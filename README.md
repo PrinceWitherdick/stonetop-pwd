@@ -76,7 +76,7 @@ A **Create Content** picker mints your own material as reusable world items: hom
 
 The system ships with the full bestiary of Books I and II: around 180 creatures, each with an illustrated codex entry and a ready-to-drop stat block, sorted into 38 regions and tagged by creature type. Monster and codex content stays hidden from players until you reveal it, so it doubles as a spoiler-safe GM reference.
 
-![A bestiary stat block](.github/screenshots/monster_example.webp)
+![A bestiary stat block, with the creature's illustration imported from Book II](.github/screenshots/monster_example.webp)
 
 #### Locations & Lore
 
