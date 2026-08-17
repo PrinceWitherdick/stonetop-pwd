@@ -1,0 +1,31 @@
+{{!-- The edit / delete pair that rides under one GM-prep card, for all three kinds.
+
+      `kind` spells both the class words the sheet's handler table matches on
+      (`.<kind>-edit-open` / `.<kind>-remove`, see gm-prep-tabs.js `prepTools`) AND what the
+      tooltips call the thing. One parameter, not two: every call site passed the same word
+      twice, and a pair free to disagree is a working button with the wrong tooltip. Passing
+      the kind rather than copying the block per family is what keeps those class words and
+      that table in step: a fourth prep kind is one more row in the table and one more `kind=`,
+      not two hand-copied markup blocks.
+
+      The DELETE button is live only while the section's pencil is on: the panel wears
+      `stonetop-readonly` otherwise, which is on neither the CSS allow-list nor past the
+      handler's own check, so a GM reading their prep cannot bin a card by accident. Editing
+      opens a dialog that writes nothing until it is saved, so it stays live.
+
+      The pencil therefore carries a SECOND, kind-free class: `stonetop-prep-edit-btn` is what
+      the readonly allow-list keys on, exactly as `stonetop-prep-add-btn` does one partial over.
+      Keyed on `<kind>-edit-open`, that list had to name every kind, and the Sites tab had
+      already shipped once with its add button missing from the equivalent list — nothing
+      failed, the control just quietly stopped working.
+
+      The trash says the opposite thing, and says it POSITIVELY: `data-readonly-gated` is a mark
+      it wears, not a list it is missing from. Kept dead by omission it would go live the day
+      somebody gave it a shared look-class that IS on that list — a plausible thing to do to the
+      button sitting right beside the pencil in the same toolbar, and a one-line CSS change with
+      no failing test behind it. The attribute outranks the allow-list (see stonetop.css), so the
+      trash can now be styled like anything else and stay dead. --}}
+<div class="threat-card-tools">
+	<button type="button" class="stonetop-prep-edit-btn {{kind}}-edit-open" data-page-uuid="{{uuid}}" data-tooltip="Edit {{kind}}" data-tooltip-direction="UP"><i class="fas fa-pen"></i></button>
+	<button type="button" class="{{kind}}-remove" data-readonly-gated data-page-uuid="{{uuid}}" data-tooltip="Delete {{kind}}" data-tooltip-direction="UP"><i class="fas fa-trash"></i></button>
+</div>

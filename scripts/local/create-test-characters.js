@@ -38,7 +38,11 @@
 //             the shape the sheet expects and what lets a PC rate them. Also seeds a block of
 //             formatted rich-text in its Notes tab (only when that tab is empty), and three
 //             demonstration Threats (each its own hidden/revealed JournalEntry) so the GM
-//             Threats tab shows the full range of card layouts. Fills in the relationship
+//             Threats tab shows the full range of card layouts. Seeds the GM Toolkit's
+//             "I wonder..." tab (Book I p.33) with a dozen open questions, six of them carrying
+//             a written answer or a hunch and six still blank, plus three more already ticked
+//             into the Answered fold, so the tab is seen holding a long list and both of its
+//             two sections rather than the empty-state line. Fills in the relationship
 //             hearts everywhere they render: each PC rates the rest of the party and a couple
 //             of villagers, each resident/neighbor rates the PCs back, and the steading rates
 //             the eight Other Settlements — every rating carrying a written "How they feel,
@@ -68,7 +72,8 @@
 //             and the test Introductions/Expedition data), strips the steading's test members
 //             (including any villager an older run left behind, whose isTest tag the people
 //             migration dropped when it rewrote the row),
-//             clears the seeded Notes and the seeded Other Settlements ratings (each only while
+//             clears the seeded Notes, the seeded Other Settlements ratings and the seeded
+//             "I wonder..." questions (each only while
 //             it still holds exactly what the macro wrote), deletes the seeded Threats (and
 //             their scene pins,
 //             pruning an emptied Threats folder), removes the world Moves/Items/Monsters and the
@@ -310,7 +315,7 @@
   // Returns the minimum pick count from a lore section description.
   const parseLorePickMin = desc => {
     const d = String(desc ?? "").toLowerCase();
-    const rangeM = d.match(/(?:choose|pick)\s+(\d+)\s*[–\-]\s*\d+/);
+    const rangeM = d.match(/(?:choose|pick)\s+(\d+)\s*[–-]\s*\d+/);
     const orM    = d.match(/(?:choose|pick)\s+(\d+)\s+or\s+\d+/);
     const maybeM = d.match(/(?:choose|pick)\s+(\d+)[,\s]+maybe\s+\d+/);
     const singM  = d.match(/(?:choose|pick)\s+(\d+)/);
@@ -1117,6 +1122,103 @@
     return { entryId: entry.id, pages: pages ?? [] };
   };
 
+  // ── GM Toolkit: the "I wonder..." list (Book I p.33) ───────────────────
+  // The one surface on the GM Toolkit a GM AUTHORS rather than reads, and the only one with
+  // nothing to look at until somebody types into it. Stored as a flat array on the toolkit's
+  // own `actor.system.wonders` (module/data-models/fields.js), NOT on the steading and NOT on
+  // the User: the Threats and Sites tabs next door resolve the steading first because their
+  // storage moved there, this list never did.
+  //
+  // The spread covers every state the tab renders differently (see
+  // templates/actor/partials/gm-toolkit-tab-wonder.hbs):
+  //   * a dozen entries on the OPEN list, which is the list a GM reads mid-session;
+  //   * six of those carrying an answer, so the always-visible <textarea> is seen holding a
+  //     settled fact, a partial answer and a bare hunch, which is what the book asks the box
+  //     to hold as much as it asks for a final answer;
+  //   * six with an empty answer box, so the placeholder is seen too;
+  //   * three already ticked into the collapsed Answered fold, which is a whole section that
+  //     simply does not render while nothing is in it, and where the question is a static
+  //     span rather than an input and the answer a paragraph rather than a box.
+  // Questions are one line (the field caps at 300 characters) and lean on the world the rest
+  // of this macro seeds, so a GM reading the tab meets the raiders, the tower and the cult the
+  // threats and the example NPC already reference.
+  const GM_TOOLKIT_TYPE = "gmToolkit";
+  const TEST_WONDERS = [
+    { question: "What did happen to the Forest Folk, and why will the Wood not say?",
+      answer:   "No answer yet, only a shape: everything that touches them goes quiet rather than hostile. Whatever took them is still being polite about it." },
+    { question: "Who is arming the Hillfolk, and what are they being armed for?",
+      answer:   "Somebody with mail and good steel to spare, which rules out the hills entirely. Coria thinks Marshedge; I think whoever is paying Marshedge." },
+    { question: "What stands out on the Flats that was not there last spring?",
+      answer:   "" },
+    { question: "Why will Yannic not speak of what he found at the old ford?",
+      answer:   "" },
+    { question: "What is the Cult of the Black Water actually praying to?",
+      answer:   "Not a god. Something that answers like one, and that has been answering for a great deal longer than the cult has been asking." },
+    { question: "Who showed the raiders the crossing?",
+      answer:   "Someone who knew the watch roster, which is a short list. Half an answer at best, and I would rather it stayed half until the table forces it." },
+    { question: "What is under the flooded undercroft at Marshedge, and who else is digging?",
+      answer:   "" },
+    { question: "Why have the bees swarmed early three years running?",
+      answer:   "A hunch and nothing more: the Wood is warmer than it should be, and something in it is awake out of season." },
+    { question: "What did Maelis leave behind in the barrow, and does it know her name?",
+      answer:   "" },
+    { question: "How long has Gordin's Delve been sending its ore somewhere other than here?",
+      answer:   "" },
+    { question: "What did Helior's flame actually take from Sael in exchange?",
+      answer:   "Time, I think. He has not aged a day since he took it up, and neither has anything he loves." },
+    { question: "If the Judge is wrong about the old ways, who in Stonetop already knows it?",
+      answer:   "" },
+    // Answered: ticked off the reading list, kept because the answer is now a decision about
+    // the world that the rest of the prep rests on.
+    { question: "Why did the herders stop taking the high pasture?",
+      answer:   "Because two of them did not come back, and the rest agreed among themselves not to say so out loud.",
+      settled:  true },
+    { question: "Who has been leaving offerings at the shrine after dark?",
+      answer:   "Bronwen, every week since the fever. She is not praying for herself and she does not want it known.",
+      settled:  true },
+    { question: "Was the winter fever natural?",
+      answer:   "Yes. Everything since has not been, which is exactly why the village has decided the fever was the start of it.",
+      settled:  true },
+  ];
+
+  // Does a stored row still hold EXACTLY what was seeded? The schema has no room for a flag of
+  // our own (id / question / answer / settled and nothing else), so the seed IS the tag: same
+  // question, same answer, same fold. A row the GM reworded, answered, ticked or reopened stops
+  // matching and is theirs from then on. Same rule as the steading's Notes and settlement
+  // standings, and for the same reason: these live on a SINGLETON the macro must never delete.
+  const sameWonder = (row, seed) =>
+    (row?.question ?? "") === seed.question
+    && (row?.answer ?? "") === (seed.answer ?? "")
+    && !!row?.settled === !!seed.settled;
+
+  // The toolkit, its list, and that list minus anything still matching a seed — which is what
+  // BOTH passes need: the seed pass drops stale seeds before adding this run's (so a partial
+  // run that failed half way does not stack a second copy), and the delete pass drops them and
+  // keeps the rest. Written out twice, the two would answer `sameWonder` differently the first
+  // time its contract moved, and the delete pass would start leaving rows the seed pass replaces.
+  // Null when there is no toolkit, since neither pass has anything to do without one.
+  const unseededWonders = () => {
+    const toolkit = game.actors?.find(a => a.type === GM_TOOLKIT_TYPE) ?? null;
+    if (!toolkit) return null;
+    const rows = Array.isArray(toolkit.system?.wonders) ? toolkit.system.wonders : [];
+    return { toolkit, rows, keep: rows.filter(row => !TEST_WONDERS.some(seed => sameWonder(row, seed))) };
+  };
+
+  const seedGmToolkitWonders = async () => {
+    const found = unseededWonders();
+    if (!found) return null;
+    const { toolkit, keep } = found;
+    const seeded = TEST_WONDERS.map(seed => ({
+      id:       foundry.utils.randomID(),
+      question: seed.question,
+      answer:   seed.answer ?? "",
+      settled:  !!seed.settled,
+    }));
+    // The whole array, not a path into it: Foundry diffs an ArrayField by REPLACEMENT.
+    await toolkit.update({ "system.wonders": [...keep, ...seeded] });
+    return { toolkit, added: seeded.length, kept: keep.length };
+  };
+
   // ── Toggle: delete existing test fixtures ──────────────────────────────
   // Any actor carrying the test flag — the [TEST] characters, the seeded Monster stat blocks,
   // and the example NPC (as well as any NPC fixtures left by older versions of this macro).
@@ -1311,6 +1413,20 @@
       }
     }
 
+    // Strip the seeded "I wonder..." questions from the GM Toolkit. Like the steading, the
+    // toolkit is a SINGLETON the macro never creates or deletes (hooks/StonetopSingleton.js
+    // refuses the delete outright), and its list rides on a document nothing else here takes
+    // down, so without this pass every re-run would leave the last run's fifteen questions
+    // behind and stack fifteen more on top. A row goes only while it still matches its seed
+    // exactly (see sameWonder) — one the GM reworded, answered or ticked is theirs and stays.
+    const foundDel = unseededWonders();
+    let wonderCount = 0;
+    if (foundDel) {
+      const { toolkit: toolkitDel, rows, keep } = foundDel;
+      wonderCount = rows.length - keep.length;
+      if (wonderCount) await toolkitDel.update({ "system.wonders": keep });
+    }
+
     // Sweep up the old "Stonetop Test Fixtures" folders if a prior run left them behind and
     // they're now empty. (The "PCs" folder is left alone — it may hold real characters; the
     // steading singleton is never touched.)
@@ -1326,7 +1442,7 @@
         if (!f.contents.length) await f.delete();
       }
     }
-    ui.notifications.info(`[TEST] Deleted ${existing.length} test actor(s), ${testItems.length} item(s), ${testThreatCount} threat(s)${strayPeople ? `, ${strayPeople} migrated resident/neighbor NPC(s) an older run left behind` : ""}, and their test data.`);
+    ui.notifications.info(`[TEST] Deleted ${existing.length} test actor(s), ${testItems.length} item(s), ${testThreatCount} threat(s)${wonderCount ? `, ${wonderCount} "I wonder..." question(s)` : ""}${strayPeople ? `, ${strayPeople} migrated resident/neighbor NPC(s) an older run left behind` : ""}, and their test data.`);
     return;
   }
 
@@ -2720,6 +2836,19 @@
     ui.notifications.warn("[TEST] No steading actor found — skipped seeding residents/neighbors/players/notes/threats/settlement standings.");
   }
 
+  // ── Seed the GM Toolkit's "I wonder..." list ───────────────────────────
+  // Independent of the characters and of the steading: the list is the world's open questions,
+  // stored on the toolkit singleton itself. Absent only when the world has not been relaunched
+  // since the `gmToolkit` subtype shipped (a new documentType needs a relaunch, not an F5), in
+  // which case the ready hook has not been able to mint one either.
+  const wonders = await seedGmToolkitWonders();
+  if (wonders) {
+    const open = TEST_WONDERS.filter(w => !w.settled).length;
+    console.log(`[TEST] Seeded the GM Toolkit "${wonders.toolkit.name}" with ${wonders.added} "I wonder..." questions (${open} open, ${wonders.added - open} answered)${wonders.kept ? `, alongside ${wonders.kept} the GM had already written` : ""}.`);
+  } else {
+    ui.notifications.warn("[TEST] No GM Toolkit actor found — skipped seeding the \"I wonder...\" questions.");
+  }
+
   // ── Relationship hearts on the character sheets ────────────────────────
   // Last of the actor passes, because every key is a live actor id: the PCs above rate one
   // another AND the villagers just created (a villager row also gets an explicit tick, since
@@ -2758,7 +2887,7 @@
   // is somehow run before onReady wires up the API.)
   await game.stonetop?.saveChronicle?.();
 
-  ui.notifications.info(`[TEST] Done — ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items, ${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + 3 threats, settlement standings, ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, introductions answers, an example expedition, and the compiled Chronicle.`);
+  ui.notifications.info(`[TEST] Done — ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items, ${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + 3 threats, settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, introductions answers, an example expedition, and the compiled Chronicle.`);
   } finally {
     globalThis.__stonetopTestFixturesRunning = false;
   }

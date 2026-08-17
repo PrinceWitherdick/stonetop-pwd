@@ -93,15 +93,47 @@ const RAIL_HEADER_GAP = 16;
  * The scale is derived from the frame's own two widths rather than from `app.position.scale`,
  * so however many transforms are stacked upstream, they land in one number.
  *
+ * `scrolledBy` is added back AFTER the divide, not before: it is already an untransformed number
+ * (`scrollTop` always is), where the two rects are not. It is zero on every sheet whose header is
+ * pinned, which is all of them but the GM Toolkit — that frame scrolls as a single unit with its
+ * banner inside the scroll, and the rail is mounted on the window FRAME, outside it. Without this
+ * term a re-render landing while the sheet is scrolled measures the banner where it has ridden up
+ * to and stamps the rail there with it; on the toolkit that is every threat, hazard and site
+ * write. Reading the anchor's at-rest position instead makes the stamp the same number at any
+ * offset, so the rail simply does not move.
+ *
  * Pure, and exported, so the arithmetic can be tested without a browser.
  * @param {{bottom: number}} anchorRect       The sheet header banner's client rect.
  * @param {{top: number, width: number}} frameRect   The window frame's client rect.
  * @param {number} frameOffsetWidth           The frame's untransformed border-box width.
+ * @param {number} [scrolledBy]               How far the anchor has been scrolled up inside the
+ *   frame, in untransformed px — see `scrolledAwayBy`.
  * @returns {number} px
  */
-export function railTopFor(anchorRect, frameRect, frameOffsetWidth) {
+export function railTopFor(anchorRect, frameRect, frameOffsetWidth, scrolledBy = 0) {
 	const scale = (frameOffsetWidth && frameRect.width / frameOffsetWidth) || 1;
-	return Math.round((anchorRect.bottom - frameRect.top) / scale) + RAIL_HEADER_GAP;
+	return Math.round((anchorRect.bottom - frameRect.top) / scale + scrolledBy) + RAIL_HEADER_GAP;
+}
+
+/**
+ * How far `anchor` has been scrolled up by scrollports between it and `frame`.
+ *
+ * Summed over the whole chain rather than taken from the nearest scrolling ancestor: a sheet can
+ * nest scrollports (`.window-content` carries a last-resort `overflow-y: auto` on top of whatever
+ * the sheet's own scroller is), and only the total says where the anchor sits at rest.
+ *
+ * `scrollTop` is 0 on a non-scrolling element, so this reads as 0 on every pinned-header sheet
+ * without asking for computed overflow — cheaper than `scrollParent`, and it cannot pick the
+ * wrong one of two.
+ *
+ * @param {HTMLElement} anchor  the header banner being measured.
+ * @param {HTMLElement} frame   the window frame; the walk stops below it.
+ * @returns {number} px
+ */
+function scrolledAwayBy(anchor, frame) {
+	let total = 0;
+	for (let el = anchor.parentElement; el && el !== frame; el = el.parentElement) total += el.scrollTop;
+	return total;
 }
 
 /**
@@ -160,7 +192,8 @@ function stampRailTop(frame, form) {
 		if (!anchor) return;
 		const anchorRect = anchor.getBoundingClientRect();
 		if (!anchorRect.height) return; // not laid out yet — see above
-		const top = railTopFor(anchorRect, frame.getBoundingClientRect(), frame.offsetWidth);
+		const top = railTopFor(anchorRect, frame.getBoundingClientRect(), frame.offsetWidth,
+			scrolledAwayBy(anchor, frame));
 		// Writing a custom property invalidates style for the whole frame subtree, so don't
 		// when it would not change anything — the common case on a re-render.
 		const px = `${top}px`;

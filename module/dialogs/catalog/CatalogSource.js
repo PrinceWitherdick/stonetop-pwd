@@ -40,6 +40,10 @@ export class CatalogSource {
 	 * @param {string} def.label Tab label.
 	 * @param {string} def.icon  Tab icon — a Font Awesome class.
 	 * @param {string} def.noun  What these are called in the count line: "82 arcana".
+	 * @param {string} [def.nounOne] The same word for a count of one ("1 monster"). Defaults to
+	 *                           `noun`, which is right for the collectives that do not inflect —
+	 *                           "1 arcana", "1 people" would be wrong, but so is any other single
+	 *                           word, and those lists say "arcana"/"people" of one entry too.
 	 * @param {{title: string, placeholder: string}} def.search Tooltip and placeholder for the search box.
 	 * @param {string} def.empty The line shown when the chips and the search between them leave nothing.
 	 * @param {string} [def.worldActorType] Actor `type` this list is built from, if it is built
@@ -49,8 +53,8 @@ export class CatalogSource {
 	 *                           "Actor". Declaring it is what makes the rows draggable at all;
 	 *                           see the note below.
 	 */
-	constructor({ key, label, icon, noun, search, empty, worldActorType = "", dragType = "" }) {
-		Object.assign(this, { key, label, icon, noun, search, empty, worldActorType, dragType });
+	constructor({ key, label, icon, noun, nounOne = noun, search, empty, worldActorType = "", dragType = "" }) {
+		Object.assign(this, { key, label, icon, noun, nounOne, search, empty, worldActorType, dragType });
 	}
 
 	/** The rows in this list. Called once per window; the browser caches the result. */

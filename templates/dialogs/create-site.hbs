@@ -1,0 +1,204 @@
+{{!-- Create-a-Site walkthrough (Book I, Sites, pp. 355-370). Reuses the spring/expedition
+      dialog chrome (.stonetop-guide-* / .stonetop-spring-*) and the follower wizard's
+      control styles (.stonetop-cf-*); site-specific hooks are .stonetop-cs-*.
+      See sites/create-site-dialog.js. --}}
+<div class="stonetop-spring">
+
+  <div class="stonetop-guide-split">
+
+    {{!-- Jump-to-step rail. The book says to do only as much of the process as you need
+          and improvise the rest, so the rail matters more here than in the shorter
+          wizards: it is how you skip straight past the phases you're not prepping. --}}
+    {{> "stonetop.guide-toc" ariaLabel="Site steps"}}
+
+    <div class="stonetop-guide-main">
+
+      <div class="stonetop-guide-banner">
+        <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
+        <div class="stonetop-guide-banner-info">
+          <div class="stonetop-guide-banner-title">{{step.title}}</div>
+          <div class="stonetop-guide-banner-sub">{{#if isEdit}}Edit a site{{else}}Create a site{{/if}}</div>
+        </div>
+        <div class="stonetop-guide-count">{{stepIndex}} / {{stepCount}}</div>
+      </div>
+
+      <div class="stonetop-spring-body">{{{step.body}}}</div>
+
+      <div class="stonetop-cf-controls">
+
+        {{#if is_foundation}}
+        <label class="stonetop-cf-label">Name
+          <input type="text" class="stonetop-cf-input" data-field="name" value="{{sel.name}}" placeholder="the Green Lord's Tomb, the warren in the bluffs…">
+        </label>
+        <label class="stonetop-cf-label">Why is this site in the game?
+          <input type="text" class="stonetop-cf-input" data-field="why" value="{{sel.why}}" placeholder="the villain's lair; to break up the journey; it's where the Mindgem's heart lies…">
+        </label>
+        <label class="stonetop-cf-label">What you know so far
+          <textarea class="stonetop-cf-textarea" data-field="description" rows="6" placeholder="A dome-shaped tomb, mostly intact, with a few old oaks growing out of it. Looks like a small hill, with bits of worked stone poking out of the soil…">{{sel.description}}</textarea>
+        </label>
+        <div class="stonetop-cs-hint">
+          <div class="stonetop-cf-pick-label">A site's story should answer</div>
+          <ul class="stonetop-cs-hint-list">{{#each storyQuestions}}<li>{{this}}</li>{{/each}}</ul>
+        </div>
+        {{/if}}
+
+        {{#if is_manner}}
+        <label class="stonetop-cf-label">Manner of site
+          <select class="stonetop-cf-input stonetop-cs-manner">
+            <option value="">(choose a Book II entry)</option>
+            {{#each manners}}<option value="{{id}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+          </select>
+        </label>
+        {{#if mannerHint}}<p class="stonetop-cs-note">{{mannerHint}} <span class="stonetop-cs-page">{{mannerPage}}</span></p>{{/if}}
+
+        {{#if tables.length}}
+        <button type="button" class="stonetop-cs-roll-all stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll the lot</button>
+        {{#each tables}}
+        <div class="stonetop-cs-table-pick">
+          <label class="stonetop-cf-label">{{label}} <span class="stonetop-cf-pick-hint">{{die}}{{#if combine}} (pick 1, or combine 2){{/if}}</span>
+            <select class="stonetop-cf-input stonetop-cs-pick" data-key="{{key}}">
+              <option value="">(choose or roll)</option>
+              {{#each rows}}<option value="{{text}}"{{#if selected}} selected{{/if}}>{{roll}} &middot; {{text}}</option>{{/each}}
+            </select>
+          </label>
+          <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" data-key="{{key}}" data-tooltip="Roll {{die}}" data-tooltip-direction="UP"><i class="fas fa-dice-d20"></i></button>
+          {{#if note}}<p class="stonetop-cs-note">{{note}}</p>{{/if}}
+        </div>
+        {{/each}}
+        {{/if}}
+
+        <label class="stonetop-cf-label">Region
+          <select class="stonetop-cf-input stonetop-cs-region">
+            <option value="">(anywhere / not yet placed)</option>
+            {{#each regions}}<option value="{{id}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+          </select>
+        </label>
+        {{#if terrainRows.length}}
+        <div class="stonetop-cs-table-pick">
+          <label class="stonetop-cf-label">Terrain <span class="stonetop-cf-pick-hint">1d12 (pick 1, or combine 2)</span>
+            <select class="stonetop-cf-input stonetop-cs-terrain">
+              <option value="">(choose or roll)</option>
+              {{#each terrainRows}}<option value="{{text}}"{{#if selected}} selected{{/if}}>{{roll}} &middot; {{text}}</option>{{/each}}
+            </select>
+          </label>
+          <button type="button" class="stonetop-cs-roll-terrain stonetop-cf-mini-btn" data-tooltip="Roll 1d12" data-tooltip-direction="UP"><i class="fas fa-dice-d20"></i></button>
+          {{#if regionNote}}<p class="stonetop-cs-note">{{regionNote}} <span class="stonetop-cs-page">{{regionPage}}</span></p>{{/if}}
+        </div>
+        {{/if}}
+        {{/if}}
+
+        {{#if is_story}}
+        {{> "stonetop.cs-line-list" list="connections" label="Connections" rows=connectionRows chips=connectionChips placeholder="the Forest Folk must have known about this place…" addLabel="Add connection"}}
+
+        {{!-- Labels are passed as PLAIN text, not pre-escaped markup: the partial prints them
+              through `{{ }}`, which escapes, so an "&amp;" handed in here would reach the screen
+              as a literal "&amp;". Field placeholders live beside the schema in the JS, which is
+              what lets one block serve lists of two keys and of four. --}}
+        {{> "stonetop.cs-pair-list" list="questions" label="Questions & answers" hint="leave an answer blank to come back to it" rows=questionRows chips=questionChips addLabel="Add question"}}
+        {{/if}}
+
+        {{#if is_timeline}}
+        {{> "stonetop.cs-pair-list" list="timeline" rows=timelineRows addLabel="Add event"}}
+        <p class="stonetop-cs-note">If the site is more than a decade or so old, line its timeline up with the ages of the world (Book II p. 496).</p>
+        {{/if}}
+
+        {{#if is_contents}}
+        {{> "stonetop.cs-pair-list" list="denizens" label="Denizens" hint="people, beasts, spirits, constructs, undead" rows=denizenRows addLabel="Add denizen"}}
+
+        {{> "stonetop.cs-line-list" list="dangers" label="Dangers" rows=dangerRows kinds=dangerKinds placeholder="unstable construction; magical wards on the vault (create!)…" addLabel="Add danger"}}
+
+        {{> "stonetop.cs-line-list" list="discoveries" label="Discoveries" rows=discoveryRows kinds=discoveryKinds placeholder="the hoard; grave goods; hidden tunnels the crinwin use…" addLabel="Add discovery"}}
+        {{/if}}
+
+        {{#if is_environment}}
+        {{> "stonetop.cs-line-list" list="outside" label="Outside" hint="the approach, the exterior" rows=outsideRows placeholder="bits of worked stone poking out of the soil, easy to miss" addLabel="Add impression"}}
+
+        {{> "stonetop.cs-line-list" list="inside" label="Inside / throughout" hint="true of every room" rows=insideRows placeholder="mostly dark, but the white marble catches and amplifies light" addLabel="Add impression"}}
+        {{/if}}
+
+        {{#if is_areas}}
+        <div class="stonetop-cs-hint">
+          <div class="stonetop-cf-pick-label">Each area wants</div>
+          <ul class="stonetop-cs-hint-list">{{#each areaPrompts}}<li>{{this}}</li>{{/each}}</ul>
+        </div>
+        {{!-- No `label`: the areas list is a column of self-titling cards, and the step's banner
+              has already said what they are. `frameClass` keeps the cards at the step's own
+              spacing rather than the tighter gap a list of plain rows wants. --}}
+        {{> "stonetop.cs-pair-list" list="areas" rows=areaRows addLabel="Add area" frameClass="stonetop-cs-area-list"}}
+        <div class="stonetop-cs-hint">
+          <div class="stonetop-cf-pick-label">To make it dynamic rather than linear</div>
+          <ul class="stonetop-cs-hint-list">{{#each layoutTips}}<li>{{this}}</li>{{/each}}</ul>
+        </div>
+        {{/if}}
+
+        {{#if is_plans}}
+        {{> "stonetop.cs-line-list" list="plans" label="Plans" hint="if/then tactics, timetables, GM moves" rows=planRows placeholder="If the sentries notice the PCs: stop singing, bird calls to alert the others, the rest scatter and hide" addLabel="Add plan"}}
+
+        {{#each tableRows}}
+        <div class="stonetop-cs-rtable">
+          <div class="stonetop-cf-gear-row">
+            <input type="text" class="stonetop-cf-input stonetop-cs-table-caption" data-index="{{index}}" value="{{caption}}" placeholder="What the crinwin are up to">
+            <span class="stonetop-cs-die">{{die}}</span>
+            <button type="button" class="stonetop-cs-table-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{index}}"><i class="fas fa-times"></i></button>
+          </div>
+          {{#each rows}}
+          <div class="stonetop-cf-gear-row stonetop-cs-trow-line">
+            <span class="stonetop-cs-roll-no">{{roll}}</span>
+            <input type="text" class="stonetop-cf-input stonetop-cs-trow" data-table="{{../index}}" data-index="{{rowIndex}}" value="{{text}}" placeholder="fighting over junk; mimicking the kids' songs…">
+            <button type="button" class="stonetop-cs-trow-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-table="{{../index}}" data-index="{{rowIndex}}"><i class="fas fa-times"></i></button>
+          </div>
+          {{/each}}
+          <button type="button" class="stonetop-cs-trow-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-table="{{index}}"><i class="fas fa-plus"></i> Add result</button>
+        </div>
+        {{/each}}
+        <button type="button" class="stonetop-cs-table-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add"><i class="fas fa-table-list"></i> Add a table</button>
+        {{/if}}
+
+        {{#if is_review}}
+        {{#with preview}}
+        <div class="stonetop-cf-preview">
+          <div class="stonetop-cf-preview-head">
+            <span class="stonetop-cf-preview-name">{{name}}</span>
+            <span class="stonetop-cf-preview-type">Site</span>
+          </div>
+          {{#if foundation.length}}
+          <div class="stonetop-cf-preview-line">{{#each foundation}}{{this}}{{#unless @last}} &middot; {{/unless}}{{/each}}</div>
+          {{/if}}
+          {{#if why}}<div class="stonetop-cf-preview-line"><strong>Why it's here</strong> {{why}}</div>{{/if}}
+          {{#if description}}<div class="stonetop-cf-preview-line stonetop-cs-preview-desc">{{description}}</div>{{/if}}
+          {{#if picks.length}}
+          <div class="stonetop-cf-preview-line">{{#each picks}}<strong>{{label}}</strong> {{value}}{{#unless @last}}; {{/unless}}{{/each}}</div>
+          {{/if}}
+          {{#if areas.length}}
+          <div class="stonetop-cf-preview-line"><strong>Areas</strong> {{#each areas}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}</div>
+          {{/if}}
+          {{#if counts.length}}
+          <div class="stonetop-cf-preview-stats">
+            {{#each counts}}<span><strong>{{label}}</strong> {{n}}</span>{{/each}}
+          </div>
+          {{/if}}
+        </div>
+        {{/with}}
+        <div class="stonetop-cs-hint">
+          <div class="stonetop-cf-pick-label">Does it make sense?</div>
+          <ul class="stonetop-cs-hint-list">{{#each reviewChecks}}<li>{{this}}</li>{{/each}}</ul>
+        </div>
+        {{/if}}
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="stonetop-guide-nav">
+    <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
+    <span class="stonetop-spring-step-label">{{stepLabel}}</span>
+    {{#if isLast}}
+    <button class="stonetop-cs-create stonetop-guide-btn--primary"><i class="fas {{#if isEdit}}fa-check{{else}}fa-mountain-sun{{/if}}"></i> {{#if isEdit}}Save site{{else}}Create site{{/if}}</button>
+    {{else}}
+    <button class="stonetop-spring-next">Next<span class="stonetop-nav-arrow"></span></button>
+    {{/if}}
+  </div>
+
+</div>

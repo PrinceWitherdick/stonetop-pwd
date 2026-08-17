@@ -44,6 +44,38 @@ export function attackMoveFor(item) {
 	return ATTACK_MOVES[item?.name] ?? null;
 }
 
+/**
+ * The attack a move-granted weapon IS, when the granting move's whole mechanical offer is
+ * "this thing counts as a weapon" — the Lightbearer's Purifying Flames, whose holy light
+ * "counts as a weapon (d10 damage, hand, close, area, 2 piercing)" and which lets them roll
+ * +WIS to Clash. Such a move has no roll of its own, so using it is that attack with the
+ * weapon already in hand; this returns what the roll needs:
+ *
+ *   { item, stat, weaponSlug }  the attack move to roll (an item ON this actor, since the
+ *                               roll resolves it by id), the stat the grant rides on, and the
+ *                               weapon that skips the weapon prompt;
+ *   { readyWhen, unreadyNotice } the weapon's own precondition, straight off its row in
+ *                               data/weapons.js — SAID by the caller when unmet, never enforced,
+ *                               so a second granted weapon needs no new branch in the roll path.
+ *
+ * Null for every other move, and for a granting move whose attack move the actor doesn't own —
+ * the caller then treats it as the description-only move it has always been. Matched on the
+ * resolved ITEM, never a row's text: an un-owned playbook row carries no item at all, and a
+ * player-authored move (moveType "other") that happens to share the name acts as itself, the
+ * same rule the guided-move and stat-picker paths apply.
+ */
+export function grantedWeaponAttackFor(actor, item) {
+	if (item?.type !== "move" || item.system?.moveType === "other") return null;
+	const granted = grantedWeaponForMove(item.name);
+	if (!granted?.viaMove || !ATTACK_MOVES[granted.viaMove]) return null;
+	const attackItem = actor?.items?.find(i => i.type === "move" && i.name === granted.viaMove);
+	if (!attackItem) return null;
+	return {
+		item: attackItem, stat: granted.whenStat, weaponSlug: granted.slug,
+		readyWhen: granted.readyWhen ?? null, unreadyNotice: granted.unreadyNotice ?? null,
+	};
+}
+
 function isFriendly(disposition) {
 	return disposition === CONST.TOKEN_DISPOSITIONS.FRIENDLY;
 }
@@ -129,13 +161,22 @@ function serializeWeapon({ slug, meta }) {
 // -- Prompts ------------------------------------------------------------------
 
 // Ask which weapon is in hand. Returns { weapon } (possibly null — unarmed / no matching
-// weapon) or "cancel". Auto-resolves without a dialog for 0 or 1 candidate. `preferSlug`
-// pre-checks a candidate instead of the first — the stat the player rolled can imply the
-// weapon (+WIS on Clash means the Lightbearer's holy light). The unarmed row (see
-// withUnarmedChoice) is a choice, not a weapon: picking it resolves to null, the same as
-// having nothing that fits the move.
-function promptWeaponChoice(candidates, moveName, { preferSlug = null } = {}) {
+// weapon) or "cancel". The unarmed row (see withUnarmedChoice) is a choice, not a weapon: picking
+// it resolves to null, the same as having nothing that fits the move.
+//
+// EVERY reason not to ask lives here, so "when is the player asked?" is one function's answer
+// rather than something a caller can also decide:
+//   forceSlug  the weapon is ALREADY chosen — clicking Purifying Flames is choosing the holy
+//              light — so there is nothing to ask. A slug that isn't on offer (a move removed
+//              mid-click) falls through to the prompt rather than attacking with a weapon this
+//              character doesn't have.
+//   0 or 1 candidate  there is no choice to make.
+// `preferSlug` does not skip the prompt; it pre-checks a candidate instead of the first, because
+// the stat the player rolled can IMPLY the weapon (+WIS on Clash means the holy light).
+function promptWeaponChoice(candidates, moveName, { preferSlug = null, forceSlug = null } = {}) {
 	const chosen = (c) => ({ weapon: c?.unarmed ? null : (c ?? null) });
+	const forced = forceSlug ? candidates.find(c => c.slug === forceSlug) : null;
+	if (forced) return Promise.resolve(chosen(forced));
 	if (candidates.length === 0) return Promise.resolve({ weapon: null });
 	if (candidates.length === 1) return Promise.resolve(chosen(candidates[0]));
 
@@ -149,7 +190,7 @@ function promptWeaponChoice(candidates, moveName, { preferSlug = null } = {}) {
 
 	return new Promise(resolve => {
 		new Dialog({
-			title: `${moveName} — which weapon?`,
+			title: `${moveName}: which weapon?`,
 			content: `<form class="stonetop-weapon-choice"><div class="stonetop-weapon-options">${rows}</div></form>`,
 			buttons: {
 				choose: {
@@ -175,7 +216,7 @@ function promptLetFlyMode() {
 	return new Promise(resolve => {
 		new Dialog({
 			title: "Let Fly",
-			content: `<form class="stonetop-letfly-mode"><p>Is this a calm, easy shot — or are you under pressure?</p></form>`,
+			content: `<form class="stonetop-letfly-mode"><p>Is this a calm, easy shot, or are you under pressure?</p></form>`,
 			buttons: {
 				easy:     { icon: '<i class="fas fa-crosshairs"></i>', label: "Easy shot (deal damage, no roll)", callback: () => resolve("easy") },
 				pressure: { icon: '<i class="fas fa-dice-d6"></i>',    label: "Under pressure (roll +DEX)",       callback: () => resolve("pressure") },
@@ -280,8 +321,11 @@ function buildTierActions(move, weapon) {
  *   - "handled"  → a no-roll easy shot was posted; the caller must NOT roll
  *   - "cancel"   → the player cancelled a prompt; abort
  *   - { … }      → merge into the roll options
+ *
+ * `weaponSlug` names a weapon the caller has ALREADY chosen (clicking Purifying Flames is
+ * choosing the holy light), which skips the weapon prompt.
  */
-export async function maybeBeginAttack(actor, item, { stat = null } = {}) {
+export async function maybeBeginAttack(actor, item, { stat = null, weaponSlug = null } = {}) {
 	const move = attackMoveFor(item);
 	if (!move) return null;
 
@@ -296,13 +340,15 @@ export async function maybeBeginAttack(actor, item, { stat = null } = {}) {
 	// pre-selects that weapon, so the d10 the move promises is what's in hand by default.
 	const candidates = carriedAttackWeapons(actor, move);
 	const preferSlug = candidates.find(c => c.whenStat && c.whenStat === stat)?.slug ?? null;
-	const picked = await promptWeaponChoice(candidates, item.name, { preferSlug });
+	// Both "which weapon should be pre-checked" and "is there anything to ask at all" are the
+	// prompt's own call — see promptWeaponChoice.
+	const picked = await promptWeaponChoice(candidates, item.name, { preferSlug, forceSlug: weaponSlug });
 	if (picked === "cancel") return "cancel";
 	const weapon = picked.weapon ? serializeWeapon(picked.weapon) : null;
 
 	const targets = snapshotTargets();
 	if (targets.length === 0 && !easyShot) {
-		ui.notifications?.info("No foe targeted — you can still target one with T before rolling damage.");
+		ui.notifications?.info("No foe targeted: you can still target one with T before rolling damage.");
 	}
 
 	if (easyShot) {
@@ -328,8 +374,11 @@ export async function maybeBeginAttack(actor, item, { stat = null } = {}) {
 async function pcDamageDie(actor) {
 	const stored = String(actor?.system?.attributes?.damage?.value ?? "").trim();
 	if (actor?.type !== "character") return stored;
-	const snapshot = await actor.typedActor?.buildSnapshot?.();
-	return snapshot?.vitals?.damage || stored;
+	// computedDamageDie, not buildSnapshot: the same answer, without building a whole sheet for one
+	// string. This runs per damage ROLL — twice over on the counter-attack and multi-target paths —
+	// and the snapshot it used to ask walks moves, inventory, arcana, possessions and post-death
+	// lore to get there. `stored` remains the fallback for a character with no playbook resolved.
+	return (await actor.typedActor?.computedDamageDie?.()) || stored;
 }
 
 // The damage formula for one attack: the PC die (or the weapon's own die), plus the
@@ -344,7 +393,7 @@ async function damageFormula(actor, weapon, extraDice) {
 // Hover text for the "problematic wound" link in the messy reminder (Book I, Harm &
 // Healing p.243): a wound isn't just lost HP — it's a lasting fictional consequence the
 // victim now has to deal with, and messy attacks make these especially common.
-const PROBLEMATIC_WOUND_TIP = "A wound with lasting fictional consequences — a severed hand, a blow to the head that leaves them staggering — not just lost HP. It's now true in the fiction and something the victim has to deal with. Especially common with messy attacks.";
+const PROBLEMATIC_WOUND_TIP = "A wound with lasting fictional consequences, a severed hand, a blow to the head that leaves them staggering, not just lost HP. It's now true in the fiction and something the victim has to deal with. Especially common with messy attacks.";
 
 // Flavour tags whose fiction the table should be reminded of at damage time — a weapon's
 // `+N damage` / piercing already ride the numbers, but `messy` and `forceful` only live in
@@ -356,8 +405,8 @@ const TAG_REMINDERS = {
 		title: "Messy attack",
 		icon: "fa-burst",
 		body: name => `<strong>${name} is messy.</strong> This attack is especially destructive, ripping
-			people and things apart. It should often use up resources — destroying a shield, weapon, or
-			gear — or inflict a
+			people and things apart. It should often use up resources, destroying a shield, weapon, or
+			gear, or inflict a
 			<span class="stonetop-problematic-wound" data-tooltip="${escHtml(PROBLEMATIC_WOUND_TIP)}">problematic wound</span>.`,
 	},
 	forceful: {
@@ -365,7 +414,7 @@ const TAG_REMINDERS = {
 		icon: "fa-hand-fist",
 		body: name => `<strong>${name} is forceful.</strong> It can knock someone around, maybe even off
 			their feet. Even if it does no damage, it should still shift the momentum or positioning of the
-			fight — driving them back, breaking their stance, or setting up an ally.`,
+			fight: driving them back, breaking their stance, or setting up an ally.`,
 	},
 };
 
@@ -397,7 +446,7 @@ async function rollAndPostDamage(actor, { move, weapon, targets, extraDice = "",
 
 	if (applyable.length === 0) {
 		if (!counter) {
-			await rollDamage(formula, actor, { label: `${move}${weapon ? ` — ${weapon.name}` : ""}` });
+			await rollDamage(formula, actor, { label: `${move}${weapon ? `: ${weapon.name}` : ""}` });
 		} else {
 			// No foe targeted, but the tier (Clash 7-9 / strike-hard) still demands the PC
 			// suffer the counter-attack. Roll the damage for the fiction and post a results
@@ -431,7 +480,7 @@ function damageRowDetail(weapon) {
 
 function postDamageResultsCard(actor, { move, weapon, results, counter }) {
 	const multiWarn = results.length > 1 && !weapon?.area
-		? `<p class="stonetop-attack-warn"><i class="fas fa-triangle-exclamation"></i> ${escHtml(move)} is a single-foe move — applying to multiple targets is a GM abstraction.</p>`
+		? `<p class="stonetop-attack-warn"><i class="fas fa-triangle-exclamation"></i> ${escHtml(move)} is a single-foe move: applying to multiple targets is a GM abstraction.</p>`
 		: "";
 
 	// Each target gets the shared roll-result block (big total + label + fine print) rather
@@ -473,7 +522,7 @@ function postDamageResultsCard(actor, { move, weapon, results, counter }) {
 
 	return ChatMessage.create({
 		speaker: ChatMessage.getSpeaker({ actor }),
-		content: stonetopChatCard(`${move} — damage`, body, "stonetop-attack-damage-card", damageBadge()),
+		content: stonetopChatCard(`${move}: damage`, body, "stonetop-attack-damage-card", damageBadge()),
 		flags: { [SCOPE]: { damage: {
 			move, attackerUuid: actor.uuid,
 			weapon: weapon ? { name: weapon.name, piercing: weapon.piercing, ignoresArmor: weapon.ignoresArmor } : null,
@@ -520,13 +569,23 @@ export function wireAttackConfirm(message, html) {
 		}
 	}
 
+	// Confirming writes the `resolved` latch onto this message (lockAttackCard), so it needs
+	// message ownership as well as the attacker's — see wireSufferAttack.
 	actorFromUuid(attack.attackerUuid).then(actor => {
-		const owner = !!actor?.isOwner;
 		for (const btn of btns) {
-			if (!owner || message.getFlag(SCOPE, "attack")?.resolved) { btn.disabled = true; continue; }
+			if (!actor?.isOwner || message.getFlag(SCOPE, "attack")?.resolved) { btn.disabled = true; continue; }
+			// Owning the attacker is not enough, and the two refusals are not the same refusal.
+			// A player who owns the PC but not the GM-authored CARD gets a button that can never
+			// work, so it says why — a silently greyed-out Confirm reads as a broken card. Same
+			// affordance, same wording shape as wireSufferAttack.
+			if (!message.isOwner) {
+				btn.disabled = true;
+				btn.title = "Ask the GM to confirm this attack";
+				continue;
+			}
 			btn.addEventListener("click", () => resolveAttackTier(message, actor, btn, root));
 		}
-	});
+	}).catch(err => console.error("Stonetop | could not wire the attack card's Confirm buttons", err));
 }
 
 // Enact one tier's Confirm. Disables the clicked button while it runs; only marks the whole
@@ -626,22 +685,22 @@ export function wireApplyDamage(message, html) {
 			if (doneUuids.has(r.uuid)) continue;
 			const td = await fromUuid(r.uuid);
 			const targetActor = td?.actor ?? null;
-			if (!targetActor) { lines.push(`<li><strong>${escHtml(r.name)}</strong> — no longer on the map</li>`); continue; }
+			if (!targetActor) { lines.push(`<li><strong>${escHtml(r.name)}</strong>: no longer on the map</li>`); continue; }
 			const armor = Number(targetActor.system?.attributes?.armor?.value) || 0;
 			const effective = mitigateDamage(r.raw, { armor, piercing, ignoresArmor: current.weapon?.ignoresArmor });
 			const t = await applyDamageToActor(targetActor, effective);
 			// A target actor with no hp attribute (e.g. a steading token) yields null. Skip it
 			// without recording it as applied, so it can be retried if the actor is fixed —
 			// rather than rendering "undefined → undefined HP" and marking it done forever.
-			if (!t) { lines.push(`<li><strong>${escHtml(r.name)}</strong> — has no HP to damage</li>`); continue; }
+			if (!t) { lines.push(`<li><strong>${escHtml(r.name)}</strong>: has no HP to damage</li>`); continue; }
 			nextApplied.push({ uuid: r.uuid, effective, oldHp: t.oldHp, newHp: t.newHp });
 			const dead = t.newHp === 0 ? " <em>(0 HP)</em>" : "";
 			const mit = effective !== r.raw ? ` <span class="stonetop-damage-mitigated">(${r.raw}${armor ? ` − ${Math.max(0, armor - piercing)} armor` : ""})</span>` : "";
-			lines.push(`<li><strong>${escHtml(r.name)}</strong> — ${effective} damage${mit}: ${t.oldHp} &rarr; ${t.newHp} HP${dead}</li>`);
+			lines.push(`<li><strong>${escHtml(r.name)}</strong>: ${effective} damage${mit}: ${t.oldHp} &rarr; ${t.newHp} HP${dead}</li>`);
 		}
 		await message.setFlag(SCOPE, "damage", { ...current, applied: nextApplied });
 		await ChatMessage.create({
-			content: stonetopChatCard(`${current.move} — damage applied`, `<div class="card-content"><ul class="stonetop-homestead-chat-list">${lines.join("")}</ul></div>`, "stonetop-attack-applied-card"),
+			content: stonetopChatCard(`${current.move}: damage applied`, `<div class="card-content"><ul class="stonetop-homestead-chat-list">${lines.join("")}</ul></div>`, "stonetop-attack-applied-card"),
 			speaker: { alias: "Stonetop" },
 		});
 	});
@@ -667,15 +726,32 @@ export function wireSufferAttack(message, html) {
 
 	actorFromUuid(ctx.attackerUuid).then(pc => {
 		if (!pc?.isOwner) { btn.disabled = true; return; }
+		// Owning the PC is not enough: suffering writes a `suffered` latch onto this MESSAGE, and
+		// a player can't update a card the GM authored. Say so rather than letting the click fail
+		// half-way. Mirrors the multi-GM affordance in wireApplyDamage.
+		if (!message.isOwner) {
+			btn.disabled = true;
+			btn.title = "Ask the GM to apply this attack's damage";
+			return;
+		}
 		if (message.getFlag(SCOPE, flagKey)?.suffered) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-check"></i> Suffered the attack'; return; }
 		btn.addEventListener("click", async () => {
 			if (btn.disabled) return;
 			btn.disabled = true;
-			const ok = await executeSuffer(message, pc, ctx, flagKey);
-			if (ok) btn.innerHTML = '<i class="fas fa-check"></i> Suffered the attack';
-			else btn.disabled = false;
+			// A throw here used to escape the handler, so the button stayed disabled with no
+			// explanation and the rejection went unhandled. Re-enable on failure like a
+			// cancelled prompt does — executeSuffer latches before it writes HP, so a retry
+			// can't double-apply.
+			try {
+				const ok = await executeSuffer(message, pc, ctx, flagKey);
+				if (ok) btn.innerHTML = '<i class="fas fa-check"></i> Suffered the attack';
+				else btn.disabled = false;
+			} catch (err) {
+				console.error("Stonetop | suffering the attack failed", err);
+				btn.disabled = false;
+			}
 		});
-	});
+	}).catch(err => console.error("Stonetop | could not wire the Suffer button", err));
 }
 
 // Roll the foe's counter-attack, confirm the number, and self-write the PC's HP. The incoming
@@ -683,7 +759,10 @@ export function wireSufferAttack(message, html) {
 // dialog so the table can adjust for the fiction. Once-only via `flagKey`'s `suffered` marker
 // ("attack" on the roll card, "damage" on the results card). Returns true when applied, false
 // if already suffered or the player cancelled the prompt.
-async function executeSuffer(message, pc, ctx, flagKey) {
+// Exported for tests: the latch-before-damage ordering below is the whole guard against a
+// player taking the same attack twice, and it is not reachable through the wired button
+// without standing up a chat card and a Dialog.
+export async function executeSuffer(message, pc, ctx, flagKey) {
 	if (message.getFlag(SCOPE, flagKey)?.suffered) return false;
 	const foe = ctx.targets?.[0] ? await fromUuid(ctx.targets[0].uuid).then(td => td?.actor).catch(() => null) : null;
 	// The rollable die is `damage.rollFormula`; `damage.value` is PROSE ("rusty sword d8+2
@@ -704,8 +783,24 @@ async function executeSuffer(message, pc, ctx, flagKey) {
 	const amount = await promptIncomingDamage({ pcName: pc.name, foeName: ctx.targets?.[0]?.name, foeDie, foeText, rolled, armor, suggested });
 	if (amount === null) return false;
 
+	// Latch BEFORE the HP write, never after.
+	//
+	// The button is gated on the PC's ownership, but this flag lives on the chat MESSAGE — which
+	// a player does NOT own when the GM rolled the attack for them. Applying damage first meant
+	// the HP write landed, the latch then threw on permission, and the card came back on the next
+	// render still unlatched, so the same attack could be suffered a second time. Writing the
+	// latch first makes the failure mode safe: nothing is deducted unless the "already suffered"
+	// marker actually stored.
+	try {
+		await message.setFlag(SCOPE, flagKey, { ...message.getFlag(SCOPE, flagKey), suffered: true });
+	} catch (err) {
+		console.error("Stonetop | could not mark the attack suffered; damage NOT applied", err);
+		ui.notifications?.warn(
+			"You can't update this attack card, so the damage was not applied. Ask the GM to apply it.");
+		return false;
+	}
+
 	const t = await applyDamageToActor(pc, amount);
-	await message.setFlag(SCOPE, flagKey, { ...message.getFlag(SCOPE, flagKey), suffered: true });
 	await ChatMessage.create({
 		content: stonetopChatCard("Suffered the enemy's attack", `<div class="card-content"><p><strong>${escHtml(pc.name)}</strong> takes <strong>${amount}</strong> damage: ${t?.oldHp} &rarr; ${t?.newHp} HP.</p></div>`, "stonetop-attack-suffer-card"),
 		speaker: ChatMessage.getSpeaker({ actor: pc }),
@@ -722,7 +817,7 @@ function promptIncomingDamage({ pcName, foeName, foeDie, foeText, rolled, armor,
 			content: `<form class="stonetop-suffer-attack">
 				<p><strong>${escHtml(foeName || "The enemy")}</strong> attacks <strong>${escHtml(pcName)}</strong>.</p>
 				${foeText ? `<p class="stonetop-suffer-fiction">${escHtml(foeText)}</p>` : ""}
-				<p class="stonetop-suffer-detail">${foeDie ? `Rolled ${rolled} (${escHtml(foeDie)})` : "No stat-block damage found — enter the damage"}${armor ? ` − ${armor} armor` : ""}.</p>
+				<p class="stonetop-suffer-detail">${foeDie ? `Rolled ${rolled} (${escHtml(foeDie)})` : "No stat-block damage found: enter the damage"}${armor ? ` − ${armor} armor` : ""}.</p>
 				<label class="stonetop-suffer-field">Damage to take
 					<input type="number" name="amount" value="${suggested}" min="0" step="1">
 				</label>

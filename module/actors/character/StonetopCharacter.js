@@ -1,7 +1,4 @@
 import {
-	LoreOptionSnapshotBuilder,
-	LoreEntrySnapshotBuilder,
-	LoreSection,
 	AppearanceLineSnapshot,
 	AppearanceOptionSnapshot,
 	AppearanceSection,
@@ -37,14 +34,20 @@ import {
 	VitalsSnapshotBuilder,
 } from "../../model/CharacterSnapshot.js";
 import {PlaybookMoveEntry} from "./PlaybookMoveEntry.js";
+import {deletionEntry} from "../../utils/foundry-compat.js";
 import {statRequirementLabel, statRequirementsUnmet} from "./stat-requirement.js";
 import {MoveResources} from "./MoveResources.js";
 import {moveMarkBudget} from "./move-mark-budget.js";
 import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, resolvedFlags, resolvedFlagProperty} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG, ownsAsteriskMove} from "./WouldBeHeroAsterisk.js";
+import {ownedNamesOr} from "./owns-move.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight} from "./holy-light.js";
+import {ONGOING_INVOCATION_FLAG, readOngoing} from "./ongoing-invocation.js";
 import {CONDEMNED_FLAG, canCondemn, readCondemned, addCondemned, removeCondemned, noteCondemned} from "./condemn.js";
+import {OATHS_FLAG, canBindOaths, readOaths, addOath, removeOath, noteOath, setOathBroken} from "./oaths.js";
+import {BLESSED_MARKS_FLAG, canMarkBlessed, readMarks, addMark, removeMark, noteMark, setMarkLoyalty} from "./blessed-marks.js";
+import {BATTLE_JOY_FLAG, BATTLE_JOY, canEnterBattleJoy, ignoresDebilities} from "./battle-joy.js";
 import {CharacterBackgrounds} from "./CharacterBackgrounds.js";
 import {CharacterInstincts} from "./CharacterInstincts.js";
 import {CharacterAppearance} from "./CharacterAppearance.js";
@@ -59,8 +62,9 @@ import {CharacterArcana} from "./CharacterArcana.js";
 import {CharacterLore} from "./CharacterLore.js";
 import {CharacterPostDeath, buildLoreSection, insertHpPenalty} from "./CharacterPostDeath.js";
 import {effectiveSubgroupMax, sumMoveBonus} from "./dialogs/possession-choice-cap.js";
+import {partitionMovesByGroup} from "./dialogs/onboarding-move-groups.js";
 import {FoundryRepositoryFactory} from "./repositories/FoundryRepositoryFactory.js";
-import {capitalizeFirst, slugify, composeInstinct, escHtml} from "../../utils/strings.js";
+import {capitalizeFirst, slugify, composeInstinct, escHtml, stripHtmlToText} from "../../utils/strings.js";
 import {splitFillBlank, fillBlank} from "../../utils/fill-blanks.js";
 import {localize as _loc} from "../../utils/i18n.js";
 import {getStonetopSteadingActor} from "../../utils/world.js";
@@ -68,6 +72,7 @@ import {moveChatCard} from "../../utils/chat.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
 import {buildCustomMoveData, clampInt} from "../../utils/custom-move-data.js";
 import {buildInventoryItemData} from "../../utils/inventory-item-data.js";
+import {ARTIFACT_STATE, concealArtifactFields, isArtifactUpgrade, normalizeArtifactState} from "./artifact-identify.js";
 import {isLoveLetter} from "./love-letters.js";
 import {deriveLoadLevel, loadLimitsFor} from "../../utils/load.js";
 import {maxDie, stepDie, normalizeDamageDie} from "../../utils/damage-die.js";
@@ -261,6 +266,11 @@ function _ownedShieldLoadReduction(actor) {
 	return _sumLearnedMoveField(actor, "shieldLoadReduction");
 }
 
+// The id seed every standing-list row is minted with (see _rosterWrite). One width, in one place,
+// because the rows are addressed by it: three call sites each passing their own length is how two
+// of the rosters come to disagree about how unique a row id is.
+const newRosterId = () => foundry.utils.randomID(16);
+
 export class StonetopCharacter {
 	constructor(actor, repos) {
 		this._actor = actor;
@@ -390,13 +400,20 @@ export class StonetopCharacter {
 		return entries.filter(e => !NON_PLAYER_EXPEDITION_MOVES.has(e.name));
 	}
 
-	async buildSnapshot() {
+	/**
+	 * @param {object} [view] Who is looking. Only `viewerIsGM` is read, and only by the gear
+	 *        section: a hidden artifact's tags are concealed from everyone else (Book I p.430),
+	 *        and concealing them HERE keeps them out of the rendered DOM entirely. This class is
+	 *        Foundry-free by design, so the viewer has to be handed in — the sheet supplies it.
+	 *        Omitting it conceals, which is the safe way round for a caller that forgot.
+	 */
+	async buildSnapshot(view = {}) {
 		const actor = this._actor;
 		const actorLevel = actor.system?.attributes?.level?.value ?? 1;
 		const playbookData = await this.playbook();
 		const ownedAllByName = this._buildOwnedMovesMap();
 		const moves    = await this._buildMovesSection(playbookData, ownedAllByName, actorLevel);
-		const inventory = await this._buildInventorySection(playbookData, ownedAllByName, actorLevel);
+		const inventory = await this._buildInventorySection(playbookData, ownedAllByName, actorLevel, view);
 		const allOutfitItems = await this._inventoryRepo.getAll();
 		const postDeath = await this._postDeath.buildSnapshot();
 		const pdiLabel  = postDeath.activeInsert?.name ?? null;
@@ -438,13 +455,14 @@ export class StonetopCharacter {
 			// every render, not written once.
 			.withVitals(_buildVitalsSection(actor, playbookData, armor, moveBonuses, wornArmorBase, insertHpPenalty(postDeath.activeInsert?.lore)))
 			.withMoves(moves)
-			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters))
+			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null))
 			.withInventory(inventory)
 			.withArcana(await this._arcana.buildSnapshot(actor.system.stats ?? {}, this._inventory.checked, this._inventory.resources))
 			.withPostDeathInsert(postDeath)
 			.withRollMode(_normalizeSheetRollMode(resolvedFlags(actor).rollMode))
 			.withCrewBonuses(_buildCrewStats(playbookData?.crew, moveBonuses))
 			.withCompanionBonuses(_buildCompanionBonuses(moveBonuses, ownedAllByName))
+			.withViewerIsGM(!!view.viewerIsGM)
 			.build();
 	}
 
@@ -657,7 +675,8 @@ export class StonetopCharacter {
 		]);
 	}
 
-	async _buildInventorySection(playbookData, ownedAllByName, actorLevel) {
+	async _buildInventorySection(playbookData, ownedAllByName, actorLevel, view = {}) {
+		const viewerIsGM     = !!view.viewerIsGM;
 		const checked        = this._inventory.checked;
 		const resources      = this._inventory.resources;
 		const possessionUses = this._possessions.uses;
@@ -723,20 +742,35 @@ export class StonetopCharacter {
 					// A write-in's "x piercing" tag scales with the steading's Prosperity, same
 					// as the shipped catalog gear above (line ~642).
 					: _transformPiercingNote(item.system?.note ?? null, prosperity));
+			// Identifying artifacts, Book I pp.430-431: an artifact the GM has hidden shows only
+			// what's "obvious at a glance" until a PC works it out. The tags/Value parenthetical
+			// and the ○ uses track are withheld here — before the snapshot, so they never reach
+			// the template — while the ◇ load below is deliberately NOT, since the book has the
+			// PCs accounting for an artifact's load the moment they pick it up.
+			const artifact = concealArtifactFields({
+				state:    item.system?.identifyState,
+				note,
+				resource: res,
+				hint:     item.system?.artifactHint,
+				lore:     item.system?.artifactLore,
+				lead:     item.system?.artifactLead,
+			}, { viewerIsGM });
+			const shownRes = artifact.resource;
 			return new InventoryItemSnapshotBuilder()
 			.withSlug(item._id)
 			.withName(grant?.name ?? item.name)
 			// Plain write-ins carry no source note. Possession gear now renders inside its
 			// possession's card (grouped under the possession label), so it needs no
 			// "from <possession>" note either.
-			.withNote(note)
+			.withNote(artifact.note)
 			.withWeight(item.system.weight ?? 1)
 			.withChecked(checked[item._id] ?? false)
-			.withResource(res ? new ResourceBuilder()
-				.withCurrent(Math.min(currentUses ?? 0, res.max ?? 0))
-				.withMax(res.max)
-				.withTitle(res.title ?? null)
-				.withLabels(res.labels ?? [])
+			.withArtifact(artifact)
+			.withResource(shownRes ? new ResourceBuilder()
+				.withCurrent(Math.min(currentUses ?? 0, shownRes.max ?? 0))
+				.withMax(shownRes.max)
+				.withTitle(shownRes.title ?? null)
+				.withLabels(shownRes.labels ?? [])
 				.build() : null)
 			// Trailing text the book prints after the ○ track ("uses, grants advantage to
 			// Persuade"), so the whisky reads as one phrase. Only grants carry it; write-ins
@@ -1459,15 +1493,35 @@ export class StonetopCharacter {
 	 * `flags.stonetop` or `system` depending on where it came from, so resolve each field
 	 * from whichever source has it and hand the result to the one shared builder — that
 	 * way a new inventory field only has to be taught to buildInventoryItemData.
+	 *
+	 * @param {object} [opts]
+	 * @param {boolean} [opts.hideArtifact=false] Land this drop unidentified (Book I p.430).
+	 *        Read from the world setting by the sheet, because this class never touches
+	 *        `game`. Only ever applied to a drop that doesn't already state its own
+	 *        identification — a GM handing over an artifact they'd already revealed must not
+	 *        have it re-hidden on the way in.
 	 */
-	async addDroppedInventoryItem(itemData) {
+	async addDroppedInventoryItem(itemData, opts = {}) {
 		const st = itemData?.flags?.[ITEM_FLAG_SCOPE] ?? {};
 		const sys = itemData?.system ?? {};
 		const clone = v => globalThis.foundry?.utils?.deepClone?.(v) ?? v;
 		const rawColumn = st.inventoryColumn ?? sys.inventoryColumn ?? st.column ?? sys.column;
 		const resource = st.resource ?? sys.resource;
 		const armor = st.armor ?? sys.armor;
+		const isTreasure = !!(st.isTreasure ?? sys.isTreasure);
+		const carriedState = normalizeArtifactState(st.identifyState ?? sys.identifyState);
+		// Only a treasure/artifact is ever hidden by default. An ordinary write-in dragged off
+		// the sidebar has no tags worth concealing, and hiding it would strand the player with a
+		// "?" on their own gear.
+		const state = carriedState
+			|| (opts.hideArtifact && isTreasure ? ARTIFACT_STATE.UNKNOWN : ARTIFACT_STATE.NONE);
 		const data = buildInventoryItemData({
+			artifact: {
+				state,
+				hint: st.artifactHint ?? sys.artifactHint ?? "",
+				lore: st.artifactLore ?? sys.artifactLore ?? "",
+				lead: st.artifactLead ?? sys.artifactLead ?? "",
+			},
 			name: itemData?.name,
 			// A drop's column is untrusted; anything but an explicit "regular" reads as small.
 			column: rawColumn === "regular" ? "regular" : "small",
@@ -1478,7 +1532,7 @@ export class StonetopCharacter {
 			moveType: "inventory-custom",
 			// A Book II treasure keeps its marker through the re-plant, so the gear tab can
 			// group it under "Treasures" rather than among the write-ins.
-			isTreasure: !!(st.isTreasure ?? sys.isTreasure),
+			isTreasure,
 			// And its art: a treasure resolves its illustration at drag time (there is no
 			// document to point at ahead of time), so the drop payload is the only place
 			// that carries it. Rebuilding the item without this drops the picture on the
@@ -1491,6 +1545,63 @@ export class StonetopCharacter {
 
 	async removeCustomInventoryItem(itemId) {
 		await this._actor.deleteEmbeddedDocuments("Item", [itemId]);
+	}
+
+	// --- Identifying artifacts (Book I, Discoveries pp.430-431) -------------
+	//
+	// State lives on the inventory Item, not in actor flags, because an artifact IS a document
+	// the character owns — unlike an arcanum, which is a pack card the actor merely references
+	// by slug. One consequence worth knowing: the ledger diffs ACTOR updates only, so these
+	// writes are not ledgered and there is no point handing them a `stonetopMove`. The roll card
+	// in chat is the durable record of how a thing came to be identified.
+
+	/** The artifact fields of one owned inventory item, or null if there's no such item. */
+	artifactKnowledge(itemId) {
+		const item = this._actor.items.get(itemId);
+		if (!item) return null;
+		return {
+			id:    item.id,
+			name:  item.name,
+			state: normalizeArtifactState(item.system?.identifyState),
+			note:  item.system?.note ?? "",
+			hint:  item.system?.artifactHint ?? "",
+			lore:  item.system?.artifactLore ?? "",
+			lead:  item.system?.artifactLead ?? "",
+		};
+	}
+
+	/**
+	 * Move an artifact to `state`.
+	 *
+	 * `upgradeOnly` is what the roll paths pass: a Know Things result may only ever tell the
+	 * character MORE than they already knew, so a Logbook spend or a GM Shift that re-lands on a
+	 * lower tier writes nothing rather than taking back a write-up already read. The GM's own
+	 * hand-over control passes it false, since re-hiding a thing is exactly what that control is
+	 * for. Returns whether anything was written.
+	 */
+	async setArtifactState(itemId, state, { upgradeOnly = false, ...options } = {}) {
+		const item = this._actor.items.get(itemId);
+		if (!item) return false;
+		const next    = normalizeArtifactState(state);
+		const current = normalizeArtifactState(item.system?.identifyState);
+		if (next === current) return false;
+		if (upgradeOnly && !isArtifactUpgrade(current, next)) return false;
+		await item.update({ "system.identifyState": next }, options);
+		return true;
+	}
+
+	/** Save the GM's hint / write-up / lead for an artifact. Absent keys are left alone. */
+	async updateArtifactKnowledge(itemId, { hint, lore, lead, state } = {}, options = {}) {
+		const item = this._actor.items.get(itemId);
+		if (!item) return false;
+		const update = {};
+		if (hint  !== undefined) update["system.artifactHint"]  = String(hint ?? "");
+		if (lore  !== undefined) update["system.artifactLore"]  = String(lore ?? "");
+		if (lead  !== undefined) update["system.artifactLead"]  = String(lead ?? "");
+		if (state !== undefined) update["system.identifyState"] = normalizeArtifactState(state);
+		if (!Object.keys(update).length) return false;
+		await item.update(update, options);
+		return true;
 	}
 
 	// --- Player-authored custom moves -------------------------------------
@@ -1657,7 +1768,7 @@ export class StonetopCharacter {
 			const grant = adopt.get(itemGrantKey(i));
 			if (grant) existing.add(grant.sourceKey ?? grant.name);
 		}
-		const sourceLabel = (opt.label ?? "").replace(/<[^>]*>/g, "").trim();
+		const sourceLabel = stripHtmlToText(opt.label);
 		const toCreate    = grantsToCreate(opt.grantsItems, existing, { slug, sourceLabel });
 		if (toCreate.length) await this._actor.createEmbeddedDocuments("Item", toCreate);
 		// Record that this possession's gear has been materialized, so the ready-time
@@ -1687,8 +1798,10 @@ export class StonetopCharacter {
 	}
 	async _clearPossessionGrantsApplied(slug) {
 		if (!(slug in this._possessionGrantsApplied())) return;
-		// setFlag can't drop keys — delete just this slug's entry via `-=`.
-		await this._actor.update({ [`flags.${STONETOP_SCOPE}.possessionGrantsApplied.-=${slug}`]: null });
+		// setFlag can't drop keys — delete just this slug's entry, in whichever form the running
+		// core applies (deletionEntry: ForcedDeletion on v14+, the legacy `-=` prefix below it).
+		await this._actor.update(Object.fromEntries(
+			[deletionEntry(`flags.${STONETOP_SCOPE}.possessionGrantsApplied.${slug}`)]));
 	}
 
 	// Ready-time back-fill for characters whose grant-bearing possessions were selected
@@ -2010,7 +2123,16 @@ export class StonetopCharacter {
 		await this.ensureStartingMoves();
 	}
 
-	async onRoll(event, { statOverride = null, situational = 0 } = {}) {
+	// `weaponSlug` pre-answers the attack flow's weapon prompt — set only by the paths where the
+	// player has already chosen the weapon by choosing the move (see grantedWeaponAttackFor).
+	//
+	// RETURNS: `false` when there was nothing here to roll and the caller should try its other
+	// paths (a bare stat, a damage formula); `"cancel"` when this WAS a move roll but the player
+	// backed out of the weapon or target prompt, so no dice were thrown; `true` otherwise. The two
+	// truthy answers both mean "taken, stop looking" — the distinction is only for a caller with
+	// something to fire after the roll (see MOVE_ROLL_EFFECTS), which must not fire on a prompt
+	// nobody answered.
+	async onRoll(event, { statOverride = null, situational = 0, weaponSlug = null } = {}) {
 		const itemId = event.currentTarget.closest(".item")?.dataset.itemId;
 		if (!itemId) return false;
 		const item = this._actor.items.get(itemId);
@@ -2020,13 +2142,24 @@ export class StonetopCharacter {
 		const isDescription = event.currentTarget.getAttribute("data-show") === "description";
 		const descriptionOnly = isDescription || (item.type === "npcMove" && !item.system.rollFormula);
 
+		// Battle Joy's only roll is its ENDING ("when the action stops, roll +CON"), so making it is
+		// leaving the state. Dropped before the options below are built, which is what puts the
+		// character's debilities back in play for this roll and no earlier — see
+		// applyDebilityRollMode. Reading the move's text is not rolling it, hence the guard.
+		if (!descriptionOnly) await this._endBattleJoyBeforeRoll(item);
+
 		// Clash / Let Fly: capture the targeted foes + chosen weapon and, for a hit, attach
 		// the tier-gated Roll-damage action — or resolve a Let Fly "easy shot" with no roll.
 		// Returns null for non-attack moves. See module/combat/attack-flow.js.
 		let attackExtra = null;
 		if (!descriptionOnly) {
-			const begun = await maybeBeginAttack(this._actor, item, { stat });
-			if (begun === "cancel") return true;
+			const begun = await maybeBeginAttack(this._actor, item, { stat, weaponSlug });
+			// "cancel", not a bare `true`. Both stop the caller looking for another way to roll
+			// this rollable, which is all the fall-through needs — but a caller that also has an
+			// after-the-roll effect to fire has to be able to tell "the dice landed" from "the
+			// player closed the weapon prompt", and while these answered the same the guards
+			// written for exactly that (`if (handled) …`) were doing nothing at all.
+			if (begun === "cancel") return "cancel";
 			// Going on the offense (Clash / Let Fly) sheds any held Defend Readiness (p.216) —
 			// but only once the attack is committed, not on a cancelled weapon/target prompt.
 			if (attackMoveFor(item)) await this._loseDefendReadinessToOffense(item.name);
@@ -2101,6 +2234,31 @@ export class StonetopCharacter {
 		await this._actor.setFlag(STONETOP_SCOPE, _DEFEND_READINESS_FLAG, next);
 	}
 
+	/**
+	 * All five header-glyph ownership answers, from ONE walk of the items.
+	 *
+	 * Each single-answer getter resolves independently, and the character sheet's getData asks
+	 * for every one of them on every render — so a sheet owning none of these moves (most sheets)
+	 * paid a full traversal per predicate, seven in total once the multi-name ones are counted.
+	 *
+	 * A METHOD rather than a getter, and it takes the Set, because the sheet has other things
+	 * asking the same question of the same items in the same repaint (the crew's Shield-Wall
+	 * check, the per-card "exceptional" gate). A zero-argument getter could only ever build its
+	 * own, which left the walk halved rather than shared. Builds one when called without.
+	 *
+	 * @param {Set<string>|null} [owned]  the render's own `ownedMoveNames`, when it has one
+	 */
+	headerGlyphOwnership(owned = null) {
+		owned = ownedNamesOr(this._actor, owned);
+		return {
+			holyLight: canWieldHolyLight(this._actor, owned),
+			condemn:   canCondemn(this._actor, owned),
+			oaths:     canBindOaths(this._actor, owned),
+			battleJoy: canEnterBattleJoy(this._actor, owned),
+			blessed:   canMarkBlessed(this._actor, owned),
+		};
+	}
+
 	// -- Holy light (the Lightbearer's consecrated flame) ----------------------------
 
 	/** Is a holy light burning? A scalar, never an object: setFlag deep-merges plain
@@ -2110,27 +2268,81 @@ export class StonetopCharacter {
 		return !!this._actor.getFlag(STONETOP_SCOPE, HOLY_LIGHT_FLAG);
 	}
 
-	/** Whether this character has any move that MAKES a holy light — what earns the candle. */
-	get canWieldHolyLight() {
-		return canWieldHolyLight(this._actor);
-	}
-
 	/** Returns true only when the flag actually changed, so a caller can skip a re-render —
 	 *  and, more to the point, so re-consecrating an already-lit flame writes no document
 	 *  update and broadcasts nothing to the other clients. */
 	async setHolyLight(lit) {
 		const next = !!lit;
-		if (next === this.holyLight) return false;
+		// The Invocation goes out with the light — "it will end immediately if your holy light is
+		// extinguished". Enforced HERE rather than at the one button that snuffs a flame, so no
+		// future way of putting a light out can strand a Lightbearer concentrating on nothing.
+		// Anyone who wants to SAY what stopped reads `ongoingInvocation` before calling.
+		const droppedInvocation = !next && !!this.ongoingInvocation && await this.setOngoingInvocation("");
+		if (next === this.holyLight) return droppedInvocation;
 		if (next) await this._actor.setFlag(STONETOP_SCOPE, HOLY_LIGHT_FLAG, true);
 		else      await this._actor.unsetFlag(STONETOP_SCOPE, HOLY_LIGHT_FLAG);
 		return true;
+	}
+
+	// -- The ongoing Invocation (what the Lightbearer is concentrating on) -------------
+
+	/** The slug of the Invocation being held open, or "" for none. See ongoing-invocation.js
+	 *  for why this is one slug and not a list, and why the label isn't stored beside it. */
+	get ongoingInvocation() {
+		return readOngoing(this._actor.getFlag(STONETOP_SCOPE, ONGOING_INVOCATION_FLAG));
+	}
+
+	/** Start concentrating on an Invocation, or end it with "". Same contract as setHolyLight:
+	 *  true only when something actually changed, so renewing the Invocation already running
+	 *  writes nothing and broadcasts nothing. */
+	async setOngoingInvocation(slug) {
+		const next = readOngoing(slug);
+		if (next === this.ongoingInvocation) return false;
+		// Unset rather than storing "": an Invocation that has ended should leave no trace on the
+		// actor, the same way a snuffed light doesn't.
+		if (next) await this._actor.setFlag(STONETOP_SCOPE, ONGOING_INVOCATION_FLAG, next);
+		else      await this._actor.unsetFlag(STONETOP_SCOPE, ONGOING_INVOCATION_FLAG);
+		return true;
+	}
+
+	// -- The standing lists (Condemn, oaths, the Blessed's marks) -----------------------
+	//
+	// Three rosters, one storage contract, so the contract is written once here and each feature's
+	// writers below are a single line naming their own flag and their own roster operation. The
+	// list algebra itself lives in marked-people.js; these two are only its binding to the actor.
+
+	/** One standing list's raw stored value, for handing to that roster's operations. */
+	_rosterRaw(flag) {
+		return this._actor.getFlag(STONETOP_SCOPE, flag);
+	}
+
+	/**
+	 * Commit a roster operation's result and hand back what it did, or null when it did nothing.
+	 *
+	 * Two rules live here, and ONLY here, for all three lists:
+	 *
+	 * ⚠ The store is a flag ARRAY, and Foundry's update merge treats an array as an ATOMIC value —
+	 * so the write hands over the WHOLE list rather than reaching into a slot. A dotted
+	 * `condemned.2.note` does not patch element 2: it expands to `{ condemned: { 2: … } }` and
+	 * replaces the array with an object, destroying the roster. Same rule, for the same reason, as
+	 * roster-portraits.js — read its header note before changing this.
+	 *
+	 * And: an operation that changed nothing writes NOTHING. Re-Censuring somebody already branded
+	 * would otherwise broadcast an update and re-render every open sheet to store what was already
+	 * there.
+	 */
+	async _rosterWrite(flag, { entries, added, removed, changed }) {
+		const result = added ?? removed ?? changed ?? null;
+		if (!result) return null;
+		await this._actor.setFlag(STONETOP_SCOPE, flag, entries);
+		return result;
 	}
 
 	// -- Condemn (the Judge's brand) --------------------------------------------------
 
 	/** Everyone this Judge is holding a brand on, normalised. See condemn.js for the shape. */
 	get condemned() {
-		return readCondemned(this._actor.getFlag(STONETOP_SCOPE, CONDEMNED_FLAG));
+		return readCondemned(this._rosterRaw(CONDEMNED_FLAG));
 	}
 
 	/** Whether this character owns Condemn — what earns the scales in the header. */
@@ -2139,44 +2351,140 @@ export class StonetopCharacter {
 	}
 
 	/**
-	 * ⚠ The store is a flag ARRAY, and Foundry's update merge treats an array as an ATOMIC value —
-	 * so every write here hands over the WHOLE list rather than reaching into a slot. A dotted
-	 * `condemned.2.note` does not patch element 2: it expands to `{ condemned: { 2: … } }` and
-	 * replaces the array with an object, destroying the roster. Same rule, for the same reason, as
-	 * roster-portraits.js — read its header note before changing any of the three writers below.
-	 */
-	async _writeCondemned(entries) {
-		await this._actor.setFlag(STONETOP_SCOPE, CONDEMNED_FLAG, entries);
-	}
-
-	/**
 	 * Brand somebody. Returns the stored entry, or null when the list was left alone — which is
-	 * either a nameless target or one already branded. Nothing is written in that case, so
-	 * re-Censuring the same person broadcasts no update and re-renders no sheets.
+	 * either a nameless target or one already branded.
 	 */
 	async brandCondemned(entry) {
-		const { entries, added } = addCondemned(
-			this._actor.getFlag(STONETOP_SCOPE, CONDEMNED_FLAG), entry, () => foundry.utils.randomID(16),
-		);
-		if (!added) return null;
-		await this._writeCondemned(entries);
-		return added;
+		return this._rosterWrite(CONDEMNED_FLAG,
+			addCondemned(this._rosterRaw(CONDEMNED_FLAG), entry, newRosterId));
 	}
 
 	/** Dismiss one brand — the only way it ever ends. Returns the entry that was lifted, or null. */
 	async dismissCondemned(id) {
-		const { entries, removed } = removeCondemned(this._actor.getFlag(STONETOP_SCOPE, CONDEMNED_FLAG), id);
-		if (!removed) return null;
-		await this._writeCondemned(entries);
-		return removed;
+		return this._rosterWrite(CONDEMNED_FLAG, removeCondemned(this._rosterRaw(CONDEMNED_FLAG), id));
 	}
 
 	/** Re-word why somebody is branded. Returns the patched entry, or null when nothing changed. */
 	async setCondemnedNote(id, note) {
-		const { entries, changed } = noteCondemned(this._actor.getFlag(STONETOP_SCOPE, CONDEMNED_FLAG), id, note);
-		if (!changed) return null;
-		await this._writeCondemned(entries);
-		return changed;
+		return this._rosterWrite(CONDEMNED_FLAG, noteCondemned(this._rosterRaw(CONDEMNED_FLAG), id, note));
+	}
+
+	// -- Oaths (the Judge's Binding Arbitration) ---------------------------------------
+	// The Judge's SECOND standing list, kept beside the first and shown in the same window.
+
+	/** Every oath this Judge is holding somebody to, normalised. See oaths.js for the shape. */
+	get oaths() {
+		return readOaths(this._rosterRaw(OATHS_FLAG));
+	}
+
+	/** Whether this character owns Binding Arbitration — the other thing that earns the scales. */
+	get canBindOaths() {
+		return canBindOaths(this._actor);
+	}
+
+	/**
+	 * Witness an oath. Returns the stored entry, or null when the list was left alone — a nameless
+	 * swearer, or one already on the list.
+	 */
+	async witnessOath(entry) {
+		return this._rosterWrite(OATHS_FLAG, addOath(this._rosterRaw(OATHS_FLAG), entry, newRosterId));
+	}
+
+	/** Release somebody from an oath — the only way it ends. Returns the entry lifted, or null. */
+	async releaseOath(id) {
+		return this._rosterWrite(OATHS_FLAG, removeOath(this._rosterRaw(OATHS_FLAG), id));
+	}
+
+	/** Re-word what somebody swore. Returns the patched entry, or null when nothing changed. */
+	async setOathNote(id, note) {
+		return this._rosterWrite(OATHS_FLAG, noteOath(this._rosterRaw(OATHS_FLAG), id, note));
+	}
+
+	/** Mark an oath kept or broken — a broken one is advantage on all rolls against them. */
+	async setOathBroken(id, broken) {
+		return this._rosterWrite(OATHS_FLAG, setOathBroken(this._rosterRaw(OATHS_FLAG), id, broken));
+	}
+
+	// -- The Blessed's marks -----------------------------------------------------------
+	// Five moves, one list, each row carrying WHICH of the five it is.
+
+	/** Every mark this Blessed has standing, normalised. See blessed-marks.js for the shape. */
+	get blessedMarks() {
+		return readMarks(this._rosterRaw(BLESSED_MARKS_FLAG));
+	}
+
+	/** Whether this character owns any of the five marking moves — what earns the header glyph. */
+	get canMarkBlessed() {
+		return canMarkBlessed(this._actor);
+	}
+
+	/** Lay a mark. Returns the stored entry, or null for a nameless or already-marked subject. */
+	async layBlessedMark(entry) {
+		return this._rosterWrite(BLESSED_MARKS_FLAG,
+			addMark(this._rosterRaw(BLESSED_MARKS_FLAG), entry, newRosterId));
+	}
+
+	/** Lift a mark. Returns the entry lifted, or null when the id matched nothing. */
+	async liftBlessedMark(id) {
+		return this._rosterWrite(BLESSED_MARKS_FLAG, removeMark(this._rosterRaw(BLESSED_MARKS_FLAG), id));
+	}
+
+	/** Re-word what a mark is for. Returns the patched entry, or null when nothing changed. */
+	async setBlessedMarkNote(id, note) {
+		return this._rosterWrite(BLESSED_MARKS_FLAG, noteMark(this._rosterRaw(BLESSED_MARKS_FLAG), id, note));
+	}
+
+	/**
+	 * Spend or restore a Shared Souls beast's Loyalty.
+	 *
+	 * The one writer with something to say beyond the shared contract: it returns `{ changed, ended }`,
+	 * where `ended` is the move's own stopping condition — "when you spend its last Loyalty, the
+	 * effect ends". Whether the row GOES with it is the caller's to ask for (`liftOnEnd`), so the
+	 * announcement still belongs to the dialog; when it does ask, the removal rides the same write
+	 * rather than storing and broadcasting an exhausted row first.
+	 */
+	async setBlessedMarkLoyalty(id, loyalty, options = {}) {
+		const result = setMarkLoyalty(this._rosterRaw(BLESSED_MARKS_FLAG), id, loyalty, options);
+		const changed = await this._rosterWrite(BLESSED_MARKS_FLAG, result);
+		return { changed, ended: changed ? result.ended : false };
+	}
+
+	// -- Battle Joy (the Heavy) ---------------------------------------------------------
+
+	/** Is this character lost in their Battle Joy? A scalar, for the reason holyLight is. */
+	get battleJoy() {
+		return !!this._actor.getFlag(STONETOP_SCOPE, BATTLE_JOY_FLAG);
+	}
+
+	/**
+	 * Whether the three debility boxes are presently doing nothing — "you ignore … the effects of
+	 * debilities as long as you keep fighting". Read by the roll path below and by the sheet, which
+	 * greys the boxes out, so the tick and the roll can never disagree about whether it applies.
+	 */
+	get ignoresDebilities() {
+		return ignoresDebilities({ raging: this.battleJoy });
+	}
+
+	/** Returns true only when the flag actually changed, so a caller can skip a re-render. */
+	async setBattleJoy(raging) {
+		const next = !!raging;
+		if (next === this.battleJoy) return false;
+		if (next) await this._actor.setFlag(STONETOP_SCOPE, BATTLE_JOY_FLAG, true);
+		else      await this._actor.unsetFlag(STONETOP_SCOPE, BATTLE_JOY_FLAG);
+		return true;
+	}
+
+	/**
+	 * Matched on the resolved ITEM's name, never on a row's text: an un-owned playbook row posts its
+	 * text with no item at all, and a player-authored custom move can carry any name.
+	 *
+	 * Returns whether it actually ended something, so the sheet knows whether this roll was the end
+	 * of a rage (and can repaint the glyph) or an ordinary Battle Joy roll by somebody who never
+	 * ticked it on.
+	 */
+	async _endBattleJoyBeforeRoll(item) {
+		if (item?.name !== BATTLE_JOY) return false;
+		return this.setBattleJoy(false);
 	}
 
 	// Raise the held Readiness to the amount this Defend tier grants, never lowering an
@@ -2193,7 +2501,7 @@ export class StonetopCharacter {
 		// hold comes solely from Guardian) — that would falsely imply the shield applied.
 		const shieldNote = (this.bearsShield && tier !== "failure") ? " (shield)" : "";
 		await ChatMessage.create({
-			content: moveChatCard("Defend — Readiness held",
+			content: moveChatCard("Defend: Readiness held",
 				`<p><strong>${escHtml(this._actor.name)}</strong> holds <strong>${next}</strong> Readiness${escHtml(shieldNote)}.</p>`
 				+ `<p>Spend it to suffer an attack's damage/effects for a ward, halve it, draw all attention to yourself, or strike back.</p>`),
 			speaker: ChatMessage.getSpeaker({ actor: this._actor }),
@@ -2279,6 +2587,20 @@ export class StonetopCharacter {
 		return true;
 	}
 
+	/**
+	 * Turn a marked debility into disadvantage on the rolls it touches, and say on the card which
+	 * one did it. THE one place a debility affects a roll — which is why the Heavy's Battle Joy is
+	 * enforced here rather than at each of the four callers.
+	 *
+	 * "You ignore fear, pain, mind-control, and the effects of debilities as long as you keep
+	 * fighting." So a raging Heavy's boxes stay ticked (they are still weakened; they are simply
+	 * past caring) and the roll goes out clean — with a pill saying so, because a player who has
+	 * forgotten they are in it would otherwise read the missing disadvantage as a bug.
+	 *
+	 * The move's OWN roll is exempt by construction: rolling Battle Joy is "when the action stops",
+	 * and the sheet drops the state before that roll is built (see _endBattleJoyBeforeRoll), so the
+	 * debility applies to it exactly as the rules say.
+	 */
 	applyDebilityRollMode(stat, options) {
 		const debilityOptions = this._actor.system.attributes?.debilities?.options ?? {};
 		const activeEntry = Object.entries(debilityOptions).find(
@@ -2291,6 +2613,12 @@ export class StonetopCharacter {
 		if (!activeEntry) return options;
 		const [key] = activeEntry;
 		const def = _DEBILITY_DEF_BY_KEY[key];
+		// Battle Joy: the debility is marked and does nothing. Named on the card rather than left
+		// silent, and the roll mode is passed through UNTOUCHED — including an advantage the
+		// debility would otherwise have cancelled, which is the point of ignoring it.
+		if (this.ignoresDebilities) {
+			return { ...options, stonetopDebilityIgnored: BATTLE_JOY, stonetopDebilityIgnoredName: def?.name ?? key };
+		}
 		const base = { ...options, stonetopDebility: def?.name ?? key, stonetopDebilityTooltip: def?.description ?? "" };
 		if (options.rollMode === "adv") return { ...base, rollMode: "normal" };
 		return { ...base, rollMode: "dis" };
@@ -2398,7 +2726,13 @@ export class StonetopCharacter {
 	 */
 	async computedMaxHp() {
 		const snapshot = await this.buildSnapshot();
-		return snapshot.vitals?.hp?.max ?? this.storedMaxHp;
+		// 0 is the vitals section's way of saying "there is no computed max": without a playbook it
+		// emits `new ValueMax(0, 0)`. That is not nullish, so a bare `??` never reached the fallback
+		// below and this handed back a max of 0 — and every caller doing arithmetic on it inherited
+		// the zero. UndeathDialog's "reform with half your max HP" floored to 1 HP for a Ghost whose
+		// playbook slug no longer resolved in the pack, which is the one moment it most matters.
+		const computed = Number(snapshot.vitals?.hp?.max);
+		return Number.isFinite(computed) && computed > 0 ? computed : this.storedMaxHp;
 	}
 
 	/** The persisted field — stale by design; see computedMaxHp. Only for a last-resort fallback. */
@@ -2434,8 +2768,14 @@ export class StonetopCharacter {
 		const typed = Math.trunc(Number(input));
 		if (!Number.isFinite(typed)) return base > 0 ? await this.computedMaxHp() : this.storedMaxHp;
 		const target = Math.max(1, typed);
+		// The adjustment is the delta and stays the delta — that is what keeps a soul-wound the same
+		// size when a later level raises the base underneath it. `hp.max` is written ALONGSIDE it as
+		// a mirror, never instead of it: `system.json` names `attributes.hp` as the primary token
+		// attribute and this system links PC prototype tokens, so the bar over the character's head
+		// reads the stored field and nothing else. Left alone it kept the number the playbook drop
+		// wrote, and a Heavy who typed 24 here had a token that still filled at 20.
 		const update = base > 0
-			? { "system.attributes.hp.adjustment": target - base }
+			? { "system.attributes.hp.adjustment": target - base, "system.attributes.hp.max": target }
 			: { "system.attributes.hp.max": target };
 		if (this.hp > target) update["system.attributes.hp.value"] = target;
 		await this._actor.update(update);
@@ -2444,6 +2784,30 @@ export class StonetopCharacter {
 
 	/** The hand-set damage die, or null when the die follows the playbook. */
 	get damageDieOverride() { return normalizeDamageDie(this._actor.system?.attributes?.damage?.override); }
+
+	/**
+	 * The damage die this character actually rolls: the hand-set override if there is one, else the
+	 * playbook's die raised by any owned move that raises it ("increase your damage die to a d8").
+	 *
+	 * The same answer `buildSnapshot().vitals.damage` gives — it shares `_derivedDamageDie`, so the
+	 * rule is stated once — for a fraction of the work. A snapshot walks moves, inventory, arcana,
+	 * possessions and post-death lore to build a whole sheet; this needs the playbook and the move
+	 * bonuses and nothing else. That matters because the damage roller asks per ROLL, including on
+	 * the counter-attack and multi-target paths, and `system.attributes.damage.value` cannot answer
+	 * on its own: it records what was written when the playbook was dropped or the field edited, so
+	 * a mark-raised die would keep rolling at its old size.
+	 *
+	 * The override is checked first and costs a property read, which is the whole answer for any
+	 * character whose die is whatever they typed.
+	 */
+	async computedDamageDie() {
+		const override = this.damageDieOverride;
+		if (override) return override;
+		const playbookData = await this.playbook();
+		if (!playbookData) return null;
+		const moveBonuses = await this._ownedMoveBonuses(playbookData, this._buildOwnedMovesMap());
+		return _derivedDamageDie(playbookData, moveBonuses);
+	}
 
 	/**
 	 * Set (or clear, with a blank/unparseable value) the hand-typed damage die.
@@ -2527,12 +2891,17 @@ export class StonetopCharacter {
 	 * with death — the Heavy's Hard to Kill trades exactly that on a 7-9 ("mark a debility of
 	 * your choice to regain 1 HP", which is also what takes them out of being out of the
 	 * action), and one write means one ledger line and one re-render for what is one decision.
+	 *
+	 * `hp` is a FLOOR, not an assignment, on exactly restoreHp's terms: these moves RESTORE hit
+	 * points, so the number is where they must not be below rather than where they must be. The
+	 * difference shows when someone else heals a downed character while the walkthrough is still
+	 * open — a Heavy healed to 6 who then trades a debility was being set back down to 1.
 	 */
 	async markDebility(key, { hp = null, moveName, clearsDeathsDoor = false } = {}) {
 		if (!_DEBILITY_DEF_BY_KEY[key]) return false;
 		if (this.debilityChoices.find(d => d.key === key)?.marked) return false;
 		const update = { [`system.attributes.debilities.options.${key}.value`]: true };
-		if (hp !== null) update["system.attributes.hp.value"] = hp;
+		if (hp !== null && hp > this.hp) update["system.attributes.hp.value"] = hp;
 		if (clearsDeathsDoor) Object.assign(update, this._clearDeathsDoorUpdate);
 		await this._actor.update(update, moveName ? { stonetopMove: moveName } : {});
 		return true;
@@ -2655,7 +3024,7 @@ export class StonetopCharacter {
 		let needsInvocation     = false;
 		let availableInvocations = [];
 		if (newLevel % 2 === 0 && playbookData?.invocations?.options?.length) {
-			const selected = new Set(actor.getFlag("stonetop-pwd", "invocations.selected") ?? []);
+			const selected = new Set(actor.getFlag(STONETOP_SCOPE, "invocations.selected") ?? []);
 			availableInvocations = playbookData.invocations.options.filter(o => !selected.has(o.slug));
 			needsInvocation = availableInvocations.length > 0;
 		}
@@ -2749,8 +3118,8 @@ export class StonetopCharacter {
 			await this._applyMarkChoices(choices.marks.moveName, choices.marks.picks);
 		}
 		if (selectedInvocationSlug) {
-			const current = this._actor.getFlag("stonetop-pwd", "invocations.selected") ?? [];
-			await this._actor.setFlag("stonetop-pwd", "invocations.selected", [...current, selectedInvocationSlug]);
+			const current = this._actor.getFlag(STONETOP_SCOPE, "invocations.selected") ?? [];
+			await this._actor.setFlag(STONETOP_SCOPE, "invocations.selected", [...current, selectedInvocationSlug]);
 		}
 	}
 
@@ -2792,8 +3161,10 @@ export class StonetopCharacter {
 	async _revertStatIncreaseChoice(moveItem) {
 		const statKey = (this._actor.getFlag(STONETOP_SCOPE, "improvedStatChoices") ?? {})[moveItem.id];
 		if (!statKey) return;
-		// setFlag merges (it can't drop keys), so unset just this instance's entry via `-=`.
-		await this._actor.update({ [`flags.${STONETOP_SCOPE}.improvedStatChoices.-=${moveItem.id}`]: null });
+		// setFlag merges (it can't drop keys), so unset just this instance's entry — via
+		// deletionEntry, so v14 gets a ForcedDeletion rather than a deprecated `-=` key.
+		await this._actor.update(Object.fromEntries(
+			[deletionEntry(`flags.${STONETOP_SCOPE}.improvedStatChoices.${moveItem.id}`)]));
 		if (!_STAT_DEFS[statKey]) return;
 		const current = this._actor.system?.stats?.[statKey]?.value ?? 0;
 		await this._actor.update(
@@ -2976,6 +3347,22 @@ function _buildWoundsSection(actor) {
 }
 
 
+/**
+ * The DERIVED damage die: the playbook's, raised by any owned move that raises it. Null without a
+ * playbook, since there is nothing to derive from.
+ *
+ * Stated here alone because two callers need the same answer at very different prices — the vitals
+ * section building a whole sheet, and `computedDamageDie` answering a single damage roll. A second
+ * copy is how the roller and the sheet come to disagree about what die a character rolls.
+ *
+ * Does NOT consider the hand-typed override: that WINS over this, and the two callers apply it at
+ * their own layer (the field is what the sheet renders, and it is checked first by the accessor).
+ */
+function _derivedDamageDie(playbookData, moveBonuses = {}) {
+	if (!playbookData) return null;
+	return moveBonuses.damageDie ? maxDie(playbookData.damage, moveBonuses.damageDie) : playbookData.damage;
+}
+
 function _buildVitalsSection(actor, playbookData, armorValue, moveBonuses = {}, wornArmorBase = 0, insertHpPenalty = 0) {
 	const attrs = actor.system?.attributes ?? {};
 	const level = attrs.level?.value ?? 1;
@@ -2988,10 +3375,14 @@ function _buildVitalsSection(actor, playbookData, armorValue, moveBonuses = {}, 
 	// new move bonuses still land, rather than freezing max HP at whatever was typed.
 	const hpAdjust = Math.trunc(Number(attrs.hp?.adjustment) || 0);
 	const hpBase = playbookData ? Math.max(1, derivedHp) : 0;
-	const hpMax = Math.max(1, derivedHp + hpAdjust);
-	const damageBase = playbookData
-		? (moveBonuses.damageDie ? maxDie(playbookData.damage, moveBonuses.damageDie) : playbookData.damage)
-		: null;
+	// Built on hpBase, NOT on the un-floored derivedHp, so the number the sheet shows as the base
+	// and the number the adjustment is measured against are the same one. They part company only
+	// when the floor fires, and that is exactly when the hand-set round trip broke: the field
+	// renders `hpBase` into `data-hp-base`, _onMaxHpEdit stores `typed - base`, and computing the
+	// max off derivedHp then landed somewhere else entirely. The floor still holds, since hpBase
+	// is already at least 1 wherever a playbook exists.
+	const hpMax = Math.max(1, hpBase + hpAdjust);
+	const damageBase = _derivedDamageDie(playbookData, moveBonuses);
 	// A die typed into the sheet's Damage field wins outright: it is the player saying "this
 	// character's die is X", which the playbook has no business overwriting on the next render.
 	// Clearing the field drops back to the derived die (see setDamageDieOverride).
@@ -3443,7 +3834,7 @@ function _rollLabelForMove(name, rollType, data = {}) {
 	return ROLL_LABELS_BY_TYPE[normalizedRollType] ?? null;
 }
 
-function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, loveLetters = []) {
+function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, loveLetters = [], playbookName = null) {
 	const playbookCat   = categories.find(c => c.key === "playbook");
 	const basicCat      = categories.find(c => c.key === "basic");
 	const expeditionCat = categories.find(c => c.key === "expedition");
@@ -3482,6 +3873,10 @@ function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, love
 
 	return new MovelistBuilder()
 		.withPlaybookMoves(playbookCat?.moves ?? [])
+		// Same moves, bucketed by the playbook's three onboarding groups so the tab can
+		// head each cluster. Falls back to [] — one flat list — for a playbook the group
+		// table doesn't know (homebrew, or none chosen yet).
+		.withPlaybookMoveGroups(partitionMovesByGroup(playbookName, playbookCat?.moves ?? []))
 		.withLearnedMoves(learnedCat?.moves ?? [])
 		.withBasicMoves(basicCat?.moves ?? [])
 		.withExpeditionMoves(expeditionCat?.moves ?? [])

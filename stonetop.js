@@ -6,12 +6,14 @@ import { createStonetopCharacterSheetClass } from "./module/actors/character/Sto
 import { createStonetopSteadingSheetClass } from "./module/actors/steading/StonetopSteadingSheet.js";
 import { createStonetopMonsterSheetClass } from "./module/actors/monster/StonetopMonsterSheet.js";
 import { createStonetopNpcSheetClass } from "./module/actors/npc/StonetopNpcSheet.js";
+import { createStonetopGmToolkitSheetClass } from "./module/actors/gmtoolkit/StonetopGmToolkitSheet.js";
 import { BestiaryPageModel } from "./module/journal/BestiaryPageModel.js";
 import { LocationPageModel } from "./module/journal/LocationPageModel.js";
 import { CharacterModel } from "./module/data-models/CharacterModel.js";
 import { SteadingModel } from "./module/data-models/SteadingModel.js";
 import { MonsterModel } from "./module/data-models/MonsterModel.js";
 import { NpcModel } from "./module/data-models/NpcModel.js";
+import { GmToolkitModel } from "./module/data-models/GmToolkitModel.js";
 import { MoveModel } from "./module/data-models/MoveModel.js";
 import { PlaybookModel } from "./module/data-models/PlaybookModel.js";
 import { NpcMoveModel } from "./module/data-models/NpcMoveModel.js";
@@ -22,6 +24,8 @@ import { ThreatPageModel } from "./module/journal/ThreatPageModel.js";
 import { createStonetopThreatPageSheetClass } from "./module/journal/StonetopThreatPageSheet.js";
 import { HazardPageModel } from "./module/journal/HazardPageModel.js";
 import { createStonetopHazardPageSheetClass } from "./module/journal/StonetopHazardPageSheet.js";
+import { SitePageModel } from "./module/journal/SitePageModel.js";
+import { createStonetopSitePageSheetClass } from "./module/journal/StonetopSitePageSheet.js";
 import { ThreatBoard } from "./module/threats/threat-board.js";
 import { onReady } from "./module/hooks/Ready.js";
 import { handleImportedJournalArt, ART_INDEX_SETTINGS } from "./module/book2-art/reapply.js";
@@ -30,13 +34,12 @@ import { onRenderActorSheet } from "./module/hooks/RenderActorSheet.js";
 import { onHotbarDrop } from "./module/hooks/HotbarDrop.js";
 import { onDropPlaceOfInterest } from "./module/hooks/PlaceOfInterestDrop.js";
 import { onDropFollower } from "./module/hooks/FollowerDrop.js";
-import { onPreUpdateActorDeathsDoor, onUpdateActorDeathsDoorAutoOpen, onUpdateActorDeathsDoorRaised, wireDyingPrompt } from "./module/hooks/DeathsDoorPrompt.js";
+import { onPreUpdateActorDeathsDoor, onUpdateActorDeathsDoorAutoOpen, onUpdateActorDeathsDoorCard, onUpdateActorDeathsDoorRaised, wireDyingPrompt } from "./module/hooks/DeathsDoorPrompt.js";
 import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { onPreCreateThreatNote } from "./module/hooks/ThreatNotePins.js";
 import { onDrawStonetopNote } from "./module/hooks/StonetopNoteLabels.js";
 import { invalidateMonsterRefIndex } from "./module/bestiary/monster-ref-index.js";
-import { ensureLocationSummaryIndex, applyLocationTooltips } from "./module/locations/location-tooltips.js";
-import { restrictContentLinks } from "./module/journal/restrict-content-links.js";
+import { ensureLocationSummaryIndex, applyTooltipsThenRestrict } from "./module/locations/location-tooltips.js";
 import { hideBrokenJournalArt } from "./module/journal/hide-broken-art.js";
 import { addJournalShareButton } from "./module/journal/share-journal.js";
 import { patchJournalImagePopoutTitles } from "./module/journal/journal-image-titles.js";
@@ -50,10 +53,12 @@ import { characterFullName } from "./module/utils/playbook-actors.js";
 import { registerStonetopSingletonHooks } from "./module/hooks/StonetopSingleton.js";
 import { info } from "./module/utils/logger.js";
 import { boldMissText } from "./module/utils/strings.js";
+import { hbsTruthy } from "./module/utils/hbs-truthy.js";
 import { rollSeasonsCard, sign, SPRING_SEASONS_RESULT, xpToLevelUp, markMissXp } from "./module/utils/roll-engine.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
 import { moveChatCard } from "./module/utils/chat.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
+import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
 import { wireAttackConfirm, wireApplyDamage, wireSufferAttack } from "./module/combat/attack-flow.js";
 import { markQuestionBullets } from "./module/utils/question-bullets.js";
 import { wrapGlyphTextContainers } from "./module/utils/glyphs.js";
@@ -73,6 +78,7 @@ import { registerStonetopWindowTheme, registerStonetopLightTheme } from "./modul
 import { installWindowRestore } from "./module/utils/window-restore.js";
 import { registerUuidRedirects } from "./module/migration/compat.js";
 import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
+import { SYSTEM_ID } from "./module/system-id.js";
 
 // -- INIT ------------------------------------------------------
 Hooks.once("init", () => {
@@ -120,11 +126,20 @@ Hooks.once("init", () => {
 	installWindowRestore();
 
 	Handlebars.registerHelper("format", (key, options) => game.i18n.format(String(key), options.hash));
+	// For the one shape Handlebars can't express on its own: a localised string that carries its
+	// own markup (so it has to be emitted with `{{{ }}}`) around a value that does not (so the
+	// value has to be escaped before it goes in). Without this, `{{{format …}}}` is a hole and
+	// `{{format …}}` prints the string's own <strong> at the reader.
+	Handlebars.registerHelper("escapeHtml", value => escHtml(value));
 	Handlebars.registerHelper("boldMissText", value => boldMissText(value));
 	Handlebars.registerHelper("eq", (a, b) => a === b);
-	Handlebars.registerHelper("or", (...args) => args.slice(0, -1).some(Boolean));
-	Handlebars.registerHelper("and", (...args) => args.slice(0, -1).every(Boolean));
-	Handlebars.registerHelper("not", value => !value);
+	// `hbsTruthy`, never bare `Boolean`: these three sit beside `{{#if}}` in the same
+	// expression and have to answer the same way, and an EMPTY ARRAY is the case where
+	// plain JS truthiness doesn't — truthy to `Boolean`, falsy to `{{#if}}`. See
+	// utils/hbs-truthy.js. `.slice(0, -1)` drops the options object Handlebars appends.
+	Handlebars.registerHelper("or", (...args) => args.slice(0, -1).some(hbsTruthy));
+	Handlebars.registerHelper("and", (...args) => args.slice(0, -1).every(hbsTruthy));
+	Handlebars.registerHelper("not", value => !hbsTruthy(value));
 	// No `concat` here on purpose: core already registers one (its own doc example is
 	// exactly our use, building an id out of a loop variable), and Handlebars helpers are
 	// global to the Foundry runtime — re-registering it would shadow core's for every
@@ -218,6 +233,7 @@ Hooks.once("init", () => {
 	CONFIG.Actor.dataModels.stonetop  = SteadingModel;
 	CONFIG.Actor.dataModels.monster   = MonsterModel;
 	CONFIG.Actor.dataModels.npc       = NpcModel;
+	CONFIG.Actor.dataModels.gmToolkit = GmToolkitModel;
 	CONFIG.Item.dataModels.move        = MoveModel;
 	CONFIG.Item.dataModels.playbook    = PlaybookModel;
 	CONFIG.Item.dataModels.npcMove     = NpcMoveModel;
@@ -234,31 +250,41 @@ Hooks.once("init", () => {
 	}
 
 	const StonetopCharacterSheet = createStonetopCharacterSheetClass(ActorSheet);
-	Actors.registerSheet("stonetop-pwd", StonetopCharacterSheet, {
+	Actors.registerSheet(SYSTEM_ID, StonetopCharacterSheet, {
 		types:       ["character"],
 		makeDefault: true,
 		label:       "Stonetop Character Sheet",
 	});
 
 	const StonetopSteadingSheet = createStonetopSteadingSheetClass(ActorSheet);
-	Actors.registerSheet("stonetop-pwd", StonetopSteadingSheet, {
+	Actors.registerSheet(SYSTEM_ID, StonetopSteadingSheet, {
 		types:       ["stonetop"],
 		makeDefault: true,
 		label:       "Stonetop Steading Sheet",
 	});
 
 	const StonetopMonsterSheet = createStonetopMonsterSheetClass(ActorSheet);
-	Actors.registerSheet("stonetop-pwd", StonetopMonsterSheet, {
+	Actors.registerSheet(SYSTEM_ID, StonetopMonsterSheet, {
 		types:       ["monster"],
 		makeDefault: true,
 		label:       "Stonetop Monster Sheet",
 	});
 
 	const StonetopNpcSheet = createStonetopNpcSheetClass(ActorSheet);
-	Actors.registerSheet("stonetop-pwd", StonetopNpcSheet, {
+	Actors.registerSheet(SYSTEM_ID, StonetopNpcSheet, {
 		types:       ["npc"],
 		makeDefault: true,
 		label:       "Stonetop NPC Sheet",
+	});
+
+	// The GM's own sheet: the screen-side companion to the GM playbook. Modern layout only
+	// (no classic variant), so it takes no `layoutClasses` and registers no per-sheet layout
+	// setting. See module/actors/gmtoolkit/StonetopGmToolkitSheet.js.
+	const StonetopGmToolkitSheet = createStonetopGmToolkitSheetClass(ActorSheet);
+	Actors.registerSheet(SYSTEM_ID, StonetopGmToolkitSheet, {
+		types:       ["gmToolkit"],
+		makeDefault: true,
+		label:       "Stonetop GM Toolkit",
 	});
 
 	// Bestiary entry as a custom JournalEntryPage subtype.
@@ -266,7 +292,7 @@ Hooks.once("init", () => {
 	CONFIG.JournalEntryPage.dataModels["bestiary"] = BestiaryPageModel;
 	const JournalPageSheetV1 = foundry.appv1?.sheets?.JournalPageSheet ?? globalThis.JournalPageSheet;
 	const StonetopBestiaryPageSheet = createStonetopBestiaryPageSheetClass(JournalPageSheetV1);
-	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, "stonetop-pwd", StonetopBestiaryPageSheet, {
+	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, SYSTEM_ID, StonetopBestiaryPageSheet, {
 		types:       ["bestiary"],
 		makeDefault: true,
 		label:       "Stonetop Bestiary Page",
@@ -276,7 +302,7 @@ Hooks.once("init", () => {
 	// per-section inline editing) — mirrors the bestiary page above.
 	CONFIG.JournalEntryPage.dataModels["location"] = LocationPageModel;
 	const StonetopLocationPageSheet = createStonetopLocationPageSheetClass(JournalPageSheetV1);
-	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, "stonetop-pwd", StonetopLocationPageSheet, {
+	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, SYSTEM_ID, StonetopLocationPageSheet, {
 		types:       ["location"],
 		makeDefault: true,
 		label:       "Stonetop Location Page",
@@ -287,7 +313,7 @@ Hooks.once("init", () => {
 	// Play" questions. Chronicle pages set every section's group to "glance", so no act
 	// banners render. See utils/chronicle.js.
 	CONFIG.JournalEntryPage.dataModels["chronicle"] = LocationPageModel;
-	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, "stonetop-pwd", StonetopLocationPageSheet, {
+	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, SYSTEM_ID, StonetopLocationPageSheet, {
 		types:       ["chronicle"],
 		makeDefault: true,
 		label:       "Stonetop Chronicle Page",
@@ -298,7 +324,7 @@ Hooks.once("init", () => {
 	// (live doom track), dropped onto scenes as a linked Note. See module/threats/.
 	CONFIG.JournalEntryPage.dataModels["threat"] = ThreatPageModel;
 	const StonetopThreatPageSheet = createStonetopThreatPageSheetClass(JournalPageSheetV1);
-	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, "stonetop-pwd", StonetopThreatPageSheet, {
+	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, SYSTEM_ID, StonetopThreatPageSheet, {
 		types:       ["threat"],
 		makeDefault: true,
 		label:       "Stonetop Threat Page",
@@ -309,14 +335,25 @@ Hooks.once("init", () => {
 	// architecture; authored via the Make-a-Hazard walkthrough. See module/hazards/.
 	CONFIG.JournalEntryPage.dataModels["hazard"] = HazardPageModel;
 	const StonetopHazardPageSheet = createStonetopHazardPageSheetClass(JournalPageSheetV1);
-	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, "stonetop-pwd", StonetopHazardPageSheet, {
+	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, SYSTEM_ID, StonetopHazardPageSheet, {
 		types:       ["hazard"],
 		makeDefault: true,
 		label:       "Stonetop Hazard Page",
 	});
 
+	// Sites: interesting places the PCs can explore (Book I "Sites", pp. 345-377), the third
+	// GM-prep page type. Same one-entry-per-page storage/visibility architecture as threats
+	// and hazards; authored via the Create-a-Site walkthrough. See module/sites/.
+	CONFIG.JournalEntryPage.dataModels["site"] = SitePageModel;
+	const StonetopSitePageSheet = createStonetopSitePageSheetClass(JournalPageSheetV1);
+	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, SYSTEM_ID, StonetopSitePageSheet, {
+		types:       ["site"],
+		makeDefault: true,
+		label:       "Stonetop Site Page",
+	});
+
 	const StonetopArcanumSheet = createStonetopArcanumSheetClass(ItemSheet);
-	Items.registerSheet("stonetop-pwd", StonetopArcanumSheet, {
+	Items.registerSheet(SYSTEM_ID, StonetopArcanumSheet, {
 		types:       ["move"],
 		makeDefault: false,
 		label:       "Stonetop Arcanum",
@@ -367,6 +404,7 @@ Hooks.once("init", () => {
 		"stonetop.relationships-viewbar": "systems/stonetop-pwd/templates/actor/partials/relationships-viewbar.hbs",
 		"stonetop.section-heading":  "systems/stonetop-pwd/templates/actor/partials/section-heading.hbs",
 		"stonetop.section-collapse": "systems/stonetop-pwd/templates/actor/partials/section-collapse.hbs",
+		"stonetop.section-randomize": "systems/stonetop-pwd/templates/actor/partials/section-randomize.hbs",
 		"stonetop.section-edit-toggle": "systems/stonetop-pwd/templates/actor/partials/section-edit-toggle.hbs",
 		"stonetop.details-section-edit-toggle": "systems/stonetop-pwd/templates/actor/partials/details-section-edit-toggle.hbs",
 		"stonetop.follower-section-edit": "systems/stonetop-pwd/templates/actor/partials/follower-section-edit.hbs",
@@ -374,9 +412,11 @@ Hooks.once("init", () => {
 		"stonetop.inv-note":         "systems/stonetop-pwd/templates/actor/partials/inv-note.hbs",
 		"stonetop.inv-item-regular": "systems/stonetop-pwd/templates/actor/partials/inv-item-regular.hbs",
 		"stonetop.inv-item-small":   "systems/stonetop-pwd/templates/actor/partials/inv-item-small.hbs",
+		"stonetop.inv-artifact":     "systems/stonetop-pwd/templates/actor/partials/inv-artifact.hbs",
 		"stonetop.choice-gear-row":  "systems/stonetop-pwd/templates/actor/partials/choice-gear-row.hbs",
 		"stonetop.roll-mode-picker": "systems/stonetop-pwd/templates/actor/partials/roll-mode-picker.hbs",
 		"stonetop.roll-mode-radios": "systems/stonetop-pwd/templates/actor/partials/roll-mode-radios.hbs",
+		"stonetop.steading-header-season":    "systems/stonetop-pwd/templates/actor/partials/steading-header-season.hbs",
 		"stonetop.steading-section-toggle":   "systems/stonetop-pwd/templates/actor/partials/steading-section-toggle.hbs",
 		"stonetop.steading-stats-bar":        "systems/stonetop-pwd/templates/actor/partials/steading-stats-bar.hbs",
 		"stonetop.steading-settlements-card": "systems/stonetop-pwd/templates/actor/partials/steading-settlements-card.hbs",
@@ -387,6 +427,16 @@ Hooks.once("init", () => {
 		"stonetop.steading-tab-improvements": "systems/stonetop-pwd/templates/actor/partials/steading-tab-improvements.hbs",
 		"stonetop.steading-tab-moves":        "systems/stonetop-pwd/templates/actor/partials/steading-tab-moves.hbs",
 		"stonetop.steading-tab-notes":        "systems/stonetop-pwd/templates/actor/partials/steading-tab-notes.hbs",
+		"stonetop.gm-toolkit-tab-moves":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-moves.hbs",
+		"stonetop.gm-toolkit-tab-loop":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-loop.hbs",
+		"stonetop.gm-toolkit-tab-threats":    "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-threats.hbs",
+		"stonetop.gm-toolkit-tab-sites":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-sites.hbs",
+		"stonetop.gm-toolkit-tab-homefront":  "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-homefront.hbs",
+		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
+		"stonetop.gm-prep-card-tools":        "systems/stonetop-pwd/templates/actor/partials/gm-prep-card-tools.hbs",
+		"stonetop.gm-prep-add-bar":           "systems/stonetop-pwd/templates/actor/partials/gm-prep-add-bar.hbs",
+		"stonetop.gm-prep-no-steading":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-no-steading.hbs",
+		"stonetop.gm-prep-guide-items":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-guide-items.hbs",
 		"stonetop.monster-sheet":             "systems/stonetop-pwd/templates/actor/monster.hbs",
 		"stonetop.npc-sheet":                 "systems/stonetop-pwd/templates/actor/npc.hbs",
 		"stonetop.bestiary-line-list":        "systems/stonetop-pwd/templates/actor/partials/bestiary-line-list.hbs",
@@ -396,14 +446,24 @@ Hooks.once("init", () => {
 		"stonetop.threat-card":               "systems/stonetop-pwd/templates/journal/partials/threat-card.hbs",
 		"stonetop.hazard-page":               "systems/stonetop-pwd/templates/journal/hazard-page.hbs",
 		"stonetop.hazard-card":               "systems/stonetop-pwd/templates/journal/partials/hazard-card.hbs",
-		"stonetop.steading-tab-threats":      "systems/stonetop-pwd/templates/actor/partials/steading-tab-threats.hbs",
+		"stonetop.site-page":                 "systems/stonetop-pwd/templates/journal/site-page.hbs",
+		"stonetop.site-card":                 "systems/stonetop-pwd/templates/journal/partials/site-card.hbs",
 		"stonetop.bestiary-section-head":     "systems/stonetop-pwd/templates/journal/partials/bestiary-section-head.hbs",
 		"stonetop.bestiary-group-section":    "systems/stonetop-pwd/templates/journal/partials/bestiary-group-section.hbs",
 		"stonetop.introductions-dialog":      "systems/stonetop-pwd/templates/dialogs/introductions.hbs",
 		"stonetop.guide-toc":                 "systems/stonetop-pwd/templates/dialogs/partials/guide-toc.hbs",
 		"stonetop.intros-capture-head":       "systems/stonetop-pwd/templates/dialogs/partials/intros-capture-head.hbs",
 		"stonetop.threat-string-list":        "systems/stonetop-pwd/templates/dialogs/partials/threat-string-list.hbs",
+		"stonetop.cs-list-frame":             "systems/stonetop-pwd/templates/dialogs/partials/cs-list-frame.hbs",
+		"stonetop.cs-line-list":              "systems/stonetop-pwd/templates/dialogs/partials/cs-line-list.hbs",
+		"stonetop.cs-pair-list":              "systems/stonetop-pwd/templates/dialogs/partials/cs-pair-list.hbs",
+		"stonetop.roster-row":                "systems/stonetop-pwd/templates/dialogs/partials/roster-row.hbs",
+		"stonetop.roster-add":                "systems/stonetop-pwd/templates/dialogs/partials/roster-add.hbs",
 		"stonetop.deaths-door-outcomes":      "systems/stonetop-pwd/templates/dialogs/partials/deaths-door-outcomes.hbs",
+		"stonetop.artifact-gm":              "systems/stonetop-pwd/templates/dialogs/artifact-gm.hbs",
+		"stonetop.header-toggle-glyph":       "systems/stonetop-pwd/templates/actor/partials/header-toggle-glyph.hbs",
+		"stonetop.header-count-glyph":        "systems/stonetop-pwd/templates/actor/partials/header-count-glyph.hbs",
+		"stonetop.card-head":                 "systems/stonetop-pwd/templates/journal/partials/card-head.hbs",
 		"stonetop.card-doom-track":           "systems/stonetop-pwd/templates/journal/partials/card-doom-track.hbs",
 		"stonetop.card-gm-moves":             "systems/stonetop-pwd/templates/journal/partials/card-gm-moves.hbs",
 		"stonetop.card-player-moves":         "systems/stonetop-pwd/templates/journal/partials/card-player-moves.hbs",
@@ -521,12 +581,9 @@ Hooks.on("drawNote", onDrawStonetopNote);
 Hooks.once("ready", () => ensureLocationSummaryIndex());
 const _onJournalRender = (app, html) => {
 	// Give cross-links their hover summary FIRST, then neuter any a player can't
-	// follow. Order matters: restrictContentLinks carries the just-stamped
-	// data-tooltip onto the de-linked span, so a player still gets the description
-	// on hover for Locations & Lore — while the GM-only bestiary codex is flattened
-	// to plain text with no tooltip. No-op for GMs (they keep every link). The
-	// tooltip index is async, so chain the restriction after it resolves.
-	applyLocationTooltips(html).then(() => restrictContentLinks(html));
+	// follow. Tooltips then restriction, in that order and for the reasons written down
+	// in applyTooltipsThenRestrict.
+	applyTooltipsThenRestrict(html);
 	// Drop any book-art image whose file fails to load, so no reader — player or GM —
 	// is ever shown an empty frame where a durable illustration went missing.
 	hideBrokenJournalArt(html);
@@ -619,8 +676,8 @@ Hooks.on("preUpdateActor", (actor, changes) => {
 	const newHp = foundry.utils.getProperty(changes, "system.attributes.hp.value");
 	if (newHp === undefined) return;
 	const oldHp = actor.system?.attributes?.hp?.value ?? 0;
-	if (newHp < oldHp && actor.getFlag("stonetop-pwd", "recover.spent")) {
-		foundry.utils.setProperty(changes, "flags.stonetop-pwd.recover.spent", false);
+	if (newHp < oldHp && actor.getFlag(SYSTEM_ID, "recover.spent")) {
+		foundry.utils.setProperty(changes, `flags.${SYSTEM_ID}.recover.spent`, false);
 	}
 });
 
@@ -629,6 +686,9 @@ Hooks.on("preUpdateActor", (actor, changes) => {
 // state on the same write and announce it, naming the move they actually trigger — Death's
 // Door only until they carry a post-death insert.
 Hooks.on("preUpdateActor", onPreUpdateActorDeathsDoor);
+// The announcement rides the COMMITTED write, not the preUpdate that plans it: an update can
+// still be refused after that hook has run, and a card is not taken back when it is.
+Hooks.on("updateActor", onUpdateActorDeathsDoorCard);
 // And, if the table wants it, open that move's walkthrough on the dying player's own screen.
 // A separate hook because it has to run somewhere the preUpdate can't: that fires only on the
 // client applying the damage, which is usually the GM's.
@@ -690,9 +750,13 @@ function _chatWireStartupWelcome(message, html) {
 }
 
 // -- ART-IMPORT REMINDER CARD: LAUNCH IMPORT MACRO -------------
-// The one-time "Import Your Book Art" reminder (whispered to GMs; see hooks/Ready.js
-// _postBook2ArtReminderOnce) carries a button that kicks off the Import Book Art macro.
-// GM-only card, but hide/guard the button for players defensively like the startup card.
+// Both whispered GM cards that launch the Import Book Art macro carry this button: the one-time
+// "Import Your Book Art" reminder for a world that never imported, and "Finish Your Art Import"
+// for one whose run fell short of the manifest (hooks/Ready.js _postBook2ArtReminderOnce and
+// _offerPartialArtImportOnce). They are mutually exclusive by construction — one needs no art on
+// disk, the other needs some — so a single generic wiring serves both and a third card offering
+// the same macro would need no change here.
+// GM-only cards, but hide/guard the button for players defensively like the startup card.
 function _chatWireBook2ArtReminder(message, html) {
 	const btn = html.querySelector(".stonetop-import-art-open");
 	if (!btn) return;
@@ -728,21 +792,22 @@ function _chatWireLayoutSwitch(message, html) {
 	});
 }
 
-// -- REBUILD DETAIL PORTRAITS CARD -----------------------------
-// The one-time offer to cut the new People detail portraits out of art the GM already imported
-// (hooks/Ready.js _offerPeopleArtRebuildOnce). Runs in the browser off files already on disk,
-// so it needs no PDF — but it does write files, hence GM-only. Disable the button while it runs
-// so an impatient second click can't start a duplicate pass over the same 140-odd images.
+// -- REBUILD BOOK ART CARD -------------------------------------
+// The one-time offer to cut the finer pictures — People detail portraits, square faces and
+// creature token squares — out of art the GM already imported (hooks/Ready.js
+// _offerBookArtRebuildOnce). Runs in the browser off files already on disk, so it needs no PDF —
+// but it does write files, hence GM-only. Disable the button while it runs so an impatient second
+// click can't start a duplicate pass over the same 200-odd images.
 function _chatWireRebuildCrops(message, html) {
 	const btn = html.querySelector(".stonetop-rebuild-crops-run");
 	if (!btn) return;
 	if (!game.user.isGM) { btn.style.display = "none"; return; }
 	btn.addEventListener("click", async () => {
 		if (btn.disabled) return;
-		const { runPeopleArtRebuildFromButton } = await import("./module/book2-art/run-rebuild.js");
+		const { runBookArtRebuildFromButton } = await import("./module/book2-art/run-rebuild.js");
 		// Owns the disable, the counting spinner, the notification and the restore-on-error;
 		// what is left here is only what this card says once the run is over.
-		const res = await runPeopleArtRebuildFromButton(btn);
+		const res = await runBookArtRebuildFromButton(btn);
 		if (!res) return;   // threw — the label is already back
 		if (res.failed) {
 			// A partial run leaves work undone, so the card has to stay usable: pressing it
@@ -825,7 +890,7 @@ function _chatWireBurnBrightly(message, html) {
 
 	if (!actor || actor.type !== "character" || !actor.isOwner) return;
 
-	const alreadyBurned = message.getFlag("stonetop-pwd", "burnBrightly") ?? false;
+	const alreadyBurned = message.getFlag(SYSTEM_ID, "burnBrightly") ?? false;
 	const xp    = actor.system?.attributes?.xp?.value    ?? 0;
 	const level = actor.system?.attributes?.level?.value ?? 1;
 	const canAfford = xp >= xpToLevelUp(level);
@@ -877,7 +942,7 @@ function _chatWireBurnBrightly(message, html) {
 				// Regenerate the card so the readout, result label and per-tier outcome reflect the +1.
 				flavor:  _shiftRollCardFlavor(message.flavor, roll.total, roll.formula),
 				speaker: { ...message.speaker, ...speakerUpdate },
-				flags:   { "stonetop-pwd": { burnBrightly: true } },
+				flags:   { [SYSTEM_ID]: { burnBrightly: true } },
 			});
 		} catch (err) {
 			console.error("Stonetop | Error burning brightly:", err);
@@ -901,7 +966,7 @@ function _chatWireBurnBrightly(message, html) {
 
 /** The move a roll card came from, as stamped by StonetopItem.roll. Null for non-move rolls. */
 function _cardMoveName(message) {
-	return message.getFlag("stonetop-pwd", "move") ?? null;
+	return message.getFlag(SYSTEM_ID, "move") ?? null;
 }
 
 /**
@@ -922,7 +987,7 @@ function _cardMoveName(message) {
  * the arcanum already carries writes nothing.
  */
 async function _syncArcanumIdentification(message, actor, total) {
-	const slug = message.getFlag("stonetop-pwd", "arcanum");
+	const slug = message.getFlag(SYSTEM_ID, "arcanum");
 	const character = actor?.typedActor;
 	if (!slug || !character) return;
 
@@ -942,6 +1007,50 @@ async function _syncArcanumIdentification(message, actor, total) {
 	} catch (err) {
 		console.error("Stonetop | Error re-applying the arcanum's identification:", err);
 	}
+}
+
+/**
+ * The same job for an artifact (Book I pp.430-431), which rides on the message as an ITEM ID
+ * rather than a pack slug: an artifact is a document the character owns, so there is one to name.
+ *
+ * Upgrades only, and for the same reason as the arcanum above — a Shift Down must not take back a
+ * write-up the player has already read. `setArtifactState` enforces that itself, so this only has
+ * to translate the tier and hand it over. A Shift Down that lands on a 6- translates to no state
+ * at all and writes nothing, which leaves the artifact exactly as the better roll left it.
+ */
+async function _syncArtifactIdentification(message, actor, total) {
+	const itemId = message.getFlag(SYSTEM_ID, "artifact");
+	const character = actor?.typedActor;
+	// Seek Insight also stamps `artifact` (so a card can say which thing it was about), but it
+	// never settles the ladder — p.430 leaves those answers with the GM. Only Know Things writes.
+	if (!itemId || !character || !isKnowThings(_cardMoveName(message))) return;
+
+	const state = artifactStateForTier(_classifyShiftedTotal(Number(total) || 0).key);
+	if (!state) return;
+	try {
+		if (await character.setArtifactState(itemId, state, { upgradeOnly: true })) {
+			actor.sheet?.render(false);
+		}
+	} catch (err) {
+		console.error("Stonetop | Error re-applying the artifact's identification:", err);
+	}
+}
+
+/**
+ * Every kind of thing a Know Things roll can be identifying.
+ *
+ * The two bodies stay separate because they genuinely differ (the arcanum walks p.440's ladder
+ * with per-tier skip guards; the artifact hands one state to `setArtifactState`, which enforces
+ * upgrade-only itself). What is shared is the DISPATCH: every place that rewrites a roll's total
+ * has to re-apply it to whatever the roll was about. Listing them here means a third identifiable
+ * thing is one entry rather than another line at each rewrite site — and a rewrite site that
+ * forgot one failed silently, promising a 10+ and delivering a 7-9's disclosure.
+ */
+const IDENTIFY_SYNCERS = [_syncArcanumIdentification, _syncArtifactIdentification];
+
+/** Re-apply a rewritten roll total to whatever that roll was identifying. */
+async function _resyncIdentification(message, actor, total) {
+	for (const sync of IDENTIFY_SYNCERS) await sync(message, actor, total);
 }
 
 // Burn Brightly gates on actor.isOwner but then calls message.update(), which throws when the GM
@@ -965,7 +1074,7 @@ function _chatWireKnowThings(message, html) {
 function _wireNeverAtALoss(message, html, actor) {
 	const buttons = html.querySelectorAll(".stonetop-know-things-xp");
 	if (!buttons.length) return;
-	const chosen = message.getFlag("stonetop-pwd", "knowThingsXp") ?? null;
+	const chosen = message.getFlag(SYSTEM_ID, "knowThingsXp") ?? null;
 	for (const btn of buttons) {
 		if (chosen) {
 			btn.disabled = true;
@@ -975,8 +1084,10 @@ function _wireNeverAtALoss(message, html, actor) {
 		btn.addEventListener("click", async () => {
 			for (const b of buttons) b.disabled = true;
 			const choice = btn.dataset.choice;
+			let latched = false;
 			try {
-				await message.setFlag("stonetop-pwd", "knowThingsXp", choice);
+				await message.setFlag(SYSTEM_ID, "knowThingsXp", choice);
+				latched = true;
 				if (choice === "mark") return void await markMissXp(actor, "Know Things");
 				await ChatMessage.create({
 					content: moveChatCard("Never at a Loss",
@@ -986,6 +1097,15 @@ function _wireNeverAtALoss(message, html, actor) {
 				});
 			} catch (err) {
 				console.error("Stonetop | Error resolving Never at a Loss:", err);
+				// Take the latch back off. It is written FIRST so a second click (or a re-render
+				// arriving mid-flight) cannot mark the XP twice — but that also means a failure
+				// after it lands leaves the choice recorded and the XP unmarked, with both buttons
+				// rendering disabled from here on and no way to ask again. Re-enabling the DOM is
+				// not enough on its own: the next render reads the flag, not these buttons.
+				if (latched) {
+					await message.unsetFlag(SYSTEM_ID, "knowThingsXp")
+						.catch(e => console.error("Stonetop | Could not release the Never at a Loss latch:", e));
+				}
 				for (const b of buttons) b.disabled = false;
 			}
 		});
@@ -995,7 +1115,7 @@ function _wireNeverAtALoss(message, html, actor) {
 // "expend a use ... treat the result as a 10+". Only offered while the card is still below a
 // strong hit and the logbook still has a use in it.
 function _wireLogbook(message, html, actor, card) {
-	if (message.getFlag("stonetop-pwd", "knowThingsUpgrade")) return;
+	if (message.getFlag(SYSTEM_ID, "knowThingsUpgrade")) return;
 	const roll = message.rolls?.at(0);
 	if (!roll || roll.total >= STRONG_HIT_TOTAL) return;
 
@@ -1033,7 +1153,7 @@ function _wireLogbook(message, html, actor, card) {
 			await message.update({
 				rolls,
 				flavor: _shiftRollCardFlavor(message.flavor, shifted.total, shifted.formula),
-				flags:  { "stonetop-pwd": { knowThingsUpgrade: LOGBOOK } },
+				flags:  { [SYSTEM_ID]: { knowThingsUpgrade: LOGBOOK } },
 			});
 			await ChatMessage.create({
 				content: moveChatCard("Logbook",
@@ -1041,9 +1161,9 @@ function _wireLogbook(message, html, actor, card) {
 					+ ` (${now.left - 1} of ${now.max} left), treating that roll as a 10+.</p>`),
 				speaker: ChatMessage.getSpeaker({ actor }),
 			});
-			// If this roll was identifying an arcanum, the 10+ the use just bought has to actually
-			// hand the card over — the outcome was committed when the dice landed.
-			await _syncArcanumIdentification(message, actor, shifted.total);
+			// If this roll was identifying an arcanum or an artifact, the 10+ the use just bought
+			// has to actually hand the thing over — the outcome was committed when the dice landed.
+			await _resyncIdentification(message, actor, shifted.total);
 			actor.sheet?.render(false);
 		} catch (err) {
 			console.error("Stonetop | Error consulting the logbook:", err);
@@ -1063,7 +1183,7 @@ function _chatWireRequisitionMissCost(message, html) {
 	const btn = html.querySelector(".stonetop-requisition-miss-cost");
 	if (!btn) return;
 
-	if (message.getFlag("stonetop-pwd", "requisitionMissCostApplied")) {
+	if (message.getFlag(SYSTEM_ID, "requisitionMissCostApplied")) {
 		btn.disabled = true;
 		btn.textContent = "Miss cost applied";
 		return;
@@ -1087,7 +1207,7 @@ function _chatWireRequisitionMissCost(message, html) {
 			const fortunes = steading.getStatValue("fortunes");
 			const newFortunes = Math.max(fortunes - 1, -1);
 			await steading.setSystemValue("stats.fortunes.value", newFortunes, { stonetopMove: "Requisition" });
-			await message.setFlag("stonetop-pwd", "requisitionMissCostApplied", true);
+			await message.setFlag(SYSTEM_ID, "requisitionMissCostApplied", true);
 			for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
 			ui.notifications.info(`Fortunes reduced to ${sign(newFortunes)}.`);
 		} catch (err) {
@@ -1107,7 +1227,7 @@ function _chatWireLoveLetterPicks(message, html) {
 	const boxes = html.querySelectorAll(".stonetop-picklist-check");
 	if (!boxes.length) return;
 
-	const saved   = message.getFlag("stonetop-pwd", "pickChecked") ?? [];
+	const saved   = message.getFlag(SYSTEM_ID, "pickChecked") ?? [];
 	const canSave = message.canUserModify?.(game.user, "update") ?? game.user.isGM;
 
 	for (const box of boxes) {
@@ -1122,7 +1242,7 @@ function _chatWireLoveLetterPicks(message, html) {
 			if (!canSave) return;
 			const arr = Array.from(boxes).map((b) => !!b.checked);
 			try {
-				await message.setFlag("stonetop-pwd", "pickChecked", arr);
+				await message.setFlag(SYSTEM_ID, "pickChecked", arr);
 			} catch (err) {
 				console.error("Stonetop | Error saving love-letter picks:", err);
 			}
@@ -1210,7 +1330,7 @@ async function _onRollShift(event, message) {
 		// A shifted Know Things card that was identifying an arcanum has to carry the new tier's
 		// disclosure with it, or a Shift Up says "You read the card, front and back" over a card
 		// still face down. No-op for every other roll — the flag is only on that one.
-		await _syncArcanumIdentification(message, _speakerActor(message), roll.total);
+		await _resyncIdentification(message, _speakerActor(message), roll.total);
 	} catch (err) {
 		console.error("Stonetop | Error shifting roll result:", err);
 	} finally {

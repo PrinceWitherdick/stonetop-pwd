@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	autoOpenUserId,
 	onUpdateActorDeathsDoorAutoOpen,
+	onUpdateActorDeathsDoorCard,
 } from "../../module/hooks/DeathsDoorPrompt.js";
 import { DEATHS_DOOR_STATE } from "../../module/actors/character/deaths-door.js";
 
@@ -130,5 +131,60 @@ describe("onUpdateActorDeathsDoorAutoOpen — opening the move on the dying play
 		const { actor, sheet } = world();
 		onUpdateActorDeathsDoorAutoOpen({ ...actor, type: "monster" }, becameDying);
 		expect(sheet.render).not.toHaveBeenCalled();
+	});
+});
+
+// The announcement used to be posted from preUpdateActor — i.e. before the write that makes it
+// true was committed. An update can still be refused at that point (a later preUpdate hook
+// returning false, a permission, a dropped connection), and the hit points and the state flag are
+// discarded together when it is; the card is not. It now rides the committed diff instead, on the
+// same signal the auto-open reads.
+describe("onUpdateActorDeathsDoorCard — announcing a PC who went down", () => {
+	/** The card path needs a ChatMessage to create and an actor with a uuid to point at. */
+	function cardWorld(opts = {}) {
+		const built = world(opts);
+		built.actor.uuid = "Actor.actor-1";
+		built.actor.name = "Pim";
+		global.ChatMessage = {
+			create: vi.fn(async (data) => data),
+			getSpeaker: vi.fn(() => ({ actor: built.actor.id })),
+		};
+		return built;
+	}
+
+	afterEach(() => { delete global.ChatMessage; });
+
+	it("posts the card once the dying state has actually landed", async () => {
+		const { actor } = cardWorld({ me: "gm" });
+		onUpdateActorDeathsDoorCard(actor, becameDying, {}, "gm");
+		await vi.waitFor(() => expect(global.ChatMessage.create).toHaveBeenCalled());
+		expect(global.ChatMessage.create.mock.calls[0][0].content).toContain("dying");
+	});
+
+	it("posts nothing for an update that never became dying", () => {
+		const { actor } = cardWorld({ me: "gm" });
+		onUpdateActorDeathsDoorCard(actor, { system: { attributes: { hp: { value: 0 } } } }, {}, "gm");
+		onUpdateActorDeathsDoorCard(actor, { flags: { [SCOPE]: { deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION } } }, {}, "gm");
+		expect(global.ChatMessage.create).not.toHaveBeenCalled();
+	});
+
+	// updateActor fires on every connected client, and the card is public — all of them posting
+	// one is N copies of the same announcement.
+	it("posts from the client that made the change and no other", () => {
+		const { actor } = cardWorld({ me: "player-2" });
+		onUpdateActorDeathsDoorCard(actor, becameDying, {}, "gm");
+		expect(global.ChatMessage.create).not.toHaveBeenCalled();
+	});
+
+	it("stays quiet when the table silenced the announcement", () => {
+		const { actor } = cardWorld({ me: "gm", settings: { deathsDoorPrompt: false } });
+		onUpdateActorDeathsDoorCard(actor, becameDying, {}, "gm");
+		expect(global.ChatMessage.create).not.toHaveBeenCalled();
+	});
+
+	it("ignores actors that aren't characters", () => {
+		const { actor } = cardWorld({ me: "gm" });
+		onUpdateActorDeathsDoorCard({ ...actor, type: "monster" }, becameDying, {}, "gm");
+		expect(global.ChatMessage.create).not.toHaveBeenCalled();
 	});
 });

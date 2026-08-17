@@ -138,12 +138,12 @@ async function _retireStrayCards(keepId) {
  * it is edited rather than left standing. That is also what keeps either direction from being a
  * one-way door: the single card in the log always offers the layout the table is not on.
  *
- * BOTH of the presser's personal overrides that contradict the new mode are dropped back to
- * their defaults: the `sheetLayout` master override to "follow the world", and any per-sheet
- * Classic Layout box they had unticked back on (_reinstateClassicSheets). Without that, a GM who
- * had pinned themselves to one layout would press a button labelled "switch the sheets" and
- * watch nothing happen to their own, which reads as a broken button rather than as a setting
- * doing its job.
+ * BOTH of the overrides that contradict the new mode are dropped back to their defaults: the
+ * presser's own `sheetLayout` master override to "follow the world", and any per-sheet Classic
+ * Layout box the table had unticked back on (_reinstateClassicSheets). Without that, a GM who had
+ * pinned themselves to one layout would press a button labelled "switch the sheets" and watch
+ * nothing happen to their own, which reads as a broken button rather than as a setting doing its
+ * job.
  *
  * @param {"classic"|"modern"} mode
  * @returns {Promise<boolean>}  false if this user was not allowed to make the change.
@@ -159,9 +159,9 @@ export async function setWorldSheetLayout(mode) {
 	const reticked = mode === CLASSIC ? await _reinstateClassicSheets() : [];
 	globalThis.ui?.notifications?.info?.(
 		`Stonetop sheets are now using the ${mode} layout. Open a character, steading, or NPC sheet to see it.`
-		+ (reticked.length ? ` Your own Classic Layout ${reticked.length > 1 ? "boxes" : "box"} for `
+		+ (reticked.length ? ` The Classic Layout ${reticked.length > 1 ? "boxes" : "box"} for `
 			+ `${joinNames(reticked)} had been unticked, which would have kept `
-			+ `${reticked.length > 1 ? "those sheets" : "that sheet"} modern for you, so `
+			+ `${reticked.length > 1 ? "those sheets" : "that sheet"} modern, so `
 			+ `${reticked.length > 1 ? "they have" : "it has"} been ticked back on.` : ""));
 	await showLayoutCard(mode);
 	return true;
@@ -171,7 +171,7 @@ export async function setWorldSheetLayout(mode) {
 const _SHEET_LABELS = { character: "Character Sheets", steading: "Steading Sheets", npc: "NPC Sheets" };
 
 /**
- * Tick the presser's own per-sheet Classic Layout boxes back on.
+ * Tick the table's per-sheet Classic Layout boxes back on.
  *
  * The same rule as the `sheetLayout` drop above, one level down, and a sharper failure. Effective
  * classic is `<master> AND <this sheet's box>` (isClassicLayout), so a box left unticked pins that

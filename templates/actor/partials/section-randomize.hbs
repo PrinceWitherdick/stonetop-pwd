@@ -1,0 +1,14 @@
+{{!-- "Roll one at random", beside a section heading whose body is a list to pick from.
+      Emits the section key on `data-section` and nothing else; what a click DOES with that key
+      is the sheet's business (the GM Toolkit whispers a move to chat).
+
+      `stonetop-section-heading-control` is what makes folding the section fold this with it:
+      section-editing.js finds heading-resident controls by that one class, deliberately, rather
+      than by a list of the controls that happen to exist — a control that forgets the class is
+      left hanging on a collapsed heading, and nothing errors.
+
+      A real <button>, so Enter and Space work without a keydown handler of our own. The fold
+      caret next to it is an <a role="button"> and does carry one; that is because it predates
+      this and lives inside an <h3>, not a reason to copy it. --}}
+<button type="button" class="stonetop-section-randomize stonetop-section-heading-control"
+        data-section="{{section}}" title="{{title}}" aria-label="{{title}}"><i class="fas fa-dice-d6" aria-hidden="true"></i></button>

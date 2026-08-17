@@ -30,6 +30,7 @@ const TABBED_SHEETS = [
 	["character", "module/actors/character/StonetopCharacterSheet.js"],
 	["steading", "module/actors/steading/StonetopSteadingSheet.js"],
 	["NPC", "module/actors/npc/StonetopNpcSheet.js"],
+	["GM Toolkit", "module/actors/gmtoolkit/StonetopGmToolkitSheet.js"],
 	["arcanum", "module/item/StonetopArcanumSheet.js"],
 ];
 
@@ -58,13 +59,21 @@ describe("...and a tab too tall for its frame scrolls instead of being cut off",
 	const CSS = read("styles/stonetop.css").replace(/\/\*[\s\S]*?\*\//g, "");
 	// This is the other half of the contract. Without it, "never refit" would mean a tall
 	// tab silently loses its bottom edge on a sheet the user has not resized.
+	//
+	// WHERE that scrollport sits differs by sheet, and the difference is deliberate. Three of
+	// them pin a header and scroll the active TAB beneath it, so each tab keeps its own offset.
+	// The GM Toolkit scrolls as one unit instead — its banner is a name the window title bar
+	// already carries, so it goes up with the text — and its scrollport is the container that
+	// holds banner and tab body together. Either way a tall tab cannot be cut off, which is the
+	// only thing this block is asserting.
 	const SCROLLPORTS = [
 		["character", /\.pbta\.sheet\.actor\.character \.stonetop-sheet-layout \.sheet-body > \.tab\.active:not\(\.notes\)\s*\{[^}]*overflow-y:\s*auto/],
 		["steading", /\.steading-sheet \.sheet-body > \.tab\.active:not\(\.notes\)\s*\{[^}]*overflow-y:\s*auto/],
 		["NPC", /\.stonetop-npc-sheet \.sheet-body > \.tab\.active:not\(\.notes\)\s*\{[^}]*overflow-y:\s*auto/],
+		["GM Toolkit", /\.stonetop-gm-toolkit-container\s*\{[^}]*overflow-y:\s*auto/],
 	];
 	for (const [name, rx] of SCROLLPORTS) {
-		it(`the ${name} sheet's active tab is its own scrollport`, () => {
+		it(`the ${name} sheet has a scrollport a tall tab cannot outgrow`, () => {
 			expect(CSS).toMatch(rx);
 		});
 	}
@@ -116,6 +125,7 @@ describe("every actor sheet has a height floor", () => {
 		["steading", /\.window-app\.stonetop\.sheet\.actor\.steading[^{]*\{[^}]*min-height:\s*\d+px/],
 		["monster", /\.window-app\.stonetop\.sheet\.actor\.monster\s*\{[^}]*min-height:\s*\d+px/],
 		["npc", /\.window-app\.stonetop\.sheet\.actor\.npc\s*\{[^}]*min-height:\s*\d+px/],
+		["gm-toolkit", /\.window-app\.stonetop\.sheet\.actor\.gm-toolkit\s*\{[^}]*min-height:\s*\d+px/],
 	];
 	for (const [name, rx] of FLOORS) {
 		it(`the ${name} sheet cannot be dragged below its floor`, () => {
@@ -130,6 +140,7 @@ describe("every actor sheet has a height floor", () => {
 		["steading", "module/actors/steading/StonetopSteadingSheet.js", 620],
 		["monster", "module/actors/monster/StonetopMonsterSheet.js", 480],
 		["npc", "module/actors/npc/StonetopNpcSheet.js", 400],
+		["gm-toolkit", "module/actors/gmtoolkit/StonetopGmToolkitSheet.js", 420],
 	];
 	for (const [name, rel, px] of OPTION) {
 		it(`the ${name} sheet's minHeight option matches its CSS floor (${px}px)`, () => {

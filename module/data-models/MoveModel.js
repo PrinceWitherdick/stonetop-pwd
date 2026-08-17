@@ -34,6 +34,21 @@ export class MoveModel extends foundry.abstract.TypeDataModel {
 			// the dragged item and carried through the drop's re-plant; false on everything
 			// else. Declared here because a TypeDataModel strips keys it doesn't know.
 			isTreasure:      new fields.BooleanField({ required: false, initial: false }),
+			// Identifying artifacts (Book I, Discoveries pp.430-431). How much of this thing the
+			// character has worked out: "" (nothing hidden — every ordinary item), "unknown",
+			// "partial" (a 7-9), "known". Drives what the gear row conceals; see
+			// actors/character/artifact-identify.js. Blank on everything that isn't an artifact
+			// the GM chose to hide, which is the initial state of every existing item.
+			identifyState:   new fields.StringField({ required: false, blank: true, initial: "" }),
+			// The GM's "hint at more than meets the eye" line, shown on the row in place of the
+			// concealed tags while the artifact is still unidentified.
+			artifactHint:    new fields.StringField({ required: false, blank: true, initial: "" }),
+			// The fuller write-up and any custom move's full text, handed over on a 10+ ("give
+			// them the move's full text"). HTML because the GM writes it in a rich editor.
+			artifactLore:    new fields.HTMLField({ required: false, blank: true, initial: "" }),
+			// "How they could learn more" (p.431): who would know, what they'd need to consult,
+			// the Plan they could make. What a 6- leaves the player with.
+			artifactLead:    new fields.StringField({ required: false, blank: true, initial: "" }),
 			// Ties a bundled-gear item back to the special possession that materialized it
 			// (possession-grants.js): the possession's slug, the grant's stable key within it,
 			// and the possession's plain-text name. Null on every hand-written item.

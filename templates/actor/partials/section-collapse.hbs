@@ -3,6 +3,16 @@
       the pencil-bearing sections where section-edit-toggle emits it into the
       section's top-right corner — either way the sheet finds the heading from the
       caret and folds the run of content below it. Caller passes `collapse`, the id
-      the fold is remembered under. --}}
-<a class="stonetop-section-collapse" data-section="{{collapse}}" role="button" tabindex="0"
+      the fold is remembered under.
+
+      `defaultCollapsed` starts the section SHUT for a user who has never touched it,
+      for sections that are reference rather than content (the GM Toolkit's prep
+      reference). The stored preference records sections sitting against their
+      default, so an id saved for one of these means the user pushed it open; see
+      utils/section-editing.js.
+
+      The aria-expanded and title below are the un-wired defaults. Both are restated
+      by `_wireSectionCollapse` at wire time, before paint, from the section's actual
+      state, so a default-collapsed caret does not announce itself as expanded. --}}
+<a class="stonetop-section-collapse" data-section="{{collapse}}"{{#if defaultCollapsed}} data-default-collapsed="true"{{/if}} role="button" tabindex="0"
    aria-expanded="true" title="Collapse section"><i class="fas fa-caret-down"></i></a>

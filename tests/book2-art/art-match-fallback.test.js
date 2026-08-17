@@ -57,11 +57,13 @@ function stencils() {
 	const out = [];
 	const add = (row, im) => {
 		if (!im.out || im.pdfPage == null) return;
-		// No pagemap is ever matched by size. One with `render` is rasterised from a page RECT, and
-		// one without is wiring-only: its `out` is another row's file, so it asks for no extraction
-		// at all. Both legitimately carry no w/h/bbox, which is why they are cut here rather than
-		// counted as rows missing their geometry.
-		if (row.kind === "pagemap") return;
+		// Nothing RENDERED is ever matched by size: a `render` row is rasterised from a page RECT
+		// rather than lifted out of the page's image objects — the printed maps, and the GM
+		// playbook's two flowcharts, which are vector and have no image object to lift at all.
+		// Neither is a pagemap WITHOUT `render`, which is wiring-only: its `out` is another row's
+		// file, so it asks for no extraction. All of them legitimately carry no w/h/bbox, which is
+		// why they are cut here rather than counted as rows missing their geometry.
+		if (row.render || row.kind === "pagemap") return;
 		out.push({ slug: row.slug, kind: row.kind, out: im.out, book: im.book ?? row.book ?? 2, page: im.pdfPage, w: im.w, h: im.h, at: im.bbox });
 	};
 	for (const row of MANIFEST.rows ?? []) {

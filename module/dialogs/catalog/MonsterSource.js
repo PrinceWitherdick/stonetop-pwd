@@ -29,6 +29,7 @@ export class MonsterSource extends CatalogSource {
 			label: "Monsters",
 			icon:  "fas fa-dragon",
 			noun:  "monsters",
+			nounOne: "monster",
 			search: { title: "Search monsters", placeholder: "Filter monsters…" },
 			empty:  "No monsters match those filters.",
 			// A world monster edit stales this list; CatalogSource#staleFor spells out what that
@@ -121,7 +122,7 @@ export class MonsterSource extends CatalogSource {
 		const badges = [];
 		if (type) badges.push({ label: creatureTypeLabel(type), img: creatureTypeIcon(type), hint: "Creature type" });
 		if (org)  badges.push({ label: MONSTER_ORGANIZATIONS.find(o => o.key === org)?.label ?? org, hint: "How many of them there are" });
-		if (hp)   badges.push({ label: `${hp} HP`, hint: armor ? `${armor} armor — ${sys.attributes?.armor?.source || "armor"}` : "Hit points" });
+		if (hp)   badges.push({ label: `${hp} HP`, hint: armor ? `${armor} armor: ${sys.attributes?.armor?.source || "armor"}` : "Hit points" });
 		if (sys.size) badges.push({ label: sys.size, hint: "Size" });
 
 		return {

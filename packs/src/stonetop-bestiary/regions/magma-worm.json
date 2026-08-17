@@ -54,7 +54,7 @@
       "_id": "9g2AwUHQ49ByFs5G",
       "name": "Burst forth from a tunnel wall",
       "type": "monsterMove",
-      "img": "icons/environment/wilderness/cave-entrance-dark.webp",
+      "img": "icons/svg/burrow.svg",
       "system": {
         "description": "",
         "rollFormula": ""

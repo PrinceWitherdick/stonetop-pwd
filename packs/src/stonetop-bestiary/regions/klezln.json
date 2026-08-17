@@ -42,7 +42,7 @@
       "_id": "0yVb6M07Q53AquUa",
       "name": "Undermine the soil, creating a sinkhole waiting to happen",
       "type": "monsterMove",
-      "img": "icons/environment/wilderness/cave-entrance-dark.webp",
+      "img": "icons/svg/burrow.svg",
       "system": {
         "description": "",
         "rollFormula": ""
@@ -53,7 +53,7 @@
       "_id": "NcXOu82AYCNas5Mb",
       "name": "Wait for prey to trigger its trap and get pinned in loose dirt, d6 damage (grabby)",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""
@@ -75,7 +75,7 @@
       "_id": "3N7ss9gmNAAMc2Mw",
       "name": "Drag it beneath the soil, to be crushed and supped on at leisure",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""

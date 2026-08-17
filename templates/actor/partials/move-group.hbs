@@ -12,12 +12,56 @@
 	{{> "stonetop.section-heading" title=title note=note collapse=collapseId}}
 	{{/if}}
 	{{#if hideToggle}}
-	<label class="stonetop-hide-unselected-label">
-		<input type="checkbox" class="stonetop-hide-unselected-check"{{#if hideUnselected}} checked{{/if}}>
-		Hide un-learned moves
-	</label>
+	{{!-- Both toggles share one row so they read as a pair of filters over the list
+	      below, and so the row (not either label) owns the heading-to-first-card gap.
+	      "Organize by category" is gated on `groups`, not on `groupByCategory`: the
+	      playbook either has clusters to organize by or it doesn't, and gating it on
+	      the toggle's own state would make the checkbox disappear the moment it was
+	      un-ticked, with no way back. --}}
+	<div class="stonetop-move-toggle-row">
+		<label class="stonetop-hide-unselected-label">
+			<input type="checkbox" class="stonetop-hide-unselected-check"{{#if hideUnselected}} checked{{/if}}>
+			Hide un-learned moves
+		</label>
+		{{#if groups}}
+		<label class="stonetop-hide-unselected-label">
+			<input type="checkbox" class="stonetop-group-by-category-check"{{#if groupByCategory}} checked{{/if}}>
+			Organize by category
+		</label>
+		{{/if}}
+	</div>
 	{{/if}}
-	{{#if splitUnowned}}
+	{{!-- A bare `groups` is safe here: `and` answers exactly as `{{#if groups}}` does,
+	      empty array included (utils/hbs-truthy.js). It did not always — built on plain
+	      `Boolean` it called a homebrew playbook's empty group list TRUE and rendered
+	      this branch's empty `{{#each}}`, i.e. no move list at all. --}}
+	{{#if (and groupByCategory groups)}}
+		{{!-- The playbook's moves split into the three clusters the onboarding "choose
+		      moves" step filters by (onboarding-move-groups.js), plus a trailing "Other"
+		      for the moves no cluster claims — chiefly Improved / Superior Stat.
+
+		      Each sub-group is its own <div> so the SECTION's fold still swallows the lot:
+		      the collapse walks a heading's following SIBLINGS and stops at the next
+		      heading (section-editing.js#_sectionFoldTargets), and these sub-titles are
+		      `.stonetop-move-group-title` too. Boxed up they're never siblings of the
+		      section's heading row, while inside a box a sub-title's own fold reaches
+		      exactly its own lists. Sub-fold ids are namespaced under the section's, so a
+		      group key can't collide with a section id elsewhere on the sheet.
+
+		      Owned / un-owned stay split WITHIN each group, so "Hide un-learned moves"
+		      and the tab search work the same as they do on a flat list. --}}
+		{{#each groups}}
+		<div class="stonetop-move-subgroup">
+			{{> "stonetop.section-heading" title=label collapse=(concat ../collapseId ":" key)}}
+			{{#if ownedMoves.length}}
+			{{> "stonetop.move-group" listOnly=true moves=ownedMoves listClass="stonetop-move-list--owned"}}
+			{{/if}}
+			{{#if unownedMoves.length}}
+			{{> "stonetop.move-group" listOnly=true moves=unownedMoves listClass="stonetop-move-list--unowned"}}
+			{{/if}}
+		</div>
+		{{/each}}
+	{{else if splitUnowned}}
 		{{#if ownedMoves.length}}
 		{{> "stonetop.move-group" listOnly=true moves=ownedMoves listClass="stonetop-move-list--owned"}}
 		{{/if}}
@@ -80,7 +124,7 @@
 				{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
 				<strong class="stonetop-item-name">{{name}}</strong>
 				{{#if requirementsUnmet}}<i class="fas fa-triangle-exclamation stonetop-move-req-warning" data-tooltip="You own this move but do not meet its requirement{{#if requiresLabel}} ({{requiresLabel}}){{/if}}. Add the missing prerequisite, or drop this move." data-tooltip-direction="UP" aria-hidden="true"></i>{{/if}}
-				{{#if markBudget.needsChoice}}<i class="fas fa-hand-pointer stonetop-move-choice-needed" data-tooltip="This move has selections left to make ({{markBudget.used}} of {{markBudget.max}} chosen) — tap the hand to jump into the moves editor and choose the rest." data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
+				{{#if markBudget.needsChoice}}<i class="fas fa-hand-pointer stonetop-move-choice-needed" data-tooltip="This move has selections left to make ({{markBudget.used}} of {{markBudget.max}} chosen). Tap the hand to jump into the moves editor and choose the rest." data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
 				{{#if statChoiceNeeded}}<i class="fas fa-hand-pointer stonetop-move-stat-choice-needed" data-tooltip="You took this move but haven't chosen which stat to raise, so it isn't boosting anything yet. Tap the hand to pick a stat (+1, max +{{statChoiceNeeded.cap}})." data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
 				{{#if (and owned resource)}}
 				{{!-- Eats the header line's free space so the track sits at the right edge
@@ -165,7 +209,7 @@
 				{{backgroundAnswer.label}}: {{backgroundAnswer.value}}
 			</p>
 			{{/if}}
-			{{#if requiresLabel}}<p class="stonetop-move-note{{#if requirementsUnmet}} stonetop-move-note--unmet{{/if}}">Requires: {{requiresLabel}}{{#if requirementsUnmet}} — not met{{/if}}</p>{{/if}}
+			{{#if requiresLabel}}<p class="stonetop-move-note{{#if requirementsUnmet}} stonetop-move-note--unmet{{/if}}">Requires: {{requiresLabel}}{{#if requirementsUnmet}} (not met){{/if}}</p>{{/if}}
 			{{#if requiresPlaybook}}<p class="stonetop-move-note{{#if requirementsUnmet}} stonetop-move-note--unmet{{/if}}">Requires {{requiresPlaybook}} playbook</p>{{/if}}
 			{{#if minLevel}}<p class="stonetop-move-note{{#if requirementsUnmet}} stonetop-move-note--unmet{{/if}}">Level {{minLevel}}+</p>{{/if}}
 		</li>

@@ -17,8 +17,26 @@ import {
 } from "../utils/expedition-log-core.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
 import { deriveLoadLevel, LOAD_LEVEL_LIMITS } from "../utils/load.js";
+import { SYSTEM_ID } from "../system-id.js";
+import { EXPLORATION_GM_MOVES } from "../gm-toolkit/gm-moves.js";
 
 const ANSWERS_SETTING = "expeditionAnswers";
+
+/**
+ * The seven exploration moves, as the "Exploration moves" step prints them.
+ *
+ * Rendered from the ONE table in gm-toolkit/gm-moves.js, which the GM Toolkit's Moves tab also
+ * prints. Restating them here meant seven names and seven glosses maintained in two files, held
+ * together only by a test that scraped this file's source text for `<li><strong>…</strong>`, so
+ * reformatting the list at all broke the guard, and a wording fix in one place left the
+ * walkthrough and the toolkit teaching the same move in different words on two screens the same
+ * GM meets in one session.
+ */
+const EXPLORATION_MOVE_LIST = EXPLORATION_GM_MOVES
+	.map(m => `<li><strong>${escHtml(m.name)}.</strong> ${escHtml(m.gloss)}</li>`)
+	.join("\n\t\t\t\t\t");
+// This dialog's key in the client-scoped reload-resume record (see walkthrough-resume.js).
+const RESUME_KEY = "expedition";
 
 // ── ExpeditionDialog ─────────────────────────────────────────────────────────
 // A GM walkthrough of Book I's Expeditions chapter (p.301–343). It follows the
@@ -41,7 +59,7 @@ const ANSWERS_SETTING = "expeditionAnswers";
 
 // Requisition (Book I, p.308): roll +Fortunes for the steading's communal assets.
 const _REQ_RESULT = {
-	success: { label: "10+",   line: "Go ahead &mdash; but you're expected to <strong>bring it back safely</strong>." },
+	success: { label: "10+",   line: "Go ahead, but you're expected to <strong>bring it back safely</strong>." },
 	partial: { label: "7&ndash;9", line: "Someone objects. You can borrow it, but you'll need to <strong>do some convincing</strong> first (likely a Persuade)." },
 	failure: { label: "6-",    line: "Folks ain't having it. <strong>Don't mark XP.</strong> Take it anyway if you must, but <strong>reduce Fortunes by 1</strong>." },
 };
@@ -110,15 +128,15 @@ const _STEPS = [
 		key:   "intro",
 		title: "An expedition begins",
 		icon:  "fa-map-location-dot",
-		body:  `<p>The characters are leaving town &mdash; to face a threat, seize an opportunity, or chase a plan of their own. This guide walks the journey's arc: <strong>Preparations</strong>, <strong>running the journey</strong>, the <strong>player moves</strong> they'll lean on, <strong>going home</strong>, and what to <strong>prep</strong> between sessions.</p>
-				<p>Travel is dangerous and hard, and that's the point &mdash; it makes home feel precious. <strong>Don't gloss it over.</strong> Give it the screen time it deserves.</p>`,
+		body:  `<p>The characters are leaving town, to face a threat, seize an opportunity, or chase a plan of their own. This guide walks the journey's arc: <strong>Preparations</strong>, <strong>running the journey</strong>, the <strong>player moves</strong> they'll lean on, <strong>going home</strong>, and what to <strong>prep</strong> between sessions.</p>
+				<p>Travel is dangerous and hard, and that's the point: it makes home feel precious. <strong>Don't gloss it over.</strong> Give it the screen time it deserves.</p>`,
 	},
 	{
 		key:   "chart",
 		title: "Chart a Course",
 		icon:  "fa-route",
 		body:  `<p>When the players start talking about leaving, point them at <strong>Chart a Course</strong>. Pin down their <strong>destination</strong> and roughly how they mean to get there (&ldquo;we follow the tracks&rdquo; is enough).</p>
-				<p>Then tell them as many of the following as make sense, based on the season, terrain, how well they know the area, and the threats that lurk there. Link them with <strong>&ldquo;and&rdquo;</strong>, or offer a merciful <strong>&ldquo;or.&rdquo;</strong> Tick the ones you present &mdash; this becomes your narrative to-do list once they set out.</p>`,
+				<p>Then tell them as many of the following as make sense, based on the season, terrain, how well they know the area, and the threats that lurk there. Link them with <strong>&ldquo;and&rdquo;</strong>, or offer a merciful <strong>&ldquo;or.&rdquo;</strong> Tick the ones you present: this becomes your narrative to-do list once they set out.</p>`,
 		qa:    {
 			kind:  "checklist",
 			key:   "chart",
@@ -132,11 +150,11 @@ const _STEPS = [
 		title: "Outfit",
 		icon:  "fa-sack",
 		body:  `<p>Each PC marks gear on their Inventory insert: up to <strong>3 for a light load</strong> (quick, quiet), <strong>4&ndash;6 normal</strong>, or <strong>7&ndash;9 heavy</strong> (noisy, slow, quick to tire). They also mark <strong>4 + Prosperity</strong> small items (these don't count toward load).</p>
-				<p>They can leave marks <strong>&ldquo;undefined&rdquo;</strong> and define them later with <em>Have What You Need</em>. Remind them of anything they need to bring (warm clothes, sleds, a guide). <strong>Followers Outfit too.</strong> Ask where their gear came from &mdash; bring it home.</p>`,
+				<p>They can leave marks <strong>&ldquo;undefined&rdquo;</strong> and define them later with <em>Have What You Need</em>. Remind them of anything they need to bring (warm clothes, sleds, a guide). <strong>Followers Outfit too.</strong> Ask where their gear came from. Bring it home.</p>`,
 		qa:    {
 			kind:        "single",
 			key:         "outfit",
-			prompt:      "Who's carrying what &mdash; and what loads?",
+			prompt:      "Who's carrying what, and what loads?",
 			placeholder: "Notable gear, loads, and anything you flagged as required…",
 		},
 	},
@@ -144,7 +162,7 @@ const _STEPS = [
 		key:      "requisition",
 		title:    "Requisition (if needed)",
 		icon:     "fa-horse",
-		body:     `<p>If they want the steading's communal assets &mdash; the horses, a cart, the plows, the big wagon &mdash; they <strong>Requisition</strong>: roll <strong>+Fortunes</strong>. Establish the fiction first: who are they asking, and who has the right to say yes?</p>
+		body:     `<p>If they want the steading's communal assets, the horses, a cart, the plows, the big wagon, they <strong>Requisition</strong>: roll <strong>+Fortunes</strong>. Establish the fiction first: who are they asking, and who has the right to say yes?</p>
 				<p>They don't need this for the steading's <em>Surplus</em> (unless taking it would be wasteful or risky), and only roll once for a related set of assets.</p>`,
 		roll:     "requisition",
 		showTiers: true,
@@ -161,10 +179,10 @@ const _STEPS = [
 		icon:  "fa-people-carry-box",
 		body:  `<p>Around Outfitting and Requisitioning, the rest of prep happens. Zoom in and out as it suits:</p>
 				<ul>
-					<li><strong>Trade &amp; Barter</strong> for special items (bendis root, a bronze weapon) &mdash; this takes time.</li>
+					<li><strong>Trade &amp; Barter</strong> for special items (bendis root, a bronze weapon): this takes time.</li>
 					<li><strong>Gather information</strong>: Know Things, Seek Insight, interview NPCs, Call the Spirits. Reward research, but mind the clock.</li>
 					<li><strong>Bring NPCs &amp; followers</strong>: the Marshal's crew, a hound, a willing villager. Write joiners up as followers; have them Outfit too.</li>
-					<li><strong>Put others to work</strong>: Muster, Pull Together, or set someone a task &mdash; roll the slow ones <em>when they return</em>.</li>
+					<li><strong>Put others to work</strong>: Muster, Pull Together, or set someone a task: roll the slow ones <em>when they return</em>.</li>
 				</ul>
 				<p>Make a note of any projects so you don't forget them later.</p>`,
 		qa:    {
@@ -180,18 +198,18 @@ const _STEPS = [
 		icon:  "fa-person-hiking",
 		body:  `<p>Break the trip into <strong>points of interest</strong> (landmarks, planned scenes, the destination) and the <strong>legs of travel</strong> between them. Gloss trivial legs; play out the rest as loose play. Then run the core loop:</p>
 				<ol>
-					<li><strong>Establish the situation</strong> &mdash; describe the terrain, weather, up to 3 sensory impressions; ask questions.</li>
-					<li><strong>Make a soft GM move</strong> &mdash; especially an exploration move; often one of the challenges you Charted.</li>
+					<li><strong>Establish the situation</strong>: describe the terrain, weather, up to 3 sensory impressions; ask questions.</li>
+					<li><strong>Make a soft GM move</strong>: especially an exploration move; often one of the challenges you Charted.</li>
 					<li>Ask <strong>&ldquo;What do you do?&rdquo;</strong></li>
-					<li><strong>Resolve it</strong> &mdash; trigger player moves; on a 6- or an ignored threat, make a hard move.</li>
+					<li><strong>Resolve it</strong>: trigger player moves; on a 6- or an ignored threat, make a hard move.</li>
 					<li><strong>Repeat</strong>, then transition to the next leg or point of interest.</li>
 				</ol>
-				<p>On a <strong>perilous</strong> leg &mdash; or whenever you&rsquo;re unsure how hard to come down &mdash; you can let the Die of Fate set the danger:</p>
+				<p>On a <strong>perilous</strong> leg, or whenever you&rsquo;re unsure how hard to come down, you can let the Die of Fate set the danger:</p>
 				<ul class="stonetop-exp-fatetable">
-					<li><strong>1</strong> &mdash; A danger springs on them, unavoidable.</li>
-					<li><strong>2&ndash;3</strong> &mdash; Introduce a danger, right in front of them.</li>
-					<li><strong>4&ndash;5</strong> &mdash; Point to a looming danger.</li>
-					<li><strong>6</strong> &mdash; Point to a looming danger, but also present a discovery.</li>
+					<li><strong>1</strong>: A danger springs on them, unavoidable.</li>
+					<li><strong>2&ndash;3</strong>: Introduce a danger, right in front of them.</li>
+					<li><strong>4&ndash;5</strong>: Point to a looming danger.</li>
+					<li><strong>6</strong>: Point to a looming danger, but also present a discovery.</li>
 				</ul>`,
 		fate:  true,
 		qa:    {
@@ -207,13 +225,7 @@ const _STEPS = [
 		icon:  "fa-compass",
 		body:  `<p>Add these to your arsenal once the PCs leave town:</p>
 				<ul>
-					<li><strong>Provide a choice of paths</strong> &mdash; a fork with a meaningful difference.</li>
-					<li><strong>Hint at more than meets the eye</strong> &mdash; point at something fraught, stay coy.</li>
-					<li><strong>Offer riches at a price</strong> &mdash; something valuable, but costly or fleeting.</li>
-					<li><strong>Present a discovery</strong> &mdash; put an interesting, not-yet-dangerous thing in front of them.</li>
-					<li><strong>Point to a looming danger</strong> &mdash; the clawprint, the distant howl.</li>
-					<li><strong>Introduce a danger, person, or faction</strong> &mdash; it's here, not looming.</li>
-					<li><strong>Bar the way</strong> &mdash; an obstacle, dead end, or missing piece.</li>
+					${EXPLORATION_MOVE_LIST}
 				</ul>
 				<p>And keep using your standard GM moves too: ask provocative questions, use up their resources, separate them, show downsides.</p>`,
 	},
@@ -221,7 +233,7 @@ const _STEPS = [
 		key:   "weather",
 		title: "Weather & the Die of Fate",
 		icon:  "fa-cloud-sun-rain",
-		body:  `<p>Weather colors the whole trip and can be a challenge by itself. You decide when it rains and shines &mdash; weave it into your descriptions and your moves (bar the way with a blizzard; separate them in the fog).</p>
+		body:  `<p>Weather colors the whole trip and can be a challenge by itself. You decide when it rains and shines: weave it into your descriptions and your moves (bar the way with a blizzard; separate them in the fog).</p>
 				<p>Or let fate decide. Either ask what weather they're <strong>hoping for</strong> and roll the <strong>Die of Fate</strong> (1&ndash;2 nope, 3&ndash;4 partway, 5&ndash;6 just what they wanted), or roll the <strong>seasonal weather table</strong> (Book I p.325), informed by the latest <em>Seasons Change</em>.</p>`,
 		fate:    true,
 		weather: true,
@@ -232,20 +244,20 @@ const _STEPS = [
 		icon:  "fa-compass-drafting",
 		body:  `<p>These come up while traveling:</p>
 				<ul>
-					<li><strong>Have What You Need</strong> &mdash; turn undefined inventory into a specific item they could've had all along.</li>
-					<li><strong>Recover</strong> &mdash; expend 1 supply, regain 4 + Prosperity HP (once until they take more damage).</li>
-					<li><strong>Struggle as One</strong> &mdash; the whole party Defies Danger together; a 10+ can pull someone else out of a spot.</li>
-					<li><strong>Keep Company</strong> &mdash; trade character questions on a quiet stretch; great on the way home.</li>
-					<li><strong>Make Camp</strong> &mdash; rest in an unsafe area: answer your questions, consume supplies, then pick HP or clear a debility.</li>
-					<li><strong>Forage</strong> &mdash; spend hours seeking food (+WIS; disadvantage in winter).</li>
+					<li><strong>Have What You Need</strong>: turn undefined inventory into a specific item they could've had all along.</li>
+					<li><strong>Recover</strong>: expend 1 supply, regain 4 + Prosperity HP (once until they take more damage).</li>
+					<li><strong>Struggle as One</strong>: the whole party Defies Danger together; a 10+ can pull someone else out of a spot.</li>
+					<li><strong>Keep Company</strong>: trade character questions on a quiet stretch; great on the way home.</li>
+					<li><strong>Make Camp</strong>: rest in an unsafe area: answer your questions, consume supplies, then pick HP or clear a debility.</li>
+					<li><strong>Forage</strong>: spend hours seeking food (+WIS; disadvantage in winter).</li>
 				</ul>
 				<p>When they <strong>Make Camp</strong> and you're unsure if the night stays quiet, roll the Die of Fate:</p>
 				<ul class="stonetop-exp-fatetable">
-					<li><strong>1</strong> &mdash; Something dangerous approaches, inclined to harm.</li>
-					<li><strong>2</strong> &mdash; Something dangerous approaches, curious but not aggressive.</li>
-					<li><strong>3</strong> &mdash; Something annoying happens (critters, rain, an argument).</li>
-					<li><strong>4&ndash;5</strong> &mdash; The night passes uneventfully.</li>
-					<li><strong>6</strong> &mdash; A small boon, or an uneventful night.</li>
+					<li><strong>1</strong>: Something dangerous approaches, inclined to harm.</li>
+					<li><strong>2</strong>: Something dangerous approaches, curious but not aggressive.</li>
+					<li><strong>3</strong>: Something annoying happens (critters, rain, an argument).</li>
+					<li><strong>4&ndash;5</strong>: The night passes uneventfully.</li>
+					<li><strong>6</strong>: A small boon, or an uneventful night.</li>
 				</ul>`,
 		fate:  true,
 	},
@@ -253,7 +265,7 @@ const _STEPS = [
 		key:   "home",
 		title: "Going home",
 		icon:  "fa-house-chimney",
-		body:  `<p>Usually, <strong>gloss the trip home</strong> &mdash; they already faced these challenges. Use it to ruminate: ask what they keep thinking about, suggest they <strong>Keep Company</strong>. But if they're hauling something awkward, lost or hurt, racing a clock, or taking a new route, <strong>Chart a Course back</strong> and play it out.</p>
+		body:  `<p>Usually, <strong>gloss the trip home</strong>: they already faced these challenges. Use it to ruminate: ask what they keep thinking about, suggest they <strong>Keep Company</strong>. But if they're hauling something awkward, lost or hurt, racing a clock, or taking a new route, <strong>Chart a Course back</strong> and play it out.</p>
 				<p>Then, before they walk back in, think through:</p>`,
 		qa:    {
 			kind:   "checklist",
@@ -273,11 +285,11 @@ const _STEPS = [
 					<li><strong>Draw a map</strong> of the route, marking your points of interest.</li>
 					<li><strong>Identify points of interest &amp; legs</strong>; note how long each leg takes.</li>
 					<li>For each, jot a one-sentence description, <strong>2&ndash;3 impressions</strong> (non-visual senses), questions to ask, and which challenges land there.</li>
-					<li>Prepare up to <strong>7 encounters</strong> &mdash; dangers, discoveries, events &mdash; tied into a larger story.</li>
+					<li>Prepare up to <strong>7 encounters</strong>, dangers, discoveries, events, tied into a larger story.</li>
 					<li>Consider Die of Fate tables for weather, camp events, or perilous stretches.</li>
 					<li>Build any <strong>sites, dangers, discoveries, NPCs, and followers</strong> they're likely to meet.</li>
 				</ul>
-				<p>Lean on <strong>Book II</strong> for the regions they'll cross &mdash; copy details or just bookmark the page.</p>`,
+				<p>Lean on <strong>Book II</strong> for the regions they'll cross: copy details or just bookmark the page.</p>`,
 	},
 ];
 
@@ -291,18 +303,46 @@ export class ExpeditionDialog extends StepperDialog {
 	get _answersSetting() { return ANSWERS_SETTING; }
 
 	static open() {
-		return openOrFocus("stonetop-expedition", () => new ExpeditionDialog().render(true));
+		return openOrFocus("stonetop-expedition", () => {
+			const dialog = new ExpeditionDialog();
+			dialog._restoreStep();   // reopen on the step left off at before a reload
+			return dialog.render(true);
+		});
 	}
+
+	// Same contract as the session-zero walkthroughs, and the same implementation — see the
+	// reload-resume block in StepperDialog. The trip itself already persists (world-scoped
+	// `expeditionAnswers`); only the reader's place in the eleven steps is per-client, so it
+	// rides in the client-scoped resume record and this is the whole opt-in.
+	get _resumeKey() { return RESUME_KEY; }
 
 	static get defaultOptions() {
 		return foundry.utils.mergeObject(super.defaultOptions, {
 			id:        "stonetop-expedition",
 			title:     "Run an Expedition",
 			template:  "systems/stonetop-pwd/templates/dialogs/expedition.hbs",
-			// Wider than the other steppers to seat the jump-to-step TOC rail.
-			width:     640,
-			height:    "auto",
+			// Wider than the other steppers to seat the jump-to-step TOC rail, and wide
+			// enough for a load row (avatar · name · nine ◇ · band pill · count) to sit on
+			// one line.
+			width:     700,
+			// Fixed, like the other left-rail guides (Welcome 660×580, Make a Monster
+			// 760×620) — NOT "auto". These eleven steps run from two paragraphs (intro) to a
+			// twelve-box checklist (Chart a Course) to a per-PC load table (Outfit), and an
+			// auto-height window re-measures its content on EVERY render: measured against a
+			// 1000px viewport it opened anywhere from 597px to 951px, and from 734px to 951px
+			// at a larger UI font — up to 95% of the screen, a different height on each Next /
+			// Back / rail click. (Core clamps an auto height only to the viewport, and the
+			// shared .stonetop-spring-dialog cap is itself viewport-sized, so neither bounded
+			// it.) 620 is also the exact height at which all eleven rail entries are visible
+			// at the default UI font. The step column scrolls instead — see
+			// .stonetop-guide-main. A fixed height also means a manual resize sticks; core
+			// discards one on an auto-height window.
+			height:    620,
 			resizable: true,
+			// Hold the reader's place through the re-renders a step does in place — naming
+			// the trip, toggling who's on it, re-rolling Requisition — now that the column
+			// scrolls. Changing step scrolls back to the top (see StepperDialog._render).
+			scrollY:   [".stonetop-guide-main", ".stonetop-guide-toc"],
 			// Reuse the spring dialog's window-content reset + body/qa/tier styling.
 			classes:   ["stonetop", "stonetop-spring-dialog", "stonetop-expedition-dialog"],
 		});
@@ -635,7 +675,7 @@ export class ExpeditionDialog extends StepperDialog {
 		const rows = [];
 		const crew = this._crewRow(actor);
 		if (crew) rows.push(crew);
-		const map = actor.getFlag?.("stonetop-pwd", "customFollowers") ?? {};
+		const map = actor.getFlag?.(SYSTEM_ID, "customFollowers") ?? {};
 		for (const f of Object.values(map)
 			.filter(f => f?.party)
 			.sort((a, b) => (Number(a?.order) || 0) - (Number(b?.order) || 0))) {
@@ -648,7 +688,7 @@ export class ExpeditionDialog extends StepperDialog {
 	// (stored at flags.stonetop-pwd.crew.gear as { slug: filledCount }); Supplies are a
 	// separate track and don't count. Returns null for a PC with no crew.
 	_crewRow(actor) {
-		const crew = actor.getFlag?.("stonetop-pwd", "crew");
+		const crew = actor.getFlag?.(SYSTEM_ID, "crew");
 		const exists = crewExists(crew);
 		if (!exists) return null;
 		const gear  = crew.gear ?? {};

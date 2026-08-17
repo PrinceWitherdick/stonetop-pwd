@@ -1,0 +1,78 @@
+<div class="stonetop-marks-body">
+
+	{{!-- Whose moves these are, then what they all have in common. The clause that makes this
+	      window necessary ("so long as the mark remains") is the one a table forgets. --}}
+	<div class="stonetop-marks-heading">
+		{{#if playbookImg}}
+		<img class="stonetop-marks-mark" src="{{playbookImg}}" alt="" draggable="false">
+		{{/if}}
+		<p class="stonetop-marks-rule">{{localize "stonetop.blessedMarks.rule"}}</p>
+	</div>
+
+	{{#if hasGroups}}
+	{{#each groups}}
+	{{!-- One group per kind. The heading is the move; the line under it is what the mark is
+	      DOING for the person wearing it, quoted from the move rather than paraphrased, since
+	      that is the question this window exists to answer without a trip to the Moves tab. --}}
+	<section class="stonetop-marks-group" data-mark-kind="{{key}}">
+		<h3 class="stonetop-marks-group-heading">{{label}}</h3>
+		<p class="stonetop-marks-group-rule">{{rule}}</p>
+
+		{{#if rows.length}}
+		<ul class="stonetop-marks-list">
+			{{#each rows}}
+			{{#> "stonetop.roster-row" prefix="stonetop-marks" editable=../../editable
+			     openClass="stonetop-mark-open" noteClass="stonetop-mark-note"
+			     noteTextClass="stonetop-marks-note-text" notePlaceholder=notePlaceholder
+			     removeClass="stonetop-mark-lift"
+			     removeLabel=(localize "stonetop.blessedMarks.liftLabel" name=name)}}
+			{{!-- Shared Souls only: "treat it as a follower with 3 Loyalty; when you spend its last
+			      Loyalty, the effect ends". Absent (not empty) on every other kind, so nothing else
+			      shows a track it could never spend. --}}
+			{{!-- `../editable` / `../id`, NOT the deeper walk this needed when it sat inline: inside
+			      a partial's block the hash arguments have pushed a frame, so one `../` out of the
+			      pip loop already lands on the row. Getting it wrong fails by reading undefined,
+			      which hands a writable sheet the read-only pips. --}}
+			{{#if pips}}
+			<span class="stonetop-mark-loyalty" data-tooltip="{{localize "stonetop.blessedMarks.loyaltyTooltip"}}" data-tooltip-direction="UP">
+				{{#each pips}}
+				{{#if ../editable}}
+				<button type="button" class="stonetop-readiness-pip stonetop-mark-loyalty-pip{{#if filled}} is-filled{{/if}}"
+				        data-row-id="{{../id}}" data-index="{{index}}"
+				        aria-label="{{localize "stonetop.blessedMarks.loyaltySet"}}"></button>
+				{{else}}
+				<span class="stonetop-readiness-pip stonetop-mark-loyalty-pip{{#if filled}} is-filled{{/if}}"></span>
+				{{/if}}
+				{{/each}}
+			</span>
+			{{/if}}
+			{{/"stonetop.roster-row"}}
+			{{/each}}
+		</ul>
+		{{else}}
+		<p class="stonetop-marks-empty">{{empty}}</p>
+		{{/if}}
+	</section>
+	{{/each}}
+	{{else}}
+	<p class="stonetop-marks-empty">{{localize "stonetop.blessedMarks.none"}}</p>
+	{{/if}}
+
+	{{#if canAdd}}
+	{{!-- The kind first, then who — the kind chooser is this list's one addition to the shared bar,
+	      so it rides in the block body and everything else comes from the partial. --}}
+	{{#> "stonetop.roster-add" prefix="stonetop-marks"
+	     nameClass="stonetop-marks-name" listId="stonetop-marks-suggestions"
+	     addClass="stonetop-marks-add-btn"
+	     addLabel=(localize "stonetop.blessedMarks.add")
+	     placeholder=(localize "stonetop.blessedMarks.addPlaceholder")
+	     hint=(localize "stonetop.blessedMarks.dropHint")}}
+	<select class="stonetop-marks-kind" aria-label="{{localize "stonetop.blessedMarks.kindLabel"}}">
+		{{#each kinds}}
+		<option value="{{key}}"{{#if (eq key ../defaultKind)}} selected{{/if}}>{{label}}</option>
+		{{/each}}
+	</select>
+	{{/"stonetop.roster-add"}}
+	{{/if}}
+
+</div>

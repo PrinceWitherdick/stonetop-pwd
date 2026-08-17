@@ -43,7 +43,7 @@
       "_id": "HlWnQsXE0uCJ5f6g",
       "name": "Manifest as a black wolf with blazing red eyes",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""

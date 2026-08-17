@@ -7,6 +7,7 @@ import {STAT_CHAT_LABELS, STEADING_STAT_CHAT_LABELS, postStatChangesToChat} from
 import {isDefaultImg} from "../utils/strings.js";
 import {PERSON_DEFAULT_IMG, isPersonPlaceholderImg} from "../utils/person-portrait.js";
 import {tokenFollowsPortrait} from "../utils/portrait-token-frame.js";
+import {GM_TOOLKIT_TYPE, theGmToolkit} from "./gmtoolkit/gm-toolkit-actor.js";
 
 export function createStonetopActorClass(BaseActor) {
 	return class StonetopActor extends BaseActor {
@@ -49,12 +50,22 @@ export function createStonetopActorClass(BaseActor) {
 				ok: { ...(options.ok ?? {}), label: title },
 			};
 			if (!options.types) {
-				// Monsters and NPCs are GM content: players (who get Create-Actor on fresh
-				// worlds) only ever make their own character, so keep both out of a non-GM's picker.
+				// Monsters, NPCs and the GM Toolkit are GM content: players (who get Create-Actor
+				// on fresh worlds) only ever make their own character, so keep all three out of a
+				// non-GM's picker.
+				const GM_ONLY_TYPES = new Set(["monster", "npc", GM_TOOLKIT_TYPE]);
+				// The toolkit drops out the same way the steading does once the world HAS one:
+				// both are singletons blocked in preCreateActor, so offering either is a dead end
+				// that only ever warns. The difference is that the steading is auto-created on
+				// every world and so is never offerable, while the toolkit can legitimately be
+				// missing (a world whose launch predates the subtype), and there the picker is a
+				// real way to make it.
+				const haveToolkit = !!theGmToolkit();
 				options.types = this.TYPES.filter(t =>
 					t !== "stonetop"
 					&& t !== CONST.BASE_DOCUMENT_TYPE
-					&& (game.user?.isGM || (t !== "monster" && t !== "npc")));
+					&& !(t === GM_TOOLKIT_TYPE && haveToolkit)
+					&& (game.user?.isGM || !GM_ONLY_TYPES.has(t)));
 			}
 			return super.createDialog(data, createOptions, options, renderOptions);
 		}
@@ -76,11 +87,21 @@ export function createStonetopActorClass(BaseActor) {
 		 * The NPC defaults below deliberately keep their tokens unlinked — a scene's
 		 * townsfolk are placed many times over and each copy is its own creature.
 		 *
-		 * The token reveals its name on hover to anyone. NPCs are the townsfolk and neighbors
-		 * the PCs talk to (not hidden threats), so their name should be legible to every
-		 * player on hover — matching how the Residents/Neighbors rows already name them
-		 * openly. Only applied when the creation data didn't specify a display mode, so a
-		 * deliberate choice, a duplicate, or a compendium import that carries its own
+		 * EVERY kind of actor reveals its name on hover to anyone. Foundry's own default is
+		 * NONE — a nameless token — which leaves a table reading the map by portrait alone
+		 * and asking out loud which of the three villagers is which. NPCs got this first
+		 * because they are the townsfolk the PCs talk to, but a PC's own token, a follower's
+		 * and a creature's all answer the same question for the same reason, and a rule that
+		 * held for one kind of token and not the others was a difference nobody at the table
+		 * could see a reason for.
+		 *
+		 * ⚠ A creature's name is a SPOILER a nameplate now gives away — hovering an unknown
+		 * horror reads its name off the map. That is the GM's call to make per token, and
+		 * Foundry already gives them the controls: hide the token, or set its display mode.
+		 * This only moves the default.
+		 *
+		 * Only applied when the creation data didn't specify a display mode, so a deliberate
+		 * choice, a duplicate, or a compendium import that carries its own
 		 * `prototypeToken.displayName` is preserved.
 		 *
 		 * An NPC with no portrait wears the system's people silhouette instead of Foundry's
@@ -96,19 +117,42 @@ export function createStonetopActorClass(BaseActor) {
 		async _preCreate(data, options, user) {
 			const allowed = await super._preCreate(data, options, user);
 			if (allowed === false) return false;
-			if (this.type === "character") {
-				if (foundry.utils.getProperty(data, "prototypeToken.actorLink") === undefined) {
-					this.updateSource({ "prototypeToken.actorLink": true });
-				}
-				return;
-			}
-			if (this.type !== "npc") return;
+			// Collected and applied in ONE updateSource at the end. Each call is its own diff and
+			// validation pass over the whole document, so a character creating with two of them paid
+			// twice for one decision — and a bestiary bulk import pays that per creature, a hundred
+			// at a time.
+			const patch = {};
+			// Not per-type: a character, an NPC, a creature and the steading all get a name on
+			// hover. The steading is a place nobody drags onto a scene, so for it this is a no-op
+			// rather than an exception worth writing down — and if somebody ever does place it, a
+			// nameplate is the right answer.
 			if (foundry.utils.getProperty(data, "prototypeToken.displayName") === undefined) {
-				this.updateSource({ "prototypeToken.displayName": CONST.TOKEN_DISPLAY_MODES.HOVER });
+				patch["prototypeToken.displayName"] = CONST.TOKEN_DISPLAY_MODES.HOVER;
 			}
-			if (isDefaultImg(this.img) && !isPersonPlaceholderImg(this.img)) {
-				this.updateSource({ img: PERSON_DEFAULT_IMG });
+			if (this.type === "character"
+				&& foundry.utils.getProperty(data, "prototypeToken.actorLink") === undefined) {
+				patch["prototypeToken.actorLink"] = true;
 			}
+			if (this.type === "npc" && isDefaultImg(this.img) && !isPersonPlaceholderImg(this.img)) {
+				patch.img = PERSON_DEFAULT_IMG;
+			}
+			// The GM Toolkit is the GM's own sheet, so no player should even see that it exists.
+			// A world Actor is broadcast to every client and `ownership` is what gates the UI, so
+			// this is where "GM only" has to be said. Foundry's own default for a new document is
+			// already NONE, but that is a default a later core change or a module could move; the
+			// toolkit is not a thing to find out about by accident. Only stamped when the creator
+			// said nothing, so a GM who deliberately shares one keeps their choice.
+			//
+			// No PER-USER ownership entry beside it, deliberately. One would only make sense if
+			// "whose toolkit is this" were a question worth asking, and it is not: the toolkit is
+			// a world singleton (hooks/StonetopSingleton.js), so every GM shares the one sheet.
+			// Recording a creator here would be a field nothing reads, sitting exactly where a
+			// later reader would take it for a permission that matters.
+			if (this.type === GM_TOOLKIT_TYPE
+				&& foundry.utils.getProperty(data, "ownership.default") === undefined) {
+				patch["ownership.default"] = CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
+			}
+			if (Object.keys(patch).length) this.updateSource(patch);
 		}
 
 		get typedActor() {
@@ -153,6 +197,14 @@ export function createStonetopActorClass(BaseActor) {
 		 * written down once and shared with the framing side, so the sheet and the map cannot come
 		 * to disagree about whose token is ours to move.
 		 *
+		 * WITHOUT ITS FOURTH STATE, though, and that is the one difference between the two sides.
+		 * A token wearing the art pipeline's own hand-framed square is fair game for a re-FRAME,
+		 * which puts another square there and remembers the one it displaced; it is not fair game
+		 * here, where the replacement would be the uncropped picture and nothing would be
+		 * remembered. That is a bestiary creature's normal resting state — portrait the whole
+		 * illustration, token a `-t<rect>` square cut from it — so treating it as "following"
+		 * would throw the square away on any write that so much as touches `img`.
+		 *
 		 * Folded into the SAME update rather than written after it, so the two pictures cannot be
 		 * seen apart and one write cannot land without the other.
 		 *
@@ -169,7 +221,7 @@ export function createStonetopActorClass(BaseActor) {
 			// shape an update can arrive in.
 			if (changed["prototypeToken.texture.src"] !== undefined) return;
 			if (foundry.utils.getProperty(changed, "prototypeToken.texture.src") !== undefined) return;
-			if (!tokenFollowsPortrait(this)) return;
+			if (!tokenFollowsPortrait(this, { pipelineSquare: false })) return;
 			changed["prototypeToken.texture.src"] = next;
 		}
 

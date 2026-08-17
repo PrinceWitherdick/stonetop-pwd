@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import fs from "node:fs";
-import path from "node:path";
+import { readRepo, readCss, declarations, ownRule } from "../fakes/css.js";
 
 // Source scan over the real stylesheet, guarding the parts of the portrait-frame feature that
 // live in CSS and fail SILENTLY when they regress.
@@ -16,32 +15,22 @@ import path from "node:path";
 //     `.stonetop-rel-portrait[data-name]` stopped matching anything at all. Nothing throws; the
 //     hover preview and the GM's only route to re-pick a resident's photo just stop working.
 
-// Comments are stripped first. This file's comments are long and full of commas, and a selector
-// list read straight out of the raw text would swallow the paragraph above the rule.
-const CSS = fs.readFileSync(path.join(process.cwd(), "styles", "stonetop.css"), "utf8")
-	.replace(/\/\*[\s\S]*?\*\//g, "");
+const CSS = readCss();
 
-const escape = (selector) => selector.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&");
-
-/** The declaration block for an exact selector, so a rule can be asserted on in isolation. */
-function block(selector) {
-	// Match the selector as a whole comma-separated entry, then take up to the closing brace.
-	const rx = new RegExp(`(^|[,}])\\s*${escape(selector)}\\s*\\{([^}]*)\\}`, "m");
-	const m = CSS.match(rx);
-	return m ? m[2] : null;
-}
+/**
+ * What a surface declares about ITSELF, so a rule can be asserted on in isolation. That is what
+ * most of the assertions here want, and what the NEGATIVE ones require — several check that a box
+ * is positioned but does not clip, or that an image does not round its own corners, and a union
+ * over the shared bases would answer for the siblings instead. See fakes/css.js.
+ */
+const block = (selector) => ownRule(CSS, selector);
 
 /**
  * EVERY declaration that reaches `selector`, including the rules where it is one entry in a
- * shared selector list. `block` above deliberately sees only the rule written ABOUT a surface,
- * which is what most of the assertions here want; two surfaces that share one affordance share
- * its declarations, and asking after only the standalone rule would find nothing but the local
- * overrides beside it.
+ * shared selector list: two surfaces that share one affordance share its declarations, and asking
+ * after only the standalone rule would find nothing but the local overrides beside it.
  */
-function allDeclarations(selector) {
-	const rx = new RegExp(`(?:^|[,}])\\s*${escape(selector)}\\s*(?:,[^{}]*)?\\{([^}]*)\\}`, "gm");
-	return [...CSS.matchAll(rx)].map((m) => m[1]).join("\n");
-}
+const allDeclarations = (selector) => declarations(CSS, selector) ?? "";
 
 describe("the clipping boxes a chosen frame paints inside", () => {
 	// Guard the scan itself: the day the CSS is reshuffled, a lookup that quietly returns null
@@ -157,8 +146,7 @@ describe("the clipping boxes a chosen frame paints inside", () => {
 });
 
 describe("the follower portrait's markup contract", () => {
-	const HBS = fs.readFileSync(
-		path.join(process.cwd(), "templates", "actor", "partials", "tab-followers.hbs"), "utf8");
+	const HBS = readRepo("templates/actor/partials/tab-followers.hbs");
 
 	it("wraps the portrait image in the clip span", () => {
 		// The box deliberately does not clip, so this span is the only thing keeping a framed
@@ -178,7 +166,7 @@ describe("the follower portrait's markup contract", () => {
 });
 
 describe("the NPC header portrait's markup contract", () => {
-	const HBS = fs.readFileSync(path.join(process.cwd(), "templates", "actor", "npc.hbs"), "utf8");
+	const HBS = readRepo("templates/actor/npc.hbs");
 
 	it("puts .stonetop-portrait on the clipping box, not on the image", () => {
 		// Three things find the slot by that class and would break quietly if it moved to the
@@ -206,7 +194,7 @@ describe("the NPC header portrait's markup contract", () => {
 		["templates/actor/monster.hbs"],
 		["templates/actor/partials/actor-header.hbs"],
 	])("%s carries NO data-edit, so the portrait click is ours in both modes", (file) => {
-		const markup = fs.readFileSync(path.join(process.cwd(), ...file.split("/")), "utf8")
+		const markup = readRepo(file)
 			.replace(/\{\{!--[\s\S]*?--\}\}/g, "");
 		expect(markup).toMatch(/stonetop-portrait/);
 		expect(markup).not.toMatch(/data-edit/);
@@ -214,7 +202,7 @@ describe("the NPC header portrait's markup contract", () => {
 });
 
 describe("the monster header portrait's markup contract", () => {
-	const HBS = fs.readFileSync(path.join(process.cwd(), "templates", "actor", "monster.hbs"), "utf8");
+	const HBS = readRepo("templates/actor/monster.hbs");
 
 	it("draws ONE slot for both modes, so locking the sheet cannot re-crop a framed face", () => {
 		// The monster header used to branch on edit mode before it branched on the frame, and the
@@ -231,7 +219,7 @@ describe("the monster header portrait's markup contract", () => {
 
 describe("the header portrait's crop pip", () => {
 	// Comments stripped: these templates discuss the pip and the corner it sits in.
-	const markup = (file) => fs.readFileSync(path.join(process.cwd(), ...file.split("/")), "utf8")
+	const markup = (file) => readRepo(file)
 		.replace(/\{\{!--[\s\S]*?--\}\}/g, "");
 
 	it.each([

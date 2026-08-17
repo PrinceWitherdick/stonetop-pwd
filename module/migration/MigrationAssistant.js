@@ -171,7 +171,7 @@ export class MigrationAssistant extends StonetopDialog {
 
 	/** A failure the world survives intact — nothing is deleted before the flip. */
 	_survivable(reason) {
-		return `${reason} (nothing was lost — this world still runs on ${SYSTEM_ID}.)`;
+		return `${reason} (nothing was lost: this world still runs on ${SYSTEM_ID}.)`;
 	}
 
 	/**

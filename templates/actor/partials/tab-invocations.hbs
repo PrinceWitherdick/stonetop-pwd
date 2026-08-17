@@ -10,17 +10,13 @@
 		{{> "stonetop.details-section-edit-toggle" section="invocations" editing=stonetop.invocationsEdit collapse="invocations"}}
 	</div>
 
-	{{!-- The filter moved up into the shared section heading (searchControl); the sort stayed
-	      down here beside the hide toggle, since both are about what the grid below shows. --}}
+	{{!-- The filter moved up into the shared section heading (searchControl); the hide toggle
+	      stayed down here, since it is about what the grid below shows. --}}
 	<div class="stonetop-invocations-toolbar">
 		<label class="stonetop-hide-unselected-label">
 			<input type="checkbox" class="stonetop-hide-unknown-invocations-check"{{#if stonetop.invocations.hideUnknown}} checked{{/if}}>
 			Hide un-learned invocations
 		</label>
-		<select class="stonetop-invocation-sort" data-tooltip="Order the invocations below">
-			<option value="known"{{#if stonetop.invocations.sortKnown}} selected{{/if}}>Known first</option>
-			<option value="alpha"{{#if stonetop.invocations.sortAlpha}} selected{{/if}}>A–Z</option>
-		</select>
 	</div>
 
 	<div class="stonetop-invocations-rules">
@@ -30,9 +26,29 @@
 		{{/if}}
 	</div>
 
+	{{!-- The Invocation currently being held open, stated under the rule it is subject to.
+	      Its own card says so too, but the card can be scrolled past, filtered out by the
+	      search, or hidden outright by "Hide un-learned" — this banner cannot. --}}
+	{{#if stonetop.invocations.concentrating.active}}
+	<div class="stonetop-invocation-concentrating">
+		<i class="fas fa-sun" aria-hidden="true"></i>
+		{{!-- The name is the only untrusted part and rides in through `localize`'s {name}, which
+		      does not escape — so the whole sentence is emitted raw and the name is escaped on the
+		      way in (`escapeHtml`). The <strong> around it is the string's, not the template's, so
+		      a translator can move it. --}}
+		<span class="stonetop-invocation-concentrating-text">{{{localize "stonetop.invocations.bannerText" name=(escapeHtml stonetop.invocations.concentrating.label)}}}</span>
+		{{#if editable}}
+		<button type="button" class="stonetop-invocation-end"
+		        data-tooltip="{{localize "stonetop.invocations.endTooltip"}}"
+		        data-tooltip-direction="UP">{{localize "stonetop.invocations.endLabel"}}</button>
+		{{/if}}
+	</div>
+	{{/if}}
+
 	<div class="stonetop-invocations-grid">
 		{{#each stonetop.invocations.options}}
-		<div class="stonetop-invocation-card{{#unless known}} is-unknown{{/unless}}">
+		<div class="stonetop-invocation-card{{#unless known}} is-unknown{{/unless}}{{#if active}} is-concentrating{{/if}}"
+		     data-slug="{{slug}}"{{#if ongoing}} data-ongoing="1"{{/if}}>
 			<div class="stonetop-invocation-header">
 				<input type="checkbox"
 				       class="stonetop-item-check stonetop-invocation-check"
@@ -42,8 +58,11 @@
 				{{!-- Both states are tappable: an un-learned Invocation still posts its text, it
 				      just isn't offered the roll (see the click handler). The tooltip is what
 				      says which of the two this tap will be. --}}
-				<span class="stonetop-invocation-name" role="button" tabindex="0" data-tooltip="{{#if known}}Use this Invocation{{else}}You haven't learned this Invocation — tap to read it out{{/if}}">{{label}}</span>
-				{{#if ongoing}}<span class="stonetop-item-source stonetop-invocation-ongoing" data-tooltip="While one Invocation is ongoing, you can't use another. You can end an Invocation whenever you wish, and it will end immediately if your holy light is extinguished. An invocation's range is equal to that of its light source." data-tooltip-direction="UP">Ongoing</span>{{/if}}
+				<span class="stonetop-invocation-name" role="button" tabindex="0" data-tooltip="{{#if known}}Use this Invocation{{else}}You haven't learned this Invocation: tap to read it out{{/if}}">{{label}}</span>
+				{{!-- The badge says what this Invocation IS until it says what it is DOING: a card
+				      that is visibly running doesn't also need telling that it's the running kind. --}}
+				{{#if active}}<span class="stonetop-item-source stonetop-invocation-active" data-tooltip="You are concentrating on this Invocation. It lasts until you end it, until you use another, or until your holy light goes out." data-tooltip-direction="UP">Concentrating</span>
+				{{else if ongoing}}<span class="stonetop-item-source stonetop-invocation-ongoing" data-tooltip="While one Invocation is ongoing, you can't use another. You can end an Invocation whenever you wish, and it will end immediately if your holy light is extinguished. An invocation's range is equal to that of its light source." data-tooltip-direction="UP">Ongoing</span>{{/if}}
 			</div>
 			<div class="stonetop-invocation-desc">{{{description}}}</div>
 		</div>

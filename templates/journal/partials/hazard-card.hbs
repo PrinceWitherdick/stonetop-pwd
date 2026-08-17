@@ -5,21 +5,7 @@
       hazard-specific rows carry .hazard-* classes on top. --}}
 <article class="threat-card threat-card--hazard hazard-card{{#if collapsed}} is-collapsed{{/if}}{{#if canDrag}} is-draggable{{/if}}"
          data-hazard-id="{{id}}" data-page-uuid="{{uuid}}" style="--threat-accent:{{accent}};"{{#if canDrag}} draggable="true"{{/if}}>
-	<span class="threat-card__edge" aria-hidden="true"></span>
-
-	<header class="threat-card__head{{#if collapsible}} threat-card__head--collapsible{{/if}}">
-		{{#if collapsible}}
-		<button type="button" class="threat-collapse-btn"
-		        aria-expanded="{{#if collapsed}}false{{else}}true{{/if}}"
-		        aria-label="Collapse or expand this hazard" tabindex="0">
-			<i class="fas fa-chevron-down" aria-hidden="true"></i>
-		</button>
-		{{/if}}
-		<div class="threat-card__title">
-			<h3 class="threat-name">{{name}}</h3>
-			<span class="threat-type">Hazard</span>
-		</div>
-	</header>
+	{{> "stonetop.card-head" kind="hazard" typeLabel="Hazard"}}
 
 	{{#if hasInstinct}}
 	<p class="threat-instinct"><span class="threat-label">Instinct</span><em>{{instinct}}</em></p>

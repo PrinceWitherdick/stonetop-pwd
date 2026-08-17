@@ -1,0 +1,43 @@
+{{!-- The chrome every editable list on the Create-a-Site wizard wears: its heading, its optional
+      suggestion chips and book prompts, its rows, and the button that adds one more.
+
+      A BLOCK partial — the caller supplies only the rows, as `{{#> "stonetop.cs-list-frame" …}}
+      …rows… {{/…}}`. cs-line-list.hbs and cs-pair-list.hbs are both this frame plus a row body:
+      before it existed the wrapper, the label line, all five lines of the chips block and the add
+      button were duplicated between them, so a change to the chip markup or to the add button's
+      `data-list` contract was two edits and the one that got missed looked identical to the one
+      that did not. That is the same trap cs-line-list.hbs was written to get the wizard out of,
+      one level up.
+
+      `label` is optional: the areas list is a column of titled cards and heads itself.
+
+      Context: the caller's own, plus
+        list        the `data-list` key the add button carries ("dangers")
+        label       optional heading
+        hint        optional parenthetical beside the heading, WITHOUT its brackets
+        chips       optional click-to-fill suggestions ({list, text, used})
+        kinds       optional book prompts, rendered as a static hint list
+        addLabel    the add button's wording ("Add danger")
+        frameClass  optional extra class on the wrapper (areas space their cards wider)
+
+      Every one of those names is cleared off the dialog's own context before rendering (see
+      _PARTIAL_PARAMS in create-site-dialog.js): Handlebars MERGES a partial's hash into the
+      enclosing context, so a bare `chips` up there would be inherited by every list that was not
+      passed one. --}}
+<div class="stonetop-cf-gear {{frameClass}}">
+  {{#if label}}
+  <div class="stonetop-cf-pick-label">{{label}}{{#if hint}} <span class="stonetop-cf-pick-hint">({{hint}})</span>{{/if}}</div>
+  {{/if}}
+  {{#if chips}}
+  <div class="stonetop-cf-chips">
+    {{#each chips}}
+    <button type="button" class="stonetop-cf-chip stonetop-cs-suggest{{#if used}} is-selected{{/if}}" data-list="{{list}}" data-text="{{text}}">{{text}}</button>
+    {{/each}}
+  </div>
+  {{/if}}
+  {{#if kinds}}
+  <ul class="stonetop-cs-hint-list">{{#each kinds}}<li>{{this}}</li>{{/each}}</ul>
+  {{/if}}
+  {{> @partial-block}}
+  <button type="button" class="stonetop-cs-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-list="{{list}}"><i class="fas fa-plus"></i> {{addLabel}}</button>
+</div>

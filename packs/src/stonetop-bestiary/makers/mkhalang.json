@@ -43,7 +43,7 @@
       "_id": "U2fH7RFEoFkT2RwP",
       "name": "Fly quickly across the skies",
       "type": "monsterMove",
-      "img": "icons/creatures/abilities/wing-membrane-blue.webp",
+      "img": "icons/creatures/abilities/wings-birdlike-blue.webp",
       "system": {
         "description": "",
         "rollFormula": ""
@@ -54,7 +54,7 @@
       "_id": "GmCxwfzCHmPw8Jmw",
       "name": "Manifest a mammoth-like form of freezing mist and ice (harmed only by salt, fire, heat)",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""

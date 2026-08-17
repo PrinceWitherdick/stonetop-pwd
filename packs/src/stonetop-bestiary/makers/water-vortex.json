@@ -64,7 +64,7 @@
       "_id": "kbwBaMOwxZoC19QV",
       "name": "Engulf a smaller foe (+grabby)",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""
@@ -75,7 +75,7 @@
       "_id": "sERcEoQ64GPWWH4v",
       "name": "Surge past foes, dragging them off their feet (+area, +forceful, costs 1d4 HP)",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""

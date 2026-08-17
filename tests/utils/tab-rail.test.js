@@ -1,8 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { railHangsLeft, railTopFor } from "../../module/utils/tab-rail.js";
+import { readRepo, readCss, declarations } from "../fakes/css.js";
 
 // The vertical icon rail hangs OUTSIDE the window frame, which buys it the dnd5e silhouette
 // and costs it every guarantee a child of the sheet gets for free. Two of those are geometry,
@@ -17,18 +15,13 @@ import { railHangsLeft, railTopFor } from "../../module/utils/tab-rail.js";
 // The arithmetic for both is pure and exported so it can be checked here; the placement itself
 // is verified in a browser.
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const read = rel => fs.readFileSync(path.resolve(HERE, "../..", rel), "utf8");
+const read = readRepo;
 
 const RAIL_JS = read("module/utils/tab-rail.js");
-// Comments carry braces and selector-like text, so strip them before matching rules.
-const CSS = read("styles/stonetop.css").replace(/\/\*[\s\S]*?\*\//g, "");
+const CSS = readCss();
 
-/** The declaration block for an exact selector, so one rule can be asserted on alone. */
-function block(selector) {
-	const rx = new RegExp(`(^|[,}])\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`, "m");
-	return CSS.match(rx)?.[2] ?? null;
-}
+/** Everything an exact selector declares, across every rule that names it — see fakes/css.js. */
+const block = (selector) => declarations(CSS, selector);
 
 describe("railTopFor", () => {
 	// The header banner ends 154px below the frame's top; + the 1rem gap dnd5e uses.
@@ -51,6 +44,33 @@ describe("railTopFor", () => {
 	// NaN — which would be written into the custom property and blank the rail's `top`.
 	it("falls back to scale 1 rather than dividing by zero", () => {
 		expect(railTopFor({ bottom: 100 }, { top: 0, width: 0 }, 0)).toBe(116);
+	});
+
+	// The GM Toolkit scrolls as ONE unit with its banner inside the scroll, and it re-renders on
+	// every threat, hazard and site write. A re-render landing mid-scroll measures the banner
+	// where it has ridden up to, so without the scroll term the rail — which lives on the window
+	// frame, outside the scroll — would be re-stamped further up the window every tick, and off
+	// the top of it entirely once the sheet is scrolled past the banner's own height.
+	it("reads the banner's at-rest position, so a scrolled sheet stamps the same number", () => {
+		const atRest = railTopFor({ bottom: 354 }, { top: 200, width: 960 }, 960, 0);
+		// Same sheet scrolled 300px: the banner's rect has moved up by exactly that much.
+		const scrolled = railTopFor({ bottom: 54 }, { top: 200, width: 960 }, 960, 300);
+		expect(scrolled).toBe(atRest);
+	});
+
+	// `scrollTop` is untransformed and the rects are not, so the term has to land on the far side
+	// of the divide. Added before it, a scrolled sheet at scale 1.5 would under-correct by a
+	// third and the rail would still creep up the window.
+	it("adds the scroll back after dividing the transform out, not before", () => {
+		const scaled = railTopFor({ bottom: 81 }, { top: 300, width: 1440 }, 960, 300);
+		expect(scaled).toBe(railTopFor({ bottom: 354 }, { top: 200, width: 960 }, 960, 0));
+	});
+
+	// Every other sheet pins its header, so the default must be a no-op — this is one call site
+	// shared by all of them.
+	it("defaults to no scroll, leaving a pinned header measured exactly as before", () => {
+		expect(railTopFor({ bottom: 354 }, { top: 200, width: 960 }, 960))
+			.toBe(railTopFor({ bottom: 354 }, { top: 200, width: 960 }, 960, 0));
 	});
 });
 

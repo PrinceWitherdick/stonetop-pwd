@@ -10,9 +10,9 @@
 
 import { describe, it, expect, vi } from "vitest";
 import {
-	buildLiveCharacter, moveCount, ownedMoveNames, sourceMovesFor, STANDARD_ARRAY,
+	buildLiveCharacter, moveCount, ownedMoveNames, sourceMovesFor,
 } from "../../fakes/LiveCharacter.js";
-import { PLAYBOOKS, STAT_KEYS, CROSS_PLAYBOOK_MOVES } from "../../fakes/sourcePack.js";
+import { PLAYBOOKS, STAT_KEYS } from "../../fakes/sourcePack.js";
 import { moveMarkBudget } from "../../../module/actors/character/move-mark-budget.js";
 
 

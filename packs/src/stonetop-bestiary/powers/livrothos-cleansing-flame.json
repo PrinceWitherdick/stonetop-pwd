@@ -54,7 +54,7 @@
       "_id": "qxdK8XkEIBHdej4E",
       "name": "Appear as a column of white flame, painful to look upon",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""
@@ -76,7 +76,7 @@
       "_id": "xqAa9VFbW3wRkjzr",
       "name": "Burn magic away from the world",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""

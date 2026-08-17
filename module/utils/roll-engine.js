@@ -116,7 +116,7 @@ export async function rollSeasonsCard({ formula, title = "", alias = "", resultT
  * the carried Fortunes against SPRING_SEASONS_RESULT). `hopeful` is the recorded
  * "most hopeful" note, if any; `fortunes` is the steading's +Fortunes modifier.
  */
-export function postSeasonsRollPrompt({ alias = "Seasons Change — Spring", hopeful = "", fortunes = 0 } = {}) {
+export function postSeasonsRollPrompt({ alias = "Seasons Change: Spring", hopeful = "", fortunes = 0 } = {}) {
 	if (!globalThis.ChatMessage) return;
 	const who = hopeful ? `<strong>${escHtml(hopeful)}</strong>` : "Whoever is the <strong>most hopeful</strong>";
 	const body = `<div class="card-content stonetop-seasons-prompt">
@@ -265,7 +265,11 @@ function _conditionsHtml(conditions) {
  * @param {string} statKey   - One of str/dex/int/wis/con/cha
  * @param {Actor}  actor
  * @param {object} options
- * @param {string} [options.rollMode]                  - "adv" | "dis" | "def" | "normal"
+ * @param {string} [options.rollMode]                  - "adv" | "dis" | "normal". NOT Foundry's
+ *   core rollMode (public/gmroll/blind/self) — that is read separately from the client setting
+ *   when the message is built. Anything other than "adv"/"dis" is coerced to "normal"; a "def"
+ *   value was documented here for a while and never implemented, so a caller trusting it got a
+ *   flat 2d6.
  * @param {number} [options.modifier]                  - Total numeric modifier (forward + ongoing + situational)
  * @param {number} [options.forward]                   - Forward portion (shown separately in card)
  * @param {number} [options.ongoing]                   - Ongoing portion (shown separately in card)
@@ -275,6 +279,10 @@ function _conditionsHtml(conditions) {
  * @param {object} [options.tierActions]               - Optional HTML actions keyed by result tier
  * @param {string}  [options.stonetopDebility]          - Debility name for annotation
  * @param {string}  [options.stonetopDebilityTooltip]
+ * @param {string}  [options.stonetopDebilityIgnored]      - What is cancelling a marked debility
+ *   (the Heavy's Battle Joy). Mutually exclusive with stonetopDebility: either the debility bit,
+ *   or something is ignoring it.
+ * @param {string}  [options.stonetopDebilityIgnoredName]  - Which debility is being ignored
  * @param {boolean} [options.noXpOnMiss]               - Skip the automatic +1 XP on a miss (for moves that replace it)
  * @param {string[]} [options.pickOptions]             - Shared "choose from this list" pool (love letters); rendered as a checklist
  * @returns {Promise<Roll>}
@@ -350,6 +358,17 @@ export async function rollStat(statKey, actor, options = {}) {
 	if (situational !== 0) {
 		conditions.push(`<li class="stonetop-condition-situational">Situational ${sign(situational)}</li>`);
 	}
+	// A debility that is marked and doing nothing (the Heavy's Battle Joy). Said out loud, because
+	// the alternative is a player seeing no Disadvantage pill on a roll their ticked box should
+	// have spoiled and reading the tracker as broken.
+	if (options.stonetopDebilityIgnored) {
+		const ignored = String(options.stonetopDebilityIgnoredName ?? "").trim();
+		const tip = ignored
+			? `${options.stonetopDebilityIgnored}: you ignore the effects of debilities (${ignored.toLowerCase()}) as long as you keep fighting.`
+			: `${options.stonetopDebilityIgnored}: you ignore the effects of debilities as long as you keep fighting.`;
+		conditions.push(`<li class="stonetop-condition-debility-ignored" data-tooltip="${escHtml(tip)}">`
+			+ `${escHtml(options.stonetopDebilityIgnored)}</li>`);
+	}
 
 	const conditionsHtml = _conditionsHtml(conditions);
 
@@ -417,7 +436,7 @@ export async function markMissXp(actor, moveName) {
 		header: "Miss",
 		result: `+1 XP (${newXp} / ${maxXp})`,
 		resultClass: "success",
-		description: `<p>On a <strong>miss</strong> (a total of 6 or less), you <strong>mark XP</strong> &mdash; a tick mark that raises your total by 1 &mdash; unless the move says otherwise.</p>`
+		description: `<p>On a <strong>miss</strong> (a total of 6 or less), you <strong>mark XP</strong>, a tick mark that raises your total by 1, unless the move says otherwise.</p>`
 	});
 	await ChatMessage.create({
 		content:  xpCard,

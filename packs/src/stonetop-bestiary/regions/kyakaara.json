@@ -65,7 +65,7 @@
       "_id": "UTpVgH2VipZsCW84",
       "name": "Surround, harry, dogpile, drag down",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""
@@ -76,7 +76,7 @@
       "_id": "bEv1HqnpgP2QrIHJ",
       "name": "Drag off a captive, to eat or torture",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""

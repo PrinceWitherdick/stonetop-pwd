@@ -63,7 +63,7 @@ const HOME_INFO = {
 	"The Steplands": "Rugged wilderness roamed by the nomadic Hillfolk — horselords and shepherds, fierce and barbaric to outsiders.",
 	"Lygos": "A city far to the south, reached after a long trek through the arid Manmarch. Steady trade flows between Marshedge, Lygos, and the other southern towns.",
 	"Barrier Pass": "A mountain stronghold sealed by a massive wall and gate, held by stoic, unfriendly folk who live on goats and sheep and want little to do with strangers.",
-	"The Manmarch": "Sparsely settled southern plains, and the feuding, warlike longhouse-dwellers of the north — who'd be a terror to all the world, should they ever unite.",
+	"The Manmarch": "Sparsely settled southern plains, and the feuding, warlike longhouse-dwellers of the north, who'd be a terror to all the world, should they ever unite.",
 };
 
 export class AddSteadingMemberDialog extends StonetopDialog {

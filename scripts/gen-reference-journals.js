@@ -51,24 +51,6 @@ async function readJsonDir(dir) {
     return docs.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function readJsonDirRecursive(dir, filter = () => true) {
-    const results = [];
-    async function walk(d) {
-        let entries;
-        try { entries = await fs.readdir(d, { withFileTypes: true }); }
-        catch { return; }
-        for (const e of entries) {
-            if (e.isDirectory()) { await walk(path.join(d, e.name)); }
-            else if (e.isFile() && e.name.endsWith(".json") && !e.name.startsWith("_")) {
-                const doc = JSON.parse(await fs.readFile(path.join(d, e.name), "utf8"));
-                if (filter(doc)) results.push(doc);
-            }
-        }
-    }
-    await walk(dir);
-    return results.sort((a, b) => a.name.localeCompare(b.name));
-}
-
 function makePage(journalId, name, content, sort, existing = { pages: {} }) {
     const pageId = existing.pages?.[name] ?? deterministicId(`${journalId}::${name}`);
     return {

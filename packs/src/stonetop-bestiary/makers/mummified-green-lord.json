@@ -87,7 +87,7 @@
       "_id": "M9uRSpkXOgMRF5UD",
       "name": "Regenerate its corpse, even if burned — unless its canopic jars are destroyed",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""

@@ -1,0 +1,19 @@
+{{!-- IMAGE ZOOM — one picture, at whatever size the reader wants it, inside Foundry.
+
+      Driven entirely by module/utils/image-zoom-window.js: the image carries no width and no
+      position here, because every width it ever has is a multiple of its own natural size —
+      not known until the file has loaded — and every position is where the reader put it.
+
+      ONE root element, as AppV1 requires (activateListeners is handed the root itself, not a
+      wrapper around several) — and that root is the viewport itself. No toolbar row
+      (user, 2026-08-16): no magnifiers, no percentage readout, no line of instructions, so
+      there is nothing for a wrapper to stack the viewport against. Wheel to zoom, drag to
+      pan, double-click between fit and full size.
+
+      The window the picture moves behind — it clips, it does not scroll (user, 2026-08-16).
+      `draggable="false"` because the browser's own image drag would otherwise start the moment
+      a pan does, and the reader would be dropping the file on their desktop instead of moving
+      the picture. --}}
+<div class="stonetop-image-zoom-view">
+	<img class="stonetop-image-zoom-img" src="{{src}}" alt="{{alt}}" draggable="false">
+</div>

@@ -58,7 +58,35 @@ export class LoadSnapshotBuilder {
  * @property {string|null} ownedId
  * @property {boolean} twoCol
  * @property {boolean} breakBefore
+ * @property {ArtifactView} artifact - What this row shows of an artifact's identification ladder
+ *           (Book I pp.430-431). Kept as the ONE object concealArtifactFields hands over rather
+ *           than exploded into seven siblings: the seven are only meaningful together, and split
+ *           apart they could be set half from a concealed view and half from a revealed one. On
+ *           ordinary gear it is EMPTY_ARTIFACT, whose `state` is "".
+ *
+ *           `note` and `resource` above are ALREADY concealed to match — the row's hidden tags
+ *           never reach the snapshot, let alone the DOM. See actors/character/artifact-identify.js.
+ *
+ * @typedef {object} ArtifactView
+ * @property {string} state     "" on ordinary gear; "unknown" / "partial" / "known" on a hidden one
+ * @property {boolean} isArtifact Does this row have artifact state at all? `state !== ""` said as
+ *           a flag, because that is the question a template asks and `{{#if artifact.state}}`
+ *           only answers it by accident of "" being falsy.
+ * @property {boolean} concealed Something is still hidden from the player, so the row draws its
+ *           "?" chip and offers the identify affordance.
+ * @property {boolean} gmPeeking The viewer is the GM and is seeing more than the owner does; the
+ *           row is tinted to say so.
+ * @property {boolean} loreOwed  A 7-9 settled: the write-up is still owed.
+ * @property {string} hint      The GM's "more than meets the eye" line, or "".
+ * @property {string} lore      The full write-up, or "" while it is still owed.
+ * @property {string} lead      "How they could learn more", or "".
  */
+
+/** What a row with no artifact state shows: nothing, in the shape the template expects. */
+export const EMPTY_ARTIFACT = Object.freeze({
+	state: "", isArtifact: false, concealed: false, gmPeeking: false, loreOwed: false,
+	hint: "", lore: "", lead: "",
+});
 export class InventoryItemSnapshot {
 	constructor(b) {
 		this.slug        = b._slug;
@@ -75,6 +103,7 @@ export class InventoryItemSnapshot {
 		this.twoCol      = b._twoCol;
 		this.breakBefore = b._breakBefore;
 		this.isAddedSpecial = b._isAddedSpecial ?? false;
+		this.artifact       = b._artifact ?? EMPTY_ARTIFACT;
 	}
 }
 
@@ -92,6 +121,27 @@ export class InventoryItemSnapshotBuilder {
 	withTwoCol(v)      { this._twoCol      = v; return this; }
 	withBreakBefore(v) { this._breakBefore = v; return this; }
 	withIsAddedSpecial(v) { this._isAddedSpecial = v; return this; }
+	/**
+	 * Takes the whole concealed view from concealArtifactFields, and KEEPS it whole, so the row
+	 * cannot be built with a revealed write-up beside a hidden state by setting one and not the
+	 * other. Normalised here rather than trusted, so a caller handing over a partial object still
+	 * yields a row the template can render.
+	 */
+	withArtifact(v) {
+		this._artifact = v ? {
+			state:      v.state ?? "",
+			// Derived rather than copied, so a caller handing over a half-built view can't leave the
+			// flag disagreeing with the state it is supposed to be shorthand for.
+			isArtifact: !!(v.state ?? ""),
+			concealed: !!v.concealed,
+			gmPeeking: !!v.gmPeeking,
+			loreOwed:  !!v.loreOwed,
+			hint:      v.hint ?? "",
+			lore:      v.lore ?? "",
+			lead:      v.lead ?? "",
+		} : EMPTY_ARTIFACT;
+		return this;
+	}
 	build()            { return new InventoryItemSnapshot(this); }
 }
 

@@ -80,6 +80,35 @@ export function stripHtmlToText(value) {
 		.trim();
 }
 
+/**
+ * Decode the named entities our authored prose carries, PRESERVING typography.
+ *
+ * The one entity decoder — do NOT add ad-hoc copies. There used to be two, and neither was a
+ * superset of the other: one knew `&mdash; &ndash; &hellip; &rsquo; &lsquo;` and the other knew
+ * `&lt; &gt; &#39;`, so text routed through the wrong one came out with raw entities still in it.
+ * Both call sites (the Chronicle's stored qa prompt, the FAQ's section/question labels) produce
+ * PLAIN TEXT labels rather than markup, so decoding `&lt;`/`&gt;` here can't inject anything.
+ *
+ * `&amp;` is decoded LAST so a double-encoded source (`&amp;mdash;`) can't decode twice.
+ *
+ * Distinct from {@link stripHtmlToText}, which deliberately flattens `&rsquo;` to an ASCII `'`
+ * for one-line tooltips and ledger previews. This one keeps the curly mark.
+ */
+export function decodeEntities(text) {
+	return String(text ?? "")
+		.replace(/&mdash;/g, "—")
+		.replace(/&ndash;/g, "–")
+		.replace(/&hellip;/g, "…")
+		.replace(/&rsquo;/g, "’")
+		.replace(/&lsquo;/g, "‘")
+		.replace(/&nbsp;/g, " ")
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&amp;/g, "&");
+}
+
 // A move outcome's flattened value reads "<lead-in> pick 1: <option> / <option> / …"
 // (the source <ul><li> list is collapsed to slash-separated text by the move pipeline).
 // This marker finds the "pick N:" / "choose N:" / "select N:" hinge so we can split the

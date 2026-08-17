@@ -39,10 +39,16 @@ export async function openNpcNotesDialog(actor) {
 			// Writing to the actor re-renders both the NPC sheet and the steading roster,
 			// which share this field — the two-way sync. Guard against a redundant write
 			// (the initial value bubbling through) so we don't log a no-op ledger entry.
+			// NPCs are GM-owned prep, so a player who reached this through the steading roster
+			// gets a permission rejection here. Unhandled, that was silent: the editor showed
+			// the text as saved and it was gone on the next open.
 			editor?.addEventListener("change", (ev) => {
 				const value = ev.target?.value ?? "";
 				if (value === (actor.system?.notes ?? "")) return;
-				actor.update({ "system.notes": value });
+				actor.update({ "system.notes": value }).catch(err => {
+					console.error("Stonetop | could not save the NPC's notes", err);
+					ui.notifications?.warn("Those notes could not be saved: you don't own this NPC.");
+				});
 			});
 		},
 	}, {

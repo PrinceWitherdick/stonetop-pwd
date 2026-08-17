@@ -52,10 +52,14 @@ describe("StonetopCharacter holy light", () => {
 		expect(outActor.unsetFlag).not.toHaveBeenCalled();
 	});
 
+	// Through `headerGlyphOwnership`, which is what the sheet reads. There is no longer a
+	// single-answer `canWieldHolyLight` getter beside it: nothing outside these tests called one,
+	// and a second spelling kept alive by its own test is a spelling that can quietly disagree.
 	it("earns the candle from any move that makes a light, and only from those", () => {
-		expect(makeChar({ items: [move("Consecrated Flame")] }).char.canWieldHolyLight).toBe(true);
-		expect(makeChar({ items: [move("Invoke the Sun God")] }).char.canWieldHolyLight).toBe(true);
-		expect(makeChar({ items: [move("Wielder of the White Flame")] }).char.canWieldHolyLight).toBe(true);
-		expect(makeChar({ items: [move("Guardian")] }).char.canWieldHolyLight).toBe(false);
+		const owns = (name) => makeChar({ items: [move(name)] }).char.headerGlyphOwnership().holyLight;
+		expect(owns("Consecrated Flame")).toBe(true);
+		expect(owns("Invoke the Sun God")).toBe(true);
+		expect(owns("Wielder of the White Flame")).toBe(true);
+		expect(owns("Guardian")).toBe(false);
 	});
 });

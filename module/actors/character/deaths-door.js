@@ -249,16 +249,6 @@ export function nextDeathsDoorState({ oldHp, newHp, state = null }) {
 }
 
 /**
- * True when an HP change is the moment a character becomes dying — the one transition that
- * should announce itself. Deliberately narrower than "is at 0 HP": re-posting the prompt
- * every time a downed PC is hit again would bury the table in cards.
- */
-export function becameDying({ oldHp, newHp, state = null }) {
-	return state !== DEATHS_DOOR_STATE.DYING
-		&& nextDeathsDoorState({ oldHp, newHp, state }) === DEATHS_DOOR_STATE.DYING;
-}
-
-/**
  * Whether the character may face their 0-HP move right now. Being at 0 HP is not enough:
  * a 7-9 leaves them at 0 HP and no longer dying, and a PC who stepped through the Last Door
  * doesn't roll anything.

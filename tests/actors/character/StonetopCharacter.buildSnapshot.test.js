@@ -4,7 +4,6 @@ import {OutfitItemBuilder} from "../../../module/model/OutfitItem.js";
 import {FakePlaybookRepository} from "../../fakes/FakePlaybookRepository.js";
 import {FakeInventoryRepository} from "../../fakes/FakeInventoryRepository.js";
 import {TestCharacterBuilder} from "../../fakes/TestCharacterBuilder.js";
-import {FakeMoveRepository} from "../../fakes/FakeMoveRepository.js";
 import {FakePostDeathInsertRepository} from "../../fakes/FakePostDeathInsertRepository.js";
 import {FakeActorBuilder, FakeStatBuilder} from "../../fakes/FakeActorBuilder.js";
 
@@ -828,6 +827,42 @@ describe("buildSnapshot — moves", () => {
 		expect(snap.movelist.playbookMoves.map(m => m.name)).toEqual(["Bravo", "Alpha", "Charlie"]);
 		expect(snap.movelist.playbookMovesOwned.map(m => m.name)).toEqual(["Bravo"]);
 		expect(snap.movelist.playbookMovesUnowned.map(m => m.name)).toEqual(["Alpha", "Charlie"]);
+	});
+
+	// The Moves tab heads each of the playbook's three onboarding clusters, so the
+	// movelist carries the same moves a second time, bucketed — each group keeping the
+	// owned / un-owned split "Hide un-learned moves" reads.
+	it("movelist buckets playbook moves into the playbook's onboarding groups", async () => {
+		const actor = new FakeActorBuilder()
+			.withPlaybook("the-heavy", "The Heavy")
+			.addItem({_id: "o1", type: "move", name: "Armored", system: {moveType: "playbook"}})
+			.build();
+		const snap = await new TestCharacterBuilder(actor)
+			.withPlaybookRepo(new FakePlaybookRepository(HEAVY_PLAYBOOK))
+			.addPlaybookMove(makeMove("pm1", "Berserker"))
+			.addPlaybookMove(makeMove("pm2", "Armored"))
+			.addPlaybookMove(makeMove("pm3", "Guardian"))
+			.addPlaybookMove(makeMove("pm4", "Improved Stat"))
+			.build().buildSnapshot();
+
+		const groups = snap.movelist.playbookMoveGroups;
+		expect(groups.map(g => [g.key, g.moves.map(m => m.name)])).toEqual([
+			["offense",   ["Berserker"]],
+			["defense",   ["Armored", "Guardian"]],
+			["ungrouped", ["Improved Stat"]],
+		]);
+		const defense = groups.find(g => g.key === "defense");
+		expect(defense.ownedMoves.map(m => m.name)).toEqual(["Armored"]);
+		expect(defense.unownedMoves.map(m => m.name)).toEqual(["Guardian"]);
+	});
+
+	// [] is what tells the Moves tab to fall back to one flat owned/un-owned list.
+	it("movelist leaves the move groups empty for a playbook with none defined", async () => {
+		const snap = await new TestCharacterBuilder(new FakeActorBuilder().build())
+			.addBasicMove(makeBasicMove("b1", "Aid"))
+			.build().buildSnapshot();
+
+		expect(snap.movelist.playbookMoveGroups).toEqual([]);
 	});
 
 	it("owned basic moves are listed before unowned basic moves", async () => {
@@ -2385,12 +2420,6 @@ const REVENANT_INSERT = {
 	img: null,
 	system: { slug: "revenant", description: "<p>When you die…</p>" },
 	flags: { stonetop: { instincts: [], lore: [] } },
-};
-
-const REVENANT_MOVE = {
-	_id: "pdMove001",
-	name: "Undying",
-	system: { rollType: "str", description: "You refuse to stay down." },
 };
 
 const REVENANT_ACTOR_MOVE = {

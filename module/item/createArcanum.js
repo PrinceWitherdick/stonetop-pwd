@@ -112,7 +112,7 @@ export async function createArcanumItem({ name = "New Arcanum", major = false, f
 	const ItemCls = globalThis.Item;
 	if (user && !user.isGM && ItemCls?.canUserCreate && !ItemCls.canUserCreate(user)) {
 		globalThis.ui?.notifications?.error(
-			'You can\'t create arcana — a GM must grant your role the "Create New Items" permission.',
+			'You can\'t create arcana: a GM must grant your role the "Create New Items" permission.',
 		);
 		return null;
 	}

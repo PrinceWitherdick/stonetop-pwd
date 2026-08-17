@@ -10,10 +10,11 @@
 // invalidateMonsterRefIndex() when bestiary actors are created/updated/deleted.
 
 import { CREATURE_LINK_DENYLIST } from "./creature-link-denylist.js";
+import { BESTIARY_PACK } from "../system-id.js";
 import { escapeRegExp } from "../utils/strings.js";
 import { ensurePackIndex } from "../utils/pack-index.js";
 
-const PACK_ID = "stonetop-pwd.stonetop-bestiary";
+const PACK_ID = BESTIARY_PACK;
 const ENTRY_SUFFIX = /\s*\(Bestiary\)\s*$/i;
 
 let _index = null; // Map<normalizedName, { uuid, name, concept, priority }>

@@ -1,0 +1,27 @@
+{{!-- One "labelled list of removable text lines" on the Create-a-Site wizard.
+
+      Six of the wizard's steps collect exactly this shape — connections, dangers, discoveries,
+      the two impression lists, and plans — and differ only in their wording and in whether
+      suggestions sit above the rows. The JS side was already fully generic (SITE_LINE_LISTS,
+      `blankRow`, and one delegated `.stonetop-cs-add` handler keyed on `data-list`); only the
+      markup had been pasted per list, so a change to the row chrome meant six edits and the one
+      that got missed looked identical to the five that did not.
+
+      Everything outside the rows is cs-list-frame.hbs, shared with the paired lists.
+
+      Each row carries its own `list` and `index` (see _lineRows) rather than being walked back to
+      with `../`: inside a partial's block the hash arguments have pushed a frame, so the depth a
+      `../` chain lands on depends on how the partial was called, and getting it wrong fails by
+      reading undefined — a `data-list=""` that no delegated handler matches.
+
+      Context: the frame's, plus
+        rows         this list's rows ({index, list, text})
+        placeholder  the row input's placeholder --}}
+{{#> "stonetop.cs-list-frame" list=list label=label hint=hint chips=chips kinds=kinds addLabel=addLabel frameClass=frameClass}}
+  {{#each rows}}
+  <div class="stonetop-cf-gear-row">
+    <input type="text" class="stonetop-cf-input stonetop-cs-line" data-list="{{list}}" data-index="{{index}}" value="{{text}}" placeholder="{{../placeholder}}">
+    <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{list}}" data-index="{{index}}"><i class="fas fa-times"></i></button>
+  </div>
+  {{/each}}
+{{/"stonetop.cs-list-frame"}}

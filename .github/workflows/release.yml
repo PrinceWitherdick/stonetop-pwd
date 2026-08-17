@@ -19,15 +19,46 @@ env:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check the tag's shape
+        # First, because it needs nothing and everything after it is expensive.
+        #
+        # Every published tag so far is bare, with no leading `v`, and system.json's version is
+        # copied verbatim from the tag further down. A `v1.5.0` slip would therefore ship
+        # "version": "v1.5.0", which Foundry compares as a string against an installed "1.5.0"
+        # and reads as a DIFFERENT, unordered version: the update either never offers or never
+        # settles. Nothing downstream would catch it, because the download URL still resolves.
+        # The tag really does exist; it is only the version string that is wrong.
+        #
+        # Four-part versions are allowed: 1.3.5.1 has already shipped. Pre-release suffixes are
+        # not, because the manifest has no way to express one.
+        run: |
+          if ! echo "${{ github.ref_name }}" | grep -qE '^[0-9]+(\.[0-9]+){2,3}$'; then
+            echo "FAIL: tag '${{ github.ref_name }}' is not a bare N.N.N or N.N.N.N version"
+            echo "      (no leading 'v': system.json's version is copied from this tag verbatim)"
+            exit 1
+          fi
+          echo "tag ok: ${{ github.ref_name }}"
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          node-version: "20"
+          # This job's token is `contents: write`, and nothing below it runs a git command:
+          # action-gh-release authenticates over the API with GITHUB_TOKEN, not over git.
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
           cache: "npm"
       - run: npm ci
+
+      # Lint before test. Both already gate every commit that reaches main through CI, but this
+      # workflow is the one that decides what users download, so it re-runs them against the
+      # tagged tree rather than trusting that the tag points where anyone thinks it does.
+      # Lint first because it fails in seconds and test does not.
+      - run: npm run lint
       - run: npm test
       - run: npm run pack
 
@@ -94,8 +125,17 @@ jobs:
       - name: Verify the artifact before it ships
         # Private book art is gitignored, so a clean checkout should not contain it. Assert
         # rather than assume: a leak here is public and irreversible.
+        #
+        # All SEVEN directories, matching DURABLE_ART_DIRS in module/book2-art/browse.js. This
+        # list used to name only the first three, which is what the importer wrote when the
+        # guard was written; it has since grown four more, and nothing noticed. The list stays
+        # spelled out here rather than read out of browse.js on purpose: this is the last gate
+        # before an irreversible public upload and it should not depend on a module path, an
+        # ESM/CJS quirk, or a parse. tests/book2-art/art-not-tracked.test.js is what keeps the
+        # two copies honest, and it runs in `npm test` above.
         run: |
-          for d in assets/maps assets/bestiary assets/locations; do
+          for d in assets/maps assets/bestiary assets/locations \
+                   assets/treasures assets/people assets/steading assets/diagrams; do
             if [ -e "$d" ]; then echo "FAIL: $d present in the checkout"; exit 1; fi
           done
           # The GM-only "(TEST ONLY) Populate World" macro fetches this file at runtime and
@@ -131,7 +171,9 @@ jobs:
             --exclude "packs/src/*"
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        # SHA-pinned, not tag-pinned. This is the step that decides what every installed world
+        # pulls from its Update button, and a floating `@v3` tag is mutable by definition.
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           generate_release_notes: true
           make_latest: ${{ steps.manifest.outputs.make_latest }}

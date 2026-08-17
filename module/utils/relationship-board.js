@@ -10,6 +10,7 @@
 // (usually) `wireRelationshipLinks` — the steading omits the last on purpose, see its call site.
 // Not folded into one façade for that reason: the three are genuinely separately chosen.
 import { clampHearts, readOrder, updateRelationships } from "./relationship-hearts.js";
+import { SYSTEM_ID } from "../system-id.js";
 import { readStoredColumnState, writeStoredColumnState } from "./steading-column-util.js";
 import { scrollParent } from "./scroll-parent.js";
 
@@ -18,7 +19,7 @@ import { scrollParent } from "./scroll-parent.js";
 // sheet can sit in board view while the steading stays a table.
 export const REL_VIEWS = ["table", "board"];
 export const REL_VIEW_DEFAULT = "table";
-const VIEW_STORAGE_PREFIX = "stonetop-pwd.relView.";
+const VIEW_STORAGE_PREFIX = `${SYSTEM_ID}.relView.`;
 
 /** The stored layout for one table, falling back to the table on anything unrecognized. */
 export function relationshipView(resizeKey) {

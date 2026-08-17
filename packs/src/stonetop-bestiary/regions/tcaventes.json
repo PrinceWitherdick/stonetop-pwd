@@ -65,7 +65,7 @@
       "_id": "YoFaEtlCMyhQE9ZI",
       "name": "Seal or unseal: a door, a binding, a mouth, a secret",
       "type": "monsterMove",
-      "img": "icons/creatures/tentacles/tentacles-octopus-purple.webp",
+      "img": "icons/creatures/tentacles/tentacles-octopus-black-pink.webp",
       "system": {
         "description": "",
         "rollFormula": ""
@@ -76,7 +76,7 @@
       "_id": "jz954pKu5rNYbAW1",
       "name": "Blaze suddenly with the blinding light of creation",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""

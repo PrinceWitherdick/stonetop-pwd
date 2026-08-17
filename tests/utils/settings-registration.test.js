@@ -28,10 +28,15 @@ const I18N = (() => {
 	return flat;
 })();
 
-/** Every `game.settings.register("stonetop-pwd", "<key>", { … })` block. */
+/**
+ * Every `game.settings.register(SYSTEM_ID, "<key>", { … })` block.
+ *
+ * Matched on the SYSTEM_ID identifier rather than the literal it resolves to: the namespace is
+ * imported from system-id.js now, so the string "stonetop-pwd" no longer appears in this file.
+ */
 function registrations() {
 	const out = [];
-	const re = /game\.settings\.register\("stonetop-pwd",\s*"([A-Za-z0-9_]+)",\s*\{/g;
+	const re = /game\.settings\.register\(SYSTEM_ID,\s*"([A-Za-z0-9_]+)",\s*\{/g;
 	for (const m of SETTINGS_SRC.matchAll(re)) {
 		// Slice to the end of the options object (the first line that closes it at
 		// the register call's indentation).

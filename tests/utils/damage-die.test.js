@@ -24,6 +24,22 @@ describe("normalizeDamageDie", () => {
 		expect(normalizeDamageDie("d")).toBeNull();
 	});
 
+	// The leading "1" is a multiplier only when a "d" follows it. `(?:1\s*)?d?` read the 1 of a
+	// bare two-digit die as the multiplier and, the match having succeeded, never gave it back.
+	it("reads a bare two- or three-digit die as the whole number", () => {
+		expect(normalizeDamageDie("12")).toBe("d12");
+		expect(normalizeDamageDie("10")).toBe("d10");
+		expect(normalizeDamageDie("20")).toBe("d20");
+		expect(normalizeDamageDie("100")).toBe("d100");
+	});
+
+	it("still reads the 1 of a 1d-form as the multiplier", () => {
+		expect(normalizeDamageDie("1d12")).toBe("d12");
+		expect(normalizeDamageDie("1d10")).toBe("d10");
+		expect(normalizeDamageDie("1 d 8")).toBe("d8");
+		expect(normalizeDamageDie("1d")).toBeNull();
+	});
+
 	it("treats blank and missing input as no die", () => {
 		expect(normalizeDamageDie("")).toBeNull();
 		expect(normalizeDamageDie("   ")).toBeNull();

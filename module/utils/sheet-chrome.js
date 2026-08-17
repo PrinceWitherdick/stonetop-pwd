@@ -137,7 +137,11 @@ export function fitDisplayName(sheet, { header, text, column: columnSelector, si
 		// worse first paint), and do it again once the real face is in.
 		if (!awaitingFont && document.fonts && !fontLoaded(textStyle, max)) {
 			awaitingFont = true;
-			document.fonts.ready.then(() => { awaitingFont = false; if (textEl.isConnected) refit(); });
+			document.fonts.ready
+				.then(() => { awaitingFont = false; if (textEl.isConnected) refit(); })
+				// A refit that throws would otherwise leave `awaitingFont` stuck true, so the
+				// name never re-fits again for the life of this sheet.
+				.catch(() => { awaitingFont = false; });
 		}
 
 		if (min >= max || fits()) return;
@@ -187,12 +191,24 @@ export function stripHeaderChrome(sheet) {
 /**
  * Inject the edit/lock toggle into the window header. `noun` names the thing
  * being edited (e.g. "stat block" or "Entry") for the tooltip.
+ *
+ * Every Stonetop actor sheet routes through here. The character and steading sheets used to
+ * carry their own byte-identical copies of the DOM building below, and both bailed on
+ * `!this.isEditable` instead of drawing the lock — so opening either from a compendium showed
+ * no toggle at all and no hint as to why, while an NPC or monster sheet in the same state
+ * explained itself. That divergence is the reason this takes options rather than staying
+ * three functions.
+ *
  * @param {Application} sheet
- * @param {string} noun
+ * @param {string} noun                  names the thing being edited, for the default tooltips
+ * @param {object} [opts]
+ * @param {string} [opts.editLabel]      tooltip when locked and clickable (default `Edit ${noun}`)
+ * @param {string} [opts.lockLabel]      tooltip when already in edit mode (default `Lock ${noun}`)
+ * @param {(on: boolean) => void} [opts.onChange]  extra work when the mode flips, before the render
  */
-export function injectHeaderToggle(sheet, noun) {
+export function injectHeaderToggle(sheet, noun, { editLabel, lockLabel, onChange } = {}) {
 	const header = sheet.element[0]?.querySelector(".window-header");
-	if (!header || !sheet.actor.isOwner) return;
+	if (!header || !sheet.actor?.isOwner) return;
 	header.querySelector(".stonetop-header-toggle")?.remove();
 
 	// Locked == viewed from a (read-only) compendium. Show a lock affordance; clicking
@@ -202,13 +218,13 @@ export function injectHeaderToggle(sheet, noun) {
 	const label = document.createElement("label");
 	label.className = "stonetop-edit-toggle stonetop-header-toggle";
 	label.title = locked
-		? "Read-only — import to your world to edit"
-		: (sheet._editMode ? `Lock ${noun}` : `Edit ${noun}`);
+		? "Read-only: import to your world to edit"
+		: (sheet._editMode ? (lockLabel ?? `Lock ${noun}`) : (editLabel ?? `Edit ${noun}`));
 
 	const checkbox = document.createElement("input");
 	checkbox.type = "checkbox";
 	checkbox.checked = sheet._editMode;
-	checkbox.addEventListener("change", () => toggleEdit(sheet, checkbox));
+	checkbox.addEventListener("change", () => toggleEdit(sheet, checkbox, { onChange }));
 
 	const track = document.createElement("span");
 	track.className = "stonetop-toggle-track";
@@ -230,7 +246,7 @@ export function injectHeaderToggle(sheet, noun) {
  * actors are always editable here); compendium content is immutable, so explain how to
  * edit a world copy instead of entering edit mode.
  */
-export async function toggleEdit(sheet, checkbox) {
+export async function toggleEdit(sheet, checkbox, { onChange } = {}) {
 	const turningOn = checkbox.checked;
 	if (turningOn && !sheet.isEditable) {
 		checkbox.checked = false;
@@ -238,5 +254,8 @@ export async function toggleEdit(sheet, checkbox) {
 		return;
 	}
 	sheet._editMode = turningOn;
+	// Sheet-specific teardown (the steading drops its per-section pencils here) runs before the
+	// render, so one paint shows the whole new state.
+	onChange?.(turningOn);
 	sheet.render(false);
 }

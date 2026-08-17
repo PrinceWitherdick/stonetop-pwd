@@ -1,0 +1,193 @@
+{{!-- "I WONDER..." — the running list of open questions Book I p.33 asks a GM to keep, and the
+      one thing on this sheet a GM AUTHORS rather than reads. The GM playbook prints it as four
+      lines of instruction beside a column of ruled ones; this is the ruled column.
+
+      The tab's shape follows the book's own instruction, which is that the list is READ during
+      play and UPDATED between sessions. So the questions come first and the reference last: a GM
+      reaching for this mid-sentence wants the list, not the page about the list, which is why the
+      guidance is one folded heading at the foot and starts shut.
+
+      WRITES DO NOT GO THROUGH THE FORM. Every field here is handled by gm-wonder-tab.js and saved
+      straight to `actor.system.wonders`, so none of them carries a `name` attribute: a `name` on
+      an input inside this sheet's <form> puts it in core's submit data, where the array indices
+      would expand into an OBJECT keyed "0", "1", ... and quietly replace the list with it.
+
+      The two text fields save on BLUR without re-rendering, and the three buttons re-render. That
+      split, and why it has to be a split, is the header of gm-wonder-tab.js.
+
+      NO ROW HERE CARRIES A BULLET IN ITS MARKUP. The question-spiral beside every question — the
+      add bar's, an open entry's, a settled one's — is a `::before` on the row, so there is no
+      element to look for and nothing to keep in step across the three. stonetop.css says why it
+      is drawn rather than printed, and where the gutter it hangs in comes from.
+
+      `data-tab="wonder"` earns the rail's question-mark glyph; the icon table in stonetop.css is
+      one flat list keyed by data-tab with no per-sheet scope.
+
+      The three headings below use the default `stonetop-move-group-title` stem, which is half of
+      HEADING_SELECTOR in StonetopGmToolkitSheet.js. The fold walk claims a heading's FOLLOWING
+      SIBLINGS until the next heading — which the section boxes below now bound anyway, so a
+      section may hold as many siblings after its heading as it likes. What it still must not do
+      is put a SECOND heading in a box: the first caret would stop claiming at it.
+
+      A PENCIL PER SECTION, in each one's own top-right corner, which is where every other
+      section in the system keeps its. That is what boxes the two lists: a pencil is positioned
+      against the section it belongs to, so a section has to BE something. The boxes pay for
+      themselves in the fold too — `_sectionFoldTargets` reads a corner caret's siblings for the
+      heading and then walks that heading's own siblings, so it wants a box around each pair
+      exactly as the Threats tab's `.steading-threats-section` gives it one.
+
+      Each pencil guards the three structural buttons of ITS list and nothing else: the tick that
+      files a question, the arrow that puts one back, and the trash. Everything else stays live
+      while both are off, which is the point rather than an oversight — the reason this list
+      exists is to be added to and answered in mid-sentence, and a tab that has to be unlocked
+      first is one nobody writes on. What the pencils are for is the pair of one-click buttons at
+      the end of every row: mid-session, with a dozen rows on screen, the tick and the trash are
+      two pixels apart from a stray click's point of view.
+
+      The guidance section is boxed like the other two but carries no pencil, for the reason the
+      Threats tab's reference sections carry none: there is nothing in it to edit.
+
+      NOT `stonetop-readonly`. That class is the sheet-wide lock (pointer-events off every input,
+      textarea and button, then an allow-list), and on this tab it would put out exactly the
+      fields the paragraph above says have to stay lit. `--reading` hides the one span it is
+      about and touches nothing else. --}}
+<div class="tab wonder" data-group="primary" data-tab="wonder">
+	<section class="sheet-tab stonetop-gm-wonder">
+
+		<p class="steading-threats-intro">{{localize "stonetop.gmToolkit.wonder.intro"}}</p>
+
+		{{!-- The add bar sits ABOVE the list rather than at its foot, unlike the prep tabs' "write
+		      one up" bars. Those open a dialog and are the end of a long act; this one is a line
+		      of typing, most often done while the list is already long, and a bar that walks down
+		      the page as the list grows is one a GM has to go looking for. --}}
+		<div class="stonetop-gm-wonder-add">
+			<input type="text" class="stonetop-gm-wonder-new" maxlength="300"
+			       aria-label="{{localize "stonetop.gmToolkit.wonder.add"}}"
+			       placeholder="{{localize "stonetop.gmToolkit.wonder.addPlaceholder"}}">
+			<button type="button" class="stonetop-gm-wonder-add-btn"
+			        data-tooltip="{{localize "stonetop.gmToolkit.wonder.add"}}" data-tooltip-direction="UP">
+				<i class="fas fa-plus"></i> {{localize "stonetop.gmToolkit.wonder.addShort"}}
+			</button>
+		</div>
+
+		{{!-- The pencil goes FIRST, ahead of the heading, which is not a style choice: the fold
+		      walk finds a corner caret's heading with `caret.parentElement.querySelector(...)` and
+		      then claims that heading's following siblings, so a caret emitted after the list
+		      would leave the list behind it with nothing to claim. The shared toggle emits the
+		      pencil and the caret as one pair, which is why they travel together.
+
+		      No fold caret on this one: the open list is what the tab is FOR, and a folded one is
+		      a tab that opens on nothing. --}}
+		<div class="stonetop-gm-wonder-section steading-edit-section{{#unless stonetop.edit.wonderOpen}} stonetop-gm-wonder-section--reading{{/unless}}">
+		{{> "stonetop.steading-section-toggle" section="wonderOpen" editing=stonetop.edit.wonderOpen}}
+		{{> "stonetop.section-heading" title=(localize "stonetop.gmToolkit.wonder.open")
+		    note=(localize "stonetop.gmToolkit.wonder.openNote")}}
+
+		{{#if stonetop.wonders.open.length}}
+		<ul class="stonetop-gm-wonder-list">
+			{{#each stonetop.wonders.open}}
+			<li class="stonetop-gm-wonder-item" data-wonder-id="{{id}}">
+				<div class="stonetop-gm-wonder-head">
+					{{!-- The question itself is the input, not a label with a pencil beside it.
+					      It is one line of text that gets reworded as often as it gets answered
+					      ("maybe the question isn't how do the bandits keep the ghosts at bay,
+					      but which of the bandits have been possessed" — Book I p.418), and a
+					      dialog for a one-line edit is a dialog nobody opens. --}}
+					<input type="text" class="stonetop-gm-wonder-question" value="{{question}}" maxlength="300"
+					       aria-label="{{localize "stonetop.gmToolkit.wonder.questionLabel"}}">
+					<span class="stonetop-gm-wonder-tools">
+						<button type="button" class="stonetop-gm-wonder-settle"
+						        data-tooltip="{{localize "stonetop.gmToolkit.wonder.settle"}}" data-tooltip-direction="UP">
+							<i class="fas fa-check"></i>
+						</button>
+						<button type="button" class="stonetop-gm-wonder-remove"
+						        data-tooltip="{{localize "stonetop.gmToolkit.wonder.remove"}}" data-tooltip-direction="UP">
+							<i class="fas fa-trash"></i>
+						</button>
+					</span>
+				</div>
+				{{!-- Always present, never behind a disclosure. Half of what the book asks a GM to
+				      do with this list is to answer PART of a question, or to note the hunch that
+				      is not yet an answer, and a box that has to be opened first is one that only
+				      gets used when the answer is already final. --}}
+				<textarea class="stonetop-gm-wonder-answer" rows="2"
+				          aria-label="{{localize "stonetop.gmToolkit.wonder.answerLabel"}}"
+				          placeholder="{{localize "stonetop.gmToolkit.wonder.answerPlaceholder"}}">{{answer}}</textarea>
+			</li>
+			{{/each}}
+		</ul>
+		{{else}}
+		<p class="stonetop-gm-wonder-empty">{{localize "stonetop.gmToolkit.wonder.empty"}}</p>
+		{{/if}}
+		</div>
+
+		{{!-- The book says to REMOVE a question once it has been answered. The tick does the
+		      softer half of that: it takes the question off the list a GM reads mid-session, and
+		      keeps the answer, which is now a decision about the world that the rest of the prep
+		      may rest on. The trash still deletes. Rendered only when there is something in it, so
+		      an untouched tab shows one list and not two.
+
+		      It carries a fold caret but starts OPEN, like every other section on this sheet: a
+		      section shut on first open is one a GM never learns is there. Folding it is a choice
+		      the caret offers and the sheet then remembers per user.
+
+		      The caret is handed to the TOGGLE rather than to the heading, unlike the guidance
+		      section below: with a pencil in the corner the two belong side by side there, which
+		      is how the steading's cards carry the pair and what
+		      `.steading-edit-section:has(> .stonetop-section-collapse)` steps the pencil left
+		      for. Left on the heading it would sit inline in the title while the pencil floated
+		      above it. --}}
+		{{#if stonetop.wonders.settled.length}}
+		<div class="stonetop-gm-wonder-section steading-edit-section{{#unless stonetop.edit.wonderSettled}} stonetop-gm-wonder-section--reading{{/unless}}">
+		{{> "stonetop.steading-section-toggle" section="wonderSettled" editing=stonetop.edit.wonderSettled
+		    collapse="gm-wonder-settled"}}
+		{{> "stonetop.section-heading" title=(localize "stonetop.gmToolkit.wonder.settled")
+		    note=(localize "stonetop.gmToolkit.wonder.settledNote")}}
+		<ul class="stonetop-gm-wonder-list stonetop-gm-wonder-list--settled">
+			{{#each stonetop.wonders.settled}}
+			<li class="stonetop-gm-wonder-item" data-wonder-id="{{id}}">
+				<div class="stonetop-gm-wonder-head">
+					<span class="stonetop-gm-wonder-question stonetop-gm-wonder-question--settled">{{question}}</span>
+					<span class="stonetop-gm-wonder-tools">
+						<button type="button" class="stonetop-gm-wonder-reopen"
+						        data-tooltip="{{localize "stonetop.gmToolkit.wonder.reopen"}}" data-tooltip-direction="UP">
+							<i class="fas fa-rotate-left"></i>
+						</button>
+						<button type="button" class="stonetop-gm-wonder-remove"
+						        data-tooltip="{{localize "stonetop.gmToolkit.wonder.remove"}}" data-tooltip-direction="UP">
+							<i class="fas fa-trash"></i>
+						</button>
+					</span>
+				</div>
+				{{#if answer}}<p class="stonetop-gm-wonder-answer-text">{{answer}}</p>{{/if}}
+			</li>
+			{{/each}}
+		</ul>
+		</div>
+		{{/if}}
+
+		{{!-- Book I p.33, which is the page the playbook's four lines are a summary of. Reference
+		      rather than content, but it still opens EXPANDED — the same treatment the Threats tab
+		      gives its prep reference.
+
+		      NO PENCIL, so its caret stays on the heading where `section-heading` puts it: the
+		      corner placement above is what a pencil brings with it, and a lone caret floating in
+		      an otherwise empty corner would read as a control that had lost its pair. --}}
+		<div class="stonetop-gm-wonder-section">
+		{{> "stonetop.section-heading" title=(localize "stonetop.gmToolkit.wonder.guide")
+		    note=(localize "stonetop.gmToolkit.wonder.guideNote")
+		    collapse="gm-wonder-guide"}}
+		<div class="stonetop-gm-wonder-guide">
+			{{#each stonetop.wonderGuide}}
+			<div class="stonetop-gm-wonder-guide-section">
+				<h4 class="stonetop-gm-wonder-guide-title">{{name}}</h4>
+				<ul class="stonetop-gm-wonder-guide-items">
+					{{#each items}}<li>{{this}}</li>{{/each}}
+				</ul>
+			</div>
+			{{/each}}
+		</div>
+		</div>
+
+	</section>
+</div>

@@ -35,22 +35,82 @@ function makeCharacterMock(actor) {
 	// a stub returning undefined here would be the only thing in the world that could break that.
 	let brands = [];
 	let canBrand = true;
+	// The Judge's SECOND standing list (Binding Arbitration), the Blessed's marks and the Heavy's
+	// Battle Joy, all on the same terms as the two above: live state, and a writable "can they" so
+	// a test can be a character who owns none of it. Each real getter always answers an array (or a
+	// boolean), which is why the sheet reads `.length` off them with no guard.
+	let oaths = [];
+	let canSwear = false;
+	let marks = [];
+	let canMark = false;
+	let raging = false;
+	let canRage = false;
+	// The Invocation being held open, live for the same reason the holy light is: getData reads
+	// the getter, the End control and the candle both write through the setter, and the rule that
+	// a snuffed light takes the Invocation with it is only assertable if the two share a value.
+	let ongoing = "";
 	return {
 		background,
 		instinct,
 		appearance,
 		origin,
 		get holyLight() { return lit; },
+		// Not a getter on the real class — see headerGlyphOwnership below. Kept here as the knob
+		// the tests turn, because "this character can wield a holy light" is what they mean.
 		get canWieldHolyLight() { return canWield; },
 		set canWieldHolyLight(value) { canWield = !!value; },
 		get condemned() { return brands; },
 		set condemned(value) { brands = Array.isArray(value) ? value : []; },
 		get canCondemn() { return canBrand; },
 		set canCondemn(value) { canBrand = !!value; },
+		get oaths() { return oaths; },
+		set oaths(value) { oaths = Array.isArray(value) ? value : []; },
+		get canBindOaths() { return canSwear; },
+		set canBindOaths(value) { canSwear = !!value; },
+		get blessedMarks() { return marks; },
+		set blessedMarks(value) { marks = Array.isArray(value) ? value : []; },
+		get canMarkBlessed() { return canMark; },
+		set canMarkBlessed(value) { canMark = !!value; },
+		get battleJoy() { return raging; },
+		get canEnterBattleJoy() { return canRage; },
+		set canEnterBattleJoy(value) { canRage = !!value; },
+		// What getData actually reads for the five header glyphs — the real one answers all five
+		// from a single walk of the items, and takes that walk from the sheet. A METHOD, matching
+		// the real signature: a getter here would keep passing while the sheet called a function.
+		// Derived from the same live values the individual getters above expose, so a test that
+		// writes `canCondemn = false` still moves it.
+		//
+		// This mock re-implements the mapping, so it cannot catch two of the five keys being
+		// swapped in the real getter — tests/actors/character/header-glyph-ownership.test.js
+		// pins that against the real predicates.
+		headerGlyphOwnership: () => ({
+			holyLight: canWield,
+			condemn:   canBrand,
+			oaths:     canSwear,
+			battleJoy: canRage,
+			blessed:   canMark,
+		}),
+		setBattleJoy: vi.fn(async value => {
+			const changed = !!value !== raging;
+			raging = !!value;
+			return changed;
+		}),
+		get ongoingInvocation() { return ongoing; },
+		setOngoingInvocation: vi.fn(async slug => {
+			const next = String(slug ?? "");
+			const changed = next !== ongoing;
+			ongoing = next;
+			return changed;
+		}),
 		setHolyLight: vi.fn(async value => {
 			const changed = !!value !== lit;
 			lit = !!value;
-			return changed;
+			// The real model drops the Invocation with the light — "it will end immediately if
+			// your holy light is extinguished" — so the fake has to as well, or the sheet's own
+			// handling of that would be tested against a model that never let go.
+			const dropped = !value && !!ongoing;
+			if (dropped) ongoing = "";
+			return changed || dropped;
 		}),
 		ensureStartingMoves: vi.fn(),
 		updateName: vi.fn(async name => actor.update({ name })),
@@ -398,16 +458,26 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
 		const sheet = makeSheet(actor);
 
-		expect((await sheet.getData()).stonetop.holyLight).toEqual({ show: true, lit: false });
+		// The keys as well as the state: which of the candle's four sentences it says is decided
+		// HERE rather than branched in the template, so a wrong one is a wrong value rather than
+		// wrong markup, and this is where it can be caught. `editable` is false on this fixture,
+		// so the read-only faces are the ones expected.
+		expect((await sheet.getData()).stonetop.holyLight).toEqual({
+			show: true, lit: false,
+			labelKey: "stonetop.holyLight.unlitLabel", tooltipKey: "stonetop.holyLight.readOnlyUnlit",
+		});
 		await sheet._onHolyLightToggle(clickEvent());
-		expect((await sheet.getData()).stonetop.holyLight).toEqual({ show: true, lit: true });
+		expect((await sheet.getData()).stonetop.holyLight).toEqual({
+			show: true, lit: true,
+			labelKey: "stonetop.holyLight.litLabel", tooltipKey: "stonetop.holyLight.readOnlyLit",
+		});
 
 		// A sheet with no light-making move gets no candle — unless one is already burning,
 		// which is the case that keeps a light stranded by a playbook swap snuffable.
 		actor.typedActor.canWieldHolyLight = false;
-		expect((await sheet.getData()).stonetop.holyLight).toEqual({ show: true, lit: true });
+		expect((await sheet.getData()).stonetop.holyLight).toMatchObject({ show: true, lit: true });
 		await sheet._onHolyLightToggle(clickEvent());
-		expect((await sheet.getData()).stonetop.holyLight).toEqual({ show: false, lit: false });
+		expect((await sheet.getData()).stonetop.holyLight).toMatchObject({ show: false, lit: false });
 	});
 
 	it("hands the header the Judge's brand count", async () => {
@@ -417,17 +487,235 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
 		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
 		const sheet = makeSheet(actor);
+		const condemn = async () => (await sheet.getData()).stonetop.condemn;
 
-		expect((await sheet.getData()).stonetop.condemn).toEqual({ show: true, count: 0 });
+		expect(await condemn()).toMatchObject({ show: true, count: 0, brands: 0 });
 		actor.typedActor.condemned = [{ id: "a", name: "Brennan" }, { id: "b", name: "The Claws" }];
-		expect((await sheet.getData()).stonetop.condemn).toEqual({ show: true, count: 2 });
+		expect(await condemn()).toMatchObject({ show: true, count: 2, brands: 2 });
 
 		// A sheet that lost Condemn keeps the scales while brands still stand — otherwise a
 		// playbook swap strands them with nothing left that could dismiss them.
 		actor.typedActor.canCondemn = false;
-		expect((await sheet.getData()).stonetop.condemn).toEqual({ show: true, count: 2 });
+		expect(await condemn()).toMatchObject({ show: true, count: 2, brands: 2 });
 		actor.typedActor.condemned = [];
-		expect((await sheet.getData()).stonetop.condemn).toEqual({ show: false, count: 0 });
+		expect(await condemn()).toMatchObject({ show: false, count: 0, brands: 0 });
+	});
+
+	// The scales' OTHER list. Binding Arbitration is enough on its own: a Judge who witnesses oaths
+	// but has never taken Condemn has somewhere to keep them, and the count the glyph wears is both
+	// lists together while only the brands colour it.
+	it("opens the same scales for a Judge who only witnesses oaths", async () => {
+		installGetDataGlobals();
+		const actor = makeActor();
+		actor.typedActor.playbook = vi.fn(async () => null);
+		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
+		actor.typedActor.canCondemn = false;
+		const sheet = makeSheet(actor);
+		const condemn = async () => (await sheet.getData()).stonetop.condemn;
+
+		expect(await condemn()).toMatchObject({ show: false, count: 0 });
+
+		actor.typedActor.canBindOaths = true;
+		expect(await condemn()).toMatchObject({
+			show: true, count: 0, tooltipKey: "stonetop.condemn.noneTooltip",
+		});
+
+		actor.typedActor.oaths = [{ id: "o", name: "Gethin" }];
+		expect(await condemn()).toMatchObject({
+			show: true, count: 1, brands: 0, oaths: 1, tooltipKey: "stonetop.condemn.oathsTooltip",
+		});
+
+		// Both at once says both, and the badge is the sum.
+		actor.typedActor.canCondemn = true;
+		actor.typedActor.condemned = [{ id: "a", name: "Brennan" }];
+		expect(await condemn()).toMatchObject({
+			show: true, count: 2, brands: 1, oaths: 1, tooltipKey: "stonetop.condemn.bothTooltip",
+		});
+
+		// And an oath standing on a sheet that lost the move keeps the scales, so it can be released.
+		actor.typedActor.canCondemn = false;
+		actor.typedActor.canBindOaths = false;
+		actor.typedActor.condemned = [];
+		expect(await condemn()).toMatchObject({ show: true, count: 1, oaths: 1 });
+	});
+
+	// The Blessed's triquetra and the Heavy's Battle Joy, on the candle's and the scales' terms.
+	it("hands the header the Blessed's marks and the Heavy's Battle Joy", async () => {
+		installGetDataGlobals();
+		const actor = makeActor();
+		actor.typedActor.playbook = vi.fn(async () => null);
+		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
+		const sheet = makeSheet(actor);
+		const header = async () => (await sheet.getData()).stonetop;
+
+		expect(await header()).toMatchObject({
+			blessedMarks: { show: false, count: 0 },
+			battleJoy:    { show: false, raging: false },
+		});
+
+		actor.typedActor.canMarkBlessed = true;
+		actor.typedActor.canEnterBattleJoy = true;
+		expect(await header()).toMatchObject({
+			blessedMarks: { show: true, count: 0 },
+			battleJoy:    { show: true, raging: false },
+		});
+
+		actor.typedActor.blessedMarks = [{ id: "m", kind: "barkskin", name: "Aeronwen" }];
+		await sheet._stonetopCharacter.setBattleJoy(true);
+		expect(await header()).toMatchObject({
+			blessedMarks: { show: true, count: 1 },
+			battleJoy:    { show: true, raging: true },
+		});
+
+		// Both survive losing the moves while their state stands: marks so they can be lifted, and
+		// a rage because a stranded one would go on cancelling the character's debilities.
+		actor.typedActor.canMarkBlessed = false;
+		actor.typedActor.canEnterBattleJoy = false;
+		expect(await header()).toMatchObject({
+			blessedMarks: { show: true, count: 1 },
+			battleJoy:    { show: true, raging: true },
+		});
+	});
+
+	// Turning it ON is a declaration and writes nothing else; turning it OFF is the move's own
+	// "when the action stops, roll +CON", so it asks rather than assuming.
+	it("asks before ending a Battle Joy, and simply enters one", async () => {
+		const clickEvent = () => ({ preventDefault: vi.fn(), stopPropagation: vi.fn() });
+		const actor = makeActor();
+		const sheet = makeSheet(actor);
+		sheet.render = vi.fn();
+		globalThis.Dialog = { confirm: vi.fn(async () => false) };
+
+		await sheet._onBattleJoyToggle(clickEvent());
+		expect(sheet._stonetopCharacter.battleJoy).toBe(true);
+		expect(globalThis.Dialog.confirm).not.toHaveBeenCalled();
+
+		// No Battle Joy item on this fake actor, so there is nothing to roll and nothing to ask —
+		// the state is simply put out, which is what a rage stranded by a playbook swap needs.
+		await sheet._onBattleJoyToggle(clickEvent());
+		expect(sheet._stonetopCharacter.battleJoy).toBe(false);
+		expect(globalThis.Dialog.confirm).not.toHaveBeenCalled();
+		delete globalThis.Dialog;
+	});
+});
+
+// Which Invocation the Lightbearer is holding open. The rules are ongoing-invocation.js's and the
+// use flow is invocation-prompt.test.js's; what is covered here is the sheet's side — what the
+// header is handed, and the two ways an Invocation stops that aren't "you used another one".
+describe("StonetopCharacterSheet ongoing Invocation", () => {
+	const clickEvent = () => ({ preventDefault: vi.fn(), stopPropagation: vi.fn() });
+
+	function invokingSheet({ ongoing = "warmth-of-the-sun", lit = true } = {}) {
+		const actor = makeActor();
+		const sheet = makeSheet(actor);
+		// What _buildInvocationsData would have left behind on the last render.
+		sheet._invocationOptions = [{ slug: "warmth-of-the-sun", label: "Warmth of the Sun", ongoing: true }];
+		sheet._postMoveCard = vi.fn(async (title, body) => ({ title, body }));
+		if (lit) actor.typedActor.setHolyLight(true);
+		if (ongoing) actor.typedActor.setOngoingInvocation(ongoing);
+		actor.typedActor.setHolyLight.mockClear();
+		actor.typedActor.setOngoingInvocation.mockClear();
+		return { actor, sheet };
+	}
+
+	it("hands the header the Invocation being held open, by name", async () => {
+		installGetDataGlobals();
+		const { actor, sheet } = invokingSheet({ ongoing: "" });
+		actor.typedActor.playbook = vi.fn(async () => null);
+		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
+
+		expect((await sheet.getData()).stonetop.ongoingInvocation)
+			.toEqual({ active: false, slug: "", label: "" });
+		await actor.typedActor.setOngoingInvocation("warmth-of-the-sun");
+		expect((await sheet.getData()).stonetop.ongoingInvocation)
+			.toEqual({ active: true, slug: "warmth-of-the-sun", label: "Warmth of the Sun" });
+	});
+
+	// "You can end an Invocation whenever you wish" — one click, nothing to confirm. It posts,
+	// unlike the candle: the candle is a tracker correction, but an Invocation ending is a thing
+	// the table needs to hear about, because it was affecting the fiction.
+	it("ends it on the End control, and says so", async () => {
+		const { actor, sheet } = invokingSheet();
+		await sheet._onEndOngoingInvocation(clickEvent());
+
+		expect(actor.typedActor.setOngoingInvocation).toHaveBeenCalledWith("");
+		expect(sheet.render).toHaveBeenCalledWith(false);
+		expect(sheet._postMoveCard).toHaveBeenCalledTimes(1);
+		expect(sheet._postMoveCard.mock.calls[0][1]).toMatch(/Warmth of the Sun<\/strong> ends\./);
+	});
+
+	// Two controls for the one act (the header chip and the tab banner), and however many clients
+	// have the sheet open. "It was running when I read it" is not the same question as "I am the
+	// one who stopped it", so the card follows the WRITE — the table hears it stop once.
+	it("says nothing when the write found the Invocation already ended", async () => {
+		const { actor, sheet } = invokingSheet();
+		actor.typedActor.setOngoingInvocation.mockResolvedValueOnce(false);
+
+		await sheet._onEndOngoingInvocation(clickEvent());
+
+		expect(sheet._postMoveCard).not.toHaveBeenCalled();
+		expect(sheet.render).not.toHaveBeenCalled();
+	});
+
+	it("says nothing when the snuffed light's Invocation was already let go", async () => {
+		const { actor, sheet } = invokingSheet();
+		actor.typedActor.setOngoingInvocation.mockResolvedValueOnce(false);
+
+		await sheet._onHolyLightToggle(clickEvent());
+
+		expect(sheet._postMoveCard).not.toHaveBeenCalled();
+	});
+
+	it("does nothing when there's no Invocation to end", async () => {
+		const { actor, sheet } = invokingSheet({ ongoing: "" });
+		await sheet._onEndOngoingInvocation(clickEvent());
+		expect(actor.typedActor.setOngoingInvocation).not.toHaveBeenCalled();
+		expect(sheet._postMoveCard).not.toHaveBeenCalled();
+	});
+
+	it("offers no End to a viewer who can't edit the sheet", async () => {
+		const actor = makeActor();
+		const Base = class {
+			constructor() { this._actor = actor; }
+			get actor() { return this._actor; }
+			get isEditable() { return false; }
+			async getData() { return {}; }
+			activateListeners() {}
+			render = vi.fn();
+		};
+		const sheet = new (createStonetopCharacterSheetClass(Base))();
+		sheet._postMoveCard = vi.fn(async () => {});
+		await actor.typedActor.setOngoingInvocation("warmth-of-the-sun");
+		await sheet._onEndOngoingInvocation(clickEvent());
+		expect(actor.typedActor.ongoingInvocation).toBe("warmth-of-the-sun");
+		expect(sheet._postMoveCard).not.toHaveBeenCalled();
+	});
+
+	// "It will end immediately if your holy light is extinguished." The model drops it; the sheet's
+	// job is to have read the name BEFORE the write, so there is still something to name.
+	it("reports the Invocation the snuffed light took with it", async () => {
+		const { actor, sheet } = invokingSheet();
+		await sheet._onHolyLightToggle(clickEvent());
+
+		expect(actor.typedActor.ongoingInvocation).toBe("");
+		expect(sheet._postMoveCard).toHaveBeenCalledTimes(1);
+		expect(sheet._postMoveCard.mock.calls[0][1]).toMatch(/Warmth of the Sun<\/strong> ends. The holy light is out\./);
+	});
+
+	// LIGHTING one takes nothing away, and snuffing a light with no Invocation running has nothing
+	// to report — the candle itself stays silent either way.
+	it("says nothing when the candle is toggled with no Invocation running", async () => {
+		const { sheet } = invokingSheet({ ongoing: "", lit: true });
+		await sheet._onHolyLightToggle(clickEvent());
+		expect(sheet._postMoveCard).not.toHaveBeenCalled();
+
+		const relit = invokingSheet({ ongoing: "warmth-of-the-sun", lit: false });
+		await relit.sheet._onHolyLightToggle(clickEvent());
+		expect(relit.sheet._postMoveCard).not.toHaveBeenCalled();
+		expect(relit.actor.typedActor.ongoingInvocation).toBe("warmth-of-the-sun");
 	});
 });
 
@@ -945,7 +1233,7 @@ describe("StonetopCharacterSheet._onDropItemCreate", () => {
 		const sheet = makeSheet(actor);
 		const item = makeInventoryItem();
 		await sheet._onDropItemCreate(item);
-		expect(actor.typedActor.addDroppedInventoryItem).toHaveBeenCalledWith(item);
+		expect(actor.typedActor.addDroppedInventoryItem).toHaveBeenCalledWith(item, { hideArtifact: false });
 		expect(actor.typedActor.onDropMove).not.toHaveBeenCalled();
 	});
 
@@ -1039,7 +1327,7 @@ describe("StonetopCharacterSheet._onDropItemCreate", () => {
 			const { synthetic, world } = makeTokenActor();
 			const item = makeInventoryItem();
 			await makeSheet(synthetic)._onDropItemCreate(item);
-			expect(world.typedActor.addDroppedInventoryItem).toHaveBeenCalledWith(item);
+			expect(world.typedActor.addDroppedInventoryItem).toHaveBeenCalledWith(item, { hideArtifact: false });
 			expect(synthetic.typedActor.addDroppedInventoryItem).not.toHaveBeenCalled();
 		});
 
@@ -1065,7 +1353,7 @@ describe("StonetopCharacterSheet._onDropItemCreate", () => {
 			const actor = makeActor();
 			const item = makeInventoryItem();
 			await makeSheet(actor)._onDropItemCreate(item);
-			expect(actor.typedActor.addDroppedInventoryItem).toHaveBeenCalledWith(item);
+			expect(actor.typedActor.addDroppedInventoryItem).toHaveBeenCalledWith(item, { hideArtifact: false });
 		});
 
 		// A token whose baseActor has gone (a deleted actor, a torn-down scene) must still take
@@ -1075,7 +1363,7 @@ describe("StonetopCharacterSheet._onDropItemCreate", () => {
 			synthetic.token = { baseActor: null };
 			const item = makeInventoryItem();
 			await makeSheet(synthetic)._onDropItemCreate(item);
-			expect(synthetic.typedActor.addDroppedInventoryItem).toHaveBeenCalledWith(item);
+			expect(synthetic.typedActor.addDroppedInventoryItem).toHaveBeenCalledWith(item, { hideArtifact: false });
 		});
 	});
 });

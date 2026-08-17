@@ -15,6 +15,7 @@
 // Windows on Reload" client setting turns it off.
 
 import { getSetting } from "../settings.js";
+import { SYSTEM_ID } from "../system-id.js";
 
 const STATE_SETTING = "openWindowsState";
 const TOGGLE_SETTING = "restoreWindowsOnReload";
@@ -129,7 +130,7 @@ function _schedulePersist() {
 	if (!getSetting(TOGGLE_SETTING)) return;
 	clearTimeout(_saveTimer);
 	_saveTimer = setTimeout(() => {
-		game.settings.set("stonetop-pwd", STATE_SETTING, _collectState()).catch(() => {});
+		game.settings.set(SYSTEM_ID, STATE_SETTING, _collectState()).catch(() => {});
 	}, 500);
 }
 
@@ -138,7 +139,7 @@ function _schedulePersist() {
 function _flushNow() {
 	if (!getSetting(TOGGLE_SETTING)) return;
 	try {
-		game.settings.set("stonetop-pwd", STATE_SETTING, _collectState());
+		game.settings.set(SYSTEM_ID, STATE_SETTING, _collectState());
 	} catch (_err) { /* nothing we can do mid-unload */ }
 }
 

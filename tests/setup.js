@@ -1,14 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import Handlebars from "handlebars";
+import { escHtml } from "../module/utils/strings.js";
 
 global.Application = class {};
+
+const _systemRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // Load the real English table so localize()/format() return the strings players
 // actually see — production code can call game.i18n directly without carrying
 // duplicate English fallbacks just for the tests.
-const _i18nTable = JSON.parse(fs.readFileSync(
-	path.join(path.dirname(fileURLToPath(import.meta.url)), "../languages/en.json"), "utf8"));
+const _i18nTable = JSON.parse(fs.readFileSync(path.join(_systemRoot, "languages/en.json"), "utf8"));
 
 // Resolve a dot-path key to its leaf string, mirroring Foundry's localize():
 // a missing key (or a non-leaf path) returns the key unchanged.
@@ -28,6 +31,28 @@ global.game = {
 global.Hooks = {
 	once: () => {},
 	on: () => {},
+};
+
+// Render a real .hbs file off disk, so a test that asserts on a dialog's markup is asserting on
+// the template that ships rather than on a stand-in for it. Handlebars is Foundry's own template
+// language and is already in the tree.
+//
+// The helpers below are the ones a rendered template can't do without: `localize` is core's (and
+// takes hash data, which is how a string interpolates a name), `escapeHtml` is ours from
+// stonetop.js — which no test runs, since it registers on the `init` hook.
+Handlebars.registerHelper("localize", (key, options) => (
+	Object.keys(options?.hash ?? {}).length ? global.game.i18n.format(key, options.hash) : _localize(key)
+));
+Handlebars.registerHelper("escapeHtml", value => escHtml(value));
+
+const _templates = new Map();
+
+global.renderTemplate = (templatePath, data) => {
+	// "systems/stonetop-pwd/templates/…" is how Foundry addresses a system file; here it is a path
+	// relative to the repo root.
+	const file = path.join(_systemRoot, String(templatePath).replace(/^systems\/[^/]+\//, ""));
+	if (!_templates.has(file)) _templates.set(file, Handlebars.compile(fs.readFileSync(file, "utf8")));
+	return Promise.resolve(_templates.get(file)(data));
 };
 
 // Foundry's always-present notifications global. Production code calls
@@ -52,6 +77,17 @@ global.foundry = {
 			.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 			.replace(/"/g, "&quot;").replace(/'/g, "&#39;"),
 		getProperty: (obj, path) => path.split(".").reduce((value, key) => value?.[key], obj),
+		// Mirrors Foundry's debounce (common/utils/helpers.mjs): each call cancels the pending
+		// one, so a burst collapses to a single trailing invocation. Faithful on purpose — a
+		// pass-through fake would let a test "pass" against a coalescing production path and
+		// hide the very batching the caller is relying on.
+		debounce: (callback, delay) => {
+			let timeoutId;
+			return function (...args) {
+				clearTimeout(timeoutId);
+				timeoutId = setTimeout(() => callback.apply(this, args), delay);
+			};
+		},
 		randomID: (length = 16) => {
 			const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 			let id = "";

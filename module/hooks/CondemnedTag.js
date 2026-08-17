@@ -17,11 +17,11 @@
  */
 
 import { SYSTEM_ID } from "../system-id.js";
-import { CONDEMNED_FLAG, readCondemned } from "../actors/character/condemn.js";
+import { CONDEMNED_FLAG, readCondemned, actorMatchKeys, trailingActorId } from "../actors/character/condemn.js";
 import { openApplications } from "../utils/open-windows.js";
 
 /**
- * The uuid set this client last saw on each Judge's list, keyed by Judge id.
+ * The id set this client last saw on each Judge's list, keyed by Judge id.
  *
  * Kept per client rather than read back off the update, because what we need is the difference
  * between what is ON SCREEN and what is now true — and a Map we maintain here answers that on
@@ -30,17 +30,32 @@ import { openApplications } from "../utils/open-windows.js";
  */
 const seenByJudge = new Map();
 
-/** The uuids in one Judge's stored list. */
-function listedUuids(actor) {
-	return new Set(readCondemned(actor.getFlag(SYSTEM_ID, CONDEMNED_FLAG)).map(e => e.uuid).filter(Boolean));
+/**
+ * The document ids in one Judge's stored list, folded exactly as condemnersOf folds them.
+ *
+ * FOLDED, never raw. A brand laid from the sidebar stores `Actor.abc`, while the same person's
+ * unlinked token sheet is the document `Scene.s.Token.t.Actor.abc` — so comparing stored strings
+ * against `target.uuid` decided "not affected" for precisely the sheet that condemnedContext was
+ * about to put the tag on. The tag then waited for a reload, which at a live table is never, which
+ * is the whole failure this file exists to prevent.
+ */
+function listedIds(actor) {
+	return new Set(readCondemned(actor.getFlag(SYSTEM_ID, CONDEMNED_FLAG))
+		.map(e => trailingActorId(e.uuid)).filter(Boolean));
 }
 
-/** The uuids that changed side — the only sheets whose tag can differ from what they are showing. */
+/** The ids that changed side — the only sheets whose tag can differ from what they are showing. */
 function changedSides(before, after) {
 	const out = new Set();
-	for (const uuid of before) if (!after.has(uuid)) out.add(uuid);
-	for (const uuid of after) if (!before.has(uuid)) out.add(uuid);
+	for (const id of before) if (!after.has(id)) out.add(id);
+	for (const id of after) if (!before.has(id)) out.add(id);
 	return out;
+}
+
+/** Does this sheet's document answer to any of these ids? The same key set condemnersOf matches on. */
+function answersTo(target, ids) {
+	for (const key of actorMatchKeys(target)) if (ids.has(key)) return true;
+	return false;
 }
 
 /**
@@ -58,7 +73,7 @@ export function onUpdateCondemned(actor, changed) {
 	if (!(CONDEMNED_FLAG in bag) && !(`-=${CONDEMNED_FLAG}` in bag)) return;
 
 	// `actor` already carries the applied update, so this is the list AFTER the change.
-	const listed = listedUuids(actor);
+	const listed = listedIds(actor);
 	const before = seenByJudge.get(actor.id);
 	seenByJudge.set(actor.id, listed);
 
@@ -77,7 +92,7 @@ export function onUpdateCondemned(actor, changed) {
 		// First change seen for this Judge this session — with nothing to diff against, fall back
 		// to the conservative sweep: the currently-listed targets, plus any sheet already showing
 		// a tag that may now be stale. Costs one DOM probe per open sheet, once per Judge.
-		const repaint = affected ? affected.has(target.uuid) : (listed.has(target.uuid) || showsCondemnedTag(app));
+		const repaint = affected ? answersTo(target, affected) : (answersTo(target, listed) || showsCondemnedTag(app));
 		if (repaint) app.render(false);
 	}
 }

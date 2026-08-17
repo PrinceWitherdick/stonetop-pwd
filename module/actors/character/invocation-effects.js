@@ -4,7 +4,7 @@ import { escHtml } from "../../utils/strings.js";
 // surfaced as hover tooltips on those labels wherever an Invocation's description is
 // shown (the Invocations tab and the level-up "choose an Invocation" step).
 export const INVOCATION_EFFECT_TOOLTIPS = {
-	reduced:   "When you Invoke the Sun God, one consequence you can choose — and must, on a 7-9 — is for the Invocation to take this weaker, reduced effect instead.",
+	reduced:   "When you Invoke the Sun God, one consequence you can choose, and must, on a 7-9, is for the Invocation to take this weaker, reduced effect instead.",
 	empowered: "With the Empowered Invocations move (6th level), you can choose an extra consequence before you roll to give the Invocation this stronger, empowered effect.",
 };
 

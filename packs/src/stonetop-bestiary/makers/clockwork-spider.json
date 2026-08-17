@@ -87,7 +87,7 @@
       "_id": "fJ3RPZUU5SdJuvZu",
       "name": "Follow orders given in the Forge Lord's tongue, poorly",
       "type": "monsterMove",
-      "img": "icons/creatures/tentacles/tentacles-octopus-purple.webp",
+      "img": "icons/creatures/tentacles/tentacles-octopus-black-pink.webp",
       "system": {
         "description": "",
         "rollFormula": ""

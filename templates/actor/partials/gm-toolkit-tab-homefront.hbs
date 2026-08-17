@@ -1,0 +1,169 @@
+{{!-- HOMEFRONT — the GM playbook's Homefront page, whole. Reference only: nothing here rolls,
+      nothing here is stored, and the tables come from module/gm-toolkit/homefront-text.js by way
+      of homefront-view.js.
+
+      The printed page is four columns of four different KINDS of thing, and this tab keeps all
+      four rather than picking the tidiest: the village's own facts, the questions to ask about
+      it, the year's work, the two procedures that bracket an expedition, the move a GM has to
+      answer, and what a trade Value is worth. They are on one page in the book because they are
+      what "we're at home now" needs, and splitting them across tabs would mean knowing which of
+      the four you wanted before you looked.
+
+      ORDER is the playbook's, read down each column and then across, and it happens to run from
+      the most-used to the least: a GM frames a homefront scene far more often than they price a
+      gemstone.
+
+      `data-tab="homefront"` earns the rail's village glyph; the icon table in stonetop.css is one
+      flat list keyed by data-tab with no per-sheet scope.
+
+      Each section is BOXED in its own `.stonetop-move-group`, the same as the Moves tab's three
+      lists and for the same reason: the fold walk claims a heading's FOLLOWING SIBLINGS until it
+      meets the next heading (utils/section-editing.js), so seven headings in one flat run would
+      let the first caret swallow the six below it.
+
+      The `{{#if (eq kind ...)}}` chain is a switch over six body shapes, and it is spelled out
+      rather than pushed into six more partial files because every branch is short and the whole
+      of what this tab renders is then readable in one place. Aftermath and Downtime share the
+      "steps" branch, which is the only reuse there is: their DATA is two separate tables (see
+      homefront-view.js), so sharing the renderer cannot make one read as the other. --}}
+<div class="tab homefront" data-group="primary" data-tab="homefront">
+	<section class="sheet-tab stonetop-gm-homefront">
+
+		<p class="steading-threats-intro">{{localize "stonetop.gmToolkit.homefront.intro"}}</p>
+
+		{{#each stonetop.homefrontSections}}
+		<div class="stonetop-move-group stonetop-gm-homefront-section">
+			{{> "stonetop.section-heading" title=title note=note collapse=collapseId}}
+
+			{{!-- LIFE IN STONETOP. Four groups of facts, each citing its own Book II spread: the
+			      four are four separate spreads there, and a GM chasing one of them wants the
+			      right page rather than the entry's first. --}}
+			{{#if (eq kind "groups")}}
+			<div class="stonetop-gm-homefront-groups">
+				{{#each body.groups}}
+				<section class="stonetop-gm-homefront-group">
+					<h4 class="stonetop-gm-homefront-group-title">{{name}}</h4>
+					<ul class="stonetop-gm-homefront-items">
+						{{#each items}}<li>{{this}}</li>{{/each}}
+					</ul>
+					<p class="stonetop-gm-homefront-page">{{pageRef}}</p>
+				</section>
+				{{/each}}
+			</div>
+			{{/if}}
+
+			{{!-- QUESTIONS TO ASK. Every one of these ends in "?", so every one is tagged
+			      `question-bullet` by markQuestionBullets (hooks/RenderActorSheet.js) on the way
+			      past. That is a bullet-picture swap only — see the note on the class in
+			      stonetop.css — so the list lays out like any other here. --}}
+			{{#if (eq kind "questions")}}
+			<ul class="stonetop-gm-homefront-items stonetop-gm-homefront-questions">
+				{{#each body.items}}<li>{{this}}</li>{{/each}}
+			</ul>
+			{{/if}}
+
+			{{!-- THE YEAR'S WORK. Five blocks, and the one the campaign is actually in is marked.
+
+			      The mark is a comparison against `stonetop.homefrontSeason`, which the sheet reads
+			      off the steading's clock on each render — NOT a flag stamped onto the season by
+			      the view-model, which is built once and frozen for the life of the page. `@root`
+			      is needed because inside this `{{#each}}` the context is the season.
+
+			      "Always" carries a key that is deliberately not a SEASON_IDS value, so it never
+			      matches and is never the marked block. That is correct rather than a gap: its
+			      chores are true in all four seasons, so marking it "now" would say nothing.
+
+			      NO per-season class on these blocks. The obvious one to add would be
+			      `--spring`/`--summer`/..., and the only thing it could usefully carry is that
+			      season's ink — which belongs to the steading header's clock alone and to nothing
+			      else (see the block in stonetop.css, and the test that counts every read of those
+			      four tokens). A hook with no rules behind it is the door back. --}}
+			{{#if (eq kind "seasons")}}
+			<div class="stonetop-gm-homefront-seasons">
+				{{#each body.seasons}}
+				<section class="stonetop-gm-homefront-season{{#if (eq key @root.stonetop.homefrontSeason)}} stonetop-gm-homefront-season--now{{/if}}">
+					<h4 class="stonetop-gm-homefront-season-title">{{name}}{{#if (eq key @root.stonetop.homefrontSeason)}}
+						<span class="stonetop-gm-homefront-now">{{localize "stonetop.gmToolkit.homefront.now"}}</span>{{/if}}</h4>
+					<ul class="stonetop-gm-homefront-items">
+						{{#each items}}<li>{{this}}</li>{{/each}}
+					</ul>
+				</section>
+				{{/each}}
+			</div>
+			{{/if}}
+
+			{{!-- AFTERMATH and DOWNTIME. One renderer, two tables.
+
+			      Always an `<ol>`, with the numbering turned off by a class for the list that is
+			      not a sequence — the same shape the Core Loop tab uses for its two charts, and
+			      for the same reason: a Handlebars branch that picks the TAG NAME has to repeat
+			      the whole list body inside both arms of it.
+
+			      A step's `name` and its `detail` are one of the playbook's sentences with the
+			      first clause bolded, so they are joined here by a single space and nothing else.
+			      That is why several details begin in lower case. --}}
+			{{#if (eq kind "steps")}}
+			<ol class="stonetop-gm-homefront-steps{{#unless body.numbered}} stonetop-gm-homefront-steps--unnumbered{{/unless}}">
+				{{#each body.steps}}
+				<li class="stonetop-gm-homefront-step">
+					<strong class="stonetop-gm-homefront-step-name">{{name}}</strong>{{#if detail}} <span class="stonetop-gm-homefront-step-detail">{{detail}}</span>{{/if}}{{#if pageRef}} <span class="stonetop-gm-homefront-step-page">{{pageRef}}</span>{{/if}}
+					{{#if items}}
+					<ul class="stonetop-gm-homefront-items">
+						{{#each items}}<li>{{this}}</li>{{/each}}
+					</ul>
+					{{/if}}
+				</li>
+				{{/each}}
+			</ol>
+			{{#if body.ends}}<p class="stonetop-gm-homefront-ends">{{body.ends}}</p>{{/if}}
+			{{/if}}
+
+			{{!-- MAKE A PLAN. The one PLAYER move on this page, and it is here because answering it
+			      is a GM procedure: the requirements below are what the answer is built out of, and
+			      the list means nothing without the trigger that summons it. So the move's own text
+			      leads, set apart as the book's words, and the requirements follow. --}}
+			{{#if (eq kind "plan")}}
+			<p class="stonetop-gm-homefront-trigger">{{body.trigger}}</p>
+			<p class="stonetop-gm-homefront-guidance">{{body.guidance}}</p>
+			<ul class="stonetop-gm-homefront-items stonetop-gm-homefront-requirements">
+				{{#each body.requirements}}<li>{{this}}</li>{{/each}}
+			</ul>
+			{{/if}}
+
+			{{!-- RELATIVE VALUE. Five tiers, and the notes under them do real work: the asterisk
+			      answers the two entries that carry one, and the last is the reminder that what
+			      is really being traded is barter, debts and honor rather than coin.
+
+			      The LEAD is Book I's paragraph rather than the playbook's, for the reason
+			      homefront-text.js gives: the playbook's condensation drops the one thing a table
+			      most often gets wrong, which is that these are tiers rather than a scale. It sets
+			      the whole table up, so it goes above it, in the book's voice. --}}
+			{{#if (eq kind "value")}}
+			<p class="stonetop-gm-homefront-lead">{{body.lead}}</p>
+			<p class="stonetop-gm-homefront-intro">{{body.intro}}</p>
+			<div class="stonetop-gm-homefront-tiers">
+				{{#each body.tiers}}
+				<section class="stonetop-gm-homefront-tier">
+					<h4 class="stonetop-gm-homefront-tier-title">{{format "stonetop.gmToolkit.homefront.valueTier" value=value}}</h4>
+					<ul class="stonetop-gm-homefront-items">
+						{{#each items}}<li>{{this}}</li>{{/each}}
+					</ul>
+				</section>
+				{{/each}}
+			</div>
+			<ul class="stonetop-gm-homefront-notes">
+				{{#each body.notes}}<li>{{this}}</li>{{/each}}
+			</ul>
+			{{/if}}
+
+			{{!-- The section's page citation, ONCE, after the switch rather than at the end of
+			      each of its branches. Only one branch renders, and every one of them ended with
+			      the same line — so five copies said what one says, and a seventh section kind
+			      would have needed a sixth. Guarded because Life in Stonetop is the one section
+			      with no citation of its own: its four groups each cite their own spread, above. --}}
+			{{#if body.pageRef}}<p class="stonetop-gm-homefront-page">{{body.pageRef}}</p>{{/if}}
+		</div>
+		{{/each}}
+
+	</section>
+</div>

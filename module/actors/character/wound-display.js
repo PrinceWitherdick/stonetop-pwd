@@ -7,9 +7,9 @@
 export const WOUND_STATUS_GLYPH = { problematic: "fa-droplet", stabilized: "fa-bandage", permanent: "fa-lock" };
 
 export const WOUND_STATUS_LABEL = {
-	problematic: "Problematic — untreated, still hindering",
-	stabilized:  "Stabilized — treated, but not yet healed",
-	permanent:   "Permanent — this one can't heal",
+	problematic: "Problematic: untreated, still hindering",
+	stabilized:  "Stabilized: treated, but not yet healed",
+	permanent:   "Permanent: this one can't heal",
 };
 
 // Picker options. The label stays one word so the tiles read as a short list; `hint`

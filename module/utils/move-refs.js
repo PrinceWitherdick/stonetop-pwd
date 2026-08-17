@@ -13,6 +13,8 @@
 // would just point back at itself.
 
 import { escapeRegExp } from "./strings.js";
+import { ensurePackIndex } from "./pack-index.js";
+import { SYSTEM_ID } from "../system-id.js";
 
 // Longest names first so the alternation prefers the longer match.
 export const MOVE_REF_NAMES = [
@@ -49,9 +51,13 @@ const _moveRefCache = new Map();
 export async function fetchMoveRef(name) {
 	const key = name.toLowerCase();
 	if (_moveRefCache.has(key)) return _moveRefCache.get(key);
-	const packs = game.packs.filter(p => p.metadata.packageName === "stonetop-pwd" && p.metadata.type === "Item");
+	const packs = game.packs.filter(p => p.metadata.packageName === SYSTEM_ID && p.metadata.type === "Item");
 	for (const pack of packs) {
-		await pack.getIndex();
+		// Via ensurePackIndex, never `pack.getIndex()` direct: a fieldless call sets this pack's
+		// tracked index fields to the core set, and v14 then rebuilds any loaded document's index
+		// entry from that set — dropping system.slug and friends from it. This runs on every
+		// move-name hover, so it is exactly the call most likely to get there first.
+		await ensurePackIndex(pack.collection);
 		const entry = pack.index.find(e => e.name.toLowerCase() === key);
 		if (!entry) continue;
 		const doc  = await pack.getDocument(entry._id);

@@ -55,21 +55,49 @@ export function withSectionEditing(Base) {
 			}, true);
 		}
 
-		/** Hook: a section's pencil was just opened. */
-		_onSectionEditOpened(section) {}
+		// Deliberately empty override points. The `_` prefix is only there to say "unused here" —
+		// a subclass overriding these names its own parameter.
+		/** Hook: a section's pencil was just opened. @param {string} _section */
+		_onSectionEditOpened(_section) {}
 
-		/** Hook: a section's pencil was just closed. */
-		_onSectionEditClosed(section) {}
+		/** Hook: a section's pencil was just closed. @param {string} _section */
+		_onSectionEditClosed(_section) {}
 
 		// ── Section collapse ──────────────────────────────────────────────────
 		// The caret beside each pencil folds its section down to just the heading.
-		// Sections default to expanded, so we track the ids left COLLAPSED. Unlike
-		// the edit state this is a reading preference, not sheet data: it lives in
-		// a client setting (per user), keyed by actor id (per sheet).
+		// Unlike the edit state this is a reading preference, not sheet data: it
+		// lives in a client setting (per user), keyed by actor id (per sheet).
+		//
+		// What is STORED is the set of sections sitting AGAINST their default, not
+		// the set that is collapsed. Almost every section defaults to expanded, and
+		// for those two readings are identical, which is why the setting is still
+		// called `sheetSectionsCollapsed` and why every list written by an older
+		// build still means exactly what it meant. The difference only shows on a
+		// section that opts into `defaultCollapsed` (the GM Toolkit's prep
+		// reference): there, a stored id means the user pushed it OPEN.
+		//
+		// Storing the override rather than the state is what lets a default change
+		// later without rewriting anyone's saved preferences, and it keeps "never
+		// touched this" distinguishable from "deliberately put it back", which a
+		// list of collapsed ids alone cannot express.
 
-		/** Ids folded shut on this sheet, hydrated from the stored preference once. */
-		get collapsedSections() {
-			return (this._collapsedSections ??= new Set(getSheetSectionsCollapsed(this.actor?.id)));
+		/**
+		 * Ids whose fold sits against its default on this sheet, hydrated from the
+		 * stored preference once.
+		 */
+		get foldOverrides() {
+			return (this._foldOverrides ??= new Set(getSheetSectionsCollapsed(this.actor?.id)));
+		}
+
+		/** Does this caret's section start folded when the user has never touched it? */
+		_defaultsCollapsed(caret) {
+			return caret.dataset.defaultCollapsed === "true";
+		}
+
+		/** Is this caret's section folded right now? */
+		_isSectionCollapsed(caret) {
+			const flipped = this.foldOverrides.has(caret.dataset.section);
+			return this._defaultsCollapsed(caret) ? !flipped : flipped;
 		}
 
 		/**
@@ -139,17 +167,21 @@ export function withSectionEditing(Base) {
 				caret.setAttribute("title", collapsed ? "Expand section" : "Collapse section");
 			};
 			for (const caret of root.querySelectorAll(".stonetop-section-collapse")) {
-				apply(caret, this.collapsedSections.has(caret.dataset.section));
+				apply(caret, this._isSectionCollapsed(caret));
 			}
 
 			const toggle = caret => {
 				const id = caret.dataset.section;
 				if (!id) return;
-				const collapsed = !this.collapsedSections.has(id);
-				if (collapsed) this.collapsedSections.add(id);
-				else           this.collapsedSections.delete(id);
+				const collapsed = !this._isSectionCollapsed(caret);
+				// The STORED fact is "this section sits against its default", so which way
+				// the flip is recorded depends on which way the section starts. Recording
+				// the state instead would make a default-collapsed section that the user
+				// has never touched indistinguishable from one they deliberately shut.
+				if (collapsed === this._defaultsCollapsed(caret)) this.foldOverrides.delete(id);
+				else                                              this.foldOverrides.add(id);
 				apply(caret, collapsed);
-				setSheetSectionsCollapsed(this.actor?.id, [...this.collapsedSections]);
+				setSheetSectionsCollapsed(this.actor?.id, [...this.foldOverrides]);
 			};
 			// Class-toggled in place rather than re-rendered: a fold changes nothing
 			// the template computes, and a re-render would cost a scroll jump.

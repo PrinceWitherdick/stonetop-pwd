@@ -43,7 +43,7 @@
       "_id": "SQufow2G8uQk81dZ",
       "name": "Create eerie environmental effects (bleeding walls, green flames)",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""

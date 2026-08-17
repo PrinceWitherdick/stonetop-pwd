@@ -15,6 +15,9 @@ for (const { name: pack, sources } of PACKS) {
 		await fs.access(dest);
 		console.log(`Skipping ${pack} — source already exists at ${dest}`);
 		continue;
-	} catch {}
+	} catch {
+		// fs.access throws exactly when `dest` does NOT exist, which is the case we want:
+		// fall through and extract. Any other reason to fail will resurface on extractPack.
+	}
 	await extractPack(src, dest, { nedb: false, log: true });
 }

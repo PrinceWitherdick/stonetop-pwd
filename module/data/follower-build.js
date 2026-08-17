@@ -280,8 +280,8 @@ export const SHIELD_WALL_MOVE = "Shield Wall";
 // custom-group follower cards and the monster stat block's group-fight tools, so
 // the rule, the readout string, and the roll rebuild can't drift between them.
 export function outnumberBonus(yours, theirs) {
-	const y = Math.max(1, parseInt(yours)  || 1);
-	const t = Math.max(1, parseInt(theirs) || 1);
+	const y = Math.max(1, parseInt(yours, 10)  || 1);
+	const t = Math.max(1, parseInt(theirs, 10) || 1);
 	const bonus = Math.max(0, Math.floor(y / t) - 1);
 	return {
 		bonus,

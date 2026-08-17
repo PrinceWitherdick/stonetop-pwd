@@ -146,8 +146,11 @@ describe("settings registration", () => {
 	const body = key => SETTINGS_JS.slice(SETTINGS_JS.indexOf(`"${key}", {`)).split("\n\t});")[0];
 
 	it("registers both masters and one child per tabbed sheet, and no monster child", () => {
+		// The namespace argument is the SYSTEM_ID constant, not the literal it resolves to, so
+		// this matches on the key alone. Which namespace they register under is settings-registration's
+		// business, and it is asserted there against the running game rather than against source text.
 		for (const key of ["worldSheetLayout", "sheetLayout", "classicLayoutCharacter", "classicLayoutSteading", "classicLayoutNpc"])
-			expect(SETTINGS_JS, key).toContain(`game.settings.register("stonetop-pwd", "${key}"`);
+			expect(SETTINGS_JS, key).toContain(`game.settings.register(SYSTEM_ID, "${key}"`);
 		// The monster sheet has no tabs and took no part in the redesign.
 		expect(SETTINGS_JS).not.toContain("classicLayoutMonster");
 	});

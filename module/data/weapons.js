@@ -34,7 +34,7 @@
 // special-items.js). The battleaxe pack note currently reads "+1 damage" — a data bug
 // (copied from Sword); this map uses the correct value.
 
-import { altStatForMove } from "./alt-stat-grants.js";
+import { altStatGrantForMove } from "./alt-stat-grants.js";
 
 const M = (over = {}) => ({
 	range: [],
@@ -84,6 +84,15 @@ export const MOVE_GRANTED_WEAPONS = {
 	"Purifying Flames": {
 		slug: "purifying-flames-holy-light",
 		meta: M({ name: "Holy light", range: ["hand", "close"], area: true, piercing: 2, damageDie: "d10" }),
+		// A holy light has to actually be BURNING to swing it — but that, like whether the foe is a
+		// creature of darkness, is the table's call rather than ours to enforce. So the row names
+		// the state to look at and the line to say when it is off, and the sheet only reads them:
+		// the next granted weapon with a precondition of its own adds two fields here instead of a
+		// branch in the shared roll path.
+		//   readyWhen      a property of the actor's StonetopCharacter that must be truthy
+		//   unreadyNotice  the i18n key for the reminder posted when it is not
+		readyWhen: "holyLight",
+		unreadyNotice: "stonetop.holyLight.unlitAttackNotice",
 	},
 };
 
@@ -97,13 +106,18 @@ export const UNARMED_META = M({ name: "Unarmed", range: ["hand"] });
 /**
  * The weapon a move grants, or null.
  *
- * `whenStat` comes back with it: the stat whose choice implies this weapon, so picking +WIS
- * pre-selects the holy light in the weapon prompt. It is the same stat the move grants for the
- * roll (alt-stat-grants.js) rather than a second copy of it, so changing one changes both.
+ * `whenStat` and `viaMove` come back with it, both read off the move's alt-stat grant rather
+ * than recorded a second time here, so changing that one row changes every side:
+ *   whenStat  the stat whose choice implies this weapon, so picking +WIS pre-selects the holy
+ *             light in the weapon prompt;
+ *   viaMove   the attack move the weapon rides on ("Clash"), which is what lets USING the
+ *             granting move be that attack with this weapon already in hand.
  */
 export function grantedWeaponForMove(moveName) {
 	const granted = MOVE_GRANTED_WEAPONS[moveName];
-	return granted ? { ...granted, whenStat: altStatForMove(moveName) } : null;
+	if (!granted) return null;
+	const grant = altStatGrantForMove(moveName);
+	return { ...granted, whenStat: grant?.altStat ?? null, viaMove: grant?.whenMove ?? null };
 }
 
 const MELEE_RANGES  = new Set(["hand", "close", "reach"]);

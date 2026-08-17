@@ -89,7 +89,7 @@ export async function crossOffWouldBe(actor) {
 	await ChatMessage.create({
 		content: stonetopChatCard("A Would-Be Hero No Longer",
 			`<div class="stonetop-roll-card-description">
-				<p><strong>${escHtml(actor.name)}</strong> has crossed off &ldquo;Would-be&rdquo; &mdash; they are now <strong>${WBH_HERO_NAME}</strong>.</p>
+				<p><strong>${escHtml(actor.name)}</strong> has crossed off &ldquo;Would-be&rdquo;: they are now <strong>${WBH_HERO_NAME}</strong>.</p>
 			</div>`),
 		speaker: ChatMessage.getSpeaker({ actor }),
 	});

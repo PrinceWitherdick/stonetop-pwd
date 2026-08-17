@@ -49,10 +49,12 @@
 		      per-facet decoder. That is why an untagged portrait writes "unspecified" here
 		      rather than "": it is a selectable bucket, not a gap. --}}
 		{{#each people}}
-		{{!-- `data-src` is what Accept commits and what the tile shows: the square face when one
-		      has been cut, otherwise the whole illustration exactly as before. `data-full` is
-		      always the illustration, for the hover preview and for deciding whether two paths
-		      mean the same person. --}}
+		{{!-- `data-src` is what the tile SHOWS: the square face when one has been cut, otherwise
+		      the whole illustration. `data-full` is always the illustration — the hover preview,
+		      the test for whether two paths mean the same person, and what Accept commits. The
+		      square as a rect over that illustration — which is how the committed portrait still
+		      draws as a face on every small round surface — is read back out of `data-src`'s own
+		      filename at click time (PeopleGalleryDialog#_frameOf), so it needs no attribute. --}}
 		<button type="button" class="stonetop-people-pick{{#if isSquare}} is-square{{/if}}{{#if selected}} is-selected{{/if}}{{#if usedBy}} is-used{{/if}}" data-src="{{src}}" data-full="{{full}}" data-presenting="{{#if presenting}}{{presenting}}{{else}}unspecified{{/if}}" data-kid="{{#if kid}}kids{{else}}adults{{/if}}" data-used="{{#if usedBy}}used{{else}}unused{{/if}}" data-used-by="{{usedBy}}" title="{{name}}{{#if usedBy}} (already assigned to {{usedBy}}){{/if}}">
 			<img src="{{src}}" alt="{{name}}" loading="lazy">
 			<span class="stonetop-people-label">{{name}}</span>
@@ -78,7 +80,7 @@
       the Next-on-the-right exception does not apply; Randomize is a repeatable action rather
       than a step forward, and it sits beside the thing it arms. --}}
 <footer class="stonetop-people-footer">
-	<button type="button" class="stonetop-people-accept" disabled="disabled" title="Use the portrait on offer — click one, or roll for it"><i class="fas fa-check"></i> Accept</button>
+	<button type="button" class="stonetop-people-accept" disabled="disabled" title="Use the portrait on offer: click one, or roll for it"><i class="fas fa-check"></i> Accept</button>
 	<button type="button" class="stonetop-people-random" title="Roll a portrait at random from the ones shown (the filters above apply)"><i class="fas fa-dice-d6"></i> Randomize</button>
 </footer>
 {{/if}}

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { BOOK2_ART_APPLY_MANIFEST } from "../../module/book2-art/manifest.js";
+import { pageChain } from "../../module/book2-art/reapply.js";
 import {
 	isValidRect, portraitOutFor, fullPortraitSrc, squarePortraitSrc, hasPortraitSuffix,
 } from "../../module/book2-art/people-portraits.js";
@@ -14,7 +15,7 @@ import {
 // same trap already applies to `crop` (see rebuild-crops.test.js).
 
 const ROOT = "stonetop-book-art";
-const { people = [] } = BOOK2_ART_APPLY_MANIFEST;
+const { people = [], settingOverviewMaps = [], gmDiagrams = [] } = BOOK2_ART_APPLY_MANIFEST;
 const squared = people.filter((p) => p.portrait || p.portraitOut);
 
 describe("people projection: square portraits", () => {
@@ -68,6 +69,50 @@ describe("people projection: the square namespace is clean", () => {
 		for (const p of people) {
 			expect(p.slug).toBeTruthy();
 			expect(p.out).toMatch(/^assets\/people\/.+\.webp$/);
+		}
+	});
+});
+
+// Two more projections with the same far-side problem, and the same silent failure mode: drop
+// either and nothing throws, the tab and the map pages just look like a world that never
+// imported.
+describe("the GM playbook projections", () => {
+	it("still emits the two diagrams, slug and path", () => {
+		expect(gmDiagrams).toHaveLength(2);
+		for (const d of gmDiagrams) {
+			expect(d.slug).toBeTruthy();
+			expect(d.out).toMatch(/^assets\/diagrams\/.+\.webp$/);
+		}
+	});
+
+	// The generator filters `settingOverviewMaps` to the rows that OWN a page, so a row emitted
+	// without its ids would give reapply a journal-less row to chase every load.
+	it("emits only page-owning rows among the setting-overview maps", () => {
+		expect(settingOverviewMaps.length).toBeGreaterThan(0);
+		for (const s of settingOverviewMaps) {
+			expect(s.journalEntryId, s.slug).toBeTruthy();
+			expect(s.journalPageId, s.slug).toBeTruthy();
+		}
+	});
+
+	// `prefer` is what makes a GM playbook import upgrade an already-imported world's map pages.
+	// `pageChain` folds it together with the older `out`/`replaces` shape rather than choosing
+	// between them, so a row may state either or both and no half can be the one a caller
+	// forgot to read. What still has to hold is that `prefer`, where a row has one, actually
+	// LEADS: it is the ordering, so anything it leaves out would be appended behind it.
+	it("keeps each map's preference chain, and leads with it", () => {
+		for (const s of settingOverviewMaps) {
+			expect(Array.isArray(s.prefer), `${s.slug} lost its chain`).toBe(true);
+			expect(s.prefer.length, s.slug).toBeGreaterThanOrEqual(2);
+			// The row's own extraction has to be somewhere in its own chain, or the file it writes
+			// is one nothing will ever show.
+			expect(s.prefer, `${s.slug} does not include its own out`).toContain(s.out);
+			// ...and the older shape must be a SUBSET of it, or the two disagree about the order
+			// and the superseded file would sort ahead of a better copy.
+			for (const old of s.replaces ?? []) {
+				expect(s.prefer, `${s.slug}: ${old} is in replaces but not in prefer`).toContain(old);
+			}
+			expect(pageChain(s), `${s.slug} chain is not just its prefer`).toEqual(s.prefer);
 		}
 	});
 });

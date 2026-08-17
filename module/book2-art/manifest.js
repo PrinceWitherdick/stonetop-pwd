@@ -13,7 +13,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "F0SuxRtw6dqB6Nvh",
    "journalEntryId": "Ttz6Fnr2M0HNfIre",
-   "journalPageId": "FUyYoLbaxcMQ2XTA"
+   "journalPageId": "FUyYoLbaxcMQ2XTA",
+   "token": [
+    0.397,
+    0.163,
+    0.718,
+    0.6
+   ],
+   "tokenOut": "assets/bestiary/crinwin-t397-163-718-600.webp"
   },
   {
    "slug": "swyn",
@@ -22,7 +29,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "gI80yymFTixu1alc",
    "journalEntryId": "k9Buk0QDWg2PIIqj",
-   "journalPageId": "yzXUzONTGla9ZzfM"
+   "journalPageId": "yzXUzONTGla9ZzfM",
+   "token": [
+    0.688,
+    0.053,
+    0.973,
+    0.46
+   ],
+   "tokenOut": "assets/bestiary/swyn-t688-053-973-460.webp"
   },
   {
    "slug": "myghal",
@@ -31,7 +45,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "xSrPam8ZFxg24LQl",
    "journalEntryId": "fhCGhdK4KZ5fBsUL",
-   "journalPageId": "NadumFaGYEX4NSc0"
+   "journalPageId": "NadumFaGYEX4NSc0",
+   "token": [
+    0.142,
+    0.343,
+    0.634,
+    0.623
+   ],
+   "tokenOut": "assets/bestiary/myghal-t142-343-634-623.webp"
   },
   {
    "slug": "phantom-rider",
@@ -40,7 +61,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "8T8jqS04adlc5107",
    "journalEntryId": "llEqxrhsKD2DvYdP",
-   "journalPageId": "ccg4Fpzc9VeL0gBK"
+   "journalPageId": "ccg4Fpzc9VeL0gBK",
+   "token": [
+    0.404,
+    0,
+    0.842,
+    0.621
+   ],
+   "tokenOut": "assets/bestiary/phantom-rider-t404-000-842-621.webp"
   },
   {
    "slug": "servants-of-daagon",
@@ -49,7 +77,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "BCA8xC2gsvHO43ou",
    "journalEntryId": "SmHddXJMWp3niCln",
-   "journalPageId": "EEIU9yPFNldtPXAZ"
+   "journalPageId": "EEIU9yPFNldtPXAZ",
+   "token": [
+    0.664,
+    0,
+    1,
+    0.724
+   ],
+   "tokenOut": "assets/bestiary/servants-of-daagon-t664-000-1000-724.webp"
   },
   {
    "slug": "necromancer",
@@ -58,7 +93,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "58UtB8l8G68t9nRI",
    "journalEntryId": "9MF7xia8nqIu1V8N",
-   "journalPageId": "DZU7wBHDfNukWLs1"
+   "journalPageId": "DZU7wBHDfNukWLs1",
+   "token": [
+    0,
+    0,
+    0.544,
+    0.999
+   ],
+   "tokenOut": "assets/bestiary/necromancer-t000-000-544-999.webp"
   },
   {
    "slug": "gwraig-wen",
@@ -67,7 +109,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "B0W8jT7lRFLJK4ds",
    "journalEntryId": "i74FkC9ROlheQBIF",
-   "journalPageId": "28Ko2NCItg3Bfkf9"
+   "journalPageId": "28Ko2NCItg3Bfkf9",
+   "token": [
+    0.17,
+    0.268,
+    0.556,
+    0.825
+   ],
+   "tokenOut": "assets/bestiary/gwraig-wen-t170-268-556-825.webp"
   },
   {
    "slug": "willow-witches",
@@ -76,7 +125,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "q6EfKl09RA6NKWEc",
    "journalEntryId": "M8gYXMHKcRqCshbC",
-   "journalPageId": "2hPfGCxCxK6zS7th"
+   "journalPageId": "2hPfGCxCxK6zS7th",
+   "token": [
+    0,
+    0,
+    0.358,
+    1
+   ],
+   "tokenOut": "assets/bestiary/willow-witches-t000-000-358-1000.webp"
   },
   {
    "slug": "draventao",
@@ -85,7 +141,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "9kcSzC3uPavigsyF",
    "journalEntryId": "sKYvwXBCiWfqNZlU",
-   "journalPageId": "MxnVw08jIaPKl8MP"
+   "journalPageId": "MxnVw08jIaPKl8MP",
+   "token": [
+    0.567,
+    0.384,
+    0.919,
+    1
+   ],
+   "tokenOut": "assets/bestiary/draventao-t567-384-919-1000.webp"
   },
   {
    "slug": "llamudwr",
@@ -94,7 +157,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "zWFuS69kPihbwlKp",
    "journalEntryId": "7qfPIuaRwuUPi4nV",
-   "journalPageId": "R2kOFklneqKTwTWd"
+   "journalPageId": "R2kOFklneqKTwTWd",
+   "token": [
+    0.014,
+    0,
+    0.49,
+    0.465
+   ],
+   "tokenOut": "assets/bestiary/llamudwr-t014-000-490-465.webp"
   },
   {
    "slug": "mummified-green-lord",
@@ -103,7 +173,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "TGLFOv8AqB8gHXvM",
    "journalEntryId": "EwO2lHfT38Fi7uqK",
-   "journalPageId": "J8A6ThARz2TEegEV"
+   "journalPageId": "J8A6ThARz2TEegEV",
+   "token": [
+    0.497,
+    0.255,
+    0.771,
+    0.951
+   ],
+   "tokenOut": "assets/bestiary/mummified-green-lord-t497-255-771-951.webp"
   },
   {
    "slug": "mummified-servant",
@@ -112,7 +189,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "WVBxp5Ii2Ahd6Xln",
    "journalEntryId": "bO6QXFMmtAmKL3zO",
-   "journalPageId": "ynEVoraTg5NZAlmU"
+   "journalPageId": "ynEVoraTg5NZAlmU",
+   "token": [
+    0.557,
+    0.085,
+    0.837,
+    0.705
+   ],
+   "tokenOut": "assets/bestiary/mummified-servant-t557-085-837-705.webp"
   },
   {
    "slug": "zrajedak",
@@ -121,7 +205,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "3JaMhYyy0qDzf06q",
    "journalEntryId": "CGPfnYi6Y86dEdE0",
-   "journalPageId": "vyDWFkK5vBnfGLZS"
+   "journalPageId": "vyDWFkK5vBnfGLZS",
+   "token": [
+    0.419,
+    0.549,
+    0.808,
+    0.961
+   ],
+   "tokenOut": "assets/bestiary/zrajedak-t419-549-808-961.webp"
   },
   {
    "slug": "hdour",
@@ -130,7 +221,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "Okqc6kkhEZ3CGYKl",
    "journalEntryId": "Owbdgx7wi7p30MzW",
-   "journalPageId": "yvKK2IoV4vk8Z8Dp"
+   "journalPageId": "yvKK2IoV4vk8Z8Dp",
+   "token": [
+    0.125,
+    0,
+    0.681,
+    0.453
+   ],
+   "tokenOut": "assets/bestiary/hdour-t125-000-681-453.webp"
   },
   {
    "slug": "hillfolk-rider",
@@ -139,7 +237,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "05mh4Ag0uKxRVY8j",
    "journalEntryId": "J3KbSweAhRZfonEX",
-   "journalPageId": "XwlDiMYnCmrH0CCc"
+   "journalPageId": "XwlDiMYnCmrH0CCc",
+   "token": [
+    0.275,
+    0.283,
+    0.63,
+    0.774
+   ],
+   "tokenOut": "assets/bestiary/hillfolk-rider-t275-283-630-774.webp"
   },
   {
    "slug": "spirit-talker",
@@ -148,7 +253,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "7ID9ieGRtwH4QoE8",
    "journalEntryId": "nJnOuEaIJBZParuZ",
-   "journalPageId": "lqG9EkFDvTaGUVR1"
+   "journalPageId": "lqG9EkFDvTaGUVR1",
+   "token": [
+    0.29,
+    0.244,
+    0.519,
+    0.635
+   ],
+   "tokenOut": "assets/bestiary/spirit-talker-t290-244-519-635.webp"
   },
   {
    "slug": "adventurer",
@@ -157,7 +269,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "aAknV9EMnUjJvRL3",
    "journalEntryId": "mqbnYBt53E6uF73P",
-   "journalPageId": "EAzIkasPD1rTWc2G"
+   "journalPageId": "EAzIkasPD1rTWc2G",
+   "token": [
+    0.019,
+    0,
+    0.372,
+    0.239
+   ],
+   "tokenOut": "assets/bestiary/adventurer-t019-000-372-239.webp"
   },
   {
    "slug": "antiquarian",
@@ -166,7 +285,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "bZKtYZmapDExeAJU",
    "journalEntryId": "T1ELDbVtepRKsf3d",
-   "journalPageId": "PSYUphUQPJtiNl0C"
+   "journalPageId": "PSYUphUQPJtiNl0C",
+   "token": [
+    0,
+    0,
+    0.334,
+    1
+   ],
+   "tokenOut": "assets/bestiary/antiquarian-t000-000-334-1000.webp"
   },
   {
    "slug": "caravan-guard",
@@ -175,7 +301,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "rmNfHJdCkFfrBVIL",
    "journalEntryId": "eLDyz1PDrdPnbnG9",
-   "journalPageId": "ltv7WDfMzG1MFpho"
+   "journalPageId": "ltv7WDfMzG1MFpho",
+   "token": [
+    0.278,
+    0.256,
+    0.417,
+    0.786
+   ],
+   "tokenOut": "assets/bestiary/caravan-guard-t278-256-417-786.webp"
   },
   {
    "slug": "infantry",
@@ -184,7 +317,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "r5Ea7yfpDcp6WTO4",
    "journalEntryId": "RrC8q9cFYtODqipS",
-   "journalPageId": "XN6JjsXaKtAGdhJR"
+   "journalPageId": "XN6JjsXaKtAGdhJR",
+   "token": [
+    0,
+    0,
+    0.336,
+    1
+   ],
+   "tokenOut": "assets/bestiary/infantry-t000-000-336-1000.webp"
   },
   {
    "slug": "shantyara",
@@ -193,7 +333,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "j8rFoANTmTHD5MKF",
    "journalEntryId": "5Sv77XzHPMBgZqJZ",
-   "journalPageId": "wpyE6SCPfsbzsAj7"
+   "journalPageId": "wpyE6SCPfsbzsAj7",
+   "token": [
+    0.421,
+    0,
+    0.889,
+    0.43
+   ],
+   "tokenOut": "assets/bestiary/shantyara-t421-000-889-430.webp"
   },
   {
    "slug": "fundamental",
@@ -202,7 +349,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "iPBB5qDX5urJ30FU",
    "journalEntryId": "WObWuLHBHqBYlZlA",
-   "journalPageId": "x2kSq3GwFhREPjAS"
+   "journalPageId": "x2kSq3GwFhREPjAS",
+   "token": [
+    0.175,
+    0,
+    0.916,
+    0.723
+   ],
+   "tokenOut": "assets/bestiary/fundamental-t175-000-916-723.webp"
   },
   {
    "slug": "the-nightingale",
@@ -211,7 +365,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "9h3AbAG1DBQTrtOG",
    "journalEntryId": "aGS4afk7P2DhhFN0",
-   "journalPageId": "NOZWTnGdb2tXHzgM"
+   "journalPageId": "NOZWTnGdb2tXHzgM",
+   "token": [
+    0.412,
+    0,
+    1,
+    0.445
+   ],
+   "tokenOut": "assets/bestiary/the-nightingale-t412-000-1000-445.webp"
   },
   {
    "slug": "rime-lord",
@@ -220,7 +381,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "knIBykmqBqa8lMFN",
    "journalEntryId": "lMOwbXpvkp9KL5SG",
-   "journalPageId": "mVZaaOE7Ih4T3CNt"
+   "journalPageId": "mVZaaOE7Ih4T3CNt",
+   "token": [
+    0.301,
+    0,
+    1,
+    0.91
+   ],
+   "tokenOut": "assets/bestiary/rime-lord-t301-000-1000-910.webp"
   },
   {
    "slug": "horned-drake-young",
@@ -230,8 +398,16 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorId": "MmkSpS99xDX01jeC",
    "journalEntryId": "VJDP2ETcmA8GeHdT",
    "journalPageId": "5mYNP79ZxnvKJ8pB",
+   "token": [
+    0.354,
+    0.016,
+    0.719,
+    0.546
+   ],
+   "tokenOut": "assets/bestiary/horned-drake-t354-016-719-546.webp",
    "retired": [
-    "assets/bestiary/horned-drake-young.webp"
+    "assets/bestiary/horned-drake-young.webp",
+    "assets/bestiary/horned-drake-young-t354-016-719-546.webp"
    ]
   },
   {
@@ -241,7 +417,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "XFmKN7n1uddyo55m",
    "journalEntryId": "VJDP2ETcmA8GeHdT",
-   "journalPageId": "5mYNP79ZxnvKJ8pB"
+   "journalPageId": "5mYNP79ZxnvKJ8pB",
+   "token": [
+    0.36,
+    0.01,
+    0.733,
+    0.552
+   ],
+   "tokenOut": "assets/bestiary/horned-drake-t360-010-733-552.webp"
   },
   {
    "slug": "coedwaig",
@@ -250,7 +433,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "Hogu0AEnAffI0HHr",
    "journalEntryId": "4cuy0KcuT5WO0S5A",
-   "journalPageId": "IwC0rnZcM22Hkn5D"
+   "journalPageId": "IwC0rnZcM22Hkn5D",
+   "token": [
+    0.245,
+    0.088,
+    0.553,
+    0.45
+   ],
+   "tokenOut": "assets/bestiary/coedwaig-t245-088-553-450.webp"
   },
   {
    "slug": "grwgnach",
@@ -259,7 +449,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "QJzjWDCU8jAAb4DT",
    "journalEntryId": "YTr1h2SyKlxiRIDK",
-   "journalPageId": "qXgDLWSXQxbqWkTA"
+   "journalPageId": "qXgDLWSXQxbqWkTA",
+   "token": [
+    0.342,
+    0,
+    0.916,
+    0.846
+   ],
+   "tokenOut": "assets/bestiary/grwgnach-t342-000-916-846.webp"
   },
   {
    "slug": "glasbren",
@@ -268,7 +465,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "7GtbWc7kafUVk6dI",
    "journalEntryId": "3Q3V7QXv1XFx1UK8",
-   "journalPageId": "yZnBR4myriobQFz5"
+   "journalPageId": "yZnBR4myriobQFz5",
+   "token": [
+    0.491,
+    0.014,
+    0.957,
+    0.224
+   ],
+   "tokenOut": "assets/bestiary/glasbren-t491-014-957-224.webp"
   },
   {
    "slug": "hennain",
@@ -277,7 +481,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "6RhD3Vrdb3B9GXTA",
    "journalEntryId": "3Q3V7QXv1XFx1UK8",
-   "journalPageId": "yZnBR4myriobQFz5"
+   "journalPageId": "yZnBR4myriobQFz5",
+   "token": [
+    0.514,
+    0,
+    1,
+    0.623
+   ],
+   "tokenOut": "assets/bestiary/hennain-t514-000-1000-623.webp"
   },
   {
    "slug": "lithic-servant",
@@ -286,7 +497,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "CoqfzAvGUkjfvMpi",
    "journalEntryId": "91EWIGU7SaOUHbS9",
-   "journalPageId": "rsVBT8SKBdg0GgA3"
+   "journalPageId": "rsVBT8SKBdg0GgA3",
+   "token": [
+    0.291,
+    0,
+    0.741,
+    1
+   ],
+   "tokenOut": "assets/bestiary/lithic-servant-t291-000-741-1000.webp"
   },
   {
    "slug": "mosaic-swarm",
@@ -295,7 +513,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "fNEJcPa37GBqXwOq",
    "journalEntryId": "qlGSzAdbwRzcPJ70",
-   "journalPageId": "rRlMBzhKYM9P4fK7"
+   "journalPageId": "rRlMBzhKYM9P4fK7",
+   "token": [
+    0.13,
+    0.144,
+    0.718,
+    0.701
+   ],
+   "tokenOut": "assets/bestiary/mosaic-swarm-t130-144-718-701.webp"
   },
   {
    "slug": "stone-sentinel",
@@ -305,8 +530,16 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorId": "mRpMqY81O24lXlPG",
    "journalEntryId": "hNTwQMEAue41DzAx",
    "journalPageId": "5hvH8z9U9TifqPZ0",
+   "token": [
+    0.291,
+    0,
+    0.741,
+    1
+   ],
+   "tokenOut": "assets/bestiary/lithic-servant-t291-000-741-1000.webp",
    "retired": [
-    "assets/bestiary/stone-sentinel.webp"
+    "assets/bestiary/stone-sentinel.webp",
+    "assets/bestiary/stone-sentinel-t291-000-741-1000.webp"
    ]
   },
   {
@@ -316,7 +549,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "1U5ExYjZPgmW0Gck",
    "journalEntryId": "qUp7ZkpC5FdinUC4",
-   "journalPageId": "MlbyZpkmaCRWrwnL"
+   "journalPageId": "MlbyZpkmaCRWrwnL",
+   "token": [
+    0.274,
+    0.465,
+    0.97,
+    0.997
+   ],
+   "tokenOut": "assets/bestiary/fire-vortex-t274-465-970-997.webp"
   },
   {
    "slug": "lightning-vortex",
@@ -325,7 +565,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "baV7yiVwXMTKa49B",
    "journalEntryId": "qUp7ZkpC5FdinUC4",
-   "journalPageId": "MlbyZpkmaCRWrwnL"
+   "journalPageId": "MlbyZpkmaCRWrwnL",
+   "token": [
+    0,
+    0,
+    1,
+    0.523
+   ],
+   "tokenOut": "assets/bestiary/lightning-vortex-t000-000-1000-523.webp"
   },
   {
    "slug": "water-vortex",
@@ -334,7 +581,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "iGFc9muBkF8HMgDQ",
    "journalEntryId": "qUp7ZkpC5FdinUC4",
-   "journalPageId": "MlbyZpkmaCRWrwnL"
+   "journalPageId": "MlbyZpkmaCRWrwnL",
+   "token": [
+    0,
+    0,
+    0.995,
+    0.929
+   ],
+   "tokenOut": "assets/bestiary/water-vortex-t000-000-995-929.webp"
   },
   {
    "slug": "wind-vortex",
@@ -343,7 +597,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "JRoNGWPbEVDVTu1s",
    "journalEntryId": "qUp7ZkpC5FdinUC4",
-   "journalPageId": "MlbyZpkmaCRWrwnL"
+   "journalPageId": "MlbyZpkmaCRWrwnL",
+   "token": [
+    0,
+    0,
+    1,
+    0.898
+   ],
+   "tokenOut": "assets/bestiary/wind-vortex-t000-000-1000-898.webp"
   },
   {
    "slug": "the-crombil",
@@ -352,7 +613,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "i2U1Qxscwoqw6eR0",
    "journalEntryId": "EYZ5DbxfTP8Pkzmv",
-   "journalPageId": "dFx9ksncRYUgW1yL"
+   "journalPageId": "dFx9ksncRYUgW1yL",
+   "token": [
+    0.563,
+    0.001,
+    0.845,
+    1
+   ],
+   "tokenOut": "assets/bestiary/the-crombil-t563-001-845-1000.webp"
   },
   {
    "slug": "grimstew",
@@ -361,7 +629,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "qDIbc21OgAwQJvjo",
    "journalEntryId": "fSV9XtOChfthnbDG",
-   "journalPageId": "13kSx63dNzKgtIQm"
+   "journalPageId": "13kSx63dNzKgtIQm",
+   "token": [
+    0.341,
+    0.23,
+    0.687,
+    0.67
+   ],
+   "tokenOut": "assets/bestiary/grimstew-t341-230-687-670.webp"
   },
   {
    "slug": "aurochs",
@@ -370,7 +645,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "fVOXp33igDV70sc0",
    "journalEntryId": "tx9I3QGe5ldHuhho",
-   "journalPageId": "1RDme0QvQu2hp7X9"
+   "journalPageId": "1RDme0QvQu2hp7X9",
+   "token": [
+    0,
+    0.033,
+    0.289,
+    0.702
+   ],
+   "tokenOut": "assets/bestiary/aurochs-t000-033-289-702.webp"
   },
   {
    "slug": "frythanc",
@@ -379,7 +661,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "YKLG7aDPRTieTkve",
    "journalEntryId": "oAW6aV8Fmw6ZQPX4",
-   "journalPageId": "LJpl17rtE9oSe9Ga"
+   "journalPageId": "LJpl17rtE9oSe9Ga",
+   "token": [
+    0.116,
+    0,
+    0.884,
+    1
+   ],
+   "tokenOut": "assets/bestiary/frythanc-t116-000-884-1000.webp"
   },
   {
    "slug": "swarm-of-silvery-vermin",
@@ -389,8 +678,16 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorId": "fnzABVPboAe4m9Y8",
    "journalEntryId": "5tvhzovmN18QlxGa",
    "journalPageId": "TGra87VIxIOJstZX",
+   "token": [
+    0.651,
+    0.096,
+    1,
+    0.577
+   ],
+   "tokenOut": "assets/bestiary/yaarowslow-the-many-t651-096-1000-577.webp",
    "retired": [
-    "assets/bestiary/swarm-of-silvery-vermin.webp"
+    "assets/bestiary/swarm-of-silvery-vermin.webp",
+    "assets/bestiary/swarm-of-silvery-vermin-t651-096-1000-577.webp"
    ]
   },
   {
@@ -400,7 +697,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "xhYYoDHoyS7ZyPKz",
    "journalEntryId": "5tvhzovmN18QlxGa",
-   "journalPageId": "TGra87VIxIOJstZX"
+   "journalPageId": "TGra87VIxIOJstZX",
+   "token": [
+    0.255,
+    0.65,
+    0.508,
+    0.999
+   ],
+   "tokenOut": "assets/bestiary/yaarowslow-the-many-t255-650-508-999.webp"
   },
   {
    "slug": "mammoth",
@@ -409,7 +713,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "cy5OhsU0kVFUoppF",
    "journalEntryId": "H4EkNtJ49Mpz9O8a",
-   "journalPageId": "xX3jtpeelPVMnDBu"
+   "journalPageId": "xX3jtpeelPVMnDBu",
+   "token": [
+    0.433,
+    0.132,
+    0.787,
+    0.774
+   ],
+   "tokenOut": "assets/bestiary/mammoth-t433-132-787-774.webp"
   },
   {
    "slug": "tcaventes",
@@ -419,8 +730,16 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorId": "GdZQKCMmPANEuFyb",
    "journalEntryId": "muAijyov4VTFfqBL",
    "journalPageId": "FNyaslzj06Ri4wHm",
+   "token": [
+    0.629,
+    0,
+    1,
+    0.326
+   ],
+   "tokenOut": "assets/bestiary/soithech-t629-000-1000-326.webp",
    "retired": [
-    "assets/bestiary/tcaventes.webp"
+    "assets/bestiary/tcaventes.webp",
+    "assets/bestiary/tcaventes-t629-000-1000-326.webp"
    ]
   },
   {
@@ -430,7 +749,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "R3CGOnv3X1BQUpB5",
    "journalEntryId": "J0eNyUcWDLD2ornV",
-   "journalPageId": "XbjOkmGBMYByEeLN"
+   "journalPageId": "XbjOkmGBMYByEeLN",
+   "token": [
+    0.624,
+    0,
+    1,
+    0.331
+   ],
+   "tokenOut": "assets/bestiary/soithech-t624-000-1000-331.webp"
   },
   {
    "slug": "ghostly-hounds",
@@ -439,7 +765,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "3WXpoW1ajr2PCDC9",
    "journalEntryId": "6wnyTkZl7GRhVM8g",
-   "journalPageId": "6Nw4LldBvZJA3Lm8"
+   "journalPageId": "6Nw4LldBvZJA3Lm8",
+   "token": [
+    0,
+    0.308,
+    0.338,
+    0.958
+   ],
+   "tokenOut": "assets/bestiary/ghostly-hounds-t000-308-338-958.webp"
   },
   {
    "slug": "the-pale-hunter",
@@ -448,7 +781,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "KEv7LnXs4zQju3lp",
    "journalEntryId": "6wnyTkZl7GRhVM8g",
-   "journalPageId": "6Nw4LldBvZJA3Lm8"
+   "journalPageId": "6Nw4LldBvZJA3Lm8",
+   "token": [
+    0.205,
+    0,
+    0.486,
+    0.503
+   ],
+   "tokenOut": "assets/bestiary/the-pale-hunter-t205-000-486-503.webp"
   },
   {
    "slug": "skittering-horror",
@@ -457,7 +797,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "mk4kCF2buJrsSlK2",
    "journalEntryId": "KcEptvDi3nhRFoBB",
-   "journalPageId": "9rYFqciEnJfFIQu8"
+   "journalPageId": "9rYFqciEnJfFIQu8",
+   "token": [
+    0,
+    0.457,
+    0.438,
+    0.955
+   ],
+   "tokenOut": "assets/bestiary/skittering-horror-t000-457-438-955.webp"
   },
   {
    "slug": "star-mole",
@@ -466,7 +813,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "89ZjFUUS1I9bP2MH",
    "journalEntryId": "5JC9gQCHQUHugXsQ",
-   "journalPageId": "nuJLbTQh1QYWWoTg"
+   "journalPageId": "nuJLbTQh1QYWWoTg",
+   "token": [
+    0.643,
+    0.155,
+    0.836,
+    0.377
+   ],
+   "tokenOut": "assets/bestiary/star-mole-t643-155-836-377.webp"
   },
   {
    "slug": "brawzbedr",
@@ -475,7 +829,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "eU2PTY1DoA2n95RT",
    "journalEntryId": "sc28aHnwvhvBDyjh",
-   "journalPageId": "pAEjZrge0FusCivY"
+   "journalPageId": "pAEjZrge0FusCivY",
+   "token": [
+    0.401,
+    0,
+    0.71,
+    0.599
+   ],
+   "tokenOut": "assets/bestiary/brawzbedr-t401-000-710-599.webp"
   },
   {
    "slug": "gouzadn",
@@ -484,7 +845,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "SerJ5gYYlRuUmI9k",
    "journalEntryId": "IS7Y75Kbqe5KILXW",
-   "journalPageId": "LO7IdRIzeEGqOvjl"
+   "journalPageId": "LO7IdRIzeEGqOvjl",
+   "token": [
+    0.367,
+    0.024,
+    0.911,
+    0.505
+   ],
+   "tokenOut": "assets/bestiary/gouzadn-t367-024-911-505.webp"
   },
   {
    "slug": "grochslon",
@@ -494,8 +862,16 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorId": "uP9zE6MDiS3TwIWF",
    "journalEntryId": "BUMZ5O0VT9SDjfwE",
    "journalPageId": "zvAUMz9DzP5e9Aec",
+   "token": [
+    0.367,
+    0.035,
+    0.896,
+    0.503
+   ],
+   "tokenOut": "assets/bestiary/gouzadn-t367-035-896-503.webp",
    "retired": [
-    "assets/bestiary/grochslon.webp"
+    "assets/bestiary/grochslon.webp",
+    "assets/bestiary/grochslon-t367-035-896-503.webp"
    ]
   },
   {
@@ -505,7 +881,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "IornEAAcH3j4YRST",
    "journalEntryId": "g8AKcpFJTeVx51xV",
-   "journalPageId": "9ri6PsJH7z67a7UF"
+   "journalPageId": "9ri6PsJH7z67a7UF",
+   "token": [
+    0.085,
+    0,
+    1,
+    0.505
+   ],
+   "tokenOut": "assets/bestiary/corrupted-glasbren-t085-000-1000-505.webp"
   },
   {
    "slug": "butcherbird",
@@ -514,7 +897,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "dLxI39zRgbt5baD5",
    "journalEntryId": "vuCG2gnrr5slc2Cj",
-   "journalPageId": "PSKZl8G6n6RRlEXd"
+   "journalPageId": "PSKZl8G6n6RRlEXd",
+   "token": [
+    0.558,
+    0.348,
+    0.89,
+    1
+   ],
+   "tokenOut": "assets/bestiary/butcherbird-t558-348-890-1000.webp"
   },
   {
    "slug": "ceirwmawr",
@@ -523,7 +913,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "Qe9HW1xQCicVwtGC",
    "journalEntryId": "idLzu8GfQknwWCby",
-   "journalPageId": "nal7Fmjmg5Grpcvw"
+   "journalPageId": "nal7Fmjmg5Grpcvw",
+   "token": [
+    0.362,
+    0.24,
+    0.704,
+    0.726
+   ],
+   "tokenOut": "assets/bestiary/ceirwmawr-t362-240-704-726.webp"
   },
   {
    "slug": "cynddaraig",
@@ -532,7 +929,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "BVvWxKNlDdOzu9Ac",
    "journalEntryId": "JWXOAXD9nd8rkB3I",
-   "journalPageId": "oXF62e14JnnztVEB"
+   "journalPageId": "oXF62e14JnnztVEB",
+   "token": [
+    0.574,
+    0,
+    1,
+    0.687
+   ],
+   "tokenOut": "assets/bestiary/cynddaraig-t574-000-1000-687.webp"
   },
   {
    "slug": "feathered-drake",
@@ -541,7 +945,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "30NDurP2YczoGj6B",
    "journalEntryId": "T17yRp50eDt8cyXO",
-   "journalPageId": "57hELMNqLR2FRrIf"
+   "journalPageId": "57hELMNqLR2FRrIf",
+   "token": [
+    0.488,
+    0.464,
+    0.7,
+    0.886
+   ],
+   "tokenOut": "assets/bestiary/feathered-drake-t488-464-700-886.webp"
   },
   {
    "slug": "hagr",
@@ -550,7 +961,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "fz8g74CpQcYrqSki",
    "journalEntryId": "ckxdN0P9cHJfsZgQ",
-   "journalPageId": "dPV0t98P6gx0ClE8"
+   "journalPageId": "dPV0t98P6gx0ClE8",
+   "token": [
+    0.395,
+    0.02,
+    0.767,
+    0.558
+   ],
+   "tokenOut": "assets/bestiary/hagr-t395-020-767-558.webp"
   },
   {
    "slug": "nine-fingered-stranger",
@@ -559,7 +977,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "Kh5NQGe2zSAEV3BZ",
    "journalEntryId": "SUe3zYQvT9AGKgzG",
-   "journalPageId": "m9OXzvC1peHLx1TF"
+   "journalPageId": "m9OXzvC1peHLx1TF",
+   "token": [
+    0.268,
+    0.153,
+    0.996,
+    0.625
+   ],
+   "tokenOut": "assets/bestiary/nine-fingered-stranger-t268-153-996-625.webp"
   },
   {
    "slug": "plasmic-horror",
@@ -568,7 +993,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "nh6h60KGgx2IlxfF",
    "journalEntryId": "mBQElv2JfT8AW8KH",
-   "journalPageId": "jtqfx2ZFWSNH0fpi"
+   "journalPageId": "jtqfx2ZFWSNH0fpi",
+   "token": [
+    0.568,
+    0,
+    1,
+    1
+   ],
+   "tokenOut": "assets/bestiary/plasmic-horror-t568-000-1000-1000.webp"
   },
   {
    "slug": "kyakaara",
@@ -577,7 +1009,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "Iyc7KUONkBO5Ibyz",
    "journalEntryId": "pOtdFLTTywDCKXPM",
-   "journalPageId": "aLuITGoixs7zCyQb"
+   "journalPageId": "aLuITGoixs7zCyQb",
+   "token": [
+    0.446,
+    0.117,
+    0.61,
+    0.611
+   ],
+   "tokenOut": "assets/bestiary/kyakaara-t446-117-610-611.webp"
   },
   {
    "slug": "kleztigr",
@@ -586,7 +1025,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "8nNyWAoSsT3VXRx5",
    "journalEntryId": "3e1HimZxPWvqLyu1",
-   "journalPageId": "YjdBd1dbn0ZqMdb9"
+   "journalPageId": "YjdBd1dbn0ZqMdb9",
+   "token": [
+    0.062,
+    0,
+    0.473,
+    0.742
+   ],
+   "tokenOut": "assets/bestiary/kleztigr-t062-000-473-742.webp"
   },
   {
    "slug": "pack-drake",
@@ -595,7 +1041,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "W7YFeowcF0yptQC3",
    "journalEntryId": "Gxjvid2IYJmTU41M",
-   "journalPageId": "N96qyRiHh4FbeFhq"
+   "journalPageId": "N96qyRiHh4FbeFhq",
+   "token": [
+    0.664,
+    0.422,
+    0.888,
+    1
+   ],
+   "tokenOut": "assets/bestiary/pack-drake-t664-422-888-1000.webp"
   },
   {
    "slug": "crinwin-broodfather",
@@ -604,7 +1057,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "hZq0cfLjfytNVrWs",
    "journalEntryId": "Ttz6Fnr2M0HNfIre",
-   "journalPageId": "FUyYoLbaxcMQ2XTA"
+   "journalPageId": "FUyYoLbaxcMQ2XTA",
+   "token": [
+    0,
+    0,
+    1,
+    0.429
+   ],
+   "tokenOut": "assets/bestiary/crinwin-broodfather-t000-000-1000-429.webp"
   },
   {
    "slug": "caralandrao",
@@ -613,7 +1073,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "PFHwDgBNwVbZHEIO",
    "journalEntryId": "eAcyCUGDDeqkLrKJ",
-   "journalPageId": "cEcM0p8CnQAgBvnd"
+   "journalPageId": "cEcM0p8CnQAgBvnd",
+   "token": [
+    0,
+    0.668,
+    0.181,
+    1
+   ],
+   "tokenOut": "assets/bestiary/caralandrao-t000-668-181-1000.webp"
   },
   {
    "slug": "wee-folk",
@@ -622,7 +1089,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "rL761LrHFjJcfArG",
    "journalEntryId": "aThMYefGFmE0mG73",
-   "journalPageId": "wH59rdbyOwJFG5GM"
+   "journalPageId": "wH59rdbyOwJFG5GM",
+   "token": [
+    0.629,
+    0.004,
+    0.898,
+    0.64
+   ],
+   "tokenOut": "assets/bestiary/wee-folk-t629-004-898-640.webp"
   },
   {
    "slug": "wild-horse",
@@ -631,7 +1105,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "uMjVv3GGJowiNCka",
    "journalEntryId": "nXxqWnbt932F98UJ",
-   "journalPageId": "lkhQJa9UPTjB06Dn"
+   "journalPageId": "lkhQJa9UPTjB06Dn",
+   "token": [
+    0.65,
+    0,
+    0.926,
+    0.404
+   ],
+   "tokenOut": "assets/bestiary/wild-horse-t650-000-926-404.webp"
   },
   {
    "slug": "voidblight",
@@ -640,7 +1121,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "P4UPY5CmKLihfSQO",
    "journalEntryId": "smqjMCaaxstHY5nZ",
-   "journalPageId": "4ajv8XIGGNNdJZVz"
+   "journalPageId": "4ajv8XIGGNNdJZVz",
+   "token": [
+    0.65,
+    0.355,
+    0.977,
+    1
+   ],
+   "tokenOut": "assets/bestiary/voidblight-t650-355-977-1000.webp"
   },
   {
    "slug": "shaksa",
@@ -649,7 +1137,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "h9IhOM9HBNmdrzUh",
    "journalEntryId": "JK9EeLUOBHfNoHCw",
-   "journalPageId": "1JLAhM8J2PwfXZpJ"
+   "journalPageId": "1JLAhM8J2PwfXZpJ",
+   "token": [
+    0.363,
+    0,
+    0.888,
+    0.427
+   ],
+   "tokenOut": "assets/bestiary/shaksa-t363-000-888-427.webp"
   },
   {
    "slug": "hollow-fae",
@@ -658,7 +1153,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "0ZKo6trYa54afrSZ",
    "journalEntryId": "KgJ8NTJSYfoMhX0Y",
-   "journalPageId": "LN7fbBXLMvmCRquV"
+   "journalPageId": "LN7fbBXLMvmCRquV",
+   "token": [
+    0.527,
+    0.587,
+    0.855,
+    0.987
+   ],
+   "tokenOut": "assets/bestiary/hollow-fae-t527-587-855-987.webp"
   },
   {
    "slug": "frythanc-fledgling",
@@ -667,7 +1169,14 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorPack": "stonetop-pwd.stonetop-bestiary",
    "actorId": "RGU7Qtp9xioMxQ3k",
    "journalEntryId": "XiAOrP04c2oqpkDg",
-   "journalPageId": "e4br5gsUdpBfugGl"
+   "journalPageId": "e4br5gsUdpBfugGl",
+   "token": [
+    0.05,
+    0,
+    0.81,
+    1
+   ],
+   "tokenOut": "assets/bestiary/frythanc-fledgling-t050-000-810-1000.webp"
   },
   {
    "slug": "assassin",
@@ -677,8 +1186,16 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "actorId": "x6X63ArQe1zZ3tBE",
    "journalEntryId": "ew3px3xfQiIpxEtg",
    "journalPageId": "CdxgzGw6aBI3GYEw",
+   "token": [
+    0.016,
+    0,
+    0.382,
+    0.247
+   ],
+   "tokenOut": "assets/bestiary/adventurer-t016-000-382-247.webp",
    "retired": [
-    "assets/bestiary/assassin.webp"
+    "assets/bestiary/assassin.webp",
+    "assets/bestiary/assassin-t016-000-382-247.webp"
    ]
   }
  ],
@@ -2064,6 +2581,11 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "journalPageId": "stonetopSOp00005",
    "replaces": [
     "assets/maps/map-vicinity.webp"
+   ],
+   "prefer": [
+    "assets/maps/gm-vicinity.webp",
+    "assets/maps/book2-vicinity.webp",
+    "assets/maps/map-vicinity.webp"
    ]
   },
   {
@@ -2073,6 +2595,11 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "journalEntryId": "stonetopSO000001",
    "journalPageId": "stonetopSOp00010",
    "replaces": [
+    "assets/maps/map-worlds-end.webp"
+   ],
+   "prefer": [
+    "assets/maps/gm-worlds-end.webp",
+    "assets/maps/book2-worlds-end.webp",
     "assets/maps/map-worlds-end.webp"
    ]
   },
@@ -2084,7 +2611,24 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "journalPageId": "stonetopSOp00004",
    "replaces": [
     "assets/maps/map-stonetop-village.webp"
+   ],
+   "prefer": [
+    "assets/maps/gm-village.webp",
+    "assets/locations/the-village-of-stonetop-1.webp",
+    "assets/maps/map-stonetop-village.webp"
    ]
+  }
+ ],
+ "gmDiagrams": [
+  {
+   "slug": "core-loop",
+   "name": "The core loop",
+   "out": "assets/diagrams/core-loop.webp"
+  },
+  {
+   "slug": "flow-of-play",
+   "name": "The flow of play",
+   "out": "assets/diagrams/flow-of-play.webp"
   }
  ],
  "treasures": [
@@ -4941,6 +5485,132 @@ export const BOOK2_ART_APPLY_MANIFEST = {
       {
        "out": "assets/bestiary/horned-drake.webp",
        "name": "Horned Drake"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "journalEntryId": "Ttz6Fnr2M0HNfIre",
+   "journalPageId": "FUyYoLbaxcMQ2XTA",
+   "name": "Crinwin",
+   "managed": [
+    "assets/bestiary/crinwin.webp",
+    "assets/bestiary/crinwin-broodfather.webp"
+   ],
+   "slots": [
+    {
+     "slot": "banner",
+     "images": [
+      {
+       "out": "assets/bestiary/crinwin.webp",
+       "name": "Crinwin"
+      }
+     ]
+    },
+    {
+     "slot": "nests",
+     "images": [
+      {
+       "out": "assets/bestiary/crinwin-broodfather.webp",
+       "name": "Crinwin Broodfather"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "journalEntryId": "3Q3V7QXv1XFx1UK8",
+   "journalPageId": "yZnBR4myriobQFz5",
+   "name": "Brennauwed",
+   "managed": [
+    "assets/bestiary/glasbren.webp",
+    "assets/bestiary/hennain.webp"
+   ],
+   "slots": [
+    {
+     "slot": "banner",
+     "images": [
+      {
+       "out": "assets/bestiary/glasbren.webp",
+       "name": "Glasbren"
+      }
+     ]
+    },
+    {
+     "slot": "description",
+     "images": [
+      {
+       "out": "assets/bestiary/hennain.webp",
+       "name": "Hennain"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "journalEntryId": "qUp7ZkpC5FdinUC4",
+   "journalPageId": "MlbyZpkmaCRWrwnL",
+   "name": "Elemental Vortex",
+   "managed": [
+    "assets/bestiary/fire-vortex.webp",
+    "assets/bestiary/lightning-vortex.webp",
+    "assets/bestiary/water-vortex.webp",
+    "assets/bestiary/wind-vortex.webp"
+   ],
+   "slots": [
+    {
+     "slot": "banner",
+     "images": [
+      {
+       "out": "assets/bestiary/fire-vortex.webp",
+       "name": "Fire Vortex"
+      }
+     ]
+    },
+    {
+     "slot": "description",
+     "images": [
+      {
+       "out": "assets/bestiary/lightning-vortex.webp",
+       "name": "Lightning Vortex"
+      },
+      {
+       "out": "assets/bestiary/water-vortex.webp",
+       "name": "Water Vortex"
+      },
+      {
+       "out": "assets/bestiary/wind-vortex.webp",
+       "name": "Wind Vortex"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "journalEntryId": "6wnyTkZl7GRhVM8g",
+   "journalPageId": "6Nw4LldBvZJA3Lm8",
+   "name": "The Pale Hunter",
+   "managed": [
+    "assets/bestiary/ghostly-hounds.webp",
+    "assets/bestiary/the-pale-hunter.webp"
+   ],
+   "slots": [
+    {
+     "slot": "banner",
+     "images": [
+      {
+       "out": "assets/bestiary/the-pale-hunter.webp",
+       "name": "The Pale Hunter"
+      }
+     ]
+    },
+    {
+     "slot": "description",
+     "images": [
+      {
+       "out": "assets/bestiary/ghostly-hounds.webp",
+       "name": "Ghostly Hounds"
       }
      ]
     }

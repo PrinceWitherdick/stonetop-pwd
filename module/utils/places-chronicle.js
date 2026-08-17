@@ -24,6 +24,7 @@ import { ensureChronicleFolder, ensureChronicleJournal, seedChroniclePages, find
 import { getStonetopSteadingActor } from "./world.js";
 import { STEADING_DEFAULTS } from "../actors/steading/StonetopSteading.js";
 import { resolvedFlagProperty } from "../actors/character/StonetopFlags.js";
+import { SYSTEM_ID } from "../system-id.js";
 
 export const PLACES_JOURNAL_NAME = "Places of Interest";
 
@@ -141,7 +142,7 @@ export function findPlacesJournal() {
 /** The page in `journal` for the place at `letter`, matched by its stable key. */
 export function findPlacePage(journal, letter) {
 	const key = placePageKey(letter);
-	return journal?.pages?.find(p => p.getFlag?.("stonetop-pwd", "chronicleKey") === key) ?? null;
+	return journal?.pages?.find(p => p.getFlag?.(SYSTEM_ID, "chronicleKey") === key) ?? null;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { getSetting, setSetting } from "../settings.js";
 import { info, error } from "../utils/logger.js";
+import { ensurePackIndex } from "../utils/pack-index.js";
 import { invalidateLocationSummaryIndex } from "../locations/location-tooltips.js";
 import { makeRewriter, remapPageData, managedHash, carryOverPageState, planSourceRestamp } from "./journal-sync-core.js";
 import { compendiumSourceOf } from "../utils/foundry-compat.js";
@@ -7,6 +8,7 @@ import { progressSlice, progressSubSlice } from "../utils/progress-slice.js";
 import { makePaintYielder } from "../utils/paint-yield.js";
 import { SEEDED_FOLDER_COLORS, rawFolderColor, planSeededFolderColorUpdates, seededFolderColorSignature } from "./seeded-folder-colors.js";
 import { isOurCompendiumRef, seededSourceKeys, compendiumRefTail } from "../migration/compat.js";
+import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
 
 // On a fresh world, copy the system's "Stonetop" JournalEntry compendium (the
 // gazetteer — Locations, Lore, the bundled Journals, and the bestiary codex) into
@@ -63,7 +65,7 @@ export async function seedCompendiumJournalsOnce({ onProgress } = {}) {
 
 	const packs = game.packs.filter(
 		p => p.documentName === "JournalEntry"
-			&& p.metadata?.packageName === "stonetop-pwd"
+			&& p.metadata?.packageName === SYSTEM_ID
 	);
 
 	// compendium entry uuid → freshly-imported world entry uuid. The generators'
@@ -83,7 +85,7 @@ export async function seedCompendiumJournalsOnce({ onProgress } = {}) {
 				onProgress: progressSlice(onProgress, packBounds(i)),
 			});
 			if (!Array.isArray(docs)) continue;
-			await pack.getIndex();
+			await ensurePackIndex(pack.collection);
 			const worldUuidByName = new Map(docs.map(d => [d.name, d.uuid]));
 			for (const idx of pack.index) {
 				const worldUuid = worldUuidByName.get(idx.name);
@@ -269,7 +271,7 @@ async function stampJournalBaselines(entries, { onProgress } = {}) {
 	const version = game.system.version;
 	for (const [i, entry] of entries.entries()) {
 		onProgress?.({ fraction: i / entries.length, detail: `Fingerprinting journals (${i + 1} of ${entries.length})` });
-		try { await entry.setFlag("stonetop-pwd", "journalSync", { hash: managedHash(entry.toObject()), version }); }
+		try { await entry.setFlag(SYSTEM_ID, "journalSync", { hash: managedHash(entry.toObject()), version }); }
 		catch (err) { error(`Failed to fingerprint seeded journal "${entry.name}":`, err); }
 	}
 }
@@ -320,7 +322,7 @@ export async function syncSeededFolderColors() {
 }
 
 // The merged journal compendium every seeded/imported world entry originates from.
-const JOURNAL_PACK_ID = "stonetop-pwd.stonetop-journal";
+const JOURNAL_PACK_ID = JOURNAL_PACK;
 
 // Restore the `_stats.compendiumSource` stamp on world journals imported from our pack
 // without it — a GM who deleted the world journals and re-imported the compendium another
@@ -336,7 +338,8 @@ export async function restampSeededJournalSources() {
 	if (!pack) return;
 	let updates;
 	try {
-		updates = planSourceRestamp(game.journal ?? [], await pack.getIndex(), pack.collection);
+		updates = planSourceRestamp(
+			game.journal ?? [], (await ensurePackIndex(pack.collection))?.index ?? [], pack.collection);
 	} catch (err) {
 		error("Failed to index the journal pack for re-stamping:", err);
 		return;
@@ -404,7 +407,7 @@ async function shippedJournalsByTail() {
 // reader's checkbox state (`flags.stonetop.checks`) with it. The hyphen in the scope is safe
 // here because this is a string key, not a property access.
 function stampUpdate(entry, hash, version) {
-	return { _id: entry.id, "flags.stonetop-pwd.journalSync": { hash, version } };
+	return { _id: entry.id, [`flags.${SYSTEM_ID}.journalSync`]: { hash, version } };
 }
 
 // On a system-version bump, roll newly-shipped journal content into the world — but
@@ -457,7 +460,7 @@ export async function updateSeededJournalsOnVersionChange({ onProgress } = {}) {
 		if (!source) continue; // entry dropped from the pack this version — leave the world copy
 
 		const worldHash = managedHash(entry.toObject());
-		const baseline = entry.getFlag("stonetop-pwd", "journalSync");
+		const baseline = entry.getFlag(SYSTEM_ID, "journalSync");
 		// GM-edited: fingerprint drifted from what we last wrote. Hands off.
 		if (baseline?.hash && baseline.hash !== worldHash) { skipped.push(entry.name); continue; }
 
@@ -493,7 +496,7 @@ export async function updateSeededJournalsOnVersionChange({ onProgress } = {}) {
 			await entry.createEmbeddedDocuments("JournalEntryPage", pagesToCreate, { keepId: false });
 			if (oldPageIds.length) await entry.deleteEmbeddedDocuments("JournalEntryPage", oldPageIds);
 			if (entry.name !== srcData.name) await entry.update({ name: srcData.name });
-			await entry.setFlag("stonetop-pwd", "journalSync", { hash: newHash, version });
+			await entry.setFlag(SYSTEM_ID, "journalSync", { hash: newHash, version });
 			updated.push(entry.name);
 		} catch (err) {
 			error(`Failed to refresh seeded journal "${entry.name}":`, err);

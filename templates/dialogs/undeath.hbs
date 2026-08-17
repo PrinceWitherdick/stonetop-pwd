@@ -27,8 +27,19 @@
 
 	{{#if isResolve}}
 	<div class="undeath-step undeath-step--resolve">
+		{{#if forcedMiss.on}}
+		{{! The same tick as the roll step, carried through so it can be TAKEN BACK. Turning it on
+		    resolves the move as a 6- and jumps straight to this step, which used to leave the only
+		    control that undoes it behind on a step no longer on screen: a mis-click cost the whole
+		    window, and the roll could only be reached again by cancelling and reopening. }}
+		<label class="undeath-toggle">
+			<input type="checkbox" class="undeath-forced-miss" checked>
+			<span>{{forcedMiss.label}}</span>
+		</label>
+		{{/if}}
+
 		{{#if rolledTotal}}
-		<p class="undeath-result-banner">You rolled <strong>{{rolledTotal}}</strong> &mdash; <strong>{{tierLabel}}</strong>.</p>
+		<p class="undeath-result-banner">You rolled <strong>{{rolledTotal}}</strong>, <strong>{{tierLabel}}</strong>.</p>
 		{{/if}}
 
 		{{#if hp}}
@@ -42,7 +53,7 @@
 		<p class="undeath-hp">
 			Your essence disperses until the next sunset. You reform near
 			{{#if tether}}<strong>{{tether}}</strong>{{else}}your tether{{/if}}
-			with <strong>{{disperses}} HP</strong> &mdash; reform from your Special Moves tab when you do.
+			with <strong>{{disperses}} HP</strong>. Reform from your Special Moves tab when you do.
 		</p>
 		{{/unless}}
 
@@ -76,7 +87,7 @@
 			{{#if allApply}}
 			All of these apply:
 			{{else}}
-			Choose {{pick}} &mdash; <span class="undeath-pick-count">{{pickedCount}} of {{pick}} taken</span>:
+			Choose {{pick}}, <span class="undeath-pick-count">{{pickedCount}} of {{pick}} taken</span>:
 			{{/if}}
 		</p>
 
@@ -90,7 +101,7 @@
 				</label>
 
 				{{#if exhausted}}
-				<p class="undeath-hint">Nothing left to take here &mdash; they're all already marked.</p>
+				<p class="undeath-hint">Nothing left to take here: they're all already marked.</p>
 				{{else if picked}}
 					{{#if (eq kind "task")}}
 					<input type="text" class="undeath-task-input" value="{{choice}}"

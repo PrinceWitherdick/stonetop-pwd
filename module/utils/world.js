@@ -7,10 +7,19 @@ export function getStonetopSteadingActor() {
 
 // Like getStonetopSteadingActor, but warns (and returns null) when no steading exists
 // yet — the one home for the "not found" wording, shared by the jump-to-steading
-// shortcut and the Seasons Change hotbar macro (see hooks/Ready.js).
-export function getStonetopSteadingActorOrWarn() {
+// shortcut, the Seasons Change hotbar macro (see hooks/Ready.js) and the GM Toolkit's
+// prep tabs.
+//
+// `because` appends what the caller was about to do, for the places where "no steading"
+// is not the whole answer — GM prep is filed in a journal the steading points at, so a
+// GM told only "no steading was found" is left to guess what that has to do with writing
+// up a threat. The SENTENCE still lives here, so it can only be worded once.
+export function getStonetopSteadingActorOrWarn({ because = "" } = {}) {
 	const steading = getStonetopSteadingActor();
-	if (!steading) ui.notifications?.warn?.("No Stonetop steading was found in this world yet.");
+	if (!steading) {
+		ui.notifications?.warn?.(
+			`No Stonetop steading was found in this world yet${because ? `, so ${because}` : ""}.`);
+	}
 	return steading;
 }
 

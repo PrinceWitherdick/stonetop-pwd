@@ -173,7 +173,7 @@
 	<div class="stonetop-levelup-step">
 		<p class="stonetop-levelup-intro">
 			{{{localize "stonetop.specialMoves.levelUp.statIntro"}}}
-			{{#if statMoveName}}<span class="stonetop-levelup-stat-cap-note">{{statMoveName}} — max +{{statCap}}</span>{{/if}}
+			{{#if statMoveName}}<span class="stonetop-levelup-stat-cap-note">{{statMoveName}}: max +{{statCap}}</span>{{/if}}
 		</p>
 		<div class="stonetop-levelup-stat-list">
 			{{#each statOptions}}
@@ -195,7 +195,7 @@
 	<div class="stonetop-levelup-step">
 		<p class="stonetop-levelup-intro">
 			{{{localize "stonetop.specialMoves.levelUp.marksIntro"}}}
-			{{#if markStep}}<span class="stonetop-levelup-stat-cap-note">{{markStep.moveName}} — {{markStep.used}} / {{markStep.allowance}} chosen</span>{{/if}}
+			{{#if markStep}}<span class="stonetop-levelup-stat-cap-note">{{markStep.moveName}}: {{markStep.used}} / {{markStep.allowance}} chosen</span>{{/if}}
 		</p>
 		<div class="stonetop-levelup-mark-list">
 			{{#each markStep.options}}

@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import fs from "node:fs";
-import path from "node:path";
+import { readRepo, readCss, declarations } from "../fakes/css.js";
 
 // The NPC header's name is shrunk to fit the column it has (utils/sheet-chrome.js
 // fitDisplayName) instead of wrapping and pushing the pronouns/traits under it down the header.
@@ -17,17 +16,12 @@ import path from "node:path";
 //    specificity, but only while it is ALSO !important; dropped, the fitted size is overridden
 //    by the very declaration it is meant to replace.
 
-const ROOT = process.cwd();
-const CSS = fs.readFileSync(path.join(ROOT, "styles", "stonetop.css"), "utf8")
-	.replace(/\/\*[\s\S]*?\*\//g, "");
-const SHEET = fs.readFileSync(path.join(ROOT, "module", "actors", "npc", "StonetopNpcSheet.js"), "utf8");
-const CHROME = fs.readFileSync(path.join(ROOT, "module", "utils", "sheet-chrome.js"), "utf8");
+const CSS = readCss();
+const SHEET = readRepo("module/actors/npc/StonetopNpcSheet.js");
+const CHROME = readRepo("module/utils/sheet-chrome.js");
 
-/** The declaration block written for exactly this selector. */
-function block(selector) {
-	const rx = new RegExp(`(^|[,}])\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`, "m");
-	return CSS.match(rx)?.[2] ?? null;
-}
+/** Everything an exact selector declares, across every rule that names it — see fakes/css.js. */
+const block = (selector) => declarations(CSS, selector);
 
 const SIZE_VAR = "--st-npc-name-size";
 const MIN_VAR = "--st-npc-name-min-size";

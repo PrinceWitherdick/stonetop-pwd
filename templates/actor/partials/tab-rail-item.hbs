@@ -17,7 +17,7 @@
       `attentionLabel` with it — the dot is decoration, so the reason has to reach the tooltip
       and the aria-label or it says nothing to anyone who can't see it. --}}
 <a class="item stonetop-tab-rail-item{{#if attention}} stonetop-tab-attention{{/if}}" data-tab="{{tab}}"
-   aria-label="{{label}}{{#if attention}} — {{attentionLabel}}{{/if}}"
-   data-tooltip="{{label}}{{#if attention}} — {{attentionLabel}}{{/if}}" data-tooltip-direction="LEFT">
+   aria-label="{{label}}{{#if attention}}: {{attentionLabel}}{{/if}}"
+   data-tooltip="{{label}}{{#if attention}}: {{attentionLabel}}{{/if}}" data-tooltip-direction="LEFT">
 	<span class="stonetop-tab-icon" aria-hidden="true"></span>
 </a>

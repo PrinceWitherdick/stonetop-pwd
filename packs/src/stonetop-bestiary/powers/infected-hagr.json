@@ -76,7 +76,7 @@
       "_id": "b10cwJRuRBkL5J4f",
       "name": "Fly into a senseless rage",
       "type": "monsterMove",
-      "img": "icons/creatures/abilities/wing-membrane-blue.webp",
+      "img": "icons/creatures/abilities/wings-birdlike-blue.webp",
       "system": {
         "description": "",
         "rollFormula": ""

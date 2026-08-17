@@ -45,6 +45,7 @@ export class UndeathDialog extends StonetopDialog {
 
 		this._picked   = new Set();   // effect kinds the player has taken
 		this._applied  = false;
+		this._maimed   = false;       // set once the maiming is on the wound list; see _applyEffect
 		this._forcedMiss = false;     // Revenant: body destroyed → resolve as a 6-
 		this._tetherDestroyed = false;
 		this._choices  = {};          // effect kind → chosen option slug / text
@@ -110,7 +111,7 @@ export class UndeathDialog extends StonetopDialog {
 		const effects = (res?.effects ?? []).map(e => ({
 			...e,
 			picked:  this._picked.has(e.kind),
-			options: this._optionsFor(e.kind),
+			options: this._selectableFor(e.kind),
 			choice:  this._choices[e.kind] ?? "",
 			// A cost with nothing left to spend can't be taken — every consequence already
 			// marked, say. Flagged rather than hidden, so the player can see why.
@@ -192,23 +193,57 @@ export class UndeathDialog extends StonetopDialog {
 		return _OPTION_KINDS.has(kind) && this._optionsFor(kind).length === 0;
 	}
 
-	/** Every picked effect that needs a choice has one. */
+	/**
+	 * What a dropdown may actually OFFER: everything the kind has left, less the Mark its opposite
+	 * number is already spending.
+	 *
+	 * mark-gain keeps `!o.blocked` and mark-crossoff keeps `!o.marked && !o.crossedOff`, and those
+	 * two overlap on every Mark the character neither holds nor has already lost. A 6- on Dark
+	 * Succor forces both at once, so the same slug could be gained AND crossed off in one apply,
+	 * leaving a Mark that is ticked and struck through together: the tab prints it under "you can
+	 * never gain them", the checkbox beside it is disabled so it can never be unticked again, and
+	 * its 2 max HP are gone for good.
+	 *
+	 * Deliberately NOT folded into _optionsFor, which answers the different question _isExhausted
+	 * counts by — "has this cost anything left to spend at all". One dropdown's pick declaring the
+	 * other exhausted would drop the tier's `available`, and with it the number of costs the move
+	 * is allowed to demand.
+	 */
+	_selectableFor(kind) {
+		const opposite = kind === "mark-gain" ? "mark-crossoff" : kind === "mark-crossoff" ? "mark-gain" : null;
+		const taken = opposite ? this._choices[opposite] : null;
+		const options = this._optionsFor(kind);
+		return taken ? options.filter(o => o.slug !== taken) : options;
+	}
+
+	/** Every picked effect that needs a choice has one, and no Mark is being gained and lost at once. */
 	_choicesComplete() {
 		for (const kind of this._picked) {
 			if (kind === "task") { if (!String(this._choices.task ?? "").trim()) return false; continue; }
 			if (this._optionsFor(kind).length && !this._choices[kind]) return false;
 		}
+		// Behind _selectableFor rather than instead of it: the two selects are independent, so a
+		// choice made before its opposite number narrowed the list survives until a re-render, and
+		// this is the gate Apply is actually held on.
+		const gained = this._choices["mark-gain"];
+		if (gained && this._picked.has("mark-gain") && this._picked.has("mark-crossoff")
+			&& gained === this._choices["mark-crossoff"]) return false;
 		return true;
 	}
 
 	activateListeners(html) {
 		super.activateListeners(html);
 
-		html.find(".undeath-roll-btn").on("click", () => this._onRoll());
-		html.find(".undeath-apply-btn").on("click", () => this._onApply());
+		// Each of the three writing handlers carries a `.catch`, on DeathsDoorDialog's terms (see
+		// _onFateFailed there): they roll their latch back and rethrow, and a click is fired and
+		// forgotten, so without one the rejection only reaches the console and the player is left
+		// looking at a window that appears to have ignored them.
+		html.find(".undeath-roll-btn").on("click", () => this._onRoll().catch(err => this._onApplyFailed(err)));
+		html.find(".undeath-apply-btn").on("click", () => this._onApply().catch(err => this._onApplyFailed(err)));
 		html.find(".undeath-close-btn").on("click", () => this._onFinish());
 		html.find(".undeath-cancel-btn").on("click", () => this.close());
-		html.find(".undeath-alternative-btn").on("click", (ev) => this._onAlternative(ev.currentTarget.dataset.insert));
+		html.find(".undeath-alternative-btn").on("click", (ev) =>
+			this._onAlternative(ev.currentTarget.dataset.insert).catch(err => this._onApplyFailed(err)));
 
 		html.find(".undeath-forced-miss").on("change", (ev) => {
 			this._setForcedMiss(ev.currentTarget.checked);
@@ -363,6 +398,13 @@ export class UndeathDialog extends StonetopDialog {
 		this.renderIfOpen();
 	}
 
+	/**
+	 * An undeath that could not be written. The latch is already back off (every handler rolls it
+	 * back before rethrowing), so this only has to name what failed — StonetopDialog says it and
+	 * redraws. The same failure as DeathsDoorDialog#_onFateFailed, one window along.
+	 */
+	_onApplyFailed(err) { this.reportWriteFailure("undeath resolution", err); }
+
 	/** One effect, applied. Returns the lines it contributes to the summary. */
 	async _applyEffect(kind) {
 		const label = (section, slug) => this._sections[section].find(o => o.slug === slug)?.label ?? slug;
@@ -380,7 +422,7 @@ export class UndeathDialog extends StonetopDialog {
 		if (kind === "mark-crossoff") {
 			const slug = this._choices["mark-crossoff"];
 			if (!slug || !await this._character.crossOffMark(slug)) return [];
-			return [`Crossed off <strong>${escHtml(label(_MARKS, slug))}</strong> — it can never be gained.`];
+			return [`Crossed off <strong>${escHtml(label(_MARKS, slug))}</strong>: it can never be gained.`];
 		}
 		if (kind === "task") {
 			const text = String(this._choices.task ?? "").trim();
@@ -389,13 +431,21 @@ export class UndeathDialog extends StonetopDialog {
 			return [`Your master sets a task: <em>${escHtml(text)}</em>. Favor stays at 0 until it's done.`];
 		}
 		if (kind === "maim") {
+			// Remembered, because this is the ONE effect here that is not idempotent on its own.
+			// The others all ask the model to mark something already marked and are told no
+			// (markSectionOption, crossOffMark) or overwrite a single field (setMasterTask); a
+			// wound is appended to a list, so a second attempt appends a second wound. _onApply
+			// rolls its latch back on a failure precisely so the player CAN click again — which
+			// turned one maiming into two whenever the failure came after this line.
+			if (this._maimed) return [];
 			// "…permanently maimed in some way of the GM's choosing" — a permanent wound is
 			// exactly the sheet's record for that, and it prompts them to name it.
 			await this._character.addWound({
-				text: "Permanently maimed — the GM says how",
+				text: "Permanently maimed: the GM says how",
 				status: "permanent",
 				origin: "wound",
 			});
+			this._maimed = true;
 			return ["Recorded a <strong>permanent maiming</strong> on your wound list."];
 		}
 		if (kind === "out-of-action") return ["Out of the action until the next sunset."];

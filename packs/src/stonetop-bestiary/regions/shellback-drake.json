@@ -42,7 +42,7 @@
       "_id": "G4sgV79J2HchPpE6",
       "name": "Burrow into soil",
       "type": "monsterMove",
-      "img": "icons/environment/wilderness/cave-entrance-dark.webp",
+      "img": "icons/svg/burrow.svg",
       "system": {
         "description": "",
         "rollFormula": ""

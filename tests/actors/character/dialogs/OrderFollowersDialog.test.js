@@ -68,7 +68,7 @@ describe("OrderFollowersDialog", () => {
 			advantage:    true,
 			disadvantage: false,
 			readout:      "Roll 2d6 +1",
-			modeNote:     "Advantage and disadvantage cancel out — rolling straight (p.230).",
+			modeNote:     "Advantage and disadvantage cancel out: rolling straight (p.230).",
 		});
 	});
 

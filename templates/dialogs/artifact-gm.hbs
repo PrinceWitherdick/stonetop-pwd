@@ -1,0 +1,38 @@
+{{!-- The GM's artifact control, Book I pp.430-431: how much of this artifact the player may
+      read, and what there is to read.
+
+      Rendered into a Dialog by StonetopCharacterSheet#_onArtifactGmControl, which harvests the
+      controls by their `name` when Save is pressed — so every field here needs one, and nothing
+      that isn't saved may carry one.
+
+      Context: { states: [{value, labelKey, selected}], note,
+                 fields: [{key, labelKey, hintKey, value, multiline}] } --}}
+<form class="stonetop-artifact-form">
+	<div class="stonetop-artifact-field">
+		<label for="st-artifact-state">{{localize "stonetop.artifact.gmCurrentState"}}</label>
+		<select id="st-artifact-state" name="state">
+			{{#each states}}
+			<option value="{{value}}"{{#if selected}} selected{{/if}}>{{localize labelKey}}</option>
+			{{/each}}
+		</select>
+	</div>
+
+	{{!-- The tags the player can't see yet. Rendered RAW, for the reason the gear row renders
+	      them raw (see inv-note.hbs): a note is authored markup, <em>-wrapped and HTML-escaped
+	      as it was saved (utils/gear-note.js wrapGearNoteTerms), so escaping it a second time
+	      would show the GM their own italics spelled out. It is the ONE value here that isn't
+	      escaped, which is why it says so. --}}
+	{{#if note}}<p class="notes">{{localize "stonetop.artifact.gmTags"}} {{{note}}}</p>{{/if}}
+
+	{{#each fields}}
+	<div class="stonetop-artifact-field">
+		<label for="st-artifact-{{key}}">{{localize labelKey}}</label>
+		{{#if multiline}}
+		<textarea id="st-artifact-{{key}}" name="{{key}}" rows="4">{{value}}</textarea>
+		{{else}}
+		<input id="st-artifact-{{key}}" name="{{key}}" type="text" value="{{value}}">
+		{{/if}}
+		<p class="notes">{{localize hintKey}}</p>
+	</div>
+	{{/each}}
+</form>

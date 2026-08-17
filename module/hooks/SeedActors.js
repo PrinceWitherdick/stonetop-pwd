@@ -1,3 +1,4 @@
+import { BESTIARY_PACK } from "../system-id.js";
 import { getSetting, setSetting } from "../settings.js";
 import { info, error } from "../utils/logger.js";
 import { compendiumRefTail, seededSourceKeys } from "../migration/compat.js";
@@ -17,7 +18,7 @@ import { progressSlice, SEED_FOLDER_PHASE, SEED_BULK_CREATE_FRACTION } from "../
 // imported actors are stamped ownership NONE, so players never see them in their sidebar —
 // matching the GM-only Monsters compendium and the codex's player-spoiler protection.
 
-const BESTIARY_PACK_ID = "stonetop-pwd.stonetop-bestiary";
+const BESTIARY_PACK_ID = BESTIARY_PACK;
 
 /**
  * Whether this world still owes the bestiary import. The seed's own guard, lifted out so the

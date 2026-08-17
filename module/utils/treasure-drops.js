@@ -17,6 +17,7 @@ import { slugify } from "./strings.js";
 import { book2ArtSrc } from "../book2-art/art-root.js";
 import { isInJournalEditor } from "./journal-editor-guard.js";
 import { STONETOP_ITEM_ICONS } from "./item-icon.js";
+import { SYSTEM_ID } from "../system-id.js";
 
 const norm = s => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -76,9 +77,9 @@ function treasureArtSrc(slug) {
 	const settings = globalThis.game?.settings;
 	// guarded: this module is unit-tested outside Foundry, and the setting is absent in a
 	// world running an older system version that hasn't registered it yet
-	if (!settings?.settings?.has?.("stonetop-pwd.treasureArt")) return null;
+	if (!settings?.settings?.has?.(`${SYSTEM_ID}.treasureArt`)) return null;
 	try {
-		const out = settings.get("stonetop-pwd", "treasureArt")?.[slug];
+		const out = settings.get(SYSTEM_ID, "treasureArt")?.[slug];
 		return out ? book2ArtSrc(out) : null;
 	} catch (_) {
 		return null;
@@ -133,7 +134,7 @@ function writeDrag(ev, entry) {
 // too small. The badge CSS sizes them up and paints each in the badge's own colour.
 function badgeHtml(entry) {
 	const parts = [];
-	if (entry.column === "immobile") parts.push(`<span class="st-treasure-weight st-immobile" data-tooltip="Immobile — needs a cart or beast to move, not a personal-load item"><i class="fas fa-dolly"></i></span>`);
+	if (entry.column === "immobile") parts.push(`<span class="st-treasure-weight st-immobile" data-tooltip="Immobile: needs a cart or beast to move, not a personal-load item"><i class="fas fa-dolly"></i></span>`);
 	else if (entry.weight > 0) parts.push(`<span class="st-treasure-weight" data-tooltip="Load ${entry.weight}">${diamondGlyphs(Math.min(entry.weight, 6))}</span>`);
 	else parts.push(`<span class="st-treasure-weight st-small" data-tooltip="Small item (no load)">▫</span>`);
 	if (entry.uses > 0) {

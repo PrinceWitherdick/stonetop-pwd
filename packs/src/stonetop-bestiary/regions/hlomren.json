@@ -43,7 +43,7 @@
       "_id": "z1E8UMosyiYM9bzr",
       "name": "Burrow into, out of, and through loose soil",
       "type": "monsterMove",
-      "img": "icons/environment/wilderness/cave-entrance-dark.webp",
+      "img": "icons/svg/burrow.svg",
       "system": {
         "description": "",
         "rollFormula": ""

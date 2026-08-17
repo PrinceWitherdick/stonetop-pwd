@@ -1,8 +1,8 @@
-import { loadImage, cropToCanvas } from "../book2-art/rebuild-crops.js";
+import { loadImage, cropToCanvas, artImageUrl } from "../book2-art/rebuild-crops.js";
 import {
 	normalizeRect, PORTRAIT_FRAME_BAKE_DIR, documentPortraitFrame, isValidFrame, sameSrc
 } from "./portrait-frame.js";
-import { filePicker } from "./foundry-compat.js";
+import { filePicker, uploadFile } from "./foundry-compat.js";
 
 /**
  * The bridge to the Tokenizer module (`vtta-tokenizer`), which is where a token actually gets made.
@@ -219,8 +219,11 @@ async function ensureDir(dir) {
 export async function bakeFrameToFile(src, rect, { name = "portrait", id = "" } = {}) {
 	const r = normalizeRect(rect);
 	if (!src || !r) return null;
-	const path = String(src).split("#")[0].split("?")[0].replace(/^\/+/, "");
-	const img = await loadImage(encodeURI(foundry.utils.getRoute(path)));
+	// Strip the query/hash before routing, but let artImageUrl decide whether to route at all: a
+	// portrait on a hosted setup is a full Assets Library URL, and putting the world route in front
+	// of one yields `/https://…`, which never loads — so the frame silently never bakes.
+	const path = String(src).split("#")[0].split("?")[0];
+	const img = await loadImage(artImageUrl(path));
 	if (!(img.naturalWidth > 0) || !(img.naturalHeight > 0)) return null;
 
 	const canvas = cropToCanvas(img, r);
@@ -230,6 +233,9 @@ export async function bakeFrameToFile(src, rect, { name = "portrait", id = "" } 
 	const dir = bakeDir();
 	await ensureDir(dir);
 	const file = new File([blob], bakeFileName(name, id), { type: "image/webp" });
-	const result = await FP().upload("data", dir, file, { overwrite: true }, { notify: false });
-	return result?.path ?? `${dir}/${file.name}`;
+	// `uploadFile` already answers null for a refused upload — which is exactly this function's own
+	// "could not bake" signal (see portrait-token-frame.js), so a rejection needs no handling here
+	// beyond passing it along. Stamping a path to a file nobody wrote onto a prototype token is
+	// what that null exists to prevent.
+	return await uploadFile("data", dir, file);
 }

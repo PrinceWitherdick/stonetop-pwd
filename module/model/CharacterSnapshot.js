@@ -86,6 +86,12 @@ export class CharacterSnapshot {
 		// { hp, armor, traitPicks } applied to the Animal Companion card (Beast of
 		// Legend "+4 HP/+1 armor", Magnificent Specimen extra trait picks).
 		this.companionBonuses = b._companionBonuses ?? null;
+		// Who is looking. The gear section already conceals a hidden artifact's tags by this
+		// same fact, so the snapshot answers "may this viewer see GM-only affordances" itself
+		// rather than leaving each caller to bolt the answer on afterwards — a second caller
+		// that passed `viewerIsGM` correctly and forgot the bolt-on would silently lose the
+		// controls. Defaults false, the safe way round.
+		this.isGM            = !!b._isGM;
 	}
 }
 
@@ -104,5 +110,6 @@ export class CharacterSnapshotBuilder {
 	withRollMode(v)        { this._rollMode        = v; return this; }
 	withCrewBonuses(v)     { this._crewBonuses     = v; return this; }
 	withCompanionBonuses(v) { this._companionBonuses = v; return this; }
+	withViewerIsGM(v)      { this._isGM            = v; return this; }
 	build()                { return new CharacterSnapshot(this); }
 }

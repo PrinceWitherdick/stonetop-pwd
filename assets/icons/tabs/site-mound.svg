@@ -1,0 +1,9 @@
+<!-- Sites tab glyph: a mound with an open way in, drawn for this project (see
+     ATTRIBUTION.md). Worn as a CSS mask, so the background square is transparent and only
+     the glyph carries alpha. The dome and the doorway share one path with fill-rule
+     evenodd, which is what punches the entrance out as a hole. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<path d="M0 0h512v512H0z" fill="#ffffff" fill-opacity="0"/>
+	<path fill="#fff" fill-rule="evenodd" d="M48 440C48 244 152 136 256 136S464 244 464 440ZM198 440v-88a58 58 0 0 1 116 0v88Z"/>
+	<path fill="#fff" d="M24 440h464a16 16 0 0 1 0 32H24a16 16 0 0 1 0-32Z"/>
+</svg>

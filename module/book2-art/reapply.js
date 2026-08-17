@@ -6,11 +6,12 @@ import { managedHash } from "../hooks/journal-sync-core.js";
 import { compendiumSourceOf } from "../utils/foundry-compat.js";
 import { openApplications } from "../utils/open-windows.js";
 import { book2ArtRoot, book2ArtSrcWith } from "./art-root.js";
-import { browseArtDirs } from "./browse.js";
+import { browseArtDirs, servedPath } from "./browse.js";
 import { STEADING_ACTOR_TYPE, isSteadingPlaceholderImg } from "../actors/steading/steading-portrait.js";
 import { isBestiaryPlaceholderImg } from "../bestiary/monster-portrait.js";
+import { creatureTypeIcon } from "../bestiary/creature-types.js";
 import { isOurCompendiumRef } from "../migration/compat.js";
-import { packId } from "../system-id.js";
+import { SYSTEM_ID, packId } from "../system-id.js";
 
 // Re-apply the Book II illustrations to the compendia, the world journals, and the
 // world actors, WITHOUT the source PDF.
@@ -72,6 +73,164 @@ export async function hasImportedBook2Art() {
 	return present.size > 0;
 }
 
+// The most art a world can be missing and still read as "an import that fell short" rather than
+// "a book that was never supplied". Book I is 64% of the illustrations and Book II is 36%, and a
+// GM who skipped one is not someone to nudge about a handful of failures — they need the plain
+// import, which the Ready-flow reminder already offers. A run that merely lost some pages comes
+// in far under this: the printing change that could not be matched by size cost 12 of 473, or
+// 2.5%. Well clear of both edges, deliberately, because the useful signal is the ORDER of
+// magnitude and not the exact figure.
+const PARTIAL_IMPORT_MAX_MISSING = 0.10;
+
+/**
+ * The shell the "would this world gain anything?" detectors share.
+ *
+ * Browses the durable art folder once and hands `read` the only two things such a detector
+ * needs: the set of files present, and the `srcOf` that maps a manifest output to the path it
+ * would occupy. Answers null before calling it when NOTHING is imported — the plain import
+ * reminder owns that GM, and every detector here agrees on that.
+ *
+ * Best-effort by construction: a browse that threw reads as "say nothing", which is the safe
+ * default for something that only ever offers. GM-only, since only a GM can browse data files.
+ *
+ * @param {string} failure  What to log if the browse throws.
+ * @param {(ctx: {present: Set<string>, srcOf: (out: any) => string}) => any} read
+ */
+async function withPresentArt(failure, read) {
+	try {
+		const root = book2ArtRoot();
+		const present = await browseDurableArt(root);
+		if (!present.size) return null;                     // never imported; not our nudge to make
+		return read({ present, srcOf: (out) => book2ArtSrcWith(root, out) });
+	} catch (e) {
+		error(failure, e);
+		return null;
+	}
+}
+
+/**
+ * The ordered list of files that could serve one Setting Overview page, best first.
+ *
+ * A row states `prefer` when more than one PDF prints the same picture and they are not equally
+ * good — the GM playbook's 300 dpi Vicinity map beats Book II's ~700px crop of it, which in turn
+ * beats the poster map an early release embedded there. `out` is the row's own picture and
+ * `replaces` is whatever it superseded, which is the older implicit way of saying the same thing.
+ *
+ * ONE chain assembled from whatever the row states, rather than two encodings with one winning.
+ * `prefer` used to be read INSTEAD of `out`/`replaces`, so a row carrying both had a half that
+ * could never run and a row where the two disagreed would silently lose links — and every
+ * consumer had to know which half to read. Ordered, deduped, falsy dropped: for a row that
+ * states only `out`/`replaces` this is exactly the old implicit shape, and for today's rows
+ * (whose `prefer` already covers both) it is exactly `prefer`.
+ *
+ * Every consumer must ask this same question the same way. Which file the page SHOWS and which
+ * files get stripped off it are the two halves of one decision, and a caller that computed the
+ * chain differently would strip the very art another caller had just placed.
+ */
+export function pageChain(row) {
+	return [...new Set([
+		...(Array.isArray(row?.prefer) ? row.prefer : []),
+		row?.out,
+		...(row?.replaces ?? []),
+	])].filter(Boolean);
+}
+
+/**
+ * Every illustration the importer writes, as manifest `out` paths. Deduped: rows legitimately
+ * share a picture (two creatures drawn in one figure, a region's plate that is also its monster's
+ * portrait), and counting one file twice would misreport both halves of the ratio below.
+ *
+ * A Setting Overview map is satisfied by ANY link in its preference chain (`pageChain`), since the
+ * lesser links name art an earlier release — or a GM without the GM playbook — legitimately has
+ * there instead. Counting the chain as one entry is what stops a GM who is on the older map from
+ * reading as incomplete forever.
+ *
+ * `gmDiagrams` is deliberately absent, for the same reason the token squares below are: this ratio
+ * decides whether to tell a GM their import fell short, and the diagrams come from an OPTIONAL
+ * twelve-page PDF. A world with both rulebooks fully imported and no GM playbook has not fallen
+ * short of anything, and counting them would say so on every load, forever.
+ */
+function everyDurableArtPath({ monsters = [], locations = [], settingOverviewMaps = [], treasures = [], people = [], steadings = [] }) {
+	const chains = [];
+	const one = (out) => { if (out) chains.push([out]); };
+	// The creature ILLUSTRATION only. A token square is deliberately NOT counted, even though it is
+	// a manifest `out` like any other: this ratio decides whether to say "your import fell short",
+	// and the remedy it offers is re-running the PDF import. A token square does not come from a
+	// PDF — it is cut locally from the illustration by the rebuild — so a world whose import is
+	// perfect but which has simply not run the rebuild yet is not a world that fell short. Counting
+	// them would also move the ratio by more than the threshold the moment the manifest gains token
+	// rects (73 of 571 = 12.8% against a 10% cap), silently switching the nudge off for everyone.
+	for (const m of monsters) one(m.out);
+	for (const l of locations) for (const im of l.images ?? []) one(im.out);
+	for (const t of treasures) one(t.out);
+	for (const s of steadings) one(s.out);
+	for (const p of people) { one(p.out); one(p.portraitOut); }
+	for (const s of settingOverviewMaps) {
+		const chain = pageChain(s).filter(Boolean);
+		if (chain.length) chains.push(chain);
+	}
+	// Dedupe on the chain's own identity, so a shared picture is one unit of work either way.
+	return [...new Map(chains.map((c) => [c.join("|"), c])).values()];
+}
+
+/**
+ * Whether this world looks like an import that fell short, and by how much.
+ *
+ * A GM whose import failed on some illustrations has no way to know: the failures scroll past in
+ * the console during a run that otherwise reports success, and what they see afterwards is a
+ * handful of entries that never got their picture. This is the detector behind the once-only
+ * offer to finish the job (hooks/Ready.js), and it deliberately describes the SHAPE of the
+ * problem rather than any particular cause. The printing change that prompted it is one way to
+ * get here; a page that timed out, a PDF that stopped being readable part way, and a run the GM
+ * closed early all land in the same place and all have the same remedy.
+ *
+ * Returns null when there is nothing to say: nothing imported at all (the plain import reminder
+ * owns that GM), nothing missing, or so much missing that a whole book is clearly absent.
+ *
+ * @returns {Promise<{missing: number, total: number} | null>}
+ */
+export async function countMissingDurableArt() {
+	return withPresentArt("Book II art: could not check whether the import is complete", ({ present, srcOf }) => {
+		const chains = everyDurableArtPath(BOOK2_ART_APPLY_MANIFEST);
+		const missing = chains.filter((chain) => !chain.some((out) => present.has(srcOf(out)))).length;
+		if (!missing) return null;
+		if (missing > chains.length * PARTIAL_IMPORT_MAX_MISSING) return null;   // a whole book is absent
+		return { missing, total: chains.length };
+	});
+}
+
+/**
+ * What this world would gain by also supplying the GM playbook, or null if nothing.
+ *
+ * The GM playbook joined the importer as a third source after worlds had already imported, and it
+ * is the one addition a GM cannot discover for themselves: nothing looks broken to them. Their map
+ * pages carry a map — just not the sharpest one printed — and the two flowcharts live on a sheet
+ * tab whose placeholder they may never scroll to. So the offer behind this (hooks/Ready.js
+ * `_offerGmPlaybookArtOnce`) has to arrive on its own.
+ *
+ * `maps` counts Setting Overview pages showing a LESSER link than the head of their chain. Both
+ * halves of that are load-bearing. A page whose best link is already on disk has nothing to gain;
+ * a page with NO link on disk is a partial import rather than a world that would benefit from a
+ * new source, and `countMissingDurableArt` above owns that GM — telling someone whose maps are
+ * missing entirely that their maps could be sharper is nonsense.
+ *
+ * Returns null when nothing is imported at all (the plain import reminder owns that GM, and the
+ * playbook is a field on the very dialog its button opens), and when there is nothing to add.
+ *
+ * @returns {Promise<{maps: number, diagrams: number} | null>}
+ */
+export async function countGmPlaybookGains() {
+	return withPresentArt("Book II art: could not check what the GM playbook would add", ({ present, srcOf }) => {
+		const { settingOverviewMaps = [], gmDiagrams = [] } = BOOK2_ART_APPLY_MANIFEST;
+		const maps = settingOverviewMaps.filter((s) => {
+			const chain = pageChain(s).filter(Boolean);
+			return chain.length > 1 && !present.has(srcOf(chain[0])) && chain.some((o) => present.has(srcOf(o)));
+		}).length;
+		const diagrams = gmDiagrams.filter((d) => !present.has(srcOf(d.out))).length;
+		return (maps || diagrams) ? { maps, diagrams } : null;
+	});
+}
+
 // Publish which document-less art rows have their illustration on disk into a world-scoped
 // index `setting`. Treasures and "People of Stonetop" portraits are not documents: a treasure's
 // Item is built at drag time (treasure-drops.js reads this index instead), and the steading
@@ -107,11 +266,34 @@ async function refreshArtIndex(setting, rows, present, srcOf, entryOf, label, pa
 	}
 }
 
+/**
+ * Publish what this host puts in front of the art root, so clients that cannot browse can still
+ * resolve a picture (art-root.js `book2ArtPrefix`). Empty on a self-hosted Foundry; the Assets
+ * Library origin on The Forge.
+ *
+ * Only ever published from a listing that actually returned something. A browse that came back
+ * empty cannot distinguish "no art here" from "that call failed", and while an empty index is a
+ * harmless (self-healing) answer to the first, an empty PREFIX is not: it would re-point every
+ * document at a path that does not resolve on this host, which is the failure this whole
+ * mechanism exists to undo.
+ */
+async function refreshArtPrefix(present) {
+	try {
+		if (!present?.size) return;
+		const prefix = present.prefix ?? "";
+		if (getSetting("book2ArtPrefix") === prefix) return;
+		await setSetting("book2ArtPrefix", prefix);
+		info(`Book II art: durable art is served from "${prefix || "the data folder"}"`);
+	} catch (e) {
+		error("Book II art: could not record where the art folder is served from", e);
+	}
+}
+
 // Every document-less art index this module publishes. Exported because a writer of one of these
 // has to bust the browse cache (see browse.js, and the `updateSetting` hook in stonetop.js) — that
 // hook used to name them in a regex of its own, so a fourth index could be added here and silently
 // never invalidate. One list, one place.
-export const ART_INDEX_SETTINGS = ["treasureArt", "peopleArt", "peoplePortraitArt"];
+export const ART_INDEX_SETTINGS = ["treasureArt", "peopleArt", "peoplePortraitArt", "gmDiagramArt"];
 
 // The two People-of-Stonetop indexes, published together because they are read together: a
 // consumer joins them by the illustration `out`, and a square index describing files whose
@@ -142,6 +324,9 @@ export async function publishPeopleArtIndexes() {
 	if (!game.user?.isGM) return;
 	const root = book2ArtRoot();
 	const present = await browseArtDirs(root, ["assets/people"]);
+	// The files this rebuild just wrote are the first listing some worlds ever get back, so record
+	// where the host serves them from here too rather than waiting for the next full pass.
+	await refreshArtPrefix(present);
 	await refreshPeopleArtIndexes(BOOK2_ART_APPLY_MANIFEST.people ?? [], present, (out) => book2ArtSrcWith(root, out));
 }
 
@@ -164,11 +349,22 @@ async function applyWorldPages(worldEntries, page, updateKey, buildNext, noteEnt
 // Minimal portrait + prototype-token update pointing `doc` at `src`, forcing the token
 // fit. For COMPENDIUM docs, which an update resets to the shipped defaults every time.
 // Returns null when nothing would change, so no-op writes are skipped.
-function artUpdate(doc, src) {
+//
+// `tokenSrc` defaults to `src` — one picture doing both jobs, which is what everything but a
+// hand-framed creature wants. A creature with a token square passes its own smaller file, so the
+// token is the square while `img` stays the whole illustration (see monster-tokens.js).
+// The update key for a prototype token's picture. Foundry's own dotted-path idiom, spelled the
+// same way all over this system — named here alone because this file is the only one that reads
+// an update object back after building it (the token counter below), and a counter comparing
+// against its own copy of the string would silently report zero if these writers ever moved to a
+// nested `prototypeToken: {texture: {…}}` form.
+const TOKEN_SRC_KEY = "prototypeToken.texture.src";
+
+function artUpdate(doc, src, tokenSrc = src) {
 	const upd = {};
 	if (doc.img !== src) upd.img = src;
 	const tex = doc.prototypeToken?.texture;
-	if (tex && tex.src !== src) upd["prototypeToken.texture.src"] = src;
+	if (tex && tex.src !== tokenSrc) upd[TOKEN_SRC_KEY] = tokenSrc;
 	if (tex && tex.fit !== TOKEN_FIT) upd["prototypeToken.texture.fit"] = TOKEN_FIT;
 	return Object.keys(upd).length ? upd : null;
 }
@@ -186,7 +382,14 @@ function artUpdate(doc, src) {
 // A portrait/token the group chose is left untouched. The token `fit` is forced ONLY when
 // adopting over a placeholder token, so a GM's "contain" on art that was already ours is never
 // reverted to "cover" on every load. Null when nothing to change.
-function worldMonsterArtUpdate(actor, src, tails) {
+//
+// `tokenSrc` is the creature's hand-framed square when it has one and that file is on disk, else
+// `src` (see monster-tokens.js). It is a THIRD safe case for the token field, not a replacement
+// for the two above: a world whose token still points at the whole illustration is pointing at
+// one of OUR paths, so `ours` already recognises it and the re-point moves it to the square. The
+// reverse also holds — `tails` carries the token path too, so clearing a token square in the
+// picker moves an already-wired token back to the illustration rather than stranding it.
+function worldMonsterArtUpdate(actor, src, tails, tokenSrc = src) {
 	const upd = {};
 	const ours = (path) => tails.some((t) => String(path ?? "").endsWith(t));
 	const imgPlaceholder = isBestiaryPlaceholderImg(actor.img);
@@ -194,9 +397,37 @@ function worldMonsterArtUpdate(actor, src, tails) {
 	const tex = actor.prototypeToken?.texture;
 	if (tex) {
 		const tokPlaceholder = isBestiaryPlaceholderImg(tex.src);
-		if ((ours(tex.src) || tokPlaceholder) && tex.src !== src) upd["prototypeToken.texture.src"] = src;
+		if ((ours(tex.src) || tokPlaceholder) && tex.src !== tokenSrc) upd[TOKEN_SRC_KEY] = tokenSrc;
 		if (tokPlaceholder && tex.fit !== TOKEN_FIT) upd["prototypeToken.texture.fit"] = TOKEN_FIT;
 	}
+	return Object.keys(upd).length ? upd : null;
+}
+
+// The mirror of worldMonsterArtUpdate, for art that has gone the other way: this actor still
+// points at one of OUR durable paths, and that file is no longer on disk. A partial import is the
+// ordinary way in (a printing that re-saved an illustration the matcher could not find, a page
+// that timed out), as is re-importing into a fresh art folder after moving or clearing the old
+// one. Nothing else ever clears it: the compendium is reset to art-less defaults by any system
+// update, but a world actor survives updates, and the passes above only ever wire art that IS
+// present — so the broken image sits on the sheet, the token and every catalog row indefinitely.
+//
+// It reverts to the creature-type icon, which is the same shipped placeholder SeedActors gave the
+// actor before any import. That matters beyond looking tidy: isBestiaryPlaceholderImg reads it as
+// a placeholder again, so the moment the GM does re-import, the adopt-over-placeholder path picks
+// the picture straight back up. Nothing is lost and nothing needs undoing.
+//
+// Only ever touches paths that are ALREADY ours, on exactly the same `tails` test the re-point
+// uses, so a portrait the group chose is untouched here as everywhere else. Null when there is
+// nothing to change.
+function staleMonsterArtReset(actor, tails) {
+	const ours = (path) => tails.some((t) => String(path ?? "").endsWith(t));
+	// Read at call time, like isBestiaryPlaceholderImg, so it reflects the running Foundry.
+	const fallback = creatureTypeIcon(actor.system?.creatureType)
+		?? globalThis.CONST?.DEFAULT_TOKEN ?? "icons/svg/mystery-man.svg";
+	const upd = {};
+	if (ours(actor.img) && actor.img !== fallback) upd.img = fallback;
+	const tex = actor.prototypeToken?.texture;
+	if (tex && ours(tex.src) && tex.src !== fallback) upd[TOKEN_SRC_KEY] = fallback;
 	return Object.keys(upd).length ? upd : null;
 }
 
@@ -279,9 +510,11 @@ function rerenderOpenCompendia(packs) {
 //   • cheapWorldSkip — in the world-journal passes, skip the compendium read for any row
 //                    whose art is already present in every matching world entry. Makes the
 //                    every-load self-heal near-free once everything is applied.
+//   • quiet        — do the work but skip the finishing toast. For a caller that runs this as
+//                    one step of a larger job and reports that job's result itself.
 // Returns a stats object ({ errors, total, … }) on a completed pass, or null when it could
 // not run (not GM / nothing on disk / packs missing) so the caller can decide about stamping.
-export async function reapplyBook2Art({ entries = null, worldOnly = false, cheapWorldSkip = false } = {}) {
+export async function reapplyBook2Art({ entries = null, worldOnly = false, cheapWorldSkip = false, quiet = false } = {}) {
 	if (!game.user?.isGM) return null;
 	const version = game.system.version;
 	const onlyWorld = worldOnly || Array.isArray(entries);
@@ -291,8 +524,31 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 
 	// book2ArtSrc with the root hoisted: this runs once per manifest row per pass, and the
 	// root cannot change mid-pass, so there's no reason to re-read the setting each time.
+	//
+	// This is the IDENTITY of a picture — what the browse is asked about and what an art index is
+	// keyed by. What a DOCUMENT gets pointed at is `servedOf`: the path the host actually listed
+	// the file under, which off a hosted setup is the very same string (see browse.js).
 	const srcOf = (out) => book2ArtSrcWith(root, out);
-	const { monsters, locations, settingOverviewMaps = [], treasures = [], people = [], codex = [], steadings = [] } = BOOK2_ART_APPLY_MANIFEST;
+	// `resolve` is asked rather than rebuilt from the published prefix, because it is the listing's
+	// own answer for THIS file — no assumption that one prefix fits every directory, and no window
+	// where the setting has not caught up with what was just browsed.
+	const servedOf = (out) => servedPath(present, srcOf(out));
+	// Every spelling of one picture this system could ever have written onto a page: the bare
+	// identity (what every build before hosted support embedded), whatever the host is serving it
+	// as now, and the identity under the published prefix — which is the one that catches a file
+	// that has since been DELETED, where `resolve` has nothing to answer with. Deduped, because on
+	// a self-hosted world all three are the same string and a strip set of three copies of one path
+	// would just do the same work three times.
+	const bothOf = (out) => [...new Set([srcOf(out), servedOf(out), `${present.prefix ?? ""}${srcOf(out)}`])];
+	// Those same spellings MINUS the one we are about to place: the stale <img> a previous pass
+	// left behind, so it comes off the page instead of sitting beside the new one as a permanent
+	// broken image. Empty on a self-hosted world, so this is inert there.
+	const renamedOf = (out) => bothOf(out).filter((p) => p !== servedOf(out));
+	const { monsters, locations, settingOverviewMaps = [], gmDiagrams = [], treasures = [], people = [], codex = [], steadings = [] } = BOOK2_ART_APPLY_MANIFEST;
+
+	// Before the indexes: they are keyed by identity, but every consumer resolves through the
+	// prefix, so publishing it late would leave one load pointing players at unresolvable art.
+	await refreshArtPrefix(present);
 
 	// Treasures first, and BEFORE the nothing-on-disk return below. They are not documents,
 	// so publishing which of them have a file on disk, and where, is their whole apply step —
@@ -303,6 +559,11 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 	// also the safe failure mode if a browse fails transiently — a dropped item falls back
 	// to its load-class icon, and the next load restores the index.
 	await refreshArtIndex("treasureArt", treasures, present, srcOf, (t) => [t.slug, t.out], "treasure");
+	// The GM playbook's two flowcharts, for exactly the same reasons as the treasures above: no
+	// document points at them, so the index IS the apply step, and it must stay authoritative so a
+	// GM who cleared the art folder gets a Core Loop tab that says "not imported" rather than two
+	// broken images.
+	await refreshArtIndex("gmDiagramArt", gmDiagrams, present, srcOf, (d) => [d.slug, d.out], "GM playbook diagram");
 	// People-of-Stonetop portraits are document-less too. But UNLIKE treasures, this reapply is
 	// NOT their publisher: a portrait's display name lives only in the Import Book Art macro's
 	// manifest (`kind:"person"` rows), so the macro publishes `peopleArt` itself, additively, from
@@ -326,23 +587,41 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 	// Only wire art that is actually on disk (a partial import must not point a
 	// document at a file that isn't there).
 	const available = new Set();
-	for (const m of monsters) if (present.has(srcOf(m.out))) available.add(m.out);
+	for (const m of monsters) {
+		if (present.has(srcOf(m.out))) available.add(m.out);
+		// The hand-framed token square is a SEPARATE file with its own presence: a GM who
+		// imported before tokens existed has every illustration and none of the squares, and
+		// must keep a working token rather than a broken image, until the rebuild cuts them.
+		if (m.tokenOut && present.has(srcOf(m.tokenOut))) available.add(m.tokenOut);
+	}
 	for (const l of locations) for (const im of l.images) if (present.has(srcOf(im.out))) available.add(im.out);
+	// The picture a creature's TOKEN should show: its square when the manifest names one AND that
+	// file is on disk, else the whole illustration. Stated once, because the compendium pass and
+	// the world-actor pass have to agree — a token wired to the square in one and the illustration
+	// in the other would flip back and forth on every load.
+	const tokenSrcOf = (m, src) => (m.tokenOut && available.has(m.tokenOut) ? servedOf(m.tokenOut) : src);
 
 	// Setting Overview maps resolve their preference chain HERE rather than in pass 2.5, so
-	// the rule is stated once and the early return below can see their work. Each row is an
-	// ORDERED preference: the Book II page crop (`out`) first, then `replaces` — the
-	// user-supplied poster map an earlier release embedded here. Show the best one on disk
-	// and supersede the rest. Preferring `out` is the upgrade (a world still showing the
-	// poster map gets the labelled Book II map instead); falling back matters just as much,
-	// because a GM who has not re-run the macro — or who has no Book II PDF at all — still
-	// has only the poster map on disk, and skipping the row outright would leave them
+	// the rule is stated once and the early return below can see their work. `pageChain` is that
+	// ordering, best first: the GM playbook's 300 dpi map where the GM imported one, then the
+	// Book II page crop, then the user-supplied poster map an early release embedded here. Show
+	// the best one on disk and supersede the rest. Walking DOWN the chain is the upgrade (a world
+	// still showing the poster map gets a labelled printed map instead); falling back matters just
+	// as much, because a GM who has not re-run the macro — or who has none of those PDFs at all —
+	// still has only the poster map on disk, and skipping the row outright would leave them
 	// staring at a blank page where their map used to be. The poster map file is never
 	// touched: it still backs its Scene.
 	const mapPicks = settingOverviewMaps.flatMap((s) => {
-		const chain = [s.out, ...(s.replaces ?? [])];
+		const chain = pageChain(s);
 		const pick = chain.find((o) => present.has(srcOf(o)));
-		return pick ? [{ s, src: srcOf(pick), replaces: chain.filter((o) => o !== pick).map(srcOf) }] : [];
+		// Both the OTHER links in the chain and the stale spellings of the pick itself:
+		// superseding the poster map and re-pointing a map this host now serves from somewhere
+		// else are the same operation on the page, so one list covers both.
+		return pick ? [{
+			s,
+			src: servedOf(pick),
+			replaces: [...chain.filter((o) => o !== pick).flatMap(bothOf), ...renamedOf(pick)],
+		}] : [];
 	});
 	// Nothing of ours on disk at all — not a document image, not a map, not the steading
 	// portrait. (Maps count even though they never enter `available`: a GM who only ever
@@ -357,6 +636,10 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 	// it may let a world through that turns out to have no bestiary actors of ours, which pass 3
 	// then no-ops over — the cheap, correct failure mode. Skipped on a scoped import (no actors).
 	const monstersOnDisk = !Array.isArray(entries) && monsters.some((m) => present.has(srcOf(m.out)));
+	// The same signal for location plates, and used for the same one thing: deciding whether an
+	// absent file is really absent, or whether the browse simply came back empty. Not scoped to a
+	// scoped import, unlike the flag above, because the page passes DO run on one.
+	const locationsOnDisk = locations.some((l) => l.images.some((im) => present.has(srcOf(im.out))));
 	if (!available.size && !mapPicks.length && !steadingOnDisk) return null;
 
 	const besPack = game.packs.get(monsters[0]?.actorPack ?? BES_PACK);
@@ -387,14 +670,14 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 	const touchedEntries = new Map();
 	const noteEntry = (entry) => {
 		if (touchedEntries.has(entry)) return;
-		const base = entry.getFlag?.("stonetop-pwd", "journalSync");
+		const base = entry.getFlag?.(SYSTEM_ID, "journalSync");
 		let pristine = false;
 		try { pristine = !!base?.hash && base.hash === managedHash(entry.toObject()); } catch (_) { /* treat as edited */ }
 		touchedEntries.set(entry, { base, pristine });
 	};
 
 	const relock = [];
-	let actors = 0, besPages = 0, codexPages = 0, locPages = 0, soPages = 0, worldActors = 0, worldJournalPages = 0, steadingActors = 0, errors = 0;
+	let actors = 0, besPages = 0, codexPages = 0, locPages = 0, soPages = 0, worldActors = 0, worldJournalPages = 0, steadingActors = 0, worldTokens = 0, errors = 0;
 	try {
 		// Unlock inside the try so the finally relocks whatever we opened even if the
 		// second unlock (or any later step) throws. Only the compendium-writing passes
@@ -405,17 +688,35 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 		//    seeded world journal). Unconditional on the compendium: an update resets it to
 		//    the shipped (art-less) defaults every time, so always re-point.
 		for (const m of monsters) {
-			if (!available.has(m.out)) continue;
-			const src = srcOf(m.out);
+			// This row's picture is NOT on disk. There is nothing to place and no actor art to
+			// wire, but a previous import may have embedded it on the page, and that embed now
+			// renders as a broken image. Carry on with a null `src`, which puts the page half into
+			// strip-only mode, and hand it the absent path as retired — the same mechanism, for
+			// the same reason: it keys on the embed rather than on a file, which is exactly what
+			// is needed when the file is the thing that has gone.
+			//
+			// Gated on some OTHER monster's art being present, like the actor reset above: that is
+			// what separates "this one picture is missing" from "the browse came back empty", and
+			// without it a transient FilePicker failure would strip the art off every bestiary
+			// page at once.
+			const onDisk = available.has(m.out);
+			if (!onDisk && !monstersOnDisk) continue;
+			const src = onDisk ? servedOf(m.out) : null;
 			// Retired art: a src a PRIOR manifest embedded for this creature and this system no
 			// longer names — two entries the book draws in ONE picture now share the one file, so
 			// the loser's embed has to come off the page. Resolved regardless of disk presence,
 			// like the locations pass: it keys on the embed, not on a file.
-			const retired = (m.retired ?? []).map(srcOf);
-			if (!onlyWorld) {
+			// Every spelling of each, so art retired under a bare path comes off a page whose host
+			// has since moved (and vice versa). When the picture is gone, `bothOf` is what strips
+			// the embed even though `resolve` has nothing left to answer with.
+			const retired = [
+				...(m.retired ?? []).flatMap(bothOf),
+				...(onDisk ? renamedOf(m.out) : bothOf(m.out)),
+			];
+			if (!onlyWorld && onDisk) {
 				try {
 					const actor = await besPack.getDocument(m.actorId);
-					const upd = actor && artUpdate(actor, src);
+					const upd = actor && artUpdate(actor, src, tokenSrcOf(m, src));
 					if (upd) { await actor.update(upd); actors++; }
 				} catch (e) { errors++; error(`Book II art re-apply: actor "${m.slug}"`, e); }
 			}
@@ -426,8 +727,11 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 				const worldEntries = worldBySource.get(jrnSource(m.journalEntryId)) ?? [];
 				// Skip the compendium read when this is a world-only pass with no world work:
 				// no matching world entries, or (in cheap mode) every one already has the art.
+				// In strip-only mode there is no art to be missing, so the only work is an embed
+				// left behind — and asking `entryHasSrc` about a null src would search the prose
+				// for the literal "null" and answer at random.
 				const worldNeedsArt = worldEntries.length && (!cheapWorldSkip || worldEntries.some(
-					(e) => !entryHasSrc(e, src) || retired.some((r) => entryHasSrc(e, r))));
+					(e) => (src && !entryHasSrc(e, src)) || retired.some((r) => entryHasSrc(e, r))));
 				if (onlyWorld && !worldNeedsArt) continue;
 				try {
 					const page = (await jrnPack.getDocument(m.journalEntryId))?.pages?.get(m.journalPageId);
@@ -458,11 +762,14 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 				// import never embeds a broken <img>; `managed` stays COMPLETE so a missing
 				// file can still be stripped off a page that already carries it.
 				const curation = {
-					managed: (c.managed ?? []).map(srcOf),
+					// The strip set takes every spelling: this pass is authoritative, so a page still
+					// carrying the bare path from an older build has to lose it before the served
+					// one goes back, or the reader is shown both.
+					managed: (c.managed ?? []).flatMap(bothOf),
 					slots: (c.slots ?? []).map((s) => ({
 						slot: s.slot,
 						images: (s.images ?? []).filter((i) => available.has(i.out))
-							.map((i) => ({ src: srcOf(i.out), name: i.name })),
+							.map((i) => ({ src: servedOf(i.out), name: i.name })),
 					})),
 				};
 				const worldEntries = worldBySource.get(jrnSource(c.journalEntryId)) ?? [];
@@ -497,7 +804,7 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 		//    into the target section body in book order.
 		for (const l of locations) {
 			try {
-				const srcs = l.images.filter((im) => available.has(im.out)).map((im) => srcOf(im.out));
+				const srcs = l.images.filter((im) => available.has(im.out)).map((im) => servedOf(im.out));
 				// Retired art: a src a PRIOR manifest embedded that this system no longer names
 				// (a duplicate extraction we removed, or a plate that turned out to be the same
 				// picture as a creature's portrait and now shares that ONE file). Keyed on the
@@ -510,7 +817,25 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 				// exactly that shape. Nothing is lost by waiting: the leftover embed is cleared
 				// the moment they import the art it was renamed to. (The monster pass gets this
 				// for free — it already skips any creature whose art is not on disk.)
-				const retired = srcs.length === l.images.length ? (l.retired ?? []).map(srcOf) : [];
+				//
+				// An image this row WANTS but cannot find is a different case, and gets stripped
+				// whether or not the rest of the row is complete: there is no replacement to wait
+				// for, because the missing path IS the one the manifest names, so an embed of it
+				// can only ever render as a broken image. Gated on some OTHER location plate being
+				// present, like the bestiary pass, so a browse that failed cannot strip the art off
+				// every location page at once.
+				const gone = locationsOnDisk
+					? l.images.filter((im) => !available.has(im.out)).flatMap((im) => bothOf(im.out))
+					: [];
+				const retired = [
+					...(srcs.length === l.images.length ? (l.retired ?? []).flatMap(bothOf) : []),
+					...gone,
+					// A picture this row still places, but under a path this host no longer serves it
+					// from. NOT gated on the row being complete like the retirees above: this is a
+					// rename with its replacement in hand, so there is nothing to wait for, and
+					// leaving it would put the same illustration on the page twice — once broken.
+					...l.images.filter((im) => available.has(im.out)).flatMap((im) => renamedOf(im.out)),
+				];
 				if (!srcs.length && !retired.length) continue; // nothing to place and nothing to retire
 				const worldEntries = worldBySource.get(jrnSource(l.journalEntryId)) ?? [];
 				const worldNeedsArt = worldEntries.length && (!cheapWorldSkip || worldEntries.some(
@@ -578,14 +903,54 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 				}
 			}
 			for (const m of monsters) {
-				if (!available.has(m.out)) continue;
-				const src = srcOf(m.out);
 				const uuid = `Compendium.${m.actorPack ?? BES_PACK}.Actor.${m.actorId}`;
-				const tails = [`/${m.out}`, ...(m.retired ?? []).map((r) => `/${r}`)];
-				for (const a of actorsBySource.get(uuid) ?? []) {
+				// The token square counts as one of OUR paths too. Both directions need it: a token
+				// still on the whole illustration has to be recognised so it can move ONTO the
+				// square, and a token already on a square has to be recognised so clearing that
+				// square in the picker moves it back rather than stranding it on a deleted file.
+				const ourOuts = [m.out, ...(m.tokenOut ? [m.tokenOut] : []), ...(m.retired ?? [])];
+				// Matched as path TAILS, so a stored path resolves whether it was written bare or
+				// under a host prefix. Kept alongside the outs they came from rather than sliced
+				// back out of, since the absence check below asks about the out.
+				const tails = ourOuts.map((o) => `/${o}`);
+				const worldOnes = actorsBySource.get(uuid) ?? [];
+				// This monster's picture is NOT on disk. Clearing a pointer at it is only honest if
+				// we can tell "this one file is missing" from "the browse came back empty", so it is
+				// gated on some OTHER monster's art being present: that proves the bestiary folder
+				// was read and has content. Without the gate a transient FilePicker failure would
+				// strip all 73 portraits at once, and while the next load would re-adopt them, the
+				// churn is exactly the kind of alarming that a self-heal must never cause.
+				if (!available.has(m.out)) {
+					if (!monstersOnDisk) continue;
+					// Only the paths that are actually GONE, which is not the same list as `tails`.
+					// A creature's token square is stored separately from the illustration it was
+					// cut from, so the square can sit happily on disk while that illustration is
+					// missing — and the reset is field-by-field, so handing it the whole list would
+					// wipe a working token back to the creature-type icon on the strength of the
+					// OTHER file's absence. A retired path is never `available`, so it still resets.
+					const goneTails = ourOuts.filter((o) => !available.has(o)).map((o) => `/${o}`);
+					for (const a of worldOnes) {
+						try {
+							const upd = staleMonsterArtReset(a, goneTails);
+							if (upd) { await a.update(upd); worldActors++; }
+						} catch (e) { errors++; error(`Book II art re-apply: world actor "${a.name ?? a.id}"`, e); }
+					}
+					continue;
+				}
+				const src = servedOf(m.out);
+				const tokSrc = tokenSrcOf(m, src);
+				// Is this creature's token being moved onto its own SQUARE, as opposed to the whole
+				// illustration it falls back to? Counted apart from `worldActors`, because the two
+				// answer different questions: `worldActors` is "how many documents did this pass
+				// write", which includes a portrait re-point and a stale reset, while the rebuild
+				// reports "N creatures now use their token square" and must not claim ones that did
+				// not move — least of all when the manifest names no squares and none could have.
+				const toSquare = !!(m.tokenOut && available.has(m.tokenOut));
+				for (const a of worldOnes) {
 					try {
-						const upd = worldMonsterArtUpdate(a, src, tails);
+						const upd = worldMonsterArtUpdate(a, src, tails, tokSrc);
 						if (upd) { await a.update(upd); worldActors++; }
+						if (toSquare && upd?.[TOKEN_SRC_KEY] === tokSrc) worldTokens++;
 					} catch (e) { errors++; error(`Book II art re-apply: world actor "${a.name ?? a.id}"`, e); }
 				}
 			}
@@ -605,12 +970,11 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 		//    journal import (Array.isArray(entries)) — that must not touch actors. artUpdate forces
 		//    the token fit like the macro does; safe here because we only ever touch a placeholder.
 		if (!Array.isArray(entries)) for (const s of steadings) {
-			const src = srcOf(s.out);
-			if (!present.has(src)) continue;
+			if (!present.has(srcOf(s.out))) continue;
 			try {
 				const actor = game.actors?.find((a) => a.type === STEADING_ACTOR_TYPE);
 				if (!actor || !isSteadingPlaceholderImg(actor.img)) continue;
-				const upd = artUpdate(actor, src);
+				const upd = artUpdate(actor, servedOf(s.out));
 				if (upd) { await actor.update(upd); steadingActors++; }
 			} catch (e) { errors++; error(`Book II art re-apply: steading "${s.slug}"`, e); }
 		}
@@ -622,7 +986,7 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 		//    landed and is idempotent, so a retry would not re-touch the entry to re-stamp it.
 		for (const [entry, { base, pristine }] of touchedEntries) {
 			if (!pristine) continue;
-			try { await entry.setFlag("stonetop-pwd", "journalSync", { hash: managedHash(entry.toObject()), version: base?.version ?? version }); }
+			try { await entry.setFlag(SYSTEM_ID, "journalSync", { hash: managedHash(entry.toObject()), version: base?.version ?? version }); }
 			catch (e) { error(`Book II art re-apply: journal re-stamp "${entry?.name}"`, e); }
 		}
 	} finally {
@@ -641,9 +1005,12 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 	const total = actors + besPages + codexPages + locPages + soPages + worldActors + worldJournalPages + steadingActors;
 	if (total) {
 		info(`Book II art applied: ${actors} actors, ${besPages + codexPages + locPages + soPages} compendium journal pages, ${worldJournalPages} world journal pages, ${worldActors} world actors${steadingActors ? ", steading portrait" : ""}.`);
-		ui.notifications?.info(`Stonetop: added Book II art to ${total} ${total === 1 ? "entry" : "entries"}.`);
+		// The console line always goes out; the TOAST is suppressible. A caller running this as one
+		// step of a larger job reports that job's own result, and two unrelated notifications for one
+		// button press reads as two things having happened.
+		if (!quiet) ui.notifications?.info(`Stonetop: added Book II art to ${total} ${total === 1 ? "entry" : "entries"}.`);
 	}
-	return { errors, total, actors, besPages, codexPages, locPages, soPages, worldActors, worldJournalPages, steadingActors };
+	return { errors, total, actors, besPages, codexPages, locPages, soPages, worldActors, worldJournalPages, steadingActors, worldTokens };
 }
 
 // The version-change trigger: run the full re-apply ONCE per system version, then stamp

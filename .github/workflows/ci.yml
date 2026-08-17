@@ -2,18 +2,58 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+
+# Cancel a run that a newer push to the SAME ref has already superseded.
+#
+# This deliberately does not merge the push/PR pair that a long-lived release PR produces on
+# develop: those refs differ (refs/heads/develop vs refs/pull/N/merge), and the only key that
+# would merge them is the head sha. Keying on the head sha is wrong here because the PR run
+# consistently starts a few seconds after the push run, so cancel-in-progress would
+# systematically kill the PUSH run, which is the only coverage develop has in the stretches
+# when no release PR is open. The duplicate pair is cheap; losing develop coverage is not.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: this workflow only ever reads the tree.
+#
+# It must NEVER be switched to `pull_request_target`. That trigger runs with a writable token
+# and the BASE repo's secrets while checking out a fork's code, which is the standard way a
+# public repo hands its token to a stranger's pull request.
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          node-version: "20"
+          # Nothing after checkout performs a git operation or resolves a dependency over
+          # git, so the checkout has no reason to leave a credential in .git/config.
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "22"
           cache: "npm"
       - run: npm ci
+      - run: npm run lint
       - run: npm test
+
+      # Compile the compendium packs, for the exit code alone.
+      #
+      # This is the one release step no test can stand in for: `npm test` asserts things ABOUT
+      # packs/src (ids, keys, folder depth, source files), but only compilePack actually builds
+      # a LevelDB out of it, and only this step exercises the classic-level native dependency.
+      # Without it, a pack that fails to compile is discovered inside release.yml, which runs on
+      # `release: published`, which is to say AFTER the tag has been pushed.
+      #
+      # Exit code only. The compiled output is gitignored, so it is never diffed against the
+      # tree (539 of the 1204 source files carry a trailing newline that pack.js strips, so a
+      # `git diff --exit-code` here would be one newline away from permanently red) and never
+      # cached or uploaded.
+      - run: npm run pack

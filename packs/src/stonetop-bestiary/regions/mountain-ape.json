@@ -65,7 +65,7 @@
       "_id": "CE0aSf7ulgk2BpSe",
       "name": "Reach out, snatch an intruder by surprise",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""

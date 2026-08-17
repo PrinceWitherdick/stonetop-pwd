@@ -14,7 +14,7 @@ import { usedPersonPortraits } from "../actors/steading/steading-people.js";
 import { getStonetopSteadingActor } from "./world.js";
 import { openPortraitFrameEditor } from "./PortraitFrameDialog.js";
 import { addPopoutHeaderControl, addPortraitFrameControl, addTokenizerControl } from "./popout-header-control.js";
-import { actorFrameHandle } from "./portrait-frame-handles.js";
+import { actorFrameHandle, actorPortraitPickUpdate } from "./portrait-frame-handles.js";
 import { PERSON_DEFAULT_IMG } from "./person-portrait.js";
 import { resolvedFlags } from "../actors/character/StonetopFlags.js";
 import { claimRosterPortraits } from "../actors/character/roster-portraits.js";
@@ -24,7 +24,6 @@ import { documentPortraitFrame, resolvePortrait } from "./portrait-frame.js";
 import { canOpenTokenizer, openTokenizer } from "./portrait-tokenizer.js";
 import { isDefaultImg } from "./strings.js";
 import { format, localize } from "./i18n.js";
-import { SYSTEM_ID } from "../system-id.js";
 
 /**
  * Where the followers a player character keeps store their portraits.
@@ -156,19 +155,22 @@ export function openActorPortraitPicker(actor, { editable = null, onSaved } = {}
 		// are invisible to an actor sweep. Without the second, a face worn by a person from
 		// before roster rows became NPCs read as free from every sheet in the system.
 		used: { ...usedActorPortraits(actor), ...usedPersonPortraits(getStonetopSteadingActor()) },
-		onPick: async (src) => {
-			await actor.update({ img: src ?? "" });
+		// Picture, frame and token in ONE update — see actorPortraitPickUpdate, which owns why all
+		// three move together and which of them a browsed file leaves behind.
+		onPick: async (src, pick) => {
+			await actor.update(actorPortraitPickUpdate(actor, src, pick));
 			onSaved?.(actor.img);
 		},
-		// One atomic update, for the reason the follower card's clear spells out: dropping the
-		// portrait must also drop any frame authored against it, or the actor keeps an orphan
-		// rect. It would not misapply — the frame's `src` stamp neutralises it against a
-		// different picture — but the dead data would accumulate with nothing to ever clear it.
+		// The same one atomic update, through the same helper: "Use default" is a pick whose
+		// picture happens to be the placeholder and which carries no square, and
+		// actorPortraitPickUpdate already answers that — the frame is dropped when the new
+		// picture brings none, and no token key is emitted without a square. Dropping the frame
+		// is the load-bearing half, for the reason the follower card's clear spells out: a rect
+		// measured on the portrait being replaced would otherwise sit there as an orphan. It
+		// would not misapply — the frame's `src` stamp neutralises it against a different
+		// picture — but the dead data would accumulate with nothing to ever clear it.
 		onClear: async () => {
-			await actor.update({
-				img: defaultPortraitFor(actor),
-				[`flags.${SYSTEM_ID}.-=portraitFrame`]: null,
-			});
+			await actor.update(actorPortraitPickUpdate(actor, defaultPortraitFor(actor)));
 			onSaved?.(actor.img);
 		},
 		// A browsed file is the one case with no hand-cut square behind it, so chain straight

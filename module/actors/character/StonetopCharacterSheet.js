@@ -25,6 +25,7 @@ import {FollowerFateDialog} from "./dialogs/FollowerFateDialog.js";
 import {CallUpDeepOnesDialog} from "./dialogs/CallUpDeepOnesDialog.js";
 import {RING_SOURCE_UUID, SERVANT_SOURCE_UUID, buildServantFollower} from "../../data/servant-of-daagon.js";
 import {grantedWeaponForMove, weaponTraitText} from "../../data/weapons.js";
+import {grantedWeaponAttackFor} from "../../combat/attack-flow.js";
 import {ALT_STAT_GRANTS} from "../../data/alt-stat-grants.js";
 import {readOnboardingResume, writeOnboardingResume, clearOnboardingResume} from "./onboarding-resume.js";
 import {trackCreationFlow} from "./creation-flow.js";
@@ -32,6 +33,7 @@ import {CharacterLedger} from "./CharacterLedger.js";
 import {wireTabSearch} from "../../utils/tab-search.js";
 import {createPacker, fitColumns, makeColumns, packShortest, wireMasonry} from "../../utils/masonry.js";
 import {mountTabRail} from "../../utils/tab-rail.js";
+import {injectHeaderToggle} from "../../utils/sheet-chrome.js";
 import {mountScrollFrost} from "../../utils/scroll-frost.js";
 import {withSheetSizeMemory} from "../../utils/sheet-size.js";
 import { crewExists, effectiveCrewSize, customGroupSize, crewAnonMemberLabel, crewIndividualLabel, CREW_SIZE_MAX } from "../../utils/crew.js";
@@ -47,10 +49,12 @@ import {playbookIconPath, partyCharacters} from "../../utils/playbook-actors.js"
 import {postMoveToChat, moveChatCard} from "../../utils/chat.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
 import {knowThingsRollChoices, withAdvantage, KNOW_THINGS_STAT} from "./arcana-identify.js";
+import {ARTIFACT_STATE, artifactStateForTier, knowThingsArtifactResults, seekInsightArtifactResults,
+	ARTIFACT_INSIGHT_QUESTIONS, ARTIFACT_LEAD_SUGGESTIONS} from "./artifact-identify.js";
 import {knowThingsRollOptions} from "./know-things.js";
 import {getStonetopSteadingActor} from "../../utils/world.js";
 import {openChroniclePageForActor} from "../../utils/chronicle.js";
-import {getDragEventData, deletionEntry, imagePopout} from "../../utils/foundry-compat.js";
+import {getDragEventData, deletionEntry, imagePopout, renderTemplate} from "../../utils/foundry-compat.js";
 import {STEADING_DEFAULTS, StonetopSteading} from "../steading/StonetopSteading.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
@@ -62,8 +66,16 @@ import {withSectionEditing} from "../../utils/section-editing.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {annotateInvocationEffects, splitEmpoweredEffect} from "./invocation-effects.js";
 import {CONSECRATED_FLAME, INVOKE_THE_SUN_GOD, EMPOWERED_INVOCATIONS, ownsMoveNamed, showHolyLight} from "./holy-light.js";
-import {showCondemn, condemnedContext, CONDEMN, CENSURE} from "./condemn.js";
+import {ownedMoveNames} from "./owns-move.js";
+import {invocationLabel, invokeNotice, readOngoing, resolveInvocationUse} from "./ongoing-invocation.js";
+import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE} from "./condemn.js";
+import {BINDING_ARBITRATION} from "./oaths.js";
 import {CondemnedDialog} from "./dialogs/CondemnedDialog.js";
+import {showBattleJoy, BATTLE_JOY} from "./battle-joy.js";
+import {
+	showBlessedMarks, BARKSKIN, TRACKLESS_STEP, SHARED_SOULS, AMULETS_TALISMANS, WARDS_BINDINGS,
+} from "./blessed-marks.js";
+import {BlessedMarksDialog} from "./dialogs/BlessedMarksDialog.js";
 import {wrapGlyphTextContainers} from "../../utils/glyphs.js";
 import {StonetopAutocomplete} from "../../utils/autocomplete.js";
 import {canAuthorCustomMoves, canCreateArcana} from "../../utils/authoring-gates.js";
@@ -81,7 +93,7 @@ import {FOLLOWER_DRAG_TYPE} from "../../data/follower-actor.js";
 import {CREW_INDIVIDUAL_NAMES, CREW_INDIVIDUAL_TAGS, CREW_INDIVIDUAL_TRAITS} from "../../data/steading-members.js";
 import {resolvePortrait, portraitActionLabel} from "../../utils/portrait-frame.js";
 import {displayPortraitSrc} from "../../book2-art/people-portraits.js";
-import {followerFrameHandle, rosterMemberFrameHandle} from "../../utils/portrait-frame-handles.js";
+import {followerFrameHandle, rosterMemberFrameHandle, followerPortraitPickUpdate, followerPortraitClearUpdate} from "../../utils/portrait-frame-handles.js";
 import {clearRosterPortrait, readRosterPortrait, rosterAvatarContext, rosterPortraitList, rosterPortraitListPath, writeRosterPortrait} from "./roster-portraits.js";
 import {openPortraitFrameEditor} from "../../utils/PortraitFrameDialog.js";
 import {headerPortraitContext, usedActorPortraits, wirePortraitPopout, pointImagePopoutAt} from "../../utils/actor-portrait-picker.js";
@@ -108,7 +120,7 @@ const STAT_TOOLTIPS = {
 const VITAL_TOOLTIPS = {
 	damage: "Your damage die. Roll it when you deal damage; moves, gear, and tags can raise or lower it.",
 	hp:     "Hit points. Lose them when you take damage; at 0 HP you're dying and must face Death's Door. Your max is set by your playbook and CON.",
-	armor:  "Reduces the damage you take — subtract it from each hit. Computed from the gear you're wearing.",
+	armor:  "Reduces the damage you take: subtract it from each hit. Computed from the gear you're wearing.",
 	xp:     "Experience. Mark 1 XP on a miss (roll 6-) and from some moves; when the track fills, spend it to level up.",
 	level:  "Your character level. Higher levels let you learn advanced moves and raise the XP needed to advance.",
 };
@@ -242,7 +254,7 @@ const GUIDED_CHARACTER_MOVES = {
 	"Chart a Course": {
 		trigger: "When you wish to travel to a distant place, name or describe your destination; if the route is unclear, tell the GM how you intend to reach it. The GM tells you what's required, the risks, and how long it will take.",
 		results: [
-			"The GM presents each challenge — plus surprises — one at a time.",
+			"The GM presents each challenge, plus surprises, one at a time.",
 			"Address them all to reach your destination.",
 		],
 		note: "Travel times from Stonetop are listed in the move's description.",
@@ -288,7 +300,7 @@ const GUIDED_CHARACTER_MOVES = {
 			"Regain HP equal to ½ your max (round up)",
 			"Clear a debility",
 		],
-		note: "A mess kit (fire & water) lets 1 use provide for up to four people. If your rest was particularly peaceful, also gain advantage on your next roll. Regaining HP or clearing a debility does NOT heal problematic wounds — those need Recover to stabilize and Convalesce to heal.",
+		note: "A mess kit (fire & water) lets 1 use provide for up to four people. If your rest was particularly peaceful, also gain advantage on your next roll. Regaining HP or clearing a debility does NOT heal problematic wounds: those need Recover to stabilize and Convalesce to heal.",
 	},
 	"Recover": {
 		trigger: "When you take time to catch your breath and tend to what ails you, expend 1 use of supplies and regain HP equal to 4 + Prosperity.",
@@ -328,14 +340,115 @@ const EXPEDITION_MOVE_HANDLERS = {
 // with no item id at all, and a player-authored custom move can carry any name. Each handler
 // does its own gating (editable, owns the move that grants the effect).
 const MOVE_USE_EFFECTS = {
-	[CONSECRATED_FLAME]: sheet => sheet._consecrateFlame(),
-	[CONDEMN]:           sheet => sheet._openCondemnedIfJudge(),
-	[CENSURE]:           sheet => sheet._openCondemnedIfJudge(),
+	[CONSECRATED_FLAME]:  sheet => sheet._consecrateFlame(),
+	[CONDEMN]:            sheet => sheet._openCondemnedIfJudge(),
+	[CENSURE]:            sheet => sheet._openCondemnedIfJudge(),
+	[BINDING_ARBITRATION]: sheet => sheet._openCondemnedIfJudge(),
+	// The Blessed's three description-only marking moves. Using one IS laying a mark, and a
+	// Blessed handed no way to write it down is back to keeping the list in their head.
+	[BARKSKIN]:           sheet => sheet._openBlessedMarksIfBlessed(),
+	[TRACKLESS_STEP]:     sheet => sheet._openBlessedMarksIfBlessed(),
+	[SHARED_SOULS]:       sheet => sheet._openBlessedMarksIfBlessed(),
 };
+
+// The same idea for moves that ROLL: their use does not fall through to the post-it-to-chat tail,
+// so MOVE_USE_EFFECTS never sees them. Only the Blessed's two +INT marking moves are here — both
+// lay something that stands afterwards, and both are ordinary fixed-stat rolls, so consulting this
+// once the roll has resolved catches every way of making them. BOTH roll entry points do it: the
+// Moves tab's click and rollMoveById, which is where a move on the hotbar arrives.
+const MOVE_ROLL_EFFECTS = {
+	[AMULETS_TALISMANS]: sheet => sheet._openBlessedMarksIfBlessed(),
+	[WARDS_BINDINGS]:    sheet => sheet._openBlessedMarksIfBlessed(),
+};
+
+/** Which sentence the scales' tooltip says, given what the Judge is actually holding. */
+function _judgeMarksTooltipKey(brands, oaths) {
+	if (brands && oaths) return "stonetop.condemn.bothTooltip";
+	if (brands) return "stonetop.condemn.someTooltip";
+	if (oaths) return "stonetop.condemn.oathsTooltip";
+	return "stonetop.condemn.noneTooltip";
+}
+
+/**
+ * What the two TOGGLE glyphs in the header say, per state. The candle and the Battle Joy are the
+ * same control twice — one state, flipped, with a read-only face for a viewer who cannot write —
+ * and the only thing that differs between them is these six strings.
+ *
+ * Spelled out per glyph rather than derived from a stem because the two key families are not
+ * symmetric (`litLabel` against `onLabel`, `readOnlyLit` against `readOnlyOn`). Naming them once
+ * here is what lets the markup be shared; renaming the keys to match would be a bigger change to
+ * make in the language files than it saves.
+ */
+const HOLY_LIGHT_GLYPH = {
+	label:    { on: "stonetop.holyLight.litLabel",    off: "stonetop.holyLight.unlitLabel" },
+	tooltip:  { on: "stonetop.holyLight.litTooltip",  off: "stonetop.holyLight.unlitTooltip" },
+	readOnly: { on: "stonetop.holyLight.readOnlyLit", off: "stonetop.holyLight.readOnlyUnlit" },
+};
+const BATTLE_JOY_GLYPH = {
+	label:    { on: "stonetop.battleJoy.onLabel",     off: "stonetop.battleJoy.offLabel" },
+	tooltip:  { on: "stonetop.battleJoy.onTooltip",   off: "stonetop.battleJoy.offTooltip" },
+	readOnly: { on: "stonetop.battleJoy.readOnlyOn",  off: "stonetop.battleJoy.readOnlyOff" },
+};
+
+/**
+ * Which of a toggle glyph's sentences apply right now.
+ *
+ * Picked here rather than branched in the template: it is a FOUR-way choice — on or off, crossed
+ * with writable or read-only — and four nested `{{#if}}`s inside an HTML attribute is exactly how
+ * these two glyphs came to be written out in full twice over.
+ */
+function _toggleGlyphKeys(keys, on, editable) {
+	const state = on ? "on" : "off";
+	return { labelKey: keys.label[state], tooltipKey: (editable ? keys.tooltip : keys.readOnly)[state] };
+}
 
 // Inventory slugs that hold "uses of supplies", in the order Recover depletes
 // them. Mirrors _PROSPERITY_RESOURCE_SLUGS in StonetopCharacter.js.
 const RECOVER_SUPPLY_SLUGS = ["supplies", "more-supplies", "even-more-supplies"];
+
+// The GM's artifact control (_onArtifactGmControl). The rungs in ladder order, weakest first,
+// and the three text fields in the order p.430-431 introduces them — the hint that stands in
+// for the tags, the write-up a 10+ hands over, the lead a miss leaves. `key` is both the
+// knowledge field read out and the form control's name, so the harvest needs no second table.
+const ARTIFACT_GM_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/artifact-gm.hbs";
+const ARTIFACT_GM_STATES = [
+	ARTIFACT_STATE.NONE, ARTIFACT_STATE.UNKNOWN, ARTIFACT_STATE.PARTIAL, ARTIFACT_STATE.KNOWN,
+];
+const ARTIFACT_GM_FIELDS = [
+	{ key: "hint", labelKey: "stonetop.artifact.fieldHint", hintKey: "stonetop.artifact.fieldHintNote" },
+	{ key: "lore", labelKey: "stonetop.artifact.fieldLore", hintKey: "stonetop.artifact.fieldLoreNote", multiline: true },
+	{ key: "lead", labelKey: "stonetop.artifact.fieldLead", hintKey: "stonetop.artifact.fieldLeadNote" },
+];
+
+// What the invoke window says about the Invocation already running, keyed by the kinds
+// invokeNotice reports. The whole point of the window growing this line: the rule that one
+// Invocation ends another is enforced silently a beat later, and a player who has forgotten what
+// they were holding would only find out by noticing it stopped working in the fiction.
+//
+// Only "start" is a plain statement; the other three name a cost that is about to be paid, so
+// each says WHICH Invocation is at stake rather than "your ongoing Invocation" — hence the
+// {name} placeholder in three of the four.
+//
+// Localised, unlike this file's roll-card flavor: nothing persists these sentences and nothing
+// parses them back (the reason the tier text is an English literal is that a settled roll card's
+// flavor is stored and re-read by the GM's Shift Up/Down — see roll-engine `_shiftRollCardFlavor`).
+// A window that explains what a chip means has to speak the same language as the chip.
+const INVOCATION_NOTICE_KEYS = {
+	start:     "stonetop.invocations.noticeStart",
+	renew:     "stonetop.invocations.noticeRenew",
+	replace:   "stonetop.invocations.noticeReplace",
+	interrupt: "stonetop.invocations.noticeInterrupt",
+};
+
+// Why an Invocation stopped, said in the chat card that reports it. The Invocation ending is a
+// thing that happens in the fiction — a wall of light drops, a blinding glare gutters — so unlike
+// the candle (a tracker correction, which posts nothing) every ending is spoken aloud. The two
+// reasons are whole sentences rather than a stem plus a suffix, so a translator can put the
+// because-clause wherever their language wants it.
+const INVOCATION_ENDED_KEYS = {
+	byHand: "stonetop.invocations.endedByHand",
+	light:  "stonetop.invocations.endedLight",
+};
 
 // Rides an Invocation's chat card when the player bought the empowered effect, so the
 // table can see the price was paid rather than inferring it from the stronger text.
@@ -654,6 +767,9 @@ export function createStonetopCharacterSheetClass(Base) {
 	return class StonetopCharacterSheet extends withSectionEditing(withSheetSizeMemory(Base)) {
 		_stonetopCharacter;
 		_editMode = false;
+		// The playbook's Invocation list as of the last render, so a click can name one without
+		// re-reading the playbook document. Empty until then, and for everyone but a Lightbearer.
+		_invocationOptions = [];
 
 		constructor(...args) {
 			super(...args);
@@ -844,12 +960,15 @@ export function createStonetopCharacterSheetClass(Base) {
 		_stampPastDeath() {
 			const root = this.element?.[0];
 			if (!root) return;
-			const kind = this._pastDeathKind();
-			root.classList.toggle("stonetop-past-death", !!kind);
-			// Every kind is cleared and one is set, so a character raised out of `dead` (or handed
-			// an insert) doesn't keep the modifier of what they used to be.
-			PAST_DEATH_KINDS.forEach(k =>
-				root.classList.toggle(`stonetop-past-death--${k}`, k === kind));
+			// The class PAIR comes from pastDeathClasses, which owns the naming so the sheet frame
+			// and the dialogs opened from it (_pastDeathWindowClasses) can never disagree about
+			// which tint the paper takes. Rebuilding `stonetop-past-death--${kind}` here made that
+			// one decision two.
+			// Every kind is cleared and only what this character is now goes back on, so one raised
+			// out of `dead` (or handed an insert) doesn't keep the modifier of what they used to be.
+			root.classList.remove("stonetop-past-death",
+				...PAST_DEATH_KINDS.map(k => `stonetop-past-death--${k}`));
+			root.classList.add(...pastDeathClasses(this._pastDeathKind()));
 		}
 
 		/** What this character is past the Door: an insert slug, "dead", or null. */
@@ -898,36 +1017,32 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		_injectHeaderToggle() {
-			const header = this.element[0]?.querySelector(".window-header");
-			if (!header || !this.isEditable) return;
+			// Shared with the steading, NPC and monster sheets — see utils/sheet-chrome.js. The
+			// hand-rolled copy this replaced bailed on `!this.isEditable`, so a character opened
+			// from a compendium showed no toggle and no reason why; the shared one draws a lock
+			// that explains it.
+			injectHeaderToggle(this, "Character", { lockLabel: "Lock Sheet" });
+		}
 
-			header.querySelector(".stonetop-header-toggle")?.remove();
-
-			const label = document.createElement("label");
-			label.className = "stonetop-edit-toggle stonetop-header-toggle";
-			label.title = this._editMode ? "Lock Sheet" : "Edit Character";
-			const checkbox = document.createElement("input");
-			checkbox.type = "checkbox";
-			checkbox.checked = this._editMode;
-			checkbox.addEventListener("change", () => {
-				this._editMode = !this._editMode;
-				this.render(false);
-			});
-
-			const track = document.createElement("span");
-			track.className = "stonetop-toggle-track";
-			const thumb = document.createElement("span");
-			thumb.className = "stonetop-toggle-thumb";
-			const icon = document.createElement("i");
-			icon.className = "fas fa-wrench";
-			thumb.appendChild(icon);
-			track.appendChild(thumb);
-
-			label.appendChild(checkbox);
-			label.appendChild(track);
-
-			const title = header.querySelector(".window-title");
-			header.insertBefore(label, title);
+		/**
+		 * Repaint once `work` settles, and surface a failed write instead of dropping it.
+		 *
+		 * A dozen handlers below share the shape "write to the actor, then re-render". Written
+		 * as a bare `.then(() => this.render(false))` the rejection went nowhere: the repaint
+		 * never ran, so the sheet kept showing the state the player had been told they were in —
+		 * the arcanum they just "revealed", the insert they just "chose" — with nothing in the
+		 * console and nothing on screen to say otherwise.
+		 *
+		 * The render runs on the failure path TOO, deliberately: falling back to what actually
+		 * stored is the whole point, and it is what makes the optimistic DOM honest again.
+		 */
+		_renderAfter(work) {
+			return Promise.resolve(work)
+				.catch(err => {
+					console.error("Stonetop | character sheet write failed", err);
+					ui.notifications?.error("That change could not be saved. The sheet has been refreshed.");
+				})
+				.finally(() => this.render(false));
 		}
 
 		// Jump to this character's page in the shared "Player Introductions" Chronicle
@@ -976,11 +1091,30 @@ export function createStonetopCharacterSheetClass(Base) {
 			return buttons;
 		}
 
+		/**
+		 * Every move name this character owns, built ONCE per render.
+		 *
+		 * Three places in a single repaint ask the same question of the same items — the header
+		 * glyphs, the crew's Shield-Wall check, and the per-card "exceptional" gate — from three
+		 * different methods, and each answering for itself was three full walks of the collection.
+		 * The cache is dropped at the top of getData rather than kept on the sheet, so a move
+		 * added between renders is seen: it is a within-one-pass memo, not a lifetime one.
+		 */
+		_ownedMoveNames() {
+			return (this._ownedMoveNameCache ??= ownedMoveNames(this.actor));
+		}
+
 		async getData() {
+			this._ownedMoveNameCache = null;
 			const context = await super.getData();
 			context.system ??= this.actor.system;
 			context.isCharacter = this.actor.type === "character";
-			context.stonetop = await this._stonetopCharacter.buildSnapshot();
+			// The viewer reaches the snapshot because a hidden artifact's tags are concealed
+			// while it's built, not while it's rendered (Book I p.430) — the GM sees what they
+			// wrote, nobody else does, and the withheld text never enters the DOM.
+			// `isGM` comes back ON the snapshot (it drives the GM-only artifact control on each
+			// gear row), from the same `viewerIsGM` the concealment reads — one fact, told once.
+			context.stonetop = await this._stonetopCharacter.buildSnapshot({ viewerIsGM: game.user.isGM });
 			// Notes tab: raw source (for the editor to serialize) + enriched HTML (for
 			// the read-only preview, resolving @UUID links, inline rolls, etc.).
 			context.stonetop.notes = this.actor.system?.notes ?? "";
@@ -1020,7 +1154,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			// off whichever sheet's context it lands in, which is why all three sheets name it
 			// `stonetop.classicLayout` with no sheet suffix.
 			context.stonetop.classicLayout = isClassicLayout("character");
-			context.stonetop.hideUnselected = this.actor.getFlag('stonetop-pwd', 'hideUnselected') ?? true;
+			context.stonetop.hideUnselected = this.actor.getFlag(STONETOP_SCOPE, "hideUnselected") ?? true;
+			// "Organize by category": whether the Playbook Moves section heads each of the
+			// playbook's three onboarding clusters, or draws one flat owned / un-owned list.
+			// Defaults to ON — the clusters are how the section has always read, and the
+			// toggle exists to get back to the flat list, not to opt into the split.
+			context.stonetop.groupMovesByCategory =
+				this.actor.getFlag(STONETOP_SCOPE, "groupMovesByCategory") ?? true;
 			context.stonetop.editMode = this._editMode;
 			context.stonetop.canEdit = this.isEditable;
 			// The header portrait and the two pips over it, answered once for all three sheets
@@ -1127,7 +1267,15 @@ export function createStonetopCharacterSheetClass(Base) {
 			// one-shot step and three routes to an insert (its own advice to finish on this tab,
 			// the Choose Your Fate buttons, an Item drop) never pass through it, so a question left
 			// unanswered has to stay askable here or it can never be answered at all.
-			const pdChoices = await buildPostDeathChoices(this._stonetopCharacter);
+			// Gated on the tab actually being drawn. This is the most expensive thing in getData for
+			// an undead character — four steps' worth of sectionOptions plus the Instinct list, each
+			// reaching the insert repository — and it was being paid on EVERY render: every hit point,
+			// every checkbox, every flag write, every follower-sweep re-render, whether or not the one
+			// template that reads it was on screen. `showPostDeath` is the same condition character.hbs
+			// puts on both the tab button and the panel, so nothing can consume this when it is false.
+			const pdChoices = context.stonetop.showPostDeath
+				? await buildPostDeathChoices(this._stonetopCharacter)
+				: null;
 			context.stonetop.postDeathChoices = pdChoices ? {
 				writeIns: choiceWriteIns(pdChoices).map(row => ({
 					...row,
@@ -1170,6 +1318,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			for (const [path, value] of Object.entries(vitalsToSystem)) {
 				foundry.utils.setProperty(context.system, path, value);
 			}
+			// Kept for the post-render mirror (_syncStoredMaxHp). That write needs the computed max
+			// and this is the one place it has already been worked out — asking for it again would
+			// rebuild the whole snapshot on every render. 0 means "no playbook, nothing to mirror".
+			this._computedMaxHp = context.stonetop.playbook ? v.hp.max : 0;
 			// A permanent max-HP change (an arcanum's soul-wound, a Mark's boon) is otherwise
 			// invisible once applied — the field just shows a number that disagrees with the
 			// playbook. Marked and spelled out here so a GM reading the sheet months later can
@@ -1229,7 +1381,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// whether the creature(s) are already on the Followers tab (matched by the
 			// stable sourceUuid marker). See module/data/arcana-summons.js.
 			const summonedUuids = new Set(
-				Object.values(this.actor.getFlag("stonetop-pwd", "customFollowers") ?? {})
+				Object.values(this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {})
 					.map(f => f?.sourceUuid).filter(Boolean)
 			);
 			// Per-card arcana back visibility. Two independent things gate whether the back
@@ -1248,7 +1400,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// the GM-only reveal toggle, meaningful only in secretive mode for a still-LOCKED
 			// card. isSpread marks a card that renders both sides, laid out full-width by the
 			// masonry. See settings.js and tab-arcana.hbs.
-			const playersSeeBothArcana = game.settings.get("stonetop-pwd", "arcanaPlayersSeeBothSides");
+			const playersSeeBothArcana = game.settings.get(STONETOP_SCOPE, "arcanaPlayersSeeBothSides");
 			const viewerIsGM           = game.user.isGM;
 			// True when the viewing user owns this actor (GMs own everything, but they're
 			// already covered by viewerIsGM). An unlocked back is the owner's earned reward,
@@ -1257,14 +1409,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			const revealedArcana       = this._stonetopCharacter.revealedArcanaSlugs;
 			// Keyed by actor id since one user (esp. the GM) may view several character sheets.
 			const showBothArcana       = new Set(
-				(game.user.getFlag("stonetop-pwd", "arcanaShowBoth") ?? {})[this.actor.id] ?? []
+				(game.user.getFlag(STONETOP_SCOPE, "arcanaShowBoth") ?? {})[this.actor.id] ?? []
 			);
 			// The single-side flip (front ⇄ back) is a second, independent per-user view
 			// preference, stored the same way. It only takes effect when the card isn't
 			// already laid open as a spread (show-both wins), and never on a card whose back
 			// this viewer isn't permitted to see.
 			const showBackArcana       = new Set(
-				(game.user.getFlag("stonetop-pwd", "arcanaShowBack") ?? {})[this.actor.id] ?? []
+				(game.user.getFlag(STONETOP_SCOPE, "arcanaShowBack") ?? {})[this.actor.id] ?? []
 			);
 			for (const [section, sectionEditable] of [
 				[context.stonetop.arcana?.major, context.stonetop.arcanaEdit.major],
@@ -1383,22 +1535,66 @@ export function createStonetopCharacterSheetClass(Base) {
 			context.stonetop.recover = this._buildRecoverData(context.stonetop);
 			context.stonetop.convalesce = this._buildConvalesceData(context.stonetop);
 			context.stonetop.woundsView = this._buildWoundsView(context.stonetop.wounds, context.editable);
+			// Which of the header glyphs this character has EARNED, all five from one walk of the
+			// items — asking each one separately is five to seven traversals of the collection per
+			// render, and most sheets own none of these moves and so pay every one in full.
+			const ownsGlyph = this._stonetopCharacter.headerGlyphOwnership(this._ownedMoveNames());
 			// The header candle. `show` is not just "is a Lightbearer": a LIT light is shown on
 			// any sheet, so one stranded by a playbook swap can still be snuffed.
 			const holyLit = this._stonetopCharacter.holyLight;
 			context.stonetop.holyLight = {
-				show: showHolyLight({ owns: this._stonetopCharacter.canWieldHolyLight, lit: holyLit }),
+				show: showHolyLight({ owns: ownsGlyph.holyLight, lit: holyLit }),
 				lit:  holyLit,
+				..._toggleGlyphKeys(HOLY_LIGHT_GLYPH, holyLit, context.editable),
 			};
-			// The header scales, on the same terms: shown once the Judge owns Condemn, and kept on a
-			// sheet that no longer does while brands are still standing, so they can be dismissed.
-			// `count` is what the tooltip says and what the badge shows; the roster itself is read
-			// fresh by the dialog rather than carried through here, since it is the dialog that
-			// re-renders when it changes.
+			// And what that light is currently shaped into. In the HEADER, not only on the
+			// Invocations tab: the tab is one of nine, an ongoing Invocation lasts until something
+			// ends it, and the player who most needs to see it is the one whose sheet is sitting on
+			// Moves reaching for the next thing to do.
+			context.stonetop.ongoingInvocation = this._ongoingInvocationContext();
+			// The header scales, on the same terms: shown once the Judge owns Condemn or Binding
+			// Arbitration, and kept on a sheet that no longer does while rows are still standing, so
+			// they can be lifted. The two lists are read fresh by the dialog rather than carried
+			// through here, since it is the dialog that re-renders when they change.
+			//
+			// The BADGE is the total of both, because it answers "how much am I holding" at a
+			// glance; the tooltip breaks it down. Only the brands turn the glyph red — a brand is a
+			// public mark of chaos, an oath is a promise somebody made, and colouring them alike
+			// would say the Judge had condemned everyone who ever swore anything.
 			const brands = this._stonetopCharacter.condemned;
+			const oaths  = this._stonetopCharacter.oaths;
 			context.stonetop.condemn = {
-				show:  showCondemn({ owns: this._stonetopCharacter.canCondemn, count: brands.length }),
-				count: brands.length,
+				show: showJudgeMarks({
+					ownsCondemn: ownsGlyph.condemn, brandCount: brands.length,
+					ownsOaths:   ownsGlyph.oaths,   oathCount: oaths.length,
+				}),
+				count:  brands.length + oaths.length,
+				brands: brands.length,
+				oaths:  oaths.length,
+				// Picked here rather than branched in the template: "2 branded, 0 sworn" is a worse
+				// sentence than "2 bearing your brand", and four nested {{#if}}s in an attribute is
+				// a worse template. The key is resolved by the `localize` helper, which formats
+				// with the hash arguments beside it.
+				tooltipKey: _judgeMarksTooltipKey(brands.length, oaths.length),
+			};
+			// The Heavy's Battle Joy. `raging` is not only a glyph state: it is what greys the three
+			// debility boxes out on the Moves tab and what stops them biting in the roll path, so
+			// the same read feeds both (see StonetopCharacter#ignoresDebilities).
+			const raging = this._stonetopCharacter.battleJoy;
+			context.stonetop.battleJoy = {
+				show:   showBattleJoy({ owns: ownsGlyph.battleJoy, raging }),
+				raging,
+				..._toggleGlyphKeys(BATTLE_JOY_GLYPH, raging, context.editable),
+			};
+			// And the Blessed's marks, on the candle's and the scales' terms exactly.
+			const marks = this._stonetopCharacter.blessedMarks;
+			context.stonetop.blessedMarks = {
+				show:  showBlessedMarks({ owns: ownsGlyph.blessed, count: marks.length }),
+				count: marks.length,
+				// Picked here for the reason the scales' is, and so that the two COUNT glyphs answer
+				// the question the same way — this one had kept an inline template ladder while the
+				// scales resolved theirs in JS, which is how the pair drifted apart.
+				tooltipKey: marks.length ? "stonetop.blessedMarks.someTooltip" : "stonetop.blessedMarks.noneTooltip",
 			};
 			// And the other side of it: a brand this character is WEARING. A PC is as Censurable as
 			// anyone — Aratis does not exempt the party — and condemnersOf already skips self, so a
@@ -1464,6 +1660,16 @@ export function createStonetopCharacterSheetClass(Base) {
 				// is spent but the choice isn't made.
 				canFace,
 				isFatePending,
+				// A way OFF `fate-pending` for a table who settled the 6- away from this window —
+				// played the fate out in conversation, or retconned the roll entirely. Nothing else
+				// walks that state back: nextDeathsDoorState returns it unchanged for every HP
+				// change thereafter, so the character is healed, plays on, and is never recognised
+				// as dying again, while the card's only control goes on offering "Choose fate".
+				// Choosing one is still the ordinary way out, which is why this sits BESIDE that
+				// button rather than replacing it, and only in edit mode — the same terms as the
+				// Post-Death route below, and for the same reason: whoever is holding the wrench has
+				// already said they are changing the sheet.
+				clearFate: isFatePending && !!snapshot.editMode,
 				// The way to the Post-Death tab for a table who resolved the Door in conversation.
 				// That tab is opt-in (showPostDeath), and until this control existed the only thing
 				// that ever opted in was REMOVING an insert — so the "Choose Your Fate" picker, whose
@@ -1479,8 +1685,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		// 4+Prosperity. The benefit is locked after use until the character takes
 		// damage again (cleared by the preUpdateActor hook in stonetop.js).
 		_buildRecoverData(snapshot) {
-			const locked      = !!this.actor.getFlag("stonetop-pwd", "recover.spent");
-			const resources   = this.actor.getFlag("stonetop-pwd", "inventory.resources") ?? {};
+			const locked      = !!this.actor.getFlag(STONETOP_SCOPE, "recover.spent");
+			const resources   = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
 			const suppliesLeft = RECOVER_SUPPLY_SLUGS.reduce((sum, slug) => sum + (Number(resources[slug]) || 0), 0);
 			const healAmount  = snapshot.inventory?.smallItemLimit ?? 4;
 			const hp          = snapshot.vitals.hp;
@@ -1798,10 +2004,10 @@ export function createStonetopCharacterSheetClass(Base) {
 				};
 			}
 
-			// Owned move names, built once here for both the crew's Shield-Wall check
-			// (below) and the per-card "exceptional" gate (further down) — each of which
-			// otherwise scanned actor.items on its own.
-			const ownedMoveNames = new Set(this.actor.items.filter(i => i.type === "move").map(i => i.name));
+			// Owned move names for the crew's Shield-Wall check (below) and the per-card
+			// "exceptional" gate (further down). The render's own copy — the header glyphs
+			// resolve from the same one, so the whole repaint walks the items once.
+			const ownedMoves = this._ownedMoveNames();
 
 			// -- Crew (Marshal) -----------------------------------------
 			// Hardcoded fallback until LevelDB pack is rebuilt with the marshal.json inventory changes.
@@ -1887,7 +2093,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					: !!gearFlags.shield);
 				// "Shield Wall" (Marshal) upgrades the shield's Readiness bonus from +1 to
 				// +2, so a Shield-Wall crew with shields can hold up to 5.
-				const crewHasShieldWall = ownedMoveNames.has(SHIELD_WALL_MOVE);
+				const crewHasShieldWall = ownedMoves.has(SHIELD_WALL_MOVE);
 				const crewShieldBonus = crewHasShieldWall ? READINESS_SHIELD_WALL_BONUS : READINESS_SHIELD_BONUS;
 				const crewReadinessPips = _makeReadinessPips(crewReadiness, readinessCap(crewHasShield, crewShieldBonus));
 				// Crew shares the common card body but supplies its own gear (the
@@ -2243,14 +2449,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			// shows for follower types whose playbook grants it, and can be switched
 			// on only once that move is owned. Surfaced per-card so the tags-row chip
 			// and its click handler can warn when the requirement isn't met.
-			// (ownedMoveNames is built once above, shared with the crew Shield-Wall check.)
+			// (ownedMoves is built once above, shared with the crew Shield-Wall check.)
 			const withExceptional = (card) => {
 				if (!card) return card;
 				const def = FOLLOWER_EXCEPTIONAL[card.ftype];
 				if (def) {
 					card.exceptionalAvailable = true;
 					card.exceptionalMoveName = def.move;
-					card.exceptionalMet      = ownedMoveNames.has(def.move);
+					card.exceptionalMet      = ownedMoves.has(def.move);
 					card.exceptionalHint     = `Your ${def.noun} can become exceptional only after you take the move “${def.move}.”`;
 					return card;
 				}
@@ -2319,7 +2525,7 @@ export function createStonetopCharacterSheetClass(Base) {
 						card.showReadiness     = true;
 						card.readinessFollower = card.ftype;
 						card.readinessSlug     = rSlug;
-						card.readinessValue    = Math.max(0, Number(this.actor.getFlag("stonetop-pwd", _followerReadinessPath(card.ftype, rSlug))) || 0);
+						card.readinessValue    = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, _followerReadinessPath(card.ftype, rSlug))) || 0);
 						card.readinessHasShield = _followerBearsShield(card.gear);
 						card.readinessPips      = _makeReadinessPips(card.readinessValue, readinessCap(card.readinessHasShield));
 					}
@@ -2339,7 +2545,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					card.canUseAmmo = true;
 					card.usesAmmo   = !!detailFlagsFor(card.ftype, card.slug).usesAmmo;
 					if (card.usesAmmo) {
-						const ammoVal = Math.max(0, Math.min(2, Number(this.actor.getFlag("stonetop-pwd", _followerAmmoPath(card.ftype, aSlug))) || 0));
+						const ammoVal = Math.max(0, Math.min(2, Number(this.actor.getFlag(STONETOP_SCOPE, _followerAmmoPath(card.ftype, aSlug))) || 0));
 						card.ammoFollower = card.ftype;
 						card.ammoSlug     = aSlug;
 						card.ammoValue    = ammoVal;
@@ -2409,9 +2615,16 @@ export function createStonetopCharacterSheetClass(Base) {
 
 		_buildInvocationsData(playbookDoc) {
 			const raw = playbookDoc?.invocations;
+			// The playbook's own option list, kept for the paths that need to name an Invocation
+			// without rebuilding the tab: the click handler, the header chip, and the chat line
+			// that says which one just ended. Stashed BEFORE the early return, so a sheet whose
+			// playbook no longer has Invocations still gets an (empty) list rather than a stale one
+			// left over from the playbook it used to have.
+			this._invocationOptions = raw?.options ?? [];
 			if (!raw?.options?.length) return null;
-			const selected = new Set(this.actor.getFlag("stonetop-pwd", "invocations.selected") ?? []);
+			const selected = new Set(this.actor.getFlag(STONETOP_SCOPE, "invocations.selected") ?? []);
 			const showEffectTips = getHoverDescriptionSetting("hoverDescriptionsInvocations");
+			const ongoingSlug = this._stonetopCharacter.ongoingInvocation;
 			const options = raw.options.map(opt => {
 				const description = opt.description ?? "";
 				return {
@@ -2420,25 +2633,40 @@ export function createStonetopCharacterSheetClass(Base) {
 					description: showEffectTips ? annotateInvocationEffects(description) : description,
 					known:       selected.has(opt.slug),
 					ongoing:     !!opt.ongoing,
+					// `ongoing` is what this Invocation IS; `active` is what it is DOING. Only one
+					// card can carry `active`, and it replaces the type badge there — a card that is
+					// visibly running does not also need telling that it is the running kind.
+					active:      !!ongoingSlug && opt.slug === ongoingSlug,
 				};
 			});
-			const sort = this.actor.getFlag("stonetop-pwd", "invocationsSort") ?? "known";
-			if (sort === "alpha") {
-				options.sort((a, b) => a.label.localeCompare(b.label));
-			} else {
-				// Known first, then alphabetically — mirrors the moves tab's owned-first order.
-				options.sort((a, b) => {
-					if (a.known !== b.known) return a.known ? -1 : 1;
-					return a.label.localeCompare(b.label);
-				});
-			}
+			// Known first, then alphabetically — mirrors the moves tab's owned-first order. The one
+			// order the tab has: an A–Z alternative used to be offered here as a dropdown, but the
+			// list is ten cards long and the hide-un-learned toggle already answers "just show me
+			// mine", so the choice bought nothing the toolbar didn't already do.
+			options.sort((a, b) => {
+				if (a.known !== b.known) return a.known ? -1 : 1;
+				return a.label.localeCompare(b.label);
+			});
 			return {
 				startingCount: raw.startingCount ?? 2,
-				hideUnknown:   this.actor.getFlag("stonetop-pwd", "hideUnknownInvocations") ?? false,
-				sortKnown:     sort === "known",
-				sortAlpha:     sort === "alpha",
+				hideUnknown:   this.actor.getFlag(STONETOP_SCOPE, "hideUnknownInvocations") ?? false,
+				// The banner over the grid. Named here as well as on its own card because the
+				// hide-un-learned toggle and the search can both push that card out of sight, and
+				// the rule the banner restates is the one that costs you an Invocation.
+				concentrating: this._ongoingInvocationContext(),
 				options,
 			};
+		}
+
+		/** The Invocation being held open, for the header chip and the tab's banner. */
+		_ongoingInvocationContext() {
+			const slug = readOngoing(this._stonetopCharacter.ongoingInvocation);
+			return { active: !!slug, slug, label: this._invocationLabel(slug) };
+		}
+
+		/** An Invocation's printed name, from whichever playbook the last render read. */
+		_invocationLabel(slug) {
+			return invocationLabel(slug, this._invocationOptions);
 		}
 
 		// Every candidate row for the Details tab's Relationships section, in display
@@ -2483,7 +2711,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.stopPropagation();
 				const value = pm.value ?? "";
 				if (value === (this.actor.system?.notes ?? "")) return;
-				this.actor.update({ "system.notes": value });
+				// Caught, not dropped: a failed persist here left the editor showing text the
+				// player believed was saved, with nothing logged.
+				this.actor.update({ "system.notes": value }).catch(err => {
+					console.error("Stonetop | could not save the character's notes", err);
+					ui.notifications?.error("Those notes could not be saved.");
+				});
 			}, true);
 
 			html.find(".stonetop-create-character-btn").on("click", () => this._onNewCharacter());
@@ -2549,7 +2782,7 @@ export function createStonetopCharacterSheetClass(Base) {
 						return;
 					}
 					if (doc?.system?.customType === "stonetop") {
-						await this.actor.setFlag("stonetop-pwd", "steadingId", doc.id);
+						await this.actor.setFlag(STONETOP_SCOPE, "steadingId", doc.id);
 						this.render(false);
 					} else if (doc?.type === "monster") {
 						// Dropping a monster offers to convert it to a follower (NPCs &
@@ -2606,15 +2839,15 @@ export function createStonetopCharacterSheetClass(Base) {
 			});
 
 			html.find(".stonetop-hide-unselected-check").on("change", async (ev) => {
-				await this.actor.setFlag('stonetop-pwd', 'hideUnselected', ev.currentTarget.checked);
+				await this.actor.setFlag(STONETOP_SCOPE, "hideUnselected", ev.currentTarget.checked);
+			});
+
+			html.find(".stonetop-group-by-category-check").on("change", async (ev) => {
+				await this.actor.setFlag(STONETOP_SCOPE, "groupMovesByCategory", ev.currentTarget.checked);
 			});
 
 			html.find(".stonetop-hide-unknown-invocations-check").on("change", async (ev) => {
-				await this.actor.setFlag('stonetop-pwd', 'hideUnknownInvocations', ev.currentTarget.checked);
-			});
-
-			html.find(".stonetop-invocation-sort").on("change", async (ev) => {
-				await this.actor.setFlag("stonetop-pwd", "invocationsSort", ev.currentTarget.value);
+				await this.actor.setFlag(STONETOP_SCOPE, "hideUnknownInvocations", ev.currentTarget.checked);
 			});
 
 			// Live text filters (shared wireTabSearch): a round magnifying-glass button beside a
@@ -2729,6 +2962,18 @@ export function createStonetopCharacterSheetClass(Base) {
 					rollable.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: ev.shiftKey }));
 					return;
 				}
+				// A move whose whole offer is "this counts as a weapon" (Purifying Flames) has no
+				// roll of its own, so using it IS the attack it grants — run below, after the tail,
+				// with the weapon already in hand.
+				//
+				// AFTER, not INSTEAD. Having no rollType means having no dice icon, so this
+				// name-click is the move's ONLY surface: a shortcut that took the click would be
+				// the one move on the sheet its owner cannot show the table. So it does both, in
+				// the order they read — here is what Purifying Flames says, and here is the Clash
+				// at +WIS it turns into. Answered here rather than at the call itself so the
+				// editability gate sits with the decision it gates: an observer gets the card and
+				// no roll, which is the same tail every other move gives them.
+				const grantedAttack = this.isEditable ? grantedWeaponAttackFor(this.actor, item) : null;
 				const description = li.querySelector(".stonetop-item-description")?.innerHTML ?? "";
 				const playbookName = html[0].querySelector(".stonetop-playbook-drop-zone:not(.empty)")?.textContent?.trim() ?? "";
 				const speaker = ChatMessage.getSpeaker({ actor: this.actor });
@@ -2741,6 +2986,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				// here — and posting its text IS using it. MOVE_USE_EFFECTS is what "using it"
 				// then means (lighting a holy light, opening the Judge's roster).
 				await this._onDescriptionMoveUsed(item);
+				// …and for the handful whose text is an offer of a weapon, using it is also that
+				// weapon's attack. See grantedAttack above.
+				if (grantedAttack) await this._rollGrantedWeaponAttack(item, grantedAttack, { shiftKey: ev.shiftKey });
 			});
 
 			// Clicking the move name fires the same roll as the dice icon.
@@ -2756,29 +3004,16 @@ export function createStonetopCharacterSheetClass(Base) {
 					?? chip?.closest("li")?.querySelector(".rollable");
 				if (!rollable || !this.isEditable) return;
 				ev.stopPropagation();
-				const guided = this._guidedMoveForRollable(rollable);
-				if (guided) {
-					this._openGuidedCharacterMove(guided, rollable);
-					return;
-				}
-				const askItem = this._statChoiceMoveForRollable(rollable);
-				if (askItem) {
-					this._promptStatChoice(askItem, rollable, undefined, { shiftKey: ev.shiftKey });
-					return;
-				}
-				const altChoice = this._altStatChoiceForRollable(rollable);
-				if (altChoice) {
-					this._promptStatChoice(altChoice.item, rollable, altChoice.stats, { shiftKey: ev.shiftKey, grants: altChoice.grants });
-					return;
-				}
-				// Optional pre-roll modifier prompt for 2d6 move/stat rolls (not damage).
-				// Returns null when the player cancels the prompt — abort the roll then.
-				let situational = 0;
-				if (rollable.classList.contains("move-rollable") || _STAT_KEYS.has(rollable.dataset.roll)) {
-					situational = await this._maybePromptRollModifier({ shiftKey: ev.shiftKey, rollable });
-					if (situational === null) return;
-				}
+				// Guided move, the two stat pickers, then the optional modifier prompt — the same
+				// ladder the hotbar path walks. See _resolveMoveRollPrompts.
+				const situational = await this._resolveMoveRollPrompts(rollable, { shiftKey: ev.shiftKey });
+				if (situational === "handled" || situational === "cancel") return;
 				const handled = await this._stonetopCharacter.onRoll({ currentTarget: rollable }, { situational });
+				// What rolling this move DOES beyond the roll — see MOVE_ROLL_EFFECTS. Only after
+				// the roll actually happened, so a cancelled weapon/target prompt opens nothing:
+				// that is the `"cancel"` half of onRoll's answer, which is truthy (nothing else may
+				// run for this rollable) but is not a roll.
+				if (handled && handled !== "cancel") await this._onRollableRolled(rollable);
 				if (!handled) {
 					const roll = rollable.dataset.roll;
 					if (!roll) return;
@@ -3320,6 +3555,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			syncFollowerActors(this.actor, followerSnapshots)
 				.catch(err => console.error("Stonetop | follower actor sync failed", err));
 
+			// The token's HP bar reads the PERSISTED max, which the sheet itself never does. Same
+			// call site and the same fire-and-forget shape as the follower sweeps above, for the
+			// same reason: every route that can move a character's max HP (a level, a Marshal's
+			// marked move, a Thrall's Marks, an insert's penalty) ends in a render of this sheet.
+			this._syncStoredMaxHp()
+				.catch(err => console.error("Stonetop | max HP mirror failed", err));
+
 			// Followers tab: drag a card onto the canvas to put that follower on the map as a
 			// token (module/hooks/FollowerDrop.js turns the payload below into an Actor).
 			// Ungated, like the steading's NPC-row drag: dragging writes nothing here, and what
@@ -3478,6 +3720,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-inv-add-btn").on("click", this._onAddInventoryItem.bind(this));
 			html.find(".stonetop-inv-delete").on("click", this._onDeleteCustomInventoryItem.bind(this));
 			html.find(".stonetop-inv-remove-special").on("click", this._onRemoveSpecialItem.bind(this));
+			// Identifying artifacts (Book I pp.430-431): the player's magnifier rolls, the GM's
+			// mask hands the thing over (or hides it in the first place).
+			html.find(".stonetop-inv-artifact-identify").on("click", ev =>
+				this._onArtifactIdentify(ev.currentTarget.dataset.ownedId, { shiftKey: ev.shiftKey }));
+			html.find(".stonetop-inv-artifact-gm").on("click", ev =>
+				this._onArtifactGmControl(ev.currentTarget.dataset.ownedId));
 			html.find(".stonetop-possession-check").on("change", this._onPossessionCheck.bind(this));
 			html.find(".stonetop-possession-custom-remove").on("click", this._onRemoveCustomPossession.bind(this));
 			html.find(".stonetop-possession-sub-check").on("change", this._onPossessionSubCheck.bind(this));
@@ -3519,11 +3767,21 @@ export function createStonetopCharacterSheetClass(Base) {
 			// The header candle. `button.` on purpose: the read-only copy is a <span> and must
 			// not be wired, so nothing offers a click that would do nothing.
 			html.find("button.stonetop-holy-light").on("click", this._onHolyLightToggle.bind(this));
+			// "End it" — one class, wired once, wherever it is drawn: the header chip beside the
+			// candle and the banner over the Invocations grid are the same control in two places a
+			// player might look for it. Only ever rendered where the sheet is editable.
+			html.find("button.stonetop-invocation-end").on("click", this._onEndOngoingInvocation.bind(this));
 			// The header scales. Unlike the candle this is wired for READERS too — the span/button
 			// split is about who may WRITE, and opening a list of who has been branded is looking,
 			// not writing. The dialog itself withholds its add and dismiss controls (see
 			// CondemnedDialog), so a player reading a GM's Judge gets the roster and nothing else.
 			html.find(".stonetop-condemn").on("click", this._onCondemnOpen.bind(this));
+			// The Blessed's triquetra, on the same terms as the scales: a reader may open the
+			// roster, and the dialog withholds the writing.
+			html.find(".stonetop-blessed-marks").on("click", this._onBlessedMarksOpen.bind(this));
+			// The Heavy's Battle Joy, on the CANDLE's terms: `button.` on purpose, since the
+			// read-only copy is a <span> and must not be wired.
+			html.find("button.stonetop-battle-joy").on("click", this._onBattleJoyToggle.bind(this));
 			html.find(".stonetop-recover-open-btn").on("click", this._onRecoverOpen.bind(this));
 			html.find(".stonetop-convalesce-open-btn").on("click", this._onConvalesceOpen.bind(this));
 
@@ -3561,7 +3819,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const path = _followerStructuralPath(el.dataset.ftype, el.dataset.field)
 					?? followerDetailPath(el.dataset.ftype, el.dataset.slug, el.dataset.field);
 				if (!path) return;
-				await this.actor.setFlag("stonetop-pwd", path, el.value.trim());
+				await this.actor.setFlag(STONETOP_SCOPE, path, el.value.trim());
 				this.render(false);
 			});
 			// Armor-source field: a free-type input with a suggestion dropdown (leather,
@@ -3583,7 +3841,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					ui.notifications.warn(el.dataset.hint || "This follower can't be marked exceptional yet.");
 					return;
 				}
-				await this.actor.setFlag("stonetop-pwd", path, turnOn);
+				await this.actor.setFlag(STONETOP_SCOPE, path, turnOn);
 				this.render(false);
 			});
 			// Crew tag picker + its custom write-in row: store only the player's chosen tags
@@ -3597,7 +3855,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const tags = html.find(".stonetop-crew-tag-option:checked:not(:disabled)").toArray().map(el => el.value);
 				const custom = html.find(".stonetop-crew-tag-custom").val()?.trim();
 				if (custom) tags.push(custom);
-				await this.actor.setFlag("stonetop-pwd", "crew.tags", tags);
+				await this.actor.setFlag(STONETOP_SCOPE, "crew.tags", tags);
 				this.render(false);
 			});
 			// Animal-companion trait picker + its custom write-in row: pick up to the type's
@@ -3608,7 +3866,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const traits = html.find(".stonetop-ac-trait-option:checked:not(:disabled)").toArray().map(el => el.value);
 				const custom = html.find(".stonetop-ac-trait-custom").val()?.trim();
 				if (custom) traits.push(custom);
-				await this.actor.setFlag("stonetop-pwd", "animalCompanion.traits", traits);
+				await this.actor.setFlag(STONETOP_SCOPE, "animalCompanion.traits", traits);
 				this.render(false);
 			});
 			// Initiate of Danu trait lines: "pick 1 on each line". Each radio row writes
@@ -3621,34 +3879,34 @@ export function createStonetopCharacterSheetClass(Base) {
 				const rowIdx = Number(el.dataset.rowIdx);
 				if (!slug || !Number.isInteger(rowIdx)) return;
 				const path = `initiateDetails.${slug}.rows`;
-				const rows = foundry.utils.deepClone(this.actor.getFlag("stonetop-pwd", path) ?? {});
+				const rows = foundry.utils.deepClone(this.actor.getFlag(STONETOP_SCOPE, path) ?? {});
 				rows[rowIdx] = el.value;
-				await this.actor.setFlag("stonetop-pwd", path, rows);
+				await this.actor.setFlag(STONETOP_SCOPE, path, rows);
 				this.render(false);
 			});
 			// Crew instinct / cost pickers (pick one from the playbook list)
 			html.find(".stonetop-crew-instinct-option").on("change", async ev => {
-				await this.actor.setFlag("stonetop-pwd", "crew.instinct", ev.currentTarget.value);
+				await this.actor.setFlag(STONETOP_SCOPE, "crew.instinct", ev.currentTarget.value);
 				this.render(false);
 			});
 			html.find(".stonetop-crew-cost-option").on("change", async ev => {
-				await this.actor.setFlag("stonetop-pwd", "crew.cost", ev.currentTarget.value);
+				await this.actor.setFlag(STONETOP_SCOPE, "crew.cost", ev.currentTarget.value);
 				this.render(false);
 			});
 			// Crew instinct / cost write-ins (the insert's blank rows): save the typed value
 			// verbatim; picking a radio above overwrites it, matching onboarding.
 			html.find(".stonetop-crew-instinct-custom").on("change", async ev => {
-				await this.actor.setFlag("stonetop-pwd", "crew.instinct", ev.currentTarget.value.trim());
+				await this.actor.setFlag(STONETOP_SCOPE, "crew.instinct", ev.currentTarget.value.trim());
 				this.render(false);
 			});
 			html.find(".stonetop-crew-cost-custom").on("change", async ev => {
-				await this.actor.setFlag("stonetop-pwd", "crew.cost", ev.currentTarget.value.trim());
+				await this.actor.setFlag(STONETOP_SCOPE, "crew.cost", ev.currentTarget.value.trim());
 				this.render(false);
 			});
 			// Gear checklist: toggle carried, rename, add, remove
 			const readFollowerGear = (ftype, slug) => {
 				const path = followerDetailPath(ftype, slug, "gear");
-				const cur  = path ? this.actor.getFlag("stonetop-pwd", path) : null;
+				const cur  = path ? this.actor.getFlag(STONETOP_SCOPE, path) : null;
 				return { path, list: Array.isArray(cur) ? foundry.utils.deepClone(cur) : [] };
 			};
 			html.find(".stonetop-follower-gear-check").on("change", async ev => {
@@ -3657,7 +3915,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const i = Number(el.dataset.index);
 				if (!path || !list[i]) return;
 				list[i].checked = el.checked;
-				await this.actor.setFlag("stonetop-pwd", path, list);
+				await this.actor.setFlag(STONETOP_SCOPE, path, list);
 				this.render(false);
 			});
 			html.find(".stonetop-follower-gear-label").on("change", async ev => {
@@ -3666,7 +3924,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const i = Number(el.dataset.index);
 				if (!path || !list[i]) return;
 				list[i].label = el.value.trim();
-				await this.actor.setFlag("stonetop-pwd", path, list);
+				await this.actor.setFlag(STONETOP_SCOPE, path, list);
 				// no re-render: the typed value already shows; avoids a focus jump
 			});
 			html.find(".stonetop-follower-gear-add").on("click", async ev => {
@@ -3674,7 +3932,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const { path, list } = readFollowerGear(el.dataset.ftype, el.dataset.slug);
 				if (!path) return;
 				list.push({ label: "", checked: false });
-				await this.actor.setFlag("stonetop-pwd", path, list);
+				await this.actor.setFlag(STONETOP_SCOPE, path, list);
 				this.render(false);
 			});
 			html.find(".stonetop-follower-gear-remove").on("click", async ev => {
@@ -3683,7 +3941,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const i = Number(el.dataset.index);
 				if (!path) return;
 				list.splice(i, 1);
-				await this.actor.setFlag("stonetop-pwd", path, list);
+				await this.actor.setFlag(STONETOP_SCOPE, path, list);
 				this.render(false);
 			});
 
@@ -3728,7 +3986,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-follower-remove").on("click", ev => {
 				const slug = ev.currentTarget.dataset.slug;
 				if (!slug) return;
-				const name = this.actor.getFlag("stonetop-pwd", `customFollowers.${slug}.name`) || "this follower";
+				const name = this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}.name`) || "this follower";
 				Dialog.confirm({
 					title:   "Remove follower",
 					content: `<p>Remove <strong>${escHtml(name)}</strong> from your followers? This can't be undone.</p>`,
@@ -3742,7 +4000,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const slug = ev.currentTarget.dataset.slug;
 				if (!slug) return;
 				const name = ev.currentTarget.dataset.followerName
-					|| this.actor.getFlag("stonetop-pwd", `customFollowers.${slug}.name`) || "this follower";
+					|| this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}.name`) || "this follower";
 				this._onHandOffFollower(slug, name);
 			});
 			// Party-wide follower toggle (advisory): any PC may pay its cost / spend its
@@ -3762,8 +4020,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				const path = _followerLoyaltyPath(ftype, slug);
 				if (!path) return;
 				const idx     = Number(ev.currentTarget.dataset.index);
-				const current = Number(this.actor.getFlag("stonetop-pwd", path)) || 0;
-				await this.actor.setFlag("stonetop-pwd", path, current === idx + 1 ? idx : idx + 1);
+				const current = Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0;
+				await this.actor.setFlag(STONETOP_SCOPE, path, current === idx + 1 ? idx : idx + 1);
 				this.render(false);
 			});
 			// Spend Loyalty / Readiness (p.464 / p.469): open a small chooser for the
@@ -3805,9 +4063,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				const pips = ev.currentTarget.closest(".stonetop-crew-gear-pips");
 				if (pips) pips.querySelectorAll(".stonetop-crew-gear-check").forEach(cb => { cb.checked = checked; });
 				ev.currentTarget.closest(".stonetop-crew-gear-item")?.classList.toggle("is-checked", checked);
-				const gear    = foundry.utils.deepClone(this.actor.getFlag("stonetop-pwd", "crew.gear") ?? {});
+				const gear    = foundry.utils.deepClone(this.actor.getFlag(STONETOP_SCOPE, "crew.gear") ?? {});
 				gear[slug]    = checked ? (Number(weight) || 1) : 0;
-				await this.actor.setFlag("stonetop-pwd", "crew.gear", gear);
+				await this.actor.setFlag(STONETOP_SCOPE, "crew.gear", gear);
 				this.render(false);
 			});
 			// Crew supplies pip circles — 6 independent sets stored as an array of counts
@@ -3815,11 +4073,11 @@ export function createStonetopCharacterSheetClass(Base) {
 				const setIdx = Number(ev.currentTarget.dataset.set);
 				const pipIdx = Number(ev.currentTarget.dataset.pip);
 				const newVal = ev.currentTarget.checked ? pipIdx + 1 : pipIdx;
-				const current = this.actor.getFlag("stonetop-pwd", "crew.supplies");
+				const current = this.actor.getFlag(STONETOP_SCOPE, "crew.supplies");
 				const arr = Array.isArray(current) ? [...current] : Array(6).fill(0);
 				while (arr.length < 6) arr.push(0);
 				arr[setIdx] = newVal;
-				await this.actor.setFlag("stonetop-pwd", "crew.supplies", arr);
+				await this.actor.setFlag(STONETOP_SCOPE, "crew.supplies", arr);
 				this.render(false);
 			});
 			// Add a group-fight pool clamp to a pending update when the roster shrinks:
@@ -3827,7 +4085,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// leave a stale over-max value stored. Only an explicitly-set value is
 			// touched — an unset groupHp tracks the full max on its own.
 			const clampStoredGroupHp = (update, crewSize) => {
-				const raw = Number(this.actor.getFlag("stonetop-pwd", "crew.groupHp"));
+				const raw = Number(this.actor.getFlag(STONETOP_SCOPE, "crew.groupHp"));
 				if (!Number.isFinite(raw)) return;
 				const max = Math.max(0, crewSize) * (this._crewMemberHpMax ?? 6);
 				if (raw > max) update["flags.stonetop-pwd.crew.groupHp"] = max;
@@ -3835,14 +4093,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Delete individual crew member
 			html.find(".stonetop-crew-delete-individual").on("click", ev => {
 				const idx = Number(ev.currentTarget.dataset.index);
-				const individuals = [...(this.actor.getFlag("stonetop-pwd", "crew.individuals") ?? [])];
+				const individuals = [...(this.actor.getFlag(STONETOP_SCOPE, "crew.individuals") ?? [])];
 				if (idx < 0 || idx >= individuals.length) return;
 				const name = individuals[idx]?.name || "this crew member";
 				individuals.splice(idx, 1);
 				// Re-key per-individual HP to stay aligned with the spliced array:
 				// the removed entry is dropped and every entry above it shifts down
 				// one. (individualsHp is an index-keyed map, not part of the array.)
-				const oldHp = this.actor.getFlag("stonetop-pwd", "crew.individualsHp") ?? {};
+				const oldHp = this.actor.getFlag(STONETOP_SCOPE, "crew.individualsHp") ?? {};
 				const newHp = {};
 				for (const [k, v] of Object.entries(oldHp)) {
 					const i = Number(k);
@@ -3865,7 +4123,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// Shrink the roster by one: "Remove" takes the member out of the crew
 				// entirely. Without this the freed slot reappears as a fresh full-HP
 				// anonymous member (`size` would still imply the old headcount).
-				const sizeBefore = effectiveCrewSize(this.actor.getFlag("stonetop-pwd", "crew.size"), individuals.length + 1);
+				const sizeBefore = effectiveCrewSize(this.actor.getFlag(STONETOP_SCOPE, "crew.size"), individuals.length + 1);
 				const newSize = Math.max(individuals.length, sizeBefore - 1);
 				update["flags.stonetop-pwd.crew.size"] = newSize;
 				clampStoredGroupHp(update, newSize);
@@ -3881,10 +4139,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Crew roster size — total headcount; never below the number of named
 			// individuals. Trims trailing anonymous-member HP entries when shrinking.
 			const setCrewSize = async (size) => {
-				const namedCount = (this.actor.getFlag("stonetop-pwd", "crew.individuals") ?? []).length;
+				const namedCount = (this.actor.getFlag(STONETOP_SCOPE, "crew.individuals") ?? []).length;
 				const clamped    = Math.min(CREW_SIZE_MAX, Math.max(namedCount, Math.max(0, size)));
 				const anonCount  = Math.max(0, clamped - namedCount);
-				const memberHp   = (this.actor.getFlag("stonetop-pwd", "crew.memberHp") ?? []).slice(0, anonCount);
+				const memberHp   = (this.actor.getFlag(STONETOP_SCOPE, "crew.memberHp") ?? []).slice(0, anonCount);
 				const update = {
 					"flags.stonetop-pwd.crew.size":     clamped,
 					"flags.stonetop-pwd.crew.memberHp": memberHp,
@@ -3904,10 +4162,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-crew-size-step").on("click", ev => {
 				const delta = Number(ev.currentTarget.dataset.delta) || 0;
 				const input = ev.currentTarget.parentElement.querySelector(".stonetop-crew-size-input");
-				setCrewSize((parseInt(input?.value) || 0) + delta);
+				setCrewSize((parseInt(input?.value, 10) || 0) + delta);
 			});
 			html.find(".stonetop-crew-size-input").on("change", ev => {
-				const v = parseInt(ev.currentTarget.value);
+				const v = parseInt(ev.currentTarget.value, 10);
 				// Blank/non-numeric input: revert to the current size rather than
 				// collapsing the roster to the named count (which would drop every
 				// anonymous member's tracked HP).
@@ -3926,7 +4184,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const path = _followerReadinessPath(ftype, slug);
 				if (!path) return;
 				const idx     = Number(ev.currentTarget.dataset.index);
-				const current = Math.max(0, Number(this.actor.getFlag("stonetop-pwd", path)) || 0);
+				const current = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0);
 				await this.actor.update({ [`flags.stonetop-pwd.${path}`]: current === idx + 1 ? idx : idx + 1 });
 				this.render(false);
 			});
@@ -3963,7 +4221,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-group-hp-reset").on("click", async ev => {
 				const slug = ev.currentTarget.dataset.slug;
 				if (slug) await this.actor.update({ [`flags.stonetop-pwd.customFollowers.${slug}.groupHp`]: null });
-				else      await this.actor.unsetFlag("stonetop-pwd", "crew.groupHp");
+				else      await this.actor.unsetFlag(STONETOP_SCOPE, "crew.groupHp");
 				this.render(false);
 			});
 
@@ -3971,7 +4229,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// abstracted group-HP pool down when the group shrinks, and drops any
 			// per-member HP entries beyond the new size, so nothing stale is left.
 			const setCustomGroupSize = async (slug, next) => {
-				const c = this.actor.getFlag("stonetop-pwd", `customFollowers.${slug}`);
+				const c = this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}`);
 				if (!c) return;
 				const size = customGroupSize({ size: next });
 				const memberHpMax = Math.max(1, Math.trunc(Number(c.hpMax) || 0) || 1);
@@ -3995,7 +4253,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			};
 			html.find(".stonetop-custom-group-size-step").on("click", ev => {
 				const { slug, delta } = ev.currentTarget.dataset;
-				const cur = customGroupSize({ size: this.actor.getFlag("stonetop-pwd", `customFollowers.${slug}.size`) });
+				const cur = customGroupSize({ size: this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}.size`) });
 				setCustomGroupSize(slug, cur + Number(delta));
 			});
 			html.find(".stonetop-custom-group-size-input").on("change", ev =>
@@ -4199,11 +4457,11 @@ export function createStonetopCharacterSheetClass(Base) {
 								// Promote the targeted anonymous member: append the named
 								// individual, carry its current HP over, and drop it from
 								// the anonymous-member HP list.
-								const individuals   = [...(this.actor.getFlag("stonetop-pwd", "crew.individuals") ?? [])];
+								const individuals   = [...(this.actor.getFlag(STONETOP_SCOPE, "crew.individuals") ?? [])];
 								const newIndex      = individuals.length;
-								const memberHp      = [...(this.actor.getFlag("stonetop-pwd", "crew.memberHp") ?? [])];
+								const memberHp      = [...(this.actor.getFlag(STONETOP_SCOPE, "crew.memberHp") ?? [])];
 								const carriedHp     = memberHp[anonIndex];
-								const individualsHp = { ...(this.actor.getFlag("stonetop-pwd", "crew.individualsHp") ?? {}) };
+								const individualsHp = { ...(this.actor.getFlag(STONETOP_SCOPE, "crew.individualsHp") ?? {}) };
 								if (carriedHp != null) individualsHp[newIndex] = carriedHp;
 								memberHp.splice(anonIndex, 1);
 								// The face comes with them. Standing out is the moment a body on the
@@ -4328,11 +4586,11 @@ export function createStonetopCharacterSheetClass(Base) {
 
 			html.find(".stonetop-invocation-check").on("change", async ev => {
 				const { slug } = ev.currentTarget.dataset;
-				const current = this.actor.getFlag("stonetop-pwd", "invocations.selected") ?? [];
+				const current = this.actor.getFlag(STONETOP_SCOPE, "invocations.selected") ?? [];
 				const updated = ev.currentTarget.checked
 					? [...current, slug]
 					: current.filter(s => s !== slug);
-				await this.actor.setFlag("stonetop-pwd", "invocations.selected", updated);
+				await this.actor.setFlag(STONETOP_SCOPE, "invocations.selected", updated);
 				this.render(false);
 			});
 			// Tapping an Invocation's title uses it: the window asks whether to Invoke the Sun
@@ -4348,9 +4606,15 @@ export function createStonetopCharacterSheetClass(Base) {
 				// offered the roll: the same line this sheet draws for moves, where the roll is
 				// what's gated and the reading is not.
 				const known = !card.classList.contains("is-unknown");
+				// Which Invocation this is, and whether it is one of the six that keep running —
+				// read off the card rather than matched by name, since the name in the DOM is the
+				// printed label and the state is keyed by slug.
+				const { slug = "", ongoing } = card.dataset;
 				// Shift is "skip the situational-modifier prompt" everywhere a roll starts; carry
 				// it through so the Invocation's roll honours it too.
-				this._postInvocationCard(name, description, { shiftKey: ev.shiftKey, known });
+				this._postInvocationCard(name, description, {
+					shiftKey: ev.shiftKey, known, slug, ongoing: ongoing === "1",
+				});
 			});
 			html.find(".stonetop-other-move-delete").on("click", ev => {
 				const { itemId } = ev.currentTarget.dataset;
@@ -4442,8 +4706,8 @@ export function createStonetopCharacterSheetClass(Base) {
 						speaker: ChatMessage.getSpeaker({ actor: this.actor }),
 					};
 					ChatMessage.applyRollMode(messageData, game.settings.get("core", "rollMode"));
-					ChatMessage.create(messageData);
-				});
+					return ChatMessage.create(messageData);
+				}).catch(err => console.error("Stonetop | could not post the arcanum card", err));
 			}, true);
 
 			html[0].addEventListener("click", ev => {
@@ -4505,7 +4769,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!btn) return;
 				ev.stopPropagation();
 				const { slug, show } = btn.dataset;
-				this._toggleArcanumShowBoth(slug, show !== "true").then(() => this.render(false));
+				this._renderAfter(this._toggleArcanumShowBoth(slug, show !== "true"));
 			}, true);
 
 			// "Show back" ⇄ "Show front" single-side flip. A sibling PER-USER preference to
@@ -4516,7 +4780,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!btn) return;
 				ev.stopPropagation();
 				const { slug, show } = btn.dataset;
-				this._toggleArcanumShowBack(slug, show !== "true").then(() => this.render(false));
+				this._renderAfter(this._toggleArcanumShowBack(slug, show !== "true"));
 			}, true);
 
 			// GM-only: in secretive mode (setting off), toggle whether the owning player can
@@ -4531,7 +4795,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const action = revealed === "true"
 					? this._stonetopCharacter.hideArcanum(slug)
 					: this._stonetopCharacter.revealArcanum(slug);
-				action.then(() => this.render(false));
+				this._renderAfter(action);
 			}, true);
 
 			html[0].addEventListener("click", ev => {
@@ -4571,9 +4835,13 @@ export function createStonetopCharacterSheetClass(Base) {
 				Dialog.confirm({
 					title:   "Remove arcanum",
 					content: `<p>Remove <strong>${escHtml(title)}</strong> from your arcana? This can't be undone.</p>`,
-					yes:     () => this._pruneArcanumUserPrefs(slug)
-						.then(() => this._stonetopCharacter.removeArcanum(slug))
-						.then(() => this.render(true)),
+					// render(false) via _renderAfter, not render(true): every sibling handler
+					// repaints in place, while force re-opens the window and resets its position.
+					// The catch matters more — a failed removal used to leave the card the user
+					// was just told was gone sitting on the sheet with nothing logged.
+					yes:     () => this._renderAfter(
+						this._pruneArcanumUserPrefs(slug)
+							.then(() => this._stonetopCharacter.removeArcanum(slug))),
 					render:  bringDialogToFront,
 					options: { classes: ["dialog", "stonetop", "stonetop-remove-arcanum-dialog"] },
 				});
@@ -4647,20 +4915,20 @@ export function createStonetopCharacterSheetClass(Base) {
 				const btn = ev.target.closest(".stonetop-pdi-activate");
 				if (!btn) return;
 				ev.stopPropagation();
-				this._stonetopCharacter.setPostDeathInsert(btn.dataset.slug).then(() => this.render(false));
+				this._renderAfter(this._stonetopCharacter.setPostDeathInsert(btn.dataset.slug));
 			}, true);
 
 			// The Ghost's tether. Saved on blur (not per keystroke) so naming it doesn't re-render
 			// the sheet out from under the cursor.
 			html.find(".stonetop-pdi-tether-input").on("change", ev => {
-				this._stonetopCharacter.setTether(ev.currentTarget.value).then(() => this.render(false));
+				this._renderAfter(this._stonetopCharacter.setTether(ev.currentTarget.value));
 			});
 
 			html[0].addEventListener("click", ev => {
 				const btn = ev.target.closest(".stonetop-pdi-remove");
 				if (!btn) return;
 				ev.stopPropagation();
-				this._stonetopCharacter.setPostDeathInsert(null).then(() => this.render(false));
+				this._renderAfter(this._stonetopCharacter.setPostDeathInsert(null));
 			}, true);
 
 			// Send the whole tab away. The tab it is drawn on goes with it, so the re-render lands
@@ -4671,7 +4939,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!btn) return;
 				ev.stopPropagation();
 				if (!this.isEditable) return;
-				this._stonetopCharacter.setPostDeathTabRequested(false).then(() => this.render(false));
+				this._renderAfter(this._stonetopCharacter.setPostDeathTabRequested(false));
 			}, true);
 
 			// These radios now render in ordinary play too, not just edit mode (an unanswered
@@ -4694,9 +4962,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				const el = ev.target.closest(".stonetop-pdi-writein, .stonetop-pdi-writein-pick");
 				if (!el) return;
 				if (!this.isEditable) return;
-				this._stonetopCharacter
-					.setPostDeathLoreText(el.dataset.section, el.dataset.option, el.value)
-					.then(() => this.render(false));
+				this._renderAfter(this._stonetopCharacter
+					.setPostDeathLoreText(el.dataset.section, el.dataset.option, el.value));
 			}, true);
 
 			html[0].addEventListener("change", ev => {
@@ -4727,7 +4994,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// Clamp to the field's max on write, not just on the next render's
 				// display — otherwise a typed over-max value (the max= attribute is
 				// advisory) would persist and resurface if the max later grows.
-				let val = Math.max(0, parseInt(input.value) || 0);
+				let val = Math.max(0, parseInt(input.value, 10) || 0);
 				if (Number.isFinite(max) && max > 0) val = Math.min(val, max);
 				const { follower, slug, index } = input.dataset;
 				// Watch for a named single follower (animal companion / initiate / beast /
@@ -4746,12 +5013,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				// "unset" HP means full (see _clampHp) — so an undefined previous value
 				// counts as alive; only an explicit 0 means they were already down.
 				const wasAlive = fateEligible
-					&& Number(this.actor.getFlag("stonetop-pwd", fateHpPaths[follower])) !== 0;
+					&& Number(this.actor.getFlag(STONETOP_SCOPE, fateHpPaths[follower])) !== 0;
 				await this._setFollowerHp(follower, slug, index, val);
 				// Reviving a fallen custom follower (HP back above 0) clears its "dead" mark so
 				// the card returns to normal — a mirror of the fate dialog's "Dead" outcome.
 				if (follower === "custom" && slug && val > 0
-					&& this.actor.getFlag("stonetop-pwd", `customFollowers.${slug}.dead`)) {
+					&& this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}.dead`)) {
 					await this.actor.update({ [`flags.stonetop-pwd.customFollowers.${slug}.dead`]: false });
 				}
 				// Capture the follower's display name off the live card BEFORE the
@@ -4766,7 +5033,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// Death's Door / dying / dead) for a follower who just went down.
 				if (wasAlive) {
 					const loyaltyPath = _followerLoyaltyPath(follower, slug);
-					const loyalty = Math.max(0, Number(this.actor.getFlag("stonetop-pwd", loyaltyPath)) || 0);
+					const loyalty = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, loyaltyPath)) || 0);
 					// Loyal to the End is the Ranger's animal-companion move (p.469 → p.143):
 					// it replaces the standard fate choice, and only the companion gets it.
 					new FollowerFateDialog(this.actor, { name: fateName, loyalty, isAnimalCompanion: follower === "animal-companion" },
@@ -4825,7 +5092,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				else target.before(dragSource);
 				const newOrder = [...nav.querySelectorAll(".item[data-tab]")].map(t => t.dataset.tab);
 				this._applyTabOrder(root, newOrder);
-				await this.actor.setFlag("stonetop-pwd", "tabOrder", newOrder);
+				await this.actor.setFlag(STONETOP_SCOPE, "tabOrder", newOrder);
 				this.render(false);
 				dragSource = null;
 			});
@@ -4840,7 +5107,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const nav = root.querySelector(".sheet-tabs");
 			const body = root.querySelector(".sheet-body");
 			if (!nav) return;
-			const savedOrder = order ?? this.actor.getFlag("stonetop-pwd", "tabOrder");
+			const savedOrder = order ?? this.actor.getFlag(STONETOP_SCOPE, "tabOrder");
 			if (!savedOrder?.length) return;
 			const tabs = [...nav.querySelectorAll(".item[data-tab]")];
 			const tabMap = new Map(tabs.map(t => [t.dataset.tab, t]));
@@ -4917,7 +5184,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const { character: target, unlinkedFrom, redirectedTo } = this._dropTarget();
 			const actor = redirectedTo ?? this.actor;
 			if (unlinkedFrom) {
-				ui.notifications?.info?.(`Dropped onto ${unlinkedFrom}'s unlinked token — written to the character instead.`);
+				ui.notifications?.info?.(`Dropped onto ${unlinkedFrom}'s unlinked token: written to the character instead.`);
 			}
 			if (POST_DEATH_INSERT_SLUGS.includes(slug)) {
 				await target.setPostDeathInsert(slug);
@@ -5010,8 +5277,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			// happened" — the same reason the arcana branch above toasts. Naming the character is
 			// what makes a drop onto the wrong actor, or onto a token copy, visible immediately.
 			const addedInventory = [];
+			// "When the PCs find an artifact, describe it! Tell them what they've found, and
+			// what's obvious at a glance" (Book I p.430). A world that turns this on has every
+			// dropped Book II treasure land with its tags and Value withheld, ready for a Know
+			// Things; off (the default) a drop reads exactly as it always has, and the GM hides
+			// individual artifacts by hand from the row's own control.
+			const hideArtifact = game.settings.get(STONETOP_SCOPE, "artifactsStartUnidentified");
 			for (const item of inventory) {
-				await target.addDroppedInventoryItem(item);
+				await target.addDroppedInventoryItem(item, { hideArtifact });
 				addedInventory.push(item.name || "an item");
 				anyAdded = true;
 			}
@@ -5028,7 +5301,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (skippedMoves.length) {
 				const names = joinNames(skippedMoves.map(n => `"${n}"`));
 				ui.notifications?.warn?.(
-					`${names} ${skippedMoves.length === 1 ? "is" : "are"} already on ${unlinkedFrom ?? this.actor?.name ?? "this character"} — nothing was added. Check the Moves tab, including Learned Moves and Other Moves.`);
+					`${names} ${skippedMoves.length === 1 ? "is" : "are"} already on ${unlinkedFrom ?? this.actor?.name ?? "this character"}: nothing was added. Check the Moves tab, including Learned Moves and Other Moves.`);
 			}
 			// Where the write actually LANDED, which on a redirect is NOT this sheet: this one is
 			// backed by the token's ActorDelta copy, which the drop deliberately did not touch. Both
@@ -5041,7 +5314,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (addedArcana.length) {
 				const one = addedArcana.length === 1;
 				ui.notifications?.info?.(
-					`Added ${joinNames(addedArcana)} to the Arcana tab, face-down — Know Things about ${one ? "it" : "them"} to learn what ${one ? "it is" : "they are"}.`,
+					`Added ${joinNames(addedArcana)} to the Arcana tab, face-down: Know Things about ${one ? "it" : "them"} to learn what ${one ? "it is" : "they are"}.`,
 				);
 				// Reveal the Arcana tab so the new (face-down) card is visible — but do it AFTER
 				// the re-render lands, as a cheap DOM toggle, not by presetting active before a
@@ -5062,34 +5335,44 @@ export function createStonetopCharacterSheetClass(Base) {
 		// This is the entry point used by the hotbar move-macros (drag a move onto the
 		// hotbar): it works whether or not the sheet is currently rendered, because it
 		// builds a detached stand-in for the row's rollable icon (see _makeSyntheticRollable)
-		// and feeds it to the same helpers the inline click handler uses. Keep the branch
-		// order here in sync with that handler in activateListeners.
+		// and feeds it to the same helpers the inline click handler uses — literally the same
+		// ladder, via _resolveMoveRollPrompts, so the two can no longer fall out of step.
 		async rollMoveById(itemId, { shiftKey = false } = {}) {
 			const item = this.actor?.items?.get(itemId);
 			if (!item) return void ui.notifications.warn("That move is no longer on this character.");
 			if (!this.isEditable) return;
 
-			const rollable = this._makeSyntheticRollable(item);
+			// A weapon-granting move (Purifying Flames) has no rollType of its own, so it belongs
+			// in the description branch — and it is steered there rather than merely landing there,
+			// so that a granting move which one day DOES carry a rollType still acts as the weapon
+			// it offers, exactly as the Moves tab's name-click has it.
+			const grantedAttack = grantedWeaponAttackFor(this.actor, item);
+
+			const rollable = grantedAttack ? null : this._makeSyntheticRollable(item);
 			if (!rollable) {                     // description-only move → post to chat
 				const posted = await item.roll();
 				// The other half: a move dragged to the hotbar is used from there just as truly
 				// as from the sheet, so it gets the same effects.
 				await this._onDescriptionMoveUsed(item);
+				// And the third, for a move whose text is an offer of a weapon: its card, then the
+				// attack it grants. Both halves, in the same order the sheet does them, so a move
+				// on the hotbar and the same move on the tab do the same thing.
+				if (grantedAttack) await this._rollGrantedWeaponAttack(item, grantedAttack, { shiftKey });
 				return posted;
 			}
 
-			const guided = this._guidedMoveForRollable(rollable);
-			if (guided) return this._openGuidedCharacterMove(guided, rollable);
-
-			const askItem = this._statChoiceMoveForRollable(rollable);
-			if (askItem) return this._promptStatChoice(askItem, rollable, undefined, { shiftKey });
-
-			const altChoice = this._altStatChoiceForRollable(rollable);
-			if (altChoice) return this._promptStatChoice(altChoice.item, rollable, altChoice.stats, { shiftKey, grants: altChoice.grants });
-
-			const situational = await this._maybePromptRollModifier({ shiftKey, rollable });
-			if (situational === null) return;   // player cancelled the modifier prompt
-			await this._stonetopCharacter.onRoll({ currentTarget: rollable }, { situational });
+			// The same ladder the Moves tab's own dice click walks, which is the point: a move on
+			// the hotbar must ask what the sheet asks. See _resolveMoveRollPrompts.
+			const situational = await this._resolveMoveRollPrompts(rollable, { shiftKey });
+			if (situational === "handled" || situational === "cancel") return;
+			const handled = await this._stonetopCharacter.onRoll({ currentTarget: rollable }, { situational });
+			// What rolling this move DOES beyond the roll — the same effects the Moves tab's own
+			// click fires, and gated the same way, so a weapon/target prompt backed out of here
+			// fires nothing either. A move dragged to the hotbar is rolled from there just as truly
+			// as from the sheet, and this path had been getting the roll without them: a Blessed who
+			// put Amulets & Talismans on their bar laid a charm the roster never heard about. The
+			// description-only branch above already reasons this way for MOVE_USE_EFFECTS.
+			if (handled !== "cancel") await this._onMoveRolled(item);
 		}
 
 		// Resolve a love letter (Book I p.568): post it like any move, then consume it.
@@ -5108,7 +5391,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				else await item.roll({ descriptionOnly: true });
 			} catch (err) {
 				console.error("Stonetop | Error resolving love letter:", err);
-				ui.notifications.error("Could not resolve that love letter — see the console for details.");
+				ui.notifications.error("Could not resolve that love letter: see the console for details.");
 				// Rethrow so the reader dialog keeps itself open and re-enables its button; the
 				// letter is left in place (delete below is skipped) so it isn't silently consumed.
 				throw err;
@@ -5137,6 +5420,89 @@ export function createStonetopCharacterSheetClass(Base) {
 			rollable.dataset.roll = stat;
 			li.append(name, rollable);
 			return rollable;
+		}
+
+		/**
+		 * Use a move that grants a weapon: roll the attack it rides on, with that weapon already
+		 * in hand. Purifying Flames is the whole case today — the Lightbearer's holy light
+		 * "counts as a weapon (d10 damage, hand, close, area, 2 piercing) and you can choose to
+		 * roll +WIS to Clash" — so clicking it Clashes with the light at +WIS, which is exactly
+		 * the state a player used to reach by clicking Clash, picking +WIS, and then picking the
+		 * light out of the weapon prompt.
+		 *
+		 * The other combination the move allows (the light in hand while rolling +STR) is still
+		 * reachable the old way, since the weapon prompt offers the light whichever stat was
+		 * chosen — so this shortcut costs nothing to leave un-asked.
+		 *
+		 * `moveItem` is the move the player CLICKED; `attack.item` is the Clash it becomes. The
+		 * modifier prompt is titled with the former (it's what they asked for), while the roll,
+		 * its card, and the effects of having rolled all belong to the latter.
+		 *
+		 * BOTH CALLERS POST THE MOVE'S TEXT FIRST and then call this. A granting move has no
+		 * rollType, so it renders no dice icon and its name-click is its only surface; taking that
+		 * click for the attack alone would leave it the one move on the sheet its owner cannot show
+		 * the table. The card then reads as the reason for the roll under it.
+		 *
+		 * THE CALLER OWNS THE EDITABILITY GATE, and deliberately: rollMoveById has already returned
+		 * for a read-only sheet, while the Moves tab resolves the attack only when editable, so an
+		 * observer gets the move's text and no roll. A guard here would swallow the difference.
+		 */
+		async _rollGrantedWeaponAttack(moveItem, attack, { shiftKey = false } = {}) {
+			const rollable = this._makeSyntheticRollable(attack.item);
+			if (!rollable) return;              // the attack move has no rollType — nothing to roll
+			// Said, not enforced: whether the granted weapon is ready — a holy light actually
+			// burning — and whether the foe is a creature of darkness are the table's call, the
+			// same call the weapon picker already leaves them. WHICH state to look at and what to
+			// say both come from the weapon's own row (data/weapons.js, via grantedWeaponAttackFor),
+			// so the second granted weapon is a table entry rather than a branch here.
+			if (attack.readyWhen && !this._stonetopCharacter?.[attack.readyWhen]) {
+				ui.notifications?.info(game.i18n.localize(attack.unreadyNotice));
+			}
+			const situational = await this._maybePromptRollModifier({ shiftKey, title: moveItem.name });
+			if (situational === null) return;   // player cancelled the modifier prompt
+			const handled = await this._stonetopCharacter.onRoll({ currentTarget: rollable }, {
+				statOverride: attack.stat, situational, weaponSlug: attack.weaponSlug,
+			});
+			// The same guard both other roll paths use. The weapon is pre-answered here, but the
+			// TARGET prompt is not, and backing out of it is a roll that never happened — an
+			// effect fired on one would be a mark laid, or a roster opened, for nothing.
+			if (handled !== "cancel") await this._onMoveRolled(attack.item);
+		}
+
+		/**
+		 * Everything a move roll has to ASK before the dice are thrown: the guided-move dialog,
+		 * the "ask" stat picker, the alt-stat picker, then the optional pre-roll modifier prompt.
+		 *
+		 * One ladder, because it has to BE one — dragging a move to the hotbar must ask exactly
+		 * what clicking its dice icon on the sheet asks. It used to be written out twice, with a
+		 * comment on the second copy telling the reader to keep the branch order in step with the
+		 * first by hand; that instruction is what this replaces.
+		 *
+		 * Returns:
+		 *   "handled"  a dialog took the roll over and owns it from here — the caller stops;
+		 *   "cancel"   the player backed out of the modifier prompt;
+		 *   a number   the situational modifier to roll with (0 when nothing was asked).
+		 *
+		 * The modifier prompt is only for 2d6 move/stat rolls, never a raw formula (a damage die,
+		 * a follower's attack) — so this answers correctly for ANY rollable on the sheet, which is
+		 * what lets the general rollable handler share it with the move-only hotbar path.
+		 */
+		async _resolveMoveRollPrompts(rollable, { shiftKey = false } = {}) {
+			const guided = this._guidedMoveForRollable(rollable);
+			if (guided) { this._openGuidedCharacterMove(guided, rollable); return "handled"; }
+
+			const askItem = this._statChoiceMoveForRollable(rollable);
+			if (askItem) { this._promptStatChoice(askItem, rollable, undefined, { shiftKey }); return "handled"; }
+
+			const altChoice = this._altStatChoiceForRollable(rollable);
+			if (altChoice) {
+				this._promptStatChoice(altChoice.item, rollable, altChoice.stats, { shiftKey, grants: altChoice.grants });
+				return "handled";
+			}
+
+			if (!rollable.classList.contains("move-rollable") && !_STAT_KEYS.has(rollable.dataset.roll)) return 0;
+			const situational = await this._maybePromptRollModifier({ shiftKey, rollable });
+			return situational === null ? "cancel" : situational;
 		}
 
 		_statChoiceMoveForRollable(rollable) {
@@ -5218,7 +5584,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const weaponNote = granted
 					? `<p class="stonetop-stat-picker-weapon"><i class="fas fa-dice-d10"></i>
 						Choosing ${_esc(Handlebars.helpers.statLabel(granted.whenStat))} means the
-						<strong>${_esc(granted.meta.name)}</strong> is your weapon &mdash;
+						<strong>${_esc(granted.meta.name)}</strong> is your weapon: 
 						<strong>${_esc(weaponTraitText(granted.meta))}</strong>, in place of your own damage die.</p>`
 					: "";
 				return `<div class="stonetop-stat-picker-why">
@@ -5228,7 +5594,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				</div>`;
 			}).join("");
 			new Dialog({
-				title: `${item.name} — Choose a Stat`,
+				title: `${item.name}: Choose a Stat`,
 				content: `<p>Which stat are you rolling with?</p>${whyHtml}`,
 				buttons,
 				render: bringDialogToFront,
@@ -5443,7 +5809,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				};
 			}
 			new Dialog({
-				title:   `${addedItem.name} — Increase a Stat`,
+				title:   `${addedItem.name}: Increase a Stat`,
 				content: `<p>Choose one stat to raise by +1 (max +${cap}).</p>${note}`,
 				buttons,
 				render:  bringDialogToFront,
@@ -5510,7 +5876,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				</form>`;
 			let picked = false;
 			new Dialog({
-				title:   `${addedItem.name} — Learn a Move`,
+				title:   `${addedItem.name}: Learn a Move`,
 				content,
 				buttons: {
 					learn: {
@@ -5894,7 +6260,52 @@ export function createStonetopCharacterSheetClass(Base) {
 			ev.preventDefault();
 			ev.stopPropagation();
 			if (!this.isEditable) return;
-			if (await this._stonetopCharacter.setHolyLight(!this._stonetopCharacter.holyLight)) this.render(false);
+			const lit = this._stonetopCharacter.holyLight;
+			// "An Invocation will end immediately if your holy light is extinguished." Read its name
+			// FIRST, because by the time the write returns there is nothing left to tell the table
+			// what went out — and then END IT HERE, so the chat card is gated on the write that
+			// actually did it. The model drops it too, and must (no future way of putting a light
+			// out may strand a Lightbearer concentrating on nothing), but its own boolean conflates
+			// "the light changed" with "an Invocation went with it" and only the second is news.
+			// Dropping it first makes the model's own drop a no-op, so this is still two writes.
+			const ending = lit ? this._invocationLabel(this._stonetopCharacter.ongoingInvocation) : "";
+			const ended  = !!ending && await this._stonetopCharacter.setOngoingInvocation("");
+			const snuffed = await this._stonetopCharacter.setHolyLight(!lit);
+			if (snuffed || ended) this.render(false);
+			// The candle itself still posts nothing — snuffing it is the player correcting the
+			// tracker. The Invocation it took with it is a different thing: that one was affecting
+			// the fiction, and its ending is news. Said ONCE: a second click that found the
+			// Invocation already gone wrote nothing, so it has nothing to announce.
+			if (ended) await this._postInvocationEnded(ending, "light");
+		}
+
+		/**
+		 * End the Invocation being held open — the "End it" control on the tab banner and on the
+		 * header chip. "You can end an Invocation whenever you wish", so there is nothing to
+		 * confirm and nothing to roll; it is one click, and re-invoking is one more.
+		 *
+		 * The card is posted only when the write actually ended something. There are two controls
+		 * for the one act (the header chip and the tab banner) plus however many clients have this
+		 * sheet open, so "it was running when I read it" is not the same question as "I am the one
+		 * who stopped it" — and the table should hear it stop once.
+		 */
+		async _onEndOngoingInvocation(ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			if (!this.isEditable) return;
+			const ending = this._invocationLabel(this._stonetopCharacter.ongoingInvocation);
+			if (!ending) return;
+			if (!await this._stonetopCharacter.setOngoingInvocation("")) return;
+			this.render(false);
+			await this._postInvocationEnded(ending, "byHand");
+		}
+
+		/** Tell the table an Invocation stopped, and why. */
+		_postInvocationEnded(label, reason) {
+			const key = INVOCATION_ENDED_KEYS[reason] ?? INVOCATION_ENDED_KEYS.byHand;
+			return this._postMoveCard(
+				game.i18n.localize("stonetop.invocations.endedTitle"),
+				`<p>${game.i18n.format(key, { name: escHtml(label) })}</p>`);
 		}
 
 		/**
@@ -5935,8 +6346,121 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * the roster is not theirs to open.
 		 */
 		async _openCondemnedIfJudge() {
-			if (!this._stonetopCharacter.canCondemn) return;
+			// Either move is enough. Condemn and Censure open the brands; Binding Arbitration opens
+			// the same window for its own half, which is the whole reason the two lists share one.
+			if (!this._stonetopCharacter.canCondemn && !this._stonetopCharacter.canBindOaths) return;
 			await this._openCondemned();
+		}
+
+		/**
+		 * The Blessed's roster of standing marks, from the header glyph.
+		 *
+		 * A window rather than a tab, for the reason the Judge's is: five moves that a Blessed uses
+		 * a handful of times a session, usually two or three rows, and a permanent tab standing
+		 * empty on every Blessed who has taken none of the five is worse than a glyph that appears
+		 * when there is something to see.
+		 *
+		 * One window PER CHARACTER (perDocumentOptions): two Blessed at one table is unusual but
+		 * legal, and two dialogs sharing one AppV1 id paint into each other's frame.
+		 */
+		async _onBlessedMarksOpen(ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			await this._openBlessedMarks();
+		}
+
+		_openBlessedMarks() {
+			return new BlessedMarksDialog(this.actor, this._stonetopCharacter, { editable: this.isEditable }).render(true);
+		}
+
+		/**
+		 * Using any of the five marking moves opens the roster — the Blessed's half of the
+		 * Consecrated Flame and Condemn hooks above. Three of the five are description-only and
+		 * arrive through MOVE_USE_EFFECTS; the other two roll +INT and arrive through
+		 * MOVE_ROLL_EFFECTS. Both land here.
+		 *
+		 * Gated on OWNING one of them, so reading an un-owned move's text off the playbook list
+		 * opens nothing.
+		 */
+		async _openBlessedMarksIfBlessed() {
+			if (!this._stonetopCharacter.canMarkBlessed) return;
+			await this._openBlessedMarks();
+		}
+
+		/**
+		 * What rolling a move does beyond rolling it. Resolved from the ITEM rather than the row's
+		 * text, for the reason MOVE_USE_EFFECTS is: an un-owned playbook row carries no item id at
+		 * all, and a player-authored custom move can be called anything.
+		 */
+		async _onMoveRolled(item) {
+			const effect = item?.name ? MOVE_ROLL_EFFECTS[item.name] : null;
+			if (effect) await effect(this);
+		}
+
+		/** The same, for a caller that has only the clicked row. */
+		async _onRollableRolled(rollable) {
+			const itemId = rollable?.closest(".item")?.dataset?.itemId;
+			return this._onMoveRolled(itemId ? this.actor.items.get(itemId) : null);
+		}
+
+		/**
+		 * The header's Battle Joy glyph: lose yourself in the fight, or come out of it.
+		 *
+		 * TURNING IT ON writes nothing else. It is a fictional state the player declares, exactly
+		 * as consecrating a flame is, and it posts nothing to chat for the same reason the candle
+		 * doesn't.
+		 *
+		 * TURNING IT OFF is a different thing, because the move attaches a roll to that moment:
+		 * "when the action stops, roll +CON". So this asks rather than assuming — a Heavy who
+		 * ticked the glyph by mistake, or whose GM has already resolved it in the fiction, must be
+		 * able to simply stop. Answering yes rolls Battle Joy itself, which is also the path a
+		 * player gets by clicking the move on the Moves tab; both go through the model, which drops
+		 * the state before building the roll so their debilities are back in play for it.
+		 */
+		async _onBattleJoyToggle(ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			if (!this.isEditable) return;
+			const raging = this._stonetopCharacter.battleJoy;
+			if (!raging) {
+				if (await this._stonetopCharacter.setBattleJoy(true)) this.render(false);
+				return;
+			}
+			const item = this.actor.items.find(i => i.type === "move" && i.name === BATTLE_JOY);
+			// No move on the sheet means this state was stranded by a playbook swap: there is
+			// nothing to roll, so the only thing left to offer is putting it out.
+			const rolled = item && await Dialog.confirm({
+				title:   game.i18n.localize("stonetop.battleJoy.endTitle"),
+				content: `<p>${game.i18n.localize("stonetop.battleJoy.endPrompt")}</p>`,
+				yes:     () => true,
+				no:      () => false,
+				defaultYes: true,
+				render:  bringDialogToFront,
+				options: { classes: ["dialog", "stonetop"] },
+			});
+			// Cancelled with Escape or the X — leave the Heavy exactly as they were, still raging.
+			if (rolled === null) return;
+			if (rolled) {
+				// Rolling it IS leaving it: the model clears the state on the way into the roll.
+				// Through the shared stand-in builder, so the header drives the same roll path the
+				// Moves tab does.
+				const rollable = this._makeSyntheticRollable(item);
+				if (rollable) {
+					await this._stonetopCharacter.onRoll({ currentTarget: rollable });
+					this.render(false);
+					return;
+				}
+				// Null for a Battle Joy carrying no rollType — a hand-edited, imported or homebrew
+				// one; the packaged move has `rollType: "con"`. `onRoll` declines that too, so
+				// there is genuinely nothing to roll. But the player answered "end it", and simply
+				// repainting an unchanged raging state is a click that did nothing and said
+				// nothing, leaving the only way out a second click and a "No". So: honour the half
+				// that can be honoured, and say why the other half did not happen.
+				ui.notifications?.warn(game.i18n.localize("stonetop.battleJoy.noRollType"));
+				if (await this._stonetopCharacter.setBattleJoy(false)) this.render(false);
+				return;
+			}
+			if (await this._stonetopCharacter.setBattleJoy(false)) this.render(false);
 		}
 
 		/**
@@ -6011,9 +6535,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		// may view several character sheets. Writing only this actor's key lets Foundry's
 		// mergeObject preserve preferences for the user's other sheets.
 		async _toggleArcanumShowBoth(slug, show) {
-			const set = new Set((game.user.getFlag("stonetop-pwd", "arcanaShowBoth") ?? {})[this.actor.id] ?? []);
+			const set = new Set((game.user.getFlag(STONETOP_SCOPE, "arcanaShowBoth") ?? {})[this.actor.id] ?? []);
 			if (show) set.add(slug); else set.delete(slug);
-			await game.user.setFlag("stonetop-pwd", "arcanaShowBoth", { [this.actor.id]: [...set] });
+			await game.user.setFlag(STONETOP_SCOPE, "arcanaShowBoth", { [this.actor.id]: [...set] });
 			// Collapsing a spread ("Show front only") returns to the front, so clear any lingering
 			// back-only flip on this card — otherwise it would land on the back, belying the label.
 			if (!show) await this._toggleArcanumShowBack(slug, false);
@@ -6023,9 +6547,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		// exactly like show-both (a per-user, per-actor User flag) so each client renders its own
 		// flip state and the GM's choices stay independent of the owning player's.
 		async _toggleArcanumShowBack(slug, show) {
-			const set = new Set((game.user.getFlag("stonetop-pwd", "arcanaShowBack") ?? {})[this.actor.id] ?? []);
+			const set = new Set((game.user.getFlag(STONETOP_SCOPE, "arcanaShowBack") ?? {})[this.actor.id] ?? []);
 			if (show) set.add(slug); else set.delete(slug);
-			await game.user.setFlag("stonetop-pwd", "arcanaShowBack", { [this.actor.id]: [...set] });
+			await game.user.setFlag(STONETOP_SCOPE, "arcanaShowBack", { [this.actor.id]: [...set] });
 		}
 
 		// Drop a removed arcanum's slug from this user's per-actor show-both / show-back view
@@ -6035,10 +6559,10 @@ export function createStonetopCharacterSheetClass(Base) {
 		async _pruneArcanumUserPrefs(slug) {
 			// The two prefs are independent flags, so prune them concurrently.
 			await Promise.all(["arcanaShowBoth", "arcanaShowBack"].map(flag => {
-				const all = game.user.getFlag("stonetop-pwd", flag);
+				const all = game.user.getFlag(STONETOP_SCOPE, flag);
 				const forActor = all?.[this.actor.id];
 				if (!Array.isArray(forActor) || !forActor.includes(slug)) return null;
-				return game.user.setFlag("stonetop-pwd", flag, { ...all, [this.actor.id]: forActor.filter(s => s !== slug) });
+				return game.user.setFlag(STONETOP_SCOPE, flag, { ...all, [this.actor.id]: forActor.filter(s => s !== slug) });
 			}));
 		}
 
@@ -6068,7 +6592,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			});
 			if (!confirmed) return;
 
-			const existing = this.actor.getFlag("stonetop-pwd", "customFollowers") ?? {};
+			const existing = this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {};
 			const present  = new Set(Object.values(existing).map(f => f?.sourceUuid).filter(Boolean));
 			const update   = {};
 			let order = this._nextFollowerOrder();
@@ -6091,7 +6615,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		// The Ring-of-Daagon follower on this sheet (or a null-ish stub), for the shared
 		// Loyalty pool that Call Up spends and a Servant's Spend button draws on.
 		_ringFollowerEntry() {
-			return findRingFollower(this.actor.getFlag("stonetop-pwd", "customFollowers") ?? {});
+			return findRingFollower(this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {});
 		}
 
 		// Open the Call Up the Deep Ones roller. Requires the Ring itself to be a follower
@@ -6130,7 +6654,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				? ` <span class="stonetop-callup-dice">(5d4: ${cost.dice.join(", ")})</span>` : "";
 			const tagLine = [...input.tags, ...(input.exceptional ? ["exceptional"] : [])].join(", ");
 			const body =
-				`<p>From heavy fog and deep water you call up <strong>${escHtml(input.name)}</strong>${diceStr} &mdash; <em>${escHtml(tagLine)}</em>.</p>`
+				`<p>From heavy fog and deep water you call up <strong>${escHtml(input.name)}</strong>${diceStr}: <em>${escHtml(tagLine)}</em>.</p>`
 				+ `<p>HP ${input.hp}${input.isGroup ? ` each &middot; ${input.size} strong` : ""}, Armor ${input.armor}, damage ${escHtml(input.damage)}.</p>`
 				+ (input.moves ? `<p><strong>Moves:</strong> ${escHtml(input.moves.replace(/\n/g, "; "))}</p>` : "")
 				+ costLine;
@@ -6143,7 +6667,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		async _onSendServantsBack(slug, name) {
 			if (!this.isEditable || !slug) return;
 			const who = name
-				|| this.actor.getFlag("stonetop-pwd", `customFollowers.${slug}.name`)
+				|| this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}.name`)
 				|| "the servants of Daagon";
 			const roll = await rollStat("cha", this.actor, {
 				moveName:        "Send Them Back",
@@ -6202,23 +6726,51 @@ export function createStonetopCharacterSheetClass(Base) {
 		 */
 		async _onArcanumKnowThings(slug, { shiftKey = false } = {}) {
 			if (!this.isEditable || !slug) return;
-			// In-flight latch, like every other one-shot action on this sheet. Nothing before the
-			// first await here does more than stop the event, and that first await is a DIALOG — so
-			// two quick clicks on the identify button opened two stat pickers, posted two roll cards
-			// and wrote this card's flags twice, in whichever order the two rolls happened to land.
-			// Keyed by slug, since identifying a different arcanum meanwhile is a real second action.
-			this._arcanaIdentifying ??= new Set();
-			if (this._arcanaIdentifying.has(slug)) return;
-			this._arcanaIdentifying.add(slug);
+			return this._underIdentifyLatch(`arcanum:${slug}`,
+				() => this._knowThingsAboutArcanum(slug, { shiftKey }));
+		}
+
+		/**
+		 * Run a one-shot identify action under an in-flight latch, keyed by the thing being
+		 * identified.
+		 *
+		 * Every identify path's first await is a DIALOG, and nothing before it does more than stop
+		 * the event — so without this, two quick clicks on an identify button opened two stat
+		 * pickers, posted two roll cards and wrote the same flags twice, in whichever order the two
+		 * rolls happened to land. Keyed rather than global because identifying a DIFFERENT thing
+		 * meanwhile is a real second action; the key carries its kind so an arcanum slug and an item
+		 * id can never be taken for each other.
+		 */
+		async _underIdentifyLatch(key, fn) {
+			this._identifyLatch ??= new Set();
+			if (this._identifyLatch.has(key)) return;
+			this._identifyLatch.add(key);
 			try {
-				await this._knowThingsAboutArcanum(slug, { shiftKey });
+				return await fn();
 			} finally {
-				this._arcanaIdentifying.delete(slug);
+				this._identifyLatch.delete(key);
 			}
 		}
 
-		/** The body of the roll above, so the latch is a plain try/finally around one call. */
-		async _knowThingsAboutArcanum(slug, { shiftKey }) {
+		/**
+		 * Roll Know Things about a particular thing, and hand back what the dice said.
+		 *
+		 * Both identify paths make the SAME roll — an arcanum's card (p.440) and an artifact's item
+		 * (p.430): the same stat/advantage picker over the character's Know Things moves, the same
+		 * Never at a Loss / Logbook plumbing, and onDirectStatRoll rather than rollStat so forward,
+		 * ongoing, the debility downgrade and the global advantage toggle all apply and a miss marks
+		 * XP. They differ only in what the tiers SAY and what they settle, so that is all a caller
+		 * passes, and the settling stays with the caller.
+		 *
+		 * `subject` is stamped on the message and is what makes the tier RE-APPLIABLE: the outcome
+		 * commits at roll time, but the Logbook ("treat the result as a 10+") and a GM Shift both
+		 * rewrite the card's tier afterwards, and without it there is nothing left to tell them which
+		 * thing the new tier is about. See _resyncIdentification in stonetop.js.
+		 *
+		 * Resolves `{ roll }`, or null when the player backed out of one of the prompts — which is
+		 * NOT the same as a roll that came back empty, and the callers settle only the latter.
+		 */
+		async _rollKnowThingsAbout({ subject, results, shiftKey }) {
 			// The character's own Know Things move carries the text the "?" toggle shows. Every
 			// character owns it (ensureStartingMoves grants all basic moves), but fall back to
 			// the trigger sentence rather than an empty card if a sheet somehow lacks it.
@@ -6233,39 +6785,45 @@ export function createStonetopCharacterSheetClass(Base) {
 			const picked  = choices.hasChoice
 				? await this._promptIdentifyRoll(choices, moves)
 				: { stat: KNOW_THINGS_STAT, advantage: false };
-			if (!picked) return;                // player closed the picker
+			if (!picked) return null;               // player closed the picker
 
 			const situational = await this._maybePromptRollModifier({ shiftKey, title: "Know Things" });
-			if (situational === null) return;   // player cancelled the modifier prompt
+			if (situational === null) return null;  // player cancelled the modifier prompt
 
 			const roll = await this._stonetopCharacter.onDirectStatRoll(picked.stat, {
 				situational,
 				rollMode: withAdvantage(this._stonetopCharacter.rollMode, picked.advantage),
 				// This roll bypasses StonetopItem.roll, so it has to stamp the move identity and
 				// pick up Never at a Loss / the Logbook itself — otherwise the card's post-roll
-				// buttons would work from the Moves tab but not from the arcana card.
-				// `arcanum` is what makes the tier RE-APPLIABLE. The outcome is committed below,
-				// at roll time, but the Logbook ("treat the result as a 10+") and a GM Shift both
-				// rewrite the card's tier afterwards — and without the slug on the message there
-				// is nothing left to tell them which card the new tier is about. See
-				// _syncArcanumIdentification in stonetop.js.
-				messageFlags: { [STONETOP_SCOPE]: { move: "Know Things", arcanum: slug } },
+				// buttons would work from the Moves tab but not from here.
+				messageFlags: { [STONETOP_SCOPE]: { move: "Know Things", ...subject } },
 				...(knowThingsRollOptions(this.actor) ?? {}),
 				moveName:        "Know Things",
 				moveDescription: owned?.system?.description
 					?? `<p>When you <strong><em>consult your accumulated knowledge</em></strong>, roll +INT.</p>`,
+				moveResults: buildMoveTierResults(results),
+			});
+			return { roll };
+		}
+
+		/** The body of the roll above, so the latch is a plain try/finally around one call. */
+		async _knowThingsAboutArcanum(slug, { shiftKey }) {
+			const outcome = await this._rollKnowThingsAbout({
+				subject: { arcanum: slug },
 				// Arcana-specific outcomes, not the generic Know Things ones: p.440 spells out
 				// what each tier means for a card. English literals, because the flavor string is
 				// persisted and re-parsed by the GM's Shift Up/Down (see roll-engine.js).
-				moveResults: buildMoveTierResults({
+				results: {
 					success: "You read the card, front and back.",
 					partial: "You read the front. The GM will show you the back when you've had time to study it or learn more.",
 					failure: "The GM makes a move: read the front and something bad happens, or you get only a hint of its power and how you could learn more.",
-				}),
+				},
+				shiftKey,
 			});
+			if (!outcome) return;
 
 			const opts = { stonetopMove: "Know Things" };
-			const tier = classifyResult(Number(roll?.total) || 0).key;
+			const tier = classifyResult(Number(outcome.roll?.total) || 0).key;
 			if (tier === "success")      await this._stonetopCharacter.identifyAndRevealArcanum(slug, opts);
 			else if (tier === "partial") await this._stonetopCharacter.identifyFrontOwedArcanum(slug, opts);
 			this.render(false);
@@ -6312,7 +6870,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				}
 				buttons.cancel = { label: "Cancel", callback: () => resolve(null) };
 				new Dialog({
-					title:   `${game.i18n.localize("stonetop.arcana.identify")} — ${_esc(this.actor.name)}`,
+					title:   `${game.i18n.localize("stonetop.arcana.identify")}: ${this.actor.name}`,
 					content,
 					buttons,
 					default: choices.stats[0],
@@ -6368,6 +6926,182 @@ export function createStonetopCharacterSheetClass(Base) {
 				`<p><strong>${escHtml(this.actor.name)}</strong> takes the time to study <strong>${escHtml(name)}</strong>, and is owed its reverse.</p>`);
 		}
 
+		// ── Identifying artifacts (Book I, Discoveries pp.430-431) ─────────────────
+		// The arcana ladder above is p.440's; this is its sibling for ordinary treasure. The
+		// two are deliberately separate: an arcanum is a pack card with a front and a back and
+		// per-character flags, an artifact is an inventory Item whose own fields carry the
+		// state, and neither's controls should ever appear on the other.
+
+		/**
+		 * The player's magnifier: pick a move, roll it, settle what it tells them.
+		 *
+		 * p.430 names two moves, and they do different jobs. Know Things settles the ladder —
+		 * "on a 7+, tell them some combo of what it is, what it does, what it's worth" — so its
+		 * tier writes the item. Seek Insight buys questions and answers, which are the GM's to
+		 * give at the table, so it rolls, posts the question list scoped to this artifact, and
+		 * deliberately writes nothing: the GM settles it with their own control if the answers
+		 * amounted to figuring the thing out.
+		 */
+		async _onArtifactIdentify(ownedId, { shiftKey = false } = {}) {
+			if (!this.isEditable || !ownedId) return;
+			return this._underIdentifyLatch(`artifact:${ownedId}`, async () => {
+				const knowledge = this._stonetopCharacter.artifactKnowledge(ownedId);
+				if (!knowledge) return;
+				const move = await this._promptArtifactMove(knowledge);
+				if (!move) return;
+				if (move === "know")  await this._knowThingsAboutArtifact(knowledge, { shiftKey });
+				if (move === "seek")  await this._seekInsightAboutArtifact(knowledge, { shiftKey });
+			});
+		}
+
+		/**
+		 * Which move the player is making about this artifact. Each is quoted from the book's own
+		 * paragraph so the choice is made on what the move will actually do, not on its name.
+		 * Resolves "know" | "seek", or null if the dialog is closed.
+		 */
+		_promptArtifactMove(knowledge) {
+			const owed = knowledge.state === ARTIFACT_STATE.PARTIAL;
+			const content =
+				`<p>${_esc(game.i18n.format("stonetop.artifact.promptIntro", { name: knowledge.name }))}</p>`
+				+ (owed ? `<p class="stonetop-artifact-owed">${_esc(game.i18n.localize("stonetop.artifact.promptOwed"))}</p>` : "")
+				+ `<div class="stonetop-stat-picker-why"><strong>${_esc(game.i18n.localize("stonetop.artifact.knowThings"))}</strong>`
+				+ `<p>${_esc(game.i18n.localize("stonetop.artifact.knowThingsWhy"))}</p></div>`
+				+ `<div class="stonetop-stat-picker-why"><strong>${_esc(game.i18n.localize("stonetop.artifact.seekInsight"))}</strong>`
+				+ `<p>${_esc(game.i18n.localize("stonetop.artifact.seekInsightWhy"))}</p></div>`;
+			return new Promise(resolve => {
+				new Dialog({
+					title:   `${game.i18n.localize("stonetop.artifact.identify")}: ${knowledge.name}`,
+					content,
+					buttons: {
+						know:   { label: game.i18n.localize("stonetop.artifact.knowThings"),  callback: () => resolve("know") },
+						seek:   { label: game.i18n.localize("stonetop.artifact.seekInsight"), callback: () => resolve("seek") },
+						cancel: { label: "Cancel", callback: () => resolve(null) },
+					},
+					default: "know",
+					close:   () => resolve(null),
+					render:  bringDialogToFront,
+				}, { width: 520, classes: ["dialog", "stonetop", "stonetop-stat-picker-dialog"] }).render(true);
+			});
+		}
+
+		/**
+		 * Know Things about an artifact (p.430). The roll is the arcanum identify's twin — same
+		 * stat/advantage picker, same Never at a Loss / Logbook plumbing, same onDirectStatRoll so
+		 * forward, ongoing, debilities and the global advantage toggle all apply — and differs
+		 * only in what the tiers say and what they settle.
+		 */
+		async _knowThingsAboutArtifact(knowledge, { shiftKey }) {
+			const outcome = await this._rollKnowThingsAbout({
+				subject: { artifact: knowledge.id },
+				results: knowThingsArtifactResults(),
+				shiftKey,
+			});
+			if (!outcome) return;
+
+			const tier  = classifyResult(Number(outcome.roll?.total) || 0).key;
+			const state = artifactStateForTier(tier);
+			if (state) {
+				await this._stonetopCharacter.setArtifactState(knowledge.id, state, { upgradeOnly: true });
+			}
+			// A miss leaves the item alone — both of p.430's answers there are the GM's to make —
+			// but it must not leave the table with nothing, so the lead the GM already wrote (or a
+			// reminder that they owe one) goes to chat where the roll card can be read beside it.
+			else await this._postArtifactLeadCard(knowledge);
+			this.render(false);
+		}
+
+		/**
+		 * Seek Insight about an artifact (p.430: "resolve the move! On a 7+, answer their
+		 * question(s) honestly and helpfully"). Rolls +WIS and posts the question list alongside,
+		 * scoped to this thing. It never writes the ladder: the answers are the GM's, and how much
+		 * of the artifact they gave away is the GM's call to record with their own control.
+		 */
+		async _seekInsightAboutArtifact(knowledge, { shiftKey }) {
+			const owned = this.actor.items.find(i => i.type === "move" && i.name === "Seek Insight");
+			const situational = await this._maybePromptRollModifier({ shiftKey, title: "Seek Insight" });
+			if (situational === null) return;
+			const roll = await this._stonetopCharacter.onDirectStatRoll("wis", {
+				situational,
+				messageFlags: { [STONETOP_SCOPE]: { move: "Seek Insight", artifact: knowledge.id } },
+				moveName:        "Seek Insight",
+				moveDescription: owned?.system?.description
+					?? `<p>When you <strong><em>study a situation or person, looking to the GM for insight</em></strong>, roll +WIS.</p>`,
+				moveResults: buildMoveTierResults(seekInsightArtifactResults()),
+			});
+			if (classifyResult(Number(roll?.total) || 0).key === "failure") return;
+			await this._postMoveCard(
+				game.i18n.format("stonetop.artifact.insightTitle", { name: knowledge.name }),
+				`<ul>${ARTIFACT_INSIGHT_QUESTIONS.map(q => `<li>${escHtml(q)}</li>`).join("")}</ul>`);
+		}
+
+		/** What a 6- leaves behind: the GM's written lead, or a nudge that p.431 wants one. */
+		async _postArtifactLeadCard(knowledge) {
+			const body = knowledge.lead
+				? `<p>${escHtml(knowledge.lead)}</p>`
+				: `<p><em>${escHtml(game.i18n.localize("stonetop.artifact.leadMissing"))}</em></p>`
+					+ `<ul>${ARTIFACT_LEAD_SUGGESTIONS.map(s => `<li>${escHtml(s)}</li>`).join("")}</ul>`;
+			await this._postMoveCard(
+				game.i18n.format("stonetop.artifact.leadTitle", { name: knowledge.name }), body);
+		}
+
+		/**
+		 * The GM's control. Two jobs in one window, because they're the same decision seen from
+		 * either end: how much of this artifact the player may read, and what there is to read.
+		 *
+		 * The state select is p.430's ladder run by hand — "Once a PC figures an artifact out,
+		 * give the player its tags, write-up, and any custom moves" is a thing the GM does at the
+		 * table as often as a roll settles it, and hiding a thing in the first place has no roll
+		 * at all. The three text fields are the artifact's own copy of p.430-431: the hint that
+		 * stands in for its tags, the write-up a 10+ hands over, and the lead a miss leaves.
+		 *
+		 * The rungs are a SELECT rather than one button each: four states plus a cancel is five
+		 * buttons crammed into one dialog row, and the choice reads better as "how much may they
+		 * read?" answered once than as five verbs to pick between.
+		 *
+		 * The body is a TEMPLATE (templates/dialogs/artifact-gm.hbs), like every other GM editor in
+		 * the system. It was thirty-odd lines of HTML built here with a local string helper, which
+		 * is how the one value that isn't escaped came to be un-escaped by accident rather than on
+		 * purpose: in a template escaping is the default, and the single raw field says why.
+		 */
+		async _onArtifactGmControl(ownedId) {
+			if (!game.user.isGM || !ownedId) return;
+			const knowledge = this._stonetopCharacter.artifactKnowledge(ownedId);
+			if (!knowledge) return;
+			const loc = key => game.i18n.localize(`stonetop.artifact.${key}`);
+			const content = await renderTemplate(ARTIFACT_GM_TEMPLATE, {
+				note:   knowledge.note,
+				states: ARTIFACT_GM_STATES.map(state => ({
+					value:    state,
+					labelKey: `stonetop.artifact.state.${state || "none"}`,
+					selected: state === knowledge.state,
+				})),
+				fields: ARTIFACT_GM_FIELDS.map(field => ({ ...field, value: knowledge[field.key] })),
+			});
+
+			// Every declared DialogV1 button closes the window, so the fields have to be
+			// harvested by the Save button rather than written as they're edited. Read off the
+			// same table the template was built from, so a fourth field is one entry, not three.
+			const save = async html => {
+				const root = html?.[0] ?? html;
+				const read = name => root?.querySelector?.(`[name="${name}"]`)?.value ?? "";
+				await this._stonetopCharacter.updateArtifactKnowledge(ownedId, {
+					state: read("state"),
+					...Object.fromEntries(ARTIFACT_GM_FIELDS.map(f => [f.key, read(f.key)])),
+				});
+				this.render(false);
+			};
+			new Dialog({
+				title:   `${loc("gmTitle")}: ${knowledge.name}`,
+				content,
+				buttons: {
+					save:   { label: loc("saveOnly"), callback: save },
+					cancel: { label: "Cancel" },
+				},
+				default: "save",
+				render:  bringDialogToFront,
+			}, { width: 560, classes: ["dialog", "stonetop", "stonetop-artifact-dialog"], resizable: true }).render(true);
+		}
+
 		/**
 		 * Use an Invocation (the tap on its title). Every Lightbearer starts with Invoke the Sun
 		 * God, so using one is a MOVE — imbue your holy light with Helior's power, roll +WIS,
@@ -6381,8 +7115,20 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * The empowered effect is left OFF the card unless it was bought: it isn't part of what
 		 * the Invocation does, it's what it does IF you pay an extra consequence for it, and
 		 * printed alongside the normal effect it just muddies what actually happened.
+		 *
+		 * It is also where the ongoing Invocation is picked up and put down. That happens on the
+		 * AFFIRMATIVE button only — "Invoke the Sun God" / "Use it" is the player saying they use
+		 * this, where "Just show it" is reading the text out to the table, and reading an
+		 * Invocation aloud must not silently drop the one they are holding.
+		 *
+		 * When there is nothing to ask, the window is skipped and the use is simply taken as read.
+		 * The bookkeeping is NOT skipped with it: owning Invoke the Sun God is what earns the roll,
+		 * not what makes an Invocation take hold, so a character who has Invocations without that
+		 * move (a cross-playbook pick through Versatile, a Lightbearer whose starting move was
+		 * dropped) has to be tracked like any other — otherwise the header chip, the banner and the
+		 * "you can't use another while one is ongoing" rule are dead for them forever.
 		 */
-		async _postInvocationCard(name, description, { shiftKey = false, known = true } = {}) {
+		async _postInvocationCard(name, description, { shiftKey = false, known = true, slug = "", ongoing = false } = {}) {
 			const { base, empowered } = splitEmpoweredEffect(description);
 			// `known` first: an Invocation this character hasn't learned can be read but not
 			// invoked, so neither question is worth asking about one. rollMoveById also bails
@@ -6390,22 +7136,51 @@ export function createStonetopCharacterSheetClass(Base) {
 			// roll button that would do nothing.
 			const canInvoke  = known && this.isEditable && ownsMoveNamed(this.actor, INVOKE_THE_SUN_GOD);
 			const canEmpower = known && !!empowered && ownsMoveNamed(this.actor, EMPOWERED_INVOCATIONS);
-			// Nothing to decide — post it and stay out of the way.
-			if (!canInvoke && !canEmpower) return this._postMoveCard(name, base);
+			// Whether this tap is a USE at all, which is the narrower question the two gates above
+			// answer for the roll and the empower checkbox. An un-learned Invocation is being read
+			// out; a sheet nobody can write is being looked at; anything else is being used.
+			const canUse = known && this.isEditable;
 
-			const answer = await this._promptInvokeInvocation({
-				name, empoweredHtml: empowered, canInvoke, canEmpower,
-				lit: this._stonetopCharacter.holyLight,
-			});
-			if (answer === null) return null;   // dismissed — the Invocation isn't used at all
+			const used = { slug, ongoing };
+			// Nothing to decide — no window, and the affirmative is assumed, because a tap with no
+			// question attached to it is still the player saying they use this.
+			let answer = { roll: false, used: canUse, empower: false };
+			if (canInvoke || canEmpower) {
+				answer = await this._promptInvokeInvocation({
+					name, empoweredHtml: empowered, canInvoke, canEmpower,
+					lit:    this._stonetopCharacter.holyLight,
+					notice: invokeNotice({ current: this._stonetopCharacter.ongoingInvocation, used, options: this._invocationOptions }),
+				});
+				if (answer === null) return null;   // dismissed — the Invocation isn't used at all
+			}
+
+			// What using it does to the Invocation already running. Worked out BEFORE the card is
+			// built, because the one it displaces is named on that card: the ending belongs in the
+			// same post as the thing that caused it, not in a second card the table has to pair up
+			// with the first.
+			const use = answer.used
+				? resolveInvocationUse({ current: this._stonetopCharacter.ongoingInvocation, used })
+				: null;
+			const lead = use?.ended
+				? `<p class="stonetop-chat-invocation-ended"><em>${escHtml(this._invocationLabel(use.ended))} ends.</em></p>`
+				: "";
 
 			// Card first, roll second: the card is the statement and the roll is how it goes.
 			// It also means a cancelled situational-modifier prompt (which fires INSIDE
 			// rollMoveById) leaves the Invocation posted rather than losing everything.
 			const card = answer.empower
-				? await this._postMoveCard(`${name} (Empowered)`, base + EMPOWERED_NOTE_HTML + empowered)
-				: await this._postMoveCard(name, base);
+				? await this._postMoveCard(`${name} (Empowered)`, lead + base + EMPOWERED_NOTE_HTML + empowered)
+				: await this._postMoveCard(name, lead + base);
+			// Written before the roll, deliberately. A 6- is the GM's to narrate — it may or may not
+			// mean the Invocation failed to take hold — so the sheet records what the player did and
+			// leaves "it didn't work" to one click on End it, rather than guessing from a die.
+			if (use?.changed) await this._stonetopCharacter.setOngoingInvocation(use.next);
 			if (answer.roll) await this.rollMoveByName(INVOKE_THE_SUN_GOD, { shiftKey });
+			// The banner, the header chip and the card's badge are all read at render time, so the
+			// flag write above shows up only once the sheet repaints. Left until AFTER the roll —
+			// re-rendering mid-roll would pull the modifier prompt out from under it — and guarded
+			// on the sheet still being open, since the roll is an await and it may have been closed.
+			if (use?.changed && this.rendered) this.render(false);
 			return card;
 		}
 
@@ -6420,11 +7195,12 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * of every use before it. It also folds what would otherwise be two sequential dialogs
 		 * into one.
 		 */
-		_promptInvokeInvocation({ name, empoweredHtml, canInvoke, canEmpower, lit }) {
+		_promptInvokeInvocation({ name, empoweredHtml, canInvoke, canEmpower, lit, notice = null }) {
 			return new Promise(resolve => {
 				let answer = null;
-				const read = (html, roll) => ({
+				const read = (html, roll, used) => ({
 					roll,
+					used,
 					empower: !!html.find('[name="empower"]')[0]?.checked,
 				});
 				let content = "";
@@ -6436,7 +7212,18 @@ export function createStonetopCharacterSheetClass(Base) {
 					// candle is only ever as current as someone kept it. Say it and move on.
 					if (!lit) content += `<p class="stonetop-invoke-nolight">`
 						+ `<i class="fas fa-triangle-exclamation" aria-hidden="true"></i> `
-						+ `No holy light is lit on this sheet — consecrate a flame, or check with your GM.</p>`;
+						+ `No holy light is lit on this sheet: consecrate a flame, or check with your GM.</p>`;
+				}
+				// What this does to the Invocation already running — OUTSIDE the canInvoke block,
+				// because the affirmative button takes hold of the Invocation either way and the
+				// window must never change that state without having said so. Also not a block:
+				// ending one Invocation to use another is a legal, ordinary thing to do, it just
+				// has to be a decision rather than a discovery.
+				{
+					const key  = notice && INVOCATION_NOTICE_KEYS[notice.kind];
+					const line = key ? game.i18n.format(key, { name: escHtml(notice.ending) }) : "";
+					if (line) content += `<p class="stonetop-invoke-ongoing${notice.kind === "start" ? "" : " is-ending"}">`
+						+ `<i class="fas fa-sun" aria-hidden="true"></i> ${line}</p>`;
 				}
 				if (canEmpower) {
 					content += `<label class="stonetop-invoke-empower"><input type="checkbox" name="empower"> `
@@ -6446,7 +7233,7 @@ export function createStonetopCharacterSheetClass(Base) {
 						+ `penalty for failing: you take it however the roll turns out, even on a 10+.</p>`;
 				}
 				new Dialog({
-					title:   canInvoke ? `${name} — Invoke the Sun God?` : `${name} — Empower it?`,
+					title:   canInvoke ? `${name}: Invoke the Sun God?` : `${name}: Empower it?`,
 					content,
 					buttons: {
 						// The affirmative key is declared first and is in the shared left-side list,
@@ -6454,12 +7241,15 @@ export function createStonetopCharacterSheetClass(Base) {
 						roll: {
 							icon:     '<i class="fas fa-sun"></i>',
 							label:    canInvoke ? "Invoke the Sun God (+WIS)" : "Use it",
-							callback: html => { answer = read(html, canInvoke); },
+							callback: html => { answer = read(html, canInvoke, true); },
 						},
 						no: {
 							icon:     '<i class="fas fa-comment"></i>',
 							label:    "Just show it",
-							callback: html => { answer = read(html, false); },
+							// `used: false` is the load-bearing half of this button. Showing an
+							// Invocation's text is not using it, so it must not take hold of a new one
+							// or let go of the one already running.
+							callback: html => { answer = read(html, false, false); },
 						},
 					},
 					default: "roll",
@@ -6505,7 +7295,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const ring = this._ringFollowerEntry();
 			let line;
 			if (kind === "loyalty" && ring.id && ring.loyalty > 0) {
-				await this.actor.setFlag("stonetop-pwd", `customFollowers.${ring.id}.loyalty`, ring.loyalty - 1);
+				await this.actor.setFlag(STONETOP_SCOPE, `customFollowers.${ring.id}.loyalty`, ring.loyalty - 1);
 				line = `<p>You spend <strong>1 Loyalty</strong> from ${escHtml(ring.name)} (now ${ring.loyalty - 1}). <strong>${escHtml(who)}</strong> will eventually go.</p>`;
 			} else {
 				line = `<p>You <strong>mark a consequence</strong>. <strong>${escHtml(who)}</strong> will eventually go.</p>`;
@@ -6517,7 +7307,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		async _servantsBreakLoose(slug, who) {
 			// No longer yours to command. Flag the batch (the card shows a "broke free" badge)
 			// and note it; it stays on the tab until removed.
-			await this.actor.setFlag("stonetop-pwd", `customFollowers.${slug}.brokenFree`, true);
+			await this.actor.setFlag(STONETOP_SCOPE, `customFollowers.${slug}.brokenFree`, true);
 			await this._postMoveCard("Send Them Back",
 				`<p><strong>${escHtml(who)}</strong> break free of your control. They are no longer yours to command.</p>`);
 			this.render(false);
@@ -6532,7 +7322,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const { possessionFollower } = await import("../../data/possession-followers.js");
 			const input = possessionFollower(slug);
 			if (!input) return;
-			const existing = this.actor.getFlag("stonetop-pwd", "customFollowers") ?? {};
+			const existing = this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {};
 			if (Object.values(existing).some(f => f?.sourceUuid === input.sourceUuid)) return;
 			const id = foundry.utils.randomID(16);
 			await this.actor.update({
@@ -6586,7 +7376,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 *
 		 * The steading is merged last so a face a named resident wears reads as theirs.
 		 */
-		_followerPortraitsInUse({ ftype, slug } = {}) {
+		_followerPortraitsInUse({ ftype, slug, own } = {}) {
 			const used = {};
 			for (const p of this._followerPortraits ?? []) {
 				if (p.ftype === ftype && p.slug === (slug ?? "")) continue;
@@ -6598,7 +7388,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			// resident wins the label over the same person's bare actor entry. A follower
 			// recruited from an NPC shares that NPC's portrait on purpose, and the gallery does
 			// not read a person's own current face as taken from them.
-			return { ...used, ...usedActorPortraits(), ...usedPersonPortraits(getStonetopSteadingActor()) };
+			const all = { ...used, ...usedActorPortraits(), ...usedPersonPortraits(getStonetopSteadingActor()) };
+			// `own` is the same "this one is already mine" the (ftype, slug) skip above expresses,
+			// for a caller that cannot express it that way. A ROSTER member has no such pair, and
+			// their face is claimed by the world scan (usedActorPortraits reaches it through
+			// claimRosterPortraits) — so without this the gallery told a crew member the picture
+			// they are wearing belongs to somebody else and dropped it out of "Unused".
+			if (own) delete all[own];
+			return all;
 		}
 
 		/**
@@ -6787,7 +7584,6 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!this.isEditable || !portrait) return;
 			const base = _followerDetailBase(portrait.dataset.ftype, portrait.dataset.slug);
 			if (!base) return;
-			const path = `${base}.img`;
 			// getAttribute, not `.src`: the DOM resolves that to an absolute URL, which would
 			// match none of the gallery's relative tile paths, so the portrait already in use
 			// would not read as selected.
@@ -6796,8 +7592,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// The gallery opens over the sheet; a preview raised by the hover that led to the
 			// click would be left floating on top of it with nothing to anchor to.
 			removeAvatarPreview();
-			const apply = async src => {
-				await this.actor.setFlag("stonetop-pwd", path, src ?? "");
+			// Picture and frame in ONE update, both ways — see followerPortraitPickUpdate and its
+			// clear, which own where a card keeps its face and why the two move together.
+			const apply = async (src, { frame = null } = {}) => {
+				await this.actor.update(followerPortraitPickUpdate(base, src, { frame }));
 				this.render(false);
 				onPicked?.(src ?? "");
 			};
@@ -6805,15 +7603,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				current,
 				used: this._followerPortraitsInUse(portrait.dataset),
 				onPick: apply,
-				// One atomic update: clearing the portrait must also drop any frame authored
-				// against it, or the follower keeps an orphan rect that would silently apply to
-				// whatever picture is chosen next (it would not — the src stamp neutralises it —
-				// but the dead data would accumulate forever).
 				onClear: async () => {
-					await this.actor.update({
-						[`flags.stonetop-pwd.${path}`]: "",
-						[`flags.stonetop-pwd.${base}.-=portraitFrame`]: null,
-					});
+					await this.actor.update(followerPortraitClearUpdate(base));
 					this.render(false);
 					onCleared?.();
 				},
@@ -6911,16 +7702,22 @@ export function createStonetopCharacterSheetClass(Base) {
 				current,
 				// The roster's own faces are in this scan (usedActorPortraits sweeps them through
 				// claimRosterPortraits), so two crew members cannot be handed one face without the
-				// gallery saying so.
-				used: this._followerPortraitsInUse(),
+				// gallery saying so — and `own` takes THIS member's back out again, since the same
+				// sweep is what would otherwise report their current face as another person's.
+				used: this._followerPortraitsInUse({ own: current }),
 				// Both branches follow through only on a write that LANDED. The store refuses,
 				// silently, a ref that has fallen off the end of its roster — the reachable case
 				// being this very window, kept open across a crew shrinking beneath it (see
 				// roster-portraits.js). Telling the window about a face that was never stored is
 				// the one outcome worse than the refusal: it would show the new picture, and the
 				// sheet behind it would still be showing the old one.
-				onPick: async (src) => {
-					if (!await writeRosterPortrait(this.actor, ref.kind, ref.slug, ref.index, { img: src ?? "" })) return;
+				onPick: async (src, { frame = null } = {}) => {
+					// Picture and frame in the one array rewrite, for the reason the follower card
+					// above spells out: the 26px disc crops to the frame, and a picture stored
+					// without one falls back to a blind top slice. `undefined` is the store's own
+					// delete signal, which is exactly what a browsed file (no square) should leave.
+					if (!await writeRosterPortrait(this.actor, ref.kind, ref.slug, ref.index,
+						{ img: src ?? "", portraitFrame: frame ?? undefined })) return;
 					this.render(false);
 					onPicked?.(src ?? "");
 				},
@@ -7024,7 +7821,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		// `order`, so two followers added in the same millisecond still sort by insertion
 		// (Date.now() alone can tie). Date.now() is the floor for the first follower.
 		_nextFollowerOrder() {
-			return nextFollowerOrder(this.actor.getFlag("stonetop-pwd", "customFollowers") ?? {});
+			return nextFollowerOrder(this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {});
 		}
 
 		// Apply the fate chosen for a follower that hit 0 HP (FollowerFateDialog).
@@ -7056,9 +7853,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			}
 			let body;
 			if (action === "deathsdoor") {
-				body = `<p><strong>${who}</strong> triggers <strong>Death's Door</strong> &mdash; ${escHtml(this.actor.name)} rolls for them.</p>`;
+				body = `<p><strong>${who}</strong> triggers <strong>Death's Door</strong>: ${escHtml(this.actor.name)} rolls for them.</p>`;
 			} else if (action === "dying") {
-				body = `<p><strong>${who}</strong> is dying &mdash; out of the action; they'll die or hit Death's Door soon if no one intervenes.</p>`;
+				body = `<p><strong>${who}</strong> is dying: out of the action; they'll die or hit Death's Door soon if no one intervenes.</p>`;
 			} else if (action === "dead") {
 				body = `<p><strong>${who}</strong> is dead.</p>`;
 				// Mark a custom follower fallen so its card stays on the sheet as a record —
@@ -7081,17 +7878,17 @@ export function createStonetopCharacterSheetClass(Base) {
 		// merges it) instead of cloning the whole map.
 		async _setFollowerHp(follower, slug, index, val) {
 			if (follower === "animal-companion") {
-				await this.actor.setFlag("stonetop-pwd", "animalCompanion.hpCurrent", val);
+				await this.actor.setFlag(STONETOP_SCOPE, "animalCompanion.hpCurrent", val);
 			} else if (follower === "initiate") {
 				await this.actor.update({ [`flags.stonetop-pwd.initiatesHp.${slug}`]: val });
 			} else if (follower === "crew-individual") {
 				await this.actor.update({ [`flags.stonetop-pwd.crew.individualsHp.${Number(index)}`]: val });
 			} else if (follower === "crew-member") {
-				const arr = [...(this.actor.getFlag("stonetop-pwd", "crew.memberHp") ?? [])];
+				const arr = [...(this.actor.getFlag(STONETOP_SCOPE, "crew.memberHp") ?? [])];
 				arr[Number(index)] = val;
-				await this.actor.setFlag("stonetop-pwd", "crew.memberHp", arr);
+				await this.actor.setFlag(STONETOP_SCOPE, "crew.memberHp", arr);
 			} else if (follower === "crew-group") {
-				await this.actor.setFlag("stonetop-pwd", "crew.groupHp", val);
+				await this.actor.setFlag(STONETOP_SCOPE, "crew.groupHp", val);
 			} else if (follower === "beast") {
 				await this.actor.update({ [`flags.stonetop-pwd.beastHp.${slug}`]: val });
 			} else if (follower === "custom") {
@@ -7099,7 +7896,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			} else if (follower === "custom-group") {
 				await this.actor.update({ [`flags.stonetop-pwd.customFollowers.${slug}.groupHp`]: val });
 			} else if (follower === "custom-member") {
-				const arr = [...(this.actor.getFlag("stonetop-pwd", `customFollowers.${slug}.memberHp`) ?? [])];
+				const arr = [...(this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}.memberHp`) ?? [])];
 				arr[Number(index)] = val;
 				await this.actor.update({ [`flags.stonetop-pwd.customFollowers.${slug}.memberHp`]: arr });
 			}
@@ -7112,7 +7909,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const gearPath = base ? `${base}.gear` : null;
 			if (!gearPath) return;
 			new Dialog({
-				title:   `${name || "Follower"} — Have What They Need`,
+				title:   `${name || "Follower"}: Have What They Need`,
 				content: `<form class="stonetop-spend-form"><p>What does <strong>${escHtml(name || "they")}</strong> produce?</p>`
 					+ `<input type="text" class="stonetop-hwtn-item stonetop-cf-input" placeholder="an item, some supplies…" style="width:100%"></form>`,
 				buttons: {
@@ -7120,11 +7917,11 @@ export function createStonetopCharacterSheetClass(Base) {
 						callback: async html => {
 							const item = String(html?.[0]?.querySelector(".stonetop-hwtn-item")?.value ?? "").trim();
 							if (!item) return;
-							const cur = foundry.utils.deepClone(this.actor.getFlag("stonetop-pwd", gearPath) ?? []);
+							const cur = foundry.utils.deepClone(this.actor.getFlag(STONETOP_SCOPE, gearPath) ?? []);
 							cur.push({ label: item, checked: true });
-							await this.actor.setFlag("stonetop-pwd", gearPath, cur);
+							await this.actor.setFlag(STONETOP_SCOPE, gearPath, cur);
 							await this._postMoveCard("Have What They Need",
-								`<p><strong>${escHtml(name || "Your follower")}</strong> produces <em>${escHtml(item)}</em> — added to their gear.</p>`);
+								`<p><strong>${escHtml(name || "Your follower")}</strong> produces <em>${escHtml(item)}</em>: added to their gear.</p>`);
 							this.render(false);
 						} },
 					cancel: { label: "Cancel" },
@@ -7140,9 +7937,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			// The Supplies-per-set count is "4 + Prosperity" — a synchronous read; no need
 			// to build the whole sheet snapshot just to pull one scalar off it.
 			const pipsPerSet = this._stonetopCharacter.getSmallItemLimit() ?? 5;
-			await this.actor.setFlag("stonetop-pwd", "crew.supplies", Array(6).fill(pipsPerSet));
+			await this.actor.setFlag(STONETOP_SCOPE, "crew.supplies", Array(6).fill(pipsPerSet));
 			await this._postMoveCard("Outfit",
-				`<p>The crew Outfits — every member's Supplies restocked to full (${pipsPerSet} uses each).</p>`);
+				`<p>The crew Outfits: every member's Supplies restocked to full (${pipsPerSet} uses each).</p>`);
 			this.render(false);
 		}
 
@@ -7151,12 +7948,12 @@ export function createStonetopCharacterSheetClass(Base) {
 		// match a "shield" gear label; the crew reads the shield pip of its structured kit.
 		_followerHasShield(ftype, slug) {
 			if (ftype === "crew") {
-				const gearFlags = this.actor.getFlag("stonetop-pwd", "crew.gear") ?? {};
+				const gearFlags = this.actor.getFlag(STONETOP_SCOPE, "crew.gear") ?? {};
 				// A number is filled load pips (equipped once ≥ its weight, default 1); a
 				// non-number flag is already the "fully equipped" boolean.
 				return typeof gearFlags.shield === "number" ? gearFlags.shield >= 1 : !!gearFlags.shield;
 			}
-			const detail = this.actor.getFlag("stonetop-pwd", _followerDetailBase(ftype, slug));
+			const detail = this.actor.getFlag(STONETOP_SCOPE, _followerDetailBase(ftype, slug));
 			return _followerBearsShield(detail?.gear);
 		}
 
@@ -7179,7 +7976,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Never REDUCE an already-held pool: a follower who held 3 (or clicked a 4th pip
 			// for their shield) and then Defends again at 7–9 keeps the higher pool rather
 			// than being silently knocked down to 1.
-			const existing = Math.max(0, Number(this.actor.getFlag("stonetop-pwd", path)) || 0);
+			const existing = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0);
 			const next = Math.max(existing, held);
 			// Only advertise the shield's +1 when the follower actually bears one, and only
 			// when this Defend set the (fresh) base hold — not when we kept a higher pool.
@@ -7189,7 +7986,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				await this.actor.update({ [`flags.stonetop-pwd.${path}`]: next }, { stonetopMove: "Defend" });
 			}
 			const who = result?.followerName || "Your follower";
-			await this._postMoveCard("Defend — Readiness held",
+			await this._postMoveCard("Defend: Readiness held",
 				`<p><strong>${escHtml(who)}</strong> holds <strong>${next}</strong> Readiness${shieldNote}.</p>`
 				+ `<p>Spend it to suffer the damage/effects of an attack for a ward, or to draw all attention to themselves.</p>`);
 			if (next !== existing) this.render(false);
@@ -7210,7 +8007,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		_onSpendLoyalty(ftype, slug, name) {
 			const path = _followerLoyaltyPath(ftype, slug);
 			if (!path) return;
-			const current = Math.max(0, Number(this.actor.getFlag("stonetop-pwd", path)) || 0);
+			const current = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0);
 			if (current <= 0) { ui.notifications?.warn?.(`${name || "This follower"} holds no Loyalty to spend.`); return; }
 			const reasons = [
 				{ key: "fear",      label: "Overcome their fear to do as you say" },
@@ -7236,7 +8033,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const reason = reasons.find(r => r.key === key)?.label ?? "";
 			// Decrement the LIVE value, not the count captured when this (non-modal) dialog
 			// opened — the track may have changed since, and writing captured−1 would clobber it.
-			const live = Math.max(0, Number(this.actor.getFlag("stonetop-pwd", path)) || 0);
+			const live = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0);
 			if (live <= 0) { ui.notifications?.warn?.(`${name || "This follower"} no longer holds any Loyalty to spend.`); return; }
 			await this.actor.update({ [`flags.stonetop-pwd.${path}`]: live - 1 }, { stonetopMove: "Spend Loyalty" });
 			await this._postMoveCard("Spend Loyalty",
@@ -7251,10 +8048,10 @@ export function createStonetopCharacterSheetClass(Base) {
 		_onSpendReadiness(ftype, slug, name) {
 			const rPath = _followerReadinessPath(ftype, slug);
 			if (!rPath) return;
-			const readiness = Math.max(0, Number(this.actor.getFlag("stonetop-pwd", rPath)) || 0);
+			const readiness = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, rPath)) || 0);
 			if (readiness <= 0) { ui.notifications?.warn?.(`${name || "This follower"} holds no Readiness to spend.`); return; }
 			const lPath   = _followerLoyaltyPath(ftype, slug);
-			const loyalty = Math.max(0, Number(this.actor.getFlag("stonetop-pwd", lPath)) || 0);
+			const loyalty = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, lPath)) || 0);
 			const reasons = [
 				{ key: "suffer",    label: "Suffer the damage/effects of an attack for a ward" },
 				{ key: "attention", label: "Draw all attention from a ward to themselves" },
@@ -7262,7 +8059,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const opts = this._spendRadioOptions("spend-readiness", reasons);
 			const unwilling = loyalty > 0
 				? `<label class="stonetop-spend-choice stonetop-spend-choice--unwilling"><input type="checkbox" class="stonetop-spend-unwilling"> <span>…and they wouldn't want to (also spend <strong>1 Loyalty</strong>)</span></label>`
-				: `<p class="stonetop-spend-note"><em>If they wouldn't want to, you'd also spend 1 Loyalty — but they hold none.</em></p>`;
+				: `<p class="stonetop-spend-note"><em>If they wouldn't want to, you'd also spend 1 Loyalty: but they hold none.</em></p>`;
 			new Dialog({
 				title:   `Spend ${name || "follower"}'s Readiness`,
 				content: `<form class="stonetop-spend-form"><p>Spend <strong>1 Readiness</strong> (${readiness} held) to have <strong>${escHtml(name || "them")}</strong>:</p>${opts}${unwilling}</form>`,
@@ -7281,10 +8078,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			const reason    = reasons.find(r => r.key === key)?.label ?? "";
 			// Decrement the LIVE tracks, not the counts captured when this (non-modal) dialog
 			// opened — either may have changed since, and writing captured−1 would clobber it.
-			const liveReadiness = Math.max(0, Number(this.actor.getFlag("stonetop-pwd", rPath)) || 0);
+			const liveReadiness = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, rPath)) || 0);
 			if (liveReadiness <= 0) { ui.notifications?.warn?.(`${name || "This follower"} no longer holds any Readiness to spend.`); return; }
 			const wantsUnwilling = !!html?.[0]?.querySelector(".stonetop-spend-unwilling")?.checked;
-			const liveLoyalty = lPath ? Math.max(0, Number(this.actor.getFlag("stonetop-pwd", lPath)) || 0) : 0;
+			const liveLoyalty = lPath ? Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, lPath)) || 0) : 0;
 			// Only charge the "wouldn't want to" Loyalty if they still hold some to pay it.
 			const unwilling = wantsUnwilling && !!lPath && liveLoyalty > 0;
 			const update = { [`flags.stonetop-pwd.${rPath}`]: liveReadiness - 1 };
@@ -7313,7 +8110,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const opts = targets.map(a => `<option value="${a.id}">${escHtml(a.name)}</option>`).join("");
 			new Dialog({
 				title:   `Hand off ${name}`,
-				content: `<p>Move <strong>${escHtml(name)}</strong> &mdash; with their Loyalty, current HP, and notes &mdash; to another character:</p>
+				content: `<p>Move <strong>${escHtml(name)}</strong>, with their Loyalty, current HP, and notes, to another character:</p>
 					<div class="form-group stonetop-handoff-row"><label>Character</label>
 						<select class="stonetop-handoff-target">${opts}</select></div>`,
 				buttons: {
@@ -7327,11 +8124,11 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		async _handOffFollower(slug, targetId) {
-			const data   = this.actor.getFlag("stonetop-pwd", `customFollowers.${slug}`);
+			const data   = this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}`);
 			const target = game.actors.get(targetId);
 			if (!data || !target) return;
 			// Fresh id + order on the destination so it can't collide with one of theirs.
-			const targetMap = target.getFlag("stonetop-pwd", "customFollowers") ?? {};
+			const targetMap = target.getFlag(STONETOP_SCOPE, "customFollowers") ?? {};
 			const maxOrder  = Object.values(targetMap).reduce((m, f) => Math.max(m, Number(f?.order) || 0), 0);
 			const newId     = foundry.utils.randomID(16);
 			await target.update({
@@ -7345,10 +8142,10 @@ export function createStonetopCharacterSheetClass(Base) {
 		async _onRecoverOpen() {
 			const snapshot = await this._stonetopCharacter.buildSnapshot();
 			const hp = snapshot.vitals.hp;
-			if (this.actor.getFlag("stonetop-pwd", "recover.spent")) return;
+			if (this.actor.getFlag(STONETOP_SCOPE, "recover.spent")) return;
 			if (hp.value >= hp.max) return;
 
-			const resources  = this.actor.getFlag("stonetop-pwd", "inventory.resources") ?? {};
+			const resources  = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
 			const supplySlug = RECOVER_SUPPLY_SLUGS.find(slug => (Number(resources[slug]) || 0) > 0);
 			if (!supplySlug) return;
 
@@ -7444,8 +8241,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				? `<p class="stonetop-homestead-note">Add tick-box requirements and any interim penalty via the wound's <i class="fas fa-pen"></i> edit on the sheet.</p>`
 				: "";
 			const permSection =
-				permBlock("Permanent injury — retire or Make a Plan to adapt:", permanent.filter(w => w.origin !== "deaths-door")) +
-				permBlock("A lasting mark — Make a Plan to carry it, or just bring it up in play:", permanent.filter(w => w.origin === "deaths-door")) +
+				permBlock("Permanent injury: retire or Make a Plan to adapt:", permanent.filter(w => w.origin !== "deaths-door")) +
+				permBlock("A lasting mark: Make a Plan to carry it, or just bring it up in play:", permanent.filter(w => w.origin === "deaths-door")) +
 				permHint;
 
 			new Dialog({
@@ -7522,7 +8319,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (typed) {
 				const die = normalizeDamageDie(typed);
 				if (!die) {
-					ui.notifications?.warn(`"${typed}" isn't a damage die — write a single die, like d8.`);
+					ui.notifications?.warn(`"${typed}" isn't a damage die: write a single die, like d8.`);
 					el.value = this.actor.system?.attributes?.damage?.value ?? base ?? "";
 					return;
 				}
@@ -7549,11 +8346,51 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (String(el.value ?? "").trim() !== "") {
 					ui.notifications?.warn("Max HP has to be a whole number of 1 or more.");
 				}
-				el.value = this.actor.system?.attributes?.hp?.max ?? base;
+				// Back to the number this field was RENDERED with, which `defaultValue` still holds
+				// however much has been typed over it since. NOT `system.attributes.hp.max`: getData
+				// mirrors the computed max into the render context, so the box shows the real number
+				// while the persisted field is the stale one — reverting to that showed a Heavy with
+				// move bonuses their level-1 max and then left it there, since this branch returns
+				// without a re-render to put it right.
+				el.value = el.defaultValue || String(base || "");
 				return;
 			}
 			await this._stonetopCharacter.setMaxHp(typed, { base });
 			this.render(false);
+		}
+
+		/**
+		 * Mirror the computed max HP onto the persisted `hp.max`.
+		 *
+		 * The stored field is stale by design (StonetopCharacter#computedMaxHp sets out why) and
+		 * this sheet never reads it — getData mirrors the computed number into the render context
+		 * instead. The TOKEN reads it: `system.json` names `attributes.hp` as the primary token
+		 * attribute and this system links PC prototype tokens, so the bar over a character's head
+		 * is drawn from the stored max and nothing else. A Heavy whose marked moves took them to 24
+		 * had a bar that showed full at 20; a Thrall whose Marks cut them to 16 had one that could
+		 * never fill.
+		 *
+		 * Until this release the blanket form submit pushed the mirrored value back on any sheet
+		 * edit, so the field converged by accident. Dropping `name` from the max input — so typing
+		 * there banks a permanent adjustment rather than pinning the number — took that away and
+		 * put nothing in its place.
+		 *
+		 * Ledger-silenced: the real change was the level or the Mark, which the ledger already
+		 * files. Writes only on a genuine difference, so it settles in one pass and costs a
+		 * comparison on every render after that.
+		 */
+		async _syncStoredMaxHp() {
+			const computed = Number(this._computedMaxHp) || 0;
+			if (computed <= 0) return;
+			// `isEditable` as well as ownership. Ownership alone is true in two places this must
+			// not write: a character previewed inside a LOCKED compendium, where the update throws
+			// and leaves one console error per render forever; and an unlinked token's sheet,
+			// where it would push a stored max into that token's ActorDelta — override data for a
+			// field the token was reading off the actor perfectly well. isEditable is the sheet's
+			// own answer to "may this be written", and it already accounts for both.
+			if (!this.actor?.isOwner || !this.isEditable) return;
+			if (Number(this.actor.system?.attributes?.hp?.max) === computed) return;
+			await this.actor.update({ "system.attributes.hp.max": computed }, { stonetopLedger: true });
 		}
 
 		// ── Wounds (4th harm track) ────────────────────────────────────────────────
@@ -7624,7 +8461,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			};
 
 			new Dialog({
-				title: "Recover — tend to a wound",
+				title: "Recover: tend to a wound",
 				content,
 				buttons: {
 					stabilize: { label: "It's taken care of", callback: stabilize },
@@ -7641,7 +8478,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const label = wound?.text ? `“${wound.text}”` : "this wound";
 			const ok = await Dialog.confirm({
 				title: "Remove Wound",
-				content: `<p>Remove ${_esc(label)} from the sheet? This deletes it entirely — to keep its fiction as a healed scar instead, edit it and tick “Healed, move to Scars.”</p>`,
+				content: `<p>Remove ${_esc(label)} from the sheet? This deletes it entirely: to keep its fiction as a healed scar instead, edit it and tick “Healed, move to Scars.”</p>`,
 				render:  bringDialogToFront,
 				options: { classes: ["dialog", "stonetop", "stonetop-remove-wound-dialog"] },
 			});
@@ -7670,14 +8507,14 @@ export function createStonetopCharacterSheetClass(Base) {
 		// or "exited" (closed mid-creation). Fire-and-forget — a failed write must
 		// never interrupt the player's creation flow.
 		_setOnboardingState(state, extra = {}) {
-			this.actor.setFlag("stonetop-pwd", "onboardingProgress", { state, ...extra })
+			this.actor.setFlag(STONETOP_SCOPE, "onboardingProgress", { state, ...extra })
 				.catch(err => console.error("Stonetop | failed to record onboarding progress", err));
 		}
 
 		// Drop the progress flag once creation is finished, so the roster stops
 		// showing progress for a completed character.
 		_clearOnboardingProgress() {
-			return this.actor.unsetFlag("stonetop-pwd", "onboardingProgress").catch(() => {});
+			return this.actor.unsetFlag(STONETOP_SCOPE, "onboardingProgress").catch(() => {});
 		}
 
 		async _onNewCharacter(options = {}) {
@@ -7935,10 +8772,12 @@ export function createStonetopCharacterSheetClass(Base) {
 		// forcing a re-pick. Keyed by choice-group index.
 		_restoreOwnedMoveChoices(playbookDoc) {
 			const groups = playbookDoc?.flags?.stonetop?.moves?.choices ?? [];
-			const ownedMoveNames = new Set(this.actor.items.filter(i => i.type === "move").map(i => i.name));
+			// Its own walk, not the render memo: this runs from the onboarding restore rather
+			// than from getData, so there may be no current render to share one with.
+			const ownedNames = ownedMoveNames(this.actor);
 			const picks = {};
 			groups.forEach((group, i) => {
-				const owned = (group.options ?? []).find(name => ownedMoveNames.has(name));
+				const owned = (group.options ?? []).find(name => ownedNames.has(name));
 				if (owned) picks[i] = owned;
 			});
 			return picks;
@@ -7946,7 +8785,6 @@ export function createStonetopCharacterSheetClass(Base) {
 
 		_readSelectionsFromActor(playbookDoc = null) {
 			const f  = resolvedFlags(this.actor);
-			const sys = this.actor.system ?? {};
 
 			// Major arcanum: use the saved flag if present, otherwise infer from owned arcana
 			// cross-referenced with the background's allowed list.

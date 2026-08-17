@@ -3,7 +3,8 @@ import { LANDMARK_ICON_SUFFIX } from "./PlaceOfInterestDrop.js";
 import { THREAT_PIN_ICON_SUFFIX } from "./ThreatNotePins.js";
 // Make Stonetop map-note labels legible over busy hand-drawn maps.
 //
-// Our lettered Place-of-Interest discs and threat/hazard pins label themselves on hover.
+// Our lettered Place-of-Interest discs and GM-prep pins (threats, hazards, sites) label
+// themselves on hover.
 // Core Foundry (Note#_getTextStyle) only gives the name a thin 4px outline, so on the
 // illustrated Stonetop maps a name like "The Granary" sinks into the surrounding line art
 // and is hard to read.
@@ -25,7 +26,7 @@ import { THREAT_PIN_ICON_SUFFIX } from "./ThreatNotePins.js";
 // package has shipped under, so neither a path change nor an id rename can desync them.
 const _OUR_NOTE_ICONS = [
 	...systemAssetVariants(`${LANDMARK_ICON_SUFFIX}/`), // Place-of-Interest lettered discs
-	...systemAssetVariants(THREAT_PIN_ICON_SUFFIX),     // threat + hazard pins
+	...systemAssetVariants(THREAT_PIN_ICON_SUFFIX),     // threat, hazard + site pins
 ];
 
 const _LABEL_TEXT_COLOR = "#f7efdc"; // warm cream, reads on the dark pill

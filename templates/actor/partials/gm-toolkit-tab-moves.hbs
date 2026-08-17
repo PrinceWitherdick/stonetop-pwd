@@ -1,0 +1,93 @@
+{{!-- GM MOVES — the playbook's first spread: the basic list, then Exploration, then Homefront.
+      Reference only. Nothing here rolls and nothing here is stored; the lists come from
+      module/gm-toolkit/gm-moves.js.
+
+      `class="tab moves"` is load-bearing, not a copy-paste leftover, though NOT for the
+      reason the same class carries elsewhere. What it earns is the tab's padding, the 14px gap
+      between move groups, and the fold caret's box — all three written against `.tab.moves`
+      plus `.stonetop-move-group`. Nothing unwanted rides along: the learned-move filter is
+      `.tab.moves.hide-unselected`, and only the character sheet ever adds that class.
+
+      The ENTRIES are deliberately not the bordered move card, and they say so by wearing their
+      own classes rather than the shared card's. They used to carry `stonetop-item` and its
+      three children and the stylesheet took the card back off again declaration by
+      declaration; a reference entry shares nothing with a card but its font, so it is cheaper
+      to describe than to undo.
+
+      `data-tab="moves"` is also what earns the rail's move glyph — the icon table in
+      stonetop.css is one flat list keyed by data-tab, with no per-sheet scope.
+
+      Each section is BOXED in its own `.stonetop-move-group`. The fold walk claims a heading's
+      following siblings until it meets the next heading (utils/section-editing.js), so three
+      headings in one flat run would let the Basic caret swallow Exploration and Homefront. --}}
+<div class="tab moves" data-group="primary" data-tab="moves">
+	<section class="sheet-tab stonetop-gm-toolkit-moves">
+
+		{{#each stonetop.moveSections}}
+		<div class="stonetop-move-group">
+			{{!-- The tab's own name lives in a tooltip now that the rail is icon-only, so these
+			      headings are the only place the page says what it is.
+
+			      `randomize` is the die beside the note: it draws one move out of THIS section
+			      and whispers it to the GM (module/gm-toolkit/random-gm-move.js). Keyed by the
+			      section's own key, so the three buttons need no wiring of their own. --}}
+			{{> "stonetop.section-heading" title=title note=note collapse=collapseId
+			                              randomize=key randomizeTitle=randomizeTitle}}
+			<ol class="items-list">
+				{{#each moves}}
+				{{!-- `data-move` is how the randomizer finds the row it just drew, to light it up
+				      for five seconds (StonetopGmToolkitSheet `_spinToDrawnMove`). The NAME rather
+				      than the index, because the index would be the position in a list this
+				      template is free to reorder while the handler kept matching by number.
+
+				      ONE BLURB, not a summary and then a paragraph. The line under the name is the
+				      book's own first sentence (`blurb.lead`), and opening the entry reveals the
+				      rest of that same sentence's paragraph INLINE, right where the reader's eye
+				      already is. Nothing on screen moves; the text simply carries on. That is why
+				      the lead is the book's words and not our `gloss`: our line would have to be
+				      re-read and then replaced, and the join would show.
+
+				      The blurb IS the disclosure button, so the caret sits at the end of whatever
+				      is currently shown: immediately after the label while shut, and after the
+				      last word of the paragraph once open. A caret pinned after the lead alone
+				      would end up mid-sentence the moment the rest arrived.
+
+				      Space and Enter work without a keydown handler of ours because it is a real
+				      <button>, and `aria-expanded` says which way it is. `aria-controls` is
+				      deliberately absent: it would need an id per entry, unique across three
+				      sections and thirty entries, and the panel is the button's own next sibling.
+				      The tooltip comes from the SECTION (`../`), where the strings are localized.
+
+				      The panel below holds the rest of what Book I prints: any further paragraphs,
+				      the soft/hard line where the book gives one, the examples of play VERBATIM,
+				      and the page. It is `hidden` at render, always. The tab is a scannable
+				      reference list first, and thirty open entries is a chapter. --}}
+				<li class="stonetop-gm-move" data-move="{{name}}">
+					<strong class="stonetop-gm-move-name">{{name}}</strong>
+					<button type="button" class="stonetop-gm-move-toggle" aria-expanded="false"
+					        data-tooltip="{{../expandTitle}}"><span class="stonetop-gm-move-lead">{{blurb.lead}}</span>{{#if blurb.rest}}<span class="stonetop-gm-move-rest" hidden> {{blurb.rest}}</span>{{/if}}</button>
+					<div class="stonetop-gm-move-book" hidden>
+						{{#each blurb.paragraphs}}
+						<p class="stonetop-gm-move-detail">{{this}}</p>
+						{{/each}}
+						{{#if blurb.hardness}}
+						<p class="stonetop-gm-move-hardness">{{blurb.hardness}}</p>
+						{{/if}}
+						{{!-- Every example is a quotation from the book, and is marked up as one
+						      rather than styled to look like one: it is somebody else's text, in
+						      somebody else's voice, naming the book's own sample cast. --}}
+						{{#each examples}}
+						<blockquote class="stonetop-gm-move-example">{{this}}</blockquote>
+						{{/each}}
+						{{#if pageRef}}
+						<p class="stonetop-gm-move-page">{{pageRef}}</p>
+						{{/if}}
+					</div>
+				</li>
+				{{/each}}
+			</ol>
+		</div>
+		{{/each}}
+
+	</section>
+</div>

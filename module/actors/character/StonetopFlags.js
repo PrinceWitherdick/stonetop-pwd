@@ -1,13 +1,14 @@
-import { SYSTEM_ID, LEGACY_FLAG_SCOPES, isCutOver, packId } from "../../system-id.js";
+import { SYSTEM_ID, LEGACY_FLAG_SCOPES, isCutOver } from "../../system-id.js";
 import { deletionEntry } from "../../utils/foundry-compat.js";
 
 const _scope = SYSTEM_ID;
 export const STONETOP_SCOPE = _scope;
 
 // Compendium pack ids, derived from the system scope so a system-id rename touches only
-// system-id.js. Import these; do not retype the literal pack path.
-export const ITEMS_PACK  = packId("stonetop-items");
-export const ARCANA_PACK = packId("stonetop-arcana");
+// system-id.js. Re-exported rather than declared here: they live beside packId now, where the
+// journal, bestiary and macro packs could join them. Import from either; do not retype the
+// literal pack path.
+export { ITEMS_PACK, ARCANA_PACK } from "../../system-id.js";
 // Compendium item documents store their custom flags under the original system ID.
 // This intentionally differs from STONETOP_SCOPE (actor flags) — see system-id.js.
 export { ITEM_FLAG_SCOPE } from "../../system-id.js";

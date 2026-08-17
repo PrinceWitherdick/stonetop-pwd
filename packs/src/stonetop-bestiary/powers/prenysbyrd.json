@@ -65,7 +65,7 @@
       "_id": "Xp1qUYvQXdhpjcfC",
       "name": "Form a body of fallen trees, leaves, and rotting wood (vulnerable to fire)",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""
@@ -76,7 +76,7 @@
       "_id": "vGLWF5dJCxzuJ4mQ",
       "name": "Smother a prone foe with soil, leaves, and wood (d8+1 damage, near, grabby)",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": "d8+1"

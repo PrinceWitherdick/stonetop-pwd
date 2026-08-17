@@ -16,7 +16,7 @@ Where our filename differs from the original, the game-icons.net source name is 
 | death-skull.svg | Post-Death | death-skull | sbed | http://opengameart.org/content/95-game-icons |
 | round-star.svg | Special Moves | round-star | Delapouite | https://delapouite.com |
 | notebook.svg | Notes | notebook | Delapouite | https://delapouite.com |
-| village.svg | Overview (steading) | village | Delapouite | https://delapouite.com |
+| village.svg | Overview (steading), Homefront (GM Toolkit) | village | Delapouite | https://delapouite.com |
 | hammer-nails.svg | Improvements | hammer-nails | Lorc | https://lorcblog.blogspot.com |
 | hazard-sign.svg | Threats & Dangers | hazard-sign | Lorc | https://lorcblog.blogspot.com |
 | hearts.svg | Relationships | hearts | Skoll | https://game-icons.net |
@@ -76,6 +76,28 @@ relengthened, and the flecks travel with the ink they belong to.
 Everything within the ring is otherwise the trace untouched, roughness and ink flecks alike:
 the rays, the sun's centre hole, and the two flecks floating in the gap. A re-run of the
 tracer undoes both edits, so redraw the ring and re-centre the sun if you re-run it.
+
+Also not from game-icons.net, and the project's own drawing: `site-mound.svg`, the Sites
+tab's glyph. A mound with an open way in, which is what most Stonetop sites look like from
+outside (a barrow, a cave mouth, a Maker-ruin gone to grass). Plain geometry: a dome and a
+semicircle-topped doorway in one `fill-rule="evenodd"` path, so the entrance is a hole and
+not a lighter shape, plus a rounded ground bar. Nothing to re-derive if it is ever redrawn.
+
+Also the project's own drawing: `flow-chart.svg`, the GM Toolkit's Core Loop tab glyph. Three
+boxes wired into a cycle, which is the shape of both diagrams that tab holds. Plain geometry, and
+the file's own comment states every coordinate rule, so there is nothing to re-derive if it is
+redrawn. Each box is an outer rounded rect plus an inner one wound the other way, so nonzero fill
+leaves a wall and an empty middle without `fill-rule`; the arrowhead that closes the loop is on
+the RETURN leg, so the cycle reads bottom-back-to-top the way the printed diagram runs.
+
+Also the project's own drawing: `question-mark.svg`, the GM Toolkit's "I wonder..." tab glyph.
+A question mark, because the tab is a list of open questions and the playbook's own heading for
+it is "I wonder...". Plain geometry, and the file's own comment states every coordinate rule, so
+there is nothing to re-derive if it is redrawn: the hook is an annulus sector swept from 205
+degrees round to -25, the stem leaves it at the band's own 72-unit width, and the outline runs
+down the hook's OUTER edge into the stem and back up into its INNER edge, which is what curls the
+tail out of the bowl rather than sticking it on. Both the band and the stem are sized so the
+stroke is 2.8px at the rail's 20px, below which a curve stops reading as one.
 
 Also not from game-icons.net, and the project's own drawing rather than either:
 `arcanum.svg`, the Arcana tab's glyph. It is the triple spiral from

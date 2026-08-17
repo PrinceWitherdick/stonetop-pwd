@@ -3,6 +3,7 @@ import {stonetopChatCard} from "../utils/chat.js";
 import {STONETOP_SCOPE, resolvedFlagProperty} from "../actors/character/StonetopFlags.js";
 import {isPrimaryGM as _isPrimaryGM} from "../utils/primary-gm.js";
 import {STEADING_ACTOR_TYPE, STEADING_DEFAULT_IMG} from "../actors/steading/steading-portrait.js";
+import {isGmToolkitData, gmToolkitActors} from "../actors/gmtoolkit/gm-toolkit-actor.js";
 
 const _OMEN_REMINDER_FLAG = "lastOmenReminder";
 
@@ -53,6 +54,24 @@ export function registerStonetopSingletonHooks() {
 			return false;
 		}
 
+		// The GM Toolkit is a singleton for the same reason and by the same mechanism, but on
+		// different grounds: the steading is one because the world has one Stonetop, and the
+		// toolkit is one because a second would show identical content. Its Moves and Core Loop
+		// tabs are reference transcribed from the playbook, its Threats and Sites tabs read their
+		// storage off the steading, and its "I wonder..." list is the world's open questions
+		// rather than any one GM's — so a second is a second window, not a second sheet, and a
+		// second would SPLIT that list. Which toolkit a given GM's "C" key opens is per-user and lives on
+		// their User document; that is the thing that actually varies between gamemasters.
+		//
+		// Vetoed HERE rather than in the Create-Actor picker because this is the only place that
+		// catches every path: a macro, a duplicate, a compendium import or a drag-drop all pass
+		// through preCreateActor and none of them go near our picker.
+		if (isGmToolkitData(data ?? actor)) {
+			if (!gmToolkitActors().length) return;
+			ui.notifications?.warn("This world already has a GM Toolkit.");
+			return false;
+		}
+
 		// Players can only ever create their own character. Even if a `monster` type slips
 		// past the Create-Actor picker (e.g. a macro), a non-GM must never create a monster
 		// stat block (that is GM content), so veto it outright.
@@ -70,12 +89,24 @@ export function registerStonetopSingletonHooks() {
 		}
 	});
 
-	Hooks.on("preDeleteActor", actor => {
-		if (!_isStonetopActorData(actor)) return;
-		if (_getStonetopActors().length > 1) return;
+	Hooks.on("preDeleteActor", (actor, options) => {
+		if (_isStonetopActorData(actor)) {
+			if (_oneWouldRemain(actor, options, _getStonetopActors())) return;
+			ui.notifications?.warn("The Stonetop sheet is required and cannot be deleted.");
+			return false;
+		}
 
-		ui.notifications?.warn("The Stonetop sheet is required and cannot be deleted.");
-		return false;
+		// Deleting the last toolkit is refused rather than allowed-and-remembered, and that is
+		// what keeps the mint gate simple: with deletion impossible, "no toolkit in this world"
+		// can only mean "never made one", so the ready hook is a plain find-or-mint with no
+		// don't-resurrect-what-somebody-threw-away latch to keep per user. A GM who does not
+		// want it on screen can leave it closed; it is not in any player's sidebar (its
+		// `ownership.default` is NONE).
+		if (isGmToolkitData(actor)) {
+			if (_oneWouldRemain(actor, options, gmToolkitActors())) return;
+			ui.notifications?.warn("The GM Toolkit is the GM's own sheet and cannot be deleted.");
+			return false;
+		}
 	});
 
 	// Display-only steading portrait fallback for the Actors sidebar. We no longer ship
@@ -128,9 +159,9 @@ export async function resetOmenReminder() {
 
 function _buildOmenReminderContent(destined) {
 	const names = destined.map(a => escHtml(a.name)).join(", ");
-	return stonetopChatCard("Start of Session — Omen Roll",
+	return stonetopChatCard("Start of Session: Omen Roll",
 		`<div class="stonetop-roll-card-description">
-			<p><strong>Destined:</strong> ${names} — roll <strong>+Omens</strong>.</p>
+			<p><strong>Destined:</strong> ${names}, roll <strong>+Omens</strong>.</p>
 			<ul>
 				<li><strong>7+:</strong> lose all Omens; the GM shares a vision or portent that points toward your fate.</li>
 				<li><strong>10+:</strong> also ask the GM a follow-up question and get a clear, helpful answer.</li>
@@ -147,7 +178,7 @@ function _shouldGuideMonster(actor, data, options) {
 	if ((actor?.type ?? data?.type) !== "monster") return false;
 	if (!game.user?.isGM) return false;
 	if (options?.stonetopMonsterBuilt) return false; // our own finished create
-	if (game.settings?.get?.("stonetop-pwd", "monsterBuilderEnabled") === false) return false;
+	if (game.settings?.get?.(STONETOP_SCOPE, "monsterBuilderEnabled") === false) return false;
 	if (options?.fromCompendium || options?.keepId) return false; // compendium import / drop
 	// Duplicates carry no keepId, but their toObject() data reads as content (see
 	// _hasMonsterContent: _stats.duplicateSource + populated stats), so they pass through.
@@ -180,6 +211,40 @@ async function _openMonsterBuilder(data) {
 	} catch (err) {
 		console.error("Stonetop | failed to open the monster builder", err);
 	}
+}
+
+// Core evaluates every document in a delete batch against the collection as it stands BEFORE any
+// of them go (client-backend.mjs, ClientDatabaseBackend##preDeleteDocumentArray), so a plain "is
+// there more than one?" answers yes for BOTH halves of a two-document selection and the world ends
+// up with none. Every document in one batch is handed the SAME `options` object, so that object is
+// the batch's identity: keyed off it we can remember what we have already let go, and refuse only
+// the document whose removal would empty the world.
+//
+// A WeakMap rather than a property ON `options`: core does `Object.assign(operation, options)` once
+// the loop is done and sends the operation to the server, so anything we left there would ride along.
+const _released = new WeakMap();
+
+/**
+ * Would one of this kind still be left once `actor` has gone?
+ *
+ * Records the ones we allow, so the last survivor of a multi-select is still refused. Only what
+ * we ACTUALLY let go is recorded: a document we refuse is not gone, and must not count as such
+ * against the rest of its batch.
+ *
+ * @param {Actor}  actor    The document being deleted.
+ * @param {object} options  The batch's shared delete options; its identity IS the batch. A caller
+ *   that passes none (a direct hook invocation) falls back to judging this document alone.
+ * @param {Array}  all      Every document of this kind currently in the world.
+ */
+function _oneWouldRemain(actor, options, all) {
+	const others = all.filter(a => a.id !== actor.id);
+	if (!options || typeof options !== "object") return others.length > 0;
+
+	let released = _released.get(options);
+	if (!released) _released.set(options, released = new Set());
+	const remains = others.some(a => !released.has(a.id));
+	if (remains) released.add(actor.id);
+	return remains;
 }
 
 function _getStonetopActors() {

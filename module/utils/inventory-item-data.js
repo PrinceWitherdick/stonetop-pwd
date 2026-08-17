@@ -17,8 +17,12 @@
  *        item under the gear tab's "Treasures" heading rather than the write-in columns
  * @param {string|null} [input.img=null]      document art. Omitted when falsy so Foundry
  *        applies its own default rather than being pinned to an empty path.
+ * @param {object|null} [input.artifact=null] identification state for an artifact the GM has
+ *        hidden — { state, hint, lore, lead }, see actors/character/artifact-identify.js. Each
+ *        key is written only when non-empty, so ordinary gear carries none of them and reads
+ *        exactly as it did before the feature existed.
  */
-export function buildInventoryItemData({ name, column = "regular", weight = 1, note = "", resource = null, armor = null, moveType = "inventory", isTreasure = false, img = null }) {
+export function buildInventoryItemData({ name, column = "regular", weight = 1, note = "", resource = null, armor = null, moveType = "inventory", isTreasure = false, img = null, artifact = null }) {
 	const isRegular = column !== "small";
 	const system = {
 		moveType,
@@ -32,6 +36,10 @@ export function buildInventoryItemData({ name, column = "regular", weight = 1, n
 	if (resource) system.resource = resource;
 	if (armor) system.armor = armor;
 	if (isTreasure) system.isTreasure = true;
+	if (artifact?.state) system.identifyState = artifact.state;
+	if (artifact?.hint)  system.artifactHint  = artifact.hint;
+	if (artifact?.lore)  system.artifactLore  = artifact.lore;
+	if (artifact?.lead)  system.artifactLead  = artifact.lead;
 	const data = { name: String(name ?? "").trim() || "New Item", type: "move", system };
 	if (img) data.img = img;
 	return data;

@@ -32,7 +32,7 @@ export const CURSE_TIERS = [
 		key:   "ruinous",
 		label: "Ruinous",
 		icon:  "fas fa-skull",
-		hint:  "Costs you the character in the end — max HP, a permanent debility, your instinct, or your death",
+		hint:  "Costs you the character in the end: max HP, a permanent debility, your instinct, or your death",
 	},
 	{
 		key:   "grim",
@@ -58,7 +58,7 @@ export const UNGRADED_CURSE = {
 	key:   "ungraded",
 	label: "Ungraded",
 	icon:  "fas fa-question",
-	hint:  "Carries a Consequences track that hasn't been graded here — homebrew majors",
+	hint:  "Carries a Consequences track that hasn't been graded here: homebrew majors",
 	cost:  "Carries a Consequences track that hasn't been graded here.",
 };
 
@@ -83,7 +83,7 @@ export const ARCANA_CURSES = {
 	},
 	"redwood-effigy": {
 		tier: "ruinous",
-		cost: "You can no longer Recover HP, and a 6- at Death's Door hands you the Revenant insert — then the GM plays your wraith",
+		cost: "You can no longer Recover HP, and a 6- at Death's Door hands you the Revenant insert: then the GM plays your wraith",
 	},
 	"norubas-ice-sphere": {
 		tier: "ruinous",
@@ -135,7 +135,7 @@ export const ARCANA_CURSES = {
 	// Mild — cosmetic, social, or aimed elsewhere.
 	"red-scepter": {
 		tier: "mild",
-		cost: "Nine boxes of feverish skin, ember eyes and howling in your ears — mostly it just makes the Scepter harder and uglier to use",
+		cost: "Nine boxes of feverish skin, ember eyes and howling in your ears: mostly it just makes the Scepter harder and uglier to use",
 	},
 	"shield-of-the-wisent-witch": {
 		tier: "mild",
@@ -143,7 +143,7 @@ export const ARCANA_CURSES = {
 	},
 	"twisted-spear": {
 		tier: "mild",
-		cost: "Barely touches you — it's the elder tree that sickens, and the evils bound beneath its roots that get loose",
+		cost: "Barely touches you: it's the elder tree that sickens, and the evils bound beneath its roots that get loose",
 	},
 	"mindgem": {
 		tier: "mild",

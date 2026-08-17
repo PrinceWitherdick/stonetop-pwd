@@ -12,6 +12,7 @@
 // feed back into that compiler without an import cycle.
 
 import { mergeChronicleSections, CHRONICLE_FOLDER_NAME, CHRONICLE_FOLDER_COLOR } from "./chronicle-core.js";
+import { SYSTEM_ID } from "../system-id.js";
 
 // Per-page flag holding the change-detection hash of each prose section's body as WE last
 // wrote it (keyed by heading). Lets seedChroniclePages keep a still-pristine section
@@ -69,7 +70,7 @@ export async function seedChroniclePages(entry, pages, { adoptLegacyKeys = null 
 	const existingByKey = new Map();
 	let maxSort = 0;
 	for (const page of entry.pages ?? []) {
-		const key = page.getFlag?.("stonetop-pwd", "chronicleKey");
+		const key = page.getFlag?.(SYSTEM_ID, "chronicleKey");
 		if (key) existingByKey.set(key, page);
 		maxSort = Math.max(maxSort, Number(page.sort) || 0);
 	}
@@ -85,7 +86,7 @@ export async function seedChroniclePages(entry, pages, { adoptLegacyKeys = null 
 			// mergeChronicleSections). toObject() gives plain data the merge can spread and
 			// the update can store back; the per-heading prose hashes ride in a page flag.
 			const current = existing.toObject().system?.sections ?? [];
-			const proseManaged = existing.getFlag?.("stonetop-pwd", CHRONICLE_PROSE_FLAG) ?? {};
+			const proseManaged = existing.getFlag?.(SYSTEM_ID, CHRONICLE_PROSE_FLAG) ?? {};
 			// A page in `adoptLegacyKeys` is being authored live right now, so its untracked
 			// (pre-hash) prose may be taken over by the current text — see mergeChronicleSections.
 			const adoptLegacy = adoptLegacyKeys ? adoptLegacyKeys.has(page.key) : false;
@@ -93,7 +94,7 @@ export async function seedChroniclePages(entry, pages, { adoptLegacyKeys = null 
 			if (merged.added) toUpdate.push({
 				_id: existing.id,
 				"system.sections": merged.sections,
-				[`flags.stonetop-pwd.${CHRONICLE_PROSE_FLAG}`]: merged.proseManaged,
+				[`flags.${SYSTEM_ID}.${CHRONICLE_PROSE_FLAG}`]: merged.proseManaged,
 			});
 			continue;
 		}
@@ -106,7 +107,7 @@ export async function seedChroniclePages(entry, pages, { adoptLegacyKeys = null 
 			type:   "chronicle",
 			sort,
 			system: { sections: page.sections },
-			flags:  { "stonetop-pwd": { chronicleKey: page.key, [CHRONICLE_PROSE_FLAG]: proseManaged } },
+			flags:  { [SYSTEM_ID]: { chronicleKey: page.key, [CHRONICLE_PROSE_FLAG]: proseManaged } },
 		});
 	}
 	if (toCreate.length) await entry.createEmbeddedDocuments("JournalEntryPage", toCreate);

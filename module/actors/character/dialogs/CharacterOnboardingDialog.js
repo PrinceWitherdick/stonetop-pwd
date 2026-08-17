@@ -23,6 +23,7 @@ import { moveGroupsForPlaybook, moveGroupKeys } from "./onboarding-move-groups.j
 import { effectiveSubgroupMax } from "./possession-choice-cap.js";
 import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { ensurePackIndex } from "../../../utils/pack-index.js";
+import { SYSTEM_ID } from "../../../system-id.js";
 
 const SEEKER_ARCANA_SLUGS = ["collection", "arcana-major", "arcana-minor"];
 
@@ -353,17 +354,17 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		const desc = String(section?.description ?? "").toLowerCase();
 		if (/answer\s+at\s+least/.test(desc)) return Infinity;
 		// "choose N–M" / "choose N-M" (en-dash U+2013 or regular hyphen)
-		const rangeM = desc.match(/(?:choose|pick)\s+(\d+)\s*[–\-]\s*(\d+)/);
-		if (rangeM) return parseInt(rangeM[2]);
+		const rangeM = desc.match(/(?:choose|pick)\s+(\d+)\s*[–-]\s*(\d+)/);
+		if (rangeM) return parseInt(rangeM[2], 10);
 		// "choose N or M"
 		const orM = desc.match(/(?:choose|pick)\s+(\d+)\s+or\s+(\d+)/);
-		if (orM) return parseInt(orM[2]);
+		if (orM) return parseInt(orM[2], 10);
 		// "choose N, maybe M"
 		const maybeM = desc.match(/(?:choose|pick)\s+(\d+)[,\s]+maybe\s+(\d+)/);
-		if (maybeM) return parseInt(maybeM[2]);
+		if (maybeM) return parseInt(maybeM[2], 10);
 		// "choose N"
 		const singleM = desc.match(/(?:choose|pick)\s+(\d+)/);
-		if (singleM) return parseInt(singleM[1]);
+		if (singleM) return parseInt(singleM[1], 10);
 		// fallback: if all options are pick-type with max 1, assume pick 1
 		const opts = section?.options ?? [];
 		if (opts.length > 0 && opts.every(o => !o.type && (o.max ?? 1) === 1)) return 1;
@@ -1332,7 +1333,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 	_parseLorePickMin(section) {
 		const desc = String(section?.description ?? "").toLowerCase();
-		const rangeM = desc.match(/(?:choose|pick)\s+(\d+)\s*[\u2013\-]\s*(\d+)/);
+		const rangeM = desc.match(/(?:choose|pick)\s+(\d+)\s*[\u2013-]\s*(\d+)/);
 		if (rangeM) return parseInt(rangeM[1], 10);
 		const orM = desc.match(/(?:choose|pick)\s+(\d+)\s+or\s+(\d+)/);
 		if (orM) return parseInt(orM[1], 10);
@@ -1602,7 +1603,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	}
 
 	get title() {
-		return `New Character — ${this._playbookDoc.name}`;
+		return `New Character: ${this._playbookDoc.name}`;
 	}
 
 	async _render(force, options) {
@@ -2044,7 +2045,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		// ── Lore ──────────────────────────────────────────────────────
 		const loreMatch = stepType?.match(/^lore:(\d+)$/);
 		if (loreMatch) {
-			const idx     = parseInt(loreMatch[1]);
+			const idx     = parseInt(loreMatch[1], 10);
 			const section = this._rawLore[idx];
 			if (section) loreSectionData = this._loreSectionData(section, idx);
 		}
@@ -2378,7 +2379,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			this._applyBackgroundChange(backgroundSlug);
 			const current = this._selections.backgroundSetup.neighborPicks[choiceKey] ?? [];
 			const value = ev.currentTarget.value;
-			let next = ev.currentTarget.checked
+			const next = ev.currentTarget.checked
 				? [...current.filter(v => v !== value), value]
 				: current.filter(v => v !== value);
 			if (next.length > max) {
@@ -2420,7 +2421,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const bg  = this._backgrounds.find(b => b.slug === backgroundSlug);
 			const max = allowedMarkableActions(bg?.markableActions, 1);
 			const value = ev.currentTarget.value;
-			let next = ev.currentTarget.checked
+			const next = ev.currentTarget.checked
 				? [...this._selections.markedActions.filter(v => v !== value), value]
 				: this._selections.markedActions.filter(v => v !== value);
 			// Enforce the level-1 mark limit by dropping the oldest mark.
@@ -2547,7 +2548,6 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 		// ── Stats ─────────────────────────────────────────────────────
 		const _updateStatDropdowns = () => {
-			const scores    = this._statScores;
 			const poolCount = this._statPoolCount;
 			const statKeys = ["str", "dex", "con", "int", "wis", "cha"];
 			for (const key of statKeys) {
@@ -3463,7 +3463,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
 		el.style.top  = `${top}px`;
 		el.style.left = `${left}px`;
-		const dialogZ = parseInt(this.element?.[0]?.style?.zIndex || 0);
+		const dialogZ = parseInt(this.element?.[0]?.style?.zIndex || 0, 10);
 		el.style.setProperty("z-index", String(Math.max(10000, dialogZ + 2)), "important");
 	}
 
@@ -3471,10 +3471,13 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		const key = text.toLowerCase();
 		if (this._wordCache.has(key)) return this._wordCache.get(key);
 		const packs = game.packs.filter(
-			p => p.metadata.packageName === "stonetop-pwd" && p.metadata.type === "Item"
+			p => p.metadata.packageName === SYSTEM_ID && p.metadata.type === "Item"
 		);
 		for (const pack of packs) {
-			await pack.getIndex();
+			// ensurePackIndex, not `pack.getIndex()` — a fieldless call narrows this pack's tracked
+			// index fields to the core set and costs later readers their system.* fields. Same
+			// helper this file already uses for the arcana and items packs above.
+			await ensurePackIndex(pack.collection);
 			const entry = pack.index.find(e => e.name.toLowerCase() === key);
 			if (!entry) continue;
 			const doc  = await pack.getDocument(entry._id);

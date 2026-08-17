@@ -43,7 +43,7 @@
       "_id": "7KI0lEoP7VipJCQY",
       "name": "Manifest a cloud of ember and ash, a voice of crackling flame",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""
@@ -87,7 +87,7 @@
       "_id": "hSNksqcnmBhOSZNH",
       "name": "Manipulate metal, telekinetically",
       "type": "monsterMove",
-      "img": "icons/creatures/tentacles/tentacles-octopus-purple.webp",
+      "img": "icons/creatures/tentacles/tentacles-octopus-black-pink.webp",
       "system": {
         "description": "",
         "rollFormula": ""

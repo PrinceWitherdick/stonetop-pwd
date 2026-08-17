@@ -53,7 +53,7 @@
       "_id": "XOMK2oWGB8J9seTb",
       "name": "Pin a smaller foe (+grabby)",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""
@@ -64,7 +64,7 @@
       "_id": "EnGEGTq6bRl68aoM",
       "name": "Grind a pinned foe, dealing damage w/advantage (+messy)",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""

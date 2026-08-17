@@ -7,7 +7,7 @@
 		{{/if}}
 		<h2 class="stonetop-onboarding-playbook-name">{{playbookName}}</h2>
 		{{#if hasFaq}}
-		<button type="button" class="stonetop-onboarding-faq-badge" title="Related questions — click for the full FAQ" aria-label="Related questions">
+		<button type="button" class="stonetop-onboarding-faq-badge" title="Related questions: click for the full FAQ" aria-label="Related questions">
 			<i class="fas fa-question"></i>
 		</button>
 		{{/if}}
@@ -293,7 +293,7 @@
 		<div class="stonetop-onboarding-names-section{{#if selected}} is-visible{{/if}}"
 		     data-region="{{region}}">
 			<p class="stonetop-onboarding-names-label">People from Gordin's Delve always come from somewhere else. Choose a name from another place, or write your own.</p>
-			<p class="stonetop-onboarding-names-label">Suggested names — {{region}}:</p>
+			<p class="stonetop-onboarding-names-label">Suggested names for {{region}}:</p>
 			{{#each nameGroups}}
 			<div class="stonetop-onboarding-name-group">
 				<p class="stonetop-onboarding-name-group-label">{{region}}</p>
@@ -309,7 +309,7 @@
 		{{#if names.length}}
 		<div class="stonetop-onboarding-names-section{{#if selected}} is-visible{{/if}}"
 		     data-region="{{region}}">
-			<p class="stonetop-onboarding-names-label">Suggested names — {{region}}:</p>
+			<p class="stonetop-onboarding-names-label">Suggested names for {{region}}:</p>
 			<div class="stonetop-onboarding-name-chips">
 				{{#each names}}
 				<button type="button" class="onboard-name-chip" data-name="{{this}}">{{this}}</button>
@@ -381,7 +381,7 @@
 				{{#if choices}}
 				<div class="stonetop-onboarding-suboptions{{#if choices.locked}} is-locked{{/if}}" data-possession="{{slug}}">
 					<p class="stonetop-onboarding-suboptions-hint">
-						{{choices.pickNote}} —
+						{{choices.pickNote}}, 
 						<span class="stonetop-onboarding-suboption-count" data-possession="{{slug}}">{{choices.selectedCount}}</span>
 						/ {{choices.pickCount}}
 					</p>
@@ -737,7 +737,7 @@
 
 		<div class="stonetop-onboarding-insert-section">
 			<p class="stonetop-onboarding-insert-section-label">
-				Traits — pick {{acData.selectedType.pickCount}} more &nbsp;
+				Traits: pick {{acData.selectedType.pickCount}} more &nbsp;
 				<span class="stonetop-onboarding-insert-counter">
 					<span class="stonetop-onboarding-ac-trait-count">{{acData.selectedType.selectedCount}}</span> / {{acData.selectedType.pickCount}}
 				</span>
@@ -853,7 +853,7 @@
 					<div class="stonetop-onboarding-lore-text-row{{#if isUnlockMark}} stonetop-onboarding-arcana-unlock-row{{/if}}">
 						{{#if isUnlockMark}}{{#if unlockHasTrack}}
 						<div class="stonetop-onboarding-arcana-unlock">
-							<p class="stonetop-onboarding-arcana-unlock-hint">You’ve begun to unlock the mysteries of {{#if majorName}}the {{majorName}}{{else}}your major arcanum{{/if}}. This is the front of its insert — mark 1 below:</p>
+							<p class="stonetop-onboarding-arcana-unlock-hint">You’ve begun to unlock the mysteries of {{#if majorName}}the {{majorName}}{{else}}your major arcanum{{/if}}. This is the front of its insert: mark 1 below:</p>
 							<div class="stonetop-onboarding-arcana-front-card">
 								<div class="stonetop-onboarding-arcana-front-header">
 									{{#if frontCard.img}}<img class="stonetop-onboarding-arcana-front-thumb" src="{{frontCard.img}}" alt="">{{/if}}

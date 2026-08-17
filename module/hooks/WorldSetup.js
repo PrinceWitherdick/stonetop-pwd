@@ -1,4 +1,3 @@
-import { getSetting, setSetting } from "../settings.js";
 import { info, error } from "../utils/logger.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { WorldSetupDialog } from "../dialogs/WorldSetupDialog.js";
@@ -51,12 +50,12 @@ const STEP_DEFS = Object.fromEntries(Object.entries({
 	art: {
 		label: "Book art you have already imported",
 		starting: "Looking for book art on your disk",
-		failed:   "Could not apply your book art — it will retry next load",
+		failed:   "Could not apply your book art: it will retry next load",
 	},
 	journals: {
 		label: "Journals, gazetteer and bestiary codex",
 		starting: "Reading the Stonetop compendium",
-		failed:   "Could not finish importing the journals — it will retry next load",
+		failed:   "Could not finish importing the journals: it will retry next load",
 	},
 	// Not the same row as `journals`, and never shown alongside it. That one is the one-time
 	// import a new world owes; this is the per-version update channel an ESTABLISHED world runs
@@ -70,17 +69,17 @@ const STEP_DEFS = Object.fromEntries(Object.entries({
 	monsters: {
 		label: "Monster sheets",
 		starting: "Reading the Monsters compendium",
-		failed:   "Could not finish importing the monsters — it will retry next load",
+		failed:   "Could not finish importing the monsters: it will retry next load",
 	},
 	treasures: {
 		label: "Treasures & Wonders",
 		starting: "Reading the Treasures & Wonders compendium",
-		failed:   "Could not finish importing the treasures — it will retry next load",
+		failed:   "Could not finish importing the treasures: it will retry next load",
 	},
 	finish: {
 		label: "Finishing touches",
 		starting: "Applying your book art to the new content",
-		failed:   "Could not finish applying your book art — it will retry next load",
+		failed:   "Could not finish applying your book art: it will retry next load",
 	},
 }).map(([key, def]) => [key, { key, ...def }]));
 
@@ -202,7 +201,7 @@ export function runWorldSetup() {
 async function runArtAndJournals(dialog, { narrateSeed, narrateSync } = {}) {
 	await runLane(dialog, STEP_DEFS.art, async () => {
 		const result = await reapplyBook2ArtOnVersionChange();
-		if (!result) return { skip: "No imported book art found — you can import it later" };
+		if (!result) return { skip: "No imported book art found: you can import it later" };
 		return result.total
 			? `Found your book art and wired it into ${result.total} ${result.total === 1 ? "entry" : "entries"}`
 			: "Your imported book art is already in place";

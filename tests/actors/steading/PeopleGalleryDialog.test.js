@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickRandomPortrait, rolledScrollTop, asFullPortrait } from "../../../module/actors/steading/PeopleGalleryDialog.js";
+import { pickRandomPortrait, rolledScrollTop, asFullPortrait, portraitIdentity } from "../../../module/actors/steading/PeopleGalleryDialog.js";
 import { BOOK2_ART_APPLY_MANIFEST } from "../../../module/book2-art/manifest.js";
 
 // asFullPortrait joins against the SHIPPED manifest, so the square/illustration pair has to be a
@@ -67,6 +67,54 @@ describe("asFullPortrait", () => {
 
 	it("reads an absent portrait as the empty string, so nothing matches it", () => {
 		for (const empty of ["", null, undefined]) expect(asFullPortrait(empty)).toBe("");
+	});
+});
+
+// The identity every "is this the same portrait?" question is settled on. Two paths can name one
+// picture and not match as strings: a square against its illustration (what asFullPortrait is
+// for), and — on a host that serves user files from elsewhere, e.g. The Forge's Assets Library —
+// the same file with and without the host's prefix. A world holding portraits chosen before it
+// knew where its art lived would otherwise show none of them as selected or as taken.
+describe("portraitIdentity", () => {
+	const FORGE = "https://assets.forge-vtt.com/abc123/";
+
+	it("reduces a square and its illustration to the same thing", () => {
+		expect(portraitIdentity(`${ROOT}/${squaredPerson.portraitOut}`))
+			.toBe(portraitIdentity(`${ROOT}/${squaredPerson.out}`));
+	});
+
+	it("reduces the same picture to the same thing however the host spells it", () => {
+		expect(portraitIdentity(`${FORGE}${ROOT}/${squaredPerson.out}`))
+			.toBe(portraitIdentity(`${ROOT}/${squaredPerson.out}`));
+	});
+
+	it("keeps two different people apart", () => {
+		expect(portraitIdentity(`${ROOT}/${squaredPerson.out}`))
+			.not.toBe(portraitIdentity(`${ROOT}/assets/people/someone-else.webp`));
+	});
+
+	it("is empty for an absent portrait, so nothing matches it", () => {
+		for (const empty of ["", null, undefined]) expect(portraitIdentity(empty)).toBe("");
+	});
+
+	it("does not confuse art outside the art folder with a gallery tile of the same name", () => {
+		// The GM's own file, in their own directory, that happens to be named like a gallery
+		// portrait. Reduced to the bare FILENAME these two matched, and the tile was reported
+		// "used by" whoever held the unrelated picture — and hidden from the Unused filter.
+		const mine = `worlds/mine/npcs/${squaredPerson.out.split("/").pop()}`;
+		expect(portraitIdentity(mine)).not.toBe(portraitIdentity(`${ROOT}/${squaredPerson.out}`));
+	});
+
+	it("keeps the roll from handing back the portrait already worn, across spellings", () => {
+		// The gallery's tiles carry the host-served path; a member wired by an earlier build holds
+		// the bare one. Compared raw, "avoid the current one" silently stops avoiding anything.
+		const pool = [`${FORGE}${ROOT}/${squaredPerson.out}`, `${FORGE}${ROOT}/assets/people/other.webp`];
+		for (const held of [`${ROOT}/${squaredPerson.out}`, `${ROOT}/${squaredPerson.portraitOut}`]) {
+			for (const r of [0, 0.5, 0.99]) {
+				expect(pickRandomPortrait(pool, { current: held, keyOf: portraitIdentity, rng: () => r }))
+					.toBe(`${FORGE}${ROOT}/assets/people/other.webp`);
+			}
+		}
 	});
 });
 

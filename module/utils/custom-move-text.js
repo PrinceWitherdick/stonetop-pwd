@@ -19,6 +19,8 @@ export function formatCustomMoveDescription(raw) {
 }
 
 export function customMoveDescriptionToPlainText(html) {
+	// Deliberately NOT stripHtmlToText: this round-trips into a textarea, so the line structure
+	// is the point — the shared helper collapses every run of whitespace to a single space.
 	return String(html ?? "")
 		.replace(/<\s*br\s*\/?>/gi, "\n")
 		.replace(/<\/\s*p\s*>/gi, "\n\n")

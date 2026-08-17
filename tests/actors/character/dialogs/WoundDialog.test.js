@@ -95,7 +95,7 @@ describe("WoundDialog", () => {
 		expect(editing._summary("Twisted ankle", "stabilized")).toMatchObject({
 			name: "Twisted ankle",
 			glyph: "fa-bandage",
-			status: "Stabilized — treated, but not yet healed",
+			status: "Stabilized: treated, but not yet healed",
 		});
 	});
 

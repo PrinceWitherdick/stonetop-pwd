@@ -133,6 +133,26 @@ export class StonetopDialog extends Application {
 	}
 
 	/**
+	 * A choice the player made that could not be written down. Log it for whoever has the console
+	 * open, tell the player in words they can act on, and put the window back the way the DOCUMENT
+	 * says it is — which, the write having failed, is the way it was before they clicked.
+	 *
+	 * The redraw is the part worth sharing. A dialog that latches a choice while its write is in
+	 * flight has to un-latch it on failure, and every one of them then has to remember that the
+	 * screen is still showing the latched state. Callers roll their own latch back before calling
+	 * this, so all that is left is to say so and repaint.
+	 *
+	 * `noun` names the thing that did not get recorded, in the player's vocabulary rather than the
+	 * schema's ("That fate", "That undeath resolution") — the rest of the sentence is the same
+	 * advice whatever failed, and writing it out per dialog only invites it to drift.
+	 */
+	reportWriteFailure(noun, err) {
+		console.error(`Stonetop | Could not apply this ${noun}.`, err);
+		ui.notifications?.error(`That ${noun} could not be recorded. Try it again, or ask your GM to check your permissions.`);
+		this.renderIfOpen();
+	}
+
+	/**
 	 * Options for a dialog that must have one window PER DOCUMENT rather than one window at all.
 	 *
 	 * AppV1 resolves `Application#element` as `$("#" + this.id)` whenever `_element` is unset, so

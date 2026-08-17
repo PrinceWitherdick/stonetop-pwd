@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--
+  The GM Toolkit's "I wonder..." tab glyph. The project's own drawing, not game-icons.net art
+  (see ATTRIBUTION.md).
+
+  Worn as a CSS MASK, so alpha may exist only where the ink is: the transparent square below is
+  what the game-icons.net exports carry and it is kept so this file drops into the same rule.
+
+  Every coordinate is derived, so nothing here is eyeballed and a redraw can re-derive it:
+
+    hook   an annulus SECTOR centred (256,172), outer r=124, inner r=52, swept from 205 degrees
+           round through the top to -25 degrees. Band 72 wide, which at the rail's 20px is a
+           2.8px stroke, the floor at which a curve still reads as a curve rather than a smudge.
+           Its four endpoints are (256 + r*cos t, 172 - r*sin t) at those two angles.
+    stem   72 wide as well, x 220..292, so the tail leaves the hook at the weight it arrived at.
+           It is not a separate shape: the outline runs down the hook's outer edge into the
+           stem's right edge, across the foot, and back up the left edge into the hook's INNER
+           edge, which is what makes the tail curl out of the bowl instead of being stuck to it.
+    dot    r=38 at (256,428), a clear 24 below the stem's foot. Sized to the stem's half-width
+           plus a touch, which is the proportion that survives being 1.5px across on the rail.
+
+  One subpath plus one circle, both simply wound, so nonzero fill needs no fill-rule.
+--><path d="M0 0h512v512H0z" fill="#ffffff" fill-opacity="0"/><path fill="#000" d="M143.618 224.405A124 124 0 1 1 368.382 224.405C366 268 340 294 316 313C299 327 292 342 292 358L292 366L220 366L220 348C220 316 232 294 254 276C281 254 297 227 300 200L303.128 193.976A52 52 0 1 0 208.872 193.976Z"/><circle cx="256" cy="428" r="38" fill="#000"/></svg>

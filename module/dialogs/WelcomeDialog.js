@@ -2,6 +2,7 @@ import { getSetting, setSetting } from "../settings.js";
 import { enrichHTML } from "../utils/foundry-compat.js";
 import { findVisibleJournal, settingOverviewPages, SETTING_OVERVIEW_JOURNAL } from "../utils/seeded-journals.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
+import { ensurePackIndex } from "../utils/pack-index.js";
 import { applyGuideRail } from "../utils/guide-rail.js";
 import { applyLocationTooltips } from "../locations/location-tooltips.js";
 import { FoundryBasicsDialog } from "./FoundryBasicsDialog.js";
@@ -13,6 +14,7 @@ import { hasImportedBook2Art } from "../book2-art/reapply.js";
 // Shared with the replacement confirmation, so the roster's "on page 4 of 9" and the
 // warning shown before that character is deleted can never disagree.
 import { progressLabel } from "../actors/character/onboarding-progress.js";
+import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
 
 // ── WelcomeDialog ───────────────────────────────────────────────────────────
 // A GM-only "first session" guide. Walks the GM through the Book I "Getting
@@ -127,7 +129,9 @@ export class WelcomeDialog extends Application {
 		// entry). Those only resolve while enriching if that pack's index is already
 		// loaded — and this guide often opens before anything else warms it, which
 		// renders the link "broken". Load the index first so it always resolves.
-		await game.packs.get("stonetop-pwd.stonetop-journal")?.getIndex();
+		// Through ensurePackIndex so warming the index for link resolution can't narrow the
+		// pack's tracked fields out from under whoever indexed it for their own.
+		await ensurePackIndex(JOURNAL_PACK);
 
 		const players = game.users
 			.filter(u => !u.isGM)
@@ -144,7 +148,7 @@ export class WelcomeDialog extends Application {
 						// _setOnboardingState in StonetopCharacterSheet); cleared once they
 						// finish, so a completed character shows no note.
 						progress: progressLabel(
-							a.getFlag?.("stonetop-pwd", "onboardingProgress"),
+							a.getFlag?.(SYSTEM_ID, "onboardingProgress"),
 							a.system?.playbook,
 						),
 					})),
@@ -159,12 +163,12 @@ export class WelcomeDialog extends Application {
 			this._bookArtImported = await hasImportedBook2Art().catch(() => false);
 		}
 
-		// How much could be cut from art already on disk without the PDFs — the detail portraits
-		// and the square faces. Shown here because the one-time chat card that normally offers
-		// this latches the moment it is posted, so a GM who missed it has no other way back.
-		// Zero (the steady state) renders nothing at all.
-		const { countPeopleArtRebuilds } = await import("../book2-art/run-rebuild.js");
-		const rebuildableArt = this._bookArtImported ? await countPeopleArtRebuilds() : 0;
+		// How much could be cut from art already on disk without the PDFs — the detail portraits,
+		// the square faces and the creature token squares. Shown here because the one-time chat
+		// card that normally offers this latches the moment it is posted, so a GM who missed it has
+		// no other way back. Zero (the steady state) renders nothing at all.
+		const { countBookArtRebuilds } = await import("../book2-art/run-rebuild.js");
+		const rebuildableArt = this._bookArtImported ? await countBookArtRebuilds() : 0;
 
 		return {
 			rebuildableArt,
@@ -224,7 +228,8 @@ export class WelcomeDialog extends Application {
 			actor?.sheet?.render(true);
 		});
 		html.find(".stonetop-welcome-dontshow-input").on("change", ev =>
-			setSetting("gmWelcomeShown", ev.currentTarget.checked));
+			setSetting("gmWelcomeShown", ev.currentTarget.checked)
+				.catch(err => console.error("Stonetop | could not save the welcome preference", err)));
 
 		this._registerHooks();
 	}
@@ -320,10 +325,10 @@ export class WelcomeDialog extends Application {
 	 * the offer permanently — and on an upgrade that means the new art silently never appears.
 	 */
 	async _rebuildPortraits(btn) {
-		const { runPeopleArtRebuildFromButton } = await import("../book2-art/run-rebuild.js");
+		const { runBookArtRebuildFromButton } = await import("../book2-art/run-rebuild.js");
 		// The disable, the counting spinner, the notification and the restore-on-error are the
 		// chat card's too, so they live in run-rebuild.js beside the work itself.
-		if (!await runPeopleArtRebuildFromButton(btn)) return;   // threw — the label is already back
+		if (!await runBookArtRebuildFromButton(btn)) return;   // threw — the label is already back
 		// Re-render, which re-counts from disk rather than assuming it is now zero: a partial run
 		// leaves the remainder, and the button has to keep offering it.
 		if (this.rendered) await this.render(false);
@@ -366,7 +371,7 @@ export class WelcomeDialog extends Application {
 				if ("name" in changes || "img" in changes || "ownership" in changes) { refresh(); return; }
 				// Onboarding progress writes (and the unset on completion, which arrives
 				// as a "-=onboardingProgress" key) should update the page count live.
-				const stFlags = changes.flags?.["stonetop-pwd"];
+				const stFlags = changes.flags?.[SYSTEM_ID];
 				if (stFlags && Object.keys(stFlags).some(k => k.replace(/^-=/, "") === "onboardingProgress")) refresh();
 			})],
 		];

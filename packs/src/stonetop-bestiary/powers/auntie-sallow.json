@@ -76,7 +76,7 @@
       "_id": "Ev2BTfaVdGApF3kb",
       "name": "Lure or drag them back to her home",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""

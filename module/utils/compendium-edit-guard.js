@@ -42,7 +42,7 @@ export function warnCompendiumImmutable(doc) {
 		title: "Compendium content can't be edited",
 		content: `
 			<div class="stonetop-compendium-immutable">
-				<p><strong>${foundry.utils.escapeHTML(name)}</strong> lives in a compendium — read-only
+				<p><strong>${foundry.utils.escapeHTML(name)}</strong> lives in a compendium: read-only
 				reference content shipped with the system. It can't be edited here.</p>
 				<p>To make changes, edit the copy in your world's <strong>${tab}</strong> tab.</p>
 				<p>Don't have it in your world yet? Import it first with the <strong>Import</strong> button

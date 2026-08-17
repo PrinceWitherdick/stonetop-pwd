@@ -1,7 +1,6 @@
 import { applyGearTermTooltips } from "../utils/gear-term-tooltips.js";
 import { ensureMonsterRefIndex, enrichBestiaryElement } from "../utils/bestiary-cross-refs.js";
-import { applyLocationTooltips } from "../locations/location-tooltips.js";
-import { restrictContentLinks } from "../journal/restrict-content-links.js";
+import { applyLocationTooltips, applyTooltipsThenRestrict } from "../locations/location-tooltips.js";
 import { getHoverDescriptionSetting } from "../settings.js";
 import { markQuestionBullets } from "../utils/question-bullets.js";
 import { markValueTooltips } from "../utils/value-tooltips.js";
@@ -61,11 +60,9 @@ export function onRenderActorSheet(sheet, html) {
 		// de-link the ones this user can't open — the same treatment journal prose gets
 		// (see the journal render hook in stonetop.js). Without it a player reading an NPC
 		// sees a hidden Threat or bestiary entry as a red "broken" link, which both looks
-		// wrong and advertises that something hidden is behind the name. Order matters:
-		// restrictContentLinks carries the just-stamped summary onto the de-linked span,
-		// and it's a no-op for GMs, so the GM keeps every link (broken ones included, which
-		// is how a dangling reference stays visible to the person who can fix it).
-		applyLocationTooltips(root).then(() => restrictContentLinks(root));
+		// wrong and advertises that something hidden is behind the name. Ordering rationale
+		// lives in applyTooltipsThenRestrict.
+		applyTooltipsThenRestrict(root);
 		return;
 	}
 

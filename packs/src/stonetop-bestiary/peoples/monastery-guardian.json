@@ -65,7 +65,7 @@
       "_id": "65ScDcozxAhjH4HB",
       "name": "Ensnare a foe (mancatcher or bola)",
       "type": "monsterMove",
-      "img": "icons/creatures/tentacles/tentacles-octopus-purple.webp",
+      "img": "icons/creatures/tentacles/tentacles-octopus-black-pink.webp",
       "system": {
         "description": "",
         "rollFormula": ""

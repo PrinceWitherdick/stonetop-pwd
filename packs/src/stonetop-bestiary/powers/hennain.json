@@ -64,7 +64,7 @@
       "_id": "zVxOuTGRJSIL286Z",
       "name": "Animate her own tree (almost impossible to harm with weapons, or even fire)",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""

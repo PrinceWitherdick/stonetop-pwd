@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
 	LEDGER_SCOPE, LEDGER_KEY, LEDGER_FLAG_PATH,
-	appendLedgerEntries, listMerge, numericMerge,
+	appendLedgerEntries, deleteLedgerEntries, listMerge, numericMerge,
 } from "../../module/utils/ledger-core.js";
 
 // appendLedgerEntries is the seam between a caller's chronological list of what just happened
@@ -73,5 +73,91 @@ describe("appendLedgerEntries ordering", () => {
 			{ defaultCategory: "steading" },
 		);
 		expect(actor.written.map(e => e.category)).toEqual(["notes", "steading"]);
+	});
+});
+
+/**
+ * A fake whose `update` does NOT resolve in the same tick.
+ *
+ * That gap is the whole bug: a real Document#update is a server round trip, so two appends fired
+ * in one tick both read the stored array before either wrote it back, and the second write
+ * clobbered the first. `makeActor` above resolves immediately and therefore cannot show it.
+ *
+ * `id` matters too — the write chain is keyed on it, and an actor without one is deliberately
+ * left unserialized. Each test uses a fresh id so the module-level chain can't leak between them.
+ */
+function makeLiveActor(id) {
+	let stored = [];
+	return {
+		id,
+		type: "character",
+		getFlag: (scope, key) => (scope === LEDGER_SCOPE && key === LEDGER_KEY ? stored : undefined),
+		update: async data => {
+			await Promise.resolve();
+			stored = data[LEDGER_FLAG_PATH];
+		},
+		get stored() { return stored; },
+	};
+}
+
+describe("appendLedgerEntries serializes writes per actor", () => {
+	it("keeps both entries when two appends race on one actor", async () => {
+		// CharacterArcana.addLead and CharacterInventory.resetSelections both fire several
+		// setFlags in a single Promise.all, and every one of them triggers an append through
+		// StonetopActor#_onUpdate. Unserialized, all but the last entry vanished — and mergeRuns
+		// folding the head made the loss read as intended behaviour.
+		const actor = makeLiveActor("race-both-survive");
+		await Promise.all([
+			appendLedgerEntries(actor, [{ action: "Instinct set to Protective" }]),
+			appendLedgerEntries(actor, [{ action: "Background set to Sheriff" }]),
+		]);
+
+		expect(actor.stored.map(e => e.action)).toEqual([
+			"Background set to Sheriff",   // newest first: queued second, so it lands on top
+			"Instinct set to Protective",
+		]);
+	});
+
+	it("keeps every entry when four appends race, the resetSelections shape", async () => {
+		const actor = makeLiveActor("race-four-survive");
+		await Promise.all(
+			["Armor", "Weapons", "Provisions", "Trinkets"]
+				.map(name => appendLedgerEntries(actor, [{ action: `${name} deselected` }])),
+		);
+
+		expect(actor.stored).toHaveLength(4);
+	});
+
+	it("does not resurrect entries when a delete races an append", async () => {
+		const actor = makeLiveActor("race-delete");
+		await appendLedgerEntries(actor, [{ action: "Instinct set to Protective" }]);
+		const [first] = actor.stored;
+
+		await Promise.all([
+			deleteLedgerEntries(actor, new Set([first.id])),
+			appendLedgerEntries(actor, [{ action: "Background set to Sheriff" }]),
+		]);
+
+		// The delete read the array before the append wrote it, so an unserialized delete put
+		// the deleted entry straight back.
+		expect(actor.stored.map(e => e.action)).toEqual(["Background set to Sheriff"]);
+	});
+
+	it("lets the next write through after one fails", async () => {
+		// The stored link is neutralized precisely so a rejected write can't reject everything
+		// queued behind it.
+		const actor = makeLiveActor("race-after-failure");
+		let failNext = true;
+		const realUpdate = actor.update;
+		actor.update = async data => {
+			if (failNext) { failNext = false; throw new Error("no connection"); }
+			return realUpdate(data);
+		};
+
+		await expect(appendLedgerEntries(actor, [{ action: "Instinct set to Protective" }]))
+			.rejects.toThrow("no connection");
+		await appendLedgerEntries(actor, [{ action: "Background set to Sheriff" }]);
+
+		expect(actor.stored.map(e => e.action)).toEqual(["Background set to Sheriff"]);
 	});
 });

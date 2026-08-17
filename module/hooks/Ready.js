@@ -1,7 +1,10 @@
 import { runStartupMigrations } from "./PbtaSheetConfig.js";
+import { theGmToolkit, createGmToolkit, isGmToolkitData, GM_TOOLKIT_DEFAULT_IMG } from "../actors/gmtoolkit/gm-toolkit-actor.js";
 import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
+import { repairAllChronicleFlagScopes } from "../migration/chronicle-flag-scope.js";
+import { renameAllSeasonYearPages } from "../migration/season-year-page-names.js";
 import { ensureStonetopSingleton, remindDestinedOmenRoll } from "./StonetopSingleton.js";
 import { runWorldSetup, pendingSetupWork } from "./WorldSetup.js";
 import { reapplyBook2Art, hasImportedBook2Art } from "../book2-art/reapply.js";
@@ -11,7 +14,7 @@ import { offerDurableArtOnce } from "../book2-art/offer-once.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
 import { stonetopChatCard } from "../utils/chat.js";
 import { stampWorldLayoutBaseline } from "../utils/sheet-layout.js";
-import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyHideRollableIcon, applyReduceMotion, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown } from "../settings.js";
+import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyHideRollableIcon, applyReduceMotion, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope } from "../settings.js";
 import { EndOfSessionDialog } from "../dialogs/EndOfSessionDialog.js";
 import { IntroductionsDialog } from "../dialogs/IntroductionsDialog.js";
 import { SpringBurstDialog } from "../dialogs/SpringBurstDialog.js";
@@ -32,7 +35,7 @@ import { LoveLetterDialog } from "../dialogs/LoveLetterDialog.js";
 import { StonetopArcanaInspireDialog } from "../item/StonetopArcanaInspireDialog.js";
 import { StonetopBrowserDialog } from "../dialogs/StonetopBrowserDialog.js";
 import { findVisibleJournal, SETTING_OVERVIEW_JOURNAL } from "../utils/seeded-journals.js";
-import { getStonetopSteadingActor, getStonetopSteadingActorOrWarn } from "../utils/world.js";
+import { getStonetopSteadingActorOrWarn } from "../utils/world.js";
 import { rollMoveFromUuid } from "./HotbarDrop.js";
 import { ensureThreatsEntry } from "../threats/threat-store.js";
 import { ensureHazardsEntry } from "../hazards/hazard-store.js";
@@ -44,6 +47,7 @@ import { migrateAllSteadingPeople, ensurePeopleFolders, backfillAllResidentHomes
 import { PERSON_DEFAULT_IMG } from "../utils/person-portrait.js";
 import { NEW_SHOOT_MARKER, LEGACY_SHOOT_MARKERS } from "../data/follower-actor.js";
 import { isDefaultImg } from "../utils/strings.js";
+import { updatePlacedTokens } from "../utils/placed-tokens.js";
 
 const _EOS_MACRO_NAME   = "End of Session";
 const _EOS_MACRO_IMG    = "systems/stonetop-pwd/assets/icons/macros/truce.svg";
@@ -137,13 +141,36 @@ export async function onReady() {
 	// Fold the pre-world-keying Setting Overview gate under this world, so every OTHER
 	// world stops reading it as already-shown (see settings.js).
 	await migrateFlatSettingOverviewShown();
-	await _migrateArmourToArmor();
+	// Before any sheet renders: carry a GM's pre-move choice for the three classic-layout boxes
+	// out of browser localStorage and into the world scope they now live in. Without it an
+	// upgraded world silently reverts to the classic layout. See adoptClassicLayoutScope.
+	try { await adoptClassicLayoutScope(); }
+	catch (err) { console.error("Stonetop | classic-layout scope adoption failed", err); }
+	try { await _migrateArmourToArmor(); }
+	catch (err) { console.error("Stonetop | armour → armor migration failed", err); }
+	// Take retired sheet-preference flags off any actor still carrying one (see
+	// _RETIRED_ACTOR_FLAGS). Self-gated to the primary GM, and a no-op in a clean world.
+	try { await _dropRetiredActorFlags(); }
+	catch (err) { console.error("Stonetop | retired actor-flag sweep failed", err); }
 	await _migrateGmPrepPagesToSingleJournal();
 	// Convert each steading's plain-text Residents/Neighbors rows into linked NPC actors
 	// (idempotent; primary-GM only so two connected GMs can't double-create). Swept every
 	// load, not once per world: players can't create actors, so a background that seeds
 	// neighbors during onboarding leaves text rows for the GM to pick up here.
 	if (isPrimaryGM()) {
+		// Un-duplicate any chronicle journal a build with the misfiled flag key re-seeded. Swept
+		// every load rather than latched: it is idempotent by construction (nothing is left for
+		// it to match once it has run), so there is no gate that can get stuck. See
+		// migration/chronicle-flag-scope.js.
+		try { await repairAllChronicleFlagScopes(); }
+		catch (err) { console.error("Stonetop | chronicle flag-scope repair failed", err); }
+		// Catch Chronicle year pages up to the "Year One" naming the sheet and the picker
+		// already use. Same shape as the sweep above and for the same reason: it recognises a
+		// generated name and writes one, so it is idempotent and needs no gate. The years that
+		// go stale are the closed-out ones nobody re-records, so healing on write is not enough.
+		// See migration/season-year-page-names.js.
+		try { await renameAllSeasonYearPages(); }
+		catch (err) { console.error("Stonetop | Chronicle year-page rename failed", err); }
 		try { await migrateAllSteadingPeople(); }
 		catch (err) { console.error("Stonetop | Residents/Neighbors → NPC conversion failed", err); }
 		// Give already-linked Residents of Stonetop a "Stonetop" Home if theirs is blank
@@ -154,14 +181,16 @@ export async function onReady() {
 		// (folder creation is a GM-only right; ensurePeopleFolder returns null for them).
 		try { await ensurePeopleFolders(); }
 		catch (err) { console.error("Stonetop | ensurePeopleFolders failed", err); }
-		try { await _migrateNpcTokenNameplates(); }
-		catch (err) { console.error("Stonetop | NPC token-nameplate migration failed", err); }
+		try { await _migrateTokenNameplates(); }
+		catch (err) { console.error("Stonetop | token-nameplate migration failed", err); }
 		try { await _migrateNpcPlaceholderPortraits(); }
 		catch (err) { console.error("Stonetop | NPC placeholder-portrait migration failed", err); }
 		try { await _migrateTokenImagesToPortraits(); }
 		catch (err) { console.error("Stonetop | token-image backfill failed", err); }
 		try { await _migrateShootMarker(); }
 		catch (err) { console.error("Stonetop | initiate shoot-marker backfill failed", err); }
+		try { await _migratePeoplePortraitsToWhole(); }
+		catch (err) { console.error("Stonetop | people portrait/frame flip failed", err); }
 		// Open the lettered village pins already on this world's scenes up to the players
 		// they were always for (once per world; see revealLandmarkNotesOnce), then point any
 		// that still open nothing at their Chronicle page (every load; a no-op once linked).
@@ -232,27 +261,27 @@ export async function onReady() {
 	game.stonetop.openCharacterCreation = (actor = game.user.character) =>
 		actor ? CharacterCreationDialog.open(actor)
 		      : ui.notifications.warn("No character to start creation for.");
-	// Cut every portrait this world could have out of the book art already on disk — the detail
-	// portraits, and the square faces the small round pictures use — then point NPCs already
-	// holding a whole illustration at their close-up. GM-only (it writes files).
+	// Cut every picture this world could have out of the book art already on disk — the detail
+	// portraits, the square faces the small round pictures use, and the square a creature's token
+	// stands on — then point NPCs and creatures already in play at them. GM-only (it writes files).
 	//
 	// The same work the one-time chat card offers, reachable on demand because that card latches
 	// the moment it is posted: scrolled past, deleted, or landed on the other GM and it is gone
 	// for good. Safe to run any number of times — every stage re-plans from what is on disk.
 	game.stonetop.rebuildPortraits = async () => {
-		if (!game.user.isGM) return ui.notifications.warn("Only a GM can rebuild portrait art.");
-		const { runPeopleArtRebuild, countPeopleArtRebuilds, describeRebuild } =
+		if (!game.user.isGM) return ui.notifications.warn("Only a GM can rebuild book art.");
+		const { runBookArtRebuild, countBookArtRebuilds, describeRebuild } =
 			await import("../book2-art/run-rebuild.js");
-		const todo = await countPeopleArtRebuilds();
-		if (!todo) return ui.notifications.info("Every portrait this world can build is already on disk.");
+		const todo = await countBookArtRebuilds();
+		if (!todo) return ui.notifications.info("Every picture this world can build is already on disk.");
 		// The other two entry points are buttons, which count down in their own label. This one
 		// has no button, and a toast that fades after five seconds while a 140-image job runs on
 		// is the exact thing the notification bar exists for. No delay: the caller just asked.
 		const bar = openProgressNotification(
-			`Stonetop: rebuilding ${todo} portrait${todo === 1 ? "" : "s"}`, { delayMs: 0 });
+			`Stonetop: rebuilding ${todo} picture${todo === 1 ? "" : "s"}`, { delayMs: 0 });
 		let res;
 		try {
-			res = await runPeopleArtRebuild({
+			res = await runBookArtRebuild({
 				onProgress: (done, total) => bar.update({ fraction: done / total, detail: `${done} of ${total}` }),
 			});
 		} catch (err) {
@@ -318,6 +347,7 @@ export async function onReady() {
 	game.stonetop.importBookArt     = () => runImportBookArtMacro();
 
 	_registerCharacterAutoOpen();
+	_registerGmToolkitAdopt();
 	// Close any half-finished creation whose character is deleted out from under it — the
 	// GM minting a replacement is a delete first. Every client, since the player who loses
 	// the character is rarely the one who pressed the button. See creation-flow.js.
@@ -328,7 +358,14 @@ export async function onReady() {
 	if (game.user.isGM) await stampWorldLayoutBaseline();
 	if (game.user.isGM) await _applyCoreSettingDefaultsForNewWorld();
 	if (game.user.isGM) await _ensurePlayerActorCreationGrant();
-	if (game.user.isGM) await _assignSteadingToUnassignedGm();
+	// The world HAVING a toolkit and this GM being pointed at one are two questions, and only the
+	// second is answered once per user. _assignGmToolkitToGm returns on its latch before it reaches
+	// the mint, so a world whose gamemasters have all been assigned already would never re-check —
+	// which is how a world that reached zero (emptied before the delete guard shipped, or by a
+	// macro passing noHook) would stay empty, and how a toolkit still wearing Foundry's mystery-man
+	// would never pick up the portrait. Asking here, unlatched, is what makes both self-correcting.
+	if (game.user.isGM) await _ensureGmToolkit();
+	if (game.user.isGM) await _assignGmToolkitToGm();
 
 	// Set this world up: the durable-art re-apply, the gazetteer seed, the bestiary and the
 	// treasure library — narrated by the setup progress window when there is actually a wait
@@ -396,8 +433,20 @@ export async function onReady() {
 		// the plan is empty so a later import still gets the nudge — so for a GM who never
 		// imports, an awaited call stalls the ready sequence on a server round-trip whose
 		// answer is always "nothing", on every single load. Nothing below waits on it.
-		_offerPeopleArtRebuildOnce()
+		_offerBookArtRebuildOnce()
 			.catch(err => console.error("Stonetop | portrait rebuild offer failed:", err));
+		// Backgrounded for the same reason, and it browses the very same folder. Ordered after
+		// the rebuild offer so a world owed both is asked about the free one first: cutting
+		// portraits from art already on disk costs the GM nothing, while this one asks them to
+		// go and find their PDFs.
+		_offerPartialArtImportOnce()
+			.catch(err => console.error("Stonetop | partial art import offer failed:", err));
+		// Backgrounded and folder-browsing like the two above, and ordered LAST of the three on
+		// purpose: it is the only one that is not about a gap. The rebuild fixes pictures the GM
+		// is owed for free, the partial import fixes ones that failed; this one offers to improve
+		// art that is already there and already looks fine, so it yields to both.
+		_offerGmPlaybookArtOnce()
+			.catch(err => console.error("Stonetop | GM playbook art offer failed:", err));
 		await remindDestinedOmenRoll();
 	}
 
@@ -407,9 +456,10 @@ export async function onReady() {
 	// Overview journal doesn't exist yet.
 	if (!wasFreshWorld) await _openSettingOverview();
 
-	// Reopen any session-zero walkthrough (Introductions / Let Spring Burst Forth)
-	// that was open when this client last reloaded, at the page it was on. Per-client,
-	// so it only fires for whoever actually had one open. See walkthrough-resume.js.
+	// Reopen any GM walkthrough — session-zero (Introductions / Let Spring Burst Forth)
+	// or Run an Expedition — that was open when this client last reloaded, at the page it
+	// was on. Per-client, so it only fires for whoever actually had one open. See
+	// walkthrough-resume.js.
 	//
 	// The GM Welcome guide auto-opens here too, but its getData awaits a pack index so
 	// it renders a beat later and would bury a resumed walkthrough — so when it's
@@ -478,43 +528,132 @@ async function _ensurePlayerActorCreationGrant() {
 	await setSetting("playerActorCreationGranted", true);
 }
 
-// Give a GM who has no assigned character the shared steading as their default character,
-// once. Foundry's `User#character` only references an actor id (it needn't be a
-// `character`-type actor), so the "Stonetop" steading rides in the GM's player-list entry
-// and their "toggle character sheet" hotkey (core binds C → game.toggleCharacterSheet,
-// which opens game.user.character when no token is controlled) opens it in a click.
+// The world's GM Toolkit: find it, or make it. ONE per world, like the steading, and enforced
+// the same way — hooks/StonetopSingleton.js vetoes a second create and refuses to delete the
+// last, so the primary GM mints it and every GM after that finds it.
+//
+// One is the right number because nothing on the sheet is per-GM: the Moves and Core Loop tabs
+// are reference transcribed from the playbook, the Threats and Sites tabs read their storage off
+// the STEADING, and the "I wonder..." list on `system.wonders` is the world's open questions
+// rather than any one gamemaster's. What genuinely varies between
+// gamemasters is which sheet their "C" key opens, and that is a per-user flag on the User
+// document (see _assignGmToolkitToGm below), not a second Actor.
+//
+// Plain find-or-mint, with NO once-per-user latch, and the delete guard is what pays for that:
+// with deletion refused, "no toolkit in this world" can only mean "never made one". There is no
+// don't-resurrect-what-somebody-threw-away case left to remember, and no flag that could jam the
+// gate shut by conflating "already minted" with "could not mint".
+//
+// The toolkit is stamped `ownership.default = NONE` by StonetopActor#_preCreate, so it never
+// appears in a player's Actors sidebar. GM-only caller.
+export async function _ensureGmToolkit() {
+	const existing = theGmToolkit();
+	if (existing) {
+		await _adoptGmToolkitPortrait(existing);
+		return existing;
+	}
+
+	// Minting is a shared-world write, so exactly ONE client may do it (utils/primary-gm.js).
+	// The preCreateActor veto cannot cover this on its own: it counts the INITIATING client's
+	// `game.actors`, so two GMs whose `ready` lands inside the same broadcast window both read
+	// zero and both pass, and the world gets two toolkits with the "I wonder..." list split
+	// across them. The steading has been gated this way all along (ensureStonetopSingleton); the
+	// toolkit missed it only because its mint rides inside a per-user function that must run on
+	// every GM client. A non-primary GM returns empty-handed and is handed the toolkit the moment
+	// the primary's create broadcasts (_registerGmToolkitAdopt), or failing that, next load.
+	if (!isPrimaryGM()) return null;
+
+	// Silent: this runs before anyone has asked for anything, so a world whose launch predates
+	// the subtype should say nothing and try again next load rather than greet the GM with a
+	// warning about a sheet they have not gone looking for. Returns null on any failure, and the
+	// next load simply asks again.
+	return await createGmToolkit({ warn: false });
+}
+
+// Put the toolkit's own mark on a toolkit that predates it, and ONLY over a stock default.
+//
+// The portrait shipped after the subtype did, so worlds already hold toolkits wearing Foundry's
+// mystery-man. That is not a portrait anybody chose — it is the absence of one, and on this sheet
+// it actively misleads, since it reads as "a person nobody has found a picture for". So this is a
+// self-heal rather than a migration, in the shape StonetopActor#_preCreate already uses for an
+// art-less NPC: `isDefaultImg` gates it, so a GM who set their own picture keeps it for good.
+//
+// Deliberately narrower than the steading's equivalent (_ensureStartingValues, which re-asserts
+// ownership on every load): once this has run the image is no longer a default, so it never runs
+// again and cannot fight a later choice.
+//
+// Primary GM only. Every GM client reaches _ensureGmToolkit, and this is a shared-world write.
+async function _adoptGmToolkitPortrait(toolkit) {
+	if (!isPrimaryGM() || !isDefaultImg(toolkit.img)) return;
+	try {
+		await toolkit.update({
+			img: GM_TOOLKIT_DEFAULT_IMG,
+			"prototypeToken.texture.src": GM_TOOLKIT_DEFAULT_IMG,
+		});
+	} catch (err) {
+		// Cosmetic, so a failure must never cost the GM their toolkit: the caller still returns it
+		// and the next load simply tries again.
+		console.warn("Stonetop | Could not set the GM Toolkit portrait.", err);
+	}
+}
+
+// Give a GM who has no assigned character their GM Toolkit as their default character, once.
+// Foundry's `User#character` only references an actor id (it needn't be a `character`-type
+// actor), so the toolkit rides in the GM's player-list entry and their "toggle character
+// sheet" hotkey (core binds C → game.toggleCharacterSheet, which opens game.user.character
+// when no token is controlled) opens it in a click.
+//
+// It used to be the STEADING behind that key, from before the GM had a sheet of their own.
+// The toolkit is the better answer now: it holds the GM moves and, since they moved off the
+// steading, the Threats and Sites prep. A GM who is still on the steading from an earlier run
+// is moved across — that assignment was ours to begin with, and the `gmSteadingAssigned` flag
+// is how we know it was. A GM who chose something else is left alone.
 //
 // The once-gate is a per-USER WORLD flag on the GM's own User document — NOT a client
 // setting. A client-scoped setting lives in the browser's localStorage keyed only by
 // namespace.key, so it leaks across every world on this browser+server and a "fresh world"
-// reads it already-set — which silently skipped this assignment (the steading never became
-// the GM's character, so C did nothing). A User flag resets per world (new world = new
-// User docs) and is still per-user, so it gates correctly:
-//   • a GM who already runs their own PC (or previously accepted the steading) is left
-//     untouched — we record the flag and never re-check; and
+// reads it already-set — which silently skipped this assignment (nothing became the GM's
+// character, so C did nothing). A User flag resets per world (new world = new User docs) and
+// is still per-user, so it gates correctly:
+//   • a GM who already runs their own PC is left untouched — we record the flag and never
+//     re-check; and
 //   • a GM who later clears the assignment stays cleared — we never re-assign.
-// If no steading exists yet (e.g. a secondary GM logging in before the primary GM minted
-// it), we return WITHOUT setting the flag so the next load tries again. GM-only caller.
-async function _assignSteadingToUnassignedGm() {
-	if (game.user.getFlag(STONETOP_SCOPE, "gmSteadingAssigned")) return;
+// If the toolkit could not be minted, we return WITHOUT setting the flag so the next load
+// tries again. GM-only caller.
+export async function _assignGmToolkitToGm() {
+	if (game.user.getFlag(STONETOP_SCOPE, "gmToolkitAssigned")) return;
 
-	// Already has a character (their own PC, or the steading from a prior run): respect it
-	// and stop checking.
-	if (game.user.character) {
-		await game.user.setFlag(STONETOP_SCOPE, "gmSteadingAssigned", true);
-		return;
+	const toolkit = await _ensureGmToolkit();
+	const current = game.user.character;
+
+	// Somebody else's choice: their own PC, or anything we did not put there. Respect it and
+	// stop checking. The one assignment we WILL move is the steading we assigned ourselves in
+	// an earlier version, which `gmSteadingAssigned` records.
+	if (current) {
+		const oursToMove = current.type === "stonetop"
+			&& !!game.user.getFlag(STONETOP_SCOPE, "gmSteadingAssigned");
+		if (!oursToMove) {
+			await game.user.setFlag(STONETOP_SCOPE, "gmToolkitAssigned", true);
+			return;
+		}
 	}
 
-	const steading = getStonetopSteadingActor();
-	if (!steading) return; // not minted yet — retry next load, flag left unset
+	if (!toolkit) return; // not minted yet — retry next load, flag left unset
 
+	// The assignment and its latch in ONE write, rather than an update followed by a setFlag.
+	// Two writes to the same User document is one round trip more than the job needs, and it is
+	// the pairing that matters: if the second half fails, the next load re-assigns a character
+	// that is already assigned. Together they land or neither does.
 	try {
-		await game.user.update({ character: steading.id });
+		await game.user.update({
+			character: toolkit.id,
+			flags: { [STONETOP_SCOPE]: { gmToolkitAssigned: true } },
+		});
 	} catch (err) {
-		console.warn("Stonetop | Could not assign the steading as the GM's character.", err);
-		return; // leave the flag unset so a transient failure retries next load
+		console.warn("Stonetop | Could not assign the GM Toolkit as the GM's character.", err);
+		// Flag left unset so the next load tries again — which it now can, because
+		// _ensureGmToolkit hands back the toolkit it already minted.
 	}
-	await game.user.setFlag(STONETOP_SCOPE, "gmSteadingAssigned", true);
 }
 
 // Let players create actors: their own characters from Foundry's "Create Actor"
@@ -597,6 +736,29 @@ function _localizedSettingText(value) {
 function _registerCharacterAutoOpen() {
 	Hooks.on("createActor", actor => _maybeOpenCharacterCreation(actor));
 	for (const actor of game.actors) _maybeOpenCharacterCreation(actor);
+}
+
+// Hand a co-GM the toolkit the moment it appears, rather than making them reload.
+//
+// Only the primary GM mints one (_ensureGmToolkit), so a second GM whose `ready` ran first has
+// nothing to be assigned and leaves `gmToolkitAssigned` unset to retry next load. That retry is
+// the correctness story; this is the part that makes it invisible. `_assignGmToolkitToGm` is
+// already idempotent — the flag is its first line — so firing it again costs a flag read.
+//
+// Ignores creates THIS client initiated: `createActor` fires from inside the create's response
+// handling, before `Actor.create` resolves, so our own mint would re-enter
+// _assignGmToolkitToGm while the outer call is still mid-flight and both halves would write the
+// same User update.
+export function _registerGmToolkitAdopt() {
+	Hooks.on("createActor", (actor, _options, userId) => {
+		if (!game.user?.isGM || userId === game.user.id) return;
+		if (!isGmToolkitData(actor)) return;
+		// Returned rather than dropped only so a test can await it — Foundry ignores whatever a
+		// `createActor` handler hands back. The catch is what makes that safe: an assignment that
+		// throws here has no caller to report to, and the next load retries anyway.
+		return _assignGmToolkitToGm()
+			.catch(err => console.warn("Stonetop | Could not adopt the GM Toolkit.", err));
+	});
 }
 
 // Greet a player with character creation, or resume an interrupted one:
@@ -952,21 +1114,42 @@ async function _clearDanglingHotbarSlots() {
 	if (dropped) await game.user.update({ hotbar }, { diff: false, recursive: false, noHook: true });
 }
 
-// Bring existing NPC actors up to the "name shows on hover to anyone" token default that
-// new NPCs now get at creation (StonetopActor#_preCreate). Only touches NPCs still at the
-// untouched core default (displayName NONE), so a GM who deliberately set a different mode
-// (hidden, always-on, owner-only) keeps it. Idempotent: once bumped, the actor no longer
-// matches, so re-running every load is a cheap no-op needing no version flag. Primary-GM
-// only (the caller gates it) so two connected GMs can't both write the same actors.
-async function _migrateNpcTokenNameplates() {
+// Bring the actors already in the world up to the "name shows on hover to anyone" token default
+// that new ones now get at creation (StonetopActor#_preCreate). Every type, not just NPCs: see
+// there for why the rule stopped being per-type, and for the spoiler note on creature names.
+//
+// Only touches what is still at the untouched core default (displayName NONE), so a GM who
+// deliberately set a different mode (hidden, always-on, owner-only) keeps it. NONE is also how a
+// GM would deliberately hide a name, and there is no way to tell those two apart — core's own
+// default IS NONE — so this reads it as "never decided", which is what it is on all but a handful
+// of tokens in any world.
+//
+// AND the tokens already standing on scenes, which the prototype does not reach: a TokenDocument
+// carries its own `displayName`, copied when it was placed, so a sweep that stopped at the
+// prototype would fix only the NEXT token dragged out and leave every villager already on the map
+// nameless. That is precisely the token somebody is hovering.
+//
+// One batched write per collection rather than a round trip each: this now matches most of the
+// actor list rather than a handful of NPCs, and each separate update is its own socket round trip,
+// document diff and sidebar repaint, all of it on the blocking startup path.
+//
+// Idempotent: once bumped, nothing matches, so re-running every load is a cheap no-op needing no
+// version flag. Primary-GM only (the caller gates it) so two connected GMs can't both write the
+// same documents.
+async function _migrateTokenNameplates() {
 	const NONE = CONST.TOKEN_DISPLAY_MODES.NONE;
 	const HOVER = CONST.TOKEN_DISPLAY_MODES.HOVER;
-	const stale = game.actors?.filter(
-		a => a.type === "npc" && (a.prototypeToken?.displayName ?? NONE) === NONE
-	) ?? [];
-	for (const actor of stale) {
-		await actor.update({ "prototypeToken.displayName": HOVER });
+	const unnamed = (mode) => (mode ?? NONE) === NONE;
+
+	const stale = game.actors?.filter(a => unnamed(a.prototypeToken?.displayName)) ?? [];
+	if (stale.length) {
+		await Actor.updateDocuments(stale.map(a => ({ _id: a.id, "prototypeToken.displayName": HOVER })));
 	}
+
+	// One request per affected scene, and none at all for a scene with nothing to bump — which
+	// after the first load is every scene. See utils/placed-tokens.js, shared with the two other
+	// sweeps that have to reach past the prototype.
+	await updatePlacedTokens(t => unnamed(t.displayName), () => ({ displayName: HOVER }), { what: "name" });
 }
 
 // Give the NPCs already in the world the people silhouette new ones now get at creation
@@ -977,12 +1160,15 @@ async function _migrateNpcTokenNameplates() {
 // anyone chose is never overwritten. Idempotent: once stamped, the actor no longer matches,
 // so re-running every load is a cheap no-op needing no version flag. Primary-GM only (the
 // caller gates it) so two connected GMs can't both write the same actors.
+// One batched write rather than a round trip each, for the reason its neighbours state: on the
+// load where this fires it fires for every art-less NPC in the world at once, and a world seeded
+// with a full steading roster has a lot of those.
 async function _migrateNpcPlaceholderPortraits() {
 	const stale = game.actors?.filter(
 		a => a.type === "npc" && a.img !== PERSON_DEFAULT_IMG && isDefaultImg(a.img)
 	) ?? [];
-	for (const actor of stale) {
-		await actor.update({ img: PERSON_DEFAULT_IMG });
+	if (stale.length) {
+		await Actor.updateDocuments(stale.map(a => ({ _id: a.id, img: PERSON_DEFAULT_IMG })));
 	}
 }
 
@@ -1044,23 +1230,144 @@ async function _migrateShootMarker() {
 	if (updates.length) await Actor.updateDocuments(updates);
 
 	// One request per affected scene, and none at all for a scene with nothing to lift — which
-	// after the first load is every scene.
-	for (const scene of game.scenes ?? []) {
-		const tokens = [...(scene.tokens ?? [])]
-			.filter(t => wasOurs(t.texture?.src))
-			.map(t => ({ _id: t.id, "texture.src": NEW_SHOOT_MARKER }));
-		if (tokens.length) await scene.updateEmbeddedDocuments("Token", tokens);
+	// after the first load is every scene. See utils/placed-tokens.js.
+	await updatePlacedTokens(
+		t => wasOurs(t.texture?.src),
+		() => ({ "texture.src": NEW_SHOOT_MARKER }),
+		{ what: "lift" },
+	);
+}
+
+// Put every People-of-Stonetop portrait onto the WHOLE illustration, with the hand-chosen square
+// as a frame over it and as the token's own file. See module/book2-art/repoint-portraits.js for
+// the three writes and why they are one move.
+//
+// ON LOAD, unlike the rebuild it also runs inside. The rebuild is behind a chat card that
+// offer-once.js latches the moment it is POSTED, so a world whose GM scrolled past that card can
+// never be asked again — and every one of those worlds is currently showing a small square face to
+// any module that reads `actor.img`, which is the bug this fixes. Nothing here CUTS a file (the
+// resolver only ever names squares the world has already extracted), so unlike the rebuild there
+// is nothing to ask permission for: it rearranges three fields into the layout a bestiary creature
+// has always had, and leaves every surface drawing the same pixels it drew before.
+//
+// Idempotent by construction, so re-running every load is a cheap no-op needing no version flag:
+// the target values are computed from the art index rather than from the actor, so a portrait
+// already in this layout produces an empty update and drops out of the plan. Primary-GM only (the
+// caller gates it) so two connected GMs can't both write the same actors.
+async function _migratePeoplePortraitsToWhole() {
+	const { flipPeoplePortraitsToWhole } = await import("../book2-art/repoint-portraits.js");
+	const result = await flipPeoplePortraitsToWhole();
+	if (result.changes) {
+		const placed = result.placed ? ` ${result.placed} placed token(s) followed.` : "";
+		console.log(`Stonetop | People portraits: ${result.changes} field(s) moved onto the whole illustration across ${result.updated} actor(s).${placed}`);
 	}
 }
 
-async function _migrateArmourToArmor() {
+// One batched actor write, falling back to one write per actor.
+//
+// `build(actor)` returns the update body for that actor, WITHOUT `_id`, and is called once per
+// actor per attempt — deliberately, never once for the whole batch. On v14 a deletion body carries
+// a `ForcedDeletion` INSTANCE rather than a magic key (utils/foundry-compat.js), and core deletes
+// only where the value `instanceof ForcedDeletion`; the contract there is a fresh instance per key,
+// so building one and spreading it across every document in the request is trusting an operator
+// object to be reusable when nothing says it is.
+//
+// THE FALLBACK IS WHAT MAKES A PARTIAL SWEEP HONEST. `Actor.updateDocuments` is all-or-nothing, so
+// one locked or unwritable actor rejects the batch and every clean actor behind it stays stale —
+// on a sweep that only ever fires on the one load where it has work to do. Walking them
+// individually saves everything that can be saved, exactly as flipPeoplePortraitsToWhole does; all
+// of these are idempotent, so whatever still fails is simply picked up next load.
+//
+// `what` names the job in the two warnings.
+async function _updateActorsBatched(actors, build, what) {
+	if (!actors.length) return 0;
+	try {
+		await Actor.updateDocuments(actors.map(a => ({ _id: a.id, ...build(a) })));
+		return actors.length;
+	} catch (err) {
+		console.warn(`Stonetop | bulk ${what} failed; retrying one actor at a time:`, err);
+	}
+	let updated = 0;
+	for (const actor of actors) {
+		try {
+			await actor.update(build(actor));
+			updated++;
+		} catch (err) {
+			console.warn(`Stonetop | could not ${what} on "${actor?.name}":`, err);
+		}
+	}
+	return updated;
+}
+
+// Drop the pre-rename `system.attributes.armour` key from characters that still carry it.
+//
+// PRIMARY-GM ONLY, like every other sweep in onReady. A player has no right to update actors
+// they don't own, so running this on their client threw `User lacks permission to update Actor`
+// once per stale character — and because the call site was a bare `await`, that rejection tore
+// down the rest of onReady for them: no hotbar macros, no game.stonetop, no window restore. It
+// went unnoticed because the early return below makes it a silent no-op in an already-clean
+// world, which is every world the developers were testing against.
+export async function _migrateArmourToArmor() {
+	if (!game.user?.isGM || !isPrimaryGM()) return;
 	const staleActors = game.actors.filter(
 		a => a.type === "character" && a.system?.attributes?.armour !== undefined
 	);
 	if (!staleActors.length) return;
-	for (const actor of staleActors) {
-		await actor.update({ "system.attributes.-=armour": null });
+	// ONE batched request, like every other actor sweep here. Per-actor updates cost a socket
+	// round trip, a world-wide `updateActor` broadcast and an Actors-sidebar repaint EACH, all on
+	// the blocking startup path — and on the one load where this fires it fires for every stale
+	// character at once. Built per actor rather than once for the batch, and with a per-actor
+	// retry behind it: see _updateActorsBatched for both reasons.
+	await _updateActorsBatched(
+		staleActors,
+		() => Object.fromEntries([deletionEntry("system.attributes.armour")]),
+		"armour key drop",
+	);
+}
+
+// Per-actor flags in OUR scope that no code reads any more, because the control that wrote them
+// is gone from the sheet. Nothing breaks if one is left behind — a stale flag is inert — but a
+// world's actor data should say what the system actually uses, and a retired key left lying
+// around is the kind of thing that gets mistaken for live state later.
+//
+// Add a key here only once its last READER is gone, not merely its writer: a flag still consulted
+// somewhere would be silently reset to its default by this sweep.
+const _RETIRED_ACTOR_FLAGS = [
+	// The Invocations tab's "Known first / A–Z" sort dropdown, dropped when the tab settled on the
+	// single order (known first, then alphabetically). Only a Lightbearer whose player opened that
+	// dropdown ever carried it.
+	"invocationsSort",
+];
+
+// Sweep those keys off every actor that still has one.
+//
+// PRIMARY-GM ONLY, like every other write in onReady. A player has no right to update actors they
+// don't own, and the rejection would tear down the rest of the hook for them — the lesson
+// _migrateArmourToArmor above learned the hard way.
+//
+// Needs no version flag: it is idempotent by construction, since after a run there is no key left
+// to match and the walk below makes it a silent no-op. One batched request rather than one per
+// actor, because unlike the armour sweep this walks EVERY actor in the world, not just characters
+// — with the same per-actor retry behind it, so one unwritable actor can't hold the rest stale.
+export async function _dropRetiredActorFlags() {
+	if (!game.user?.isGM || !isPrimaryGM()) return 0;
+	const staleKeys = new Map();
+	for (const actor of game.actors ?? []) {
+		const flags = actor.flags?.[STONETOP_SCOPE];
+		if (!flags) continue;
+		const stale = _RETIRED_ACTOR_FLAGS.filter(key => flags[key] !== undefined);
+		if (stale.length) staleKeys.set(actor, stale);
 	}
+	if (!staleKeys.size) return 0;
+	await _updateActorsBatched(
+		[...staleKeys.keys()],
+		// Through deletionEntry so v14 gets a ForcedDeletion instance rather than a deprecated
+		// `-=` key, while v13 gets the `-=` prefix, which is the only form that works there.
+		actor => Object.fromEntries(
+			staleKeys.get(actor).map(key => deletionEntry(`flags.${STONETOP_SCOPE}.${key}`))),
+		"retired flag sweep",
+	);
+	return staleKeys.size;
 }
 
 // The GM-prep page families (threats / hazards) used to store one JournalEntry per item in
@@ -1190,7 +1497,7 @@ function _buildBook2ArtReminderContent() {
 	return stonetopChatCard(
 		"Import Your Book Art",
 		`<div class="stonetop-roll-card-description">
-			<p>Own the Stonetop PDFs? You can rebuild the monster and location illustrations right here in your world &mdash; portraits, tokens, treasure and journal art, all filled in from your own books. Nothing is uploaded anywhere; the pictures are reconstructed locally on your machine.</p>
+			<p>Own the Stonetop PDFs? You can rebuild the monster and location illustrations right here in your world: portraits, tokens, treasure and journal art, all filled in from your own books. Nothing is uploaded anywhere; the pictures are reconstructed locally on your machine.</p>
 			<p>It's best to run this <strong>before your players join</strong>, and to <strong>close any journal you're editing</strong> first. You can re-run it any time from the <strong>Import Book Art</strong> macro in your Macro Directory.</p>
 		</div>
 		<div class="row stonetop-art-reminder__actions">
@@ -1201,54 +1508,165 @@ function _buildBook2ArtReminderContent() {
 		"stonetop-art-reminder-card");
 }
 
-// -- REBUILD DETAIL PORTRAITS FROM ART ALREADY IMPORTED --------
-// Detail portraits (crops of a multi-figure illustration) arrived after the first release that
-// shipped whole-illustration People art, so a GM who already imported holds every PARENT on disk
-// and none of the details. Those can be cut from the parents locally — no PDF, no re-import — so
-// offer it once rather than making them hunt for their books again. See book2-art/rebuild-crops.js.
+// -- REBUILD CUT PICTURES FROM ART ALREADY IMPORTED --------
+// Three kinds of picture arrived after releases that had already shipped whole illustrations: the
+// detail portraits (crops of a multi-figure drawing), the square faces the small round surfaces
+// use, and the square a creature's prototype token stands on. Each leaves a GM who already
+// imported holding every SOURCE on disk and none of the results. All three can be cut from those
+// sources locally — no PDF, no re-import — so offer it once rather than making them hunt for
+// their books again. See book2-art/rebuild-crops.js.
 //
 // The once-per-world rules — including "found nothing, so do not latch, and ask again next
 // load" — belong to offerDurableArtOnce; what is local here is what counts as rebuildable and
 // how the offer is presented.
-function _offerPeopleArtRebuildOnce() {
+function _offerBookArtRebuildOnce() {
 	return offerDurableArtOnce({
-		setting: "peopleArtRebuildOffered",
+		// A NEW KEY, not `peopleArtRebuildOffered`. Every world that answered the squares offer has
+		// that one set, so reusing it would latch all of them shut against creature tokens — which
+		// did not exist when they answered. This is the second time that trap has come up here (the
+		// squares offer could not reuse the crops key either), and it fails SILENTLY: the offer is
+		// simply never made. When this offer next grows to cover new work, mint another key.
+		setting: "bookArtRebuildOffered",
 		findWork: async () => {
-			// Both kinds of cuttable art: the detail portraits, and the square faces the small
-			// surfaces use. One offer covers both — they are the same work from the GM's side
-			// (cut from pictures already on disk) and asking twice would just be nagging.
-			// Counted through run-rebuild.js, the same façade the three run paths use.
-			const { countPeopleArtRebuilds } = await import("../book2-art/run-rebuild.js");
-			return await countPeopleArtRebuilds() || null;
+			// Every kind of cuttable art at once: the detail portraits, the square faces the small
+			// surfaces use, and the creature token squares. One offer covers all of them — they are
+			// the same work from the GM's side (cut from pictures already on disk) and asking three
+			// times would just be nagging. Counted through run-rebuild.js, the same façade the
+			// three run paths use.
+			const { countBookArtRebuilds } = await import("../book2-art/run-rebuild.js");
+			return await countBookArtRebuilds() || null;
 		},
-		offer: async count => {
-			if (!globalThis.ChatMessage?.create) return false; // chat isn't ready — retry next load
-			await ChatMessage.create({
-				content: _buildPeopleArtRebuildContent(count),
-				whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
-				speaker: { alias: "Stonetop" },
-			});
-		},
+		card: _buildBookArtRebuildContent,
 	});
 }
 
-function _buildPeopleArtRebuildContent(count) {
+function _buildBookArtRebuildContent(count) {
 	return stonetopChatCard(
-		"Rebuild Portraits",
+		"Rebuild Book Art",
 		`<div class="stonetop-roll-card-description">
-			<p>The <strong>People of Stonetop</strong> gallery now offers individual portraits cut from the
-			group illustrations &mdash; one face per person, instead of a whole crowd scene &mdash; and a
-			square close-up of each face, for the small round portraits on the character and steading sheets.
+			<p>Some of the book art is now cut finer than the whole-page illustrations you imported. The
+			<strong>People of Stonetop</strong> gallery offers individual portraits carved out of the group
+			illustrations, one face per person, instead of a whole crowd scene, plus a square
+			close-up of each face for the small round portraits on the character and steading sheets; and every
+			creature with art can carry a square framed for its <strong>token</strong>, so what stands on the
+			battle map is the beast rather than a blind slice through the middle of the page.
 			You already have the source pictures, so <strong>${count}</strong> of these can be made right here
 			from the art you imported before.
 			<strong>You do not need your PDFs, and you do not need to re-import.</strong></p>
 			<p>They are cut from pictures already on your disk, so they come out a little smaller than a fresh
 			import would give. If you would rather have them at full size, re-run the
-			<strong>Import Book Art</strong> macro instead &mdash; either way, nothing already on disk is deleted.</p>
+			<strong>Import Book Art</strong> macro instead: either way, nothing already on disk is deleted.</p>
 		</div>
 		<div class="row stonetop-art-reminder__actions">
 			<button type="button" class="stonetop-rebuild-crops-run">
-				<i class="fas fa-crop-simple"></i> Rebuild ${count} portraits
+				<i class="fas fa-crop-simple"></i> Rebuild ${count} pictures
+			</button>
+		</div>`,
+		"stonetop-art-reminder-card");
+}
+
+// -- FINISH AN IMPORT THAT FELL SHORT --------------------------
+// An import that fails on some illustrations still reports success. The failures scroll past in
+// the console during a run that takes a couple of minutes, and what the GM is left with is a
+// handful of entries that never got a picture and nothing connecting the two. The 2nd printing of
+// both books is one way to arrive here (it re-saved nine illustrations at a resolution the
+// importer could not match until the shape-and-place fallback landed), but a page that timed out,
+// a PDF that stopped reading part way, or a run closed early all end in the same state.
+//
+// Unlike the rebuild above this CANNOT be done from disk: the missing pictures were never
+// extracted, and the system keeps no copy of the books. So the honest offer is to re-run the
+// import, which skips everything already present and processes only the gap.
+//
+// The once-per-world rules — including "found nothing, so do not latch, and ask again next load"
+// — belong to offerDurableArtOnce; what is local here is what counts as a shortfall (see
+// countMissingDurableArt, which stays quiet when a whole book is simply absent) and how the offer
+// is presented.
+function _offerPartialArtImportOnce() {
+	return offerDurableArtOnce({
+		setting: "partialArtImportOffered",
+		findWork: async () => {
+			const { countMissingDurableArt } = await import("../book2-art/reapply.js");
+			return await countMissingDurableArt();
+		},
+		card: ({ missing, total }) => _buildPartialArtImportContent(missing, total),
+	});
+}
+
+function _buildPartialArtImportContent(missing, total) {
+	const pictures = missing === 1 ? "picture" : "pictures";
+	return stonetopChatCard(
+		"Finish Your Art Import",
+		`<div class="stonetop-roll-card-description">
+			<p>Your book art is imported, but <strong>${missing}</strong> of ${total} ${pictures} never made it
+			onto your disk, so a few bestiary entries, locations or portraits are sitting without their
+			illustration. An import reports those failures only in the console, which is easy to miss.</p>
+			<p>Running <strong>Import Book Art</strong> again picks up just the ${pictures} that are missing:
+			everything already on disk is skipped, so it is a short run rather than another full one.
+			<strong>You will need your PDFs again</strong>: missing art has to come out of the books,
+			and nothing already imported is touched or deleted.</p>
+		</div>
+		<div class="row stonetop-art-reminder__actions">
+			<button type="button" class="stonetop-import-art-open">
+				<i class="fas fa-images"></i> Import the missing ${missing}
+			</button>
+		</div>`,
+		"stonetop-art-reminder-card");
+}
+
+// -- THE GM PLAYBOOK, ADDED AS A THIRD SOURCE --------------
+// A world that imported before this release has no way to learn the importer reads a third PDF
+// now. Nothing looks broken to them: their map pages carry a map, and the two diagrams live on a
+// tab whose placeholder they may never scroll to. So this is the one nudge that has to arrive on
+// its own, rather than being discovered.
+//
+// Worth interrupting for because the PDF is FREE — it is the publisher's own handout, not a book
+// to buy — and because the books really are the poorer source here: Book I embeds the village map
+// at 478x272 and Book II the other two at ~700px, against a true 300 dpi in the playbook.
+//
+// The once-per-world rules — including "found nothing, so do not latch, and ask again next load"
+// — belong to offerDurableArtOnce, and which worlds have anything to gain belongs to
+// countGmPlaybookGains (which stays quiet for a world that never imported, since the plain
+// reminder owns that GM and the playbook is a field on the very dialog its button opens). What is
+// local here is only how the offer is put.
+function _offerGmPlaybookArtOnce() {
+	return offerDurableArtOnce({
+		setting: "gmPlaybookArtOffered",
+		findWork: async () => {
+			const { countGmPlaybookGains } = await import("../book2-art/reapply.js");
+			return await countGmPlaybookGains();
+		},
+		card: _buildGmPlaybookArtContent,
+	});
+}
+
+// Written against what this world would actually gain, not against everything the playbook holds:
+// a GM who already has the diagrams and only stands to sharpen a map should not be told about a
+// tab they have been using, and the reverse.
+function _buildGmPlaybookArtContent({ maps, diagrams }) {
+	const gains = [];
+	if (maps) {
+		gains.push(`<li><strong>Sharper regional maps.</strong> ${maps === 1 ? "One" : maps} of your Setting
+			Overview map pages ${maps === 1 ? "is" : "are"} showing a coarser copy than the playbook prints.
+			The rulebooks embed those maps small (Book I stores the village map at 478&times;272),
+			where the playbook prints all three at a full 300 dpi.</li>`);
+	}
+	if (diagrams) {
+		gains.push(`<li><strong>The core loop and the flow of play.</strong> The playbook's two flowcharts, which
+			are in no other PDF. They fill the <strong>Core Loop</strong> tab on your GM Toolkit sheet.</li>`);
+	}
+	return stonetopChatCard(
+		"Add The GM Playbook",
+		`<div class="stonetop-roll-card-description">
+			<p><strong>Import Book Art</strong> reads a third PDF as of this update: the <strong>GM
+			playbook</strong>. It's the free 12-page handout from the publisher, not a book you buy,
+			and for a few pictures it is a better source than either rulebook.</p>
+			<ul>${gains.join("")}</ul>
+			<p>Everything you have already imported is skipped, so this is a short run rather than another full
+			one, and nothing already on disk is touched or deleted.</p>
+		</div>
+		<div class="row stonetop-art-reminder__actions">
+			<button type="button" class="stonetop-import-art-open">
+				<i class="fas fa-images"></i> Add the GM playbook
 			</button>
 		</div>`,
 		"stonetop-art-reminder-card");
@@ -1291,7 +1709,7 @@ function _buildStartupWelcomeContent() {
 					<ul>
 						<li>A first-session Welcome guide and a Let Spring Burst Forth walkthrough.</li>
 						<li>A steading sheet with seasonal automation, improvements, and disasters.</li>
-						<li>A Threats tab of book-faithful cards you can pin to a scene.</li>
+						<li>A GM Toolkit with your moves, and Threats and Sites tabs you can pin to a scene.</li>
 						<li>Love Letters: personal, one-time moves you hand to a single character.</li>
 						<li>Character Introductions that compile into "The Chronicle" world journal.</li>
 						<li>An End of Session macro that awards XP to the whole table at once.</li>

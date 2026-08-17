@@ -1,0 +1,17 @@
+{{!-- The "write one up" bar at the foot of a GM-prep section.
+
+      TWO classes on the button, doing two different jobs. `stonetop-prep-add-btn` is what it
+      LOOKS like: the dashed full-width entry point, stated once in stonetop.css against this one
+      class. `{{kind}}-add-btn` is what it DOES: the hook the handler table matches
+      (`.<kind>-add-btn`, see gm-prep-tabs.js), which stays per-kind so the four bars keep their
+      separate handlers. Splitting them is what stops the styling being a list of kind names
+      maintained in a different file from the one that creates them: that list had already
+      shipped once without `.site-add-btn` on it, so the Sites tab drew its "Create a site" as a
+      bare core button and nothing failed.
+
+      `label` is the whole button text, and `proximity` is threats-only: the Threats tab prints
+      one bar per proximity band and the button carries which band it seeds. Absent elsewhere,
+      where it renders as an empty attribute the handler simply reads as undefined. --}}
+<div class="steading-improvement-add-bar">
+	<button type="button" class="stonetop-prep-add-btn {{kind}}-add-btn" data-proximity="{{proximity}}"><i class="fas fa-plus"></i> {{label}}</button>
+</div>

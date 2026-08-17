@@ -221,3 +221,70 @@ describe("section collapse", () => {
 		expect(decoration.folded).toBe(false);
 	});
 });
+
+// A section can opt into starting SHUT (the GM Toolkit's prep reference: five screens of
+// chapter that would otherwise sit under the cards on every open). What is stored is therefore
+// the set of sections sitting AGAINST their default, not the set that is collapsed — the two
+// readings coincide for every default-expanded section, which is what keeps older saved
+// preferences meaning exactly what they meant.
+describe("sections that default to collapsed", () => {
+	/** Same shape as buildSheetDom, with `data-default-collapsed` on the named carets. */
+	function buildWithDefaults(ids, defaultCollapsed = []) {
+		const dom = buildSheetDom(ids);
+		for (const id of defaultCollapsed) dom.carets[id].dataset.defaultCollapsed = "true";
+		return dom;
+	}
+
+	it("starts folded for a user who has never touched it", () => {
+		const sheet = new Sheet("actor1");
+		const { html, carets, bodies } = buildWithDefaults(["guide", "cards"], ["guide"]);
+		sheet._wireSectionCollapse(html, HEADINGS);
+
+		expect(bodies.guide.folded).toBe(true);
+		expect(carets.guide.attrs["aria-expanded"]).toBe("false");
+		// ...and its neighbour, which did not opt in, is unaffected.
+		expect(bodies.cards.folded).toBe(false);
+	});
+
+	it("opens on click, and records that it was opened", () => {
+		const sheet = new Sheet("actor1");
+		const { html, carets, bodies } = buildWithDefaults(["guide"], ["guide"]);
+		sheet._wireSectionCollapse(html, HEADINGS);
+
+		html[0].fire("click", click(carets.guide));
+		expect(bodies.guide.folded).toBe(false);
+		expect(carets.guide.attrs.title).toBe("Collapse section");
+		// The stored id means "against its default", which for this section is OPEN.
+		expect(store.sheetSectionsCollapsed.actor1).toEqual(["guide"]);
+	});
+
+	it("survives a re-render open, then shuts again and stores nothing", () => {
+		const sheet = new Sheet("actor1");
+		const first = buildWithDefaults(["guide"], ["guide"]);
+		sheet._wireSectionCollapse(first.html, HEADINGS);
+		first.html[0].fire("click", click(first.carets.guide));
+
+		// Foundry replaces the whole element on a re-render: same sheet, new DOM.
+		const second = buildWithDefaults(["guide"], ["guide"]);
+		sheet._wireSectionCollapse(second.html, HEADINGS);
+		expect(second.bodies.guide.folded).toBe(false);
+
+		// Shutting it again puts it back at its default, so the override is dropped rather
+		// than inverted. Otherwise the list grows an entry for every section left alone.
+		second.html[0].fire("click", click(second.carets.guide));
+		expect(second.bodies.guide.folded).toBe(true);
+		expect(store.sheetSectionsCollapsed.actor1).toEqual([]);
+	});
+
+	// The whole point of storing the override rather than the state: a preference saved by an
+	// older build lists sections the user COLLAPSED, and every one of those was default-expanded.
+	it("reads a list saved before defaults existed the same way it always did", () => {
+		store.sheetSectionsCollapsed = { actor1: ["stats"] };
+		const sheet = new Sheet("actor1");
+		const { html, bodies } = buildWithDefaults(["stats", "guide"], ["guide"]);
+		sheet._wireSectionCollapse(html, HEADINGS);
+
+		expect(bodies.stats.folded).toBe(true);   // collapsed, as it was saved
+		expect(bodies.guide.folded).toBe(true);   // collapsed, because that is its default
+	});
+});

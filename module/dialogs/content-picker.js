@@ -52,3 +52,31 @@ export function pickContentOption({ title, options, buttonLabel = "Continue" }) 
 		rejectClose: false,
 	});
 }
+
+/**
+ * Run the flow that belongs to the option that was picked.
+ *
+ * The other half of the chooser. Every table above used to be paired with an if/else ladder
+ * beside it, re-spelling each id a second time: a kind added to one and missed in the other is a
+ * picker row that quietly does nothing, or a flow nothing can reach, and neither fails loudly.
+ * With the flow ON the row there is only one list to keep, and the one thing that can still go
+ * wrong — a row with no flow at all — is reported instead of resolving a bare null, which the
+ * caller cannot tell apart from the user closing the dialog.
+ *
+ * `create` is optional in the type sense only: a table whose rows lack it is a bug, not a mode.
+ *
+ * @param {{id: string, create?: Function}[]} options  The same rows handed to pickContentOption.
+ * @param {string|null} choice     The id pickContentOption resolved, or null if it was dismissed.
+ * @param {...any} args            Passed through to the row's `create`.
+ * @returns {any}                  Whatever the flow returns, or null.
+ */
+export function runPickedOption(options, choice, ...args) {
+	if (!choice) return null;
+	const row = (options ?? []).find(o => o?.id === choice);
+	if (!row?.create) {
+		console.error(`Stonetop | picker option "${choice}" has no create flow`);
+		ui.notifications?.error?.("That option has no creation flow behind it. See the console for details.");
+		return null;
+	}
+	return row.create(...args);
+}

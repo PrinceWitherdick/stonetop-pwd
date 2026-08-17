@@ -1,0 +1,27 @@
+{{!-- A two-state glyph in the character header: the Lightbearer's candle and the Heavy's Battle
+      Joy. One state, toggled, with no list behind it.
+
+      A <button> where the sheet is editable and a <span> where it is not, so nothing offers a
+      click that would do nothing. `type="button"` is not optional: the whole sheet is one <form>
+      and a bare button submits it.
+
+      Which sentences it says are chosen in getData (_toggleGlyphKeys) — it is a four-way choice,
+      on/off crossed with writable/read-only, and that does not belong inside an HTML attribute.
+
+      Context:
+        stem      the base class; the icon is `<stem>-icon` ("stonetop-holy-light")
+        on        is the state currently ON
+        onClass   the modifier worn while it is ("is-lit")
+        labelKey  / tooltipKey   i18n keys for this state, already picked --}}
+{{#if editable}}
+<button type="button" class="{{stem}}{{#if on}} {{onClass}}{{/if}}"
+        aria-pressed="{{#if on}}true{{else}}false{{/if}}"
+        aria-label="{{localize labelKey}}"
+        data-tooltip="{{localize tooltipKey}}"
+        data-tooltip-direction="UP"><span class="{{stem}}-icon" aria-hidden="true"></span></button>
+{{else}}
+<span class="{{stem}}{{#if on}} {{onClass}}{{/if}}"
+      aria-label="{{localize labelKey}}"
+      data-tooltip="{{localize tooltipKey}}"
+      data-tooltip-direction="UP"><span class="{{stem}}-icon" aria-hidden="true"></span></span>
+{{/if}}

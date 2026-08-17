@@ -107,7 +107,7 @@ export function validateArcanumFlags(flags) {
 	if (!String(back.title ?? "").trim()) issues.push({ level: "warn", message: "The back (revealed power) has no title." });
 
 	const hasPayoff = hasText(back.description) || !!back.move || !!back.item || !!back.resource;
-	if (!hasPayoff) issues.push({ level: "warn", message: "The back has no payoff yet — add a description, move, item, or resource track." });
+	if (!hasPayoff) issues.push({ level: "warn", message: "The back has no payoff yet: add a description, move, item, or resource track." });
 
 	return issues;
 }

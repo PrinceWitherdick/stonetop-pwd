@@ -74,7 +74,7 @@
 			{{!-- Persistent warnings + glyph toolbar (apply across sections, so they stay put). --}}
 			{{#if edit.slugLocked}}
 			<ul class="stonetop-arc-validation">
-				<li class="stonetop-arc-issue stonetop-arc-issue--warn"><i class="fas fa-users"></i> A character already holds this card. Editing the mark tracks (◇ ○ □) can shift players' saved marks — add or remove glyphs at the <em>end</em> of a track, not before a marked one.</li>
+				<li class="stonetop-arc-issue stonetop-arc-issue--warn"><i class="fas fa-users"></i> A character already holds this card. Editing the mark tracks (◇ ○ □) can shift players' saved marks: add or remove glyphs at the <em>end</em> of a track, not before a marked one.</li>
 			</ul>
 			{{/if}}
 
@@ -101,10 +101,10 @@
 				<label class="stonetop-arc-row"><span>Slug</span>
 					<input type="text" class="stonetop-arc-input" data-arc-field="flags.stonetop.slug" value="{{edit.slug}}" {{#if edit.slugLocked}}readonly{{/if}}></label>
 				{{#if edit.slugLocked}}
-				<p class="stonetop-arc-hint"><i class="fas fa-lock"></i> A character already holds this card, so the slug is locked — changing it would orphan their saved marks and remove the card from their sheet.</p>
+				<p class="stonetop-arc-hint"><i class="fas fa-lock"></i> A character already holds this card, so the slug is locked: changing it would orphan their saved marks and remove the card from their sheet.</p>
 				{{else}}
-				<p class="stonetop-arc-slug-warning" {{#unless edit.slugCollision}}hidden{{/unless}}><i class="fas fa-triangle-exclamation"></i> Another arcanum already uses this slug. A shipped card of the same slug wins, and cards that share a slug share saved marks — pick a unique one.</p>
-				<p class="stonetop-arc-hint">The slug identifies the card and keys saved marks — avoid changing it once players own it.</p>
+				<p class="stonetop-arc-slug-warning" {{#unless edit.slugCollision}}hidden{{/unless}}><i class="fas fa-triangle-exclamation"></i> Another arcanum already uses this slug. A shipped card of the same slug wins, and cards that share a slug share saved marks: pick a unique one.</p>
+				<p class="stonetop-arc-hint">The slug identifies the card and keys saved marks: avoid changing it once players own it.</p>
 				{{/if}}
 				<label class="stonetop-arc-check"><input type="checkbox" class="stonetop-check" data-arc-field="flags.stonetop.major" data-arc-type="boolean" {{#if edit.major}}checked{{/if}}>
 					<span>Major Arcanum <em>(gets card art + major semantics)</em></span></label>
@@ -158,7 +158,7 @@
 							</select>
 							{{#if isOption}}
 							<input type="text" class="stonetop-arc-req-input" data-req-prop="description" placeholder="A requirement to check off…" value="{{description}}">
-							<input type="text" class="stonetop-arc-req-slug" data-req-prop="slug" title="stable key — avoid changing once in use" value="{{slug}}">
+							<input type="text" class="stonetop-arc-req-slug" data-req-prop="slug" title="stable key: avoid changing once in use" value="{{slug}}">
 							<input type="number" class="stonetop-arc-req-max" data-req-prop="max" min="1" value="{{max}}" title="number of checkboxes">
 							{{else}}
 							<input type="text" class="stonetop-arc-req-input stonetop-arc-req-input--wide" data-req-prop="content" placeholder="Interstitial label (e.g. “And then…”)" value="{{content}}">

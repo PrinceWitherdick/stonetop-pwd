@@ -1,8 +1,9 @@
-import { StonetopSteading, IMPROVEMENT_DEFINITIONS, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, improvementRequirementCount, HERD_SURPLUS_PER } from "./StonetopSteading.js";
+import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, improvementRequirementCount, HERD_SURPLUS_PER } from "./StonetopSteading.js";
 import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml} from "../../utils/roll-engine.js";
 import {SteadingLedger} from "./SteadingLedger.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
 import {wireTabSearch} from "../../utils/tab-search.js";
+import {injectHeaderToggle} from "../../utils/sheet-chrome.js";
 import {escHtml} from "../../utils/strings.js";
 import {CUSTOM_ASSET_VALUE, wireCustomAssetSelect} from "../../utils/requisition-asset.js";
 import {postMoveToChat} from "../../utils/chat.js";
@@ -27,21 +28,16 @@ import {makeColumnsSortable} from "../../utils/sortable-columns.js";
 import {withSectionEditing} from "../../utils/section-editing.js";
 import {STEADING_IMPROVEMENT_DRAG_TYPE} from "../../journal/steading-improvement-cards.js";
 import {improvementCategoryFieldHtml} from "../../dialogs/create-improvement-dialog.js";
-import {STONETOP_THREAT_SEED_DRAG_TYPE} from "../../threats/threat-seed-cards.js";
 import {PLACE_OF_INTEREST_DRAG_TYPE} from "../../hooks/PlaceOfInterestDrop.js";
 import {getDragEventData, imagePopout, imagePopoutTitle} from "../../utils/foundry-compat.js";
-import {postSeasonsChangeReminder, seasonIconSrc, seasonLabel, SEASON_IDS} from "../../seasons/seasons-change-reminders.js";
-import {recordSeasonsChange, ordinalWord} from "../../seasons/seasons-chronicle.js";
+import {wireCardDropZone} from "../../utils/card-drop-zone.js";
+import {postSeasonsChangeReminder, seasonIconSrc, seasonLabel} from "../../seasons/seasons-change-reminders.js";
+import {recordSeasonsChange, yearLabel} from "../../seasons/seasons-chronicle.js";
+import {readCurrentSeason, recordCurrentSeason, currentSeasonView, readCurrentYear} from "../../seasons/current-season.js";
+import {readCurrentWeather, currentWeatherView} from "../../seasons/current-weather.js";
+import {openSeasonPicker} from "../../seasons/season-picker.js";
 import {SEASONAL_GAINS} from "../../dialogs/spring-burst-data.js";
 import {addStonetopSteadingButton} from "../../utils/world.js";
-import {listThreatPages, createThreat, deleteThreat} from "../../threats/threat-store.js";
-import {buildThreatCardVM, wireThreatDoomChange, wireThreatCardDrag} from "../../threats/threat-view.js";
-import {THREAT_PROXIMITIES} from "../../threats/threat-types.js";
-import {CreateThreatDialog} from "../../threats/create-threat-dialog.js";
-import {ThreatEditorDialog} from "../../threats/threat-editor-dialog.js";
-import {listHazardPages, createHazard, deleteHazard} from "../../hazards/hazard-store.js";
-import {buildHazardCardVM} from "../../hazards/hazard-view.js";
-import {CreateHazardDialog} from "../../hazards/create-hazard-dialog.js";
 import {SETTLEMENTS} from "../../data/settlements.js";
 import {relationshipRow, wireRelationshipTable} from "../../utils/relationship-hearts.js";
 import {wireAvatarPreview, removeAvatarPreview} from "../../utils/avatar-preview.js";
@@ -49,7 +45,8 @@ import {ACTOR_LINK_MISSING, openLinkedActorSheet, withLinkedActor} from "../../u
 import {relationshipViewContext, wireRelationshipBoard} from "../../utils/relationship-board.js";
 import {displayPortraitSrc} from "../../book2-art/people-portraits.js";
 import {addPopoutHeaderControl, addPortraitFrameControl, addTokenizerControl} from "../../utils/popout-header-control.js";
-import {personFrameHandle} from "../../utils/portrait-frame-handles.js";
+import {personFrameHandle, actorPortraitPickUpdate, saveLegacyPersonRow} from "../../utils/portrait-frame-handles.js";
+import {normalizeFrame} from "../../utils/portrait-frame.js";
 import {bindImagePopoutToActor, pointImagePopoutAt, usedActorPortraits} from "../../utils/actor-portrait-picker.js";
 import {openPortraitFrameEditor} from "../../utils/PortraitFrameDialog.js";
 import {localize} from "../../utils/i18n.js";
@@ -82,13 +79,13 @@ const _STEADING_MOVES_RAW = [
 		interactive: true,
 		description: `<div class="stonetop-seasons-grid">
   <img src="systems/stonetop-pwd/assets/icons/seasons/spring_icon.svg" class="stonetop-season-row-icon" alt="Spring">
-  <div><strong>Spring</strong> — The <em>most hopeful</em> rolls +Fortunes. <strong>10+:</strong> pick 1 seasonal gain. <strong>7–9:</strong> pick 1 gain, but a threat makes itself known. <strong>6−:</strong> threats abound; don't mark XP. Reset Fortunes to +1.</div>
+  <div><strong>Spring</strong>: The <em>most hopeful</em> rolls +Fortunes. <strong>10+:</strong> pick 1 seasonal gain. <strong>7–9:</strong> pick 1 gain, but a threat makes itself known. <strong>6−:</strong> threats abound; don't mark XP. Reset Fortunes to +1.</div>
 
   <img src="systems/stonetop-pwd/assets/icons/seasons/summer_icon.svg" class="stonetop-season-row-icon" alt="Summer">
-  <div><strong>Summer</strong> — The <em>most content</em> rolls +Fortunes. <strong>10+:</strong> pick 2 seasonal gains. <strong>7–9:</strong> pick 1. <strong>6−:</strong> a threat makes itself known; don't mark XP. The steading generates 1d4−1 Surplus. Reset Fortunes to +1.</div>
+  <div><strong>Summer</strong>: The <em>most content</em> rolls +Fortunes. <strong>10+:</strong> pick 2 seasonal gains. <strong>7–9:</strong> pick 1. <strong>6−:</strong> a threat makes itself known; don't mark XP. The steading generates 1d4−1 Surplus. Reset Fortunes to +1.</div>
 
   <img src="systems/stonetop-pwd/assets/icons/seasons/fall_icon.svg" class="stonetop-season-row-icon" alt="Autumn">
-  <div><strong>Autumn</strong> — The <em>most determined</em> rolls +Fortunes. <strong>10+:</strong> pick 1 seasonal gain. <strong>7–9:</strong> pick 1 gain, but a threat makes itself known. <strong>6−:</strong> threats abound; don't mark XP. The steading generates 1d4 Surplus at harvest. Reset Fortunes to +1.</div>
+  <div><strong>Autumn</strong>: The <em>most determined</em> rolls +Fortunes. <strong>10+:</strong> pick 1 seasonal gain. <strong>7–9:</strong> pick 1 gain, but a threat makes itself known. <strong>6−:</strong> threats abound; don't mark XP. The steading generates 1d4 Surplus at harvest. Reset Fortunes to +1.</div>
 
   <img src="systems/stonetop-pwd/assets/icons/seasons/winter_icon.svg" class="stonetop-season-row-icon" alt="Winter">
   <div><strong>Winter</strong> — The <em>weariest</em> rolls 1d4+Population (min 0); the steading consumes that much Surplus. If there isn't enough: Surplus → 0, Fortunes −1, pick 1 consequence. Then roll +Fortunes. Reset Fortunes to +1.</div>
@@ -215,12 +212,12 @@ const STEADING_STAT_CHIP_LABELS = {
 // Hover tooltips for the steading stat labels, keyed by data-steading-stat
 // (Book I "Homefront"). Gated by hoverDescriptionsSteadingStats.
 const STEADING_STAT_TOOLTIPS = {
-	surplus:    "Stores of food and trade goods. A resource you accumulate, spend, and consume — not rolled. Generated in summer and autumn, eaten through in winter.",
-	fortunes:   "The steading's morale, social cohesion, and the favor of the gods — “how things are going.” Roll +Fortunes to Requisition and when the Seasons Change; resets to +1 each season.",
+	surplus:    "Stores of food and trade goods. A resource you accumulate, spend, and consume, not rolled. Generated in summer and autumn, eaten through in winter.",
+	fortunes:   "The steading's morale, social cohesion, and the favor of the gods: “how things are going.” Roll +Fortunes to Requisition and when the Seasons Change; resets to +1 each season.",
 	size:       "How big the steading is: hamlet (under 50 people), village (150–350), town (500–1500), city (2500+). Mostly descriptive, but it affects winter Surplus consumption and the Muster, Pull Together, and Trade & Barter moves.",
 	population: "The number of able bodies living here, relative to its Size. Roll +Population to Muster or Pull Together; higher Population also eats more Surplus each winter.",
 	prosperity: "The goods in circulation, the variety of tradesfolk, and merchant traffic. Roll +Prosperity to Trade & Barter; it also sets the value of “x piercing” and what gear is available.",
-	defenses:   "The steading's martial readiness — trained, armed residents and veteran warriors. Roll +Defenses to Deploy its people against a threat.",
+	defenses:   "The steading's martial readiness: trained, armed residents and veteran warriors. Roll +Defenses to Deploy its people against a threat.",
 	debilities: "Ongoing afflictions that drag the steading down: diminished (injury, sickness, or doubt), lacking (shortages, hoarding, or distrust), and malcontent (fear, anger, or despair). Check any that apply; each imposes its own penalty until it's cleared.",
 };
 const _esc = escHtml;
@@ -400,7 +397,7 @@ const HOMESTEAD_MOVE_FLOWS = {
 			"Someone has it, but they aren't keen to give it up",
 			"You can get something close, but not quite right",
 		],
-		picksLabel: "7-9 when buying — the GM picks 1:",
+		picksLabel: "7-9 when buying, the GM picks 1:",
 		note: "For unique or truly exceptional items, don't Trade & Barter — Make a Plan with the GM or wait for a trade opportunity when Seasons Change. Lacking treats Prosperity as 1 lower; subtract the item's Value as a modifier.",
 	},
 	persuade: {
@@ -429,7 +426,9 @@ const STEADING_EDIT_SECTIONS = [
 	"surplus", "fortunes", "population", "defenses", "prosperity",
 	"size", "fortifications", "currency",
 	"resources", "assets", "places",
-	"players", "residents", "neighbors", "settlements", "improvements", "threats",
+	// "threats" and "sites" left with their tabs, which moved to the GM Toolkit sheet
+	// (module/actors/gmtoolkit/gm-prep-tabs.js declares its own list).
+	"players", "residents", "neighbors", "settlements", "improvements",
 ];
 
 export function createStonetopSteadingSheetClass(Base) {
@@ -457,12 +456,6 @@ export function createStonetopSteadingSheetClass(Base) {
 		// viewer's lens on the list, not a property of the steading, and a player with
 		// read-only access to the actor could not write a flag anyway.
 		_improvementCategory = "";
-		// Page uuids of threat cards the user has collapsed (clamped to title + Instinct).
-		// Threats default EXPANDED, so a uuid present here means that card reopens collapsed.
-		// Kept on the instance like _openImprovements so the state survives the re-render a
-		// reveal / create / delete triggers; it resets when the sheet is closed.
-		_collapsedThreats = new Set();
-
 		constructor(...args) {
 			super(...args);
 			this._stonetopSteading = this.actor.typedActor;
@@ -507,44 +500,17 @@ export function createStonetopSteadingSheetClass(Base) {
 		}
 
 		_injectHeaderToggle() {
-			const header = this.element[0]?.querySelector(".window-header");
-			if (!header || !this.isEditable) return;
-
-			header.querySelector(".stonetop-header-toggle")?.remove();
-
-			const label = document.createElement("label");
-			label.className = "stonetop-edit-toggle stonetop-header-toggle";
-			// Master edit toggle: when on, every section is editable. Each section
-			// also has its own hover pencil for editing it in isolation.
-			label.title = this._editMode ? "Lock Steading" : "Edit Steading";
-
-			const checkbox = document.createElement("input");
-			checkbox.type = "checkbox";
-			checkbox.checked = this._editMode;
-			checkbox.addEventListener("change", () => {
-				this._editMode = checkbox.checked;
+			// Master edit toggle: when on, every section is editable. Each section also has its
+			// own hover pencil for editing it in isolation. Shared with the character, NPC and
+			// monster sheets — see utils/sheet-chrome.js.
+			injectHeaderToggle(this, "Steading", {
 				// Locking the sheet resets any per-section pencils back to read-only.
-				if (!this._editMode) {
+				onChange: (on) => {
+					if (on) return;
 					this._editingSections.clear();
 					this._clearAllSectionDoneTimers();
-				}
-				this.render(false);
+				},
 			});
-
-			const track = document.createElement("span");
-			track.className = "stonetop-toggle-track";
-			const thumb = document.createElement("span");
-			thumb.className = "stonetop-toggle-thumb";
-			const icon = document.createElement("i");
-			icon.className = "fas fa-wrench";
-			thumb.appendChild(icon);
-			track.appendChild(thumb);
-
-			label.appendChild(checkbox);
-			label.appendChild(track);
-
-			const title = header.querySelector(".window-title");
-			header.insertBefore(label, title);
 		}
 
 		_getHeaderButtons() {
@@ -658,7 +624,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			context.stonetop.recentlyEdited = Object.fromEntries(
 				STEADING_EDIT_SECTIONS.map(section => [section, this._recentlyEditedSections.has(section)])
 			);
-			context.stonetop.hideUnearnedImprovements = this.actor.getFlag("stonetop-pwd", "hideUnearnedImprovements") ?? false;
+			context.stonetop.hideUnearnedImprovements = this.actor.getFlag(STONETOP_SCOPE, "hideUnearnedImprovements") ?? false;
 			context.stonetop.improvementCategories = IMPROVEMENT_CATEGORIES.map(cat => ({
 				...cat,
 				active: this._improvementCategory === cat.key,
@@ -671,161 +637,17 @@ export function createStonetopSteadingSheetClass(Base) {
 				imp.isOpen = this._openImprovements.has(imp.slug);
 				imp.filtered = this._isImprovementFiltered(imp.category);
 			}
-			const threatsCtx = await this._buildThreatsContext();
-			context.stonetop.threatGroups = threatsCtx.threatGroups;
-			context.stonetop.hazards = threatsCtx.hazards;
-			context.stonetop.showHazards = threatsCtx.showHazards;
-			context.stonetop.canSeeThreats = threatsCtx.canSeeThreats;
 			context.stonetop.isGM = game.user?.isGM ?? false;
+			// The clock beside the sheet's title: the season the table is playing in and the
+			// year it belongs to, stamped by the Seasons Change move. The un-stamped case falls
+			// back to the picker's year so the header still names a year on a world that hasn't
+			// turned a season since this shipped (see module/seasons/current-season.js).
+			context.stonetop.currentSeason = currentSeasonView(readCurrentSeason(this.actor), this._seasonsCurrentYear());
+			// And what the sky is doing, shown as a glyph to the left of that clock. Set by the
+			// Weather picker when the GM posts a result; fine weather until they do (see
+			// module/seasons/current-weather.js).
+			context.stonetop.currentWeather = currentWeatherView(readCurrentWeather(this.actor));
 			return context;
-		}
-
-		/** Resolve the steading's threat + hazard cards. Threats and hazards are pure GM prep
-		 *  (never shared with players), so the whole "Threats & Dangers" tab is GM-only: a
-		 *  non-GM gets nothing, which hides the tab (it's gated on `canSeeThreats`). */
-		async _buildThreatsContext() {
-			const isGM = game.user?.isGM ?? false;
-			if (!isGM) return { threatGroups: [], hazards: [], showHazards: false, canSeeThreats: false };
-			const pages = listThreatPages(this.actor);
-			// Hazards render as one flat section after the proximity groups (they have no
-			// proximity; they belong to places and expeditions, Book I "Dangers").
-			const hazardPages = listHazardPages(this.actor);
-			// Enrich every card VM concurrently (each page is independent, and the threat
-			// and hazard batches don't depend on each other) rather than serializing the
-			// enrichHTML calls, then decorate with host collapse chrome.
-			const [vms, hazardVMs] = await Promise.all([
-				Promise.all(pages.map(page => buildThreatCardVM(page))),
-				Promise.all(hazardPages.map(page => buildHazardCardVM(page))),
-			]);
-			// On this tab each card can clamp to its title + Instinct. Seed the current
-			// state from the per-instance set (default expanded); hazards share the set,
-			// which is keyed by page uuid so the kinds can't collide.
-			const decorate = (vm, page) => {
-				vm.canDrag = vm.isOwner;
-				vm.collapsible = true;
-				vm.collapsed = this._collapsedThreats.has(page.uuid);
-				return vm;
-			};
-			const threats = vms.map((vm, i) => decorate(vm, pages[i]));
-			// Group by proximity (Homefront / Nearby / Distant, Book I p. 288) in book order,
-			// mirroring the Residents tab's stacked Player/Residents/Neighbors sections. The GM
-			// always sees all three headers (prep view), each with its own "write up" button.
-			const threatGroups = THREAT_PROXIMITIES.map(p => ({
-				id: p.id,
-				label: p.label,
-				lowerLabel: p.label.toLowerCase(),
-				hint: p.hint,
-				threats: threats.filter(t => t.proximity.id === p.id),
-			}));
-			const hazards = hazardVMs.map((vm, i) => decorate(vm, hazardPages[i]));
-			return { threatGroups, hazards, showHazards: true, canSeeThreats: true };
-		}
-
-		/** Threats tab interactions: doom-track toggles, drag-to-scene, edit / remove /
-		 *  create. Self-gated per action (page ownership / GM), so it's independent of the
-		 *  section edit-mode gate; delegated on the sheet root. */
-		_activateThreatsListeners(root) {
-			if (!root) return;
-
-			wireThreatDoomChange(root, chk => fromUuid(chk.closest(".threat-card")?.dataset.pageUuid ?? ""));
-
-			root.addEventListener("click", async ev => {
-				const edit = ev.target.closest?.(".steading-threats .threat-edit-open");
-				if (edit) { ev.preventDefault(); const page = await fromUuid(edit.dataset.pageUuid); if (page) this._openThreatEditor(page); return; }
-				const remove = ev.target.closest?.(".steading-threats .threat-remove");
-				if (remove) { ev.preventDefault(); const page = await fromUuid(remove.dataset.pageUuid); if (page) this._onDeleteThreat(page); return; }
-				const add = ev.target.closest?.(".steading-threats .threat-add-btn");
-				if (add) { ev.preventDefault(); this._onCreateThreat(add.dataset.proximity); return; }
-				const hazardEdit = ev.target.closest?.(".steading-threats .hazard-edit-open");
-				if (hazardEdit) { ev.preventDefault(); const page = await fromUuid(hazardEdit.dataset.pageUuid); if (page) this._onEditHazard(page); return; }
-				const hazardRemove = ev.target.closest?.(".steading-threats .hazard-remove");
-				if (hazardRemove) { ev.preventDefault(); const page = await fromUuid(hazardRemove.dataset.pageUuid); if (page) this._onDeleteHazard(page); return; }
-				const hazardAdd = ev.target.closest?.(".steading-threats .hazard-add-btn");
-				if (hazardAdd) { ev.preventDefault(); this._onCreateHazard(); return; }
-
-				// Collapse / expand a card down to its title + Instinct. Any header click toggles
-				// it (mirrors the Improvements tab); the edit / remove tools are handled and
-				// returned above. A drag suppresses the click, so grabbing the header to pin it
-				// doesn't also collapse it. State lives in _collapsedThreats so it survives
-				// re-renders; no re-render, just a class flip.
-				const head = ev.target.closest?.(".steading-threats .threat-card__head--collapsible");
-				if (head) {
-					const card = head.closest(".threat-card");
-					if (!card) return;
-					const collapsed = card.classList.toggle("is-collapsed");
-					card.querySelector(".threat-collapse-btn")?.setAttribute("aria-expanded", String(!collapsed));
-					const uuid = card.dataset.pageUuid;
-					if (uuid) collapsed ? this._collapsedThreats.add(uuid) : this._collapsedThreats.delete(uuid);
-				}
-			});
-
-			// The whole card is the drag handle (no separate grip): grab it anywhere to drop
-			// a pinned Note on a scene. A plain click still toggles collapse (a drag suppresses
-			// the click), and interactive children (doom checks, tools) keep working.
-			// Shares the one drag-wiring helper with the page sheet so the selector can't diverge.
-			wireThreatCardDrag(root, { selector: ".steading-threats .threat-card[draggable='true']" });
-		}
-
-		/** Open a threat's editor (a proper movable dialog, not the page sheet standalone). */
-		_openThreatEditor(page) {
-			if (page) new ThreatEditorDialog(page).render(true);
-		}
-
-		// Confirm-and-delete a GM-prep page (threat or hazard): identical card + scene-pin
-		// cleanup, only the noun and the delete fn differ.
-		async _confirmDeletePrepPage(page, title, remove) {
-			const ok = await Dialog.confirm({
-				title,
-				content: `<p>Delete <strong>${escHtml(page.name)}</strong>? This removes its card and any pins placed on scenes.</p>`,
-				options: { classes: ["dialog", "stonetop", "stonetop-delete-threat-dialog"] },
-			});
-			if (!ok) return;
-			await remove(page);
-			this.render(false);
-		}
-
-		async _onDeleteThreat(page) {
-			return this._confirmDeletePrepPage(page, "Delete Threat", deleteThreat);
-		}
-
-		async _onCreateThreat(defaultProximity) {
-			const seed = await new CreateThreatDialog(this.actor, { defaultProximity }).promise();
-			if (!seed) return;
-			const page = await createThreat(this.actor, seed);
-			this.render(false);
-			if (page) this._openThreatEditor(page);
-		}
-
-		// The Make-a-Hazard walkthrough collects the whole write-up, so unlike threats
-		// nothing needs an editor to open afterwards; edits reopen the wizard pre-filled.
-		async _onCreateHazard() {
-			const seed = await new CreateHazardDialog().promise();
-			if (!seed) return;
-			await createHazard(this.actor, seed);
-			this.render(false);
-		}
-
-		async _onEditHazard(page) {
-			const saved = await new CreateHazardDialog({ page }).promise();
-			// The sheet doesn't observe journal-page updates, so re-render after a save.
-			if (saved) this.render(false);
-		}
-
-		async _onDeleteHazard(page) {
-			return this._confirmDeletePrepPage(page, "Delete Hazard", deleteHazard);
-		}
-
-		// Create this steading's own threat from a dropped homebrew threat card's seed
-		// (the reusable "Create Item -> Threat" path). Same result as the guided creator,
-		// minus the dialog — the fuller doom track / stakes / prose are still authored in
-		// the editor that opens right after.
-		async _onDropThreatSeed(seed) {
-			if (!seed?.name) return;
-			const page = await createThreat(this.actor, seed);
-			if (!page) return;
-			globalThis.ui?.notifications?.info?.(`Added threat: ${page.name}.`);
-			this.render(false);
-			this._openThreatEditor(page);
 		}
 
 		activateListeners(html) {
@@ -836,7 +658,6 @@ export function createStonetopSteadingSheetClass(Base) {
 			// rail is on the frame, since that is where the tab-change watcher binds.
 			mountScrollFrost(this, html);
 			wrapStonetopGlyphsInEl(html[0]);
-			this._activateThreatsListeners(html[0]);
 
 			// Residents / Neighbors filters (see utils/tab-search.js). Each is scoped to its own
 			// section so it only hides that section's rows; a row matches on the text of every
@@ -949,6 +770,28 @@ export function createStonetopSteadingSheetClass(Base) {
 				await this.actor.setFlag(STONETOP_SCOPE, "rollMode", mode);
 			}, true);
 
+			// The season/year clock beside the title. Runs the MOVE, the same thing the hotbar
+			// macro and the Seasons Change move card run — the clock is the most obvious thing
+			// on the sheet to click when the seasons turn, and it used to open the
+			// correct-the-clock window instead, which quietly wrote a flag and made no move.
+			// Correcting the clock is now a door at the bottom of that window (see
+			// _onSeasonsChange's `altAction`), which is the right way round: the move happens
+			// four times a year and the correction about once a campaign.
+			//
+			// Only a GM gets a button here (the template renders a plain div for everyone
+			// else), so this binds nothing for players.
+			html.find("[data-action='set-current-season']").on("click", () => this._onSeasonsChange());
+
+			// The weather glyph left of the clock opens the Weather picker — the window that
+			// decides what that glyph shows, so the readout is the way back to what set it.
+			// Through `game.stonetop.openWeather` rather than the class, which is what the hotbar
+			// macro and the Expedition dialog's own weather button both call: one entry point, so
+			// `openOrFocus` in there can keep it to one window however it was reached.
+			//
+			// GM-only, like the clock: the template renders a plain span for everyone else, so
+			// this binds nothing for a player.
+			html.find("[data-action='set-current-weather']").on("click", () => game.stonetop?.openWeather?.());
+
 			// A real radio group, so `change` rather than a delegated click: the browser owns the
 			// deselection, and change only fires on the one that became checked.
 			html.find(".stonetop-roll-mode-input").on("change", async ev => {
@@ -1038,7 +881,8 @@ export function createStonetopSteadingSheetClass(Base) {
 				const cb = ev.target.closest(".steading-hide-unearned-improvements-check");
 				if (!cb) return;
 				ev.stopPropagation();
-				this.actor.setFlag("stonetop-pwd", "hideUnearnedImprovements", cb.checked);
+				this.actor.setFlag(STONETOP_SCOPE, "hideUnearnedImprovements", cb.checked)
+					.catch(err => console.error("Stonetop | could not save the improvements filter", err));
 			}, true);
 
 			// Per-section edit toggle (pencil/check at each section's corner) flips
@@ -1113,7 +957,7 @@ export function createStonetopSteadingSheetClass(Base) {
 				const input = ev.target.closest(".steading-surplus-input");
 				if (!input) return;
 				ev.stopPropagation();
-				this._onSteadingTrackChange(input.name, Math.max(0, parseInt(input.value) || 0));
+				this._onSteadingTrackChange(input.name, Math.max(0, parseInt(input.value, 10) || 0));
 			};
 			html[0].addEventListener("input", onSurplusInput, true);
 			html[0].addEventListener("change", onSurplusInput, true);
@@ -1132,7 +976,7 @@ export function createStonetopSteadingSheetClass(Base) {
 				if (!cb) return;
 				ev.stopPropagation();
 				const { list, index } = cb.dataset;
-				this._onListItemCheck(list, parseInt(index), cb.checked);
+				this._onListItemCheck(list, parseInt(index, 10), cb.checked);
 			}, true);
 
 			// Click a requisitioned ("taken") asset to return it to the steading.
@@ -1140,7 +984,7 @@ export function createStonetopSteadingSheetClass(Base) {
 				const taken = ev.target.closest(".steading-asset-taken");
 				if (!taken) return;
 				ev.stopPropagation();
-				this._onReturnAsset(parseInt(taken.dataset.index));
+				this._onReturnAsset(parseInt(taken.dataset.index, 10));
 			}, true);
 
 			// Add list item (residents/neighbors are handled above, regardless of edit mode)
@@ -1158,7 +1002,7 @@ export function createStonetopSteadingSheetClass(Base) {
 				if (!btn) return;
 				ev.stopPropagation();
 				const { list, index } = btn.dataset;
-				this._onListItemDelete(btn.dataset.list, parseInt(index));
+				this._onListItemDelete(list, parseInt(index, 10));
 			}, true);
 
 			// Rows that name an actor: the Player Characters table opens a PC, a
@@ -1187,7 +1031,7 @@ export function createStonetopSteadingSheetClass(Base) {
 				const inp = ev.target.closest(".steading-place-name");
 				if (!inp) return;
 				ev.stopPropagation();
-				this._onPlaceChange(parseInt(inp.dataset.index), inp.value);
+				this._onPlaceChange(parseInt(inp.dataset.index, 10), inp.value);
 			}, true);
 
 // Resident / neighbor / player details
@@ -1201,10 +1045,10 @@ export function createStonetopSteadingSheetClass(Base) {
 			// which would make personFieldPath bail and silently drop the edit).
 			const list = inp.dataset.list || "residents";
 			if (list === "players") {
-				this._onPlayerFieldChange(parseInt(index), field, inp.value);
+				this._onPlayerFieldChange(parseInt(index, 10), field, inp.value);
 			} else {
 				// list is "residents" or "neighbors" — both go through the shared handler.
-				this._onPersonFieldChange(list, parseInt(index), field, inp.value);
+				this._onPersonFieldChange(list, parseInt(index, 10), field, inp.value);
 			}
 			}, true);
 
@@ -1230,7 +1074,7 @@ export function createStonetopSteadingSheetClass(Base) {
 				if (!inp) return;
 				ev.stopPropagation();
 				const { currency, field } = inp.dataset;
-				this._onCurrencyChange(currency, field, parseInt(inp.value) || 0);
+				this._onCurrencyChange(currency, field, parseInt(inp.value, 10) || 0);
 			}, true);
 
 			// Improvement complete checkbox
@@ -1247,7 +1091,7 @@ export function createStonetopSteadingSheetClass(Base) {
 				if (!cb) return;
 				ev.stopPropagation();
 				const { slug, index } = cb.dataset;
-				this._onImprovementReq(slug, parseInt(index), cb.checked);
+				this._onImprovementReq(slug, parseInt(index, 10), cb.checked);
 			}, true);
 
 			// Herd of Horses tracker: +/- steppers and direct number entry per age tier.
@@ -1255,7 +1099,7 @@ export function createStonetopSteadingSheetClass(Base) {
 				const btn = ev.target.closest(".steading-herd-step");
 				if (!btn) return;
 				ev.stopPropagation();
-				this._onHerdStep(btn.dataset.tier, parseInt(btn.dataset.delta) || 0);
+				this._onHerdStep(btn.dataset.tier, parseInt(btn.dataset.delta, 10) || 0);
 			}, true);
 			html[0].addEventListener("change", ev => {
 				const inp = ev.target.closest(".steading-herd-input");
@@ -1300,38 +1144,10 @@ export function createStonetopSteadingSheetClass(Base) {
 				}, true);
 			}
 
-			// Wire a tab as a drop zone for journal-dragged cards of one drag type,
-			// showing the shared drag-over highlight and routing the payload to onDrop.
-			const wireCardDropZone = (tabEl, dragType, onDrop) => {
-				if (!tabEl) return;
-				const setDrag = on => tabEl.classList.toggle("steading-improvement-drag-over", on);
-				tabEl.addEventListener("dragover", (ev) => {
-					ev.preventDefault();
-					ev.dataTransfer.dropEffect = "copy";
-					setDrag(true);
-				});
-				tabEl.addEventListener("dragleave", (ev) => {
-					if (!tabEl.contains(ev.relatedTarget)) setDrag(false);
-				});
-				tabEl.addEventListener("drop", async (ev) => {
-					const data = getDragEventData(ev);
-					if (data?.type !== dragType) return;
-					ev.preventDefault();
-					ev.stopPropagation();
-					setDrag(false);
-					await onDrop(data);
-				});
-			};
-
 			// Drop a "Steading Improvement" card (dragged from a journal) onto the
 			// Improvements tab to add it as a tracked custom improvement.
 			wireCardDropZone(html[0].querySelector(".tab.improvements"),
 				STEADING_IMPROVEMENT_DRAG_TYPE, (data) => this._onDropSteadingImprovement(data.improvement));
-
-			// Drop a "Threat" card (dragged from a journal) onto the Threats tab to
-			// create this steading's own threat entry from the card's seed.
-			wireCardDropZone(html[0].querySelector(".tab.threats"),
-				STONETOP_THREAT_SEED_DRAG_TYPE, (data) => this._onDropThreatSeed(data.seed));
 
 			// Remove a custom (journal-sourced) improvement.
 			html[0].addEventListener("click", (ev) => {
@@ -1469,8 +1285,8 @@ export function createStonetopSteadingSheetClass(Base) {
 		_onMemberAvatarPickImage({ list, index, current, popout }) {
 			// Apply a chosen path (a gallery pick, a browsed file, or "" for the default), keep the
 			// open photo popout in sync, and re-render the sheet. Shared by all three routes.
-			const applyPath = async path => {
-				await this._onMemberAvatarImageChange(list, index, path);
+			const applyPath = async (path, pick = null) => {
+				await this._onMemberAvatarImageChange(list, index, path, pick);
 				if (popout) this._refreshMemberImagePopout(popout, path);
 				this.render(false);
 			};
@@ -1532,25 +1348,38 @@ export function createStonetopSteadingSheetClass(Base) {
 			if (!patched) this._scheduleMemberImageHeaderControl(popout);
 		}
 
-		async _onMemberAvatarImageChange(list, index, value) {
+		// `pick` is what the gallery tile carried alongside the path — `{frame, square}` — because
+		// the picture, the square it crops to and the file the map draws are one choice. Null for
+		// a browsed file and for "Use default", both of which correctly leave no frame behind.
+		async _onMemberAvatarImageChange(list, index, value, pick = null) {
 			if (!["residents", "neighbors"].includes(list) || !Number.isInteger(index)) return;
 			const f = this._stonetopSteading._flags;
 			const rows = f[list] ?? STEADING_DEFAULTS[list];
 			const row = rows[index];
-			// Actor-backed row: the portrait is the NPC actor's own image.
+			// Actor-backed row: the portrait is the NPC actor's own image, and it is a real
+			// document with a prototype token — so this is the same three-field write the sheet
+			// header's own picker makes. See actorPortraitPickUpdate.
 			if (row && isActorRow(row)) {
 				const actor = (row.id ? game.actors?.get(row.id) : null)
 					|| (row.uuid ? await fromUuid(row.uuid).catch(() => null) : null);
 				// Clearing a portrait returns the person to the people silhouette, which is what
 				// the roster draws for an un-portraited member anyway — so the cleared row looks
 				// the same here as one that never had art, rather than reverting to mystery-man.
-				if (actor) await actor.update({ img: value || PERSON_DEFAULT_IMG });
+				if (actor) {
+					await actor.update(actorPortraitPickUpdate(actor, value || PERSON_DEFAULT_IMG, pick ?? {}));
+				}
 				return;
 			}
-			const arr = foundry.utils.deepClone(rows);
-			if (!arr[index]) return;
-			arr[index].img = value;
-			await this._stonetopSteading.setFlags({ [list]: arr });
+			// A legacy text row keeps its frame on the row object itself, beside the img — so both
+			// move in ONE write, because they are one choice. saveLegacyPersonRow owns how this
+			// list is stored (the whole array back, which is what lets a plain `delete` land) and
+			// refuses an actor-backed row, which the branch above has already taken anyway.
+			await saveLegacyPersonRow(this._stonetopSteading, list, index, (r) => {
+				r.img = value;
+				const frame = normalizeFrame(pick?.frame);
+				if (frame) r.portraitFrame = frame;
+				else delete r.portraitFrame;
+			});
 		}
 
 		_onHomesteadMove(moveSlug) {
@@ -1709,7 +1538,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			};
 			if (flow.label !== "Trade & Barter") return options;
 			const data = this._formDataFromDialog(html);
-			const value = Math.max(0, parseInt(data.value) || 0);
+			const value = Math.max(0, parseInt(data.value, 10) || 0);
 			return {
 				...options,
 				modifier: value ? -value : 0,
@@ -1802,8 +1631,9 @@ export function createStonetopSteadingSheetClass(Base) {
 					<span class="stonetop-disaster-choice-detail">${c.detail}</span>
 				</li>`).join("");
 
-			let dialog;
-			dialog = new Dialog({
+			// `const`, even though the render/button callbacks below refer to `dialog`: they run
+			// after this statement completes, so the binding is always initialised by then.
+			const dialog = new Dialog({
 				title: "Meet with Disaster",
 				content: `<div class="stonetop-disaster-dialog">
 					<p><em>Fortunes cannot drop below −1.</em> The GM picks 1:</p>
@@ -1870,8 +1700,9 @@ export function createStonetopSteadingSheetClass(Base) {
 					<span class="stonetop-disaster-choice-detail">${d.detail}</span>
 				</li>`).join("");
 
-			let dialog;
-			dialog = new Dialog({
+			// `const`, even though the render/button callbacks below refer to `dialog`: they run
+			// after this statement completes, so the binding is always initialised by then.
+			const dialog = new Dialog({
 				title: "Return Triumphant",
 				content: `<div class="stonetop-disaster-dialog">
 					<p><em>You return home in triumph.</em> Clear 1 of the steading's debilities:</p>
@@ -1976,50 +1807,78 @@ export function createStonetopSteadingSheetClass(Base) {
 		// starting at 1). Advanced by one each time a Winter is completed (see
 		// _saveSeasonChange), so the season picker defaults to the latest year.
 		_seasonsCurrentYear() {
-			return Math.max(1, Math.trunc(Number(this.actor.getFlag(STONETOP_SCOPE, "seasonsCurrentYear")) || 1));
+			return readCurrentYear(this.actor);
 		}
 
+		// Set the header's clock by hand, without running the Seasons Change move — the move
+		// applies seasonal gains, resets Fortunes and writes a journal entry, none of which a
+		// GM wants when they're only correcting what the header says. Needed by any table that
+		// was already mid-campaign when the readout shipped (their clock has never been
+		// stamped) and by the mis-clicked season. GM-only; only a GM can reach it at all.
+		//
+		// NOT what the header's clock opens. Correcting the clock happens about once in a
+		// campaign, where the move happens four times a year, and the clock is the most
+		// obvious thing on the sheet to click when the seasons turn — so the header runs the
+		// MOVE, and this is one click further in, off the door at the bottom of that window.
+		//
+		// Deliberately the same cards-and-year-field shape as the move's own picker, so the two
+		// read as the same question. The clock can be set to any year, including one ahead of
+		// anything played — picking it carries `seasonsCurrentYear` along, or the move's picker
+		// would still default a year behind.
+		//
+		// @param {number} [openOn]  The year to open on, handed over by the move's picker so a
+		//   GM who has already dialled one in does not type it twice to change which question
+		//   they are answering. Falls back to the stamp, then to the campaign's current year.
+		async _onSetCurrentSeason(openOn) {
+			if (!game.user?.isGM) return;
+			const stamped  = readCurrentSeason(this.actor);
+			const pickYear = openOn ?? stamped?.year ?? this._seasonsCurrentYear();
+			openSeasonPicker({
+				title:  "Set the Current Season",
+				prompt: "Which season is Stonetop in?",
+				note:   "Only changes what the sheet says. It doesn't make the Seasons Change move.",
+				selected: stamped?.season ?? null,
+				selectedYear: pickYear,
+				// The high-water mark, for the picker's hint alone — not a ceiling. Both halves
+				// of the clock are candidates because they move independently: `seasonsCurrentYear`
+				// runs a year ahead of the stamp for the whole of a completed Winter.
+				latestYear: Math.max(this._seasonsCurrentYear(), stamped?.year ?? 1),
+				// One write for both halves of the clock. The move's picker defaults to
+				// `seasonsCurrentYear`, so setting the clock ahead has to carry it; `pickerYear`
+				// defaults to the stamped year, and the never-rewind guard lives in
+				// recordCurrentSeason.
+				onPick: (season, year) => recordCurrentSeason(this.actor, season, year),
+			});
+		}
+
+		// The move itself, and what all three ways in reach: the hotbar macro, the Seasons
+		// Change move card, and the header's clock. Picks a season and a year, then opens the
+		// move's own dialog — the rules, the seasonal gains, the Fortunes roll, Done.
 		async _onSeasonsChange() {
-			// Ids + labels come from the shared season source, not a local copy.
-			const SEASONS = SEASON_IDS.map(id => ({ id, label: seasonLabel(id) }));
-			// Year dropdown under the season cards: every year up to the current one
-			// (Winter completion bumps it), defaulting to the latest so the journal page
-			// matches by default. The chosen year rides through to recordSeasonsChange.
-			const currentYear  = this._seasonsCurrentYear();
-			const yearOptions  = Array.from({ length: currentYear }, (_, i) => i + 1)
-				.map(y => `<option value="${y}"${y === currentYear ? " selected" : ""}>${ordinalWord(y)} Year</option>`)
-				.join("");
-			let dialog;
-			dialog = new Dialog({
-				title: "Seasons Change",
-				content: `<div class="stonetop-season-picker">
-					<p><em>Which season is beginning?</em></p>
-					<div class="stonetop-season-cards">
-						${SEASONS.map(s => `
-							<div class="stonetop-season-card" data-season="${s.id}">
-								<img src="${seasonIconSrc(s.id)}" alt="${s.label}" class="stonetop-season-icon">
-								<span class="stonetop-season-label">${s.label}</span>
-							</div>`).join("")}
-					</div>
-					<div class="stonetop-season-year">
-						<label class="stonetop-season-year-label" for="stonetop-season-year-select">Year</label>
-						<select id="stonetop-season-year-select" class="stonetop-season-year-select">${yearOptions}</select>
-					</div>
-				</div>`,
-				buttons: {},
-				render: (html) => {
-					addStonetopSteadingButton(html);
-					const yearSelect = html[0].querySelector(".stonetop-season-year-select");
-					html[0].querySelectorAll(".stonetop-season-card").forEach(el => {
-						el.addEventListener("click", () => {
-							const year = Math.trunc(Number(yearSelect?.value)) || currentYear;
-							dialog.close();
-							this._showSeasonDialog(el.dataset.season, year);
-						});
-					});
-				},
-			}, { classes: ["dialog", "stonetop", "stonetop-season-picker-dialog"] });
-			dialog.render(true);
+			// Opens on the current year (Winter completion bumps it), which is also the
+			// high-water mark the picker's hint is measured against — a table catching the
+			// sheet up mid-campaign can type past it. The chosen year rides through to
+			// recordSeasonsChange, which files the season into that year's Chronicle page.
+			const currentYear = this._seasonsCurrentYear();
+			openSeasonPicker({
+				title:  "Seasons Change",
+				prompt: "Which season is beginning?",
+				selectedYear: currentYear,
+				latestYear:   currentYear,
+				// Openable from a hotbar macro, away from the sheet, so this one offers the jump.
+				headerShortcut: true,
+				// The door to the other flow. This picker is what the header's clock opens, and
+				// a GM who clicked it meaning to fix a mis-typed season has to be able to get
+				// there from here — the two windows ask nearly the same question and are told
+				// apart by intent alone, so the one you land in owes you the other. GM-only,
+				// like the flow it opens, and the header only offers the clock to a GM anyway.
+				altAction: game.user?.isGM ? {
+					ask:   "Only correcting what the sheet says?",
+					label: "Set the season without making the move.",
+					onRun: (year) => this._onSetCurrentSeason(year),
+				} : null,
+				onPick: (season, year) => this._showSeasonDialog(season, year),
+			});
 		}
 
 		// Read the season dialog's ticked gains + notes off the DOM (Done), apply the two
@@ -2071,12 +1930,18 @@ export function createStonetopSteadingSheetClass(Base) {
 			const notes   = root.querySelector(".stonetop-season-notes")?.value ?? "";
 			const journal = await recordSeasonsChange({ seasonId, year, gainNames, fortunes, surplusChange, notes });
 
-			// Winter closes out the year: advance the steading's current year so the next
-			// season picker offers (and defaults to) the new one. max() guards against
-			// recording an out-of-order older Winter regressing the count.
-			if (seasonId === "winter") {
-				await this.actor.setFlag(STONETOP_SCOPE, "seasonsCurrentYear", Math.max(this._seasonsCurrentYear(), year + 1));
-			}
+			// This season has begun: stamp it on the steading so the sheet header reads it,
+			// and carry the picker's year with it in the same write. Winter closes out the
+			// year, so it hands the picker the NEXT one; every other season leaves the count
+			// where it is (a `pickerYear` already behind is a no-op).
+			//
+			// advanceOnly because re-recording an older season to fix its journal entry
+			// mustn't rewind the header's clock, and recordCurrentSeason owns the matching
+			// guard against an out-of-order older Winter regressing the year.
+			await recordCurrentSeason(this.actor, seasonId, year, {
+				advanceOnly: true,
+				pickerYear:  seasonId === "winter" ? year + 1 : year,
+			});
 
 			journal?.sheet?.render(true);
 		}
@@ -2096,9 +1961,19 @@ export function createStonetopSteadingSheetClass(Base) {
 			const label   = seasonLabel(seasonId);
 			const iconSrc = seasonIconSrc(seasonId);
 
+			// The season beside its icon, and the year in the same stadium chip the steading
+			// header's clock wears. NOT in the season's ink: those four colours belong to the
+			// header's clock and nowhere else — see the token block in styles/stonetop.css. The
+			// season is named by the window title, by this heading and by its glyph already; a
+			// colour spent here would be the fourth thing saying it and the second place teaching
+			// the eye that a coloured season means something.
+			//
+			// The icon's `alt` is empty on purpose, as it is on the picker's cards: the <h3> right
+			// beside it names the season in text, and a filled alt would say "Spring" twice.
 			const header = `<div class="stonetop-season-flow-header">
-				<img src="${iconSrc}" alt="${label}" class="stonetop-season-icon-sm">
-				<h3>${label}</h3>
+				<img src="${iconSrc}" alt="" class="stonetop-season-icon-sm">
+				<h3 class="stonetop-season-flow-title">${label}</h3>
+				<span class="stonetop-season-flow-year stonetop-year-chip">${yearLabel(year)}</span>
 			</div>`;
 
 			const statsNote = `<p class="stonetop-season-note">Fortunes: <strong>${sign(fortunes)}</strong> &nbsp;·&nbsp; Surplus: <strong>${surplus}</strong> &nbsp;·&nbsp; Population: <strong>${sign(population)}</strong></p>`;
@@ -2125,7 +2000,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// Gain copy comes from the shared SEASONAL_GAINS so the dialog and Chronicle
 			// stay in lockstep.
 			const gainsRef = `<div class="stonetop-season-gains">
-				<p class="stonetop-season-gains-label">Seasonal gains <span class="stonetop-season-gains-hint">&mdash; tick what they pick</span></p>
+				<p class="stonetop-season-gains-label">Seasonal gains <span class="stonetop-season-gains-hint">(tick what they pick)</span></p>
 				<ul class="stonetop-season-gains-list">
 					${SEASONAL_GAINS.map(g => `<li class="stonetop-season-gain">
 						<label class="stonetop-season-gain-label">
@@ -2227,11 +2102,11 @@ export function createStonetopSteadingSheetClass(Base) {
 								</li>
 								<li class="stonetop-disaster-choice" data-consequence="resource">
 									<span class="stonetop-disaster-choice-label">Important resource lost or damaged</span>
-									<span class="stonetop-disaster-choice-detail">A horse, the cistern, etc. — lost or not maintained (narrative).</span>
+									<span class="stonetop-disaster-choice-detail">A horse, the cistern, etc.: lost or not maintained (narrative).</span>
 								</li>
 								<li class="stonetop-disaster-choice" data-consequence="npc">
 									<span class="stonetop-disaster-choice-label">Important NPC dies</span>
-									<span class="stonetop-disaster-choice-detail">Their role unfilled — a narrative consequence.</span>
+									<span class="stonetop-disaster-choice-detail">Their role unfilled: a narrative consequence.</span>
 								</li>
 								<li class="stonetop-disaster-choice" data-consequence="pc">
 									<span class="stonetop-disaster-choice-label">A PC dies, leaves, or retires</span>
@@ -2262,9 +2137,10 @@ export function createStonetopSteadingSheetClass(Base) {
 				</div>`;
 			}
 
-			let dialog;
-			dialog = new Dialog({
-				title: `Seasons Change — ${label}`,
+			// `const`, even though the render/button callbacks below refer to `dialog`: they run
+			// after this statement completes, so the binding is always initialised by then.
+			const dialog = new Dialog({
+				title: `Seasons Change: ${label}`,
 				content,
 				// Done resets Fortunes (the season's close-out), applies any ticked mechanical
 				// gains, then records this season into the year's "Seasons Change" Chronicle
@@ -2285,7 +2161,7 @@ export function createStonetopSteadingSheetClass(Base) {
 					// Spring only: hand the roll to the table — post a chat card asking the
 					// most hopeful character's player to roll +Fortunes, with a button to do it.
 					root.querySelector("[data-action='ask-hopeful']")?.addEventListener("click", () => {
-						postSeasonsRollPrompt({ alias: `Seasons Change — ${label}`, fortunes });
+						postSeasonsRollPrompt({ alias: `Seasons Change: ${label}`, fortunes });
 					});
 
 					// Done resets Fortunes for the new season (the move's guaranteed close-out)
@@ -2768,7 +2644,7 @@ export function createStonetopSteadingSheetClass(Base) {
 		_disableIfSeasonStepDone(btn, step, year, seasonId) {
 			if (!btn || !this._stonetopSteading.seasonStepApplied(step, year, seasonId)) return false;
 			btn.disabled = true;
-			btn.title = "Already done this season — reopening won't repeat it.";
+			btn.title = "Already done this season: reopening won't repeat it.";
 			return true;
 		}
 
@@ -2783,7 +2659,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// (1d4 + Fortunes), not a bare 1d4 that disagrees with the herd change / notification.
 			const formula = fortunes >= 0 ? `1d4 + ${fortunes}` : `1d4 - ${Math.abs(fortunes)}`;
 			const roll = await new Roll(formula).evaluate();
-			await roll.toMessage({ flavor: `Herd — new foals (1d4 + Fortunes ${sign(fortunes)})` });
+			await roll.toMessage({ flavor: `Herd: new foals (1d4 + Fortunes ${sign(fortunes)})` });
 			const newFoals = Math.max(0, roll.total);
 			const next = StonetopSteading.advanceHerdForSummer(before, newFoals);
 			await this._stonetopSteading.setHerd(next, { stonetopMove: "Seasons Change" });
@@ -2803,14 +2679,14 @@ export function createStonetopSteadingSheetClass(Base) {
 			const surplus = this._stonetopSteading.getStatValue("surplus");
 			const cost = StonetopSteading.herdWinterCost(before);
 			if (cost <= 0) {
-				ui.notifications.info("The herd is small enough to forage — no Surplus needed this winter.");
+				ui.notifications.info("The herd is small enough to forage: no Surplus needed this winter.");
 				return;
 			}
 			const shortfall = Math.max(0, cost - Math.max(0, surplus));
 			let losses = 0;
 			if (shortfall > 0) {
 				const roll = await new Roll(`${shortfall}d6`).evaluate();
-				await roll.toMessage({ flavor: `Herd losses (${shortfall}× 1d6 — ${shortfall} Surplus short)` });
+				await roll.toMessage({ flavor: `Herd losses (${shortfall}× 1d6, ${shortfall} Surplus short)` });
 				losses = roll.total;
 			}
 			const result = StonetopSteading.feedHerdForWinter(before, surplus, losses);
@@ -2843,8 +2719,9 @@ export function createStonetopSteadingSheetClass(Base) {
 		// Prompt for a custom improvement (name + optional flavor/effect) and add it as a
 		// tracked custom improvement — the same path a dropped journal card takes.
 		async _onCreateImprovementOpen() {
-			let dialog;
-			dialog = new Dialog({
+			// `const`, even though the render/button callbacks below refer to `dialog`: they run
+			// after this statement completes, so the binding is always initialised by then.
+			const dialog = new Dialog({
 				title: "Create Improvement",
 				content: `<form class="stonetop-homestead-dialog">
 					<p class="stonetop-homestead-trigger"><em>Add a custom improvement to track alongside the book's built-ins.</em></p>
@@ -2860,7 +2737,7 @@ export function createStonetopSteadingSheetClass(Base) {
 						</label>
 						<label class="stonetop-homestead-field">
 							<span>Effect</span>
-							<textarea name="effect" rows="2" placeholder="What completing it does — new resources, defenses, etc. (optional)."></textarea>
+							<textarea name="effect" rows="2" placeholder="What completing it does: new resources, defenses, etc. (optional)."></textarea>
 						</label>
 					</div>
 				</form>`,

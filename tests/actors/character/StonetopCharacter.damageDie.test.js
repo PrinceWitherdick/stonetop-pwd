@@ -84,3 +84,33 @@ describe("StonetopCharacter.setDamageDieOverride", () => {
 		expect(snap.vitals.damageBase).toBe("d10");
 	});
 });
+
+// The damage roller asks per ROLL — twice over on the counter-attack and multi-target paths — so
+// it takes this instead of building a whole sheet snapshot for one string. That trade is only safe
+// while the two give the SAME answer, which is what these pin: both read the one derivation in
+// _derivedDamageDie, and a second copy of that rule is how the roller and the sheet come to
+// disagree about what die a character rolls.
+describe("StonetopCharacter.computedDamageDie", () => {
+	it("agrees with the snapshot on the playbook's die", async () => {
+		const { char } = makeChar();
+		expect(await char.computedDamageDie()).toBe("d10");
+		expect(await char.computedDamageDie()).toBe((await char.buildSnapshot()).vitals.damage);
+	});
+
+	it("agrees with the snapshot on a hand-typed override", async () => {
+		const { char } = makeChar({ override: "d6" });
+		expect(await char.computedDamageDie()).toBe("d6");
+		expect(await char.computedDamageDie()).toBe((await char.buildSnapshot()).vitals.damage);
+	});
+
+	it("normalizes the override the same way the snapshot does", async () => {
+		const { char } = makeChar({ override: "1d8" });
+		expect(await char.computedDamageDie()).toBe("d8");
+	});
+
+	// No playbook means nothing to derive from. The roller falls back to the persisted field.
+	it("has no answer without a playbook", async () => {
+		const { char } = makeChar({ playbook: false });
+		expect(await char.computedDamageDie()).toBeNull();
+	});
+});

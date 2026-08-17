@@ -38,6 +38,36 @@ export function filePicker() {
 }
 
 /**
+ * Write one file and answer with the path it can be fetched from, or null if it was not written.
+ *
+ * Here, with the other host-and-version shims, because BOTH of the awkward parts are the host's
+ * doing and neither is discoverable from the call site:
+ *
+ * A REJECTED upload does not throw. Foundry's own FilePicker returns false when the server answers
+ * with an error and undefined when it answers without a path, and The Forge's replacement returns
+ * false on every failure path it has (a quota, a bad response, an asset the API refused to
+ * create). A caller that reads the result as a path gets a falsy value and, if it papers over that
+ * with a rebuilt path, hands back the name of a file nobody wrote — which is how a run reports
+ * "rebuilt 143 pictures" having saved none, and how a token ends up stamped with a permanently
+ * broken image. Null is the one answer that cannot be mistaken for success.
+ *
+ * And where the file LANDS is the server's call, not ours. Off the data path (The Forge's Assets
+ * Library) `result.path` is the only thing that names it correctly, so it is believed whenever it
+ * is given; the rebuilt path is for a FilePicker that reports success without one.
+ *
+ * `notify: false` throughout: every caller reports its own outcome, and a per-file core toast in a
+ * 140-file batch is a wall of them.
+ *
+ * @returns {Promise<string|null>} the fetchable path, or null if the upload was refused.
+ */
+export async function uploadFile(source, dir, file, options = { overwrite: true }) {
+	const FP = filePicker();
+	const result = await FP.upload(source, dir, file, options, { notify: false });
+	if (!result) return null;
+	return result.path || `${dir}/${file.name}`;
+}
+
+/**
  * Repoint one key of a rendered Application's `options`. ApplicationV2 hands out a frozen
  * options object (`this.options = Object.freeze(...)`), so assigning a key through it throws
  * under strict mode — but the field holding it is a plain writable property, so swap in a
@@ -82,6 +112,20 @@ export function imagePopout({ src, title } = {}) {
 /** An open ImagePopout's window title, across the same move. */
 export function imagePopoutTitle(popout) {
 	return popout?.options?.window?.title ?? popout?.options?.title ?? "";
+}
+
+/**
+ * Render a Handlebars template file to HTML. V13 moved `renderTemplate` under
+ * `foundry.applications.handlebars` and deprecated the bare global; prefer the namespaced
+ * implementation and fall back to the global on older cores.
+ * @param {string} path  System-relative template path (as passed to loadTemplates).
+ * @param {object} data  The template's context.
+ * @returns {Promise<string>}
+ */
+export function renderTemplate(path, data) {
+	const handlebars = globalThis.foundry?.applications?.handlebars;
+	if (typeof handlebars?.renderTemplate === "function") return handlebars.renderTemplate(path, data);
+	return globalThis.renderTemplate(path, data);
 }
 
 /**

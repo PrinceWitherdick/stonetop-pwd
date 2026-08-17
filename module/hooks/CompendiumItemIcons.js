@@ -1,4 +1,5 @@
 import { stonetopThumbnail } from "../utils/item-icon.js";
+import { ensurePackIndex } from "../utils/pack-index.js";
 
 /**
  * Give art-less compendium rows the same fallback markers the world Items sidebar gets.
@@ -23,7 +24,11 @@ export async function onRenderCompendiumItemIcons(app, element) {
 	// Core indexes _id/name/img/type/sort/folder. `moveType` — which decides gear vs arcanum vs
 	// move — is ours, added to CONFIG.Item.compendiumIndexFields at init, and nothing in the
 	// render path fetches it, so ask for it here. Cached on the pack after the first call.
-	if (!pack.indexed) await pack.getIndex();
+	// Asked for by name through ensurePackIndex rather than a bare `pack.getIndex()`: the bare
+	// call would re-track this pack on the CORE fields only, costing every other reader its
+	// system.* index fields. ensurePackIndex always re-requests the union, and no-ops when the
+	// union is already covered — so the `pack.indexed` guard is no longer needed either.
+	await ensurePackIndex(pack.collection, ["system.moveType"]);
 
 	for (const li of element.querySelectorAll("li.directory-item.document[data-entry-id]")) {
 		const entry = pack.index.get(li.dataset.entryId);

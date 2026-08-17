@@ -15,6 +15,18 @@ import { composeInstinct, stripHtmlToText } from "../../utils/strings.js";
 import { clampInt } from "../../utils/custom-move-data.js";
 import { zeroHpResolution, FAVOR_TRACK } from "./deaths-door.js";
 
+/**
+ * The one lore section crossing-off applies to.
+ *
+ * Crossed-off slugs are MARK slugs and nothing else: `crossOffMark` is only ever reached from the
+ * `mark-crossoff` effect, and `_crossedOffLabels` resolves them against the Marks list alone. Held
+ * as a flat array of bare slugs with no section on them, so any reader that forgets this asks the
+ * wrong section a Mark's question — and a Consequence or Impulse that happened to reuse a Mark's
+ * slug would come back struck through and, since `crossedOff` folds into `blocked`, could never be
+ * ticked again. Named once so the three readers cannot answer it differently.
+ */
+const MARKS_SECTION = "marks";
+
 export class CharacterPostDeath {
 	constructor(insertFlags, instinct, lore, insertRepo, moveRepo) {
 		this._insertFlags = insertFlags;
@@ -89,6 +101,11 @@ export class CharacterPostDeath {
 		return true;
 	}
 
+	/** Which of those slugs one section is entitled to read — see MARKS_SECTION. */
+	_crossedOffIn(sectionSlug) {
+		return sectionSlug === MARKS_SECTION ? this.crossedOffMarks : [];
+	}
+
 	/** "Your master gives you a task; until you complete it, your Favor stays at 0." */
 	get masterTask()          { return this._insertFlags.getFlag("task") ?? ""; }
 	async setMasterTask(text) { await this._insertFlags.setFlag("task", String(text ?? "").trim()); }
@@ -124,7 +141,7 @@ export class CharacterPostDeath {
 		const section = await this._activeSection(sectionSlug);
 		if (!section) return [];
 
-		const crossed = this.crossedOffMarks;
+		const crossed = this._crossedOffIn(sectionSlug);
 		return (section.options ?? [])
 			.filter(o => (o.type ?? "checkbox") !== "text")
 			.map(o => {
@@ -371,7 +388,7 @@ export function insertHpPenalty(loreSection) {
 /** Display labels for the crossed-off Mark slugs, resolved against the insert's own Marks list. */
 function _crossedOffLabels(loreData, slugs) {
 	if (!slugs.length) return [];
-	const marks = (loreData ?? []).find(e => e.slug === "marks")?.options ?? [];
+	const marks = (loreData ?? []).find(e => e.slug === MARKS_SECTION)?.options ?? [];
 	return slugs.map(slug => ({
 		slug,
 		label: optionLabel(marks.find(o => o.slug === slug)?.description) || slug,
@@ -399,6 +416,8 @@ export function optionLabel(description) {
 export function buildLoreSection(loreData, loreState, arcanaDisplay = null, crossedOff = []) {
 	const crossed = new Set(crossedOff);
 	const entries = loreData.map(entry => {
+		// Crossing off is a MARKS rule and nothing else — see MARKS_SECTION.
+		const isMarks = entry.slug === MARKS_SECTION;
 		const options = (entry.options ?? []).map(opt => {
 			const isText = (opt.type ?? "checkbox") === "text";
 			// A pick option may carry an inline fill-in blank (e.g. "… running for your
@@ -411,7 +430,7 @@ export function buildLoreSection(loreData, loreState, arcanaDisplay = null, cros
 				.withType(opt.type ?? "checkbox")
 				.withMax(isText ? 0 : (opt.max ?? 1))
 				.withCount(isText ? 0 : loreState.getCount(entry.slug, opt.slug))
-				.withCrossedOff(crossed.has(opt.slug))
+				.withCrossedOff(isMarks && crossed.has(opt.slug))
 				.withTextValue((isText || hasBlank) ? loreState.getText(entry.slug, opt.slug) : null);
 			if (arcanaDisplay && opt.arcanaRole) {
 				const selectedSlug = arcanaDisplay.roles?.[opt.arcanaRole] ?? "";

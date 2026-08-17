@@ -144,7 +144,7 @@ export async function preflight(game, { target = RENAME_TARGET_ID, source = SYST
 	// refusal still stands structurally wherever it actually matters.
 	const hosted = onHostedProvider(scope ?? globalThis);
 	if (hosted && !allowHosted) {
-		blockers.push("This looks like a hosted Foundry (The Forge or similar). The migration needs Foundry's own setup route, which hosted providers may replace or restrict, and it is the same route you would need to undo a bad move. Do not run it here unsupervised — see MIGRATION.md for the hosted path.");
+		blockers.push("This looks like a hosted Foundry (The Forge or similar). The migration needs Foundry's own setup route, which hosted providers may replace or restrict, and it is the same route you would need to undo a bad move. Do not run it here unsupervised: see MIGRATION.md for the hosted path.");
 	}
 
 	const invalid = game?.actors?.invalidDocumentIds?.size ?? 0;
@@ -211,7 +211,7 @@ export async function verifyFlip({ worldId, target = RENAME_TARGET_ID, fetchImpl
  * the loaded packs are still the old one, so anyone joining is served zero compendium
  * packs and a page refresh boots the new system's code against old server state.
  */
-export async function shutdownWorld(game, { settleMs = 4000, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+export async function shutdownWorld(game, { settleMs = 4000, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
 	try {
 		await game?.shutDown?.();
 	} catch (err) {

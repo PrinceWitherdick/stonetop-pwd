@@ -140,13 +140,13 @@ export class AddInventoryItemDialog extends StonetopDialog {
 		const isAmmo = !!root.querySelector("[name=ammo]")?.checked;
 		const resource = uses > 0 ? buildUsesResource(uses, isAmmo) : null;
 
-		const armorMod = parseInt(val("[name=armor]")) || 0;
+		const armorMod = parseInt(val("[name=armor]"), 10) || 0;
 		const armor = isRegular && armorMod > 0 ? { modifier: armorMod } : null;
 
 		await this._saver.create({
 			name,
 			column,
-			weight: isRegular ? (parseInt(val("[name=weight]")) || 1) : 1,
+			weight: isRegular ? (parseInt(val("[name=weight]"), 10) || 1) : 1,
 			note: wrapGearNoteTerms(val("[name=note]").trim()),
 			resource,
 			armor,

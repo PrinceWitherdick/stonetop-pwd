@@ -2,33 +2,54 @@ import { escHtml } from "../utils/strings.js";
 import { sign } from "../utils/roll-engine.js";
 import { ensureChronicleFolder, ensureChronicleJournal } from "../utils/chronicle-journals.js";
 import { seasonLabel, SEASON_IDS } from "./seasons-change-reminders.js";
+import { SYSTEM_ID } from "../system-id.js";
 
 // ── Seasons Change chronicle ───────────────────────────────────────────────────
 // Records each Seasons Change move (the steading flow's "Done") into a "Seasons Change"
-// journal inside the shared "The Chronicle" folder. There's one page per year — "First
-// Year", "Second Year", … — chosen in the season picker's year dropdown (which advances
-// when a Winter is completed). Each season folds into its year's page, under a heading,
-// so a year reads top to bottom: Spring, Summer, Autumn, Winter.
+// journal inside the shared "The Chronicle" folder. There's one page per year — "Year One",
+// "Year Two", … — typed into the season picker's year field (which opens on the campaign's
+// current year, and advances when a Winter is completed). Each season folds into its year's
+// page, under a heading, so a year reads top to bottom: Spring, Summer, Autumn, Winter.
 
 const SEASONS_JOURNAL_NAME = "Seasons Change";
 
-// English ordinal for a positive integer: 1 → "1st", 2 → "2nd", 3 → "3rd", 11 → "11th".
-export function ordinal(n) {
-	const v = n % 100;
-	if (v >= 11 && v <= 13) return `${n}th`;
-	return `${n}${({ 1: "st", 2: "nd", 3: "rd" })[n % 10] ?? "th"}`;
-}
-
-const _ORDINAL_WORDS = [
-	"", "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth",
-	"Ninth", "Tenth", "Eleventh", "Twelfth", "Thirteenth", "Fourteenth", "Fifteenth",
-	"Sixteenth", "Seventeenth", "Eighteenth", "Nineteenth", "Twentieth",
+const _CARDINAL_WORDS = [
+	"", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+	"Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen",
+	"Eighteen", "Nineteen", "Twenty",
 ];
 
-// Word ordinal for a small positive integer: 1 → "First", 2 → "Second", … up to 20,
-// then falls back to the numeric ordinal ("21st") for longer-running campaigns.
-export function ordinalWord(n) {
-	return _ORDINAL_WORDS[n] ?? ordinal(n);
+/**
+ * A small positive integer as a word: 1 → "One", 2 → "Two", … up to 20, then the numeral
+ * itself ("21") for longer-running campaigns. Twenty is where the words stop earning their
+ * keep — past it they are longer to read than the digits and the counting is the point.
+ */
+export function cardinalWord(n) {
+	return _CARDINAL_WORDS[n] ?? String(n);
+}
+
+/**
+ * What a campaign year is CALLED, everywhere it is named.
+ *
+ * Three surfaces show this string and they have to agree: the Chronicle page title in the
+ * journal sidebar (below), the season picker's year chip, and the steading header's clock.
+ * Nothing checks that they match at runtime, because `recordSeasonsChange` finds its page by
+ * the `chronicleYear` flag rather than by name, so three hand-built copies could drift apart
+ * silently and only show up as the sidebar disagreeing with the sheet.
+ *
+ * "Year One", not "First Year". The count leads, which is how the surfaces that show it are
+ * read: the header's clock and the picker's chip are both a season next to a NUMBER, and the
+ * journal sidebar is a column of years to scan down. An ordinal buries the digit behind a
+ * word that changes shape every entry ("Fourth", "Twelfth"), so the eye has to read each
+ * title to place it; "Year …" puts the constant first and the varying part where it can be
+ * scanned. It also survives the fall-off past twenty without changing form — "Year 21" reads
+ * as one of these, where "21st Year" reads as a different naming scheme.
+ *
+ * Pages named the old way are renamed on load — see module/migration/season-year-page-names.js.
+ * That sweep reads THIS function, so the two cannot drift.
+ */
+export function yearLabel(year) {
+	return `Year ${cardinalWord(year)}`;
 }
 
 // Find (or create) the "Seasons Change" journal in the Chronicle folder, reusing the
@@ -82,9 +103,9 @@ export function mergeSeasonBlock(existingHtml = "", seasonId, block) {
 
 /**
  * Record one Seasons Change into the "Seasons Change" journal and return the journal
- * (so the caller can open it). One page per year — "First Year", "Second Year", … —
- * tagged with a `chronicleYear` flag. The caller picks the `year` (from the season
- * picker's year dropdown, which advances when a Winter is completed); the season's
+ * (so the caller can open it). One page per year — "Year One", "Year Two", … — tagged
+ * with a `chronicleYear` flag. The caller picks the `year` (from the season picker's
+ * year field, which opens on the campaign's current year); the season's
  * block is merged into that year's page (replacing an earlier block for the same
  * season rather than duplicating it), creating the page the first time. Records the seasonal
  * gains chosen, the Fortunes rolled against, the net Surplus change, and any notes the
@@ -107,10 +128,10 @@ export async function recordSeasonsChange({ seasonId, year = 1, gainNames = [], 
 	if (!journal) return null;
 
 	const yr       = Number.isInteger(year) && year >= 1 ? year : 1;
-	const yearName = `${ordinalWord(yr)} Year`;
+	const yearName = yearLabel(yr);
 	const block    = _seasonBlock(seasonId, gainNames, fortunes, surplusChange, notes);
 
-	const page = (journal.pages ?? []).find(p => Number(p.getFlag?.("stonetop-pwd", "chronicleYear")) === yr) ?? null;
+	const page = (journal.pages ?? []).find(p => Number(p.getFlag?.(SYSTEM_ID, "chronicleYear")) === yr) ?? null;
 	if (page) {
 		await page.update({ "text.content": mergeSeasonBlock(page.text?.content ?? "", seasonId, block) });
 	} else {
@@ -120,7 +141,7 @@ export async function recordSeasonsChange({ seasonId, year = 1, gainNames = [], 
 			type:  "text",
 			sort:  maxSort + 10,
 			text:  { content: block, format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML },
-			flags: { "stonetop-pwd": { chronicleYear: yr } },
+			flags: { [SYSTEM_ID]: { chronicleYear: yr } },
 		}]);
 	}
 

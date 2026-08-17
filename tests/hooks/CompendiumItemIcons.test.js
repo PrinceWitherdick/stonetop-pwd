@@ -54,14 +54,31 @@ function render(entries) {
 	return root;
 }
 
+let _packSeq = 0;
+
+/**
+ * A fake compendium, registered in `game.packs` under a collection id unique to this call.
+ *
+ * Registered because the module now indexes through `ensurePackIndex(pack.collection)` rather
+ * than calling `pack.getIndex()` on the object it was handed — a bare fieldless `getIndex()`
+ * re-tracks the pack on the core fields only and costs every other reader its `system.*` index
+ * fields. Unique ids because ensurePackIndex memoizes the requested field union per pack name
+ * for the life of the module, so a shared id would leak state between tests.
+ */
 function pack(entries, { documentName = "Item", indexed = true } = {}) {
-	return {
+	const p = {
 		documentName,
 		indexed,
+		collection: `stonetop-pwd.test-items-${++_packSeq}`,
 		index: new Map(entries.map((e) => [e._id, e])),
 		getIndex: vi.fn(async function () { this.indexed = true; return this.index; }),
 	};
+	_registeredPacks.set(p.collection, p);
+	return p;
 }
+
+const _registeredPacks = new Map();
+globalThis.game = { ...globalThis.game, packs: { get: (id) => _registeredPacks.get(id) ?? null } };
 
 const thumbSrcs = (root) =>
 	root.querySelectorAll("li.directory-item.document[data-entry-id]")
@@ -108,20 +125,23 @@ describe("onRenderCompendiumItemIcons", () => {
 		expect(thumbSrcs(root)).toEqual([STONETOP_ITEM_ICONS.arcanum]);
 	});
 
-	it("fetches the index first when moveType has not been loaded yet", async () => {
+	it("asks for the index by name, requesting the moveType field it reads", async () => {
 		const entries = [{ _id: "a", name: "Rations", type: "move", system: { moveType: "inventory" }, img: "icons/svg/item-bag.svg" }];
 		const p = pack(entries, { indexed: false });
 		await onRenderCompendiumItemIcons({ collection: p }, render(entries));
 
 		expect(p.getIndex).toHaveBeenCalledOnce();
+		// Never a bare getIndex(): the fields go along, so the pack stays tracked on the union
+		// rather than being narrowed back to core.
+		expect(p.getIndex.mock.calls[0][0].fields).toContain("system.moveType");
 	});
 
-	it("does not re-fetch an index that already carries moveType", async () => {
+	it("survives a pack that is not registered in game.packs", async () => {
 		const entries = [{ _id: "a", name: "Rations", type: "move", system: { moveType: "inventory" }, img: "icons/svg/item-bag.svg" }];
 		const p = pack(entries);
-		await onRenderCompendiumItemIcons({ collection: p }, render(entries));
+		_registeredPacks.delete(p.collection);
 
-		expect(p.getIndex).not.toHaveBeenCalled();
+		await expect(onRenderCompendiumItemIcons({ collection: p }, render(entries))).resolves.not.toThrow();
 	});
 
 	describe("bails on anything that is not an Item compendium", () => {

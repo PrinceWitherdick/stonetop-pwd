@@ -190,7 +190,7 @@ export class CallUpDeepOnesDialog extends StonetopDialog {
 		}
 		if (key === "number") {
 			const o = SERVANT_NUMBER_OPTIONS[die];
-			return `${o.label} (${o.countFormula}) — HP ${o.hp}, ${o.die}`;
+			return `${o.label} (${o.countFormula}): HP ${o.hp}, ${o.die}`;
 		}
 		if (key === "size") {
 			const o = SERVANT_SIZE_OPTIONS[die];

@@ -21,7 +21,7 @@ export const ARCANUM_KINDS = [
 		key:   "relic",
 		label: "Relic",
 		icon:  "fas fa-gem",
-		hint:  "Carries or places a thing — the arcanum itself is an item in your load",
+		hint:  "Carries or places a thing: the arcanum itself is an item in your load",
 	},
 	{
 		key:   "power",
@@ -53,13 +53,13 @@ export const ARCANUM_TIERS = [
 		key:   "major",
 		label: "Major",
 		icon:  "fas fa-star",
-		hint:  "The 18 great arcana — card art, a Consequences track, and a hold on whoever carries them",
+		hint:  "The 18 great arcana: card art, a Consequences track, and a hold on whoever carries them",
 	},
 	{
 		key:   "minor",
 		label: "Minor",
 		icon:  "fas fa-star-half-stroke",
-		hint:  "The lesser arcana — smaller powers, paid for as you use them rather than by a curse",
+		hint:  "The lesser arcana: smaller powers, paid for as you use them rather than by a curse",
 	},
 ];
 

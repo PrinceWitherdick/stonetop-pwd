@@ -46,7 +46,7 @@ export const HOME_GROUP = [
 			{ key: "townDoings",    text: "What have folks back home been up to?" },
 			{ key: "requisitioned", text: "If they Requisitioned assets, how has that impacted the village?" },
 			{ key: "threats",       text: "Did any threats advance toward their dooms while they were away?" },
-			{ key: "triumph",       text: "Are they Returning Triumphant &mdash; or could they, with some effort?" },
+			{ key: "triumph",       text: "Are they Returning Triumphant, or could they, with some effort?" },
 			{ key: "disaster",      text: "Could their return cause panic or reveal calamity (Meet With Disaster)?" },
 		],
 	},

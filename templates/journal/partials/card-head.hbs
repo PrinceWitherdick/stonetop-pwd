@@ -1,0 +1,30 @@
+{{!-- The head every GM-prep card wears: the accent edge, the host's collapse chrome, and the
+      title/type pair. Shared by the threat, hazard and site cards, which is what lets one set of
+      handlers drive all three (StonetopSteadingSheet._activateThreatsListeners binds
+      `.threat-card__head--collapsible` and `.threat-collapse-btn` once, for every kind).
+
+      The card's <article> wrapper stays with each card, because that is where the three genuinely
+      differ — its modifier class and its `data-<kind>-id`, which is what the steading sheet reads
+      a card's kind back off.
+
+      Context: the card's own view-model, plus
+        `kind`      the noun the collapse button's aria-label uses ("threat", "hazard", "site")
+        `typeLabel` what this card calls itself in the header ("Hazard", a threat's type label) --}}
+<span class="threat-card__edge" aria-hidden="true"></span>
+
+<header class="threat-card__head{{#if collapsible}} threat-card__head--collapsible{{/if}}">
+	{{#if collapsible}}
+	{{!-- Host-added collapse chrome (the steading's prep tabs only): clamps the card to its
+	      title + Instinct. The chevron reflects/announces state; clicking anywhere on the header
+	      toggles it. --}}
+	<button type="button" class="threat-collapse-btn"
+	        aria-expanded="{{#if collapsed}}false{{else}}true{{/if}}"
+	        aria-label="Collapse or expand this {{kind}}" tabindex="0">
+		<i class="fas fa-chevron-down" aria-hidden="true"></i>
+	</button>
+	{{/if}}
+	<div class="threat-card__title">
+		<h3 class="threat-name">{{name}}</h3>
+		<span class="threat-type">{{typeLabel}}</span>
+	</div>
+</header>

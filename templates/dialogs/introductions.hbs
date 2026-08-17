@@ -104,7 +104,7 @@
 
     {{#if capture.passed}}
     <div class="stonetop-intros-passed">
-      <i class="fas fa-check-circle"></i> <span>Passed — no more questions this step.</span>
+      <i class="fas fa-check-circle"></i> <span>Passed: no more questions this step.</span>
     </div>
     {{else}}
 
@@ -118,7 +118,7 @@
         {{#if ../capture.canEdit}}
         <li>
           <button type="button" class="stonetop-intros-question-pick{{#if isSelected}} is-selected{{/if}}{{#if isUsed}} is-used{{/if}}"
-                  {{#if isUsed}}disabled data-tooltip="Already answered — pick a different one"{{/if}}
+                  {{#if isUsed}}disabled data-tooltip="Already answered: pick a different one"{{/if}}
                   data-actor-id="{{../capture.actorId}}" data-step-key="{{../capture.stepKey}}" data-q-index="{{index}}">
             {{{html}}}
           </button>
@@ -152,7 +152,7 @@
     {{#if stepReady}}
     <div class="stonetop-intros-ready-tally{{#if stepReady.all}} is-all{{/if}}">
       <i class="fas fa-users"></i>
-      {{stepReady.count}} / {{stepReady.total}} done{{#if stepReady.all}} — everyone's passed or answered all{{/if}}
+      {{stepReady.count}} / {{stepReady.total}} done{{#if stepReady.all}}, everyone's passed or answered all{{/if}}
     </div>
     {{/if}}
 

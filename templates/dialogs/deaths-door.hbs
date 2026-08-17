@@ -22,7 +22,7 @@
 		    name and its own words both come from the owned Item, so a player who is suddenly
 		    offered a stat can see which move is giving it to them and read why. }}
 		<div class="deaths-door-roll-option">
-			<span class="deaths-door-roll-option-label">{{#if statChoiceMove}}{{statChoiceMove}} &mdash; {{/if}}roll with:</span>
+			<span class="deaths-door-roll-option-label">{{#if statChoiceMove}}{{statChoiceMove}}, {{/if}}roll with:</span>
 			<div class="deaths-door-stat-choices">
 				{{#each statChoices}}
 				{{! The label wraps the radio so the text is a hit target too. No `is-checked`
@@ -46,7 +46,7 @@
 		{{#if unstoppableMarks}}
 		<p class="deaths-door-penalty-note">
 			<i class="fas fa-triangle-exclamation"></i>
-			<strong>Unstoppable</strong> &mdash; {{penalty}} for {{unstoppableMarks}} circle{{#unless (eq unstoppableMarks 1)}}s{{/unless}} marked.
+			<strong>Unstoppable</strong>: {{penalty}} for {{unstoppableMarks}} circle{{#unless (eq unstoppableMarks 1)}}s{{/unless}} marked.
 		</p>
 		{{/if}}
 
@@ -100,7 +100,7 @@
 				<p class="deaths-door-mark-done">
 					<i class="fas fa-check"></i>
 					{{#if markText}}Mark recorded on your sheet. Bring it up often.
-					{{else}}The mark is on your sheet already &mdash; what you write here names it.{{/if}}
+					{{else}}The mark is on your sheet already. What you write here names it.{{/if}}
 				</p>
 				{{/if}}
 			</div>
@@ -111,7 +111,7 @@
 		<div class="deaths-door-actions">
 			{{#if outOfAction}}
 			<p class="deaths-door-applied">
-				<i class="fas fa-check"></i> No longer dying. Unconscious, or close enough, until the GM says otherwise &mdash;
+				<i class="fas fa-check"></i> No longer dying. Unconscious, or close enough, until the GM says otherwise, 
 				still at 0 HP.
 			</p>
 			{{/if}}
@@ -120,7 +120,7 @@
 			{{! Heavy only: the one route back to 1 HP on a weak hit. }}
 			<div class="deaths-door-debility-trade">
 				{{#if debilityTraded}}
-				<p class="deaths-door-applied"><i class="fas fa-check"></i> Debility marked &mdash; you regain <strong>1 HP</strong> and stay on your feet.</p>
+				<p class="deaths-door-applied"><i class="fas fa-check"></i> Debility marked: you regain <strong>1 HP</strong> and stay on your feet.</p>
 				{{else if debilityChoices.length}}
 				<p class="deaths-door-mark-label"><strong>Hard to Kill</strong> &mdash; mark a debility of your choice to regain 1 HP:</p>
 				<div class="deaths-door-debility-choices">
@@ -132,7 +132,7 @@
 				</div>
 				{{else}}
 				<p class="deaths-door-roll-option-hint">
-					<strong>Hard to Kill</strong> &mdash; all three debilities are already marked, so there's none left to trade.
+					<strong>Hard to Kill</strong>: all three debilities are already marked, so there's none left to trade.
 				</p>
 				{{/if}}
 			</div>
@@ -164,7 +164,7 @@
 		<h2 class="deaths-door-move-name">Refuse to Go</h2>
 		<p class="deaths-door-intro deaths-door-move-trigger">
 			The GM will ask why you refuse. Name the person, the task, or the reckoning you will not
-			leave behind &mdash; that's your Terrible Purpose. Then say which way you stay.
+			leave behind. That's your Terrible Purpose. Then say which way you stay.
 		</p>
 		<div class="deaths-door-fates">
 			{{#each refusalInserts}}

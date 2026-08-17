@@ -49,7 +49,7 @@ export class ConvertToFollowerDialog extends StonetopDialog {
 
 		// Group toggle + size (re-render so the size field shows/hides).
 		html.find(`.stonetop-${sel}-group-toggle`).on("change", ev => { this._isGroup = ev.currentTarget.checked; this.render(false); });
-		html.find(`.stonetop-${sel}-group-size`).on("change", ev => { this._groupSize = Math.max(2, parseInt(ev.currentTarget.value) || 2); });
+		html.find(`.stonetop-${sel}-group-size`).on("change", ev => { this._groupSize = Math.max(2, parseInt(ev.currentTarget.value, 10) || 2); });
 	}
 
 	_removeTag(tag) {
@@ -79,7 +79,7 @@ export class ConvertToFollowerDialog extends StonetopDialog {
 		const pronEl = root.querySelector(`.stonetop-${this._sel}-pronoun`);
 		if (pronEl) this._pronoun = pronEl.value;
 		const sizeEl = root.querySelector(`.stonetop-${this._sel}-group-size`);
-		if (sizeEl) this._groupSize = Math.max(2, parseInt(sizeEl.value) || 2);
+		if (sizeEl) this._groupSize = Math.max(2, parseInt(sizeEl.value, 10) || 2);
 	}
 
 	/** The group size to bake into the built follower (0 when it's not a group). */

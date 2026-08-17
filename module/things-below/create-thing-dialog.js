@@ -55,7 +55,7 @@ const _STEPS = [
 		title:   "Review",
 		icon:    "fa-clipboard-check",
 		isFinal: true,
-		body:    `<p>Look it over. Its card goes to the homebrew Threats journal; drag it onto the Stonetop steading sheet's Threats tab to make it a live threat.</p>`,
+		body:    `<p>Look it over. Its card goes to the homebrew Threats journal; drag it onto the GM Toolkit's Threats tab to make it a live threat.</p>`,
 	},
 ];
 

@@ -30,8 +30,8 @@
 				</div>
 				<div class="stonetop-inspire-field">
 					<span class="stonetop-inspire-field-label">Tier</span>
-					<label class="stonetop-inspire-radio"><input type="radio" name="arcTier" value="minor" {{#unless major}}checked{{/unless}}> Minor arcanum <em>— a little card, front requirements &amp; back payoff</em></label>
-					<label class="stonetop-inspire-radio"><input type="radio" name="arcTier" value="major" {{#if major}}checked{{/if}}> Major arcanum <em>— a playbook insert with unlockable moves &amp; consequences</em></label>
+					<label class="stonetop-inspire-radio"><input type="radio" name="arcTier" value="minor" {{#unless major}}checked{{/unless}}> Minor arcanum <em>(a little card, front requirements &amp; back payoff)</em></label>
+					<label class="stonetop-inspire-radio"><input type="radio" name="arcTier" value="major" {{#if major}}checked{{/if}}> Major arcanum <em>(a playbook insert with unlockable moves &amp; consequences)</em></label>
 				</div>
 
 				{{#if lines.length}}
@@ -40,10 +40,10 @@
 					<ul>
 						{{#each lines}}<li><strong>{{label}}:</strong> {{text}}</li>{{/each}}
 					</ul>
-					<p class="stonetop-inspire-hint">These seed the card's front description — edit or delete them in the card editor that opens.</p>
+					<p class="stonetop-inspire-hint">These seed the card's front description. Edit or delete them in the card editor that opens.</p>
 				</div>
 				{{else}}
-				<p class="stonetop-inspire-hint">You didn't pick any results — that's fine. A blank card opens for you to fill in.</p>
+				<p class="stonetop-inspire-hint">You didn't pick any results. That's fine. A blank card opens for you to fill in.</p>
 				{{/if}}
 			</div>
 

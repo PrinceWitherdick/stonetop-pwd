@@ -170,7 +170,7 @@ export class CatalogBrowserDialog extends StonetopDialog {
 			})),
 			// Seeds the count line for the first paint; _updateCount rewrites it from the DOM
 			// from then on, which is the only place that knows about the search's hides too.
-			total:   `${rows.length} ${this._countNoun()}`,
+			total:   `${rows.length} ${this._countNoun(rows.length)}`,
 			empty:   current?.empty ?? "Nothing matches those filters.",
 			searchTitle:       search.title,
 			searchPlaceholder: search.placeholder,
@@ -318,15 +318,24 @@ export class CatalogBrowserDialog extends StonetopDialog {
 		).length;
 		const label = root.querySelector(".stonetop-catalog-count");
 		if (label) {
-			const noun = this._countNoun(shown);
+			// Agrees with the TOTAL in both forms, because that is the noun's number in each:
+			// "1 monster", and "1 of 82 monsters" — where the word belongs to the 82.
+			const noun = this._countNoun(rows.length);
 			label.textContent = shown === rows.length ? `${rows.length} ${noun}` : `${shown} of ${rows.length} ${noun}`;
 		}
 		const empty = root.querySelector(".stonetop-catalog-empty");
 		if (empty) empty.classList.toggle("is-visible", shown === 0);
 	}
 
-	/** What the current source's entries are called in the count line: "82 arcana". */
-	_countNoun() { return this._currentSource?.noun ?? "entries"; }
+	/**
+	 * What the current source's entries are called in the count line: "82 arcana", "1 monster".
+	 *
+	 * `count` picks the form. It was declared at the call site and not here, so the line read
+	 * "1 monsters" whenever the filters narrowed to one — the argument named the intent and
+	 * nothing acted on it. A source that does not inflect (arcana, people) sets no `nounOne` and
+	 * gets the same word back for both.
+	 */
+	_countNoun(count) { return (count === 1 ? this._currentSource?.nounOne : this._currentSource?.noun) ?? "entries"; }
 
 	// ------------------------------------------------------------- staying current
 

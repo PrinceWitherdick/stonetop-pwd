@@ -10,33 +10,53 @@
 //     corruption wizards, or a blank stat block for a GM who'd rather type it in.
 // Opened from StonetopActor.createDialog.
 
-import { pickContentOption } from "./content-picker.js";
+import { pickContentOption, runPickedOption } from "./content-picker.js";
 import { createCharacterForUser } from "../actors/character/create-character.js";
 import { charactersOwnedBy } from "../utils/playbook-actors.js";
 import { addPersonToSteading, createPersonNpc } from "../actors/steading/steading-people.js";
 import { buildMonsterActorData } from "../data/monster-builder.js";
+import { SYSTEM_ID } from "../system-id.js";
+import { GM_TOOLKIT_TYPE, createGmToolkit, theGmToolkit } from "../actors/gmtoolkit/gm-toolkit-actor.js";
 
 // Sentinel for the "no player yet" row of the character-owner step. Never a real user id.
 const UNASSIGNED = "__unassigned__";
 
+// What the chooser offers, and what each row DOES. The flow belongs on the row rather than in a
+// dispatch ladder beside it: a subtype added to one and missed in the other is a picker option
+// that silently returns null, or a flow nothing can reach, and neither fails loudly.
+//
+// `create` is called with the sidebar's folder and any caller-supplied name; the flows that want
+// neither ignore them. NOTHING ELSE may be baked in here — actorOptionsFor hands the character
+// row to PLAYERS, so a row that assumed its caller was the GM would be a player running the GM's
+// branch of a flow. Whose client this is stays where it can be read afresh, in the flow itself.
 const ACTOR_OPTIONS = [
 	{
 		id: "character",
 		label: "Player Character",
 		icon: "fa-user",
 		hint: "A new PC. Pick whose it is, and character creation opens on their screen: playbook, stats, gear, bonds.",
+		create: (folder, name) => _createCharacter(folder, name),
 	},
 	{
 		id: "npc",
 		label: "Person",
 		icon: "fa-people-group",
 		hint: "A villager, a neighbor from elsewhere, or a stranger. Built from the steading worksheet: name, occupation, traits, notes.",
+		create: (folder) => _createPerson(folder),
 	},
 	{
 		id: "monster",
 		label: "Monster",
 		icon: "fa-dragon",
 		hint: "A stat block from the Dangers worksheet, a being or emanation corrupted by the Things Below, or a blank one you fill in yourself.",
+		create: (folder, name) => _createMonster(folder, name),
+	},
+	{
+		id: GM_TOOLKIT_TYPE,
+		label: "GM Toolkit",
+		icon: "fa-book-open",
+		hint: "Your own sheet: the GM playbook on screen. Opens on the GM moves, with Exploration and Homefront under them.",
+		create: (folder, name) => _createGmToolkit(folder, name),
 	},
 ];
 
@@ -78,41 +98,57 @@ const PERSON_KINDS = [
 const _rosterLabel = list => (list ? list[0].toUpperCase() + list.slice(1) : "");
 
 // The Monster sub-chooser: the book's own worksheet, the two Things Below corruption
-// wizards (which also end in a stat block), or an empty one.
+// wizards (which also end in a stat block), or an empty one. Each row carries its own flow, for
+// the reason ACTOR_OPTIONS gives — the two corruption rows differ only in the `mode` they pass,
+// and each names its own rather than the dispatch re-testing which of them was picked.
 const MONSTER_KIND_OPTIONS = [
 	{
 		id: "worksheet",
 		label: "Make a Monster",
 		icon: "fa-dragon",
 		hint: "The Book I worksheet: organization, size, tags, HP, armor, damage, instinct and moves, with the stats totted up as you go.",
+		create: (folder, name) => _openMonsterWorksheet(folder, name),
 	},
 	{
 		id: "being",
 		label: "Corrupted being",
 		icon: "fa-skull",
 		hint: "Twist an existing monster with the Things Below's gifts and marks (Book II).",
+		create: (folder) => _openCorruption("being", folder),
 	},
 	{
 		id: "emanation",
 		label: "Emanation",
 		icon: "fa-hurricane",
 		hint: "A Thing's discharge given form, from a source monster or a blank template (Book II).",
+		create: (folder) => _openCorruption("emanation", folder),
 	},
 	{
 		id: "blank",
 		label: "Blank stat block",
 		icon: "fa-file-lines",
 		hint: "Skip the worksheet and fill the stat block in by hand.",
+		create: (folder, name) => _createBlankMonster(folder, name),
 	},
 ];
 
 /**
  * Which kinds a user may create. Players only ever make their own character: people and
  * monsters are GM prep, and preCreateActor vetoes a player-made monster outright.
+ *
+ * The GM Toolkit row drops out once the world HAS one. It is a singleton
+ * (hooks/StonetopSingleton.js), so the row would be a dead entry that only ever warns; the
+ * steading is kept out of this table entirely for the same reason, and differs only in never
+ * being absent. `haveToolkit` is passed in rather than read here so the table stays a pure
+ * function of its inputs, which is what lets the tests drive both states.
+ *
  * @param {boolean} isGM
+ * @param {object}  [world]
+ * @param {boolean} [world.haveToolkit=false]  Does this world already hold a GM Toolkit?
  */
-export function actorOptionsFor(isGM) {
-	return isGM ? ACTOR_OPTIONS : ACTOR_OPTIONS.filter(o => o.id === "character");
+export function actorOptionsFor(isGM, { haveToolkit = false } = {}) {
+	if (!isGM) return ACTOR_OPTIONS.filter(o => o.id === "character");
+	return ACTOR_OPTIONS.filter(o => !(o.id === GM_TOOLKIT_TYPE && haveToolkit));
 }
 
 /**
@@ -159,20 +195,45 @@ function _ownerHint(user, existing = []) {
  */
 export async function openCreateActor({ folder = null, name = "" } = {}) {
 	const isGM = !!game.user?.isGM;
-	// A player has exactly one option, so the chooser would be a one-row formality:
-	// send them straight into their own character.
-	if (!isGM) return _createCharacter(folder, name, isGM);
+	// A player has exactly one option, so the chooser would be a one-row formality: send them
+	// straight into their own character. Through the table, not past it — this is a shortcut
+	// around the PICKER, and a second spelling of the flow beside it is the drift the table exists
+	// to prevent.
+	if (!isGM) return runPickedOption(ACTOR_OPTIONS, "character", folder, name);
 
 	const choice = await pickContentOption({
 		title: game.i18n.localize("stonetop.actorCreate.title"),
-		options: actorOptionsFor(isGM),
+		options: actorOptionsFor(isGM, { haveToolkit: !!theGmToolkit() }),
 	});
 	if (!choice) return null;
 
-	if (choice === "character") return _createCharacter(folder, name, isGM);
-	if (choice === "npc") return _createPerson(folder);
-	if (choice === "monster") return _createMonster(folder, name);
-	return null;
+	return runPickedOption(ACTOR_OPTIONS, choice, folder, name);
+}
+
+/**
+ * GM Toolkit flow. There is no worksheet: the sheet is reference the GM reads, so it has
+ * nothing to ask before it exists. Create it and open it.
+ *
+ * A world SINGLETON, on the same two hooks as the steading: hooks/StonetopSingleton.js vetoes a
+ * second create and refuses to delete the last. This flow is not that guard and must not be read
+ * as one — `actorOptionsFor` drops the row once the world has a toolkit (line 149-152 above) only
+ * so the picker never offers a dead end that could just warn. Getting here at all means the world
+ * had none, which is either a world whose launch predates the subtype or one somebody emptied;
+ * both are exactly the cases this row exists to recover from.
+ *
+ * Visibility is handled where it belongs, in StonetopActor#_preCreate: a toolkit is stamped
+ * `ownership.default = NONE` so it never appears in a player's Actors sidebar.
+ */
+async function _createGmToolkit(folder, name) {
+	if (!game.user?.isGM) {
+		ui.notifications?.warn("Only the GM can create a GM Toolkit.");
+		return null;
+	}
+	// Both failure modes — a world launched before this subtype existed, and a create that
+	// throws — are handled inside createGmToolkit, which owns the notices.
+	const actor = await createGmToolkit({ name, folder });
+	actor?.sheet?.render(true);
+	return actor;
 }
 
 /**
@@ -180,9 +241,14 @@ export async function openCreateActor({ folder = null, name = "" } = {}) {
  * takes over from there (the creation intro, then the playbook picker and onboarding);
  * an unassigned sheet has no player to greet, so we open it here instead. Its playbook
  * gate offers the same first step.
+ *
+ * Whose client this is, is READ HERE rather than passed in. Choosing an owner is the GM's step —
+ * a player's character is their own by definition — and a caller that could get the answer wrong
+ * would put a player in front of "Whose character is this?", listing every other player, and let
+ * them mint a sheet that replaces someone else's.
  */
-async function _createCharacter(folder, name, isGM) {
-	if (!isGM) return createCharacterForUser(game.user?.id ?? null, { folder, name });
+async function _createCharacter(folder, name) {
+	if (!game.user?.isGM) return createCharacterForUser(game.user?.id ?? null, { folder, name });
 
 	const owner = await _pickOwner();
 	if (!owner) return null;
@@ -252,21 +318,23 @@ async function _createMonster(folder, name) {
 		ui.notifications?.warn("Only the GM can create monsters.");
 		return null;
 	}
-	const builderEnabled = game.settings?.get?.("stonetop-pwd", "monsterBuilderEnabled") !== false;
+	const builderEnabled = game.settings?.get?.(SYSTEM_ID, "monsterBuilderEnabled") !== false;
 	const kind = builderEnabled
 		? await pickContentOption({ title: "Create a Monster", options: MONSTER_KIND_OPTIONS })
 		: "blank";
-	if (!kind) return null;
+	return runPickedOption(MONSTER_KIND_OPTIONS, kind, folder, name);
+}
 
-	if (kind === "worksheet") {
-		const { CreateMonsterDialog } = await import("./CreateMonsterDialog.js");
-		return new CreateMonsterDialog({ name, folder }).promise();
-	}
-	if (kind === "being" || kind === "emanation") {
-		const { CorruptBeingDialog } = await import("../things-below/corrupt-being-dialog.js");
-		return new CorruptBeingDialog({ mode: kind, folder }).promise();
-	}
-	return _createBlankMonster(folder, name);
+/** The Book I worksheet, which creates its own finished stat block. */
+async function _openMonsterWorksheet(folder, name) {
+	const { CreateMonsterDialog } = await import("./CreateMonsterDialog.js");
+	return new CreateMonsterDialog({ name, folder }).promise();
+}
+
+/** Either Things Below corruption wizard; both also end in a stat block. */
+async function _openCorruption(mode, folder) {
+	const { CorruptBeingDialog } = await import("../things-below/corrupt-being-dialog.js");
+	return new CorruptBeingDialog({ mode, folder }).promise();
 }
 
 async function _createBlankMonster(folder, name) {

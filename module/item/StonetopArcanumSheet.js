@@ -11,6 +11,7 @@ import { isDefaultImg } from "../utils/strings.js";
 import { STAT_KEYS } from "../utils/roll-types.js";
 import { hasText } from "../actors/bestiary/codex.js";
 import { collectTakenArcanumSlugs } from "./createArcanum.js";
+import { SYSTEM_ID } from "../system-id.js";
 import {
 	defaultArcanumItemLine, defaultResourceDef, defaultBackMove, defaultFollower,
 	newUnlockRequirement, nextOptionSlug, ensureOptionSlug, validateArcanumFlags,
@@ -60,7 +61,7 @@ function _arcanumSlugInUse(slug) {
 	for (const actor of globalThis.game?.actors ?? []) {
 		// Check the live scope AND the legacy "stonetop" scope a migrated world may still
 		// store arcana marks under, so renaming a slug never orphans either set of marks.
-		for (const arcana of [actor.flags?.["stonetop-pwd"]?.arcana, actor.flags?.stonetop?.arcana]) {
+		for (const arcana of [actor.flags?.[SYSTEM_ID]?.arcana, actor.flags?.stonetop?.arcana]) {
 			if (!arcana) continue;
 			if ([arcana.owned, arcana.identified, arcana.flipped, arcana.minorDraw]
 				.some(list => Array.isArray(list) && list.includes(slug))) return true;
@@ -112,7 +113,7 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 		_isCustomMoveHandoff() {
 			return this.item?.type === "move"
 				&& this.item?.system?.moveType !== "arcanum"
-				&& !!this.item?.flags?.["stonetop-pwd"]?.custom
+				&& !!this.item?.flags?.[SYSTEM_ID]?.custom
 				&& !isInCompendium(this.item);
 		}
 

@@ -38,7 +38,7 @@ const _MOVE = zeroHpMove(null);
 // "say how your brush with death has marked you" — so the wound goes on the sheet the moment the
 // tier lands and carries the question until it's answered, rather than waiting on a click that
 // a player halfway into the next scene never gets round to.
-const _MARK_PLACEHOLDER = "Marked in mind, body, or soul — describe the mark";
+const _MARK_PLACEHOLDER = "Marked in mind, body, or soul: describe the mark";
 
 // One-tap suggestions for the 10+ mark — the book's own examples (p.245), so recording a mark
 // mid-session is a single click.
@@ -60,7 +60,7 @@ const _FATES = [
 	{
 		key:    "refuse",
 		label:  "Refuse to go; gain the Revenant or Ghost insert",
-		hint:   "The GM will ask why. If you can't say what you refuse to leave undone — your Terrible Purpose — you shouldn't pick this.",
+		hint:   "The GM will ask why. If you can't say what you refuse to leave undone, your Terrible Purpose, you shouldn't pick this.",
 		insert: "choice",
 	},
 	{
@@ -131,7 +131,7 @@ const _INSERT_TAKEN = {
 	thrall:   {
 		intro: "You called one of the Things Below by name, and it answered. Here is what that costs.",
 		card:  (who, what) =>
-			`<strong>${who}</strong> calls on a Thing Below by name, and it intercedes — gaining the <strong>${what}</strong> insert.`,
+			`<strong>${who}</strong> calls on a Thing Below by name, and it intercedes: gaining the <strong>${what}</strong> insert.`,
 		// The Mark is the GM's to choose (thrall.json: "the GM will choose 1 Mark for you"), so
 		// this does not tell the player to take one.
 		next:  "Name your master; your GM will choose the Mark it leaves on you.",
@@ -451,8 +451,13 @@ export class DeathsDoorDialog extends StonetopDialog {
 		html.find(".deaths-door-debility-btn").on("click", (ev) => this._onTradeDebility(ev.currentTarget.dataset.debility));
 
 		// 6-: pick a fate, then (for "refuse to go") which insert tells it.
-		html.find(".deaths-door-fate-btn").on("click", (ev) => this._onChooseFate(ev.currentTarget.dataset.fate));
-		html.find(".deaths-door-insert-btn").on("click", (ev) => this._onTakeInsert(ev.currentTarget.dataset.slug));
+		// Both carry a `.catch`: each handler rolls its latch back and rethrows, and a click is
+		// fired and forgotten, so without one the rejection reached the console and the player was
+		// left looking at a window that had silently ignored them.
+		html.find(".deaths-door-fate-btn").on("click", (ev) =>
+			this._onChooseFate(ev.currentTarget.dataset.fate).catch(err => this._onFateFailed(err)));
+		html.find(".deaths-door-insert-btn").on("click", (ev) =>
+			this._onTakeInsert(ev.currentTarget.dataset.slug).catch(err => this._onFateFailed(err)));
 
 		// The rail down the side of the last step, and the pair of buttons that walk it. Navigation
 		// is this window's, not the chooser's: the rules table knows what the questions are, and
@@ -597,7 +602,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 				});
 			} catch (err) {
 				console.error("Stonetop | could not record the Death's-Door mark", err);
-				ui.notifications?.warn?.("Couldn't record the Death's-Door mark — describe it and it will try again.");
+				ui.notifications?.warn?.("Couldn't record the Death's-Door mark: describe it and it will try again.");
 			} finally {
 				this._markSeeding = null;
 			}
@@ -646,6 +651,9 @@ export class DeathsDoorDialog extends StonetopDialog {
 
 	get _actorName() { return this._character?._actor?.name ?? "The character"; }
 
+	/** A fate that could not be written. The latch is already back off; say so and redraw. */
+	_onFateFailed(err) { this.reportWriteFailure("fate", err); }
+
 	/**
 	 * A 6- fate. "Refuse to go" forks again (Revenant or Ghost), so it advances to the insert
 	 * step; the other two resolve here.
@@ -659,8 +667,19 @@ export class DeathsDoorDialog extends StonetopDialog {
 
 		// Step through the Last Door. Nothing on the sheet changes but the state — the last
 		// move is made in the fiction, at the table, as a 12+.
+		//
+		// The latch is rolled back on a failed write, the same as _onTakeInsert below. Left set, a
+		// refused update (a player-owned actor whose permission the server declines, a dropped
+		// connection) wrote nothing, posted nothing and re-rendered nothing, while every later
+		// click returned at the guard above: the three fates stayed on screen and none of them
+		// could be chosen again.
 		this._fateApplied = true;
-		await this._character.setDeathsDoorState(DEATHS_DOOR_STATE.DEAD);
+		try {
+			await this._character.setDeathsDoorState(DEATHS_DOOR_STATE.DEAD);
+		} catch (err) {
+			this._fateApplied = false;
+			throw err;
+		}
 		await this._post("The Last Door", `<p><strong>${escHtml(this._actorName)}</strong> makes one last move as if they rolled a <strong>12+</strong>, then steps through the Last Door.</p>
 			<p class="stonetop-dying-trigger">There's no saving them. Only the rarest of magic can bring them back.</p>`);
 		this.renderIfOpen();

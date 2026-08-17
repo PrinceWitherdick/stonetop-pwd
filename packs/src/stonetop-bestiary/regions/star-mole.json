@@ -42,7 +42,7 @@
       "_id": "lVA2EfHmWqGlFK42",
       "name": "Soften stone with its spit, then dig through it",
       "type": "monsterMove",
-      "img": "icons/environment/wilderness/cave-entrance-dark.webp",
+      "img": "icons/svg/burrow.svg",
       "system": {
         "description": "",
         "rollFormula": ""

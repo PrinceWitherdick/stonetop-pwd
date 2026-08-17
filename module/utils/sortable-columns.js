@@ -1,6 +1,7 @@
 import { resolveResidentsGrid, readStoredColumnState, writeStoredColumnState } from "./steading-column-util.js";
+import { SYSTEM_ID } from "../system-id.js";
 
-const STORAGE_PREFIX = "stonetop-pwd.columnSort.";
+const STORAGE_PREFIX = `${SYSTEM_ID}.columnSort.`;
 
 // Last known pointer position, so a re-render can tell whether it is about to move rows
 // out from under the user's cursor (see applySort). One passive listener for the whole

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, afterEach } from "vitest";
 import { playbookSlug, getPlayerCharacters, playbookIconPath, playbookTitle, characterFullName } from "../../module/utils/playbook-actors.js";
 import { WBH_HERO_FLAG } from "../../module/actors/character/WouldBeHeroAsterisk.js";
 

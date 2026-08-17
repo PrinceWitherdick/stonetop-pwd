@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
+import { readCss, declarations } from "../fakes/css.js";
 
 // The NPC header's Hit Points + Armor bar stacks Armor UNDER Hit Points once the window is too
 // narrow to hold both beside the name. The header wants portrait (120) + gap + name column
@@ -15,23 +13,16 @@ import { describe, it, expect } from "vitest";
 //     the bar wraps even on a wide sheet (measured: it stacked at 760px).
 // Layout itself is verified in a browser; these guard the declarations behind it.
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const CSS = fs.readFileSync(path.resolve(HERE, "../..", "styles/stonetop.css"), "utf8")
-	.replace(/\/\*[\s\S]*?\*\//g, "");
-
-const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const CSS = readCss();
 
 /**
  * Every declaration block whose selector list contains `selector` as a whole comma-separated
  * entry, joined. ALL of them, not the first: these selectors are shared with the monster header
  * (`.stonetop-monster-statbar .cell--…, .stonetop-npc-statbar .cell--…`), so the behaviour comes
- * from the cascade of two rules and a first-match lookup would read only half of it.
+ * from the cascade of two rules and a first-match lookup would read only half of it. See
+ * fakes/css.js.
  */
-function block(selector) {
-	const rx = new RegExp(`(?:^|[,}])\\s*${escape(selector)}\\s*\\{([^}]*)\\}`, "gm");
-	const found = [...CSS.matchAll(rx)].map((m) => m[1]);
-	return found.length ? found.join("\n") : null;
-}
+const block = (selector) => declarations(CSS, selector);
 
 /** Nesting depth at a byte offset: 0 is top level, 1 is inside an @media block. */
 function depthAt(offset) {

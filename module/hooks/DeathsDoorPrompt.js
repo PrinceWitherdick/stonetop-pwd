@@ -4,7 +4,6 @@ import { STONETOP_SCOPE, resolvedFlagProperty } from "../actors/character/Stonet
 import {
 	DEATHS_DOOR_FLAG,
 	DEATHS_DOOR_STATE,
-	becameDying,
 	effectiveDeathsDoorState,
 	nextDeathsDoorState,
 	raisedFromDead,
@@ -32,19 +31,25 @@ export const RAISED_OPTION = "stonetopRaisedFromDead";
  * Nothing here decides that the damage was lethal — that's the GM's call ("an attack that could
  * kill them"). A PC knocked to 0 by something harmless just closes the card.
  *
- * The card posts on preUpdate, not update, for two reasons: the document still holds the
- * OUTGOING HP, so the transition is readable without stashing it; and preUpdate fires only on
- * the client that initiated the change, so the card posts exactly once. The state write is
- * folded into the same `changes` object, so it costs no second document update and can't race
- * the HP write.
+ * The work is split across the two halves of one write, and which half a thing belongs in comes
+ * down to whether it can be taken back.
  *
- * The walkthrough can also open on its own (setting `deathsDoorAutoOpen`), which is the one
- * thing that CANNOT ride on preUpdate: whoever applied the damage is usually the GM, and a
- * dialog opened there lands on the wrong screen. That half runs on `updateActor` — broadcast to
- * every client — and claims a single one of them; see `autoOpenUserId`. Even auto-opened the
- * dialog remains an invitation, since its Cancel closes it and leaves the card in chat: the
- * book explicitly allows holding the roll off "until the scene wraps up or the other PCs get a
- * little spotlight".
+ * DECIDING is preUpdate's: the document still holds the OUTGOING HP there, so the transition is
+ * readable without stashing it, and the state flag folds into the same `changes` object — no
+ * second document update, and no way for it to race the HP write.
+ *
+ * ANNOUNCING is `updateActor`'s. A preUpdate can still be refused, and while a discarded write
+ * takes the hit points and the flag with it, it cannot recall a chat card: that stays in the log
+ * announcing a death that never happened. So the card waits for the commit and reads the flag
+ * back out of the committed diff, which is the same transition one beat later. `updateActor`
+ * broadcasts to every client, so both halves below have to claim exactly one — the card by
+ * `userId` (whoever applied the damage), the walkthrough by `autoOpenUserId`.
+ *
+ * The walkthrough can open on its own (setting `deathsDoorAutoOpen`), and never belonged on
+ * preUpdate for a second reason: whoever applied the damage is usually the GM, and a dialog
+ * opened there lands on the wrong screen. Even auto-opened it remains an invitation, since its
+ * Cancel closes it and leaves the card in chat: the book explicitly allows holding the roll off
+ * "until the scene wraps up or the other PCs get a little spotlight".
  */
 export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 	if (actor?.type !== "character") return;
@@ -86,14 +91,54 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 		// card kept quiet has said nothing about wanting resurrections to go unrecorded.
 		if (raisedFromDead({ oldHp, newHp, state })) options[RAISED_OPTION] = true;
 
-		if (!becameDying({ oldHp, newHp, state })) return;
-		if (!getSetting("deathsDoorPrompt")) return;
-
-		// Fire-and-forget: the card is an announcement, and making the HP write await a chat
-		// round-trip would stall damage application behind it.
-		postDyingPrompt(actor).catch(err => console.error("Stonetop | Error posting the dying prompt:", err));
+		// The CARD is not posted here. This hook runs before the update is committed, and the
+		// update can still be refused — a later preUpdate hook returning false, a permission, a
+		// lost connection — at which point the hit points and the state flag are both discarded
+		// together. A card already on its way is not: it stays in the log announcing a death that
+		// never happened, with a live "Face Death's Door" button on a character who is not dying.
+		// The flag rides `changes` for exactly this reason; the announcement now waits for the
+		// same commit, on `updateActor`. See onUpdateActorDeathsDoorCard.
 	} catch (err) {
 		console.error("Stonetop | Error recording the dying state:", err);
+	}
+}
+
+/**
+ * Is this committed diff the moment the character became dying?
+ *
+ * The transition itself was already decided by `nextDeathsDoorState` in the preUpdate half, which
+ * writes the flag only when the state actually changes — so a downed PC hit again carries no flag
+ * in its diff and neither hook below re-fires. Both of them ask this same question, of the same
+ * `updateActor` payload, and would otherwise spell the flag path out twice.
+ */
+const becameDyingInDiff = (changes) =>
+	foundry.utils.getProperty(changes, `flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`) === DEATHS_DOOR_STATE.DYING;
+
+/**
+ * The announcement: a card in chat saying this character is down, once the write that put them
+ * there has actually landed.
+ *
+ * Keyed on the state flag arriving as `dying` in the committed diff — the same signal the
+ * auto-open below uses, and written only on the transition, so a downed PC hit again does not
+ * announce twice. Posting it from `preUpdate` instead read the transition a beat early: correct
+ * whenever the update went through, and a permanent card about a death that did not happen
+ * whenever it did not.
+ *
+ * Posted by the user who made the change and nobody else, like the raise prompt: `updateActor`
+ * fires on every client, and the card is public, so all of them posting one is N copies. Whoever
+ * applied the damage is the natural author and is guaranteed to exist.
+ */
+export function onUpdateActorDeathsDoorCard(actor, changes, _options = {}, userId = null) {
+	if (actor?.type !== "character") return;
+	if (!becameDyingInDiff(changes)) return;
+	if (userId && userId !== game.user?.id) return;
+
+	try {
+		// "Announce When a Character Is Dying" — a table can silence the theatre of the moment.
+		if (!getSetting("deathsDoorPrompt")) return;
+		postDyingPrompt(actor).catch(err => console.error("Stonetop | Error posting the dying prompt:", err));
+	} catch (err) {
+		console.error("Stonetop | Error posting the dying prompt:", err);
 	}
 }
 
@@ -101,16 +146,14 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
  * The other half: open the walkthrough on the dying character's own screen.
  *
  * Runs on `updateActor`, which fires on EVERY connected client, so the deciding question is
- * which one of them this is. The signal is the state flag arriving as "dying" in the diff —
- * written by the preUpdate half above, and written only on the transition (nextDeathsDoorState
- * returns the state unchanged otherwise), so this can't re-fire while a downed PC is hit again.
+ * which one of them this is — the transition itself is `becameDyingInDiff`'s to answer.
  *
  * Fails quiet for the same reason the preUpdate half does, minus the stakes: a fault here is
  * only a window that didn't open.
  */
 export function onUpdateActorDeathsDoorAutoOpen(actor, changes) {
 	if (actor?.type !== "character") return;
-	if (foundry.utils.getProperty(changes, `flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`) !== DEATHS_DOOR_STATE.DYING) return;
+	if (!becameDyingInDiff(changes)) return;
 
 	try {
 		// Subordinate to the announcement: a table that silenced the card doesn't want a window.
@@ -286,8 +329,8 @@ export async function postDyingPrompt(actor) {
 			</button>`;
 
 	const lead = move.dialog
-		? `<p><strong>${who}</strong> is at 0 HP &mdash; they're <strong>dying</strong>.</p>`
-		: `<p><strong>${who}</strong> is at 0 HP. Death's Door is behind them &mdash; <strong>${escHtml(move.name)}</strong> triggers instead.</p>`;
+		? `<p><strong>${who}</strong> is at 0 HP: they're <strong>dying</strong>.</p>`
+		: `<p><strong>${who}</strong> is at 0 HP. Death's Door is behind them: <strong>${escHtml(move.name)}</strong> triggers instead.</p>`;
 
 	return ChatMessage.create({
 		speaker: ChatMessage.getSpeaker({ actor }),

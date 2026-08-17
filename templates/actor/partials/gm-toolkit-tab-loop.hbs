@@ -1,0 +1,88 @@
+{{!-- CORE LOOP — the GM playbook's last spread: the core-loop flowchart and, facing it, the
+      flow of play across a whole campaign. Reference only; nothing here rolls or is stored.
+
+      Unlike the Moves tab, this page is not transcribed. The two flowcharts are the publisher's
+      artwork, so the system ships neither of them: a GM extracts them from their own copy of the
+      free GM playbook PDF with the "Import Book Art" macro, and module/gm-toolkit/gm-diagrams.js
+      reads the world index of what that produced. Until then each figure draws a placeholder
+      saying so, rather than the tab being hidden — a GM who cannot see the tab has no way to
+      learn the diagrams exist.
+
+      `data-tab="loop"` earns the rail's flowchart glyph; the icon table in stonetop.css is one
+      flat list keyed by data-tab with no per-sheet scope.
+
+      Each figure is its own <figure>, not a bare <img>, so the caption travels with the picture
+      when the two columns collapse to one on a narrow window. --}}
+<div class="tab loop" data-group="primary" data-tab="loop">
+	<section class="sheet-tab">
+
+		<div class="stonetop-gm-diagrams">
+			{{#each stonetop.diagrams}}
+			<figure class="stonetop-gm-diagram">
+				<figcaption class="stonetop-gm-diagram-caption">
+					<strong class="stonetop-gm-diagram-title">{{caption}}</strong>
+					<span class="stonetop-gm-diagram-note">{{note}}</span>
+				</figcaption>
+				{{#if src}}
+				{{!-- Click to open the zoom window (utils/image-zoom-window.js). The flowcharts are
+				      ~2000px tall and the tab shows them at a few hundred, which is legible for
+				      finding your place but not for reading a box.
+
+				      A BUTTON, not a link to the file. An anchor sends the picture to a browser tab
+				      — and does it on middle-click and ctrl-click whatever the click handler says —
+				      which throws the GM out of the game to read a page of their own rulebook. The
+				      `src` rides along in a data attribute so the handler has the path without one. --}}
+				<button type="button" class="stonetop-gm-diagram-zoom" data-src="{{src}}"
+				        data-caption="{{caption}}" data-slug="{{slug}}"
+				        data-tooltip="{{localize "stonetop.gmToolkit.loop.zoom"}}">
+					<img class="stonetop-gm-diagram-img" src="{{src}}" alt="{{caption}}">
+				</button>
+				{{else}}
+				<div class="stonetop-gm-diagram-missing">
+					<p>{{localize "stonetop.gmToolkit.loop.missing"}}</p>
+					{{!-- `@root`, because inside {{#each}} the context is the diagram: a bare
+					      `stonetop.isGM` resolves against that, finds nothing, and silently
+					      renders no button at all. --}}
+					{{#if @root.stonetop.isGM}}
+					<button type="button" class="stonetop-gm-diagram-import">
+						<i class="fas fa-images"></i> {{localize "stonetop.gmToolkit.loop.import"}}
+					</button>
+					{{/if}}
+				</div>
+				{{/if}}
+
+				{{!-- What the chart SAYS, always, under whichever of the two the world has. The
+				      picture is the optional half of this tab: it is the publisher's artwork, so
+				      it ships nowhere, while the procedure it draws is rules text like every
+				      other list on this sheet (Book I p.169). A GM who has not run the import
+				      should meet the core loop, not an apology for not having a picture of it.
+
+				      Steps rather than prose, because what a chart is FOR is saying what follows
+				      what. The core loop is numbered and cycles; the flow of play is stages, so
+				      it takes the same markup with the numbering off. --}}
+				<ol class="stonetop-gm-loop{{#unless numbered}} stonetop-gm-loop--stages{{/unless}}">
+					{{#each steps}}
+					{{!-- Step 5's items ask questions, and step 3 IS one ("Ask \"What do you
+					      do?\""), which matters here for a reason that has nothing to do with the
+					      chart: markQuestionBullets (hooks/RenderActorSheet.js) runs over every
+					      <li> on an actor sheet and tags anything ending in "?" as a
+					      `question-bullet`. That class is a picture swap only — see the note on
+					      it in stonetop.css — so a step wearing it lays out like any other. --}}
+					<li class="stonetop-gm-loop-step">
+						<strong class="stonetop-gm-loop-name">{{name}}</strong>
+						{{#if pageRef}}<span class="stonetop-gm-loop-page">{{pageRef}}</span>{{/if}}
+						{{#if note}}<p class="stonetop-gm-loop-note">{{note}}</p>{{/if}}
+						{{#if items}}
+						<ul class="stonetop-gm-loop-items">
+							{{#each items}}<li>{{this}}</li>{{/each}}
+						</ul>
+						{{/if}}
+					</li>
+					{{/each}}
+				</ol>
+			</figure>
+			{{/each}}
+		</div>
+
+	</section>
+</div>

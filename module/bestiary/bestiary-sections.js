@@ -20,28 +20,28 @@ export const BESTIARY_SECTIONS = [
 		label:  "Peoples",
 		folder: "Peoples & Folk",
 		icon:   "fas fa-people-group",
-		hint:   "Peoples & Folk — the ones you can talk to before you fight them",
+		hint:   "Peoples & Folk: the ones you can talk to before you fight them",
 	},
 	{
 		key:    "regions",
 		label:  "Regions",
 		folder: "Regions",
 		icon:   "fas fa-tree",
-		hint:   "Regions — what lives in the Hillfolk lands, the fens, the forest, the deeps",
+		hint:   "Regions: what lives in the Hillfolk lands, the fens, the forest, the deeps",
 	},
 	{
 		key:    "powers",
 		label:  "Powers",
 		folder: "Primordial & Mythic Powers",
 		icon:   "fas fa-bolt",
-		hint:   "Primordial & Mythic Powers — the old things, the great things, the Things Below",
+		hint:   "Primordial & Mythic Powers: the old things, the great things, the Things Below",
 	},
 	{
 		key:    "makers",
 		label:  "Makers",
 		folder: "The Makers",
 		icon:   "fas fa-gears",
-		hint:   "The Makers — their constructs, their servants, and what they left behind",
+		hint:   "The Makers: their constructs, their servants, and what they left behind",
 	},
 ];
 

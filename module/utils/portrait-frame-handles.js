@@ -1,9 +1,11 @@
 import { SYSTEM_ID } from "../system-id.js";
+import { deletionEntry } from "./foundry-compat.js";
 import { resolvedFlags } from "../actors/character/StonetopFlags.js";
 import { isActorRow, personRowActor } from "../actors/steading/steading-people.js";
 import { STEADING_DEFAULTS } from "../actors/steading/StonetopSteading.js";
 import { readRosterPortrait, rosterPortraitListPath, writeRosterPortrait } from "../actors/character/roster-portraits.js";
 import { normalizeFrame, documentPortraitFrame } from "./portrait-frame.js";
+import { tokenFollowsPortrait } from "./portrait-token-frame.js";
 
 /**
  * Where a chosen portrait frame is stored, per kind of "person".
@@ -28,6 +30,90 @@ import { normalizeFrame, documentPortraitFrame } from "./portrait-frame.js";
  *    a plain `delete` on a row object is both correct and the only thing that works.
  * Do not "unify" them.
  */
+
+/**
+ * The one update a GALLERY PICK makes on an Actor: the picture, the square that frames it, and the
+ * square as the token's own file.
+ *
+ * All three land together because they are one choice. The gallery commits the WHOLE illustration
+ * (PeopleGalleryDialog#_choose explains why), and on its own that would be a regression in two
+ * places at once — the small round surfaces would fall back to a blind top slice of a standing
+ * figure, and `_syncPrototypeTokenImage` would drag a following token onto that same tall picture.
+ * The frame fixes the first and the square file fixes the second, which the canvas needs as a file
+ * because a token texture carries no crop rect (see portrait-token-frame.js).
+ *
+ * THE FRAME IS REPLACED, NEVER MERGED, and cleared when the new picture brings none: a rect
+ * measured on the portrait being replaced describes a picture this actor no longer wears. It would
+ * not misapply — the frame's own `src` stamp neutralises it — but the dead data would sit there
+ * with nothing left to ever clear it.
+ *
+ * THE TOKEN MOVES ONLY IF IT WAS FOLLOWING, under the same four-state rule everything else uses.
+ * Set explicitly rather than left to `_syncPrototypeTokenImage`, which would otherwise put the
+ * whole illustration there; that sync stands down as soon as an update names the key itself.
+ *
+ * @param {Actor}  actor
+ * @param {string} src            the picture to wear
+ * @param {object} [pick]         what the gallery tile carried: `{frame, square}`, both null for
+ *                                a browsed file with no hand-cut square behind it
+ */
+export function actorPortraitPickUpdate(actor, src, { frame = null, square = "" } = {}) {
+	const update = { img: src ?? "" };
+	const normalized = normalizeFrame(frame);
+	if (normalized) {
+		update[`flags.${SYSTEM_ID}.portraitFrame`] = normalized;
+	} else {
+		// deletionEntry, not a hard-coded `-=`: v14 still honours the legacy prefix but logs a
+		// deprecation for every key it sees.
+		const [key, value] = deletionEntry(`flags.${SYSTEM_ID}.portraitFrame`);
+		update[key] = value;
+	}
+	if (square && actor?.prototypeToken?.texture?.src !== undefined && tokenFollowsPortrait(actor)) {
+		update["prototypeToken.texture.src"] = square;
+	}
+	return update;
+}
+
+/**
+ * The one update a GALLERY PICK makes on a follower CARD — the flag counterpart to
+ * actorPortraitPickUpdate above, and here for the same reason: the picture and the rect it crops
+ * to are one choice, so they move together or the 75px card falls back to a blind top slice of a
+ * standing figure.
+ *
+ * NO TOKEN HALF. A card is a flag, not a document, so there is no prototype token to move; the
+ * token a follower gets when it is dropped on a scene is minted from these two.
+ *
+ * `base` is `_followerDetailBase(ftype, slug)` — see followerFrameHandle, which owns the same two
+ * paths for the framing side. Stated here rather than at the sheet's call site so the follower
+ * store has ONE place that knows where a card keeps its face.
+ */
+export function followerPortraitPickUpdate(base, src, { frame = null } = {}) {
+	const normalized = normalizeFrame(frame);
+	// A pick with no frame behind it — a browsed file, or a gallery tile with no hand-cut square
+	// — DELETES the old rect rather than nulling it, for the reason the clear below states and
+	// under the same rule actorPortraitPickUpdate follows: one key, one clearing convention.
+	return Object.fromEntries([
+		[`flags.${SYSTEM_ID}.${base}.img`, src ?? ""],
+		normalized
+			? [`flags.${SYSTEM_ID}.${base}.portraitFrame`, normalized]
+			: deletionEntry(`flags.${SYSTEM_ID}.${base}.portraitFrame`),
+	]);
+}
+
+/**
+ * And the clear: back to art-less, with the frame DELETED rather than nulled.
+ *
+ * Deleted because a rect measured on the picture being dropped describes one this card no longer
+ * wears. It would not misapply — the frame's own `src` stamp neutralises it against a different
+ * picture — but the dead data would sit there with nothing left to ever clear it. Via
+ * deletionEntry so v14 gets a ForcedDeletion rather than a deprecated `-=` key.
+ *
+ * Which is precisely a pick of nothing: the pick above already takes the delete branch whenever no
+ * frame comes with the picture, so this is that call rather than a second spelling of it — one key,
+ * one clearing convention, and now one piece of code holding it.
+ */
+export function followerPortraitClearUpdate(base) {
+	return followerPortraitPickUpdate(base, "");
+}
 
 /**
  * An Actor's own portrait: NPCs, PCs, monsters, and every actor-backed steading roster row.
@@ -94,12 +180,13 @@ export function followerFrameHandle(actor, base, { editable = false } = {}) {
 		get img() { return String(detail().img ?? "").trim(); },
 		read: () => detail().portraitFrame ?? null,
 		write: (frame) => actor.setFlag(SYSTEM_ID, `${base}.portraitFrame`, normalizeFrame(frame)),
-		// An explicit `-=` through update() rather than unsetFlag: it touches the parent anyway,
-		// so no phantom `initiateDetails.acolyte: {}` can be inserted for a follower that never
-		// had a frame. Guarded so clearing an unframed follower is a genuine no-op.
+		// An explicit deletion through update() rather than unsetFlag: it touches the parent
+		// anyway, so no phantom `initiateDetails.acolyte: {}` can be inserted for a follower that
+		// never had a frame. Guarded so clearing an unframed follower is a genuine no-op.
+		// Via deletionEntry so v14 gets a ForcedDeletion instead of a deprecated `-=` key.
 		clear: () => (detail().portraitFrame === undefined
 			? Promise.resolve()
-			: actor.update({ [`flags.${SYSTEM_ID}.${base}.-=portraitFrame`]: null }))
+			: actor.update(Object.fromEntries([deletionEntry(`flags.${SYSTEM_ID}.${base}.portraitFrame`)])))
 	};
 }
 
@@ -132,39 +219,58 @@ export function rosterMemberFrameHandle(actor, { kind, slug = "", index = 0 } = 
 }
 
 /**
+ * The `residents`/`neighbors` rows as they should be READ.
+ *
+ * Falls back to STEADING_DEFAULTS exactly as the sheet's own photo editor does. Reading only the
+ * flag looks right and is wrong: a world that has never written this list still SHOWS the default
+ * rows, so a caller working from `[]` would decide there was no row here and quietly offer nothing.
+ */
+function legacyPersonRows(steading, list) {
+	const stored = steading?._flags?.[list];
+	const source = Array.isArray(stored) ? stored : STEADING_DEFAULTS[list];
+	return Array.isArray(source) ? source : [];
+}
+
+/**
+ * Change one legacy steading person row in place and store the list back.
+ *
+ * THE WHOLE ARRAY IS REWRITTEN, and that is the point rather than a cost: setFlags merges, but
+ * mergeObject and diffObject treat an ARRAY as an atomic value, so the list is replaced wholesale
+ * — which is what makes a plain `delete` on a row key actually disappear. (An object flag is the
+ * exact opposite: there a smaller object never drops a key and clearing needs `-=`. Do not
+ * "unify" them — see the header.)
+ *
+ * An actor-backed row renders from the NPC's own img, so anything written onto the array row would
+ * be an invisible no-op; those are refused here so no caller has to remember to branch first.
+ *
+ * Shared with the steading sheet's own photo editor, which writes `img` and `portraitFrame`
+ * together in one pass: it is one gesture, and one write, so the rule about how this list is
+ * stored is stated once for both.
+ */
+export async function saveLegacyPersonRow(steading, list, index, mutate) {
+	const arr = foundry.utils.deepClone(legacyPersonRows(steading, list));
+	if (!arr[index] || isActorRow(arr[index])) return false;
+	mutate(arr[index]);
+	await steading.setFlags({ [list]: arr });
+	return true;
+}
+
+/**
  * A legacy steading person row: plain text in the `residents`/`neighbors` flag arrays, from
  * before those rows became NPC actors.
  *
  * Stored as a `portraitFrame` key on the row object itself.
  */
 export function legacyRowFrameHandle(steading, list, index, { editable = false } = {}) {
-	// Falls back to STEADING_DEFAULTS exactly as the sheet's own photo editor does. Reading only
-	// the flag looks right and is wrong: a world that has never written this list still SHOWS the
-	// default rows, so a handle built from `[]` would decide there was no row here and quietly
-	// offer nothing.
-	const rows = () => {
-		const stored = steading?._flags?.[list];
-		const source = Array.isArray(stored) ? stored : STEADING_DEFAULTS[list];
-		return Array.isArray(source) ? source : [];
-	};
-	const row = () => rows()[index] ?? null;
-	const save = async (mutate) => {
-		const arr = foundry.utils.deepClone(rows());
-		// An actor-backed row renders from the NPC's own img, so a frame written onto the array
-		// row would be an invisible no-op. Branch the same way the photo editor does.
-		if (!arr[index] || isActorRow(arr[index])) return;
-		mutate(arr[index]);
-		await steading.setFlags({ [list]: arr });
-	};
+	const row = () => legacyPersonRows(steading, list)[index] ?? null;
+	const save = (mutate) => saveLegacyPersonRow(steading, list, index, mutate);
 	return {
 		canWrite: !!editable,
 		get img() { return String(row()?.img ?? "").trim(); },
 		read: () => row()?.portraitFrame ?? null,
 		write: (frame) => save((r) => { r.portraitFrame = normalizeFrame(frame); }),
 		// A PLAIN delete, and `-=` would be WRONG here — the exact opposite of the object-flag
-		// rule above. setFlags merges the whole `steading` object, and mergeObject/diffObject
-		// treat ARRAYS as atomic values, so the array is replaced and a deleted row key really
-		// does disappear. The existing photo editor already relies on this for `arr[index].img`.
+		// rule above. saveLegacyPersonRow owns why that works.
 		clear: () => save((r) => { delete r.portraitFrame; })
 	};
 }

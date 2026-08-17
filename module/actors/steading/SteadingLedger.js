@@ -1,7 +1,7 @@
 import {
 	LEDGER_SCOPE, isLedgerPath, normalizeFlagPath, getActorProperty,
 	appendLedgerEntries, deleteLedgerEntries, getLedgerEntries,
-	isBlank, formatValue, valuesEqual, actionForField, coalesceEntries, prettifySlug,
+	isBlank, valuesEqual, actionForField, coalesceEntries, prettifySlug,
 	truncateValue, scalarEntry,
 } from "../../utils/ledger-core.js";
 import { IMPROVEMENT_DEFINITIONS } from "./StonetopSteading.js";
@@ -251,7 +251,10 @@ function improvementEntries(actor, oldImps, newImps) {
 		for (let i = 0; i < max; i++) {
 			if (!!beforeR[i] === !!afterR[i]) continue;
 			const step = def?.steps?.[i] || `requirement ${i + 1}`;
-			entries.push({ action: `Improvement step ${afterR[i] ? "marked" : "unmarked"}: ${label} — ${step}` });
+			// Improvement then step, separated by the same middle dot the sheets use to join two
+			// fields on one line. A comma would read as one list ("Mill, A full-time miller") and
+			// the line already spends its colon on "marked:".
+			entries.push({ action: `Improvement step ${afterR[i] ? "marked" : "unmarked"}: ${label} · ${step}` });
 		}
 	}
 	return entries;
@@ -279,9 +282,9 @@ const PATH_HANDLERS = bySteadingPath({
 	"gold.purses":     (o, n) => _currencyEntry("Gold purses",      o, n),
 	"gold.handfuls":   (o, n) => _currencyEntry("Gold handfuls",    o, n),
 	"gold.coins":      (o, n) => _currencyEntry("Gold coins",       o, n),
-	"herd.grown":      (o, n) => _herdTierEntry("Herd — grown horses", o, n),
-	"herd.yearlings":  (o, n) => _herdTierEntry("Herd — yearlings",     o, n),
-	"herd.foals":      (o, n) => _herdTierEntry("Herd — foals",         o, n),
+	"herd.grown":      (o, n) => _herdTierEntry("Herd: grown horses", o, n),
+	"herd.yearlings":  (o, n) => _herdTierEntry("Herd: yearlings",     o, n),
+	"herd.foals":      (o, n) => _herdTierEntry("Herd: foals",         o, n),
 });
 
 function actorUpdateEntries(actor, changed) {

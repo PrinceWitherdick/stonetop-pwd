@@ -1,0 +1,51 @@
+{{!-- The identification affordances on an artifact's inventory row (Book I, Discoveries
+      pp.430-431). Renders nothing on ordinary gear, so the two column partials can include it
+      unconditionally.
+
+      The row's tags/Value and ○ uses were already withheld upstream (see
+      concealArtifactFields), so there is nothing to hide HERE: this partial only adds the "?"
+      chip that stands in their place, the GM's hint and lead, and the two buttons.
+
+      Both buttons are play actions, not edit ones — the same reasoning that lifted the
+      arcanum's "Reveal back" out of edit mode (p.440's ladder can't sit behind the section
+      pencil). The GM's is drawn on any `deletable` row (a write-in or a Book II treasure — the
+      two kinds of thing that can BE an artifact, as against the playbook's standard kit), so
+      there's somewhere to click on a treasure nobody has hidden yet.
+      Context: an inventory item snapshot, plus `deletable` from the calling row. --}}
+{{#if (or artifact.isArtifact (and @root.stonetop.isGM deletable))}}
+{{#if artifact.concealed}}
+<span class="stonetop-inv-artifact-chip{{#if artifact.gmPeeking}} is-gm-peek{{/if}}"
+      data-tooltip="{{#if artifact.loreOwed}}{{localize 'stonetop.artifact.chipPartial'}}{{else}}{{localize 'stonetop.artifact.chipUnknown'}}{{/if}}">
+	<i class="fas fa-circle-question"></i>
+</span>
+{{/if}}
+{{#if artifact.hint}}
+<span class="stonetop-inv-artifact-hint">{{artifact.hint}}</span>
+{{/if}}
+{{!-- "Once a PC figures an artifact out, give the player its tags, write-up, and any custom
+      moves" (p.431). The tags are the note beside the name; this is the write-up. Rendered
+      raw — it's GM-authored and declared HTML, exactly like a gear note — with pre-wrap in
+      the CSS so a plainly typed one keeps its line breaks. Blank until the state permits it,
+      so a still-owed write-up can't leak through the markup. --}}
+{{#if artifact.lore}}
+<div class="stonetop-inv-artifact-lore{{#if artifact.gmPeeking}} is-gm-peek{{/if}}">{{{artifact.lore}}}</div>
+{{/if}}
+{{#if artifact.lead}}
+<span class="stonetop-inv-artifact-lead" data-tooltip="{{localize 'stonetop.artifact.leadTooltip'}}">
+	<i class="fas fa-signs-post"></i> {{artifact.lead}}
+</span>
+{{/if}}
+{{#if artifact.concealed}}
+<a class="stonetop-inv-artifact-identify" data-owned-id="{{ownedId}}"
+   data-tooltip="{{localize 'stonetop.artifact.identifyTooltip'}}">
+	<i class="fas fa-magnifying-glass"></i>
+</a>
+{{/if}}
+{{#if @root.stonetop.isGM}}
+<a class="stonetop-inv-artifact-gm{{#if artifact.isArtifact}} is-hidden-artifact{{/if}}"
+   data-owned-id="{{ownedId}}" data-state="{{artifact.state}}"
+   data-tooltip="{{localize 'stonetop.artifact.gmTooltip'}}">
+	<i class="fas fa-user-secret"></i>
+</a>
+{{/if}}
+{{/if}}

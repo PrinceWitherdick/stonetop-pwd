@@ -1,13 +1,16 @@
 import { getSetting, setSetting, setWorldSetting, worldKey } from "../settings.js";
 
 // ── Walkthrough reload-resume ──────────────────────────────────────────────────
-// The session-zero walkthroughs (Character Introductions, Let Spring Burst Forth)
-// are plain Applications that don't survive a browser refresh. Each one records, in
-// a single client-scoped setting, where it is and whether it's currently open; a
-// browser reload never runs the dialog's close(), so an `open: true` left behind
-// means it was open when the page unloaded. hooks/Ready.js calls
-// reopenOpenWalkthroughs() to bring those back at the page they were on. See
-// settings.js for the stored shape.
+// The GM walkthroughs — the session-zero pair (Character Introductions, Let Spring
+// Burst Forth) and Run an Expedition — are plain Applications that don't survive a
+// browser refresh. Each one records, in a single client-scoped setting, where it is
+// and whether it's currently open; a browser reload never runs the dialog's close(),
+// so an `open: true` left behind means it was open when the page unloaded.
+// hooks/Ready.js calls reopenOpenWalkthroughs() to bring those back at the page they
+// were on. See settings.js for the stored shape.
+//
+// Only the session-zero pair is ever "finished" (markWalkthroughDone / sessionZeroDone
+// below); expeditions recur, so that walkthrough only ever stores a resume record.
 
 const SETTING = "walkthroughResume";
 // Which session-zero walkthroughs THIS world has finished. World-scoped (see
@@ -15,8 +18,24 @@ const SETTING = "walkthroughResume";
 // world opened in the same browser the way the client-scoped resume above does.
 const DONE_SETTING = "sessionZeroDone";
 
-// The walkthrough keys stored per world (used by the flat-shape migration below).
-const WALKTHROUGH_KEYS = ["introductions", "springBurst"];
+// Every walkthrough that keeps a resume record, in the order reopenOpenWalkthroughs brings them
+// back: the session-zero pair first, then Run an Expedition, so the working window lands frontmost
+// in the rare case a session-zero walkthrough was left open behind it. `opener` is the game.stonetop
+// entry point and `renderHook` the hook that fires once it has actually drawn.
+const WALKTHROUGHS = [
+	{ key: "introductions", opener: "openIntroductions", renderHook: "renderIntroductionsDialog" },
+	{ key: "springBurst",   opener: "openSpringBurst",   renderHook: "renderSpringBurstDialog" },
+	{ key: "expedition",    opener: "openExpedition",    renderHook: "renderExpeditionDialog" },
+];
+
+// Every key one of those records can be filed under — what tells a world bucket apart from a
+// pre-world-keying flat record below.
+const WALKTHROUGH_KEYS = WALKTHROUGHS.map(w => w.key);
+
+// The keys that predate world-keying, and so are the only ones the flat-shape migration below has
+// to fold in. (The `expedition` record was added after world-keying and never existed at the top
+// level, so a value stored under it was always already a world bucket.)
+const FLAT_ERA_KEYS = ["introductions", "springBurst"];
 
 // Every record is stored under the current world's id (see settings.js's worldKey, shared with
 // the Setting Overview gate, which nests for the same reason). The setting is client-scoped, so
@@ -39,6 +58,23 @@ export function patchWalkthroughResume(key, patch) {
 	else world[key] = { ...(world[key] ?? {}), ...patch };
 	all[wk] = world;
 	return setSetting(SETTING, all);
+}
+
+// Record where a walkthrough currently IS, and that it is open — what every one of them does on
+// each render. `position` is whatever that walkthrough calls its place: `{step}` for the steppers,
+// `{v, phase, pcIndex}` for Character Introductions, whose place is two fields and a format
+// version.
+//
+// The write is SKIPPED when the stored record already says exactly this, which is the whole reason
+// this is shared rather than three near-identical guards: a walkthrough saves on every render, and
+// a render happens for reasons that have nothing to do with moving (a flush, a cursor sync, a
+// player's turn ending). Comparing the whole position rather than a hand-picked subset is what
+// keeps a record from being left half-stale — an Introductions record whose `v` never caught up
+// would have its phase remapped as legacy a second time on the next load.
+export function saveWalkthroughPosition(key, position) {
+	const cur = getWalkthroughResume(key);
+	if (cur?.open === true && Object.entries(position).every(([k, v]) => cur[k] === v)) return;
+	return patchWalkthroughResume(key, { open: true, ...position });
 }
 
 // Record that a walkthrough was finished via its final button. Two writes: the client
@@ -94,15 +130,14 @@ function openThenRendered(open, renderHook) {
 // read by the world-scoped getters and would linger forever. Fold any flat record under
 // THIS world (the one this browser most likely had it open in — the flat shape carried no
 // world attribution) and drop the stale top-level keys. Idempotent: after it runs the flat
-// keys are gone; a value that already looks like a world bucket (holds intro/springBurst
-// sub-records) is left alone, so it can't swallow a world whose id happens to be
+// keys are gone; a value that already looks like a world bucket (holds any walkthrough
+// sub-record) is left alone, so it can't swallow a world whose id happens to be
 // "introductions"/"springBurst"; and an existing world record is never clobbered.
 export function migrateFlatWalkthroughResume() {
 	const all = getSetting(SETTING);
 	if (!all || typeof all !== "object") return;
-	const looksFlat = v => v && typeof v === "object"
-		&& !("introductions" in v) && !("springBurst" in v);
-	const flatKeys = WALKTHROUGH_KEYS.filter(k => looksFlat(all[k]));
+	const looksFlat = v => v && typeof v === "object" && !WALKTHROUGH_KEYS.some(k => k in v);
+	const flatKeys = FLAT_ERA_KEYS.filter(k => looksFlat(all[k]));
 	if (!flatKeys.length) return;
 	const next  = { ...all };
 	const wk    = worldKey();
@@ -117,19 +152,18 @@ export function migrateFlatWalkthroughResume() {
 
 // Reopen any walkthrough that was open when the page last unloaded, each at the page
 // it was on (the dialogs restore their own position on open). We let one fully render
-// before opening the next so the last — Spring Burst, if it was open on top of
-// Introductions — lands frontmost instead of being buried by a slower-rendering
-// sibling. Called from ready (after the Welcome guide renders; see hooks/Ready.js).
+// before opening the next so the last one to come back lands frontmost instead of being
+// buried by a slower-rendering sibling — which is why WALKTHROUGHS is walked in order
+// rather than opened all at once. Called from ready (after the Welcome guide renders;
+// see hooks/Ready.js).
 export async function reopenOpenWalkthroughs() {
 	// Fold any pre-world-keying flat record under this world first, so an upgrade mid-session
 	// still finds its `open: true` (see migrateFlatWalkthroughResume).
 	await migrateFlatWalkthroughResume();
-	// getWalkthroughResume reads only THIS world's records (see worldKey), so a stray
-	// `open: true` left behind in another world can never reopen its dialog here.
-	if (getWalkthroughResume("introductions")?.open === true) {
-		await openThenRendered(() => game.stonetop?.openIntroductions?.(), "renderIntroductionsDialog");
-	}
-	if (getWalkthroughResume("springBurst")?.open === true) {
-		await openThenRendered(() => game.stonetop?.openSpringBurst?.(), "renderSpringBurstDialog");
+	for (const { key, opener, renderHook } of WALKTHROUGHS) {
+		// getWalkthroughResume reads only THIS world's records (see worldKey), so a stray
+		// `open: true` left behind in another world can never reopen its dialog here.
+		if (getWalkthroughResume(key)?.open !== true) continue;
+		await openThenRendered(() => game.stonetop?.[opener]?.(), renderHook);
 	}
 }

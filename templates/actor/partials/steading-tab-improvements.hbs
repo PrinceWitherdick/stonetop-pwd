@@ -35,7 +35,7 @@
 
 				<div class="steading-improvement-header">
 					<label class="steading-improvement-complete-label{{#if completeLocked}} is-locked{{/if}}"
-					       data-tooltip="{{#if completeLocked}}Requirements not all met — tap to mark them complete, earn this improvement, and apply its effects{{else}}Mark complete — automatically applies its effects (Fortunes/Defenses, new resources, etc.){{/if}}"
+					       data-tooltip="{{#if completeLocked}}Requirements not all met. Tap to mark them complete, earn this improvement, and apply its effects{{else}}Mark complete: automatically applies its effects (Fortunes/Defenses, new resources, etc.){{/if}}"
 					       data-tooltip-direction="UP">
 						<input type="checkbox" class="steading-improvement-complete"
 						       data-slug="{{slug}}" {{#if completed}}checked{{/if}}>
@@ -108,11 +108,7 @@
 		      Dropping a journal card is the other way in
 		      (see StonetopSteadingSheet._onDropSteadingImprovement). --}}
 		{{#if stonetop.canEdit}}
-		<div class="steading-improvement-add-bar">
-			<button type="button" class="steading-improvement-add-btn">
-				<i class="fas fa-plus"></i> Create improvement
-			</button>
-		</div>
+		{{> "stonetop.gm-prep-add-bar" kind="steading-improvement" label="Create improvement"}}
 		{{/if}}
 
 	</section>

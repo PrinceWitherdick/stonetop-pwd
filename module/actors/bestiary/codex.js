@@ -5,7 +5,7 @@
 // their codex edit clicks/changes through the same dispatchers, so there's one
 // implementation of the codex, not two.
 
-import { escHtml } from "../../utils/strings.js";
+import { escHtml, stripHtmlToText } from "../../utils/strings.js";
 import { enrichHTML } from "../../utils/foundry-compat.js";
 
 export const CODEX_RICH_FIELDS = [
@@ -66,10 +66,7 @@ export function qaPairs(value, editMode) {
 
 // True if a value carries meaningful content (strips HTML so "<p></p>" is empty).
 export function hasText(value) {
-	return String(value ?? "")
-		.replace(/<[^>]*>/g, "")
-		.replace(/&nbsp;/gi, " ")
-		.trim().length > 0;
+	return stripHtmlToText(value).length > 0;
 }
 
 export function discoveryGroups(value, editMode) {

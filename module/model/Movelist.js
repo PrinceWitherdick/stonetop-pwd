@@ -57,6 +57,7 @@ export class OtherItemSnapshotBuilder {
  * @property {MoveSnapshot[]} playbookMoves
  * @property {MoveSnapshot[]} playbookMovesOwned
  * @property {MoveSnapshot[]} playbookMovesUnowned
+ * @property {Array<{key: string, label: string, moves: MoveSnapshot[], ownedMoves: MoveSnapshot[], unownedMoves: MoveSnapshot[]}>} playbookMoveGroups
  * @property {MoveSnapshot[]} basicMoves
  * @property {MoveSnapshot[]} expeditionMoves
  * @property {MoveGroupSnapshot[]} otherGroups
@@ -76,6 +77,18 @@ export class Movelist {
 		this.playbookMoves     = b._playbookMoves;
 		this.playbookMovesOwned = this.playbookMoves.filter(m => m.owned);
 		this.playbookMovesUnowned = this.playbookMoves.filter(m => !m.owned);
+		// The same moves again, bucketed into the playbook's three onboarding groups
+		// (plus "Other" for the leftovers) so the Moves tab can head each cluster with
+		// its own sub-section. Each keeps the owned / un-owned split the flat lists
+		// above use, so "Hide un-learned moves" reaches inside a group unchanged.
+		// Empty when the playbook defines no groups — the tab then renders one flat list.
+		this.playbookMoveGroups = (b._playbookMoveGroups ?? []).map(g => ({
+			key:          g.key,
+			label:        g.label,
+			moves:        g.moves,
+			ownedMoves:   g.moves.filter(m => m.owned),
+			unownedMoves: g.moves.filter(m => !m.owned),
+		}));
 		// Moves learned from OTHER playbooks via a cross-playbook pick (Versatile/…),
 		// rendered with their full card (description/roll/marks/resource) like playbook moves.
 		this.learnedMoves      = b._learnedMoves ?? [];
@@ -99,6 +112,7 @@ export class Movelist {
 
 export class MovelistBuilder {
 	withPlaybookMoves(v)     { this._playbookMoves     = v; return this; }
+	withPlaybookMoveGroups(v) { this._playbookMoveGroups = v; return this; }
 	withLearnedMoves(v)      { this._learnedMoves      = v; return this; }
 	withBasicMoves(v)        { this._basicMoves        = v; return this; }
 	withExpeditionMoves(v)   { this._expeditionMoves   = v; return this; }

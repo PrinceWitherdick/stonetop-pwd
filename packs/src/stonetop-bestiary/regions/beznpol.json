@@ -42,7 +42,7 @@
       "_id": "qGTYZMfq3D85nS6b",
       "name": "Dig up serious quantities of soil",
       "type": "monsterMove",
-      "img": "icons/environment/wilderness/cave-entrance-dark.webp",
+      "img": "icons/svg/burrow.svg",
       "system": {
         "description": "",
         "rollFormula": ""

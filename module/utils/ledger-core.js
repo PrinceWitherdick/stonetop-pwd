@@ -11,8 +11,9 @@
  * {@link appendLedgerEntries} for the rest.
  */
 import { stripHtmlToText } from "./strings.js";
+import { SYSTEM_ID } from "../system-id.js";
 
-export const LEDGER_SCOPE = "stonetop-pwd";
+export const LEDGER_SCOPE = SYSTEM_ID;
 export const LEDGER_KEY = "ledger";
 /** Hard cap on stored entries. The ledger is a flag, so it cannot grow forever. */
 export const LEDGER_MAX_ENTRIES = 300;
@@ -289,6 +290,46 @@ export function getLedgerEntries(actor) {
 }
 
 /**
+ * One promise chain per actor, so two ledger writes for the same actor can never interleave.
+ *
+ * Both writers below are read-whole-array / write-whole-array, and they are driven from
+ * StonetopActor#_onUpdate, which fires once per actor update. Several places deliberately fire
+ * CONCURRENT updates on a single actor — CharacterArcana's `Promise.all` of three setFlags,
+ * CharacterInventory.resetSelections' four unsetFlags. Each of those flag writes survives on its
+ * own, because they touch different keys and the server merges them; but the ledger appends they
+ * trigger all read the SAME stored array, and the last write back wins. Every entry but one was
+ * dropped, and mergeRuns folding the head made the loss read as intended behaviour rather than
+ * as a bug.
+ *
+ * Chaining rather than locking: the work runs only after the previous write for this actor has
+ * RESOLVED, which is exactly the point at which `actor.getFlag` returns what that write stored.
+ * Same shape as `ensurePackIndex`'s `_pending` chain in utils/pack-index.js.
+ */
+const _ledgerWrites = new Map();
+
+function _serializeLedgerWrite(actor, work) {
+	const key = actor?.id ?? actor?.uuid;
+	// No identity to key a chain on (some test fakes): run unserialized rather than
+	// funnelling every such actor through one shared chain.
+	if (!key) return work();
+	const prev = _ledgerWrites.get(key) ?? Promise.resolve();
+	// `.then(work, work)` — a failed write must not stop the next one from being attempted.
+	const run = prev.then(work, work);
+	// The rejection belongs to the caller; the stored link is neutralised so one failed write
+	// can't reject every write queued behind it.
+	//
+	// The tail drops the chain once it is idle. An entry is only needed while a write for that
+	// actor is in flight; without this the map keeps one settled promise per actor id touched for
+	// the life of the session, including actors since deleted. The identity check is what makes it
+	// safe: a write queued behind this one has already replaced the value, and must stay.
+	const link = run.then(() => {}, () => {}).then(() => {
+		if (_ledgerWrites.get(key) === link) _ledgerWrites.delete(key);
+	});
+	_ledgerWrites.set(key, link);
+	return run;
+}
+
+/**
  * Stamp `entries` with id / timestamp / user / category, fold any runs, and write the
  * result back trimmed to {@link LEDGER_MAX_ENTRIES}.
  *
@@ -306,7 +347,6 @@ export async function appendLedgerEntries(actor, entries, {
 	defaultCategory = "other",
 } = {}) {
 	if (!actor || !entries?.length) return;
-	const current = getLedgerEntries(actor);
 	const user = userId ? globalThis.game?.users?.get?.(userId) : null;
 	// Reversed at the end: callers hand entries over in the order they happened, while both
 	// storage and mergeRuns are newest-first. Without the flip a single update carrying several
@@ -329,21 +369,32 @@ export async function appendLedgerEntries(actor, entries, {
 		...(entry.merge ? { merge: entry.merge } : {}),
 	})).reverse();
 
-	// Fold runs across the new entries and the single newest stored entry, so a burst that
-	// arrives as several updates (four appearance lines, a climb from level 1 to 34) lands
-	// as one entry. Only the head is offered for merging — older history is never rewritten.
-	const merged = mergeRuns(stamped.concat(current.slice(0, 1)));
+	// Stamping happens above, OUTSIDE the queue, so `timestamp` records when the change
+	// happened rather than when its turn to write came up. Only the read-merge-write below
+	// has to be serialized.
+	return _serializeLedgerWrite(actor, async () => {
+		const current = getLedgerEntries(actor);
 
-	await actor.update({
-		[LEDGER_FLAG_PATH]: merged.concat(current.slice(1)).slice(0, LEDGER_MAX_ENTRIES),
-	}, { stonetopLedger: true, render: false });
+		// Fold runs across the new entries and the single newest stored entry, so a burst that
+		// arrives as several updates (four appearance lines, a climb from level 1 to 34) lands
+		// as one entry. Only the head is offered for merging — older history is never rewritten.
+		const merged = mergeRuns(stamped.concat(current.slice(0, 1)));
+
+		await actor.update({
+			[LEDGER_FLAG_PATH]: merged.concat(current.slice(1)).slice(0, LEDGER_MAX_ENTRIES),
+		}, { stonetopLedger: true, render: false });
+	});
 }
 
 /** Drop the entries whose ids are in `ids`. */
 export async function deleteLedgerEntries(actor, ids) {
 	if (!actor || !ids?.size) return;
-	const current = getLedgerEntries(actor);
-	await actor.update({
-		[LEDGER_FLAG_PATH]: current.filter(e => !ids.has(e.id)),
-	}, { stonetopLedger: true });
+	// Same chain as the appends: a delete that read the array before a concurrent append wrote
+	// it would put the appended entries straight back.
+	return _serializeLedgerWrite(actor, async () => {
+		const current = getLedgerEntries(actor);
+		await actor.update({
+			[LEDGER_FLAG_PATH]: current.filter(e => !ids.has(e.id)),
+		}, { stonetopLedger: true });
+	});
 }

@@ -5,7 +5,6 @@ import {
 	POST_DEATH_INSERT_SLUGS,
 	ZERO_HP_MOVES,
 	ZERO_HP_RESOLUTIONS,
-	becameDying,
 	canFaceDeathsDoor,
 	deathsDoorRollOptions,
 	effectiveDeathsDoorState,
@@ -112,31 +111,11 @@ describe("nextDeathsDoorState", () => {
 	});
 });
 
-describe("becameDying — when to announce", () => {
-	it("fires on the crossing to 0", () => {
-		expect(becameDying({ oldHp: 1, newHp: 0, state: null })).toBe(true);
-	});
-
-	it("does not fire again while they are already down", () => {
-		expect(becameDying({ oldHp: 0, newHp: 0, state: DEATHS_DOOR_STATE.DYING })).toBe(false);
-	});
-
-	it("does not fire on ordinary damage that leaves them up", () => {
-		expect(becameDying({ oldHp: 8, newHp: 3, state: null })).toBe(false);
-	});
-
-	it("does not fire on healing", () => {
-		expect(becameDying({ oldHp: 0, newHp: 4, state: DEATHS_DOOR_STATE.DYING })).toBe(false);
-	});
-
-	it("fires for a character who was out of the action and is dropped again", () => {
-		expect(becameDying({ oldHp: 3, newHp: 0, state: DEATHS_DOOR_STATE.OUT_OF_ACTION })).toBe(true);
-	});
-
-	it("stays silent for a character who is already dead", () => {
-		expect(becameDying({ oldHp: 3, newHp: 0, state: DEATHS_DOOR_STATE.DEAD })).toBe(false);
-	});
-});
+// The "is this the moment they became dying?" question used to live in a `becameDying` helper
+// here, read from preUpdate. The card now waits for the committed diff and keys off the state
+// flag arriving as `dying` (see DeathsDoorPrompt.onUpdateActorDeathsDoorCard), which is the same
+// transition read one beat later — and `nextDeathsDoorState` above is what decides it, so the
+// cases that mattered (already down, healing, already dead) are covered by its own block.
 
 describe("canFaceDeathsDoor", () => {
 	it("is true at 0 HP with the move still to face", () => {

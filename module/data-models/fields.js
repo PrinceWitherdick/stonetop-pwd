@@ -68,6 +68,25 @@ export const woundsField = () => new fields.ArrayField(new fields.SchemaField({
 	healed:          new fields.BooleanField({ required: true, initial: false }),
 }), { required: false, initial: [] });
 
+// The GM's "I wonder..." list — the running list of open questions Book I p.33 asks a GM to
+// keep, and the GM playbook prints a column of ruled lines for. Additive like `woundsField`, so
+// a toolkit made before this field loads with an empty list and needs no migration. Each element:
+//   id       stable key (foundry.utils.randomID)
+//   question the thing wondered about, one line ("What did happen to the Forest Folk?")
+//   answer   what play (or the GM) settled on, or a hunch, or nothing yet
+//   settled  true -> moved to the collapsed "Answered" fold rather than deleted
+//
+// `trim: false` on both, because the sheet writes these on BLUR without re-rendering (see
+// gm-wonder-tab.js): a field the model quietly trims would then hold one string while the box
+// the GM is looking at holds another, and nothing on screen would say which one was saved.
+// The add bar trims its own input instead, where trimming is what the GM means.
+export const wondersField = () => new fields.ArrayField(new fields.SchemaField({
+	id:       new fields.StringField({ required: true, blank: true, initial: () => foundry.utils.randomID() }),
+	question: new fields.StringField({ required: true, blank: true, trim: false }),
+	answer:   new fields.StringField({ required: true, blank: true, trim: false }),
+	settled:  new fields.BooleanField({ required: true, initial: false }),
+}), { required: false, initial: [] });
+
 // Schema for the two minimal move subtypes (npcMove / monsterMove): just a
 // rich-text description and an optional roll formula.
 export const simpleMoveSchema = () => ({

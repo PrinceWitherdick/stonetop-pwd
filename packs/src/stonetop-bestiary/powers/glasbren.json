@@ -64,7 +64,7 @@
       "_id": "BjlrTEzq1GqE1Z12",
       "name": "Manifest a beautiful form of moving wood (unharmed by stabbing, vulnerable to fire)",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""

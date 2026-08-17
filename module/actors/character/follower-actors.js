@@ -28,8 +28,9 @@ import {
 	followerNpcActorData, followerPortraitFrame, isFollowerMarkerImg,
 } from "../../data/follower-actor.js";
 import { ensureNamedActorFolder } from "../steading/steading-people.js";
+import { deletionEntry } from "../../utils/foundry-compat.js";
 import { resolvedFlags } from "./StonetopFlags.js";
-import { sameSrc } from "../../utils/portrait-frame.js";
+import { rectEq, sameSrc } from "../../utils/portrait-frame.js";
 import { isDefaultImg } from "../../utils/strings.js";
 import { SYSTEM_ID } from "../../system-id.js";
 
@@ -240,8 +241,15 @@ const _syncsInFlight = new Set();
  * added:" entries against their NPC — in the voice of whichever client's render happened to win
  * the makerRank stagger, as though somebody had sat down and typed them. The card is the author
  * here; the NPC's log is for what people do to the NPC.
+ *
+ * A FUNCTION, and never a shared constant, because Foundry writes to the options object it is
+ * handed: Document#update does `operation.parent = this.parent; operation.pack = this.pack;`
+ * before it does anything else, and the two embedded-document calls do the same. A frozen object
+ * therefore throws TypeError on the first write in strict mode (which every ES module is), and a
+ * merely shared one would carry one actor's `parent` into the next actor's call. Every other
+ * ledger-silenced call site in this system passes a fresh literal for the same reason.
  */
-const SILENT = Object.freeze({ stonetopLedger: true });
+const silent = () => ({ stonetopLedger: true });
 
 /** The stamp: what the card last dictated to this actor, or null for one made before it existed. */
 const cardStamp = (actor) => actor?.flags?.[SYSTEM_ID]?.[STAMP_KEY] ?? null;
@@ -303,12 +311,15 @@ function _holdsNothing(key, current) {
 /** Equal for our purposes: a portrait ignores the cache-buster stamp, everything else is strict. */
 const _sameValue = (key, a, b) => (key === "img" ? sameSrc(a, b) : a === b);
 
+/** The same picture cut to the same rect. Float-tolerant, because the rect made a box round trip. */
+const _sameFrame = (a, b) => !!a && !!b && sameSrc(a.src, b.src) && rectEq(a.rect, b.rect);
+
 /** Shallow equality over two stamps, so an unchanged one is never re-written. */
 function _stampEq(a, b) {
 	if (!a || !b) return false;
 	const keys = new Set([...Object.keys(a.fields ?? {}), ...Object.keys(b.fields ?? {})]);
 	for (const key of keys) if (a.fields?.[key] !== b.fields?.[key]) return false;
-	return (a.moves ?? []).join(" ") === (b.moves ?? []).join(" ");
+	return (a.moves ?? []).join("\u0000") === (b.moves ?? []).join("\u0000");
 }
 
 /**
@@ -338,10 +349,21 @@ function followerActorPlan(actor, follower) {
 	// The frame goes with the picture it was measured on, so a face arriving without one takes the
 	// old rect away rather than leaving an orphan behind — the same atomic pair the card's own
 	// clear handler writes.
-	if (update.img !== undefined) {
+	//
+	// Weighed on its own rather than only when `img` moves, because RE-CROPPING a portrait is a
+	// change to the rect and nothing else: the src is identical, so the field loop above skips it,
+	// `update` stays empty, and the stamp — which carries the fields and the moves, never the frame
+	// — compares equal too, so the whole plan came back null and the NPC wore the first crop for
+	// good. Gated on the picture still being the card's to write, so a face typed on the NPC's own
+	// sheet keeps the crop that was measured on it.
+	if (fieldFollowsCard(actor, "img", stamp?.fields?.img)) {
 		const frame = followerPortraitFrame(follower);
-		if (frame) update[`flags.${SYSTEM_ID}.portraitFrame`] = frame;
-		else if (actor.flags?.[SYSTEM_ID]?.portraitFrame) update[`flags.${SYSTEM_ID}.-=portraitFrame`] = null;
+		const held  = actor.flags?.[SYSTEM_ID]?.portraitFrame ?? null;
+		if (frame && !_sameFrame(frame, held)) update[`flags.${SYSTEM_ID}.portraitFrame`] = frame;
+		else if (!frame && held) {
+			const [frameKey, frameVal] = deletionEntry(`flags.${SYSTEM_ID}.portraitFrame`);
+			update[frameKey] = frameVal;
+		}
 	}
 
 	// Moves are documents, not fields, so they are reconciled by name rather than overwritten. Only
@@ -435,13 +457,13 @@ export async function syncFollowerActors(character, snapshots = []) {
 			const plan = followerActorPlan(actor, follower);
 			if (!plan) continue;
 			try {
-				if (Object.keys(plan.update).length) await actor.update(plan.update, SILENT);
+				if (Object.keys(plan.update).length) await actor.update(plan.update, silent());
 				// Removals first: a move renamed on the card is an add and a drop on the same
 				// creature's list, and doing it in this order never leaves the two side by side.
-				if (plan.remove.length) await actor.deleteEmbeddedDocuments?.("Item", plan.remove, SILENT);
+				if (plan.remove.length) await actor.deleteEmbeddedDocuments?.("Item", plan.remove, silent());
 				if (plan.add.length) {
 					await actor.createEmbeddedDocuments?.("Item",
-						plan.add.map(m => ({ name: m, type: "npcMove" })), SILENT);
+						plan.add.map(m => ({ name: m, type: "npcMove" })), silent());
 				}
 				moved++;
 			} catch (err) {

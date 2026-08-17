@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
+import { readCss, declarations } from "../fakes/css.js";
 
 // Each tab on the character and steading sheets is its own scrollport, so it keeps its
 // own scroll offset: the browser preserves a scrollport's scrollTop across the
@@ -25,6 +26,7 @@ const read = (rel) => fs.readFileSync(path.resolve(HERE, "../..", rel), "utf8");
 const CSS = read("styles/stonetop.css");
 const CHARACTER_SHEET = read("module/actors/character/StonetopCharacterSheet.js");
 const STEADING_SHEET = read("module/actors/steading/StonetopSteadingSheet.js");
+const TOOLKIT_SHEET = read("module/actors/gmtoolkit/StonetopGmToolkitSheet.js");
 
 /** The declaration block for the first rule whose selector list contains `selector`. */
 function ruleFor(selector) {
@@ -99,6 +101,61 @@ describe("scroll restore across re-renders", () => {
 		const scrollY = CHARACTER_SHEET.match(/scrollY:\s*\[([^\]]*)\]/)?.[1];
 		expect(scrollY).toBeTruthy();
 		expect(scrollY).toContain(".sheet-body > .tab.active");
+		expect(scrollY).not.toContain(".window-content");
+	});
+});
+
+// The GM Toolkit is the ONE actor sheet that goes the other way: its banner says the actor's
+// name and nothing else, the window title bar above it already says the same, so the whole sheet
+// scrolls as a single unit and the banner leaves the top of the window with the text under it.
+//
+// That is the arrangement the character sheet deliberately abandoned (one scrollport, one offset
+// shared by every tab), so every guard here is against it silently drifting back to the pinned
+// shape the rest of the system uses — a sheet that pins its header again looks entirely correct
+// until you notice the banner never moves.
+describe("GM Toolkit whole-sheet scroll", () => {
+	// Comment-stripped and prelude-exact, unlike the `ruleFor` above: these selectors are named
+	// in the prose beside the rules they undo, and a raw `indexOf` would answer with whichever
+	// block followed the first MENTION of one.
+	const block = (selector) => declarations(readCss(), selector);
+
+	it("scrolls the container, not the tab", () => {
+		const container = block(".stonetop-gm-toolkit-container");
+		expect(container, "no rule for the toolkit's scrollport").toBeTruthy();
+		expect(container).toContain("overflow-y: auto");
+		// A flex column here would squeeze the layout to the frame, which IS the pinning
+		// arrangement this frame is opting out of. Block flow lets the content run past the
+		// bottom and the container scroll to it.
+		expect(container).toContain("display: block");
+		// The moves tab always overflows and the short tabs do not; without a reserved gutter,
+		// switching between them pops the bar in and out and reflows the move columns sideways.
+		expect(container).toContain("scrollbar-gutter: stable");
+	});
+
+	it("leaves nothing below the container clipping or scrolling", () => {
+		// A second scrollport nested in the first gives the tab its own bar and its own clipped
+		// bottom edge inside a sheet that is already scrolling past it. Both rules exist only to
+		// undo the shared `.stonetop-sheet-layout` pair, so their absence is the failure.
+		const layout = block(".stonetop-gm-toolkit-layout");
+		expect(layout, "no override — the shared layout still clips").toBeTruthy();
+		expect(layout).toContain("overflow: visible");
+		const body = block(".stonetop-gm-toolkit-layout .sheet-body");
+		expect(body, "no override — the shared body still scrolls").toBeTruthy();
+		expect(body).toContain("overflow: visible");
+		expect(body).toContain("height: auto");
+		// The panel is the tallest thing in the scroll, so it has to be its own height.
+		expect(block(".stonetop-gm-toolkit-sheet .sheet-body > .tab")).toContain("height: auto");
+	});
+
+	it("restores its offset from a selector inside the form", () => {
+		// Same trap as the character sheet's, arrived at from the other side: the toolkit WANTS
+		// one scrollport high up the tree, and `.window-content` is the obvious element for it —
+		// but that is an ANCESTOR of the form `_restoreScrollPositions` is handed, so jQuery's
+		// descendant-only `.find()` never reaches it. The container is the outermost element
+		// still inside the form.
+		const scrollY = TOOLKIT_SHEET.match(/scrollY:\s*\[([^\]]*)\]/)?.[1];
+		expect(scrollY).toBeTruthy();
+		expect(scrollY).toContain(".stonetop-gm-toolkit-container");
 		expect(scrollY).not.toContain(".window-content");
 	});
 });

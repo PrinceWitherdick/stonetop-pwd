@@ -20,6 +20,7 @@ import { getSetting } from "../settings.js";
 import { writePlacesOfInterest } from "./places-chronicle.js";
 import { getPlayerCharacters, playbookSlug, orderByCombatTurns } from "./playbook-actors.js";
 import { ensureChronicleFolder, ensureChronicleJournal, seedChroniclePages, findChronicleFolder } from "./chronicle-journals.js";
+import { SYSTEM_ID } from "../system-id.js";
 import {
 	buildChroniclePages,
 	INTRODUCTIONS_JOURNAL_NAME,
@@ -85,7 +86,7 @@ function findIntroductionsJournal() {
 // The page in `journal` that belongs to the actor with `actorId` — matched by the
 // stable chronicleKey flag (the actor id), so it survives renames.
 function findActorChroniclePage(journal, actorId) {
-	return journal?.pages?.find(p => p.getFlag?.("stonetop-pwd", "chronicleKey") === actorId) ?? null;
+	return journal?.pages?.find(p => p.getFlag?.(SYSTEM_ID, "chronicleKey") === actorId) ?? null;
 }
 
 /**
@@ -106,7 +107,7 @@ export async function openChroniclePageForActor(actor) {
 	}
 	if (!page) {
 		ui.notifications?.warn?.(game.user?.isGM
-			? `${actor.name} has no Chronicle page yet — record their introductions to create one.`
+			? `${actor.name} has no Chronicle page yet: record their introductions to create one.`
 			: `${actor.name} doesn't have a Chronicle page yet.`);
 		return false;
 	}
@@ -187,6 +188,6 @@ export async function writeChronicle({ silent = false, adoptLegacyKeys = null } 
 	if (updated) parts.push(`updated ${updated} ${updated === 1 ? "page" : "pages"}`);
 	if (!silent) ui.notifications?.info?.(parts.length
 		? `Chronicle: ${parts.join(", ")}.`
-		: "The Chronicle is already up to date — edit its pages there directly.");
+		: "The Chronicle is already up to date: edit its pages there directly.");
 	return intro;
 }

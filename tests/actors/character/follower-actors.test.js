@@ -269,6 +269,55 @@ describe("syncFollowerActors", () => {
 		expect(npc.update).not.toHaveBeenCalled();
 	});
 
+	// Foundry WRITES to the options object it is handed — Document#update opens with
+	// `operation.parent = this.parent; operation.pack = this.pack;`, and the two embedded-document
+	// calls do the same. A shared frozen constant therefore threw TypeError on the first write of
+	// every pass (ES modules are strict), the throw was swallowed by the per-actor catch, and the
+	// whole card→NPC sync was dead while logging one warning per render. The fakes above never
+	// touched their options argument, which is exactly why nothing here noticed.
+	it("hands every write an options object Foundry is free to write back to", async () => {
+		const stamped = [];
+		const foundryish = (fn) => vi.fn(async (...args) => {
+			const operation = args[args.length - 1];
+			// Precisely what core does to it, before anything else.
+			operation.parent = null;
+			operation.pack = null;
+			stamped.push(operation);
+			return fn?.();
+		});
+		// Registered for its side effect — syncFollowerActors resolves it by uuid, not from here.
+		makeFollowerActor("Actor.a", card({ img: "" }), {
+			update: foundryish(),
+			createEmbeddedDocuments: foundryish(),
+			deleteEmbeddedDocuments: foundryish(),
+		});
+		character = makeCharacter({ f1: "Actor.a" });
+
+		expect(await syncFollowerActors(character, [snap({ img: "worlds/art/enfys.webp", moves: ["A new song"] })])).toBe(1);
+		expect(stamped.length).toBeGreaterThan(0);
+		// Still the kill switch, and never one object shared between two calls: a reused one would
+		// carry the first actor's `parent` into the next actor's write.
+		for (const operation of stamped) expect(operation.stonetopLedger).toBe(true);
+		expect(new Set(stamped).size).toBe(stamped.length);
+	});
+
+	// Re-cropping leaves `src` alone and changes only the rect, so the field loop finds nothing and
+	// the stamp (which carries the fields and the moves, never the frame) compares equal too — the
+	// whole plan came back null and the NPC wore the first crop for good.
+	it("carries a re-cropped portrait frame through on an unchanged picture", async () => {
+		const SRC = "worlds/art/enfys.webp";
+		const F1 = { src: SRC, rect: [0.1, 0.1, 0.6, 0.6] };
+		const F2 = { src: SRC, rect: [0.2, 0.2, 0.8, 0.8] };
+		const npc = makeFollowerActor("Actor.a", card({ img: SRC, portraitFrame: F1 }));
+		npc.flags["stonetop-pwd"].portraitFrame = F1;
+		character = makeCharacter({ f1: "Actor.a" });
+
+		expect(await syncFollowerActors(character, [snap({ img: SRC, portraitFrame: F2 })])).toBe(1);
+		expect(wrote(npc)["flags.stonetop-pwd.portraitFrame"]).toEqual(F2);
+		// The picture itself never moved, so nothing should be rewriting it.
+		expect(wrote(npc).img).toBeUndefined();
+	});
+
 	it("fills the numbers on an actor still sitting at the schema's own 0", async () => {
 		// NpcModel starts armor and the HP ceiling at 0, and 0 used to read as "the actor holds
 		// something": skipped on the first pass, the stamp then planted saying the card had given

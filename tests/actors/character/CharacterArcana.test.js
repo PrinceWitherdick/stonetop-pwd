@@ -7,7 +7,6 @@ import {
 	MinorArcanumSnapshot, MinorArcanumFrontSnapshot, MinorArcanumBackSnapshot,
 	ArcanumUnlockSection,
 } from "../../../module/model/CharacterSnapshot.js";
-import { MinorArcanum } from "../../../module/model/MinorArcanum.js";
 import {FakeArcanaRepository} from "../../fakes/FakeArcanaRepository.js";
 
 // -- Helpers ------------------------------------------------------------------

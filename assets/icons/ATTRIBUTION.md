@@ -11,12 +11,21 @@ Where our filename differs from the original, the game-icons.net source name is 
 |------|-----------------------|--------|-------------|
 | broken-heart.svg | broken-heart | Lorc | https://lorcblog.blogspot.com |
 | candle-light.svg | candle-light | Lorc | https://lorcblog.blogspot.com |
+| enrage.svg | enrage | Delapouite | https://delapouite.com |
+| gm-toolkit.svg | read | Skoll | https://game-icons.net |
 | hearts.svg | hearts | Skoll | https://game-icons.net |
 | move.svg | move | Delapouite | https://delapouite.com |
 | scales.svg | scales | Lorc | https://lorcblog.blogspot.com |
+| triquetra.svg | triquetra | Delapouite | https://delapouite.com |
 
 `move.svg` recolours the glyph and sets it on the system's dark octagon token; the artwork
 itself is unchanged.
+
+`gm-toolkit.svg` is the GM Toolkit actor's portrait. As with `move.svg`, only the ground under
+the drawing is ours: the glyph is recoloured cream and set on the same black field over a cream
+disc that the Book I creature marks in `bestiary/` and `followers/new-shoot.svg` wear, so the
+GM's own sheet reads as one set with them in the sidebar. The outline itself is unchanged; the
+recipe and its numbers are in the file's own comment.
 
 ## The project's own drawings
 

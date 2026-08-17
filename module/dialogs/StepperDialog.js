@@ -1,5 +1,6 @@
 import { FrontOnOpen } from "../utils/front-on-open.js";
 import { getSetting } from "../settings.js";
+import { getWalkthroughResume, patchWalkthroughResume, saveWalkthroughPosition } from "./walkthrough-resume.js";
 
 // ── StepperDialog ────────────────────────────────────────────────────────────
 // Shared scaffolding for the linear "walkthrough" dialogs (Spring Burst,
@@ -38,12 +39,68 @@ export class StepperDialog extends Application {
 	/** Override to true for a content-hugging window that re-fits its height each render. */
 	get _autoHeight() { return false; }
 
+	/** The scrollport holding a step's content, zeroed when the step changes. Only matters
+	 *  to a fixed-height stepper that lists the same selector in `options.scrollY` (the
+	 *  Expedition walkthrough): core restores those offsets at the end of every render, so
+	 *  without this a new step opens scrolled to the previous one's reading position. */
+	get _stepScrollSelector() { return ".stonetop-guide-main"; }
+
+	// ── Reload-resume ────────────────────────────────────────────────────────────
+	// A walkthrough is a plain Application, so it does not survive a browser refresh: it
+	// records the step it is on and that it is open, and hooks/Ready.js reopens it there on
+	// the next load. See walkthrough-resume.js.
+	//
+	// The protocol lives here rather than in each dialog because it is one contract with
+	// four coupled halves — save on render, clear the open flag on a DELIBERATE close (a
+	// reload never runs close(), which is exactly what marks it as interrupted), restore the
+	// cursor on open, and skip the write when nothing moved. Written out per dialog it drifted
+	// immediately, and the next stepper would have copied whichever version it happened to
+	// read. A subclass opts in with `_resumeKey` alone.
+
+	/** The walkthrough-resume record this dialog stores its place under. Null — the default —
+	 *  means this stepper has nothing to reopen: a result wizard is awaited through promise()
+	 *  by whatever opened it, so there is no standalone window for Ready.js to bring back. */
+	get _resumeKey() { return null; }
+
+	/** Extra fields a subclass keeps in its resume record beside `step`, for state that gates
+	 *  what a step SHOWS and would otherwise come back wrong (Spring Burst's delegated roll).
+	 *  Compared by value on save, so an unchanged record is not rewritten. */
+	_resumeExtras() { return {}; }
+
+	/** Take those extra fields back off the stored record when the dialog reopens. */
+	_applyResumeExtras(_saved) {}
+
+	/** Reopen on the step left off at before a reload. Called by a subclass's own `open()`
+	 *  BEFORE the first render, so the restored cursor is what gets drawn. */
+	_restoreStep() {
+		if (!this._resumeKey) return;
+		const saved = getWalkthroughResume(this._resumeKey);
+		const step = Number(saved?.step);
+		if (Number.isInteger(step) && step >= 0 && step < this._steps.length) this._step = step;
+		this._applyResumeExtras(saved);
+	}
+
+	/** Record where we are. saveWalkthroughPosition drops the write when nothing has moved — a
+	 *  settings write per render, for a value that only changes on Back/Next, is pure noise. */
+	_saveResume() {
+		if (!this._resumeKey) return;
+		saveWalkthroughPosition(this._resumeKey, { step: this._step, ...this._resumeExtras() });
+	}
+
 	async _render(force, options) {
+		const stepChanged = this._renderedStep !== this._step;
 		await super._render(force, options);
+		this._renderedStep = this._step;
 		this._frontOnOpen.apply();
+		// After super._render, which is where core writes the restored scroll offsets back.
+		if (stepChanged) {
+			const port = this.element?.[0]?.querySelector(this._stepScrollSelector);
+			if (port) port.scrollTop = 0;
+		}
 		// Auto-height wizards recompute height after each render so the window hugs the
 		// current step's content (AppV1 caps the result via CSS max-height).
 		if (this._autoHeight) this.setPosition({ height: "auto" });
+		this._saveResume();
 	}
 
 	// Result-dialog protocol: a caller awaits promise(); the dialog collects input and
@@ -63,6 +120,9 @@ export class StepperDialog extends Application {
 
 	async close(options = {}) {
 		this._frontOnOpen.stop();
+		// Closing on purpose clears the open flag (no auto-reopen next load); a reload skips
+		// close() entirely and leaves it set. The saved step stays either way, for a manual reopen.
+		if (this._resumeKey) patchWalkthroughResume(this._resumeKey, { open: false });
 		// A close without finishing (Cancel, Escape, X) resolves an open promise() to null.
 		if (this._resolve) { const resolve = this._resolve; this._resolve = null; resolve(null); }
 		return super.close(options);

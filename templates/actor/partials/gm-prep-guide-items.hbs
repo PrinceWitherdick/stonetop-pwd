@@ -1,0 +1,31 @@
+{{!-- The rows of one guidance group: a name, an "optional" tag where the step can be skipped,
+      and the gloss.
+
+      Here rather than inline because the list around it comes in two flavours — numbered where
+      the order is the point (the write-up steps), plain everywhere else — and the rows were
+      written out identically inside each branch. Two copies of one <li> means any change to a
+      guidance row is two edits, and the missed one is invisible: only the write-up section takes
+      the ordered branch, so an edit made to the <ul> copy alone looks correct everywhere a reader
+      is likely to check.
+
+      The shared "optional" tag is passed in as `optionalLabel`. NOT reached for through `@root`,
+      which would tie a partial named for every GM-prep kind to one tab's context shape: rendered
+      from the Sites or Hazards tab, a page sheet or the canvas overlay — all of which the generic
+      name invites, and reuse is why it was extracted — every optional row would emit an empty <em>
+      with no error to say so.
+
+      The rows arrive as `rows=`, a HASH KEY, rather than as the partial's context. That is the
+      whole reason this file takes two parameters instead of one, and it is load bearing:
+      Handlebars merges a partial's hash INTO its context, and merging anything into an ARRAY
+      flattens it to a plain object carrying the array's indices plus the hash's own keys. The
+      `{{#each}}` below then walks `optionalLabel` as if it were a row, and emits one extra <li>
+      with no name and no gloss per list — a lone dash under the last item of every checklist,
+      and a stray final number under the write-up steps. Nothing errors. Handed the rows in the
+      hash, both parameters sit on the same object and the each walks the array itself.
+
+      Params:
+        rows           the group's item rows ({name, optional, gloss})
+        optionalLabel  the localized "optional" tag --}}
+{{#each rows}}
+<li><strong>{{name}}</strong>{{#if optional}} <em class="steading-threats-guide-optional">{{../optionalLabel}}</em>{{/if}}<span>{{gloss}}</span></li>
+{{/each}}

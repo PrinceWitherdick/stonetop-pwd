@@ -1,10 +1,9 @@
-// Factory for a "GM-prep page" sheet (threat / hazard). These sheets render ONLY the
-// book-faithful card (view) with live doom-track checkboxes the owner can tick and an
+// Factory for a "GM-prep page" sheet (threat / hazard / site). These sheets render ONLY
+// the book-faithful card (view) with live doom-track checkboxes the owner can tick and an
 // owner Edit button. They are only ever rendered EMBEDDED in the journal (a scene pin
 // opens one), so "tick the doom track from the map" is: click the pin, tick a portent
 // right here. The card markup is shared, so threat-view's wiring (doom toggles,
-// drag-to-pin) applies to both. Threat and hazard sheets differ only in the four config
-// values below.
+// drag-to-pin) applies to all three. The sheets differ only in the config values below.
 import { wireThreatDoomChange, wireThreatCardDrag } from "../threats/threat-view.js";
 
 /**
@@ -14,8 +13,10 @@ import { wireThreatDoomChange, wireThreatCardDrag } from "../threats/threat-view
  * @param {(page:object, opts:object)=>Promise<object>} cfg.buildCardVM  Card view-model builder.
  * @param {string} cfg.editSelector Selector for the owner's Edit affordance.
  * @param {(document:object)=>void} cfg.openEditor  Open the editor for this page's document.
+ * @param {(root:HTMLElement, page:object)=>void} [cfg.wireExtras]  Wiring only one kind's
+ *        card needs (a site's roll-on-my-table buttons), run once per render.
  */
-export function createStonetopGmPrepPageSheetClass(Base, { template, buildCardVM, editSelector, openEditor }) {
+export function createStonetopGmPrepPageSheetClass(Base, { template, buildCardVM, editSelector, openEditor, wireExtras }) {
 	return class StonetopGmPrepPageSheet extends Base {
 		get template() { return template; }
 
@@ -45,6 +46,8 @@ export function createStonetopGmPrepPageSheetClass(Base, { template, buildCardVM
 			wireThreatCardDrag(root, { fallbackUuid: this.document.uuid });
 			// Live doom-track checkboxes (owners only; players are disabled).
 			wireThreatDoomChange(root, () => this.document);
+			// Anything only this kind of card carries (a site's roll-on-my-table buttons).
+			wireExtras?.(root, this.document);
 
 			root.addEventListener("click", async ev => {
 				if (!this.document.isOwner) return;

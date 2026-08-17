@@ -1,3 +1,4 @@
+import { SYSTEM_ID } from "../system-id.js";
 // Drag-a-move-onto-the-hotbar support.
 //
 // Dragging a learned, rollable move off a character sheet produces standard Foundry
@@ -11,7 +12,7 @@
 // rollMoveFromUuid) so the roll works with the sheet closed and survives the macro
 // being copied around; the actor and move are re-resolved from the move's uuid.
 
-const _FLAG_SCOPE = "stonetop-pwd";
+const _FLAG_SCOPE = SYSTEM_ID;
 const _MOVE_MACRO_FLAG = "moveMacro";
 const _FALLBACK_IMG = "icons/svg/d20-black.svg";
 

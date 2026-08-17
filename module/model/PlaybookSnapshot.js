@@ -374,6 +374,9 @@ function _stripChoosePrompt(description = "") {
 		.trim();
 }
 
+// Deliberately NOT stripHtmlToText: this flattens dashes to an ASCII hyphen so the "pick 1-2"
+// range below matches, where the shared helper preserves the en/em dash. It also drops tags to a
+// SPACE rather than nothing, so "…<em>pick</em>2…" can't glue into one token.
 function _pickCountFromDescription(description = "") {
 	const text = String(description)
 		.replace(/<[^>]*>/g, " ")

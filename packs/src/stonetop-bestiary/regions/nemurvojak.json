@@ -54,7 +54,7 @@
       "_id": "wp00xuE1W090sJuH",
       "name": "Lash out with a mass of black, viny tendrils (reach, grabby)",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""

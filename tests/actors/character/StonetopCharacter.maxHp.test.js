@@ -55,6 +55,43 @@ describe("the permanent max-HP adjustment in the snapshot", () => {
 		const snap = await makeChar({ playbook: false }).char.buildSnapshot();
 		expect(snap.vitals.hpBase).toBe(0);
 	});
+
+	// The floor fires on the BASE, so a derived max driven to 0 or below still reports a base of 1
+	// — and the adjustment has to be measured against that same 1, because it is the number the
+	// sheet renders into the field and hands back to setMaxHp. Measuring the max off the un-floored
+	// number instead made the hand-set round trip land somewhere else entirely.
+	describe("when the derived max has been driven below 1", () => {
+		// A playbook contributing nothing stands in for the real routes there: a Thrall's max-HP
+		// Marks, or a deep enough insert penalty. All three reach it by the same subtraction.
+		const makeSpent = ({ adjustment = 0 } = {}) => {
+			const actor = new FakeActorBuilder().withHp(1, 20).withMaxHpAdjustment(adjustment)
+				.withPlaybook("the-heavy", "The Heavy").build();
+			const char = new TestCharacterBuilder(actor)
+				.addPlaybook({ ...HEAVY_PLAYBOOK, hp: 0 })
+				.build();
+			return { char, actor };
+		};
+
+		it("still reports a base of 1", async () => {
+			const snap = await makeSpent().char.buildSnapshot();
+			expect(snap.vitals.hpBase).toBe(1);
+			expect(snap.vitals.hp.max).toBe(1);
+		});
+
+		it("round-trips a hand-set max through the base the sheet showed", async () => {
+			const { char, actor } = makeSpent();
+			const base = (await char.buildSnapshot()).vitals.hpBase;   // what data-hp-base carries
+			await char.setMaxHp(5, { base });
+			expect(actor.system.attributes.hp.adjustment).toBe(4);
+			// The number typed is the number that comes back — it used to render as 4.
+			expect((await char.buildSnapshot()).vitals.hp.max).toBe(5);
+		});
+
+		it("keeps the floor when the adjustment cannot lift it", async () => {
+			const snap = await makeSpent({ adjustment: -3 }).char.buildSnapshot();
+			expect(snap.vitals.hp.max).toBe(1);
+		});
+	});
 });
 
 describe("StonetopCharacter.setMaxHp", () => {

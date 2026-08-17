@@ -83,6 +83,14 @@ export function closeCreationFlowFor(actorId) {
 		if (id !== actorId) continue;
 		_flowWindows.delete(app);
 		closed++;
+		// The window's exit callbacks are suppressed, because the character they would act on has
+		// already gone. `onClose` is openSheetOnce, which renders the sheet of a DELETED actor —
+		// a ghost window that looks live and silently refuses every edit made in it. `onExit` is
+		// saveResume, which writes back the very resume snapshot the caller clears a line before
+		// calling this, so the deliberate "drop the snapshot first" ordering was undone by the
+		// close that followed it. `_suppressOnClose` is the dialog's own switch for this: it is
+		// what stepping back to the picker uses, so a step backwards is not read as giving up.
+		app._suppressOnClose = true;
 		Promise.resolve(app.close()).catch(() => {});   // a failed close must not stop the rest
 	}
 	return closed;

@@ -4,13 +4,22 @@
       "character": "Character",
       "stonetop": "Stonetop",
       "monster": "Monster",
-      "npc": "NPC"
+      "npc": "NPC",
+      "gmToolkit": "GM Toolkit"
     },
     "Item": {
       "move": "Move",
       "playbook": "Playbook",
       "npcMove": "NPC Move",
       "monsterMove": "Monster Move"
+    },
+    "JournalEntryPage": {
+      "bestiary": "Bestiary Entry",
+      "location": "Location",
+      "chronicle": "Chronicle",
+      "threat": "Threat",
+      "hazard": "Hazard",
+      "site": "Site"
     }
   },
   "stonetop": {
@@ -22,11 +31,13 @@
       "settlement": "Settlement",
       "settlementShowTooltip": "Show this settlement on the sheet",
       "settlementsAllHidden": "No settlements ticked. Use the pencil to choose which ones this steading tracks.",
+      "season": {
+        "setTooltip": "Make the Seasons Change move (or just correct what the sheet says)"
+      },
       "tabs": {
         "overview": "Overview",
         "neighbors": "Residents",
         "improvements": "Improvements",
-        "threats": "Threats & Dangers",
         "moves": "Homefront Moves",
         "notes": "Notes"
       }
@@ -45,6 +56,105 @@
         "railLabel": "Sheet sections"
       }
     },
+    "gmToolkit": {
+      "tabs": {
+        "homefront": "Homefront",
+        "moves": "GM Moves",
+        "loop": "Core Loop",
+        "threats": "Threats & Dangers",
+        "sites": "Sites",
+        "wonder": "I Wonder..."
+      },
+      "moves": {
+        "basic": "GM Moves",
+        "basicNote": "Any time you owe the table a move",
+        "exploration": "Exploration",
+        "explorationNote": "On an expedition, or inside a site",
+        "homefront": "Homefront",
+        "homefrontNote": "At home in Stonetop, or in another steading",
+        "randomize": "Draw one at random (whispered to the GM)",
+        "bookPage": "Book {book}, page {page}",
+        "bookPageAlt": "Book {book}, page {page}, and again on page {alt} for a site",
+        "expand": "What the book says about this move"
+      },
+      "homefront": {
+        "intro": "The GM playbook's Homefront page: what life in Stonetop is like, what folk are doing this season, and the two procedures that bracket every expedition. Reach for it when the party gets home.",
+        "life": "Life in Stonetop",
+        "lifeNote": "The village's own facts, for when someone asks",
+        "questions": "Questions to ask",
+        "questionsNote": "Their answers are true from then on",
+        "year": "The year's work",
+        "yearNote": "What folk are doing when you frame the scene",
+        "now": "now",
+        "aftermath": "Aftermath",
+        "aftermathNote": "After every expedition, and after every crisis",
+        "downtime": "Downtime",
+        "downtimeNote": "Between adventures, until the next one starts",
+        "plan": "Make a Plan",
+        "planNote": "The player move you answer with requirements",
+        "value": "Relative Value",
+        "valueNote": "Tiers, not a scale",
+        "valueTier": "A Value {value} item is generally worth:"
+      },
+      "loop": {
+        "coreLoop": "The core loop",
+        "coreLoopNote": "One exchange at the table, start to finish",
+        "flowOfPlay": "The flow of play",
+        "flowOfPlayNote": "How a campaign moves between adventure and home",
+        "zoom": "Open in a window you can zoom and pan",
+        "missing": "This diagram is artwork from the GM playbook, so it isn't shipped with the system. Run Import Book Art and give it your copy of the free GM playbook PDF.",
+        "import": "Import Book Art"
+      },
+      "wonder": {
+        "intro": "Your running list of open questions (Book I, p.33): things you don't know the answer to yet, or want to leave for play to answer. Read it when you need something interesting to say; update it between sessions.",
+        "add": "Add this question to the list",
+        "addShort": "Add",
+        "addPlaceholder": "What did happen to the Forest Folk?",
+        "open": "Open questions",
+        "openNote": "Unanswered, and meant to be",
+        "empty": "Nothing open yet. Write down the first thing you find yourself wondering about, and let play answer it.",
+        "questionLabel": "The question",
+        "answerLabel": "The answer, or a hunch",
+        "answerPlaceholder": "Answer...",
+        "settle": "Answered: file it below",
+        "reopen": "Put this back on the open list",
+        "remove": "Delete this question",
+        "removeTitle": "Delete Question",
+        "removeBody": "Delete <strong>{question}</strong>, and any answer written under it? To take a question off the list but keep what it settled, use the tick instead.",
+        "removeUnnamed": "this question",
+        "settled": "Answered",
+        "settledNote": "Off the list, but decided",
+        "guide": "Keeping the list",
+        "guideNote": "Book I, p.33",
+        "writeFailed": "Couldn't save the I wonder list. See the console for details."
+      },
+      "threats": {
+        "intro": "Ongoing problems that will trouble Stonetop if left unchecked (Book I, Threats). Written up here for your eyes only. Drag a card onto a scene to pin it to the map.",
+        "proximityHeading": "{proximity} Threats",
+        "addThreat": "Write up a {proximity} threat",
+        "hazards": "Hazards",
+        "hazardsIntro": "Environmental dangers: traps, treacherous terrain, weather (Book I, Dangers). They can't be fought, only avoided, endured, thwarted, or overcome.",
+        "addHazard": "Make a hazard",
+        "optional": "optional",
+        "guide": {
+          "writeup": "Writing a threat",
+          "writeupNote": "Book I, p.282",
+          "when": "When to write one up",
+          "whenNote": "Book I, pp.280-281",
+          "whenCaution": "Not every NPC, monster or situation is a threat. If it won't get worse when left alone, it is just a danger to be faced. Don't write one up unless you know it is going to be a big deal.",
+          "portents": "Portents, dooms and stakes",
+          "portentsNote": "Book I, pp.290-293",
+          "grimPortents": "Grim portents",
+          "impendingDoom": "Impending doom",
+          "stakes": "Stakes",
+          "review": "Between sessions",
+          "reviewNote": "Book I, p.298",
+          "types": "The eight threat types",
+          "typesNote": "Book I, pp.284-287",
+          "typeMoves": "What a threat of this type does next"
+        }
+      }
+    },
     "specialMoves": {
       "burnBrightly": {
         "title": "Burn Brightly",
@@ -56,15 +166,17 @@
         "button": "Face Death's Door",
         "clear": "No longer out of the action",
         "chooseFate": "Choose your fate",
-        "fatePendingHint": "You rolled a 6-. Your time has come — choose how it ends.",
-        "supersededHint": "You've already died once. At 0 HP you trigger {move} instead — it's on your Moves tab.",
+        "clearFate": "Clear the pending fate",
+        "clearFateHint": "Takes the sheet off \"a fate is owed\" without choosing one, for a table who played the 6- out in conversation, or took the roll back. Until this is cleared the character is never recognised as dying again.",
+        "fatePendingHint": "You rolled a 6-. Your time has come. Choose how it ends.",
+        "supersededHint": "You've already died once. At 0 HP you trigger {move} instead. It's on your Moves tab.",
         "outOfActionHint": "No longer dying, but out of the action until the GM says otherwise.",
         "dispersedHint": "Your essence has dispersed. You reform near your tether at the next sunset with {hp} HP.",
         "reform": "Reform at your tether",
         "deadHint": "They stepped through the Last Door.",
         "postDeathTab": "Choose Your Fate",
-        "postDeathTabHint": "Opens the Post-Death tab, where you can take the Revenant, Ghost or Thrall insert. Death's Door grants one for you on a 6- — use this if your table resolved that away from the sheet.",
-        "lockedHint": "Only available when the character is dying — at 0 HP, with the move still to face.",
+        "postDeathTabHint": "Opens the Post-Death tab, where you can take the Revenant, Ghost or Thrall insert. Death's Door grants one for you on a 6-. Use this if your table resolved that away from the sheet.",
+        "lockedHint": "Only available when the character is dying: at 0 HP, with the move still to face.",
         "summary": "When you <em><strong>are dying</strong></em>, you glimpse the Last Door and the Lady of Crows. Roll +nothing: on a 10+ return to 1 HP; on a 7-9 you're out of action; on a 6- choose a dark fate.",
         "description": "When you <em><strong>are dying</strong></em>, you glimpse the Last Door and the Lady of Crows (describe it). Then, roll +nothing: on a 10+, you wrest yourself back to the realm of the living&mdash;return to 1 HP but say how your brush with death has marked you; on a 7-9, the Lady waves you off&mdash;you're no longer dying but you're out of the action; on a 6-, your time has come&mdash;choose 1: make one last move as if you rolled a 12+, then step through the Last Door; refuse to go and gain the Revenant or Ghost insert; or call on one of the Things Below by name and beseech it to intercede, gaining the Thrall insert."
       },
@@ -79,15 +191,15 @@
         "newLevel": "New Level",
         "xpCost": "XP Cost",
         "xpRemaining": "XP Remaining",
-        "invocationAside": "Your new level is even — you'll also choose a new Invocation on the next step.",
+        "invocationAside": "Your new level is even, so you'll also choose a new Invocation on the next step.",
         "moveIntro": "Choose one new move from your playbook (or an insert you've unlocked).",
         "noMoves": "No additional moves are available at this level.",
         "noMovesMatch": "No moves match this filter.",
         "invocationIntro": "Choose one new Invocation to add to your repertoire.",
         "statIntro": "Choose which stat to raise by +1.",
-        "statAllAtCap": "All of your stats are already at this move's maximum — go back and pick a different move.",
+        "statAllAtCap": "All of your stats are already at this move's maximum. Go back and pick a different move.",
         "foreignIntro": "Choose the move this grants you from another playbook (you must qualify for it):",
-        "foreignEmpty": "You don't currently qualify for any move from the allowed playbooks — continue to finish.",
+        "foreignEmpty": "You don't currently qualify for any move from the allowed playbooks. Continue to finish.",
         "marksIntro": "Make this move's selection(s) for the level you're gaining.",
         "back": "Back",
         "next": "Next",
@@ -105,9 +217,9 @@
         "regularItems": "Items",
         "smallItems": "Small Items",
         "loadNone": "No items selected",
-        "loadLight": "<strong>Light load</strong> — quick &amp; quiet",
+        "loadLight": "<strong>Light load</strong>: quick &amp; quiet",
         "loadNormal": "<strong>Normal load</strong>",
-        "loadHeavy": "<strong>Heavy load</strong> — noisy, slow, quick to tire",
+        "loadHeavy": "<strong>Heavy load</strong>: noisy, slow, quick to tire",
         "packHorseNote": "Your <em><strong>Pack Horse</strong></em> raises each load by 1: up to 4 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> light, 7 normal, 10 heavy.",
         "arcanaItems": "Arcana",
         "treasureItems": "Treasures",
@@ -133,14 +245,14 @@
     },
     "postDeath": {
       "chooseFate": "Choose Your Fate",
-      "chooseFateHint": "You take one of these only when it becomes relevant — you died, and refused to go. Death's Door grants it for you on a 6-; pick one here if your table resolved that away from the sheet.",
+      "chooseFateHint": "You take one of these only when it becomes relevant: you died, and refused to go. Death's Door grants it for you on a 6-; pick one here if your table resolved that away from the sheet.",
       "removeInsert": "Remove Insert",
       "hideTab": "Remove Post-Death Tab",
       "hideTabHint": "Take this tab off the sheet. It comes back on its own if this character takes an insert, or faces the Last Door.",
       "tether": "Your Tether",
       "tetherHint": "Tethered reforms you beside it. If it's ever destroyed, you mark the Final Consequence.",
       "tetherPlaceholder": "Your mortal remains, the place where you died, an object of significance…",
-      "tetherMissing": "Name your tether — Tethered can't resolve without knowing where you reform.",
+      "tetherMissing": "Name your tether. Tethered can't resolve without knowing where you reform.",
       "crossedOff": "Crossed Off",
       "crossedOffHint": "Dark Succor took these away. You can never gain them.",
       "masterTask": "Your Master's Task",
@@ -152,7 +264,7 @@
       "instinctRetired": "Retired when you took the insert. It comes back if the insert is removed.",
       "deadTag": "Dead",
       "deadTooltip": "They made one last move as if they rolled a 12+, then stepped through the Last Door. Only the rarest of magic can bring them back.",
-      "deadTooltipAction": "They made one last move as if they rolled a 12+, then stepped through the Last Door. Only the rarest of magic can bring them back — click here if it has.",
+      "deadTooltipAction": "They made one last move as if they rolled a 12+, then stepped through the Last Door. Only the rarest of magic can bring them back. Click here if it has.",
       "raiseTitle": "Is {name} being brought back?",
       "raiseBody": "<strong>{name}</strong> stepped through the Last Door.",
       "raiseHpNote": "Their hit points have just gone above 0.",
@@ -180,7 +292,7 @@
       "searchPlaceholder": "Filter arcana…",
       "identifyHint": "Consult your accumulated knowledge about this arcanum (+INT by default). Hold Shift to skip the modifier prompt.",
       "identifyPrompt": "What are you drawing on to place this arcanum?",
-      "identifyAdvantage": "This falls under one of the moves below — roll with advantage.",
+      "identifyAdvantage": "This falls under one of the moves below, so roll with advantage.",
       "giveCard": "Give the card",
       "giveCardHint": "Hand this arcanum to the player without a roll.",
       "giveCardTitle": "Give the card",
@@ -213,7 +325,7 @@
       "addItem": "Add item",
       "addSmallItem": "Add small item",
       "createWorldItem": "Create Inventory Item",
-      "worldCreated": "Created inventory item \"{name}\" — drag it onto a character's Inventory tab to add it.",
+      "worldCreated": "Created inventory item \"{name}\". Drag it onto a character's Inventory tab to add it.",
       "dropAdded": "Added {names} to {actor}'s Inventory tab.",
       "dropAddedUnlinked": "Added {names} to {actor}'s character sheet. This token isn't linked to {actor}, so anything dropped on it would otherwise have stayed on the token and never reached the player.",
       "addItemColumn": "Column",
@@ -238,9 +350,9 @@
       "resetTitle": "Reset Inventory",
       "resetConfirm": "Clear all item marks and the undefined ◇/□ pools? Item uses (e.g. supplies) are not affected.",
       "regularUndefinedPoolLabel": "Undefined",
-      "regularUndefinedPoolNote": "Click to reserve undefined <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>. When you <strong><em>Have What You Need</em></strong>, mark an item below — it draws from here.",
+      "regularUndefinedPoolNote": "Click to reserve undefined <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>. When you <strong><em>Have What You Need</em></strong>, mark an item below. It draws from here.",
       "smallUndefinedPoolLabel": "Undefined",
-      "smallUndefinedPoolNote": "Click to reserve undefined <span class=\"stonetop-glyph stonetop-glyph--checkbox-checked\">■</span>. When you <strong><em>Have What You Need</em></strong>, mark a small item below — it draws from here.",
+      "smallUndefinedPoolNote": "Click to reserve undefined <span class=\"stonetop-glyph stonetop-glyph--checkbox-checked\">■</span>. When you <strong><em>Have What You Need</em></strong>, mark a small item below. It draws from here.",
       "regularPoolAtLimit": "You're already carrying a full load, so there's no room to reserve more undefined ◇. Un-mark a carried item to free up room.",
       "smallPoolAtLimit": "You've used all your small-item slots, so there's no room to reserve more undefined □. Un-mark a small item to free up room.",
       "smallOverAllotment": "That's more small items than your Outfit allotment of {limit} (4+Prosperity). Expend a use of supplies to carry an extra small item, or check with your GM.",
@@ -248,7 +360,7 @@
       "outfit": {
         "heading": "When you <em><strong>Outfit</strong></em>, mark a number of <span class=\"stonetop-glyph stonetop-glyph--diamond\">◇</span> below on specific items or as a group. Your load is whatever you've marked:",
         "currentLoad": "Carrying <strong>{count}</strong> <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>.",
-        "overloaded": "Overloaded! — risk exhaustion, accident, and injury.",
+        "overloaded": "Overloaded! Risk exhaustion, accident, and injury.",
         "light": "For a <strong>light load</strong> (<em>quick &amp; quiet</em>), mark up to 3 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
         "normal": "For a <strong>normal load</strong>, mark 4–6 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
         "heavy": "For a <strong>heavy load</strong> (<em>noisy, slow, hot, quick to tire</em>), mark 7–9 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
@@ -260,11 +372,11 @@
     "settings": {
       "customMovesGmOnly": {
         "name": "Custom Moves: GM Only",
-        "hint": "When on, only the GM can create or edit custom moves — players don't see the \"+ Custom Move\" button or the edit pencils. Existing custom moves still display and roll for everyone. Turn off to let players author their own custom moves (including ongoing bonuses)."
+        "hint": "When on, only the GM can create or edit custom moves. Players don't see the \"+ Custom Move\" button or the edit pencils. Existing custom moves still display and roll for everyone. Turn off to let players author their own custom moves (including ongoing bonuses)."
       },
       "arcanaCreationGmOnly": {
         "name": "Arcana Creation: GM Only",
-        "hint": "When on, only the GM can create homebrew arcana — players don't see the \"Create major/minor arcanum\" buttons on the arcana tab. Existing arcana still display, flip, and roll for everyone, and players can still edit cards they own. Turn off to let players author their own arcana."
+        "hint": "When on, only the GM can create homebrew arcana. Players don't see the \"Create major/minor arcanum\" buttons on the arcana tab. Existing arcana still display, flip, and roll for everyone, and players can still edit cards they own. Turn off to let players author their own arcana."
       },
       "monsterBuilderEnabled": {
         "name": "Guided Monster Builder",
@@ -272,7 +384,7 @@
       },
       "arcanaPlayersSeeBothSides": {
         "name": "Arcana: Players See Both Sides",
-        "hint": "A player always sees the back of a card once they've unlocked it (filled every spot) — that's their own achievement, no setting needed. This switch is a separate peek: when on, players may also open the back of a card they haven't unlocked yet, reading the whole card up front. Off by default for a more secretive table: an un-unlocked back stays hidden until you click \"Reveal back to player\" on that card (handy when a card must be read before it can be unlocked). Turn on to let players read cards up front. You always see both sides as the GM."
+        "hint": "A player always sees the back of a card once they've unlocked it (filled every spot). That's their own achievement, no setting needed. This switch is a separate peek: when on, players may also open the back of a card they haven't unlocked yet, reading the whole card up front. Off by default for a more secretive table: an un-unlocked back stays hidden until you click \"Reveal back to player\" on that card (handy when a card must be read before it can be unlocked). Turn on to let players read cards up front. You always see both sides as the GM."
       },
       "threatOnCanvasCards": {
         "name": "Threats: Show Cards on the Map",
@@ -325,7 +437,7 @@
       },
       "hideRollableIcon": {
         "name": "Hide Rollable Icon",
-        "hint": "Hide the dice icon that marks rollable moves and stats. Rolling still works — click the move name or stat row to roll."
+        "hint": "Hide the dice icon that marks rollable moves and stats. Rolling still works: click the move name or stat row to roll."
       },
       "promptRollModifier": {
         "name": "Prompt for Roll Modifier",
@@ -357,11 +469,11 @@
       },
       "deathsDoorPrompt": {
         "name": "Announce When a Character Is Dying",
-        "hint": "Post a chat card the moment a character is reduced to 0 HP, naming the move they trigger — Death's Door, or their post-death insert's own move. The card never forces the roll; the GM can hold it off until the scene wraps up. On by default."
+        "hint": "Post a chat card the moment a character is reduced to 0 HP, naming the move they trigger (Death's Door, or their post-death insert's own move). The card never forces the roll; the GM can hold it off until the scene wraps up. On by default."
       },
       "deathsDoorAutoOpen": {
         "name": "Open the Dying Character's Move Automatically",
-        "hint": "Also open the walkthrough for the move on the dying player's own screen, rather than waiting for them to click the chat card. It opens for the player the character is assigned to and nobody else — not the GM applying the damage, and not the rest of the party. If that player isn't logged in, the GM gets it. Cancelling still leaves the card in chat, so the roll can wait. Requires the setting above."
+        "hint": "Also open the walkthrough for the move on the dying player's own screen, rather than waiting for them to click the chat card. It opens for the player the character is assigned to and nobody else: not the GM applying the damage, and not the rest of the party. If that player isn't logged in, the GM gets it. Cancelling still leaves the card in chat, so the roll can wait. Requires the setting above."
       },
       "chatShiftButtons": {
         "name": "Shift Up/Down Buttons on Roll Cards",
@@ -399,7 +511,7 @@
       },
       "hoverDescriptionsMonsterRefs": {
         "name": "Hover Descriptions: Creature Cross-links",
-        "hint": "On bestiary and stat-block sheets, highlight other creatures' names — hover for their concept, click to open their sheet."
+        "hint": "On bestiary and stat-block sheets, highlight other creatures' names: hover for their concept, click to open their sheet."
       },
       "hoverDescriptionsInvocations": {
         "name": "Hover Descriptions: Invocation Effects",
@@ -427,11 +539,15 @@
       },
       "hoverDescriptionsJournalLinks": {
         "name": "Hover Descriptions: Journal Cross-links",
-        "hint": "Show an entry's one-line summary when hovering a link into the Stonetop journals — in journal prose, on stat blocks and NPC sheets, and in the Welcome and Setting Overview windows. Turning this off only removes the hover; links you can and can't open are unchanged."
+        "hint": "Show an entry's one-line summary when hovering a link into the Stonetop journals: in journal prose, on stat blocks and NPC sheets, and in the Welcome and Setting Overview windows. Turning this off only removes the hover; links you can and can't open are unchanged."
       },
       "hoverDescriptionsLoreTerms": {
         "name": "Hover Descriptions: Lore Terms",
         "hint": "Explain Stonetop's four gods (Danu, Aratis, Helior, Tor) when hovering their names in the Character Introductions prompts and the character creation wizard."
+      },
+      "artifactsStartUnidentified": {
+        "name": "Artifacts Arrive Unidentified",
+        "hint": "Book I, Discoveries pp.430-431. When on, a Book II treasure dropped onto a character sheet arrives with its tags, Value and uses withheld: the player sees only what's obvious at a glance, and has to Know Things or Seek Insight about it to learn more. Off by default, so treasure lands fully described as it always has. Either way you can hide or hand over any single artifact from the mask icon on its gear row."
       }
     },
     "newCharacter": {
@@ -503,7 +619,7 @@
       "addImpression": "Add Impression",
       "instinct": "Instinct",
       "instinctPlaceholder": "to... (e.g. to complain but get the job done)",
-      "instinctEmpty": "No instinct yet — write one as “to [do something].”",
+      "instinctEmpty": "No instinct yet. Write one as “to [do something].”",
       "status": "Status",
       "following": "Following",
       "connections": "Connections",
@@ -695,7 +811,7 @@
         "otherMoves": "Other Moves",
         "addMove": "Add Move",
         "removeMove": "Remove Move",
-        "learnedTitle": "Learned — un-check to keep this move on the sheet but inactive (not rollable, bonuses off)",
+        "learnedTitle": "Learned. Un-check to keep this move on the sheet but inactive (not rollable, bonuses off)",
         "chooseStartingMoves": "Choose Starting Moves",
         "levelMovesIncompleteOne": "You still have 1 move to choose for level {level}.",
         "levelMovesIncompleteMany": "You still have {count} moves to choose for level {level}.",
@@ -720,12 +836,12 @@
           "nameLabel": "Move name",
           "namePlaceholder": "e.g. Reckless Charge",
           "nameRequired": "Your move needs a name.",
-          "worldCreated": "Created move \"{name}\" — drag it onto a character sheet to add it.",
+          "worldCreated": "Created move \"{name}\". Drag it onto a character sheet to add it.",
           "descriptionLabel": "What happens? (the trigger and effect)",
           "descriptionPlaceholder": "When you…",
           "rollLabel": "Dice roll",
-          "rollNone": "No roll — text only",
-          "rollAsk": "Ask — choose a stat each time",
+          "rollNone": "No roll: text only",
+          "rollAsk": "Ask: choose a stat each time",
           "rollHint": "Pick a stat to make this a 2d6+stat move. Leave on \"No roll\" for a pure narrative move.",
           "resultsTitle": "Roll results (optional)",
           "success": "On a 10+",
@@ -758,7 +874,7 @@
           "descriptionLabel": "The letter (start with \"Dear …\")",
           "descriptionPlaceholder": "Dear …",
           "rollLabel": "Dice roll",
-          "rollNone": "No roll — read aloud only",
+          "rollNone": "No roll: read aloud only",
           "rollHint": "Pick a stat to make this a 2d6+stat move. Leave on \"No roll\" for a read-aloud letter.",
           "resultsTitle": "Roll results (optional)",
           "stylePickerLabel": "Result style",
@@ -841,13 +957,29 @@
       "unlitTooltip": "No holy light. Click to light one, or use Consecrated Flame.",
       "readOnlyLit": "A holy light burns.",
       "readOnlyUnlit": "No holy light is lit.",
+      "unlitAttackNotice": "No holy light is lit. The candle in the sheet header lights one.",
       "litLabel": "Holy light is lit",
       "unlitLabel": "Holy light is out"
     },
+    "invocations": {
+      "chipLabel": "Concentrating on {name}",
+      "chipTooltip": "Concentrating on {name}. You can't use another Invocation while it's ongoing. Click to end it.",
+      "chipReadOnly": "Concentrating on {name}. No other Invocation can be used while it's ongoing.",
+      "bannerText": "Concentrating on <strong>{name}</strong>. You can't use another Invocation until it ends.",
+      "endLabel": "End it",
+      "endTooltip": "End it now. It also ends on its own the moment your holy light goes out, or when you use another Invocation.",
+      "noticeStart": "This one is <strong>ongoing</strong>: you'll be concentrating on it until you end it, and you can't use another Invocation while it lasts.",
+      "noticeRenew": "You're already concentrating on <strong>{name}</strong>. Invoking it again renews it.",
+      "noticeReplace": "You're concentrating on <strong>{name}</strong>. Invoking this ends it, and you concentrate on this instead.",
+      "noticeInterrupt": "You're concentrating on <strong>{name}</strong>. You can't use another Invocation while it's ongoing, so using this one lets it go.",
+      "endedTitle": "Invocation Ended",
+      "endedByHand": "<strong>{name}</strong> ends.",
+      "endedLight": "<strong>{name}</strong> ends. The holy light is out."
+    },
     "condemn": {
-      "openLabel": "The Condemned",
-      "noneTooltip": "Nobody bears your brand. Click to open the roster.",
-      "someTooltip": "{count} bearing your brand. Click to open the roster.",
+      "openLabel": "What you are holding",
+      "noneTooltip": "Nobody is branded or sworn. Click to open the roster.",
+      "someTooltip": "{brands} bearing your brand. Click to open the roster.",
       "rule": "A brand that cannot be removed or hidden until you dismiss it. Any intelligent creature who sees the mark recognizes the bearer as an agent of chaos and anathema to civilization.",
       "empty": "Nobody bears your brand.",
       "add": "Condemn",
@@ -857,16 +989,108 @@
       "dismissLabel": "Dismiss the brand on {name}",
       "needName": "Name who is being condemned first.",
       "ambiguous": "Several people match \"{name}\": {names}. Type the full name, or drop the right one onto this window.",
-      "sameName": "More than one {name} in the world — the first was branded. Drop the right one onto this window to be certain.",
+      "sameName": "More than one {name} in the world. The first was branded. Drop the right one onto this window to be certain.",
       "matched": "Found {name} in the world; their sheet now carries the brand.",
-      "nameOnly": "Nobody in the world is named {name}, so the brand records the name alone — no sheet will carry the tag.",
+      "nameOnly": "Nobody in the world is named {name}, so the brand records the name alone, so no sheet will carry the tag.",
       "already": "{name} already bears your brand.",
       "notSelf": "A Judge cannot condemn themself.",
       "notBrandable": "{name} is not somebody who can be denounced.",
-      "fromCompendium": "{name} came from a compendium, so the brand records the name only — it will not tag that person's sheet in this world.",
+      "fromCompendium": "{name} came from a compendium, so the brand records the name only, so it will not tag that person's sheet in this world.",
       "tag": "Condemned",
       "tagTooltip": "Condemned by {who} — branded as an agent of chaos and anathema to civilization.",
-      "tagTooltipPlain": "Branded as an agent of chaos and anathema to civilization."
+      "tagTooltipPlain": "Branded as an agent of chaos and anathema to civilization.",
+      "windowRule": "What you are holding over people. Neither a brand nor an oath ends until you end it.",
+      "brandsHeading": "The Condemned",
+      "oathsTooltip": "{oaths} held to an oath. Click to open the roster.",
+      "bothTooltip": "{brands} bearing your brand, {oaths} held to an oath. Click to open the roster.",
+      "notSwearable": "{name} is not somebody who can swear an oath."
+    },
+    "artifact": {
+      "identify": "Identify artifact",
+      "identifyTooltip": "There's more to this than meets the eye. Know Things or Seek Insight about it.",
+      "promptIntro": "How do you try to work out what {name} is?",
+      "promptOwed": "You already know roughly what it is and what it's worth. What it truly does is still owed you.",
+      "knowThings": "Know Things",
+      "knowThingsWhy": "Consult your accumulated knowledge (+INT). On a 7+ the GM tells you some combination of what it is, what it does, what it's worth, how to use it or sell it for full value. On a 10+, the write-up and any custom move in full.",
+      "seekInsight": "Seek Insight",
+      "seekInsightWhy": "Study it, looking to the GM for insight (+WIS). On a 7+ they answer your questions about it honestly and helpfully. It's the GM who decides how much that gave away.",
+      "insightTitle": "Seek Insight: {name}",
+      "leadTitle": "{name}: how to learn more",
+      "leadTooltip": "How you could learn more about this",
+      "leadMissing": "The GM hasn't named a path yet. Book I p.431 suggests:",
+      "chipUnknown": "Unidentified. You know only what's obvious at a glance.",
+      "chipPartial": "Partly identified. You know what it is and what it's worth; the full write-up is still owed.",
+      "gmTooltip": "GM: what this artifact is, and how much of it the player may read",
+      "gmTitle": "Artifact knowledge",
+      "gmTags": "Concealed tags:",
+      "gmCurrentState": "How much of this may the player read?",
+      "state": {
+        "none": "everything (this is ordinary gear, nothing is hidden)",
+        "unknown": "the name and its load, nothing else",
+        "partial": "its tags and Value; the write-up is still owed",
+        "known": "everything, write-up included"
+      },
+      "fieldHint": "Hint",
+      "fieldHintNote": "\"More than meets the eye\". Shown on the gear row in place of the concealed tags.",
+      "fieldLore": "Write-up",
+      "fieldLoreNote": "What it truly does, and any custom move's full text. Handed over on a 10+.",
+      "fieldLead": "How to learn more",
+      "fieldLeadNote": "Who would know, what they'd need to consult, the Plan they could make. What a 6- leaves them with.",
+      "saveOnly": "Save"
+    },
+    "oaths": {
+      "heading": "The Sworn",
+      "rule": "You bore witness. You may ask their player at any time whether they have kept their word, present or not, and they must answer honestly. Break it, and you have advantage on all rolls against them until they admit the wrong and suffer for it.",
+      "empty": "Nobody has sworn an oath before you.",
+      "add": "Witness",
+      "addPlaceholder": "Name who swore…",
+      "notePlaceholder": "What they swore…",
+      "dropHint": "Or drop a person onto this section.",
+      "releaseLabel": "Release {name} from their oath",
+      "broken": "Broken",
+      "brokenTooltip": "They have broken their word: you have advantage on all rolls against them until they admit the wrong and suffer an appropriate consequence. Untick it once they have.",
+      "needName": "Name who swore the oath first.",
+      "ambiguous": "Several people match \"{name}\": {names}. Type the full name, or drop the right one onto this section.",
+      "sameName": "More than one {name} in the world; the first was recorded. Drop the right one onto this section to be certain.",
+      "matched": "Found {name} in the world; the oath is recorded against them.",
+      "nameOnly": "Nobody in the world is named {name}, so the oath records the name alone.",
+      "already": "{name} has already sworn an oath before you."
+    },
+    "blessedMarks": {
+      "openLabel": "Marks",
+      "noneTooltip": "Nobody bears your marks. Click to open the roster.",
+      "someTooltip": "{count} standing. Click to open the roster.",
+      "rule": "Each of these was bought with Stock and stands until you end it, the mark is spent, or the moment it was made for arrives.",
+      "none": "You have laid no marks.",
+      "kindLabel": "Which mark",
+      "add": "Mark",
+      "addPlaceholder": "Name who or what is marked…",
+      "dropHint": "Or drop a person or beast onto this window.",
+      "liftLabel": "Lift the mark on {name}",
+      "loyaltyTooltip": "Loyalty. Spend it to direct the beast; when the last one goes, the mark ends. Click a circle to set how much is left.",
+      "loyaltySet": "Set Loyalty",
+      "loyaltySpent": "{name} spent their last Loyalty, so that mark has ended.",
+      "noKind": "Pick which mark you are laying first.",
+      "needName": "Name who or what is being marked first.",
+      "ambiguous": "Several match \"{name}\": {names}. Type the full name, or drop the right one onto this window.",
+      "sameName": "More than one {name} in the world; the first was marked. Drop the right one onto this window to be certain.",
+      "matched": "Found {name} in the world; the mark is recorded against them.",
+      "nameOnly": "Nobody in the world is named {name}, so the mark records the name alone.",
+      "already": "{name} already bears your {kind}.",
+      "notMarkable": "{name} is not somebody a mark can be laid on.",
+      "fromCompendium": "{name} came from a compendium, so the mark records the name only; it will not link to that person in this world."
+    },
+    "battleJoy": {
+      "onLabel": "Lost in your Battle Joy",
+      "offLabel": "Not in your Battle Joy",
+      "onTooltip": "Lost in battle: you ignore fear, pain, mind-control and the effects of debilities. Click when the action stops.",
+      "offTooltip": "Click when you spill blood and lose yourself in battle.",
+      "readOnlyOn": "Lost in their Battle Joy, ignoring fear, pain, mind-control and debilities.",
+      "readOnlyOff": "Not in their Battle Joy.",
+      "endTitle": "The action stops",
+      "endPrompt": "Battle Joy ends. Roll +CON now? On a 10+ that was a rush, regain 1d4 HP; on a 7-9 you are winded but will be fine; on a 6- mark a debility, but do not mark XP. Choose No to simply come out of it.",
+      "noRollType": "Your Battle Joy move has no stat set on it, so there was nothing to roll. You have come out of it all the same. Give the move a roll type to get the +CON roll.",
+      "debilitiesIgnored": "Battle Joy: still marked, and doing nothing. You ignore the effects of debilities as long as you keep fighting."
     }
   }
 }

@@ -50,6 +50,14 @@
 		</div>
 		{{/if}}
 
+		{{!-- `groups` heads each of the playbook's three onboarding clusters (+ "Other"
+		      for the moves none of them claim) with its own foldable sub-heading. It is
+		      empty for a playbook the group table doesn't know — homebrew, or a sheet with
+		      no playbook picked — and the section then falls back to the flat
+		      owned-then-un-owned pair that `splitUnowned` renders. `groupByCategory` is the
+		      reader's own "Organize by category" toggle over the same fallback: off, the
+		      clusters collapse back into that one flat pair. Both are always passed, so the
+		      toggle switches between two lists the section already knows how to draw. --}}
 		{{#if stonetop.movelist.playbookMoves.length}}
 		{{> "stonetop.move-group"
 		    title=(localize "stonetop.character.moves.playbookMoves")
@@ -58,8 +66,10 @@
 		    ownedMoves=stonetop.movelist.playbookMovesOwned
 		    unownedMoves=stonetop.movelist.playbookMovesUnowned
 		    splitUnowned=true
+		    groups=stonetop.movelist.playbookMoveGroups
 		    hideToggle=true
 		    hideUnselected=stonetop.hideUnselected
+		    groupByCategory=stonetop.groupMovesByCategory
 		    searchControl=true
 		    searchTitle=(localize "stonetop.character.moves.searchLabel")
 		    searchPlaceholder=(localize "stonetop.character.moves.searchPlaceholder")

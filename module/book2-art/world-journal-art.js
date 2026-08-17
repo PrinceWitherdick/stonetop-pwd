@@ -36,10 +36,23 @@ export function artEmbed(src, name) {
 // FILE, and the loser's path has to come off the page or the same illustration sits on it
 // twice. Keyed on the embed, not on a file, so it still clears after the file is gone. A src
 // that is still wanted is never retired.
+//
+// A null `src` means STRIP ONLY: this row's picture is not on disk, so there is nothing to
+// place, but whatever a previous import left on the page has to come off or the reader gets a
+// broken image. The caller passes the absent path through `retired`, which is the same
+// mechanism and for the same reason — it keys on the embed rather than on a file, so it works
+// precisely when the file is the thing that is gone. Nothing is ever inserted in this mode,
+// including a `name` the caller may still have passed.
 export function bestiaryDescriptionWithArt(description, src, name, retired = []) {
 	const desc = String(description ?? "");
 	const dead = [];
 	for (const r of retired ?? []) if (r && r !== src && !dead.includes(r) && bodyHasSrc(desc, r)) dead.push(r);
+	if (!src) {
+		if (!dead.length) return null;
+		let stripped = desc;
+		for (const r of dead) stripped = stripSrcEmbed(stripped, r);
+		return stripped;
+	}
 	// `bodyHasSrc`, not a raw substring: "on the page" has to mean the same thing in both halves
 	// of this function. A page can name the path without carrying the picture — a GM's note, an
 	// href, an HTML comment — and a substring check reads that as "already embedded" and blocks

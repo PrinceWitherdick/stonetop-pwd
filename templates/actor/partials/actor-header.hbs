@@ -81,17 +81,32 @@
 			    nothing offers a click that would do nothing. `type="button"` is not optional: the
 			    whole sheet is one <form> and a bare button submits it. }}
 			{{#if stonetop.holyLight.show}}
+			{{> "stonetop.header-toggle-glyph" stem="stonetop-holy-light" onClass="is-lit"
+			    on=stonetop.holyLight.lit labelKey=stonetop.holyLight.labelKey
+			    tooltipKey=stonetop.holyLight.tooltipKey}}
+			{{/if}}
+			{{! What that light is currently shaped into. Beside the candle rather than only on the
+			    Invocations tab, because an ongoing Invocation runs until something ends it and the
+			    player who needs to see it is the one sitting on some other tab: the rule it costs
+			    you — one Invocation at a time — is broken by reaching for the next thing, not by
+			    reading this one.
+
+			    A button where the sheet is editable (it ends the Invocation, which the rules let you
+			    do whenever you wish) and a span where it isn't, the same split the candle makes. The
+			    name is the chip's whole content, so it carries a tooltip either way: it can be
+			    ellipsised by a narrow header, and the tooltip is where the full name and what ends
+			    it are said. }}
+			{{#if stonetop.ongoingInvocation.active}}
 			{{#if editable}}
-			<button type="button" class="stonetop-holy-light{{#if stonetop.holyLight.lit}} is-lit{{/if}}"
-			        aria-pressed="{{#if stonetop.holyLight.lit}}true{{else}}false{{/if}}"
-			        aria-label="{{#if stonetop.holyLight.lit}}{{localize "stonetop.holyLight.litLabel"}}{{else}}{{localize "stonetop.holyLight.unlitLabel"}}{{/if}}"
-			        data-tooltip="{{#if stonetop.holyLight.lit}}{{localize "stonetop.holyLight.litTooltip"}}{{else}}{{localize "stonetop.holyLight.unlitTooltip"}}{{/if}}"
-			        data-tooltip-direction="UP"><span class="stonetop-holy-light-icon" aria-hidden="true"></span></button>
+			<button type="button" class="stonetop-invocation-chip stonetop-invocation-end"
+			        aria-label="{{localize "stonetop.invocations.chipLabel" name=stonetop.ongoingInvocation.label}}"
+			        data-tooltip="{{localize "stonetop.invocations.chipTooltip" name=stonetop.ongoingInvocation.label}}"
+			        data-tooltip-direction="UP"><i class="fas fa-sun" aria-hidden="true"></i><span class="stonetop-invocation-chip-name">{{stonetop.ongoingInvocation.label}}</span></button>
 			{{else}}
-			<span class="stonetop-holy-light{{#if stonetop.holyLight.lit}} is-lit{{/if}}"
-			      aria-label="{{#if stonetop.holyLight.lit}}{{localize "stonetop.holyLight.litLabel"}}{{else}}{{localize "stonetop.holyLight.unlitLabel"}}{{/if}}"
-			      data-tooltip="{{#if stonetop.holyLight.lit}}{{localize "stonetop.holyLight.readOnlyLit"}}{{else}}{{localize "stonetop.holyLight.readOnlyUnlit"}}{{/if}}"
-			      data-tooltip-direction="UP"><span class="stonetop-holy-light-icon" aria-hidden="true"></span></span>
+			<span class="stonetop-invocation-chip"
+			      aria-label="{{localize "stonetop.invocations.chipLabel" name=stonetop.ongoingInvocation.label}}"
+			      data-tooltip="{{localize "stonetop.invocations.chipReadOnly" name=stonetop.ongoingInvocation.label}}"
+			      data-tooltip-direction="UP"><i class="fas fa-sun" aria-hidden="true"></i><span class="stonetop-invocation-chip-name">{{stonetop.ongoingInvocation.label}}</span></span>
 			{{/if}}
 			{{/if}}
 			{{! The Judge's scales, beside the candle and on the same terms — shown once they own
@@ -109,10 +124,33 @@
 			    there, and a tooltip cannot be glanced at. Suppressed at zero — a Judge who has
 			    branded nobody should see the scales, not a "0". }}
 			{{#if stonetop.condemn.show}}
-			<button type="button" class="stonetop-condemn{{#if stonetop.condemn.count}} is-branding{{/if}}"
-			        aria-label="{{localize "stonetop.condemn.openLabel"}}"
-			        data-tooltip="{{#if stonetop.condemn.count}}{{localize "stonetop.condemn.someTooltip" count=stonetop.condemn.count}}{{else}}{{localize "stonetop.condemn.noneTooltip"}}{{/if}}"
-			        data-tooltip-direction="UP"><span class="stonetop-condemn-icon" aria-hidden="true"></span>{{#if stonetop.condemn.count}}<span class="stonetop-condemn-count" aria-hidden="true">{{stonetop.condemn.count}}</span>{{/if}}</button>
+			{{> "stonetop.header-count-glyph" stem="stonetop-condemn" activeClass="is-branding"
+			    countClass="stonetop-condemn-count" openLabelKey="stonetop.condemn.openLabel"
+			    active=stonetop.condemn.brands count=stonetop.condemn.count
+			    brands=stonetop.condemn.brands oaths=stonetop.condemn.oaths
+			    tooltipKey=stonetop.condemn.tooltipKey}}
+			{{/if}}
+			{{! The Blessed's marks, on the scales' terms exactly: shown once they own any of the five
+			    marking moves, or while marks stand on a sheet that has since lost them, and always a
+			    <button> because opening the roster is looking rather than writing. The dialog
+			    withholds its own laying and lifting from a viewer who cannot write. }}
+			{{#if stonetop.blessedMarks.show}}
+			{{> "stonetop.header-count-glyph" stem="stonetop-blessed-marks" activeClass="is-marking"
+			    countClass="stonetop-marks-count" openLabelKey="stonetop.blessedMarks.openLabel"
+			    active=stonetop.blessedMarks.count count=stonetop.blessedMarks.count
+			    tooltipKey=stonetop.blessedMarks.tooltipKey}}
+			{{/if}}
+			{{! The Heavy's Battle Joy — the candle's shape rather than the scales': one state,
+			    toggled, no list behind it. A button where the sheet is editable and a span where it
+			    isn't, exactly as the candle splits, so nothing offers a click that would do nothing.
+
+			    Shown in BOTH edit and play mode: losing yourself in battle is play, not editing.
+			    `type="button"` is not optional: the whole sheet is one <form> and a bare button
+			    submits it. }}
+			{{#if stonetop.battleJoy.show}}
+			{{> "stonetop.header-toggle-glyph" stem="stonetop-battle-joy" onClass="is-raging"
+			    on=stonetop.battleJoy.raging labelKey=stonetop.battleJoy.labelKey
+			    tooltipKey=stonetop.battleJoy.tooltipKey}}
 			{{/if}}
 		</div>
 		{{! Through the Last Door, with no insert. The three returns say what they are in the name

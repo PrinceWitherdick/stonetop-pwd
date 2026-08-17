@@ -8,24 +8,7 @@
       root in StonetopSteadingSheet._activateThreatsListeners. --}}
 <article class="threat-card threat-card--{{type.id}}{{#if collapsed}} is-collapsed{{/if}}{{#if canDrag}} is-draggable{{/if}}"
          data-threat-id="{{id}}" data-page-uuid="{{uuid}}" style="--threat-accent:{{accent}};"{{#if canDrag}} draggable="true"{{/if}}>
-	<span class="threat-card__edge" aria-hidden="true"></span>
-
-	<header class="threat-card__head{{#if collapsible}} threat-card__head--collapsible{{/if}}">
-		{{#if collapsible}}
-		{{!-- Host-added collapse chrome (steading Threats tab only): clamps the card to
-		      its title + Instinct. The chevron reflects/announces state; clicking anywhere
-		      on the header toggles it (see StonetopSteadingSheet._activateThreatsListeners). --}}
-		<button type="button" class="threat-collapse-btn"
-		        aria-expanded="{{#if collapsed}}false{{else}}true{{/if}}"
-		        aria-label="Collapse or expand this threat" tabindex="0">
-			<i class="fas fa-chevron-down" aria-hidden="true"></i>
-		</button>
-		{{/if}}
-		<div class="threat-card__title">
-			<h3 class="threat-name">{{name}}</h3>
-			<span class="threat-type">{{type.label}}</span>
-		</div>
-	</header>
+	{{> "stonetop.card-head" kind="threat" typeLabel=type.label}}
 
 	{{#if hasInstinct}}
 	<p class="threat-instinct"><span class="threat-label">Instinct</span><em>{{instinct}}</em></p>

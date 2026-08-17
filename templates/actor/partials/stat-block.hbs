@@ -22,7 +22,14 @@
 	<section class="sheet-attributes flexrow">
 		{{> "stonetop.actor-stats"}}
 	</section>
-	<div class="stonetop-debilities">
+	{{!-- The three debilities. While the Heavy is in their Battle Joy they stay TICKED and stop
+	      doing anything — "you ignore fear, pain, mind-control, and the effects of debilities as
+	      long as you keep fighting" — so the block goes grey rather than the boxes clearing. The
+	      distinction matters: the debilities are still marked, and will bite again the moment the
+	      action stops. The roll path reads the same state (StonetopCharacter#ignoresDebilities), so
+	      what this says and what the dice do cannot disagree. --}}
+	<div class="stonetop-debilities{{#if stonetop.battleJoy.raging}} is-ignored{{/if}}"
+	     {{#if stonetop.battleJoy.raging}}data-tooltip="{{localize "stonetop.battleJoy.debilitiesIgnored"}}" data-tooltip-direction="UP"{{/if}}>
 		<div class="stonetop-debility">
 			<span class="stonetop-debility-bracket"></span>
 			<label class="stonetop-debility-control" data-tooltip="Fatigued, tired, sluggish, shaky. Disadvantage on +STR or +DEX rolls." data-tooltip-direction="UP">

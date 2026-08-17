@@ -71,23 +71,10 @@ export async function setDoomDone(page, done) {
 }
 
 /**
- * Delete a threat (its page) and any scene Note pins linked to it across all scenes.
- * Notes link back via `entryId` + `pageId`; siblings share the entry, so the pin match
- * keys on both. When the last page goes, the now-empty journal is removed too so no bare
- * "<Steading> Threats" entry lingers. GM-only (threats are GM prep).
+ * Delete a threat: its page, and any scene Note pins linked to it.
+ *
+ * Nothing threat-specific about it — deleting is page-shaped, so it is `deleteGmPrepPage` in the
+ * store factory, beside the rest of the CRUD all three families share. Kept as a name here for
+ * the callers that have a threat in hand and read better saying so.
  */
-export async function deleteThreat(page) {
-	const entry = page?.parent;
-	if (!entry) return;
-	const entryId = entry.id;
-	const pageId = page.id;
-	if (game.user?.isGM && game.scenes) {
-		for (const scene of game.scenes) {
-			const noteIds = scene.notes.filter(n => n.entryId === entryId && n.pageId === pageId).map(n => n.id);
-			if (noteIds.length) await scene.deleteEmbeddedDocuments("Note", noteIds).catch(() => {});
-		}
-	}
-	await page.delete();
-	// Tidy up: once the last page is gone, drop the empty journal (a later create re-mints it).
-	if (!entry.pages?.size) await entry.delete().catch(() => {});
-}
+export { deleteGmPrepPage as deleteThreat } from "../journal/gm-prep-page-store.js";

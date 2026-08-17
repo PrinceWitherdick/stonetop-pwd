@@ -54,7 +54,7 @@
       "_id": "X1QtTUNdLiLq0IMf",
       "name": "Cause vicious thorns and spines to sprout from nearby plants",
       "type": "monsterMove",
-      "img": "icons/sundries/gaming/playing-cards-grab.webp",
+      "img": "icons/svg/net.svg",
       "system": {
         "description": "",
         "rollFormula": ""
@@ -65,7 +65,7 @@
       "_id": "7pVz5nkhpWGqQBnf",
       "name": "Dig in deep, make them bleed (messy)",
       "type": "monsterMove",
-      "img": "icons/environment/wilderness/cave-entrance-dark.webp",
+      "img": "icons/svg/burrow.svg",
       "system": {
         "description": "",
         "rollFormula": ""

@@ -78,7 +78,7 @@ const _PURPOSE = {
 	title:   "Your Terrible Purpose",
 	short:   "Terrible Purpose",
 	icon:    "fa-hand-fist",
-	hint:    "What you will not leave behind. Choose 1 — and say who, or what.",
+	hint:    "What you will not leave behind. Choose 1: and say who, or what.",
 	nameFor: true,
 	namePlaceholder: "Name them, or name the task…",
 };
@@ -104,7 +104,7 @@ const _CONSEQUENCE = {
 	title:   "Your first Consequence",
 	short:   "first Consequence",
 	icon:    "fa-heart-crack",
-	hint:    "What coming back cost you. Take 1 now — and another whenever a move says so.",
+	hint:    "What coming back cost you. Take 1 now: and another whenever a move says so.",
 	// Once one is held the step has nothing left to hand out, so the invitation stops being an
 	// instruction and starts being a lie: a Revenant three sessions in would otherwise read
 	// "Take 1 now" over a list where every remaining option is greyed out.
@@ -183,7 +183,7 @@ export const POST_DEATH_CHOICES = {
 			// too — thrall.json says "the GM will choose 1 Mark for you". It read "Take 1 now"
 			// directly above "Your GM chooses this one", which is an instruction and its own
 			// contradiction in two lines.
-			hint:    "What your master's touch leaves on you — one now, and more as your master gives them.",
+			hint:    "What your master's touch leaves on you: one now, and more as your master gives them.",
 			// Held once the first is taken: see `hintDone`.
 			hintDone: "The Marks your master has left on you so far.",
 			gm:      true,
@@ -261,23 +261,27 @@ async function _buildStep(character, step) {
 	// A pick. sectionOptions already honours `requires` and crossed-off Marks, so an option that
 	// can't be taken yet arrives `blocked` rather than having to be filtered here.
 	const raw     = await character.sectionOptions(step.section);
+	const never   = new Set(step.neverPick ?? []);
+	// What the PLAYER chose, which is not the same as what is ticked. An INFLICTED option (THE
+	// FINAL CONSEQUENCE) is put there by the fiction, never picked. Stated once because three
+	// separate questions below — the hint, the cap, and the answer itself — all turn on it, and
+	// the reason is the same every time: a step must not report itself answered, or spend its
+	// allowance, on the strength of the character being destroyed. Reads equally well on a raw
+	// option and on an enriched one, which carry the same `marked` and `slug`.
+	const isPick  = (o) => o.marked && !never.has(o.slug);
 	// An accumulating step's hint invites a pick ("Take 1 now"); once the pick is made the step
 	// is a record instead, and the invitation would be describing something it no longer offers.
-	const hint    = step.hintDone && raw.some(o => o.marked) ? step.hintDone : step.hint;
+	// An INFLICTED option is not that pick, so the invitation stands.
+	const hint    = step.hintDone && raw.some(isPick) ? step.hintDone : step.hint;
 	// `requires` arrives as a slug; a player has never seen a slug. Resolve it against the
 	// section's own options so a locked entry can say "needs BREAKDOWN" in the book's words.
 	const labels  = new Map(raw.map(o => [o.slug, o.label]));
-	const never   = new Set(step.neverPick ?? []);
 	// Has this window already handed out everything it may? Counted off what's MARKED, not off
 	// what was clicked here: a counter of this session's clicks would reset with the window and
 	// hand out a second. A Mark granted later by Dark Succor also counts, which is right: it takes
-	// the step past its allowance, and there is nothing left for this window to give.
-	//
-	// What does NOT count is an option nobody chose. THE FINAL CONSEQUENCE is inflicted, and
-	// counting it would let a Ghost's ending fill the allowance and lock every real Consequence
-	// behind it — this step would then report itself done on the strength of the character being
-	// destroyed.
-	const atCap   = raw.filter(o => o.marked && !never.has(o.slug)).length >= (step.takeNow ?? Infinity);
+	// the step past its allowance, and there is nothing left for this window to give. An inflicted
+	// option is not a pick and so does not fill the allowance — see `isPick`.
+	const atCap   = raw.filter(isPick).length >= (step.takeNow ?? Infinity);
 	// Prerequisites of something currently held. The cap must never lock one of these: unticking
 	// BREAKDOWN while UNSTABLE ("Requires Breakdown") is marked would otherwise strand the pair —
 	// UNSTABLE locked for want of its prerequisite, BREAKDOWN locked by the cap that UNSTABLE
@@ -314,7 +318,11 @@ async function _buildStep(character, step) {
 		};
 	});
 
-	const marked  = options.filter(o => o.marked);
+	// Everything below reads the player's answer — the chosen slug, the count, and whether the
+	// step is done — so all of it counts off this list rather than off what is merely ticked; see
+	// `isPick`. The OPTIONS keep their own `marked`, so the window still draws an inflicted
+	// Consequence as the ticked, un-clickable thing it is.
+	const marked  = options.filter(isPick);
 	const chosen  = marked[0] ?? null;
 	const named   = step.nameFor && chosen ? character.postDeathLoreText(step.section, chosen.slug) : "";
 	// The Thrall's "Other (write in)" Impulse is an ALTERNATIVE to the seven printed ones, not an

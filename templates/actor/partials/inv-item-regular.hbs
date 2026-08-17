@@ -19,6 +19,7 @@
 		<span class="stonetop-inv-label">{{name}}</span>
 	</label>
 	{{> "stonetop.inv-note" note=note resource=resource resourceFirst=resourceFirst slug=slug}}
+	{{> "stonetop.inv-artifact" deletable=deletable}}
 	{{#if (and deletable @root.stonetop.editMode)}}
 	<a class="stonetop-inv-delete" data-owned-id="{{ownedId}}" title="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-times"></i></a>
 	{{/if}}

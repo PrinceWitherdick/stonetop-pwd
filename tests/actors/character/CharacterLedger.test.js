@@ -28,6 +28,31 @@ describe("CharacterLedger", () => {
 		expect(entries.map(e => e.action)).toEqual(["Damage value changed from d4 to d6"]);
 	});
 
+	// Max HP is stored twice: `hp.adjustment` is the signed delta the sheet keeps, and `hp.max`
+	// is a mirror written beside it so the token bar reads the right number. Both paths are
+	// labelled, so one player typing a new max used to file TWO rows for one edit.
+	it("files one row when a hand-set max HP writes the delta and its mirror together", async () => {
+		const actor = makeActor({ attributes: { hp: { value: 20, max: 20, adjustment: 0 } } });
+		const entries = await CharacterLedger.entriesForActorUpdate(actor, {
+			"system.attributes.hp.adjustment": 4,
+			"system.attributes.hp.max": 24,
+		});
+		expect(entries).toHaveLength(1);
+		expect(entries[0].action).toContain("Max HP (permanent)");
+	});
+
+	// A character with no playbook has no derived base to sit a delta on, so setMaxHp writes the
+	// typed number straight to the stored field — and that write is the only record there is.
+	it("still records the stored max when it changes on its own", async () => {
+		const actor = makeActor({ attributes: { hp: { value: 10, max: 10, adjustment: 0 } } });
+		const entries = await CharacterLedger.entriesForActorUpdate(actor, {
+			"system.attributes.hp.max": 14,
+		});
+		expect(entries).toHaveLength(1);
+		expect(entries[0].action).toContain("Max HP");
+		expect(entries[0].action).not.toContain("permanent");
+	});
+
 	it("records wound additions, status changes, and removals", async () => {
 		const actor = makeActor({ attributes: { wounds: [
 			{ id: "w1", text: "Twisted ankle", status: "problematic", healed: false },
@@ -640,6 +665,30 @@ describe("CharacterLedger", () => {
 		expect(entries.map(e => e.action)).toEqual([]);
 	});
 
+	// The link to the Actor made for a follower is plumbing, not play: it is written by the sweep
+	// in follower-actors.js and by a drag onto the canvas, never by a player deciding anything.
+	// Falling through, it wrote raw uuids into the Chronicle — and because the sweep links every
+	// follower in ONE update, listMerge folded them into a single "Initiate details set to
+	// Actor.<id>, Actor.<id>" line.
+	it("never logs the Actor link a follower sweep writes back, whichever follower it is for", async () => {
+		const actor = makeActor({}, {
+			stonetop: {
+				animalCompanion: { name: "Bramble", details: {} },
+				initiateDetails: { enfys: {}, afon: {} },
+				beastDetails: { mule: {} },
+				crew: { name: "The Red Shields", details: {} },
+			},
+		});
+		const entries = await CharacterLedger.entriesForActorUpdate(actor, {
+			"flags.stonetop-pwd.initiateDetails.enfys.actorUuid": "Actor.E0FGjEd91XwUD7Jc",
+			"flags.stonetop-pwd.initiateDetails.afon.actorUuid": "Actor.si3Eu6QXhkPwDnIJ",
+			"flags.stonetop-pwd.beastDetails.mule.actorUuid": "Actor.aaaaaaaaaaaaaaaa",
+			"flags.stonetop-pwd.animalCompanion.details.actorUuid": "Actor.bbbbbbbbbbbbbbbb",
+			"flags.stonetop-pwd.crew.details.actorUuid": "Actor.cccccccccccccccc",
+		});
+		expect(entries.map(e => e.action)).toEqual([]);
+	});
+
 	// Clearing a portrait is TWO writes: the picture away as img:"" and the frame with it as
 	// `.-=portraitFrame`. Silencing only the first left every "Use default" writing "set to blank".
 	it("stays quiet on both halves of a portrait clear", async () => {
@@ -863,7 +912,7 @@ describe("CharacterLedger lore", () => {
 			"flags.stonetop-pwd.lore.counts.earth-mother:shrine-loved": 1,
 		});
 		// Was: "Lore set to 1".
-		expect(entries.map(e => e.action)).toEqual(["Lore — The Earth Mother: Loved and well-used. marked"]);
+		expect(entries.map(e => e.action)).toEqual(["Lore: The Earth Mother: Loved and well-used. marked"]);
 	});
 
 	it("previews a written answer instead of pasting the whole paragraph", async () => {
@@ -877,7 +926,7 @@ describe("CharacterLedger lore", () => {
 			"flags.stonetop-pwd.lore.texts.relic:where": "<p>" + long + "</p>",
 		});
 		expect(entries).toHaveLength(1);
-		expect(entries[0].action).toMatch(/^Lore — Your Relic answered: /);
+		expect(entries[0].action).toMatch(/^Lore: Your Relic answered: /);
 		expect(entries[0].action).toContain("…");
 		expect(entries[0].action.length).toBeLessThan(120);
 		expect(entries[0].action).not.toContain("<p>");

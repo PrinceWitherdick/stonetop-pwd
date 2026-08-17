@@ -136,7 +136,7 @@ describe("the style string", () => {
 	});
 
 	it("emits nothing Handlebars would escape, so a double stash is safe", () => {
-		expect(frameStyle([0.4, 0.1, 1, 0.7])).toMatch(/^[a-z0-9:;%.\-]+$/);
+		expect(frameStyle([0.4, 0.1, 1, 0.7])).toMatch(/^[a-z0-9:;%.-]+$/);
 	});
 
 	it("is empty for a rect that does not normalise", () => {

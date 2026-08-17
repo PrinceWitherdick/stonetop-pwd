@@ -1,50 +1,55 @@
 import { describe, it, expect } from "vitest";
-import { ordinal, ordinalWord, mergeSeasonBlock } from "../../module/seasons/seasons-chronicle.js";
+import { readRepo } from "../fakes/css.js";
+import { cardinalWord, yearLabel, mergeSeasonBlock } from "../../module/seasons/seasons-chronicle.js";
 
 // Minimal stand-ins for the wrapped blocks recordSeasonsChange writes — only the
 // `<section data-season>` marker matters to the merge.
 const block = (season, body = "") => `<section class="stonetop-season-block" data-season="${season}"><h2>${season}</h2>${body}</section>`;
 
-describe("ordinal", () => {
-	it("uses st/nd/rd for 1–3", () => {
-		expect(ordinal(1)).toBe("1st");
-		expect(ordinal(2)).toBe("2nd");
-		expect(ordinal(3)).toBe("3rd");
+describe("cardinalWord", () => {
+	it("spells out the small numbers", () => {
+		expect(cardinalWord(1)).toBe("One");
+		expect(cardinalWord(2)).toBe("Two");
+		expect(cardinalWord(3)).toBe("Three");
+		expect(cardinalWord(10)).toBe("Ten");
+		expect(cardinalWord(20)).toBe("Twenty");
 	});
 
-	it("uses th for 4–9 and 0", () => {
-		expect(ordinal(4)).toBe("4th");
-		expect(ordinal(9)).toBe("9th");
-	});
-
-	it("uses th for the 11–13 exception", () => {
-		expect(ordinal(11)).toBe("11th");
-		expect(ordinal(12)).toBe("12th");
-		expect(ordinal(13)).toBe("13th");
-	});
-
-	it("uses st/nd/rd again for 21–23 and 101", () => {
-		expect(ordinal(21)).toBe("21st");
-		expect(ordinal(22)).toBe("22nd");
-		expect(ordinal(23)).toBe("23rd");
-		expect(ordinal(101)).toBe("101st");
-		expect(ordinal(111)).toBe("111th");
+	// Twenty is where the words stop earning their keep — past it they are longer to read
+	// than the digits, and the counting is the point.
+	it("falls back to the numeral past twenty", () => {
+		expect(cardinalWord(21)).toBe("21");
+		expect(cardinalWord(22)).toBe("22");
+		expect(cardinalWord(100)).toBe("100");
 	});
 });
 
-describe("ordinalWord", () => {
-	it("spells out the year for small numbers", () => {
-		expect(ordinalWord(1)).toBe("First");
-		expect(ordinalWord(2)).toBe("Second");
-		expect(ordinalWord(3)).toBe("Third");
-		expect(ordinalWord(10)).toBe("Tenth");
-		expect(ordinalWord(20)).toBe("Twentieth");
+describe("yearLabel", () => {
+	// "Year One", not "First Year". The count leads: the header's clock and the picker's chip
+	// are both a season beside a NUMBER, and the journal sidebar is a column of years to scan
+	// down — an ordinal buries the digit behind a word that changes shape every entry.
+	it("puts the count after the constant word", () => {
+		expect(yearLabel(1)).toBe("Year One");
+		expect(yearLabel(2)).toBe("Year Two");
+		expect(yearLabel(20)).toBe("Year Twenty");
 	});
 
-	it("falls back to the numeric ordinal past twenty", () => {
-		expect(ordinalWord(21)).toBe("21st");
-		expect(ordinalWord(22)).toBe("22nd");
-		expect(ordinalWord(100)).toBe("100th");
+	// ...which is also what survives the fall-off past twenty. "Year 21" still reads as one of
+	// these; "21st Year" would read as a different naming scheme starting halfway through.
+	it("keeps its shape past twenty", () => {
+		expect(yearLabel(21)).toBe("Year 21");
+		expect(yearLabel(100)).toBe("Year 100");
+	});
+
+	// The ordinal spellers are gone from the live code — nothing spells a year that way any
+	// more, and a leftover exported one is a second naming scheme sitting there to be reached
+	// for. Recognising the OLD names is the migration's job and lives there alone.
+	it("leaves no ordinal speller behind in the module", () => {
+		const source = readRepo("module/seasons/seasons-chronicle.js");
+		expect(source).not.toContain("_ORDINAL_WORDS");
+		expect(source).not.toMatch(/export function ordinal/);
+		// ...and no surface builds the string by hand instead of calling yearLabel.
+		expect(source).not.toMatch(/`\$\{[^}]+\} Year`/);
 	});
 });
 

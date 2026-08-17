@@ -1,0 +1,55 @@
+{{!-- One "labelled list of KEYED rows" on the Create-a-Site wizard: questions & answers, the
+      timeline, denizens, and areas.
+
+      The sibling of cs-line-list.hbs and here for the same reason — the block was pasted per list
+      and differed only in wording. Everything outside the rows is cs-list-frame.hbs, shared
+      between the two.
+
+      Arity comes from the DATA, not from this file. An earlier cut took a fixed `keyA`/`keyB` pair
+      of hash arguments, which meant it could serve only the two-key lists while SITE_PAIR_LISTS
+      went on advertising areas' four — a list wired through it would have rendered its first two
+      fields and silently dropped the rest, with the dropped ones still seeded, saved and shaped.
+      So a row arrives as `cells`, one per key the schema declares, in the order it declares them
+      (see _pairRows), and this file loops them.
+
+      Two shapes, chosen per row:
+        inline  every field on ONE control row (the timeline: a date and what happened read as a
+                single line)
+        else    the first field shares a row with the delete button and the rest stack under it,
+                each cell either a single-line input or, if `multiline`, a textarea
+
+      Every cell carries its own `list` and `index` rather than being walked back to with `../`:
+      inside a partial's block the hash arguments have pushed a frame, so the depth a `../` chain
+      lands on depends on how the partial was called, and getting it wrong fails by reading
+      undefined — a `data-list=""` that no delegated handler matches.
+
+      Context: the frame's, plus
+        rows  this list's rows ({index, list, rowClass, inline, cells}), each cell
+              {list, index, key, first, value, placeholder, cls, multiline, lines} --}}
+{{#> "stonetop.cs-list-frame" list=list label=label hint=hint chips=chips kinds=kinds addLabel=addLabel frameClass=frameClass}}
+  {{#each rows}}
+  {{#if inline}}
+  <div class="stonetop-cf-gear-row">
+    {{#each cells}}
+    <input type="text" class="stonetop-cf-input stonetop-cs-pair {{cls}}" data-list="{{list}}" data-index="{{index}}" data-key="{{key}}" value="{{value}}" placeholder="{{placeholder}}">
+    {{/each}}
+    <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{list}}" data-index="{{index}}"><i class="fas fa-times"></i></button>
+  </div>
+  {{else}}
+  <div class="{{rowClass}}">
+    {{#each cells}}
+    {{#if first}}
+    <div class="stonetop-cf-gear-row">
+      <input type="text" class="stonetop-cf-input stonetop-cs-pair {{cls}}" data-list="{{list}}" data-index="{{index}}" data-key="{{key}}" value="{{value}}" placeholder="{{placeholder}}">
+      <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{list}}" data-index="{{index}}"><i class="fas fa-times"></i></button>
+    </div>
+    {{else if multiline}}
+    <textarea class="stonetop-cf-textarea stonetop-cs-pair {{cls}}" data-list="{{list}}" data-index="{{index}}" data-key="{{key}}" rows="{{lines}}" placeholder="{{placeholder}}">{{value}}</textarea>
+    {{else}}
+    <input type="text" class="stonetop-cf-input stonetop-cs-pair {{cls}}" data-list="{{list}}" data-index="{{index}}" data-key="{{key}}" value="{{value}}" placeholder="{{placeholder}}">
+    {{/if}}
+    {{/each}}
+  </div>
+  {{/if}}
+  {{/each}}
+{{/"stonetop.cs-list-frame"}}

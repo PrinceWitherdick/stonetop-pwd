@@ -76,7 +76,7 @@
       "_id": "WebllT9pXTml2WRo",
       "name": "Bind itself to a victim's bones",
       "type": "monsterMove",
-      "img": "icons/creatures/tentacles/tentacles-octopus-purple.webp",
+      "img": "icons/creatures/tentacles/tentacles-octopus-black-pink.webp",
       "system": {
         "description": "",
         "rollFormula": ""

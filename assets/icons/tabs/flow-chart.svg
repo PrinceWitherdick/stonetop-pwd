@@ -1,0 +1,22 @@
+<!-- Core Loop tab glyph: three boxes wired into a cycle, drawn for this project (see
+     ATTRIBUTION.md). Worn as a CSS mask, so the background square is transparent and only the
+     glyph carries alpha.
+
+     Plain geometry, nothing to re-derive. Three 296x104 boxes at x 152..448, stacked at y 32,
+     204 and 376, each drawn as an outer rounded rect plus an inner one wound the OTHER way, so
+     nonzero fill leaves a 16-unit wall and an empty middle without needing fill-rule. Two
+     connectors run down the centre line (x 300) from box to box, and a return leg runs from the
+     bottom box out to a rail at x 56, up the left side, and back into the top box. Every
+     connector ends in a solid triangular head, and the loop's head is the one on the return leg:
+     the cycle reads bottom-back-to-top, which is the direction the diagram it stands for goes. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<path d="M0 0h512v512H0z" fill="#ffffff" fill-opacity="0"/>
+	<g fill="#fff">
+		<path d="M176 32h248a24 24 0 0 1 24 24v56a24 24 0 0 1-24 24H176a24 24 0 0 1-24-24V56a24 24 0 0 1 24-24Zm0 16a8 8 0 0 0-8 8v56a8 8 0 0 0 8 8h248a8 8 0 0 0 8-8V56a8 8 0 0 0-8-8Z"/>
+		<path d="M176 204h248a24 24 0 0 1 24 24v56a24 24 0 0 1-24 24H176a24 24 0 0 1-24-24v-56a24 24 0 0 1 24-24Zm0 16a8 8 0 0 0-8 8v56a8 8 0 0 0 8 8h248a8 8 0 0 0 8-8v-56a8 8 0 0 0-8-8Z"/>
+		<path d="M176 376h248a24 24 0 0 1 24 24v56a24 24 0 0 1-24 24H176a24 24 0 0 1-24-24v-56a24 24 0 0 1 24-24Zm0 16a8 8 0 0 0-8 8v56a8 8 0 0 0 8 8h248a8 8 0 0 0 8-8v-56a8 8 0 0 0-8-8Z"/>
+		<path d="M292 136h16v40h-16zm-18 40h52l-26 28z"/>
+		<path d="M292 308h16v40h-16zm-18 40h52l-26 28z"/>
+		<path d="M56 420h96v16H56zm0-344h16v360H56zm0 0h68v16H56zm68-18v52l28-26z"/>
+	</g>
+</svg>

@@ -22,8 +22,24 @@ stonetop_pwd.zip
 extracted_text.txt
 sample-data.md
 TODO.md
+*.bak
+*.orig
+*.rej
 
-# Copyrighted / PDF-derived images — must never be committed (live in the private mirror repo)
+# Copyrighted / PDF-derived images — must never be committed (live in the private mirror repo).
+#
+# This list is DURABLE_ART_DIRS in module/book2-art/browse.js: every directory the Import Book
+# Art flow writes extracted PDF art into. The two lists are kept honest by a test
+# (tests/book2-art/art-not-tracked.test.js), because they drift silently otherwise: for most of
+# this system's life only the first three were here, while the importer had grown to seven.
+#
+# Root-anchored with a trailing slash, deliberately. A bare `people/` or `steading/` matches at
+# ANY depth and would swallow assets/icons/people, assets/icons/steading and friends, which are
+# our own drawn icons and must stay tracked.
 assets/maps/
 assets/bestiary/
 assets/locations/
+assets/treasures/
+assets/people/
+assets/steading/
+assets/diagrams/

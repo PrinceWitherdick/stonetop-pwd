@@ -229,7 +229,7 @@ export function showAvatarPreview(anchor, { placement = "below", variant = "" } 
 	// windows to front, so read it back rather than guessing a constant that a stack of open
 	// sheets would climb past. !important because the popup is outside the app's subtree and
 	// must not lose to anything the theme sets on body-level children.
-	const z = Number.parseInt(anchor.closest(".app, .application")?.style?.zIndex) || 0;
+	const z = Number.parseInt(anchor.closest(".app, .application")?.style?.zIndex, 10) || 0;
 	popup.style.setProperty("z-index", String(Math.max(10000, z + 2)), "important");
 
 	// Last, so the watchdog only ever runs for a preview that actually made it onto the screen.

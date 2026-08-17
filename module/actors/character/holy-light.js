@@ -13,7 +13,7 @@
  * Foundry global in sight.
  */
 
-import { ownsMoveNamed } from "./owns-move.js";
+import { ownsMoveNamed, ownsAnyMoveNamed } from "./owns-move.js";
 
 // Re-exported so the sheet and this playbook's tests keep reaching the predicate through the
 // feature module they already import.
@@ -34,8 +34,10 @@ const WIELDER_OF_THE_WHITE_FLAME   = "Wielder of the White Flame";
 // arcanum, say) gets no candle. Widening that is one line here.
 const HOLY_LIGHT_MOVES = [CONSECRATED_FLAME, INVOKE_THE_SUN_GOD, WIELDER_OF_THE_WHITE_FLAME];
 
-export function canWieldHolyLight(actor) {
-	return HOLY_LIGHT_MOVES.some(name => ownsMoveNamed(actor, name));
+// `owned` is the character sheet's one-pass Set — see ownsAnyMoveNamed. Omitted, this answers
+// for itself exactly as it always did.
+export function canWieldHolyLight(actor, owned = null) {
+	return ownsAnyMoveNamed(actor, HOLY_LIGHT_MOVES, owned);
 }
 
 /**

@@ -1,0 +1,59 @@
+{{!-- One person on a standing roster: a brand, an oath, or one of the Blessed's marks.
+
+      All three lists are the same row — a portrait, a name that links to the document while there
+      still is one, a note, and the control that ends it — and they had been written out three
+      times over, in two files, with the class prefix swapped. marked-people.js already shares the
+      ALGEBRA behind them and RosterDialog the behaviour; this is the markup.
+
+      A row whose actor has since been DELETED keeps its name and simply stops being a link: losing
+      the document does not lift a brand, release an oath or end a mark, and the character still has
+      to be able to end it.
+
+      Anything a particular list carries BESIDE the name — the oath's broken tick, a Shared Souls
+      beast's Loyalty track — goes in the block body, which renders inside the nameline after the
+      name. A caller with nothing to add invokes it with an empty block.
+
+      Context: the row's own view-model, plus
+        prefix          class stem for the shared chrome ("stonetop-condemned", "stonetop-marks")
+        rowClass        this list's own row classes, if any ("stonetop-oath-row")
+        openClass       the name link's class, which the host dialog binds its click to
+        noteClass       the note input's class
+        noteTextClass   the read-only note's class
+        notePlaceholder placeholder text, already localized
+        removeClass     the dismiss / release / lift button's class
+        removeLabel     that button's label, already localized
+        editable        may this viewer write
+
+      `data-row-id` is deliberately ONE attribute name for all three lists: three names meant three
+      near-identical listeners in the host, and the pair that got updated together looked exactly
+      like the pair that did not. --}}
+<li class="{{prefix}}-row{{#if rowClass}} {{rowClass}}{{/if}}{{#if broken}} is-broken{{/if}}" data-row-id="{{id}}">
+	<span class="{{prefix}}-portrait">
+		<img class="{{prefix}}-portrait-img" src="{{img}}" style="{{imgStyle}}" alt="" draggable="false">
+	</span>
+
+	<div class="{{prefix}}-text">
+		<div class="{{prefix}}-nameline">
+			{{#if linked}}
+			<a class="{{openClass}} {{prefix}}-name-text" data-actor-uuid="{{uuid}}"
+			   tabindex="0" aria-label="{{localize "stonetop.relationships.open" name=name}}">{{name}}</a>
+			{{else}}
+			<span class="{{prefix}}-name-text">{{name}}</span>
+			{{/if}}
+			{{> @partial-block}}
+		</div>
+
+		{{#if editable}}
+		<input type="text" class="{{noteClass}}" data-row-id="{{id}}"
+		       value="{{note}}" autocomplete="off" placeholder="{{notePlaceholder}}">
+		{{else}}{{#if note}}
+		<p class="{{noteTextClass}}">{{note}}</p>
+		{{/if}}{{/if}}
+	</div>
+
+	{{#if editable}}
+	<button type="button" class="{{removeClass}}" data-row-id="{{id}}"
+	        aria-label="{{removeLabel}}" data-tooltip="{{removeLabel}}"
+	        data-tooltip-direction="LEFT"><i class="fas fa-xmark"></i></button>
+	{{/if}}
+</li>

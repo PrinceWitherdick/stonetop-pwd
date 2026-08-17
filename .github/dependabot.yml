@@ -1,0 +1,28 @@
+version: 2
+
+# Two ecosystems, both monthly. This repository has no runtime dependencies at all (a Foundry
+# system ships as plain ES modules with no build step), so everything below is tooling: the
+# test runner, the linter, and the actions the two workflows call.
+#
+# The github-actions entry is the one that earns its keep. release.yml pins its actions by
+# commit SHA, because a floating tag on the step that decides what every installed world
+# downloads is mutable by definition. A SHA pin does not float, which is the point, but it also
+# means it never picks up a security fix on its own. Dependabot rewrites the SHA and the trailing
+# `# v3.0.2` comment together, which is what keeps a pin from quietly rotting into an old one.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "[Chore]"
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    # Deliberately low. These are dev dependencies on a single-maintainer repo, and a wall of
+    # open PRs is how this feature stops being read at all.
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "[Chore]"

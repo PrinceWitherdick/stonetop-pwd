@@ -72,7 +72,7 @@ export class EndOfSessionDialog extends StonetopDialog {
 			const names = playerChars.map(a => `<strong>${escHtml(a.name)}</strong>`).join(", ");
 
 			const content = stonetopChatCard(
-				`End of Session — Group XP (+${xpToAward})`,
+				`End of Session: Group XP (+${xpToAward})`,
 				`<div class="card-content">
 					<ul class="stonetop-eos-award-list">${yeses}</ul>
 					<p>${names} each marked <strong>+${xpToAward} XP</strong>.</p>

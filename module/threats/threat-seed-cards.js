@@ -55,7 +55,7 @@ export function renderThreatSeedCardHtml(seed) {
 	if (instinct) body.push(`<p class="stonetop-journal-improvement-flavor"><em>Instinct:</em> ${instinct}</p>`);
 	if (moves.length) body.push(`<ul class="steading-req-list">${moves.map(m => `<li class="check-bullet">${m}</li>`).join("")}</ul>`);
 
-	return `<div class="stonetop-journal-improvement stonetop-journal-threat" draggable="true" data-stonetop-threat="${dataAttr}" title="Drag onto the Stonetop steading sheet's Threats tab">`
+	return `<div class="stonetop-journal-improvement stonetop-journal-threat" draggable="true" data-stonetop-threat="${dataAttr}" title="Drag onto the GM Toolkit's Threats tab">`
 		+ `<div class="stonetop-journal-improvement-head">`
 		+ `<i class="fas fa-skull" aria-hidden="true"></i>`
 		+ `<span class="stonetop-journal-improvement-eyebrow">Threat</span>`

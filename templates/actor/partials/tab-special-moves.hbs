@@ -33,6 +33,17 @@
 			</button>
 			{{/with}}
 
+			{{! Edit mode's way off a fate that was settled away from this window — or retconned.
+			    Nothing else clears `fate-pending`, and a sheet left holding it is never recognised
+			    as dying again. See clearFate. }}
+			{{#if stonetop.deathsDoor.clearFate}}
+			<button type="button" class="stonetop-deathsdoor-clear-btn"
+			        data-tooltip="{{localize "stonetop.specialMoves.deathsDoor.clearFateHint"}}">
+				<i class="fas fa-rotate-left"></i>
+				{{localize "stonetop.specialMoves.deathsDoor.clearFate"}}
+			</button>
+			{{/if}}
+
 			{{! Edit mode's route to the Post-Death tab, for a table who resolved the Last Door away
 			    from the sheet: that tab is opt-in, and this is what opts in. See openPostDeath. }}
 			{{#if stonetop.deathsDoor.openPostDeath}}

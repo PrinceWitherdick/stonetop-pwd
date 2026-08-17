@@ -1,77 +1,110 @@
 <div class="stonetop-condemned-body">
 
-	{{!-- Whose move this is, then the move itself. Condemn's brand is the only Judge state that
-	      outlives its scene, and the clause that makes this window necessary ("until you dismiss
-	      it") is the one a table forgets. --}}
+	{{!-- Whose moves these are, then what they have in common: both of the Judge's standing lists
+	      end only when the Judge ends them, and that is the clause a table forgets. Each section
+	      quotes its own move below; this line is what is true of the window. --}}
 	<div class="stonetop-condemned-heading">
 		{{#if playbookImg}}
 		<img class="stonetop-condemned-mark" src="{{playbookImg}}" alt="" draggable="false">
 		{{/if}}
-		<p class="stonetop-condemned-rule">{{localize "stonetop.condemn.rule"}}</p>
+		<p class="stonetop-condemned-rule">{{localize "stonetop.condemn.windowRule"}}</p>
 	</div>
 
-	{{#if hasRows}}
-	<ul class="stonetop-condemned-list">
-		{{#each rows}}
-		<li class="stonetop-condemned-row" data-condemned-id="{{id}}">
-			<span class="stonetop-condemned-portrait">
-				<img class="stonetop-condemned-portrait-img" src="{{img}}" style="{{imgStyle}}" alt="" draggable="false">
-			</span>
+	{{#if showBrands}}
+	{{!-- The brands. A section rather than a bare list, because it is also the drop target for
+	      "brand this person" and has to be distinguishable from the oaths' one below. --}}
+	<section class="stonetop-condemned-section">
+		{{#if showHeadings}}
+		<h3 class="stonetop-condemned-section-heading">{{localize "stonetop.condemn.brandsHeading"}}</h3>
+		{{/if}}
+		<p class="stonetop-condemned-section-rule">{{localize "stonetop.condemn.rule"}}</p>
 
-			<div class="stonetop-condemned-text">
-				<div class="stonetop-condemned-nameline">
-					{{!-- A link only where there is still a document to open. A brand outlives the
-					      actor it names, so a deleted target degrades to plain text rather than to a
-					      control that warns every time it is pressed. --}}
-					{{#if linked}}
-					<a class="stonetop-condemned-open stonetop-condemned-name-text" data-actor-uuid="{{uuid}}"
-					   tabindex="0" aria-label="{{localize "stonetop.relationships.open" name=name}}">{{name}}</a>
-					{{else}}
-					<span class="stonetop-condemned-name-text">{{name}}</span>
-					{{/if}}
-				</div>
+		{{#if hasRows}}
+		<ul class="stonetop-condemned-list">
+			{{#each rows}}
+			{{!-- Nothing in the block: a brand is a name, a link and a reason, with nothing beside
+			      the name the way an oath has its broken tick. --}}
+			{{#> "stonetop.roster-row" prefix="stonetop-condemned" editable=../editable
+			     openClass="stonetop-condemned-open" noteClass="stonetop-condemned-note"
+			     noteTextClass="stonetop-condemned-note-text"
+			     notePlaceholder=(localize "stonetop.condemn.notePlaceholder")
+			     removeClass="stonetop-condemned-dismiss"
+			     removeLabel=(localize "stonetop.condemn.dismissLabel" name=name)}}{{/"stonetop.roster-row"}}
+			{{/each}}
+		</ul>
+		{{else}}
+		<p class="stonetop-condemned-empty">{{localize "stonetop.condemn.empty"}}</p>
+		{{/if}}
 
-				{{#if ../editable}}
-				<input type="text" class="stonetop-condemned-note" data-condemned-id="{{id}}"
-				       value="{{note}}" autocomplete="off"
-				       placeholder="{{localize "stonetop.condemn.notePlaceholder"}}">
-				{{else}}{{#if note}}
-				<p class="stonetop-condemned-note-text">{{note}}</p>
-				{{/if}}{{/if}}
-			</div>
-
-			{{#if ../editable}}
-			<button type="button" class="stonetop-condemned-dismiss" data-condemned-id="{{id}}"
-			        aria-label="{{localize "stonetop.condemn.dismissLabel" name=name}}"
-			        data-tooltip="{{localize "stonetop.condemn.dismissLabel" name=name}}"
-			        data-tooltip-direction="LEFT"><i class="fas fa-xmark"></i></button>
-			{{/if}}
-		</li>
-		{{/each}}
-	</ul>
-	{{else}}
-	<p class="stonetop-condemned-empty">{{localize "stonetop.condemn.empty"}}</p>
+		{{#if canBrand}}
+		{{#> "stonetop.roster-add" prefix="stonetop-condemned"
+		     nameClass="stonetop-condemned-name" listId="stonetop-condemned-suggestions"
+		     addClass="stonetop-condemned-add-btn"
+		     addLabel=(localize "stonetop.condemn.add")
+		     placeholder=(localize "stonetop.condemn.addPlaceholder")
+		     hint=(localize "stonetop.condemn.dropHint")}}{{/"stonetop.roster-add"}}
+		{{/if}}
+	</section>
 	{{/if}}
 
-	{{#if editable}}
-	{{!-- Free-type, backed by a datalist of world actors: a Censure most often lands on somebody
-	      nobody has made an Actor for, and a Proclamation's faction never has one at all. A typed
-	      name that matches an actor exactly is stored as a link to them anyway (see _addTyped), so
-	      the two ways of adding the same person record the same thing. Dropping an Actor onto this
-	      window does it without the typing. --}}
-	<div class="stonetop-condemned-add">
-		<input type="text" class="stonetop-condemned-name" list="stonetop-condemned-suggestions"
-		       autocomplete="off" placeholder="{{localize "stonetop.condemn.addPlaceholder"}}">
-		{{!-- `label` is where a native datalist already means "the aside beside this option", and
-		      it is what StonetopAutocomplete renders as the dimmed second column. Only `value` is
-		      ever inserted into the field, so a picked "Brennan the Claw / Marshedge" types just
-		      the name and the search resolves it cleanly. --}}
-		<datalist id="stonetop-condemned-suggestions">
-			{{#each suggestions}}<option value="{{value}}"{{#if hint}} label="{{hint}}"{{/if}}></option>{{/each}}
-		</datalist>
-		<button type="button" class="stonetop-condemned-add-btn">{{localize "stonetop.condemn.add"}}</button>
-	</div>
-	<p class="stonetop-condemned-hint">{{localize "stonetop.condemn.dropHint"}}</p>
+	{{#if showOaths}}
+	{{!-- The oaths (Binding Arbitration). Same construction as the brands above, plus the one thing
+	      an oath has that a brand does not: whether it has been BROKEN, which is the mechanical
+	      half of the move ("advantage on all rolls against them until they admit their wrong"). --}}
+	<section class="stonetop-oath-section">
+		{{#if showHeadings}}
+		<h3 class="stonetop-condemned-section-heading">{{localize "stonetop.oaths.heading"}}</h3>
+		{{/if}}
+		<p class="stonetop-condemned-section-rule">{{localize "stonetop.oaths.rule"}}</p>
+
+		{{#if hasOaths}}
+		<ul class="stonetop-condemned-list stonetop-oath-list">
+			{{#each oaths}}
+			{{#> "stonetop.roster-row" prefix="stonetop-condemned" editable=../editable
+			     rowClass="stonetop-oath-row" openClass="stonetop-condemned-open"
+			     noteClass="stonetop-oath-note" noteTextClass="stonetop-condemned-note-text"
+			     notePlaceholder=(localize "stonetop.oaths.notePlaceholder")
+			     removeClass="stonetop-oath-release"
+			     removeLabel=(localize "stonetop.oaths.releaseLabel" name=name)}}
+			{{!-- The one thing an oath has that a brand does not. A tick box where the sheet can be
+			      written to, a plain tag where it cannot: the Judge learns this by ASKING, at a
+			      moment that has nothing to do with the roll it later affects, so ticking it is how
+			      the answer survives to that roll.
+
+			      `editable` unqualified, NOT `../editable`: inside a partial's block the hash
+			      arguments have pushed a frame, so `../` no longer walks out to the dialog context
+			      the way it does in a plain `{{#each}}` — and it fails by quietly reading undefined,
+			      which renders the read-only face to somebody who can in fact write. --}}
+			{{#if editable}}
+			<label class="stonetop-oath-broken-control"
+			       data-tooltip="{{localize "stonetop.oaths.brokenTooltip"}}" data-tooltip-direction="UP">
+				<input type="checkbox" class="stonetop-check stonetop-oath-broken" data-row-id="{{id}}"
+				       {{#if broken}}checked{{/if}}>
+				<span class="stonetop-oath-broken-label">{{localize "stonetop.oaths.broken"}}</span>
+			</label>
+			{{else}}{{#if broken}}
+			<span class="stonetop-oath-broken-tag"
+			      data-tooltip="{{localize "stonetop.oaths.brokenTooltip"}}" data-tooltip-direction="UP">{{localize "stonetop.oaths.broken"}}</span>
+			{{/if}}{{/if}}
+			{{/"stonetop.roster-row"}}
+			{{/each}}
+		</ul>
+		{{else}}
+		<p class="stonetop-condemned-empty">{{localize "stonetop.oaths.empty"}}</p>
+		{{/if}}
+
+		{{#if canWitness}}
+		{{!-- The brands' bar exactly, on the oaths' own suggestions and classes: the shared chrome
+		      stem stays `stonetop-condemned` because both halves of this window wear it. --}}
+		{{#> "stonetop.roster-add" prefix="stonetop-condemned"
+		     nameClass="stonetop-oath-name" listId="stonetop-oath-suggestions"
+		     addClass="stonetop-oath-add-btn"
+		     addLabel=(localize "stonetop.oaths.add")
+		     placeholder=(localize "stonetop.oaths.addPlaceholder")
+		     hint=(localize "stonetop.oaths.dropHint")
+		     suggestions=oathSuggestions}}{{/"stonetop.roster-add"}}
+		{{/if}}
+	</section>
 	{{/if}}
 
 </div>

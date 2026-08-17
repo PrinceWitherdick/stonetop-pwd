@@ -1,38 +1,18 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
+import { readRepo, readCss, declarations } from "../fakes/css.js";
 
 // The Lightbearer's header candle. How it LOOKS is verified in a browser; these three guard
 // the ways it can break with no signal at all — the element still lays out, still hovers,
 // still clicks, and nothing is logged.
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const read = (rel) => fs.readFileSync(path.resolve(HERE, "../..", rel), "utf8");
+const read = readRepo;
 
-// Comments carry braces and selector-like text, so strip them before matching rules.
-const CSS = read("styles/stonetop.css").replace(/\/\*[\s\S]*?\*\//g, "");
+const CSS = readCss();
 const SVG = read("assets/icons/candle-light.svg");
 const HEADER = read("templates/actor/partials/actor-header.hbs");
 
-/**
- * Everything an exact selector declares, across every rule that names it.
- *
- * Selector LISTS count: the candle shares its button-neutralising base with the Judge's
- * scales (`.stonetop-holy-light, .stonetop-condemn { … }`) and its mask defaults with the
- * other masked glyphs, so a rule matters here whether the selector stands alone before the
- * brace or sits in a group. Matching only the standalone form would let these assertions
- * pass or fail on how the rules happen to be grouped rather than on what they declare.
- *
- * Returns null when no rule names the selector at all, so "the rule is gone" still fails.
- */
-function block(selector) {
-	const found = [];
-	for (const [, prelude, body] of CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-		if (prelude.split(",").map(s => s.trim()).includes(selector)) found.push(body);
-	}
-	return found.length ? found.join("\n") : null;
-}
+/** Everything an exact selector declares, across every rule that names it — see fakes/css.js. */
+const block = (selector) => declarations(CSS, selector);
 
 describe("the holy-light candle", () => {
 	// game-icons.net ships its art as white-on-an-opaque-black-plate. As a MASK, an opaque

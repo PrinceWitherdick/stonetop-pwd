@@ -8,7 +8,7 @@ import { ensurePackIndex } from "../../../utils/pack-index.js";
 const PLAYBOOK_DESCRIPTIONS = {
 	"the-blessed":       { complexity: "Medium",       desc: "Nature priest. Speaks to spirits and beasts. Works subtle magics via sacred markings and materials." },
 	"the-fox":           { complexity: "Low",          desc: "Clever, quick, and skillful. Not above bending the rules or fighting dirty. Can be quite the charmer, too." },
-	"the-heavy":         { complexity: "Low / Medium", desc: "Not just a violent individual—our violent individual. A champion, yes, but a bit of a liability, too." },
+	"the-heavy":         { complexity: "Low / Medium", desc: "Not just a violent individual, our violent individual. A champion, yes, but a bit of a liability, too." },
 	"the-judge":         { complexity: "Low",          desc: "Settler of disputes, chronicler, and divine bulwark against chaos. Insightful, tough, not necessarily persuasive." },
 	"the-lightbearer":   { complexity: "High",         desc: "Invokes divine power via flame and candle. Beacon of hope, charity, and mercy. Fiery foe of the dark." },
 	"the-marshal":       { complexity: "High",         desc: "Leads the town's militia, plus a crew of followers. Makes choices about who lives and who dies." },

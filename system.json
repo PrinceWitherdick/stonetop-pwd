@@ -3,7 +3,7 @@
     "id":  "stonetop-pwd",
     "title":  "Stonetop",
     "description":  "<p>An unofficial system for playing Stonetop, the pastoral fantasy Powered by the Apocalypse game by Jeremy Strandberg. It provides a character sheet for every playbook with rollable moves, a guided process for leveling up, and tracking for followers and for the steading of Stonetop itself, including its seasonal turns, herds, surplus, and community improvements. The goal is to take the bookkeeping off the table so the group can spend less time on record keeping and more time roleplaying.</p><p>It also adds an interactive flow for Clash and Let Fly, a searchable bestiary of the region's creatures, and compendium journals covering the world's people, places, and major arcana. For GMs there is a shared campaign chronicle, tools to create custom moves and arcana, and options to keep spoilers hidden from players.</p><p><strong>AI training / text-and-data-mining:</strong> rights are reserved. This system, its source, and its bundled content may not be used to train, fine-tune, or evaluate AI models, or be included in datasets built for those purposes. See AI-TRAINING-NOTICE.md.</p>",
-    "version":  "1.4.0",
+    "version":  "1.5.0",
     "compatibility":  {
                           "minimum":  "13",
                           "verified":  "14"
@@ -24,7 +24,7 @@
                 ],
     "url":  "https://github.com/PrinceWitherdick/stonetop-pwd",
     "manifest":  "https://github.com/PrinceWitherdick/stonetop-pwd/releases/latest/download/system.json",
-    "download":  "https://github.com/PrinceWitherdick/stonetop-pwd/releases/download/1.4.0/stonetop.zip",
+    "download":  "https://github.com/PrinceWitherdick/stonetop-pwd/releases/download/1.5.0/stonetop.zip",
     "license":  "LICENSE",
     "readme":  "README.md",
     "bugs":  "https://github.com/PrinceWitherdick/stonetop-pwd/issues",
@@ -100,7 +100,8 @@
                                         "character":  {},
                                         "stonetop":  {},
                                         "monster":  {},
-                                        "npc":  {}
+                                        "npc":  {},
+                                        "gmToolkit":  {}
                                     },
                           "Item":  {
                                        "move":  {},
@@ -113,7 +114,8 @@
                                                    "location":  {},
                                                    "chronicle":  {},
                                                    "threat":  {},
-                                                   "hazard":  {}
+                                                   "hazard":  {},
+                                                   "site":  {}
                                                }
                       },
     "primaryTokenAttribute":  "attributes.hp",

@@ -68,3 +68,18 @@ export const PACK_NAMES = Object.freeze([
 export function packId(name, scope = SYSTEM_ID) {
 	return `${scope}.${name}`;
 }
+
+/**
+ * The five shipped packs, fully qualified. Import these; do not retype the literal pack path.
+ *
+ * Here rather than beside their first caller because a pack id is the package id plus a pack
+ * name, and both halves already live in this file. ITEMS_PACK and ARCANA_PACK used to be
+ * declared in actors/character/StonetopFlags.js, which meant a module wanting the journal pack
+ * had no shared constant to reach for and typed the literal instead. StonetopFlags re-exports
+ * both so its existing importers are unaffected.
+ */
+export const ITEMS_PACK    = packId("stonetop-items");
+export const ARCANA_PACK   = packId("stonetop-arcana");
+export const JOURNAL_PACK  = packId("stonetop-journal");
+export const BESTIARY_PACK = packId("stonetop-bestiary");
+export const MACROS_PACK   = packId("stonetop-macros");

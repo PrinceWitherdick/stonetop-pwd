@@ -1,0 +1,59 @@
+{{!-- THE GM TOOLKIT — the screen-side companion to the GM playbook.
+
+      MODERN LAYOUT ONLY. There are no `{{#if stonetop.classicLayout}}` branches anywhere in
+      this sheet and there should never be any: it postdates the icon rail, so it has no
+      pre-redesign shape to preserve. That is why the nav goes straight to
+      `stonetop.tab-rail-item` rather than through `stonetop.tab-nav-item`, which exists only
+      to pick between the two shapes.
+
+      ONE top-level element, as AppV1's `activateListeners` contract requires.
+
+      The header banner is what module/utils/tab-rail.js MEASURES to place the rail: it looks
+      for `.stonetop-sheet-header, .steading-header` inside the form and starts the rail 16px
+      below whatever it finds. Rename or drop that class and the rail silently falls back to a
+      flat 150px from the top of the window.
+
+      THIS SHEET SCROLLS AS ONE UNIT, alone among the actor sheets. The container below is the
+      scrollport (stonetop.css, and the sheet's `scrollY` names that class), so the banner
+      scrolls off the top with the tab under it rather than staying pinned above it. Anything
+      added between the banner and the tab body scrolls away too — there is no pinned region on
+      this frame to put it in. --}}
+<form class="{{cssClass}} stonetop-gm-toolkit-sheet" autocomplete="off">
+	<div class="sheet-wrapper stonetop-gm-toolkit-container">
+
+		<header class="sheet-header stonetop-sheet-header stonetop-gm-toolkit-header">
+			<h1 class="stonetop-gm-toolkit-name">{{actor.name}}</h1>
+		</header>
+
+		{{!-- The rail's position in the form is arbitrary: tab-rail.js lifts this node onto the
+		      window frame before it is ever painted. It is rendered here, inside the form, so
+		      that Foundry's Tabs controller finds and binds it normally first. --}}
+		<nav class="sheet-tabs tabs stonetop-tab-rail" data-group="primary"
+		     aria-label="{{localize "stonetop.sheet.tabs.railLabel"}}">
+			{{!-- Homefront leads the rail, above the moves. The playbook's own order puts the move
+			      lists first, and this one departs from it deliberately: the moves are what a GM
+			      reaches for mid-sentence and are the tab this sheet OPENS on, so the rail costs
+			      them nothing by sitting them second, while Homefront is the page you turn to when
+			      the party gets home — the start of a stretch of play rather than a moment in
+			      one. --}}
+			{{> "stonetop.tab-rail-item" tab="homefront" label=(localize "stonetop.gmToolkit.tabs.homefront")}}
+			{{> "stonetop.tab-rail-item" tab="moves"   label=(localize "stonetop.gmToolkit.tabs.moves")}}
+			{{> "stonetop.tab-rail-item" tab="threats" label=(localize "stonetop.gmToolkit.tabs.threats")}}
+			{{> "stonetop.tab-rail-item" tab="sites"   label=(localize "stonetop.gmToolkit.tabs.sites")}}
+			{{> "stonetop.tab-rail-item" tab="wonder"  label=(localize "stonetop.gmToolkit.tabs.wonder")}}
+			{{> "stonetop.tab-rail-item" tab="loop"    label=(localize "stonetop.gmToolkit.tabs.loop")}}
+		</nav>
+
+		<div class="stonetop-sheet-layout stonetop-gm-toolkit-layout stonetop-sheet-layout--own-seam">
+			<section class="sheet-body">
+				{{> "stonetop.gm-toolkit-tab-homefront"}}
+				{{> "stonetop.gm-toolkit-tab-moves"}}
+				{{> "stonetop.gm-toolkit-tab-threats"}}
+				{{> "stonetop.gm-toolkit-tab-sites"}}
+				{{> "stonetop.gm-toolkit-tab-wonder"}}
+				{{> "stonetop.gm-toolkit-tab-loop"}}
+			</section>
+		</div>
+
+	</div>
+</form>

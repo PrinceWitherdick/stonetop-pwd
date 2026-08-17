@@ -1,0 +1,21 @@
+{{!-- The steading header's clock: the season Stonetop is in, over the campaign year.
+
+      Its own partial because the header wraps it in a <button> for a GM (who can correct
+      it) and a plain <div> for everyone else — two wrappers, one readout, and the partial
+      is what keeps them from drifting apart.
+
+      Two centred rows at the far right of the header: the season's name bare above, the
+      year alone inside the chip below. Only the year is boxed, so the chip reads as the
+      campaign's count and the name above it as the label on that count, rather than both
+      competing inside one border. The name carries the season entirely on its own — bold,
+      and in that season's ink (the --stonetop-season-*-ink tokens), by way of a modifier
+      class interpolated from the SEASON_IDS key rather than picked by a chain of {{#if}}s:
+      the value is already the token's name.
+
+      Both halves always render. A world that has never recorded a Seasons Change is in the
+      season it opened in, so the readout falls back on Spring of the First Year rather
+      than showing half a clock — see DEFAULT_SEASON in module/seasons/current-season.js,
+      which is also where that fallback stops: it is what the header SAYS, never what the
+      steading stores. --}}
+<span class="steading-header-season-name steading-header-season-name--{{season.season}}">{{season.label}}</span>
+<span class="steading-header-season-year stonetop-year-chip">{{season.yearLabel}}</span>

@@ -9,6 +9,7 @@
 // the same in Foundry's browser and under the node test runner.
 
 import { settingOverviewPages } from "./seeded-journals.js";
+import { decodeEntities } from "./strings.js";
 
 export const FAQ_PAGE_NAME = "Character Creation FAQ";
 
@@ -26,19 +27,15 @@ export const STEP_FAQ_KEYS = {
 	moves:             ["advantage", "various tags"],
 };
 
-// Minimal entity decode — enough to clean the question text we match/display a
-// key on. We never run this over the answer html (that stays verbatim).
-function decodeEntities(text) {
-	return String(text ?? "")
-		.replace(/&amp;/g, "&")
-		.replace(/&lt;/g, "<")
-		.replace(/&gt;/g, ">")
-		.replace(/&quot;/g, '"')
-		.replace(/&#39;/g, "'");
-}
+// Entity decoding for the question text we match/display a key on. We never run this over the
+// answer html (that stays verbatim). Shared via utils/strings.js — the local copy this replaced
+// didn't know &mdash;/&ndash;/&hellip;/&rsquo;/&lsquo;, so em-dashes in a question survived as
+// raw "&mdash;" in the FAQ popup's headings.
 
 function stripTags(html) {
-	return String(html ?? "").replace(/<[^>]+>/g, "");
+	// `[^>]*`, not `[^>]+`: the latter left a bare "<>" in place, and every other tag-stripper
+	// in the codebase uses the zero-or-more form.
+	return String(html ?? "").replace(/<[^>]*>/g, "");
 }
 
 // Split the FAQ page's HTML into ordered Q&A items. The page is a flat run of

@@ -21,20 +21,6 @@ function makeFlags(store = {}) {
 	};
 }
 
-function makeOutfitItem(overrides = {}) {
-	const labels = overrides.resourceLabels ?? null;
-	return new OutfitItemBuilder()
-		.withSlug(overrides.slug ?? "test-item")
-		.withName(overrides.name ?? "Test Item")
-		.withWeight(overrides.weight ?? 1)
-		.withNote(overrides.note ?? null)
-		.withInventoryColumn(overrides.inventoryColumn ?? "regular")
-		.withResource(labels != null ? {max: labels.length, title: null, labels} : (overrides.resource ?? null))
-		.withTwoCol(overrides.twoCol ?? false)
-		.withSmallGrid(overrides.smallGrid ?? false)
-		.withBreakBefore(overrides.breakBefore ?? false)
-		.build();
-}
 
 // -- CharacterInventory -------------------------------------------------------
 

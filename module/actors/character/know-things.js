@@ -63,7 +63,7 @@ export function neverAtALossActions() {
 			`<button type="button" class="stonetop-know-things-xp" data-choice="mark">`
 			+ `<i class="fas fa-star"></i> Mark XP</button>`
 			+ `<button type="button" class="stonetop-know-things-xp" data-choice="decline">`
-			+ `<i class="fas fa-book-open-reader"></i> Never at a Loss — no XP, tell me how to learn more</button>`,
+			+ `<i class="fas fa-book-open-reader"></i> Never at a Loss: no XP, tell me how to learn more</button>`,
 	};
 }
 

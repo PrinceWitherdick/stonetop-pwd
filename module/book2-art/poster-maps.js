@@ -1,8 +1,8 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { ALL_SYSTEM_IDS } from "../migration/compat.js";
 import { book2ArtSrcWith } from "./art-root.js";
-import { browseArtDirs } from "./browse.js";
-import { loadImage } from "./rebuild-crops.js";
+import { browseArtDirs, servedPath } from "./browse.js";
+import { loadImage, artImageUrl } from "./rebuild-crops.js";
 import { landmarkIcon, landmarkNoteData } from "../hooks/PlaceOfInterestDrop.js";
 import { placeNoteLink } from "../utils/places-chronicle.js";
 import { error, info } from "../utils/logger.js";
@@ -120,8 +120,11 @@ function flagScopes() {
 export function planPosterMapScenes(present, root, scenes = []) {
 	const all = Array.from(scenes ?? []);
 	return POSTER_MAPS.flatMap(map => {
-		const src = book2ArtSrcWith(root, map.out);
-		if (!present.has(src)) return [];
+		const key = book2ArtSrcWith(root, map.out);
+		if (!present.has(key)) return [];
+		// Asked about by identity, but the Scene's background has to be something a browser can
+		// fetch — the same string off a hosted setup, the Assets Library URL on The Forge.
+		const src = servedPath(present, key);
 		return [{ map, src, hasScene: all.some(scene => isPosterMapScene(scene, map)) }];
 	});
 }
@@ -153,9 +156,12 @@ export async function posterMapScenePlan(root) {
  * than the whole batch. Ported from the macro's `probeMapPath`.
  */
 export async function probeImageSize(src) {
-	const path = String(src).replace(/^\/+/, "");
-	const img = await loadImage(encodeURI(foundry.utils.getRoute(path)));
-	return { src: path, w: img.naturalWidth, h: img.naturalHeight };
+	// `src` arrives already host-resolved from planPosterMapScenes — on The Forge that is a full
+	// Assets Library URL, which must NOT be routed. artImageUrl decides; the Scene background keeps
+	// the resolved string either way, since that is what a client has to fetch.
+	const path = String(src ?? "");
+	const img = await loadImage(artImageUrl(path));
+	return { src: path.replace(/^\/+/, ""), w: img.naturalWidth, h: img.naturalHeight };
 }
 
 /**

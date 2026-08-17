@@ -34,13 +34,13 @@ const _STEPS = [
 		key:   "cause",
 		title: "Cause of corruption",
 		icon:  "fa-skull-crossbones",
-		body:  `<p>How did the corruption take root? Some causes were an intentional, misguided, or accidental act &mdash; if so, decide who did it and why (or roll the Die of Fate).</p>`,
+		body:  `<p>How did the corruption take root? Some causes were an intentional, misguided, or accidental act: if so, decide who did it and why (or roll the Die of Fate).</p>`,
 	},
 	{
 		key:   "severity",
 		title: "Severity",
 		icon:  "fa-hourglass-half",
-		body:  `<p>How bad is it? Severity climbs a ladder from a merely shunned place to a wound in the world &mdash; it seeds the site's <strong>impending doom</strong> and grim portents (it getting worse).</p>`,
+		body:  `<p>How bad is it? Severity climbs a ladder from a merely shunned place to a wound in the world: it seeds the site's <strong>impending doom</strong> and grim portents (it getting worse).</p>`,
 	},
 	{
 		key:   "cleansing",
@@ -53,7 +53,7 @@ const _STEPS = [
 		title:   "Review",
 		icon:    "fa-clipboard-check",
 		isFinal: true,
-		body:    `<p>Look it over. Its card goes to the homebrew Threats journal; drag it onto the Stonetop steading sheet's Threats tab to make it a live threat.</p>`,
+		body:    `<p>Look it over. Its card goes to the homebrew Threats journal; drag it onto the GM Toolkit's Threats tab to make it a live threat.</p>`,
 	},
 ];
 
@@ -204,7 +204,7 @@ export class CreateCorruptedSiteDialog extends StepperDialog {
 			const intent = chosen?.fateful && this._causeIntent ? ` (${escHtml(this._causeIntent)})` : "";
 			facts.push(`<li><strong>Cause:</strong> ${escHtml(this._causeText.trim())}${intent}</li>`);
 		}
-		if (sev) facts.push(`<li><strong>Severity:</strong> ${escHtml(sev.text)} &mdash; ${escHtml(sev.detail)}</li>`);
+		if (sev) facts.push(`<li><strong>Severity:</strong> ${escHtml(sev.text)}, ${escHtml(sev.detail)}</li>`);
 		if (facts.length) descParts.push(`<ul>${facts.join("")}</ul>`);
 
 		const cleansing = [

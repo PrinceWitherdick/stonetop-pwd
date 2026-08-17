@@ -1,0 +1,37 @@
+{{!-- SITES — moved here from the steading sheet, alongside Threats & Dangers, for the same
+      reason: a written-up site is the GM's own prep.
+
+      Sites get their own tab rather than a third section on Threats & Dangers because a
+      written-up site is a page-long card, and stacking those under the threat and hazard
+      sections would bury both.
+
+      The `steading-*` class names are CSS hooks kept deliberately, and the storage still lives
+      on the STEADING actor. Both are explained at length in gm-toolkit-tab-threats.hbs and in
+      module/actors/gmtoolkit/gm-prep-tabs.js. --}}
+<div class="tab sites steading-edit-section{{#unless stonetop.edit.sites}} stonetop-readonly{{/unless}}" data-group="primary" data-tab="sites">
+	{{> "stonetop.steading-section-toggle" section="sites" editing=stonetop.edit.sites}}
+	<section class="sheet-tab steading-sites steading-prep-cards">
+
+		{{#if stonetop.hasSteading}}
+		<p class="steading-threats-intro">
+			Interesting places the PCs can explore (Book I, <em>Sites</em>): the destination of an expedition, a point of interest on the way, or an incidental discovery. Written up here for your eyes only. Drag a card onto a scene to pin it to the map.
+		</p>
+
+		{{#if stonetop.sites.length}}
+		<div class="steading-threats-grid">
+			{{#each stonetop.sites}}
+			<div class="threat-card-wrap" data-page-uuid="{{uuid}}">
+				{{> "stonetop.site-card" this}}
+				{{> "stonetop.gm-prep-card-tools" kind="site" uuid=uuid}}
+			</div>
+			{{/each}}
+		</div>
+		{{/if}}
+
+		{{> "stonetop.gm-prep-add-bar" kind="site" label="Create a site"}}
+		{{else}}
+		{{> "stonetop.gm-prep-no-steading" noun="Sites"}}
+		{{/if}}
+
+	</section>
+</div>

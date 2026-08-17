@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { CharacterPostDeath } from "../../../module/actors/character/CharacterPostDeath.js";
+import { CharacterPostDeath, buildLoreSection } from "../../../module/actors/character/CharacterPostDeath.js";
 import { CharacterInstincts } from "../../../module/actors/character/CharacterInstincts.js";
 import { CharacterLore } from "../../../module/actors/character/CharacterLore.js";
 
@@ -96,5 +96,49 @@ describe("CharacterPostDeath", () => {
 		const pd = new CharacterPostDeath(flags, new CharacterInstincts(makeFlags()), new CharacterLore(makeFlags()));
 
 		expect(pd.slugUpdateData("ghost")).toEqual({ "flags.stonetop-pwd.postDeathInsert.slug": "ghost" });
+	});
+});
+
+// Crossing off is the Thrall's Dark Succor rule and nothing else: a Mark crossed off can never be
+// gained again. The crossed-off set holds MARK slugs, so applying it to every entry made any
+// option in any other section that happened to share a slug render struck through — and, since
+// sectionOptions folds that into "blocked", unclickable for good.
+describe("buildLoreSection — crossed-off Marks", () => {
+	// One slug reused across two sections, which is the whole point: nothing stops an insert's
+	// Consequences and its Marks both naming an option "hollow".
+	const LORE = [
+		{
+			slug: "marks",
+			options: [
+				{ slug: "hollow", description: "<p><strong>HOLLOW</strong> &mdash; a Mark.</p>" },
+				{ slug: "hungry", description: "<p><strong>HUNGRY</strong> &mdash; a Mark.</p>" },
+			],
+		},
+		{
+			slug: "consequences",
+			options: [
+				{ slug: "hollow", description: "<p><strong>HOLLOW</strong> &mdash; a Consequence sharing the name.</p>" },
+			],
+		},
+	];
+
+	const loreState = { getCount: () => 0, getText: () => "" };
+	const optionIn = (section, entrySlug, optSlug) =>
+		section.entries.find(e => e.slug === entrySlug).options.find(o => o.slug === optSlug);
+
+	it("crosses the Mark off", () => {
+		const section = buildLoreSection(LORE, loreState, null, ["hollow"]);
+		expect(optionIn(section, "marks", "hollow").crossedOff).toBe(true);
+	});
+
+	it("leaves a same-named option in another section alone", () => {
+		const section = buildLoreSection(LORE, loreState, null, ["hollow"]);
+		expect(optionIn(section, "consequences", "hollow").crossedOff).toBe(false);
+	});
+
+	it("crosses nothing off when nothing has been", () => {
+		const section = buildLoreSection(LORE, loreState, null, []);
+		expect(optionIn(section, "marks", "hollow").crossedOff).toBe(false);
+		expect(optionIn(section, "marks", "hungry").crossedOff).toBe(false);
 	});
 });

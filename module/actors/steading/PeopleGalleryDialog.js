@@ -1,9 +1,12 @@
 import { StonetopDialog } from "../../utils/stonetop-dialog.js";
-import { book2ArtRoot } from "../../book2-art/art-root.js";
+import { book2ArtPrefix, book2ArtRoot, book2ArtServedWith, book2ArtSrcWith } from "../../book2-art/art-root.js";
+import { splitAtArtRoot } from "../../book2-art/browse.js";
 import { BOOK2_ART_APPLY_MANIFEST } from "../../book2-art/manifest.js";
-import { displayPortraitSrc } from "../../book2-art/people-portraits.js";
+import { displayPortraitSrc, portraitRectOf } from "../../book2-art/people-portraits.js";
+import { normalizeFrame } from "../../utils/portrait-frame.js";
 import { getObjectSetting } from "../../settings.js";
 import { filePicker } from "../../utils/foundry-compat.js";
+import { pickRandomExcluding } from "../../utils/arrays.js";
 
 // How long the grid takes to travel to a rolled portrait, however far away it landed. The
 // browser's own `scrollIntoView({behavior:"smooth"})` picks its own duration and scales it
@@ -36,6 +39,41 @@ export function rolledScrollTop({ scrollTop, viewTop, viewHeight, tileTop, tileH
 export const asFullPortrait = displayPortraitSrc;
 
 /**
+ * The comparable identity of a held portrait: its whole-illustration form, reduced to the path
+ * INSIDE the durable art folder.
+ *
+ * Two paths can name the same picture and not match as strings. A square and its illustration are
+ * the pair `asFullPortrait` exists for; the other pair is a path written before this world knew
+ * where its art was actually served from (a bare `stonetop-book-art/…`) against the same file
+ * spelled with the host's prefix (`https://assets.forge-vtt.com/<userId>/stonetop-book-art/…`).
+ * Cutting everything up to and including the root settles that second pair, because a root and a
+ * host prefix are both things that sit in FRONT of the part that identifies the picture.
+ *
+ * Cutting all the way down to the BASENAME would settle it too, and that is what this did — but a
+ * file outside the art folder then answers to a gallery tile merely by sharing its name. A GM's own
+ * `worlds/mine/npcs/b1-p135-x526.webp` was marked "used by" whoever holds it and hidden from the
+ * Unused filter, for a portrait nobody is wearing. Art outside the root keeps its whole path and so
+ * is only ever equal to itself.
+ *
+ * Used for every "is this the same portrait?" question the gallery asks — selected, used-by, and
+ * the roll's avoid-the-current-one — but never to BUILD a path.
+ *
+ * `root` is injectable for the same reason `book2ArtPrefix` is hoisted in getData: every caller
+ * asks this once PER ITEM — once per used portrait, and once per pool tile inside the roll — so
+ * reading the setting in here means one `game.settings.get` per element of a 155-tile pool for a
+ * value that cannot change between iterations. Callers with a root already in hand pass it.
+ */
+export const portraitIdentity = (src, root = book2ArtRoot()) => {
+	if (!src) return "";
+	// `splitAtArtRoot` is the browse's own answer to "what is in front of the root, and what
+	// identifies the file?" — the same question asked of a stored path instead of a listed one.
+	// Sharing it is what keeps a gallery tile and a browse result agreeing about one picture; it
+	// also matches on the DEEPEST occurrence of the root, so a URL that happens to repeat it
+	// higher up still resolves to the file.
+	return splitAtArtRoot(String(asFullPortrait(src)), root).key;
+};
+
+/**
  * Choose one portrait at random out of `srcs` — which the caller has already narrowed to the
  * tiles the filters leave on screen, so "feminine, not a child, surprise me" works.
  *
@@ -43,16 +81,12 @@ export const asFullPortrait = displayPortraitSrc;
  * always lands somewhere new; falls back to the whole pool when the current portrait is the
  * only thing showing. `rng` is injectable so the tests can pin the roll.
  *
- * Compares raw strings, so the caller owes it paths that are already comparable — see
- * `asFullPortrait`, and the roll handler that runs both sides through it.
+ * Compares through `keyOf`, which defaults to comparing the raw strings. The gallery passes
+ * `portraitIdentity`, because the pool and the held portrait are routinely spelled differently
+ * for the same picture — see there.
  */
-export function pickRandomPortrait(srcs, { current = "", rng = Math.random } = {}) {
-	const pool = (srcs ?? []).filter(Boolean);
-	if (!pool.length) return null;
-	const fresh = pool.filter(src => src !== current);
-	const choices = fresh.length ? fresh : pool;
-	// Clamp rather than trust rng() < 1: a stub (or an edge-case 1) would index past the end.
-	return choices[Math.min(choices.length - 1, Math.floor(rng() * choices.length))];
+export function pickRandomPortrait(srcs, { current = "", rng = Math.random, keyOf = (s) => s } = {}) {
+	return pickRandomExcluding(srcs, { exclude: current, rng, keyOf });
 }
 
 /**
@@ -128,31 +162,46 @@ export class PeopleGalleryDialog extends StonetopDialog {
 		const idx = this._peopleIndex();
 		const squares = this._squareIndex();
 		const root = book2ArtRoot();
+		// Where this host actually serves the art folder from. Empty on a self-hosted Foundry, so
+		// the tiles are built exactly as they always were; the Assets Library origin on The Forge,
+		// where the bare path 404s. Read once per render rather than per tile — 155 of them.
+		const prefix = book2ArtPrefix();
 		const traits = PeopleGalleryDialog._traitsByOut();
-		// Everything about "is this the same person" is decided on the WHOLE illustration's path
-		// — see asFullPortrait — because a portrait can be held either way: an actor picked
-		// before squares existed carries the illustration, one picked after carries the square.
-		const currentFull = asFullPortrait(this._current);
-		const usedByFull = {};
-		for (const [src, who] of Object.entries(this._used ?? {})) usedByFull[asFullPortrait(src)] = who;
+		// Everything about "is this the same person" is decided on the portrait's identity — see
+		// portraitIdentity — because one picture can be held under several paths: an actor picked
+		// before squares existed carries the illustration and one picked after carries the square,
+		// and either can be spelled with or without this host's prefix.
+		//
+		// Only the HELD paths need reducing. A tile is built FROM the manifest, so its identity is
+		// already known — `${root}/${out}`, the same key the browse and every art index use — and
+		// re-deriving it from the path built one line below would cost a setting read and a
+		// manifest lookup on each of 155 tiles, twice over, to arrive back where it started.
+		const currentKey = portraitIdentity(this._current, root);
+		const usedByKey = {};
+		for (const [src, who] of Object.entries(this._used ?? {})) usedByKey[portraitIdentity(src, root)] = who;
 		const people = Object.entries(idx).map(([out, name]) => {
-			const full = `${root}/${out}`;
-			// The square is what gets committed and what the tile shows, so the grid is a
-			// preview of the sheet rather than of the book page. The whole illustration is one
-			// hover away, which is where a standing figure actually reads.
-			const square = squares[out] ? `${root}/${squares[out]}` : "";
+			const key = book2ArtSrcWith(root, out);
+			const full = book2ArtServedWith(root, out, prefix);
+			// The square is what the tile SHOWS, so the grid is a preview of the sheet rather
+			// than of the book page. The whole illustration is one hover away, which is where a
+			// standing figure actually reads.
+			//
+			// What gets COMMITTED is the whole illustration plus the square as a frame over it —
+			// see `_choose`. The tile still previews the square because that is what the sheet
+			// will draw; only the way it gets there has changed.
+			const square = squares[out] ? book2ArtServedWith(root, squares[out], prefix) : "";
 			const src = square || full;
 			// A portrait with no manifest entry (an older import, or a file dropped in by hand)
 			// is untagged, which is the same bucket as one deliberately left unspecified.
 			const t = traits[out] ?? { presenting: "", kid: false };
-			const selected = full === currentFull;
+			const selected = key === currentKey;
 			// "Used" always means used by somebody ELSE. Every caller leaves the person being
 			// edited out of the map it hands over, but the guarantee is made here too rather than
 			// resting on all of them getting it right: the scans now reach the whole world, and
 			// two people can legitimately share a face — so without this, the very portrait
 			// somebody is wearing could come back marked as taken from them, and the "Unused"
 			// filter would hide the tile that is currently selected.
-			const usedBy = selected ? "" : (usedByFull[full] ?? "");
+			const usedBy = selected ? "" : (usedByKey[key] ?? "");
 			return {
 				out, name, src, full, isSquare: !!square,
 				selected, presenting: t.presenting, kid: t.kid, usedBy,
@@ -233,11 +282,43 @@ export class PeopleGalleryDialog extends StonetopDialog {
 
 	// ── Picking ───────────────────────────────────────────────────────
 
-	/** Apply a portrait and close. Only Accept gets here: every other route only proposes. */
-	async _choose(src) {
+	/**
+	 * Apply a portrait and close. Only Accept gets here: every other route only proposes.
+	 *
+	 * Commits the WHOLE illustration and hands the square over as a FRAME, which is the layout a
+	 * bestiary creature has always used and which people now share (book2-art/repoint-portraits.js
+	 * has the reasoning and migrates worlds already holding the older shape). Committing the square
+	 * as `img` looked identical on every surface in this system and was wrong one step outside it:
+	 * a module reading `actor.img` — Image Hover on a token — got a small cropped face where the
+	 * same gesture on a monster gave the artist's whole composition.
+	 *
+	 * The second argument carries BOTH halves of that arrangement — the frame the small round
+	 * surfaces crop to, and the square file the map draws — because a caller that took only the
+	 * picture would leave a following token on the tall illustration. Both are null for a tile with
+	 * no square behind it and for a browsed file, which is why every `onPick` must still work from
+	 * `src` alone.
+	 */
+	async _choose(btn) {
+		const src = btn?.dataset?.full || btn?.dataset?.src;
 		if (!src) return;
-		await this._onPick?.(src);
+		const frame = this.constructor._frameOf(btn, src);
+		await this._onPick?.(src, { frame, square: frame ? (btn?.dataset?.src ?? "") : "" });
 		this.close();
+	}
+
+	/**
+	 * The frame a tile commits: its hand-chosen rect, stamped against the picture it was measured on.
+	 *
+	 * Read back out of the square's own filename, which is the only place that rect survives
+	 * (people-portraits.js). `data-src` IS the square whenever one was cut, so no second data
+	 * channel is needed — and `portraitRectOf` returns null for the tile that carries no square
+	 * (its `data-src` is the whole illustration) and for a square whose name predates the suffix,
+	 * which are exactly the tiles with no frame to commit. Cache-busters are stripped there, so a
+	 * served path with a query string still resolves.
+	 */
+	static _frameOf(btn, src) {
+		const rect = portraitRectOf(btn?.dataset?.src);
+		return rect ? normalizeFrame({ src, rect }) : null;
 	}
 
 	/** The tiles the filters currently leave on screen — the pool Random rolls from. */
@@ -500,19 +581,23 @@ export class PeopleGalleryDialog extends StonetopDialog {
 		// one, else the member's current portrait — so rolling again always moves.
 		//
 		// Rolled over `data-full`, not `data-src`, for the reason getData spells out: a portrait
-		// chosen before squares existed is held as the WHOLE illustration while its tile now
-		// shows the square, so comparing the two raw paths never matches and "avoid the current
-		// one" silently stops avoiding anything. The winning tile still contributes its own
-		// `data-src` — the square is what Accept commits.
+		// is held as the WHOLE illustration while its tile shows the square, so comparing the two
+		// raw paths never matches and "avoid the current one" silently stops avoiding anything.
+		// The comparison itself goes through `portraitIdentity`, which normalises either spelling,
+		// so a world still holding the older square-as-img shape is avoided correctly too.
 		this._randomBtn?.addEventListener("click", () => {
 			const visible = this._visiblePicks();
 			const held = this._proposed?.dataset.src || this._current;
-			const full = pickRandomPortrait(visible.map(p => p.dataset.full), { current: asFullPortrait(held) });
+			// One setting read for the whole roll: `keyOf` is called once for the held portrait and
+			// once per pool tile, and the art root is the same for all of them.
+			const artRoot = book2ArtRoot();
+			const full = pickRandomPortrait(visible.map(p => p.dataset.full),
+				{ current: held, keyOf: (s) => portraitIdentity(s, artRoot) });
 			if (full) this._propose(visible.find(p => p.dataset.full === full), { scroll: true });
 		});
 
 		// The one door a portrait actually goes through, however it was landed on.
-		this._acceptBtn?.addEventListener("click", () => this._choose(this._proposed?.dataset.src));
+		this._acceptBtn?.addEventListener("click", () => this._choose(this._proposed));
 
 		// Close first so the gallery isn't stacked over the FilePicker it opens.
 		root.querySelector(".stonetop-people-browse")?.addEventListener("click", () => {

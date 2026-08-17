@@ -7,8 +7,10 @@
 // (registered in stonetop.js) call applyLocationTooltips() on the rendered HTML.
 
 import { isInJournalEditor } from "../utils/journal-editor-guard.js";
+import { JOURNAL_PACK } from "../system-id.js";
 import { ensurePackIndex } from "../utils/pack-index.js";
 import { getHoverDescriptionSetting } from "../settings.js";
+import { restrictContentLinks } from "../journal/restrict-content-links.js";
 
 // Where the resolved summary is recorded regardless of the hover setting. The hover
 // itself is `data-tooltip`, which we only stamp when the user wants hovers; but
@@ -20,7 +22,7 @@ const SUMMARY_DATA_KEY = "stonetopSummary";
 
 // Packs that carry hover summaries. The locations, lore, and bestiary-codex
 // generators all stamp `flags.stonetop.summary`; they now ship in one merged pack.
-const SUMMARY_PACKS = ["stonetop-pwd.stonetop-journal"];
+const SUMMARY_PACKS = [JOURNAL_PACK];
 
 let _indexPromise = null;
 
@@ -67,9 +69,9 @@ async function _indexPackSummaries(map, packId) {
  * Stonetop journal, and stamp it as `data-tooltip` (the hover itself) unless the user has
  * switched cross-link hovers off. Safe to call repeatedly.
  *
- * Always resolves — the summary bookkeeping runs whether or not hovers are wanted, so the
- * caller's `.then(() => restrictContentLinks(...))` chains still fire and still classify
- * links correctly with hovers off (see SUMMARY_DATA_KEY).
+ * Always resolves — the summary bookkeeping runs whether or not hovers are wanted, so
+ * {@link applyTooltipsThenRestrict} still classifies links correctly with hovers off
+ * (see SUMMARY_DATA_KEY).
  * @param {HTMLElement|jQuery} root
  */
 export async function applyLocationTooltips(root) {
@@ -92,4 +94,28 @@ export async function applyLocationTooltips(root) {
 		// re-renders sheets), so clear a tooltip left by an earlier pass.
 		else delete a.dataset.tooltip;
 	}
+}
+
+/**
+ * Stamp the cross-link tooltips, then de-link what this reader may not see.
+ *
+ * ORDER IS THE POINT, and it was restated (with its own copy of this comment) at all three call
+ * sites — the journal render hook, the actor-sheet render hook, and the Setting Overview dialog.
+ * restrictContentLinks carries the just-stamped summary onto the de-linked span, so a player
+ * still gets the hover description for Locations & Lore while the GM-only bestiary codex
+ * flattens to plain text. It is a no-op for GMs, who keep every link — including broken ones,
+ * which is how a dangling reference stays visible to the person who can fix it.
+ *
+ * The tooltip index is async, hence the chain; the catch is here so one failed pack index can't
+ * leave a player looking at links that should have been restricted with nothing logged.
+ *
+ * @param {HTMLElement|jQuery} root
+ */
+export async function applyTooltipsThenRestrict(root) {
+	try {
+		await applyLocationTooltips(root);
+	} catch (err) {
+		console.error("Stonetop | cross-link tooltips failed; restricting links anyway", err);
+	}
+	restrictContentLinks(root);
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-	isValidRect, portraitSuffix, portraitOutFor,
+	isValidRect, portraitSuffix, portraitOutFor, portraitRectOf, rectFromSuffix,
 	fullPortraitSrc, squarePortraitSrc, hasPortraitSuffix,
 } from "../../module/book2-art/people-portraits.js";
 
@@ -67,6 +67,57 @@ describe("filename grammar", () => {
 
 	it("does not mistake a crop suffix for a square one", () => {
 		expect(hasPortraitSuffix("assets/people/b1-p007-x32-c750-387-1000-1000.webp")).toBe(false);
+	});
+});
+
+// Reading a rect back OUT of the name it was written into. The hand-chosen square of every shipped
+// person survives only in its filename, and moving a world onto the "portrait is the whole
+// illustration, the square is a frame over it" layout needs that number back.
+describe("reading a rect back out of a filename", () => {
+	it("round-trips every rect the writer can produce", () => {
+		for (const rect of [[0.12, 0, 0.88, 0.26], [0.25, 0, 1, 0.75], [0, 0, 1, 1], [0.292, 0.024, 0.72, 0.328]]) {
+			expect(portraitRectOf(`assets/people/x${portraitSuffix(rect)}.webp`)).toEqual(rect);
+		}
+	});
+
+	it("reads a coordinate flush with the edge, where the group is four digits", () => {
+		expect(portraitRectOf("assets/people/b1-p135-x526-q000-000-1000-720.webp")).toEqual([0, 0, 1, 0.72]);
+	});
+
+	it("sees through a cache-buster, which the suffix's own anchor would otherwise hide", () => {
+		// Tokenizer appends `?<timestamp>` to paths it touches; the suffix is matched against the
+		// EXTENSION, so an unstripped query moves the anchor and the rect silently disappears.
+		expect(portraitRectOf("assets/people/x-q120-000-880-260.webp?1754099")).toEqual([0.12, 0, 0.88, 0.26]);
+		expect(portraitRectOf("assets/people/x-q120-000-880-260.webp#frag")).toEqual([0.12, 0, 0.88, 0.26]);
+	});
+
+	it("reads a square cut from an already-cropped person, suffix stacked on suffix", () => {
+		expect(portraitRectOf("assets/people/b1-p007-x32-c335-048-492-452-q292-024-720-328.webp"))
+			.toEqual([0.292, 0.024, 0.72, 0.328]);
+	});
+
+	it("answers null for a name carrying no rect, so it doubles as the is-this-ours test", () => {
+		expect(portraitRectOf("assets/people/b1-p135-x526.webp")).toBeNull();
+		expect(portraitRectOf("assets/people/b1-p135-x526-face.webp")).toBeNull();
+		expect(portraitRectOf("")).toBeNull();
+		expect(portraitRectOf(null)).toBeNull();
+	});
+
+	it("refuses a suffix whose numbers are not a usable rect", () => {
+		// Nothing writes these, but a hand-renamed file can carry them and a frame built from an
+		// inverted rect would paint garbage.
+		expect(portraitRectOf("assets/people/x-q880-000-120-260.webp")).toBeNull();  // x1 <= x0
+		expect(portraitRectOf("assets/people/x-q120-260-880-260.webp")).toBeNull();  // zero height
+	});
+
+	it("keeps the two suffix letters apart", () => {
+		// `q` is a person's face, `t` a creature's token square, `c` a crop. Asking for one must
+		// never answer with another's numbers.
+		const token = "assets/bestiary/crinwin-t397-163-718-600.webp";
+		expect(portraitRectOf(token)).toBeNull();
+		expect(rectFromSuffix("t", token)).toEqual([0.397, 0.163, 0.718, 0.6]);
+		expect(rectFromSuffix("c", "assets/people/b1-p007-x32-c335-048-492-452.webp"))
+			.toEqual([0.335, 0.048, 0.492, 0.452]);
 	});
 });
 

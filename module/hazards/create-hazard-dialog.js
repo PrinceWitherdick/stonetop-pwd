@@ -59,7 +59,7 @@ const _STEPS = [
 		title:   "Review",
 		icon:    "fa-clipboard-check",
 		isFinal: true,
-		body:    `<p>Look it over. Its card lives on the steading sheet beside your threats: drag it onto a scene to pin it to the map, and edit it any time.</p>`,
+		body:    `<p>Look it over. Its card lives on the GM Toolkit beside your threats: drag it onto a scene to pin it to the map, and edit it any time.</p>`,
 	},
 ];
 

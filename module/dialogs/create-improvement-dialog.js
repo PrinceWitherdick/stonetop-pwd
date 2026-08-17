@@ -42,11 +42,11 @@ export function openCreateImprovementDialog() {
 				</label>
 				<label class="stonetop-homestead-field">
 					<span>Requirements</span>
-					<textarea name="requirements" rows="4" placeholder="One requirement per line — each becomes a check-off step (optional)."></textarea>
+					<textarea name="requirements" rows="4" placeholder="One requirement per line: each becomes a check-off step (optional)."></textarea>
 				</label>
 				<label class="stonetop-homestead-field">
 					<span>Effect</span>
-					<textarea name="effect" rows="2" placeholder="What completing it does — new resources, defenses, etc. (optional)."></textarea>
+					<textarea name="effect" rows="2" placeholder="What completing it does: new resources, defenses, etc. (optional)."></textarea>
 				</label>
 			</div>
 		</form>`,

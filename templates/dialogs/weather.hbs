@@ -1,29 +1,63 @@
 <div class="stonetop-weather-pick">
 
   <p class="stonetop-weather-intro">
-    Pick the season (per your latest <em>Seasons Change</em>), then roll 1d6 on its table.
+    Pick the season (per your latest <em>Seasons Change</em>), then roll 1d6 on its table, or
+    choose the weather yourself.
   </p>
+
+  {{#if clock}}
+  <p class="stonetop-weather-clock">
+    <i class="fas fa-hourglass-half"></i>
+    Stonetop is in <strong>{{clock.label}}</strong>, {{clock.yearLabel}}{{#if clock.followed}}: its table is selected below{{else}}, but you&rsquo;ve chosen a different table{{/if}}.
+  </p>
+  {{/if}}
 
   <div class="stonetop-weather-seasons">
     {{#each seasons}}
-    <button type="button" class="stonetop-weather-season{{#if isActive}} is-active{{/if}}"
+    {{!-- `is-off-clock` only ever rides along with `is-active`: it is the selection going red
+          because the season chosen is not the one the steading's clock is in. --}}
+    <button type="button" class="stonetop-weather-season{{#if isActive}} is-active{{/if}}{{#if isOffClock}} is-off-clock{{/if}}"
             data-season="{{key}}">{{label}}</button>
     {{/each}}
   </div>
 
-  <ul class="stonetop-weather-rows">
+  {{!-- The rows are BUTTONS, not list items. They were already drawn as six boxed options and
+        the window was the only place in the system where that shape did nothing when clicked;
+        now a click stands the row up as the weather, the same as a roll landing on it. Real
+        buttons rather than clickable <li>s, so the keyboard reaches them for free and
+        `aria-pressed` can say which one is standing.
+
+        `data-index` is the position in the season's own rows array, and that is safe here in a
+        way it would not be on a list the template may reorder: this one is printed in the
+        book's order, straight off WEATHER_SEASONS, and the handler resolves the index against
+        that same array. A season change rebuilds the whole list and clears the pick with it. --}}
+  <div class="stonetop-weather-rows">
     {{#each rows}}
-    <li class="stonetop-weather-row">
+    <button type="button" class="stonetop-weather-row{{#if isPicked}} is-picked{{/if}}"
+            data-index="{{index}}" aria-pressed="{{#if isPicked}}true{{else}}false{{/if}}">
       <span class="stonetop-weather-row-range">{{range}}</span>
       <span class="stonetop-weather-row-text">{{text}}{{#if reroll}} <em class="stonetop-weather-row-reroll">(roll again later with disadvantage)</em>{{/if}}</span>
-    </li>
+    </button>
     {{/each}}
-  </ul>
+  </div>
 
+  {{!-- One button until there is a result, two once there is. Re-roll sits LEFT of Post, the
+        wizard's Back/Next hand rather than the dialog's affirmative-left one: these are not a
+        yes and a no, they are "again" and "done", and the one that ends the window belongs at
+        the end of the row. Nothing here is a cancel — the window's own X is that. --}}
   <div class="stonetop-weather-roll-wrap">
+    {{#if picked}}
+    <button type="button" class="stonetop-weather-reroll-btn">
+      <i class="fas fa-rotate-right"></i> Re-roll
+    </button>
+    <button type="button" class="stonetop-weather-post-btn">
+      <i class="fas fa-cloud-sun-rain"></i> Post the weather
+    </button>
+    {{else}}
     <button type="button" class="stonetop-weather-roll-btn">
       <i class="fas fa-cloud-sun-rain"></i> Roll the weather
     </button>
+    {{/if}}
   </div>
 
 </div>

@@ -25,14 +25,14 @@ const _STEPS = [
 		key:   "concept",
 		title: "Create them as an NPC",
 		icon:  "fa-user-pen",
-		body:  `<p>Every follower is first an <strong>NPC</strong>. Give them a <strong>name</strong>, picture who they are, and jot down their lot in life and a few <strong>impressions</strong> &mdash; the touchstones you'll use to portray them.</p>
+		body:  `<p>Every follower is first an <strong>NPC</strong>. Give them a <strong>name</strong>, picture who they are, and jot down their lot in life and a few <strong>impressions</strong>: the touchstones you'll use to portray them.</p>
 				<p>You can flesh this out later; a name and a sense of them is plenty to start.</p>`,
 	},
 	{
 		key:   "tags",
 		title: "Give them tags",
 		icon:  "fa-tags",
-		body:  `<p>Tags guide how they act and what a player rolls when they <em>Order Followers</em>. Give a mix that's <strong>useful</strong>, <strong>problematic</strong>, and <strong>mixed blessings</strong> &mdash; tags that apply <em>some</em> of the time, not all of it.</p>
+		body:  `<p>Tags guide how they act and what a player rolls when they <em>Order Followers</em>. Give a mix that's <strong>useful</strong>, <strong>problematic</strong>, and <strong>mixed blessings</strong>: tags that apply <em>some</em> of the time, not all of it.</p>
 				<p>Click to add, or type your own (the <code>___-wise</code> tags want a topic).</p>`,
 	},
 	{
@@ -51,7 +51,7 @@ const _STEPS = [
 		key:   "damage",
 		title: "Calculate damage",
 		icon:  "fa-burst",
-		body:  `<p>How dangerous are they? Pick one. <strong>Range and other tags come from their gear</strong> &mdash; click to add the ones that fit, or type your own.</p>`,
+		body:  `<p>How dangerous are they? Pick one. <strong>Range and other tags come from their gear</strong>: click to add the ones that fit, or type your own.</p>`,
 	},
 	{
 		key:   "instinct",
@@ -76,7 +76,7 @@ const _STEPS = [
 		title:   "Equip them",
 		icon:    "fa-sack",
 		isFinal: true,
-		body:    `<p>Finally, give them their gear &mdash; a weapon, some supplies, whatever they show up with. Then review and create the follower.</p>`,
+		body:    `<p>Finally, give them their gear: a weapon, some supplies, whatever they show up with. Then review and create the follower.</p>`,
 	},
 ];
 
@@ -231,7 +231,7 @@ export class CreateFollowerDialog extends StepperDialog {
 
 		// Group toggle + size (HP step). Re-render on toggle so the size field appears.
 		html.find(".stonetop-cf-group-toggle").on("change", ev => { this._sel.isGroup = ev.currentTarget.checked; this.render(false); });
-		html.find(".stonetop-cf-group-size").on("change", ev => { this._sel.groupSize = Math.max(2, parseInt(ev.currentTarget.value) || 2); });
+		html.find(".stonetop-cf-group-size").on("change", ev => { this._sel.groupSize = Math.max(2, parseInt(ev.currentTarget.value, 10) || 2); });
 
 		// Tag chips (toggle) + add free-text tag(s).
 		html.find(".stonetop-cf-tag").on("click", ev => this._toggleTag(ev.currentTarget.dataset.tag));
@@ -307,7 +307,7 @@ export class CreateFollowerDialog extends StepperDialog {
 			if (this._sel.gear[i]) this._sel.gear[i].label = el.value;
 		});
 		const sizeEl = root.querySelector(".stonetop-cf-group-size");
-		if (sizeEl) this._sel.groupSize = Math.max(2, parseInt(sizeEl.value) || 2);
+		if (sizeEl) this._sel.groupSize = Math.max(2, parseInt(sizeEl.value, 10) || 2);
 	}
 
 	async _finish() {

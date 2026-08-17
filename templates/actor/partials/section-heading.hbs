@@ -9,5 +9,34 @@
       `caret` is the same mark without the button: for a heading that is ITSELF
       the fold control (the Major / Minor arcana sections, where clicking
       anywhere on the line folds it), so the state still reads the same way as
-      every other section. Pass one or the other, never both. --}}
-<h3 class="stonetop-move-group-title">{{title}}{{#if note}} <span class="stonetop-section-note">{{note}}</span>{{/if}}{{#if searchControl}} {{> "stonetop.tab-search-control" title=searchTitle placeholder=searchPlaceholder}}{{/if}}{{#if collapse}}{{> "stonetop.section-collapse" collapse=collapse}}{{/if}}{{#if caret}}<i class="fas fa-caret-down stonetop-section-caret" aria-hidden="true"></i>{{/if}}</h3>
+      every other section. Pass one or the other, never both.
+
+      `randomize` is the section key for a "roll one at random" button, sat right
+      after the note. Optional like the rest: pass nothing and no button is
+      emitted, so every existing caller is untouched.
+
+      `startCollapsed` is forwarded to section-collapse as its `defaultCollapsed` —
+      a section that is reference rather than content starts shut. It lives here as
+      well as there because a caller needing it had otherwise to bypass this partial
+      and hand-write the whole title line, which is how the GM Toolkit's Threats tab
+      came to carry four copies of markup this one line emits.
+
+      `headingClass` overrides the heading's own class for the few sections whose CSS
+      and whose sheet-side HEADING_SELECTOR key on a different stem. Defaults to the
+      move-group title, so every existing caller is untouched.
+
+      WHY THOSE TWO ARE NAMED THE WAY THEY ARE, and the rule for the next one added:
+      Handlebars MERGES a partial's hash into the caller's context, so every optional
+      parameter here is also a bare lookup against whatever object the caller happens
+      to be rendering — `{{#if headingClass}}` cannot tell "the caller passed it" from
+      "the caller's own row has a field by that name". This partial is invoked from
+      ~45 places, many inside `{{#each}}` loops over view-models built in JS, so a
+      parameter named `class` was one VM field away from replacing the heading's stem
+      everywhere in that loop. That stem is half of HEADING_SELECTOR
+      (StonetopGmToolkitSheet.js) and what the fold walk claims siblings from, so the
+      section would stop folding and its caret would swallow the section below, with
+      no error and nothing failing. So: an optional parameter here wants a name no
+      view-model would use for something else. The remaining ones (`note`, `caret`,
+      `randomize`, `searchControl`) fail LOUDLY if they ever collide — a stray note or
+      an extra button is visible on the first render — which is why they stand. --}}
+<h3 class="{{#if headingClass}}{{headingClass}}{{else}}stonetop-move-group-title{{/if}}">{{title}}{{#if note}} <span class="stonetop-section-note">{{note}}</span>{{/if}}{{#if randomize}} {{> "stonetop.section-randomize" section=randomize title=randomizeTitle}}{{/if}}{{#if searchControl}} {{> "stonetop.tab-search-control" title=searchTitle placeholder=searchPlaceholder}}{{/if}}{{#if collapse}}{{> "stonetop.section-collapse" collapse=collapse defaultCollapsed=startCollapsed}}{{/if}}{{#if caret}}<i class="fas fa-caret-down stonetop-section-caret" aria-hidden="true"></i>{{/if}}</h3>

@@ -14,7 +14,7 @@
 
 import { normalizeTags, parseFollowerArmor } from "./follower-build.js";
 import { CREATURE_TYPES, CREATURE_TYPE_ICON_SUFFIX, creatureTypeIcon, creatureTypeForFaIcon } from "../bestiary/creature-types.js";
-import { escHtml, isDefaultImg } from "../utils/strings.js";
+import { escHtml, isDefaultImg, stripHtmlToText } from "../utils/strings.js";
 import { systemAssetVariants } from "../migration/compat.js";
 import { SYSTEM_ID } from "../system-id.js";
 
@@ -175,7 +175,7 @@ export function followerNotesHtml(follower = {}) {
 	const gear = (Array.isArray(follower.gear) ? follower.gear : [])
 		.filter(g => (typeof g === "string" ? true : !!g?.checked))
 		.map(g => (typeof g === "string" ? g : g.label))
-		.map(l => String(l ?? "").replace(/<[^>]*>/g, "").trim())
+		.map(l => stripHtmlToText(l))
 		.filter(Boolean);
 	if (gear.length) out.push(`<p><strong>Gear:</strong> ${escHtml(gear.join(", "))}</p>`);
 	out.push(..._paragraphs(follower.notes));

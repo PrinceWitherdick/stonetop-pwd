@@ -3,7 +3,7 @@ import { creatureTypeIcon } from "../bestiary/creature-types.js";
 import { invalidateMonsterRefIndex } from "../bestiary/monster-ref-index.js";
 import { formatCustomMoveDescription } from "../utils/custom-move-text.js";
 import { buildMonsterActorData } from "../data/monster-builder.js";
-import { THEMES, ASPECTS, INSTINCTS, EMANATION_ORIGINS, rollOnTable, rollDistinct, themeLabels, aspectTexts, themeCheckboxes, aspectCheckboxes } from "../data/things-below-tables.js";
+import { THEMES, ASPECTS, EMANATION_ORIGINS, rollOnTable, rollDistinct, themeLabels, aspectTexts, themeCheckboxes, aspectCheckboxes } from "../data/things-below-tables.js";
 import { GIFTS, MARKS, EMANATION_BASE, applyCorruption } from "../data/corruption-tables.js";
 
 // ── CorruptBeingDialog ───────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ const _STEP_DEFS = {
 		title:   "Review",
 		icon:    "fa-clipboard-check",
 		isFinal: true,
-		body:    `<p>Look it over, then create the stat block. Open its sheet afterward to tweak anything &mdash; corruption often reshapes tags, qualities, and moves in ways worth revising.</p>`,
+		body:    `<p>Look it over, then create the stat block. Open its sheet afterward to tweak anything: corruption often reshapes tags, qualities, and moves in ways worth revising.</p>`,
 	},
 };
 

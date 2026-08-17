@@ -48,7 +48,7 @@ export class PeopleSource extends CatalogSource {
 			icon:  "fas fa-user-group",
 			noun:  "people",
 			search: { title: "Search people", placeholder: "Filter people…" },
-			empty:  "No one matches those filters. (People are the world's NPC actors — a fresh world has none until the steading roster is filled in.)",
+			empty:  "No one matches those filters. (People are the world's NPC actors: a fresh world has none until the steading roster is filled in.)",
 			// An NPC edit stales this list; CatalogSource#staleFor spells out what that does and
 			// does not count as.
 			worldActorType: "npc",
@@ -67,7 +67,7 @@ export class PeopleSource extends CatalogSource {
 					key:   statusKey(s.value),
 					label: s.label,
 					icon:  NPC_STATUS_ICONS[statusKey(s.value)],
-					hint:  s.inactive ? `${s.label} — no longer an active presence` : s.label,
+					hint:  s.inactive ? `${s.label}: no longer an active presence` : s.label,
 				})),
 			},
 			{
@@ -103,7 +103,7 @@ export class PeopleSource extends CatalogSource {
 		const badges = [];
 		if (sys.pronouns)  badges.push({ label: sys.pronouns, hint: "Pronouns" });
 		if (sys.occupation) badges.push({ label: sys.occupation, hint: "What they do" });
-		if (sys.hasStats)  badges.push({ label: "Has stats", icon: "fas fa-shield-halved", hint: "Carries the optional combat overlay — HP, armor, damage, GM moves" });
+		if (sys.hasStats)  badges.push({ label: "Has stats", icon: "fas fa-shield-halved", hint: "Carries the optional combat overlay: HP, armor, damage, GM moves" });
 
 		// Their instinct is the anchor field the book tells a GM to look at when they don't
 		// know what an NPC would do (p.457), so it leads; relations answer "who is this to

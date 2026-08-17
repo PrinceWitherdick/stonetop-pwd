@@ -1,7 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
+import { readRepo, readCss, declarations } from "../fakes/css.js";
 
 // The frosted seam between a sheet's pinned header and the tab scrolling under it: content
 // blurs and dissolves as it passes behind the portrait block instead of being sliced off at
@@ -16,20 +14,34 @@ import { describe, it, expect } from "vitest";
 //     always, and the tab's first line is permanently fuzzy — which reads as a broken
 //     renderer, not a depth cue.
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const read = (rel) => fs.readFileSync(path.resolve(HERE, "../..", rel), "utf8");
+const read = readRepo;
 
-// Comments carry braces and selector-like text, so strip them before matching rules.
-const CSS = read("styles/stonetop.css").replace(/\/\*[\s\S]*?\*\//g, "");
+const CSS = readCss();
 const CHARACTER_SHEET = read("module/actors/character/StonetopCharacterSheet.js");
 const STEADING_SHEET = read("module/actors/steading/StonetopSteadingSheet.js");
 const FROST = read("module/utils/scroll-frost.js");
 
-/** The declaration block for an exact selector, so one rule can be asserted on alone. */
-function block(selector) {
-	const rx = new RegExp(`(^|[,}])\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`, "m");
-	return CSS.match(rx)?.[2] ?? null;
-}
+/** Everything an exact selector declares, across every rule that names it — see fakes/css.js. */
+const block = (selector) => declarations(CSS, selector);
+
+// Sheets EXEMPT from the seam's separator, because something of their own already draws a rule
+// flush above it (measured: a 0px gap). Painting both makes the edge visibly thicken the moment
+// the tab scrolls.
+//
+// The exemption is OPT-IN and declared by the markup: a sheet whose header carries a bottom
+// border puts `stonetop-sheet-layout--own-seam` on its layout div, in the same template the
+// border is written in. So there is no list in the CSS to keep in step — each entry below is
+// just a template that claims the exemption, plus the header whose border is the reason for it.
+// Both halves are asserted, so a claim cannot outlive the rule it defers to and quietly leave
+// that sheet with no separator at all.
+const SEAM_EXEMPT = [
+	{ template: "templates/actor/steading.hbs",    header: ".steading-header" },
+	{ template: "templates/actor/gm-toolkit.hbs",  header: ".stonetop-gm-toolkit-header" },
+];
+
+/** The opt-out class, and the separator's selector built from it. */
+const OWN_SEAM = "stonetop-sheet-layout--own-seam";
+const SEAM = `.stonetop-sheet-layout:not(.${OWN_SEAM})`;
 
 describe("the frosted header seam", () => {
 	it("anchors the band to the scrolling body, not to the window", () => {
@@ -69,13 +81,13 @@ describe("the frosted header seam", () => {
 	// sheet unruled. `.sheet-body` also clips its own overflow, so widening the band's
 	// pseudo-element is not an escape either; it is cut off at the same place.
 	it("rules the full width of the sheet, sidebar included", () => {
-		const sep = block(".stonetop-sheet-layout:not(.steading-sheet-layout)");
+		const sep = block(SEAM);
 		expect(sep, "the separator's rule is gone").toBeTruthy();
 		expect(sep).toMatch(/border-top:\s*1px solid/);
 		// Transparent-then-coloured, never added-then-removed: toggling the border itself
 		// shifts the whole layout a pixel every time the seam appears.
 		expect(sep).toMatch(/border-top:\s*1px solid transparent/);
-		const on = block(".stonetop-sheet-layout:not(.steading-sheet-layout):has(> .sheet-body.is-scrolled)");
+		const on = block(`${SEAM}:has(> .sheet-body.is-scrolled)`);
 		expect(on, "the gate rule is gone — the seam would never colour in").toBeTruthy();
 		expect(on).toMatch(/border-top-color:/);
 	});
@@ -84,15 +96,27 @@ describe("the frosted header seam", () => {
 		expect(block(".stonetop-sheet-layout .sheet-body::before")).not.toMatch(/border-top:/);
 	});
 
-	// Not silent, but ugly and easy to reintroduce: the steading's header sits flush on the
-	// seam (a measured 0px gap) with a rule of its own, so an unscoped separator paints a
-	// second line on top of it and the edge visibly thickens the moment the tab scrolls.
-	it("leaves the steading alone, which already has a rule at that seam", () => {
-		// The `:not()` is what holds that off — assert it is still on both halves.
-		expect(CSS).toMatch(/\.stonetop-sheet-layout:not\(\.steading-sheet-layout\)\s*\{[^}]*border-top:/);
-		// ...and the rule it defers to has to still be there, or the steading silently ends
-		// up as the one sheet with no separator at all.
-		expect(block(".steading-header")).toMatch(/border-bottom:\s*2px solid/);
+	// Not silent, but ugly and easy to reintroduce: these headers sit flush on the seam (a
+	// measured 0px gap) with a rule of their own, so an unscoped separator paints a second line
+	// on top and the edge visibly thickens the moment the tab scrolls. Ugly only under scroll,
+	// which is what makes it easy to ship.
+	it.each(SEAM_EXEMPT)("leaves $template alone, which already has a rule at that seam", ({ template, header }) => {
+		// The template claims the exemption on the same div that carries the shared layout class.
+		const hbs = read(template);
+		expect(hbs, `${template} stopped claiming the exemption`)
+			.toMatch(new RegExp(`class="[^"]*stonetop-sheet-layout[^"]*${OWN_SEAM}`));
+		// ...and the rule it defers to has to still be there, or that sheet silently ends up as
+		// the one with no separator at all.
+		expect(block(header), `${header} lost the border the exemption defers to`)
+			.toMatch(/border-bottom:\s*2px solid/);
+	});
+
+	// The opt-out is honoured on BOTH halves of the separator: miss it off the `is-scrolled`
+	// half and the doubled line comes back at exactly the moment it is meant to be suppressed.
+	it("honours the opt-out on both halves of the separator", () => {
+		const escaped = `\\.stonetop-sheet-layout:not\\(\\.${OWN_SEAM}\\)`;
+		expect(CSS).toMatch(new RegExp(`${escaped}\\s*\\{[^}]*border-top:`));
+		expect(CSS).toMatch(new RegExp(`${escaped}[^{]*is-scrolled[^{]*\\{[^}]*border-top-color:`));
 	});
 
 	// The band exists to soften text being sliced off as it passes UNDER a pinned header. On the

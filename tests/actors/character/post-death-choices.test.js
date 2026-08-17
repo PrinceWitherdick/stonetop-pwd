@@ -378,6 +378,32 @@ describe("which sections accumulate, and which are one to a character", () => {
 		expect(opt.marked).toBe(true);
 		expect(opt.locked).toBe(true);
 	});
+
+	it("doesn't count an inflicted Consequence as the step's answer", async () => {
+		// The same rule the allowance already followed, applied to the step's own report of
+		// itself. A Ghost destroyed by losing their tether had the Consequence question ticked
+		// off as answered — and dropped from "Still to choose" — on the strength of their ending.
+		const vm = await buildPostDeathChoices(makeCharacter("ghost", GHOST_LORE, {
+			counts: { "consequences:final-consequence": 1 },
+		}));
+		const step = vm.steps.find(s => s.key === "consequence");
+		expect(step.chosenSlug).toBe("");
+		expect(step.markedCount).toBe(0);
+		expect(step.done).toBe(false);
+		expect(outstandingLabel(vm)).toMatch(/consequence/i);
+	});
+
+	it("counts a real Consequence taken beside an inflicted one", async () => {
+		// The exclusion is about WHICH option, not about the step: a Ghost who chose BREAKDOWN
+		// and then lost their tether has answered the question.
+		const vm = await buildPostDeathChoices(makeCharacter("ghost", GHOST_LORE, {
+			counts: { "consequences:breakdown": 1, "consequences:final-consequence": 1 },
+		}));
+		const step = vm.steps.find(s => s.key === "consequence");
+		expect(step.chosenSlug).toBe("breakdown");
+		expect(step.markedCount).toBe(1);
+		expect(step.done).toBe(true);
+	});
 });
 
 describe("unmarkSectionOption / clearSectionPicks", () => {

@@ -16,7 +16,12 @@ export const ALT_STAT_GRANTS = [
 	{ whenDefaultStat: "con",          ownsMove: "Laugh at Danger",  altStat: "cha" },
 ];
 
-/** The alternate stat this move grants, or null when it grants none. */
-export function altStatForMove(moveName) {
-	return ALT_STAT_GRANTS.find(g => g.ownsMove === moveName)?.altStat ?? null;
+/**
+ * The whole grant a move makes, or null when it makes none. `whenMove` is the half the attack
+ * flow needs: it says which move the alternate stat is FOR, which is also the move a granted
+ * weapon rides on (Purifying Flames' holy light is a Clash), so clicking the granting move can
+ * roll that attack rather than only offering an extra stat once the player finds it.
+ */
+export function altStatGrantForMove(moveName) {
+	return ALT_STAT_GRANTS.find(g => g.ownsMove === moveName) ?? null;
 }

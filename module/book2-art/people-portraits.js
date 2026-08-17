@@ -12,9 +12,13 @@ import { BOOK2_ART_APPLY_MANIFEST } from "./manifest.js";
  * face. So the square is CHOSEN by hand in the picker, once per portrait, and cut as its own
  * small file.
  *
- * That file is what an actor's `img` points at, which is why every small surface needed no
- * change: they all already read `.img`. The whole illustration stays on disk beside it and is
- * what the NPC sheet header and the hover previews show.
+ * WHERE THAT SQUARE NOW SITS. It was originally what `actor.img` pointed at — every small surface
+ * already read `.img`, so that cost no per-surface work. It is not any more: `actor.img` is the
+ * WHOLE illustration, the square rides as a frame rect over it, and the square FILE is what the
+ * token draws. See repoint-portraits.js for why (a module reading `actor.img` got a cropped face
+ * where the same gesture on a monster gave the artist's whole composition) and for the migration.
+ * The square <-> whole index below outlives that move: a world still holds paths from either side
+ * of it, and the hover preview and the token still need to get from one to the other.
  *
  * Everything here is pure and Foundry-free so it can be unit-tested, and so a caller in a
  * template helper or a data-model getter can use it without dragging settings in.
@@ -30,7 +34,80 @@ import { BOOK2_ART_APPLY_MANIFEST } from "./manifest.js";
  * make it again. Both suffixes now build on this: only the leading letter and the anchor
  * differ, and each site supplies its own.
  */
-export const RECT_SUFFIX_GROUPS = String.raw`\d{3,4}(?:-\d{3,4}){3}`;
+const RECT_DIGITS = String.raw`\d{3,4}`;
+export const RECT_SUFFIX_GROUPS = `${RECT_DIGITS}(?:-${RECT_DIGITS}){3}`;
+
+/** The same four groups, CAPTURING, for reading a rect back out of a name it was written into.
+ *  Built from the same `RECT_DIGITS` literal so the 3-or-4 rule above cannot drift between the
+ *  pattern that matches a suffix and the one that parses it. */
+const RECT_SUFFIX_CAPTURE = `(${RECT_DIGITS})-(${RECT_DIGITS})-(${RECT_DIGITS})-(${RECT_DIGITS})`;
+
+// One compiled matcher per suffix letter (`q`, `t`, `c`). `rectFromSuffix` runs once per stored
+// `img` across every actor in the world and every follower flag on them, and a RegExp built per
+// call would be the only allocation in an otherwise pure lookup.
+const rectMatchers = new Map();
+const rectMatcher = (letter) => {
+	let rx = rectMatchers.get(letter);
+	if (!rx) rectMatchers.set(letter, rx = new RegExp(`-${letter}${RECT_SUFFIX_CAPTURE}(?=\\.[^.]+$|$)`));
+	return rx;
+};
+
+/**
+ * A path with any `?query` or `#hash` removed.
+ *
+ * Stated once because it is load-bearing in five places for one reason. Every suffix in this
+ * pipeline is anchored to the EXTENSION, and paths here routinely carry a cache-buster: the
+ * Tokenizer module (vtta-tokenizer) rewrites `actor.img` to `<path>?<timestamp>` on every run, and
+ * this system's own frame bake does the same on every re-frame so the browser repaints. Left on,
+ * that stamp hides the suffix — the manifest lookup misses, the hover preview silently stops
+ * swapping in the whole illustration, and the on-disk square resolver stops matching. Nothing
+ * throws, so nothing announces it.
+ */
+export const stripQuery = (p) => String(p ?? "").split("#")[0].split("?")[0];
+
+/**
+ * The rect a filename ENCODES, read back out: the inverse of `rectSuffix`.
+ *
+ * The suffix is per-mille of four fractions, so the round trip is exact to the 3dp everything in
+ * this pipeline stores rects at — which is what makes a filename a usable source of truth for a
+ * rect nobody wrote down anywhere else. That is the whole reason this exists: the hand-chosen
+ * square of every shipped person lives ONLY in its square's name, and moving a world onto the
+ * "portrait is the whole illustration, the square is a frame over it" layout needs that rect back.
+ *
+ * Query and hash are stripped first — the suffix is anchored to the EXTENSION, and a cache-buster
+ * would otherwise hide it (see `basenameOf` for who appends those and why).
+ *
+ * Returns null rather than a partial rect for anything that does not carry the suffix, so a
+ * caller can use it as the "is this one of ours?" test as well as the parse.
+ */
+export function rectFromSuffix(letter, path) {
+	const m = rectMatcher(letter).exec(stripQuery(path));
+	if (!m) return null;
+	const rect = m.slice(1, 5).map((n) => Number(n) / 1000);
+	return isValidRect(rect) ? rect : null;
+}
+
+/**
+ * The same path with its `-<letter><rect>` suffix spliced back OUT, or null when it carries none.
+ *
+ * The inverse of `outWithSuffix`, and the counterpart to `rectFromSuffix`: one reads the rect out
+ * of a name, this reads the SOURCE FILE out of it. Both can exist at all because the suffix is a
+ * pure naming convention over one source file, so a caller holding only a stored path can ask
+ * "which picture is this a square of?" with no manifest, compendium or network round trip.
+ *
+ * Parameterised by letter for the same reason everything else here is — `q` for a person's face,
+ * `t` for a creature's token square, `c` for a crop — so the anchor and the 3-or-4-digit rule are
+ * stated once rather than restated per kind of square. Query and hash go first (see `stripQuery`).
+ */
+export function stripRectSuffix(letter, path) {
+	const s = stripQuery(path);
+	const m = rectMatcher(letter).exec(s);
+	if (!m) return null;
+	return s.slice(0, m.index) + s.slice(m.index + m[0].length);
+}
+
+/** The square rect a `-q…` portrait filename encodes, in the PERSON image's coordinate space. */
+export const portraitRectOf = (path) => rectFromSuffix("q", path);
 
 /**
  * A square's filename suffix: per-mille of each fractional coordinate, zero-padded. Mirrors
@@ -58,18 +135,41 @@ export function isValidRect(rect) {
 
 const permille = (f) => String(Math.round(f * 1000)).padStart(3, "0");
 
+/**
+ * `-<letter><x0>-<y0>-<x1>-<y1>`, per-mille. MUST agree with the Python, or a re-export orphans
+ * files.
+ *
+ * The letter is the only thing that varies between the kinds of rect this pipeline names: `q` for
+ * a person's square face, `t` for a creature's token square (monster-tokens.js), `c` for a crop.
+ * The rounding and the padding are stated once here, because those are what have to match
+ * merge-art-picker.py exactly — a half-up tie resolved differently in one place mints a filename
+ * nothing ever writes.
+ */
+export const rectSuffix = (letter, rect) => `-${letter}${rect.map(permille).join("-")}`;
+
+/**
+ * A derived path: the source path with a rect suffix spliced in before its extension.
+ *
+ * Shared with monster-tokens.js. The splice is only three lines, but the edge case (a path with
+ * no extension, or a dot that belongs to a DIRECTORY name rather than a file) is the kind that
+ * looks handled in each copy and is only handled in one.
+ */
+export function outWithSuffix(out, suffix) {
+	const s = String(out);
+	const dot = s.lastIndexOf(".");
+	const slash = s.lastIndexOf("/");
+	if (dot <= slash) return s + suffix;   // no extension to splice before
+	return s.slice(0, dot) + suffix + s.slice(dot);
+}
+
 /** `-q<x0>-<y0>-<x1>-<y1>`, per-mille. MUST agree with the Python, or a re-export orphans files. */
 export function portraitSuffix(rect) {
-	return "-q" + rect.map(permille).join("-");
+	return rectSuffix("q", rect);
 }
 
 /** The square's own `out` path: the person's path with the suffix spliced before its extension. */
 export function portraitOutFor(out, rect) {
-	const s = String(out);
-	const dot = s.lastIndexOf(".");
-	const slash = s.lastIndexOf("/");
-	if (dot <= slash) return s + portraitSuffix(rect);   // no extension to splice before
-	return s.slice(0, dot) + portraitSuffix(rect) + s.slice(dot);
+	return outWithSuffix(out, portraitSuffix(rect));
 }
 
 // A square is always measured against the PERSON image — after `crop`, not before. There is
@@ -109,18 +209,11 @@ function index(people) {
 
 const swapBasename = (src, file) => String(src).slice(0, String(src).lastIndexOf("/") + 1) + file;
 
-/**
- * The filename part of a path, with any `?query` or `#hash` removed.
- *
- * The strip is load-bearing, not tidiness. The Tokenizer module (vtta-tokenizer) rewrites
- * `actor.img` to `<path>?<timestamp>` on every run, as a deliberate cache-buster. Without this,
- * the very first tokenize of an NPC wearing a shipped square detaches it from the manifest: the
- * lookup below misses, the hover preview silently stops swapping in the whole illustration, and
- * the on-disk square resolver stops matching. Nothing throws, so nothing announces it.
- */
+/** The filename part of a path, with any `?query` or `#hash` removed — see `stripQuery` for why
+ *  that strip is load-bearing rather than tidiness. */
 export const basenameOf = (p) => {
 	const s = String(p);
-	return s.slice(s.lastIndexOf("/") + 1).split("#")[0].split("?")[0];
+	return stripQuery(s.slice(s.lastIndexOf("/") + 1));
 };
 
 /**
@@ -135,7 +228,7 @@ export function fullPortraitSrc(src, people) {
 	const full = index(people).toFull.get(basenameOf(s));
 	// The swap drops any query string with the basename, which is correct: the caller wants the
 	// illustration's real path, and a cache-buster minted for a different file means nothing here.
-	return full ? swapBasename(s.split("#")[0].split("?")[0], full) : null;
+	return full ? swapBasename(stripQuery(s), full) : null;
 }
 
 /**
@@ -155,7 +248,7 @@ export function squarePortraitSrc(src, people) {
 	if (!src) return null;
 	const s = String(src);
 	const square = index(people).toSquare.get(basenameOf(s));
-	return square ? swapBasename(s.split("#")[0].split("?")[0], square) : null;
+	return square ? swapBasename(stripQuery(s), square) : null;
 }
 
 /** Shape-only test, for callers with no manifest to hand (the manifest's own parity checks). */

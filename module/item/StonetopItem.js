@@ -57,7 +57,8 @@ export function createStonetopItemClass(BaseItem) {
 		 *
 		 * @param {object} options
 		 * @param {boolean} [options.descriptionOnly]
-		 * @param {string}  [options.rollMode]           - "adv" | "dis" | "def" | "normal"
+		 * @param {string}  [options.rollMode]           - "adv" | "dis" | "normal" (see roll-engine;
+		 *   never Foundry's core public/gmroll/blind/self rollMode)
 		 * @param {string}  [options.stonetopDebility]
 		 * @param {string}  [options.stonetopDebilityTooltip]
 		 */

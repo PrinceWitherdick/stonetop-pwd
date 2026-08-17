@@ -12,7 +12,7 @@
 // of the others become editable prompt/answer pairs, like a location's "In Play"
 // questions). `group:"glance"` keeps the sheet from drawing act banners.
 
-import { escHtml } from "./strings.js";
+import { escHtml, decodeEntities } from "./strings.js";
 import { step4Questions, step6Questions } from "../dialogs/introductions-data.js";
 import { CHART_GROUPS } from "../dialogs/expedition-data.js";
 import { SEASONAL_GAINS } from "../dialogs/spring-burst-data.js";
@@ -51,19 +51,9 @@ function paragraphs(text) {
 		.join("");
 }
 
-// Decode the few HTML entities the authored question text carries (e.g. "heart
-// &amp; soul"), so the stored qa prompt reads as plain text in its edit input.
-// `&amp;` is decoded last so an `&amp;mdash;` source can't double-decode.
-function decodeEntities(text) {
-	return String(text ?? "")
-		.replace(/&mdash;/g, "—")
-		.replace(/&ndash;/g, "–")
-		.replace(/&hellip;/g, "…")
-		.replace(/&rsquo;/g, "’")
-		.replace(/&lsquo;/g, "‘")
-		.replace(/&quot;/g, '"')
-		.replace(/&amp;/g, "&");
-}
+// Entity decoding for the authored question text (e.g. "heart &amp; soul"), so the stored qa
+// prompt reads as plain text in its edit input. Shared with the FAQ parser via utils/strings.js
+// — the local copy this replaced didn't know &lt;/&gt;/&#39;, so those came through raw.
 
 // A list-bearing prose body gets the location-body wrapper so its bullets render as
 // spirals (matching the rest of this system's prose; see styles/stonetop.css

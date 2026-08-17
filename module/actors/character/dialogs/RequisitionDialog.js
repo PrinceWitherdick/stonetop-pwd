@@ -6,6 +6,7 @@ import { buildCustomFollower, nextFollowerOrder } from "../../../data/follower-b
 import { bringDialogToFront } from "../../../utils/front-on-open.js";
 import { escHtml } from "../../../utils/strings.js";
 import { CUSTOM_ASSET_VALUE, wireCustomAssetSelect } from "../../../utils/requisition-asset.js";
+import { SYSTEM_ID } from "../../../system-id.js";
 
 /**
  * The player-facing Requisition move. Lists the linked steading's on-hand assets
@@ -65,7 +66,7 @@ export class RequisitionDialog extends StonetopDialog {
 		wireCustomAssetSelect({ select: assetSelect, customInput });
 
 		root.querySelector(".stonetop-requisition-roll-btn")?.addEventListener("click", () => {
-			const rollMode = this._steadingActor.getFlag("stonetop-pwd", "rollMode") ?? "normal";
+			const rollMode = this._steadingActor.getFlag(SYSTEM_ID, "rollMode") ?? "normal";
 			rollStat("fortunes", this._steadingActor, {
 				moveName: "Requisition",
 				statValue: this._steading.getStatValue("fortunes"),
@@ -159,7 +160,7 @@ export class RequisitionDialog extends StonetopDialog {
 	async _addRequisitionedFollower(match, assetName) {
 		const input = followerInputFromBeast(match.beast, { name: match.beast.name });
 		if (!input) return;
-		const existing = this._characterActor.getFlag("stonetop-pwd", "customFollowers") ?? {};
+		const existing = this._characterActor.getFlag(SYSTEM_ID, "customFollowers") ?? {};
 		const id = foundry.utils.randomID(16);
 		await this._characterActor.update({
 			[`flags.stonetop-pwd.customFollowers.${id}`]: {

@@ -1,3 +1,4 @@
+import { SYSTEM_ID } from "../system-id.js";
 /**
  * Opt-in Stonetop skin for *core* Foundry windows we don't own.
  *
@@ -76,7 +77,7 @@ const LIGHT_CLASSES = ["themed", "theme-light"];
  */
 function isStonetopWindow(root) {
 	return Array.from(root.classList).some(c =>
-		(c === "stonetop" || c.startsWith("stonetop-")) && c !== "stonetop-pwd");
+		(c === "stonetop" || c.startsWith("stonetop-")) && c !== SYSTEM_ID);
 }
 
 /**

@@ -2,6 +2,7 @@ import { BEAST_CATALOG } from "../../data/beasts.js";
 import { stripHtmlToText } from "../../utils/strings.js";
 import { categoryForCharacterPath } from "../../utils/ledger-categories.js";
 import { crewAnonMemberLabel, crewIndividualLabel } from "../../utils/crew.js";
+import { SYSTEM_ID } from "../../system-id.js";
 import {
 	LEDGER_SCOPE, isLedgerPath, normalizeFlagPath, getActorProperty,
 	appendLedgerEntries, deleteLedgerEntries, getLedgerEntries,
@@ -274,7 +275,7 @@ async function buildNameLookup(actor) {
 		if (item?._id && item.name) names.inventory.set(item._id, item.name);
 		// Custom moves persist their resource track by item id; map that id back to the
 		// move's name/title so a ledger tick reads "<Move> - <Title>", not a raw id.
-		if (item?.type === "move" && item.flags?.["stonetop-pwd"]?.custom && item._id) {
+		if (item?.type === "move" && item.flags?.[SYSTEM_ID]?.custom && item._id) {
 			names.moveResourceNames.set(item._id, stripHtml(item.name) ?? item.name);
 			if (item.system?.resource?.title) names.moveResourceTitles.set(item._id, stripHtml(item.system.resource.title));
 		}
@@ -538,7 +539,7 @@ const CREW_FIELD_LABELS = new Map([
 // an ALLOWLIST, so it is already silent. It has a test of its own so that stays true if the
 // allowlist ever grows.
 // The anonymous members' faces. Needs naming here, where the two `.img`-shaped stores do not
-// (isCosmeticPortraitPath covers those): this is an ARRAY of portrait slots, which flattenObject
+// (isBookkeepingPath covers those): this is an ARRAY of portrait slots, which flattenObject
 // leaves as ONE atomic leaf, so the path never mentions `img` at all — it rendered as the literal
 // "[object Object]".
 const isUnloggedCrewKey = (key) => key === "memberPortrait";
@@ -792,7 +793,7 @@ function possessionChoiceCarriedEntry(path, oldValue, newValue, names) {
 
 function possessionChoiceUsesEntry(path, oldValue, newValue, names) {
 	const key = path.slice(POSSESSION_CHOICE_USES_PREFIX.length);
-	const [possessionSlug, choiceSlug] = key.split(":");
+	const [possessionSlug] = key.split(":");
 	const possessionName = nameFrom(names.possessions, possessionSlug);
 	const choiceName = nameFrom(names.possessionChoices, key);
 	return { action: `${possessionName}: ${choiceName} uses changed from ${formatValue(oldValue)} to ${formatValue(newValue)}` };
@@ -913,7 +914,7 @@ function loreCountEntry(path, oldValue, newValue, names) {
 	const before = Number(oldValue ?? 0);
 	const after  = Number(newValue ?? 0);
 	if (after === before) return null;
-	return { action: `Lore — ${question}: ${answer} ${after > before ? "marked" : "unmarked"}` };
+	return { action: `Lore: ${question}: ${answer} ${after > before ? "marked" : "unmarked"}` };
 }
 
 // A written lore answer. The prose can run several hundred characters, so the entry records the
@@ -923,8 +924,8 @@ function loreTextEntry(path, newValue, names) {
 	const [loreSlug = ""] = key.split(":");
 	const question = nameFrom(names.lore, loreSlug);
 	const text = stripHtml(newValue);
-	if (!text) return { action: `Lore — ${question}: answer cleared` };
-	return { action: `Lore — ${question} answered: “${truncateValue(text)}”` };
+	if (!text) return { action: `Lore: ${question}: answer cleared` };
+	return { action: `Lore: ${question} answered: “${truncateValue(text)}”` };
 }
 
 // Appearance lines carry no category names in the playbook data (they are just four ordered
@@ -971,8 +972,26 @@ function debilityEntry(label, oldValue, newValue) {
 // ahead of `arcana.` without anyone having to remember to write it first. Adding a nested
 // namespace under an existing one is therefore just a new row.
 
+// Max HP is stored twice on purpose: `hp.adjustment` is the signed DELTA that survives a later
+// level raising the base underneath it, and `hp.max` is a mirror written beside it so the token
+// bar over the character's head reads the right number (see StonetopCharacter#setMaxHp).
+const MAX_HP_PATH            = "system.attributes.hp.max";
+const MAX_HP_ADJUSTMENT_PATH = "system.attributes.hp.adjustment";
+
 const EXACT_PATH_ENTRIES = {
 	[POSSESSION_SELECTED_PATH]: (p, o, n, names) => possessionSelectionEntries(o, n, names),
+	// The mirror says nothing when its source landed in the same update. Both paths are
+	// labelled, so one player typing 24 into the max-HP box filed TWO rows for one edit —
+	// "Max HP (permanent) changed …" and "Max HP changed …". The delta is the change that was
+	// made; the mirror is bookkeeping. Silencing the pair at the WRITE would have been wrong in
+	// the other direction: `stonetopLedger: true` is a whole-update kill switch, and a permanent
+	// change to max HP is exactly the kind of thing the ledger exists to record.
+	//
+	// Still speaks on its own. A character with no playbook has no derived base to sit a delta
+	// on top of, so setMaxHp writes the typed number straight to this field and nothing else —
+	// and that write is the only record there is.
+	[MAX_HP_PATH]: (p, o, n, names, ctx) =>
+		ctx?.paths?.has(MAX_HP_ADJUSTMENT_PATH) ? [] : [scalarEntry(SYSTEM_PATH_LABELS[MAX_HP_PATH], o, n, p)],
 	[POSSESSION_CUSTOM_PATH]:   (p, o, n) => possessionCustomEntries(o, n),
 	[WOUNDS_PATH]:              (p, o, n) => woundLedgerEntries(o, n),
 	[INVOCATIONS_PATH]:         (p, o, n, names) => invocationEntries(o, n, names),
@@ -1027,7 +1046,8 @@ const PREFIX_ENTRIES = {
 const SORTED_ENTRY_PREFIXES = Object.keys(PREFIX_ENTRIES).sort((a, b) => b.length - a.length);
 
 /**
- * A face, and the rect that crops it — cosmetic wherever it is stored, and never a ledger line.
+ * A follower's face, the rect that crops it, and the link to the Actor made for them — plumbing
+ * wherever it is stored, and never a ledger line.
  *
  * Every follower type keeps its portrait at `<namespace>.img` with an optional `portraitFrame`
  * beside it (StonetopCharacterSheet's _FOLLOWER_FLAGS), and a roster member keeps theirs the same
@@ -1035,8 +1055,15 @@ const SORTED_ENTRY_PREFIXES = Object.keys(PREFIX_ENTRIES).sort((a, b) => b.lengt
  * generic field formatter: a raw file path for the picture, a bare "0.1, 0.2, 0.3, 0.4" for the
  * rect (a `portraitFrame` is a plain object, so flattenObject splits it into `.src` and `.rect`).
  *
+ * `actorUuid` is the same kind of key and belongs in the same rule. It is written by the sweep
+ * that gives every follower an Actor (actors/character/follower-actors.js#ensureFollowerActors)
+ * and by a drag onto the canvas (hooks/FollowerDrop.js) — never by a player deciding anything.
+ * Left to fall through, one sweep put "Initiate details set to Actor.E0FGjEd91XwUD7Jc,
+ * Actor.si3Eu6QXhkPwDnIJ" into a Blessed's Chronicle, two raw ids run together because the sweep
+ * writes the lot in ONE update and listMerge folded the pair into a single line.
+ *
  * ONE rule rather than an entry per follower type — the crew, the animal companion, the initiates,
- * the beasts, the custom followers and the roster members all store a face the same way, so a type
+ * the beasts, the custom followers and the roster members all store these the same way, so a type
  * added later is quiet by default instead of quietly noisy.
  *
  * Restricted to FLAG paths so it cannot reach the actor's own top-level `img`, which is a
@@ -1045,12 +1072,12 @@ const SORTED_ENTRY_PREFIXES = Object.keys(PREFIX_ENTRIES).sort((a, b) => b.lengt
 // `(?:-=)?` because clearing a portrait is TWO writes, not one: "Use default" sends the picture
 // away as `img: ""` and the frame with it as `.-=portraitFrame`. Silencing only the first left
 // every follower's "Use default" writing "<name> set to blank" into the Chronicle.
-const COSMETIC_PORTRAIT_KEY = /\.(?:-=)?(img|portraitFrame)(\.|$)/;
-const isCosmeticPortraitPath = (path) =>
-	path.startsWith(`flags.${LEDGER_SCOPE}.`) && COSMETIC_PORTRAIT_KEY.test(path);
+const BOOKKEEPING_KEY = /\.(?:-=)?(img|portraitFrame|actorUuid)(\.|$)/;
+const isBookkeepingPath = (path) =>
+	path.startsWith(`flags.${LEDGER_SCOPE}.`) && BOOKKEEPING_KEY.test(path);
 
 function granularEntriesForPath(path, oldValue, newValue, names, ctx) {
-	if (isCosmeticPortraitPath(path)) return [];
+	if (isBookkeepingPath(path)) return [];
 	// Object.hasOwn, not a bare lookup: `path` is attacker-adjacent data off an actor update,
 	// and a plain `EXACT_PATH_ENTRIES[path]` would happily hand back Object.prototype members
 	// for a path named "constructor" or "toString" — which this then tries to call.

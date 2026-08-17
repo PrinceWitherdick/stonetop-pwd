@@ -227,7 +227,7 @@ describe("SteadingLedger", () => {
 			improvements: { mill: { completed: false, r: [false, false, false, false, false, true] } },
 		}));
 
-		expect(entries.map(e => e.action)).toEqual(["Improvement step marked: Mill — A full-time miller"]);
+		expect(entries.map(e => e.action)).toEqual(["Improvement step marked: Mill · A full-time miller"]);
 		expect(entries.map(e => ledgerNoun(e.action))).toEqual(["Improvement step"]);
 	});
 
@@ -241,7 +241,7 @@ describe("SteadingLedger", () => {
 		}));
 
 		expect(entries.map(e => e.action)).toEqual([
-			"Improvement step marked: Palisade — Pulling Together, costing a month and 1 Surplus",
+			"Improvement step marked: Palisade · Pulling Together, costing a month and 1 Surplus",
 		]);
 	});
 
@@ -266,7 +266,7 @@ describe("SteadingLedger", () => {
 
 		expect(entries.map(e => e.action)).toEqual([
 			"Improvement completed: Foo Bar",
-			"Improvement step marked: Foo Bar — Do the thing",
+			"Improvement step marked: Foo Bar · Do the thing",
 		]);
 	});
 
@@ -280,8 +280,8 @@ describe("SteadingLedger", () => {
 		}));
 
 		expect(entries.map(e => e.action)).toEqual([
-			"Herd — grown horses changed from 12 to 13",
-			"Herd — foals changed from 0 to 2",
+			"Herd: grown horses changed from 12 to 13",
+			"Herd: foals changed from 0 to 2",
 		]);
 	});
 
@@ -293,7 +293,7 @@ describe("SteadingLedger", () => {
 		}));
 
 		// Only the meaningful tier is logged — not "yearlings set to 0" / "foals set to 0".
-		expect(entries.map(e => e.action)).toEqual(["Herd — grown horses set to 12"]);
+		expect(entries.map(e => e.action)).toEqual(["Herd: grown horses set to 12"]);
 	});
 
 	it("emits nothing when the improvements map is unchanged", () => {

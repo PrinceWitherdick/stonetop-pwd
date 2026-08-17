@@ -2,8 +2,7 @@ import { applyGearTermTooltips } from "../utils/gear-term-tooltips.js";
 import { markProseSpiralBullets } from "../utils/journal-spiral-bullets.js";
 import { enrichHTML } from "../utils/foundry-compat.js";
 import { settingOverviewPages } from "../utils/seeded-journals.js";
-import { applyLocationTooltips } from "../locations/location-tooltips.js";
-import { restrictContentLinks } from "../journal/restrict-content-links.js";
+import { applyTooltipsThenRestrict } from "../locations/location-tooltips.js";
 
 // This popup is now a *renderer* over the seeded "Setting Overview" journal — the
 // single source of truth. The journal's pages become the popup's tabs, so there's
@@ -58,11 +57,8 @@ export class SettingOverviewDialog extends Application {
 			applyGearTermTooltips(entryBody);
 			// Cross-link hover summaries, then de-link the ones a player can't open —
 			// this is a dialog, not a journal render, so it isn't covered by the
-			// journal render hooks in stonetop.js. Order matches that hook: tooltips
-			// first so restrictContentLinks can carry the summary onto the de-linked
-			// span (Locations & Lore keep their hover description; the GM-only
-			// bestiary codex flattens to plain text). No-op for GMs.
-			applyLocationTooltips(entryBody).then(() => restrictContentLinks(entryBody));
+			// journal render hooks in stonetop.js. Same helper as those hooks.
+			applyTooltipsThenRestrict(entryBody);
 		}
 		// X button should always close, bypassing the z-index guard
 		this.element?.find('[data-action="close"]').off("click").on("click", () => this.close({force: true}));
@@ -76,9 +72,9 @@ export class SettingOverviewDialog extends Application {
 		// If a window opened on top of this one (e.g. an image popout) is still
 		// rendered, don't close yet — let that window handle Escape first.
 		if (!options.force) {
-			const myZ = parseInt(this.element?.[0]?.style?.zIndex || 0);
+			const myZ = parseInt(this.element?.[0]?.style?.zIndex || 0, 10);
 			const hasWindowAbove = Object.values(ui.windows).some(w =>
-				w !== this && parseInt(w.element?.[0]?.style?.zIndex || 0) > myZ
+				w !== this && parseInt(w.element?.[0]?.style?.zIndex || 0, 10) > myZ
 			);
 			if (hasWindowAbove) return this;
 		}

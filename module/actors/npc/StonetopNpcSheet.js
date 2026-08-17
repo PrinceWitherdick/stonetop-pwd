@@ -24,6 +24,7 @@ import { partyCharacters } from "../../utils/playbook-actors.js";
 import { preserveScroll } from "../../utils/scroll-parent.js";
 import { mountTabRail } from "../../utils/tab-rail.js";
 import { withSheetSizeMemory } from "../../utils/sheet-size.js";
+import { SYSTEM_ID } from "../../system-id.js";
 
 // Rich-text (HTMLField) fields edited inline via prose-mirror on the sheet.
 const NPC_RICH_TEXT_FIELDS = [
@@ -286,7 +287,7 @@ export function createStonetopNpcSheetClass(Base) {
 			const npcUuid = this.actor.uuid;
 			st.following = (game.actors?.contents ?? [])
 				.filter(a => a.type === "character")
-				.filter(pc => Object.values(pc.getFlag?.("stonetop-pwd", "customFollowers") ?? {})
+				.filter(pc => Object.values(pc.getFlag?.(SYSTEM_ID, "customFollowers") ?? {})
 					.some(f => f?.sourceUuid === npcUuid))
 				.map(pc => ({ id: pc.id, name: pc.name }));
 			st.isFollowing = st.following.length > 0;

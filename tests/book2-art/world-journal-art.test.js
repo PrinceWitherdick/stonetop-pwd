@@ -96,6 +96,39 @@ describe("bestiaryDescriptionWithArt", () => {
 			expect(bestiaryDescriptionWithArt(kept, longer, "Young", [SRC])).toBeNull();
 		});
 	});
+
+	// A null src means "this row's picture is not on disk": there is nothing to place, but an
+	// embed a previous import left behind now renders as a broken image and has to come off.
+	describe("strip-only (the art is gone from disk)", () => {
+		it("removes the embed and places nothing", () => {
+			const embedded = bestiaryDescriptionWithArt("<p>prose</p>", SRC, "Antiquarian");
+			expect(bestiaryDescriptionWithArt(embedded, null, "Antiquarian", [SRC])).toBe("<p>prose</p>");
+		});
+
+		it("returns null when the page never had it", () => {
+			// The every-load self-heal runs this over every page; a non-null return is a write.
+			expect(bestiaryDescriptionWithArt("<p>prose</p>", null, "Antiquarian", [SRC])).toBeNull();
+		});
+
+		it("never inserts the name it was handed", () => {
+			// The caller still passes a name; strip-only must not turn it into an embed with no src.
+			const out = bestiaryDescriptionWithArt(`<p>x</p>`, null, "Antiquarian", [SRC]);
+			expect(out).toBeNull();
+			const embedded = bestiaryDescriptionWithArt("<p>x</p>", SRC, "Antiquarian");
+			expect(bestiaryDescriptionWithArt(embedded, null, "Antiquarian", [SRC])).not.toContain("<img");
+		});
+
+		it("leaves art that is not this row's alone", () => {
+			const other = bestiaryDescriptionWithArt("<p>prose</p>", SRC2, "Someone else");
+			expect(bestiaryDescriptionWithArt(other, null, "Antiquarian", [SRC])).toBeNull();
+		});
+
+		it("strips several gone paths at once", () => {
+			let body = bestiaryDescriptionWithArt("<p>prose</p>", SRC, "A");
+			body = bestiaryDescriptionWithArt(body, SRC2, "A");
+			expect(bestiaryDescriptionWithArt(body, null, "A", [SRC, SRC2])).toBe("<p>prose</p>");
+		});
+	});
 });
 
 describe("codexFieldWithArt", () => {

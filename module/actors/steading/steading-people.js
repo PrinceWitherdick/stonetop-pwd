@@ -14,6 +14,7 @@ import { isPrimaryGM } from "../../utils/primary-gm.js";
 // 22px avatars, where a column of the actor's dark disc reads as clutter rather than as
 // blanks — see utils/person-portrait.js, which owns both and counts either as "no art".
 import { PERSON_ROSTER_IMG as EMPTY_MEMBER_AVATAR } from "../../utils/person-portrait.js";
+import { SYSTEM_ID } from "../../system-id.js";
 
 // The empty field shape resolvePersonRow returns when a row has no live actor to
 // pull from — spread into the no-row and deleted-actor fallbacks so the blank
@@ -170,13 +171,20 @@ export function rebasePersonRows(live, replacements, additions = []) {
  * datalists (e.g. Create-a-Follower). Reads the nested `stonetop-pwd.steading` flag where
  * the people rows actually live — the flat `getFlag(…, "residents")` path is never written.
  * Best-effort: a missing/unlinked steading (or any read error) just yields [].
+ *
+ * The optional chaining above already covers "no steading", so the catch only ever fires on
+ * something genuinely unexpected — and an empty list is indistinguishable from "this steading
+ * has nobody". Log it, or a broken read looks exactly like an empty village.
  */
 export function peopleNames(steading) {
 	try {
-		const flags = steading?.getFlag?.("stonetop-pwd", "steading") ?? {};
+		const flags = steading?.getFlag?.(SYSTEM_ID, "steading") ?? {};
 		const rows = Object.keys(PEOPLE_FOLDERS).flatMap(list => Array.isArray(flags[list]) ? flags[list] : []);
 		return [...new Set(rows.map(r => String(r?.name ?? "").trim()).filter(Boolean))];
-	} catch { return []; }
+	} catch (err) {
+		console.error("Stonetop | could not read the steading's people names", err);
+		return [];
+	}
 }
 
 /**
@@ -185,10 +193,14 @@ export function peopleNames(steading) {
  * deleted, since both lack an actor to rate. Backs the character sheet's Relationships
  * section, which offers everyone on the steading sheet as a rateable row.
  * Best-effort: a missing/unlinked steading (or any read error) just yields [].
+ *
+ * Logged for the same reason as peopleNames: this backs the character sheet's Relationships
+ * section, where a swallowed failure reads as "this steading has no people" and the player
+ * simply loses the section with no clue why.
  */
 export function steadingPeopleActors(steading) {
 	try {
-		const flags = steading?.getFlag?.("stonetop-pwd", "steading") ?? {};
+		const flags = steading?.getFlag?.(SYSTEM_ID, "steading") ?? {};
 		const seen = new Set();
 		const people = [];
 		for (const list of Object.keys(PEOPLE_FOLDERS)) {
@@ -200,7 +212,10 @@ export function steadingPeopleActors(steading) {
 			}
 		}
 		return people;
-	} catch { return []; }
+	} catch (err) {
+		console.error("Stonetop | could not resolve the steading's people actors", err);
+		return [];
+	}
 }
 
 /**
@@ -221,7 +236,7 @@ export function steadingPeopleActors(steading) {
  */
 export function usedPersonPortraits(steading, exclude = {}) {
 	try {
-		const flags = steading?.getFlag?.("stonetop-pwd", "steading") ?? {};
+		const flags = steading?.getFlag?.(SYSTEM_ID, "steading") ?? {};
 		const used = {};
 		for (const list of Object.keys(PEOPLE_FOLDERS)) {
 			const rows = Array.isArray(flags[list]) ? flags[list] : [];
@@ -417,7 +432,7 @@ export async function createPersonNpc(list, data = {}, { folder = null } = {}) {
 		// the loss would happen silently on the GM's next load with nothing to notice. Only
 		// written when there IS one — an explicit null would be a key every read then has to
 		// special-case.
-		if (data.portraitFrame) createData.flags = { "stonetop-pwd": { portraitFrame: data.portraitFrame } };
+		if (data.portraitFrame) createData.flags = { [SYSTEM_ID]: { portraitFrame: data.portraitFrame } };
 	}
 	return Actor.create(createData);
 }
@@ -502,7 +517,7 @@ export async function migrateSteadingPeople(steading) {
 	// top-level scope. Read through a function, not into a variable: everything below the scan
 	// awaits, and the rows have to be re-read once those awaits are done.
 	const readRows = list => {
-		const rows = steading.flags?.["stonetop-pwd"]?.steading?.[list];
+		const rows = steading.flags?.[SYSTEM_ID]?.steading?.[list];
 		return Array.isArray(rows) ? rows : [];
 	};
 	// Cheap scan before anything else: the steady state is "every row already points at an
@@ -551,7 +566,7 @@ export async function migrateSteadingPeople(steading) {
 		// re-writing an identical array, which would broadcast an update for no reason.
 		if (rows.length !== live.length || rows.some((row, i) => row !== live[i])) update[list] = rows;
 	}
-	if (Object.keys(update).length) await steading.setFlag("stonetop-pwd", "steading", update);
+	if (Object.keys(update).length) await steading.setFlag(SYSTEM_ID, "steading", update);
 	return converted;
 }
 
@@ -633,7 +648,7 @@ export function repaintOpenSteadingRosters(actor) {
 		if (steading.type !== "stonetop") continue;
 		const openApps = Object.values(steading.apps ?? {});
 		if (!openApps.length) continue;
-		const people = steading.flags?.["stonetop-pwd"]?.steading ?? {};
+		const people = steading.flags?.[SYSTEM_ID]?.steading ?? {};
 		const rows = lists.flatMap(list => people[list] ?? []);
 		const listed = rows.some(r =>
 			(r?.uuid && r.uuid === uuid) ||
@@ -657,8 +672,8 @@ export function repaintOpenSteadingRosters(actor) {
  */
 export async function backfillResidentHomes(steading) {
 	if (!game.user?.isGM || steading?.type !== "stonetop") return 0;
-	if (steading.flags?.["stonetop-pwd"]?.steading?.residentHomesBackfilled) return 0;
-	const rows = steading.flags?.["stonetop-pwd"]?.steading?.residents;
+	if (steading.flags?.[SYSTEM_ID]?.steading?.residentHomesBackfilled) return 0;
+	const rows = steading.flags?.[SYSTEM_ID]?.steading?.residents;
 	let updated = 0;
 	for (const row of (Array.isArray(rows) ? rows : [])) {
 		const actor = personRowActor(row);
@@ -667,7 +682,7 @@ export async function backfillResidentHomes(steading) {
 		try { await actor.update({ "system.home": HOME_STONETOP }); updated++; }
 		catch (err) { console.warn("Stonetop | Could not backfill Home for", actor?.name, err); }
 	}
-	await steading.setFlag("stonetop-pwd", "steading", { residentHomesBackfilled: true });
+	await steading.setFlag(SYSTEM_ID, "steading", { residentHomesBackfilled: true });
 	return updated;
 }
 

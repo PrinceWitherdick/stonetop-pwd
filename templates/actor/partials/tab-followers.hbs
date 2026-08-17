@@ -262,7 +262,7 @@
 				{{#if edit.stats}}
 				<div class="stonetop-follower-armor-edit">
 					<input class="stonetop-follower-stat-input stonetop-follower-stat-input--num" type="number" min="0" data-ftype="{{ftype}}" data-slug="{{slug}}" data-field="armor" value="{{armorInput}}">
-					<input class="stonetop-follower-text stonetop-follower-armor-source-input" type="text" data-ftype="{{ftype}}" data-slug="{{slug}}" data-field="armorSource" value="{{armorSource}}" placeholder="from… (leather, shield…)" data-tooltip="Where their armor comes from — leather, a shield, thick hides. Optional, and it never changes the number." data-tooltip-direction="UP">
+					<input class="stonetop-follower-text stonetop-follower-armor-source-input" type="text" data-ftype="{{ftype}}" data-slug="{{slug}}" data-field="armorSource" value="{{armorSource}}" placeholder="from… (leather, shield…)" data-tooltip="Where their armor comes from: leather, a shield, thick hides. Optional, and it never changes the number." data-tooltip-direction="UP">
 				</div>
 				{{else}}
 				<span class="stonetop-follower-field-value">{{armor}}{{#if armorSource}} <span class="stonetop-follower-armor-source">({{armorSource}})</span>{{/if}}</span>
@@ -405,7 +405,7 @@
 		{{#if showReadiness}}{{#unless edit.stats}}
 		<div class="stonetop-follower-field-row stonetop-follower-readiness-row">
 			<span class="stonetop-follower-field-label">Readiness</span>
-			<div class="stonetop-readiness-pips" data-tooltip="{{#if readinessIsPool}}Crew ordered to Defend, 7+ (p.473) — common pool. 7–9: hold 1{{#if readinessHasShield}} ({{#if readinessShieldWall}}3 with Shield Wall{{else}}2 with shields{{/if}}){{/if}}. 10+: hold 3{{#if readinessHasShield}} ({{#if readinessShieldWall}}5 with Shield Wall{{else}}4 with shields{{/if}}){{/if}}.{{else}}Ordered to Defend, 7+ (p.469). 7–9: hold 1{{#if readinessHasShield}} (2 with their shield){{/if}}. 10+: hold 3{{#if readinessHasShield}} (4 with their shield){{/if}}.{{/if}} Click a circle to set how much they hold." data-tooltip-direction="UP">
+			<div class="stonetop-readiness-pips" data-tooltip="{{#if readinessIsPool}}Crew ordered to Defend, 7+ (p.473): common pool. 7–9: hold 1{{#if readinessHasShield}} ({{#if readinessShieldWall}}3 with Shield Wall{{else}}2 with shields{{/if}}){{/if}}. 10+: hold 3{{#if readinessHasShield}} ({{#if readinessShieldWall}}5 with Shield Wall{{else}}4 with shields{{/if}}){{/if}}.{{else}}Ordered to Defend, 7+ (p.469). 7–9: hold 1{{#if readinessHasShield}} (2 with their shield){{/if}}. 10+: hold 3{{#if readinessHasShield}} (4 with their shield){{/if}}.{{/if}} Click a circle to set how much they hold." data-tooltip-direction="UP">
 				{{#each readinessPips}}
 				<button type="button" class="stonetop-readiness-pip{{#if filled}} is-filled{{/if}}" data-ftype="{{../readinessFollower}}" data-slug="{{../readinessSlug}}" data-index="{{index}}" title="Set Readiness"></button>
 				{{/each}}
@@ -479,7 +479,7 @@
 			{{#if canHaveNeed}}
 			<button type="button" class="stonetop-follower-have-need stonetop-inline-btn"
 			        data-ftype="{{ftype}}" data-slug="{{slug}}" data-follower-name="{{orderName}}"
-			        data-tooltip="Have what they need — they produce a needed item; adds it to their gear (p.472)." data-tooltip-direction="UP">
+			        data-tooltip="Have what they need: they produce a needed item; adds it to their gear (p.472)." data-tooltip-direction="UP">
 				<i class="fas fa-sack"></i> Have what they need
 			</button>
 			{{/if}}
@@ -539,7 +539,7 @@
 				<p class="stonetop-follower-section-heading">Supplies
 					{{!-- Outfit the crew (p.472): members Outfit with the same gear — restock
 					      all their Supplies to full. --}}
-					<button type="button" class="stonetop-crew-outfit stonetop-inline-btn" data-tooltip="Outfit the crew — restock every member's Supplies to full (p.472)." data-tooltip-direction="UP">
+					<button type="button" class="stonetop-crew-outfit stonetop-inline-btn" data-tooltip="Outfit the crew: restock every member's Supplies to full (p.472)." data-tooltip-direction="UP">
 						<i class="fas fa-sack"></i> Outfit crew
 					</button>
 				</p>
@@ -848,7 +848,7 @@
 		<div class="stonetop-daagon-shared-note"><i class="fas fa-ring"></i> Loyalty is the Ring's shared pool.</div>
 		{{/if}}
 		{{#if brokenFree}}
-		<div class="stonetop-daagon-broke-free"><i class="fas fa-skull-crossbones"></i> Broke free of your control &mdash; no longer yours to command.</div>
+		<div class="stonetop-daagon-broke-free"><i class="fas fa-skull-crossbones"></i> Broke free of your control. No longer yours to command.</div>
 		{{/if}}
 		<div class="stonetop-daagon-actions">
 			<button type="button" class="stonetop-send-back stonetop-daagon-btn" data-slug="{{slug}}" data-follower-name="{{orderName}}"
@@ -862,14 +862,14 @@
 		{{!-- Party-wide follower badge (advisory): any PC may pay its cost or spend
 		      its Loyalty (p.464). --}}
 		{{#if party}}{{#unless edit.card}}
-		<div class="stonetop-follower-party-badge"><i class="fas fa-people-group"></i> Party follower — any PC may pay its cost or spend its Loyalty.</div>
+		<div class="stonetop-follower-party-badge"><i class="fas fa-people-group"></i> Party follower: any PC may pay its cost or spend its Loyalty.</div>
 		{{/unless}}{{/if}}
 		{{!-- Fallen follower (marked Dead from the 0-HP fate): keep the card as a record but
 		      surface a Remove button here so the player needn't open the edit pencil to clear
 		      it. Reuses the same .stonetop-follower-remove handler as the edit-mode button. --}}
 		{{#if dead}}{{#unless edit.card}}
 		<div class="stonetop-follower-dead-actions">
-			<span class="stonetop-follower-dead-note"><i class="fas fa-skull-crossbones"></i> {{#if name}}{{name}}{{else}}This follower{{/if}} has fallen — set their HP above 0 to revive them, or remove the card.</span>
+			<span class="stonetop-follower-dead-note"><i class="fas fa-skull-crossbones"></i> {{#if name}}{{name}}{{else}}This follower{{/if}} has fallen. Set their HP above 0 to revive them, or remove the card.</span>
 			<button type="button" class="stonetop-follower-remove stonetop-inline-btn stonetop-inline-btn--danger" data-slug="{{slug}}">
 				<i class="fas fa-trash"></i> Remove
 			</button>

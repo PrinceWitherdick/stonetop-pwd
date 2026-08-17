@@ -1,13 +1,13 @@
-// Factory for the CRUD shared by the "GM-prep page" families — threats and hazards.
+// Factory for the CRUD shared by the "GM-prep page" families: threats, hazards and sites.
 // Each family stores ALL of a steading's items as pages of ONE hidden JournalEntry
-// (named "<Steading> Threats" / "<Steading> Hazards"); the steading points at that
-// entry via a flag. See threat-store.js for the full rationale — in short, these are
-// pure GM prep that is never shared with players, so a single many-page journal is
-// safe (there is no per-item "reveal", hence no whole-entry-broadcast leak to guard).
+// (named "<Steading> Threats" / "<Steading> Hazards" / "<Steading> Sites"); the steading
+// points at that entry via a flag. See threat-store.js for the full rationale: in short,
+// these are pure GM prep that is never shared with players, so a single many-page journal
+// is safe (there is no per-item "reveal", hence no whole-entry-broadcast leak to guard).
 //
-// Threats and hazards share this entire surface and differ only in the config constants
-// below plus the seed->system shaper, so the CRUD lives once here. The doom-tick and
-// delete helpers are page-shape generic and stay in threat-store, which hazards reuse.
+// All three families share this entire surface and differ only in the config constants
+// below plus the seed->system shaper, so the CRUD lives once here. Deleting is shared too and
+// lives at the bottom of this file; the doom-tick is threat-only and stays in threat-store.
 import { STONETOP_SCOPE, resolvedFlagProperty } from "../actors/character/StonetopFlags.js";
 
 // Looked up lazily (not at module load) so callers import cleanly outside Foundry.
@@ -17,7 +17,7 @@ const SORT_STEP = 100000;
 
 /**
  * @param {object} cfg
- * @param {string} cfg.pageType     JournalEntryPage type ("threat" | "hazard").
+ * @param {string} cfg.pageType     JournalEntryPage type ("threat" | "hazard" | "site").
  * @param {string} cfg.entryFlag    Boolean flag marking the entry as ours (flags.<scope>.<entryFlag>).
  * @param {string} cfg.entryFlagId  Steading flag holding the entry id (e.g. "threatsEntryId").
  * @param {string} cfg.entrySuffix  Journal name suffix (e.g. "Threats" -> "<Steading> Threats").
@@ -101,4 +101,36 @@ export function makeGmPrepPageStore({ pageType, entryFlag, entryFlagId, entrySuf
 	};
 
 	return { entryId, getEntry, listPages, pageById, ensureEntry, create, setName };
+}
+
+/**
+ * Delete a GM-prep page of ANY kind: the page, its scene Note pins, and the journal entry behind
+ * it once nothing is left in it.
+ *
+ * Notes link back via `entryId` + `pageId`; siblings share the entry, so the pin match keys on
+ * both. When the last page goes, the now-empty journal is removed too so no bare
+ * "<Steading> Threats" entry lingers. GM-only (all three families are GM prep).
+ *
+ * ONE function with ONE name. This work is page-shaped, not kind-shaped — it names no flag and no
+ * store — and it used to live in threat-store with `deleteHazard` and `deleteSite` re-exporting it
+ * from there. Three names for one behaviour meant a caller had to pick a kind it did not care
+ * about, and the kind-neutral module imported its shared behaviour out of one kind's store: had
+ * `deleteThreat` ever grown something threat-only (a doom-track flag, a board notification) sites
+ * and hazards would silently have inherited it. It belongs here, beside the CRUD it is the other
+ * half of.
+ */
+export async function deleteGmPrepPage(page) {
+	const entry = page?.parent;
+	if (!entry) return;
+	const entryId = entry.id;
+	const pageId = page.id;
+	if (game.user?.isGM && game.scenes) {
+		for (const scene of game.scenes) {
+			const noteIds = scene.notes.filter(n => n.entryId === entryId && n.pageId === pageId).map(n => n.id);
+			if (noteIds.length) await scene.deleteEmbeddedDocuments("Note", noteIds).catch(() => {});
+		}
+	}
+	await page.delete();
+	// Tidy up: once the last page is gone, drop the empty journal (a later create re-mints it).
+	if (!entry.pages?.size) await entry.delete().catch(() => {});
 }

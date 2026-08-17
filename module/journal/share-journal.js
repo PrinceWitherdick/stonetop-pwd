@@ -13,6 +13,7 @@
 // floor, so this never clobbers an intentional one-off share.
 
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
+import { isGmPrepDoc } from "./gm-prep-page.js";
 
 // Looked up lazily (not at module load) so the file imports cleanly outside
 // Foundry — e.g. under the unit tests — and never races the global's setup.
@@ -41,9 +42,9 @@ export function addJournalShareButton(app) {
 	if (!game.user?.isGM) return;
 	const journal = app?.document ?? app?.object;
 	if (!(journal instanceof JournalEntry)) return;
-	// The Threats / Hazards journals are pure GM prep, never shared with players — suppress
-	// the header "Share" eye on them so they can't be handed out by accident.
-	if (journal.getFlag?.("stonetop-pwd", "threat") || journal.getFlag?.("stonetop-pwd", "hazard")) return;
+	// The Threats / Hazards / Sites journals are pure GM prep, never shared with players:
+	// suppress the header "Share" eye on them so they can't be handed out by accident.
+	if (isGmPrepDoc(journal)) return;
 
 	const root = app.element?.jquery ? app.element[0] : app.element;
 	const header = root?.querySelector?.(".window-header");
@@ -94,8 +95,8 @@ function _refreshShareButton(btn, journal) {
 	const O = levels();
 	const shared = (journal?.ownership?.default ?? O.NONE) >= O.OBSERVER;
 	const tip = shared
-		? "Players can see this journal — click to change"
-		: "Hidden from players — click to share";
+		? "Players can see this journal: click to change"
+		: "Hidden from players: click to share";
 	btn.classList.toggle("is-shared", shared);
 	btn.setAttribute("data-tooltip", tip);
 	btn.setAttribute("aria-label", tip);

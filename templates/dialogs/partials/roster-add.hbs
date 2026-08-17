@@ -1,0 +1,42 @@
+{{!-- The add-a-person bar under a standing roster: brands, oaths, and the Blessed's marks.
+
+      The other half of roster-row.hbs, and here for the same reason. All three lists add the same
+      way — free-type a name against a datalist of world actors, press the button, or drop an Actor
+      on the section — and the block had been written out three times across two files with the
+      class stem swapped, including the five-line note about `label` vs `value` pasted verbatim
+      twice. A fourth roster (marked-people.js and RosterDialog both anticipate one) would have
+      been a fourth copy.
+
+      Free-type rather than a picker because the person very often has no Actor at all: a Censure
+      lands on somebody nobody has made a document for, a Proclamation's faction never has one, a
+      ward names a doorway and a Shared Souls beast is usually just a beast. A typed name that
+      matches an actor exactly is stored as a link to them anyway (see RosterDialog `_addTyped`),
+      so typing and dropping record the same thing.
+
+      Anything a particular list picks BEFORE the name — the Blessed's kind chooser — goes in the
+      block body, which renders at the head of the bar. A caller with nothing to add invokes it
+      with an empty block.
+
+      Context:
+        prefix       class stem for the shared chrome ("stonetop-condemned", "stonetop-marks")
+        nameClass    the text input's class, which the host dialog reads the typed name from
+        listId       id tying the input to its datalist; unique per bar on the page
+        addClass     the add button's class, which the host binds its click to
+        addLabel     that button's label, already localized
+        placeholder  the input's placeholder, already localized
+        hint         the "or drop an actor here" line, already localized
+        suggestions  {value, hint} rows for the datalist --}}
+<div class="{{prefix}}-add">
+	{{> @partial-block}}
+	<input type="text" class="{{nameClass}}" list="{{listId}}"
+	       autocomplete="off" placeholder="{{placeholder}}">
+	{{!-- `label` is where a native datalist already means "the aside beside this option", and it
+	      is what StonetopAutocomplete renders as the dimmed second column. Only `value` is ever
+	      inserted into the field, so a picked "Brennan the Claw / Marshedge" types just the name
+	      and the search resolves it cleanly. --}}
+	<datalist id="{{listId}}">
+		{{#each suggestions}}<option value="{{value}}"{{#if hint}} label="{{hint}}"{{/if}}></option>{{/each}}
+	</datalist>
+	<button type="button" class="{{addClass}}">{{addLabel}}</button>
+</div>
+<p class="{{prefix}}-hint">{{hint}}</p>

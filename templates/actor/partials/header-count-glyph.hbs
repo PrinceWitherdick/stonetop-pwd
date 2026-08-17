@@ -1,0 +1,29 @@
+{{!-- A glyph in the character header that opens a LIST and carries how long it is: the Judge's
+      scales and the Blessed's triquetra.
+
+      ALWAYS a <button>, where the toggle glyphs are a button only on an editable sheet. That
+      split is about who may WRITE, and this opens a roster; reading who has been branded or
+      marked is not an edit, and the dialog withholds its own add/remove controls from a viewer
+      who cannot write. `type="button"` is not optional: the whole sheet is one <form> and a bare
+      button submits it.
+
+      The count rides the button as a superscript rather than living only in the tooltip: the one
+      thing wanted off this icon at a glance is how many are out there, and a tooltip cannot be
+      glanced at. Suppressed at zero — a Judge who has branded nobody sees the scales, not a "0".
+
+      Every tooltip argument is passed to `localize` whichever glyph this is; a key that does not
+      name one simply ignores it, which is what lets the two share this markup while saying quite
+      different sentences.
+
+      Context:
+        stem         the base class; the icon is `<stem>-icon` ("stonetop-condemn")
+        active       whether the glyph is lit up (NOT the same as having a count: an oath does not
+                     redden the scales, only a brand does)
+        activeClass  the modifier worn while it is ("is-branding")
+        count        the badge; falsy hides it
+        countClass   the badge's class, which does not always follow the stem
+        openLabelKey / tooltipKey   i18n keys, the latter picked in getData --}}
+<button type="button" class="{{stem}}{{#if active}} {{activeClass}}{{/if}}"
+        aria-label="{{localize openLabelKey}}"
+        data-tooltip="{{localize tooltipKey brands=brands oaths=oaths count=count}}"
+        data-tooltip-direction="UP"><span class="{{stem}}-icon" aria-hidden="true"></span>{{#if count}}<span class="{{countClass}}" aria-hidden="true">{{count}}</span>{{/if}}</button>

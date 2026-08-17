@@ -50,6 +50,7 @@ export const createHazard = _store.create;
 /** Rename a hazard everywhere its name is its identity: the page and its scene pins. */
 export const setHazardName = _store.setName;
 
-// Delete carries no hazard-specific logic (it removes a page + its scene pins and tidies
-// an empty journal), so hazards reuse threats' helper directly.
-export { deleteThreat as deleteHazard } from "../threats/threat-store.js";
+// No `deleteHazard`. Deleting carries no hazard-specific logic — it removes a page, its scene
+// pins and an emptied journal — so it is `deleteGmPrepPage` in gm-prep-page-store.js, which is
+// where callers reach it. An alias here would be a second name for one behaviour, offered from
+// the one module a caller with a hazard in hand would find first.

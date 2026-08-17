@@ -1,5 +1,5 @@
 import { StonetopDialog } from "./stonetop-dialog.js";
-import { loadImage } from "../book2-art/rebuild-crops.js";
+import { loadImage, artImageUrl } from "../book2-art/rebuild-crops.js";
 import { removeAvatarPreview } from "./avatar-preview.js";
 import { localize, format } from "./i18n.js";
 import { hasVideoExtension } from "./foundry-compat.js";
@@ -85,10 +85,7 @@ export class PortraitFrameDialog extends StonetopDialog {
 
 	/** Data-relative paths go through Foundry's route; an absolute URL is left alone. */
 	_route(path) {
-		const s = String(path ?? "");
-		if (!s) return "";
-		if (/^(https?:|data:|blob:)/i.test(s)) return s;
-		return encodeURI(foundry.utils.getRoute(s.replace(/^\/+/, "")));
+		return artImageUrl(path);
 	}
 
 	activateListeners(html) {

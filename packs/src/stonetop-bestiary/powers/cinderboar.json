@@ -54,7 +54,7 @@
       "_id": "SlZAgN9wco3qUuFQ",
       "name": "Start a fire, incidentally",
       "type": "monsterMove",
-      "img": "icons/magic/fire/flame-burning-creature-orange.webp",
+      "img": "icons/magic/fire/flame-burning-yellow-orange.webp",
       "system": {
         "description": "",
         "rollFormula": ""

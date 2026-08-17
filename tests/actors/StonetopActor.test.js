@@ -21,15 +21,23 @@ class FakeBaseActor {
 
 const StonetopActor = createStonetopActorClass(FakeBaseActor);
 
+const CREATOR_ID = "gm1";
+
 /** Run _preCreate the way Foundry does: the document already holds the creation data. */
-async function precreate({ type = "npc", img = FOUNDRY_DEFAULT }, data = {}) {
+async function precreate({ type = "npc", img = FOUNDRY_DEFAULT }, data = {}, user = { id: CREATOR_ID }) {
 	const actor = new StonetopActor({ type, img });
-	await actor._preCreate(data, {}, {});
+	await actor._preCreate(data, {}, user);
 	return actor;
 }
 
+const OWNERSHIP = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
+
 beforeEach(() => {
-	global.CONST = { ...(global.CONST ?? {}), TOKEN_DISPLAY_MODES: { NONE: 0, HOVER: HOVER } };
+	global.CONST = {
+		...(global.CONST ?? {}),
+		TOKEN_DISPLAY_MODES: { NONE: 0, HOVER: HOVER },
+		DOCUMENT_OWNERSHIP_LEVELS: OWNERSHIP,
+	};
 });
 afterEach(() => { delete global.CONST; });
 
@@ -55,20 +63,60 @@ describe("StonetopActor#_preCreate", () => {
 		expect(actor.applied.some(change => "img" in change)).toBe(false);
 	});
 
+	// The GM Toolkit is the GM's own sheet. A world Actor is broadcast to every client and
+	// `ownership` is the only thing gating the UI, so without this stamp "GM Toolkit" is a row
+	// in every player's Actors sidebar. Foundry's own default happens to be NONE today, which
+	// is exactly why losing this would go unnoticed until a core release moved it.
+	it("hides a GM Toolkit from players", async () => {
+		const actor = await precreate({ type: "gmToolkit", img: FOUNDRY_DEFAULT });
+		const patch = actor.applied.find(change => "ownership.default" in change);
+		expect(patch?.["ownership.default"]).toBe(OWNERSHIP.NONE);
+	});
+
+	// A GM who deliberately shares one keeps their choice, the same way a chosen portrait and a
+	// chosen displayName survive.
+	it("leaves a deliberately shared GM Toolkit alone", async () => {
+		const actor = await precreate({ type: "gmToolkit" }, { ownership: { default: OWNERSHIP.OBSERVER } });
+		expect(actor.applied.some(change => "ownership.default" in change)).toBe(false);
+	});
+
+	// No per-user entry beside the default. The toolkit is a world singleton, so "whose is it"
+	// is not a question anything asks, and a recorded creator would be a field nothing reads
+	// sitting where a later reader would take it for a permission that matters.
+	it("records no per-user owner on a GM Toolkit", async () => {
+		const actor = await precreate({ type: "gmToolkit" });
+		expect(actor.applied.some(change => `ownership.${CREATOR_ID}` in change)).toBe(false);
+	});
+
+	it("does not stamp ownership on any other actor type", async () => {
+		for (const type of ["character", "monster", "npc", "stonetop"]) {
+			const actor = await precreate({ type, img: FOUNDRY_DEFAULT });
+			expect(actor.applied.some(change => "ownership.default" in change), type).toBe(false);
+		}
+	});
+
 	it("does not portrait other actor types", async () => {
 		for (const type of ["character", "monster", "stonetop"]) {
 			expect((await precreate({ type, img: FOUNDRY_DEFAULT })).img).toBe(FOUNDRY_DEFAULT);
 		}
 	});
 
-	it("still defaults an NPC's token to name-on-hover", async () => {
-		const actor = await precreate({});
-		expect(actor["prototypeToken.displayName"]).toBe(HOVER);
+	it("defaults EVERY kind of actor's token to name-on-hover", async () => {
+		// Foundry's own default is a nameless token, which leaves a table reading the map by
+		// portrait alone. The rule is deliberately not per-type — a PC's token, a villager's and
+		// a creature's all answer the same question.
+		for (const type of ["npc", "character", "monster", "stonetop"]) {
+			expect((await precreate({ type }))["prototypeToken.displayName"]).toBe(HOVER);
+		}
 	});
 
-	it("keeps a display mode the creation data chose", async () => {
-		const actor = await precreate({}, { prototypeToken: { displayName: 0 } });
-		expect(actor.applied.some(change => "prototypeToken.displayName" in change)).toBe(false);
+	it("keeps a display mode the creation data chose, whatever the type", async () => {
+		// A duplicate, or a compendium import that carries its own mode. Checked on a character
+		// too, because that branch returns early and could easily stop seeing this rule.
+		for (const type of ["npc", "character"]) {
+			const actor = await precreate({ type }, { prototypeToken: { displayName: 0 } });
+			expect(actor.applied.some(change => "prototypeToken.displayName" in change)).toBe(false);
+		}
 	});
 
 	// Foundry leaves actorLink false, which for a PC means every token on a scene carries a
