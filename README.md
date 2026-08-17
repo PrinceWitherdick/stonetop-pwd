@@ -16,17 +16,9 @@ A multi-step onboarding wizard handles everything from playbook selection to the
 
 ![Guided character creation, choosing a playbook](.github/screenshots/character_creation.webp)
 
-#### Automated Move Rolls
-
-Every move roll goes through a pre-roll dialog that shows active **Forward** and **Ongoing** modifiers (Forward clears automatically after use), then lets the player choose Normal, Advantage, or Disadvantage, plus an alternate stat for moves that allow one. Results are classified automatically as Strong Hit (10+), Weak Hit (7-9), or Miss (6 and under), the roll card spells out what happens at each tier, and a miss instantly awards +1 XP. Debilities apply disadvantage to the correct stat and annotate the card so the table always knows why.
-
 #### Level-Up Wizard
 
 Clicking Level Up opens a step-by-step wizard. It shows the XP cost, presents every move the character is eligible for (locking moves whose prerequisites aren't met), and, on even levels, surfaces available Invocations. Picking a move that grants a choice (a stat increase, a move borrowed from another playbook, an extra Sacred Pouch trait) opens the matching chooser inline, and the wizard flags when you still have picks left to spend. Confirming applies the new level, deducts XP, and adds the chosen move to the sheet in one click.
-
-#### Interactive Combat
-
-Clash and Let Fly run as a guided flow: choose a target, roll, then resolve damage per target while the GM applies it straight from the chat card. Weapon tags and ranges are baked in, enemies counter-attack when the fiction calls for it, and the whole exchange stays on the card so nobody loses track of who hit whom.
 
 #### Outfit & Inventory Management
 
@@ -36,27 +28,33 @@ The Outfit Move dialog lets players check off items and see their load level upd
 
 Build a follower from scratch with a guided builder, or turn any bestiary monster into a follower in one step. Each follower lives on a single card with per-section editing for instinct, moves, cost, and tags. During play the card handles the follower moves for you: Order rolls, Strengthen Bond, ammo and supply tracks, and a follower's fate at 0 HP. Group warbands, hirelings, and companions to keep the tab tidy.
 
-![Followers tab with a warband and a companion follower](.github/screenshots/followers_example.webp)
+![The Marshal's Followers tab, with a group follower and a single companion](.github/screenshots/followers_example.webp)
 
 #### Seeker Arcana
 
 The Seeker's arcana ship as a browsable deck. Cards track their marks, unlocks, and resource tracks interactively, the GM can reveal a whole card (or just its front) to a player once it's discovered, and a per-card ledger records every change so the table can see an arcanum's history at a glance.
 
-![The Seeker arcana deck](.github/screenshots/arcana_example.webp)
-
-#### Death's Door Dialog
-
-When a character hits 0 HP, a three-step walkthrough explains the Death's Door rules: what it means, how the roll works, and what the possible outcomes are, so no one has to look it up mid-session.
-
-#### Per-Tab Search
-
-Each character-sheet tab has a collapsible search box that filters the list in front of you (moves, gear, followers), so long sheets stay navigable.
+![The Seeker's Arcana tab, showing a major arcanum's front face](.github/screenshots/arcana_example.webp)
 
 ### For Game Masters
 
 #### Guided First Session
 
 The GM gets a **Welcome** guide and a **Let Spring Burst Forth** walkthrough that frames the village's opening scene step by step, with one-click sharing of the right journals to the table. Players see a guided creation intro and a **resumable** onboarding flow, while the GM watches a live roster fill in as each character is finished. A **New to Foundry?** primer helps first-time Foundry users find their feet.
+
+#### GM Toolkit
+
+Every world gets one **GM Toolkit**, the screen-side companion to the GM playbook, opened straight from the GM's own character slot. Its **GM Moves** tab lays out the full move lists, basic, exploration, and homefront, each one expandable to what the book says about it, with a "draw one at random" whisper for when nothing comes to mind.
+
+![The GM Toolkit's GM Moves tab](.github/screenshots/gm_toolkit_moves.webp)
+
+**Homefront** collects life in Stonetop, the year's work, and the Aftermath and Downtime procedures that bracket every expedition. **Threats & Dangers** and **Sites** hold the GM's prep. **Core Loop** reproduces the two flowcharts, the exchange-by-exchange loop and the campaign's flow between adventure and home, in a window you can zoom and pan.
+
+![The Core Loop tab's two flowcharts](.github/screenshots/gm_toolkit_flowcharts.webp)
+
+**I Wonder...** is the one page on the sheet a GM writes rather than reads: a running list of open questions, the things you don't know the answer to yet or want to leave for play to answer. Answer one and it drops to the **Answered** list below, so the top of the page stays the questions still open.
+
+![The I Wonder tab's list of open questions](.github/screenshots/gm_toolkit_i_wonder.webp)
 
 #### GM Result Controls
 
@@ -65,22 +63,6 @@ After any roll, the GM can shift the result up or down by one tier directly from
 #### Steading Sheet & Seasonal Automation
 
 The Stonetop steading sheet tracks Fortunes, Prosperity, Population, and Defense alongside the debility system (Diminished, Lacking, Malcontent). Steading moves are wired up: **Meet with Disaster** auto-applies the Fortunes penalty and picks a consequence; **Seasons Change** steps through the full seasonal checklist with automatic resource updates and nudges each player with a personal upkeep reminder; **Muster** deducts Fortunes before the roll. Completing an improvement automatically applies its one-time effect (reversible if you undo it), Places of Interest can be dragged onto a scene to drop a lettered map note, and a seasonal **Weather** oracle plus an **Expedition** GM walkthrough round out the homefront tools.
-
-#### Threats
-
-A dedicated **Threats** tab collects the GM's threats as book-faithful cards. Threats (and hazards) are pure GM prep, gathered into a single "Stonetop Threats" / "Stonetop Hazards" journal: drag a card onto a scene to drop a pin, and optionally show live threat cards as a canvas overlay.
-
-#### <img src="assets/icons/macros/love-letter.svg" alt="Love Letter icon" width="24" height="24" align="absmiddle"> Love Letters
-
-Love Letters hand a single character a personal, one-time GM move in the spirit of Book I's love letters. Each one sits at the top of that character's Moves tab until it's used; one click rolls it, posts the outcome to chat, and consumes it. A Love Letter macro is slotted to the hotbar for quick access.
-
-#### Character Introductions & The Chronicle
-
-The Introductions flow walks the table through the get-acquainted questions during the first session. Answer and ask steps open on the active player's own client while the GM follows along live (no extra setup or sockets), and once everyone has answered, the system compiles **The Chronicle**: a world journal with a page per character plus the Spring Burst opening, ready for the GM to narrate and players to read back.
-
-#### <img src="assets/icons/macros/truce.svg" alt="End of Session macro icon" width="24" height="24" align="absmiddle"> End of Session Macro
-
-An **End of Session** macro is automatically slotted into hotbar slot 10. The GM checks off which of the four group XP criteria were met and the system awards XP to every player-owned character simultaneously, then posts a summary to chat.
 
 #### Homebrew Content Creation
 
@@ -100,9 +82,27 @@ The system ships with the full bestiary of Books I and II: around 180 creatures,
 
 A bundled **Stonetop** journal compendium covers the wider world: all 30 Book II locations plus the setting's gods and factions, cross-linked to one another and to the bestiary so a click carries you from a region to the creatures that haunt it. Hover any link for a one-line summary. Seeded entries refresh automatically when the system updates, unless you've edited them, in which case your version is left untouched.
 
+#### Browse Stonetop
+
+One **Browse Stonetop** window, on the magnifying-glass hotbar macro, answers "what have we got?" across the bundled content: every arcanum, every creature, and the world's own NPCs, each in its own tab. Filter arcana by tier, by what they grant, and by curse; creatures by section, type, and the numbers they come in; people by status and home. It reads the GM-hidden compendia, so it is seeded GM-only.
+
+![The Browse Stonetop window, filtering the arcana catalog](.github/screenshots/browse_stonetop.webp)
+
+### Art from Your Own Books
+
+Lucie Arnoux's illustrations are not open-licensed, so none of them ship with this system. If you own the PDFs, though, the art is already yours, and an **Import Book Art** wizard pulls it out of your own copies and into your own world.
+
+![The Import Book Art wizard asking for the rulebook PDFs](.github/screenshots/import_book_art.webp)
+
+Five steps, each one optional: point it at **Book I** and **Book II** (the "spreads" editions, 308 and 302 pages), at the **GM playbook**, which is a free download and adds five more pictures, and at the **poster maps**. Skip any of them and that part is simply left out; come back for the rest another time and nothing already imported is touched, unless you tick **Force update**.
+
+What lands is every monster portrait, every location illustration, the villagers' faces, treasure and steading art, the GM playbook's flowcharts, and the poster maps as ready-made scenes. Bestiary entries, location journals, and the People gallery pick the pictures up on their own once they are on disk.
+
+The extraction runs locally, in your browser, on the file you chose. Nothing is uploaded, and the images are written into your own Foundry data under `stonetop-book-art/`, never into the system folder and never into a release. If you do not own the books, everything else in this system still works; the illustrated slots just stay empty.
+
 ## Screenshots
 
-![Character and Stonetop steading sheets](.github/screenshots/sheets-overview.webp)
+![A character sheet, the Stonetop steading sheet, and a bestiary stat block side by side](.github/screenshots/sheets-overview.webp)
 
 ---
 
