@@ -42,6 +42,49 @@ function configNumber(name) {
 	return Number(m[1]);
 }
 
+/** The source of one top-level function in the shipped macro, brace-matched out of the command. */
+function macroFunction(name) {
+	const start = COMMAND.indexOf(`async function ${name}(`);
+	expect(start, `${name} is not declared in the macro`).toBeGreaterThan(-1);
+	// Anchored on the end of the PARAMETER LIST rather than the first "{" after the name: a
+	// signature that grows a destructured option (`function f(doc, { probes = 5 } = {})`) would
+	// otherwise match the parameter brace and hand back a truncated function, which fails at parse
+	// with an error naming nothing.
+	const body = COMMAND.indexOf(") {", start);
+	expect(body, `${name} has a signature this matcher cannot anchor on`).toBeGreaterThan(-1);
+	let depth = 0;
+	for (let i = body + 2; i < COMMAND.length; i++) {
+		const c = COMMAND[i];
+		if (c === "{") depth++;
+		else if (c === "}" && --depth === 0) return COMMAND.slice(start, i + 1);
+	}
+	throw new Error(`could not find the end of ${name} in the Import Book Art macro`);
+}
+
+/** A pdf.js document stub: one [width, height] in points per page, in order. */
+const fakeDoc = (sizes) => ({
+	numPages: sizes.length,
+	async getPage(p) {
+		const [width, height] = sizes[p - 1];
+		if (!sizes[p - 1]) throw new Error(`no page ${p}`);
+		return { getViewport: () => ({ width, height }), cleanup() {} };
+	},
+});
+
+/** The macro's own edition detector, lifted out of the shipped command and run for real. */
+let lifted;
+const pdfLayout = (doc) => {
+	// Lifted on first use rather than at import. A lift that throws at module scope takes the whole
+	// file down with it, including the seventeen manifest, rect and index assertions that have
+	// nothing to do with edition detection, and reports "no tests" instead of naming the cause.
+	lifted ??= new Function(`${macroFunction("pdfLayout")}; return pdfLayout;`)();
+	return lifted(doc);
+};
+
+/** Both rulebooks: a half-width portrait cover, N landscape spreads, a half-width back cover. */
+const spreadsBook = (pages) =>
+	fakeDoc([[396, 612], ...Array.from({ length: pages - 2 }, () => [792, 612]), [396, 612]]);
+
 describe("the GM playbook as a third source", () => {
 	it("contributes the three maps and the two diagrams", () => {
 		expect(GM_ROWS.map(r => r.slug)).toEqual([
@@ -152,9 +195,10 @@ describe("the diagrams the toolkit shows", () => {
 	// page per portrait sheet, which is the download the publisher's page offers first. Read as a
 	// spread, a 1-up file takes its crops off the wrong page entirely, and every rect past the
 	// middle of a sheet falls off the paper and rasterises as blank white.
-	it("reads a 1-up playbook by stitching each sheet back out of its page pair", () => {
-		// Detected from the page's own shape, not the page count: a printing may add a cover.
-		expect(COMMAND).toContain("oneUp: vp.width < vp.height");
+	it("reads a 1-up playbook by stitching each sheet back out of its page pair", async () => {
+		// Detected from the shape of the paper, not the page count: a printing may add a cover.
+		const booklet = await pdfLayout(fakeDoc(Array.from({ length: 25 }, () => [396, 612])));
+		expect(booklet.oneUp).toBe(true);
 		// Sheet S is 1-up pages 2S and 2S+1, offset by whatever front matter the file carries.
 		expect(COMMAND).toContain("const left = 2 * sheet + layout.offset;");
 		expect(COMMAND).toContain("return [left, left + 1];");
@@ -200,6 +244,72 @@ describe("the diagrams the toolkit shows", () => {
 		expect(COMMAND).toContain('is the 1-up edition (one page per sheet)');
 		// Book I and Book II must NOT carry the flag, or that guard passes them straight through.
 		expect(COMMAND).not.toMatch(/label: "Book I(I)?",[^}]*oneUp: true/);
+	});
+
+	// The regression that made the macro unusable for its main job: a "spreads" rulebook is NOT
+	// landscape from end to end. Book I and Book II each open on a single half-width portrait cover
+	// and close on another, so an edition read off page 1 alone was declared 1-up and refused, and
+	// with both books skipped the run ended on "no usable book PDF provided". The GM playbook's
+	// spreads edition has no separate cover, which is why it was the one file that still imported,
+	// and why the fault looked like a problem with the rulebooks rather than with the detector.
+	it("does not mistake a rulebook's portrait cover for a 1-up edition", async () => {
+		for (const [label, pages] of [["Book I", 308], ["Book II", 302]]) {
+			const layout = await pdfLayout(spreadsBook(pages));
+			expect(layout.oneUp, `${label} was read as a 1-up edition`).toBe(false);
+			// And it reports the spread it judged, not the cover it read past, so the log a GM is
+			// asked for names the paper the verdict actually came from.
+			expect([layout.width, layout.height], label).toEqual([792, 612]);
+			// The evidence the console line is built from: five pages sampled, no cover among them,
+			// and a unanimous verdict. A GM who pastes that line has said what their file is.
+			expect(layout.probes, label).toHaveLength(5);
+			expect(layout.probes.includes(1) || layout.probes.includes(pages), `${label} sampled a cover`).toBe(false);
+			expect([layout.portrait, layout.landscape], label).toEqual([0, 5]);
+		}
+		// The playbook's spreads edition is landscape from page 1 and stays unaffected.
+		expect((await pdfLayout(fakeDoc(Array.from({ length: 12 }, () => [792, 612])))).oneUp).toBe(false);
+		// A booklet that carries one landscape foldout is still a booklet, and a spreads book whose
+		// front matter runs to a second portrait page is still spreads. Both strays sit on PAGE 2,
+		// which is deliberate: page 2 is the first page sampled, so these are the cases that tell a
+		// majority apart from a detector that trusts a single page. Reading one page was the whole
+		// of the original bug, and a rule that samples one page one place to the right of the cover
+		// would pass every other assertion here.
+		const foldout = Array.from({ length: 25 }, () => [396, 612]);
+		foldout[1] = [792, 612];
+		expect((await pdfLayout(fakeDoc(foldout))).oneUp).toBe(true);
+		const twoCovers = [[396, 612], [396, 612], ...Array.from({ length: 305 }, () => [792, 612]), [396, 612]];
+		expect(twoCovers).toHaveLength(308);
+		expect((await pdfLayout(fakeDoc(twoCovers))).oneUp).toBe(false);
+	});
+
+	// A verdict nobody can see is a verdict nobody can check. The page-1 bug named the edition it
+	// had settled on but never the evidence, so the console said "1-up edition supplied" and not one
+	// word about the file that earned it. The vote now travels out with the verdict and is printed
+	// on BOTH paths, which is what lets a GM's pasted log stand in for a 60 MB PDF.
+	it("says what its verdict was read off, on the refusal path and the accepting one", () => {
+		expect(COMMAND).toContain("return { oneUp, width, height, offset: 0, probes, portrait, landscape };");
+		const logAt = COMMAND.indexOf("} edition: ${layout.oneUp");
+		const refuseAt = COMMAND.indexOf("if (layout.oneUp && !BOOKS[book]?.oneUp) {");
+		expect(logAt, "the edition line is not logged at all").toBeGreaterThan(-1);
+		// BEFORE the refusal branch, or a skipped book is the one case that says nothing.
+		expect(logAt).toBeLessThan(refuseAt);
+		// And pdfLayout still names nothing outside itself. A `log()` call in there would read as
+		// the obvious way to do this and would break the lift these tests run on.
+		// Comments stripped first: the function carries a comment SAYING not to call log() in there,
+		// so matching the raw source would decide this assertion on prose.
+		const body = macroFunction("pdfLayout").replace(/^\s*\/\/.*$/gm, "");
+		expect(body).not.toMatch(/\blog\(/);
+	});
+
+	// A file that answers nothing is not a file we know to be 1-up. It reads as the calibrated
+	// edition and is left to the page-count check and the per-image extraction, which fail loudly,
+	// rather than being refused whole on no evidence at all.
+	it("reports an unreadable file as read off nothing, instead of guessing", async () => {
+		const layout = await pdfLayout({ numPages: 308, async getPage() { throw new Error("corrupt"); } });
+		expect(layout.oneUp).toBe(false);
+		// 0x0pt and a 0/0 tally is the tell, and it is in the line the GM pastes.
+		expect([layout.portrait, layout.landscape]).toEqual([0, 0]);
+		expect([layout.width, layout.height]).toEqual([0, 0]);
+		expect(layout.probes).toEqual([2, 78, 155, 231, 307]);
 	});
 
 	// The flowchart sheet is the one page whose two editions are genuinely different layouts: the
