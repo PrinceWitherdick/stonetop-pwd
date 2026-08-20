@@ -46,6 +46,34 @@
 				{{/each}}
 			</span>
 			{{/if}}
+			{{!-- Wards & Bindings only: "choose whether the affected beings are repelled or trapped by
+			      the signs". One move, two outcomes, so it is a toggle on the row rather than a sixth
+			      entry in the kind picker — see blessed-marks.js. Absent (not empty) on every other
+			      kind, and `../id` inside the loop for the same reason the pips use it. --}}
+			{{#if signs}}
+			{{#if editable}}
+			<span class="stonetop-mark-sign{{#if signUnset}} is-unset{{/if}}"
+			      data-tooltip="{{#if signUnset}}{{localize "stonetop.blessedMarks.signUnset"}}{{else}}{{localize "stonetop.blessedMarks.signTooltip"}}{{/if}}"
+			      data-tooltip-direction="UP">
+				{{#each signs}}
+				<button type="button" class="stonetop-mark-sign-btn{{#if active}} is-active{{/if}}"
+				        data-row-id="{{../id}}" data-sign="{{key}}"
+				        data-tooltip="{{rule}}" data-tooltip-direction="UP">{{label}}</button>
+				{{/each}}
+			</span>
+			{{!-- A viewer who cannot write gets the ANSWER, not a widget that does nothing when
+			      pressed — and NOTHING AT ALL where a pre-toggle ward has no answer to give, since
+			      the wrapper would otherwise draw an empty dashed box asking a question this viewer
+			      could not answer anyway. `:empty` could not have done that: the whitespace this
+			      template indents with is a text node, so the span is never empty to CSS. --}}
+			{{else}}{{#unless signUnset}}
+			<span class="stonetop-mark-sign" data-tooltip="{{localize "stonetop.blessedMarks.signTooltip"}}"
+			      data-tooltip-direction="UP">
+				{{#each signs}}{{#if active}}<span class="stonetop-mark-sign-btn is-active"
+				      data-tooltip="{{rule}}" data-tooltip-direction="UP">{{label}}</span>{{/if}}{{/each}}
+			</span>
+			{{/unless}}{{/if}}
+			{{/if}}
 			{{/"stonetop.roster-row"}}
 			{{/each}}
 		</ul>
@@ -70,6 +98,15 @@
 	<select class="stonetop-marks-kind" aria-label="{{localize "stonetop.blessedMarks.kindLabel"}}">
 		{{#each kinds}}
 		<option value="{{key}}"{{#if (eq key ../defaultKind)}} selected{{/if}}>{{label}}</option>
+		{{/each}}
+	</select>
+	{{!-- And, for a ward, which of the two it is. Always rendered, shown only while the kind picker
+	      is on the ward (BlessedMarksDialog `_syncSignPicker`) — hidden rather than re-rendered, so
+	      flicking through the kinds never wipes a half-typed name. --}}
+	<select class="stonetop-marks-sign" aria-label="{{localize "stonetop.blessedMarks.signLabel"}}"
+	        {{#unless signsOpen}}hidden{{/unless}}>
+		{{#each signs}}
+		<option value="{{key}}"{{#if (eq key ../defaultSign)}} selected{{/if}}>{{label}}</option>
 		{{/each}}
 	</select>
 	{{/"stonetop.roster-add"}}

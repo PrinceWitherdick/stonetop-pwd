@@ -9017,12 +9017,23 @@ a.stonetop-marks-name-text:hover { text-decoration: underline; }
 
    `width: auto` and the min/max pair are both needed, for the reason every other control in this
    file states them: core's `body.game .app select` sets a width these would otherwise inherit. */
-.stonetop-marks-kind {
+.stonetop-marks-kind,
+.stonetop-marks-sign {
 	flex: 0 0 auto;
 	width: auto;
 	min-width: 8em;
 	max-width: 12em;
 }
+
+/* Narrower than the kind picker: it holds two words, not five move names. */
+.stonetop-marks-sign {
+	min-width: 6em;
+	max-width: 8em;
+}
+
+/* `[hidden]` alone loses to core's `body.game .app select { display: … }`, which is more specific;
+   without this the ward's picker sits in the add row asking about Barkskin. */
+.stonetop-marks-sign[hidden] { display: none; }
 
 /* Shared Souls' three circles, on the name line beside the beast. Sized like the Moves sidebar's
    Readiness pips rather than the Crew tab's, since these sit in running text rather than in a
@@ -9045,6 +9056,77 @@ span.stonetop-mark-loyalty-pip {
 	display: inline-block;
 	box-sizing: border-box;
 	cursor: default;
+}
+
+/* ── Ward or binding ───────────────────────────────────────────────────────
+   "Choose whether the affected beings are repelled or trapped by the signs" — one move, two
+   outcomes, so a segmented pair on the name line rather than a second entry in the kind picker.
+   Sized and cased like the oath tick above, which is the other "which kind of row is this"
+   control in this window, so the two read as the same class of thing.
+
+   Nothing here hides an empty pair, because the template never emits one: a read-only view of a
+   ward nobody has answered for renders no wrapper at all. `:empty` could not have done that job
+   anyway — the whitespace a template indents with is a text node, so the span is never empty. */
+.stonetop-mark-sign {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 0.6em;
+	border: 1px solid rgba(0, 0, 0, 0.25);
+	border-radius: var(--st-radius-sm);
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+/* `button` in the selector because core's `body.game .app button` sets a height, width, margin and
+   background these must all beat; the read-only span needs none of that but takes the same box so
+   the two views of one row measure identically. Both of the height pair, since min-height beats
+   height: unpinning only `height` left the button at core's 2em while the <span> took its natural
+   line box, which is the one thing this rule exists to stop. */
+.stonetop-mark-sign-btn,
+button.stonetop-mark-sign-btn {
+	display: inline-block;
+	width: auto;
+	height: auto;
+	min-height: 0;
+	flex: 0 0 auto;
+	margin: 0;
+	padding: 1px 6px;
+	border: none;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-2xs);
+	line-height: 1.5;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--st-text-faint);
+	cursor: pointer;
+}
+
+span.stonetop-mark-sign-btn { cursor: default; }
+
+button.stonetop-mark-sign-btn:hover {
+	background: rgba(112, 128, 144, 0.18);
+	color: var(--st-text-secondary);
+	text-shadow: none;
+}
+
+/* The chosen side, declared AFTER the base and the hover so the tie goes to it — a ward that says
+   which one it is must not lose its ink to a passing cursor. */
+.stonetop-mark-sign-btn.is-active,
+button.stonetop-mark-sign-btn.is-active,
+button.stonetop-mark-sign-btn.is-active:hover {
+	background: slategrey;
+	color: #fff;
+	font-weight: 600;
+}
+
+/* A ward laid before this choice existed. Dashed, so the pair reads as a question still open
+   rather than as a control that merely happens to be off. */
+.stonetop-mark-sign.is-unset {
+	border-style: dashed;
+	border-color: var(--st-text-faint);
 }
 
 
