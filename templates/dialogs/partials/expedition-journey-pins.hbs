@@ -1,0 +1,54 @@
+{{!-- The interactive layer of a regional map: the route line, its arrowhead, and a hotspot per
+      place. Its context is one `map` object from ExpeditionDialog._buildJourney.
+
+      ITS OWN PARTIAL BECAUSE TWO SURFACES DRAW IT. The route step renders it over the map inside
+      the walkthrough, and the "See the whole map" window renders the same markup over the same
+      picture at whatever size the reader has zoomed to. Everything here is positioned in
+      PERCENTAGES of its container, so both get the right answer from one set of numbers, and the
+      pins, the stroke and the arrowhead keep their pixel sizes while their positions scale.
+
+      The container must carry `.stonetop-journey-canvas` (that is what the CSS hangs off) and be
+      a positioned box of the picture's exact shape. --}}
+{{!-- The way they go. The viewBox is the same 0-100 percentage space the pins are placed in,
+  stretched to the picture by preserveAspectRatio="none" — so the points need no
+  conversion. `vector-effect` then keeps the stroke and its dots round and evenly spaced
+  in SCREEN space, which that stretch would otherwise smear along one axis. Sits above the
+  map and below the pins, and takes no clicks. --}}
+{{#if path}}
+<svg class="stonetop-journey-path" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+  <polyline class="stonetop-journey-path-case" points="{{path.points}}" vector-effect="non-scaling-stroke"></polyline>
+  <polyline class="stonetop-journey-path-ink" points="{{path.points}}" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+{{/if}}
+
+{{!-- Which end is the destination. Its own fixed-size SVG rather than a marker on the
+  polyline above: that one is stretched to the picture, which would both squash the head
+  and (with orient="auto") aim it off a diagonal. This one is sized in pixels and turned by
+  an angle already worked out in the box's real proportions, so it points true. --}}
+{{#with path.arrow}}
+<svg class="stonetop-journey-arrowhead" viewBox="0 0 10 10" aria-hidden="true" focusable="false"
+     style="left:{{left}}%;top:{{top}}%;transform:translate(-50%,-50%) rotate({{angle}}deg)">
+  <path d="M1 1.2 L9 5 L1 8.8 Z"></path>
+</svg>
+{{/with}}
+
+{{#each spots}}
+<button type="button" data-slug="{{slug}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
+    style="left:{{left}}%;top:{{top}}%"
+    class="stonetop-journey-pick stonetop-journey-spot h-{{anchorH}} v-{{anchorV}}{{#if isOrigin}} is-origin{{/if}}{{#if isChosen}} is-chosen{{/if}}">
+  <span class="stonetop-journey-dot"></span>
+  {{#if showLabel}}
+  <span class="stonetop-journey-tag">{{name}}{{#if time}} <em>{{time}}</em>{{/if}}</span>
+  {{/if}}
+</button>
+{{/each}}
+
+{{!-- The edge arrows. Each moves out a tier; the three that name one place pick it too. --}}
+{{#each exits}}
+<button type="button" data-slug="{{node}}" data-tier="{{to}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
+    style="left:{{left}}%;top:{{top}}%"
+    class="stonetop-journey-pick stonetop-journey-exit h-{{anchorH}} v-{{anchorV}}{{#if isChosen}} is-chosen{{/if}}">
+  <span class="stonetop-journey-arrow"><i class="fas fa-angles-right"></i></span>
+  <span class="stonetop-journey-tag">{{label}}{{#if time}} <em>{{time}}</em>{{/if}}</span>
+</button>
+{{/each}}

@@ -160,7 +160,13 @@ export async function probeImageSize(src) {
 	// Assets Library URL, which must NOT be routed. artImageUrl decides; the Scene background keeps
 	// the resolved string either way, since that is what a client has to fetch.
 	const path = String(src ?? "");
-	const img = await loadImage(artImageUrl(path));
+	// `crossOrigin: null`, as loadImage's own note asks of any caller that never touches a canvas.
+	// Two reasons here. An anonymous request FAILS outright against a host sending no CORS headers,
+	// which loses the measurement for no gain — nothing below decodes pixels, only naturalWidth and
+	// naturalHeight. And an anonymous request is a different fetch mode from a plain `<img>`, so it
+	// gets its own cache entry: measuring a picture that is also being DISPLAYED (the travel maps)
+	// downloaded and decoded the whole file a second time.
+	const img = await loadImage(artImageUrl(path), { crossOrigin: null });
 	return { src: path.replace(/^\/+/, ""), w: img.naturalWidth, h: img.naturalHeight };
 }
 

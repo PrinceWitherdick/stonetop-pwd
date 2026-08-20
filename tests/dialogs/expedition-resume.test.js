@@ -47,7 +47,39 @@ beforeEach(() => {
 describe("ExpeditionDialog reload-resume record", () => {
 	it("records the open flag and the current step on render", () => {
 		dialogAt(4)._saveResume();
-		expect(getWalkthroughResume("expedition")).toEqual({ open: true, step: 4 });
+		expect(getWalkthroughResume("expedition")).toEqual({ open: true, step: 4, stepKey: "requisition" });
+	});
+
+	it("records the step's KEY as well as its index, so an inserted step cannot shift it", () => {
+		// An index is a place in a list this system edits: inserting "The route" as the second step
+		// moved nine later steps down one, and a GM who reloaded mid-walkthrough came back to the
+		// step BEFORE the one they left, silently, because the range check still passed.
+		const dialog = dialogAt(4);
+		dialog._saveResume();
+		const saved = getWalkthroughResume("expedition");
+		expect(saved.stepKey).toBe(dialog._steps[4].key);
+
+		// A record written BEFORE that insert, when "prep" was the fifth step. Its index is now
+		// stale by exactly one and its key is not, so restoring by key has to move it forward.
+		expect(dialog._steps[4].key).toBe("requisition");
+		expect(dialog._steps[5].key).toBe("prep");
+		store.walkthroughResume = { "world-a": { expedition: { open: true, step: 4, stepKey: "prep" } } };
+		const reopened = dialogAt(0);
+		reopened._restoreStep();
+		expect(reopened._steps[reopened._step].key).toBe("prep");
+		expect(reopened._step).toBe(5);
+	});
+
+	it("falls back to the index for a record with no key, or a step since renamed", () => {
+		store.walkthroughResume = { "world-a": { expedition: { open: true, step: 2 } } };
+		const byIndex = dialogAt(0);
+		byIndex._restoreStep();
+		expect(byIndex._step).toBe(2);
+
+		store.walkthroughResume = { "world-a": { expedition: { open: true, step: 2, stepKey: "gone" } } };
+		const missing = dialogAt(0);
+		missing._restoreStep();
+		expect(missing._step).toBe(2);
 	});
 
 	it("skips the write when the recorded position is unchanged", () => {
@@ -85,7 +117,7 @@ describe("ExpeditionDialog reload-resume record", () => {
 		const dialog = dialogAt(4);
 		dialog._saveResume();          // what each render does
 		await dialog.close();
-		expect(getWalkthroughResume("expedition")).toEqual({ open: false, step: 4 });
+		expect(getWalkthroughResume("expedition")).toEqual({ open: false, step: 4, stepKey: "requisition" });
 	});
 });
 

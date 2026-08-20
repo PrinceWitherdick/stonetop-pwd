@@ -1,0 +1,36 @@
+{{!-- The answer: how long the journey takes, by which legs, and what that ticked on Chart a Course.
+
+      Shared by the route step and the "See the whole map" window, so the number the GM reads is the
+      same wherever they happen to be looking. Context is the journey object. --}}
+{{#if journey.route}}
+<div class="stonetop-journey-route">
+  <div class="stonetop-journey-total">{{journey.route.atLeast}}</div>
+  <ol class="stonetop-journey-legs">
+    {{#each journey.route.legs}}
+    <li>
+      <span class="j-from">{{fromName}}</span>
+      <span class="j-arw">&rarr;</span>
+      <span class="j-to">{{toName}}</span>
+      <b class="j-time">{{time}}</b>
+      {{#if via}}<em class="j-via">by {{via}}</em>{{/if}}
+    </li>
+    {{/each}}
+  </ol>
+  {{!-- What the route actually carried onto the checklist, and nothing it did not. `hasStops` is
+        about intermediate stops alone, so leaning on it for the days as well told the GM the days
+        were filled in on every single-leg journey — including the four measured only in hours,
+        where the blank stays empty and the box stays unticked. --}}
+  {{#if journey.route.hasStops}}
+  <p class="stonetop-journey-note">
+    Ticked on <strong>Chart a Course</strong>: they must first travel to
+    {{#each journey.route.stops}}<strong>{{this}}</strong>{{#unless @last}}, then {{/unless}}{{/each}}{{#if journey.route.hasDays}}, with the days filled in{{/if}}.
+  </p>
+  {{else if journey.route.hasDays}}
+  <p class="stonetop-journey-note">Ticked on <strong>Chart a Course</strong>, with the days filled in.</p>
+  {{else}}
+  <p class="stonetop-journey-note">
+    Under a day's walk, so <strong>Chart a Course</strong> has no blank this route can fill.
+  </p>
+  {{/if}}
+</div>
+{{/if}}

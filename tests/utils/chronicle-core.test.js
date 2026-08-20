@@ -245,6 +245,70 @@ describe("buildChroniclePages — expeditions", () => {
 		expect(allBody(page)).not.toContain("How long have they been gone");
 	});
 
+	// The route plotted on the walkthrough's map step. Stored as two slugs and recomputed here, so
+	// a correction to the travel table reaches an old trip's page rather than freezing into it.
+	describe("the plotted route", () => {
+		const withJourney = (journey, chart) => buildChroniclePages({
+			pcs: [], expeditions: [{ ...expeditionFull(), journey, chart: { ...expeditionFull().chart, ...chart } }],
+		})[0];
+
+		it("leads the route section with the legs and the total", () => {
+			const body = bodyOf(withJourney({ origin: "stonetop", destination: "lygos" }), "Destination & route");
+			expect(body).toContain("<strong>Stonetop to Marshedge to Lygos</strong>: at least 40 days.");
+			expect(body).toContain("<li>Stonetop to Marshedge, 10 days (via the Roads)</li>");
+			expect(body).toContain("<li>Marshedge to Lygos, 30 days</li>");
+			// The GM's own prose still follows it.
+			expect(body).toContain("North along the old logging road to the ridge.");
+		});
+
+		it("fills the requirement blanks exactly as the dialog's own checklist does", () => {
+			const way = bodyOf(
+				withJourney({ origin: "stonetop", destination: "lygos" },
+					{ checks: { days: true, firstTravel: true } }),
+				"The way ahead");
+			expect(way).toContain("It'll take at least 40 days");
+			expect(way).toContain("First travel to Marshedge, and from there to your destination");
+			expect(way).not.toContain("___");
+		});
+
+		it("keeps the authored blank when a ticked requirement has no route to fill it", () => {
+			const way = bodyOf(withJourney(null, { checks: { days: true } }), "The way ahead");
+			expect(way).toContain("It'll take at least ___ days");
+		});
+
+		it("compiles a trip with no journey exactly as it did before", () => {
+			const before = buildChroniclePages({ pcs: [], expeditions: [expeditionFull()] })[0];
+			const after = withJourney(undefined, {});
+			expect(after.sections).toEqual(before.sections);
+		});
+
+		it("ignores a journey that goes nowhere", () => {
+			const same = withJourney({ origin: "marshedge", destination: "marshedge" }, {});
+			expect(bodyOf(same, "Destination & route")).not.toContain("at least");
+		});
+
+		// Picking a destination seeds the empty "Destination & route" field with the route line,
+		// so the walkthrough shows an answer rather than a blank — and that is the exact string
+		// the prose above already leads with. Printed verbatim underneath, the page said the same
+		// sentence twice, once bold and once not.
+		it("does not print the route line a second time as the GM's note", () => {
+			const body = bodyOf(
+				withJourney({ origin: "stonetop", destination: "lygos" },
+					{ route: "Stonetop to Marshedge to Lygos" }),
+				"Destination & route");
+			expect(body).toContain("<strong>Stonetop to Marshedge to Lygos</strong>: at least 40 days.");
+			expect(body).not.toContain("<p>Stonetop to Marshedge to Lygos</p>");
+		});
+
+		it("keeps every word once the GM has added to it", () => {
+			const body = bodyOf(
+				withJourney({ origin: "stonetop", destination: "lygos" },
+					{ route: "Stonetop to Marshedge to Lygos, but by boat from the Fen." }),
+				"Destination & route");
+			expect(body).toContain("but by boat from the Fen.");
+		});
+	});
+
 	it("falls back to a numbered name for an untitled trip", () => {
 		const pages = buildChroniclePages({
 			pcs:         [],

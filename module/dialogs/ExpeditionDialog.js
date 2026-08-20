@@ -5,6 +5,7 @@ import { sign, rollSeasonsCard } from "../utils/roll-engine.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
 import { getSetting, setWorldSetting } from "../settings.js";
 import { escHtml } from "../utils/strings.js";
+import { warn } from "../utils/logger.js";
 import { CHART_GROUPS, HOME_GROUP } from "./expedition-data.js";
 import { saveChronicleFromButton } from "../utils/chronicle.js";
 import {
@@ -17,10 +18,28 @@ import {
 } from "../utils/expedition-log-core.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
 import { deriveLoadLevel, LOAD_LEVEL_LIMITS } from "../utils/load.js";
-import { SYSTEM_ID } from "../system-id.js";
+import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
+import { renderTemplate } from "../utils/foundry-compat.js";
 import { EXPLORATION_GM_MOVES } from "../gm-toolkit/gm-moves.js";
+import {
+	TRAVEL_MAPS, TRAVEL_PLACES, BEYOND_TIER,
+	travelPlace, travelMap, placesOnMap, placesBeyond, exitsOnMap, spotPercent,
+} from "../data/travel-times.js";
+import {
+	solveTravel, normalizeJourney, journeyRoute, formatTravelTime, atLeastPhrase, routeLine,
+	stopsAlongTheWay, fillChartBlank, chartBlankValue,
+} from "../utils/travel-route.js";
+import { resolveTravelMap, travelMapFile, browseTravelMapArt } from "../book2-art/travel-map-art.js";
+import { openTravelMap } from "./TravelMapWindow.js";
+import { bindJourneyControls, journeyPick } from "./journey-controls.js";
 
 const ANSWERS_SETTING = "expeditionAnswers";
+
+// The route step's pin layer, rendered into BOTH the walkthrough's own map and the "See the whole
+// map" window's overlay. Named here because the dialog renders it directly (not only through a
+// `{{> }}` in its template), so the partial-registration sweep in stonetop.js cannot be the only
+// place the path is written down.
+const JOURNEY_PINS_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-pins.hbs";
 
 /**
  * The seven exploration moves, as the "Exploration moves" step prints them.
@@ -132,6 +151,16 @@ const _STEPS = [
 				<p>Travel is dangerous and hard, and that's the point: it makes home feel precious. <strong>Don't gloss it over.</strong> Give it the screen time it deserves.</p>`,
 	},
 	{
+		key:   "journey",
+		title: "The route",
+		icon:  "fa-signs-post",
+		body:  `<p>Before the players trigger <strong>Chart a Course</strong>, work out the answer. Say where they're setting out from and where they're bound: the maps are the region as the books draw it, and the times are the book's own travel table.</p>
+				<p>Composing legs is the book's arithmetic too, not a shortcut. Stonetop to <strong>Lygos</strong> is ten days to Marshedge and thirty more beyond it, which is why Book II calls the round trip &ldquo;an entire season of travel.&rdquo; What you pick here fills in the requirements on the next step.</p>`,
+		// A per-step flag, like `fate` and `weather` above, so getData switches on the schema
+		// rather than on a key spelled out in two places.
+		journey: true,
+	},
+	{
 		key:   "chart",
 		title: "Chart a Course",
 		icon:  "fa-route",
@@ -140,6 +169,11 @@ const _STEPS = [
 		qa:    {
 			kind:  "checklist",
 			key:   "chart",
+			// This checklist's requirements carry literal blanks ("at least ___ days"). A flag on
+			// the schema, like `journey` above, rather than `_qaContext` recognising the step by
+			// name — rename or split the step and a name written in two places stops matching in
+			// silence, with the range check still passing.
+			routeBlanks: true,
 			intro: { field: "route", prompt: "Destination &amp; route", placeholder: "Where are they headed, and how do they intend to get there?" },
 			groups: CHART_GROUPS,
 			notes: { field: "notes", prompt: "Other notes (custom requirements, nested legs, what you negotiated)", placeholder: "Anything else you told them…" },
@@ -326,18 +360,23 @@ export class ExpeditionDialog extends StepperDialog {
 			// one line.
 			width:     700,
 			// Fixed, like the other left-rail guides (Welcome 660×580, Make a Monster
-			// 760×620) — NOT "auto". These eleven steps run from two paragraphs (intro) to a
-			// twelve-box checklist (Chart a Course) to a per-PC load table (Outfit), and an
-			// auto-height window re-measures its content on EVERY render: measured against a
-			// 1000px viewport it opened anywhere from 597px to 951px, and from 734px to 951px
-			// at a larger UI font — up to 95% of the screen, a different height on each Next /
-			// Back / rail click. (Core clamps an auto height only to the viewport, and the
-			// shared .stonetop-spring-dialog cap is itself viewport-sized, so neither bounded
-			// it.) 620 is also the exact height at which all eleven rail entries are visible
-			// at the default UI font. The step column scrolls instead — see
+			// 760×620) — NOT "auto". These twelve steps run from two paragraphs (intro) to a
+			// twelve-box checklist (Chart a Course) to a per-PC load table (Outfit) to a
+			// regional map (The route), and an auto-height window re-measures its content on
+			// EVERY render: measured against a 1000px viewport it opened anywhere from 597px to
+			// 951px, and from 734px to 951px at a larger UI font — up to 95% of the screen, a
+			// different height on each Next / Back / rail click. (Core clamps an auto height
+			// only to the viewport, and the shared .stonetop-spring-dialog cap is itself
+			// viewport-sized, so neither bounded it.) The step column scrolls instead — see
 			// .stonetop-guide-main. A fixed height also means a manual resize sticks; core
 			// discards one on an auto-height window.
-			height:    620,
+			//
+			// 620 used to be the exact height at which all ELEVEN rail entries were visible at
+			// the default UI font. "The route" made it twelve, so this is 620 plus one rail
+			// entry's worth (6px padding twice, ~18px of line, a 1px border and the 2px gap) —
+			// the rail also scrolls and is in `scrollY` below, so overshooting costs nothing but
+			// falling short would quietly hide the last step behind a scroll.
+			height:    664,
 			resizable: true,
 			// Hold the reader's place through the re-renders a step does in place — naming
 			// the trip, toggling who's on it, re-rolling Requisition — now that the column
@@ -366,6 +405,16 @@ export class ExpeditionDialog extends StepperDialog {
 			ev.currentTarget.dataset.actorId,
 			ev.currentTarget.classList.contains("is-out"),
 		));
+		// Route step: pick a place off the map or the list, or change which map is showing. The
+		// same binder the popout uses, because it is the same partial (dialogs/journey-controls.js).
+		const journeyHandlers = {
+			pick: (field, slug) => this._setJourneyPlace(field, slug),
+			showTier: tier => this._showMapTier(tier),
+		};
+		bindJourneyControls(html[0], { ...journeyHandlers, zoom: key => this._openMapWindow(key) });
+		// DELEGATED, not bound per hotspot: pins, edge arrows and list rows all wear this class and
+		// there are around thirty-five of them on a drawn map, re-created on every render.
+		html.on("click", ".stonetop-journey-pick", ev => journeyPick(ev.currentTarget.dataset, journeyHandlers));
 		html.find(".stonetop-exp-chronicle").on("click", ev => this._saveChronicle(ev.currentTarget));
 		// Save on change so fields keep focus while typing.
 		html.find(".stonetop-exp-field").on("change", ev => {
@@ -413,6 +462,11 @@ export class ExpeditionDialog extends StepperDialog {
 		// every PC's inventory. Built only on this step so the others stay cheap.
 		if (step.key === "outfit" && game.user?.isGM) {
 			data.loadReadout = await this._buildLoadReadout();
+		}
+		// The route step gains the maps and the travel times. Same shape as the readout above:
+		// built only on its own step, because it browses the art folder and measures an image.
+		if (step.journey) {
+			data.journey = await this._buildJourney();
 		}
 		return data;
 	}
@@ -483,13 +537,16 @@ export class ExpeditionDialog extends StepperDialog {
 	async _startNewExpedition() {
 		const log = addExpedition(this._log(), this._newExpedition());
 		await this._persistLog(log);
+		await this._closeMapWindows();
 		this._step = 0;
 		this.render(false);
 	}
 
-	// Switch which logged trip the dialog is editing.
+	// Switch which logged trip the dialog is editing. Any open map window is showing the trip being
+	// switched AWAY from and has no way to notice — see _closeMapWindows.
 	async _switchExpedition(id) {
 		await this._persistLog(selectExpedition(this._log(), id));
+		await this._closeMapWindows();
 		this.render(false);
 	}
 
@@ -506,6 +563,7 @@ export class ExpeditionDialog extends StepperDialog {
 		});
 		if (!ok) return;
 		await this._persistLog(deleteExpedition(this._log(), current.id));
+		await this._closeMapWindows();
 		this._step = 0;
 		this.render(false);
 	}
@@ -540,13 +598,17 @@ export class ExpeditionDialog extends StepperDialog {
 				value:       read(`${qa.key}.${f.field}`) ?? "",
 				_label:      label,
 			});
+			// Once the route step has plotted a journey, a blank-carrying checklist's blanks have
+			// answers — so fill them here, through the same helper the Chronicle uses, or the tick
+			// box a GM reads and the journal that records it would say different things.
+			const route = qa.routeBlanks ? this._journeyRoute() : null;
 			return {
 				kind:   "checklist",
 				intro:  qa.intro ? field(qa.intro) : null,
 				groups: qa.groups.map(g => ({
 					label: g.label,
 					items: g.items.map(it => ({
-						text:    it.text,
+						text:    fillChartBlank(it.text, it.key, route),
 						path:    `${qa.key}.checks.${it.key}`,
 						checked: !!read(`${qa.key}.checks.${it.key}`),
 					})),
@@ -579,6 +641,534 @@ export class ExpeditionDialog extends StepperDialog {
 			alias:       "Requisition",
 			resultTable: _REQ_RESULT,
 		});
+		this.render(false);
+	}
+
+	// ── The route (journey step) ─────────────────────────────────────────────────
+	// The book's travel table, made tappable. The graph and the solve are pure and live in
+	// data/travel-times.js and utils/travel-route.js; everything here is presentation plus the
+	// one impure question — which copy of the map, if any, this world has on disk.
+
+	/** The trip's saved pick, defaulted to setting out from home. */
+	_journeyPick() {
+		return normalizeJourney(this._currentExpedition()?.journey);
+	}
+
+	/** The solved route to the chosen destination, or null when nothing is chosen yet. */
+	_journeyRoute() {
+		return journeyRoute(this._currentExpedition()?.journey);
+	}
+
+	/** Is `place` somewhere `tier` can draw — its own spot, or the edge arrow that points at it? */
+	_drawnOn(tier, place) {
+		if (!place) return false;
+		return !!travelPlace(place)?.spots?.[tier] || exitsOnMap(tier).some(e => e.node === place);
+	}
+
+	/**
+	 * Which map to show: what the GM last opened, else the CLOSEST one that can draw the whole
+	 * journey — both ends of it, not just the far one.
+	 *
+	 * "Wherever the destination is drawn, outermost first" is right for every place but one, and
+	 * wrong for the one that matters: Stonetop is the only place drawn on both maps, so a walk to
+	 * it from the Red Grove — four to six hours, entirely inside the Vicinity — was sent out to the
+	 * map of the whole continent, where the Red Grove has no pin, no arrow names it, and the route
+	 * line therefore cannot be drawn at all. Asking about the pair instead of the destination alone
+	 * costs nothing anywhere else, because every other place is drawn on exactly one map.
+	 */
+	_activeTier(origin, destination) {
+		const slugs = TRAVEL_MAPS.map(m => m.slug);
+		if (slugs.includes(this._journeyTier)) return this._journeyTier;
+		// Nothing to travel to yet, so the origin is the whole of the journey — and it still has
+		// to be drawable. Returning the innermost map flat meant setting out from Marshedge, the
+		// Steplands or Tor's Fist opened a Vicinity with no "setting out" pin anywhere on it.
+		if (!destination) return slugs.find(slug => this._drawnOn(slug, origin)) ?? slugs[0];
+		// Innermost first: TRAVEL_MAPS is ordered outermost LAST, and the closer map is the one
+		// drawn at the scale the journey actually happens on.
+		const both = slugs.find(slug => this._drawnOn(slug, origin) && this._drawnOn(slug, destination));
+		if (both) return both;
+		// No single map holds both ends, so show the destination's own outermost — and for a place
+		// past every edge, the outermost map there is, whose arrow points at it.
+		return slugs.filter(slug => this._drawnOn(slug, destination)).at(-1) ?? slugs.at(-1);
+	}
+
+	/** A destination's travel time, for a pin label or a list row. */
+	_timeLabel(routes, slug) {
+		const route = routes.get(slug);
+		return route?.legs?.length ? formatTravelTime(route.total) : null;
+	}
+
+	/**
+	 * The route drawn as a run of points on ONE map, or null when it cannot be.
+	 *
+	 * Two things make this more than "join the pins". A stop can be missing from the map being
+	 * shown — the Foothills are drawn on the Vicinity but not on the World's End, so Stonetop to
+	 * Tor's Fist has a stop with nowhere to put it — and the line BRIDGES those rather than
+	 * breaking, which is honest for a schematic: it says "the way runs from here to there", never
+	 * that it follows this road. And a stop past the map's edge is drawn at the arrow that points
+	 * to it, which is what lets the line to Lygos run off the corner of the World's End instead of
+	 * stopping at Marshedge with nothing to say.
+	 *
+	 * Percentages, like every other position here, so the polyline rides a `0 0 100 100` viewBox
+	 * and rescales with the picture without measuring anything.
+	 */
+	_routePath(route, tier, frame, aspect) {
+		if (!route?.legs?.length) return null;
+		const arrows = new Map(exitsOnMap(tier).filter(e => e.node).map(e => [e.node, e]));
+		const at = slug => {
+			const spot = travelPlace(slug)?.spots?.[tier] ?? arrows.get(slug) ?? null;
+			return spot ? spotPercent(spot, frame) : null;
+		};
+		const stops = [route.legs[0].from, ...route.legs.map(leg => leg.to)];
+		const placed = stops.map(at);
+		// THE ENDS ARE NOT BRIDGEABLE. Dropping a missing stop from the MIDDLE is the honest
+		// schematic described above; dropping a missing one from either END silently shortens the
+		// journey to somewhere it merely passes through. Tor's Fist drawn on the Vicinity tab is
+		// the case: its own spot is on the other map, so the line stopped at the Foothills and
+		// planted the destination arrowhead on an unlabelled dot the party is only walking past.
+		// A journey with an end this map cannot show has no honest line, so it gets none.
+		if (!placed[0] || !placed.at(-1)) return null;
+		const points = placed.filter(Boolean);
+		// One point is a dot, not a path, and drawing it would just double the pin already there.
+		if (points.length < 2) return null;
+		return {
+			points: points.map(p => `${p.left.toFixed(2)},${p.top.toFixed(2)}`).join(" "),
+			arrow:  this._routeArrow(points.at(-2), points.at(-1), aspect),
+		};
+	}
+
+	/**
+	 * The arrowhead that says which end of the line is the destination.
+	 *
+	 * ITS ANGLE IS NOT THE ANGLE BETWEEN THE TWO POINTS. Both coordinates are percentages of a box
+	 * that is wider than it is tall, so a step of 1% across is a different number of pixels from a
+	 * step of 1% down, and the direction a reader SEES is not the direction the numbers describe.
+	 * Dividing the vertical component by the box's aspect converts into the pixel space the eye is
+	 * actually in. (This is the same distortion that rules out an SVG `orient="auto"` marker here:
+	 * it would take its angle from the unstretched user space and point visibly wide on a diagonal.)
+	 *
+	 * The head is then backed off along the segment so it points AT the destination pin instead of
+	 * sitting under it, and that back-off is undistorted the same way. It is capped at a share of
+	 * the final leg so a short last hop cannot push the arrow back past the stop before it.
+	 */
+	_routeArrow(from, to, aspect) {
+		const ratio = Number(aspect) > 0 ? Number(aspect) : 1;
+		// Into pixel-proportional space: x stays as-is, y shrinks by the box's width-to-height.
+		const dx = to.left - from.left;
+		const dy = (to.top - from.top) / ratio;
+		const len = Math.hypot(dx, dy);
+		if (!len) return null;
+		const back = Math.min(3, len * 0.4);
+		return {
+			left:  Number((to.left - (dx / len) * back).toFixed(2)),
+			// ...and back out of it, so the result is a percentage again like everything else here.
+			top:   Number((to.top - (dy / len) * back * ratio).toFixed(2)),
+			angle: Number((Math.atan2(dy, dx) * 180 / Math.PI).toFixed(2)),
+		};
+	}
+
+	/** A place's gazetteer entry in the merged journal pack, when the books give it one. */
+	_journalUuid(place) {
+		return place?.journalId ? `Compendium.${JOURNAL_PACK}.JournalEntry.${place.journalId}` : null;
+	}
+
+	/**
+	 * Everything drawn ON one map: its picture, the route line, and a hotspot per place.
+	 *
+	 * Built for a NAMED tier rather than for whichever one the panel is showing, because two
+	 * surfaces draw it and they can be looking at different maps — the walkthrough's own panel
+	 * follows the destination, while a "See the whole map" window keeps showing whatever map it
+	 * was opened on until it is closed. One builder, so a pin means the same thing on both.
+	 *
+	 * Returns null when this world has no copy of that map, which is the ordinary state of a world
+	 * that never imported the book art.
+	 */
+	_mapLayer(tier, art, { routes, route, origin, destination }) {
+		if (!art) return null;
+		// Both anchors read the same way: a label near an edge hangs INWARD, so it cannot spill
+		// out of the picture and give whatever is showing it a horizontal scrollbar.
+		const anchors = (left, top) => ({
+			anchorH: left > 78 ? "right" : left < 22 ? "left" : "centre",
+			anchorV: top > 84 ? "above" : "below",
+		});
+		return {
+			...art,
+			tier,
+			alt: `${travelMap(tier)?.name ?? "The region"}, from the Stonetop rulebooks`,
+			path: this._routePath(route, tier, art.frame, art.aspect),
+			spots: placesOnMap(tier).map(place => {
+				const { left, top } = spotPercent(place.spots[tier], art.frame);
+				const time = this._timeLabel(routes, place.slug);
+				const isOrigin = place.slug === origin;
+				const isChosen = place.slug === destination;
+				return {
+					slug: place.slug, name: place.name, left, top, time, isOrigin, isChosen,
+					// Labels only where they carry the answer, so eleven of them cannot collide.
+					showLabel: isOrigin || isChosen,
+					tooltip: isOrigin ? `${place.name}, setting out` : time ? `${place.name}, ${time}` : place.name,
+					...anchors(left, top),
+				};
+			}),
+			exits: exitsOnMap(tier).map(exit => {
+				const { left, top } = spotPercent(exit, art.frame);
+				const time = exit.node ? this._timeLabel(routes, exit.node) : null;
+				return {
+					...exit, left, top, time,
+					isChosen: !!exit.node && exit.node === destination,
+					tooltip: exit.node
+						? `${exit.label}${time ? `, ${time}` : ""}`
+						: `Zoom out to ${travelMap(exit.to)?.name ?? "the wider map"}`,
+					...anchors(left, top),
+				};
+			}),
+		};
+	}
+
+	/**
+	 * The whole route planner, as the template wants it.
+	 *
+	 * `forTier` names a map to build for instead of the one the panel is showing — how the "See the
+	 * whole map" window asks for its own map, which it keeps even after a destination has taken the
+	 * panel out to the other one. Asking for a tier also renders the pin layer into `pins`, since
+	 * that window has no template of its own to `{{> }}` it from.
+	 */
+	async _buildJourney(forTier = null) {
+		const { origin, destination } = this._journeyPick();
+		const routes = solveTravel(origin);
+		const route  = destination ? routes.get(destination) ?? null : null;
+		const tier   = forTier ?? this._activeTier(origin, destination);
+
+		// One browse for both tiers (it is promise-cached per session anyway), so the tier tabs can
+		// say which maps this world actually has before the GM clicks one. Only the tier being
+		// DRAWN is then measured: that is a 300 dpi decode, and this runs on every render.
+		const present = await browseTravelMapArt().catch(() => null);
+		const files = new Map(present
+			? await Promise.all(TRAVEL_MAPS.map(async m => [m.slug, await travelMapFile(m, present).catch(() => null)]))
+			: TRAVEL_MAPS.map(m => [m.slug, null]));
+
+		// Still gated on the cheap answer: with no file for this tier there is nothing to measure,
+		// and where the browse failed outright that gate is also what keeps `resolveTravelMap` from
+		// going back to the folder for a second look at a directory that just refused to be read.
+		const art = files.get(tier)
+			? await resolveTravelMap(travelMap(tier), present).catch(() => null)
+			: null;
+		const map = this._mapLayer(tier, art, { routes, route, origin, destination });
+
+		const row = place => ({
+			slug: place.slug, name: place.name,
+			time: this._timeLabel(routes, place.slug),
+			isOrigin: place.slug === origin,
+			isChosen: place.slug === destination,
+			uuid: this._journalUuid(place),
+		});
+
+		const routeStops = route?.legs?.length ? stopsAlongTheWay(route) : [];
+
+		return {
+			origin: travelPlace(origin),
+			originOptions: TRAVEL_PLACES.map(place => ({
+				slug: place.slug, name: place.name, selected: place.slug === origin,
+			})),
+			destination: travelPlace(destination),
+			hasDestination: !!destination,
+			tiers: TRAVEL_MAPS.map(m => ({
+				slug: m.slug, name: m.name, scale: m.scale,
+				isActive: m.slug === tier, hasMap: !!files.get(m.slug),
+			})),
+			activeTier: tier,
+			map,
+			// Only for a caller that named a tier: the panel draws the same partial inline with
+			// `{{> }}`, and rendering it twice on every step change would be waste.
+			pins: forTier && map ? await renderTemplate(JOURNEY_PINS_TEMPLATE, map) : "",
+			// The list is the map's legend AND the whole screen when no map is on disk, which is
+			// what makes that fallback free rather than a second implementation.
+			hasAnyMap: [...files.values()].some(Boolean),
+			groups: this._destinationGroups(row, destination, tier),
+			route: route?.legs?.length ? {
+				legs:     route.legs,
+				atLeast:  atLeastPhrase(route.total),
+				stops:    routeStops,
+				hasStops: routeStops.length > 0,
+				// Through the SAME predicate the carry-forward ticks the box with, so the readout
+				// cannot promise a blank that `chartBlankValue` refuses to fill. Five of the
+				// eighteen destinations from Stonetop are measured only in hours, and the readout
+				// used to tell the GM the days were filled in on every one of them.
+				hasDays:  chartBlankValue("days", route) !== null,
+			} : null,
+		};
+	}
+
+	/**
+	 * The destination list, grouped by the map each place is drawn on.
+	 *
+	 * EACH PLACE APPEARS EXACTLY ONCE, which `placesOnMap` per tier does not give you: Stonetop is
+	 * drawn on both maps, so calling it once per tier produced eighteen rows for seventeen mapped
+	 * places — "Stonetop" under both headings, both wearing the green "setting out" pill, and both
+	 * lighting up when it was the destination. A place goes under the CLOSEST map that draws it,
+	 * which is also the map `_activeTier` would send a journey to it.
+	 *
+	 * The highlighted group is the one holding the DESTINATION, not the one matching the picture.
+	 * Those are the same group for every place a map draws, and differ for exactly the ones that
+	 * make the distinction worth having: a destination past the maps' edge (Lygos, the Manmarch,
+	 * the Steplands) is shown ON the outermost map, so keying the highlight to the picture meant
+	 * "Beyond the maps" could never take it — `_activeTier` cannot return BEYOND_TIER — and the
+	 * gold heading sat on a group that did not contain the chosen place. With nothing chosen it
+	 * falls back to the picture, which is the only thing there is to follow.
+	 */
+	_destinationGroups(row, destination, tier) {
+		const seen = new Set();
+		const groups = TRAVEL_MAPS.map(m => {
+			const places = placesOnMap(m.slug).filter(p => !seen.has(p.slug));
+			for (const p of places) seen.add(p.slug);
+			return { label: m.name, slug: m.slug, places: places.map(row) };
+		});
+		groups.push({ label: "Beyond the maps", slug: BEYOND_TIER, places: placesBeyond().map(row) });
+
+		const holding = destination
+			? groups.find(g => g.places.some(p => p.slug === destination))?.slug
+			: null;
+		const active = holding ?? tier;
+		return groups.map(g => ({ ...g, isActive: g.slug === active }));
+	}
+
+	/**
+	 * Record a pick and carry it forward onto Chart a Course.
+	 *
+	 * One write for the lot: `_saveField` persists the whole log per call, and this changes up to
+	 * four things at once.
+	 */
+	async _setJourneyPlace(field, slug, from = null) {
+		const { log, entry } = ensureCurrent(this._log(), () => this._newExpedition());
+		// The route as it stood BEFORE the pick, so the carry-forward below can tell its own last
+		// answer from a GM's own words. Read off the entry being mutated, NOT off _journeyPick():
+		// ensureCurrent hands back a deep copy, so the draft still holds the previous values until
+		// _persistLog swaps it in, and asking the draft would answer for the wrong trip.
+		const before = journeyRoute(entry.journey);
+		foundry.utils.setProperty(entry, `journey.${field}`, travelPlace(slug)?.slug ?? "");
+		// Let the map follow the new pick rather than stranding the GM on the old tier. BOTH ends
+		// matter, not just the destination: `_activeTier` promises "the closest map that can draw
+		// the whole journey", and a pinned tab outranks it, so a GM who had opened the World's End
+		// and then set out from the Red Grove got a Vicinity place on a continental map — no green
+		// pin anywhere, and `_routePath` returning null because that end has no spot to draw.
+		this._journeyTier = null;
+		this._carryToChart(entry, before, journeyRoute(entry.journey));
+
+		await this._persistLog(log);
+		this.render(false);
+		// A map window open beside the walkthrough is showing the state that just changed. Awaited
+		// and caught: it renders templates and re-reads the log, and an unhandled rejection here is
+		// console-only on v13 — the popout would simply keep showing the previous trip's route.
+		await this._refreshMapWindows(from).catch(err =>
+			warn("couldn't refresh the travel map window", err));
+	}
+
+	/**
+	 * Carry a change of route onto the Chart a Course checklist — in BOTH directions.
+	 *
+	 * The two requirements the route can answer are set from the route every time, never only
+	 * ticked. A one-way carry-forward looks harmless until the GM changes their mind: nothing ever
+	 * cleared `chart.checks`, so re-picking left `firstTravel` ticked with a blank nobody could
+	 * fill, and clearing the destination outright left a checklist describing a journey the trip no
+	 * longer had. The emptiness guard on the route field ended up protecting the system's own stale
+	 * output rather than a GM's words.
+	 *
+	 * A box is ticked only when `chartBlankValue` can actually fill the blank underneath it — the
+	 * same predicate the text goes through — because five of the eighteen destinations from
+	 * Stonetop are measured in hours and have no day count at all.
+	 *
+	 * The free-text route field is only ever written while it still holds what we last put there
+	 * (or nothing). The moment a GM types their own account of how they mean to get there, it is
+	 * theirs, and no later pick touches it again.
+	 *
+	 * EVERY field here goes through that same test, boxes included. "Set from the route every time"
+	 * was right about the stale tick and wrong about whose tick it was: a GM who ticks "they must
+	 * first travel to ___" by hand — for a stop the graph does not model, on a single-leg trip the
+	 * route can never answer for — had it silently cleared by the next pick they made, along with
+	 * its line in the Chronicle. So a box is rewritten only while it still says what the BEFORE
+	 * route would have made it say. The moment it disagrees, the GM has been at it, and it is
+	 * theirs. The stale tick this replaced cannot come back, because a box we ticked ourselves
+	 * still matches and is still ours to clear.
+	 */
+	_carryToChart(entry, before, after) {
+		if (!before && !after) return;
+		for (const key of ["days", "firstTravel"]) {
+			const path = `chart.checks.${key}`;
+			const stored = foundry.utils.getProperty(entry, path);
+			// Absent is nobody's answer yet, so it is ours to write. Only a box that EXISTS and
+			// disagrees with what the before-route would have made it say has been touched by hand.
+			if (stored !== undefined && !!stored !== (chartBlankValue(key, before) !== null)) continue;
+			foundry.utils.setProperty(entry, path, chartBlankValue(key, after) !== null);
+		}
+
+		const written = String(entry.chart?.route ?? "").trim();
+		if (written && written !== routeLine(before)) return;
+		foundry.utils.setProperty(entry, "chart.route", after ? routeLine(after) : "");
+	}
+
+	/**
+	 * Everything the "See the whole map" window needs to be a peer of this panel, rather than a
+	 * picture of it: how to build the planner for a given map, and how to write a choice.
+	 *
+	 * Both go through the very methods the panel's own controls use, so a destination set in the
+	 * window and one set here are the same act — same trip, same Chart a Course boxes, same
+	 * Chronicle line.
+	 */
+	_mapWindowSource() {
+		return {
+			build: tier => this._buildJourney(tier),
+			// `from` is the window that made the pick, so the sweep below can skip re-reading the
+			// one that is about to re-read itself.
+			pick:  (field, slug, from = null) => this._setJourneyPlace(field, slug, from),
+			// A window navigated to another map is no longer the window for the map it was opened
+			// on, and the bookkeeping here is keyed by exactly that.
+			moved: (fromTier, toTier, app) => this._movedMapWindow(fromTier, toTier, app),
+		};
+	}
+
+	/**
+	 * Open the map big, with the whole planner on it.
+	 *
+	 * Keyed by TIER, so the two maps open as two windows and a second click raises the one already
+	 * showing that map. Remembered so a pick made in the PANEL can redraw the window's pins in
+	 * place — and note the window keeps showing the map it was opened on even once the panel
+	 * follows a destination out to the other one.
+	 */
+	async _openMapWindow(tier) {
+		// Guarded against a second click landing while the first is still opening. `openTravelMap`
+		// checks `ui.windows` for an already-RENDERED app, but AppV1 sets `_state = RENDERED` only
+		// on the last line of `_render` — so for the whole of the build (a browse, a decode, a
+		// template render) that check answers "no", and two clicks mint two Applications sharing
+		// one DOM id. The second then steals the first's appId and paints into its frame, or the
+		// first is orphaned on screen still writing picks that nothing redraws. Holding the PROMISE
+		// makes the second click await the first instead.
+		if (!this._opening.has(tier)) {
+			const opening = openTravelMap({ tier, source: this._mapWindowSource() })
+				.then(app => { if (app) this._mapWindows.set(tier, app); return app; })
+				// Caught HERE and not left to the caller: the zoom button is bound as a plain
+				// `() => zoom(key)` and drops the promise, so a throw anywhere in the open (a
+				// template that will not compile, a decode past `resolveTravelMap`'s own catch)
+				// surfaced only as an unhandled rejection in the console. What the GM saw was a
+				// button that did nothing. The two sibling sweeps both warn; so does this.
+				.catch(err => { warn("couldn't open the travel map window", err); return null; })
+				.finally(() => this._opening.delete(tier));
+			this._opening.set(tier, opening);
+		}
+		return this._opening.get(tier);
+	}
+
+	/**
+	 * Re-key a window that has navigated to another map, and settle the tie if one was already there.
+	 *
+	 * `_mapWindows` is keyed by tier because the panel asks for a map by tier, and the window's own
+	 * tabs can move it out from under that key. Without this, a window opened on the Vicinity and
+	 * navigated to the World's End stayed filed under "vicinity" — so the panel's Vicinity zoom
+	 * raised a window showing the other map, and its World's End zoom opened a second one.
+	 */
+	_movedMapWindow(fromTier, toTier, app) {
+		if (this._mapWindows.get(fromTier) === app) this._mapWindows.delete(fromTier);
+		const other = this._mapWindows.get(toTier);
+		this._mapWindows.set(toTier, app);
+		// Two windows cannot both BE the one showing a map: they would share the DOM id that
+		// `openOrFocus` matches on, and the loser is unreachable from the panel from then on. The
+		// window the GM just navigated wins, because it is the one they are working in.
+		if (other && other !== app) {
+			Promise.resolve(other.close?.())
+				.catch(err => warn("couldn't close a travel map window", err));
+		}
+	}
+
+	/** Every open map window, per tier. */
+	get _mapWindows() {
+		return (this.__mapWindows ??= new Map());
+	}
+
+	/** Map windows currently being opened, per tier. See `_openMapWindow`. */
+	get _opening() {
+		return (this.__opening ??= new Map());
+	}
+
+	/**
+	 * Drop the windows for a trip that is no longer the one being edited.
+	 *
+	 * A map window is a view of ONE trip, and it has no way to know the trip changed underneath it:
+	 * it would go on showing the old route line and the old `is-chosen` pin, and a click on one of
+	 * those stale pins writes a destination — plus the Chart a Course boxes that follow it — onto
+	 * whichever trip is current NOW. Closing them is the honest answer to "switch", "new" and
+	 * "delete" alike; the GM reopens the map for the trip they are actually looking at.
+	 *
+	 * The tier tab goes with them for the same reason: `_journeyTier` outranks everything in
+	 * `_activeTier`, so a tab clicked on one trip left the next one stranded on a map that cannot
+	 * draw its journey.
+	 */
+	async _closeMapWindows() {
+		this._journeyTier = null;
+		// The opens still in flight are AWAITED before taking stock, never merely forgotten.
+		// Forgetting one does not cancel it: `openTravelMap` is a browse, a decode and a template
+		// render away from painting its window, and the promise went on to resolve after the
+		// walkthrough was gone — rendering a map window nothing would ever close, and re-filling
+		// the very map that had just been cleared. That orphan holds a `source` bound to a closed
+		// dialog whose `_log()` is a draft memoized for its own lifetime, so one click on one of
+		// its pins wrote that stale whole-log snapshot back over `expeditionAnswers`. Waiting is
+		// what makes "a map window never outlives the walkthrough that opened it" true.
+		//
+		// Safe to await: these promises already carry their own `catch` in `_openMapWindow`, and
+		// the `.then` that files the window in `_mapWindows` is chained ahead of them, so by the
+		// time this resolves anything that opened is in the map below.
+		const pending = [...this._opening.values()];
+		this._opening.clear();
+		await Promise.all(pending);
+
+		const open = [...this._mapWindows.values()];
+		this._mapWindows.clear();
+		await Promise.all(open.map(app => app?.close?.()))
+			.catch(err => warn("couldn't close a travel map window", err));
+	}
+
+	/**
+	 * Re-read any open map window after a pick made in the PANEL.
+	 *
+	 * The window's own `sync` swaps its pins and its chrome in place rather than re-rendering, so
+	 * the reader keeps the corner they had zoomed into. A window they have since closed is dropped
+	 * rather than redrawn.
+	 *
+	 * `except` is the window that MADE the pick, which re-reads the planner itself the moment its
+	 * `pick` returns. Every build is a graph solve, an art browse and a template render, so leaving
+	 * it in meant one click on one pin solved the same journey three times over.
+	 */
+	async _refreshMapWindows(except = null) {
+		const live = [];
+		for (const [tier, app] of [...this._mapWindows]) {
+			if (!app?.rendered) this._mapWindows.delete(tier);
+			else if (app !== except) live.push(app);
+		}
+		// Together, not in turn: each window re-reads the planner on its own and none of them reads
+		// another's markup, so the second tier has nothing to wait for. Same as `_closeMapWindows`.
+		await Promise.all(live.map(app => app.sync()));
+	}
+
+	/**
+	 * A map window never outlives the walkthrough that opened it.
+	 *
+	 * Left open, it keeps a `source` bound to THIS instance, and this instance's `_log()` is a
+	 * draft memoized for its own lifetime with no `onChange` to invalidate it. So a pin clicked in
+	 * an orphaned window ran the closed dialog's `_setJourneyPlace`, which wrote that dialog's
+	 * snapshot of the whole log back over `expeditionAnswers` — silently discarding every note
+	 * typed into the walkthrough since it was reopened. Reopening did not reconnect it either:
+	 * `openOrFocus` returns the window it finds without running the factory, so the fresh source
+	 * was built and thrown away while the map looked connected and its pins visibly updated.
+	 *
+	 * Closing the children with the parent removes the whole class of problem rather than patching
+	 * the one path through it.
+	 */
+	async close(options = {}) {
+		await this._closeMapWindows();
+		return super.close(options);
+	}
+
+	/** Switch which map the GM is looking at. Per-client view state, so it stays off the log. */
+	_showMapTier(slug) {
+		if (!TRAVEL_MAPS.some(m => m.slug === slug)) return;
+		this._journeyTier = slug;
 		this.render(false);
 	}
 

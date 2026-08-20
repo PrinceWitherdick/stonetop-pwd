@@ -1,0 +1,71 @@
+{{!-- The route step: the book's regional maps, made tappable, over its travel table.
+
+      Two halves, and only the first is optional. The MAP needs art the GM imported from their own
+      rulebooks (it is gitignored and stripped from releases, so it can never ship), while the
+      DESTINATION LIST below is always rendered — it is the map's legend and, in a world with no
+      art, the whole screen. That is what makes the no-map case cost nothing extra.
+
+      Every hotspot's left/top is a percentage precomputed in ExpeditionDialog._buildJourney
+      (data/travel-times.js spotPercent), so Handlebars does no arithmetic and nothing here has to
+      measure the rendered image. --}}
+<div class="stonetop-journey">
+
+  {{> "stonetop.expedition-journey-controls" journey=journey}}
+
+  {{#if journey.map}}
+  {{!-- aspect-ratio comes from the probed file, so the box has its true height before the image
+        decodes and the hotspots land right on the first paint instead of jumping. --}}
+  <div class="stonetop-journey-map stonetop-journey-canvas" style="aspect-ratio:{{journey.map.aspect}}">
+    <img class="stonetop-journey-img" src="{{journey.map.src}}" alt="{{journey.map.alt}}" draggable="false">
+
+    {{> "stonetop.expedition-journey-pins" journey.map}}
+  </div>
+  {{!-- The panel's map is only as wide as the step column, and the books print these at 300 dpi.
+        Reuse the shared pan/zoom window rather than growing the dialog. --}}
+  <button type="button" class="stonetop-journey-zoom"
+          data-src="{{journey.map.src}}" data-key="{{journey.activeTier}}" data-title="{{journey.map.alt}}">
+    <i class="fas fa-magnifying-glass-plus"></i> See the whole map
+  </button>
+  {{else}}
+  <p class="stonetop-journey-nomap">
+    {{#if journey.hasAnyMap}}
+    That map isn&rsquo;t in this world yet. Try the other one, or use the list below.
+    {{else}}
+    The books&rsquo; maps aren&rsquo;t in this world. They come with your rulebooks rather than with
+    the system, so run <strong>Import Book Art</strong> to add them. The distances below work either way.
+    {{/if}}
+  </p>
+  {{/if}}
+
+  {{> "stonetop.expedition-journey-route" journey=journey}}
+
+  <div class="stonetop-journey-list">
+    {{#each journey.groups}}
+    {{#if places.length}}
+    <div class="stonetop-journey-group{{#if isActive}} is-active{{/if}}">
+      <div class="stonetop-journey-grouphead">{{label}}</div>
+      <ul>
+        {{#each places}}
+        <li>
+          <button type="button" data-slug="{{slug}}"
+                  class="stonetop-journey-pick stonetop-journey-row{{#if isOrigin}} is-origin{{/if}}{{#if isChosen}} is-chosen{{/if}}">
+            <span class="j-name">{{name}}</span>
+            {{#if isOrigin}}<span class="j-here">setting out</span>{{else if time}}<span class="j-time">{{time}}</span>{{/if}}
+          </button>
+          {{#if uuid}}
+          {{!-- `data-link` is what makes this open, NOT `.content-link`: core delegates its
+                content-link click (and drag) off `a[data-link]` and only paints the class. An
+                anchor with the class alone looks exactly like a link and does nothing. --}}
+          <a class="content-link stonetop-journey-book" data-link draggable="true"
+             data-uuid="{{uuid}}" data-tooltip="Read the gazetteer">
+            <i class="fas fa-book-open"></i>
+          </a>
+          {{/if}}
+        </li>
+        {{/each}}
+      </ul>
+    </div>
+    {{/if}}
+    {{/each}}
+  </div>
+</div>

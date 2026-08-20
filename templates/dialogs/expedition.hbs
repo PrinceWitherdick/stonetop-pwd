@@ -47,6 +47,11 @@
 
     <div class="stonetop-spring-body">{{{step.body}}}</div>
 
+    {{!-- Route step: the regional maps and the book's travel times (built in
+          ExpeditionDialog getData). Its own partial — the panel is long, and this
+          template is already the biggest in the dialogs folder. --}}
+    {{#if journey}}{{> "stonetop.expedition-journey" journey=journey}}{{/if}}
+
     {{!-- Outfit step: live party-load readout (GM-only; built in ExpeditionDialog
           getData). One row per party member, scoped to the current expedition. --}}
     {{#if loadReadout}}
