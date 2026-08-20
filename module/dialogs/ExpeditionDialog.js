@@ -7,6 +7,7 @@ import { getSetting, setWorldSetting } from "../settings.js";
 import { escHtml } from "../utils/strings.js";
 import { warn } from "../utils/logger.js";
 import { CHART_GROUPS, HOME_GROUP } from "./expedition-data.js";
+import { FATE_TABLES, fateTableList, fateInlinePhrase } from "../data/fate-tables.js";
 import { saveChronicleFromButton } from "../utils/chronicle.js";
 import {
 	normalizeLog,
@@ -139,7 +140,8 @@ function _pipBands(totalMarks, limits) {
 // questions (p.338) live in expedition-data.js so the Chronicle compiler can resolve
 // a ticked key back to its text. See CHART_GROUPS / HOME_GROUP imports above.
 
-// Linear walkthrough. `body` is HTML. `fate` adds a Die of Fate button. `roll`
+// Linear walkthrough. `body` is HTML. `fate` names the Die of Fate table this step
+// reaches for (a key in data/fate-tables.js) and adds the button that rolls it. `roll`
 // names an inline roll ("requisition"). `tiers` shows the matching outcome list.
 // `qa` is a single note, per-PC notes, or a checklist (see _qaContext).
 const _STEPS = [
@@ -239,13 +241,8 @@ const _STEPS = [
 					<li><strong>Repeat</strong>, then transition to the next leg or point of interest.</li>
 				</ol>
 				<p>On a <strong>perilous</strong> leg, or whenever you&rsquo;re unsure how hard to come down, you can let the Die of Fate set the danger:</p>
-				<ul class="stonetop-exp-fatetable">
-					<li><strong>1</strong>: A danger springs on them, unavoidable.</li>
-					<li><strong>2&ndash;3</strong>: Introduce a danger, right in front of them.</li>
-					<li><strong>4&ndash;5</strong>: Point to a looming danger.</li>
-					<li><strong>6</strong>: Point to a looming danger, but also present a discovery.</li>
-				</ul>`,
-		fate:  true,
+				${fateTableList(FATE_TABLES.perilous)}`,
+		fate:  "perilous",
 		qa:    {
 			kind:        "single",
 			key:         "running",
@@ -268,8 +265,8 @@ const _STEPS = [
 		title: "Weather & the Die of Fate",
 		icon:  "fa-cloud-sun-rain",
 		body:  `<p>Weather colors the whole trip and can be a challenge by itself. You decide when it rains and shines: weave it into your descriptions and your moves (bar the way with a blizzard; separate them in the fog).</p>
-				<p>Or let fate decide. Either ask what weather they're <strong>hoping for</strong> and roll the <strong>Die of Fate</strong> (1&ndash;2 nope, 3&ndash;4 partway, 5&ndash;6 just what they wanted), or roll the <strong>seasonal weather table</strong> (Book I p.325), informed by the latest <em>Seasons Change</em>.</p>`,
-		fate:    true,
+				<p>Or let fate decide. Either ask what weather they're <strong>hoping for</strong> and roll the <strong>Die of Fate</strong> (${fateInlinePhrase(FATE_TABLES.weather)}), or roll the <strong>seasonal weather table</strong> (Book I p.325), informed by the latest <em>Seasons Change</em>.</p>`,
+		fate:    "weather",
 		weather: true,
 	},
 	{
@@ -286,14 +283,8 @@ const _STEPS = [
 					<li><strong>Forage</strong>: spend hours seeking food (+WIS; disadvantage in winter).</li>
 				</ul>
 				<p>When they <strong>Make Camp</strong> and you're unsure if the night stays quiet, roll the Die of Fate:</p>
-				<ul class="stonetop-exp-fatetable">
-					<li><strong>1</strong>: Something dangerous approaches, inclined to harm.</li>
-					<li><strong>2</strong>: Something dangerous approaches, curious but not aggressive.</li>
-					<li><strong>3</strong>: Something annoying happens (critters, rain, an argument).</li>
-					<li><strong>4&ndash;5</strong>: The night passes uneventfully.</li>
-					<li><strong>6</strong>: A small boon, or an uneventful night.</li>
-				</ul>`,
-		fate:  true,
+				${fateTableList(FATE_TABLES.camp)}`,
+		fate:  "camp",
 	},
 	{
 		key:   "home",
@@ -391,7 +382,12 @@ export class ExpeditionDialog extends StepperDialog {
 		super.activateListeners(html);
 		this._bindStepNav(html);
 		html.find(".stonetop-exp-roll-btn").on("click", () => this._rollRequisition());
-		html.find(".stonetop-exp-fate-btn").on("click", () => game.stonetop?.rollDieOfFate?.());
+		// Roll the table the step is showing, not the bare oracle: on these steps the rules ask a
+		// specific question ("how perilous?", "does the night stay quiet?"), and a card reading
+		// only "4 — neutral / mixed" leaves the GM to look the answer back up on the page behind it.
+		html.find(".stonetop-exp-fate-btn").on("click", () => {
+			game.stonetop?.rollDieOfFate?.(FATE_TABLES[this._stepNav().step.fate]);
+		});
 		html.find(".stonetop-exp-weather-btn").on("click", () => game.stonetop?.openWeather?.());
 		html.find(".stonetop-spring-done").on("click", () => this.close());
 		// Expedition-log bar: rename the current trip, switch trips, start a fresh one.

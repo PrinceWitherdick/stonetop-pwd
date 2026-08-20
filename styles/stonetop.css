@@ -3920,6 +3920,33 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 }
+/* The rolled row's words, beside the number. A named table (a perilous leg, making camp)
+   answers in a full sentence, so it stacks under the band word rather than beside it, and
+   it is NOT uppercased — that treatment was chosen for the one-word bands. */
+.stonetop-fate-said {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+.stonetop-fate-text {
+	font-weight: bold;
+	line-height: 1.25;
+}
+/* Which question was asked — the speaker alias only ever says "Die of Fate".
+   The colour is DECLARED, not inherited: this card's paper is parchment in both themes, and a
+   text element that declares none takes core's near-white --color-text-primary under the dark
+   theme and disappears into it. This one sits outside `.stonetop-fate-result`, so there is no band
+   colour above it to fall back on. Same trap as `.pbta-chat-card .cell__title`. */
+.stonetop-fate-title {
+	margin: 0;
+	color: var(--st-text);
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	opacity: 0.75;
+}
 .stonetop-fate-legend {
 	list-style: none;
 	margin: 0 0 8px;
