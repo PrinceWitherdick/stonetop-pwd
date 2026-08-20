@@ -4182,11 +4182,15 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 
 .stonetop-weather-roll-btn > i,
 .stonetop-weather-post-btn > i,
-.stonetop-weather-reroll-btn > i { margin-right: 4px; }
+.stonetop-weather-reroll-btn > i,
+.stonetop-weather-fx-btn > i { margin-right: 4px; }
 
 /* Re-roll is the secondary of the pair and wears the season chip's outline rather than the
-   slate fill, so the row reads as one call to action and one way back to the die. */
-.stonetop-weather-reroll-btn {
+   slate fill, so the row reads as one call to action and one way back to the die. The canvas
+   control below wears the same outline skin and differs only in size, so it shares the rule
+   rather than restating it. */
+.stonetop-weather-reroll-btn,
+.stonetop-weather-fx-btn {
 	flex: 0 0 auto;
 	width: auto;
 	justify-content: center;
@@ -4201,7 +4205,109 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	transition: background 0.15s;
 }
 
-.stonetop-weather-reroll-btn:hover { background: hsl(40 25% 85%); }
+.stonetop-weather-reroll-btn:hover,
+.stonetop-weather-fx-btn:hover { background: hsl(40 25% 85%); }
+
+/* The canvas control, on its own row under the footer with a rule above it (see the template).
+   Quieter than either footer button: it is not part of deciding the weather, and a GM who has
+   never wanted to pause anything should be able to read straight past it. */
+.stonetop-weather-fx {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	padding-top: 8px;
+	border-top: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.12));
+}
+
+/* Quieter than the pair above: smaller type and tighter padding on the shared outline skin. */
+.stonetop-weather-fx-btn {
+	padding: 4px 10px;
+	font-size: calc(0.8rem * var(--stonetop-font-scale, 1));
+	transition: background 0.15s, border-color 0.15s;
+}
+
+/* Paused wears the gold caution tone rather than the red one. Nothing is broken and nothing has
+   been lost: the sky the world is under is still on the steading and still going out on the
+   cards, it is only being held off the map. Gold is also the tone that reads as a state somebody
+   chose, which is what the GM needs to recognise on the way back to switching it off. */
+.stonetop-weather-fx-btn.is-paused {
+	font-weight: 600;
+	background: var(--st-gold-bg);
+	border-color: var(--st-gold-border);
+	color: var(--st-gold-text);
+}
+
+.stonetop-weather-fx-btn.is-paused:hover {
+	background: color-mix(in srgb, var(--st-gold-border) 22%, transparent);
+}
+
+/* The way out to Configure Settings: text on the end of the control's own line, pushed to the
+   far side of it. Not a third button, because it is the one thing in this window that does not
+   act on the weather. Unlayered like the rest of this file, so `background: none` takes core's
+   button skin off it whatever the specificity of the rule that put it there. */
+.stonetop-weather-fx-link {
+	flex: 0 0 auto;
+	width: auto;
+	margin-left: auto;
+	padding: 0;
+	border: none;
+	box-shadow: none;
+	background: none;
+	font-family: var(--font-stonetop);
+	font-size: calc(0.78rem * var(--stonetop-font-scale, 1));
+	line-height: 1.35;
+	color: var(--color-text-dark-secondary);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+.stonetop-weather-fx-link:hover {
+	background: none;
+	color: var(--st-btn-primary-bg-hover);
+}
+
+/* Always its own line under the pair above, rather than the last thing squeezed onto theirs. */
+.stonetop-weather-fx-hint {
+	flex: 1 1 100%;
+	min-width: 0;
+	font-size: calc(0.78rem * var(--stonetop-font-scale, 1));
+	line-height: 1.35;
+	color: var(--color-text-dark-secondary);
+}
+
+/* The settings row a jump-to-setting lands on (utils/open-settings.js), lit for a moment so the
+   reader's eye finds it among the twenty other Stonetop options on that tab.
+
+   UNSCOPED, which almost nothing else in this file is: the element is inside core's Configure
+   Settings window and no `.stonetop` ancestor reaches it. Safe all the same, because a rule this
+   specifically named can only ever paint an element we put the class on ourselves. */
+.stonetop-setting-flash {
+	border-radius: var(--st-radius-sm);
+	animation: stonetop-setting-flash 2.6s ease-out both;
+}
+
+@keyframes stonetop-setting-flash {
+	0%, 65% {
+		background-color: var(--st-gold-bg);
+		box-shadow: 0 0 0 4px var(--st-gold-bg);
+	}
+	100% {
+		background-color: transparent;
+		box-shadow: 0 0 0 4px transparent;
+	}
+}
+
+/* Motion off: the same wash, arriving and leaving without the fade. It still clears on its own,
+   since the class comes off on the same timer either way. */
+@media (prefers-reduced-motion: reduce) {
+	.stonetop-setting-flash {
+		animation: none;
+		background-color: var(--st-gold-bg);
+		box-shadow: 0 0 0 4px var(--st-gold-bg);
+	}
+}
 
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-card__content {
 	display: grid;

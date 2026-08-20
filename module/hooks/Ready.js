@@ -22,6 +22,7 @@ import { reopenOpenWalkthroughs, sessionZeroComplete } from "../dialogs/walkthro
 import { writeChronicle } from "../utils/chronicle.js";
 import { ExpeditionDialog } from "../dialogs/ExpeditionDialog.js";
 import { WeatherDialog } from "../dialogs/WeatherDialog.js";
+import { refreshWeatherFx } from "../seasons/current-weather.js";
 import { WelcomeDialog } from "../dialogs/WelcomeDialog.js";
 import { FoundryBasicsDialog } from "../dialogs/FoundryBasicsDialog.js";
 import { CharacterCreationDialog } from "../actors/character/dialogs/CharacterCreationDialog.js";
@@ -252,6 +253,10 @@ export async function onReady() {
 	game.stonetop.saveChronicle     = () => writeChronicle().then(j => j?.sheet?.render(true));
 	game.stonetop.openExpedition    = () => ExpeditionDialog.open();
 	game.stonetop.openWeather       = () => WeatherDialog.open();
+	// Put the canvas weather back in step with the weather-effect settings. Registered here
+	// because settings.js reaches this way rather than importing the seasons module, which reads
+	// settings.js itself; its onChange handlers call this whenever one of those switches moves.
+	game.stonetop.refreshWeatherFx  = () => refreshWeatherFx();
 	game.stonetop.openWelcome       = () => WelcomeDialog.open();
 	game.stonetop.openFoundryBasics = () => FoundryBasicsDialog.open();
 	// Preview/test the player-facing creation intro for any character on demand

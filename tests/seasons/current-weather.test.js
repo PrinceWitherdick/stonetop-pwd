@@ -8,8 +8,11 @@ import {
 	recordCurrentWeather,
 	currentWeatherView,
 	announceWeather,
+	setWeatherFxPaused,
+	refreshWeatherFx,
 } from "../../module/seasons/current-weather.js";
 import { WEATHER_SEASONS } from "../../module/utils/weather.js";
+import { FXMASTER_ID, FX_KEY_PREFIX } from "../../module/seasons/weather-fx.js";
 import { STONETOP_SCOPE } from "../../module/actors/character/StonetopFlags.js";
 
 // The sky over Stonetop, shown as a glyph beside the steading header's season clock. Set by the
@@ -202,5 +205,153 @@ describe("announcing the weather", () => {
 
 		expect(globalThis.ChatMessage.create).not.toHaveBeenCalled();
 		expect(actor.setFlag).not.toHaveBeenCalled();
+	});
+
+	// The canvas is the third part of the act, and the one most easily left behind: the optional
+	// FXMaster integration was written against `WeatherDialog._post`, which is no longer where
+	// announcing happens. Driven through a stood-up FXMaster world rather than a spy on
+	// applyWeatherFx, so it fails if the call is dropped OR if the scene write stops working.
+	// What lands in the flag is seasons/weather-fx.test.js's business; this is the wire.
+	it("puts the weather on the scene too, when FXMaster is there", async () => {
+		const actor     = steading();
+		const undoWorld = world(actor);
+		const saved     = { modules: globalThis.game.modules, scenes: globalThis.game.scenes, user: globalThis.game.user };
+		const scene     = { update: vi.fn(), getFlag: () => ({}), canUserModify: () => true };
+
+		globalThis.game.modules  = { get: id => (id === FXMASTER_ID ? { active: true } : undefined) };
+		globalThis.game.scenes   = { active: scene };
+		globalThis.game.user     = {};
+		globalThis.game.settings = { get: (_sys, key) => (key === "weatherSceneFx" ? true : "publicroll") };
+		restore = () => { Object.assign(globalThis.game, saved); undoWorld(); };
+
+		// A sky that DRAWS something. The book's three clear days write nothing to a clean scene,
+		// so one of those here would pass whether or not the call was ever made.
+		const drawn  = sky => !["sun", "heat", "cold"].includes(sky);
+		const season = WEATHER_SEASONS.find(s => s.rows.some(r => drawn(r.sky)));
+		const row    = season.rows.find(r => drawn(r.sky));
+
+		await announceWeather(season.key, { row });
+
+		expect(scene.update).toHaveBeenCalledTimes(1);
+		expect(Object.keys(scene.update.mock.calls[0][0]).join(" "))
+			.toContain("flags." + FXMASTER_ID + ".effects." + FX_KEY_PREFIX);
+	});
+});
+
+// ── Pausing the weather on the canvas ────────────────────────────────────────
+// The picker's Pause button (WeatherDialog#_toggleFx). One switch, the world setting the config
+// screen already shows, and the canvas brought into line with it in the same act: flipping it
+// without clearing would leave a blizzard falling under a picker that said the weather was
+// paused, which is the same disagreement `announceWeather` exists to prevent.
+describe("pausing the weather on the canvas", () => {
+	let restore = null;
+	afterEach(() => { restore?.(); restore = null; });
+
+	// A world with FXMaster, a scene to draw on, and a steading standing under `sky` (or under
+	// nothing at all, for a world where no weather has ever been posted). `sceneFx` is where the
+	// switch starts. The stored value is REAL rather than a constant: what these tests are
+	// mostly checking is the order of the two writes, so a `get` that could not see the `set`
+	// would pass whichever way round they went.
+	function fxWorld(sky, { sceneFx = true, effects = {}, off = [] } = {}) {
+		const actor     = steading(sky ? { sky, text: "a line from the table" } : undefined);
+		const undoWorld = world(actor);
+		const saved     = { modules: globalThis.game.modules, scenes: globalThis.game.scenes, user: globalThis.game.user };
+		const scene     = { update: vi.fn(), getFlag: () => effects, canUserModify: () => true };
+		let stored      = sceneFx;
+
+		globalThis.game.modules  = { get: id => (id === FXMASTER_ID ? { active: true } : undefined) };
+		globalThis.game.scenes   = { active: scene };
+		globalThis.game.user     = { isGM: true };
+		globalThis.game.settings = {
+			// `off` names the per-effect switches this world has turned off; everything else falls
+			// through to the roll mode postWeather asks for, which is not false, which is on.
+			get: (_sys, key) => (key === "weatherSceneFx" ? stored : (off.includes(key) ? false : "publicroll")),
+			set: vi.fn((_sys, key, value) => { if (key === "weatherSceneFx") stored = value; }),
+			// setWorldSetting reads the scope off the registration before it writes.
+			settings: new Map([["stonetop-pwd.weatherSceneFx", { scope: "world" }]]),
+		};
+		restore = () => { Object.assign(globalThis.game, saved); undoWorld(); };
+		return { actor, scene, settings: globalThis.game.settings };
+	}
+
+	it("takes our weather off the map and leaves everything else alone", async () => {
+		const { actor, scene, settings } = fxWorld("storm", {
+			effects: { [`${FX_KEY_PREFIX}rain`]: {}, core_embers: {} },
+		});
+
+		expect(await setWeatherFxPaused(true)).toBe(true);
+		expect(settings.set).toHaveBeenCalledWith("stonetop-pwd", "weatherSceneFx", false);
+		expect(Object.keys(scene.update.mock.calls[0][0]))
+			.toEqual([`flags.${FXMASTER_ID}.effects.-=${FX_KEY_PREFIX}rain`]);
+		// The sky the world is under is not what was paused. The steading still says storm, and
+		// the next card still says storm; only the map goes quiet.
+		expect(actor.setFlag).not.toHaveBeenCalled();
+	});
+
+	// Resuming re-derives the sky from the steading rather than from anything remembered at the
+	// pause, so a GM who posted three more weathers while paused comes back to the current one.
+	// This also pins the ORDER of the two writes: applyWeatherFx stands down while the switch is
+	// still off, so a scene written here proves the setting went first.
+	it("puts back the sky the world is actually under", async () => {
+		const { scene, settings } = fxWorld("blizzard", { sceneFx: false });
+
+		expect(await setWeatherFxPaused(false)).toBe(true);
+		expect(settings.set).toHaveBeenCalledWith("stonetop-pwd", "weatherSceneFx", true);
+		expect(scene.update.mock.calls[0][0])
+			.toHaveProperty(`flags.${FXMASTER_ID}.effects.${FX_KEY_PREFIX}snowstorm`);
+	});
+
+	// The reconciler is what the settings' onChange reaches (through game.stonetop, since
+	// settings.js cannot import this file back), and it is the whole reason unticking a switch
+	// takes effect on the weather already falling rather than on the next one posted.
+	it("re-lays the current sky without its switched-off parts", async () => {
+		const { scene } = fxWorld("storm", { off: ["weatherFxHail"] });
+
+		expect(await refreshWeatherFx()).toBe(true);
+		const update = scene.update.mock.calls[0][0];
+		expect(update).not.toHaveProperty(`flags.${FXMASTER_ID}.effects.${FX_KEY_PREFIX}hail`);
+		expect(update).toHaveProperty(`flags.${FXMASTER_ID}.effects.${FX_KEY_PREFIX}rain`);
+	});
+
+	// Twice over the same canvas is one canvas. It WILL run twice — the picker's button
+	// reconciles and so does the onChange the same write sets off — and our keys are one per
+	// effect type, so the second run re-lays the same snow over the same key rather than hanging
+	// a second snowfall beside the first. Nothing accumulates, which is the property that matters;
+	// a second write is not one.
+	it("cannot double the weather up by running twice", async () => {
+		const flags = {};
+		const { scene } = fxWorld("snow");
+		scene.getFlag = () => flags;
+		scene.update  = vi.fn(update => {
+			for (const [key, value] of Object.entries(update)) {
+				const leaf = key.split(".").pop();
+				if (leaf.startsWith("-=")) delete flags[leaf.slice(2)];
+				else flags[leaf] = value;
+			}
+		});
+
+		await refreshWeatherFx();
+		const once = JSON.stringify(flags);
+		await refreshWeatherFx();
+
+		expect(Object.keys(flags)).toEqual([`${FX_KEY_PREFIX}snow`]);
+		expect(JSON.stringify(flags)).toBe(once);
+	});
+
+	// The pause direction IS write-free the second time, since the effects it takes off are gone
+	// by then. That is what lets the button and the onChange both fire without a second write.
+	it("finds nothing to take off a canvas already paused", async () => {
+		const { scene } = fxWorld("storm", { sceneFx: false, effects: {} });
+		expect(await refreshWeatherFx()).toBe(false);
+		expect(scene.update).not.toHaveBeenCalled();
+	});
+
+	// No weather has ever been posted here, so there is no sky to put back. A default sun would
+	// draw nothing anyway; saying so honestly is what keeps "nobody has set the weather" from
+	// looking like a decision downstream.
+	it("has nothing to put back in a world that has never had weather", async () => {
+		const { scene } = fxWorld(null, { sceneFx: false });
+		expect(await setWeatherFxPaused(false)).toBe(false);
+		expect(scene.update).not.toHaveBeenCalled();
 	});
 });

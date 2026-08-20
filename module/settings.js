@@ -1,5 +1,37 @@
 import { DEFAULT_ROOT as DEFAULT_BOOK2_ART_ROOT } from "./book2-art/art-root.js";
 import { SYSTEM_ID } from "./system-id.js";
+import { WEATHER_FX_PARTS, WEATHER_FX_SETTING } from "./seasons/weather-fx-parts.js";
+import { isPrimaryGM } from "./utils/primary-gm.js";
+
+/**
+ * A weather-effect setting changed, so the canvas has to catch up with it: unticking Fog must
+ * take the fog off the map it is already drifting across, not wait for the next posted weather.
+ *
+ * Reached through `game.stonetop` rather than by importing seasons/current-weather.js, which is
+ * how everything in this file reaches outward (see the threat board's onChange below):
+ * current-weather.js reads settings.js, so an import back the other way would be a cycle.
+ *
+ * ONE client does the work. onChange fires on every connected client and what it leads to is a
+ * scene update, so without the guard every GM at the table races the same write.
+ *
+ * ONE pass per save, too. This hangs off all eight weather switches, and core's SettingsConfig
+ * applies a form one `game.settings.set` at a time — so a GM who unticks Fog, Hail and Snow and
+ * presses Save fired three of these in a row, each a scene write, a broadcast, and a teardown and
+ * rebuild of every emitter on every connected client's canvas, when only the last one's state was
+ * ever visible. Debounced the way the rest of the codebase does it (IntroductionsDialog,
+ * WelcomeDialog), so a save is one reconcile however many boxes it touched.
+ */
+let _debouncedReconcile = null;
+function reconcileWeatherFx() {
+	// Built on first call rather than at module load. This file is evaluated while the system's
+	// entry point is still pulling its imports in, and reaching into `foundry.utils` that early
+	// would fail at load time — where there is no setting change to blame it on — instead of at a
+	// moment a reader could act on.
+	_debouncedReconcile ??= foundry.utils.debounce(() => {
+		if (isPrimaryGM()) globalThis.game?.stonetop?.refreshWeatherFx?.();
+	}, 100);
+	return _debouncedReconcile();
+}
 
 export function registerSettings() {
 	// -- WORLD SETTINGS ------------------------------------------
@@ -612,9 +644,12 @@ export function registerSettings() {
 	// "Expedition: …" page in the shared Chronicle (utils/chronicle-core.js). Shape:
 	//   { currentId: "<id>",                     // the trip the dialog is editing
 	//     list: [ { id, title, createdAt,
+	//               journey: { origin, destination },  // slugs into module/data/travel-times.js
 	//               chart: { route, checks: { warmClothes: true }, notes },
 	//               outfit, requisition, prep, running,   // single-text step notes
 	//               home: { checks, notes } }, … ] }      // oldest trip first
+	// Only the two journey SLUGS are stored, never the solved route: the travel graph is frozen
+	// compile-time data, so recomputing costs nothing and there is no snapshot to go stale.
 	game.settings.register(SYSTEM_ID, "expeditionAnswers", {
 		name: "Expedition Walkthrough Notes",
 		scope: "world",
@@ -635,6 +670,61 @@ export function registerSettings() {
 		type: Number,
 		default: 0
 	});
+
+	// Optional FXMaster integration: when the GM posts a weather from the picker, put the
+	// matching particles on the scene the table is on (module/seasons/weather-fx.js).
+	//
+	// Registered whether or not FXMaster is installed, because a setting cannot be added later
+	// in the load without the world's saved value being read before it exists. The hint says
+	// what it needs; without the module the toggle is simply inert, which is cheaper than a
+	// config screen that changes shape depending on what else is installed.
+	//
+	// Default ON. It only ever fires on an explicit "Post the weather", it writes nothing but
+	// its own keys, and a GM who has FXMaster and rolls Stonetop's weather is the person this
+	// was built for. Off leaves the canvas entirely alone.
+	//
+	// The Weather picker shows this same switch as a Pause button (dialogs/WeatherDialog.js),
+	// which is where a GM will actually reach for it: mid-session, with a blizzard on the map.
+	// ONE setting behind both, so "why is nothing happening on the map" has one answer. The
+	// button does the extra half a checkbox cannot: it takes what is already falling off the
+	// scene on the way down, and puts the world's current sky back on the way up.
+	// The key comes from the same leaf the seven parts below it come from, and NOT from a literal
+	// here: weather-fx.js reads it through `WEATHER_FX_SETTING`, and a rename that touched only one
+	// of the two failed in the worst direction there is — the box still on the settings screen and
+	// ticked, `getSetting` answering undefined, `weatherFxPaused` reading that as paused, and the
+	// canvas weather simply dead with nothing anywhere to say why.
+	// The KEY comes from the constant; the two i18n strings stay literals, because the registration
+	// suite greps this file for them to find en.json entries nothing declares.
+	game.settings.register(SYSTEM_ID, WEATHER_FX_SETTING, {
+		name: "stonetop.settings.weatherSceneFx.name",
+		hint: "stonetop.settings.weatherSceneFx.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: true,
+		onChange: reconcileWeatherFx,
+	});
+
+	// The parts of the sky, one switch each, sitting directly under the main one: a table that
+	// cannot stand the fog can put the fog out and keep the rain. Registered in a loop off
+	// WEATHER_FX_PARTS in that table's own order, which IS the order they appear in Configure
+	// Settings, so the seven read as a block under the switch they hang off rather than as seven
+	// unrelated checkboxes. Their names and hints are derived from the key for the same reason:
+	// a row added to the table is a row on the screen, with nothing here to keep in step.
+	//
+	// Default ON, every one. Off is a thing a table asks for, and the world that has never been
+	// asked gets the whole sky.
+	for (const part of WEATHER_FX_PARTS) {
+		game.settings.register(SYSTEM_ID, part.setting, {
+			name: `stonetop.settings.${part.setting}.name`,
+			hint: `stonetop.settings.${part.setting}.hint`,
+			scope: "world",
+			config: true,
+			type: Boolean,
+			default: true,
+			onChange: reconcileWeatherFx,
+		});
+	}
 
 	// The season last picked in the Weather roll dialog (see dialogs/WeatherDialog.js),
 	// so it reopens to where the GM left off. Client-scoped — it's a GM convenience,

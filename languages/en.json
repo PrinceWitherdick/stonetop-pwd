@@ -370,6 +370,38 @@
       }
     },
     "settings": {
+      "weatherSceneFx": {
+        "name": "Weather on the Scene (FXMaster)",
+        "hint": "When on, posting a result from the Weather window puts the matching particles on the scene your players are on: rain for rain, snow for snow, racing cloud for a storm, and a clear sky for the fine days. Requires the FXMaster module (FXMaster+ counts); without it this does nothing. Only the effects this system adds are ever touched, so any you set up yourself stay put. The Weather window carries this same switch as a Pause button, which also takes whatever is falling right now off the map."
+      },
+      "weatherFxClouds": {
+        "name": "Weather Effects: Cloud",
+        "hint": "Drifting cloud, which most of the skies wear: a few for a fine day, a low lid for an overcast one, and a dark ceiling racing over for the storms. Off leaves the fine, overcast and windy days with nothing on the map at all, since cloud is all they draw."
+      },
+      "weatherFxFog": {
+        "name": "Weather Effects: Fog",
+        "hint": "The low haze that sits over the ground on a muggy day. The only sky that draws it."
+      },
+      "weatherFxRain": {
+        "name": "Weather Effects: Rain",
+        "hint": "Falling rain, from a shower to a downpour to the driven rain of a storm or a tornado. The cloud above it is a separate switch."
+      },
+      "weatherFxHail": {
+        "name": "Weather Effects: Hail",
+        "hint": "Hail, which only a storm throws, mixed in with its rain."
+      },
+      "weatherFxSnow": {
+        "name": "Weather Effects: Snow",
+        "hint": "Ordinary falling snow."
+      },
+      "weatherFxSnowstorm": {
+        "name": "Weather Effects: Blizzard Snow",
+        "hint": "The driven snow of a blizzard, which is a heavier effect than ordinary snow and switches separately from it."
+      },
+      "weatherFxStormTint": {
+        "name": "Weather Effects: Storm Light",
+        "hint": "The slate grey a storm or a tornado washes the daylight with. Off keeps the cloud and the rain and leaves your map its own colours."
+      },
       "customMovesGmOnly": {
         "name": "Custom Moves: GM Only",
         "hint": "When on, only the GM can create or edit custom moves. Players don't see the \"+ Custom Move\" button or the edit pencils. Existing custom moves still display and roll for everyone. Turn off to let players author their own custom moves (including ongoing bonuses)."
