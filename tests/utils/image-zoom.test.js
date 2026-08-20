@@ -4,6 +4,7 @@ import {
 	anchoredOffset, centreOffset, clampPan, clampZoom, fitScale, stepZoom,
 	MIN_ZOOM, MAX_ZOOM, PAN_MARGIN, ZOOM_STEP,
 } from "../../module/utils/image-zoom.js";
+import { ImageZoomWindow } from "../../module/utils/image-zoom-window.js";
 
 // The arithmetic behind the image-zoom window. Everything here is a pure function of a few
 // numbers, which is exactly why it is worth pinning: a viewer whose anchor maths is subtly wrong
@@ -242,5 +243,91 @@ describe("the zoom window", () => {
 		expect(countRoots(hbs)).toBe(1);
 		expect(hbs).toMatch(/<div class="stonetop-image-zoom-view">/);
 		expect(WINDOW_JS).toContain('root.matches?.(".stonetop-image-zoom-view")');
+	});
+
+	// A subclass's template can render no viewport at all — TravelMapWindow draws a "that map isn't
+	// in this world" panel instead — and the guard below the lookup returns before anything is
+	// reassigned. So the refs and the observer are dropped FIRST, unconditionally: a stale
+	// `_overlay` took the next `setOverlay`'s markup into a detached div nobody would ever see, and
+	// a stale observer went on firing as its element was torn out, re-fitting against a 0x0 view.
+	it("drops last render's nodes before the guard that may return early", () => {
+		const body = WINDOW_JS.slice(WINDOW_JS.indexOf("activateListeners(html)"));
+		const cleared = body.indexOf("this._resizeObserver?.disconnect()");
+		const guard = body.indexOf("if (!this._view || !this._img) return;");
+		expect(cleared).toBeGreaterThan(-1);
+		expect(cleared).toBeLessThan(guard);
+		for (const ref of ["this._view = null", "this._img = null", "this._overlay = null"]) {
+			expect(body.slice(0, guard), ref).toContain(ref);
+		}
+	});
+
+	// This window is shared, so its template names no ONE caller's class: a caller that needs its
+	// own hook on the overlay renders its own template (the travel maps do), and the next overlay
+	// added here must not inherit map styling it never asked for.
+	it("names no caller's own class on the overlay", () => {
+		const hbs = read("templates/dialogs/image-zoom.hbs");
+		// The MARKUP, not the file: the comment above it names the class it is explaining.
+		const markup = hbs.replace(/\{\{!--[\s\S]*?--\}\}/g, "");
+		expect(markup).not.toContain("stonetop-journey-canvas");
+		expect(markup).toContain('class="stonetop-image-zoom-overlay"');
+	});
+});
+
+// The press that has to NOT start a drag.
+//
+// `setPointerCapture` on the viewport retargets every later event from that pointer at the
+// capturing element — including the `pointerup` the browser derives the `click` from. The viewport
+// is an ancestor of the overlay, so capturing on a press that landed on a pin made the click fire
+// at the viewport, `closest(PICK_SELECTOR)` find nothing, and the delegated handler never run:
+// every hotspot in the window was dead, on a dead-centre click that never moved a pixel. Releasing
+// the capture on pointerup does not undo it, because the click inherits the already-retargeted
+// target. So the press has to be recognised BEFORE the capture is taken, which is what this pins.
+describe("a press on an overlay control", () => {
+	/** The smallest DOM the pan handler actually touches. */
+	function press(targetAttrs = null, { inOverlay = true } = {}) {
+		const captured = [];
+		const target = targetAttrs
+			? { closest: sel => (sel.split(", ").some(s => s.slice(1, -1) in targetAttrs) ? target : null) }
+			: { closest: () => null };
+		const overlay = { contains: () => inOverlay };
+		const view = {
+			classList: { add: () => {}, remove: () => {} },
+			setPointerCapture: id => captured.push(id),
+		};
+
+		const app = Object.create(ImageZoomWindow.prototype);
+		app._view = view;
+		app._overlay = targetAttrs ? overlay : null;
+		app._offset = { x: 0, y: 0 };
+		app._pan = null;
+
+		let prevented = 0;
+		app._onPanStart({ button: 0, pointerId: 7, clientX: 10, clientY: 10, target, preventDefault: () => { prevented++; } });
+		return { pan: app._pan, captured, prevented };
+	}
+
+	it("starts no pan and takes no capture, so the click can reach the hotspot", () => {
+		const onPin = press({ "data-slug": true });
+		expect(onPin.pan).toBeNull();
+		expect(onPin.captured).toEqual([]);
+		// Nor is the press swallowed: it is the overlay button's to handle.
+		expect(onPin.prevented).toBe(0);
+	});
+
+	// An edge arrow that names no place carries only `data-tier` — and is still a control.
+	it("recognises a control that names a tier and no place", () => {
+		expect(press({ "data-tier": true }).captured).toEqual([]);
+	});
+
+	it("still pans from a press on the picture itself", () => {
+		const onMap = press(null);
+		expect(onMap.pan).toMatchObject({ id: 7, x: 10, y: 10 });
+		expect(onMap.captured).toEqual([7]);
+	});
+
+	// The guard asks the overlay whether the element is ITS child. A `data-slug` on something
+	// outside the overlay is not an overlay control and must not disable the drag.
+	it("pans from a match that is not inside the overlay", () => {
+		expect(press({ "data-slug": true }, { inOverlay: false }).captured).toEqual([7]);
 	});
 });

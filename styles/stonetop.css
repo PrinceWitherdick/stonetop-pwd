@@ -34245,3 +34245,19 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	-webkit-user-drag: none;
 }
 
+/* The optional layer over the picture (see image-zoom.hbs). Sized and placed onto the image in
+   pixels by the window on every paint, so nothing here may set a size â€” only the things that must
+   be true of it whatever size it is.
+
+   `pointer-events: none` is the load-bearing one: this box covers the whole picture, and taking
+   clicks would mean a drag beginning anywhere on the map moved nothing instead of panning. Its
+   CHILDREN opt back in individually, so a pin is clickable and the open map between pins is not. */
+.stonetop-image-zoom-overlay {
+	position: absolute;
+	left: 0;
+	top: 0;
+	pointer-events: none;
+	/* An edge pin's label hangs past the artwork, as it does in the walkthrough's own map. */
+	overflow: visible;
+}
+
