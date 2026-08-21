@@ -29810,8 +29810,75 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-people-gallery .stonetop-people-hint {
 	margin: 0 0 8px; font-size: var(--st-fs-xs); color: var(--st-text-muted);
 }
+/* The empty gallery. Not one line of apology any more: a short column saying what would fill it,
+   with the button that does the filling under it. Centred and measure-capped, because a sentence
+   run across the full 640px of a resizable dialog is a sentence nobody finishes. */
 .stonetop-people-gallery .stonetop-people-empty {
-	padding: 16px; font-size: var(--st-fs-sm); color: var(--st-text-muted); text-align: center; line-height: 1.5;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding: 24px 16px;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-muted);
+	text-align: center;
+	line-height: 1.5;
+}
+.stonetop-people-gallery .stonetop-people-empty p {
+	margin: 0;
+	max-width: 46ch;
+}
+/* The "you can still browse for one" aside, dropped a step so it reads as a footnote to the two
+   real offers rather than a third one. */
+.stonetop-people-gallery .stonetop-people-empty-note {
+	font-size: var(--st-fs-xs);
+}
+/* The bring-your-own-book fields, one per rulebook, asked for here rather than in the importer's
+   own window. Left-aligned inside a column that is otherwise centred: a label sitting over the
+   field it names is a form, and a centred form has no edge for the eye to run down. Capped to the
+   same 46ch measure as the prose above so the block reads as part of the same column. */
+.stonetop-people-gallery .stonetop-people-books {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 100%;
+	max-width: 46ch;
+	text-align: left;
+}
+.stonetop-people-gallery .stonetop-people-book {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+.stonetop-people-gallery .stonetop-people-book-name {
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-body);
+}
+/* What that book is worth to THIS gallery, said beside its name rather than under it: the two
+   belong to one line, and the distinction is carried by weight, not by a second row. */
+.stonetop-people-gallery .stonetop-people-book-hint {
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-muted);
+}
+/* `width: 100%` undoes nothing core does to a file field; it stops the browser's own intrinsic
+   width from setting the column, which is what made the two fields different lengths. */
+.stonetop-people-gallery .stonetop-people-books input[type="file"] {
+	width: 100%;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-body);
+}
+/* Which edition to hand over, sat UNDER the field rather than beside the book's name: it is an
+   instruction about the file you are on your way to choose, not a description of the book, and the
+   1-up file is refused outright, so a GM who misses this line has spent a minute to be told no. */
+.stonetop-people-gallery .stonetop-people-book-edition {
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-muted);
+	font-style: italic;
+}
+/* The line under the Import button, which says why it is waiting and then where the book goes.
+   A footnote to the button, like the browse aside is to the pair above it. */
+.stonetop-people-gallery .stonetop-people-import-hint {
+	font-size: var(--st-fs-xs);
 }
 /* Track floor is the 160px image minimum plus the card's own padding + border (a card is
    border-box, so the image gets track - 10px); the extra cushion keeps subpixel grid
@@ -29925,7 +29992,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    core's full-width `body.game .app button`, and the explicit colour undoes the white text
    core hands a window button, which vanished against a light fill. */
 .stonetop-people-gallery .stonetop-people-footer button,
-.stonetop-people-gallery .stonetop-people-actions button {
+.stonetop-people-gallery .stonetop-people-actions button,
+.stonetop-people-gallery .stonetop-people-empty button {
 	width: auto;
 	flex: 0 0 auto;
 	display: inline-flex;
@@ -29943,7 +30011,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 .stonetop-people-gallery .stonetop-people-footer button:not([disabled]):hover,
-.stonetop-people-gallery .stonetop-people-actions button:not([disabled]):hover {
+.stonetop-people-gallery .stonetop-people-actions button:not([disabled]):hover,
+.stonetop-people-gallery .stonetop-people-empty button:not([disabled]):hover {
 	background: rgba(0, 0, 0, 0.05);
 	border-color: var(--st-btn-primary-border);
 	color: var(--st-text);
@@ -29961,9 +30030,28 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border-color: var(--st-btn-primary-border-hover);
 	color: var(--st-btn-primary-text);
 }
+/* The empty state's leading action takes the same slate fill, because it is the affirmative there
+   in exactly the way Accept is in the footer: the one button that changes anything.
+
+   Which button leads varies (the rebuild when there is art to cut from, else the import), so it is
+   said as `:first-of-type` rather than as a class the template would have to remember to move
+   between the two. Buttons are the only elements of their type in that column, so the first of
+   them is the first one rendered. */
+.stonetop-people-gallery .stonetop-people-empty button:first-of-type {
+	background: var(--st-btn-primary-bg);
+	border-color: var(--st-btn-primary-border);
+	color: var(--st-btn-primary-text);
+}
+.stonetop-people-gallery .stonetop-people-empty button:first-of-type:not([disabled]):hover {
+	background: var(--st-btn-primary-bg-hover);
+	border-color: var(--st-btn-primary-border-hover);
+	color: var(--st-btn-primary-text);
+}
 /* Disabled means "nothing to do yet": no roll has landed (Accept), or the filters left
-   nothing to roll (Randomize). */
-.stonetop-people-gallery .stonetop-people-footer button[disabled] {
+   nothing to roll (Randomize). The empty state's buttons disable too, for the length of a
+   rebuild, and read the same way. */
+.stonetop-people-gallery .stonetop-people-footer button[disabled],
+.stonetop-people-gallery .stonetop-people-empty button[disabled] {
 	opacity: 0.45;
 	cursor: default;
 }

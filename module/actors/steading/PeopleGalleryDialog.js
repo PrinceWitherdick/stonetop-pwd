@@ -4,6 +4,7 @@ import { splitAtArtRoot } from "../../book2-art/browse.js";
 import { BOOK2_ART_APPLY_MANIFEST } from "../../book2-art/manifest.js";
 import { displayPortraitSrc, portraitRectOf } from "../../book2-art/people-portraits.js";
 import { normalizeFrame } from "../../utils/portrait-frame.js";
+import { IMPORT_BOOKS, runImportBookArtMacro } from "../../book2-art/macro.js";
 import { getObjectSetting } from "../../settings.js";
 import { filePicker } from "../../utils/foundry-compat.js";
 import { pickRandomExcluding } from "../../utils/arrays.js";
@@ -13,6 +14,16 @@ import { pickRandomExcluding } from "../../utils/arrays.js";
 // with distance, so in a ~155-tile grid a roll clear across the gallery took noticeably
 // longer than one nearby — and rolling repeatedly meant waiting on the scroll every time.
 const ROLL_SCROLL_MS = 200;
+
+/**
+ * The line under the empty state's Import button, in its two states.
+ *
+ * Exported so a test can hold the shipped copy to the same rules as everything else the gallery
+ * says, and so the wiring and the template cannot come to disagree about which sentence goes with
+ * which state.
+ */
+export const IMPORT_WAITING_HINT = "Point one of the fields above at a PDF you own, and this button runs the import here.";
+export const IMPORT_READY_HINT = "Nothing is uploaded anywhere: the pictures are rebuilt locally, on your own machine.";
 
 /**
  * Where the gallery body has to be scrolled to put a tile in the middle of it, clamped to
@@ -90,6 +101,65 @@ export function pickRandomPortrait(srcs, { current = "", rng = Math.random, keyO
 }
 
 /**
+ * What an empty gallery offers to fill itself, decided from three facts the dialog looks up.
+ *
+ * A gallery with no tiles used to be a dead end: one sentence saying there was no art, with the
+ * two ways OUT of the gallery (browse a file, use the default) as the only buttons. But an empty
+ * gallery has a cause, and every cause has a cure the GM can run from right here:
+ *
+ *   • art already on disk that the portraits are CUT from, and no cuts made yet. That happens to a
+ *     GM who imported before the detail crops existed, and to one who reused an art folder from an
+ *     older campaign. No PDFs needed: the rebuild carves the faces out of pictures they already
+ *     have; and
+ *   • no people art at all, whether or not other art landed. That one needs the books, so the
+ *     gallery asks for them HERE, in a field per volume, and runs the import itself.
+ *
+ * Both are GM work (they browse, cut and upload data files), so a player is told where the art
+ * comes from instead of being offered a button that would throw.
+ *
+ * Pure, and given the facts rather than reading them, so the wording and the branch are testable
+ * without a Foundry: the browse that establishes them is the dialog's job.
+ *
+ * @param {{isGM?: boolean, artOnDisk?: boolean, rebuildable?: number}} facts
+ */
+export function emptyGalleryOffer({ isGM = false, artOnDisk = false, rebuildable = 0 } = {}) {
+	if (!isGM) {
+		return {
+			canRebuild: false,
+			canImport: false,
+			books: [],
+			blurb: "These portraits come from the Stonetop books, which your GM imports once for the whole table.",
+		};
+	}
+	// Guard the count rather than trust it: it arrives from a browse that is allowed to fail, and a
+	// NaN here would offer to build "NaN portraits" and then run a plan with nothing in it.
+	const n = Math.max(0, Math.trunc(Number(rebuildable) || 0));
+	return {
+		canRebuild: n > 0,
+		rebuildLabel: `Build ${n} portrait${n === 1 ? "" : "s"} from art you already have`,
+		// Offered even when the rebuild is, because the two are not the same thing: a cut face is
+		// carved out of an already-downscaled page, while an import lifts it from the book at full
+		// resolution and brings the people no parent on disk can account for.
+		canImport: true,
+		importLabel: artOnDisk ? "Import Book Art Again" : "Import Book Art",
+		// A field per rulebook, right here. The button used to open the importer's own setup
+		// window, which is a strange thing to do to somebody who has already told us what they
+		// want: they are standing in front of an empty gallery, the window's first four pages are
+		// about art they did not come for, and the one field they need is on page two. So the two
+		// books are asked for on the spot and the button runs the import on them.
+		//
+		// Only the rulebooks. The poster maps and the free GM playbook are separate errands with
+		// nothing to do with faces, and the window is still one click away for them.
+		books: IMPORT_BOOKS,
+		blurb: n
+			? "You already have the book art these faces are cut from, so they can be built right here without opening your PDFs again."
+			: artOnDisk
+				? "The book art in this world doesn't include the People of Stonetop illustrations yet. Running the import again with your books will add them."
+				: "Own the Stonetop PDFs? Import your book art and the people drawn in them become portraits you can hand out here. Nothing is uploaded anywhere; the pictures are rebuilt locally on your machine.",
+	};
+}
+
+/**
  * The "People of Stonetop" portrait gallery: pick an imported book illustration as a
  * resident's or neighbor's portrait on the steading sheet.
  *
@@ -158,7 +228,37 @@ export class PeopleGalleryDialog extends StonetopDialog {
 		return map;
 	}
 
-	getData() {
+	/**
+	 * The empty gallery's offer, with the two facts it turns on read off disk.
+	 *
+	 * Only ever called when there are no tiles, which is what keeps the browses free in the normal
+	 * case: a world with art pays nothing for this. When it does run, browse.js has already cached
+	 * both listings for the session, so the second read after a rebuild is a cache hit on the very
+	 * files that rebuild just invalidated.
+	 *
+	 * Dynamically imported, like the Welcome guide's copy of the same offer: run-rebuild pulls in
+	 * the crop planner, the re-apply pass and the portrait re-point, none of which a gallery that
+	 * has art should be made to load.
+	 *
+	 * Best-effort throughout. A browse that throws reads as "nothing on disk", which offers the
+	 * plain import: the harmless answer either way, and the same default the Welcome guide takes.
+	 */
+	async _emptyOffer() {
+		// A player is told where the art comes from and offered nothing, which is the shape
+		// emptyGalleryOffer defaults to.
+		if (!game.user?.isGM) return emptyGalleryOffer();
+		const [{ hasImportedBook2Art }, { countPeopleArtRebuilds }] = await Promise.all([
+			import("../../book2-art/reapply.js"),
+			import("../../book2-art/run-rebuild.js"),
+		]);
+		const artOnDisk = await hasImportedBook2Art().catch(() => false);
+		// Nothing imported means nothing to cut, so the plan is skipped rather than drawn against an
+		// empty folder: it is the plain import that GM needs.
+		const rebuildable = artOnDisk ? await countPeopleArtRebuilds() : 0;
+		return emptyGalleryOffer({ isGM: true, artOnDisk, rebuildable });
+	}
+
+	async getData() {
 		const idx = this._peopleIndex();
 		const squares = this._squareIndex();
 		const root = book2ArtRoot();
@@ -228,6 +328,10 @@ export class PeopleGalleryDialog extends StonetopDialog {
 		const showFilters = people.length > 1 && (counts.masculine || counts.feminine || counts.kid || counts.used);
 		return {
 			people, counts,
+			// Only an empty gallery has anything to offer here, and only an empty gallery pays for
+			// the browses that decide what. Null the rest of the time, which the template reads as
+			// "render the grid".
+			empty: people.length ? null : await this._emptyOffer(),
 			showFilters: !!showFilters,
 			hasKids: !!counts.kid,
 			// Nobody has a portrait yet in a fresh world, and a lone "Unused 155" chip would
@@ -319,6 +423,111 @@ export class PeopleGalleryDialog extends StonetopDialog {
 	static _frameOf(btn, src) {
 		const rect = portraitRectOf(btn?.dataset?.src);
 		return rect ? normalizeFrame({ src, rect }) : null;
+	}
+
+	// ── Filling an empty gallery ──────────────────────────────────────
+
+	/**
+	 * Cut the portraits that can be derived from art already on disk, then redraw the gallery with
+	 * them in it.
+	 *
+	 * The same work the Welcome guide's Book Art step and the once-per-world chat card offer, and
+	 * for the same reason it is reachable from more than one place: that card latches when it is
+	 * POSTED rather than when it is clicked, so scrolling past it once loses the offer for good.
+	 * This is where a GM actually NOTICES the loss, standing in front of an empty gallery, so it is
+	 * the most useful of the three doors.
+	 *
+	 * The disable, the counting spinner, the notification and the restore-on-error all live in
+	 * run-rebuild.js beside the work itself, so every entry point behaves alike.
+	 */
+	async _rebuildFromDisk(btn) {
+		const { runBookArtRebuildFromButton } = await import("../../book2-art/run-rebuild.js");
+		if (!await runBookArtRebuildFromButton(btn)) return;   // threw, and the label is already back
+		// Re-read from disk rather than assume the gallery is now full: a partial run leaves a
+		// remainder, and the empty state has to keep offering it honestly.
+		if (this.rendered) await this.render(false);
+	}
+
+	/**
+	 * The books the GM has pointed the empty state at, in the shape the importer takes them.
+	 *
+	 * Read straight off the fields at the moment the button is pressed, rather than tracked as the
+	 * files are chosen: a `<input type="file">` selection cannot be re-created from script, so the
+	 * inputs are the only place it can live, and any copy of it would only be a copy that could go
+	 * stale. Static and given its root so the collection is testable without a dialog.
+	 */
+	static _chosenBooks(root) {
+		const out = [];
+		for (const { book } of IMPORT_BOOKS) {
+			const file = root?.querySelector?.(`[name="stonetop-book-file-${book}"]`)?.files?.[0];
+			if (file) out.push({ book, file });
+		}
+		return out;
+	}
+
+	/**
+	 * Run the import on the books this gallery was handed, without opening the importer's window.
+	 *
+	 * That window is where this used to go, and it was a detour: a GM who has just been told their
+	 * gallery is empty and why does not need to be asked the same question again on page two of a
+	 * five-page sheet. The files are collected here and handed straight to the macro, which skips
+	 * its own setup when it is given picks (module/book2-art/macro.js).
+	 *
+	 * Files first, close second: closing empties the DOM, and a File read out of a detached input
+	 * is nothing. The close itself matches "Browse files…" above — the macro drives its own
+	 * progress window, and this gallery has no business sitting under it. The import ends with the
+	 * whole world's art wired up, so there is nothing useful left to re-render here; the GM reopens
+	 * the gallery on a person when they are ready to dress them.
+	 */
+	async _importBookArt(root) {
+		const books = this.constructor._chosenBooks(root);
+		this.close();
+		return runImportBookArtMacro(books.length ? { books } : null);
+	}
+
+	/**
+	 * The way through to the poster maps, the free GM playbook, and the force-update tick: the
+	 * importer's own window, opened with nothing pre-supplied.
+	 *
+	 * Kept as a door of its own rather than as what the Import button does when no file has been
+	 * chosen. One button that sometimes runs a two-minute import and sometimes opens a window is a
+	 * button nobody can predict, and the errands really are different: this gallery asks for books
+	 * because it is made of faces, and everything else that window offers is somebody else's.
+	 */
+	async _importMoreOptions() {
+		this.close();
+		return runImportBookArtMacro();
+	}
+
+	/**
+	 * Wire the empty state's book fields to its Import button: nothing chosen, nothing to run.
+	 *
+	 * The button is disabled rather than left live, because the fields it depends on are two lines
+	 * above it — the reason is on screen, which is what separates a button waiting for you from a
+	 * button that is broken. The hint under it says so in words for anyone who reads the state off
+	 * the copy rather than off the greying, and swaps to the reassurance once there is a file: the
+	 * one thing a GM about to hand over a book they paid for wants to hear is where it goes.
+	 *
+	 * No re-render on change, deliberately: an `<input type="file">` cannot be given its selection
+	 * back from script, so re-rendering the panel would silently drop the book just chosen.
+	 */
+	_activateBookImport(root) {
+		const btn = root.querySelector(".stonetop-people-import");
+		if (!btn) return;
+		const hint = root.querySelector(".stonetop-people-import-hint");
+		const sync = () => {
+			const chosen = this.constructor._chosenBooks(root).length > 0;
+			btn.disabled = !chosen;
+			if (hint) hint.textContent = chosen ? IMPORT_READY_HINT : IMPORT_WAITING_HINT;
+		};
+		for (const field of root.querySelectorAll(".stonetop-people-books input[type='file']")) {
+			// `change` is the only event a file field fires; it never fires `input`.
+			field.addEventListener("change", sync);
+		}
+		sync();
+		btn.addEventListener("click", () => this._importBookArt(root));
+		root.querySelector(".stonetop-people-import-more")
+			?.addEventListener("click", () => this._importMoreOptions());
 	}
 
 	/** The tiles the filters currently leave on screen — the pool Random rolls from. */
@@ -604,6 +813,15 @@ export class PeopleGalleryDialog extends StonetopDialog {
 			this.close();
 			this._onBrowse?.();
 		});
+
+		// The two cures for an empty gallery. Neither exists once there is art to show, and neither
+		// is rendered for a player, who can do no part of either. The import's own wiring — its
+		// book fields, the state of its button and the line under it — lives in one place, because
+		// the three only ever change together.
+		root.querySelector(".stonetop-people-rebuild")?.addEventListener("click", ev => {
+			this._rebuildFromDisk(ev.currentTarget);
+		});
+		this._activateBookImport(root);
 
 		root.querySelector(".stonetop-people-clear")?.addEventListener("click", async () => {
 			await this._onClear?.();
