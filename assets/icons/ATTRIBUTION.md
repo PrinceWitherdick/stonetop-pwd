@@ -14,12 +14,31 @@ Where our filename differs from the original, the game-icons.net source name is 
 | enrage.svg | enrage | Delapouite | https://delapouite.com |
 | gm-toolkit.svg | read | Skoll | https://game-icons.net |
 | hearts.svg | hearts | Skoll | https://game-icons.net |
+| landmarks/place-exit.svg | direction-signs | Delapouite | https://delapouite.com |
+| landmarks/place-marker.svg | position-marker | Delapouite | https://delapouite.com |
+| landmarks/place-peak.svg | peaks | Lorc | https://lorcblog.blogspot.com |
 | move.svg | move | Delapouite | https://delapouite.com |
 | scales.svg | scales | Lorc | https://lorcblog.blogspot.com |
 | triquetra.svg | triquetra | Delapouite | https://delapouite.com |
 
 `move.svg` recolours the glyph and sets it on the system's dark octagon token; the artwork
 itself is unchanged.
+
+`landmarks/place-marker.svg` is the pin every named place on the Vicinity and the World's End
+map wears, `landmarks/place-exit.svg` is the signpost their edge-of-page arrows wear instead,
+since those name a way off the map rather than a place on it, and `landmarks/place-peak.svg` is
+the terrain symbol the World's End map's mountains wear: the two ranges it letters names across,
+and the two places on it that are themselves mountain. As with `move.svg`, only the colour is
+ours in all three: the outlines are upstream's, filled in the same cream and ink the lettered
+discs beside them are drawn in so the whole set reads as one table's pins. Each original's
+full-canvas backing square is deleted rather than recoloured, since it would otherwise paint an
+opaque black tile on the map behind the drawing.
+
+`place-peak.svg` carries a lighter stroke than its two siblings (14 against their 20), which is
+the one place the three differ and is not a lighter pen. The other two are single silhouettes
+drawn barely half the width of their box; the peaks are drawn 473 units of 512 wide with five
+inner folds packed into them, so the weight that reads as one clean line around a teardrop closes
+those folds up at the size these ship at. The file's own comment has the reasoning.
 
 `gm-toolkit.svg` is the GM Toolkit actor's portrait. As with `move.svg`, only the ground under
 the drawing is ours: the glyph is recoloured cream and set on the same black field over a cream
@@ -30,11 +49,18 @@ recipe and its numbers are in the file's own comment.
 ## The project's own drawings
 
 Not listed above, because they are the project's own work rather than third-party
-assets: `treasures/vase.svg` and `arcanum.svg`. Both are redrawn from category symbols the
-rulebooks use — the treasure vase, and the triple spiral printed beside an arcanum (Book II
-p.545). They are marks, not illustrations: neither reproduces any book artwork, and neither
-depicts any particular item. `arcanum.svg` is generated geometry (three Archimedean spirals
-at 120 degrees); the recipe and its numbers are in the file's own comment.
+assets: `treasures/vase.svg`, `arcanum.svg` and `landmarks/place-region.svg`. The first two are
+redrawn from category symbols the rulebooks use — the treasure vase, and the triple spiral
+printed beside an arcanum (Book II p.545). They are marks, not illustrations: neither reproduces
+any book artwork, and neither depicts any particular item. `arcanum.svg` is generated geometry
+(three Archimedean spirals at 120 degrees); the recipe and its numbers are in the file's own
+comment.
+
+`landmarks/place-region.svg` is the emptiest file here and owes nothing to anyone: one fully
+transparent square and no drawing at all. It is what a REGION or a ROAD caption wears on the
+regional maps, where a pin would be a lie (the Great Wood is not at a point, it is half the
+map). Foundry has no way to draw a map note without an icon, so this stands in for one and
+leaves the name lying over the country it names. The file's own comment has the reasoning.
 
 ## Font Awesome Free
 

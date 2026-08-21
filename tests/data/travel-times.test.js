@@ -3,7 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import {
-	TRAVEL_PLACES, TRAVEL_LEGS, TRAVEL_MAPS, TRAVEL_EXITS, MAP_FRAMES, FULL_FRAME, BEYOND_TIER,
+	TRAVEL_PLACES, TRAVEL_LEGS, TRAVEL_MAPS, TRAVEL_EXITS, MAP_CAPTIONS, MAP_FRAMES, FULL_FRAME,
+	BEYOND_TIER,
 	travelPlace, homePlace, placesOnMap, placesBeyond, exitsOnMap,
 	spotPercent, frameFor, frameFitsImage,
 } from "../../module/data/travel-times.js";
@@ -299,6 +300,26 @@ describe("gazetteer links", () => {
 			if (!place.journalId || place.journalId === bears) continue;
 			expect(ids, `${place.slug} points at a journal the locations pack does not ship`)
 				.toContain(place.journalId);
+		}
+	});
+
+	it("holds the map captions to the same rule as the places", () => {
+		// A caption's link is worth more scrutiny than a place's, not less: several of them BORROW
+		// an entry rather than having one (the three gates onto the Old Wall open The Village of
+		// Stonetop, which is where the wall is described), so a typo lands on a real-looking id
+		// nobody would notice was the wrong entry. This at least catches one that is no entry.
+		const ids = locationIds();
+		// EVERY caption, not most of them: a caption whose pin opens nothing is a pin that looks
+		// live on the map and does nothing when clicked, which is worse than not drawing it. Most
+		// of the village's and both of the Vicinity's roads get there by BORROWING an entry that
+		// describes them rather than by having one of their own, which is what the borrowing is
+		// for: eight of these eighteen point at just two entries between them, the village's
+		// own write-up and The Makers' Roads.
+		const linked = MAP_CAPTIONS.filter(c => c.journalId);
+		expect(linked.length).toBe(MAP_CAPTIONS.length);
+		for (const caption of linked) {
+			expect(ids, `${caption.map}/${caption.slug} points at a journal the locations pack does not ship`)
+				.toContain(caption.journalId);
 		}
 	});
 });

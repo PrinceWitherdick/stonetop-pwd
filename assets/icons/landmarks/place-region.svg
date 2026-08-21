@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    The marker a REGION or a ROAD wears, which is deliberately no marker at all.
+
+    The project's own work, and owes nothing to any source: it is one fully transparent
+    square and no drawing whatsoever. That is the whole idea, so it is worth writing down
+    why an empty file is the right answer rather than a missing one.
+
+    A pin means "the thing you want is at this point". The Great Wood is not at a point; it
+    is half the map. The Flats are the other half. The Highway is a line across both. Set a
+    teardrop on any of them and the map says something false, that the wood is a place you
+    can stand in the middle of, and it says it most loudly for the labels that cover the
+    most ground. What those captions want is what the printed map gives them: the name,
+    lying over the country it names, with nothing pointing anywhere.
+
+    Foundry has no way to draw a Note without an icon, so this stands in for one. It is a
+    full 512 square rather than a small one because Foundry's ControlIcon stretches whatever
+    it is given to a square of the note's iconSize, and because that square is the only
+    thing a GM can grab when they want to move the caption: invisible is not the same as
+    absent, and a one-pixel handle on a six-thousand-pixel map would be unusable.
+
+    The label that goes with it is centred rather than hung below (see MARKER_KINDS in
+    module/utils/map-pins.js), so the name lands exactly where the printed map set it.
+  -->
+  <rect width="512" height="512" fill="#fff" fill-opacity="0"/>
+</svg>

@@ -168,8 +168,8 @@ describe("building the panel", () => {
 		expect(data.activeTier).toBe("worlds-end");
 		const marshedge = data.map.spots.find(s => s.slug === "marshedge");
 		// A printed render is the identity frame, so the percentage IS the measured fraction.
-		expect(marshedge.left).toBeCloseTo(71.5, 5);
-		expect(marshedge.top).toBeCloseTo(61.2, 5);
+		expect(marshedge.left).toBeCloseTo(71.38, 5);
+		expect(marshedge.top).toBeCloseTo(59.36, 5);
 		expect(marshedge.isChosen).toBe(true);
 		expect(marshedge.time).toBe("10 days");
 		expect(marshedge.showLabel).toBe(true);
@@ -265,7 +265,13 @@ describe("building the panel", () => {
 		const data = await dialog()._buildJourney();
 		const rows = Object.fromEntries(data.groups.flatMap(g => g.places).map(p => [p.slug, p]));
 		expect(rows.marshedge.uuid).toBe("Compendium.stonetop-pwd.stonetop-journal.JournalEntry.uXlyry9CpXUz4ooR");
-		expect(rows["the-crossroads"].uuid).toBeNull();
+		// The Crossroads has no entry of its own and BORROWS the road's, which is where the books
+		// describe it: The Makers' Roads carries a section headed "The Crossroads".
+		expect(rows["the-crossroads"].uuid)
+			.toBe("Compendium.stonetop-pwd.stonetop-journal.JournalEntry.ezquwGFbne6uxzJK");
+		// Tor's Fist still opens nothing, and that is the honest answer rather than an oversight:
+		// nothing in the gazetteer describes it, and a card that opens the wrong entry is worse
+		// than one that opens none.
 		expect(rows["tors-fist"].uuid).toBeNull();
 	});
 

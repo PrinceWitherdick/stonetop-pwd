@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    The marker an edge-of-page arrow wears: not a place, but the road going on past the
+    edge of this map towards a place drawn on another one.
+
+    Artwork: game-icons.net "direction-signs" by Delapouite (CC BY 3.0), outline unchanged.
+    Ours is the colour only, the same cream (#f2e6c8) and ink (#33281e) as the teardrop
+    marker and the lettered discs beside it, so all three read as one set of pins.
+
+    A signpost rather than a second teardrop on purpose. A pin says "the thing you are
+    looking for is HERE"; these captions say the opposite, that what you are looking for is
+    somewhere off the paper and this is the way to it. Two families of pin that mean
+    opposite things must not be the same drawing.
+
+    Same construction notes as place-marker.svg, and for the same reasons: the game-icons
+    backing square is deleted rather than made transparent, because an opaque square is a
+    black tile on the map; the viewBox stays a 512 square because Foundry's ControlIcon
+    stretches whatever it is given to a square of the note's iconSize; and the stroke is
+    heavy so cream does not sink into brown line art.
+
+    This one stands on the FOOT of its post, at y = 486.4 of the viewBox plus half the
+    stroke. module/utils/map-pins.js reads that to set the post down on the spot rather
+    than floating it half a signpost above.
+  -->
+  <path fill="#f2e6c8" stroke="#33281e" stroke-width="20" stroke-linejoin="round"
+        d="M277.3 35.11l-32.1 2.12-1 32.93 33.6.05-.5-35.1zM151.7 88.04L67.96 118.9 152 169.2l188-6.2 2.4-74.72-190.7-.24zM279.2 183l-38.3 1.3-.8 27.8 39.5 1.2-.4-30.3zm-93.1 45.6l.8 64.2 200.4.9 51.7-29.2-55.8-30.2-197.1-5.7zm51.1 82.5l-5 175.3 50.9.6-2.3-175.7-43.6-.2z"/>
+</svg>
