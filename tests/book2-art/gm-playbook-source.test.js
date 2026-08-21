@@ -216,8 +216,17 @@ describe("the diagrams the toolkit shows", () => {
 	// erases the first. The sheet came back blank down its left half: the entire core-loop chart,
 	// and the left page of all three regional maps, gone with nothing logged.
 	it("composites the pair rather than rendering both into one context", () => {
-		expect(COMMAND).toContain(`await p.render({ canvasContext: one.getContext("2d"), viewport }).promise;`);
+		// The render TARGET, and nothing whatever about how the call is made. What must not regress
+		// is the canvas each page of a pair paints onto; this assertion has now been broken twice by
+		// changes that preserved that perfectly (a watchdog wrapped round the render, then a
+		// renderPage helper), and each time it reported a regression that did not exist. So it is
+		// pinned to the substring that IS the invariant and to nothing else.
+		expect(COMMAND).toContain(`canvasContext: one.getContext("2d")`);
 		expect(COMMAND).toContain("ctx.drawImage(one, Math.round(dx), Math.round(dy));");
+		// Deliberately NO "and never renders a pair into ctx" assertion. `ctx` is a local name this
+		// macro reuses in several unrelated renders (the picker thumbnail has its own), so a
+		// negative on it fails on code that has nothing to do with pairs. The positive pair above
+		// is the invariant; a regression to the shared context necessarily deletes it.
 		// A lone page still renders straight into the crop at its exact fractional offset. That is
 		// every row of both rulebooks, and re-cutting all 545 of them a pixel over is not free.
 		expect(COMMAND).toContain("if (pages.length === 1) {");

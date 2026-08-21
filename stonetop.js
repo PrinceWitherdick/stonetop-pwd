@@ -29,7 +29,7 @@ import { createStonetopSitePageSheetClass } from "./module/journal/StonetopSiteP
 import { ThreatBoard } from "./module/threats/threat-board.js";
 import { onReady } from "./module/hooks/Ready.js";
 import { handleImportedJournalArt, ART_INDEX_SETTINGS } from "./module/book2-art/reapply.js";
-import { clearArtBrowseCache } from "./module/book2-art/browse.js";
+import { clearArtBrowseCache, ART_BROWSE_INPUTS } from "./module/book2-art/browse.js";
 import { onRenderActorSheet } from "./module/hooks/RenderActorSheet.js";
 import { onHotbarDrop } from "./module/hooks/HotbarDrop.js";
 import { onDropPlaceOfInterest } from "./module/hooks/PlaceOfInterestDrop.js";
@@ -588,9 +588,14 @@ Hooks.on("createJournalEntry", handleImportedJournalArt);
 // Driven off reapply.js's own list rather than naming the indexes again here: a fourth index
 // added there and forgotten here would simply never invalidate, and its files would stay unseen
 // for the rest of the session.
+//
+// ...and off browse.js's list of what a cached listing READS, for the same reason from the other
+// side. A published index means "the folder changed"; the art prefix means "the question we ask
+// the folder changed", and a listing taken before one was known answers nothing about the folder
+// a listing taken after would find. Neither module names the other's settings.
 const _onArtIndexPublished = (setting) => {
 	const key = setting?.key ?? "";
-	if (ART_INDEX_SETTINGS.some((s) => key.endsWith(`.${s}`))) clearArtBrowseCache();
+	if ([...ART_INDEX_SETTINGS, ...ART_BROWSE_INPUTS].some((s) => key.endsWith(`.${s}`))) clearArtBrowseCache();
 };
 Hooks.on("createSetting", _onArtIndexPublished);
 Hooks.on("updateSetting", _onArtIndexPublished);

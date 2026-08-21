@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ArtInventory, browseArtDirs, clearArtBrowseCache, DURABLE_ART_DIRS, splitAtArtRoot } from "../../module/book2-art/browse.js";
 
 // The durable-art listing is cached for the session, which is only safe because every writer
@@ -208,5 +208,98 @@ describe("ArtInventory", () => {
 			expect(inv.plus([`${ROOT}/assets/people/a.webp`]).resolve(`${ROOT}/assets/people/a.webp`))
 				.toBe(`${FORGE}${ROOT}/assets/people/a.webp`);
 		});
+	});
+});
+describe("browseArtDirs where the art is kept off the data path", () => {
+	// The failure this exists to stop, seen on a real hosted world: uploads are redirected into
+	// an Assets Library under an absolute prefix, while the data-relative folder either does not
+	// exist or exists and is EMPTY. The host answers the data-relative browse rather than
+	// rejecting it, so the search ended there — and because the art indexes are AUTHORITATIVE,
+	// `peopleArt` was republished as empty on every GM load and the People gallery stayed blank
+	// on a world holding all 306 portraits.
+	//
+	// `emptyNotAbsent` is the sharp edge: a host that REJECTS is already handled (the directory
+	// is simply not there), a host that answers "no files" about the wrong folder is not.
+	// Matched EXACTLY, never by suffix. A host answers about the folder it was asked for, so a
+	// harness that accepts anything ending in "/assets/people" cannot tell the right question from
+	// a wrong one — and it did not: dropping the art root from the retry target
+	// (`${prefix}${dir}` instead of `${prefix}${root}/${dir}`) left all 30 tests in this file
+	// green while asking a real host about a folder that does not exist. The prefix, the root and
+	// the directory are three separate ways to get this wrong; the assertion is the whole string.
+	function hostedHarness(filesByDir, { emptyNotAbsent = true, prefix = FORGE } = {}) {
+		const browse = vi.fn(async (_source, path) => {
+			const dir = Object.keys(filesByDir).find(d => path === `${FORGE}${ROOT}/${d}`);
+			if (dir) return { target: path, files: filesByDir[dir].map(f => `${FORGE}${ROOT}/${dir}/${f}`) };
+			// Anything else addressed at the assets origin is a folder this host does not have.
+			if (path.startsWith(FORGE)) throw new Error(`no such directory: ${path}`);
+			// The data-relative ask, which knows nothing about where the files really went.
+			if (!emptyNotAbsent) throw new Error(`no such directory: ${path}`);
+			return { target: path, files: [] };
+		});
+		global.FilePicker = { browse };
+		global.foundry = {};
+		global.game = { settings: { get: (_ns, key) => (key === "book2ArtPrefix" ? prefix : null) } };
+		return browse;
+	}
+
+	afterEach(() => { global.game = { i18n: { localize: (k) => k, format: (k) => k } }; });
+
+	it("finds art the data-relative listing answered 'no files' about", async () => {
+		hostedHarness({ "assets/people": ["a.webp", "b.webp"] });
+		const present = await browseArtDirs(ROOT, ["assets/people"]);
+		expect(present.size).toBe(2);
+		expect(present.has(`${ROOT}/assets/people/a.webp`)).toBe(true);
+		expect(present.resolve(`${ROOT}/assets/people/a.webp`)).toBe(`${FORGE}${ROOT}/assets/people/a.webp`);
+	});
+
+	it("asks for the art root under the prefix, not the bare directory", async () => {
+		// The two round trips, spelled out. The retry is only worth making if it names the same
+		// folder the first ask named, with the host's prefix in front — get that wrong and it is a
+		// second useless question, which looks exactly like a host with no art on it.
+		const browse = hostedHarness({ "assets/people": ["a.webp"] });
+		await browseArtDirs(ROOT, ["assets/people"]);
+		expect(browse.mock.calls.map(([source, path]) => `${source} ${path}`)).toEqual([
+			`data ${ROOT}/assets/people`,
+			`data ${FORGE}${ROOT}/assets/people`,
+		]);
+	});
+
+	it("still learns the prefix off the retry, so clients that cannot browse are told where art is", async () => {
+		hostedHarness({ "assets/people": ["a.webp"] });
+		expect((await browseArtDirs(ROOT, ["assets/people"])).prefix).toBe(FORGE);
+	});
+
+	it("retries the same way when the data-relative folder is absent rather than empty", async () => {
+		hostedHarness({ "assets/people": ["a.webp"] }, { emptyNotAbsent: false });
+		expect([...await browseArtDirs(ROOT, ["assets/people"])]).toEqual([`${ROOT}/assets/people/a.webp`]);
+	});
+
+	it("asks once when the first listing found something — the retry is for empties only", async () => {
+		const browse = vi.fn(async (_s, path) => ({ target: path, files: [`${ROOT}/assets/people/a.webp`] }));
+		global.FilePicker = { browse };
+		global.foundry = {};
+		global.game = { settings: { get: (_ns, key) => (key === "book2ArtPrefix" ? FORGE : null) } };
+		expect((await browseArtDirs(ROOT, ["assets/people"])).size).toBe(1);
+		expect(browse).toHaveBeenCalledTimes(1);
+	});
+
+	it("asks only once when this world has never observed a prefix", async () => {
+		const browse = hostedHarness({ "assets/people": ["a.webp"] }, { prefix: "" });
+		expect((await browseArtDirs(ROOT, ["assets/people"])).size).toBe(0);
+		expect(browse).toHaveBeenCalledTimes(1); // nothing to retry WITH; a self-hosted world pays nothing
+	});
+
+	it("keeps the empty answer when the retry finds nothing either", async () => {
+		const browse = hostedHarness({});
+		const present = await browseArtDirs(ROOT, ["assets/people"]);
+		expect(present.size).toBe(0);
+		expect(browse).toHaveBeenCalledTimes(2);
+	});
+
+	it("caches the retry's answer, so the second pass of a load does not repeat it", async () => {
+		const browse = hostedHarness({ "assets/people": ["a.webp"] });
+		await browseArtDirs(ROOT, ["assets/people"]);
+		await browseArtDirs(ROOT, ["assets/people"]);
+		expect(browse).toHaveBeenCalledTimes(2); // one empty + one retry, for the first pass only
 	});
 });

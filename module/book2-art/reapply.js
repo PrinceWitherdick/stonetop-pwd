@@ -1,5 +1,5 @@
 import { getSetting, setSetting } from "../settings.js";
-import { info, error } from "../utils/logger.js";
+import { info, warn, error } from "../utils/logger.js";
 import { BOOK2_ART_APPLY_MANIFEST } from "./manifest.js";
 import { bestiaryDescriptionWithArt, codexFieldWithArt, locationSectionsWithArt, textPageWithManagedMap, matchWorldPage } from "./world-journal-art.js";
 import { managedHash } from "../hooks/journal-sync-core.js";
@@ -258,9 +258,23 @@ async function refreshArtIndex(setting, rows, present, srcOf, entryOf, label, pa
 		const prev = getSetting(setting);
 		// Key order is the manifest's on both sides, so a plain stringify compares faithfully.
 		if (JSON.stringify(prev ?? {}) === JSON.stringify(have)) return;
-		await setSetting(setting, have);
 		const count = Object.keys(have).length;
-		info(`Book II art: ${label} art index updated (${count} of ${rows.length} on disk)`);
+		// EMPTYING an index that had entries is the one update worth saying out loud. It is
+		// legitimate — a GM who deleted or renamed the art folder must have it cleared, or every
+		// drag keeps baking a path to a file that is gone — but it is also exactly what a browse
+		// that answers "no files" about a folder full of art does, on every load, for as long as
+		// the browse keeps lying (see browse.js `readDir` for the host that did this). The
+		// difference between those two is invisible from here and enormous to the GM, so the one
+		// that ends with an empty gallery no longer happens without a word in the console.
+		const emptying = !count && Object.keys(prev ?? {}).length;
+		if (emptying) {
+			warn(`Book II art: the ${label} art index is being CLEARED. The durable art folder listed`
+				+ ` none of its ${rows.length} pictures, where it previously held ${emptying}.`
+				+ ` If that art is still on disk, this world cannot see it: check that`
+				+ ` "${book2ArtRoot()}" is the right folder and re-run Import Book Art.`);
+		}
+		await setSetting(setting, have);
+		if (!emptying) info(`Book II art: ${label} art index updated (${count} of ${rows.length} on disk)`);
 	} catch (e) {
 		error(`Book II art: could not update the ${label} art index`, e);
 	}
