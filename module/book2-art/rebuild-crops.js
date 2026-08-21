@@ -314,7 +314,10 @@ export const browseCuttableArt = (root = book2ArtRoot()) =>
 async function planBookArt(root = book2ArtRoot()) {
 	const present = await browseCuttableArt(root);
 	const tokens = plannedMonsterTokenRebuilds(present, root);
-	const first = [...plannedCropRebuilds(present, root), ...tokens];
+	// The crops come back NAMED as well as merged, because one caller wants the people half of
+	// this plan on its own — see plannedPeopleArtRebuilds.
+	const crops = plannedCropRebuilds(present, root);
+	const first = [...crops, ...tokens];
 	const dests = first.map((c) => c.dest);
 	// `plus` carries this host's prefix onto the not-yet-written files, so a square planned against
 	// a detail that does not exist yet still gets a fetchable `parentSrc`. `browseCuttableArt`
@@ -324,7 +327,7 @@ async function planBookArt(root = book2ArtRoot()) {
 	// has to know whether this run creates any CREATURE squares: those are the only cut that
 	// changes what a compendium document should point at, and re-pointing the compendium is the
 	// expensive half the rebuild otherwise skips. See runBookArtRebuild.
-	return { first, tokensPlanned: tokens.length, squares: plannedPortraitRebuilds(afterFirst, root) };
+	return { first, crops, tokensPlanned: tokens.length, squares: plannedPortraitRebuilds(afterFirst, root) };
 }
 
 /**
@@ -391,4 +394,20 @@ export async function rebuildBookArt({ onProgress = null } = {}) {
 export async function plannedBookArtRebuilds(root = book2ArtRoot()) {
 	const { first, squares } = await planBookArt(root);
 	return [...first, ...squares];
+}
+
+/**
+ * The PEOPLE half of that plan: the detail portraits, and the square faces cut from them, without
+ * the creature token squares that ride the same run.
+ *
+ * An empty People gallery counts THIS rather than `plannedBookArtRebuilds`, because there the
+ * rebuild is offered as a way for the gallery to fill ITSELF. A world holding every bestiary
+ * illustration and no person image has ~73 cuttable token squares and no cuttable person — offered
+ * the full count, that GM would press a button, watch it work, and find the gallery exactly as
+ * empty as before. The run the button starts is still the whole rebuild (the tokens are worth
+ * cutting, and one pass is cheaper than two); only the decision to OFFER it is narrowed.
+ */
+export async function plannedPeopleArtRebuilds(root = book2ArtRoot()) {
+	const { crops, squares } = await planBookArt(root);
+	return [...crops, ...squares];
 }

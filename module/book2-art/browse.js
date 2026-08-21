@@ -57,6 +57,22 @@ export const DURABLE_ART_DIRS = [
 const _browseCache = new Map();
 
 /**
+ * Session caches elsewhere that are keyed off these same files, forgotten when this one is.
+ *
+ * Registered rather than imported: every one of them already imports THIS module for the browse
+ * itself, so a call the other way would be a cycle. A cache that measures or reads a file the
+ * browse found is only as fresh as the browse, and a GM who re-runs Import Book Art mid-session
+ * gets one cleared and not the other — which is worse than either, because the two then disagree
+ * about a file that is right there on disk.
+ */
+const _dependents = new Set();
+
+/** Have a cache of your own forgotten whenever the art browse is. */
+export function onArtBrowseCleared(forget) {
+	_dependents.add(forget);
+}
+
+/**
  * Forget everything browseArtDirs has cached. Call after anything writes to the durable art
  * folder. Three callers today: the crop rebuild does it directly, the Import Book Art macro is
  * caught by the settings hook in stonetop.js (publishing its art index is the last thing it
@@ -65,6 +81,7 @@ const _browseCache = new Map();
  */
 export function clearArtBrowseCache() {
 	_browseCache.clear();
+	for (const forget of _dependents) forget();
 }
 
 /** One directory's file list, from cache when we have already asked this session. */

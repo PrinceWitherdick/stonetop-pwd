@@ -15,6 +15,9 @@
 import { escHtml, decodeEntities } from "./strings.js";
 import { step4Questions, step6Questions } from "../dialogs/introductions-data.js";
 import { CHART_GROUPS } from "../dialogs/expedition-data.js";
+import {
+	journeyRoute, atLeastPhrase, routeLegLines, routeLine, fillChartBlank,
+} from "./travel-route.js";
 import { SEASONAL_GAINS } from "../dialogs/spring-burst-data.js";
 // Change-detection hash (pure, Foundry-free) — lets us tell a page's still-pristine
 // prose (safe to refresh from the source) from one the GM has edited in the journal.
@@ -104,16 +107,43 @@ function qaPairsFrom(records, questions) {
 // & challenges) as a per-group bulleted list — the journey's shape, in the GM's own
 // words. `checks` is the saved { key: bool } map; item text is trusted authored HTML.
 // Returns "" when nothing in any group is ticked.
-function checkedGroups(groups, checks) {
+//
+// `route` is the trip's solved journey, when one was plotted. Two of the requirements carry
+// literal blanks ("at least ___ days"), and they go through the SAME filler the dialog's own
+// checklist uses — substituting in one place and not the other would print a blank in the journal
+// where the GM had read a number.
+function checkedGroups(groups, checks, route = null) {
 	return (groups ?? [])
 		.map(group => {
 			const items = (group.items ?? []).filter(it => checks?.[it.key]);
 			if (!items.length) return "";
-			const lis = items.map(it => `<li>${it.text}</li>`).join("");
+			const lis = items.map(it => `<li>${fillChartBlank(it.text, it.key, route)}</li>`).join("");
 			return `<p><strong>${escHtml(group.label)}</strong></p><ul>${lis}</ul>`;
 		})
 		.filter(Boolean)
 		.join("");
+}
+
+// "Stonetop to Marshedge to Lygos: at least 40 days", then a line per leg.
+function journeyProse(route) {
+	if (!route) return "";
+	const legs = routeLegLines(route).map(line => `<li>${escHtml(line)}</li>`).join("");
+	return `<p><strong>${escHtml(routeLine(route))}</strong>: `
+		+ `${escHtml(atLeastPhrase(route.total))}.</p><ul>${legs}</ul>`;
+}
+
+// The GM's own words about the route — with OUR words dropped back out.
+//
+// Picking a destination seeds the empty "Destination & route" field with the plotted route line,
+// so the walkthrough's Chart a Course step shows an answer rather than a blank. That line is
+// exactly what `journeyProse` above already leads with, so printing the field verbatim underneath
+// it said the same sentence twice, once bold and once not. A GM who typed their own words (or
+// added to ours) keeps every one of them: only text that still matches the generated line is
+// recognised as ours to drop.
+function journeyNote(chart, route) {
+	const written = String(chart?.route ?? "").trim();
+	if (route && written === routeLine(route)) return "";
+	return paragraphs(chart?.route);
 }
 
 // Compile one logged expedition into a Chronicle page, or null when it holds nothing
@@ -122,9 +152,13 @@ function checkedGroups(groups, checks) {
 function buildExpeditionPage(exp, index) {
 	const chart = exp?.chart ?? {};
 	const home  = exp?.home ?? {};
+	// The plotted route joins the section it belongs to rather than opening a new heading:
+	// mergeChronicleSections matches on heading, so a brand-new one would churn every page that
+	// already exists. It leads, because it is the answer the GM's own prose then elaborates on.
+	const route = journeyRoute(exp?.journey);
 	const sections = [
-		proseSection("Destination & route", paragraphs(chart.route)),
-		proseSection("The way ahead", checkedGroups(CHART_GROUPS, chart.checks) + paragraphs(chart.notes)),
+		proseSection("Destination & route", journeyProse(route) + journeyNote(chart, route)),
+		proseSection("The way ahead", checkedGroups(CHART_GROUPS, chart.checks, route) + paragraphs(chart.notes)),
 		proseSection("Outfit & supplies", paragraphs(exp?.outfit)),
 		proseSection("Requisitioned", paragraphs(exp?.requisition)),
 		proseSection("Other preparations", paragraphs(exp?.prep)),

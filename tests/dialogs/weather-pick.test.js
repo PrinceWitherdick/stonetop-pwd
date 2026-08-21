@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { WeatherDialog } from "../../module/dialogs/WeatherDialog.js";
 import { postWeather, getWeatherSeason } from "../../module/utils/weather.js";
+import { FXMASTER_ID, FXMASTER_PLUS_ID } from "../../module/seasons/weather-fx.js";
 
 // The Weather picker sits on its answer instead of firing it at chat: a roll walks a light down
 // the table and LEAVES it standing on the row it gave, the GM can click a different row instead,
@@ -202,5 +203,92 @@ describe("the Weather card", () => {
 		expect(await postWeather("nope", { row: getWeatherSeason("winter").rows[0] })).toBeNull();
 		expect(await postWeather("winter", {})).toBeNull();
 		expect(globalThis.ChatMessage.create).not.toHaveBeenCalled();
+	});
+});
+
+// ── The canvas control ───────────────────────────────────────────────────────
+// The Pause / Resume button, which is only on the window at all for a GM whose world has a
+// particle module in it. Guarded here because "hidden" is the whole design: a table without
+// FXMaster should never read the word FXMaster, so the thing to keep working is the ABSENCE.
+describe("the Weather picker's canvas control", () => {
+	// The world is COPIED and put back, not built from scratch and deleted: tests/setup.js hangs
+	// the real i18n off `game` once for the whole run, and an earlier test in this file deletes
+	// the global outright, so neither "it is there" nor "it is not" can be assumed on the way in.
+	let saved;
+	let held = false;
+
+	afterEach(() => {
+		if (!held) return;
+		if (saved === undefined) delete globalThis.game;
+		else globalThis.game = saved;
+		held = false;
+	});
+
+	function world({ module = FXMASTER_ID, isGM = true, sceneFx = true } = {}) {
+		if (!held) { saved = globalThis.game; held = true; }
+		globalThis.game = {
+			...(saved ?? {}),
+			modules:  { get: id => (id === module ? { active: true } : undefined) },
+			user:     { isGM },
+			settings: {
+				get: (_sys, key) => (key === "weatherSceneFx" ? sceneFx : undefined),
+				set: vi.fn(),
+			},
+		};
+	}
+
+	it("stays off the window for a table with no particle module", () => {
+		world({ module: "some-other-module" });
+		expect(picker().getData().fx).toBeNull();
+	});
+
+	// A player cannot write the world setting behind it, so the button would be a lie about who
+	// is in charge of the map.
+	it("stays off the window for a player who somehow opened it", () => {
+		world({ isGM: false });
+		expect(picker().getData().fx).toBeNull();
+	});
+
+	it("offers the pause while the weather is still reaching the map", () => {
+		world({ sceneFx: true });
+		const fx = picker().getData().fx;
+		expect(fx.paused).toBe(false);
+		expect(fx.label).toMatch(/^Pause/);
+	});
+
+	// And offers the way back once it is paused. Under FXMaster+ as well: a table that bought
+	// the paid build must not find the control missing with nothing on screen to say why.
+	it("offers the way back once it is paused, under FXMaster+ too", () => {
+		world({ module: FXMASTER_PLUS_ID, sceneFx: false });
+		const fx = picker().getData().fx;
+		expect(fx.paused).toBe(true);
+		expect(fx.label).toMatch(/^Resume/);
+	});
+
+	// Beside it, the way out to the permanent switch. Only the wiring is checked here: what
+	// happens inside core's settings window is tests/utils/open-settings.test.js's business.
+	it("offers a way out to the setting behind it", async () => {
+		world();
+		const render = vi.fn();
+		globalThis.game.settings.sheet = { render };
+
+		await picker()._openWeatherSettings();
+
+		expect(render).toHaveBeenCalledWith(true);
+	});
+
+	// The button acts on the canvas, not on the window. A GM stopping a blizzard mid-session
+	// must not lose the row they were three seconds from posting.
+	it("leaves a standing result standing", async () => {
+		world();
+		const dlg = picker("winter");
+		dlg._pickRow(2);
+		dlg.render.mockClear();
+
+		await dlg._toggleFx();
+
+		expect(globalThis.game.settings.set).toHaveBeenCalledWith("stonetop-pwd", "weatherSceneFx", false);
+		expect(dlg._picked.index).toBe(2);
+		expect(dlg.render).toHaveBeenCalled();
 	});
 });

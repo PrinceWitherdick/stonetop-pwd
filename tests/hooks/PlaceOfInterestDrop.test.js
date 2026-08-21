@@ -6,9 +6,13 @@ import {
 	landmarkNoteData,
 	linkLandmarkNotes,
 	onDropPlaceOfInterest,
+	refitLandmarkNotes,
 	revealLandmarkNotesOnce,
 	switchToJournalNotesControls,
 } from "../../module/hooks/PlaceOfInterestDrop.js";
+import {
+	MAP_PIN_FONT_SIZE, MAP_PIN_ICON_SIZE, PLACE_MARKER_ICON_SUFFIX, placeMarkerNoteData,
+} from "../../module/utils/map-pins.js";
 
 // The drop hook has to answer core synchronously, so it fires the note creation and
 // returns. That chain now also resolves the pin's Chronicle page, so counting microtasks
@@ -302,6 +306,78 @@ describe("PlaceOfInterestDrop", () => {
 				scenes: [scene], isGM: true, seed: async () => null, findPage: pageFor(["a"]),
 			})).toBe(0);
 			expect(scene.updateEmbeddedDocuments).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("refitLandmarkNotes", () => {
+		// A disc is written once and nothing ever went back to one, which was fine while the discs
+		// were the only pins on their map. The village map now carries the captions its printing
+		// letters too, so the two families sit inches apart and a size change to either leaves the
+		// other visibly stale on every table that ran the older one.
+		const disc = (id, over = {}) => ({
+			id, texture: { src: "systems/stonetop-pwd/assets/icons/landmarks/landmark-c.svg" },
+			iconSize: MAP_PIN_ICON_SIZE, fontSize: MAP_PIN_FONT_SIZE, textColor: "#1b1009",
+			x: 100, y: 200, text: "The Public House",
+			entryId: "journal-1", ...over,
+		});
+		const sceneWith = (notes) => ({ notes, updateEmbeddedDocuments: vi.fn(async () => {}) });
+
+		it("brings a disc down to the size and label the map pins share", async () => {
+			// The two sizes the discs shipped at before they had captions for company.
+			const scene = sceneWith([disc("n1", { iconSize: 90, fontSize: 60 })]);
+			expect(await refitLandmarkNotes({ scenes: [scene], isGM: true })).toBe(1);
+			expect(scene.updateEmbeddedDocuments).toHaveBeenCalledWith("Note", [
+				{ _id: "n1", fontSize: MAP_PIN_FONT_SIZE, iconSize: MAP_PIN_ICON_SIZE },
+			]);
+		});
+
+		it("sets a disc and a marker at the same size, which is the point of sharing it", async () => {
+			expect(landmarkNoteData({ x: 0, y: 0, letter: "a", name: "The Stone" }).iconSize)
+				.toBe(MAP_PIN_ICON_SIZE);
+			expect(placeMarkerNoteData({ x: 0, y: 0, name: "The Stream" }).iconSize)
+				.toBe(MAP_PIN_ICON_SIZE);
+		});
+
+		it("is the same number the markers are set in, not a second copy of it", async () => {
+			expect(landmarkNoteData({ x: 0, y: 0, letter: "a", name: "The Stone" }).fontSize)
+				.toBe(MAP_PIN_FONT_SIZE);
+		});
+
+		it("writes nothing at all once they agree, since it runs on every load", async () => {
+			const scene = sceneWith([disc("n1"), disc("n2")]);
+			expect(await refitLandmarkNotes({ scenes: [scene], isGM: true })).toBe(0);
+			expect(scene.updateEmbeddedDocuments).not.toHaveBeenCalled();
+		});
+
+		it("leaves the position, the label and the link alone", async () => {
+			// Those are the GM's the moment they touch them. Only the design is claimed.
+			const scene = sceneWith([disc("n1", { fontSize: 60, x: 4321, text: "Renamed", entryId: "theirs" })]);
+			// iconSize already agrees on this one, so the only design field left is the type size.
+			await refitLandmarkNotes({ scenes: [scene], isGM: true });
+			const [[, updates]] = scene.updateEmbeddedDocuments.mock.calls;
+			expect(Object.keys(updates[0]).sort()).toEqual(["_id", "fontSize"]);
+		});
+
+		it("never touches a place marker, which the other pass owns", async () => {
+			// The wide "is this ours" test claims markers too, since both families live in the same
+			// folder. Resizing one here to a disc's 90 would have this pass and the marker reconcile
+			// take turns resizing the same pin on every load, forever.
+			const marker = {
+				id: "m1", texture: { src: `systems/stonetop-pwd/${PLACE_MARKER_ICON_SUFFIX}` },
+				iconSize: 70, fontSize: 45, textColor: "#1b1009",
+			};
+			const scene = sceneWith([marker]);
+			expect(await refitLandmarkNotes({ scenes: [scene], isGM: true })).toBe(0);
+			expect(scene.updateEmbeddedDocuments).not.toHaveBeenCalled();
+		});
+
+		it("leaves everyone else's notes alone, and does nothing for a player", async () => {
+			const theirs = sceneWith([{ id: "x", texture: { src: "icons/svg/book.svg" }, fontSize: 60 }]);
+			expect(await refitLandmarkNotes({ scenes: [theirs], isGM: true })).toBe(0);
+
+			const ours = sceneWith([disc("n1", { fontSize: 60 })]);
+			expect(await refitLandmarkNotes({ scenes: [ours], isGM: false })).toBe(0);
+			expect(ours.updateEmbeddedDocuments).not.toHaveBeenCalled();
 		});
 	});
 

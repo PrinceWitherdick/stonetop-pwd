@@ -24,6 +24,11 @@
  *  • One kind counts down. Shared Souls ends when the beast's last Loyalty is spent, so those rows
  *    carry a 3-pip track and dismiss themselves at zero. Nothing else does, so `loyalty` is null
  *    everywhere else rather than 0 — a 0 would render an exhausted track on a ward.
+ *  • One kind asks a question at the moment it is laid. Wards & Bindings says "ALSO, CHOOSE whether
+ *    the affected beings are repelled or trapped by the signs" — the difference between a ward and
+ *    a binding, and the only thing that says which of the two a row is. Same null discipline as
+ *    Loyalty: `sign` is null on the four kinds that never had one, and "" on a ward nobody has
+ *    answered for yet, so an unanswered ward reads as a question rather than as a quiet default.
  *
  * WHAT IS DELIBERATELY NOT HERE: spending the Stock. Every one of these moves costs 1 Stock, and
  * the roster still does not touch the Sacred Pouch's track, because the cost is not per-ROW —
@@ -51,6 +56,28 @@ export const WARDS_BINDINGS      = "Wards & Bindings";
 
 /** Shared Souls' beast starts at 3 Loyalty and the mark ends when the last one is spent. */
 export const SHARED_SOULS_LOYALTY = 3;
+
+/**
+ * Wards & Bindings' one per-row choice: "choose whether the affected beings are repelled or
+ * trapped by the signs".
+ *
+ * ONE MOVE, TWO OUTCOMES — which is why this is a field on a ward row and NOT a sixth entry in
+ * MARK_KINDS. A ward and a binding are the same move, cost the same Stock, quote the same rule and
+ * roll the same +INT when first tested; splitting them into two kinds would put two pickers'
+ * worth of choice where the move has one, and would break the per-kind dedupe below into letting
+ * one doorway carry two rows of what the fiction calls one set of signs.
+ *
+ * `key` is the move's OWN word, stored; `label` is the word a player uses for the thing that word
+ * makes. Storing "repelled" rather than "ward" keeps the flag readable against the move text, and
+ * keeps this key out of collision with the `ward` KIND key, which means something else entirely.
+ */
+export const WARD_SIGNS = [
+	{ key: "repelled", label: "Ward",    rule: "The affected beings are repelled by the signs." },
+	{ key: "trapped",  label: "Binding", rule: "The affected beings are trapped by the signs." },
+];
+
+/** What the add row offers first. Visible in the picker, so it is a shown default, not a silent one. */
+export const DEFAULT_WARD_SIGN = WARD_SIGNS[0].key;
 
 /**
  * The kinds a mark can be, in the order the roster lists them.
@@ -90,6 +117,7 @@ export const MARK_KINDS = [
 		rule: "Sacred signs on a boundary: name who or what they affect in no more words than your "
 			+ "level, and whether those beings are repelled or trapped. Roll +INT when first tested. "
 			+ "Costs 1 Stock.",
+		signs: WARD_SIGNS,
 	},
 ];
 
@@ -128,9 +156,28 @@ function coerceLoyalty(raw, row) {
 	return Math.min(def.loyalty, Math.max(0, n));
 }
 
+/**
+ * Which of the two a ward row is, and null on every kind that never had the choice.
+ *
+ * THREE STATES, DELIBERATELY. Null means "this kind has no such choice" — the four kinds that are
+ * not Wards & Bindings, which must not render a toggle. "" means "a ward whose signs nobody has
+ * said repel or trap yet", which is every ward laid before this field existed and is a real,
+ * answerable state rather than an error. Only the move's own two words are anything else.
+ *
+ * An unrecognised value lands on "" rather than on a default, for the reason the whole field
+ * exists: a row that quietly claims to be a ward when the player never said so is exactly the
+ * silence this is here to break.
+ */
+function coerceSign(raw, row) {
+	const def = KIND_BY_KEY[coerceKind(row?.kind)];
+	if (!def?.signs) return null;
+	const key = String(raw ?? "").trim();
+	return def.signs.some(s => s.key === key) ? key : "";
+}
+
 const roster = createRoster({
 	prefix: "mark",
-	fields: { kind: coerceKind, loyalty: coerceLoyalty },
+	fields: { kind: coerceKind, loyalty: coerceLoyalty, sign: coerceSign },
 	// Duplicates are refused WITHIN A KIND, not across the roster. That is the rule the moves state:
 	// "one can benefit from only 1 charm at a time" is Amulets & Talismans' own sentence, while
 	// nothing stops the same woman wearing Barkskin and Trackless Step at once. Scope-blind dedupe
@@ -141,6 +188,11 @@ const roster = createRoster({
 /** The kind definition for a key, or null. Used by the dialog for labels and rule lines. */
 export function markKind(key) {
 	return KIND_BY_KEY[coerceKind(key)] ?? null;
+}
+
+/** The ward-sign definition for a stored key, or null for "" and for anything unrecognised. */
+export function markSign(key) {
+	return WARD_SIGNS.find(s => s.key === key) ?? null;
 }
 
 /**
@@ -185,6 +237,17 @@ export const removeMark   = roster.remove;
 /** Re-word what a mark is for. `{ entries, changed }`, `changed` null when nothing moved. */
 export function noteMark(list, id, note) {
 	return roster.patch(list, id, { note });
+}
+
+/**
+ * Say whether a ward's signs repel or trap. Same `{ entries, changed }` contract as the rest.
+ *
+ * A no-op on the four kinds that never had the choice: coerceSign answers null there whatever is
+ * passed, so the patch compares equal and nothing is written. Unlike Loyalty this needs no early
+ * return to say so, because there is no second result field whose value would be a lie.
+ */
+export function setMarkSign(list, id, sign) {
+	return roster.patch(list, id, { sign });
 }
 
 /**

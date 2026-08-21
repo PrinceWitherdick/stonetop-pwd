@@ -15,7 +15,7 @@ import {
 // same trap already applies to `crop` (see rebuild-crops.test.js).
 
 const ROOT = "stonetop-book-art";
-const { people = [], settingOverviewMaps = [], gmDiagrams = [] } = BOOK2_ART_APPLY_MANIFEST;
+const { people = [], settingOverviewMaps = [], gmDiagrams = [], expectedPdfPages } = BOOK2_ART_APPLY_MANIFEST;
 const squared = people.filter((p) => p.portrait || p.portraitOut);
 
 describe("people projection: square portraits", () => {
@@ -114,5 +114,30 @@ describe("the GM playbook projections", () => {
 			}
 			expect(pageChain(s), `${s.slug} chain is not just its prefer`).toEqual(s.prefer);
 		}
+	});
+});
+
+// How long each book is in the edition the importer was measured against. It rides this
+// projection so that the one surface asking for a book outside the importer's own window (the
+// People gallery's empty state) names the edition with the number the macro validates against,
+// rather than with a copy of it that nothing keeps in step.
+//
+// Silent if it goes: the note falls back to "spreads edition" with no page count, which still
+// reads as a complete sentence and quietly drops the only part a GM can check their file against.
+describe("the expected page counts", () => {
+	it("still ships one per book the importer knows about", () => {
+		expect(expectedPdfPages, "the projection lost expectedPdfPages").toBeTruthy();
+		// 1 and 2 are the rulebooks; 3 is the free GM playbook.
+		for (const book of [1, 2, 3]) {
+			expect(expectedPdfPages[book], `book ${book}`).toBeGreaterThan(0);
+		}
+	});
+
+	// A rulebook is hundreds of pages and the playbook is a dozen. A count that came out as the
+	// wrong book's would send a GM looking for a file they do not own.
+	it("keeps the rulebooks apart from the twelve-page playbook", () => {
+		expect(expectedPdfPages[1]).toBeGreaterThan(100);
+		expect(expectedPdfPages[2]).toBeGreaterThan(100);
+		expect(expectedPdfPages[3]).toBeLessThan(100);
 	});
 });

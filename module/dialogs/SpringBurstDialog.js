@@ -169,7 +169,7 @@ export class SpringBurstDialog extends StepperDialog {
 		// Spring has burst forth: mark this walkthrough finished. With the Introductions
 		// also done, hooks/Ready.js stops auto-opening the Welcome guide (sessionZeroComplete).
 		// Drop the saved step + delegated flag so a manual reopen starts a fresh run.
-		markWalkthroughDone(RESUME_KEY, ["step", "delegated"]);
+		markWalkthroughDone(RESUME_KEY, ["step", "stepKey", "delegated"]);
 		return this.close();
 	}
 

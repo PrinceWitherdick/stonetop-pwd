@@ -4,7 +4,9 @@ import { getSetting, setSetting } from "../settings.js";
 import { WEATHER_SEASONS, getWeatherSeason, rollWeatherResult, rowRange, defaultWeatherSeason, weatherSeasonForCampaignSeason } from "../utils/weather.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
 import { readCurrentSeason, currentSeasonView } from "../seasons/current-season.js";
-import { announceWeather } from "../seasons/current-weather.js";
+import { announceWeather, setWeatherFxPaused } from "../seasons/current-weather.js";
+import { fxMasterActive, weatherFxPaused, WEATHER_FX_SETTING } from "../seasons/weather-fx.js";
+import { openSystemSetting } from "../utils/open-settings.js";
 import { spinHighlight } from "../utils/flash-highlight.js";
 
 const SEASON_SETTING = "weatherSeason";
@@ -81,6 +83,8 @@ export class WeatherDialog extends StonetopDialog {
 		// handler rather than a class — the class is what the stylesheet tells apart.
 		html.find(".stonetop-weather-roll-btn, .stonetop-weather-reroll-btn").on("click", () => this._roll());
 		html.find(".stonetop-weather-post-btn").on("click", () => this._post());
+		html.find(".stonetop-weather-fx-btn").on("click", () => this._toggleFx());
+		html.find(".stonetop-weather-fx-link").on("click", () => this._openWeatherSettings());
 	}
 
 	/** Cancel any walk still running, so nothing lands on a window that has gone. */
@@ -112,6 +116,9 @@ export class WeatherDialog extends StonetopDialog {
 			// `picked` rather than the row itself: the footer only needs to know whether there
 			// is one, and the row that IS picked says so on its own line.
 			picked:  !!this._picked,
+			// The canvas control, or null when there is nothing on a canvas to control. The
+			// template hangs the whole row off it.
+			fx:      this._fxControl(),
 			rows:    season.rows.map((r, i) => ({
 				index:    i,
 				range:    rowRange(r),
@@ -119,6 +126,32 @@ export class WeatherDialog extends StonetopDialog {
 				reroll:   !!r.reroll,
 				isPicked: this._picked?.index === i,
 			})),
+		};
+	}
+
+	// The Pause / Resume control for the weather on the players' map, or null when this window
+	// has no business offering one.
+	//
+	// HIDDEN rather than disabled in both of its off cases, which is the unusual call here. A
+	// greyed-out button is a promise that something could happen if the reader worked out what
+	// they were missing, and for a table with no particle module installed nothing ever can —
+	// the honest version of "you have no FXMaster" is a picker that never mentions FXMaster.
+	// The second case is a player who somehow reached the window: they cannot write a
+	// world setting, so the button would be a lie about who is in charge of the map.
+	//
+	// FXMaster+ counts as FXMaster (see fxMasterActive), because a table that bought the paid
+	// build would have no way to guess why the button was missing.
+	_fxControl() {
+		if (!fxMasterActive() || !globalThis.game?.user?.isGM) return null;
+		const paused = weatherFxPaused();
+		return {
+			paused,
+			label: paused ? "Resume weather effects" : "Pause weather effects",
+			// Said in terms of what the TABLE sees, not of the setting behind it: "off" would
+			// leave a GM wondering whether the weather itself had stopped being rolled.
+			hint:  paused
+				? "Posted weather stays off the map until you resume."
+				: "Posted weather also falls on the scene your players are on.",
 		};
 	}
 
@@ -212,6 +245,31 @@ export class WeatherDialog extends StonetopDialog {
 		if (!await spin.done) return false;
 		rows[index].classList.add(PICKED_CLASS);
 		return true;
+	}
+
+	// Stop the rain (or start it again) without closing the window.
+	//
+	// The one control here that acts the moment it is pressed rather than waiting for Post: the
+	// GM reaching for this is a GM whose players are watching a blizzard right now. Nothing else
+	// in the window moves — a standing result is still standing when the canvas goes still.
+	//
+	// It writes the same world setting the config screen shows, so there is one answer to "why
+	// is nothing happening on the map" rather than two that can disagree. See setWeatherFxPaused.
+	async _toggleFx() {
+		if (!fxMasterActive()) return;
+		await setWeatherFxPaused(!weatherFxPaused());
+		this.render(false);
+	}
+
+	// The way out to the permanent switch, in core's own Configure Settings.
+	//
+	// A LINK rather than a third button: Pause is for tonight, and this is for a table that has
+	// decided it does not want its canvas touched at all. The window stays open behind it (see
+	// utils/front-on-open.js — our windows float as they open and then take their turn in the
+	// stack like anything else), so a GM who only wanted a look can come straight back to the
+	// row they were about to post.
+	_openWeatherSettings() {
+		return openSystemSetting(WEATHER_FX_SETTING);
 	}
 
 	// Send the standing result to the table and close.

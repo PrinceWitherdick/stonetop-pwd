@@ -1,0 +1,36 @@
+{{!-- TRAVEL MAP — one of the book's regional maps, as large as the reader wants it, with the whole
+      route planner on it.
+
+      This is the "See the whole map" window, and it is a PEER of the route step, not a picture of
+      it: the same origin picker, the same map tabs, the same hotspots and the same readout, all
+      from the same partials the walkthrough uses. Picking here writes to the same trip.
+
+      Structurally it is ImageZoomWindow's template with chrome added above and below. That window
+      already looks for its viewport as a descendant when the root is not the viewport itself
+      (see its activateListeners), which is exactly the case this template creates — so all of the
+      wheel/drag/fit behaviour comes along untouched.
+
+      The chrome does NOT ride the picture: only `.stonetop-image-zoom-overlay` is sized onto the
+      image, so the controls and the readout stay put while the map moves behind them. --}}
+<div class="stonetop-travel-map stonetop-journey">
+
+  <div class="stonetop-travel-map-chrome">
+    {{> "stonetop.expedition-journey-controls" journey=journey}}
+  </div>
+
+  {{#if journey.map}}
+  <div class="stonetop-image-zoom-view">
+    <img class="stonetop-image-zoom-img" src="{{src}}" alt="{{alt}}" draggable="false">
+    <div class="stonetop-image-zoom-overlay stonetop-journey-canvas">{{{overlay}}}</div>
+  </div>
+  {{else}}
+  <p class="stonetop-journey-nomap">
+    That map isn&rsquo;t in this world. Run <strong>Import Book Art</strong> to add the books&rsquo;
+    maps, or pick a destination back on the walkthrough&rsquo;s own list.
+  </p>
+  {{/if}}
+
+  <div class="stonetop-travel-map-foot">
+    {{> "stonetop.expedition-journey-route" journey=journey}}
+  </div>
+</div>

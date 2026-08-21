@@ -6,6 +6,10 @@
  * normal stacking afterward, so any window the user brings forward later (e.g. the
  * Settings dialog, or the parent sheet) can sit over it.
  *
+ * ONCE means once per open, not once per render. See `apply()`: a re-render is not an
+ * appearance, and treating it as one makes a window jump the stack whenever anything
+ * writes to the data behind it.
+ *
  * Extracted from CharacterOnboardingDialog's behavior so other sheet-spawned
  * dialogs (LevelUpDialog, DeathsDoorDialog, etc.) can share it.
  */
@@ -13,13 +17,31 @@ export class FrontOnOpen {
 	/** @param {Application} app */
 	constructor(app) {
 		this._app = app;
+		// Whether this window has been floated for its CURRENT time on screen. Reset by stop(),
+		// so a window that is closed and reopened floats again.
+		this._raised = false;
 	}
 
-	/** Float the window on top once, via Foundry's native window stacking. */
+	/**
+	 * Float the window on top as it opens, via Foundry's native window stacking.
+	 *
+	 * Once per open, and that guard is the point of the method rather than an optimization.
+	 * Callers hang this off `_render`, and an AppV1 window re-renders for reasons that have
+	 * nothing to do with the reader looking at it: a companion window writing to the same data, a
+	 * hook, a background job. Raising every time turned “float as it opens” into “jump in front
+	 * whenever anything changes” — so choosing a destination in the Expedition walkthrough's
+	 * popped-out travel map threw the walkthrough over the map the GM was working on, on the very
+	 * gesture that map exists for.
+	 *
+	 * Nothing is lost by not re-raising: Foundry brings a window to the top when the user clicks
+	 * into it, so the window someone is actually using is already there.
+	 */
 	apply() {
 		const app = this._app;
 		const el = app?.element?.jquery ? app.element[0] : app?.element;
-		if (!el) return;
+		// No frame yet: leave `_raised` alone, so the render that does paint one still floats it.
+		if (!el || this._raised) return;
+		this._raised = true;
 		(app.bringToTop ?? app.bringToFront)?.call(app);
 	}
 
@@ -31,7 +53,8 @@ export class FrontOnOpen {
 	}
 
 	stop() {
-		// Nothing to tear down — native stacking needs no cleanup.
+		// Native stacking needs no cleanup. This only re-arms apply() for the next open.
+		this._raised = false;
 	}
 }
 

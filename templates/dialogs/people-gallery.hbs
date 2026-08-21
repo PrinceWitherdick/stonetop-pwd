@@ -63,10 +63,47 @@
 	</div>
 	<p class="stonetop-people-nomatch" hidden="hidden">No portraits match this filter.</p>
 	{{else}}
-	<p class="stonetop-people-empty">
-		No <strong>People of Stonetop</strong> portraits are available yet.
-		{{#if canBrowse}}You can choose any image with <strong>Browse files&hellip;</strong> above.{{/if}}
-	</p>
+	{{!-- An empty gallery is not a dead end: it says what would fill it and offers to do it. Which
+	      of the two cures is on the table (cut the faces out of art already on disk, or fetch the
+	      art from the books) is settled in PeopleGalleryDialog#_emptyOffer, which is also where the
+	      wording lives, so nothing here has to branch on the state of the art folder. --}}
+	<div class="stonetop-people-empty">
+		<p>No <strong>People of Stonetop</strong> portraits are available yet.</p>
+		<p>{{empty.blurb}}</p>
+		{{#if empty.canRebuild}}
+		<button type="button" class="stonetop-people-rebuild" title="Cut the portraits out of book art this world already has, without opening your PDFs"><i class="fas fa-crop-simple"></i> {{empty.rebuildLabel}}</button>
+		{{/if}}
+		{{#if empty.canImport}}
+		{{!-- The books, asked for here rather than in the importer's own window: a GM in front of an
+		      empty gallery has already been told what is missing, so the shortest way to the faces is
+		      the one that takes the PDF and goes. The `name` is what PeopleGalleryDialog._chosenBooks
+		      reads each field back by, keyed on the same book NUMBER the macro's handoff is keyed on.
+		      A file field cannot be given its selection back from script, so nothing here may be
+		      re-rendered once a book has been chosen. --}}
+		<div class="stonetop-people-books">
+			{{#each empty.books}}
+			<label class="stonetop-people-book">
+				<span class="stonetop-people-book-name">{{title}} <span class="stonetop-people-book-hint">{{note}}</span></span>
+				<input type="file" name="stonetop-book-file-{{book}}" accept="application/pdf,.pdf">
+				{{!-- Which edition, with the page count that settles it. Not a nicety: every page
+				      number the importer works from was measured on the spreads sheet, so the 1-up
+				      file is refused outright rather than half-imported, and a GM who hands one over
+				      without being warned first has spent a minute to be told no. --}}
+				<span class="stonetop-people-book-edition">{{edition}}</span>
+			</label>
+			{{/each}}
+		</div>
+		{{!-- Disabled until a book is chosen, and re-armed by _activateBookImport. The fields it is
+		      waiting on are two lines above it, which is what makes a dead button read as waiting
+		      rather than as broken; the hint under it says the same thing in words. --}}
+		<button type="button" class="stonetop-people-import" disabled="disabled" title="Rebuild the illustrations from your own Stonetop PDFs, on your own machine"><i class="fas fa-images"></i> {{empty.importLabel}}</button>
+		<p class="stonetop-people-import-hint"></p>
+		{{!-- The poster maps, the free GM playbook and the force-update tick are separate errands
+		      with nothing to do with faces, so they keep the window they have always lived in. --}}
+		<button type="button" class="stonetop-people-import-more" title="Open the full Import Book Art window: poster maps, the free GM playbook, and the force-update option"><i class="fas fa-sliders"></i> More import options&hellip;</button>
+		{{/if}}
+		{{#if canBrowse}}<p class="stonetop-people-empty-note">In the meantime you can choose any image with <strong>Browse files&hellip;</strong> above.</p>{{/if}}
+	</div>
 	{{/if}}
 </div>
 {{#if people}}

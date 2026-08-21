@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    The map marker every named place on the two regional poster maps wears.
+
+    Artwork: game-icons.net "position-marker" by Delapouite (CC BY 3.0), outline unchanged.
+    Ours is the colour only: the same cream (#f2e6c8) and ink (#33281e) the lettered
+    place-of-interest discs beside this file are drawn in, so a marker and a disc read as
+    one set of pins on one table's maps.
+
+    The game-icons original opens with a full-canvas square that carries no fill and so
+    paints solid black behind the glyph. It is DELETED here rather than made transparent:
+    this file is a picture with a ground of its own, not a mask, and a Foundry map note
+    draws its texture straight through a PIXI sprite, so an opaque square is an opaque
+    black tile sitting on the map where the pin should be.
+
+    The square is also why the viewBox stays 512 x 512 with the drawing off-centre inside
+    it rather than being cropped to the pin's own 274 x 478. Foundry's ControlIcon force
+    sets width and height to the note's iconSize (client/canvas/containers/elements/
+    control-icon.mjs), which stretches whatever it is given to a square, so a file trimmed
+    to the ink would be drawn visibly fat. The note's texture.fit and anchors are never
+    read for a Note at all.
+
+    The stroke is deliberately heavy, because these pins sit on hand-drawn brown line art and
+    an unoutlined cream shape sinks into the parchment it is standing on. 20 of 512 is NOT the
+    lettered discs' 4 of 64 rescaled, which would be 32: a disc is drawn nearly the full width
+    of its box and this pin is drawn barely half of it, so matching the ring's share of the BOX
+    would give the marker a ring half again as thick as the discs' relative to the shape it is
+    actually outlining. 20 is the weight that reads as the same pen at map scale.
+
+    Note for anything that measures this file: with the stroke centred on the path and joined
+    round, the lowest visible ink is half a stroke BELOW the path's last vertex, at 505 rather
+    than 494.892. module/utils/map-pins.js depends on that number to stand the pin on its point.
+
+    The hole through the head is upstream's, and is kept open rather than filled: the
+    parchment showing through it is what makes the drawing read as a pin pushed into a map
+    rather than a cream blob.
+  -->
+  <path fill="#f2e6c8" stroke="#33281e" stroke-width="20" stroke-linejoin="round"
+        d="M256 17.108c-75.73 0-137.122 61.392-137.122 137.122.055 23.25 6.022 46.107 11.58 56.262L256 494.892l119.982-274.244h-.063c11.27-20.324 17.188-43.18 17.202-66.418C393.122 78.5 331.73 17.108 256 17.108zm0 68.56a68.56 68.56 0 0 1 68.56 68.562A68.56 68.56 0 0 1 256 222.79a68.56 68.56 0 0 1-68.56-68.56A68.56 68.56 0 0 1 256 85.67z"/>
+</svg>

@@ -3920,6 +3920,33 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 }
+/* The rolled row's words, beside the number. A named table (a perilous leg, making camp)
+   answers in a full sentence, so it stacks under the band word rather than beside it, and
+   it is NOT uppercased — that treatment was chosen for the one-word bands. */
+.stonetop-fate-said {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+.stonetop-fate-text {
+	font-weight: bold;
+	line-height: 1.25;
+}
+/* Which question was asked — the speaker alias only ever says "Die of Fate".
+   The colour is DECLARED, not inherited: this card's paper is parchment in both themes, and a
+   text element that declares none takes core's near-white --color-text-primary under the dark
+   theme and disappears into it. This one sits outside `.stonetop-fate-result`, so there is no band
+   colour above it to fall back on. Same trap as `.pbta-chat-card .cell__title`. */
+.stonetop-fate-title {
+	margin: 0;
+	color: var(--st-text);
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	opacity: 0.75;
+}
 .stonetop-fate-legend {
 	list-style: none;
 	margin: 0 0 8px;
@@ -4155,11 +4182,15 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 
 .stonetop-weather-roll-btn > i,
 .stonetop-weather-post-btn > i,
-.stonetop-weather-reroll-btn > i { margin-right: 4px; }
+.stonetop-weather-reroll-btn > i,
+.stonetop-weather-fx-btn > i { margin-right: 4px; }
 
 /* Re-roll is the secondary of the pair and wears the season chip's outline rather than the
-   slate fill, so the row reads as one call to action and one way back to the die. */
-.stonetop-weather-reroll-btn {
+   slate fill, so the row reads as one call to action and one way back to the die. The canvas
+   control below wears the same outline skin and differs only in size, so it shares the rule
+   rather than restating it. */
+.stonetop-weather-reroll-btn,
+.stonetop-weather-fx-btn {
 	flex: 0 0 auto;
 	width: auto;
 	justify-content: center;
@@ -4174,7 +4205,109 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	transition: background 0.15s;
 }
 
-.stonetop-weather-reroll-btn:hover { background: hsl(40 25% 85%); }
+.stonetop-weather-reroll-btn:hover,
+.stonetop-weather-fx-btn:hover { background: hsl(40 25% 85%); }
+
+/* The canvas control, on its own row under the footer with a rule above it (see the template).
+   Quieter than either footer button: it is not part of deciding the weather, and a GM who has
+   never wanted to pause anything should be able to read straight past it. */
+.stonetop-weather-fx {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	padding-top: 8px;
+	border-top: 1px solid var(--color-border-light-tertiary, rgba(0, 0, 0, 0.12));
+}
+
+/* Quieter than the pair above: smaller type and tighter padding on the shared outline skin. */
+.stonetop-weather-fx-btn {
+	padding: 4px 10px;
+	font-size: calc(0.8rem * var(--stonetop-font-scale, 1));
+	transition: background 0.15s, border-color 0.15s;
+}
+
+/* Paused wears the gold caution tone rather than the red one. Nothing is broken and nothing has
+   been lost: the sky the world is under is still on the steading and still going out on the
+   cards, it is only being held off the map. Gold is also the tone that reads as a state somebody
+   chose, which is what the GM needs to recognise on the way back to switching it off. */
+.stonetop-weather-fx-btn.is-paused {
+	font-weight: 600;
+	background: var(--st-gold-bg);
+	border-color: var(--st-gold-border);
+	color: var(--st-gold-text);
+}
+
+.stonetop-weather-fx-btn.is-paused:hover {
+	background: color-mix(in srgb, var(--st-gold-border) 22%, transparent);
+}
+
+/* The way out to Configure Settings: text on the end of the control's own line, pushed to the
+   far side of it. Not a third button, because it is the one thing in this window that does not
+   act on the weather. Unlayered like the rest of this file, so `background: none` takes core's
+   button skin off it whatever the specificity of the rule that put it there. */
+.stonetop-weather-fx-link {
+	flex: 0 0 auto;
+	width: auto;
+	margin-left: auto;
+	padding: 0;
+	border: none;
+	box-shadow: none;
+	background: none;
+	font-family: var(--font-stonetop);
+	font-size: calc(0.78rem * var(--stonetop-font-scale, 1));
+	line-height: 1.35;
+	color: var(--color-text-dark-secondary);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+.stonetop-weather-fx-link:hover {
+	background: none;
+	color: var(--st-btn-primary-bg-hover);
+}
+
+/* Always its own line under the pair above, rather than the last thing squeezed onto theirs. */
+.stonetop-weather-fx-hint {
+	flex: 1 1 100%;
+	min-width: 0;
+	font-size: calc(0.78rem * var(--stonetop-font-scale, 1));
+	line-height: 1.35;
+	color: var(--color-text-dark-secondary);
+}
+
+/* The settings row a jump-to-setting lands on (utils/open-settings.js), lit for a moment so the
+   reader's eye finds it among the twenty other Stonetop options on that tab.
+
+   UNSCOPED, which almost nothing else in this file is: the element is inside core's Configure
+   Settings window and no `.stonetop` ancestor reaches it. Safe all the same, because a rule this
+   specifically named can only ever paint an element we put the class on ourselves. */
+.stonetop-setting-flash {
+	border-radius: var(--st-radius-sm);
+	animation: stonetop-setting-flash 2.6s ease-out both;
+}
+
+@keyframes stonetop-setting-flash {
+	0%, 65% {
+		background-color: var(--st-gold-bg);
+		box-shadow: 0 0 0 4px var(--st-gold-bg);
+	}
+	100% {
+		background-color: transparent;
+		box-shadow: 0 0 0 4px transparent;
+	}
+}
+
+/* Motion off: the same wash, arriving and leaving without the fade. It still clears on its own,
+   since the class comes off on the same timer either way. */
+@media (prefers-reduced-motion: reduce) {
+	.stonetop-setting-flash {
+		animation: none;
+		background-color: var(--st-gold-bg);
+		box-shadow: 0 0 0 4px var(--st-gold-bg);
+	}
+}
 
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-card__content {
 	display: grid;
@@ -8990,12 +9123,23 @@ a.stonetop-marks-name-text:hover { text-decoration: underline; }
 
    `width: auto` and the min/max pair are both needed, for the reason every other control in this
    file states them: core's `body.game .app select` sets a width these would otherwise inherit. */
-.stonetop-marks-kind {
+.stonetop-marks-kind,
+.stonetop-marks-sign {
 	flex: 0 0 auto;
 	width: auto;
 	min-width: 8em;
 	max-width: 12em;
 }
+
+/* Narrower than the kind picker: it holds two words, not five move names. */
+.stonetop-marks-sign {
+	min-width: 6em;
+	max-width: 8em;
+}
+
+/* `[hidden]` alone loses to core's `body.game .app select { display: … }`, which is more specific;
+   without this the ward's picker sits in the add row asking about Barkskin. */
+.stonetop-marks-sign[hidden] { display: none; }
 
 /* Shared Souls' three circles, on the name line beside the beast. Sized like the Moves sidebar's
    Readiness pips rather than the Crew tab's, since these sit in running text rather than in a
@@ -9018,6 +9162,77 @@ span.stonetop-mark-loyalty-pip {
 	display: inline-block;
 	box-sizing: border-box;
 	cursor: default;
+}
+
+/* ── Ward or binding ───────────────────────────────────────────────────────
+   "Choose whether the affected beings are repelled or trapped by the signs" — one move, two
+   outcomes, so a segmented pair on the name line rather than a second entry in the kind picker.
+   Sized and cased like the oath tick above, which is the other "which kind of row is this"
+   control in this window, so the two read as the same class of thing.
+
+   Nothing here hides an empty pair, because the template never emits one: a read-only view of a
+   ward nobody has answered for renders no wrapper at all. `:empty` could not have done that job
+   anyway — the whitespace a template indents with is a text node, so the span is never empty. */
+.stonetop-mark-sign {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 0.6em;
+	border: 1px solid rgba(0, 0, 0, 0.25);
+	border-radius: var(--st-radius-sm);
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+/* `button` in the selector because core's `body.game .app button` sets a height, width, margin and
+   background these must all beat; the read-only span needs none of that but takes the same box so
+   the two views of one row measure identically. Both of the height pair, since min-height beats
+   height: unpinning only `height` left the button at core's 2em while the <span> took its natural
+   line box, which is the one thing this rule exists to stop. */
+.stonetop-mark-sign-btn,
+button.stonetop-mark-sign-btn {
+	display: inline-block;
+	width: auto;
+	height: auto;
+	min-height: 0;
+	flex: 0 0 auto;
+	margin: 0;
+	padding: 1px 6px;
+	border: none;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-2xs);
+	line-height: 1.5;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--st-text-faint);
+	cursor: pointer;
+}
+
+span.stonetop-mark-sign-btn { cursor: default; }
+
+button.stonetop-mark-sign-btn:hover {
+	background: rgba(112, 128, 144, 0.18);
+	color: var(--st-text-secondary);
+	text-shadow: none;
+}
+
+/* The chosen side, declared AFTER the base and the hover so the tie goes to it — a ward that says
+   which one it is must not lose its ink to a passing cursor. */
+.stonetop-mark-sign-btn.is-active,
+button.stonetop-mark-sign-btn.is-active,
+button.stonetop-mark-sign-btn.is-active:hover {
+	background: slategrey;
+	color: #fff;
+	font-weight: 600;
+}
+
+/* A ward laid before this choice existed. Dashed, so the pair reads as a question still open
+   rather than as a control that merely happens to be off. */
+.stonetop-mark-sign.is-unset {
+	border-style: dashed;
+	border-color: var(--st-text-faint);
 }
 
 
@@ -29122,6 +29337,315 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: 12px; font-size: var(--st-fs-sm); color: var(--st-text-muted); font-style: italic; text-align: center;
 }
 
+/* ── Run an Expedition · The route step · maps and travel times ────────────────
+   The book's regional maps with a hotspot per place, over the travel table's day counts
+   (module/data/travel-times.js, templates/dialogs/partials/expedition-journey.hbs).
+
+   THE WHOLE LAYOUT IS PERCENTAGES, ON PURPOSE. Each hotspot's left/top is a percentage
+   computed from the place's position on the printed map, and the wrapper carries the
+   image's own aspect-ratio inline. So the map scales with the step column and every pin
+   follows it — no ResizeObserver, no getBoundingClientRect, nothing to re-measure on a
+   window resize, and no first-paint jump while the image decodes (the wrapper already
+   has its true height before then, which a plain <img> would not).
+
+   Scoped to the dialog, like the load readout above. The pins are painted from the
+   shared --st-green-* (where they set out) and --st-gold-* (where they are bound)
+   accents, so the two ends of the journey read the same way they do on the sheets. */
+.stonetop-expedition-dialog .stonetop-journey { margin-top: 12px; }
+
+/* Where they set out from, and where they are bound. */
+.stonetop-journey .stonetop-journey-picks {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+	padding: 8px 10px;
+	border: 1px solid rgba(0,0,0,0.14); border-radius: var(--st-radius-lg);
+	background: rgba(0,0,0,0.03);
+}
+.stonetop-journey .stonetop-journey-picklab {
+	display: inline-flex; align-items: center; gap: 6px;
+	font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
+}
+.stonetop-journey .stonetop-journey-origin {
+	width: auto; min-width: 130px; font-size: var(--st-fs-xs); font-style: normal;
+}
+.stonetop-journey .stonetop-journey-bound {
+	font-size: var(--st-fs-xs); color: var(--st-text-body);
+}
+.stonetop-journey .stonetop-journey-bound strong { color: var(--st-gold-text); }
+/* Later than the base rule, per the modifier-ordering house rule. */
+.stonetop-journey .stonetop-journey-bound--empty {
+	margin-left: auto; color: var(--st-text-muted); font-style: italic;
+}
+.stonetop-journey .stonetop-journey-clear {
+	flex: 0 0 auto; display: inline-flex; width: auto; margin-left: auto;
+	padding: 2px 7px; font-size: var(--st-fs-2xs); line-height: 1.4;
+}
+
+/* Which map. Not `.stonetop-tabs`: two buttons that swap one picture are a zoom control,
+   and reusing the sheet's tab chrome here would promise a tabbed panel underneath. */
+.stonetop-journey .stonetop-journey-tiers {
+	display: flex; gap: 6px; margin: 10px 0 6px;
+}
+/* The outline pill, worn by the map tabs here and by the "see the whole map" button further
+   down. One rule, so the two cannot drift apart; each keeps only its own size and type below. */
+.stonetop-journey .stonetop-journey-tier,
+.stonetop-journey .stonetop-journey-zoom {
+	flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; width: auto;
+	font-size: var(--st-fs-2xs);
+	color: var(--st-text-muted);
+	border: 1px solid rgba(0,0,0,0.16); border-radius: 999px;
+	background: transparent;
+}
+.stonetop-journey .stonetop-journey-tier {
+	padding: 4px 10px;
+	font-family: var(--font-stonetop);
+	text-transform: uppercase; letter-spacing: 0.06em;
+}
+.stonetop-journey .stonetop-journey-tier:hover,
+.stonetop-journey .stonetop-journey-zoom:hover {
+	background: var(--st-slate-hover-bg); border-color: var(--st-slate-hover-border);
+}
+.stonetop-journey .stonetop-journey-tier .fa-image-slash {
+	font-size: 0.85em; color: var(--st-text-faint);
+}
+.stonetop-journey .stonetop-journey-tier.is-active {
+	color: var(--st-gold-text); font-weight: 700;
+	background: var(--st-gold-bg); border-color: var(--st-gold-border);
+}
+
+/* The map itself. `overflow: visible` deliberately: a pin at the map's edge hangs its
+   label past the artwork, so the ROUNDING is on the <img> and not on this box. The
+   inline aspect-ratio is what gives the box a height for the pins' `top: N%` to resolve
+   against — see the note at the top of this block. */
+.stonetop-journey .stonetop-journey-map {
+	position: relative; width: 100%; overflow: visible;
+}
+
+/* The interactive layer's own contract, wherever it is drawn: a positioned box the exact shape of
+   the picture, with room for an edge pin's label to hang past the art. The route step's map box
+   above satisfies it; so does the overlay the "See the whole map" window sizes to the picture. */
+.stonetop-journey-canvas { position: relative; }
+.stonetop-journey .stonetop-journey-img {
+	display: block; width: 100%; height: 100%;
+	border: 1px solid rgba(0,0,0,0.22); border-radius: var(--st-radius);
+	/* The maps are ink on cream, so they carry their own ground in both themes. */
+	background: #f4ecd8;
+}
+
+/* The route line. Two polylines over the same points: a cream casing under red dots, so each dot
+   keeps its own halo and stays readable over the maps' tree-line hatching (the same job the pins'
+   box-shadow does). Both are LITERAL colours, for the reason given below. `inset: 0` rather than a
+   width/height pair so it tracks the wrapper's aspect-ratio box exactly. */
+.stonetop-journey-canvas .stonetop-journey-path {
+	position: absolute; inset: 0; width: 100%; height: 100%;
+	pointer-events: none; overflow: visible;
+}
+.stonetop-journey-canvas .stonetop-journey-path-case,
+.stonetop-journey-canvas .stonetop-journey-path-ink {
+	fill: none; stroke-linecap: round; stroke-linejoin: round;
+	/* Round caps on a 0-length dash ARE the dots. */
+	stroke-dasharray: 0.1 7;
+}
+.stonetop-journey-canvas .stonetop-journey-path-case { stroke: #f4ecd8; stroke-width: 7; stroke-opacity: 0.9; }
+.stonetop-journey-canvas .stonetop-journey-path-ink  { stroke: #b3261e; stroke-width: 3.5; }
+
+/* The head on the destination end. Fixed pixel size and its own viewBox, so it is untouched by
+   the stretch the polyline above lives under; its rotation is computed in the box's real
+   proportions (ExpeditionDialog._routeArrow), which is what lets it point true on a diagonal.
+   Cream stroke for the same halo the dots get. Below the pins, above the map, and takes no clicks. */
+.stonetop-journey-canvas .stonetop-journey-arrowhead {
+	position: absolute; width: 15px; height: 15px;
+	pointer-events: none; overflow: visible;
+	/* `left`/`top` and the rotate come from the style attribute; transform-origin has to be the
+	   element's own centre or the head would swing off its anchor as the angle changes. */
+	transform-origin: 50% 50%;
+}
+.stonetop-journey-canvas .stonetop-journey-arrowhead path {
+	fill: #b3261e; stroke: #f4ecd8; stroke-width: 1.4; stroke-linejoin: round;
+	paint-order: stroke;
+}
+
+/* One hotspot. `width: auto` because core sets `button { display: flex }`, which would
+   otherwise stretch every pin across the whole map and stack their hit areas. The
+   translate is what makes left/top address the pin's CENTRE, which is what a measured
+   label position means.
+
+   Inside the canvas every `.stonetop-journey-pick` IS a spot or an exit — the destination
+   list's rows wear the same class but live outside it, which the descendant scope excludes.
+
+   `pointer-events` is set HERE rather than in the image-zoom block: over a zoomable map the
+   overlay is `pointer-events: none` so the picture underneath can still be dragged, and the
+   pins are what opt back in. Naming this class in the shared viewer's rules would make its
+   next caller inherit a map's idea of what is clickable. */
+.stonetop-journey-canvas .stonetop-journey-pick {
+	pointer-events: auto;
+	position: absolute; transform: translate(-50%, -50%);
+	display: inline-flex; align-items: center; justify-content: center;
+	width: auto; min-width: 0; height: auto; min-height: 0; margin: 0; padding: 0;
+	border: 0; background: none; box-shadow: none; line-height: 1;
+}
+/* EVERY COLOUR FROM HERE TO THE END OF THE MAP IS A LITERAL, NOT A THEME TOKEN.
+   The book's maps are ink on cream in both themes — the picture carries its own ground,
+   exactly like a chat card's parchment — so a pin painted in --st-text would be dark on
+   light in the day theme and light on light at night, vanishing into the paper. The one
+   ink used, #1b1009, is the same the system already writes onto map Notes (see
+   hooks/PlaceOfInterestDrop.js), and the cream #f4ecd8 matches the <img> backdrop above. */
+.stonetop-journey-canvas .stonetop-journey-dot {
+	width: 11px; height: 11px; border-radius: 50%;
+	background: #1b1009;
+	border: 2px solid #f4ecd8;
+	/* A halo so a dot stays legible over the maps' tree-line hatching. box-shadow, not a
+	   filter: a drop-shadow is erased by any mask, and these sit near masked glyphs. */
+	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
+	transition: transform 120ms ease;
+}
+.stonetop-journey-canvas .stonetop-journey-pick:hover .stonetop-journey-dot { transform: scale(1.35); }
+.stonetop-journey-canvas .stonetop-journey-arrow {
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 18px; height: 18px; border-radius: 50%;
+	font-size: 9px; color: #f4ecd8;
+	background: #1b1009; border: 2px solid #f4ecd8;
+	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* The pin's caption. Absolute so it never widens the button's hit area, and anchored
+   INWARD near an edge (h-left / h-right below) so an edge label cannot spill out of the
+   step column and give it a horizontal scrollbar. */
+.stonetop-journey-canvas .stonetop-journey-tag {
+	position: absolute; white-space: nowrap; pointer-events: none;
+	padding: 1px 6px;
+	font-size: var(--st-fs-2xs); font-weight: 700; color: #1b1009;
+	background: rgba(244,236,216,0.92);
+	border: 1px solid rgba(0,0,0,0.25); border-radius: var(--st-radius-sm);
+	box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.stonetop-journey-canvas .stonetop-journey-tag em {
+	font-weight: 400; font-style: italic; color: #8a6a12;
+}
+.stonetop-journey-canvas .h-centre .stonetop-journey-tag { left: 50%; transform: translateX(-50%); }
+.stonetop-journey-canvas .h-left   .stonetop-journey-tag { left: -4px; }
+.stonetop-journey-canvas .h-right  .stonetop-journey-tag { right: -4px; }
+.stonetop-journey-canvas .v-below  .stonetop-journey-tag { top: calc(100% + 5px); }
+.stonetop-journey-canvas .v-above  .stonetop-journey-tag { bottom: calc(100% + 5px); }
+
+/* The two ends of the journey, after the base pin rules. Literal greens and golds for the
+   same reason as the ink above: these sit on the map's own cream, not on the sheet.
+   They also lift above their neighbours: labelled pins sit close enough on a 466px map to
+   overlap, and when two tags collide the one naming where they are BOUND has to be the
+   readable one, not whichever happened to come later in the markup. */
+.stonetop-journey-canvas .stonetop-journey-spot.is-origin,
+.stonetop-journey-canvas .stonetop-journey-exit.is-chosen { z-index: 2; }
+.stonetop-journey-canvas .stonetop-journey-spot.is-chosen { z-index: 3; }
+.stonetop-journey-canvas .stonetop-journey-spot.is-origin .stonetop-journey-dot {
+	background: #2f6b3a; width: 13px; height: 13px;
+}
+.stonetop-journey-canvas .stonetop-journey-spot.is-chosen .stonetop-journey-dot,
+.stonetop-journey-canvas .stonetop-journey-exit.is-chosen .stonetop-journey-arrow {
+	background: #9a6f0e; width: 15px; height: 15px;
+}
+.stonetop-journey-canvas .stonetop-journey-exit.is-chosen .stonetop-journey-arrow { width: 20px; height: 20px; }
+.stonetop-journey-canvas .stonetop-journey-spot.is-chosen .stonetop-journey-tag,
+.stonetop-journey-canvas .stonetop-journey-exit.is-chosen .stonetop-journey-tag {
+	color: #8a6a12; border-color: #9a6f0e;
+}
+
+/* The pill above, on its own line under the map. */
+.stonetop-journey .stonetop-journey-zoom { margin: 6px 0 0; padding: 3px 9px; }
+.stonetop-journey .stonetop-journey-zoom:hover { color: var(--st-gold-text); }
+.stonetop-journey .stonetop-journey-nomap {
+	margin: 0; padding: 14px 12px;
+	font-size: var(--st-fs-xs); color: var(--st-text-muted); font-style: italic; text-align: center;
+	border: 1px dashed rgba(0,0,0,0.2); border-radius: var(--st-radius-lg);
+	background: rgba(0,0,0,0.02);
+}
+
+/* The answer. */
+.stonetop-journey .stonetop-journey-route {
+	margin-top: 10px; padding: 9px 12px;
+	border: 1px solid var(--st-gold-border); border-radius: var(--st-radius-lg);
+	background: rgba(201,162,39,0.10);
+}
+.stonetop-journey .stonetop-journey-total {
+	font-family: var(--font-stonetop); font-size: var(--st-fs-sm); font-weight: 700;
+	color: var(--st-gold-text); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.stonetop-journey .stonetop-journey-legs {
+	margin: 6px 0 0; padding: 0; list-style: none;
+	display: flex; flex-direction: column; gap: 3px;
+}
+.stonetop-journey .stonetop-journey-legs li {
+	display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px;
+	font-size: var(--st-fs-xs); color: var(--st-text-body);
+}
+.stonetop-journey .stonetop-journey-legs .j-arw { color: var(--st-text-faint); }
+.stonetop-journey .stonetop-journey-legs .j-time {
+	font-variant-numeric: tabular-nums; color: var(--st-text);
+}
+.stonetop-journey .stonetop-journey-legs .j-via {
+	font-size: var(--st-fs-2xs); color: var(--st-text-muted);
+}
+.stonetop-journey .stonetop-journey-note {
+	margin: 7px 0 0; font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
+}
+
+/* Every destination, grouped by map. The map's legend, and the whole screen when the GM
+   has not imported the art — which is why it is never conditional on the picture. */
+.stonetop-journey .stonetop-journey-list { margin-top: 10px; }
+.stonetop-journey .stonetop-journey-group + .stonetop-journey-group { margin-top: 8px; }
+.stonetop-journey .stonetop-journey-grouphead {
+	font-family: var(--font-stonetop); font-size: var(--st-fs-2xs); font-weight: 700;
+	text-transform: uppercase; letter-spacing: 0.08em;
+	color: var(--st-text-muted);
+	padding-bottom: 3px; border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+.stonetop-journey .stonetop-journey-group.is-active .stonetop-journey-grouphead {
+	color: var(--st-gold-text); border-bottom-color: var(--st-gold-border);
+}
+.stonetop-journey .stonetop-journey-list ul {
+	margin: 4px 0 0; padding: 0; list-style: none;
+	display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px;
+}
+.stonetop-journey .stonetop-journey-list li {
+	display: flex; align-items: center; gap: 4px; min-width: 0;
+}
+/* A prose row that happens to be a <button>, so core's button rule has to be unpinned in full:
+   `display: flex` on its own replaces only `display`, and the `justify-content: center` beside it
+   survives — which `text-align: left` cannot undo, because the children are flex items and not
+   text. A row whose place has no route renders only its name (`_timeLabel` returns null and the
+   time span is inside an `{{#if}}`), and those rows were the ones that came out CENTRED while
+   every other name sat left. Height and min-height go together, min-height winning, or a name that
+   wraps is clipped. Same fix and same reason as `.stonetop-weather-row`. */
+.stonetop-journey .stonetop-journey-row {
+	flex: 1 1 auto; display: flex; align-items: baseline; justify-content: flex-start;
+	gap: 6px; min-width: 0; width: 100%; height: auto; min-height: 0;
+	padding: 2px 6px; text-align: left;
+	font-size: var(--st-fs-xs); color: var(--st-text-body);
+	border: 1px solid transparent; border-radius: var(--st-radius-sm); background: none;
+}
+.stonetop-journey .stonetop-journey-row:hover {
+	background: var(--st-slate-hover-bg); border-color: var(--st-slate-hover-border);
+}
+.stonetop-journey .stonetop-journey-row .j-name {
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.stonetop-journey .stonetop-journey-row .j-time {
+	margin-left: auto; flex: 0 0 auto;
+	font-size: var(--st-fs-2xs); font-variant-numeric: tabular-nums; color: var(--st-text-muted);
+}
+.stonetop-journey .stonetop-journey-row .j-here {
+	margin-left: auto; flex: 0 0 auto;
+	font-size: var(--st-fs-2xs); font-style: italic; color: var(--st-green-text);
+}
+.stonetop-journey .stonetop-journey-row.is-origin { color: var(--st-green-text); }
+.stonetop-journey .stonetop-journey-row.is-chosen {
+	color: var(--st-gold-text); font-weight: 700;
+	background: var(--st-gold-bg); border-color: var(--st-gold-border);
+}
+.stonetop-journey .stonetop-journey-row.is-chosen .j-time { color: var(--st-gold-text); }
+.stonetop-journey .stonetop-journey-book {
+	flex: 0 0 auto; font-size: var(--st-fs-2xs); color: var(--st-text-faint);
+}
+.stonetop-journey .stonetop-journey-book:hover { color: var(--st-gold-text); }
+
 /* ============================================================================
    PEOPLE OF STONETOP gallery — the portrait picker for a resident/neighbor image
    on the steading sheet (module/actors/steading/PeopleGalleryDialog.js). A grid of
@@ -29286,8 +29810,75 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-people-gallery .stonetop-people-hint {
 	margin: 0 0 8px; font-size: var(--st-fs-xs); color: var(--st-text-muted);
 }
+/* The empty gallery. Not one line of apology any more: a short column saying what would fill it,
+   with the button that does the filling under it. Centred and measure-capped, because a sentence
+   run across the full 640px of a resizable dialog is a sentence nobody finishes. */
 .stonetop-people-gallery .stonetop-people-empty {
-	padding: 16px; font-size: var(--st-fs-sm); color: var(--st-text-muted); text-align: center; line-height: 1.5;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding: 24px 16px;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-muted);
+	text-align: center;
+	line-height: 1.5;
+}
+.stonetop-people-gallery .stonetop-people-empty p {
+	margin: 0;
+	max-width: 46ch;
+}
+/* The "you can still browse for one" aside, dropped a step so it reads as a footnote to the two
+   real offers rather than a third one. */
+.stonetop-people-gallery .stonetop-people-empty-note {
+	font-size: var(--st-fs-xs);
+}
+/* The bring-your-own-book fields, one per rulebook, asked for here rather than in the importer's
+   own window. Left-aligned inside a column that is otherwise centred: a label sitting over the
+   field it names is a form, and a centred form has no edge for the eye to run down. Capped to the
+   same 46ch measure as the prose above so the block reads as part of the same column. */
+.stonetop-people-gallery .stonetop-people-books {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 100%;
+	max-width: 46ch;
+	text-align: left;
+}
+.stonetop-people-gallery .stonetop-people-book {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+.stonetop-people-gallery .stonetop-people-book-name {
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-body);
+}
+/* What that book is worth to THIS gallery, said beside its name rather than under it: the two
+   belong to one line, and the distinction is carried by weight, not by a second row. */
+.stonetop-people-gallery .stonetop-people-book-hint {
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-muted);
+}
+/* `width: 100%` undoes nothing core does to a file field; it stops the browser's own intrinsic
+   width from setting the column, which is what made the two fields different lengths. */
+.stonetop-people-gallery .stonetop-people-books input[type="file"] {
+	width: 100%;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-body);
+}
+/* Which edition to hand over, sat UNDER the field rather than beside the book's name: it is an
+   instruction about the file you are on your way to choose, not a description of the book, and the
+   1-up file is refused outright, so a GM who misses this line has spent a minute to be told no. */
+.stonetop-people-gallery .stonetop-people-book-edition {
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-muted);
+	font-style: italic;
+}
+/* The line under the Import button, which says why it is waiting and then where the book goes.
+   A footnote to the button, like the browse aside is to the pair above it. */
+.stonetop-people-gallery .stonetop-people-import-hint {
+	font-size: var(--st-fs-xs);
 }
 /* Track floor is the 160px image minimum plus the card's own padding + border (a card is
    border-box, so the image gets track - 10px); the extra cushion keeps subpixel grid
@@ -29401,7 +29992,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    core's full-width `body.game .app button`, and the explicit colour undoes the white text
    core hands a window button, which vanished against a light fill. */
 .stonetop-people-gallery .stonetop-people-footer button,
-.stonetop-people-gallery .stonetop-people-actions button {
+.stonetop-people-gallery .stonetop-people-actions button,
+.stonetop-people-gallery .stonetop-people-empty button {
 	width: auto;
 	flex: 0 0 auto;
 	display: inline-flex;
@@ -29419,7 +30011,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 .stonetop-people-gallery .stonetop-people-footer button:not([disabled]):hover,
-.stonetop-people-gallery .stonetop-people-actions button:not([disabled]):hover {
+.stonetop-people-gallery .stonetop-people-actions button:not([disabled]):hover,
+.stonetop-people-gallery .stonetop-people-empty button:not([disabled]):hover {
 	background: rgba(0, 0, 0, 0.05);
 	border-color: var(--st-btn-primary-border);
 	color: var(--st-text);
@@ -29437,9 +30030,28 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border-color: var(--st-btn-primary-border-hover);
 	color: var(--st-btn-primary-text);
 }
+/* The empty state's leading action takes the same slate fill, because it is the affirmative there
+   in exactly the way Accept is in the footer: the one button that changes anything.
+
+   Which button leads varies (the rebuild when there is art to cut from, else the import), so it is
+   said as `:first-of-type` rather than as a class the template would have to remember to move
+   between the two. Buttons are the only elements of their type in that column, so the first of
+   them is the first one rendered. */
+.stonetop-people-gallery .stonetop-people-empty button:first-of-type {
+	background: var(--st-btn-primary-bg);
+	border-color: var(--st-btn-primary-border);
+	color: var(--st-btn-primary-text);
+}
+.stonetop-people-gallery .stonetop-people-empty button:first-of-type:not([disabled]):hover {
+	background: var(--st-btn-primary-bg-hover);
+	border-color: var(--st-btn-primary-border-hover);
+	color: var(--st-btn-primary-text);
+}
 /* Disabled means "nothing to do yet": no roll has landed (Accept), or the filters left
-   nothing to roll (Randomize). */
-.stonetop-people-gallery .stonetop-people-footer button[disabled] {
+   nothing to roll (Randomize). The empty state's buttons disable too, for the length of a
+   rebuild, and read the same way. */
+.stonetop-people-gallery .stonetop-people-footer button[disabled],
+.stonetop-people-gallery .stonetop-people-empty button[disabled] {
 	opacity: 0.45;
 	cursor: default;
 }
@@ -34244,4 +34856,52 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	user-select: none;
 	-webkit-user-drag: none;
 }
+
+/* The optional layer over the picture (see image-zoom.hbs). Sized and placed onto the image in
+   pixels by the window on every paint, so nothing here may set a size — only the things that must
+   be true of it whatever size it is.
+
+   `pointer-events: none` is the load-bearing one: this box covers the whole picture, and taking
+   clicks would mean a drag beginning anywhere on the map moved nothing instead of panning. Its
+   CHILDREN opt back in individually, so a pin is clickable and the open map between pins is not. */
+.stonetop-image-zoom-overlay {
+	position: absolute;
+	left: 0;
+	top: 0;
+	pointer-events: none;
+	/* An edge pin's label hangs past the artwork, as it does in the walkthrough's own map. */
+	overflow: visible;
+}
+
+/* ── Travel map window ────────────────────────────────────────────────────────
+   "See the whole map": the route step's planner around a full-size, zoomable map
+   (module/dialogs/TravelMapWindow.js, templates/dialogs/travel-map.hbs). The controls and
+   the readout come from the same partials the walkthrough uses and are already styled by the
+   `.stonetop-journey` rules above; all this block does is stack them around the viewport.
+
+   A column with ONE flexible row. The chrome takes the height it needs and the viewport takes
+   the rest, which is what lets the picture grow with the window while the controls stay put —
+   and `min-height: 0` on the viewport, because a flex child's default `min-height: auto` refuses
+   to shrink below its content and would push the readout off the bottom of the window. */
+.stonetop-travel-map {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	gap: 8px;
+	padding: 8px 10px 10px;
+}
+/* Only what differs from `.stonetop-image-zoom-view` above: the layout is already that rule's. */
+.stonetop-travel-map .stonetop-image-zoom-view {
+	border: 1px solid rgba(0,0,0,0.22);
+	border-radius: var(--st-radius);
+	/* The maps are ink on cream and carry their own ground, so the window behind them matches
+	   rather than showing a theme colour through the margins of a fitted picture. */
+	background: #f4ecd8;
+}
+.stonetop-travel-map-chrome,
+.stonetop-travel-map-foot { flex: 0 0 auto; }
+/* The readout can grow with a long route; let it scroll rather than steal the map's height. */
+.stonetop-travel-map-foot { max-height: 34%; overflow-y: auto; }
+.stonetop-travel-map .stonetop-journey-route { margin-top: 0; }
+.stonetop-travel-map .stonetop-journey-nomap { flex: 1 1 auto; }
 

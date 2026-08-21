@@ -79,6 +79,7 @@ import { installWindowRestore } from "./module/utils/window-restore.js";
 import { registerUuidRedirects } from "./module/migration/compat.js";
 import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
 import { SYSTEM_ID } from "./module/system-id.js";
+import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
 
 // -- INIT ------------------------------------------------------
 Hooks.once("init", () => {
@@ -88,15 +89,19 @@ Hooks.once("init", () => {
 	// older system id. localStorage is per-browser, so the GM's migration only ever fixed
 	// the GM's own machine; without this every player silently reverts to defaults. Must
 	// precede registerSettings and onReady, which applies the sheet font on its first line.
-	adoptLegacyClientSettings();
+	// Wrapped, like the two steps below it, so a throw here is named and reported rather than only
+	// logged by Foundry and forgotten. Foundry catches a hook that throws and carries on with the
+	// next listener, so a failure in this run leaves a world that opens, looks right, and has
+	// silently registered none of the settings that come after it. See utils/boot-guard.js.
+	bootStep("adoptLegacyClientSettings", adoptLegacyClientSettings);
 
 	// Before anything can resolve a UUID: make every compendium link written under an
 	// older system id resolve against the current packs. This covers @UUID text, already
 	// serialized content-link anchors, embeds and compendiumSource lookups alike, so no
 	// stored string has to be rewritten for a renamed system to keep working.
-	registerUuidRedirects();
+	bootStep("registerUuidRedirects", registerUuidRedirects);
 
-	registerSettings();
+	bootStep("registerSettings", registerSettings);
 	registerStonetopSingletonHooks();
 
 	// Every window and modal in the system is drag-resizable; the ad-hoc
@@ -452,6 +457,10 @@ Hooks.once("init", () => {
 		"stonetop.bestiary-group-section":    "systems/stonetop-pwd/templates/journal/partials/bestiary-group-section.hbs",
 		"stonetop.introductions-dialog":      "systems/stonetop-pwd/templates/dialogs/introductions.hbs",
 		"stonetop.guide-toc":                 "systems/stonetop-pwd/templates/dialogs/partials/guide-toc.hbs",
+		"stonetop.expedition-journey":        "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey.hbs",
+		"stonetop.expedition-journey-pins":   "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-pins.hbs",
+		"stonetop.expedition-journey-controls": "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-controls.hbs",
+		"stonetop.expedition-journey-route":  "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-route.hbs",
 		"stonetop.intros-capture-head":       "systems/stonetop-pwd/templates/dialogs/partials/intros-capture-head.hbs",
 		"stonetop.threat-string-list":        "systems/stonetop-pwd/templates/dialogs/partials/threat-string-list.hbs",
 		"stonetop.cs-list-frame":             "systems/stonetop-pwd/templates/dialogs/partials/cs-list-frame.hbs",
@@ -468,6 +477,11 @@ Hooks.once("init", () => {
 		"stonetop.card-gm-moves":             "systems/stonetop-pwd/templates/journal/partials/card-gm-moves.hbs",
 		"stonetop.card-player-moves":         "systems/stonetop-pwd/templates/journal/partials/card-player-moves.hbs",
 	});
+
+	// Last line of `init`, so reaching it means the whole run got through. A world that never
+	// records this has a partial boot however healthy it looks, which is what reportBootHealth
+	// says out loud once the world is up.
+	recordBootPhase("init");
 });
 
 // -- RENDER PAUSE ----------------------------------------------
@@ -509,6 +523,22 @@ Hooks.on("updateActor", onUpdateActorPlaybookName);
 Hooks.on("updateActor", onUpdateCondemned);
 
 // -- READY -----------------------------------------------------
+// FIRST of the ready listeners, deliberately. This one reports whether the startup it is reporting
+// on actually finished, so it must not be able to be skipped by a later listener throwing. It is
+// registered at module scope like every hook here, which is what lets it still fire on a world
+// whose `init` threw — the case it exists for. See utils/boot-guard.js.
+Hooks.once("ready", () => {
+	reportBootHealth();
+	// Callable from the console: game.stonetop.bootReport()
+	//
+	// Hung off `game` rather than only `game.stonetop`, because `game.stonetop` is built during
+	// onReady and a boot broken enough to need this is a boot that may never build it. A GM asked
+	// for a bug report can paste the result of one expression instead of being talked through the
+	// console, and it answers the question every art report has to answer first: is this world's
+	// system actually running?
+	game.stonetop ??= {};
+	game.stonetop.bootReport = bootReport;
+});
 Hooks.once("ready", onReady);
 Hooks.once("ready", () => applyMoveDescriptionBodyClass(getSetting("showMoveDescriptionsInChat")));
 

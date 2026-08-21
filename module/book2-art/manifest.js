@@ -5623,5 +5623,10 @@ export const BOOK2_ART_APPLY_MANIFEST = {
    "name": "Stonetop",
    "out": "assets/steading/stonetop.webp"
   }
- ]
+ ],
+ "expectedPdfPages": {
+  "1": 308,
+  "2": 302,
+  "3": 12
+ }
 };

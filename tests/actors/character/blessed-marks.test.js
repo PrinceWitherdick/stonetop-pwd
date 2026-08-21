@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
 	BLESSED_MARKS_FLAG, MARK_KINDS, DEFAULT_KIND, SHARED_SOULS_LOYALTY,
+	WARD_SIGNS, DEFAULT_WARD_SIGN,
 	BARKSKIN, TRACKLESS_STEP, SHARED_SOULS, AMULETS_TALISMANS, WARDS_BINDINGS,
-	canMarkBlessed, showBlessedMarks, availableKinds, markKind,
-	readMarks, addMark, removeMark, noteMark, setMarkLoyalty, groupMarks,
+	canMarkBlessed, showBlessedMarks, availableKinds, markKind, markSign,
+	readMarks, addMark, removeMark, noteMark, setMarkLoyalty, setMarkSign, groupMarks,
 } from "../../../module/actors/character/blessed-marks.js";
 
 const actorWith = (...items) => ({ items });
@@ -82,7 +83,8 @@ describe("reading stored marks", () => {
 	it("normalises a row and trims it", () => {
 		const [row] = readMarks([{ id: "a", kind: "ward", name: "  the north gate ", note: " keeps them out " }]);
 		expect(row).toEqual({
-			id: "a", kind: "ward", name: "the north gate", uuid: "", note: "keeps them out", loyalty: null,
+			id: "a", kind: "ward", name: "the north gate", uuid: "", note: "keeps them out",
+			loyalty: null, sign: "",
 		});
 	});
 
@@ -164,6 +166,75 @@ describe("Loyalty, which only a Shared Souls beast has", () => {
 		const list = [{ id: "m", kind: "beast", name: "the vixen", loyalty: 2 }];
 		expect(setMarkLoyalty(list, "m", 1, { liftOnEnd: true }))
 			.toMatchObject({ ended: false, entries: [{ id: "m", loyalty: 1 }] });
+	});
+});
+
+// "Also, choose whether the affected beings are repelled or trapped by the signs." One move, two
+// outcomes — so a field on the row, and NOT a sixth kind. These are the guards for that.
+describe("repelled or trapped, which only a ward has", () => {
+	it("spells the move's own two words, and offers a ward first", () => {
+		expect(WARD_SIGNS.map(s => s.key)).toEqual(["repelled", "trapped"]);
+		expect(WARD_SIGNS.map(s => s.label)).toEqual(["Ward", "Binding"]);
+		expect(DEFAULT_WARD_SIGN).toBe("repelled");
+	});
+
+	// A sixth kind would put two pickers' worth of choice where the move has one, and would let one
+	// doorway carry two rows of what the fiction calls a single set of signs.
+	it("stays ONE kind, carrying the choice as a field", () => {
+		expect(MARK_KINDS.filter(k => k.signs)).toEqual([markKind("ward")]);
+		expect(markKind("ward").signs).toBe(WARD_SIGNS);
+	});
+
+	it("is null on every other kind, never empty string", () => {
+		for (const key of ["barkskin", "trackless", "beast", "charm"]) {
+			expect(readMarks([{ kind: key, name: "x", sign: "trapped" }])[0].sign, key).toBeNull();
+		}
+	});
+
+	// The three states are the point: null is "this kind never had the choice", "" is "a ward
+	// nobody has answered for yet" — which is every ward laid before the field existed.
+	it("leaves a ward unanswered rather than defaulting one", () => {
+		expect(readMarks([{ kind: "ward", name: "the north gate" }])[0].sign).toBe("");
+		expect(readMarks([{ kind: "ward", name: "the gate", sign: "banished" }])[0].sign).toBe("");
+		expect(readMarks([{ kind: "ward", name: "the gate", sign: 7 }])[0].sign).toBe("");
+	});
+
+	it("keeps either of the move's words", () => {
+		expect(readMarks([{ kind: "ward", name: "g", sign: "repelled" }])[0].sign).toBe("repelled");
+		expect(readMarks([{ kind: "ward", name: "g", sign: " trapped " }])[0].sign).toBe("trapped");
+	});
+
+	it("resolves a stored sign to its definition, and nothing else", () => {
+		expect(markSign("trapped")).toBe(WARD_SIGNS[1]);
+		expect(markSign("")).toBeNull();
+		expect(markSign("ward")).toBeNull();
+	});
+
+	it("answers a ward, and reports no change when it was already that", () => {
+		const { entries } = addMark([], { kind: "ward", name: "the gate" }, () => "w");
+		const first = setMarkSign(entries, "w", "trapped");
+		expect(first.changed).toMatchObject({ id: "w", sign: "trapped" });
+		expect(setMarkSign(first.entries, "w", "trapped").changed).toBeNull();
+		expect(setMarkSign(first.entries, "w", "repelled").changed).toMatchObject({ sign: "repelled" });
+	});
+
+	it("writes nothing on a kind that never had the choice, or an id that matches none", () => {
+		const { entries } = addMark([], { kind: "barkskin", name: "Aeronwen" }, () => "a");
+		expect(setMarkSign(entries, "a", "trapped").changed).toBeNull();
+		expect(setMarkSign(entries, "nope", "trapped").changed).toBeNull();
+	});
+
+	// The add row carries it, so a ward laid through the window is never half-answered.
+	it("keeps a sign handed in at the moment the ward is laid", () => {
+		const { added } = addMark([], { kind: "ward", name: "the gate", sign: "trapped" }, () => "w");
+		expect(added.sign).toBe("trapped");
+	});
+
+	// One boundary, one set of signs: a ward and a binding on the same doorway are still one row,
+	// so the sign must NOT widen the per-kind dedupe.
+	it("does not let a second sign make a second row on the same boundary", () => {
+		const first = addMark([], { kind: "ward", name: "the gate", sign: "repelled" }, () => "w").entries;
+		expect(addMark(first, { kind: "ward", name: "the gate", sign: "trapped" }).added).toBeNull();
 	});
 });
 

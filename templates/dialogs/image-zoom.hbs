@@ -16,4 +16,13 @@
       the picture. --}}
 <div class="stonetop-image-zoom-view">
 	<img class="stonetop-image-zoom-img" src="{{src}}" alt="{{alt}}" draggable="false">
+	{{!-- An optional layer over the picture, in the picture's own coordinates. The window sizes
+	      and places it exactly on top of the image on every paint, so its percentage-positioned
+	      children ride the zoom and the pan while keeping their own pixel sizes. Trusted authored
+	      HTML, filled through `setOverlay`, and absent entirely for every caller that only wants
+	      to read a picture. A caller needing its own class here renders its own template, which is
+	      what the travel maps do. --}}
+	{{#if overlay}}
+	<div class="stonetop-image-zoom-overlay">{{{overlay}}}</div>
+	{{/if}}
 </div>

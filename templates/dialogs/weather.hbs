@@ -60,4 +60,26 @@
     {{/if}}
   </div>
 
+  {{!-- The canvas control (WeatherDialog#_fxControl), present only for a GM whose world has
+        FXMaster or FXMaster+ in it. Everything above decides what the weather IS; this decides
+        whether the players' map hears about it, which is why it sits under the footer behind a
+        rule rather than becoming a third button in a row where the other two are still waiting
+        to be pressed. It is also the only control in the window that acts immediately.
+
+        No disabled state to paint: the row is absent, rather than dimmed, for a table with no
+        particle module. --}}
+  {{#if fx}}
+  <div class="stonetop-weather-fx">
+    <button type="button" class="stonetop-weather-fx-btn{{#if fx.paused}} is-paused{{/if}}">
+      <i class="fas {{#if fx.paused}}fa-play{{else}}fa-pause{{/if}}"></i> {{fx.label}}
+    </button>
+    {{!-- Text, not a button: it does nothing to the weather, it leaves for core's Configure
+          Settings, where the same switch lives permanently alongside the rest of Stonetop's
+          options. The window stays open behind it. --}}
+    <button type="button" class="stonetop-weather-fx-link"
+            title="Open Configure Settings at Stonetop&rsquo;s weather options">Weather settings</button>
+    <span class="stonetop-weather-fx-hint">{{fx.hint}}</span>
+  </div>
+  {{/if}}
+
 </div>

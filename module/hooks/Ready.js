@@ -22,6 +22,7 @@ import { reopenOpenWalkthroughs, sessionZeroComplete } from "../dialogs/walkthro
 import { writeChronicle } from "../utils/chronicle.js";
 import { ExpeditionDialog } from "../dialogs/ExpeditionDialog.js";
 import { WeatherDialog } from "../dialogs/WeatherDialog.js";
+import { refreshWeatherFx } from "../seasons/current-weather.js";
 import { WelcomeDialog } from "../dialogs/WelcomeDialog.js";
 import { FoundryBasicsDialog } from "../dialogs/FoundryBasicsDialog.js";
 import { CharacterCreationDialog } from "../actors/character/dialogs/CharacterCreationDialog.js";
@@ -41,7 +42,8 @@ import { ensureThreatsEntry } from "../threats/threat-store.js";
 import { ensureHazardsEntry } from "../hazards/hazard-store.js";
 import { STONETOP_SCOPE, resolvedFlagProperty, resolvedFlags } from "../actors/character/StonetopFlags.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
-import { linkLandmarkNotes, revealLandmarkNotesOnce } from "./PlaceOfInterestDrop.js";
+import { markPosterMapScenes } from "../book2-art/poster-maps.js";
+import { linkLandmarkNotes, refitLandmarkNotes, revealLandmarkNotesOnce } from "./PlaceOfInterestDrop.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { migrateAllSteadingPeople, ensurePeopleFolders, backfillAllResidentHomes } from "../actors/steading/steading-people.js";
 import { PERSON_DEFAULT_IMG } from "../utils/person-portrait.js";
@@ -198,6 +200,19 @@ export async function onReady() {
 		catch (err) { console.error("Stonetop | landmark map-pin reveal failed", err); }
 		try { await linkLandmarkNotes(); }
 		catch (err) { console.error("Stonetop | landmark map-pin linking failed", err); }
+		// And bring the lettered discs' own formatting up to the current design, which nothing
+		// else does: they are written once and never revisited, and they now share the village
+		// map with the captions its printing letters, so a size change to either shows up as the
+		// other being stale. Silent once they agree.
+		try { await refitLandmarkNotes(); }
+		catch (err) { console.error("Stonetop | landmark map-pin refit failed", err); }
+		// Put the named places back on the poster maps, whose printing carries no labels at all,
+		// and bring pins already down up to the current design. Every load, and
+		// silent when they already agree: the only other thing that writes a poster-map Scene is
+		// an offer this world answered long ago, so a pass that ran once could never change
+		// anything it had already made (see markPosterMapScenes).
+		try { await markPosterMapScenes(); }
+		catch (err) { console.error("Stonetop | poster map marker placement failed", err); }
 	}
 	await runStartupMigrations();
 	// If the renamed system has been installed alongside this one, offer to move this
@@ -252,6 +267,10 @@ export async function onReady() {
 	game.stonetop.saveChronicle     = () => writeChronicle().then(j => j?.sheet?.render(true));
 	game.stonetop.openExpedition    = () => ExpeditionDialog.open();
 	game.stonetop.openWeather       = () => WeatherDialog.open();
+	// Put the canvas weather back in step with the weather-effect settings. Registered here
+	// because settings.js reaches this way rather than importing the seasons module, which reads
+	// settings.js itself; its onChange handlers call this whenever one of those switches moves.
+	game.stonetop.refreshWeatherFx  = () => refreshWeatherFx();
 	game.stonetop.openWelcome       = () => WelcomeDialog.open();
 	game.stonetop.openFoundryBasics = () => FoundryBasicsDialog.open();
 	// Preview/test the player-facing creation intro for any character on demand

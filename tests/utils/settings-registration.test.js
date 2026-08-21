@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { WEATHER_FX_PARTS } from "../../module/seasons/weather-fx-parts.js";
 
 // Structural guards on module/settings.js. Settings drift quietly: a hint keeps
 // describing behaviour that moved, a key outlives the feature it gated, a new
@@ -75,6 +76,10 @@ function searchCorpus() {
 
 const REGISTRATIONS = registrations();
 const HOVER_KEYS = hoverKeys();
+// The per-effect weather switches, registered in a loop off their own table rather than one
+// literal at a time, so the scan above cannot see them: the register call names `part.setting`.
+// Imported rather than parsed back out of settings.js, since the table is a plain leaf module.
+const WEATHER_FX_KEYS = WEATHER_FX_PARTS.map(part => part.setting);
 
 describe("settings registration", () => {
 	it("parses the registrations at all (guards the scan itself)", () => {
@@ -111,10 +116,23 @@ describe("settings registration", () => {
 		expect(bad, `Hover toggles missing en.json entries:\n  ${bad.join("\n  ")}`).toEqual([]);
 	});
 
+	it("localizes every weather-effect switch", () => {
+		// Same situation as the hover toggles: registered in a loop, so their names and hints are
+		// built from the key and there is no literal in settings.js for the scan to find.
+		const bad = [];
+		for (const key of WEATHER_FX_KEYS) {
+			for (const field of ["name", "hint"]) {
+				const i18nKey = `stonetop.settings.${key}.${field}`;
+				if (!(i18nKey in I18N)) bad.push(i18nKey);
+			}
+		}
+		expect(bad, `Weather-effect switches missing en.json entries:\n  ${bad.join("\n  ")}`).toEqual([]);
+	});
+
 	it("has no orphaned stonetop.settings.* strings in en.json", () => {
 		const declared = new Set();
 		for (const m of SETTINGS_SRC.matchAll(/"(stonetop\.settings\.[A-Za-z0-9_.]+)"/g)) declared.add(m[1]);
-		for (const key of HOVER_KEYS) {
+		for (const key of [...HOVER_KEYS, ...WEATHER_FX_KEYS]) {
 			declared.add(`stonetop.settings.${key}.name`);
 			declared.add(`stonetop.settings.${key}.hint`);
 		}

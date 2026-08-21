@@ -3,12 +3,19 @@ import { readRepo as read } from "../fakes/css.js";
 
 // The Import Book Art wizard's pages are three separate errands: the rulebooks you bought, the
 // free GM playbook, and your own poster-map files. None of them needs the others, so each page
-// carries an Import button that runs THAT page and closes, and the last page's "Import Art" still
-// runs the lot.
+// carries an Import button that lets a GM stop there, and the last page's "Import Art" is the
+// same run under the name that suits a finish line.
 //
-// Everything here fails silently if it breaks. A button that submits more than its page starts a
-// 1-2 minute run over PDFs the GM did not mean to hand over; one that submits less imports
-// nothing and reports success; one that stays visible on every page turns a wizard into four
+// Every one of those buttons imports EVERYTHING the window is holding, not just the page it sits
+// on. The page-scoped version of this read well and failed at the table: the ordinary way to fill
+// the wizard in is rulebooks, Next, playbook, then press the button in front of you — and that
+// press dropped both rulebooks without a word, so GM after GM came away with a five-image import
+// and no idea why. What changes between the buttons is only what they are CALLED, which is why
+// half of this file is about the label.
+//
+// Everything here fails silently if it breaks. A button that submits less than the window holds
+// imports nothing and reports success; a label that promises less than the button does surprises
+// a GM with a 1-2 minute run; one that stays visible on every page turns a wizard into four
 // buttons that all look like the finish line. So this file reads the SHIPPED macro command, which
 // is what a world actually executes, rather than any local copy of its source.
 
@@ -40,18 +47,60 @@ describe("importing one page at a time", () => {
 	it("declares them as real dialog buttons, one per page, off the section table", () => {
 		expect(COMMAND).toContain("SETUP_SECTIONS.filter((s) => s.runLabel).map((s) => ({");
 		expect(COMMAND).toContain("action: `run-${s.key}`");
-		expect(COMMAND).toContain("callback: (event, button, dialog) => collectPage(dialog, s.key)");
+		expect(COMMAND).toContain("callback: (event, button, dialog) => collectAll(dialog)");
 	});
 
-	// The whole promise of the button is that it does not touch what another page holds.
-	it("submits that page's inputs and nothing another page holds", () => {
-		expect(COMMAND).toContain('books: key === "maps" ? [] : collectBooks(dialog, key)');
-		expect(COMMAND).toContain('maps: key === "maps" ? collectMaps(dialog) : NO_MAPS');
-		// Scoped by the same panel-to-books answer the fields were BUILT from, so a book moved
-		// between pages cannot leave its field on one page and its import on another.
-		expect(COMMAND).toContain("for (const b of (key ? booksOn(key) : booksUsed))");
-		// Force is the deliberate exception: it belongs to every import button alike.
+	// The reported bug, kept from coming back: a GM fills in the rulebooks, presses Next, fills in
+	// the playbook, presses the button in front of them, and all three files go in. One read
+	// serves every button, so there is no second path left for a page to fall down.
+	it("submits every field the window holds, whichever button was pressed", () => {
+		expect(COMMAND).toContain("const collectAll = (dialog) => ({ books: collectBooks(dialog), force: collectForce(dialog), maps: collectMaps(dialog) });");
+		// Every book field, not the ones belonging to the page the button sits on: the rulebooks
+		// page and the playbook page are two panels of one window, not two runs.
+		expect(COMMAND).toContain("for (const b of booksUsed) {");
+		// The page-scoped read is GONE, rather than left standing for something to call again.
+		expect(COMMAND).not.toContain("collectPage");
+		expect(COMMAND).not.toContain('books: key === "maps" ? [] : collectBooks(dialog, key)');
+		expect(COMMAND).not.toContain('maps: key === "maps" ? collectMaps(dialog) : NO_MAPS');
+		// Force belongs to every import button alike, which is why it is read the same way here.
 		expect(COMMAND).toContain("force: collectForce(dialog)");
+	});
+
+	// A button that quietly does more than its name says is the same failure pointing the other
+	// way, so the label answers to what is actually filled in: its own page's name while that is
+	// all it is carrying, and a plainly bigger name once it is carrying another page too.
+	it("renames itself once it is carrying another page's files", () => {
+		expect(COMMAND).toContain('const runLabelFor = (root, s) => (suppliedElsewhere(root, s.key).length ? "Import everything filled in" : s.runLabel);');
+		expect(COMMAND).toContain("const suppliedElsewhere = (root, key) => SETUP_SECTIONS");
+		expect(COMMAND).toContain(".filter((s) => s.runLabel && s.key !== key)");
+		// Painted into a span of ours, so repainting cannot wipe whatever DialogV2 put in the
+		// button, and the page's copy of the name is set from the SAME answer in the same pass.
+		expect(COMMAND).toContain('el.className = "stbook-setup-runlabel"');
+		expect(COMMAND).toContain("const label = runLabelFor(root, s);");
+		expect(COMMAND).toContain("if (labelEl) labelEl.textContent = label;");
+		expect(COMMAND).toContain("if (named) named.textContent = label;");
+	});
+
+	// ...and the page says what is riding along, by name. A GM standing on the playbook page
+	// cannot see the rulebooks page from there, so a count would tell them nothing.
+	it("names on the page what it is bringing in from the other pages", () => {
+		expect(COMMAND).toContain("const others = suppliedElsewhere(root, s.key);");
+		expect(COMMAND).toContain("also.hidden = !others.length;");
+		expect(COMMAND).toContain("You have also given this window <strong>${esc(andList(others))}</strong>");
+		expect(COMMAND).toContain("so nothing you have filled in is left behind.");
+		// Said a second time ON the button, because on a long panel that sentence is below the
+		// fold at the moment it matters, and the moment it matters is the one where the cursor is
+		// already on the button. Named in full there too: a count would answer nothing.
+		expect(COMMAND).toContain("const all = suppliedEverywhere(root);");
+		expect(COMMAND).toContain("run.dataset.tooltip = `Imports ${andList(all)}.");
+		expect(COMMAND).toContain("else delete run.dataset.tooltip;");
+		// Named off the SAME read the label is, and the books by their titles rather than a
+		// tally, so the sentence and the button cannot describe two different runs.
+		expect(COMMAND).toContain("const suppliedOn = (root, key) => {");
+		expect(COMMAND).toContain(".map(bookTitle);");
+		// andList is shared with the run report, and had to move up the file to be callable
+		// while the dialog is open — a `const` declared below it is in its dead zone until then.
+		expect(COMMAND).toMatch(/const andList = [^\n]+\n\s*const log = /);
 	});
 
 	// Force update changes what EVERY button in this row does, so it is drawn beside them rather
@@ -78,7 +127,7 @@ describe("importing one page at a time", () => {
 		expect(COMMAND).toContain("const READY_ROWS = [");
 		expect(COMMAND).toContain("const paintReady = (root) => {");
 		// Painted from paintBadges, so a page stepped away from still shows up here.
-		expect(COMMAND).toMatch(/run\.disabled = !n;\s*\n\s*}\s*\n\s*paintReady\(root\);/);
+		expect(COMMAND).toMatch(/\}\s*\n\s*paintReady\(root\);\s*\n\s*\};/);
 		expect(COMMAND).toContain("filledOn(root, r.key)");
 	});
 
@@ -122,9 +171,10 @@ describe("importing one page at a time", () => {
 		expect(COMMAND).not.toMatch(/\$\{unasked\}[^`]*not imported/);
 	});
 
-	// "Import Art" is unchanged: the last page still runs everything, unscoped.
+	// "Import Art" is unchanged in what it does — it always ran the lot — and now says so through
+	// the same one read as every other button, so there is no second definition of "everything".
 	it("leaves the whole-run button running the whole thing", () => {
-		expect(COMMAND).toContain("({ books: collectBooks(dialog), force: collectForce(dialog), maps: collectMaps(dialog) })");
+		expect(COMMAND).toContain('{ action: "ok", label: "Import Art", default: true, class: "stbook-setup-submit", callback: (event, button, dialog) => collectAll(dialog) }');
 	});
 
 	// Declared AFTER the submit, which is what puts each page's import to the right of Back/Next
@@ -144,10 +194,15 @@ describe("importing one page at a time", () => {
 		expect(COMMAND).not.toMatch(/run\.remove\(\)/);
 	});
 
-	// An enabled "Import these maps" over an empty page opens a progress window that imports
-	// nothing. The count that decides this is the same one painted on the rail badge.
-	it("cannot be pressed on a page with nothing filled in", () => {
-		expect(COMMAND).toContain("run.disabled = !n;");
+	// An Import button over an EMPTY WINDOW opens a progress window that imports nothing. Over an
+	// empty page it does not: on an untouched playbook page it is still the button that imports
+	// the two rulebooks behind it, which is the very press this window used to answer by dropping
+	// them. So it is live on what the window holds, counted with the same `filledOn` the rail
+	// badges are painted from.
+	it("cannot be pressed only when the whole window is empty", () => {
+		expect(COMMAND).toContain("run.disabled = !anywhere;");
+		expect(COMMAND).toContain("const anywhere = SETUP_SECTIONS.filter((s) => s.runLabel).reduce((t, s) => t + filledOn(root, s.key), 0);");
+		// The badge beside it still counts that page alone — it is a count OF the page.
 		expect(COMMAND).toContain("const n = filledOn(root, s.key);");
 		// Settled once against the empty sheet the dialog opens on, or every button starts live.
 		expect(COMMAND).toMatch(/showPanel\(root, SETUP_SECTIONS\[0\]\.key\);\s*\n\s*paintBadges\(root\);/);
@@ -158,9 +213,18 @@ describe("importing one page at a time", () => {
 	it("says on each page that stopping there is allowed, and what the alternative is", () => {
 		for (const key of INPUT_PAGES) expect(COMMAND, key).toContain(`runHint("${key}")`);
 		expect(COMMAND).toContain("You can stop here.");
-		expect(COMMAND).toContain("<strong>Import Art</strong> on the last page runs everything");
-		// ...and the hint names the button by the same label the button is drawn with.
-		expect(COMMAND).toContain("<em>${esc(s.runLabel)}</em>");
+		expect(COMMAND).toContain("<strong>Import Art</strong> on the last page is the same run");
+		// The hint names the button by painting the live label in, not by writing s.runLabel into
+		// the markup: the label changes as the window fills up, and a page telling you to press a
+		// button that is no longer called that is worse than one that never named it.
+		expect(COMMAND).toContain('data-runname="${key}"');
+		expect(COMMAND).not.toContain("<em>${esc(s.runLabel)}</em>");
+		// The promise itself has to match what the button now does.
+		expect(COMMAND).toContain("imports everything you have filled in, on this page and on any other");
+		expect(COMMAND).not.toContain("imports just what you filled in above");
+		// ...and so does the overview's account of the same buttons.
+		expect(COMMAND).not.toContain("Import button of its own that runs just that page");
+		expect(COMMAND).toContain("it imports <strong>everything you have filled in</strong>");
 	});
 
 	// The offer is the one thing on the page that must not read as an aside, so it is deliberately

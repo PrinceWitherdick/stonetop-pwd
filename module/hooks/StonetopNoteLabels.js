@@ -1,4 +1,5 @@
 import { systemAssetVariants } from "../migration/compat.js";
+import { getAlwaysShowMapPinNames } from "../settings.js";
 import { LANDMARK_ICON_SUFFIX } from "./PlaceOfInterestDrop.js";
 import { THREAT_PIN_ICON_SUFFIX } from "./ThreatNotePins.js";
 // Make Stonetop map-note labels legible over busy hand-drawn maps.
@@ -29,6 +30,18 @@ const _OUR_NOTE_ICONS = [
 	...systemAssetVariants(THREAT_PIN_ICON_SUFFIX),     // threat, hazard + site pins
 ];
 
+// WHEN the label shows is one world setting over all of them, not a property of the family.
+// Core shows a note's text only while the cursor is on it (Note#_refreshState), which is the
+// right default for an annotation and the wrong one for a place name: the poster maps ship as
+// the UNLABELLED printing of their artwork, so a reader who has to go hunting for each name
+// with the mouse is reading a map with no names on it. So the setting ships ON.
+//
+// It governs every pin here rather than the place markers alone, because they already share
+// everything else: the same pill, the same cream ink, one treatment. A GM who turns it off
+// wants a quieter map, not a quieter half of one, and off is exactly core's own behaviour
+// handed back. Nothing about the note document changes either way, so the switch is free to
+// flip back and forth and costs a repaint.
+
 const _LABEL_TEXT_COLOR = "#f7efdc"; // warm cream, reads on the dark pill
 const _LABEL_STROKE_COLOR = 0x1b1009; // faint ink edge keeps letters crisp on light patches
 const _PILL_COLOR = 0x000000;
@@ -42,6 +55,25 @@ function _isStonetopMapNote(noteDoc) {
 	const src = noteDoc?.texture?.src;
 	if (!src) return false;
 	return _OUR_NOTE_ICONS.some((prefix) => src.includes(prefix));
+}
+
+/**
+ * Show this note's label, unless this world has asked for names on hover only.
+ *
+ * Only ever turns a tooltip ON, and only for our own pins, so every other note on every scene
+ * keeps core's hover behaviour untouched. Turning it off needs no counterpart here: core has
+ * just recomputed `tooltip.visible` from the cursor, so declining to override IS the hover
+ * behaviour. Forcing it is safe against all the ways a note is
+ * meant to disappear, because none of them run through the tooltip: the note is a container
+ * whose own visibility core sets from Note#isVisible (permission, fog, elevation), and the
+ * Notes layer's display toggle hides the whole objects container wholesale. A hidden parent
+ * hides this child whatever the child thinks of itself. What is overridden here is only the
+ * last and narrowest of those gates, the one that asks where the mouse is.
+ */
+function _showPermanentLabel(note) {
+	if (!getAlwaysShowMapPinNames()) return;
+	if (!_isStonetopMapNote(note?.document)) return;
+	if (note.tooltip) note.tooltip.visible = true;
 }
 
 /** Cream fill + thin ink edge; layered onto core's computed tooltip style, in place. */
@@ -112,6 +144,9 @@ export function onDrawStonetopNote(note) {
 		const baseRefreshState = note._refreshState.bind(note);
 		note._refreshState = function () {
 			baseRefreshState();
+			// Ahead of the pill, which is only ever a backing for whatever the tooltip is
+			// doing: core has just recomputed tooltip.visible from where the cursor is.
+			_showPermanentLabel(this);
 			const bg = this._stonetopLabelBg;
 			if (bg && !bg.destroyed) bg.visible = this.tooltip?.visible ?? false;
 		};
@@ -123,5 +158,9 @@ export function onDrawStonetopNote(note) {
 	// against a note that has no tooltip (core normally builds one in _draw, but a null here
 	// would throw and break the whole drawNote hook); _redrawPill no-ops on a missing tooltip.
 	if (note.tooltip) note.tooltip.style = note._getTextStyle();
+	// Eagerly, for the same reason the style is applied eagerly: core draws the tooltip during
+	// _draw and only settles its visibility on the next render flag pass, so a marker whose
+	// scene is painted and then left alone would sit there nameless until something touched it.
+	_showPermanentLabel(note);
 	_redrawPill(note);
 }

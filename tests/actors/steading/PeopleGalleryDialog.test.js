@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { pickRandomPortrait, rolledScrollTop, asFullPortrait, portraitIdentity } from "../../../module/actors/steading/PeopleGalleryDialog.js";
+import {
+	pickRandomPortrait, rolledScrollTop, asFullPortrait, portraitIdentity, emptyGalleryOffer,
+	IMPORT_WAITING_HINT, IMPORT_READY_HINT,
+} from "../../../module/actors/steading/PeopleGalleryDialog.js";
+import { IMPORT_BOOKS } from "../../../module/book2-art/macro.js";
 import { BOOK2_ART_APPLY_MANIFEST } from "../../../module/book2-art/manifest.js";
 
 // asFullPortrait joins against the SHIPPED manifest, so the square/illustration pair has to be a
@@ -144,5 +148,111 @@ describe("rolledScrollTop", () => {
 
 	it("asks for no scroll at all when the grid is shorter than the view", () => {
 		expect(rolledScrollTop({ ...BODY, tileTop: 300, scrollHeight: 300 })).toBe(0);
+	});
+});
+
+// What an empty gallery says and offers. A gallery with no tiles used to be a dead end, which is
+// the moment a GM most needs to hear that the art is one button away: cut out of pictures already
+// on disk when there are any, and imported from their own books when there are not.
+describe("emptyGalleryOffer", () => {
+	it("offers a player nothing to press, and says where the art comes from", () => {
+		// Both cures browse, cut and upload data files, so a player pressing either would get
+		// nothing but an error. They are told whose job it is instead.
+		const offer = emptyGalleryOffer({ isGM: false, artOnDisk: true, rebuildable: 40 });
+		expect(offer.canRebuild).toBe(false);
+		expect(offer.canImport).toBe(false);
+		expect(offer.blurb).toMatch(/your GM/);
+	});
+
+	it("offers the rebuild when there is art on disk to cut the faces out of", () => {
+		const offer = emptyGalleryOffer({ isGM: true, artOnDisk: true, rebuildable: 40 });
+		expect(offer.canRebuild).toBe(true);
+		expect(offer.rebuildLabel).toBe("Build 40 portraits from art you already have");
+	});
+
+	it("agrees in the singular", () => {
+		expect(emptyGalleryOffer({ isGM: true, artOnDisk: true, rebuildable: 1 }).rebuildLabel)
+			.toBe("Build 1 portrait from art you already have");
+	});
+
+	it("never offers a rebuild that would cut nothing", () => {
+		// The button's whole promise is that the gallery fills up behind it. Offered on a count of
+		// zero it would run, report success, and leave the GM looking at the same empty grid. The
+		// count arrives from a browse that is allowed to fail, so the junk cases matter too.
+		for (const rebuildable of [0, -3, NaN, undefined, "lots"]) {
+			expect(emptyGalleryOffer({ isGM: true, artOnDisk: true, rebuildable }).canRebuild).toBe(false);
+		}
+	});
+
+	it("offers the import alongside the rebuild, because they are not the same picture", () => {
+		// A cut face comes out of a page that was downscaled once already; an import lifts it from
+		// the book. And no amount of cutting produces a person whose parent illustration never landed.
+		const offer = emptyGalleryOffer({ isGM: true, artOnDisk: true, rebuildable: 40 });
+		expect(offer.canImport).toBe(true);
+		expect(offer.importLabel).toBe("Import Book Art Again");
+	});
+
+	it("asks a GM with no art at all for their books, without calling it a second attempt", () => {
+		const offer = emptyGalleryOffer({ isGM: true, artOnDisk: false, rebuildable: 0 });
+		expect(offer.canRebuild).toBe(false);
+		expect(offer.canImport).toBe(true);
+		expect(offer.importLabel).toBe("Import Book Art");
+		expect(offer.blurb).toMatch(/PDFs/);
+	});
+
+	it("tells a GM whose import brought no people that running it again is the answer", () => {
+		// Art on disk, nothing cuttable: the people illustrations are simply not there, so no
+		// rearranging of what IS there can produce them.
+		const offer = emptyGalleryOffer({ isGM: true, artOnDisk: true, rebuildable: 0 });
+		expect(offer.canRebuild).toBe(false);
+		expect(offer.importLabel).toBe("Import Book Art Again");
+		expect(offer.blurb).toMatch(/again/);
+	});
+
+	it("keeps its user-facing copy free of em dashes", () => {
+		for (const facts of [
+			{ isGM: false },
+			{ isGM: true, artOnDisk: false, rebuildable: 0 },
+			{ isGM: true, artOnDisk: true, rebuildable: 0 },
+			{ isGM: true, artOnDisk: true, rebuildable: 40 },
+		]) {
+			const offer = emptyGalleryOffer(facts);
+			for (const copy of [offer.blurb, offer.rebuildLabel, offer.importLabel]) {
+				if (copy) expect(copy).not.toContain("—");
+			}
+		}
+	});
+
+	it("asks a GM for the books on the spot, rather than sending them to another window", () => {
+		// The rulebooks the import wants are a field each, right under the blurb. The offer carries
+		// the same table the handoff is keyed on, so what is drawn and what is collected agree by
+		// construction; tests/book2-art/import-handoff.test.js holds the rest of that chain.
+		for (const facts of [
+			{ isGM: true, artOnDisk: false, rebuildable: 0 },
+			{ isGM: true, artOnDisk: true, rebuildable: 0 },
+			{ isGM: true, artOnDisk: true, rebuildable: 40 },
+		]) {
+			expect(emptyGalleryOffer(facts).books).toBe(IMPORT_BOOKS);
+		}
+	});
+
+	it("asks a player for no books, having just told them it is not their job", () => {
+		// The fields would open an OS file picker for a user who cannot upload a byte.
+		expect(emptyGalleryOffer({ isGM: false, artOnDisk: true, rebuildable: 40 }).books).toEqual([]);
+		expect(emptyGalleryOffer().books).toEqual([]);
+	});
+
+	it("says why the button is waiting, and then where the book goes", () => {
+		// Two states of one line: before a PDF is chosen it explains the greyed button (which is
+		// what separates "waiting for you" from "broken"), and after it answers the one question a
+		// GM about to hand over a book they paid for actually has.
+		expect(IMPORT_WAITING_HINT).toMatch(/PDF/);
+		expect(IMPORT_READY_HINT).toMatch(/uploaded/);
+		for (const copy of [IMPORT_WAITING_HINT, IMPORT_READY_HINT]) expect(copy).not.toContain("—");
+	});
+
+	it("survives being asked with nothing at all", () => {
+		expect(emptyGalleryOffer().canRebuild).toBe(false);
+		expect(emptyGalleryOffer().canImport).toBe(false);
 	});
 });

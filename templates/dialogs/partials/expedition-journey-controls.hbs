@@ -1,0 +1,37 @@
+{{!-- Who is setting out, where they are bound, and which map is showing.
+
+      SHARED BY BOTH SURFACES. The route step draws these above its map; the "See the whole map"
+      window draws the same controls above its viewport, which is what makes the popout a peer of
+      the panel rather than a picture of it. Context is the journey object from
+      ExpeditionDialog._buildJourney.
+
+      Every control is bound once, in that dialog's activateListeners, and the window forwards its
+      own clicks to the very same methods — so "change the origin" cannot come to mean two
+      different things depending on which window you did it in. --}}
+<div class="stonetop-journey-picks">
+  <label class="stonetop-journey-picklab">
+    Setting out from
+    <select class="stonetop-journey-origin">
+      {{#each journey.originOptions}}
+      <option value="{{slug}}"{{#if selected}} selected{{/if}}>{{name}}</option>
+      {{/each}}
+    </select>
+  </label>
+  {{#if journey.hasDestination}}
+  <span class="stonetop-journey-bound">bound for <strong>{{journey.destination.name}}</strong></span>
+  <button type="button" class="stonetop-journey-clear" data-tooltip="Clear the destination">
+    <i class="fas fa-xmark"></i>
+  </button>
+  {{else}}
+  <span class="stonetop-journey-bound stonetop-journey-bound--empty">Tap a place to set the destination.</span>
+  {{/if}}
+</div>
+
+<div class="stonetop-journey-tiers" role="tablist" aria-label="Map">
+  {{#each journey.tiers}}
+  <button type="button" role="tab" aria-selected="{{isActive}}" data-tier="{{slug}}"
+          class="stonetop-journey-tier{{#if isActive}} is-active{{/if}}">
+    {{name}}{{#unless hasMap}} <i class="fas fa-image-slash" data-tooltip="Not imported"></i>{{/unless}}
+  </button>
+  {{/each}}
+</div>

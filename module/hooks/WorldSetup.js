@@ -314,7 +314,8 @@ export async function offerPosterMapScenesOnce({ artOnDisk = null } = {}) {
 	if (built) {
 		ui.notifications?.info(`Stonetop: ${result.created} map scene${result.created === 1 ? "" : "s"} created`
 			+ `${result.updated ? `, ${result.updated} refreshed` : ""}`
-			+ `${result.pins ? `, ${result.pins} village pins placed` : ""}.`);
+			+ `${result.pins ? `, ${result.pins} village pins placed` : ""}`
+			+ `${result.markers ? `, ${result.markers} places marked` : ""}.`);
 	}
 	if (result.failures.length) {
 		ui.notifications?.warn(`Stonetop: could not build a scene for ${result.failures.join(", ")}. See the console.`);

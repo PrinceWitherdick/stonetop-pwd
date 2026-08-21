@@ -1,4 +1,4 @@
-import { rebuildBookArt, plannedBookArtRebuilds } from "./rebuild-crops.js";
+import { rebuildBookArt, plannedBookArtRebuilds, plannedPeopleArtRebuilds } from "./rebuild-crops.js";
 import { publishPeopleArtIndexes, reapplyBook2Art } from "./reapply.js";
 import { flipPeoplePortraitsToWhole } from "./repoint-portraits.js";
 
@@ -76,15 +76,35 @@ export async function runBookArtRebuild({ onProgress = null } = {}) {
 	return { ...art, repointed, tokens };
 }
 
-/** How much there is to do, without doing any of it. Drives whether an entry point offers at all. */
-export async function countBookArtRebuilds() {
+/**
+ * How much there is to do, without doing any of it. Drives whether an entry point offers at all.
+ *
+ * Best effort: a browse that threw reads as "nothing to offer", which leaves whichever plainer
+ * door the caller has as the only thing on screen. Written once so the two counts cannot come to
+ * disagree about what a failed browse means.
+ */
+async function countRebuilds(plan, what) {
 	try {
-		return (await plannedBookArtRebuilds()).length;
+		return (await plan()).length;
 	} catch (err) {
-		console.error("Stonetop | could not count rebuildable book art:", err);
+		console.error(`Stonetop | could not count rebuildable ${what}:`, err);
 		return 0;
 	}
 }
+
+/** Everything one rebuild run would cut. */
+export const countBookArtRebuilds = () => countRebuilds(plannedBookArtRebuilds, "book art");
+
+/**
+ * How many PEOPLE pictures that same run would cut — the portraits and their square faces, not the
+ * creature tokens riding along with them.
+ *
+ * The People gallery's empty state asks this, because it offers the rebuild as a way to fill
+ * itself and must not offer one that cannot. See plannedPeopleArtRebuilds for why the narrower
+ * count is the honest one there. The best-effort contract is countRebuilds’ own, so the two
+ * counts cannot drift about what a failed browse means.
+ */
+export const countPeopleArtRebuilds = () => countRebuilds(plannedPeopleArtRebuilds, "people art");
 
 const SPINNER = '<i class="fas fa-spinner fa-spin"></i>';
 

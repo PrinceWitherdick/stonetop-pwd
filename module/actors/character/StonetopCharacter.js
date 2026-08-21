@@ -46,7 +46,7 @@ import {HOLY_LIGHT_FLAG, canWieldHolyLight} from "./holy-light.js";
 import {ONGOING_INVOCATION_FLAG, readOngoing} from "./ongoing-invocation.js";
 import {CONDEMNED_FLAG, canCondemn, readCondemned, addCondemned, removeCondemned, noteCondemned} from "./condemn.js";
 import {OATHS_FLAG, canBindOaths, readOaths, addOath, removeOath, noteOath, setOathBroken} from "./oaths.js";
-import {BLESSED_MARKS_FLAG, canMarkBlessed, readMarks, addMark, removeMark, noteMark, setMarkLoyalty} from "./blessed-marks.js";
+import {BLESSED_MARKS_FLAG, canMarkBlessed, readMarks, addMark, removeMark, noteMark, setMarkLoyalty, setMarkSign} from "./blessed-marks.js";
 import {BATTLE_JOY_FLAG, BATTLE_JOY, canEnterBattleJoy, ignoresDebilities} from "./battle-joy.js";
 import {CharacterBackgrounds} from "./CharacterBackgrounds.js";
 import {CharacterInstincts} from "./CharacterInstincts.js";
@@ -2432,6 +2432,15 @@ export class StonetopCharacter {
 	/** Re-word what a mark is for. Returns the patched entry, or null when nothing changed. */
 	async setBlessedMarkNote(id, note) {
 		return this._rosterWrite(BLESSED_MARKS_FLAG, noteMark(this._rosterRaw(BLESSED_MARKS_FLAG), id, note));
+	}
+
+	/**
+	 * Say whether a ward's signs repel or trap — the choice Wards & Bindings asks for at the moment
+	 * it is laid, and the one thing that says which of the two a row is. Returns the patched entry,
+	 * or null when nothing changed, which is also what the four kinds without the choice get back.
+	 */
+	async setBlessedMarkSign(id, sign) {
+		return this._rosterWrite(BLESSED_MARKS_FLAG, setMarkSign(this._rosterRaw(BLESSED_MARKS_FLAG), id, sign));
 	}
 
 	/**

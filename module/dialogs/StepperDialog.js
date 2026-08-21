@@ -71,11 +71,19 @@ export class StepperDialog extends Application {
 	_applyResumeExtras(_saved) {}
 
 	/** Reopen on the step left off at before a reload. Called by a subclass's own `open()`
-	 *  BEFORE the first render, so the restored cursor is what gets drawn. */
+	 *  BEFORE the first render, so the restored cursor is what gets drawn.
+	 *
+	 *  By KEY where the record has one, and by index only as a fallback. An index is a place in
+	 *  a list this system edits: inserting "The route" as the Expedition walkthrough's second
+	 *  step moved nine later steps down one, and a GM who reloaded mid-walkthrough came back to
+	 *  the step BEFORE the one they left — silently, because the range check still passed. A key
+	 *  survives an insert, a removal and a reorder; only a renamed or deleted step misses, and
+	 *  that falls through to the index, which is no worse than what it replaced. */
 	_restoreStep() {
 		if (!this._resumeKey) return;
 		const saved = getWalkthroughResume(this._resumeKey);
-		const step = Number(saved?.step);
+		const byKey = saved?.stepKey ? this._steps.findIndex(s => s.key === saved.stepKey) : -1;
+		const step = byKey >= 0 ? byKey : Number(saved?.step);
 		if (Number.isInteger(step) && step >= 0 && step < this._steps.length) this._step = step;
 		this._applyResumeExtras(saved);
 	}
@@ -84,7 +92,11 @@ export class StepperDialog extends Application {
 	 *  settings write per render, for a value that only changes on Back/Next, is pure noise. */
 	_saveResume() {
 		if (!this._resumeKey) return;
-		saveWalkthroughPosition(this._resumeKey, { step: this._step, ...this._resumeExtras() });
+		saveWalkthroughPosition(this._resumeKey, {
+			step:    this._step,
+			stepKey: this._steps[this._step]?.key ?? null,
+			...this._resumeExtras(),
+		});
 	}
 
 	async _render(force, options) {
