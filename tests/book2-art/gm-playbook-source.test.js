@@ -288,10 +288,24 @@ describe("the diagrams the toolkit shows", () => {
 	it("says what its verdict was read off, on the refusal path and the accepting one", () => {
 		expect(COMMAND).toContain("return { oneUp, width, height, offset: 0, probes, portrait, landscape };");
 		const logAt = COMMAND.indexOf("} edition: ${layout.oneUp");
-		const refuseAt = COMMAND.indexOf("if (layout.oneUp && !BOOKS[book]?.oneUp) {");
+		// The refusal rule is now applied in TWO places: once in the setup dialog, which reads a
+		// book the moment it is chosen so a wrong edition is caught before a five-minute run, and
+		// once in the run itself, which is the one that actually skips the book. Both spell the
+		// condition the same way, so `indexOf` alone would find whichever comes first in the file
+		// and this assertion would stop being about the run at all. Anchor it inside the run loop.
+		const loopAt = COMMAND.indexOf("for (const { book, file } of bookFiles) {");
+		expect(loopAt, "the book-reading loop was renamed").toBeGreaterThan(-1);
+		const refuseAt = COMMAND.indexOf("if (layout.oneUp && !BOOKS[book]?.oneUp) {", loopAt);
+		expect(refuseAt, "the run no longer refuses a 1-up rulebook").toBeGreaterThan(-1);
 		expect(logAt, "the edition line is not logged at all").toBeGreaterThan(-1);
 		// BEFORE the refusal branch, or a skipped book is the one case that says nothing.
 		expect(logAt).toBeLessThan(refuseAt);
+		// And the dialog applies the same rule, ahead of the run, so the two cannot drift into
+		// disagreeing about which file is acceptable. It is a genuinely separate occurrence: the
+		// run's is the first one AT OR AFTER the loop, so an earlier one can only be the preview.
+		const previewAt = COMMAND.indexOf("if (layout.oneUp && !BOOKS[book]?.oneUp) {");
+		expect(previewAt, "the setup dialog no longer checks the edition when a book is chosen")
+			.toBeLessThan(loopAt);
 		// And pdfLayout still names nothing outside itself. A `log()` call in there would read as
 		// the obvious way to do this and would break the lift these tests run on.
 		// Comments stripped first: the function carries a comment SAYING not to call log() in there,
