@@ -402,6 +402,10 @@
         "name": "Weather Effects: Storm Light",
         "hint": "The slate grey a storm or a tornado washes the daylight with. Off keeps the cloud and the rain and leaves your map its own colours."
       },
+      "alwaysShowMapPinNames": {
+        "name": "Map Pins: Always Show Names",
+        "hint": "When on (the default), every Stonetop map pin wears its name on the map: the poster maps are the unlabelled printing of artwork the books print labelled, and this puts the names back. Covers the lettered places of interest, the regional and village map markers, and your threat, hazard and site pins. Turn off to hand all of them back to Foundry's own behaviour, showing a name only while the cursor is on the pin, for a table that would rather look at the drawing."
+      },
       "customMovesGmOnly": {
         "name": "Custom Moves: GM Only",
         "hint": "When on, only the GM can create or edit custom moves. Players don't see the \"+ Custom Move\" button or the edit pencils. Existing custom moves still display and roll for everyone. Turn off to let players author their own custom moves (including ongoing bonuses)."

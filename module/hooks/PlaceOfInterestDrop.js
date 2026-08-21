@@ -2,9 +2,10 @@
 //
 // Each "Places of Interest" entry on the steading Overview tab carries a lettered
 // disc (A–R) and a name. Dragging that disc onto the canvas drops a map Note at the
-// cursor: a matching landmark-<letter>.svg icon whose label (the place name) shows on
-// hover. The sizing/colour mirror the lettered pins on the seeded Village scene — a
-// 90px contained icon, a 60px label anchored below in ink brown.
+// cursor: a matching landmark-<letter>.svg icon labelled with the place name in ink brown,
+// anchored below. Its size is the one every map pin this system draws shares, which lives in
+// utils/map-pins.js; whether the label shows always or on hover is one world setting over all
+// of them (see hooks/StonetopNoteLabels.js).
 //
 // The steading sheet writes { type, letter, name } into the drag payload
 // (StonetopSteadingSheet.activateListeners). This dropCanvasData hook claims that
@@ -14,6 +15,9 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { systemAssetVariants } from "../migration/compat.js";
 import { getSetting, setSetting } from "../settings.js";
+import {
+	MAP_PIN_FONT_SIZE, MAP_PIN_ICON_SIZE, MAP_PIN_TEXT_COLOR, mapPinNoteData, publicPinDrift,
+} from "../utils/map-pins.js";
 import { findPlacePage, placeNoteLink, writePlacesOfInterest } from "../utils/places-chronicle.js";
 
 export const PLACE_OF_INTEREST_DRAG_TYPE = "StonetopPlaceOfInterest";
@@ -28,11 +32,17 @@ const _FALLBACK_ICON = "icons/svg/book.svg";
 // system-id rename is still recognised as ours.
 const _LANDMARK_ICON_DIRS = systemAssetVariants(`${LANDMARK_ICON_SUFFIX}/`);
 
-// Pin formatting — matches the seeded Village scene's lettered notes.
-const NOTE_ICON_SIZE = 90;
-const NOTE_FONT_SIZE = 60;
-const NOTE_TEXT_COLOR = "#1b1009";
-const NOTE_TINT = "#ffffff";
+// Pin formatting. Both numbers are map-pins.js's and are imported rather than written out again,
+// which is what stops the two families from drifting the next time either moves.
+//
+// They are shared rather than each family's own because the village map carries BOTH, inches
+// apart: its eight lettered discs and the six captions its printing letters. A disc that is a
+// third larger than the pin beside it reads as an accident rather than as a distinction, and the
+// distinction that does matter between them is already carried by the drawing and by when the
+// name shows, not by size.
+const NOTE_ICON_SIZE = MAP_PIN_ICON_SIZE;
+const NOTE_FONT_SIZE = MAP_PIN_FONT_SIZE;
+const NOTE_TEXT_COLOR = MAP_PIN_TEXT_COLOR;
 const NOTES_CONTROL = "notes";
 const SELECT_TOOL = "select";
 
@@ -46,11 +56,18 @@ export function landmarkIcon(letter) {
 }
 
 /**
- * True when this Note document is one of our lettered place-of-interest pins.
+ * True when this Note document is one of the map pins this system lays down: a lettered
+ * place-of-interest disc, or one of the regional maps' place markers, both of which live in
+ * the `landmarks` folder.
  *
  * Judged by the icon it wears rather than by a flag, so a pin dropped by hand years ago is
  * claimed alongside one the poster-map builder stamped — the same rule StonetopNoteLabels
  * uses to decide whose label to restyle, off the same suffix.
+ *
+ * Deliberately the WIDE test, because its callers are the ones that should be wide: making a
+ * pin public (revealLandmarkNotesOnce) is right for every pin of ours. The narrow question —
+ * "which lettered place is this?" — is `landmarkLetterOf`, which answers null for a marker and
+ * so keeps the Chronicle-page linking to the discs it was written for.
  */
 export function isLandmarkNote(noteDoc) {
 	const src = noteDoc?.texture?.src;
@@ -121,6 +138,73 @@ export async function linkLandmarkNotes({
 }
 
 /**
+ * Walk every scene's notes, collect what one pass wants changed, and write it a scene at a time.
+ *
+ * Three passes in this file carried their own copy of this loop, and a fourth would have copied it
+ * again. What actually differs between them is two questions: which notes a pass claims, and what
+ * it wants changed about one. Everything else - the empty-update skip that keeps a quiet load
+ * silent, the single write per scene, the running count - is the same bargain every time.
+ *
+ * @param {Iterable} scenes
+ * @param {(note: object) => boolean} claims  Which notes this pass owns.
+ * @param {(note: object) => object} changeFor  What to write, empty when the note already agrees.
+ * @returns {Promise<number>} How many notes were written.
+ */
+async function sweepLandmarkNotes(scenes, claims, changeFor) {
+	let written = 0;
+	for (const scene of scenes) {
+		const updates = [];
+		for (const note of scene.notes ?? []) {
+			if (!claims(note)) continue;
+			const change = changeFor(note);
+			if (change && Object.keys(change).length) updates.push({ _id: note.id, ...change });
+		}
+		if (!updates.length) continue;
+		await scene.updateEmbeddedDocuments("Note", updates);
+		written += updates.length;
+	}
+	return written;
+}
+/**
+ * Bring the lettered discs already on this world's scenes up to the current formatting.
+ *
+ * WHY THIS HAD TO EXIST. A disc is written once, when a GM drops a Place of Interest or when the
+ * poster-map builder lays out the village, and nothing has ever gone back to one afterwards. That
+ * was survivable while the discs were the only pins on their map. They are not any more: the
+ * village map now carries the six captions its printing letters as well, and the two families sit
+ * inches apart, so the moment either changes size the other is visibly stale on every table that
+ * ran the old one. The regional markers grew a reconcile for exactly this reason and this is the
+ * same bargain in smaller print.
+ *
+ * WHAT IT CLAIMS, AND WHAT IT LEAVES ALONE. Only the three fields that are the DESIGN: the type
+ * size, the icon size and the ink. Never the position, the label or the link, which are the GM's
+ * the moment they touch them, and never a note it did not put there.
+ *
+ * It asks `landmarkLetterOf` rather than `isLandmarkNote`, and the difference matters: the wide
+ * test claims the place markers too, since both families live in the same folder, and rewriting a
+ * marker's iconSize to a disc's 90 here would have this pass and the marker reconcile take turns
+ * resizing the same pin on every load, forever.
+ *
+ * @param {object} [io] Injected world accessors, for tests.
+ * @returns {Promise<number>} How many pins were brought up to date.
+ */
+export async function refitLandmarkNotes({
+	scenes = globalThis.game?.scenes ?? [],
+	isGM = !!globalThis.game?.user?.isGM,
+} = {}) {
+	if (!isGM) return 0;
+	// Silence in the steady state is the whole budget: this runs on every load, and the sweep
+	// writes nothing for a scene whose discs already agree.
+	return sweepLandmarkNotes(scenes, landmarkLetterOf, note => {
+		const change = {};
+		if (note.fontSize !== NOTE_FONT_SIZE) change.fontSize = NOTE_FONT_SIZE;
+		if (note.iconSize !== NOTE_ICON_SIZE) change.iconSize = NOTE_ICON_SIZE;
+		if (note.textColor !== NOTE_TEXT_COLOR) change.textColor = NOTE_TEXT_COLOR;
+		return change;
+	});
+}
+
+/**
  * The Note payload for one lettered landmark pin, at scene coordinates `x`/`y`.
  *
  * The single writer of this shape. Two things place these pins — a GM dragging a Place of
@@ -135,40 +219,15 @@ export async function linkLandmarkNotes({
  * is what a player-side drop or a world with no steading yet has to fall back to.
  */
 export function landmarkNoteData({ x, y, letter, name, entryId = null, pageId = null }) {
-	return {
-		x, y,
-		entryId,
-		pageId,
-		texture: {
-			src: landmarkIcon(letter),
-			anchorX: 0.5,
-			anchorY: 0.5,
-			fit: "contain",
-			tint: NOTE_TINT,
-		},
-		iconSize: NOTE_ICON_SIZE,
-		text: String(name ?? "").trim(),
-		fontSize: NOTE_FONT_SIZE,
+	// Everything a disc shares with the regional maps’ markers — the sizes, the ink, the tint, and
+	// the pair of fields that make a pin part of the map rather than somebody’s private note — comes
+	// from the one builder in utils/map-pins.js, with the reasoning. What a disc chooses for itself
+	// is its lettered glyph and a name hung underneath.
+	return mapPinNoteData({
+		x, y, name, entryId, pageId,
+		icon: landmarkIcon(letter),
 		textAnchor: CONST.TEXT_ANCHOR_POINTS?.BOTTOM ?? 1,
-		textColor: NOTE_TEXT_COLOR,
-		// A landmark pin is a label printed on the map: everyone at the table sees it. Core's
-		// Note#isVisible has TWO gates in front of that, and both have to be opened here.
-		//
-		// `global` waives line of sight. Our poster-map Scenes ship with token vision off,
-		// where core skips the sight test entirely, but a GM who turns vision on for their
-		// village map would otherwise have every landmark hide behind unexplored fog.
-		global: true,
-		// `author` decides who a pin with no journal entry behind it belongs to. Foundry 14
-		// made such a note visible only to its author, falling back for everyone else to
-		// "nobody wrote it, or a player did" — so a pin laid down by a GM is GM-only, and
-		// `global` never even gets consulted. Nulling the author is core's own way of saying
-		// this pin is part of the map rather than someone's note, which is exactly what it is.
-		//
-		// Safe from either side: the server rewrites this to the creating user's id for a
-		// player, which lands on the other half of that same fallback and is just as visible,
-		// and v13 has no `author` field at all, so it drops the key without complaint.
-		author: null,
-	};
+	});
 }
 
 /**
@@ -194,20 +253,10 @@ export async function revealLandmarkNotesOnce({
 } = {}) {
 	if (!isGM || read("landmarkNotesRevealed")) return 0;
 
-	let revealed = 0;
-	for (const scene of scenes) {
-		const updates = [];
-		for (const note of scene.notes ?? []) {
-			if (!isLandmarkNote(note)) continue;
-			// `_source.author` rather than the resolved `author`, which is a User document — and
-			// is simply absent on v13, where the field does not exist and no pin needs re-owning.
-			if (note.global === true && (note._source?.author ?? null) === null) continue;
-			updates.push({ _id: note.id, global: true, author: null });
-		}
-		if (!updates.length) continue;
-		await scene.updateEmbeddedDocuments("Note", updates);
-		revealed += updates.length;
-	}
+	// Which of the public pair a pin is missing is map-pins.js’s to answer, beside the constant
+	// that writes it: a copy of that test which drifts from the writer is a pin that goes silently
+	// GM-only on Foundry 14.
+	const revealed = await sweepLandmarkNotes(scenes, isLandmarkNote, publicPinDrift);
 	// Stamped only once the writes have landed: a run that throws part-way leaves the flag
 	// unset, so the next load picks up the scenes it never reached.
 	await write("landmarkNotesRevealed", true);

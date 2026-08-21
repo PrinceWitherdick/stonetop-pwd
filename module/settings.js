@@ -489,6 +489,52 @@ export function registerSettings() {
 		default: ""
 	});
 
+	// Whether every Stonetop map pin wears its name, or waits for the cursor.
+	//
+	// ON by default, because the poster maps this system labels are the UNLABELLED printing of
+	// artwork the books print labelled, and a name you have to go hunting for with a mouse is not
+	// a name on a map. Off gives core's own behaviour back to all of them, which is the right
+	// answer for a table that would rather look at the drawing, or one running a scene where the
+	// map is on screen for its own sake.
+	//
+	// One switch for every pin of ours rather than one per family. They already share a treatment
+	// (the cream-on-pill label in hooks/StonetopNoteLabels.js) and differ only in WHEN it shows,
+	// so a GM who wants a quieter map wants a quieter map.
+	game.settings.register(SYSTEM_ID, "alwaysShowMapPinNames", {
+		name: "stonetop.settings.alwaysShowMapPinNames.name",
+		hint: "stonetop.settings.alwaysShowMapPinNames.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: true,
+		onChange: () => applyMapPinLabelMode(),
+	});
+
+	// Which poster maps have had their named-place markers laid down, as a { map slug -> keys }
+	// map. Per MAP rather than one flag for the set, and that is the whole point of the shape:
+	// the Scenes can arrive years apart (a GM who imported the Vicinity, then the World's End
+	// with the next book), and a single latch would have marked whichever existed first and left
+	// the others bare forever.
+	//
+	// The KEY still says "regional" because it is already written into every world that has run
+	// this pass, and it covered exactly the regional maps when it was named. Renaming it would
+	// orphan every record, which reads as "nothing has ever been marked here" and re-lays every
+	// pin the GM has since deleted on purpose.
+	//
+	// Latched at all, rather than re-checked every load, for the same reason
+	// `landmarkNotesRevealed` is: after the first pass a GM who DELETES a marker meant it —
+	// a place the party has not found yet, or a name they would rather write themselves — and a
+	// pass that puts it back on every reload is arguing with them. A slug is recorded only once
+	// a Scene for that map has actually been visited, so a map with no Scene yet, or one whose
+	// picture the positions do not fit, stays pending rather than being written off.
+	game.settings.register(SYSTEM_ID, "regionalMapMarkers", {
+		name: "Regional Map Markers Placed",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {}
+	});
+
 	// Which Book II treasures have their illustration on disk under `book2ArtRoot`, as a
 	// { catalog slug -> path within the art folder } map (module/data/treasure-catalog.js).
 	// Unlike every other kind of book art, a treasure is not a document: its Item is built
@@ -1439,6 +1485,52 @@ export function stampLayoutClass(app, sheet) {
 
 // Whether the rollable dice icon is hidden; when it is, rolls fire from the move
 // name / stat row instead of the (now absent) icon.
+/**
+ * Do this world's map pins wear their names, or wait for the cursor?
+ *
+ * Read defensively, and TRUE when there is nothing to read. This is asked from inside a PIXI
+ * refresh pass that can run before settings are registered (a Scene painted during startup), and
+ * the harmless answer there is the shipped default rather than a silently quieter map.
+ */
+let _alwaysShowMapPinNames = null;
+export function getAlwaysShowMapPinNames() {
+	if (_alwaysShowMapPinNames !== null) return _alwaysShowMapPinNames;
+	// In a try, because optional chaining is not the guard this needs: `game.settings` exists
+	// long before our keys are on it, and `get` THROWS for a key it has never been told about.
+	// That throw would come out inside a PIXI refresh pass and take the note redraw with it,
+	// which is the failure this whole function was written to avoid.
+	let value;
+	try {
+		value = globalThis.game?.settings?.get?.(SYSTEM_ID, "alwaysShowMapPinNames");
+	} catch (_) {
+		return true;
+	}
+	// Only a real answer is worth keeping. Before the setting is registered the read has nothing
+	// to give back, and caching the shipped default then would freeze a world that wants it off.
+	if (typeof value !== "boolean") return true;
+	_alwaysShowMapPinNames = value;
+	return value;
+}
+
+/**
+ * Push the label setting onto the notes already drawn, so flipping it takes effect on the map the
+ * GM is looking at rather than on their next reload.
+ *
+ * `refreshState` is the narrowest flag that does it: core recomputes tooltip visibility from the
+ * cursor in Note#_refreshState, and our wrapper rides that same pass, so one flag both turns the
+ * labels on and hands them back to core when the switch goes off.
+ *
+ * Registered as the setting's own `onChange`, which is what makes it the right place to drop the
+ * cached answer: every flip of the switch comes through here, and nothing else can change it.
+ */
+export function applyMapPinLabelMode() {
+	_alwaysShowMapPinNames = null;
+	for (const note of globalThis.canvas?.notes?.placeables ?? []) {
+		if (note?.renderFlags?.set) note.renderFlags.set({ refreshState: true });
+		else note?.refresh?.();
+	}
+}
+
 export function getHideRollableIconSetting() {
 	return globalThis.game?.settings?.get?.(SYSTEM_ID, "hideRollableIcon") ?? false;
 }
