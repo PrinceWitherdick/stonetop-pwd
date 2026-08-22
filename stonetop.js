@@ -38,6 +38,7 @@ import { onPreUpdateActorDeathsDoor, onUpdateActorDeathsDoorAutoOpen, onUpdateAc
 import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { onPreCreateThreatNote } from "./module/hooks/ThreatNotePins.js";
 import { onDrawStonetopNote } from "./module/hooks/StonetopNoteLabels.js";
+import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
 import { invalidateMonsterRefIndex } from "./module/bestiary/monster-ref-index.js";
 import { ensureLocationSummaryIndex, applyTooltipsThenRestrict } from "./module/locations/location-tooltips.js";
 import { hideBrokenJournalArt } from "./module/journal/hide-broken-art.js";
@@ -611,6 +612,11 @@ Hooks.on("preCreateNote", onPreCreateThreatNote);
 // Give our lettered Place-of-Interest discs and threat/hazard pins a thick paper text
 // halo so their labels stay legible over the illustrated Stonetop maps.
 Hooks.on("drawNote", onDrawStonetopNote);
+
+// -- EXPEDITION ROUTE ON THE MAP -------------------------------
+// A journey put on a poster-map scene from the Run an Expedition walkthrough. The scene
+// carries the two place slugs and every client paints the line from them, players included.
+registerExpeditionRouteHooks();
 
 // -- LOCATION CROSS-LINK TOOLTIPS ------------------------------
 // Give cross-links into the Locations pack a useful hover summary instead of the

@@ -4,6 +4,29 @@
       same wherever they happen to be looking. Context is the journey object. --}}
 {{#if journey.route}}
 <div class="stonetop-journey-route">
+  {{!-- WHY THE MAP ABOVE HAS NO LINE ON IT. `routePath` will not bridge a missing END of a
+        journey, for the reason set out over it, and six of the places the books letter are drawn
+        on the Vicinity alone. So choosing one and then opening the World&rsquo;s End took the whole
+        route line away with nothing on screen saying so, and the map read as having forgotten the
+        trip rather than as being unable to draw it.
+
+        It sits with the READOUT rather than over the picture because the readout is the half that
+        still answers, and because both surfaces draw this partial: the route step sets it under
+        its map, the window under its viewport. --}}
+  {{#if journey.map.offMap}}
+  <p class="stonetop-journey-offmap">
+    <i class="fas fa-map-location-dot" aria-hidden="true"></i>
+    {{!-- The sentence is written in ExpeditionDialog._offMapReadout, off the same en.json keys the
+          refusal toast uses, so the two cannot come to say different things about one fact. All
+          this partial owns is the button. --}}
+    {{journey.map.offMap.sentence}}
+    {{#if journey.map.offMap.other}}
+    <button type="button" class="stonetop-journey-elsewhere" data-tier="{{journey.map.offMap.other}}">
+      {{journey.map.offMap.showLabel}}
+    </button>
+    {{/if}}
+  </p>
+  {{/if}}
   <div class="stonetop-journey-total">{{journey.route.atLeast}}</div>
   <ol class="stonetop-journey-legs">
     {{#each journey.route.legs}}

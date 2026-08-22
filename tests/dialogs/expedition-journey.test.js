@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 
 // The route step of the Run an Expedition walkthrough: the book's maps made tappable over its
@@ -21,6 +21,8 @@ vi.mock("../../module/book2-art/travel-map-art.js", () => ({
 
 const { ExpeditionDialog } = await import("../../module/dialogs/ExpeditionDialog.js");
 const { frameFor, travelPlace } = await import("../../module/data/travel-times.js");
+const { offMapNote, routeArrow, routeLegs, routePath } = await import("../../module/utils/route-path.js");
+const { offMapNames, showRouteOnScene } = await import("../../module/utils/scene-route.js");
 
 // The printed renders, which need no frame registration.
 const PRINTED = {
@@ -57,6 +59,11 @@ beforeEach(() => {
 	art.browsed = true;
 	art.resolved = new Map(Object.entries(PRINTED));
 	global.game = {
+		// tests/setup.js installs a localizer backed by the real languages/en.json, and this
+		// override would otherwise drop it. The route's copy lives in that file now, so keeping
+		// it is what lets these tests go on asserting the sentences a GM actually reads — and
+		// makes a key that is missing from en.json fail here rather than ship as raw dotted text.
+		i18n: global.game.i18n,
 		user: { isGM: true },
 		settings: {
 			settings: new Map([["stonetop-pwd.expeditionAnswers", { scope: "world" }]]),
@@ -288,8 +295,13 @@ describe("building the panel", () => {
 });
 
 describe("the line showing the way they go", () => {
-	/** The path's points as [left, top] pairs, in travel order. */
-	const points = path => (path?.points ?? "").split(" ").filter(Boolean).map(p => p.split(",").map(Number));
+	/** The stops the path visits as [left, top] pairs, in travel order: its M, then every Q's end. */
+	const points = path => [...(path?.d ?? "").matchAll(/(?:^M|Q [\d.-]+,[\d.-]+) ([\d.-]+),([\d.-]+)/g)]
+		.map(m => [Number(m[1]), Number(m[2])]);
+
+	/** Each leg's control point, which is where its bow lives. */
+	const controls = path => [...(path?.d ?? "").matchAll(/Q ([\d.-]+),([\d.-]+)/g)]
+		.map(m => [Number(m[1]), Number(m[2])]);
 
 	it("joins every stop that the map being shown actually draws", async () => {
 		const data = await dialog({ origin: "stonetop", destination: "three-coven-lake" })._buildJourney();
@@ -309,13 +321,19 @@ describe("the line showing the way they go", () => {
 		expect(drawn.at(-1)).toEqual([Number(arrow.left.toFixed(2)), Number(arrow.top.toFixed(2))]);
 	});
 
-	it("bridges a stop the map being shown does not draw", async () => {
-		// Stonetop to Tor's Fist goes via the Foothills, which the World's End map never labels.
-		const data = await dialog({ destination: "tors-fist" })._buildJourney();
-		expect(data.activeTier).toBe("worlds-end");
-		expect(travelPlace("the-foothills").spots["worlds-end"]).toBeUndefined();
+	// SYNTHETIC, and it did not use to be: Stonetop to Tor's Fist goes via the Foothills, which the
+	// World's End does not letter, and that was this case. The Foothills has since been given an
+	// anchor there (see `spots` in travel-times.js), so no journey the graph can solve now has a
+	// stop the map cannot place. The behaviour still has to hold for the next place that does.
+	it("bridges a stop the map being shown does not draw", () => {
+		const route = { legs: [
+			{ from: "stonetop", to: "nowhere-at-all" },
+			{ from: "nowhere-at-all", to: "marshedge" },
+		] };
+		const path = routePath(route, "worlds-end", PRINTED["worlds-end"].frame, PRINTED["worlds-end"].aspect);
 		// Two points, not three, and never a break in the line.
-		expect(points(data.map.path)).toHaveLength(2);
+		expect(points(path)).toHaveLength(2);
+		expect(path.d.split("M")).toHaveLength(2);
 	});
 
 	// Bridging is for stops in the MIDDLE. Dropping a missing END silently shortens the journey to
@@ -328,57 +346,161 @@ describe("the line showing the way they go", () => {
 		expect(data.map.path).toBeNull();
 	});
 
-	it("still draws when only the middle is missing", async () => {
-		// The guard above must not swallow the bridging case it sits next to.
-		const data = await dialog({ destination: "tors-fist" })._buildJourney("worlds-end");
-		expect(data.map.path).not.toBeNull();
+	it("still draws when only the middle is missing", () => {
+		// The guard above must not swallow the bridging case it sits next to. Synthetic for the
+		// same reason as that one.
+		const route = { legs: [
+			{ from: "stonetop", to: "nowhere-at-all" },
+			{ from: "nowhere-at-all", to: "marshedge" },
+		] };
+		expect(routePath(route, "worlds-end", PRINTED["worlds-end"].frame, PRINTED["worlds-end"].aspect))
+			.not.toBeNull();
 	});
 
 
-	it("caps the head at the destination end, pointing the way they are going", async () => {
+	// A ruled line pin to pin says the way runs exactly there, which is the one thing a schematic
+	// over a hand-drawn map cannot know. Each leg bows a little instead.
+	it("bends every leg instead of ruling it straight", async () => {
 		const data = await dialog({ destination: "three-coven-lake" })._buildJourney();
-		const [, mid, end] = points(data.map.path);
-		const { arrow } = data.map.path;
-		// It sits on the final leg, short of the pin rather than under it.
-		expect(arrow.left).toBeGreaterThan(Math.min(mid[0], end[0]) - 0.01);
-		expect(arrow.left).toBeLessThan(Math.max(mid[0], end[0]) + 0.01);
-		expect(Math.hypot(arrow.left - end[0], arrow.top - end[1])).toBeGreaterThan(0);
+		const stops = points(data.map.path);
+		const bends = controls(data.map.path);
+		expect(data.map.path.d.startsWith(`M ${stops[0][0].toFixed(2)},${stops[0][1].toFixed(2)} Q `)).toBe(true);
+		expect(bends).toHaveLength(stops.length - 1);
+		// A control point sitting on the midpoint of its chord IS the ruled line it replaced.
+		bends.forEach((bend, i) => {
+			const [from, to] = [stops[i], stops[i + 1]];
+			const mid = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
+			expect(Math.hypot(bend[0] - mid[0], bend[1] - mid[1])).toBeGreaterThan(0.5);
+		});
+	});
+
+	it("alternates the bend, so consecutive legs meet without a kink", async () => {
+		// A quadratic leaves its first stop turned toward its control point and reaches its second
+		// turned as far the other way, so bowing both legs to the same side would put a corner on
+		// a middle stop the journey walks straight through.
+		const [first, second] = routeLegs(
+			[{ left: 0, top: 50 }, { left: 50, top: 50 }, { left: 100, top: 50 }], 1.4);
+		const arriving = [first.to.left - first.control.left, first.to.top - first.control.top];
+		const leaving = [second.control.left - second.from.left, second.control.top - second.from.top];
+		expect(leaving[0]).toBeCloseTo(arriving[0], 6);
+		expect(leaving[1]).toBeCloseTo(arriving[1], 6);
+		// ...and they are bowed, on opposite sides of the line the two of them share.
+		expect(Math.sign(first.control.top - 50)).toBe(-Math.sign(second.control.top - 50));
+	});
+
+	it("bows as deeply on a leg running north as on one running east", async () => {
+		// The same correction the heads' angle needs: 1% down is fewer pixels than 1% across, so a
+		// bow measured in raw percentages would be flat on one axis and fat on the other. These two
+		// legs are the same length on screen, so they must bow the same distance on screen.
+		const [east] = routeLegs([{ left: 30, top: 50 }, { left: 70, top: 50 }], 1.4);
+		const [south] = routeLegs([{ left: 50, top: 22 }, { left: 50, top: 78 }], 1.4);
+		expect(Math.abs(east.control.top - 50) / 1.4).toBeCloseTo(Math.abs(south.control.left - 50), 6);
+	});
+
+	it("caps the bend, so a long leg does not balloon", async () => {
+		const depth = leg => Math.abs(leg.control.top - 50);
+		const [across] = routeLegs([{ left: 0, top: 50 }, { left: 100, top: 50 }], 1.4);
+		const [long] = routeLegs([{ left: 20, top: 50 }, { left: 80, top: 50 }], 1.4);
+		const [short] = routeLegs([{ left: 45, top: 50 }, { left: 55, top: 50 }], 1.4);
+		// Past the cap two legs of different lengths bow alike; a short hop stays shallower.
+		expect(depth(across)).toBeCloseTo(depth(long), 6);
+		expect(depth(short)).toBeLessThan(depth(long));
+	});
+
+	// Where each head SITS is proven once, over every one of them, by "puts a head on every leg"
+	// below — this asserted the same three things about the last of them and failed with it.
+	// What is left here is the one thing that test does not say: the head on the end belongs to
+	// the final leg rather than to some earlier one, which is what makes it the destination's.
+	it("hangs the last head on the final leg, so it is the destination's", async () => {
+		const data = await dialog({ destination: "three-coven-lake" })._buildJourney();
+		const legs = data.map.path.legs;
+		const arrow = data.map.path.arrows.at(-1);
+		const end = legs.at(-1).to;
+		expect(Math.hypot(arrow.left - end.left, arrow.top - end.top))
+			.toBeLessThan(Math.hypot(arrow.left - legs[0].from.left, arrow.top - legs[0].from.top));
 	});
 
 	it("turns by the angle the eye sees, not the angle the percentages describe", async () => {
 		// The map box is wider than it is tall, so a step of 1% down is fewer pixels than 1% across.
 		// Taking the angle straight off the percentages would aim every diagonal too steeply.
-		const data = await dialog({ destination: "three-coven-lake" })._buildJourney();
-		const [, from, to] = points(data.map.path);
-		const naive = Math.atan2(to[1] - from[1], to[0] - from[0]) * 180 / Math.PI;
-		const corrected = Math.atan2((to[1] - from[1]) / data.map.aspect, to[0] - from[0]) * 180 / Math.PI;
-		expect(data.map.path.arrow.angle).toBeCloseTo(corrected, 1);
-		expect(Math.abs(data.map.path.arrow.angle - naive)).toBeGreaterThan(1);
+		//
+		// A leg whose control point sits ON its chord is a straight one, which is what isolates
+		// that correction from the turn a bowed leg adds to it.
+		const from = { left: 20, top: 20 };
+		const to = { left: 60, top: 70 };
+		const straight = { from, to, control: { left: 40, top: 45 } };
+		const naive = Math.atan2(to.top - from.top, to.left - from.left) * 180 / Math.PI;
+		const corrected = Math.atan2((to.top - from.top) / 1.4, to.left - from.left) * 180 / Math.PI;
+		expect(routeArrow(straight, 1.4).angle).toBeCloseTo(corrected, 1);
+		expect(Math.abs(routeArrow(straight, 1.4).angle - naive)).toBeGreaterThan(1);
 	});
 
-	it("points straight along an axis, where the two angles agree", async () => {
-		// A purely horizontal leg is the case the distortion cannot affect, so it pins the sign
-		// convention: 0 degrees is due east, and the SVG head is drawn pointing that way.
-		const d = Object.create(Object.getPrototypeOf(dialog()));
-		const east = d._routeArrow({ left: 10, top: 50 }, { left: 90, top: 50 }, 1.4);
-		expect(east.angle).toBe(0);
-		expect(east.left).toBe(87);
-		const south = d._routeArrow({ left: 50, top: 10 }, { left: 50, top: 90 }, 1.4);
-		expect(south.angle).toBe(90);
+	// The head is a fixed shape pinned at one point, so it can only be right if it takes its angle
+	// from the curve where it sits. Off the chord instead, it would sit visibly askew on the line.
+	it("lies along the curve where it sits, not along the chord", async () => {
+		const stops = [{ left: 20, top: 20 }, { left: 60, top: 70 }];
+		const [bowed] = routeLegs(stops, 1.4);
+		const straight = { ...bowed, control: { left: 40, top: 45 } };
+		expect(routeArrow(bowed, 1.4).angle).not.toBeCloseTo(routeArrow(straight, 1.4).angle, 1);
+	});
+
+	// A head on the far end alone says where the journey stops, not which way it is walked. The
+	// dots between the stops are evenly spaced and identical in both directions, so on a route
+	// that changes heading the middle of the line says nothing at all about the order of it.
+	it("puts a head on every leg, so each stretch says which way it is walked", async () => {
+		const data = await dialog({ destination: "three-coven-lake" })._buildJourney();
+		const drawn = points(data.map.path);
+		const { arrows } = data.map.path;
+		expect(drawn).toHaveLength(3);
+		expect(arrows).toHaveLength(2);
+		// Each head sits on its own leg, short of the stop that leg arrives at.
+		arrows.forEach((head, i) => {
+			const [from, to] = [drawn[i], drawn[i + 1]];
+			const toEnd = Math.hypot(head.left - to[0], head.top - to[1]);
+			expect(toEnd).toBeGreaterThan(0);
+			expect(toEnd).toBeLessThan(5);
+			expect(Math.hypot(head.left - from[0], head.top - from[1])).toBeGreaterThan(toEnd);
+		});
+	});
+
+	// The one on the end is the destination and should read as it; the rest are only direction.
+	it("flags the heads short of a waypoint, and not the one on the destination", async () => {
+		const { arrows } = (await dialog({ destination: "three-coven-lake" })._buildJourney()).map.path;
+		expect(arrows.map(a => a.waypoint)).toEqual([true, false]);
+	});
+
+	it("has one head, unflagged, on a journey drawn as a single leg", async () => {
+		const { arrows } = (await dialog({ destination: "the-red-grove" })._buildJourney()).map.path;
+		expect(arrows).toHaveLength(1);
+		expect(arrows[0].waypoint).toBe(false);
+	});
+
+	it("points along an axis in the sense the SVG head is drawn", async () => {
+		// The sign convention: 0 degrees is due east, and the head is drawn pointing that way. Its
+		// leg bows, so by the far end the head is already turning back toward the chord — east and
+		// a little south of it, never the other way about.
+		const [east] = routeLegs([{ left: 10, top: 50 }, { left: 90, top: 50 }], 1.4);
+		const head = routeArrow(east, 1.4);
+		// The bow is perpendicular to the leg, so on a due-east one it never moves the head across.
+		expect(head.left).toBe(87);
+		expect(head.angle).toBeGreaterThan(0);
+		expect(head.angle).toBeLessThan(20);
+		const [south] = routeLegs([{ left: 50, top: 10 }, { left: 50, top: 90 }], 1.4);
+		expect(routeArrow(south, 1.4).angle).toBeGreaterThan(90);
+		expect(routeArrow(south, 1.4).angle).toBeLessThan(110);
 	});
 
 	it("never backs the head past the stop before it on a short last leg", async () => {
-		const d = Object.create(Object.getPrototypeOf(dialog()));
-		const from = { left: 50, top: 50 };
-		const to = { left: 51, top: 50 };          // a 1% hop, shorter than the 3% back-off
-		const arrow = d._routeArrow(from, to, 1.4);
-		expect(arrow.left).toBeGreaterThan(from.left);
-		expect(arrow.left).toBeLessThanOrEqual(to.left);
+		// A 1% hop, shorter than the 3% back-off.
+		const [leg] = routeLegs([{ left: 50, top: 50 }, { left: 51, top: 50 }], 1.4);
+		const arrow = routeArrow(leg, 1.4);
+		expect(arrow.left).toBeGreaterThan(50);
+		expect(arrow.left).toBeLessThanOrEqual(51);
 	});
 
 	it("has no head to draw when the last two stops coincide", async () => {
-		const d = Object.create(Object.getPrototypeOf(dialog()));
-		expect(d._routeArrow({ left: 40, top: 40 }, { left: 40, top: 40 }, 1.4)).toBeNull();
+		const [leg] = routeLegs([{ left: 40, top: 40 }, { left: 40, top: 40 }], 1.4);
+		expect(routeArrow(leg, 1.4)).toBeNull();
 	});
 
 	it("draws nothing when fewer than two stops are on the map", async () => {
@@ -397,7 +519,9 @@ describe("the line showing the way they go", () => {
 	it("stays inside the picture, so the stroke cannot escape the frame", async () => {
 		for (const destination of ["lygos", "tors-fist", "three-coven-lake", "the-ruined-tower"]) {
 			const data = await dialog({ destination })._buildJourney();
-			for (const [x, y] of points(data.map.path)) {
+			// The control points as well as the stops: a leg's bow reaches out past its chord, and
+			// on a leg run along an edge that is the part that would leave the frame first.
+			for (const [x, y] of [...points(data.map.path), ...controls(data.map.path)]) {
 				expect(x, destination).toBeGreaterThanOrEqual(0);
 				expect(x, destination).toBeLessThanOrEqual(100);
 				expect(y, destination).toBeGreaterThanOrEqual(0);
@@ -421,15 +545,162 @@ describe("the line showing the way they go", () => {
 	});
 });
 
+describe("the outer map draws the inner map's journeys", () => {
+	// THE BUG THIS FIXES. Six places are lettered on the Vicinity alone, so choosing one and then
+	// opening the World's End took the whole route line away: `routePath` will not bridge a
+	// missing END, and the destination had no position on that map. They now carry an `anchor`
+	// spot there, which is a position and nothing else.
+	const INNER = ["the-crossroads", "the-maw", "the-red-grove", "cave-bears-den",
+		"the-ruined-tower", "the-foothills"];
+
+	it("draws the way to every place the Vicinity letters alone", async () => {
+		for (const destination of INNER) {
+			const data = await dialog({ origin: "stonetop", destination })._buildJourney("worlds-end");
+			expect(data.map.path, destination).not.toBeNull();
+			expect(data.map.offMap, destination).toBeNull();
+		}
+	});
+
+	// An anchor is a position, NOT a pin. Counting it as one would put six unlettered hotspots in a
+	// knot on top of Stonetop's own, and six overlapping Notes on every GM's World's End Scene,
+	// since module/utils/map-pins.js builds those from the same list.
+	it("gives them no pin on the outer map", async () => {
+		const data = await dialog({ origin: "stonetop", destination: "the-red-grove" })
+			._buildJourney("worlds-end");
+		const drawn = new Set(data.map.spots.map(spot => spot.slug));
+		for (const slug of INNER) expect(drawn, slug).not.toContain(slug);
+		expect(drawn).toContain("stonetop");
+	});
+
+	// The list still files them under the map that LETTERS them, which is also the map drawn at
+	// the scale those journeys actually happen on.
+	it("leaves them listed under the Vicinity", async () => {
+		const data = await dialog()._buildJourney();
+		const vicinity = data.groups.find(g => g.slug === "vicinity");
+		for (const slug of INNER) {
+			expect(vicinity.places.map(place => place.slug), slug).toContain(slug);
+		}
+	});
+
+	// The line ends ON the anchor rather than somewhere near it: placing that far end is the whole
+	// of what an anchor is for.
+	it("ends the line on the anchor itself", async () => {
+		const data = await dialog({ origin: "stonetop", destination: "the-red-grove" })
+			._buildJourney("worlds-end");
+		const spot = travelPlace("the-red-grove").spots["worlds-end"];
+		// The last point the path arrives at: its final Q's endpoint.
+		const last = data.map.path.d.split(" ").slice(-1)[0].split(",").map(Number);
+		expect(last).toEqual([Number((spot.fx * 100).toFixed(2)), Number((spot.fy * 100).toFixed(2))]);
+	});
+});
+
+describe("saying why a map has no line on it", () => {
+	// The refusal to bridge a missing END is right, and it was also SILENT: the map read as having
+	// forgotten the trip rather than as being unable to draw it. It still happens on the INNER map,
+	// which letters none of the World's End's own places.
+	it("names the end this map cannot draw, and the map that can", async () => {
+		const data = await dialog({ origin: "stonetop", destination: "marshedge" })
+			._buildJourney("vicinity");
+		expect(data.map.path).toBeNull();
+		expect(data.map.offMap).toMatchObject({
+			names: ["Marshedge"], other: "worlds-end", otherName: "The World's End",
+		});
+		// The sentence the readout prints, written from en.json rather than in the partial.
+		expect(data.map.offMap.sentence)
+			.toBe("This map doesn't draw Marshedge, so the way there isn't on it.");
+		expect(data.map.offMap.showLabel).toBe("Show The World's End");
+	});
+
+	it("names both ends when this map can draw neither", async () => {
+		// Two World's End places asked for on the Vicinity: it draws neither, and the note has to
+		// say so about the pair rather than picking one of them to blame.
+		const data = await dialog({ origin: "marshedge", destination: "titan-bones" })
+			._buildJourney("vicinity");
+		expect(data.map.path).toBeNull();
+		expect(data.map.offMap.names).toEqual(["Marshedge", "Titan Bones"]);
+		expect(data.map.offMap.sentence).toContain("Marshedge & Titan Bones");
+		expect(data.map.offMap.other).toBe("worlds-end");
+	});
+
+	it("says nothing at all when the line is drawn", async () => {
+		const data = await dialog({ origin: "stonetop", destination: "three-coven-lake" })
+			._buildJourney("worlds-end");
+		expect(data.map.path).not.toBeNull();
+		expect(data.map.offMap).toBeNull();
+	});
+
+	it("says nothing before a destination is chosen", async () => {
+		expect((await dialog()._buildJourney()).map.offMap).toBeNull();
+	});
+
+	// The note must not report a stop the line BRIDGES: that one is not why there is no line, and
+	// naming it would send the reader after the wrong map. Synthetic, for the reason set out over
+	// the bridging test further up.
+	it("says nothing about a missing stop in the middle", () => {
+		const route = { legs: [
+			{ from: "stonetop", to: "marshedge" },
+			{ from: "marshedge", to: "the-red-grove" },
+		] };
+		expect(offMapNote("vicinity", route)).toBeNull();
+	});
+
+	// The fallback for a journey no single map can draw. Nothing in the books reaches it today,
+	// because the World's End can now place every place there is. It stays because `other` is a
+	// lookup that can come back empty, and without this the note would offer a button naming no
+	// map at all.
+	it("offers no other map when none draws both ends", () => {
+		const route = { legs: [{ from: "atlantis", to: "narnia" }] };
+		const note = offMapNote("worlds-end", route);
+		expect(note.other).toBeNull();
+		expect(note.otherName).toBeNull();
+		// The bare array: `offMapNote` does geometry, and the joining is offMapNames' job --
+		// through `joinNames`, the system's one list-joiner, so this reads like every other
+		// "you got A, B & C" line in the system rather than wording its own pair.
+		expect(note.names).toEqual(["atlantis", "narnia"]);
+		expect(offMapNames(note)).toBe("atlantis & narnia");
+		expect(offMapNames({ names: ["a", "b", "c"] })).toBe("a, b & c");
+	});
+
+	// The note is rendered by the shared route partial, so BOTH surfaces get it: the walkthrough
+	// under its map and the "See the whole map" window under its viewport.
+	it("is carried by the readout both surfaces draw", () => {
+		const route = readFileSync(
+			new URL("../../templates/dialogs/partials/expedition-journey-route.hbs", import.meta.url), "utf8");
+		expect(route).toContain("journey.map.offMap");
+		// The partial prints the finished sentence and the button's label; the wording itself is
+		// in en.json and is built in ExpeditionDialog._offMapReadout, so what the template must
+		// still carry is those two fields and the tier the button switches to.
+		for (const field of ["sentence", "other", "showLabel"]) {
+			expect(route, field).toContain("journey.map.offMap." + field);
+		}
+	});
+
+	// The button that switches map is bound in journey-controls.js, which exists so that adding a
+	// control means editing ONE place rather than remembering both surfaces. A class the binder
+	// does not know is a button that reads as live and does nothing.
+	it("binds the switch-map button through the shared binder", () => {
+		const controls = readFileSync(
+			new URL("../../module/dialogs/journey-controls.js", import.meta.url), "utf8");
+		expect(controls).toContain("stonetop-journey-elsewhere");
+	});
+});
+
 describe("seeing the whole map", () => {
 	// The pin layer is rendered from the shared partial; here we only care that the dialog asks for
 	// it with the right tier's data and keeps an open window in step.
+	//
+	// PUT BACK AFTERWARDS. This stub takes a pin-layer context and reads `ctx.spots` off it, so a
+	// later block that renders any OTHER template through the same global gets a TypeError from a
+	// stub that was never meant for it. Leaving it in place made the file order-dependent in a way
+	// nothing announced.
+	const real = globalThis.renderTemplate;
 	beforeEach(() => {
 		globalThis.renderTemplate = (path, ctx) => Promise.resolve(
 			`<render path="${path}" tier="${ctx.tier}" spots="${ctx.spots.length}" `
 			+ `chosen="${ctx.spots.filter(s => s.isChosen).map(s => s.slug).join()}" `
-			+ `path-points="${ctx.path?.points ?? ""}">`);
+			+ `path-d="${ctx.path?.d ?? ""}">`);
 	});
+	afterEach(() => { globalThis.renderTemplate = real; });
 
 	it("builds for the map being shown, not for wherever the panel has moved on to", async () => {
 		// A window opened on the Vicinity keeps showing the Vicinity even once the destination has
@@ -448,7 +719,7 @@ describe("seeing the whole map", () => {
 	it("marks the chosen destination in the layer it hands the window", async () => {
 		const built = await dialog({ destination: "marshedge" })._buildJourney("worlds-end");
 		expect(built.pins).toContain('chosen="marshedge"');
-		expect(built.pins).toMatch(/path-points="[\d.,\s]+"/);
+		expect(built.pins).toMatch(/path-d="M [\d.,\s]+ Q [\d.,\s-]+"/);
 	});
 
 	it("renders the layer from the shared partial, so a pin cannot differ between the two", async () => {
@@ -639,6 +910,188 @@ describe("seeing the whole map", () => {
 	});
 });
 
+// Putting the route on the table's own map. The check itself lives in utils/scene-route.js and is
+// proven in tests/utils/scene-route.test.js; what is covered here is the dialog's half of it -
+// which button the GM is shown, and what pressing it does to the scene they are looking at.
+describe("drawing the route on the scene", () => {
+	/** A poster-map Scene stand-in, with the flag API the writer needs. */
+	function scene(slug = "vicinity", { name = null, width = 6000, height = 4714 } = {}) {
+		const doc = {
+			id: `scene-${slug}`,
+			name: name ?? (slug === "vicinity" ? "The Vicinity" : "The World's End"),
+			width, height,
+			flags: { "stonetop-pwd": slug ? { posterMap: slug } : {} },
+			// `update` rather than the flag helpers: the route is written and cleared through
+			// explicit `flags.<scope>.<key>` paths so it can reach a scope core would refuse to
+			// validate, which is what a rename of this package leaves behind. Dotted paths and
+			// the `-=` deletion key are the whole of what those writes need.
+			update: async (changes) => {
+				for (const [path, value] of Object.entries(changes ?? {})) {
+					const parts = path.split(".");
+					const key = parts.pop();
+					let node = doc;
+					for (const part of parts) node = (node[part] ??= {});
+					if (key.startsWith("-=")) delete node[key.slice(2)];
+					else node[key] = value;
+				}
+			},
+		};
+		return doc;
+	}
+
+	/** Put a scene on the canvas and in the world, and catch what the GM is told. */
+	function onCanvas(doc, others = []) {
+		globalThis.canvas = { scene: doc };
+		game.scenes = [doc, ...others];
+		const said = { info: [], warn: [] };
+		global.ui = {
+			notifications: {
+				info: msg => said.info.push(msg),
+				warn: msg => said.warn.push(msg),
+				error: () => {},
+			},
+		};
+		return said;
+	}
+
+	afterEach(() => { delete globalThis.canvas; });
+
+	it("offers no button until there is somewhere to go", async () => {
+		onCanvas(scene());
+		expect((await dialog()._buildJourney()).scene).toBeNull();
+	});
+
+	// It writes a Scene flag, which a player cannot do. A control that is visibly there and
+	// refuses on click is worse than one that never offered; the line still SHOWS for them.
+	it("offers no button to a player", async () => {
+		onCanvas(scene());
+		game.user.isGM = false;
+		expect((await dialog({ destination: "the-crossroads" })._buildJourney()).scene).toBeNull();
+	});
+
+	// `canvasReady` fires on every scene switch, and a full redraw of the walkthrough (plus every
+	// open map window) is expensive. The button is the only thing on either surface that turns on
+	// the canvas, so a switch that leaves it saying the same thing must cost nothing — and one
+	// that changes it must still redraw, which is the half worth guarding.
+	describe("redrawing when the canvas moves under it", () => {
+		/** A dialog that counts its own renders, with the canvas watch's bookkeeping primed. */
+		function watched(dest = "the-crossroads") {
+			const d = dialog({ destination: dest });
+			d.rendered = true;
+			let renders = 0;
+			d.render = () => { renders += 1; };
+			d._refreshMapWindows = async () => {};
+			// Parked on the step that carries the button; which step it is is not what is under
+			// test here, and the real stepper needs more of a dialog than this harness builds.
+			d._stepNav = () => ({ step: { journey: true } });
+			// What the panel was last drawn with, the way a real render stamps it.
+			d._sceneRouteShowing();
+			return { d, count: () => renders };
+		}
+
+		it("does nothing when the new scene says what the old one did", () => {
+			onCanvas(scene());
+			const { d, count } = watched();
+			d._sceneChanged();
+			expect(count()).toBe(0);
+			// A second scene that also carries no route: still nothing to redraw.
+			globalThis.canvas = { scene: scene("worlds-end") };
+			d._sceneChanged();
+			expect(count()).toBe(0);
+		});
+
+		it("redraws when the scene it walked onto is showing this very journey", async () => {
+			const carrying = scene();
+			onCanvas(carrying);
+			const { d, count } = watched();
+			// Another GM drew it, so the button must flip from "Draw" to "Take it off".
+			await showRouteOnScene(carrying, { origin: "stonetop", destination: "the-crossroads" });
+			d._sceneChanged();
+			expect(count()).toBe(1);
+			expect(d._sceneShowing).toBe(true);
+		});
+	});
+
+	it("offers to draw it when the scene has no route on it", async () => {
+		onCanvas(scene());
+		const { scene: button } = await dialog({ destination: "the-crossroads" })._buildJourney();
+		expect(button.showing).toBe(false);
+		expect(button.label).toBe("Draw it on the scene");
+	});
+
+	// The label follows THIS reader's canvas, not the map tab showing in the panel: the two come
+	// apart constantly, and a button offering to draw a line already on the map is a lie.
+	it("offers to take it off once this very journey is on the scene", async () => {
+		const doc = scene();
+		onCanvas(doc);
+		const d = dialog({ destination: "the-crossroads" });
+		await d._putRouteOnScene();
+		const { scene: button } = await d._buildJourney();
+		expect(button.showing).toBe(true);
+		expect(button.label).toBe("Take it off the scene");
+	});
+
+	it("stores the two slugs on the scene and says where the way now runs", async () => {
+		const doc = scene();
+		const said = onCanvas(doc);
+		await dialog({ destination: "the-crossroads" })._putRouteOnScene();
+		expect(doc.flags["stonetop-pwd"].expeditionRoute)
+			.toMatchObject({ origin: "stonetop", destination: "the-crossroads" });
+		expect(said.info[0]).toContain("the Crossroads");
+		expect(said.info[0]).toContain("The Vicinity");
+	});
+
+	it("takes it back off on a second press", async () => {
+		const doc = scene();
+		const said = onCanvas(doc);
+		const d = dialog({ destination: "the-crossroads" });
+		await d._putRouteOnScene();
+		await d._putRouteOnScene();
+		expect(doc.flags["stonetop-pwd"].expeditionRoute).toBeUndefined();
+		expect(said.info.at(-1)).toContain("off The Vicinity");
+	});
+
+	// The whole point of the alert. "Nothing happened" is the one answer none of the refusals
+	// deserve, and the map that WOULD take it is the only part of a no the GM can act on.
+	it("says why, and writes nothing, when the scene is no map of ours", async () => {
+		const doc = scene(null, { name: "The Barrow", width: 4000, height: 3000 });
+		const said = onCanvas(doc, [scene("vicinity")]);
+		await dialog({ destination: "the-crossroads" })._putRouteOnScene();
+		expect(doc.flags["stonetop-pwd"].expeditionRoute).toBeUndefined();
+		expect(said.info).toHaveLength(0);
+		expect(said.warn[0]).toContain("The Vicinity");
+	});
+
+	it("says which end the scene's map cannot place", async () => {
+		const said = onCanvas(scene("vicinity"), [scene("worlds-end")]);
+		await dialog({ destination: "tors-fist" })._putRouteOnScene();
+		expect(said.warn[0]).toContain("The World's End");
+	});
+
+	// The panel is on the World's End and the table is on the Vicinity, which is the ordinary
+	// state of things. Most journeys are drawable on either, and refusing because the two windows
+	// disagreed would be refusing something that plainly works.
+	it("draws for the scene the reader is on, not for the map tab the panel is showing", async () => {
+		const doc = scene("worlds-end");
+		const said = onCanvas(doc);
+		const d = dialog({ destination: "the-crossroads" });
+		d._showMapTier("vicinity");
+		await d._putRouteOnScene();
+		expect(doc.flags["stonetop-pwd"].expeditionRoute).toBeTruthy();
+		expect(said.info[0]).toContain("The World's End");
+	});
+
+	it("puts the button in the markup both surfaces render", async () => {
+		onCanvas(scene());
+		const journey = await dialog({ destination: "the-crossroads" })._buildJourney();
+		const html = await renderTemplate(
+			"systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-controls.hbs", { journey });
+		expect(html).toContain("stonetop-journey-to-scene");
+		expect(html).toContain("Draw it on the scene");
+	});
+});
+
+
 describe("the template asks for what the dialog builds", () => {
 	// A renamed context field is silent: Handlebars prints an empty string for a path that is not
 	// there, so the panel would just quietly lose its map or its day counts. Nothing else catches
@@ -666,6 +1119,7 @@ describe("the template asks for what the dialog builds", () => {
 		// Each {{#each}} block's body, checked against one real element of that collection.
 		const blocks = [
 			// The pin layer's context is one `map` object, so its paths carry no prefix.
+			["path.arrows", data.map.path.arrows[0]],
 			["spots", data.map.spots[0]],
 			["exits", data.map.exits[0]],
 			["journey.route.legs", data.route.legs[0]],

@@ -33,6 +33,13 @@ import {
 import { resolveTravelMap, travelMapFile, browseTravelMapArt } from "../book2-art/travel-map-art.js";
 import { openTravelMap } from "./TravelMapWindow.js";
 import { bindJourneyControls, journeyPick } from "./journey-controls.js";
+import { drawnOn, offMapNote, routePath, tierDrawingEnds } from "../utils/route-path.js";
+import { posterSceneFor } from "../book2-art/poster-map-catalog.js";
+import { format, localize } from "../utils/i18n.js";
+import {
+	clearRouteOnScene, offMapNames, routeFlagTouched, sceneRouteCheck, sceneRouteRefusal,
+	sceneShowsJourney, showRouteOnScene,
+} from "../utils/scene-route.js";
 
 const ANSWERS_SETTING = "expeditionAnswers";
 
@@ -407,7 +414,14 @@ export class ExpeditionDialog extends StepperDialog {
 			pick: (field, slug) => this._setJourneyPlace(field, slug),
 			showTier: tier => this._showMapTier(tier),
 		};
-		bindJourneyControls(html[0], { ...journeyHandlers, zoom: key => this._openMapWindow(key) });
+		bindJourneyControls(html[0], {
+			...journeyHandlers,
+			zoom: key => this._openMapWindow(key),
+			toScene: () => this._putRouteOnScene(),
+		});
+		// The scene button's label turns on what THIS reader's canvas is showing, which can change
+		// without anything in here happening. Re-wired on every render, released on close.
+		this._wireCanvasWatch();
 		// DELEGATED, not bound per hotspot: pins, edge arrows and list rows all wear this class and
 		// there are around thirty-five of them on a drawn map, re-created on every render.
 		html.on("click", ".stonetop-journey-pick", ev => journeyPick(ev.currentTarget.dataset, journeyHandlers));
@@ -655,12 +669,6 @@ export class ExpeditionDialog extends StepperDialog {
 		return journeyRoute(this._currentExpedition()?.journey);
 	}
 
-	/** Is `place` somewhere `tier` can draw — its own spot, or the edge arrow that points at it? */
-	_drawnOn(tier, place) {
-		if (!place) return false;
-		return !!travelPlace(place)?.spots?.[tier] || exitsOnMap(tier).some(e => e.node === place);
-	}
-
 	/**
 	 * Which map to show: what the GM last opened, else the CLOSEST one that can draw the whole
 	 * journey — both ends of it, not just the far one.
@@ -678,89 +686,18 @@ export class ExpeditionDialog extends StepperDialog {
 		// Nothing to travel to yet, so the origin is the whole of the journey — and it still has
 		// to be drawable. Returning the innermost map flat meant setting out from Marshedge, the
 		// Steplands or Tor's Fist opened a Vicinity with no "setting out" pin anywhere on it.
-		if (!destination) return slugs.find(slug => this._drawnOn(slug, origin)) ?? slugs[0];
-		// Innermost first: TRAVEL_MAPS is ordered outermost LAST, and the closer map is the one
-		// drawn at the scale the journey actually happens on.
-		const both = slugs.find(slug => this._drawnOn(slug, origin) && this._drawnOn(slug, destination));
+		if (!destination) return slugs.find(slug => drawnOn(slug, origin)) ?? slugs[0];
+		const both = tierDrawingEnds([origin, destination]);
 		if (both) return both;
 		// No single map holds both ends, so show the destination's own outermost — and for a place
 		// past every edge, the outermost map there is, whose arrow points at it.
-		return slugs.filter(slug => this._drawnOn(slug, destination)).at(-1) ?? slugs.at(-1);
+		return slugs.filter(slug => drawnOn(slug, destination)).at(-1) ?? slugs.at(-1);
 	}
 
 	/** A destination's travel time, for a pin label or a list row. */
 	_timeLabel(routes, slug) {
 		const route = routes.get(slug);
 		return route?.legs?.length ? formatTravelTime(route.total) : null;
-	}
-
-	/**
-	 * The route drawn as a run of points on ONE map, or null when it cannot be.
-	 *
-	 * Two things make this more than "join the pins". A stop can be missing from the map being
-	 * shown — the Foothills are drawn on the Vicinity but not on the World's End, so Stonetop to
-	 * Tor's Fist has a stop with nowhere to put it — and the line BRIDGES those rather than
-	 * breaking, which is honest for a schematic: it says "the way runs from here to there", never
-	 * that it follows this road. And a stop past the map's edge is drawn at the arrow that points
-	 * to it, which is what lets the line to Lygos run off the corner of the World's End instead of
-	 * stopping at Marshedge with nothing to say.
-	 *
-	 * Percentages, like every other position here, so the polyline rides a `0 0 100 100` viewBox
-	 * and rescales with the picture without measuring anything.
-	 */
-	_routePath(route, tier, frame, aspect) {
-		if (!route?.legs?.length) return null;
-		const arrows = new Map(exitsOnMap(tier).filter(e => e.node).map(e => [e.node, e]));
-		const at = slug => {
-			const spot = travelPlace(slug)?.spots?.[tier] ?? arrows.get(slug) ?? null;
-			return spot ? spotPercent(spot, frame) : null;
-		};
-		const stops = [route.legs[0].from, ...route.legs.map(leg => leg.to)];
-		const placed = stops.map(at);
-		// THE ENDS ARE NOT BRIDGEABLE. Dropping a missing stop from the MIDDLE is the honest
-		// schematic described above; dropping a missing one from either END silently shortens the
-		// journey to somewhere it merely passes through. Tor's Fist drawn on the Vicinity tab is
-		// the case: its own spot is on the other map, so the line stopped at the Foothills and
-		// planted the destination arrowhead on an unlabelled dot the party is only walking past.
-		// A journey with an end this map cannot show has no honest line, so it gets none.
-		if (!placed[0] || !placed.at(-1)) return null;
-		const points = placed.filter(Boolean);
-		// One point is a dot, not a path, and drawing it would just double the pin already there.
-		if (points.length < 2) return null;
-		return {
-			points: points.map(p => `${p.left.toFixed(2)},${p.top.toFixed(2)}`).join(" "),
-			arrow:  this._routeArrow(points.at(-2), points.at(-1), aspect),
-		};
-	}
-
-	/**
-	 * The arrowhead that says which end of the line is the destination.
-	 *
-	 * ITS ANGLE IS NOT THE ANGLE BETWEEN THE TWO POINTS. Both coordinates are percentages of a box
-	 * that is wider than it is tall, so a step of 1% across is a different number of pixels from a
-	 * step of 1% down, and the direction a reader SEES is not the direction the numbers describe.
-	 * Dividing the vertical component by the box's aspect converts into the pixel space the eye is
-	 * actually in. (This is the same distortion that rules out an SVG `orient="auto"` marker here:
-	 * it would take its angle from the unstretched user space and point visibly wide on a diagonal.)
-	 *
-	 * The head is then backed off along the segment so it points AT the destination pin instead of
-	 * sitting under it, and that back-off is undistorted the same way. It is capped at a share of
-	 * the final leg so a short last hop cannot push the arrow back past the stop before it.
-	 */
-	_routeArrow(from, to, aspect) {
-		const ratio = Number(aspect) > 0 ? Number(aspect) : 1;
-		// Into pixel-proportional space: x stays as-is, y shrinks by the box's width-to-height.
-		const dx = to.left - from.left;
-		const dy = (to.top - from.top) / ratio;
-		const len = Math.hypot(dx, dy);
-		if (!len) return null;
-		const back = Math.min(3, len * 0.4);
-		return {
-			left:  Number((to.left - (dx / len) * back).toFixed(2)),
-			// ...and back out of it, so the result is a percentage again like everything else here.
-			top:   Number((to.top - (dy / len) * back * ratio).toFixed(2)),
-			angle: Number((Math.atan2(dy, dx) * 180 / Math.PI).toFixed(2)),
-		};
 	}
 
 	/** A place's gazetteer entry in the merged journal pack, when the books give it one. */
@@ -781,6 +718,7 @@ export class ExpeditionDialog extends StepperDialog {
 	 */
 	_mapLayer(tier, art, { routes, route, origin, destination }) {
 		if (!art) return null;
+		const path = routePath(route, tier, art.frame, art.aspect);
 		// Both anchors read the same way: a label near an edge hangs INWARD, so it cannot spill
 		// out of the picture and give whatever is showing it a horizontal scrollbar.
 		const anchors = (left, top) => ({
@@ -791,7 +729,11 @@ export class ExpeditionDialog extends StepperDialog {
 			...art,
 			tier,
 			alt: `${travelMap(tier)?.name ?? "The region"}, from the Stonetop rulebooks`,
-			path: this._routePath(route, tier, art.frame, art.aspect),
+			path,
+			// Only ever set when there is no line: what the reader gets instead of one. The
+			// sentence is finished HERE rather than in the partial, so the readout and the
+			// refusal toast cannot come to word the same fact differently.
+			offMap: path ? null : this._offMapReadout(offMapNote(tier, route)),
 			spots: placesOnMap(tier).map(place => {
 				const { left, top } = spotPercent(place.spots[tier], art.frame);
 				const time = this._timeLabel(routes, place.slug);
@@ -891,7 +833,181 @@ export class ExpeditionDialog extends StepperDialog {
 				// used to tell the GM the days were filled in on every one of them.
 				hasDays:  chartBlankValue("days", route) !== null,
 			} : null,
+			scene: this._sceneRouteState(route),
 		};
+	}
+
+	/**
+	 * The state of the "draw it on the scene" button, or null when there is no button to draw.
+	 *
+	 * GM-ONLY, and not merely hidden from players: the button writes a Scene flag, which a player
+	 * cannot do. A control that is visibly there and refuses on click is worse than one that never
+	 * offered. Players still SEE the route once a GM puts one down, because the flag broadcasts
+	 * and every client paints from it.
+	 *
+	 * `showing` is asked of the scene on THIS reader's canvas, so the label tells the truth about
+	 * the map in front of them rather than about the one the GM who drew it was looking at. It is
+	 * recomputed on `canvasReady` (see `_wireCanvasWatch`), which is what keeps it honest when the
+	 * reader walks from one map to the other with the walkthrough open.
+	 */
+	_sceneRouteState(route) {
+		// ONE test, and it is `_sceneRouteShowing`'s: asking the same question here first meant the
+		// record it stamps was skipped on exactly the renders that answer "no button" — with no
+		// destination picked, or for a player — leaving `_sceneShowing` undefined. The next
+		// `canvasReady` then compared undefined against null, decided something had moved, and paid
+		// for the full re-render the guard exists to avoid.
+		const showing = this._sceneRouteShowing(route);
+		if (showing === null) return null;
+		return {
+			showing,
+			label: localize(`stonetop.expedition.route.${showing ? "take" : "draw"}`),
+			icon: showing ? "fa-eraser" : "fa-map-location-dot",
+			tooltip: localize(`stonetop.expedition.route.${showing ? "takeTip" : "drawTip"}`),
+		};
+	}
+
+	/**
+	 * The scene button's whole state as ONE tri-state: null when there is no button to draw at
+	 * all, else whether the canvas in front of this reader is already showing this journey.
+	 *
+	 * ONE function, asked both by the thing that draws the button and by the hook that decides
+	 * whether anything needs redrawing — a second copy of this condition is exactly how the
+	 * record it keeps below would go stale and start skipping redraws that mattered.
+	 *
+	 * It STAMPS what it saw on the way past, so `_sceneChanged` can tell a canvas event that
+	 * changed this panel from one that did not.
+	 *
+	 * NEITHER CALLER PAYS FOR A SOLVE IT DOES NOT NEED. `_buildJourney` has just solved the whole
+	 * travel graph and passes what it got, where re-solving cost a second Dijkstra over every
+	 * place plus `describeLegs` for every reachable one on every render of the journey step.
+	 * `_sceneChanged` has nothing in hand, and the two cheap gates below are ordered so that the
+	 * case it fires on most — the GM walking between two scenes with no destination picked at all
+	 * — never reaches the solve.
+	 */
+	_sceneRouteShowing(route) {
+		const pick = this._journeyPick();
+		const showing = (!game.user?.isGM || !pick.destination || !(route ?? this._journeyRoute())?.legs?.length)
+			? null
+			: sceneShowsJourney(globalThis.canvas?.scene ?? null, pick);
+		this._sceneShowing = showing;
+		return showing;
+	}
+
+	/**
+	 * The off-map note with its prose already written, or null when the line drew fine.
+	 *
+	 * `offMapNote` answers in slugs and names; turning that into a sentence is this layer's job,
+	 * and doing it here rather than in the partial is what lets the "Show <other map>" button be
+	 * the only markup the template owns.
+	 */
+	_offMapReadout(note) {
+		if (!note) return null;
+		const places = offMapNames(note);
+		return {
+			...note,
+			sentence: places
+				? format("stonetop.expedition.route.panelOffMap", { places })
+				: localize("stonetop.expedition.route.panelNoMap"),
+			showLabel: note.otherName
+				? format("stonetop.expedition.route.panelShow", { map: note.otherName })
+				: "",
+		};
+	}
+
+	/**
+	 * Put the route onto the scene on screen, or take it off again.
+	 *
+	 * IT DRAWS FOR THE SCENE THE READER IS ON, not for the map tab the panel happens to be showing.
+	 * Those come apart constantly and harmlessly: the panel follows a destination out to the
+	 * World's End while the table is still looking at the Vicinity, and most journeys are drawable
+	 * on either map. Refusing because the two disagreed would be refusing something that works.
+	 *
+	 * Every refusal says which map WOULD take it, because that is the only part of a "no" the
+	 * reader can act on. The check itself is in utils/scene-route.js, where it can be tested
+	 * without a canvas.
+	 */
+	async _putRouteOnScene() {
+		const scene = globalThis.canvas?.scene ?? null;
+		const pick = this._journeyPick();
+
+		// Already showing exactly this journey, so the button is the way back off.
+		if (sceneShowsJourney(scene, pick)) {
+			await clearRouteOnScene(scene);
+			ui.notifications?.info(format("stonetop.expedition.route.cleared", { scene: scene.name }));
+			return;
+		}
+
+		const check = sceneRouteCheck(scene, this._journeyRoute());
+		if (!check.ok) {
+			const hasScene = !!posterSceneFor(check.wanted, game.scenes ?? []);
+			ui.notifications?.warn(sceneRouteRefusal(check, { hasScene }));
+			return;
+		}
+
+		// THE PAIR OF PLACES, and nothing else: the flag used to carry the expedition's id and
+		// title too, which nothing ever read and which went stale the moment a trip was renamed.
+		const where = await showRouteOnScene(scene, pick);
+		ui.notifications?.info(format("stonetop.expedition.route.placed", { place: where, map: check.tierName }));
+		// Nothing to redraw here: both writes above are Scene updates, and `_wireCanvasWatch` is
+		// already listening for exactly those. Redrawing from this side as well would render the
+		// panel twice for one press, and would still leave the case that matters uncovered — a
+		// SECOND GM drawing the route from their own walkthrough, which this client only ever
+		// hears about as the very same hook.
+	}
+
+	/**
+	 * Keep the scene button honest while the canvas moves under the walkthrough.
+	 *
+	 * Its label turns on what the canvas is showing, and the canvas changes for reasons that have
+	 * nothing to do with this dialog: the GM clicks another scene in the nav bar, or another GM
+	 * draws a route from their own walkthrough. Both arrive as hooks, and without them this panel's
+	 * button goes on offering to draw a line that is already there, or to clear one that is not.
+	 *
+	 * Registered on render and dropped on close, the same shape IntroductionsDialog uses for its
+	 * combat watch. Re-registering is safe because the previous pair is always released first: a
+	 * walkthrough re-renders on every step change, and a hook left behind on each would end the
+	 * session with dozens of them redrawing a closed window.
+	 */
+	_wireCanvasWatch() {
+		this._dropCanvasWatch();
+		this._canvasHooks = [
+			["canvasReady", Hooks.on("canvasReady", () => this._sceneChanged())],
+			["updateScene", Hooks.on("updateScene", (scene, changes) => {
+				// Only our own flag, and only on the scene in front of this reader: a scene is
+				// written to constantly, and a re-render of the whole walkthrough on each of those
+				// would cost a browse and an image decode for nothing.
+				if (scene?.id !== globalThis.canvas?.scene?.id) return;
+				if (!routeFlagTouched(changes)) return;
+				this._sceneChanged();
+			})],
+		];
+	}
+
+	/**
+	 * Both surfaces re-read the canvas. The panel only when it is on the step that shows the
+	 * button.
+	 *
+	 * AND ONLY WHEN SOMETHING ACTUALLY MOVED. `canvasReady` fires on every scene switch, and the
+	 * only thing on either surface that turns on the canvas is the two-state button. Redrawing
+	 * regardless cost a full `solveTravel`, three `placesOnMap` passes, a whole Handlebars render
+	 * and a re-bind of every listener — and then, per open map window, a second `_buildJourney`
+	 * and three more renders — to arrive at the same picture. Walking between two scenes that
+	 * both show no route is the common case, and it is the one that changes nothing.
+	 */
+	_sceneChanged() {
+		const before = this._sceneShowing;
+		// Recomputes AND re-stamps, so the record can never drift from what is on screen.
+		if (this._sceneRouteShowing() === before) return;
+		if (this.rendered && this._stepNav().step?.journey) this.render(false);
+		// The popout carries the same button whenever it is OPEN, which includes while the
+		// walkthrough behind it has moved on to a step that does not draw the route at all.
+		this._refreshMapWindows().catch(err => warn("couldn't redraw a travel map window", err));
+	}
+
+	/** Let the canvas watch go. Called before re-registering and again on close. */
+	_dropCanvasWatch() {
+		for (const [name, id] of this._canvasHooks ?? []) Hooks.off(name, id);
+		this._canvasHooks = null;
 	}
 
 	/**
@@ -945,7 +1061,7 @@ export class ExpeditionDialog extends StepperDialog {
 		// matter, not just the destination: `_activeTier` promises "the closest map that can draw
 		// the whole journey", and a pinned tab outranks it, so a GM who had opened the World's End
 		// and then set out from the Red Grove got a Vicinity place on a continental map — no green
-		// pin anywhere, and `_routePath` returning null because that end has no spot to draw.
+		// pin anywhere, and `routePath` returning null because that end has no spot to draw.
 		this._journeyTier = null;
 		this._carryToChart(entry, before, journeyRoute(entry.journey));
 
@@ -1018,6 +1134,10 @@ export class ExpeditionDialog extends StepperDialog {
 			// A window navigated to another map is no longer the window for the map it was opened
 			// on, and the bookkeeping here is keyed by exactly that.
 			moved: (fromTier, toTier, app) => this._movedMapWindow(fromTier, toTier, app),
+			// Same act from either surface, and it goes through the panel for the same reason
+			// `pick` does: the trip lives here, and the notification has to name the trip's own
+			// destination whichever window the GM pressed the button in.
+			toScene: () => this._putRouteOnScene(),
 		};
 	}
 
@@ -1157,6 +1277,7 @@ export class ExpeditionDialog extends StepperDialog {
 	 * the one path through it.
 	 */
 	async close(options = {}) {
+		this._dropCanvasWatch();
 		await this._closeMapWindows();
 		return super.close(options);
 	}

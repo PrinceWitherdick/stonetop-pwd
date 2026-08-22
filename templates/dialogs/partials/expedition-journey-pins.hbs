@@ -1,36 +1,46 @@
-{{!-- The interactive layer of a regional map: the route line, its arrowhead, and a hotspot per
+{{!-- The interactive layer of a regional map: the route line, its arrowheads, and a hotspot per
       place. Its context is one `map` object from ExpeditionDialog._buildJourney.
 
       ITS OWN PARTIAL BECAUSE TWO SURFACES DRAW IT. The route step renders it over the map inside
       the walkthrough, and the "See the whole map" window renders the same markup over the same
       picture at whatever size the reader has zoomed to. Everything here is positioned in
       PERCENTAGES of its container, so both get the right answer from one set of numbers, and the
-      pins, the stroke and the arrowhead keep their pixel sizes while their positions scale.
+      pins, the stroke and the arrowheads keep their pixel sizes while their positions scale.
 
       The container must carry `.stonetop-journey-canvas` (that is what the CSS hangs off) and be
       a positioned box of the picture's exact shape. --}}
-{{!-- The way they go. The viewBox is the same 0-100 percentage space the pins are placed in,
-  stretched to the picture by preserveAspectRatio="none" — so the points need no
-  conversion. `vector-effect` then keeps the stroke and its dots round and evenly spaced
-  in SCREEN space, which that stretch would otherwise smear along one axis. Sits above the
-  map and below the pins, and takes no clicks. --}}
+{{!-- The way they go: one bowed leg per stop, joined into a single curve. The viewBox is the
+  same 0-100 percentage space the pins are placed in, stretched to the picture by
+  preserveAspectRatio="none" — so the curve needs no conversion either, since stretching a
+  quadratic leaves a quadratic and leaves it smooth where two of them meet. `vector-effect`
+  then keeps the stroke and its dots round and evenly spaced in SCREEN space, which that
+  stretch would otherwise smear along one axis. Sits above the map and below the pins, and
+  takes no clicks. --}}
 {{#if path}}
 <svg class="stonetop-journey-path" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-  <polyline class="stonetop-journey-path-case" points="{{path.points}}" vector-effect="non-scaling-stroke"></polyline>
-  <polyline class="stonetop-journey-path-ink" points="{{path.points}}" vector-effect="non-scaling-stroke"></polyline>
+  <path class="stonetop-journey-path-case" d="{{path.d}}" vector-effect="non-scaling-stroke"></path>
+  <path class="stonetop-journey-path-ink" d="{{path.d}}" vector-effect="non-scaling-stroke"></path>
 </svg>
 {{/if}}
 
-{{!-- Which end is the destination. Its own fixed-size SVG rather than a marker on the
-  polyline above: that one is stretched to the picture, which would both squash the head
-  and (with orient="auto") aim it off a diagonal. This one is sized in pixels and turned by
-  an angle already worked out in the box's real proportions, so it points true. --}}
-{{#with path.arrow}}
-<svg class="stonetop-journey-arrowhead" viewBox="0 0 10 10" aria-hidden="true" focusable="false"
+{{!-- Which way they are walking: one head short of every stop the route arrives at, the last of
+  them on the destination. Each is its own fixed-size SVG rather than a marker on the polyline
+  above: that one is stretched to the picture, which would both squash the head and (with
+  orient="auto") aim it off a diagonal. These are sized in pixels and turned by an angle already
+  worked out in the box's real proportions, taken from the curve where the head sits rather than
+  from the straight line between the stops, so each one lies along the leg it belongs to.
+
+  The TRIANGLE is `path.headD`, not written out here: the Scene painter draws the same head from
+  the same points (utils/route-path.js ROUTE_HEAD_POINTS), and a shape spelt out in both places is
+  one that gets reshaped in one of them. `../` reaches the map object the `{{#each}}` was opened
+  from, which is this partial's own context under both callers. --}}
+{{#each path.arrows}}
+<svg class="stonetop-journey-arrowhead{{#if waypoint}} stonetop-journey-arrowhead--waypoint{{/if}}"
+     viewBox="0 0 10 10" aria-hidden="true" focusable="false"
      style="left:{{left}}%;top:{{top}}%;transform:translate(-50%,-50%) rotate({{angle}}deg)">
-  <path d="M1 1.2 L9 5 L1 8.8 Z"></path>
+  <path d="{{../path.headD}}"></path>
 </svg>
-{{/with}}
+{{/each}}
 
 {{#each spots}}
 <button type="button" data-slug="{{slug}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"

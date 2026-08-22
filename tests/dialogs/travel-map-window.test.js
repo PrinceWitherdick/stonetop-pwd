@@ -60,6 +60,9 @@ function chromeRoot() {
 		chrome: el({ innerHTML: "" }),
 		foot:   el({ innerHTML: "" }),
 		tabs:   [el({ dataset: { tier: "vicinity" } }), el({ dataset: { tier: "worlds-end" } })],
+		// The readout's "show me the map that DOES draw this" button, which the same binder wires
+		// to the same handler as the tabs.
+		elsewhere: [el({ dataset: { tier: "vicinity" } })],
 	};
 	const byClass = {
 		".stonetop-journey-origin":     parts.origin,
@@ -69,7 +72,13 @@ function chromeRoot() {
 	};
 	return Object.assign(parts, {
 		querySelector: sel => byClass[sel] ?? null,
-		querySelectorAll: sel => (sel === ".stonetop-journey-tier" ? parts.tabs : []),
+		// Comma lists are split the way a real querySelectorAll reads them: the binder asks for the
+		// tabs and the readout's switch-map button in one call, and a fake that matched the whole
+		// string literally would report "no tabs here" and let a dead control through.
+		querySelectorAll: sel => sel.split(",").flatMap(one => ({
+			".stonetop-journey-tier":      parts.tabs,
+			".stonetop-journey-elsewhere": parts.elsewhere,
+		}[one.trim()] ?? [])),
 	});
 }
 

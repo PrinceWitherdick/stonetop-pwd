@@ -25,6 +25,20 @@
   {{else}}
   <span class="stonetop-journey-bound stonetop-journey-bound--empty">Tap a place to set the destination.</span>
   {{/if}}
+  {{!-- Put the way they go onto the table's own map. It sits with the DESTINATION rather than with
+        the map tabs because it is an act on the journey, not a choice of picture: the scene it
+        draws on is the one the reader is looking at, which need not be the map showing here.
+
+        GM-only, and absent rather than disabled for a player: it writes a Scene flag, which a
+        player cannot do, and a control that is visibly there and refuses on click is worse than
+        one that never offered. Players still SEE the line, because the flag broadcasts. Built only
+        once a destination is picked, for the same reason. See utils/scene-route.js. --}}
+  {{#if journey.scene}}
+  <button type="button" class="stonetop-journey-to-scene{{#if journey.scene.showing}} is-showing{{/if}}"
+          data-tooltip="{{journey.scene.tooltip}}">
+    <i class="fas {{journey.scene.icon}}"></i> {{journey.scene.label}}
+  </button>
+  {{/if}}
 </div>
 
 <div class="stonetop-journey-tiers" role="tablist" aria-label="Map">

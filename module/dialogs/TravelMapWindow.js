@@ -38,7 +38,8 @@ export class TravelMapWindow extends ImageZoomWindow {
 	 * @param {object} config.source          the planner behind it, supplying:
 	 *   `build(tier)`  -> Promise of the journey context for that tier (the same object the route
 	 *                     step renders), and
-	 *   `pick(field, slug)` -> Promise, writing an origin or destination to the trip.
+	 *   `pick(field, slug)` -> Promise, writing an origin or destination to the trip, and
+	 *   `toScene()` -> Promise, putting the route on the reader's own scene or taking it back off.
 	 * @param {object} config.journey         the first build's result, so the window opens populated
 	 */
 	constructor({ tier, source, journey } = {}, options = {}) {
@@ -102,10 +103,13 @@ export class TravelMapWindow extends ImageZoomWindow {
 	 * survives its own contents being swapped.
 	 */
 	_bindChrome(root) {
-		// No `zoom`: this window IS what that button opens.
+		// No `zoom`: this window IS what that button opens. `toScene` IS forwarded, because putting
+		// the route on the table's map is the same act wherever it is asked for, and this window is
+		// the surface a GM is most likely to be reading the route from when they think of it.
 		bindJourneyControls(root, {
 			pick: (field, slug) => this._pick(field, slug),
 			showTier: tier => this.showTier(tier),
+			toScene: () => this._source?.toScene?.(),
 		});
 	}
 

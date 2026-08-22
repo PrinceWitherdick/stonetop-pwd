@@ -287,6 +287,15 @@
 	   One default radius and its small/large companions; 50% and pill (999px)
 	   stay literal. */
 	--st-radius-sm: 3px;
+
+	/* THE ROUTE'S INK, and the one place it is written down.
+	   Two renderers draw this line — an SVG stroke in the expedition walkthrough and a PIXI path
+	   on the GM's Scene — and two pictures of the same country in front of the same table have to
+	   agree about the colour of the road. The Scene painter reads these back through
+	   `routeInk()` in utils/scene-route.js rather than carrying its own copy of the hex. */
+	--stonetop-route-ink: #b3261e;
+	--stonetop-route-case: #f4ecd8;
+	--stonetop-route-case-alpha: 0.9;
 	--st-radius:    4px;
 	--st-radius-lg: 6px;
 
@@ -29421,15 +29430,17 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	flex: 0 0 auto; display: inline-flex; width: auto; margin-left: auto;
 	padding: 2px 7px; font-size: var(--st-fs-2xs); line-height: 1.4;
 }
-
 /* Which map. Not `.stonetop-tabs`: two buttons that swap one picture are a zoom control,
    and reusing the sheet's tab chrome here would promise a tabbed panel underneath. */
 .stonetop-journey .stonetop-journey-tiers {
 	display: flex; gap: 6px; margin: 10px 0 6px;
 }
-/* The outline pill, worn by the map tabs here and by the "see the whole map" button further
-   down. One rule, so the two cannot drift apart; each keeps only its own size and type below. */
+/* The outline pill, worn by the map tabs here, by the "see the whole map" button further down,
+   and by the "put this route on the scene" button standing in a row with them
+   (module/utils/scene-route.js). One rule, so the three cannot drift apart; each keeps only its
+   own size and type below. */
 .stonetop-journey .stonetop-journey-tier,
+.stonetop-journey .stonetop-journey-to-scene,
 .stonetop-journey .stonetop-journey-zoom {
 	flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; width: auto;
 	font-size: var(--st-fs-2xs);
@@ -29442,14 +29453,27 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-family: var(--font-stonetop);
 	text-transform: uppercase; letter-spacing: 0.06em;
 }
+/* Put this route on the scene the table is looking at (module/utils/scene-route.js). The auto
+   margin is on the clear button ahead of it, so with a destination picked the two travel to the
+   right end of the row together. Without one this button is not rendered at all and the
+   empty-state line takes the auto margin instead. */
+.stonetop-journey .stonetop-journey-to-scene {
+	padding: 3px 10px; line-height: 1.4;
+}
 .stonetop-journey .stonetop-journey-tier:hover,
+.stonetop-journey .stonetop-journey-to-scene:hover,
 .stonetop-journey .stonetop-journey-zoom:hover {
 	background: var(--st-slate-hover-bg); border-color: var(--st-slate-hover-border);
 }
 .stonetop-journey .stonetop-journey-tier .fa-image-slash {
 	font-size: 0.85em; color: var(--st-text-faint);
 }
-.stonetop-journey .stonetop-journey-tier.is-active {
+/* The one that is chosen: the active map tab, and the scene button once the route is already on
+   the map, so that button is the way back off it. Gold, the same "this is the one you chose"
+   accent the chosen destination wears. Later than the base rule, per the modifier-ordering
+   house rule. */
+.stonetop-journey .stonetop-journey-tier.is-active,
+.stonetop-journey .stonetop-journey-to-scene.is-showing {
 	color: var(--st-gold-text); font-weight: 700;
 	background: var(--st-gold-bg); border-color: var(--st-gold-border);
 }
@@ -29473,7 +29497,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	background: #f4ecd8;
 }
 
-/* The route line. Two polylines over the same points: a cream casing under red dots, so each dot
+/* The route line. Two paths over the same curve: a cream casing under red dots, so each dot
    keeps its own halo and stays readable over the maps' tree-line hatching (the same job the pins'
    box-shadow does). Both are LITERAL colours, for the reason given below. `inset: 0` rather than a
    width/height pair so it tracks the wrapper's aspect-ratio box exactly. */
@@ -29487,12 +29511,17 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	/* Round caps on a 0-length dash ARE the dots. */
 	stroke-dasharray: 0.1 7;
 }
-.stonetop-journey-canvas .stonetop-journey-path-case { stroke: #f4ecd8; stroke-width: 7; stroke-opacity: 0.9; }
-.stonetop-journey-canvas .stonetop-journey-path-ink  { stroke: #b3261e; stroke-width: 3.5; }
+.stonetop-journey-canvas .stonetop-journey-path-case {
+	stroke: var(--stonetop-route-case);
+	stroke-width: 7;
+	stroke-opacity: var(--stonetop-route-case-alpha);
+}
+.stonetop-journey-canvas .stonetop-journey-path-ink { stroke: var(--stonetop-route-ink); stroke-width: 3.5; }
 
-/* The head on the destination end. Fixed pixel size and its own viewBox, so it is untouched by
-   the stretch the polyline above lives under; its rotation is computed in the box's real
-   proportions (ExpeditionDialog._routeArrow), which is what lets it point true on a diagonal.
+/* A head short of every stop the route arrives at, the last of them on the destination end.
+   Fixed pixel size and its own viewBox, so it is untouched by the stretch the polyline above
+   lives under; its rotation is computed in the box's real proportions
+   (utils/route-path.js routeArrow), which is what lets it point true on a diagonal.
    Cream stroke for the same halo the dots get. Below the pins, above the map, and takes no clicks. */
 .stonetop-journey-canvas .stonetop-journey-arrowhead {
 	position: absolute; width: 15px; height: 15px;
@@ -29501,9 +29530,23 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	   element's own centre or the head would swing off its anchor as the angle changes. */
 	transform-origin: 50% 50%;
 }
+/* Through the SAME tokens the ribbon and the beads above read, and the same ones the Scene's
+   painter reads back out of the stylesheet (utils/scene-route.js routeInk). These were literal
+   hexes, which meant re-inking the route moved the line and the canvas heads and left the
+   dialog's heads on last season's colour, on the same journey in front of the same table.
+   `stroke-opacity` rides along for the same reason: the canvas paints the halo at
+   `--stonetop-route-case-alpha` and a solid edge here would be a second, louder head.
+   The 1.4 is ROUTE_HEAD_EDGE x the head's 10-unit viewBox (utils/route-path.js). */
 .stonetop-journey-canvas .stonetop-journey-arrowhead path {
-	fill: #b3261e; stroke: #f4ecd8; stroke-width: 1.4; stroke-linejoin: round;
+	fill: var(--stonetop-route-ink); stroke: var(--stonetop-route-case);
+	stroke-width: 1.4; stroke-opacity: var(--stonetop-route-case-alpha); stroke-linejoin: round;
 	paint-order: stroke;
+}
+/* The heads on the stops along the way. Smaller than the one on the end, so the direction is
+   legible on every leg without a row of identical chevrons competing with the destination for
+   the eye. Later than the base rule it modifies, which is what lets equal specificity win. */
+.stonetop-journey-canvas .stonetop-journey-arrowhead--waypoint {
+	width: 11px; height: 11px;
 }
 
 /* One hotspot. `width: auto` because core sets `button { display: flex }`, which would
@@ -29606,6 +29649,28 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border: 1px solid var(--st-gold-border); border-radius: var(--st-radius-lg);
 	background: rgba(201,162,39,0.10);
 }
+/* WHY THIS MAP HAS NO LINE ON IT (utils/route-path.js offMapNote). Inside the same gold box as the
+   legs and above them, because it is the other half of one answer: the picture cannot draw this
+   journey, and the times underneath still can. Rendered ONLY when there is no line, so a reader
+   whose route is drawn never looks past it. */
+.stonetop-journey .stonetop-journey-offmap {
+	margin: 0 0 7px; padding: 0 0 7px;
+	border-bottom: 1px solid var(--st-gold-border);
+	font-size: var(--st-fs-2xs); color: var(--st-text-muted); line-height: 1.45;
+}
+.stonetop-journey .stonetop-journey-offmap > i { margin-right: 4px; color: var(--st-gold-text); }
+/* The way to the map that DOES draw it. A text button and not a pill: it is the end of a sentence,
+   not a call to action competing with the map tabs a few lines above it. Every one of core's
+   button rules is answered here, `width` included, because a Foundry button left alone fills its
+   row and would break the line it is sitting in. */
+.stonetop-journey .stonetop-journey-elsewhere {
+	display: inline-block; width: auto; min-width: 0; height: auto;
+	margin: 0; padding: 0; border: 0; background: none; box-shadow: none;
+	font: inherit; line-height: inherit; vertical-align: baseline;
+	color: var(--st-gold-text); text-decoration: underline; cursor: pointer;
+}
+.stonetop-journey .stonetop-journey-elsewhere:hover { color: var(--st-text); }
+
 .stonetop-journey .stonetop-journey-total {
 	font-family: var(--font-stonetop); font-size: var(--st-fs-sm); font-weight: 700;
 	color: var(--st-gold-text); text-transform: uppercase; letter-spacing: 0.05em;
@@ -34932,13 +34997,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 8px;
 	padding: 8px 10px 10px;
 }
-/* Only what differs from `.stonetop-image-zoom-view` above: the layout is already that rule's. */
+/* Only what differs from `.stonetop-image-zoom-view` above: the layout is already that rule's,
+   and so is the ground. This once painted the viewport the maps' own cream, so the margins around
+   a fitted picture matched the paper it is printed on; white reads better (user, 2026-08-21),
+   because the cream showed as a tan mat around the art rather than as more of the same page. */
 .stonetop-travel-map .stonetop-image-zoom-view {
 	border: 1px solid rgba(0,0,0,0.22);
 	border-radius: var(--st-radius);
-	/* The maps are ink on cream and carry their own ground, so the window behind them matches
-	   rather than showing a theme colour through the margins of a fitted picture. */
-	background: #f4ecd8;
 }
 .stonetop-travel-map-chrome,
 .stonetop-travel-map-foot { flex: 0 0 auto; }

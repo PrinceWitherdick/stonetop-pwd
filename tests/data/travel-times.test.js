@@ -195,6 +195,64 @@ describe("map positions", () => {
 		expect(exitsOnMap("worlds-end").map(e => e.to)).toContain(BEYOND_TIER);
 	});
 
+	// AN ANCHOR IS A POSITION WITHOUT A PIN. The Vicinity letters six places the World's End does
+	// not, so a trip to one of them had no route line at all on the outer map. They now carry a
+	// World's End spot marked `anchor`, which the line reads and nothing else does.
+	describe("the anchor spots", () => {
+		const INNER = ["the-crossroads", "the-maw", "the-red-grove", "cave-bears-den",
+			"the-ruined-tower", "the-foothills"];
+
+		it("gives each of the six inner places a World's End position", () => {
+			for (const slug of INNER) {
+				const spot = travelPlace(slug).spots["worlds-end"];
+				expect(spot, slug).toBeTruthy();
+				expect(spot.anchor, slug).toBe(true);
+			}
+		});
+
+		it("keeps them off the outer map's pins while leaving the inner map's alone", () => {
+			const outer = placesOnMap("worlds-end").map(place => place.slug);
+			const inner = placesOnMap("vicinity").map(place => place.slug);
+			for (const slug of INNER) {
+				expect(outer, slug).not.toContain(slug);
+				expect(inner, slug).toContain(slug);
+			}
+			// The map still draws everything it letters, Stonetop included.
+			expect(outer).toContain("stonetop");
+		});
+
+		it("marks nothing else as an anchor, on either map", () => {
+			const flagged = [];
+			for (const place of TRAVEL_PLACES) {
+				for (const [tier, spot] of Object.entries(place.spots ?? {})) {
+					if (spot.anchor) flagged.push(`${place.slug}@${tier}`);
+				}
+			}
+			expect(flagged.sort()).toEqual(INNER.map(slug => `${slug}@worlds-end`).sort());
+		});
+
+		// A refit that went wrong would show up here first: these six are the country immediately
+		// around Stonetop, and the Vicinity's whole footprint is about a quarter of the outer map.
+		// A number out in the Manmarch would draw a route line clear across the continent.
+		it("puts them in the country around Stonetop", () => {
+			const home = travelPlace("stonetop").spots["worlds-end"];
+			for (const slug of INNER) {
+				const spot = travelPlace(slug).spots["worlds-end"];
+				expect(Math.hypot(spot.fx - home.fx, spot.fy - home.fy), slug).toBeLessThan(0.15);
+			}
+		});
+
+		it("keeps every anchor inside the map", () => {
+			for (const slug of INNER) {
+				const spot = travelPlace(slug).spots["worlds-end"];
+				for (const axis of ["fx", "fy"]) {
+					expect(spot[axis], `${slug}.${axis}`).toBeGreaterThan(0);
+					expect(spot[axis], `${slug}.${axis}`).toBeLessThan(1);
+				}
+			}
+		});
+	});
+
 	it("orders a map's places down the page", () => {
 		const ys = placesOnMap("worlds-end").map(p => p.spots["worlds-end"].fy);
 		expect(ys).toEqual([...ys].sort((a, b) => a - b));

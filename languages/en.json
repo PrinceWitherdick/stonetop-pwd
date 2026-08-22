@@ -1140,6 +1140,31 @@
       "endPrompt": "Battle Joy ends. Roll +CON now? On a 10+ that was a rush, regain 1d4 HP; on a 7-9 you are winded but will be fine; on a 6- mark a debility, but do not mark XP. Choose No to simply come out of it.",
       "noRollType": "Your Battle Joy move has no stat set on it, so there was nothing to roll. You have come out of it all the same. Give the move a roll type to get the +CON roll.",
       "debilitiesIgnored": "Battle Joy: still marked, and doing nothing. You ignore the effects of debilities as long as you keep fighting."
+    },
+    "expedition": {
+      "route": {
+        "goToOpen": " Open {map} and try again.",
+        "goToImport": " This world has no scene for it yet. The Import Book Art macro builds one.",
+        "noScene": "There's no scene on screen to draw the route on.",
+        "noDestination": "Pick where they're bound first, and the way there can go on the map.",
+        "notAMap": "This scene isn't one of the poster maps, so there's nowhere on it the route means anything.",
+        "wrongMap": "{map} isn't the map this journey is drawn on.",
+        "notCharted": "{map} isn't a map the travel table charts a course across.",
+        "noSize": "This scene has no dimensions to place the route against.",
+        "wrongShape": "This scene's picture isn't the shape the map positions were measured against, so the route would run through the wrong valleys. Rebuild it from the Import Book Art macro to put it right.",
+        "offMapNamed": "{map} doesn't draw {places}, so the way there isn't on it.",
+        "offMapWhole": "{map} can't draw the whole of this journey.",
+        "refused": "The route can't go on this scene.",
+        "draw": "Draw it on the scene",
+        "take": "Take it off the scene",
+        "drawTip": "Draw this route on the map the table is looking at.",
+        "takeTip": "Take this route back off the map the table is looking at.",
+        "cleared": "The way there is off {scene}.",
+        "placed": "The way to {place} is on {map}.",
+        "panelOffMap": "This map doesn't draw {places}, so the way there isn't on it.",
+        "panelShow": "Show {map}",
+        "panelNoMap": "No one map draws both ends of this journey, so the way there isn't drawn. The legs below still hold."
+      }
     }
   }
 }
