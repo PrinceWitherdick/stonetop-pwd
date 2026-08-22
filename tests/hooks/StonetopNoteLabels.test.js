@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { onDrawStonetopNote } from "../../module/hooks/StonetopNoteLabels.js";
 import { PLACE_MARKER_ICON_SUFFIX } from "../../module/utils/map-pins.js";
+import { applyMapPinLabelMode } from "../../module/settings.js";
+import { POSTER_MAPS } from "../../module/book2-art/poster-map-catalog.js";
 
 // The label treatment our map pins get over core's: cream text on a translucent pill, and — for
 // the regional maps' place markers only — a name that stands on the map instead of waiting for
@@ -37,9 +39,11 @@ afterEach(() => { globalThis.PIXI = _pixi; });
  * A stand-in for a drawn Note, with core's own tooltip rule in `_refreshState` (note.mjs:230)
  * so the test is measuring what our wrapper does to core rather than to a convenient fiction.
  */
-function fakeNote(src, { tooltip = true } = {}) {
+function fakeNote(src, { tooltip = true, scene = null } = {}) {
 	const note = {
-		document: { texture: { src } },
+		// `parent` is the Scene a Note document belongs to, which is what decides whether this
+		// pin's map has an answer of its own about names.
+		document: { texture: { src }, parent: scene },
 		hover: false,
 		children: [],
 		tooltip: tooltip
@@ -176,5 +180,57 @@ describe("when the world asks for names on hover only", () => {
 		const note = fakeNote(MARKER, { tooltip: false });
 		expect(() => onDrawStonetopNote(note)).not.toThrow();
 		expect(note._stonetopLabelStyled).toBe(true);
+	});
+});
+
+describe("when one map has asked for names on hover only", () => {
+	// The switch is per map, so a world can carry both answers at once: the Vicinity wall-to-wall
+	// with the names the poster printing left out, the village map quiet under its lettered discs.
+	// What decides is the scene the pin is painted on, not the scene being looked at.
+	const VILLAGE = POSTER_MAPS[0];
+	const VICINITY = POSTER_MAPS[1];
+	const sceneFor = map => ({ name: map.name, flags: { "stonetop-pwd": { posterMap: map.slug } } });
+
+	let _game;
+	beforeEach(() => {
+		_game = globalThis.game;
+		globalThis.game = {
+			settings: {
+				get: (_scope, key) => key === "alwaysShowMapPinNames" ? true : { [VILLAGE.slug]: false },
+			},
+		};
+		applyMapPinLabelMode();
+	});
+	afterEach(() => { globalThis.game = _game; applyMapPinLabelMode(); });
+
+	it("hands that map's pins back to hover and leaves the others named", () => {
+		const quiet = fakeNote(MARKER, { scene: sceneFor(VILLAGE) });
+		onDrawStonetopNote(quiet);
+		expect(quiet.tooltip.visible).toBe(false);
+		quiet.hover = true;
+		quiet._refreshState();
+		expect(quiet.tooltip.visible).toBe(true);
+
+		const named = fakeNote(MARKER, { scene: sceneFor(VICINITY) });
+		onDrawStonetopNote(named);
+		expect(named.tooltip.visible).toBe(true);
+	});
+
+	it("asks about the pin's OWN scene, not the one on screen", () => {
+		// A note is drawn as part of the scene it belongs to; `canvas.scene` is whatever is being
+		// viewed. Reading the canvas would answer for the wrong map every time the two differ.
+		const _canvas = globalThis.canvas;
+		globalThis.canvas = { scene: sceneFor(VILLAGE) };
+		try {
+			const note = fakeNote(MARKER, { scene: sceneFor(VICINITY) });
+			onDrawStonetopNote(note);
+			expect(note.tooltip.visible).toBe(true);
+		} finally { globalThis.canvas = _canvas; }
+	});
+
+	it("leaves a scene of the GM's own following the world setting", () => {
+		const note = fakeNote(MARKER, { scene: { name: "The Barrow Under the Hill", flags: {} } });
+		onDrawStonetopNote(note);
+		expect(note.tooltip.visible).toBe(true);
 	});
 });

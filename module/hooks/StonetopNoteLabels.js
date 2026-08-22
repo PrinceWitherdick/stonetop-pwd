@@ -1,5 +1,5 @@
 import { systemAssetVariants } from "../migration/compat.js";
-import { getAlwaysShowMapPinNames } from "../settings.js";
+import { showMapPinNamesOn } from "../settings.js";
 import { LANDMARK_ICON_SUFFIX } from "./PlaceOfInterestDrop.js";
 import { THREAT_PIN_ICON_SUFFIX } from "./ThreatNotePins.js";
 // Make Stonetop map-note labels legible over busy hand-drawn maps.
@@ -30,7 +30,7 @@ const _OUR_NOTE_ICONS = [
 	...systemAssetVariants(THREAT_PIN_ICON_SUFFIX),     // threat, hazard + site pins
 ];
 
-// WHEN the label shows is one world setting over all of them, not a property of the family.
+// WHEN the label shows is a setting, not a property of the family.
 // Core shows a note's text only while the cursor is on it (Note#_refreshState), which is the
 // right default for an annotation and the wrong one for a place name: the poster maps ship as
 // the UNLABELLED printing of their artwork, so a reader who has to go hunting for each name
@@ -41,6 +41,12 @@ const _OUR_NOTE_ICONS = [
 // wants a quieter map, not a quieter half of one, and off is exactly core's own behaviour
 // handed back. Nothing about the note document changes either way, so the switch is free to
 // flip back and forth and costs a repaint.
+//
+// It is asked PER SCENE, though, and settings.js answers it: one world default, overridden per
+// poster map. The two regional maps are wall-to-wall names once they are marked up and the two
+// town maps are almost bare, so "names everywhere" and "names on hover" are genuinely different
+// right answers for two maps in the same world. What decides is the scene the pin is painted
+// on, which is why the scene is looked up here rather than the setting read directly.
 
 const _LABEL_TEXT_COLOR = "#f7efdc"; // warm cream, reads on the dark pill
 const _LABEL_STROKE_COLOR = 0x1b1009; // faint ink edge keeps letters crisp on light patches
@@ -58,7 +64,13 @@ function _isStonetopMapNote(noteDoc) {
 }
 
 /**
- * Show this note's label, unless this world has asked for names on hover only.
+ * Show this note's label, unless this map has asked for names on hover only.
+ *
+ * Which map that is comes off the note's OWN scene rather than off the canvas, because they are
+ * not always the same one: a note is drawn as part of the scene it belongs to, and the canvas
+ * getter answers whatever is being viewed. `canvas.scene` is the fallback for a stand-in note
+ * with no parent behind it, and a null scene is a fine question to ask: it is no poster map, so
+ * it lands on the world default, which is what any other scene gets too.
  *
  * Only ever turns a tooltip ON, and only for our own pins, so every other note on every scene
  * keeps core's hover behaviour untouched. Turning it off needs no counterpart here: core has
@@ -71,8 +83,13 @@ function _isStonetopMapNote(noteDoc) {
  * last and narrowest of those gates, the one that asks where the mouse is.
  */
 function _showPermanentLabel(note) {
-	if (!getAlwaysShowMapPinNames()) return;
+	// OURS first, and deliberately: this runs per note per refresh pass — canvas draw and every
+	// hover in and out — and it is an `includes` over a module constant, where the settings
+	// question below has to find the note's poster map first. Most notes on most scenes are not
+	// ours, and they now cost the cheap test alone.
 	if (!_isStonetopMapNote(note?.document)) return;
+	const scene = note?.document?.parent ?? globalThis.canvas?.scene ?? null;
+	if (!showMapPinNamesOn(scene)) return;
 	if (note.tooltip) note.tooltip.visible = true;
 }
 

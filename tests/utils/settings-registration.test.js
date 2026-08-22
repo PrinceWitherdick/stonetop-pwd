@@ -74,6 +74,15 @@ function searchCorpus() {
 	return out;
 }
 
+/** The settings menus' own templates, which localize copy that belongs to a menu, not a key. */
+function settingsTemplates() {
+	const dir = path.join(ROOT, "templates/settings");
+	if (!fs.existsSync(dir)) return [];
+	return fs.readdirSync(dir)
+		.filter(name => name.endsWith(".hbs"))
+		.map(name => fs.readFileSync(path.join(dir, name), "utf8"));
+}
+
 const REGISTRATIONS = registrations();
 const HOVER_KEYS = hoverKeys();
 // The per-effect weather switches, registered in a loop off their own table rather than one
@@ -132,6 +141,13 @@ describe("settings registration", () => {
 	it("has no orphaned stonetop.settings.* strings in en.json", () => {
 		const declared = new Set();
 		for (const m of SETTINGS_SRC.matchAll(/"(stonetop\.settings\.[A-Za-z0-9_.]+)"/g)) declared.add(m[1]);
+		// A settings MENU renders its own template, and copy that belongs to the menu rather than
+		// to any one key (a note above the rows, the labels on a tristate select) is localized
+		// there and named nowhere else. Those are references too, and a scan that could not see
+		// them would report every one as an orphan and push it into being a bare string.
+		for (const src of settingsTemplates()) {
+			for (const m of src.matchAll(/"(stonetop\.settings\.[A-Za-z0-9_.]+)"/g)) declared.add(m[1]);
+		}
 		for (const key of [...HOVER_KEYS, ...WEATHER_FX_KEYS]) {
 			declared.add(`stonetop.settings.${key}.name`);
 			declared.add(`stonetop.settings.${key}.hint`);

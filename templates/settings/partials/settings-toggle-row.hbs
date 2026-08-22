@@ -1,0 +1,16 @@
+{{!-- One labelled checkbox in a settings submenu, with its hint under it.
+
+      Three shapes used to write this out separately: the master toggle at the top of each menu,
+      and every row of the hover-descriptions list. They differ only in the field name, the id and
+      where the two strings come from, so they are all this partial now.
+
+      "name" is the form field the menu's update reads back, and "id" is only there to tie the
+      label to the input. Pass label/hint already localized, or labelKey/hintKey to have it done
+      here — the hover menu localizes per row in getData, the master toggles do not. --}}
+<div class="form-group">
+	<label for="stonetop-{{id}}">{{#if labelKey}}{{localize labelKey}}{{else}}{{label}}{{/if}}</label>
+	<div class="form-fields">
+		<input id="stonetop-{{id}}" type="checkbox" class="stonetop-check" name="{{name}}" {{#if checked}}checked{{/if}}>
+	</div>
+	<p class="notes">{{#if hintKey}}{{localize hintKey}}{{else}}{{hint}}{{/if}}</p>
+</div>

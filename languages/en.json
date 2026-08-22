@@ -403,8 +403,18 @@
         "hint": "The slate grey a storm or a tornado washes the daylight with. Off keeps the cloud and the rain and leaves your map its own colours."
       },
       "alwaysShowMapPinNames": {
-        "name": "Map Pins: Always Show Names",
-        "hint": "When on (the default), every Stonetop map pin wears its name on the map: the poster maps are the unlabelled printing of artwork the books print labelled, and this puts the names back. Covers the lettered places of interest, the regional and village map markers, and your threat, hazard and site pins. Turn off to hand all of them back to Foundry's own behaviour, showing a name only while the cursor is on the pin, for a table that would rather look at the drawing."
+        "name": "Map Pin Names: Show By Default",
+        "hint": "When on (the default), a Stonetop map pin wears its name on the map instead of waiting for the cursor. The poster maps are the unlabelled printing of artwork the books print labelled, and this puts the names back. Covers the lettered places of interest, the regional and village map markers, and your threat, hazard and site pins. This is the default every map follows unless you give it an answer of its own below, and it is the only answer for scenes that are not poster maps."
+      },
+      "mapPinNameSettings": {
+        "name": "Map Pin Names",
+        "label": "Configure",
+        "hint": "Choose whether Stonetop map pins wear their names on the map, for all maps at once or one poster map at a time.",
+        "title": "Map Pin Names",
+        "perMapNote": "Each imported poster map can answer for itself. A map set to follow the world setting changes with it; one given an answer of its own keeps that answer whatever the setting above says.",
+        "followDefault": "Follow the world setting",
+        "alwaysShow": "Always show names",
+        "hoverOnly": "Show names on hover only"
       },
       "customMovesGmOnly": {
         "name": "Custom Moves: GM Only",

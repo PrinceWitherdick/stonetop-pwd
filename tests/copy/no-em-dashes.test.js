@@ -52,7 +52,7 @@ const ALLOWED = {
 
 	// Names that are also lookup keys. These strings are written into a Scene and a JournalEntry
 	// page and then matched by name on the next run, so editing one orphans what it points at.
-	"module/book2-art/poster-maps.js":  "scene names, matched by name on re-import",
+	"module/book2-art/poster-map-catalog.js": "scene names, matched by name on re-import",
 	"module/utils/chronicle-core.js":   "chronicle page names, matched by name",
 };
 

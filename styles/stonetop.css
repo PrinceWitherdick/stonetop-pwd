@@ -3620,17 +3620,29 @@ input.stonetop-name-field {
 	display: none;
 }
 
-.stonetop-hover-settings .form-group {
+/* The settings submenus. Both are the same object: a stack of labelled rows with one control
+   each and a Save at the bottom, so they share the layout rather than each restating it. */
+.stonetop-hover-settings .form-group,
+.stonetop-map-pin-name-settings .form-group {
 	align-items: flex-start;
 }
 
-.stonetop-hover-settings .form-fields {
+.stonetop-hover-settings .form-fields,
+.stonetop-map-pin-name-settings .form-fields {
 	flex: 0 0 auto;
 }
 
-.stonetop-hover-settings .sheet-footer {
+.stonetop-hover-settings .sheet-footer,
+.stonetop-map-pin-name-settings .sheet-footer {
 	margin-top: 12px;
 	justify-content: flex-end;
+}
+
+/* The per-map rows carry a select rather than a checkbox, and `flex: 0 0 auto` above sizes it
+   to its widest option. Given a floor it lines the five up in a column instead of stepping in
+   and out with the length of whichever answer each map happens to be showing. */
+.stonetop-map-pin-name-settings .form-fields select {
+	min-width: 16em;
 }
 
 select[name="stonetop-pwd.sheetFont"] option[value="libre-caslon"],

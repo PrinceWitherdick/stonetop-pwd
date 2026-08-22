@@ -1,5 +1,6 @@
 import { SYSTEM_ID } from "../system-id.js";
-import { ALL_SYSTEM_IDS } from "../migration/compat.js";
+import { POSTER_MAPS, isPosterMapScene, sceneOrigin, scopedFlag } from "./poster-map-catalog.js";
+export { POSTER_MAPS, isPosterMapScene } from "./poster-map-catalog.js";
 import { book2ArtSrcWith } from "./art-root.js";
 import { browseArtDirs, servedPath } from "./browse.js";
 import { loadImage, artImageUrl } from "./rebuild-crops.js";
@@ -29,11 +30,15 @@ import { error, info } from "../utils/logger.js";
 // Scenes back short of re-running the whole PDF import. This module closes that gap: the
 // ready flow browses the folder, and offers to build the Scenes from what it finds.
 //
-// The map catalog below MIRRORS `manifest.maps` in the importer macro
-// (packs/src/stonetop-macros/import-book2-art.json). Nothing at runtime can derive it —
-// the macro's manifest is not shipped as a module — so it is duplicated here on purpose
-// and pinned by tests/book2-art/poster-maps.test.js, which reads the macro's own manifest
-// out of the pack source and fails if the two ever drift.
+// The map catalog itself lives next door in poster-map-catalog.js, and is re-exported from
+// here because this is where every caller has always imported it from. It moved because the
+// per-map "do this map's pins wear their names?" switch is registered in settings.js, which
+// this file reads, so settings.js cannot read this file back without a cycle. What the catalog
+// IS has not changed: it MIRRORS `manifest.maps` in the importer macro
+// (packs/src/stonetop-macros/import-book2-art.json). Nothing at runtime can derive it, since
+// the macro's manifest is not shipped as a module, so it is duplicated on purpose and pinned by
+// tests/book2-art/poster-maps.test.js, which reads the macro's own manifest out of the pack
+// source and fails if the two ever drift.
 //
 // The BEHAVIOUR is not duplicated: the macro imports `upsertPosterMapScene` from this file
 // at runtime rather than carrying its own copy, so a Scene the macro builds and one this
@@ -54,91 +59,6 @@ const MARKER_RECORD_SETTING = "regionalMapMarkers";
 const SCENE_BACKDROP = "#1a1a1a";
 const SCENE_FIT = "fill";
 
-/**
- * The five poster maps, in nav-bar order. `out` is the path within the durable art folder
- * the importer writes them to; `notes` are the village map's lettered pins, stored as
- * FRACTIONS of the scene so they land correctly whatever resolution the GM's image is.
- */
-export const POSTER_MAPS = Object.freeze([
-	{
-		slug: "stonetop-village",
-		name: "Stonetop — The Village",
-		navName: "The Village",
-		navOrder: 0,
-		sort: 100000,
-		out: "assets/maps/map-stonetop-village.webp",
-		hint: "Book I or the free Setting Overview handout",
-		width: 6000,
-		height: 4714,
-		notes: [
-			{ key: "f",   letter: "f", name: "Watchtowers",         fx: 0.456,   fy: 0.22889 },
-			{ key: "a",   letter: "a", name: "The Stone",           fx: 0.40783, fy: 0.33135 },
-			{ key: "b",   letter: "b", name: "The Granary",         fx: 0.386,   fy: 0.27874 },
-			{ key: "c",   letter: "c", name: "The Public House",    fx: 0.50833, fy: 0.31396 },
-			{ key: "d",   letter: "d", name: "Cistern",             fx: 0.40533, fy: 0.39584 },
-			{ key: "e",   letter: "e", name: "Pavilion of the Gods", fx: 0.50583, fy: 0.37802 },
-			{ key: "f-2", letter: "f", name: "Watchtowers",         fx: 0.226,   fy: 0.44018 },
-			{ key: "f-3", letter: "f", name: "Watchtowers",         fx: 0.62483, fy: 0.46542 },
-		],
-	},
-	{
-		slug: "vicinity", name: "The Vicinity", navName: "The Vicinity", navOrder: 1, sort: 200000,
-		out: "assets/maps/map-vicinity.webp", hint: "Book I or the free Setting Overview handout",
-		width: 6000, height: 4714,
-	},
-	{
-		slug: "worlds-end", name: "The World's End", navName: "World's End", navOrder: 2, sort: 300000,
-		out: "assets/maps/map-worlds-end.webp", hint: "Book I or the free Setting Overview handout",
-		width: 6000, height: 4714,
-	},
-	{
-		slug: "marshedge", name: "Marshedge", navName: "Marshedge", navOrder: 3, sort: 400000,
-		out: "assets/maps/map-marshedge.webp", hint: "Book II",
-		width: 6000, height: 4714,
-	},
-	{
-		slug: "gordins-delve", name: "Gordin's Delve", navName: "Gordin's Delve", navOrder: 4, sort: 500000,
-		out: "assets/maps/map-gordins-delve.webp", hint: "Book II",
-		width: 6000, height: 4714,
-	},
-]);
-
-/**
- * Is this Scene one of ours for `map`? Matched on the `posterMap` flag first, then by name
- * — the same two-step lookup the importer macro uses, so a Scene the macro built (or one the
- * GM renamed the system's way) is recognised rather than duplicated.
- *
- * The flag is read across every scope this package has shipped under, because the macro
- * stamps it with the RUNTIME `game.system.id` (the install folder name) while everything
- * else in this system writes the pinned SYSTEM_ID. On a normally-named install those are
- * the same string; on a renamed folder they are not, and a mismatch here would mean
- * building a second Scene beside the GM's existing one.
- */
-export function isPosterMapScene(scene, map) {
-	if (scopedFlag(scene, "posterMap") === map.slug) return true;
-	return scene?.name === map.name;
-}
-
-/** Every flag scope our own documents could have been stamped with — see isPosterMapScene. */
-function flagScopes() {
-	return [...ALL_SYSTEM_IDS, globalThis.game?.system?.id].filter(Boolean);
-}
-
-/**
- * One of our flags off a Scene or a Note, under whichever scope it was stamped with.
- *
- * The scope walk, written once. Five places in this file asked the same question about a
- * different key, and a rename of the package is exactly the sort of change that has to reach
- * all five or none of them.
- */
-function scopedFlag(doc, key) {
-	const flags = doc?.flags ?? {};
-	for (const scope of flagScopes()) {
-		const value = flags[scope]?.[key];
-		if (value) return value;
-	}
-	return null;
-}
 
 /**
  * What the offer should show: one row per poster map whose image is on disk, flagged with
@@ -241,6 +161,14 @@ export async function upsertPosterMapScene(map, img) {
 	const width = map.width;
 	const height = posterMapSceneHeight(map, img);
 
+	// Matched against the `map` this caller HANDED US, not against whatever the shipped catalog
+	// happens to say about that slug. This function is the importer macro's runtime contract — the
+	// macro imports it and calls it with a row from its OWN manifest, and a world holds whichever
+	// copy of that macro the GM once imported. Round-tripping through `posterSceneFor` would
+	// resolve the slug back through the catalog, answer null outright for a slug the catalog no
+	// longer lists, and compare the name fallback against the CATALOG's name rather than the
+	// caller's — so a stale macro or a map renamed in a later release would build a SECOND Scene
+	// beside the GM's and re-lay every pin on it.
 	let scene = (game.scenes ?? []).find(s => isPosterMapScene(s, map)) ?? null;
 	let created = false;
 	if (!scene) {
@@ -316,24 +244,6 @@ async function placeLetteredPins(scene, map, width, height) {
 		flags: { [SYSTEM_ID]: { posterPin: note.key } },
 	})));
 	return missing.length;
-}
-
-/**
- * Where the top-left of a Scene's PICTURE sits in the coordinate space its Notes live in.
- *
- * Not the same point, and the difference is a whole map's worth of misplacement. A Note's x/y are
- * canvas coordinates, and the canvas is the scene rectangle plus its padding margin, so a Scene
- * with any padding at all puts the artwork's own origin at `dimensions.sceneX/sceneY` rather than
- * at zero. Ours are built unpadded, where the two coincide, but nothing stops a GM from adding
- * padding to a Scene afterwards, and the failure mode is silent: every pin lands out on the blank
- * margin with the map itself untouched.
- *
- * Read defensively because it is a computed getter: a Scene stand-in in a test has no such thing,
- * and zero is exactly right for the unpadded case it stands in for.
- */
-function sceneOrigin(scene) {
-	const dims = scene?.dimensions;
-	return { x: Number(dims?.sceneX) || 0, y: Number(dims?.sceneY) || 0 };
 }
 
 /** The `posterPin` key we stamped on a note, under any scope this package has shipped under. */
