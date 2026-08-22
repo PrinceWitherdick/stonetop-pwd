@@ -13561,10 +13561,28 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	position: absolute;
 	/* Hung below the sheet's own header banner — the portrait / name block — rather than off
 	   the title bar, which is where dnd5e puts its rail (`top: calc(sheet-header + 1rem)`).
-	   With the tab count these sheets carry that lands the rail's middle around a third of
-	   the way down the window. tab-rail.js measures the banner and stamps the value; the
-	   fallback below is only what shows for the frame before that lands. */
-	top: var(--st-rail-top, 150px);
+	   tab-rail.js measures the banner and stamps the value; the fallback inside the `var()`
+	   is only what shows for the frame before that lands.
+
+	   Clamped, because the banner is only a good anchor while the window is tall enough to
+	   make it one. dnd5e can hang a rail off a flat 170px header because its sheet is always
+	   tall; ours are content-sized, and the NPC is the case that breaks. A portrait, a name
+	   and a line of prose put its banner's bottom nearly halfway down a window that stops
+	   just past the details block below it, so the rail — three tabs, on a sheet that short —
+	   sat in the window's bottom third with empty frame above it.
+
+	   `--st-rail-max-depth` caps how far down the rail may START, as a share of the window's
+	   own height. That pulls it back into the upper third on a short sheet and changes
+	   nothing on a tall one: a character sheet floored at 620px has its banner bottom well
+	   inside a third already, so `min()` keeps the measured anchor there. A percentage rather
+	   than px so it tracks a drag-resize on its own — the stamped value cannot, being
+	   rewritten only on render.
+
+	   The `max()` floor keeps the rail off the window's own title bar: a third of a window
+	   dragged down to core's 50px minimum is 16px, which is inside the bar. */
+	--st-rail-max-depth: 33%;
+	--st-rail-anchor: max(30px, min(var(--st-rail-top, 150px), var(--st-rail-max-depth)));
+	top: var(--st-rail-anchor);
 	/* Fully outside the frame's right edge — the whole point. `.window-app` is positioned
 	   (`position: fixed`), so it is the containing block and 100% is its own width. */
 	left: 100%;
@@ -13610,7 +13628,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	   this had nothing to do with the window being short. The NPC escaped it only because its
 	   frame has no `pbta` class. Restate `height` and the rail sizes to its own content again. */
 	height: auto;
-	max-height: max(96px, calc(100% - var(--st-rail-top, 150px)));
+	max-height: max(96px, calc(100% - var(--st-rail-anchor)));
 	overflow-y: auto;
 	overflow-x: hidden;
 	scrollbar-width: none;
