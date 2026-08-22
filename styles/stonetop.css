@@ -31173,41 +31173,51 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--color-text-hyperlink, slategrey);
 }
 
-/* Pop-up rich-notes editor launched from a roster row. Lay the dialog out as a flex
-   column so the ProseMirror editor fills the body and the footer button row pins to the
-   bottom instead of floating below a short editor. The `> form` rule covers the case
-   where Foundry wraps the content + buttons in a form; the direct-child rules cover when
-   it doesn't. */
-.stonetop-npc-notes-window .window-content {
+/* Every pop-up rich-notes editor (module/dialogs/prose-notes-dialog.js): the roster row's NPC
+   notes and the GM Toolkit's encounter notes. Lay the dialog out as a flex column so the
+   ProseMirror editor fills the body and the footer button row pins to the bottom instead of
+   floating below a short editor. The `> form` rule covers the case where Foundry wraps the
+   content + buttons in a form; the direct-child rules cover when it doesn't.
+
+   ONE block for both, because they are now literally the same dialog. They were not before: the
+   encounter window carried only the body/editor pair and none of the column layout, so its
+   footer floated — the exact drift that keeping two copies invites. */
+.stonetop-prose-notes-window .window-content {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 }
-.stonetop-npc-notes-window .window-content > form {
+.stonetop-prose-notes-window .window-content > form {
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 auto;
 	min-height: 0;
 }
-.stonetop-npc-notes-window .dialog-content {
+.stonetop-prose-notes-window .dialog-content {
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 auto;
 	min-height: 0;
 }
-.stonetop-npc-notes-window .dialog-buttons {
+.stonetop-prose-notes-window .dialog-buttons {
 	flex: 0 0 auto;
 }
-.stonetop-npc-notes-window .stonetop-npc-notes-dialog-body {
+.stonetop-prose-notes-window .stonetop-prose-notes-body {
 	display: flex;
 	flex: 1 1 auto;
-	min-height: 260px;
+	min-height: 0;
 }
-.stonetop-npc-notes-window .stonetop-npc-notes-dialog-editor {
+.stonetop-prose-notes-window .stonetop-prose-notes-editor {
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 auto;
 	min-height: 0;
+}
+
+/* The NPC dialog alone keeps a floor under its editor, so a roster note opens tall enough to
+   write a paragraph in. MODIFIER-STYLE: later than the base rule it overrides. */
+.stonetop-npc-notes-window .stonetop-prose-notes-body {
+	min-height: 260px;
 }
 
 /* ── Notes prose size (character / NPC / monster / steading) ───────────────
@@ -31254,7 +31264,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop .character-notes-editor .editor-content,
 .stonetop .stonetop-npc-notes-editor .editor-content,
-.stonetop .stonetop-npc-notes-dialog-editor .editor-content,
+.stonetop .stonetop-prose-notes-editor .editor-content,
 .stonetop .stonetop-monster-notes-editor .editor-content,
 .stonetop .steading-notes-editor .editor-content {
 	font-size: var(--st-fs-base);
