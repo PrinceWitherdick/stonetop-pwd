@@ -35,6 +35,7 @@ import { openImageZoom } from "../../utils/image-zoom-window.js";
 import { runImportBookArtMacro } from "../../book2-art/macro.js";
 import { withGmPrepTabs } from "./gm-prep-tabs.js";
 import { withGmWonderTab } from "./gm-wonder-tab.js";
+import { withGmEncountersTab } from "./gm-encounters-tab.js";
 import { localizedHomefrontSections } from "../../gm-toolkit/homefront-view.js";
 import { readCurrentSeason, currentSeasonView, isCurrentSeasonChange } from "../../seasons/current-season.js";
 import { localize } from "../../utils/i18n.js";
@@ -98,7 +99,7 @@ export function createStonetopGmToolkitSheetClass(Base) {
 	// withGmWonderTab: the "I wonder..." tab, the one authored surface on this sheet. Its storage
 	// IS the toolkit's own (`actor.system.wonders`), which is the opposite of the line above and
 	// stated here so the two are never confused for one another.
-	return class StonetopGmToolkitSheet extends withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base)))) {
+	return class StonetopGmToolkitSheet extends withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base))))) {
 		// Read by the mixin's `isSectionEditable`. Constant, not state: this sheet has no global
 		// edit wrench, so a section is editable exactly when its own pencil is on.
 		_editMode = false;
@@ -214,6 +215,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// away. Those two fields save on blur, and the sync above redraws this sheet on every
 			// prep-page write in the WORLD — a redraw no blur precedes. See the mixin.
 			await this._flushGmWonderEdits();
+			// The Encounters tab has two boxes with the same problem and the same fix: an
+			// encounter name and a collected row's note, both saved on blur. See the mixin.
+			await this._flushGmEncounterEdits();
 			await super._render(force, options);
 			stripHeaderChrome(this);
 		}
@@ -222,6 +226,7 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The same flush, for the close that no blur precedes: Escape shuts an AppV1 window
 			// straight from the focused field, so its `change` event never fires.
 			await this._flushGmWonderEdits();
+			await this._flushGmEncounterEdits();
 			this._unwirePrepPageSync();
 			this._unwireSeasonSync();
 			return super.close(options);
@@ -350,6 +355,11 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// and the answered ones, plus the book's guidance on keeping it.
 			this._addGmWonderContext(context);
 
+			// The Encounters list, off actor.system.encounters, with every collected row resolved
+			// to the document it points at. Awaited, unlike the wonder call above: a row pointing
+			// into a compendium can need a pack load to name itself (see resolveEncounterEntry).
+			await this._addGmEncountersContext(context);
+
 			return context;
 		}
 
@@ -378,6 +388,10 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The "I wonder..." tab: the add bar, its two text fields, and the three per-row
 			// buttons. Delegated on the same root and independent of everything above it.
 			this._activateGmWonderListeners(html[0]);
+			// The Encounters tab: the add bar, the per-row buttons, the two text fields, the
+			// keyboard reorder, and both halves of the drag. Delegated on the same root, and the
+			// only thing on this sheet that takes a drop.
+			this._activateGmEncountersListeners(html[0]);
 			// This sheet's own two buttons. Both are delegated rather than bound per element,
 			// because both are re-emitted whenever their tab re-renders and either may be absent
 			// (the import button depends on which diagrams this world already has).

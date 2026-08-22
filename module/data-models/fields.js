@@ -87,6 +87,56 @@ export const wondersField = () => new fields.ArrayField(new fields.SchemaField({
 	settled:  new fields.BooleanField({ required: true, initial: false }),
 }), { required: false, initial: [] });
 
+// The GM's Encounters list — what has been gathered for one session or one scene: the monsters,
+// the read-aloud page, the map, the treasure table, the arcanum somebody is about to find. One
+// flat list per encounter, because what a GM reaches for mid-scene is "everything for THIS", not
+// "the actors, then the journals". Additive like `wondersField` and `woundsField`, so a toolkit
+// made before this field loads with an empty list and needs no migration. Each element:
+//   id       stable key (foundry.utils.randomID)
+//   name     what the GM calls it ("The bridge at dusk")
+//   notes    the prose box on the encounter itself, folded away with the row
+//   used     true -> already run, marked down rather than deleted
+//   entries  what was dropped into it, in the order the GM arranged
+//
+// AN ENTRY CACHES `name` AND `type` AND NOTHING ELSE, which is the one judgement in this shape:
+//   uuid  kept WHOLE, compendium and all. RosterDialog throws a pack uuid away and stores the
+//         bare name, and is right to — a Condemned row names a person in this world. An
+//         encounter is the other case entirely: the bestiary, the arcana and the journals ARE
+//         packs, so a list that could not point into one would be a list of almost nothing.
+//   type  the documentName. It arrives free on core's own drag payload, so it never costs a
+//         resolve; it picks the row's icon; it is what Deploy filters on; and it is the only
+//         thing that still says what KIND of thing went missing once the uuid resolves to null.
+//         A plain StringField, NOT `choices`-constrained, for the reason `woundsField` gives
+//         above: a value written by a newer build must not wedge an older one on read.
+//   name  the label a broken row keeps, so a GM can see WHICH thing went and re-add it. Never a
+//         second source of truth: the resolver prefers the live document's name whenever there
+//         is one, exactly as `resolvePersonRow` does on the steading.
+//   NO `img`. It is derived chrome, it goes stale on every re-portrait, and the row that would
+//         have needed it — the broken one — shows its type icon instead. A cached field with no
+//         reader can only ever be wrong.
+//   note  the per-entry line ("opens the door on round 2").
+//
+// `notes` is an HTMLField and the rest are plain: the encounter's own box holds read-aloud text
+// and @UUID links and is edited in a pop-up ProseMirror (encounter-notes-dialog.js), while the
+// name and the per-entry note are single lines typed in place.
+//
+// `trim: false` on the plain prose, for the reason `wondersField` gives: these save on BLUR
+// without re-rendering, and a field the model quietly trimmed would leave the box holding one
+// string and the document holding another with nothing on screen saying which was saved.
+export const encountersField = () => new fields.ArrayField(new fields.SchemaField({
+	id:    new fields.StringField({ required: true, blank: true, initial: () => foundry.utils.randomID() }),
+	name:  new fields.StringField({ required: true, blank: true, trim: false }),
+	notes: new fields.HTMLField({ required: true, blank: true }),
+	used:  new fields.BooleanField({ required: true, initial: false }),
+	entries: new fields.ArrayField(new fields.SchemaField({
+		id:   new fields.StringField({ required: true, blank: true, initial: () => foundry.utils.randomID() }),
+		uuid: new fields.StringField({ required: true, blank: true }),
+		type: new fields.StringField({ required: true, blank: true }),
+		name: new fields.StringField({ required: true, blank: true, trim: false }),
+		note: new fields.StringField({ required: true, blank: true, trim: false }),
+	}), { required: false, initial: [] }),
+}), { required: false, initial: [] });
+
 // Schema for the two minimal move subtypes (npcMove / monsterMove): just a
 // rich-text description and an optional roll formula.
 export const simpleMoveSchema = () => ({

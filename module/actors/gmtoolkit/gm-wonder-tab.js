@@ -26,11 +26,13 @@
 // answer box of another, so the browser fires `change` (an async write) and then `click` (a second
 // async write) in that order with nothing between them. Both would read `actor.system.wonders`
 // before either landed, and the second to finish would win: the answer just typed would vanish
-// with no error. `_mutateWonders` therefore takes a TRANSFORM rather than a finished array, and
-// runs it at the front of a promise chain so it always reads the list the previous write left.
+// with no error. Every mutation here is therefore a TRANSFORM rather than a finished array, run
+// at the front of a promise chain so it always reads the list the previous write left — which is
+// ActorListStore's whole job (actor-list-store.js), shared with the Encounters tab.
 import { GM_WONDER_GUIDE } from "../../gm-toolkit/gm-wonder-guide.js";
 import { escHtml } from "../../utils/strings.js";
 import { localize, format } from "../../utils/i18n.js";
+import { ActorListStore } from "./actor-list-store.js";
 
 /**
  * The tab's two edit sections, one per list, each with its own pencil in its own corner.
@@ -59,15 +61,21 @@ function normalizeWonder(w = {}, { keepId = true } = {}) {
 export function withGmWonderTab(Base) {
 	return class GmWonderTab extends Base {
 		/**
-		 * The tail of the write chain, so the next mutation reads the list the last one left.
-		 * See the header. Never rejects: `_mutateWonders` absorbs the failure at the tail, which
-		 * is what keeps one failed write from wedging every write after it.
+		 * This tab's list, and the whole protocol for writing to it: the queue that makes each
+		 * mutation read what the last one left, the whole-array update, and the swallow at the
+		 * tail that keeps one failed write from wedging every write behind it. Shared with the
+		 * Encounters tab, which keeps its own list the same way — see actor-list-store.js, which
+		 * is also where the reasoning this file's header used to carry now lives.
 		 *
 		 * The name is checked against AppV1's own members, as every field on this sheet has to be:
-		 * a collision there is silent. `_wonderWrites` collides with nothing in Application,
+		 * a collision there is silent. `_wonders` collides with nothing in Application,
 		 * FormApplication or ActorSheet.
 		 */
-		_wonderWrites = null;
+		_wonders = new ActorListStore(this, {
+			path: "system.wonders",
+			normalize: normalizeWonder,
+			writeFailedKey: "stonetop.gmToolkit.wonder.writeFailed",
+		});
 
 		/**
 		 * The add bar's unfiled line, and whether the caret belongs back in it.
@@ -90,38 +98,17 @@ export function withGmWonderTab(Base) {
 
 		/** Every entry, normalized. Read fresh on each call — this is the live document. */
 		_wonderList() {
-			const list = this.actor?.system?.wonders;
-			return Array.isArray(list) ? list.map(w => normalizeWonder(w)) : [];
+			return this._wonders.list();
 		}
 
 		/** One entry by id, or null. */
 		_wonder(id) {
-			return this._wonderList().find(w => w.id === id) ?? null;
+			return this._wonders.get(id);
 		}
 
-		/**
-		 * Apply `transform` to the list and save the result.
-		 *
-		 * @param {(list: object[]) => object[]|null} transform  Runs against the list as it stands
-		 *   when this write's turn comes, NOT when it was queued (see the header). Return null to
-		 *   write nothing, which is how a no-op edit stays off the wire.
-		 * @param {object}  [options]
-		 * @param {boolean} [options.render=true]  False for text edits — see the header.
-		 */
-		_mutateWonders(transform, { render = true } = {}) {
-			const run = async () => {
-				const next = transform(this._wonderList());
-				if (!next) return;
-				// The whole array, not a path into it. Foundry diffs an ArrayField by REPLACEMENT
-				// (there is no `system.wonders.2.answer` write that means what it looks like it
-				// means), which is also why the transform gets the list rather than an index.
-				await this.actor.update({ "system.wonders": next }, render ? {} : { render: false });
-			};
-			this._wonderWrites = (this._wonderWrites ?? Promise.resolve()).then(run).catch(err => {
-				console.error("Stonetop | failed to write the I wonder list", err);
-				ui.notifications?.error?.(localize("stonetop.gmToolkit.wonder.writeFailed"));
-			});
-			return this._wonderWrites;
+		/** Apply `transform` to the list and save the result. See ActorListStore#mutate. */
+		_mutateWonders(transform, options) {
+			return this._wonders.mutate(transform, options);
 		}
 
 		/**
@@ -143,30 +130,17 @@ export function withGmWonderTab(Base) {
 
 		/** Edit one field of one entry. No write at all when the value is unchanged. */
 		_setWonderField(id, key, value) {
-			return this._mutateWonders(list => {
-				const i = list.findIndex(w => w.id === id);
-				if (i < 0 || list[i][key] === value) return null;
-				list[i] = { ...list[i], [key]: value };
-				return list;
-			}, { render: false });
+			return this._wonders.setField(id, key, value);
 		}
 
-		/** Move an entry into the Answered fold, or back out of it. */
+		/** Move an entry into the Answered fold, or back out of it. RENDERS: the row moves. */
 		_setWonderSettled(id, settled) {
-			return this._mutateWonders(list => {
-				const i = list.findIndex(w => w.id === id);
-				if (i < 0 || list[i].settled === settled) return null;
-				list[i] = { ...list[i], settled };
-				return list;
-			});
+			return this._wonders.setField(id, "settled", settled, { render: true });
 		}
 
 		/** Drop an entry for good. */
 		_removeWonder(id) {
-			return this._mutateWonders(list => {
-				const next = list.filter(w => w.id !== id);
-				return next.length === list.length ? null : next;
-			});
+			return this._wonders.remove(id);
 		}
 
 		/**
@@ -328,26 +302,19 @@ export function withGmWonderTab(Base) {
 		/**
 		 * Save what is being TYPED before the sheet is redrawn under it.
 		 *
-		 * The two text fields save on blur, and this sheet has a redraw that does not wait for one:
-		 * `_wirePrepPageSync` re-renders it on every threat, hazard and site write anywhere in the
-		 * world. A GM part-way through an answer when another client ticks a grim portent would
-		 * otherwise watch the sentence vanish, with nothing logged and nothing to undo.
-		 *
-		 * Reading the DOM here is correct, and is the one case where it is: unwritten keystrokes
-		 * live ONLY in the box. The trap this pattern has (a pre-render flush reads the previous
-		 * paint, so it can write stale state back over a fresh write) applies to fields a CLICK
-		 * already committed to the document; neither of these has one, and `_setWonderField`
-		 * no-ops on an unchanged value, so a flush with nothing to say costs nothing.
+		 * The two text fields go through `ActorListStore#flushFocused`, which is where the whole
+		 * reasoning now lives — this tab and the Encounters tab beside it had the same twenty
+		 * lines twice, on a sheet whose write protocol was already shared.
 		 *
 		 * AWAITED by the caller, unlike the listener writes. If the render went ahead first it
 		 * would repaint from a document the write had not reached yet, and the GM would see their
 		 * own sentence replaced by the previous one until something else redrew the tab.
 		 *
-		 * THREE boxes, not two. The add bar loses its contents to the same repaint and for the
-		 * same reason, and the only difference is where they go: it is STASHED rather than saved,
-		 * because a line nobody has filed yet is not a question (see `_wonderAdd`). Taken
-		 * unconditionally and whether or not a field has focus — the GM may well have typed half a
-		 * question, gone to read a threat, and left it sitting there.
+		 * THREE boxes, not two, which is what is left here. The add bar loses its contents to the
+		 * same repaint and for the same reason, and the only difference is where they go: it is
+		 * STASHED rather than saved, because a line nobody has filed yet is not a question (see
+		 * `_wonderAdd`). Taken unconditionally and whether or not a field has focus — the GM may
+		 * well have typed half a question, gone to read a threat, and left it sitting there.
 		 */
 		async _flushGmWonderEdits() {
 			const root = this.element?.[0];
@@ -356,16 +323,15 @@ export function withGmWonderTab(Base) {
 			const add = root.querySelector(".stonetop-gm-wonder-new");
 			if (add) this._wonderAdd.text = add.value;
 
-			const field = root
-				.querySelector(".stonetop-gm-wonder-question:focus, .stonetop-gm-wonder-answer:focus");
-			if (!field) return;
-			const id = this._wonderIdFrom(field);
-			if (!id) return;
-			const question = field.matches(".stonetop-gm-wonder-question");
-			// Same refusal the `change` handler makes: an emptied question is not saved as one.
-			// Nothing is put back here, because the repaint about to happen restores the box.
-			if (question && !field.value.trim()) return;
-			await this._setWonderField(id, question ? "question" : "answer", field.value);
+			const write = key => field => {
+				const id = this._wonderIdFrom(field);
+				return id ? this._setWonderField(id, key, field.value) : null;
+			};
+			return this._wonders.flushFocused(root, [
+				// An emptied question is not saved as one; an emptied answer is a real edit.
+				{ selector: ".stonetop-gm-wonder-question", required: true, save: write("question") },
+				{ selector: ".stonetop-gm-wonder-answer", save: write("answer") },
+			]);
 		}
 
 		/**

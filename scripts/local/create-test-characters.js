@@ -38,11 +38,20 @@
 //             the shape the sheet expects and what lets a PC rate them. Also seeds a block of
 //             formatted rich-text in its Notes tab (only when that tab is empty), and three
 //             demonstration Threats (each its own hidden/revealed JournalEntry) so the GM
-//             Threats tab shows the full range of card layouts. Seeds the GM Toolkit's
+//             Threats tab shows the full range of card layouts, and two demonstration Sites —
+//             one written up through all four phases of the book's procedure (picks, timeline,
+//             denizens, areas, plans, rollable tables) and one stopping after the foundation,
+//             which is the pair of card states worth looking at. Both tabs live on the GM
+//             Toolkit and both store on the steading. Seeds the GM Toolkit's
 //             "I wonder..." tab (Book I p.33) with a dozen open questions, six of them carrying
 //             a written answer or a hunch and six still blank, plus three more already ticked
 //             into the Answered fold, so the tab is seen holding a long list and both of its
-//             two sections rather than the empty-state line. Fills in the relationship
+//             two sections rather than the empty-state line. Seeds its Encounters tab with three
+//             prepared bundles pointing at documents rather than copying them: one reaching every
+//             kind of row the tab collects (world and compendium Actors and Items, a journal
+//             entry and one of its pages, a macro, the world's first scene and roll table), one
+//             built out of the prep this macro just seeded, and one marked used that carries a
+//             deliberately dangling pointer, so the unresolved row has a fixture too. Fills in the relationship
 //             hearts everywhere they render: each PC rates the rest of the party and a couple
 //             of villagers, each resident/neighbor rates the PCs back, and the steading rates
 //             the eight Other Settlements — every rating carrying a written "How they feel,
@@ -72,10 +81,10 @@
 //             and the test Introductions/Expedition data), strips the steading's test members
 //             (including any villager an older run left behind, whose isTest tag the people
 //             migration dropped when it rewrote the row),
-//             clears the seeded Notes, the seeded Other Settlements ratings and the seeded
+//             clears the seeded Notes, the seeded Other Settlements ratings, the seeded
 //             "I wonder..." questions (each only while
-//             it still holds exactly what the macro wrote), deletes the seeded Threats (and
-//             their scene pins,
+//             it still holds exactly what the macro wrote) and the three seeded Encounters, deletes the seeded Threats and Sites
+//             (and their scene pins,
 //             pruning an emptied Threats folder), removes the world Moves/Items/Monsters and the
 //             example NPC (and their now-empty folders), and prunes the matching Chronicle pages.
 
@@ -87,7 +96,7 @@
   // IIFE, so that rejection surfaces as an uncaught-in-promise error). Bail if a run is
   // already in flight; the finally below clears the flag even on early return or error.
   if (globalThis.__stonetopTestFixturesRunning) {
-    ui.notifications.warn("[TEST] The fixtures macro is already running — ignoring the repeat click.");
+    ui.notifications.warn("[TEST] The fixtures macro is already running; ignoring the repeat click.");
     return;
   }
   globalThis.__stonetopTestFixturesRunning = true;
@@ -100,6 +109,12 @@
   const TEST_FLAG    = "isTestCharacter";     // key within that scope
   const PACK_ID      = "stonetop-pwd.stonetop-items";
   const ARCANA_PACK_ID = "stonetop-pwd.stonetop-arcana";
+  // The other three shipped packs, which only the Encounters fixtures reach into: a bundle that
+  // could not point INTO a compendium would be a bundle of almost nothing, since the bestiary,
+  // the arcana, the journals and the macros all ship as packs.
+  const BESTIARY_PACK_ID = "stonetop-pwd.stonetop-bestiary";
+  const JOURNAL_PACK_ID  = "stonetop-pwd.stonetop-journal";
+  const MACRO_PACK_ID    = "stonetop-pwd.stonetop-macros";
   // Post-death playbooks we don't want a test character for.
   const SKIP_PLAYBOOKS = new Set(["ghost", "revenant", "thrall"]);
   const MAJOR_FOLDER = "JwVuMk5DtWmttIYY";
@@ -973,6 +988,192 @@
     },
   ];
 
+  // ── Steading test sites (Book I, "Sites" pp. 345-377) ──────────────────
+  // Two demonstration sites, seeded so the GM Toolkit's Sites tab isn't empty on a test
+  // world. Deliberately STAGGERED the way the threats above are, because a site card is a
+  // page-long thing with fifteen optional sections and the two states worth eyeballing are
+  // "all of it" and "the first phase only":
+  //   1. a MAXIMAL barrow filling every phase of the book's procedure — foundation (manner,
+  //      Book II table picks, region + terrain), story (connections, answered AND unanswered
+  //      questions, a timeline), contents (denizens, dangers, discoveries, outside/inside
+  //      impressions) and the write-up (four areas with exits, GM plans, two rollable random
+  //      tables);
+  //   2. a MINIMAL Maker-ruin that stops after phase 1 plus two open questions — which is
+  //      what the book actually asks for while a site is still a rumour, and the card state
+  //      every "hasX" branch is skipped for.
+  // Both lean on the world the rest of this macro seeds: the barrow is where the Crow-Mother
+  // threat's cult goes to pray and where the Seeker's major arcanum came out of, and the
+  // tower is the place behind the Singing Tower threat and the example expedition.
+  //
+  // Storage is the threats' architecture verbatim (module/sites/site-store.js): every site is
+  // a `site` PAGE of ONE journal named "<Steading> Sites", pointed at by the steading's
+  // `sitesEntryId` flag. The TAB moved to the GM Toolkit; its storage did NOT, which is why
+  // these are seeded against the steading and not against the toolkit actor.
+  //
+  // `manner` / `regionId` are real ids out of module/data/site-tables.js, and each pick's
+  // `key` and `value` are a real table key and one of its row texts VERBATIM: the Create-a-Site
+  // wizard is also the editor, and it puts a stored pick back on its control by matching the
+  // key and then the row text. A reworded value means that row re-opens blank.
+  const TEST_SITES = [
+    {
+      name:        "The Barrow Beneath the Black Water",
+      manner:      "barrowBuilder",
+      mannerLabel: "Barrow Builder site",
+      regionId:    "ferriersFen",
+      regionLabel: "Ferrier's Fen",
+      terrain:     "Hummock, hill, rocky outcrop, ringed by peat and floating mats",
+      why: "The Crow-Mother's cult has to be walking somewhere on those moonless nights, and a place the party can reach on foot is worth more at the table than a rumour they can only worry about. It is also the barrow Maelis left an eye in, so the Seeker has a reason to go back that has nothing to do with the village.",
+      description: `<p>A low green hummock out in the fen, a good half-day east of the Maker's Road, ringed by black water that never quite freezes and never quite drains. The herders will not graze within sight of it. They say the ground there sounds hollow underfoot, and that a stone laid on top of it in the morning is gone by evening.</p>`
+                 + `<p>Under the turf is a <strong>barrow</strong>, and under the barrow is a spring, and the Barrow Builders who raised it were not trying to honour whoever lies inside. They were trying to keep her down.</p>`,
+      picks: [
+        { key: "theme",             label: "Theme",                  value: "Human sacrifice, blood magic, the courting and open worship of the Things Below" },
+        { key: "site",              label: "What kind of site?",     value: "A barrow" },
+        { key: "size",              label: "Size",                   value: "Large: a manmade hill, riddled with chambers/passages" },
+        { key: "barrowPurpose",     label: "Purpose",                value: "To bind/torment the interred" },
+        { key: "barrowElements",    label: "Architectural elements", value: "Built around a spring: water bubbling up/pooling/flowing out" },
+        { key: "barrowCondition",   label: "Condition",              value: "Mostly intact, but overgrown or partly buried; easy to miss" },
+        { key: "feature",           label: "Feature",                value: "Protective spirit(s)/construct(s)/demon(s)/spell(s)/trap(s)" },
+      ],
+      connections: [
+        "The Cult of the Black Water walk out to it on the moonless nights, and walk back lighter than they went.",
+        "Maelis the Seeker took her major arcanum out of the flooded gallery, and left her right eye behind for it.",
+        "Yannic the forester has been as far as the threshold stones and will not say what turned him back.",
+        "The offerings left at the old marsh-shrine are the same shape as the ones stacked inside.",
+      ],
+      questions: [
+        { prompt: "Who is actually interred here, and is the Crow-Mother her name or her title?",
+          answer: "A sorcerer-queen of the Barrow Builders, bound rather than buried. \"Crow-Mother\" is what the village calls the thing that has been whispering out of the fen for three generations; it is not the name carved on the stone." },
+        { prompt: "Why does the binding fail now, after three quiet generations?",
+          answer: "Because someone has been feeding it. The bindings were never meant to hold against willing offerings, and the cult brings her willing offerings." },
+        { prompt: "What did the Barrow Builders bury WITH her, and can it still be used?",
+          answer: "" },
+        { prompt: "If she gets out, where does she go first, and whose face is she wearing?",
+          answer: "" },
+      ],
+      timeline: [
+        { when: "Long ago",           text: "The Barrow Builders raise the hummock over the spring, and bind their queen beneath it rather than burn her." },
+        { when: "Centuries later",    text: "The fen creeps in, floods the lower galleries, and swallows the entrance whole. The village forgets there was ever anything out there." },
+        { when: "Three generations ago", text: "A child comes back from the reeds talking to someone nobody else can hear. The tale of the Crow-Mother starts here." },
+        { when: "Last winter",        text: "The first offerings appear at the old marsh-shrine, and the water in the fen stops freezing." },
+        { when: "Last month",         text: "Maelis finds the gallery, takes the arcanum, and loses an eye getting back out." },
+      ],
+      denizens: [
+        { name: "The bound queen",       notes: "Awake, patient, and entirely willing to wait another lifetime if that is what it takes. She cannot leave. She can be heard." },
+        { name: "Marsh-ghouls",          notes: "What is left of the offerings that walked out here on their own feet. They keep the galleries and drag the newly given down." },
+        { name: "The threshold wardens", notes: "Barrow Builder constructs, still doing the one job they were left: nothing comes OUT past the stones. They have no opinion about anything going in." },
+        { name: "Cult pilgrims",         notes: "Villagers, three or four at a time, out on the moonless nights. Some of them are people the party knows." },
+      ],
+      dangers: [
+        "The threshold wardens, which do not care who you are on the way in and care very much on the way out.",
+        "Black water that is deeper than it looks and colder than it should be.",
+        "Marsh-ghouls in the flooded gallery, patient in the dark.",
+        "The voice itself, which knows what you want and can afford to be generous about it.",
+      ],
+      discoveries: [
+        "Barrow Builder grave-goods: bronze, bog-blackened wood, cord-marked pottery.",
+        "The binding-stones, and carved on them the rite that set them (and so the rite that would unset them).",
+        "A second arcanum, still where the first was lying.",
+        "The name carved on the queen's slab, which is not the name the village uses.",
+      ],
+      outside: [
+        "Standing water the colour of strong tea, and no wind on it at all.",
+        "Peat that gives underfoot, then does not give back.",
+        "Dool trees ringing the hummock, their branches hung with strips of dyed leather.",
+        "Birdsong everywhere in the fen except here.",
+      ],
+      inside: [
+        "Packed-dirt floors and walls lined with slabs, low enough that a big man goes on his knees.",
+        "Water running somewhere below, always, in every chamber.",
+        "The smell of wet stone and something sweeter underneath it.",
+        "Cold that gets into the joints rather than the skin.",
+      ],
+      areas: [
+        {
+          title:       "The Sunken Approach",
+          description: "A hundred paces of floating peat mat with the barrow's crown showing above it. Every third step is water.",
+          contents:    "Offerings left on the mat: bread, a knife, a child's shoe. Fresh ones, some of them.",
+          exits:       "The fen, west. The threshold stones, east and up.",
+        },
+        {
+          title:       "The Threshold Stones",
+          description: "Three dolmens leaning together over a slot of a doorway, half-buried, easy to walk straight past.",
+          contents:    "The wardens, dormant in the uprights. Cord-marked pottery stacked in the lee of the stones, some of it new.",
+          exits:       "The approach, west. The upper passage, down.",
+        },
+        {
+          title:       "The Drowned Gallery",
+          description: "A long chamber flooded to the chest, its slabs carved with the revolt: little stick-figure kings being pulled down off little stick-figure thrones.",
+          contents:    "Grave-goods under the water. Marsh-ghouls under the water. Where the first arcanum came out.",
+          exits:       "The upper passage, back and up. The spring chamber, through the gap in the north wall.",
+        },
+        {
+          title:       "The Spring Chamber",
+          description: "The heart of it: a spring bubbling up through a slab floor into a shallow pool, and the queen's stone set flat in the middle of it with the binding-stones at its corners.",
+          contents:    "Her, under the slab. The rite carved around the rim. One binding-stone already cracked.",
+          exits:       "The drowned gallery, south. Something that is not on any map, below the spring.",
+        },
+      ],
+      plans: [
+        "If the party takes anything out past the threshold stones, the wardens wake and follow them home.",
+        "If they crack a second binding-stone, the fen's water starts moving toward Stonetop.",
+        "Whoever spends a night in the barrow is offered exactly what they want, by name, in a voice they trust.",
+        "The cult's next pilgrimage is in nine days. If the party is inside when it arrives, they meet neighbours.",
+      ],
+      randomTables: [
+        {
+          caption: "What the black water gives up",
+          rows: [
+            "A bronze torc, bog-blackened and still bright at the break.",
+            "Somebody's boot, the size a child would wear.",
+            "A carved bone whistle that will not sound underwater.",
+            "A hand, and no arm attached to it, and it is not cold.",
+            "Cord-marked pot-sherds, fitting together into a face.",
+            "Nothing at all, and the sense of having been let off.",
+          ],
+        },
+        {
+          caption: "What the barrow does when it is disturbed",
+          rows: [
+            "The water level rises a hand's breadth, everywhere at once.",
+            "Every torch gutters green and comes back wrong.",
+            "A voice says your name in your mother's voice.",
+            "The passage you came in by is a hand's breadth narrower than it was.",
+            "The ghouls stop moving and listen, all of them, to something else.",
+            "Somewhere below the spring, a slab grinds an inch aside.",
+          ],
+        },
+      ],
+    },
+    {
+      name:        "The Tower on the Heath",
+      manner:      "makers",
+      mannerLabel: "A Maker-ruin (unsure whose)",
+      regionId:    "flats",
+      regionLabel: "The Flats",
+      terrain:     "Open meadow, grass waist-high or shorter",
+      why: "Somewhere for the Singing Tower to actually stand, so the expedition has a destination the moment a player asks where they are going. Written up only as far as the book asks for a site that is still a rumour: foundation, and the questions I have not answered yet.",
+      description: `<p>East of the old ford, out where the treeline gives way to open heath, the herders swear there is a tower standing that was not there last spring. Grey stone, no door they could see, and at dusk it <em>sings</em>: one low wordless note that carries for miles and sets every dog between here and the village howling.</p>`
+                 + `<p>Nobody who has walked out to answer it has come back to say what it wanted.</p>`,
+      picks: [
+        { key: "makers", label: "Makers & site locations", value: "The Tempest Lords: along the Dread River, the Flats, the Ruined Tower, anywhere you want (their sky-islands flew far and wide)" },
+      ],
+      connections: [],
+      questions: [
+        { prompt: "Did it arrive, or was it always there and simply not visible?", answer: "" },
+        { prompt: "What is the singing FOR, and what happens to whoever answers it?", answer: "" },
+      ],
+      timeline: [],
+      denizens: [],
+      dangers: [],
+      discoveries: [],
+      outside: [],
+      inside: [],
+      areas: [],
+      plans: [],
+      randomTables: [],
+    },
+  ];
+
   // Random flavour pools for the seeded Player rows' Occupation / Relations / Notes
   // columns. PCs hold an ordinary village trade alongside their playbook, plus a tie to
   // the townsfolk above. Unlike the rest of the macro (deterministic "first option"),
@@ -1075,52 +1276,110 @@
     })),
   });
 
-  // Seed the demonstration threats the way the Threats tab actually stores them: as `threat`
-  // PAGES appended to the steading's ONE "<name> Threats" journal, which the steading points at
-  // via its `threatsEntryId` flag (module/threats/threat-store.js + journal/gm-prep-page-store.js).
-  // Mirrors that store's ensureEntry/create: entry ownership NONE (threats are GM prep), entry
-  // flagged threat:true, pages appended after whatever the GM already has filed, each page flagged
-  // isTest so only ours are stripped. Returns { entryId, pages }: the entry id to record on the
-  // steading pointer flag (or the existing pointer when we're not the GM, since only a GM may
-  // create the journal) plus the created PAGE docs, so the example NPC can @UUID-link to one.
+  // Shape one TEST_SITES seed into the `site` page's system data. Mirrors
+  // module/sites/site-store.js shapeSiteSystem, with its paired lists spelled out (the macro
+  // is standalone and can't import site-schema.js). Blank rows are dropped on the same rule
+  // the store uses, so a seeded page holds exactly what a wizard-authored one would.
+  const shapeSiteSystem = (seed) => {
+    const lines = (arr) => (Array.isArray(arr) ? arr : []).map(s => String(s ?? "").trim()).filter(Boolean);
+    const rows  = (arr, keys) => (Array.isArray(arr) ? arr : [])
+      .map(row => Object.fromEntries(keys.map(k => [k, String(row?.[k] ?? "").trim()])))
+      .filter(row => keys.some(k => row[k]));
+    return {
+      description:  String(seed.description ?? ""),
+      why:          String(seed.why ?? "").trim(),
+      manner:       String(seed.manner ?? ""),
+      mannerLabel:  String(seed.mannerLabel ?? ""),
+      // A pick with no result is nothing at all, so those rows go (unlike a question, which
+      // is worth keeping unanswered).
+      picks:        rows(seed.picks, ["key", "label", "value"]).filter(p => p.value),
+      regionId:     String(seed.regionId ?? ""),
+      regionLabel:  String(seed.regionLabel ?? ""),
+      terrain:      String(seed.terrain ?? "").trim(),
+      connections:  lines(seed.connections),
+      questions:    rows(seed.questions, ["prompt", "answer"]),
+      timeline:     rows(seed.timeline,  ["when", "text"]),
+      denizens:     rows(seed.denizens,  ["name", "notes"]),
+      dangers:      lines(seed.dangers),
+      discoveries:  lines(seed.discoveries),
+      outside:      lines(seed.outside),
+      inside:       lines(seed.inside),
+      areas:        rows(seed.areas, ["title", "description", "contents", "exits"]),
+      plans:        lines(seed.plans),
+      // A table with a caption but no rows is still worth keeping (it's a note to fill in);
+      // one with neither is not.
+      randomTables: (Array.isArray(seed.randomTables) ? seed.randomTables : [])
+        .map(t => ({ caption: String(t?.caption ?? "").trim(), rows: lines(t?.rows) }))
+        .filter(t => t.caption || t.rows.length),
+    };
+  };
+
+  // Seed one GM-prep page family the way its tab actually stores it: as PAGES appended to the
+  // steading's ONE "<name> Threats" / "<name> Sites" journal, which the steading points at via
+  // its `threatsEntryId` / `sitesEntryId` flag (module/threats/threat-store.js,
+  // module/sites/site-store.js, journal/gm-prep-page-store.js). Mirrors that store's
+  // ensureEntry/create: entry ownership NONE (both families are GM prep), entry flagged with
+  // the family's own boolean, pages appended after whatever the GM already has filed, each page
+  // flagged isTest so only ours are stripped. Returns { entryId, pages }: the entry id to record
+  // on the steading pointer flag (or the existing pointer when we're not the GM, since only a GM
+  // may create the journal) plus the created PAGE docs, so the example NPC can @UUID-link to one.
+  //
+  // ONE seeder for both, because the system itself makes both stores out of ONE factory: written
+  // twice, the copy that wasn't being looked at would be the one that drifted off the store it
+  // is imitating, and drift here is silent — a page in the wrong shape simply never appears on
+  // the tab.
   //
   // Getting the shape right is what keeps the NPC's threat cross-link alive: a page uuid
   // (JournalEntry.<entry>.JournalEntryPage.<page>) points at a document the system reads and
   // keeps; the standalone-entry-in-a-folder shape an earlier version of this macro used was
   // invisible to the Threats tab and got swept, leaving the NPC holding a dead entry id.
+  //
+  // Note the steading, not the GM Toolkit: the Threats and Sites TABS moved to the toolkit, but
+  // the storage did not move with them, and passing the toolkit here would mint a second journal
+  // and strand the world's real prep.
   const SORT_STEP = 100000;
-  const seedTestThreats = async (steadingActor, sf) => {
-    if (!game.user?.isGM) return { entryId: sf?.threatsEntryId ?? null, pages: [] };
+  const seedTestPrepPages = async ({ steadingActor, sf, pageType, entryFlag, entryFlagId, entrySuffix, defaultName, seeds, shape }) => {
+    if (!game.user?.isGM) return { entryId: sf?.[entryFlagId] ?? null, pages: [] };
     const OWN = CONST.DOCUMENT_OWNERSHIP_LEVELS;
 
-    let entry = sf?.threatsEntryId ? game.journal?.get(sf.threatsEntryId) : null;
+    let entry = sf?.[entryFlagId] ? game.journal?.get(sf[entryFlagId]) : null;
     if (!entry) {
       entry = await JournalEntry.create({
-        name:      `${steadingActor.name} Threats`,
+        name:      `${steadingActor.name} ${entrySuffix}`,
         ownership: { default: OWN.NONE },
-        flags:     { [FLAG_SCOPE]: { threat: true } },
+        flags:     { [FLAG_SCOPE]: { [entryFlag]: true } },
       });
     }
 
     // Strip leftovers so a re-run can't duplicate: our own isTest pages, plus any unflagged
-    // page carrying a TEST_THREATS name (worlds seeded before the pages were flagged ended up
-    // with one stale copy per run). Threats the GM named something else are left alone.
-    const testNames = new Set(TEST_THREATS.map(t => t.name));
+    // page carrying a seed's name (worlds seeded before the pages were flagged ended up with
+    // one stale copy per run). Pages the GM named something else are left alone.
+    const testNames = new Set(seeds.map(s => s.name));
     const stale = entry.pages
-      .filter(p => p.type === "threat" && (p.getFlag?.(FLAG_SCOPE, TEST_FLAG) || testNames.has(p.name)))
+      .filter(p => p.type === pageType && (p.getFlag?.(FLAG_SCOPE, TEST_FLAG) || testNames.has(p.name)))
       .map(p => p.id);
     if (stale.length) await entry.deleteEmbeddedDocuments("JournalEntryPage", stale);
 
     let sort = entry.pages.reduce((m, p) => Math.max(m, p.sort ?? 0), 0);
-    const pages = await entry.createEmbeddedDocuments("JournalEntryPage", TEST_THREATS.map(seed => ({
-      type:   "threat",
-      name:   String(seed.name ?? "").trim() || "New Threat",
+    const pages = await entry.createEmbeddedDocuments("JournalEntryPage", seeds.map(seed => ({
+      type:   pageType,
+      name:   String(seed.name ?? "").trim() || defaultName,
       sort:   (sort += SORT_STEP),
-      system: shapeThreatSystem(seed),
+      system: shape(seed),
       flags:  { [FLAG_SCOPE]: { [TEST_FLAG]: true } },
     })));
     return { entryId: entry.id, pages: pages ?? [] };
   };
+
+  const seedTestThreats = (steadingActor, sf) => seedTestPrepPages({
+    steadingActor, sf, pageType: "threat", entryFlag: "threat", entryFlagId: "threatsEntryId",
+    entrySuffix: "Threats", defaultName: "New Threat", seeds: TEST_THREATS, shape: shapeThreatSystem,
+  });
+
+  const seedTestSites = (steadingActor, sf) => seedTestPrepPages({
+    steadingActor, sf, pageType: "site", entryFlag: "site", entryFlagId: "sitesEntryId",
+    entrySuffix: "Sites", defaultName: "New Site", seeds: TEST_SITES, shape: shapeSiteSystem,
+  });
 
   // ── GM Toolkit: the "I wonder..." list (Book I p.33) ───────────────────
   // The one surface on the GM Toolkit a GM AUTHORS rather than reads, and the only one with
@@ -1219,6 +1478,172 @@
     return { toolkit, added: seeded.length, kept: keep.length };
   };
 
+  // ── GM Toolkit: three prepared Encounters ──────────────────────────────
+  // The toolkit's other authored surface, and the only one in the system that stores POINTERS at
+  // documents rather than prose about them. A flat array on the toolkit's own
+  // `actor.system.encounters` (module/data-models/fields.js#encountersField), like the
+  // "I wonder..." list beside it and unlike the Threats and Sites tabs, whose pages stayed on the
+  // steading.
+  //
+  // The three cover the states the tab renders differently (gm-toolkit-tab-encounters.hbs and
+  // gm-encounters-tab.js#ENCOUNTER_DOC_TYPES):
+  //   * one FULL bundle reaching every kind of row the tab collects — a world Actor, a world
+  //     Item, a compendium Actor, a compendium JournalEntry, a compendium Macro, and the
+  //     world's first Scene and RollTable where it has them — so every icon and kind label has
+  //     a fixture;
+  //   * one leaning on the prep this macro just seeded (the site page, the threat page, the
+  //     monster stat block) plus a compendium Item and a compendium JournalEntryPage, which is
+  //     the one uuid shape `fromUuidSync` THROWS on and so the row most worth having a fixture
+  //     for;
+  //   * one marked USED, which is its own skin, and holding a row whose uuid resolves to
+  //     NOTHING: it keeps its cached name, loses its drag and wears `.is-unresolved`. That row
+  //     is the whole reason a name and a type are stored beside the uuid, and it is the state a
+  //     GM cannot conveniently make on purpose.
+  // Notes are spread across them too: per-entry notes on some rows and not others (so the note
+  // placeholder shows), rich-text bundle notes on two and none on the third (a whole block that
+  // swaps for a single "no notes" line). The EMPTY bundle needs no fixture — that is simply what
+  // the Add button gives you.
+  //
+  // POINTERS ARE RESOLVED AT SEED TIME rather than written down, so every row carries the uuid a
+  // drag out of the sidebar would have put there, compendium uuids kept WHOLE. A candidate that
+  // does not resolve is dropped: this runs against worlds that may have no scene and no roll
+  // table, and a thin world deserves a shorter bundle rather than a row that says nothing.
+  //
+  // THE ID IS THE TAG. The schema has no room for a flag of our own (id / name / notes / used /
+  // entries and nothing else), so every seeded bundle carries an id starting with
+  // TEST_ENCOUNTER_ID_PREFIX; that is what a re-seed replaces and what the re-run strips. Note
+  // this is a BLUNTER rule than the one the "I wonder..." list uses next door, where a row the GM
+  // has since made their own stops matching and stays: a bundle is scaffolding around fixtures
+  // that are themselves about to be deleted, so leaving an edited one behind would leave a
+  // handful of dead pointers rather than anything worth keeping.
+  const TEST_ENCOUNTER_ID_PREFIX = "stonetopTestEnc";
+
+  /** One collected row from a LIVE document, or null when the document didn't resolve. */
+  const encounterRow = (doc, note = "") => (doc?.uuid ? {
+    uuid: doc.uuid,
+    type: doc.documentName,
+    name: doc.name ?? "",
+    note,
+  } : null);
+
+  // Resolve a compendium document by name. Loads the DOCUMENT rather than reading the index
+  // entry, because the row wants what a real drag would have carried: a `documentName` answered
+  // by the document itself and a name read off it rather than off an index that may be partial.
+  // `getIndex()` is called with no `fields`, which is the rule everywhere in this system: a
+  // direct field request replaces whatever another caller had already asked the pack to index.
+  const packDocByName = async (packId, name) => {
+    const pack = game.packs?.get(packId);
+    if (!pack) return null;
+    const index = await pack.getIndex().catch(() => null);
+    const hit   = index?.find(e => e.name === name) ?? null;
+    return hit ? await pack.getDocument(hit._id).catch(() => null) : null;
+  };
+
+  /** A page of a compendium JournalEntry, by entry name then page name (first page by default). */
+  const packPageByName = async (packId, entryName, pageName = null) => {
+    const entry = await packDocByName(packId, entryName);
+    const pages = entry?.pages?.contents ?? [];
+    return (pageName ? pages.find(p => p.name === pageName) : pages[0]) ?? null;
+  };
+
+  // Build and store the three bundles. Takes the live fixtures the rest of the run produced —
+  // the monster stat blocks, the example NPC, and the threat and site PAGES (the page, never its
+  // parent journal: the page is the document the tabs read and keep, so its uuid is the one that
+  // stays live). Returns null when the world has no toolkit, matching seedGmToolkitWonders.
+  const seedGmToolkitEncounters = async ({ monsters, npc, threatPages, sitePages }) => {
+    const toolkit = game.actors?.find(a => a.type === GM_TOOLKIT_TYPE) ?? null;
+    if (!toolkit) return null;
+
+    const named = (list, name) => (list ?? []).find(d => d?.name === name) ?? null;
+    // Every pack lookup at once: each is a load, and none depends on any other.
+    const [packRider, packWight, packArcanum, packSettlement, packRegionPage, packMacro] = await Promise.all([
+      packDocByName(BESTIARY_PACK_ID, "Hillfolk Rider"),
+      packDocByName(BESTIARY_PACK_ID, "Barrow Wight"),
+      packDocByName(ARCANA_PACK_ID,   "A gold ring"),
+      packDocByName(JOURNAL_PACK_ID,  "The Village of Stonetop"),
+      packPageByName(JOURNAL_PACK_ID, "Ferrier's Fen"),
+      packDocByName(MACRO_PACK_ID,    "Run an Expedition"),
+    ]);
+    const worldItem = game.items?.find(i => i.name === "Boar Spear" && i.getFlag(FLAG_SCOPE, TEST_FLAG)) ?? null;
+    const scene     = game.scenes?.contents?.[0] ?? null;
+    const table     = game.tables?.contents?.[0] ?? null;
+
+    const seeds = [
+      {
+        id:   `${TEST_ENCOUNTER_ID_PREFIX}1`,
+        name: "Raiders at the Broken Gate",
+        used: false,
+        notes: `<h3>If they come, they come at the grey hour</h3>`
+             + `<p>Open on the watch-horn, not on the raiders: <strong>Coria is already awake and already shouting</strong>, and the question the scene asks is who gets to the gate first.</p>`
+             + `<ul>`
+             + `<li>Gethin wants the stores, not the village. He will take a hostage and withdraw rather than lose men.</li>`
+             + `<li>If the militia holds two rounds, the war-band breaks off. If it doesn't, Pell is the one who falls.</li>`
+             + `</ul>`
+             + `<p>Damage on the gate itself: <strong>[[/r 2d6]]</strong> hours of work to make it sound again.</p>`,
+        entries: [
+          encounterRow(named(monsters, "Hillfolk Raider"), "Three of them, and better armed than any hill raider has a right to be."),
+          encounterRow(npc, "Only if they push him. He parleys first, and he means it."),
+          encounterRow(packRider, "If it turns into a chase out onto the Flats."),
+          encounterRow(worldItem, "What gets left in the mud if the war-band breaks and runs."),
+          encounterRow(packSettlement, "The gate, the wall, and who is standing on it."),
+          encounterRow(packMacro),
+          encounterRow(scene, "Whatever map is loaded; swap it for the gate if the world has one."),
+          encounterRow(table),
+        ],
+      },
+      {
+        id:   `${TEST_ENCOUNTER_ID_PREFIX}2`,
+        name: "Out to the Barrow",
+        used: false,
+        notes: "",
+        entries: [
+          encounterRow(named(sitePages, "The Barrow Beneath the Black Water"), "Read the outside impressions before they set foot on the mat."),
+          encounterRow(named(threatPages, "The Crow-Mother"), "Two portents ticked. The third is the cult moving openly in the square."),
+          encounterRow(named(monsters, "Marsh Ghoul"), "Six of them, in the drowned gallery, patient."),
+          encounterRow(packWight, "Only if somebody cracks the second binding-stone."),
+          encounterRow(packArcanum, "Lying where the first one was. Concealed until somebody Knows Things about it."),
+          encounterRow(packRegionPage, "For the walk out: what the fen looks like on a cold morning."),
+        ],
+      },
+      {
+        id:   `${TEST_ENCOUNTER_ID_PREFIX}3`,
+        name: "The Tower at Dusk (run last session)",
+        used: true,
+        notes: `<p>They answered it on the second verse and it answered back. Wren is still hearing the note; ask her player about it at the top of the session.</p>`
+             + `<p><em>Kept for the callback, not to run again.</em></p>`,
+        entries: [
+          encounterRow(named(monsters, "Echo of the Singing Tower"), "Took four harm and stopped singing. Stopping is not the same as leaving."),
+          encounterRow(named(sitePages, "The Tower on the Heath")),
+          // Deliberately dangling: a pointer at a stat block the GM has since deleted, which is
+          // what the .is-unresolved row is FOR. Nothing resolves "Actor.<id that never existed>",
+          // and nothing throws on it either.
+          {
+            uuid: "Actor.stonetopTestGone",
+            type: "Actor",
+            name: "The Thing Under the Spring",
+            note: "Stat block deleted after the session. The row keeps the name and stops being draggable.",
+          },
+        ],
+      },
+    ];
+
+    // Entry ids are derived from the bundle's, so a re-seed is byte-identical rather than a new
+    // set of random ids every run — the rows are addressed by id in the DOM, and a stable id
+    // means a re-run leaves an open toolkit looking at the same list it was looking at.
+    const rows = seeds.map(enc => ({
+      id:      enc.id,
+      name:    enc.name,
+      notes:   enc.notes ?? "",
+      used:    !!enc.used,
+      entries: enc.entries.filter(Boolean).map((e, i) => ({ id: `${enc.id}e${String(i + 1).padStart(2, "0")}`, ...e })),
+    }));
+    const list = Array.isArray(toolkit.system?.encounters) ? toolkit.system.encounters : [];
+    const keep = list.filter(enc => !String(enc?.id ?? "").startsWith(TEST_ENCOUNTER_ID_PREFIX));
+    // The whole array, not a path into it: Foundry diffs an ArrayField by REPLACEMENT.
+    await toolkit.update({ "system.encounters": [...keep, ...rows] });
+    return { toolkit, added: rows.length, kept: keep.length, entries: rows.reduce((n, r) => n + r.entries.length, 0) };
+  };
+
   // ── Toggle: delete existing test fixtures ──────────────────────────────
   // Any actor carrying the test flag — the [TEST] characters, the seeded Monster stat blocks,
   // and the example NPC (as well as any NPC fixtures left by older versions of this macro).
@@ -1229,14 +1654,14 @@
     const list  = names.map(n => `<li>${foundry.utils.escapeHTML(n)}</li>`).join("");
     const ok = await Dialog.confirm({
       title:   "Delete Test Fixtures",
-      content: `<p>This will <strong>permanently delete</strong> ${existing.length} test fixture${existing.length === 1 ? "" : "s"}, any seeded test items and steading threats, and the test Introductions/Expedition data, then prune the matching Chronicle pages.</p>`
+      content: `<p>This will <strong>permanently delete</strong> ${existing.length} test fixture${existing.length === 1 ? "" : "s"}, any seeded test items and steading threats and sites, and the test Introductions/Expedition data, then prune the matching Chronicle pages.</p>`
              + `<ul>${list}</ul>`
              + `<p><strong>This cannot be undone.</strong> Are you sure?</p>`,
       yes: () => true,
       no:  () => false,
       defaultYes: false,
     });
-    if (!ok) { ui.notifications.info("[TEST] Deletion cancelled — nothing was removed."); return; }
+    if (!ok) { ui.notifications.info("[TEST] Deletion cancelled: nothing was removed."); return; }
 
     // Drop these PCs' recorded Introductions answers.
     const intro = { ...(game.settings.get(FLAG_SCOPE, "introductionsAnswers") ?? {}) };
@@ -1285,35 +1710,41 @@
     const testItems = game.items.filter(i => i.getFlag(FLAG_SCOPE, TEST_FLAG));
     if (testItems.length) await Item.deleteDocuments(testItems.map(i => i.id));
 
-    // Delete the seeded test threats. They are `threat` PAGES of the steading's single
-    // "<name> Threats" journal, so drop just the isTest pages plus any scene Note pins that
-    // point at them — pins key on entryId + pageId since siblings share the entry, mirroring
-    // threat-store.deleteThreat. Threats the GM wrote by hand are left alone; if ours were the
-    // last pages, the emptied journal goes too and the steading's pointer with it (setFlag
-    // MERGES and can't drop a key, hence the "-=" deletion syntax).
+    // Delete the seeded test threats and sites. Each is a PAGE of the steading's single
+    // "<name> Threats" / "<name> Sites" journal, so drop just the isTest pages plus any scene
+    // Note pins that point at them — pins key on entryId + pageId since siblings share the
+    // entry, mirroring gm-prep-page-store.deleteGmPrepPage. Prep the GM wrote by hand is left
+    // alone; if ours were the last pages, the emptied journal goes too and the steading's
+    // pointer with it (setFlag MERGES and can't drop a key, hence the "-=" deletion syntax).
+    //
+    // One sweep for both families, matching the one seeder above and the one store the system
+    // builds both families out of.
     const steadingThreats = game.actors.find(a => a.type === "stonetop" || a.system?.customType === "stonetop");
     const threatsEntryId  = readSteadingFlags(steadingThreats)?.threatsEntryId ?? null;
-    const threatsEntry    = threatsEntryId ? game.journal?.get(threatsEntryId) : null;
-    let testThreatCount   = 0;
-    if (threatsEntry) {
-      const killPageIds = new Set(threatsEntry.pages
-        .filter(p => p.type === "threat" && p.getFlag?.(FLAG_SCOPE, TEST_FLAG))
+    const sweepTestPrepPages = async (pageType, entryFlagId) => {
+      const entryId = readSteadingFlags(steadingThreats)?.[entryFlagId] ?? null;
+      const entry   = entryId ? game.journal?.get(entryId) : null;
+      if (!entry) return 0;
+      const killPageIds = new Set(entry.pages
+        .filter(p => p.type === pageType && p.getFlag?.(FLAG_SCOPE, TEST_FLAG))
         .map(p => p.id));
-      testThreatCount = killPageIds.size;
       if (killPageIds.size) {
         for (const scene of (game.scenes ?? [])) {
           const noteIds = scene.notes
-            .filter(n => n.entryId === threatsEntry.id && killPageIds.has(n.pageId))
+            .filter(n => n.entryId === entry.id && killPageIds.has(n.pageId))
             .map(n => n.id);
           if (noteIds.length) await scene.deleteEmbeddedDocuments("Note", noteIds).catch(() => {});
         }
-        await threatsEntry.deleteEmbeddedDocuments("JournalEntryPage", [...killPageIds]);
+        await entry.deleteEmbeddedDocuments("JournalEntryPage", [...killPageIds]);
       }
-      if (!threatsEntry.pages?.size) {
-        await threatsEntry.delete().catch(() => {});
-        await steadingThreats?.update({ [`flags.${FLAG_SCOPE}.steading.-=threatsEntryId`]: null });
+      if (!entry.pages?.size) {
+        await entry.delete().catch(() => {});
+        await steadingThreats?.update({ [`flags.${FLAG_SCOPE}.steading.-=${entryFlagId}`]: null });
       }
-    }
+      return killPageIds.size;
+    };
+    let testThreatCount = await sweepTestPrepPages("threat", "threatsEntryId");
+    const testSiteCount = await sweepTestPrepPages("site",   "sitesEntryId");
 
     // Legacy sweep: an earlier version of this macro filed each threat as its OWN JournalEntry
     // in a "<name> Threats" FOLDER — a shape the Threats tab never read. Remove any that linger
@@ -1427,6 +1858,20 @@
       if (wonderCount) await toolkitDel.update({ "system.wonders": keep });
     }
 
+    // Strip the seeded Encounters from the same singleton, on the id prefix that tags them (see
+    // TEST_ENCOUNTER_ID_PREFIX). Bundles the GM built themselves carry a random id and are left
+    // alone. This has to happen even though every document a seeded bundle points AT is deleted
+    // moments later: an encounter is a list of pointers, and orphaned pointers don't tidy
+    // themselves up — they just render as unresolved rows for ever.
+    const toolkitEnc = foundDel?.toolkit ?? game.actors?.find(a => a.type === GM_TOOLKIT_TYPE) ?? null;
+    let encounterCount = 0;
+    if (toolkitEnc) {
+      const encList = Array.isArray(toolkitEnc.system?.encounters) ? toolkitEnc.system.encounters : [];
+      const encKeep = encList.filter(e => !String(e?.id ?? "").startsWith(TEST_ENCOUNTER_ID_PREFIX));
+      encounterCount = encList.length - encKeep.length;
+      if (encounterCount) await toolkitEnc.update({ "system.encounters": encKeep });
+    }
+
     // Sweep up the old "Stonetop Test Fixtures" folders if a prior run left them behind and
     // they're now empty. (The "PCs" folder is left alone — it may hold real characters; the
     // steading singleton is never touched.)
@@ -1442,7 +1887,7 @@
         if (!f.contents.length) await f.delete();
       }
     }
-    ui.notifications.info(`[TEST] Deleted ${existing.length} test actor(s), ${testItems.length} item(s), ${testThreatCount} threat(s)${wonderCount ? `, ${wonderCount} "I wonder..." question(s)` : ""}${strayPeople ? `, ${strayPeople} migrated resident/neighbor NPC(s) an older run left behind` : ""}, and their test data.`);
+    ui.notifications.info(`[TEST] Deleted ${existing.length} test actor(s), ${testItems.length} item(s), ${testThreatCount} threat(s), ${testSiteCount} site(s)${wonderCount ? `, ${wonderCount} "I wonder..." question(s)` : ""}${encounterCount ? `, ${encounterCount} prepared encounter(s)` : ""}${strayPeople ? `, ${strayPeople} migrated resident/neighbor NPC(s) an older run left behind` : ""}, and their test data.`);
     return;
   }
 
@@ -1470,7 +1915,7 @@
       close: () => resolve(choice),
     }).render(true);
   });
-  if (maxLevel === null) { ui.notifications.info("[TEST] Creation cancelled — nothing was created."); return; }
+  if (maxLevel === null) { ui.notifications.info("[TEST] Creation cancelled: nothing was created."); return; }
 
   // ── Load pack ──────────────────────────────────────────────────────────
   const pack = game.packs.get(PACK_ID);
@@ -2623,7 +3068,7 @@
     const minorSlugs = minorArcana.map(slugOf).filter(Boolean);
 
     if (!majorSlugs.length && !minorSlugs.length) {
-      ui.notifications.warn("[TEST] No arcana found in the arcana pack — skipped the arcana scatter.");
+      ui.notifications.warn("[TEST] No arcana found in the arcana pack, so the arcana scatter was skipped.");
     } else {
       const majorBins = dealEvenly(majorSlugs, created.length);
       for (let i = 0; i < created.length; i++) {
@@ -2794,6 +3239,7 @@
   // so re-runs replace only our own additions: strip prior isTest rows first to stay
   // idempotent if a partial run left some behind).
   let testThreatPages = [];
+  let testSitePages   = [];
   let testVillagers   = [];
   const steading = game.actors.find(a => a.type === "stonetop" || a.system?.customType === "stonetop");
   if (steading) {
@@ -2815,6 +3261,12 @@
     const { entryId: threatsEntryId, pages: threatPages } = await seedTestThreats(steading, sf);
     testThreatPages = threatPages;
     if (threatsEntryId) sf.threatsEntryId = threatsEntryId;
+    // The two demonstration sites, the same way: `site` pages of the steading's Sites journal,
+    // its pointer recorded on the steading flags. Stored on the STEADING, read by the GM
+    // Toolkit's Sites tab, which resolves the steading before every store call.
+    const { entryId: sitesEntryId, pages: sitePages } = await seedTestSites(steading, sf);
+    testSitePages = sitePages;
+    if (sitesEntryId) sf.sitesEntryId = sitesEntryId;
     await steading.setFlag(FLAG_SCOPE, "steading", sf);
 
     // Other Settlements — the steading's own relations table, keyed by settlement slug (see
@@ -2831,9 +3283,9 @@
     }
     if (Object.keys(relUpdate).length) await steading.update(relUpdate);
 
-    console.log(`[TEST] Seeded steading "${steading.name}": ${people.residents.length} residents, ${people.neighbors.length} neighbors (as NPC actors), ${created.length} players${notesSeeded ? ", formatted Notes" : " (left existing Notes untouched)"}${threatsEntryId ? `, ${testThreatPages.length} threats` : ""}, ${Object.keys(relUpdate).length}/${Object.keys(TEST_SETTLEMENT_RELS).length} settlement standings${relSkipped ? ` (left ${relSkipped} the GM had already rated)` : ""}.`);
+    console.log(`[TEST] Seeded steading "${steading.name}": ${people.residents.length} residents, ${people.neighbors.length} neighbors (as NPC actors), ${created.length} players${notesSeeded ? ", formatted Notes" : " (left existing Notes untouched)"}${threatsEntryId ? `, ${testThreatPages.length} threats` : ""}${sitesEntryId ? `, ${testSitePages.length} sites` : ""}, ${Object.keys(relUpdate).length}/${Object.keys(TEST_SETTLEMENT_RELS).length} settlement standings${relSkipped ? ` (left ${relSkipped} the GM had already rated)` : ""}.`);
   } else {
-    ui.notifications.warn("[TEST] No steading actor found — skipped seeding residents/neighbors/players/notes/threats/settlement standings.");
+    ui.notifications.warn("[TEST] No steading actor found, so nothing was seeded for residents/neighbors/players/notes/threats/sites/settlement standings.");
   }
 
   // ── Seed the GM Toolkit's "I wonder..." list ───────────────────────────
@@ -2846,7 +3298,7 @@
     const open = TEST_WONDERS.filter(w => !w.settled).length;
     console.log(`[TEST] Seeded the GM Toolkit "${wonders.toolkit.name}" with ${wonders.added} "I wonder..." questions (${open} open, ${wonders.added - open} answered)${wonders.kept ? `, alongside ${wonders.kept} the GM had already written` : ""}.`);
   } else {
-    ui.notifications.warn("[TEST] No GM Toolkit actor found — skipped seeding the \"I wonder...\" questions.");
+    ui.notifications.warn("[TEST] No GM Toolkit actor found, so nothing was seeded for the \"I wonder...\" questions.");
   }
 
   // ── Relationship hearts on the character sheets ────────────────────────
@@ -2862,6 +3314,18 @@
   // the created PCs (relationship hearts + @UUID connections). Torn down on re-run by the actor
   // sweep (isTest) and the empty-flagged "NPCs" folder prune.
   const exampleNpc = await seedTestNpc({ pcs: created, monsters: testMonsters, threats: testThreatPages });
+
+  // ── Seed the GM Toolkit's Encounters tab ───────────────────────────────
+  // AFTER the example NPC, and last of the toolkit passes, because every row is a POINTER: the
+  // monsters, the NPC, and the threat and site pages all have to exist before a bundle can name
+  // them, or the row degrades to an unresolved one. (Exactly one row is unresolved on purpose.)
+  const encounters = await seedGmToolkitEncounters({
+    monsters: testMonsters, npc: exampleNpc,
+    threatPages: testThreatPages, sitePages: testSitePages,
+  });
+  if (encounters) {
+    console.log(`[TEST] Seeded the GM Toolkit "${encounters.toolkit.name}" with ${encounters.added} prepared encounter(s) holding ${encounters.entries} collected row(s)${encounters.kept ? `, alongside ${encounters.kept} the GM had already gathered` : ""}.`);
+  }
 
   // ── The Judge's standing Condemnations ─────────────────────────────────
   // Last of all, because a brand stores a LINK to its target: every actor a row could name — the
@@ -2887,7 +3351,7 @@
   // is somehow run before onReady wires up the API.)
   await game.stonetop?.saveChronicle?.();
 
-  ui.notifications.info(`[TEST] Done — ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items, ${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + 3 threats, settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, introductions answers, an example expedition, and the compiled Chronicle.`);
+  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items, ${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites, settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, introductions answers, an example expedition, and the compiled Chronicle.`);
   } finally {
     globalThis.__stonetopTestFixturesRunning = false;
   }

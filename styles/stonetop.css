@@ -13788,6 +13788,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
    in the same rail. `neighbors` and `followers` already share `three-friends.svg` on the same
    grounds. */
 .stonetop-tab-rail .item[data-tab="homefront"]     { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/village.svg'); }
+.stonetop-tab-rail .item[data-tab="encounters"]    { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/prep-stack.svg'); }
 .stonetop-tab-rail .item[data-tab="wonder"]        { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/question-mark.svg'); }
 .stonetop-tab-rail .item[data-tab="loop"]          { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/flow-chart.svg'); }
 
@@ -33692,7 +33693,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    NOT the "I wonder..." tab, whose pencils are positioned against a section rather than a
    panel: these two tabs put ONE pencil in the whole panel's corner, which is what makes the
    panel the section here. */
-.stonetop-gm-toolkit-sheet .sheet-body > :is(.tab.threats, .tab.sites) {
+.stonetop-gm-toolkit-sheet .sheet-body > :is(.tab.threats, .tab.sites, .tab.encounters) {
 	position: relative;
 }
 
@@ -34093,27 +34094,48 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    draws a soft rounded box whatever the border says. Without this the ruled
    column renders as a stack of form fields — no error, nothing logged, and the
    two look near enough alike in a thumbnail to pass a glance. */
-.stonetop-gm-wonder-item .stonetop-gm-wonder-question {
-	flex: 1 1 auto;
-	min-width: 0;
+/* The quiet-field treatment, shared by every in-place text box on this sheet: the wonder
+   tab's questions and the encounters tab's names and entry notes. Grouped rather than
+   given one short class of its own, ON PURPOSE — a selector list applies these at each
+   selector's OWN specificity, and the PbtA base sheet styles inputs hard enough that a
+   single class would lose the cascade to them.
+
+   `box-shadow: none` is the load-bearing line, and a transparent border alone is NOT
+   enough: core paints every input an inset ring
+   (`--input-box-shadow: inset 0 0 6px var(--input-background-color)`), which draws a soft
+   rounded box whatever the border says. Without this a ruled column renders as a stack of
+   form fields — no error, nothing logged, and the two look near enough alike in a
+   thumbnail to pass a glance. Layout and type stay with each field below. */
+.stonetop-gm-wonder-item .stonetop-gm-wonder-question,
+.stonetop-gm-encounter-name,
+.stonetop-gm-encounter-entry-note {
 	height: auto;
-	margin: 0;
-	padding: 1px 4px;
 	border: 1px solid transparent;
 	border-radius: var(--st-radius-sm);
 	background: transparent;
 	box-shadow: none;
-	font-size: var(--st-fs-base);
-	color: var(--st-text);
 }
 
-.stonetop-gm-wonder-item .stonetop-gm-wonder-question:hover {
+.stonetop-gm-wonder-item .stonetop-gm-wonder-question:hover,
+.stonetop-gm-encounter-name:hover,
+.stonetop-gm-encounter-entry-note:hover {
 	border-color: var(--st-card-rule);
 }
 
-.stonetop-gm-wonder-item .stonetop-gm-wonder-question:focus {
+.stonetop-gm-wonder-item .stonetop-gm-wonder-question:focus,
+.stonetop-gm-encounter-name:focus,
+.stonetop-gm-encounter-entry-note:focus {
 	border-color: var(--st-btn-primary-border);
 	background: var(--st-warm-hover-bg);
+}
+
+.stonetop-gm-wonder-item .stonetop-gm-wonder-question {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin: 0;
+	padding: 1px 4px;
+	font-size: var(--st-fs-base);
+	color: var(--st-text);
 }
 
 /* An answered question is no longer editable in place: it is a span, not an
@@ -34214,7 +34236,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* The row's buttons. `width: auto` and an explicit box, because V13 gives every
    `<button>` inside an app `width: 100%`, which would put one icon per line. */
-.stonetop-gm-wonder-tools {
+/* The row of icon buttons a section header carries, shared by the wonder and encounters
+   tabs. Grouped, so the size, the hover ground and the `box-shadow` reset cannot drift
+   apart between two tabs of the same sheet — a divergence that only ever shows up when a
+   GM flips from one to the other mid-session. The per-button hover inks stay local. */
+.stonetop-gm-wonder-tools,
+.stonetop-gm-encounter-tools {
 	flex: 0 0 auto;
 	display: inline-flex;
 	align-items: center;
@@ -34231,7 +34258,14 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: none;
 }
 
-.stonetop-gm-wonder-tools > button {
+/* Every square transparent icon button on this sheet: the two tool rows, the encounter's own
+   disclosure caret, and the cross on a collected row. One rule, so the shape, the reset and the
+   hover ground cannot drift apart between two tabs of the same sheet; the two outside a tool row
+   keep only their own size and ink below, which is all they actually differ by. */
+.stonetop-gm-wonder-tools > button,
+.stonetop-gm-encounter-tools > button,
+.stonetop-gm-encounter-toggle,
+.stonetop-gm-encounter-entry-remove {
 	flex: 0 0 auto;
 	display: inline-flex;
 	align-items: center;
@@ -34247,7 +34281,10 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	line-height: 1;
 }
 
-.stonetop-gm-wonder-tools > button:hover {
+.stonetop-gm-wonder-tools > button:hover,
+.stonetop-gm-encounter-tools > button:hover,
+.stonetop-gm-encounter-toggle:hover,
+.stonetop-gm-encounter-entry-remove:hover {
 	background: var(--st-warm-hover-bg);
 	box-shadow: none;
 }
@@ -34909,6 +34946,305 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    things that happen inside it, not one more bullet in a list — a spiral there would make
    "Expedition" a sibling of "Preparations" when it is the thing they sit under. The
    numbering stays off for the reason above, so the stage names simply run unmarked. */
+
+/* ── Encounters tab ───────────────────────────────────────────────────────────
+   actors/gmtoolkit/gm-encounters-tab.js: named bundles of whatever a GM gathered for a session
+   or a scene, each row holding pointers to documents rather than copies of them.
+
+   Every rule here is scoped to its own class rather than to the panel, because the tab is one
+   list and the list is the tab: there is no second thing on this panel for a panel-wide rule to
+   catch by accident.
+
+   The drag-over highlight is NOT here. It is `.stonetop-card-drag-over` (see the drop-zone
+   helper), which is deliberately unscoped so every drop zone in the system paints the same. */
+.stonetop-gm-encounters {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+/* The pencil guards the two destructive buttons and nothing else. Everything else on this tab
+   stays live while it is off, which is the point: the reason the tab exists is to be dropped
+   into and noted on mid-session, and one that has to be unlocked first is one nobody uses. */
+.stonetop-gm-encounters--reading .stonetop-gm-encounter-remove,
+.stonetop-gm-encounters--reading .stonetop-gm-encounter-entry-remove {
+	display: none;
+}
+
+.stonetop-gm-encounter-list,
+.stonetop-gm-encounter-entries {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.stonetop-gm-encounter-entries {
+	gap: 2px;
+}
+
+.stonetop-gm-encounter {
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius);
+	background: var(--st-card-fill);
+	overflow: hidden;
+}
+
+.stonetop-gm-encounter-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 8px;
+}
+
+.stonetop-gm-encounter-grip {
+	flex: 0 0 auto;
+	color: var(--st-text-faint);
+	font-size: var(--st-fs-sm);
+	cursor: grab;
+}
+
+.stonetop-gm-encounter-grip:active {
+	cursor: grabbing;
+}
+
+/* The shape is the shared icon-button rule above; a row of encounters is denser than a tool row,
+   so only the size and the ink are set here. `box-shadow` is reset on the resting state too,
+   because core paints one on every button and the shared rule only clears it on hover. */
+.stonetop-gm-encounter-toggle {
+	width: 20px;
+	height: 20px;
+	box-shadow: none;
+	color: var(--st-text-muted);
+}
+
+/* The caret points DOWN when the body is open and right when it is shut, which is the direction
+   every other disclosure in the system turns. The rotation is on the icon rather than the button
+   so the button's own hit area does not turn with it. */
+.stonetop-gm-encounter-toggle > i {
+	transition: transform 120ms ease;
+}
+
+.stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-toggle > i {
+	transform: rotate(-90deg);
+}
+
+.stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-body {
+	display: none;
+}
+
+/* The name is a field that does not look like one until it is reached for, the same three-state
+   treatment `.stonetop-gm-wonder-question` carries and for the same reason: a column of form
+   boxes reads as a form to fill in, and this is a list to read. `box-shadow: none` is the
+   load-bearing line, because core paints every input an inset ring whatever its border says. */
+.stonetop-gm-encounter-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin: 0;
+	padding: 1px 4px;
+	font-size: var(--st-fs-md);
+	font-weight: 600;
+	color: var(--st-text);
+}
+
+.stonetop-gm-encounter-count {
+	flex: 0 0 auto;
+	min-width: 1.6em;
+	padding: 0 5px;
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius-sm);
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-muted);
+	text-align: center;
+}
+
+.stonetop-gm-encounter-deploy:hover {
+	color: var(--st-blue-text);
+}
+
+.stonetop-gm-encounter-used:hover {
+	color: var(--st-green-text);
+}
+
+.stonetop-gm-encounter-remove:hover {
+	color: var(--st-red-text);
+}
+
+.stonetop-gm-encounter-body {
+	padding: 0 8px 8px 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+/* One collected row. Two lines: the thing on the first, the GM's note on the second, indented
+   under it so the note reads as belonging to the row rather than as another row. */
+.stonetop-gm-encounter-entry {
+	display: grid;
+	grid-template-columns: auto 1fr auto auto;
+	align-items: center;
+	column-gap: 6px;
+	padding: 3px 0;
+	border-top: 1px solid var(--st-card-rule);
+}
+
+.stonetop-gm-encounter-entry-icon {
+	grid-column: 1;
+	width: 1.1em;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-muted);
+	text-align: center;
+}
+
+/* A button rather than an anchor (see the template), so every scrap of core's button chrome has
+   to come off before it reads as a name in a list. */
+.stonetop-gm-encounter-entry-open {
+	grid-column: 2;
+	min-width: 0;
+	width: auto;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	font-size: var(--st-fs-base);
+	color: var(--st-text-body);
+	text-align: left;
+	line-height: 1.3;
+	cursor: grab;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.stonetop-gm-encounter-entry-open:hover {
+	background: transparent;
+	box-shadow: none;
+	text-decoration: underline;
+}
+
+.stonetop-gm-encounter-entry-open:active {
+	cursor: grabbing;
+}
+
+.stonetop-gm-encounter-entry-kind {
+	grid-column: 3;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-faint);
+}
+
+.stonetop-gm-encounter-entry-remove {
+	grid-column: 4;
+	width: 20px;
+	height: 20px;
+}
+
+/* Red on hover, the same warning ink the wonder tab's own delete cross wears. The ground and the
+   box-shadow reset come from the shared rule; only the ink is this button's own. */
+.stonetop-gm-encounter-entry-remove:hover {
+	color: var(--st-red-text);
+}
+
+/* The note sits on its own row under the name, spanning the width, indented past the icon. */
+.stonetop-gm-encounter-entry-note {
+	grid-column: 1 / -1;
+	margin: 0 0 0 calc(1.1em + 6px);
+	padding: 0 4px;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+}
+
+/* The visible target for "put it at the end", and the only content an empty encounter has. */
+.stonetop-gm-encounter-dropzone {
+	margin: 0;
+	padding: 5px 8px;
+	border: 1px dashed var(--st-card-rule);
+	border-radius: var(--st-radius);
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-faint);
+	text-align: center;
+}
+
+.stonetop-gm-encounter-notes-block {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+}
+
+.stonetop-gm-encounter-notes {
+	width: 100%;
+	margin: 0;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-body);
+}
+
+.stonetop-gm-encounter-notes--empty {
+	color: var(--st-text-faint);
+	font-style: italic;
+}
+
+.stonetop-gm-encounter-notes-edit {
+	width: auto;
+	margin: 0;
+	padding: 1px 8px;
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius-sm);
+	background: transparent;
+	box-shadow: none;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-muted);
+	cursor: pointer;
+	line-height: 1.6;
+}
+
+.stonetop-gm-encounter-notes-edit:hover {
+	background: var(--st-warm-hover-bg);
+	box-shadow: none;
+	color: var(--st-text-body);
+}
+
+.stonetop-gm-encounter-empty {
+	margin: 0;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-muted);
+}
+
+/* MODIFIERS LAST. A `--mod` rule ties with its base on specificity, so it only wins by sitting
+   later in the file. Everything below here restyles a row that is already styled above. */
+
+/* An encounter that has been run is not deleted, it is set down: the ink goes quiet and a green
+   edge marks it done, so a GM scanning the list sees at once what is still to come. */
+.stonetop-gm-encounter.is-used {
+	border-left: 3px solid var(--st-green-border);
+}
+
+.stonetop-gm-encounter.is-used .stonetop-gm-encounter-name {
+	color: var(--st-text-muted);
+}
+
+.stonetop-gm-encounter.is-used .stonetop-gm-encounter-used {
+	color: var(--st-green-text);
+}
+
+/* A row whose target has left the world keeps its name and stops being a link, rather than
+   disappearing: what a GM needs from it is to see WHICH thing went, so they can put it back. */
+.stonetop-gm-encounter-entry.is-unresolved {
+	border-left: 2px dotted var(--st-red-border);
+	padding-left: 4px;
+}
+
+.stonetop-gm-encounter-entry.is-unresolved .stonetop-gm-encounter-entry-open {
+	color: var(--st-text-faint);
+	cursor: default;
+	text-decoration: line-through;
+}
+
+.stonetop-gm-encounter-entry.is-unresolved .stonetop-gm-encounter-entry-open:hover {
+	text-decoration: line-through;
+}
 
 /* ── THE IMAGE ZOOM WINDOW ────────────────────────────────────────────────────
    utils/image-zoom-window.js: one picture, at whatever size the reader wants it,

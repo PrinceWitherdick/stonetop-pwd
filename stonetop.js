@@ -39,6 +39,7 @@ import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { onPreCreateThreatNote } from "./module/hooks/ThreatNotePins.js";
 import { onDrawStonetopNote } from "./module/hooks/StonetopNoteLabels.js";
 import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
+import { bumpEncounterNotesGeneration } from "./module/actors/gmtoolkit/gm-encounters-tab.js";
 import { invalidateMonsterRefIndex } from "./module/bestiary/monster-ref-index.js";
 import { ensureLocationSummaryIndex, applyTooltipsThenRestrict } from "./module/locations/location-tooltips.js";
 import { hideBrokenJournalArt } from "./module/journal/hide-broken-art.js";
@@ -439,6 +440,7 @@ Hooks.once("init", () => {
 		"stonetop.gm-toolkit-tab-sites":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-sites.hbs",
 		"stonetop.gm-toolkit-tab-homefront":  "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-homefront.hbs",
 		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
+		"stonetop.gm-toolkit-tab-encounters": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-encounters.hbs",
 		"stonetop.gm-prep-card-tools":        "systems/stonetop-pwd/templates/actor/partials/gm-prep-card-tools.hbs",
 		"stonetop.gm-prep-add-bar":           "systems/stonetop-pwd/templates/actor/partials/gm-prep-add-bar.hbs",
 		"stonetop.gm-prep-no-steading":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-no-steading.hbs",
@@ -617,6 +619,18 @@ Hooks.on("drawNote", onDrawStonetopNote);
 // A journey put on a poster-map scene from the Run an Expedition walkthrough. The scene
 // carries the two place slugs and every client paints the line from them, players included.
 registerExpeditionRouteHooks();
+
+// -- ENCOUNTER NOTES: LINKS FOLLOW A RENAME --------------------
+// The GM Toolkit's Encounters tab holds each encounter's notes as already-enriched HTML, keyed
+// against the prose they were built from. That key cannot see a rename: `enrichHTML` resolves an
+// @UUID link to the target's CURRENT name, so renaming a linked monster leaves the prose
+// byte-identical and the cached HTML showing the old name for the rest of the session. Bumping a
+// counter on any rename of a thing a note can point at is what lets the next paint rebuild.
+for (const doc of ["Actor", "Item", "JournalEntry", "JournalEntryPage", "Scene", "RollTable", "Macro"]) {
+	Hooks.on(`update${doc}`, (_doc, changes) => {
+		if ("name" in (changes ?? {})) bumpEncounterNotesGeneration();
+	});
+}
 
 // -- LOCATION CROSS-LINK TOOLTIPS ------------------------------
 // Give cross-links into the Locations pack a useful hover summary instead of the

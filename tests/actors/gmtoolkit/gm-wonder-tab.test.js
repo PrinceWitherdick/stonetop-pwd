@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readRepo as read, readCss, repoFileExists, declarations } from "../../fakes/css.js";
 import { withGmWonderTab } from "../../../module/actors/gmtoolkit/gm-wonder-tab.js";
 import { GM_WONDER_GUIDE } from "../../../module/gm-toolkit/gm-wonder-guide.js";
+import { fakeEl, fakeRoot, makeListHost } from "../../fakes/dom.js";
 
 // The GM Toolkit's "I wonder..." tab: the running list of open questions from Book I p.33, and
 // the ONE surface on this sheet a GM authors rather than reads.
@@ -26,97 +27,14 @@ const MODEL_JS    = read("module/data-models/GmToolkitModel.js");
 const FIELDS_JS   = read("module/data-models/fields.js");
 
 /**
- * The mixin over a stand-in actor whose `update` writes through, so a chain of mutations reads
- * what the one before it left — which is the property the serialization guard is about.
+ * The mixin over a stand-in actor whose `update` writes through. The harness itself is shared with
+ * the Encounters tab — see tests/fakes/dom.js for what it models and why it lives there.
  *
- * `updates` records every call as `[data, options]`, so a test can ask what was sent and whether
- * it asked for a render.
- *
- * `editing` stands in for the `withSectionEditing` mixin the real sheet composes underneath this
- * one — the two pencils, one per list. Pass a boolean to set both, or `{wonderOpen, wonderSettled}`
- * to set them apart. Defaults to ON so that every test here about what a button WRITES says only
- * that; the tests about what the pencils GATE pass it explicitly.
+ * `editing` takes a boolean for both pencils, or `{wonderOpen, wonderSettled}` to set them apart.
  */
-function makeHost(wonders = [], { editing = true } = {}) {
-	const actor = { id: "toolkit1", system: { wonders: wonders.map(w => ({ ...w })) } };
-	const updates = [];
-	actor.update = vi.fn(async (data, options = {}) => {
-		updates.push([data, options]);
-		actor.system.wonders = data["system.wonders"].map(w => ({ ...w }));
-		return actor;
-	});
-	const Base = class {
-		get actor() { return actor; }
-		isSectionEditable(section) {
-			return typeof editing === "boolean" ? editing : !!editing[section];
-		}
-	};
-	const Host = withGmWonderTab(Base);
-	const host = new Host();
-	return { host, actor, updates };
-}
+const makeHost = (wonders = [], opts) =>
+	makeListHost(withGmWonderTab, "system.wonders", wonders, opts);
 
-// A stand-in for the rendered tab. The suite runs on the `node` environment with no DOM at all
-// (vitest.config.js), and the tab's listeners are DELEGATED — every one of them reaches its row by
-// walking up from `ev.target` with `closest`. That walk is the thing worth testing, so rather than
-// calling the handlers with a hand-built row, this models just enough of an element for it: a
-// parent chain, class lists, `data-wonder-id`, and the two selector forms the mixin actually uses.
-//
-// `emit` AWAITS each listener, which a real dispatch does not. That is deliberate: the handlers
-// are async and the assertions are about what they wrote, so a test that fired and polled would be
-// testing the poll.
-
-/** Match `.class` and `[data-wonder-id]`, single or comma-separated, which is all the mixin uses. */
-function matchesSelector(node, selector) {
-	return selector.split(",").map(s => s.trim()).some(s => (
-		s.startsWith("[") ? s === "[data-wonder-id]" && node.dataset.wonderId !== undefined
-		                  : node.classes.includes(s.slice(1))
-	));
-}
-
-function fakeEl({ cls = [], dataset = {}, value = "", parent = null } = {}) {
-	const node = {
-		classes: cls, dataset, value, children: [], parent, focused: false,
-		matches: sel => matchesSelector(node, sel),
-		closest(sel) {
-			for (let cur = node; cur; cur = cur.parent) if (cur.matches(sel)) return cur;
-			return null;
-		},
-		focus() { node.focused = true; },
-		blur()  { node.focused = false; },
-	};
-	parent?.children.push(node);
-	return node;
-}
-
-function findDeep(nodes, sel) {
-	for (const node of nodes) {
-		if (node.matches(sel)) return node;
-		const hit = findDeep(node.children, sel);
-		if (hit) return hit;
-	}
-	return null;
-}
-
-function fakeRoot() {
-	const handlers = {};
-	const root = {
-		classes: [], dataset: {}, children: [], parent: null,
-		matches: () => false,
-		closest: () => null,
-		addEventListener: (type, fn) => { (handlers[type] ??= []).push(fn); },
-		querySelector: sel => findDeep(root.children, sel),
-		async emit(type, target, extra = {}) {
-			const ev = {
-				target, defaultPrevented: false, ...extra,
-				preventDefault() { ev.defaultPrevented = true; },
-			};
-			for (const fn of handlers[type] ?? []) await fn(ev);
-			return ev;
-		},
-	};
-	return root;
-}
 
 /** One rendered row: the two fields and the three buttons, all under a `data-wonder-id` li. */
 function makeRow(root, id, question = "", answer = "") {
@@ -158,7 +76,7 @@ describe("the I wonder tab: wiring", () => {
 	// have to agree: the rail decides the button order, the body decides nothing at all, and a
 	// mismatch is invisible (the panels are shown one at a time).
 	it("sits directly above the Core Loop tab, in the rail and in the body", () => {
-		const order = ["homefront", "moves", "threats", "sites", "wonder", "loop"];
+		const order = ["homefront", "moves", "threats", "sites", "encounters", "wonder", "loop"];
 		const railOrder = [...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1]);
 		expect(railOrder).toEqual(order);
 		const bodyOrder = [...SHEET_HBS.matchAll(/\{\{>\s*"stonetop\.gm-toolkit-tab-(\w+)"\}\}/g)].map(m => m[1]);
