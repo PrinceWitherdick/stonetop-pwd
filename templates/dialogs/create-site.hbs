@@ -53,18 +53,7 @@
 
         {{#if tables.length}}
         <button type="button" class="stonetop-cs-roll-all stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll the lot</button>
-        {{#each tables}}
-        <div class="stonetop-cs-table-pick">
-          <label class="stonetop-cf-label">{{label}} <span class="stonetop-cf-pick-hint">{{die}}{{#if combine}} (pick 1, or combine 2){{/if}}</span>
-            <select class="stonetop-cf-input stonetop-cs-pick" data-key="{{key}}">
-              <option value="">(choose or roll)</option>
-              {{#each rows}}<option value="{{text}}"{{#if selected}} selected{{/if}}>{{roll}} &middot; {{text}}</option>{{/each}}
-            </select>
-          </label>
-          <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" data-key="{{key}}" data-tooltip="Roll {{die}}" data-tooltip-direction="UP"><i class="fas fa-dice-d20"></i></button>
-          {{#if note}}<p class="stonetop-cs-note">{{note}}</p>{{/if}}
-        </div>
-        {{/each}}
+        {{#each tables}}{{> "stonetop.cs-pick-slots" this}}{{/each}}
         {{/if}}
 
         <label class="stonetop-cf-label">Region
@@ -73,17 +62,9 @@
             {{#each regions}}<option value="{{id}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
           </select>
         </label>
-        {{#if terrainRows.length}}
-        <div class="stonetop-cs-table-pick">
-          <label class="stonetop-cf-label">Terrain <span class="stonetop-cf-pick-hint">1d12 (pick 1, or combine 2)</span>
-            <select class="stonetop-cf-input stonetop-cs-terrain">
-              <option value="">(choose or roll)</option>
-              {{#each terrainRows}}<option value="{{text}}"{{#if selected}} selected{{/if}}>{{roll}} &middot; {{text}}</option>{{/each}}
-            </select>
-          </label>
-          <button type="button" class="stonetop-cs-roll-terrain stonetop-cf-mini-btn" data-tooltip="Roll 1d12" data-tooltip-direction="UP"><i class="fas fa-dice-d20"></i></button>
-          {{#if regionNote}}<p class="stonetop-cs-note">{{regionNote}} <span class="stonetop-cs-page">{{regionPage}}</span></p>{{/if}}
-        </div>
+        {{#if terrainPick.slots.length}}
+        {{> "stonetop.cs-pick-slots" terrainPick}}
+        {{#if regionNote}}<p class="stonetop-cs-note">{{regionNote}} <span class="stonetop-cs-page">{{regionPage}}</span></p>{{/if}}
         {{/if}}
         {{/if}}
 

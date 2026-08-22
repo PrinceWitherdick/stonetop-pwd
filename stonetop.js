@@ -466,6 +466,7 @@ Hooks.once("init", () => {
 		"stonetop.cs-list-frame":             "systems/stonetop-pwd/templates/dialogs/partials/cs-list-frame.hbs",
 		"stonetop.cs-line-list":              "systems/stonetop-pwd/templates/dialogs/partials/cs-line-list.hbs",
 		"stonetop.cs-pair-list":              "systems/stonetop-pwd/templates/dialogs/partials/cs-pair-list.hbs",
+		"stonetop.cs-pick-slots":             "systems/stonetop-pwd/templates/dialogs/partials/cs-pick-slots.hbs",
 		"stonetop.settings-toggle-row":       "systems/stonetop-pwd/templates/settings/partials/settings-toggle-row.hbs",
 		"stonetop.settings-save-footer":      "systems/stonetop-pwd/templates/settings/partials/settings-save-footer.hbs",
 		"stonetop.roster-row":                "systems/stonetop-pwd/templates/dialogs/partials/roster-row.hbs",

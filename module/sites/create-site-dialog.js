@@ -1,7 +1,8 @@
 import { StepperDialog } from "../dialogs/StepperDialog.js";
 import {
 	SITE_MANNERS, REGIONS, siteManner, region, visibleTables, pickLines,
-	rollOnTable, rollMannerTable, rollTerrain,
+	rollOnTable, againSpec, claimedAfter, combinableRows, combineMax, maxExtraPicks,
+	splitCombined, joinCombined,
 	SITE_STORY_QUESTIONS, SITE_CONNECTIONS, SITE_QUESTION_PROMPTS,
 	SITE_DANGER_KINDS, SITE_DISCOVERY_KINDS, AREA_DETAIL_PROMPTS,
 	SITE_LAYOUT_TIPS, SITE_REVIEW_CHECKS,
@@ -37,7 +38,7 @@ const _STEPS = [
 	},
 	{
 		key:   "manner",
-		title: "Exploit the setting guide",
+		title: "Theme",
 		icon:  "fa-book-atlas",
 		body:  `<p>Decide what <strong>manner of site</strong> this is, then use that Book II entry's tables to develop the concept. Treat them as creative prompts: pick what catches your eye, or roll and make sense of what you get.</p>
 				<p>Unlikely combinations make the most memorable sites. But you're not beholden to the dice, so re-roll or pick instead if a result really doesn't feel right.</p>`,
@@ -92,6 +93,22 @@ const _STEPS = [
 				<p>Its card lives on the GM Toolkit's Sites tab. Drag it onto a scene to pin it to the map, and edit it any time.</p>`,
 	},
 ];
+
+// Every pick control on the "Theme" step speaks the same language — a list of combined values
+// against a list of table rows — so the manner's tables and the region's terrain share one set of
+// handlers rather than two that can drift. Terrain is addressed by this reserved key, which no
+// table key can collide with (site-tables.test.js says so).
+export const TERRAIN_KEY = "#terrain";
+
+/**
+ * How a combinable table's limit reads beside its die, in the book's own two phrasings.
+ *
+ * HERE and not in `data/site-tables.js`, which is otherwise a faithful transcription of the
+ * book's tables: how many answers a table takes is a fact about the table (`combineMax`), but
+ * how that limit is WORDED on screen is this dialog's business. Keeping the two apart is what
+ * lets the note strings say `combine: 3` and leave the phrasing to whoever is painting it.
+ */
+const combineHint = (max) => (max <= 1 ? "" : max === 2 ? "pick 1, or combine 2" : `pick or roll 1 to ${max}`);
 
 // The free-text scalar fields the generic [data-field] change handler may persist onto
 // `_sel`; list-row fields are captured by their own classed handlers.
@@ -207,7 +224,7 @@ export class CreateSiteDialog extends StepperDialog {
 		this._page = page;
 		this._sel = page ? this._seedFromPage(page) : {
 			name: "", why: "", description: "",
-			manner: "", picks: {}, regionId: "", terrain: "",
+			manner: "", picks: {}, regionId: "", terrain: [],
 			connections: [], questions: [], timeline: [],
 			denizens: [], dangers: [], discoveries: [],
 			outside: [], inside: [],
@@ -244,7 +261,8 @@ export class CreateSiteDialog extends StepperDialog {
 			// Match on the table's id; fall back to its label for a page written before picks
 			// carried a key. A pick whose table has since gone is dropped.
 			const table = manner?.tables.find(t => t.key === p?.key) ?? manner?.tables.find(t => t.label === p?.label);
-			if (table) picks[table.key] = String(p?.value ?? "");
+			// Split back into the rows combined into it, so each lands in its own field.
+			if (table) picks[table.key] = splitCombined(p?.value);
 		}
 		// Read back UNTRIMMED and with blank rows kept: this is the editor re-opening, so a row the
 		// GM half-filled is theirs to finish, not ours to drop. The shaper applies that rule once,
@@ -261,7 +279,7 @@ export class CreateSiteDialog extends StepperDialog {
 			manner: manner?.id ?? "",
 			picks,
 			regionId: String(sys.regionId ?? ""),
-			terrain: String(sys.terrain ?? ""),
+			terrain: splitCombined(sys.terrain),
 			...Object.fromEntries(SITE_LINE_LISTS.map(list => [list, [...(sys[list] ?? [])].map(String)])),
 			...Object.fromEntries(Object.entries(SITE_PAIR_LISTS).map(([list, { keys }]) => [list, pairs(sys[list], keys)])),
 			randomTables: (sys.randomTables ?? []).map(t => ({
@@ -290,28 +308,13 @@ export class CreateSiteDialog extends StepperDialog {
 			ctx.mannerPage = manner?.page ?? "";
 			// Only the tables of the branch actually taken (lingering signs vs a ruin, a
 			// barrow vs a reclaimed Maker-ruin) are offered.
-			ctx.tables = manner ? visibleTables(manner, sel.picks).map(t => ({
-				key: t.key,
-				label: t.label,
-				die: t.die,
-				note: t.note ?? "",
-				combine: !!t.combine,
-				value: sel.picks[t.key] ?? "",
-				rows: t.rows.map(r => ({
-					text: r.text,
-					roll: r.min === r.max ? String(r.min) : `${r.min}-${r.max}`,
-					selected: r.text === sel.picks[t.key],
-				})),
-			})) : [];
+			ctx.tables = manner ? visibleTables(manner, sel.picks)
+				.map(t => ({ note: t.note ?? "", ...this._pickSlots(t.key) })) : [];
 			ctx.regions = REGIONS.map(r => ({ id: r.id, label: r.label, selected: r.id === sel.regionId }));
 			const chosenRegion = region(sel.regionId);
 			ctx.regionNote = chosenRegion?.note ?? "";
 			ctx.regionPage = chosenRegion?.page ?? "";
-			ctx.terrainRows = (chosenRegion?.terrain ?? []).map(r => ({
-				text: r.text,
-				roll: r.min === r.max ? String(r.min) : `${r.min}-${r.max}`,
-				selected: r.text === sel.terrain,
-			}));
+			ctx.terrainPick = this._pickSlots(TERRAIN_KEY);
 		}
 		if (step.key === "story") {
 			ctx.connectionRows = this._lineRows("connections");
@@ -359,6 +362,75 @@ export class CreateSiteDialog extends StepperDialog {
 			}
 		}
 		return ctx;
+	}
+
+	/**
+	 * The list of rows combined into one pick, and the row pool + label chrome its controls need.
+	 * Returns null for a control that isn't on screen (a table of an untaken branch, terrain with
+	 * no region chosen yet). `set` writes the list back, so callers never need to know whether a
+	 * pick lives in `_sel.picks` or in `_sel.terrain`.
+	 *
+	 * TERRAIN IS AN ORDINARY TABLE HERE. It reads its die, its label and how many answers it takes
+	 * off the row in `REGIONS`, exactly as a manner's tables do off `siteManner`. This used to
+	 * substitute those three literals in code behind a `key === TERRAIN_KEY` branch, which meant a
+	 * region whose terrain table was not 1d12, or a change to what it combines, was a code change
+	 * rather than a data one. The reserved key now says only WHICH SLOT the answer is stored in,
+	 * which is the one thing about terrain that really is different.
+	 */
+	_pickTarget(key) {
+		const terrain = key === TERRAIN_KEY;
+		const table = terrain ? region(this._sel.regionId)?.terrain : this._manner?.tables.find(t => t.key === key);
+		if (!table) return null;
+		// Seeded from a page written before a pick could be combined, it is still a string.
+		const cur = terrain ? this._sel.terrain : this._sel.picks[key];
+		return {
+			key, table, rows: table.rows, combine: combineMax(table), label: table.label, die: table.die,
+			values: Array.isArray(cur) ? cur : splitCombined(cur),
+			set: terrain ? (v) => { this._sel.terrain = v; } : (v) => { this._sel.picks[key] = v; },
+		};
+	}
+
+	/**
+	 * One pick's controls: a field for the row chosen, then one more for each row combined into it.
+	 *
+	 * The roll NUMBER is deliberately absent from the options. It is the table's own bookkeeping,
+	 * not part of the answer, and printing it in front of every result made the control read as a
+	 * transcription of the book rather than as a choice.
+	 *
+	 * How many extras a pick may hold is the chosen row's business: a row carrying "and roll 1d8
+	 * again" asks for one more (or two, for the "roll twice" rows) off that sub-die, and a table
+	 * the book says to take several of ("pick 1, or combine 2", "pick or roll 1 to 3") allows that
+	 * many freely. Each rides on its own control, with its own roll button, so the GM can re-roll
+	 * or re-pick just the one.
+	 */
+	_pickSlots(key) {
+		const target = this._pickTarget(key);
+		if (!target) return { key, slots: [], canAdd: false };
+		const { rows, table, combine, values, label, die } = target;
+		const spec = againSpec(rows.find(r => r.text === values[0]));
+		const pool = combinableRows(rows, spec?.max ?? 0);
+		// The row's own sub-die rolls AND the table's free combines; see `maxExtraPicks` for why
+		// those add rather than compete.
+		const maxExtras = maxExtraPicks(table, rows, values);
+		const options = (list, value) => list.map(r => ({ text: r.text, selected: r.text === value }));
+		const hint = combineHint(combine);
+		const slots = [{
+			key, slot: 0, label,
+			hint: hint ? `${die} (${hint})` : die,
+			rollTip: `Roll ${die}`,
+			rows: options(rows, values[0] ?? ""),
+		}];
+		for (let i = 1; i < values.length; i++) {
+			slots.push({
+				key, slot: i, extra: true, label: "combined with", hint: "", rollTip: "Roll again",
+				rows: options(pool, values[i]),
+			});
+		}
+		// `label`, `die` and `combine` are NOT republished here. Everything a slot needs rides on
+		// the slot — the partial says so in its own header, and reading them off the table would
+		// need a `../` chain whose depth depends on how the partial was called. Leaving them off
+		// also gives this function ONE shape, matching the early return above.
+		return { key, slots, canAdd: !!values[0] && values.length - 1 < maxExtras };
 	}
 
 	/** {index, list, text} rows for a string list. `list` rides along for the reason _pairRows gives. */
@@ -461,12 +533,29 @@ export class CreateSiteDialog extends StepperDialog {
 		});
 		// A pick can open or close a branch, so every pick re-renders.
 		html.find(".stonetop-cs-pick").on("change", ev => {
-			this._setPick(ev.currentTarget.dataset.key, ev.currentTarget.value);
+			const { key, slot } = ev.currentTarget.dataset;
+			this._setPick(key, Number(slot), ev.currentTarget.value);
 			this.render(false);
 		});
 		html.find(".stonetop-cs-roll").on("click", ev => {
-			const key = ev.currentTarget.dataset.key;
-			this._setPick(key, rollMannerTable(this._manner, key)?.text ?? "");
+			const { key, slot } = ev.currentTarget.dataset;
+			this._rollPick(key, Number(slot));
+			this.render(false);
+		});
+		// "Pick 1, or combine 2": an empty second field to answer by hand or roll.
+		html.find(".stonetop-cs-combine").on("click", ev => {
+			const target = this._pickTarget(ev.currentTarget.dataset.key);
+			if (!target) return;
+			target.set([...target.values, ""]);
+			this.render(false);
+		});
+		html.find(".stonetop-cs-uncombine").on("click", ev => {
+			const { key, slot } = ev.currentTarget.dataset;
+			const target = this._pickTarget(key);
+			if (!target) return;
+			const next = [...target.values];
+			next.splice(Number(slot), 1);
+			target.set(next);
 			this.render(false);
 		});
 		// Roll every table of the manner, in order, so a branch table's result opens the
@@ -478,9 +567,10 @@ export class CreateSiteDialog extends StepperDialog {
 			// Bounded by the table count: each pass rolls the first not-yet-picked visible
 			// table, which is how a branch opened mid-way still gets filled.
 			for (let i = 0; i < manner.tables.length; i++) {
-				const next = visibleTables(manner, this._sel.picks).find(t => !this._sel.picks[t.key]);
+				const next = visibleTables(manner, this._sel.picks).find(t => !splitCombined(this._sel.picks[t.key]).length);
 				if (!next) break;
-				this._sel.picks[next.key] = rollOnTable(next.rows)?.text ?? "";
+				// Through _setPick, so a rolled "and roll again" row is followed up here too.
+				this._setPick(next.key, 0, rollOnTable(next.rows)?.text ?? "");
 			}
 			this.render(false);
 		});
@@ -488,14 +578,11 @@ export class CreateSiteDialog extends StepperDialog {
 		// ── Region + terrain ─────────────────────────────────────────────────
 		html.find(".stonetop-cs-region").on("change", ev => {
 			this._sel.regionId = ev.currentTarget.value;
-			this._sel.terrain = "";
+			this._sel.terrain = [];
 			this.render(false);
 		});
-		html.find(".stonetop-cs-terrain").on("change", ev => { this._sel.terrain = ev.currentTarget.value; this.render(false); });
-		html.find(".stonetop-cs-roll-terrain").on("click", () => {
-			this._sel.terrain = rollTerrain(this._sel.regionId)?.text ?? "";
-			this.render(false);
-		});
+		// Terrain has no handlers of its own: its controls carry TERRAIN_KEY and go through the
+		// pick handlers above, which is what keeps "and roll 1d10 again" working on a terrain row.
 
 		// ── Row lists (add / remove / suggest) ───────────────────────────────
 		html.find(".stonetop-cs-add").on("click", ev => {
@@ -551,13 +638,66 @@ export class CreateSiteDialog extends StepperDialog {
 		});
 	}
 
-	/** Set (or clear) one table pick, dropping the picks of a branch that just closed. */
-	_setPick(key, value) {
+	/**
+	 * Set (or clear) one field of one pick, then drop the picks of a branch that just closed.
+	 *
+	 * Changing the row a pick was made on clears whatever was combined into it — the extras belong
+	 * to the row that asked for them, and a leftover from a wider sub-die is not even offered by
+	 * the new one — and then follows that row's own "and roll 1d8 again" instruction, which is the
+	 * whole reason the instruction is no longer printed in the result.
+	 *
+	 * A COMBINED SLOT FOLLOWS THAT INSTRUCTION TOO, and it used to be dropped there. The extra
+	 * slots are offered from the same table (the whole of it, whenever the first pick asked for no
+	 * sub-die), so the GM can perfectly well combine in a row that itself says "and roll 1d8
+	 * again" — and since the wording was taken out of the row text on purpose, nothing rolled it
+	 * and nothing said so. Re-picking such a slot drops only what THAT row brought with it
+	 * (`claimedAfter`); a row combined freely off the table's own budget is the GM's choice and is
+	 * not this row's to throw away.
+	 */
+	_setPick(key, slot, value) {
+		const target = this._pickTarget(key);
+		if (!target) return;
+		const { rows, values } = target;
+		if (slot === 0 && !value) { target.set([]); this._dropOrphanPicks(); return; }
+
+		let next;
+		if (slot === 0 && value !== values[0]) {
+			next = [value, ...this._againRolls(rows, value)];
+		} else if (slot > 0 && value !== values[slot]) {
+			next = [...values];
+			next.splice(slot, 1 + claimedAfter(rows, values, slot), value, ...this._againRolls(rows, value));
+		} else {
+			next = [...values];
+			next[slot] = value;
+		}
+		target.set(next);
+		this._dropOrphanPicks();
+	}
+
+	/** What a chosen row's own "and roll 1d8 again" asks for, rolled on the sub-die it names. */
+	_againRolls(rows, value) {
+		const spec = againSpec(rows.find(r => r.text === value));
+		if (!spec) return [];
+		const pool = combinableRows(rows, spec.max);
+		return Array.from({ length: spec.count }, () => rollOnTable(pool)?.text ?? "");
+	}
+
+	/** Roll one field of one pick: the whole table for the pick itself, the sub-die for an extra. */
+	_rollPick(key, slot) {
+		const target = this._pickTarget(key);
+		if (!target) return;
+		const { rows, values } = target;
+		const pool = slot === 0 ? rows : combinableRows(rows, againSpec(rows.find(r => r.text === values[0]))?.max ?? 0);
+		this._setPick(key, slot, rollOnTable(pool)?.text ?? "");
+	}
+
+	/**
+	 * A branch pick that changed leaves the other branch's answers orphaned; drop any pick whose
+	 * table is no longer visible so it can't ride along into the write-up.
+	 */
+	_dropOrphanPicks() {
 		const manner = this._manner;
-		if (!manner || !key) return;
-		this._sel.picks[key] = value;
-		// A branch pick that changed leaves the other branch's answers orphaned; drop any
-		// pick whose table is no longer visible so it can't ride along into the write-up.
+		if (!manner) return;
 		const visible = new Set(visibleTables(manner, this._sel.picks).map(t => t.key));
 		for (const k of Object.keys(this._sel.picks)) if (!visible.has(k)) delete this._sel.picks[k];
 	}
@@ -614,6 +754,7 @@ export class CreateSiteDialog extends StepperDialog {
 			mannerLabel: manner?.label ?? "",
 			picks:       pickLines(manner, sel.picks),
 			regionLabel: region(sel.regionId)?.label ?? "",
+			terrain:     joinCombined(sel.terrain),
 		};
 	}
 
