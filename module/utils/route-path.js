@@ -78,6 +78,12 @@ export function tierDrawingEnds(ends, { except = null } = {}) {
  */
 export function tierDrawing(route, opts) {
 	if (!route?.legs?.length) return null;
+	// A HAND-DRAWN WAY HAS ONLY ONE ANSWER, and it is not up for negotiation: its bare marks are
+	// fractions of one particular picture, so the map it was drawn on is the map it can be drawn
+	// on. Asking `tierDrawingEnds` about it would answer for its two ENDS, which on a path from
+	// Stonetop to a bend in the Flats are one place and a null — and it would happily nominate the
+	// other map, on which every mark in the middle means somewhere else entirely.
+	if (route.custom) return route.tier ?? null;
 	return tierDrawingEnds([route.legs[0].from, route.legs.at(-1).to], opts);
 }
 
@@ -101,12 +107,21 @@ export function tierDrawing(route, opts) {
  */
 export function routePath(route, tier, frame, aspect) {
 	if (!route?.legs?.length) return null;
+	// A hand-drawn way belongs to ONE map (see `tierDrawing`), so on any other it has no line and
+	// not a wrong one. `offMapNote` is what says so in words, and names the map that does draw it.
+	if (route.custom && route.tier !== tier) return null;
 	const arrows = new Map(exitsOnMap(tier).filter(e => e.node).map(e => [e.node, e]));
-	const at = slug => {
-		const spot = travelPlace(slug)?.spots?.[tier] ?? arrows.get(slug) ?? null;
-		return spot ? spotPercent(spot, frame) : null;
+	// A stop is either a place, which this map looks up for itself, or a bare mark the GM put down,
+	// which arrives carrying its own fraction. Both end up in the same percentage space, which is
+	// what lets one curve builder serve a solved route and a drawn one.
+	const at = ({ slug, spot }) => {
+		const at2 = spot ?? travelPlace(slug)?.spots?.[tier] ?? arrows.get(slug) ?? null;
+		return at2 ? spotPercent(at2, frame) : null;
 	};
-	const stops = [route.legs[0].from, ...route.legs.map(leg => leg.to)];
+	const stops = [
+		{ slug: route.legs[0].from, spot: route.legs[0].fromSpot ?? null },
+		...route.legs.map(leg => ({ slug: leg.to, spot: leg.toSpot ?? null })),
+	];
 	const placed = stops.map(at);
 	// THE ENDS ARE NOT BRIDGEABLE. Dropping a missing stop from the MIDDLE is the honest
 	// schematic described above; dropping a missing one from either END silently shortens the
@@ -353,6 +368,7 @@ export function routeDots(legs, aspect, spacing) {
  */
 export function offMapNote(tier, route) {
 	if (!route?.legs?.length) return null;
+	if (route.custom) return customOffMapNote(tier, route);
 	// The ends alone. A missing stop in the MIDDLE is bridged rather than refused, so it is
 	// not why there is no line and saying so would send the reader after the wrong map.
 	const ends = [...new Set([route.legs[0].from, route.legs.at(-1).to])];
@@ -371,4 +387,38 @@ export function offMapNote(tier, route) {
 		other,
 		otherName: other ? travelMap(other)?.name ?? null : null,
 	};
+}
+
+/**
+ * The same question for a way the GM drew, which has two ways of not being drawable and they want
+ * different sentences.
+ *
+ * WRONG MAP is the common one and it is not a fault: a drawn path's bare marks are fractions of one
+ * picture, so opening the other tab takes the line away exactly as it should. The reader needs to
+ * be told which map it is on and given the button back to it — `elsewhere` is what says the note is
+ * about the PICTURE rather than about a place, so the readout does not word it as though somewhere
+ * had gone missing.
+ *
+ * WRONG ORIGIN is the rare one: the trip now sets out from Marshedge and the way was drawn on the
+ * Vicinity, which letters no Marshedge. That really is a missing end, it reads exactly like the
+ * solved-route case above, and there is no other map to offer — the marks in the middle only mean
+ * anything on this one.
+ *
+ * A BARE MARK IS NEVER MISSING. It carries its own position, so the `spot` test has to come first;
+ * asking `drawnOn` about its null slug would report the far end of every hand-drawn path as
+ * undrawable and put a refusal under a line the reader can plainly see.
+ */
+function customOffMapNote(tier, route) {
+	const other = route.tier ?? null;
+	if (other !== tier) {
+		return { names: [], other, otherName: travelMap(other)?.name ?? null, elsewhere: true };
+	}
+	const first = route.legs[0];
+	const last = route.legs.at(-1);
+	const ends = [{ slug: first.from, spot: first.fromSpot }, { slug: last.to, spot: last.toSpot }];
+	const names = [...new Set(ends
+		.filter(end => !end.spot && !drawnOn(tier, end.slug))
+		.map(end => travelPlace(end.slug)?.name ?? end.slug)
+		.filter(Boolean))];
+	return names.length ? { names, other: null, otherName: null, elsewhere: false } : null;
 }

@@ -428,3 +428,90 @@ describe("the scene draws the line in the same ink the dialog does", () => {
 		expect(ROUTE_DOT_GAP).toBe(ROUTE_CASE_WIDTH);
 	});
 });
+
+// ── A way the GM drew, on the table's own map ────────────────────────────────
+//
+// The flag carries the trip and every client works the line out again, which is what lets a
+// correction to the travel table reach a route already on a Scene. A hand-drawn way is the same
+// bargain with a different payload: the map it was drawn on, and the marks on it.
+
+/** A trip with a way drawn on one map. */
+const drawnTrip = (points, { origin = "stonetop", tier = "vicinity" } = {}) =>
+	({ origin, destination: "lygos", custom: { on: true, tier, points } });
+
+/** A Scene already showing whatever `showRouteOnScene` would have written for `trip`. */
+async function sceneShowing(slug, trip) {
+	const scene = posterScene(slug);
+	scene.update = update => {
+		for (const [key, value] of Object.entries(update)) {
+			if (key.startsWith("flags.") && !key.includes("-=")) {
+				scene.flags[SYSTEM_ID] = { ...scene.flags[SYSTEM_ID], [SCENE_ROUTE_FLAG]: value };
+			}
+		}
+		return Promise.resolve(scene);
+	};
+	await showRouteOnScene(scene, trip);
+	return scene;
+}
+
+describe("putting a hand-drawn way on a scene", () => {
+	it("writes the map and the marks, and not the destination", async () => {
+		const trip = drawnTrip([{ fx: 0.4, fy: 0.6 }]);
+		const scene = await sceneShowing("vicinity", trip);
+		expect(scene.flags[SYSTEM_ID][SCENE_ROUTE_FLAG]).toEqual({
+			origin: "stonetop",
+			custom: { on: true, tier: "vicinity", points: [{ fx: 0.4, fy: 0.6 }] },
+		});
+	});
+
+	it("reads back as the way that was drawn", async () => {
+		const trip = drawnTrip([{ fx: 0.4, fy: 0.6 }]);
+		const scene = await sceneShowing("vicinity", trip);
+		expect(sceneJourney(scene).custom.points).toEqual([{ fx: 0.4, fy: 0.6 }]);
+		expect(sceneShowsJourney(scene, trip)).toBe(true);
+	});
+
+	// The destination is remembered while the box is ticked and it is NOT what the line is about,
+	// so changing it must not make the button offer to redraw a line already there.
+	it("stays in step when the destination changes underneath it", async () => {
+		const trip = drawnTrip([{ fx: 0.4, fy: 0.6 }]);
+		const scene = await sceneShowing("vicinity", trip);
+		expect(sceneShowsJourney(scene, { ...trip, destination: "marshedge" })).toBe(true);
+		expect(sceneShowsJourney(scene, drawnTrip([{ fx: 0.4, fy: 0.7 }]))).toBe(false);
+	});
+
+	it("is not a route until a mark is put down", () => {
+		const scene = posterScene("vicinity", {
+			flags: { [SYSTEM_ID]: { posterMap: "vicinity", [SCENE_ROUTE_FLAG]: { origin: "stonetop", custom: { on: true, tier: "vicinity", points: [] } } } },
+		});
+		expect(sceneJourney(scene)).toBeNull();
+	});
+
+	// A drawn way's marks are fractions of ONE picture. Named here rather than left to fall through
+	// to the geometry, whose refusal would come out as "this map doesn't draw <place>" — the wrong
+	// problem, sending the reader after a place when what they need is the other map.
+	it("refuses the other map by name, and says which one would take it", () => {
+		const route = journeyRoute(drawnTrip([{ fx: 0.4, fy: 0.6 }]));
+		const check = sceneRouteCheck(posterScene("worlds-end"), route);
+		expect(check.ok).toBe(false);
+		expect(check.reason).toBe("wrong-map");
+		expect(check.wanted).toBe("vicinity");
+		expect(sceneRouteRefusal(check, { hasScene: true })).toContain("The Vicinity");
+	});
+
+	it("lands its marks on the scene in the same places the dialog draws them", () => {
+		const scene = posterScene("vicinity", {
+			flags: {
+				[SYSTEM_ID]: {
+					posterMap: "vicinity",
+					[SCENE_ROUTE_FLAG]: { origin: "stonetop", custom: { on: true, tier: "vicinity", points: [{ fx: 0.25, fy: 0.5 }] } },
+				},
+			},
+		});
+		const plan = sceneRoutePlan(scene);
+		expect(plan.legs).toHaveLength(1);
+		const wanted = spotPercent({ fx: 0.25, fy: 0.5 }, frameFor(POSTER_MAPS.find(m => m.slug === "vicinity").out));
+		expect(plan.legs[0].to.x).toBeCloseTo((wanted.left / 100) * scene.width, 4);
+		expect(plan.legs[0].to.y).toBeCloseTo((wanted.top / 100) * scene.height, 4);
+	});
+});

@@ -283,8 +283,11 @@ describe("the zoom window", () => {
 // the capture on pointerup does not undo it, because the click inherits the already-retargeted
 // target. So the press has to be recognised BEFORE the capture is taken, which is what this pins.
 describe("a press on an overlay control", () => {
+	/** What the window recognises as a control when its caller says nothing. */
+	const DEFAULT_CONTROLS = "[data-slug], [data-tier]";
+
 	/** The smallest DOM the pan handler actually touches. */
-	function press(targetAttrs = null, { inOverlay = true } = {}) {
+	function press(targetAttrs = null, { inOverlay = true, controls = DEFAULT_CONTROLS } = {}) {
 		const captured = [];
 		const target = targetAttrs
 			? { closest: sel => (sel.split(", ").some(s => s.slice(1, -1) in targetAttrs) ? target : null) }
@@ -300,6 +303,9 @@ describe("a press on an overlay control", () => {
 		app._overlay = targetAttrs ? overlay : null;
 		app._offset = { x: 0, y: 0 };
 		app._pan = null;
+		// State of the handler, not decoration: the selector is the whole of what tells a press on
+		// a pin from a press on open map, and the constructor is the only thing that sets it.
+		app._controls = controls;
 
 		let prevented = 0;
 		app._onPanStart({ button: 0, pointerId: 7, clientX: 10, clientY: 10, target, preventDefault: () => { prevented++; } });
@@ -329,5 +335,16 @@ describe("a press on an overlay control", () => {
 	// outside the overlay is not an overlay control and must not disable the drag.
 	it("pans from a match that is not inside the overlay", () => {
 		expect(press({ "data-slug": true }, { inOverlay: false }).captured).toEqual([7]);
+	});
+
+	// A CALLER MAY WIDEN THE SELECTOR, and the travel map does: its pin layer carries the GM's own
+	// sites as well as the book's places and edge arrows. This is the half of that option nobody
+	// would think to check, and the half that fails invisibly — a mark left out of the selector
+	// still renders, still wears a tooltip and still takes a hover, and is simply unclickable,
+	// because the press starts a pan whose capture retargets the click away from it.
+	it("honours a widened selector, and refuses one it was never given", () => {
+		const site = { "data-site-uuid": true };
+		expect(press(site).captured, "unknown to the default").toEqual([7]);
+		expect(press(site, { controls: "[data-slug], [data-tier], [data-site-uuid]" }).captured).toEqual([]);
 	});
 });

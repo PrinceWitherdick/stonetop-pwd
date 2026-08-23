@@ -1,7 +1,7 @@
 import { systemAssetVariants } from "../migration/compat.js";
 import { showMapPinNamesOn } from "../settings.js";
 import { LANDMARK_ICON_SUFFIX } from "./PlaceOfInterestDrop.js";
-import { THREAT_PIN_ICON_SUFFIX } from "./ThreatNotePins.js";
+import { SITE_PIN_ICON_SUFFIX, THREAT_PIN_ICON_SUFFIX } from "../journal/gm-prep-page.js";
 // Make Stonetop map-note labels legible over busy hand-drawn maps.
 //
 // Our lettered Place-of-Interest discs and GM-prep pins (threats, hazards, sites) label
@@ -25,12 +25,23 @@ import { THREAT_PIN_ICON_SUFFIX } from "./ThreatNotePins.js";
 // Icon families we own; any note textured from one of these gets the pill treatment.
 // The suffixes come from the modules that WRITE these notes, under every system id this
 // package has shipped under, so neither a path change nor an id rename can desync them.
-const _OUR_NOTE_ICONS = [
-	...systemAssetVariants(`${LANDMARK_ICON_SUFFIX}/`), // Place-of-Interest lettered discs
-	...systemAssetVariants(THREAT_PIN_ICON_SUFFIX),     // threat, hazard + site pins
+//
+// `alwaysLabel` is a property OF THE FAMILY, which is why it is a column here rather than a
+// named exception inside _showPermanentLabel: a fifth family arrives as one more row, and the
+// roll-up every other test reads is derived from this list rather than kept beside it.
+const _NOTE_FAMILIES = [
+	// Place-of-Interest lettered discs
+	{ icons: systemAssetVariants(`${LANDMARK_ICON_SUFFIX}/`), alwaysLabel: false },
+	// threat + hazard pins
+	{ icons: systemAssetVariants(THREAT_PIN_ICON_SUFFIX), alwaysLabel: false },
+	// The GM's own sites, dropped on a scene. See _showPermanentLabel for why they never hide.
+	{ icons: systemAssetVariants(SITE_PIN_ICON_SUFFIX), alwaysLabel: true },
 ];
 
-// WHEN the label shows is a setting, not a property of the family.
+const _OUR_NOTE_ICONS = _NOTE_FAMILIES.flatMap(family => family.icons);
+
+// WHEN the label shows is a setting for every family that does not say otherwise above - the one
+// that does is the GM's own site pins, whose reasoning is in _showPermanentLabel.
 // Core shows a note's text only while the cursor is on it (Note#_refreshState), which is the
 // right default for an annotation and the wrong one for a place name: the poster maps ship as
 // the UNLABELLED printing of their artwork, so a reader who has to go hunting for each name
@@ -63,8 +74,16 @@ function _isStonetopMapNote(noteDoc) {
 	return _OUR_NOTE_ICONS.some((prefix) => src.includes(prefix));
 }
 
+/** The family a note belongs to, or null when it is not one of ours. */
+function _noteFamily(noteDoc) {
+	const src = noteDoc?.texture?.src;
+	if (!src) return null;
+	return _NOTE_FAMILIES.find((family) => family.icons.some((prefix) => src.includes(prefix))) ?? null;
+}
+
 /**
- * Show this note's label, unless this map has asked for names on hover only.
+ * Show this note's label, unless this map has asked for names on hover only - and a site pin
+ * wears its name whatever the map says.
  *
  * Which map that is comes off the note's OWN scene rather than off the canvas, because they are
  * not always the same one: a note is drawn as part of the scene it belongs to, and the canvas
@@ -87,9 +106,19 @@ function _showPermanentLabel(note) {
 	// hover in and out — and it is an `includes` over a module constant, where the settings
 	// question below has to find the note's poster map first. Most notes on most scenes are not
 	// ours, and they now cost the cheap test alone.
-	if (!_isStonetopMapNote(note?.document)) return;
-	const scene = note?.document?.parent ?? globalThis.canvas?.scene ?? null;
-	if (!showMapPinNamesOn(scene)) return;
+	const doc = note?.document;
+	const family = _noteFamily(doc);
+	if (!family) return;
+	// A SITE IS NOT SUBJECT TO THE SETTING. The setting exists because the poster maps carry
+	// dozens of the book's own places and a wall of names is a fair thing to want quieter. A GM
+	// places a HANDFUL of sites, on their own prep, and a mark whose name you have to go hunting
+	// for with the mouse is not a label - it is an anonymous blob on somebody else's artwork. The
+	// journey dialog's site pins already made this exact exception (expedition-journey-pins.hbs);
+	// this is the same mark on the table's own map, so it answers the same way.
+	if (!family.alwaysLabel) {
+		const scene = doc?.parent ?? globalThis.canvas?.scene ?? null;
+		if (!showMapPinNamesOn(scene)) return;
+	}
 	if (note.tooltip) note.tooltip.visible = true;
 }
 

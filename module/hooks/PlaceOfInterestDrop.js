@@ -17,6 +17,7 @@ import { systemAssetVariants } from "../migration/compat.js";
 import { getSetting, setSetting } from "../settings.js";
 import {
 	MAP_PIN_FONT_SIZE, MAP_PIN_ICON_SIZE, MAP_PIN_TEXT_COLOR, mapPinNoteData, publicPinDrift,
+	sameColor,
 } from "../utils/map-pins.js";
 import { findPlacePage, placeNoteLink, writePlacesOfInterest } from "../utils/places-chronicle.js";
 
@@ -145,12 +146,16 @@ export async function linkLandmarkNotes({
  * it wants changed about one. Everything else - the empty-update skip that keeps a quiet load
  * silent, the single write per scene, the running count - is the same bargain every time.
  *
+ * Exported because the fifth pass is not in this file: the GM-prep pin refit in ThreatNotePins.js
+ * claims a different family of notes and is otherwise the same walk, so it asks for it here rather
+ * than making the copy this function exists to stop.
+ *
  * @param {Iterable} scenes
  * @param {(note: object) => boolean} claims  Which notes this pass owns.
  * @param {(note: object) => object} changeFor  What to write, empty when the note already agrees.
  * @returns {Promise<number>} How many notes were written.
  */
-async function sweepLandmarkNotes(scenes, claims, changeFor) {
+export async function sweepSceneNotes(scenes, claims, changeFor) {
 	let written = 0;
 	for (const scene of scenes) {
 		const updates = [];
@@ -195,11 +200,14 @@ export async function refitLandmarkNotes({
 	if (!isGM) return 0;
 	// Silence in the steady state is the whole budget: this runs on every load, and the sweep
 	// writes nothing for a scene whose discs already agree.
-	return sweepLandmarkNotes(scenes, landmarkLetterOf, note => {
+	return sweepSceneNotes(scenes, landmarkLetterOf, note => {
 		const change = {};
 		if (note.fontSize !== NOTE_FONT_SIZE) change.fontSize = NOTE_FONT_SIZE;
 		if (note.iconSize !== NOTE_ICON_SIZE) change.iconSize = NOTE_ICON_SIZE;
-		if (note.textColor !== NOTE_TEXT_COLOR) change.textColor = NOTE_TEXT_COLOR;
+		// The ink through `sameColor`, not `===`: a live Note's textColor is a `Color`, so a direct
+		// comparison against this string never agrees and the "silence in the steady state" above
+		// is silence this pass never actually keeps.
+		if (!sameColor(note.textColor, NOTE_TEXT_COLOR)) change.textColor = NOTE_TEXT_COLOR;
 		return change;
 	});
 }
@@ -256,7 +264,7 @@ export async function revealLandmarkNotesOnce({
 	// Which of the public pair a pin is missing is map-pins.js’s to answer, beside the constant
 	// that writes it: a copy of that test which drifts from the writer is a pin that goes silently
 	// GM-only on Foundry 14.
-	const revealed = await sweepLandmarkNotes(scenes, isLandmarkNote, publicPinDrift);
+	const revealed = await sweepSceneNotes(scenes, isLandmarkNote, publicPinDrift);
 	// Stamped only once the writes have landed: a run that throws part-way leaves the flag
 	// unset, so the next load picks up the scenes it never reached.
 	await write("landmarkNotesRevealed", true);

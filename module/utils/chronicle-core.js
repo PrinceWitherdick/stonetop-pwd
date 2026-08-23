@@ -16,7 +16,7 @@ import { escHtml, decodeEntities } from "./strings.js";
 import { step4Questions, step6Questions } from "../dialogs/introductions-data.js";
 import { CHART_GROUPS } from "../dialogs/expedition-data.js";
 import {
-	journeyRoute, atLeastPhrase, routeLegLines, routeLine, fillChartBlank,
+	journeyRoute, routePhrase, routeLegLines, routeLine, fillChartBlank,
 } from "./travel-route.js";
 import { SEASONAL_GAINS } from "../dialogs/spring-burst-data.js";
 // One name for an unnamed trip: the switcher, the steading's held assets and this page all
@@ -132,7 +132,7 @@ function journeyProse(route) {
 	if (!route) return "";
 	const legs = routeLegLines(route).map(line => `<li>${escHtml(line)}</li>`).join("");
 	return `<p><strong>${escHtml(routeLine(route))}</strong>: `
-		+ `${escHtml(atLeastPhrase(route.total))}.</p><ul>${legs}</ul>`;
+		+ `${escHtml(routePhrase(route))}.</p><ul>${legs}</ul>`;
 }
 
 // The GM's own words about the route — with OUR words dropped back out.

@@ -29681,10 +29681,53 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	flex: 0 0 auto; display: inline-flex; width: auto; margin-left: auto;
 	padding: 2px 7px; font-size: var(--st-fs-2xs); line-height: 1.4;
 }
+/* LAYING THE WAY OUT BY HAND (module/utils/custom-route.js).
+
+   Its own row between the picks and the map tabs, because it belongs to neither and crowds both:
+   it changes what a click on the picture means AND what the readout underneath is about. Quiet
+   while it is off — one checkbox in the muted italic every other label on this screen wears — and
+   it takes the route's own red once it is on, which is the colour of the line the reader is about
+   to be drawing. That is the whole of the state: the map either is or is not something to draw on,
+   and this row is where you look to find out which. */
+.stonetop-journey .stonetop-journey-draw {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+	margin-top: 6px; padding: 5px 10px;
+	border: 1px solid transparent; border-radius: var(--st-radius-lg);
+}
+.stonetop-journey .stonetop-journey-drawlab {
+	display: inline-flex; align-items: center; gap: 6px;
+	flex: 0 0 auto; cursor: pointer;
+	font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
+}
+.stonetop-journey .stonetop-journey-drawhint {
+	flex: 1 1 240px; min-width: 0;
+	font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
+}
+.stonetop-journey .stonetop-journey-clear-drawn {
+	flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; width: auto;
+	padding: 2px 8px; font-size: var(--st-fs-2xs); line-height: 1.4;
+}
+/* Later than the base rule, per the modifier-ordering house rule. The tint is the route ink at a
+   twentieth, which is the same red the line on the map is drawn in and reads as barely a wash
+   against the step column rather than as a warning. */
+.stonetop-journey .stonetop-journey-draw.is-on {
+	border-color: color-mix(in srgb, var(--stonetop-route-ink) 35%, transparent);
+	background: color-mix(in srgb, var(--stonetop-route-ink) 5%, transparent);
+}
+.stonetop-journey .stonetop-journey-draw.is-on .stonetop-journey-drawlab {
+	color: var(--st-text); font-style: normal; font-weight: 700;
+}
+
 /* Which map. Not `.stonetop-tabs`: two buttons that swap one picture are a zoom control,
    and reusing the sheet's tab chrome here would promise a tabbed panel underneath. */
 .stonetop-journey .stonetop-journey-tiers {
-	display: flex; gap: 6px; margin: 10px 0 6px;
+	display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 6px;
+}
+/* The tabs alone, wrapped because a tablist may hold tabs and nothing else and this row also
+   carries the site button (see the partial). It lays out exactly as the row did before it existed:
+   one flex box inside another, with the same gap. */
+.stonetop-journey .stonetop-journey-tierlist {
+	display: flex; gap: 6px; min-width: 0;
 }
 /* The outline pill, worn by the map tabs here, by the "see the whole map" button further down,
    and by the "put this route on the scene" button standing in a row with them
@@ -29692,6 +29735,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    own size and type below. */
 .stonetop-journey .stonetop-journey-tier,
 .stonetop-journey .stonetop-journey-to-scene,
+.stonetop-journey .stonetop-journey-place-site,
 .stonetop-journey .stonetop-journey-zoom {
 	flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; width: auto;
 	font-size: var(--st-fs-2xs);
@@ -29711,8 +29755,15 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-journey .stonetop-journey-to-scene {
 	padding: 3px 10px; line-height: 1.4;
 }
+/* Put one of the GM's own sites on this map (module/sites/place-site-on-map.js). It shares the
+   pill above and takes the end of the map-tab row: the tabs say which picture, and this is what
+   the GM does TO that picture, so it reads as belonging to the row rather than to the picks. */
+.stonetop-journey .stonetop-journey-place-site {
+	padding: 3px 10px; line-height: 1.4; margin-left: auto;
+}
 .stonetop-journey .stonetop-journey-tier:hover,
 .stonetop-journey .stonetop-journey-to-scene:hover,
+.stonetop-journey .stonetop-journey-place-site:hover,
 .stonetop-journey .stonetop-journey-zoom:hover {
 	background: var(--st-slate-hover-bg); border-color: var(--st-slate-hover-border);
 }
@@ -29741,6 +29792,18 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    the picture, with room for an edge pin's label to hang past the art. The route step's map box
    above satisfies it; so does the overlay the "See the whole map" window sizes to the picture. */
 .stonetop-journey-canvas { position: relative; }
+
+/* WAITING FOR A CLICK ON THE PICTURE (module/utils/pick-point-on-image.js). Worn by whichever
+   element that gesture is listening on: the walkthrough's own map box, or the popout's viewport.
+   Not scoped to either, because the gesture is not — it is "click a point on this picture", and
+   the next thing that wants one should get the same cursor for free.
+
+   The descendant rule is load-bearing rather than tidy. Every pin on the map is a <button>, which
+   core paints with `cursor: pointer`, so without it the crosshair would blink out over exactly
+   the marks a GM is most likely to aim beside. While the mode is armed a click means the same
+   thing wherever it lands, so it should look the same wherever it lands too. */
+.stonetop-picking, .stonetop-picking *,
+.stonetop-drawing, .stonetop-drawing * { cursor: crosshair; }
 .stonetop-journey .stonetop-journey-img {
 	display: block; width: 100%; height: 100%;
 	border: 1px solid rgba(0,0,0,0.22); border-radius: var(--st-radius);
@@ -29843,6 +29906,71 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
 }
 
+/* One of the GM's own sites, dropped on the map (module/sites/site-map-spots.js).
+
+   A THIRD MARK, because it is a third kind of thing. The book's places are ink DOTS and its edge
+   arrows ink DISCS; a site is neither printed nor charted, so it wears the weathered stone the
+   site cards are accented in. That stone arrives as `--site-accent` off the pin itself, from the
+   same SITE_ACCENT the cards are handed (module/sites/site-view.js), so re-inking sites reaches
+   the map and the tab together. NOT a theme token, for the reason stated above the dot: the map
+   carries its own cream ground in both themes. Rounded rather than round, so the silhouette
+   differs from its neighbours at a glance and not only in colour.
+
+   It lifts above the unchosen book pins but stays under the two ends of the journey, which keep
+   z-index 2 and 3: a GM's own mark should not be buried, and it should not cover where the party
+   is bound either. */
+.stonetop-journey-canvas .stonetop-journey-site { z-index: 1; }
+.stonetop-journey-canvas .stonetop-journey-sitemark {
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 18px; height: 18px; border-radius: var(--st-radius-sm);
+	font-size: 9px; color: #f4ecd8;
+	background: var(--site-accent, #5a5f6b); border: 2px solid #f4ecd8;
+	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
+	transition: transform 120ms ease;
+}
+.stonetop-journey-canvas .stonetop-journey-site:hover .stonetop-journey-sitemark { transform: scale(1.2); }
+/* Its name is set in the same stone, so a pin and its label read as one mark and neither is
+   mistaken for one of the book's own. Later than the shared `.stonetop-journey-tag` rule, per the
+   modifier-ordering house rule. */
+.stonetop-journey-canvas .stonetop-journey-site .stonetop-journey-tag {
+	/* The ink stays its own darker literal: it is a reading of the stone rather than the stone. */
+	color: #3d4149; border-color: var(--site-accent, #5a5f6b);
+}
+
+/* A BARE MARK ON A HAND-DRAWN WAY (module/utils/custom-route.js): a point the GM put down where
+   the books letter nothing.
+
+   IT BELONGS TO THE LINE, NOT TO THE MAP, and it is painted to say so: the route's own red ring in
+   the route's own cream, the same two tokens the ribbon and its arrowheads are drawn from, so
+   re-inking the line re-inks its marks with it. The book's places stay ink dots and the GM's sites
+   stay stone; three kinds of thing, three drawings.
+
+   IT TAKES NO CLICKS. Every other mark on this picture is a button; this one is handwriting, and
+   while the mode is on a click anywhere lays the next mark — including on top of an existing one.
+   `pointer-events: none` is what lets that click through to the drawing watch underneath instead
+   of being swallowed by the very mark the reader was trying to move.
+
+   Level with a lettered stop on the same way (z-index 2) and drawn LAST in the layer, so DOM order
+   settles the tie in the numeral's favour: it is the mark the reader is about to right-click, and
+   a name tag hanging off a neighbouring pin should not bury it. Where they are BOUND still wins
+   over both, at 3, and the ribbon underneath is an SVG with no z-index of its own. */
+.stonetop-journey-canvas .stonetop-journey-mark {
+	position: absolute; z-index: 2; pointer-events: none;
+	transform: translate(-50%, -50%);
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 16px; height: 16px; border-radius: 50%;
+	font-family: var(--font-stonetop); font-size: 9px; font-weight: 700; line-height: 1;
+	color: var(--stonetop-route-case);
+	background: var(--stonetop-route-ink);
+	border: 2px solid var(--stonetop-route-case);
+	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
+}
+/* The far end of the way, after the base rule. Bigger for the same reason the destination pin is:
+   of a run of identical beads, the one saying where this ends has to be the one you find first. */
+.stonetop-journey-canvas .stonetop-journey-mark.is-end {
+	width: 20px; height: 20px; font-size: 11px;
+}
+
 /* The pin's caption. Absolute so it never widens the button's hit area, and anchored
    INWARD near an edge (h-left / h-right below) so an edge label cannot spill out of the
    step column and give it a horizontal scrollbar. */
@@ -29862,6 +29990,20 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-journey-canvas .h-right  .stonetop-journey-tag { right: -4px; }
 .stonetop-journey-canvas .v-below  .stonetop-journey-tag { top: calc(100% + 5px); }
 .stonetop-journey-canvas .v-above  .stonetop-journey-tag { bottom: calc(100% + 5px); }
+
+/* A LETTERED PLACE THE HAND-DRAWN WAY PASSES THROUGH. It keeps the book's ink rather than taking
+   the route's red — it is still one of the map's own places, and the numbered beads are what the
+   route paints — but it lifts out of the crowd it was standing in, because the reader chose it.
+
+   Before the two ends below, deliberately: the last stop of a drawn way is BOTH a stop and where
+   they are bound, and "bound" is the louder fact. */
+.stonetop-journey-canvas .stonetop-journey-spot.is-stop,
+.stonetop-journey-canvas .stonetop-journey-exit.is-stop { z-index: 2; }
+.stonetop-journey-canvas .stonetop-journey-spot.is-stop .stonetop-journey-dot {
+	width: 13px; height: 13px;
+	border-color: var(--stonetop-route-case);
+	box-shadow: 0 0 0 2px var(--stonetop-route-ink), 0 1px 3px rgba(0,0,0,0.4);
+}
 
 /* The two ends of the journey, after the base pin rules. Literal greens and golds for the
    same reason as the ink above: these sit on the map's own cream, not on the sheet.
@@ -29941,6 +30083,26 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-journey .stonetop-journey-legs .j-via {
 	font-size: var(--st-fs-2xs); color: var(--st-text-muted);
 }
+/* MEASURED RATHER THAN PRINTED. A total the book stands behind is gold, like every other answer
+   on this screen; one this system worked out with a ruler is the route's own red and set in
+   italics, so a GM glancing at the step can tell in one look whether the number in front of them
+   is the book's. Later than the base rule, per the modifier-ordering house rule. */
+.stonetop-journey .stonetop-journey-total.is-estimate {
+	color: var(--stonetop-route-ink); font-style: italic; text-transform: none; letter-spacing: 0;
+}
+/* And per leg, since a hand-drawn way can mix the two: a leg between two places the table prices
+   keeps its printed time and its road, and only the drawn ones are marked. */
+.stonetop-journey .stonetop-journey-legs li.is-estimate .j-time {
+	color: var(--st-text-muted); font-style: italic;
+}
+/* Where the number came from, in one line under the legs. */
+.stonetop-journey .stonetop-journey-estimate {
+	margin: 7px 0 0;
+	display: flex; align-items: baseline; gap: 6px;
+	font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
+}
+.stonetop-journey .stonetop-journey-estimate > i { color: var(--stonetop-route-ink); font-style: normal; }
+
 .stonetop-journey .stonetop-journey-note {
 	margin: 7px 0 0; font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
 }

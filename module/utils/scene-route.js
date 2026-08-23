@@ -4,13 +4,13 @@
 // is the same line on the table's map: the Scene the party is looking at, at the size the whole
 // room can see, with the route running across it in the same cream ribbon and red beads.
 //
-// WHAT IS STORED IS THE TRIP, NOT THE LINE. The Scene carries a flag naming two places, and every
-// client works the geometry out again from the travel graph. That is the same choice the trip's
-// own record makes and for the same reason (see `expeditionAnswers` in settings.js): the graph is
-// frozen compile-time data, so recomputing costs nothing, there is no snapshot to migrate, and a
-// correction to the travel table reaches a route already on a Scene the next time anything draws
-// it. It also means the line survives a GM resizing the Scene, which a saved run of pixels would
-// not.
+// WHAT IS STORED IS THE TRIP, NOT THE LINE. The Scene carries a flag naming two places — or, for a
+// way the GM drew by hand, the map and the marks they put on it — and every client works the
+// geometry out again from there. That is the same choice the trip's own record makes and for the
+// same reason (see `expeditionAnswers` in settings.js): the graph is frozen compile-time data, so
+// recomputing costs nothing, there is no snapshot to migrate, and a correction to the travel table
+// reaches a route already on a Scene the next time anything draws it. It also means the line
+// survives a GM resizing the Scene, which a saved run of pixels would not.
 //
 // WHY IT CAN REFUSE. A fraction like 0.708 means "70.8% of the way across the Vicinity", and it
 // means nothing at all anywhere else. So this asks three questions before it will draw: is this
@@ -30,7 +30,7 @@ import {
 } from "../book2-art/poster-map-catalog.js";
 import { frameFitsImage, frameFor, travelMap, travelPlace } from "../data/travel-times.js";
 import { MAP_PIN_ICON_SIZE } from "./map-pins.js";
-import { journeyRoute, normalizeJourney } from "./travel-route.js";
+import { journeyKey, journeyRoute, normalizeJourney } from "./travel-route.js";
 import { offMapNote, routeDots, routePath, tierDrawing } from "./route-path.js";
 
 /** The Scene flag one route lives in. */
@@ -133,14 +133,17 @@ export function routeInk() {
  */
 export function sceneJourney(scene) {
 	const stored = scopedFlag(scene, SCENE_ROUTE_FLAG);
-	if (!stored?.destination) return null;
-	const { origin, destination } = normalizeJourney(stored);
-	if (!destination) return null;
-	// TWO PLACES, and nothing else. The flag used to carry the expedition's id and title as well,
-	// which nothing ever read: state on a document that no reader can reach cannot be checked, and
-	// a title copied here goes stale the moment the trip is renamed. What the line IS is the pair
-	// of places; whose trip it was is the expedition record's to say.
-	return { origin, destination };
+	if (!stored?.destination && !stored?.custom?.on) return null;
+	const { origin, destination, custom } = normalizeJourney(stored);
+	// Nothing drawn: neither a destination the table can solve a way to, nor a mark the GM laid
+	// down. Both are ordinary — a trip mid-plan is one or the other — and neither is a route.
+	if (custom.on ? !custom.points.length : !destination) return null;
+	// WHAT THE LINE IS, and nothing else. The flag used to carry the expedition's id and title as
+	// well, which nothing ever read: state on a document that no reader can reach cannot be
+	// checked, and a title copied here goes stale the moment the trip is renamed. What the line IS
+	// is a pair of places, or a map and the marks on it; whose trip it was is the expedition
+	// record's to say.
+	return { origin, destination, custom };
 }
 
 /**
@@ -160,12 +163,17 @@ export function routeFlagTouched(changes) {
 			&& (SCENE_ROUTE_FLAG in flags[scope] || `-=${SCENE_ROUTE_FLAG}` in flags[scope]));
 }
 
-/** Is this Scene already showing exactly this journey? What the button's own label turns on. */
+/**
+ * Is this Scene already showing exactly this journey? What the button's own label turns on.
+ *
+ * Through `journeyKey`, which compares WHAT IS DRAWN rather than what is stored. With a hand-drawn
+ * way showing, the trip's own destination is remembered but not on the map, so a GM who changes it
+ * has not changed the line — and comparing the stored fields directly would decide the Scene had
+ * fallen out of step and offer to redraw a line already there.
+ */
 export function sceneShowsJourney(scene, journey) {
 	const shown = sceneJourney(scene);
-	if (!shown) return false;
-	const want = normalizeJourney(journey);
-	return shown.origin === want.origin && shown.destination === want.destination;
+	return !!shown && journeyKey(shown) === journeyKey(journey);
 }
 
 /**
@@ -197,6 +205,14 @@ export function sceneRouteCheck(scene, route) {
 	// A poster map this system knows, but not one the travel table charts across: the village and
 	// the two town maps. They letter their own places and have no legs attached to any of them.
 	if (!tier) return { ...refuse("wrong-map"), on: slug, onName: posterMapFor(slug)?.name ?? scene.name };
+
+	// A HAND-DRAWN WAY IS FRACTIONS OF ONE PICTURE, so the Scene has to be that picture. Left to
+	// fall through, the geometry below would simply find no line and the refusal would come out as
+	// "this map doesn't draw <place>" — which names the wrong problem and sends the reader off
+	// after a place when what they need is the other map. Named here, they get the map.
+	if (route.custom && route.tier !== slug) {
+		return { ...refuse("wrong-map"), on: slug, onName: tier.name };
+	}
 
 	const map = posterMapFor(slug);
 	const width = Number(scene.width) || 0;
@@ -331,17 +347,27 @@ export function offMapNames(note) {
  * button is the map the whole table is looking at.
  */
 export async function showRouteOnScene(scene, journey) {
-	const { origin, destination } = normalizeJourney(journey);
-	if (!destination) return null;
+	const { origin, destination, custom } = normalizeJourney(journey);
+	const drawn = custom.on && custom.points.length > 0;
+	if (!drawn && !destination) return null;
+	// WHAT IS DRAWN GOES IN, and not the rest of the trip. A hand-drawn way carries its map and its
+	// marks and no destination, because with the box ticked the destination is a pick the GM is
+	// keeping for later rather than anything the line on the Scene is about — and writing it here
+	// would make the button think the Scene had gone out of step every time they changed it.
+	const payload = drawn
+		? { origin, custom: { on: true, tier: custom.tier, points: custom.points } }
+		: { origin, destination };
 	// ONE write, and it takes any LEGACY copy down on the way past. `scopedFlag` answers with the
 	// first scope that holds one and walks the historical ids AHEAD of the pinned one, so a flag
 	// left behind by a rename would otherwise outrank the route being drawn right now.
-	// TWO PLACES in the payload; see `sceneJourney` for why nothing else goes in it.
 	await scene.update({
 		...routeFlagDeletions(scene, { except: SYSTEM_ID }),
-		[`flags.${SYSTEM_ID}.${SCENE_ROUTE_FLAG}`]: { origin, destination },
+		[`flags.${SYSTEM_ID}.${SCENE_ROUTE_FLAG}`]: payload,
 	});
-	return travelPlace(destination)?.name ?? destination;
+	// The name to tell the GM the line landed under, or null where the way ends at a mark of their
+	// own and there is no name to give — which the caller words for itself.
+	if (!drawn) return travelPlace(destination)?.name ?? destination;
+	return travelPlace(custom.points.at(-1)?.slug)?.name ?? null;
 }
 
 /**

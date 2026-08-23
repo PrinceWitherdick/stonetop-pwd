@@ -1,0 +1,191 @@
+// "Which site?" — the chooser behind the route step's Put-a-site-on-the-map button.
+//
+// ONE BUTTON, BOTH ANSWERS. A GM reaching for this has either already written the place up and
+// wants it on the map, or is looking at the map and has just decided there ought to be something
+// in that valley. Those are the same intention arriving from two directions, so they are one
+// control with a list: every site this steading has, and a last row that opens Book I's four
+// phases and comes back with a new one. The row IS the flow (see `runPickedOption`), so a site
+// added to the list cannot end up with no way to reach it.
+//
+// The gesture itself lives here too, and not in the walkthrough that first offered it. A site's
+// spot is a flag on the PAGE, not anything about a trip: the walkthrough was simply the first
+// surface with a map on it. Keeping the whole act here is what lets the popout do it without
+// reaching back through the panel for code that has nothing to do with the journey, and what lets
+// the next surface that grows a map offer the same gesture by calling it.
+//
+// What is NOT here is what to redraw afterwards. That genuinely is the caller's business: each
+// surface knows which of its own views is showing pins.
+import { pickContentOption, runPickedOption } from "../dialogs/content-picker.js";
+import { createSiteFlow } from "../actors/gmtoolkit/gm-prep-actions.js";
+import { listSitePages } from "./site-store.js";
+import { clearSiteMapSpot, setSiteMapSpot, siteMapTier } from "./site-map-spots.js";
+import { percentSpot, travelMap } from "../data/travel-times.js";
+import { getStonetopSteadingActorOrWarn } from "../utils/world.js";
+import { format, localize } from "../utils/i18n.js";
+
+/**
+ * The mark a site wears in a LIST, shared with the sidebar's own "Create Stonetop Content" row so
+ * the same thing is offered under the same picture wherever a GM meets it.
+ *
+ * Deliberately NOT the mark it wears as a pin on the map, which is a standing stone: that one is
+ * drawn at 18px, where this one collapses into something that reads as a broken-image placeholder.
+ * See the site block in expedition-journey-pins.hbs. One idea, two sizes, two drawings.
+ */
+export const SITE_ICON = "fa-mountain-sun";
+
+/** The id of the row that writes a new one, kept off any page id by the underscores. */
+const NEW_SITE = "__new__";
+
+/**
+ * What one existing site's row says under its name.
+ *
+ * The card's own foundation line (what manner of site, what country, what terrain), which is the
+ * shortest true description a site has and the one the Sites tab already leads with. Where the
+ * site is already pinned that outranks it: a GM scanning this list for something to place needs
+ * to know which of these are placed before they need to be reminded what they are.
+ */
+function siteHint(page) {
+	const tier = siteMapTier(page);
+	if (tier) return format("stonetop.expedition.sites.alreadyOn", { map: travelMap(tier)?.name ?? tier });
+	const sys = page.system ?? {};
+	return [sys.mannerLabel, sys.regionLabel, sys.terrain]
+		.map(s => String(s ?? "").trim())
+		.filter(Boolean)
+		.join(", ");
+}
+
+/**
+ * Ask which site is going on the map, writing a new one if that is the answer.
+ *
+ * @param {Actor} steading  where this world's sites are filed
+ * @param {string} tier     the map being placed on, for the window title alone
+ * @returns {Promise<JournalEntryPage|null>}  the site to place, or null if the GM backed out
+ *          (of the chooser OR of the walkthrough behind its last row).
+ */
+export async function chooseSiteForMap(steading, tier) {
+	if (!steading) return null;
+
+	const options = listSitePages(steading).map(page => ({
+		id: page.id,
+		label: page.name,
+		icon: SITE_ICON,
+		hint: siteHint(page),
+		// Already in hand. The chooser's contract is that a row's `create` produces the thing, and
+		// for a site that already exists producing it is handing it back.
+		create: () => page,
+	}));
+
+	// LAST, not first. With prep written, placing it is what this button is for and the list is
+	// what the GM came to read; the walkthrough is the answer to a rarer question, and a row that
+	// opens a nine-step dialog is the wrong thing to have pre-selected under a Continue button.
+	// With no prep at all it is the only row, so it is first by default anyway.
+	options.push({
+		id: NEW_SITE,
+		label: localize("stonetop.expedition.sites.createNew"),
+		icon: "fa-plus",
+		hint: localize("stonetop.expedition.sites.createNewHint"),
+		create: () => createSiteFlow(steading),
+	});
+
+	const choice = await pickContentOption({
+		title: format("stonetop.expedition.sites.chooseTitle", {
+			map: travelMap(tier)?.name ?? localize("stonetop.expedition.sites.thisMap"),
+		}),
+		options,
+		buttonLabel: localize("stonetop.expedition.sites.chooseButton"),
+	});
+	return (await runPickedOption(options, choice)) ?? null;
+}
+
+/**
+ * Open a site's write-up, from a pin on the map.
+ *
+ * Through the PARENT journal's sheet with the page named, which is how every other surface in this
+ * system opens one of these pages: a site is one page of the steading's single hidden Sites entry,
+ * and rendering the page sheet standalone would show the write-up with no way to reach its
+ * siblings. Tolerant of a uuid that no longer resolves, which is the ordinary state of a pin whose
+ * site was deleted from the tab while the map was open.
+ */
+export async function openSiteWriteUp(uuid) {
+	if (!uuid) return null;
+	const page = await fromUuid(uuid).catch(() => null);
+	if (!page) {
+		ui.notifications?.warn?.(localize("stonetop.expedition.sites.gone"));
+		return null;
+	}
+	page.parent?.sheet?.render(true, { pageId: page.id });
+	return page;
+}
+
+/**
+ * Choose a site, then take the click that says where it goes, then write it down.
+ *
+ * THE CHOOSING COMES FIRST, deliberately. The other order (click the map, then say what is there)
+ * reads well until the GM has to leave the map to write the site up: Book I's walkthrough is nine
+ * steps long, and by the time it closes the point they were aiming at is gone from under the
+ * cursor and from their head. Choosing first means the last thing that happens is the click, which
+ * is the part that has to be precise.
+ *
+ * @param {object} surface
+ * @param {string} surface.tier        which map is showing, since a spot belongs to one
+ * @param {object} surface.frame       that file's registration, for `percentSpot`
+ * @param {Function} surface.pickPoint `()` -> Promise of `{left, top}` percentages, or null
+ * @returns {Promise<boolean>} whether a pin was actually written, so the caller knows to redraw.
+ */
+export async function placeSiteOnMap({ tier, frame, pickPoint } = {}) {
+	const steading = getStonetopSteadingActorOrWarn({ because: "there is nowhere to file a site" });
+	if (!steading) return false;
+
+	const page = await chooseSiteForMap(steading, tier);
+	// Backed out of the chooser, or out of the nine-step walkthrough behind its last row.
+	if (!page) return false;
+
+	ui.notifications?.info(format("stonetop.expedition.sites.clickToPlace", { name: page.name }));
+	const at = await pickPoint();
+	// Escape, a right-click, or the window closing with the gesture still armed. A site written on
+	// the way through is KEPT: it is prep either way, it is already on the Sites tab, and binning
+	// somebody's nine steps of typing because they changed their mind about the pin would be the
+	// worst possible reading of "cancel".
+	if (!at) return false;
+
+	const mapName = travelMap(tier)?.name ?? localize("stonetop.expedition.sites.thisMap");
+
+	// The answer is CHECKED, not assumed. `setSiteMapSpot` refuses a fraction outside the printed
+	// crop and writes nothing, and that is a reachable click rather than a broken caller: the
+	// picker shows the whole map FILE, whose registered crop is inset a few percent inside it, so
+	// aiming at the margin band is an ordinary miss. Announced as placed, it would send the caller
+	// off to redraw a pin that is not there, or report a move that never happened while the old
+	// pin sits where it always was.
+	const spot = await setSiteMapSpot(page, { tier, ...percentSpot(at, frame) });
+	if (!spot) {
+		ui.notifications?.warn(format("stonetop.expedition.sites.offTheMap", {
+			name: page.name,
+			map: mapName,
+		}));
+		return false;
+	}
+
+	ui.notifications?.info(format("stonetop.expedition.sites.placed", {
+		name: page.name,
+		map: mapName,
+	}));
+	return true;
+}
+
+/**
+ * Lift a pin back off the map.
+ *
+ * NO CONFIRMATION, because nothing is destroyed: the write-up stays exactly where it was on the
+ * Sites tab, and putting the pin back is the same two clicks that put it there. That is the whole
+ * difference between this and the trash on that tab, which does ask.
+ *
+ * @returns {Promise<boolean>} whether a pin was actually lifted.
+ */
+export async function liftSiteOffMap(uuid) {
+	if (!uuid) return false;
+	const page = await fromUuid(uuid).catch(() => null);
+	if (!page) return false;
+	await clearSiteMapSpot(page);
+	ui.notifications?.info(format("stonetop.expedition.sites.removed", { name: page.name }));
+	return true;
+}

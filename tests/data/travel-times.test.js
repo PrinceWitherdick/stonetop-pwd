@@ -6,7 +6,7 @@ import {
 	TRAVEL_PLACES, TRAVEL_LEGS, TRAVEL_MAPS, TRAVEL_EXITS, MAP_CAPTIONS, MAP_FRAMES, FULL_FRAME,
 	BEYOND_TIER,
 	travelPlace, homePlace, placesOnMap, placesBeyond, exitsOnMap,
-	spotPercent, frameFor, frameFitsImage,
+	spotPercent, percentSpot, frameFor, frameFitsImage,
 } from "../../module/data/travel-times.js";
 
 // The travel graph is a duplicate of prose the packs already ship — the GM playbook's Travel
@@ -296,6 +296,35 @@ describe("map positions", () => {
 		// The frame's corners are where a canonical 0,0 and 1,1 land.
 		expect(spotPercent({ fx: 0, fy: 0 }, poster)).toEqual({ left: poster.x0 * 100, top: poster.y0 * 100 });
 		expect(spotPercent({ fx: 1, fy: 1 }, poster)).toEqual({ left: poster.x1 * 100, top: poster.y1 * 100 });
+	});
+
+	// The other direction, which is how a place the BOOKS never printed gets onto these maps: a
+	// GM clicks a pixel of whichever copy their world has, and what is stored has to be the
+	// canonical fraction, or the pin walks the day that world gains the sharper render.
+	it("takes a click back to a canonical fraction, on any copy of the map", () => {
+		const poster = frameFor("assets/maps/map-vicinity.webp");
+		const printed = frameFor("assets/maps/gm-vicinity.webp");
+		// The SAME point on the drawing, addressed against two different crops of it. Both have
+		// to come back as the one fraction, which is the whole claim this pair makes.
+		const spot = { fx: 0.42, fy: 0.61 };
+		for (const frame of [poster, printed]) {
+			expect(percentSpot(spotPercent(spot, frame), frame)).toEqual(spot);
+		}
+		// And the poster's own corners are canonical 0,0 and 1,1, as the reverse says they are.
+		expect(percentSpot({ left: poster.x0 * 100, top: poster.y0 * 100 }, poster)).toEqual({ fx: 0, fy: 0 });
+		expect(percentSpot({ left: poster.x1 * 100, top: poster.y1 * 100 }, poster)).toEqual({ fx: 1, fy: 1 });
+	});
+
+	it("rounds to the precision the table itself is written to", () => {
+		// A click is a pixel on a 300 dpi map, and 0.0001 of the width is finer than that pixel.
+		const { fx, fy } = percentSpot({ left: 33.333333, top: 66.666666 });
+		expect(fx).toBe(0.3333);
+		expect(fy).toBe(0.6667);
+	});
+
+	it("answers zero for a frame with no extent rather than dividing by it", () => {
+		const flat = { x0: 0.5, y0: 0.5, x1: 0.5, y1: 0.5 };
+		expect(percentSpot({ left: 40, top: 40 }, flat)).toEqual({ fx: 0, fy: 0 });
 	});
 
 	it("checks a registration against the shape of the file it is used on", () => {

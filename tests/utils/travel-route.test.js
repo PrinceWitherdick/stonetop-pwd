@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
 	solveTravel, formatTravelTime, atLeastPhrase, atLeastDays,
 	stopsAlongTheWay, routeLine, routeLegLines, fillChartBlank, chartBlankValue,
-	normalizeJourney, journeyRoute,
+	normalizeJourney, journeyRoute, journeyKey, routePhrase,
 } from "../../module/utils/travel-route.js";
 import { MARCH_HOURS, TRAVEL_LEGS, TRAVEL_PLACES } from "../../module/data/travel-times.js";
 
@@ -176,15 +176,20 @@ describe("phrasing a route", () => {
 // ONE definition of what a trip's stored pick means, because three callers need it and they have
 // to agree: the walkthrough draws from it, the carry-forward onto Chart a Course ticks from it,
 // and the Chronicle compiler prints from it.
+// What a trip with nothing drawn on it reads back as. Every stored journey now carries the
+// hand-drawn way alongside the two slugs, ticked on or not, because `journeyRoute` dispatches
+// on it and four callers read the answer.
+const NO_DRAWN_WAY = { on: false, tier: null, points: [] };
+
 describe("reading a stored journey", () => {
 	it("defaults the origin to home and leaves an unset destination null", () => {
-		expect(normalizeJourney(undefined)).toEqual({ origin: "stonetop", destination: null });
-		expect(normalizeJourney({})).toEqual({ origin: "stonetop", destination: null });
+		expect(normalizeJourney(undefined)).toEqual({ origin: "stonetop", destination: null, custom: NO_DRAWN_WAY });
+		expect(normalizeJourney({})).toEqual({ origin: "stonetop", destination: null, custom: NO_DRAWN_WAY });
 	});
 
 	it("drops a slug the table has never heard of, rather than passing it through", () => {
 		expect(normalizeJourney({ origin: "atlantis", destination: "narnia" }))
-			.toEqual({ origin: "stonetop", destination: null });
+			.toEqual({ origin: "stonetop", destination: null, custom: NO_DRAWN_WAY });
 	});
 
 	it("treats a place you are already standing in as no destination", () => {
@@ -247,5 +252,132 @@ describe("filling the Chart a Course blanks", () => {
 		expect(hourly.sort()).toEqual([
 			"cave-bears-den", "the-crossroads", "the-maw", "the-red-grove", "the-ruined-tower",
 		]);
+	});
+});
+
+// ── A way the GM drew, rather than the one the table would have taken ────────
+//
+// `journeyRoute` answers with either, in one shape, and that is the whole reason it dispatches in
+// one place: four readers depend on it — the walkthrough's readout, the Chart a Course
+// carry-forward, the Scene painter and the Chronicle — and none of them should have to ask which
+// sort of route it is holding.
+
+/** A trip with a way drawn on one map. */
+const drawnTrip = (points, { origin = "stonetop", tier = "worlds-end" } = {}) =>
+	({ origin, destination: "lygos", custom: { on: true, tier, points } });
+
+describe("a route the GM drew", () => {
+	it("is what the trip answers with once the box is ticked", () => {
+		const route = journeyRoute(drawnTrip([{ fx: 0.5, fy: 0.5 }]));
+		expect(route.custom).toBe(true);
+		expect(route.tier).toBe("worlds-end");
+		expect(route.legs.map(l => l.fromName)).toEqual(["Stonetop"]);
+		expect(route.legs.map(l => l.toName)).toEqual(["point 1"]);
+	});
+
+	// The destination is remembered while the box is ticked, and it is not what the line is about.
+	it("leaves the table's own answer untouched underneath it", () => {
+		const trip = drawnTrip([{ fx: 0.5, fy: 0.5 }]);
+		expect(journeyRoute({ ...trip, custom: { ...trip.custom, on: false } }).legs.map(l => l.to))
+			.toEqual(["marshedge", "lygos"]);
+	});
+
+	it("is no route at all until a mark is put down", () => {
+		expect(journeyRoute(drawnTrip([]))).toBeNull();
+	});
+
+	// A LEG THE TABLE ALREADY PRICES KEEPS THE PRINTED TIME. If the GM drew one straight leg from
+	// Stonetop to Marshedge, the book has measured that journey and a ruler has no business
+	// second-guessing it. The estimate is for the legs the book never printed.
+	it("keeps the book's own time for a leg the book prices", () => {
+		const [leg] = journeyRoute(drawnTrip([{ slug: "marshedge" }])).legs;
+		expect(leg.time).toBe("10 days");
+		expect(leg.via).toBe("the Roads");
+		expect(leg.estimated).toBe(false);
+	});
+
+	it("estimates a leg that touches a mark of the GM's own", () => {
+		const [leg] = journeyRoute(drawnTrip([{ fx: 0.62, fy: 0.66 }])).legs;
+		expect(leg.estimated).toBe(true);
+		expect(leg.via).toBeNull();
+		expect(leg.time).toMatch(/\d+(–\d+)? days?/);
+	});
+
+	// The usual road with a detour bent into it: the common case, and the one a GM cannot get any
+	// other way. The printed leg keeps its ten days; the two drawn ones are measured.
+	it("adds the printed and the measured together", () => {
+		const route = journeyRoute(drawnTrip([
+			{ slug: "marshedge" }, { fx: 0.75, fy: 0.8 }, { slug: "lygos" },
+		]));
+		expect(route.legs.map(l => l.estimated)).toEqual([false, true, true]);
+		expect(route.estimated).toBe(true);
+		expect(route.total.days.min).toBeGreaterThan(10);
+	});
+
+	// A leg whose ends this map cannot both place gets no time rather than a made-up one — the
+	// ordinary state of a way whose origin has been moved somewhere the picture does not letter.
+	it("gives no time to a leg it cannot measure", () => {
+		const [leg] = journeyRoute(drawnTrip([{ fx: 0.5, fy: 0.5 }], { origin: "tors-fist", tier: "vicinity" })).legs;
+		expect(leg.time).toBeNull();
+		expect(leg.min).toBe(0);
+		expect(routeLegLines({ legs: [leg] })).toEqual(["Tor's Fist to point 1"]);
+	});
+
+	// Chart a Course's blank reads "you must first travel to ___", and filling it with "point 2"
+	// would hand the GM a requirement they cannot say out loud.
+	it("names only the lettered stops as places to travel to first", () => {
+		const route = journeyRoute(drawnTrip([
+			{ fx: 0.5, fy: 0.5 }, { slug: "marshedge" }, { slug: "lygos" },
+		]));
+		expect(stopsAlongTheWay(route)).toEqual(["Marshedge"]);
+		expect(chartBlankValue("firstTravel", route)).toBe("Marshedge");
+	});
+});
+
+// "At least" is a promise about the FLOOR: the table printed these times, so the journey cannot be
+// quicker. A way measured off the map with a ruler has made no such promise.
+describe("what the headline time promises", () => {
+	it("says at least, for a route the book priced", () => {
+		expect(routePhrase(journeyRoute({ origin: "stonetop", destination: "lygos" })))
+			.toBe("at least 40 days");
+	});
+
+	it("says roughly, the moment any leg of it was measured", () => {
+		expect(routePhrase(journeyRoute(drawnTrip([{ fx: 0.62, fy: 0.66 }])))).toMatch(/^roughly /);
+	});
+
+	// A drawn way that happens to follow priced legs is not an estimate, and should not read as one.
+	it("says at least again for a drawn way the table prices every leg of", () => {
+		expect(routePhrase(journeyRoute(drawnTrip([{ slug: "marshedge" }])))).toBe("at least 10 days");
+	});
+
+	it("has nothing to promise about no journey", () => {
+		expect(routePhrase(null)).toBe("no travel at all");
+	});
+});
+
+// What `sceneShowsJourney` compares: whether the map in front of the table is showing THIS way.
+describe("telling one way from another", () => {
+	it("ignores a destination the drawn way is not about", () => {
+		const a = drawnTrip([{ fx: 0.5, fy: 0.5 }]);
+		expect(journeyKey({ ...a, destination: "marshedge" })).toBe(journeyKey(a));
+	});
+
+	it("notices a mark moved, added or taken back", () => {
+		const one = journeyKey(drawnTrip([{ fx: 0.5, fy: 0.5 }]));
+		expect(journeyKey(drawnTrip([{ fx: 0.5, fy: 0.6 }]))).not.toBe(one);
+		expect(journeyKey(drawnTrip([{ fx: 0.5, fy: 0.5 }, { fx: 0.6, fy: 0.6 }]))).not.toBe(one);
+		expect(journeyKey(drawnTrip([]))).not.toBe(one);
+	});
+
+	it("notices the box being ticked off, and where they set out from", () => {
+		const drawn = drawnTrip([{ fx: 0.5, fy: 0.5 }]);
+		expect(journeyKey({ ...drawn, custom: { ...drawn.custom, on: false } })).not.toBe(journeyKey(drawn));
+		expect(journeyKey({ ...drawn, origin: "marshedge" })).not.toBe(journeyKey(drawn));
+	});
+
+	it("says nothing different about two trips bound the same way by the table", () => {
+		expect(journeyKey({ origin: "stonetop", destination: "lygos" }))
+			.toBe(journeyKey({ origin: "stonetop", destination: "lygos", custom: { on: false } }));
 	});
 });

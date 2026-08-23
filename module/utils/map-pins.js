@@ -159,6 +159,38 @@ export const MAP_PIN_TEXT_COLOR = "#1b1009";
 export const MAP_PIN_TINT = "#ffffff";
 
 /**
+ * One colour written as the one string a comparison can be made on.
+ *
+ * WHY THIS HAD TO EXIST, and it is not a tidying. A Note's `textColor` and its `texture.tint` are
+ * ColorFields, and v13's `ColorField#initialize` hands back a `Color` — a subclass of Number —
+ * rather than the "#rrggbb" string its `_source` holds and every writer in this system declares.
+ * So `note.textColor !== MAP_PIN_TEXT_COLOR` is ALWAYS true, whatever the pin is actually wearing.
+ * Every refit pass here promises to be silent once the pins agree, and that promise is what makes
+ * it safe to run one on every world load; compared this way it instead rewrites every pin on every
+ * map, on every load, for every GM, and the "did the GM touch this?" tests downstream of it never
+ * get to run.
+ *
+ * Tolerant of the shapes the tests build as well as the ones Foundry hands over: a plain string, a
+ * bare 0xrrggbb number, a Color, and nothing at all.
+ */
+export function colorKey(value) {
+	if (value === null || value === undefined) return "";
+	// A `Color` is a Number OBJECT, so this arm catches it and any bare number alike. A hex string
+	// is not a string this arm sees, so "" cannot be read as black.
+	if (typeof value !== "string") {
+		const n = Number(value);
+		return Number.isFinite(n) ? `#${(Math.trunc(n) >>> 0).toString(16).padStart(6, "0")}` : "";
+	}
+	const text = value.trim().toLowerCase();
+	// "#abc" and "#aabbcc" are one colour. Core writes only the long form, so this arm is for a pin
+	// hand-edited to the short one, which should be left alone rather than rewritten every load.
+	return /^#[0-9a-f]{3}$/.test(text) ? `#${[...text.slice(1)].map(c => c + c).join("")}` : text;
+}
+
+/** Do these two spellings of a colour mean the same colour? */
+export const sameColor = (a, b) => colorKey(a) === colorKey(b);
+
+/**
  * How far above its recorded spot a marker's note sits, so the drawing STANDS on that spot.
  *
  * This exists because core centres a note's icon on the note's position — `Note#_drawControlIcon`

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { onDrawStonetopNote } from "../../module/hooks/StonetopNoteLabels.js";
 import { PLACE_MARKER_ICON_SUFFIX } from "../../module/utils/map-pins.js";
+import { SITE_PIN_ICON_SUFFIX } from "../../module/hooks/ThreatNotePins.js";
 import { applyMapPinLabelMode } from "../../module/settings.js";
 import { POSTER_MAPS } from "../../module/book2-art/poster-map-catalog.js";
 
@@ -11,6 +12,7 @@ import { POSTER_MAPS } from "../../module/book2-art/poster-map-catalog.js";
 
 const MARKER = `systems/stonetop-pwd/${PLACE_MARKER_ICON_SUFFIX}`;
 const DISC = "systems/stonetop-pwd/assets/icons/landmarks/landmark-c.svg";
+const SITE_PIN = "systems/stonetop-pwd/" + SITE_PIN_ICON_SUFFIX;
 const THEIRS = "icons/svg/book.svg";
 
 // Saved and restored rather than assigned: vitest shares a worker across test files, and a
@@ -71,6 +73,16 @@ describe("the pill and the cream ink", () => {
 		onDrawStonetopNote(theirs);
 		expect(theirs.tooltip.style).toBe(null);
 		expect(theirs._stonetopLabelBg).toBeUndefined();
+	});
+
+	it("claims the GM’s own site pins, which wear a glyph of their own", () => {
+		// A site stopped sharing the threat pin’s torn note the day it started wearing the Sites
+		// tab’s mound. That is a whole family of our pins, and a reader that still listed only
+		// the torn note would have quietly dropped every one of them out of the label treatment.
+		const note = fakeNote(SITE_PIN);
+		onDrawStonetopNote(note);
+		expect(note.tooltip.style.fill).toBe("#f7efdc");
+		expect(note._stonetopLabelBg).toBeTruthy();
 	});
 
 	it("keeps the cream fill across core recomputing the style", () => {
@@ -152,6 +164,21 @@ describe("when the world asks for names on hover only", () => {
 		}
 	});
 
+	it("still names the GM's own sites, which the switch is not about", () => {
+		// The switch is there because a poster map carries dozens of the book's places and a wall
+		// of names is a fair thing to want quieter. A GM places a handful of sites, on their own
+		// prep, and an unnamed one is an anonymous blob on somebody else's artwork.
+		const note = fakeNote(SITE_PIN);
+		onDrawStonetopNote(note);
+		expect(note.tooltip.visible).toBe(true);
+		// And it stays named when the cursor leaves, which is the whole of "always".
+		note.hover = true;
+		note._refreshState();
+		note.hover = false;
+		note._refreshState();
+		expect(note.tooltip.visible).toBe(true);
+	});
+
 	it("keeps the pill and the cream ink, which are not what the switch is about", () => {
 		// The switch is WHEN a name shows. A name that does show still has to be legible over
 		// hand-drawn line art, which is this module's other and older job.
@@ -226,6 +253,14 @@ describe("when one map has asked for names on hover only", () => {
 			onDrawStonetopNote(note);
 			expect(note.tooltip.visible).toBe(true);
 		} finally { globalThis.canvas = _canvas; }
+	});
+
+	it("names a site even on the map that asked to be quiet", () => {
+		// The per-map override is the narrowest answer there is, and a site pin still outranks it:
+		// the GM put this mark on this map themselves, and it is theirs to read.
+		const note = fakeNote(SITE_PIN, { scene: sceneFor(VILLAGE) });
+		onDrawStonetopNote(note);
+		expect(note.tooltip.visible).toBe(true);
 	});
 
 	it("leaves a scene of the GM's own following the world setting", () => {

@@ -26,13 +26,22 @@ vi.mock("../../module/utils/foundry-compat.js", () => ({
 	renderTemplate: (path, ctx) =>
 		Promise.resolve(`<chrome path="${path}" tier="${ctx.journey.activeTier}">`),
 }));
+// Opening a site's write-up renders a journal sheet, which there is no Foundry here to do. What
+// matters at this level is only that the pin routes to it at all rather than to the destination.
+const opened_sites = [];
+vi.mock("../../module/sites/place-site-on-map.js", () => ({
+	openSiteWriteUp: uuid => { opened_sites.push(uuid); return Promise.resolve(null); },
+}));
 
 const { TravelMapWindow, openTravelMap } = await import("../../module/dialogs/TravelMapWindow.js");
 
 /** A journey context the shape of what ExpeditionDialog._buildJourney returns. */
 const journeyFor = (tier, destination = null) => ({
 	activeTier: tier,
-	map: { tier, src: `art/${tier}.webp`, alt: `The ${tier}`, aspect: 1.4 },
+	// `frame` is the registration of the file on screen. It rides the journey because the window
+	// hands it back to the planner when a site is placed, rather than re-deriving it: doing that
+	// would be a second browse and a second decode to arrive at the number already in hand.
+	map: { tier, src: `art/${tier}.webp`, alt: `The ${tier}`, aspect: 1.4, frame: { x0: 0, y0: 0, x1: 1, y1: 1 } },
 	pins: `<pins tier="${tier}">`,
 	destination: destination ? { name: destination } : null,
 	hasDestination: !!destination,
@@ -57,6 +66,10 @@ function chromeRoot() {
 	const parts = {
 		origin: el({ value: "stonetop" }),
 		clear:  el(),
+		site:   el(),
+		// Laying the way out by hand: the checkbox that starts it, and the button that empties it.
+		custom: el({ checked: false }),
+		clearDrawn: el(),
 		chrome: el({ innerHTML: "" }),
 		foot:   el({ innerHTML: "" }),
 		tabs:   [el({ dataset: { tier: "vicinity" } }), el({ dataset: { tier: "worlds-end" } })],
@@ -67,6 +80,9 @@ function chromeRoot() {
 	const byClass = {
 		".stonetop-journey-origin":     parts.origin,
 		".stonetop-journey-clear":      parts.clear,
+		".stonetop-journey-place-site": parts.site,
+		".stonetop-journey-custom":      parts.custom,
+		".stonetop-journey-clear-drawn": parts.clearDrawn,
 		".stonetop-travel-map-chrome":  parts.chrome,
 		".stonetop-travel-map-foot":    parts.foot,
 	};
@@ -84,6 +100,9 @@ function chromeRoot() {
 
 let picks;
 let source;
+// Slug clicks that reached the planner, with whether the shift key was down: half of what a
+// click on a place says while a way is being drawn by hand.
+const marked = [];
 
 /** An instance without the Application constructor, for the methods that do not need it. */
 function windowFor(tier = "worlds-end") {
@@ -100,10 +119,22 @@ function windowFor(tier = "worlds-end") {
 
 beforeEach(() => {
 	picks = [];
+	marked.length = 0;
 	alreadyOpen = null;
+	opened_sites.length = 0;
 	source = {
 		build: vi.fn(tier => Promise.resolve(journeyFor(tier))),
 		pick: vi.fn((field, slug) => { picks.push([field, slug]); return Promise.resolve(); }),
+		// What a click on a PLACE goes through now, whichever of its two things it turns out to
+		// mean: the planner decides between "where they are bound" and "another stop on the way
+		// they are drawing", because only it knows which the trip is in. See `journeyPick`.
+		markPlace: vi.fn((slug, ev) => { marked.push([slug, !!ev?.shiftKey]); return Promise.resolve(); }),
+		placeSite: vi.fn(() => Promise.resolve()),
+		takeSiteOffMap: vi.fn(() => Promise.resolve()),
+		drawMark: vi.fn(() => Promise.resolve()),
+		undoMark: vi.fn(() => Promise.resolve()),
+		drawByHand: vi.fn(() => Promise.resolve()),
+		clearDrawn: vi.fn(() => Promise.resolve()),
 	};
 });
 
@@ -116,8 +147,8 @@ describe("what it forwards to the planner", () => {
 		expect(typeof app._onPick).toBe("function");
 
 		app.rendered = false;                    // sync() no-ops, which is all we want here
-		await app._onPick({ slug: "marshedge", tier: "worlds-end" });
-		expect(picks).toEqual([["destination", "marshedge"]]);
+		await app._onPick({ slug: "marshedge", tier: "worlds-end" }, { shiftKey: false });
+		expect(marked).toEqual([["marshedge", false]]);
 	});
 
 	it("zooms out instead of picking, for the arrow that names two places", async () => {
@@ -157,6 +188,74 @@ describe("what it forwards to the planner", () => {
 		await app._pick("destination", "lygos");
 		expect(picks).toEqual([["destination", "lygos"]]);
 		expect(source.build).toHaveBeenCalledWith("worlds-end");
+	});
+});
+
+// Putting one of the GM's own sites on the map, from in here.
+//
+// The division is the same one `pick` and `toScene` already follow: the planner owns every write,
+// and this window supplies the one thing only it can — the picture. That matters because the
+// picture here is the good one to aim at, wheel-zoom and all, which is the whole reason a GM would
+// place from this window rather than from the panel's inch-wide map.
+describe("placing a site from the popout", () => {
+	it("hands the planner this map's tier, its registration, and its own aim", async () => {
+		const app = windowFor("vicinity");
+		app.pickPoint = vi.fn(() => Promise.resolve({ left: 40, top: 60 }));
+		app.sync = vi.fn();
+		const root = chromeRoot();
+		app._bindChrome(root);
+
+		root.site.fire("click");
+		await new Promise(r => setTimeout(r, 0));
+
+		expect(source.placeSite).toHaveBeenCalledTimes(1);
+		const [surface, from] = source.placeSite.mock.calls[0];
+		expect(surface.tier).toBe("vicinity");
+		expect(surface.frame).toEqual({ x0: 0, y0: 0, x1: 1, y1: 1 });
+		// The window is named as the caller, so the planner's sweep over the open maps skips it:
+		// it re-reads itself the moment the call returns.
+		expect(from).toBe(app);
+		expect(await surface.pickPoint()).toEqual({ left: 40, top: 60 });
+		expect(app.sync).toHaveBeenCalled();
+	});
+
+	// A window sitting on the "that map isn't in this world" panel has no picture to point at, so
+	// there is nothing to aim and nothing to write.
+	it("asks for nothing when there is no map on screen", async () => {
+		const app = windowFor("vicinity");
+		app._journey = { ...app._journey, map: null };
+		app.sync = vi.fn();
+		await app._placeSite();
+		expect(source.placeSite).not.toHaveBeenCalled();
+	});
+
+	it("lifts a pin through the planner and re-reads", async () => {
+		const app = windowFor("vicinity");
+		app.sync = vi.fn();
+		await app._removeSite("JournalEntry.a.JournalEntryPage.b");
+		expect(source.takeSiteOffMap).toHaveBeenCalledWith("JournalEntry.a.JournalEntryPage.b", app);
+		expect(app.sync).toHaveBeenCalled();
+	});
+
+	// A site pin carries neither `data-slug` nor `data-tier`, so the parent's default selector
+	// would take a press on one for a press on open map: it would start a pan, capture the pointer
+	// on the viewport, and retarget the click away from the pin. Every site on the map would look
+	// live and be unclickable.
+	it("tells the parent that a site pin is a control", () => {
+		const app = new TravelMapWindow(
+			{ tier: "vicinity", source, journey: journeyFor("vicinity") }, { id: "t", title: "t" });
+		expect(app._controls).toContain("[data-site-uuid]");
+		expect(app._controls).toContain("[data-slug]");
+		expect(app._controls).toContain("[data-tier]");
+	});
+
+	it("opens a site's write-up from a pin, rather than making it the destination", async () => {
+		const app = new TravelMapWindow(
+			{ tier: "vicinity", source, journey: journeyFor("vicinity") }, { id: "t", title: "t" });
+		app.rendered = false;
+		await app._onPick({ siteUuid: "JournalEntry.a.JournalEntryPage.b" });
+		expect(opened_sites).toEqual(["JournalEntry.a.JournalEntryPage.b"]);
+		expect(picks).toEqual([]);
 	});
 });
 
@@ -281,5 +380,92 @@ describe("opening one", () => {
 		openOrFocusReturns(focused);
 		expect(await openTravelMap({ tier: "vicinity", source })).toBe(focused);
 		expect(source.build.mock.calls.length).toBe(builds);
+	});
+});
+
+// ── Drawing the way from the popout ──────────────────────────────────────────
+//
+// The same division again: the planner owns every write, and this window supplies the picture —
+// which here is a 300 dpi map the reader can wheel down into before laying a mark, rather than the
+// panel's inch-wide copy of it. What has to be right on this side is which picture is armed and
+// which is not, since this window keeps showing whatever tier it was opened on long after the
+// panel has followed a destination out to the other one.
+
+/** A journey with the box ticked, drawn on `tier`. */
+const drawnOn = (tier, over = {}) => ({
+	...journeyFor(tier),
+	custom: { on: true, canDraw: true, tier, count: 1, ...over },
+});
+
+describe("drawing the way from the popout", () => {
+	it("arms its own picture and reports a mark as a fraction of the printed crop", async () => {
+		const app = windowFor("vicinity");
+		app._journey = drawnOn("vicinity");
+		app.sync = vi.fn();
+		let handlers = null;
+		app.watchPoints = vi.fn(h => { handlers = h; return () => {}; });
+
+		app._bindChrome(chromeRoot());
+		expect(app.watchPoints).toHaveBeenCalledTimes(1);
+		// The pins keep their own clicks, and a site pin keeps its own right-click.
+		expect(handlers.ignore).toContain("data-slug");
+		expect(handlers.undoIgnore).toContain("data-site-uuid");
+
+		await handlers.onPoint({ left: 40, top: 60 }, { shiftKey: true });
+		// A percentage of the picture on screen, converted against THIS file's registration — which
+		// is what makes a mark laid here land in the same valley on every other copy of the map.
+		expect(source.drawMark).toHaveBeenCalledWith({ fx: 0.4, fy: 0.6 }, { append: true }, app);
+		expect(app.sync).toHaveBeenCalled();
+	});
+
+	it("takes the last mark back on a right-click", async () => {
+		const app = windowFor("vicinity");
+		app._journey = drawnOn("vicinity");
+		app.sync = vi.fn();
+		let handlers = null;
+		app.watchPoints = vi.fn(h => { handlers = h; return () => {}; });
+		app._bindChrome(chromeRoot());
+
+		await handlers.onUndo();
+		expect(source.undoMark).toHaveBeenCalledWith(app);
+	});
+
+	// This window keeps the map it was opened on. A crosshair over a picture whose clicks could not
+	// join this way would be promising something it cannot do.
+	it("leaves its picture alone when the way is drawn on the other map", () => {
+		const app = windowFor("vicinity");
+		app._journey = { ...journeyFor("vicinity"), custom: { on: true, canDraw: true, tier: "worlds-end" } };
+		app.watchPoints = vi.fn();
+		app.stopWatchingPoints = vi.fn();
+		app._bindChrome(chromeRoot());
+		expect(app.watchPoints).not.toHaveBeenCalled();
+		expect(app.stopWatchingPoints).toHaveBeenCalled();
+	});
+
+	// Drawing writes the trip into a world setting, which a player cannot do.
+	it("leaves it alone for a reader who may not draw", () => {
+		const app = windowFor("vicinity");
+		app._journey = drawnOn("vicinity", { canDraw: false });
+		app.watchPoints = vi.fn();
+		app.stopWatchingPoints = vi.fn();
+		app._bindChrome(chromeRoot());
+		expect(app.watchPoints).not.toHaveBeenCalled();
+	});
+
+	it("forwards the box and the start-over button to the planner", async () => {
+		const app = windowFor("vicinity");
+		app._journey = drawnOn("vicinity");
+		app.sync = vi.fn();
+		app.watchPoints = vi.fn(() => () => {});
+		const root = chromeRoot();
+		app._bindChrome(root);
+
+		root.custom.checked = true;
+		root.custom.fire("change");
+		root.clearDrawn.fire("click");
+		await new Promise(r => setTimeout(r, 0));
+
+		expect(source.drawByHand).toHaveBeenCalledWith(true, app);
+		expect(source.clearDrawn).toHaveBeenCalledWith(app);
 	});
 });

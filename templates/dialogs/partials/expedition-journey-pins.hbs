@@ -45,7 +45,7 @@
 {{#each spots}}
 <button type="button" data-slug="{{slug}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
     style="left:{{left}}%;top:{{top}}%"
-    class="stonetop-journey-pick stonetop-journey-spot h-{{anchorH}} v-{{anchorV}}{{#if isOrigin}} is-origin{{/if}}{{#if isChosen}} is-chosen{{/if}}">
+    class="stonetop-journey-pick stonetop-journey-spot h-{{anchorH}} v-{{anchorV}}{{#if isOrigin}} is-origin{{/if}}{{#if isStop}} is-stop{{/if}}{{#if isChosen}} is-chosen{{/if}}">
   <span class="stonetop-journey-dot"></span>
   {{#if showLabel}}
   <span class="stonetop-journey-tag">{{name}}{{#if time}} <em>{{time}}</em>{{/if}}</span>
@@ -53,12 +53,66 @@
 </button>
 {{/each}}
 
+{{!-- The GM's own sites, wherever they have dropped one on this map (module/sites/site-map-spots.js).
+      Built GM-only, so this loop is simply empty for a player.
+
+      A DIFFERENT MARK, because it means a different thing. Every other pin on this picture is a
+      place the books charted and a destination the travel table can time; a site is prep, it opens
+      its own write-up rather than setting where the party is bound, and it stands wherever the GM
+      said rather than where a label was printed. It wears its name ALWAYS, unlike the book's own
+      places: a GM places a handful of these, and a mark on a map whose name you have to go hunting
+      for with a mouse is not a label. Right-click takes it off again; the tooltip says so.
+
+      A STANDING STONE, and NOT the `fa-mountain-sun` a site wears in a list. The two are the same
+      thing at two sizes, and 18px is not a size a drawing survives: mountain-sun is a sun disc
+      over two peaks, and shrunk into a small pale square it reads as the broken-image placeholder
+      a browser paints for art that failed to load — which is the worst possible thing to look
+      like on a map built out of imported book art. The monument is one silhouette, it holds at
+      pin size, and a menhir is the mark you would actually pencil onto a map of Stonetop. --}}
+{{#each sites}}
+<button type="button" data-site-uuid="{{uuid}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
+    style="left:{{left}}%;top:{{top}}%;--site-accent:{{accent}}"
+    class="stonetop-journey-pick stonetop-journey-site h-{{anchorH}} v-{{anchorV}}">
+  <span class="stonetop-journey-sitemark"><i class="fas fa-monument"></i></span>
+  <span class="stonetop-journey-tag">{{name}}</span>
+</button>
+{{/each}}
+
 {{!-- The edge arrows. Each moves out a tier; the three that name one place pick it too. --}}
 {{#each exits}}
 <button type="button" data-slug="{{node}}" data-tier="{{to}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
     style="left:{{left}}%;top:{{top}}%"
-    class="stonetop-journey-pick stonetop-journey-exit h-{{anchorH}} v-{{anchorV}}{{#if isChosen}} is-chosen{{/if}}">
+    class="stonetop-journey-pick stonetop-journey-exit h-{{anchorH}} v-{{anchorV}}{{#if isStop}} is-stop{{/if}}{{#if isChosen}} is-chosen{{/if}}">
   <span class="stonetop-journey-arrow"><i class="fas fa-angles-right"></i></span>
   <span class="stonetop-journey-tag">{{label}}{{#if time}} <em>{{time}}</em>{{/if}}</span>
 </button>
+{{/each}}
+
+{{!-- The bare marks of a hand-drawn way (module/utils/custom-route.js): the points the GM put down
+      where the books letter nothing.
+
+      NOT BUTTONS. Every other mark on this picture does something when clicked; these are the
+      reader's own handwriting, and while the mode is on a click anywhere — including on one of
+      these — lays the next mark. So they take no pointer events at all and let the click through
+      to the drawing watch underneath, which is what stops a mark from swallowing the gesture that
+      would move it.
+
+      AND SO THEY CARRY NO TOOLTIP, which is not an omission: core's tooltips fire on mouseenter,
+      and nothing enters an element that takes no pointer events. One would read as live and never
+      appear. What a click and a right-click do is taught in the line above the map instead
+      (expedition-journey-controls.hbs), which is the one place it can be said once and read.
+
+      NUMBERED, and the numeral is the whole point: it is what the readout's leg list calls this
+      stop ("point 2"), so a line in the list and a dot on the map are visibly the same thing. They
+      count the marks the GM placed, so a way that passes through Marshedge by name does not leave
+      a gap in the numbering.
+
+      LAST IN THE LAYER, and it is the DOM order that does the work rather than the z-index: a mark
+      and a lettered stop on the drawn way both sit at 2, so whichever comes later wins, and a
+      numeral half-buried under a neighbour's name tag is the one thing on this picture the reader
+      most needs to see — it is what they are about to right-click. Where they are BOUND still wins
+      over both, at 3. --}}
+{{#each marks}}
+<span class="stonetop-journey-mark{{#if isEnd}} is-end{{/if}}"
+      style="left:{{left}}%;top:{{top}}%" aria-hidden="true">{{mark}}</span>
 {{/each}}

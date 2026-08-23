@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { markPosterMapScenes } from "../../module/book2-art/poster-maps.js";
 import { markerPinKey, placeMarkerIcon } from "../../module/utils/map-pins.js";
+import { asColor } from "../fakes/color.js";
 
 // Putting the names back on the two regional maps of a world that already has their Scenes.
 //
@@ -229,6 +230,35 @@ describe("markPosterMapScenes", () => {
 		expect(updated).toBe(6);
 		expect(scene.updated.every(u => u.iconSize === 70 && u.fontSize === 45)).toBe(true);
 		expect(store.vicinity).toHaveLength(14);
+	});
+
+	it("leaves a marker alone when the Scene hands its ink back as a Color", async () => {
+		// A second pass over a map this ran on before, in the shape a REAL world is in: the fake
+		// Scene above stores what we wrote, so the ink comes back as the string we sent, while a
+		// Note document answers with a `Color`. Compared with ===, every marker on both regional
+		// maps reports drift on every load, forever, and the "theirs the moment they touch it"
+		// tests below the ink never get to run at all.
+		const scene = fakeScene("vicinity");
+		const first = await run([scene]);
+		scene.notes.contents = scene.notes.contents.map(n => ({ ...n, textColor: asColor(n.textColor) }));
+		scene.created = [];
+		scene.updated = [];
+
+		const { created, updated } = await run([scene], { store: { vicinity: first.store.vicinity } });
+		expect(created).toBe(0);
+		expect(updated).toBe(0);
+		expect(scene.updated).toHaveLength(0);
+	});
+
+	it("still repaints a marker somebody left in the wrong ink", async () => {
+		const scene = fakeScene("vicinity");
+		const first = await run([scene]);
+		scene.notes.contents = scene.notes.contents.map(n => ({ ...n, textColor: asColor("#ffffff") }));
+		scene.updated = [];
+
+		const { updated } = await run([scene], { store: { vicinity: first.store.vicinity } });
+		expect(updated).toBe(14);
+		expect(scene.updated.every(u => u.textColor === "#1b1009")).toBe(true);
 	});
 
 	it("still marks a map whose Scene only arrives later", async () => {

@@ -1213,7 +1213,37 @@
         "placed": "The way to {place} is on {map}.",
         "panelOffMap": "This map doesn't draw {places}, so the way there isn't on it.",
         "panelShow": "Show {map}",
-        "panelNoMap": "No one map draws both ends of this journey, so the way there isn't drawn. The legs below still hold."
+        "panelNoMap": "No one map draws both ends of this journey, so the way there isn't drawn. The legs below still hold.",
+        "placedDrawn": "The way you drew is on {map}.",
+        "panelDrawnOn": "This way was drawn on {map}, so it isn't on this one."
+      },
+      "sites": {
+        "place": "Put a site on the map",
+        "placeTip": "Mark one of your written-up sites on {map}, or write a new one and mark that.",
+        "thisMap": "this map",
+        "chooseTitle": "Put a site on {map}",
+        "chooseButton": "Place it",
+        "createNew": "Write a new site",
+        "createNewHint": "Walk through Book I's Creating Sites process, then click where it stands.",
+        "alreadyOn": "already on {map}; placing it again moves the pin",
+        "clickToPlace": "Click where {name} stands. Escape or right-click to stop.",
+        "placed": "{name} is on {map}.",
+        "removed": "{name} is off the map. The write-up is still on the Sites tab.",
+        "pinTip": "{name}. Click to read it, right-click to take it off the map.",
+        "offTheMap": "That click was past the printed edge of {map}, so {name} wasn't placed. The write-up is still on the Sites tab.",
+        "gone": "That site isn't in this world any more."
+      },
+      "draw": {
+        "label": "Draw the way yourself",
+        "tip": "Lay the way out on the map by hand, instead of following the travel table's shortest road.",
+        "hint": "Click the map to move the end of the way; shift-click to add a leg; right-click to take one back.",
+        "hintElsewhere": "This way is drawn on {map}. Open that map to add to it.",
+        "drawnNote": "This way was drawn by hand, so the times beside it are measured off the map rather than printed in the book.",
+        "clear": "Start over",
+        "clearTip": "Throw the marks away and start the way again. Keeps drawing on.",
+        "notOnMap": "{map} doesn't draw {place}, so the way can't stop there. Pick somewhere this map letters, or click the map itself.",
+        "offTheMap": "That click was past the printed edge of {map}, so no mark was laid. Click inside the map itself.",
+        "estimate": "Measured off {map} at the pace of the book's own printed journeys: a good guess, not a printed time."
       }
     }
   }

@@ -647,6 +647,48 @@ export function spotPercent({ fx, fy }, frame = FULL_FRAME) {
 	};
 }
 
+/**
+ * How many decimals a fraction of a map keeps.
+ *
+ * Four is about a third of a pixel on the 6000px poster Scenes this system builds, which is finer
+ * than any pointer can be aimed and far finer than the maps' own printed labels are placed. What
+ * it is really for is the COMPARISON: the Scene button asks whether the map in front of the table
+ * is already showing a hand-drawn path by matching its marks, and a float carried at full
+ * precision through a JSON round trip is a mark that can stop matching itself.
+ *
+ * Declared beside `percentSpot`, which is what MINTS those fractions, so the rounding a mark is
+ * stored at and the rounding it is compared at cannot come to be two different numbers.
+ */
+export const MARK_PRECISION = 4;
+
+/**
+ * The other direction: a percentage read off a rendered picture, back to a canonical fraction.
+ *
+ * The inverse of `spotPercent`, and it exists for the one thing this table cannot supply — a
+ * place the BOOKS never printed. A GM who drops one of their own written-up sites onto the
+ * Vicinity is pointing at a pixel of whatever copy of the art their world happens to have, and
+ * what has to be stored is the fraction of the PRINTED CROP that pixel stands on. Store the raw
+ * percentage instead and the pin moves the day the world gains the sharper render, because the
+ * poster scan is a different crop of the same drawing.
+ *
+ * Rounded to the same four places the measured table is written to. Any more is precision the
+ * gesture never had: a click is a pixel on a 300 dpi map, and 0.0001 of the width is finer than
+ * that pixel.
+ *
+ * A frame with no extent cannot be divided by, so it answers 0 rather than Infinity — which is
+ * a rectangle nothing measured, and the honest reading of "I do not know where in this that is".
+ */
+export function percentSpot({ left, top }, frame = FULL_FRAME) {
+	const width = frame.x1 - frame.x0;
+	const height = frame.y1 - frame.y0;
+	const scale = 10 ** MARK_PRECISION;
+	const round = n => Math.round(n * scale) / scale;
+	return {
+		fx: width ? round((left / 100 - frame.x0) / width) : 0,
+		fy: height ? round((top / 100 - frame.y0) / height) : 0,
+	};
+}
+
 /** The registration recorded for one file, or the whole image when none is. */
 export function frameFor(out) {
 	return MAP_FRAMES[out] ?? FULL_FRAME;

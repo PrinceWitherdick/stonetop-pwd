@@ -3,11 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import {
+	MAP_PIN_TEXT_COLOR, MAP_PIN_TINT,
 	PLACE_EXIT_ICON_SUFFIX, PLACE_MARKER_ICON_SUFFIX, PLACE_PEAK_ICON_SUFFIX, PUBLIC_MAP_PIN,
-	isPlaceMarkerNote,
+	colorKey, isPlaceMarkerNote,
 	markerPinKey, markerTextAnchor, markerTipLift, placeMarkerIcon, placeMarkerNoteData,
-	posterMapPins,
+	posterMapPins, sameColor,
 } from "../../module/utils/map-pins.js";
+import { asColor } from "../fakes/color.js";
 import { POSTER_MAPS } from "../../module/book2-art/poster-maps.js";
 import {
 	MAP_FRAMES, captionsOnMap, exitsOnMap, frameFor, placesOnMap, travelMap, travelPlace,
@@ -540,5 +542,51 @@ describe("telling a marker apart from everything else on a scene", () => {
 			const keys = posterMapPins(posterMap(slug), SCENE).map(p => p.key);
 			expect(new Set(keys).size).toBe(keys.length);
 		}
+	});
+});
+
+describe("comparing a pin's colour with the colour it was written in", () => {
+	// The bug this exists to prevent is quiet and total. Every refit pass in this system promises
+	// to be silent once the pins agree, and that promise is what makes it safe to run one on every
+	// world load. A live Note's textColor and tint are ColorFields, so what comes back is a Color
+	// object and never the string the writer declared, and a === against that string is false for
+	// every pin that ever existed. Compared that way the passes rewrite every pin on every map, on
+	// every load, for every GM, and the "has the GM moved this?" tests behind them never run.
+
+	it("reads a live document's Color as the hex it was written from", () => {
+		expect(colorKey(asColor(MAP_PIN_TEXT_COLOR))).toBe(MAP_PIN_TEXT_COLOR);
+		expect(colorKey(asColor(MAP_PIN_TINT))).toBe(MAP_PIN_TINT);
+		expect(sameColor(asColor(MAP_PIN_TEXT_COLOR), MAP_PIN_TEXT_COLOR)).toBe(true);
+		expect(sameColor(asColor(MAP_PIN_TINT), MAP_PIN_TINT)).toBe(true);
+	});
+
+	it("keeps a leading zero, which is where a naive hex conversion loses a pin", () => {
+		// #0b1009 as a number is six digits short of nothing; unpadded it reads as #b1009 and the
+		// darkest inks in this palette would report drift forever.
+		expect(colorKey(asColor("#0b1009"))).toBe("#0b1009");
+		expect(colorKey(asColor("#000000"))).toBe("#000000");
+	});
+
+	it("still answers for the plain strings the stored source holds", () => {
+		expect(sameColor("#1B1009", "#1b1009")).toBe(true);
+		expect(sameColor(" #ffffff ", "#ffffff")).toBe(true);
+		// The short form is the same colour, and core writes only the long one: a pin hand-edited
+		// to "#fff" is a pin to leave alone, not one to rewrite on every load.
+		expect(sameColor("#fff", "#ffffff")).toBe(true);
+	});
+
+	it("still says no when the colours genuinely differ", () => {
+		expect(sameColor(asColor(MAP_PIN_TINT), MAP_PIN_TEXT_COLOR)).toBe(false);
+		expect(sameColor("#1b1009", "#1b100a")).toBe(false);
+	});
+
+	it("reads nothing at all as nothing, rather than as black", () => {
+		// `Number("")` is 0, so an empty string routed through the numeric arm would come back as
+		// #000000 and an unset ink would silently agree with a black one.
+		expect(colorKey(undefined)).toBe("");
+		expect(colorKey(null)).toBe("");
+		expect(colorKey("")).toBe("");
+		expect(sameColor(undefined, MAP_PIN_TEXT_COLOR)).toBe(false);
+		expect(sameColor("", "#000000")).toBe(false);
 	});
 });

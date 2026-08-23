@@ -27,18 +27,34 @@
     {{/if}}
   </p>
   {{/if}}
-  <div class="stonetop-journey-total">{{journey.route.atLeast}}</div>
+  {{!-- "at least 7-8 days" for the table's own times, "roughly 4-6 days" for a way measured off
+        the map. One is a floor the book printed and the other is a good guess; `routePhrase` is
+        what tells them apart, and the class lets the estimate carry its own mark. --}}
+  <div class="stonetop-journey-total{{#if journey.route.estimated}} is-estimate{{/if}}">{{journey.route.atLeast}}</div>
   <ol class="stonetop-journey-legs">
     {{#each journey.route.legs}}
-    <li>
+    {{!-- A leg the table prices keeps its printed time and its road, on a hand-drawn way as much as
+          on a solved one. An estimated leg wears the tilde, so a reader can see at a glance which
+          half of a mixed answer the book stands behind. A leg with no time at all is one this map
+          cannot place an end of; it still says where it runs. --}}
+    <li{{#if estimated}} class="is-estimate"{{/if}}>
       <span class="j-from">{{fromName}}</span>
       <span class="j-arw">&rarr;</span>
       <span class="j-to">{{toName}}</span>
-      <b class="j-time">{{time}}</b>
+      {{#if time}}<b class="j-time">{{#if estimated}}~{{/if}}{{time}}</b>{{/if}}
       {{#if via}}<em class="j-via">by {{via}}</em>{{/if}}
     </li>
     {{/each}}
   </ol>
+  {{#if journey.route.estimated}}
+  {{!-- WHERE THE NUMBER CAME FROM, because a GM about to tell the table "at least six days" is
+        owed the difference between a figure the book printed and one this system measured. The
+        derivation is in utils/custom-route.js `tierPace`; this is its one-line summary. --}}
+  <p class="stonetop-journey-estimate">
+    <i class="fas fa-ruler" aria-hidden="true"></i>
+    {{journey.route.estimateNote}}
+  </p>
+  {{/if}}
   {{!-- What the route actually carried onto the checklist, and nothing it did not. `hasStops` is
         about intermediate stops alone, so leaning on it for the days as well told the GM the days
         were filled in on every single-leg journey — including the four measured only in hours,

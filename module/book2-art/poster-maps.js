@@ -6,7 +6,7 @@ import { browseArtDirs, servedPath } from "./browse.js";
 import { loadImage, artImageUrl } from "./rebuild-crops.js";
 import { landmarkIcon, landmarkNoteData } from "../hooks/PlaceOfInterestDrop.js";
 import {
-	isPlaceMarkerNote, mapHasMarkers, placeMarkerNoteData, posterMapPins, publicPinDrift,
+	isPlaceMarkerNote, mapHasMarkers, placeMarkerNoteData, posterMapPins, publicPinDrift, sameColor,
 } from "../utils/map-pins.js";
 import { placeNoteLink } from "../utils/places-chronicle.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
@@ -336,9 +336,14 @@ function markerDrift(note, data, spec) {
 
 	// Ours, unconditionally: this is the design.
 	if (note.texture?.src !== data.texture.src) change.texture = data.texture;
-	for (const field of ["iconSize", "fontSize", "textAnchor", "textColor"]) {
+	for (const field of ["iconSize", "fontSize", "textAnchor"]) {
 		if (note[field] !== data[field]) change[field] = data[field];
 	}
+	// The ink is not one of the plain fields, however much it looks like one: a live Note's
+	// textColor is a `Color` and never the string beside it, so in that loop it would report drift
+	// on every marker forever, and the "theirs the moment they touch it" tests below would be
+	// deciding a write that had already been decided. See `sameColor` in utils/map-pins.js.
+	if (!sameColor(note.textColor, data.textColor)) change.textColor = data.textColor;
 	if ((note.entryId ?? null) !== data.entryId) {
 		change.entryId = data.entryId;
 		change.pageId = null;

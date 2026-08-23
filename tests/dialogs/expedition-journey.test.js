@@ -19,6 +19,25 @@ vi.mock("../../module/book2-art/travel-map-art.js", () => ({
 	resolveTravelMap: map => Promise.resolve(art.resolved.get(map.slug) ?? null),
 }));
 
+// The GM's own sites, marked on the same maps. Their storage is proven in
+// tests/sites/site-map-spots.test.js and their chooser opens a dialog, so both are faked here:
+// what this suite covers is the panel's own share — the arithmetic that turns a stored fraction
+// into a hotspot, and the order the two gestures happen in.
+const sites = { onMap: [], chosen: null, opened: [], placeCalls: [], liftCalls: [] };
+// Only the read: writing a spot is inside the gesture, which is faked whole below.
+vi.mock("../../module/sites/site-map-spots.js", () => ({
+	sitesOnMap: (_steading, tier) => sites.onMap.filter(s => s.spot.tier === tier),
+}));
+// The gesture itself (choose, aim, write) is proven in tests/sites/place-site-on-map.test.js,
+// where it now lives. What is left for this suite is the dialog's own share: that it delegates,
+// and that it redraws both surfaces afterwards only when something actually moved.
+vi.mock("../../module/sites/place-site-on-map.js", () => ({
+	chooseSiteForMap: () => Promise.resolve(sites.chosen),
+	openSiteWriteUp: uuid => { sites.opened.push(uuid); return Promise.resolve(null); },
+	placeSiteOnMap: surface => { sites.placeCalls.push(surface); return Promise.resolve(!!sites.chosen); },
+	liftSiteOffMap: uuid => { sites.liftCalls.push(uuid); return Promise.resolve(!!sites.chosen); },
+}));
+
 const { ExpeditionDialog } = await import("../../module/dialogs/ExpeditionDialog.js");
 const { frameFor, travelPlace } = await import("../../module/data/travel-times.js");
 const { offMapNote, routeArrow, routeLegs, routePath } = await import("../../module/utils/route-path.js");
@@ -58,6 +77,11 @@ beforeEach(() => {
 	rendered = 0;
 	art.browsed = true;
 	art.resolved = new Map(Object.entries(PRINTED));
+	sites.onMap = [];
+	sites.chosen = null;
+	sites.placeCalls = [];
+	sites.liftCalls = [];
+	sites.opened = [];
 	global.game = {
 		// tests/setup.js installs a localizer backed by the real languages/en.json, and this
 		// override would otherwise drop it. The route's copy lives in that file now, so keeping
@@ -97,14 +121,17 @@ describe("the route step sits in the walkthrough", () => {
 	});
 });
 
+/** A trip with no hand-drawn way on it, which every stored journey now reads back carrying. */
+const NO_DRAWN_WAY = { on: false, tier: null, points: [] };
+
 describe("what the trip remembers", () => {
 	it("sets out from home until told otherwise", () => {
-		expect(dialog()._journeyPick()).toEqual({ origin: "stonetop", destination: null });
+		expect(dialog()._journeyPick()).toEqual({ origin: "stonetop", destination: null, custom: NO_DRAWN_WAY });
 	});
 
 	it("keeps a saved pick", () => {
 		expect(dialog({ origin: "marshedge", destination: "lygos" })._journeyPick())
-			.toEqual({ origin: "marshedge", destination: "lygos" });
+			.toEqual({ origin: "marshedge", destination: "lygos", custom: NO_DRAWN_WAY });
 	});
 
 	it("treats a place you are already standing in as no destination", () => {
@@ -115,7 +142,7 @@ describe("what the trip remembers", () => {
 
 	it("falls back to home when the stored slug is not a place any more", () => {
 		expect(dialog({ origin: "atlantis", destination: "narnia" })._journeyPick())
-			.toEqual({ origin: "stonetop", destination: null });
+			.toEqual({ origin: "stonetop", destination: null, custom: NO_DRAWN_WAY });
 	});
 });
 
@@ -1115,12 +1142,29 @@ describe("the template asks for what the dialog builds", () => {
 	});
 
 	it("names only fields a hotspot, an arrow, a leg and a row actually carry", async () => {
-		const data = await dialog({ origin: "stonetop", destination: "lygos" })._buildJourney();
+		// One of the GM's own sites, so the pin layer's third {{#each}} has a real element to be
+		// checked against too. It is the block most likely to drift, being the newest and the only
+		// one whose fields are not the travel table's.
+		global.game.actors = [{ type: "stonetop" }];
+		sites.onMap = [{
+			page: { uuid: "JournalEntry.a.JournalEntryPage.b", name: "The Sunken Barrow" },
+			spot: { tier: "worlds-end", fx: 0.5, fy: 0.5 },
+		}];
+		// And a way drawn by hand, with one bare mark on it, so the pin layer's FOURTH {{#each}}
+		// has a real element too. It is checked here rather than in its own test for the same
+		// reason the sites block is: what this guard protects is that no block references a field
+		// its collection does not carry, and a block with nothing to iterate proves nothing.
+		const data = await dialog({
+			origin: "stonetop", destination: "lygos",
+			custom: { on: true, tier: "worlds-end", points: [{ slug: "marshedge" }, { fx: 0.62, fy: 0.7 }] },
+		})._buildJourney();
 		// Each {{#each}} block's body, checked against one real element of that collection.
 		const blocks = [
 			// The pin layer's context is one `map` object, so its paths carry no prefix.
 			["path.arrows", data.map.path.arrows[0]],
+			["marks", data.map.marks[0]],
 			["spots", data.map.spots[0]],
+			["sites", data.map.sites[0]],
 			["exits", data.map.exits[0]],
 			["journey.route.legs", data.route.legs[0]],
 			["journey.originOptions", data.originOptions[0]],
@@ -1277,5 +1321,414 @@ describe("the Chart a Course blanks", () => {
 			if (key === "days" || key === "firstTravel") continue;
 			expect(plotted[key], key).toBe(blank[key]);
 		}
+	});
+});
+
+// The GM's own sites, on the books' maps.
+//
+// The travel table charts eighteen places and neither map letters the barrow the GM invented last
+// week, so this is the one kind of mark on these maps that is not the books'. What it must NOT do
+// is drift from them: a site's stored position goes through the very same frame arithmetic the
+// printed places do, or it lands in a different valley on the poster scan than on the render.
+describe("sites on the map", () => {
+	beforeEach(() => {
+		// getStonetopSteadingActor finds this; where the sites are filed is the store's business
+		// and is faked above.
+		global.game.actors = [{ type: "stonetop" }];
+		global.fromUuid = uuid => Promise.resolve(
+			sites.onMap.find(s => s.page.uuid === uuid)?.page ?? null);
+	});
+
+	/** One placed site, as sitesOnMap hands it over. */
+	const placed = (name, spot) => ({
+		page: { uuid: `JournalEntry.x.JournalEntryPage.${name}`, name },
+		spot,
+	});
+
+	it("places a pin by the same arithmetic as the book's own places", async () => {
+		sites.onMap = [placed("The Sunken Barrow", { tier: "vicinity", fx: 0.5, fy: 0.5 })];
+		const data = await dialog()._buildJourney("vicinity");
+		// The printed render carries no registration, so a canonical half is half of the picture.
+		expect(data.map.sites).toHaveLength(1);
+		expect(data.map.sites[0]).toMatchObject({ name: "The Sunken Barrow", left: 50, top: 50 });
+	});
+
+	it("shows only the sites on the map being drawn", async () => {
+		sites.onMap = [
+			placed("The Sunken Barrow", { tier: "vicinity", fx: 0.5, fy: 0.5 }),
+			placed("Far Hall", { tier: "worlds-end", fx: 0.3, fy: 0.3 }),
+		];
+		expect((await dialog()._buildJourney("vicinity")).map.sites.map(s => s.name))
+			.toEqual(["The Sunken Barrow"]);
+		expect((await dialog()._buildJourney("worlds-end")).map.sites.map(s => s.name))
+			.toEqual(["Far Hall"]);
+	});
+
+	// A label near an edge hangs INWARD, or it spills out of the step column and gives it a
+	// horizontal scrollbar. The book's places have always done this; a site is drawn by the same
+	// rule because it is a mark on the same picture, and the rule now lives in one place.
+	it("hangs an edge label inward, exactly as a place's does", async () => {
+		sites.onMap = [
+			placed("Right edge", { tier: "vicinity", fx: 0.95, fy: 0.95 }),
+			placed("Left edge", { tier: "vicinity", fx: 0.05, fy: 0.05 }),
+		];
+		const [right, left] = (await dialog()._buildJourney("vicinity")).map.sites;
+		expect(right).toMatchObject({ anchorH: "right", anchorV: "above" });
+		expect(left).toMatchObject({ anchorH: "left", anchorV: "below" });
+	});
+
+	// A site is prep filed in a journal players cannot see, so a pin they could see would name a
+	// write-up they could not open.
+	it("draws none of it for a player, button and all", async () => {
+		sites.onMap = [placed("The Sunken Barrow", { tier: "vicinity", fx: 0.5, fy: 0.5 })];
+		global.game.user = { isGM: false };
+		const data = await dialog()._buildJourney("vicinity");
+		expect(data.map.sites).toEqual([]);
+		expect(data.placeSite).toBeNull();
+	});
+
+	it("offers the button once there is a map to put a pin on, and names it", async () => {
+		const data = await dialog()._buildJourney("vicinity");
+		expect(data.placeSite.label).toBe("Put a site on the map");
+		expect(data.placeSite.tooltip).toContain("The Vicinity");
+	});
+
+	// A placement is a point ON a picture. With no art imported there is no picture, and a control
+	// that is visibly there and can do nothing is worse than one that never offered.
+	it("offers no button when this world has no copy of the map", async () => {
+		art.resolved = new Map();
+		expect((await dialog()._buildJourney("vicinity")).placeSite).toBeNull();
+	});
+
+	// The controls partial is the markup BOTH surfaces draw, which is what makes one check cover
+	// the walkthrough's own map and the popout alike.
+	it("draws the button in the markup both surfaces render, and withholds it from a player", async () => {
+		const controls = "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-controls.hbs";
+		const journey = await dialog()._buildJourney("vicinity");
+		expect(await renderTemplate(controls, { journey })).toContain("stonetop-journey-place-site");
+
+		global.game.user = { isGM: false };
+		const forPlayer = await dialog()._buildJourney("vicinity");
+		expect(await renderTemplate(controls, { journey: forPlayer }))
+			.not.toContain("stonetop-journey-place-site");
+	});
+
+	// The pin has to carry `data-site-uuid`: that attribute is what routes a click to the write-up
+	// (journey-controls.js#journeyPick), what a right-click reads to lift the pin, AND what tells
+	// the popout's pan handler this is a control rather than open map. Miss it and the pin renders,
+	// hovers, and is unclickable.
+	it("draws a site pin that names the page it opens", async () => {
+		sites.onMap = [placed("The Sunken Barrow", { tier: "vicinity", fx: 0.5, fy: 0.5 })];
+		const map = (await dialog()._buildJourney("vicinity")).map;
+		const html = await renderTemplate(
+			"systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-pins.hbs", map);
+		expect(html).toContain('data-site-uuid="JournalEntry.x.JournalEntryPage.The Sunken Barrow"');
+		expect(html).toContain("stonetop-journey-site");
+		// It wears its name always, unlike the book's own places, which show one only at the two
+		// ends of the journey.
+		expect(html).toContain("The Sunken Barrow");
+	});
+});
+
+describe("what the walkthrough does around a site placement", () => {
+	beforeEach(() => {
+		global.game.actors = [{ type: "stonetop" }];
+		global.fromUuid = uuid => Promise.resolve(sites.onMap.find(s => s.page.uuid === uuid)?.page ?? null);
+	});
+
+	/** A dialog counting its own redraws, since neither surface is on screen here. */
+	function planner() {
+		const d = dialog();
+		d.redrawn = 0;
+		d._refreshMapWindows = async () => { d.redrawn += 1; };
+		d._stepNav = () => ({ step: { journey: true } });
+		return d;
+	}
+
+	const POSTER = { x0: 0.03, y0: 0.072, x1: 0.97, y1: 0.936 };
+	const surface = { tier: "vicinity", frame: POSTER, pickPoint: async () => ({ left: 50, top: 50 }) };
+
+	// The picture is the SURFACE's to supply, and it is the whole reason the popout routes this
+	// through the panel: the reader aims at 300 dpi and the answer still comes back as a fraction
+	// of the printed crop.
+	it("hands the gesture whichever map the surface is showing", async () => {
+		sites.chosen = { name: "The Sunken Barrow" };
+		await planner()._placeSite(surface);
+		expect(sites.placeCalls).toEqual([surface]);
+	});
+
+	it("redraws both surfaces once a pin has actually moved", async () => {
+		sites.chosen = { name: "The Sunken Barrow" };
+		const d = planner();
+		await d._placeSite(surface);
+		expect(d.redrawn).toBe(1);
+	});
+
+	// Backing out of the chooser is not a change, and a redraw of a map nothing happened to would
+	// throw away the popout's zoom and pan for nothing.
+	it("redraws nothing when the gesture wrote nothing", async () => {
+		sites.chosen = null;
+		const d = planner();
+		await d._placeSite(surface);
+		await d._takeSiteOffMap("JournalEntry.x.JournalEntryPage.gone");
+		expect(d.redrawn).toBe(0);
+	});
+
+	it("lifts through the same one gesture, then redraws", async () => {
+		sites.chosen = { name: "The Sunken Barrow" };
+		const d = planner();
+		await d._takeSiteOffMap("JournalEntry.x.JournalEntryPage.barrow");
+		expect(sites.liftCalls).toEqual(["JournalEntry.x.JournalEntryPage.barrow"]);
+		expect(d.redrawn).toBe(1);
+	});
+});
+
+// ── Laying the way out by hand ───────────────────────────────────────────────
+//
+// The table's shortest path is the right answer to "how do you get to Marshedge" and the wrong one
+// to "how are they going". This is the box that hands the line over, and the three gestures that
+// draw it: click moves the far end, shift-click adds a leg, right-click takes one back.
+
+/** The trip's drawn way, as it now stands in the setting. */
+const drawnWay = () => saved().journey?.custom;
+
+describe("ticking the box", () => {
+	it("seeds the way from the route the table had already worked out", async () => {
+		const d = dialog({ origin: "stonetop", destination: "lygos" });
+		await d._toggleDrawnWay(true);
+		// Ticking it should not empty the map: the way they were going is nearly always the way
+		// they are still going, plus a detour.
+		expect(drawnWay()).toEqual({
+			on: true, tier: "worlds-end", points: [{ slug: "marshedge" }, { slug: "lygos" }],
+		});
+	});
+
+	it("starts empty when there is nowhere to go yet", async () => {
+		await dialog()._toggleDrawnWay(true);
+		expect(drawnWay().points).toEqual([]);
+		expect(drawnWay().on).toBe(true);
+	});
+
+	// A GM who unticks to compare the two ways has not thrown theirs away. Only "start over" does.
+	it("keeps the marks when it is ticked off again", async () => {
+		const d = dialog({ origin: "stonetop", destination: "lygos" });
+		await d._toggleDrawnWay(true);
+		await d._toggleDrawnWay(false);
+		expect(drawnWay().on).toBe(false);
+		expect(drawnWay().points).toEqual([{ slug: "marshedge" }, { slug: "lygos" }]);
+	});
+
+	it("does not overwrite a way drawn earlier with the table's guess", async () => {
+		const d = dialog({
+			origin: "stonetop", destination: "lygos",
+			custom: { on: false, tier: "worlds-end", points: [{ fx: 0.4, fy: 0.6 }] },
+		});
+		await d._toggleDrawnWay(true);
+		expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }]);
+	});
+
+	// A way begun on a map that cannot draw where the party is setting out from would start at a
+	// stop with nowhere to stand, and `routePath` refuses the whole line rather than shorten it.
+	it("begins on a map that can draw the origin", async () => {
+		const d = dialog({ origin: "marshedge" });
+		d._journeyTier = "vicinity";
+		await d._toggleDrawnWay(true);
+		expect(drawnWay().tier).toBe("worlds-end");
+		// And the panel follows, rather than sitting on a tab the marks do not belong to.
+		expect(d._journeyTier).toBeNull();
+	});
+});
+
+describe("the three gestures", () => {
+	/** A dialog with the box ticked and one bare mark already down. */
+	const drawing = (points = [{ fx: 0.4, fy: 0.6 }], over = {}) => dialog({
+		origin: "stonetop", destination: null,
+		custom: { on: true, tier: "vicinity", points },
+		...over,
+	});
+
+	it("moves the far end on a plain click, and adds a leg on a shift-click", async () => {
+		const d = drawing();
+		await d._drawJourneyMark({ fx: 0.5, fy: 0.5 }, { append: false });
+		expect(drawnWay().points).toEqual([{ fx: 0.5, fy: 0.5 }]);
+		await d._drawJourneyMark({ fx: 0.6, fy: 0.6 }, { append: true });
+		expect(drawnWay().points).toEqual([{ fx: 0.5, fy: 0.5 }, { fx: 0.6, fy: 0.6 }]);
+	});
+
+	it("takes the last leg back on a right-click", async () => {
+		const d = drawing([{ fx: 0.4, fy: 0.6 }, { fx: 0.5, fy: 0.5 }]);
+		await d._undoJourneyMark();
+		expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }]);
+	});
+
+	// A right-click on a map with nothing on it should not cost a world-setting write, a re-render
+	// and a sweep of every open map window.
+	it("writes nothing when there is nothing to take back", async () => {
+		const d = drawing([]);
+		rendered = 0;
+		await d._undoJourneyMark();
+		expect(rendered).toBe(0);
+	});
+
+	it("throws the marks away without leaving the mode", async () => {
+		const d = drawing([{ fx: 0.4, fy: 0.6 }, { fx: 0.5, fy: 0.5 }]);
+		await d._clearDrawnWay();
+		expect(drawnWay()).toEqual({ on: true, tier: "vicinity", points: [] });
+	});
+
+	// A click on a lettered place takes that place, name and all, so a way can wander off the road
+	// and still come back through somewhere by name.
+	it("takes a lettered place as a stop while the box is ticked", async () => {
+		const d = drawing();
+		await d._chooseJourneyPlace("the-maw", { shiftKey: true });
+		expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }, { slug: "the-maw" }]);
+	});
+
+	// The margin of the FILE is not the margin of the printed page. MAP_FRAMES insets each crop
+	// three to seven percent inside the file, and the panel shows the whole file, so the band
+	// outside the crop is on screen and clickable and a click there is an ordinary aim at the edge
+	// of the map. `percentSpot` answers it with a negative fraction, and a plain click MOVES the
+	// far end: written through and normalized away downstream, one miss costs the GM the mark they
+	// meant AND the leg they had already drawn.
+	it("refuses a click past the printed edge without eating the last leg", async () => {
+		const d = drawing([{ fx: 0.4, fy: 0.6 }, { fx: 0.5, fy: 0.5 }]);
+		const warned = [];
+		global.ui = { notifications: { warn: msg => warned.push(msg) } };
+		rendered = 0;
+
+		await d._drawJourneyMark({ fx: -0.032, fy: 0.44 }, { append: false });
+
+		expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }, { fx: 0.5, fy: 0.5 }]);
+		// Said out loud, on the same terms as a place this map does not letter: a click that does
+		// nothing at all is the baffling failure, not the safe one.
+		expect(warned[0]).toContain("The Vicinity");
+		// And it costs no world-setting write, re-render or sweep of the open map windows.
+		expect(rendered).toBe(0);
+	});
+
+	it("refuses a click past the bottom and right edges too", async () => {
+		const d = drawing();
+		global.ui = { notifications: { warn: () => {} } };
+		await d._drawJourneyMark({ fx: 0.5, fy: 1.04 }, { append: true });
+		await d._drawJourneyMark({ fx: 1.02, fy: 0.5 }, { append: true });
+		expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }]);
+	});
+
+	// And means what it always meant when the box is not ticked.
+	it("sets where they are bound when the box is not ticked", async () => {
+		const d = dialog({ origin: "stonetop" });
+		await d._chooseJourneyPlace("the-maw", { shiftKey: true });
+		expect(saved().journey.destination).toBe("the-maw");
+	});
+
+	// The destination list runs to every place the table knows, grouped by the map that draws it,
+	// so clicking a World's End row while drawing on the Vicinity is an easy mistake to make and a
+	// baffling one to have silently ignored.
+	it("refuses a place this map does not letter, by name", async () => {
+		const d = drawing();
+		const warned = [];
+		global.ui = { notifications: { warn: msg => warned.push(msg) } };
+		await d._chooseJourneyPlace("marshedge");
+		expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }]);
+		expect(warned[0]).toContain("Marshedge");
+		expect(warned[0]).toContain("The Vicinity");
+	});
+});
+
+describe("what the route step shows while the way is being drawn", () => {
+	const drawnTrip = (points, tier = "worlds-end") => ({
+		origin: "stonetop", destination: "lygos",
+		custom: { on: true, tier, points },
+	});
+
+	it("draws the hand-drawn way instead of the table's", async () => {
+		const data = await dialog(drawnTrip([{ fx: 0.6, fy: 0.7 }]))._buildJourney();
+		expect(data.route.drawn).toBe(true);
+		expect(data.route.legs.map(l => l.toName)).toEqual(["point 1"]);
+		expect(data.route.atLeast).toMatch(/^roughly /);
+	});
+
+	// The far end of a drawn way is where they are bound, whether or not anything was ever picked
+	// off the list — and a way ending on a bare mark has no name to give.
+	it("says where they are bound from the end of the way", async () => {
+		const named = await dialog(drawnTrip([{ slug: "marshedge" }]))._buildJourney();
+		expect(named.destination.name).toBe("Marshedge");
+		const bare = await dialog(drawnTrip([{ fx: 0.6, fy: 0.7 }]))._buildJourney();
+		expect(bare.destination).toBeNull();
+		expect(bare.hasDestination).toBe(false);
+	});
+
+	it("badges each bare mark with the number the readout calls it by", async () => {
+		const data = await dialog(drawnTrip([
+			{ fx: 0.6, fy: 0.7 }, { slug: "marshedge" }, { fx: 0.7, fy: 0.8 },
+		]))._buildJourney();
+		expect(data.map.marks.map(m => m.mark)).toEqual([1, 2]);
+		expect(data.map.marks.at(-1).isEnd).toBe(true);
+		expect(data.route.legs.map(l => l.toName)).toEqual(["point 1", "Marshedge", "point 2"]);
+	});
+
+	it("lights up a lettered place the way passes through", async () => {
+		const data = await dialog(drawnTrip([{ slug: "marshedge" }, { fx: 0.7, fy: 0.8 }]))._buildJourney();
+		const marshedge = data.map.spots.find(s => s.slug === "marshedge");
+		expect(marshedge.isStop).toBe(true);
+		expect(marshedge.showLabel).toBe(true);
+		// Not where they are bound, though: the way runs on past it to a mark of the GM's own.
+		expect(marshedge.isChosen).toBe(false);
+	});
+
+	// The tier is not up for negotiation while a way is drawn on it — only a deliberate tab click
+	// outranks it, because looking at the other map to compare is a reasonable thing to want.
+	it("opens on the map the way is drawn on", () => {
+		const d = dialog();
+		expect(d._activeTier("stonetop", "the-maw", { on: true, tier: "worlds-end" })).toBe("worlds-end");
+		d._journeyTier = "vicinity";
+		expect(d._activeTier("stonetop", "the-maw", { on: true, tier: "worlds-end" })).toBe("vicinity");
+	});
+
+	// On the other tab the readout says where the way is, with the button back to it — rather than
+	// marks at fractions that mean somewhere else entirely.
+	it("keeps its marks off the other map, and says where they are", async () => {
+		const d = dialog(drawnTrip([{ fx: 0.6, fy: 0.7 }]));
+		d._journeyTier = "vicinity";
+		const data = await d._buildJourney();
+		expect(data.map.marks).toEqual([]);
+		expect(data.map.path).toBeNull();
+		expect(data.map.offMap.sentence).toContain("The World's End");
+		expect(data.map.offMap.showLabel).toContain("The World's End");
+	});
+
+	it("tells a GM the three gestures, and a player only that the way was drawn", async () => {
+		const on = await dialog(drawnTrip([{ fx: 0.6, fy: 0.7 }]))._buildJourney();
+		expect(on.custom.canDraw).toBe(true);
+		expect(on.custom.hint).toContain("shift-click");
+		expect(on.custom.count).toBe(1);
+
+		global.game.user.isGM = false;
+		const off = await dialog(drawnTrip([{ fx: 0.6, fy: 0.7 }]))._buildJourney();
+		expect(off.custom.canDraw).toBe(false);
+		expect(off.custom.drawnNote).toContain("drawn by hand");
+	});
+});
+
+describe("carrying a drawn way onto Chart a Course", () => {
+	// The same carry-forward the table's own routes get, through the same predicate: a box is
+	// ticked only when the blank underneath it can actually be filled.
+	it("ticks the days once the drawn way is a day's march or more", async () => {
+		const d = dialog({ origin: "stonetop", destination: null });
+		await d._toggleDrawnWay(true);
+		await d._drawJourneyMark({ fx: 0.2, fy: 0.8 }, { append: false });
+		expect(saved().chart.checks.days).toBe(true);
+		expect(saved().chart.route).toMatch(/^Stonetop to point 1$/);
+	});
+
+	// "You must first travel to ___" cannot be filled with "point 2", so only lettered stops count.
+	it("names only a lettered stop as the place to travel to first", async () => {
+		const d = dialog({
+			origin: "stonetop", destination: null,
+			custom: { on: true, tier: "worlds-end", points: [{ slug: "marshedge" }] },
+		});
+		await d._drawJourneyMark({ fx: 0.8, fy: 0.9 }, { append: true });
+		expect(saved().chart.checks.firstTravel).toBe(true);
+		expect(saved().chart.route).toBe("Stonetop to Marshedge to point 1");
 	});
 });

@@ -9,8 +9,33 @@ import { buildThreatCardVM } from "../threats/threat-view.js";
 import { buildHazardCardVM } from "../hazards/hazard-view.js";
 import { buildSiteCardVM, wireSiteTableRoll } from "../sites/site-view.js";
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
+import { SYSTEM_ID } from "../system-id.js";
 
 const CARD_PARTIALS = "systems/stonetop-pwd/templates/journal/partials";
+
+// ── What a kind's scene pin is drawn from ────────────────────────────────────────────────────
+// Here rather than beside the hook that writes the pins, for the reason the table below exists:
+// which picture a kind wears is one more thing that varies by kind, and a fourth kind declared
+// upstairs and forgotten here would silently come out wearing a threat's torn note.
+
+/** Threats and hazards are both things the GM wrote down about the world: one torn note. */
+export const THREAT_PIN_ICON_SUFFIX = "assets/icons/threat-note.svg";
+
+// A SITE IS NOT A TORN NOTE. A site is a PLACE, and a place dropped on a map should look like the
+// place it is. The mound the GM Toolkit's Sites tab wears is already that drawing, and this is the
+// same FILE rather than a copy of it, so the tab and the map can never end up showing two
+// different pictures of one idea. (The rail paints it as a CSS mask; on a Note it is a texture,
+// which is what the tint is for.)
+export const SITE_PIN_ICON_SUFFIX = "assets/icons/tabs/site-mound.svg";
+
+/** The ink a prep pin's own name is written in. */
+export const GM_PREP_PIN_TEXT_COLOR = "#1b1009";
+
+// The tab glyph is authored WHITE on transparent, because a mask only cares about alpha. Dropped
+// on a map untinted it would be an invisible white mound on cream book art. Tinted to the same ink
+// the pin's name is written in, it reads as the solid silhouette the rail paints, and the pin and
+// its label are visibly one mark.
+const DEFAULT_PIN_TINT = "#ffffff";
 
 /**
  * Everything that varies by GM-prep kind, in ONE table.
@@ -30,6 +55,8 @@ const CARD_PARTIALS = "systems/stonetop-pwd/templates/journal/partials";
  *   cardVM             the view-model builder that feeds it
  *   collapsedByDefault the prep tabs open this kind's cards shut
  *   wireCard           card controls only this kind has
+ *   pinIcon            the texture this kind's scene pin wears (shared: a hazard is a threat's note)
+ *   pinTint            what to tint that texture, when white is wrong for it
  *
  * `wireCard` is a DELEGATED wiring: it binds one listener to a root that may hold cards of any
  * kind, and finds nothing when no card of its kind is there. That is what lets every host wire
@@ -42,14 +69,17 @@ const GM_PREP_KINDS = {
 	threat: {
 		pageById: threatPageById, entryId: threatsEntryId, noun: "Threat",
 		cardTemplate: `${CARD_PARTIALS}/threat-card.hbs`, cardVM: buildThreatCardVM,
+		pinIcon: THREAT_PIN_ICON_SUFFIX,
 	},
 	hazard: {
 		pageById: hazardPageById, entryId: hazardsEntryId, noun: "Hazard",
 		cardTemplate: `${CARD_PARTIALS}/hazard-card.hbs`, cardVM: buildHazardCardVM,
+		pinIcon: THREAT_PIN_ICON_SUFFIX,
 	},
 	site: {
 		pageById: sitePageById, entryId: sitesEntryId, noun: "Site",
 		cardTemplate: `${CARD_PARTIALS}/site-card.hbs`, cardVM: buildSiteCardVM,
+		pinIcon: SITE_PIN_ICON_SUFFIX, pinTint: GM_PREP_PIN_TEXT_COLOR,
 		// A site write-up is a page long, so the tab reads as a list of titles you expand into;
 		// a threat is a few lines and opens expanded.
 		collapsedByDefault: true,
@@ -69,6 +99,32 @@ export const gmPrepCardTemplate = (id) => kind(id).cardTemplate ?? null;
 export const gmPrepCardVM = (id) => kind(id).cardVM ?? null;
 /** Do this kind's cards open collapsed? */
 export const gmPrepStartsCollapsed = (id) => !!kind(id).collapsedByDefault;
+
+/**
+ * The texture one kind of GM-prep pin wears.
+ *
+ * The WHOLE texture rather than the glyph alone, because the pass that brings old pins up to date
+ * has to compare a note against exactly what a fresh drop would have written.
+ */
+export function gmPrepPinTexture(id) {
+	return {
+		src: `systems/${SYSTEM_ID}/${kind(id).pinIcon ?? THREAT_PIN_ICON_SUFFIX}`,
+		tint: kind(id).pinTint ?? DEFAULT_PIN_TINT,
+		anchorX: 0.5,
+		anchorY: 0.5,
+		fit: "contain",
+	};
+}
+
+/**
+ * The distinct pin glyphs across every kind, as path suffixes.
+ *
+ * Derived rather than listed, so the pass that refits old pins and the hook that styles their
+ * labels both widen the moment a kind above declares a picture of its own.
+ */
+export const GM_PREP_PIN_ICON_SUFFIXES = Object.freeze([
+	...new Set(Object.values(GM_PREP_KINDS).map(k => k.pinIcon ?? THREAT_PIN_ICON_SUFFIX)),
+]);
 
 /**
  * The kind names alone, for the hosts that need to iterate or test them without caring how a

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { routeDots, routeLegs } from "../../module/utils/route-path.js";
+import { offMapNote, routeDots, routeLegs, routePath, tierDrawing } from "../../module/utils/route-path.js";
+import { spotPercent, travelPlace } from "../../module/data/travel-times.js";
 
 // The beads that make the route read as a dotted line on a Scene.
 //
@@ -73,5 +74,92 @@ describe("beading the route line", () => {
 	it("terminates on a leg of no length", () => {
 		const legs = routeLegs([{ left: 30, top: 30 }, { left: 30, top: 30 }], 1.4);
 		expect(routeDots(legs, 1.4, 2)).toHaveLength(1);
+	});
+});
+
+// ── A way the GM drew, on the same geometry ──────────────────────────────────
+//
+// The point of putting the arithmetic here rather than in the walkthrough was that three renderers
+// draw one curve and a curve computed twice is a curve that drifts. A hand-drawn way is a fourth
+// caller of the same functions, and it brings one thing the solved routes never did: a stop that
+// carries its own position instead of naming a place the map knows how to look up.
+
+const FULL = { x0: 0, y0: 0, x1: 1, y1: 1 };
+
+/** A drawn way's legs, in the shape `customRoute` builds them. */
+const drawnRoute = (tier, stops) => ({
+	custom: true,
+	tier,
+	legs: stops.slice(1).map((to, i) => ({
+		from: stops[i].slug ?? null, to: to.slug ?? null,
+		fromSpot: stops[i].spot ?? null, toSpot: to.spot ?? null,
+	})),
+});
+
+describe("drawing a way the GM laid out by hand", () => {
+	it("places a bare mark where the mark says, without asking the table", () => {
+		const path = routePath(drawnRoute("vicinity", [
+			{ slug: "stonetop" }, { spot: { fx: 0.25, fy: 0.5 } },
+		]), "vicinity", FULL, 1.4);
+		expect(path.legs).toHaveLength(1);
+		expect(path.legs[0].to).toEqual(spotPercent({ fx: 0.25, fy: 0.5 }, FULL));
+	});
+
+	it("still looks a named stop up, so a corrected coordinate reaches an old path", () => {
+		const path = routePath(drawnRoute("vicinity", [
+			{ slug: "stonetop" }, { slug: "the-maw" },
+		]), "vicinity", FULL, 1.4);
+		expect(path.legs[0].to).toEqual(spotPercent(travelPlace("the-maw").spots.vicinity, FULL));
+	});
+
+	// A drawn way's marks are fractions of ONE picture. On any other map it has no line, and not a
+	// wrong one — which is the whole difference between "we cannot show this here" and running the
+	// party's route through the wrong valleys.
+	it("draws nothing at all on the other map", () => {
+		const way = drawnRoute("vicinity", [{ slug: "stonetop" }, { spot: { fx: 0.25, fy: 0.5 } }]);
+		expect(routePath(way, "worlds-end", FULL, 1.22)).toBeNull();
+		expect(tierDrawing(way)).toBe("vicinity");
+	});
+
+	// And the note under the empty map says which picture it IS on, with the button back to it —
+	// rather than naming a place, which is what a solved route's refusal is about and would send
+	// the reader hunting for something that has not gone missing.
+	it("says which map it is on, rather than which place is missing", () => {
+		const way = drawnRoute("vicinity", [{ slug: "stonetop" }, { spot: { fx: 0.25, fy: 0.5 } }]);
+		const note = offMapNote("worlds-end", way);
+		expect(note.elsewhere).toBe(true);
+		expect(note.names).toEqual([]);
+		expect(note.other).toBe("vicinity");
+		expect(note.otherName).toBe("The Vicinity");
+	});
+
+	it("has no note to make on the map it belongs to", () => {
+		const way = drawnRoute("vicinity", [{ slug: "stonetop" }, { spot: { fx: 0.25, fy: 0.5 } }]);
+		expect(offMapNote("vicinity", way)).toBeNull();
+	});
+
+	// A bare mark carries its own position, so it can never be the missing end. Asking `drawnOn`
+	// about its null slug would report the far end of every hand-drawn way as undrawable and put a
+	// refusal under a line the reader can plainly see.
+	it("never reports a bare mark as somewhere the map cannot draw", () => {
+		const way = drawnRoute("vicinity", [
+			{ slug: "stonetop" }, { spot: { fx: 0.9, fy: 0.9 } },
+		]);
+		expect(offMapNote("vicinity", way)).toBeNull();
+		expect(routePath(way, "vicinity", FULL, 1.4)).toBeTruthy();
+	});
+
+	// The rare one: the trip now sets out from somewhere this picture does not letter. That really
+	// is a missing end, it reads exactly as a solved route's would, and there is no other map to
+	// offer — the marks in the middle only mean anything on this one.
+	it("names the origin when the map does not letter it", () => {
+		const way = drawnRoute("vicinity", [
+			{ slug: "marshedge" }, { spot: { fx: 0.5, fy: 0.5 } },
+		]);
+		const note = offMapNote("vicinity", way);
+		expect(note.names).toEqual(["Marshedge"]);
+		expect(note.other).toBeNull();
+		expect(note.elsewhere).toBe(false);
+		expect(routePath(way, "vicinity", FULL, 1.4)).toBeNull();
 	});
 });

@@ -41,11 +41,69 @@
   {{/if}}
 </div>
 
-<div class="stonetop-journey-tiers" role="tablist" aria-label="Map">
-  {{#each journey.tiers}}
-  <button type="button" role="tab" aria-selected="{{isActive}}" data-tier="{{slug}}"
-          class="stonetop-journey-tier{{#if isActive}} is-active{{/if}}">
-    {{name}}{{#unless hasMap}} <i class="fas fa-image-slash" data-tooltip="Not imported"></i>{{/unless}}
+{{!-- Lay the way out by hand instead of by the table (module/utils/custom-route.js).
+
+      ITS OWN ROW, between the picks and the map tabs, because it belongs to both and crowds
+      either: it changes what a click on the picture MEANS, and it changes what the readout below
+      is about. The row is also where the three gestures are taught. They have to be taught
+      somewhere — nothing on a map advertises that shift adds a leg — and a line of text that is
+      only there while the mode is on costs nothing the rest of the time.
+
+      The checkbox is GM-only (`canDraw`), like the scene and site buttons beside it and for the
+      same reason: drawing writes the trip into a world setting, which a player cannot do. The row
+      itself is not, so a player reading the route step still sees that this way was drawn by
+      hand rather than worked out. --}}
+{{#if journey.custom.canDraw}}
+<div class="stonetop-journey-draw{{#if journey.custom.on}} is-on{{/if}}">
+  <label class="stonetop-journey-drawlab" data-tooltip="{{journey.custom.tooltip}}">
+    <input type="checkbox" class="stonetop-journey-custom"{{#if journey.custom.on}} checked{{/if}}>
+    {{journey.custom.label}}
+  </label>
+  {{#if journey.custom.on}}
+  <span class="stonetop-journey-drawhint">{{journey.custom.hint}}</span>
+  {{#if journey.custom.count}}
+  <button type="button" class="stonetop-journey-clear-drawn" data-tooltip="{{journey.custom.clearTip}}">
+    <i class="fas fa-rotate-left"></i> {{journey.custom.clearLabel}}
   </button>
-  {{/each}}
+  {{/if}}
+  {{/if}}
+</div>
+{{else if journey.route.drawn}}
+{{!-- A player, looking at a way somebody drew. No control, but the line on this map is not the one
+      the travel table would have drawn and the times beside it are measured rather than printed,
+      so it says so. Its own sentence, not the GM's: the three gestures are no use to a reader who
+      cannot make them. --}}
+<div class="stonetop-journey-draw is-on">
+  <span class="stonetop-journey-drawhint">{{journey.custom.drawnNote}}</span>
+</div>
+{{/if}}
+
+{{!-- The map row: which picture, and what the GM can do to it.
+
+      The tablist is its own element INSIDE the row rather than being the row, because a tablist
+      may hold tabs and nothing else. The button beside it is not a tab (it changes no panel and
+      selects nothing), so a reader told "tab 3 of 3" about it would be told something untrue. --}}
+<div class="stonetop-journey-tiers">
+  <div class="stonetop-journey-tierlist" role="tablist" aria-label="Map">
+    {{#each journey.tiers}}
+    <button type="button" role="tab" aria-selected="{{isActive}}" data-tier="{{slug}}"
+            class="stonetop-journey-tier{{#if isActive}} is-active{{/if}}">
+      {{name}}{{#unless hasMap}} <i class="fas fa-image-slash" data-tooltip="Not imported"></i>{{/unless}}
+    </button>
+    {{/each}}
+  </div>
+  {{!-- Put one of the GM's own written-up sites on this map, or write a new one and put THAT on it
+        (module/sites/place-site-on-map.js). It rides the end of the map-tab row rather than the
+        row of picks above, because what it adds is a mark on THIS picture: the chooser is followed
+        by a click on the map showing here, so the control belongs beside the tabs that decide
+        which map that is.
+
+        GM-only, and absent rather than disabled for a player, exactly as the scene button above
+        is: a site is prep filed in a journal players cannot see or write. It is also built only
+        once there is a map on screen, since a placement is a point on a picture. --}}
+  {{#if journey.placeSite}}
+  <button type="button" class="stonetop-journey-place-site" data-tooltip="{{journey.placeSite.tooltip}}">
+    <i class="fas fa-map-pin"></i> {{journey.placeSite.label}}
+  </button>
+  {{/if}}
 </div>

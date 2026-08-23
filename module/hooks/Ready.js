@@ -44,6 +44,7 @@ import { STONETOP_SCOPE, resolvedFlagProperty, resolvedFlags } from "../actors/c
 import { deletionEntry } from "../utils/foundry-compat.js";
 import { markPosterMapScenes } from "../book2-art/poster-maps.js";
 import { linkLandmarkNotes, refitLandmarkNotes, revealLandmarkNotesOnce } from "./PlaceOfInterestDrop.js";
+import { refitGmPrepPins } from "./ThreatNotePins.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { migrateAllSteadingPeople, ensurePeopleFolders, backfillAllResidentHomes } from "../actors/steading/steading-people.js";
 import { PERSON_DEFAULT_IMG } from "../utils/person-portrait.js";
@@ -206,6 +207,10 @@ export async function onReady() {
 		// other being stale. Silent once they agree.
 		try { await refitLandmarkNotes(); }
 		catch (err) { console.error("Stonetop | landmark map-pin refit failed", err); }
+		// Same bargain for the GM's own prep pins: a site dropped on a scene wears the Sites tab's
+		// mound now, and every site pinned before that still wears a threat's torn note.
+		try { await refitGmPrepPins(); }
+		catch (err) { console.error("Stonetop | GM-prep map-pin refit failed", err); }
 		// Put the named places back on the poster maps, whose printing carries no labels at all,
 		// and bring pins already down up to the current design. Every load, and
 		// silent when they already agree: the only other thing that writes a poster-map Scene is

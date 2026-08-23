@@ -18,9 +18,13 @@
 // destination out to the World's End, because the reader put it there.
 
 import { ImageZoomWindow } from "../utils/image-zoom-window.js";
-import { bindJourneyControls, journeyPick } from "./journey-controls.js";
+import {
+	JOURNEY_MARKS, JOURNEY_RIGHT_CLICK_MARKS,
+	bindJourneyControls, bindJourneySiteRemoval, journeyPick,
+} from "./journey-controls.js";
+import { openSiteWriteUp } from "../sites/place-site-on-map.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
-import { travelMap } from "../data/travel-times.js";
+import { percentSpot, travelMap } from "../data/travel-times.js";
 // Not the bare global: v13 moved it under foundry.applications.handlebars and deprecated that,
 // and the shim picks whichever this core has.
 import { renderTemplate } from "../utils/foundry-compat.js";
@@ -39,26 +43,38 @@ export class TravelMapWindow extends ImageZoomWindow {
 	 *   `build(tier)`  -> Promise of the journey context for that tier (the same object the route
 	 *                     step renders), and
 	 *   `pick(field, slug)` -> Promise, writing an origin or destination to the trip, and
-	 *   `toScene()` -> Promise, putting the route on the reader's own scene or taking it back off.
+	 *   `toScene()` -> Promise, putting the route on the reader's own scene or taking it back off,
+	 *   `placeSite({tier, frame, pickPoint})` -> Promise, dropping one of the GM's own sites on the
+	 *                     map showing here, and `takeSiteOffMap(uuid)` -> Promise, lifting one.
 	 * @param {object} config.journey         the first build's result, so the window opens populated
 	 */
 	constructor({ tier, source, journey } = {}, options = {}) {
 		super({
 			src: journey?.map?.src ?? "",
 			alt: journey?.map?.alt ?? "",
+			// The pin layer's third kind of mark, added to the parent's own two. It matters here
+			// and not only in the delegate below: this selector is also what tells the pan handler
+			// a press on a pin from a press on open map, so a site pin left out of it would take a
+			// pointer capture on the viewport, have its click retargeted there, and be unclickable.
+			controls: JOURNEY_MARKS,
 			// Handed to the parent HERE and not in activateListeners: the parent binds its overlay
 			// delegate only when it already has an onPick, and it binds during the very first
 			// activateListeners — so setting this afterwards would leave the hotspots dead.
 			//
-			// Both halves of what a hotspot can carry, because the pin layer has two kinds of
-			// control on it and only one of them names a place. An edge arrow with no `node` (the
-			// "Steplands & Marshedge" one) renders `data-slug=""` and means "move out a tier", and
-			// the panel's own handler has always read it that way — so without the `tier` arm that
-			// arrow would sit here wearing a tooltip promising a zoom and do nothing at all.
-			onPick: data => journeyPick(data, {
+			// Every kind of mark the layer carries, because they mean different things and only one
+			// of them names a place. An edge arrow with no `node` (the "Steplands & Marshedge" one)
+			// renders `data-slug=""` and means "move out a tier", and the panel's own handler has
+			// always read it that way — so without the `tier` arm that arrow would sit here wearing
+			// a tooltip promising a zoom and do nothing at all. `journeyPick` owns which wins.
+			onPick: (data, ev) => journeyPick(data, {
 				pick: (field, slug) => this._pick(field, slug),
 				showTier: tier => this.showTier(tier),
-			}),
+				openSite: uuid => openSiteWriteUp(uuid),
+				// The planner decides whether this is a destination or a stop on a drawn way, at
+				// click time — which it has to be, since this handler is built once here and never
+				// rebound, long before any box is ticked.
+				markPlace: (slug, click) => this._through(source => source.markPlace?.(slug, click, this)),
+			}, ev),
 		}, options);
 		this._tier = tier;
 		this._source = source;
@@ -91,10 +107,15 @@ export class TravelMapWindow extends ImageZoomWindow {
 		// viewport itself, and that fallback is the whole reason this template can exist.
 		super.activateListeners(html);
 		this._bindChrome(html[0]);
+		// NOT in `_bindChrome`, which `sync` calls again on markup it has just replaced. This is
+		// delegated on the window's ROOT, which survives every sync, so re-binding it there would
+		// stack a second listener on each pick and a third on the next — and one right-click would
+		// then ask to lift the same pin twice over.
+		bindJourneySiteRemoval(html[0], uuid => this._removeSite(uuid));
 	}
 
 	/**
-	 * The three controls around the picture, forwarded to the same planner the walkthrough uses.
+	 * The controls around the picture, forwarded to the same planner the walkthrough uses.
 	 *
 	 * SEPARATE FROM activateListeners because `sync` replaces this markup and has to re-bind it —
 	 * and calling the whole of activateListeners again would hand the viewport a second set of
@@ -110,7 +131,90 @@ export class TravelMapWindow extends ImageZoomWindow {
 			pick: (field, slug) => this._pick(field, slug),
 			showTier: tier => this.showTier(tier),
 			toScene: () => this._source?.toScene?.(),
+			placeSite: () => this._placeSite(),
+			drawByHand: on => this._through(source => source.drawByHand?.(on, this)),
+			clearDrawn: () => this._through(source => source.clearDrawn?.(this)),
 		});
+		// And the picture itself, since the chrome that was just re-read is what says whether the
+		// box is ticked. Re-armed here rather than in `activateListeners` for that reason: `sync`
+		// is what a tick of the box comes back through, and the mode has to follow it.
+		this._armDrawing();
+	}
+
+	/**
+	 * Arm this window's own map for drawing, or leave it alone.
+	 *
+	 * ONLY ON THE MAP THE WAY IS DRAWN ON, and this window is the surface where that matters most:
+	 * it keeps showing whatever tier it was opened on even after the panel has followed a
+	 * destination out to the other one, so the two can disagree for as long as the reader likes. A
+	 * crosshair over a picture whose clicks could not join this way would be a promise it cannot
+	 * keep.
+	 *
+	 * The parent takes care of aiming: it listens on the viewport, where a pan's pointer capture
+	 * retargets everything, and measures the overlay, which is the painted picture's own box at
+	 * whatever zoom and pan the reader has put it at. So a mark laid here at 300 dpi is a mark in
+	 * the same valley the panel's little map would have put it in.
+	 */
+	_armDrawing() {
+		const custom = this._journey?.custom;
+		const map = this._journey?.map;
+		// The picture on screen has to be the way's OWN map, which is not the same question as
+		// "is it the map this window was opened on": the way can be drawn on the other tier
+		// entirely, and then this window is showing a picture its clicks could never join.
+		if (!custom?.on || !custom.canDraw || !map || map.tier !== custom.tier) {
+			this.stopWatchingPoints();
+			return;
+		}
+		this.watchPoints({
+			onPoint: (at, ev) => this._through(source =>
+				source.drawMark?.(percentSpot(at, map.frame), { append: !!ev.shiftKey }, this)),
+			onUndo: () => this._through(source => source.undoMark?.(this)),
+			ignore: JOURNEY_MARKS,
+			undoIgnore: JOURNEY_RIGHT_CLICK_MARKS,
+		});
+	}
+
+	/**
+	 * Do something through the planner, then re-read this window.
+	 *
+	 * The shape every gesture in here already had, written once: the panel owns the trip, so the
+	 * act goes over there and the answer comes back through `sync` — and the planner is told which
+	 * window asked, so its own sweep of the open maps skips the one about to re-read itself.
+	 */
+	async _through(act) {
+		if (!this._source) return;
+		await act(this._source);
+		await this.sync();
+	}
+
+	/**
+	 * Put one of the GM's own sites on this map.
+	 *
+	 * THE WINDOW SUPPLIES THE PICTURE, the planner supplies everything else. Which site, where it
+	 * is filed and what a spot means are the panel's business (it owns the steading and the frame
+	 * arithmetic); what only this surface can answer is "click on WHAT" — and here that is a
+	 * zoomable, draggable 300 dpi map the reader can wheel down into before they commit, which is
+	 * the whole reason a GM would place from this window rather than from the panel's own map.
+	 *
+	 * The frame comes off the journey this window is already holding rather than being re-derived:
+	 * it is the registration of the exact file on screen, and asking for it again would be a second
+	 * browse and a second decode to arrive at the number in hand.
+	 */
+	async _placeSite() {
+		const map = this._journey?.map;
+		if (!map) return;
+		await this._source?.placeSite?.({
+			tier: this._tier,
+			frame: map.frame,
+			pickPoint: () => this.pickPoint(),
+		}, this);
+		await this.sync();
+	}
+
+	/** Lift a pin back off this map, through the planner, then re-read. */
+	async _removeSite(uuid) {
+		await this._source?.takeSiteOffMap?.(uuid, this);
+		await this.sync();
 	}
 
 	/**
