@@ -102,8 +102,12 @@
         is: a site is prep filed in a journal players cannot see or write. It is also built only
         once there is a map on screen, since a placement is a point on a picture. --}}
   {{#if journey.placeSite}}
+  {{!-- SITE_ICON, the mark a site wears in a LIST (module/sites/place-site-on-map.js) and the one
+        the chooser this button opens puts beside every row in it. NOT the standing stone a placed
+        site wears as a pin on the picture below: that one is drawn at 18px, where this one does
+        not read. One idea, two sizes, two drawings -- and this control belongs with the list. --}}
   <button type="button" class="stonetop-journey-place-site" data-tooltip="{{journey.placeSite.tooltip}}">
-    <i class="fas fa-map-pin"></i> {{journey.placeSite.label}}
+    <i class="fas fa-mountain-sun"></i> {{journey.placeSite.label}}
   </button>
   {{/if}}
 </div>

@@ -1,6 +1,6 @@
 // "Give me one" — the randomizer beside each GM Moves heading. Picks a move out of that
 // section's list, and whispers it to the GM once the sheet's light has landed on it
-// (StonetopGmToolkitSheet `_spinToDrawnMove`).
+// (gm-move-drawer.js `GmMoveDrawer#spinTo`).
 //
 // The paper playbook's lists are for reading down when there is time. This is for the other
 // case: the table has just handed the GM a golden opportunity, everyone is looking at them,

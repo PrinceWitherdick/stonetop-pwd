@@ -28,7 +28,7 @@ import {
 export { MARK_PRECISION } from "../data/travel-times.js";
 // "Can this map draw that place?" and "which map draws them all?" are asked by the solved route
 // too, and the map ordering they turn on is stated once, over there.
-import { drawnOn, tierDrawingEnds } from "./route-path.js";
+import { tierDraws, tierDrawingEnds } from "./route-path.js";
 
 /** The fewest priced legs a map must draw before its pace is worth calibrating from. */
 const PACE_MIN_SAMPLE = 3;
@@ -322,7 +322,7 @@ export function withMark(points, mark, { append = false, undo = false } = {}) {
  * is the honest answer, and it is the same one `_activeTier` reaches for with no destination yet.
  */
 export function customTierFor(origin, showing) {
-	if (travelMap(showing) && drawnOn(showing, origin)) return showing;
+	if (tierDraws(showing, [origin])) return showing;
 	return tierDrawingEnds([origin]) ?? travelMap(showing)?.slug ?? TRAVEL_MAPS[0].slug;
 }
 

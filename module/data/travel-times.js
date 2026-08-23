@@ -368,6 +368,40 @@ export const TRAVEL_LEGS = Object.freeze([
 ]);
 
 /**
+ * Where a leg of the table has to be DRAWN bending, because the road it stands for does.
+ *
+ * The travel table prints journeys, not roads. "Stonetop to the Foothills, 2 days via the Roads"
+ * is one row, so the line drawn for it runs pin to pin, and pin to pin on the Vicinity is a
+ * diagonal straight across the Bottomlands. The road does no such thing: it leaves Stonetop
+ * heading south-west down the West Road, meets the Highway at the Crossroads, and only then turns
+ * north for the Foothills and Barrier Pass. A schematic that cuts that corner tells the party
+ * they are walking country the books say they are not.
+ *
+ * SO THIS IS GEOMETRY AND ONLY GEOMETRY. A bend is a place the line passes OVER, never a stop the
+ * journey makes: it is spliced in by `routePath` (utils/route-path.js) when it places the pins,
+ * and it never reaches TRAVEL_LEGS. Nothing about the trip's arithmetic moves, because nothing
+ * about the trip changed. The time is still the book's printed 2 days, Chart a Course's "you must
+ * first travel to ___" stays empty on a single-leg journey, and the Chronicle still records one
+ * leg. All that changes is where the dots go.
+ *
+ * A ROW IS UNDIRECTED, like the legs it bends, because a road runs both ways: coming back down
+ * from Barrier Pass the same bend is walked in the other order, and `roadBendsBetween` reverses
+ * it rather than making anyone write the row twice.
+ *
+ * PER MAP, because a bend is a fact about one picture. The Vicinity draws the Crossroads well
+ * south-west of Stonetop and the Foothills off in its far corner, which is what makes the dogleg
+ * worth drawing at that scale; another map letters the same three places at other spacings and
+ * wants its own answer, or none. A bend naming a place the map cannot draw is simply skipped,
+ * so a row is never a reason for a line to go missing.
+ */
+export const ROAD_BENDS = Object.freeze([
+	// The West Road out of Stonetop and the Highway north, which meet at the Crossroads. Both of
+	// these are "via the Roads" legs in the table, and the Crossroads is the corner they turn.
+	Object.freeze({ map: "vicinity", from: "stonetop", to: "the-foothills", through: Object.freeze(["the-crossroads"]) }),
+	Object.freeze({ map: "vicinity", from: "stonetop", to: "barrier-pass",  through: Object.freeze(["the-crossroads"]) }),
+]);
+
+/**
  * The maps' edge-of-page arrows — the captions that say "the road goes on" instead of naming
  * somewhere you have arrived.
  *
@@ -634,6 +668,25 @@ export function placesBeyond() {
 /** The arrows on one map tier. */
 export function exitsOnMap(mapSlug) {
 	return TRAVEL_EXITS.filter(e => e.map === mapSlug);
+}
+
+/**
+ * The places one leg's line has to pass over on `mapSlug`, in the order it passes them.
+ *
+ * Empty for the great majority of legs, which is the point: a bend is written down only where a
+ * ruled line would tell a lie about the country, so asking this question costs a scan of a very
+ * short table and usually answers "none".
+ *
+ * Reversed for a journey walked the other way, so ROAD_BENDS holds one row per road rather than
+ * one per direction.
+ */
+export function roadBendsBetween(mapSlug, from, to) {
+	for (const bend of ROAD_BENDS) {
+		if (bend.map !== mapSlug) continue;
+		if (bend.from === from && bend.to === to) return [...bend.through];
+		if (bend.from === to && bend.to === from) return [...bend.through].reverse();
+	}
+	return [];
 }
 
 /**

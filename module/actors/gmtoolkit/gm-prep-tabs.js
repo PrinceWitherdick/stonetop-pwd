@@ -152,7 +152,7 @@ export function withGmPrepTabs(Base) {
 		// A flat Set of opened keys rather than a per-kind default/override pair like the collapse
 		// state above: there is exactly one default here ("shut") and no kind may differ from it,
 		// so a table keyed by kind would be three rows saying the same word. Not persisted, for
-		// the reason `_lastRandomMove` is not — it is a reading position, and one that survived a
+		// the reason the move drawer's own memory is not — it is a reading position, and one that survived a
 		// reload would be a stored preference nobody asked for.
 		_cardGroupsOpen = new Set();
 

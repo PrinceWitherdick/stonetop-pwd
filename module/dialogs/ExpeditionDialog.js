@@ -7,7 +7,7 @@ import { getSetting, setWorldSetting } from "../settings.js";
 import { escHtml } from "../utils/strings.js";
 import { warn } from "../utils/logger.js";
 import { CHART_GROUPS, HOME_GROUP } from "./expedition-data.js";
-import { FATE_TABLES, fateTableList, fateInlinePhrase } from "../data/fate-tables.js";
+import { FATE_TABLES, fateTableList } from "../data/fate-tables.js";
 import { saveChronicleFromButton } from "../utils/chronicle.js";
 import {
 	normalizeLog,
@@ -26,6 +26,8 @@ import { deriveLoadLevel, LOAD_LEVEL_LIMITS } from "../utils/load.js";
 import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
 import { renderTemplate } from "../utils/foundry-compat.js";
 import { EXPLORATION_GM_MOVES } from "../gm-toolkit/gm-moves.js";
+import { GmMoveDrawer } from "../gm-toolkit/gm-move-drawer.js";
+import { wireSidebarToggle } from "../utils/sidebar-toggle.js";
 import {
 	TRAVEL_MAPS, TRAVEL_PLACES, BEYOND_TIER,
 	travelPlace, travelMap, placesOnMap, placesBeyond, exitsOnMap, spotPercent, percentSpot,
@@ -47,7 +49,7 @@ import {
 	JOURNEY_MARKS, JOURNEY_RIGHT_CLICK_MARKS,
 	bindJourneyControls, bindJourneySiteRemoval, journeyPick,
 } from "./journey-controls.js";
-import { drawnOn, offMapNote, routePath, tierDrawingEnds } from "../utils/route-path.js";
+import { drawnOn, offMapNote, routePath, tierDraws, tierDrawingEnds } from "../utils/route-path.js";
 import { posterSceneFor } from "../book2-art/poster-map-catalog.js";
 import { format, localize } from "../utils/i18n.js";
 import {
@@ -64,18 +66,19 @@ const ANSWERS_SETTING = "expeditionAnswers";
 const JOURNEY_PINS_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-pins.hbs";
 
 /**
- * The seven exploration moves, as the "Exploration moves" step prints them.
+ * The seven exploration moves, as the sidebar lists them.
  *
- * Rendered from the ONE table in gm-toolkit/gm-moves.js, which the GM Toolkit's Moves tab also
+ * Read off the ONE table in gm-toolkit/gm-moves.js, which the GM Toolkit's Moves tab also
  * prints. Restating them here meant seven names and seven glosses maintained in two files, held
- * together only by a test that scraped this file's source text for `<li><strong>…</strong>`, so
- * reformatting the list at all broke the guard, and a wording fix in one place left the
- * walkthrough and the toolkit teaching the same move in different words on two screens the same
- * GM meets in one session.
+ * together only by a test that scraped this file's source text, so reformatting the list at all
+ * broke the guard, and a wording fix in one place left the walkthrough and the toolkit teaching
+ * the same move in different words on two screens the same GM meets in one session.
+ *
+ * A plain array of `{ name, gloss }` rather than a block of HTML, because the sidebar renders
+ * them through the template — which escapes both fields for us, and lets a test read the list
+ * back as data instead of matching source text again.
  */
-const EXPLORATION_MOVE_LIST = EXPLORATION_GM_MOVES
-	.map(m => `<li><strong>${escHtml(m.name)}.</strong> ${escHtml(m.gloss)}</li>`)
-	.join("\n\t\t\t\t\t");
+const EXPLORATION_SIDEBAR_MOVES = EXPLORATION_GM_MOVES.map(m => ({ name: m.name, gloss: m.gloss }));
 // This dialog's key in the client-scoped reload-resume record (see walkthrough-resume.js).
 const RESUME_KEY = "expedition";
 
@@ -88,8 +91,22 @@ const RESUME_KEY = "expedition";
 // The chapter's fifth part, "What to prep", is NOT a step: it is between-sessions
 // homework, so a step of it sat at the END of the walkthrough, past Going home,
 // where a GM prepping for next week had already clicked Done. It rides on the
-// intro step instead, folded shut behind a question (`aside` on the step schema),
-// which is where a GM opening this guide to prep actually is.
+// intro step instead, as a headed aside below the prose (`aside` on the step
+// schema), which is where a GM opening this guide to prep actually is.
+//
+// The chapter's weather section is NOT a step either. It taught nothing this
+// walkthrough has to walk you through, and every tool it pointed at is a click
+// away without it: the seasonal table is the Weather picker's whole window (hotbar
+// slot 4, and the glyph beside the steading's clock), and the hoped-for-weather
+// oracle is a Die of Fate roll. A step per section of the chapter was making the
+// rail long enough to read as a chore.
+//
+// The chapter's exploration moves are not a step either, for the opposite reason:
+// they were needed on MORE than one. A step of them sat between Running the journey
+// and Player moves, so the seven moves were on screen only while the GM was reading
+// about them, and gone by the time they were running the leg those moves are FOR.
+// They are a permanent right-hand rail now, on every step, modelled on the character
+// sheet's Basic Moves sidebar down to its collapse handle. See EXPLORATION_SIDEBAR_MOVES.
 //
 // Interactive bits: a Chart a Course checklist (the requirements/challenges the
 // book tells you to "write down with tick boxes"), an inline Requisition roll
@@ -171,8 +188,8 @@ function _pipBands(totalMarks, limits) {
 // reaches for (a key in data/fate-tables.js) and adds the button that rolls it. `roll`
 // names an inline roll ("requisition"). `tiers` shows the matching outcome list.
 // `qa` is a single note, per-PC notes, or a checklist (see _qaContext). `aside` is a
-// question-headed fold below the body — advice the step doesn't walk you through, kept
-// shut until the GM asks for it.
+// headed block below the body — advice the step doesn't walk you through, set off from
+// the prose but always shown.
 const _STEPS = [
 	{
 		key:   "intro",
@@ -180,44 +197,40 @@ const _STEPS = [
 		icon:  "fa-map-location-dot",
 		body:  `<p>The characters are leaving town, to face a threat, seize an opportunity, or chase a plan of their own. This guide walks the journey's arc: <strong>Preparations</strong>, <strong>running the journey</strong>, the <strong>player moves</strong> they'll lean on, and <strong>going home</strong>.</p>
 				<p>Travel is dangerous and hard, and that's the point: it makes home feel precious. <strong>Don't gloss it over.</strong> Give it the screen time it deserves.</p>`,
+		// The advice is Book I p.340-341; the worked example that follows it (p.342-343) is not
+		// reproduced. Every page number in the copy is one of the book's own cross-references from
+		// those two pages, so a GM can jump straight to the chapter a line points at.
 		aside: {
-			label: "Questions about what to prep?",
-			body:  `<p>If you know an expedition is coming, prep pays off:</p>
+			label: "What to prep",
+			body:  `<p>If you know an expedition is in the PCs' future, there's plenty you can prepare in advance (p.340). None of it is required, but prep helps the journey go smoothly in play.</p>
 				<ul>
-					<li><strong>Chart the course</strong> in advance and write the choices down with tick boxes.</li>
-					<li><strong>Draw a map</strong> of the route, marking your points of interest.</li>
-					<li><strong>Identify points of interest &amp; legs</strong>; note how long each leg takes.</li>
-					<li>For each, jot a one-sentence description, <strong>2&ndash;3 impressions</strong> (non-visual senses), questions to ask, and which challenges land there.</li>
-					<li>Prepare up to <strong>7 encounters</strong>, dangers, discoveries, events, tied into a larger story.</li>
-					<li>Consider Die of Fate tables for weather, camp events, or perilous stretches.</li>
-					<li>Build any <strong>sites, dangers, discoveries, NPCs, and followers</strong> they're likely to meet.</li>
+					<li><strong>Chart the course</strong> first. Look at where they're going and their likely routes, make your <em>Chart a Course</em> choices, and write them down with tick boxes so you can tick them off as you present them.</li>
+					<li><strong>Draw a map</strong> of the route you expect them to take. Grab the map of the vicinity around Stonetop or of the World's End region, highlight or add the points of interest this trip touches, and zoom in on anywhere the regional map leaves thin.</li>
+					<li><strong>Identify points of interest:</strong> any landmark not yet seen in play (or changed since their last visit), anywhere you mean to frame a scene and make a GM move, and the journey's destination.</li>
+					<li><strong>Identify the legs</strong> between them, and note how long each leg is likely to take.</li>
+					<li>For each leg and point of interest, jot <strong>a description no longer than a sentence</strong>, <strong>2&ndash;3 impressions</strong> (ideally senses other than sight), <strong>questions to ask</strong> the players, which <em>Chart a Course</em> <strong>challenges</strong> you plan to introduce there, and any other dangers or discoveries you expect.</li>
+					<li>Prepare up to <strong>7 encounters</strong>: dangers, discoveries, or events to drop in on a player move or just to break things up. Keep each to 1&ndash;3 sentences, tie it into a larger story, and give any creature a disposition or activity.</li>
+					<li>Consider a <strong>Die of Fate table</strong> for the weather (p.324), for events while they <em>Make Camp</em> (p.334), or for encounters while travelling through a perilous area (p.323).</li>
+					<li>Create each <strong>site</strong> (p.355), <strong>danger</strong> (p.379), <strong>discovery</strong> (p.421), and <strong>NPC</strong> (p.453) they're likely to encounter, in as much or as little detail as you find useful.</li>
+					<li>Finally, write up any <strong>followers</strong> (p.474) or other NPCs you expect to join the party.</li>
 				</ul>
-				<p>Lean on <strong>Book II</strong> for the regions they'll cross: copy details or just bookmark the page.</p>`,
+				<p>For regions and locations described in <strong>Book II</strong>, copy the relevant details or just note the page and bookmark it. Add questions and details of your own devising.</p>`,
 		},
-	},
-	{
-		key:   "journey",
-		title: "The route",
-		icon:  "fa-signs-post",
-		body:  `<p>Before the players trigger <strong>Chart a Course</strong>, work out the answer. Say where they're setting out from and where they're bound: the maps are the region as the books draw it, and the times are the book's own travel table.</p>
-				<p>Composing legs is the book's arithmetic too, not a shortcut. Stonetop to <strong>Lygos</strong> is ten days to Marshedge and thirty more beyond it, which is why Book II calls the round trip &ldquo;an entire season of travel.&rdquo; What you pick here fills in the requirements on the next step.</p>`,
-		// A per-step flag, like `fate` and `weather` above, so getData switches on the schema
-		// rather than on a key spelled out in two places.
-		journey: true,
 	},
 	{
 		key:   "chart",
 		title: "Chart a Course",
 		icon:  "fa-route",
 		body:  `<p>When the players start talking about leaving, point them at <strong>Chart a Course</strong>. Pin down their <strong>destination</strong> and roughly how they mean to get there (&ldquo;we follow the tracks&rdquo; is enough).</p>
-				<p>Then tell them as many of the following as make sense, based on the season, terrain, how well they know the area, and the threats that lurk there. Link them with <strong>&ldquo;and&rdquo;</strong>, or offer a merciful <strong>&ldquo;or.&rdquo;</strong> Tick the ones you present: this becomes your narrative to-do list once they set out.</p>`,
+				<p>Then tell them as many of the following as make sense, based on the season, terrain, how well they know the area, and the threats that lurk there. Link them with <strong>&ldquo;and&rdquo;</strong>, or offer a merciful <strong>&ldquo;or.&rdquo;</strong> Tick the ones you present: this becomes your narrative to-do list once they set out.</p>
+				<p>Two of those requirements want travel times. Pick the trip on <strong>The route</strong>, the next step, and they fill themselves in.</p>`,
 		qa:    {
 			kind:  "checklist",
 			key:   "chart",
 			// This checklist's requirements carry literal blanks ("at least ___ days"). A flag on
-			// the schema, like `journey` above, rather than `_qaContext` recognising the step by
-			// name — rename or split the step and a name written in two places stops matching in
-			// silence, with the range check still passing.
+			// the schema, like `journey` on the step below, rather than `_qaContext` recognising
+			// the step by name: rename or split the step and a name written in two places stops
+			// matching in silence, with the range check still passing.
 			routeBlanks: true,
 			intro: { field: "route", prompt: "Destination &amp; route", placeholder: "Where are they headed, and how do they intend to get there?" },
 			groups: CHART_GROUPS,
@@ -225,11 +238,28 @@ const _STEPS = [
 		},
 	},
 	{
+		key:   "journey",
+		title: "The route",
+		icon:  "fa-signs-post",
+		body:  `<p>With the course charted, pin the journey down. Say where they're setting out from and where they're bound: the maps are the region as the books draw it, and the times are the book's own travel table.</p>
+				<p>Composing legs is the book's arithmetic too, not a shortcut. Stonetop to <strong>Lygos</strong> is ten days to Marshedge and thirty more beyond it, which is why Book II calls the round trip &ldquo;an entire season of travel.&rdquo; What you pick here fills in the travel times back on <strong>Chart a Course</strong>.</p>`,
+		// A per-step flag, like `fate` above, so getData switches on the schema rather than on
+		// a key spelled out in two places.
+		journey: true,
+	},
+	{
 		key:   "outfit",
 		title: "Outfit",
 		icon:  "fa-sack",
 		body:  `<p>Each PC marks gear on their Inventory insert: up to <strong>3 for a light load</strong> (quick, quiet), <strong>4&ndash;6 normal</strong>, or <strong>7&ndash;9 heavy</strong> (noisy, slow, quick to tire). They also mark <strong>4 + Prosperity</strong> small items (these don't count toward load).</p>
 				<p>They can leave marks <strong>&ldquo;undefined&rdquo;</strong> and define them later with <em>Have What You Need</em>. Remind them of anything they need to bring (warm clothes, sleds, a guide). <strong>Followers Outfit too.</strong> Ask where their gear came from. Bring it home.</p>`,
+		// Kept alongside the live party-load readout this step also builds, not replaced by it.
+		// The readout counts marks off the sheets; this is the GM's own sentence about them —
+		// where the gear came from, what was flagged as required, who ended up hauling the rope.
+		// It is also the ONLY source of the Chronicle's "Outfit & supplies" section (see
+		// buildExpeditionPage in utils/chronicle-core.js), so dropping the field would leave that
+		// heading permanently blank on new trips and the notes already typed on old ones stranded:
+		// still printed on the page, with nowhere left to edit them.
 		qa:    {
 			kind:        "single",
 			key:         "outfit",
@@ -283,6 +313,7 @@ const _STEPS = [
 					<li><strong>Resolve it</strong>: trigger player moves; on a 6- or an ignored threat, make a hard move.</li>
 					<li><strong>Repeat</strong>, then transition to the next leg or point of interest.</li>
 				</ol>
+				<p>The <strong>exploration moves</strong> step two reaches for are listed down the side of this window, on every step. And keep using your standard GM moves too: ask provocative questions, use up their resources, separate them, show downsides.</p>
 				<p>On a <strong>perilous</strong> leg, or whenever you&rsquo;re unsure how hard to come down, you can let the Die of Fate set the danger:</p>
 				${fateTableList(FATE_TABLES.perilous)}`,
 		fate:  "perilous",
@@ -292,25 +323,6 @@ const _STEPS = [
 			prompt:      "Points of interest &amp; legs of travel",
 			placeholder: "Your route: landmarks, planned scenes, rough travel times…",
 		},
-	},
-	{
-		key:   "explore",
-		title: "Exploration moves",
-		icon:  "fa-compass",
-		body:  `<p>Add these to your arsenal once the PCs leave town:</p>
-				<ul>
-					${EXPLORATION_MOVE_LIST}
-				</ul>
-				<p>And keep using your standard GM moves too: ask provocative questions, use up their resources, separate them, show downsides.</p>`,
-	},
-	{
-		key:   "weather",
-		title: "Weather & the Die of Fate",
-		icon:  "fa-cloud-sun-rain",
-		body:  `<p>Weather colors the whole trip and can be a challenge by itself. You decide when it rains and shines: weave it into your descriptions and your moves (bar the way with a blizzard; separate them in the fog).</p>
-				<p>Or let fate decide. Either ask what weather they're <strong>hoping for</strong> and roll the <strong>Die of Fate</strong> (${fateInlinePhrase(FATE_TABLES.weather)}), or roll the <strong>seasonal weather table</strong> (Book I p.325), informed by the latest <em>Seasons Change</em>.</p>`,
-		fate:    "weather",
-		weather: true,
 	},
 	{
 		key:   "playermoves",
@@ -325,8 +337,30 @@ const _STEPS = [
 					<li><strong>Make Camp</strong>: rest in an unsafe area: answer your questions, consume supplies, then pick HP or clear a debility.</li>
 					<li><strong>Forage</strong>: spend hours seeking food (+WIS; disadvantage in winter).</li>
 				</ul>
-				<p>When they <strong>Make Camp</strong> and you're unsure if the night stays quiet, roll the Die of Fate:</p>
-				${fateTableList(FATE_TABLES.camp)}`,
+				<p><strong>Make Camp</strong> says "answer the GM's questions about your campsite" and
+				   leaves the questions to you. They are (p.334):</p>
+				<ul>
+					<li>If the route is perilous, if there's something to watch out for, or if they
+					    risk drawing attention, ask how they address that.</li>
+					<li>If it's cold, ask how they stay warm.</li>
+					<li>If they start a fire, ask what they use for fuel, or how they start it.</li>
+					<li>If it's wet, ask what they do (if anything) to stay dry.</li>
+					<li>Ask what precautions they take to keep animals out of their food.</li>
+					<li>Ask if they set a watch, and the order.</li>
+				</ul>
+				<p>Two things that go with it: you don't need the move every night while you're
+				   glossing days of road travel (just use up their supplies and move on), and once
+				   they've settled in, before you decide what the night holds, ask if anyone wants
+				   to <strong>Keep Company</strong>.</p>
+				<p>When they <strong>Make Camp</strong> and you're unsure if the night stays quiet, roll the Die of Fate.
+				   Consider advantage or disadvantage on it, depending on how well prepared they are:</p>
+				${fateTableList(FATE_TABLES.camp)}
+				<p><strong>Deprivation</strong> (p.335). If they go without food, drink, or rest, the
+				   first cost is just that they get no choice when they Make Camp. The longer it runs,
+				   the worse it gets: ask them to <em>Defy Danger</em> against their own hunger, thirst
+				   or exhaustion; then a debility; then more debilities; then increasingly aggressive
+				   moves, using the GM moves for afflictions. Between sessions, write their
+				   deprivation up as a threat.</p>`,
 		fate:  "camp",
 	},
 	{
@@ -336,7 +370,7 @@ const _STEPS = [
 		// The last step, so this is where Done and "Save to the Chronicle" sit. The chapter's
 		// own last part ("What to prep") folds into the intro instead — see the header comment.
 		isFinal: true,
-		body:  `<p>Usually, <strong>gloss the trip home</strong>: they already faced these challenges. Use it to ruminate: ask what they keep thinking about, suggest they <strong>Keep Company</strong>. But if they're hauling something awkward, lost or hurt, racing a clock, or taking a new route, <strong>Chart a Course back</strong> and play it out.</p>
+		body:  `<p>Usually, <strong>gloss over the trip home</strong>: they already faced these challenges. Use it to ruminate: ask what they keep thinking about, suggest they <strong>Keep Company</strong>. But if they're hauling something awkward, lost or hurt, racing a clock, or taking a new route, <strong>Chart a Course back</strong> and play it out.</p>
 				<p>Then, before they walk back in, think through:</p>`,
 		qa:    {
 			kind:   "checklist",
@@ -366,13 +400,32 @@ function pinAnchors(left, top) {
 }
 
 export class ExpeditionDialog extends StepperDialog {
+	// The rail's die: what it last drew (so the next draw avoids repeating it) and the walk
+	// currently running down the rail, so a second click can abandon the first. The same drawer
+	// the GM Toolkit's three lists hold one of (gm-move-drawer.js) — this rail is one section
+	// where the toolkit has three, which is the only difference between them and is why the
+	// don't-repeat memory is keyed either way. One list, so the rows are gathered from the rail
+	// itself rather than from an inner group.
+	//
+	// Deliberately NOT persisted: it is one click's worth of memory, and a "don't repeat" that
+	// survived a reload would be a stored preference nobody asked for. Reopening starts empty.
+	// The names are checked against Application and StepperDialog's own members, because a
+	// property collision with a base class is silent.
+	//
+	// BUILT ON FIRST USE rather than as a class field. A field initializer runs only in a
+	// constructor, and this dialog is routinely stood up without one — every expedition suite
+	// builds it with `Object.create(ExpeditionDialog.prototype)` to skip Application's — so a
+	// field here would be undefined exactly where the behaviour is exercised.
+	get _moveDrawer() {
+		return (this._moveDrawerCache ??= new GmMoveDrawer({
+			scope: ".stonetop-guide-moves-sidebar",
+			row:   ".stonetop-guide-move",
+		}));
+	}
+
 	constructor(options = {}) {
 		super(options);
 		this._rolls = {}; // keyed by step key, so each inline roll persists across nav
-		// Whether the current step's `aside` fold is open. Held on the dialog, not just as a
-		// class on the element, because the steps re-render in place (naming the trip, picking
-		// who's coming) and a fold the GM opened must not snap shut under them.
-		this._asideOpen = false;
 	}
 
 	get _steps() { return _STEPS; }
@@ -388,39 +441,65 @@ export class ExpeditionDialog extends StepperDialog {
 
 	// Same contract as the session-zero walkthroughs, and the same implementation — see the
 	// reload-resume block in StepperDialog. The trip itself already persists (world-scoped
-	// `expeditionAnswers`); only the reader's place in the eleven steps is per-client, so it
+	// `expeditionAnswers`); only the reader's place in the ten steps is per-client, so it
 	// rides in the client-scoped resume record and this is the whole opt-in.
 	get _resumeKey() { return RESUME_KEY; }
+
+	// The exploration rail's collapse rides along in the same record: `movesRailCollapsed`, the
+	// edge handle, which takes the whole column down to a 14px strip. A per-reader preference
+	// about the window rather than anything about the trip, which is what the client-scoped
+	// resume blob already holds; the alternative was a settings key of its own for one boolean.
+	//
+	// ONE key, where there were two. The heading used to carry the character sheet's group fold
+	// as well (`movesListCollapsed`), and a record written while that existed still has the
+	// field — it is read by nobody now and drops out of the record the first time this writes.
+	//
+	// `saveWalkthroughPosition` compares the WHOLE position object it is handed, extras
+	// included, so adding a field here is all it takes for a change in it to be written; a
+	// guard that compared only `step` would have dropped every one of these.
+	//
+	// Read back as `!!`, so a record written before it existed — and one from a reader who
+	// never touched the handle — opens the rail, which is the state the moves are worth having.
+	_resumeExtras() {
+		return { movesRailCollapsed: this._movesRailCollapsed };
+	}
+
+	_applyResumeExtras(saved) {
+		this._movesRailCollapsed = !!saved?.movesRailCollapsed;
+	}
 
 	static get defaultOptions() {
 		return foundry.utils.mergeObject(super.defaultOptions, {
 			id:        "stonetop-expedition",
 			title:     "Run an Expedition",
 			template:  "systems/stonetop-pwd/templates/dialogs/expedition.hbs",
-			// Wider than the other steppers to seat the jump-to-step TOC rail, and wide
-			// enough for a load row (avatar · name · nine ◇ · band pill · count) to sit on
-			// one line.
-			width:     700,
+			// Wider than the other steppers to seat TWO rails, the jump-to-step TOC on the
+			// left and the exploration moves on the right, and wide enough for a load row
+			// (avatar · name · nine ◇ · band pill · count) to sit on one line between them.
+			//
+			// 1000 = the 800 the step column was sized to, plus the 200 the moves rail takes.
+			// The reading column is what 800 was chosen for, so the rail was added to the
+			// window rather than taken out of the prose. Collapsing the rail (its handle, or
+			// the record it remembers) hands those 200 back to the step.
+			width:     1000,
 			// Fixed, like the other left-rail guides (Welcome 660×580, Make a Monster
-			// 760×620) — NOT "auto". These eleven steps run from two paragraphs (intro) to a
+			// 760×620), NOT "auto". These ten steps run from two paragraphs (intro) to a
 			// twelve-box checklist (Chart a Course) to a per-PC load table (Outfit) to a
 			// regional map (The route), and an auto-height window re-measures its content on
 			// EVERY render: measured against a 1000px viewport it opened anywhere from 597px to
-			// 951px, and from 734px to 951px at a larger UI font — up to 95% of the screen, a
+			// 951px, and from 734px to 951px at a larger UI font, up to 95% of the screen, a
 			// different height on each Next / Back / rail click. (Core clamps an auto height
 			// only to the viewport, and the shared .stonetop-spring-dialog cap is itself
-			// viewport-sized, so neither bounded it.) The step column scrolls instead — see
+			// viewport-sized, so neither bounded it.) The step column scrolls instead: see
 			// .stonetop-guide-main. A fixed height also means a manual resize sticks; core
 			// discards one on an auto-height window.
 			//
-			// 620 is the exact height at which ELEVEN rail entries fit at the default UI font,
-			// which is the count again now that "What to prep" has folded into the intro. This
-			// keeps the twelve-entry height (620 plus one entry's worth: 6px padding twice,
-			// ~18px of line, a 1px border and the 2px gap) rather than shrinking the window
-			// under anyone who has it open — the rail scrolls and is in `scrollY` below, so
-			// overshooting costs nothing, while falling short would quietly hide the last step
-			// behind a scroll.
-			height:    664,
+			// 900 is a chosen default rather than a computed rail fit: it clears the ten rail
+			// entries with room to spare and gives the long steps (Chart a Course's checklist,
+			// the route map) most of a screen before the column starts scrolling. Both the
+			// rail and the step column are in `scrollY` below, so a shorter viewport clamps
+			// this without hiding anything.
+			height:    900,
 			resizable: true,
 			// Hold the reader's place through the re-renders a step does in place — naming
 			// the trip, toggling who's on it, re-rolling Requisition — now that the column
@@ -441,16 +520,28 @@ export class ExpeditionDialog extends StepperDialog {
 		html.find(".stonetop-exp-fate-btn").on("click", () => {
 			game.stonetop?.rollDieOfFate?.(FATE_TABLES[this._stepNav().step.fate]);
 		});
-		html.find(".stonetop-exp-weather-btn").on("click", () => game.stonetop?.openWeather?.());
-		// The step's `aside` fold. Flipped by class rather than by re-rendering: a render on the
-		// route step rebuilds the map panel (it browses the art folder and measures an image),
-		// which is a lot of work for opening a paragraph of advice.
-		html.find(".stonetop-guide-aside-toggle").on("click", ev => {
-			this._asideOpen = !this._asideOpen;
-			ev.currentTarget.classList.toggle("is-open", this._asideOpen);
-			ev.currentTarget.setAttribute("aria-expanded", String(this._asideOpen));
-			html[0].querySelector(".stonetop-guide-aside-body")?.classList.toggle("is-open", this._asideOpen);
+		// Collapse / expand the exploration moves rail. By class rather than by re-rendering,
+		// for the reason the character sheet's own handle gives: the step reclaims the freed
+		// width without a flicker, and a render here would rebuild the route step's map panel
+		// (it browses the art folder and measures an image) to move one column. `_saveResume`
+		// is called directly because nothing re-renders, and the render is what normally
+		// writes the record.
+		wireSidebarToggle(html, {
+			expandLabel:   "Expand exploration moves",
+			collapseLabel: "Collapse exploration moves",
+			persist:       collapsed => {
+				this._movesRailCollapsed = collapsed;
+				this._saveResume();
+			},
 		});
+		// There is NO second collapse on the heading, and that is deliberate — see the note in
+		// expedition.hbs. The rail holds one group and nothing else, so folding it away leaves a
+		// heading standing over an empty column, which is the handle above's job done worse.
+		//
+		// The rail's die. Scoped to the rail, because `.stonetop-section-randomize` is the shared
+		// heading control and nothing should stop a later step growing one of its own.
+		html.find(".stonetop-guide-moves-sidebar .stonetop-section-randomize")
+			.on("click", ev => { ev.preventDefault(); this._drawExplorationMove(ev.currentTarget); });
 		html.find(".stonetop-spring-done").on("click", () => this.close());
 		// Expedition-log bar: rename the current trip, switch trips, start a fresh one.
 		html.find(".stonetop-exp-title").on("change", ev => this._saveTitle(ev.currentTarget.value));
@@ -515,18 +606,65 @@ export class ExpeditionDialog extends StepperDialog {
 		});
 	}
 
+	/**
+	 * Draw one exploration move at random, land the light on it, and whisper it to the GM.
+	 *
+	 * The rail lists the same seven moves off the same table as the GM Toolkit's Exploration
+	 * group, so it presses the same drawer (gm-move-drawer.js) — the beat order, the
+	 * don't-repeat memory and the one-landing-one-card rule are all its. The paper list is for
+	 * reading down when there is time; this is for the other case, which is what an expedition
+	 * mostly is: the party has just walked into something, the table is looking at the GM, and
+	 * seven moves have gone to soup.
+	 *
+	 * WHISPERED, never public, for the reason written up in random-gm-move.js: naming the move
+	 * announces the trick before it is played. The card carries the move's gloss, one of the
+	 * book's examples and the page.
+	 *
+	 * The speaker is the USER's, not an actor's — a dialog speaks for whoever opened it, where
+	 * the toolkit speaks as the toolkit actor.
+	 */
+	_drawExplorationMove(button) {
+		return this._moveDrawer.draw(button, { speaker: ChatMessage.getSpeaker() });
+	}
+
 	async getData() {
 		const nav  = this._stepNav();
 		const step = nav.step;
 		const roll = step.roll ? this._rolls[step.key] ?? null : null;
 		const { currentId, list } = this._log();
+		// The trip being walked, found once and then read for both the banner and the bar.
+		//
+		// Its name goes through the shared `expeditionLabel` (an unnamed one reads
+		// "Expedition 2"), so the banner line, the switcher's own entry for the same trip and
+		// the label copied onto whatever it takes out of the steading's stores cannot word one
+		// expedition three ways. Null before any trip exists — there is nothing to name yet.
+		const currentAt = list.findIndex(e => e.id === currentId);
+		const current   = currentAt < 0 ? null : list[currentAt];
+		const label     = current && expeditionLabel(current, currentAt);
 		const data = {
 			...nav,
 			isGM:       game.user?.isGM ?? false,
+			// The banner's second line. Past the opening page it carries the trip's name,
+			// where a read-only nameplate under the log bar used to say it: the same wording,
+			// in the heading that was already standing there, and one line less between the
+			// banner and the step's prose. The opening page leaves it off — the bar's own
+			// field is right below, holding that name and taking your edits to it, and the
+			// heading would only be saying back what you are typing.
+			bannerSub:  this._step === 0 || !label ? "Run an expedition" : `Run an expedition: ${label}`,
 			// The expedition-log bar atop the walkthrough: the current trip's name, a
 			// switcher (only with more than one), a delete (once any exist), and New.
+			// Only the opening step carries the bar itself. Naming a trip, switching to
+			// another, deleting one and starting a fresh one are all things you do BEFORE
+			// walking the steps, and repeating a Delete on all eleven pages is eleven
+			// chances to end the trip you are halfway through writing. Every later step
+			// reads the name off the banner above instead, so you can still see at a
+			// glance which trip you are filling in.
 			expedition: {
-				title:       list.find(e => e.id === currentId)?.title ?? "",
+				title:       current?.title ?? "",
+				// The opening step, where the bar is editable. Off the step INDEX rather than
+				// its key: the key would be a name spelled in two files, and this one already
+				// means "the first page" everywhere else in the stepper.
+				editable:    this._step === 0,
 				hasAny:      list.length > 0,
 				hasMultiple: list.length > 1,
 				options:     list.map((e, i) => ({
@@ -544,11 +682,26 @@ export class ExpeditionDialog extends StepperDialog {
 			tiers:     step.showTiers
 				? _REQ_TIERS.map(t => ({ ...t, label: _REQ_RESULT[t.key].label, isActive: roll?.tier === t.key }))
 				: null,
-			showFate:    !!step.fate,
-			showWeather: !!step.weather,
-			// The question-headed fold below the body ("What to prep", on the intro step).
-			aside:     step.aside ? { ...step.aside, open: this._asideOpen } : null,
+			showFate:  !!step.fate,
+			// The headed aside below the body ("What to prep", on the intro step).
+			aside:     step.aside ?? null,
 			qa:        this._qaContext(step.qa),
+			// The exploration moves rail. On EVERY step, not only the ones that reach for a
+			// GM move: it is furniture, and a column that came and went as the reader stepped
+			// would shift the prose sideways under them twice a walkthrough. The list is the
+			// same seven on every step, so it is handed over as the module constant rather
+			// than rebuilt per render.
+			explorationMoves:   EXPLORATION_SIDEBAR_MOVES,
+			movesRailCollapsed: !!this._movesRailCollapsed,
+			// The rail's die, and the section key it draws from. GM-only, and empty rather than
+			// false so the template's `{{#if}}` and the partial's `data-section` are the one
+			// value: the card the draw posts is a WHISPER to the GMs, so a player clicking it
+			// would watch a light run down the list and then get nothing at all.
+			movesRandomize:      game.user?.isGM ? "exploration" : "",
+			// The GM Toolkit's own string, verbatim. Two wordings for one control on two screens
+			// the same GM meets in one session is the thing EXPLORATION_SIDEBAR_MOVES exists to
+			// prevent for the list; the button deserves the same.
+			movesRandomizeTitle: localize("stonetop.gmToolkit.moves.randomize"),
 		};
 		// The Outfit step gains a live party-load readout — GM-only, since it reads
 		// every PC's inventory. Built only on this step so the others stay cheap.
@@ -1109,6 +1262,13 @@ export class ExpeditionDialog extends StepperDialog {
 		// (see TravelMapWindow._placeSite), and stashing its answer here would leave the panel
 		// placing sites against whichever map somebody last popped out.
 		if (!forTier) this._panelMap = map;
+		// WHICH MAP THE PANEL IS ON, which is not the same fact as `_journeyTier` and is the one a
+		// pick has to answer to. `_journeyTier` is only ever set by a tab click, so a reader who
+		// arrived at the World's End by picking Marshedge is standing on it with nothing recording
+		// that they are. See `_setJourneyPlace`: what it has to know is where they were LOOKING,
+		// not whether they clicked a tab to get there. Remembered even where this world has no copy
+		// of the art, because the tier tabs and the destination list are on screen either way.
+		if (!forTier) this._shownTier = tier;
 
 		const row = place => ({
 			slug: place.slug, name: place.name,
@@ -1732,12 +1892,30 @@ export class ExpeditionDialog extends StepperDialog {
 		// _persistLog swaps it in, and asking the draft would answer for the wrong trip.
 		const before = journeyRoute(entry.journey);
 		foundry.utils.setProperty(entry, `journey.${field}`, travelPlace(slug)?.slug ?? "");
-		// Let the map follow the new pick rather than stranding the GM on the old tier. BOTH ends
-		// matter, not just the destination: `_activeTier` promises "the closest map that can draw
-		// the whole journey", and a pinned tab outranks it, so a GM who had opened the World's End
-		// and then set out from the Red Grove got a Vicinity place on a continental map — no green
-		// pin anywhere, and `routePath` returning null because that end has no spot to draw.
-		this._journeyTier = null;
+		// STAY ON THE MAP THEY ARE READING, as long as it can still show the trip.
+		//
+		// The map used to follow the pick outright, which reads as the panel taking the map away.
+		// Every place the Vicinity letters is also drawn on the World's End, so a GM working on the
+		// continental map and tapping the Red Grove, the Maw or the Foothills was answered by being
+		// moved in to the Vicinity — a picture they had not asked for, at a scale that hides the
+		// rest of the country they were planning across, and the two pins they were comparing now
+		// on separate maps. "The closest map that can draw the journey" is the right way to CHOOSE
+		// a map for a trip nobody is looking at yet. It is the wrong answer to a reader who is
+		// plainly looking at one already.
+		//
+		// So the pinned tab now follows the picture rather than being thrown away: the map on
+		// screen keeps the trip while it letters both ends, and only when it cannot does this fall
+		// back to `_activeTier`. That fallback is what still moves a GM out to the World's End when
+		// they pick Marshedge off the Vicinity, and what stops the old bug it replaces, a Vicinity
+		// tab pinned over a journey setting out from somewhere the Vicinity has no pin for.
+		//
+		// The SHOWN tier, not the pinned one, because those differ in exactly the case worth
+		// getting right: a reader taken to the World's End by an earlier pick never clicked a tab,
+		// and has as much claim to the map in front of them as one who did.
+		const now = normalizeJourney(entry.journey);
+		this._journeyTier = tierDraws(this._shownTier, [now.origin, now.destination])
+			? this._shownTier
+			: null;
 		this._carryToChart(entry, before, journeyRoute(entry.journey));
 
 		await this._persistLog(log);

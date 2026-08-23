@@ -107,11 +107,15 @@ beforeEach(() => {
 });
 
 describe("the route step sits in the walkthrough", () => {
-	it("is one step, and comes before Chart a Course", () => {
+	// AFTER Chart a Course: the move is what the players trigger, and the route is the GM working
+	// out the answer. The two travel-time requirements on the checklist are filled in from the
+	// pick made here, in both directions (see _carryToChart), so a GM who charts first and picks
+	// second comes back to a checklist that has filled itself in.
+	it("is one step, and comes after Chart a Course", () => {
 		const steps = Object.create(ExpeditionDialog.prototype)._steps;
 		const journeys = steps.filter(s => s.journey);
 		expect(journeys).toHaveLength(1);
-		expect(steps.indexOf(journeys[0])).toBeLessThan(steps.findIndex(s => s.key === "chart"));
+		expect(steps.indexOf(journeys[0])).toBeGreaterThan(steps.findIndex(s => s.key === "chart"));
 	});
 
 	it("carries a title short enough for the rail, and its own icon", () => {
@@ -193,6 +197,62 @@ describe("which map is showing", () => {
 		d._showMapTier("atlantis");
 		expect(d._journeyTier).toBeUndefined();
 		expect(rendered).toBe(0);
+	});
+
+	// ── The map a pick leaves you on ────────────────────────────────────────────
+	//
+	// A pick used to hand the map back to `_activeTier` outright, which reads as the panel taking
+	// the map away: every place the Vicinity letters is also drawn on the World's End, so a GM
+	// planning on the continental map and tapping the Red Grove was moved in to a picture they had
+	// not asked for, at a scale that hides the rest of the country they were planning across.
+	describe("after a pick", () => {
+		/** A panel that has been drawn once, so it knows which map the reader is looking at. */
+		const showing = async (journey, tier = null) => {
+			const d = dialog(journey);
+			if (tier) d._showMapTier(tier);
+			await d._buildJourney();
+			return d;
+		};
+
+		it("stays on the World's End when the World's End can still show the trip", async () => {
+			const d = await showing({ origin: "stonetop", destination: "marshedge" }, "worlds-end");
+			await d._setJourneyPlace("destination", "the-red-grove");
+			expect(d._activeTier("stonetop", "the-red-grove")).toBe("worlds-end");
+		});
+
+		// The case a pinned tab cannot account for: this reader never clicked one. They were taken
+		// to the World's End by the LAST pick, and have as much claim to the map in front of them.
+		it("stays put even when no tab was ever clicked", async () => {
+			const d = await showing({ origin: "stonetop", destination: "marshedge" });
+			expect(d._shownTier).toBe("worlds-end");
+			await d._setJourneyPlace("destination", "the-foothills");
+			expect(d._activeTier("stonetop", "the-foothills")).toBe("worlds-end");
+		});
+
+		// The other half of the same rule, and the reason it is a rule rather than "never move":
+		// the Vicinity has no Marshedge, so staying would leave the reader on a map with no line
+		// on it and no pin for where they are bound.
+		it("moves out when the map on screen cannot show the new trip", async () => {
+			const d = await showing({ origin: "stonetop", destination: "the-red-grove" }, "vicinity");
+			await d._setJourneyPlace("destination", "marshedge");
+			expect(d._journeyTier).toBeNull();
+			expect(d._activeTier("stonetop", "marshedge")).toBe("worlds-end");
+		});
+
+		// BOTH ends, not just the far one. A GM on the Vicinity who sets out from Marshedge has an
+		// origin the Vicinity cannot draw: no green "setting out" pin anywhere, and no route line,
+		// because `routePath` refuses a journey with an end this map cannot place.
+		it("moves out when the new ORIGIN is the end this map cannot draw", async () => {
+			const d = await showing({ origin: "stonetop", destination: "the-red-grove" }, "vicinity");
+			await d._setJourneyPlace("origin", "marshedge");
+			expect(d._journeyTier).toBeNull();
+		});
+
+		it("keeps the reader on the Vicinity for a trip drawn on both", async () => {
+			const d = await showing({ origin: "stonetop", destination: "the-maw" }, "vicinity");
+			await d._setJourneyPlace("destination", "the-ruined-tower");
+			expect(d._activeTier("stonetop", "the-ruined-tower")).toBe("vicinity");
+		});
 	});
 });
 
@@ -384,6 +444,77 @@ describe("the line showing the way they go", () => {
 			.not.toBeNull();
 	});
 
+	// ── The corners the road turns ──────────────────────────────────────────────
+	//
+	// The table prints journeys, not roads, so "Stonetop to the Foothills, 2 days via the Roads" is
+	// one row, and a line drawn for it pin to pin cuts straight across the Vicinity's Bottomlands.
+	// The road leaves Stonetop heading south-west, meets the Highway at the Crossroads and turns
+	// north there. ROAD_BENDS says so, per map, and `routePath` splices it in as it places the pins.
+	describe("passing over the Crossroads on the roads that turn there", () => {
+		/** One place's spot on a map, as the path prints it. */
+		const at = (slug, tier = "vicinity") => {
+			const spot = travelPlace(slug).spots[tier];
+			return [Number((spot.fx * 100).toFixed(2)), Number((spot.fy * 100).toFixed(2))];
+		};
+
+		it("doglegs through the Crossroads on the way to the Foothills", async () => {
+			const data = await dialog({ destination: "the-foothills" })._buildJourney("vicinity");
+			expect(points(data.map.path)).toEqual([at("stonetop"), at("the-crossroads"), at("the-foothills")]);
+		});
+
+		it("does the same for Barrier Pass, out to the arrow that points at it", async () => {
+			const data = await dialog({ destination: "barrier-pass" })._buildJourney("vicinity");
+			const arrow = data.map.exits.find(e => e.node === "barrier-pass");
+			expect(points(data.map.path)).toEqual([
+				at("stonetop"), at("the-crossroads"),
+				[Number(arrow.left.toFixed(2)), Number(arrow.top.toFixed(2))],
+			]);
+		});
+
+		// THE WHOLE POINT: a bend is a place the line passes over, never a stop the journey makes.
+		// It never reaches `route.legs`, so the time stays the book's printed one, Chart a Course's
+		// "you must first travel to ___" stays empty on what is still a single-leg journey, and the
+		// Chronicle still records the one leg.
+		it("changes nothing the readout says about the trip", async () => {
+			const data = await dialog({ destination: "the-foothills" })._buildJourney("vicinity");
+			expect(data.route.legs).toHaveLength(1);
+			expect(data.route.hasStops).toBe(false);
+			expect(data.route.stops).toEqual([]);
+			expect(data.route.atLeast).toBe("at least 2 days");
+		});
+
+		// One row per road, not one per direction: a road runs both ways, and coming back down from
+		// the Foothills the same corner is turned in the other order.
+		it("turns the same corner walking the other way", async () => {
+			const data = await dialog({ origin: "the-foothills", destination: "stonetop" })
+				._buildJourney("vicinity");
+			expect(points(data.map.path)).toEqual([at("the-foothills"), at("the-crossroads"), at("stonetop")]);
+		});
+
+		it("leaves a leg with no corner to turn ruled from pin to pin", async () => {
+			const data = await dialog({ destination: "the-maw" })._buildJourney("vicinity");
+			expect(points(data.map.path)).toEqual([at("stonetop"), at("the-maw")]);
+		});
+
+		// A bend is a fact about ONE picture. The Vicinity draws the Crossroads well south-west of
+		// Stonetop and Barrier Pass off its corner, which is what makes the dogleg worth drawing at
+		// that scale; the World's End is a different drawing, and has no row of its own.
+		it("bends only the map the row was written for", async () => {
+			const data = await dialog({ destination: "barrier-pass" })._buildJourney("worlds-end");
+			expect(points(data.map.path))
+				.toEqual([at("stonetop", "worlds-end"), at("barrier-pass", "worlds-end")]);
+		});
+
+		// The marks are the GM's own account of which way the party goes. Bending them toward a
+		// junction they drew around would be the system overruling the person holding the pen.
+		it("never bends a way the GM drew by hand", async () => {
+			const data = await dialog({
+				origin: "stonetop", destination: "the-foothills",
+				custom: { on: true, tier: "vicinity", points: [{ slug: "the-foothills" }] },
+			})._buildJourney("vicinity");
+			expect(points(data.map.path)).toEqual([at("stonetop"), at("the-foothills")]);
+		});
+	});
 
 	// A ruled line pin to pin says the way runs exactly there, which is the one thing a schematic
 	// over a hand-drawn map cannot know. Each leg bows a little instead.

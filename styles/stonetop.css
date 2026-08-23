@@ -24867,59 +24867,37 @@ th:has(> .stonetop-roll-table-btn) {
 	text-overflow: ellipsis;
 }
 
-/* A question-headed fold under a step's body — advice the step doesn't walk you
-   through ("What to prep", on the Expedition walkthrough's intro). Reads as a
-   question the GM can decline, not as another paragraph: quiet, left-aligned, and
-   shut until clicked. The body also carries .stonetop-spring-body, so its prose
-   and spiral bullets match the step it hangs off. */
+/* A headed aside under a step's body — advice the step doesn't walk you through
+   ("What to prep", on the Expedition walkthrough's intro). Always shown; the head
+   marks where the step's own walk-through ends and the standing advice begins. The
+   body also carries .stonetop-spring-body, so its prose and spiral bullets match
+   the step it hangs off. */
 .stonetop-guide-aside {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
 }
 
-.stonetop-guide-aside-toggle {
-	align-self: flex-start;
-	width: auto;
+.stonetop-guide-aside-head {
 	margin: 0;
-	display: inline-flex;
-	align-items: center;
-	gap: 0.4rem;
-	padding: 4px 6px;
-	/* The question is addressed to the reader of the prose above it, so it reads in the
-	   dialog's own face rather than the UA button default — a bare <button> does not
-	   inherit font-family. One notch quieter than the body, being an aside. */
+	/* A section head inside the prose, not a step title: the dialog's own face, one
+	   notch quieter than the body, being an aside. */
 	font-family: inherit;
 	font-size: var(--st-fs-sm);
-	background: transparent;
+	font-weight: 600;
+	line-height: 1.3;
 	border: 0;
-	border-radius: var(--st-radius-sm);
-	cursor: pointer;
 	color: var(--st-text-secondary, #4a4034);
-	transition: background 0.15s;
 }
 
-.stonetop-guide-aside-toggle:hover {
-	background: hsl(40 25% 85%);
-	color: var(--st-green-text);
-}
-
-/* Closed: the chevron rests pointing up (the template ships fa-chevron-up).
-   Open: a half-turn to down. */
-.stonetop-guide-aside-toggle i { transition: transform 0.15s ease; }
-.stonetop-guide-aside-toggle.is-open i { transform: rotate(180deg); }
-
-/* Set off from the step body above it, so the fold reads as an aside rather than
+/* Set off from the step body above it, so the advice reads as an aside rather than
    as more of the step. */
 .stonetop-guide-aside-body {
-	display: none;
 	padding: 10px 14px;
 	background: rgba(0, 0, 0, 0.03);
 	border: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.1));
 	border-radius: var(--st-radius-sm);
 }
-
-.stonetop-guide-aside-body.is-open { display: block; }
 
 .stonetop-guide-nav {
 	display: flex;
@@ -26398,6 +26376,224 @@ th:has(> .stonetop-roll-table-btn) {
 	color: var(--st-green-text);
 }
 
+/* ── The walkthrough's exploration-moves rail ─────────────────────────────────
+   The right-hand bookend to the TOC rail above: a reference list of the seven GM
+   exploration moves, on every step of Run an Expedition.
+
+   It wears `.stonetop-moves-sidebar` (the character sheet's Basic Moves chrome: the
+   border, the gutter, the absolutely-positioned collapse handle, the 14px collapsed
+   strip) and this modifier adjusts only what a dialog column needs differently. Both
+   selectors are one class, so BEM order is load-bearing: these must stay LATER in the
+   file than `.stonetop-moves-sidebar` (~line 2719) or the width below loses the tie.
+
+   What differs from the character sheet: that rail is `width: max-content` around
+   short move names ("Aid", "Defy Danger"), which here would size the column to
+   "Introduce a danger, person, or faction" and eat the step. This one is a fixed
+   200px whose names wrap, and the same 200 the dialog's `width` was raised by. */
+.stonetop-guide-moves-sidebar {
+	width: 200px;
+	min-width: 200px;
+	/* Bookend the TOC rail: the same hairline and the same tint, so the step column
+	   reads as the page and the two rails as its margins. Both are restated here rather
+	   than inherited — the shared sidebar's border is `--color-border-light-2`, a core
+	   variable that resolves on a sheet and can be absent on a dialog, which left the
+	   seam invisible; and it carries no background at all, which on a sheet is right
+	   (the tab body beside it is already tinted) and here left the rail floating in the
+	   step column. These two literals are the ones the TOC rail above already uses. */
+	border-left: 1px solid rgba(0, 0, 0, 0.1);
+	background: rgba(0, 0, 0, 0.03);
+}
+
+/* `.stonetop-sidebar-body` sets `min-width: max-content` so the character sheet's rail
+   can never clip a name. That is the opposite of what a fixed column wants: it would
+   push this one back out to the longest gloss. */
+.stonetop-guide-moves-sidebar .stonetop-sidebar-body {
+	min-width: 0;
+}
+
+/* Collapsed, the fixed width has to yield to the 14px strip, which is also one class
+   and would otherwise lose to the 200px above on source order alone. */
+.stonetop-guide-moves-sidebar.is-collapsed {
+	width: 14px;
+	min-width: 14px;
+}
+
+/* The sheets size their own <h3>s, and nothing does that inside a dialog, so this
+   heading would come out at the UA default and dwarf a 200px column. Sized to the
+   step prose beside it instead. */
+.stonetop-guide-moves-sidebar .stonetop-move-group-title {
+	margin: 0;
+	font-size: var(--st-fs-md);
+	line-height: 1.2;
+}
+
+/* The heading's caption ("once they leave town") is an inline span by default, which
+   in a 200px column tucks itself against the last word of the title. On its own line
+   it reads as the caption it is. */
+.stonetop-guide-moves-sidebar .stonetop-section-note {
+	display: block;
+	margin-top: 2px;
+}
+
+/* The heading row: the title (with its caption under it) and the randomizer die beside it.
+
+   NOT `.stonetop-moves-collapsible` / `.stonetop-moves-summary`, the pair the character sheet's
+   sidebar groups use and this rail used to borrow. Those classes carry a fold with them — a
+   rotating caret on the heading and a rule that clamps the list to zero height — and this rail
+   has no second collapse. It holds ONE group, so folding it leaves a heading standing over an
+   empty column, which is the edge handle's job done worse.
+
+   MEASURED, because the caret was also paying for itself in the one place this column has no
+   slack: it took 14px of the 179 the heading gets, which is exactly the difference between
+   "Exploration moves" on one line and breaking after the first word once the die is beside it.
+   With the caret gone the title fits at root 16; at root 20 it wants 179.8px and would wrap
+   with or without anything next to it, and the caption takes the second line instead.
+
+   `flex-start`, not the sheet's `center`: this heading is two lines, so centring the die would
+   drop it into the gap between the title and the caption. The title takes the remaining width
+   so the die sits at the end of the line rather than immediately after the last word. */
+.stonetop-guide-moves-sidebar .stonetop-guide-moves-head {
+	display: flex;
+	align-items: flex-start;
+}
+
+.stonetop-guide-moves-sidebar .stonetop-guide-moves-head > .stonetop-move-group-title {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* Onto the TITLE's line. Aligning to the top of the heading box is only approximately right —
+   the die is taller than the title's line — and centring is badly wrong once the caption is
+   under it.
+
+   The title's first line box is `1.2 × var(--st-fs-md)` = 1.26em of the row's own size, so its
+   centre is at 0.63em; the die is 1.35rem tall, so its centre is 0.675rem down from its top.
+   The difference is what pulls it up. It comes out around -2px at either root size, and is
+   written as the arithmetic rather than as that number so it tracks both the heading's em and
+   the die's own font scale instead of drifting when either moves. */
+.stonetop-guide-moves-sidebar .stonetop-guide-moves-head > .stonetop-section-randomize {
+	flex: none;
+	margin-top: calc(0.63em - 0.675rem * var(--stonetop-font-scale, 1));
+}
+
+.stonetop-guide-moves-sidebar .stonetop-guide-moves-list {
+	list-style: none;
+	margin: 8px 0 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+/* SPECIFICITY, both rules below: the shared row rule is `.stonetop-moves-sidebar
+   .items-list li` and the hover is `.stonetop-moves-sidebar li:hover`, each (0,2,1).
+   Being later in the file is not enough against those, so both of these carry three
+   classes and the element to win (0,3,1) outright. Drop a class from either selector
+   and the rows silently go back to being one nowrap line with a pointer cursor.
+
+   Reference only: nothing here rolls, so the rows are not buttons, take no hover and
+   keep the default cursor. `white-space: normal` undoes the `nowrap` the shared rule
+   sets for one-line names — these wrap, which is the whole reason for the fixed width
+   above, and `flex-direction: column` stacks the gloss under its move rather than
+   beside it. */
+.stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move {
+	position: relative;
+	/* BLOCK flow, not the flex column this looks like it wants: the spiral below hangs off
+	   an absolutely-positioned ::before, and the whole shared bullet family is block-flow
+	   for the reason written up on the other spiral rules — a flex <li> makes every inline
+	   child its own flex item. Nothing here is inline today (two spans, both blocked
+	   below), but the next person to put an <em> in a gloss should not have to find that
+	   out. The name/gloss spacing is the name's margin, not a flex `gap`. */
+	display: block;
+	margin: 0;
+	/* The house bullet gutter: icon width plus var(--stonetop-spiral-gap). Never a
+	   hardcoded gap — this is the spacing the Assets list sets the reference for. */
+	padding: 0 0 0 calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
+	cursor: default;
+	white-space: normal;
+}
+
+/* The spiral, on each move's title. Through `var(--stonetop-spiral-icon)` rather than a
+   literal url() so a dark-paper scope that re-points it at check-spiral-light.svg reaches
+   this rail too; `opacity: 0.55` is the value the rest of the family carries. */
+.stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	/* Against the NAME's line box, not the li's: the name is set a notch smaller and
+	   bolder than the body, so 0.2em of the li's own size sat the spiral low of the cap
+	   line it should hang beside. */
+	top: 0.3em;
+	width: var(--stonetop-bullet-size, 10px);
+	height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain;
+	opacity: 0.55;
+}
+
+.stonetop-guide-moves-sidebar li.stonetop-guide-move:hover {
+	background: transparent;
+}
+
+/* THE DRAW, and the walk that leads up to it — the die beside the heading picks one of the
+   seven, a light runs down the list and decelerates onto it, and the drawn row stays lit while
+   it fades (module/utils/flash-highlight.js). The GM Toolkit's Moves tab does the same thing to
+   the same seven moves; this is that effect, re-scoped, because the rules there are written
+   against `.stonetop-gm-toolkit-moves .stonetop-gm-move` and reach nothing in a dialog.
+
+   The KEYFRAME is not re-declared. `stonetop-gm-move-flash` is global, it is the one place the
+   5s is written in CSS, and the GM Toolkit's suite pins that number against `FLASH_MS`. A second
+   copy here would be a second duration to keep in step with the timer that takes the class off.
+
+   SPECIFICITY, every rule below: the row's own base is `.stonetop-guide-moves-sidebar
+   .items-list li.stonetop-guide-move` at (0,3,1) and its hover is (0,3,1) too, and `:is()` takes
+   only the highest specificity of its arguments — so a selector one class shorter loses the
+   padding to the base and the wash to the hover, silently. Hence three classes AND the element
+   AND the state class on each. */
+.stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move:is(.stonetop-spin, .stonetop-flash) {
+	/* Pulled 6px wider than the row and given the width straight back as padding, so the wash
+	   reads as a band AROUND the text rather than starting on its first letter. Declared once
+	   for both classes because the two swap on the landing row inside a single task: geometry
+	   that differed between them would jump at exactly the moment being watched.
+	   `padding-inline-start` keeps the spiral gutter and adds the 6px to it — the shared 6px
+	   both sides of the toolkit's rows would have eaten the gutter and put the marker under the
+	   move's name. */
+	margin-inline: -6px;
+	padding-inline-start: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap) + 6px);
+	padding-inline-end: 6px;
+	border-radius: 3px;
+}
+
+/* The spiral is absolutely positioned against the row's padding box, whose left edge just moved
+   6px out with the margin. Without this the marker slides left as the light passes and slides
+   back after it, on every row of the walk. */
+.stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move:is(.stonetop-spin, .stonetop-flash)::before {
+	left: 6px;
+}
+
+/* The PAINT — the passing wash, the landing fade and the motion-off fallback — is not here.
+   It is identical to the GM Toolkit's, so it is stated once for both, grouped with the toolkit's
+   block further down (search `stonetop-gm-move-flash 5s`). Only the geometry above is local,
+   because only the geometry genuinely differs: this row hangs a spiral marker in its own left
+   padding and the toolkit's does not. */
+
+/* Blocked, so the gloss sits under its title rather than running on from it. This is
+   what replaces the flex column the row used to be. */
+.stonetop-guide-move-name {
+	display: block;
+	margin-bottom: 1px;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.stonetop-guide-move-gloss {
+	display: block;
+	font-size: var(--st-fs-xs);
+	line-height: 1.3;
+	color: var(--color-text-dark-secondary, #4b4a44);
+}
+
 .stonetop-spring-body {
 	font-size: var(--st-fs-md);
 	line-height: 1.6;
@@ -26757,6 +26953,10 @@ th:has(> .stonetop-roll-table-btn) {
 	background: var(--st-red-bg, rgba(176, 48, 48, 0.1));
 	color: var(--st-red-text, #b03030);
 }
+
+/* Past the first step there is no log bar and no nameplate under it: the trip's name
+   rides in the banner's second line instead (see `bannerSub` in ExpeditionDialog), so
+   the step's prose starts one line higher than the opening page's does. */
 
 /* Group the final step's "Save to the Chronicle" + Done buttons on the right (mirrors
    .stonetop-intros-done-actions; the buttons themselves use .stonetop-guide-nav button). */
@@ -29422,6 +29622,14 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border-radius: var(--st-radius-lg);
 	background: rgba(0,0,0,0.03);
 	overflow: hidden;
+	/* Never shrink. The step column (.stonetop-guide-main) is a flex column that
+	   scrolls, so its children default to flex-shrink:1; a flex item is normally
+	   protected from that by min-height:auto, but the automatic minimum is waived for
+	   an item whose own overflow is not visible -- which is these two cards, one line
+	   up. So instead of the column growing a scrollbar, each card was squeezed into
+	   whatever was left of the scrollport and clipped its own last rows: Party load
+	   showed five of thirteen members, the fifth cut off mid-row. */
+	flex: 0 0 auto;
 }
 .stonetop-expedition-dialog .stonetop-exp-load-head,
 .stonetop-expedition-dialog .stonetop-exp-assets-head {
@@ -34392,15 +34600,29 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border-radius: 3px;
 }
 
-/* Passing through. Deliberately WEAKER than the landing wash — the walk crosses a dozen-odd
-   entries at 40ms and slows to 240ms, and if every step looked like the answer then the last
-   three steps would each look like the answer too. Half the tone, and no transition of its own:
-   a step is on screen for one interval, and anything easing in or out would still be arriving
-   when it was time to leave. */
+/* THE PAINT OF THE DRAW, for both surfaces that have one: this tab's three move lists and the
+   expedition walkthrough's exploration rail (its geometry is up at `.stonetop-guide-moves-sidebar
+   … :is(.stonetop-spin, .stonetop-flash)`). Grouped rather than written out per host, the way
+   the segmented pickers group their core-button reset — the wash, the fade and the motion-off
+   fallback are the same effect on the same seven-to-thirty rows, and two copies are two things
+   to keep in step with `FLASH_MS` and with each other.
+
+   FULL SELECTORS, not a bare `.stonetop-spin`. Each host's own row base and :hover are (0,3,1)
+   and (0,3,1), so a one-class rule would lose the wash to the hover, silently. Grouping keeps
+   each selector at its own weight. The toolkit's is written LAST in each group so that its
+   block still reads as `<selector> {` for the guards that look it up that way.
+
+   Passing through is deliberately WEAKER than the landing: the walk crosses the entries at 40ms
+   and slows to 240ms, and if every step looked like the answer then the last three steps would
+   each look like the answer too. Half the tone, and no transition of its own — a step is on
+   screen for one interval, and anything easing in or out would still be arriving when it was
+   time to leave. */
+.stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move.stonetop-spin,
 .stonetop-gm-toolkit-moves .stonetop-gm-move.stonetop-spin {
 	background-color: color-mix(in srgb, var(--st-warm-hover-bg) 50%, transparent);
 }
 
+.stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move.stonetop-flash,
 .stonetop-gm-toolkit-moves .stonetop-gm-move.stonetop-flash {
 	animation: stonetop-gm-move-flash 5s ease-out both;
 }
@@ -34409,6 +34631,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    its own — the class comes off on the same 5s timer either way — so nothing is lost but
    the transition. Same treatment the Death's Door moods get further up this file. */
 @media (prefers-reduced-motion: reduce) {
+	.stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move.stonetop-flash,
 	.stonetop-gm-toolkit-moves .stonetop-gm-move.stonetop-flash {
 		animation: none;
 		background-color: var(--st-warm-hover-bg);

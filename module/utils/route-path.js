@@ -19,7 +19,7 @@
 // in the box's real proportions or they come out squashed along one axis.
 
 import {
-	TRAVEL_MAPS, exitsOnMap, spotPercent, travelMap, travelPlace,
+	TRAVEL_MAPS, exitsOnMap, roadBendsBetween, spotPercent, travelMap, travelPlace,
 } from "../data/travel-times.js";
 
 // How far a leg of the route bows off the straight line between its two stops: a share of the
@@ -50,6 +50,24 @@ const quadAt = (a, b, c, t) => (1 - t) * (1 - t) * a + 2 * (1 - t) * t * b + t *
 export function drawnOn(tier, place) {
 	if (!place) return false;
 	return !!travelPlace(place)?.spots?.[tier] || exitsOnMap(tier).some(e => e.node === place);
+}
+
+/**
+ * Can `tier` draw every one of `ends`, and is it a map at all?
+ *
+ * The question a surface asks about the picture it is ALREADY showing, which is a different
+ * question from "which map is best for this journey" below and wants a different answer. A GM
+ * reading the World's End and picking the Red Grove off it is not asking to be taken anywhere:
+ * the map in front of them letters both ends, so it can go on showing the trip, and the innermost
+ * map being a closer view is beside the point. `customTierFor` in utils/custom-route.js has always
+ * treated a showing map that way; this is the same rule, said once, for the panel to use too.
+ *
+ * A null end is nothing to draw rather than something undrawable, which is what makes it answer
+ * for a trip with no destination picked yet.
+ */
+export function tierDraws(tier, ends) {
+	if (!travelMap(tier)) return false;
+	return (ends ?? []).filter(Boolean).every(end => drawnOn(tier, end));
 }
 
 /**
@@ -118,10 +136,10 @@ export function routePath(route, tier, frame, aspect) {
 		const at2 = spot ?? travelPlace(slug)?.spots?.[tier] ?? arrows.get(slug) ?? null;
 		return at2 ? spotPercent(at2, frame) : null;
 	};
-	const stops = [
+	const stops = bendStops([
 		{ slug: route.legs[0].from, spot: route.legs[0].fromSpot ?? null },
 		...route.legs.map(leg => ({ slug: leg.to, spot: leg.toSpot ?? null })),
-	];
+	], tier, route);
 	const placed = stops.map(at);
 	// THE ENDS ARE NOT BRIDGEABLE. Dropping a missing stop from the MIDDLE is the honest
 	// schematic described above; dropping a missing one from either END silently shortens the
@@ -142,6 +160,39 @@ export function routePath(route, tier, frame, aspect) {
 		headD: ROUTE_HEAD_PATH,
 		legs,
 	};
+}
+
+/**
+ * The same run of stops with the road's own corners spliced into it.
+ *
+ * WHY A LINE NEEDS CORNERS THE TABLE DOES NOT HAVE. The travel table prints journeys, so one row
+ * covers a road that turns: "Stonetop to the Foothills, 2 days via the Roads" is a single leg, and
+ * a single leg drawn pin to pin cuts straight across the Vicinity's Bottomlands. The road goes
+ * south-west to the Crossroads first and turns north there, and ROAD_BENDS (data/travel-times.js)
+ * is where that is written down, per map, for the handful of legs it is true of.
+ *
+ * A BEND IS NOT A STOP. It arrives here with no time, no name in the readout and no row in the
+ * Chronicle, because it changes nothing about the journey: it is a point the line passes over on
+ * its way, and splicing it in HERE, where the pins are placed, is what keeps it out of everything
+ * that reads `route.legs` for an answer about how long the walk takes.
+ *
+ * NOT ON A WAY THE GM DREW. Those marks are the GM's own account of which way the party goes, and
+ * bending them toward a junction they deliberately drew around would be this module overruling
+ * the person holding the pen.
+ *
+ * A bend the map cannot place is dropped by the caller's own lookup, exactly as a stop it cannot
+ * place is, so a bend can never be the reason a line goes missing.
+ */
+function bendStops(stops, tier, route) {
+	if (route.custom) return stops;
+	return stops.flatMap((stop, i) => {
+		if (i === 0) return [stop];
+		// Between two stops the map places for itself: a bare mark carries a spot and no slug, and
+		// there is no road row for a point somebody put down by hand.
+		const through = roadBendsBetween(tier, stops[i - 1].slug, stop.slug)
+			.map(slug => ({ slug, spot: null }));
+		return [...through, stop];
+	});
 }
 
 /**

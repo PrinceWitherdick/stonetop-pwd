@@ -3,9 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import {
-	TRAVEL_PLACES, TRAVEL_LEGS, TRAVEL_MAPS, TRAVEL_EXITS, MAP_CAPTIONS, MAP_FRAMES, FULL_FRAME,
-	BEYOND_TIER,
-	travelPlace, homePlace, placesOnMap, placesBeyond, exitsOnMap,
+	TRAVEL_PLACES, TRAVEL_LEGS, TRAVEL_MAPS, TRAVEL_EXITS, ROAD_BENDS,
+	MAP_CAPTIONS, MAP_FRAMES, FULL_FRAME, BEYOND_TIER,
+	travelPlace, homePlace, placesOnMap, placesBeyond, exitsOnMap, roadBendsBetween,
 	spotPercent, percentSpot, frameFor, frameFitsImage,
 } from "../../module/data/travel-times.js";
 
@@ -163,6 +163,56 @@ describe("the travel graph is internally consistent", () => {
 			expect(leg.min).toBeGreaterThan(0);
 			expect(["days", "hours"]).toContain(leg.unit);
 		}
+	});
+});
+
+// The corners a drawn line has to turn, which the table has no room for: it prints journeys, so
+// the road from Stonetop up to the Foothills is one row and a line drawn for it pin to pin cuts
+// the corner the road turns at the Crossroads. These rows are geometry and only geometry, so what
+// they have to be held to is that each one bends a leg that exists, on a map that draws it.
+describe("the corners the roads turn", () => {
+	/** Is `slug` somewhere `map` can draw: its own spot, or the edge arrow that points at it? */
+	const drawn = (map, slug) =>
+		!!travelPlace(slug)?.spots?.[map] || TRAVEL_EXITS.some(e => e.map === map && e.node === slug);
+
+	it("bends a leg the table actually prints", () => {
+		// A row for a journey the graph solves in two legs would never be consulted: the bend is
+		// looked up between one stop and the next, and those are the legs.
+		for (const bend of ROAD_BENDS) {
+			const leg = TRAVEL_LEGS.some(l =>
+				(l.from === bend.from && l.to === bend.to) || (l.from === bend.to && l.to === bend.from));
+			expect(leg, `no leg for ${bend.from}->${bend.to}`).toBe(true);
+		}
+	});
+
+	it("names a map, and places that map can draw", () => {
+		const maps = new Set(TRAVEL_MAPS.map(m => m.slug));
+		for (const bend of ROAD_BENDS) {
+			expect(maps, `unknown map ${bend.map}`).toContain(bend.map);
+			expect(bend.through.length).toBeGreaterThan(0);
+			for (const slug of bend.through) {
+				expect(travelPlace(slug), `unknown place ${slug}`).toBeTruthy();
+				expect(drawn(bend.map, slug), `${slug} is not drawn on ${bend.map}`).toBe(true);
+				// A corner is somewhere the line passes THROUGH, so it is neither of its ends.
+				expect([bend.from, bend.to]).not.toContain(slug);
+			}
+		}
+	});
+
+	it("writes one row per road rather than one per direction", () => {
+		const seen = new Set();
+		for (const bend of ROAD_BENDS) {
+			const key = [bend.map, ...[bend.from, bend.to].sort()].join("|");
+			expect(seen, `two rows for ${key}`).not.toContain(key);
+			seen.add(key);
+		}
+		// And the lookup is what turns that one row around for the walk home.
+		expect(roadBendsBetween("vicinity", "stonetop", "the-foothills")).toEqual(["the-crossroads"]);
+		expect(roadBendsBetween("vicinity", "the-foothills", "stonetop")).toEqual(["the-crossroads"]);
+		// The great majority of legs turn no corner, and the map a row was written for is the only
+		// one it answers for.
+		expect(roadBendsBetween("vicinity", "stonetop", "the-maw")).toEqual([]);
+		expect(roadBendsBetween("worlds-end", "stonetop", "the-foothills")).toEqual([]);
 	});
 });
 

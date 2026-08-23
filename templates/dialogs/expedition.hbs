@@ -15,13 +15,19 @@
       <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
       <div class="stonetop-guide-banner-info">
         <div class="stonetop-guide-banner-title">{{step.title}}</div>
-        <div class="stonetop-guide-banner-sub">Run an expedition</div>
+        {{!-- Past the opening step this reads "Run an expedition: <the trip's name>",
+              which is where the read-only nameplate under the log bar used to say it.
+              Truncated, because the name is whatever the table typed. --}}
+        <div class="stonetop-guide-banner-sub stonetop-guide-truncate">{{bannerSub}}</div>
       </div>
       <div class="stonetop-guide-count">{{stepIndex}} / {{stepCount}}</div>
     </div>
 
     {{!-- Expedition-log bar: name the current trip, switch between logged trips, or
-          start a fresh one. Each trip with content becomes its own Chronicle page. --}}
+          start a fresh one. Each trip with content becomes its own Chronicle page.
+          The opening step only — see the `editable` note in ExpeditionDialog getData.
+          Every later step reads the trip's name off the banner above instead. --}}
+    {{#if expedition.editable}}
     <div class="stonetop-exp-bar">
       <label class="stonetop-exp-bar-field">
         <span class="stonetop-exp-bar-label">Expedition</span>
@@ -44,21 +50,17 @@
         <i class="fas fa-plus"></i> New
       </button>
     </div>
+    {{/if}}
 
     <div class="stonetop-spring-body">{{{step.body}}}</div>
 
-    {{!-- A question-headed fold below the body: advice this step doesn't walk you
-          through, shut until the GM asks for it. Currently the intro step's "What to
-          prep", which used to be a twelfth step past Going home. The toggle keeps its
-          open state on the dialog (ExpeditionDialog._asideOpen), so the in-place
-          re-renders (naming the trip, picking who's coming) don't snap it shut. --}}
+    {{!-- A headed aside below the body: advice this step doesn't walk you through,
+          set off from the prose but always shown. Currently the intro step's "What to
+          prep", which used to be a twelfth step past Going home. --}}
     {{#if aside}}
     <div class="stonetop-guide-aside">
-      <button type="button" class="stonetop-guide-aside-toggle{{#if aside.open}} is-open{{/if}}"
-              aria-expanded="{{#if aside.open}}true{{else}}false{{/if}}">
-        <i class="fas fa-chevron-up"></i> {{aside.label}}
-      </button>
-      <div class="stonetop-guide-aside-body stonetop-spring-body{{#if aside.open}} is-open{{/if}}">{{{aside.body}}}</div>
+      <h3 class="stonetop-guide-aside-head">{{aside.label}}</h3>
+      <div class="stonetop-guide-aside-body stonetop-spring-body">{{{aside.body}}}</div>
     </div>
     {{/if}}
 
@@ -197,14 +199,9 @@
 
     {{#if showFate}}
     <div class="stonetop-spring-roll-wrap">
-      <button type="button" class="stonetop-exp-fate-btn stonetop-spring-roll-btn{{#unless showWeather}} stonetop-spring-roll-btn--primary{{/unless}}">
+      <button type="button" class="stonetop-exp-fate-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary">
         <i class="fas fa-dice-d6"></i> Roll the Die of Fate
       </button>
-      {{#if showWeather}}
-      <button type="button" class="stonetop-exp-weather-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary">
-        <i class="fas fa-cloud-sun-rain"></i> Seasonal weather
-      </button>
-      {{/if}}
     </div>
     {{/if}}
 
@@ -257,6 +254,83 @@
     </div>
     {{/if}}
 
+    </div>
+
+    {{!-- EXPLORATION MOVES — a permanent right-hand rail, on every step, wearing the
+          character sheet's own sidebar chrome (.stonetop-moves-sidebar and its collapse
+          handle) so the two read as the same furniture. The modifier class is what makes
+          it fit here: the character sheet's rail is `width: max-content` around short
+          names like "Aid", and these seven run to "Introduce a danger, person, or
+          faction", so this one is a fixed column whose names wrap.
+
+          Reference only. Nothing here rolls and nothing is stored: a GM move is something
+          you say. That is why the rows are plain <li>, with none of the `data-item-id` /
+          `.rollable` machinery the character sheet's rows carry.
+
+          The list comes from module/gm-toolkit/gm-moves.js, by way of
+          EXPLORATION_SIDEBAR_MOVES, so the walkthrough and the GM Toolkit's Moves tab
+          cannot come to word the same move differently. --}}
+    <div class="stonetop-moves-sidebar stonetop-guide-moves-sidebar{{#if movesRailCollapsed}} is-collapsed{{/if}}">
+      <button type="button" class="stonetop-sidebar-toggle"
+              aria-expanded="{{#if movesRailCollapsed}}false{{else}}true{{/if}}"
+              aria-label="{{#if movesRailCollapsed}}Expand exploration moves{{else}}Collapse exploration moves{{/if}}">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+      <div class="stonetop-sidebar-body">
+        {{!-- ONE collapse, the edge handle above, and no second one on the heading.
+
+              This rail used to carry the character sheet's group fold as well — the whole
+              `.stonetop-moves-collapsible` / `.stonetop-moves-summary` pair, a `role="button"`
+              heading with a rotating caret that clamped the list to zero height. That is the
+              right control on a sheet, where one sidebar holds four groups and folding one of
+              them is how you get to the others. Here there is exactly ONE group and it is the
+              only thing in the column, so folding it away leaves a heading floating over an
+              empty rail — while the handle beside it already collapses the whole column and
+              hands its 200px back to the step, which is what a reader who wants the moves out
+              of the way actually wants. Two controls, one useful outcome.
+
+              Dropping the caret also gives the title back the 14px it took, which is the
+              difference between "Exploration moves" fitting on one line in a 200px column and
+              breaking after the first word.
+
+              So the heading is a plain heading now: no role, no tabindex, no aria-expanded, no
+              handler. Do not reach for the shared collapsible classes to re-style it — they
+              carry the caret and the clamp with them. --}}
+        <div class="stonetop-guide-moves-head">
+          {{!-- `note` rather than a line of our own: it is the same "what this list is"
+                caption the GM Toolkit's move groups carry. It is an inline span by
+                default, which tucks against the title in a column this narrow, so the
+                modifier's CSS drops it onto its own line. --}}
+          {{> "stonetop.section-heading" title="Exploration moves" note="once they leave town"}}
+          {{!-- The die: draw one of the seven at random, run a light down the list to it, and
+                whisper it to the GM — the same control, the same walk and the same card the GM
+                Toolkit's move groups carry (module/gm-toolkit/random-gm-move.js). This rail is
+                the other place a GM reaches for an exploration move, and mid-leg with the table
+                waiting is exactly the moment seven of them read as soup.
+
+                A SIBLING of the heading rather than the section-heading partial's `randomize=`
+                parameter, which would emit it inside the <h3>. Out here it is a flex item, so it
+                sits at the end of the title's line without the heading having to hold it, and
+                the caption underneath keeps the full width of the column.
+
+                GM-only, like the load readout and the asset picker on their own steps: the card
+                is whispered to the GMs, so a player clicking this would get silence. --}}
+          {{#if movesRandomize}}
+          {{> "stonetop.section-randomize" section=movesRandomize title=movesRandomizeTitle}}
+          {{/if}}
+        </div>
+        <ol class="items-list stonetop-guide-moves-list">
+          {{#each explorationMoves}}
+          {{!-- `data-move` is how the randomizer finds the row it just drew, the same way the
+                GM Toolkit's list is matched: by NAME, not by index, because the index would be
+                a position this template is free to reorder while the handler kept counting. --}}
+          <li class="stonetop-guide-move" data-move="{{name}}">
+            <span class="stonetop-guide-move-name">{{name}}</span>
+            <span class="stonetop-guide-move-gloss">{{gloss}}</span>
+          </li>
+          {{/each}}
+        </ol>
+      </div>
     </div>
 
   </div>

@@ -251,9 +251,10 @@ export const BASIC_GM_MOVES = [
 /**
  * Exploration moves, for an expedition or a site (GM playbook p.1; Book I pp. 317, 352).
  *
- * The Expedition walkthrough's "Exploration moves" step RENDERS this list rather than
- * restating it (see ExpeditionDialog's `EXPLORATION_MOVE_LIST`), so the two surfaces cannot
- * teach the same move in different words. Reword one here and both screens change together.
+ * The Expedition walkthrough's right-hand rail READS this list rather than restating it (see
+ * ExpeditionDialog's `EXPLORATION_SIDEBAR_MOVES`), so the two surfaces cannot teach the same
+ * move in different words. Reword one here and both screens change together. It takes the
+ * name and the gloss only; the book's own text below stays here, for the Moves tab.
  */
 export const EXPLORATION_GM_MOVES = [
 	{

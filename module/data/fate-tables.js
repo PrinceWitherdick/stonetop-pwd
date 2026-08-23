@@ -23,8 +23,13 @@ export const DEFAULT_FATE_TABLE = {
 };
 
 /**
- * The expedition walkthrough's tables (Book I p.301–343), keyed by the `fate` value on the
- * step that prints them (see dialogs/ExpeditionDialog.js).
+ * The expedition chapter's tables (Book I p.301–343), keyed by the `fate` value on the step
+ * that prints them (see dialogs/ExpeditionDialog.js).
+ *
+ * `weather` is the exception: its step is gone from the walkthrough (the seasonal picker is a
+ * window of its own, and the step was one of eleven on a rail that had grown into a chore), so
+ * nothing prints it today. It stays because `rollDieOfFate` takes any table here by name and
+ * this is still the book's answer to "did they get the weather they hoped for?"
  */
 export const FATE_TABLES = {
 	// Running the journey — how hard to come down on a perilous leg.
@@ -89,7 +94,9 @@ export function fateTableList(table) {
 	return `<ul class="stonetop-exp-fatetable">\n\t\t\t\t\t${rows}\n\t\t\t\t</ul>`;
 }
 
-/** The table as a parenthetical phrase: "1–2 nope, 3–4 partway, 5–6 just what they wanted". */
+/** The table as a parenthetical phrase: "1–2 nope, 3–4 partway, 5–6 just what they wanted".
+ *  The short form, for a table named in running prose rather than listed under it. No step
+ *  prints one this way since the weather step went; kept as the pair to fateTableList. */
 export function fateInlinePhrase(table) {
 	return table.rows.map(r => `${fateRangeLabel(r)} ${r.label ?? fateRowText(r)}`).join(", ");
 }
