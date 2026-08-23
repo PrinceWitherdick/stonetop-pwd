@@ -58,10 +58,11 @@ import {getDragEventData, deletionEntry, imagePopout, renderTemplate} from "../.
 import {STEADING_DEFAULTS, StonetopSteading} from "../steading/StonetopSteading.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
-import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getSidebarCollapsed, setSidebarCollapsed, getPromptRollModifierSetting, getOpenSheetsInEditMode, getHideRollableIconSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
+import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getHideRollableIconSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
 import {bringDialogToFront} from "../../utils/front-on-open.js";
+import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
-import {promptRollModifier} from "../../dialogs/RollModifierDialog.js";
+import {promptRoll, UNPROMPTED_ROLL} from "../../dialogs/RollDialog.js";
 import {withSectionEditing} from "../../utils/section-editing.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {annotateInvocationEffects, splitEmpoweredEffect} from "./invocation-effects.js";
@@ -2909,10 +2910,6 @@ export function createStonetopCharacterSheetClass(Base) {
 				},
 			});
 
-			html.find(".stonetop-roll-mode-input").on("change", async (ev) => {
-				await this._stonetopCharacter.setRollMode(ev.currentTarget.value);
-			});
-
 			// The header portrait's own click and the two pips over it, wired the same way the
 			// stat-block sheets wire theirs — one header, one behaviour. A PC's face appears in
 			// the steading roster and in everyone else's relationship rows, so it wants framing
@@ -2957,7 +2954,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// steading sheet does. Only rollable moves have a `.rollable`; description-
 				// only moves (no rollType, hence no icon) fall through and post to chat.
 				// Re-dispatch a click carrying the Shift state (a plain `.click()` would drop
-				// it) so "Shift to skip the modifier prompt" still works when rolling here.
+				// it) so "Shift to skip the roll prompt" still works when rolling here.
 				if (rollable && getHideRollableIconSetting()) {
 					rollable.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: ev.shiftKey }));
 					return;
@@ -3004,11 +3001,11 @@ export function createStonetopCharacterSheetClass(Base) {
 					?? chip?.closest("li")?.querySelector(".rollable");
 				if (!rollable || !this.isEditable) return;
 				ev.stopPropagation();
-				// Guided move, the two stat pickers, then the optional modifier prompt — the same
-				// ladder the hotbar path walks. See _resolveMoveRollPrompts.
-				const situational = await this._resolveMoveRollPrompts(rollable, { shiftKey: ev.shiftKey });
-				if (situational === "handled" || situational === "cancel") return;
-				const handled = await this._stonetopCharacter.onRoll({ currentTarget: rollable }, { situational });
+				// Guided move, the two stat pickers, then the roll prompt — the same ladder the
+				// hotbar path walks. See _resolveMoveRollPrompts.
+				const prompted = await this._resolveMoveRollPrompts(rollable, { shiftKey: ev.shiftKey });
+				if (prompted === "handled" || prompted === "cancel") return;
+				const handled = await this._stonetopCharacter.onRoll({ currentTarget: rollable }, prompted);
 				// What rolling this move DOES beyond the roll — see MOVE_ROLL_EFFECTS. Only after
 				// the roll actually happened, so a cancelled weapon/target prompt opens nothing:
 				// that is the `"cancel"` half of onRoll's answer, which is truthy (nothing else may
@@ -3019,7 +3016,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					if (!roll) return;
 					if (_STAT_KEYS.has(roll)) {
 						// Stat roll (STR, DEX, etc.)
-						await this._stonetopCharacter.onDirectStatRoll(roll, { situational });
+						await this._stonetopCharacter.onDirectStatRoll(roll, prompted);
 					} else {
 						// Raw formula roll (e.g. damage die "d8")
 						let label;
@@ -3084,7 +3081,15 @@ export function createStonetopCharacterSheetClass(Base) {
 				}
 
 				const rollable = li.querySelector(".rollable");
-				if (rollable) { rollable.click(); return; }
+				// Re-dispatched with the Shift state rather than a bare `.click()`, which reports
+				// `shiftKey: false` however the row was clicked — see the Moves tab's own
+				// name-click above. Shift-clicking a move here is meant to skip the roll prompt.
+				if (rollable) {
+					rollable.dispatchEvent(new MouseEvent("click", {
+						bubbles: true, cancelable: true, shiftKey: ev.shiftKey,
+					}));
+					return;
+				}
 				const { compendiumId } = nameEl.dataset;
 				if (!compendiumId) return;
 				const doc = await this._stonetopCharacter._moveRepo.getBasicMoveDocument(compendiumId);
@@ -4305,17 +4310,13 @@ export function createStonetopCharacterSheetClass(Base) {
 				onToggle:       () => this._repackArcana?.(),
 			});
 
-			// Collapse / expand the whole moves sidebar (Roll Modifier + move lists).
-			// Toggling a class (rather than re-rendering) lets the tab content reclaim
-			// the freed width without flicker; the state is persisted so the sidebar
-			// reopens the same way.
-			html.find(".stonetop-sidebar-toggle").on("click", ev => {
-				const sidebar   = ev.currentTarget.closest(".stonetop-moves-sidebar");
-				if (!sidebar) return;
-				const collapsed = sidebar.classList.toggle("is-collapsed");
-				ev.currentTarget.setAttribute("aria-expanded", String(!collapsed));
-				ev.currentTarget.setAttribute("aria-label", collapsed ? "Expand moves sidebar" : "Collapse moves sidebar");
-				setSidebarCollapsed(this.actor?.id, collapsed);
+			// Collapse / expand the whole moves sidebar. Shared with the steading sheet and the
+			// expedition walkthrough's rail (utils/sidebar-toggle.js); the state is persisted
+			// per actor, so the sidebar reopens the way it was left.
+			wireSidebarToggle(html, {
+				expandLabel:   "Expand moves sidebar",
+				collapseLabel: "Collapse moves sidebar",
+				persist:       collapsed => setSidebarCollapsed(this.actor?.id, collapsed),
 			});
 
 			// Name an (anonymous) crew member: promote them to a named individual,
@@ -4610,8 +4611,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				// read off the card rather than matched by name, since the name in the DOM is the
 				// printed label and the state is keyed by slug.
 				const { slug = "", ongoing } = card.dataset;
-				// Shift is "skip the situational-modifier prompt" everywhere a roll starts; carry
-				// it through so the Invocation's roll honours it too.
+				// Shift is "skip the roll prompt" everywhere a roll starts; carry it through so
+				// the Invocation's roll honours it too.
 				this._postInvocationCard(name, description, {
 					shiftKey: ev.shiftKey, known, slug, ongoing: ongoing === "1",
 				});
@@ -5331,7 +5332,7 @@ export function createStonetopCharacterSheetClass(Base) {
 
 		// Roll one of this character's owned moves by its embedded item id, running the
 		// exact same dispatch a click on the move's dice icon would — guided-move dialog,
-		// "ask"/alt-stat picker, and the optional pre-roll modifier prompt all included.
+		// "ask"/alt-stat picker, and the pre-roll prompt all included.
 		// This is the entry point used by the hotbar move-macros (drag a move onto the
 		// hotbar): it works whether or not the sheet is currently rendered, because it
 		// builds a detached stand-in for the row's rollable icon (see _makeSyntheticRollable)
@@ -5363,9 +5364,9 @@ export function createStonetopCharacterSheetClass(Base) {
 
 			// The same ladder the Moves tab's own dice click walks, which is the point: a move on
 			// the hotbar must ask what the sheet asks. See _resolveMoveRollPrompts.
-			const situational = await this._resolveMoveRollPrompts(rollable, { shiftKey });
-			if (situational === "handled" || situational === "cancel") return;
-			const handled = await this._stonetopCharacter.onRoll({ currentTarget: rollable }, { situational });
+			const prompted = await this._resolveMoveRollPrompts(rollable, { shiftKey });
+			if (prompted === "handled" || prompted === "cancel") return;
+			const handled = await this._stonetopCharacter.onRoll({ currentTarget: rollable }, prompted);
 			// What rolling this move DOES beyond the roll — the same effects the Moves tab's own
 			// click fires, and gated the same way, so a weapon/target prompt backed out of here
 			// fires nothing either. A move dragged to the hotbar is rolled from there just as truly
@@ -5378,8 +5379,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		// Resolve a love letter (Book I p.568): post it like any move, then consume it.
 		// A fixed-stat letter rolls through the standard engine (same chat card, XP-on-miss);
 		// a no-roll letter posts its body as a description card. We call onRoll directly (not
-		// rollMoveById) so there's no situational-modifier prompt whose cancel could leave a
-		// single-use letter half-spent — the letter is only deleted once its card has posted.
+		// rollMoveById) so there's no pre-roll prompt whose cancel could leave a single-use
+		// letter half-spent — the letter is only deleted once its card has posted.
 		async _onResolveLoveLetter(itemId) {
 			const item = this.actor?.items?.get(itemId);
 			if (!item) return void ui.notifications.warn("That love letter is no longer on this character.");
@@ -5435,7 +5436,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * chosen — so this shortcut costs nothing to leave un-asked.
 		 *
 		 * `moveItem` is the move the player CLICKED; `attack.item` is the Clash it becomes. The
-		 * modifier prompt is titled with the former (it's what they asked for), while the roll,
+		 * roll prompt is titled with the former (it's what they asked for), while the roll,
 		 * its card, and the effects of having rolled all belong to the latter.
 		 *
 		 * BOTH CALLERS POST THE MOVE'S TEXT FIRST and then call this. A granting move has no
@@ -5458,10 +5459,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (attack.readyWhen && !this._stonetopCharacter?.[attack.readyWhen]) {
 				ui.notifications?.info(game.i18n.localize(attack.unreadyNotice));
 			}
-			const situational = await this._maybePromptRollModifier({ shiftKey, title: moveItem.name });
-			if (situational === null) return;   // player cancelled the modifier prompt
+			const prompted = await this._promptRollOptions({ shiftKey, title: moveItem.name });
+			if (!prompted) return;              // player cancelled the roll prompt
 			const handled = await this._stonetopCharacter.onRoll({ currentTarget: rollable }, {
-				statOverride: attack.stat, situational, weaponSlug: attack.weaponSlug,
+				statOverride: attack.stat, ...prompted, weaponSlug: attack.weaponSlug,
 			});
 			// The same guard both other roll paths use. The weapon is pre-answered here, but the
 			// TARGET prompt is not, and backing out of it is a roll that never happened — an
@@ -5471,7 +5472,8 @@ export function createStonetopCharacterSheetClass(Base) {
 
 		/**
 		 * Everything a move roll has to ASK before the dice are thrown: the guided-move dialog,
-		 * the "ask" stat picker, the alt-stat picker, then the optional pre-roll modifier prompt.
+		 * the "ask" stat picker, the alt-stat picker, then the pre-roll prompt (how to roll it,
+		 * and any one-off modifier).
 		 *
 		 * One ladder, because it has to BE one — dragging a move to the hotbar must ask exactly
 		 * what clicking its dice icon on the sheet asks. It used to be written out twice, with a
@@ -5479,12 +5481,12 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * first by hand; that instruction is what this replaces.
 		 *
 		 * Returns:
-		 *   "handled"  a dialog took the roll over and owns it from here — the caller stops;
-		 *   "cancel"   the player backed out of the modifier prompt;
-		 *   a number   the situational modifier to roll with (0 when nothing was asked).
+		 *   "handled"    a dialog took the roll over and owns it from here — the caller stops;
+		 *   "cancel"     the player backed out of the roll prompt;
+		 *   an object    { rollMode, situational } — spread straight into the roll call.
 		 *
-		 * The modifier prompt is only for 2d6 move/stat rolls, never a raw formula (a damage die,
-		 * a follower's attack) — so this answers correctly for ANY rollable on the sheet, which is
+		 * The roll prompt is only for 2d6 move/stat rolls, never a raw formula (a damage die, a
+		 * follower's attack) — so this answers correctly for ANY rollable on the sheet, which is
 		 * what lets the general rollable handler share it with the move-only hotbar path.
 		 */
 		async _resolveMoveRollPrompts(rollable, { shiftKey = false } = {}) {
@@ -5500,9 +5502,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				return "handled";
 			}
 
-			if (!rollable.classList.contains("move-rollable") && !_STAT_KEYS.has(rollable.dataset.roll)) return 0;
-			const situational = await this._maybePromptRollModifier({ shiftKey, rollable });
-			return situational === null ? "cancel" : situational;
+			// A raw formula rollable is not a 2d6 move roll: there is nothing to ask about, so
+			// nothing is asked and it goes out on the defaults.
+			if (!rollable.classList.contains("move-rollable") && !_STAT_KEYS.has(rollable.dataset.roll)) {
+				return { ...UNPROMPTED_ROLL };
+			}
+			return (await this._promptRollOptions({ shiftKey, rollable })) ?? "cancel";
 		}
 
 		_statChoiceMoveForRollable(rollable) {
@@ -5540,20 +5545,28 @@ export function createStonetopCharacterSheetClass(Base) {
 			return { item, stats: [defaultStat, ...alts], grants };
 		}
 
-		// Optional pre-roll modifier prompt, gated by the "Prompt for Roll Modifier"
-		// client setting. Returns the situational modifier to apply (0 when the setting
-		// is off or the prompt is skipped), or null when the player cancels the prompt so
-		// the caller can abort the roll. Holding Shift on the originating click skips it.
-		// Pass a `rollable` to derive the title from its move/stat, or an explicit `title`.
-		async _maybePromptRollModifier({ shiftKey = false, rollable = null, title = null } = {}) {
-			if (!getPromptRollModifierSetting()) return 0;
-			if (shiftKey) return 0;
+		// The pre-roll prompt (RollDialog.js), titled with whatever this sheet knows the roll by.
+		// Returns `{ rollMode, situational }` to spread straight into a roll, or null when the
+		// player cancels so the caller can abort; Shift skips the window for a plain Normal roll
+		// at +0. Pass a `rollable` to derive the title from its move/stat, or an explicit `title`.
+		//
+		// TITLE DERIVATION IS ALL THIS ADDS. The window, the Shift shortcut and the shape of the
+		// answer belong to promptRoll, which the steading sheet and the Requisition dialog call
+		// for themselves — this is not a second front door to them.
+		//
+		// Nothing gates the prompt any more. It used to be opt-in behind a "Prompt for Roll
+		// Modifier" client setting that defaulted OFF, which was fair when all it asked for was a
+		// number most rolls do not have — but advantage and disadvantage live here now, and the
+		// only way to say "with advantage" cannot sit inside a window most tables never turn on.
+		_promptRollOptions({ shiftKey = false, rollable = null, title = null } = {}) {
 			const moveName = rollable?.closest(".stonetop-item")?.querySelector(".stonetop-item-name")?.textContent?.trim();
 			const statKey  = rollable?.dataset?.roll;
-			const resolvedTitle = title
-				|| moveName
-				|| (statKey && _STAT_KEYS.has(statKey) ? `Roll +${statKey.toUpperCase()}` : "Roll Modifier");
-			return promptRollModifier({ title: resolvedTitle });
+			return promptRoll({
+				shiftKey,
+				title: title
+					|| moveName
+					|| (statKey && _STAT_KEYS.has(statKey) ? `Roll +${statKey.toUpperCase()}` : "Roll"),
+			});
 		}
 
 		// `grants` are the moves that opened this choice up (empty for a move whose own
@@ -5566,12 +5579,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				const value = stats[key]?.value ?? 0;
 				const label = Handlebars.helpers.statLabel(key);
 				buttons[key] = {
-					// Offer the modifier prompt once the stat is chosen, mirroring the inline
-					// roll path; Shift on the original click skips it, a cancel aborts the roll.
+					// Offer the roll prompt once the stat is chosen, mirroring the inline roll
+					// path; Shift on the original click skips it, a cancel aborts the roll.
 					callback: async () => {
-						const situational = await this._maybePromptRollModifier({ shiftKey, title: item.name });
-						if (situational === null) return;
-						await this._stonetopCharacter.onRoll({ currentTarget: rollable }, { statOverride: key, situational });
+						const prompted = await this._promptRollOptions({ shiftKey, title: item.name });
+						if (!prompted) return;
+						await this._stonetopCharacter.onRoll({ currentTarget: rollable }, { statOverride: key, ...prompted });
 					},
 					label: `${label} (${sign(value)})`,
 				};
@@ -5655,13 +5668,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (rollable) {
 				buttons.roll = {
 					label: `Roll +${(rollable.dataset.roll ?? "").toUpperCase()}`,
-					// Prompt for the modifier before posting, so cancelling is a clean abort
-					// (nothing hits the chat). Title comes from the rollable's move/stat.
+					// Ask how to roll it before posting, so cancelling is a clean abort (nothing
+					// hits the chat). Title comes from the rollable's move/stat.
 					callback: async html => {
-						const situational = await this._maybePromptRollModifier({ rollable });
-						if (situational === null) return;
+						const prompted = await this._promptRollOptions({ rollable });
+						if (!prompted) return;
 						await this._postGuidedCharacterMove(name, guide, html);
-						await this._stonetopCharacter.onRoll({ currentTarget: rollable }, { situational });
+						await this._stonetopCharacter.onRoll({ currentTarget: rollable }, prompted);
 					},
 				};
 			} else if (guide.roll) {
@@ -5670,10 +5683,10 @@ export function createStonetopCharacterSheetClass(Base) {
 					label: fixedStat ? `Roll +${fixedStat.toUpperCase()}` : "Roll",
 					callback: async html => {
 						const stat = fixedStat ?? html[0]?.querySelector('[name="guidedRollStat"]')?.value ?? "wis";
-						const situational = await this._maybePromptRollModifier({ title: name });
-						if (situational === null) return;
+						const prompted = await this._promptRollOptions({ title: name });
+						if (!prompted) return;
 						await this._postGuidedCharacterMove(name, guide, html);
-						await this._stonetopCharacter.onDirectStatRoll(stat, { moveName: name, situational });
+						await this._stonetopCharacter.onDirectStatRoll(stat, { moveName: name, ...prompted });
 					},
 				};
 			}
@@ -6446,7 +6459,18 @@ export function createStonetopCharacterSheetClass(Base) {
 				// Moves tab does.
 				const rollable = this._makeSyntheticRollable(item);
 				if (rollable) {
-					await this._stonetopCharacter.onRoll({ currentTarget: rollable });
+					// …and through the same pre-roll ladder, so the header asks what the Moves tab
+					// asks. Without it this was the one 2d6 move on the sheet that could never be
+					// rolled with advantage, disadvantage, or a one-off modifier — the sticky sheet
+					// control that used to carry those is gone, and this window is where they live
+					// now. Shift on the glyph skips it, exactly as it does on a dice icon.
+					const prompted = await this._resolveMoveRollPrompts(rollable, { shiftKey: ev.shiftKey });
+					// "handled" — a dialog owns the roll from here and will run it through the same
+					// model call, which drops the raging state itself. "cancel" — they backed out of
+					// the roll prompt, so the roll never happened and neither did the leaving: still
+					// raging, the same answer Escape on the confirm above gives.
+					if (prompted === "handled" || prompted === "cancel") return;
+					await this._stonetopCharacter.onRoll({ currentTarget: rollable }, prompted);
 					this.render(false);
 					return;
 				}
@@ -6787,12 +6811,15 @@ export function createStonetopCharacterSheetClass(Base) {
 				: { stat: KNOW_THINGS_STAT, advantage: false };
 			if (!picked) return null;               // player closed the picker
 
-			const situational = await this._maybePromptRollModifier({ shiftKey, title: "Know Things" });
-			if (situational === null) return null;  // player cancelled the modifier prompt
+			const prompted = await this._promptRollOptions({ shiftKey, title: "Know Things" });
+			if (!prompted) return null;             // player cancelled the roll prompt
 
 			const roll = await this._stonetopCharacter.onDirectStatRoll(picked.stat, {
-				situational,
-				rollMode: withAdvantage(this._stonetopCharacter.rollMode, picked.advantage),
+				situational: prompted.situational,
+				// The move's own advantage (Polyglot, Naturalist) stacks on top of whatever the
+				// player just chose in the prompt, which is what withAdvantage is for: it lifts
+				// Disadvantage to Normal and Normal to Advantage rather than overwriting either.
+				rollMode: withAdvantage(prompted.rollMode, picked.advantage),
 				// This roll bypasses StonetopItem.roll, so it has to stamp the move identity and
 				// pick up Never at a Loss / the Logbook itself — otherwise the card's post-roll
 				// buttons would work from the Moves tab but not from here.
@@ -7018,10 +7045,10 @@ export function createStonetopCharacterSheetClass(Base) {
 		 */
 		async _seekInsightAboutArtifact(knowledge, { shiftKey }) {
 			const owned = this.actor.items.find(i => i.type === "move" && i.name === "Seek Insight");
-			const situational = await this._maybePromptRollModifier({ shiftKey, title: "Seek Insight" });
-			if (situational === null) return;
+			const prompted = await this._promptRollOptions({ shiftKey, title: "Seek Insight" });
+			if (!prompted) return;
 			const roll = await this._stonetopCharacter.onDirectStatRoll("wis", {
-				situational,
+				...prompted,
 				messageFlags: { [STONETOP_SCOPE]: { move: "Seek Insight", artifact: knowledge.id } },
 				moveName:        "Seek Insight",
 				moveDescription: owned?.system?.description
@@ -7166,8 +7193,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				: "";
 
 			// Card first, roll second: the card is the statement and the roll is how it goes.
-			// It also means a cancelled situational-modifier prompt (which fires INSIDE
-			// rollMoveById) leaves the Invocation posted rather than losing everything.
+			// It also means a cancelled roll prompt (which fires INSIDE rollMoveById) leaves
+			// the Invocation posted rather than losing everything.
 			const card = answer.empower
 				? await this._postMoveCard(`${name} (Empowered)`, lead + base + EMPOWERED_NOTE_HTML + empowered)
 				: await this._postMoveCard(name, lead + base);
@@ -7178,7 +7205,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (answer.roll) await this.rollMoveByName(INVOKE_THE_SUN_GOD, { shiftKey });
 			// The banner, the header chip and the card's badge are all read at render time, so the
 			// flag write above shows up only once the sheet repaints. Left until AFTER the roll —
-			// re-rendering mid-roll would pull the modifier prompt out from under it — and guarded
+			// re-rendering mid-roll would pull the roll prompt out from under it — and guarded
 			// on the sheet still being open, since the roll is an await and it may have been closed.
 			if (use?.changed && this.rendered) this.render(false);
 			return card;

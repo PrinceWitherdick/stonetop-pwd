@@ -7,6 +7,7 @@ import { bringDialogToFront } from "../../../utils/front-on-open.js";
 import { escHtml } from "../../../utils/strings.js";
 import { CUSTOM_ASSET_VALUE, assetTakenLabel, wireCustomAssetSelect } from "../../../utils/requisition-asset.js";
 import { SYSTEM_ID } from "../../../system-id.js";
+import { promptRoll } from "../../../dialogs/RollDialog.js";
 
 /**
  * The player-facing Requisition move. Lists the linked steading's on-hand assets
@@ -67,12 +68,18 @@ export class RequisitionDialog extends StonetopDialog {
 
 		wireCustomAssetSelect({ select: assetSelect, customInput });
 
-		root.querySelector(".stonetop-requisition-roll-btn")?.addEventListener("click", () => {
-			const rollMode = this._steadingActor.getFlag(SYSTEM_ID, "rollMode") ?? "normal";
+		// How this one is rolled is asked here, per roll, rather than read off a sticky flag the
+		// steading sheet used to write — see RollDialog.js. Cancelling the prompt rolls nothing.
+		root.querySelector(".stonetop-requisition-roll-btn")?.addEventListener("click", async ev => {
+			const prompted = await promptRoll({ title: "Requisition", shiftKey: ev.shiftKey });
+			if (!prompted) return;
 			rollStat("fortunes", this._steadingActor, {
 				moveName: "Requisition",
 				statValue: this._steading.getStatValue("fortunes"),
-				rollMode,
+				rollMode: prompted.rollMode,
+				// The steading rolls carry no forward/ongoing, so the prompt's one-off IS the
+				// whole modifier here — the engine reads it back out as the Situational pill.
+				modifier: prompted.situational,
 			});
 		});
 

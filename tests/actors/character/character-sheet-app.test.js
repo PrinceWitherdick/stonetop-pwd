@@ -112,6 +112,7 @@ function makeCharacterMock(actor) {
 			if (dropped) ongoing = "";
 			return changed || dropped;
 		}),
+		onRoll: vi.fn(async () => true),
 		ensureStartingMoves: vi.fn(),
 		updateName: vi.fn(async name => actor.update({ name })),
 		addMove: vi.fn(),
@@ -597,6 +598,42 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		await sheet._onBattleJoyToggle(clickEvent());
 		expect(sheet._stonetopCharacter.battleJoy).toBe(false);
 		expect(globalThis.Dialog.confirm).not.toHaveBeenCalled();
+		delete globalThis.Dialog;
+	});
+
+	// The roll this glyph ends the rage WITH is a 2d6 move roll like any other, so it walks the
+	// same pre-roll ladder every other one does — the guided/stat pickers, then the window that
+	// asks how it is being rolled. It used to call onRoll bare, which made it the one move on the
+	// sheet that could never take advantage, disadvantage, or a one-off modifier: the sticky sheet
+	// control that used to carry those is gone, and that window is where they live now.
+	it("asks how the ending Battle Joy is rolled, and leaves the rage standing on a cancel", async () => {
+		const shiftClick = shiftKey => ({ preventDefault: vi.fn(), stopPropagation: vi.fn(), shiftKey });
+		const actor = makeActor();
+		actor.items = [{ id: "bj", type: "move", name: "Battle Joy", system: { rollType: "con" } }];
+		const sheet = makeSheet(actor);
+		sheet.render = vi.fn();
+		globalThis.Dialog = { confirm: vi.fn(async () => true) };
+		// Stubbed at the ladder, not below it: what is being pinned is that the header goes
+		// THROUGH it and hands its answer on, which is the whole of the fix.
+		const stand = { dataset: { roll: "con" } };
+		sheet._makeSyntheticRollable = vi.fn(() => stand);
+		sheet._resolveMoveRollPrompts = vi.fn(async () => ({ rollMode: "adv", situational: 1 }));
+
+		await sheet._stonetopCharacter.setBattleJoy(true);
+		await sheet._onBattleJoyToggle(shiftClick(true));
+		// The Shift the glyph was clicked with rides along, so it skips the window here too.
+		expect(sheet._resolveMoveRollPrompts).toHaveBeenCalledWith(stand, { shiftKey: true });
+		expect(sheet._stonetopCharacter.onRoll)
+			.toHaveBeenCalledWith({ currentTarget: stand }, { rollMode: "adv", situational: 1 });
+
+		// Backing out of that window is a roll that never happened — and rolling it IS leaving it,
+		// so the rage is still burning, the same answer Escape on the confirm gives.
+		sheet._stonetopCharacter.onRoll.mockClear();
+		sheet._resolveMoveRollPrompts = vi.fn(async () => "cancel");
+		await sheet._stonetopCharacter.setBattleJoy(true);
+		await sheet._onBattleJoyToggle(shiftClick(false));
+		expect(sheet._stonetopCharacter.onRoll).not.toHaveBeenCalled();
+		expect(sheet._stonetopCharacter.battleJoy).toBe(true);
 		delete globalThis.Dialog;
 	});
 });

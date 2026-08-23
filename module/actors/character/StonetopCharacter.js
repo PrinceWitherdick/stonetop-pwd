@@ -34,6 +34,7 @@ import {
 	VitalsSnapshotBuilder,
 } from "../../model/CharacterSnapshot.js";
 import {PlaybookMoveEntry} from "./PlaybookMoveEntry.js";
+import {normalizeRollMode} from "../../dialogs/RollDialog.js";
 import {deletionEntry} from "../../utils/foundry-compat.js";
 import {statRequirementLabel, statRequirementsUnmet} from "./stat-requirement.js";
 import {MoveResources} from "./MoveResources.js";
@@ -111,10 +112,6 @@ const ORIGIN_DESCRIPTIONS = {
 	stonetop: "<p>A tight-knit village of about three hundred souls, built around a massive standing stone at the edge of the Great Wood. Everyone is expected to pull their weight, take their turn at guard duty, and help protect the community when danger comes.</p>",
 	wild: "<p>The area around Stonetop includes the Great Wood, the Flats, and other dangerous places beyond the roads. The Forest Folk have vanished, crinwin grow bolder, and hunters bring back stories of fresh ruins, strange spirits, and twisted things in the trees.</p>",
 };
-
-function _normalizeSheetRollMode(rollMode) {
-	return ["adv", "dis"].includes(rollMode) ? rollMode : "normal";
-}
 
 // True for player-authored custom moves (flagged at creation by buildCustomMoveData).
 // The flag distinguishes them from foreign playbook moves that also land in "other".
@@ -459,7 +456,6 @@ export class StonetopCharacter {
 			.withInventory(inventory)
 			.withArcana(await this._arcana.buildSnapshot(actor.system.stats ?? {}, this._inventory.checked, this._inventory.resources))
 			.withPostDeathInsert(postDeath)
-			.withRollMode(_normalizeSheetRollMode(resolvedFlags(actor).rollMode))
 			.withCrewBonuses(_buildCrewStats(playbookData?.crew, moveBonuses))
 			.withCompanionBonuses(_buildCompanionBonuses(moveBonuses, ownedAllByName))
 			.withViewerIsGM(!!view.viewerIsGM)
@@ -2132,7 +2128,7 @@ export class StonetopCharacter {
 	// truthy answers both mean "taken, stop looking" — the distinction is only for a caller with
 	// something to fire after the roll (see MOVE_ROLL_EFFECTS), which must not fire on a prompt
 	// nobody answered.
-	async onRoll(event, { statOverride = null, situational = 0, weaponSlug = null } = {}) {
+	async onRoll(event, { statOverride = null, situational = 0, weaponSlug = null, rollMode = "normal" } = {}) {
 		const itemId = event.currentTarget.closest(".item")?.dataset.itemId;
 		if (!itemId) return false;
 		const item = this._actor.items.get(itemId);
@@ -2167,7 +2163,6 @@ export class StonetopCharacter {
 			attackExtra = begun;
 		}
 
-		const rollMode = this.rollMode;
 		const forward  = descriptionOnly ? 0 : this._actor.system?.attributes?.forward?.value ?? 0;
 		const ongoing  = descriptionOnly ? 0 : this._actor.system?.attributes?.ongoing?.value ?? 0;
 		// A one-off situational modifier from the optional pre-roll prompt; the roll
@@ -2175,7 +2170,11 @@ export class StonetopCharacter {
 		const situ     = descriptionOnly ? 0 : situational;
 
 		const modifier    = forward + ongoing + situ;
-		const rollOptions = { rollMode, modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}) };
+		// `rollMode` is the caller's answer to the pre-roll prompt (see RollDialog.js), which is
+		// the ONLY place advantage and disadvantage are chosen — there is no sticky sheet control
+		// behind it to fall back on. A description-only click never opened the prompt, so it
+		// arrives at the default and rolls nothing anyway.
+		const rollOptions = { rollMode: normalizeRollMode(rollMode), modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}) };
 
 		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, rollOptions), descriptionOnly });
 
@@ -2531,8 +2530,10 @@ export class StonetopCharacter {
 
 	async onDirectStatRoll(stat, extraOptions = {}) {
 		const { rollStat } = await import("../../utils/roll-engine.js");
-		const { situational = 0, ...rest } = extraOptions;
-		const rollMode = this.rollMode;
+		// `rollMode` is the pre-roll prompt's answer (see RollDialog.js). Destructured rather
+		// than left in `rest` so the caller cannot half-set it: Know Things passes a mode it has
+		// already lifted through withAdvantage, and that is a value, not an override.
+		const { situational = 0, rollMode = "normal", ...rest } = extraOptions;
 		const forward  = this._actor.system?.attributes?.forward?.value ?? 0;
 		const ongoing  = this._actor.system?.attributes?.ongoing?.value ?? 0;
 		// `situational` is the one-off modifier from the optional pre-roll prompt; the
@@ -2542,7 +2543,7 @@ export class StonetopCharacter {
 		// Returned so a caller that has to act on the outcome (the arcana Identify roll) can
 		// classify the total without re-rolling or re-deriving the tier thresholds.
 		const roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat, {
-			rollMode,
+			rollMode: normalizeRollMode(rollMode),
 			modifier,
 			forward,
 			ongoing,
@@ -2631,14 +2632,6 @@ export class StonetopCharacter {
 		const base = { ...options, stonetopDebility: def?.name ?? key, stonetopDebilityTooltip: def?.description ?? "" };
 		if (options.rollMode === "adv") return { ...base, rollMode: "normal" };
 		return { ...base, rollMode: "dis" };
-	}
-
-	get rollMode() {
-		return _normalizeSheetRollMode(resolvedFlags(this._actor).rollMode);
-	}
-
-	async setRollMode(rollMode) {
-		await this._actor.setFlag(STONETOP_SCOPE, "rollMode", _normalizeSheetRollMode(rollMode));
 	}
 
 	// ── Death and dying (Book I, Harm & Healing p.245) ─────────────────────────

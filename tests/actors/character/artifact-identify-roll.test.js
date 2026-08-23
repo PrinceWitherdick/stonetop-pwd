@@ -2,6 +2,16 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { FakeActorBuilder } from "../../fakes/FakeActorBuilder.js";
 import { ARTIFACT_STATE } from "../../../module/actors/character/artifact-identify.js";
+import { promptRoll } from "../../../module/dialogs/RollDialog.js";
+
+// Every move roll opens the pre-roll prompt now — Advantage / Normal / Disadvantage plus a
+// one-off modifier, fresh each time (module/dialogs/RollDialog.js). It has its own tests; here
+// it is stubbed so the identify ladder under test is what these assertions see, and so the
+// `global.Dialog` captures below only ever catch the pickers they were written for.
+vi.mock("../../../module/dialogs/RollDialog.js", () => ({
+	DEFAULT_ROLL_MODE: "normal",
+	promptRoll: vi.fn(async () => ({ rollMode: "normal", modifier: 0 })),
+}));
 
 // Identifying artifacts (Book I, Discoveries pp.430-431). Two moves, two different jobs:
 //   "If they Know Things about the artifact and get a 7+, then tell them some combo of what it
@@ -30,7 +40,6 @@ const KNOWLEDGE = {
 
 function makeCharacterMock(rollTotal, knowledge = KNOWLEDGE) {
 	return {
-		rollMode: "normal",
 		onDirectStatRoll:        vi.fn(async () => ({ total: rollTotal })),
 		artifactKnowledge:       vi.fn(() => knowledge),
 		setArtifactState:        vi.fn(async () => true),
@@ -75,7 +84,8 @@ function captureDialog(choice) {
 
 beforeEach(() => {
 	global.game.settings ??= {};
-	global.game.settings.get = () => false;   // situational-modifier prompt off
+	promptRoll.mockResolvedValue({ rollMode: "normal", modifier: 0 });
+	global.game.settings.get = () => false;
 	global.game.user = { isGM: false };
 	global.Handlebars = { helpers: { statLabel: k => k.toUpperCase() } };
 });

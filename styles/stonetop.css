@@ -2877,54 +2877,6 @@ input.stonetop-name-field {
 	visibility: hidden;
 }
 
-.stonetop-roll-mode-control {
-	display: grid;
-	gap: 3px;
-	margin-bottom: 12px;
-	font-size: calc(0.78rem * var(--stonetop-font-scale, 1));
-}
-
-.stonetop-roll-mode-option {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	padding: 2px 4px;
-	border-radius: var(--st-radius-sm);
-	cursor: pointer;
-	white-space: nowrap;
-}
-
-.stonetop-roll-mode-option:hover,
-.stonetop-roll-mode-option.is-checked {
-	background: rgba(0, 0, 0, 0.06);
-}
-
-.stonetop-roll-mode-option input {
-	/* Round slate-dot radio (matches the onboarding background picker / create-
-	   follower radios) instead of the native control. The row's `.is-checked`
-	   background still signals selection alongside the dot. */
-	appearance: none;
-	-webkit-appearance: none;
-	flex-shrink: 0;
-	width: calc(13px * var(--stonetop-font-scale, 1));
-	height: calc(13px * var(--stonetop-font-scale, 1));
-	border: 1.5px solid slategrey;
-	border-radius: 50%;
-	background: #fff;
-	cursor: pointer;
-	box-shadow: none;
-	margin: 0;
-	/* align-items: center lands the radio on the text's line-box center, which is a
-	   hair below the letterforms' optical center, so the label reads higher than the
-	   radio. Lift the radio slightly to meet the label. */
-	position: relative;
-	top: -1px;
-}
-
-.stonetop-roll-mode-option input:checked {
-	background: radial-gradient(circle, slategrey 0 44%, transparent 48%);
-}
-
 /* Each row is a left-aligned, vertically-centered flex row. No left padding so
    the dice icon (or name, for non-rollable moves) sits flush with the left edge
    of the "Basic Moves" / "Expedition Moves" heading above it. Specificity (0,2,1)
@@ -3005,20 +2957,43 @@ input.stonetop-name-field {
 	cursor: default !important;
 }
 
-/* Pre-roll modifier prompt (RollModifierDialog.js) — a centered −/＋ stepper around
-   a number input. Gated by the "Prompt for Roll Modifier" client setting. */
+/* Pre-roll prompt (RollDialog.js) — the Advantage / Normal / Disadvantage pill over a
+   centered −/＋ stepper around a number input. Opens on every move/stat roll; there is no
+   setting behind it, because it is the only place advantage is chosen. */
 
 /* Top/bottom breathing room on Foundry's bare 8px compatibility inset — the same
    `4px 0 12px` rhythm the other ad-hoc move Dialogs use (.stonetop-homestead-dialog,
    .stonetop-disaster-dialog), so the stepper isn't cramped against the title or the
    Roll/Cancel row. */
-.stonetop-roll-modifier-form {
+.stonetop-roll-form {
 	padding: 4px 0 12px;
 }
 
-.stonetop-roll-modifier-form .stonetop-roll-modifier-prompt {
+.stonetop-roll-form .stonetop-roll-prompt {
 	margin: 0 0 8px;
 }
+
+/* The pill spans the window rather than hugging its labels, so the three segments are equal
+   targets and the strip reads as one control the width of the stepper below it. Only the
+   CONTAINER is sized here; the segments size themselves in the strip's own block (search
+   `.stonetop-roll-mode-picker .stonetop-roll-mode-btn`), because the dialog is the only place
+   this strip is mounted and a second rule to undo the first would be a rule undoing itself. */
+.stonetop-roll-form .stonetop-roll-mode-picker {
+	display: flex;
+	width: 100%;
+	margin-bottom: 6px;
+}
+
+/* What the choice above actually throws, in the dialog's own words. A player who has never met
+   this window should not have to know that "Advantage" means 3d6 keep highest two. */
+.stonetop-roll-form .stonetop-roll-dice {
+	margin: 0 0 12px;
+	text-align: center;
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	color: var(--st-text-muted, #6b6257);
+}
+
 .stonetop-roll-modifier-stepper {
 	display: flex;
 	align-items: center;
@@ -6343,38 +6318,37 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 }
 
 /* ── Roll modifier pill (Advantage / Normal / Disadvantage) ─────────────────────────────
-   The steading's Moves heading wears one. Buttons, not the radios the strip above is built
-   around (see roll-mode-picker.hbs), so the fill hangs off a stamped `.is-active` rather than
-   `:has(input:checked)` — safe because the flip always re-renders.
+   The pre-roll dialog wears one (RollDialog.js). It used to ride in the steading's Moves
+   heading, which is where the tight box below comes from; the dialog's own block, much
+   earlier in this file, grows it back out to a full-width three-segment strip.
+
+   Buttons, not the radios `.stonetop-segmented-picker` is built around, so the fill hangs off
+   a stamped `.is-active` rather than `:has(input:checked)` — the dialog has no document write
+   to re-render off, so it moves the class itself.
 
    Deliberately a near-copy of `.stonetop-rel-viewpicker .stonetop-rel-view-btn` rather than a
    shared block with it: they are the same LOOK but not the same rule set (that one adds an
    icon-only heading variant and a lane-picker sibling), and folding them together would mean
    every future tweak to one silently moving the other. */
-.stonetop-roll-mode-bar {
-	/* Far right of the heading's own line. The heading is the flex row — see
-	   `.steading-moves-tab .stonetop-move-group-title`. */
-	margin-left: auto;
-	display: flex;
-	align-items: center;
-}
 
 /* The core-button reset this shares with the board's two strips is stated once, grouped with
    them, further down the file — search `.stonetop-rel-viewpicker .stonetop-rel-view-btn,`.
    Only what this strip genuinely differs on is here. */
 .stonetop-roll-mode-picker .stonetop-roll-mode-btn {
-	flex: 0 0 auto;
+	/* Equal thirds of the window. This strip is mounted in exactly one place — the pre-roll
+	   dialog (RollDialog.js) — so it is sized for that here rather than sized for a section
+	   heading and then re-sized by the dialog. The heading it used to ride on is retired. */
+	flex: 1 1 0;
+	justify-content: center;
 	gap: 5px;
-	/* Tight box, like the view toggle's heading variant: a section heading is only ~23px tall
-	   and the default strip would hang past the underline and sit on top of it. */
-	padding: 0 8px;
+	padding: 5px 6px;
 	background: transparent;
 	color: var(--st-text-body);
 	font-family: var(--font-stonetop);
 	/* Pinned to the ROOT base, not var(--st-fs-sm), for the reason the view toggle's block
-	   spells out: this renders inside an `h3`, whose em box is not the body's, so a relative
-	   step would resolve against the heading and size the pill by where it was mounted. The
-	   font-scale factor stays, so the sheet's own text-size setting still applies. */
+	   spells out: a relative step would resolve against whatever this is mounted in and size
+	   the pill by where it sits rather than by the sheet. The font-scale factor stays, so the
+	   reader's own text-size setting still applies. */
 	font-size: calc(0.95rem * var(--stonetop-font-scale, 1));
 	line-height: 1.25;
 	white-space: nowrap;
@@ -12267,50 +12241,6 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: var(--st-text-body);
 }
 
-/* The Roll Modifier's radios, the sidebar's only hand-drawn control. Everything else that says
-   "picked" on this sheet is one of the checkbox SVGs, which the bone twins further up already
-   turned over; this one is built out of literals instead (a slategrey ring, a `#fff` disc, a
-   slategrey dot) and none of them were reachable from the palette.
-
-   Unlit, that inverted the affordance it was drawn for. The two options NOT chosen were solid
-   white discs, the brightest marks in the sidebar, while the chosen one dropped its disc for a
-   dim slate dot on near-black paper: the sheet was pointing at the wrong row. Both empty rings
-   come down onto the same wash the form wells wear, which puts the three back on equal footing
-   and leaves the selection to be said by colour alone.
-
-   And the colour is the insert's. `--st-past-death-ink` is already what brought them back
-   (revenant blue, thrall bile-moss, ghost violet) and already carries the window header's rule
-   and the active tab, so the one thing on this sheet that is warm is also the one thing that
-   answers a question. The row tint behind it is the same ink at 16%, replacing a 6% BLACK wash
-   that on black paper said nothing at all; hover stays a plain white lift, so hovering an
-   unchosen row can't be mistaken for having chosen it. */
-.vtt .stonetop.character.stonetop-past-death.window-app .window-content
-	.stonetop-roll-mode-option input {
-	border-color: var(--st-btn-primary-border);
-	background: rgba(255, 255, 255, 0.06);
-}
-
-.vtt .stonetop.character.stonetop-past-death.window-app .window-content
-	.stonetop-roll-mode-option input:checked {
-	border-color: var(--st-past-death-ink);
-	/* Longhands, not the shorthand the base rule uses: the disc has to survive the dot being
-	   painted over it, and `background: <gradient>` would reset the colour to transparent. */
-	background-color: rgba(255, 255, 255, 0.06);
-	background-image: radial-gradient(circle, var(--st-past-death-ink) 0 44%, transparent 48%);
-}
-
-.vtt .stonetop.character.stonetop-past-death.window-app .window-content
-	.stonetop-roll-mode-option:hover {
-	background: rgba(255, 255, 255, 0.06);
-}
-
-/* After the hover rule, not before: the two tie on specificity, so source order is the only thing
-   keeping the chosen row's tint on top while it is also being hovered. */
-.vtt .stonetop.character.stonetop-past-death.window-app .window-content
-	.stonetop-roll-mode-option.is-checked {
-	background: color-mix(in srgb, var(--st-past-death-ink) 16%, transparent);
-}
-
 /* ── What the insert asks for ─────────────────────────────────────────
    One block of styling for one partial rendered in two windows: Death's Door's last step and the
    standalone chooser off the Post-Death tab. Deliberately NOT scoped to either dialog's root —
@@ -14081,12 +14011,6 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .steading-moves-sidebar .steading-move-stat-tag {
 	margin: 0 3px;
 }
-
-/* No sidebar override for the roll-mode PILL. The classic sidebar carries the stacked radio
-   list instead (roll-mode-radios.hbs, styled by `.stonetop-roll-mode-control` above, shared
-   with the character sheet), so a stacked-pill variant here would be a second shape nothing
-   renders — and the drift that follows from keeping one. The pill lives only in the modern
-   moves heading. */
 
 .steading-sheet .sheet-tab {
 	padding: 12px;
@@ -32107,8 +32031,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* Every segmented strip in the system — the board's section-level Table/Board toggle, its
-   per-card lane control far below, and the steading's Roll Modifier pill (whose own block sits
-   much earlier in this file) — begins by undoing the same core button styling. Stated once,
+   per-card lane control far below, and the pre-roll dialog's Roll Modifier pill (whose own
+   block sits much earlier in this file) — begins by undoing the same core button styling.
+   Stated once,
    grouped, so they cannot drift; each strip's own block then carries only what it genuinely
    differs on (sizing, spacing, fill and type).
 

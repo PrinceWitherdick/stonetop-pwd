@@ -1,6 +1,16 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { FakeActorBuilder } from "../../fakes/FakeActorBuilder.js";
+import { promptRoll } from "../../../module/dialogs/RollDialog.js";
+
+// Every move roll opens the pre-roll prompt now — Advantage / Normal / Disadvantage plus a
+// one-off modifier, fresh each time (module/dialogs/RollDialog.js). It has its own tests; here
+// it is stubbed so the identify ladder under test is what these assertions see, and so the
+// `global.Dialog` captures below only ever catch the pickers they were written for.
+vi.mock("../../../module/dialogs/RollDialog.js", () => ({
+	DEFAULT_ROLL_MODE: "normal",
+	promptRoll: vi.fn(async () => ({ rollMode: "normal", modifier: 0 })),
+}));
 
 // Identifying an arcanum by Knowing Things about it (Book I, Discoveries p.440):
 //   "on a 10+, give them the card and have them read both sides; on a 7-9, have them read the
@@ -18,9 +28,8 @@ const KNOW_THINGS = {
 
 const named = name => ({ type: "move", name, system: { description: `<p>${name} does a thing.</p>` } });
 
-function makeCharacterMock(rollTotal, rollMode = "normal") {
+function makeCharacterMock(rollTotal) {
 	return {
-		rollMode,
 		onDirectStatRoll:          vi.fn(async () => ({ total: rollTotal })),
 		identifyArcanum:           vi.fn(async () => {}),
 		identifyAndRevealArcanum:  vi.fn(async () => {}),
@@ -30,11 +39,14 @@ function makeCharacterMock(rollTotal, rollMode = "normal") {
 	};
 }
 
+// `rollMode` here is what the PLAYER answers the pre-roll prompt with — the base the move's own
+// advantage is then applied on top of, which is the pairing p.230 turns on.
 function makeSheet({ rollTotal = 10, isEditable = true, items = [KNOW_THINGS], rollMode = "normal" } = {}) {
+	promptRoll.mockResolvedValue({ rollMode, modifier: 0 });
 	const actor = new FakeActorBuilder().withItems(items).build();
 	actor.id = "actor-1";
 	actor.isOwner = true;
-	actor.typedActor = makeCharacterMock(rollTotal, rollMode);
+	actor.typedActor = makeCharacterMock(rollTotal);
 	const Base = class {
 		constructor() { this._actor = actor; }
 		get actor() { return this._actor; }
@@ -48,8 +60,7 @@ function makeSheet({ rollTotal = 10, isEditable = true, items = [KNOW_THINGS], r
 }
 
 beforeEach(() => {
-	// The situational-modifier prompt is a client setting; off means _maybePromptRollModifier
-	// resolves to 0 without opening a dialog, so the roll runs straight through.
+	promptRoll.mockResolvedValue({ rollMode: "normal", modifier: 0 });
 	global.game.settings ??= {};
 	global.game.settings.get = () => false;
 	global.game.user = { isGM: false };
@@ -198,6 +209,8 @@ describe("the moves that bend the identify roll", () => {
 		}
 	});
 
+	// The player answered the pre-roll prompt with Disadvantage; Naturalist's advantage cancels
+	// it rather than replacing it, which is the whole of p.230.
 	it("cancels advantage against disadvantage instead of overriding it (p.230)", async () => {
 		const dialog = captureDialog();
 		const { sheet, character } = makeSheet({ rollTotal: 11, rollMode: "dis", items: [KNOW_THINGS, named("Naturalist")] });

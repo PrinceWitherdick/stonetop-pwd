@@ -183,19 +183,16 @@ describe("classic moves sidebar", () => {
 		expect(SIDEBAR_HBS).toContain("steading-moves-sidebar");
 	});
 
-	// Classic means the layout as it was, roll modifier included: the stacked radio list the
-	// character sheet's sidebar still carries, not the segmented pill the modern moves heading
-	// took. The pill belongs to the modern tab and must not follow the sidebar back.
-	it("brings back the stacked radios rather than the modern pill", () => {
-		expect(SIDEBAR_HBS).toContain('{{> "stonetop.roll-mode-radios"');
-		expect(stripComments(SIDEBAR_HBS)).not.toContain("roll-mode-picker");
-	});
-
-	// Rolling a homefront move is open to a player who cannot edit the steading, so choosing
-	// HOW to roll has to be too. The partial disables the group unless told otherwise, so
-	// forgetting this leaves every player looking at a greyed-out control.
-	it("leaves the radios usable by a player who cannot edit the sheet", () => {
-		expect(stripComments(SIDEBAR_HBS)).toMatch(/roll-mode-radios"[^}]*enabled=true/);
+	// Neither shape of the roll modifier comes back with the classic layout. It was a stacked
+	// radio list here and a segmented pill on the modern heading, and BOTH were sticky: whatever
+	// you last rolled with, you kept rolling with. It is a per-roll question now
+	// (module/dialogs/RollDialog.js), so a sheet that brought either control back would be
+	// writing a flag nothing reads.
+	it("brings back neither the stacked radios nor the modern pill", () => {
+		const markup = stripComments(SIDEBAR_HBS);
+		expect(markup).not.toContain("roll-mode-radios");
+		expect(markup).not.toContain("roll-mode-picker");
+		expect(markup).not.toContain("Roll Modifier");
 	});
 
 	// `.steading-moves-tab` carries `display: flex`, and an unlayered `display` on a `.tab`

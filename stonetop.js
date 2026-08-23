@@ -421,8 +421,6 @@ Hooks.once("init", () => {
 		"stonetop.inv-item-small":   "systems/stonetop-pwd/templates/actor/partials/inv-item-small.hbs",
 		"stonetop.inv-artifact":     "systems/stonetop-pwd/templates/actor/partials/inv-artifact.hbs",
 		"stonetop.choice-gear-row":  "systems/stonetop-pwd/templates/actor/partials/choice-gear-row.hbs",
-		"stonetop.roll-mode-picker": "systems/stonetop-pwd/templates/actor/partials/roll-mode-picker.hbs",
-		"stonetop.roll-mode-radios": "systems/stonetop-pwd/templates/actor/partials/roll-mode-radios.hbs",
 		"stonetop.steading-header-season":    "systems/stonetop-pwd/templates/actor/partials/steading-header-season.hbs",
 		"stonetop.steading-section-toggle":   "systems/stonetop-pwd/templates/actor/partials/steading-section-toggle.hbs",
 		"stonetop.steading-stats-bar":        "systems/stonetop-pwd/templates/actor/partials/steading-stats-bar.hbs",

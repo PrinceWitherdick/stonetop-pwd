@@ -535,10 +535,6 @@
         "name": "Hide Rollable Icon",
         "hint": "Hide the dice icon that marks rollable moves and stats. Rolling still works: click the move name or stat row to roll."
       },
-      "promptRollModifier": {
-        "name": "Prompt for Roll Modifier",
-        "hint": "Ask for a one-off modifier (a held bonus, a GM-granted +1, etc.) before each move or stat roll on the character sheet. Hold Shift while clicking the roll to skip the prompt."
-      },
       "openSheetsInEditMode": {
         "name": "Open Sheets in Edit Mode",
         "hint": "Open character, steading, monster, and NPC sheets in Edit mode instead of Play mode. The header wrench still switches modes per sheet. NPC sheets you don't own always open in Play mode."
@@ -795,7 +791,8 @@
       "goneNpc": "That NPC no longer exists."
     },
     "rollMode": {
-      "label": "Roll modifier",
+      "pickerLabel": "How you're rolling this",
+      "modifierLabel": "One-off modifier",
       "adv": "Advantage",
       "advTooltip": "Roll 3d6 and keep the highest two",
       "normal": "Normal",

@@ -2637,22 +2637,15 @@ describe("buildSnapshot — movelist / level move budget", () => {
 
 // ── rollMode ──────────────────────────────────────────────────────────────────
 
+// The snapshot used to carry one, for a stacked radio list in the Moves sidebar. Nothing
+// renders a roll mode any more: it is asked per roll (module/dialogs/RollDialog.js), which is
+// what stopped players carrying yesterday's Advantage into today's rolls. A stale flag left on
+// an old actor must not come back through the snapshot and light a control up somewhere.
 describe("buildSnapshot — rollMode", () => {
-	it("defaults to 'normal' when no flag set", async () => {
-		const snap = await new TestCharacterBuilder(new FakeActorBuilder().build()).build().buildSnapshot();
-		expect(snap.rollMode).toBe("normal");
-	});
-
-	it("reflects pbta rollMode flag", async () => {
+	it("carries none, even for an actor that still holds the retired flag", async () => {
 		const actor = new FakeActorBuilder().withRollMode("adv").build();
 		const snap = await new TestCharacterBuilder(actor).build().buildSnapshot();
-		expect(snap.rollMode).toBe("adv");
-	});
-
-	it("normalizes legacy default rollMode to normal", async () => {
-		const actor = new FakeActorBuilder().withRollMode("def").build();
-		const snap = await new TestCharacterBuilder(actor).build().buildSnapshot();
-		expect(snap.rollMode).toBe("normal");
+		expect(snap.rollMode).toBeUndefined();
 	});
 });
 describe("buildSnapshot - homefront moves", () => {

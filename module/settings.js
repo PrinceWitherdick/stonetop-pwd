@@ -1087,18 +1087,6 @@ export function registerSettings() {
 		onChange: value => applyHideRollableIcon(value),
 	});
 
-	// Prompt for a one-off situational modifier before each 2d6 move/stat roll on
-	// the character sheet (a held bonus, a GM-granted +1, etc.). Read at roll time
-	// (StonetopCharacterSheet); Shift-clicking the roll skips the prompt.
-	game.settings.register(SYSTEM_ID, "promptRollModifier", {
-		name: "stonetop.settings.promptRollModifier.name",
-		hint: "stonetop.settings.promptRollModifier.hint",
-		scope: "client",
-		config: true,
-		type: Boolean,
-		default: false,
-	});
-
 	// Open actor sheets (character / steading / monster / NPC) in Edit mode instead of
 	// Play mode. Read once when the sheet is constructed; the header wrench still
 	// toggles modes per-sheet afterward. The NPC sheet additionally requires ownership
@@ -1560,11 +1548,6 @@ export function applyHideRollableIcon(value) {
 
 export function applyReduceMotion(value) {
 	document.documentElement.classList.toggle("stonetop-reduce-motion", !!value);
-}
-
-// Whether to prompt for a one-off situational modifier before a move/stat roll.
-export function getPromptRollModifierSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptRollModifier") ?? false;
 }
 
 // Whether actor sheets should open in Edit mode rather than Play mode.
