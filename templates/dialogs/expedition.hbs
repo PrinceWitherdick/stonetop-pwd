@@ -106,6 +106,51 @@
     </div>
     {{/if}}
 
+    {{!-- Requisition step: the steading's communal assets, and which of them this trip
+          takes (GM-only; built in ExpeditionDialog getData). Clicking an on-hand asset
+          marks it out on the steading sheet, tagged with this expedition; clicking one
+          that is already ours sends it home. --}}
+    {{#if assetPicker}}
+    <div class="stonetop-exp-assets">
+      <div class="stonetop-exp-assets-head">
+        <span class="stonetop-exp-assets-title"><span class="stonetop-glyph stonetop-glyph--diamond">◇</span> Steading assets</span>
+        <span class="stonetop-exp-assets-live">live from the steading</span>
+      </div>
+
+      {{#if assetPicker.hasSteading}}
+        {{#if assetPicker.hasRows}}
+        <p class="stonetop-exp-assets-hint">
+          Click what they leave with. It shows struck through on {{assetPicker.steadingName}}&rsquo;s sheet, named to this expedition, until you click it again to bring it home.
+        </p>
+        <ul class="stonetop-exp-assets-list">
+          {{#each assetPicker.rows}}
+          <li class="stonetop-exp-asset{{#if stateClass}} {{stateClass}}{{/if}}">
+            {{!-- Where it went is printed under the row rather than hung off the button as a
+                  tooltip: the button is disabled, and a disabled control fires no pointer
+                  events, so a tooltip on it would never open. --}}
+            <button type="button" class="stonetop-exp-asset-btn"
+                    data-asset-index="{{index}}" data-take="{{take}}"
+                    {{#if elsewhere}}disabled{{/if}}>
+              <span class="tick">{{glyph}}</span>
+              <span class="nm">{{name}}</span>
+            </button>
+            {{#if elsewhere}}<span class="stonetop-exp-asset-where">{{where}}</span>{{/if}}
+          </li>
+          {{/each}}
+        </ul>
+        <p class="stonetop-exp-assets-foot">
+          {{#if assetPicker.takenCount}}Going with them: <b>{{assetPicker.takenCount}}</b>. Bring it back safely.
+          {{else}}Nothing of the village&rsquo;s is going with them yet.{{/if}}
+        </p>
+        {{else}}
+        <p class="stonetop-exp-assets-empty">{{assetPicker.steadingName}} has no assets listed yet. Add them on the steading sheet.</p>
+        {{/if}}
+      {{else}}
+      <p class="stonetop-exp-assets-empty">No steading sheet in this world yet, so there is nothing to requisition from.</p>
+      {{/if}}
+    </div>
+    {{/if}}
+
     {{#if showRoll}}
     <div class="stonetop-spring-roll-wrap">
       {{#if roll}}

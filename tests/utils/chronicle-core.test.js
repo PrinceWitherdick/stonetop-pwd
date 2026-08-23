@@ -229,6 +229,46 @@ describe("buildChroniclePages — expeditions", () => {
 		expect(bodyOf(page, "Coming home")).toContain("A true triumph");
 	});
 
+	// What the Requisition step actually ticked off, above whatever the GM typed. The steading
+	// sheet says where an asset is WHILE it is out; this says what the trip borrowed, and goes
+	// on saying it after the wagon is back in the barn.
+	it("names the steading assets the trip took, above the GM's own words", () => {
+		const exp = expeditionFull();
+		exp.requisitioned = [{ index: 0, name: "A pair of hardy draft horses" }, { index: 3, name: "A wagon" }];
+
+		const body = bodyOf(buildChroniclePages({ pcs: [], expeditions: [exp] })[0], "Requisitioned");
+
+		expect(body).toContain("<p><strong>Taken from the steading</strong></p>");
+		expect(body).toContain("<li>A pair of hardy draft horses</li>");
+		expect(body).toContain("<li>A wagon</li>");
+		expect(body.indexOf("A wagon")).toBeLessThan(body.indexOf("Two ponies from the commons."));
+	});
+
+	it("names them even when nothing was typed on the step", () => {
+		const exp = expeditionFull();
+		delete exp.requisition;
+		exp.requisitioned = [{ index: 3, name: "A wagon" }];
+
+		expect(bodyOf(buildChroniclePages({ pcs: [], expeditions: [exp] })[0], "Requisitioned"))
+			.toContain("<li>A wagon</li>");
+	});
+
+	it("escapes an asset name, and skips a record with no name left on it", () => {
+		const exp = expeditionFull();
+		exp.requisitioned = [{ index: 0, name: "Finn's <cart>" }, { index: 1, name: "  " }, { index: 2 }];
+
+		const body = bodyOf(buildChroniclePages({ pcs: [], expeditions: [exp] })[0], "Requisitioned");
+
+		expect(body).toContain("Finn&#x27;s &lt;cart&gt;");
+		expect(body).not.toContain("<cart>");
+		expect((body.match(/<li>/g) ?? [])).toHaveLength(1);
+	});
+
+	it("says nothing about assets when the trip took none", () => {
+		expect(bodyOf(buildChroniclePages({ pcs: [], expeditions: [expeditionFull()] })[0], "Requisitioned"))
+			.not.toContain("Taken from the steading");
+	});
+
 	it("lists only the ticked chart checks, grouped, with the spiral-bullet wrapper", () => {
 		const way = bodyOf(buildChroniclePages({ pcs: [], expeditions: [expeditionFull()] })[0], "The way ahead");
 		expect(way).toContain('<div class="stonetop-location-body">'); // list-bearing body gets spiral bullets

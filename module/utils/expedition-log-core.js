@@ -22,6 +22,33 @@ export function normalizeLog(raw) {
 	return { currentId, list };
 }
 
+/**
+ * A logged trip's display name: its own title, or "Expedition N" for one never named.
+ *
+ * The switcher, the asset a trip is holding on the steading sheet, and the Chronicle page
+ * all have to call an unnamed trip something, and they have to call it the SAME thing:
+ * an asset tagged "Expedition 2" against a switcher reading "Expedition 3" names no trip
+ * at all. `index` is the trip's position in the log (oldest first).
+ */
+export function expeditionLabel(entry, index) {
+	const title = String(entry?.title ?? "").trim();
+	return title || `Expedition ${index + 1}`;
+}
+
+/**
+ * Every logged trip's id to the name it is called by, in one Map.
+ *
+ * The steading copies a trip's name onto whatever that trip takes out of its stores, so it needs
+ * the whole answer at once: what each trip is called NOW, and (by absence) which ids are no longer
+ * trips at all. Built from `expeditionLabel`, so a copy and the switcher cannot word one trip two
+ * ways. See StonetopSteading#reconcileHeldAssets.
+ */
+export function expeditionNames(log) {
+	return new Map((log?.list ?? [])
+		.map((entry, index) => [entry?.id, expeditionLabel(entry, index)])
+		.filter(([id]) => id));
+}
+
 /** The trip currently being edited, or null when the log is empty. */
 export function currentExpedition(log) {
 	return log.list.find(e => e.id === log.currentId) ?? null;

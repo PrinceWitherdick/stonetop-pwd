@@ -16,7 +16,11 @@ import {
 	addExpedition,
 	selectExpedition,
 	deleteExpedition,
+	expeditionLabel,
+	expeditionNames,
 } from "../utils/expedition-log-core.js";
+import { StonetopSteading } from "../actors/steading/StonetopSteading.js";
+import { assetTakenLabel } from "../utils/requisition-asset.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
 import { deriveLoadLevel, LOAD_LEVEL_LIMITS } from "../utils/load.js";
 import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
@@ -408,6 +412,12 @@ export class ExpeditionDialog extends StepperDialog {
 			ev.currentTarget.dataset.actorId,
 			ev.currentTarget.classList.contains("is-out"),
 		));
+		// Requisition step: tick an asset the party leaves with (or click one of ours to send it
+		// home). The row carries what its own click means, decided when the row was built.
+		html.find(".stonetop-exp-asset-btn").on("click", ev => this._toggleRequisitionedAsset(
+			Number(ev.currentTarget.dataset.assetIndex),
+			ev.currentTarget.dataset.take === "true",
+		));
 		// Route step: pick a place off the map or the list, or change which map is showing. The
 		// same binder the popout uses, because it is the same partial (dialogs/journey-controls.js).
 		const journeyHandlers = {
@@ -453,7 +463,9 @@ export class ExpeditionDialog extends StepperDialog {
 				hasMultiple: list.length > 1,
 				options:     list.map((e, i) => ({
 					id:        e.id,
-					label:     e.title?.trim() ? e.title : `Expedition ${i + 1}`,
+					// Through the shared helper: an unnamed trip is tagged onto whatever assets it
+					// takes out of the steading, and the two names have to be the same one.
+					label:     expeditionLabel(e, i),
 					isCurrent: e.id === currentId,
 				})),
 			},
@@ -472,6 +484,12 @@ export class ExpeditionDialog extends StepperDialog {
 		// every PC's inventory. Built only on this step so the others stay cheap.
 		if (step.key === "outfit" && game.user?.isGM) {
 			data.loadReadout = await this._buildLoadReadout();
+		}
+		// The Requisition step gains the steading's asset list, with this trip's own takes
+		// marked. GM-only for the same reason as the load readout, and because taking one
+		// writes to the steading sheet.
+		if (step.key === "requisition" && game.user?.isGM) {
+			data.assetPicker = this._buildAssetPicker();
 		}
 		// The route step gains the maps and the travel times. Same shape as the readout above:
 		// built only on its own step, because it browses the art folder and measures an image.
@@ -534,11 +552,14 @@ export class ExpeditionDialog extends StepperDialog {
 		return { id: foundry.utils.randomID(), title: "", createdAt: Date.now() };
 	}
 
-	// Rename the current trip (refreshes the switcher label).
+	// Rename the current trip (refreshes the switcher label, and the label on anything it
+	// is holding out of the steading's stores).
 	async _saveTitle(value) {
 		const { log, entry } = ensureCurrent(this._log(), () => this._newExpedition());
 		entry.title = value;
-		await this._persistLog(log);
+		// Two documents, neither waiting on the other: the log is a world setting and the labels
+		// are a flag on the steading, and the sync works off the log already renamed above.
+		await Promise.all([this._persistLog(log), this._syncHeldAssets(log)]);
 		this.render(false);
 	}
 
@@ -572,7 +593,10 @@ export class ExpeditionDialog extends StepperDialog {
 			content: `<p>Delete <strong>${escHtml(label)}</strong> from the log? Its notes can't be recovered.</p>`,
 		});
 		if (!ok) return;
-		await this._persistLog(deleteExpedition(this._log(), current.id));
+		const log = deleteExpedition(this._log(), current.id);
+		// The trip is gone, so it is holding nothing, and every unnamed trip after it has just
+		// been renumbered. Both are the steading's copies going stale; one pass answers both.
+		await Promise.all([this._persistLog(log), this._syncHeldAssets(log)]);
 		await this._closeMapWindows();
 		this._step = 0;
 		this.render(false);
@@ -638,6 +662,121 @@ export class ExpeditionDialog extends StepperDialog {
 		const { log, entry } = ensureCurrent(this._log(), () => this._newExpedition());
 		foundry.utils.setProperty(entry, path, value);
 		await this._persistLog(log);
+	}
+
+	// ── Requisition: the steading's assets, and what this trip takes ─────────────
+	// The Requisition step lists what the village owns in common and lets the GM tick off
+	// what the party leaves with. A ticked asset is marked out on the STEADING (struck
+	// through there, tagged with this trip), which is what makes "where did the wagon go?"
+	// answerable months later, and this trip also keeps its own list for the Chronicle.
+	//
+	// The live state is read off the steading rather than off the trip's list, because the
+	// steading is where an asset actually is: returning a horse by clicking it on the
+	// steading sheet has to show here as a horse back home, with no second write to keep in
+	// step. The trip's `requisitioned` list is the RECORD of the take, for the journal.
+
+	/** The steading actor plus its wrapper, or null when the world has no steading sheet yet. */
+	_steadingWrapper() {
+		const actor = getStonetopSteadingActor();
+		if (!actor) return null;
+		return { actor, steading: actor.typedActor ?? new StonetopSteading(actor) };
+	}
+
+	// One row per named steading asset: on hand, out with this trip, or out elsewhere
+	// (with a character, or with another trip). The class and glyph are resolved here so
+	// the template stays a list of rows, like the load readout above.
+	_buildAssetPicker() {
+		const found = this._steadingWrapper();
+		if (!found) return { hasSteading: false, hasRows: false, rows: [], takenCount: 0 };
+		const tripId = this._currentExpedition()?.id ?? null;
+		// The steading is the record of where a communal asset actually IS, so which of them this
+		// trip is holding is its question to answer rather than a predicate spelled again here.
+		const ourIndexes = new Set(found.steading.getAssetsOnExpedition(tripId).map(a => a.index));
+
+		const rows = found.steading.getNamedAssets().map(asset => {
+			const ours      = ourIndexes.has(asset.index);
+			const elsewhere = !!asset.takenBy && !ours;
+			return {
+				index:      asset.index,
+				name:       asset.name,
+				ours, elsewhere,
+				// What a click on this row means, decided here: one of ours is sent home.
+				take:       !ours,
+				stateClass: ours ? "is-ours" : (elsewhere ? "is-elsewhere" : ""),
+				glyph:      ours ? "✓" : (elsewhere ? "✕" : "+"),
+				where:      elsewhere ? assetTakenLabel(asset) : "",
+			};
+		});
+
+		return {
+			hasSteading:  true,
+			steadingName: found.actor.name,
+			hasRows:      rows.length > 0,
+			rows,
+			takenCount:   rows.filter(r => r.ours).length,
+		};
+	}
+
+	// Take an asset out on this trip, or send it back. `take` is what the clicked row was
+	// offering, so a row already ours returns it.
+	//
+	// Two writes, and they don't fold into one: the steading holds where the thing IS (so its
+	// sheet can strike it through and say where it went), the trip holds what it BORROWED (so
+	// the Chronicle page can name it even after it comes home). The steading write is guarded,
+	// because it is another document and a refusal there must not leave the trip claiming a
+	// wagon the village still has.
+	async _toggleRequisitionedAsset(index, take) {
+		if (!Number.isInteger(index)) return;
+		const found = this._steadingWrapper();
+		if (!found) {
+			ui.notifications?.warn?.("No steading sheet in this world to requisition from.");
+			return;
+		}
+		const { log, entry } = ensureCurrent(this._log(), () => this._newExpedition());
+		const name   = found.steading.getNamedAssets().find(a => a.index === index)?.name ?? "";
+		const record = Array.isArray(entry.requisitioned) ? entry.requisitioned : [];
+
+		try {
+			if (take) {
+				const title = expeditionLabel(entry, log.list.findIndex(e => e.id === entry.id));
+				const ok = await found.steading.setAssetTaken(index, { expedition: { id: entry.id, title } });
+				if (!ok) return;
+				// Deduped on index: an asset returned from the steading sheet and then taken
+				// again here would otherwise be recorded twice on the one trip.
+				entry.requisitioned = record.some(r => r.index === index) ? record : [...record, { index, name }];
+			} else {
+				await found.steading.returnAsset(index);
+				entry.requisitioned = record.filter(r => r.index !== index);
+			}
+		} catch (err) {
+			warn("Could not update the steading's assets:", err);
+			ui.notifications?.warn?.(`Could not update ${found.actor.name}'s assets.`);
+			return;
+		}
+
+		await this._persistLog(log);
+		this.render(false);
+	}
+
+	/**
+	 * Put the steading's copy of "who is holding what" back in step with the log.
+	 *
+	 * Called after ANY write that changes what a trip is called or whether it exists, which is
+	 * both of the ones there are: a rename, and a delete. The whole log goes over rather than the
+	 * one trip that changed, because deleting a trip renumbers every unnamed trip after it and
+	 * the delete is also how an asset's trip stops existing. See reconcileHeldAssets.
+	 *
+	 * Guarded and quiet: the steading is another document, and a refusal there must not take the
+	 * log write down with it.
+	 */
+	async _syncHeldAssets(log) {
+		const found = this._steadingWrapper();
+		if (!found) return;
+		try {
+			await found.steading.reconcileHeldAssets(expeditionNames(log));
+		} catch (err) {
+			warn("Could not bring the steading's requisitioned assets up to date:", err);
+		}
 	}
 
 	// Roll 2d6 +Fortunes for Requisition, remember the tier (to highlight the

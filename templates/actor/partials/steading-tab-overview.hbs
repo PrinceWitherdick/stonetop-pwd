@@ -71,9 +71,19 @@
 				<ul class="steading-list steading-assets-list">
 					{{#each stonetop.assets}}
 					{{#if name}}
-					<li class="steading-list-item">
+					{{!-- An asset out on requisition reads struck through, and its tooltip names
+					      where it went (a character, an expedition, or both). Clicking the name
+					      brings it home: see _onReturnAsset in StonetopSteadingSheet.js. --}}
+					<li class="steading-list-item{{#if takenBy}} is-taken{{/if}}">
 						<span class="steading-list-bullet" aria-hidden="true"></span>
+						{{#if takenBy}}
+						<span class="steading-list-name steading-asset-name steading-asset-taken"
+						      data-index="{{@index}}"
+						      data-tooltip="{{takenTooltip}}"
+						      data-tooltip-direction="UP">{{name}}</span>
+						{{else}}
 						<span class="steading-list-name steading-asset-name">{{name}}</span>
+						{{/if}}
 						<button type="button" class="steading-list-delete"
 						        data-list="assets" data-index="{{@index}}"
 						        title="Remove" tabindex="-1">

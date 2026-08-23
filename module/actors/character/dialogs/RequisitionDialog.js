@@ -5,7 +5,7 @@ import { beastFollowerForAsset, followerInputFromBeast } from "../../../data/bea
 import { buildCustomFollower, nextFollowerOrder } from "../../../data/follower-build.js";
 import { bringDialogToFront } from "../../../utils/front-on-open.js";
 import { escHtml } from "../../../utils/strings.js";
-import { CUSTOM_ASSET_VALUE, wireCustomAssetSelect } from "../../../utils/requisition-asset.js";
+import { CUSTOM_ASSET_VALUE, assetTakenLabel, wireCustomAssetSelect } from "../../../utils/requisition-asset.js";
 import { SYSTEM_ID } from "../../../system-id.js";
 
 /**
@@ -50,9 +50,11 @@ export class RequisitionDialog extends StonetopDialog {
 			fortunes: sign(this._steading.getStatValue("fortunes")),
 			assets: this._steading.getAvailableAssets(),
 			customAssetValue: CUSTOM_ASSET_VALUE,
+			// "Already out" reads through the shared wording, so an asset a GM sent out on an
+			// expedition names the trip here rather than reporting "Taken by someone".
 			takenAssets: assets
 				.filter(asset => asset.name && asset.takenBy)
-				.map(asset => ({ name: asset.name, takenByName: asset.takenBy?.name ?? "someone" })),
+				.map(asset => ({ name: asset.name, where: assetTakenLabel(asset) })),
 		};
 	}
 

@@ -19,6 +19,9 @@ import {
 	journeyRoute, atLeastPhrase, routeLegLines, routeLine, fillChartBlank,
 } from "./travel-route.js";
 import { SEASONAL_GAINS } from "../dialogs/spring-burst-data.js";
+// One name for an unnamed trip: the switcher, the steading's held assets and this page all
+// have to agree, so the fallback wording lives in one place rather than three.
+import { expeditionLabel } from "./expedition-log-core.js";
 // Change-detection hash (pure, Foundry-free) — lets us tell a page's still-pristine
 // prose (safe to refresh from the source) from one the GM has edited in the journal.
 import { hashString } from "../hooks/journal-sync-core.js";
@@ -146,6 +149,19 @@ function journeyNote(chart, route) {
 	return paragraphs(chart?.route);
 }
 
+// What the trip took out of the steading's common stores, as ticked on the Requisition
+// step. Printed ABOVE the GM's own words so the page names the assets even when nothing
+// was typed: this list, and the "out on <trip>" tag the steading sheet wears while they
+// are gone, are the two halves of the answer to "where did the wagon go?".
+function requisitionedList(taken) {
+	const names = (taken ?? [])
+		.map(t => String(t?.name ?? "").trim())
+		.filter(Boolean);
+	if (!names.length) return "";
+	const lis = names.map(n => `<li>${escHtml(n)}</li>`).join("");
+	return `<p><strong>Taken from the steading</strong></p><ul>${lis}</ul>`;
+}
+
 // Compile one logged expedition into a Chronicle page, or null when it holds nothing
 // worth recording. The arriving-home checklist is GM prep (questions, not answers), so
 // only its free-text "Return Triumphant?" note carries through.
@@ -160,7 +176,7 @@ function buildExpeditionPage(exp, index) {
 		proseSection("Destination & route", journeyProse(route) + journeyNote(chart, route)),
 		proseSection("The way ahead", checkedGroups(CHART_GROUPS, chart.checks, route) + paragraphs(chart.notes)),
 		proseSection("Outfit & supplies", paragraphs(exp?.outfit)),
-		proseSection("Requisitioned", paragraphs(exp?.requisition)),
+		proseSection("Requisitioned", requisitionedList(exp?.requisitioned) + paragraphs(exp?.requisition)),
 		proseSection("Other preparations", paragraphs(exp?.prep)),
 		proseSection("The journey", paragraphs(exp?.running)),
 		proseSection("Coming home", paragraphs(home.notes)),
@@ -168,7 +184,7 @@ function buildExpeditionPage(exp, index) {
 	if (!sections.length) return null;
 
 	const title = String(exp?.title ?? "").trim();
-	const name  = title ? `Expedition: ${title}` : `Expedition ${index + 1}`;
+	const name  = title ? `Expedition: ${title}` : expeditionLabel(exp, index);
 	return { key: `${EXPEDITION_PAGE_KEY_PREFIX}${exp.id}`, name, sections };
 }
 

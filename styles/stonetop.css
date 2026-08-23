@@ -29399,31 +29399,36 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    font setting and holds the 0.9em readability floor), never a bare rem; the tags and
    counts are set in the house face with tabular figures rather than a monospace stack,
    which appeared nowhere else in the system. */
-.stonetop-expedition-dialog .stonetop-exp-load {
+.stonetop-expedition-dialog .stonetop-exp-load,
+.stonetop-expedition-dialog .stonetop-exp-assets {
 	margin-top: 12px;
 	border: 1px solid rgba(0,0,0,0.14);
 	border-radius: var(--st-radius-lg);
 	background: rgba(0,0,0,0.03);
 	overflow: hidden;
 }
-.stonetop-expedition-dialog .stonetop-exp-load-head {
+.stonetop-expedition-dialog .stonetop-exp-load-head,
+.stonetop-expedition-dialog .stonetop-exp-assets-head {
 	display: flex; align-items: center; gap: 8px;
 	padding: 8px 12px;
-	/* 0.10, not --st-gold-bg's 0.12: the same wash the packhorse note carries, and the
-	   pair reads as one tint only while they stay equal. See the --st-gold-* block. */
+	/* 0.10, not --st-gold-bg's 0.12: the same wash the packhorse note carries. See the
+	   --st-gold-* block. */
 	background: rgba(201,162,39,0.10);
 	border-bottom: 1px solid rgba(0,0,0,0.08);
 }
-.stonetop-expedition-dialog .stonetop-exp-load-title {
+.stonetop-expedition-dialog .stonetop-exp-load-title,
+.stonetop-expedition-dialog .stonetop-exp-assets-title {
 	font-family: var(--font-stonetop);
 	text-transform: uppercase; letter-spacing: 0.08em;
 	font-size: var(--st-fs-2xs); font-weight: 700; color: var(--st-gold-text);
 }
-.stonetop-expedition-dialog .stonetop-exp-load-live {
+.stonetop-expedition-dialog .stonetop-exp-load-live,
+.stonetop-expedition-dialog .stonetop-exp-assets-live {
 	margin-left: auto; font-size: var(--st-fs-2xs); color: var(--st-text-muted);
 	display: inline-flex; align-items: center; gap: 5px; font-style: italic;
 }
-.stonetop-expedition-dialog .stonetop-exp-load-live::before {
+.stonetop-expedition-dialog .stonetop-exp-load-live::before,
+.stonetop-expedition-dialog .stonetop-exp-assets-live::before {
 	content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--st-green-border);
 }
 
@@ -29567,8 +29572,71 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop-expedition-dialog .stonetop-exp-load-note.danger { color: var(--st-red-text); font-weight: 600; font-style: normal; }
 .stonetop-expedition-dialog .stonetop-exp-load-note .mod { color: var(--st-gold-text); font-weight: 700; font-style: normal; }
-.stonetop-expedition-dialog .stonetop-exp-load-empty {
+.stonetop-expedition-dialog .stonetop-exp-load-empty,
+.stonetop-expedition-dialog .stonetop-exp-assets-empty {
 	padding: 12px; font-size: var(--st-fs-sm); color: var(--st-text-muted); font-style: italic; text-align: center;
+}
+
+/* ── Run an Expedition · Requisition step · the steading's assets ──────────────
+   The same card chrome as the Party load readout above (head, hint, list, foot), because
+   the two panels sit on adjacent steps of one walkthrough and a second card idiom on the
+   next screen reads as a second tool. Literally the same: the shell, head, title, live dot
+   and empty line are folded into that block's own selectors rather than restated here, so
+   the two cards cannot drift into two tints. Only what this panel has of its OWN is below.
+
+   ROWS, NOT PILLS. The party chips are names; these are the book's own asset lines, which
+   run to a full stat block ("A pair of hardy draft horses — HP 10 each; d6+3 dmg …").
+   A pill row wraps those into ragged blocks, so each asset takes a full-width row and
+   wraps inside it. A row already out with this trip wears the tick and the gold wash; one
+   out with someone else is struck through and disabled, and says where it went. */
+.stonetop-expedition-dialog .stonetop-exp-assets-hint,
+.stonetop-expedition-dialog .stonetop-exp-assets-foot {
+	margin: 0; padding: 8px 12px;
+	font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
+}
+.stonetop-expedition-dialog .stonetop-exp-assets-hint { border-bottom: 1px solid rgba(0,0,0,0.08); }
+.stonetop-expedition-dialog .stonetop-exp-assets-foot { border-top: 1px solid rgba(0,0,0,0.08); }
+.stonetop-expedition-dialog .stonetop-exp-assets-foot b { color: var(--st-gold-text); font-style: normal; }
+.stonetop-expedition-dialog .stonetop-exp-assets-list {
+	list-style: none; margin: 0; padding: 0;
+}
+.stonetop-expedition-dialog .stonetop-exp-asset {
+	display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px;
+	padding: 4px 12px;
+}
+.stonetop-expedition-dialog .stonetop-exp-asset + .stonetop-exp-asset {
+	border-top: 1px solid rgba(0,0,0,0.05);
+}
+.stonetop-expedition-dialog .stonetop-exp-asset-btn {
+	display: flex; align-items: baseline; gap: 8px; text-align: left;
+	flex: 1 1 100%; width: auto; min-width: 0; min-height: 0;
+	padding: 3px 6px; border: 1px solid transparent; border-radius: var(--st-radius-sm);
+	background: none; color: var(--st-text-body); cursor: pointer;
+	font-family: var(--font-stonetop); font-size: var(--st-fs-xs); line-height: 1.35;
+}
+.stonetop-expedition-dialog .stonetop-exp-asset-btn:hover { background: rgba(0,0,0,0.06); }
+.stonetop-expedition-dialog .stonetop-exp-asset-btn .tick {
+	flex: 0 0 auto; width: 1em; text-align: center;
+	font-weight: 700; font-size: var(--st-fs-2xs); color: var(--st-text-faint);
+}
+.stonetop-expedition-dialog .stonetop-exp-asset-btn .nm { flex: 1 1 auto; min-width: 0; }
+
+.stonetop-expedition-dialog .stonetop-exp-asset.is-ours { background: var(--st-gold-bg); }
+.stonetop-expedition-dialog .stonetop-exp-asset.is-ours .stonetop-exp-asset-btn {
+	border-color: var(--st-gold-border); background: rgba(255,255,255,0.45); font-weight: 600;
+}
+.stonetop-expedition-dialog .stonetop-exp-asset.is-ours .tick { color: var(--st-green-border); }
+
+/* Out with someone else: not this trip's to take, so the button is inert and the row
+   says where it went beneath the name. */
+.stonetop-expedition-dialog .stonetop-exp-asset.is-elsewhere .stonetop-exp-asset-btn {
+	cursor: default; color: var(--st-text-faint); text-decoration: line-through;
+	text-decoration-color: rgba(0,0,0,0.35);
+}
+.stonetop-expedition-dialog .stonetop-exp-asset.is-elsewhere .stonetop-exp-asset-btn:hover { background: none; }
+.stonetop-expedition-dialog .stonetop-exp-asset-where {
+	flex: 1 1 100%; padding-left: 24px;
+	font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
 }
 
 /* ── Run an Expedition · The route step · maps and travel times ────────────────
