@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "Value 2",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>dented and tarnished, engraved with images of monsters being trapped in a globe</p>"
   },
   "flags": {
     "stonetop": {

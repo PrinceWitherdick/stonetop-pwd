@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A length of fiber, maybe 50 feet long, spun by a ghost from all the hair that ever fell from her daughters’ heads. The thread is light, and fine, and almost unbreakably strong, but it can be handled only by one who has seen the Last Door. Only the edge of a silver blade can cut it. It can be used to bind a ghost fast, if you’re clever and can handle the thread yourself.</p>"
   },
   "flags": {
     "stonetop": {

@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "magical, <em>dangerous</em>",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A chunk of crystal the size of a clenched fist. If charged, it thrums or crackles with power. If depleted, it fills you with a sense of emptiness and longing.</p><p>When you brandish the depleted powercrystal at a source of elemental energy, roll +CON: on a 10+, the crystal absorbs the energy fully and as safely as possible (it is now charged); on a 7-9, the crystal absorbs the energy (it’s now charged) but pick 1:</p><ul><li>You are harmed by the coursing energy, taking damage as the GM sees fit</li><li>The power stored in the crystal is extremely unstable, likely to discharge without warning</li><li>The crystal cracks; henceforth, treat a 10+ on this move as a 7-9, and you can’t pick this option again.</li></ul><p>In the hands of a skilled arcanist, a charged power-crystal can fuel or empower a magical effect (though this is dangerous). In the hands of the incautious, the reckless, or the desperate, it can split or crack, leading to a violent explosion.</p>"
   },
   "flags": {
     "stonetop": {

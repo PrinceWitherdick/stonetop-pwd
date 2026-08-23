@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical, loud",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>When you strike this tuning fork against a hard surface, it emits a loud tone for about a minute. Nearby (reach, area) magical effects and creatures become visible: shaking, vibrating, distorted. The noise draws the attention of any spirits or magically attuned beings for miles around.</p>"
   },
   "flags": {
     "stonetop": {

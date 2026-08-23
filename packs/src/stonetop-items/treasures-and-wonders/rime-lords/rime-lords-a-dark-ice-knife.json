@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>hand</em>, magical, <em>crude</em>",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A hilt of bone, with a spike of dark ice tapering to a sharp point. The ice is hard as stone, and not especially sharp.</p><p>When you stab an undead entity with the knife, ask the GM whether it is driven by obsession, hunger, and/or vengeance. If the answer is “yes,” then deal +1d4 damage (ignores armor), and leave the entity briefly disoriented. Should this reduce the entity to 0 HP, the dark ice knife melts away along with whatever bound the entity to this world.</p>"
   },
   "flags": {
     "stonetop": {

@@ -5601,6 +5601,33 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	font-style: normal;
 }
 .stonetop-inv-artifact-lore.is-gm-peek { opacity: 0.8; }
+/* A Book II treasure arrives with the book's own write-up already in this field (see
+   data/treasure-catalog.js), so it is no longer only ever a GM's typed paragraph: it can be
+   several <p>s and a <ul> of the custom move's "pick 1" options. Browser default paragraph
+   margins are a whole line each, which stacks a treasure's four paragraphs into a wall down
+   the gear column, so tighten them to the spacing the move descriptions use.
+
+   NB the markup arrives on ONE line, deliberately — `pre-wrap` above would otherwise render
+   the newlines BETWEEN these tags as blank lines. */
+.stonetop-inv-artifact-lore p { margin: 0 0 3px; }
+.stonetop-inv-artifact-lore p:last-child { margin-bottom: 0; }
+.stonetop-inv-artifact-lore ul {
+	margin: 0 0 3px;
+	padding-left: 0;
+	list-style: none;
+}
+.stonetop-inv-artifact-lore li { margin: 2px 0; }
+/* Spiral bullets, per the standing rule that every prose list on these sheets shows one. The
+   marker's `content`/picture is declared here and its position/size by the shared family rule
+   below (see `.stonetop-item-description li::before` and friends), which this selector has
+   been added to — the family owns the geometry so a new prose list can't drift from it. */
+.stonetop-inv-artifact-lore li::before {
+	content: "";
+	background-image: var(--stonetop-spiral-icon);
+	background-size: contain;
+	background-repeat: no-repeat;
+	background-position: center;
+}
 .stonetop-inv-artifact-identify,
 .stonetop-inv-artifact-gm {
 	flex: 0 0 auto;
@@ -21518,6 +21545,7 @@ li.question-bullet::before {
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card-description li::before,
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-card__section li::before,
 .stonetop-item-description li::before,
+.stonetop-inv-artifact-lore li::before,
 .stonetop-arcanum-body li::before,
 .stonetop-arcanum-chat-card li::before,
 .stonetop-outfit-rule-note li::before,
@@ -21537,6 +21565,7 @@ li.question-bullet::before {
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card-description li,
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-card__section li,
 .stonetop-item-description li,
+.stonetop-inv-artifact-lore li,
 .stonetop-arcanum-body li,
 .stonetop-arcanum-chat-card li,
 .stonetop-outfit-rule-note li,

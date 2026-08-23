@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>fragile</em>, magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A number of earthenware jars, about the size of a pinecone, sealed with wax and seemingly empty. When opened (or broken) a fine cloud of dust puffs out. The dust is, in fact, chogor spores.</p><p>When someone is exposed to chogor spores, the spores quickly start to grow on them in masses of vine-like ferns. They will—in a matter of seconds—ensnare and restrain their victim. After about an hour, the ferns die and rapidly dry out, but until then, it’s like being bound up in twine.</p>"
   },
   "flags": {
     "stonetop": {

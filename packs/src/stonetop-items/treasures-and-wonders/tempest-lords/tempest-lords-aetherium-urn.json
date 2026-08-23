@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "magical, <em>dangerous</em>",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>The lid is held fast by no apparent means. It takes some effort to pry open and eagerly snaps back into place.</p><p>When the urn is open and empty, it draws raw elemental force into it like a lodestone draws iron. With the lid in place, the force is safely stored. If the urn is damaged or dented (not hard), any stored force escapes, violently.</p>"
   },
   "flags": {
     "stonetop": {

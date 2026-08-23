@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 2,
     "note": "magical, beautiful, <em>fragile</em>, Value 4",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>One is a flawless silvered mirror (magical, beautiful, fragile, Value 4), 3 feet tall and set in a golden frame. Forge Lord runes adorn the frame, translated as: “To my beautiful Esé, my faithful, my rock.”</p><p>The other is a smaller, humble mirror (magical, fragile, Value 2), only 12 inches tall in a frame of bronze. It bears the same inscription as the other mirror, but inverted. A small needle protrudes from the frame, stained dark.</p><p>When you prick your finger and touch the smaller mirror, it shows what is reflected in the larger mirror until you break contact. Your blood soaks into the surface, leaving no stain.</p>"
   },
   "flags": {
     "stonetop": {

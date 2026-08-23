@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "<em>fragile</em>, Value 4 to the right buyer, Value 4",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>with cryptic instructions on how to create a Redwood Effigy</p>"
   },
   "flags": {
     "stonetop": {

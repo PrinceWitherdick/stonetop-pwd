@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A stout stick about 2 feet long, the bark removed, with fine woodworm trails making entirely-too-regular patterns. If you hold it gently, with a hand on each tine of the fork, you can feel it tugging, pulling you gently in certain directions.</p><p>When you dowse with the redwood stick, it will guide you to the nearest site sacred to the spirits of the wild. With practice, you can estimate the distance and even the disposition of the spirits that dwell there.</p>"
   },
   "flags": {
     "stonetop": {

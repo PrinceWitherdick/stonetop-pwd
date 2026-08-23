@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "<em>crude</em>, Value 0",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>found on a crude altar</p>"
   },
   "flags": {
     "stonetop": {

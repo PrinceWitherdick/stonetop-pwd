@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>immobile</em>, magical, Value 2",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>When the urn is unoccupied and a Fae looks inside, it is compelled to crawl in (it can always fit). If you then close the lid, the Fae is trapped and the urn slowly and painfully peels away its knowledge, essence, and sense of self. In time, nothing remains but a pile of pearls (Value 2).</p>"
   },
   "flags": {
     "stonetop": {

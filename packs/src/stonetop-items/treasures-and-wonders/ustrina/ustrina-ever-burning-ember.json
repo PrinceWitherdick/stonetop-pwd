@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "<em>fragile</em>, magical, Value 3",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>This ceramic pot has a number of thin slits along its shoulder and a ring of rune-etched brass around its neck. The pot is always hot, painful to touch, but it won’t cause blisters outright. Inside is a glowing ember of redwood with a fire spirit bound inside. The ember will smolder forever as long it stays in the pot and isn’t completely submerged.</p>"
   },
   "flags": {
     "stonetop": {

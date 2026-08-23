@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "Value 0",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>found far from any water</p>"
   },
   "flags": {
     "stonetop": {

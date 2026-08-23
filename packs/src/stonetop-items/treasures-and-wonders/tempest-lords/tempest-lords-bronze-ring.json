@@ -17,7 +17,8 @@
         ""
       ]
     },
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>About 8 inches in diameter, an inch thick throughout, scorched and smeared with ash. A button protrudes, with a Tempest Lord glyph that might mean “stubborn.”</p><p>When you find the ring, it has enough power to run for 1d4-1 hours.</p><p>When you press the button, the ring fixes in place, defying gravity. It simply will not budge. The effect ends if the ring is bent or broken, or when it runs out of power. There’s no obvious way to end the effect early. When the ring runs out of power, the button pops out and the effect ends.</p><p>When you heat the ring in a forge or kiln for about eight hours, it gains an hour of use (up to 3 hours).</p>"
   },
   "flags": {
     "stonetop": {

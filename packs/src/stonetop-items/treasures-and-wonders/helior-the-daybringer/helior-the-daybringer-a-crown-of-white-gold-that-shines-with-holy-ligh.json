@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "<em>reach</em>, <em>area</em>, Value 4",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>when worn by one with a pure soul</p>"
   },
   "flags": {
     "stonetop": {

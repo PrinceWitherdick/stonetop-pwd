@@ -12,7 +12,14 @@
       two kinds of thing that can BE an artifact, as against the playbook's standard kit), so
       there's somewhere to click on a treasure nobody has hidden yet.
       Context: an inventory item snapshot, plus `deletable` from the calling row. --}}
-{{#if (or artifact.isArtifact (and @root.stonetop.isGM deletable))}}
+{{!-- The gate also opens on a write-up alone, with no identification state at all. That is the
+      resting shape of a Book II treasure now: the book prints a sidebar for the notable ones —
+      what it looks like, the custom move it grants — and that text ships on the item
+      (data/treasure-catalog.js -> system.artifactLore), whether or not any GM has chosen to
+      hide the find. Without this clause the whole block stays folded on an unhidden treasure
+      and a player reads the tags and nothing else, which is the gap this all set out to close.
+      Every row inside is separately guarded, so nothing else appears any earlier than before. --}}
+{{#if (or artifact.isArtifact artifact.lore (and @root.stonetop.isGM deletable))}}
 {{#if artifact.concealed}}
 <span class="stonetop-inv-artifact-chip{{#if artifact.gmPeeking}} is-gm-peek{{/if}}"
       data-tooltip="{{#if artifact.loreOwed}}{{localize 'stonetop.artifact.chipPartial'}}{{else}}{{localize 'stonetop.artifact.chipUnknown'}}{{/if}}">

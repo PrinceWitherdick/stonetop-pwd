@@ -19,7 +19,8 @@
         ""
       ]
     },
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A bronze oil-lamp with a small valve on the top. When you screw the nozzle open, a hot blue flame pops out of the nozzle. When you screw the nozzle shut, the flame snuffs out. The lamp itself gets blisteringly hot while running, and once empty of fuel, only the Ustrina know how to refill it.</p>"
   },
   "flags": {
     "stonetop": {

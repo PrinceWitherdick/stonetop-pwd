@@ -8,7 +8,7 @@ import {
 } from "./SeedCompendiums.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
 import { needsBestiaryActorSeed, seedBestiaryActorsOnce, collapseBestiaryActorSubfoldersOnce } from "./SeedActors.js";
-import { needsTreasureItemSeed, seedTreasureItemsOnce } from "./SeedItems.js";
+import { needsTreasureItemSeed, seedTreasureItemsOnce, backfillTreasureWriteups } from "./SeedItems.js";
 import { reapplyBook2ArtOnVersionChange, reapplyBook2Art } from "../book2-art/reapply.js";
 import { book2ArtRoot } from "../book2-art/art-root.js";
 import { offerDurableArtOnce } from "../book2-art/offer-once.js";
@@ -171,6 +171,12 @@ export function runWorldSetup() {
 	});
 	const treasures = runLane(pending.treasures ? dialog : null, STEP_DEFS.treasures, async report => {
 		await seedTreasureItemsOnce({ onProgress: report });
+		// Then the same bargain the monsters lane strikes above: a per-load repair an
+		// already-seeded world still needs. The treasures shipped for years with only their
+		// tags, so every copy in an established world — sidebar and sheet alike — is missing
+		// the book's write-up that a freshly-seeded one now arrives with. Fills blanks only,
+		// and is silent once there are none. See backfillTreasureWriteups.
+		await backfillTreasureWriteups();
 		return "The treasure library is ready in your Items sidebar";
 	});
 

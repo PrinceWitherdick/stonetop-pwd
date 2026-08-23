@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>immobile</em>, magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A slab of once-beautiful stone, some 30 feet tall and about half again as wide, standing in a vaulted chamber, surrounded by deeply etched runes that speak of union and protection, consumption and sacrifice. The stone bears a multitude of chips, gouges, and cracks. Dust and debris surround it.</p><p>When you pry a chip of stone from the marble and swallow it whole, while standing within the ring of runes, your flesh becomes like stone and your DEX becomes -2 until the effect ends. The next three times you would suffer physical harm, the marble slab suffers the harm instead. The effect ends after the third blow.</p>"
   },
   "flags": {
     "stonetop": {

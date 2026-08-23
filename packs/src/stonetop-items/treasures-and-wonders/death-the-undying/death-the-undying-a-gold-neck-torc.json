@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "Value 3",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>fitted around the neck of a murdered corpse</p>"
   },
   "flags": {
     "stonetop": {

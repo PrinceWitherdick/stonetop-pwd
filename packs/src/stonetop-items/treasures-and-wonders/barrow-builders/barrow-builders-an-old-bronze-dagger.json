@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>hand</em>, magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Tinged green, but sharp and sturdy. In the chaotic days after the Makers fell, it was the weapon of a desperate father. He killed his own brother with it, to protect his children’s food. He killed others, too, to make sure his family had enough. So many, many others.</p><p>The dagger holds a shard of that father’s desperate will. When you Seek Insight about someone while carrying the dagger, add the following to the list of questions you can ask. If your hand is on the hilt, you can ask one of these questions for free, even on a 6-.</p><ul><li class=\"question-bullet\">What of mine do they most want?</li><li class=\"question-bullet\">How am I most vulnerable to them?</li><li class=\"question-bullet\">What do they carry that is useful to me?</li></ul><p>If a PC keeps the dagger, treat it as a threat (a MacGuffin; Instinct to cause paranoia).</p>"
   },
   "flags": {
     "stonetop": {

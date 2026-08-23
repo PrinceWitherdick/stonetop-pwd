@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical, <em>immobile</em>",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Amidst a high, lonely meadow stands a pillar of dark purple ice, 12 feet tall and 2 feet thick. It rests on a circular slab of rune-etched stone, a dozen paces across, untouched by time or nature. There’s a stillness to the place, a tension in the air.</p><p>Something interesting: The runes appear to be some sort of spell, waiting to be triggered; it’d take days of study to puzzle out the command word (and you risk triggering it accidentally).</p><p>Something useful: You can determine the command word with a few hours of study (less if you’re versed in Rime Lord script).</p><p>When you speak the command word near the column, the dark ice expands in a flash, encasing the stone slab and anything on it. The ice traps even spirits (manifest or not). Mortal prisoners soon perish, their souls ensnared. The dark ice never melts and resists all but the mightiest magic and blows.</p>"
   },
   "flags": {
     "stonetop": {

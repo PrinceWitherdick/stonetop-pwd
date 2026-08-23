@@ -10,14 +10,15 @@
     "note": "magical",
     "resource": {
       "max": 3,
-      "title": null,
+      "title": "Blood",
       "labels": [
         "",
         "",
         ""
       ]
     },
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A woolen flag hanging from a crossbar at the end of a sturdy long spear. It’s tattered, crimson, with a crudely embroidered boot for a device. It hangs heavy. Like it’s wet.</p><p>When you fly the Red Pennant in battle, all who fight on your side feel bloodlust boil within them. Hold 3 Blood. While the battle rages, you can spend Blood 1-for-1 to will your allies to:</p><ul><li>Rush forward, driving back their foes</li><li>Hold fast, making their foes pay for every inch</li><li>Fight savagely, giving no quarter</li></ul><p>If spending Blood results in you Ordering Followers or Deploying, or another PC Clashing, the roll has advantage. Each time you spend Blood, those affected gain some small, animalistic or stony trait (little horns, weird eyes, crag-like wrinkles, etc.).</p><p>When you spend the last Blood or the battle ends, the Red Pennant’s color fades and a few (~1 in 6) of those manifested traits will linger, especially in those who fought hardest. It will not function again until you soak it in the blood of fallen foes.</p><p>This is the battle standard of the Bloody Boots, their most sacred relic. Don’t expect them to just let it go.</p>"
   },
   "flags": {
     "stonetop": {
@@ -28,7 +29,7 @@
       "note": "magical",
       "resource": {
         "max": 3,
-        "title": null,
+        "title": "Blood",
         "labels": [
           "",
           "",

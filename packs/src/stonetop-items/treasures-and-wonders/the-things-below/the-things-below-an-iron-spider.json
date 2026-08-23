@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical, indestructible",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>About the size of one’s palm, half an inch thick, rusted around the edges, with legs folded up on the back. A hidden button makes the legs extend and reveals their bladed tips. Sometimes, when you go to retrieve it, it’s not quite where you left it.</p><p>The spider is hungry when you find it. When you plunge the hungry spider into a person’s flesh, they lose 1d4 HP every few seconds until it’s torn free (1d8 damage, messy, ignores armor). Should the spider drain them to 0 HP, it becomes sated.</p><p>When you plunge the sated spider into a person’s flesh, they take 1 damage (ignores armor) and will not age for 1d10 years. If they are middle aged or older, they regain some vigor of their youth. Then, the spider becomes hungry.</p><p>Each time someone uses the spider to extend their life, their features change subtly, becoming blander, waxier, more pallid, less specific. Should they die after exceeding their mortal lifespan, they become a revenant, hungering for blood.</p>"
   },
   "flags": {
     "stonetop": {

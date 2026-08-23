@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>immobile</em>, Value 2",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>carved along the edge with runes of amplification</p>"
   },
   "flags": {
     "stonetop": {

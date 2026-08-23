@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "<em>fragile</em>, magical, Value 3",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Made of tin and set with agate eyes. When you wind it up and let it run, it will dance and chirp loudly for a few minutes. When you wind it up and twist one of its feathers just so, it will sit and wait, only starting to dance and chirp when a creature enters its line of sight.</p>"
   },
   "flags": {
     "stonetop": {

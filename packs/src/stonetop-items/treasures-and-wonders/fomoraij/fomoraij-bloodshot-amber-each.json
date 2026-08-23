@@ -7,8 +7,9 @@
     "moveType": "inventory",
     "inventoryColumn": "regular",
     "weight": 1,
-    "note": "magical 1d4",
-    "isTreasure": true
+    "note": "magical",
+    "isTreasure": true,
+    "artifactLore": "<p>1d4 fist-sized gems, riddled with red-black intrusions.</p><p>When you drip blood onto an amber, name a manifest spirit in your presence and roll +CHA. If the spirit has an intact tether, roll with disadvantage. On a 10+, the spirit is imprisoned in the amber; on a 7-9, the amber starts to suck the spirit in, but it may yet fight back; on a 6-, the spirit wrests free and the amber shatters.</p><p>When you imprison a spirit in a bloodshot amber, it is wracked with pain and cannot manifest. Only one spirit can be imprisoned at a time. When you touch the amber with bare skin, you can communicate with the spirit within and release it if you want (even if you weren’t the one who imprisoned it).</p><p>When a bloodshot amber is found, it likely contains a spirit that has been trapped in agony for centuries.</p>"
   },
   "flags": {
     "stonetop": {
@@ -16,7 +17,7 @@
       "inventoryColumn": "regular",
       "isTreasure": true,
       "weight": 1,
-      "note": "magical 1d4"
+      "note": "magical"
     }
   },
   "img": "systems/stonetop-pwd/assets/icons/treasures/vase.svg",

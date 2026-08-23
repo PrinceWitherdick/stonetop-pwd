@@ -17,7 +17,8 @@
         ""
       ]
     },
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>that causes a racking cough, weakness, maybe even paralysis</p>"
   },
   "flags": {
     "stonetop": {

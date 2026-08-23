@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "<em>close</em>, <em>crude</em>, magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Carved from a dool tree with a silver knife, and polished with oils infused with moonlight. The grip is worn smooth but the “blade” is chipped and notched, unlikely to stand up to iron or bronze.</p><p>When you wield the sword against a manifest undead spirit, you can hurt it (deal damage normally). If you reduce it to 0 HP, the manifest form dissipates but the spirit can reform at its tether normally.</p>"
   },
   "flags": {
     "stonetop": {

@@ -6,15 +6,16 @@
   "system": {
     "moveType": "inventory",
     "inventoryColumn": "small",
-    "note": "magical 3",
-    "isTreasure": true
+    "note": "magical",
+    "isTreasure": true,
+    "artifactLore": "<p>3 feet long, frayed on one end, and crusty with flaking... something. The braids entwine 2d4 beads of redwood. Each bead contains some harm: a wound (1d10 damage, messy, ignores armor), a sickness, a poison, a delusion. The whole thing binds a spirit of blight.</p><p>When you unweave the braid and let a redwood bead drop upon the earth, the spirit manifests as a warm, damp wind. Name someone in your presence; the spirit inflicts upon them whatever harm was stored in the bead. If you do not name someone in your presence, the spirit will choose someone at random (maybe even you).</p>"
   },
   "flags": {
     "stonetop": {
       "slug": "length-of-braided-leather",
       "inventoryColumn": "small",
       "isTreasure": true,
-      "note": "magical 3"
+      "note": "magical"
     }
   },
   "img": "systems/stonetop-pwd/assets/icons/treasures/vase.svg",

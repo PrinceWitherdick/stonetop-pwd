@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>immobile</em>, <em>dangerous</em>, Value 3",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Lumps of lustrous, gray-black stone, like coal but drier and much more useful. A small lump catches fire as readily as dry wood and burns all night with the heat of a good cook-fire. It casts only dim light (close, area) and there’s almost no smoke, but the smell is something awful.</p>"
   },
   "flags": {
     "stonetop": {

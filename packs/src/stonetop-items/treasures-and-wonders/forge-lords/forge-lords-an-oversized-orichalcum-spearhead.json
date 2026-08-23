@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 2,
     "note": "Value 2",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>too big to use but a smith might recast it</p>"
   },
   "flags": {
     "stonetop": {

@@ -124,6 +124,76 @@ describe("treasureItemData", () => {
 	});
 });
 
+// The book prints a write-up beside a notable treasure — what it looks like, the custom move it
+// grants, the questions it adds — and for years the drop carried only the tags. It rides in
+// `system.artifactLore` rather than `system.description` for two reasons, and both are load
+// bearing: that is the field the gear row actually prints, and it is the one the p.430 identify
+// ladder conceals, so a treasure the GM lands unidentified can't hand over its move with the
+// picture. See module/actors/character/artifact-identify.js.
+describe("a treasure's write-up", () => {
+	const DAGGER = TREASURE_CATALOG.find(e => e.name === "An old bronze dagger");
+
+	it("rides onto the item as artifactLore", () => {
+		const data = treasureItemData(DAGGER);
+		expect(data.system.artifactLore).toBe(DAGGER.writeup);
+		expect(data.system.artifactLore).toContain("Tinged green, but sharp and sturdy.");
+	});
+
+	it("carries the WHOLE entry — the move, its questions and the GM's note, not just the flavour", () => {
+		const lore = treasureItemData(DAGGER).system.artifactLore;
+		expect(lore).toContain("When you Seek Insight about someone while carrying the dagger");
+		expect(lore).toContain('<li class="question-bullet">What of mine do they most want?</li>');
+		expect(lore).toContain("treat it as a threat (a MacGuffin; Instinct to cause paranoia)");
+	});
+
+	it("leaves the field off a treasure the book prints no prose for", () => {
+		// 82 of the 168 are a name and its tags and nothing else. An empty artifactLore would
+		// still satisfy `{{#if artifact.lore}}`-free markup badly; absent is the resting state.
+		const bare = TREASURE_CATALOG.find(e => e.name === "A gold mobius strip on a chain");
+		expect(bare.writeup).toBeUndefined();
+		expect(treasureItemData(bare).system.artifactLore).toBeUndefined();
+	});
+
+	it("never lands the treasure pre-hidden", () => {
+		// Whether a find starts unidentified is the DROP's call (addDroppedInventoryItem reads
+		// the world's `hideArtifact` setting), not the catalog's. A state baked in here would
+		// conceal every treasure in every world, including the GM's own sidebar copies.
+		expect(treasureItemData(DAGGER).system.identifyState).toBeUndefined();
+	});
+
+	it("is renderable as-is by a template that does not enrich", () => {
+		// inv-artifact.hbs prints `{{{artifact.lore}}}` raw, and `.stonetop-inv-artifact-lore`
+		// is `white-space: pre-wrap`. So: no `@UUID[…]` links (they'd show as bracket noise)
+		// and no newlines between tags (they'd render as blank lines down the gear column).
+		for (const entry of TREASURE_CATALOG) {
+			if (!entry.writeup) continue;
+			expect(entry.writeup, entry.slug).not.toContain("@UUID[");
+			expect(entry.writeup, entry.slug).not.toContain("\n");
+			expect(entry.writeup, entry.slug).toMatch(/^<p>|^<ul>/);
+		}
+	});
+
+	it("closes every tag it opens", () => {
+		for (const entry of TREASURE_CATALOG) {
+			if (!entry.writeup) continue;
+			for (const tag of ["p", "ul", "li"]) {
+				const open  = entry.writeup.match(new RegExp(`<${tag}[ >]`, "g"))?.length ?? 0;
+				const close = entry.writeup.match(new RegExp(`</${tag}>`, "g"))?.length ?? 0;
+				expect(close, `${entry.slug} <${tag}>`).toBe(open);
+			}
+			// A bullet only ever inside a list.
+			expect(entry.writeup, entry.slug).not.toMatch(/<\/ul>\s*<li/);
+		}
+	});
+
+	it("covers the treasures the book actually writes up", () => {
+		// A floor, not an exact count: the guard is against a re-extraction quietly losing the
+		// prose again (the 2019 pass shipped 0 of these), not against the book gaining an entry.
+		const withProse = TREASURE_CATALOG.filter(e => e.writeup).length;
+		expect(withProse).toBeGreaterThanOrEqual(86);
+	});
+});
+
 // The book's illustration for a treasure lives in the GM's durable art folder. Which files
 // exist — and where — is published to the world-scoped `treasureArt` index (slug -> path)
 // by the Import Book Art macro / book2-art/reapply.js, because the drop payload is built

@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "beautiful, Value 4",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>if placed in a fire or otherwise heated, it hums beautiful, haunting notes</p>"
   },
   "flags": {
     "stonetop": {

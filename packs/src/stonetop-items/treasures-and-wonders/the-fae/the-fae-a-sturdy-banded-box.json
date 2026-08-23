@@ -7,8 +7,9 @@
     "moveType": "inventory",
     "inventoryColumn": "regular",
     "weight": 1,
-    "note": "magical 6”",
-    "isTreasure": true
+    "note": "magical",
+    "isTreasure": true,
+    "artifactLore": "<p>6” by 4” by 3”, made of thick rowan wood and banded with bronze. It’s not much to look at. It slips easily from one’s mind.</p><p>When you let a drop of your blood fall into the empty chest, name a promise you have made, an oath you have given, or a debt that you owe. Your blood becomes a bead of lead as it falls into the chest, and the promise, oath, or debt holds no power over you as long as the chest is sealed.</p>"
   },
   "flags": {
     "stonetop": {
@@ -16,7 +17,7 @@
       "inventoryColumn": "regular",
       "isTreasure": true,
       "weight": 1,
-      "note": "magical 6”"
+      "note": "magical"
     }
   },
   "img": "systems/stonetop-pwd/assets/icons/treasures/vase.svg",

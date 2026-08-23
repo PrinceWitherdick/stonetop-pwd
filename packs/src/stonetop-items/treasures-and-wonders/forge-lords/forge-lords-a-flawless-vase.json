@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "<em>fragile</em>, beautiful, Value 4",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>~2 feet tall with an iridescent glaze; reminds you of the fragility of life</p>"
   },
   "flags": {
     "stonetop": {

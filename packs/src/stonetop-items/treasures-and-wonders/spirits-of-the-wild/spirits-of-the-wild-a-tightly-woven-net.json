@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>close</em>, <em>thrown</em>, magical, <em>crude</em>",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Woven from Flats-grass by a Hillfolk sorcerer or witch. Hundreds of minor root-spirits are tethered to the strands.</p><p>When you cast the net over a spirit, it is ensnared—even if its form is intangible or could flow through the net. The spirit can’t escape on its own as long as the net is intact. Don’t try to use this on fire spirits— they’ll burn right through it.</p>"
   },
   "flags": {
     "stonetop": {

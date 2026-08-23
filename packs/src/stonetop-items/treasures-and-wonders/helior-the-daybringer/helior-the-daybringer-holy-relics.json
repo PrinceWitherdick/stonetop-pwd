@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>uses</em>, Value 3 to a collector, Value 3",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>if you have one in your inventory when you Invoke the Sun God, you can mark a use in lieu of choosing a consequence</p>"
   },
   "flags": {
     "stonetop": {

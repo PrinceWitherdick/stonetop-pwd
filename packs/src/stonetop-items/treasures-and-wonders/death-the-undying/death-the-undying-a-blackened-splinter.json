@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>crude</em>, magical, fireproof",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Undead who see it are drawn to it, or else deeply agitated by its presence. When you touch the splinter to an undead entity, they see the Last Door yawning open before them. Roll 4d6. If the total is greater than the entity’s current HP, they are drawn through the Last Door and leave this world for good. Otherwise, they are transfixed for a few moments before the Door slams shut. Regardless, the splinter vanishes.</p>"
   },
   "flags": {
     "stonetop": {

@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "<em>5 hours</em>, <em>reach</em>, <em>area</em>, magical, Value 1",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>made of twisted black metal; its flame casts pale light that leaches color and chills the air</p>"
   },
   "flags": {
     "stonetop": {

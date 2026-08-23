@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 3,
     "note": "magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A small bronze cauldron, full of glittering coins. At least, that’s what it seems.</p><p>When you fill the pot with small, natural items (leaves, stones, acorns, etc.) and hide it from light for a season, the contents are glamoured to become a purse of gold (Value 4).</p><p>Any “coins” removed from the pot revert to their true form when…</p><p>… an honest merchant touches them;… their current owner tells a lie;… someone sees through the glamour;… something dispels the glamour; or… the new moon comes and goes</p>"
   },
   "flags": {
     "stonetop": {

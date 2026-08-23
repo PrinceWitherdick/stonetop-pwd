@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "Value 1",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>each able to fuel a good cookfire for a night</p>"
   },
   "flags": {
     "stonetop": {

@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>fragile</em>, <em>dangerous</em>, Value 1",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A small box containing 3d4 stiff metal rods, about the size of incense sticks. Snap one, and each piece bursts into a blindingly bright, blisteringly hot flame (d8 damage, messy) for a few seconds while it burns away to ash.</p>"
   },
   "flags": {
     "stonetop": {

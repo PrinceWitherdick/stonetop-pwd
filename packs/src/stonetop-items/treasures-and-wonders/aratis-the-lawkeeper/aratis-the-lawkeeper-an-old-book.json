@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "<em>fragile</em>, Value 2",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>the Chronicle of a failed settlement, ending mid-sentence</p>"
   },
   "flags": {
     "stonetop": {
