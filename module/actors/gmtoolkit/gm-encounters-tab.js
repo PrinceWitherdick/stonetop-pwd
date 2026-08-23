@@ -41,12 +41,38 @@ import { wireDocumentDropZone } from "../../utils/card-drop-zone.js";
 import { clusterPoint, dropActorOnCanvas } from "../../utils/token-drop.js";
 import { enrichHTML } from "../../utils/foundry-compat.js";
 import { compendiumRefTail, worldCopiesBySource } from "../../migration/compat.js";
-import { escHtml, joinNames } from "../../utils/strings.js";
+import { escHtml, joinNames, stripHtmlToText } from "../../utils/strings.js";
 import { localize, format } from "../../utils/i18n.js";
 import { error } from "../../utils/logger.js";
 import { openEncounterNotesDialog } from "./encounter-notes-dialog.js";
 import { ActorListStore } from "./actor-list-store.js";
 import { localizedOnce } from "../../utils/localized-once.js";
+
+/**
+ * How much of a note rides on a shut encounter's head.
+ *
+ * The CLIPPING is the CSS's job (one line, ellipsis, whatever the row's width turns out to be);
+ * this only keeps a thousand-word note out of the flex row, where its untruncated width would be
+ * the row's flex basis. Generous on purpose, so the ellipsis a GM sees is the one the column
+ * width drew rather than one this number drew at a fixed count of characters.
+ */
+const NOTE_PEEK_CHARS = 240;
+
+/**
+ * A note's prose as the one clipped line that rides on a shut row.
+ *
+ * A plain slice rather than the system's word-boundary truncator (`truncateValue`): that one
+ * signs its cut with an ellipsis, and the ellipsis here has to be the CSS's — drawn where the
+ * column actually ran out. Two of them, one mid-string and one at the column edge, would read as
+ * a note with something missing out of its middle.
+ *
+ * Kept as a function only so `NOTE_PEEK_CHARS` is applied in one place; the block-boundary
+ * spacing this used to do for itself now lives in `stripHtmlToText`, where every one-line
+ * consumer gets it.
+ */
+function notePeek(html) {
+	return stripHtmlToText(html).slice(0, NOTE_PEEK_CHARS);
+}
 
 /**
  * The tab's one edit section, and the JOIN it stands for: the template reads
@@ -301,7 +327,7 @@ export function withGmEncountersTab(Base) {
 
 		/**
 		 * Each encounter's enriched notes, keyed by id, against the prose they were built from.
-		 * Read and pruned by `_addGmEncountersContext`; see `_encounterNotesHtml` for why.
+		 * Read and pruned by `_addGmEncountersContext`; see `_encounterNotes` for why.
 		 *
 		 * Collides with nothing in Application, FormApplication or ActorSheet.
 		 */
@@ -546,34 +572,48 @@ export function withGmEncountersTab(Base) {
 		 * and, more to the point, for what it manages not to.
 		 */
 		/**
-		 * One encounter's notes as enriched HTML, held against the prose it was built from.
+		 * One encounter's notes, as the enriched HTML the body prints and the one flat line that
+		 * rides on the shut row's head — held together against the prose both were built from.
 		 *
 		 * Enriching is a regex sweep plus content-link resolution, and this sheet re-renders on
 		 * every prep write ANYWHERE in the world — a burst of ticks on another client used to
 		 * re-enrich the whole list, repeatedly, for prose that was identical every time. The source
 		 * string is the key, so an edit still rebuilds on the very next paint.
+		 *
+		 * THE PEEK IS CACHED WITH IT, not derived at the call: its input is exactly the string
+		 * being held, so on a cache hit it can only come out the same, and flattening a long note
+		 * is a dozen full-string passes to throw all but 240 characters away.
+		 *
+		 * Taken off the ENRICHED html rather than the stored source, so a link reads as the name
+		 * it was written as: a note typed with an @UUID in it would otherwise put the raw macro
+		 * text in the peek, mid-sentence, which is the one place there is no room for it.
 		 */
-		async _encounterNotesHtml(enc) {
-			if (!enc.notes) return "";
+		async _encounterNotes(enc) {
+			if (!enc.notes) return { html: "", peek: "" };
 			const hit = this._notesHtmlCache.get(enc.id);
-			if (hit?.src === enc.notes && hit.gen === _notesGeneration) return hit.html;
+			if (hit?.src === enc.notes && hit.gen === _notesGeneration) return hit;
 			const html = await enrichHTML(enc.notes, { secrets: true });
-			this._notesHtmlCache.set(enc.id, { src: enc.notes, gen: _notesGeneration, html });
-			return html;
+			const entry = { src: enc.notes, gen: _notesGeneration, html, peek: notePeek(html) };
+			this._notesHtmlCache.set(enc.id, entry);
+			return entry;
 		}
 
 		async _addGmEncountersContext(context) {
 			const list = this._encounterList();
-			context.stonetop.encounters = await Promise.all(list.map(async enc => ({
-				...enc,
-				open:        this._encounterOpen.has(enc.id),
-				entryCount:  enc.entries.length,
+			context.stonetop.encounters = await Promise.all(list.map(async enc => {
 				// Enriched for every encounter and not only the open ones, because the body is in
 				// the DOM either way: expanding is a CSS class this file toggles in place, so that
 				// it costs no render and cannot lose a caret (see `_activateGmEncountersListeners`).
-				notesHtml:   await this._encounterNotesHtml(enc),
-				entries:     await Promise.all(enc.entries.map(resolveEncounterEntry)),
-			})));
+				const notes = await this._encounterNotes(enc);
+				return {
+					...enc,
+					open:        this._encounterOpen.has(enc.id),
+					entryCount:  enc.entries.length,
+					notesHtml:   notes.html,
+					notesPeek:   notes.peek,
+					entries:     await Promise.all(enc.entries.map(resolveEncounterEntry)),
+				};
+			}));
 			// Rows the list no longer holds, so a session of adding and removing cannot grow the
 			// enrich cache without bound.
 			const live = new Set(list.map(enc => enc.id));

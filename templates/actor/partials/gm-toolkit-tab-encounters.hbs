@@ -67,13 +67,20 @@
 					      keyboard half of the grip beside it. --}}
 					<input type="text" class="stonetop-gm-encounter-name" value="{{name}}" maxlength="120"
 					       aria-label="{{localize "stonetop.gmToolkit.encounters.nameLabel"}}">
+					{{!-- The head of the note, riding on the row while it is shut (the CSS shows it only under
+					      .is-collapsed, where the body it belongs to is hidden). Two bundles both called "the
+					      bridge" are told apart by what was written about them, and a column of eight shut
+					      cards otherwise says nothing at all. Plain text rather than the enriched HTML below:
+					      this is one clipped line, and a content link or a paragraph in it would fight the
+					      ellipsis. --}}
+					{{#if notesPeek}}<span class="stonetop-gm-encounter-peek">{{notesPeek}}</span>{{/if}}
 					<span class="stonetop-gm-encounter-count"
 					      data-tooltip="{{format "stonetop.gmToolkit.encounters.countTip" count=entryCount}}"
 					      data-tooltip-direction="UP">{{entryCount}}</span>
 					<span class="stonetop-gm-encounter-tools">
 						<button type="button" class="stonetop-gm-encounter-deploy"
 						        data-tooltip="{{localize "stonetop.gmToolkit.encounters.deploy"}}" data-tooltip-direction="UP">
-							<i class="fas fa-map-location-dot"></i>
+							<i class="fas fa-dragon"></i>
 						</button>
 						<button type="button" class="stonetop-gm-encounter-used"
 						        data-tooltip="{{#if used}}{{localize "stonetop.gmToolkit.encounters.markUnused"}}{{else}}{{localize "stonetop.gmToolkit.encounters.markUsed"}}{{/if}}"
@@ -88,6 +95,27 @@
 				</div>
 
 				<div class="stonetop-gm-encounter-body">
+					{{!-- THE NOTE COMES FIRST, above the collected rows. What a GM writes here is what the
+					      encounter IS ("they cross at dusk, the ford is watched"); the rows under it are the
+					      documents it points at. Reading order follows that, and it puts the note at the same
+					      place on every card rather than after a list that is two rows long on one and twelve
+					      on the next. --}}
+					<div class="stonetop-gm-encounter-notes-block">
+						{{#if notesHtml}}
+						<div class="stonetop-gm-encounter-notes">{{{notesHtml}}}</div>
+						{{else}}
+						<p class="stonetop-gm-encounter-notes stonetop-gm-encounter-notes--empty">{{localize "stonetop.gmToolkit.encounters.notesEmpty"}}</p>
+						{{/if}}
+						{{!-- Read here, written in a pop-up. This sheet re-renders on every prep-page
+						      write in the WORLD, and a live ProseMirror on the tab would be torn out
+						      from under a GM mid-sentence; a Dialog is a window that redraw cannot
+						      reach. See encounter-notes-dialog.js. --}}
+						<button type="button" class="stonetop-gm-encounter-notes-edit"
+						        data-tooltip="{{localize "stonetop.gmToolkit.encounters.notesEdit"}}" data-tooltip-direction="UP">
+							<i class="fas fa-pen"></i> {{localize "stonetop.gmToolkit.encounters.notesEditShort"}}
+						</button>
+					</div>
+
 					{{#if entries.length}}
 					<ul class="stonetop-gm-encounter-entries">
 						{{#each entries}}
@@ -120,22 +148,6 @@
 					      pointer midpoints — and leaves no way to aim at the bottom of the list
 					      except this strip. It doubles as the empty encounter's only content. --}}
 					<p class="stonetop-gm-encounter-dropzone">{{localize "stonetop.gmToolkit.encounters.dropHere"}}</p>
-
-					<div class="stonetop-gm-encounter-notes-block">
-						{{#if notesHtml}}
-						<div class="stonetop-gm-encounter-notes">{{{notesHtml}}}</div>
-						{{else}}
-						<p class="stonetop-gm-encounter-notes stonetop-gm-encounter-notes--empty">{{localize "stonetop.gmToolkit.encounters.notesEmpty"}}</p>
-						{{/if}}
-						{{!-- Read here, written in a pop-up. This sheet re-renders on every prep-page
-						      write in the WORLD, and a live ProseMirror on the tab would be torn out
-						      from under a GM mid-sentence; a Dialog is a window that redraw cannot
-						      reach. See encounter-notes-dialog.js. --}}
-						<button type="button" class="stonetop-gm-encounter-notes-edit"
-						        data-tooltip="{{localize "stonetop.gmToolkit.encounters.notesEdit"}}" data-tooltip-direction="UP">
-							<i class="fas fa-pen"></i> {{localize "stonetop.gmToolkit.encounters.notesEditShort"}}
-						</button>
-					</div>
 				</div>
 			</li>
 			{{/each}}

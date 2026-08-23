@@ -58,15 +58,19 @@ export function joinNames(names) {
 }
 
 // Collapse rich text (an HTML / ProseMirror field) to a single plain-text line for a tooltip or
-// a ledger/preview: drop tags (turning <br> into a space so words don't glue), decode the handful
-// of named entities our authored prose uses, and squeeze whitespace. Returns "" for null/blank.
+// a ledger/preview: drop tags (turning a line or block BREAK into a space so words don't glue),
+// decode the handful of named entities our authored prose uses, and squeeze whitespace. Returns
+// "" for null/blank.
 // The one strip-HTML helper — do NOT add ad-hoc copies elsewhere; import this.
 export function stripHtmlToText(value) {
 	if (value == null) return "";
 	return String(value)
-		// <br> becomes a space so words on separate lines don't glue; every other tag drops to
-		// nothing so an inline tag next to punctuation ("Together</em>,") doesn't leave a gap.
+		// <br> and the END of a block become a space so words on either side of the break don't
+		// glue: two paragraphs would otherwise come back as "…the ford is watched.They cross at
+		// dusk…", run together at exactly the place a reader needs the break. Every other tag
+		// drops to nothing so an inline tag next to punctuation ("Together</em>,") leaves no gap.
 		.replace(/<\s*br\s*\/?>/gi, " ")
+		.replace(/<\/(?:p|div|li|h[1-6]|blockquote|tr|td|th|section|article)\s*>/gi, " ")
 		.replace(/<[^>]*>/g, "")
 		.replace(/&nbsp;/gi, " ")
 		.replace(/&mdash;/gi, "—")

@@ -676,6 +676,62 @@ describe("the Encounters tab: notes, used and delete", () => {
 		{ id: "x1", uuid: "Actor.a", type: "Actor", name: "Rust-Hound", note: "" },
 	] }];
 
+	// WHAT THE ENCOUNTER IS comes before the documents it points at, and at the same place on
+	// every card: after the collected rows the note sat two lines down on one card and twelve
+	// on the next, which is a thing you hunt for rather than read.
+	it("draws the note above the collected rows, not after them", () => {
+		const notes = TAB_MARKUP.indexOf("stonetop-gm-encounter-notes-block");
+		const rows  = TAB_MARKUP.indexOf("stonetop-gm-encounter-entries");
+		expect(notes).toBeGreaterThan(-1);
+		expect(rows).toBeGreaterThan(-1);
+		expect(notes).toBeLessThan(rows);
+	});
+
+	// A column of shut cards says only what each one is CALLED, and two bundles are routinely
+	// both called "the bridge". The head of the note rides the row to tell them apart. Only
+	// while it is shut: open, the real note is two pixels below it.
+	it("rides the head of the note beside the name, and only while the row is shut", () => {
+		expect(TAB_MARKUP).toMatch(/stonetop-gm-encounter-peek"[^>]*>\{\{notesPeek\}\}/);
+		const peek = declarations(CSS, ".stonetop-gm-encounter-peek");
+		expect(peek).toMatch(/display:\s*none/);
+		expect(peek).toMatch(/white-space:\s*nowrap/);
+		expect(peek).toMatch(/text-overflow:\s*ellipsis/);
+		// NEITHER GROWS NOR SHRINKS, and is capped by a max-width instead. Core sizes a form input
+		// `width: 100%`, so the name beside this one is a flex item whose basis is the whole row,
+		// and every shrinkable item in the head gives up a proportional share of that overflow --
+		// which clipped a ten-word note with half the row still empty beside it.
+		expect(peek).toMatch(/flex:\s*0 0 auto/);
+		expect(peek).toMatch(/max-width:\s*\d+%/);
+		expect(declarations(CSS, ".stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-peek"))
+			.toMatch(/display:\s*block/);
+	});
+
+	// One line of PLAIN text: the markup would be drawn as source in a span, and a paragraph
+	// boundary that dropped to nothing would run two sentences together at the one place the
+	// reader needs the break.
+	it("publishes the peek as one plain line, with the paragraph breaks kept as spaces", async () => {
+		const { host } = makeHost([{ id: "e1", name: "Crypt", used: false, entries: [], notes:
+			"<p>They cross at <strong>dusk</strong>.</p><p>The ford is watched.</p>" }]);
+		const context = { stonetop: {} };
+		await host._addGmEncountersContext(context);
+		expect(context.stonetop.encounters[0].notesPeek).toBe("They cross at dusk. The ford is watched.");
+	});
+
+	// The clip is the column's job, not a character count's; this cap only keeps a note of any
+	// length out of the flex row, whose basis is the span's whole untruncated text.
+	it("caps a long note rather than putting the whole of it in the row", async () => {
+		const { host } = makeHost([{ id: "e1", name: "Crypt", used: false, entries: [], notes: "<p>" + "word ".repeat(400) + "</p>" }]);
+		const context = { stonetop: {} };
+		await host._addGmEncountersContext(context);
+		expect(context.stonetop.encounters[0].notesPeek.length).toBeLessThanOrEqual(240);
+	});
+
+	it("leaves the peek empty for an encounter nobody has written about", async () => {
+		const { host } = makeHost(one());
+		const context = { stonetop: {} };
+		await host._addGmEncountersContext(context);
+		expect(context.stonetop.encounters[0].notesPeek).toBe("");
+	});
 	// A text write that re-rendered would tear out the node that just took focus.
 	it("writes a rename and an entry note without asking for a render", async () => {
 		const { host, updates } = makeHost(one());

@@ -35708,6 +35708,35 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-text);
 }
 
+/* THE NOTE'S FIRST LINE, ON THE SHUT ROW. Drawn only while the card is folded, because open it
+   would say the same thing twice with the real note two pixels below it. One line, clipped with
+   an ellipsis at whatever width is left beside the name.
+
+   THE NAME OUTRANKS IT, and that is the whole of the flexing. This span neither grows nor shrinks,
+   so it is exactly min(its own words, 45% of the row): a short note takes the width of what it
+   says and no more, and a long one is capped at a share of the head rather than eating the title
+   it is there to gloss. The name is the flexible one and absorbs whatever is left.
+
+   THE `0` SHRINK IS THE LOAD-BEARING HALF. Core sizes a form input `width: 100%`, so the name's
+   flex basis is the whole row and the head is over-subscribed before this span is even in it;
+   every shrinkable item then gives up a proportional share of that overflow, which with a
+   shrink of 1 here clipped a ten-word note with half the row still empty beside it. */
+.stonetop-gm-encounter-peek {
+	display: none;
+	flex: 0 0 auto;
+	max-width: 45%;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-size: var(--st-fs-xs);
+	font-style: italic;
+	color: var(--st-text-faint);
+}
+
+.stonetop-gm-encounter.is-collapsed .stonetop-gm-encounter-peek {
+	display: block;
+}
+
 .stonetop-gm-encounter-count {
 	flex: 0 0 auto;
 	min-width: 1.6em;
