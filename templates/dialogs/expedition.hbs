@@ -47,6 +47,21 @@
 
     <div class="stonetop-spring-body">{{{step.body}}}</div>
 
+    {{!-- A question-headed fold below the body: advice this step doesn't walk you
+          through, shut until the GM asks for it. Currently the intro step's "What to
+          prep", which used to be a twelfth step past Going home. The toggle keeps its
+          open state on the dialog (ExpeditionDialog._asideOpen), so the in-place
+          re-renders (naming the trip, picking who's coming) don't snap it shut. --}}
+    {{#if aside}}
+    <div class="stonetop-guide-aside">
+      <button type="button" class="stonetop-guide-aside-toggle{{#if aside.open}} is-open{{/if}}"
+              aria-expanded="{{#if aside.open}}true{{else}}false{{/if}}">
+        <i class="fas fa-chevron-up"></i> {{aside.label}}
+      </button>
+      <div class="stonetop-guide-aside-body stonetop-spring-body{{#if aside.open}} is-open{{/if}}">{{{aside.body}}}</div>
+    </div>
+    {{/if}}
+
     {{!-- Route step: the regional maps and the book's travel times (built in
           ExpeditionDialog getData). Its own partial — the panel is long, and this
           template is already the biggest in the dialogs folder. --}}

@@ -1706,6 +1706,12 @@ async function _postStartupWelcomeMessageOnce() {
 	await setSetting("startupWelcomeShown", true);
 }
 
+// Where the books come from. This system ships the sheets and the bookkeeping and none of the
+// prose, so the one thing a brand-new world cannot supply is the rules themselves; the greeting
+// card says so and points at the publisher's own store rather than a reseller.
+const STONETOP_STORE_URL   = "https://plusoneexp.com/collections/stonetop";
+const STONETOP_STORE_LABEL = "plusoneexp.com/collections/stonetop";
+
 function _buildStartupWelcomeContent() {
 	return `<section class="pbta-chat-card stonetop-roll-card stonetop-startup-card">
 		<div class="cell cell--chat">
@@ -1715,17 +1721,15 @@ function _buildStartupWelcomeContent() {
 			</div>
 			<div class="stonetop-roll-card-description">
 				<p>This is an unofficial Foundry VTT system for <strong>Stonetop</strong>, by Jeremy Strandberg, illustrated by Lucie Arnoux, with layout, editing, and co-design by Jason Lutes.</p>
+				<p>It carries none of the rules text, so you will want the books themselves. They come from the publisher, Plus One Exp: <a href="${STONETOP_STORE_URL}">${STONETOP_STORE_LABEL}</a>.</p>
 			</div>
 			<div class="card-content stonetop-startup-card__content">
 				<div class="row stonetop-startup-card__section">
 					<h3 class="cell__subtitle">For Players</h3>
 					<ul>
-						<li>Guided, resumable character creation from the playbook picker.</li>
-						<li>Automated move rolls with modifiers, advantage or disadvantage, and auto hit tiers.</li>
-						<li>A step-by-step level-up wizard with inline stat, move, and trait choosers.</li>
-						<li>Interactive Clash and Let Fly, resolved from the chat card.</li>
-						<li>Armor and load tracked automatically from your equipped gear.</li>
-						<li>Followers and the Seeker's arcana on tidy, trackable cards.</li>
+						<li>Guided, resumable character creation, and a step-by-step level-up wizard.</li>
+						<li>Move rolls with modifiers, advantage or disadvantage, and hit tiers worked out for you, including Clash and Let Fly resolved from the chat card.</li>
+						<li>Armor, load, followers, and the Seeker's arcana tracked on the sheet.</li>
 					</ul>
 				</div>
 				<div class="row stonetop-startup-card__section">
@@ -1734,9 +1738,6 @@ function _buildStartupWelcomeContent() {
 						<li>A first-session Welcome guide and a Let Spring Burst Forth walkthrough.</li>
 						<li>A steading sheet with seasonal automation, improvements, and disasters.</li>
 						<li>A GM Toolkit with your moves, and Threats and Sites tabs you can pin to a scene.</li>
-						<li>Love Letters: personal, one-time moves you hand to a single character.</li>
-						<li>Character Introductions that compile into "The Chronicle" world journal.</li>
-						<li>An End of Session macro that awards XP to the whole table at once.</li>
 					</ul>
 				</div>
 				<div class="row stonetop-startup-card__section">
@@ -1747,20 +1748,6 @@ function _buildStartupWelcomeContent() {
 						<li>The complete deck of major and minor arcana.</li>
 					</ul>
 				</div>
-				<div class="row stonetop-startup-card__section">
-					<h3 class="cell__subtitle">Useful Settings</h3>
-					<ul>
-						<li><span><strong>Sheet Font &amp; Size</strong>: choose the typeface and scale the text on Stonetop sheets.</span></li>
-						<li><span><strong>On Hover Info</strong>: turn all hover info on/off, or tune Stats, Basic Moves, Playbook Moves, Traits, and Gear Tags individually.</span></li>
-						<li><span><strong>Shift Up/Down Buttons on Roll Cards</strong>: turn this on to add GM-only buttons that bump a roll's result up or down a tier from the chat card, no re-roll needed.</span></li>
-					</ul>
-				</div>
-				<div class="row stonetop-startup-card__section">
-					<h3 class="cell__subtitle">Recommended Add-on</h3>
-					<ul>
-						<li><span>Install <strong><a href="https://foundryvtt.com/packages/dice-so-nice">Dice So Nice!</a></strong> for 3D dice on the tabletop. Every move, damage, and steading roll uses Foundry's dice, so it adds a little immersion to your rolls.</span></li>
-					</ul>
-				</div>
 			</div>
 			<div class="row stonetop-startup-card__actions">
 				<button type="button" class="stonetop-startup-open-welcome">
@@ -1768,7 +1755,8 @@ function _buildStartupWelcomeContent() {
 				</button>
 			</div>
 			<div class="row row--border stonetop-startup-card__footer">
-				Open <strong>Configure Settings</strong> and filter for <strong>Stonetop</strong> to adjust these options.
+				Open <strong>Configure Settings</strong> and filter for <strong>Stonetop</strong> for the sheet font and size, the hover info, and the rest.
+				<a href="https://foundryvtt.com/packages/dice-so-nice">Dice So Nice!</a> is worth installing for 3D dice.
 			</div>
 		</div>
 	</section>`;

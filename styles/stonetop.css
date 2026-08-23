@@ -4347,6 +4347,15 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	font-size: var(--font-size-12);
 }
 
+/* The greeting card's two outbound links: the publisher's store and Dice So Nice. Card paper is
+   pinned parchment in both themes while core's hyperlink ink is chosen for the dark sidebar, so
+   a link that inherits it goes pale on the paper. Same reason the card's headings declare a
+   colour; `--st-blue-text` is a light-scope token and does not flip under a dark interface. */
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-card a[href] {
+	color: var(--st-blue-text);
+	text-decoration: underline;
+}
+
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-card__actions,
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-art-reminder__actions,
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-layout-offer__actions {
@@ -24904,6 +24913,60 @@ th:has(> .stonetop-roll-table-btn) {
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
+
+/* A question-headed fold under a step's body — advice the step doesn't walk you
+   through ("What to prep", on the Expedition walkthrough's intro). Reads as a
+   question the GM can decline, not as another paragraph: quiet, left-aligned, and
+   shut until clicked. The body also carries .stonetop-spring-body, so its prose
+   and spiral bullets match the step it hangs off. */
+.stonetop-guide-aside {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.stonetop-guide-aside-toggle {
+	align-self: flex-start;
+	width: auto;
+	margin: 0;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 4px 6px;
+	/* The question is addressed to the reader of the prose above it, so it reads in the
+	   dialog's own face rather than the UA button default — a bare <button> does not
+	   inherit font-family. One notch quieter than the body, being an aside. */
+	font-family: inherit;
+	font-size: var(--st-fs-sm);
+	background: transparent;
+	border: 0;
+	border-radius: var(--st-radius-sm);
+	cursor: pointer;
+	color: var(--st-text-secondary, #4a4034);
+	transition: background 0.15s;
+}
+
+.stonetop-guide-aside-toggle:hover {
+	background: hsl(40 25% 85%);
+	color: var(--st-green-text);
+}
+
+/* Closed: the chevron rests pointing up (the template ships fa-chevron-up).
+   Open: a half-turn to down. */
+.stonetop-guide-aside-toggle i { transition: transform 0.15s ease; }
+.stonetop-guide-aside-toggle.is-open i { transform: rotate(180deg); }
+
+/* Set off from the step body above it, so the fold reads as an aside rather than
+   as more of the step. */
+.stonetop-guide-aside-body {
+	display: none;
+	padding: 10px 14px;
+	background: rgba(0, 0, 0, 0.03);
+	border: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.1));
+	border-radius: var(--st-radius-sm);
+}
+
+.stonetop-guide-aside-body.is-open { display: block; }
 
 .stonetop-guide-nav {
 	display: flex;

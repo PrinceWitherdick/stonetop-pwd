@@ -81,9 +81,15 @@ const RESUME_KEY = "expedition";
 
 // ── ExpeditionDialog ─────────────────────────────────────────────────────────
 // A GM walkthrough of Book I's Expeditions chapter (p.301–343). It follows the
-// chapter's own five steps — Preparations, Running the journey, Player moves,
-// Going home, What to prep — as a linear stepper, mirroring SpringBurstDialog
-// (and reusing its `.stonetop-spring-*` / shared `.stonetop-guide-*` styles).
+// chapter's own arc — Preparations, Running the journey, Player moves, Going
+// home — as a linear stepper, mirroring SpringBurstDialog (and reusing its
+// `.stonetop-spring-*` / shared `.stonetop-guide-*` styles).
+//
+// The chapter's fifth part, "What to prep", is NOT a step: it is between-sessions
+// homework, so a step of it sat at the END of the walkthrough, past Going home,
+// where a GM prepping for next week had already clicked Done. It rides on the
+// intro step instead, folded shut behind a question (`aside` on the step schema),
+// which is where a GM opening this guide to prep actually is.
 //
 // Interactive bits: a Chart a Course checklist (the requirements/challenges the
 // book tells you to "write down with tick boxes"), an inline Requisition roll
@@ -164,14 +170,30 @@ function _pipBands(totalMarks, limits) {
 // Linear walkthrough. `body` is HTML. `fate` names the Die of Fate table this step
 // reaches for (a key in data/fate-tables.js) and adds the button that rolls it. `roll`
 // names an inline roll ("requisition"). `tiers` shows the matching outcome list.
-// `qa` is a single note, per-PC notes, or a checklist (see _qaContext).
+// `qa` is a single note, per-PC notes, or a checklist (see _qaContext). `aside` is a
+// question-headed fold below the body — advice the step doesn't walk you through, kept
+// shut until the GM asks for it.
 const _STEPS = [
 	{
 		key:   "intro",
 		title: "An expedition begins",
 		icon:  "fa-map-location-dot",
-		body:  `<p>The characters are leaving town, to face a threat, seize an opportunity, or chase a plan of their own. This guide walks the journey's arc: <strong>Preparations</strong>, <strong>running the journey</strong>, the <strong>player moves</strong> they'll lean on, <strong>going home</strong>, and what to <strong>prep</strong> between sessions.</p>
+		body:  `<p>The characters are leaving town, to face a threat, seize an opportunity, or chase a plan of their own. This guide walks the journey's arc: <strong>Preparations</strong>, <strong>running the journey</strong>, the <strong>player moves</strong> they'll lean on, and <strong>going home</strong>.</p>
 				<p>Travel is dangerous and hard, and that's the point: it makes home feel precious. <strong>Don't gloss it over.</strong> Give it the screen time it deserves.</p>`,
+		aside: {
+			label: "Questions about what to prep?",
+			body:  `<p>If you know an expedition is coming, prep pays off:</p>
+				<ul>
+					<li><strong>Chart the course</strong> in advance and write the choices down with tick boxes.</li>
+					<li><strong>Draw a map</strong> of the route, marking your points of interest.</li>
+					<li><strong>Identify points of interest &amp; legs</strong>; note how long each leg takes.</li>
+					<li>For each, jot a one-sentence description, <strong>2&ndash;3 impressions</strong> (non-visual senses), questions to ask, and which challenges land there.</li>
+					<li>Prepare up to <strong>7 encounters</strong>, dangers, discoveries, events, tied into a larger story.</li>
+					<li>Consider Die of Fate tables for weather, camp events, or perilous stretches.</li>
+					<li>Build any <strong>sites, dangers, discoveries, NPCs, and followers</strong> they're likely to meet.</li>
+				</ul>
+				<p>Lean on <strong>Book II</strong> for the regions they'll cross: copy details or just bookmark the page.</p>`,
+		},
 	},
 	{
 		key:   "journey",
@@ -308,9 +330,12 @@ const _STEPS = [
 		fate:  "camp",
 	},
 	{
-		key:   "home",
-		title: "Going home",
-		icon:  "fa-house-chimney",
+		key:     "home",
+		title:   "Going home",
+		icon:    "fa-house-chimney",
+		// The last step, so this is where Done and "Save to the Chronicle" sit. The chapter's
+		// own last part ("What to prep") folds into the intro instead — see the header comment.
+		isFinal: true,
 		body:  `<p>Usually, <strong>gloss the trip home</strong>: they already faced these challenges. Use it to ruminate: ask what they keep thinking about, suggest they <strong>Keep Company</strong>. But if they're hauling something awkward, lost or hurt, racing a clock, or taking a new route, <strong>Chart a Course back</strong> and play it out.</p>
 				<p>Then, before they walk back in, think through:</p>`,
 		qa:    {
@@ -320,29 +345,34 @@ const _STEPS = [
 			notes:  { field: "notes", prompt: "Return Triumphant?", placeholder: "If their return is a true triumph, clear a steading debility (or +1 Fortunes). What does it look like?" },
 		},
 	},
-	{
-		key:     "prepAfter",
-		title:   "What to prep",
-		icon:    "fa-feather",
-		isFinal: true,
-		body:    `<p>If you know an expedition is coming, prep pays off:</p>
-				<ul>
-					<li><strong>Chart the course</strong> in advance and write the choices down with tick boxes.</li>
-					<li><strong>Draw a map</strong> of the route, marking your points of interest.</li>
-					<li><strong>Identify points of interest &amp; legs</strong>; note how long each leg takes.</li>
-					<li>For each, jot a one-sentence description, <strong>2&ndash;3 impressions</strong> (non-visual senses), questions to ask, and which challenges land there.</li>
-					<li>Prepare up to <strong>7 encounters</strong>, dangers, discoveries, events, tied into a larger story.</li>
-					<li>Consider Die of Fate tables for weather, camp events, or perilous stretches.</li>
-					<li>Build any <strong>sites, dangers, discoveries, NPCs, and followers</strong> they're likely to meet.</li>
-				</ul>
-				<p>Lean on <strong>Book II</strong> for the regions they'll cross: copy details or just bookmark the page.</p>`,
-	},
 ];
+
+/**
+ * Where a pin hangs its label, given where the pin itself sits on the picture.
+ *
+ * Both anchors read the same way: a label near an edge hangs INWARD, so it cannot spill out of the
+ * picture and give whatever is showing it a horizontal scrollbar.
+ *
+ * MODULE LEVEL because three families of mark now want it — the book's places, its edge arrows and
+ * the GM's own sites — and the third is built outside `_mapLayer`, where the closure this used to
+ * be could not be reached. A second copy of these four numbers would put a site's label on the
+ * wrong side of the pin at exactly the edges where it matters.
+ */
+function pinAnchors(left, top) {
+	return {
+		anchorH: left > 78 ? "right" : left < 22 ? "left" : "centre",
+		anchorV: top > 84 ? "above" : "below",
+	};
+}
 
 export class ExpeditionDialog extends StepperDialog {
 	constructor(options = {}) {
 		super(options);
 		this._rolls = {}; // keyed by step key, so each inline roll persists across nav
+		// Whether the current step's `aside` fold is open. Held on the dialog, not just as a
+		// class on the element, because the steps re-render in place (naming the trip, picking
+		// who's coming) and a fold the GM opened must not snap shut under them.
+		this._asideOpen = false;
 	}
 
 	get _steps() { return _STEPS; }
@@ -372,7 +402,7 @@ export class ExpeditionDialog extends StepperDialog {
 			// one line.
 			width:     700,
 			// Fixed, like the other left-rail guides (Welcome 660×580, Make a Monster
-			// 760×620) — NOT "auto". These twelve steps run from two paragraphs (intro) to a
+			// 760×620) — NOT "auto". These eleven steps run from two paragraphs (intro) to a
 			// twelve-box checklist (Chart a Course) to a per-PC load table (Outfit) to a
 			// regional map (The route), and an auto-height window re-measures its content on
 			// EVERY render: measured against a 1000px viewport it opened anywhere from 597px to
@@ -383,11 +413,13 @@ export class ExpeditionDialog extends StepperDialog {
 			// .stonetop-guide-main. A fixed height also means a manual resize sticks; core
 			// discards one on an auto-height window.
 			//
-			// 620 used to be the exact height at which all ELEVEN rail entries were visible at
-			// the default UI font. "The route" made it twelve, so this is 620 plus one rail
-			// entry's worth (6px padding twice, ~18px of line, a 1px border and the 2px gap) —
-			// the rail also scrolls and is in `scrollY` below, so overshooting costs nothing but
-			// falling short would quietly hide the last step behind a scroll.
+			// 620 is the exact height at which ELEVEN rail entries fit at the default UI font,
+			// which is the count again now that "What to prep" has folded into the intro. This
+			// keeps the twelve-entry height (620 plus one entry's worth: 6px padding twice,
+			// ~18px of line, a 1px border and the 2px gap) rather than shrinking the window
+			// under anyone who has it open — the rail scrolls and is in `scrollY` below, so
+			// overshooting costs nothing, while falling short would quietly hide the last step
+			// behind a scroll.
 			height:    664,
 			resizable: true,
 			// Hold the reader's place through the re-renders a step does in place — naming
@@ -410,6 +442,15 @@ export class ExpeditionDialog extends StepperDialog {
 			game.stonetop?.rollDieOfFate?.(FATE_TABLES[this._stepNav().step.fate]);
 		});
 		html.find(".stonetop-exp-weather-btn").on("click", () => game.stonetop?.openWeather?.());
+		// The step's `aside` fold. Flipped by class rather than by re-rendering: a render on the
+		// route step rebuilds the map panel (it browses the art folder and measures an image),
+		// which is a lot of work for opening a paragraph of advice.
+		html.find(".stonetop-guide-aside-toggle").on("click", ev => {
+			this._asideOpen = !this._asideOpen;
+			ev.currentTarget.classList.toggle("is-open", this._asideOpen);
+			ev.currentTarget.setAttribute("aria-expanded", String(this._asideOpen));
+			html[0].querySelector(".stonetop-guide-aside-body")?.classList.toggle("is-open", this._asideOpen);
+		});
 		html.find(".stonetop-spring-done").on("click", () => this.close());
 		// Expedition-log bar: rename the current trip, switch trips, start a fresh one.
 		html.find(".stonetop-exp-title").on("change", ev => this._saveTitle(ev.currentTarget.value));
@@ -505,6 +546,8 @@ export class ExpeditionDialog extends StepperDialog {
 				: null,
 			showFate:    !!step.fate,
 			showWeather: !!step.weather,
+			// The question-headed fold below the body ("What to prep", on the intro step).
+			aside:     step.aside ? { ...step.aside, open: this._asideOpen } : null,
 			qa:        this._qaContext(step.qa),
 		};
 		// The Outfit step gains a live party-load readout — GM-only, since it reads
