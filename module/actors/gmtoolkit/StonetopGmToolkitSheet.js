@@ -89,8 +89,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 	// untouched toolkit keeps the default forever.
 	//
 	// withSectionEditing: the fold carets on every tab, plus the per-section edit pencil the
-	// Threats and Sites tabs carry (their delete buttons are live only under the pencil, so a
-	// GM reading their prep can't bin a threat with a stray click).
+	// Encounters and Wonder tabs carry. NOT Threats or Sites: both had one and lost it, because
+	// the only control it ended up locking was the trash while everything around it needed
+	// exempting by name — see the note at the head of gm-prep-tabs.js.
 	//
 	// withGmPrepTabs: the Threats & Dangers and Sites tabs, moved here from the steading sheet.
 	// Its file header explains the one thing that must not drift: the STORAGE stayed on the
@@ -229,6 +230,7 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			await this._flushGmEncounterEdits();
 			this._unwirePrepPageSync();
 			this._unwireSeasonSync();
+			this._unwireGmPrepMasonry();
 			return super.close(options);
 		}
 
@@ -343,9 +345,7 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// writes files. This sheet is GM-only by ownership, so it is always true in practice.
 			context.stonetop.isGM = game.user?.isGM ?? false;
 
-			// Both prep tabs, including their per-section edit flags (a section is editable when
-			// its own pencil is toggled, which is what keeps the delete buttons inert while a GM
-			// is only reading).
+			// Both prep tabs. They publish no edit flags — neither has a pencil.
 			// The steading resolved above, handed down rather than looked up again: it is an
 			// unindexed `game.actors` scan, and the mixin's own note says both its builders
 			// sharing one resolution is the point.
@@ -377,9 +377,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// Folding a section is a reading preference, so this is wired outside any
 			// editability guard, exactly as the character and steading sheets wire theirs.
 			this._wireSectionCollapse(html, HEADING_SELECTOR);
-			// The per-section edit pencil on Threats and Sites. Same class hook the steading
-			// used, because the shared `section-edit-toggle` partial emits it and moved here
-			// unchanged along with the rest of that markup.
+			// The per-section edit pencil, now Encounters' and Wonder's only. Same class hook the
+			// steading used, because the shared `section-edit-toggle` partial emits it and moved
+			// here unchanged along with the rest of that markup.
 			this._wireSectionEditToggle(html, ".steading-section-edit-toggle");
 			// Threats and Sites: doom tracks, prep tools, card collapse, drag-to-scene and the
 			// journal threat-seed drop. Self-gated per action, so it goes outside the editable

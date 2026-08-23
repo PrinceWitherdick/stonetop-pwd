@@ -43,9 +43,30 @@ import { escHtml } from "../../utils/strings.js";
 import { localize, format } from "../../utils/i18n.js";
 import { localizedOnce } from "../../utils/localized-once.js";
 import { toggleDisclosure } from "../../utils/disclosure.js";
+import { GM_PREP_GRID_SELECTOR, wireGmPrepMasonry } from "./gm-prep-masonry.js";
 
-/** Sections on these tabs that carry their own edit pencil. Read by `_addGmPrepContext`. */
-const GM_PREP_EDIT_SECTIONS = ["threats", "sites"];
+/*
+ * NEITHER TAB HAS AN EDIT PENCIL, and neither should grow one back. There was a
+ * `GM_PREP_EDIT_SECTIONS` list here, and each tab hung `stonetop-readonly` off the flag it
+ * published.
+ *
+ * What that lock actually reached, once every control that writes nothing had been exempted one
+ * at a time, was a single button per tab: the trash. Everything else on a prep card is either
+ * read-only prose or a play-time affordance -- a card is written and re-edited in its wizard,
+ * the site tables only roll, the doom ticks are a tracker, the type reference only unhides prose
+ * -- so the pencil unlocked nothing a GM wanted unlocked, while the trash beside it gave no
+ * hover feedback and swallowed clicks with nothing on screen naming the lock. The exemption list
+ * in stonetop.css kept growing for the same reason, and the threat-type disclosure sat mouse-dead
+ * for its whole life because it is a `<button>` and nobody had thought to add its line.
+ *
+ * Deleting is guarded by the confirm dialog in `_confirmDeletePrepPage`, which is the guard it
+ * always really had. If a gate is ever wanted here again, gate it in the HANDLER where a reader
+ * can see it, not by a class an allow-list has to keep being told about.
+ *
+ * The host still mixes in `withSectionEditing` -- the Encounters and Wonder tabs use it, and both
+ * MERGE into `context.stonetop.edit` rather than assigning, so nothing here needs to reserve a
+ * place in that object.
+ */
 
 /**
  * The Threats tab's static reference, localized once.
@@ -107,8 +128,9 @@ function cardKind(card) {
 /**
  * Adds the Threats & Dangers and Sites tabs to a sheet.
  *
- * Expects the host to provide `isEditable`, `_editMode`, `render`, and the
- * `withSectionEditing` mixin (for `isSectionEditable` / `_wireSectionEditToggle`).
+ * Expects the host to provide `isEditable`, `_editMode` and `render`. NOT `withSectionEditing`:
+ * neither tab has a section pencil any more (see the note above), so nothing in here reads
+ * `isSectionEditable`. The GM Toolkit still mixes it in for its Encounters and Wonder tabs.
  *
  * @template {new (...args: any[]) => object} T
  * @param {T} Base
@@ -120,6 +142,19 @@ export function withGmPrepTabs(Base) {
 		// kind these two maps disagree about is a TypeError mid-render rather than a default.
 		_cardCollapse = Object.fromEntries(GM_PREP_KIND_IDS.map(kind =>
 			[kind, { defaultCollapsed: gmPrepStartsCollapsed(kind), overrides: new Set() }]));
+
+		// Which of a card's named folds this GM has OPENED, as `${uuid}::${groupId}`. Only site
+		// cards have any (site-card.hbs), and this tab draws every one of them shut: a written-up
+		// site runs to a page, and this tab tiles several abreast, which is the whole reason the
+		// folds exist. So an expanded card reads as its foundation plus four one-line rows saying
+		// what is inside, and you open the beat you want.
+		//
+		// A flat Set of opened keys rather than a per-kind default/override pair like the collapse
+		// state above: there is exactly one default here ("shut") and no kind may differ from it,
+		// so a table keyed by kind would be three rows saying the same word. Not persisted, for
+		// the reason `_lastRandomMove` is not — it is a reading position, and one that survived a
+		// reload would be a stored preference nobody asked for.
+		_cardGroupsOpen = new Set();
 
 		// Card view-models from an earlier render, by kind then page uuid, each stamped with its
 		// page's last-modified time. Building one is a walk of async enrichHTML round trips (a
@@ -225,6 +260,19 @@ export function withGmPrepTabs(Base) {
 			else state.overrides.add(uuid);
 		}
 
+		/** The key one card's named fold is remembered under. */
+		_cardGroupKey(uuid, group) { return `${uuid}::${group}`; }
+
+		/** Is this card's named fold drawn open? Shut unless this GM opened it. */
+		_isCardGroupOpen(uuid, group) { return this._cardGroupsOpen.has(this._cardGroupKey(uuid, group)); }
+
+		/** Record that a fold was opened (or shut again). */
+		_setCardGroupOpen(uuid, group, open) {
+			const key = this._cardGroupKey(uuid, group);
+			if (open) this._cardGroupsOpen.add(key);
+			else this._cardGroupsOpen.delete(key);
+		}
+
 		/**
 		 * One kind's card view-models, built concurrently and reused while their pages sit still.
 		 * What is CACHED is the expensive half (the enriched prose); the per-render chrome is
@@ -248,6 +296,14 @@ export function withGmPrepTabs(Base) {
 				vm.canDrag = vm.isOwner;
 				vm.collapsible = true;
 				vm.collapsed = this._isCardCollapsed(kind, page.uuid);
+				// A card whose body is drawn in named folds (sites) opens SHUT here, minus the
+				// folds this GM has opened. Mutated in place on the cached view-model's own group
+				// objects, exactly as `collapsed` above is re-applied to a cached card: what the
+				// cache holds is the expensive enriched prose, and this is the cheap chrome that
+				// has to be right for THIS render. Kinds with no folds simply have none to walk.
+				for (const group of Object.values(vm.groups ?? {})) {
+					group.open = this._isCardGroupOpen(page.uuid, group.id);
+				}
 				return vm;
 			}));
 			// Forget cards whose page is gone, so deleting prep doesn't hold its VM for the life
@@ -304,20 +360,8 @@ export function withGmPrepTabs(Base) {
 		 */
 		async _addGmPrepContext(context, steading = this._prepSteading()) {
 			const st = context.stonetop;
-			// Per-section edit flags, built here rather than by the host: these two tabs are the
-			// only sections that carry a pencil, so the list of them is the mixin's own business.
-			// A section missing from `stonetop.edit` renders permanently read-only with no error,
-			// which is not a thing to leave to a caller remembering to iterate an export.
-			//
-			// MERGED, never assigned over: this is a mixin, and a host that publishes edit flags
-			// of its own would have them silently dropped by an `=` here — read-only sections
-			// with nothing logged, which is the very failure the paragraph above is about.
-			st.edit = {
-				...(st.edit ?? {}),
-				...Object.fromEntries(
-					GM_PREP_EDIT_SECTIONS.map(section => [section, this.isSectionEditable(section)])
-				),
-			};
+			// No `st.edit` flags from here: neither tab has a pencil to publish one for. See the
+			// note above the mixin for why they lost it, and why nothing should re-add it.
 			// Resolved ONCE and passed down. Both builders used to ask for it themselves, which
 			// was two `game.actors` scans and two places to state the no-steading branch.
 			// One flag for both tabs: with no steading in the world there is nowhere to file
@@ -410,13 +454,11 @@ export function withGmPrepTabs(Base) {
 					const remove = ev.target.closest?.(`${tool.scope} .${tool.kind}-remove`);
 					if (remove) {
 						ev.preventDefault();
-						// Deleting is the one control on these tabs that destroys a write-up, and
-						// the per-section pencil is this sheet's whole write gate (there is no
-						// global edit wrench). The stylesheet says the same thing by leaving
-						// `<kind>-remove` off the `.stonetop-readonly` allow-list, but a gate that
-						// exists only in CSS is one `!important` from being gone, so the handler
-						// states it too rather than trusting `pointer-events`.
-						if (remove.closest(".stonetop-readonly")) return;
+						// No edit-mode check. There was one — `if (remove.closest(".stonetop-readonly")) return;`
+						// — paired with the trash's omission from the CSS allow-list, back when both
+						// tabs had a section pencil. Deleting is guarded by the confirm dialog below,
+						// which is what a destructive action on a GM-only sheet actually needs; see
+						// the note above the mixin for what the pencil cost.
 						const page = await fromUuid(remove.dataset.pageUuid);
 						// AWAITED, and its failure said out loud. A rejection here — a journal the
 						// GM cannot delete, a write that fails — used to close the confirm dialog,
@@ -444,11 +486,32 @@ export function withGmPrepTabs(Base) {
 					if (!card) return;
 					const collapsed = card.classList.toggle("is-collapsed");
 					card.querySelector(".threat-collapse-btn")?.setAttribute("aria-expanded", String(!collapsed));
+					// Folding a card changes its height but not the grid's width, and the packing
+					// is width-guarded, so the columns only re-balance if we say so. Only THIS
+					// grid: the sibling grids on the tab are unchanged.
+					this._gmPrepMasonry?.repack(card.closest(GM_PREP_GRID_SELECTOR));
 					const uuid = card.dataset.pageUuid;
 					if (!uuid) return;
 					this._setCardCollapsed(cardKind(card), uuid, collapsed);
 				}
 			});
+
+			// A site card's four folds are native <details>, so nothing here is what makes them
+			// open — see site-card.hbs. Two things only this tab has to say about it: the packer
+			// balances its columns by MEASURED height, so a fold that just changed a card's height
+			// invalidates the packing; and the state has to survive the re-render that any prep
+			// write in the world triggers, which would otherwise re-draw every fold shut.
+			//
+			// CAPTURE PHASE, because `toggle` does not bubble: a delegated listener on the sheet
+			// root never sees it otherwise. Guarded on our own class so the sheet's other
+			// <details> (a follower rule, a wound scar) don't repack a grid they aren't in.
+			root.addEventListener("toggle", ev => {
+				const fold = ev.target;
+				if (!fold?.classList?.contains?.("site-group")) return;
+				this._gmPrepMasonry?.repack(fold.closest(GM_PREP_GRID_SELECTOR));
+				const uuid = fold.closest(".threat-card")?.dataset.pageUuid;
+				if (uuid && fold.dataset.group) this._setCardGroupOpen(uuid, fold.dataset.group, fold.open);
+			}, true);
 
 			// Whatever controls each kind's own card carries (a site's random tables, Book I p.369).
 			wireGmPrepCardExtras(root, target => fromUuid(target.closest(".threat-card")?.dataset.pageUuid ?? ""));
@@ -465,6 +528,24 @@ export function withGmPrepTabs(Base) {
 			// uses, so the drag-over highlight and the dragleave containment test can't diverge.
 			wireCardDropZone(root.querySelector(".tab.threats"),
 				STONETOP_THREAT_SEED_DRAG_TYPE, data => this._onDropThreatSeed(data.seed));
+
+			this._wireGmPrepMasonry(root);
+		}
+
+		/**
+		 * Pack the prep-card grids by measured height rather than letting them ride the CSS
+		 * grid's rows, so a short card never holds a row open beside a tall one. The packing
+		 * itself, and why the Sites tab needs it most, is in gm-prep-masonry.js.
+		 */
+		_wireGmPrepMasonry(root) {
+			this._unwireGmPrepMasonry();
+			this._gmPrepMasonry = wireGmPrepMasonry(root);
+		}
+
+		/** Stop observing the prep grids (a re-render rebuilds them; a close throws them away). */
+		_unwireGmPrepMasonry() {
+			this._gmPrepMasonry?.disconnect();
+			this._gmPrepMasonry = null;
 		}
 
 		/** Open a threat's editor (a proper movable dialog, not the page sheet standalone). */

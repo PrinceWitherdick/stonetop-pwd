@@ -6,7 +6,19 @@
 
       Sections follow the book's own write-up order (Book I pp. 355-370): the foundation,
       then the story, then the contents, then the areas and the plans. A site with only a
-      foundation renders as just that, which is the point: you prep only what you need. --}}
+      foundation renders as just that, which is the point: you prep only what you need.
+
+      The last four of those fold, as native <details>, because a fully written-up site runs
+      to a page and the Sites tab tiles several of them abreast. What is NOT in a fold is the
+      foundation — the manner/region/terrain strip, the description, why it's here and the
+      Book II picks — because that is the part that tells you which site you are looking at.
+      Which sections cluster into which fold, and why there are four of them, is in
+      SITE_CARD_GROUPS (module/sites/site-view.js).
+
+      <details> rather than a class flip and a click handler: the fold then works in all three
+      hosts with no wiring at all, and keyboard and find-in-page come free. Only the GM Toolkit's
+      Sites tab has anything to add, and neither half is about making it open — it repacks its
+      masonry columns and remembers the state across re-renders. --}}
 <article class="threat-card threat-card--site site-card{{#if collapsed}} is-collapsed{{/if}}{{#if canDrag}} is-draggable{{/if}}"
          data-site-id="{{id}}" data-page-uuid="{{uuid}}" style="--threat-accent:{{accent}};"{{#if canDrag}} draggable="true"{{/if}}>
 	{{> "stonetop.card-head" kind="site" typeLabel="Site"}}
@@ -29,116 +41,136 @@
 	</div>
 	{{/if}}
 
-	{{#if hasTimeline}}
-	<div class="site-block site-timeline">
-		<span class="threat-label">Timeline</span>
-		<ul class="site-list site-timeline-list">
-			{{#each timeline}}<li>{{#if when}}<strong class="site-when">{{when}}</strong>{{/if}}{{text}}</li>{{/each}}
-		</ul>
-	</div>
-	{{/if}}
+	{{!-- Build up its story (walkthrough steps 3-4). --}}
+	{{#> "stonetop.site-group" group=groups.story}}
 
-	{{#if hasQuestions}}
-	<div class="site-block site-questions">
-		<span class="threat-label">Questions</span>
-		<ul class="site-list site-question-list">
-			{{#each questions}}
-			<li{{#unless answer}} class="site-question--open"{{/unless}}>
-				{{#if prompt}}<span class="site-question-prompt">{{prompt}}</span>{{/if}}
-				{{#if answer}}<span class="site-question-answer">{{answer}}</span>{{/if}}
-			</li>
-			{{/each}}
-		</ul>
-	</div>
-	{{/if}}
-
-	{{#if hasConnections}}
-	<div class="site-block site-connections">
-		<span class="threat-label">Connections</span>
-		<ul class="site-list">{{#each connections}}<li>{{this}}</li>{{/each}}</ul>
-	</div>
-	{{/if}}
-
-	{{#if hasDenizens}}
-	<div class="site-block site-denizens">
-		<span class="threat-label">Denizens</span>
-		<ul class="site-list site-denizen-list">
-			{{#each denizens}}<li>{{#if name}}<strong>{{name}}</strong>{{/if}}{{#if notes}} {{notes}}{{/if}}</li>{{/each}}
-		</ul>
-	</div>
-	{{/if}}
-
-	{{#if hasDangers}}
-	<div class="site-block site-dangers">
-		<span class="threat-label">Dangers</span>
-		<ul class="site-list">{{#each dangers}}<li>{{this}}</li>{{/each}}</ul>
-	</div>
-	{{/if}}
-
-	{{#if hasDiscoveries}}
-	<div class="site-block site-discoveries">
-		<span class="threat-label">Discoveries</span>
-		<ul class="site-list">{{#each discoveries}}<li>{{this}}</li>{{/each}}</ul>
-	</div>
-	{{/if}}
-
-	{{#if hasEnvironment}}
-	<div class="site-block site-environment">
-		{{#if hasOutside}}
-		<span class="threat-label">Outside</span>
-		<ul class="site-list">{{#each outside}}<li>{{this}}</li>{{/each}}</ul>
-		{{/if}}
-		{{#if hasInside}}
-		<span class="threat-label">Inside</span>
-		<ul class="site-list">{{#each inside}}<li>{{this}}</li>{{/each}}</ul>
-		{{/if}}
-	</div>
-	{{/if}}
-
-	{{#if hasAreas}}
-	<div class="site-block site-areas">
-		<span class="threat-label">Areas</span>
-		{{#each areas}}
-		<div class="site-area">
-			<h4 class="site-area-title">{{title}}</h4>
-			{{#if hasDescription}}<div class="site-area-desc">{{{description}}}</div>{{/if}}
-			{{#if hasContents}}<div class="site-area-contents">{{{contents}}}</div>{{/if}}
-			{{#if hasExits}}<p class="site-area-exits"><span class="threat-label">Exits</span>{{exits}}</p>{{/if}}
-		</div>
-		{{/each}}
-	</div>
-	{{/if}}
-
-	{{#if hasPlans}}
-	<div class="site-block site-plans">
-		<span class="threat-label">Plans</span>
-		<ul class="threat-move-list">
-			{{#each plans}}<li><span class="threat-move-caret" aria-hidden="true">&#x27a4;</span>{{this}}</li>{{/each}}
-		</ul>
-	</div>
-	{{/if}}
-
-	{{#if hasRandomTables}}
-	<div class="site-block site-tables">
-		{{#each randomTables}}
-		<div class="site-table" data-table-index="{{index}}">
-			<p class="site-table-head">
-				<span class="threat-label">{{#if caption}}{{caption}}{{else}}Table{{/if}}</span>
-				{{#if hasRows}}
-				<span class="site-table-die">{{die}}</span>
-				<button type="button" class="site-table-roll" data-table-index="{{index}}"
-				        data-tooltip="Roll {{die}}" data-tooltip-direction="UP" aria-label="Roll {{die}} on this table">
-					<i class="fas fa-dice-d20" aria-hidden="true"></i>
-				</button>
-				{{/if}}
-			</p>
-			{{#if hasRows}}
-			<ol class="site-list site-table-list">
-				{{#each rows}}<li data-roll="{{roll}}"><span class="site-table-roll-no">{{roll}}</span>{{text}}</li>{{/each}}
-			</ol>
+			{{#if hasTimeline}}
+			<div class="site-block site-timeline">
+				<span class="threat-label">Timeline</span>
+				<ul class="site-list site-timeline-list">
+					{{#each timeline}}<li>{{#if when}}<strong class="site-when">{{when}}</strong>{{/if}}{{text}}</li>{{/each}}
+				</ul>
+			</div>
 			{{/if}}
-		</div>
-		{{/each}}
-	</div>
-	{{/if}}
+
+			{{#if hasQuestions}}
+			<div class="site-block site-questions">
+				<span class="threat-label">Questions</span>
+				<ul class="site-list site-question-list">
+					{{#each questions}}
+					<li{{#unless answer}} class="site-question--open"{{/unless}}>
+						{{#if prompt}}<span class="site-question-prompt">{{prompt}}</span>{{/if}}
+						{{#if answer}}<span class="site-question-answer">{{answer}}</span>{{/if}}
+					</li>
+					{{/each}}
+				</ul>
+			</div>
+			{{/if}}
+
+			{{#if hasConnections}}
+			<div class="site-block site-connections">
+				<span class="threat-label">Connections</span>
+				<ul class="site-list">{{#each connections}}<li>{{this}}</li>{{/each}}</ul>
+			</div>
+			{{/if}}
+
+	{{/"stonetop.site-group"}}
+
+	{{!-- Populate it (walkthrough step 5): who's here, and what the story implies is waiting. --}}
+	{{#> "stonetop.site-group" group=groups.within}}
+
+			{{#if hasDenizens}}
+			<div class="site-block site-denizens">
+				<span class="threat-label">Denizens</span>
+				<ul class="site-list site-denizen-list">
+					{{#each denizens}}<li>{{#if name}}<strong>{{name}}</strong>{{/if}}{{#if notes}} {{notes}}{{/if}}</li>{{/each}}
+				</ul>
+			</div>
+			{{/if}}
+
+			{{#if hasDangers}}
+			<div class="site-block site-dangers">
+				<span class="threat-label">Dangers</span>
+				<ul class="site-list">{{#each dangers}}<li>{{this}}</li>{{/each}}</ul>
+			</div>
+			{{/if}}
+
+			{{#if hasDiscoveries}}
+			<div class="site-block site-discoveries">
+				<span class="threat-label">Discoveries</span>
+				<ul class="site-list">{{#each discoveries}}<li>{{this}}</li>{{/each}}</ul>
+			</div>
+			{{/if}}
+
+	{{/"stonetop.site-group"}}
+
+	{{!-- The environment and the areas (walkthrough steps 6-7): what it's like to stand in. --}}
+	{{#> "stonetop.site-group" group=groups.place}}
+
+			{{#if hasEnvironment}}
+			<div class="site-block site-environment">
+				{{#if hasOutside}}
+				<span class="threat-label">Outside</span>
+				<ul class="site-list">{{#each outside}}<li>{{this}}</li>{{/each}}</ul>
+				{{/if}}
+				{{#if hasInside}}
+				<span class="threat-label">Inside</span>
+				<ul class="site-list">{{#each inside}}<li>{{this}}</li>{{/each}}</ul>
+				{{/if}}
+			</div>
+			{{/if}}
+
+			{{#if hasAreas}}
+			<div class="site-block site-areas">
+				<span class="threat-label">Areas</span>
+				{{#each areas}}
+				<div class="site-area">
+					<h4 class="site-area-title">{{title}}</h4>
+					{{#if hasDescription}}<div class="site-area-desc">{{{description}}}</div>{{/if}}
+					{{#if hasContents}}<div class="site-area-contents">{{{contents}}}</div>{{/if}}
+					{{#if hasExits}}<p class="site-area-exits"><span class="threat-label">Exits</span>{{exits}}</p>{{/if}}
+				</div>
+				{{/each}}
+			</div>
+			{{/if}}
+
+	{{/"stonetop.site-group"}}
+
+	{{!-- Write it up (walkthrough step 8): the plans, and what you roll on at the table. --}}
+	{{#> "stonetop.site-group" group=groups.play}}
+
+			{{#if hasPlans}}
+			<div class="site-block site-plans">
+				<span class="threat-label">Plans</span>
+				<ul class="threat-move-list">
+					{{#each plans}}<li><span class="threat-move-caret" aria-hidden="true">&#x27a4;</span>{{this}}</li>{{/each}}
+				</ul>
+			</div>
+			{{/if}}
+
+			{{#if hasRandomTables}}
+			<div class="site-block site-tables">
+				{{#each randomTables}}
+				<div class="site-table" data-table-index="{{index}}">
+					<p class="site-table-head">
+						<span class="threat-label">{{#if caption}}{{caption}}{{else}}Table{{/if}}</span>
+						{{#if hasRows}}
+						<span class="site-table-die">{{die}}</span>
+						<button type="button" class="site-table-roll" data-table-index="{{index}}"
+						        data-tooltip="Roll {{die}}" data-tooltip-direction="UP" aria-label="Roll {{die}} on this table">
+							<i class="fas fa-dice-d20" aria-hidden="true"></i>
+						</button>
+						{{/if}}
+					</p>
+					{{#if hasRows}}
+					<ol class="site-list site-table-list">
+						{{#each rows}}<li data-roll="{{roll}}"><span class="site-table-roll-no">{{roll}}</span>{{text}}</li>{{/each}}
+					</ol>
+					{{/if}}
+				</div>
+				{{/each}}
+			</div>
+			{{/if}}
+
+	{{/"stonetop.site-group"}}
 </article>

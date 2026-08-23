@@ -165,6 +165,8 @@ describe("the schema round-trip", () => {
 describe("the theme step's pick controls", () => {
 	const dlg = (sel) => on({ ...blankSel(), ...sel });
 	const themeRows = (manner) => siteManner(manner).tables.find(t => t.key === "theme").rows;
+	/** The Nth Green Lord theme the sub-die can reach that owes no further roll of its own. */
+	const plainTheme = (n) => combinableRows(themeRows("greenLord"), 8).filter(r => !r.again)[n].text;
 
 	it("offers the result alone, without the roll that would have produced it", () => {
 		const [pick] = dlg({ manner: "greenLord" })._pickSlots("theme").slots;
@@ -178,7 +180,8 @@ describe("the theme step's pick controls", () => {
 		const values = d._sel.picks.theme;
 		expect(values[0]).toBe("Sized for giants");
 		expect(values).toHaveLength(2);
-		// The row says 1d8, so the extra is one of the eight plain themes and never the row itself.
+		// The row says 1d8, so the extra comes from the eight rows that die can reach, never the
+		// row itself (which is the ninth).
 		expect(combinableRows(themeRows("greenLord"), 8).map(r => r.text)).toContain(values[1]);
 	});
 
@@ -291,11 +294,33 @@ describe("the theme step's pick controls", () => {
 		const d = dlg({ manner: "greenLord" });
 		d._setPick("theme", 0, "Sized for giants");
 		expect(d._sel.picks.theme).toHaveLength(2);
+		// The sub-die filled slot 1 at random, and one of the eight rows it can reach carries a
+		// roll-again of ITS own, which buys a further slot (see the test below). Pinned to a plain
+		// row so what is under test here is the TABLE's budget and not which theme came up.
+		d._setPick("theme", 1, plainTheme(1));
 		expect(d._pickSlots("theme").slots[0].hint).toContain("pick 1, or combine 2");
 		expect(d._pickSlots("theme").canAdd).toBe(true);
-		d._setPick("theme", 2, themeRows("greenLord").find(r => !r.again).text);
+		d._setPick("theme", 2, plainTheme(0));
 		expect(d._sel.picks.theme).toHaveLength(3);
 		expect(d._pickSlots("theme").canAdd).toBe(false);
+	});
+
+	// The other half of "the two budgets ADD" (see maxExtraPicks): the roll-again belongs to the
+	// ROW, so a row that arrives in a combined slot brings its own, exactly as the first pick did.
+	// It is not rolled for automatically - the GM is offered the slot and fills it themselves.
+	it("gives a combined row its own roll-again as one more slot to fill", () => {
+		const d = dlg({ manner: "greenLord" });
+		d._setPick("theme", 0, "Sized for giants");
+		d._setPick("theme", 1, plainTheme(0));
+		expect(d._pickSlots("theme").canAdd).toBe(true);
+		// Swap the combined slot for the one row in the sub-die's reach that owes a roll of its own.
+		const owes = combinableRows(themeRows("greenLord"), 8).find(r => r.again);
+		expect(owes, "the sub-die's pool no longer holds a roll-again row").toBeTruthy();
+		d._setPick("theme", 1, owes.text);
+		d._setPick("theme", 2, plainTheme(1));
+		expect(d._sel.picks.theme).toHaveLength(3);
+		// Two rows owing a roll plus the table's own free combine, so there is still room.
+		expect(d._pickSlots("theme").canAdd).toBe(true);
 	});
 
 	it("says nothing about combining on a table that takes one answer", () => {

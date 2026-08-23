@@ -3548,34 +3548,18 @@ input.stonetop-name-field {
 .stonetop-readonly .steading-interactive-btn,
 .stonetop-readonly .stonetop-answer-character-questions-btn,
 .stonetop-readonly .steading-list-add,
-/* Every "write one up" bar, by the one class the shared partial emits: adding is not
-   editing what is already written, and the handlers are GM-gated themselves. */
-.stonetop-readonly .stonetop-prep-add-btn,
-/* Opening a prep card stays live too (the editor writes nothing until it is saved),
-   but DELETING one does NOT: the trash is the only control here that destroys a
-   write-up, and the pencil is the GM Toolkit's whole write gate, since it has no
-   global edit wrench. `<kind>-remove` on this allow-list would mean a threat could be
-   binned with one stray click while its section is only being read. Both tab templates
-   and StonetopGmToolkitSheet say so in as many words; the omission of
-   `.threat-remove` / `.hazard-remove` / `.site-remove` here, plus the matching check in
-   gm-prep-tabs.js, is what makes it true.
-
-   By the ONE class the shared partial emits beside the per-kind hook, like the add bar
-   above: named per kind, this list had to be extended for every new prep kind, and a kind
-   whose line was forgotten drew a pencil that silently did nothing. */
-.stonetop-readonly .stonetop-prep-edit-btn,
-/* Rolling a site's own table is play-time use, not editing, and it writes nothing to
-   the page at all, so the d20 button stays live too. */
-.stonetop-readonly .site-table-roll,
-/* Collapse chevron stays live outside edit mode: clamping a card to its title +
-   Instinct is a view convenience, not structural editing. Without this the button's
-   pointer-events:none makes a chevron click fall through to the card (the header sits
-   left of the corner chevron via its margin) so the toggle never fires. */
-.stonetop-readonly .threat-collapse-btn,
-/* Doom-track ticks stay live outside edit mode: they're a play-time tracker, not
-   structural editing, and the toggle handler is already ownership-gated. */
-.stonetop-readonly .threat-portent,
-.stonetop-readonly .threat-portent__check,
+/* NOTHING FROM THE GM-PREP TABS IS ON THIS LIST ANY MORE, and nothing should go back on.
+   Seven lines used to live here — the add bar, the card pencil, a site's d20 roll, the collapse
+   chevron, the threat-type disclosure and the two doom-track selectors — every one of them
+   exempting a control that writes nothing from a lock that had no business reaching it. Those
+   tabs no longer carry `stonetop-readonly` at all (see gm-toolkit-tab-threats.hbs), so a prep
+   selector here would be a line nothing can match, and the next person would read it as proof
+   the gate still exists.
+   The list kept growing because the gate was upside down: the Threats pencil ended up locking
+   ONE button, the trash, and exempting everything else one accident at a time — the threat-type
+   reference spent its whole life mouse-dead because it is a <button> and nobody had noticed it
+   needed a line. Deleting is guarded by its confirm dialog now, which is the guard it always
+   really had. */
 .stonetop-readonly .stonetop-deathsdoor-open-btn,
 /* Clearing "out of the action" is the GM saying otherwise mid-scene, not sheet editing —
    same play-time affordance as the Death's Door button it replaces. */
@@ -3611,18 +3595,6 @@ input.stonetop-name-field {
 .stonetop-readonly .stonetop-item-resource-check {
 	pointer-events: auto;
 	opacity: 1;
-}
-
-/* The one POSITIVE gate in this block, and it outranks the allow-list above by sitting after it
-   at the same specificity (0,2,0).
-   A control marked `data-readonly-gated` must not be clickable while its panel is only being
-   read — the GM-prep trash, which is the only control on those tabs that destroys a write-up.
-   Stated as a mark the control WEARS rather than as a line it is missing from: kept dead by
-   omission, the trash would go live the day someone gave it a shared look-class that IS on the
-   list, which is a plausible thing to do to a button sitting beside the pencil in the same
-   toolbar. gm-prep-tabs.js checks the same thing in the handler; this is the other half. */
-.stonetop-readonly [data-readonly-gated] {
-	pointer-events: none;
 }
 
 .stonetop-readonly .steading-list-delete {
@@ -28568,10 +28540,66 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--tc-ink);
 }
 
+/* ── A site's four folds ──────────────────────────────────────────────────────
+   Everything past the foundation is drawn inside one of four <details> (see the head
+   of site-card.hbs for which, and site-view.js's SITE_CARD_GROUPS for why four). The
+   fold's own hairline replaces the first .site-block's, so a shut card is a stack of
+   ruled rows rather than a stack of ruled rows each with a second rule under it. */
+.stonetop .site-group {
+	margin: 0 0 0.35rem;
+	border-top: 1px solid color-mix(in srgb, var(--threat-accent, var(--tc-ink-soft)) 25%, transparent);
+}
+.stonetop .site-group__summary {
+	display: flex;
+	align-items: baseline;
+	gap: 0.4rem;
+	padding: 0.34rem 0 0.3rem;
+	cursor: pointer;
+	color: var(--tc-ink);
+	/* Both halves of "no browser marker": `list-style` covers the modern engines, the
+	   pseudo-element covers WebKit's older one. Ours is the caret, which can be turned. */
+	list-style: none;
+}
+.stonetop .site-group__summary::-webkit-details-marker { display: none; }
+.stonetop .site-group__summary::marker { content: ""; }
+.stonetop .site-group__summary:hover .site-group__title { color: var(--threat-accent); }
+.stonetop .site-group__caret {
+	flex: 0 0 auto;
+	font-size: 0.68rem;
+	color: var(--threat-accent);
+	transition: transform 0.12s ease;
+}
+.stonetop .site-group[open] > .site-group__summary .site-group__caret { transform: rotate(90deg); }
+.stonetop .site-group__title {
+	font-family: var(--font-stonetop);
+	font-size: 0.9rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+/* What the fold is holding, named — and only while it IS holding it. Opened, the section
+   labels are on screen already and this would just be saying them twice. */
+.stonetop .site-group__holds { font-size: 0.8rem; color: var(--tc-ink-soft); }
+.stonetop .site-group[open] > .site-group__summary .site-group__holds { display: none; }
+.stonetop .site-group__hold + .site-group__hold::before {
+	content: "\00b7";
+	margin: 0 0.28rem;
+	color: var(--threat-accent);
+}
+/* Air between the fold's title row and what it opens onto. Carried by the BODY rather than by
+   the first block's own padding, so the rule below it — "the fold's hairline is the only one,
+   and the first block inside draws no second" — stays a statement about borders alone. */
+.stonetop .site-group__body { padding-top: 0.35rem; }
+.stonetop .site-group__body > .site-block:first-child { padding-top: 0; border-top: 0; }
+.stonetop .site-group__body > .site-block:last-child { margin-bottom: 0.35rem; }
+
 /* Collapsed, a site keeps only its title + the foundation line (manner / region /
-   terrain), which is what tells you which site you're looking at. */
+   terrain), which is what tells you which site you're looking at. `.site-block` stays
+   named beside `.site-group` although every block now lives inside a fold: the rule is
+   "a collapsed card shows no body", and a section drawn outside the folds one day would
+   otherwise be the one thing that survived. */
 .stonetop .steading-prep-cards .threat-card.is-collapsed .site-why,
 .stonetop .steading-prep-cards .threat-card.is-collapsed .site-picks,
+.stonetop .steading-prep-cards .threat-card.is-collapsed .site-group,
 .stonetop .steading-prep-cards .threat-card.is-collapsed .site-block {
 	display: none;
 }
@@ -28595,11 +28623,26 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop .steading-threats-section + .steading-threats-section { margin-top: 12px; }
 .stonetop .steading-threats-section .steading-improvement-add-bar { margin-top: 0; }
+/* The track count lives HERE and only here: `_wireGmPrepMasonry` (gm-prep-tabs.js) reads the
+   count back off the laid-out cards rather than recomputing it, so this line can change freely
+   and the packing follows. `auto-fit` collapsing the empty track is load-bearing too -- it is
+   what makes a lone card span the full width, which the packer preserves by leaving a
+   single-column grid flat. */
 .stonetop .steading-threats-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
 	gap: 1rem;
 	align-items: start;
+}
+/* Once packed, the grid's children are COLUMNS rather than cards: each takes one track and
+   stacks its own cards at their natural heights, so a short card never holds a row open beside
+   a tall one. The inner gap matches the grid's, so packed and unpacked read identically apart
+   from the closed holes. */
+.stonetop .steading-threats-col {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	min-width: 0;
 }
 /* --- prep reference (Book I, "Threats") ------------------------------------
    The condensed chapter guidance under the cards: how to write a threat up, when to,
@@ -28864,8 +28907,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: #4a4034;
 	cursor: pointer;
 }
-.stonetop .threat-card-tools .threat-remove:hover,
-.stonetop .threat-card-tools .hazard-remove:hover { color: #b23; border-color: #b23; }
+/* The trash goes red under the pointer, on every prep card. Written as a `[class$="-remove"]`
+   rather than one selector per kind: this rule had named threats and hazards only, so the Sites
+   tab's trash stayed the same ink as the pencil beside it and read as inert -- which is the same
+   silent-omission failure the add bar and the pencil each had once and each answered by keying
+   on something a new kind cannot fall off. The tools bar holds exactly the two buttons the
+   shared partial emits, and the pencil's class ends in `-edit-open`. */
+.stonetop .threat-card-tools button[class$="-remove"]:hover { color: #b23; border-color: #b23; }
 
 /* --- the page sheet (view + editor) --------------------------------------- */
 .stonetop-threat-page { padding: 0.4rem; }

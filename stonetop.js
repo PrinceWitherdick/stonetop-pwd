@@ -482,6 +482,7 @@ Hooks.once("init", () => {
 		"stonetop.card-doom-track":           "systems/stonetop-pwd/templates/journal/partials/card-doom-track.hbs",
 		"stonetop.card-gm-moves":             "systems/stonetop-pwd/templates/journal/partials/card-gm-moves.hbs",
 		"stonetop.card-player-moves":         "systems/stonetop-pwd/templates/journal/partials/card-player-moves.hbs",
+		"stonetop.site-group":                "systems/stonetop-pwd/templates/journal/partials/site-group.hbs",
 	});
 
 	// Last line of `init`, so reaching it means the whole run got through. A world that never

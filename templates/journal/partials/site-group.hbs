@@ -1,0 +1,31 @@
+{{!-- One of a site card's folds: the whole <details>, with the caller's markup as its body.
+
+      The group arrives as a HASH parameter rather than as the context, and that is load-bearing:
+      a partial invoked with its own context renders `{{> @partial-block}}` in THAT context too, so
+      the body would be evaluated against one group instead of against the card and every section
+      inside it would silently render empty. Passed as `group=`, the context stays the card's and
+      the body goes on reading `hasTimeline`, `areas` and the rest exactly as it did inline.
+
+      A partial rather than four copies of the wrapper. The BODIES share nothing — they are the
+      book's own sections in the book's own order — but the fold around them is the same three
+      lines every time, and the group name was typed three times per copy (`groups.place.show`,
+      `data-group="place"`, `groups.place.open`), which is three chances for a fold to test one
+      group and label itself another. Here `data-group` comes off the group's own `id`, so the
+      tab's collapse-state bookkeeping cannot disagree with what it is folding.
+
+      `holds` names the sections inside, and only shows while the fold is SHUT (the stylesheet
+      hides it on `[open]`, where the section labels themselves are already on screen): a shut
+      "The place itself · Outside · Areas" is worth opening, a shut "The place itself" is a
+      guess. No aria-expanded and no role: a <summary> announces its own state. --}}
+{{#if group.show}}
+<details class="site-group" data-group="{{group.id}}"{{#if group.open}} open{{/if}}>
+	<summary class="site-group__summary">
+		<i class="fas fa-chevron-right site-group__caret" aria-hidden="true"></i>
+		<span class="site-group__title">{{group.label}}</span>
+		<span class="site-group__holds">{{#each group.holds}}<span class="site-group__hold">{{this}}</span>{{/each}}</span>
+	</summary>
+	<div class="site-group__body">
+		{{> @partial-block}}
+	</div>
+</details>
+{{/if}}

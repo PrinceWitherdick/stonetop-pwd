@@ -79,6 +79,67 @@ describe("buildSiteCardVM", () => {
 	});
 });
 
+// A written-up site runs to a page, and the Sites tab tiles several of them abreast, so the body
+// past the foundation is drawn in four folds. The grouping is the whole feature: a section that
+// belongs to no fold is a section the fold cannot hide, and nothing about it would look wrong.
+describe("the card's four folds", () => {
+	// The barrow with everything filled in: one item in every foldable section there is.
+	const filled = () => page({
+		timeline: [{ when: "Centuries ago", text: "The barrow was raised." }],
+		questions: [{ prompt: "Who raised it?", answer: "The Wracked." }],
+		connections: ["The Forgotten Gods"],
+		denizens: [{ name: "Crinwin", notes: "A dozen of them, nesting." }],
+		dangers: ["The black water itself"],
+		discoveries: ["A sunken cist"],
+		outside: ["Reeds, standing water, midges"],
+		inside: ["Dripping stone, cold air"],
+		areas: [{ title: "The Antechamber", description: "Vaulted to 20 feet.", contents: "", exits: "" }],
+		plans: ["Wake what sleeps in the cist"],
+		randomTables: [{ caption: "What the crinwin are doing", rows: ["eating", "nest-building"] }],
+	});
+
+	it("draws every fold whole by default: a page sheet is a site you opened on purpose", async () => {
+		const vm = await buildSiteCardVM(filled());
+		for (const group of Object.values(vm.groups)) expect(group.open, group.id).toBe(true);
+	});
+
+	it("names the sections a shut fold is holding, in card order", async () => {
+		const vm = await buildSiteCardVM(filled());
+		expect(vm.groups.story.holds).toEqual(["Timeline", "Questions", "Connections"]);
+		expect(vm.groups.within.holds).toEqual(["Denizens", "Dangers", "Discoveries"]);
+		expect(vm.groups.place.holds).toEqual(["Outside", "Inside", "Areas"]);
+		expect(vm.groups.play.holds).toEqual(["Plans", "Tables"]);
+	});
+
+	it("names only what was actually written up", async () => {
+		const vm = await buildSiteCardVM(page({
+			areas: [{ title: "The Antechamber", description: "Vaulted to 20 feet.", contents: "", exits: "" }],
+		}));
+		expect(vm.groups.place.show).toBe(true);
+		expect(vm.groups.place.holds).toEqual(["Areas"]);
+	});
+
+	it("shows no fold at all on a foundation-only site", async () => {
+		const vm = await buildSiteCardVM(page({
+			mannerLabel: "Green Lord site", description: "A dome-shaped tomb, mostly intact.",
+		}));
+		for (const group of Object.values(vm.groups)) {
+			expect(group.show, group.id).toBe(false);
+			expect(group.holds, group.id).toEqual([]);
+		}
+	});
+
+	// The guard the feature rests on. Every list the card renders has to be claimed by exactly one
+	// fold: claimed by none and it sits outside the folds, unfoldable and invisible to the summary
+	// line; claimed by two and it renders twice. Neither fails anywhere else.
+	it("puts every foldable section in exactly one fold", async () => {
+		const vm = await buildSiteCardVM(filled());
+		const claimed = Object.values(vm.groups).flatMap(g => g.holds);
+		expect(new Set(claimed).size, "a section claimed by two folds").toBe(claimed.length);
+		expect(claimed.length).toBe(11);
+	});
+});
+
 describe("rollSiteTable", () => {
 	const rolling = page({ randomTables: [{ caption: "Crinwin stuff", rows: ["eating", "nest-building", "fighting"] }] });
 

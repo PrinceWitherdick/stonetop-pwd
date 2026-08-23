@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import Handlebars from "handlebars";
 import { readRepo as read, readCss, repoFileExists, declarations } from "../../fakes/css.js";
 import { withGmPrepTabs } from "../../../module/actors/gmtoolkit/gm-prep-tabs.js";
+import { SITE_CARD_GROUP_IDS } from "../../../module/sites/site-view.js";
 
 // The Threats & Dangers and Sites tabs, moved off the steading sheet onto the GM Toolkit.
 //
@@ -170,23 +172,20 @@ describe("the toolkit picked them up whole", () => {
 		expect(SHEET_JS).toMatch(/HEADING_SELECTOR\s*=\s*"[^"]*\.steading-residents-heading/);
 	});
 
-	it("wires the moved listeners and the section pencil", () => {
+	it("wires the moved listeners", () => {
 		expect(SHEET_JS).toContain("this._activateGmPrepListeners(html[0])");
+		// Still wired, but no longer for these two tabs — Encounters and Wonder are the sheet's
+		// remaining pencils. Asserted here anyway because dropping the call would take those
+		// with it, and this file is where the selector string is spelled.
 		expect(SHEET_JS).toContain('this._wireSectionEditToggle(html, ".steading-section-edit-toggle")');
 	});
 
-	// The shared `section-edit-toggle` partial hides every pencil while the GLOBAL wrench is on
-	// and draws none at all unless `canEdit`. Leave either undefined and no pencil ever appears,
-	// which locks the delete buttons out of reach.
+	// The shared `section-edit-toggle` partial reads both of these, and the Encounters and
+	// Wonder tabs still draw through it. Leave either undefined and no pencil appears anywhere
+	// on the sheet.
 	it("publishes what the shared edit-pencil partial reads", () => {
 		expect(SHEET_JS).toMatch(/context\.stonetop\.canEdit\s*=/);
 		expect(SHEET_JS).toMatch(/context\.stonetop\.editMode\s*=/);
-		// The per-section flags are the mixin's own business — these two tabs are the only
-		// sections carrying a pencil, so it publishes them rather than exporting its section
-		// list for the host to iterate. A section missing from `stonetop.edit` renders
-		// permanently read-only with no error, which is not a thing to leave to a caller.
-		expect(PREP_JS).toMatch(/GM_PREP_EDIT_SECTIONS\.map/);
-		expect(PREP_JS).toMatch(/st\.edit\s*=/);
 	});
 
 	// `steading-prep-cards` is the shared card chrome (the re-map from the standalone card's rem
@@ -220,9 +219,11 @@ describe("the toolkit picked them up whole", () => {
 		// button. The pencil takes the same shape as the add bar below, so the readonly
 		// allow-list keys on one class instead of naming every kind.
 		expect(TOOLS_HBS).toContain('class="stonetop-prep-edit-btn {{kind}}-edit-open"');
-		// The trash carries the per-kind hook ALONE, deliberately: no shared gate word is what
-		// keeps it off the readonly allow-list and so dead while a section is only being read.
+		// The trash carries the per-kind hook alone. That used to be load-bearing — no shared
+		// look-class meant no line on the readonly allow-list, which is how it was kept dead —
+		// and is now just the handler hook, since nothing gates it but its confirm dialog.
 		expect(TOOLS_HBS).toContain('class="{{kind}}-remove"');
+		expect(TOOLS_HBS).not.toContain("data-readonly-gated");
 		expect(TOOLS_HBS).not.toContain("stonetop-prep-remove-btn");
 		expect(ADD_BAR_HBS).toContain('class="stonetop-prep-add-btn {{kind}}-add-btn"');
 		// The scoping ancestors the handlers pair those with.
@@ -230,19 +231,72 @@ describe("the toolkit picked them up whole", () => {
 		expect(stripComments(PREP_JS)).toContain('scope: ".steading-sites"');
 	});
 
-	// Every "add" button reads as one quiet affordance, and it is one class that says so, not a
-	// list of kind names kept in the stylesheet. That list had already shipped once without
-	// `.site-add-btn` on it, so the Sites tab drew a filled core button that read as the tab's
-	// primary action, and nothing failed. With the class emitted by the shared partial there is
-	// no per-kind list left to fall off.
-	// Same argument, one control over: the pencil's "stays live outside edit mode" line was
-	// itself a list of kind names in the stylesheet, so a fourth kind's pencil would have gone
-	// dead with nothing to say so. It keys on the shared class now, and the TRASH still keys on
-	// nothing at all, which is what keeps deleting gated.
-	it("keeps every prep pencil live outside edit mode from one shared class", () => {
-		expect(CSS).toMatch(/\.stonetop-readonly \.stonetop-prep-edit-btn\s*[,{]/);
-		expect(CSS).not.toMatch(/\.stonetop-readonly \.(threat|hazard|site)-edit-open/);
-		expect(CSS).not.toMatch(/\.stonetop-readonly \.(threat|hazard|site)-remove/);
+	// NOTHING from these tabs is on the readonly allow-list any more, because nothing on them
+	// can be read-only. Seven exemptions used to live there, one per control that writes nothing,
+	// and the list kept growing because the gate was upside down — the threat-type disclosure
+	// spent its whole life mouse-dead for want of an eighth line. A prep selector back in that
+	// block would be a rule nothing matches, read by the next person as proof the gate survives.
+	it("keeps the prep tabs off the readonly allow-list entirely", () => {
+		for (const cls of ["stonetop-prep-edit-btn", "stonetop-prep-add-btn", "site-table-roll",
+			"threat-collapse-btn", "threat-portent", "steading-threat-type-toggle"]) {
+			expect(CSS, `${cls} is still exempted from a lock that no longer reaches it`)
+				.not.toMatch(new RegExp(`\\.stonetop-readonly \\.${cls}\\b`));
+		}
+		expect(CSS).not.toMatch(/\.stonetop-readonly \.(threat|hazard|site)-(edit-open|remove)/);
+		// And the positive gate that had exactly one user — the trash — went with it.
+		expect(CSS).not.toContain("data-readonly-gated");
+	});
+
+	// NEITHER tab has a pencil, and so neither may gate anything on one. Both carried a
+	// `steading-edit-section` box with `{{#unless stonetop.edit.<tab>}} stonetop-readonly{{/unless}}`
+	// on it, and on both the only thing that lock reached was the trash: the card is written and
+	// re-edited in a wizard, the site tables only roll, the doom ticks are a tracker. So the trash
+	// was drawn beside a live pencil, gave no hover feedback and swallowed clicks.
+	//
+	// Every half is asserted, because any one of them alone is a bug: the class without the flag
+	// is PERMANENTLY readonly (`{{#unless}}` on a missing key is always true), the flag without
+	// the class is a pencil that toggles nothing visible, and the list surviving in the mixin is
+	// how the flag comes back.
+	it.each([["sites", () => SITES_HBS], ["threats", () => THREATS_HBS]])(
+		"leaves the %s tab ungated, with no pencil and no readonly class", (tab, hbs) => {
+			const markup = stripComments(hbs());
+			expect(markup).toContain(`<div class="tab ${tab}" data-group="primary" data-tab="${tab}">`);
+			expect(markup).not.toContain("stonetop-readonly");
+			expect(markup).not.toContain("steading-edit-section");
+			expect(markup).not.toContain("steading-section-toggle");
+			expect(markup).not.toContain(`stonetop.edit.${tab}`);
+		});
+
+	it("keeps the section-edit machinery out of the prep mixin", () => {
+		const prep = stripComments(PREP_JS);
+		expect(prep).not.toContain("GM_PREP_EDIT_SECTIONS");
+		expect(prep).not.toContain("isSectionEditable");
+		// The handler's own half of the old gate. Deleting is guarded by the confirm dialog now.
+		expect(prep).not.toContain("stonetop-readonly");
+		expect(prep).toMatch(/_confirmDeletePrepPage\(page,/);
+	});
+
+	// ...and the trash actually LOOKS destructive on all three. This rule named threats and
+	// hazards only, so a site's trash stayed the same ink as the pencil beside it under the
+	// pointer -- the third time a per-kind list in this stylesheet quietly skipped the newest
+	// kind. Keyed on the class SUFFIX now, which a fourth kind cannot fall off.
+	it("reddens the trash on every prep card, without naming the kinds", () => {
+		const rule = CSS.match(/\.stonetop \.threat-card-tools [^{}\n]*-remove[^{}\n]*:hover\s*\{([^}]*)\}/);
+		expect(rule, "no hover rule for the prep trash").toBeTruthy();
+		expect(rule[1]).toMatch(/color:/);
+		expect(CSS).not.toMatch(/\.threat-card-tools \.(threat|hazard|site)-remove:hover/);
+	});
+
+	// The find that settled the argument. The threat-type reference (eight types, each opening
+	// its own list of GM moves) is a <button>, so the blanket
+	// `.stonetop-readonly button { pointer-events: none }` caught it, and it was never given an
+	// allow-list line. Those disclosures would not open while the pencil was shut -- the default,
+	// and the only state anyone consults a reference block in. It needs no exemption now because
+	// there is no lock; the assertion is that the button is still there and the tab still can't
+	// be locked, which the ungated test above pins from the other side.
+	it("leaves the threat-type reference openable", () => {
+		expect(THREATS_HBS).toContain('class="steading-threat-type-toggle"');
+		expect(stripComments(THREATS_HBS)).not.toContain("stonetop-readonly");
 	});
 
 	it("draws every add bar from one shared dashed-entry class", () => {
@@ -432,5 +486,167 @@ describe("the prep tabs re-render when their pages change", () => {
 		expect([...hooks.registered.keys()]).toContain(0);
 		host._unwirePrepPageSync();
 		expect(hooks.off).toHaveBeenCalledWith("createJournalEntryPage", 0);
+	});
+});
+
+// ── A site card's four folds ─────────────────────────────────────────────────────────────────
+// A fully written-up site (the barrow, with a timeline, areas and tables) runs to a page, and the
+// Sites tab tiles several of them abreast, so everything past the foundation is drawn inside one
+// of four <details>. WHICH sections cluster into which fold is site-view.js's to say and is
+// tested there; what this file is about is the parts only this tab has — the sections really are
+// inside the folds, the tab draws them shut, and opening one both survives the next re-render and
+// tells the height packer the card changed.
+describe("a site card folds its body into four", () => {
+	const CARD = stripComments(read("templates/journal/partials/site-card.hbs"));
+	// Comments stripped from both: the partial's own header explains that it deliberately has no
+	// aria-expanded, so read raw it would answer the assertion below on its own rationale.
+	// Comments stripped from both: the partial's own header explains that it deliberately has no
+	// aria-expanded, so read raw it would answer the assertion below on its own rationale.
+	const FOLD = stripComments(read("templates/journal/partials/site-group.hbs"));
+
+	it("leaves no written-up section outside a fold", () => {
+		// Cut every fold out of the card. What is left is the head matter, which is meant to hold
+		// no .site-block at all: a block outside the folds is one no fold can hide, and it would
+		// look perfectly correct sitting there at full height.
+		const outsideFolds = CARD.replace(
+			/\{\{#> "stonetop\.site-group"[\s\S]*?\{\{\/"stonetop\.site-group"\}\}/g, "");
+		expect(outsideFolds).not.toMatch(/site-block/);
+		// ...and the folds really are the four the view-model builds, named and ordered the same.
+		const ids = [...CARD.matchAll(/\{\{#> "stonetop\.site-group" group=groups\.([a-z]+)\}\}/g)].map(m => m[1]);
+		expect(ids).toEqual([...SITE_CARD_GROUP_IDS]);
+	});
+
+	it("draws all four folds from the one registered partial", () => {
+		expect(CARD.match(/\{\{#> "stonetop\.site-group"/g)).toHaveLength(SITE_CARD_GROUP_IDS.length);
+		expect(STONETOP_JS).toContain("stonetop.site-group");
+		expect(repoFileExists("templates/journal/partials/site-group.hbs")).toBe(true);
+		// The <details> and its body live in the partial, so the card never writes either.
+		expect(CARD).not.toMatch(/<details/);
+		// And `data-group` is the group's OWN id rather than a name typed beside it, so the tab's
+		// collapse bookkeeping cannot end up keyed to a different fold than the one it folded.
+		expect(FOLD).toMatch(/data-group="\{\{group\.id\}\}"/);
+		expect(CARD).not.toMatch(/data-group=/);
+		// A <summary> announces its own open state, so an aria-expanded here would say it twice —
+		// and out of step, the moment the browser toggles the fold without us.
+		expect(FOLD).not.toMatch(/aria-expanded/);
+	});
+
+	// RENDERED, not read. The fold's body is a partial block, and a partial block invoked with
+	// its own context renders in THAT context - so passing the group as the context instead of as
+	// `group=` compiles fine, reads fine, and quietly renders every section inside the fold empty.
+	// No assertion above can see that: the card's source still names all four sections.
+	it("renders the card's sections INSIDE their folds, not into an empty body", () => {
+		const hbs = Handlebars.create();
+		const cardSrc = read("templates/journal/partials/site-card.hbs");
+		hbs.registerPartial("stonetop.site-group", read("templates/journal/partials/site-group.hbs"));
+		// The card's other partials are the head matter and are not what this is about; stubbed to
+		// nothing, read off the card itself so a newly mounted one does not break this.
+		for (const [, name] of cardSrc.matchAll(/\{\{#?>\s*"([^"]+)"/g)) {
+			if (name !== "stonetop.site-group") hbs.registerPartial(name, "");
+		}
+		const html = hbs.compile(cardSrc)({
+			name: "The Sunken Barrow",
+			hasTimeline: true, timeline: [{ when: "Long ago", text: "It sank." }],
+			hasDenizens: true, denizens: [{ name: "Crinwin" }],
+			groups: Object.fromEntries(SITE_CARD_GROUP_IDS.map(id => [id,
+				{ id, label: id, holds: ["Something"], show: true, open: true }])),
+		});
+		// Every fold the view-model showed is drawn...
+		expect(html.match(/<details class="site-group"/g)).toHaveLength(SITE_CARD_GROUP_IDS.length);
+		// ...and the body really carries the card's own sections, which is the half that broke.
+		const body = html.slice(html.indexOf('site-group__body'));
+		expect(body).toMatch(/site-block site-timeline/);
+		expect(body).toMatch(/It sank\./);
+		expect(html).toMatch(/site-block site-denizens/);
+	});
+
+	it("hides the folds along with the rest of the body on a collapsed card", () => {
+		expect(declarations(CSS, ".stonetop .steading-prep-cards .threat-card.is-collapsed .site-group"))
+			.toMatch(/display:\s*none/);
+	});
+
+	it("turns the caret and drops the what's-inside line once a fold is open", () => {
+		expect(declarations(CSS, ".stonetop .site-group[open] > .site-group__summary .site-group__caret"))
+			.toMatch(/transform:\s*rotate\(90deg\)/);
+		expect(declarations(CSS, ".stonetop .site-group[open] > .site-group__summary .site-group__holds"))
+			.toMatch(/display:\s*none/);
+		// The browser's own disclosure marker is suppressed both ways it can be: ours is the
+		// caret, and a second triangle beside it reads as a broken row.
+		expect(declarations(CSS, ".stonetop .site-group__summary")).toMatch(/list-style:\s*none/);
+		expect(declarations(CSS, ".stonetop .site-group__summary::-webkit-details-marker"))
+			.toMatch(/display:\s*none/);
+	});
+
+	it("lets the fold's own hairline be the only one above the first block inside it", () => {
+		const first = declarations(CSS, ".stonetop .site-group__body > .site-block:first-child");
+		expect(first).toMatch(/border-top:\s*0/);
+		expect(first).toMatch(/padding-top:\s*0/);
+		// ...which is why the air under an OPEN fold's title row is the body's own padding and
+		// not that first block's: the two would otherwise be the same declaration arguing.
+		expect(declarations(CSS, ".stonetop .site-group__body")).toMatch(/padding-top:\s*0\.35rem/);
+	});
+});
+
+describe("the Sites tab remembers which folds are open", () => {
+	/** The mixin over a bare host: the fold state needs no steading and no Foundry. */
+	const makeHost = () => new (withGmPrepTabs(class { render = vi.fn(); }))();
+	const UUID = "Journal.sites1.JournalEntryPage.barrow";
+
+	it("draws every fold shut until this GM opens one", () => {
+		const host = makeHost();
+		expect(host._isCardGroupOpen(UUID, "place")).toBe(false);
+		host._setCardGroupOpen(UUID, "place", true);
+		expect(host._isCardGroupOpen(UUID, "place")).toBe(true);
+		// Per card AND per fold: opening the barrow's areas says nothing about any other.
+		expect(host._isCardGroupOpen(UUID, "story")).toBe(false);
+		expect(host._isCardGroupOpen("Journal.sites1.JournalEntryPage.other", "place")).toBe(false);
+		host._setCardGroupOpen(UUID, "place", false);
+		expect(host._isCardGroupOpen(UUID, "place")).toBe(false);
+	});
+
+	// The state is only worth keeping if the view-model is drawn from it. `_cardVMsFor` re-applies
+	// the cheap chrome to a CACHED card on every render, and a fold has to be part of that pass:
+	// without it, any prep write anywhere in the world re-draws every fold shut under the cursor
+	// of a GM who is mid-read.
+	it("re-applies the remembered state to a cached card on every render", async () => {
+		const host = makeHost();
+		host._setCardGroupOpen(UUID, "place", true);
+		const page = { uuid: UUID, _stats: { modifiedTime: 1 } };
+		const build = vi.fn(async () => ({
+			isOwner: true,
+			groups: { story: { id: "story", open: true }, place: { id: "place", open: true } },
+		}));
+
+		const [first] = await host._cardVMsFor("site", [page], build);
+		expect(first.collapsed).toBe(true);          // the kind's own default, untouched by folds
+		expect(first.groups.story.open).toBe(false);
+		expect(first.groups.place.open).toBe(true);
+
+		// Second render: the enriched prose comes off the cache, and the fold shut in the meantime
+		// is drawn shut anyway.
+		host._setCardGroupOpen(UUID, "place", false);
+		const [second] = await host._cardVMsFor("site", [page], build);
+		expect(build).toHaveBeenCalledTimes(1);
+		expect(second.groups.place.open).toBe(false);
+	});
+
+	it("leaves a card with no folds alone", async () => {
+		const host = makeHost();
+		const [vm] = await host._cardVMsFor("threat", [{ uuid: "u", _stats: {} }], async () => ({ isOwner: true }));
+		expect(vm.groups).toBeUndefined();
+		expect(vm.collapsible).toBe(true);
+	});
+
+	it("listens for the toggle in the capture phase, since <details> does not bubble it", () => {
+		const wiring = stripComments(PREP_JS).match(/addEventListener\("toggle"[\s\S]*?\}, true\);/);
+		expect(wiring, "no capture-phase toggle listener").not.toBe(null);
+		// Both halves of what this tab owes a fold: the packer balances columns by MEASURED
+		// height, so a card that just changed height invalidates the packing, and the state has
+		// to outlive the re-render.
+		expect(wiring[0]).toMatch(/_gmPrepMasonry\?\.repack\(fold\.closest\(GM_PREP_GRID_SELECTOR\)\)/);
+		expect(wiring[0]).toMatch(/_setCardGroupOpen/);
+		// Guarded on our own class, so the sheet's other <details> don't repack a grid they are
+		// not in.
+		expect(wiring[0]).toMatch(/site-group/);
 	});
 });
