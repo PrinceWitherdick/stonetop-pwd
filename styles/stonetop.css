@@ -6263,13 +6263,31 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	font-weight: bold;
 	color: var(--ll-accent);
 }
+/* The letter's options. The 1.4em left padding was the disc list's indent; the rule above
+   it is the letter's own divider and stays on the <ul>, so only the padding moves down. */
 .stonetop-love-letter-read-options {
+	list-style: none;
 	margin: 0.85rem 0 0;
-	padding: 0.75rem 0 0 1.4em;
+	padding: 0.75rem 0 0 0;
 	border-top: 1px solid var(--tc-rule);
 	color: var(--tc-ink-soft);
 }
-.stonetop-love-letter-read-options li { margin: 3px 0; line-height: 1.4; }
+.stonetop-love-letter-read-options li {
+	position: relative;
+	margin: 3px 0;
+	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
+	line-height: 1.4;
+}
+.stonetop-love-letter-read-options li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0.2em;
+	width: var(--stonetop-bullet-size, 10px);
+	height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain;
+	opacity: 0.55;
+}
 /* Sign-off reads as ink on paper here (the shared rule below defaults to chat body color). */
 .stonetop-love-letter-reader .stonetop-move-signoff {
 	color: var(--tc-ink-soft);
@@ -6733,8 +6751,15 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	opacity: 0.5;
 	transition-delay: var(--st-edit-reveal-delay);
 }
+/* Shut: the caret turns AND stops waiting to be hovered. A collapsed section here is
+   a heading with a blank strip under it, which a reader who never hovered it would
+   take for a section with nothing in it; the standing caret is what says "folded".
+   Four class-level parts, so it beats the three-part hover reveal above and holds one
+   steady weight instead of dropping to 0.5 as the pointer arrives. */
 .stonetop-arcana-collapsible.is-collapsed > .stonetop-arcana-summary .stonetop-section-caret {
 	transform: rotate(180deg);
+	opacity: 0.8;
+	transition-delay: 0s;
 }
 
 .stonetop-arcana-collapsible.is-collapsed > .stonetop-arcana-grid {
@@ -11385,12 +11410,32 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	white-space: normal;
 }
 
+/* "Recorded on your sheet:" — what the roll actually wrote. Was a tightened disc list.
+   The spiral goes through the variable, so the black-paper moods below (which swap it for
+   the bone-filled twin) carry this list over with everything else. */
 .undeath-summary,
 .stonetop-undeath-summary {
+	list-style: none;
 	margin: 4px 0 0;
-	padding-left: 18px;
+	padding-left: 0;
 	font-size: var(--st-fs-base);
 	line-height: 1.45;
+}
+.undeath-summary li,
+.stonetop-undeath-summary li {
+	position: relative;
+	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
+}
+.undeath-summary li::before,
+.stonetop-undeath-summary li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0.2em;
+	width: var(--stonetop-bullet-size, 10px);
+	height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain;
+	opacity: 0.55;
 }
 
 /* The footer itself is skinned with Death's Door's, up in that section. */
@@ -12523,11 +12568,29 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: var(--color-text-dark-secondary);
 }
 
+/* The marks this death crossed off, each struck through. Was a tightened disc list. The
+   spiral is left unstruck: the <s> is on the label inside the row, and a struck-out bullet
+   reads as a smudge rather than as a line through a name. */
 .stonetop-pdi-crossed-list {
+	list-style: none;
 	margin: 0;
-	padding-left: 18px;
+	padding-left: 0;
 	font-size: var(--st-fs-base);
 	color: var(--color-text-dark-secondary);
+}
+.stonetop-pdi-crossed-list li {
+	position: relative;
+	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
+}
+.stonetop-pdi-crossed-list li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0.2em;
+	width: var(--stonetop-bullet-size, 10px);
+	height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain;
+	opacity: 0.55;
 }
 
 .stonetop-pdi-task-text,
@@ -23631,10 +23694,25 @@ li.question-bullet::before {
 .stonetop-section-collapse.stonetop-section-collapsed i {
 	transform: rotate(180deg);
 }
-/* Hover-only in BOTH states — a folded section shows nothing but its heading
-   until you go looking, same as an open one. */
+/* Hovering the caret itself lifts it to full ink, from wherever the reveal on its
+   heading (or the shut-state rule below) left it. */
 .stonetop-section-collapse:hover {
 	opacity: 1;
+	transition-delay: 0s;
+}
+/* A SHUT section keeps its caret on screen with no hover at all. An OPEN section can
+   afford to hide the control, because the run of content under the heading is proof
+   the section is there and holds something; a shut one is a bare heading and nothing
+   else, which reads as an EMPTY section rather than a folded one unless the caret is
+   standing there pointing at it.
+
+   Four class-level parts, so it outranks every per-host "heading:hover > caret"
+   reveal further down the file (three parts each) wherever that host happens to sit,
+   and holds the caret at one steady weight rather than having it dim to 0.5 the
+   moment the heading is hovered. The two :not()s hand it straight back to the :hover
+   rule above and the :focus-visible rule below, which take it the rest of the way. */
+.stonetop-section-collapse.stonetop-section-collapsed:not(:hover):not(:focus-visible) {
+	opacity: 0.8;
 	transition-delay: 0s;
 }
 /* …but hover is not the only way to reach one. The caret is `tabindex="0"` with its
@@ -27113,12 +27191,29 @@ th:has(> .stonetop-roll-table-btn) {
 }
 .stonetop-create-site-dialog .stonetop-cs-page { color: var(--st-text-muted); font-style: normal; }
 .stonetop-create-site-dialog .stonetop-cs-hint { display: flex; flex-direction: column; gap: 3px; }
+/* The wizard's prompt lists ("a site's story should answer…", the area prompts). Another
+   tightened-disc list: an 18px indent with no `list-style: none` under it. */
 .stonetop-create-site-dialog .stonetop-cs-hint-list {
+	list-style: none;
 	margin: 0;
-	padding-left: 18px;
+	padding-left: 0;
 	font-size: var(--st-fs-xs);
 	color: var(--st-text-secondary);
 	line-height: 1.45;
+}
+.stonetop-create-site-dialog .stonetop-cs-hint-list li {
+	position: relative;
+	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
+}
+.stonetop-create-site-dialog .stonetop-cs-hint-list li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0.2em;
+	width: var(--stonetop-bullet-size, 10px);
+	height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain;
+	opacity: 0.55;
 }
 /* Pick-or-roll: the select fills the row and the d20 button sits on its baseline. A pick that
    combines two results carries one such row per result, so each slot takes a full line of its
@@ -28395,14 +28490,32 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border-top: 1px solid color-mix(in srgb, var(--threat-accent, var(--tc-ink-soft)) 25%, transparent);
 }
 .stonetop .site-block > .threat-label { display: block; margin-bottom: 0.3rem; }
+/* Timeline, questions, connections, denizens, dangers: every list on a site card. It was a
+   native disc list with its indent tightened to 1.1rem, which is the tell for one — the
+   `list-style: none` never went on, so the browser drew its own black dot. */
 .stonetop .site-list {
+	list-style: none;
 	margin: 0 0 0.35rem;
-	padding-left: 1.1rem;
+	padding-left: 0;
 	font-size: 0.92rem;
 	line-height: 1.35;
 	color: var(--tc-ink-soft);
 }
-.stonetop .site-list li { margin: 0 0 0.12rem; }
+.stonetop .site-list li {
+	position: relative;
+	margin: 0 0 0.12rem;
+	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
+}
+.stonetop .site-list li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0.2em;
+	width: var(--stonetop-bullet-size, 10px);
+	height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain;
+	opacity: 0.55;
+}
 .stonetop .site-when { margin-right: 0.4rem; color: var(--tc-ink); }
 /* A question with no answer yet is a note to self; mark it so it reads as unfinished. */
 .stonetop .site-question-answer { display: block; color: var(--tc-ink); }
@@ -28557,9 +28670,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-text-secondary);
 	font-size: 0.94em;
 }
-/* Numbered where the order is the point, dashed where it is a checklist. Both drawn as
-   markers in the padding rather than list-style, so the number and the dash sit on the
-   same left edge and a wrapped gloss stays hung off it. */
+/* Numbered where the order is the point, spiral-bulleted where it is a checklist. Both
+   drawn as markers in the padding rather than list-style, so the number and the spiral sit
+   on the same left edge and a wrapped gloss stays hung off it. */
 .stonetop .steading-threats-guide-list.is-ordered > li::before {
 	counter-increment: stonetop-guide-step;
 	content: counter(stonetop-guide-step) ".";
@@ -28572,16 +28685,25 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 /* The type list is excluded rather than left to lose a specificity race. It carries BOTH
    class names, and this selector outranks the accent-tick rule below it (three classes to
-   two), so without the second :not() every type row draws this grey dash instead of its
-   own colour and the tick rule silently does nothing. */
+   two), so without the second :not() every type row draws this spiral instead of its
+   own colour and the tick rule silently does nothing.
+
+   The spiral is the sheet's bullet everywhere else, so the gutter is the standard
+   `bullet-size + spiral-gap` rather than the `1.35em` the numbered rows keep: a spiral hung
+   in a gutter measured for "1." sits too tight against its own text. */
+.stonetop .steading-threats-guide-list:not(.is-ordered):not(.steading-threat-type-list) > li {
+	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
+}
 .stonetop .steading-threats-guide-list:not(.is-ordered):not(.steading-threat-type-list) > li::before {
 	content: "";
 	position: absolute;
-	left: 0.25em;
-	top: 0.72em;
-	width: 0.5em;
-	height: 1px;
-	background: var(--st-text-secondary);
+	left: 0;
+	/* The row's own 3px top padding is already past the text's first line, so this is the
+	   block-flow family's `0.2em` measured from there rather than from the row's top edge. */
+	top: calc(3px + 0.2em);
+	width: var(--stonetop-bullet-size, 10px);
+	height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain;
 	opacity: 0.55;
 }
 /* The chapter's last three write-up steps are explicitly optional, and a GM who reads
@@ -28690,14 +28812,26 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-size: 0.94em;
 	color: var(--st-text-secondary);
 }
+/* Spiral-bulleted like every other prose list on these sheets. It was a `›`, borrowed from
+   the disclosure caret that opens this very list, which read as eight rows of the control
+   repeated down the panel. The caret stays a caret because it is a CONTROL; these are prose.
+
+   Block flow — absolute marker, matching padding on the row — rather than the inline
+   `text-indent` hanging indent this had: an inline spiral would have to be an inline-block
+   with a background, which is a taller line box than the text and rags the leading. */
 .stonetop .steading-threat-type-moves > li {
 	break-inside: avoid;
-	padding-left: 0.7em;
-	text-indent: -0.7em;
+	position: relative;
+	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
 }
 .stonetop .steading-threat-type-moves > li::before {
-	content: "\203A";
-	margin-right: 0.3em;
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0.2em;
+	width: var(--stonetop-bullet-size, 10px);
+	height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain;
 	opacity: 0.5;
 }
 @media (max-width: 720px) {
@@ -30743,18 +30877,25 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	flex-direction: column;
 	gap: 4px;
 }
+/* Spirals, like every other prose list on these sheets; a ❯ stood here before. The row already
+   had the block-flow shape, so only the marker changes. The flex on the <ul> above is COLUMN, so
+   each impression is still its own row and the inline runs inside it are untouched: it is the
+   <li> that must never be flex. */
 .stonetop-npc-impressions-list li {
 	position: relative;
-	padding-left: 16px;
+	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
 	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	line-height: 1.4;
 }
 .stonetop-npc-impressions-list li::before {
-	content: "\276F";
+	content: "";
 	position: absolute;
-	left: 2px;
-	color: var(--color-text-dark-secondary);
-	opacity: 0.6;
+	left: 0;
+	top: 0.2em;
+	width: var(--stonetop-bullet-size, 10px);
+	height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain;
+	opacity: 0.55;
 }
 /* Sized to match the play-mode list item above, so an impression doesn't resize
    when the sheet is toggled between modes. */
