@@ -1,0 +1,20 @@
+{
+  "_id": "ohQJuoELiPbHIh6g",
+  "_key": "!items!ohQJuoELiPbHIh6g",
+  "name": "Firkin of whisky, fine",
+  "type": "move",
+  "system": {
+    "moveType": "inventory"
+  },
+  "flags": {
+    "stonetop": {
+      "slug": "firkin-whisky-fine",
+      "inventoryColumn": "regular",
+      "sortOrder": 45,
+      "weight": 1,
+      "special": true,
+      "specialCategory": "Trade Goods"
+    }
+  },
+  "folder": "OL1lTSyCryWm3Xez"
+}

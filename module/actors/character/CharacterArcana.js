@@ -9,6 +9,7 @@ import {
 import { OutfitItemBuilder } from "../../model/OutfitItem.js";
 import { majorArcanaImg, isMajorArcanumItem, arcanumCardImg } from "../../arcana-icons.js";
 import { arcanaSummonFollowers } from "../../data/arcana-summons.js";
+import { isImplantedArcanumItem } from "../../data/arcana-facets.js";
 import { centerArcanumTracks } from "../../utils/glyphs.js";
 import { stonetopChatCard } from "../../utils/chat.js";
 
@@ -19,6 +20,10 @@ import { stonetopChatCard } from "../../utils/chat.js";
 // Inventory tab. This gates only the WEIGHTLESS side (see weightedInventoryItems): a
 // card whose front is such a place but whose unlocked BACK item is real, weighted gear
 // (e.g. vein-of-milky-crystal, huge-wooden-sphere) still surfaces that gear once realised.
+//
+// An IMPLANTED arcanum — Storm Markings up your skin, the Ineffable Words on your soul — is
+// kept off by its own printed tag rather than by name (isImplantedArcanumItem), so a homebrew
+// card tagged the same way needs no entry here.
 const CONCEPT_ARCANA_SLUGS = new Set([
 	"crumbling-arch",
 	"giants-dormitory",
@@ -569,6 +574,9 @@ export class CharacterArcana {
 			// curios ship with no explicit weight; only true places are held back.
 			if (!sideItem?.name) return [];
 			if (sideItem.weight == null && CONCEPT_ARCANA_SLUGS.has(item.slug)) return [];
+			// An implanted arcanum carries an item only so its card can print the book's tag
+			// line; there is nothing in your hands and nothing in your load.
+			if (isImplantedArcanumItem(sideItem)) return [];
 			return [new OutfitItemBuilder()
 				.withSlug(item.slug)
 				.withName(sideItem.name)

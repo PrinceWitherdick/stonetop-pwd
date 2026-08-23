@@ -9,7 +9,12 @@
       "slug": "storm-markings",
       "front": {
         "title": "Storm Markings",
-        "item": null,
+        "item": {
+          "name": "Storm Markings",
+          "weight": null,
+          "note": "<em>implanted, magical</em>",
+          "inventoryColumn": null
+        },
         "description": "<p>A series of branching, tree-like markings coursing up and down your skin. Usually pale blue, almost like veins, but when you become agitated they seem to glow, pulse, and ripple with light.</p><p>The markings are usually seen as a blessing of Tor (rainmaker, thunderhead, slayer-of-beasts). But like most blessings of the gods, they are also a great burden.</p><p>When you <strong><em>roil with anger</em></strong>, you do +1 damage until you calm down. But when you <strong><em>try to control your temper</em></strong>, roll +WIS: <strong>on a 10+</strong>, you keep your cool and act as you wish; <strong>on a 7-9</strong>, choose 1 from the list below; <strong>on a 6-</strong>, you just lose it—tell the GM what damn fool thing you end up doing.</p><ul><li>Take some deep breaths and count to ten, fuming all the while</li><li>Vent your rage, but tell us how and on what</li></ul><p>When you <strong><em>are struck by lightning or an electrical discharge</em></strong>, mark 1, take no damage, and suffer no ill effects (your gear, alas, has no such protection):</p>",
         "unlock": {
           "description": "○○○ When you make the last mark, you unlock the mysteries of the Storm Markings and can use Storm's Fury (see reverse). When you would make a mark but have already marked all 3, set your Fury to 3.",

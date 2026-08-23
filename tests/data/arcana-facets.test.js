@@ -4,7 +4,7 @@ import { ARCANUM_KINDS, ARCANUM_TIERS, arcanumKinds, arcanumTier } from "../../m
 const KIND_KEYS = ARCANUM_KINDS.map(k => k.key);
 const TIER_KEYS = ARCANUM_TIERS.map(t => t.key);
 import { ARCANA_SUMMONS } from "../../module/data/arcana-summons.js";
-import { MAJOR_ARCANA_ICONS } from "../../module/arcana-icons.js";
+import { MAJOR_ARCANA_ICONS, isMajorArcanumItem } from "../../module/arcana-icons.js";
 import { loadArcanaPackDocs } from "../fakes/sourcePack.js";
 
 /** The shape arcanumKinds() reads, built from a pack doc's flags. */
@@ -135,8 +135,37 @@ describe("arcanumKinds over the shipped arcana", () => {
 		for (const slug of ["hungering-maw-of-hlad", "ineffable-words", "redwood-effigy", "storm-markings"]) {
 			const doc = docs.find(d => d.flags.stonetop.slug === slug);
 			expect(doc.flags.stonetop.back.move, slug).toBeNull();
+			expect(arcanumKinds(arcOf(doc)), slug).toContain("power");
+		}
+	});
+
+	it("calls the two implanted majors a Power only — they are never in your load", () => {
+		// The Relic chip promises "the arcanum itself is an item in your load". Storm Markings
+		// course up and down your skin and the Ineffable Words are emblazoned on your soul, and
+		// Book II tags both `implanted` for exactly that reason. They carry a `front.item` so
+		// the card can print its tag line (pp.556, 566) — which is a NEW thing here; all four of
+		// these majors used to have a null item and so read as Powers by accident. The two that
+		// really are carried now say so, and the two that aren't are held out by their own tag.
+		for (const slug of ["ineffable-words", "storm-markings"]) {
+			const doc = docs.find(d => d.flags.stonetop.slug === slug);
+			expect(doc.flags.stonetop.front.item.note, slug).toMatch(/implanted/);
 			expect(arcanumKinds(arcOf(doc)), slug).toEqual(["power"]);
 		}
+		for (const slug of ["hungering-maw-of-hlad", "redwood-effigy"]) {
+			const doc = docs.find(d => d.flags.stonetop.slug === slug);
+			expect(arcanumKinds(arcOf(doc)), slug).toEqual(["relic", "power"]);
+		}
+	});
+
+	it("gives every major the tag line the book prints under its title", () => {
+		// Every major in Appendix D prints a tag line under its title. Five shipped with
+		// `front.item: null`, and the sheet draws a card's tags from `front.item.note`, so those
+		// five rendered with no tags at all: Ring of Daagon, Storm Markings, Ineffable Words,
+		// Redwood Effigy, Hungering Maw of Hlad.
+		const bare = docs
+			.filter(d => isMajorArcanumItem(arcOf(d)) && !d.flags.stonetop.front.item?.note)
+			.map(d => d.flags.stonetop.slug);
+		expect(bare).toEqual([]);
 	});
 
 	it("leaves only the pure-lore cards with no kind at all", () => {

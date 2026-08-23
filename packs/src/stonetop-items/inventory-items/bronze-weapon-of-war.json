@@ -1,0 +1,21 @@
+{
+  "_id": "95ZhkBt14sPTvXZV",
+  "_key": "!items!95ZhkBt14sPTvXZV",
+  "name": "Weapon of war, bronze",
+  "type": "move",
+  "system": {
+    "moveType": "inventory"
+  },
+  "flags": {
+    "stonetop": {
+      "slug": "bronze-weapon-of-war",
+      "inventoryColumn": "regular",
+      "sortOrder": 42,
+      "note": "as the iron weapons of war, but no <em>x piercing</em>",
+      "weight": 1,
+      "special": true,
+      "specialCategory": "Bronze Weapons"
+    }
+  },
+  "folder": "OL1lTSyCryWm3Xez"
+}

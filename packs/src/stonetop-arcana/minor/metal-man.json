@@ -29,7 +29,7 @@
             {
               "type": "option",
               "slug": "repair-runes",
-              "description": "… spend a few years repairing the runes, risking a mistake that makes them ineffective or unstable."
+              "description": "… spend a few weeks repairing the runes, risking a mistake that makes them ineffective or unstable."
             },
             {
               "type": "option",
@@ -42,7 +42,7 @@
       "back": {
         "title": "Bronze Protector",
         "item": null,
-        "description": "<p>As long as <strong><em>fire burns in in the stove-like chest</em></strong>, the hearth spirit will animate the construct. Treat it as a follower.</p><p><strong>Bronze protector</strong><br><em>Construct, spirit, durable, vigilant, overbearing, mute, gullible</em><br><strong>HP</strong> 13; <strong>Armor</strong> 3 (metal)<br><strong>Damage</strong> pummel 1d8 (<em>band</em>)<br><strong>Special qualities</strong> fireproof; holds +1 Readiness <strong>on a 7+</strong> to Defend; requires a smithy and tools to regain HP<br><strong>Instinct</strong> to be overzealous in guarding you<br>▶ Loom menacingly, belching smoke<br>▶ Start fires, cause collateral damage<br>▶ Run low on fuel<br><strong>Cost</strong> profuse gratitude (Loyalty: ○○○)</p>",
+        "description": "<p>As long as <strong><em>fire burns in in the stove-like chest</em></strong>, the hearth spirit will animate the construct. Treat it as a follower.</p><p><strong>Bronze protector</strong><br><em>Construct, spirit, durable, vigilant, overbearing, mute, gullible</em><br><strong>HP</strong> 13; <strong>Armor</strong> 3 (metal)<br><strong>Damage</strong> pummel 1d8 (<em>hand</em>)<br><strong>Special qualities</strong> fireproof; holds +1 Readiness <strong>on a 7+</strong> to Defend; requires a smithy and tools to regain HP<br><strong>Instinct</strong> to be overzealous in guarding you<br>▶ Loom menacingly, belching smoke<br>▶ Start fires, cause collateral damage<br>▶ Run low on fuel<br><strong>Cost</strong> profuse gratitude (Loyalty: ○○○)</p>",
         "resource": {
           "max": 4,
           "maxStat": null,

@@ -111,7 +111,18 @@ describe("pack source files", () => {
 			}
 		}
 
-		expect(bySlug.get("ineffable-words").front.item).toBeNull();
+		// A card with nothing to hold at all: a story is not a thing.
+		expect(bySlug.get("a-folktale").front.item).toBeNull();
+		// An IMPLANTED card does carry an item, but only so its tag line can print. It stays
+		// weightless and columnless, and CharacterArcana keeps it off the Inventory tab off the
+		// same tag — see isImplantedArcanumItem. (This one used to be null outright, which lost
+		// the "implanted, magical" the book prints under its title on p.556.)
+		expect(bySlug.get("ineffable-words").front.item).toEqual({
+			name: "Ineffable Words",
+			weight: null,
+			note: "<em>implanted, magical</em>",
+			inventoryColumn: null,
+		});
 		expect(bySlug.get("whispering-rocks").front.item).toMatchObject({
 			name: "Whispering Rocks",
 			weight: 1,

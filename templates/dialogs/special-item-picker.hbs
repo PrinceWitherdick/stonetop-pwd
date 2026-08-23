@@ -10,6 +10,9 @@
 			{{#each this}}
 			<div class="stonetop-special-picker-group">
 				<h3 class="stonetop-special-picker-cat">{{category}}</h3>
+				{{!-- One category carries a rule of its own on the handout, printed under its
+				      table rather than with the list's footnote: bronze never pierces. --}}
+				{{#if note}}<p class="stonetop-special-picker-cat-note">{{note}}</p>{{/if}}
 				{{#each items}}
 				<button type="button" class="stonetop-special-pick{{#if added}} is-added{{/if}}" data-slug="{{slug}}"{{#if added}} disabled{{/if}}>
 					<span class="stonetop-special-pick-text"><span class="stonetop-special-pick-name">{{name}}</span>{{#if traits}} <span class="stonetop-special-pick-traits">({{traits}})</span>{{/if}}</span>

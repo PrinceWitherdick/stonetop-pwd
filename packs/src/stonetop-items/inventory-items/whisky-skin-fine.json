@@ -1,0 +1,29 @@
+{
+  "_id": "dvMCnNr9hsIEZrfc",
+  "_key": "!items!dvMCnNr9hsIEZrfc",
+  "name": "Whisky, skin, fine",
+  "type": "move",
+  "system": {
+    "moveType": "inventory"
+  },
+  "flags": {
+    "stonetop": {
+      "slug": "whisky-skin-fine",
+      "inventoryColumn": "regular",
+      "sortOrder": 44,
+      "note": "share a use with someone to get advantage on Persuade",
+      "weight": 1,
+      "resource": {
+        "max": 2,
+        "title": null,
+        "labels": [
+          "",
+          ""
+        ]
+      },
+      "special": true,
+      "specialCategory": "Trade Goods"
+    }
+  },
+  "folder": "OL1lTSyCryWm3Xez"
+}

@@ -32,6 +32,9 @@ export class SpecialItemPickerDialog extends StonetopDialog {
 		// Decorate each item with a Relative Value tooltip for its Value cell.
 		const decorate = group => ({
 			category: group.category,
+			// Bronze Weapons prints its own rule under its table (see SPECIAL_ITEM_CATALOG);
+			// absent on every other category, so the template's row falls out.
+			note: group.note ?? null,
 			items: group.items.map(i => ({ ...i, valueTooltip: relativeValueTooltip(i.value) })),
 		});
 		const splitAt = this._catalog.findIndex(g => g.category === "Transport");

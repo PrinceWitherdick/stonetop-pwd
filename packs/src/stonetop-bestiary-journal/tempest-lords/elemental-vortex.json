@@ -36,7 +36,7 @@
       "src": null,
       "system": {
         "concept": "Elemental spirits bound in aetherium matrices, manifesting as whirling vortices.",
-        "description": "<p>Picture a filigree sphere of aetherium, maybe six inches across, with a glowing mote swirling at its center. This device — a matrix — binds an elemental spirit and absorbs a particular force, with which the spirit manifests a swirling vortex. A bound spirit must obey orders given in the <strong>@UUID[Compendium.stonetop-pwd.stonetop-journal.JournalEntry.wsIFXTjnJFgO6vnI]{Tempest Lords}</strong>' primordial tongue, but as almost none alive can speak it, any matrix encountered is likely acting on orders centuries old. A vortex's current HP reflects its current power: as it gains or loses HP, its size, armor, and damage all change — tiny (1-5 HP: Armor 1, d8-2), small (6-11: Armor 2, d8), medium (12-18: Armor 2, d10), large (19-23: Armor 3, d10+3), huge (24-28: Armor 3, d10+5). At 0 HP it dissipates and the inert matrix drops. The matrix itself has only 3 HP; destroy it and the freed spirit lashes out for the vortex's full damage (+area).</p>",
+        "description": "<p>Picture a filigree sphere of aetherium, maybe six inches across, with a glowing mote swirling at its center. This device — a matrix — binds an elemental spirit and absorbs a particular force, with which the spirit manifests a swirling vortex. A bound spirit must obey orders given in the <strong>@UUID[Compendium.stonetop-pwd.stonetop-journal.JournalEntry.wsIFXTjnJFgO6vnI]{Tempest Lords}</strong>' primordial tongue, but as almost none alive can speak it, any matrix encountered is likely acting on orders centuries old. A vortex's current HP reflects its current power: as it gains or loses HP, its size, armor, and damage all change — tiny (1-5 HP: Armor 1, d8-2), small (6-11: Armor 2, d8), medium (12-18: Armor 2, d10), large (19-23: Armor 3, d10+3), huge (24-28: Armor 3, d10+5). At 0 HP it dissipates and the inert matrix drops. The matrix itself has only 3 HP; destroy it and the freed spirit lashes out for the vortex's full damage (+area, one range tag greater than normal).</p>",
         "questions": [],
         "lore": [],
         "hooks": "",
@@ -45,7 +45,20 @@
         "originsIntro": "",
         "discoveries": [],
         "nests": "",
-        "dangers": [],
+        "dangers": [
+          {
+            "heading": "Attacking the matrix",
+            "body": "When a PC tries to strike the matrix inside an active vortex, the vortex’s Armor applies. Also, tell them the requirements and/or consequences. Pick based on the nature of the vortex, the PC’s weapon, and the rest of their fictional positioning — the larger the vortex, the harder it is to strike the matrix.",
+            "items": [
+              "You’ll have disadvantage to Clash/Let Fly/deal damage",
+              "You’ll need to create or wait for an opening, where the matrix is exposed",
+              "You’ll need to get in close/let it engulf you",
+              "You’ll need a longer/heavier/magical weapon",
+              "You’ll risk losing/ruining your weapon",
+              "You’ll suffer its attack, no matter what"
+            ]
+          }
+        ],
         "notes": "",
         "statBlocks": [
           "Compendium.stonetop-pwd.stonetop-bestiary.Actor.8KHfTcPYblTJRpV1",

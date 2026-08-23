@@ -5783,6 +5783,15 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	filter: invert(1);
 }
 .stonetop-special-picker-footnote { font-size: var(--st-fs-xs); color: var(--color-text-dark-secondary); margin: 10px 0 0; }
+/* A rule belonging to one category rather than to the whole list — the handout prints the
+   bronze-piercing note under the Bronze Weapons table. Same ink as the list footnote, sitting
+   tight under its heading so it reads as part of it. */
+.stonetop-special-picker-cat-note {
+	font-size: var(--st-fs-xs);
+	color: var(--color-text-dark-secondary);
+	font-style: italic;
+	margin: -2px 0 4px;
+}
 .stonetop-special-picker-actions { margin-top: 12px; }
 /* Lone footer button → full width, centered label, matching the other pickers'
    slate primary buttons (the close button carried no styling of its own). */

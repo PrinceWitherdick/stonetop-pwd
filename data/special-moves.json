@@ -29,6 +29,11 @@
     }
   },
   {
+    "name": "Denouement",
+    "description": "<p>When the <strong><em>game comes to an end</em></strong>, go around the table. On your turn, pick a scene below and ask the player or the GM to describe it.</p><p>When you describe a scene, make it involve your PC, an NPC important to them, or (if you're the GM) any NPC you like.</p><ul><li>A return home</li><li>A funeral, a farewell, an ending</li><li>A struggle, an absence, grief</li><li>A time of rebuilding, renewal, hope</li><li>A lasting change, a transition</li><li>A beginning, a fresh start, a birth</li><li>A memory, a story, a legend</li></ul><p>Go around as many times as you like. Change who you ask each time, or just pick a scene to describe yourself.</p><p>When you're done, thank your friends, wish them well, and say goodbye.</p>",
+    "rollType": null
+  },
+  {
     "name": "End of Session",
     "description": "<p>When a <strong><em>session ends</em></strong>, point out how you demonstrated or struggled with your instinct. If you can, mark XP.</p><p>Say how your relationship with or opinion of a PC, NPC, or group has changed. If you can, mark XP.</p><p>Answer these questions as a group. For each \"yes,\" everyone marks XP.</p><ul><li>Did we learn more about the world or its history?</li><li>Did we defeat a threat to Stonetop or the region?</li><li>Did we improve our standing with our neighbors?</li><li>Did we make a lasting improvement to Stonetop, or tangible progress towards doing so?</li></ul><p>Praise something about the session (in the fiction or around the table) that you enjoyed or appreciated.</p><p>Finally, offer up a wish for future sessions: more __, less __, a chance to __, handling __ in a different way, etc. Wishes can be about what happens in the fiction or around the table. The GM will take notes.</p>",
     "rollType": null

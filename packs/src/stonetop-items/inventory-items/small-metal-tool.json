@@ -1,0 +1,21 @@
+{
+  "_id": "0izRGuMOfvnZWT1T",
+  "_key": "!items!0izRGuMOfvnZWT1T",
+  "name": "Small metal tool",
+  "type": "move",
+  "system": {
+    "moveType": "inventory"
+  },
+  "flags": {
+    "stonetop": {
+      "slug": "small-metal-tool",
+      "inventoryColumn": "small",
+      "sortOrder": 43,
+      "note": "chisel, file, nails, shears, etc.",
+      "smallGrid": true,
+      "special": true,
+      "specialCategory": "Tools & Trades"
+    }
+  },
+  "folder": "OL1lTSyCryWm3Xez"
+}

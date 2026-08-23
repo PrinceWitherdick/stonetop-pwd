@@ -69,9 +69,28 @@ export function arcanumTier(arc) {
 	return isMajorArcanumItem(arc) ? "major" : "minor";
 }
 
-/** True when the arcanum's front hands the holder an item (`front.item`). */
+/**
+ * Is this arcanum's item worn INSIDE you rather than carried?
+ *
+ * Book II tags two majors `implanted` — Storm Markings, which course up and down your skin, and
+ * the Ineffable Words, emblazoned on your soul and tongue. They carry an `item` only so the card
+ * can print its tag line; there is nothing in your hands and nothing in your load. Keyed off the
+ * printed tag rather than a list of slugs, so a homebrew card tagged the same way behaves the
+ * same way, and so the rule reads as what the book actually says.
+ */
+export function isImplantedArcanumItem(item) {
+	return /\bimplanted\b/i.test(String(item?.note ?? ""));
+}
+
+/**
+ * True when the arcanum's front hands the holder an item to carry (`front.item`).
+ *
+ * An implanted one does not count: the Relic chip promises "the arcanum itself is an item in
+ * your load", and these never enter it.
+ */
 function _isRelic(arc) {
-	return !!arc?.front?.item;
+	const item = arc?.front?.item;
+	return !!item && !isImplantedArcanumItem(item);
 }
 
 /**
