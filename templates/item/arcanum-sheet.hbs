@@ -1,22 +1,63 @@
 <form class="stonetop-arcanum-sheet-form" autocomplete="off">
 
 {{#unless isArcanum}}
-	{{!-- Plain readout for non-arcanum move items (inventory livestock/gear,
-	     basic/special moves) that resolve to this sheet but have no glyph tracks. --}}
-	<div class="stonetop-arcanum-card stonetop-arcanum-card--readout stonetop-arcanum-sheet-side">
+	{{!-- Plain readout for non-arcanum move items (inventory gear, Book II treasures, the
+	     Setting Overview's livestock, basic/special moves) that resolve to this sheet but have
+	     no glyph tracks. It prints the same entry a character sheet's gear row does — ◇ load,
+	     tags, ○ uses, and the artifact hint / write-up / lead — so a thing reads whole in the
+	     Items sidebar and in its compendium, not only once somebody is carrying it. The fields
+	     are gathered (and a hidden artifact's concealed) by module/item/item-readout.js. --}}
+	<div class="stonetop-arcanum-card stonetop-arcanum-card--readout stonetop-arcanum-sheet-side{{#if simple.img}} stonetop-arcanum-sheet-side--withart{{/if}}">
+		{{#if simple.img}}<img class="stonetop-arcanum-img" src="{{simple.img}}" alt="">{{/if}}
 		<div class="stonetop-arcanum-sheet-main">
 			<div class="stonetop-arcanum-header">
 				<div class="stonetop-arcanum-header-left">
 					<span class="stonetop-arcanum-title">{{simple.name}}</span>
-					{{#if simple.weight}}
+					{{#if (or simple.weight simple.small simple.uses simple.armor simple.isTreasure)}}
 					<div class="stonetop-arcanum-weight-note-row">
-						<span class="stonetop-arcanum-note">Weight {{simple.weight}}</span>
+						{{!-- The ◇ load, drawn as this system's glyphs rather than "Weight 2", to
+						      match how the book, the journal treasure cells and the gear row all
+						      print it. Pre-wrapped spans: the header row isn't one of the
+						      containers wrapGlyphTextContainers sweeps. --}}
+						{{#if simple.weight}}
+						<span class="stonetop-item-load" data-tooltip="{{format 'stonetop.itemSheet.loadTooltip' weight=simple.weight}}">
+							{{#each (times simple.weight)}}<span class="stonetop-glyph stonetop-glyph--diamond">◇</span>{{/each}}
+						</span>
+						{{/if}}
+						{{#if simple.small}}<span class="stonetop-arcanum-note" data-tooltip="{{localize 'stonetop.itemSheet.smallTooltip'}}">{{localize 'stonetop.itemSheet.small'}}</span>{{/if}}
+						{{!-- The ○ track is a DEFINITION here, not a tally: no actor owns this
+						      document, so every circle is drawn empty and none of them is a
+						      button. Ticking them happens on the carrier's sheet. --}}
+						{{#if simple.uses}}
+						<span class="stonetop-item-uses" data-tooltip="{{localize 'stonetop.itemSheet.usesTooltip'}}">
+							{{#if simple.uses.title}}<span class="stonetop-arcanum-resource-title">{{simple.uses.title}}</span>{{/if}}
+							{{#each simple.uses.marks}}<span class="stonetop-glyph stonetop-glyph--circle">○</span>{{#if label}}<span class="stonetop-resource-label">{{label}}</span>{{/if}}{{/each}}
+						</span>
+						{{/if}}
+						{{#if simple.armor}}<span class="stonetop-arcanum-note">{{simple.armor}}</span>{{/if}}
+						{{#if simple.isTreasure}}<span class="stonetop-arcanum-note stonetop-item-treasure" data-tooltip="{{localize 'stonetop.itemSheet.treasureTooltip'}}">{{localize 'stonetop.itemSheet.treasure'}}</span>{{/if}}
 					</div>
 					{{/if}}
 				</div>
 			</div>
 			<div class="stonetop-arcanum-body">
-				{{#if simple.note}}<p>{{{simple.note}}}</p>{{/if}}
+				{{!-- Tags and Value, the row's parenthetical. Withheld upstream while an artifact
+				      is still unidentified, so there is nothing to hide here. --}}
+				{{#if simple.note}}<p class="stonetop-item-tags">{{{simple.note}}}</p>{{/if}}
+				{{#if simple.artifact.concealed}}
+				<p class="stonetop-item-artifact-chip{{#if simple.artifact.gmPeeking}} is-gm-peek{{/if}}">
+					<i class="fas fa-circle-question"></i>
+					{{#if simple.artifact.loreOwed}}{{localize 'stonetop.artifact.chipPartial'}}{{else}}{{localize 'stonetop.artifact.chipUnknown'}}{{/if}}
+				</p>
+				{{/if}}
+				{{#if simple.artifact.hint}}<p class="stonetop-inv-artifact-hint">{{simple.artifact.hint}}</p>{{/if}}
+				{{!-- The fuller write-up: a GM's own paragraphs on a hidden artifact, and the
+				      book's printed sidebar on a Book II treasure. Same class as the gear row's
+				      so its prose (tight paragraphs, spiral bullets) is styled in one place. --}}
+				{{#if simple.artifact.lore}}<div class="stonetop-inv-artifact-lore{{#if simple.artifact.gmPeeking}} is-gm-peek{{/if}}">{{{simple.artifact.lore}}}</div>{{/if}}
+				{{#if simple.artifact.lead}}
+				<p class="stonetop-inv-artifact-lead" data-tooltip="{{localize 'stonetop.artifact.leadTooltip'}}"><i class="fas fa-signs-post"></i> {{simple.artifact.lead}}</p>
+				{{/if}}
 				{{{simple.description}}}
 			</div>
 		</div>

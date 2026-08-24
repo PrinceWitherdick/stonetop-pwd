@@ -1134,6 +1134,14 @@
       "fieldLeadNote": "Who would know, what they'd need to consult, the Plan they could make. What a 6- leaves them with.",
       "saveOnly": "Save"
     },
+    "itemSheet": {
+      "loadTooltip": "Load {weight} ◇. Counts against what whoever carries it can carry.",
+      "small": "small",
+      "smallTooltip": "A small item: fits in a pocket, pouch, or boot, and carries no ◇ load.",
+      "usesTooltip": "○ uses. The circles are ticked on the sheet of whoever is carrying it, not here.",
+      "treasure": "Treasure",
+      "treasureTooltip": "A Book II treasure. Dropped onto a character, it lands under the Gear tab's Treasures heading."
+    },
     "oaths": {
       "heading": "The Sworn",
       "rule": "You bore witness. You may ask their player at any time whether they have kept their word, present or not, and they must answer honestly. Break it, and you have advantage on all rolls against them until they admit the wrong and suffer for it.",

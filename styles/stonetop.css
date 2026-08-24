@@ -631,14 +631,19 @@ body {
    inherited text colour keeps it legible in both themes and in every render path
    (the journal sheet and the Setting Overview dialog both carry
    `.stonetop-journal-body`; locations use `.stonetop-location-body`). The literal
-   ◇/◆ character is pushed out of the masked box so it can't double up, and the
-   right margin opens the gap between the diamond(s) and the item text. */
+   ◇/◆ character is pushed out of the masked box so it can't double up.
+
+   Declared ONCE for every surface that needs it, prose and chip alike -- the journal's
+   treasure badge and the arcanum sheet's readout row had each pasted this recipe out again,
+   and a change to the icon variable or to the text-indent trick reached one of the three. */
 .stonetop-location-body .stonetop-glyph--diamond,
 .stonetop-location-body .stonetop-glyph--diamond-selected,
 .stonetop-journal-body .stonetop-glyph--diamond,
 .stonetop-journal-body .stonetop-glyph--diamond-selected,
 .stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond,
-.stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond-selected {
+.stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond-selected,
+.st-treasure-badge .stonetop-glyph--diamond,
+.stonetop-arcanum-card--readout .stonetop-item-load .stonetop-glyph--diamond {
 	color: inherit;
 	background: none;
 	background-color: currentColor;
@@ -647,6 +652,16 @@ body {
 	overflow: hidden;
 	text-indent: 2em;
 	white-space: nowrap;
+}
+
+/* The gap before the following text belongs to the PROSE hosts only: the treasure badge and
+   the arcanum readout chip space their glyphs themselves. */
+.stonetop-location-body .stonetop-glyph--diamond,
+.stonetop-location-body .stonetop-glyph--diamond-selected,
+.stonetop-journal-body .stonetop-glyph--diamond,
+.stonetop-journal-body .stonetop-glyph--diamond-selected,
+.stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond,
+.stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond-selected {
 	margin-right: 0.3em;
 }
 .stonetop-location-body .stonetop-glyph--diamond-selected,
@@ -5565,17 +5580,21 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	color: var(--st-tier-failure-text, #6e0000);
 	opacity: 0.75;
 }
-/* EVERY second line an inventory row can drop beneath its name: the three an artifact carries, and
-   a Book II treasure's tag/value note. `order: 1` sends them past the ◇ load markers, the name and
+/* EVERY second line an INVENTORY ROW can drop beneath its name: the three an artifact carries, and
+   a Book II treasure's tag/value note. Scoped to `.stonetop-inv-item` (both partials that pull in
+   inv-artifact.hbs wrap it in one) because every declaration here is a property of that flex ROW,
+   not of the prose: the arcanum sheet borrows these same classes for a block card, where a hanging
+   indent measured against markers that are not there is simply wrong.
+   `order: 1` sends them past the ◇ load markers, the name and
    the edit-mode ✕ (all order 0) so each claims the next line rather than crowding the row, and the
    `padding-left` calc hangs them clear of the leading marker (one ◇ / check, plus the row's gap).
    That calc is the ALIGNMENT CONTRACT between them: a treasure the GM has marked as an artifact
    renders the note AND a hint or a write-up, stacked, and a font-scale change reaching one copy of
    the calc and not the other unaligns lines sitting directly above one another. One copy, so there
    is no other to miss. */
-.stonetop-inv-artifact-hint,
-.stonetop-inv-artifact-lead,
-.stonetop-inv-artifact-lore,
+.stonetop-inv-item .stonetop-inv-artifact-hint,
+.stonetop-inv-item .stonetop-inv-artifact-lead,
+.stonetop-inv-item .stonetop-inv-artifact-lore,
 .stonetop-inv-item.stonetop-inv-treasure .stonetop-inv-note {
 	order: 1;
 	flex-basis: 100%;
@@ -6932,6 +6951,62 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	min-height: 0;
 }
 
+/* ── The plain readout's own furniture ─────────────────────────────────────────────────
+   A non-arcanum item's card prints the entry a character sheet's gear row prints, so these
+   are that row's vocabulary redrawn at card size. Every selector is scoped to the readout
+   card rather than left bare: several of these chips also carry `.stonetop-arcanum-note`,
+   and the reused `.stonetop-inv-*` artifact classes are written for a flex ROW, so scoping
+   settles which rule wins by specificity instead of by where the block happens to sit. */
+/* The chips need real air between them or "◇ draughts ○○○○ empty" reads as one run; the
+   header row's own 3px gap is sized for adjacent words, not for adjacent readouts. */
+.stonetop-arcanum-card--readout .stonetop-arcanum-weight-note-row {
+	gap: 10px;
+}
+.stonetop-arcanum-card--readout .stonetop-item-load,
+.stonetop-arcanum-card--readout .stonetop-item-uses {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: var(--st-fs-xs);
+}
+/* A ○'s label belongs to the circle before it ("○ low ammo, ○ all out"), so close the gap
+   on its left and open one on its right — otherwise the pairs run together. */
+.stonetop-arcanum-card--readout .stonetop-item-uses .stonetop-resource-label {
+	margin-left: 1px;
+	margin-right: 7px;
+}
+.stonetop-arcanum-card--readout .stonetop-item-uses .stonetop-resource-label:last-child {
+	margin-right: 0;
+}
+.stonetop-arcanum-card--readout .stonetop-item-load { color: var(--st-blue-text, #3f5560); }
+.stonetop-arcanum-card--readout .stonetop-item-uses { color: var(--st-green-text, #4d6b3f); }
+/* At header type the ◇ and ○ read as specks — the same problem the journal's treasure
+   badge has, so take its answer: the same 1.3em bump. The diamond is painted as a
+   currentColor mask, so it takes the chip's own colour instead of staying near-black on it;
+   that recipe is declared with the other masked-diamond hosts near the top of this file. */
+.stonetop-arcanum-card--readout .stonetop-item-load .stonetop-glyph,
+.stonetop-arcanum-card--readout .stonetop-item-uses .stonetop-glyph {
+	font-size: 1.3em;
+}
+.stonetop-arcanum-card--readout .stonetop-item-treasure {
+	color: var(--st-gold-text, #8a6d12);
+}
+/* The tags-and-Value line. Part of the item's name rather than the sheet talking about it,
+   so it keeps the body's own type — unlike the artifact lines below. */
+.stonetop-arcanum-card--readout .stonetop-item-tags {
+	color: var(--color-text-dark-secondary, #666);
+}
+/* The "?" chip that stands in for what an unidentified artifact is still withholding. On
+   the gear row it is a bare glyph with the explanation in a tooltip; a card has room to
+   print the sentence, so it does. */
+.stonetop-arcanum-card--readout .stonetop-item-artifact-chip {
+	color: var(--color-text-dark-secondary, #666);
+	font-style: italic;
+	font-size: 0.92em;
+}
+.stonetop-arcanum-card--readout .stonetop-item-artifact-chip.is-gm-peek {
+	color: var(--st-tier-failure-text, #6e0000);
+}
 /* Arcana-tab card art: a compact square thumbnail at the left of the header. The
    source icons are square, so it sizes to its natural 44×44 (height:auto) and centres
    against the title/subtitle block — rather than stretching to fill the full header
@@ -22526,21 +22601,12 @@ li.question-bullet::before {
 /* The load-diamonds and use-circles are drawn as this system's SVG/mask glyphs (see
    badgeHtml), not the raw ◇/○ font characters, which read far too small. Size them up
    to sit comfortably beside the item text. The diamond takes the badge's colour via a
-   currentColor mask so it stays legible on both light and dark journal backgrounds
-   regardless of which body wrapper the render path carries; the circle is a currentColor
-   ring already, and gets a hair of spacing so a "○○○" use track reads as separate uses. */
+   currentColor mask (declared with the other masked-diamond hosts near the top of this file)
+   so it stays legible on both light and dark journal backgrounds regardless of which body
+   wrapper the render path carries; the circle is a currentColor ring already, and gets a hair
+   of spacing so a "○○○" use track reads as separate uses. */
 .st-treasure-badge .stonetop-glyph {
 	font-size: 1.3em;
-}
-.st-treasure-badge .stonetop-glyph--diamond {
-	color: inherit;
-	background: none;
-	background-color: currentColor;
-	-webkit-mask: var(--stonetop-diamond-icon) center / contain no-repeat;
-	mask: var(--stonetop-diamond-icon) center / contain no-repeat;
-	overflow: hidden;
-	text-indent: 2em;
-	white-space: nowrap;
 }
 .st-treasure-uses .stonetop-glyph--circle {
 	margin-right: .16em;
@@ -22944,8 +23010,13 @@ li.question-bullet::before {
 	margin: 0;
 }
 
+/* The stat line runs its label and value inline, so the editor has to take the whole
+   width below it. `width` alone does that — core already makes `<prose-mirror>` a
+   block-level box (`display: flex`), and it must STAY flex: overriding the host's
+   display collapses the `.editor-container` core wraps the live editor in (it sizes by
+   `flex: 1`, and its only child is absolutely positioned), whose `overflow: hidden`
+   then clips the whole typing surface away — the box paints, but nothing can be typed. */
 .stonetop-monster-stat-line--qualities .stonetop-monster-qualities-editor {
-	display: block;
 	width: 100%;
 }
 
@@ -23085,6 +23156,19 @@ li.question-bullet::before {
 .stonetop-monster-rich-editor .editor-content {
 	min-height: inherit;
 	padding: 6px 8px;
+}
+
+/* The floors above size the INACTIVE read box, where `.editor-content` is a direct child
+   of the host. Once the editor goes live core wraps it in a `.editor-container` that sizes
+   by `flex: 1` off the host's leftover height — and the toolbar takes `--menu-height` (42px)
+   plus core's 0.5rem gap first, so a host floor under ~50px leaves the container at 0 and its
+   `overflow: hidden` clips the typing surface away entirely. That is exactly what the
+   per-move editor's `min-height: 0` did. Give the live editor its own floor here: a floor on
+   `.editor-content` can't do this job — it's absolutely positioned inside the container, so
+   it would just overflow and be clipped. The host grows to fit, which is the "small while
+   displaying, expanding once you start editing" behaviour Notes already documents. */
+.stonetop-monster-rich-editor .editor-container {
+	min-height: 4.5em;
 }
 
 /* Notes stays a live rich-text editor in play mode: a small box while displaying
@@ -23456,9 +23540,12 @@ li.question-bullet::before {
 }
 
 /* Compact per-move description editor: the shared rich-editor box is 160px+ (for
-   Qualities/Notes), too tall stacked once per move, so shrink it here. */
+   Qualities/Notes), too tall stacked once per move, so shrink it here. The floor has to
+   stay on the HOST — core absolutely-positions `.editor-content` to fill it, so a floor
+   there alone leaves the host 0-tall and `prose-mirror.inactive`'s `overflow: hidden auto`
+   clips the whole read box away. Matches its NPC twin, .stonetop-npc-move-editor. */
 .stonetop-monster-move-editor {
-	min-height: 0;
+	min-height: 2.6em;
 }
 
 .stonetop-monster-move-editor .editor-content {
@@ -27668,6 +27755,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-arcanum-edit .stonetop-arc-row > span {
 	flex: 0 0 92px;
 	font-size: var(--st-fs-xs);
+	font-weight: 600;
 	color: var(--st-text-secondary);
 }
 
@@ -27689,6 +27777,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: block;
 	margin: 8px 0 3px;
 	font-size: var(--st-fs-xs);
+	font-weight: 600;
 	color: var(--st-text-secondary);
 }
 
@@ -27728,8 +27817,15 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-arcanum-edit .stonetop-arc-subgrid .stonetop-arc-row--wide { grid-column: 1 / -1; }
 
+/* An always-on (untoggled) editor: core lays the host out as a flex COLUMN — the
+   ProseMirror toolbar on top, then `.editor-container` taking the rest with the
+   contenteditable `.editor-content` absolutely positioned (`inset: 0`) inside it.
+   So the host must keep `display: flex`: switched to block, the container has no
+   flex height, collapses to 0, and its `overflow: hidden` clips the whole typing
+   surface away — the bordered box still paints, but clicks land on the host and
+   nothing can be typed. Only the floor belongs here; the container sizes the
+   typing area below, so the toolbar's height never eats into it. */
 .stonetop-arcanum-edit prose-mirror.stonetop-arc-rich {
-	display: block;
 	min-height: 90px;
 	border: 1px solid var(--color-border-light, #c9c0ad);
 	border-radius: var(--st-radius-sm);
@@ -27738,9 +27834,87 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* Keep the editable area clickable/visible even when empty (a 0-height editor can't
-   be focused to type into). */
-.stonetop-arcanum-edit prose-mirror.stonetop-arc-rich .editor-content {
+   be focused to type into). On the CONTAINER, not `.editor-content`: the content is
+   absolutely positioned and clipped to the container, so a floor on it would just
+   overflow and be cut off. */
+.stonetop-arcanum-edit prose-mirror.stonetop-arc-rich .editor-container {
 	min-height: 70px;
+}
+
+/*
+	NOTE: this file has three sibling rules that rely on the same reasoning — search
+	`.editor-container` — because `<prose-mirror>` only grows a `.editor-container` once the
+	editor goes live. See `.stonetop-monster-rich-editor` / `.stonetop-npc-rich-editor`.
+*/
+
+/* ── Inline actions ───────────────────────────────────────────────────────
+   One skin for every small action in the editor — the glyph toolbar, the unlock
+   requirement and follower "add" buttons, the card-art picker and the major-mode
+   authoring buttons. Each of these used to set only its own metrics and inherit
+   Foundry's grey button, so the same class of control read differently in each
+   bar. Modelled on Make a Monster's `.cm-move-add`: hairline chip on the parchment,
+   slate-tinted on hover. `width: auto` + `inline-flex` because core forces
+   `button { display: flex; width: 100% }`. */
+.stonetop-arcanum-edit :is(
+	.stonetop-arc-glyph,
+	.stonetop-arc-req-add,
+	.stonetop-arc-foll-add,
+	.stonetop-arc-pick-art,
+	.stonetop-arc-marktrack,
+	.stonetop-arc-add-mystery,
+	.stonetop-arc-add-consequence
+) {
+	flex: 0 0 auto;
+	width: auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.35em;
+	padding: 2px 10px;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-xs);
+	line-height: 1.5;
+	border: 1px solid var(--color-border-dark, #7a7971);
+	border-radius: var(--st-radius-sm);
+	background: transparent;
+	color: inherit;
+	box-shadow: none;
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s;
+}
+
+.stonetop-arcanum-edit :is(
+	.stonetop-arc-glyph,
+	.stonetop-arc-req-add,
+	.stonetop-arc-foll-add,
+	.stonetop-arc-pick-art,
+	.stonetop-arc-marktrack,
+	.stonetop-arc-add-mystery,
+	.stonetop-arc-add-consequence
+):hover {
+	border-color: var(--st-btn-primary-border);
+	background: color-mix(in srgb, var(--st-btn-primary-bg) 12%, transparent);
+	box-shadow: none;
+}
+
+/* Row-remove buttons are quiet until you reach for them, like the other list editors —
+   not a filled button with a red glyph sitting in it. */
+.stonetop-arcanum-edit :is(.stonetop-arc-req-remove, .stonetop-arc-foll-remove) {
+	flex: 0 0 auto;
+	width: auto;
+	padding: 1px 6px;
+	border: none;
+	background: transparent;
+	box-shadow: none;
+	color: var(--st-text-muted);
+	cursor: pointer;
+	transition: color 0.15s;
+}
+
+.stonetop-arcanum-edit :is(.stonetop-arc-req-remove, .stonetop-arc-foll-remove):hover {
+	color: var(--st-red-text);
+	background: transparent;
+	box-shadow: none;
 }
 
 /* Glyph-insert toolbar */
@@ -27764,14 +27938,21 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-weight: 600;
 }
 
+/* Wider than the other chips (it holds a 3-glyph run) and a rung larger, so the marks read
+   at the size they will land on the card. `gap: 0` because the run is the label: each glyph
+   is its own span once the styled-glyph pass runs, and the chip's icon-to-label gap would
+   comb "◇◇◇" out into three separate marks instead of one track. Same for the consequence
+   buttons, whose □/□□/□□□ weights read as a run. */
+.stonetop-arcanum-edit :is(.stonetop-arc-glyph, .stonetop-arc-add-consequence) { gap: 0; }
+
+/* A word sitting beside a run needs its own gap back: with `gap: 0` the button's text
+   becomes an anonymous flex item, and flex strips ITS leading/trailing whitespace, so
+   "Consequence □" closed up. The span carries the space the layout ate. */
+.stonetop-arcanum-edit .stonetop-arc-chip-label { margin-right: 0.4em; }
+
 .stonetop-arcanum-edit .stonetop-arc-glyph {
-	flex: 0 0 auto;
-	width: auto;
-	min-width: 2.4em;
-	padding: 1px 8px;
+	min-width: 2.6em;
 	font-size: var(--st-fs-md);
-	line-height: 1.4;
-	cursor: pointer;
 }
 
 .stonetop-arcanum-edit .stonetop-arc-glyphbar-hint {
@@ -27789,16 +27970,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	align-items: center;
 	gap: 8px;
 	font-size: var(--st-fs-xs);
+	font-weight: 600;
 	color: var(--st-text-secondary);
 	margin-bottom: 4px;
-}
-
-.stonetop-arcanum-edit .stonetop-arc-req-add {
-	flex: 0 0 auto;
-	width: auto;
-	padding: 1px 8px;
-	font-size: var(--st-fs-2xs);
-	cursor: pointer;
 }
 
 .stonetop-arcanum-edit .stonetop-arc-req-list {
@@ -27820,14 +27994,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-arcanum-edit .stonetop-arc-req-input { flex: 1; min-width: 0; }
 .stonetop-arcanum-edit .stonetop-arc-req-slug { flex: 0 0 7em; font-size: var(--st-fs-2xs); }
 .stonetop-arcanum-edit .stonetop-arc-req-max { flex: 0 0 3.5em; }
-
-.stonetop-arcanum-edit .stonetop-arc-req-remove {
-	flex: 0 0 auto;
-	width: auto;
-	padding: 1px 7px;
-	color: var(--st-red-text);
-	cursor: pointer;
-}
 
 /* Validation status */
 .stonetop-arcanum-edit .stonetop-arc-validation {
@@ -27851,22 +28017,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-arcanum-edit .stonetop-arc-issue--error { color: var(--st-red-text); }
 .stonetop-arcanum-edit .stonetop-arc-issue--warn  { color: var(--st-text-secondary); }
-
-/* Live slug-collision warning under the slug field (amber, matches the shared notice). */
-.stonetop-arcanum-edit .stonetop-arc-slug-warning {
-	margin: 2px 0 0;
-	padding: 4px 8px;
-	border-radius: var(--st-radius-sm);
-	background: rgba(200, 120, 20, 0.1);
-	border: 1px solid rgba(200, 120, 20, 0.4);
-	color: #7a4a00;
-	font-size: var(--st-fs-2xs);
-	display: flex;
-	align-items: baseline;
-	gap: 6px;
-}
-.stonetop-arcanum-edit .stonetop-arc-slug-warning[hidden] { display: none; }
-.stonetop-arcanum-edit .stonetop-arc-slug-warning > i { color: #c07820; }
 
 /* ── Artifact Creation inspiration wizard (StonetopArcanaInspireDialog) ─────────
    A left-rail stepper: reuses the shared .stonetop-guide-* chrome (banner + rail +
@@ -27957,7 +28107,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 .stonetop-arcana-inspire-dialog .stonetop-inspire-summary {
-	border: 1px solid var(--st-blue-border, #9bb4d1);
+	border: 1px solid var(--st-blue-border);
 	background: var(--st-blue-bg);
 	border-radius: var(--st-radius-sm);
 	padding: 6px 10px;
@@ -28068,6 +28218,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-arcana-inspire-dialog .stonetop-inspire-footer .stonetop-inspire-create:hover {
 	background: var(--st-btn-primary-bg-hover);
+	border-color: var(--st-btn-primary-border-hover);
 }
 
 /* Major-mode authoring tools (shown when the arcanum is a Major). */
@@ -28097,16 +28248,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	object-fit: contain;
 }
 
-.stonetop-arcanum-edit .stonetop-arc-pick-art {
-	flex: 0 0 auto;
-	width: auto;
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 2px 10px;
-	cursor: pointer;
-}
-
 .stonetop-arcanum-edit .stonetop-arc-majorbar {
 	display: flex;
 	flex-wrap: wrap;
@@ -28125,19 +28266,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-green-text);
 }
 
-.stonetop-arcanum-edit .stonetop-arc-marktrack,
-.stonetop-arcanum-edit .stonetop-arc-add-mystery,
-.stonetop-arcanum-edit .stonetop-arc-add-consequence {
-	flex: 0 0 auto;
-	width: auto;
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	padding: 1px 9px;
-	font-size: var(--st-fs-xs);
-	cursor: pointer;
-}
-
 .stonetop-arcanum-edit .stonetop-arc-majorbar .stonetop-arc-hint { flex: 1 1 100%; margin: 0; }
 
 /* Manifested-followers (summon) authoring list. */
@@ -28148,19 +28276,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	align-items: center;
 	gap: 8px;
 	font-size: var(--st-fs-xs);
+	font-weight: 600;
 	color: var(--st-text-secondary);
 	margin-bottom: 4px;
-}
-
-.stonetop-arcanum-edit .stonetop-arc-foll-add {
-	flex: 0 0 auto;
-	width: auto;
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	padding: 1px 9px;
-	font-size: var(--st-fs-2xs);
-	cursor: pointer;
 }
 
 .stonetop-arcanum-edit .stonetop-arc-foll-list {
@@ -28193,77 +28311,23 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-arcanum-edit .stonetop-arc-foll-grid .stonetop-arc-row--wide { grid-column: 1 / -1; }
 .stonetop-arcanum-edit .stonetop-arc-foll-grid .stonetop-arc-check { grid-column: 1 / -1; }
 
-.stonetop-arcanum-edit .stonetop-arc-foll-remove {
-	flex: 0 0 auto;
-	width: auto;
-	padding: 1px 7px;
-	color: var(--st-red-text);
-	cursor: pointer;
-}
+/* Pinned footer beneath the scrolling content column. The row and its buttons are the
+   shared `.stonetop-guide-nav` chrome the other steppers on this rail use (Make a Monster,
+   Create Follower, the custom-move editor), so Save/Cancel and the rail's Next walk are the
+   same control here as there; Save carries `.stonetop-guide-btn--primary` for the slate
+   fill. Save/Cancel sit at the left end (Foundry order), Next at the right. */
+.stonetop-arcanum-edit .stonetop-arc-nav { flex: 0 0 auto; }
 
-/* Pinned footer beneath the scrolling content column: Save/Cancel on the LEFT (Foundry
-   order), the rail's "Next" walk on the right. Scoped under .stonetop-arcanum-edit so it
-   never bleeds onto other windows. */
-.stonetop-arcanum-edit .stonetop-arc-footer {
-	flex: 0 0 auto;
+.stonetop-arcanum-edit .stonetop-arc-nav-btns {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	padding: 10px 20px 12px;
-	border-top: 1px solid var(--color-border-light, #c9c0ad);
-	background: rgba(0, 0, 0, 0.02);
+	gap: 10px;
 }
 
-.stonetop-arcanum-edit .stonetop-arc-footer-actions {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-/* inline-flex, not the V13-core full-width button{display:flex}. */
-.stonetop-arcanum-edit .stonetop-arc-next {
-	flex: 0 0 auto;
-	width: auto;
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 4px 14px;
-	font-size: var(--st-fs-sm);
-	cursor: pointer;
-}
+/* "Next" vanishes on the last section. The shared `.stonetop-guide-nav button` rule sets
+   display:inline-flex, which out-specifies the UA `[hidden] { display: none }`; re-hide
+   here — same reason as `.create-monster .cm-next[hidden]`. */
 .stonetop-arcanum-edit .stonetop-arc-next[hidden] { display: none; }
-
-/* inline-flex, not the V13-core full-width button{display:flex}. */
-.stonetop-arcanum-edit .stonetop-arc-save {
-	flex: 0 0 auto;
-	width: auto;
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 4px 16px;
-	font-size: var(--st-fs-sm);
-	background: var(--st-btn-primary-bg);
-	border: 1px solid var(--st-btn-primary-border);
-	color: var(--st-btn-primary-text);
-	cursor: pointer;
-}
-
-.stonetop-arcanum-edit .stonetop-arc-save:hover {
-	background: var(--st-btn-primary-bg-hover);
-	border-color: var(--st-btn-primary-border-hover);
-	color: var(--st-btn-primary-text);
-}
-
-.stonetop-arcanum-edit .stonetop-arc-cancel {
-	flex: 0 0 auto;
-	width: auto;
-	display: inline-flex;
-	align-items: center;
-	padding: 4px 14px;
-	font-size: var(--st-fs-sm);
-	cursor: pointer;
-}
 
 /* ── Pin modal footers to the bottom ──────────────────────────────────────
    Foundry makes each dialog template's outer wrapper fill the window
@@ -30991,6 +31055,17 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	background: rgba(255, 255, 255, 0.28);
 	border: 1px solid rgba(0, 0, 0, 0.22);
 	border-radius: var(--st-radius);
+}
+
+/* That floor sizes the INACTIVE read box only. Once the editor goes live core wraps it in a
+   `.editor-container` sized by `flex: 1` off the host's leftover height, and the toolbar takes
+   `--menu-height` (42px) plus core's 0.5rem gap first — so the 4.5em host floor left barely
+   13px to type in, and the per-move editor's 2.6em left none at all (0px, clipped away by the
+   container's `overflow: hidden`). Floor the live editor here instead; a floor on
+   `.editor-content` can't do it — it's absolutely positioned inside the container, so it would
+   overflow and be clipped. The host grows to fit, so the box expands when you start editing. */
+.stonetop-npc-rich-editor .editor-container {
+	min-height: 4.5em;
 }
 .stonetop-npc-rich-editor:hover .editor-content,
 .stonetop-npc-rich-editor:focus-within .editor-content {

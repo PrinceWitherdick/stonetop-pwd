@@ -1,3 +1,5 @@
+import { ITEM_FLAG_SCOPE } from "../system-id.js";
+
 /**
  * Shape a custom inventory item's document data, shared by every save target: the
  * actor-embedded item (moveType "inventory-custom", via createCustomInventoryItem)
@@ -43,4 +45,48 @@ export function buildInventoryItemData({ name, column = "regular", weight = 1, n
 	const data = { name: String(name ?? "").trim() || "New Item", type: "move", system };
 	if (img) data.img = img;
 	return data;
+}
+
+
+/**
+ * The inverse of buildInventoryItemData: resolve one item document's gear metadata out of
+ * WHEREVER it is actually stored.
+ *
+ * Gear metadata lives in two places by design. Shipped catalog items carry it under
+ * `flags.stonetop` (packs/src/stonetop-items/inventory-items/*.json); anything authored in play
+ * writes `system.*` through the builder above; a dragged Book II treasure writes both
+ * (utils/treasure-drops.js). Flags win, because a catalog item that has been re-planted onto a
+ * sheet carries the catalog values in its flags and the sheet copy's in `system`.
+ *
+ * One reader, for the same reason there is one builder: every consumer that resolved these
+ * field-by-field for itself resolved a slightly different set in a slightly different order —
+ * the item sheet read `system.armor` alone, so a hauberk that stores its 2 armor in flags showed
+ * none at all, and it preferred `system.isTreasure` where the drop path prefers the flag.
+ *
+ * Returns raw values, NOT defaults: `undefined` means "the document does not say", which is what
+ * lets each caller apply its own fallback (a drop lands at weight 1; a readout prints nothing).
+ *
+ * @param {object} itemData  anything shaped like an Item — `{ system, flags }`
+ * @returns {{column: string|undefined, weight: *, note: string, resource: object|null,
+ *           armor: object|null, isTreasure: boolean,
+ *           artifact: {state: *, hint: string, lore: string, lead: string}}}
+ */
+export function readInventoryItemData(itemData) {
+	const st  = itemData?.flags?.[ITEM_FLAG_SCOPE] ?? {};
+	const sys = itemData?.system ?? {};
+	return {
+		// `column` is the legacy spelling of inventoryColumn; a drop off an old world can carry it.
+		column:     st.inventoryColumn ?? sys.inventoryColumn ?? st.column ?? sys.column,
+		weight:     st.weight ?? sys.weight,
+		note:       st.note ?? sys.note ?? "",
+		resource:   st.resource ?? sys.resource ?? null,
+		armor:      st.armor ?? sys.armor ?? null,
+		isTreasure: !!(st.isTreasure ?? sys.isTreasure),
+		artifact: {
+			state: st.identifyState ?? sys.identifyState,
+			hint:  st.artifactHint  ?? sys.artifactHint  ?? "",
+			lore:  st.artifactLore  ?? sys.artifactLore  ?? "",
+			lead:  st.artifactLead  ?? sys.artifactLead  ?? "",
+		},
+	};
 }

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-	slugify, uniqueArcanumSlug, buildArcanumItemData,
+	newArcanumSlug, buildArcanumItemData,
 } from "../../module/item/createArcanum.js";
+import { slugify } from "../../module/utils/strings.js";
 
 describe("createArcanum helpers", () => {
 	describe("slugify", () => {
@@ -21,20 +22,20 @@ describe("createArcanum helpers", () => {
 		});
 	});
 
-	describe("uniqueArcanumSlug", () => {
-		it("returns the base slug when free", () => {
-			expect(uniqueArcanumSlug("Azure Hand", [])).toBe("azure-hand");
+	// The slug is the identity key for every holder's saved marks, so it must be opaque and
+	// permanent: NOT derived from the name (renaming would orphan the marks) and never
+	// repeated (a shared slug means shared marks, and a shipped pack slug would shadow the
+	// card entirely). The editor doesn't show it, so these are the only guarantees it has.
+	describe("newArcanumSlug", () => {
+		it("is prefixed so it reads as an arcanum slug in the console", () => {
+			expect(newArcanumSlug()).toMatch(/^arc-[A-Za-z0-9]{16}$/);
 		});
-		it("suffixes -2, -3 on collision", () => {
-			expect(uniqueArcanumSlug("Azure Hand", ["azure-hand"])).toBe("azure-hand-2");
-			expect(uniqueArcanumSlug("Azure Hand", ["azure-hand", "azure-hand-2"])).toBe("azure-hand-3");
+		it("never repeats", () => {
+			const slugs = new Set(Array.from({ length: 500 }, () => newArcanumSlug()));
+			expect(slugs.size).toBe(500);
 		});
-		it("accepts a Set of taken slugs", () => {
-			expect(uniqueArcanumSlug("Azure Hand", new Set(["azure-hand"]))).toBe("azure-hand-2");
-		});
-		it("falls back to 'arcanum' for an empty name", () => {
-			expect(uniqueArcanumSlug("", [])).toBe("arcanum");
-			expect(uniqueArcanumSlug("", ["arcanum"])).toBe("arcanum-2");
+		it("carries nothing from any name, so renaming a card can't orphan its marks", () => {
+			expect(newArcanumSlug()).not.toContain("azure");
 		});
 	});
 

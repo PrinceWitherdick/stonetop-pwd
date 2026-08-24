@@ -1,6 +1,6 @@
 import { arcanumCardImg } from "../arcana-icons.js";
 import { ITEM_FLAG_SCOPE } from "../actors/character/StonetopFlags.js";
-import { centerArcanumTracks, wrapGlyphTextContainers } from "../utils/glyphs.js";
+import { centerArcanumTracks, wrapGlyphTextContainers, wrapStonetopGlyphsInEl } from "../utils/glyphs.js";
 import { markValueTooltips } from "../utils/value-tooltips.js";
 import { markDebilityTooltips } from "../utils/debility-tooltips.js";
 import { enrichHTML } from "../utils/foundry-compat.js";
@@ -10,7 +10,8 @@ import { applyGuideRail } from "../utils/guide-rail.js";
 import { isDefaultImg } from "../utils/strings.js";
 import { STAT_KEYS } from "../utils/roll-types.js";
 import { hasText } from "../actors/bestiary/codex.js";
-import { collectTakenArcanumSlugs } from "./createArcanum.js";
+import { buildItemReadout } from "./item-readout.js";
+import { isArcanumData } from "./createArcanum.js";
 import { SYSTEM_ID } from "../system-id.js";
 import {
 	defaultArcanumItemLine, defaultResourceDef, defaultBackMove, defaultFollower,
@@ -35,12 +36,26 @@ const GLYPH_INSERTS = [
 	{ ins: "▶ ", label: "▶", hint: "Move / list arrow (decorative)" },
 ];
 
+// The editor's own chrome that spells glyphs out in text: the insert-track buttons and the
+// line under them, the major-mode consequence buttons (□ / □□ / □□□) and the mark-track
+// hint beside them, and the warning about re-cutting a track. Redrawn as styled glyphs on
+// render so a control shows the same mark it will put on the card. Display-only, and never
+// a field the author types into (whose value IS its text) — what the buttons insert is read
+// from `data-glyph`.
+const GLYPH_CHROME = [
+	".stonetop-arc-glyph",
+	".stonetop-arc-glyphbar-hint",
+	".stonetop-arc-add-consequence",
+	".stonetop-arc-majorbar .stonetop-arc-hint",
+	".stonetop-arc-issue",
+].join(", ");
+
 // The editor's sections, driving the left rail (like Make a Monster / Run an Expedition).
 // Each `key` matches a `<section data-arc-tab>` in the edit template and its rail button;
 // `sub` is the banner subtitle, `icon` a Font Awesome 6 glyph. Switching sections is
 // client-side (no re-render), so the prose-mirror editors and unsaved field values survive.
 const ARC_SECTIONS = [
-	{ key: "identity",  title: "Identity",  sub: "name, slug & tier",   icon: "fa-fingerprint" },
+	{ key: "identity",  title: "Identity",  sub: "name & tier",         icon: "fa-fingerprint" },
 	{ key: "front",     title: "Front",     sub: "the curio, face-up",  icon: "fa-scroll" },
 	{ key: "back",      title: "Back",      sub: "the revealed power",  icon: "fa-wand-sparkles" },
 	{ key: "followers", title: "Followers", sub: "manifested summons",  icon: "fa-users" },
@@ -51,9 +66,9 @@ const ARC_VIEW_WIDTH = 460;
 const ARC_EDIT_WIDTH = 680;
 
 // True when any character already holds this arcanum slug — in their owned/identified
-// list, or via saved marks/unlock counts keyed by it. The slug is the identity key for
-// per-character marks AND the owned list, so changing it once in use orphans both; the
-// editor locks the slug field when this is true.
+// list, or via saved marks/unlock counts keyed by it. Marks are saved by POSITION within a
+// track, so the editor uses this to warn that re-cutting a ◇/○/□ run shifts what those
+// players have already marked.
 function _arcanumSlugInUse(slug) {
 	if (!slug) return false;
 	const prefix = `${slug}:`;
@@ -135,7 +150,7 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 		// Only homebrew (world, owned, editable) arcana can be edited in place; shipped
 		// compendium cards are immutable reference content.
 		_canEditArcanum() {
-			return this.item?.system?.moveType === "arcanum"
+			return isArcanumData(this.item)
 				&& this.isEditable
 				&& !isInCompendium(this.item);
 		}
@@ -161,7 +176,6 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 				// Leaving edit mode commits a pending draft: attach it to the originating
 				// character (once) so Save & Done / header Done both finish it in one click.
 				if (this._arcanumDraft) await this._commitArcanumDraft();
-				this._otherArcanumSlugs = null; // drop the per-session slug cache on exit
 			}
 			this._editMode = !this._editMode;
 			// Leaving edit re-arms the one-shot edit-width sizing so re-entering re-seats the
@@ -220,18 +234,16 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 				if (!discarded) return this;   // "Keep editing" → don't close
 				return this;                   // discarded: item.delete() already closed the sheet
 			}
-			// Flush any pending rich-editor content before teardown, then drop the per-session
-			// slug cache so a reopened sheet rebuilds it fresh. Skip the flush when the item was
+			// Flush any pending rich-editor content before teardown. Skip it when the item was
 			// just deleted (nothing to flush, and the update would throw).
 			if (this._editMode && !this._discarded && !itemGone) await this._flushRichEditors();
-			this._otherArcanumSlugs = null;
 			return super.close(options);
 		}
 
 		async getData() {
 			const data = await super.getData();
 			const flags = this.item.flags?.[ITEM_FLAG_SCOPE] ?? {};
-			data.isArcanum = this.item.system?.moveType === "arcanum";
+			data.isArcanum = isArcanumData(this.item);
 
 			// This is the only system item sheet registered for the "move" subtype, so
 			// the sheet registry resolves it as the default for *every* move item that
@@ -239,25 +251,35 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			// (the Setting Overview's Livestock & Beasts links: Dog, Goat, Sheep) and
 			// basic/special moves. Those carry no front/back glyph tracks, so render a
 			// plain read-only readout instead of an empty Arcanum card.
+			//
+			// That readout prints the SAME entry a character sheet's gear row does — ◇ load,
+			// tags, ○ uses, and the artifact hint / write-up / lead — so a treasure reads whole
+			// in the Items sidebar and in the compendium it was dragged out of, not only once
+			// somebody is carrying it. Gathering the fields is item-readout.js; concealment for
+			// a hidden artifact happens there too, against the viewer, so nothing the ladder is
+			// still withholding reaches this template.
 			if (!data.isArcanum) {
-				data.simple = {
-					name:        this.item.name,
-					weight:      flags.weight ?? null,
-					note:        flags.note ?? "",
-					description: this.item.system?.description ?? "",
-				};
+				const simple = buildItemReadout(this.item, { viewerIsGM: !!game.user?.isGM });
+				// The item's own art heads the card, as an arcanum's icon does. A stock
+				// placeholder counts as none (isDefaultImg), so an un-illustrated item gets the
+				// plain card it had rather than a bordered panel of Foundry's bag glyph.
+				simple.img = isDefaultImg(this.item.img) ? null : this.item.img;
+				// Both rich fields go through enrichHTML so a @UUID link, an inline roll or a
+				// content link somebody typed into a write-up actually resolves. The gear row
+				// does NOT enrich its copy (it prints `system.artifactLore` verbatim) — it has
+				// a line of a column to work in, where a card has the room to render a link as
+				// a link. The shipped Book II write-ups carry no links either way.
+				[simple.description, simple.artifact.lore] = await Promise.all([
+					enrichHTML(simple.description),
+					enrichHTML(simple.artifact.lore),
+				]);
+				data.simple = simple;
 				return data;
 			}
 
 			// Edit mode: hand the template raw values (+ enriched copies for the rich
 			// editors) and the live validation status.
 			if (this._editMode && this._canEditArcanum()) {
-				// Cache the slugs in use elsewhere (pack + other world cards) once per edit
-				// session so the live slug-collision warning doesn't re-query the pack index +
-				// scan every world item on every structural re-render. Cleared on edit exit/close.
-				if (!this._otherArcanumSlugs) {
-					this._otherArcanumSlugs = await collectTakenArcanumSlugs({ excludeId: this.item.id });
-				}
 				data.editMode   = true;
 				// Left-rail sections. The active one is preserved on `this._activeArcSection`
 				// so a structural re-render re-opens the same section (the template hides the
@@ -315,7 +337,6 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 				};
 			};
 
-			const slug = flags.slug ?? "";
 			// Enrich the four rich-text fields in parallel — they're independent and each
 			// enrichHTML resolves @UUID links asynchronously, and this runs on every
 			// structural-edit re-render (toggling major, adding a mystery, etc.).
@@ -327,8 +348,6 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			]);
 			return {
 				name:   this.item.name ?? "",
-				slug,
-				slugCollision: !!slug && !!this._otherArcanumSlugs?.has(slug),
 				major:  !!flags.major,
 				img:    isDefaultImg(this.item.img) ? null : this.item.img,
 				front: {
@@ -397,6 +416,12 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 				// Insert glyph runs on mousedown so the focused editor keeps focus.
 				root.querySelectorAll(".stonetop-arc-glyph").forEach(btn =>
 					btn.addEventListener("mousedown", ev => { ev.preventDefault(); this._insertGlyph(btn.dataset.glyph); }));
+				// Redraw the toolbar's own ◇ ○ □ ▶ as the same styled glyphs the cards paint, so a
+				// button shows what it will actually put on the card rather than the fallback-font
+				// character. Done here rather than via wrapGlyphTextContainers: that list is for
+				// containers of *authored* text, and this is the editor's own chrome. Display-only —
+				// what gets inserted is read from `data-glyph`, never from the button's text.
+				root.querySelectorAll(GLYPH_CHROME).forEach(el => wrapStonetopGlyphsInEl(el));
 				// Hide "Next" if the rail opens on the last section.
 				this._syncArcNext(root);
 				// Seat the rail width once per edit session (covers a freshly-created draft that
@@ -444,9 +469,6 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			const fieldEl = t.closest("[data-arc-field]");
 			if (!fieldEl || fieldEl.tagName === "PROSE-MIRROR") return;
 			const path = fieldEl.dataset.arcField;
-			// The slug is an identity key for saved marks + ownership; once a character holds
-			// the card it's locked (the input renders readonly), so never persist a changed slug.
-			if (path === `flags.${ITEM_FLAG_SCOPE}.slug` && _arcanumSlugInUse(this._flags().slug)) return;
 			let value;
 			if (fieldEl.matches?.('input[type="checkbox"]')) {
 				value = fieldEl.checked;
@@ -460,31 +482,12 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			}
 			if (value === "" && (path.endsWith(".maxStat") || path.endsWith(".inventoryColumn"))) value = null;
 
-			// A slug that collides with ANOTHER card's slug would make this one unresolvable
-			// (world/pack lookup is first-wins), so refuse to persist it — surface the live
-			// warning and bail. The author must pick a free slug. (The readonly lock above
-			// already covers slugs a character holds; this covers card-vs-card collisions.)
-			if (path === `flags.${ITEM_FLAG_SCOPE}.slug` && this._otherArcanumSlugs?.has(value)) {
-				this._updateSlugWarning(value);
-				return;
-			}
-
 			// Toggling major shows/hides the major-tools UI, so it needs a re-render.
 			if (path.endsWith(".major")) {
 				await this._flushRichEditors();
 				return this.item.update({ [path]: value });
 			}
 			await this.item.update({ [path]: value }, { render: false });
-			// Editing the slug → live-refresh the collision warning (no re-render).
-			if (path === `flags.${ITEM_FLAG_SCOPE}.slug`) this._updateSlugWarning(value);
-		}
-
-		// Show/hide the inline "another card uses this slug" warning against the cached
-		// set of other arcana slugs. Called on each slug edit so it tracks live.
-		_updateSlugWarning(slug) {
-			const el = this.element?.[0]?.querySelector(".stonetop-arc-slug-warning");
-			if (!el) return;
-			el.hidden = !slug || !this._otherArcanumSlugs?.has(slug);
 		}
 
 		_onEditClick(ev) {

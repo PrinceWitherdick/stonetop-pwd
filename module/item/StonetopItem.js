@@ -3,11 +3,70 @@ import {rollFormula, rollStat} from "../utils/roll-engine.js";
 import {normalizeRollType} from "../utils/roll-types.js";
 import {filterStatOptionLines, escHtml} from "../utils/strings.js";
 import {stonetopThumbnail} from "../utils/item-icon.js";
-import {STONETOP_SCOPE} from "../actors/character/StonetopFlags.js";
+import {STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "../actors/character/StonetopFlags.js";
+import {newArcanumSlug, isArcanumData} from "./createArcanum.js";
 import {isKnowThings, knowThingsRollOptions} from "../actors/character/know-things.js";
 
 export function createStonetopItemClass(BaseItem) {
 	return class StonetopItem extends BaseItem {
+
+		/**
+		 * Stamp an arcanum card with its slug before it is written.
+		 *
+		 * The slug is the identity key for everything a character saves about a card -- its marks,
+		 * its unlock counts, and the owned/identified/flipped lists -- so "every arcanum has one"
+		 * is an invariant of the DOCUMENT, not of any one screen. It used to be repaired by the
+		 * editor's `getData`, which made a render responsible for fixing stored data and only
+		 * reached cards somebody happened to open: a card built by macro or console and never
+		 * edited stayed slug-less while players held marks against it.
+		 *
+		 * Fills a GAP, and breaks a TIE. Shipped pack arcana carry their own slug and
+		 * `createArcanumItem` mints one into its payload, so an import and the creator both pass
+		 * straight through -- which matters, because a slug rewritten on import would orphan every
+		 * mark in the world that points at the old one. A COPY is the other way a card can arrive
+		 * carrying a slug, and there the slug has to be re-minted: see `_arcanumSlugIsSomebodyElses`.
+		 *
+		 * Same shape as StonetopActor#_preCreate: one `updateSource` on the pending document.
+		 * @override
+		 */
+		async _preCreate(data, options, user) {
+			const allowed = await super._preCreate(data, options, user);
+			if (allowed === false) return false;
+			if (!isArcanumData(this)) return;
+			const slug = String(this.flags?.[ITEM_FLAG_SCOPE]?.slug ?? "").trim();
+			if (!slug || this._arcanumSlugIsSomebodyElses(slug)) {
+				this.updateSource({ [`flags.${ITEM_FLAG_SCOPE}.slug`]: newArcanumSlug() });
+			}
+		}
+
+		/**
+		 * Is the slug this card arrived with already another card's identity?
+		 *
+		 * A slug is an IDENTITY, not a name, so two cards may never share one: marks, unlock counts
+		 * and the owned/identified/flipped lists are all keyed by it, and two cards on one slug is
+		 * two cards wearing each other's play state -- ticking a mark on either shows it on both.
+		 * The editor deliberately doesn't show the slug, so there is no screen on which a GM could
+		 * see the clash, let alone fix it; the only place it can be prevented is here.
+		 *
+		 * The sidebar's Duplicate copies the whole document, slug and all, which is exactly this
+		 * case. Core stamps a copy with `_stats.duplicateSource` (Document#clone's `addSource`), so
+		 * that flag alone settles it -- including for a duplicate made inside a compendium, where
+		 * there is no world collection to compare against.
+		 *
+		 * The sweep of `game.items` behind it catches the copies core doesn't stamp: a macro or
+		 * console `Item.create(card.toObject())`, or a module doing the same. It is a scan of the
+		 * world's items, which is why it is gated on the document being an arcanum at all --
+		 * arcana are created one at a time, by hand, and every other item type never reaches it.
+		 */
+		_arcanumSlugIsSomebodyElses(slug) {
+			if (this._stats?.duplicateSource) return true;
+			if (this.pack) return false;
+			for (const item of globalThis.game?.items ?? []) {
+				if (item.id && item.id === this.id) continue;
+				if (String(item.flags?.[ITEM_FLAG_SCOPE]?.slug ?? "").trim() === slug) return true;
+			}
+			return false;
+		}
 
 		/**
 		 * The image the Items sidebar (and anything else reading `thumbnail`) draws for this

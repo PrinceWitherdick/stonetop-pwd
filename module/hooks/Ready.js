@@ -4,6 +4,7 @@ import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
 import { repairAllChronicleFlagScopes } from "../migration/chronicle-flag-scope.js";
+import { newArcanumSlug, isArcanumData } from "../item/createArcanum.js";
 import { renameAllSeasonYearPages } from "../migration/season-year-page-names.js";
 import { ensureStonetopSingleton, remindDestinedOmenRoll } from "./StonetopSingleton.js";
 import { runWorldSetup, pendingSetupWork } from "./WorldSetup.js";
@@ -40,7 +41,7 @@ import { getStonetopSteadingActorOrWarn } from "../utils/world.js";
 import { rollMoveFromUuid } from "./HotbarDrop.js";
 import { ensureThreatsEntry } from "../threats/threat-store.js";
 import { ensureHazardsEntry } from "../hazards/hazard-store.js";
-import { STONETOP_SCOPE, resolvedFlagProperty, resolvedFlags } from "../actors/character/StonetopFlags.js";
+import { STONETOP_SCOPE, ITEM_FLAG_SCOPE, resolvedFlagProperty, resolvedFlags } from "../actors/character/StonetopFlags.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
 import { markPosterMapScenes } from "../book2-art/poster-maps.js";
 import { linkLandmarkNotes, refitLandmarkNotes, revealLandmarkNotesOnce } from "./PlaceOfInterestDrop.js";
@@ -167,6 +168,10 @@ export async function onReady() {
 		// migration/chronicle-flag-scope.js.
 		try { await repairAllChronicleFlagScopes(); }
 		catch (err) { console.error("Stonetop | chronicle flag-scope repair failed", err); }
+		// Give a slug to any arcanum card built before StonetopItem#_preCreate stamped them.
+		// Idempotent, so it needs no gate and is a no-op in every world that has none.
+		try { await _stampMissingArcanumSlugs(); }
+		catch (err) { console.error("Stonetop | arcanum slug sweep failed", err); }
 		// Catch Chronicle year pages up to the "Year One" naming the sheet and the picker
 		// already use. Same shape as the sweep above and for the same reason: it recognises a
 		// generated name and writes one, so it is idempotent and needs no gate. The years that
@@ -1392,6 +1397,43 @@ export async function _dropRetiredActorFlags() {
 		"retired flag sweep",
 	);
 	return staleKeys.size;
+}
+
+// Give a slug to any arcanum card in the world that has none.
+//
+// Every arcanum needs one: it is the identity key for each holder's marks, unlock counts and
+// owned/identified/flipped lists, so a card without one silently keys all of that off "". New
+// cards can no longer arrive that way -- StonetopItem#_preCreate stamps the gap before the
+// document is written -- but a world may already hold one built by macro or console before that
+// existed. Repairing it used to be the editor's `getData`, which only reached cards somebody
+// happened to open in edit mode.
+//
+// Idempotent by construction and so needs no version flag: after a run there is nothing left to
+// match. WORLD items only -- a card embedded on an actor is not an arcanum (arcana are referenced
+// by slug from a pack or the world, never owned as embedded documents).
+//
+// PRIMARY-GM ONLY, like every other write in onReady: a player has no right to update world
+// items, and the rejection would tear down the rest of the hook for them.
+export async function _stampMissingArcanumSlugs() {
+	if (!game.user?.isGM || !isPrimaryGM()) return 0;
+	const slugless = (game.items ?? []).filter(
+		item => isArcanumData(item) && !String(item.flags?.[ITEM_FLAG_SCOPE]?.slug ?? "").trim()
+	);
+	if (!slugless.length) return 0;
+	// ONE batched request, like every other sweep here: per-item updates each cost a socket round
+	// trip and an Items-sidebar repaint, on the blocking startup path.
+	try {
+		await Item.updateDocuments(slugless.map(item => ({
+			_id: item.id,
+			[`flags.${ITEM_FLAG_SCOPE}.slug`]: newArcanumSlug(),
+		})));
+	} catch (err) {
+		// Never cost the GM their load: the cards still open, and the next load tries again.
+		console.warn("Stonetop | Could not stamp slugs on slug-less arcana.", err);
+		return 0;
+	}
+	console.log(`Stonetop | Gave a slug to ${slugless.length} arcanum card(s) that had none.`);
+	return slugless.length;
 }
 
 // The GM-prep page families (threats / hazards) used to store one JournalEntry per item in

@@ -39,7 +39,7 @@ import {deletionEntry} from "../../utils/foundry-compat.js";
 import {statRequirementLabel, statRequirementsUnmet} from "./stat-requirement.js";
 import {MoveResources} from "./MoveResources.js";
 import {moveMarkBudget} from "./move-mark-budget.js";
-import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, resolvedFlags, resolvedFlagProperty} from "./StonetopFlags.js";
+import {StonetopFlags, STONETOP_SCOPE, resolvedFlags, resolvedFlagProperty} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG, ownsAsteriskMove} from "./WouldBeHeroAsterisk.js";
 import {ownedNamesOr} from "./owns-move.js";
@@ -72,7 +72,7 @@ import {getStonetopSteadingActor} from "../../utils/world.js";
 import {moveChatCard} from "../../utils/chat.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
 import {buildCustomMoveData, clampInt} from "../../utils/custom-move-data.js";
-import {buildInventoryItemData} from "../../utils/inventory-item-data.js";
+import {buildInventoryItemData, readInventoryItemData} from "../../utils/inventory-item-data.js";
 import {ARTIFACT_STATE, concealArtifactFields, isArtifactUpgrade, normalizeArtifactState} from "./artifact-identify.js";
 import {isLoveLetter} from "./love-letters.js";
 import {deriveLoadLevel, loadLimitsFor} from "../../utils/load.js";
@@ -1498,31 +1498,23 @@ export class StonetopCharacter {
 	 *        have it re-hidden on the way in.
 	 */
 	async addDroppedInventoryItem(itemData, opts = {}) {
-		const st = itemData?.flags?.[ITEM_FLAG_SCOPE] ?? {};
-		const sys = itemData?.system ?? {};
+		// Where each field actually lives is readInventoryItemData's problem, not this method's.
+		const read = readInventoryItemData(itemData);
 		const clone = v => globalThis.foundry?.utils?.deepClone?.(v) ?? v;
-		const rawColumn = st.inventoryColumn ?? sys.inventoryColumn ?? st.column ?? sys.column;
-		const resource = st.resource ?? sys.resource;
-		const armor = st.armor ?? sys.armor;
-		const isTreasure = !!(st.isTreasure ?? sys.isTreasure);
-		const carriedState = normalizeArtifactState(st.identifyState ?? sys.identifyState);
+		const { column: rawColumn, resource, armor, isTreasure } = read;
+		const carriedState = normalizeArtifactState(read.artifact.state);
 		// Only a treasure/artifact is ever hidden by default. An ordinary write-in dragged off
 		// the sidebar has no tags worth concealing, and hiding it would strand the player with a
 		// "?" on their own gear.
 		const state = carriedState
 			|| (opts.hideArtifact && isTreasure ? ARTIFACT_STATE.UNKNOWN : ARTIFACT_STATE.NONE);
 		const data = buildInventoryItemData({
-			artifact: {
-				state,
-				hint: st.artifactHint ?? sys.artifactHint ?? "",
-				lore: st.artifactLore ?? sys.artifactLore ?? "",
-				lead: st.artifactLead ?? sys.artifactLead ?? "",
-			},
+			artifact: { ...read.artifact, state },
 			name: itemData?.name,
 			// A drop's column is untrusted; anything but an explicit "regular" reads as small.
 			column: rawColumn === "regular" ? "regular" : "small",
-			weight: st.weight ?? sys.weight ?? 1,
-			note: st.note ?? sys.note ?? "",
+			weight: read.weight ?? 1,
+			note: read.note,
 			resource: resource ? clone(resource) : null,
 			armor: armor ? clone(armor) : null,
 			moveType: "inventory-custom",

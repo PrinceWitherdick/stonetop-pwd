@@ -1,3 +1,4 @@
+import { isArcanumData } from "../../item/createArcanum.js";
 import { CatalogSource, summarize, searchIndex } from "./CatalogSource.js";
 import { stripHtmlToText } from "../../utils/strings.js";
 import { MinorArcanum } from "../../model/MinorArcanum.js";
@@ -132,7 +133,7 @@ export class ArcanaSource extends CatalogSource {
 	}
 
 	_worldDocs() {
-		return [...(game.items ?? [])].filter(i => i.type === "move" && i.system?.moveType === "arcanum");
+		return [...(game.items ?? [])].filter(isArcanumData);
 	}
 
 	/** One browser row from an arcanum Item document. */
