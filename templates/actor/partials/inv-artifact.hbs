@@ -34,8 +34,21 @@
       raw — it's GM-authored and declared HTML, exactly like a gear note — with pre-wrap in
       the CSS so a plainly typed one keeps its line breaks. Blank until the state permits it,
       so a still-owed write-up can't leak through the markup. --}}
+{{!-- It folds. A treasure's write-up is the book's whole sidebar and a GM's can be as long
+      as they please, so the prose hides behind the caret up in the row's icon cluster and the
+      row rests at its name and its tags. Shut by default; which rows this user has opened is
+      remembered per actor (settings.js -> inventoryLoreExpanded, stamped onto the snapshot as
+      `loreExpanded` by the sheet). The caret and the prose sit in ONE wrapper so the fold has
+      something to toggle, and that wrapper is boxless (`display: contents`) because the two
+      belong to different lines of the row: see the CSS. --}}
 {{#if artifact.lore}}
-<div class="stonetop-inv-artifact-lore{{#if artifact.gmPeeking}} is-gm-peek{{/if}}">{{{artifact.lore}}}</div>
+<div class="stonetop-inv-artifact-fold{{#unless artifact.loreExpanded}} is-collapsed{{/unless}}" data-section="{{ownedId}}">
+	<a class="stonetop-inv-lore-toggle" role="button" tabindex="0"
+	   aria-expanded="{{#if artifact.loreExpanded}}true{{else}}false{{/if}}"
+	   aria-label="{{localize 'stonetop.artifact.loreToggle'}}"
+	   data-tooltip="{{localize 'stonetop.artifact.loreToggle'}}"><i class="fas fa-caret-down"></i></a>
+	<div class="stonetop-inv-artifact-lore{{#if artifact.gmPeeking}} is-gm-peek{{/if}}">{{{artifact.lore}}}</div>
+</div>
 {{/if}}
 {{#if artifact.lead}}
 <span class="stonetop-inv-artifact-lead" data-tooltip="{{localize 'stonetop.artifact.leadTooltip'}}">
@@ -52,7 +65,7 @@
 <a class="stonetop-inv-artifact-gm{{#if artifact.isArtifact}} is-hidden-artifact{{/if}}"
    data-owned-id="{{ownedId}}" data-state="{{artifact.state}}"
    data-tooltip="{{localize 'stonetop.artifact.gmTooltip'}}">
-	<i class="fas fa-user-secret"></i>
+	<i class="fas fa-eye"></i>
 </a>
 {{/if}}
 {{/if}}

@@ -1114,6 +1114,7 @@
       "leadMissing": "The GM hasn't named a path yet. Book I p.431 suggests:",
       "chipUnknown": "Unidentified. You know only what's obvious at a glance.",
       "chipPartial": "Partly identified. You know what it is and what it's worth; the full write-up is still owed.",
+      "loreToggle": "Show or hide the write-up",
       "gmTooltip": "GM: what this artifact is, and how much of it the player may read",
       "gmTitle": "Artifact knowledge",
       "gmTags": "Concealed tags:",

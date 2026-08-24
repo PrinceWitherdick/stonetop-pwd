@@ -103,3 +103,54 @@ describe("the stylesheet's opinion of a write-up", () => {
 		expect(CSS).toContain(".stonetop-inv-artifact-lore li,\n.stonetop-arcanum-body li");
 	});
 });
+
+// A write-up that long can't be the row's resting state: the treasures section would be a wall of
+// prose down a column whose every other line is one row. So it folds, and the row rests at what
+// the book prints in its own margin — the name, and the tags beside it. What follows is that
+// resting shape, the caret that opens it, and the stylesheet that actually does the hiding.
+describe("folding the write-up away", () => {
+	const CSS = read("styles/stonetop.css");
+	const rowHtml = row => artifactRow({ ...row, stonetop: {} }, { data: { root: { stonetop: {} } } });
+
+	it("rests folded, with a caret to open it", async () => {
+		const html = rowHtml(await rowFor(droppedDagger()));
+		expect(html).toContain("stonetop-inv-artifact-fold is-collapsed");
+		expect(html).toContain('class="stonetop-inv-lore-toggle"');
+		expect(html).toContain('aria-expanded="false"');
+		// Folded is a class, not a missing paragraph: the prose is still in the row, so opening it
+		// is a class toggle rather than a re-render (which would lose the tab's scroll position).
+		expect(html).toContain("Tinged green, but sharp and sturdy.");
+	});
+
+	it("opens for a row this user left open, and says so", async () => {
+		const row = await rowFor(droppedDagger());
+		row.artifact.loreExpanded = true;   // what the sheet stamps from inventoryLoreExpanded
+		const html = rowHtml(row);
+		expect(html).not.toContain("is-collapsed");
+		expect(html).toContain('aria-expanded="true"');
+	});
+
+	it("hangs the fold off the owned item's id, which is what the sheet remembers", async () => {
+		const row = await rowFor(droppedDagger());
+		expect(row.ownedId).toBe("item-1");
+		expect(rowHtml(row)).toContain('data-section="item-1"');
+	});
+
+	it("draws no caret on a row with nothing to unfold", () => {
+		// A GM's hint with the write-up still owed (p.430): there IS an artifact block on this
+		// row, but no prose in it, so it must not sprout a caret that opens onto nothing.
+		const owed = { artifact: { isArtifact: true, concealed: true, state: "partial",
+			lore: "", hint: "Older than it looks", lead: "" } };
+		const html = artifactRow({ ...owed, stonetop: {} }, { data: { root: { stonetop: {} } } });
+		expect(html).toContain("Older than it looks");
+		expect(html).not.toContain("stonetop-inv-lore-toggle");
+	});
+
+	it("leaves the hiding to the stylesheet, and keeps the row's geometry while doing it", () => {
+		expect(CSS).toMatch(/\.stonetop-inv-artifact-fold\.is-collapsed \.stonetop-inv-artifact-lore\s*\{[^}]*display:\s*none/);
+		// The wrapper is boxless, so the caret and the prose stay direct children of the row and
+		// keep the order/flex-basis the shared second-line rule gives them: the caret up on the
+		// name's line, the prose alone underneath. A real box could only be in one of those places.
+		expect(CSS).toMatch(/\.stonetop-inv-artifact-fold\s*\{[^}]*display:\s*contents/);
+	});
+});

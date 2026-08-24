@@ -5675,6 +5675,38 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	background-repeat: no-repeat;
 	background-position: center;
 }
+/* The write-up FOLDS, and rests folded. A Book II treasure ships with the book's whole
+   sidebar in this field (data/treasure-catalog.js) — several paragraphs, often a custom
+   move's list of picks — which is a wall of prose down a column whose every other row is
+   one line. So it hides behind a caret sat in the row's icon cluster, leaving the row at
+   what the book prints in its margin: the name, and the tags beside it. Which rows a user
+   opened is remembered per actor (inventoryLoreExpanded); the text is a click away.
+
+   `display: contents` on the wrapper because the caret and the write-up belong to DIFFERENT
+   LINES of the row — the caret up beside the name (order 0), the prose alone underneath
+   (order 1, from the shared second-line rule above). A wrapper with a box of its own would
+   be a single flex item and could only be in one of those places. Boxless, both stay direct
+   children of the row and keep the geometry that rule gives them. Same trick and the same
+   reason as .stonetop-inv-item-toggle further down. */
+.stonetop-inv-artifact-fold { display: contents; }
+.stonetop-inv-artifact-fold.is-collapsed .stonetop-inv-artifact-lore { display: none; }
+.stonetop-inv-lore-toggle {
+	flex: 0 0 auto;
+	cursor: pointer;
+	color: var(--color-text-dark-secondary, #666);
+	font-size: 0.9em;
+	opacity: 0.55;
+	transition: opacity 120ms ease;
+}
+.stonetop-inv-lore-toggle:hover { opacity: 1; }
+/* The caret points at what it opens, like the section headings and the arcanum card's corner:
+   down while the write-up is showing, right while it is folded away. */
+.stonetop-inv-lore-toggle > i {
+	display: inline-block;
+	transition: transform 0.15s;
+}
+.stonetop-inv-artifact-fold.is-collapsed .stonetop-inv-lore-toggle > i { transform: rotate(-90deg); }
+
 .stonetop-inv-artifact-identify,
 .stonetop-inv-artifact-gm {
 	flex: 0 0 auto;
@@ -5695,7 +5727,29 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
    specificity is exactly what three separate ones came to. */
 .stonetop-inv-item:has(.stonetop-inv-artifact-hint, .stonetop-inv-artifact-lead, .stonetop-inv-artifact-lore) { flex-wrap: wrap; }
 
-/* The GM's knowledge window: three stacked labelled fields. */
+/* The GM's knowledge window: three stacked labelled fields, the middle one a live editor.
+
+   The window is a FIXED height (the Dialog options in _onArtifactGmControl) so the write-up
+   opens with room to write in, which means something has to absorb the leftover. Flex column
+   all the way down from the window content to the editor, with the write-up field the only
+   thing that grows: the short fields keep their natural height and the editor takes the rest,
+   whatever the GM drags the window to. */
+.stonetop-artifact-dialog .window-content,
+.stonetop-artifact-dialog .window-content > form,
+.stonetop-artifact-dialog .dialog-content {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+.stonetop-artifact-dialog .window-content > form,
+.stonetop-artifact-dialog .dialog-content { flex: 1 1 auto; }
+.stonetop-artifact-dialog .dialog-buttons { flex: 0 0 auto; }
+.stonetop-artifact-form {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+}
 .stonetop-artifact-form .stonetop-artifact-field { margin-bottom: 8px; }
 .stonetop-artifact-form .stonetop-artifact-field > label {
 	display: block;
@@ -5703,9 +5757,56 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	margin-bottom: 2px;
 }
 .stonetop-artifact-form .stonetop-artifact-field > input,
-.stonetop-artifact-form .stonetop-artifact-field > select,
-.stonetop-artifact-form .stonetop-artifact-field > textarea { width: 100%; }
+.stonetop-artifact-form .stonetop-artifact-field > select { width: 100%; }
 .stonetop-artifact-form .stonetop-artifact-field > .notes { margin: 2px 0 0; }
+
+/* Core dresses every `.notes` inside a form as a hint line, and part of that dressing is
+   `flex: 0 0 100%` (`body.game .app form .notes`, `@layer compatibility`). It means "take a
+   full LINE" and was written for the flex ROWS core lays forms out in — but this form is a
+   flex COLUMN, where a 100% basis is 100% of its HEIGHT. So the concealed-tags line claimed
+   the entire window on its own, squeezed the write-up field to nothing and pushed the editor
+   out through the bottom of the dialog: the box painted below the footer buttons, over the
+   page, and a click at the middle of it landed on <body>.
+
+   Hand every hint here back automatic sizing. Nothing is lost by it: `align-items: stretch`
+   already gives each one the full width the row-basis existed to fake. Unlayered, so it beats
+   `@layer compatibility` whatever the specificity — the same lever the Notes tab pulls (see
+   `.stonetop .sheet-body > .tab.notes`), which is the OTHER half of this same core rule. */
+.stonetop-artifact-form .notes,
+.stonetop-artifact-form .stonetop-artifact-field > label { flex: 0 0 auto; }
+
+/* The write-up field, and it alone, grows. MODIFIER-STYLE: later than the base rule it
+   extends, so the two don't tie on specificity. */
+.stonetop-artifact-form .stonetop-artifact-field--rich {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+/* An always-on (untoggled) editor: core lays the host out as a flex COLUMN — the ProseMirror
+   toolbar on top, then `.editor-container` taking the rest with the contenteditable
+   `.editor-content` absolutely positioned (`inset: 0`) inside it. So the host keeps core's
+   `display` and is given only a flex-ITEM rule here; switched to block, the container has no
+   flex height, collapses to 0, and its `overflow: hidden` clips the whole typing surface away.
+   Same reasoning and same shape as `.stonetop-arc-rich` on the arcanum sheet and the two
+   sibling rules named beside it — search `.editor-container` for all four. */
+.stonetop-artifact-form .stonetop-artifact-rich {
+	flex: 1 1 auto;
+	min-height: 150px;
+	border: 1px solid var(--color-border-light, #c9c0ad);
+	border-radius: var(--st-radius-sm);
+	background: rgba(255, 255, 255, 0.5);
+	padding: 2px 4px;
+}
+
+/* The floor that keeps the typing area clickable when the GM drags the window short, on the
+   CONTAINER rather than the host: the toolbar and its gap eat a host floor first, and a floor
+   on `.editor-content` is clipped by the container and types nothing. */
+.stonetop-artifact-form .stonetop-artifact-rich .editor-container {
+	min-height: 80px;
+}
+
 .stonetop-artifact-owed { font-style: italic; }
 
 .stonetop-inv-item-toggle {
@@ -8143,6 +8244,20 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
    edit pencil) — let it wrap like the Moves header rather than overflow. */
 .stonetop-possession-list .stonetop-item-header {
 	flex-wrap: wrap;
+}
+
+/* The edit pencil belongs on the title line, in the header corner. The Stock
+   track is flex-basis:100% (it always claims a header row of its own), so in
+   source order the pencil lands below the circles instead of beside the name.
+   Ordering the track last puts the pencil back on the first line, where the
+   flex:1 name pushes it to the right edge. */
+.stonetop-possession-list .stonetop-item-header > .stonetop-item-resources {
+	order: 1;
+}
+.stonetop-possession-list .stonetop-item-header > .stonetop-possession-choices-edit,
+.stonetop-possession-list .stonetop-item-header > .stonetop-possession-custom-remove {
+	order: 0;
+	align-self: flex-start;
 }
 
 :is(.tab.moves, .tab.post-death) .stonetop-item-name,

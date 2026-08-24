@@ -1217,6 +1217,21 @@ export function registerSettings() {
 		default: {},
 	});
 
+	// Remembers which gear rows each character left with their write-up UNFOLDED. A Book II
+	// treasure arrives carrying the book's whole printed sidebar (data/treasure-catalog.js),
+	// which is several paragraphs down a column whose other rows are one line each, so the
+	// write-up folds away and the row rests at what the book prints in the margin: the name
+	// and the tags beside it. Like arcanaContentExpanded above, the fold defaults SHUT, so
+	// this is the EXPANDED list — an id present here means that row reopens showing its
+	// write-up. Keyed by the owned Item's id, which is what the row carries. Per-user
+	// (client) and per-actor: a map of actor id -> array of item ids. Internal.
+	game.settings.register(SYSTEM_ID, "inventoryLoreExpanded", {
+		scope: "client",
+		config: false,
+		type: Object,
+		default: {},
+	});
+
 	// Remembers which sheet sections each actor's viewer folded shut with the heading
 	// caret (the one beside the section edit pencil) — character AND steading, keyed by
 	// the caret's own collapse id rather than the edit-section id, since two groups can
@@ -2032,6 +2047,17 @@ export function getArcanaCardsCollapsed(actorId) {
 
 export function setArcanaCardsCollapsed(actorId, slugs) {
 	return setSectionList("arcanaCardsCollapsed", actorId, slugs);
+}
+
+// The gear rows whose artifact / treasure write-up this user left unfolded. Write-ups
+// default to folded away, so an owned Item id present here means that row reopens with
+// its write-up showing.
+export function getInventoryLoreExpanded(actorId) {
+	return getSectionList("inventoryLoreExpanded", actorId);
+}
+
+export function setInventoryLoreExpanded(actorId, itemIds) {
+	return setSectionList("inventoryLoreExpanded", actorId, itemIds);
 }
 
 // The sheet sections (character and steading alike) this user folded shut with the

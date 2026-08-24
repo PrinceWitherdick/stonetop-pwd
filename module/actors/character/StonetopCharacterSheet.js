@@ -54,11 +54,11 @@ import {ARTIFACT_STATE, artifactStateForTier, knowThingsArtifactResults, seekIns
 import {knowThingsRollOptions} from "./know-things.js";
 import {getStonetopSteadingActor} from "../../utils/world.js";
 import {openChroniclePageForActor} from "../../utils/chronicle.js";
-import {getDragEventData, deletionEntry, imagePopout, renderTemplate} from "../../utils/foundry-compat.js";
+import {getDragEventData, deletionEntry, enrichHTML, imagePopout, renderTemplate} from "../../utils/foundry-compat.js";
 import {STEADING_DEFAULTS, StonetopSteading} from "../steading/StonetopSteading.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
-import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getHideRollableIconSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
+import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getHideRollableIconSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
 import {bringDialogToFront} from "../../utils/front-on-open.js";
 import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
@@ -417,7 +417,7 @@ const ARTIFACT_GM_STATES = [
 ];
 const ARTIFACT_GM_FIELDS = [
 	{ key: "hint", labelKey: "stonetop.artifact.fieldHint", hintKey: "stonetop.artifact.fieldHintNote" },
-	{ key: "lore", labelKey: "stonetop.artifact.fieldLore", hintKey: "stonetop.artifact.fieldLoreNote", multiline: true },
+	{ key: "lore", labelKey: "stonetop.artifact.fieldLore", hintKey: "stonetop.artifact.fieldLoreNote", rich: true },
 	{ key: "lead", labelKey: "stonetop.artifact.fieldLead", hintKey: "stonetop.artifact.fieldLeadNote" },
 ];
 
@@ -800,6 +800,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			// And the individual arcanum cards (clamped to their title bar). Like the
 			// sections they default to expanded; we track the slugs left collapsed.
 			this._collapsedArcanaCards = new Set(getArcanaCardsCollapsed(this.actor?.id));
+
+			// And the write-ups on the gear rows (a treasure's printed sidebar, a GM's artifact
+			// notes). Unlike everything above these default to FOLDED — prose that long belongs
+			// behind a caret in a one-line-per-row column — so we track the item ids left open.
+			this._expandedItemLore = new Set(getInventoryLoreExpanded(this.actor?.id));
 		}
 
 		// Persist the current crew-section open state so it survives a sheet reopen.
@@ -827,13 +832,23 @@ export function createStonetopCharacterSheetClass(Base) {
 			setArcanaCardsCollapsed(this.actor?.id, [...(this._collapsedArcanaCards ?? [])]);
 		}
 
+		// Persist which gear rows have their write-up unfolded (these default folded).
+		_persistItemLore() {
+			setInventoryLoreExpanded(this.actor?.id, [...(this._expandedItemLore ?? [])]);
+		}
+
 		// Wire a custom collapse/expand toggle for a set of collapsible sections. Used
 		// by both the sidebar move groups and the Arcana sections — both use a custom
 		// toggle (not <details>) so the content keeps contributing layout, and both
 		// track COLLAPSED ids (default expanded). `getSet` returns the live Set to
 		// mutate; `persist` writes it back. (Crew sections use <details>.open instead,
 		// so they keep their own handler.)
-		_wireCollapsible(html, { summarySel, collapsibleSel, getSet, persist, onToggle }) {
+		//
+		// `tracksExpanded` flips which half of the state the Set holds, for a fold that defaults
+		// SHUT rather than open (the gear rows' write-ups): the id goes in when the fold is
+		// OPENED, so absence means folded. Nothing else changes — the state a render STARTS in
+		// comes from the template either way, and this only decides what gets remembered.
+		_wireCollapsible(html, { summarySel, collapsibleSel, getSet, persist, onToggle, tracksExpanded = false }) {
 			const toggle = el => {
 				const wrap = el.closest(collapsibleSel);
 				const id   = wrap?.dataset.section;
@@ -841,8 +856,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				const collapsed = wrap.classList.toggle("is-collapsed");
 				el.setAttribute("aria-expanded", String(!collapsed));
 				const set = getSet();
-				if (collapsed) set.add(id);
-				else           set.delete(id);
+				if (tracksExpanded ? !collapsed : collapsed) set.add(id);
+				else                                         set.delete(id);
 				persist();
 				onToggle?.(wrap, collapsed);
 			};
@@ -1146,6 +1161,23 @@ export function createStonetopCharacterSheetClass(Base) {
 				major: !collapsedArcana.has("arcanaMajor"),
 				minor: !collapsedArcana.has("arcanaMinor"),
 			};
+			// The write-up on a gear row folds, and unlike the sections above it defaults SHUT
+			// (a treasure carries the book's whole sidebar, several paragraphs down a column of
+			// one-line rows), so we stamp the rows this user has OPENED. Every list the two row
+			// partials draw from is here; the rows the equipment tab writes out by hand (the
+			// two-column grid, possession gear) render no write-up, so they have none to fold.
+			const openLore = this._expandedItemLore ?? new Set();
+			const outfit   = context.stonetop.inventory?.outfit ?? {};
+			const loreRows = [
+				...(outfit.regularItems ?? []),
+				...(outfit.smallItems ?? []),
+				...(outfit.treasureRegular ?? []),
+				...(outfit.treasureSmall ?? []),
+				...(outfit.regularSegments ?? []).flatMap(seg => seg.items ?? []),
+			];
+			for (const row of loreRows) {
+				if (row?.artifact?.lore) row.artifact.loreExpanded = openLore.has(row.ownedId);
+			}
 			// Whether the whole moves sidebar is collapsed (defaults to expanded),
 			// persisted per-actor, per-user.
 			context.stonetop.sidebarCollapsed = getSidebarCollapsed(this.actor?.id);
@@ -3731,6 +3763,15 @@ export function createStonetopCharacterSheetClass(Base) {
 				this._onArtifactIdentify(ev.currentTarget.dataset.ownedId, { shiftKey: ev.shiftKey }));
 			html.find(".stonetop-inv-artifact-gm").on("click", ev =>
 				this._onArtifactGmControl(ev.currentTarget.dataset.ownedId));
+			// And the caret that unfolds a row's write-up. Tracks the rows left OPEN, since
+			// these fold shut by default; persisted per user, per actor.
+			this._wireCollapsible(html, {
+				summarySel:     ".stonetop-inv-lore-toggle",
+				collapsibleSel: ".stonetop-inv-artifact-fold",
+				getSet:         () => (this._expandedItemLore ??= new Set()),
+				persist:        () => this._persistItemLore(),
+				tracksExpanded: true,
+			});
 			html.find(".stonetop-possession-check").on("change", this._onPossessionCheck.bind(this));
 			html.find(".stonetop-possession-custom-remove").on("click", this._onRemoveCustomPossession.bind(this));
 			html.find(".stonetop-possession-sub-check").on("change", this._onPossessionSubCheck.bind(this));
@@ -7102,12 +7143,26 @@ export function createStonetopCharacterSheetClass(Base) {
 					labelKey: `stonetop.artifact.state.${state || "none"}`,
 					selected: state === knowledge.state,
 				})),
-				fields: ARTIFACT_GM_FIELDS.map(field => ({ ...field, value: knowledge[field.key] })),
+				// The write-up opens in a live editor, so it is handed BOTH forms: the raw HTML
+				// the element edits, and the enriched copy it paints until the custom element
+				// upgrades. Every other field is a one-line string and needs neither.
+				fields: await Promise.all(ARTIFACT_GM_FIELDS.map(async field => ({
+					...field,
+					value:    knowledge[field.key],
+					enriched: field.rich ? await enrichHTML(knowledge[field.key] ?? "") : "",
+				}))),
 			});
 
 			// Every declared DialogV1 button closes the window, so the fields have to be
 			// harvested by the Save button rather than written as they're edited. Read off the
 			// same table the template was built from, so a fourth field is one entry, not three.
+			//
+			// The write-up needs no special case here even though it is a <prose-mirror> rather
+			// than a textarea: the element is form-associated and answers `.value` with the
+			// SERIALIZED LIVE DOCUMENT while its editor is active (elements/prosemirror-editor.mjs
+			// _getValue), and DialogV1 runs a button callback while the content is still in the
+			// DOM. So the same one-line read gets what the GM has typed, unsaved keystrokes and
+			// all, with no dependency on the editor firing its own change first.
 			const save = async html => {
 				const root = html?.[0] ?? html;
 				const read = name => root?.querySelector?.(`[name="${name}"]`)?.value ?? "";
@@ -7126,7 +7181,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				},
 				default: "save",
 				render:  bringDialogToFront,
-			}, { width: 560, classes: ["dialog", "stonetop", "stonetop-artifact-dialog"], resizable: true }).render(true);
+			}, { width: 560, height: 620, classes: ["dialog", "stonetop", "stonetop-artifact-dialog"], resizable: true }).render(true);
 		}
 
 		/**
