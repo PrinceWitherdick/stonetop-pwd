@@ -25,6 +25,7 @@ const world = { steading: null };
 vi.mock("../../module/utils/world.js", () => ({
 	getStonetopSteadingActor:       () => world.steading,
 	getStonetopSteadingActorOrWarn: () => world.steading,
+	isSteadingActor: a => a?.type === "stonetop" || a?.system?.customType === "stonetop",
 }));
 
 const { ExpeditionDialog } = await import("../../module/dialogs/ExpeditionDialog.js");

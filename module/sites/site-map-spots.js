@@ -94,6 +94,30 @@ export function sitesOnMap(steading, tier) {
 }
 
 /**
+ * One placed site, found by the uuid its pin carries: `{ page, spot }`, or null.
+ *
+ * FOR THE CLICK ON THAT PIN. A site pin on the route map is a route control like every other mark
+ * on that picture — tapping it lays a stop on the way there (ExpeditionDialog `_chooseJourneySite`)
+ * — and what the handler is given is the uuid alone. The spot is the site's OWN recorded fraction
+ * rather than wherever the pointer landed, so the stop stands exactly on the pin the GM aimed at
+ * instead of a few miles off it, and the same tap in the panel's inch-wide map and the popout's
+ * 300 dpi one writes the very same number.
+ *
+ * SYNCHRONOUS, and that is why it goes through the steading rather than `fromUuid`: this answers a
+ * click, and a click that had to await a document resolve would have the trip written a tick after
+ * the gesture that asked for it — long enough for a re-render to land in between.
+ *
+ * Across every tier, not one: the caller does not know which map the site is on, and the spot is
+ * what says.
+ */
+export function placedSiteSpot(steading, uuid) {
+	if (!steading || !uuid) return null;
+	const page = listSitePages(steading).find(p => p?.uuid === uuid);
+	const spot = siteMapSpot(page);
+	return spot ? { page, spot } : null;
+}
+
+/**
  * Which map a site is on, for a picker row that has to say so, or "" for one on no map at all.
  *
  * Its own function because the picker asks it of every site it lists, and a caller that reached

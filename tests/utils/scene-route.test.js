@@ -437,7 +437,7 @@ describe("the scene draws the line in the same ink the dialog does", () => {
 
 /** A trip with a way drawn on one map. */
 const drawnTrip = (points, { origin = "stonetop", tier = "vicinity" } = {}) =>
-	({ origin, destination: "lygos", custom: { on: true, tier, points } });
+	({ origin, destination: "lygos", custom: { tier, points } });
 
 /** A Scene already showing whatever `showRouteOnScene` would have written for `trip`. */
 async function sceneShowing(slug, trip) {
@@ -460,7 +460,7 @@ describe("putting a hand-drawn way on a scene", () => {
 		const scene = await sceneShowing("vicinity", trip);
 		expect(scene.flags[SYSTEM_ID][SCENE_ROUTE_FLAG]).toEqual({
 			origin: "stonetop",
-			custom: { on: true, tier: "vicinity", points: [{ fx: 0.4, fy: 0.6 }] },
+			custom: { tier: "vicinity", points: [{ fx: 0.4, fy: 0.6 }] },
 		});
 	});
 

@@ -280,6 +280,59 @@ describe("buildChroniclePages — expeditions", () => {
 		expect(way).not.toContain("You risk getting lost");
 	});
 
+	// The step records what it presented as a LIST a GM adds to now, and the two shapes have to
+	// print the same page: the block above proves it off the old tick-and-fill pair, this one off
+	// the list. Both go through `chartPicked`, which is the only place the older shape is known.
+	describe("the charted list", () => {
+		const charting = picked => bodyOf(buildChroniclePages({
+			pcs: [], expeditions: [{ ...expeditionFull(), chart: { picked, notes: "" } }],
+		})[0], "The way ahead");
+
+		it("prints each presented line under its group, in the order it was added", () => {
+			const way = charting([
+				{ id: "a", group: "requirements", key: "guide",    answer: "" },
+				{ id: "b", group: "challenges",   key: "lost",     answer: "" },
+				{ id: "c", group: "challenges",   key: "perilous", answer: "" },
+			]);
+			expect(way).toContain("<p><strong>Requirements</strong></p>");
+			expect(way).toContain("A knowledgeable guide / accurate map / detailed directions");
+			expect(way.indexOf("You risk getting lost"))
+				.toBeLessThan(way.indexOf("The way is perilous"));
+			// Nothing the trip did not present.
+			expect(way).not.toContain("Wait until");
+		});
+
+		it("splices what was said into the line's blank, and escapes it", () => {
+			const way = charting([
+				{ id: "a", group: "challenges", key: "watchOut", answer: "the <wolves> of the Ettenmark" },
+			]);
+			expect(way).toContain("Watch out for the &lt;wolves&gt; of the Ettenmark");
+			expect(way).not.toContain("Watch out for ___");
+			expect(way).not.toContain("<wolves>");
+		});
+
+		it("prints what was said after a line with no blank in it", () => {
+			const way = charting([
+				{ id: "a", group: "challenges", key: "perilous", answer: "raiders on the ridge" },
+			]);
+			expect(way).toContain("The way is perilous, plagued with danger: raiders on the ridge");
+		});
+
+		// A line the GM wrote is the one user-authored string in this section, so it is the one
+		// that has to be escaped rather than trusted the way the book's own wording is.
+		it("prints a line the GM wrote themselves, escaped, with what was said after it", () => {
+			const way = charting([
+				{ id: "a", group: "challenges", text: "The <ford> is watched", answer: "by Brennan's Claws" },
+			]);
+			expect(way).toContain("The &lt;ford&gt; is watched: by Brennan&#x27;s Claws");
+			expect(way).not.toContain("<ford>");
+		});
+
+		it("says nothing at all for a trip that presented nothing", () => {
+			expect(charting([])).toBe("");
+		});
+	});
+
 	it("omits the arriving-home prep questions (only the free-text note carries through)", () => {
 		const page = buildChroniclePages({ pcs: [], expeditions: [expeditionFull()] })[0];
 		expect(allBody(page)).not.toContain("How long have they been gone");
@@ -311,9 +364,48 @@ describe("buildChroniclePages — expeditions", () => {
 			expect(way).not.toContain("___");
 		});
 
-		it("keeps the authored blank when a ticked requirement has no route to fill it", () => {
+		it("keeps the authored blank when a ticked requirement has nothing to fill it", () => {
 			const way = bodyOf(withJourney(null, { checks: { days: true } }), "The way ahead");
 			expect(way).toContain("It'll take at least ___ days");
+		});
+
+		// What the GM wrote against each requirement on the step. The page is the record of what
+		// the table was actually TOLD, so a requirement that reached it as "watch out for ___" was
+		// only ever half of one.
+		it("prints what the GM wrote into a requirement's blank", () => {
+			const way = bodyOf(withJourney(null, {
+				checks: { watchOut: true },
+				fills:  { watchOut: "the wolves of the Ettenmark" },
+			}), "The way ahead");
+			expect(way).toContain("Watch out for the wolves of the Ettenmark");
+			expect(way).not.toContain("Watch out for ___");
+		});
+
+		it("lets what the GM wrote outrank what the route worked out", () => {
+			const way = bodyOf(withJourney({ origin: "stonetop", destination: "lygos" }, {
+				checks: { days: true },
+				fills:  { days: "60, if the passes are shut" },
+			}), "The way ahead");
+			expect(way).toContain("It'll take at least 60, if the passes are shut days");
+			expect(way).not.toContain("at least 40 days");
+		});
+
+		// A requirement with no blank has nowhere to splice, so its answer follows the line.
+		it("prints a note written against a requirement that has no blank", () => {
+			const way = bodyOf(withJourney(null, {
+				checks: { perilous: true },
+				fills:  { perilous: "raiders on the <ridge>" },
+			}), "The way ahead");
+			expect(way).toContain("The way is perilous, plagued with danger: raiders on the &lt;ridge&gt;");
+			expect(way).not.toContain("<ridge>");
+		});
+
+		it("says nothing extra for a requirement the GM answered but did not present", () => {
+			const way = bodyOf(withJourney(null, {
+				checks: { perilous: true },
+				fills:  { perilous: "raiders", lost: "the fog off the fens" },
+			}), "The way ahead");
+			expect(way).not.toContain("the fog off the fens");
 		});
 
 		it("compiles a trip with no journey exactly as it did before", () => {

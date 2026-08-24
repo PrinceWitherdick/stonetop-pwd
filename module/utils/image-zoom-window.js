@@ -140,6 +140,13 @@ export class ImageZoomWindow extends StonetopDialog {
 		// one of them: left alone it would go on swallowing clicks on a viewport nobody can see,
 		// and the caller would never learn its picture had been rebuilt underneath it.
 		this.stopWatchingPoints();
+		// And a ONE-SHOT pick is aimed at them too, with somebody awaiting its answer. The same
+		// argument, plus one: it never reports at all, so a caller left holding it would wait for
+		// a click on a viewport that has left the document until the window closed. `close` makes
+		// the same call for the same reason; this is the render that replaces the picture without
+		// closing anything.
+		this._picking?.abort();
+		this._picking = null;
 		this._view = null;
 		this._img = null;
 		this._overlay = null;
@@ -369,7 +376,9 @@ export class ImageZoomWindow extends StonetopDialog {
 		const picking = new AbortController();
 		this._picking = picking;
 		try {
-			return await pickPointOnImage({ listenOn: this._view, measure: target, signal: picking.signal });
+			return await pickPointOnImage({
+				listenOn: this._view, measure: target, signal: picking.signal,
+			});
 		} finally {
 			if (this._picking === picking) this._picking = null;
 		}

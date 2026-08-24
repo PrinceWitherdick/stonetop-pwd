@@ -27,10 +27,15 @@
     {{/if}}
   </p>
   {{/if}}
-  {{!-- "at least 7-8 days" for the table's own times, "roughly 4-6 days" for a way measured off
-        the map. One is a floor the book printed and the other is a good guess; `routePhrase` is
-        what tells them apart, and the class lets the estimate carry its own mark. --}}
-  <div class="stonetop-journey-total{{#if journey.route.estimated}} is-estimate{{/if}}">{{journey.route.atLeast}}</div>
+  {{!-- "It will take at least 7-8 days" for the table's own times, "It will take roughly 4-6 days"
+        for a way measured off the map. One is a floor the book printed and the other is a good
+        guess; `routePhrase` is what tells them apart, and the class lets the estimate carry its
+        own mark.
+
+        THE LEAD IS WRITTEN HERE and not in `routePhrase`, which the Chronicle reads too: its
+        paragraph is "Stonetop to Marshedge: at least 40 days", and a phrase that had swallowed a
+        verb could not sit after that colon. --}}
+  <div class="stonetop-journey-total{{#if journey.route.estimated}} is-estimate{{/if}}">It will take {{journey.route.atLeast}}</div>
   <ol class="stonetop-journey-legs">
     {{#each journey.route.legs}}
     {{!-- A leg the table prices keeps its printed time and its road, on a hand-drawn way as much as

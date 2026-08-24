@@ -98,25 +98,11 @@ export async function chooseSiteForMap(steading, tier) {
 	return (await runPickedOption(options, choice)) ?? null;
 }
 
-/**
- * Open a site's write-up, from a pin on the map.
- *
- * Through the PARENT journal's sheet with the page named, which is how every other surface in this
- * system opens one of these pages: a site is one page of the steading's single hidden Sites entry,
- * and rendering the page sheet standalone would show the write-up with no way to reach its
- * siblings. Tolerant of a uuid that no longer resolves, which is the ordinary state of a pin whose
- * site was deleted from the tab while the map was open.
- */
-export async function openSiteWriteUp(uuid) {
-	if (!uuid) return null;
-	const page = await fromUuid(uuid).catch(() => null);
-	if (!page) {
-		ui.notifications?.warn?.(localize("stonetop.expedition.sites.gone"));
-		return null;
-	}
-	page.parent?.sheet?.render(true, { pageId: page.id });
-	return page;
-}
+// NO `openSiteWriteUp` ANY MORE. It existed for one caller — a tap on a site pin over the route
+// map — and that tap lays a stop on the way there now instead (user, 2026-08-24: a site pin is a
+// route control like every other mark on that picture, not a link out of the screen). The write-up
+// is read where it is written, on the steading's Sites tab, which is also the only place that can
+// show a site beside its siblings.
 
 /**
  * Choose a site, then take the click that says where it goes, then write it down.

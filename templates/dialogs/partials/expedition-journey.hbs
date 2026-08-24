@@ -8,24 +8,52 @@
       Every hotspot's left/top is a percentage precomputed in ExpeditionDialog._buildJourney
       (data/travel-times.js spotPercent), so Handlebars does no arithmetic and nothing here has to
       measure the rendered image. --}}
-<div class="stonetop-journey">
+{{!-- `is-needing-start` is what tells the destination list below that its rows are about to answer
+      "where do they set out from?" rather than "where are they bound?" — the state a trip is in
+      after a right-click has peeled it back past its own start. It rides the ROOT because both the
+      map and the list are inside it and both answer that click. See ExpeditionDialog `needsStart`,
+      which is GM-only: a player cannot write the trip, so their rows must not offer to. --}}
+<div class="stonetop-journey{{#if journey.needsStart}} is-needing-start{{/if}}">
 
   {{> "stonetop.expedition-journey-controls" journey=journey}}
 
   {{#if journey.map}}
-  {{!-- aspect-ratio comes from the probed file, so the box has its true height before the image
-        decodes and the hotspots land right on the first paint instead of jumping. --}}
-  <div class="stonetop-journey-map stonetop-journey-canvas" style="aspect-ratio:{{journey.map.aspect}}">
-    <img class="stonetop-journey-img" src="{{journey.map.src}}" alt="{{journey.map.alt}}" draggable="false">
+  {{!-- The wrapper exists for the expand button and for nothing else: it is what that button's
+        corner is measured from. That button is a SIBLING of the map box rather than a child of it
+        because the box is what the draw and place-a-site gestures listen on (ExpeditionDialog
+        `_armPanelDrawing`, `_placeSiteFromPanel`) — inside it, pressing the button would be
+        indistinguishable from clicking that spot on the map. --}}
+  <div class="stonetop-journey-mapwrap">
+    {{!-- aspect-ratio comes from the probed file, so the box has its true height before the image
+          decodes and the hotspots land right on the first paint instead of jumping. --}}
+    <div class="stonetop-journey-map stonetop-journey-canvas" style="aspect-ratio:{{journey.map.aspect}}">
+      <img class="stonetop-journey-img" src="{{journey.map.src}}" alt="{{journey.map.alt}}" draggable="false">
 
-    {{> "stonetop.expedition-journey-pins" journey.map}}
+      {{> "stonetop.expedition-journey-pins" journey.map}}
+    </div>
+    {{!-- OPEN THE BIG MAP. The panel's map is only as wide as the step column and the books print
+          these at 300 dpi, so there has always been a way out to the shared pan/zoom window. This
+          is that way, off a line of its own and onto the picture it opens (user, 2026-08-24): it
+          fades in over the map, which is where the reader's pointer already is when they want more
+          of it, and the step column gets a row back.
+
+          KEEPS ITS CLASS AND ITS DATASET, which is why no JS moved with it: `bindJourneyControls`
+          finds this button by `.stonetop-journey-zoom` anywhere under the root it is handed, and
+          reads which map to open off `data-key`. --}}
+    <button type="button" class="stonetop-journey-zoom"
+            data-src="{{journey.map.src}}" data-key="{{journey.activeTier}}" data-title="{{journey.map.alt}}"
+            data-tooltip="See the whole map" aria-label="See the whole map">
+      <i class="fas fa-expand"></i>
+    </button>
   </div>
-  {{!-- The panel's map is only as wide as the step column, and the books print these at 300 dpi.
-        Reuse the shared pan/zoom window rather than growing the dialog. --}}
-  <button type="button" class="stonetop-journey-zoom"
-          data-src="{{journey.map.src}}" data-key="{{journey.activeTier}}" data-title="{{journey.map.alt}}">
-    <i class="fas fa-magnifying-glass-plus"></i> See the whole map
-  </button>
+  {{!-- What a shift-click on the picture above does, which is the one thing about this map no
+        reader could guess. AGAINST THE PICTURE, and now directly under it: it is that picture's
+        caption, and it used to have to sit ahead of the zoom pill so a line of small centred italic
+        did not read as a caption for a left-aligned button. That pill has gone onto the map itself,
+        so the caption has the space under the art to itself. Only where there IS a picture, too —
+        an invitation to click a map this world has no copy of would be teaching a gesture with
+        nowhere to make it. --}}
+  {{> "stonetop.expedition-journey-drawhint" journey=journey}}
   {{else}}
   <p class="stonetop-journey-nomap">
     {{#if journey.hasAnyMap}}
@@ -40,12 +68,63 @@
   {{> "stonetop.expedition-journey-route" journey=journey}}
 
   <div class="stonetop-journey-list">
+    {{!-- WHAT THE FOLDS BELOW ARE. Each one is headed with the name of a map the books print, which
+          says everything to a reader with the rulebooks open and nothing at all to anyone else: a
+          GM who has never seen the Vicinity has no way to tell whether it is a region, a road or a
+          season. The header names the three folds and says what the times beside every place mean,
+          once, instead of leaving eighteen unexplained figures down the right-hand edge.
+
+          It reads off the START rather than saying "from Stonetop", because a trip can set out from
+          anywhere at all now — any of the eighteen places the books letter, or any point on either
+          map — and every time in the list is re-solved when it does. A time reckoned from a point
+          the GM placed wears a tilde: it is the book's own printed roads plus one leg this system
+          measured. See ExpeditionDialog `_timeLabel`.
+
+          AND WITH NO START IT NAMES NOBODY, because there is nothing to name: a trip right-clicked
+          back past its own start has nowhere to reckon from, so the times beside these places are
+          blank and the heading says only what the list IS. The next click sets the start and every
+          one of them fills in. --}}
+    <div class="stonetop-journey-listhead">
+      {{!-- NO GLYPH ON THIS ONE. It wore the load diamond for a while, borrowed off the step's
+            other card heads (the Steading assets bar carries one) — but ◇ is this system's LOAD
+            mark, and it means a weight of gear everywhere else it is printed. Over a list of
+            travel times it is a mark the reader has been taught to read as something else. --}}
+      <span class="stonetop-journey-listtitle">Travel times{{#if journey.start.set}} from {{journey.start.name}}{{/if}}</span>
+      <span class="stonetop-journey-listnote">at least this long</span>
+    </div>
+    {{!-- What each fold is, and nothing about how to use the list: the line under the map already
+          says what a click does, and saying it twice on one screen reads as two different
+          instructions. --}}
+    {{!-- WHAT A CLICK ON A ROW WILL DO, but only where there is no picture to say it instead. With
+          a map on screen the caption under it already teaches the gesture, and two instructions
+          about one screen read as two different ones. Without a map this list IS the screen, so
+          this is the only place the state can be said at all — and it is the state the trip is in
+          after a right-click has taken its start away. --}}
+    {{#unless journey.map}}
+    {{#if journey.needsStart}}
+    <p class="stonetop-journey-listhint stonetop-journey-listhint--start">
+      Nobody has said where they set out from yet. Tap a place to leave from there;
+      right-click a place to take the trip back a step.
+    </p>
+    {{/if}}
+    {{/unless}}
+    <p class="stonetop-journey-listhint">
+      Every place the books give a time for, filed under the map it is drawn on.
+      <strong>The Vicinity</strong> is the country around Stonetop, reckoned in hours and days;
+      <strong>The World&rsquo;s End</strong> is the wider region past it, reckoned in days;
+      <strong>Beyond the maps</strong> is what lies off the edge of both.
+    </p>
     {{#each journey.groups}}
     {{#if places.length}}
-    <div class="stonetop-journey-group{{#if isActive}} is-active{{/if}}">
+    <div class="stonetop-journey-group">
       <div class="stonetop-journey-grouphead">{{label}}</div>
       <ul>
         {{#each places}}
+        {{!-- THE BOOK TRAILS THE NAME, at the far end of the row, which is where it has always
+              been (user, 2026-08-24). It is what you reach for AFTER reading the place, so it
+              follows the place. The gutter it sits in is still a fixed column rather than
+              whatever space the name and time leave over, so the one place in eighteen the books
+              give no entry keeps its column empty instead of letting its name run wide. --}}
         <li>
           <button type="button" data-slug="{{slug}}"
                   class="stonetop-journey-pick stonetop-journey-row{{#if isOrigin}} is-origin{{/if}}{{#if isChosen}} is-chosen{{/if}}">

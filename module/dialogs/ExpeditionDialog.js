@@ -2,12 +2,14 @@ import { StepperDialog } from "./StepperDialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { crewExists } from "../utils/crew.js";
 import { sign, rollSeasonsCard } from "../utils/roll-engine.js";
-import { getStonetopSteadingActor } from "../utils/world.js";
+import { getStonetopSteadingActor, isSteadingActor } from "../utils/world.js";
 import { getSetting, setWorldSetting } from "../settings.js";
-import { escHtml } from "../utils/strings.js";
+import { escHtml, decodeEntities, stripHtmlToText } from "../utils/strings.js";
 import { portraitOrNone, documentPortraitFrame } from "../utils/portrait-frame.js";
+import { wireAvatarPreview, removeAvatarPreview } from "../utils/avatar-preview.js";
 import { warn } from "../utils/logger.js";
-import { CHART_GROUPS, HOME_GROUP } from "./expedition-data.js";
+import { CHART_GROUPS, HOME_GROUP, chartPicked, chartEntryText, chartGroupOf } from "./expedition-data.js";
+import { pickOrWriteOption } from "./content-picker.js";
 import { FATE_TABLES, fateTableList } from "../data/fate-tables.js";
 import { saveChronicleFromButton } from "../utils/chronicle.js";
 import {
@@ -32,27 +34,32 @@ import { GmMoveDrawer } from "../gm-toolkit/gm-move-drawer.js";
 import { wireSidebarToggle } from "../utils/sidebar-toggle.js";
 import { SpinTrack } from "../utils/flash-highlight.js";
 import {
-	TRAVEL_MAPS, TRAVEL_PLACES, BEYOND_TIER,
+	TRAVEL_MAPS, BEYOND_TIER,
 	travelPlace, travelMap, placesOnMap, placesBeyond, exitsOnMap, spotPercent, percentSpot,
 } from "../data/travel-times.js";
-import { liftSiteOffMap, openSiteWriteUp, placeSiteOnMap } from "../sites/place-site-on-map.js";
-import { sitesOnMap } from "../sites/site-map-spots.js";
+import { liftSiteOffMap, placeSiteOnMap } from "../sites/place-site-on-map.js";
+import { placedSiteSpot, sitesOnMap } from "../sites/site-map-spots.js";
 import { SITE_ACCENT } from "../sites/site-view.js";
 import { pickPointOnImage, watchPointsOnImage } from "../utils/pick-point-on-image.js";
 import {
-	solveTravel, normalizeJourney, journeyRoute, formatTravelTime, routePhrase, routeLine,
-	stopsAlongTheWay, fillChartBlank, chartBlankValue,
+	solveFrom, normalizeJourney, journeyRoute, formatTravelTime, routePhrase, routeLine,
+	stopsAlongTheWay, chartBlankValue,
 } from "../utils/travel-route.js";
 import {
 	customStops, customTierFor, insideMap, markSpot, normalizeCustom, seedMarks, withMark,
 } from "../utils/custom-route.js";
+// Where the party sets out from: a place the books lettered, a point the GM put down on one of
+// their maps, or nowhere at all until the next click says. Every map question below takes it
+// through `startEnd`, and `hasStart` is what tells the third state from the first two. See
+// utils/journey-start.js.
+import { hasStart, startEnd, startMark, startName, startTier } from "../utils/journey-start.js";
 import { resolveTravelMap, travelMapFile, browseTravelMapArt } from "../book2-art/travel-map-art.js";
 import { openTravelMap } from "./TravelMapWindow.js";
 import {
 	JOURNEY_MARKS, JOURNEY_RIGHT_CLICK_MARKS,
-	bindJourneyControls, bindJourneySiteRemoval, journeyPick,
+	bindJourneyControls, bindJourneySiteRemoval, bindJourneyUndo, journeyPick,
 } from "./journey-controls.js";
-import { drawnOn, offMapNote, routePath, tierDraws, tierDrawingEnds } from "../utils/route-path.js";
+import { drawnOn, offMapNote, routePath, tierDraws, tierDrawing, tierDrawingEnds } from "../utils/route-path.js";
 import { posterSceneFor } from "../book2-art/poster-map-catalog.js";
 import { format, localize } from "../utils/i18n.js";
 import {
@@ -67,6 +74,57 @@ const ANSWERS_SETTING = "expeditionAnswers";
 // `{{> }}` in its template), so the partial-registration sweep in stonetop.js cannot be the only
 // place the path is written down.
 const JOURNEY_PINS_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-pins.hbs";
+
+// The Outfit step's party-load block, for the same reason: it is redrawn on its own whenever a
+// sheet under it changes (see `_refreshLoadReadout`), not only through the `{{> }}` in the
+// dialog's template.
+const LOAD_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expedition-load.hbs";
+
+// How long the readout waits after a sheet write before rebuilding. Ticking one inventory box
+// can land as several documents updating in a row (the item, the actor's pool flag, a follower's
+// gear), and each rebuild snapshots every PC on the trip — so the burst is collapsed into one
+// pass. Short enough that the number moves while the GM is still looking at the sheet they
+// changed.
+const LOAD_REFRESH_MS = 200;
+
+/**
+ * An authored checklist line as words, for an `aria-label`: tags dropped, entities read back.
+ *
+ * The item texts are trusted HTML with `<strong>`/`<em>` in them and `&hellip;` at the end of a
+ * couple, and a label read out as "You'll need to bring &hellip;" is worse than no label.
+ *
+ * `stripHtmlToText` is the one strip-HTML helper and says so; `decodeEntities` runs after it for
+ * the one entity it does not carry (`&hellip;`, which is exactly the case above). Going through
+ * the shared stripper rather than a private regex also buys the block-end -> space substitution
+ * it exists for, so a two-part prompt cannot read back as "...is watched.They cross...".
+ */
+function _plainText(html) {
+	return decodeEntities(stripHtmlToText(html));
+}
+
+/**
+ * Take a set of registered hooks back off, and answer what the field holding them becomes.
+ *
+ * `[["hookName", id], …]` is the shape both watches on this window register in, and dropping one
+ * is "off every hook, then forget the list" — two statements that have to stay together, since a
+ * list kept after the hooks are gone is a second teardown that silently un-registers somebody
+ * else's ids. Returning the new value is what lets the caller write it as one assignment.
+ */
+function _offHooks(registered) {
+	for (const [name, id] of registered ?? []) Hooks.off(name, id);
+	return null;
+}
+
+/**
+ * Whether a document that just changed is one the party-load readout is built from: a PC, or the
+ * steading (whose flags hold the crew's gear). A world in play writes to actors constantly —
+ * every token moved, every monster hurt in a fight — and none of that is load. Cheap enough to
+ * ask on the hook itself, which is what keeps a busy scene from rebuilding a snapshot per PC
+ * five times a second.
+ */
+function _carriesLoad(actor) {
+	return actor?.type === "character" || isSteadingActor(actor);
+}
 
 /**
  * The seven exploration moves, as the sidebar lists them.
@@ -228,8 +286,9 @@ const _STEPS = [
 		title: "Chart a Course",
 		icon:  "fa-route",
 		body:  `<p>When the players start talking about leaving, point them at <strong>Chart a Course</strong>. Pin down their <strong>destination</strong> and roughly how they mean to get there (&ldquo;we follow the tracks&rdquo; is enough).</p>
-				<p>Then tell them as many of the following as make sense, based on the season, terrain, how well they know the area, and the threats that lurk there. Link them with <strong>&ldquo;and&rdquo;</strong>, or offer a merciful <strong>&ldquo;or.&rdquo;</strong> Tick the ones you present: this becomes your narrative to-do list once they set out.</p>
-				<p>Two of those requirements want travel times. Pick the trip on <strong>The route</strong>, the next step, and they fill themselves in.</p>`,
+				<p>Then tell them as many <strong>requirements</strong> and <strong>challenges</strong> as make sense, based on the season, terrain, how well they know the area, and the threats that lurk there. Link them with <strong>&ldquo;and&rdquo;</strong>, or offer a merciful <strong>&ldquo;or.&rdquo;</strong></p>
+				<p>Add each one you present below, off the book's list or in your own words, and note what you actually told them. That becomes your narrative to-do list once they set out.</p>
+				<p>Two of the book's requirements want travel times. Pick the trip on <strong>The route</strong>, the next step, and they add themselves with the figures already worked out.</p>`,
 		qa:    {
 			kind:  "checklist",
 			key:   "chart",
@@ -240,7 +299,7 @@ const _STEPS = [
 			routeBlanks: true,
 			intro: { field: "route", prompt: "Destination &amp; route", placeholder: "Where are they headed, and how do they intend to get there?" },
 			groups: CHART_GROUPS,
-			notes: { field: "notes", prompt: "Other notes (custom requirements, nested legs, what you negotiated)", placeholder: "Anything else you told them…" },
+			notes: { field: "notes", prompt: "Other notes (nested legs, what you negotiated, how they took it)", placeholder: "Anything else worth remembering…" },
 		},
 	},
 	{
@@ -536,11 +595,29 @@ export class ExpeditionDialog extends StepperDialog {
 		html.find(".stonetop-exp-delete").on("click", () => this._deleteCurrentExpedition());
 		html.find(".stonetop-exp-new").on("click", () => this._startNewExpedition());
 		// Outfit step: toggle a PC in/out of this trip's party (a chip showing "out" is
-		// being turned back on).
-		html.find(".stonetop-exp-load-chip").on("click", ev => this._togglePartyMember(
+		// being turned back on). DELEGATED from the dialog root rather than bound to each
+		// chip, because the readout redraws itself between renders (`_refreshLoadReadout`
+		// swaps the whole block's markup) and a per-chip binding would be thrown away with
+		// the chip that carried it.
+		html.on("click", ".stonetop-exp-load-chip", ev => this._togglePartyMember(
 			ev.currentTarget.dataset.actorId,
 			ev.currentTarget.classList.contains("is-out"),
 		));
+		// Hover a party face for a full-size look at it, through the shared preview every other
+		// small avatar in the system raises. Delegated on the root for the same reason as the
+		// chips above, and because the helper pools its listeners per root anyway.
+		//
+		// ONLY WHERE THERE ARE FACES. The preview watches `mouseenter` in the CAPTURE phase, so
+		// every element the pointer crosses anywhere in the window runs a `closest` against this
+		// selector -- on the eight steps that draw no readout, for a thumbnail that is not there.
+		// Asked of the DOM rather than of the step, so it cannot drift from the `{{#if loadReadout}}`
+		// that decides whether the block is drawn at all.
+		if (html[0]?.querySelector?.(".stonetop-exp-load")) {
+			wireAvatarPreview(html[0], ".stonetop-exp-load-ava-img");
+		}
+		// "Live from sheets" is what the readout's heading promises, so it has to mean it: watch
+		// the documents the party's load is read out of and redraw when one of them moves.
+		this._wireLoadWatch();
 		// Requisition step: tick an asset the party leaves with (or click one of ours to send it
 		// home). The row carries what its own click means, decided when the row was built.
 		html.find(".stonetop-exp-asset-btn").on("click", ev => this._toggleRequisitionedAsset(
@@ -554,26 +631,33 @@ export class ExpeditionDialog extends StepperDialog {
 		// Route step: pick a place off the map or the list, or change which map is showing. The
 		// same binder the popout uses, because it is the same partial (dialogs/journey-controls.js).
 		const journeyHandlers = {
-			pick: (field, slug) => this._setJourneyPlace(field, slug),
 			showTier: tier => this._showMapTier(tier),
-			openSite: uuid => openSiteWriteUp(uuid),
-			// What a click on a lettered place means, which depends on whether the way is being
-			// drawn by hand. Asked at click time; see `_chooseJourneyPlace`.
+			// What a click on a lettered place means, which depends on whether a way is being
+			// laid out by hand and on whether shift was held. Asked at click time; see
+			// `_chooseJourneyPlace`.
 			markPlace: (slug, ev) => this._chooseJourneyPlace(slug, ev),
+			// And the same three readings for one of the GM's own sites, which is a place on the way
+			// now rather than a link to a journal (user, 2026-08-24). See `_chooseJourneySite`.
+			markSite: (uuid, ev) => this._chooseJourneySite(uuid, ev),
 		};
 		bindJourneyControls(html[0], {
 			...journeyHandlers,
 			zoom: key => this._openMapWindow(key),
 			toScene: () => this._putRouteOnScene(),
 			placeSite: () => this._placeSiteFromPanel(html[0]),
-			drawByHand: on => this._toggleDrawnWay(on),
 			clearDrawn: () => this._clearDrawnWay(),
 		});
-		// And the map itself, while the box is ticked: every click on open picture is a mark.
+		// And the map itself, which is where the trip is actually planned: a click plants the start
+		// or moves the far end of the way, a shift-click lays a leg, and a right-click takes the
+		// whole thing back a step at a time.
 		this._armPanelDrawing(html[0]);
 		// Right-click a site pin to lift it back off. Delegated on the dialog root, which is fresh
 		// on every render, so nothing accumulates.
 		bindJourneySiteRemoval(html[0], uuid => this._takeSiteOffMap(uuid));
+		// And the same ladder over the destination list, which is the whole screen in a world that
+		// never imported the book art: without it a GM with no map on disk could set a trip and
+		// never un-set it, since the picture is the only other place this gesture lives.
+		bindJourneyUndo(html[0], () => this._undoJourneyMark());
 		// This render replaces the map an armed placement was aimed at, so that gesture is over.
 		// See `_armPanelPick`.
 		this._disarmPanelPick();
@@ -591,9 +675,16 @@ export class ExpeditionDialog extends StepperDialog {
 			const el = ev.currentTarget;
 			this._saveField(el.dataset.answerPath, el.value);
 		});
-		html.find(".stonetop-exp-checkbox").on("change", ev => {
+		// Chart a Course: add a requirement/challenge off the book's menu (or write one), take one
+		// back off, and say what was told. The answer saves on blur like every field above it and
+		// does not re-render; the two structural buttons do, because the list changed shape.
+		html.find(".stonetop-exp-chart-add").on("click", ev =>
+			this._addChartRow(ev.currentTarget.dataset.chartGroup));
+		html.find(".stonetop-exp-chart-remove").on("click", ev =>
+			this._removeChartRow(ev.currentTarget.closest("[data-chart-id]")?.dataset.chartId));
+		html.find(".stonetop-exp-chart-answer").on("change", ev => {
 			const el = ev.currentTarget;
-			this._saveField(el.dataset.answerPath, el.checked);
+			this._saveChartAnswer(el.closest("[data-chart-id]")?.dataset.chartId, el.value);
 		});
 	}
 
@@ -860,26 +951,137 @@ export class ExpeditionDialog extends StepperDialog {
 				value:       read(`${qa.key}.${f.field}`) ?? "",
 				_label:      label,
 			});
-			// Once the route step has plotted a journey, a blank-carrying checklist's blanks have
-			// answers — so fill them here, through the same helper the Chronicle uses, or the tick
-			// box a GM reads and the journal that records it would say different things.
-			const route = qa.routeBlanks ? this._journeyRoute() : null;
+			// Once the route step has plotted a journey it can answer two of the blanks for
+			// itself, and those answers are offered as the box's placeholder rather than spliced
+			// into the sentence: see `fillChartBlank` on why the GM's own words outrank the map's.
+			const route  = qa.routeBlanks ? this._journeyRoute() : null;
+			const picked = chartPicked(read(qa.key));
 			return {
 				kind:   "checklist",
 				intro:  qa.intro ? field(qa.intro) : null,
 				groups: qa.groups.map(g => ({
-					label: g.label,
-					items: g.items.map(it => ({
-						text:    fillChartBlank(it.text, it.key, route),
-						path:    `${qa.key}.checks.${it.key}`,
-						checked: !!read(`${qa.key}.checks.${it.key}`),
-					})),
+					key:      g.key,
+					label:    g.label,
+					addLabel: g.addLabel,
+					empty:    g.empty,
+					entries:  picked
+						.filter(e => e.group === g.key)
+						.map(e => this._chartRow(e, route)),
 				})),
 				notes:  qa.notes ? field(qa.notes) : null,
 			};
 		}
 
 		return { kind: "single", key: qa.key, prompt: qa.prompt, placeholder: qa.placeholder, path: qa.key, answer: read(qa.key) ?? "" };
+	}
+
+	/**
+	 * One requirement or challenge this trip presented, with somewhere to say what was told.
+	 *
+	 * THE STEP NO LONGER PRINTS THE BOOK'S TWELVE. It printed all of them with a tick beside
+	 * each, and a tick was all a row was: it recorded that a requirement had been PRESENTED and
+	 * lost what was actually said. Later each row grew a field, which answered that and left
+	 * twelve rows of mostly-empty boxes on a step whose whole use is to be read back mid-journey
+	 * as a to-do list. So the menu moved into the add button beside each heading (`_addChartRow`)
+	 * and what stands on the page is what the GM actually chose to tell the table.
+	 *
+	 * A row is drawn as the GM Toolkit's open questions are — question spiral, the line itself,
+	 * the answer under it — because it is the same thing: a prompt with an answer that arrives
+	 * later, read down a column. Those rules are shared, not copied; the template says where.
+	 *
+	 * The answer box saves on blur without a re-render, so the row keeps focus while typing.
+	 */
+	_chartRow(entry, route) {
+		const text = chartEntryText(entry);
+		// What the plotted route would say, where it has anything to say about this line. Offered
+		// as the answer box's placeholder, so a GM who leaves it alone still reads the map's
+		// answer and a GM who types gets theirs. The Chronicle resolves the pair the same way.
+		const derived = (route && entry.key) ? chartBlankValue(entry.key, route) : null;
+		return {
+			id:     entry.id,
+			text,
+			answer: entry.answer,
+			hint:   derived ?? "What did you tell them?",
+			// The line is trusted authored HTML, so a screen reader needs the plain words to say
+			// which prompt this box belongs to.
+			plain:  _plainText(text),
+		};
+	}
+
+	/**
+	 * Add a requirement or a challenge: the book's menu for that group, or the GM's own words.
+	 *
+	 * The menu leaves out what this trip has already presented — the list is what was said, and
+	 * saying "you risk getting lost" twice is not a thing that happens. A group whose every
+	 * authored line is already on the list still opens, on the write-your-own row: the book's
+	 * twelve are examples, not the set.
+	 */
+	async _addChartRow(groupKey) {
+		const group = CHART_GROUPS.find(g => g.key === groupKey);
+		if (!group) return;
+		const taken = new Set(chartPicked(this._answers()?.chart).map(e => e.key).filter(Boolean));
+		const chosen = await pickOrWriteOption({
+			title:   group.addLabel,
+			options: (group.items ?? [])
+				.filter(it => !taken.has(it.key))
+				.map(it => ({ id: it.key, html: it.text })),
+			writeLabel:       "Something else:",
+			writePlaceholder: "Tell them in your own words…",
+			buttonLabel:      "Add",
+		});
+		if (!chosen) return;
+		await this._mutateChart(list => [...list, {
+			id:     foundry.utils.randomID(),
+			group:  groupKey,
+			key:    chosen.key ?? null,
+			text:   chosen.text ?? "",
+			answer: "",
+		}]);
+		this.render(false);
+	}
+
+	/** Take one back off the list. Its answer goes with it — the row was the record. */
+	async _removeChartRow(id) {
+		await this._mutateChart(list => list.filter(e => e.id !== id));
+		this.render(false);
+	}
+
+	/**
+	 * What the GM told the table about one line. Saved on blur WITHOUT a re-render, like every
+	 * other text field in this walkthrough: a render here would tear out the box being typed in.
+	 */
+	_saveChartAnswer(id, value) {
+		return this._mutateChart(list => list.map(e => e.id === id ? { ...e, answer: value } : e));
+	}
+
+	/**
+	 * Apply `transform` to this trip's charted list and save the result.
+	 *
+	 * `chartPicked` is read FIRST, which is what upgrades a trip logged under the old step: it
+	 * derives the list out of the legacy `checks`/`fills` pair when there is no list yet, so the
+	 * transform runs against everything that trip presented. Only then are the two legacy maps
+	 * dropped — with the list written from them in the same breath, so nothing is lost, and
+	 * without leaving a second copy behind for the Chronicle to print twice.
+	 */
+	async _mutateChart(transform) {
+		const { log, entry } = ensureCurrent(this._log(), () => this._newExpedition());
+		this._setChartPicked(entry, transform(chartPicked(entry.chart)));
+		await this._persistLog(log);
+	}
+
+	/**
+	 * Write the charted list onto a trip, and retire the legacy pair in the same breath.
+	 *
+	 * Every caller has already read the list through `chartPicked`, which derives it from the old
+	 * `checks`/`fills` maps when a trip has no list yet — so by the time this runs, everything
+	 * those two held is in `list`. Dropping them here is what keeps a trip from carrying two
+	 * records of the same requirement, which the Chronicle would print twice.
+	 */
+	_setChartPicked(entry, list) {
+		const chart = (entry.chart ??= {});
+		chart.picked = list;
+		delete chart.checks;
+		delete chart.fills;
 	}
 
 	/**
@@ -1082,7 +1284,12 @@ export class ExpeditionDialog extends StepperDialog {
 	// data/travel-times.js and utils/travel-route.js; everything here is presentation plus the
 	// one impure question — which copy of the map, if any, this world has on disk.
 
-	/** The trip's saved pick, defaulted to setting out from home. */
+	/**
+	 * The trip's saved pick: an unwritten start defaults to home, one peeled off is nowhere.
+	 *
+	 * The default is applied inside `normalizeJourney` (utils/journey-start.js `storedStart`) and
+	 * nowhere else, so `hasStart(pick.start)` is the same answer everywhere it is asked.
+	 */
 	_journeyPick() {
 		return normalizeJourney(this._currentExpedition()?.journey);
 	}
@@ -1120,25 +1327,46 @@ export class ExpeditionDialog extends StepperDialog {
 	 * tab click still wins, because looking at the other map to compare is a reasonable thing to
 	 * want and the readout says plainly which map the way is on.
 	 */
-	_activeTier(origin, destination, custom = null) {
+	_activeTier(start, destination, custom = null) {
 		const slugs = TRAVEL_MAPS.map(m => m.slug);
 		if (slugs.includes(this._journeyTier)) return this._journeyTier;
 		if (custom?.on && custom.tier) return custom.tier;
-		// Nothing to travel to yet, so the origin is the whole of the journey — and it still has
+		// A START PLACED BY HAND OUTRANKS THE DESTINATION, for the same reason a drawn way's marks
+		// do and one line above: it is a fraction of one picture, so that picture is the only map
+		// this journey can be drawn on at all. Sending the panel to the World's End because Lygos
+		// is only lettered there would open the one map that cannot show where the party is
+		// standing, and `routePath` would rightly refuse the whole line.
+		const placed = startTier(start);
+		if (placed) return placed;
+		const from = startEnd(start);
+		// Nothing to travel to yet, so the start is the whole of the journey — and it still has
 		// to be drawable. Returning the innermost map flat meant setting out from Marshedge, the
 		// Steplands or Tor's Fist opened a Vicinity with no "setting out" pin anywhere on it.
-		if (!destination) return slugs.find(slug => drawnOn(slug, origin)) ?? slugs[0];
-		const both = tierDrawingEnds([origin, destination]);
+		if (!destination) return slugs.find(slug => drawnOn(slug, from)) ?? slugs[0];
+		// FILTERED, because a trip with no start at all has a null end and `tierDrawingEnds` reads
+		// one as undrawable rather than as nothing to draw (which is what `tierDraws` reads it as).
+		// Left in, it would answer "no single map holds both" for every map on a trip whose start
+		// has just been peeled off, and send a reader picking Marshedge out to the World's End.
+		const both = tierDrawingEnds([from, destination].filter(Boolean));
 		if (both) return both;
 		// No single map holds both ends, so show the destination's own outermost — and for a place
 		// past every edge, the outermost map there is, whose arrow points at it.
 		return slugs.filter(slug => drawnOn(slug, destination)).at(-1) ?? slugs.at(-1);
 	}
 
-	/** A destination's travel time, for a pin label or a list row. */
+	/**
+	 * A destination's travel time, for a pin label or a list row.
+	 *
+	 * TILDED WHERE ANY OF IT WAS MEASURED, which is the same mark the readout's own leg list wears
+	 * and it means the same thing: a journey setting out from a point the GM put down joins the
+	 * book's roads across a leg this system measured off the map (see `solveFrom`), so its total is
+	 * the book's times plus a guess. Costs nothing on a trip leaving a lettered place, where no
+	 * route is estimated and the tilde never appears.
+	 */
 	_timeLabel(routes, slug) {
 		const route = routes.get(slug);
-		return route?.legs?.length ? formatTravelTime(route.total) : null;
+		if (!route?.legs?.length) return null;
+		return `${route.estimated ? "~" : ""}${formatTravelTime(route.total)}`;
 	}
 
 	/** A place's gazetteer entry in the merged journal pack, when the books give it one. */
@@ -1162,7 +1390,7 @@ export class ExpeditionDialog extends StepperDialog {
 	 * drawn way wears its name and its number, and the far end of that way is where the party is
 	 * bound whether or not anything was ever picked from the list.
 	 */
-	_mapLayer(tier, art, { routes, route, origin, destination, stops = [] }) {
+	_mapLayer(tier, art, { routes, route, start, origin, destination, stops = [] }) {
 		if (!art) return null;
 		const path = routePath(route, tier, art.frame, art.aspect);
 		// Which lettered places stand on the drawn way. The origin is skipped: it is already drawn
@@ -1181,6 +1409,11 @@ export class ExpeditionDialog extends StepperDialog {
 			// sentence is finished HERE rather than in the partial, so the readout and the
 			// refusal toast cannot come to word the same fact differently.
 			offMap: path ? null : this._offMapReadout(offMapNote(tier, route)),
+			// Where they set out from, when that is a point the GM put down rather than a place the
+			// books lettered. Null the rest of the time: a lettered start is already drawn by its
+			// own pin below, wearing the setting-out ring, and a second mark on top of it would be
+			// the same fact twice.
+			start: this._startPin(tier, art.frame, start),
 			// The bare marks of a hand-drawn way, each wearing the number the readout calls it by.
 			// Only the ones the GM put down: a stop that landed on a lettered place is drawn by
 			// that place's own pin below, lit up, rather than by a second mark on top of it.
@@ -1230,6 +1463,36 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	/**
+	 * The mark a hand-placed start stands at on one map, or null.
+	 *
+	 * ONLY ON ITS OWN MAP. The fraction it is stored as means one valley on the Vicinity and quite
+	 * another on the World's End, so the other tab draws nothing and the readout says where the
+	 * journey is instead (see `offMapNote`). `startSpot` makes the same judgement for the first leg
+	 * of a drawn way, off the same start.
+	 *
+	 * NOT A BUTTON, and it takes no clicks at all — the same choice the drawn way's own numerals
+	 * make, for the same reason. Every gesture over this picture is about the trip: a plain click
+	 * moves the far end of the way, a shift-click adds a leg. A mark that swallowed those would be
+	 * the one thing on the map that stops the map working, and it has nothing of its own to do with
+	 * a click. Moving where they set out from is a right-click back past it and a click somewhere
+	 * else — the same ladder everything else on this picture comes off by.
+	 *
+	 * IT WEARS "setting out" AND NOT ITS OWN NAME, because its name is "a point on The Vicinity" and
+	 * that is a sentence about the map rather than a label to stand on it. The pill is the same
+	 * wording the destination list puts beside a lettered start, so the two read as one idea.
+	 */
+	_startPin(tier, frame, start) {
+		const mark = startMark(start);
+		if (!mark || startTier(start) !== tier) return null;
+		const { left, top } = spotPercent(mark, frame);
+		return {
+			left, top,
+			label: localize("stonetop.expedition.start.pinLabel"),
+			...pinAnchors(left, top),
+		};
+	}
+
+	/**
 	 * The sites the GM has dropped on one map, ready for the pin layer.
 	 *
 	 * GM-ONLY, and not merely hidden: a site is prep filed in a NONE-owned journal (see
@@ -1254,8 +1517,11 @@ export class ExpeditionDialog extends StepperDialog {
 				// The same weathered stone the site CARDS are accented in, handed to the markup the
 				// same way they hand it: re-inking sites is then one edit, not one plus a stylesheet.
 				accent: SITE_ACCENT,
-				// The tooltip is where this map teaches what a mark does, as it already does for
-				// the edge arrows; right-click is the only way back off, so it is said here.
+				// The tooltip is where this map teaches what a mark does, as it already does for the
+				// edge arrows. BOTH gestures, because they are about two different things and only
+				// one of them is guessable: a tap lays the way through this site, and a right-click
+				// takes the pin off the map (which is the only way back off, and does not touch the
+				// write-up).
 				tooltip: format("stonetop.expedition.sites.pinTip", { name: page.name }),
 				...pinAnchors(left, top),
 			};
@@ -1289,17 +1555,20 @@ export class ExpeditionDialog extends StepperDialog {
 	 * that window has no template of its own to `{{> }}` it from.
 	 */
 	async _buildJourney(forTier = null) {
-		const { origin, destination, custom } = this._journeyPick();
-		const routes = solveTravel(origin);
-		// The way they are actually going, which is the drawn one whenever the box is ticked. Every
-		// number, line and sentence below is about THIS route, so the two kinds cannot come apart
-		// on the way to the screen.
+		const { start, origin, destination, custom } = this._journeyPick();
+		// Through `solveFrom` rather than `solveTravel`, because the party may be setting out from a
+		// point the GM put down: that answer joins the table across one measured leg and is the
+		// book's own times from there. See utils/travel-route.js.
+		const routes = solveFrom(start);
+		// The way they are actually going, which is the drawn one whenever there are marks on the
+		// map. Every number, line and sentence below is about THIS route, so the two kinds cannot
+		// come apart on the way to the screen.
 		const route  = this._journeyRoute(routes);
-		const tier   = forTier ?? this._activeTier(origin, destination, custom);
+		const tier   = forTier ?? this._activeTier(start, destination, custom);
 		// Only the way's OWN map gets the marks. On the other tab the readout says where the way is
 		// drawn and offers the button back to it, which is a truer answer than marks at fractions
 		// that mean somewhere else entirely.
-		const stops  = custom.on && custom.tier === tier ? customStops(origin, custom) : [];
+		const stops  = custom.on && custom.tier === tier ? customStops(start, custom) : [];
 
 		// One browse for both tiers (it is promise-cached per session anyway), so the tier tabs can
 		// say which maps this world actually has before the GM clicks one. Only the tier being
@@ -1315,7 +1584,7 @@ export class ExpeditionDialog extends StepperDialog {
 		const art = files.get(tier)
 			? await resolveTravelMap(travelMap(tier), present).catch(() => null)
 			: null;
-		const map = this._mapLayer(tier, art, { routes, route, origin, destination, stops });
+		const map = this._mapLayer(tier, art, { routes, route, start, origin, destination, stops });
 		// The picture the PANEL is showing, remembered for the one control that needs to write onto
 		// it: putting a site down is a click on a map, and the handler has only the DOM to go on
 		// unless the tier and the file's registration are kept where it can reach them. Only for
@@ -1346,20 +1615,37 @@ export class ExpeditionDialog extends StepperDialog {
 		const boundTo = stops.length > 1 ? travelPlace(stops.at(-1).slug) : travelPlace(destination);
 
 		return {
-			origin: travelPlace(origin),
-			originOptions: TRAVEL_PLACES.map(place => ({
-				slug: place.slug, name: place.name, selected: place.slug === origin,
-			})),
+			// WHERE THEY SET OUT FROM, named however it was chosen — or `set: false` when nobody has
+			// said yet. A place the books lettered gives its own name; a point the GM put down gives
+			// the map it stands on; a trip peeled back past its start has no name at all, and the
+			// list heading is written from `set` rather than being handed a placeholder to print.
+			// `slug` is null for both of the others — there is no place to be.
+			start: {
+				name: startName(start),
+				slug: origin,
+				set: hasStart(start),
+			},
+			// Where they are bound. Still a fact the map draws (the gold pin, the far end of the
+			// line) and the list marks — only the row of controls that used to READ it back in
+			// words, with an × to un-pick it, has gone: a right-click on the picture is what takes
+			// a destination off now, on the rung above the start (see `_undoJourneyMark`).
 			destination: boundTo,
-			hasDestination: !!boundTo,
-			// The drawn way's own state, for the checkbox and the line of instructions under it.
-			// Built for everyone, because a player looking at the route step should see that the
-			// way on it was laid out by hand; `canDraw` is what gates the CONTROLS, since drawing
-			// writes the trip to a world setting only a GM can touch.
+			// IS THE NEXT CLICK GOING TO SAY WHERE THEY SET OUT FROM? The whole-screen version of
+			// `custom.canSetStart`, which is the same question asked of one PICTURE and therefore
+			// wants a map to be asked about. This one wants none: the destination list answers it
+			// too, and in a world that never imported the book art that list is the whole screen —
+			// which is exactly the case the old press-then-click button existed to cover, and the
+			// one this must not lose. Both template roots wear a class off it, so the rows can say
+			// what they are about to do.
+			needsStart: (game.user?.isGM ?? false) && !hasStart(start),
+			// The drawn way's own state, for the line of instructions under the map. Built for
+			// everyone, because a player looking at the route step should see that the way on it
+			// was laid out by hand; `canDraw` is what gates the CONTROLS, since drawing writes the
+			// trip to a world setting only a GM can touch.
 			// COUNTED OFF THE STORED MARKS, not off `stops`, which is empty on the map the way is
 			// NOT drawn on: "start over" would go missing from the other tab, on a way that plainly
 			// has something to start over from.
-			custom: this._drawState(custom, tier),
+			custom: this._drawState(custom, tier, start, destination),
 			tiers: TRAVEL_MAPS.map(m => ({
 				slug: m.slug, name: m.name, scale: m.scale,
 				isActive: m.slug === tier, hasMap: !!files.get(m.slug),
@@ -1372,7 +1658,7 @@ export class ExpeditionDialog extends StepperDialog {
 			// The list is the map's legend AND the whole screen when no map is on disk, which is
 			// what makes that fallback free rather than a second implementation.
 			hasAnyMap: [...files.values()].some(Boolean),
-			groups: this._destinationGroups(row, destination, tier),
+			groups: this._destinationGroups(row),
 			route: route?.legs?.length ? {
 				legs:     route.legs,
 				// "At least" for the table's own times, "roughly" for a way measured off the map:
@@ -1424,7 +1710,23 @@ export class ExpeditionDialog extends StepperDialog {
 			showing,
 			label: localize(`stonetop.expedition.route.${showing ? "take" : "draw"}`),
 			icon: showing ? "fa-eraser" : "fa-map-location-dot",
-			tooltip: localize(`stonetop.expedition.route.${showing ? "takeTip" : "drawTip"}`),
+			// THE DRAW TIP NAMES THE SCENE THEY HAVE TO BE STANDING ON, because the one thing this
+			// button does that surprises people is that it writes on the CANVAS, not on the picture
+			// in this window. A GM reading the Vicinity here with the village scene open presses it,
+			// gets a refusal, and has no way of knowing from the label that the two were ever
+			// different things. `tierDrawing` is the same answer `sceneRouteCheck` refuses with, so
+			// the warning after the press and the hint before it cannot name two different maps.
+			// Null when no one map draws both ends: there is no scene to send them to, and the
+			// fallback says what is wanted rather than pretending to know its name.
+			//
+			// Only the draw side says it. Once the route IS showing, the reader is by definition on
+			// the scene it went onto, and telling them to go there would be telling them nothing.
+			tooltip: showing
+				? localize("stonetop.expedition.route.takeTip")
+				: format("stonetop.expedition.route.drawTip", {
+					map: travelMap(tierDrawing(route))?.name
+						?? localize("stonetop.expedition.route.drawTipMap"),
+				}),
 		};
 	}
 
@@ -1452,7 +1754,7 @@ export class ExpeditionDialog extends StepperDialog {
 		// way drawn by hand that is a mark on the map rather than a destination picked off the
 		// list, and asking only about the destination hid the button on every hand-drawn way that
 		// ended somewhere the books never named.
-		const anyRoute = pick.custom.on ? pick.custom.points.length > 0 : !!pick.destination;
+		const anyRoute = pick.custom.on || !!pick.destination;
 		const showing = (!game.user?.isGM || !anyRoute || !(route ?? this._journeyRoute())?.legs?.length)
 			? null
 			: sceneShowsJourney(globalThis.canvas?.scene ?? null, pick);
@@ -1472,11 +1774,20 @@ export class ExpeditionDialog extends StepperDialog {
 		const places = offMapNames(note);
 		return {
 			...note,
-			// A hand-drawn way on the other tab is not a place gone missing, and saying so would
-			// send the reader hunting for one. Its marks are fractions of the map it was drawn on;
-			// naming that map, with the button back to it, is the whole of the answer.
+			// A route pinned to the other tab is not a place gone missing, and saying so would send
+			// the reader hunting for one. It is fractions of the map it belongs to; naming that
+			// map, with the button back to it, is the whole of the answer.
+			//
+			// WHICH pinning, though, because there are two and they are different facts about the
+			// trip: the GM drew this way on that map, or the party is standing on it. `drawn` is
+			// what `pinnedOffMapNote` tells them apart with.
 			sentence: note.elsewhere
-				? format("stonetop.expedition.route.panelDrawnOn", { map: note.otherName ?? "" })
+				? format(
+					note.drawn
+						? "stonetop.expedition.route.panelDrawnOn"
+						: "stonetop.expedition.route.panelStartOn",
+					{ map: note.otherName ?? "" },
+				)
 				: places
 					? format("stonetop.expedition.route.panelOffMap", { places })
 					: localize("stonetop.expedition.route.panelNoMap"),
@@ -1582,6 +1893,11 @@ export class ExpeditionDialog extends StepperDialog {
 	 *
 	 * Two of them at once would be two gestures over one map, both swallowing the same click and
 	 * only one of them being awaited. Dropped on every render and on close, from `_disarmPanelPick`.
+	 *
+	 * The drawing watch needs no such handling: it stands ITSELF down while a placement is armed,
+	 * off the class this gesture puts on the picture (see utils/pick-point-on-image.js). So a GM
+	 * who presses "put a site on the map" mid-plan gets that one click for the site and their map
+	 * back afterwards, rather than one click meaning two things.
 	 */
 	_armPanelPick() {
 		this._disarmPanelPick();
@@ -1628,94 +1944,130 @@ export class ExpeditionDialog extends StepperDialog {
 			.catch(err => warn("couldn't refresh the travel map window", err));
 	}
 
-	// ── The way they go, drawn by hand ──────────────────────────────────────────
+	// ── The trip, drawn on the picture ──────────────────────────────────────────
 	// The table's shortest path is the right answer to "how do you get to Marshedge" and the wrong
 	// one to "how are they going". A party avoids the Roads, swings by a barrow, cuts north across
 	// the Flats — and Chart a Course asks the players exactly that, then leaves the map showing the
-	// way the book would have gone. This is the box that hands the line over: tick it and the map
-	// becomes something to draw on.
+	// way the book would have gone. This is where that answer goes onto the picture.
 	//
-	// THREE GESTURES AND NOTHING ELSE (utils/custom-route.js `withMark` is what they mean):
-	//   click        move the far end of the way to here
-	//   shift-click  leave the far end where it is and add a leg on
-	//   right-click  take the last leg back
+	// NO MODE TO TURN ON, AND NOW NO ROW OF CONTROLS EITHER. There was a "draw the way yourself"
+	// checkbox here once, and above the map a row that carried "Setting out from Stonetop" (a
+	// button that armed the next click), "bound for Marshedge", and an × to un-pick it. All of it
+	// is gone. What is left is the picture and two gestures on it, and the marks themselves are the
+	// state (utils/custom-route.js `normalizeCustom`, utils/journey-start.js): a way is being drawn
+	// exactly while there are marks on the map, and the party sets out from somewhere exactly while
+	// the trip says so.
+	//
+	// THE GESTURES, which are the whole vocabulary of this screen:
+	//   click        with no start, say where the party sets out from
+	//                with a start and no way drawn, say where they are bound
+	//                with a way drawn, move its far end to here
+	//   shift-click  add a leg — and, on a map with no way on it yet, START one
+	//   right-click  take the trip back one step: the last mark, else the destination, else the
+	//                start itself (see `_undoJourneyMark`, which is the whole ladder)
 	// A click on a lettered place takes that place, name and all, so a way can wander off the road
 	// and still come back through Marshedge by name. Everything else is a bare mark.
+	//
+	// WHICH MEANS THE PICTURE IS REVERSIBLE, and that is what let the row above it go: every state
+	// this screen can be put into by clicking can be taken back off by right-clicking, in the order
+	// it went on, with no control anywhere that is the only way to undo something.
 	//
 	// THE PANEL OWNS THE WRITES, both surfaces offer the gestures — the same division as `pick`,
 	// `toScene` and `placeSite`, and for the same reason: the trip lives here.
 
 	/**
-	 * The checkbox's state, and the line of instructions under it.
+	 * What the line under the map says, and whether this picture takes marks at all.
 	 *
 	 * `canDraw` gates the CONTROLS and not the display. Drawing writes the trip into a world
 	 * setting, which only a GM may do, so a player gets the same readout, the same line on the map
-	 * and no way to change it — rather than a checkbox that looks live and throws on click.
+	 * and no way to change it — rather than an invitation that does nothing when accepted.
+	 *
+	 * `canDrawHere` is the narrower question the two surfaces arm their pictures on, and it is
+	 * asked per TIER because they can be looking at different maps. Once a way exists, only its own
+	 * map can take a mark — its marks are fractions of that one picture. Before there is a way, any
+	 * map that draws the ORIGIN can start one; a map that does not would begin the way at a stop
+	 * with nowhere to stand, and `routePath` refuses a line like that outright rather than drawing
+	 * a shortened one.
+	 *
+	 * `canSetStart` is the OTHER thing a click on this picture can be, and the two are exclusive by
+	 * construction: a map can start a way only once there is a start to draw it from, so nothing
+	 * can be true of both at once. Both surfaces arm off this pair, which is what keeps the
+	 * crosshair, the sentence under the map and what the click actually does from ever disagreeing.
+	 *
+	 * `crosshair` and `canUndo` are here for that same reason and not derived again by each caller.
+	 * They were, in three places across two files, and the right-click ladder is documented to
+	 * grow: a fourth rung meant finding three boolean expressions, and a miss reads as a
+	 * right-click that swallows the browser menu and does nothing.
 	 */
-	_drawState(custom, tier) {
+	_drawState(custom, tier, start, destination = null) {
 		const on = !!custom.on;
 		const here = on && custom.tier === tier;
 		const mapName = travelMap(custom.tier)?.name ?? "";
+		const canDraw = game.user?.isGM ?? false;
+		// NOBODY HAS SAID WHERE THEY ARE, which is now a state a GM can reach and get back out of:
+		// right-clicking peels the marks off one at a time and then takes the start with them, and
+		// the next click puts it back down wherever they mean. It comes FIRST of the three
+		// sentences below because it is the only one whose gesture is not about the way at all.
+		const unset = !hasStart(start);
+		// Could a way START on this picture? Asked of the start alone: where they are bound is
+		// wherever the way ends up, so the far end has nothing to say about it. A start the GM
+		// placed by hand answers for its own map and no other, which falls out of `startEnd`, and
+		// one that is nowhere answers for none — there is nothing yet to draw a first leg from.
+		const startable = drawnOn(tier, startEnd(start));
 		return {
 			on,
 			count: custom.points.length,
-			canDraw: game.user?.isGM ?? false,
-			label: localize("stonetop.expedition.draw.label"),
-			tooltip: localize("stonetop.expedition.draw.tip"),
-			// Which sentence depends on whether the reader is looking at the map the way is ON.
-			// Telling them to click when a click here could not add to that way would be teaching
-			// them a gesture that quietly does nothing.
-			hint: here
-				? localize("stonetop.expedition.draw.hint")
-				: format("stonetop.expedition.draw.hintElsewhere", { map: mapName }),
+			canDraw,
+			// WHETHER THE NEXT CLICK PLANTS THE START rather than laying a leg. Its own flag and not
+			// folded into `canDrawHere`, because the two arm the picture for different gestures: a
+			// plain click means "they set out from here" under this one and "move the far end of
+			// the way" under that one, and a single flag would leave both surfaces guessing which.
+			canSetStart: canDraw && unset && !!travelMap(tier),
+			canDrawHere: canDraw && (on ? here : startable),
+			// THE CROSSHAIR SAYS THE NEXT CLICK LANDS SOMETHING, and it is on for exactly the two
+			// states where that is true: a way already drawn, whose far end a click moves, and a
+			// trip with no start, whose start a click plants. In between — a start, no marks — a
+			// plain click on open map still does nothing, so the picture goes on looking exactly as
+			// it always did and the line beneath it is what says a shift-click would change that.
+			crosshair: canDraw && (on || (unset && !!travelMap(tier))),
+			// IS THERE ANYTHING LEFT TO RIGHT-CLICK OFF? The whole ladder in one flag: the last
+			// mark, else the destination, else the start. It swallows the browser's own menu while
+			// it is armed, so it stays OFF for a trip already peeled back to nothing rather than
+			// being armed to do nothing. Read off the TRIP rather than off this map — the marks and
+			// the picks belong to the journey, not to the picture showing here — so the popout
+			// offers the same undo on the same trip. See `_undoJourneyMark`.
+			canUndo: canDraw && (on || !!destination || hasStart(start)),
+			// Which sentence depends on what this reader can do with THIS picture. Teaching a
+			// gesture that quietly does nothing is worse than teaching none.
+			hint: this._drawHint({ unset, on, here, startable, tier, start, mapName }),
 			clearLabel: localize("stonetop.expedition.draw.clear"),
 			clearTip: localize("stonetop.expedition.draw.clearTip"),
-			// What a PLAYER gets instead of the three gestures, which are no use to a reader who
-			// cannot make them: the fact that the line on this map is somebody's own and the times
-			// beside it were measured rather than printed.
+			// What a PLAYER gets instead of the gestures, which are no use to a reader who cannot
+			// make them: the fact that the line on this map is somebody's own and the times beside
+			// it were measured rather than printed.
 			drawnNote: localize("stonetop.expedition.draw.drawnNote"),
 		};
 	}
 
 	/**
-	 * Tick the box: start laying the way out by hand, or go back to the table's own answer.
+	 * The line under the map: the one gesture this reader can make on THIS picture, in words.
 	 *
-	 * TURNING IT OFF KEEPS THE MARKS. A GM who unticks to compare the two ways has not thrown
-	 * theirs away, and the box put back on returns it exactly as it was. Only the explicit "start
-	 * over" empties it, which is the whole reason that control exists separately.
-	 *
-	 * TURNING IT ON SEEDS FROM THE SOLVED ROUTE, for the reason set out over `seedMarks`: the way
-	 * they were going is nearly always the way they are still going plus a detour, and a blank map
-	 * would make the commonest use of this a job of re-clicking what the system already knew. Only
-	 * ever into an EMPTY path — a way drawn last week is not something to overwrite with the
-	 * table's guess.
+	 * Four states, four lines. Written as guard clauses rather than nested in the object literal
+	 * above, because the ladder is read in the order the states rule each other out — and there
+	 * will be a fifth, which wants to be a new line here and not another level of nesting.
 	 */
-	async _toggleDrawnWay(on, from = null) {
-		const { log, entry } = ensureCurrent(this._log(), () => this._newExpedition());
-		const before = journeyRoute(entry.journey);
-		const custom = normalizeCustom(entry.journey?.custom);
-		const { origin, destination } = normalizeJourney(entry.journey);
-		// The map they are looking at, unless it cannot draw where they are setting out from — in
-		// which case a way begun here would start at a stop with nowhere to stand, and `routePath`
-		// would refuse the whole line rather than draw a shortened one. A way already drawn keeps
-		// its own map, because its marks are fractions of that one.
-		const tier = custom.points.length
-			? custom.tier
-			: customTierFor(origin, this._activeTier(origin, destination));
-		const points = custom.points.length
-			? custom.points
-			: seedMarks(journeyRoute({ ...entry.journey, custom: null }), tier);
-
-		foundry.utils.setProperty(entry, "journey.custom", { on: !!on, tier, points });
-		// A tab the GM clicked earlier outranks everything in `_activeTier`, which would strand the
-		// panel on a map the marks do not belong to the moment those two disagree.
-		if (on && tier !== this._journeyTier) this._journeyTier = null;
-		this._carryToChart(entry, before, journeyRoute(entry.journey));
-
-		await this._persistLog(log);
-		this.render(false);
-		await this._refreshMapWindows(from).catch(err =>
-			warn("couldn't refresh the travel map window", err));
+	_drawHint({ unset, on, here, startable, tier, start, mapName }) {
+		if (unset) return localize("stonetop.expedition.draw.noStart");
+		if (on) {
+			return here
+				? localize("stonetop.expedition.draw.hint")
+				: format("stonetop.expedition.draw.hintElsewhere", { map: mapName });
+		}
+		if (startable) return localize("stonetop.expedition.draw.invite");
+		return format("stonetop.expedition.draw.originOffMap", {
+			map: travelMap(tier)?.name ?? "",
+			place: startName(start),
+		});
 	}
 
 	/**
@@ -1723,25 +2075,102 @@ export class ExpeditionDialog extends StepperDialog {
 	 *
 	 * ONE ENTRY POINT FOR BOTH READINGS, asked at click time rather than at bind time, because the
 	 * popout binds its hotspot handler once in its constructor and never again — so a decision made
-	 * when that handler was created would still be the old one after the box was ticked.
+	 * when that handler was created would still be the old one after the first mark went down.
+	 *
+	 * A PLAIN CLICK WITH NO WAY DRAWN IS A DESTINATION, which is what it has always been and what
+	 * every row of the list below the map is for. Held with shift it starts a way through that
+	 * place instead; once a way exists both gestures are about the way, because the far end of it
+	 * IS where the party is bound.
 	 *
 	 * A place this map does not letter is refused by name. It is a real thing to try: the
 	 * destination list runs to every place the table knows, grouped by the map that draws it, and
 	 * clicking a World's End row while drawing on the Vicinity is an easy mistake to make and a
 	 * baffling one to have silently ignored.
+	 *
+	 * `tier` is the map the click was made on, which only the surface knows — the popout keeps
+	 * showing whatever map it was opened on long after the panel has followed a destination out to
+	 * the other one. It matters only for a way that does not exist yet, since an existing one
+	 * brings its own.
 	 */
-	async _chooseJourneyPlace(slug, ev = null, from = null) {
+	async _chooseJourneyPlace(slug, ev = null, from = null, tier = null) {
+		// WITH NO START, THE CLICK IS THE START. A trip peeled back past its last mark has nowhere
+		// to set out from, and until it has one there is no journey for a destination or a leg to
+		// be part of — so the first click says where the party is, whether it lands on a pin, an
+		// edge arrow or a row of the list below the map. That last one is what lets a world with no
+		// imported book art answer at all, since there the list is the whole screen.
+		if (!hasStart(this._journeyPick().start)) return this._setJourneyStart(slug, from);
 		const custom = this._customPath();
-		if (!custom.on) return this._setJourneyPlace("destination", slug, from);
-		if (!markSpot(custom.tier, slug)) {
+		const append = !!ev?.shiftKey;
+		if (!custom.on && !append) return this._setJourneyPlace("destination", slug, from);
+		const onTier = custom.on ? custom.tier : (tier ?? this._shownTier);
+		if (!markSpot(onTier, slug)) {
 			ui.notifications?.warn(format("stonetop.expedition.draw.notOnMap", {
 				place: travelPlace(slug)?.name ?? slug,
-				map: travelMap(custom.tier)?.name ?? "",
+				map: travelMap(onTier)?.name ?? "",
 			}));
 			return undefined;
 		}
 		return this._writeDrawnWay(
-			points => withMark(points, { slug }, { append: !!ev?.shiftKey }), from);
+			points => withMark(points, { slug }, { append }), from, { begins: true, tier: onTier });
+	}
+
+	/**
+	 * A click on one of the GM's OWN sites: a stop on the way there, exactly as a lettered place is.
+	 *
+	 * IT USED TO OPEN THE WRITE-UP (user, 2026-08-24), and that made a GM's own barrow the one mark
+	 * on this map that could not be part of the journey drawn across it. On a screen whose whole
+	 * purpose is saying how the party gets somewhere — and where the somewhere is very often that
+	 * barrow — the pin for it was a link out to a journal. It is a route control now, like every
+	 * other mark on the picture. The write-up is still one click away on the steading's Sites tab,
+	 * which is where it is written and where its siblings are.
+	 *
+	 * THE SAME THREE READINGS AS A LETTERED PLACE, which is what "treating it like the other pins"
+	 * has to mean or the map has two vocabularies: no start yet and the tap plants it; a plain tap
+	 * puts the far end of the way there; SHIFT adds it as another stop. What it cannot be is the
+	 * trip's `destination`, which is a slug out of the travel table and names one of eighteen
+	 * printed places — so where a lettered pin would set that field, a site begins a hand-drawn way
+	 * ending on itself. That is the same sentence by other means: the far end of a drawn way IS
+	 * where the party is bound (see `_buildJourney`'s `boundTo`).
+	 *
+	 * THE SPOT IS THE SITE'S OWN, not the pointer's. A pin is a few pixels of standing stone with a
+	 * name tag hanging off it, and a stop laid where the cursor happened to be would sit beside the
+	 * place rather than on it — visibly so, once the line is drawn through it.
+	 */
+	async _chooseJourneySite(uuid, ev = null, from = null) {
+		const steading = getStonetopSteadingActor();
+		const placed = steading ? placedSiteSpot(steading, uuid) : null;
+		// A pin whose site has been deleted from the Sites tab while this map was open. Silent: the
+		// pin is about to go with the next redraw anyway, and there is nothing the reader can do.
+		if (!placed) return undefined;
+		const { page, spot } = placed;
+		const mark = { fx: spot.fx, fy: spot.fy };
+		const { start } = this._journeyPick();
+		// With no start, the tap says where the party is — a site the GM has written up being a very
+		// likely answer to that, since it is somewhere they have already decided matters.
+		if (!hasStart(start)) return this._setJourneyStart({ tier: spot.tier, ...mark }, from);
+
+		// A SITE'S FRACTION MEANS ONE PICTURE, so both refusals below are about the site's own map
+		// and not the one the reader happens to be looking at. Said out loud and by name, exactly as
+		// a lettered place the map does not draw is: a GM tapping a Vicinity barrow while a way is
+		// laid out on the World's End has made a reasonable mistake, and a silent no teaches nothing.
+		const custom = this._customPath();
+		if (custom.on && custom.tier !== spot.tier) {
+			ui.notifications?.warn(format("stonetop.expedition.draw.notOnMap", {
+				place: page.name, map: travelMap(custom.tier)?.name ?? "",
+			}));
+			return undefined;
+		}
+		// And with no way yet, one would begin on the site's map — which has to be able to draw the
+		// START as well, or the first leg begins at a stop with nowhere to stand and `routePath`
+		// refuses the whole line rather than drawing a shortened one.
+		if (!custom.on && !drawnOn(spot.tier, startEnd(start))) {
+			ui.notifications?.warn(format("stonetop.expedition.draw.originOffMap", {
+				map: travelMap(spot.tier)?.name ?? "", place: startName(start),
+			}));
+			return undefined;
+		}
+		return this._drawJourneyMark(
+			mark, { append: !!ev?.shiftKey, tier: spot.tier, aimed: true }, from);
 	}
 
 	/**
@@ -1752,35 +2181,95 @@ export class ExpeditionDialog extends StepperDialog {
 	 * and how it is registered. That is what makes a mark laid on the panel's small map land in the
 	 * same valley on the poster Scene and on the 300 dpi render — the same conversion a site
 	 * placement makes, through the same `percentSpot`.
+	 *
+	 * A PLAIN CLICK ON A BARE MAP DOES NOTHING, and that silence is the point: with no way drawn
+	 * there is no far end for it to move, and the gesture that starts one is the shift-click the
+	 * line under the map teaches. Reading a stray click as "begin a journey here" would put a way
+	 * on the map every time a GM clicked the picture to bring the window forward.
+	 *
+	 * UNLESS THERE IS NO START, in which case the click IS one, and the silence would be the wrong
+	 * answer: the reader has just right-clicked the start off this very picture and the line under
+	 * it says the next click puts it back. That is the one state where a plain click on open map
+	 * means something, and it is a state the GM asked for one gesture ago.
+	 *
+	 * `aimed` SAYS THE CLICK NAMED SOMETHING, and it is what a tap on one of the GM's own site pins
+	 * comes through as (`_chooseJourneySite`). The silence above is about STRAY clicks — a press on
+	 * open paper to bring the window forward — and a press on a pin is never one of those: the
+	 * reader put that mark on the map themselves and has just aimed at it. So it begins a way where
+	 * a click on the paper an inch away would do nothing, which is exactly what a tap on one of the
+	 * book's own lettered pins already does.
 	 */
-	async _drawJourneyMark(mark, { append = false } = {}, from = null) {
+	async _drawJourneyMark(mark, { append = false, tier = null, aimed = false } = {}, from = null) {
 		const custom = this._customPath();
-		if (!custom.on || !mark) return undefined;
+		const unset = !hasStart(this._journeyPick().start);
+		if (!mark || (!unset && !custom.on && !append && !aimed)) return undefined;
 		// Refused HERE rather than left to `normalizeCustom`, and said out loud, for the same reason
 		// a place this map does not letter is refused by name above: the surface shows the whole
 		// file, so the margin outside the printed crop is clickable and a click there is a real aim
 		// (see `insideMap`). Written through and normalized away, it would take the previous mark
 		// with it, which is a leg of the GM's way silently disappearing under their own cursor.
+		// WORDED FOR WHAT THE CLICK WAS FOR, since the two refusals are about different things: one
+		// says no mark was laid, the other that where they set out from is unchanged. Telling a GM
+		// aiming at a starting point that their leg went missing would name a thing they were not
+		// doing.
 		if (!insideMap(mark)) {
-			ui.notifications?.warn(format("stonetop.expedition.draw.offTheMap", {
-				map: travelMap(custom.tier)?.name ?? "",
-			}));
+			ui.notifications?.warn(format(
+				unset ? "stonetop.expedition.start.offTheMap" : "stonetop.expedition.draw.offTheMap",
+				{ map: travelMap(unset ? tier : (custom.tier ?? tier))?.name ?? "" },
+			));
 			return undefined;
 		}
-		return this._writeDrawnWay(points => withMark(points, mark, { append }), from);
-	}
-
-	/** Right-click: take the last leg back. An empty way has nothing to take, and says nothing. */
-	async _undoJourneyMark(from = null) {
-		if (!this._customPath().on) return undefined;
-		return this._writeDrawnWay(points => withMark(points, null, { undo: true }), from);
+		// A mark belongs to the picture it was laid on, and a start laid by hand is a mark like any
+		// other — so the tier has to come with it. The surfaces always send one for a click on open
+		// map; without it there is no map for the fraction to be a fraction OF, and the write would
+		// normalize straight back to nowhere.
+		if (unset) return tier ? this._setJourneyStart({ tier, ...mark }, from) : undefined;
+		return this._writeDrawnWay(
+			points => withMark(points, mark, { append }), from, { begins: true, tier });
 	}
 
 	/**
-	 * Throw the marks away and stay in drawing mode.
+	 * Right-click: take the trip back one step, whatever the last step was.
 	 *
-	 * The mode stays ON, which is the whole point of it being a separate control from the box: "I
-	 * meant something else entirely" is a thing to do in the middle of drawing, not a way out of it.
+	 * A LADDER, AND IT PEELS THE JOURNEY OFF IN THE ORDER IT WAS PUT ON:
+	 *   a mark on a hand-drawn way   the last of them
+	 *   else a destination           where they were bound
+	 *   else the start               where they were setting out from
+	 *   else nothing                 an empty trip has nothing to take, and says nothing
+	 *
+	 * ONE GESTURE FOR THE LOT, which is what let the row of controls above the map go. There used
+	 * to be a "Setting out from Stonetop" button that armed a click, a "bound for Marshedge"
+	 * readout with an × beside it, and this right-click for the marks: three ways of taking a trip
+	 * apart, in two places, one of them invisible until pressed. What is left is the picture and
+	 * the two things you can do to it, and a reader who right-clicks twice can see the whole ladder
+	 * happen in front of them rather than having to be told about it.
+	 *
+	 * AND THE DESTINATION IS ON THE LADDER because nothing else clears it any more. That × was the
+	 * only way to un-pick a place, so leaving it off would have made a destination a thing a GM
+	 * could set and never take back — and the rung is where it is because it is what a plain click
+	 * put there, one gesture before the start.
+	 *
+	 * PAST THE LAST RUNG THE TRIP HAS NO START AT ALL, which is a real state and not an error:
+	 * there is no pin, no line and no solved time, the line under the map says so, and the next
+	 * click plants the start wherever the party actually is. See utils/journey-start.js.
+	 */
+	async _undoJourneyMark(from = null) {
+		if (this._customPath().on) {
+			return this._writeDrawnWay(points => withMark(points, null, { undo: true }), from);
+		}
+		const { start, destination } = this._journeyPick();
+		if (destination) return this._setJourneyPlace("destination", "", from);
+		if (!hasStart(start)) return undefined;
+		return this._setJourneyStart(null, from);
+	}
+
+	/**
+	 * Throw the marks away: the way is over, and the table's own answer is back.
+	 *
+	 * ITS OWN CONTROL rather than the × beside the destination, which still means what it always
+	 * meant. Undoing thirty marks one right-click at a time is not a thing to ask of anybody, and a
+	 * single button that did whichever depending on some other state is how a GM loses a route they
+	 * had spent a minute laying out.
 	 */
 	async _clearDrawnWay(from = null) {
 		return this._writeDrawnWay(() => [], from);
@@ -1792,18 +2281,27 @@ export class ExpeditionDialog extends StepperDialog {
 	 * ONE WRITE FOR THE LOT, exactly as `_setJourneyPlace` makes one: `_saveField` persists the
 	 * whole log per call, and a mark can move the ticked requirements and the route line together.
 	 *
+	 * `begins` says this gesture may BEGIN a way — the shift-clicks, and every gesture once one
+	 * exists. On a trip with no marks yet that is what picks the map and seeds it: the way they were
+	 * going is nearly always the way they are still going plus a detour, so the honest first state
+	 * is the route the table had already worked out, in marks the GM can now move and take back
+	 * (see `seedMarks`). Without it — an undo or a "start over" on a bare map — there is nothing to
+	 * do, and doing nothing costs no world-setting write.
+	 *
 	 * `mutate` returns the SAME array when nothing would change (see `withMark` — an undo on an
 	 * empty way does), and that is taken as "nothing happened": a right-click on a bare map should
 	 * not cost a world-setting write, a re-render and a sweep of every open map window.
 	 */
-	async _writeDrawnWay(mutate, from = null) {
+	async _writeDrawnWay(mutate, from = null, { begins = false, tier = null } = {}) {
 		const { log, entry } = ensureCurrent(this._log(), () => this._newExpedition());
 		const before = journeyRoute(entry.journey);
 		const custom = normalizeCustom(entry.journey?.custom);
-		const points = mutate(custom.points);
-		if (points === custom.points) return undefined;
+		const begun = custom.points.length ? custom : this._beginWay(entry, tier, begins);
+		if (!begun) return undefined;
+		const points = mutate(begun.points);
+		if (points === begun.points && begun === custom) return undefined;
 
-		foundry.utils.setProperty(entry, "journey.custom", { ...custom, points });
+		foundry.utils.setProperty(entry, "journey.custom", { tier: begun.tier, points });
 		this._carryToChart(entry, before, journeyRoute(entry.journey));
 
 		await this._persistLog(log);
@@ -1813,32 +2311,68 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	/**
+	 * The map and the first marks of a way that does not exist yet, or null for a gesture that
+	 * cannot begin one.
+	 *
+	 * THE MAP IS THE ONE CLICKED ON, because the mark that is about to be laid is a fraction of
+	 * that very picture. A surface only offers the gesture on a map that can draw where the party
+	 * sets out from (see `_drawState`'s `canDrawHere`), so `customTierFor` agrees with it — but it
+	 * is asked anyway, and it is the answer that is stored: a way beginning at a stop with nowhere
+	 * to stand is one `routePath` refuses to draw at all, and getting that wrong here would show as
+	 * a map that quietly stopped drawing lines.
+	 *
+	 * `begins` is the caller's gesture, NOT the journey's start: an undo or a "start over" on a bare
+	 * map cannot bring a way into being, and doing nothing there costs no world-setting write.
+	 */
+	_beginWay(entry, tier, begins) {
+		if (!begins) return null;
+		const { start, destination } = normalizeJourney(entry.journey);
+		const on = customTierFor(start, tier ?? this._activeTier(start, destination));
+		// A tab the GM clicked earlier outranks everything in `_activeTier`, which would strand the
+		// panel on a map the marks do not belong to the moment those two disagree.
+		if (on !== this._journeyTier) this._journeyTier = null;
+		return { tier: on, points: seedMarks(journeyRoute({ ...entry.journey, custom: null }), on) };
+	}
+
+	/**
 	 * Arm the panel's own map for drawing, or leave it alone.
 	 *
 	 * Bound on every render and dropped by the next one, which is what keeps it aimed at markup
-	 * that exists: the walkthrough re-renders on every mark laid, so the box the last watch was
+	 * that exists: the walkthrough re-renders on every mark laid, so the map the last watch was
 	 * listening on is gone by the time the new one goes up.
 	 *
-	 * ONLY ON THE WAY'S OWN MAP. A click on the other tab could not add to a path whose marks are
-	 * fractions of this one, so the crosshair would be promising something it cannot do.
+	 * ARMED WHENEVER A CLICK COULD MEAN SOMETHING, which since the checkbox and the controls row
+	 * went is most of the time: every map that can draw where the party is setting out from, plus
+	 * the one an existing way is drawn on and no other — and, on a trip with no start at all, every
+	 * map there is, because that click plants the start. That is `canDrawHere` and `canSetStart`,
+	 * asked of the same `_drawState` the line under the map is written from, so the crosshair and
+	 * the sentence explaining it cannot come apart. What stops a stray click from starting a journey
+	 * is not the arming but the gesture itself: a plain click on a bare map lays nothing, once there
+	 * is a start (see `_drawJourneyMark`).
 	 */
 	_armPanelDrawing(root) {
 		this._stopPanelDrawing();
-		if (!game.user?.isGM) return;
-		const custom = this._customPath();
 		const map = this._panelMap;
-		if (!custom.on || !map || map.tier !== custom.tier) return;
+		if (!map) return;
+		const { start, destination } = this._journeyPick();
+		const state = this._drawState(this._customPath(), map.tier, start, destination);
+		if (!state.canDrawHere && !state.canSetStart) return;
 		// Absent on every step but the route one, which is also what keeps a `_panelMap` left over
 		// from the last visit to that step from arming a picture nobody is looking at.
 		const box = root?.querySelector?.(".stonetop-journey-map");
 		if (!box) return;
 		// The same two selectors the popout arms with, from the same constants: which marks already
 		// own a click is a fact about this markup, so neither surface spells it for itself.
+		//
+		// The crosshair and the right-click come off the SAME `_drawState` as the sentence under
+		// the map, and the popout arms on those very fields (see `TravelMapWindow._armDrawing`),
+		// so the two surfaces cannot answer differently about what a click here would do.
 		this._panelDrawing = watchPointsOnImage({
 			listenOn: box,
 			onPoint: (at, ev) => this._drawJourneyMark(
-				percentSpot(at, map.frame), { append: !!ev.shiftKey }),
-			onUndo: () => this._undoJourneyMark(),
+				percentSpot(at, map.frame), { append: !!ev.shiftKey, tier: map.tier }),
+			onUndo: state.canUndo ? () => this._undoJourneyMark() : null,
+			crosshair: state.crosshair,
 			ignore: JOURNEY_MARKS,
 			undoIgnore: JOURNEY_RIGHT_CLICK_MARKS,
 		});
@@ -1902,8 +2436,82 @@ export class ExpeditionDialog extends StepperDialog {
 
 	/** Let the canvas watch go. Called before re-registering and again on close. */
 	_dropCanvasWatch() {
-		for (const [name, id] of this._canvasHooks ?? []) Hooks.off(name, id);
-		this._canvasHooks = null;
+		this._canvasHooks = _offHooks(this._canvasHooks);
+	}
+
+	/**
+	 * Keep the Outfit step's party-load readout honest while the sheets under it change.
+	 *
+	 * The block calls itself "live from sheets" and until now it was live only in the sense that
+	 * it read them fresh whenever the walkthrough happened to render — so a GM who ticked a
+	 * torch onto a PC's sheet with this window open saw nothing move, and had to toggle someone
+	 * out of the party and back in to force the render that re-read it. That is the one gesture
+	 * a readout beside the sheets exists to save.
+	 *
+	 * Everything the readout is built from is an Actor or an Item on one: the ◇ pool and the
+	 * checked inventory (Items, plus the actor flag holding the reserve), custom followers and
+	 * the crew's gear (actor flags), and the owned moves the load gates (Items). Watching those
+	 * four hooks covers all of it without a hook per PC — the party changes with the trip, and
+	 * a per-actor registration would have to be torn down and rebuilt on every party toggle.
+	 *
+	 * Registered on render and dropped on close, the same shape as the canvas watch above; the
+	 * drop-then-register keeps a re-render from stacking a second set.
+	 */
+	_wireLoadWatch() {
+		this._dropLoadWatch();
+		// The readout is GM-only and lives on one step. Off that step there is nothing on screen
+		// to keep honest, and a player never builds it at all.
+		if (!game.user?.isGM || this._stepNav().step?.key !== "outfit") return;
+		const onActor = actor => { if (_carriesLoad(actor)) this._loadChanged(); };
+		const onItem  = item  => { if (_carriesLoad(item?.parent)) this._loadChanged(); };
+		this._loadHooks = [
+			["updateActor", Hooks.on("updateActor", onActor)],
+			["createItem",  Hooks.on("createItem",  onItem)],
+			["updateItem",  Hooks.on("updateItem",  onItem)],
+			["deleteItem",  Hooks.on("deleteItem",  onItem)],
+		];
+	}
+
+	/** Let the sheet watch go. Called before re-registering and again on close. */
+	_dropLoadWatch() {
+		this._loadHooks = _offHooks(this._loadHooks);
+		clearTimeout(this._loadTimer);
+		this._loadTimer = null;
+	}
+
+	/** A watched document moved: collapse the burst, then redraw once. */
+	_loadChanged() {
+		clearTimeout(this._loadTimer);
+		this._loadTimer = setTimeout(() => {
+			this._loadTimer = null;
+			this._refreshLoadReadout().catch(err => warn("couldn't refresh the party load readout", err));
+		}, LOAD_REFRESH_MS);
+	}
+
+	/**
+	 * Rebuild the party-load block in place.
+	 *
+	 * NOT `this.render(false)`. A render here would rebuild the whole walkthrough — including the
+	 * route step's map panel, which browses the art folder and measures an image — and would take
+	 * the caret out of whatever field the GM was mid-sentence in, on a trigger they did not make
+	 * themselves. Swapping one block's markup costs the readout and nothing else; the chips and
+	 * the hover previews inside it are delegated from the dialog root, so the new markup arrives
+	 * already wired.
+	 */
+	async _refreshLoadReadout() {
+		if (!this.rendered) return;
+		const host = this.element?.[0]?.querySelector(".stonetop-exp-load");
+		// Gone from under us — the step moved on, or the window is on its way out. The next
+		// render builds it fresh anyway.
+		if (!host) return;
+		const loadReadout = await this._buildLoadReadout();
+		// The build is async, so the window may have closed or moved on while it ran.
+		if (!this.rendered || !host.isConnected) return;
+		// A preview raised off a face this swap is about to remove would be left hanging: the
+		// helper's own watchdog takes it down a frame later, but taking it down here means the
+		// numbers never change underneath an open card.
+		removeAvatarPreview();
+		host.innerHTML = await renderTemplate(LOAD_TEMPLATE, { loadReadout });
 	}
 
 	/**
@@ -1915,15 +2523,14 @@ export class ExpeditionDialog extends StepperDialog {
 	 * lighting up when it was the destination. A place goes under the CLOSEST map that draws it,
 	 * which is also the map `_activeTier` would send a journey to it.
 	 *
-	 * The highlighted group is the one holding the DESTINATION, not the one matching the picture.
-	 * Those are the same group for every place a map draws, and differ for exactly the ones that
-	 * make the distinction worth having: a destination past the maps' edge (Lygos, the Manmarch,
-	 * the Steplands) is shown ON the outermost map, so keying the highlight to the picture meant
-	 * "Beyond the maps" could never take it — `_activeTier` cannot return BEYOND_TIER — and the
-	 * gold heading sat on a group that did not contain the chosen place. With nothing chosen it
-	 * falls back to the picture, which is the only thing there is to follow.
+	 * NO GROUP IS SINGLED OUT. One of them used to be, following the group that held the
+	 * destination, and its heading took the gold — a third mark for something the screen already
+	 * says twice: the chosen place wears its own pill in the list, and the map tabs mark the one
+	 * showing. On the one element whose job is "these places are on that map", it read as a claim
+	 * about the fold rather than about the place inside it. The heads are furniture now, all three
+	 * alike, and the gold belongs to the answer.
 	 */
-	_destinationGroups(row, destination, tier) {
+	_destinationGroups(row) {
 		const seen = new Set();
 		const groups = TRAVEL_MAPS.map(m => {
 			const places = placesOnMap(m.slug).filter(p => !seen.has(p.slug));
@@ -1931,12 +2538,7 @@ export class ExpeditionDialog extends StepperDialog {
 			return { label: m.name, slug: m.slug, places: places.map(row) };
 		});
 		groups.push({ label: "Beyond the maps", slug: BEYOND_TIER, places: placesBeyond().map(row) });
-
-		const holding = destination
-			? groups.find(g => g.places.some(p => p.slug === destination))?.slug
-			: null;
-		const active = holding ?? tier;
-		return groups.map(g => ({ ...g, isActive: g.slug === active }));
+		return groups;
 	}
 
 	/**
@@ -1946,13 +2548,52 @@ export class ExpeditionDialog extends StepperDialog {
 	 * four things at once.
 	 */
 	async _setJourneyPlace(field, slug, from = null) {
+		return this._writeJourneyPick(
+			entry => foundry.utils.setProperty(entry, `journey.${field}`, travelPlace(slug)?.slug ?? ""),
+			from,
+		);
+	}
+
+	/**
+	 * Record where the party sets out from, whichever kind of answer that is.
+	 *
+	 * ONE WRITER FOR A PLACE AND A POINT, because they are one fact. `where` is a slug when the GM
+	 * clicked a pin or a row of the destination list, and a `{ tier, fx, fy }` mark when they
+	 * clicked open map; `startEnd` is what reduces either to the single value the trip stores, and
+	 * `normalizeStart` reads it straight back. Two writers would be two shapes on disk within a
+	 * week, and this is the value everything from the readout to the Scene flag turns on.
+	 *
+	 * AND `null` IS A THIRD ANSWER, written by the last rung of the right-click ladder: the party
+	 * sets out from nowhere until the next click says otherwise. It goes through the very same
+	 * `startEnd`, which answers null for a start that is neither a place nor a mark — so the
+	 * cleared state round-trips exactly as the two full ones do, and an explicit stored null is
+	 * what `storedStart` tells apart from a trip that was simply never asked (that one still leaves
+	 * the steading). See utils/journey-start.js.
+	 *
+	 * The whole of the rest — the map the panel keeps, the Chart a Course carry-forward, the sweep
+	 * over open map windows — is the same as any other pick, and is shared below for that reason.
+	 */
+	async _setJourneyStart(where, from = null) {
+		return this._writeJourneyPick(
+			entry => foundry.utils.setProperty(entry, "journey.origin", startEnd(where)),
+			from,
+		);
+	}
+
+	/**
+	 * Write one change to the trip's journey, and carry it forward onto Chart a Course.
+	 *
+	 * One write for the lot: `_persistLog` persists the whole log per call, and a pick changes up
+	 * to four things at once.
+	 */
+	async _writeJourneyPick(mutate, from = null) {
 		const { log, entry } = ensureCurrent(this._log(), () => this._newExpedition());
 		// The route as it stood BEFORE the pick, so the carry-forward below can tell its own last
 		// answer from a GM's own words. Read off the entry being mutated, NOT off _journeyPick():
 		// ensureCurrent hands back a deep copy, so the draft still holds the previous values until
 		// _persistLog swaps it in, and asking the draft would answer for the wrong trip.
 		const before = journeyRoute(entry.journey);
-		foundry.utils.setProperty(entry, `journey.${field}`, travelPlace(slug)?.slug ?? "");
+		mutate(entry);
 		// STAY ON THE MAP THEY ARE READING, as long as it can still show the trip.
 		//
 		// The map used to follow the pick outright, which reads as the panel taking the map away.
@@ -1974,7 +2615,7 @@ export class ExpeditionDialog extends StepperDialog {
 		// getting right: a reader taken to the World's End by an earlier pick never clicked a tab,
 		// and has as much claim to the map in front of them as one who did.
 		const now = normalizeJourney(entry.journey);
-		this._journeyTier = tierDraws(this._shownTier, [now.origin, now.destination])
+		this._journeyTier = tierDraws(this._shownTier, [startEnd(now.start), now.destination])
 			? this._shownTier
 			: null;
 		this._carryToChart(entry, before, journeyRoute(entry.journey));
@@ -1989,42 +2630,54 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	/**
-	 * Carry a change of route onto the Chart a Course checklist — in BOTH directions.
+	 * Carry a change of route onto the Chart a Course list — in BOTH directions.
 	 *
-	 * The two requirements the route can answer are set from the route every time, never only
-	 * ticked. A one-way carry-forward looks harmless until the GM changes their mind: nothing ever
-	 * cleared `chart.checks`, so re-picking left `firstTravel` ticked with a blank nobody could
-	 * fill, and clearing the destination outright left a checklist describing a journey the trip no
-	 * longer had. The emptiness guard on the route field ended up protecting the system's own stale
-	 * output rather than a GM's words.
+	 * Two of the book's requirements are ones the map can answer ("it'll take at least ___ days",
+	 * "first travel to ___"), so plotting a route puts them on the trip's list, and un-plotting it
+	 * takes them back off. A one-way carry-forward looks harmless until the GM changes their mind:
+	 * nothing ever cleared the old tick, so re-picking left `firstTravel` presented with a blank
+	 * nobody could fill, and clearing the destination outright left a list describing a journey the
+	 * trip no longer had.
 	 *
-	 * A box is ticked only when `chartBlankValue` can actually fill the blank underneath it — the
-	 * same predicate the text goes through — because five of the eighteen destinations from
-	 * Stonetop are measured in hours and have no day count at all.
+	 * A line is added only when `chartBlankValue` can actually fill its blank — the same predicate
+	 * the text goes through — because five of the eighteen destinations from Stonetop are measured
+	 * in hours and have no day count at all.
 	 *
-	 * The free-text route field is only ever written while it still holds what we last put there
-	 * (or nothing). The moment a GM types their own account of how they mean to get there, it is
-	 * theirs, and no later pick touches it again.
+	 * ONLY ON THE TURN, and only over our own rows. Two guards, and both are about not touching
+	 * the GM's list:
 	 *
-	 * EVERY field here goes through that same test, boxes included. "Set from the route every time"
-	 * was right about the stale tick and wrong about whose tick it was: a GM who ticks "they must
-	 * first travel to ___" by hand — for a stop the graph does not model, on a single-leg trip the
-	 * route can never answer for — had it silently cleared by the next pick they made, along with
-	 * its line in the Chronicle. So a box is rewritten only while it still says what the BEFORE
-	 * route would have made it say. The moment it disagrees, the GM has been at it, and it is
-	 * theirs. The stale tick this replaced cannot come back, because a box we ticked ourselves
-	 * still matches and is still ours to clear.
+	 *  • Nothing happens unless the route's ANSWER to that line changed (it could not answer it
+	 *    and now can, or the reverse). So a row the GM took off does not come back on the next
+	 *    pick, and one they added by hand for a stop the graph does not model is never our
+	 *    business at all.
+	 *  • A row is only ever removed while it still carries `fromRoute` — we put it there. A row
+	 *    the GM chose off the menu stays, whatever the map later works out.
+	 *
+	 * The free-text route field is written on the same terms it always was: only while it still
+	 * holds what we last put there (or nothing). The moment a GM types their own account of how
+	 * they mean to get there, it is theirs, and no later pick touches it again.
 	 */
 	_carryToChart(entry, before, after) {
 		if (!before && !after) return;
+		const list = chartPicked(entry.chart);
+		let changed = false;
 		for (const key of ["days", "firstTravel"]) {
-			const path = `chart.checks.${key}`;
-			const stored = foundry.utils.getProperty(entry, path);
-			// Absent is nobody's answer yet, so it is ours to write. Only a box that EXISTS and
-			// disagrees with what the before-route would have made it say has been touched by hand.
-			if (stored !== undefined && !!stored !== (chartBlankValue(key, before) !== null)) continue;
-			foundry.utils.setProperty(entry, path, chartBlankValue(key, after) !== null);
+			const could = chartBlankValue(key, before) !== null;
+			const can   = chartBlankValue(key, after)  !== null;
+			if (could === can) continue;
+			const at = list.findIndex(e => e.key === key);
+			if (can && at < 0) {
+				list.push({
+					id: foundry.utils.randomID(), group: chartGroupOf(key),
+					key, text: "", answer: "", fromRoute: true,
+				});
+				changed = true;
+			} else if (!can && at >= 0 && list[at].fromRoute) {
+				list.splice(at, 1);
+				changed = true;
+			}
 		}
+		if (changed) this._setChartPicked(entry, list);
 
 		const written = String(entry.chart?.route ?? "").trim();
 		if (written && written !== routeLine(before)) return;
@@ -2042,28 +2695,33 @@ export class ExpeditionDialog extends StepperDialog {
 	_mapWindowSource() {
 		return {
 			build: tier => this._buildJourney(tier),
-			// `from` is the window that made the pick, so the sweep below can skip re-reading the
-			// one that is about to re-read itself.
-			pick:  (field, slug, from = null) => this._setJourneyPlace(field, slug, from),
 			// A window navigated to another map is no longer the window for the map it was opened
 			// on, and the bookkeeping here is keyed by exactly that.
 			moved: (fromTier, toTier, app) => this._movedMapWindow(fromTier, toTier, app),
-			// Same act from either surface, and it goes through the panel for the same reason
-			// `pick` does: the trip lives here, and the notification has to name the trip's own
-			// destination whichever window the GM pressed the button in.
+			// Same act from either surface, and it goes through the panel for the same reason the
+			// gestures below do: the trip lives here, and the notification has to name the trip's
+			// own destination whichever window the GM pressed the button in.
 			toScene: () => this._putRouteOnScene(),
 			// Also the same act from either surface, with one thing the window has to supply: the
 			// picture. `pickPoint` is the window's own zoomable map, so the reader aims at 300 dpi
 			// and the answer still comes back as a fraction of the printed crop.
 			placeSite: (surface, from = null) => this._placeSite(surface, from),
 			takeSiteOffMap: (uuid, from = null) => this._takeSiteOffMap(uuid, from),
-			// Drawing the way by hand, which is the same act again and the surface a GM is most
-			// likely to want it on: a 300 dpi map they can wheel into is where a mark can be put
-			// exactly where they mean, rather than within a few miles of it.
-			markPlace: (slug, ev, from = null) => this._chooseJourneyPlace(slug, ev, from),
+			// Planning the trip on the picture, which is the same act again and the surface a GM is
+			// most likely to want it on: a 300 dpi map they can wheel into is where a mark can be
+			// put exactly where they mean, rather than within a few miles of it. All three gestures
+			// come through here, including the one that plants the start and the ladder that peels
+			// the whole trip back — the window has the picture, the panel has the trip.
+			// The tier is the window's own, which is the one thing it can tell the planner that the
+			// planner cannot work out: it keeps showing the map it was opened on long after the
+			// panel has followed a destination out to the other one.
+			markPlace: (slug, ev, from = null, tier = null) =>
+				this._chooseJourneyPlace(slug, ev, from, tier),
+			// A site needs no tier from the window: it carries its own, because the spot the tap
+			// lays a stop at is the site's own recorded fraction rather than the pointer's.
+			markSite: (uuid, ev, from = null) => this._chooseJourneySite(uuid, ev, from),
 			drawMark: (mark, opts, from = null) => this._drawJourneyMark(mark, opts, from),
 			undoMark: (from = null) => this._undoJourneyMark(from),
-			drawByHand: (on, from = null) => this._toggleDrawnWay(on, from),
 			clearDrawn: (from = null) => this._clearDrawnWay(from),
 		};
 	}
@@ -2205,6 +2863,10 @@ export class ExpeditionDialog extends StepperDialog {
 	 */
 	async close(options = {}) {
 		this._dropCanvasWatch();
+		this._dropLoadWatch();
+		// A face hovered as the window goes is portaled to <body>, so it outlives its row unless
+		// it is taken down here.
+		removeAvatarPreview();
 		this._disarmPanelPick();
 		this._stopPanelDrawing();
 		await this._closeMapWindows();
@@ -2371,7 +3033,7 @@ export class ExpeditionDialog extends StepperDialog {
 	_loadRow(key, name, marks, limits, extras = {}) {
 		const pill = _LOAD_PILL[key];
 		const { bands, overflow } = _pipBands(marks, limits);
-		return {
+		const row = {
 			isFollower: false,
 			// The face, when there is one: the picture and the frame that crops it, resolved
 			// through the same helper every other small avatar in the system uses so a portrait
@@ -2393,6 +3055,11 @@ export class ExpeditionDialog extends StepperDialog {
 			noteDanger: false,
 			...extras,
 		};
+		// The quiet second line under the name on the enlarged-portrait card: a PC's playbook,
+		// a follower's tag. Derived here rather than in the template so both kinds of row answer
+		// with whichever one they carry, and neither has to know about the other's field.
+		row.previewSub = row.sub || row.folTag || "";
+		return row;
 	}
 
 	// Toggle a PC in/out of the current trip's party (stored on the trip entry, so it's

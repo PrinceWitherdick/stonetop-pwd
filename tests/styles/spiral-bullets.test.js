@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readCss, stripComments, declarations } from "../fakes/css.js";
+import { readCss, readRepo, stripComments, declarations } from "../fakes/css.js";
 
 /**
  * The standing rule for prose lists on these sheets: the bullet is the spiral, never the
@@ -134,5 +134,73 @@ describe("the lists whose marker was not a spiral", () => {
 		const caret = declarations(CSS, ".stonetop .steading-threat-type-toggle::after");
 		expect(caret).toMatch(/203A/);
 		expect(caret).toMatch(/transition:\s*transform/);
+	});
+});
+
+// The question spiral is a DIFFERENT SHAPE from the spiral it stands in for, and every family
+// that draws a bullet sizes its marker box square. Swapping the picture and leaving the box drew
+// the wide glyph a fifth short: `contain` fits it by its width, so it lost the height it should
+// have shared with the mark beside it, and it read as a faint speck rather than a bullet. Nothing
+// reports this: the list lays out, the row reads, and the only symptom is a glyph that looks
+// underfed next to its neighbours.
+describe("the question spiral is given a box built for its shape", () => {
+	const viewBox = (file) => {
+		const svg = readRepo(`assets/icons/steading/${file}`);
+		const [, w, h] = svg.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.-]+) ([\d.-]+)"/).map(Number);
+		return { w, h, ratio: w / h };
+	};
+
+	/** Every rule in the sheet, as {selectors, body}. */
+	const rules = [...stripComments(CSS).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+		.map(([, prelude, body]) => ({ selectors: prelude.split(",").map(x => x.trim()), body }));
+
+	// The premise the widening rests on. If the art is ever re-cropped square, the multiplier
+	// below stops being a fit and starts being a distortion, and this says so first.
+	it("stands on the art: one glyph square, the other wide", () => {
+		expect(viewBox("check-spiral.svg").ratio).toBeCloseTo(1, 1);
+		expect(viewBox("question-spiral.svg").ratio).toBeGreaterThan(1.2);
+	});
+
+	it("widens the box by the glyph's own ratio, not by a number someone liked", () => {
+		const widths = rules.flatMap(r => [...r.body.matchAll(/width:\s*calc\(var\(--stonetop-bullet-size, 10px\) \* ([\d.]+)\)/g)])
+			.map(m => Number(m[1]));
+		expect(widths.length, "no widened marker box found at all").toBeGreaterThan(0);
+		for (const factor of widths) expect(factor).toBeCloseTo(viewBox("question-spiral.svg").ratio, 2);
+	});
+
+	// The coupling, and the whole point: a rule that hands a marker this picture hands it the box
+	// too. Five rules do the swap today (the sheets' shared one, the journal bodies, the monster
+	// rich text, and the two GM playbook lists), each because the one before it loses the cascade
+	// where it lands -- and a sixth added later would shrink the glyph again on that surface alone.
+	it("sizes the box in the same rule that swaps the picture, every time", () => {
+		const swaps = rules.filter(r => /question-spiral\.svg/.test(r.body)
+			&& r.selectors.some(sel => sel.includes("question-bullet")));
+		expect(swaps.length, "the swap rules are gone or renamed").toBeGreaterThanOrEqual(5);
+		for (const rule of swaps) {
+			expect(rule.body, rule.selectors.join(", ")).toMatch(/width:\s*calc\(var\(--stonetop-bullet-size/);
+		}
+	});
+
+	// And back the other way. The Setting Overview opts a page out of the swap (a principle that
+	// ends on a rhetorical "...who will?" is not a prompt); putting the square glyph back into the
+	// widened box would draw it a quarter BIGGER than the bullets around it.
+	it("puts the square box back wherever it puts the square glyph back", () => {
+		const optOut = rules.find(r => r.selectors.some(sel => sel.includes("no-question-spiral")));
+		expect(optOut, "the opt-out rule is gone").toBeTruthy();
+		expect(optOut.body).toMatch(/width:\s*var\(--stonetop-bullet-size/);
+	});
+
+	// Two lists hang a CHARACTER in their marker (the follower moves list draws the rulebook's
+	// arrow, the numbered threats guide draws its step number). They are tagged like any other row
+	// ending in "?", so the swap reaches them: it paints a picture nobody can see behind the
+	// character, and the box it asks for pushes a flex-laid marker's text off the list's edge.
+	it("leaves the two lists whose marker is a character out of it", () => {
+		for (const sel of [".stonetop-follower-moves-list li.question-bullet::before",
+			".stonetop .steading-threats-guide-list.is-ordered > li.question-bullet::before"]) {
+			const rule = declarations(CSS, sel);
+			expect(rule, `${sel} is no longer opted out of the picture swap`).toBeTruthy();
+			expect(rule).toMatch(/background-image:\s*none/);
+			expect(rule).toMatch(/width:\s*auto/);
+		}
 	});
 });

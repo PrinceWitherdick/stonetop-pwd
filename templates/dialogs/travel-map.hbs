@@ -12,7 +12,7 @@
 
       The chrome does NOT ride the picture: only `.stonetop-image-zoom-overlay` is sized onto the
       image, so the controls and the readout stay put while the map moves behind them. --}}
-<div class="stonetop-travel-map stonetop-journey">
+<div class="stonetop-travel-map stonetop-journey{{#if journey.needsStart}} is-needing-start{{/if}}">
 
   <div class="stonetop-travel-map-chrome">
     {{> "stonetop.expedition-journey-controls" journey=journey}}
@@ -31,6 +31,10 @@
   {{/if}}
 
   <div class="stonetop-travel-map-foot">
+    {{!-- What a shift-click on the map lays, said under the picture exactly as the route step says
+          it. Ahead of the readout, since it is about the picture and the readout is about the
+          answer. `sync` re-renders both halves of this foot together. --}}
+    {{> "stonetop.expedition-journey-drawhint" journey=journey}}
     {{> "stonetop.expedition-journey-route" journey=journey}}
   </div>
 </div>

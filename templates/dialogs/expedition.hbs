@@ -113,55 +113,7 @@
     {{!-- Outfit step: live party-load readout (GM-only; built in ExpeditionDialog
           getData). One row per party member, scoped to the current expedition. --}}
     {{#if loadReadout}}
-    <div class="stonetop-exp-load">
-      <div class="stonetop-exp-load-head">
-        <span class="stonetop-exp-load-title"><span class="stonetop-glyph stonetop-glyph--diamond">◇</span> Party load</span>
-        <span class="stonetop-exp-load-live">live from sheets</span>
-      </div>
-
-      {{#if loadReadout.chips.length}}
-      <div class="stonetop-exp-load-pick">
-        <span class="stonetop-exp-load-picklab">On this trip:</span>
-        {{#each loadReadout.chips}}
-        <button type="button" class="stonetop-exp-load-chip{{#unless on}} is-out{{/unless}}" data-actor-id="{{id}}">
-          <span class="tick">✓</span> {{name}}
-        </button>
-        {{/each}}
-      </div>
-      {{/if}}
-
-      {{#if loadReadout.hasRows}}
-      <div class="stonetop-exp-load-glance">
-        <span class="g-head">Setting out</span>
-        {{#if loadReadout.summary.anyOver}}<span class="g-tally g-warn"><b>{{loadReadout.summary.overloaded}}</b> overloaded</span>{{/if}}
-        {{#if loadReadout.summary.anyHeavy}}<span class="g-tally g-caut"><b>{{loadReadout.summary.heavy}}</b> heavy</span>{{/if}}
-        {{#if loadReadout.summary.anySneak}}<span class="g-tally"><b>{{loadReadout.summary.cantSneak}}</b> can't move quiet</span>{{/if}}
-        {{#unless loadReadout.summary.anySneak}}<span class="g-tally g-ok">all set to move</span>{{/unless}}
-      </div>
-
-      {{#each loadReadout.rows}}
-      <div class="stonetop-exp-load-row {{levelClass}}{{#if isFollower}} is-follower{{/if}}">
-        <span class="stonetop-exp-load-ava{{#if img}} stonetop-exp-load-ava--photo{{/if}}">{{#if img}}<img class="stonetop-exp-load-ava-img" src="{{img}}" alt="" draggable="false"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}>{{else}}{{initial}}{{/if}}</span>
-        <span class="stonetop-exp-load-name">{{name}}{{#if sub}} <em>{{sub}}</em>{{/if}}{{#if folTag}} <span class="stonetop-exp-load-fol">{{folTag}}</span>{{/if}}</span>
-        <span class="stonetop-exp-load-track">
-          {{#each bands}}<span class="stonetop-exp-load-band">{{#each pips}}<i class="stonetop-exp-load-pip{{#if on}} on{{/if}}"></i>{{/each}}</span>{{/each}}
-          {{#if overflow}}<span class="stonetop-exp-load-over">+{{overflow}}</span>{{/if}}
-        </span>
-        <span class="stonetop-exp-load-pill {{pillClass}}">{{levelLabel}}</span>
-        <span class="stonetop-exp-load-count"><b>{{marks}}</b>/{{cap}}</span>
-        {{#if gated.length}}
-        <span class="stonetop-exp-load-gated">
-          {{#each gated}}<span class="stonetop-exp-load-move {{#if active}}on{{else}}off{{/if}}"><span class="ic">{{#if active}}✓{{else}}✕{{/if}}</span> <span class="nm">{{name}}</span> <span class="rq">{{req}}</span></span>{{/each}}
-        </span>
-        {{/if}}
-        {{#if loadBonus}}<span class="stonetop-exp-load-note"><span class="mod">▲ {{loadBonus.from}}</span> {{loadBonus.caps}}</span>{{/if}}
-        {{#if note}}<span class="stonetop-exp-load-note{{#if noteDanger}} danger{{/if}}">{{#if noteDanger}}⚠ {{/if}}{{note}}</span>{{/if}}
-      </div>
-      {{/each}}
-      {{else}}
-      <p class="stonetop-exp-load-empty">No one's on this trip yet. Pick who's coming above.</p>
-      {{/if}}
-    </div>
+    <div class="stonetop-exp-load">{{> "stonetop.expedition-load" loadReadout=loadReadout}}</div>
     {{/if}}
 
     {{!-- Requisition step: the steading's communal assets, and which of them this trip
@@ -253,20 +205,57 @@
                     placeholder="{{qa.intro.placeholder}}">{{qa.intro.value}}</textarea>
         </div>
         {{/if}}
+        {{!-- WHAT THIS TRIP PRESENTED, not the book's menu of twelve.
+
+              The step used to print every requirement and every challenge with a tick beside
+              each, which is twelve rows of mostly-empty boxes on the one step a GM reads back
+              mid-journey as a to-do list. The menu now lives behind each heading's add button
+              and what stands here is what was actually told to the table, with the answer under
+              it. ExpeditionDialog `_chartRow` has the rest of why.
+
+              DRAWN AS THE GM TOOLKIT'S OPEN QUESTIONS ARE, in their own rules rather than in a
+              copy of them: `.stonetop-gm-wonder-item` and the three classes inside it are the
+              ruled column, the question spiral and the answer box from the "I wonder…" tab
+              (styles/stonetop.css says so where the shared rules are declared). A charted
+              requirement IS one of those — a prompt whose answer arrives later, read down a
+              column — and two hand-matched copies of that look would drift the first time
+              either was touched. Only the container and the three handles the walkthrough
+              binds are `.stonetop-exp-chart-*`. --}}
         {{#each qa.groups}}
-        <div class="stonetop-exp-checkgroup">
+        <div class="stonetop-exp-chartgroup">
           <div class="stonetop-exp-checkgroup-label">{{label}}</div>
-          <ul class="stonetop-exp-checks">
-            {{#each items}}
-            <li class="stonetop-exp-check">
-              <label>
-                <input type="checkbox" class="stonetop-exp-checkbox"
-                       data-answer-path="{{path}}" {{#if checked}}checked{{/if}}>
-                <span>{{{text}}}</span>
-              </label>
+          {{#if entries.length}}
+          <ul class="stonetop-gm-wonder-list">
+            {{#each entries}}
+            <li class="stonetop-gm-wonder-item" data-chart-id="{{id}}">
+              <div class="stonetop-gm-wonder-head">
+                {{!-- A span, not an input: the wording is the book's (or, for a line the GM
+                      wrote, what they already said), so there is nothing to reword in place.
+                      Same treatment a settled question on the toolkit gets, at full strength —
+                      this is the live list, not a filed one. --}}
+                <span class="stonetop-gm-wonder-question stonetop-gm-wonder-question--fixed">{{{text}}}</span>
+                <span class="stonetop-gm-wonder-tools">
+                  <button type="button" class="stonetop-gm-wonder-remove stonetop-exp-chart-remove"
+                          data-tooltip="Take this back off the list" data-tooltip-direction="UP">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </span>
+              </div>
+              {{!-- What you actually told them. On the two lines the plotted route can answer,
+                    its answer is the placeholder, so leaving the box alone still reads as the
+                    map's figure and typing over it keeps yours. --}}
+              <textarea class="stonetop-gm-wonder-answer stonetop-exp-chart-answer" rows="2"
+                        aria-label="{{plain}}" placeholder="{{hint}}">{{answer}}</textarea>
             </li>
             {{/each}}
           </ul>
+          {{else}}
+          <p class="stonetop-gm-wonder-empty">{{empty}}</p>
+          {{/if}}
+          <button type="button" class="stonetop-gm-wonder-add-btn stonetop-exp-chart-add"
+                  data-chart-group="{{key}}">
+            <i class="fas fa-plus"></i> {{addLabel}}
+          </button>
         </div>
         {{/each}}
         {{#if qa.notes}}
@@ -302,10 +291,9 @@
               {{#unless returnTriumphant.hasSteading}}disabled{{/unless}}>
         <i class="fas fa-house-chimney-heart"></i> Return Triumphant
       </button>
-      <p class="stonetop-exp-triumph-note">
-        {{#if returnTriumphant.hasSteading}}If their return is a true triumph, clear one of the steading&rsquo;s debilities, or raise Fortunes by 1 if none are marked.
-        {{else}}No steading sheet in this world yet, so there is nothing to clear.{{/if}}
-      </p>
+      {{#unless returnTriumphant.hasSteading}}
+      <p class="stonetop-exp-triumph-note">No steading sheet in this world yet, so there is nothing to clear.</p>
+      {{/unless}}
     </div>
     {{/if}}
 

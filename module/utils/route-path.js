@@ -46,10 +46,20 @@ const ratioOf = aspect => (Number(aspect) > 0 ? Number(aspect) : 1);
 // times is a curve that can be mistyped in one of them without anything disagreeing loudly.
 const quadAt = (a, b, c, t) => (1 - t) * (1 - t) * a + 2 * (1 - t) * t * b + t * t * c;
 
-/** Is `place` somewhere `tier` can draw — its own spot, or the edge arrow that points at it? */
-export function drawnOn(tier, place) {
-	if (!place) return false;
-	return !!travelPlace(place)?.spots?.[tier] || exitsOnMap(tier).some(e => e.node === place);
+/**
+ * Is `end` somewhere `tier` can draw — its own spot, or the edge arrow that points at it?
+ *
+ * TWO KINDS OF END, because a journey has two kinds. A slug names a place the books lettered, and
+ * this is the lookup it always was. A `{ tier, fx, fy }` mark is a point the GM put down by hand
+ * (utils/journey-start.js), and it is drawn on the map it was laid on and on no other: its
+ * fractions are of that one picture, so the same numbers elsewhere would mean a different valley.
+ * `startEnd` is what reduces a trip's start to whichever of the two it is, and every map question
+ * below takes ends in that form.
+ */
+export function drawnOn(tier, end) {
+	if (!end) return false;
+	if (typeof end === "object") return !!end.tier && end.tier === tier;
+	return !!travelPlace(end)?.spots?.[tier] || exitsOnMap(tier).some(e => e.node === end);
 }
 
 /**
@@ -96,12 +106,14 @@ export function tierDrawingEnds(ends, { except = null } = {}) {
  */
 export function tierDrawing(route, opts) {
 	if (!route?.legs?.length) return null;
-	// A HAND-DRAWN WAY HAS ONLY ONE ANSWER, and it is not up for negotiation: its bare marks are
-	// fractions of one particular picture, so the map it was drawn on is the map it can be drawn
-	// on. Asking `tierDrawingEnds` about it would answer for its two ENDS, which on a path from
-	// Stonetop to a bend in the Flats are one place and a null — and it would happily nominate the
-	// other map, on which every mark in the middle means somewhere else entirely.
-	if (route.custom) return route.tier ?? null;
+	// A ROUTE PINNED TO ONE MAP HAS ONLY ONE ANSWER, and it is not up for negotiation. Two kinds of
+	// route are: a way drawn by hand, whose bare marks are fractions of one particular picture, and
+	// one setting out from a mark the GM put down, whose first leg starts at such a fraction. Either
+	// way the map it was laid on is the map it can be drawn on. Asking `tierDrawingEnds` about one
+	// would answer for its two ENDS, which on a path from Stonetop to a bend in the Flats are one
+	// place and a null — and it would happily nominate the other map, on which every mark in the
+	// middle means somewhere else entirely.
+	if (route.pinned) return route.tier ?? null;
 	return tierDrawingEnds([route.legs[0].from, route.legs.at(-1).to], opts);
 }
 
@@ -125,9 +137,9 @@ export function tierDrawing(route, opts) {
  */
 export function routePath(route, tier, frame, aspect) {
 	if (!route?.legs?.length) return null;
-	// A hand-drawn way belongs to ONE map (see `tierDrawing`), so on any other it has no line and
-	// not a wrong one. `offMapNote` is what says so in words, and names the map that does draw it.
-	if (route.custom && route.tier !== tier) return null;
+	// A route with a bare mark at either end belongs to ONE map (see `tierDrawing`), so on any other
+	// it has no line and not a wrong one. `offMapNote` says so in words, and names the map it is on.
+	if (route.pinned && route.tier !== tier) return null;
 	const arrows = new Map(exitsOnMap(tier).filter(e => e.node).map(e => [e.node, e]));
 	// A stop is either a place, which this map looks up for itself, or a bare mark the GM put down,
 	// which arrives carrying its own fraction. Both end up in the same percentage space, which is
@@ -419,7 +431,7 @@ export function routeDots(legs, aspect, spacing) {
  */
 export function offMapNote(tier, route) {
 	if (!route?.legs?.length) return null;
-	if (route.custom) return customOffMapNote(tier, route);
+	if (route.pinned) return pinnedOffMapNote(tier, route);
 	// The ends alone. A missing stop in the MIDDLE is bridged rather than refused, so it is
 	// not why there is no line and saying so would send the reader after the wrong map.
 	const ends = [...new Set([route.legs[0].from, route.legs.at(-1).to])];
@@ -441,28 +453,34 @@ export function offMapNote(tier, route) {
 }
 
 /**
- * The same question for a way the GM drew, which has two ways of not being drawable and they want
- * different sentences.
+ * The same question for a route pinned to one map, which has two ways of not being drawable and
+ * they want different sentences.
  *
- * WRONG MAP is the common one and it is not a fault: a drawn path's bare marks are fractions of one
- * picture, so opening the other tab takes the line away exactly as it should. The reader needs to
- * be told which map it is on and given the button back to it — `elsewhere` is what says the note is
- * about the PICTURE rather than about a place, so the readout does not word it as though somewhere
- * had gone missing.
+ * WRONG MAP is the common one and it is not a fault: a bare mark is a fraction of one picture, so
+ * opening the other tab takes the line away exactly as it should. The reader needs to be told which
+ * map it is on and given the button back to it — `elsewhere` is what says the note is about the
+ * PICTURE rather than about a place, so the readout does not word it as though somewhere had gone
+ * missing. `drawn` then says WHICH pinning it is, because "you drew this on the Vicinity" and "they
+ * set out from a point on the Vicinity" are two different facts and only one of them is true of any
+ * given trip.
  *
- * WRONG ORIGIN is the rare one: the trip now sets out from Marshedge and the way was drawn on the
+ * WRONG END is the rare one: the trip now sets out from Marshedge and the way was drawn on the
  * Vicinity, which letters no Marshedge. That really is a missing end, it reads exactly like the
  * solved-route case above, and there is no other map to offer — the marks in the middle only mean
  * anything on this one.
  *
  * A BARE MARK IS NEVER MISSING. It carries its own position, so the `spot` test has to come first;
- * asking `drawnOn` about its null slug would report the far end of every hand-drawn path as
- * undrawable and put a refusal under a line the reader can plainly see.
+ * asking `drawnOn` about its null slug would report the far end of every hand-drawn path, and the
+ * near end of every hand-placed start, as undrawable — putting a refusal under a line the reader
+ * can plainly see.
  */
-function customOffMapNote(tier, route) {
+function pinnedOffMapNote(tier, route) {
 	const other = route.tier ?? null;
 	if (other !== tier) {
-		return { names: [], other, otherName: travelMap(other)?.name ?? null, elsewhere: true };
+		return {
+			names: [], other, otherName: travelMap(other)?.name ?? null,
+			elsewhere: true, drawn: !!route.custom,
+		};
 	}
 	const first = route.legs[0];
 	const last = route.legs.at(-1);

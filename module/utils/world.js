@@ -1,8 +1,17 @@
 import {resolvedFlagProperty} from "../actors/character/StonetopFlags.js";
 import {escHtml} from "./strings.js";
 
+// Is this actor the steading? TWO ARMS, and both are load-bearing: the subtype is what a
+// steading minted by this system carries, and `system.customType` is what one made before the
+// subtype existed still carries. Exported because the short one-armed spelling kept being
+// written by hand at each new call site, and a world on the legacy shape then reads as having no
+// steading at all -- silently, since every one of those call sites has a sensible empty answer.
+export function isSteadingActor(actor) {
+	return actor?.type === "stonetop" || actor?.system?.customType === "stonetop";
+}
+
 export function getStonetopSteadingActor() {
-	return game.actors?.find(a => a.type === "stonetop" || a.system?.customType === "stonetop") ?? null;
+	return game.actors?.find(isSteadingActor) ?? null;
 }
 
 // Like getStonetopSteadingActor, but warns (and returns null) when no steading exists

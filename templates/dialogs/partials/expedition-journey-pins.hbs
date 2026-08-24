@@ -53,15 +53,44 @@
 </button>
 {{/each}}
 
+{{!-- WHERE THEY SET OUT FROM, when that is a point the GM put down rather than a place the books
+      lettered. Only ever one, only ever on the map it was laid on, and absent entirely for a trip
+      leaving a lettered place: that one is already drawn by its own pin below, wearing the
+      setting-out ring, and a second mark on top of it would be the same fact drawn twice.
+
+      NOT A BUTTON, and it takes no clicks at all, exactly as the drawn way's numerals below do not.
+      Every gesture over this picture is about the trip: a plain click moves the far end of the way,
+      a shift-click adds a leg. A mark that swallowed those would be the one thing on the map that
+      stops the map working, and it has nothing of its own to do with a click. Moving where they set
+      out from is a right-click back past it and a click somewhere else — the same ladder everything
+      else on this picture comes off by (ExpeditionDialog `_undoJourneyMark`).
+
+      IT WEARS "setting out" RATHER THAN ITS OWN NAME, because its name is "a point on The Vicinity",
+      which is a sentence about the map and not a label to stand on it. The same wording the
+      destination list puts beside a lettered start, so the two read as one idea. --}}
+{{#if start}}
+<span class="stonetop-journey-pick stonetop-journey-start h-{{start.anchorH}} v-{{start.anchorV}}"
+      style="left:{{start.left}}%;top:{{start.top}}%">
+  <span class="stonetop-journey-dot"></span>
+  <span class="stonetop-journey-tag">{{start.label}}</span>
+</span>
+{{/if}}
+
 {{!-- The GM's own sites, wherever they have dropped one on this map (module/sites/site-map-spots.js).
       Built GM-only, so this loop is simply empty for a player.
 
-      A DIFFERENT MARK, because it means a different thing. Every other pin on this picture is a
-      place the books charted and a destination the travel table can time; a site is prep, it opens
-      its own write-up rather than setting where the party is bound, and it stands wherever the GM
-      said rather than where a label was printed. It wears its name ALWAYS, unlike the book's own
-      places: a GM places a handful of these, and a mark on a map whose name you have to go hunting
-      for with a mouse is not a label. Right-click takes it off again; the tooltip says so.
+      A DIFFERENT MARK, because it stands for a different KIND of place — not because it does a
+      different thing when tapped. Every other pin on this picture is a place the books charted and
+      the travel table can time; a site is the GM's own prep, standing wherever they said rather
+      than where a label was printed, and the table has never heard of it. But a tap means what a
+      tap on any of the others means (user, 2026-08-24): it lays the way through here. It used to
+      open the write-up, which made a GM's own barrow the one mark on this map that could not be
+      part of the journey drawn across it. See ExpeditionDialog `_chooseJourneySite`.
+
+      It wears its name ALWAYS, unlike the book's own places: a GM places a handful of these, and a
+      mark on a map whose name you have to go hunting for with a mouse is not a label. Right-click
+      takes the PIN off again — not the write-up, which stays on the Sites tab — and that is the one
+      gesture here that differs from the book's own pins, so the tooltip says all three.
 
       A STANDING STONE, and NOT the `fa-mountain-sun` a site wears in a list. The two are the same
       thing at two sizes, and 18px is not a size a drawing survives: mountain-sun is a sun disc
@@ -92,15 +121,15 @@
       where the books letter nothing.
 
       NOT BUTTONS. Every other mark on this picture does something when clicked; these are the
-      reader's own handwriting, and while the mode is on a click anywhere — including on one of
-      these — lays the next mark. So they take no pointer events at all and let the click through
+      reader's own handwriting, and while a way is drawn a click anywhere — including on one of
+      these — moves or extends it. So they take no pointer events at all and let the click through
       to the drawing watch underneath, which is what stops a mark from swallowing the gesture that
       would move it.
 
       AND SO THEY CARRY NO TOOLTIP, which is not an omission: core's tooltips fire on mouseenter,
       and nothing enters an element that takes no pointer events. One would read as live and never
-      appear. What a click and a right-click do is taught in the line above the map instead
-      (expedition-journey-controls.hbs), which is the one place it can be said once and read.
+      appear. What a click and a right-click do is taught in the line under the map instead
+      (expedition-journey-drawhint.hbs), which is the one place it can be said once and read.
 
       NUMBERED, and the numeral is the whole point: it is what the readout's leg list calls this
       stop ("point 2"), so a line in the list and a dot on the map are visibly the same thing. They

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { readRepo as read, readCss, declarations } from "../fakes/css.js";
+import { readRepo as read, readCss, declarations, ownRule } from "../fakes/css.js";
+import { FATE_TABLES, fateTableList } from "../../module/data/fate-tables.js";
 
 // Where the two roll buttons of the expedition walkthrough sit, relative to the tables they
 // are read against.
@@ -113,6 +114,28 @@ describe("the Requisition outcome table", () => {
 		expect(row).not.toContain("display: flex;");
 		const label = declarations(CSS, ".stonetop-spring-tiers--table .stonetop-spring-tier-label");
 		expect(label ?? "").not.toMatch(/min-width: [^0]/);
+	});
+
+	it("bolds its range, the way every fate row's range is bold", () => {
+		// fateTableList writes the range as a <strong>, so a fate row's "1-2" renders at 700.
+		// This table's range is a plain span, and with no weight of its own it rendered at 400
+		// next to a table read three steps later at 700 — measured, and the first difference a
+		// reader names. The weight belongs to the TABLE look: the card look sets its own.
+		expect(fateTableList(FATE_TABLES.camp)).toContain("<strong>");
+		expect(declarations(CSS, ".stonetop-spring-tiers--table .stonetop-spring-tier-label"))
+			.toMatch(/font-weight: 700;/);
+	});
+
+	it("sets its rows no taller than a fate row: line-height and nothing else", () => {
+		// A fate row is text in the box with no chrome of its own, hung on the body's
+		// `line-height: 1.45`. This row states the same 1.45 (it is not inside a spring body),
+		// and must add nothing to it: vertical padding and a reserved transparent border made
+		// every row here 23.7px against the fate table's 19.7px, 4px a row.
+		expect(declarations(CSS, ".stonetop-spring-body li")).toContain("line-height: 1.45;");
+		const row = ownRule(CSS, ".stonetop-spring-tiers--table .stonetop-spring-tier");
+		expect(row).toContain("line-height: 1.45;");
+		expect(row).not.toMatch(/\bpadding: /);
+		expect(row).not.toMatch(/\bborder: /);
 	});
 
 	it("declares that modifier after the card rules it overrides", () => {

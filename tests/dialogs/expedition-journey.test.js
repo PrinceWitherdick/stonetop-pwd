@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import { readCss, ownRule, declarations, readRepo as read } from "../fakes/css.js";
 
 // The route step of the Run an Expedition walkthrough: the book's maps made tappable over its
 // travel table. The graph and the solve are proven in tests/data/travel-times.test.js and
@@ -23,22 +24,25 @@ vi.mock("../../module/book2-art/travel-map-art.js", () => ({
 // tests/sites/site-map-spots.test.js and their chooser opens a dialog, so both are faked here:
 // what this suite covers is the panel's own share — the arithmetic that turns a stored fraction
 // into a hotspot, and the order the two gestures happen in.
-const sites = { onMap: [], chosen: null, opened: [], placeCalls: [], liftCalls: [] };
-// Only the read: writing a spot is inside the gesture, which is faked whole below.
+const sites = { onMap: [], chosen: null, placeCalls: [], liftCalls: [] };
+// Only the reads: writing a spot is inside the gesture, which is faked whole below. Both of them,
+// because a site pin now answers a tap as well as being drawn — `placedSiteSpot` is what the tap
+// looks its own recorded fraction up through, across every tier rather than one.
 vi.mock("../../module/sites/site-map-spots.js", () => ({
 	sitesOnMap: (_steading, tier) => sites.onMap.filter(s => s.spot.tier === tier),
+	placedSiteSpot: (_steading, uuid) => sites.onMap.find(s => s.page.uuid === uuid) ?? null,
 }));
 // The gesture itself (choose, aim, write) is proven in tests/sites/place-site-on-map.test.js,
 // where it now lives. What is left for this suite is the dialog's own share: that it delegates,
 // and that it redraws both surfaces afterwards only when something actually moved.
 vi.mock("../../module/sites/place-site-on-map.js", () => ({
 	chooseSiteForMap: () => Promise.resolve(sites.chosen),
-	openSiteWriteUp: uuid => { sites.opened.push(uuid); return Promise.resolve(null); },
 	placeSiteOnMap: surface => { sites.placeCalls.push(surface); return Promise.resolve(!!sites.chosen); },
 	liftSiteOffMap: uuid => { sites.liftCalls.push(uuid); return Promise.resolve(!!sites.chosen); },
 }));
 
 const { ExpeditionDialog } = await import("../../module/dialogs/ExpeditionDialog.js");
+const { chartPicked, chartGroupOf } = await import("../../module/dialogs/expedition-data.js");
 const { frameFor, travelPlace } = await import("../../module/data/travel-times.js");
 const { offMapNote, routeArrow, routeLegs, routePath } = await import("../../module/utils/route-path.js");
 const { offMapNames, showRouteOnScene } = await import("../../module/utils/scene-route.js");
@@ -81,7 +85,6 @@ beforeEach(() => {
 	sites.chosen = null;
 	sites.placeCalls = [];
 	sites.liftCalls = [];
-	sites.opened = [];
 	global.game = {
 		// tests/setup.js installs a localizer backed by the real languages/en.json, and this
 		// override would otherwise drop it. The route's copy lives in that file now, so keeping
@@ -127,15 +130,36 @@ describe("the route step sits in the walkthrough", () => {
 
 /** A trip with no hand-drawn way on it, which every stored journey now reads back carrying. */
 const NO_DRAWN_WAY = { on: false, tier: null, points: [] };
+/** And where it sets out from, read back whole: a place the books letter, or a mark on one map. */
+const startingAt = slug => ({ slug, tier: null, fx: null, fy: null });
 
 describe("what the trip remembers", () => {
 	it("sets out from home until told otherwise", () => {
-		expect(dialog()._journeyPick()).toEqual({ origin: "stonetop", destination: null, custom: NO_DRAWN_WAY });
+		expect(dialog()._journeyPick()).toEqual({
+			origin: "stonetop", start: startingAt("stonetop"), destination: null, custom: NO_DRAWN_WAY,
+		});
 	});
 
 	it("keeps a saved pick", () => {
-		expect(dialog({ origin: "marshedge", destination: "lygos" })._journeyPick())
-			.toEqual({ origin: "marshedge", destination: "lygos", custom: NO_DRAWN_WAY });
+		expect(dialog({ origin: "marshedge", destination: "lygos" })._journeyPick()).toEqual({
+			origin: "marshedge", start: startingAt("marshedge"), destination: "lygos", custom: NO_DRAWN_WAY,
+		});
+	});
+
+	// The far end of a trip has always been able to be anywhere. This is the near end catching up:
+	// a point on one of the books' maps, stored as the fraction it is, with `origin` null because
+	// there is no place to name. See module/utils/journey-start.js.
+	it("keeps a start the GM put down on the map by hand", () => {
+		const pick = dialog({ origin: { tier: "vicinity", fx: 0.42, fy: 0.55 }, destination: "marshedge" })._journeyPick();
+		expect(pick.origin).toBeNull();
+		expect(pick.start).toEqual({ slug: null, tier: "vicinity", fx: 0.42, fy: 0.55 });
+	});
+
+	// A fraction with no picture to be a fraction OF is not a position, and honouring one would put
+	// the party wherever the reader happened to be looking.
+	it("falls back to home for a mark whose map it has never heard of", () => {
+		expect(dialog({ origin: { tier: "atlantis", fx: 0.4, fy: 0.4 } })._journeyPick().origin).toBe("stonetop");
+		expect(dialog({ origin: { tier: "vicinity", fx: 1.4, fy: 0.4 } })._journeyPick().origin).toBe("stonetop");
 	});
 
 	it("treats a place you are already standing in as no destination", () => {
@@ -145,8 +169,9 @@ describe("what the trip remembers", () => {
 	});
 
 	it("falls back to home when the stored slug is not a place any more", () => {
-		expect(dialog({ origin: "atlantis", destination: "narnia" })._journeyPick())
-			.toEqual({ origin: "stonetop", destination: null, custom: NO_DRAWN_WAY });
+		expect(dialog({ origin: "atlantis", destination: "narnia" })._journeyPick()).toEqual({
+			origin: "stonetop", start: startingAt("stonetop"), destination: null, custom: NO_DRAWN_WAY,
+		});
 	});
 });
 
@@ -339,20 +364,22 @@ describe("building the panel", () => {
 		expect(data.groups.find(g => g.places.some(p => p.slug === "stonetop")).label).toBe("The Vicinity");
 	});
 
-	// The gold heading follows the DESTINATION's group. `_activeTier` can only ever name a map, so
-	// keying it to the picture meant the group holding Lygos could never take it — the highlight
-	// sat on a heading that did not contain the chosen place.
-	it("highlights the group holding the destination, even past the maps' edge", async () => {
-		const beyond = await dialog({ destination: "lygos" })._buildJourney();
-		expect(beyond.activeTier).toBe("worlds-end");
-		expect(beyond.groups.find(g => g.isActive).label).toBe("Beyond the maps");
+	// No fold is singled out any more. The heading used to take the gold for whichever group held
+	// the destination, which the chosen place's own pill and the map tabs already said between
+	// them; three marks for one fact, and the one on the heading read as being about the fold.
+	it("singles out no group, whatever is chosen", async () => {
+		for (const journey of [{ destination: "lygos" }, { destination: "marshedge" }, null]) {
+			const built = await dialog(journey)._buildJourney();
+			expect(built.groups.some(g => "isActive" in g), JSON.stringify(journey)).toBe(false);
+		}
+		// The picture still follows the destination; that is what the map tabs mark.
+		expect((await dialog({ destination: "lygos" })._buildJourney()).activeTier).toBe("worlds-end");
+	});
 
-		const drawn = await dialog({ destination: "marshedge" })._buildJourney();
-		expect(drawn.groups.find(g => g.isActive).label).toBe("The World's End");
-
-		// With nothing chosen there is only the picture to follow.
-		const none = await dialog()._buildJourney();
-		expect(none.groups.find(g => g.isActive).label).toBe("The Vicinity");
+	it("leaves no active-fold class in the markup for nothing to style", () => {
+		const hbs = read("templates/dialogs/partials/expedition-journey.hbs");
+		expect(hbs).toContain('<div class="stonetop-journey-group">');
+		expect(hbs).not.toContain("journey-group{{#if isActive}}");
 	});
 
 	it("offers the gazetteer only where the books give the place an entry", async () => {
@@ -367,6 +394,70 @@ describe("building the panel", () => {
 		// nothing in the gazetteer describes it, and a card that opens the wrong entry is worse
 		// than one that opens none.
 		expect(rows["tors-fist"].uuid).toBeNull();
+	});
+
+	// The gazetteer link TRAILS its row, at the far end of it: it is what you reach for after
+	// reading the place, so it follows the place.
+	it("puts the gazetteer link after the place it belongs to", () => {
+		const hbs = read("templates/dialogs/partials/expedition-journey.hbs");
+		const link = hbs.indexOf("stonetop-journey-book");
+		const row  = hbs.indexOf("stonetop-journey-pick stonetop-journey-row");
+		expect(row).toBeGreaterThan(-1);
+		expect(link).toBeGreaterThan(row);
+	});
+
+	// Tor's Fist is the one place in eighteen with no entry, so its row has ONE child — and left to
+	// the grid's own sizing that lone row would spread over a cell no other row's name gets, which
+	// is what put the icons at eighteen different x's. Both children name their column, which is
+	// what stops it: a fixed LAST column, empty on the row that has nothing to put in it.
+	it("reserves the icon's gutter on a row that has no gazetteer entry", () => {
+		const css = readCss();
+		const li  = declarations(css, ".stonetop-journey .stonetop-journey-list li");
+		expect(li).toContain("display: grid;");
+		expect(li).toMatch(/grid-template-columns: 1fr \d+px;/);
+		expect(declarations(css, ".stonetop-journey .stonetop-journey-row")).toContain("grid-column: 1;");
+		expect(declarations(css, ".stonetop-journey .stonetop-journey-book")).toContain("grid-column: 2;");
+	});
+
+	// The lit box takes in BOTH children: the button that picks the place and the bookmark that
+	// opens its entry. Drawn on the button alone it stopped a whole column short of that icon, so
+	// the chosen place read as a gold pill with a loose bookmark floating off the end of it. The
+	// <li> is the only element that can hold both, since an <a> cannot live inside a <button>.
+	it("draws the row's box around the gazetteer link as well as the name", () => {
+		const css = readCss();
+		const li  = declarations(css, ".stonetop-journey .stonetop-journey-list li");
+		expect(li).toContain("border: 1px solid transparent;");
+		expect(li).toMatch(/padding: \d+px \d+px;/);
+		// And nothing left on the button to draw a second box inside the first: core styles a
+		// <button> with a background and a border of its own, so both have to be put out by hand.
+		const row = declarations(css, ".stonetop-journey .stonetop-journey-row");
+		expect(row).toContain("border: none;");
+		expect(row).toContain("background: none;");
+		expect(row).not.toMatch(/padding: \d+px \d+px;/);
+	});
+
+	// Every lit state goes with the box, or the answer's gold would still stop where the button
+	// does. The INK stays on the button: the name and the time turn gold, the bookmark keeps its
+	// own faint grey against the wash behind it.
+	it("lights that box rather than the button inside it", () => {
+		const css  = readCss();
+		const box  = ".stonetop-journey .stonetop-journey-list li";
+		expect(ownRule(css, `${box}:has(.stonetop-journey-row.is-chosen)`)).toContain("--st-gold-bg");
+		expect(ownRule(css, `${box}:has(.stonetop-journey-row:hover)`)).toContain("--st-slate-hover-bg");
+		const chosen = declarations(css, ".stonetop-journey .stonetop-journey-row.is-chosen");
+		expect(chosen).toContain("--st-gold-text");
+		expect(chosen).not.toContain("background:");
+	});
+
+	// Core ships `.content-link` as a grey chip: a background, a border and padding sized for a
+	// word of link text. Around a lone 2xs glyph it reads as a second button drawn inside the
+	// row's pill, and it measures nine pixels wider than the gutter it sits in, so it crowds the
+	// time on one side and the pill's border on the other.
+	it("strips core's link chip off the bookmark", () => {
+		const book = declarations(readCss(), ".stonetop-journey .stonetop-journey-book");
+		expect(book).toContain("background: none;");
+		expect(book).toContain("border: none;");
+		expect(book).toContain("padding: 0;");
 	});
 
 	it("hangs that link off data-link, which is what core listens for", () => {
@@ -510,7 +601,7 @@ describe("the line showing the way they go", () => {
 		it("never bends a way the GM drew by hand", async () => {
 			const data = await dialog({
 				origin: "stonetop", destination: "the-foothills",
-				custom: { on: true, tier: "vicinity", points: [{ slug: "the-foothills" }] },
+				custom: { tier: "vicinity", points: [{ slug: "the-foothills" }] },
 			})._buildJourney("vicinity");
 			expect(points(data.map.path)).toEqual([at("stonetop"), at("the-foothills")]);
 		});
@@ -843,6 +934,60 @@ describe("saying why a map has no line on it", () => {
 	});
 });
 
+describe("saying how long it takes, and what the list under it is", () => {
+	const partial = f => readFileSync(
+		new URL(`../../templates/dialogs/partials/${f}`, import.meta.url), "utf8");
+
+	// The headline is a sentence a GM reads out at the table, and it used to be a bare span of
+	// time with no verb in front of it: "AT LEAST 7-8 DAYS", sitting on its own over the legs.
+	it("leads the total with a verb, whichever of the two wordings it carries", () => {
+		const total = partial("expedition-journey-route.hbs")
+			.match(/<div class="stonetop-journey-total[\s\S]*?<\/div>/)[0];
+		// ONE lead over `journey.route.atLeast`, which is both wordings: "It will take at least
+		// 7-8 days" for the table's own times and "It will take roughly 4-6 days" for a measured
+		// way. Writing it into only one branch would have the same readout speaking two ways.
+		expect(total).toContain("It will take {{journey.route.atLeast}}");
+	});
+
+	// ...and the verb is written in the TEMPLATE, because `routePhrase` has a second reader: the
+	// Chronicle prints it after a colon ("Stonetop to Marshedge: at least 40 days"), where a
+	// phrase that had swallowed a verb cannot sit.
+	it("keeps the verb out of the phrase the Chronicle reuses", () => {
+		expect(readFileSync(new URL("../../module/utils/travel-route.js", import.meta.url), "utf8"))
+			.not.toContain("It will take");
+	});
+
+	// A total the system measured with a ruler is set apart by being italic and in sentence case.
+	// It was ALSO the route's red, which on the step's one headline reads as a warning about the
+	// journey rather than as a note about where the figure came from.
+	it("sets a measured total in plain ink, not in the route's red", () => {
+		const rule = ownRule(readCss(), ".stonetop-journey .stonetop-journey-total.is-estimate");
+		expect(rule).toContain("color: var(--st-text)");
+		expect(rule).not.toContain("--stonetop-route-ink");
+		// The two marks that carry the distinction instead.
+		expect(rule).toContain("font-style: italic");
+		expect(rule).toContain("text-transform: none");
+	});
+
+	// The three folds under the readout are headed with the names of maps the books print, which
+	// say everything to a reader with the rulebooks open and nothing at all to anyone else.
+	it("heads the destination list with what the folds and the times are", () => {
+		const markup = partial("expedition-journey.hbs");
+		const head = markup.slice(
+			markup.indexOf('<div class="stonetop-journey-listhead">'),
+			markup.indexOf("{{#each journey.groups}}"));
+		expect(head).toContain("Travel times");
+		// Read off the START rather than saying "from Stonetop": a trip can set out from any place
+		// the books letter OR any point on either map, and every time in the list re-solves when it
+		// does. And with no start at all it names nobody — a trip right-clicked back past its own
+		// start has nowhere to reckon from, so the heading says only what the list IS.
+		expect(head).toContain("{{#if journey.start.set}} from {{journey.start.name}}{{/if}}");
+		for (const fold of ["The Vicinity", "The World&rsquo;s End", "Beyond the maps"]) {
+			expect(head, fold).toContain(fold);
+		}
+	});
+});
+
 describe("seeing the whole map", () => {
 	// The pin layer is rendered from the shared partial; here we only care that the dialog asks for
 	// it with the right tier's data and keeps an open window in step.
@@ -918,10 +1063,16 @@ describe("seeing the whole map", () => {
 		// The window renders the shared controls/route partials off this very object, so a field
 		// missing here is a control missing there.
 		const built = await dialog({ destination: "lygos" })._buildJourney("worlds-end");
-		expect(built.originOptions.some(o => o.selected)).toBe(true);
+		expect(built.start.name).toBe("Stonetop");
+		expect(built.start.set).toBe(true);
 		expect(built.tiers.map(t => t.slug)).toEqual(["vicinity", "worlds-end"]);
-		expect(built.hasDestination).toBe(true);
+		expect(built.destination.name).toBe("Lygos");
 		expect(built.route.atLeast).toBe("at least 40 days");
+		// The two flags the window arms its own picture off, so a mark laid at 300 dpi and one laid
+		// on the panel's inch-wide map are the same act: what a click means here, and whether a
+		// right-click has anything left to take.
+		expect(built.custom.canSetStart).toBe(false);
+		expect(built.custom.canUndo).toBe(true);
 	});
 
 	it("re-reads an open window after a pick made in the panel", async () => {
@@ -1058,12 +1209,19 @@ describe("seeing the whole map", () => {
 		expect(d._mapWindows.get("worlds-end")).toBe(app);
 	});
 
+	// Every gesture the window offers goes through the panel's own methods, which is what makes a
+	// pick made in the popout and one made on the panel the same act — same trip, same Chart a
+	// Course boxes, same Chronicle line. `pick` is gone with the × it was bound to; a place clicked
+	// in either window arrives here as `markPlace` and the planner decides what it means.
 	it("hands the window a way to write, going through the panel's own method", async () => {
 		const d = dialog();
 		const source = d._mapWindowSource();
-		await source.pick("destination", "marshedge");
+		expect(source.pick).toBeUndefined();
+		expect(source.pickStart).toBeUndefined();
+
+		await source.markPlace("marshedge", null, null, "vicinity");
 		expect(saved().journey.destination).toBe("marshedge");
-		expect(saved().chart.checks.days).toBe(true);
+		expect(chartPicked(saved().chart).map(e => e.key)).toContain("days");
 		expect((await source.build("vicinity")).activeTier).toBe("vicinity");
 	});
 });
@@ -1175,6 +1333,11 @@ describe("drawing the route on the scene", () => {
 		const { scene: button } = await dialog({ destination: "the-crossroads" })._buildJourney();
 		expect(button.showing).toBe(false);
 		expect(button.label).toBe("Draw it on the scene");
+		// AND NAMES THE SCENE THEY HAVE TO OPEN. The press writes on the canvas, never on the
+		// picture in the window, and a GM who reads the map here with another scene open gets a
+		// refusal with nothing in the label to have warned them.
+		expect(button.tooltip).toContain("The Vicinity");
+		expect(button.tooltip).toContain("canvas");
 	});
 
 	// The label follows THIS reader's canvas, not the map tab showing in the panel: the two come
@@ -1187,6 +1350,8 @@ describe("drawing the route on the scene", () => {
 		const { scene: button } = await d._buildJourney();
 		expect(button.showing).toBe(true);
 		expect(button.label).toBe("Take it off the scene");
+		// No "open that map first" on this side: the route is showing, so they are already on it.
+		expect(button.tooltip).not.toContain("canvas");
 	});
 
 	it("stores the two slugs on the scene and says where the way now runs", async () => {
@@ -1259,7 +1424,8 @@ describe("the template asks for what the dialog builds", () => {
 	// three the "See the whole map" window renders, which is what makes this one check cover both.
 	const TEMPLATE = [
 		"expedition-journey.hbs", "expedition-journey-pins.hbs",
-		"expedition-journey-controls.hbs", "expedition-journey-route.hbs",
+		"expedition-journey-controls.hbs", "expedition-journey-drawhint.hbs",
+		"expedition-journey-route.hbs",
 	].map(f => readFileSync(new URL(`../../templates/dialogs/partials/${f}`, import.meta.url), "utf8"))
 		.join("\n");
 
@@ -1287,7 +1453,7 @@ describe("the template asks for what the dialog builds", () => {
 		// its collection does not carry, and a block with nothing to iterate proves nothing.
 		const data = await dialog({
 			origin: "stonetop", destination: "lygos",
-			custom: { on: true, tier: "worlds-end", points: [{ slug: "marshedge" }, { fx: 0.62, fy: 0.7 }] },
+			custom: { tier: "worlds-end", points: [{ slug: "marshedge" }, { fx: 0.62, fy: 0.7 }] },
 		})._buildJourney();
 		// Each {{#each}} block's body, checked against one real element of that collection.
 		const blocks = [
@@ -1298,7 +1464,6 @@ describe("the template asks for what the dialog builds", () => {
 			["sites", data.map.sites[0]],
 			["exits", data.map.exits[0]],
 			["journey.route.legs", data.route.legs[0]],
-			["journey.originOptions", data.originOptions[0]],
 			["journey.groups", data.groups[0]],
 			["places", data.groups[0].places[0]],
 		];
@@ -1321,14 +1486,22 @@ describe("the template asks for what the dialog builds", () => {
 	});
 });
 
+// Chart a Course is a list a GM adds to now, not twelve ticks, so a pick that the map can answer
+// PUTS THAT LINE ON THE LIST — and un-picking takes it back off, as long as it is still the row
+// we put there. `charted` reads the trip's list the way both the step and the Chronicle do.
+const charted = () => chartPicked(saved().chart).map(e => e.key);
+const chartedRow = key => chartPicked(saved().chart).find(e => e.key === key);
+
 describe("carrying the pick onto Chart a Course", () => {
-	it("ticks the two requirements the route can answer, and fills the route line", async () => {
+	it("adds the two requirements the route can answer, and fills the route line", async () => {
 		const d = dialog();
 		await d._setJourneyPlace("destination", "lygos");
 
 		expect(saved().journey).toEqual({ destination: "lygos" });
-		expect(saved().chart.checks.days).toBe(true);
-		expect(saved().chart.checks.firstTravel).toBe(true);
+		expect(charted().sort()).toEqual(["days", "firstTravel"]);
+		// Marked as ours, which is the whole of what lets a later pick clear it again.
+		expect(chartedRow("days").fromRoute).toBe(true);
+		expect(chartedRow("days").group).toBe("requirements");
 		expect(saved().chart.route).toBe("Stonetop to Marshedge to Lygos");
 		expect(rendered).toBe(1);
 	});
@@ -1336,71 +1509,84 @@ describe("carrying the pick onto Chart a Course", () => {
 	it("does not claim a first stop on a journey that has none", async () => {
 		const d = dialog();
 		await d._setJourneyPlace("destination", "marshedge");
-		expect(saved().chart.checks.days).toBe(true);
-		// Explicitly false, not merely absent: the carry-forward SETS both boxes from the route
-		// every time rather than only ticking them, which is what lets a change of mind untick one.
-		expect(saved().chart.checks.firstTravel).toBe(false);
+		expect(charted()).toEqual(["days"]);
 	});
 
 	// Five of the eighteen destinations from Stonetop are measured only in hours, so they have
 	// legs and no day count — and `fillChartBlank` refuses to fill a day count it hasn't got. A
-	// tick over a requirement still reading "at least ___ days" is worse than either state alone.
-	it("does not tick the days box for a journey the book measures in hours", async () => {
+	// line on the list still reading "at least ___ days" is worse than no line at all.
+	it("adds no days line for a journey the book measures in hours", async () => {
 		const d = dialog();
 		await d._setJourneyPlace("destination", "the-red-grove");
-		expect(saved().chart.checks.days).toBe(false);
-		expect(saved().chart.checks.firstTravel).toBe(false);
+		expect(charted()).toEqual([]);
 	});
 
 	// Nothing used to clear these, so a GM who changed their mind kept the previous journey's
-	// ticks — and a `firstTravel` blank with no stop left to name can never be filled in.
-	it("unticks what the new route cannot answer", async () => {
-		const d = dialog({ origin: "stonetop", destination: "lygos" }, {});
+	// lines — and a `firstTravel` blank with no stop left to name can never be filled in.
+	it("takes back off what the new route cannot answer", async () => {
+		const d = dialog();
+		await d._setJourneyPlace("destination", "lygos");
+		expect(charted().sort()).toEqual(["days", "firstTravel"]);
 		await d._setJourneyPlace("destination", "the-red-grove");
-		expect(saved().chart.checks.days).toBe(false);
-		expect(saved().chart.checks.firstTravel).toBe(false);
+		expect(charted()).toEqual([]);
 		expect(saved().chart.route).toBe("Stonetop to the Red Grove");
 	});
 
 	it("clears its own carried-forward answers when the destination is cleared", async () => {
-		const d = dialog({ origin: "stonetop", destination: "lygos" }, {});
-		await d._setJourneyPlace("destination", "lygos");   // seeds chart.route
+		const d = dialog();
+		await d._setJourneyPlace("destination", "lygos");   // seeds chart.route and both lines
 		expect(saved().chart.route).toBe("Stonetop to Marshedge to Lygos");
 		await d._setJourneyPlace("destination", "");
 		expect(saved().chart.route).toBe("");
-		expect(saved().chart.checks.days).toBe(false);
-		expect(saved().chart.checks.firstTravel).toBe(false);
+		expect(charted()).toEqual([]);
 	});
 
-	// "Set from the route every time" was right about the stale tick and wrong about whose tick it
-	// was. A GM who ticks "they must first travel to ___" by hand — for a stop the graph does not
-	// model, on a trip the route can never answer for — had it silently cleared by the next pick,
-	// along with its line in the Chronicle.
-	it("never unticks a box the GM ticked by hand", async () => {
-		const d = dialog({ origin: "stonetop", destination: "the-red-grove" },
-			{ checks: { firstTravel: true } });
-		await d._setJourneyPlace("origin", "the-maw");
-		expect(saved().chart.checks.firstTravel).toBe(true);
-	});
-
-	// ...and the stale tick it replaced still cannot come back, because a box WE ticked still says
-	// what the old route would have made it say, and is therefore still ours to clear.
-	it("still clears a tick of its own that the new route cannot answer", async () => {
+	// A row the GM put on the list themselves is theirs — for a stop the graph does not model, on
+	// a trip the route can never answer for — and no later pick may quietly take it off, along
+	// with its line in the Chronicle.
+	it("never removes a line the GM added by hand", async () => {
 		const d = dialog({ origin: "stonetop", destination: "lygos" },
-			{ checks: { days: true, firstTravel: true } });
+			{ picked: [{ id: "mine", group: "requirements", key: "firstTravel", answer: "the Maw" }] });
 		await d._setJourneyPlace("destination", "the-red-grove");
-		expect(saved().chart.checks.days).toBe(false);
-		expect(saved().chart.checks.firstTravel).toBe(false);
+		expect(charted()).toEqual(["firstTravel"]);
+		expect(chartedRow("firstTravel").answer).toBe("the Maw");
+	});
+
+	// ...and the stale line it replaced still cannot come back, because a row WE added still says
+	// so, and is therefore still ours to clear.
+	it("still clears a line of its own that the new route cannot answer", async () => {
+		const d = dialog({ origin: "stonetop", destination: "lygos" }, {
+			picked: [
+				{ id: "a", group: "requirements", key: "days",        fromRoute: true },
+				{ id: "b", group: "requirements", key: "firstTravel", fromRoute: true },
+			],
+		});
+		await d._setJourneyPlace("destination", "the-red-grove");
+		expect(charted()).toEqual([]);
+	});
+
+	// A row added once and taken off by the GM does not come back on the next pick: the carry
+	// only ever acts on the TURN, when the route's answer to that line changes.
+	it("does not put back a line the GM took off, on a later pick of the same kind", async () => {
+		const d = dialog();
+		await d._setJourneyPlace("destination", "lygos");
+		await d._removeChartRow(chartedRow("days").id);
+		expect(charted()).not.toContain("days");
+		// Another destination the map can also count the days for. The route's ANSWER to that
+		// line did not turn, so nothing about it is ours to touch, and the GM's removal stands.
+		await d._setJourneyPlace("destination", "gordins-delve");
+		expect(d._journeyRoute().total.days.max).toBeGreaterThan(0);
+		expect(charted()).not.toContain("days");
 	});
 
 	it("never overwrites what the GM typed", async () => {
 		const d = dialog(null, { route: "We follow the tracks north." });
 		await d._setJourneyPlace("destination", "lygos");
 		expect(saved().chart.route).toBe("We follow the tracks north.");
-		expect(saved().chart.checks.days).toBe(true);
+		expect(charted()).toContain("days");
 	});
 
-	it("ticks nothing for a destination the book gives no time to", async () => {
+	it("charts nothing for a destination the book gives no time to", async () => {
 		const d = dialog();
 		await d._setJourneyPlace("destination", "");
 		expect(saved().journey.destination).toBe("");
@@ -1409,11 +1595,11 @@ describe("carrying the pick onto Chart a Course", () => {
 
 	it("reads the new pick, not the draft it is replacing", async () => {
 		// ensureCurrent hands back a deep copy, so the draft still holds the old value while this
-		// runs. Getting that wrong would tick the boxes for the PREVIOUS destination.
+		// runs. Getting that wrong would chart the PREVIOUS destination.
 		const d = dialog({ origin: "stonetop", destination: "the-red-grove" }, {});
 		await d._setJourneyPlace("destination", "lygos");
 		expect(saved().chart.route).toBe("Stonetop to Marshedge to Lygos");
-		expect(saved().chart.checks.firstTravel).toBe(true);
+		expect(charted()).toContain("firstTravel");
 	});
 
 	it("re-solves from a changed origin", async () => {
@@ -1421,37 +1607,114 @@ describe("carrying the pick onto Chart a Course", () => {
 		await d._setJourneyPlace("origin", "marshedge");
 		// Standing in Marshedge, Lygos is the printed 30-day leg with nothing before it.
 		expect(saved().chart.route).toBe("Marshedge to Lygos");
-		expect(saved().chart.checks.firstTravel).toBe(false);
+		expect(charted()).not.toContain("firstTravel");
+	});
+
+	// A trip charted under the old tick-and-fill pair opens with everything it presented still on
+	// it, and the first write retires the pair rather than leaving a second copy behind for the
+	// Chronicle to print twice.
+	it("upgrades a trip logged with the old ticks, keeping what was written", async () => {
+		const d = dialog({ origin: "stonetop", destination: "the-red-grove" }, {
+			checks: { perilous: true, days: true },
+			fills:  { perilous: "the Ettenmark wolves are hunting", days: "60, the long way round" },
+		});
+		await d._setJourneyPlace("destination", "lygos");
+		expect(charted().sort()).toEqual(["days", "firstTravel", "perilous"]);
+		expect(chartedRow("perilous").answer).toBe("the Ettenmark wolves are hunting");
+		expect(chartedRow("days").answer).toBe("60, the long way round");
+		// An upgraded row is the GM's, not ours: a tick carried no record of who made it.
+		expect(chartedRow("days").fromRoute).toBe(false);
+		expect(saved().chart.checks).toBeUndefined();
+		expect(saved().chart.fills).toBeUndefined();
 	});
 });
 
-describe("the Chart a Course blanks", () => {
-	/** The chart step's checklist, as the template receives it. */
-	function chartItems(d) {
+// Every requirement on Chart a Course now has somewhere to write the ANSWER to it, because most
+// of them are a sentence with a hole in it that the table has to be told. What the route works
+// out is offered to the two blanks it can answer as a placeholder rather than spliced into the
+// words: the map's arithmetic is a starting point, and the GM's own ruling outranks it.
+describe("what a charted line offers to answer with", () => {
+	/** The chart step's rows, keyed by the authored key each one names. */
+	function chartRows(d) {
 		const step = d._steps.find(s => s.key === "chart");
-		return Object.fromEntries(d._qaContext(step.qa).groups
-			.flatMap(g => g.items).map(it => [it.path.split(".").pop(), it.text]));
+		const rows = d._qaContext(step.qa).groups.flatMap(g => g.entries);
+		const keys = chartPicked(d._answers().chart).map(e => e.key);
+		return Object.fromEntries(rows.map((row, i) => [keys[i] ?? row.id, row]));
 	}
 
-	it("fills the days and the first stop from the plotted route", () => {
-		const items = chartItems(dialog({ origin: "stonetop", destination: "lygos" }));
-		expect(items.days).toBe("It'll take at least 40 days (and a corresponding amount of supplies)");
-		expect(items.firstTravel).toBe("First travel to Marshedge, and from there to your destination");
+	/** A trip that has presented these authored lines, with what was said against each. */
+	const presenting = (journey, said = {}) => dialog(journey, {
+		picked: Object.entries(said).map(([key, answer], i) =>
+			({ id: `row-${i}`, group: chartGroupOf(key), key, answer })),
 	});
 
-	it("leaves the blanks as authored when no journey is plotted", () => {
-		const items = chartItems(dialog());
-		expect(items.days).toContain("___");
-		expect(items.firstTravel).toContain("___");
+	it("offers the days and the first stop from the plotted route", () => {
+		const rows = chartRows(presenting({ origin: "stonetop", destination: "lygos" },
+			{ days: "", firstTravel: "" }));
+		expect(rows.days.hint).toBe("40");
+		expect(rows.firstTravel.hint).toBe("Marshedge");
+		// A placeholder, not an answer: nothing is written until the GM writes it.
+		expect(rows.days.answer).toBe("");
 	});
 
-	it("leaves every other requirement exactly as authored", () => {
-		const plotted = chartItems(dialog({ destination: "lygos" }));
-		const blank = chartItems(dialog());
-		for (const key of Object.keys(blank)) {
-			if (key === "days" || key === "firstTravel") continue;
-			expect(plotted[key], key).toBe(blank[key]);
+	it("leaves the sentence as authored, blank and all", () => {
+		// The words are the book's whether a route has been plotted or not; what was told lives
+		// in the box under them.
+		for (const journey of [null, { origin: "stonetop", destination: "lygos" }]) {
+			const rows = chartRows(presenting(journey, { days: "", firstTravel: "" }));
+			expect(rows.days.text).toContain("___");
+			expect(rows.firstTravel.text).toContain("___");
 		}
+	});
+
+	it("hands back what the GM wrote against a line", () => {
+		const rows = chartRows(presenting({ origin: "stonetop", destination: "lygos" },
+			{ days: "60, the long way round", perilous: "the Ettenmark wolves are hunting" }));
+		expect(rows.days.answer).toBe("60, the long way round");
+		// Still shown as the placeholder, so the map's answer stays legible under the override.
+		expect(rows.days.hint).toBe("40");
+		expect(rows.perilous.answer).toBe("the Ettenmark wolves are hunting");
+	});
+
+	it("asks the plain question where the route has nothing to say", () => {
+		const rows = chartRows(presenting(null, { days: "", watchOut: "" }));
+		expect(rows.days.hint).toBe("What did you tell them?");
+		expect(rows.watchOut.hint).toBe("What did you tell them?");
+	});
+
+	it("labels every box with the line it answers, in plain words", () => {
+		const rows = chartRows(presenting(null, { bring: "", perilous: "" }));
+		// Trusted authored HTML with entities in it; a screen reader needs the words.
+		expect(rows.bring.plain).toBe("You'll need to bring ___ (warm clothes, a cart, rope…)");
+		expect(rows.perilous.plain).toBe("The way is perilous, plagued with danger");
+	});
+
+	it("carries a line the GM wrote in their own words, verbatim", () => {
+		const d = dialog(null, { picked: [
+			{ id: "own", group: "challenges", text: "The ford is watched by Brennan's Claws" },
+		] });
+		const step = d._steps.find(s => s.key === "chart");
+		const row  = d._qaContext(step.qa).groups.find(g => g.key === "challenges").entries[0];
+		expect(row.text).toBe("The ford is watched by Brennan's Claws");
+		expect(row.hint).toBe("What did you tell them?");
+	});
+
+	it("keeps each group's lines under its own heading, with its own add button", () => {
+		const d = dialog(null, { picked: [
+			{ id: "a", group: "requirements", key: "guide" },
+			{ id: "b", group: "challenges",   key: "lost"  },
+		] });
+		const step   = d._steps.find(s => s.key === "chart");
+		const groups = d._qaContext(step.qa).groups;
+		expect(groups.map(g => g.key)).toEqual(["requirements", "challenges"]);
+		expect(groups.map(g => g.entries.length)).toEqual([1, 1]);
+		expect(groups.map(g => g.addLabel)).toEqual(["Add a requirement", "Add a challenge"]);
+	});
+
+	it("starts a fresh trip with nothing on either list", () => {
+		const d = dialog();
+		const step = d._steps.find(s => s.key === "chart");
+		expect(d._qaContext(step.qa).groups.every(g => g.entries.length === 0)).toBe(true);
 	});
 });
 
@@ -1544,11 +1807,11 @@ describe("sites on the map", () => {
 			.not.toContain("stonetop-journey-place-site");
 	});
 
-	// The pin has to carry `data-site-uuid`: that attribute is what routes a click to the write-up
+	// The pin has to carry `data-site-uuid`: that attribute is what routes a tap to the planner
 	// (journey-controls.js#journeyPick), what a right-click reads to lift the pin, AND what tells
 	// the popout's pan handler this is a control rather than open map. Miss it and the pin renders,
 	// hovers, and is unclickable.
-	it("draws a site pin that names the page it opens", async () => {
+	it("draws a site pin that names the page it marks", async () => {
 		sites.onMap = [placed("The Sunken Barrow", { tier: "vicinity", fx: 0.5, fy: 0.5 })];
 		const map = (await dialog()._buildJourney("vicinity")).map;
 		const html = await renderTemplate(
@@ -1558,6 +1821,119 @@ describe("sites on the map", () => {
 		// It wears its name always, unlike the book's own places, which show one only at the two
 		// ends of the journey.
 		expect(html).toContain("The Sunken Barrow");
+		// And the tooltip teaches all three gestures, since only the right-click is the same one it
+		// always was and none of them is guessable off a picture.
+		expect(map.sites[0].tooltip).toContain("run the way through here");
+		expect(map.sites[0].tooltip).toContain("shift-click");
+		expect(map.sites[0].tooltip).toContain("right-click");
+	});
+});
+
+// A SITE PIN IS A PLACE ON THE WAY (user, 2026-08-24), not a link out to a journal. Tapping one
+// used to open its write-up, which made a GM's own barrow the one mark on this map that could not
+// be part of the journey drawn across it — on the screen whose whole purpose is saying how the
+// party gets somewhere, and where the somewhere is very often that barrow.
+describe("tapping one of the GM's own sites", () => {
+	const barrow = "JournalEntry.x.JournalEntryPage.The Sunken Barrow";
+	const farHall = "JournalEntry.x.JournalEntryPage.Far Hall";
+
+	beforeEach(() => {
+		global.game.actors = [{ type: "stonetop" }];
+		global.ui = { notifications: { info: () => {}, warn: () => {} } };
+		sites.onMap = [
+			{ page: { uuid: barrow, name: "The Sunken Barrow" }, spot: { tier: "vicinity", fx: 0.5, fy: 0.5 } },
+			{ page: { uuid: farHall, name: "Far Hall" }, spot: { tier: "worlds-end", fx: 0.3, fy: 0.3 } },
+		];
+	});
+
+	/** The stored marks of the way, as the trip holds them. */
+	const way = () => saved().journey?.custom;
+
+	// A plain tap runs the way through the site, which is the same sentence a plain tap on one of
+	// the book's own pins says: that is where they are bound. It cannot be said the same WAY — a
+	// site has no slug the travel table knows — so it begins a hand-drawn way ending on itself, and
+	// the far end of a drawn way IS where the party is bound.
+	it("runs the way through the site on a plain tap", async () => {
+		const d = dialog({ origin: "stonetop" });
+		await d._chooseJourneySite(barrow);
+		expect(way()).toMatchObject({ tier: "vicinity", points: [{ fx: 0.5, fy: 0.5 }] });
+	});
+
+	// THE SITE'S OWN FRACTION, never the pointer's. A pin is a few pixels of standing stone with a
+	// name tag hanging off it, so a stop laid where the cursor happened to be would sit beside the
+	// place rather than on it — visibly so, once the line runs through it.
+	it("lays the stop on the site's recorded spot", async () => {
+		const d = dialog({ origin: "stonetop" });
+		await d._chooseJourneySite(barrow);
+		expect(way().points[0]).toEqual({ fx: 0.5, fy: 0.5 });
+	});
+
+	// Shift adds it as another stop rather than moving the far end there, exactly as it does for a
+	// lettered place and for open map: the modifier is half of what the tap said.
+	it("adds it as another stop on a shift-tap", async () => {
+		const d = dialog({
+			origin: "stonetop",
+			custom: { tier: "vicinity", points: [{ fx: 0.2, fy: 0.2 }] },
+		});
+		await d._chooseJourneySite(barrow, { shiftKey: true });
+		expect(way().points).toEqual([{ fx: 0.2, fy: 0.2 }, { fx: 0.5, fy: 0.5 }]);
+
+		// And a plain tap moves that far end, rather than adding a third.
+		await d._chooseJourneySite(barrow);
+		expect(way().points).toEqual([{ fx: 0.2, fy: 0.2 }, { fx: 0.5, fy: 0.5 }]);
+	});
+
+	// With no start, the tap plants it — a site the GM has written up being a very likely answer to
+	// "where are they?", since it is somewhere they have already decided matters.
+	it("plants the start there on a trip that has none", async () => {
+		const d = dialog({ origin: null });
+		await d._chooseJourneySite(barrow);
+		expect(saved().journey.origin).toMatchObject({ tier: "vicinity", fx: 0.5, fy: 0.5 });
+		expect(way()).toBeUndefined();
+	});
+
+	// A site's fraction means ONE picture. A way already laid out on the other map cannot take it,
+	// and the refusal is by name for the same reason a lettered place the map does not draw is: a
+	// GM tapping a Vicinity barrow while drawing on the World's End has made a reasonable mistake.
+	it("refuses a site on the other map by name, rather than silently", async () => {
+		const warned = [];
+		global.ui = { notifications: { info: () => {}, warn: msg => warned.push(msg) } };
+		const d = dialog({
+			origin: "stonetop",
+			custom: { tier: "worlds-end", points: [{ fx: 0.2, fy: 0.2 }] },
+		});
+		rendered = 0;
+
+		await d._chooseJourneySite(barrow);
+		expect(way().points).toEqual([{ fx: 0.2, fy: 0.2 }]);
+		expect(warned[0]).toContain("The Sunken Barrow");
+		expect(rendered).toBe(0);
+	});
+
+	// And a way that does not exist yet would begin on the SITE's map, which has to be able to draw
+	// where the party sets out from as well — or the first leg begins at a stop with nowhere to
+	// stand, and routePath refuses to draw the line at all rather than drawing a shortened one.
+	it("refuses to begin a way from a start its own map cannot draw", async () => {
+		const warned = [];
+		global.ui = { notifications: { info: () => {}, warn: msg => warned.push(msg) } };
+		// Marshedge is lettered on the World's End and not on the Vicinity.
+		const d = dialog({ origin: "marshedge" });
+		rendered = 0;
+
+		await d._chooseJourneySite(barrow);
+		expect(way()).toBeUndefined();
+		expect(warned[0]).toContain("Marshedge");
+		expect(rendered).toBe(0);
+	});
+
+	// The ordinary state of a pin whose site was deleted from the Sites tab while this map was open.
+	// Silent: the pin goes with the next redraw anyway, and there is nothing the reader can do.
+	it("says nothing at all for a pin whose site has gone", async () => {
+		const d = dialog({ origin: "stonetop" });
+		rendered = 0;
+		await d._chooseJourneySite("JournalEntry.x.JournalEntryPage.Nowhere");
+		expect(way()).toBeUndefined();
+		expect(rendered).toBe(0);
 	});
 });
 
@@ -1617,45 +1993,62 @@ describe("what the walkthrough does around a site placement", () => {
 // ── Laying the way out by hand ───────────────────────────────────────────────
 //
 // The table's shortest path is the right answer to "how do you get to Marshedge" and the wrong one
-// to "how are they going". This is the box that hands the line over, and the three gestures that
-// draw it: click moves the far end, shift-click adds a leg, right-click takes one back.
+// to "how are they going". There is no box to tick any more: a shift-click hands the line
+// over and starts a way where there was none, a plain click moves its far end once it exists,
+// and a right-click takes a leg back. The marks ARE the mode, so a way ends when its last does.
 
 /** The trip's drawn way, as it now stands in the setting. */
 const drawnWay = () => saved().journey?.custom;
 
-describe("ticking the box", () => {
+describe("the first shift-click", () => {
 	it("seeds the way from the route the table had already worked out", async () => {
 		const d = dialog({ origin: "stonetop", destination: "lygos" });
-		await d._toggleDrawnWay(true);
-		// Ticking it should not empty the map: the way they were going is nearly always the way
+		// A mark laid on the World's End, which is the map this journey opens on.
+		await d._drawJourneyMark({ fx: 0.7, fy: 0.7 }, { append: true, tier: "worlds-end" });
+		// The first mark should not empty the map: the way they were going is nearly always the way
 		// they are still going, plus a detour.
 		expect(drawnWay()).toEqual({
-			on: true, tier: "worlds-end", points: [{ slug: "marshedge" }, { slug: "lygos" }],
+			tier: "worlds-end",
+			points: [{ slug: "marshedge" }, { slug: "lygos" }, { fx: 0.7, fy: 0.7 }],
 		});
 	});
 
-	it("starts empty when there is nowhere to go yet", async () => {
-		await dialog()._toggleDrawnWay(true);
-		expect(drawnWay().points).toEqual([]);
-		expect(drawnWay().on).toBe(true);
+	it("starts with just that mark when there is nowhere to go yet", async () => {
+		const d = dialog();
+		await d._drawJourneyMark({ fx: 0.4, fy: 0.6 }, { append: true, tier: "vicinity" });
+		expect(drawnWay()).toEqual({ tier: "vicinity", points: [{ fx: 0.4, fy: 0.6 }] });
 	});
 
-	// A GM who unticks to compare the two ways has not thrown theirs away. Only "start over" does.
-	it("keeps the marks when it is ticked off again", async () => {
+	// A plain click has no far end to move on a bare map, and reading it as "begin a journey here"
+	// would lay a way every time a GM clicked the picture to bring the window forward.
+	it("is the only gesture that starts one: a plain click lays nothing", async () => {
 		const d = dialog({ origin: "stonetop", destination: "lygos" });
-		await d._toggleDrawnWay(true);
-		await d._toggleDrawnWay(false);
-		expect(drawnWay().on).toBe(false);
-		expect(drawnWay().points).toEqual([{ slug: "marshedge" }, { slug: "lygos" }]);
+		rendered = 0;
+		await d._drawJourneyMark({ fx: 0.7, fy: 0.7 }, { append: false, tier: "worlds-end" });
+		expect(saved().journey.custom).toBeUndefined();
+		expect(rendered).toBe(0);
+	});
+
+	// Nor an undo or a "start over" on a map with nothing on it: neither can BEGIN a way. A right-
+	// click on a trip that still has ends takes one of those instead (see the ladder), so this asks
+	// it of a trip already peeled back to nothing — where doing nothing should cost no world-setting
+	// write, re-render or sweep of the open map windows.
+	it("is not an undo or a start-over", async () => {
+		const d = dialog({ origin: null, destination: null });
+		rendered = 0;
+		await d._undoJourneyMark();
+		await d._clearDrawnWay();
+		expect(saved().journey.custom).toBeUndefined();
+		expect(rendered).toBe(0);
 	});
 
 	it("does not overwrite a way drawn earlier with the table's guess", async () => {
 		const d = dialog({
 			origin: "stonetop", destination: "lygos",
-			custom: { on: false, tier: "worlds-end", points: [{ fx: 0.4, fy: 0.6 }] },
+			custom: { tier: "worlds-end", points: [{ fx: 0.4, fy: 0.6 }] },
 		});
-		await d._toggleDrawnWay(true);
-		expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }]);
+		await d._drawJourneyMark({ fx: 0.5, fy: 0.5 }, { append: true, tier: "worlds-end" });
+		expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }, { fx: 0.5, fy: 0.5 }]);
 	});
 
 	// A way begun on a map that cannot draw where the party is setting out from would start at a
@@ -1663,18 +2056,30 @@ describe("ticking the box", () => {
 	it("begins on a map that can draw the origin", async () => {
 		const d = dialog({ origin: "marshedge" });
 		d._journeyTier = "vicinity";
-		await d._toggleDrawnWay(true);
+		await d._drawJourneyMark({ fx: 0.4, fy: 0.6 }, { append: true, tier: "vicinity" });
 		expect(drawnWay().tier).toBe("worlds-end");
 		// And the panel follows, rather than sitting on a tab the marks do not belong to.
 		expect(d._journeyTier).toBeNull();
 	});
+
+	// Which is why the two surfaces do not offer the gesture there at all, and the line under the
+	// map says as much before a click is ever made.
+	it("is not offered on a map that cannot draw the origin", async () => {
+		const d = dialog({ origin: "marshedge" });
+		const vicinity = await d._buildJourney("vicinity");
+		expect(vicinity.custom.canDrawHere).toBe(false);
+		expect(vicinity.custom.hint).toContain("Marshedge");
+		const home = await d._buildJourney("worlds-end");
+		expect(home.custom.canDrawHere).toBe(true);
+		expect(home.custom.hint).toContain("Shift-click");
+	});
 });
 
 describe("the three gestures", () => {
-	/** A dialog with the box ticked and one bare mark already down. */
+	/** A dialog with a way already begun, one bare mark down on the Vicinity. */
 	const drawing = (points = [{ fx: 0.4, fy: 0.6 }], over = {}) => dialog({
 		origin: "stonetop", destination: null,
-		custom: { on: true, tier: "vicinity", points },
+		custom: { tier: "vicinity", points },
 		...over,
 	});
 
@@ -1692,24 +2097,44 @@ describe("the three gestures", () => {
 		expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }]);
 	});
 
-	// A right-click on a map with nothing on it should not cost a world-setting write, a re-render
-	// and a sweep of every open map window.
-	it("writes nothing when there is nothing to take back", async () => {
+	// A right-click past the last mark drops to the next rung of the ladder rather than doing
+	// nothing: with no marks and no destination left, what it takes is the start.
+	it("takes the start once the last mark has gone", async () => {
 		const d = drawing([]);
+		await d._undoJourneyMark();
+		expect(saved().journey.origin).toBeNull();
+		expect(d._journeyPick().start.slug).toBeNull();
+	});
+
+	// And only THEN is there nothing to take back — which should cost no world-setting write, no
+	// re-render and no sweep of every open map window.
+	it("writes nothing when there is nothing left to take back", async () => {
+		const d = drawing([], { origin: null });
 		rendered = 0;
 		await d._undoJourneyMark();
 		expect(rendered).toBe(0);
 	});
 
-	it("throws the marks away without leaving the mode", async () => {
+	// "Start over" is also the way OUT: with the marks gone there is no way, and the trip is back to
+	// the road the travel table works out.
+	it("throws the marks away, and with them the drawing", async () => {
 		const d = drawing([{ fx: 0.4, fy: 0.6 }, { fx: 0.5, fy: 0.5 }]);
 		await d._clearDrawnWay();
-		expect(drawnWay()).toEqual({ on: true, tier: "vicinity", points: [] });
+		expect(drawnWay()).toEqual({ tier: "vicinity", points: [] });
+		expect(d._customPath().on).toBe(false);
+	});
+
+	// The same door out, one leg at a time: the way is over when its last mark is taken back.
+	it("ends the way when the last leg goes back", async () => {
+		const d = drawing([{ fx: 0.4, fy: 0.6 }]);
+		await d._undoJourneyMark();
+		expect(d._customPath().on).toBe(false);
+		expect(d._journeyRoute()).toBeNull();
 	});
 
 	// A click on a lettered place takes that place, name and all, so a way can wander off the road
 	// and still come back through somewhere by name.
-	it("takes a lettered place as a stop while the box is ticked", async () => {
+	it("takes a lettered place as a stop on a way already begun", async () => {
 		const d = drawing();
 		await d._chooseJourneyPlace("the-maw", { shiftKey: true });
 		expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }, { slug: "the-maw" }]);
@@ -1745,11 +2170,22 @@ describe("the three gestures", () => {
 		expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }]);
 	});
 
-	// And means what it always meant when the box is not ticked.
-	it("sets where they are bound when the box is not ticked", async () => {
+	// And a plain click means what it always meant, on the map and in the list alike: that is where
+	// the party is bound.
+	it("sets where they are bound on a plain click, with no way drawn", async () => {
 		const d = dialog({ origin: "stonetop" });
-		await d._chooseJourneyPlace("the-maw", { shiftKey: true });
+		await d._chooseJourneyPlace("the-maw", { shiftKey: false });
 		expect(saved().journey.destination).toBe("the-maw");
+		expect(saved().journey.custom).toBeUndefined();
+	});
+
+	// Held with shift it starts a way through that place instead, on the map the reader is looking
+	// at — which only the surface knows, since the popout keeps the map it was opened on.
+	it("starts a way through a place on a shift-click, on the map that was clicked", async () => {
+		const d = dialog({ origin: "stonetop" });
+		await d._chooseJourneyPlace("the-maw", { shiftKey: true }, null, "vicinity");
+		expect(drawnWay()).toEqual({ tier: "vicinity", points: [{ slug: "the-maw" }] });
+		expect(saved().journey.destination).toBeUndefined();
 	});
 
 	// The destination list runs to every place the table knows, grouped by the map that draws it,
@@ -1769,7 +2205,7 @@ describe("the three gestures", () => {
 describe("what the route step shows while the way is being drawn", () => {
 	const drawnTrip = (points, tier = "worlds-end") => ({
 		origin: "stonetop", destination: "lygos",
-		custom: { on: true, tier, points },
+		custom: { tier, points },
 	});
 
 	it("draws the hand-drawn way instead of the table's", async () => {
@@ -1786,7 +2222,6 @@ describe("what the route step shows while the way is being drawn", () => {
 		expect(named.destination.name).toBe("Marshedge");
 		const bare = await dialog(drawnTrip([{ fx: 0.6, fy: 0.7 }]))._buildJourney();
 		expect(bare.destination).toBeNull();
-		expect(bare.hasDestination).toBe(false);
 	});
 
 	it("badges each bare mark with the number the readout calls it by", async () => {
@@ -1828,10 +2263,35 @@ describe("what the route step shows while the way is being drawn", () => {
 		expect(data.map.offMap.showLabel).toContain("The World's End");
 	});
 
-	it("tells a GM the three gestures, and a player only that the way was drawn", async () => {
+	// The sentence has to reach the screen, and it is the SAME partial on both surfaces: the route
+	// step sets it under its map, the popout under its viewport (expedition-journey-drawhint.hbs).
+	it("puts the line in the markup both surfaces render", async () => {
+		const hint = "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-drawhint.hbs";
+		// Nothing drawn: an invitation, and nothing to start over from.
+		const bare = await renderTemplate(hint, { journey: await dialog()._buildJourney("vicinity") });
+		expect(bare).toContain("Shift-click the map");
+		expect(bare).not.toContain("stonetop-journey-clear-drawn");
+
+		// A way drawn here: the gestures, and the button that throws it away.
+		const drawn = await dialog(drawnTrip([{ fx: 0.6, fy: 0.7 }]))._buildJourney();
+		const on = await renderTemplate(hint, { journey: drawn });
+		expect(on).toContain("stonetop-journey-draw is-on");
+		expect(on).toContain("stonetop-journey-clear-drawn");
+
+		// A player gets the one thing still theirs to know, and no controls at all.
+		global.game.user = { isGM: false };
+		const forPlayer = await renderTemplate(hint, {
+			journey: await dialog(drawnTrip([{ fx: 0.6, fy: 0.7 }]))._buildJourney(),
+		});
+		expect(forPlayer).toContain("drawn by hand");
+		expect(forPlayer).not.toContain("stonetop-journey-clear-drawn");
+	});
+
+	it("tells a GM the gestures, and a player only that the way was drawn", async () => {
 		const on = await dialog(drawnTrip([{ fx: 0.6, fy: 0.7 }]))._buildJourney();
 		expect(on.custom.canDraw).toBe(true);
-		expect(on.custom.hint).toContain("shift-click");
+		expect(on.custom.canDrawHere).toBe(true);
+		expect(on.custom.hint).toContain("Shift-click");
 		expect(on.custom.count).toBe(1);
 
 		global.game.user.isGM = false;
@@ -1846,9 +2306,8 @@ describe("carrying a drawn way onto Chart a Course", () => {
 	// ticked only when the blank underneath it can actually be filled.
 	it("ticks the days once the drawn way is a day's march or more", async () => {
 		const d = dialog({ origin: "stonetop", destination: null });
-		await d._toggleDrawnWay(true);
-		await d._drawJourneyMark({ fx: 0.2, fy: 0.8 }, { append: false });
-		expect(saved().chart.checks.days).toBe(true);
+		await d._drawJourneyMark({ fx: 0.2, fy: 0.8 }, { append: true, tier: "vicinity" });
+		expect(chartPicked(saved().chart).map(e => e.key)).toContain("days");
 		expect(saved().chart.route).toMatch(/^Stonetop to point 1$/);
 	});
 
@@ -1856,10 +2315,351 @@ describe("carrying a drawn way onto Chart a Course", () => {
 	it("names only a lettered stop as the place to travel to first", async () => {
 		const d = dialog({
 			origin: "stonetop", destination: null,
-			custom: { on: true, tier: "worlds-end", points: [{ slug: "marshedge" }] },
+			custom: { tier: "worlds-end", points: [{ slug: "marshedge" }] },
 		});
 		await d._drawJourneyMark({ fx: 0.8, fy: 0.9 }, { append: true });
-		expect(saved().chart.checks.firstTravel).toBe(true);
+		expect(chartPicked(saved().chart).map(e => e.key)).toContain("firstTravel");
 		expect(saved().chart.route).toBe("Stonetop to Marshedge to point 1");
+	});
+});
+
+// ── Where they set out from ──────────────────────────────────────────────────
+//
+// This used to be a dropdown of the eighteen places the books letter, and it stopped being enough
+// the moment the far end of a trip could be anywhere: a way laid out by hand ends wherever the GM
+// last clicked, so a party could be BOUND for a bend in the river and still had to claim they were
+// LEAVING Stonetop.
+//
+// It is a press and then a click now, the same shape "put a site on the map" already has. What
+// this covers is the dialog's own share of that: which surface may offer it, what the armed click
+// reaches, and what a miss does.
+// WHERE THEY SET OUT FROM, which is now the same kind of thing as everything else on this picture:
+// a click, and a right-click to take it back.
+//
+// It was a press-then-click gesture armed off a button in a row above the map, and before that a
+// dropdown of the eighteen places the books letter. Both are gone with that row (user, 2026-08-24).
+// A trip either has a start or it does not, and while it does not, the next click anywhere on this
+// screen says where it is — the map, a pin, or a row of the list.
+describe("saying where the party sets out from", () => {
+	beforeEach(() => {
+		global.ui = { notifications: { info: () => {}, warn: () => {} } };
+	});
+
+	// A point on the map, written as the fraction of the printed crop it is — the very same shape a
+	// bare mark on a hand-drawn way is stored in, because they are the same kind of fact.
+	it("writes a click on open map as a mark on that map", async () => {
+		// `origin: null` is a trip peeled back past its own start, which is the state this gesture
+		// answers. The frame is the file's registration, so a percentage of the FILE becomes a
+		// fraction of the printed crop on the way in.
+		const d = dialog({ origin: null, destination: "the-maw" });
+		await d._drawJourneyMark({ fx: 0.5, fy: 0.5 }, { tier: "vicinity" });
+
+		const written = saved().journey.origin;
+		expect(written.tier).toBe("vicinity");
+		expect(written.fx).toBeCloseTo(0.5);
+		expect(d._journeyPick().origin).toBeNull();
+		expect(d._journeyPick().start.tier).toBe("vicinity");
+	});
+
+	// The surface shows the whole map FILE, and on a poster scan the printed crop is inset three
+	// percent inside it — so the margin band is on screen and clickable, and a click there is an
+	// ordinary aim at the edge of a valley. `percentSpot` answers it with a NEGATIVE fraction.
+	// Written through, `normalizeStart` would quietly drop it: a start silently thrown away by a
+	// near miss, which is the one failure worse than nothing happening.
+	it("refuses a click past the printed edge, and leaves the start where it was", async () => {
+		const d = dialog({ origin: null, destination: "lygos" });
+		const warned = [];
+		global.ui = { notifications: { info: () => {}, warn: msg => warned.push(msg) } };
+		rendered = 0;
+
+		await d._drawJourneyMark({ fx: -0.02, fy: 0.5 }, { tier: "vicinity" });
+
+		expect(saved().journey.origin).toBeNull();
+		// Worded for the gesture that was actually made: nothing was being drawn, so nothing about a
+		// missing leg.
+		expect(warned[0]).toContain("The Vicinity");
+		expect(warned[0]).toContain("set out from");
+		// And it costs no world-setting write, re-render or sweep of the open map windows.
+		expect(rendered).toBe(0);
+	});
+
+	// A place pin, an edge arrow, or a row of the destination list. That last one is what makes the
+	// gesture work at all in a world that never imported the book art, where the list is the whole
+	// screen and there is no picture to click.
+	it("takes a place click as the start while the trip has none", async () => {
+		const d = dialog({ origin: null, destination: "lygos" });
+		await d._chooseJourneyPlace("marshedge");
+		expect(saved().journey.origin).toBe("marshedge");
+		// And it did NOT also become the destination: one click, one meaning.
+		expect(saved().journey.destination).toBe("lygos");
+	});
+
+	// With a start already down, a click on a place means what it always meant, on the map and in
+	// the list alike: that is where the party is bound.
+	it("leaves a place click meaning the destination once there is a start", async () => {
+		const d = dialog();
+		await d._chooseJourneyPlace("marshedge");
+		expect(saved().journey.destination).toBe("marshedge");
+		expect(saved().journey.origin).toBeUndefined();
+	});
+
+	// A plain click on open map still lays nothing once there IS a start and no way drawn: with no
+	// far end to move, reading a stray click as "begin a journey here" would put a way on the map
+	// every time a GM clicked the picture to bring the window forward.
+	it("still lays nothing on a bare map once the start is down", async () => {
+		const d = dialog();
+		rendered = 0;
+		await d._drawJourneyMark({ fx: 0.5, fy: 0.5 }, { tier: "vicinity" });
+		expect(saved().journey?.custom).toBeUndefined();
+		expect(rendered).toBe(0);
+	});
+
+	// A mark belongs to the picture it was laid on, and a start laid by hand is a mark like any
+	// other. Without a tier there is no map for the fraction to be a fraction OF, and the write
+	// would normalize straight back to nowhere.
+	it("refuses a mark that names no map, rather than storing a homeless fraction", async () => {
+		const d = dialog({ origin: null });
+		rendered = 0;
+		await d._drawJourneyMark({ fx: 0.5, fy: 0.5 }, {});
+		expect(saved().journey.origin).toBeNull();
+		expect(rendered).toBe(0);
+	});
+
+	// GM-ONLY. The dropdown this all replaces was live for a player and wrote nothing when they
+	// used it, because the trip lives in a world setting; the class that lights the list rows must
+	// not offer them the gesture either.
+	it("offers the gesture to a GM and not to a player", async () => {
+		expect((await dialog({ origin: null })._buildJourney()).needsStart).toBe(true);
+		global.game.user.isGM = false;
+		const built = await dialog({ origin: null })._buildJourney();
+		expect(built.needsStart).toBe(false);
+		// And the reader is told plainly that there is no start yet, rather than being shown one.
+		expect(built.start.set).toBe(false);
+		expect(built.start.name).toBeNull();
+	});
+});
+
+// THE RIGHT-CLICK LADDER, which is what let the row of controls above the map go: every state this
+// screen can be put into by clicking comes back off by right-clicking, in the order it went on.
+describe("taking the trip back a step at a time", () => {
+	beforeEach(() => {
+		global.ui = { notifications: { info: () => {}, warn: () => {} } };
+	});
+
+	// The whole ladder, walked in one test, because the ORDER is the thing worth pinning: marks
+	// first, then where they were bound, then where they were setting out from.
+	it("peels the marks, then the destination, then the start", async () => {
+		const d = dialog({
+			origin: "stonetop", destination: "marshedge",
+			custom: { tier: "vicinity", points: [{ slug: "gordins-delve" }] },
+		});
+
+		await d._undoJourneyMark();
+		expect(saved().journey.custom.points).toEqual([]);
+		expect(saved().journey.destination).toBe("marshedge");
+
+		await d._undoJourneyMark();
+		expect(saved().journey.destination).toBe("");
+		expect(saved().journey.origin).toBe("stonetop");
+
+		await d._undoJourneyMark();
+		expect(saved().journey.origin).toBeNull();
+		expect(d._journeyPick().start.slug).toBeNull();
+	});
+
+	// Past the last rung there is nothing to take, and taking nothing must cost nothing: no
+	// world-setting write, no re-render, no sweep of the open map windows.
+	it("writes nothing once the trip is already back to nothing", async () => {
+		const d = dialog({ origin: null });
+		rendered = 0;
+		await d._undoJourneyMark();
+		expect(rendered).toBe(0);
+	});
+
+	// And then the next click starts it again, which is the whole point of being able to reach this
+	// state at all: a party camped in the Flats says so by right-clicking twice and clicking once.
+	it("lets the next click plant the start again", async () => {
+		const d = dialog({ origin: "stonetop" });
+		await d._undoJourneyMark();
+		expect(saved().journey.origin).toBeNull();
+
+		await d._drawJourneyMark({ fx: 0.36, fy: 0.62 }, { tier: "vicinity" });
+		expect(saved().journey.origin).toMatchObject({ tier: "vicinity", fx: 0.36, fy: 0.62 });
+	});
+
+	// A trip with no start has no journey: no line, no solved times, and nothing for the scene
+	// button to draw. The destination list still lists its places — it is the map's legend — but the
+	// times beside them are gone, because there is nowhere to reckon them from.
+	it("leaves no route and no times behind it", async () => {
+		const built = await dialog({ origin: null, destination: "marshedge" })._buildJourney();
+		expect(built.route).toBeNull();
+		expect(built.scene).toBeNull();
+		expect(built.groups.flatMap(g => g.places).every(place => !place.time)).toBe(true);
+	});
+
+	// IN A WORLD WITH NO BOOK ART THE LIST IS THE WHOLE SCREEN, and this ladder is the only way back
+	// from a pick now that the row of controls has gone. Without the list carrying it, such a GM
+	// could set a trip and never un-set it — no picture to right-click, and so no way to reach the
+	// state where the next click says where the party is. See `bindJourneyUndo`.
+	it("is reachable from the destination list, which is all a world with no art has", () => {
+		const markup = read("templates/dialogs/partials/expedition-journey.hbs");
+		expect(read("module/dialogs/ExpeditionDialog.js")).toContain("bindJourneyUndo(html[0]");
+		// And the state is said in words there, since there is no picture whose caption could say
+		// it — but only there, or the map's own caption would be saying it twice.
+		const hint = markup.slice(markup.indexOf("{{#unless journey.map}}"));
+		expect(hint).toContain("journey.needsStart");
+		expect(hint).toContain("right-click a place to take the trip back a step");
+	});
+});
+
+describe("drawing a start the GM put down", () => {
+	const inTheFlats = { tier: "vicinity", fx: 0.36, fy: 0.62 };
+
+	// A mark carries its own position, so it gets a mark of its own. A LETTERED start does not: it
+	// is already drawn by its own pin wearing the setting-out ring, and a second mark on top of it
+	// would be the same fact drawn twice.
+	it("puts a pin of its own on the map, and only for a start with no place to name", async () => {
+		const placed = await dialog({ origin: inTheFlats })._buildJourney();
+		expect(placed.map.start).toMatchObject({ label: "setting out" });
+		expect(placed.map.start.left).toBeGreaterThan(0);
+		expect(placed.map.spots.some(spot => spot.isOrigin)).toBe(false);
+
+		const lettered = await dialog({ origin: "stonetop" })._buildJourney();
+		expect(lettered.map.start).toBeNull();
+		expect(lettered.map.spots.some(spot => spot.isOrigin)).toBe(true);
+	});
+
+	// Its fractions mean one valley on the Vicinity and quite another on the World's End, so the
+	// other map draws nothing rather than drawing it wrong.
+	it("draws on its own map and on no other", async () => {
+		const built = await dialog({ origin: inTheFlats })._buildJourney("worlds-end");
+		expect(built.map.start).toBeNull();
+	});
+
+	// And the panel opens on the map the party is standing on, rather than following a destination
+	// out to one that cannot show where they are.
+	it("opens the panel on the map the mark belongs to", async () => {
+		const built = await dialog({ origin: inTheFlats, destination: "marshedge" })._buildJourney();
+		expect(built.activeTier).toBe("vicinity");
+	});
+
+	// "This way was drawn on The Vicinity" is the wrong sentence for a trip nobody drew. Both are
+	// about a route pinned to one map; only one of them is about somebody's pen.
+	it("says why the other map is empty without claiming somebody drew this", async () => {
+		const built = await dialog({ origin: inTheFlats, destination: "marshedge" })._buildJourney("worlds-end");
+		expect(built.map.offMap.sentence).toContain("set out from a point on The Vicinity");
+		expect(built.map.offMap.sentence).not.toContain("drew");
+	});
+
+	// The list is the map's legend and, in a world with no art, the whole screen. Every place keeps
+	// a time — the book's own roads plus one measured leg — and the tilde is what says which is which.
+	it("keeps a time on every row, tilded because one leg was measured", async () => {
+		const built = await dialog({ origin: inTheFlats })._buildJourney();
+		const rows = built.groups.flatMap(g => g.places);
+		expect(rows.every(row => !!row.time)).toBe(true);
+		expect(rows.every(row => row.time.startsWith("~"))).toBe(true);
+		// Against the trip that leaves a lettered place, where nothing is measured and nothing is
+		// tilded — and where home itself has no route from home.
+		const home = await dialog({ origin: "stonetop" })._buildJourney();
+		const timed = home.groups.flatMap(g => g.places).filter(row => row.time);
+		expect(timed.length).toBeGreaterThan(0);
+		expect(timed.some(row => row.time.startsWith("~"))).toBe(false);
+	});
+
+	// A way by hand starts where the party is, so the map it can be laid on is the one they are
+	// standing on. On the other tab the invitation would be teaching a gesture with nowhere to make it.
+	it("lets a way be drawn on its own map, and nowhere else", async () => {
+		const here = await dialog({ origin: inTheFlats })._buildJourney();
+		expect(here.custom.canDrawHere).toBe(true);
+		const there = await dialog({ origin: inTheFlats })._buildJourney("worlds-end");
+		expect(there.custom.canDrawHere).toBe(false);
+		expect(there.custom.hint).toContain("a point on The Vicinity");
+	});
+});
+
+// ── The markup and the stylesheet agree about the gesture ────────────────────
+//
+// Three files have to say the same thing for the armed state to be visible at all: the partial
+// renders the sentence, the binder writes the class, and the stylesheet is what reveals it. Arming
+// deliberately costs no re-render (a render would replace the very picture the click is armed on),
+// so a disagreement here is a mode with no way of telling the reader it is on.
+describe("the row above the map, and what replaced it", () => {
+	const partial = f => readFileSync(
+		new URL(`../../templates/dialogs/partials/${f}`, import.meta.url), "utf8");
+
+	// THE WHOLE ROW OF PICKS IS GONE (user, 2026-08-24): "Setting out from Stonetop" as a button
+	// that armed the next click, "bound for Marshedge", and the × that un-picked it. Three readings
+	// of what the map already draws in pins, one of them a mode invisible until you were in it, and
+	// the only way out of two of those states.
+	it("draws neither end of the journey as a control any more", () => {
+		const markup = partial("expedition-journey-controls.hbs");
+		for (const gone of [
+			"<select", "originOptions", "stonetop-journey-picks", "stonetop-journey-start-btn",
+			"stonetop-journey-bound", "stonetop-journey-clear\"", "stonetop-journey-starthint",
+		]) expect(markup).not.toContain(gone);
+	});
+
+	// And nothing is left styling them either: a stylesheet still dressing markup nobody renders is
+	// how a control comes back half-alive.
+	it("leaves no styling behind for the row it removed", () => {
+		const css = readCss();
+		for (const gone of [
+			".stonetop-journey-picks", ".stonetop-journey-picklab", ".stonetop-journey-start-btn",
+			".stonetop-journey-startname", ".stonetop-journey-starthint", ".stonetop-journey-bound",
+		]) expect(css).not.toContain(`}\n${gone} `);
+		expect(css).not.toContain(".is-setting-out ");
+	});
+
+	// PUT THE ROUTE ON THE SCENE moved next to PUT A SITE ON THE MAP (user, 2026-08-24). Both write
+	// something onto a picture, and the row of facts the scene button used to sit in has gone — so
+	// the two buttons that act on a map are what the map-tab row now ends with.
+	it("ends the map-tab row with the two buttons that write onto a picture", () => {
+		const markup = partial("expedition-journey-controls.hbs");
+		const row = markup.slice(markup.indexOf("stonetop-journey-tiers"));
+		const site = row.indexOf("stonetop-journey-place-site");
+		const scene = row.indexOf("stonetop-journey-to-scene");
+		expect(site).toBeGreaterThan(-1);
+		expect(scene).toBeGreaterThan(site);
+		// Inside the row rather than after it, or they would wrap onto a line of their own.
+		expect(row.indexOf("</div>", scene)).toBeGreaterThan(scene);
+	});
+
+	// The two are built on different conditions — the site button wants a map on screen, the scene
+	// button wants a route, and a route can be plotted in a world with no book art at all — so the
+	// site button's auto margin cannot be the only thing holding the pair at the right end.
+	it("keeps the scene button at the right end even when it is alone there", () => {
+		expect(declarations(readCss(), ".stonetop-journey .stonetop-journey-place-site"))
+			.toContain("margin-left: auto;");
+		expect(ownRule(readCss(),
+			".stonetop-journey .stonetop-journey-tierlist + .stonetop-journey-to-scene"))
+			.toContain("margin-left: auto");
+	});
+
+	// The rows of the destination list answer "where do they set out from?" while the trip has no
+	// start, which is what makes the gesture work in a world that never imported the book art. A
+	// RENDERED state now (ExpeditionDialog `needsStart`), not an armed one: there is no mode left to
+	// arm, so the class comes off the same build as everything else on the screen.
+	it("lights the destination list, in the green of the near end of the journey", () => {
+		const css = readCss();
+		expect(read("templates/dialogs/partials/expedition-journey.hbs"))
+			.toContain("journey.needsStart}} is-needing-start");
+		expect(read("templates/dialogs/travel-map.hbs"))
+			.toContain("journey.needsStart}} is-needing-start");
+		// The ink on the row, the box around the whole row (gazetteer icon included) on its <li>.
+		const ink = ownRule(css, ".stonetop-journey.is-needing-start .stonetop-journey-row:hover");
+		const box = ownRule(css,
+			".stonetop-journey.is-needing-start .stonetop-journey-list li:has(.stonetop-journey-row:hover)");
+		expect(ink).toContain("--st-green");
+		expect(box).toContain("--st-green");
+		expect(`${ink}${box}`).not.toContain("--st-gold");
+	});
+
+	// A start the GM placed takes no clicks at all, exactly as a drawn way's numerals do not: every
+	// gesture over that picture is about the way, and a mark that swallowed one would be the one
+	// thing on the map that stops the map working.
+	it("draws a placed start as a mark that takes no clicks", () => {
+		expect(partial("expedition-journey-pins.hbs")).toContain("stonetop-journey-start");
+		expect(declarations(readCss(), ".stonetop-journey-canvas .stonetop-journey-start"))
+			.toContain("pointer-events: none;");
 	});
 });

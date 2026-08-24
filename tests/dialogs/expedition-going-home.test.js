@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { readRepo as read, readCss, ownRule } from "../fakes/css.js";
+import { readRepo as read, readCss, ownRule, declarations } from "../fakes/css.js";
 
 // The last step of the Run an Expedition walkthrough, "Going home".
 //
@@ -85,9 +85,11 @@ describe("the arriving-home list", () => {
 	it("renders them as a spiral-marked list, with no checkbox in sight", () => {
 		expect(HBS).toMatch(/eq qa\.kind "questions"/);
 		expect(HBS).toMatch(/<ul class="stonetop-exp-questions">/);
-		// The checkbox branch is still there for Chart a Course, which DOES record its ticks.
+		// The checklist branch is still there for Chart a Course, which records what it
+		// presented — as a list a GM adds to now, not as twelve ticks. So there is no
+		// checkbox left anywhere in this walkthrough, on either branch.
 		expect(HBS).toMatch(/eq qa\.kind "checklist"/);
-		expect(HBS).toMatch(/stonetop-exp-checkbox/);
+		expect(HBS).not.toMatch(/stonetop-exp-checkbox/);
 	});
 
 	it("hangs the question spiral on those rows in CSS", () => {
@@ -95,6 +97,44 @@ describe("the arriving-home list", () => {
 		// this selector SHARES with the other question lists, which a fixed-length slice from the
 		// first mention would read straight past.
 		expect(ownRule(CSS, ".stonetop-exp-questions > li::before")).toContain("question-spiral.svg");
+	});
+
+	// The rows draw their own box for that spiral rather than borrowing the walkthrough's
+	// prose-bullet rule, and the reason is the art: question-spiral.svg is WIDE where the prose
+	// bullet's check-spiral is square, so `contain` in a square box drew it a fifth short. It read
+	// as a faint speck beside the type and rode above the words instead of sitting beside them.
+	// This is the silent kind of style bug: the list still lays out and still reads, so nothing
+	// short of looking at it says the glyph shrank.
+	it("draws the wide glyph in a box shaped for it, not the square prose bullet's", () => {
+		const svg = read("assets/icons/steading/question-spiral.svg");
+		const [, w, h] = svg.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.-]+) ([\d.-]+)"/).map(Number);
+		expect(w, "the art is wider than it is tall, which is what the box below answers for")
+			.toBeGreaterThan(h);
+
+		// Not a member of the prose-bullet rule any more: that one is the SQUARE spiral's
+		// arithmetic, and re-joining it is exactly how the glyph would silently shrink back.
+		for (const sel of [".stonetop-spring-body ul:not([class]) > li",
+			".stonetop-spring-body ul:not([class]) > li::before"]) {
+			expect(declarations(CSS, sel).length, sel).toBeGreaterThan(0);
+		}
+		expect(CSS).not.toMatch(/ul:not\(\[class\]\) > li(::before)?,\s*\.stonetop-exp-questions/);
+
+		// Its own box: as wide as the row's type (the 14px every other question spiral in the
+		// system hangs in, in em so it tracks the font-scale setting), and one line tall, which
+		// is what centres the glyph on the words rather than pinning it a fixed em down.
+		const glyph = ownRule(CSS, ".stonetop-exp-questions > li::before");
+		expect(glyph).toMatch(/width:\s*1em/);
+		expect(glyph).toMatch(/top:\s*0/);
+		expect(glyph).toMatch(/center\s*\/\s*contain/);
+
+		// The box height and the row's line-height are the SAME number, or the centring is off by
+		// their difference.
+		const line = ownRule(CSS, ".stonetop-exp-questions > li").match(/line-height:\s*([\d.]+)/)[1];
+		expect(glyph).toContain(`height: ${line}em`);
+
+		// And the text hangs off that box, so the words clear the wider glyph.
+		expect(ownRule(CSS, ".stonetop-exp-questions > li"))
+			.toMatch(/padding-left:\s*calc\(1em \+ var\(--stonetop-spiral-gap\)\)/);
 	});
 });
 

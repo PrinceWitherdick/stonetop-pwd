@@ -31,6 +31,10 @@ import {
 import { frameFitsImage, frameFor, travelMap, travelPlace } from "../data/travel-times.js";
 import { MAP_PIN_ICON_SIZE } from "./map-pins.js";
 import { journeyKey, journeyRoute, normalizeJourney } from "./travel-route.js";
+// Where the party sets out from, which may be a mark of the GM's own rather than a slug: the
+// flag has to carry whichever it is, in the one shape it round-trips through. See
+// utils/journey-start.js.
+import { startEnd } from "./journey-start.js";
 import { offMapNote, routeDots, routePath, tierDrawing } from "./route-path.js";
 
 /** The Scene flag one route lives in. */
@@ -133,8 +137,11 @@ export function routeInk() {
  */
 export function sceneJourney(scene) {
 	const stored = scopedFlag(scene, SCENE_ROUTE_FLAG);
-	if (!stored?.destination && !stored?.custom?.on) return null;
-	const { origin, destination, custom } = normalizeJourney(stored);
+	// ASKED OF THE MARKS, not of any stored `on`: a hand-drawn way is one that has marks, and the
+	// flag written by the days of the checkbox carried a separate boolean that this must not start
+	// depending on again. See `normalizeCustom`.
+	if (!stored?.destination && !stored?.custom?.points?.length) return null;
+	const { start, destination, custom } = normalizeJourney(stored);
 	// Nothing drawn: neither a destination the table can solve a way to, nor a mark the GM laid
 	// down. Both are ordinary — a trip mid-plan is one or the other — and neither is a route.
 	if (custom.on ? !custom.points.length : !destination) return null;
@@ -143,7 +150,12 @@ export function sceneJourney(scene) {
 	// checked, and a title copied here goes stale the moment the trip is renamed. What the line IS
 	// is a pair of places, or a map and the marks on it; whose trip it was is the expedition
 	// record's to say.
-	return { origin, destination, custom };
+	//
+	// THE START GOES BACK OUT IN THE SHAPE IT CAME IN, through `startEnd`: a slug where the party
+	// left a lettered place, the bare mark where they left a point of the GM's own. This value is
+	// fed straight back through `normalizeJourney` by `journeyKey` and by the painter, so anything
+	// else here would be a start that changed every time the Scene was read.
+	return { origin: startEnd(start), destination, custom };
 }
 
 /**
@@ -206,11 +218,12 @@ export function sceneRouteCheck(scene, route) {
 	// the two town maps. They letter their own places and have no legs attached to any of them.
 	if (!tier) return { ...refuse("wrong-map"), on: slug, onName: posterMapFor(slug)?.name ?? scene.name };
 
-	// A HAND-DRAWN WAY IS FRACTIONS OF ONE PICTURE, so the Scene has to be that picture. Left to
-	// fall through, the geometry below would simply find no line and the refusal would come out as
-	// "this map doesn't draw <place>" — which names the wrong problem and sends the reader off
-	// after a place when what they need is the other map. Named here, they get the map.
-	if (route.custom && route.tier !== slug) {
+	// A ROUTE WITH A BARE MARK AT EITHER END IS FRACTIONS OF ONE PICTURE, so the Scene has to be
+	// that picture. That is a way drawn by hand, and equally one setting out from a point the GM
+	// placed. Left to fall through, the geometry below would simply find no line and the refusal
+	// would come out as "this map doesn't draw <place>" — which names the wrong problem and sends
+	// the reader off after a place when what they need is the other map. Named here, they get it.
+	if (route.pinned && route.tier !== slug) {
 		return { ...refuse("wrong-map"), on: slug, onName: tier.name };
 	}
 
@@ -347,15 +360,17 @@ export function offMapNames(note) {
  * button is the map the whole table is looking at.
  */
 export async function showRouteOnScene(scene, journey) {
-	const { origin, destination, custom } = normalizeJourney(journey);
+	const { start, destination, custom } = normalizeJourney(journey);
+	// Whichever kind of start it is, in the shape the flag stores and `normalizeJourney` reads.
+	const origin = startEnd(start);
 	const drawn = custom.on && custom.points.length > 0;
 	if (!drawn && !destination) return null;
 	// WHAT IS DRAWN GOES IN, and not the rest of the trip. A hand-drawn way carries its map and its
-	// marks and no destination, because with the box ticked the destination is a pick the GM is
+	// marks and no destination, because while a way is drawn the destination is a pick the GM is
 	// keeping for later rather than anything the line on the Scene is about — and writing it here
 	// would make the button think the Scene had gone out of step every time they changed it.
 	const payload = drawn
-		? { origin, custom: { on: true, tier: custom.tier, points: custom.points } }
+		? { origin, custom: { tier: custom.tier, points: custom.points } }
 		: { origin, destination };
 	// ONE write, and it takes any LEGACY copy down on the way past. `scopedFlag` answers with the
 	// first scope that holds one and walks the historical ids AHEAD of the pinned one, so a flag

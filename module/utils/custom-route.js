@@ -22,21 +22,19 @@
 // compiler can print a hand-drawn route into a journal from the stored marks alone.
 
 import {
-	MARCH_HOURS, MARK_PRECISION, TRAVEL_LEGS, TRAVEL_MAPS, exitsOnMap, travelMap, travelPlace,
+	MARCH_HOURS, TRAVEL_LEGS, TRAVEL_MAPS, exitsOnMap, isFraction, roundMark, travelMap, travelPlace,
 } from "../data/travel-times.js";
 // Re-offered, because a reader of a hand-drawn path asks this module what its marks are stored at.
 export { MARK_PRECISION } from "../data/travel-times.js";
 // "Can this map draw that place?" and "which map draws them all?" are asked by the solved route
 // too, and the map ordering they turn on is stated once, over there.
 import { tierDraws, tierDrawingEnds } from "./route-path.js";
+// Where the party sets out from, which since it may be a mark of the GM's own is the same kind of
+// thing as the points below rather than a slug the table happens to know. See utils/journey-start.js.
+import { normalizeStart, startEnd, startName } from "./journey-start.js";
 
 /** The fewest priced legs a map must draw before its pace is worth calibrating from. */
 const PACE_MIN_SAMPLE = 3;
-
-const round = (value, places) => Number(Number(value).toFixed(places));
-
-/** Is this a number that can be a fraction of a map? */
-const isFraction = value => Number.isFinite(value) && value >= 0 && value <= 1;
 
 /**
  * Is this a mark the printed map can actually hold?
@@ -95,6 +93,20 @@ export function markSpot(tier, slug) {
 const originSpot = (tier, slug) => travelPlace(slug)?.spots?.[tier] ?? arrowSpot(tier, slug);
 
 /**
+ * Where the journey's START stands on one map, whichever kind of start it is, or null.
+ *
+ * A place is looked up exactly as it always was, anchors and edge arrows included. A mark the GM
+ * put down carries its own fraction and stands there — but ONLY on its own map: the same pair of
+ * numbers on the other tier is a different valley, and drawing the first leg from it would be this
+ * module inventing a position nobody chose.
+ */
+export function startSpot(tier, start) {
+	const at = normalizeStart(start);
+	if (at.slug) return originSpot(tier, at.slug);
+	return at.tier === tier ? { fx: at.fx, fy: at.fy } : null;
+}
+
+/**
  * One stored point read back, or null.
  *
  * Two shapes, and exactly one of them per point: `{ slug }` names a place the travel table knows,
@@ -108,7 +120,7 @@ function normalizeMark(point, tier) {
 	const place = travelPlace(point.slug);
 	if (place) return markSpot(tier, place.slug) ? { slug: place.slug } : null;
 	if (!isFraction(point.fx) || !isFraction(point.fy)) return null;
-	return { fx: round(point.fx, MARK_PRECISION), fy: round(point.fy, MARK_PRECISION) };
+	return { fx: roundMark(point.fx), fy: roundMark(point.fy) };
 }
 
 /**
@@ -127,9 +139,13 @@ export function normalizeCustom(custom) {
 	const points = (Array.isArray(custom?.points) ? custom.points : [])
 		.map(point => normalizeMark(point, tier))
 		.filter(Boolean);
-	// `on` with nothing drawn yet is an ordinary state and not a contradiction: it is what the GM
-	// has the moment they tick the box, and it is what puts the map into drawing mode.
-	return { on: !!custom?.on, tier, points };
+	// THE MARKS ARE THE MODE. There is no box to tick: a way is laid out by hand exactly when there
+	// are marks on the map, and it is over the moment the last of them is taken back. `on` is kept
+	// as a field because three surfaces ask this question and "are there points?" is the wrong
+	// sentence to write in all of them, but it is DERIVED — a stored flag from the days of the
+	// checkbox is ignored rather than honoured, so an old trip whose box was unticked with its
+	// marks kept now reads as the way it plainly draws.
+	return { on: points.length > 0, tier, points };
 }
 
 /**
@@ -143,16 +159,22 @@ export function normalizeCustom(custom) {
  *
  * THE ORIGIN IS NOT STORED AMONG THE POINTS. A journey starts where the trip says it starts, and
  * copying that into the marks would let the two disagree the moment a GM changed "setting out
- * from" — leaving a path that sets out from somewhere the trip no longer does.
+ * from" — leaving a path that sets out from somewhere the trip no longer does. That holds all the
+ * harder now the start may itself be a mark: two copies of one fraction is one of them going stale.
+ *
+ * AND SO THE FIRST STOP IS NEVER NUMBERED. `mark` counts the points the GM laid on the way, which
+ * is what the readout's "point 2" and the numeral on the picture both read; the start wears its own
+ * pin and its own name (see `startName`), so numbering it as well would make the first leg run from
+ * point 1 to point 1.
  */
-export function customStops(origin, custom) {
+export function customStops(start, custom) {
 	const { tier, points } = normalizeCustom(custom);
 	if (!tier) return [];
-	const start = travelPlace(origin);
+	const from = normalizeStart(start);
 	const stops = [{
-		slug: start?.slug ?? null,
-		name: start?.name ?? "",
-		spot: originSpot(tier, start?.slug),
+		slug: from.slug,
+		name: startName(from),
+		spot: startSpot(tier, from),
 		mark: null,
 	}];
 	let placed = 0;
@@ -306,9 +328,10 @@ export function withMark(points, mark, { append = false, undo = false } = {}) {
 	const run = Array.isArray(points) ? points : [];
 	if (undo) return run.length ? run.slice(0, -1) : run;
 	if (!mark) return run;
-	// An empty path has no far end to move, so the first click lays the first mark down however it
-	// was pressed. Without this the plain click — the one a reader tries first — would do nothing
-	// at all on a path they have only just started.
+	// An empty path has no far end to move, so the first mark goes down however it was pressed.
+	// The gesture that STARTS a way is the shift-click (the dialogs refuse a plain one on a bare
+	// map, since it has nothing to move), and this is what makes that first press lay a mark
+	// rather than replace the nothing that was there.
 	if (append || !run.length) return [...run, mark];
 	return [...run.slice(0, -1), mark];
 }
@@ -316,20 +339,25 @@ export function withMark(points, mark, { append = false, undo = false } = {}) {
 /**
  * Which map a hand-drawn path should start on, given where the party is setting out from.
  *
- * The tier the reader is looking at, unless that map cannot draw the origin — in which case the
+ * The tier the reader is looking at, unless that map cannot draw the start — in which case the
  * path would begin at a stop with nowhere to stand, and `routePath` would rightly refuse to draw
- * any of it rather than silently shorten the journey. The innermost map that DOES draw the origin
+ * any of it rather than silently shorten the journey. The innermost map that DOES draw the start
  * is the honest answer, and it is the same one `_activeTier` reaches for with no destination yet.
+ *
+ * A HAND-PLACED START ANSWERS ITS OWN MAP AND ONLY ITS OWN, which falls out of `startEnd` rather
+ * than being tested here: a mark is drawn on the tier it was laid on, so both questions below can
+ * name exactly one map and the way is laid out on the picture the party is standing on.
  */
-export function customTierFor(origin, showing) {
-	if (tierDraws(showing, [origin])) return showing;
-	return tierDrawingEnds([origin]) ?? travelMap(showing)?.slug ?? TRAVEL_MAPS[0].slug;
+export function customTierFor(start, showing) {
+	const end = startEnd(start);
+	if (tierDraws(showing, [end])) return showing;
+	return tierDrawingEnds([end]) ?? travelMap(showing)?.slug ?? TRAVEL_MAPS[0].slug;
 }
 
 /**
- * A solved route turned into marks, which is what the checkbox hands the GM to start from.
+ * A solved route turned into marks, which is what the first shift-click starts from.
  *
- * TICKING THE BOX SHOULD NOT EMPTY THE MAP. The way they were going is very nearly always the way
+ * THE FIRST MARK SHOULD NOT EMPTY THE MAP. The way they were going is very nearly always the way
  * they are still going, plus a detour — so the honest first state of "draw it yourself" is the
  * route that was already drawn, in marks the GM can now move, extend and take back. Starting from
  * a blank map would make the commonest use of this feature (the usual road, but swinging by the

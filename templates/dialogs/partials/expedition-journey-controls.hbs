@@ -1,89 +1,30 @@
-{{!-- Who is setting out, where they are bound, and which map is showing.
+{{!-- Which map is showing, and what the GM can do to the picture.
 
-      SHARED BY BOTH SURFACES. The route step draws these above its map; the "See the whole map"
-      window draws the same controls above its viewport, which is what makes the popout a peer of
-      the panel rather than a picture of it. Context is the journey object from
+      SHARED BY BOTH SURFACES. The route step draws this above its map; the "See the whole map"
+      window draws the same row above its viewport, which is what makes the popout a peer of the
+      panel rather than a picture of it. Context is the journey object from
       ExpeditionDialog._buildJourney.
 
       Every control is bound once, in that dialog's activateListeners, and the window forwards its
-      own clicks to the very same methods — so "change the origin" cannot come to mean two
-      different things depending on which window you did it in. --}}
-<div class="stonetop-journey-picks">
-  <label class="stonetop-journey-picklab">
-    Setting out from
-    <select class="stonetop-journey-origin">
-      {{#each journey.originOptions}}
-      <option value="{{slug}}"{{#if selected}} selected{{/if}}>{{name}}</option>
-      {{/each}}
-    </select>
-  </label>
-  {{#if journey.hasDestination}}
-  <span class="stonetop-journey-bound">bound for <strong>{{journey.destination.name}}</strong></span>
-  <button type="button" class="stonetop-journey-clear" data-tooltip="Clear the destination">
-    <i class="fas fa-xmark"></i>
-  </button>
-  {{else}}
-  <span class="stonetop-journey-bound stonetop-journey-bound--empty">Tap a place to set the destination.</span>
-  {{/if}}
-  {{!-- Put the way they go onto the table's own map. It sits with the DESTINATION rather than with
-        the map tabs because it is an act on the journey, not a choice of picture: the scene it
-        draws on is the one the reader is looking at, which need not be the map showing here.
+      own clicks to the very same methods — so "put a site on the map" cannot come to mean two
+      different things depending on which window you did it in.
 
-        GM-only, and absent rather than disabled for a player: it writes a Scene flag, which a
-        player cannot do, and a control that is visibly there and refuses on click is worse than
-        one that never offered. Players still SEE the line, because the flag broadcasts. Built only
-        once a destination is picked, for the same reason. See utils/scene-route.js. --}}
-  {{#if journey.scene}}
-  <button type="button" class="stonetop-journey-to-scene{{#if journey.scene.showing}} is-showing{{/if}}"
-          data-tooltip="{{journey.scene.tooltip}}">
-    <i class="fas {{journey.scene.icon}}"></i> {{journey.scene.label}}
-  </button>
-  {{/if}}
-</div>
+      THE ROW OF FACTS ABOVE THIS ONE HAS GONE (user, 2026-08-24). It carried "Setting out from
+      Stonetop" — a button whose press armed the next click — then "bound for Marshedge", then an ×
+      to un-pick that. Three ways of saying what the map already draws, one of them a mode that was
+      invisible until you were in it, and the only route out of two of those states.
 
-{{!-- Lay the way out by hand instead of by the table (module/utils/custom-route.js).
-
-      ITS OWN ROW, between the picks and the map tabs, because it belongs to both and crowds
-      either: it changes what a click on the picture MEANS, and it changes what the readout below
-      is about. The row is also where the three gestures are taught. They have to be taught
-      somewhere — nothing on a map advertises that shift adds a leg — and a line of text that is
-      only there while the mode is on costs nothing the rest of the time.
-
-      The checkbox is GM-only (`canDraw`), like the scene and site buttons beside it and for the
-      same reason: drawing writes the trip into a world setting, which a player cannot do. The row
-      itself is not, so a player reading the route step still sees that this way was drawn by
-      hand rather than worked out. --}}
-{{#if journey.custom.canDraw}}
-<div class="stonetop-journey-draw{{#if journey.custom.on}} is-on{{/if}}">
-  <label class="stonetop-journey-drawlab" data-tooltip="{{journey.custom.tooltip}}">
-    <input type="checkbox" class="stonetop-journey-custom"{{#if journey.custom.on}} checked{{/if}}>
-    {{journey.custom.label}}
-  </label>
-  {{#if journey.custom.on}}
-  <span class="stonetop-journey-drawhint">{{journey.custom.hint}}</span>
-  {{#if journey.custom.count}}
-  <button type="button" class="stonetop-journey-clear-drawn" data-tooltip="{{journey.custom.clearTip}}">
-    <i class="fas fa-rotate-left"></i> {{journey.custom.clearLabel}}
-  </button>
-  {{/if}}
-  {{/if}}
-</div>
-{{else if journey.route.drawn}}
-{{!-- A player, looking at a way somebody drew. No control, but the line on this map is not the one
-      the travel table would have drawn and the times beside it are measured rather than printed,
-      so it says so. Its own sentence, not the GM's: the three gestures are no use to a reader who
-      cannot make them. --}}
-<div class="stonetop-journey-draw is-on">
-  <span class="stonetop-journey-drawhint">{{journey.custom.drawnNote}}</span>
-</div>
-{{/if}}
-
-{{!-- The map row: which picture, and what the GM can do to it.
-
-      The tablist is its own element INSIDE the row rather than being the row, because a tablist
-      may hold tabs and nothing else. The button beside it is not a tab (it changes no panel and
-      selects nothing), so a reader told "tab 3 of 3" about it would be told something untrue. --}}
+      THE PICTURE IS THE CONTROL NOW. A click says where they set out from, or where they are
+      bound, or moves the end of the way; a shift-click lays a leg; a right-click takes the trip
+      back one step at a time — the last mark, then the destination, then the start itself, until
+      the map is empty and the next click starts it again. Every state this screen can be put into
+      by clicking comes back off by right-clicking, which is what let the row go: nothing here is
+      the only way to undo something. See ExpeditionDialog `_undoJourneyMark` for the ladder, and
+      expedition-journey-drawhint.hbs for the line under the map that teaches it. --}}
 <div class="stonetop-journey-tiers">
+  {{!-- The tablist is its own element INSIDE the row rather than being the row, because a tablist
+        may hold tabs and nothing else. The buttons beside it are not tabs (they change no panel and
+        select nothing), so a reader told "tab 3 of 4" about one would be told something untrue. --}}
   <div class="stonetop-journey-tierlist" role="tablist" aria-label="Map">
     {{#each journey.tiers}}
     <button type="button" role="tab" aria-selected="{{isActive}}" data-tier="{{slug}}"
@@ -93,14 +34,13 @@
     {{/each}}
   </div>
   {{!-- Put one of the GM's own written-up sites on this map, or write a new one and put THAT on it
-        (module/sites/place-site-on-map.js). It rides the end of the map-tab row rather than the
-        row of picks above, because what it adds is a mark on THIS picture: the chooser is followed
-        by a click on the map showing here, so the control belongs beside the tabs that decide
-        which map that is.
+        (module/sites/place-site-on-map.js). It rides the end of the map-tab row because what it
+        adds is a mark on THIS picture: the chooser is followed by a click on the map showing here,
+        so the control belongs beside the tabs that decide which map that is.
 
-        GM-only, and absent rather than disabled for a player, exactly as the scene button above
-        is: a site is prep filed in a journal players cannot see or write. It is also built only
-        once there is a map on screen, since a placement is a point on a picture. --}}
+        GM-only, and absent rather than disabled for a player: a site is prep filed in a journal
+        players cannot see or write. It is also built only once there is a map on screen, since a
+        placement is a point on a picture. --}}
   {{#if journey.placeSite}}
   {{!-- SITE_ICON, the mark a site wears in a LIST (module/sites/place-site-on-map.js) and the one
         the chooser this button opens puts beside every row in it. NOT the standing stone a placed
@@ -108,6 +48,24 @@
         not read. One idea, two sizes, two drawings -- and this control belongs with the list. --}}
   <button type="button" class="stonetop-journey-place-site" data-tooltip="{{journey.placeSite.tooltip}}">
     <i class="fas fa-mountain-sun"></i> {{journey.placeSite.label}}
+  </button>
+  {{/if}}
+  {{!-- Put the way they go onto the table's own map. NEXT TO "put a site on the map" (user,
+        2026-08-24), and it belongs there for the same reason that one does: both are acts on a
+        picture rather than facts about the trip. It sat with the destination while there was a
+        destination readout to sit with; with that row gone, the two buttons that write something
+        onto a map are the row.
+
+        The scene it draws on is the one the reader is looking at, which need not be the map showing
+        here — so it is last of the two, the further of them from the tabs that say which map this
+        is. GM-only, and absent rather than disabled for a player: it writes a Scene flag, which a
+        player cannot do, and a control that is visibly there and refuses on click is worse than one
+        that never offered. Players still SEE the line, because the flag broadcasts. Built only once
+        there is a route to draw. See utils/scene-route.js. --}}
+  {{#if journey.scene}}
+  <button type="button" class="stonetop-journey-to-scene{{#if journey.scene.showing}} is-showing{{/if}}"
+          data-tooltip="{{journey.scene.tooltip}}">
+    <i class="fas {{journey.scene.icon}}"></i> {{journey.scene.label}}
   </button>
   {{/if}}
 </div>

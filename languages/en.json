@@ -1238,7 +1238,8 @@
         "refused": "The route can't go on this scene.",
         "draw": "Draw it on the scene",
         "take": "Take it off the scene",
-        "drawTip": "Draw this route on the map the table is looking at.",
+        "drawTip": "Draw this route on the map the table is looking at. It goes on the scene open on your canvas rather than on the picture in this window, so open {map} first or it has nowhere to land.",
+        "drawTipMap": "the map it runs across",
         "takeTip": "Take this route back off the map the table is looking at.",
         "cleared": "The way there is off {scene}.",
         "placed": "The way to {place} is on {map}.",
@@ -1246,7 +1247,8 @@
         "panelShow": "Show {map}",
         "panelNoMap": "No one map draws both ends of this journey, so the way there isn't drawn. The legs below still hold.",
         "placedDrawn": "The way you drew is on {map}.",
-        "panelDrawnOn": "This way was drawn on {map}, so it isn't on this one."
+        "panelDrawnOn": "This way was drawn on {map}, so it isn't on this one.",
+        "panelStartOn": "They set out from a point on {map}, so the way there is only on that map."
       },
       "sites": {
         "place": "Put a site on the map",
@@ -1262,21 +1264,25 @@
         "placedPinned": "{name} is on {map}, and a pin for it is now on {scene}.",
         "placedMoved": "{name} is on {map}, and its pin on {scene} moved to match.",
         "removed": "{name} is off the map. The write-up is still on the Sites tab.",
-        "pinTip": "{name}. Click to read it, right-click to take it off the map.",
-        "offTheMap": "That click was past the printed edge of {map}, so {name} wasn't placed. The write-up is still on the Sites tab.",
-        "gone": "That site isn't in this world any more."
+        "pinTip": "{name}. Click to run the way through here, shift-click to add it as another stop, right-click to take the pin off the map. The write-up is on the Sites tab.",
+        "offTheMap": "That click was past the printed edge of {map}, so {name} wasn't placed. The write-up is still on the Sites tab."
       },
       "draw": {
-        "label": "Draw the way yourself",
-        "tip": "Lay the way out on the map by hand, instead of following the travel table's shortest road.",
-        "hint": "Click the map to move the end of the way; shift-click to add a leg; right-click to take one back.",
+        "noStart": "Click the map to say where they set out from: open map for a point of your own, or a place the books name.",
+        "invite": "Going a way of your own? Shift-click the map to lay it out by hand, starting from the road the table works out.",
+        "hint": "Shift-click the map to add a leg; click to move the end of the way; right-click to take a leg back.",
         "hintElsewhere": "This way is drawn on {map}. Open that map to add to it.",
+        "originOffMap": "{map} doesn't draw {place}, so a way by hand can't start out from here. Open the map that does.",
         "drawnNote": "This way was drawn by hand, so the times beside it are measured off the map rather than printed in the book.",
         "clear": "Start over",
-        "clearTip": "Throw the marks away and start the way again. Keeps drawing on.",
+        "clearTip": "Throw the hand-drawn marks away and go back to the way the travel table works out.",
         "notOnMap": "{map} doesn't draw {place}, so the way can't stop there. Pick somewhere this map letters, or click the map itself.",
         "offTheMap": "That click was past the printed edge of {map}, so no mark was laid. Click inside the map itself.",
         "estimate": "Measured off {map} at the pace of the book's own printed journeys: a good guess, not a printed time."
+      },
+      "start": {
+        "offTheMap": "That click was past the printed edge of {map}, so where they set out from is unchanged. Click inside the map itself.",
+        "pinLabel": "setting out"
       }
     }
   }

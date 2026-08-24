@@ -715,6 +715,19 @@ export function spotPercent({ fx, fy }, frame = FULL_FRAME) {
 export const MARK_PRECISION = 4;
 
 /**
+ * Is this a number that can be a fraction of a map?
+ *
+ * Here rather than in each of the three modules that ask it, for the reason MARK_PRECISION is
+ * here: the test a mark is admitted by and the test it is compared by cannot come to be two
+ * tests. A mark that fails this is off the paper -- see `insideMap` in utils/custom-route.js,
+ * which is this asked of both halves at once.
+ */
+export const isFraction = value => Number.isFinite(value) && value >= 0 && value <= 1;
+
+/** One fraction at the precision marks are stored and compared at. */
+export const roundMark = value => Number(Number(value).toFixed(MARK_PRECISION));
+
+/**
  * The other direction: a percentage read off a rendered picture, back to a canonical fraction.
  *
  * The inverse of `spotPercent`, and it exists for the one thing this table cannot supply — a

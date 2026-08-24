@@ -89,6 +89,11 @@ const FULL = { x0: 0, y0: 0, x1: 1, y1: 1 };
 /** A drawn way's legs, in the shape `customRoute` builds them. */
 const drawnRoute = (tier, stops) => ({
 	custom: true,
+	// What every renderer here actually branches on: "this route belongs to ONE map". A drawn way
+	// is pinned because its marks are fractions of one picture; a route setting out from a mark the
+	// GM placed is pinned for the same reason without anybody having drawn it, which is why the two
+	// are separate fields rather than one.
+	pinned: true,
 	tier,
 	legs: stops.slice(1).map((to, i) => ({
 		from: stops[i].slug ?? null, to: to.slug ?? null,

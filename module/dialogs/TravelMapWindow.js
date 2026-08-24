@@ -13,7 +13,10 @@
 //
 // WHO OWNS WHAT. The trip's origin and destination live in the world setting, reached only through
 // the ExpeditionDialog that opened this window — so this class never writes game state, it calls
-// `source.pick(...)` and then re-reads. Which map it is showing is its OWN state, deliberately: a
+// `source.markPlace(...)` / `source.drawMark(...)` / `source.undoMark(...)` and then re-reads. What
+// this window has that the panel does not is the PICTURE: a 300 dpi map the reader can wheel into,
+// which is where a point can be put exactly where they mean it rather than within a few miles of
+// it. Which map it is showing is its OWN state, deliberately: a
 // window opened on the Vicinity keeps showing the Vicinity even when the panel behind it follows a
 // destination out to the World's End, because the reader put it there.
 
@@ -22,7 +25,6 @@ import {
 	JOURNEY_MARKS, JOURNEY_RIGHT_CLICK_MARKS,
 	bindJourneyControls, bindJourneySiteRemoval, journeyPick,
 } from "./journey-controls.js";
-import { openSiteWriteUp } from "../sites/place-site-on-map.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { percentSpot, travelMap } from "../data/travel-times.js";
 // Not the bare global: v13 moved it under foundry.applications.handlebars and deprecated that,
@@ -33,7 +35,38 @@ const TEMPLATE = "systems/stonetop-pwd/templates/dialogs/travel-map.hbs";
 // The two halves of the chrome, re-rendered in place by `sync`. The same partials the route step
 // composes itself from, which is what keeps the window a peer of the panel rather than a copy.
 const CONTROLS_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-controls.hbs";
+// The foot's two halves, in the order the template composes them: what a click on the picture does,
+// then what the journey costs.
+const DRAWHINT_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-drawhint.hbs";
 const ROUTE_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-route.hbs";
+
+// HOW BIG IT OPENS. The books print these maps at 300 dpi and this window exists to give one room,
+// so it takes most of the screen rather than a fixed box every reader has to drag out again. The
+// share is read at construction (an Application merges `defaultOptions` per instance), so it
+// follows the window the reader actually has, and falls back to a fixed size when there is no
+// window to measure - a headless test run, chiefly.
+const SCREEN_SHARE = 0.8;
+// ...but no wider than this much of its own height (user, 2026-08-24). On an ultrawide, 80% of the
+// width is a letterbox: the maps are roughly landscape-page shaped, so the picture fits to the
+// height and everything past that is white mat down both sides. Widening past 1.2 buys margin, not
+// map. Only the DEFAULT is clamped - the frame stays resizable, so a reader who wants the whole
+// width can drag it there.
+const MAX_ASPECT = 1.2;
+const FALLBACK_WIDTH = 900;
+const FALLBACK_HEIGHT = 800;
+
+function screenShare(available, fallback) {
+	const measured = Number(available);
+	return Number.isFinite(measured) && measured > 0
+		? Math.round(measured * SCREEN_SHARE)
+		: fallback;
+}
+
+function openingSize() {
+	const height = screenShare(globalThis.window?.innerHeight, FALLBACK_HEIGHT);
+	const width = screenShare(globalThis.window?.innerWidth, FALLBACK_WIDTH);
+	return { width: Math.min(width, Math.round(height * MAX_ASPECT)), height };
+}
 
 export class TravelMapWindow extends ImageZoomWindow {
 	/**
@@ -42,8 +75,11 @@ export class TravelMapWindow extends ImageZoomWindow {
 	 * @param {object} config.source          the planner behind it, supplying:
 	 *   `build(tier)`  -> Promise of the journey context for that tier (the same object the route
 	 *                     step renders), and
-	 *   `pick(field, slug)` -> Promise, writing an origin or destination to the trip, and
+	 *   `markPlace(slug, ev, from, tier)` / `drawMark(mark, opts, from)` / `undoMark(from)` ->
+	 *                     Promise, the three gestures on the picture, written to the trip, and
 	 *   `toScene()` -> Promise, putting the route on the reader's own scene or taking it back off,
+	 *   `markSite(uuid, ev, from)` -> Promise, the same three gestures for one of the GM's own
+	 *                     sites, which is a place on the way rather than a link to a journal, and
 	 *   `placeSite({tier, frame, pickPoint})` -> Promise, dropping one of the GM's own sites on the
 	 *                     map showing here, and `takeSiteOffMap(uuid)` -> Promise, lifting one.
 	 * @param {object} config.journey         the first build's result, so the window opens populated
@@ -67,13 +103,20 @@ export class TravelMapWindow extends ImageZoomWindow {
 			// always read it that way — so without the `tier` arm that arrow would sit here wearing
 			// a tooltip promising a zoom and do nothing at all. `journeyPick` owns which wins.
 			onPick: (data, ev) => journeyPick(data, {
-				pick: (field, slug) => this._pick(field, slug),
 				showTier: tier => this.showTier(tier),
-				openSite: uuid => openSiteWriteUp(uuid),
 				// The planner decides whether this is a destination or a stop on a drawn way, at
 				// click time — which it has to be, since this handler is built once here and never
-				// rebound, long before any box is ticked.
-				markPlace: (slug, click) => this._through(source => source.markPlace?.(slug, click, this)),
+				// rebound, long before the first mark goes down. The tier is read at click time for
+				// the same reason: this window's own tabs move it, and a way that does not exist
+				// yet begins on the map the reader is actually looking at.
+				markPlace: (slug, click) => this._through(source =>
+					source.markPlace?.(slug, click, this, this._journey?.map?.tier ?? this._tier)),
+				// One of the GM's own sites, which is a place on the way now rather than a link out
+				// to a journal (user, 2026-08-24). It needs no tier from here: a site carries its
+				// own, and the stop is laid at the site's recorded fraction rather than the
+				// pointer's — so the same tap in this window and in the panel writes one number.
+				markSite: (uuid, click) => this._through(source =>
+					source.markSite?.(uuid, click, this)),
 			}, ev),
 		}, options);
 		this._tier = tier;
@@ -82,11 +125,12 @@ export class TravelMapWindow extends ImageZoomWindow {
 	}
 
 	static get defaultOptions() {
+		const { width, height } = openingSize();
 		return foundry.utils.mergeObject(super.defaultOptions, {
 			classes: ["stonetop", "stonetop-image-zoom", "stonetop-travel-map-app"],
 			template: TEMPLATE,
-			width: 900,
-			height: 800,
+			width,
+			height,
 		});
 	}
 
@@ -128,27 +172,26 @@ export class TravelMapWindow extends ImageZoomWindow {
 		// the route on the table's map is the same act wherever it is asked for, and this window is
 		// the surface a GM is most likely to be reading the route from when they think of it.
 		bindJourneyControls(root, {
-			pick: (field, slug) => this._pick(field, slug),
 			showTier: tier => this.showTier(tier),
 			toScene: () => this._source?.toScene?.(),
 			placeSite: () => this._placeSite(),
-			drawByHand: on => this._through(source => source.drawByHand?.(on, this)),
 			clearDrawn: () => this._through(source => source.clearDrawn?.(this)),
 		});
-		// And the picture itself, since the chrome that was just re-read is what says whether the
-		// box is ticked. Re-armed here rather than in `activateListeners` for that reason: `sync`
-		// is what a tick of the box comes back through, and the mode has to follow it.
+		// And the picture itself, since the journey just re-read is what says whether this map
+		// takes marks at all. Re-armed here rather than in `activateListeners` for that reason:
+		// `sync` is what every mark comes back through, and the first one changes the answer.
 		this._armDrawing();
 	}
 
 	/**
 	 * Arm this window's own map for drawing, or leave it alone.
 	 *
-	 * ONLY ON THE MAP THE WAY IS DRAWN ON, and this window is the surface where that matters most:
-	 * it keeps showing whatever tier it was opened on even after the panel has followed a
-	 * destination out to the other one, so the two can disagree for as long as the reader likes. A
-	 * crosshair over a picture whose clicks could not join this way would be a promise it cannot
-	 * keep.
+	 * WHAT A CLICK COULD MEAN HERE is the planner's answer and not this window's: `canDrawHere` and
+	 * `canSetStart` are built per tier by `ExpeditionDialog._drawState`, off the same journey this
+	 * window renders its chrome from, so the crosshair and the line under the map cannot come
+	 * apart. They say no to a reader who may not draw, and no on a picture an existing way could
+	 * never join — which matters most here, since this window keeps showing whatever tier it was
+	 * opened on even after the panel has followed a destination out to the other one.
 	 *
 	 * The parent takes care of aiming: it listens on the viewport, where a pan's pointer capture
 	 * retargets everything, and measures the overlay, which is the painted picture's own box at
@@ -158,17 +201,23 @@ export class TravelMapWindow extends ImageZoomWindow {
 	_armDrawing() {
 		const custom = this._journey?.custom;
 		const map = this._journey?.map;
-		// The picture on screen has to be the way's OWN map, which is not the same question as
-		// "is it the map this window was opened on": the way can be drawn on the other tier
-		// entirely, and then this window is showing a picture its clicks could never join.
-		if (!custom?.on || !custom.canDraw || !map || map.tier !== custom.tier) {
+		if (!map || !(custom?.canDrawHere || custom?.canSetStart)) {
 			this.stopWatchingPoints();
 			return;
 		}
+		// The crosshair belongs to the two states where the next click lands something — a way
+		// already drawn, whose far end it moves, and a trip with no start, whose start it plants —
+		// and the right-click to any trip with something left to peel back off it. Both are the
+		// planner's answer, built per tier alongside `canDrawHere` (see `ExpeditionDialog`
+		// `_drawState`) and read here rather than re-derived, so this window and the panel cannot
+		// come to disagree about what a click on the same map would do.
 		this.watchPoints({
-			onPoint: (at, ev) => this._through(source =>
-				source.drawMark?.(percentSpot(at, map.frame), { append: !!ev.shiftKey }, this)),
-			onUndo: () => this._through(source => source.undoMark?.(this)),
+			onPoint: (at, ev) => this._through(source => source.drawMark?.(
+				percentSpot(at, map.frame), { append: !!ev.shiftKey, tier: map.tier }, this)),
+			onUndo: custom.canUndo
+				? () => this._through(source => source.undoMark?.(this))
+				: null,
+			crosshair: !!custom.crosshair,
 			ignore: JOURNEY_MARKS,
 			undoIgnore: JOURNEY_RIGHT_CLICK_MARKS,
 		});
@@ -214,18 +263,6 @@ export class TravelMapWindow extends ImageZoomWindow {
 	/** Lift a pin back off this map, through the planner, then re-read. */
 	async _removeSite(uuid) {
 		await this._source?.takeSiteOffMap?.(uuid, this);
-		await this.sync();
-	}
-
-	/**
-	 * Write a choice through the planner, then re-read everything it changed.
-	 *
-	 * The planner is told WHICH window asked, so its own sweep over the open maps skips this one:
-	 * every build is a graph solve, an art browse and a template render, and re-reading here and
-	 * being re-read from over there is the same answer computed twice for one click.
-	 */
-	async _pick(field, slug) {
-		await this._source?.pick?.(field, slug, this);
 		await this.sync();
 	}
 
@@ -300,14 +337,16 @@ export class TravelMapWindow extends ImageZoomWindow {
 		// say" cannot drift from "what the panel says" — then re-bound, since it is new markup.
 		const chrome = root.querySelector(".stonetop-travel-map-chrome");
 		const foot = root.querySelector(".stonetop-travel-map-foot");
-		// Two independent renders of the same journey: started together rather than one after the
-		// other, since neither reads the other's markup.
-		const [controlsHtml, routeHtml] = await Promise.all([
+		// Independent renders of the same journey: started together rather than one after the
+		// other, since none of them reads another's markup.
+		const [controlsHtml, hintHtml, routeHtml] = await Promise.all([
 			chrome ? renderTemplate(CONTROLS_TEMPLATE, { journey: this._journey }) : null,
+			foot ? renderTemplate(DRAWHINT_TEMPLATE, { journey: this._journey }) : null,
 			foot ? renderTemplate(ROUTE_TEMPLATE, { journey: this._journey }) : null,
 		]);
 		if (chrome) chrome.innerHTML = controlsHtml;
-		if (foot) foot.innerHTML = routeHtml;
+		// The same order the template lays them in, since this replaces the whole foot.
+		if (foot) foot.innerHTML = `${hintHtml}${routeHtml}`;
 		this._bindChrome(root);
 	}
 }

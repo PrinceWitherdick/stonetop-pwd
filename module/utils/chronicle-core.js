@@ -14,10 +14,11 @@
 
 import { escHtml, decodeEntities } from "./strings.js";
 import { step4Questions, step6Questions } from "../dialogs/introductions-data.js";
-import { CHART_GROUPS } from "../dialogs/expedition-data.js";
+import { CHART_GROUPS, chartPicked, chartEntryText } from "../dialogs/expedition-data.js";
 import {
 	journeyRoute, routePhrase, routeLegLines, routeLine, fillChartBlank,
 } from "./travel-route.js";
+import { hasFillBlank } from "./fill-blanks.js";
 import { SEASONAL_GAINS } from "../dialogs/spring-burst-data.js";
 // One name for an unnamed trip: the switcher, the steading's held assets and this page all
 // have to agree, so the fallback wording lives in one place rather than three.
@@ -106,21 +107,42 @@ function qaPairsFrom(records, questions) {
 	return pairs;
 }
 
-// Render the ticked items of an expedition checklist (Chart a Course's requirements
-// & challenges) as a per-group bulleted list — the journey's shape, in the GM's own
-// words. `checks` is the saved { key: bool } map; item text is trusted authored HTML.
-// Returns "" when nothing in any group is ticked.
+// Render what a trip's Chart a Course presented — its requirements and its challenges — as a
+// per-group bulleted list: the journey's shape, in the GM's own words. Returns "" for a trip
+// that presented nothing.
 //
-// `route` is the trip's solved journey, when one was plotted. Two of the requirements carry
-// literal blanks ("at least ___ days"), and they go through the SAME filler the dialog's own
-// checklist uses — substituting in one place and not the other would print a blank in the journal
-// where the GM had read a number.
-function checkedGroups(groups, checks, route = null) {
-	return (groups ?? [])
+// THE LIST IS THE RECORD, read through `chartPicked` so this and the walkthrough are looking
+// at one thing (and so a trip logged under the older tick-and-fill pair prints the same here
+// as it draws there — that adapter is where the legacy shape is dealt with, once).
+//
+// Each line is either an authored prompt named by key, whose wording lives in expedition-data
+// as trusted HTML, or a sentence the GM wrote, which is escaped. What they said about it goes
+// through the SAME resolver the walkthrough's own rows use, in the same order of preference:
+// most of the authored requirements carry a literal blank ("at least ___ days", "watch out for
+// ___"), and what was written is spliced into it, else what the plotted route works out, else
+// the blank stands. Filling in one place and not the other would print a blank in the journal
+// where the GM had read an answer.
+//
+// A line with no blank in it ("the way is perilous") has nowhere to splice, so what was said is
+// printed after it instead. Same field either way: the record does not care which shape the step
+// drew it in.
+function chartedGroups(chart, route = null) {
+	const picked = chartPicked(chart);
+	return CHART_GROUPS
 		.map(group => {
-			const items = (group.items ?? []).filter(it => checks?.[it.key]);
-			if (!items.length) return "";
-			const lis = items.map(it => `<li>${fillChartBlank(it.text, it.key, route)}</li>`).join("");
+			const mine = picked.filter(e => e.group === group.key);
+			if (!mine.length) return "";
+			const lis = mine.map(entry => {
+				const text = chartEntryText(entry);
+				const said = String(entry.answer ?? "").trim();
+				// An authored line is the book's words; one the GM wrote is theirs, and is the
+				// only user-authored string in this list.
+				const line = entry.key
+					? fillChartBlank(text, entry.key, route, said)
+					: escHtml(text);
+				const after = (entry.key && hasFillBlank(text)) ? "" : said;
+				return `<li>${line}${after ? `: ${escHtml(after)}` : ""}</li>`;
+			}).join("");
 			return `<p><strong>${escHtml(group.label)}</strong></p><ul>${lis}</ul>`;
 		})
 		.filter(Boolean)
@@ -174,7 +196,7 @@ function buildExpeditionPage(exp, index) {
 	const route = journeyRoute(exp?.journey);
 	const sections = [
 		proseSection("Destination & route", journeyProse(route) + journeyNote(chart, route)),
-		proseSection("The way ahead", checkedGroups(CHART_GROUPS, chart.checks, route) + paragraphs(chart.notes)),
+		proseSection("The way ahead", chartedGroups(chart, route) + paragraphs(chart.notes)),
 		// LEGACY on the same terms as "Other preparations" below. The Outfit step's note box is
 		// gone — the live party-load readout there answers "who's carrying what" off the sheets
 		// themselves — so nothing writes `exp.outfit` any more. Trips logged while the box existed

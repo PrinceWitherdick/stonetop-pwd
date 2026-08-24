@@ -315,6 +315,17 @@ describe("watching a picture for as many clicks as it takes", () => {
 		expect(listenOn.classList.has(DRAWING_CLASS)).toBe(false);
 	});
 
+	// A watch can be armed over a picture that is not being drawn on yet: the expedition's route
+	// step listens for the shift-click that would START a way, and a plain click there still means
+	// what it always meant. A cursor promising that every click lands a point would be lying.
+	it("goes bare-headed when the caller asks it to", () => {
+		const { listenOn, points } = watch({ crosshair: false });
+		expect(listenOn.classList.has(DRAWING_CLASS)).toBe(false);
+		// Still watching, though — the cursor is the only thing that changed.
+		clickAt(listenOn, 50, 25);
+		expect(points).toHaveLength(1);
+	});
+
 	// Its listeners are on markup that goes with the next render, and it holds a class on one of
 	// those nodes. Left alone it would swallow clicks on a picture nobody can see.
 	it("reports nothing once it has been stopped", () => {

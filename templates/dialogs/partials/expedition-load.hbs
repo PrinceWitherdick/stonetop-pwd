@@ -1,0 +1,55 @@
+{{!-- Outfit step: the live party-load readout. Its own partial because it is re-rendered on
+      its own — a PC changing what they carry redraws this block alone (ExpeditionDialog
+      `_refreshLoadReadout`) rather than the whole walkthrough, which would rebuild the route
+      step's map panel and take focus out of whatever field the GM was typing in. Everything
+      inside is delegated from the dialog root, so a swap needs no re-binding. --}}
+<div class="stonetop-exp-load-head">
+  <span class="stonetop-exp-load-title"><span class="stonetop-glyph stonetop-glyph--diamond">◇</span> Party load</span>
+  <span class="stonetop-exp-load-live">live from sheets</span>
+</div>
+
+{{#if loadReadout.chips.length}}
+<div class="stonetop-exp-load-pick">
+  <span class="stonetop-exp-load-picklab">On this trip:</span>
+  {{#each loadReadout.chips}}
+  <button type="button" class="stonetop-exp-load-chip{{#unless on}} is-out{{/unless}}" data-actor-id="{{id}}">
+    <span class="tick">✓</span> {{name}}
+  </button>
+  {{/each}}
+</div>
+{{/if}}
+
+{{#if loadReadout.hasRows}}
+<div class="stonetop-exp-load-glance">
+  <span class="g-head">Setting out</span>
+  {{#if loadReadout.summary.anyOver}}<span class="g-tally g-warn"><b>{{loadReadout.summary.overloaded}}</b> overloaded</span>{{/if}}
+  {{#if loadReadout.summary.anyHeavy}}<span class="g-tally g-caut"><b>{{loadReadout.summary.heavy}}</b> heavy</span>{{/if}}
+  {{#if loadReadout.summary.anySneak}}<span class="g-tally"><b>{{loadReadout.summary.cantSneak}}</b> can't move quiet</span>{{/if}}
+  {{#unless loadReadout.summary.anySneak}}<span class="g-tally g-ok">all set to move</span>{{/unless}}
+</div>
+
+{{#each loadReadout.rows}}
+<div class="stonetop-exp-load-row {{levelClass}}{{#if isFollower}} is-follower{{/if}}">
+  {{!-- `stonetop-portrait-box` marks the CLIPPING box a hover preview measures itself against,
+        so a hand-framed portrait raises its enlarged card beside the face and not off where the
+        oversized image really sits (module/utils/avatar-preview.js). --}}
+  <span class="stonetop-exp-load-ava stonetop-portrait-box{{#if img}} stonetop-exp-load-ava--photo{{/if}}">{{#if img}}<img class="stonetop-exp-load-ava-img" src="{{img}}" alt="" draggable="false" data-name="{{name}}"{{#if previewSub}} data-subtitle="{{previewSub}}"{{/if}}{{#if imgStyle}} style="{{imgStyle}}"{{/if}}>{{else}}{{initial}}{{/if}}</span>
+  <span class="stonetop-exp-load-name">{{name}}{{#if sub}} <em>{{sub}}</em>{{/if}}{{#if folTag}} <span class="stonetop-exp-load-fol">{{folTag}}</span>{{/if}}</span>
+  <span class="stonetop-exp-load-track">
+    {{#each bands}}<span class="stonetop-exp-load-band">{{#each pips}}<i class="stonetop-exp-load-pip{{#if on}} on{{/if}}"></i>{{/each}}</span>{{/each}}
+    {{#if overflow}}<span class="stonetop-exp-load-over">+{{overflow}}</span>{{/if}}
+  </span>
+  <span class="stonetop-exp-load-pill {{pillClass}}">{{levelLabel}}</span>
+  <span class="stonetop-exp-load-count"><b>{{marks}}</b>/{{cap}}</span>
+  {{#if gated.length}}
+  <span class="stonetop-exp-load-gated">
+    {{#each gated}}<span class="stonetop-exp-load-move {{#if active}}on{{else}}off{{/if}}"><span class="ic">{{#if active}}✓{{else}}✕{{/if}}</span> <span class="nm">{{name}}</span> <span class="rq">{{req}}</span></span>{{/each}}
+  </span>
+  {{/if}}
+  {{#if loadBonus}}<span class="stonetop-exp-load-note"><span class="mod">▲ {{loadBonus.from}}</span> {{loadBonus.caps}}</span>{{/if}}
+  {{#if note}}<span class="stonetop-exp-load-note{{#if noteDanger}} danger{{/if}}">{{#if noteDanger}}⚠ {{/if}}{{note}}</span>{{/if}}
+</div>
+{{/each}}
+{{else}}
+<p class="stonetop-exp-load-empty">No one's on this trip yet. Pick who's coming above.</p>
+{{/if}}

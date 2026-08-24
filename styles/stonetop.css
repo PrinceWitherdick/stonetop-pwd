@@ -296,6 +296,13 @@
 	--stonetop-route-ink: #b3261e;
 	--stonetop-route-case: #f4ecd8;
 	--stonetop-route-case-alpha: 0.9;
+
+	/* WHERE THEY SET OUT FROM, in one place for the same reason. Both ends of a journey are drawn
+	   twice over — the start the books lettered and the start a GM put down by hand — and they are
+	   the same fact, so they are the same green. Literal rather than a sheet token because these
+	   sit on the map's own cream and not on the parchment. */
+	--stonetop-map-start-dot: #2f6b3a;
+	--stonetop-map-start-ink: #2c5a35;
 	--st-radius:    4px;
 	--st-radius-lg: 6px;
 
@@ -388,22 +395,25 @@
 	--st-red-bg-hover:   hsl(0 60% 85%);
 	--st-red-text:       hsl(0 55% 30%);
 
-	/* ── Gold "encumbrance/caution" accent ────────────────────────────────
-	   The warning tier that isn't yet a failure: a heavy load on the Expedition
-	   readout, a threat's clock, the Death's Door accent. The app painted all three
-	   from the same gold by hand (`#c9a227` and a 0.10–0.15 wash of it, a dozen
-	   literals); these name it, and every literal that was an EXACT match now reads
-	   the token — so there is one spelling of this colour rather than two, which is
-	   the drift naming it was meant to prevent.
+	/* ── Gold "caution" accent ────────────────────────────────────────────
+	   The warning tier that isn't yet a failure: a threat's clock, the Death's Door
+	   accent, the Expedition readout's own chrome (its head, the load-bonus chip, where
+	   a trip is bound). The app painted these from the same gold by hand (`#c9a227` and
+	   a 0.10–0.15 wash of it, a dozen literals); these name it, and every literal that
+	   was an EXACT match now reads the token — so there is one spelling of this colour
+	   rather than two, which is the drift naming it was meant to prevent.
+
+	   NOT ENCUMBRANCE ANY MORE. A heavy load was the fourth member of this list, which
+	   put an amber beside a red for the two states that actually cost a PC something;
+	   both loaded bands are red now and step apart by weight instead. See the load
+	   readout's own block for why.
+
 	   Kept as the exact hex already in use, not re-expressed in hsl, so migrating an
 	   existing literal was a swap rather than a colour change. EXACT IS THE WHOLE RULE,
 	   and it is why the following are deliberately left as literals — each is a near
 	   miss, and converting one would BE a colour change under cover of a rename:
 	     · washes at other strengths — the load-bonus note's and the load head's 0.10,
-	       the heavy load pill's 0.15, the spared Death's Door's 0.14, and a ticked
-	       end-of-session question's 0.1;
-	     · #c29a1f, a second gold two points per channel off this one, on the heavy
-	       load row's avatar and pips.
+	       the spared Death's Door's 0.14, and a ticked end-of-session question's 0.1.
 	   Fold one of those in when somebody decides that pixel should move, as its own
 	   change with its own reason — not as a side effect of naming a colour. Three
 	   stops, not the family's usual four —
@@ -3279,7 +3289,6 @@ input.stonetop-name-field {
 .stonetop-ledger-edit-check,
 .stonetop-ledger-select-all,
 .stonetop-welcome-dontshow-input,
-.stonetop-exp-checkbox,
 .stonetop-season-gain-check,
 .stonetop-onboarding-check,
 .stonetop-bg-action-check,
@@ -3345,7 +3354,6 @@ input.stonetop-name-field {
 .stonetop-ledger-edit-check:checked,
 .stonetop-ledger-select-all:checked,
 .stonetop-welcome-dontshow-input:checked,
-.stonetop-exp-checkbox:checked,
 .stonetop-season-gain-check:checked,
 .stonetop-onboarding-check:checked,
 .stonetop-bg-action-check:checked,
@@ -5923,9 +5931,14 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 /* Relative Value hover list (rendered inside the dark Foundry tooltip): spiral
    bullets, inverted so the dark spiral SVG shows on the dark tooltip background. */
 .stonetop-rel-value { list-style: none; margin: 4px 0 0; padding: 0; text-align: left; }
-.stonetop-rel-value li { position: relative; padding-left: calc(10px + var(--stonetop-spiral-gap)); margin: 2px 0; }
+/* Bullet box from the token, not a hard 10px: it is the same spiral every other list here hangs,
+   so it should follow the font-scale setting with them, and a question row in this list can only
+   get the wider box the question-spiral needs (see li.question-bullet further down) if the box is
+   read from the token that rule redeclares. */
+.stonetop-rel-value li { position: relative; padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap)); margin: 2px 0; }
 .stonetop-rel-value li::before {
-	content: ""; position: absolute; left: 0; top: 0.2em; width: 10px; height: 10px;
+	content: ""; position: absolute; left: 0; top: 0.2em;
+	width: var(--stonetop-bullet-size, 10px); height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
 	opacity: 0.6;
 	filter: invert(1);
@@ -21774,20 +21787,6 @@ details.stonetop-crew-collapsible[open] > .stonetop-follower-section-summary::be
 	opacity: 0.5;
 }
 
-/* Question-spiral: swap icon on li items whose text ends with "?".
-   A SWAP AND NOTHING ELSE. `markQuestionBullets` (hooks/RenderActorSheet.js) runs over
-   EVERY <li> in an actor sheet's root, so this class lands on rows that are not prose
-   bullets at all — a step of the GM Toolkit's core loop is named `Ask "What do you
-   do?"`, and it got the class like any other list item. That is fine as long as the
-   class only changes an EXISTING bullet's picture, which is why it is not in the two
-   family rules below that hand out `padding-left` and position the marker: those give
-   an indent for a bullet that never draws here, because `content` is set per-family
-   and a row outside every family never gets one. The result was 18px of empty space
-   in front of one step and nothing in it. */
-li.question-bullet::before {
-	background-image: url('/systems/stonetop-pwd/assets/icons/steading/question-spiral.svg');
-}
-
 /* Block flow (not flex) — same fix as the journal bodies below: a flex `li` turns
    every inline child (each `<strong>`/`<em>` and content-link) into its own flex
    item, so phrases like "<em>exceptional</em>" shatter into separate columns
@@ -21813,6 +21812,49 @@ li.question-bullet::before {
 	height: var(--stonetop-bullet-size, 10px);
 	margin-top: 0;
 	opacity: 0.55;
+}
+
+/* Question-spiral: swap icon on li items whose text ends with "?".
+   A PICTURE AND THE BOX IT NEEDS, AND NOTHING ELSE. `markQuestionBullets` (hooks/
+   RenderActorSheet.js) runs over EVERY <li> in an actor sheet's root, so this class lands on
+   rows that are not prose bullets at all — a step of the GM Toolkit's core loop is named
+   `Ask "What do you do?"`, and it got the class like any other list item. That is fine as long
+   as the class only changes an EXISTING bullet's picture, which is why it hands out no
+   `padding-left` and positions nothing: those would give an indent for a bullet that never
+   draws here, because `content` is set per-family and a row outside every family never gets
+   one. The result was 18px of empty space in front of one step and nothing in it.
+
+   THE WIDTH is part of the picture, not a layout of its own. Every family sizes its marker
+   `var(--stonetop-bullet-size)` SQUARE, which is check-spiral.svg's shape (its viewBox is
+   372x391). question-spiral.svg is a WIDE glyph (493x392), so `contain` in a square box fits it
+   by its WIDTH and draws it a fifth SHORTER than the mark it replaced: in a list beside its
+   neighbours it reads as a faint speck rather than a bullet. Widening the box by the glyph's own
+   ratio (493 ÷ 392) makes the height the constraint instead, so it draws exactly as tall as the
+   spiral it stands in for, seated on the same line, in the gap the row already had.
+
+   AND IT SITS HERE, below the family rule above rather than above it, because that rule declares
+   the width for eleven of these families and weighs exactly what this one does: declared first,
+   this width would lose to it silently. Nothing between the two positions declares a picture, so
+   the move changes which rule wins the WIDTH and nothing about which families see the swap.
+   Where a family declares its marker later still, it re-asserts both for itself (the journal and
+   monster bodies, the two GM playbook lists) — for the same reason and in the same pair. */
+li.question-bullet::before {
+	background-image: url('/systems/stonetop-pwd/assets/icons/steading/question-spiral.svg');
+	width: calc(var(--stonetop-bullet-size, 10px) * 1.26);
+}
+
+/* THE TWO LISTS THAT DRAW A CHARACTER instead of a picture, taken back out of it: the follower
+   moves list hangs the rulebook's ➤ in its marker, and the numbered threats guide hangs its
+   step number. A row in either that ends in "?" is tagged like any other, and the swap above
+   then paints a spiral BEHIND the character (invisible only by luck: an untouched
+   `background-size` shows a few pixels of a 493px-wide drawing, which land on blank paper) and
+   hands the marker a width it has no use for. On the follower list that width is real: the
+   marker is a flex item, so a question row's text would sit 2px right of every row around it.
+   Neither list wants a picture, so neither gets one. */
+.stonetop-follower-moves-list li.question-bullet::before,
+.stonetop .steading-threats-guide-list.is-ordered > li.question-bullet::before {
+	background-image: none;
+	width: auto;
 }
 
 .stonetop-basic-move-panel li,
@@ -21877,10 +21919,13 @@ li.question-bullet::before {
 	-webkit-mask-size: contain;
 	mask-size: contain;
 }
+/* The wide glyph, in the box it needs: see the swap rule further up this file for why the
+   width travels with the picture. */
 .stonetop-location-body li.question-bullet::before,
 .stonetop-journal-body li.question-bullet::before {
 	-webkit-mask-image: url('/systems/stonetop-pwd/assets/icons/steading/question-spiral.svg');
 	mask-image: url('/systems/stonetop-pwd/assets/icons/steading/question-spiral.svg');
+	width: calc(var(--stonetop-bullet-size, 10px) * 1.26);
 }
 /* Some prose opts out of the question-spiral auto-detection by wrapping its
    content in `.stonetop-no-question-spiral` (e.g. the Setting Overview's "Agenda &
@@ -21892,6 +21937,9 @@ li.question-bullet::before {
 .stonetop-so-entry-body .stonetop-no-question-spiral li.question-bullet::before {
 	-webkit-mask-image: var(--stonetop-spiral-icon);
 	mask-image: var(--stonetop-spiral-icon);
+	/* The square glyph again, so the square box with it: the widening belongs to the wide one,
+	   and left standing it would draw this spiral a quarter bigger than the bullets around it. */
+	width: var(--stonetop-bullet-size, 10px);
 }
 /* Character Creation FAQ: each Q&A is a single `<p><strong>Question?</strong><br>
    Answer</p>` block (not a list item), tagged `faq-item` at render by
@@ -23640,10 +23688,12 @@ li.question-bullet::before {
 /* Question items use the question-spiral. The global `li.question-bullet::before`
    rule has the same specificity as the spiral default just above and loses to it
    on source order inside the rich-text body, so re-assert it here (matches the
-   journal-body path). Keeps the standard spiral size — only the icon changes. */
+   journal-body path). The width comes with it, as it does everywhere this glyph is swapped in:
+   it is a wide mark in a box built for a square one, and a square box draws it a fifth short. */
 .stonetop-monster-rich-text li.question-bullet::before,
 .stonetop-monster-move-description li.question-bullet::before {
 	background-image: url('/systems/stonetop-pwd/assets/icons/steading/question-spiral.svg');
+	width: calc(var(--stonetop-bullet-size, 10px) * 1.26);
 }
 
 /* Requirement/option check-lists (baked `class="check-bullet"` by the gazetteer
@@ -26919,16 +26969,16 @@ th:has(> .stonetop-roll-table-btn) {
 	list-style: none;
 	padding-left: 14px;
 }
-/* The arriving-home question list (.stonetop-exp-questions) is hung by these same two rules
-   rather than by a copy of them: it wants the identical left edge, and it had grown its own
-   byte-for-byte duplicate of the arithmetic, differing only in which spiral it drew. */
-.stonetop-spring-body ul:not([class]) > li,
-.stonetop-exp-questions > li {
+/* This is the SQUARE spiral's arithmetic: a box as wide as it is tall, because check-spiral.svg
+   is (372x391) and fills one. The arriving-home question list used to be hung by these same two
+   rules, differing only in the image -- but question-spiral.svg is a WIDE glyph (493x392), and
+   `contain` in a square box draws it a fifth short. It hangs its own now; see
+   .stonetop-exp-questions below. */
+.stonetop-spring-body ul:not([class]) > li {
 	position: relative;
 	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
 }
-.stonetop-spring-body ul:not([class]) > li::before,
-.stonetop-exp-questions > li::before {
+.stonetop-spring-body ul:not([class]) > li::before {
 	content: "";
 	position: absolute;
 	left: 0;
@@ -27081,12 +27131,25 @@ th:has(> .stonetop-roll-table-btn) {
    them is dimmed: every line of a rollable table is there to be read before the roll.
    Text flow, not the label/description columns of the card look: a fate row reads
    "1-2: it goes badly" as one sentence, and the outcome starts right after its colon
-   rather than at a tab stop wide enough for the widest range. */
+   rather than at a tab stop wide enough for the widest range.
+
+   NO vertical padding and NO reserved transparent border. A fate row is line-height and
+   nothing else, and these two added 4px per row here: measured against the Die of Fate
+   table three steps along, rows were 23.7px where that one's are 19.7px, which is the
+   whole difference between the two tables looking like one thing and looking like two.
+   The active band below needs neither -- it is a tint, not an outline, exactly as the
+   landing wash on a fate row is. */
 .stonetop-spring-tiers--table .stonetop-spring-tier {
 	line-height: 1.45;
-	padding: 1px 0;
-	border: 1px solid transparent;
 	border-radius: var(--st-radius-sm);
+}
+
+/* The result range reads bold, because the range on every fate-table row is a <strong>
+   and these are the same table read three steps apart. The card look sets its own weight
+   and column width on this same span; this is the table look's, and only the weight,
+   since a table row is one flowing sentence rather than two columns. */
+.stonetop-spring-tiers--table .stonetop-spring-tier-label {
+	font-weight: 700;
 }
 
 /* The result that came up marks itself as a tinted band across its line, bled out to the
@@ -27313,30 +27376,93 @@ th:has(> .stonetop-roll-table-btn) {
 	color: var(--color-text-dark-secondary);
 }
 
-.stonetop-exp-checks {
-	list-style: none;
-	margin: 0;
-	padding: 0;
+/* ── The charted list ───────────────────────────────────────────────────────────────────
+   What this trip's Chart a Course actually presented, one group per heading. The ROWS are
+   the GM Toolkit's open questions, in that tab's own rules — see the note on
+   `.stonetop-gm-wonder` for why they are shared rather than copied, and the markup in
+   expedition.hbs for which classes come from where. What is left here is this host's own:
+   where the group sits, and where its add button sits under it.
+
+   The group is what carries the ruled column's two variables (it is the second selector on
+   that var block), so a row inside it hangs its spiral in the same gutter and steps its
+   answer in by the same amount as one on the toolkit.
+
+   `padding-top` on top of the wrap's own 10px gap, because a heading here is not just the
+   next line down: it opens a section, and what sits above it is the tail of the previous
+   one (the charting prompt above Requirements, the last answer box above Challenges). Ten
+   more pixels is what it takes for the heading to read as belonging to the list under it
+   rather than to the box over it. On the group and not on the label so the air lands
+   outside the flex column's 5px rhythm instead of stretching the first row's gap. */
+.stonetop-exp-chartgroup {
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	gap: 5px;
+	padding-top: 10px;
 }
 
-.stonetop-exp-check > label {
-	display: flex;
-	align-items: flex-start;
-	gap: 8px;
-	cursor: pointer;
-	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
+/* The add button under the list rather than over it, which is where the toolkit's add bar
+   sits — and the difference is the length of the list. That one is a running list a GM adds
+   to mid-session with a dozen rows already on it, so its bar stays at the top where it can
+   be found; these two are five and seven lines at most, chosen once while charting, and a
+   button under a short list is read as the end of it.
+
+   `align-self` against the flex column's default stretch, which would draw a dashed edge
+   the full width of the step. `margin-top: 2px` and no more: the list's last row carries
+   its own rule, and the button hangs just below it. */
+.stonetop-exp-chartgroup > .stonetop-gm-wonder-add-btn {
+	align-self: flex-start;
+	margin-top: 2px;
+}
+
+/* The stand-in for an empty list, without the toolkit's bottom margin: there, the next thing
+   down is a heading and the two would sit on one line of air; here it is this group's own add
+   button, which is part of the same block and wants the group's own 5px gap. */
+.stonetop-exp-chartgroup > .stonetop-gm-wonder-empty {
+	margin: 2px 0 0;
+}
+
+/* ── The picker's line rows ─────────────────────────────────────────────────────────────
+   `pickOrWriteOption` offers a menu of one-line PROMPTS, not a handful of kinds: no icon,
+   no bold name over a sentence about it, just the line as it will read on the list. Same
+   bordered radio row as the content picker's kinds (it is the same question, "which one"),
+   with the type of the thing being chosen. */
+.stonetop-content-picker-option--line {
+	align-items: center;
+	padding: 6px 10px;
+}
+
+.stonetop-content-picker-line {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: var(--st-fs-base);
 	line-height: 1.4;
+}
+
+/* The write-your-own row: its label and its field on one line, and the field taking the
+   slack. It is one of the radios rather than a control beside them — the question has
+   exactly one answer — so it wears the same row and reads as the last item on the menu. */
+.stonetop-content-picker-own .stonetop-content-picker-line {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.stonetop-content-picker-own-label {
+	flex: 0 0 auto;
+	color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+.stonetop-content-picker-own input[type="text"] {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: auto;
+	padding: 2px 6px;
 }
 
 /* The arriving-home list: questions to think through, not boxes to tick. Same group chrome
    as the checklist above (it shares .stonetop-exp-checkgroup and its label), but each row
-   hangs a question spiral where the checkbox stood — the mark this system gives a question
-   everywhere else it prints one. Hung BY the walkthrough's own prose-bullet rule (see
-   .stonetop-spring-body ul:not([class]) above), so a question in the list and a bullet in the
-   step above it cannot end up on different left edges. */
+   hangs a question spiral where the checkbox stood: the mark this system gives a question
+   everywhere else it prints one. */
 .stonetop-exp-questions {
 	list-style: none;
 	margin: 0;
@@ -27345,18 +27471,40 @@ th:has(> .stonetop-roll-table-btn) {
 	flex-direction: column;
 	gap: 5px;
 }
-/* The bullet geometry is the walkthrough's own, declared with it further up this file --
-   these rows sit on the same left edge as a prose bullet in the step above because they are
-   hung by the same rule, not by a second copy of its arithmetic. Only the type is local. */
+/* Every row in this list IS a question, so it wears the question spiral rather than the prose
+   one, and it hangs that spiral itself instead of borrowing the walkthrough's prose-bullet
+   arithmetic (.stonetop-spring-body ul:not([class]) further up this file). The two glyphs are
+   not the same shape: check-spiral.svg is square (372x391) and fills a square box, while
+   question-spiral.svg is a wide one (493x392), so `contain` in that same 10px square box drew
+   it 10 wide by 7.9 tall. A fifth shorter than every other mark on the page, it read as a faint
+   speck beside 14px type. Every other question spiral in the system hangs in a 14px box
+   (--stonetop-question-spiral-size), which is what these rows give it, as 1em of their own type
+   so it tracks the sheetFontScale setting the way the prose bullet's box does. The text edge
+   lands at 22px, which is where the walkthrough's other question list started its words back
+   when Chart a Course drew a checkbox column: this is the last of the two, and the number is
+   kept because it is the one that reads right against 14px type, not because a sibling still
+   has to be matched. */
 .stonetop-exp-questions > li {
+	position: relative;
 	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
 	line-height: 1.4;
+	padding-left: calc(1em + var(--stonetop-spiral-gap));
 }
 
-/* Every row in this list IS a question, so the spiral is the question one rather than the
-   prose one -- the same one-line swap `li.question-bullet::before` makes elsewhere. */
+/* Centred on the row's FIRST LINE (a box one line-height tall, with the art centred inside it)
+   rather than pinned a fixed em below the top. The wide glyph is a short one, so a `top` tuned
+   for the square prose bullet left it riding up by the difference, sitting above the words
+   instead of beside them. Centring inside a line-tall box keeps the two together at any font
+   scale, because both are em of the same type. */
 .stonetop-exp-questions > li::before {
-	background-image: url('/systems/stonetop-pwd/assets/icons/steading/question-spiral.svg');
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 1em;
+	height: 1.4em;
+	background: url('/systems/stonetop-pwd/assets/icons/steading/question-spiral.svg') no-repeat left center / contain;
+	opacity: 0.55;
 }
 
 /* Return Triumphant, under the arriving-home questions: the one control on that step that
@@ -27378,12 +27526,11 @@ th:has(> .stonetop-roll-table-btn) {
 	font-style: italic;
 }
 
-/* No per-row checkbox override: .stonetop-exp-checkbox is in the shared 15px-glyph
-   master block, so it inherits the exact seating of every other checklist (lore
-   options, arcana unlocks, …). Those peers keep Foundry core's `margin: 3px 5px`,
-   which centres the 15px glyph on the first line of `align-items: flex-start` text.
-   Do NOT add `margin: 0` here — that was tuned for the old native 20px box; on a
-   15px glyph it lifts the box ~3px ABOVE where the peer checklists sit. */
+/* NO CHECKBOX ANYWHERE IN THIS WALKTHROUGH ANY MORE. Chart a Course was the only step
+   that had one — a tick per requirement, twelve of them standing on the page — and the
+   step now records what it presented as a list a GM adds to instead (see the charted-list
+   block above). `.stonetop-exp-checkbox` went out of the shared 15px-glyph master block
+   with the markup that wore it; there is nothing left here to seat. */
 
 /* The box every rollable table in a step body wears: the inline d6 reference tables (e.g.
    Make Camp occurrences) and the Requisition outcome list, which is a .stonetop-spring-tiers
@@ -27955,7 +28102,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* No per-row checkbox override: .stonetop-share-visible / .stonetop-share-owner are
    in the shared 15px-glyph master block and inherit the same seating as every other
-   checklist (see the note on .stonetop-exp-check above). */
+   checklist (see the shared master block near the top of this file). */
 
 .stonetop-share-option-text {
 	display: flex;
@@ -29994,8 +30141,22 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 /* ── Run an Expedition · Outfit step · live party-load readout ─────────────────
    One row per party member: a diamond ◇ load track (grouped in the light/normal/heavy
    bands), a band pill, the ◇ count, and any load-gated move the load switched off.
-   Encumbrance is painted from the shared --st-gold-* accent; scoped to the dialog so
-   none of it leaks onto core/other sheets. Diamonds are discrete pips, not a fill bar,
+   THE TWO LOADED BANDS ARE BOTH RED, and are told apart by weight rather than by hue:
+   heavy takes --st-red-border and wears its pill as an outline, overloaded takes the ink
+   red --st-red-text and wears its pill filled, over a washed row. Heavy used to be the
+   gold caution accent, which put an amber and a red side by side for the two states that
+   actually cost a PC something, and read as a colour scheme rather than as a ladder. One
+   colour rising in weight says "this is the same problem, worse" in a way two colours
+   cannot. Everything else on the panel (its head, the load-bonus chip) keeps the gold,
+   because none of it is encumbrance.
+
+   The pair reads as an escalation in EITHER theme, which is not the accident it looks
+   like: the two tokens swap lightness between them (border is the lighter red on
+   parchment, the darker one on a dark ground, and -text the reverse), so overloaded is
+   the deeper red on light and the brighter one on dark. Louder both times, which is the
+   property that matters. Don't "fix" one of them to the other's lightness.
+
+   Scoped to the dialog so none of it leaks onto core/other sheets. Diamonds are discrete pips, not a fill bar,
    matching the house idiom. Sizes come from the --st-fs-* scale (which tracks the sheet
    font setting and holds the 0.9em readability floor), never a bare rem; the tags and
    counts are set in the house face with tabular figures rather than a monospace stack,
@@ -30083,7 +30244,10 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop-expedition-dialog .stonetop-exp-load-glance .g-tally b { font-size: var(--st-fs-md); font-weight: 700; }
 .stonetop-expedition-dialog .stonetop-exp-load-glance .g-warn b { color: var(--st-red-text); }
-.stonetop-expedition-dialog .stonetop-exp-load-glance .g-caut b { color: var(--st-gold-text); }
+/* The same ink as the overloaded tally beside it: at this size the two counts are told apart
+   by their words ("2 overloaded", "1 heavy"), and the lighter red that separates the bands
+   elsewhere is only ~2.5:1 on parchment, so it cannot carry a numeral. */
+.stonetop-expedition-dialog .stonetop-exp-load-glance .g-caut b { color: var(--st-red-text); }
 .stonetop-expedition-dialog .stonetop-exp-load-glance .g-ok { color: var(--st-green-text); font-style: italic; }
 
 /* rows */
@@ -30094,10 +30258,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop-expedition-dialog .stonetop-exp-load-row:last-child { border-bottom: none; }
 .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light { border-left-color: var(--st-green-border); }
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy { border-left-color: var(--st-gold-border); }
-/* The palette red at half strength: full --st-red-bg is the pill/chip fill, too loud
-   across a whole row. */
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over  { border-left-color: var(--st-red-border); background: color-mix(in srgb, var(--st-red-bg) 50%, transparent); }
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy { border-left-color: var(--st-red-border); }
+/* Overloaded takes the DEEP red for its edge, now that heavy holds the light one: with both
+   bands red the edge has to carry the difference on its own for the length of the row.
+   The wash behind it is the palette red at half strength, because full --st-red-bg is the
+   pill/chip fill and is too loud across a whole row. */
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over  { border-left-color: var(--st-red-text); background: color-mix(in srgb, var(--st-red-bg) 50%, transparent); }
 
 .stonetop-expedition-dialog .stonetop-exp-load-ava {
 	width: 26px; height: 26px; flex: 0 0 auto; border-radius: 50%;
@@ -30106,26 +30272,42 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: #fff; background: slategrey;
 }
 .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light .stonetop-exp-load-ava { background: var(--st-green-border); }
-/* #c29a1f, not --st-gold-border's #c9a227: a second, very slightly deeper gold that the
-   avatar and the pips below share. See the --st-gold-* block on why it stays a literal. */
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy .stonetop-exp-load-ava { background: #c29a1f; }
+/* Light red for heavy, deep red for overloaded below it: the same pair the pips and the edge
+   use, so a face, a diamond and a row edge all say the same thing about one PC. */
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy .stonetop-exp-load-ava { background: var(--st-red-border); }
 .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over  .stonetop-exp-load-ava { background: var(--st-red-text); }
 .stonetop-expedition-dialog .stonetop-exp-load-row.is-follower .stonetop-exp-load-ava { width: 22px; height: 22px; font-size: var(--st-fs-2xs); }
 
 /* Anyone with a portrait wears their own face here instead of an initial: the disc becomes a
    clipping box (the shared People crop and the hand-cut frame both apply, as everywhere else a
-   small face appears), and the load band moves from the fill to a RING around it, so the
-   light/heavy/overloaded colour still reads at a glance beside the pips. box-sizing keeps the
-   ring inside the same 26px, so a photo row and an initial row line up.
+   small face appears).
 
-   These sit after the plain-disc rules above on purpose: same specificity, later wins. */
+   NO band-coloured ring around the face. It used to carry the light/heavy/overloaded colour,
+   and at 26px a 2px ring is a fifth of the disc — the green read as the graphic and the face as
+   its filling, on the one screen whose job is to tell people apart at a glance. The band is
+   already said three times on the same row (the left edge, the pips, the pill), so the face is
+   free to be nothing but the face. `background: none` because the plain-disc rules above set the
+   band colour as a FILL, which a portrait with transparency would let through as the same ring
+   by another route.
+
+   Hovering enlarges it, through the shared avatar preview every other small face in the system
+   uses (module/utils/avatar-preview.js, wired in ExpeditionDialog).
+
+   This sits after the plain-disc rules above on purpose: same specificity, later wins — which
+   is enough for the base disc, and not enough for the per-band fills (see the block below it). */
 .stonetop-expedition-dialog .stonetop-exp-load-ava--photo {
 	display: block; position: relative; overflow: hidden;
-	box-sizing: border-box; border: 2px solid slategrey;
+	box-sizing: border-box; border: none; background: none;
+	cursor: zoom-in;
 }
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light .stonetop-exp-load-ava--photo { border-color: var(--st-green-border); }
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy .stonetop-exp-load-ava--photo { border-color: #c29a1f; }
-.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over  .stonetop-exp-load-ava--photo { border-color: var(--st-red-text); }
+/* The band fills above are written `.row.lvl-x .ava` — three classes to this rule's two, so
+   they outrank `background: none` no matter how late it sits. Said again at their weight, once
+   per band, which is the only thing that actually turns them off. */
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light .stonetop-exp-load-ava--photo,
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy .stonetop-exp-load-ava--photo,
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over  .stonetop-exp-load-ava--photo {
+	background: none;
+}
 
 .stonetop-expedition-dialog .stonetop-exp-load-name {
 	font-family: var(--font-stonetop); font-weight: 700; font-size: var(--st-fs-sm); white-space: nowrap;
@@ -30148,7 +30330,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop-expedition-dialog .lvl-light .stonetop-exp-load-pip.on { background: var(--st-green-border); border-color: var(--st-green-border); }
 .stonetop-expedition-dialog .lvl-normal .stonetop-exp-load-pip.on { background: slategrey; border-color: slategrey; }
-.stonetop-expedition-dialog .lvl-heavy .stonetop-exp-load-pip.on { background: #c29a1f; border-color: #c29a1f; }
+.stonetop-expedition-dialog .lvl-heavy .stonetop-exp-load-pip.on { background: var(--st-red-border); border-color: var(--st-red-border); }
 .stonetop-expedition-dialog .lvl-over .stonetop-exp-load-pip.on { background: var(--st-red-text); border-color: var(--st-red-text); }
 .stonetop-expedition-dialog .stonetop-exp-load-over {
 	font-family: var(--font-stonetop); font-variant-numeric: tabular-nums;
@@ -30165,9 +30347,10 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop-expedition-dialog .stonetop-exp-load-pill.light  { color: var(--st-green-text); background: var(--st-green-bg); border-color: var(--st-green-border); }
 .stonetop-expedition-dialog .stonetop-exp-load-pill.normal { color: var(--st-text-body); border-color: rgba(0,0,0,0.2); }
-/* 0.15, not --st-gold-bg's 0.12: a pill is small and carries a word, so its fill sits a
-   shade stronger than the panel washes. See the --st-gold-* block. */
-.stonetop-expedition-dialog .stonetop-exp-load-pill.heavy  { color: var(--st-gold-text); background: rgba(201,162,39,0.15); border-color: var(--st-gold-border); }
+/* OUTLINED where "Overloaded" below is filled. Both pills are red now, and two red pills of
+   the same weight two rows apart would be one state said twice; the fill is what makes the
+   second one the louder of the pair. */
+.stonetop-expedition-dialog .stonetop-exp-load-pill.heavy  { color: var(--st-red-text); background: none; border-color: var(--st-red-border); }
 .stonetop-expedition-dialog .stonetop-exp-load-pill.over   { color: var(--st-red-text); background: var(--st-red-bg); border-color: var(--st-red-border); }
 .stonetop-expedition-dialog .stonetop-exp-load-count {
 	font-family: var(--font-stonetop); font-variant-numeric: tabular-nums;
@@ -30279,67 +30462,47 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    accents, so the two ends of the journey read the same way they do on the sheets. */
 .stonetop-expedition-dialog .stonetop-journey { margin-top: 12px; }
 
-/* Where they set out from, and where they are bound. */
-.stonetop-journey .stonetop-journey-picks {
-	display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-	padding: 8px 10px;
-	border: 1px solid rgba(0,0,0,0.14); border-radius: var(--st-radius-lg);
-	background: rgba(0,0,0,0.03);
-}
-.stonetop-journey .stonetop-journey-picklab {
-	display: inline-flex; align-items: center; gap: 6px;
-	font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
-}
-.stonetop-journey .stonetop-journey-origin {
-	width: auto; min-width: 130px; font-size: var(--st-fs-xs); font-style: normal;
-}
-.stonetop-journey .stonetop-journey-bound {
-	font-size: var(--st-fs-xs); color: var(--st-text-body);
-}
-.stonetop-journey .stonetop-journey-bound strong { color: var(--st-gold-text); }
-/* Later than the base rule, per the modifier-ordering house rule. */
-.stonetop-journey .stonetop-journey-bound--empty {
-	margin-left: auto; color: var(--st-text-muted); font-style: italic;
-}
-.stonetop-journey .stonetop-journey-clear {
-	flex: 0 0 auto; display: inline-flex; width: auto; margin-left: auto;
-	padding: 2px 7px; font-size: var(--st-fs-2xs); line-height: 1.4;
-}
+/* THE ROW OF PICKS THAT USED TO OPEN THIS BLOCK HAS GONE (user, 2026-08-24), and with it
+   `.stonetop-journey-picks`, `-picklab`, `-start-btn`, `-startname`, `-starthint`, `-bound`,
+   `-clear` and the whole `.is-setting-out` state. It carried "Setting out from Stonetop" (a button
+   whose press armed the next click), "bound for Marshedge", and an × to un-pick that — three
+   readings of what the map already draws in pins, one of them a mode invisible until you were in
+   it.
+
+   THE PICTURE IS THE CONTROL NOW: a click sets the start, then the destination, then moves the
+   end of a drawn way; a right-click peels those back off in the same order. So there is nothing
+   left here to style, and the two ends of the journey are read where they are set — off the green
+   and gold pins on the map, which is what the accents below were always for. */
+
 /* LAYING THE WAY OUT BY HAND (module/utils/custom-route.js).
 
-   Its own row between the picks and the map tabs, because it belongs to neither and crowds both:
-   it changes what a click on the picture means AND what the readout underneath is about. Quiet
-   while it is off — one checkbox in the muted italic every other label on this screen wears — and
-   it warms to the panel's gold once it is on. That is the whole of the state: the map either is or
-   is not something to draw on, and this row is where you look to find out which. */
+   A CAPTION, not a panel. It is about the picture rather than about the trip: it says what a
+   shift-click on the map above it will do, which is the one thing that picture cannot say for
+   itself. So it reads as a caption should, centred under the map in the muted italic every hint on
+   this screen wears, with no border and no fill of its own. It had a bordered, tinted row of its
+   own for a while, when it sat ABOVE the map beside a checkbox that turned drawing on; with the box
+   gone (there is no mode now, only marks) that box drawn round it read as one more control to deal
+   with rather than as a line explaining the picture. What marks the state now is the ink alone (see
+   `.is-on` below), which is as much emphasis as a caption should ever need. */
 .stonetop-journey .stonetop-journey-draw {
-	display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-	margin-top: 6px; padding: 5px 10px;
-	border: 1px solid transparent; border-radius: var(--st-radius-lg);
-}
-.stonetop-journey .stonetop-journey-drawlab {
-	display: inline-flex; align-items: center; gap: 6px;
-	flex: 0 0 auto; cursor: pointer;
-	font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
+	display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+	margin: 3px 0 0; padding: 0 8px;
 }
 .stonetop-journey .stonetop-journey-drawhint {
-	flex: 1 1 240px; min-width: 0;
+	flex: 0 1 auto; min-width: 0;
 	font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
+	line-height: 1.35; text-align: center; text-wrap: pretty;
 }
 .stonetop-journey .stonetop-journey-clear-drawn {
 	flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; width: auto;
 	padding: 2px 8px; font-size: var(--st-fs-2xs); line-height: 1.4;
 }
-/* Later than the base rule, per the modifier-ordering house rule. The tint is the parchment gold,
-   NOT the route's red: the red is what a WARNING wears everywhere else on this screen, and a mode
-   the GM turned on deliberately is not a warning. Gold is already the readout's own accent two
-   rules up, so the row lighting up reads as this panel's own emphasis. */
-.stonetop-journey .stonetop-journey-draw.is-on {
-	border-color: color-mix(in srgb, var(--st-gold-border) 55%, transparent);
-	background: color-mix(in srgb, var(--st-gold-border) 8%, transparent);
-}
-.stonetop-journey .stonetop-journey-draw.is-on .stonetop-journey-drawlab {
-	color: var(--st-text); font-style: normal; font-weight: 700;
+/* Later than the base rule, per the modifier-ordering house rule. THE INK IS THE WHOLE OF THE
+   STATE: the caption steps out of the muted italic once there are marks on the map, because it has
+   stopped offering something the reader may not have thought of and started teaching gestures they
+   are about to use. No border and no tint, for the reason set out over the base rule. */
+.stonetop-journey .stonetop-journey-draw.is-on .stonetop-journey-drawhint {
+	color: var(--st-text-body); font-style: normal;
 }
 
 /* Which map. Not `.stonetop-tabs`: two buttons that swap one picture are a zoom control,
@@ -30353,14 +30516,16 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-journey .stonetop-journey-tierlist {
 	display: flex; gap: 6px; min-width: 0;
 }
-/* The outline pill, worn by the map tabs here, by the "see the whole map" button further down,
-   and by the "put this route on the scene" button standing in a row with them
-   (module/utils/scene-route.js). One rule, so the three cannot drift apart; each keeps only its
-   own size and type below. */
+/* The outline pill, worn by the map tabs here, by the "put this route on the scene" button
+   standing in a row with them (module/utils/scene-route.js), and by the site button at the end of
+   that row. One rule, so the three cannot drift apart; each keeps only its own size and type below.
+
+   NOT the expand button, which used to be a fourth: it has left this row for the map's own corner
+   (user, 2026-08-24), where a pill's border and muted ink would read as something printed on the
+   artwork rather than as a control over it. Its whole appearance is its own block below. */
 .stonetop-journey .stonetop-journey-tier,
 .stonetop-journey .stonetop-journey-to-scene,
-.stonetop-journey .stonetop-journey-place-site,
-.stonetop-journey .stonetop-journey-zoom {
+.stonetop-journey .stonetop-journey-place-site {
 	flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; width: auto;
 	font-size: var(--st-fs-2xs);
 	color: var(--st-text-muted);
@@ -30372,23 +30537,30 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-family: var(--font-stonetop);
 	text-transform: uppercase; letter-spacing: 0.06em;
 }
-/* Put this route on the scene the table is looking at (module/utils/scene-route.js). The auto
-   margin is on the clear button ahead of it, so with a destination picked the two travel to the
-   right end of the row together. Without one this button is not rendered at all and the
-   empty-state line takes the auto margin instead. */
+/* Put this route on the scene the table is looking at (module/utils/scene-route.js). It sat beside
+   the destination readout until that row went (user, 2026-08-24) and now trails "put a site on the
+   map" at the end of this one: both write something onto a picture, so they read as a pair and
+   travel to the right end of the row together on the site button's auto margin. */
 .stonetop-journey .stonetop-journey-to-scene {
 	padding: 3px 10px; line-height: 1.4;
 }
+/* UNLESS IT IS THE ONLY ONE OF THE PAIR, in which case it carries the margin itself. The two are
+   built on different conditions — the site button wants a map on screen, this one wants a route,
+   and a route can be plotted in a world that never imported the book art — so "the buttons are at
+   the right end of the row" cannot be left to whichever of them happens to be first. Selected by
+   adjacency to the tablist, which is exactly "nothing else came before me". Later than the base
+   rule, per the modifier-ordering house rule. */
+.stonetop-journey .stonetop-journey-tierlist + .stonetop-journey-to-scene { margin-left: auto; }
 /* Put one of the GM's own sites on this map (module/sites/place-site-on-map.js). It shares the
-   pill above and takes the end of the map-tab row: the tabs say which picture, and this is what
-   the GM does TO that picture, so it reads as belonging to the row rather than to the picks. */
+   pill above and opens the far end of the map-tab row: the tabs say which picture, and this and the
+   scene button after it are what the GM does TO that picture. The auto margin is what splits the
+   row in two — which map on the left, what to do with it on the right. */
 .stonetop-journey .stonetop-journey-place-site {
 	padding: 3px 10px; line-height: 1.4; margin-left: auto;
 }
 .stonetop-journey .stonetop-journey-tier:hover,
 .stonetop-journey .stonetop-journey-to-scene:hover,
-.stonetop-journey .stonetop-journey-place-site:hover,
-.stonetop-journey .stonetop-journey-zoom:hover {
+.stonetop-journey .stonetop-journey-place-site:hover {
 	background: var(--st-slate-hover-bg); border-color: var(--st-slate-hover-border);
 }
 .stonetop-journey .stonetop-journey-tier .fa-image-slash {
@@ -30410,6 +30582,93 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    against — see the note at the top of this block. */
 .stonetop-journey .stonetop-journey-map {
 	position: relative; width: 100%; overflow: visible;
+}
+
+/* THE EXPAND BUTTON. "See the whole map", off its row under the picture and onto the picture's own
+   top-right corner (user, 2026-08-24). Nothing survives of the pill it used to be: over artwork a
+   control has to carry its own ground, so this is a small WHITE tile with a shadow beneath it,
+   legible over hatched forest and open sea alike.
+
+   WHITE, not the maps' own cream (user, 2026-08-24). Cream is the ground these pictures are
+   printed on, so a cream tile reads as a torn-out piece of the map rather than as a control laid
+   on top of one; and it is at its weakest over the paper-coloured parts of the art, which is
+   exactly where a hint of the map showing through the old 0.94 alpha finished the job. Opaque,
+   for the same reason: whatever it covers, it covers.
+
+   The wrapper is the only reason a corner is available at all. `.stonetop-journey-map` is the box
+   every pin measures its percentages from, so a button hung off THAT would be one more thing among
+   the marks; the partial says why it is a sibling rather than a child. */
+.stonetop-journey .stonetop-journey-mapwrap { position: relative; }
+.stonetop-journey .stonetop-journey-zoom {
+	position: absolute; top: 8px; right: 8px;
+	/* Above every pin. The chosen spot and the chosen exit climb to `z-index: 3` inside the map box,
+	   and this button shares their stacking context (that box sets no z-index of its own), so
+	   anything lower would be painted over by whichever pin happens to sit in this corner. */
+	z-index: 5;
+	display: inline-flex; align-items: center; justify-content: center;
+	/* A SQUARE OF ITS OWN TYPE, not a fixed pixel tile: this system runs at whatever font scale the
+	   reader set, and a 28px box would be roomy at 14px and cramped at 20. Two ems of the glyph
+	   inside it holds the same proportion at either end. */
+	width: 2em; height: 2em; padding: 0; margin: 0;
+	font-size: var(--st-fs-2xs); line-height: 1;
+	color: #3a3126;
+	background: #fff;
+	border: 1px solid rgba(0,0,0,0.28); border-radius: var(--st-radius);
+	box-shadow: 0 1px 4px rgba(0,0,0,0.32);
+	/* HIDDEN MEANS UNCLICKABLE. A transparent button left live over the corner would swallow clicks
+	   meant for whatever is under it, and on this map a click is how a destination gets chosen — so
+	   the fade takes the pointer with it. */
+	opacity: 0; pointer-events: none;
+	transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+/* Later than the base rule, per the modifier-ordering house rule. Focus stands beside hover
+   because a keyboard has no pointer to reveal it with, and a control that can be tabbed to but
+   never seen is a control that cannot be used. */
+.stonetop-journey .stonetop-journey-mapwrap:hover .stonetop-journey-zoom,
+.stonetop-journey .stonetop-journey-zoom:focus-visible {
+	opacity: 1; pointer-events: auto;
+}
+/* The tile itself does not change under the pointer: it is white because white is what reads
+   over the art, and there is no second white to move to. The gold is the whole of the answer. */
+.stonetop-journey .stonetop-journey-zoom:hover {
+	color: var(--st-gold-text);
+	border-color: var(--st-gold-border);
+}
+/* CENTRED IN BOTH AXES, which neither `justify-content` nor `align-items` manages on its own here
+   and which every geometry probe wrongly says is already done (user, 2026-08-24).
+
+   THE MARGIN IS MOST OF IT. Core Foundry gives every `button > i` a `margin-right: 3px` for the
+   label it assumes is coming; on an icon-only button that is 1.5px of glyph shoved left of the
+   middle, and it is the one part of this visible at a glance. Same correction as the relationship
+   board's view and lane pickers.
+
+   THE REST IS THE GLYPH ITSELF. Font Awesome 7's vertical metrics are lopsided (ascent 11px
+   against descent 3px at this size), so the artwork sits flush with the top of a box that centres
+   perfectly and all the slack collects underneath; fa-expand's own ink then leans a half pixel
+   right of its box. Centring the box harder cannot reach either: half-leading is symmetric, so a
+   taller line box or another flex wrapper just re-centres a new box around the same off-centre
+   artwork.
+
+   BOTH NUMBERS WERE MEASURED OFF THE PAINTED PIXELS, swept over root font size (16 to 20px, since
+   this system runs at whatever scale the reader set) x device pixel ratio (1 to 2), and this pair
+   is the one that keeps every configuration inside 0.8px with most of them under half:
+   z:/tmp/foundry-verify/journey-zoom-nudge.mjs. transform rather than an offset or padding, so the
+   box the glyph is centred in does not move and the tile keeps its square. */
+.stonetop-journey .stonetop-journey-zoom > i {
+	margin-right: 0;
+	transform: translate(-0.5px, 1px);
+}
+/* NOT WHILE A POINT IS BEING PICKED. Placing one of the GM's own sites arms the map for a single
+   click anywhere on it, and with this showing, the corner of the map would quietly not be part of
+   "anywhere". `.stonetop-drawing` is deliberately NOT matched: a drawn way wears its crosshair for
+   as long as it exists, so hiding the button with it would hide it for the rest of the session. */
+.stonetop-journey .stonetop-journey-mapwrap:has(.stonetop-picking) .stonetop-journey-zoom {
+	display: none;
+}
+/* Nothing to hover with: on a touch screen a control that waits for a pointer never appears at
+   all, so there it simply stands. */
+@media (hover: none) {
+	.stonetop-journey .stonetop-journey-zoom { opacity: 1; pointer-events: auto; }
 }
 
 /* The interactive layer's own contract, wherever it is drawn: a positioned box the exact shape of
@@ -30637,8 +30896,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-journey-canvas .stonetop-journey-spot.is-origin,
 .stonetop-journey-canvas .stonetop-journey-exit.is-chosen { z-index: 2; }
 .stonetop-journey-canvas .stonetop-journey-spot.is-chosen { z-index: 3; }
-.stonetop-journey-canvas .stonetop-journey-spot.is-origin .stonetop-journey-dot {
-	background: #2f6b3a; width: 13px; height: 13px;
+.stonetop-journey-canvas .stonetop-journey-spot.is-origin .stonetop-journey-dot,
+.stonetop-journey-canvas .stonetop-journey-start .stonetop-journey-dot {
+	background: var(--stonetop-map-start-dot); width: 13px; height: 13px;
 }
 .stonetop-journey-canvas .stonetop-journey-spot.is-chosen .stonetop-journey-dot,
 .stonetop-journey-canvas .stonetop-journey-exit.is-chosen .stonetop-journey-arrow {
@@ -30650,9 +30910,31 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: #8a6a12; border-color: #9a6f0e;
 }
 
-/* The pill above, on its own line under the map. */
-.stonetop-journey .stonetop-journey-zoom { margin: 6px 0 0; padding: 3px 9px; }
-.stonetop-journey .stonetop-journey-zoom:hover { color: var(--st-gold-text); }
+/* WHERE THEY SET OUT FROM, when that is a point the GM put down rather than a place the books
+   lettered (module/utils/journey-start.js).
+
+   THE SAME GREEN AS THE LETTERED START, and the same size, because it is the same fact: this end of
+   the journey should look like itself whether the party is leaving Marshedge or a bend in the
+   river. So it JOINS that rule above rather than restating it, and the green itself is written
+   down once as `--stonetop-map-start-dot`. What tells the two apart is the label it wears
+   ("setting out" rather than a place name) and, on the picture, that it stands where no printed
+   name does — which is all that is left down here.
+
+   IT TAKES NO CLICKS, exactly as a drawn way's numerals do not, and for the same reason: every
+   gesture over this map is about the way the party goes, and a mark that swallowed one would be the
+   one thing on the picture that stops the picture working. It overrides the `pointer-events: auto`
+   the shared pin rule opts in with, which is why it sits after it.
+
+   Level with the lettered start at z-index 2. Where they are BOUND still wins, at 3. */
+.stonetop-journey-canvas .stonetop-journey-start {
+	z-index: 2; pointer-events: none;
+}
+.stonetop-journey-canvas .stonetop-journey-start .stonetop-journey-tag {
+	color: var(--stonetop-map-start-ink);
+	border-color: var(--stonetop-map-start-dot);
+	font-style: italic;
+}
+
 .stonetop-journey .stonetop-journey-nomap {
 	margin: 0; padding: 14px 12px;
 	font-size: var(--st-fs-xs); color: var(--st-text-muted); font-style: italic; text-align: center;
@@ -30708,11 +30990,15 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-size: var(--st-fs-2xs); color: var(--st-text-muted);
 }
 /* MEASURED RATHER THAN PRINTED. A total the book stands behind is gold, like every other answer
-   on this screen; one this system worked out with a ruler is the route's own red and set in
-   italics, so a GM glancing at the step can tell in one look whether the number in front of them
-   is the book's. Later than the base rule, per the modifier-ordering house rule. */
+   on this screen; one this system worked out with a ruler drops to plain ink, in italics and in
+   sentence case, so a GM glancing at the step can tell in one look whether the number in front of
+   them is the book's. NOT the route's red, which it used to wear: red on the one headline of the
+   step reads as a warning about the journey rather than as a note about where the figure came
+   from, and the italics say that much on their own. The red still marks the LINE on the map and
+   the ruler beside the derivation, which is where it means "this one was measured".
+   Later than the base rule, per the modifier-ordering house rule. */
 .stonetop-journey .stonetop-journey-total.is-estimate {
-	color: var(--stonetop-route-ink); font-style: italic; text-transform: none; letter-spacing: 0;
+	color: var(--st-text); font-style: italic; text-transform: none; letter-spacing: 0;
 }
 /* And per leg, since a hand-drawn way can mix the two: a leg between two places the table prices
    keeps its printed time and its road, and only the drawn ones are marked. */
@@ -30733,7 +31019,45 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* Every destination, grouped by map. The map's legend, and the whole screen when the GM
    has not imported the art — which is why it is never conditional on the picture. */
-.stonetop-journey .stonetop-journey-list { margin-top: 10px; }
+/* A section break, not a paragraph gap. What sits above is the route readout — a filled gold box
+   that is the step's one headline — and at the 10px this carried, the "Travel times" rule ran
+   straight on from the bottom of that box and the two read as one panel. The folds inside this
+   list clear each other by 8px; the list has to clear what it is NOT by more than its own parts
+   clear each other. */
+.stonetop-journey .stonetop-journey-list { margin-top: 20px; }
+/* WHAT THE FOLDS ARE, said once over the lot of them. The step's own card-head idiom (compare
+   .stonetop-exp-load-head) with the wash and the full-width bar left off: this list sits inside
+   the step column rather than in a card of its own, so a filled bar across it would read as the
+   start of a second panel. A rule and the gold are enough to outrank the group heads under it,
+   which are the same face in muted ink. */
+.stonetop-journey .stonetop-journey-listhead {
+	display: flex; align-items: baseline; gap: 8px;
+	padding-bottom: 4px; border-bottom: 1px solid var(--st-gold-border);
+}
+.stonetop-journey .stonetop-journey-listtitle {
+	/* One step up from the group heads under it, which are the same face, the same gold and the
+	   same rule: at the same size the header read as a fourth fold rather than as the heading over
+	   the three. It stays below the route total above it, which is the step's one headline. */
+	font-family: var(--font-stonetop); font-size: var(--st-fs-xs); font-weight: 700;
+	text-transform: uppercase; letter-spacing: 0.08em; color: var(--st-gold-text);
+}
+.stonetop-journey .stonetop-journey-listnote {
+	margin-left: auto; flex: 0 0 auto;
+	font-size: var(--st-fs-2xs); font-style: italic; color: var(--st-text-muted);
+}
+.stonetop-journey .stonetop-journey-listhint {
+	margin: 5px 0 0; font-size: var(--st-fs-2xs); color: var(--st-text-muted); line-height: 1.45;
+}
+/* WHAT A CLICK ON A ROW WILL DO, in a world with no book art on disk — where this list is the whole
+   screen and there is no picture whose caption could say it. Green, because it is about the NEAR
+   end of the journey, which is the one thing the rows are about to set; and out of the muted italic
+   the fold explanation below it wears, because this is a state rather than a description. Later
+   than the base rule, per the modifier-ordering house rule. */
+.stonetop-journey .stonetop-journey-listhint--start {
+	color: var(--st-green-text); font-style: italic;
+}
+/* The first fold clears the hint by the same step the folds clear each other. */
+.stonetop-journey .stonetop-journey-listhint + .stonetop-journey-group { margin-top: 8px; }
 .stonetop-journey .stonetop-journey-group + .stonetop-journey-group { margin-top: 8px; }
 .stonetop-journey .stonetop-journey-grouphead {
 	font-family: var(--font-stonetop); font-size: var(--st-fs-2xs); font-weight: 700;
@@ -30741,15 +31065,39 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-text-muted);
 	padding-bottom: 3px; border-bottom: 1px solid rgba(0,0,0,0.1);
 }
-.stonetop-journey .stonetop-journey-group.is-active .stonetop-journey-grouphead {
-	color: var(--st-gold-text); border-bottom-color: var(--st-gold-border);
-}
+/* EVERY FOLD HEAD READS THE SAME. One of them used to take the gold, following whichever group
+   held the destination (or, with nothing chosen, whichever map was showing) — and both of those
+   are already said on this screen, twice over: the chosen place wears its own gold pill down in
+   the list, and the map tabs above mark the showing one. A third mark for the same fact, on the
+   one element whose whole job is to say "these places are on that map", read as a claim about the
+   FOLD rather than about the place inside it. The heads are furniture; the gold belongs to the
+   answer. */
 .stonetop-journey .stonetop-journey-list ul {
 	margin: 4px 0 0; padding: 0; list-style: none;
 	display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px;
 }
+/* A GRID, not a flex row, for the sake of the one place in eighteen the books give no gazetteer
+   entry. The book link trails its row (the template says why), and in a flex row the row would
+   take whatever width its name and time came to, so the icons landed at eighteen different x's.
+   A fixed LAST column is the same width whether the cell holds a link or nothing, which is what
+   rules the icons into one edge and lets the entry-less place simply leave its gutter empty. The
+   width is the 2xs glyph plus its breathing room. */
+/* AND THE PILL IS THE WHOLE ROW, gazetteer icon included (user, 2026-08-24). The padding, the
+   border and every lit state used to sit on the <button>, which stops one column short of the
+   icon beside it: the chosen place read as a gold box with a loose bookmark floating off its end.
+   The <li> is the only element that can hold both. An <a> cannot go INSIDE the <button> (the
+   parser lifts it straight back out, and a click on it would fire the pick as well as open the
+   entry), so the two stay siblings and the box around them does the lighting. */
 .stonetop-journey .stonetop-journey-list li {
-	display: flex; align-items: center; gap: 4px; min-width: 0;
+	display: grid; grid-template-columns: 1fr 15px; align-items: center; gap: 4px; min-width: 0;
+	padding: 2px 6px;
+	border: 1px solid transparent; border-radius: var(--st-radius-sm);
+}
+/* LIT OFF THE ROW, NOT OFF THE BOX. The pill wraps the icon, but the icon is not part of what the
+   pill offers — it opens an entry, it does not pick a place — so a pointer resting on the bookmark
+   colours the bookmark and leaves the pick unlit. */
+.stonetop-journey .stonetop-journey-list li:has(.stonetop-journey-row:hover) {
+	background: var(--st-slate-hover-bg); border-color: var(--st-slate-hover-border);
 }
 /* A prose row that happens to be a <button>, so core's button rule has to be unpinned in full:
    `display: flex` on its own replaces only `display`, and the `justify-content: center` beside it
@@ -30757,16 +31105,18 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    text. A row whose place has no route renders only its name (`_timeLabel` returns null and the
    time span is inside an `{{#if}}`), and those rows were the ones that came out CENTRED while
    every other name sat left. Height and min-height go together, min-height winning, or a name that
-   wraps is clipped. Same fix and same reason as `.stonetop-weather-row`. */
+   wraps is clipped. Same fix and same reason as `.stonetop-weather-row`. The chrome it once wore
+   is on the <li> above; what is left here is the unpinning, and core's own button background and
+   border have to go with it or the pill gets a second box drawn inside itself. */
 .stonetop-journey .stonetop-journey-row {
+	/* Always the FIRST column, gazetteer link or no gazetteer link — see the note on
+	   `.stonetop-journey-book`. */
+	grid-column: 1;
 	flex: 1 1 auto; display: flex; align-items: baseline; justify-content: flex-start;
 	gap: 6px; min-width: 0; width: 100%; height: auto; min-height: 0;
-	padding: 2px 6px; text-align: left;
+	padding: 0; text-align: left;
 	font-size: var(--st-fs-xs); color: var(--st-text-body);
-	border: 1px solid transparent; border-radius: var(--st-radius-sm); background: none;
-}
-.stonetop-journey .stonetop-journey-row:hover {
-	background: var(--st-slate-hover-bg); border-color: var(--st-slate-hover-border);
+	border: none; background: none;
 }
 .stonetop-journey .stonetop-journey-row .j-name {
 	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -30780,15 +31130,52 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-size: var(--st-fs-2xs); font-style: italic; color: var(--st-green-text);
 }
 .stonetop-journey .stonetop-journey-row.is-origin { color: var(--st-green-text); }
+/* WHILE THE TRIP HAS NO START, every row of this list answers THAT question instead of setting the
+   destination — which is what makes the gesture usable at all in a world that never imported the
+   book art, where this list is the whole screen. So the rows say so: the green of the near end of
+   the journey rather than the gold of the far one, and the crosshair the map wears in the same
+   state.
+
+   A RENDERED STATE, not an armed one. This used to be `.is-setting-out`, put on by hand while a
+   button above the map held the next click hostage — deliberately without a re-render, because a
+   render would have replaced the very picture the click was armed on. There is no mode to arm any
+   more: a trip either has a start or it does not (ExpeditionDialog `needsStart`), and the class
+   comes off the same build as everything else on the screen.
+
+   Later than the base row rules, per the modifier-ordering house rule. */
+.stonetop-journey.is-needing-start .stonetop-journey-row { cursor: crosshair; }
+.stonetop-journey.is-needing-start .stonetop-journey-row:hover { color: var(--st-green-text); }
+.stonetop-journey.is-needing-start .stonetop-journey-list li:has(.stonetop-journey-row:hover) {
+	border-color: var(--st-green-border); background: var(--st-green-bg-hover);
+}
+/* THE ANSWER'S GOLD, on the box rather than on the button, so it runs the full width of the row
+   and takes in the bookmark at the end of it. The ink stays on the button: the name and the time
+   are what turn gold, and the icon keeps its own faint grey against the 12% wash behind it. */
 .stonetop-journey .stonetop-journey-row.is-chosen {
 	color: var(--st-gold-text); font-weight: 700;
+}
+.stonetop-journey .stonetop-journey-list li:has(.stonetop-journey-row.is-chosen) {
 	background: var(--st-gold-bg); border-color: var(--st-gold-border);
 }
 .stonetop-journey .stonetop-journey-row.is-chosen .j-time { color: var(--st-gold-text); }
+/* In the row's last column, centred in it: the gutter is furniture, and a glyph pushed to one
+   side of a fixed column reads as belonging to whichever neighbour it drifted toward. The column
+   is NAMED rather than left to auto-placement, which is the whole point of the grid — the place
+   with no gazetteer has only one child, and auto-placement would let that lone row spread across
+   a cell no other row's name gets. Its pair is on `.stonetop-journey-row` above. */
+/* AND CORE'S CHIP PUT OUT. `.content-link` ships a grey box — background, border, 2px radius and
+   padding, all of it sized for a word of link text. Around a lone 2xs glyph that box reads as a
+   second button drawn inside the row's own pill, and it comes out nine pixels wider than the
+   gutter it sits in, so it crowds the time on one side and the pill's border on the other. The
+   system strips the same chip off its journal cross-links (see the `.journal-page-content` reset
+   above); this link is not in that list only because it is not prose. Unlike that reset nothing
+   here hides the `<i>`: the bookmark is written in the template and IS the link. */
 .stonetop-journey .stonetop-journey-book {
-	flex: 0 0 auto; font-size: var(--st-fs-2xs); color: var(--st-text-faint);
+	grid-column: 2; justify-self: center;
+	background: none; border: none; padding: 0; margin: 0; text-shadow: none;
+	font-size: var(--st-fs-2xs); color: var(--st-text-faint);
 }
-.stonetop-journey .stonetop-journey-book:hover { color: var(--st-gold-text); }
+.stonetop-journey .stonetop-journey-book:hover { color: var(--st-gold-text); text-shadow: none; }
 
 /* ============================================================================
    PEOPLE OF STONETOP gallery — the portrait picker for a resident/neighbor image
@@ -35077,7 +35464,15 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    fields are the whole point it would put out the add bar, the questions and the
    answers to guard three buttons. `--reading` hides those three and stops there;
    the template's head says why the split falls where it does. */
-.stonetop-gm-wonder {
+/* THE EXPEDITION'S CHARTED LIST IS THE SECOND HOST of everything in this block, and it is
+   here in the prelude rather than in a copy of its own further down the file. A Chart a
+   Course requirement is the same object as an open question — a prompt whose answer arrives
+   later, read down a ruled column — and the walkthrough draws one with these very classes
+   (templates/dialogs/expedition.hbs says so at the markup). Two hand-matched copies of a
+   look this particular would drift the first time either was touched, which is the lesson
+   the two rollable tables one dialog over already taught. */
+.stonetop-gm-wonder,
+.stonetop-exp-chartgroup {
 	/* The gutter every row on this tab hangs its question-spiral in, and the step
 	   an answer is set in past its question. One pair of numbers, because the add
 	   bar, an open entry and a settled one all have to line up on the same x or
@@ -35215,13 +35610,29 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-text);
 }
 
-/* An answered question is no longer editable in place: it is a span, not an
-   input, and reads as settled rather than as a field someone forgot to fill. */
-.stonetop-gm-wonder-question--settled {
+/* THE TWO SPANS. Neither is editable in place, so neither is an input, and both
+   sit in the row where one would: same flex, same padding, so filing a question
+   or picking a printed one does not move a word sideways. Only the ink differs,
+   and it differs on purpose — see each below. */
+.stonetop-gm-wonder-question--settled,
+.stonetop-gm-wonder-question--fixed {
 	flex: 1 1 auto;
 	min-width: 0;
 	padding: 1px 4px;
+}
+
+/* An answered question reads as settled rather than as a field someone forgot to
+   fill: it has been dealt with, and the list it now sits in is the archive. */
+.stonetop-gm-wonder-question--settled {
 	color: var(--st-text-secondary);
+}
+
+/* A line PICKED off a printed menu rather than typed — the expedition's charted
+   requirements and challenges. Full strength, unlike the settled span above it:
+   this is the live list a GM reads on the road, and the wording is the book's,
+   which is the whole reason there is nothing here to edit. */
+.stonetop-gm-wonder-question--fixed {
+	color: var(--st-text);
 }
 
 /* The answer sits UNDER the question and one step in past it, so the pair reads
@@ -35528,10 +35939,11 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    RenderActorSheet.js), but the global `li.question-bullet::before` weighs exactly what the
    rule above does and loses to it on source order, so the swap has to be re-asserted inside
    this list — the same path the journal and monster rich-text bodies take, for the same
-   reason. Only the picture changes; the size and position stay the list's own. This guide is
+   reason. The picture and the width it needs; the seating stays the list's own. This guide is
    half questions, so without it the one thing the tab is named for draws as ordinary prose. */
 .stonetop-gm-wonder-guide-items > li.question-bullet::before {
 	background-image: url('/systems/stonetop-pwd/assets/icons/steading/question-spiral.svg');
+	width: calc(var(--stonetop-bullet-size, 10px) * 1.26);
 }
 
 /* -- Homefront tab --------------------------------------------------------
@@ -35602,6 +36014,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    prose, which looks like nothing being wrong. */
 .stonetop-gm-homefront-items > li.question-bullet::before {
 	background-image: url('/systems/stonetop-pwd/assets/icons/steading/question-spiral.svg');
+	width: calc(var(--stonetop-bullet-size, 10px) * 1.26);
 }
 
 /* A sub-heading inside a section: the four groups of village facts, the five

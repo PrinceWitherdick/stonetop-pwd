@@ -106,8 +106,8 @@ export function pickPointOnImage({ listenOn, measure = listenOn, signal = null }
 		}, bind);
 
 		listenOn.addEventListener("click", ev => {
-			// Every click over the picture belongs to this gesture while it is armed, whether or
-			// not it turns out to be a placement: see the header for what it would otherwise reach.
+			// Every click over the picture belongs to this gesture while it is armed, whether or not
+			// it turns out to be a placement: see the header for what it would else reach.
 			ev.preventDefault();
 			ev.stopPropagation();
 
@@ -174,12 +174,16 @@ export function pickPointOnImage({ listenOn, measure = listenOn, signal = null }
  * @param {Function} [opts.onUndo]         `(ev)` — a right-click on it
  * @param {string} [opts.ignore]           selector for marks whose own click meaning wins
  * @param {string} [opts.undoIgnore]       the same for right-clicks, which some marks also claim
+ * @param {boolean} [opts.crosshair]       wear the drawing cursor. OFF for a watch that is armed
+ *                                         but not yet drawing anything — a picture whose plain
+ *                                         click still means what it always meant should not look
+ *                                         like one waiting to be marked.
  * @param {AbortSignal} [opts.signal]      stops the watch from outside
  * @returns {Function} stop watching. Idempotent, so a caller may both call it and abort the signal.
  */
 export function watchPointsOnImage({
 	listenOn, measure = listenOn, onPoint = null, onUndo = null,
-	ignore = "", undoIgnore = "", signal = null,
+	ignore = "", undoIgnore = "", crosshair = true, signal = null,
 } = {}) {
 	if (!listenOn || !measure || signal?.aborted) return () => {};
 
@@ -224,6 +228,6 @@ export function watchPointsOnImage({
 
 	signal?.addEventListener?.("abort", stop, { once: true, signal: off.signal });
 
-	listenOn.classList.add(DRAWING_CLASS);
+	if (crosshair) listenOn.classList.add(DRAWING_CLASS);
 	return stop;
 }

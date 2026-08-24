@@ -33,8 +33,24 @@
 //             introductions, the steading's players or the example NPC's relationships. The
 //             living roster can't cover any of this: SKIP_PLAYBOOKS keeps the three inserts out
 //             of it, so without the Graveyard the Death's Door black has no fixture.
-//             Also records Introductions answers + one example Expedition and compiles the
-//             shared "Chronicle" journal. Seeds the steading "Stonetop" (the world's required
+//             The Seeker additionally gets the two arcana Book I works through as examples —
+//             the old scroll case that teaches Laoj Daveth's Galvanic Infusion (p.58) and
+//             Noruba's Ice Sphere (p.61) — authored as HOMEBREW world Items with their own
+//             `arc-` slugs rather than drawn from the compendium, since nothing else here
+//             exercises that path. She holds the shipped copies of neither, so her tab reads
+//             as a shipped major beside a homebrew one, and the book is the reference you
+//             hold beside both. The minor is mastered (unlocked back), the major left locked.
+//             The first character of each roster also carries three treasures, one per rung of
+//             the Book I p.430 identify ladder (unknown / partial / known), so one Inventory tab
+//             shows an artifact concealed, half worked out and read whole; the same three sit in
+//             the world Items folder, where a treasure's write-up now reads on its own sheet.
+//             Also records Introductions answers + TWO example Expeditions and compiles the
+//             shared "Chronicle" journal. The two trips are the two the route step has: one
+//             plotted off the book's travel table (multi-leg, so Chart a Course gets both of the
+//             rows the map fills in for itself) and home again, and one still out on a way the
+//             GM drew by hand, holding two of the village's communal assets — which are struck
+//             through on the steading sheet and tagged with the trip that took them.
+//             Seeds the steading "Stonetop" (the world's required
 //             singleton) with a thematic set of test Residents, Neighbors, and Players (the
 //             created PCs) so the steading sheet's member tables aren't empty — each resident
 //             and neighbor is a real `npc` Actor in the system's own people folders, which is
@@ -44,7 +60,10 @@
 //             Threats tab shows the full range of card layouts, and two demonstration Sites —
 //             one written up through all four phases of the book's procedure (picks, timeline,
 //             denizens, areas, plans, rollable tables) and one stopping after the foundation,
-//             which is the pair of card states worth looking at. Both tabs live on the GM
+//             which is the pair of card states worth looking at. Both sites are also PINNED on
+//             the books' regional maps — one on each tier — and the steading is left with one
+//             debility marked, so Return Triumphant at the end of the walkthrough has something
+//             to clear rather than only ever raising Fortunes. Both tabs live on the GM
 //             Toolkit and both store on the steading. Seeds the GM Toolkit's
 //             "I wonder..." tab (Book I p.33) with a dozen open questions, six of them carrying
 //             a written answer or a hunch and six still blank, plus three more already ticked
@@ -89,7 +108,10 @@
 //             it still holds exactly what the macro wrote) and the three seeded Encounters, deletes the seeded Threats and Sites
 //             (and their scene pins,
 //             pruning an emptied Threats folder), removes the world Moves/Items/Monsters and the
-//             example NPC (and their now-empty folders), and prunes the matching Chronicle pages.
+//             example NPC (and their now-empty folders), sends home every steading asset a test
+//             trip was holding (matched by trip id, so the GM's own requisitions are untouched),
+//             unmarks the seeded debility while it is still the only one marked, and prunes the
+//             matching Chronicle pages.
 
 (async () => {
   // Re-entrancy guard: a double-click on the hotbar — or clicking the macro again while
@@ -490,29 +512,146 @@
     },
   });
 
-  // ── Example expedition (so the Expedition log + its Chronicle page show) ───
-  // Matches the expeditionAnswers entry shape (chart/home are { checks, notes };
-  // outfit/requisition/prep/running are top-level single-text notes). `isTest`
-  // marks it so the re-run cleanup can remove just this one.
-  const buildExampleExpedition = () => ({
+  // ── Example expeditions (so the log + its Chronicle pages show) ────────
+  // TWO trips, because the walkthrough's route step has two modes and one trip cannot be in
+  // both: a journey plotted off the book's travel table, and a way the GM drew by hand on the
+  // map. The rest of the log's states are staggered across them the way the threats and the
+  // sites below are: one trip is home and reads complete, the other is still out and is holding
+  // two of the village's communal assets for as long as it is.
+  //
+  // EVERY FIELD HERE IS ONE THE WALKTHROUGH STILL WRITES, which is worth saying because most
+  // of what a trip used to carry is gone. `chart.checks`, `outfit`, `requisition`, `prep`,
+  // `running`, `home.checks` and `home.notes` were each written by a step or a note box that
+  // no longer exists; utils/chronicle-core.js goes on printing them, deliberately, so that a
+  // trip logged before the change keeps every word a GM typed into it. A FIXTURE written in
+  // those fields is a different thing entirely: it compiles a journal page made up of nothing
+  // but those legacy headings, which is a picture of a walkthrough nobody is running any more.
+  // What the steps write now:
+  //   chart.picked   the requirements and challenges actually presented, in the order they were
+  //                  added, each with what was said under it (dialogs/expedition-data.js).
+  //                  `fromRoute: true` marks a row the map put there rather than the GM, which
+  //                  only ever happens to the two the map can answer: `days` and `firstTravel`.
+  //   journey        where they set out from and where they are bound: `destination` for a trip
+  //                  the travel table can solve, `custom` for a way laid out by hand
+  //                  (utils/travel-route.js, utils/custom-route.js).
+  //   requisitioned  what came out of the steading's common stores, as the Requisition step
+  //                  ticks it. The steading holds the other half of that — see seedTripAssets,
+  //                  which fills this in, because only the steading knows what it owns.
+  // There is no `home` key at all: that step asks questions and offers the Return Triumphant
+  // move, and the move writes its result on the steading rather than on the trip.
+  //
+  // NOTHING ABOUT A ROUTE IS PRECOMPUTED. A trip stores where it goes, never how far or how
+  // long: the legs, the day count and the line on the map are all worked out on read, so a
+  // correction to the travel table reaches a trip logged last season (journeyRoute). That is
+  // also why a fixture can name places and nothing else.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  // `group` is spelled out rather than left to be derived, mirroring what the step itself
+  // stores; the keys are CHART_GROUPS in dialogs/expedition-data.js, and a key that no longer
+  // names an authored prompt is dropped on read rather than drawn blank.
+  const TEST_EXPEDITIONS = [
+    // 1. HOME AGAIN, plotted off the travel table, and MULTI-LEG on purpose: Stonetop to the
+    //    Steplands to Blackwater Lake is the shape that gives Chart a Course both of the rows
+    //    the map can answer for itself ("you must first travel to ___" has nowhere to point on
+    //    a single-leg trip) and gives the Chronicle a leg-by-leg breakdown rather than one line.
+    //    Neither route row carries an answer, which is the point of them: the blanks are filled
+    //    from the plotted route, and the day count changes if the table ever does.
+    {
+      title:   "North to Blackwater Lake",
+      journey: { origin: "stonetop", destination: "blackwater-lake" },
+      route:   "Up the Roads to the north edge of the Steplands, then west along the shore until "
+             + "the standing stones the trader described. Home the same way before the frosts.",
+      picked: [
+        { group: "requirements", key: "firstTravel", fromRoute: true },
+        { group: "requirements", key: "days",        fromRoute: true },
+        { group: "requirements", key: "guide",
+          answer: "Yannic the forester walked it as a young man and still remembers the fords." },
+        { group: "challenges",   key: "watchOut",
+          answer: "Steplander outriders, who will want to know what a Stonetop cart is doing this far north" },
+        { group: "challenges",   key: "grueling",
+          answer: "Four days of open road on the Steplands leg with nothing to shelter under." },
+      ],
+      notes: "They went looking for whoever raised the barrow out in the fen, on a trader's word "
+           + "that the same stones stand at the lake. They came home with a rubbing and no answer.",
+      // Positions among the steading's NAMED assets, resolved to real rows at seed time.
+      // Home again, so the steading is not holding these for it: the trip keeps the record
+      // anyway, which is the half of the design that lets the Chronicle name what it borrowed
+      // months after it came back.
+      takes: [2],
+      holds: false,
+    },
+    // 2. STILL OUT, and following a way the GM drew: the tower stands on the Flats, which the
+    //    travel table does not price and no letter on the map names, so there is nothing to
+    //    pick from a dropdown. Both shapes of mark are here — a place the table knows
+    //    (`{ slug }`, which stores no position, so the pin follows any later correction) and a
+    //    bare fraction of the printed Vicinity crop, which is the tower itself and is the same
+    //    spot the site page is pinned at below. The stops read "Stonetop", "the Crossroads",
+    //    "point 1": only marks laid by hand are numbered.
+    {
+      title:   "The Wandering Tower",
+      journey: {
+        origin: "stonetop",
+        custom: { tier: "vicinity", points: [{ slug: "the-crossroads" }, { fx: 0.331, fy: 0.792 }] },
+      },
+      route:   "Down the West Road past the Crossroads, then out onto the Flats until the treeline "
+             + "is behind them and the heath opens up. The herders will not take them the last mile.",
+      picked: [
+        // Answered by the GM rather than by the map, which is the other half of the rule: what
+        // was written always wins over what the route works out (chartFillValue).
+        // The drawn way prices itself at roughly a day and a half of march; the GM has decided
+        // trackless heath is slower than that, and what was written wins.
+        { group: "requirements", key: "days",
+          answer: "two, and a third if the weather turns" },
+        { group: "requirements", key: "guide",
+          answer: "Branok the herder will take them as far as the ford and not one step past it." },
+        { group: "requirements", key: "bring",
+          answer: "rope, and something to stop their ears with" },
+        { group: "challenges",   key: "perilous",
+          answer: "Nobody who has walked out to answer the singing has come back to say what it wanted." },
+        { group: "challenges",   key: "attention",
+          answer: "whatever it is that sings" },
+        // A line the GM wrote themselves: no key, so the wording is stored here and is the one
+        // user-authored string in the list (escaped by every reader, unlike the book's own).
+        { group: "challenges",   key: null,
+          text:   "Once the treeline is behind you the heath has no landmark worth the name.",
+          answer: "Coming back is the part they have not thought about." },
+      ],
+      notes: "Set out on the third day of the thaw. If they are not home inside the week, that is "
+           + "the session that opens with Coria at the gate asking who is going after them.",
+      // Out with them right now, so the steading is struck through and tagged with this trip.
+      takes: [0, 3],
+      holds: true,
+    },
+  ];
+
+  const buildExampleExpeditions = () => TEST_EXPEDITIONS.map((seed, i) => ({
     id:        foundry.utils.randomID(),
-    title:     "The Wandering Tower",
-    createdAt: Date.now(),
+    title:     seed.title,
+    // Staggered backwards so the finished trip is plainly the older one; the current trip is
+    // the one the switcher opens on (see the log write near the end of the macro).
+    createdAt: Date.now() - (TEST_EXPEDITIONS.length - 1 - i) * 9 * DAY_MS,
     isTest:    true,
+    journey:   foundry.utils.deepClone(seed.journey),
     chart: {
-      route:  "North up the Maker's Road to the old ford, then east along the treeline to where the herders swear a stone tower now stands that wasn't there last spring.",
-      checks: { guide: true, days: true, bring: true, perilous: true, attention: true },
-      notes:  "Branok the herder will guide them as far as the ford but no further — he'll not go near the tower. Reckon four days out, more if the weather turns.",
+      route:  seed.route,
+      // Ids are FIXED (`c1`…`cN`) rather than the randomID the step mints, on the same grounds
+      // as the seeded encounter rows: a row is addressed by id in the DOM, so a stable one
+      // means a re-run leaves an open walkthrough looking at the same list. They only have to
+      // be unique within the one trip, which is all that is ever on screen.
+      picked: seed.picked.map((p, n) => ({
+        id:        `c${n + 1}`,
+        group:     p.group ?? "",
+        key:       p.key ?? null,
+        text:      p.text ?? "",
+        answer:    p.answer ?? "",
+        fromRoute: !!p.fromRoute,
+      })),
+      notes: seed.notes,
     },
-    outfit:      "Warm cloaks, three days' hard rations apiece, a coil of good rope, and Vahid's lantern. Caradoc insisted on hauling the heavy shield along.",
-    requisition: "Rolled a 9 on Requisition — the village can spare dried meat and a sound cart, but the elders want both back in one piece.",
-    prep:        "They spent the eve before at the Stranger's Roof trading rumours. An old trapper swore the tower 'sings' at dusk and warned them not to answer.",
-    running:     "Lost half a day to a washed-out stretch of road and a tense parley with a Hillfolk scouting party — settled with a gift of salt and no blood drawn.",
-    home: {
-      checks: { absence: true, townDoings: true, threats: true, triumph: true },
-      notes:  "Gone the better part of a week. If they come home with proof of what stands out there, that's a Triumphant return — clear a steading debility.",
-    },
-  });
+    // Filled in by seedTripAssets once the steading has been read; an empty list is what a trip
+    // that requisitioned nothing carries, so this is also the resting shape.
+    requisitioned: [],
+  }));
 
   // ── Steading test members (Residents / Neighbors / Players) ────────────
   // Thematic fixtures for the steading "Stonetop" so its member tables aren't empty
@@ -848,6 +987,12 @@
     "hillfolk":       { hearts: 1, notes: "Raiders out of the Steplands took the winter stores and left Brennan dead at the gate. Nobody here is ready to hear about the bands that had no part in it." },
   };
 
+  // The steading's three debilities, and the one the fixtures mark. Ids out of
+  // StonetopSteading's STEADING_DEFAULTS (`attributes.debilities.options`); the full list is
+  // here because "is any of them marked?" is the question both the seed and the cleanup ask.
+  const TEST_DEBILITIES = ["diminished", "lacking", "malcontent"];
+  const TEST_DEBILITY   = "lacking";
+
   // Formatted rich-text seeded into the steading's Notes tab (the prose-mirror editor
   // bound to flags["stonetop-pwd"].steading.notes, rendered through TextEditor.enrichHTML).
   // Deliberately exercises the full range of blocks the editor produces — headings,
@@ -1025,6 +1170,13 @@
       regionId:    "ferriersFen",
       regionLabel: "Ferrier's Fen",
       terrain:     "Hummock, hill, rocky outcrop, ringed by peat and floating mats",
+      // Out in the fen itself, a little south-east of where the World's End map letters
+      // "Ferrier's Fen" (0.6397 / 0.5311 in module/data/travel-times.js). The two seeded sites
+      // are pinned on DIFFERENT tiers on purpose — the fen is only drawn on the World's End,
+      // the tower's heath only on the Vicinity — so the per-map pass has both an answer and an
+      // empty answer to give on each. See seedTestPrepPages for what a spot is and why it is
+      // a flag; the fractions are of the PRINTED CROP, never of any one file's pixels.
+      mapSpot:     { tier: "worlds-end", fx: 0.652, fy: 0.556 },
       why: "The Crow-Mother's cult has to be walking somewhere on those moonless nights, and a place the party can reach on foot is worth more at the table than a rumour they can only worry about. It is also the barrow Maelis left an eye in, so the Seeker has a reason to go back that has nothing to do with the village.",
       description: `<p>A low green hummock out in the fen, a good half-day east of the Maker's Road, ringed by black water that never quite freezes and never quite drains. The herders will not graze within sight of it. They say the ground there sounds hollow underfoot, and that a stone laid on top of it in the morning is gone by evening.</p>`
                  + `<p>Under the turf is a <strong>barrow</strong>, and under the barrow is a spring, and the Barrow Builders who raised it were not trying to honour whoever lies inside. They were trying to keep her down.</p>`,
@@ -1154,6 +1306,12 @@
       regionId:    "flats",
       regionLabel: "The Flats",
       terrain:     "Open meadow, grass waist-high or shorter",
+      // THE SAME POINT THE EXAMPLE EXPEDITION'S DRAWN WAY ENDS AT. That is the whole shape of
+      // this pair of fixtures: the tower stands somewhere the travel table does not price and
+      // no letter on the map names, so the trip to it is a way the GM laid out by hand, and its
+      // last mark and this pin are one place. Out on the eastern reach of the Flats, between
+      // the West Road and where the Vicinity letters "The Flats".
+      mapSpot:     { tier: "vicinity", fx: 0.331, fy: 0.792 },
       why: "Somewhere for the Singing Tower to actually stand, so the expedition has a destination the moment a player asks where they are going. Written up only as far as the book asks for a site that is still a rumour: foundation, and the questions I have not answered yet.",
       description: `<p>East of the old ford, out where the treeline gives way to open heath, the herders swear there is a tower standing that was not there last spring. Grey stone, no door they could see, and at dusk it <em>sings</em>: one low wordless note that carries for miles and sets every dog between here and the village howling.</p>`
                  + `<p>Nobody who has walked out to answer it has come back to say what it wanted.</p>`,
@@ -1251,6 +1409,50 @@
     let bag = steading.flags?.[FLAG_SCOPE]?.steading;
     for (const scope of LEGACY_SCOPES) bag = bag ?? steading.flags?.[scope]?.steading;
     return foundry.utils.deepClone(bag ?? {});
+  };
+
+  // ── Requisition: what the example trips took out of the steading ───────
+  // THE TWO HALVES OF ONE FACT, which is the whole reason this is worth a fixture. The trip
+  // records what it BORROWED, so the Chronicle can name the wagon months after it came home;
+  // the steading records where the wagon IS, so its own sheet can strike the row through and
+  // say where it went. Neither is derivable from the other, and only a seeded pair shows that.
+  //
+  // NAMES ARE NEVER INVENTED HERE, and neither is the list. `takes` is a position among the
+  // steading's own NAMED assets, read back through getNamedAssets — which is what applies the
+  // shipped defaults (the book's draft horses, plows, carts and wagon) to a steading nobody has
+  // edited yet. So a world whose GM rewrote the list gets THEIR rows requisitioned rather than
+  // rows this macro made up, a shorter list simply takes fewer, and the macro carries no copy
+  // of the defaults to go stale.
+  //
+  // The write goes through setAssetTaken for the same reason: it is the one place that knows
+  // an asset out on a trip loses its on-hand tick as well as gaining a `takenBy`.
+  //
+  // `takenBy.expedition.id` MUST be the trip's real id, because reconcileHeldAssets sends home
+  // anything held by a trip the log does not contain — a mismatched id would see the wagon walk
+  // back into the village the first time the walkthrough was opened. The title beside it is
+  // expeditionLabel's answer for a titled trip, which is the title itself.
+  const seedTripAssets = async (steadingActor, entries) => {
+    const steading = steadingActor?.typedActor;
+    if (!steading?.getNamedAssets) return { taken: 0, held: 0 };
+    const named = steading.getNamedAssets();
+    if (!named.length) {
+      console.log("[TEST] The steading lists no named assets, so the example trips requisitioned nothing.");
+      return { taken: 0, held: 0 };
+    }
+
+    let taken = 0;
+    let held  = 0;
+    for (const [i, entry] of entries.entries()) {
+      const seed = TEST_EXPEDITIONS[i];
+      const mine = (seed?.takes ?? []).map(at => named[at]).filter(Boolean);
+      entry.requisitioned = mine.map(a => ({ index: a.index, name: a.name }));
+      taken += mine.length;
+      if (!seed?.holds) continue;
+      for (const asset of mine) {
+        if (await steading.setAssetTaken(asset.index, { expedition: { id: entry.id, title: entry.title } })) held += 1;
+      }
+    }
+    return { taken, held };
   };
 
   // Shape one TEST_THREATS seed into the `threat` page's system data. Mirrors
@@ -1369,7 +1571,13 @@
       name:   String(seed.name ?? "").trim() || defaultName,
       sort:   (sort += SORT_STEP),
       system: shape(seed),
-      flags:  { [FLAG_SCOPE]: { [TEST_FLAG]: true } },
+      // A site's place on the books' maps rides BESIDE its data rather than in it: `shape`
+      // above is the Create-a-Site walkthrough's shaper, and it replaces the whole system
+      // object every time that wizard saves, so a spot stored in there would be dropped the
+      // first time the GM reopened the wizard to add an area. See module/sites/site-map-spots.js
+      // (`SITE_MAP_SPOT_FLAG`), which is also why the key is spelled out rather than imported.
+      // Threats never carry one; a seed without a spot writes no key at all.
+      flags:  { [FLAG_SCOPE]: { [TEST_FLAG]: true, ...(seed.mapSpot ? { mapSpot: seed.mapSpot } : {}) } },
     })));
     return { entryId: entry.id, pages: pages ?? [] };
   };
@@ -1680,6 +1888,19 @@
       const list      = expList.filter(e => !e?.isTest);
       const currentId = list.some(e => e.id === expLog.currentId) ? expLog.currentId : (list.at(-1)?.id ?? null);
       await game.settings.set(FLAG_SCOPE, "expeditionAnswers", { currentId, list });
+
+      // And send home whatever those trips were holding. The steading is the record of where a
+      // communal asset IS, and that record does not live in the log we just emptied: left
+      // alone, the wagon would stay struck through on the sheet, tagged to a trip that no
+      // longer exists. The system heals this itself (reconcileHeldAssets, the next time the
+      // walkthrough opens), but a cleanup that leaves the village visibly short until somebody
+      // happens to open a dialog is not a cleanup. Matched by TRIP ID, so an asset the GM sent
+      // out on a trip of their own is never touched.
+      const steadingAssets = game.actors.find(a => a.type === "stonetop" || a.system?.customType === "stonetop");
+      const returnable = (steadingAssets?.typedActor?.getNamedAssets?.() ?? [])
+        .filter(a => testExpIds.includes(a.takenBy?.expedition?.id));
+      for (const asset of returnable) await steadingAssets.typedActor.returnAsset(asset.index);
+      if (returnable.length) console.log(`[TEST] Returned ${returnable.length} requisitioned asset(s) to the steading.`);
     }
 
     // Prune the matching Chronicle pages (the test PCs + the example expedition) so the
@@ -1836,6 +2057,24 @@
         relKill[`system.relationships.-=${slug}`] = null;
       }
       if (Object.keys(relKill).length) await steadingDel.update(relKill);
+
+      // Unmark the seeded debility, on the mirror image of the rule that set it: it goes only
+      // while it is still the ONLY one marked, which is the state this macro leaves behind. A
+      // steading that has since taken a second debility has a history of its own, and the one
+      // this macro marked is no longer distinguishable from one the table earned.
+      const debilityMarked = (id) => {
+        const mirrored = foundry.utils.getProperty(steadingFlags, `system.attributes.debilities.options.${id}.value`);
+        return mirrored !== undefined
+          ? !!mirrored
+          : !!foundry.utils.getProperty(steadingDel.system, `attributes.debilities.options.${id}.value`);
+      };
+      const stillOurs = TEST_DEBILITIES.filter(debilityMarked);
+      if (stillOurs.length === 1 && stillOurs[0] === TEST_DEBILITY) {
+        await steadingDel.update({
+          [`system.attributes.debilities.options.${TEST_DEBILITY}.value`]:                              false,
+          [`flags.${FLAG_SCOPE}.steading.system.attributes.debilities.options.${TEST_DEBILITY}.value`]: false,
+        });
+      }
       // Legacy: the "<name> Threats" FOLDER an older version of this macro created, plus the
       // steading's stale pointer to it. Dropped once it's empty; setFlag MERGES (can't drop a
       // key), so the pointer is cleared with the "-=" deletion syntax. Left intact when the GM
@@ -1934,6 +2173,18 @@
   const arcanaDocs   = arcanaPack ? await arcanaPack.getDocuments() : [];
   const majorArcana  = arcanaDocs.filter(d => (d.folder?.id ?? d.folder) === MAJOR_FOLDER);
   const minorArcana  = arcanaDocs.filter(d => (d.folder?.id ?? d.folder) === MINOR_FOLDER);
+
+  // The two cards Book I works through as examples: the old scroll case that teaches Laoj
+  // Daveth's Galvanic Infusion (p.58) and Noruba's Ice Sphere (p.61). Both also ship in the
+  // arcana compendium, and the Seeker gets HOMEBREW copies of them (see seedHomebrewArcana
+  // below), so the shipped originals are held out of her draw — the same card twice on one
+  // Arcana tab reads as a bug rather than as a fixture. Keyed by shipped slug.
+  const EXAMPLE_ARCANA  = { major: "norubas-ice-sphere", minor: "old-scroll-case" };
+  const EXAMPLE_SLUGS   = new Set(Object.values(EXAMPLE_ARCANA));
+  const notAnExample    = (d) => !EXAMPLE_SLUGS.has(d?.flags?.stonetop?.slug);
+  const SEEKER_SLUG     = "the-seeker";
+  const playbookSlugOf  = (a) => a?.system?.playbook?.slug
+    || a?.items?.find(i => i.type === "playbook")?.system?.slug || "";
 
   // ── Build selections object for one playbook ───────────────────────────
   function buildSelections(pbDoc) {
@@ -2190,9 +2441,11 @@
     // On the Max-Level path this is skipped: the post-creation pass below scatters
     // arcana across the WHOLE roster (Seeker included), so applying the Seeker's
     // deterministic onboarding draw here as well would double it up.
-    if (slug === "the-seeker" && !maxLevel) {
-      const major = pick(majorArcana);
-      const drawn = pickN(minorArcana, 3);
+    // Both draws skip the book's two example cards: she is handed homebrew copies of
+    // exactly those, and one card can't be on her tab twice.
+    if (slug === SEEKER_SLUG && !maxLevel) {
+      const major = pick(majorArcana.filter(notAnExample));
+      const drawn = pickN(minorArcana.filter(notAnExample), 3);
       sel.arcana = {
         major:      major?.flags?.stonetop?.slug,
         minorDraw:  drawn.map(d => d.flags?.stonetop?.slug),
@@ -2444,6 +2697,18 @@
     // expedition Outfit readout showed the entire party boosted, which is not a shape a
     // real party ever has. The follower below stays on every sheet — it changes no numbers.
     if (slot === 0 && typed?.addCustomMove) await typed.addCustomMove(TEST_CUSTOM_MOVE);
+    // And the three treasures, to that same first character — one sheet holding all three
+    // rungs of the identify ladder at once, which is the comparison they exist to make: an
+    // unknown one showing nothing but its hint, a partial one that has given up its tags and
+    // its Value and still owes its write-up, and one read whole. Spread across the roster they
+    // would only ever be seen one at a time.
+    //
+    // Through addDroppedInventoryItem, which is the REAL drop path off the sidebar: it re-plants
+    // the row as an "inventory-custom" copy and carries the treasure marker and the identify
+    // state across, so these are the same documents a GM dragging the world copies would get.
+    if (slot === 0 && typed?.addDroppedInventoryItem) {
+      for (const treasure of TEST_TREASURES) await typed.addDroppedInventoryItem(buildWorldItemItem(treasure));
+    }
     // This character's share of the Book I p.569 love letters (embedded move items flagged
     // loveLetter) — all four, one, or none, per testLoveLettersFor. Created directly rather
     // than via a typed-wrapper method — a love letter is a plain embedded item; the shaping
@@ -2575,6 +2840,66 @@
     { name: "Waxed Tinderbox",     column: "small",   note: "<em>slow</em>", resource: buildUses(2, false) },
   ];
 
+  // ── Three treasures, one per rung of the identify ladder ───────────────
+  // ARTIFACTS ARE THE ONE PIECE OF GEAR THAT LOOKS DIFFERENT DEPENDING ON WHO IS READING IT,
+  // and nothing else in these fixtures has that shape. Book I pp.430-431: the party finds a
+  // thing, the GM describes what is obvious at a glance, and the rest — the tags, the Value,
+  // the uses track, the write-up — stays behind a "?" until somebody Knows Things about it.
+  // The concealment happens as the sheet's snapshot is built (StonetopCharacter, via
+  // concealArtifactFields), so a withheld tag never reaches the template at all.
+  //
+  // The three cover the ladder, one rung each, and they are seeded BOTH ways so both surfaces
+  // have a fixture:
+  //   * in the world Items folder, which is where the write-up now reads whole on the item's
+  //     OWN sheet rather than only once somebody is carrying it;
+  //   * planted on the first character of each roster, which is where the concealment, the
+  //     hint line and the Know Things roll live.
+  // `unknown` shows the hint and nothing else; `partial` is a 7-9 — the tags and the Value are
+  // handed over and the write-up is still owed; `known` is a 10+ and reads whole. Two of them
+  // carry a ○ track, because the track is one of the things a concealed artifact withholds and
+  // a fixture that showed only the tags going missing would only be half the picture.
+  //
+  // Written for this macro rather than lifted out of Book II: the shipped treasures compendium
+  // already carries the book's own, and what is wanted here is three states of one mechanism.
+  const TEST_TREASURES = [
+    {
+      // Tags and a Value and nothing mechanical: the armor the write-up describes is the GM's
+      // to hand over once somebody has worked the thing out, so the row makes no claim the
+      // item does not implement while it is still concealed.
+      name: "A tarnished silver torc", column: "regular", weight: 1, isTreasure: true,
+      note: "<em>worn</em>, Value: 40 silver",
+      artifact: {
+        state: "unknown",
+        hint:  "Heavy silver, black with tarnish, the ends worked into two beasts that are biting something the smith did not carve.",
+        lore:  "<p>Barrow Builder work, and old even for that. Worn openly it turns a blade the way good mail does, and the wearer sleeps badly: the same dream, a hall under water, and somebody at the far end of it who will not turn around.</p>",
+        lead:  "Bronwen has read of a torc like it. So, it turns out, has whoever the cult prays to.",
+      },
+    },
+    {
+      name: "A ewer of grey Maker-glass", column: "regular", weight: 1, isTreasure: true,
+      note: "<em>slow</em>, Value: 120 silver",
+      resource: buildUses(3, false),
+      artifact: {
+        state: "partial",
+        hint:  "A tall grey ewer, cool to the touch whatever the weather, that rings for a long time after it is set down.",
+        lore:  "<p>It holds a great deal more than it should, and what is poured out of it comes out clean: brackish water, fouled water, water somebody has died in. Three pourings, and then it has to stand empty a full day.</p>",
+        lead:  "The Delve keeps a register of Maker-glass. Caradoc's people would know who to ask.",
+      },
+    },
+    {
+      name: "The Ninth Bell of Marchgate", column: "small", isTreasure: true,
+      note: "<em>fragile</em>, Value: 200 silver",
+      resource: buildUses(1, false),
+      artifact: {
+        state: "known",
+        hint:  "A hand-bell of dull bronze, no bigger than a fist, with no clapper in it.",
+        lore:  "<p>Marchgate hung nine bells and rang eight. Shaken where a thing is wearing a face that is not its own, the ninth rings once, and everyone within earshot sees the face under the face for as long as the note lasts.</p>"
+             + "<p>Once. Then the bronze goes dead and stays dead, and there is no known way to wake it again.</p>",
+        lead:  "",
+      },
+    },
+  ];
+
   const buildWorldItemItem = (it) => {
     const isRegular = it.column !== "small";
     const system = { moveType: "inventory", inventoryColumn: isRegular ? "regular" : "small" };
@@ -2585,6 +2910,14 @@
     if (it.note) system.note = it.note;
     if (it.resource) system.resource = it.resource;
     if (isRegular && it.armor) system.armor = it.armor;
+    // The treasure marker groups the row under "Treasures" rather than among the write-ins;
+    // the four artifact fields are the ladder's storage (utils/inventory-item-data.js, which is
+    // the one reader for all of this and prefers `system.*` for anything authored in play).
+    if (it.isTreasure) system.isTreasure = true;
+    if (it.artifact?.state) system.identifyState = it.artifact.state;
+    if (it.artifact?.hint)  system.artifactHint  = it.artifact.hint;
+    if (it.artifact?.lore)  system.artifactLore  = it.artifact.lore;
+    if (it.artifact?.lead)  system.artifactLead  = it.artifact.lead;
     return {
       name: String(it.name ?? "").trim() || "New Item",
       type: "move",
@@ -2698,15 +3031,19 @@
     const movesFolder = await ensureTestFolder("Item", "Moves");
     await Item.createDocuments(TEST_WORLD_MOVES.map(m => ({ ...buildWorldMoveItem(m), folder: movesFolder.id })));
 
+    // The plain gear and the three treasures share a folder and a builder: a treasure is an
+    // inventory item that happens to carry the marker and the four artifact fields, which is
+    // the point — the same drag, the same row, one extra state on it.
     const itemsFolder = await ensureTestFolder("Item", "Items");
-    await Item.createDocuments(TEST_WORLD_ITEMS.map(it => ({ ...buildWorldItemItem(it), folder: itemsFolder.id })));
+    await Item.createDocuments([...TEST_WORLD_ITEMS, ...TEST_TREASURES]
+      .map(it => ({ ...buildWorldItemItem(it), folder: itemsFolder.id })));
 
     const monsterFolder = await ensureTestFolder("Actor", "Monster");
     const monsters = [];
     for (const mon of TEST_MONSTERS) {
       monsters.push(await Actor.create({ ...buildTestMonsterData(mon), folder: monsterFolder.id }, { stonetopMonsterBuilt: true }));
     }
-    console.log(`[TEST] Seeded world content: ${TEST_WORLD_MOVES.length} moves, ${TEST_WORLD_ITEMS.length} items, ${TEST_MONSTERS.length} monsters.`);
+    console.log(`[TEST] Seeded world content: ${TEST_WORLD_MOVES.length} moves, ${TEST_WORLD_ITEMS.length} items + ${TEST_TREASURES.length} treasures, ${TEST_MONSTERS.length} monsters.`);
     return monsters.filter(Boolean);
   };
 
@@ -3079,12 +3416,25 @@
       ui.notifications.warn("[TEST] No arcana found in the arcana pack, so the arcana scatter was skipped.");
     } else {
       const majorBins = dealEvenly(majorSlugs, created.length);
+      // The Seeker carries homebrew copies of the book's two example cards, so the shipped
+      // originals must not also land in her hand. The major is SWAPPED out of her bin rather
+      // than dropped, so every major is still dealt exactly once across the roster; her
+      // minors are simply sampled from a list without the example in it.
+      const seekerIdx = created.findIndex(a => playbookSlugOf(a) === SEEKER_SLUG);
+      const seekerBin = seekerIdx >= 0 ? majorBins[seekerIdx] : null;
+      for (let k = 0; seekerBin && k < seekerBin.length; k++) {
+        if (!EXAMPLE_SLUGS.has(seekerBin[k])) continue;
+        const other = majorBins.findIndex((b, i) => i !== seekerIdx && b.some(s => !EXAMPLE_SLUGS.has(s)));
+        if (other < 0) break;                                   // a roster too small to swap within
+        const j = majorBins[other].findIndex(s => !EXAMPLE_SLUGS.has(s));
+        [seekerBin[k], majorBins[other][j]] = [majorBins[other][j], seekerBin[k]];
+      }
       for (let i = 0; i < created.length; i++) {
         const actor = created[i];
         const typed = actor.typedActor;
         if (!typed?.addArcanum) continue;
         const majors = majorBins[i] ?? [];
-        const minors = sampleN(minorSlugs, 3);
+        const minors = sampleN(i === seekerIdx ? minorSlugs.filter(s => !EXAMPLE_SLUGS.has(s)) : minorSlugs, 3);
         // Own + identify each dealt card so it shows face-up on the Arcana tab.
         for (const slug of [...majors, ...minors]) {
           await typed.addArcanum(slug);
@@ -3105,6 +3455,84 @@
       }
     }
   }
+
+  // ── The book's two example arcana, authored as HOMEBREW cards ──────────
+  // Book I works one card of each tier through as an example: the old scroll case that
+  // teaches Laoj Daveth's Galvanic Infusion (p.58) and Noruba's Ice Sphere (p.61). Both
+  // ship in the arcana compendium, and copying THOSE two — rather than inventing a pair —
+  // is the whole point: the same content, authored the way a GM authors it, has to read on
+  // the sheet exactly like the shipped card does, and the book is the reference you hold
+  // beside it. Nothing else in these fixtures exercises the homebrew path at all — the card
+  // editor, the world-Item branch of the arcana repository, a major that has to declare its
+  // own tier and carry its own art rather than inheriting both from a shipped slug.
+  //
+  // Runs on BOTH paths (1st level and Max Level), since the homebrew path is worth looking
+  // at either way. They are world Items, which Actor.deleteDocuments would NOT tear down,
+  // so both carry the test flag and the re-run's world-item sweep collects them.
+  //
+  // These are ADDED to her draw, not swapped into it, so she ends up holding a shipped major
+  // and a homebrew one at the same time. A Seeker starts the book with one major, so that is
+  // a deliberate deviation: the two cards sitting side by side on one tab is the comparison
+  // this fixture exists to make, and at 1st level hers is the only major on any sheet.
+  const seedHomebrewArcana = async () => {
+    const seeker = created.find(a => playbookSlugOf(a) === SEEKER_SLUG);
+    const typed  = seeker?.typedActor;
+    if (!typed?.addArcanum) {
+      console.log("[TEST] No Seeker in the roster — skipped the homebrew example arcana.");
+      return 0;
+    }
+
+    // Slugs are FIXED rather than the `arc-<randomID>` the real creator mints. A homebrew
+    // slug is random so that renaming a card never orphans the marks saved against it; a
+    // fixture wants the opposite — re-runs that land on the same key, and a slug you can
+    // recognise in a flag dump. `arc-` keeps them clear of every shipped slug either way.
+    // `mastered` is the pair's second half: the minor begins play fully realized and the
+    // major stays locked, so between them both states of a homebrew card are on the tab.
+    const homebrew = [
+      { from: EXAMPLE_ARCANA.major, slug: "arc-test-ice-sphere",  major: true,  mastered: false },
+      { from: EXAMPLE_ARCANA.minor, slug: "arc-test-scroll-case", major: false, mastered: true  },
+    ];
+
+    const folder  = await ensureTestFolder("Item", "Arcana");
+    const payload = [];
+    for (const spec of homebrew) {
+      const src = arcanaDocs.find(d => d.flags?.stonetop?.slug === spec.from);
+      if (!src) { console.warn(`[TEST] Example arcanum not in the pack: ${spec.from}`); continue; }
+      payload.push({
+        name:   src.name,
+        type:   "move",
+        img:    src.img,
+        folder: folder.id,
+        system: { moveType: "arcanum" },
+        flags:  {
+          // `major` is what makes a homebrew card a major — the shipped cards are majors by
+          // virtue of their slug being in the icon registry, which an `arc-` slug never is.
+          // This is the flag the editor's Identity checkbox writes.
+          stonetop: { ...foundry.utils.deepClone(src.flags.stonetop), slug: spec.slug, major: spec.major },
+          core:     { sheetClass: "stonetop.StonetopArcanumSheet" },
+          [FLAG_SCOPE]: { [TEST_FLAG]: true },
+        },
+        // Everyone can read a homebrew card, matching what createArcanumItem writes and what
+        // the shipped arcana do — without it the card vanishes from every other player's view
+        // of the Seeker's sheet. 2 === OBSERVER.
+        ownership: { default: 2 },
+      });
+    }
+    if (!payload.length) return 0;
+    await Item.createDocuments(payload);
+
+    // Own + identify both so they sit face-up on her tab, then realize the one marked
+    // `mastered`: an unlocked back (the Galvanic Infusion spell) beside a front still
+    // carrying its requirements and its ○○○ track.
+    for (const spec of homebrew) {
+      await typed.addArcanum(spec.slug);
+      await typed.identifyArcanum(spec.slug);
+      if (spec.mastered) await typed.masterArcanum(spec.slug);
+    }
+    console.log(`[TEST] Homebrew example arcana → ${seeker.name}: ${homebrew.map(h => h.slug).join(", ")}.`);
+    return payload.length;
+  };
+  const homebrewArcana = await seedHomebrewArcana();
 
   // ── The Graveyard: four characters past the Last Door ──────────────────
   // The living roster can't exercise any of this. SKIP_PLAYBOOKS keeps the three post-death
@@ -3283,16 +3711,43 @@
     // A slug is seeded only while it is untouched or still holds a prior copy of this exact
     // seed, on the same rule as the Notes above: never overwrite a standing the GM set.
     const relUpdate = {};
-    let relSkipped  = 0;
     for (const [slug, seed] of Object.entries(TEST_SETTLEMENT_RELS)) {
       const entry  = buildRelEntry(seed);
       const stored = steading.system?.relationships?.[slug];
-      if (stored !== undefined && !sameRelEntry(stored, entry)) { relSkipped++; continue; }
+      if (stored !== undefined && !sameRelEntry(stored, entry)) continue;
       relUpdate[`system.relationships.${slug}`] = entry;
     }
     if (Object.keys(relUpdate).length) await steading.update(relUpdate);
 
-    console.log(`[TEST] Seeded steading "${steading.name}": ${people.residents.length} residents, ${people.neighbors.length} neighbors (as NPC actors), ${created.length} players${notesSeeded ? ", formatted Notes" : " (left existing Notes untouched)"}${threatsEntryId ? `, ${testThreatPages.length} threats` : ""}${sitesEntryId ? `, ${testSitePages.length} sites` : ""}, ${Object.keys(relUpdate).length}/${Object.keys(TEST_SETTLEMENT_RELS).length} settlement standings${relSkipped ? ` (left ${relSkipped} the GM had already rated)` : ""}.`);
+    // One marked debility, so RETURN TRIUMPHANT HAS SOMETHING TO CLEAR. The move is offered on
+    // the last step of the expedition walkthrough (and off the steading's own move card), and
+    // it has two quite different shapes: with nothing marked it simply raises Fortunes by 1,
+    // and with a debility marked it opens the picker that clears one and names it in the
+    // ledger. A test world seeds none, so only the first of those was ever reachable.
+    //
+    // "Lacking" is the one the rest of these fixtures already describe — the black spots on the
+    // stored barley, the winter that made the raiders bold.
+    //
+    // ONLY WHEN NOTHING IS MARKED, on the same rule as the Notes and the standings above: a
+    // steading mid-campaign has its own answer to this and it is not ours to overwrite. The
+    // value is written to BOTH places a steading system value lives (the actor's own data and
+    // the mirrored copy in the steading flag bag), which is what setSystemValues does — done
+    // by hand here because going through the wrapper would append a ledger entry, and no move
+    // was made. The re-run cleanup clears it again on the mirror-image condition.
+    const debilityAt = (id) => `attributes.debilities.options.${id}.value`;
+    const debilityOn = (id) => {
+      const mirrored = foundry.utils.getProperty(sf, `system.${debilityAt(id)}`);
+      return mirrored !== undefined ? !!mirrored : !!foundry.utils.getProperty(steading.system, debilityAt(id));
+    };
+    const debilitySeeded = !TEST_DEBILITIES.some(debilityOn);
+    if (debilitySeeded) {
+      await steading.update({
+        [`system.${debilityAt(TEST_DEBILITY)}`]:                                  true,
+        [`flags.${FLAG_SCOPE}.steading.system.${debilityAt(TEST_DEBILITY)}`]:     true,
+      });
+    }
+
+    console.log(`[TEST] Seeded steading "${steading.name}": ${people.residents.length} residents, ${people.neighbors.length} neighbors (as NPC actors), ${created.length} players${notesSeeded ? ", formatted Notes" : " (left existing Notes untouched)"}${threatsEntryId ? `, ${testThreatPages.length} threats` : ""}${sitesEntryId ? `, ${testSitePages.length} sites` : ""}, ${Object.keys(relUpdate).length}/${Object.keys(TEST_SETTLEMENT_RELS).length} settlement standings${debilitySeeded ? `, the "${TEST_DEBILITY}" debility marked` : " (left the debilities the GM had marked)"}.`);
   } else {
     ui.notifications.warn("[TEST] No steading actor found, so nothing was seeded for residents/neighbors/players/notes/threats/sites/settlement standings.");
   }
@@ -3342,7 +3797,7 @@
   // roster is written, or the row silently degrades to a name-only entry that tags no sheet.
   const brandCount = await seedCondemned(created, [created, testVillagers, testMonsters, [exampleNpc]]);
 
-  // ── Record introductions answers + an example expedition ───────────────
+  // ── Record introductions answers + the example expeditions ─────────────
   // So the GM can run game.stonetop.saveChronicle() (or the Introductions dialog's
   // "Save to the Chronicle" button) and open the Expedition walkthrough to immediately
   // see compiled content. Merge alongside any existing/real data rather than clobbering.
@@ -3350,17 +3805,22 @@
   for (const actor of created) introAll[actor.id] = buildIntroAnswers(actor.name);
   await game.settings.set(FLAG_SCOPE, "introductionsAnswers", introAll);
 
-  const expLog  = game.settings.get(FLAG_SCOPE, "expeditionAnswers") ?? {};
-  const keep    = Array.isArray(expLog.list) ? expLog.list.filter(e => !e?.isTest) : [];
-  const example = buildExampleExpedition();
-  await game.settings.set(FLAG_SCOPE, "expeditionAnswers", { currentId: example.id, list: [...keep, example] });
+  // The trips are built first (each needs an id before anything can be tagged with it), then
+  // the requisition pass fills in what they took and marks the steading's copy, and only then
+  // is the log written — so the setting lands once, holding both halves already agreed. The
+  // switcher opens on the LAST of them, which is the trip that is still out.
+  const expLog   = game.settings.get(FLAG_SCOPE, "expeditionAnswers") ?? {};
+  const keep     = Array.isArray(expLog.list) ? expLog.list.filter(e => !e?.isTest) : [];
+  const examples = buildExampleExpeditions();
+  const tripKit  = await seedTripAssets(steading, examples);
+  await game.settings.set(FLAG_SCOPE, "expeditionAnswers", { currentId: examples.at(-1).id, list: [...keep, ...examples] });
 
   // Compile + open the Chronicle straight away, so the recorded answers are visible
   // without running game.stonetop.saveChronicle() by hand. (Guarded in case the macro
   // is somehow run before onReady wires up the API.)
   await game.stonetop?.saveChronicle?.();
 
-  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items, ${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites, settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, introductions answers, an example expedition, and the compiled Chronicle.`);
+  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
   } finally {
     globalThis.__stonetopTestFixturesRunning = false;
   }

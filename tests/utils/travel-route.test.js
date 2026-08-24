@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-	solveTravel, formatTravelTime, atLeastPhrase, atLeastDays,
+	solveFrom, solveTravel, formatTravelTime, atLeastPhrase, atLeastDays,
 	stopsAlongTheWay, routeLine, routeLegLines, fillChartBlank, chartBlankValue,
 	normalizeJourney, journeyRoute, journeyKey, routePhrase,
 } from "../../module/utils/travel-route.js";
@@ -180,16 +180,20 @@ describe("phrasing a route", () => {
 // hand-drawn way alongside the two slugs, ticked on or not, because `journeyRoute` dispatches
 // on it and four callers read the answer.
 const NO_DRAWN_WAY = { on: false, tier: null, points: [] };
+// And where it sets out from, which is a place OR a mark the GM put down: `origin` is the start's
+// slug (null for a mark) and `start` is the whole of it. See utils/journey-start.js.
+const HOME_START = { slug: "stonetop", tier: null, fx: null, fy: null };
 
 describe("reading a stored journey", () => {
 	it("defaults the origin to home and leaves an unset destination null", () => {
-		expect(normalizeJourney(undefined)).toEqual({ origin: "stonetop", destination: null, custom: NO_DRAWN_WAY });
-		expect(normalizeJourney({})).toEqual({ origin: "stonetop", destination: null, custom: NO_DRAWN_WAY });
+		const home = { origin: "stonetop", start: HOME_START, destination: null, custom: NO_DRAWN_WAY };
+		expect(normalizeJourney(undefined)).toEqual(home);
+		expect(normalizeJourney({})).toEqual(home);
 	});
 
 	it("drops a slug the table has never heard of, rather than passing it through", () => {
 		expect(normalizeJourney({ origin: "atlantis", destination: "narnia" }))
-			.toEqual({ origin: "stonetop", destination: null, custom: NO_DRAWN_WAY });
+			.toEqual({ origin: "stonetop", start: HOME_START, destination: null, custom: NO_DRAWN_WAY });
 	});
 
 	it("treats a place you are already standing in as no destination", () => {
@@ -263,11 +267,11 @@ describe("filling the Chart a Course blanks", () => {
 // sort of route it is holding.
 
 /** A trip with a way drawn on one map. */
-const drawnTrip = (points, { origin = "stonetop", tier = "worlds-end" } = {}) =>
-	({ origin, destination: "lygos", custom: { on: true, tier, points } });
+const drawnTrip = (points, { origin = "stonetop", tier = "worlds-end", destination = "lygos" } = {}) =>
+	({ origin, destination, custom: { tier, points } });
 
 describe("a route the GM drew", () => {
-	it("is what the trip answers with once the box is ticked", () => {
+	it("is what the trip answers with as soon as there is a mark on the map", () => {
 		const route = journeyRoute(drawnTrip([{ fx: 0.5, fy: 0.5 }]));
 		expect(route.custom).toBe(true);
 		expect(route.tier).toBe("worlds-end");
@@ -275,15 +279,20 @@ describe("a route the GM drew", () => {
 		expect(route.legs.map(l => l.toName)).toEqual(["point 1"]);
 	});
 
-	// The destination is remembered while the box is ticked, and it is not what the line is about.
+	// The destination is remembered while a way is drawn, and it is not what the line is about —
+	// so taking the marks back is all it takes to have the table's answer again. The marks ARE the
+	// mode (`normalizeCustom`): there is no flag to unset, and a stored one is ignored.
 	it("leaves the table's own answer untouched underneath it", () => {
 		const trip = drawnTrip([{ fx: 0.5, fy: 0.5 }]);
-		expect(journeyRoute({ ...trip, custom: { ...trip.custom, on: false } }).legs.map(l => l.to))
+		expect(journeyRoute({ ...trip, custom: { ...trip.custom, points: [] } }).legs.map(l => l.to))
 			.toEqual(["marshedge", "lygos"]);
+		// And a stored `on` from the days of the checkbox does not resurrect a way with no marks.
+		expect(journeyRoute({ origin: "stonetop", destination: "lygos", custom: { on: true, tier: "worlds-end", points: [] } })
+			.legs.map(l => l.to)).toEqual(["marshedge", "lygos"]);
 	});
 
-	it("is no route at all until a mark is put down", () => {
-		expect(journeyRoute(drawnTrip([]))).toBeNull();
+	it("is no route at all with no marks and nowhere to go", () => {
+		expect(journeyRoute(drawnTrip([], { destination: null }))).toBeNull();
 	});
 
 	// A LEG THE TABLE ALREADY PRICES KEEPS THE PRINTED TIME. If the GM drew one straight leg from
@@ -370,14 +379,149 @@ describe("telling one way from another", () => {
 		expect(journeyKey(drawnTrip([]))).not.toBe(one);
 	});
 
-	it("notices the box being ticked off, and where they set out from", () => {
+	it("notices the last mark going back, and where they set out from", () => {
 		const drawn = drawnTrip([{ fx: 0.5, fy: 0.5 }]);
-		expect(journeyKey({ ...drawn, custom: { ...drawn.custom, on: false } })).not.toBe(journeyKey(drawn));
+		// The way is over when its marks are, so the key goes back to naming the table's own route.
+		expect(journeyKey({ ...drawn, custom: { ...drawn.custom, points: [] } }))
+			.toBe("table|stonetop|lygos");
 		expect(journeyKey({ ...drawn, origin: "marshedge" })).not.toBe(journeyKey(drawn));
 	});
 
 	it("says nothing different about two trips bound the same way by the table", () => {
 		expect(journeyKey({ origin: "stonetop", destination: "lygos" }))
-			.toBe(journeyKey({ origin: "stonetop", destination: "lygos", custom: { on: false } }));
+			.toBe(journeyKey({ origin: "stonetop", destination: "lygos", custom: { tier: "worlds-end", points: [] } }));
+	});
+});
+
+// ── Setting out from a point the GM put down ─────────────────────────────────
+//
+// The far end of a trip has always been able to be anywhere: a way laid out by hand ends wherever
+// the GM last clicked, priced off the map where the book prices nothing. The near end could not,
+// and a party camped in the Flats had to claim they were leaving Stonetop.
+//
+// WHAT THIS HAS TO PROTECT is that gaining that did not cost the travel table. A mark joins the
+// book's own graph at the nearest few places its map draws and is solved from there, so an answer
+// is one measured leg plus the roads Book II prints — not a ruler laid across the whole country.
+describe("solving from a mark on the map", () => {
+	// A point in the Vicinity's Bottomlands, south-west of Stonetop.
+	const inTheFlats = { tier: "vicinity", fx: 0.36, fy: 0.62 };
+
+	it("answers for every place the table can reach, which the table's own origin does not", () => {
+		const fromHome = solveFrom("stonetop");
+		const fromMark = solveFrom(inTheFlats);
+		// Home is the one place with no route FROM home, so the mark answers for one more.
+		expect(fromHome.get("stonetop").legs).toHaveLength(0);
+		expect(fromMark.get("stonetop").legs.length).toBeGreaterThan(0);
+		for (const place of TRAVEL_PLACES) {
+			expect(fromMark.get(place.slug)?.legs?.length, place.name).toBeGreaterThan(0);
+		}
+	});
+
+	// The whole point of joining the graph rather than measuring straight to everywhere: the book
+	// printed ten days to Marshedge and this has no business second-guessing it with a ruler.
+	it("keeps the book's printed legs, and estimates only the walk onto them", () => {
+		const route = solveFrom(inTheFlats).get("marshedge");
+		expect(route.legs[0].estimated).toBe(true);
+		expect(route.legs.slice(1).every(leg => !leg.estimated)).toBe(true);
+		const printed = route.legs.find(leg => leg.to === "marshedge");
+		expect(printed.time).toBe("10 days");
+		expect(printed.via).toBe("the Roads");
+	});
+
+	// A leg has to start SOMEWHERE the renderers can place, and a mark carries its own position —
+	// the same bare-stop shape the far end of a hand-drawn way already has.
+	it("starts on a bare stop carrying its own fraction, named for its map", () => {
+		const first = solveFrom(inTheFlats).get("marshedge").legs[0];
+		expect(first.from).toBeNull();
+		expect(first.fromSpot).toEqual({ fx: 0.36, fy: 0.62 });
+		expect(first.fromName).toBe("a point on The Vicinity");
+	});
+
+	// A fraction of the Vicinity means a different valley on the World's End, so the route belongs
+	// to one map exactly as a hand-drawn way does. `custom` stays false: nobody drew this.
+	it("pins the route to the mark's own map without calling it hand-drawn", () => {
+		const route = journeyRoute({ origin: inTheFlats, destination: "marshedge" });
+		expect(route.pinned).toBe(true);
+		expect(route.tier).toBe("vicinity");
+		expect(route.custom).toBeFalsy();
+	});
+
+	// Any guess at all makes the whole answer a guess, which is what turns "at least" into
+	// "roughly" — the difference between a floor the book printed and a figure got with a ruler.
+	it("words the total as an estimate, and says so on the route", () => {
+		const route = journeyRoute({ origin: inTheFlats, destination: "marshedge" });
+		expect(route.estimated).toBe(true);
+		expect(routePhrase(route)).toMatch(/^roughly /);
+	});
+
+	// The virtual node the solve runs through is a convenience, not a place. Its slug appearing in
+	// a leg, a readout or a Chronicle line would be a name nothing could resolve.
+	it("never lets its own solving node out", () => {
+		const routes = solveFrom(inTheFlats);
+		for (const [slug, route] of routes) {
+			expect(slug.startsWith("@")).toBe(false);
+			for (const leg of route.legs) {
+				expect(leg.from ?? "").not.toMatch(/^@/);
+				expect(leg.to ?? "").not.toMatch(/^@/);
+				expect(leg.fromName).not.toMatch(/^@/);
+			}
+		}
+	});
+
+	// "You must first travel to ___" is read out at the table, and "a point on The Vicinity" is not
+	// a thing a GM can say into that blank.
+	it("does not offer the mark as somewhere to travel to first", () => {
+		const route = journeyRoute({ origin: inTheFlats, destination: "marshedge" });
+		expect(stopsAlongTheWay(route)).not.toContain("a point on The Vicinity");
+		expect(chartBlankValue("firstTravel", route)).toBe("the Crossroads");
+	});
+
+	// The Scene button compares journeys through this key. Every mark start shares one null slug,
+	// so keying on that would leave a Scene certain it was showing a line the party had moved off.
+	it("keys on the mark, so moving it moves the journey", () => {
+		const a = journeyKey({ origin: inTheFlats, destination: "marshedge" });
+		const b = journeyKey({ origin: { ...inTheFlats, fx: 0.5 }, destination: "marshedge" });
+		const home = journeyKey({ origin: "stonetop", destination: "marshedge" });
+		expect(a).not.toBe(b);
+		expect(a).not.toBe(home);
+		// And it is stable: the same mark read twice is the same journey.
+		expect(a).toBe(journeyKey({ origin: { tier: "vicinity", fx: 0.36, fy: 0.62 }, destination: "marshedge" }));
+	});
+
+	// "10 days and 7-11 hours" is a printed road with a measured walk stapled to the end of it, and
+	// eighteen of those down the destination list is a column of noise that squeezes out the place
+	// names. Said in one unit it is an answer a GM can read at a glance.
+	it("says a total in one unit when a measured walk would otherwise be stapled to printed days", () => {
+		const route = journeyRoute({ origin: inTheFlats, destination: "marshedge" });
+		expect(route.total.hours).toEqual({ min: 0, max: 0 });
+		expect(formatTravelTime(route.total)).toBe("11–12 days");
+		// And the Chart a Course blank counts from it exactly as it always did.
+		expect(chartBlankValue("days", route)).toBe("11");
+	});
+
+	// AND ONLY THEN, which is where this parts company with a hand-drawn way on purpose. That one
+	// piles up its own measured hour-legs until "roughly 13-22 hours" hides three days of marching,
+	// so it is converted whole. A route setting out from a mark carries a short chain of hours —
+	// exactly what Book II itself prints in hours — and re-saying "12-18 hours to the Maw" as
+	// "2 days" would be less faithful than the book, not more.
+	it("leaves a short chain of hours in hours, as the book prints them", () => {
+		const route = journeyRoute({ origin: inTheFlats, destination: "the-maw" });
+		expect(route.total.days).toEqual({ min: 0, max: 0 });
+		expect(formatTravelTime(route.total)).toBe("12–18 hours");
+		// Measured only in hours, so there is no day count for the blank to take.
+		expect(chartBlankValue("days", route)).toBeNull();
+	});
+
+	// A way laid out by hand from a mark: the first leg is measured off the map like any other
+	// unpriced one, and the stops are the marks the GM placed with the start ahead of them.
+	it("lets a hand-drawn way set out from one too", () => {
+		const route = journeyRoute({
+			origin: inTheFlats,
+			custom: { tier: "vicinity", points: [{ fx: 0.5, fy: 0.4 }, { slug: "gordins-delve" }] },
+		});
+		expect(route.legs[0].fromName).toBe("a point on The Vicinity");
+		expect(route.legs[0].fromSpot).toEqual({ fx: 0.36, fy: 0.62 });
+		expect(route.legs[0].toName).toBe("point 1");
+		expect(route.stops[0].mark).toBeNull();
 	});
 });
