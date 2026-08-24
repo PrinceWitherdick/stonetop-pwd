@@ -1259,6 +1259,8 @@
         "alreadyOn": "already on {map}; placing it again moves the pin",
         "clickToPlace": "Click where {name} stands. Escape or right-click to stop.",
         "placed": "{name} is on {map}.",
+        "placedPinned": "{name} is on {map}, and a pin for it is now on {scene}.",
+        "placedMoved": "{name} is on {map}, and its pin on {scene} moved to match.",
         "removed": "{name} is off the map. The write-up is still on the Sites tab.",
         "pinTip": "{name}. Click to read it, right-click to take it off the map.",
         "offTheMap": "That click was past the printed edge of {map}, so {name} wasn't placed. The write-up is still on the Sites tab.",

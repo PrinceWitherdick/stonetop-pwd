@@ -19,6 +19,7 @@ import { pickContentOption, runPickedOption } from "../dialogs/content-picker.js
 import { createSiteFlow } from "../actors/gmtoolkit/gm-prep-actions.js";
 import { listSitePages } from "./site-store.js";
 import { clearSiteMapSpot, setSiteMapSpot, siteMapTier } from "./site-map-spots.js";
+import { syncSitePin } from "./site-scene-pins.js";
 import { percentSpot, travelMap } from "../data/travel-times.js";
 import { getStonetopSteadingActorOrWarn } from "../utils/world.js";
 import { format, localize } from "../utils/i18n.js";
@@ -165,11 +166,38 @@ export async function placeSiteOnMap({ tier, frame, pickPoint } = {}) {
 		return false;
 	}
 
-	ui.notifications?.info(format("stonetop.expedition.sites.placed", {
+	// AND ON THE TABLE'S OWN COPY OF THAT MAP, if this world has built one. A spot is one fact
+	// about where a site stands, so marking it on the planner's little map and leaving the Scene
+	// the players are looking at unmarked would be half an answer — and the half nobody at the
+	// table can see. See sites/site-scene-pins.js: it is the same fraction, laid through the same
+	// conversion the book's own place markers use.
+	//
+	// AFTER the spot is written, never before. The Scene pin is a picture OF that spot; drawing it
+	// first would mean a refused write left a pin on the table's map for a placement that never
+	// happened.
+	const pinned = await syncSitePin(page, spot);
+
+	ui.notifications?.info(format(pinnedMessage(pinned), {
 		name: page.name,
 		map: mapName,
+		scene: pinned?.scene?.name ?? "",
 	}));
 	return true;
+}
+
+/**
+ * Which sentence the GM reads, out of the three things that can have happened.
+ *
+ * Named separately because the difference is worth saying: a pin appearing on the Scene the table
+ * plays on is news, a pin MOVING there is different news, and a world with no such Scene should not
+ * be told about a map it does not have. The Scene is named rather than described, because a GM may
+ * well have renamed it and it is the thing they are about to go and look at.
+ */
+function pinnedMessage(pinned) {
+	if (!pinned) return "stonetop.expedition.sites.placed";
+	return pinned.moved
+		? "stonetop.expedition.sites.placedMoved"
+		: "stonetop.expedition.sites.placedPinned";
 }
 
 /**
@@ -186,6 +214,14 @@ export async function liftSiteOffMap(uuid) {
 	const page = await fromUuid(uuid).catch(() => null);
 	if (!page) return false;
 	await clearSiteMapSpot(page);
+	// The other half of the same door. A pin this system put on the table's copy of the map is a
+	// picture of the spot that has just been cleared, so leaving it there would have the two maps
+	// disagreeing about whether the site is placed at all. Only the regional poster Scenes and only
+	// pins linked to this page: a mark the GM dragged onto a dungeon of their own is theirs.
+	//
+	// Its answer is not read, and there is nothing here to word from it: "off the map" is the whole
+	// of what happened, whether or not this world had a Scene to take a pin off as well.
+	await syncSitePin(page, null);
 	ui.notifications?.info(format("stonetop.expedition.sites.removed", { name: page.name }));
 	return true;
 }

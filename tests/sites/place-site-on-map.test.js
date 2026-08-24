@@ -7,7 +7,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // of the ways out of them leaves behind. Where the pin is STORED is proven in site-map-spots.test.js
 // and the redraw afterwards is each caller's own business, so neither is repeated here.
 
-const sites = { pages: [], placed: [], cleared: [], chosen: null, steading: { id: "steading" } };
+const sites = {
+	pages: [], placed: [], cleared: [], chosen: null, steading: { id: "steading" },
+	// What the Scene half of a placement was asked to do (`pinned`), and what it answers
+	// (`pinAnswer`) - the pins themselves are proven in site-scene-pins.test.js.
+	pinned: [], pinAnswer: null,
+};
 
 // The chooser's own dialog is a window, so only the picking is faked - the option list
 // `chooseSiteForMap` builds is real, and `runPickedOption` runs the chosen row the way it does in
@@ -31,6 +36,15 @@ vi.mock("../../module/sites/site-map-spots.js", async (importOriginal) => {
 		clearSiteMapSpot: page => { sites.cleared.push(page); return Promise.resolve(); },
 	};
 });
+// The Scene half is faked here and proven on its own (site-scene-pins.test.js). What this file is
+// about is the SEAM: that it is asked at all, that it is asked only once the spot is written, and
+// that what it answers is what the GM is told.
+vi.mock("../../module/sites/site-scene-pins.js", () => ({
+	syncSitePin: (page, spot) => {
+		sites.pinned.push({ page, spot, spotsWritten: sites.placed.length });
+		return Promise.resolve(sites.pinAnswer);
+	},
+}));
 vi.mock("../../module/sites/site-store.js", () => ({ listSitePages: () => sites.pages }));
 vi.mock("../../module/actors/gmtoolkit/gm-prep-actions.js", () => ({ createSiteFlow: () => null }));
 vi.mock("../../module/utils/world.js", () => ({
@@ -57,6 +71,8 @@ describe("putting a site on the map", () => {
 		sites.pages = [BARROW];
 		sites.placed = [];
 		sites.cleared = [];
+		sites.pinned = [];
+		sites.pinAnswer = null;
 		sites.chosen = BARROW.id;
 		sites.steading = { id: "steading" };
 		global.ui = { notifications: { info: () => {}, warn: () => {} } };
@@ -100,6 +116,53 @@ describe("putting a site on the map", () => {
 		});
 
 		expect(infos.some(msg => msg.includes("is on"))).toBe(false);
+	});
+
+	// A spot is ONE fact about where a site stands, so marking the planner's little map and leaving
+	// the Scene the table plays on unmarked would be half an answer - and the half nobody at the
+	// table can see.
+	it("marks the table's own copy of the map with the same spot", async () => {
+		await placeSiteOnMap({
+			tier: "vicinity", frame: POSTER, pickPoint: async () => middleOf(POSTER),
+		});
+		expect(sites.pinned).toEqual([{
+			page: BARROW,
+			spot: { tier: "vicinity", fx: 0.5, fy: 0.5 },
+			// AFTER the spot is written, never before: the Scene pin is a picture OF that spot, and
+			// drawing it first would leave a pin on the table's map for a placement that a refused
+			// write never made.
+			spotsWritten: 1,
+		}]);
+	});
+
+	// A click in the file's margin writes no spot, so there is no spot for a pin to picture either.
+	it("marks nothing on the Scene when the spot itself was refused", async () => {
+		await placeSiteOnMap({
+			tier: "vicinity", frame: POSTER, pickPoint: async () => ({ left: 2, top: 50 }),
+		});
+		expect(sites.pinned).toEqual([]);
+	});
+
+	// Three things can have happened, and the GM reads a different sentence for each: a pin has
+	// appeared on the Scene, a pin there has moved, or this world has no such Scene to mark.
+	it("says which of the three things happened to the table's map", async () => {
+		const said = async () => {
+			const infos = [];
+			global.ui = { notifications: { info: msg => infos.push(msg), warn: () => {} } };
+			await placeSiteOnMap({
+				tier: "vicinity", frame: POSTER, pickPoint: async () => middleOf(POSTER),
+			});
+			return infos.at(-1);
+		};
+
+		sites.pinAnswer = { scene: { name: "The Vicinity" }, moved: false };
+		expect(await said()).toBe("The Sunken Barrow is on The Vicinity, and a pin for it is now on The Vicinity.");
+
+		sites.pinAnswer = { scene: { name: "Table Map" }, moved: true };
+		expect(await said()).toBe("The Sunken Barrow is on The Vicinity, and its pin on Table Map moved to match.");
+
+		sites.pinAnswer = null;
+		expect(await said()).toBe("The Sunken Barrow is on The Vicinity.");
 	});
 
 	// The chooser comes first and the click last, because the click is the part that has to be
@@ -153,6 +216,8 @@ describe("lifting a site back off the map", () => {
 	beforeEach(() => {
 		sites.pages = [BARROW];
 		sites.cleared = [];
+		sites.pinned = [];
+		sites.pinAnswer = null;
 		global.ui = { notifications: { info: () => {}, warn: () => {} } };
 		global.fromUuid = uuid => Promise.resolve(sites.pages.find(p => p.uuid === uuid) ?? null);
 	});
@@ -161,6 +226,14 @@ describe("lifting a site back off the map", () => {
 		const lifted = await liftSiteOffMap(BARROW.uuid);
 		expect(lifted).toBe(true);
 		expect(sites.cleared).toEqual([BARROW]);
+	});
+
+	// The other half of the same door: a pin on the table's copy of the map pictures a spot that
+	// has just been cleared, so leaving it there would have the two maps disagreeing about whether
+	// the site is placed at all.
+	it("takes the pin off the table's copy of the map as well", async () => {
+		await liftSiteOffMap(BARROW.uuid);
+		expect(sites.pinned).toEqual([{ page: BARROW, spot: null, spotsWritten: 0 }]);
 	});
 
 	it("does nothing for a pin whose site has since been deleted", async () => {
