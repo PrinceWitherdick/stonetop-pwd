@@ -1,0 +1,140 @@
+{{!-- ONE ENCOUNTER, wherever it is rendered. Two lists print this: the live one at the top of the
+      tab and the Completed fold under it, and the card is the SAME card in both — everything a GM
+      gathered stays gathered, stays openable, stays deployable and stays droppable-into after it
+      has been run. What changes between the two is one button, and it changes off `used`, which
+      is the very flag the context split the lists by (gm-encounters-tab.js): the card can
+      therefore never disagree with the list it was printed into, and no caller has to pass a
+      "which list am I in" parameter down. That matters more than it looks — Handlebars MERGES a
+      partial's hash into the caller's context, so a parameter here would ALSO be a bare lookup
+      against the encounter's own fields, and this partial is rendered inside an `{{#each}}` over
+      a view-model built in JS. section-heading.hbs states the rule at length.
+
+      THE DRAG HANDLE IS THE NAME BUTTON, NOT THE ROW. In Chromium a `draggable` ancestor takes
+      the mousedown from every input inside it, so a draggable <li> would leave the per-entry note
+      box unselectable — you could not put a caret in it. Narrowing the handle to the
+      icon-and-name control puts the note outside the draggable subtree. The button carries
+      `data-uuid` and `data-doc-type` because the payload it emits is CORE'S OWN `{type, uuid}`:
+      the same thing the sidebar puts on the wire, so dragging a monster out of here onto the
+      canvas behaves exactly like dragging it out of the sidebar. An unresolved row is
+      `draggable="false"` — there is nothing on the other end of it to drag.
+
+      THERE IS NO <img> ANYWHERE ON THIS CARD, which is why nothing here carries the
+      `draggable="false"` opt-out that every portrait in the system does (see
+      tests/actors/steading/steading-actor-drag.test.js). Add a portrait and it needs one, or
+      Gecko hands over the image instead of the document.
+
+      NO FIELD HERE CARRIES A `name`. Every one of them is written by hand to
+      `actor.system.encounters`; a `name` on an input inside this sheet's <form> puts it in core's
+      submit data, where the array indices would expand into an OBJECT keyed "0", "1", ... and
+      quietly replace the list with it.
+
+      EXPANDING IS A CLASS, NOT A RENDER. The body is emitted for every encounter and hidden by
+      `.is-collapsed`, so the caret toggles it in place: instant, and incapable of landing a
+      re-render on a note box two rows down that happens to have focus. --}}
+<li class="stonetop-gm-encounter{{#if used}} is-used{{/if}}{{#unless open}} is-collapsed{{/unless}}"
+    data-encounter-id="{{id}}">
+	<div class="stonetop-gm-encounter-head">
+		<span class="stonetop-gm-encounter-grip" draggable="true" aria-hidden="true"
+		      data-tooltip="{{localize "stonetop.gmToolkit.encounters.reorder"}}" data-tooltip-direction="UP">
+			<i class="fas fa-grip-vertical"></i>
+		</span>
+		<button type="button" class="stonetop-gm-encounter-toggle" aria-expanded="{{#if open}}true{{else}}false{{/if}}"
+		        aria-label="{{#if open}}{{localize "stonetop.gmToolkit.encounters.collapse"}}{{else}}{{localize "stonetop.gmToolkit.encounters.expand"}}{{/if}}">
+			<i class="fas fa-caret-down"></i>
+		</button>
+		{{!-- The name IS the input, not a label with a pencil beside it: an encounter gets
+		      renamed as often as it gets used ("the bridge" becomes "the bridge at dusk"
+		      becomes "the ambush"), and a dialog for a one-line edit is a dialog nobody
+		      opens. alt+Up / alt+Down in this box reorders the encounter WITHIN ITS OWN
+		      LIST, which is the keyboard half of the grip beside it. --}}
+		<input type="text" class="stonetop-gm-encounter-name" value="{{name}}" maxlength="120"
+		       aria-label="{{localize "stonetop.gmToolkit.encounters.nameLabel"}}">
+		{{!-- The head of the note, riding on the row while it is shut (the CSS shows it only under
+		      .is-collapsed, where the body it belongs to is hidden). Two bundles both called "the
+		      bridge" are told apart by what was written about them, and a column of eight shut
+		      cards otherwise says nothing at all. Plain text rather than the enriched HTML below:
+		      this is one clipped line, and a content link or a paragraph in it would fight the
+		      ellipsis. --}}
+		{{#if notesPeek}}<span class="stonetop-gm-encounter-peek">{{notesPeek}}</span>{{/if}}
+		<span class="stonetop-gm-encounter-count"
+		      data-tooltip="{{format "stonetop.gmToolkit.encounters.countTip" count=entryCount}}"
+		      data-tooltip-direction="UP">{{entryCount}}</span>
+		<span class="stonetop-gm-encounter-tools">
+			<button type="button" class="stonetop-gm-encounter-deploy"
+			        data-tooltip="{{localize "stonetop.gmToolkit.encounters.deploy"}}" data-tooltip-direction="UP">
+				<i class="fas fa-dragon"></i>
+			</button>
+			{{!-- THE ONE CONTROL THAT DIFFERS BETWEEN THE TWO LISTS, and it is one button rather
+			      than two because it is one act read in either direction: the tick files an
+			      encounter down into the Completed fold, and the arrow on a filed one lifts it
+			      back onto the live list. The GLYPH turns with the tooltip, so a card says which
+			      way it is about to go without being hovered — a tick still sitting on something
+			      already done reads as "press me to finish it", and gets pressed. --}}
+			<button type="button" class="stonetop-gm-encounter-used"
+			        data-tooltip="{{#if used}}{{localize "stonetop.gmToolkit.encounters.markUnused"}}{{else}}{{localize "stonetop.gmToolkit.encounters.markUsed"}}{{/if}}"
+			        data-tooltip-direction="UP">
+				<i class="fas {{#if used}}fa-rotate-left{{else}}fa-check{{/if}}"></i>
+			</button>
+			<button type="button" class="stonetop-gm-encounter-remove"
+			        data-tooltip="{{localize "stonetop.gmToolkit.encounters.removeEncounter"}}" data-tooltip-direction="UP">
+				<i class="fas fa-trash"></i>
+			</button>
+		</span>
+	</div>
+
+	<div class="stonetop-gm-encounter-body">
+		{{!-- THE NOTE COMES FIRST, above the collected rows. What a GM writes here is what the
+		      encounter IS ("they cross at dusk, the ford is watched"); the rows under it are the
+		      documents it points at. Reading order follows that, and it puts the note at the same
+		      place on every card rather than after a list that is two rows long on one and twelve
+		      on the next. --}}
+		<div class="stonetop-gm-encounter-notes-block">
+			{{#if notesHtml}}
+			<div class="stonetop-gm-encounter-notes">{{{notesHtml}}}</div>
+			{{else}}
+			<p class="stonetop-gm-encounter-notes stonetop-gm-encounter-notes--empty">{{localize "stonetop.gmToolkit.encounters.notesEmpty"}}</p>
+			{{/if}}
+			{{!-- Read here, written in a pop-up. This sheet re-renders on every prep-page
+			      write in the WORLD, and a live ProseMirror on the tab would be torn out
+			      from under a GM mid-sentence; a Dialog is a window that redraw cannot
+			      reach. See encounter-notes-dialog.js. --}}
+			<button type="button" class="stonetop-gm-encounter-notes-edit"
+			        data-tooltip="{{localize "stonetop.gmToolkit.encounters.notesEdit"}}" data-tooltip-direction="UP">
+				<i class="fas fa-pen"></i> {{localize "stonetop.gmToolkit.encounters.notesEditShort"}}
+			</button>
+		</div>
+
+		{{#if entries.length}}
+		<ul class="stonetop-gm-encounter-entries">
+			{{#each entries}}
+			<li class="stonetop-gm-encounter-entry{{#if unresolved}} is-unresolved{{/if}}" data-entry-id="{{id}}">
+				<i class="stonetop-gm-encounter-entry-icon {{icon}}" aria-hidden="true"></i>
+				{{!-- A <button>, not an <a>: an href would make this natively draggable and
+				      fight the drag it already emits, and it is a delegated handler either
+				      way. See relationships-table.hbs, which says the same thing at
+				      length. --}}
+				<button type="button" class="stonetop-gm-encounter-entry-open"
+				        draggable="{{#if unresolved}}false{{else}}true{{/if}}"
+				        data-uuid="{{uuid}}" data-doc-type="{{type}}"
+				        data-tooltip="{{#if unresolved}}{{localize "stonetop.gmToolkit.encounters.entryGoneTip"}}{{else}}{{localize "stonetop.gmToolkit.encounters.entryOpenTip"}}{{/if}}"
+				        data-tooltip-direction="UP">{{name}}</button>
+				<span class="stonetop-gm-encounter-entry-kind">{{typeLabel}}</span>
+				<button type="button" class="stonetop-gm-encounter-entry-remove"
+				        data-tooltip="{{localize "stonetop.gmToolkit.encounters.removeEntry"}}" data-tooltip-direction="UP">
+					<i class="fas fa-xmark"></i>
+				</button>
+				<input type="text" class="stonetop-gm-encounter-entry-note" value="{{note}}" maxlength="200"
+				       placeholder="{{localize "stonetop.gmToolkit.encounters.entryNotePlaceholder"}}"
+				       aria-label="{{localize "stonetop.gmToolkit.encounters.entryNoteLabel"}}">
+			</li>
+			{{/each}}
+		</ul>
+		{{/if}}
+
+		{{!-- The visible target for "put it at the END". A drop on a row inserts BEFORE
+		      that row, which is what keeps the whole router testable without measuring
+		      pointer midpoints — and leaves no way to aim at the bottom of the list
+		      except this strip. It doubles as the empty encounter's only content. --}}
+		<p class="stonetop-gm-encounter-dropzone">{{localize "stonetop.gmToolkit.encounters.dropHere"}}</p>
+	</div>
+</li>

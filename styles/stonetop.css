@@ -35909,11 +35909,34 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-text-muted);
 }
 
+/* THE COMPLETED FOLD, at the foot of the tab: what has been run, kept whole and out of the way.
+   Rendered only when there is something in it, so an untouched tab shows one list and not two.
+
+   A RULE ACROSS THE TAB rather than a card-like box, because what this marks is a boundary in one
+   column and not a container: everything inside it is already a bordered card, and a second border
+   around a stack of them reads as a card of cards. The 10px above the rule is the section's own
+   flex gap; the padding below it is this box's own, so the pair sit evenly either side.
+
+   NO PENCIL AND SO NO CORNER PAIR. The tab's single pencil already reaches the delete buttons in
+   here, which is why this heading keeps its caret inline where `section-heading` puts it, and why
+   this box (unlike `.stonetop-gm-wonder-section`) needs no `position: relative`. */
+.stonetop-gm-encounters-completed {
+	padding-top: 12px;
+	border-top: 1px solid var(--st-card-rule);
+}
+
+/* The heading sets its own top margin to 0, so this is the whole of the gap under it. */
+.stonetop-gm-encounter-list--completed {
+	margin-top: 8px;
+}
+
 /* MODIFIERS LAST. A `--mod` rule ties with its base on specificity, so it only wins by sitting
    later in the file. Everything below here restyles a row that is already styled above. */
 
-/* An encounter that has been run is not deleted, it is set down: the ink goes quiet and a green
-   edge marks it done, so a GM scanning the list sees at once what is still to come. */
+/* An encounter that has been run is not deleted, it is set down: it moves into the fold above,
+   the ink goes quiet, and a green edge marks it done. The edge stays worth drawing now that the
+   section says the same thing, because a card can be READ apart from its section: folded away and
+   scrolled back to, or caught mid-drag out of the fold, it still has to say what it is. */
 .stonetop-gm-encounter.is-used {
 	border-left: 3px solid var(--st-green-border);
 }
@@ -35922,8 +35945,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-text-muted);
 }
 
-.stonetop-gm-encounter.is-used .stonetop-gm-encounter-used {
-	color: var(--st-green-text);
+/* The tick's green does NOT carry over to the arrow that replaces it. Green here would be a
+   button lit in the colour of the state it undoes, on the one card where that state is already
+   said twice over (the section it sits in, the edge beside it). It takes the neutral hover the
+   wonder tab's reopen arrow wears, for the same reason and out of the same token. The resting
+   ink stays the shared faint one, so the whole fold reads quiet until it is reached into. */
+.stonetop-gm-encounter.is-used .stonetop-gm-encounter-used:hover {
+	color: var(--st-text-secondary);
 }
 
 /* A row whose target has left the world keeps its name and stops being a link, rather than

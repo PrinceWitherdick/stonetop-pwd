@@ -439,6 +439,8 @@ Hooks.once("init", () => {
 		"stonetop.gm-toolkit-tab-homefront":  "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-homefront.hbs",
 		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
 		"stonetop.gm-toolkit-tab-encounters": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-encounters.hbs",
+		// One card, printed by BOTH of that tab's lists — the live one and the Completed fold.
+		"stonetop.gm-encounter-card":         "systems/stonetop-pwd/templates/actor/partials/gm-encounter-card.hbs",
 		"stonetop.gm-prep-card-tools":        "systems/stonetop-pwd/templates/actor/partials/gm-prep-card-tools.hbs",
 		"stonetop.gm-prep-add-bar":           "systems/stonetop-pwd/templates/actor/partials/gm-prep-add-bar.hbs",
 		"stonetop.gm-prep-no-steading":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-no-steading.hbs",

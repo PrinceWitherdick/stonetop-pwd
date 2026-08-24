@@ -32,12 +32,22 @@ const CSS         = readCss();
 const STONETOP_JS = read("stonetop.js");
 const SHEET_HBS   = read("templates/actor/gm-toolkit.hbs");
 const TAB_HBS     = read("templates/actor/partials/gm-toolkit-tab-encounters.hbs");
+const CARD_HBS    = read("templates/actor/partials/gm-encounter-card.hbs");
 const SHEET_JS    = read("module/actors/gmtoolkit/StonetopGmToolkitSheet.js");
 const MODEL_JS    = read("module/data-models/GmToolkitModel.js");
 const FIELDS_JS   = read("module/data-models/fields.js");
 
 /** Markup with the Handlebars comments stripped, so prose cannot answer for the template. */
-const TAB_MARKUP = TAB_HBS.replace(/\{\{!--[\s\S]*?--\}\}/g, "");
+const strip = hbs => hbs.replace(/\{\{!--[\s\S]*?--\}\}/g, "");
+const TAB_MARKUP  = strip(TAB_HBS);
+const CARD_MARKUP = strip(CARD_HBS);
+/**
+ * Both halves of the tab as one string, for the rules that are about what a GM ends up looking at
+ * rather than about which file emits it. The card was lifted out of the tab when the Completed
+ * fold arrived and both lists had to print the same one, so an assertion pinned to TAB_MARKUP
+ * alone would now pass by rendering nothing at all.
+ */
+const PANEL_MARKUP = `${TAB_MARKUP}\n${CARD_MARKUP}`;
 
 /**
  * The mixin over a stand-in actor whose `update` writes through. The harness itself is shared
@@ -183,7 +193,7 @@ describe("the Encounters tab: wiring", () => {
 	// put it in core's form submit data, where the array indices expand into an OBJECT keyed "0",
 	// "1", ... and replace the list with it — no error, and the list is gone.
 	it("gives no form field a name, so the sheet's submit cannot rewrite the list", () => {
-		expect(TAB_MARKUP).not.toMatch(/<(?:input|textarea|prose-mirror)[^>]*\sname=/);
+		expect(PANEL_MARKUP).not.toMatch(/<(?:input|textarea|prose-mirror)[^>]*\sname=/);
 	});
 
 	// The sheet declares no drop targets of its own on purpose (ActorSheet's default entry would
@@ -195,22 +205,22 @@ describe("the Encounters tab: wiring", () => {
 	// In Chromium a `draggable` ancestor takes the mousedown from every input inside it, so a
 	// draggable row would leave its own note box impossible to put a caret in.
 	it("puts the drag handle on the name control, not on the row that holds the note box", () => {
-		expect(TAB_MARKUP).toMatch(/<button[^>]*stonetop-gm-encounter-entry-open[^>]*draggable=/);
-		expect(TAB_MARKUP).not.toMatch(/<li[^>]*stonetop-gm-encounter-entry[^>]*draggable=/);
+		expect(CARD_MARKUP).toMatch(/<button[^>]*stonetop-gm-encounter-entry-open[^>]*draggable=/);
+		expect(CARD_MARKUP).not.toMatch(/<li[^>]*stonetop-gm-encounter-entry[^>]*draggable=/);
 	});
 
 	// `_wireSectionCollapse` binds a CAPTURE-phase click on this class and folds by walking
 	// heading siblings, so a per-row caret wearing it would be swallowed and fold the wrong run.
 	it("keeps its per-row expander off the shared section-collapse class", () => {
-		expect(TAB_MARKUP).not.toContain("stonetop-section-collapse");
-		expect(TAB_MARKUP).toContain("stonetop-gm-encounter-toggle");
+		expect(CARD_MARKUP).not.toContain("stonetop-section-collapse");
+		expect(CARD_MARKUP).toContain("stonetop-gm-encounter-toggle");
 	});
 
 	// There is no <img> on this tab, so the `draggable="false"` opt-out every portrait in the
 	// system carries has nothing to apply to. Pinned so that adding one without it is a failure
 	// rather than a Gecko drag that hands over the image instead of the document.
 	it("has no portrait, which is why nothing here carries the image drag opt-out", () => {
-		expect(TAB_MARKUP).not.toMatch(/<img/);
+		expect(PANEL_MARKUP).not.toMatch(/<img/);
 	});
 
 	it("is composed into the sheet, and flushed before every paint and every close", () => {
@@ -612,9 +622,9 @@ describe("the Encounters tab: resolving what a row points at", () => {
 		globalThis.fromUuidSync = vi.fn(uuid => (uuid === "Actor.here" ? { name: "Here", documentName: "Actor" } : null));
 		const context = { stonetop: {} };
 		await host._addGmEncountersContext(context);
-		expect(context.stonetop.encounters[0].entries.map(e => e.id)).toEqual(["x1", "x2"]);
-		expect(context.stonetop.encounters[0].entries[0].unresolved).toBe(true);
-		expect(context.stonetop.encounters[0].entries[1].unresolved).toBe(false);
+		expect(context.stonetop.encounters.active[0].entries.map(e => e.id)).toEqual(["x1", "x2"]);
+		expect(context.stonetop.encounters.active[0].entries[0].unresolved).toBe(true);
+		expect(context.stonetop.encounters.active[0].entries[1].unresolved).toBe(false);
 	});
 
 	it("prefers the live document's name over the cached one", async () => {
@@ -665,7 +675,7 @@ describe("the Encounters tab: resolving what a row points at", () => {
 		] }]);
 		const context = { stonetop: {} };
 		await host._addGmEncountersContext(context);
-		expect(context.stonetop.encounters[0]).toMatchObject({ entryCount: 2 });
+		expect(context.stonetop.encounters.active[0]).toMatchObject({ entryCount: 2 });
 	});
 });
 
@@ -680,8 +690,8 @@ describe("the Encounters tab: notes, used and delete", () => {
 	// every card: after the collected rows the note sat two lines down on one card and twelve
 	// on the next, which is a thing you hunt for rather than read.
 	it("draws the note above the collected rows, not after them", () => {
-		const notes = TAB_MARKUP.indexOf("stonetop-gm-encounter-notes-block");
-		const rows  = TAB_MARKUP.indexOf("stonetop-gm-encounter-entries");
+		const notes = CARD_MARKUP.indexOf("stonetop-gm-encounter-notes-block");
+		const rows  = CARD_MARKUP.indexOf("stonetop-gm-encounter-entries");
 		expect(notes).toBeGreaterThan(-1);
 		expect(rows).toBeGreaterThan(-1);
 		expect(notes).toBeLessThan(rows);
@@ -691,7 +701,7 @@ describe("the Encounters tab: notes, used and delete", () => {
 	// both called "the bridge". The head of the note rides the row to tell them apart. Only
 	// while it is shut: open, the real note is two pixels below it.
 	it("rides the head of the note beside the name, and only while the row is shut", () => {
-		expect(TAB_MARKUP).toMatch(/stonetop-gm-encounter-peek"[^>]*>\{\{notesPeek\}\}/);
+		expect(CARD_MARKUP).toMatch(/stonetop-gm-encounter-peek"[^>]*>\{\{notesPeek\}\}/);
 		const peek = declarations(CSS, ".stonetop-gm-encounter-peek");
 		expect(peek).toMatch(/display:\s*none/);
 		expect(peek).toMatch(/white-space:\s*nowrap/);
@@ -714,7 +724,7 @@ describe("the Encounters tab: notes, used and delete", () => {
 			"<p>They cross at <strong>dusk</strong>.</p><p>The ford is watched.</p>" }]);
 		const context = { stonetop: {} };
 		await host._addGmEncountersContext(context);
-		expect(context.stonetop.encounters[0].notesPeek).toBe("They cross at dusk. The ford is watched.");
+		expect(context.stonetop.encounters.active[0].notesPeek).toBe("They cross at dusk. The ford is watched.");
 	});
 
 	// The clip is the column's job, not a character count's; this cap only keeps a note of any
@@ -723,14 +733,14 @@ describe("the Encounters tab: notes, used and delete", () => {
 		const { host } = makeHost([{ id: "e1", name: "Crypt", used: false, entries: [], notes: "<p>" + "word ".repeat(400) + "</p>" }]);
 		const context = { stonetop: {} };
 		await host._addGmEncountersContext(context);
-		expect(context.stonetop.encounters[0].notesPeek.length).toBeLessThanOrEqual(240);
+		expect(context.stonetop.encounters.active[0].notesPeek.length).toBeLessThanOrEqual(240);
 	});
 
 	it("leaves the peek empty for an encounter nobody has written about", async () => {
 		const { host } = makeHost(one());
 		const context = { stonetop: {} };
 		await host._addGmEncountersContext(context);
-		expect(context.stonetop.encounters[0].notesPeek).toBe("");
+		expect(context.stonetop.encounters.active[0].notesPeek).toBe("");
 	});
 	// A text write that re-rendered would tear out the node that just took focus.
 	it("writes a rename and an entry note without asking for a render", async () => {
@@ -1277,5 +1287,227 @@ describe("the Encounters tab: expanding a row", () => {
 		el.name.focused = false;
 		host._restoreGmEncounterFocus(root);
 		expect(el.name.focused).toBe(false);
+	});
+});
+
+/* ══ completed ════════════════════════════════════════════════════════════════ */
+
+// The tab's second list: what has been RUN, filed under the live one rather than deleted, with
+// everything gathered into it still there.
+//
+// The failures worth guarding are the quiet ones. The split is made in JS off `used` and the card
+// draws its one two-state button off the SAME flag, so the two can only disagree if someone gives
+// the card a "which list am I in" parameter — which Handlebars would then also resolve against the
+// encounter's own fields. And the flat array now renders as two lists, which is what makes an
+// unguarded reorder move a card in storage and nowhere on screen.
+describe("the Encounters tab: the Completed section", () => {
+	const mixed = () => [
+		{ id: "a", name: "Ford",  used: false, entries: [] },
+		{ id: "b", name: "Crypt", used: true,  entries: [] },
+		{ id: "c", name: "Camp",  used: false, entries: [] },
+	];
+
+	/** The context both lists are rendered from. */
+	const contextOf = async host => {
+		const context = { stonetop: {} };
+		await host._addGmEncountersContext(context);
+		return context.stonetop.encounters;
+	};
+
+	const namesIn = lane => lane.map(e => e.id);
+
+	it("prints one card in both lists, from a partial that is registered", () => {
+		expect(STONETOP_JS).toContain('"stonetop.gm-encounter-card"');
+		expect(repoFileExists("templates/actor/partials/gm-encounter-card.hbs")).toBe(true);
+		expect(TAB_MARKUP.match(/\{\{>\s*"stonetop\.gm-encounter-card"\}\}/g)).toHaveLength(2);
+	});
+
+	// Handlebars MERGES a partial's hash into the caller's context, so a `completed=true` passed
+	// down here would ALSO be a bare lookup against the encounter view-model the `{{#each}}` is
+	// standing on. The card reads the flag the split was made from instead, which is the one thing
+	// that cannot drift from the list it was printed into.
+	it("passes the card no parameters, so it can only read the encounter it is standing on", () => {
+		expect(TAB_MARKUP).not.toMatch(/\{\{>\s*"stonetop\.gm-encounter-card"\s+\w/);
+		expect(CARD_MARKUP).toMatch(/\{\{#if used\}\}fa-rotate-left\{\{else\}\}fa-check\{\{\/if\}\}/);
+		expect(CARD_MARKUP).toMatch(/encounters\.markUnused[\s\S]*?encounters\.markUsed/);
+	});
+
+	it("splits the one stored list into the two the template prints, in stored order", async () => {
+		const { host } = makeHost(mixed());
+		const lanes = await contextOf(host);
+		expect(namesIn(lanes.active)).toEqual(["a", "c"]);
+		expect(namesIn(lanes.completed)).toEqual(["b"]);
+	});
+
+	it("says nothing about a Completed section until something has been run", async () => {
+		const { host } = makeHost([{ id: "a", name: "Ford", used: false, entries: [] }]);
+		expect((await contextOf(host)).completed).toEqual([]);
+		expect(TAB_MARKUP).toMatch(/\{\{#if stonetop\.encounters\.completed\.length\}\}/);
+	});
+
+	// The tick is the whole feature: one click takes a card out of the live list and files it
+	// below, and one click brings it back.
+	it("sends a card below on the tick and lifts it back on the arrow", async () => {
+		const { host, actor } = makeHost(mixed());
+		const root = fakeRoot();
+		host._activateGmEncountersListeners(root);
+		const el = makeEncounterEl(root, listOf(actor)[0]);
+
+		await root.emit("click", el.used);
+		let lanes = await contextOf(host);
+		expect(namesIn(lanes.active)).toEqual(["c"]);
+		expect(namesIn(lanes.completed)).toEqual(["a", "b"]);
+
+		await host._setEncounterUsed("a", false);
+		lanes = await contextOf(host);
+		expect(namesIn(lanes.active)).toEqual(["a", "c"]);
+	});
+
+	// The card moves between two lists, which is a thing only a repaint can do — so this write
+	// leaves core's own default alone, where the two text writes beside it pass `render: false`.
+	// That split is the header of the file, and it is why the tick is the one control here that
+	// can be seen to work.
+	it("renders for the move, unlike the writes that only change prose", async () => {
+		const { host, updates } = makeHost(mixed());
+		await host._setEncounterUsed("a", true);
+		await host._setEncounterField("a", "name", "Ford at dusk");
+		expect(updates.map(([, o]) => o.render)).toEqual([undefined, false]);
+	});
+
+	// Eight expanded cards standing in the fold make a quiet record into the longest thing on the
+	// page. Lifting one back does NOT re-open it: the GM asked for it on the list, not for its
+	// twelve collected rows in their face.
+	it("shuts a card as it is filed, and leaves it shut when it comes back", async () => {
+		const { host } = makeHost(mixed());
+		host._encounterOpen.add("a");
+		await host._setEncounterUsed("a", true);
+		expect(host._encounterOpen.has("a")).toBe(false);
+		await host._setEncounterUsed("a", false);
+		expect(host._encounterOpen.has("a")).toBe(false);
+	});
+
+	// The two lists are one flat array with the completed ones interleaved wherever they sit, so
+	// `from + delta` stepped over a neighbour from the OTHER list: the card moved in storage and
+	// nowhere on screen, and the GM pressed alt+Down to no effect at all.
+	it("nudges a card past its own list's neighbour, not the array's", async () => {
+		const { host, actor } = makeHost(mixed());
+		await host._nudgeEncounter("a", 1);
+		expect(listOf(actor).filter(e => !e.used).map(e => e.id)).toEqual(["c", "a"]);
+		await host._nudgeEncounter("a", -1);
+		expect(listOf(actor).filter(e => !e.used).map(e => e.id)).toEqual(["a", "c"]);
+	});
+
+	it("clamps a nudge at the end of its own list rather than crossing into the other", async () => {
+		const { host, actor, updates } = makeHost(mixed());
+		await host._nudgeEncounter("c", 1);        // last of the live list, with "b" below it
+		await host._nudgeEncounter("b", -1);       // the only completed one
+		expect(updates).toEqual([]);
+		expect(listOf(actor).map(e => e.used)).toEqual([false, true, false]);
+	});
+
+	// Dropping a card from the fold onto one still to come is the same act as pressing its arrow,
+	// and the only reading it can have. Without this the array moved and the card re-rendered
+	// straight back into the fold it was dragged out of, with nothing logged.
+	it("completes or reopens a card dragged across the boundary", async () => {
+		const { host, actor } = makeHost(mixed());
+		await host._reorderEncounter("b", "a");                 // out of the fold, above "Ford"
+		expect(listOf(actor).map(e => e.id)).toEqual(["b", "a", "c"]);
+		expect(listOf(actor)[0].used).toBe(false);
+
+		await host._reorderEncounter("b", null);                // empty tab space: lane unchanged
+		expect(listOf(actor).find(e => e.id === "b").used).toBe(false);
+	});
+
+	// The neighbour's own flag, not the DOM: it is exactly what the context split the lists by, so
+	// there is nothing to keep in step.
+	it("files a live card that is dropped onto a completed one", async () => {
+		const { host, actor } = makeHost(mixed());
+		await host._reorderEncounter("c", "b");
+		expect(listOf(actor).find(e => e.id === "c").used).toBe(true);
+	});
+
+	// Completing is completing, whichever gesture did it: the drag has to shut the card the way
+	// the tick does, or the same act leaves the fold tidy one way and eight cards deep the other.
+	it("shuts a card dragged into the fold, exactly as the tick does", async () => {
+		const { host } = makeHost(mixed());
+		host._encounterOpen.add("c");
+		await host._reorderEncounter("c", "b");
+		expect(host._encounterOpen.has("c")).toBe(false);
+	});
+
+	// Lifting one back does NOT shut it — same as the arrow. The GM asked for the card on the
+	// list, and whatever state it was in is the state it comes back in.
+	it("leaves a card lifted back out of the fold as it found it", async () => {
+		const { host } = makeHost(mixed());
+		host._encounterOpen.add("b");
+		await host._reorderEncounter("b", "a");
+		expect(host._encounterOpen.has("b")).toBe(true);
+	});
+
+	// The order can be a no-op while the crossing is not, so the two are checked apart. A single
+	// identity test on the array would have written nothing and left the card in the wrong list.
+	it("still writes when only the lane changed, and not at all when neither did", async () => {
+		const { host, updates } = makeHost([
+			{ id: "a", name: "Ford",  used: true,  entries: [] },
+			{ id: "b", name: "Crypt", used: false, entries: [] },
+		]);
+		await host._reorderEncounter("a", "b");   // already index 0; only the lane moves
+		expect(updates).toHaveLength(1);
+		await host._reorderEncounter("a", "b");   // now nothing at all is left to change
+		expect(updates).toHaveLength(1);
+	});
+
+	// The fold hides the heading's FOLLOWING SIBLINGS up to the next heading, so the box around
+	// the pair is load-bearing: without it the walk runs past the list and out of the tab, and a
+	// SECOND heading inside it would stop the caret claiming at the first.
+	it("folds as one section, with its heading and its list alone in the box", () => {
+		const box = TAB_MARKUP.slice(TAB_MARKUP.indexOf('"stonetop-gm-encounters-completed"'));
+		const end = box.indexOf("</div>");
+		const inner = box.slice(0, end);
+		expect(inner).toContain('collapse="gm-encounters-completed"');
+		expect(inner.match(/\{\{>\s*"stonetop\.section-heading"/g)).toHaveLength(1);
+		expect(inner).toContain("stonetop-gm-encounter-list--completed");
+		// The heading partial's default stem, which is half of the sheet's HEADING_SELECTOR. A
+		// section whose heading is not in it renders a caret that folds nothing.
+		expect(SHEET_JS).toContain("stonetop-move-group-title");
+	});
+
+	it("names the section and both directions of its one button in the language file", () => {
+		for (const key of ["completed", "completedNote", "emptyAllDone", "markUsed", "markUnused"]) {
+			const full = `stonetop.gmToolkit.encounters.${key}`;
+			expect(game.i18n.localize(full)).not.toBe(full);
+		}
+		expect(game.i18n.localize("stonetop.gmToolkit.encounters.completed")).toBe("Completed");
+	});
+
+	// "Nothing gathered yet" is the wrong advice for a GM who has run everything they prepared:
+	// what they most likely want is the card two inches below, not a drag from the sidebar.
+	it("tells an emptied live list apart from an untouched one", () => {
+		expect(TAB_MARKUP).toMatch(/\{\{#if stonetop\.encounters\.completed\.length\}\}\{\{localize "stonetop\.gmToolkit\.encounters\.emptyAllDone"\}\}/);
+	});
+
+	// The pencil's `--reading` class sits on the <section> that wraps BOTH lists, so a delete
+	// button in the fold is locked by the same one press. On the panel rather than on the live
+	// list is the whole of that.
+	it("locks the delete buttons in the fold with the same one pencil", () => {
+		expect(TAB_MARKUP).toMatch(/<section class="sheet-tab stonetop-gm-encounters\{\{#unless stonetop\.edit\.encounters\}\} stonetop-gm-encounters--reading/);
+		expect(CSS).toContain(".stonetop-gm-encounters--reading .stonetop-gm-encounter-remove");
+	});
+
+	// The tick's green must not carry over to the arrow that replaces it: it would be a button lit
+	// in the colour of the state it undoes. Later in the file than the base hover, per the modifier
+	// ordering, or a `--mod` rule that ties on specificity simply loses.
+	it("gives the filed card's arrow the neutral hover, after the tick's green", () => {
+		const undo = ".stonetop-gm-encounter.is-used .stonetop-gm-encounter-used:hover";
+		expect(declarations(CSS, undo)).toMatch(/color:\s*var\(--st-text-secondary\)/);
+		expect(CSS.indexOf(undo)).toBeGreaterThan(CSS.indexOf(".stonetop-gm-encounter-used:hover"));
+	});
+
+	// A rule across the column, not a box: everything inside it is already a bordered card, and a
+	// second border around a stack of them reads as a card of cards.
+	it("marks the boundary with a rule and clears it before the heading", () => {
+		const box = declarations(CSS, ".stonetop-gm-encounters-completed");
+		expect(box).toMatch(/border-top:\s*1px solid var\(--st-card-rule\)/);
+		expect(box).toMatch(/padding-top:/);
 	});
 });

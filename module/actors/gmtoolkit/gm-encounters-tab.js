@@ -2,6 +2,17 @@
 // named bundles: the monsters, the read-aloud page, the battle map, the treasure table, the
 // arcanum somebody is about to find.
 //
+// TWO LISTS OUT OF ONE ARRAY. What is still to come is at the top of the tab; what has been run is
+// filed into the Completed fold at its foot, and the tick on a card is what sends it there. The
+// storage stays ONE flat array — the array is the order, an encounter's own `used` flag is the
+// lane it renders in — and the split is made once, in `_addGmEncountersContext`, off that flag.
+// Nothing else in this file asks the DOM which list a click came from, and the card partial reads
+// the same flag to decide which way its one two-state button points, so the two cannot disagree.
+//
+// The consequence worth remembering when touching anything positional here: an INDEX in the array
+// is no longer a place on screen. `_nudgeEncounter` and `_reorderEncounter` both have to reason
+// about the lane as well, or a card moves in storage and nowhere a GM can see.
+//
 // STORAGE IS THE TOOLKIT'S OWN, like the "I wonder..." list beside it and unlike the Threats and
 // Sites tabs, whose JournalEntryPages stayed on the steading (gm-prep-tabs.js says so at length).
 // It is a flat array on `actor.system.encounters`, and `this.actor` is the right document. On the
@@ -18,7 +29,7 @@
 //
 // TWO KINDS OF WRITE, the same split the wonder tab makes and for the same reason:
 //
-//   STRUCTURAL (add, collect, move, remove, mark used) re-renders. The list changed shape.
+//   STRUCTURAL (add, collect, move, remove, mark complete) re-renders. The list changed shape.
 //
 //   TEXT (renaming an encounter, an entry's note, the notes box) does NOT, and passes
 //   `{ render: false }`. These save on `change`, which fires on BLUR, and an actor update
@@ -417,8 +428,20 @@ export function withGmEncountersTab(Base) {
 			return this._encounters.setField(id, key, value, options);
 		}
 
-		/** Mark an encounter run, or put it back. */
+		/**
+		 * File an encounter into the Completed fold, or lift it back onto the live list.
+		 *
+		 * RENDERS, and here that is the whole point rather than a cost: the card moves from one
+		 * list to the other, which is a thing only a repaint can do.
+		 *
+		 * COMPLETING ALSO SHUTS THE CARD. What a GM has just finished running is the one thing on
+		 * the tab they no longer need open, and leaving eight expanded cards standing in the fold
+		 * makes a section that is meant to be a quiet record into the longest thing on the page.
+		 * Lifting one back does NOT re-open it, deliberately: the GM asked for it back on the
+		 * list, not for its twelve collected rows in their face — and the caret is one click.
+		 */
 		_setEncounterUsed(id, used) {
+			if (used) this._encounterOpen.delete(id);
 			return this._setEncounterField(id, "used", !!used, { render: true });
 		}
 
@@ -432,23 +455,67 @@ export function withGmEncountersTab(Base) {
 		 *
 		 * Last is what a drop on empty tab space can unambiguously mean, and it is the only place
 		 * a neighbourless drop CAN mean something: there is no "before nothing".
+		 *
+		 * A DROP THAT CROSSES BETWEEN THE TWO LISTS COMPLETES OR REOPENS THE ENCOUNTER, which is
+		 * the only reading a GM can have meant: they took a card out of the Completed fold and put
+		 * it down among the ones still to come. Without it the array moved and the card did not —
+		 * it re-rendered back into the fold it was dragged out of, and the gesture looked broken
+		 * with nothing logged. A crossing INTO the fold shuts the card too, for the reason
+		 * `_setEncounterUsed` spells out -- the tick and the drag file an encounter away the same.
+		 *
+		 * Which list the drop landed in is read off the NEIGHBOUR'S OWN `used` flag rather than
+		 * off the DOM, because that flag is exactly what the context split the two lists by
+		 * (`_addGmEncountersContext`): the two can never disagree, and there is nothing to keep in
+		 * step. A drop that named no neighbour leaves the flag alone — empty tab space belongs to
+		 * neither list, so it can only mean "last where you already are".
 		 */
 		_reorderEncounter(dragId, overId) {
 			return this._mutateEncounters(list => {
 				const from = list.findIndex(e => e.id === dragId);
 				if (from < 0 || dragId === overId) return null;
+				const over = overId ? list.find(e => e.id === overId) : null;
+				const used = over ? !!over.used : !!list[from].used;
 				// Through the SAME primitive the keyboard path uses, including its no-op contract:
 				// this used to re-implement the splice and the identity test inline, so a fix to
 				// `moveWithin` reached the nudge and not the drag. The destination is computed against
 				// a list the row has already been taken OUT of, for the reason spelt out on
 				// `_moveEntry`, and `moveWithin` then does the removal itself from the original index.
 				const without = list.filter((_, i) => i !== from);
-				return moveWithin(list, from, insertionIndexIn(without, overId, without.length));
+				const moved = moveWithin(list, from, insertionIndexIn(without, overId, without.length));
+				// The order can be a no-op while the crossing is not: a card dragged out of the fold
+				// onto the row directly below its own array slot lands back on the same index and
+				// still has to change lists. So the flag is checked separately, and BOTH being
+				// unchanged is what keeps a pointless write off the wire.
+				const crosses = used !== !!list[from].used;
+				if (!moved && !crosses) return null;
+				const next = moved ?? [...list];
+				if (crosses) {
+					const at = next.findIndex(e => e.id === dragId);
+					next[at] = { ...next[at], used };
+					// Completing SHUTS the card, whichever gesture completed it. The rule and the
+					// reasoning are `_setEncounterUsed`'s; the tick goes through it and this does not
+					// (one write moves the card and flips the flag together), so the one line it owns
+					// is repeated rather than skipped -- a card dragged into the fold used to land
+					// there fully expanded while the identical card ticked into it landed shut.
+					if (used) this._encounterOpen.delete(dragId);
+				}
+				return next;
 			});
 		}
 
 		/**
 		 * Nudge an encounter one place up or down. The keyboard path; same primitive.
+		 *
+		 * WITHIN ITS OWN LIST, which is why this is not simply `from + delta` any more. The two
+		 * lists are one flat array with the completed ones interleaved wherever they happen to
+		 * sit, so a step over a neighbour from the OTHER list moved the card in storage and
+		 * nowhere on screen: the GM pressed alt+Down, the sheet repainted, and nothing had
+		 * changed. The neighbour is found among the rows sharing this one's `used` flag — the same
+		 * flag the context splits the lists by — and the flat index to land on is read back off
+		 * it.
+		 *
+		 * Crossing lists is deliberately NOT a thing the keyboard can do. alt+Arrow is a reorder;
+		 * completing an encounter is the tick, which is one keystroke away and says what it does.
 		 *
 		 * The caret is handed on because this RENDERS: every name box is re-emitted, so the input
 		 * the GM is holding is replaced and focus falls to `<body>`. Without the stash, moving an
@@ -459,7 +526,16 @@ export function withGmEncountersTab(Base) {
 			this._encounterFocus = { id };
 			return this._mutateEncounters(list => {
 				const from = list.findIndex(e => e.id === id);
-				return from < 0 ? null : moveWithin(list, from, from + delta);
+				if (from < 0) return null;
+				const group = list.filter(e => !!e.used === !!list[from].used);
+				const neighbour = group[group.findIndex(e => e.id === id) + delta];
+				if (!neighbour) return null;                          // already at that list's end
+				// Against the list this row has already been taken OUT of, for the reason
+				// `_moveEntry` spells out: "after the neighbour" is one index further along once the
+				// row itself is gone, and which of the two is right depends on the direction.
+				const without = list.filter((_, i) => i !== from);
+				const n = without.findIndex(e => e.id === neighbour.id);
+				return moveWithin(list, from, delta < 0 ? n : n + 1);
 			});
 		}
 
@@ -600,7 +676,7 @@ export function withGmEncountersTab(Base) {
 
 		async _addGmEncountersContext(context) {
 			const list = this._encounterList();
-			context.stonetop.encounters = await Promise.all(list.map(async enc => {
+			const cards = await Promise.all(list.map(async enc => {
 				// Enriched for every encounter and not only the open ones, because the body is in
 				// the DOM either way: expanding is a CSS class this file toggles in place, so that
 				// it costs no render and cannot lose a caret (see `_activateGmEncountersListeners`).
@@ -614,6 +690,18 @@ export function withGmEncountersTab(Base) {
 					entries:     await Promise.all(enc.entries.map(resolveEncounterEntry)),
 				};
 			}));
+			// THE TAB'S TWO LISTS, split HERE and nowhere else. Both print the same card partial,
+			// and that card decides which way its one two-state button reads off the very same
+			// `used` flag — so the card can never disagree with the list it was printed into, and
+			// no click handler has to ask the DOM which section it was pressed in.
+			//
+			// ONE PASS OVER THE STORED ORDER, so an encounter keeps its place in its own list
+			// whichever list that is: the array is the order, the flag is the lane, and completing
+			// one moves no other row.
+			context.stonetop.encounters = {
+				active:    cards.filter(enc => !enc.used),
+				completed: cards.filter(enc => enc.used),
+			};
 			// Rows the list no longer holds, so a session of adding and removing cannot grow the
 			// enrich cache without bound.
 			const live = new Set(list.map(enc => enc.id));
@@ -1061,9 +1149,9 @@ export function withGmEncountersTab(Base) {
 		 * Delete an encounter, after asking.
 		 *
 		 * Asked because it is the only irreversible button on the tab, and it is NOT the one a GM
-		 * reaches for after running something: that is "mark used", which takes the encounter off
-		 * the live list, keeps everything gathered into it, and is one click both ways. So the
-		 * frequent act stays one click and the final one asks.
+		 * reaches for after running something: that is the tick, which files the encounter down
+		 * into the Completed fold, keeps everything gathered into it, and is one click both ways.
+		 * So the frequent act stays one click and the final one asks.
 		 */
 		async _onEncounterRemove(id) {
 			const encounter = this._encounter(id);
@@ -1105,7 +1193,7 @@ export function withGmEncountersTab(Base) {
 				if (want.entryId && this._entryIdFrom(field) !== want.entryId) continue;
 				// CLEARED HERE, on the paint that actually found the control, and not on the way in.
 				// Writes are queued, so a render belonging to an EARLIER write can land between the
-				// stash and the write that creates the row — "mark used" then "+ Add" is enough. A
+				// stash and the write that creates the row — the tick then "+ Add" is enough. A
 				// stash blanked by that first paint left the new box with neither the caret nor the
 				// selection, and the GM typed over whatever had focus before.
 				this._encounterFocus = null;
