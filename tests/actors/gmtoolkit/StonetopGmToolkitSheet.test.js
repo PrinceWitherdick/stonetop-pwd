@@ -644,14 +644,16 @@ describe("the move randomizer", () => {
 
 		it("walks the light to that row, then flashes it", () => {
 			const drawer = stripComments(DRAWER_JS);
-			expect(drawer).toContain('import { flashHighlight, spinHighlight } from "../utils/flash-highlight.js"');
+			expect(drawer).toContain('import { SpinTrack } from "../utils/flash-highlight.js"');
 			expect(drawer).toMatch(/this\.spinTo\(button,\s*move\.name\)/);
 			// Compared as a dataset value, NOT interpolated into an attribute selector: the names
 			// carry brackets and a slash, which a selector would need CSS.escape to survive.
 			expect(drawer).toMatch(/li\.dataset\.move === name/);
 			expect(drawer).not.toMatch(/\[data-move=/);
-			expect(drawer).toMatch(/spinHighlight\(rows,\s*target,\s*\{\s*scope\s*\}\)/);
-			expect(drawer).toMatch(/flashHighlight\(rows\[target\],\s*\{\s*scope\s*\}\)/);
+			// The walk-then-flash beat itself is SpinTrack's, tested on its own behaviour in
+			// tests/utils/flash-highlight.test.js. What the drawer owes is finding the right rows
+			// and handing over the scope it douses.
+			expect(drawer).toMatch(/landOn\(rows,\s*target,\s*\{\s*scope\s*\}\)/);
 		});
 
 		// The walk belongs to the list that was drawn from — a light crossing Homefront's entries
@@ -674,8 +676,10 @@ describe("the move randomizer", () => {
 		// never arrived.
 		it("abandons a walk in flight and posts only for the one that lands", () => {
 			const drawer = stripComments(DRAWER_JS);
-			expect(drawer).toMatch(/this\._spin\?\.cancel\(\)/);
-			expect(drawer).toMatch(/if \(!await spin\.done\) return false/);
+			// Superseding is SpinTrack's to do, and holding ONE track per drawer is what lets it:
+			// a second click cancels the first through the same field. That the cancel actually
+			// happens is tested on SpinTrack itself.
+			expect(drawer).toMatch(/this\._spin \?\?= new SpinTrack\(\)/);
 			expect(drawer).toMatch(/if \(!await this\.spinTo\(button, move\.name\)\) return null;/);
 			// The card goes out AFTER the walk, which is the whole point of splitting the draw
 			// from the whisper: `postGmMove` takes a move rather than drawing one.

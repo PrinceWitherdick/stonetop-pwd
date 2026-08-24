@@ -86,10 +86,15 @@ export function fateRowText(row) {
 /**
  * The table as a step body's inline reference list — the `<ul>` a walkthrough prints under
  * the paragraph that reaches for the die.
+ *
+ * Each row carries its INDEX in the table. That is what lets the surface printing this list run
+ * the randomizer's light down it and land on the row the die gave (dialogs/ExpeditionDialog.js):
+ * the roll knows which row it landed on, and this says which <li> that is — without matching on
+ * the printed range, which is prose ("2&ndash;3") and would have to survive an entity decode.
  */
 export function fateTableList(table) {
 	const rows = table.rows
-		.map(r => `<li><strong>${fateRangeLabel(r)}</strong>: ${fateRowText(r)}</li>`)
+		.map((r, i) => `<li data-fate-row="${i}"><strong>${fateRangeLabel(r)}</strong>: ${fateRowText(r)}</li>`)
 		.join("\n\t\t\t\t\t");
 	return `<ul class="stonetop-exp-fatetable">\n\t\t\t\t\t${rows}\n\t\t\t\t</ul>`;
 }

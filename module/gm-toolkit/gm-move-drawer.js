@@ -31,7 +31,7 @@
 //   One landing, one card. A walk that a later click cancels resolves false and posts NOTHING —
 //   otherwise a GM who pressed twice gets two whispers for one light.
 import { randomGmMove, postGmMove } from "./random-gm-move.js";
-import { flashHighlight, spinHighlight } from "../utils/flash-highlight.js";
+import { SpinTrack } from "../utils/flash-highlight.js";
 
 export class GmMoveDrawer {
 	/**
@@ -97,14 +97,8 @@ export class GmMoveDrawer {
 		const scope  = button.closest(this._scopeSel);
 		const rows   = [...(button.closest(this._groupSel)?.querySelectorAll(this._rowSel) ?? [])];
 		const target = rows.findIndex(li => li.dataset.move === name);
-		if (target < 0) return true;
-
-		this._spin?.cancel();
-		const spin = spinHighlight(rows, target, { scope });
-		this._spin = spin;
-
-		if (!await spin.done) return false;
-		flashHighlight(rows[target], { scope });
-		return true;
+		// The cancel/walk/land beat itself lives on SpinTrack, shared with the other surfaces that
+		// draw from a printed list; all this method owns is finding the row.
+		return (this._spin ??= new SpinTrack()).landOn(rows, target, { scope });
 	}
 }

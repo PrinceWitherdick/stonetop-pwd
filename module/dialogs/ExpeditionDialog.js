@@ -5,6 +5,7 @@ import { sign, rollSeasonsCard } from "../utils/roll-engine.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
 import { getSetting, setWorldSetting } from "../settings.js";
 import { escHtml } from "../utils/strings.js";
+import { portraitOrNone, documentPortraitFrame } from "../utils/portrait-frame.js";
 import { warn } from "../utils/logger.js";
 import { CHART_GROUPS, HOME_GROUP } from "./expedition-data.js";
 import { FATE_TABLES, fateTableList } from "../data/fate-tables.js";
@@ -20,6 +21,7 @@ import {
 	expeditionNames,
 } from "../utils/expedition-log-core.js";
 import { StonetopSteading } from "../actors/steading/StonetopSteading.js";
+import { openReturnTriumphant } from "../actors/steading/return-triumphant.js";
 import { assetTakenLabel } from "../utils/requisition-asset.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
 import { deriveLoadLevel, LOAD_LEVEL_LIMITS } from "../utils/load.js";
@@ -28,6 +30,7 @@ import { renderTemplate } from "../utils/foundry-compat.js";
 import { EXPLORATION_GM_MOVES } from "../gm-toolkit/gm-moves.js";
 import { GmMoveDrawer } from "../gm-toolkit/gm-move-drawer.js";
 import { wireSidebarToggle } from "../utils/sidebar-toggle.js";
+import { SpinTrack } from "../utils/flash-highlight.js";
 import {
 	TRAVEL_MAPS, TRAVEL_PLACES, BEYOND_TIER,
 	travelPlace, travelMap, placesOnMap, placesBeyond, exitsOnMap, spotPercent, percentSpot,
@@ -180,14 +183,17 @@ function _pipBands(totalMarks, limits) {
 	return { bands, overflow: Math.max(0, totalMarks - limits.heavy) };
 }
 
-// The Chart a Course requirements/challenges (Book I p.302–303) and arriving-home
-// questions (p.338) live in expedition-data.js so the Chronicle compiler can resolve
-// a ticked key back to its text. See CHART_GROUPS / HOME_GROUP imports above.
+// The Chart a Course requirements/challenges (Book I p.302–303) live in expedition-data.js
+// so the Chronicle compiler can resolve a ticked key back to its text; the arriving-home
+// questions (p.338) sit beside them as plain prompts. See the imports above.
 
-// Linear walkthrough. `body` is HTML. `fate` names the Die of Fate table this step
-// reaches for (a key in data/fate-tables.js) and adds the button that rolls it. `roll`
+// Linear walkthrough. `body` is HTML, and `bodyAfterFate` the rest of it, printed BELOW
+// the Die of Fate button so the button lands at the end of the passage that reaches for
+// it rather than under everything on the page. `fate` names the Die of Fate table this
+// step reaches for (a key in data/fate-tables.js) and adds the button that rolls it. `roll`
 // names an inline roll ("requisition"). `tiers` shows the matching outcome list.
-// `qa` is a single note, per-PC notes, or a checklist (see _qaContext). `aside` is a
+// `qa` is a single note, per-PC notes, a checklist, or a bare question list (see
+// _qaContext). `returnTriumphant` adds the button that opens that move. `aside` is a
 // headed block below the body — advice the step doesn't walk you through, set off from
 // the prose but always shown.
 const _STEPS = [
@@ -253,19 +259,11 @@ const _STEPS = [
 		icon:  "fa-sack",
 		body:  `<p>Each PC marks gear on their Inventory insert: up to <strong>3 for a light load</strong> (quick, quiet), <strong>4&ndash;6 normal</strong>, or <strong>7&ndash;9 heavy</strong> (noisy, slow, quick to tire). They also mark <strong>4 + Prosperity</strong> small items (these don't count toward load).</p>
 				<p>They can leave marks <strong>&ldquo;undefined&rdquo;</strong> and define them later with <em>Have What You Need</em>. Remind them of anything they need to bring (warm clothes, sleds, a guide). <strong>Followers Outfit too.</strong> Ask where their gear came from. Bring it home.</p>`,
-		// Kept alongside the live party-load readout this step also builds, not replaced by it.
-		// The readout counts marks off the sheets; this is the GM's own sentence about them —
-		// where the gear came from, what was flagged as required, who ended up hauling the rope.
-		// It is also the ONLY source of the Chronicle's "Outfit & supplies" section (see
-		// buildExpeditionPage in utils/chronicle-core.js), so dropping the field would leave that
-		// heading permanently blank on new trips and the notes already typed on old ones stranded:
-		// still printed on the page, with nowhere left to edit them.
-		qa:    {
-			kind:        "single",
-			key:         "outfit",
-			prompt:      "Who's carrying what, and what loads?",
-			placeholder: "Notable gear, loads, and anything you flagged as required…",
-		},
+		// No note field: "who's carrying what, and what loads" is what the live party-load readout
+		// this step builds already answers, off the marks on the sheets themselves, and typing the
+		// same answer underneath it only put a stale copy beside a live one. A trip that already
+		// recorded one keeps it — the Chronicle still prints a stored `outfit` answer as
+		// "Outfit & supplies" (utils/chronicle-core.js).
 	},
 	{
 		key:      "requisition",
@@ -275,31 +273,11 @@ const _STEPS = [
 				<p>They don't need this for the steading's <em>Surplus</em> (unless taking it would be wasteful or risky), and only roll once for a related set of assets.</p>`,
 		roll:     "requisition",
 		showTiers: true,
-		qa:       {
-			kind:        "single",
-			key:         "requisition",
-			prompt:      "What did they borrow, and from whom?",
-			placeholder: "The asset(s), who they convinced, any strings attached…",
-		},
-	},
-	{
-		key:   "prep",
-		title: "Other preparations",
-		icon:  "fa-people-carry-box",
-		body:  `<p>Around Outfitting and Requisitioning, the rest of prep happens. Zoom in and out as it suits:</p>
-				<ul>
-					<li><strong>Trade &amp; Barter</strong> for special items (bendis root, a bronze weapon): this takes time.</li>
-					<li><strong>Gather information</strong>: Know Things, Seek Insight, interview NPCs, Call the Spirits. Reward research, but mind the clock.</li>
-					<li><strong>Bring NPCs &amp; followers</strong>: the Marshal's crew, a hound, a willing villager. Write joiners up as followers; have them Outfit too.</li>
-					<li><strong>Put others to work</strong>: Muster, Pull Together, or set someone a task: roll the slow ones <em>when they return</em>.</li>
-				</ul>
-				<p>Make a note of any projects so you don't forget them later.</p>`,
-		qa:    {
-			kind:        "single",
-			key:         "prep",
-			prompt:      "Standing projects, joiners, and threads to remember",
-			placeholder: "Who's coming, what's been set in motion, what to resolve on return…",
-		},
+		// No note field: what they borrowed is what the steading's asset list on this step is
+		// ticked with, and the Chronicle prints those names under "Requisitioned" whether or not
+		// anybody typed a sentence. A trip that already recorded one keeps it — the Chronicle
+		// still prints a stored `requisition` answer under that same heading
+		// (utils/chronicle-core.js).
 	},
 	{
 		key:   "running",
@@ -317,12 +295,10 @@ const _STEPS = [
 				<p>On a <strong>perilous</strong> leg, or whenever you&rsquo;re unsure how hard to come down, you can let the Die of Fate set the danger:</p>
 				${fateTableList(FATE_TABLES.perilous)}`,
 		fate:  "perilous",
-		qa:    {
-			kind:        "single",
-			key:         "running",
-			prompt:      "Points of interest &amp; legs of travel",
-			placeholder: "Your route: landmarks, planned scenes, rough travel times…",
-		},
+		// No note field: the route is plotted on the step of its own before this one, and asking
+		// for the points of interest and legs a second time here only split the same answer across
+		// two pages. A trip that already recorded one keeps it — the Chronicle still prints a
+		// stored `running` answer as "The journey" (utils/chronicle-core.js).
 	},
 	{
 		key:   "playermoves",
@@ -354,14 +330,19 @@ const _STEPS = [
 				   to <strong>Keep Company</strong>.</p>
 				<p>When they <strong>Make Camp</strong> and you're unsure if the night stays quiet, roll the Die of Fate.
 				   Consider advantage or disadvantage on it, depending on how well prepared they are:</p>
-				${fateTableList(FATE_TABLES.camp)}
-				<p><strong>Deprivation</strong> (p.335). If they go without food, drink, or rest, the
+				${fateTableList(FATE_TABLES.camp)}`,
+		fate:  "camp",
+		// Deprivation sits BELOW the die, not above it. The prose above the button is the camp
+		// itself and the table the die reads against, so the button belongs at the end of that
+		// thought rather than a screen further down past a paragraph on going hungry: a GM who
+		// has just read "roll the Die of Fate" should not have to scroll past deprivation to
+		// find it. Deprivation is what comes AFTER the night, so it reads after the roll.
+		bodyAfterFate: `<p><strong>Deprivation</strong> (p.335). If they go without food, drink, or rest, the
 				   first cost is just that they get no choice when they Make Camp. The longer it runs,
 				   the worse it gets: ask them to <em>Defy Danger</em> against their own hunger, thirst
 				   or exhaustion; then a debility; then more debilities; then increasingly aggressive
 				   moves, using the GM moves for afflictions. Between sessions, write their
 				   deprivation up as a threat.</p>`,
-		fate:  "camp",
 	},
 	{
 		key:     "home",
@@ -372,12 +353,20 @@ const _STEPS = [
 		isFinal: true,
 		body:  `<p>Usually, <strong>gloss over the trip home</strong>: they already faced these challenges. Use it to ruminate: ask what they keep thinking about, suggest they <strong>Keep Company</strong>. But if they're hauling something awkward, lost or hurt, racing a clock, or taking a new route, <strong>Chart a Course back</strong> and play it out.</p>
 				<p>Then, before they walk back in, think through:</p>`,
+		// Questions, not answers. These were tick boxes, and the ticks were read by nothing —
+		// not the Chronicle, not the steading, not the next step — because the list is the GM's
+		// own thinking-through before the PCs walk back in, not a record of what happened. So
+		// they wear the question spiral the rest of this system's questions wear, and there is
+		// nothing to leave half-ticked.
 		qa:    {
-			kind:   "checklist",
-			key:    "home",
+			kind:   "questions",
 			groups: HOME_GROUP,
-			notes:  { field: "notes", prompt: "Return Triumphant?", placeholder: "If their return is a true triumph, clear a steading debility (or +1 Fortunes). What does it look like?" },
 		},
+		// The last of those questions asks whether they are Returning Triumphant. This is the
+		// move itself, on the step where it comes up: the same walkthrough the steading sheet's
+		// move card opens (actors/steading/return-triumphant.js), so the debility is cleared here
+		// rather than written down here and cleared on another sheet later.
+		returnTriumphant: true,
 	},
 ];
 
@@ -517,9 +506,7 @@ export class ExpeditionDialog extends StepperDialog {
 		// Roll the table the step is showing, not the bare oracle: on these steps the rules ask a
 		// specific question ("how perilous?", "does the night stay quiet?"), and a card reading
 		// only "4 — neutral / mixed" leaves the GM to look the answer back up on the page behind it.
-		html.find(".stonetop-exp-fate-btn").on("click", () => {
-			game.stonetop?.rollDieOfFate?.(FATE_TABLES[this._stepNav().step.fate]);
-		});
+		html.find(".stonetop-exp-fate-btn").on("click", () => this._rollFate());
 		// Collapse / expand the exploration moves rail. By class rather than by re-rendering,
 		// for the reason the character sheet's own handle gives: the step reclaims the freed
 		// width without a flicker, and a render here would rebuild the route step's map panel
@@ -560,6 +547,10 @@ export class ExpeditionDialog extends StepperDialog {
 			Number(ev.currentTarget.dataset.assetIndex),
 			ev.currentTarget.dataset.take === "true",
 		));
+		// Arriving-home step: make the Return Triumphant move. Nothing of the trip is written —
+		// the move's whole effect is on the steading — so there is no re-render here; the
+		// walkthrough it opens repaints whatever steading sheet happens to be showing.
+		html.find(".stonetop-exp-triumph-btn").on("click", () => this._returnTriumphant());
 		// Route step: pick a place off the map or the list, or change which map is showing. The
 		// same binder the popout uses, because it is the same partial (dialogs/journey-controls.js).
 		const journeyHandlers = {
@@ -645,12 +636,12 @@ export class ExpeditionDialog extends StepperDialog {
 			...nav,
 			isGM:       game.user?.isGM ?? false,
 			// The banner's second line. Past the opening page it carries the trip's name,
-			// where a read-only nameplate under the log bar used to say it: the same wording,
-			// in the heading that was already standing there, and one line less between the
-			// banner and the step's prose. The opening page leaves it off — the bar's own
-			// field is right below, holding that name and taking your edits to it, and the
-			// heading would only be saying back what you are typing.
-			bannerSub:  this._step === 0 || !label ? "Run an expedition" : `Run an expedition: ${label}`,
+			// where a read-only nameplate under the log bar used to say it: kept short, as
+			// "Expedition: <name>", in the heading that was already standing there, and one
+			// line less between the banner and the step's prose. The opening page leaves it
+			// off — the bar's own field is right below, holding that name and taking your
+			// edits to it, and the heading would only be saying back what you are typing.
+			bannerSub:  this._step === 0 || !label ? "Run an expedition" : `Expedition: ${label}`,
 			// The expedition-log bar atop the walkthrough: the current trip's name, a
 			// switcher (only with more than one), a delete (once any exist), and New.
 			// Only the opening step carries the bar itself. Naming a trip, switching to
@@ -686,6 +677,13 @@ export class ExpeditionDialog extends StepperDialog {
 			// The headed aside below the body ("What to prep", on the intro step).
 			aside:     step.aside ?? null,
 			qa:        this._qaContext(step.qa),
+			// The Return Triumphant button, on the arriving-home step. GM-only, like the asset
+			// picker and for the same reason: the move writes to the steading sheet. It reports
+			// whether there is a steading to write to, so a world without one says so on the
+			// button instead of offering a control that can only fail.
+			returnTriumphant: step.returnTriumphant && game.user?.isGM
+				? { hasSteading: !!getStonetopSteadingActor() }
+				: null,
 			// The exploration moves rail. On EVERY step, not only the ones that reach for a
 			// GM move: it is furniture, and a column that came and went as the reader stepped
 			// would shift the prose sideways under them twice a walkthrough. The list is the
@@ -844,6 +842,13 @@ export class ExpeditionDialog extends StepperDialog {
 	// only in SpringBurstDialog.)
 	_qaContext(qa) {
 		if (!qa) return null;
+
+		// A bare list of questions to think through: no ticks, no fields, nothing saved. The
+		// arriving-home list is the one of these — see the note on that step. Nothing writes
+		// to it and the template only reads the prompts, so the authored groups are handed
+		// over as the module constant rather than copied field-by-field per render.
+		if (qa.kind === "questions") return { kind: "questions", groups: qa.groups };
+
 		const all = this._answers();
 		const read = path => foundry.utils.getProperty(all, path);
 
@@ -875,6 +880,43 @@ export class ExpeditionDialog extends StepperDialog {
 		}
 
 		return { kind: "single", key: qa.key, prompt: qa.prompt, placeholder: qa.placeholder, path: qa.key, answer: read(qa.key) ?? "" };
+	}
+
+	/**
+	 * The step's Die of Fate: roll it, walk the light down the table the step prints, and only
+	 * then whisper the card.
+	 *
+	 * The SAME beat the GM Moves randomizer keeps (gm-toolkit/gm-move-drawer.js), and for the same
+	 * reason — the table is right there on the page, and a card that posted at the click would
+	 * answer the question before the GM had any reason to look at the list. The answer is settled
+	 * before the walk starts either way: the light is theatre over a rolled die, not the roll.
+	 *
+	 * A second press cancels the first walk, and the roll it belonged to posts nothing (spinTo
+	 * resolves false), so one landing is one card.
+	 */
+	async _rollFate() {
+		const table = FATE_TABLES[this._stepNav().step.fate];
+		await game.stonetop?.rollDieOfFate?.(table, { beforePost: ({ index }) => this._spinFateTo(index) });
+	}
+
+	/**
+	 * Run the light down the printed table and land it on row `index` (utils/flash-highlight.js).
+	 *
+	 * Scoped to the LIST rather than to the window: the exploration rail beside it runs the same
+	 * light off its own die, and a scope that took in both would have each draw putting the
+	 * other's answer out.
+	 *
+	 * Rows are found by `data-fate-row`, which fateTableList stamps on each <li> — see there on
+	 * why not by the printed range. Returns true when there is no walk to make (the table not on
+	 * the page, motion turned off): the card still goes out.
+	 */
+	async _spinFateTo(index) {
+		const list = this.element?.[0]?.querySelector(".stonetop-exp-fatetable") ?? null;
+		const rows = [...(list?.querySelectorAll("li[data-fate-row]") ?? [])];
+		// The cancel/walk/land beat itself lives on SpinTrack, shared with the GM Toolkit's move
+		// die; all this method owns is finding the rows. Its OWN track, separate from the rail's,
+		// so the two dice on this screen do not cancel each other's walks.
+		return (this._fateSpin ??= new SpinTrack()).landOn(rows, index, { scope: list });
 	}
 
 	// Persist one field/checkbox at its dotted path within the current trip, without
@@ -979,6 +1021,25 @@ export class ExpeditionDialog extends StepperDialog {
 
 		await this._persistLog(log);
 		this.render(false);
+	}
+
+	// ── Arriving home: Return Triumphant ─────────────────────────────────────────
+
+	/**
+	 * Make the Return Triumphant move (Book I p.339) from the last step of the walkthrough.
+	 *
+	 * Hands straight off to the shared walkthrough the steading sheet's move card opens
+	 * (actors/steading/return-triumphant.js). Nothing of the expedition is recorded: the move's
+	 * whole effect is a debility cleared, or a point of Fortunes, on the steading — and that is
+	 * already written down where it belongs, on the sheet, in its ledger, attributed to the move.
+	 */
+	_returnTriumphant() {
+		const found = this._steadingWrapper();
+		if (!found) {
+			ui.notifications?.warn?.("No steading sheet in this world to Return Triumphant to.");
+			return;
+		}
+		openReturnTriumphant(found.steading);
 	}
 
 	/**
@@ -2209,17 +2270,24 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	// A PC row: avatar, name/playbook, the diamond track, band pill, ◇ count, any
-	// load-gated moves, and (when overloaded or Pack-Horse'd) a note.
+	// load-gated moves, and (when overloaded, or carrying a load bonus) a note.
 	_pcRow(actor, snap, tier, over, marks, limits) {
 		const band = tier || "light";           // the empty-load default, shared by both branches below
 		const key = over ? "over" : band;
-		const hasPackHorse = !!snap?.inventory?.outfit?.hasPackHorse;
+		// Whatever raised this PC's caps, by name: Pack Horse for a Ranger, but a custom or
+		// world-authored move carrying a loadBonus reads as itself rather than as the horse.
+		const loadBonusFrom = snap?.inventory?.outfit?.loadBonusFrom ?? "";
 		const wornArmor    = Number(snap?.vitals?.wornArmor) || 0;
+		const portrait = portraitOrNone(actor.img, documentPortraitFrame(actor));
 		return this._loadRow(key, actor.name, marks, limits, {
 			isFollower: false,
+			img:        portrait.src || "",
+			imgStyle:   portrait.style,
 			sub:        actor.system?.playbook?.name || "",
 			gated:      this._gatedMovesFor(snap, over ? "heavy" : band, wornArmor),
-			packHorse:  hasPackHorse ? `caps ${limits.light}/${limits.normal}/${limits.heavy}` : null,
+			loadBonus:  loadBonusFrom
+				? { from: loadBonusFrom, caps: `caps ${limits.light}/${limits.normal}/${limits.heavy}` }
+				: null,
 			note:       over ? "risks exhaustion, accident, injury" : null,
 			noteDanger: over,
 		});
@@ -2245,7 +2313,7 @@ export class ExpeditionDialog extends StepperDialog {
 	// A PC's followers, each as a load row: the Marshal's crew (whose gear pips carry
 	// weights) plus any custom followers marked "in the party" (the Followers-tab
 	// toggle). A follower's load is its ✓ gear marks (Book I p.472), bucketed by the
-	// standard caps — followers don't get Pack Horse.
+	// standard caps: nothing raises a follower's.
 	_partyFollowersOf(actor) {
 		const rows = [];
 		const crew = this._crewRow(actor);
@@ -2268,21 +2336,32 @@ export class ExpeditionDialog extends StepperDialog {
 		if (!exists) return null;
 		const gear  = crew.gear ?? {};
 		const marks = Object.values(gear).reduce((sum, v) => sum + (typeof v === "number" ? v : (v ? 1 : 0)), 0);
-		return this._makeFollowerRow(crew.name || "The Crew", marks, "crew");
+		// The crew keeps its face on its detail flag (flags.<system>.crew.details), where the
+		// follower card's portrait picker writes it.
+		return this._makeFollowerRow(crew.name || "The Crew", marks, "crew", crew.details);
 	}
 
 	// A custom follower's load row (gear is a ✓ checklist).
 	_followerRow(f) {
 		const marks  = (Array.isArray(f?.gear) ? f.gear : []).filter(g => g?.checked).length;
 		const folTag = f?.isGroup ? `×${Math.max(2, Number(f?.size) || 2)} group` : "follower";
-		return this._makeFollowerRow(f?.name, marks, folTag);
+		// A custom follower stores its whole card, portrait included, in the one object.
+		return this._makeFollowerRow(f?.name, marks, folTag, f);
 	}
 
-	// Shared builder for a follower load row from a name + ◇ mark count.
-	_makeFollowerRow(name, marks, folTag) {
+	// Shared builder for a follower load row from a name + ◇ mark count. `art` is whichever
+	// stored object carries this follower's `img` / `portraitFrame` pair (the crew's details
+	// flag, a custom follower's own object); art-less followers keep the initial disc.
+	_makeFollowerRow(name, marks, folTag, art = null) {
 		const tier = deriveLoadLevel(marks, LOAD_LEVEL_LIMITS);
 		const key  = tier === "overloaded" ? "over" : (tier || "light");
-		return this._loadRow(key, name, marks, LOAD_LEVEL_LIMITS, { isFollower: true, folTag });
+		const portrait = portraitOrNone(art?.img, art?.portraitFrame);
+		return this._loadRow(key, name, marks, LOAD_LEVEL_LIMITS, {
+			isFollower: true,
+			folTag,
+			img:      portrait.src || "",
+			imgStyle: portrait.style,
+		});
 	}
 
 	// Assemble one load row from a resolved band `key` (light/normal/heavy/over) and a ◇
@@ -2294,6 +2373,12 @@ export class ExpeditionDialog extends StepperDialog {
 		const { bands, overflow } = _pipBands(marks, limits);
 		return {
 			isFollower: false,
+			// The face, when there is one: the picture and the frame that crops it, resolved
+			// through the same helper every other small avatar in the system uses so a portrait
+			// framed by hand shows the same square here. `initial` stays on every row as the
+			// fallback disc for anyone art-less.
+			img:        "",
+			imgStyle:   "",
 			initial:    (name || "?").charAt(0).toUpperCase(),
 			name:       name || (extras.isFollower ? "Follower" : "Character"),
 			sub:        "",
@@ -2303,7 +2388,7 @@ export class ExpeditionDialog extends StepperDialog {
 			levelLabel: pill.label,
 			marks, cap: limits.heavy, bands, overflow,
 			gated:      [],
-			packHorse:  null,
+			loadBonus:  null,
 			note:       null,
 			noteDanger: false,
 			...extras,

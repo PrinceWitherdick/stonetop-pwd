@@ -164,6 +164,56 @@ export function spinHighlight(rows, target, {
 }
 
 /**
+ * One surface's walk, and the cancel token that lets a later click supersede it.
+ *
+ * The BEAT is the thing worth having in one place: cancel whatever is still running, walk the
+ * light, wait for it to land, and only then flash the row it landed on. Every surface that draws
+ * from a printed list wants exactly that order, and each one that wrote it out for itself wrote
+ * the same five statements — so a fix to the order (or to what "superseded" means) reached one
+ * caller and not the others.
+ *
+ * Hold ONE of these per list that can be drawn from. Two lights on one screen — the expedition's
+ * fate table and the exploration rail beside it — are two tracks, so that a draw on one does not
+ * cancel the other's walk; they are kept apart on screen by their `scope` for the same reason.
+ *
+ * NOT for a walk that lands on a lasting selection (WeatherDialog's picked row): that one holds
+ * its answer instead of letting it fade, which is a different ending and deliberately not here.
+ */
+export class SpinTrack {
+	/**
+	 * Walk the light down `rows` onto `rows[target]` and flash it there.
+	 *
+	 * A target that is not in `rows` is not an error and makes no walk — the row may simply not be
+	 * on the page. The caller still gets `true`, because whatever the walk was theatre FOR (the card
+	 * it posts) must still happen.
+	 *
+	 * @param   {ArrayLike<HTMLElement>} rows  The list to walk, in reading order.
+	 * @param   {number} target                Index in `rows` to land on.
+	 * @param   {object} [options]             Passed through to `spinHighlight`; `scope` also bounds
+	 *                                         the flash, so the landing is put out by the same
+	 *                                         surface that douses the walk.
+	 * @returns {Promise<boolean>}  false if a later click superseded this walk — the caller's cue to
+	 *          post nothing. True when the light landed, and true when there was no walk to make.
+	 */
+	async landOn(rows, target, options = {}) {
+		if (!rows?.[target]) return true;
+
+		this._spin?.cancel();
+		const spin = spinHighlight(rows, target, options);
+		this._spin = spin;
+
+		if (!await spin.done) return false;
+		flashHighlight(rows[target], { scope: options.scope ?? null });
+		return true;
+	}
+
+	/** Put out a walk still running — for a surface closing under one. */
+	cancel() {
+		this._spin?.cancel();
+	}
+}
+
+/**
  * How many steps to walk, given where the light starts and where it has to end up.
  *
  * Always at least one full lap when the target is where the walk began, and topped up by whole

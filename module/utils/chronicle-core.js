@@ -150,9 +150,9 @@ function journeyNote(chart, route) {
 }
 
 // What the trip took out of the steading's common stores, as ticked on the Requisition
-// step. Printed ABOVE the GM's own words so the page names the assets even when nothing
-// was typed: this list, and the "out on <trip>" tag the steading sheet wears while they
-// are gone, are the two halves of the answer to "where did the wagon go?".
+// step. The whole of the section now, and above whatever a GM typed back when the step
+// carried a note box: this list, and the "out on <trip>" tag the steading sheet wears
+// while they are gone, are the two halves of the answer to "where did the wagon go?".
 function requisitionedList(taken) {
 	const names = (taken ?? [])
 		.map(t => String(t?.name ?? "").trim())
@@ -163,8 +163,8 @@ function requisitionedList(taken) {
 }
 
 // Compile one logged expedition into a Chronicle page, or null when it holds nothing
-// worth recording. The arriving-home checklist is GM prep (questions, not answers), so
-// only its free-text "Return Triumphant?" note carries through.
+// worth recording. The arriving-home list is GM prep — questions, not answers — and has
+// never been printed here; what came of Returning Triumphant is written on the steading.
 function buildExpeditionPage(exp, index) {
 	const chart = exp?.chart ?? {};
 	const home  = exp?.home ?? {};
@@ -175,10 +175,28 @@ function buildExpeditionPage(exp, index) {
 	const sections = [
 		proseSection("Destination & route", journeyProse(route) + journeyNote(chart, route)),
 		proseSection("The way ahead", checkedGroups(CHART_GROUPS, chart.checks, route) + paragraphs(chart.notes)),
+		// LEGACY on the same terms as "Other preparations" below. The Outfit step's note box is
+		// gone — the live party-load readout there answers "who's carrying what" off the sheets
+		// themselves — so nothing writes `exp.outfit` any more. Trips logged while the box existed
+		// still carry what a GM typed, and it goes on printing under the heading it was written
+		// for. A trip logged since simply has no such heading.
 		proseSection("Outfit & supplies", paragraphs(exp?.outfit)),
+		// The ticked list is what fills this heading now: the Requisition step's note box is gone,
+		// so `exp.requisition` is LEGACY in the same way `exp.outfit` above is, still printed
+		// under the list for the trips that were logged with it.
 		proseSection("Requisitioned", requisitionedList(exp?.requisitioned) + paragraphs(exp?.requisition)),
+		// LEGACY, and kept deliberately. "Other preparations" is no longer a step of the
+		// walkthrough (ExpeditionDialog's _STEPS), so nothing writes `exp.prep` any more — but
+		// trips logged while it was a step still carry what a GM typed there, and dropping this
+		// line would silently un-print it from every Chronicle page that already holds it.
+		// `proseSection` returns nothing for empty prose and the list is filtered, so a trip
+		// logged since the step went away simply has no such heading.
 		proseSection("Other preparations", paragraphs(exp?.prep)),
 		proseSection("The journey", paragraphs(exp?.running)),
+		// LEGACY, like the three above. The arriving-home step's "Return Triumphant?" box is
+		// gone — that step offers the MOVE now, and making it clears a steading debility (or
+		// raises Fortunes), which the steading's own ledger records attributed to the move. So
+		// nothing writes `home.notes` any more; trips logged with the box keep printing theirs.
 		proseSection("Coming home", paragraphs(home.notes)),
 	].filter(Boolean);
 	if (!sections.length) return null;

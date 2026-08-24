@@ -11,6 +11,7 @@ import {AddSteadingMemberDialog} from "../../dialogs/AddSteadingMemberDialog.js"
 import {addPersonToSteading, personFieldPath, isActorRow, personRowActor, usedPersonPortraits, HOME_STONETOP} from "./steading-people.js";
 import {PERSON_DEFAULT_IMG} from "../../utils/person-portrait.js";
 import {openNpcNotesDialog} from "./npc-notes-dialog.js";
+import {openReturnTriumphant} from "./return-triumphant.js";
 import {openPeoplePortraitPicker} from "./PeopleGalleryDialog.js";
 import {STONETOP_SCOPE, StonetopFlags} from "../character/StonetopFlags.js";
 import {SpecialItemPickerDialog} from "../character/dialogs/SpecialItemPickerDialog.js";
@@ -1644,73 +1645,12 @@ export function createStonetopSteadingSheetClass(Base) {
 			dialog.render(true);
 		}
 
-		// Return Triumphant: clear one marked steading debility. If none are marked,
-		// increase Fortunes by 1 instead. Mirrors the Meet with Disaster walkthrough
-		// (its inverse — that one marks debilities / drops Fortunes). Writes are
-		// attributed to the move so the steading ledger reads "via Return Triumphant".
+		// Return Triumphant: clear one marked steading debility, or raise Fortunes by 1 when
+		// none are marked. The walkthrough itself lives in ./return-triumphant.js, because the
+		// last step of the Run an Expedition guide offers the same move — that is where a table
+		// is when it comes up — and two copies would eventually disagree about what it does.
 		async _onReturnTriumphant() {
-			const DEBILITIES = [
-				{ id: "diminished", label: "Diminished", detail: "disadvantage to Deploy, Muster, Pull Together" },
-				{ id: "lacking",    label: "Lacking",    detail: "treat Prosperity as 1 lower" },
-				{ id: "malcontent", label: "Malcontent", detail: "Fortunes reset to +0 each season; folks need Persuading more often" },
-			];
-			const marked = DEBILITIES.filter(d =>
-				this._stonetopSteading.getSystemValue(`attributes.debilities.options.${d.id}.value`, false));
-
-			// No debilities marked → the move raises Fortunes by 1 instead.
-			if (marked.length === 0) {
-				const fortunes = this._stonetopSteading.getStatValue("fortunes");
-				const newFortunes = fortunes + 1;
-				new Dialog({
-					title: "Return Triumphant",
-					content: `<div class="stonetop-disaster-dialog">
-						<p><em>You return home in triumph, and the steading has no debilities marked.</em></p>
-						<p>Fortunes: <strong>${sign(fortunes)}</strong> → <strong>${sign(newFortunes)}</strong></p>
-					</div>`,
-					buttons: {
-						cancel: { label: "Cancel" },
-						apply: {
-							label: "Increase Fortunes",
-							callback: async () => {
-								await this._stonetopSteading.setSystemValue("stats.fortunes.value", newFortunes, { stonetopMove: "Return Triumphant" });
-								this.render(false);
-							},
-						},
-					},
-					default: "apply",
-				}, { classes: ["dialog", "stonetop", "stonetop-disaster-move-dialog"] }).render(true);
-				return;
-			}
-
-			// One or more debilities marked → the GM clears 1.
-			const choicesHtml = marked.map(d => `
-				<li class="stonetop-disaster-choice" data-choice="${d.id}">
-					<span class="stonetop-disaster-choice-label">${d.label}</span>
-					<span class="stonetop-disaster-choice-detail">${d.detail}</span>
-				</li>`).join("");
-
-			// `const`, even though the render/button callbacks below refer to `dialog`: they run
-			// after this statement completes, so the binding is always initialised by then.
-			const dialog = new Dialog({
-				title: "Return Triumphant",
-				content: `<div class="stonetop-disaster-dialog">
-					<p><em>You return home in triumph.</em> Clear 1 of the steading's debilities:</p>
-					<ol class="stonetop-disaster-choices">${choicesHtml}</ol>
-				</div>`,
-				buttons: { cancel: { label: "Cancel" } },
-				render: (html) => {
-					html[0].querySelectorAll(".stonetop-disaster-choice").forEach(el => {
-						el.addEventListener("click", async () => {
-							const choice = marked.find(d => d.id === el.dataset.choice);
-							if (!choice) return;
-							await this._stonetopSteading.setSystemValue(`attributes.debilities.options.${choice.id}.value`, false, { stonetopMove: "Return Triumphant" });
-							this.render(false);
-							dialog.close();
-						});
-					});
-				},
-			}, { classes: ["dialog", "stonetop", "stonetop-disaster-move-dialog"] });
-			dialog.render(true);
+			openReturnTriumphant(this._stonetopSteading, { onApplied: () => this.render(false) });
 		}
 
 		async _onRequisitionWalkthrough() {

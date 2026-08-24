@@ -36,18 +36,20 @@ export const CHART_GROUPS = [
 	},
 ];
 
-// Arriving home — the questions to settle before the PCs walk back in.
+// Arriving home — the questions to settle before the PCs walk back in. Prompts only:
+// unlike CHART_GROUPS these are never ticked, so they carry no key for anything to
+// resolve back.
 export const HOME_GROUP = [
 	{
 		label: "Before they arrive, consider",
 		items: [
-			{ key: "absence",       text: "How long have they been gone, and how has their absence been felt?" },
-			{ key: "casualties",    text: "If they suffered casualties, who back home is most affected or upset?" },
-			{ key: "townDoings",    text: "What have folks back home been up to?" },
-			{ key: "requisitioned", text: "If they Requisitioned assets, how has that impacted the village?" },
-			{ key: "threats",       text: "Did any threats advance toward their dooms while they were away?" },
-			{ key: "triumph",       text: "Are they Returning Triumphant, or could they, with some effort?" },
-			{ key: "disaster",      text: "Could their return cause panic or reveal calamity (Meet With Disaster)?" },
+			{ text: "How long have they been gone, and how has their absence been felt?" },
+			{ text: "If they suffered casualties, who back home is most affected or upset?" },
+			{ text: "What have folks back home been up to?" },
+			{ text: "If they Requisitioned assets, how has that impacted the village?" },
+			{ text: "Did any threats advance toward their dooms while they were away?" },
+			{ text: "Are they Returning Triumphant, or could they, with some effort?" },
+			{ text: "Could their return cause panic or reveal calamity (Meet With Disaster)?" },
 		],
 	},
 ];

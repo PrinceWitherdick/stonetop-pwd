@@ -1,4 +1,5 @@
 import { isValidRect, fullPortraitSrc } from "../book2-art/people-portraits.js";
+import { isDefaultImg } from "./strings.js";
 import { SYSTEM_ID } from "../system-id.js";
 
 /**
@@ -285,6 +286,24 @@ export function resolvePortrait(img, frame, { fullSrc = fullPortraitSrc } = {}) 
 	const full = fullSrc(img);
 	if (full && sameSrc(frame.src, full)) return { src: frame.src, style, framed: true };
 	return unframed;
+}
+
+/**
+ * `resolvePortrait` for a document that may have no art of its own.
+ *
+ * Foundry hands every document a default silhouette, and a caller drawing an avatar wants to know
+ * "is there a picture" rather than "is `img` non-empty" — so the default has to become null before
+ * it reaches `resolvePortrait`, whose `src` passes through unchanged and would otherwise paint the
+ * placeholder as though it were art. Every avatar-drawing surface wanted that same conversion and
+ * wrote the ternary out for itself; this is it, once.
+ *
+ * @param {string|null|undefined} img    the document's `img`, default silhouette and all
+ * @param {object|null} [frame]          its `portraitFrame` flag, see documentPortraitFrame
+ * @returns {{src: string|null, style: string, framed: boolean}}  `src` is null when there is no
+ *          real art, which is what a caller's `{{#if img}}` is asking.
+ */
+export function portraitOrNone(img, frame = null) {
+	return resolvePortrait(isDefaultImg(img) ? null : (img || null), frame ?? null);
 }
 
 /**

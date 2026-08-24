@@ -59,14 +59,14 @@ describe("ExpeditionDialog reload-resume record", () => {
 		const saved = getWalkthroughResume("expedition");
 		expect(saved.stepKey).toBe(dialog._steps[4].key);
 
-		// A record written BEFORE that insert, when "prep" was the fifth step. Its index is now
+		// A record written BEFORE that insert, when "running" was the fifth step. Its index is now
 		// stale by exactly one and its key is not, so restoring by key has to move it forward.
 		expect(dialog._steps[4].key).toBe("requisition");
-		expect(dialog._steps[5].key).toBe("prep");
-		store.walkthroughResume = { "world-a": { expedition: { open: true, step: 4, stepKey: "prep" } } };
+		expect(dialog._steps[5].key).toBe("running");
+		store.walkthroughResume = { "world-a": { expedition: { open: true, step: 4, stepKey: "running" } } };
 		const reopened = dialogAt(0);
 		reopened._restoreStep();
-		expect(reopened._steps[reopened._step].key).toBe("prep");
+		expect(reopened._steps[reopened._step].key).toBe("running");
 		expect(reopened._step).toBe(5);
 	});
 

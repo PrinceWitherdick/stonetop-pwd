@@ -3883,38 +3883,40 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 
 /* Die of Fate oracle card — traffic-light bands (1–2 bad, 3–4 mixed, 5–6 good) */
 .stonetop-fate-card .cell--chat { padding-top: 16px; }
-.stonetop-fate-result {
+
+/* ONE rhythm down the card, set here rather than by each part's own margin. The title, the
+   formula chip, the result and the table each used to carry their own bottom margin, and the
+   cell they sit in is itself a flex column with a gap — so the gaps stacked unevenly and the
+   card read as loose in some places and tight in others. A flex column with one gap, and the
+   parts zeroed, is the same fix the roll cards' cell already uses. */
+.stonetop-fate {
 	display: flex;
-	align-items: center;
-	gap: 10px;
-	padding: 6px 10px;
-	border-radius: var(--st-radius-lg);
-	border-left: 5px solid currentColor;
-	margin: 0;
+	flex-direction: column;
+	gap: 8px;
 }
-.stonetop-fate-number {
-	font-family: var(--font-stonetop);
-	font-size: 2.2em;
-	line-height: 1;
-	font-weight: bold;
+.stonetop-fate > .stonetop-roll-formula,
+.stonetop-fate > .stonetop-fate-legend { margin: 0; }
+
+/* The answer, which is `.stonetop-roll-result` (the block every Stonetop roll card ends on)
+   plus the two things a fate roll says differently: the left edge and the wash take the ROW's
+   tone rather than the hit-tier bone. Two classes, so both beat the shared rule wherever it
+   is in the file. */
+.stonetop-roll-result.stonetop-fate-result {
+	border-left-color: currentColor;
 }
 .stonetop-fate-label {
+	font-family: var(--font-stonetop);
 	font-weight: bold;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
+	line-height: 1.1;
 }
-/* The rolled row's words, beside the number. A named table (a perilous leg, making camp)
-   answers in a full sentence, so it stacks under the band word rather than beside it, and
-   it is NOT uppercased — that treatment was chosen for the one-word bands. */
-.stonetop-fate-said {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	min-width: 0;
-}
+/* The rolled row's words. A named table (a perilous leg, making camp) answers in a full
+   sentence, so it stacks under the band word rather than beside it, and it is NOT uppercased —
+   that treatment was chosen for the one-word bands. */
 .stonetop-fate-text {
 	font-weight: bold;
-	line-height: 1.25;
+	line-height: 1.3;
 }
 /* Which question was asked — the speaker alias only ever says "Die of Fate".
    The colour is DECLARED, not inherited: this card's paper is parchment in both themes, and a
@@ -3930,31 +3932,57 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	letter-spacing: 0.06em;
 	opacity: 0.75;
 }
+/* THE TABLE, under the answer: what the other five faces would have said. Reference, so it is
+   set quieter than the result above it and tighter than the card's prose. */
 .stonetop-fate-legend {
 	list-style: none;
-	margin: 0 0 8px;
+	margin: 0;
 	padding: 0;
 	font-size: var(--st-fs-sm);
+	line-height: 1.3;
 }
+/* A GRID, not a bold run and a sentence in one flow. Inline, a range and its text are one
+   paragraph: the second line wraps back to the left edge and sits under the die face, which is
+   what made a four-row table look like eight ragged ones. Two cells hang the sentence in its
+   own column, and the ranges line up on their right edge (a "1" under a "4–5") so the column
+   reads as a die's worth of faces rather than as ragged numbers. */
 .stonetop-fate-legend-row {
+	display: grid;
+	grid-template-columns: 2.4em 1fr;
+	gap: 8px;
 	padding: 2px 6px;
 	border-radius: var(--st-radius-sm);
-	opacity: 0.65;
 }
-.stonetop-fate-legend-row strong { display: inline-block; min-width: 2.6em; }
-.stonetop-fate-legend-row.is-active {
-	opacity: 1;
-	font-weight: bold;
-	background: rgba(0, 0, 0, 0.06);
+.stonetop-fate-legend-range {
+	font-family: var(--font-stonetop);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	opacity: 0.85;
 }
+/* The SENTENCES are ink; only the range keeps the row's tone. Every row printed in its own
+   traffic-light colour was three colours of prose stacked up the card, which no other Stonetop
+   card does and which left the rolled row with nothing much to distinguish it. The tone now
+   rides on the numbers, where it reads as a key to the table. */
+.stonetop-fate-legend-text {
+	color: var(--st-text);
+	opacity: 0.7;
+}
+/* The row the die landed on, wearing the same wash as the result block above it — one card, one
+   way of saying "this one". */
+.stonetop-fate-legend-row.is-active { font-weight: bold; }
+.stonetop-fate-legend-row.is-active .stonetop-fate-legend-text { opacity: 1; }
+.stonetop-fate-legend-row.is-active .stonetop-fate-legend-range { opacity: 1; }
 
 /* Band colours */
 .stonetop-fate--bad   { color: #b3261e; }
 .stonetop-fate--mixed { color: #9a7400; }
 .stonetop-fate--good  { color: #2e7d32; }
-.stonetop-fate-result.stonetop-fate--bad   { background: rgba(179, 38, 30, 0.10); }
-.stonetop-fate-result.stonetop-fate--mixed { background: rgba(154, 116, 0, 0.12); }
-.stonetop-fate-result.stonetop-fate--good  { background: rgba(46, 125, 50, 0.10); }
+.stonetop-fate-result.stonetop-fate--bad,
+.stonetop-fate-legend-row.is-active.stonetop-fate--bad   { background: rgba(179, 38, 30, 0.10); }
+.stonetop-fate-result.stonetop-fate--mixed,
+.stonetop-fate-legend-row.is-active.stonetop-fate--mixed { background: rgba(154, 116, 0, 0.12); }
+.stonetop-fate-result.stonetop-fate--good,
+.stonetop-fate-legend-row.is-active.stonetop-fate--good  { background: rgba(46, 125, 50, 0.10); }
 
 /* Weather roll chat card (Book I seasonal tables, p.325) */
 .stonetop-weather-card .cell--chat { padding-top: 16px; }
@@ -15190,6 +15218,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
    circle-vs-square call. */
 .steading-member-avatar-img,
 .steading-player-portrait-img,
+.stonetop-exp-load-ava-img,
 .stonetop-follower-portrait-img,
 .stonetop-npc-portrait-img,
 .stonetop-portrait-img,
@@ -15230,6 +15259,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
    and on a framed image a radius becomes an ellipse that clips the visible circle. */
 .steading-member-avatar-img,
 .steading-player-portrait-img,
+.stonetop-exp-load-ava-img,
 .stonetop-npc-portrait-img,
 .stonetop-portrait-img,
 .stonetop-rel-portrait-img,
@@ -16701,6 +16731,32 @@ a.steading-player-open:hover {
 	border-radius: var(--st-radius);
 	cursor: pointer;
 	background: rgba(0,0,0,0.03);
+}
+
+/* Return Triumphant picks a row before it writes it, so a row has a chosen state and is
+   reachable by keyboard. Meet with Disaster shares this card and applies on click, so it
+   only ever shows the hover; nothing there sets `.is-selected`. Two classes to one, so
+   the chosen state outranks the base rule wherever it sits. */
+.stonetop-disaster-choice:hover {
+	background: rgba(0,0,0,0.06);
+}
+
+.stonetop-disaster-choice:focus-visible {
+	outline: 2px solid var(--st-green-border);
+	outline-offset: 1px;
+}
+
+.stonetop-disaster-choice.is-selected {
+	border-color: var(--st-green-border);
+	background: var(--st-green-bg);
+	color: var(--st-green-text);
+}
+
+/* The detail line is deliberately quieter than its label, and the chosen row's ink has to
+   carry that same contrast rather than let the muted grey sit on the green. */
+.stonetop-disaster-choice.is-selected .stonetop-disaster-choice-detail {
+	color: var(--st-green-text);
+	opacity: 0.85;
 }
 
 .stonetop-disaster-choice-label {
@@ -26516,8 +26572,14 @@ th:has(> .stonetop-roll-table-btn) {
 
 /* The sheets size their own <h3>s, and nothing does that inside a dialog, so this
    heading would come out at the UA default and dwarf a 200px column. Sized to the
-   step prose beside it instead. */
+   step prose beside it instead.
+
+   `position: relative` is the die's anchor, and belongs on the HEADING rather than on a
+   wrapper: `right: 0` then lands on the same edge core's h3 underline ends at. Nothing else
+   in this rail is absolutely positioned, so it establishes a containing block for the one
+   control that wants it. */
 .stonetop-guide-moves-sidebar .stonetop-move-group-title {
+	position: relative;
 	margin: 0;
 	font-size: var(--st-fs-md);
 	line-height: 1.2;
@@ -26531,45 +26593,44 @@ th:has(> .stonetop-roll-table-btn) {
 	margin-top: 2px;
 }
 
-/* The heading row: the title (with its caption under it) and the randomizer die beside it.
+/* THE DIE, down on the caption's line and standing just clear of the heading's rule.
 
-   NOT `.stonetop-moves-collapsible` / `.stonetop-moves-summary`, the pair the character sheet's
-   sidebar groups use and this rail used to borrow. Those classes carry a fold with them — a
-   rotating caret on the heading and a rule that clamps the list to zero height — and this rail
-   has no second collapse. It holds ONE group, so folding it leaves a heading standing over an
-   empty column, which is the edge handle's job done worse.
+   It is emitted INSIDE the <h3> now (the section-heading partial's own `randomize=`), not
+   beside it in a `.stonetop-guide-moves-head` flex row — that wrapper and its three rules are
+   gone from here and from expedition.hbs, which carries the long version of why. The short of
+   it: a flex item shrinks to its content, so as a sibling the h3 stopped spanning the column
+   and core's `body.game .app h3` underline — the hairline between this heading and the list —
+   stopped short of the die and ran under the words alone. Inside the h3 the heading is a
+   full-width block again and the hairline runs the width of the rail.
 
-   MEASURED, because the caret was also paying for itself in the one place this column has no
-   slack: it took 14px of the 179 the heading gets, which is exactly the difference between
-   "Exploration moves" on one line and breaking after the first word once the die is beside it.
-   With the caret gone the title fits at root 16; at root 20 it wants 179.8px and would wrap
-   with or without anything next to it, and the caption takes the second line instead.
+   OUT OF FLOW rather than left to sit inline after the caption, and that is MEASURED, not
+   tidiness. Inline it fits beautifully at root 16 — the caption takes 119px of the 179 the
+   heading gets, so the die lands 8.7px after "town" — and breaks at root 20, where the caption
+   alone takes 148.7px while the die and its margin want 32, which is 1.7px more than the column
+   has: it wrapped to a FOURTH line, alone and flush left under the caption. Absolute it cannot
+   wrap at either size, and lands 38px after the text at root 16 and 3px at root 20, on the
+   caption's line.
 
-   `flex-start`, not the sheet's `center`: this heading is two lines, so centring the die would
-   drop it into the gap between the title and the caption. The title takes the remaining width
-   so the die sits at the end of the line rather than immediately after the last word. */
-.stonetop-guide-moves-sidebar .stonetop-guide-moves-head {
-	display: flex;
-	align-items: flex-start;
-}
+   `bottom: 2px` rather than flush: at 0 the chip's lower edge lands ON core's h3 underline,
+   and the die reads as sitting on the line rather than above it — most of all on hover, where
+   the lit box has its own bottom edge to be mistaken for the rule. Two pixels is the smallest
+   gap that reads as a gap, and it comes off the empty air ABOVE the die (which hangs up into
+   the title's line either way), so nothing below moves and the heading does not grow.
 
-.stonetop-guide-moves-sidebar .stonetop-guide-moves-head > .stonetop-move-group-title {
-	flex: 1 1 auto;
-	min-width: 0;
-}
+   An OFFSET rather than bottom padding on the button: padding grows the box, and the box IS the
+   hover chip — a taller chip with the glyph no longer centred in it is a different-looking
+   control, where all that was wanted is the same control, two pixels up.
 
-/* Onto the TITLE's line. Aligning to the top of the heading box is only approximately right —
-   the die is taller than the title's line — and centring is badly wrong once the caption is
-   under it.
-
-   The title's first line box is `1.2 × var(--st-fs-md)` = 1.26em of the row's own size, so its
-   centre is at 0.63em; the die is 1.35rem tall, so its centre is 0.675rem down from its top.
-   The difference is what pulls it up. It comes out around -2px at either root size, and is
-   written as the arithmetic rather than as that number so it tracks both the heading's em and
-   the die's own font scale instead of drifting when either moves. */
-.stonetop-guide-moves-sidebar .stonetop-guide-moves-head > .stonetop-section-randomize {
-	flex: none;
-	margin-top: calc(0.63em - 0.675rem * var(--stonetop-font-scale, 1));
+   Out of flow also means the heading no longer grows to contain it, so the die (taller than the
+   caption's line) hangs up into the title's line. That space is empty at both sizes in a column
+   this narrow: the title ends ~35px short of the die at root 16, and at root 20 it has already
+   wrapped to "Exploration / moves". `margin: 0` drops the 5px the inline button needs to stand
+   off the text it follows — `right: 0` is the standoff here. */
+.stonetop-guide-moves-sidebar .stonetop-move-group-title > .stonetop-section-randomize {
+	position: absolute;
+	right: 0;
+	bottom: 2px;
+	margin: 0;
 }
 
 .stonetop-guide-moves-sidebar .stonetop-guide-moves-list {
@@ -26698,6 +26759,23 @@ th:has(> .stonetop-roll-table-btn) {
 .stonetop-spring-body p { margin: 0 0 8px; }
 .stonetop-spring-body p:last-child { margin-bottom: 0; }
 
+/* PROSE RESUMING AFTER A LIST gets a gap above it, because that is where a step changes
+   subject. A paragraph carries its space UNDERNEATH (the rule above), and a list carries none
+   at its foot, so a paragraph following one started hard against the last bullet: on "Player
+   moves on the road" the Make Camp write-up ran straight on from the six moves listed above it,
+   and Deprivation ran straight on from the Die of Fate table, each reading as another line of
+   the list rather than as the new topic it is.
+
+   Structural rather than a class on the two paragraphs that prompted it: every one of these is
+   the same "the list is over, here is the next thing" join, and a rule that has to be remembered
+   per paragraph is one the next step body written will not have. 12px is the paragraph gap and
+   half again — enough to read as a break, short of the space the walkthrough gives a heading.
+
+   Scoped to the expedition walkthrough. `.stonetop-spring-body` is worn by a dozen wizards
+   (Make a Hazard, Create a Site, the follower builders), whose step bodies are a paragraph and a
+   field rather than pages of prose; this is not a change to make to all of them unseen. */
+.stonetop-expedition-dialog .stonetop-spring-body :is(ul, ol) + p { margin-top: 12px; }
+
 /* Closing "wrap up" note on the combined Seasons Change step — set off from the
    hook field above it with a divider and a muted tone. */
 .stonetop-spring-footer {
@@ -26726,11 +26804,16 @@ th:has(> .stonetop-roll-table-btn) {
 	list-style: none;
 	padding-left: 14px;
 }
-.stonetop-spring-body ul:not([class]) > li {
+/* The arriving-home question list (.stonetop-exp-questions) is hung by these same two rules
+   rather than by a copy of them: it wants the identical left edge, and it had grown its own
+   byte-for-byte duplicate of the arithmetic, differing only in which spiral it drew. */
+.stonetop-spring-body ul:not([class]) > li,
+.stonetop-exp-questions > li {
 	position: relative;
 	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
 }
-.stonetop-spring-body ul:not([class]) > li::before {
+.stonetop-spring-body ul:not([class]) > li::before,
+.stonetop-exp-questions > li::before {
 	content: "";
 	position: absolute;
 	left: 0;
@@ -26820,16 +26903,31 @@ th:has(> .stonetop-roll-table-btn) {
 
 /* Omen tiers */
 
+/* The list itself is LAYOUT ONLY. What a tier looks like belongs to whichever modifier the
+   list wears -- --cards for the Spring dialog's omen list, --table for the expedition's
+   rollable outcomes -- because the two looks share almost nothing, and a look on the base
+   is a look the other consumer has to spend a rule undoing. */
 .stonetop-spring-tiers {
 	list-style: none;
 	margin: 0;
 	padding: 0;
 	display: flex;
 	flex-direction: column;
+}
+
+/* The one thing both looks agree on: the tier that came up marks itself green. */
+.stonetop-spring-tier.is-active {
+	border-color: var(--st-green-border);
+	background: var(--st-green-bg);
+}
+
+/* ── The card look: one bordered card per tier, the ones that did not come up dimmed.
+   Spring Burst's omen list, which has no table beside it to match. ── */
+.stonetop-spring-tiers--cards {
 	gap: 6px;
 }
 
-.stonetop-spring-tier {
+.stonetop-spring-tiers--cards .stonetop-spring-tier {
 	display: flex;
 	align-items: baseline;
 	gap: 10px;
@@ -26841,23 +26939,46 @@ th:has(> .stonetop-roll-table-btn) {
 	transition: opacity 0.15s, border-color 0.15s, background 0.15s;
 }
 
-.stonetop-spring-tier.is-active {
+.stonetop-spring-tiers--cards .stonetop-spring-tier.is-active {
 	opacity: 1;
-	border-color: var(--st-green-border);
-	background: var(--st-green-bg);
 }
 
-.stonetop-spring-tier-label {
+.stonetop-spring-tiers--cards .stonetop-spring-tier-label {
 	flex: 0 0 auto;
 	min-width: 2.6em;
 	font-weight: 700;
 	font-size: calc(0.95rem * var(--stonetop-font-scale, 1));
 }
 
-.stonetop-spring-tier-text {
+.stonetop-spring-tiers--cards .stonetop-spring-tier-text {
 	flex: 1;
 	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
 	line-height: 1.45;
+}
+
+/* ── The table look: the expedition's Requisition outcomes, worn as the boxed rollable
+   table the Die of Fate steps print. One bordered box with a line per result. The BOX
+   itself is declared once, on the shared rule with .stonetop-exp-fatetable further down
+   this file, so the two rollable tables a GM meets three steps apart in one walkthrough
+   cannot drift apart. Only what is this list's own is here. ── */
+
+/* Rows carry no chrome of their own inside the box (the box is the frame), and none of
+   them is dimmed: every line of a rollable table is there to be read before the roll.
+   Text flow, not the label/description columns of the card look: a fate row reads
+   "1-2: it goes badly" as one sentence, and the outcome starts right after its colon
+   rather than at a tab stop wide enough for the widest range. */
+.stonetop-spring-tiers--table .stonetop-spring-tier {
+	line-height: 1.45;
+	padding: 1px 0;
+	border: 1px solid transparent;
+	border-radius: var(--st-radius-sm);
+}
+
+/* The result that came up marks itself as a tinted band across its line, bled out to the
+   box's padding so the band spans the row rather than floating inside it. */
+.stonetop-spring-tiers--table .stonetop-spring-tier.is-active {
+	margin-inline: -6px;
+	padding-inline: 6px;
 }
 
 /* Tier colour-coding (shared by the dialog roll result and the chat card) */
@@ -27095,6 +27216,53 @@ th:has(> .stonetop-roll-table-btn) {
 	line-height: 1.4;
 }
 
+/* The arriving-home list: questions to think through, not boxes to tick. Same group chrome
+   as the checklist above (it shares .stonetop-exp-checkgroup and its label), but each row
+   hangs a question spiral where the checkbox stood — the mark this system gives a question
+   everywhere else it prints one. Hung BY the walkthrough's own prose-bullet rule (see
+   .stonetop-spring-body ul:not([class]) above), so a question in the list and a bullet in the
+   step above it cannot end up on different left edges. */
+.stonetop-exp-questions {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+/* The bullet geometry is the walkthrough's own, declared with it further up this file --
+   these rows sit on the same left edge as a prose bullet in the step above because they are
+   hung by the same rule, not by a second copy of its arithmetic. Only the type is local. */
+.stonetop-exp-questions > li {
+	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
+	line-height: 1.4;
+}
+
+/* Every row in this list IS a question, so the spiral is the question one rather than the
+   prose one -- the same one-line swap `li.question-bullet::before` makes elsewhere. */
+.stonetop-exp-questions > li::before {
+	background-image: url('/systems/stonetop-pwd/assets/icons/steading/question-spiral.svg');
+}
+
+/* Return Triumphant, under the arriving-home questions: the one control on that step that
+   writes anything. Its own block below the list rather than a row in it — the questions are
+   the GM thinking, and this is the move. The button wears the walkthrough's own primary roll
+   chrome (.stonetop-spring-roll-btn--primary) because it is the step's action, even though
+   no dice are involved; the line under it says what pressing it does. */
+.stonetop-exp-triumph {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	margin-top: 14px;
+}
+.stonetop-exp-triumph-note {
+	margin: 0;
+	font-size: var(--st-fs-2xs);
+	color: var(--st-text-muted);
+	font-style: italic;
+}
+
 /* No per-row checkbox override: .stonetop-exp-checkbox is in the shared 15px-glyph
    master block, so it inherits the exact seating of every other checklist (lore
    options, arcana unlocks, …). Those peers keep Foundry core's `margin: 3px 5px`,
@@ -27102,9 +27270,13 @@ th:has(> .stonetop-roll-table-btn) {
    Do NOT add `margin: 0` here — that was tuned for the old native 20px box; on a
    15px glyph it lifts the box ~3px ABOVE where the peer checklists sit. */
 
-/* Inline d6 reference table embedded in a step body (e.g. Make Camp occurrences). */
-.stonetop-spring-body ul.stonetop-exp-fatetable {
-	margin-top: 6px;
+/* The box every rollable table in a step body wears: the inline d6 reference tables (e.g.
+   Make Camp occurrences) and the Requisition outcome list, which is a .stonetop-spring-tiers
+   list wearing --table. Declared once for both -- these two are read three steps apart in one
+   walkthrough and have to look like the same thing, which a second hand-copied box does not
+   survive. Each entry keeps its own specificity, so this still lands after the tier base. */
+.stonetop-spring-body ul.stonetop-exp-fatetable,
+.stonetop-spring-tiers--table {
 	padding: 8px 12px;
 	gap: 3px;
 	list-style: none;
@@ -27112,6 +27284,11 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius);
 	background: rgba(0, 0, 0, 0.02);
 	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
+}
+
+/* Only the inline reference table needs lifting off the paragraph above it. */
+.stonetop-spring-body ul.stonetop-exp-fatetable {
+	margin-top: 6px;
 }
 
 /* Navigation (the nav bar + buttons are shared — see .stonetop-guide-nav). Only
@@ -29800,6 +29977,21 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over  .stonetop-exp-load-ava { background: var(--st-red-text); }
 .stonetop-expedition-dialog .stonetop-exp-load-row.is-follower .stonetop-exp-load-ava { width: 22px; height: 22px; font-size: var(--st-fs-2xs); }
 
+/* Anyone with a portrait wears their own face here instead of an initial: the disc becomes a
+   clipping box (the shared People crop and the hand-cut frame both apply, as everywhere else a
+   small face appears), and the load band moves from the fill to a RING around it, so the
+   light/heavy/overloaded colour still reads at a glance beside the pips. box-sizing keeps the
+   ring inside the same 26px, so a photo row and an initial row line up.
+
+   These sit after the plain-disc rules above on purpose: same specificity, later wins. */
+.stonetop-expedition-dialog .stonetop-exp-load-ava--photo {
+	display: block; position: relative; overflow: hidden;
+	box-sizing: border-box; border: 2px solid slategrey;
+}
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light .stonetop-exp-load-ava--photo { border-color: var(--st-green-border); }
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-heavy .stonetop-exp-load-ava--photo { border-color: #c29a1f; }
+.stonetop-expedition-dialog .stonetop-exp-load-row.lvl-over  .stonetop-exp-load-ava--photo { border-color: var(--st-red-text); }
+
 .stonetop-expedition-dialog .stonetop-exp-load-name {
 	font-family: var(--font-stonetop); font-weight: 700; font-size: var(--st-fs-sm); white-space: nowrap;
 }
@@ -29983,9 +30175,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    Its own row between the picks and the map tabs, because it belongs to neither and crowds both:
    it changes what a click on the picture means AND what the readout underneath is about. Quiet
    while it is off — one checkbox in the muted italic every other label on this screen wears — and
-   it takes the route's own red once it is on, which is the colour of the line the reader is about
-   to be drawing. That is the whole of the state: the map either is or is not something to draw on,
-   and this row is where you look to find out which. */
+   it warms to the panel's gold once it is on. That is the whole of the state: the map either is or
+   is not something to draw on, and this row is where you look to find out which. */
 .stonetop-journey .stonetop-journey-draw {
 	display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
 	margin-top: 6px; padding: 5px 10px;
@@ -30004,12 +30195,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; width: auto;
 	padding: 2px 8px; font-size: var(--st-fs-2xs); line-height: 1.4;
 }
-/* Later than the base rule, per the modifier-ordering house rule. The tint is the route ink at a
-   twentieth, which is the same red the line on the map is drawn in and reads as barely a wash
-   against the step column rather than as a warning. */
+/* Later than the base rule, per the modifier-ordering house rule. The tint is the parchment gold,
+   NOT the route's red: the red is what a WARNING wears everywhere else on this screen, and a mode
+   the GM turned on deliberately is not a warning. Gold is already the readout's own accent two
+   rules up, so the row lighting up reads as this panel's own emphasis. */
 .stonetop-journey .stonetop-journey-draw.is-on {
-	border-color: color-mix(in srgb, var(--stonetop-route-ink) 35%, transparent);
-	background: color-mix(in srgb, var(--stonetop-route-ink) 5%, transparent);
+	border-color: color-mix(in srgb, var(--st-gold-border) 55%, transparent);
+	background: color-mix(in srgb, var(--st-gold-border) 8%, transparent);
 }
 .stonetop-journey .stonetop-journey-draw.is-on .stonetop-journey-drawlab {
 	color: var(--st-text); font-style: normal; font-weight: 700;
@@ -34678,15 +34870,19 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    walk that leads up to the draw) and by the row it LANDS on (`stonetop-flash`). Declared
    once for both, because the two swap on the landing row inside a single task: any geometry
    that differed between them would jump at exactly the moment being watched. */
+.stonetop-spring-body ul.stonetop-exp-fatetable li:is(.stonetop-spin, .stonetop-flash),
 .stonetop-gm-toolkit-moves .stonetop-gm-move:is(.stonetop-spin, .stonetop-flash) {
 	margin-inline: -6px;
 	padding-inline: 6px;
 	border-radius: 3px;
 }
 
-/* THE PAINT OF THE DRAW, for both surfaces that have one: this tab's three move lists and the
+/* THE PAINT OF THE DRAW, for every surface that has one: this tab's three move lists, the
    expedition walkthrough's exploration rail (its geometry is up at `.stonetop-guide-moves-sidebar
-   … :is(.stonetop-spin, .stonetop-flash)`). Grouped rather than written out per host, the way
+   … :is(.stonetop-spin, .stonetop-flash)`), and the Die of Fate table a walkthrough step prints
+   — that die decides its answer before the light sets off, exactly as a drawn move does, so it
+   walks the printed rows the same way rather than inventing a second way to say "this one".
+   Grouped rather than written out per host, the way
    the segmented pickers group their core-button reset — the wash, the fade and the motion-off
    fallback are the same effect on the same seven-to-thirty rows, and two copies are two things
    to keep in step with `FLASH_MS` and with each other.
@@ -34701,11 +34897,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    each look like the answer too. Half the tone, and no transition of its own — a step is on
    screen for one interval, and anything easing in or out would still be arriving when it was
    time to leave. */
+.stonetop-spring-body ul.stonetop-exp-fatetable li.stonetop-spin,
 .stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move.stonetop-spin,
 .stonetop-gm-toolkit-moves .stonetop-gm-move.stonetop-spin {
 	background-color: color-mix(in srgb, var(--st-warm-hover-bg) 50%, transparent);
 }
 
+.stonetop-spring-body ul.stonetop-exp-fatetable li.stonetop-flash,
 .stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move.stonetop-flash,
 .stonetop-gm-toolkit-moves .stonetop-gm-move.stonetop-flash {
 	animation: stonetop-gm-move-flash 5s ease-out both;
@@ -34715,6 +34913,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    its own — the class comes off on the same 5s timer either way — so nothing is lost but
    the transition. Same treatment the Death's Door moods get further up this file. */
 @media (prefers-reduced-motion: reduce) {
+	.stonetop-spring-body ul.stonetop-exp-fatetable li.stonetop-flash,
 	.stonetop-guide-moves-sidebar .items-list li.stonetop-guide-move.stonetop-flash,
 	.stonetop-gm-toolkit-moves .stonetop-gm-move.stonetop-flash {
 		animation: none;

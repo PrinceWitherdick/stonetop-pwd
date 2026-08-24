@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readRepo } from "../fakes/css.js";
-import { flashHighlight, spinHighlight, FLASH_CLASS, FLASH_MS, SPIN_CLASS, SPIN_MIN_STEPS } from "../../module/utils/flash-highlight.js";
+import { flashHighlight, spinHighlight, SpinTrack, FLASH_CLASS, FLASH_MS, SPIN_CLASS, SPIN_MAX_MS, SPIN_MIN_STEPS } from "../../module/utils/flash-highlight.js";
 
 // The module's own text, comments stripped — this file discusses the very line it forbids
 // removing, so the prose has to come out or the guard passes on its own rationale.
@@ -271,5 +271,86 @@ describe("spinHighlight", () => {
 				delete globalThis.matchMedia;
 			}
 		});
+	});
+});
+
+// The beat every surface that draws from a printed list wants, in the one place it now lives:
+// cancel what is still running, walk, wait, and only then flash. Each surface used to write these
+// five statements out for itself, so a fix to the ORDER reached one caller and not the others.
+describe("SpinTrack", () => {
+	// Run the clock only as far as the landing. `runAllTimersAsync` would drain the flash timer as
+	// well, putting the landing row out again before the assertion could see it lit.
+	const land = async (landing) => {
+		let done = false;
+		landing.then(() => { done = true; });
+		for (let i = 0; i < 500 && !done; i++) await vi.advanceTimersByTimeAsync(SPIN_MAX_MS);
+		return landing;
+	};
+
+	it("walks the light and flashes the row it lands on", async () => {
+		const rows = fakeRows();
+		const track = new SpinTrack();
+
+		expect(await land(track.landOn(rows, 4, { scope: fakeScope(rows) }))).toBe(true);
+
+		// Wearing the flash and NOT the walking light: the swap happens in one task, so the
+		// landing row is never painted bare.
+		expect(rows[4].lit()).toBe(true);
+		expect(rows[4].passing()).toBe(false);
+		expect(lightAt(rows)).toBe(-1);
+	});
+
+	// One landing, one card. A click superseded mid-walk resolves false so its caller posts
+	// nothing — otherwise a GM drumming on the die ends up with a pile of cards for moves whose
+	// light never arrived.
+	it("abandons a walk in flight when a second one starts on the same track", async () => {
+		const rows = fakeRows();
+		const track = new SpinTrack();
+
+		const first = track.landOn(rows, 4);
+		const second = track.landOn(rows, 7);
+
+		expect(await land(second)).toBe(true);
+		expect(await first).toBe(false);
+		// Only the walk that arrived left a mark.
+		expect(rows[7].lit()).toBe(true);
+		expect(rows[4].lit()).toBe(false);
+	});
+
+	// Two lists on one screen are two tracks, so a draw on one does not put the other away:
+	// the fate table and the exploration rail beside it are exactly this pair.
+	it("leaves a walk on another track alone", async () => {
+		const rows = fakeRows();
+		const other = fakeRows();
+
+		const a = new SpinTrack().landOn(rows, 4);
+		const b = new SpinTrack().landOn(other, 2);
+		await vi.runAllTimersAsync();
+
+		expect(await a).toBe(true);
+		expect(await b).toBe(true);
+	});
+
+	// Not an error, and not a walk: the row may simply not be on the page (a re-render mid-roll).
+	// Whatever the walk was theatre FOR still has to happen, so the caller is told to carry on.
+	it("reports success without walking when the target is not there", async () => {
+		const rows = fakeRows();
+		await expect(new SpinTrack().landOn(rows, 99)).resolves.toBe(true);
+		await expect(new SpinTrack().landOn([], 0)).resolves.toBe(true);
+		await expect(new SpinTrack().landOn(null, 0)).resolves.toBe(true);
+		expect(rows.some(r => r.passing() || r.lit())).toBe(false);
+	});
+
+	// A surface closing under a walk puts it out; the caller then resolves false and posts nothing.
+	it("cancels a walk still running", async () => {
+		const rows = fakeRows();
+		const track = new SpinTrack();
+
+		const landed = track.landOn(rows, 4);
+		track.cancel();
+		await vi.runAllTimersAsync();
+
+		expect(await landed).toBe(false);
+		expect(rows.some(r => r.lit())).toBe(false);
 	});
 });

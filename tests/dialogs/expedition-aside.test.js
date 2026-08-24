@@ -76,14 +76,52 @@ describe("the walkthrough's steps", () => {
 	// section goes permanently blank on new trips while the notes already typed on old ones are
 	// stranded, still printed on the page with nowhere left to edit them. So the two are pinned to
 	// each other here rather than left to be noticed a season later.
+	//
+	// ONE EXEMPTION, and it is the other half of the same rule rather than a hole in it.
+	// "Other preparations" was retired as a step, so `exp.prep` has no writer by design — and
+	// the Chronicle deliberately goes on READING it, because trips logged while the step existed
+	// still carry what a GM typed there and deleting the line would un-print it from pages that
+	// already hold it. Naming it here is what keeps that a decision: an unlisted key with no
+	// writer is still the accident this test was written for.
+	//
+	// `running` is the second, on the same terms. "Running the journey" asked for the points of
+	// interest and the legs of travel, which is the question the route step before it already
+	// answers on a map — so the box went and the step is prose and a die now. The Chronicle keeps
+	// reading the key for the trips that were logged with it, and keeps printing them as "The
+	// journey"; what it will not do is offer a heading nobody can fill in.
+	//
+	// `outfit` is the third, and the same shape again: "who's carrying what, and what loads" is
+	// what the live party-load readout on that step already reads off the sheets, so the box under
+	// it went. Stored answers still print as "Outfit & supplies".
+	//
+	// `requisition` is the fourth. What they borrowed is what the step's asset list is TICKED
+	// with, and the Chronicle prints those names under "Requisitioned" on its own — so that
+	// heading keeps a writer even with the box gone, and stored sentences still print beneath it.
+	const RETIRED = new Set(["prep", "running", "outfit", "requisition"]);
+
 	it("give every prose section the Chronicle compiles somewhere to be written", () => {
 		const chronicle = read("module/utils/chronicle-core.js");
 		const page = chronicle.slice(chronicle.indexOf("function buildExpeditionPage"));
 		const reads = [...page.matchAll(/paragraphs\(exp\?\.(\w+)\)/g)].map(m => m[1]);
-		expect(reads).toContain("outfit");           // the one that went missing
+		// Retired, but the Chronicle must go on reading it or the notes already typed on trips
+		// logged with the box un-print themselves. Also the canary that the match above still
+		// matches anything at all.
+		expect(reads).toContain("outfit");
 
 		const writable = new Set(steps.filter(s => s.qa?.kind === "single").map(s => s.qa.key));
-		for (const key of reads) expect([...writable], `nothing writes exp.${key}`).toContain(key);
+		for (const key of reads) {
+			if (RETIRED.has(key)) continue;
+			expect([...writable], `nothing writes exp.${key}`).toContain(key);
+		}
+		// And the exemption is not allowed to go stale: a retired key that gains a step again
+		// should be struck from the list rather than left claiming to be write-only.
+		for (const key of RETIRED) expect([...writable], `exp.${key} has a step again`).not.toContain(key);
+	});
+
+	// The step itself is gone from the rail, which is the visible half of the above.
+	it("no longer walks the GM through a step of its own for the rest of prep", () => {
+		expect(steps.some(s => s.key === "prep")).toBe(false);
+		expect(steps.map(s => s.title)).not.toContain("Other preparations");
 	});
 });
 

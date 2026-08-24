@@ -361,31 +361,65 @@ beforeEach(() => {
 });
 
 describe("the rail's die, as markup", () => {
-	// The section-heading partial can emit this button itself (`randomize=`), which would put it
-	// inside the <h3> — where it would sit after the caption rather than beside the title, and
-	// where the caption's own line would have to make room for it. Out here it is a flex item on
-	// the heading row, so the title's line ends with it and the caption keeps the full column.
-	it("sits beside the heading rather than inside it", () => {
-		const head = HBS.indexOf('class="stonetop-guide-moves-head"');
-		const h3   = HBS.indexOf('"stonetop.section-heading" title="Exploration moves"');
-		const die  = HBS.indexOf('"stonetop.section-randomize"');
-		const list = HBS.indexOf('class="items-list stonetop-guide-moves-list"');
-		expect(head).toBeGreaterThan(-1);
-		expect(die).toBeGreaterThan(h3);
-		expect(die).toBeLessThan(list);
-		expect(HBS).not.toContain("randomize=movesRandomize ");
-		expect(HBS).toContain('{{> "stonetop.section-randomize" section=movesRandomize');
+	// INSIDE the <h3>, through the partial's own `randomize=` parameter, and no longer beside it
+	// in a `.stonetop-guide-moves-head` flex row. A flex item shrinks to its content, so as a
+	// sibling the h3 stopped spanning the column and core's h3 underline stopped short of the die
+	// — and the die sat on the title's line while the caption below it kept the full width.
+	it("is emitted inside the heading, so the h3 stays a full-width block", () => {
+		expect(HBS).toContain("randomize=movesRandomize randomizeTitle=movesRandomizeTitle");
+		expect(HBS).not.toContain('{{> "stonetop.section-randomize" section=movesRandomize');
+		// The wrapper that held the two as siblings is gone from the markup and from the CSS.
+		expect(HBS).not.toContain("stonetop-guide-moves-head");
+		expect(CSS).not.toContain(".stonetop-guide-moves-head {");
+		expect(CSS).not.toContain(".stonetop-guide-moves-head > ");
 	});
 
-	// A flex row, and the title takes the slack: the die belongs at the END of the title's line,
-	// not immediately after its last word. `flex-start` because this heading is two lines — the
-	// caption sits under the title — and centring drops the die into the gap between them.
-	it("rides a flex heading row that seats it on the title's line", () => {
-		const rule = CSS.slice(CSS.indexOf(".stonetop-guide-moves-sidebar .stonetop-guide-moves-head {"));
-		expect(rule.slice(0, 120)).toContain("display: flex");
-		expect(rule.slice(0, 120)).toContain("align-items: flex-start");
-		expect(CSS).toContain(".stonetop-guide-moves-sidebar .stonetop-guide-moves-head > .stonetop-move-group-title");
-		expect(CSS).toContain(".stonetop-guide-moves-sidebar .stonetop-guide-moves-head > .stonetop-section-randomize");
+	// OUT OF FLOW, anchored to the bottom-right of the <h3> itself. Left inline after the caption
+	// the die fits at root 16 and does NOT at root 20 — the caption alone takes 148.7px of the
+	// 179 the heading gets, and the die plus its margin wants 32 — so it wrapped to a fourth
+	// line, alone and flush left under the caption. Measured both ways in
+	// z:/tmp/foundry-verify/exp-rail-die-variants.mjs; the CSS comment carries the numbers.
+	it("seats the die on the caption's line by taking it out of flow", () => {
+		const die = CSS.slice(CSS.indexOf(".stonetop-guide-moves-sidebar .stonetop-move-group-title > .stonetop-section-randomize {"));
+		expect(die.slice(0, 140)).toContain("position: absolute");
+		expect(die.slice(0, 140)).toContain("right: 0");
+		// Anchored to the bottom, but not flush to it: flush, the chip's lower edge lands on
+		// core's h3 underline and the die reads as resting on the line rather than above it.
+		expect(die.slice(0, 140)).toContain("bottom: 2px");
+		// The anchor is the HEADING, so `right: 0` is the edge the underline ends at.
+		const h3 = CSS.slice(CSS.indexOf(".stonetop-guide-moves-sidebar .stonetop-move-group-title {"));
+		expect(h3.slice(0, 140)).toContain("position: relative");
+		// And the caption keeps its own line, which is what puts the die's line under the title.
+		const note = CSS.slice(CSS.indexOf(".stonetop-guide-moves-sidebar .stonetop-section-note {"));
+		expect(note.slice(0, 80)).toContain("display: block");
+	});
+
+	// End to end, on the rendered markup: the button is INSIDE the <h3> and after the caption,
+	// which is what makes the caption's line the one it sits on.
+	it("renders the die inside the heading, after the caption", async () => {
+		const hb = Handlebars.create();
+		hb.registerPartial("stonetop.guide-toc", "");
+		hb.registerPartial("stonetop.expedition-journey", "");
+		hb.registerPartial("stonetop.section-heading",
+			read("templates/actor/partials/section-heading.hbs"));
+		hb.registerPartial("stonetop.section-randomize",
+			read("templates/actor/partials/section-randomize.hbs"));
+		hb.registerHelper("localize", x => x);
+		hb.registerHelper("eq", (a, b) => a === b);
+		hb.registerHelper("and", (...a) => a.slice(0, -1).every(Boolean));
+		hb.registerHelper("boldMissText", x => x);
+
+		const { explorationMoves } = await dialog().getData();
+		const html = hb.compile(HBS)({
+			explorationMoves, movesRailCollapsed: false, step: {},
+			movesRandomize: "exploration", movesRandomizeTitle: "Draw one at random",
+		});
+		const rail = html.slice(html.indexOf("stonetop-guide-moves-sidebar"));
+		const h3   = rail.slice(rail.indexOf("<h3"), rail.indexOf("</h3>"));
+		expect(h3).toContain("once they leave town");
+		expect(h3).toContain("stonetop-section-randomize");
+		expect(h3.indexOf("stonetop-section-randomize")).toBeGreaterThan(h3.indexOf("once they leave town"));
+		expect(h3).toContain('data-section="exploration"');
 	});
 
 	// GM-only, and by the same test the load readout and the asset picker use: the card is a

@@ -15,7 +15,7 @@
       <i class="fas {{step.icon}} stonetop-guide-banner-icon"></i>
       <div class="stonetop-guide-banner-info">
         <div class="stonetop-guide-banner-title">{{step.title}}</div>
-        {{!-- Past the opening step this reads "Run an expedition: <the trip's name>",
+        {{!-- Past the opening step this reads "Expedition: <the trip's name>",
               which is where the read-only nameplate under the log bar used to say it.
               Truncated, because the name is whatever the table typed. --}}
         <div class="stonetop-guide-banner-sub stonetop-guide-truncate">{{bannerSub}}</div>
@@ -64,6 +64,47 @@
     </div>
     {{/if}}
 
+    {{!-- The roll a step is read against, printed directly under its prose, as the Die of
+          Fate tables are on the steps that print one: the table first, then the button that
+          rolls on it, and only then the step's own panels (the route map, the party's load,
+          the steading's assets). Requisition used to roll below the whole asset list, a
+          screen away from the sentence asking for the roll. --}}
+
+    {{!-- The requisition roll's three outcomes. Wears the boxed table look of the Die of
+          Fate tables on the journey steps (.stonetop-exp-fatetable): both are "the table
+          this step's roll is read against", and a reader who meets the fate tables two
+          steps later should not have to learn a second shape for the same thing. --}}
+    {{#if showTiers}}
+    <ul class="stonetop-spring-tiers stonetop-spring-tiers--table">
+      {{#each tiers}}
+      <li class="stonetop-spring-tier{{#if isActive}} is-active{{/if}}"><span
+          class="stonetop-spring-tier-label">{{{label}}}</span>: <span
+          class="stonetop-spring-tier-text">{{{text}}}</span></li>
+      {{/each}}
+    </ul>
+    {{/if}}
+
+    {{!-- Below the table it reads against, where the Die of Fate button sits on the steps
+          that roll one. Above it, the button asked for a roll before the outcomes it lands
+          on had been read. --}}
+    {{#if showRoll}}
+    <div class="stonetop-spring-roll-wrap">
+      {{#if roll}}
+      <div class="stonetop-spring-roll-result stonetop-spring--{{roll.tier}}">
+        <span class="stonetop-spring-roll-result-total">{{roll.total}}</span>
+        <span class="stonetop-spring-roll-result-label">{{{roll.label}}}</span>
+      </div>
+      <button type="button" class="stonetop-exp-roll-btn stonetop-spring-roll-btn">
+        <i class="fas fa-rotate-right"></i> Roll again
+      </button>
+      {{else}}
+      <button type="button" class="stonetop-exp-roll-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary">
+        <i class="fas fa-dice"></i> Roll +Fortunes ({{fortunesLabel}})
+      </button>
+      {{/if}}
+    </div>
+    {{/if}}
+
     {{!-- Route step: the regional maps and the book's travel times (built in
           ExpeditionDialog getData). Its own partial — the panel is long, and this
           template is already the biggest in the dialogs folder. --}}
@@ -100,7 +141,7 @@
 
       {{#each loadReadout.rows}}
       <div class="stonetop-exp-load-row {{levelClass}}{{#if isFollower}} is-follower{{/if}}">
-        <span class="stonetop-exp-load-ava">{{initial}}</span>
+        <span class="stonetop-exp-load-ava{{#if img}} stonetop-exp-load-ava--photo{{/if}}">{{#if img}}<img class="stonetop-exp-load-ava-img" src="{{img}}" alt="" draggable="false"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}>{{else}}{{initial}}{{/if}}</span>
         <span class="stonetop-exp-load-name">{{name}}{{#if sub}} <em>{{sub}}</em>{{/if}}{{#if folTag}} <span class="stonetop-exp-load-fol">{{folTag}}</span>{{/if}}</span>
         <span class="stonetop-exp-load-track">
           {{#each bands}}<span class="stonetop-exp-load-band">{{#each pips}}<i class="stonetop-exp-load-pip{{#if on}} on{{/if}}"></i>{{/each}}</span>{{/each}}
@@ -113,7 +154,7 @@
           {{#each gated}}<span class="stonetop-exp-load-move {{#if active}}on{{else}}off{{/if}}"><span class="ic">{{#if active}}✓{{else}}✕{{/if}}</span> <span class="nm">{{name}}</span> <span class="rq">{{req}}</span></span>{{/each}}
         </span>
         {{/if}}
-        {{#if packHorse}}<span class="stonetop-exp-load-note"><span class="mod">▲ Pack Horse</span> {{packHorse}}</span>{{/if}}
+        {{#if loadBonus}}<span class="stonetop-exp-load-note"><span class="mod">▲ {{loadBonus.from}}</span> {{loadBonus.caps}}</span>{{/if}}
         {{#if note}}<span class="stonetop-exp-load-note{{#if noteDanger}} danger{{/if}}">{{#if noteDanger}}⚠ {{/if}}{{note}}</span>{{/if}}
       </div>
       {{/each}}
@@ -168,35 +209,6 @@
     </div>
     {{/if}}
 
-    {{#if showRoll}}
-    <div class="stonetop-spring-roll-wrap">
-      {{#if roll}}
-      <div class="stonetop-spring-roll-result stonetop-spring--{{roll.tier}}">
-        <span class="stonetop-spring-roll-result-total">{{roll.total}}</span>
-        <span class="stonetop-spring-roll-result-label">{{{roll.label}}}</span>
-      </div>
-      <button type="button" class="stonetop-exp-roll-btn stonetop-spring-roll-btn">
-        <i class="fas fa-rotate-right"></i> Roll again
-      </button>
-      {{else}}
-      <button type="button" class="stonetop-exp-roll-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary">
-        <i class="fas fa-dice"></i> Roll +Fortunes ({{fortunesLabel}})
-      </button>
-      {{/if}}
-    </div>
-    {{/if}}
-
-    {{#if showTiers}}
-    <ul class="stonetop-spring-tiers">
-      {{#each tiers}}
-      <li class="stonetop-spring-tier{{#if isActive}} is-active{{/if}}">
-        <span class="stonetop-spring-tier-label">{{{label}}}</span>
-        <span class="stonetop-spring-tier-text">{{{text}}}</span>
-      </li>
-      {{/each}}
-    </ul>
-    {{/if}}
-
     {{#if showFate}}
     <div class="stonetop-spring-roll-wrap">
       <button type="button" class="stonetop-exp-fate-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary">
@@ -205,10 +217,34 @@
     </div>
     {{/if}}
 
+    {{!-- The tail of a step's prose, printed BELOW the Die of Fate button. Only a step that
+          keeps reading past the roll carries one (Player moves on the road, whose deprivation
+          note follows the night rather than setting it up), so the button sits at the end of
+          the thought that reaches for it instead of below everything else on the page. --}}
+    {{#if step.bodyAfterFate}}
+    <div class="stonetop-spring-body">{{{step.bodyAfterFate}}}</div>
+    {{/if}}
+
     {{#if qa}}
     <div class="stonetop-spring-qa-wrap">
 
-      {{#if (eq qa.kind "checklist")}}
+      {{!-- A bare list of questions to think through (the arriving-home list). No ticks and
+            no fields: nothing here is an answer to be saved, so each item wears the question
+            spiral the rest of this system's questions wear rather than a box that would sit
+            half-filled for the rest of the trip. --}}
+      {{#if (eq qa.kind "questions")}}
+        {{#each qa.groups}}
+        <div class="stonetop-exp-checkgroup">
+          <div class="stonetop-exp-checkgroup-label">{{label}}</div>
+          <ul class="stonetop-exp-questions">
+            {{#each items}}
+            <li>{{{text}}}</li>
+            {{/each}}
+          </ul>
+        </div>
+        {{/each}}
+
+      {{else if (eq qa.kind "checklist")}}
         {{#if qa.intro}}
         <div class="stonetop-spring-qa">
           <p class="stonetop-spring-qa-prompt">{{{qa.intro.prompt}}}</p>
@@ -254,6 +290,25 @@
     </div>
     {{/if}}
 
+    {{!-- RETURN TRIUMPHANT, on the arriving-home step: the move itself, opening the same
+          walkthrough the steading sheet's move card does (actors/steading/return-triumphant.js).
+          It clears a steading debility, or raises Fortunes when none are marked — so it is the
+          one thing on this step that WRITES, and it belongs under the questions rather than
+          among them. GM-only, and it says so plainly when the world has no steading sheet
+          to clear a debility on. --}}
+    {{#if returnTriumphant}}
+    <div class="stonetop-exp-triumph">
+      <button type="button" class="stonetop-exp-triumph-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary"
+              {{#unless returnTriumphant.hasSteading}}disabled{{/unless}}>
+        <i class="fas fa-house-chimney-heart"></i> Return Triumphant
+      </button>
+      <p class="stonetop-exp-triumph-note">
+        {{#if returnTriumphant.hasSteading}}If their return is a true triumph, clear one of the steading&rsquo;s debilities, or raise Fortunes by 1 if none are marked.
+        {{else}}No steading sheet in this world yet, so there is nothing to clear.{{/if}}
+      </p>
+    </div>
+    {{/if}}
+
     </div>
 
     {{!-- EXPLORATION MOVES — a permanent right-hand rail, on every step, wearing the
@@ -296,29 +351,37 @@
               So the heading is a plain heading now: no role, no tabindex, no aria-expanded, no
               handler. Do not reach for the shared collapsible classes to re-style it — they
               carry the caret and the clamp with them. --}}
-        <div class="stonetop-guide-moves-head">
-          {{!-- `note` rather than a line of our own: it is the same "what this list is"
-                caption the GM Toolkit's move groups carry. It is an inline span by
-                default, which tucks against the title in a column this narrow, so the
-                modifier's CSS drops it onto its own line. --}}
-          {{> "stonetop.section-heading" title="Exploration moves" note="once they leave town"}}
-          {{!-- The die: draw one of the seven at random, run a light down the list to it, and
-                whisper it to the GM — the same control, the same walk and the same card the GM
-                Toolkit's move groups carry (module/gm-toolkit/random-gm-move.js). This rail is
-                the other place a GM reaches for an exploration move, and mid-leg with the table
-                waiting is exactly the moment seven of them read as soup.
+        {{!-- `note` rather than a line of our own: it is the same "what this list is"
+              caption the GM Toolkit's move groups carry. It is an inline span by default,
+              which tucks against the title in a column this narrow, so the modifier's CSS
+              breaks the line in front of it.
 
-                A SIBLING of the heading rather than the section-heading partial's `randomize=`
-                parameter, which would emit it inside the <h3>. Out here it is a flex item, so it
-                sits at the end of the title's line without the heading having to hold it, and
-                the caption underneath keeps the full width of the column.
+              THE DIE RIDES INSIDE THE HEADING, through the partial's own `randomize=`
+              parameter, rather than beside it as a flex sibling. It used to be the sibling:
+              a flex row of h3 + button with the button pulled up onto the title's line. Two
+              things were wrong with that. A flex item shrinks to its content, so the h3 no
+              longer spanned the column and core's `body.game .app h3` underline — the
+              hairline that separates this heading from the list — stopped short of the die
+              and ran under the words alone. And the die sat up on the title while the
+              caption underneath kept the whole width, which put the control on the line
+              that names the list instead of the line that describes it.
 
-                GM-only, like the load readout and the asset picker on their own steps: the card
-                is whispered to the GMs, so a player clicking this would get silence. --}}
-          {{#if movesRandomize}}
-          {{> "stonetop.section-randomize" section=movesRandomize title=movesRandomizeTitle}}
-          {{/if}}
-        </div>
+              Emitted inside the h3, the heading is a full-width block again, so the hairline
+              runs the width of the rail and the die lands right after "once they leave town",
+              down on that line and sitting on the rule. Which is where this partial always
+              meant to put it: "a 'roll one at random' button, sat right after the note"
+              (section-heading.hbs).
+
+              GM-only, like the load readout and the asset picker on their own steps: the card
+              is whispered to the GMs, so a player clicking this would get silence. The gate is
+              `movesRandomize` coming back "" for a player (ExpeditionDialog#getData) and the
+              partial's own `{{#if randomize}}` reading it, so no wrapper of ours is needed.
+
+              The click is wired in ExpeditionDialog off
+              `.stonetop-guide-moves-sidebar .stonetop-section-randomize`, a descendant
+              selector, so it does not care which of the two places the button sits in. --}}
+        {{> "stonetop.section-heading" title="Exploration moves" note="once they leave town"
+            randomize=movesRandomize randomizeTitle=movesRandomizeTitle}}
         <ol class="items-list stonetop-guide-moves-list">
           {{#each explorationMoves}}
           {{!-- `data-move` is how the randomizer finds the row it just drew, the same way the
