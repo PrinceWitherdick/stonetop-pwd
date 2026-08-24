@@ -58,6 +58,7 @@ import { error } from "../../utils/logger.js";
 import { openEncounterNotesDialog } from "./encounter-notes-dialog.js";
 import { ActorListStore } from "./actor-list-store.js";
 import { localizedOnce } from "../../utils/localized-once.js";
+import { isArcanumData } from "../../item/createArcanum.js";
 
 /**
  * How much of a note rides on a shut encounter's head.
@@ -180,6 +181,17 @@ export function bumpEncounterNotesGeneration() {
 const UNKNOWN_KIND = Object.freeze({ icon: "fas fa-circle-question", labelKey: "stonetop.gmToolkit.encounters.kind.unknown" });
 
 /**
+ * The arcanum, which core insists is an Item and this tab does not.
+ *
+ * NOT A KEY IN `ENCOUNTER_DOC_TYPES`: that table is keyed by `documentName` because it is what
+ * the drop filter matches core's drag payload against, and an arcanum arrives as `"Item"` like
+ * every other. It is promoted in `resolveEncounterEntry`, which is the only place holding the
+ * document that can tell them apart. Same shape as the entry it would have had, so the row's
+ * icon and label are read off it without a branch.
+ */
+const ARCANUM_KIND = Object.freeze({ icon: "fas fa-wand-sparkles", labelKey: "stonetop.gmToolkit.encounters.kind.arcanum" });
+
+/**
  * The same table with its labels already localized, built on the first render and held.
  *
  * Seven constant keys, and this sheet re-renders on every threat, hazard and site write ANYWHERE
@@ -194,8 +206,149 @@ const encounterKinds = localizedOnce(() => {
 		kinds[type] = { icon: kind.icon, typeLabel: localize(kind.labelKey) };
 	}
 	kinds._unknown = { icon: UNKNOWN_KIND.icon, typeLabel: localize(UNKNOWN_KIND.labelKey) };
+	kinds._arcanum = { icon: ARCANUM_KIND.icon, typeLabel: localize(ARCANUM_KIND.labelKey) };
 	return kinds;
 });
+
+/**
+ * THE SHUT CARD'S BREAKDOWN — what an encounter holds, counted by kind, in the order it prints.
+ *
+ * A single "12 gathered" says how MUCH work is in a bundle and nothing about what KIND: twelve
+ * monsters and twelve journal pages wear the same badge, and reading a column of shut cards is
+ * the whole reason a GM shuts them. Counted by kind, a shut row says "three monsters, a map, a
+ * page" without being opened.
+ *
+ * SEPARATE FROM `ENCOUNTER_DOC_TYPES`, which is keyed by `documentName` because that is what
+ * core's drag payload carries. This list is not a one-to-one relabelling of it:
+ *
+ *  - A JournalEntry and a JournalEntryPage are ONE tally. A page dragged out of the shipped pack
+ *    and the entry it lives in are the same fact to a GM reading a shut row ("there is something
+ *    to read aloud here"), and splitting them would put two book glyphs side by side on most
+ *    cards.
+ *  - An ARCANUM is not an Item, whatever core says. Arcana are `move` Items carrying
+ *    `system.moveType === "arcanum"` (see `isArcanumData`), and on this tab they are the thing a
+ *    party is about to FIND — quite unlike the sword and the bag of coin the gem glyph means.
+ *    That split can only be made once the row's document has resolved, which is why the tally
+ *    kind is settled in `resolveEncounterEntry` rather than read off the stored `type`.
+ *
+ * `unknown` is last, and is here rather than dropped so the chips always add up to the number of
+ * rows in the body: a card whose badges say five over a list six long reads as a bug.
+ */
+export const ENCOUNTER_TALLY_KINDS = Object.freeze([
+	{ key: "actor",   icon: ENCOUNTER_DOC_TYPES.Actor.icon, deployable: true },
+	{ key: "item",    icon: ENCOUNTER_DOC_TYPES.Item.icon },
+	{ key: "arcanum", icon: ARCANUM_KIND.icon },
+	{ key: "journal", icon: ENCOUNTER_DOC_TYPES.JournalEntry.icon },
+	{ key: "scene",   icon: ENCOUNTER_DOC_TYPES.Scene.icon },
+	{ key: "table",   icon: ENCOUNTER_DOC_TYPES.RollTable.icon },
+	{ key: "macro",   icon: ENCOUNTER_DOC_TYPES.Macro.icon },
+	{ key: "unknown", icon: UNKNOWN_KIND.icon },
+]);
+
+/**
+ * Which tally a row falls under, from its stored `type` alone. Arcana are settled on top of this
+ * by `resolveEncounterEntry`, which is the only place that has the document to ask.
+ */
+const TALLY_BY_DOC_TYPE = Object.freeze({
+	Actor:            "actor",
+	Item:             "item",
+	JournalEntry:     "journal",
+	JournalEntryPage: "journal",
+	Scene:            "scene",
+	RollTable:        "table",
+	Macro:            "macro",
+});
+
+/**
+ * ONE ENCOUNTER'S CONTENTS, GATHERED BY KIND: `{key, icon, count, label, tip, entries}` in the
+ * order above, with every kind the encounter does not hold left OUT of the array entirely.
+ *
+ * ONE GROUPING, READ TWICE. The badges on the shut head and the cards in the open body are the
+ * same fact at two sizes -- "what is in this, by kind" -- so they are one array and not two
+ * passes that can disagree about what an arcanum is. The head iterates it for `{count, icon,
+ * tip}`; the body iterates it for `{label, count, icon, entries}`.
+ *
+ * Empty kinds are dropped rather than drawn empty. Eight greyed chips (or eight empty cards) is a
+ * column of furniture a GM reads past to find the two that are not, and the shut row has one line
+ * in which to say what this encounter is.
+ *
+ * THE ORDER WITHIN A GROUP IS THE STORED ORDER, which is what keeps every reorder honest: the
+ * array on the actor is still one flat list, this is a stable partition of it, and so "the row
+ * above this one in its card" is always also "the row before it among its kind in storage".
+ * `nudgeWithinGroup` is the other half of that, and says the rest.
+ *
+ * Localized at the call rather than held like `encounterKinds`: this runs once per CARD, not once
+ * per row, and only for the two or three kinds a card actually holds.
+ */
+export function groupEncounterEntries(entries = []) {
+	const byKind = new Map();
+	for (const entry of entries) {
+		const key = entry?.tally || "unknown";
+		if (!byKind.has(key)) byKind.set(key, []);
+		byKind.get(key).push(entry);
+	}
+	const groups = [];
+	for (const kind of ENCOUNTER_TALLY_KINDS) {
+		const rows = byKind.get(kind.key);
+		if (!rows?.length) continue;
+		// The tally's OWN nouns, not `kind` -- that one is the capitalised label a row used to
+		// print beside its name, and "1 Actor" beside "3 monsters and NPCs" reads as two lists.
+		const label = localize(`stonetop.gmToolkit.encounters.tally.${rows.length === 1 ? "one" : "other"}.${kind.key}`);
+		groups.push({
+			key:     kind.key,
+			icon:    kind.icon,
+			count:   rows.length,
+			// Whether "put these on the map" belongs on this card's heading. Read off the kind's
+			// own row rather than named here, so this stays kind-agnostic and the next per-kind
+			// affordance is a field on the table instead of a second `key === ...` in the grouper.
+			// `_deployEncounter` still filters on `"Actor"` itself rather than trusting a flag --
+			// this decides where the BUTTON is drawn, not what it acts on.
+			canDeploy: !!kind.deployable,
+			label,
+			// The CARD's heading is always the plural, whatever it holds: it names a group and the
+			// count is printed at the far end of the same strip, so "MAP 1" would be the singular
+			// arguing with the number beside it. `label` stays count-aware for the badge tooltip,
+			// where it is the whole of the sentence ("1 map").
+			title:   localize(`stonetop.gmToolkit.encounters.tally.other.${kind.key}`),
+			tip:     format("stonetop.gmToolkit.encounters.tallyTip", { count: rows.length, label }),
+			entries: rows,
+		});
+	}
+	return groups;
+}
+
+/**
+ * Where a row goes when it is nudged one place inside its OWN card, expressed as the flat array
+ * the actor stores. Returns null for a no-op, like every other reorder primitive here.
+ *
+ * WHY THIS IS NOT `moveWithin`. The body draws one card per kind, so an index in the stored array
+ * is no longer a place on screen -- the same break `_nudgeEncounter` had to reason about when the
+ * Completed fold split one array into two lanes. alt+Down on a monster whose next STORED row is a
+ * map would swap two rows in two different cards and move nothing a GM can see, which reads
+ * exactly like a key that did nothing.
+ *
+ * `groupIds` is the ids of the card the row is actually in, IN THE ORDER IT IS DRAWN, read off
+ * the DOM by the caller. Reading it there rather than re-deriving the kinds is what keeps this
+ * pure and keeps arcana right: the render already decided which card each row is in, having had
+ * the resolved document to ask, and this cannot then disagree with it.
+ *
+ * TAKEN OUT FIRST, then aimed, for the reason `_moveEntry` spells out: "after the neighbour" is
+ * one index further along once the row has been removed, and which of the two is right otherwise
+ * depends on which way the row travelled. A last-in-its-card row moving down aims at nothing and
+ * lands at the end of the whole array, which is also the end of its own kind.
+ */
+export function nudgeWithinGroup(rows, groupIds, entryId, delta) {
+	const at = groupIds.indexOf(entryId);
+	const to = at + delta;
+	if (at < 0 || to < 0 || to >= groupIds.length) return null;   // already at the end of its card
+	const from = rows.findIndex(r => r.id === entryId);
+	if (from < 0) return null;
+	const without = rows.filter((_, i) => i !== from);
+	const beforeId = delta < 0 ? groupIds[to] : (groupIds[to + 1] ?? null);
+	const next = [...without];
+	next.splice(insertionIndexIn(without, beforeId, without.length), 0, rows[from]);
+	return next.every((x, i) => x === rows[i]) ? null : next;
+}
 
 /**
  * One collected row, in the shape the schema and the sheet agree on.
@@ -286,6 +439,10 @@ export async function resolveEncounterEntry(entry) {
 		name: entry?.name ?? "",
 		icon: kind.icon,
 		typeLabel: kind.typeLabel,
+		// Which badge on the shut card this row is counted under. Settled here and not in the
+		// context builder, because the ARCANUM case needs the resolved document and this is the
+		// one place that has it — see ENCOUNTER_TALLY_KINDS.
+		tally: TALLY_BY_DOC_TYPE[entry?.type] ?? "unknown",
 		unresolved: true,
 		inPack: false,
 	};
@@ -302,7 +459,26 @@ export async function resolveEncounterEntry(entry) {
 
 	// The LIVE name wins whenever there is one, so a renamed monster reads as renamed here. The
 	// stored one is a fallback, never a second source of truth.
-	return { ...base, name: doc.name || base.name, unresolved: false, inPack: !!doc.pack };
+	//
+	// An arcanum can only be told from a sword now that the document is in hand: both arrive as
+	// `type: "Item"`. `isArcanumData` reads `type` + `system.moveType`, which a pack INDEX entry
+	// carries as happily as a full document does (stonetop.js puts `system.moveType` in
+	// CONFIG.Item.compendiumIndexFields), so this costs no pack load on the sync path. A pack
+	// whose index somehow lacks it simply counts as an Item, which is what it was before.
+	//
+	// THE ROW IN THE BODY TURNS WITH IT. A card whose head counts an arcanum over a list calling
+	// the same line an Item is a card that disagrees with itself.
+	const arcanum = isArcanumData(doc);
+	const shown = arcanum ? kinds._arcanum : kind;
+	return {
+		...base,
+		name: doc.name || base.name,
+		icon: shown.icon,
+		typeLabel: shown.typeLabel,
+		tally: arcanum ? "arcanum" : base.tally,
+		unresolved: false,
+		inPack: !!doc.pack,
+	};
 }
 
 export function withGmEncountersTab(Base) {
@@ -607,17 +783,20 @@ export function withGmEncountersTab(Base) {
 		}
 
 		/**
-		 * Nudge a collected row one place up or down inside its own encounter.
+		 * Nudge a collected row one place up or down inside its own KIND CARD.
+		 *
+		 * `groupIds` is that card's rows in drawn order, read off the DOM by the keydown handler.
+		 * Without one this falls back to the whole encounter, which is the same thing on an
+		 * encounter holding a single kind and is what every caller that is not the keyboard wants.
+		 * `nudgeWithinGroup` says why the card and not the array is the thing being moved within.
 		 *
 		 * Hands the caret on for the reason `_nudgeEncounter` gives: this renders, so the open
 		 * button the GM is holding is replaced and the next keypress would reach the document.
 		 */
-		_nudgeEntry(encId, entryId, delta) {
+		_nudgeEntry(encId, entryId, delta, groupIds = null) {
 			this._encounterFocus = { id: encId, entryId };
-			return this._mutateEntries(encId, rows => {
-				const from = rows.findIndex(x => x.id === entryId);
-				return from < 0 ? null : moveWithin(rows, from, from + delta);
-			});
+			return this._mutateEntries(encId, rows =>
+				nudgeWithinGroup(rows, groupIds?.length ? groupIds : rows.map(r => r.id), entryId, delta));
 		}
 
 		/** Write a collected row's GM note. No render — it saves on blur. */
@@ -681,13 +860,18 @@ export function withGmEncountersTab(Base) {
 				// the DOM either way: expanding is a CSS class this file toggles in place, so that
 				// it costs no render and cannot lose a caret (see `_activateGmEncountersListeners`).
 				const notes = await this._encounterNotes(enc);
+				const entries = await Promise.all(enc.entries.map(resolveEncounterEntry));
 				return {
 					...enc,
 					open:        this._encounterOpen.has(enc.id),
+					// The flat count is still the number the DELETE confirmation quotes ("and the
+					// 12 things gathered into it"), so it stays; `groups` is what both the head's
+					// badges and the body's per-kind cards are drawn from.
 					entryCount:  enc.entries.length,
+					groups:      groupEncounterEntries(entries),
 					notesHtml:   notes.html,
 					notesPeek:   notes.peek,
-					entries:     await Promise.all(enc.entries.map(resolveEncounterEntry)),
+					entries,
 				};
 			}));
 			// THE TAB'S TWO LISTS, split HERE and nowhere else. Both print the same card partial,
@@ -775,13 +959,36 @@ export function withGmEncountersTab(Base) {
 				// Dropped on empty tab space: it already lives here, so making a second encounter
 				// out of it would be a copy nobody asked for.
 				if (!overEncounter) return;
-				return this._moveEntry(data.stonetopEncounterId, data.stonetopEntryId, overEncounter, overEntry);
+				// AIMED ONLY AMONG ITS OWN KIND. The body draws one card per kind, so a monster let
+				// go over a row in the Maps card has no place there to land: honouring that row
+				// would move it in storage and draw it somewhere else entirely, which is a gesture
+				// that appears to have done nothing. Dropped anywhere but its own card it goes to
+				// the END of its own, which is where the dropzone would have put it.
+				const before = this._sameEntryKind(data, target) ? overEntry : null;
+				return this._moveEntry(data.stonetopEncounterId, data.stonetopEntryId, overEncounter, before);
 			}
 
 			const entry = await this._encounterEntryFrom(data);
 			if (!entry) return;
-			if (overEncounter) return this._addEncounterEntry(overEncounter, entry, overEntry);
+			// Same rule for something arriving from outside: it is aimed at a row only if that row
+			// is in the card it is going to be drawn in.
+			const before = this._sameEntryKind({ ...data, stonetopKind: TALLY_BY_DOC_TYPE[data.type] }, target)
+				? overEntry : null;
+			if (overEncounter) return this._addEncounterEntry(overEncounter, entry, before);
 			return this._createEncounterFrom(entry);
+		}
+
+		/**
+		 * Was this dropped over the kind card it belongs in?
+		 *
+		 * True when there is no card under the pointer at all (the dropzone, the body, another
+		 * encounter's head), because "not over a row" is already handled by `overEntry` being
+		 * null, and true when the payload does not say what kind it is -- a drag that predates
+		 * this key, or one from a build that does not send it, should behave as it always did.
+		 */
+		_sameEntryKind(data, target) {
+			const over = target?.closest?.("[data-entry-kind]")?.dataset?.entryKind ?? "";
+			return !over || !data?.stonetopKind || over === data.stonetopKind;
 		}
 
 		/**
@@ -830,6 +1037,11 @@ export function withGmEncountersTab(Base) {
 					uuid,
 					stonetopEncounterId: handle.closest("[data-encounter-id]")?.dataset?.encounterId ?? "",
 					stonetopEntryId:     handle.closest("[data-entry-id]")?.dataset?.entryId ?? "",
+					// Which KIND CARD it was drawn in. A third key riding alongside the two above,
+					// invisible to every other drop target in Foundry, and read only by the branch
+					// in `_onEncounterDrop` that decides whether the row it was dropped on is a
+					// place this row could actually go.
+					stonetopKind:        handle.closest("[data-entry-kind]")?.dataset?.entryKind ?? "",
 				}));
 				ev.dataTransfer.effectAllowed = "copyMove";
 			});
@@ -1056,7 +1268,13 @@ export function withGmEncountersTab(Base) {
 						ev.preventDefault();
 						const encId = this._encounterIdFrom(entry);
 						const entryId = this._entryIdFrom(entry);
-						if (encId && entryId) await this._nudgeEntry(encId, entryId, delta);
+						// The rows of the card this one is drawn in, in the order they are drawn.
+						// Taken from the DOM rather than re-derived, because the render has already
+						// decided which card each row is in and this must not second-guess it.
+						const drawn = entry.closest?.(".stonetop-gm-encounter-entries");
+						const ids = [...(drawn?.querySelectorAll?.("[data-entry-id]") ?? [])]
+							.map(li => li?.dataset?.entryId).filter(Boolean);
+						if (encId && entryId) await this._nudgeEntry(encId, entryId, delta, ids);
 						return;
 					}
 					const name = ev.target.closest?.(".stonetop-gm-encounter-name");

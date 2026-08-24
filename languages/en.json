@@ -142,10 +142,11 @@
         "reorder": "Drag to reorder, or use alt and the arrow keys",
         "expand": "Show what is in this encounter",
         "collapse": "Hide what is in this encounter",
-        "countTip": "{count} gathered",
         "deploy": "Put every monster in this encounter on the current map",
         "markUsed": "Mark this one complete, and file it below",
+        "markUsedShort": "Mark complete",
         "markUnused": "Put this one back on the list above",
+        "markUnusedShort": "Put back on the list",
         "removeEncounter": "Delete this encounter",
         "removeEntry": "Take this out of the encounter",
         "removeTitle": "Delete Encounter",
@@ -159,7 +160,6 @@
         "unnamedEntry": "Unnamed",
         "notesEmpty": "No notes on this encounter yet.",
         "notesEdit": "Write the notes for this encounter",
-        "notesEditShort": "Notes",
         "notesTitle": "{name}: Notes",
         "notesDone": "Done",
         "deployed": "Put {count} on the map for {name}.",
@@ -173,12 +173,36 @@
         "kind": {
           "actor": "Actor",
           "item": "Item",
+          "arcanum": "Arcanum",
           "journal": "Journal",
           "page": "Page",
           "scene": "Scene",
           "table": "Table",
           "macro": "Macro",
           "unknown": "Unknown"
+        },
+        "tallyTip": "{count} {label}",
+        "tally": {
+          "one": {
+            "actor": "monster or NPC",
+            "item": "item",
+            "arcanum": "arcanum",
+            "journal": "journal or page",
+            "scene": "map",
+            "table": "table",
+            "macro": "macro",
+            "unknown": "thing of a kind this build doesn't know"
+          },
+          "other": {
+            "actor": "monsters and NPCs",
+            "item": "items",
+            "arcanum": "arcana",
+            "journal": "journals and pages",
+            "scene": "maps",
+            "table": "tables",
+            "macro": "macros",
+            "unknown": "things of a kind this build doesn't know"
+          }
         }
       },
       "threats": {

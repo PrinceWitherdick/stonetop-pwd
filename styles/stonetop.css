@@ -36089,10 +36089,19 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* The shape is the shared icon-button rule above; a row of encounters is denser than a tool row,
    so only the size and the ink are set here. `box-shadow` is reset on the resting state too,
-   because core paints one on every button and the shared rule only clears it on hover. */
+   because core paints one on every button and the shared rule only clears it on hover.
+
+   NARROWER THAN IT IS TALL, and pulled toward the trash beside it. A caret is a 5px glyph, so a
+   20px square carried 7px of empty box on each side; measured ink to ink, the button sat in 18.5px
+   of air on its left and 19.75px on its right, marooned between the badges and the trash and
+   reading as neither. 16px wide takes 2px off each side, and the negative margin cancels most of
+   the head's own 6px gap on the right so the row's TWO BUTTONS read as a pair at its end, with the
+   badges the thing they are separated from. The height is untouched: this is a button pressed on
+   every row of the tab, and it keeps a full-height target. */
 .stonetop-gm-encounter-toggle {
-	width: 20px;
+	width: 16px;
 	height: 20px;
+	margin-right: -4px;
 	box-shadow: none;
 	color: var(--st-text-muted);
 }
@@ -36155,23 +36164,52 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: block;
 }
 
+/* WHAT IS IN THIS ENCOUNTER, BY KIND: "3(monster) 1(map) 2(page)", the badges built by
+   `encounterTally` with every zero already dropped in JS.
+
+   NO BOX AND NO RULE. The head already has three framed things on it (the name's input, and the
+   card's own border either side), and a fourth frame around a run of numbers made the row read as
+   a toolbar of controls rather than a line that says what is inside. The grouping is done with
+   SPACE instead: the gap inside this run is tighter than the head's own, and the margin either
+   side of it wider, so the badges hang together and stand apart from the peek on one side and the
+   tools on the other without anything being drawn to say so.
+
+   NOWRAP AND NO SHRINK. This is the shortest thing on the head and the only one that cannot be
+   read at half length: a breakdown that wrapped would push the row to two lines, and one clipped
+   mid-glyph is a lie about the contents. The name absorbs the flexing, as it does beside the
+   note's peek two rules up. */
 .stonetop-gm-encounter-count {
 	flex: 0 0 auto;
-	min-width: 1.6em;
-	padding: 0 5px;
-	border: 1px solid var(--st-card-rule);
-	border-radius: var(--st-radius-sm);
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	margin: 0 3px;
 	font-size: var(--st-fs-xs);
 	color: var(--st-text-muted);
-	text-align: center;
+	white-space: nowrap;
+}
+
+/* One kind's count and its glyph, which read as a single word and so must never be split by the
+   gap above -- hence a flex box of their own with a hair's gap inside it.
+
+   THE GLYPH IS SET LARGER THAN THE DIGIT. FA7 draws these at the cap height of the font size it
+   inherits, and at --st-fs-xs the wand and the d20 lose their detail and read as a smudge (the
+   same trap the sidebar type markers hit at pin size). A digit is legible far smaller than a
+   picture of a thing is. */
+.stonetop-gm-encounter-tally {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-variant-numeric: tabular-nums;
+}
+
+.stonetop-gm-encounter-tally > i {
+	font-size: 1.15em;
+	line-height: 1;
 }
 
 .stonetop-gm-encounter-deploy:hover {
 	color: var(--st-blue-text);
-}
-
-.stonetop-gm-encounter-used:hover {
-	color: var(--st-green-text);
 }
 
 .stonetop-gm-encounter-remove:hover {
@@ -36185,29 +36223,180 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	gap: 6px;
 }
 
+/* ONE KIND'S CARD, inside an open encounter's body: the monsters in one, the maps in another, in
+   the fixed order the tally table declares.
+
+   NO FILL OF ITS OWN. This is the third box deep -- the tab holds a bordered encounter which
+   holds this -- and a card of cards of cards is what the Completed fold's own comment warns
+   against. A hairline and a headed strip are enough to say "these belong together"; a second
+   filled panel inside a filled one reads as depth that means nothing.
+
+   It is the BODY's flex column that spaces these apart, so nothing here sets a margin. */
+.stonetop-gm-entry-card {
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius-sm);
+	overflow: hidden;
+}
+
+/* The heading strip: the kind's glyph, its name in the plural, and how many. It carries what
+   every row underneath used to repeat -- which is the whole of the de-cluttering, and why the
+   rows below have no glyph and no kind label of their own.
+
+   THE COUNT SITS AT THE FAR END rather than beside the name, so a column of these cards can be
+   read down the right-hand edge the way the badge row on the shut head is read across. */
+.stonetop-gm-entry-card-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 8px;
+	border-bottom: 1px solid var(--st-card-rule);
+	background: var(--st-card-fill);
+	font-size: var(--st-fs-xs);
+	/* BODY INK, not muted. This line is the NAME of the group under it, and at this size, in caps,
+	   under a card rule, a muted grey read as a disabled label rather than as a heading. The two
+	   things on the line that are NOT the name step back from it instead, one token each: the
+	   glyph to secondary, the count to muted. */
+	color: var(--st-text-body);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+/* THE GLYPH IS NUDGED DOWN, and the figure is measured rather than guessed. Scanned off the real
+   paint at 8x against the REAL Pro webfont, flex-centred the glyph's ink ran 2.25..16.75 against
+   the title's cap band of 5.63..15.00: overshooting the cap line by
+   3.38px above and the baseline by only 1.75px below. That asymmetry is what reads as "not
+   centred" even though `align-items: center` is centring both BOXES exactly -- FA7 carries a tall
+   ascent and almost no descent, so its ink sits high inside its own em box.
+
+   0.055em of the GLYPH's own size is the 0.81px that makes the two overshoots equal. In em, not
+   px, because it comes from the font's metrics and so has to hold at every UI font scale.
+
+   A TRANSFORM rather than `top`, so it can land sub-pixel instead of rounding to a whole one --
+   the same reason, and the same optical half of the same problem, as the dismiss/release/lift
+   buttons further up this file.
+
+   `letter-spacing: normal` because the heading spaces its caps out, and 0.04em added after a
+   one-character run pushes the glyph off its own centre. `margin: 0` because core spaces an <i>
+   from the label that normally follows it in its own components, and the gap on this line is the
+   flex gap's to set. */
+.stonetop-gm-entry-card-head > i {
+	flex: 0 0 auto;
+	margin: 0;
+	font-size: 1.15em;
+	line-height: 1;
+	letter-spacing: normal;
+	transform: translateY(0.055em);
+	color: var(--st-text-secondary);
+}
+
+.stonetop-gm-entry-card-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* "Put them all on the map", on the heading of the card that holds them. Transparent and square
+   like the tools on the encounter's own head, but sized off the strip rather than off that row: it
+   has to sit inside a 22px band without pushing it taller, so it takes NO height of its own: a
+   20px square pushed that one card's strip to 27px while its neighbours stayed at 22, which reads
+   as the Monsters card having a different heading from every other. `align-self: stretch` gives it
+   the strip's own content height instead, so the ground it lights on hover still fills the line
+   and the strip is the same height on every card.
+
+   `letter-spacing: normal` for the same reason the glyph beside the title needs it: the heading
+   spaces its caps out, and 0.04em after a one-character run pushes the glyph off its own centre.
+   The blue hover comes from the shared `.stonetop-gm-encounter-deploy:hover` rule further up, which
+   is keyed on the class and so followed the button here. */
+.stonetop-gm-entry-card-head > .stonetop-gm-encounter-deploy {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	align-self: stretch;
+	width: 22px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--st-radius-sm);
+	background: transparent;
+	box-shadow: none;
+	color: var(--st-text-secondary);
+	cursor: pointer;
+	letter-spacing: normal;
+	line-height: 1;
+}
+
+.stonetop-gm-entry-card-head > .stonetop-gm-encounter-deploy:hover {
+	background: var(--st-warm-hover-bg);
+	box-shadow: none;
+}
+
+/* The glyph itself: a figure going down, masked out of one SVG so it takes the button's ink in
+   both themes and on hover with no second file and no `filter` to fight (the rule the tab rail's
+   whole set follows).
+
+   THE HEIGHT IS THE STRIP'S, not a number. `contain` fits the 512 viewBox, and this artwork fills
+   its own square nearly top to bottom -- so a fixed 16px box gives a 15px mark, which pushed this
+   one card's heading to 23px while its neighbours stayed at 22. `100%` of a stretched button can
+   never do that: whatever the strip's line is, the glyph is exactly it.
+
+   THE BOX IS SQUARE, and the width is not there to be trimmed. `contain` scales the whole 512
+   viewBox to fit the SMALLER side, so narrowing the box towards the ink's own width does not crop
+   the empty margins -- it shrinks the entire glyph. Measured on the icon this replaced, 12px
+   instead of 16 took the figure from 15px tall down to 11. The width is spent on margin so the
+   height can be spent on ink; that is the trade `contain` forces, and it is worth knowing before
+   the next mask is fitted here.
+
+   game-icons.net art is drawn with generous margins inside its 512 square, so `contain` hands back
+   less ink than a Font Awesome glyph in the same box -- the ~1.4x budget that art wants. Here the
+   strip's own line caps it instead. */
+.stonetop-gm-encounter-deploy-icon {
+	display: block;
+	width: 16px;
+	height: 100%;
+	background-color: currentColor;
+	-webkit-mask: url('/systems/stonetop-pwd/assets/icons/pounce.svg') center / contain no-repeat;
+	mask: url('/systems/stonetop-pwd/assets/icons/pounce.svg') center / contain no-repeat;
+}
+
+.stonetop-gm-entry-card-count {
+	flex: 0 0 auto;
+	color: var(--st-text-muted);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: normal;
+}
+
+.stonetop-gm-entry-card .stonetop-gm-encounter-entries {
+	padding: 3px 8px;
+}
+
 /* One collected row. Two lines: the thing on the first, the GM's note on the second, indented
-   under it so the note reads as belonging to the row rather than as another row. */
+   under it so the note reads as belonging to the row rather than as another row.
+
+   TWO COLUMNS NOW, not four. The glyph and the kind label are gone: the card this row sits in has
+   just said both, and repeating them on every line is what made a column of eight rows read as
+   eight of the same thing. */
 .stonetop-gm-encounter-entry {
 	display: grid;
-	grid-template-columns: auto 1fr auto auto;
+	grid-template-columns: 1fr auto;
 	align-items: center;
 	column-gap: 6px;
 	padding: 3px 0;
 	border-top: 1px solid var(--st-card-rule);
 }
 
-.stonetop-gm-encounter-entry-icon {
-	grid-column: 1;
-	width: 1.1em;
-	font-size: var(--st-fs-sm);
-	color: var(--st-text-muted);
-	text-align: center;
+/* The first row in a card sits directly under the head's own rule, so its border would be a
+   second line two pixels below the first. */
+.stonetop-gm-encounter-entry:first-child {
+	border-top: 0;
 }
 
 /* A button rather than an anchor (see the template), so every scrap of core's button chrome has
    to come off before it reads as a name in a list. */
 .stonetop-gm-encounter-entry-open {
-	grid-column: 2;
+	grid-column: 1;
 	min-width: 0;
 	width: auto;
 	margin: 0;
@@ -36235,14 +36424,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	cursor: grabbing;
 }
 
-.stonetop-gm-encounter-entry-kind {
-	grid-column: 3;
-	font-size: var(--st-fs-xs);
-	color: var(--st-text-faint);
-}
-
 .stonetop-gm-encounter-entry-remove {
-	grid-column: 4;
+	grid-column: 2;
 	width: 20px;
 	height: 20px;
 }
@@ -36253,10 +36436,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-red-text);
 }
 
-/* The note sits on its own row under the name, spanning the width, indented past the icon. */
+/* The note sits on its own row under the name, spanning the width, and indented a little so it
+   reads as belonging to the row above rather than as another row. A flat 10px now: it used to be
+   measured off the icon column, and that column is gone. */
 .stonetop-gm-encounter-entry-note {
 	grid-column: 1 / -1;
-	margin: 0 0 0 calc(1.1em + 6px);
+	margin: 0 0 0 10px;
 	padding: 0 4px;
 	font-size: var(--st-fs-xs);
 	color: var(--st-text-secondary);
@@ -36273,15 +36458,86 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	text-align: center;
 }
 
+/* THE NOTE BLOCK, boxed like the character and steading sheets box their own Notes tabs: a
+   translucent well with a hairline round it and a pencil in its top-right corner. Those sheets put
+   the box on their editor's `.editor-content` for a reason that does not apply here (once a
+   ProseMirror activates, its toolbar is a sibling of the content div and has to stay outside the
+   box) -- here the read block IS the box, because the pencil opens a Dialog rather than an editor
+   in place.
+
+   `relative` is what parks the pencil in the corner: the block is the positioning parent, so the
+   button sits over whichever of the two note blocks below was drawn without either of them having
+   to know it is there. */
 .stonetop-gm-encounter-notes-block {
+	position: relative;
 	display: flex;
 	flex-direction: column;
-	align-items: flex-start;
 	gap: 4px;
 }
 
+/* The well, and its hover. The values are the character and steading Notes tabs' own, so the two
+   surfaces cannot drift apart: an encounter's notes and a PC's notes are the same kind of writing
+   and should read the same. Padding at the right leaves the corner control its room. */
 .stonetop-gm-encounter-notes {
-	width: 100%;
+	padding: 4px 6px;
+	padding-right: calc(var(--form-field-height, 26px) + 6px);
+	background: rgba(255, 255, 255, 0.28);
+	border: 1px solid rgba(0, 0, 0, 0.22);
+	border-radius: var(--st-radius);
+}
+
+.stonetop-gm-encounter-notes-block:hover .stonetop-gm-encounter-notes,
+.stonetop-gm-encounter-notes-block:focus-within .stonetop-gm-encounter-notes {
+	background: rgba(255, 255, 255, 0.5);
+	border-color: rgba(0, 0, 0, 0.4);
+}
+
+/* The pencil, parked where core parks `<prose-mirror toggled>`'s own toggle: the box's top-right
+   corner, a form-field square, on translucent ivory with a hairline. Hidden until the block is
+   hovered, again as core hides that one -- the box itself is what says "there is writing here, or
+   room for some", and a control standing in the corner of every card on a column of them is
+   furniture.
+
+   `top`/`right` of 2px rather than 0: core's own offset, which keeps the button's own border clear
+   of the box's rather than doubling it. */
+.stonetop-gm-encounter-notes-edit {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	z-index: 1;
+	display: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--form-field-height, 26px);
+	height: var(--form-field-height, 26px);
+	margin: 0;
+	padding: 0;
+	background: rgba(255, 255, 240, 0.8);
+	border: 1px solid var(--color-border-light-primary, rgba(0, 0, 0, 0.22));
+	border-radius: 3px;
+	box-shadow: none;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+	cursor: pointer;
+	line-height: 1;
+}
+
+/* `flex`, not `inline-flex`: an absolutely positioned box is blockified by the spec, so
+   `inline-flex` would compute to `flex` anyway and the declaration would be describing something
+   the browser does not do. */
+.stonetop-gm-encounter-notes-block:hover .stonetop-gm-encounter-notes-edit,
+.stonetop-gm-encounter-notes-block:focus-within .stonetop-gm-encounter-notes-edit {
+	display: flex;
+}
+
+.stonetop-gm-encounter-notes-edit:hover {
+	background: rgba(255, 255, 240, 0.95);
+	border-color: rgba(0, 0, 0, 0.4);
+	box-shadow: none;
+	color: var(--st-text-body);
+}
+
+.stonetop-gm-encounter-notes {
 	margin: 0;
 	font-size: var(--st-fs-sm);
 	color: var(--st-text-body);
@@ -36292,7 +36548,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-style: italic;
 }
 
-.stonetop-gm-encounter-notes-edit {
+.stonetop-gm-encounter-used {
 	width: auto;
 	margin: 0;
 	padding: 1px 8px;
@@ -36306,10 +36562,29 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	line-height: 1.6;
 }
 
-.stonetop-gm-encounter-notes-edit:hover {
+.stonetop-gm-encounter-used:hover {
 	background: var(--st-warm-hover-bg);
 	box-shadow: none;
 	color: var(--st-text-body);
+}
+
+/* THE TWO-STATE BUTTON, at the foot of an open card. `align-self` and not a wrapper: the body is
+   already a flex column, so one line here does what a row div would, and the button takes the
+   width of its own words rather than the whole card.
+
+   IT IS LAST BY DOM ORDER, not by a margin: the body is a plain content-height column, so there
+   is no free space for an `auto` margin to push into and a rule claiming to pin it to the bottom
+   would be doing nothing. The template puts it under the dropzone; that is the whole of it.
+
+   The green comes AFTER the shared hover above, or the neutral ink in that rule would win on
+   source order and the tick would light like every other button on the card. */
+.stonetop-gm-encounter-used {
+	align-self: flex-start;
+	margin-top: 2px;
+}
+
+.stonetop-gm-encounter-used:hover {
+	color: var(--st-green-text);
 }
 
 .stonetop-gm-encounter-empty {
