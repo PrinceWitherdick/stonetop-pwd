@@ -1,4 +1,4 @@
-import { LOAD_LEVEL_LIMITS } from "../utils/load.js";
+import { LOAD_LEVEL_LIMITS, loadBandLabels, loadBonusLabel } from "../utils/load.js";
 
 // ── Load ──────────────────────────────────────────────────────────────────────
 
@@ -178,8 +178,16 @@ export class InventorySegmentSnapshot {
  *           same heading in the small column; marking one eats the 4+Prosperity allowance.
  * @property {number|null} smallItemLimit - 4+Prosperity from the linked steading actor, or null if unavailable
  * @property {string|null} steadingName   - Name of the linked steading actor, or null if unavailable
- * @property {boolean} hasPackHorse       - Ranger owns the Pack Horse move (boosted load caps)
+ * @property {number} loadBonus           - Total ◇ the owned moves add to every load cap (0 for most)
+ * @property {string[]} loadBonusMoves    - Names of the moves that granted it, in sheet order. The
+ *           Ranger's Pack Horse is the printed source, but a custom or world-authored move carrying
+ *           a loadBonus counts the same, so the boosted help text names whichever move actually did
+ *           it instead of assuming the horse.
+ * @property {string} loadBonusFrom       - Those names as one readable phrase, "" when the caps are
+ *           the printed 3/6/9. This is what the notes print, and what gates them.
  * @property {{light:number, normal:number, heavy:number}} loadLimits - Per-load weight caps in effect
+ * @property {{light:string, normal:string, heavy:string}} loadBands - Those caps as the "3" / "4–6" /
+ *           "7–9" captions the load lines print, derived so a bonus shifts every band at once
  */
 export class OutfitSnapshot {
 	constructor(b) {
@@ -202,8 +210,11 @@ export class OutfitSnapshot {
 		this.treasureSmall   = b._treasureSmall ?? [];
 		this.smallItemLimit  = b._smallItemLimit ?? null;
 		this.steadingName    = b._steadingName ?? null;
-		this.hasPackHorse    = b._hasPackHorse ?? false;
+		this.loadBonus       = b._loadBonus ?? 0;
+		this.loadBonusMoves  = b._loadBonusMoves ?? [];
+		this.loadBonusFrom   = loadBonusLabel(this.loadBonusMoves);
 		this.loadLimits      = b._loadLimits ?? LOAD_LEVEL_LIMITS;
+		this.loadBands       = loadBandLabels(this.loadLimits);
 	}
 }
 
@@ -223,7 +234,8 @@ export class OutfitSnapshotBuilder {
 	withTreasureSmall(v)   { this._treasureSmall   = v; return this; }
 	withSmallItemLimit(v)  { this._smallItemLimit  = v; return this; }
 	withSteadingName(v)    { this._steadingName    = v; return this; }
-	withHasPackHorse(v)    { this._hasPackHorse    = v; return this; }
+	withLoadBonus(v)       { this._loadBonus       = v; return this; }
+	withLoadBonusMoves(v)  { this._loadBonusMoves  = v; return this; }
 	withLoadLimits(v)      { this._loadLimits      = v; return this; }
 	build()                { return new OutfitSnapshot(this); }
 }

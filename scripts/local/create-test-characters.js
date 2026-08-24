@@ -12,10 +12,13 @@
 //             origin, and a deterministic fill of the rest. "Max Level" additionally
 //             climbs each character through the real level-up engine until no move remains
 //             (level 20+), taking every reachable move / stat / invocation / mark.
-//             Every character (either path) is also seeded with one filled-out player
-//             custom "Other" move ("This is a test") and one custom follower, so the Moves
-//             tab's custom-move card and the Followers tab's custom card are exercised on
-//             every sheet. The four Book I p.569 love letters (Rhianna, Caradoc, Vahid,
+//             Every character (either path) is also seeded with one custom follower, so the
+//             Followers tab's custom card is exercised on every sheet, and the FIRST character
+//             alone gets the filled-out player custom "Other" move ("This is a test") that
+//             exercises the Moves tab's custom-move card. Just the one, because that move
+//             carries a loadBonus: on every sheet it made the whole party read as load-boosted
+//             wherever a load is shown (the expedition Outfit page most visibly), which is not
+//             what a normal party looks like. The four Book I p.569 love letters (Rhianna, Caradoc, Vahid,
 //             Blodwen — both structures + the no-XP-on-miss case) are spread across the
 //             roster rather than given to everyone: by position a character gets all four,
 //             exactly one, or none at all, so the Moves tab's Love Letters section is seen
@@ -2435,7 +2438,12 @@
   // character's position in the roster being built, which is what decides its love letters.
   const seedTestCustomContent = async (actor, slot) => {
     const typed = actor.typedActor;
-    if (typed?.addCustomMove) await typed.addCustomMove(TEST_CUSTOM_MOVE);
+    // The custom move goes to the FIRST character of each roster only, not to all of them.
+    // One card is enough to look at, and this one carries a loadBonus of 1: handed to
+    // everybody it raised every character's load caps, so the sheet's load lines and the
+    // expedition Outfit readout showed the entire party boosted, which is not a shape a
+    // real party ever has. The follower below stays on every sheet — it changes no numbers.
+    if (slot === 0 && typed?.addCustomMove) await typed.addCustomMove(TEST_CUSTOM_MOVE);
     // This character's share of the Book I p.569 love letters (embedded move items flagged
     // loveLetter) — all four, one, or none, per testLoveLettersFor. Created directly rather
     // than via a typed-wrapper method — a love letter is a plain embedded item; the shaping
@@ -3025,9 +3033,9 @@
       console.log(`[TEST] Created: ${actor.name}`);
     }
 
-    // Seed the demonstration custom move + follower (both are torn down with the actor), and
-    // this slot's share of the love letters — created.length is the character's index in the
-    // roster, read before the push below.
+    // Seed the demonstration follower (torn down with the actor), this slot's share of the
+    // love letters, and on the first character only the demonstration custom move.
+    // created.length is the character's index in the roster, read before the push below.
     await seedTestCustomContent(actor, created.length);
 
     created.push(actor);
@@ -3218,8 +3226,9 @@
     if (sel.notes) await actor.update({ "system.notes": sel.notes });
     await applyStartingMoveMarks(actor);
     await fillPostDeath(actor, entry);
-    // The custom move, the follower and this slot's love letters again — on black paper this
-    // time, which is the one place those cards are never otherwise seen.
+    // The follower, this slot's love letters, and (on the first grave only) the custom move
+    // again, on black paper this time, which is the one place those cards are never otherwise
+    // seen. Both rosters are indexed from 0, so each gets exactly one custom-move card.
     await seedTestCustomContent(actor, buried.length);
     buried.push(actor);
     console.log(`[TEST] Graveyard: ${actor.name} — ${pbDoc.name}, ${entry.fate}.`);

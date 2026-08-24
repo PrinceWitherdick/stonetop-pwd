@@ -15,20 +15,20 @@
 	{{!-- Load level bar --}}
 	<div class="stonetop-outfit-load-bar">
 		<div class="stonetop-outfit-load-option{{#if loadLevelLight}} is-active{{/if}}">
-			<span class="stonetop-outfit-load-badge">{{loadBadgeLight}} <span class="stonetop-glyph stonetop-glyph--diamond-selected">◆</span></span>
+			<span class="stonetop-outfit-load-badge">{{loadBands.light}} <span class="stonetop-glyph stonetop-glyph--diamond-selected">◆</span></span>
 			<span class="stonetop-outfit-load-text">{{{localize "stonetop.specialMoves.outfit.loadLight"}}}</span>
 		</div>
 		<div class="stonetop-outfit-load-option{{#if loadLevelNormal}} is-active{{/if}}">
-			<span class="stonetop-outfit-load-badge">{{loadBadgeNormal}} <span class="stonetop-glyph stonetop-glyph--diamond-selected">◆</span></span>
+			<span class="stonetop-outfit-load-badge">{{loadBands.normal}} <span class="stonetop-glyph stonetop-glyph--diamond-selected">◆</span></span>
 			<span class="stonetop-outfit-load-text">{{{localize "stonetop.specialMoves.outfit.loadNormal"}}}</span>
 		</div>
 		<div class="stonetop-outfit-load-option{{#if loadLevelHeavy}} is-active{{/if}}">
-			<span class="stonetop-outfit-load-badge">{{loadBadgeHeavy}} <span class="stonetop-glyph stonetop-glyph--diamond-selected">◆</span></span>
+			<span class="stonetop-outfit-load-badge">{{loadBands.heavy}} <span class="stonetop-glyph stonetop-glyph--diamond-selected">◆</span></span>
 			<span class="stonetop-outfit-load-text">{{{localize "stonetop.specialMoves.outfit.loadHeavy"}}}</span>
 		</div>
 	</div>
-	{{#if hasPackHorse}}
-	<p class="stonetop-outfit-packhorse-note">{{{localize "stonetop.specialMoves.outfit.packHorseNote"}}}</p>
+	{{#if loadBonusFrom}}
+	<p class="stonetop-outfit-load-bonus-note">{{{format "stonetop.specialMoves.outfit.loadBonusNote" moves=loadBonusFrom bonus=loadBonus light=loadLimits.light normal=loadLimits.normal heavy=loadLimits.heavy}}}</p>
 	{{/if}}
 
 	{{!-- Running mark total (specific items + undefined) --}}

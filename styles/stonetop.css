@@ -399,7 +399,7 @@
 	   existing literal was a swap rather than a colour change. EXACT IS THE WHOLE RULE,
 	   and it is why the following are deliberately left as literals — each is a near
 	   miss, and converting one would BE a colour change under cover of a rename:
-	     · washes at other strengths — the packhorse note's and the load head's 0.10,
+	     · washes at other strengths — the load-bonus note's and the load head's 0.10,
 	       the heavy load pill's 0.15, the spared Death's Door's 0.14, and a ticked
 	       end-of-session question's 0.1;
 	     · #c29a1f, a second gold two points per channel off this one, on the heavy
@@ -10131,7 +10131,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-size: var(--st-fs-lg);
 }
 
-.stonetop-outfit-packhorse-note {
+.stonetop-outfit-load-bonus-note {
 	margin: 0;
 	padding: 4px 8px;
 	border-left: 3px solid var(--st-gold-border);
@@ -29708,7 +29708,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-expedition-dialog .stonetop-exp-assets-head {
 	display: flex; align-items: center; gap: 8px;
 	padding: 8px 12px;
-	/* 0.10, not --st-gold-bg's 0.12: the same wash the packhorse note carries. See the
+	/* 0.10, not --st-gold-bg's 0.12: the same wash the load-bonus note carries. See the
 	   --st-gold-* block. */
 	background: rgba(201,162,39,0.10);
 	border-bottom: 1px solid rgba(0,0,0,0.08);

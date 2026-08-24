@@ -273,7 +273,7 @@
         "loadLight": "<strong>Light load</strong>: quick &amp; quiet",
         "loadNormal": "<strong>Normal load</strong>",
         "loadHeavy": "<strong>Heavy load</strong>: noisy, slow, quick to tire",
-        "packHorseNote": "Your <em><strong>Pack Horse</strong></em> raises each load by 1: up to 4 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> light, 7 normal, 10 heavy.",
+        "loadBonusNote": "With <em><strong>{moves}</strong></em>, every load allows {bonus} more <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>: up to {light} light, {normal} normal, {heavy} heavy.",
         "arcanaItems": "Arcana",
         "treasureItems": "Treasures",
         "smallItemLimit": "Mark up to <strong>{limit}</strong> small items (4+Prosperity)",
@@ -414,12 +414,10 @@
         "heading": "When you <em><strong>Outfit</strong></em>, mark a number of <span class=\"stonetop-glyph stonetop-glyph--diamond\">◇</span> below on specific items or as a group. Your load is whatever you've marked:",
         "currentLoad": "Carrying <strong>{count}</strong> <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>.",
         "overloaded": "Overloaded! Risk exhaustion, accident, and injury.",
-        "light": "For a <strong>light load</strong> (<em>quick &amp; quiet</em>), mark up to 3 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
-        "normal": "For a <strong>normal load</strong>, mark 4–6 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
-        "heavy": "For a <strong>heavy load</strong> (<em>noisy, slow, hot, quick to tire</em>), mark 7–9 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
-        "lightPackHorse": "For a <strong>light load</strong> (<em>quick &amp; quiet</em>), mark up to 4 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> <strong>with your packhorse</strong>",
-        "normalPackHorse": "For a <strong>normal load</strong>, mark 5–7 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> <strong>with your packhorse</strong>",
-        "heavyPackHorse": "For a <strong>heavy load</strong> (<em>noisy, slow, hot, quick to tire</em>), mark 8–10 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> <strong>with your packhorse</strong>"
+        "light": "For a <strong>light load</strong> (<em>quick &amp; quiet</em>), mark up to {band} <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
+        "normal": "For a <strong>normal load</strong>, mark {band} <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
+        "heavy": "For a <strong>heavy load</strong> (<em>noisy, slow, hot, quick to tire</em>), mark {band} <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
+        "boostedBy": " <strong>(with {moves})</strong>"
       }
     },
     "settings": {

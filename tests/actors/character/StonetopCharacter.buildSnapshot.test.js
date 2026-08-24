@@ -1099,21 +1099,66 @@ describe("buildSnapshot — inventory.outfit", () => {
 		expect(snap.inventory.outfit.smallPool).toMatchObject({current: 0, max: 9, title: null, labels: []});
 	});
 
-	it("uses base load caps and hasPackHorse=false when the Pack Horse move isn't owned", async () => {
+	it("uses base load caps and names no load-bonus source when no move grants one", async () => {
 		const snap = await new TestCharacterBuilder(new FakeActorBuilder().build()).build().buildSnapshot();
-		expect(snap.inventory.outfit.hasPackHorse).toBe(false);
+		expect(snap.inventory.outfit.loadBonus).toBe(0);
+		expect(snap.inventory.outfit.loadBonusMoves).toEqual([]);
+		expect(snap.inventory.outfit.loadBonusFrom).toBe("");
 		expect(snap.inventory.outfit.loadLimits).toEqual({light: 3, normal: 6, heavy: 9});
+		expect(snap.inventory.outfit.loadBands).toEqual({light: "3", normal: "4–6", heavy: "7–9"});
 		expect(snap.inventory.outfit.regularPool.max).toBe(9);
 	});
 
-	it("raises the load caps by one when the Pack Horse move is owned", async () => {
+	it("raises the load caps by one when the Pack Horse move is owned, and names it", async () => {
 		const actor = new FakeActorBuilder()
 			.addItem({type: "move", name: "Pack Horse", system: {moveType: "playbook", loadBonus: 1}})
 			.build();
 		const snap = await new TestCharacterBuilder(actor).build().buildSnapshot();
-		expect(snap.inventory.outfit.hasPackHorse).toBe(true);
+		expect(snap.inventory.outfit.loadBonus).toBe(1);
+		expect(snap.inventory.outfit.loadBonusFrom).toBe("Pack Horse");
 		expect(snap.inventory.outfit.loadLimits).toEqual({light: 4, normal: 7, heavy: 10});
+		expect(snap.inventory.outfit.loadBands).toEqual({light: "4", normal: "5–7", heavy: "8–10"});
 		expect(snap.inventory.outfit.regularPool.max).toBe(10);
+	});
+
+	// The bonus is a move FIELD, not the Ranger's move by name: a custom or world-authored
+	// move carrying a loadBonus raises the caps just as well, and the notes that explain the
+	// raised caps have to say which move did it rather than claiming a packhorse.
+	it("names a custom move that granted the load bonus, not Pack Horse", async () => {
+		const actor = new FakeActorBuilder()
+			.addItem({type: "move", name: "Bear the Standard", system: {moveType: "other", loadBonus: 1}})
+			.build();
+		const snap = await new TestCharacterBuilder(actor).build().buildSnapshot();
+		expect(snap.inventory.outfit.loadBonusFrom).toBe("Bear the Standard");
+		expect(snap.inventory.outfit.loadLimits).toEqual({light: 4, normal: 7, heavy: 10});
+	});
+
+	it("names every granting move when two of them stack", async () => {
+		const actor = new FakeActorBuilder()
+			.addItem({type: "move", name: "Pack Horse", system: {moveType: "playbook", loadBonus: 1}})
+			.addItem({type: "move", name: "Bear the Standard", system: {moveType: "other", loadBonus: 1}})
+			.build();
+		const snap = await new TestCharacterBuilder(actor).build().buildSnapshot();
+		expect(snap.inventory.outfit.loadBonus).toBe(2);
+		expect(snap.inventory.outfit.loadBonusMoves).toEqual(["Pack Horse", "Bear the Standard"]);
+		expect(snap.inventory.outfit.loadBonusFrom).toBe("Pack Horse and Bear the Standard");
+		expect(snap.inventory.outfit.loadLimits).toEqual({light: 5, normal: 8, heavy: 11});
+	});
+
+	// An un-learned custom move's bonuses stop applying, so it must not be named as the
+	// source of a bonus it isn't granting.
+	it("ignores an un-learned move's load bonus and never names it", async () => {
+		const actor = new FakeActorBuilder()
+			.addItem({
+				type: "move", name: "Bear the Standard",
+				system: {moveType: "other", loadBonus: 1},
+				flags: {"stonetop-pwd": {custom: true, learned: false}},
+			})
+			.build();
+		const snap = await new TestCharacterBuilder(actor).build().buildSnapshot();
+		expect(snap.inventory.outfit.loadBonus).toBe(0);
+		expect(snap.inventory.outfit.loadBonusFrom).toBe("");
+		expect(snap.inventory.outfit.loadLimits).toEqual({light: 3, normal: 6, heavy: 9});
 	});
 
 	it("with Pack Horse, 4 marked ◇ still reads as a light load", async () => {

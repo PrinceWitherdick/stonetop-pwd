@@ -127,13 +127,22 @@ function _isMoveLearned(item) {
 	return item?.flags?.[STONETOP_SCOPE]?.learned !== false;
 }
 
-// Sum a numeric `system.<field>` across every LEARNED move the actor owns. The shared
-// spine of _ownedLoadBonus / _ownedShieldLoadReduction (and any future per-move bonus),
-// so the "skip un-learned moves" rule lives in exactly one place and can't be forgotten.
-function _sumLearnedMoveField(actor, field) {
-	return actor.items
-		.filter(i => i.type === "move" && _isMoveLearned(i))
-		.reduce((sum, i) => sum + (Number(i.system?.[field]) || 0), 0);
+// Total a numeric `system.<field>` across every LEARNED move the actor owns, and name the
+// moves that actually contributed, in sheet order. The shared spine of _ownedLoadBonus /
+// _ownedShieldLoadReduction (and any future per-move bonus), so the "skip un-learned moves"
+// rule lives in exactly one place and can't be forgotten -- and so a note naming the source
+// can never disagree with the total it explains, since both come off the same single pass.
+function _learnedMoveField(actor, field) {
+	let total = 0;
+	const names = [];
+	for (const i of actor.items) {
+		if (i.type !== "move" || !_isMoveLearned(i)) continue;
+		const value = Number(i.system?.[field]) || 0;
+		if (value === 0) continue;
+		total += value;
+		if (i.name) names.push(i.name);
+	}
+	return { total, names };
 }
 
 // Resource-track snapshot for an "other" move, in the shape the resourceChecks helper
@@ -238,9 +247,13 @@ function _stripPossessionUsesAnnotation(desc, resourceDef) {
 
 // A move can raise every load cap via its `loadBonus` field (the Ranger's Pack
 // Horse sets it to 1). The caps and the count→tier bucketing live in utils/load.js
-// so the sheet, snapshot defaults, and dialog can't drift.
+// so the sheet, snapshot defaults, and dialog can't drift. The granting moves' names
+// come back alongside the total, so the notes on the sheet, in the Outfit dialog and in
+// the expedition load readout can say which move raised the caps. They used to all say
+// "Pack Horse", which is a lie on any character whose bonus came from a custom or
+// world-authored move instead.
 function _ownedLoadBonus(actor) {
-	return _sumLearnedMoveField(actor, "loadBonus");
+	return _learnedMoveField(actor, "loadBonus");
 }
 
 // The standard Shield inventory item (Book I p.86). The Heavy/Judge/Marshal's Armored
@@ -260,7 +273,7 @@ const _DEFEND_READINESS_FLAG = "readiness";
 // ◇ load by its `shieldLoadReduction`. Like loadBonus, the mechanic lives in the move's data
 // so buildSnapshot never hard-codes a move name.
 function _ownedShieldLoadReduction(actor) {
-	return _sumLearnedMoveField(actor, "shieldLoadReduction");
+	return _learnedMoveField(actor, "shieldLoadReduction").total;
 }
 
 // The id seed every standing-list row is minted with (see _rosterWrite). One width, in one place,
@@ -686,9 +699,11 @@ export class StonetopCharacter {
 		const commonSpecialSet = this._earnedCommonSpecialSlugs(steadingActor, allItems);
 		// A move's `loadBonus` raises every load cap (the Ranger's Pack Horse → +1).
 		// The boosted limits flow into the regular ◇ pool here and into the Outfit
-		// dialog via the snapshot. hasPackHorse drives the boosted help text/note.
-		const loadBonus      = _ownedLoadBonus(this._actor);
-		const hasPackHorse   = loadBonus > 0;
+		// dialog via the snapshot; the granting moves' names ride along so the boosted
+		// help text can name whichever move did it rather than assuming the horse.
+		const bonus          = _ownedLoadBonus(this._actor);
+		const loadBonus      = bonus.total;
+		const loadBonusMoves = loadBonus > 0 ? bonus.names : [];
 		const loadLimits     = loadLimitsFor(loadBonus);
 		// The Armored move drops a carried shield to ◆ (1 ◇) instead of ◆◆; floored at 1.
 		const shieldLoadReduction = _ownedShieldLoadReduction(this._actor);
@@ -1060,7 +1075,8 @@ export class StonetopCharacter {
 			.withTreasureSmall(treasureSmall)
 			.withSmallItemLimit(smallItemLimit)
 			.withSteadingName(steadingName)
-			.withHasPackHorse(hasPackHorse)
+			.withLoadBonus(loadBonus)
+			.withLoadBonusMoves(loadBonusMoves)
 			.withLoadLimits(loadLimits)
 			.build();
 
