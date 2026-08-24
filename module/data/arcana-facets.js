@@ -83,6 +83,24 @@ export function isImplantedArcanumItem(item) {
 }
 
 /**
+ * Is this arcanum's item too big to carry on your person?
+ *
+ * Book I, "Tags and game elements" (p.437): "If it's too big to just carry on your person, give
+ * it the `immobile` tag." Seven shipped cards say so under their titles — a huge wooden sphere,
+ * a sunken tablet, a vein of milky crystal, a whispering word, an oversized codex, a rusty
+ * cauldron, a strange skull and antlers. Each carries an `item` so the card can print that tag
+ * line, but a vein of crystal in a cave wall is never in anyone's load.
+ *
+ * Read off the printed tag, like {@link isImplantedArcanumItem} beside it, so a homebrew card
+ * tagged the way the book says behaves the way the book says — which a list of shipped slugs
+ * could never do. Deliberately NOT gated on a null weight: the tag is the author's declaration,
+ * and it outranks a stray number left in the weight field.
+ */
+export function isImmobileArcanumItem(item) {
+	return /\bimmobile\b/i.test(String(item?.note ?? ""));
+}
+
+/**
  * True when the arcanum's front hands the holder an item to carry (`front.item`).
  *
  * An implanted one does not count: the Relic chip promises "the arcanum itself is an item in

@@ -754,6 +754,11 @@
       "front": {
         "title": "A huge wooden sphere",
         "description": "<p>Half-buried and largely overgrown, about 4 feet across and weighing hundreds of pounds. It is strangely well preserved and adorned with intricate pictograms. A handful of other spheres rot nearby.</p>",
+        "item": {
+          "weight": 1,
+          "tags": "<em>immobile</em>",
+          "column": "regular"
+        },
         "unlock": "The pictograms depict some sort of recipe, which you can learn but you must…"
       },
       "back": {
@@ -1607,6 +1612,11 @@
       "front": {
         "title": "Rune-etched pillars",
         "description": "<p>Deep under a giant, ruined fort is a vaulted chamber, once a storeroom but looted long, long ago. A giant skeleton lies just inside, face-down, its skull and ribs staved in.</p><p>Four pillars support the roof, carved with a series of huge runes that thrum with power. You can unlock their secrets, but…</p>",
+        "item": {
+          "weight": 1,
+          "tags": "<em>magical</em>",
+          "column": "regular"
+        },
         "unlock": "You can unlock their secrets, but…"
       },
       "back": {

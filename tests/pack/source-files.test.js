@@ -128,7 +128,33 @@ describe("pack source files", () => {
 			weight: 1,
 			inventoryColumn: "regular",
 		});
+		// Two minors kept their tag line at `front.note`, a key nothing renders and the data
+		// exporter drops, so the sheet printed no tags under either title. The book prints
+		// `immobile` under the sphere and `magical` under the pillars (Book II p.513).
+		expect(bySlug.get("huge-wooden-sphere").front.item).toEqual({
+			name: "A huge wooden sphere",
+			weight: null,
+			note: "<em>immobile</em>",
+			inventoryColumn: null,
+		});
+		expect(bySlug.get("rune-etched-pillars").front.item).toEqual({
+			name: "Rune-etched pillars",
+			weight: null,
+			note: "<em>magical</em>",
+			inventoryColumn: null,
+		});
 		expect(bad).toEqual([]);
+	});
+
+	it("keeps no arcanum's tag line in a key nothing renders", () => {
+		// The sheet draws a side's tags from `<side>.item.note` and nowhere else. A tag line
+		// parked beside it — `front.note` — reads like authored content and prints nothing.
+		const stray = allDocs
+			.filter(({ doc }) => doc.system?.moveType === "arcanum")
+			.flatMap(({ doc }) => ["front", "back"]
+				.filter(side => doc.flags.stonetop[side]?.note != null)
+				.map(side => `${doc.flags.stonetop.slug}.${side}.note`));
+		expect(stray).toEqual([]);
 	});
 
 	it("HTML descriptions have balanced tags", () => {

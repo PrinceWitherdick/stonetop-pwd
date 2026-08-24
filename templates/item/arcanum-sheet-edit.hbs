@@ -22,6 +22,10 @@
 				<option value="arcana" {{#if (eq "arcana" item.inventoryColumnValue)}}selected{{/if}}>Arcana</option>
 			</select></label>
 	</div>
+	<p class="stonetop-arc-hint">The tag line prints under the title, the way the book prints one under
+		every arcanum that is a thing. Tag it <em>immobile</em> for a place or a structure, or
+		<em>implanted</em> for something worn inside you: either keeps it off the Inventory tab and
+		out of your load, whatever the Weight says.</p>
 	{{/inline}}
 
 	{{#*inline "resourceFields"}}
@@ -71,9 +75,10 @@
 				<div class="stonetop-guide-count stonetop-arc-banner-count">{{active.index}} / {{sectionCount}}</div>
 			</div>
 
-			{{!-- Glyph toolbar. Outside the sections and sticky, so it stays reachable
-			      whichever page the rail is showing. --}}
-			<div class="stonetop-arc-glyphbar">
+			{{!-- Glyph toolbar. Outside the sections and sticky, so it stays reachable while a
+			      long description scrolls. Shown only on the pages that HAVE a rich editor to
+			      insert into (see ARC_SECTIONS.rich); the section switch re-hides it in JS. --}}
+			<div class="stonetop-arc-glyphbar"{{#unless active.rich}} hidden{{/unless}}>
 				<span class="stonetop-arc-glyphbar-label">Insert track:</span>
 				{{#each glyphs}}
 				<button type="button" class="stonetop-arc-glyph" data-glyph="{{ins}}" title="{{hint}}">{{label}}</button>
@@ -104,7 +109,7 @@
 				<prose-mirror class="stonetop-arc-rich" data-arc-field="flags.stonetop.front.description" value="{{edit.front.description}}">{{{edit.front.descriptionEnriched}}}</prose-mirror>
 
 				<label class="stonetop-arc-check"><input type="checkbox" class="stonetop-check" data-arc-toggle="front.item" {{#if edit.front.hasItem}}checked{{/if}}>
-					<span>Carried item (weighs the pack while face-up)</span></label>
+					<span>It’s a thing (name + tag line; weighs the pack while face-up)</span></label>
 				{{#if edit.front.hasItem}}
 				{{> itemFields item=edit.front.item prefix="flags.stonetop.front.item"}}
 				{{/if}}

@@ -923,12 +923,70 @@ describe("CharacterArcana.weightedInventoryItems() — carried side follows unlo
 		expect(items[0].name).toBe("A Carved Charm");
 	});
 
-	it("omits the weightless side of a concept/place arcanum from the inventory", async () => {
-		// huge-wooden-sphere is a non-carriable place (CONCEPT_ARCANA_SLUGS); its weightless
-		// front is a huge, immobile, half-buried sphere and contributes nothing to inventory.
+	it("omits an IMMOBILE side from the inventory, off its own printed tag", async () => {
+		// Book I p.437 tags a thing too big to carry on your person `immobile`, and the sphere's
+		// front prints exactly that: half-buried, four feet across, hundreds of pounds. Nothing
+		// here consults a list of slugs — the tag line the card prints is the whole rule.
 		const arcana = new CharacterArcana(makeFlags(LOCKED), new FakeArcanaRepository([FFYRNIG_SPHERE]));
 		const items = await arcana.weightedInventoryItems();
 		expect(items).toHaveLength(0);
+	});
+
+	it("omits a HOMEBREW immobile card, which no shipped slug list could name", async () => {
+		// The reason the rule is keyed on the tag: a card an author writes today can say
+		// `immobile` and be held back by it, exactly like the shipped places.
+		const STANDING_STONE = {
+			...FFYRNIG_SPHERE,
+			slug: "arc-homebrew-standing-stone",
+			front: {
+				...FFYRNIG_SPHERE.front,
+				item: { name: "A leaning standing stone", weight: null, note: "<em>immobile, magical</em>", inventoryColumn: null },
+			},
+			back: { ...FFYRNIG_SPHERE.back, item: null },
+		};
+		const arcana = new CharacterArcana(
+			makeFlags({ owned: ["arc-homebrew-standing-stone"] }),
+			new FakeArcanaRepository([STANDING_STONE]),
+		);
+		expect(await arcana.weightedInventoryItems()).toHaveLength(0);
+	});
+
+	it("holds an immobile side back even when a weight was left on it", async () => {
+		// The tag is the author's declaration and outranks a stray number in the weight field:
+		// a cave mouth someone typed a ◇1 into is still not in anybody's pack.
+		const WEIGHTED_CAVE = {
+			...FFYRNIG_SPHERE,
+			slug: "arc-homebrew-cave",
+			front: {
+				...FFYRNIG_SPHERE.front,
+				item: { name: "A sealed cave", weight: 1, note: "<em>immobile</em>", inventoryColumn: "regular" },
+			},
+			back: { ...FFYRNIG_SPHERE.back, item: null },
+		};
+		const arcana = new CharacterArcana(
+			makeFlags({ owned: ["arc-homebrew-cave"] }),
+			new FakeArcanaRepository([WEIGHTED_CAVE]),
+		);
+		expect(await arcana.weightedInventoryItems()).toHaveLength(0);
+	});
+
+	it("still omits a shipped place the book leaves untagged (CONCEPT_ARCANA_SLUGS)", async () => {
+		// The book prints "A sealed cave" as plain `magical` — nothing in its data says place, so
+		// the named list still carries the ones the tag can't reach.
+		const SEALED_CAVE = {
+			...FFYRNIG_SPHERE,
+			slug: "sealed-cave",
+			front: {
+				...FFYRNIG_SPHERE.front,
+				item: { name: "A sealed cave", weight: null, note: "<em>magical</em>", inventoryColumn: null },
+			},
+			back: { ...FFYRNIG_SPHERE.back, item: null },
+		};
+		const arcana = new CharacterArcana(
+			makeFlags({ owned: ["sealed-cave"] }),
+			new FakeArcanaRepository([SEALED_CAVE]),
+		);
+		expect(await arcana.weightedInventoryItems()).toHaveLength(0);
 	});
 
 	it("excludes an un-recovered lead card's curio from the inventory", async () => {

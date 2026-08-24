@@ -27944,9 +27944,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	min-width: 0;
 }
 
+/* Grows to the lines it holds and can be dragged past that — utils/growable-fields.js reads
+   this floor and ceiling back, so the two never disagree about how tall the box may get. The
+   ceiling is what keeps a follower's move list from pushing the footer off the sheet. */
 .stonetop-arcanum-edit textarea.stonetop-arc-input {
 	resize: vertical;
 	min-height: 2.4em;
+	max-height: 40vh;
 	font-family: var(--font-stonetop);
 }
 
@@ -28000,14 +28004,26 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    So the host must keep `display: flex`: switched to block, the container has no
    flex height, collapses to 0, and its `overflow: hidden` clips the whole typing
    surface away — the bordered box still paints, but clicks land on the host and
-   nothing can be typed. Only the floor belongs here; the container sizes the
+   nothing can be typed. Only the bounds belong here; the container sizes the
    typing area below, so the toolbar's height never eats into it. */
 .stonetop-arcanum-edit prose-mirror.stonetop-arc-rich {
-	min-height: 90px;
+	min-height: 130px;
+	max-height: 55vh;
 	border: 1px solid var(--color-border-light, #c9c0ad);
 	border-radius: var(--st-radius-sm);
 	background: rgba(255, 255, 255, 0.5);
 	padding: 2px 4px;
+	/* A description is the longest thing on the card and was being written through a slot, so
+	   utils/growable-fields.js sizes this host to its content between the two heights above,
+	   and the handle lets the author overrule the fit. `resize` needs a non-visible overflow to
+	   paint a grip; hidden costs nothing here (the container clips already) and does NOT reach
+	   the toolbar's drop-downs, which core clones into <body> as #prosemirror-dropdown.
+
+	   The floor has to clear the toolbar plus the container's own floor below, or an explicit
+	   height sits the container in less room than it will take and the last line is clipped away.
+	   The JS floors it at the measured chrome for the same reason, so a taller UI font is safe. */
+	resize: vertical;
+	overflow: hidden;
 }
 
 /* Keep the editable area clickable/visible even when empty (a 0-height editor can't
@@ -28108,6 +28124,10 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	top: 0;
 	z-index: 2;
 }
+
+/* Identity and Followers hold no rich editor, so the bar is hidden there. `display: flex`
+   above out-specifies the UA `[hidden] { display: none }`; re-hide here. */
+.stonetop-arcanum-edit .stonetop-arc-glyphbar[hidden] { display: none; }
 
 .stonetop-arcanum-edit .stonetop-arc-glyphbar-label {
 	font-size: var(--st-fs-xs);

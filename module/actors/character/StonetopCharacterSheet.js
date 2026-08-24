@@ -7362,7 +7362,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		// to this character only when the author clicks Save & Done (see _createAndAddArcanum).
 		async _onArcanaCreate(major = false) {
 			if (!this.isEditable || !canCreateArcana()) return;
-			await this._createAndAddArcanum({ name: major ? "New Major Arcanum" : "New Minor Arcanum", major });
+			await this._createAndAddArcanum({ name: major ? "New Arcanum" : "New Minor Arcanum", major });
 		}
 
 		// Create a homebrew arcanum world Item (optionally pre-filled) and open its editor as a

@@ -103,22 +103,18 @@ const THING_BELOW_KIND_OPTIONS = [
 	},
 ];
 
-// The Arcanum sub-chooser (shown after picking "Arcanum"): a blank card of either tier,
-// or the Artifact Creation wizard that seeds a card from rolled inspiration.
+// The Arcanum sub-chooser (shown after picking "Arcanum"): a blank card, or the Artifact
+// Creation wizard that seeds one from rolled inspiration. NOT a tier choice — the editor's
+// Identity page carries a "Major Arcanum" checkbox that switches tier either way, so asking
+// here would only be a second place to answer the same question (and the wrong answer would
+// look permanent). A blank card starts minor, the commoner tier.
 const ARCANUM_KIND_OPTIONS = [
 	{
-		id: "minor",
-		label: "Minor arcanum",
+		id: "blank",
+		label: "Blank card",
 		icon: "fa-scroll",
-		hint: "A blank minor arcanum (a curio with a hidden power), opened in the card editor.",
-		create: () => _createBlankArcanum(false),
-	},
-	{
-		id: "major",
-		label: "Major arcanum",
-		icon: "fa-wand-sparkles",
-		hint: "A blank major arcanum (its own card art and major semantics), opened in the card editor.",
-		create: () => _createBlankArcanum(true),
+		hint: "An empty arcanum, opened in the card editor. Tick “Major Arcanum” on its Identity page for card art and major semantics.",
+		create: () => _createBlankArcanum(),
 	},
 	{
 		id: "inspire",
@@ -146,7 +142,7 @@ function pickThingBelowKind() {
 	return pickContentOption({ title: "Create a Thing Below", options: THING_BELOW_KIND_OPTIONS });
 }
 
-/** Arcanum tier chooser. Resolves to "minor" | "major" | "inspire" or null. */
+/** Arcanum start chooser. Resolves to "blank" | "inspire" or null. */
 function pickArcanumKind() {
 	return pickContentOption({ title: "Create Arcanum", options: ARCANUM_KIND_OPTIONS });
 }
@@ -249,11 +245,11 @@ async function openCreateThingBelow() {
 }
 
 /**
- * Second-step Arcanum flow: pick a tier (or the inspiration wizard), then create a
+ * Second-step Arcanum flow: start blank or from the inspiration wizard, then create a
  * standalone homebrew arcanum world Item and open its editor. Mirrors the
  * `game.stonetop.createArcanum` / `inspireArcanum` console helpers (see Ready.js): a
- * blank card for major/minor, or the Artifact Creation wizard whose rolled results
- * pre-fill the card before the editor opens.
+ * blank card, or the Artifact Creation wizard whose rolled results pre-fill the card
+ * before the editor opens.
  */
 async function openCreateArcanum() {
 	// Defensive gate (the chooser already hides the Arcanum option for non-authors): never
@@ -265,10 +261,10 @@ async function openCreateArcanum() {
 	return runPickedOption(ARCANUM_KIND_OPTIONS, await pickArcanumKind());
 }
 
-/** A blank card of either tier, opened in the editor. */
-async function _createBlankArcanum(major) {
+/** A blank card, opened in the editor; its Identity page picks the tier. */
+async function _createBlankArcanum() {
 	const { createArcanumItem } = await import("../item/createArcanum.js");
-	return createArcanumItem({ name: major ? "New Major Arcanum" : "New Minor Arcanum", major });
+	return createArcanumItem({ name: "New Arcanum", major: false });
 }
 
 /** The Artifact Creation wizard, whose rolled results pre-fill the card before the editor opens. */

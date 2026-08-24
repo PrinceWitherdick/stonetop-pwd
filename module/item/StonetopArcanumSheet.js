@@ -7,6 +7,7 @@ import { enrichHTML } from "../utils/foundry-compat.js";
 import { isInCompendium } from "../utils/compendium-edit-guard.js";
 import { bringDialogToFront } from "../utils/front-on-open.js";
 import { applyGuideRail } from "../utils/guide-rail.js";
+import { wireGrowableFields, refitGrowableFields } from "../utils/growable-fields.js";
 import { isDefaultImg } from "../utils/strings.js";
 import { STAT_KEYS } from "../utils/roll-types.js";
 import { hasText } from "../actors/bestiary/codex.js";
@@ -50,14 +51,27 @@ const GLYPH_CHROME = [
 	".stonetop-arc-issue",
 ].join(", ");
 
+// What a growable text field is called, so a height the author dragged can be handed back to
+// the same field after a structural re-render (which builds fresh elements). A follower's boxes
+// go by their row, since every follower carries the same two field names.
+function arcFieldKey(el) {
+	const row = el.closest?.("[data-foll-index]");
+	if (row && el.dataset.follProp) return `foll:${row.dataset.follIndex}:${el.dataset.follProp}`;
+	return el.dataset.arcField ? `field:${el.dataset.arcField}` : null;
+}
+
 // The editor's sections, driving the left rail (like Make a Monster / Run an Expedition).
 // Each `key` matches a `<section data-arc-tab>` in the edit template and its rail button;
 // `sub` is the banner subtitle, `icon` a Font Awesome 6 glyph. Switching sections is
 // client-side (no re-render), so the prose-mirror editors and unsaved field values survive.
+//
+// `rich` says the section holds prose-mirror editors, which is the only thing the glyph bar
+// can insert into. Identity and Followers are plain inputs, so the bar hides there rather
+// than offering buttons whose every press can only answer "click into a description first".
 const ARC_SECTIONS = [
 	{ key: "identity",  title: "Identity",  sub: "name & tier",         icon: "fa-fingerprint" },
-	{ key: "front",     title: "Front",     sub: "the curio, face-up",  icon: "fa-scroll" },
-	{ key: "back",      title: "Back",      sub: "the revealed power",  icon: "fa-wand-sparkles" },
+	{ key: "front",     title: "Front",     sub: "the curio, face-up",  icon: "fa-scroll",       rich: true },
+	{ key: "back",      title: "Back",      sub: "the revealed power",  icon: "fa-wand-sparkles", rich: true },
 	{ key: "followers", title: "Followers", sub: "manifested summons",  icon: "fa-users" },
 ];
 
@@ -95,6 +109,14 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 		// One-shot guard: widen to seat the rail on the first edit render of a session, then
 		// leave the width alone so structural re-renders don't undo a manual resize.
 		_editSizeApplied = false;
+		// Heights the author dragged a text field to, keyed by arcFieldKey. Kept on the sheet
+		// rather than the elements: a structural re-render replaces them, and a box dragged tall
+		// for a long description snapping back to a fit is the thing being fixed here.
+		_arcFieldHeights = new Map();
+		// Drops the previous render's size observation. The listeners go with the elements a
+		// re-render replaces, but an observer holds its targets strongly and would keep every
+		// dead editor on the page alive; see utils/growable-fields.js.
+		_dropArcFieldWatch = null;
 		// Draft state: a card created from a character's Create button is a pending draft that
 		// isn't attached to that character until Save & Done. `_arcanumOnSave(item)` performs
 		// the attach (set by createArcanumItem); `_discarded` guards the delete-triggered close
@@ -237,6 +259,8 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			// Flush any pending rich-editor content before teardown. Skip it when the item was
 			// just deleted (nothing to flush, and the update would throw).
 			if (this._editMode && !this._discarded && !itemGone) await this._flushRichEditors();
+			this._dropArcFieldWatch?.();
+			this._dropArcFieldWatch = null;
 			return super.close(options);
 		}
 
@@ -422,6 +446,12 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 				// containers of *authored* text, and this is the editor's own chrome. Display-only —
 				// what gets inserted is read from `data-glyph`, never from the button's text.
 				root.querySelectorAll(GLYPH_CHROME).forEach(el => wrapStonetopGlyphsInEl(el));
+				// Every text field on the sheet holds prose, and some of it runs long: fit each
+				// one to what it holds, and leave the drag handle for the author to overrule that.
+				// Only the open section can be measured — the rail refits the rest as it shows them.
+				this._dropArcFieldWatch?.();
+				this._dropArcFieldWatch = wireGrowableFields(
+					root, { heights: this._arcFieldHeights, keyOf: arcFieldKey });
 				// Hide "Next" if the rail opens on the last section.
 				this._syncArcNext(root);
 				// Seat the rail width once per edit session (covers a freshly-created draft that
@@ -558,6 +588,17 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			if (sub) sub.textContent = active.sub;
 			const count = root.querySelector(".stonetop-arc-banner-count");
 			if (count) count.textContent = `${index + 1} / ${ARC_SECTIONS.length}`;
+
+			// The glyph bar sits outside the sections (sticky, so it stays reachable while a
+			// long description scrolls), so its visibility follows the section by hand.
+			const glyphbar = root.querySelector(".stonetop-arc-glyphbar");
+			if (glyphbar) glyphbar.hidden = !active.rich;
+
+			// A field in a hidden section measures nothing, so it was still sitting at its floor
+			// while its section was away. Now that this one is up, fit its fields to their text.
+			// THIS section only: the other three are hidden again, so re-measuring them is a rect
+			// read per field to arrive at the height they already have.
+			refitGrowableFields(root.querySelector(`.stonetop-arc-section[data-arc-tab="${key}"]`));
 
 			this._syncArcNext(root);
 		}

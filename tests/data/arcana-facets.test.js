@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { ARCANUM_KINDS, ARCANUM_TIERS, arcanumKinds, arcanumTier } from "../../module/data/arcana-facets.js";
+import {
+	ARCANUM_KINDS, ARCANUM_TIERS, arcanumKinds, arcanumTier,
+	isImmobileArcanumItem, isImplantedArcanumItem,
+} from "../../module/data/arcana-facets.js";
 
 const KIND_KEYS = ARCANUM_KINDS.map(k => k.key);
 const TIER_KEYS = ARCANUM_TIERS.map(t => t.key);
@@ -101,6 +104,57 @@ describe("arcanumKinds", () => {
 
 	it("never reports a kind that isn't one of the three", () => {
 		expect(arcanumKinds({ front: { item: { name: "x" } } })).not.toContain("cursed");
+	});
+});
+
+describe("isImmobileArcanumItem", () => {
+	// Book I p.437: "If it's too big to just carry on your person, give it the `immobile` tag."
+	it("reads the tag out of the printed tag line", () => {
+		expect(isImmobileArcanumItem({ note: "<em>immobile</em>" })).toBe(true);
+		expect(isImmobileArcanumItem({ note: "<em>magical, beautiful, immobile</em>" })).toBe(true);
+		expect(isImmobileArcanumItem({ note: "<em>IMMOBILE</em>" })).toBe(true);
+	});
+
+	it("is false for a curio you can pocket, and for nothing at all", () => {
+		expect(isImmobileArcanumItem({ note: "<em>magical</em>" })).toBe(false);
+		expect(isImmobileArcanumItem({ note: null })).toBe(false);
+		expect(isImmobileArcanumItem(null)).toBe(false);
+	});
+
+	it("matches a whole word, so a tag that merely contains it doesn't count", () => {
+		expect(isImmobileArcanumItem({ note: "<em>immobilizing</em>" })).toBe(false);
+	});
+
+	it("is independent of the implanted tag beside it", () => {
+		const markings = { note: "<em>implanted, magical</em>" };
+		expect(isImplantedArcanumItem(markings)).toBe(true);
+		expect(isImmobileArcanumItem(markings)).toBe(false);
+	});
+});
+
+describe("the shipped cards the book tags immobile", () => {
+	const docs = loadArcanaPackDocs();
+
+	it("finds all seven, front side, exactly as Appendix C prints them", () => {
+		const immobile = docs
+			.filter(d => isImmobileArcanumItem(d.flags.stonetop.front?.item))
+			.map(d => d.flags.stonetop.slug).sort();
+		expect(immobile).toEqual([
+			"huge-wooden-sphere",
+			"oversized-codex",
+			"rusty-cauldron",
+			"strange-skull-and-antlers",
+			"sunken-tablet",
+			"vein-of-milky-crystal",
+			"whispering-word",
+		]);
+	});
+
+	it("leaves the realised BACK item carriable — a place can still yield gear", () => {
+		// The vein of milky crystal is immobile; the Moonstone you cut out of it is not.
+		const vein = docs.find(d => d.flags.stonetop.slug === "vein-of-milky-crystal");
+		expect(isImmobileArcanumItem(vein.flags.stonetop.front.item)).toBe(true);
+		expect(isImmobileArcanumItem(vein.flags.stonetop.back.item)).toBe(false);
 	});
 });
 
