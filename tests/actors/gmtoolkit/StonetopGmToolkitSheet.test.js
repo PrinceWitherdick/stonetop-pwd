@@ -19,6 +19,10 @@ import { escHtml } from "../../../module/utils/strings.js";
 
 
 const SHEET_JS      = read("module/actors/gmtoolkit/StonetopGmToolkitSheet.js");
+// The draw/walk/whisper sequence itself lives here, shared with the expedition rail, so the
+// guards below that are about the ORDER of those beats read this file and the ones about how
+// this sheet WIRES it read the sheet.
+const DRAWER_JS     = read("module/gm-toolkit/gm-move-drawer.js");
 const STONETOP_JS   = read("stonetop.js");
 const SYSTEM_JSON   = read("system.json");
 const SHEET_HBS     = read("templates/actor/gm-toolkit.hbs");
@@ -96,21 +100,28 @@ describe("GM Toolkit move lists", () => {
 	});
 
 	// The Expedition walkthrough teaches these same seven, and a GM meets both surfaces in the
-	// same session. It now RENDERS this table instead of restating it, so "same move, same
-	// words" holds by construction. What is pinned is that it still does: the failure mode this
+	// same session. It READS this table instead of restating it, so "same move, same words"
+	// holds by construction. What is pinned is that it still does: the failure mode this
 	// replaces is somebody pasting the list back in as literal prose, after which the two
 	// screens are free to drift with nothing to say so.
+	//
+	// The walkthrough shows them in a right-hand rail now rather than in a step of their own,
+	// so what carries the list is EXPLORATION_SIDEBAR_MOVES, a mapped array, and the assertion
+	// on its CONTENT is in tests/dialogs/expedition-moves-rail.test.js, where the array itself
+	// can be read. What is left here is the half this file is for: that no second copy of the
+	// words has appeared in that file's source.
 	it("hands the Expedition walkthrough the same list rather than a second copy", () => {
 		expect(EXPEDITION_JS).toContain('import { EXPLORATION_GM_MOVES } from "../gm-toolkit/gm-moves.js"');
+		expect(EXPEDITION_JS).toMatch(/EXPLORATION_SIDEBAR_MOVES\s*=\s*EXPLORATION_GM_MOVES\.map\(/);
 
-		const step = EXPEDITION_JS.match(/key:\s*"explore"[\s\S]*?\n\t\},/)?.[0];
-		expect(step, "the ExpeditionDialog exploration step moved or was renamed").toBeTruthy();
-		expect(step).toContain("${EXPLORATION_MOVE_LIST}");
-		// No literal move survives in the step's prose. Checking one name is enough to catch a
-		// paste-back, and checking every name would fail on the surrounding sentences that
-		// legitimately mention a move by name ("bar the way with a blizzard").
+		// No literal move survives anywhere in the walkthrough's own prose. The step bodies
+		// are the risk: they are template literals of authored HTML, which is exactly where a
+		// paste-back would land. Comments are stripped first — this file's own header
+		// discusses the moves by name, and so does the one being read.
+		const prose = stripComments(EXPEDITION_JS);
 		for (const move of EXPLORATION_GM_MOVES) {
-			expect(step, `${move.name} is written out again`).not.toContain(`<strong>${move.name}`);
+			expect(prose, `${move.name} is written out again`).not.toContain(move.name);
+			expect(prose, `${move.name}'s gloss is written out again`).not.toContain(move.gloss);
 		}
 	});
 });
@@ -591,18 +602,22 @@ describe("the move randomizer", () => {
 		const src = stripComments(SHEET_JS);
 		expect(src).toContain("_wireToolkitButtons(html[0])");
 		expect(src).toMatch(/closest\("\.stonetop-section-randomize"\)/);
-		// The no-repeat only works if the drawn move is kept and passed back as `exclude`.
-		expect(src).toMatch(/exclude:\s*this\._lastRandomMove\[key\]/);
-		expect(src).toMatch(/this\._lastRandomMove\[key\]\s*=\s*move\.name/);
+		expect(src).toMatch(/this\._moveDrawer\.draw\(button,/);
+		// The no-repeat only works if the drawn move is kept and passed back as `exclude`, and it
+		// is kept PER SECTION — one memory for all three lists would have a draw from Basic
+		// suppressing the same-named move in Homefront.
+		const drawer = stripComments(DRAWER_JS);
+		expect(drawer).toMatch(/exclude:\s*this\._last\[key\]/);
+		expect(drawer).toMatch(/this\._last\[key\]\s*=\s*move\.name/);
 	});
 
 	// The draw is remembered BEFORE the walk, not after the card posts. A second click that
 	// supersedes the first drops out without posting, so a draw recorded after the post would be
 	// no draw at all — and the interrupting click would be free to land on the same move again.
 	it("remembers the draw before the walk that reveals it", () => {
-		const src = stripComments(SHEET_JS);
-		expect(src.indexOf("this._lastRandomMove[key] = move.name"))
-			.toBeLessThan(src.indexOf("_spinToDrawnMove(button, move.name)"));
+		const drawer = stripComments(DRAWER_JS);
+		expect(drawer.indexOf("this._last[key] = move.name"))
+			.toBeLessThan(drawer.indexOf("this.spinTo(button, move.name)"));
 	});
 
 	// The whisper says WHICH move; the light says where in the list it came from — and gets there
@@ -628,38 +643,48 @@ describe("the move randomizer", () => {
 		});
 
 		it("walks the light to that row, then flashes it", () => {
-			const src = stripComments(SHEET_JS);
-			expect(src).toContain('import { flashHighlight, spinHighlight } from "../../utils/flash-highlight.js"');
-			expect(src).toMatch(/this\._spinToDrawnMove\(button,\s*move\.name\)/);
+			const drawer = stripComments(DRAWER_JS);
+			expect(drawer).toContain('import { SpinTrack } from "../utils/flash-highlight.js"');
+			expect(drawer).toMatch(/this\.spinTo\(button,\s*move\.name\)/);
 			// Compared as a dataset value, NOT interpolated into an attribute selector: the names
 			// carry brackets and a slash, which a selector would need CSS.escape to survive.
-			expect(src).toMatch(/li\.dataset\.move === name/);
-			expect(src).not.toMatch(/\[data-move=/);
-			expect(src).toMatch(/spinHighlight\(rows,\s*target,\s*\{\s*scope\s*\}\)/);
-			expect(src).toMatch(/flashHighlight\(rows\[target\],\s*\{\s*scope\s*\}\)/);
+			expect(drawer).toMatch(/li\.dataset\.move === name/);
+			expect(drawer).not.toMatch(/\[data-move=/);
+			// The walk-then-flash beat itself is SpinTrack's, tested on its own behaviour in
+			// tests/utils/flash-highlight.test.js. What the drawer owes is finding the right rows
+			// and handing over the scope it douses.
+			expect(drawer).toMatch(/landOn\(rows,\s*target,\s*\{\s*scope\s*\}\)/);
 		});
 
 		// The walk belongs to the list that was drawn from — a light crossing Homefront's entries
 		// off a click on the Basic die would be showing moves that were never in the draw. The
 		// DOUSING is tab-wide, so the previous draw's fade cannot still be burning two sections up.
 		it("walks one section but douses the whole tab", () => {
+			// The two are separate selectors on the drawer, and this sheet is the reason they are:
+			// it hands it a narrower `group` for the rows than the `scope` it douses.
 			const src = stripComments(SHEET_JS);
-			expect(src).toMatch(/rows = \[\.\.\.\(button\.closest\("\.stonetop-move-group"\)/);
-			expect(src).toMatch(/scope = button\.closest\("\.stonetop-gm-toolkit-moves"\)/);
+			expect(src).toMatch(/scope:\s*"\.stonetop-gm-toolkit-moves"/);
+			expect(src).toMatch(/group:\s*"\.stonetop-move-group"/);
+			expect(src).toMatch(/row:\s*"\.stonetop-gm-move"/);
+			const drawer = stripComments(DRAWER_JS);
+			expect(drawer).toMatch(/rows\s*=\s*\[\.\.\.\(button\.closest\(this\._groupSel\)/);
+			expect(drawer).toMatch(/scope\s*=\s*button\.closest\(this\._scopeSel\)/);
 		});
 
 		// One landing, one card. A click that is superseded mid-walk resolves false and must post
 		// nothing, or a GM drumming on the die ends up with a pile of cards for moves whose light
 		// never arrived.
 		it("abandons a walk in flight and posts only for the one that lands", () => {
-			const src = stripComments(SHEET_JS);
-			expect(src).toMatch(/this\._moveSpin\?\.cancel\(\)/);
-			expect(src).toMatch(/if \(!await spin\.done\) return false/);
-			expect(src).toMatch(/if \(!await this\._spinToDrawnMove\(button, move\.name\)\) return;/);
+			const drawer = stripComments(DRAWER_JS);
+			// Superseding is SpinTrack's to do, and holding ONE track per drawer is what lets it:
+			// a second click cancels the first through the same field. That the cancel actually
+			// happens is tested on SpinTrack itself.
+			expect(drawer).toMatch(/this\._spin \?\?= new SpinTrack\(\)/);
+			expect(drawer).toMatch(/if \(!await this\.spinTo\(button, move\.name\)\) return null;/);
 			// The card goes out AFTER the walk, which is the whole point of splitting the draw
 			// from the whisper: `postGmMove` takes a move rather than drawing one.
-			expect(src.indexOf("_spinToDrawnMove(button, move.name)"))
-				.toBeLessThan(src.indexOf("postGmMove(key, move,"));
+			expect(drawer.indexOf("this.spinTo(button, move.name)"))
+				.toBeLessThan(drawer.indexOf("postGmMove(key, move,"));
 		});
 
 		// The classes are put on and taken off by JS; how they LOOK is entirely CSS. A stylesheet

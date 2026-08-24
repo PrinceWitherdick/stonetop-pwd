@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical, Value 1",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>This heavy, black metal torc is set with a red gem. It feels good upon your wrist. Makes you feel important.</p><p>When you wear the torc and threaten someone that you consider beneath you, lose HP equal to the torc’s current Cost (1d4 to start). They are filled with fear; the craven will flee, cower, or grovel, and even the brave will flinch and hesitate. Each time you use the torc, the Cost increases by 1 die size (max 1d10).</p><p>When you wear the torc for a week without anyone questioning your authority, decrease the Cost by one step (min 1d4).</p>"
   },
   "flags": {
     "stonetop": {

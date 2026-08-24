@@ -224,7 +224,7 @@ export const ARCANA_SUMMONS = {
 				instinct:     "to heap abuse on its worshippers",
 				moves:        "Make unreasonable demands\nConsume the essence of foodstuffs\nSense one's idle thoughts/memories\nWeave powerful illusions and hallucinations (near, area)\nGrow bored/huffy and go to sleep",
 				cost:         "obeisance and ever-larger offerings of food",
-				notes:        "Armor 6 (stone, resilience), 2 vs. iron. Special qualities: inert; indistinguishable voice. It hardly considers itself a follower.",
+				notes:        "Armor 6 (stone, resilience), 2 vs. iron. Special qualities: inert; disembodied voice. It hardly considers itself a follower.",
 				sourceUuid:   "stone-idol:thistlewik",
 			},
 		],

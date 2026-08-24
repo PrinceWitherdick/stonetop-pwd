@@ -109,6 +109,14 @@ export function treasureItemData(entry) {
 		// The book's own illustration when this world has imported it; otherwise null, so
 		// buildInventoryItemData omits it and the item takes Foundry's default icon.
 		img: treasureArtSrc(entry.slug),
+		// And the book's own text, into the p.430 "fuller write-up" slot. That field rather
+		// than `system.description` because it is the one the gear row already prints AND the
+		// one the identify ladder already conceals: a treasure the GM lands as an unidentified
+		// artifact must not hand over its custom move with the picture. `state` is deliberately
+		// left off — the write-up travels with every treasure, and whether this particular find
+		// starts hidden is the drop's call (addDroppedInventoryItem reads `hideArtifact`), not
+		// the catalog's. Entries the book prints no prose for pass undefined and get no field.
+		artifact: entry.writeup ? { lore: entry.writeup } : null,
 	});
 	// Mirror the gear metadata into flags.stonetop as well, so addDroppedInventoryItem
 	// resolves it whichever source it reads first, and a sidebar copy keeps a slug.

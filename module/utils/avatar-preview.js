@@ -68,8 +68,15 @@ function fitPreviewImage(popup, img, nw, nh) {
 	return true;
 }
 
-/** There is only ever one preview, so tearing down is a query rather than bookkeeping. */
+/**
+ * There is only ever one preview, so tearing down is a query rather than bookkeeping.
+ *
+ * The document guard is for the callers that run without one: this is the teardown a window
+ * calls from `close()`, and a headless test closing a dialog to check what it wrote has no DOM
+ * at all. Nothing can be showing in that case either, so there is nothing to take down.
+ */
 export function removeAvatarPreview() {
+	if (typeof document === "undefined") return;
 	document.querySelector(`.${PREVIEW_CLASS}`)?.remove();
 }
 

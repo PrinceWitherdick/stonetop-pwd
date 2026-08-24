@@ -13,6 +13,12 @@ export const SPECIAL_ITEM_CATALOG = [
 		{ slug: "crossbow",      name: "Crossbow",      traits: "far, +1 damage, x piercing, reload, ○ low ammo, ○ all out", value: "1" },
 		{ slug: "composite-bow", name: "Composite bow", traits: "far, +1 damage, x piercing, ○ low ammo, ○ all out",         value: "1" },
 	] },
+	// Its own category on the handout, printed right under Weapons of War with a footnote of
+	// its own — the whole point of the category being that bronze is cheap and never pierces.
+	{ category: "Bronze Weapons", note: "Bronze weapons do not have “x piercing.”", items: [
+		{ slug: "bronze-common-weapon",  name: "Common weapons", traits: "spears, daggers, etc.", value: "0" },
+		{ slug: "bronze-weapon-of-war",  name: "Weapons of war", traits: "as above, in bronze",   value: "1" },
+	] },
 	{ category: "Armor", items: [
 		{ slug: "cuirass-boiled-leather", name: "Cuirass, boiled leather",            traits: "1 armor",                  value: "1" },
 		{ slug: "hauberk-iron",           name: "Hauberk/cuirass/scale, iron or bronze", traits: "2 armor, warm, cumbersome", value: "2" },
@@ -24,6 +30,7 @@ export const SPECIAL_ITEM_CATALOG = [
 		{ slug: "bullseye-lantern", name: "Bullseye lantern", traits: "○○○○○ hours, near",          value: "1" },
 	] },
 	{ category: "Tools & Trades", items: [
+		{ slug: "small-metal-tool",        name: "Small metal tool",             traits: "chisel, file, nails, shears, etc.", value: "0" },
 		{ slug: "metal-tools",             name: "Metal tools",                  traits: "drill, prybar, saw, tongs, etc.", value: "0" },
 		{ slug: "glass-vial",              name: "Glass vial",                   traits: "fragile",                         value: "0" },
 		{ slug: "block-and-tackle",        name: "Block & tackle",               traits: "",                                value: "0" },
@@ -56,7 +63,9 @@ export const SPECIAL_ITEM_CATALOG = [
 	] },
 	{ category: "Trade Goods", items: [
 		{ slug: "salt",                 name: "Salt",                        traits: "a little box", value: "0" },
+		{ slug: "whisky-skin-fine",     name: "Skin of whisky, fine",        traits: "○○ uses; share a use to get advantage on Persuade", value: "0" },
 		{ slug: "purse-of-coppers",     name: "Purse of coppers",            traits: "~10 handfuls", value: "0" },
+		{ slug: "firkin-whisky-fine",   name: "Firkin of whisky, fine",      traits: "",             value: "1" },
 		{ slug: "handful-of-silvers",   name: "Handful of silvers",          traits: "",             value: "1" },
 		{ slug: "barrel-whisky-common", name: "Barrel of whisky, common",    traits: "immobile",     value: "1" },
 		{ slug: "barrel-whisky-fine",   name: "Barrel of whisky, fine",      traits: "immobile",     value: "2" },

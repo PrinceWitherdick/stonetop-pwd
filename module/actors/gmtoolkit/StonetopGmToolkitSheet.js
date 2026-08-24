@@ -27,14 +27,14 @@ import { withSectionEditing } from "../../utils/section-editing.js";
 import { gmMoveSections } from "../../gm-toolkit/gm-moves.js";
 import { bookPageRef } from "../../gm-toolkit/book-ref.js";
 import { moveBlurb } from "../../gm-toolkit/gm-move-blurb.js";
-import { randomGmMove, postGmMove } from "../../gm-toolkit/random-gm-move.js";
-import { flashHighlight, spinHighlight } from "../../utils/flash-highlight.js";
+import { GmMoveDrawer } from "../../gm-toolkit/gm-move-drawer.js";
 import { toggleDisclosure } from "../../utils/disclosure.js";
 import { gmDiagrams } from "../../gm-toolkit/gm-diagrams.js";
 import { openImageZoom } from "../../utils/image-zoom-window.js";
 import { runImportBookArtMacro } from "../../book2-art/macro.js";
 import { withGmPrepTabs } from "./gm-prep-tabs.js";
 import { withGmWonderTab } from "./gm-wonder-tab.js";
+import { withGmEncountersTab } from "./gm-encounters-tab.js";
 import { localizedHomefrontSections } from "../../gm-toolkit/homefront-view.js";
 import { readCurrentSeason, currentSeasonView, isCurrentSeasonChange } from "../../seasons/current-season.js";
 import { localize } from "../../utils/i18n.js";
@@ -88,8 +88,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 	// untouched toolkit keeps the default forever.
 	//
 	// withSectionEditing: the fold carets on every tab, plus the per-section edit pencil the
-	// Threats and Sites tabs carry (their delete buttons are live only under the pencil, so a
-	// GM reading their prep can't bin a threat with a stray click).
+	// Encounters and Wonder tabs carry. NOT Threats or Sites: both had one and lost it, because
+	// the only control it ended up locking was the trash while everything around it needed
+	// exempting by name — see the note at the head of gm-prep-tabs.js.
 	//
 	// withGmPrepTabs: the Threats & Dangers and Sites tabs, moved here from the steading sheet.
 	// Its file header explains the one thing that must not drift: the STORAGE stayed on the
@@ -98,27 +99,31 @@ export function createStonetopGmToolkitSheetClass(Base) {
 	// withGmWonderTab: the "I wonder..." tab, the one authored surface on this sheet. Its storage
 	// IS the toolkit's own (`actor.system.wonders`), which is the opposite of the line above and
 	// stated here so the two are never confused for one another.
-	return class StonetopGmToolkitSheet extends withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base)))) {
+	return class StonetopGmToolkitSheet extends withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base))))) {
 		// Read by the mixin's `isSectionEditable`. Constant, not state: this sheet has no global
 		// edit wrench, so a section is editable exactly when its own pencil is on.
 		_editMode = false;
 
-		// Last move the randomizer drew, per section key, so the next draw from that section can
-		// avoid repeating it. Deliberately NOT persisted and not on the actor: it is one click's
-		// worth of memory, and a "don't repeat" that survives a reload would be a stored
-		// preference nobody asked for. Reopening the sheet starts it empty, which is correct.
+		// The randomizer beside each GM Moves heading: what it last drew per section (so the next
+		// draw from that section can avoid repeating it) and the walk currently running, so a
+		// second click can abandon the first. Neither is persisted and neither is on the actor —
+		// it is one click's worth of memory, and a "don't repeat" that survived a reload would be
+		// a stored preference nobody asked for. Reopening the sheet starts it empty, correctly.
+		//
+		// ONE PER SHEET rather than per section: the light is tab-wide, and a GM who clicks
+		// Homefront's die while Basic's is still travelling is asking for the second answer, not
+		// for both. Rows come from the pressed SECTION though, not the whole tab — a light running
+		// through Homefront's entries off a click on the Basic die would be showing moves that
+		// were never in the draw.
 		//
 		// The name is checked against AppV1's own members: a property collision there is silent
-		// (see the character sheet's notes on `_element`), and `_lastRandomMove` collides with
-		// nothing in Application, FormApplication or ActorSheet.
-		_lastRandomMove = {};
-
-		// The walk currently running down a move list, if any, so a second click can abandon the
-		// first (see `_spinToDrawnMove`). One per SHEET rather than per section: the light is
-		// tab-wide, and a GM who clicks Homefront's die while Basic's is still travelling is
-		// asking for the second answer, not for both. Collides with nothing in Application,
-		// FormApplication or ActorSheet, which is checked because such a collision is silent.
-		_moveSpin = null;
+		// (see the character sheet's notes on `_element`), and `_moveDrawer` collides with nothing
+		// in Application, FormApplication or ActorSheet.
+		_moveDrawer = new GmMoveDrawer({
+			scope: ".stonetop-gm-toolkit-moves",
+			group: ".stonetop-move-group",
+			row:   ".stonetop-gm-move",
+		});
 
 		// The `updateActor` registration that keeps the Homefront tab's "now" mark in step with
 		// the steading's clock, or null while unbound. See `_wireSeasonSync`. Null rather than
@@ -214,6 +219,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// away. Those two fields save on blur, and the sync above redraws this sheet on every
 			// prep-page write in the WORLD — a redraw no blur precedes. See the mixin.
 			await this._flushGmWonderEdits();
+			// The Encounters tab has two boxes with the same problem and the same fix: an
+			// encounter name and a collected row's note, both saved on blur. See the mixin.
+			await this._flushGmEncounterEdits();
 			await super._render(force, options);
 			stripHeaderChrome(this);
 		}
@@ -222,8 +230,10 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The same flush, for the close that no blur precedes: Escape shuts an AppV1 window
 			// straight from the focused field, so its `change` event never fires.
 			await this._flushGmWonderEdits();
+			await this._flushGmEncounterEdits();
 			this._unwirePrepPageSync();
 			this._unwireSeasonSync();
+			this._unwireGmPrepMasonry();
 			return super.close(options);
 		}
 
@@ -338,9 +348,7 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// writes files. This sheet is GM-only by ownership, so it is always true in practice.
 			context.stonetop.isGM = game.user?.isGM ?? false;
 
-			// Both prep tabs, including their per-section edit flags (a section is editable when
-			// its own pencil is toggled, which is what keeps the delete buttons inert while a GM
-			// is only reading).
+			// Both prep tabs. They publish no edit flags — neither has a pencil.
 			// The steading resolved above, handed down rather than looked up again: it is an
 			// unindexed `game.actors` scan, and the mixin's own note says both its builders
 			// sharing one resolution is the point.
@@ -349,6 +357,11 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The "I wonder..." list, off `actor.system.wonders`, split into the open questions
 			// and the answered ones, plus the book's guidance on keeping it.
 			this._addGmWonderContext(context);
+
+			// The Encounters list, off actor.system.encounters, with every collected row resolved
+			// to the document it points at. Awaited, unlike the wonder call above: a row pointing
+			// into a compendium can need a pack load to name itself (see resolveEncounterEntry).
+			await this._addGmEncountersContext(context);
 
 			return context;
 		}
@@ -367,9 +380,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// Folding a section is a reading preference, so this is wired outside any
 			// editability guard, exactly as the character and steading sheets wire theirs.
 			this._wireSectionCollapse(html, HEADING_SELECTOR);
-			// The per-section edit pencil on Threats and Sites. Same class hook the steading
-			// used, because the shared `section-edit-toggle` partial emits it and moved here
-			// unchanged along with the rest of that markup.
+			// The per-section edit pencil, now Encounters' and Wonder's only. Same class hook the
+			// steading used, because the shared `section-edit-toggle` partial emits it and moved
+			// here unchanged along with the rest of that markup.
 			this._wireSectionEditToggle(html, ".steading-section-edit-toggle");
 			// Threats and Sites: doom tracks, prep tools, card collapse, drag-to-scene and the
 			// journal threat-seed drop. Self-gated per action, so it goes outside the editable
@@ -378,6 +391,10 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The "I wonder..." tab: the add bar, its two text fields, and the three per-row
 			// buttons. Delegated on the same root and independent of everything above it.
 			this._activateGmWonderListeners(html[0]);
+			// The Encounters tab: the add bar, the per-row buttons, the two text fields, the
+			// keyboard reorder, and both halves of the drag. Delegated on the same root, and the
+			// only thing on this sheet that takes a drop.
+			this._activateGmEncountersListeners(html[0]);
 			// This sheet's own two buttons. Both are delegated rather than bound per element,
 			// because both are re-emitted whenever their tab re-renders and either may be absent
 			// (the import button depends on which diagrams this world already has).
@@ -434,22 +451,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 				const button = ev.target.closest(".stonetop-section-randomize");
 				if (!button) return;
 				ev.preventDefault();
-				const key = button.dataset.section;
-				// The last move drawn from THIS section, so a second click always moves on.
-				const move = randomGmMove(key, { exclude: this._lastRandomMove[key] ?? "" });
-				if (!move) return;
-
-				// Remembered at the DRAW rather than after the whisper. A second click supersedes
-				// this one before its card ever posts, and the move this walk was heading for still
-				// has to count as just-drawn — otherwise the click that interrupted it is free to
-				// land on the very same move.
-				this._lastRandomMove[key] = move.name;
-
-				// The whisper waits for the light to arrive. A card that posted at the click would
-				// answer the question the walk is still in the middle of asking, and a GM reading
-				// chat would have no reason to watch the list at all.
-				if (!await this._spinToDrawnMove(button, move.name)) return;
-				await postGmMove(key, move, { speaker: ChatMessage.getSpeaker({ actor: this.actor }) });
+				// Draw, walk the light, whisper — the order and the don't-repeat memory both live
+				// in the drawer (gm-move-drawer.js), shared with the expedition walkthrough's rail.
+				await this._moveDrawer.draw(button, { speaker: ChatMessage.getSpeaker({ actor: this.actor }) });
 			});
 		}
 
@@ -476,50 +480,6 @@ export function createStonetopGmToolkitSheetClass(Base) {
 		 */
 		_toggleMoveBook(toggle) {
 			toggleDisclosure(toggle, ".stonetop-gm-move-rest, .stonetop-gm-move-book");
-		}
-
-		/**
-		 * Run the light down this section's entries, land it on the one drawn, and let it fade
-		 * (utils/flash-highlight.js).
-		 *
-		 * The move goes to CHAT, which is where it is read. This answers the other half of the
-		 * question — where in a list of thirteen it came from — and buys the list a moment of the
-		 * GM's attention on the way past: the entries the light crosses are the ones the die did
-		 * not give, which is the reading of the list nobody does mid-sentence.
-		 *
-		 * WALKED within the clicked section, but doused across the whole tab. The walk belongs to
-		 * one list, because a light running through Homefront's entries off a click on the Basic
-		 * die would be showing moves that were never in the draw; the dousing is tab-wide because
-		 * only ever one row should be lit, and two rows fading on two clocks is two answers to
-		 * "what did that just give me?".
-		 *
-		 * Matched on `data-move` by comparing the dataset rather than by building an attribute
-		 * SELECTOR: these names are printed prose ("Offer an opportunity (with or without a
-		 * cost)"), and interpolating one into a selector would need `CSS.escape` to survive the
-		 * brackets and the slash — a scan of thirteen <li> is cheaper than that is careful.
-		 *
-		 * @returns {Promise<boolean>}  false if a later click superseded this one, which is the
-		 *          caller's cue to post nothing: one landing, one card. True when there was no
-		 *          walk to make at all (a row not on the page, a folded section, motion turned
-		 *          off) — the whisper is the part that must still go out.
-		 */
-		async _spinToDrawnMove(button, name) {
-			const scope = button.closest(".stonetop-gm-toolkit-moves");
-			const rows = [...(button.closest(".stonetop-move-group")?.querySelectorAll(".stonetop-gm-move") ?? [])];
-			const target = rows.findIndex(li => li.dataset.move === name);
-			if (target < 0) return true;
-
-			// A walk still in flight is abandoned where it stands. Its `done` resolves false, so the
-			// click that started it drops out before posting and this click's card is the only one.
-			// A walk left running by a CLOSE is not cancelled here: its timers only touch detached
-			// nodes, and the card the GM asked for still arrives.
-			this._moveSpin?.cancel();
-			const spin = spinHighlight(rows, target, { scope });
-			this._moveSpin = spin;
-
-			if (!await spin.done) return false;
-			flashHighlight(rows[target], { scope });
-			return true;
 		}
 	};
 }

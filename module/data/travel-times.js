@@ -141,6 +141,35 @@ export const FULL_FRAME = Object.freeze({ x0: 0, y0: 0, x1: 1, y1: 1 });
  * [104,68,690,547] in points on the 792x612 spread). A place with no spot on a map simply is not
  * drawn there; a place with no spots at all lives past the map's edge (`beyond`).
  *
+ * A SPOT MARKED `anchor` IS A POSITION WITHOUT A PIN, and it exists because those two things were
+ * never the same question. The Vicinity letters six places the World's End does not — the
+ * Crossroads, the Maw, the Red Grove, the cave bears' den, the Ruined Tower and the Foothills —
+ * so a trip to one of them had no line at all on the outer map: `routePath` (utils/route-path.js) will not bridge a
+ * missing END, and one of the ends was missing. But "the World's End does not LETTER the Red
+ * Grove" and "the Red Grove is nowhere on the World's End" are different claims, and only the
+ * first is true. The country is drawn; the cartographer just had no room for the name.
+ *
+ * So an anchor records where the place stands and says nothing else. `placesOnMap` leaves it out,
+ * which keeps it off the hotspot layer and out of the poster-map pins, so the outer map gains no
+ * clutter and the GM's Scene gains no Notes. The route line and `drawnOn` read `spots` directly
+ * and so pick it up, which is the whole of what it is for: the way to the Red Grove now draws on
+ * the World's End as the short leg it really is, instead of vanishing.
+ *
+ * WHERE THE SIX NUMBERS CAME FROM, since they are the only ones here nobody read off a page. They
+ * are one similarity transform of the Vicinity's own spots, fitted on the two things both maps
+ * show: Stonetop, which is measured on each, and the Crossroads, which is not lettered on the
+ * World's End but is DRAWN on it — it is the junction where the Highway coming down from Barrier
+ * Pass meets the West Road running out to Gordin's Delve, and a crossing of two roads is a point
+ * whether or not anyone captioned it. Rotation is held at zero because both maps are north-up.
+ * The fit was then checked against things it was not fitted to: the Vicinity's "The Highway" and
+ * "The West Road" captions land on those same two roads on the World's End, the Foothills onto
+ * hill hatching, the Maw and the Red Grove into the Great Wood.
+ *
+ * Read them as good to about a percent of the map near Stonetop and worse toward the edges of the
+ * Vicinity's footprint, which is a hundredth of the country the outer map draws and far inside
+ * what a line between two of them is claiming. They are NOT a measurement, and they are not
+ * `placed` either: nothing compares them against a pin, because they never become one.
+ *
  * A FEW ARE THE FEATURE RATHER THAN THE LABEL, and the difference is worth knowing about. What the
  * text layer gives back is where the printed WORDS were set, which is not always over the thing
  * they name: a cartographer moves a caption off a crowded ridge or leans it into open paper, and
@@ -205,32 +234,32 @@ export const TRAVEL_PLACES = Object.freeze([
 		// no write-up apart from the roads it is a crossing of.
 		slug: "the-crossroads", name: "the Crossroads", journalId: "ezquwGFbne6uxzJK",
 		mapLabel: "The Crossroads",
-		spots: Object.freeze({ vicinity: { fx: 0.5677, fy: 0.6415, placed: true } }),
+		spots: Object.freeze({ vicinity: { fx: 0.5677, fy: 0.6415, placed: true }, "worlds-end": { fx: 0.2822, fy: 0.3514, anchor: true } }),
 	}),
 	Object.freeze({
 		slug: "the-maw", name: "the Maw", journalId: "vwP9YSr3qrc4Tq7k",
 		mapLabel: "The Maw",
-		spots: Object.freeze({ vicinity: { fx: 0.723, fy: 0.380 } }),
+		spots: Object.freeze({ vicinity: { fx: 0.723, fy: 0.380 }, "worlds-end": { fx: 0.3216, fy: 0.2928, anchor: true } }),
 	}),
 	Object.freeze({
 		slug: "the-red-grove", name: "the Red Grove", journalId: "o7qpevFfrKXuVlGo",
 		mapLabel: "Red Grove",
-		spots: Object.freeze({ vicinity: { fx: 0.894, fy: 0.573 } }),
+		spots: Object.freeze({ vicinity: { fx: 0.894, fy: 0.573 }, "worlds-end": { fx: 0.365, fy: 0.336, anchor: true } }),
 	}),
 	Object.freeze({
 		slug: "cave-bears-den", name: "the cave bears' den", journalId: "VJf1tzQZ3nGxBNsC",
 		mapLabel: "Cave Bears",
-		spots: Object.freeze({ vicinity: { fx: 0.785, fy: 0.769 } }),
+		spots: Object.freeze({ vicinity: { fx: 0.785, fy: 0.769 }, "worlds-end": { fx: 0.3373, fy: 0.38, anchor: true } }),
 	}),
 	Object.freeze({
 		slug: "the-ruined-tower", name: "the Ruined Tower", journalId: "iYSktNtms4NQat8F",
 		mapLabel: "The Ruined Tower",
-		spots: Object.freeze({ vicinity: { fx: 0.4603, fy: 0.8659, placed: true } }),
+		spots: Object.freeze({ vicinity: { fx: 0.4603, fy: 0.8659, placed: true }, "worlds-end": { fx: 0.255, fy: 0.4017, anchor: true } }),
 	}),
 	Object.freeze({
 		slug: "the-foothills", name: "the Foothills", journalId: "61j2hjMjANZcniEQ",
 		mapLabel: "The Foothills",
-		spots: Object.freeze({ vicinity: { fx: 0.2332, fy: 0.2174, placed: true } }),
+		spots: Object.freeze({ vicinity: { fx: 0.2332, fy: 0.2174, placed: true }, "worlds-end": { fx: 0.1974, fy: 0.2563, anchor: true } }),
 	}),
 	Object.freeze({
 		slug: "titan-bones", name: "Titan Bones", journalId: "fc9yqAlxCCgZVckC",
@@ -336,6 +365,40 @@ export const TRAVEL_LEGS = Object.freeze([
 	// To Tor's Fist from…
 	Object.freeze({ from: "the-foothills", to: "tors-fist", min: 5, max: 5, unit: "days" }),
 	Object.freeze({ from: "barrier-pass",  to: "tors-fist", min: 6, max: 6, unit: "days" }),
+]);
+
+/**
+ * Where a leg of the table has to be DRAWN bending, because the road it stands for does.
+ *
+ * The travel table prints journeys, not roads. "Stonetop to the Foothills, 2 days via the Roads"
+ * is one row, so the line drawn for it runs pin to pin, and pin to pin on the Vicinity is a
+ * diagonal straight across the Bottomlands. The road does no such thing: it leaves Stonetop
+ * heading south-west down the West Road, meets the Highway at the Crossroads, and only then turns
+ * north for the Foothills and Barrier Pass. A schematic that cuts that corner tells the party
+ * they are walking country the books say they are not.
+ *
+ * SO THIS IS GEOMETRY AND ONLY GEOMETRY. A bend is a place the line passes OVER, never a stop the
+ * journey makes: it is spliced in by `routePath` (utils/route-path.js) when it places the pins,
+ * and it never reaches TRAVEL_LEGS. Nothing about the trip's arithmetic moves, because nothing
+ * about the trip changed. The time is still the book's printed 2 days, Chart a Course's "you must
+ * first travel to ___" stays empty on a single-leg journey, and the Chronicle still records one
+ * leg. All that changes is where the dots go.
+ *
+ * A ROW IS UNDIRECTED, like the legs it bends, because a road runs both ways: coming back down
+ * from Barrier Pass the same bend is walked in the other order, and `roadBendsBetween` reverses
+ * it rather than making anyone write the row twice.
+ *
+ * PER MAP, because a bend is a fact about one picture. The Vicinity draws the Crossroads well
+ * south-west of Stonetop and the Foothills off in its far corner, which is what makes the dogleg
+ * worth drawing at that scale; another map letters the same three places at other spacings and
+ * wants its own answer, or none. A bend naming a place the map cannot draw is simply skipped,
+ * so a row is never a reason for a line to go missing.
+ */
+export const ROAD_BENDS = Object.freeze([
+	// The West Road out of Stonetop and the Highway north, which meet at the Crossroads. Both of
+	// these are "via the Roads" legs in the table, and the Crossroads is the corner they turn.
+	Object.freeze({ map: "vicinity", from: "stonetop", to: "the-foothills", through: Object.freeze(["the-crossroads"]) }),
+	Object.freeze({ map: "vicinity", from: "stonetop", to: "barrier-pass",  through: Object.freeze(["the-crossroads"]) }),
 ]);
 
 /**
@@ -583,10 +646,17 @@ export function placeMapLabel(place) {
 	return place?.mapLabel ?? place?.name ?? "";
 }
 
-/** The places drawn on one map tier, in reading order down the page. */
+/**
+ * The places one map tier DRAWS, in reading order down the page. Everything that gets a pin: the
+ * walkthrough's hotspots and the poster-map Scene's Notes both come from here.
+ *
+ * Anchors are not among them, by design. An `anchor` spot is a position the route line may use and
+ * nothing more (see `spots` above), so counting it here would put six unlettered pins in a knot on
+ * top of Stonetop's own, on the map and on every GM's Scene alike.
+ */
 export function placesOnMap(mapSlug) {
 	return TRAVEL_PLACES
-		.filter(p => p.spots?.[mapSlug])
+		.filter(p => p.spots?.[mapSlug] && !p.spots[mapSlug].anchor)
 		.sort((a, b) => a.spots[mapSlug].fy - b.spots[mapSlug].fy);
 }
 
@@ -601,6 +671,25 @@ export function exitsOnMap(mapSlug) {
 }
 
 /**
+ * The places one leg's line has to pass over on `mapSlug`, in the order it passes them.
+ *
+ * Empty for the great majority of legs, which is the point: a bend is written down only where a
+ * ruled line would tell a lie about the country, so asking this question costs a scan of a very
+ * short table and usually answers "none".
+ *
+ * Reversed for a journey walked the other way, so ROAD_BENDS holds one row per road rather than
+ * one per direction.
+ */
+export function roadBendsBetween(mapSlug, from, to) {
+	for (const bend of ROAD_BENDS) {
+		if (bend.map !== mapSlug) continue;
+		if (bend.from === from && bend.to === to) return [...bend.through];
+		if (bend.from === to && bend.to === from) return [...bend.through].reverse();
+	}
+	return [];
+}
+
+/**
  * Where a canonical fraction lands inside a file with `frame`, as a 0-100 percentage pair — ready
  * to drop straight into `left`/`top`, so nothing has to measure the rendered image.
  */
@@ -608,6 +697,61 @@ export function spotPercent({ fx, fy }, frame = FULL_FRAME) {
 	return {
 		left: (frame.x0 + fx * (frame.x1 - frame.x0)) * 100,
 		top:  (frame.y0 + fy * (frame.y1 - frame.y0)) * 100,
+	};
+}
+
+/**
+ * How many decimals a fraction of a map keeps.
+ *
+ * Four is about a third of a pixel on the 6000px poster Scenes this system builds, which is finer
+ * than any pointer can be aimed and far finer than the maps' own printed labels are placed. What
+ * it is really for is the COMPARISON: the Scene button asks whether the map in front of the table
+ * is already showing a hand-drawn path by matching its marks, and a float carried at full
+ * precision through a JSON round trip is a mark that can stop matching itself.
+ *
+ * Declared beside `percentSpot`, which is what MINTS those fractions, so the rounding a mark is
+ * stored at and the rounding it is compared at cannot come to be two different numbers.
+ */
+export const MARK_PRECISION = 4;
+
+/**
+ * Is this a number that can be a fraction of a map?
+ *
+ * Here rather than in each of the three modules that ask it, for the reason MARK_PRECISION is
+ * here: the test a mark is admitted by and the test it is compared by cannot come to be two
+ * tests. A mark that fails this is off the paper -- see `insideMap` in utils/custom-route.js,
+ * which is this asked of both halves at once.
+ */
+export const isFraction = value => Number.isFinite(value) && value >= 0 && value <= 1;
+
+/** One fraction at the precision marks are stored and compared at. */
+export const roundMark = value => Number(Number(value).toFixed(MARK_PRECISION));
+
+/**
+ * The other direction: a percentage read off a rendered picture, back to a canonical fraction.
+ *
+ * The inverse of `spotPercent`, and it exists for the one thing this table cannot supply — a
+ * place the BOOKS never printed. A GM who drops one of their own written-up sites onto the
+ * Vicinity is pointing at a pixel of whatever copy of the art their world happens to have, and
+ * what has to be stored is the fraction of the PRINTED CROP that pixel stands on. Store the raw
+ * percentage instead and the pin moves the day the world gains the sharper render, because the
+ * poster scan is a different crop of the same drawing.
+ *
+ * Rounded to the same four places the measured table is written to. Any more is precision the
+ * gesture never had: a click is a pixel on a 300 dpi map, and 0.0001 of the width is finer than
+ * that pixel.
+ *
+ * A frame with no extent cannot be divided by, so it answers 0 rather than Infinity — which is
+ * a rectangle nothing measured, and the honest reading of "I do not know where in this that is".
+ */
+export function percentSpot({ left, top }, frame = FULL_FRAME) {
+	const width = frame.x1 - frame.x0;
+	const height = frame.y1 - frame.y0;
+	const scale = 10 ** MARK_PRECISION;
+	const round = n => Math.round(n * scale) / scale;
+	return {
+		fx: width ? round((left / 100 - frame.x0) / width) : 0,
+		fy: height ? round((top / 100 - frame.y0) / height) : 0,
 	};
 }
 

@@ -276,7 +276,7 @@ describe("selectors that would break silently", () => {
 		const m = sharedCropRule();
 		expect(m, "the shared cover/center-top rule is gone").toBeTruthy();
 		const selectors = m[1].split(",").map((s) => s.trim()).filter(Boolean);
-		expect(selectors).toHaveLength(8);
+		expect(selectors).toHaveLength(9);
 		for (const sel of [".steading-member-avatar-img", ".steading-player-portrait-img",
 			".stonetop-follower-portrait-img", ".stonetop-npc-portrait-img",
 			// The character and monster headers' framed portrait. It joined this rule when those
@@ -284,6 +284,11 @@ describe("selectors that would break silently", () => {
 			// inside the clipping box, which is the whole reason this list exists.
 			".stonetop-portrait-img",
 			".stonetop-rel-portrait-img",
+			// The expedition walkthrough's load rows, where anyone setting out wears their own
+			// face rather than a lettered disc. Another small clipping circle, so the same two
+			// fixes again — and the walkthrough is a classic Application, which is exactly where
+			// core paints that black img border.
+			".stonetop-exp-load-ava-img",
 			// A group follower's roster row (the crew's individuals and members, a custom group's
 			// members). Same 26px clipping disc as the relationship portrait, so it needs the same
 			// two fixes: core's black img border, and no radius on a framed image.

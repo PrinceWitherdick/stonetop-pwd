@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "fireproof, magical, Value 3",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Made of a pale metal, lighter than it should be, and intricately carved with geometric patterns. The insides are an impossibly fine chainmail of the same metal. They seem to absorb heat, and are often damp.</p><p>When you wear the pale metal gauntlets, you can pick up and manipulate even white-hot steel without harming your hands (the rest of you, though, has no special protection from heat).</p>"
   },
   "flags": {
     "stonetop": {

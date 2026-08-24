@@ -4,6 +4,7 @@ import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
 import { repairAllChronicleFlagScopes } from "../migration/chronicle-flag-scope.js";
+import { newArcanumSlug, isArcanumData } from "../item/createArcanum.js";
 import { renameAllSeasonYearPages } from "../migration/season-year-page-names.js";
 import { ensureStonetopSingleton, remindDestinedOmenRoll } from "./StonetopSingleton.js";
 import { runWorldSetup, pendingSetupWork } from "./WorldSetup.js";
@@ -40,10 +41,11 @@ import { getStonetopSteadingActorOrWarn } from "../utils/world.js";
 import { rollMoveFromUuid } from "./HotbarDrop.js";
 import { ensureThreatsEntry } from "../threats/threat-store.js";
 import { ensureHazardsEntry } from "../hazards/hazard-store.js";
-import { STONETOP_SCOPE, resolvedFlagProperty, resolvedFlags } from "../actors/character/StonetopFlags.js";
+import { STONETOP_SCOPE, ITEM_FLAG_SCOPE, resolvedFlagProperty, resolvedFlags } from "../actors/character/StonetopFlags.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
 import { markPosterMapScenes } from "../book2-art/poster-maps.js";
 import { linkLandmarkNotes, refitLandmarkNotes, revealLandmarkNotesOnce } from "./PlaceOfInterestDrop.js";
+import { refitGmPrepPins } from "./ThreatNotePins.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { migrateAllSteadingPeople, ensurePeopleFolders, backfillAllResidentHomes } from "../actors/steading/steading-people.js";
 import { PERSON_DEFAULT_IMG } from "../utils/person-portrait.js";
@@ -166,6 +168,10 @@ export async function onReady() {
 		// migration/chronicle-flag-scope.js.
 		try { await repairAllChronicleFlagScopes(); }
 		catch (err) { console.error("Stonetop | chronicle flag-scope repair failed", err); }
+		// Give a slug to any arcanum card built before StonetopItem#_preCreate stamped them.
+		// Idempotent, so it needs no gate and is a no-op in every world that has none.
+		try { await _stampMissingArcanumSlugs(); }
+		catch (err) { console.error("Stonetop | arcanum slug sweep failed", err); }
 		// Catch Chronicle year pages up to the "Year One" naming the sheet and the picker
 		// already use. Same shape as the sweep above and for the same reason: it recognises a
 		// generated name and writes one, so it is idempotent and needs no gate. The years that
@@ -206,6 +212,10 @@ export async function onReady() {
 		// other being stale. Silent once they agree.
 		try { await refitLandmarkNotes(); }
 		catch (err) { console.error("Stonetop | landmark map-pin refit failed", err); }
+		// Same bargain for the GM's own prep pins: a site dropped on a scene wears the Sites tab's
+		// mound now, and every site pinned before that still wears a threat's torn note.
+		try { await refitGmPrepPins(); }
+		catch (err) { console.error("Stonetop | GM-prep map-pin refit failed", err); }
 		// Put the named places back on the poster maps, whose printing carries no labels at all,
 		// and bring pins already down up to the current design. Every load, and
 		// silent when they already agree: the only other thing that writes a poster-map Scene is
@@ -1389,6 +1399,43 @@ export async function _dropRetiredActorFlags() {
 	return staleKeys.size;
 }
 
+// Give a slug to any arcanum card in the world that has none.
+//
+// Every arcanum needs one: it is the identity key for each holder's marks, unlock counts and
+// owned/identified/flipped lists, so a card without one silently keys all of that off "". New
+// cards can no longer arrive that way -- StonetopItem#_preCreate stamps the gap before the
+// document is written -- but a world may already hold one built by macro or console before that
+// existed. Repairing it used to be the editor's `getData`, which only reached cards somebody
+// happened to open in edit mode.
+//
+// Idempotent by construction and so needs no version flag: after a run there is nothing left to
+// match. WORLD items only -- a card embedded on an actor is not an arcanum (arcana are referenced
+// by slug from a pack or the world, never owned as embedded documents).
+//
+// PRIMARY-GM ONLY, like every other write in onReady: a player has no right to update world
+// items, and the rejection would tear down the rest of the hook for them.
+export async function _stampMissingArcanumSlugs() {
+	if (!game.user?.isGM || !isPrimaryGM()) return 0;
+	const slugless = (game.items ?? []).filter(
+		item => isArcanumData(item) && !String(item.flags?.[ITEM_FLAG_SCOPE]?.slug ?? "").trim()
+	);
+	if (!slugless.length) return 0;
+	// ONE batched request, like every other sweep here: per-item updates each cost a socket round
+	// trip and an Items-sidebar repaint, on the blocking startup path.
+	try {
+		await Item.updateDocuments(slugless.map(item => ({
+			_id: item.id,
+			[`flags.${ITEM_FLAG_SCOPE}.slug`]: newArcanumSlug(),
+		})));
+	} catch (err) {
+		// Never cost the GM their load: the cards still open, and the next load tries again.
+		console.warn("Stonetop | Could not stamp slugs on slug-less arcana.", err);
+		return 0;
+	}
+	console.log(`Stonetop | Gave a slug to ${slugless.length} arcanum card(s) that had none.`);
+	return slugless.length;
+}
+
 // The GM-prep page families (threats / hazards) used to store one JournalEntry per item in
 // a per-steading "<Steading> Threats" / "<Steading> Hazards" Folder; they now store all of
 // a family's items as pages of ONE such JournalEntry. See _consolidateGmPrepFamily.
@@ -1701,6 +1748,12 @@ async function _postStartupWelcomeMessageOnce() {
 	await setSetting("startupWelcomeShown", true);
 }
 
+// Where the books come from. This system ships the sheets and the bookkeeping and none of the
+// prose, so the one thing a brand-new world cannot supply is the rules themselves; the greeting
+// card says so and points at the publisher's own store rather than a reseller.
+const STONETOP_STORE_URL   = "https://plusoneexp.com/collections/stonetop";
+const STONETOP_STORE_LABEL = "plusoneexp.com/collections/stonetop";
+
 function _buildStartupWelcomeContent() {
 	return `<section class="pbta-chat-card stonetop-roll-card stonetop-startup-card">
 		<div class="cell cell--chat">
@@ -1710,17 +1763,15 @@ function _buildStartupWelcomeContent() {
 			</div>
 			<div class="stonetop-roll-card-description">
 				<p>This is an unofficial Foundry VTT system for <strong>Stonetop</strong>, by Jeremy Strandberg, illustrated by Lucie Arnoux, with layout, editing, and co-design by Jason Lutes.</p>
+				<p>It carries none of the rules text, so you will want the books themselves. They come from the publisher, Plus One Exp: <a href="${STONETOP_STORE_URL}">${STONETOP_STORE_LABEL}</a>.</p>
 			</div>
 			<div class="card-content stonetop-startup-card__content">
 				<div class="row stonetop-startup-card__section">
 					<h3 class="cell__subtitle">For Players</h3>
 					<ul>
-						<li>Guided, resumable character creation from the playbook picker.</li>
-						<li>Automated move rolls with modifiers, advantage or disadvantage, and auto hit tiers.</li>
-						<li>A step-by-step level-up wizard with inline stat, move, and trait choosers.</li>
-						<li>Interactive Clash and Let Fly, resolved from the chat card.</li>
-						<li>Armor and load tracked automatically from your equipped gear.</li>
-						<li>Followers and the Seeker's arcana on tidy, trackable cards.</li>
+						<li>Guided, resumable character creation, and a step-by-step level-up wizard.</li>
+						<li>Move rolls with modifiers, advantage or disadvantage, and hit tiers worked out for you, including Clash and Let Fly resolved from the chat card.</li>
+						<li>Armor, load, followers, and the Seeker's arcana tracked on the sheet.</li>
 					</ul>
 				</div>
 				<div class="row stonetop-startup-card__section">
@@ -1729,9 +1780,6 @@ function _buildStartupWelcomeContent() {
 						<li>A first-session Welcome guide and a Let Spring Burst Forth walkthrough.</li>
 						<li>A steading sheet with seasonal automation, improvements, and disasters.</li>
 						<li>A GM Toolkit with your moves, and Threats and Sites tabs you can pin to a scene.</li>
-						<li>Love Letters: personal, one-time moves you hand to a single character.</li>
-						<li>Character Introductions that compile into "The Chronicle" world journal.</li>
-						<li>An End of Session macro that awards XP to the whole table at once.</li>
 					</ul>
 				</div>
 				<div class="row stonetop-startup-card__section">
@@ -1742,20 +1790,6 @@ function _buildStartupWelcomeContent() {
 						<li>The complete deck of major and minor arcana.</li>
 					</ul>
 				</div>
-				<div class="row stonetop-startup-card__section">
-					<h3 class="cell__subtitle">Useful Settings</h3>
-					<ul>
-						<li><span><strong>Sheet Font &amp; Size</strong>: choose the typeface and scale the text on Stonetop sheets.</span></li>
-						<li><span><strong>On Hover Info</strong>: turn all hover info on/off, or tune Stats, Basic Moves, Playbook Moves, Traits, and Gear Tags individually.</span></li>
-						<li><span><strong>Shift Up/Down Buttons on Roll Cards</strong>: turn this on to add GM-only buttons that bump a roll's result up or down a tier from the chat card, no re-roll needed.</span></li>
-					</ul>
-				</div>
-				<div class="row stonetop-startup-card__section">
-					<h3 class="cell__subtitle">Recommended Add-on</h3>
-					<ul>
-						<li><span>Install <strong><a href="https://foundryvtt.com/packages/dice-so-nice">Dice So Nice!</a></strong> for 3D dice on the tabletop. Every move, damage, and steading roll uses Foundry's dice, so it adds a little immersion to your rolls.</span></li>
-					</ul>
-				</div>
 			</div>
 			<div class="row stonetop-startup-card__actions">
 				<button type="button" class="stonetop-startup-open-welcome">
@@ -1763,7 +1797,8 @@ function _buildStartupWelcomeContent() {
 				</button>
 			</div>
 			<div class="row row--border stonetop-startup-card__footer">
-				Open <strong>Configure Settings</strong> and filter for <strong>Stonetop</strong> to adjust these options.
+				Open <strong>Configure Settings</strong> and filter for <strong>Stonetop</strong> for the sheet font and size, the hover info, and the rest.
+				<a href="https://foundryvtt.com/packages/dice-so-nice">Dice So Nice!</a> is worth installing for 3D dice.
 			</div>
 		</div>
 	</section>`;

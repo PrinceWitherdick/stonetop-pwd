@@ -159,6 +159,38 @@ export const MAP_PIN_TEXT_COLOR = "#1b1009";
 export const MAP_PIN_TINT = "#ffffff";
 
 /**
+ * One colour written as the one string a comparison can be made on.
+ *
+ * WHY THIS HAD TO EXIST, and it is not a tidying. A Note's `textColor` and its `texture.tint` are
+ * ColorFields, and v13's `ColorField#initialize` hands back a `Color` — a subclass of Number —
+ * rather than the "#rrggbb" string its `_source` holds and every writer in this system declares.
+ * So `note.textColor !== MAP_PIN_TEXT_COLOR` is ALWAYS true, whatever the pin is actually wearing.
+ * Every refit pass here promises to be silent once the pins agree, and that promise is what makes
+ * it safe to run one on every world load; compared this way it instead rewrites every pin on every
+ * map, on every load, for every GM, and the "did the GM touch this?" tests downstream of it never
+ * get to run.
+ *
+ * Tolerant of the shapes the tests build as well as the ones Foundry hands over: a plain string, a
+ * bare 0xrrggbb number, a Color, and nothing at all.
+ */
+export function colorKey(value) {
+	if (value === null || value === undefined) return "";
+	// A `Color` is a Number OBJECT, so this arm catches it and any bare number alike. A hex string
+	// is not a string this arm sees, so "" cannot be read as black.
+	if (typeof value !== "string") {
+		const n = Number(value);
+		return Number.isFinite(n) ? `#${(Math.trunc(n) >>> 0).toString(16).padStart(6, "0")}` : "";
+	}
+	const text = value.trim().toLowerCase();
+	// "#abc" and "#aabbcc" are one colour. Core writes only the long form, so this arm is for a pin
+	// hand-edited to the short one, which should be left alone rather than rewritten every load.
+	return /^#[0-9a-f]{3}$/.test(text) ? `#${[...text.slice(1)].map(c => c + c).join("")}` : text;
+}
+
+/** Do these two spellings of a colour mean the same colour? */
+export const sameColor = (a, b) => colorKey(a) === colorKey(b);
+
+/**
  * How far above its recorded spot a marker's note sits, so the drawing STANDS on that spot.
  *
  * This exists because core centres a note's icon on the note's position — `Note#_drawControlIcon`
@@ -327,6 +359,31 @@ export function markerPinKey(slug, family = "place") {
 }
 
 /**
+ * One canonical map fraction as a point in a poster Scene's own pixels.
+ *
+ * THE ONE ARITHMETIC, and it is shared on purpose. Two quite different things land marks on these
+ * Scenes — the book's own place markers below, and the GM's site pins (module/sites/site-scene-pins.js)
+ * — and both are converting the same kind of number: a fraction of the PRINTED PAGE crop, which is
+ * not the same rectangle as the poster scan. A second copy of this would be the two families of pin
+ * standing in slightly different valleys on one picture, which is exactly the failure the fractions
+ * exist to prevent.
+ *
+ * `frame` is the caller's, resolved once with `frameFor` and checked once with `frameFitsImage`,
+ * because what to DO about a Scene that is not the shape the fractions were measured against
+ * differs: the marker builder draws no pins at all, while a site placement says so out loud.
+ *
+ * The result is the point the fraction names, and nothing about how a drawing sits on it. A pin
+ * with a foot wants lifting off it (see `markerTipLift`); a mark that covers its spot does not.
+ */
+export function posterSpotPixels({ spot, frame, width, height }) {
+	const { left, top } = spotPercent(spot, frame);
+	return {
+		x: Math.round((left / 100) * width),
+		y: Math.round((top / 100) * height),
+	};
+}
+
+/**
  * Every named-place marker one poster map should carry, as `{ key, slug, name, x, y }` in Scene
  * pixels, ready to be dressed by `placeMarkerNoteData`.
  *
@@ -362,13 +419,11 @@ export function posterMapPins(map, { width, height } = {}) {
 	const frame = frameFor(map.out);
 	if (!frameFitsImage(frame, width / height, tier.printedAspect)) return [];
 
-	// The note's position, which is not quite the caption's: see markerTipLift.
+	// The note's position, which is not quite the caption's: see markerTipLift. The conversion
+	// itself is `posterSpotPixels`, so a marker and a site pin cannot be laid by two arithmetics.
 	const at = (spot, kind) => {
-		const { left, top } = spotPercent(spot, frame);
-		return {
-			x: Math.round((left / 100) * width),
-			y: Math.round((top / 100) * height) - markerTipLift(kind),
-		};
+		const { x, y } = posterSpotPixels({ spot, frame, width, height });
+		return { x, y: y - markerTipLift(kind) };
 	};
 
 	// `family` is what the pin IS and `kind` is what it is DRAWN AS, and they are separate fields

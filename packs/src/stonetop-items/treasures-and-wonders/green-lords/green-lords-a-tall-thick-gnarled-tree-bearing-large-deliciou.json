@@ -17,7 +17,8 @@
         ""
       ]
     },
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Provides as many provisions as the PCs care to take, and could be cultivated into a rhoillyg orchard.</p>"
   },
   "flags": {
     "stonetop": {

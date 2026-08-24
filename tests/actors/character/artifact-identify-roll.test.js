@@ -2,6 +2,16 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { FakeActorBuilder } from "../../fakes/FakeActorBuilder.js";
 import { ARTIFACT_STATE } from "../../../module/actors/character/artifact-identify.js";
+import { promptRoll } from "../../../module/dialogs/RollDialog.js";
+
+// Every move roll opens the pre-roll prompt now — Advantage / Normal / Disadvantage plus a
+// one-off modifier, fresh each time (module/dialogs/RollDialog.js). It has its own tests; here
+// it is stubbed so the identify ladder under test is what these assertions see, and so the
+// `global.Dialog` captures below only ever catch the pickers they were written for.
+vi.mock("../../../module/dialogs/RollDialog.js", () => ({
+	DEFAULT_ROLL_MODE: "normal",
+	promptRoll: vi.fn(async () => ({ rollMode: "normal", modifier: 0 })),
+}));
 
 // Identifying artifacts (Book I, Discoveries pp.430-431). Two moves, two different jobs:
 //   "If they Know Things about the artifact and get a 7+, then tell them some combo of what it
@@ -30,7 +40,6 @@ const KNOWLEDGE = {
 
 function makeCharacterMock(rollTotal, knowledge = KNOWLEDGE) {
 	return {
-		rollMode: "normal",
 		onDirectStatRoll:        vi.fn(async () => ({ total: rollTotal })),
 		artifactKnowledge:       vi.fn(() => knowledge),
 		setArtifactState:        vi.fn(async () => true),
@@ -75,7 +84,8 @@ function captureDialog(choice) {
 
 beforeEach(() => {
 	global.game.settings ??= {};
-	global.game.settings.get = () => false;   // situational-modifier prompt off
+	promptRoll.mockResolvedValue({ rollMode: "normal", modifier: 0 });
+	global.game.settings.get = () => false;
 	global.game.user = { isGM: false };
 	global.Handlebars = { helpers: { statLabel: k => k.toUpperCase() } };
 });
@@ -256,5 +266,44 @@ describe("_onArtifactGmControl — the GM's hand-over", () => {
 		expect(data.content).toMatch(/<option value="partial" selected>/);
 		// And the concealed tags are shown to the GM, since that's what they're deciding about.
 		expect(data.content).toMatch(/magical, Value 2/);
+	});
+
+	// The write-up is stored as HTML (`artifactLore` is an HTMLField) and printed RAW everywhere
+	// it is read — the gear row, the arcanum card, the identify chat card. So it has to be
+	// AUTHORED as formatted prose, and a plain textarea made that the GM's problem: a compendium
+	// treasure opened as a wall of <p>/<em>/<strong> to edit around, and anything typed by hand
+	// arrived as one unbroken paragraph. It opens in a live editor instead.
+	it("opens the write-up in an editor rather than a box full of tags", async () => {
+		let data;
+		global.Dialog = vi.fn(function (d) { data = d; this.render = vi.fn(); });
+		const { sheet } = makeSheet({ knowledge: { ...KNOWLEDGE, lore: "<p>It <em>hums</em>.</p>" } });
+		await sheet._onArtifactGmControl("item-1");
+		expect(data.content).not.toMatch(/<textarea/);
+		// Named, because the Save button harvests by `name` and <prose-mirror> is form-associated:
+		// that one attribute is the whole reason the harvest needed no special case for it.
+		expect(data.content).toMatch(/<prose-mirror[^>]*name="lore"/);
+	});
+
+	// The raw HTML rides in the attribute the element reads ITSELF back from (its constructor
+	// takes `value` and immediately drops the attribute), escaped exactly once so the tags
+	// survive the trip instead of being parsed as markup belonging to the dialog.
+	it("hands the editor the stored markup, not a rendering of it", async () => {
+		let data;
+		global.Dialog = vi.fn(function (d) { data = d; this.render = vi.fn(); });
+		const { sheet } = makeSheet({ knowledge: { ...KNOWLEDGE, lore: "<p>It <em>hums</em>.</p>" } });
+		await sheet._onArtifactGmControl("item-1");
+		expect(data.content).toMatch(/value="&lt;p&gt;It &lt;em&gt;hums&lt;\/em&gt;\.&lt;\/p&gt;"/);
+	});
+
+	// The hint and the lead stay one-liners. Both are a single sentence by design — "more than
+	// meets the eye", "who would know" — so a toolbar over either would be more chrome than field.
+	it("leaves the hint and the lead as plain one-line fields", async () => {
+		let data;
+		global.Dialog = vi.fn(function (d) { data = d; this.render = vi.fn(); });
+		const { sheet } = makeSheet();
+		await sheet._onArtifactGmControl("item-1");
+		expect(data.content).toMatch(/<input id="st-artifact-hint"[^>]*type="text"/);
+		expect(data.content).toMatch(/<input id="st-artifact-lead"[^>]*type="text"/);
+		expect(data.content).not.toMatch(/<prose-mirror[^>]*name="(hint|lead)"/);
 	});
 });

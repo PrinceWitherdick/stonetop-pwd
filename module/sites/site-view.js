@@ -17,6 +17,56 @@ export const SITE_ACCENT = "#5a5f6b";
 const rowsOf = (arr, list) => keyedRows(arr, pairKeys(list) ?? []);
 
 /**
+ * The card's four foldable beats: which written-up sections fold together, and what the fold is
+ * called.
+ *
+ * A fully written-up site is a page long — the barrow with a timeline, six areas and two tables
+ * is about 900px — and the Sites tab tiles several of them side by side, so the body folds
+ * rather than running. FOUR named folds rather than a caret on every heading: a dozen carets is
+ * as hard to read as the wall it replaced, and the walkthrough already collects a site in four
+ * clusters (create-site-dialog.js: steps 3-4 the story, 5 what lives there, 6-7 the place, 8 what
+ * you roll in play). Folding along the same seams means the card reads back the way it was
+ * written, and the book's own order (Book I pp. 355-370) survives.
+ *
+ * The section names inside each group are carried so a SHUT fold can say what it is holding —
+ * "The place itself · Outside · Areas" tells you whether it is worth opening. They are paired
+ * with the view-model key they render from, so a group cannot come to claim a section the card
+ * no longer draws.
+ */
+const SITE_CARD_GROUPS = [
+	{ id: "story", label: "Its story", sections: [
+		["timeline", "Timeline"], ["questions", "Questions"], ["connections", "Connections"]] },
+	{ id: "within", label: "What's in it", sections: [
+		["denizens", "Denizens"], ["dangers", "Dangers"], ["discoveries", "Discoveries"]] },
+	{ id: "place", label: "The place itself", sections: [
+		["outside", "Outside"], ["inside", "Inside"], ["areas", "Areas"]] },
+	{ id: "play", label: "Plans & tables", sections: [
+		["plans", "Plans"], ["randomTables", "Tables"]] },
+];
+
+/** The group ids, in card order, for a host that wants to walk them without the labels. */
+export const SITE_CARD_GROUP_IDS = Object.freeze(SITE_CARD_GROUPS.map(g => g.id));
+
+/**
+ * The foldable groups for one site's parts, KEYED BY ID rather than listed.
+ *
+ * The card's four bodies are hand-written markup in the book's order, not a loop over a list, so
+ * the template asks for its group by name (`groups.place.open`); an array would make every one of
+ * those a lookup helper. A group with nothing written up in it is still present, marked
+ * `show: false`, for the same reason.
+ *
+ * `open` is the BUILD-TIME default and says "drawn whole": a site page sheet or a pinned card on
+ * the canvas is a site you opened on purpose. The GM Toolkit's Sites tab, which is where the
+ * height actually hurts, overrides it per card — see `_cardVMsFor` in gm-prep-tabs.js.
+ */
+export function siteCardGroups(parts) {
+	return Object.fromEntries(SITE_CARD_GROUPS.map(({ id, label, sections }) => {
+		const holds = sections.filter(([key]) => parts[key]?.length).map(([, name]) => name);
+		return [id, { id, label, holds, show: holds.length > 0, open: true }];
+	}));
+}
+
+/**
  * View-model for one site page. Async because prose fields are enriched. Pass
  * `{ forOwner }` to force the owner/editable affordances (defaults to page.isOwner).
  */
@@ -125,6 +175,12 @@ export async function buildSiteCardVM(page, { forOwner } = {}) {
 		hasPlans: plans.length > 0,
 		randomTables,
 		hasRandomTables: randomTables.length > 0,
+		// The four folds the body is drawn in. Built from the same arrays the sections render
+		// from, so an empty group is empty for the one reason there is.
+		groups: siteCardGroups({
+			timeline, questions, connections, denizens, dangers, discoveries,
+			outside, inside, areas, plans, randomTables,
+		}),
 		isOwner: forOwner ?? page.isOwner,
 	};
 }

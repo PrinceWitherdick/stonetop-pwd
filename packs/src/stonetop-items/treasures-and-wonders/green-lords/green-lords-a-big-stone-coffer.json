@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>immobile</em>, magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Carved from serpentine, 4 feet by 2 feet by 2, with a heavy stone lid. When found, it’s likely half-full with soil. To those sensitive to such things, it thrums with the power of fertility and growth.</p><p>When you add fresh soil to the coffer, plant seeds in it, and close the lid, the seeds will germinate and sprout overnight. Each seed will sprout only once, and the sprouts henceforth grow at a regular rate, regardless of whether they stay in the coffer or are planted elsewhere.</p><p>With coordination, this could lead to a boom in Stonetop’s gardens and +1 Surplus each summer. In the hands of a skilled herbalist, this can greatly improve an herb garden and allow the cultivation of rare or difficult plants. The herbalists of Marshedge would kill over this—or even start a war.</p>"
   },
   "flags": {
     "stonetop": {

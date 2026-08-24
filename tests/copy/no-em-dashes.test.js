@@ -43,6 +43,7 @@ const ALLOWED = {
 	// the same reason `packs/src` is out of this check entirely. The punctuation in them is the
 	// author's. A file here is NOT guarded at all, so nothing of ours should be written into one.
 	"module/data/artifact-creation-tables.js":               "the Book II Artifact Creation tables",
+	"module/data/treasure-catalog.js":                       "each Book II treasure's own write-up, extracted from packs/src",
 	"module/data/arcana-summons.js":                         "stat blocks off each arcanum's reverse",
 	"module/data/follower-moves.js":                         "the universal follower moves, generated from packs/src",
 	"module/actors/character/dialogs/well-versed-topics.js": "the Lore journals' \"Everyone knows\" text",
@@ -52,7 +53,7 @@ const ALLOWED = {
 
 	// Names that are also lookup keys. These strings are written into a Scene and a JournalEntry
 	// page and then matched by name on the next run, so editing one orphans what it points at.
-	"module/book2-art/poster-maps.js":  "scene names, matched by name on re-import",
+	"module/book2-art/poster-map-catalog.js": "scene names, matched by name on re-import",
 	"module/utils/chronicle-core.js":   "chronicle page names, matched by name",
 };
 

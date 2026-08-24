@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "Value 2",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>found in a mass grave, the tether for a ghost</p>"
   },
   "flags": {
     "stonetop": {

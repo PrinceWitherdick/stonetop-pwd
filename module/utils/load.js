@@ -28,3 +28,24 @@ export function deriveLoadLevel(totalWeight, loadLimits = LOAD_LEVEL_LIMITS) {
 	if (totalWeight <= loadLimits.heavy)  return "heavy";
 	return "overloaded";
 }
+
+// The "how many ◆" caption for each tier under the caps in effect: 3 / 4–6 / 7–9 by
+// default, 4 / 5–7 / 8–10 with a +1 load bonus. One source for where a band starts, so
+// the Outfit dialog's badges and the sheet's load lines can never disagree.
+export function loadBandLabels(limits = LOAD_LEVEL_LIMITS) {
+	return {
+		light:  `${limits.light}`,
+		normal: `${limits.light + 1}–${limits.normal}`,
+		heavy:  `${limits.normal + 1}–${limits.heavy}`,
+	};
+}
+
+// Name the move (or moves) whose loadBonus raised the caps, for the notes that explain
+// why this character carries more than the printed 3/6/9. The Ranger's Pack Horse is the
+// one in the book, but a custom or world-authored move can carry a loadBonus just as
+// well, so nothing downstream hard-codes a move name. Returns "" when nothing granted one.
+export function loadBonusLabel(names = []) {
+	const list = (names ?? []).map(n => String(n ?? "").trim()).filter(Boolean);
+	if (list.length <= 1) return list[0] ?? "";
+	return `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+}

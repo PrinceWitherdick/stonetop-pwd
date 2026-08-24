@@ -13,6 +13,7 @@ import {
 import {
 	MAP_PIN_FONT_SIZE, MAP_PIN_ICON_SIZE, PLACE_MARKER_ICON_SUFFIX, placeMarkerNoteData,
 } from "../../module/utils/map-pins.js";
+import { asColor } from "../fakes/color.js";
 
 // The drop hook has to answer core synchronously, so it fires the note creation and
 // returns. That chain now also resolves the pin's Chronicle page, so counting microtasks
@@ -347,6 +348,24 @@ describe("PlaceOfInterestDrop", () => {
 			const scene = sceneWith([disc("n1"), disc("n2")]);
 			expect(await refitLandmarkNotes({ scenes: [scene], isGM: true })).toBe(0);
 			expect(scene.updateEmbeddedDocuments).not.toHaveBeenCalled();
+		});
+
+		it("counts the ink as agreeing when a live disc hands it back as a Color", async () => {
+			// The shape the test above cannot catch, and the one every real world is in: `textColor`
+			// is a ColorField, so a Note document answers with a `Color` and never the string this
+			// module declares. Compared with ===, no disc ever agrees and "silence in the steady
+			// state" is silence this pass never keeps.
+			const scene = sceneWith([disc("n1", { textColor: asColor("#1b1009") })]);
+			expect(await refitLandmarkNotes({ scenes: [scene], isGM: true })).toBe(0);
+			expect(scene.updateEmbeddedDocuments).not.toHaveBeenCalled();
+		});
+
+		it("still repaints a disc whose Color is genuinely the wrong ink", async () => {
+			const scene = sceneWith([disc("n1", { textColor: asColor("#ffffff") })]);
+			expect(await refitLandmarkNotes({ scenes: [scene], isGM: true })).toBe(1);
+			expect(scene.updateEmbeddedDocuments).toHaveBeenCalledWith("Note", [
+				{ _id: "n1", textColor: "#1b1009" },
+			]);
 		});
 
 		it("leaves the position, the label and the link alone", async () => {

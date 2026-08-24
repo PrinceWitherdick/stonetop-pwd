@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "<em>close</em>, <em>thrown</em>, beautiful, indestructible, 2 <em>piercing</em>, Value 3",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>made of makerglass, shaft and all, found in a hero’s tomb</p>"
   },
   "flags": {
     "stonetop": {

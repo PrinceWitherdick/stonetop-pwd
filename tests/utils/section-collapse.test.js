@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { withSectionEditing } from "../../module/utils/section-editing.js";
+import { readCss, ownRule } from "../fakes/css.js";
 
 // Just enough DOM for the mixin: class toggling, ancestor lookup, a forward
 // descendant query, sibling walking, and delegated listeners on the root.
@@ -286,5 +287,75 @@ describe("sections that default to collapsed", () => {
 
 		expect(bodies.stats.folded).toBe(true);   // collapsed, as it was saved
 		expect(bodies.guide.folded).toBe(true);   // collapsed, because that is its default
+	});
+});
+
+// A folded section is a heading with nothing under it, and a reader who never thought to
+// hover a heading reads that as a section with nothing IN it. So the caret stops hiding the
+// moment its section is shut, and only goes back to hover-only once the section is open.
+//
+// Asserted against the STYLESHEET, because the failure is silent in both directions: the
+// caret still lays out, still hovers, still clicks, and every behaviour test above still
+// passes whether it is painted at 0.8 or at 0. What actually breaks it is a per-host reveal
+// out-specifying the shut rule and putting the caret back to invisible, which is why the
+// specificity is measured here rather than trusted to source order.
+describe("the caret while its section is shut", () => {
+	const css = readCss();
+	const SHUT = ".stonetop-section-collapse.stonetop-section-collapsed:not(:hover):not(:focus-visible)";
+	const ARCANA_SHUT = ".stonetop-arcana-collapsible.is-collapsed > .stonetop-arcana-summary .stonetop-section-caret";
+
+	/**
+	 * Class-level specificity of one selector: classes, attribute selectors and pseudo-CLASSES.
+	 * `:not(...)` counts once (CSS scores it as its argument, and every argument here is itself
+	 * class-level), and the lookbehind keeps a `::pseudo-element` out of the count.
+	 */
+	function classParts(selector) {
+		return (selector.match(/\.[A-Za-z_-][\w-]*|\[[^\]]*\]|(?<!:):[A-Za-z-]+(?:\([^)]*\))?/g) ?? []).length;
+	}
+
+	/** Every whole comma-separated selector in the sheet matching `pattern`. */
+	function selectorsMatching(pattern) {
+		const found = [];
+		for (const [, prelude] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+			for (const entry of prelude.split(",").map(s => s.trim())) if (pattern.test(entry)) found.push(entry);
+		}
+		return found;
+	}
+
+	/** The opacity a rule body paints, as a number. */
+	function opacityOf(body) {
+		return Number(body?.match(/opacity:\s*([\d.]+)/)?.[1]);
+	}
+
+	it("hides both carets while the section is OPEN, as before", () => {
+		expect(opacityOf(ownRule(css, ".stonetop-section-collapse"))).toBe(0);
+		expect(opacityOf(ownRule(css, ".stonetop-section-caret"))).toBe(0);
+	});
+
+	it("paints the shut caret with no hover anywhere near it", () => {
+		expect(opacityOf(ownRule(css, SHUT))).toBeGreaterThanOrEqual(0.6);
+		expect(opacityOf(ownRule(css, ARCANA_SHUT))).toBeGreaterThanOrEqual(0.6);
+	});
+
+	// Every host heading reveals the caret its own way (`.steading-edit-section:hover > …`,
+	// `.stonetop-details-heading-row:hover > …`, and so on), and several of those rules sit
+	// LATER in the file than the shut rule. Ties would go to them.
+	it("outranks every heading-hover reveal, wherever in the file that heading sits", () => {
+		const reveals = selectorsMatching(/:hover\s*>\s*\.stonetop-section-collapse$/);
+		expect(reveals.length).toBeGreaterThan(2);
+		for (const reveal of reveals) expect(classParts(SHUT)).toBeGreaterThan(classParts(reveal));
+
+		const arcanaReveal = ".stonetop-arcana-summary:hover .stonetop-section-caret";
+		expect(selectorsMatching(/^\.stonetop-arcana-summary:hover \.stonetop-section-caret$/)).toHaveLength(1);
+		expect(classParts(ARCANA_SHUT)).toBeGreaterThan(classParts(arcanaReveal));
+	});
+
+	// …but the caret still has somewhere brighter to go when you actually reach for it, or tab
+	// onto it. Both of those are excluded from the shut rule rather than out-specified by it.
+	it("leaves hover and keyboard focus their full-ink rules", () => {
+		expect(SHUT).toContain(":not(:hover)");
+		expect(SHUT).toContain(":not(:focus-visible)");
+		expect(opacityOf(ownRule(css, ".stonetop-section-collapse:hover"))).toBe(1);
+		expect(opacityOf(ownRule(css, ".stonetop-section-collapse:focus-visible"))).toBe(1);
 	});
 });

@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical, beautiful, Value 3",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Cast from silver that never seems to tarnish, with what appear to be two small rubies in its eye sockets. It seems like it might not fit—but what do you know, it does.</p><p>When you wear the serpentine armband openly for all to see, NPCs find you magnetic, becoming jealous and possessive of your attention. Tempers flare quickly, and you might need to Defy Danger or Persuade others in order to take your leave. Ask each PC you encounter how the armband affects them.</p><p>When you remove the armband after wearing it and basking in the regard of others, you find yourself pining for that feeling of being adored. Roll +CON: on a 10+, you’ll get over it; on a 7-9, either put the armband back on (and keep it there) or mark a debility; on a 6-, you cannot sleep until you put the armband on and wear it openly around others.</p>"
   },
   "flags": {
     "stonetop": {

@@ -17,7 +17,8 @@
         ""
       ]
     },
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A heavy lump of smooth metal that fits in one’s hand. When you touch the sphere with bare flesh, it glows with an orange light (reach, area, hours). It recharges an hour of light for every hour that it sits in a hot fire or coals.</p>"
   },
   "flags": {
     "stonetop": {

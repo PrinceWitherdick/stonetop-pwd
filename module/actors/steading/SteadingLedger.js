@@ -6,6 +6,7 @@ import {
 } from "../../utils/ledger-core.js";
 import { IMPROVEMENT_DEFINITIONS } from "./StonetopSteading.js";
 import { stripHtmlToText as stripHtml } from "../../utils/strings.js";
+import { isSteadingActor } from "../../utils/world.js";
 
 const IMPROVEMENTS_PATH = `flags.${LEDGER_SCOPE}.steading.improvements`;
 const CUSTOM_IMPROVEMENTS_PATH = `flags.${LEDGER_SCOPE}.steading.customImprovements`;
@@ -63,10 +64,6 @@ const FLAG_NAMESPACE_LABELS = bySteadingPath({
 });
 
 const SORTED_NAMESPACE_PREFIXES = Object.keys(FLAG_NAMESPACE_LABELS).sort((a, b) => b.length - a.length);
-
-function isSteadingActor(actor) {
-	return actor?.type === "stonetop" || actor?.system?.customType === "stonetop";
-}
 
 function labelForPath(path) {
 	if (SYSTEM_PATH_LABELS[path]) return SYSTEM_PATH_LABELS[path];

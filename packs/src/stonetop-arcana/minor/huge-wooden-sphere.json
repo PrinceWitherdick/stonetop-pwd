@@ -11,7 +11,12 @@
       "slug": "huge-wooden-sphere",
       "front": {
         "title": "A huge wooden sphere",
-        "note": "<em>immobile</em>",
+        "item": {
+          "name": "A huge wooden sphere",
+          "weight": null,
+          "note": "<em>immobile</em>",
+          "inventoryColumn": null
+        },
         "description": "<p>Half-buried and largely overgrown, about 4 feet across and weighing hundreds of pounds. It is strangely well preserved and adorned with intricate pictograms. A handful of other spheres rot nearby.</p>",
         "unlock": {
           "description": "The pictograms depict some sort of recipe, which you can learn but you must…",

@@ -99,6 +99,29 @@ describe("the tab rail sizes to its own content", () => {
 		expect(rail).toMatch(/max-height:\s*max\(/);
 	});
 
+	it("cannot start lower than a third of the way down the window", () => {
+		// The rail hangs off the sheet's own header banner, which is a good anchor only while
+		// the window is tall enough to make it one. The NPC is the counter-example: portrait,
+		// name and a line of prose put the banner's bottom nearly halfway down a window that
+		// is `height: "auto"` and stops just past the details block, so three tabs landed in
+		// the bottom third with empty frame above them. `--st-rail-max-depth` is the ceiling
+		// on how far down the rail may start; it bites only when the measured anchor is
+		// lower, so a tall sheet keeps the banner anchor untouched.
+		expect(rail).toMatch(/--st-rail-max-depth:\s*\d+%/);
+		expect(rail).toMatch(/--st-rail-anchor:\s*max\([^;]*min\(var\(--st-rail-top[^;]*--st-rail-max-depth/);
+		expect(rail).toMatch(/top:\s*var\(--st-rail-anchor\)/);
+	});
+
+	it("subtracts the SAME anchor from its height cap that it positions against", () => {
+		// Reserving room for the unclamped banner anchor while sitting at the clamped one
+		// leaves the panel short by the difference: tabs scroll out of reach behind a hidden
+		// scrollbar with visible window left below them. Both must read `--st-rail-anchor`.
+		expect(rail).toMatch(/max-height:\s*max\(96px,\s*calc\(100% - var\(--st-rail-anchor\)\)\)/);
+		expect(rail, "an unclamped --st-rail-top is still being subtracted").not.toMatch(
+			/max-height:[^;]*--st-rail-top/
+		);
+	});
+
 	it("disappears with the rest of the sheet when the window is collapsed", () => {
 		// Double-clicking the header collapses a window to its title bar, which core does by
 		// hiding `.window-content`. The rail is a sibling of that element out on the frame, so

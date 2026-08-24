@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>hand</em>, magical, <em>+1 damage</em>",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>An 8-inch fang, bound to a wooden hilt by fiber that never rots. A cruel-looking thing, with strange carvings along the blade.</p><p>Something interesting: The fang looks like it came from a cynddaraig, and the markings are definitely some sort of spell related to blood and soil.</p><p>Something useful: When you bury the fang-dagger and water the soil with blood, the ground buckles and bulges. A minute later, a full-grown cynddaraig bursts from the soil—angry, confused, and hungry. The spell grants no control over the beast and provides no way to dismiss it. The dagger is gone, now a tooth in the rage-drake’s maw.</p>"
   },
   "flags": {
     "stonetop": {

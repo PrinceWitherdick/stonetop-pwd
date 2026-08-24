@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>crude</em>, magical (?), Value 3",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A clockwork hand, foot, arm, or leg, with straps and buckles to attach it. Impossibly intricate, and with practice it’s nearly as functional as the real thing. It cannot feel, though, and is prone to jamming up and needing repairs.</p>"
   },
   "flags": {
     "stonetop": {

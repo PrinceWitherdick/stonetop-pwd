@@ -18,19 +18,19 @@
 			<li>
 				<span class="stonetop-outfit-load-label{{#if stonetop.inventory.outfit.load.loadLevelLight}} is-checked{{/if}}">
 					<span class="stonetop-outfit-load-marker"></span>
-					<span>{{#if stonetop.inventory.outfit.hasPackHorse}}{{{localize "stonetop.inventory.outfit.lightPackHorse"}}}{{else}}{{{localize "stonetop.inventory.outfit.light"}}}{{/if}}</span>
+					<span>{{{format "stonetop.inventory.outfit.light" band=stonetop.inventory.outfit.loadBands.light}}}{{#if stonetop.inventory.outfit.loadBonusFrom}}{{{format "stonetop.inventory.outfit.boostedBy" moves=stonetop.inventory.outfit.loadBonusFrom}}}{{/if}}</span>
 				</span>
 			</li>
 			<li>
 				<span class="stonetop-outfit-load-label{{#if stonetop.inventory.outfit.load.loadLevelNormal}} is-checked{{/if}}">
 					<span class="stonetop-outfit-load-marker"></span>
-					<span>{{#if stonetop.inventory.outfit.hasPackHorse}}{{{localize "stonetop.inventory.outfit.normalPackHorse"}}}{{else}}{{{localize "stonetop.inventory.outfit.normal"}}}{{/if}}</span>
+					<span>{{{format "stonetop.inventory.outfit.normal" band=stonetop.inventory.outfit.loadBands.normal}}}{{#if stonetop.inventory.outfit.loadBonusFrom}}{{{format "stonetop.inventory.outfit.boostedBy" moves=stonetop.inventory.outfit.loadBonusFrom}}}{{/if}}</span>
 				</span>
 			</li>
 			<li>
 				<span class="stonetop-outfit-load-label{{#if stonetop.inventory.outfit.load.loadLevelHeavy}} is-checked{{/if}}">
 					<span class="stonetop-outfit-load-marker"></span>
-					<span>{{#if stonetop.inventory.outfit.hasPackHorse}}{{{localize "stonetop.inventory.outfit.heavyPackHorse"}}}{{else}}{{{localize "stonetop.inventory.outfit.heavy"}}}{{/if}}</span>
+					<span>{{{format "stonetop.inventory.outfit.heavy" band=stonetop.inventory.outfit.loadBands.heavy}}}{{#if stonetop.inventory.outfit.loadBonusFrom}}{{{format "stonetop.inventory.outfit.boostedBy" moves=stonetop.inventory.outfit.loadBonusFrom}}}{{/if}}</span>
 				</span>
 			</li>
 		</ul>

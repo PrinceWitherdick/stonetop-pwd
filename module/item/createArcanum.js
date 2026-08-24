@@ -1,24 +1,32 @@
-import { ITEM_FLAG_SCOPE, ARCANA_PACK } from "../actors/character/StonetopFlags.js";
-import { slugify } from "../utils/strings.js";
-import { ensurePackIndex } from "../utils/pack-index.js";
-
-// Re-exported for the arcana creator's callers (kept here for back-compat); the
-// implementation is the shared one in utils/strings.js.
-export { slugify };
+import { ITEM_FLAG_SCOPE } from "../actors/character/StonetopFlags.js";
 
 const ARCANUM_SHEET_CLASS = "stonetop.StonetopArcanumSheet";
 
 /**
- * A slug derived from `name` that doesn't collide with any in `takenSlugs` (Set or array).
- * Appends -2, -3, … until free; empty names fall back to "arcanum". Pure + testable.
+ * Is this document (or creation payload) an arcanum card?
+ *
+ * `move` is the catch-all Item sub-type, so `system.moveType` is what actually decides -- the same
+ * test the sheet makes to choose between the card and the plain readout.
  */
-export function uniqueArcanumSlug(name, takenSlugs = []) {
-	const taken = takenSlugs instanceof Set ? takenSlugs : new Set(takenSlugs);
-	const base  = slugify(name) || "arcanum";
-	if (!taken.has(base)) return base;
-	let n = 2;
-	while (taken.has(`${base}-${n}`)) n++;
-	return `${base}-${n}`;
+export function isArcanumData(item) {
+	return item?.type === "move" && item?.system?.moveType === "arcanum";
+}
+
+/**
+ * An opaque, permanent id for a new homebrew arcanum.
+ *
+ * The slug is the identity key for everything a character saves about a card — its marks,
+ * its unlock counts, and the owned/identified/flipped lists — so it has to stay fixed for
+ * the life of the card. That rules out deriving it from the name: renaming a card would
+ * orphan every mark on every sheet holding it. Random rather than name-derived also means
+ * it can never collide with a shipped pack slug (which would shadow this card, since the
+ * repository resolves the pack first) or with another homebrew one — so there is nothing
+ * for the author to get wrong, which is why the editor doesn't show the slug at all.
+ *
+ * The `arc-` prefix is purely so a slug read off a flag in the console is recognisable.
+ */
+export function newArcanumSlug() {
+	return `arc-${foundry.utils.randomID(16)}`;
 }
 
 /**
@@ -70,30 +78,6 @@ export function buildArcanumItemData({ slug, name = "New Arcanum", major = false
 }
 
 /**
- * Every arcanum slug already in use across the shipped pack + the world, so a new homebrew
- * slug can be made unique against both. Pack precedence means a homebrew never shadows a
- * shipped card (the repository resolves the pack first), but we still avoid the collision.
- * Pass `excludeId` to skip a world item (the card currently being edited), so checking its
- * own slug for collisions doesn't flag itself.
- */
-export async function collectTakenArcanumSlugs({ excludeId = null } = {}) {
-	const taken = new Set();
-	const pack  = await ensurePackIndex(ARCANA_PACK, [`flags.${ITEM_FLAG_SCOPE}.slug`]);
-	if (pack) {
-		for (const e of pack.index) {
-			const slug = e.flags?.[ITEM_FLAG_SCOPE]?.slug;
-			if (slug) taken.add(slug);
-		}
-	}
-	for (const i of globalThis.game?.items ?? []) {
-		if (excludeId && i.id === excludeId) continue;
-		const slug = i.flags?.[ITEM_FLAG_SCOPE]?.slug;
-		if (slug) taken.add(slug);
-	}
-	return taken;
-}
-
-/**
  * Create a homebrew arcanum world Item with a unique slug and open its sheet ready to edit.
  * `front`/`back` optionally pre-fill the card (the inspiration wizard seeds front.description
  * with the rolled artifact notes). Returns the created Item, or null if creation was blocked
@@ -117,8 +101,7 @@ export async function createArcanumItem({ name = "New Arcanum", major = false, f
 		return null;
 	}
 
-	const taken = await collectTakenArcanumSlugs();
-	const slug  = uniqueArcanumSlug(name, taken);
+	const slug = newArcanumSlug();
 	let item = null;
 	try {
 		// Grant a non-GM author OWNER on their own card so its editor opens editable. A GM

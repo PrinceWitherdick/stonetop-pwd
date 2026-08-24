@@ -1,41 +1,51 @@
-{{!-- The interactive layer of a regional map: the route line, its arrowhead, and a hotspot per
+{{!-- The interactive layer of a regional map: the route line, its arrowheads, and a hotspot per
       place. Its context is one `map` object from ExpeditionDialog._buildJourney.
 
       ITS OWN PARTIAL BECAUSE TWO SURFACES DRAW IT. The route step renders it over the map inside
       the walkthrough, and the "See the whole map" window renders the same markup over the same
       picture at whatever size the reader has zoomed to. Everything here is positioned in
       PERCENTAGES of its container, so both get the right answer from one set of numbers, and the
-      pins, the stroke and the arrowhead keep their pixel sizes while their positions scale.
+      pins, the stroke and the arrowheads keep their pixel sizes while their positions scale.
 
       The container must carry `.stonetop-journey-canvas` (that is what the CSS hangs off) and be
       a positioned box of the picture's exact shape. --}}
-{{!-- The way they go. The viewBox is the same 0-100 percentage space the pins are placed in,
-  stretched to the picture by preserveAspectRatio="none" — so the points need no
-  conversion. `vector-effect` then keeps the stroke and its dots round and evenly spaced
-  in SCREEN space, which that stretch would otherwise smear along one axis. Sits above the
-  map and below the pins, and takes no clicks. --}}
+{{!-- The way they go: one bowed leg per stop, joined into a single curve. The viewBox is the
+  same 0-100 percentage space the pins are placed in, stretched to the picture by
+  preserveAspectRatio="none" — so the curve needs no conversion either, since stretching a
+  quadratic leaves a quadratic and leaves it smooth where two of them meet. `vector-effect`
+  then keeps the stroke and its dots round and evenly spaced in SCREEN space, which that
+  stretch would otherwise smear along one axis. Sits above the map and below the pins, and
+  takes no clicks. --}}
 {{#if path}}
 <svg class="stonetop-journey-path" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-  <polyline class="stonetop-journey-path-case" points="{{path.points}}" vector-effect="non-scaling-stroke"></polyline>
-  <polyline class="stonetop-journey-path-ink" points="{{path.points}}" vector-effect="non-scaling-stroke"></polyline>
+  <path class="stonetop-journey-path-case" d="{{path.d}}" vector-effect="non-scaling-stroke"></path>
+  <path class="stonetop-journey-path-ink" d="{{path.d}}" vector-effect="non-scaling-stroke"></path>
 </svg>
 {{/if}}
 
-{{!-- Which end is the destination. Its own fixed-size SVG rather than a marker on the
-  polyline above: that one is stretched to the picture, which would both squash the head
-  and (with orient="auto") aim it off a diagonal. This one is sized in pixels and turned by
-  an angle already worked out in the box's real proportions, so it points true. --}}
-{{#with path.arrow}}
-<svg class="stonetop-journey-arrowhead" viewBox="0 0 10 10" aria-hidden="true" focusable="false"
+{{!-- Which way they are walking: one head short of every stop the route arrives at, the last of
+  them on the destination. Each is its own fixed-size SVG rather than a marker on the polyline
+  above: that one is stretched to the picture, which would both squash the head and (with
+  orient="auto") aim it off a diagonal. These are sized in pixels and turned by an angle already
+  worked out in the box's real proportions, taken from the curve where the head sits rather than
+  from the straight line between the stops, so each one lies along the leg it belongs to.
+
+  The TRIANGLE is `path.headD`, not written out here: the Scene painter draws the same head from
+  the same points (utils/route-path.js ROUTE_HEAD_POINTS), and a shape spelt out in both places is
+  one that gets reshaped in one of them. `../` reaches the map object the `{{#each}}` was opened
+  from, which is this partial's own context under both callers. --}}
+{{#each path.arrows}}
+<svg class="stonetop-journey-arrowhead{{#if waypoint}} stonetop-journey-arrowhead--waypoint{{/if}}"
+     viewBox="0 0 10 10" aria-hidden="true" focusable="false"
      style="left:{{left}}%;top:{{top}}%;transform:translate(-50%,-50%) rotate({{angle}}deg)">
-  <path d="M1 1.2 L9 5 L1 8.8 Z"></path>
+  <path d="{{../path.headD}}"></path>
 </svg>
-{{/with}}
+{{/each}}
 
 {{#each spots}}
 <button type="button" data-slug="{{slug}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
     style="left:{{left}}%;top:{{top}}%"
-    class="stonetop-journey-pick stonetop-journey-spot h-{{anchorH}} v-{{anchorV}}{{#if isOrigin}} is-origin{{/if}}{{#if isChosen}} is-chosen{{/if}}">
+    class="stonetop-journey-pick stonetop-journey-spot h-{{anchorH}} v-{{anchorV}}{{#if isOrigin}} is-origin{{/if}}{{#if isStop}} is-stop{{/if}}{{#if isChosen}} is-chosen{{/if}}">
   <span class="stonetop-journey-dot"></span>
   {{#if showLabel}}
   <span class="stonetop-journey-tag">{{name}}{{#if time}} <em>{{time}}</em>{{/if}}</span>
@@ -43,12 +53,95 @@
 </button>
 {{/each}}
 
+{{!-- WHERE THEY SET OUT FROM, when that is a point the GM put down rather than a place the books
+      lettered. Only ever one, only ever on the map it was laid on, and absent entirely for a trip
+      leaving a lettered place: that one is already drawn by its own pin below, wearing the
+      setting-out ring, and a second mark on top of it would be the same fact drawn twice.
+
+      NOT A BUTTON, and it takes no clicks at all, exactly as the drawn way's numerals below do not.
+      Every gesture over this picture is about the trip: a plain click moves the far end of the way,
+      a shift-click adds a leg. A mark that swallowed those would be the one thing on the map that
+      stops the map working, and it has nothing of its own to do with a click. Moving where they set
+      out from is a right-click back past it and a click somewhere else — the same ladder everything
+      else on this picture comes off by (ExpeditionDialog `_undoJourneyMark`).
+
+      IT WEARS "setting out" RATHER THAN ITS OWN NAME, because its name is "a point on The Vicinity",
+      which is a sentence about the map and not a label to stand on it. The same wording the
+      destination list puts beside a lettered start, so the two read as one idea. --}}
+{{#if start}}
+<span class="stonetop-journey-pick stonetop-journey-start h-{{start.anchorH}} v-{{start.anchorV}}"
+      style="left:{{start.left}}%;top:{{start.top}}%">
+  <span class="stonetop-journey-dot"></span>
+  <span class="stonetop-journey-tag">{{start.label}}</span>
+</span>
+{{/if}}
+
+{{!-- The GM's own sites, wherever they have dropped one on this map (module/sites/site-map-spots.js).
+      Built GM-only, so this loop is simply empty for a player.
+
+      A DIFFERENT MARK, because it stands for a different KIND of place — not because it does a
+      different thing when tapped. Every other pin on this picture is a place the books charted and
+      the travel table can time; a site is the GM's own prep, standing wherever they said rather
+      than where a label was printed, and the table has never heard of it. But a tap means what a
+      tap on any of the others means (user, 2026-08-24): it lays the way through here. It used to
+      open the write-up, which made a GM's own barrow the one mark on this map that could not be
+      part of the journey drawn across it. See ExpeditionDialog `_chooseJourneySite`.
+
+      It wears its name ALWAYS, unlike the book's own places: a GM places a handful of these, and a
+      mark on a map whose name you have to go hunting for with a mouse is not a label. Right-click
+      takes the PIN off again — not the write-up, which stays on the Sites tab — and that is the one
+      gesture here that differs from the book's own pins, so the tooltip says all three.
+
+      A STANDING STONE, and NOT the `fa-mountain-sun` a site wears in a list. The two are the same
+      thing at two sizes, and 18px is not a size a drawing survives: mountain-sun is a sun disc
+      over two peaks, and shrunk into a small pale square it reads as the broken-image placeholder
+      a browser paints for art that failed to load — which is the worst possible thing to look
+      like on a map built out of imported book art. The monument is one silhouette, it holds at
+      pin size, and a menhir is the mark you would actually pencil onto a map of Stonetop. --}}
+{{#each sites}}
+<button type="button" data-site-uuid="{{uuid}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
+    style="left:{{left}}%;top:{{top}}%;--site-accent:{{accent}}"
+    class="stonetop-journey-pick stonetop-journey-site h-{{anchorH}} v-{{anchorV}}">
+  <span class="stonetop-journey-sitemark"><i class="fas fa-monument"></i></span>
+  <span class="stonetop-journey-tag">{{name}}</span>
+</button>
+{{/each}}
+
 {{!-- The edge arrows. Each moves out a tier; the three that name one place pick it too. --}}
 {{#each exits}}
 <button type="button" data-slug="{{node}}" data-tier="{{to}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
     style="left:{{left}}%;top:{{top}}%"
-    class="stonetop-journey-pick stonetop-journey-exit h-{{anchorH}} v-{{anchorV}}{{#if isChosen}} is-chosen{{/if}}">
+    class="stonetop-journey-pick stonetop-journey-exit h-{{anchorH}} v-{{anchorV}}{{#if isStop}} is-stop{{/if}}{{#if isChosen}} is-chosen{{/if}}">
   <span class="stonetop-journey-arrow"><i class="fas fa-angles-right"></i></span>
   <span class="stonetop-journey-tag">{{label}}{{#if time}} <em>{{time}}</em>{{/if}}</span>
 </button>
+{{/each}}
+
+{{!-- The bare marks of a hand-drawn way (module/utils/custom-route.js): the points the GM put down
+      where the books letter nothing.
+
+      NOT BUTTONS. Every other mark on this picture does something when clicked; these are the
+      reader's own handwriting, and while a way is drawn a click anywhere — including on one of
+      these — moves or extends it. So they take no pointer events at all and let the click through
+      to the drawing watch underneath, which is what stops a mark from swallowing the gesture that
+      would move it.
+
+      AND SO THEY CARRY NO TOOLTIP, which is not an omission: core's tooltips fire on mouseenter,
+      and nothing enters an element that takes no pointer events. One would read as live and never
+      appear. What a click and a right-click do is taught in the line under the map instead
+      (expedition-journey-drawhint.hbs), which is the one place it can be said once and read.
+
+      NUMBERED, and the numeral is the whole point: it is what the readout's leg list calls this
+      stop ("point 2"), so a line in the list and a dot on the map are visibly the same thing. They
+      count the marks the GM placed, so a way that passes through Marshedge by name does not leave
+      a gap in the numbering.
+
+      LAST IN THE LAYER, and it is the DOM order that does the work rather than the z-index: a mark
+      and a lettered stop on the drawn way both sit at 2, so whichever comes later wins, and a
+      numeral half-buried under a neighbour's name tag is the one thing on this picture the reader
+      most needs to see — it is what they are about to right-click. Where they are BOUND still wins
+      over both, at 3. --}}
+{{#each marks}}
+<span class="stonetop-journey-mark{{#if isEnd}} is-end{{/if}}"
+      style="left:{{left}}%;top:{{top}}%" aria-hidden="true">{{mark}}</span>
 {{/each}}

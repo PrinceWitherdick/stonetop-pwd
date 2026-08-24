@@ -6,7 +6,7 @@
       that isn't saved may carry one.
 
       Context: { states: [{value, labelKey, selected}], note,
-                 fields: [{key, labelKey, hintKey, value, multiline}] } --}}
+                 fields: [{key, labelKey, hintKey, value, rich, enriched}] } --}}
 <form class="stonetop-artifact-form">
 	<div class="stonetop-artifact-field">
 		<label for="st-artifact-state">{{localize "stonetop.artifact.gmCurrentState"}}</label>
@@ -25,10 +25,21 @@
 	{{#if note}}<p class="notes">{{localize "stonetop.artifact.gmTags"}} {{{note}}}</p>{{/if}}
 
 	{{#each fields}}
-	<div class="stonetop-artifact-field">
+	<div class="stonetop-artifact-field{{#if rich}} stonetop-artifact-field--rich{{/if}}">
 		<label for="st-artifact-{{key}}">{{localize labelKey}}</label>
-		{{#if multiline}}
-		<textarea id="st-artifact-{{key}}" name="{{key}}" rows="4">{{value}}</textarea>
+		{{#if rich}}
+		{{!-- The write-up is stored as HTML (artifactLore is an HTMLField on MoveModel) and is
+		      printed RAW on the gear row and in the identify card, so it has to be authored as
+		      formatted prose. A textarea showed the GM the tags themselves: a compendium
+		      treasure opened as a wall of <p>/<em>/<strong> to edit around, and anything typed
+		      by hand arrived as one unbroken paragraph.
+
+		      An ALWAYS-ON editor (no toggled attribute), like the arcanum sheet uses: this window
+		      exists to write in, so making the GM press a pencil before they can type is a step
+		      with nothing behind it. The dialog harvests by name on Save and <prose-mirror> is
+		      form-associated, so the name carries the value out exactly as the textarea did. --}}
+		<prose-mirror id="st-artifact-{{key}}" class="stonetop-artifact-rich" name="{{key}}"
+		              value="{{value}}">{{{enriched}}}</prose-mirror>
 		{{else}}
 		<input id="st-artifact-{{key}}" name="{{key}}" type="text" value="{{value}}">
 		{{/if}}

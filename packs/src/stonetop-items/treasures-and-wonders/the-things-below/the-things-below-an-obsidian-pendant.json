@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A lump of volcanic glass, impossibly black, set in a pendant and hanging from a leather cord. The glass sucks up light from nearby sources, causing them to dim. (The sun and moon are unaffected, as they are far, far away.) More subtly, the pendant also sucks up kindness, making individuals in its presence more callous and self-centered.</p><p>When you wear or carry the pendant openly for a few minutes or more, your eyes adjust and can see clearly in all but pitch darkness. But also, your instinct for the session becomes “Callousness: to disregard the feelings, needs, or wellbeing of others.”</p>"
   },
   "flags": {
     "stonetop": {

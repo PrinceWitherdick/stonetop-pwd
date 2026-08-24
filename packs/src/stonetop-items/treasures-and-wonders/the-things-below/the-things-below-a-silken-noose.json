@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A length of fine cord, tied into a noose with a few feet hanging free. It’s remarkably tough, but a bronze blade will slice right through it. If untied and left unattended, it re-ties itself into a noose.</p><p>When you slip the noose around someone’s neck, it cinches tight—snug and uncomfortable, but the victim can breathe.</p><p>When your victim lies or refuses to answer a question, the noose tightens and strangles them until they die or gasp out the truth.</p><p>When you (or anyone else) tries to remove or loosen the noose, it starts to strangle the victim. If you (or they) stop, it relaxes. If you (or they) persist, it quickly crushes the victim’s windpipe.</p><p>When the victim dies, the noose slackens and can be removed.</p>"
   },
   "flags": {
     "stonetop": {

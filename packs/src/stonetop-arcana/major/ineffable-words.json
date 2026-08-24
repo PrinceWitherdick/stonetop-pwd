@@ -9,7 +9,12 @@
       "slug": "ineffable-words",
       "front": {
         "title": "Ineffable Words",
-        "item": null,
+        "item": {
+          "name": "Ineffable Words",
+          "weight": null,
+          "note": "<em>implanted, magical</em>",
+          "inventoryColumn": null
+        },
         "description": "<p>Syllables of the first language, words of pure thought and will, emblazoned on your soul and tongue by some angelic force or being. A gift, perhaps. Or a terrible, terrible affliction.</p><p>Their power thrums inside you, pulsing against the crude vessel of your flesh and blood. Sometimes, under stress or simply out of the blue, you are struck with shakes and seizures. And when the tremors pass and your senses return, you find that you have scratched strange symbols in the dirt or on the walls. Sometimes in your own blood.</p><p>When you <strong><em>enter an ecstatic delirium and allow the Ineffable Words to pour forth</em></strong>, roll +CON: <strong>on a 10+</strong>, you speak Truth, revealing something new and interesting about the current situation—ask the GM what, and all present understand this Truth as though it were spoken in their native tongue; <strong>on a 7-9</strong>, the 10+ result applies, but choose 1 from the list below.</p><ul><li>The Truth is cryptic, vague, incomplete</li><li>You are overcome, collapsing in a full-body seizure</li><li>You draw unwanted attention</li></ul><p>When you <strong><em>spend weeks in ascetic contemplation of the incommunicable words within you</em></strong>, roll +WIS: <strong>on a 10+</strong>, you gain insight into the power within you—mark 1 below; <strong>on a 7-9</strong>, gain advantage on your next attempt to contemplate the words.</p>",
         "unlock": {
           "description": "○○○ When you make the last mark, you unlock the mysteries of the Ineffable Words and can Speak the Unutterable (see reverse). Choose 1 Word that you have mastered and erase all marks above. Thereafter, when you make the last mark, choose another Word to master and erase all marks.",

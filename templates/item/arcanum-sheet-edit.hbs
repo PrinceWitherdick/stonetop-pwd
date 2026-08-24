@@ -22,6 +22,10 @@
 				<option value="arcana" {{#if (eq "arcana" item.inventoryColumnValue)}}selected{{/if}}>Arcana</option>
 			</select></label>
 	</div>
+	<p class="stonetop-arc-hint">The tag line prints under the title, the way the book prints one under
+		every arcanum that is a thing. Tag it <em>immobile</em> for a place or a structure, or
+		<em>implanted</em> for something worn inside you: either keeps it off the Inventory tab and
+		out of your load, whatever the Weight says.</p>
 	{{/inline}}
 
 	{{#*inline "resourceFields"}}
@@ -71,22 +75,10 @@
 				<div class="stonetop-guide-count stonetop-arc-banner-count">{{active.index}} / {{sectionCount}}</div>
 			</div>
 
-			{{!-- Persistent warnings + glyph toolbar (apply across sections, so they stay put). --}}
-			{{#if edit.slugLocked}}
-			<ul class="stonetop-arc-validation">
-				<li class="stonetop-arc-issue stonetop-arc-issue--warn"><i class="fas fa-users"></i> A character already holds this card. Editing the mark tracks (◇ ○ □) can shift players' saved marks: add or remove glyphs at the <em>end</em> of a track, not before a marked one.</li>
-			</ul>
-			{{/if}}
-
-			{{#if validation.length}}
-			<ul class="stonetop-arc-validation">
-				{{#each validation}}
-				<li class="stonetop-arc-issue stonetop-arc-issue--{{level}}"><i class="fas {{#if (eq level "error")}}fa-circle-exclamation{{else}}fa-triangle-exclamation{{/if}}"></i> {{message}}</li>
-				{{/each}}
-			</ul>
-			{{/if}}
-
-			<div class="stonetop-arc-glyphbar">
+			{{!-- Glyph toolbar. Outside the sections and sticky, so it stays reachable while a
+			      long description scrolls. Shown only on the pages that HAVE a rich editor to
+			      insert into (see ARC_SECTIONS.rich); the section switch re-hides it in JS. --}}
+			<div class="stonetop-arc-glyphbar"{{#unless active.rich}} hidden{{/unless}}>
 				<span class="stonetop-arc-glyphbar-label">Insert track:</span>
 				{{#each glyphs}}
 				<button type="button" class="stonetop-arc-glyph" data-glyph="{{ins}}" title="{{hint}}">{{label}}</button>
@@ -98,14 +90,6 @@
 			<section class="stonetop-arc-section" data-arc-tab="identity"{{#unless (eq active.key "identity")}} hidden{{/unless}}>
 				<label class="stonetop-arc-row"><span>Name</span>
 					<input type="text" class="stonetop-arc-input" data-arc-field="name" value="{{edit.name}}"></label>
-				<label class="stonetop-arc-row"><span>Slug</span>
-					<input type="text" class="stonetop-arc-input" data-arc-field="flags.stonetop.slug" value="{{edit.slug}}" {{#if edit.slugLocked}}readonly{{/if}}></label>
-				{{#if edit.slugLocked}}
-				<p class="stonetop-arc-hint"><i class="fas fa-lock"></i> A character already holds this card, so the slug is locked: changing it would orphan their saved marks and remove the card from their sheet.</p>
-				{{else}}
-				<p class="stonetop-arc-slug-warning" {{#unless edit.slugCollision}}hidden{{/unless}}><i class="fas fa-triangle-exclamation"></i> Another arcanum already uses this slug. A shipped card of the same slug wins, and cards that share a slug share saved marks: pick a unique one.</p>
-				<p class="stonetop-arc-hint">The slug identifies the card and keys saved marks: avoid changing it once players own it.</p>
-				{{/if}}
 				<label class="stonetop-arc-check"><input type="checkbox" class="stonetop-check" data-arc-field="flags.stonetop.major" data-arc-type="boolean" {{#if edit.major}}checked{{/if}}>
 					<span>Major Arcanum <em>(gets card art + major semantics)</em></span></label>
 				{{#if edit.major}}
@@ -125,7 +109,7 @@
 				<prose-mirror class="stonetop-arc-rich" data-arc-field="flags.stonetop.front.description" value="{{edit.front.description}}">{{{edit.front.descriptionEnriched}}}</prose-mirror>
 
 				<label class="stonetop-arc-check"><input type="checkbox" class="stonetop-check" data-arc-toggle="front.item" {{#if edit.front.hasItem}}checked{{/if}}>
-					<span>Carried item (weighs the pack while face-up)</span></label>
+					<span>It’s a thing (name + tag line; weighs the pack while face-up)</span></label>
 				{{#if edit.front.hasItem}}
 				{{> itemFields item=edit.front.item prefix="flags.stonetop.front.item"}}
 				{{/if}}
@@ -181,7 +165,7 @@
 				<div class="stonetop-arc-majorbar">
 					<span class="stonetop-arc-majorbar-label">Major content:</span>
 					<button type="button" class="stonetop-arc-add-mystery"><i class="fas fa-plus"></i> Mystery</button>
-					<button type="button" class="stonetop-arc-add-consequence" data-weight="1">Consequence □</button>
+					<button type="button" class="stonetop-arc-add-consequence" data-weight="1"><span class="stonetop-arc-chip-label">Consequence</span>□</button>
 					<button type="button" class="stonetop-arc-add-consequence" data-weight="2">□□</button>
 					<button type="button" class="stonetop-arc-add-consequence" data-weight="3">□□□</button>
 					<span class="stonetop-arc-hint">Appends a guided block to the description; edit it above.</span>
@@ -265,21 +249,41 @@
 				</div>
 			</section>
 
+			{{!-- Validation + the marks-in-use warning. Below the sections rather than above
+			      them: these apply to the whole card, not the open page, and at the top they
+			      pushed every section down the window on a card that had two or three notes. --}}
+			{{#if edit.slugLocked}}
+			<ul class="stonetop-arc-validation">
+				<li class="stonetop-arc-issue stonetop-arc-issue--warn"><i class="fas fa-users"></i> <span>A character already holds this card. Editing the mark tracks (◇ ○ □) can shift players' saved marks: add or remove glyphs at the <em>end</em> of a track, not before a marked one.</span></li>
+			</ul>
+			{{/if}}
+
+			{{#if validation.length}}
+			<ul class="stonetop-arc-validation">
+				{{#each validation}}
+				<li class="stonetop-arc-issue stonetop-arc-issue--{{level}}"><i class="fas {{#if (eq level "error")}}fa-circle-exclamation{{else}}fa-triangle-exclamation{{/if}}"></i> <span>{{message}}</span></li>
+				{{/each}}
+			</ul>
+			{{/if}}
+
 		</div>
 
 	</div>
 
 	{{!-- Save / Done. A draft (created from a character's Create button) only lands on the
 	     Arcana tab when this is clicked; Cancel discards it. An existing card's edits already
-	     persist live, so it just gets "Done" (switch to the card preview). Next walks the rail. --}}
-	<footer class="stonetop-arc-footer">
-		<div class="stonetop-arc-footer-actions">
-			<button type="button" class="stonetop-arc-save"><i class="fas fa-check"></i> {{#if edit.isDraft}}Save &amp; Done{{else}}Done{{/if}}</button>
+	     persist live, so it just gets "Done" (switch to the card preview). Next walks the rail.
+	     Shared `.stonetop-guide-nav` row + button styling, like the custom-move editor. --}}
+	<footer class="stonetop-guide-nav stonetop-arc-nav">
+		<span class="stonetop-arc-nav-btns">
+			<button type="button" class="stonetop-arc-save stonetop-guide-btn--primary"><i class="fas fa-check" aria-hidden="true"></i> {{#if edit.isDraft}}Save &amp; Done{{else}}Done{{/if}}</button>
 			{{#if edit.isDraft}}
 			<button type="button" class="stonetop-arc-cancel">Cancel</button>
 			{{/if}}
-		</div>
-		<button type="button" class="stonetop-arc-next">Next<span class="stonetop-nav-arrow"></span></button>
+		</span>
+		<span class="stonetop-arc-nav-btns">
+			<button type="button" class="stonetop-arc-next">Next<span class="stonetop-nav-arrow"></span></button>
+		</span>
 	</footer>
 
 </form>

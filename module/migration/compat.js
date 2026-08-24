@@ -113,6 +113,25 @@ export function seededSourceKeys(docs) {
 	return keys;
 }
 
+/**
+ * The world's own copy of each seeded document, by package-id-free identity.
+ *
+ * `seededSourceKeys` next door answers "has this been imported?"; this answers "and WHICH document
+ * is it?", off the same walk and the same key. Built ONCE and asked many times, because the
+ * alternative is a `.find()` over `game.actors` per question and this world seeds ~180 monsters
+ * and ~168 treasures: an eight-monster encounter deployed that way read ~1,400 compendium sources.
+ *
+ * The first copy of a tail wins, which is the document a `.find()` would have returned.
+ */
+export function worldCopiesBySource(docs) {
+	const byTail = new Map();
+	for (const doc of docs ?? []) {
+		const tail = compendiumRefTail(compendiumSourceOf(doc));
+		if (tail && !byTail.has(tail)) byTail.set(tail, doc);
+	}
+	return byTail;
+}
+
 /** Matches `@UUID[Compendium.<anyOfOurIds>.…]` in stored prose. */
 export function systemLinkPattern(systemIds = ALL_SYSTEM_IDS) {
 	const ids = systemIds.map(escapeRegExp).join("|");

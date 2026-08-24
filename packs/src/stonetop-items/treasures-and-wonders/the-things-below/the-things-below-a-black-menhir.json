@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical, <em>immobile</em>",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A number of these megaliths have appeared in the Great Wood of late. They are jagged chunks of basalt, tall as a tall lad, etched with intricate patterns that could be writing, almost. The earth around them is broken and disturbed. They are unmarred by moss or lichen, untouched by shoot or vine.</p><p>When you study the intricate markings and let your mind wander, you receive a vision or intuition about the current situation. The GM will describe it. But first, roll +WIS: on a 10+, pick only 1; on a 7-9, pick 2; on a 6-, alas, all 3 are true.</p><ul><li class=\"question-bullet\">Part of what you learn is false or misleading (but what?)</li><li>You start to suffer nightmares, of horrors shifting in the earth</li><li>The menhir asks a question about your shame, guilt, or fears—answer truly</li></ul>"
   },
   "flags": {
     "stonetop": {

@@ -1105,11 +1105,28 @@ describe("StonetopCharacter.onRoll", () => {
 		expect(item.roll).toHaveBeenCalledOnce();
 	});
 
-	it("passes the actor's saved rollMode", async () => {
+	// The mode comes from the pre-roll prompt the sheet opened (module/dialogs/RollDialog.js),
+	// which is the only place it is chosen now — passed in per roll rather than read off a flag
+	// a sidebar control wrote once and nobody remembered to clear.
+	it("passes the rollMode it was handed", async () => {
+		const item = makeRollableItem({ rollType: "str" });
+		const char = new TestCharacterBuilder(makeOnRollActor(item)).build();
+		expect(await char.onRoll(makeItemEvent(), { rollMode: "adv" })).toBe(true);
+		expect(item.roll).toHaveBeenCalledWith(expect.objectContaining({ rollMode: "adv" }));
+	});
+
+	// A caller with nothing to say about the mode gets a normal roll, and so does one that
+	// hands over junk — the value arrives from a dialog's DOM, not from a validated flag.
+	it("falls back to a normal roll, and normalizes anything unrecognized", async () => {
 		const item = makeRollableItem({ rollType: "str" });
 		const char = new TestCharacterBuilder(makeOnRollActor(item, {pbtaRollMode: "adv"})).build();
 		expect(await char.onRoll(makeItemEvent())).toBe(true);
-		expect(item.roll).toHaveBeenCalledWith(expect.objectContaining({ rollMode: "adv" }));
+		expect(item.roll).toHaveBeenCalledWith(expect.objectContaining({ rollMode: "normal" }));
+
+		const other = makeRollableItem({ rollType: "str" });
+		const char2 = new TestCharacterBuilder(makeOnRollActor(other)).build();
+		await char2.onRoll(makeItemEvent(), { rollMode: "def" });
+		expect(other.roll).toHaveBeenCalledWith(expect.objectContaining({ rollMode: "normal" }));
 	});
 
 	it("sets descriptionOnly when data-show=description", async () => {
@@ -1154,10 +1171,14 @@ describe("StonetopCharacter.onRoll", () => {
 		});
 	});
 
-	it("saves sheet rollMode to actor flags", async () => {
+	// There is no sticky mode to save any more, and nothing may quietly start writing one back:
+	// a flag that outlives a roll is the whole bug this replaced.
+	it("has no sticky roll mode to read or write", async () => {
 		const actor = makeOnRollActor(makeRollableItem());
 		const char = new TestCharacterBuilder(actor).build();
-		await char.setRollMode("dis");
-		expect(actor.setFlag).toHaveBeenCalledWith("stonetop-pwd", "rollMode", "dis");
+		expect(char.setRollMode).toBeUndefined();
+		expect(char.rollMode).toBeUndefined();
+		await char.onRoll(makeItemEvent(), { rollMode: "dis" });
+		expect(actor.setFlag).not.toHaveBeenCalledWith("stonetop-pwd", "rollMode", expect.anything());
 	});
 });

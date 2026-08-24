@@ -13,16 +13,14 @@
       different description visibility - two shapes, deliberately, in two files.
 
       This file must stay separate from steading-tab-moves.hbs rather than branching inside
-      it: that file is pinned by tests/actors/steading/roll-mode-picker.test.js, which
-      requires it to carry no radios, no "Roll Modifier" heading and exactly one move group.
+      it: that file is pinned by tests/actors/steading/roll-prompt.test.js, which requires it
+      to carry no roll-mode control of any kind and exactly one move group.
 
-      The Roll Modifier is the pre-redesign stacked RADIO list, shared with the character
-      sheet's sidebar (roll-mode-radios.hbs) - not the segmented pill the modern tab carries
-      in its heading. Classic means the layout as it was, and a dark three-segment pill in a
-      narrow column was never part of it. Both shapes are live, so both are wired: the pill on
-      a delegated click, these on `change`, in StonetopSteadingSheet#activateListeners. Wiring
-      only one is the silent failure here - the control renders and highlights correctly
-      either way, and simply never writes.
+      There is no Roll Modifier section here any more, in either layout. It used to head this
+      column as a stacked radio list (and the modern tab as a segmented pill), and it stayed
+      set: a player who took Advantage for one roll kept it for every roll after, which is
+      exactly what nobody remembered. Rolling a homefront move now asks, per roll - see
+      module/dialogs/RollDialog.js, which every steading roll path opens.
 
       NOTE the `<section class="steading-moves-tab">` here has NO `.tab` class and sits
       outside `.sheet-body`. `.steading-moves-tab` carries `display: flex`, and an unlayered
@@ -36,12 +34,6 @@
 		<i class="fas fa-chevron-right"></i>
 	</button>
 	<div class="stonetop-sidebar-body">
-	{{> "stonetop.section-heading" title="Roll Modifier" collapse="rollModifier"}}
-	{{!-- `enabled=true`, not `editable`: rolling the homefront moves is open to a player who
-	      cannot edit the sheet, so saying HOW to roll has to be too. Same reason the handler
-	      sits above the isEditable guard. --}}
-	{{> "stonetop.roll-mode-radios" rollMode=stonetop.rollMode enabled=true}}
-
 	{{> "stonetop.section-heading" title=(localize "stonetop.steading.tabs.moves") collapse="steadingMoves"}}
 	<section class="steading-moves-tab">
 

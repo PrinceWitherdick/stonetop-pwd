@@ -12,7 +12,14 @@
       two kinds of thing that can BE an artifact, as against the playbook's standard kit), so
       there's somewhere to click on a treasure nobody has hidden yet.
       Context: an inventory item snapshot, plus `deletable` from the calling row. --}}
-{{#if (or artifact.isArtifact (and @root.stonetop.isGM deletable))}}
+{{!-- The gate also opens on a write-up alone, with no identification state at all. That is the
+      resting shape of a Book II treasure now: the book prints a sidebar for the notable ones —
+      what it looks like, the custom move it grants — and that text ships on the item
+      (data/treasure-catalog.js -> system.artifactLore), whether or not any GM has chosen to
+      hide the find. Without this clause the whole block stays folded on an unhidden treasure
+      and a player reads the tags and nothing else, which is the gap this all set out to close.
+      Every row inside is separately guarded, so nothing else appears any earlier than before. --}}
+{{#if (or artifact.isArtifact artifact.lore (and @root.stonetop.isGM deletable))}}
 {{#if artifact.concealed}}
 <span class="stonetop-inv-artifact-chip{{#if artifact.gmPeeking}} is-gm-peek{{/if}}"
       data-tooltip="{{#if artifact.loreOwed}}{{localize 'stonetop.artifact.chipPartial'}}{{else}}{{localize 'stonetop.artifact.chipUnknown'}}{{/if}}">
@@ -27,8 +34,21 @@
       raw — it's GM-authored and declared HTML, exactly like a gear note — with pre-wrap in
       the CSS so a plainly typed one keeps its line breaks. Blank until the state permits it,
       so a still-owed write-up can't leak through the markup. --}}
+{{!-- It folds. A treasure's write-up is the book's whole sidebar and a GM's can be as long
+      as they please, so the prose hides behind the caret up in the row's icon cluster and the
+      row rests at its name and its tags. Shut by default; which rows this user has opened is
+      remembered per actor (settings.js -> inventoryLoreExpanded, stamped onto the snapshot as
+      `loreExpanded` by the sheet). The caret and the prose sit in ONE wrapper so the fold has
+      something to toggle, and that wrapper is boxless (`display: contents`) because the two
+      belong to different lines of the row: see the CSS. --}}
 {{#if artifact.lore}}
-<div class="stonetop-inv-artifact-lore{{#if artifact.gmPeeking}} is-gm-peek{{/if}}">{{{artifact.lore}}}</div>
+<div class="stonetop-inv-artifact-fold{{#unless artifact.loreExpanded}} is-collapsed{{/unless}}" data-section="{{ownedId}}">
+	<a class="stonetop-inv-lore-toggle" role="button" tabindex="0"
+	   aria-expanded="{{#if artifact.loreExpanded}}true{{else}}false{{/if}}"
+	   aria-label="{{localize 'stonetop.artifact.loreToggle'}}"
+	   data-tooltip="{{localize 'stonetop.artifact.loreToggle'}}"><i class="fas fa-caret-down"></i></a>
+	<div class="stonetop-inv-artifact-lore{{#if artifact.gmPeeking}} is-gm-peek{{/if}}">{{{artifact.lore}}}</div>
+</div>
 {{/if}}
 {{#if artifact.lead}}
 <span class="stonetop-inv-artifact-lead" data-tooltip="{{localize 'stonetop.artifact.leadTooltip'}}">
@@ -45,7 +65,7 @@
 <a class="stonetop-inv-artifact-gm{{#if artifact.isArtifact}} is-hidden-artifact{{/if}}"
    data-owned-id="{{ownedId}}" data-state="{{artifact.state}}"
    data-tooltip="{{localize 'stonetop.artifact.gmTooltip'}}">
-	<i class="fas fa-user-secret"></i>
+	<i class="fas fa-eye"></i>
 </a>
 {{/if}}
 {{/if}}

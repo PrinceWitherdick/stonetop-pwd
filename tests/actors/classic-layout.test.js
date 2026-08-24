@@ -258,8 +258,12 @@ describe("things that break silently", () => {
 	// retired with the sidebar. Without them it renders, and the handle and the one-line move
 	// rows do nothing at all.
 	it("keeps the steading's classic sidebar handlers alive", () => {
-		expect(SHEET_JS.steading).toContain('html.find(".stonetop-sidebar-toggle")');
+		// The handle is bound through the shared helper (utils/sidebar-toggle.js), which the
+		// character sheet and the expedition rail press too — so the binding itself is asserted
+		// there and what this sheet must still do is ask for it, and persist per actor.
+		expect(SHEET_JS.steading).toContain("wireSidebarToggle(html, {");
 		expect(SHEET_JS.steading).toContain("setSidebarCollapsed(this.actor?.id, collapsed)");
+		expect(read("module/utils/sidebar-toggle.js")).toContain('html.find(".stonetop-sidebar-toggle")');
 		expect(SHEET_JS.steading).toContain("context.stonetop.sidebarCollapsed = getSidebarCollapsed(this.actor?.id)");
 		expect(SHEET_JS.steading).toContain('html[0].querySelector(".steading-move-row")');
 	});

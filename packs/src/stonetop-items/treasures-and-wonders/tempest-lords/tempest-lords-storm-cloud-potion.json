@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical, <em>fragile</em>",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A glass vial of dark-grey liquid, roiling and shot through with sparks.</p><p>When you drink a storm-cloud potion, lightning courses through you. Take 1d10 damage (ignores armor) and mark a debility. Should you survive, hold 3 Storm.</p><p>While you hold any Storm, you cannot feel pain or fear, tell friend from foe, speak coherently, or exercise patience or care. Add your Storm to your Armor, and your melee and thrown attacks do +Storm damage (+loud, +forceful).</p><p>When you reduce someone or something to 0 HP, lose 1 Storm.</p>"
   },
   "flags": {
     "stonetop": {

@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>fragile</em>",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>to the barrow of a famously rich warlord</p>"
   },
   "flags": {
     "stonetop": {

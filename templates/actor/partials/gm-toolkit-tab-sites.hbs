@@ -7,9 +7,15 @@
 
       The `steading-*` class names are CSS hooks kept deliberately, and the storage still lives
       on the STEADING actor. Both are explained at length in gm-toolkit-tab-threats.hbs and in
-      module/actors/gmtoolkit/gm-prep-tabs.js. --}}
-<div class="tab sites steading-edit-section{{#unless stonetop.edit.sites}} stonetop-readonly{{/unless}}" data-group="primary" data-tab="sites">
-	{{> "stonetop.steading-section-toggle" section="sites" editing=stonetop.edit.sites}}
+      module/actors/gmtoolkit/gm-prep-tabs.js.
+
+      NO SECTION PENCIL, unlike the Threats tab, and so no `stonetop-readonly` either. A pencil
+      gates the fields you type into, and this tab has none: a site is written up in the wizard
+      and re-opened in it, its d20 tables roll without writing anything, and the only control
+      left is the trash. Gating that ONE button behind a pencil bought nothing and cost the
+      obvious reading of the toolbar - the trash sat beside a live pencil and was simply
+      mouse-dead, when the confirm dialog it already opens is the real "are you sure". --}}
+<div class="tab sites" data-group="primary" data-tab="sites">
 	<section class="sheet-tab steading-sites steading-prep-cards">
 
 		{{#if stonetop.hasSteading}}

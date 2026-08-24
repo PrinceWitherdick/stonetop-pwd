@@ -9,7 +9,12 @@
       "slug": "hungering-maw-of-hlad",
       "front": {
         "title": "Hungering Maw of Hlad",
-        "item": null,
+        "item": {
+          "name": "Hungering Maw of Hlad",
+          "weight": null,
+          "note": "<em>magical</em>",
+          "inventoryColumn": null
+        },
         "description": "<p>A ring of black metal bands, woven in an intricate pattern beyond the skills of modern smiths. The way the bands twist on each other seems to defy reality, and the weak-willed find themselves pondering the bands for minutes or hours.</p><p>The metal is always cold. Always.</p><p>When you <strong><em>wear the ring and press it firmly into the skin of a living thing</em></strong>, the ring draws the life-force from your victim. If your victim is helpless or unable to struggle, they are reduced to 0 HP (see below).</p><p>If your <strong><em>victim struggles</em></strong>, roll +CON: <strong>on a 10+</strong>, deal 1d10 damage (ignores armor) and they are left reeling (a PC or follower marks a debility, an NPC or monster grants advantage on any moves made against it until it recovers); <strong>on a 7-9</strong>, deal 1d10 damage (ignores armor) but you suffer whatever counterattack they dish out; <strong>on a 6-</strong>, ask the GM what happens (which may or may not involve marking a consequence).</p><p>When you <strong><em>use the ring to reduce an intelligent victim to 0 HP</em></strong>, roll 1d6:</p><ul><li>1-2: Their soul is wounded but they'll live, suffering from unnatural, compulsive hungers; should they die in this state, they become a wraith.</li><li>3-4: Their soul is wounded and their body gives up; they become a wraith.</li><li>5-6: Their soul is consumed and utterly destroyed by the ring—mark 1 below.</li></ul>",
         "unlock": {
           "description": "○○○ When you make the last mark, you unlock the ring's mysteries. Gain Siphon (see reverse) and erase all the marks. Each time you mark the third circle, gain another move from the reverse. If you have all the moves, mark a consequence instead.",

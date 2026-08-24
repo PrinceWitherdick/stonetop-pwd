@@ -36,7 +36,7 @@
 			<ol class="items-list">
 				{{#each moves}}
 				{{!-- `data-move` is how the randomizer finds the row it just drew, to light it up
-				      for five seconds (StonetopGmToolkitSheet `_spinToDrawnMove`). The NAME rather
+				      for five seconds (gm-move-drawer.js `GmMoveDrawer#spinTo`). The NAME rather
 				      than the index, because the index would be the position in a list this
 				      template is free to reorder while the handler kept matching by number.
 

@@ -38,6 +38,8 @@ import { onPreUpdateActorDeathsDoor, onUpdateActorDeathsDoorAutoOpen, onUpdateAc
 import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { onPreCreateThreatNote } from "./module/hooks/ThreatNotePins.js";
 import { onDrawStonetopNote } from "./module/hooks/StonetopNoteLabels.js";
+import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
+import { bumpEncounterNotesGeneration } from "./module/actors/gmtoolkit/gm-encounters-tab.js";
 import { invalidateMonsterRefIndex } from "./module/bestiary/monster-ref-index.js";
 import { ensureLocationSummaryIndex, applyTooltipsThenRestrict } from "./module/locations/location-tooltips.js";
 import { hideBrokenJournalArt } from "./module/journal/hide-broken-art.js";
@@ -419,8 +421,6 @@ Hooks.once("init", () => {
 		"stonetop.inv-item-small":   "systems/stonetop-pwd/templates/actor/partials/inv-item-small.hbs",
 		"stonetop.inv-artifact":     "systems/stonetop-pwd/templates/actor/partials/inv-artifact.hbs",
 		"stonetop.choice-gear-row":  "systems/stonetop-pwd/templates/actor/partials/choice-gear-row.hbs",
-		"stonetop.roll-mode-picker": "systems/stonetop-pwd/templates/actor/partials/roll-mode-picker.hbs",
-		"stonetop.roll-mode-radios": "systems/stonetop-pwd/templates/actor/partials/roll-mode-radios.hbs",
 		"stonetop.steading-header-season":    "systems/stonetop-pwd/templates/actor/partials/steading-header-season.hbs",
 		"stonetop.steading-section-toggle":   "systems/stonetop-pwd/templates/actor/partials/steading-section-toggle.hbs",
 		"stonetop.steading-stats-bar":        "systems/stonetop-pwd/templates/actor/partials/steading-stats-bar.hbs",
@@ -438,6 +438,9 @@ Hooks.once("init", () => {
 		"stonetop.gm-toolkit-tab-sites":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-sites.hbs",
 		"stonetop.gm-toolkit-tab-homefront":  "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-homefront.hbs",
 		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
+		"stonetop.gm-toolkit-tab-encounters": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-encounters.hbs",
+		// One card, printed by BOTH of that tab's lists — the live one and the Completed fold.
+		"stonetop.gm-encounter-card":         "systems/stonetop-pwd/templates/actor/partials/gm-encounter-card.hbs",
 		"stonetop.gm-prep-card-tools":        "systems/stonetop-pwd/templates/actor/partials/gm-prep-card-tools.hbs",
 		"stonetop.gm-prep-add-bar":           "systems/stonetop-pwd/templates/actor/partials/gm-prep-add-bar.hbs",
 		"stonetop.gm-prep-no-steading":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-no-steading.hbs",
@@ -457,15 +460,20 @@ Hooks.once("init", () => {
 		"stonetop.bestiary-group-section":    "systems/stonetop-pwd/templates/journal/partials/bestiary-group-section.hbs",
 		"stonetop.introductions-dialog":      "systems/stonetop-pwd/templates/dialogs/introductions.hbs",
 		"stonetop.guide-toc":                 "systems/stonetop-pwd/templates/dialogs/partials/guide-toc.hbs",
+		"stonetop.expedition-load":           "systems/stonetop-pwd/templates/dialogs/partials/expedition-load.hbs",
 		"stonetop.expedition-journey":        "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey.hbs",
 		"stonetop.expedition-journey-pins":   "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-pins.hbs",
 		"stonetop.expedition-journey-controls": "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-controls.hbs",
+		"stonetop.expedition-journey-drawhint": "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-drawhint.hbs",
 		"stonetop.expedition-journey-route":  "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-route.hbs",
 		"stonetop.intros-capture-head":       "systems/stonetop-pwd/templates/dialogs/partials/intros-capture-head.hbs",
 		"stonetop.threat-string-list":        "systems/stonetop-pwd/templates/dialogs/partials/threat-string-list.hbs",
 		"stonetop.cs-list-frame":             "systems/stonetop-pwd/templates/dialogs/partials/cs-list-frame.hbs",
 		"stonetop.cs-line-list":              "systems/stonetop-pwd/templates/dialogs/partials/cs-line-list.hbs",
 		"stonetop.cs-pair-list":              "systems/stonetop-pwd/templates/dialogs/partials/cs-pair-list.hbs",
+		"stonetop.cs-pick-slots":             "systems/stonetop-pwd/templates/dialogs/partials/cs-pick-slots.hbs",
+		"stonetop.settings-toggle-row":       "systems/stonetop-pwd/templates/settings/partials/settings-toggle-row.hbs",
+		"stonetop.settings-save-footer":      "systems/stonetop-pwd/templates/settings/partials/settings-save-footer.hbs",
 		"stonetop.roster-row":                "systems/stonetop-pwd/templates/dialogs/partials/roster-row.hbs",
 		"stonetop.roster-add":                "systems/stonetop-pwd/templates/dialogs/partials/roster-add.hbs",
 		"stonetop.deaths-door-outcomes":      "systems/stonetop-pwd/templates/dialogs/partials/deaths-door-outcomes.hbs",
@@ -476,6 +484,7 @@ Hooks.once("init", () => {
 		"stonetop.card-doom-track":           "systems/stonetop-pwd/templates/journal/partials/card-doom-track.hbs",
 		"stonetop.card-gm-moves":             "systems/stonetop-pwd/templates/journal/partials/card-gm-moves.hbs",
 		"stonetop.card-player-moves":         "systems/stonetop-pwd/templates/journal/partials/card-player-moves.hbs",
+		"stonetop.site-group":                "systems/stonetop-pwd/templates/journal/partials/site-group.hbs",
 	});
 
 	// Last line of `init`, so reaching it means the whole run got through. A world that never
@@ -608,6 +617,23 @@ Hooks.on("preCreateNote", onPreCreateThreatNote);
 // Give our lettered Place-of-Interest discs and threat/hazard pins a thick paper text
 // halo so their labels stay legible over the illustrated Stonetop maps.
 Hooks.on("drawNote", onDrawStonetopNote);
+
+// -- EXPEDITION ROUTE ON THE MAP -------------------------------
+// A journey put on a poster-map scene from the Run an Expedition walkthrough. The scene
+// carries the two place slugs and every client paints the line from them, players included.
+registerExpeditionRouteHooks();
+
+// -- ENCOUNTER NOTES: LINKS FOLLOW A RENAME --------------------
+// The GM Toolkit's Encounters tab holds each encounter's notes as already-enriched HTML, keyed
+// against the prose they were built from. That key cannot see a rename: `enrichHTML` resolves an
+// @UUID link to the target's CURRENT name, so renaming a linked monster leaves the prose
+// byte-identical and the cached HTML showing the old name for the rest of the session. Bumping a
+// counter on any rename of a thing a note can point at is what lets the next paint rebuild.
+for (const doc of ["Actor", "Item", "JournalEntry", "JournalEntryPage", "Scene", "RollTable", "Macro"]) {
+	Hooks.on(`update${doc}`, (_doc, changes) => {
+		if ("name" in (changes ?? {})) bumpEncounterNotesGeneration();
+	});
+}
 
 // -- LOCATION CROSS-LINK TOOLTIPS ------------------------------
 // Give cross-links into the Locations pack a useful hover summary instead of the

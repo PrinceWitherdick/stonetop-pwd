@@ -2,7 +2,7 @@ import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { getHoverDescriptionSetting } from "../../../settings.js";
 import { applyGearTermTooltips } from "../../../utils/gear-term-tooltips.js";
 import { wrapStonetopGlyphsInEl } from "../../../utils/glyphs.js";
-import { LOAD_LEVEL_LIMITS, deriveLoadLevel } from "../../../utils/load.js";
+import { LOAD_LEVEL_LIMITS, deriveLoadLevel, loadBandLabels } from "../../../utils/load.js";
 
 export class OutfitMoveDialog extends StonetopDialog {
 	constructor(character, outfitSnapshot, onDone, options = {}) {
@@ -29,10 +29,16 @@ export class OutfitMoveDialog extends StonetopDialog {
 			...(outfitSnapshot.arcanaSmall ?? []),
 		];
 		this._smallItemLimit = outfitSnapshot.smallItemLimit ?? null;
-		// Pack Horse raises each load cap by one; the snapshot carries the limits in
-		// effect so the thresholds and the regular ◇ ceiling here match the sheet.
+		// A move's loadBonus raises each load cap (Pack Horse by one); the snapshot carries
+		// the limits in effect so the thresholds and the regular ◇ ceiling here match the
+		// sheet, plus the name of whatever granted the bonus for the note below the bar.
 		this._loadLimits     = outfitSnapshot.loadLimits ?? LOAD_LEVEL_LIMITS;
-		this._hasPackHorse   = outfitSnapshot.hasPackHorse ?? false;
+		this._loadBonus      = outfitSnapshot.loadBonus ?? 0;
+		this._loadBonusFrom  = outfitSnapshot.loadBonusFrom ?? "";
+		// The band captions ("3", "4-6", "7-9") ride along on the snapshot, computed there
+		// from these same limits; take that copy rather than deriving a second one, so the
+		// badges here and the sheet's load lines cannot drift apart.
+		this._loadBands      = outfitSnapshot.loadBands ?? loadBandLabels(this._loadLimits);
 		this._checked = {};
 		for (const item of [...this._regularItems, ...this._smallItems, ...this._arcanaItems]) {
 			this._checked[item.slug] = item.checked;
@@ -108,10 +114,13 @@ export class OutfitMoveDialog extends StonetopDialog {
 			totalSmallMarks:   pools.totalSmallMarks,
 			smallItemLimit,
 			hasSmallItemLimit: smallItemLimit !== null,
-			hasPackHorse:      this._hasPackHorse,
-			loadBadgeLight:    `${this._loadLimits.light}`,
-			loadBadgeNormal:   `${this._loadLimits.light + 1}–${this._loadLimits.normal}`,
-			loadBadgeHeavy:    `${this._loadLimits.normal + 1}–${this._loadLimits.heavy}`,
+			loadBonus:         this._loadBonus,
+			loadBonusFrom:     this._loadBonusFrom,
+			// The two objects themselves, under the names the gear tab's own load lines read
+			// them by (`loadLimits` / `loadBands`), so the same value is spelled the same way on
+			// both screens instead of being flattened into six keys here and three there.
+			loadLimits:        this._loadLimits,
+			loadBands:         this._loadBands,
 		};
 	}
 

@@ -29,3 +29,49 @@ export function wireCustomAssetSelect({ select, customInput, valueInput } = {}) 
 	sync();
 	return sync;
 }
+
+/**
+ * Who is holding a requisitioned asset, read out of its `takenBy` record.
+ *
+ * An asset can be out with a person (the player-facing Requisition move records the
+ * character who took it), with an expedition (the GM walkthrough's Requisition step
+ * records the trip), or with both. Returns null for an asset that is still on hand.
+ *
+ * @param {object} asset - one entry of the steading's `assets` flag
+ * Who has it, not WHICH TRIP: the id an asset is tagged with is how the steading answers
+ * `getAssetsOnExpedition`, and it is asked there, off the flag. This function is the naming half.
+ *
+ * @returns {{person: string|null, expedition: string|null}|null}
+ */
+export function assetHolder(asset) {
+	const takenBy = asset?.takenBy;
+	if (!takenBy) return null;
+	const person = String(takenBy.name ?? "").trim();
+	const trip = String(takenBy.expedition?.title ?? "").trim();
+	return {
+		person:     person || null,
+		expedition: trip || null,
+	};
+}
+
+/**
+ * One line naming where an asset has gone: "Taken by Wren", "Out on The Wandering Tower",
+ * or both when a named character took it on a named trip. "" for an asset on hand.
+ *
+ * The steading sheet's tooltip, the player-facing picker's "Already out" list and the
+ * walkthrough's own asset list all print this, so a struck-through asset says the same
+ * thing wherever the reader meets it.
+ */
+export function assetTakenLabel(asset) {
+	const holder = assetHolder(asset);
+	if (!holder) return "";
+	if (holder.person && holder.expedition) return `Taken by ${holder.person}, out on ${holder.expedition}`;
+	if (holder.expedition) return `Out on ${holder.expedition}`;
+	return `Taken by ${holder.person || "someone"}`;
+}
+
+/** The label above, plus the steading sheet's affordance: clicking the name returns it. */
+export function assetTakenTooltip(asset) {
+	const label = assetTakenLabel(asset);
+	return label ? `${label}. Click to return` : "";
+}

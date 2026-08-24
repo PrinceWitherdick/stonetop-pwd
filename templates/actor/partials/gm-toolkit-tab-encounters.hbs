@@ -1,0 +1,104 @@
+{{!-- ENCOUNTERS — what has been gathered for one session or one scene, in named bundles: the
+      monsters, the read-aloud page, the battle map, the treasure table, the arcanum somebody is
+      about to find. The one tab on this sheet that holds POINTERS to other documents rather than
+      prose about them.
+
+      TWO LISTS, ONE CARD. What is still to come is at the top; what has been run is filed into
+      the Completed fold at the foot, and the tick on a card is what sends it there. Both lists
+      print `gm-encounter-card.hbs`, which is where everything about a single encounter lives —
+      including the one button that reads differently in the two places. The split itself is made
+      in JS off each encounter's `used` flag (gm-encounters-tab.js), never off the DOM.
+
+      NOTHING IS LOST BY COMPLETING ONE. A filed encounter keeps its notes, its collected rows,
+      its Deploy button and its dropzone, and one press of the arrow puts it back on the live
+      list. That is the whole reason the trash is a separate button behind a pencil: the frequent
+      act is reversible and one click, and the final one asks first.
+
+      WRITES DO NOT GO THROUGH THE FORM. Every field here is handled by gm-encounters-tab.js and
+      saved straight to `actor.system.encounters`, so none of them carries a `name` attribute: a
+      `name` on an input inside this sheet's <form> puts it in core's submit data, where the array
+      indices would expand into an OBJECT keyed "0", "1", ... and quietly replace the list with it.
+
+      ONE PENCIL for the whole tab, in the panel's corner, and it guards exactly the two delete
+      buttons — in BOTH lists, because the `--reading` class sits on the <section> that wraps
+      them. Everything else stays live while it is off, which is the point rather than an
+      oversight: the reason this tab exists is to be dropped into and noted on mid-session, and a
+      tab that has to be unlocked first is one nobody uses. What the pencil is FOR is that "delete
+      this encounter" is one press on the head of a shut row, and now the ONLY button on that head:
+      a lone 22px square, at the end of a row a GM drags things onto and types in constantly, whose
+      one press throws a session's prep away.
+
+      NOT `stonetop-readonly`. That class is the sheet-wide lock (pointer-events off every input,
+      textarea and button, then an allow-list), and on this tab it would put out exactly the fields
+      the paragraph above says have to stay lit. `--reading` hides the two buttons it is about and
+      touches nothing else.
+
+      `data-tab="encounters"` earns the rail's stack glyph; the icon table in stonetop.css is one
+      flat list keyed by data-tab with no per-sheet scope. --}}
+<div class="tab encounters steading-edit-section" data-group="primary" data-tab="encounters">
+	{{> "stonetop.steading-section-toggle" section="encounters" editing=stonetop.edit.encounters}}
+	<section class="sheet-tab stonetop-gm-encounters{{#unless stonetop.edit.encounters}} stonetop-gm-encounters--reading{{/unless}}">
+
+		<p class="steading-threats-intro">{{localize "stonetop.gmToolkit.encounters.intro"}}</p>
+
+		{{!-- THE LIVE LIST CARRIES NO HEADING OF ITS OWN. It is what the tab IS, sitting directly
+		      under the tab's own intro, and a "Prepared" heading over it would only be there to
+		      make a pair with the fold below — which is rendered at all only once something has
+		      been run. A heading that exists to balance a section that is usually absent is a
+		      heading that reads as a section boundary on an empty tab. --}}
+		{{#if stonetop.encounters.active.length}}
+		<ul class="stonetop-gm-encounter-list">
+			{{#each stonetop.encounters.active}}
+			{{> "stonetop.gm-encounter-card"}}
+			{{/each}}
+		</ul>
+		{{else}}
+		{{!-- Two empty states, because "nothing here yet" and "you have run everything you
+		      prepared" are different facts and the second one is wrong advice: there is no need
+		      to tell a GM to drag something in when what they most likely want is to lift one
+		      back out of the fold two inches below. --}}
+		<p class="stonetop-gm-encounter-empty">
+			{{#if stonetop.encounters.completed.length}}{{localize "stonetop.gmToolkit.encounters.emptyAllDone"}}{{else}}{{localize "stonetop.gmToolkit.encounters.empty"}}{{/if}}
+		</p>
+		{{/if}}
+
+		{{!-- The add bar stays with the LIVE list, above the fold rather than at the true foot of
+		      the tab: what it adds is a new encounter, which lands on that list, and a bar sitting
+		      under a season's worth of completed ones would be a bar a GM has to scroll past a
+		      history to reach. --}}
+		{{> "stonetop.gm-prep-add-bar" kind="stonetop-gm-encounter"
+		    label=(localize "stonetop.gmToolkit.encounters.add")}}
+
+		{{!-- COMPLETED, and rendered only when there is something in it, so an untouched tab shows
+		      one list and not two.
+
+		      It folds, and starts OPEN like every other section on this sheet: a section shut on
+		      first open is one a GM never learns is there. Folding it is a choice the caret offers
+		      and the sheet then remembers per user — which is exactly what a GM three sessions in
+		      will want, and exactly what a GM one session in must not have chosen for them.
+
+		      The caret rides ON THE HEADING (via `section-heading`) rather than in a corner,
+		      because this section has no pencil of its own: the tab's single pencil in the panel's
+		      top-right corner already reaches the delete buttons inside here, and a second one
+		      would be two controls for one lock. A lone caret floating in an otherwise empty
+		      corner is what the wonder tab's guidance section avoids the same way.
+
+		      The heading's FOLLOWING SIBLINGS are what the fold hides (`_sectionFoldTargets`), so
+		      the box around this pair is load-bearing: without it the walk would run on past the
+		      list and out of the tab. Nothing else may go in this box, and a SECOND heading in it
+		      would stop the caret claiming at the first. --}}
+		{{#if stonetop.encounters.completed.length}}
+		<div class="stonetop-gm-encounters-completed">
+			{{> "stonetop.section-heading" title=(localize "stonetop.gmToolkit.encounters.completed")
+			    note=(localize "stonetop.gmToolkit.encounters.completedNote")
+			    collapse="gm-encounters-completed"}}
+			<ul class="stonetop-gm-encounter-list stonetop-gm-encounter-list--completed">
+				{{#each stonetop.encounters.completed}}
+				{{> "stonetop.gm-encounter-card"}}
+				{{/each}}
+			</ul>
+		</div>
+		{{/if}}
+
+	</section>
+</div>

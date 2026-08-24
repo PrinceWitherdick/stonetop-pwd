@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>This leg bone is always cold and covered in rime. It’s the bone of a witch who broke her leg and froze to death. It houses not a ghost, but a potent spirit of winter and cold.</p><p>When you first grip the bone, roll +CON: on a 10+, the spirit acknowledges you as master and you can wield the bone; on a 7-9, pick 1:</p><ul><li>Drop the bone; you can never wield it</li><li>Endure as the spirit sucks away your heat—take 2d4 damage (ignores armor) and mark weakened—but you then master the spirit and can wield the bone.</li></ul><p>On a 6-, the spirit sucks away your heat—take 2d4 damage (ignores armor) and mark weakened—and you can never wield the bone.</p><p>When you wield the bone as a weapon (hand, crude, magical, ignores armor) it deals 2d4 damage instead of your normal damage, sucking the warmth from your foe.</p>"
   },
   "flags": {
     "stonetop": {

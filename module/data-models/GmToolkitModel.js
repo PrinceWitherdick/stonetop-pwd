@@ -7,19 +7,28 @@
 // preferences that persist (which sections are folded, the window's size) are client settings
 // keyed by actor id, not document data.
 //
-// `wonders` is the one thing a GM AUTHORS on this sheet: the "I wonder..." list from Book I p.33,
-// which the playbook prints as a column of ruled lines. It is world-level prep rather than one
-// GM's private notes, which is why it sits on the toolkit (a singleton — see gm-toolkit-actor.js)
-// and not on the User.
+// Two fields, and both are things a GM AUTHORS on this sheet rather than reads:
+//
+//   `wonders`    the "I wonder..." list from Book I p.33, which the playbook prints as a column
+//                of ruled lines.
+//   `encounters` what has been gathered for a session or a scene — the monsters, the map, the
+//                read-aloud page — each bundle pointing at documents by uuid rather than copying
+//                them (see gm-encounters-tab.js).
+//
+// Both sit on the toolkit (a singleton — see gm-toolkit-actor.js) rather than on the User,
+// because both are world-level prep: a world has one set of open questions and one set of
+// prepared encounters whoever is running it, and a second GM opening their own toolkit should
+// see the same lists.
 //
 // A field added here must tolerate absence on toolkits created before it: `initial` covers that
 // for every field type this system uses, which is what lets this stay additive with no migration.
-import { wondersField } from "./fields.js";
+import { wondersField, encountersField } from "./fields.js";
 
 export class GmToolkitModel extends foundry.abstract.TypeDataModel {
 	static defineSchema() {
 		return {
 			wonders: wondersField(),
+			encounters: encountersField(),
 		};
 	}
 }

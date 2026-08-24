@@ -19,7 +19,8 @@
         ""
       ]
     },
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>ingest a dose and start compulsively telling secrets to those around you</p>"
   },
   "flags": {
     "stonetop": {

@@ -63,6 +63,7 @@
         "loop": "Core Loop",
         "threats": "Threats & Dangers",
         "sites": "Sites",
+        "encounters": "Encounters",
         "wonder": "I Wonder..."
       },
       "moves": {
@@ -127,6 +128,82 @@
         "guide": "Keeping the list",
         "guideNote": "Book I, p.33",
         "writeFailed": "Couldn't save the I wonder list. See the console for details."
+      },
+      "encounters": {
+        "intro": "What you have gathered for a session or a scene, kept in one place: the monsters, the map, the page you mean to read aloud, the table you will roll on. Drag anything in from the sidebar or a compendium. Drag it back out onto the canvas when the moment comes.",
+        "add": "Start a new encounter",
+        "newName": "New encounter",
+        "nameLabel": "What you call this encounter",
+        "empty": "Nothing gathered yet. Drag a monster, a map or a journal page onto this tab and it will start an encounter for you.",
+        "emptyAllDone": "Everything you prepared has been run. Start another, or lift one back out of Completed below.",
+        "completed": "Completed",
+        "completedNote": "Run, with everything still gathered",
+        "dropHere": "Drop anything here: monsters, items, journals, scenes, tables.",
+        "reorder": "Drag to reorder, or use alt and the arrow keys",
+        "expand": "Show what is in this encounter",
+        "collapse": "Hide what is in this encounter",
+        "deploy": "Put every monster in this encounter on the current map",
+        "markUsed": "Mark this one complete, and file it below",
+        "markUsedShort": "Mark complete",
+        "markUnused": "Put this one back on the list above",
+        "markUnusedShort": "Put back on the list",
+        "removeEncounter": "Delete this encounter",
+        "removeEntry": "Take this out of the encounter",
+        "removeTitle": "Delete Encounter",
+        "removeBody": "Delete <strong>{name}</strong> and the {count} things gathered into it? Nothing they point at is touched: the monsters, pages and maps themselves stay exactly where they are. To take an encounter off the list but keep what is in it, mark it complete with the tick instead and it moves to Completed.",
+        "removeUnnamed": "this encounter",
+        "entryOpenTip": "Open it, or drag it onto the map",
+        "entryGoneTip": "This is no longer in the world. The name is what was gathered.",
+        "entryGone": "That is no longer in the world, so there is nothing to open.",
+        "entryNoteLabel": "What this one is for",
+        "entryNotePlaceholder": "Opens the door on round two...",
+        "unnamedEntry": "Unnamed",
+        "notesEmpty": "No notes on this encounter yet.",
+        "notesEdit": "Write the notes for this encounter",
+        "notesTitle": "{name}: Notes",
+        "notesDone": "Done",
+        "deployed": "Put {count} on the map for {name}.",
+        "deployImported": "Brought {count} into this world from a compendium, so there is an actor for the token to point at.",
+        "deploySkipped": "Could not place: {names}.",
+        "noScene": "There is no scene open, so there is nowhere to put them.",
+        "noTokens": "You do not have permission to create tokens on this scene.",
+        "nothingToDeploy": "There are no monsters or NPCs in this encounter to place. Everything else in it is opened rather than deployed.",
+        "noUuid": "That one carries no reference to store, so it cannot be gathered. Make it a real item first, then drag that in.",
+        "writeFailed": "Couldn't save the encounters list. See the console for details.",
+        "kind": {
+          "actor": "Actor",
+          "item": "Item",
+          "arcanum": "Arcanum",
+          "journal": "Journal",
+          "page": "Page",
+          "scene": "Scene",
+          "table": "Table",
+          "macro": "Macro",
+          "unknown": "Unknown"
+        },
+        "tallyTip": "{count} {label}",
+        "tally": {
+          "one": {
+            "actor": "monster or NPC",
+            "item": "item",
+            "arcanum": "arcanum",
+            "journal": "journal or page",
+            "scene": "map",
+            "table": "table",
+            "macro": "macro",
+            "unknown": "thing of a kind this build doesn't know"
+          },
+          "other": {
+            "actor": "monsters and NPCs",
+            "item": "items",
+            "arcanum": "arcana",
+            "journal": "journals and pages",
+            "scene": "maps",
+            "table": "tables",
+            "macro": "macros",
+            "unknown": "things of a kind this build doesn't know"
+          }
+        }
       },
       "threats": {
         "intro": "Ongoing problems that will trouble Stonetop if left unchecked (Book I, Threats). Written up here for your eyes only. Drag a card onto a scene to pin it to the map.",
@@ -220,7 +297,7 @@
         "loadLight": "<strong>Light load</strong>: quick &amp; quiet",
         "loadNormal": "<strong>Normal load</strong>",
         "loadHeavy": "<strong>Heavy load</strong>: noisy, slow, quick to tire",
-        "packHorseNote": "Your <em><strong>Pack Horse</strong></em> raises each load by 1: up to 4 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> light, 7 normal, 10 heavy.",
+        "loadBonusNote": "With <em><strong>{moves}</strong></em>, every load allows {bonus} more <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>: up to {light} light, {normal} normal, {heavy} heavy.",
         "arcanaItems": "Arcana",
         "treasureItems": "Treasures",
         "smallItemLimit": "Mark up to <strong>{limit}</strong> small items (4+Prosperity)",
@@ -361,12 +438,10 @@
         "heading": "When you <em><strong>Outfit</strong></em>, mark a number of <span class=\"stonetop-glyph stonetop-glyph--diamond\">◇</span> below on specific items or as a group. Your load is whatever you've marked:",
         "currentLoad": "Carrying <strong>{count}</strong> <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>.",
         "overloaded": "Overloaded! Risk exhaustion, accident, and injury.",
-        "light": "For a <strong>light load</strong> (<em>quick &amp; quiet</em>), mark up to 3 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
-        "normal": "For a <strong>normal load</strong>, mark 4–6 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
-        "heavy": "For a <strong>heavy load</strong> (<em>noisy, slow, hot, quick to tire</em>), mark 7–9 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
-        "lightPackHorse": "For a <strong>light load</strong> (<em>quick &amp; quiet</em>), mark up to 4 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> <strong>with your packhorse</strong>",
-        "normalPackHorse": "For a <strong>normal load</strong>, mark 5–7 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> <strong>with your packhorse</strong>",
-        "heavyPackHorse": "For a <strong>heavy load</strong> (<em>noisy, slow, hot, quick to tire</em>), mark 8–10 <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> <strong>with your packhorse</strong>"
+        "light": "For a <strong>light load</strong> (<em>quick &amp; quiet</em>), mark up to {band} <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
+        "normal": "For a <strong>normal load</strong>, mark {band} <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
+        "heavy": "For a <strong>heavy load</strong> (<em>noisy, slow, hot, quick to tire</em>), mark {band} <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>",
+        "boostedBy": " <strong>(with {moves})</strong>"
       }
     },
     "settings": {
@@ -403,8 +478,18 @@
         "hint": "The slate grey a storm or a tornado washes the daylight with. Off keeps the cloud and the rain and leaves your map its own colours."
       },
       "alwaysShowMapPinNames": {
-        "name": "Map Pins: Always Show Names",
-        "hint": "When on (the default), every Stonetop map pin wears its name on the map: the poster maps are the unlabelled printing of artwork the books print labelled, and this puts the names back. Covers the lettered places of interest, the regional and village map markers, and your threat, hazard and site pins. Turn off to hand all of them back to Foundry's own behaviour, showing a name only while the cursor is on the pin, for a table that would rather look at the drawing."
+        "name": "Map Pin Names: Show By Default",
+        "hint": "When on (the default), a Stonetop map pin wears its name on the map instead of waiting for the cursor. The poster maps are the unlabelled printing of artwork the books print labelled, and this puts the names back. Covers the lettered places of interest, the regional and village map markers, and your threat, hazard and site pins. This is the default every map follows unless you give it an answer of its own below, and it is the only answer for scenes that are not poster maps."
+      },
+      "mapPinNameSettings": {
+        "name": "Map Pin Names",
+        "label": "Configure",
+        "hint": "Choose whether Stonetop map pins wear their names on the map, for all maps at once or one poster map at a time.",
+        "title": "Map Pin Names",
+        "perMapNote": "Each imported poster map can answer for itself. A map set to follow the world setting changes with it; one given an answer of its own keeps that answer whatever the setting above says.",
+        "followDefault": "Follow the world setting",
+        "alwaysShow": "Always show names",
+        "hoverOnly": "Show names on hover only"
       },
       "customMovesGmOnly": {
         "name": "Custom Moves: GM Only",
@@ -474,10 +559,6 @@
       "hideRollableIcon": {
         "name": "Hide Rollable Icon",
         "hint": "Hide the dice icon that marks rollable moves and stats. Rolling still works: click the move name or stat row to roll."
-      },
-      "promptRollModifier": {
-        "name": "Prompt for Roll Modifier",
-        "hint": "Ask for a one-off modifier (a held bonus, a GM-granted +1, etc.) before each move or stat roll on the character sheet. Hold Shift while clicking the roll to skip the prompt."
       },
       "openSheetsInEditMode": {
         "name": "Open Sheets in Edit Mode",
@@ -735,7 +816,8 @@
       "goneNpc": "That NPC no longer exists."
     },
     "rollMode": {
-      "label": "Roll modifier",
+      "pickerLabel": "How you're rolling this",
+      "modifierLabel": "One-off modifier",
       "adv": "Advantage",
       "advTooltip": "Roll 3d6 and keep the highest two",
       "normal": "Normal",
@@ -1056,6 +1138,7 @@
       "leadMissing": "The GM hasn't named a path yet. Book I p.431 suggests:",
       "chipUnknown": "Unidentified. You know only what's obvious at a glance.",
       "chipPartial": "Partly identified. You know what it is and what it's worth; the full write-up is still owed.",
+      "loreToggle": "Show or hide the write-up",
       "gmTooltip": "GM: what this artifact is, and how much of it the player may read",
       "gmTitle": "Artifact knowledge",
       "gmTags": "Concealed tags:",
@@ -1073,6 +1156,14 @@
       "fieldLead": "How to learn more",
       "fieldLeadNote": "Who would know, what they'd need to consult, the Plan they could make. What a 6- leaves them with.",
       "saveOnly": "Save"
+    },
+    "itemSheet": {
+      "loadTooltip": "Load {weight} ◇. Counts against what whoever carries it can carry.",
+      "small": "small",
+      "smallTooltip": "A small item: fits in a pocket, pouch, or boot, and carries no ◇ load.",
+      "usesTooltip": "○ uses. The circles are ticked on the sheet of whoever is carrying it, not here.",
+      "treasure": "Treasure",
+      "treasureTooltip": "A Book II treasure. Dropped onto a character, it lands under the Gear tab's Treasures heading."
     },
     "oaths": {
       "heading": "The Sworn",
@@ -1130,6 +1221,69 @@
       "endPrompt": "Battle Joy ends. Roll +CON now? On a 10+ that was a rush, regain 1d4 HP; on a 7-9 you are winded but will be fine; on a 6- mark a debility, but do not mark XP. Choose No to simply come out of it.",
       "noRollType": "Your Battle Joy move has no stat set on it, so there was nothing to roll. You have come out of it all the same. Give the move a roll type to get the +CON roll.",
       "debilitiesIgnored": "Battle Joy: still marked, and doing nothing. You ignore the effects of debilities as long as you keep fighting."
+    },
+    "expedition": {
+      "route": {
+        "goToOpen": " Open {map} and try again.",
+        "goToImport": " This world has no scene for it yet. The Import Book Art macro builds one.",
+        "noScene": "There's no scene on screen to draw the route on.",
+        "noDestination": "Pick where they're bound first, and the way there can go on the map.",
+        "notAMap": "This scene isn't one of the poster maps, so there's nowhere on it the route means anything.",
+        "wrongMap": "{map} isn't the map this journey is drawn on.",
+        "notCharted": "{map} isn't a map the travel table charts a course across.",
+        "noSize": "This scene has no dimensions to place the route against.",
+        "wrongShape": "This scene's picture isn't the shape the map positions were measured against, so the route would run through the wrong valleys. Rebuild it from the Import Book Art macro to put it right.",
+        "offMapNamed": "{map} doesn't draw {places}, so the way there isn't on it.",
+        "offMapWhole": "{map} can't draw the whole of this journey.",
+        "refused": "The route can't go on this scene.",
+        "draw": "Draw it on the scene",
+        "take": "Take it off the scene",
+        "drawTip": "Draw this route on the map the table is looking at. It goes on the scene open on your canvas rather than on the picture in this window, so open {map} first or it has nowhere to land.",
+        "drawTipMap": "the map it runs across",
+        "takeTip": "Take this route back off the map the table is looking at.",
+        "cleared": "The way there is off {scene}.",
+        "placed": "The way to {place} is on {map}.",
+        "panelOffMap": "This map doesn't draw {places}, so the way there isn't on it.",
+        "panelShow": "Show {map}",
+        "panelNoMap": "No one map draws both ends of this journey, so the way there isn't drawn. The legs below still hold.",
+        "placedDrawn": "The way you drew is on {map}.",
+        "panelDrawnOn": "This way was drawn on {map}, so it isn't on this one.",
+        "panelStartOn": "They set out from a point on {map}, so the way there is only on that map."
+      },
+      "sites": {
+        "place": "Put a site on the map",
+        "placeTip": "Mark one of your written-up sites on {map}, or write a new one and mark that.",
+        "thisMap": "this map",
+        "chooseTitle": "Put a site on {map}",
+        "chooseButton": "Place it",
+        "createNew": "Write a new site",
+        "createNewHint": "Walk through Book I's Creating Sites process, then click where it stands.",
+        "alreadyOn": "already on {map}; placing it again moves the pin",
+        "clickToPlace": "Click where {name} stands. Escape or right-click to stop.",
+        "placed": "{name} is on {map}.",
+        "placedPinned": "{name} is on {map}, and a pin for it is now on {scene}.",
+        "placedMoved": "{name} is on {map}, and its pin on {scene} moved to match.",
+        "removed": "{name} is off the map. The write-up is still on the Sites tab.",
+        "pinTip": "{name}. Click to run the way through here, shift-click to add it as another stop, right-click to take the pin off the map. The write-up is on the Sites tab.",
+        "offTheMap": "That click was past the printed edge of {map}, so {name} wasn't placed. The write-up is still on the Sites tab."
+      },
+      "draw": {
+        "noStart": "Click the map to say where they set out from: open map for a point of your own, or a place the books name.",
+        "invite": "Going a way of your own? Shift-click the map to lay it out by hand, starting from the road the table works out.",
+        "hint": "Shift-click the map to add a leg; click to move the end of the way; right-click to take a leg back.",
+        "hintElsewhere": "This way is drawn on {map}. Open that map to add to it.",
+        "originOffMap": "{map} doesn't draw {place}, so a way by hand can't start out from here. Open the map that does.",
+        "drawnNote": "This way was drawn by hand, so the times beside it are measured off the map rather than printed in the book.",
+        "clear": "Start over",
+        "clearTip": "Throw the hand-drawn marks away and go back to the way the travel table works out.",
+        "notOnMap": "{map} doesn't draw {place}, so the way can't stop there. Pick somewhere this map letters, or click the map itself.",
+        "offTheMap": "That click was past the printed edge of {map}, so no mark was laid. Click inside the map itself.",
+        "estimate": "Measured off {map} at the pace of the book's own printed journeys: a good guess, not a printed time."
+      },
+      "start": {
+        "offTheMap": "That click was past the printed edge of {map}, so where they set out from is unchanged. Click inside the map itself.",
+        "pinLabel": "setting out"
+      }
     }
   }
 }

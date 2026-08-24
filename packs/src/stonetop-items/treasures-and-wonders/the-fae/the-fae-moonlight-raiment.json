@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical, beautiful, <em>fragile</em>",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A gossamer robe, a joy against your skin. When you wear the raiment in dim light, you become more pleasing to the eye. If normally ugly, you become plain. If plain, you become beautiful. If beautiful, you become luminous, breathtaking, magnificent.</p><p>Alas, when the moonlight raiment is soiled or torn while you wear it, mark a debility. The debility cannot be cleared until the raiment is cleaned or repaired using Fae magic, or you burn it away into silvery ash.</p>"
   },
   "flags": {
     "stonetop": {

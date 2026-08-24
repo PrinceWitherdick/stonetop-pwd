@@ -11,6 +11,7 @@ import {AddSteadingMemberDialog} from "../../dialogs/AddSteadingMemberDialog.js"
 import {addPersonToSteading, personFieldPath, isActorRow, personRowActor, usedPersonPortraits, HOME_STONETOP} from "./steading-people.js";
 import {PERSON_DEFAULT_IMG} from "../../utils/person-portrait.js";
 import {openNpcNotesDialog} from "./npc-notes-dialog.js";
+import {openReturnTriumphant} from "./return-triumphant.js";
 import {openPeoplePortraitPicker} from "./PeopleGalleryDialog.js";
 import {STONETOP_SCOPE, StonetopFlags} from "../character/StonetopFlags.js";
 import {SpecialItemPickerDialog} from "../character/dialogs/SpecialItemPickerDialog.js";
@@ -18,6 +19,8 @@ import {CharacterInventory} from "../character/CharacterInventory.js";
 import {SPECIAL_ITEM_CATALOG} from "../../data/special-items.js";
 import {getRollStatChipsSetting, getOpenSheetsInEditMode, getHoverDescriptionSetting, getSidebarCollapsed, setSidebarCollapsed, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
+import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
+import {promptRoll, normalizeRollMode} from "../../dialogs/RollDialog.js";
 import {wrapStonetopGlyphsInEl} from "../../utils/glyphs.js";
 import {mountTabRail} from "../../utils/tab-rail.js";
 import {mountScrollFrost} from "../../utils/scroll-frost.js";
@@ -64,10 +67,6 @@ import {localize} from "../../utils/i18n.js";
  * gallery is handed back, so re-opening Edit Photo still highlights the portrait the member wears.
  */
 const memberPhotoDisplaySrc = displayPortraitSrc;
-
-function _normalizeSheetRollMode(rollMode) {
-	return ["adv", "dis"].includes(rollMode) ? rollMode : "normal";
-}
 
 const _STEADING_MOVES_RAW = [
 	{
@@ -583,7 +582,6 @@ export function createStonetopSteadingSheetClass(Base) {
 				...move,
 				statChipLabel: STEADING_STAT_CHIP_LABELS[move.statLabel] ?? move.statLabel,
 			}));
-			context.stonetop.rollMode = this._sheetRollMode();
 			context.stonetop.showRollStatChips = getRollStatChipsSetting();
 			context.stonetop.enrichedNotes = await foundry.applications.ux.TextEditor.enrichHTML(context.stonetop.notes ?? "");
 			context.stonetop.editMode = this._editMode;
@@ -738,36 +736,17 @@ export function createStonetopSteadingSheetClass(Base) {
 				table: STEADING_STAT_TOOLTIPS, settingKey: "hoverDescriptionsSteadingStats", direction: "UP",
 			});
 
-			// Rollable move buttons (both editable and read-only)
-			html[0].addEventListener("click", ev => {
+			// Rollable move buttons (both editable and read-only). Asking how to roll comes
+			// BEFORE the roll and belongs to nobody's sheet state: this used to read a sticky
+			// flag two controls on this sheet wrote, which is what players kept forgetting they
+			// had set. Shift-click rolls straight through, Normal at +0.
+			html[0].addEventListener("click", async ev => {
 				const btn = ev.target.closest(".steading-roll-btn");
 				if (!btn) return;
 				ev.stopPropagation();
-				this._onSteadingRoll(btn.dataset.moveName, btn.dataset.stat);
-			}, true);
-
-			// Roll modifier, in BOTH its shapes — the modern layout's segmented pill on the
-			// Homefront Moves heading (buttons, see roll-mode-picker.hbs) and the classic
-			// sidebar's stacked radio list (roll-mode-radios.hbs). One layout renders at a time,
-			// so only one of these ever has anything to match, but both have to be bound: which
-			// one is live is a per-user setting read at render, not something known here. Binding
-			// only the pill's is the silent failure the classic layout hit — the radios render,
-			// highlight correctly off the server-stamped `checked`, and write nothing at all.
-			//
-			// Wired here, above the isEditable guard, for the same reason the roll buttons are: a
-			// player who can roll the moves has to be able to say how.
-			//
-			// Neither renders explicitly: setFlag is a document update, and `updateActor` already
-			// re-renders every sheet on this actor. A second one here is a whole extra rebuild of
-			// six tabs (re-enriched notes, three relationship tables, the rail and frost remounts)
-			// and it flickers the tab the user is reading.
-			html[0].addEventListener("click", async ev => {
-				const btn = ev.target.closest(".stonetop-roll-mode-btn");
-				if (!btn) return;
-				ev.stopPropagation();
-				const mode = _normalizeSheetRollMode(btn.dataset.rollMode);
-				if (mode === this._sheetRollMode()) return; // already on it — nothing to write
-				await this.actor.setFlag(STONETOP_SCOPE, "rollMode", mode);
+				const prompted = await promptRoll({ title: btn.dataset.moveName || "Roll", shiftKey: ev.shiftKey });
+				if (!prompted) return;
+				await this._onSteadingRoll(btn.dataset.moveName, btn.dataset.stat, prompted);
 			}, true);
 
 			// The season/year clock beside the title. Runs the MOVE, the same thing the hotbar
@@ -792,30 +771,29 @@ export function createStonetopSteadingSheetClass(Base) {
 			// this binds nothing for a player.
 			html.find("[data-action='set-current-weather']").on("click", () => game.stonetop?.openWeather?.());
 
-			// A real radio group, so `change` rather than a delegated click: the browser owns the
-			// deselection, and change only fires on the one that became checked.
-			html.find(".stonetop-roll-mode-input").on("change", async ev => {
-				await this.actor.setFlag(STONETOP_SCOPE, "rollMode", _normalizeSheetRollMode(ev.currentTarget.value));
-			});
-
 			// Collapse / expand the whole moves sidebar (CLASSIC layout only; the modern layout
-			// has no sidebar, so this simply matches nothing). Toggling a class rather than
-			// re-rendering lets the tab content reclaim the freed width without flicker; the
-			// state is persisted so the sidebar reopens the same way.
-			html.find(".stonetop-sidebar-toggle").on("click", ev => {
-				const sidebar = ev.currentTarget.closest(".stonetop-moves-sidebar");
-				if (!sidebar) return;
-				const collapsed = sidebar.classList.toggle("is-collapsed");
-				ev.currentTarget.setAttribute("aria-expanded", String(!collapsed));
-				ev.currentTarget.setAttribute("aria-label", collapsed ? "Expand moves sidebar" : "Collapse moves sidebar");
-				setSidebarCollapsed(this.actor?.id, collapsed);
+			// has no sidebar, so this simply matches nothing). Shared with the character sheet
+			// and the expedition walkthrough's rail (utils/sidebar-toggle.js); the state is
+			// persisted per actor, so the sidebar reopens the way it was left.
+			wireSidebarToggle(html, {
+				expandLabel:   "Expand moves sidebar",
+				collapseLabel: "Collapse moves sidebar",
+				persist:       collapsed => setSidebarCollapsed(this.actor?.id, collapsed),
 			});
 
-			// Clicking the move name or its "+STAT" chip rolls the same as tapping the dice icon beside it.
+			// Clicking the move name or its "+STAT" chip rolls the same as tapping the dice icon
+			// beside it. Re-dispatched as a MouseEvent carrying the Shift state rather than a bare
+			// `.click()`, which reports `shiftKey: false` however the name was clicked — so
+			// Shift-clicking a move's NAME would sit through the roll prompt that Shift exists to
+			// skip. The character sheet's own name-click forwards the same way, for the same reason.
 			html.find(".stonetop-steading-move-open, .stonetop-move-roll-chip").on("click", ev => {
 				const li = ev.currentTarget.closest("li");
 				const rollable = li?.querySelector(".steading-roll-btn, .steading-interactive-btn");
-				if (rollable) rollable.click();
+				if (rollable) {
+					rollable.dispatchEvent(new MouseEvent("click", {
+						bubbles: true, cancelable: true, shiftKey: ev.shiftKey,
+					}));
+				}
 			});
 
 			// Interactive move buttons (e.g. Meet with Disaster)
@@ -1453,10 +1431,19 @@ export function createStonetopSteadingSheetClass(Base) {
 					cancel: { label: "Cancel" },
 					roll: {
 						label: `Roll +${flow.statLabel}`,
+						// The prompt comes first, ahead of the summary card and the move's own
+						// before-the-roll costs, so backing out of it is a clean abort: nothing
+						// posted, nothing spent. `_homesteadRollOptions` spreads AFTER the
+						// prompt because the one mode it carries is a rule, not a preference —
+						// Trade & Barter in winter is at disadvantage whatever was picked.
 						callback: async html => {
+							const prompted = await promptRoll({ title: flow.label });
+							if (!prompted) return;
 							await this._postHomesteadMoveSummary(flow, html);
 							await this._applyHomesteadBeforeRoll(flow);
-							await this._onSteadingRoll(flow.label, flow.stat, this._homesteadRollOptions(flow, html));
+							await this._onSteadingRoll(flow.label, flow.stat, {
+								...prompted, ...this._homesteadRollOptions(flow, html),
+							});
 						},
 					},
 				},
@@ -1542,7 +1529,10 @@ export function createStonetopSteadingSheetClass(Base) {
 			return {
 				...options,
 				modifier: value ? -value : 0,
-				rollMode: data.winter ? "dis" : undefined,
+				// Only present when it applies. It is spread over the player's prompt answer, so
+				// a key that is always there would blank their choice with `undefined` every
+				// other season of the year.
+				...(data.winter ? { rollMode: "dis" } : {}),
 			};
 		}
 
@@ -1655,73 +1645,12 @@ export function createStonetopSteadingSheetClass(Base) {
 			dialog.render(true);
 		}
 
-		// Return Triumphant: clear one marked steading debility. If none are marked,
-		// increase Fortunes by 1 instead. Mirrors the Meet with Disaster walkthrough
-		// (its inverse — that one marks debilities / drops Fortunes). Writes are
-		// attributed to the move so the steading ledger reads "via Return Triumphant".
+		// Return Triumphant: clear one marked steading debility, or raise Fortunes by 1 when
+		// none are marked. The walkthrough itself lives in ./return-triumphant.js, because the
+		// last step of the Run an Expedition guide offers the same move — that is where a table
+		// is when it comes up — and two copies would eventually disagree about what it does.
 		async _onReturnTriumphant() {
-			const DEBILITIES = [
-				{ id: "diminished", label: "Diminished", detail: "disadvantage to Deploy, Muster, Pull Together" },
-				{ id: "lacking",    label: "Lacking",    detail: "treat Prosperity as 1 lower" },
-				{ id: "malcontent", label: "Malcontent", detail: "Fortunes reset to +0 each season; folks need Persuading more often" },
-			];
-			const marked = DEBILITIES.filter(d =>
-				this._stonetopSteading.getSystemValue(`attributes.debilities.options.${d.id}.value`, false));
-
-			// No debilities marked → the move raises Fortunes by 1 instead.
-			if (marked.length === 0) {
-				const fortunes = this._stonetopSteading.getStatValue("fortunes");
-				const newFortunes = fortunes + 1;
-				new Dialog({
-					title: "Return Triumphant",
-					content: `<div class="stonetop-disaster-dialog">
-						<p><em>You return home in triumph, and the steading has no debilities marked.</em></p>
-						<p>Fortunes: <strong>${sign(fortunes)}</strong> → <strong>${sign(newFortunes)}</strong></p>
-					</div>`,
-					buttons: {
-						cancel: { label: "Cancel" },
-						apply: {
-							label: "Increase Fortunes",
-							callback: async () => {
-								await this._stonetopSteading.setSystemValue("stats.fortunes.value", newFortunes, { stonetopMove: "Return Triumphant" });
-								this.render(false);
-							},
-						},
-					},
-					default: "apply",
-				}, { classes: ["dialog", "stonetop", "stonetop-disaster-move-dialog"] }).render(true);
-				return;
-			}
-
-			// One or more debilities marked → the GM clears 1.
-			const choicesHtml = marked.map(d => `
-				<li class="stonetop-disaster-choice" data-choice="${d.id}">
-					<span class="stonetop-disaster-choice-label">${d.label}</span>
-					<span class="stonetop-disaster-choice-detail">${d.detail}</span>
-				</li>`).join("");
-
-			// `const`, even though the render/button callbacks below refer to `dialog`: they run
-			// after this statement completes, so the binding is always initialised by then.
-			const dialog = new Dialog({
-				title: "Return Triumphant",
-				content: `<div class="stonetop-disaster-dialog">
-					<p><em>You return home in triumph.</em> Clear 1 of the steading's debilities:</p>
-					<ol class="stonetop-disaster-choices">${choicesHtml}</ol>
-				</div>`,
-				buttons: { cancel: { label: "Cancel" } },
-				render: (html) => {
-					html[0].querySelectorAll(".stonetop-disaster-choice").forEach(el => {
-						el.addEventListener("click", async () => {
-							const choice = marked.find(d => d.id === el.dataset.choice);
-							if (!choice) return;
-							await this._stonetopSteading.setSystemValue(`attributes.debilities.options.${choice.id}.value`, false, { stonetopMove: "Return Triumphant" });
-							this.render(false);
-							dialog.close();
-						});
-					});
-				},
-			}, { classes: ["dialog", "stonetop", "stonetop-disaster-move-dialog"] });
-			dialog.render(true);
+			openReturnTriumphant(this._stonetopSteading, { onApplied: () => this.render(false) });
 		}
 
 		async _onRequisitionWalkthrough() {
@@ -1777,8 +1706,11 @@ export function createStonetopSteadingSheetClass(Base) {
 					roll: {
 						label: "Roll +Fortunes",
 						callback: async html => {
+							const prompted = await promptRoll({ title: "Requisition" });
+							if (!prompted) return;
 							await this._postHomesteadMoveSummary(requisitionFlow, html);
 							await this._onSteadingRoll("Requisition", "fortunes", {
+								...prompted,
 								moveResults: _moveResultsFromRows(requisitionResults),
 								resultLegend: _resultsLegendHtml(requisitionResults),
 								tierActions: {
@@ -2154,8 +2086,12 @@ export function createStonetopSteadingSheetClass(Base) {
 					// homefront move, so the ledger attributes them to it.
 					const seasonsMove = { stonetopMove: "Seasons Change" };
 
-					root.querySelector("[data-action='roll-fortunes']")?.addEventListener("click", () => {
-						this._onSteadingRoll("Seasons Change", "fortunes", _seasonRollOptions(seasonId));
+					root.querySelector("[data-action='roll-fortunes']")?.addEventListener("click", async () => {
+						const prompted = await promptRoll({ title: "Seasons Change" });
+						if (!prompted) return;
+						await this._onSteadingRoll("Seasons Change", "fortunes", {
+							...prompted, ..._seasonRollOptions(seasonId),
+						});
 					});
 
 					// Spring only: hand the roll to the table — post a chat card asking the
@@ -2309,11 +2245,18 @@ export function createStonetopSteadingSheetClass(Base) {
 					resultLegend: _resultsLegendHtml(flow.results),
 				}
 				: {};
+			// `situational` is the one-off modifier from the pre-roll prompt; it lands on top of
+			// whatever the move itself already charges (Trade & Barter's declared value), and the
+			// roll engine surfaces the sum as a Situational pill.
+			const { situational = 0, ...rest } = rollOptions;
 			const options = {
 				...defaultRollOptions,
-				...rollOptions,
+				...rest,
 				moveName,
-				rollMode: _normalizeSheetRollMode(rollOptions.rollMode ?? this._sheetRollMode()),
+				// The mode is the caller's — the prompt's answer, or a rule that forced it. There
+				// is no sheet state left to fall back on.
+				rollMode: normalizeRollMode(rest.rollMode),
+				modifier: (rest.modifier ?? 0) + situational,
 				statValue: this._stonetopSteading.getStatValue(statKey),
 			};
 			if (rollOptions.statValue !== undefined) options.statValue = rollOptions.statValue;
@@ -2330,10 +2273,6 @@ export function createStonetopSteadingSheetClass(Base) {
 			await rollStat(statKey, this.actor, {
 				...options,
 			});
-		}
-
-		_sheetRollMode() {
-			return _normalizeSheetRollMode(this.actor.getFlag(STONETOP_SCOPE, "rollMode"));
 		}
 
 		async _onSteadingTrackChange(path, value) {

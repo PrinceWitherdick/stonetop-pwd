@@ -1,0 +1,39 @@
+{{!-- HOW TO LAY THE WAY OUT YOURSELF, under the picture it is about.
+
+      There used to be a "Draw the way yourself" checkbox above the map, and the gestures were
+      taught in the row beside it. The box is gone: a shift-click on the map lays a way, and the
+      marks themselves are the mode (module/utils/custom-route.js `normalizeCustom`). What is left
+      is the one thing a map cannot say for itself — nothing about a picture advertises that shift
+      adds a leg — and it belongs UNDER the picture, where a reader looking for what a click will
+      do is already looking, rather than in a row of controls above it.
+
+      SHARED BY BOTH SURFACES, like the controls above and the readout below: the route step sets
+      it under its own map, the "See the whole map" window under its viewport. One sentence, so the
+      gesture cannot come to mean two different things depending on which window you are in.
+
+      WHICH sentence is `ExpeditionDialog._drawState`'s to decide, off the same `canDrawHere` the
+      two surfaces arm their pictures on — an invitation on a map that can start a way, the
+      gestures once one is drawn here, and where the way actually is when it is drawn elsewhere.
+      All this partial owns is where it sits.
+
+      GM-only (`canDraw`), like the scene and site buttons above and for the same reason: drawing
+      writes the trip into a world setting, which a player cannot do. A player gets the one thing
+      that is still theirs to know, and only once there is a way: that the line on this map is
+      somebody's own and the times beside it were measured rather than printed. --}}
+{{#if journey.custom.canDraw}}
+<div class="stonetop-journey-draw{{#if journey.custom.on}} is-on{{/if}}">
+  <span class="stonetop-journey-drawhint">{{journey.custom.hint}}</span>
+  {{!-- COUNTED, not conditioned on this map: the marks are on the trip, so "start over" is offered
+        from the other tab too — a way that plainly has something to start over from should not
+        have the button go missing on it. --}}
+  {{#if journey.custom.count}}
+  <button type="button" class="stonetop-journey-clear-drawn" data-tooltip="{{journey.custom.clearTip}}">
+    <i class="fas fa-rotate-left"></i> {{journey.custom.clearLabel}}
+  </button>
+  {{/if}}
+</div>
+{{else if journey.custom.on}}
+<div class="stonetop-journey-draw is-on">
+  <span class="stonetop-journey-drawhint">{{journey.custom.drawnNote}}</span>
+</div>
+{{/if}}

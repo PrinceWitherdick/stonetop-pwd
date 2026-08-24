@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical, indestructible, <em>immobile</em>",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Found in or near some Rime Lord ruin, this… thing… appears to be a perfect sphere of lead, maybe 2 inches across. It hovers motionless in the air. No amount of physical force can mar it, nor move it from its relative position.</p><p>When you focus all your will upon the black sphere, roll +WIS: on a 10+, you can slowly move the sphere with your mind, so long as you keep your attention fixed upon the task; on a 7-9, pick 1:</p><ul><li>Mark a debility and move the sphere as per a 10+</li><li>Move the sphere, but only a few inches</li><li>Fling the sphere in a random vector (if it matters: d8 damage, forceful, messy)</li></ul>"
   },
   "flags": {
     "stonetop": {

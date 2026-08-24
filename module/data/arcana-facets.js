@@ -69,9 +69,46 @@ export function arcanumTier(arc) {
 	return isMajorArcanumItem(arc) ? "major" : "minor";
 }
 
-/** True when the arcanum's front hands the holder an item (`front.item`). */
+/**
+ * Is this arcanum's item worn INSIDE you rather than carried?
+ *
+ * Book II tags two majors `implanted` — Storm Markings, which course up and down your skin, and
+ * the Ineffable Words, emblazoned on your soul and tongue. They carry an `item` only so the card
+ * can print its tag line; there is nothing in your hands and nothing in your load. Keyed off the
+ * printed tag rather than a list of slugs, so a homebrew card tagged the same way behaves the
+ * same way, and so the rule reads as what the book actually says.
+ */
+export function isImplantedArcanumItem(item) {
+	return /\bimplanted\b/i.test(String(item?.note ?? ""));
+}
+
+/**
+ * Is this arcanum's item too big to carry on your person?
+ *
+ * Book I, "Tags and game elements" (p.437): "If it's too big to just carry on your person, give
+ * it the `immobile` tag." Seven shipped cards say so under their titles — a huge wooden sphere,
+ * a sunken tablet, a vein of milky crystal, a whispering word, an oversized codex, a rusty
+ * cauldron, a strange skull and antlers. Each carries an `item` so the card can print that tag
+ * line, but a vein of crystal in a cave wall is never in anyone's load.
+ *
+ * Read off the printed tag, like {@link isImplantedArcanumItem} beside it, so a homebrew card
+ * tagged the way the book says behaves the way the book says — which a list of shipped slugs
+ * could never do. Deliberately NOT gated on a null weight: the tag is the author's declaration,
+ * and it outranks a stray number left in the weight field.
+ */
+export function isImmobileArcanumItem(item) {
+	return /\bimmobile\b/i.test(String(item?.note ?? ""));
+}
+
+/**
+ * True when the arcanum's front hands the holder an item to carry (`front.item`).
+ *
+ * An implanted one does not count: the Relic chip promises "the arcanum itself is an item in
+ * your load", and these never enter it.
+ */
 function _isRelic(arc) {
-	return !!arc?.front?.item;
+	const item = arc?.front?.item;
+	return !!item && !isImplantedArcanumItem(item);
 }
 
 /**

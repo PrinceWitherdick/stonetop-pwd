@@ -66,7 +66,6 @@ export {
  * @property {InventorySnapshot} inventory
  * @property {ArcanaSnapshot} arcana
  * @property {PostDeathSectionSnapshot} postDeathInsert
- * @property {string} rollMode - "normal" | "adv" | "dis"
  */
 export class CharacterSnapshot {
 	constructor(b) {
@@ -81,7 +80,6 @@ export class CharacterSnapshot {
 		this.inventory       = b._inventory;
 		this.arcana          = b._arcana;
 		this.postDeathInsert = b._postDeathInsert;
-		this.rollMode        = b._rollMode;
 		this.crewBonuses     = b._crewBonuses ?? null;
 		// { hp, armor, traitPicks } applied to the Animal Companion card (Beast of
 		// Legend "+4 HP/+1 armor", Magnificent Specimen extra trait picks).
@@ -107,7 +105,6 @@ export class CharacterSnapshotBuilder {
 	withInventory(v)       { this._inventory       = v; return this; }
 	withArcana(v)          { this._arcana          = v; return this; }
 	withPostDeathInsert(v) { this._postDeathInsert = v; return this; }
-	withRollMode(v)        { this._rollMode        = v; return this; }
 	withCrewBonuses(v)     { this._crewBonuses     = v; return this; }
 	withCompanionBonuses(v) { this._companionBonuses = v; return this; }
 	withViewerIsGM(v)      { this._isGM            = v; return this; }

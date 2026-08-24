@@ -1,6 +1,6 @@
 # Tab Rail Icon Attribution
 
-The glyphs worn by the vertical tab rail on the character, steading and NPC sheets.
+The glyphs worn by the vertical tab rail on the character, steading, NPC and GM Toolkit sheets.
 
 Icons sourced from [game-icons.net](https://github.com/game-icons/icons),
 licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
@@ -98,6 +98,19 @@ degrees round to -25, the stem leaves it at the band's own 72-unit width, and th
 down the hook's OUTER edge into the stem and back up into its INNER edge, which is what curls the
 tail out of the bowl rather than sticking it on. Both the band and the stem are sized so the
 stroke is 2.8px at the rail's 20px, below which a curve stops reading as one.
+
+Also the project's own drawing: `prep-stack.svg`, the GM Toolkit's Encounters tab glyph. A stack
+of sheets, because the tab is the pile of things gathered for tonight rather than a fight: it holds
+a scene, a journal page and a roll table as often as it holds monsters, and crossed swords (which
+were free, being worn only by tabs no GM Toolkit rail ever shows) would have named the smaller half
+of it. Plain geometry, and the file's own comment states every coordinate rule, so there is nothing
+to re-derive if it is redrawn: three 288x288 sheets offset 48 down and right, of which only the
+front one is drawn whole, the two behind it being the L of top and left edge left showing by the
+sheet in front, inset by a 16 unit gap so the three read as separate sheets rather than as one
+shape. The front sheet's three ruled lines are holes carved by `fill-rule="evenodd"` rather than
+lighter shapes, and are 32 units deep so they still read at the rail's 20px. Only each shape's
+outer corner is rounded; a rounded corner where one sheet passes behind another would read as that
+sheet ending rather than continuing underneath.
 
 Also not from game-icons.net, and the project's own drawing rather than either:
 `arcanum.svg`, the Arcana tab's glyph. It is the triple spiral from

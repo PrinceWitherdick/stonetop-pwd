@@ -359,12 +359,49 @@ describe("the tab's chrome is localized", () => {
 // Both of these fail SILENTLY: the panel still renders, just wrong, and nothing is logged.
 describe("the reference panel's layout", () => {
 	// The type list carries BOTH `steading-threats-guide-list` and `steading-threat-type-list`,
-	// so the checklist's grey dash rule matches it too. That selector outranks the accent-tick
-	// rule (three classes to two), so without the exclusion every type row draws a grey dash and
+	// so the checklist's spiral rule matches it too. That selector outranks the accent-tick
+	// rule (three classes to two), so without the exclusion every type row draws a spiral and
 	// the tick rule silently does nothing at all.
-	it("keeps the checklist dash off the type list, so the accent tick survives", () => {
+	it("keeps the checklist spiral off the type list, so the accent tick survives", () => {
 		expect(CSS).toContain(
 			".stonetop .steading-threats-guide-list:not(.is-ordered):not(.steading-threat-type-list) > li::before");
+	});
+
+	// Every prose list on these sheets wears the spiral; this one wore a grey dash. Asserted
+	// on the marker itself rather than the selector, because a dash and a spiral are the same
+	// `::before` and swapping one back for the other would break nothing else.
+	it("bullets the checklists with the spiral, not a dash", () => {
+		const rule = CSS.match(
+			/\.stonetop \.steading-threats-guide-list:not\(\.is-ordered\):not\(\.steading-threat-type-list\) > li::before \{([^}]*)\}/,
+		)?.[1];
+		expect(rule, "checklist bullet rule").toBeTruthy();
+		expect(rule).toMatch(/var\(--stonetop-spiral-icon\)/);
+		expect(rule).toMatch(/var\(--stonetop-bullet-size/);
+		// The dash was a 1px-tall rule; a spiral needs its full square or it renders as a sliver.
+		expect(rule).not.toMatch(/height:\s*1px/);
+		// ...and hung in the standard gutter, so it does not crowd its own text.
+		const row = CSS.match(
+			/\.stonetop \.steading-threats-guide-list:not\(\.is-ordered\):not\(\.steading-threat-type-list\) > li \{([^}]*)\}/,
+		)?.[1];
+		expect(row, "checklist row rule").toBeTruthy();
+		expect(row).toMatch(/padding-left:\s*calc\(var\(--stonetop-bullet-size[^)]*\)[^)]*\+\s*var\(--stonetop-spiral-gap\)\)/);
+	});
+
+	// The moves under a threat type were bulleted with the SAME `›` as the caret that opens
+	// them, so the control appeared to repeat down the panel once per line. The caret is a
+	// control and keeps its glyph; the moves are prose and take the spiral.
+	it("bullets a type's moves with the spiral, not the disclosure caret", () => {
+		const rule = CSS.match(/\.stonetop \.steading-threat-type-moves > li::before \{([^}]*)\}/)?.[1];
+		expect(rule, "type moves bullet rule").toBeTruthy();
+		expect(rule).toMatch(/var\(--stonetop-spiral-icon\)/);
+		expect(rule).not.toMatch(/203A/);
+		// A background marker needs a box to paint in and a positioned row to hang off.
+		expect(rule).toMatch(/position:\s*absolute/);
+		expect(CSS).toMatch(/\.stonetop \.steading-threat-type-moves > li \{[^}]*position:\s*relative/);
+		// The old inline hanging indent would drag the spiral off the row's left edge.
+		expect(CSS).not.toMatch(/\.stonetop \.steading-threat-type-moves > li \{[^}]*text-indent/);
+		// The caret itself is untouched: it is the same affordance as the GM Moves tab's.
+		expect(CSS).toMatch(/\.stonetop \.steading-threat-type-toggle::after \{[^}]*203A/);
 	});
 
 	// ...and having been excluded, the tick can no longer borrow `position` from that rule.

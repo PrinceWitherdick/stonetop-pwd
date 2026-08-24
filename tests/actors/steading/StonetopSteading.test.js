@@ -833,5 +833,107 @@ describe("StonetopSteading", () => {
 				{ name: "Horses", checked: true, index: 0 },
 			]);
 		});
+
+		// The walkthrough's Requisition step sends assets out in the name of a TRIP rather than a
+		// character, so the steading can answer "where did the wagon go?" months later. It reads
+		// its own list back off the steading (not off its notes), because the steading is where
+		// an asset actually is: returning one from the sheet has to show there as returned.
+		it("marks an asset taken by an expedition, not only by a person", async () => {
+			const actor = makeAssetActor([{ name: "Wagon", checked: true }]);
+			const steading = new StonetopSteading(actor);
+
+			const trip = { id: "trip-1", title: "The Wandering Tower" };
+			expect(await steading.setAssetTaken(0, { expedition: trip })).toBe(true);
+
+			expect(actor.flags.stonetop.steading.assets).toEqual([
+				{ name: "Wagon", checked: false, takenBy: { expedition: trip } },
+			]);
+		});
+
+		it("lists what one expedition is holding, and nothing another trip took", () => {
+			const actor = makeAssetActor([
+				{ name: "Horses", checked: true },
+				{ name: "Wagon", checked: false, takenBy: { expedition: { id: "trip-1", title: "A" } } },
+				{ name: "Plow",  checked: false, takenBy: { expedition: { id: "trip-2", title: "B" } } },
+				{ name: "Cart",  checked: false, takenBy: { name: "Wren", id: "hero1" } },
+				{ name: "", checked: false },
+			]);
+			const steading = new StonetopSteading(actor);
+
+			expect(steading.getAssetsOnExpedition("trip-1").map(a => a.name)).toEqual(["Wagon"]);
+			expect(steading.getAssetsOnExpedition("trip-2").map(a => a.name)).toEqual(["Plow"]);
+			// No trip id means no claim on anything, NOT "everything out on loan".
+			expect(steading.getAssetsOnExpedition(null)).toEqual([]);
+			expect(steading.getAssetsOnExpedition("nobodys-trip")).toEqual([]);
+		});
+
+		it("lists every named asset with its index, on hand or out", () => {
+			const actor = makeAssetActor([
+				{ name: "Horses", checked: true },
+				{ name: "", checked: false },
+				{ name: "Wagon", checked: false, takenBy: { name: "Wren", id: "hero1" } },
+			]);
+
+			// The index is the position in the STORED list, so a blank slot in the middle does not
+			// shift the index a click on "Wagon" sends back.
+			expect(new StonetopSteading(actor).getNamedAssets().map(a => ({ name: a.name, index: a.index })))
+				.toEqual([{ name: "Horses", index: 0 }, { name: "Wagon", index: 2 }]);
+		});
+
+		// The trip's name is COPIED onto the asset so the steading sheet can name it without
+		// reading the walkthrough's world setting. Renaming the trip has to carry across, or the
+		// tooltip goes on naming a trip the switcher no longer calls that.
+		it("re-labels what a renamed trip is holding, and leaves everything else alone", async () => {
+			const actor = makeAssetActor([
+				{ name: "Wagon", checked: false, takenBy: { expedition: { id: "trip-1", title: "Expedition 1" } } },
+				{ name: "Plow",  checked: false, takenBy: { expedition: { id: "trip-2", title: "Expedition 2" } } },
+				{ name: "Cart",  checked: false, takenBy: { name: "Wren", id: "hero1" } },
+				{ name: "Horses", checked: true },
+			]);
+			const steading = new StonetopSteading(actor);
+
+			expect(await steading.reconcileHeldAssets(new Map([
+				["trip-1", "The Wandering Tower"], ["trip-2", "Expedition 2"],
+			]))).toBe(1);
+
+			expect(actor.flags.stonetop.steading.assets).toEqual([
+				{ name: "Wagon", checked: false, takenBy: { expedition: { id: "trip-1", title: "The Wandering Tower" } } },
+				{ name: "Plow",  checked: false, takenBy: { expedition: { id: "trip-2", title: "Expedition 2" } } },
+				{ name: "Cart",  checked: false, takenBy: { name: "Wren", id: "hero1" } },
+				{ name: "Horses", checked: true },
+			]);
+		});
+
+		// A deleted trip is holding nothing. Left tagged, the wagon sits struck through on the
+		// sheet against a trip the switcher cannot show and the walkthrough cannot return it from.
+		it("sends home whatever a trip that is no longer in the log was holding", async () => {
+			const actor = makeAssetActor([
+				{ name: "Wagon", checked: false, takenBy: { expedition: { id: "gone", title: "Expedition 1" } } },
+				{ name: "Plow",  checked: false, takenBy: { expedition: { id: "trip-2", title: "Expedition 1" } } },
+				{ name: "Cart",  checked: false, takenBy: { name: "Wren", id: "hero1" } },
+			]);
+			const steading = new StonetopSteading(actor);
+
+			// Deleting the first trip renumbered the second, so this is both cases at once.
+			expect(await steading.reconcileHeldAssets(new Map([["trip-2", "Expedition 1"]]))).toBe(1);
+			expect(actor.flags.stonetop.steading.assets).toEqual([
+				{ name: "Wagon", checked: true },
+				{ name: "Plow",  checked: false, takenBy: { expedition: { id: "trip-2", title: "Expedition 1" } } },
+				// A person is not a trip: an asset out with a character is never touched here.
+				{ name: "Cart",  checked: false, takenBy: { name: "Wren", id: "hero1" } },
+			]);
+		});
+
+		it("writes nothing when everything already agrees", async () => {
+			const actor = makeAssetActor([
+				{ name: "Wagon", checked: false, takenBy: { expedition: { id: "trip-1", title: "The Wandering Tower" } } },
+				{ name: "Cart",  checked: false, takenBy: { name: "Wren", id: "hero1" } },
+				{ name: "Horses", checked: true },
+			]);
+			const steading = new StonetopSteading(actor);
+
+			expect(await steading.reconcileHeldAssets(new Map([["trip-1", "The Wandering Tower"]]))).toBe(0);
+			expect(actor.setFlag).not.toHaveBeenCalled();
+		});
 	});
 });

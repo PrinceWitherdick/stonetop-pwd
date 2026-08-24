@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 2,
     "note": "magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>Threadbare, ancient, but remarkably well-preserved. Embroidered with a stylized aurochs whose horns encompass the sun. It fills you with hope and pride to look upon it, as well it should. For this was the standard of the Heol-Tarv, a heroic band who gave their lives in hopeless battle against the Anan Gllo, securing their people’s escape.</p><p>When you unfurl the tattered standard and hold it aloft for all to see, you and your allies are immune to supernatural fear and unshaken by undead or otherwise unnatural foes.</p>"
   },
   "flags": {
     "stonetop": {

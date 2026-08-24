@@ -6,15 +6,16 @@
   "system": {
     "moveType": "inventory",
     "inventoryColumn": "small",
-    "note": "magical, <em>fragile</em>, slow 1d4",
-    "isTreasure": true
+    "note": "magical, <em>fragile</em>, <em>slow</em>",
+    "isTreasure": true,
+    "artifactLore": "<p>1d4 glass vials containing thick, gritty, whitish fluid. The stopper bears a mark of transformation, flesh, and stone.</p><p>When you drink the whole potion while touching stone, you transform (over a matter of minutes) into a mass of stone, similar to that which you touch. You retain awareness of your surroundings, blind but with excellent hearing.</p><p>When you attempt to end your lithic vigil, roll +CON: on a 10+, you return to your original form, rested and invigorated—regain all your HP and clear all your debilities; on a 7-9, the transformation back is slow and arduous, mark a debility; on a 6-, you are stuck until someone pours another dose of the potion over you or communes with your spirit and helps you try again.</p>"
   },
   "flags": {
     "stonetop": {
       "slug": "a-chalky-potion",
       "inventoryColumn": "small",
       "isTreasure": true,
-      "note": "magical, <em>fragile</em>, slow 1d4"
+      "note": "magical, <em>fragile</em>, <em>slow</em>"
     }
   },
   "img": "systems/stonetop-pwd/assets/icons/treasures/vase.svg",

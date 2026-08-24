@@ -142,12 +142,95 @@ describe("printing a table", () => {
 	it("renders the step body's reference list from the same rows", () => {
 		const list = fateTableList(FATE_TABLES.camp);
 		expect(list).toContain('class="stonetop-exp-fatetable"');
-		expect(list.match(/<li>/g)).toHaveLength(FATE_TABLES.camp.rows.length);
+		expect(list.match(/<li /g)).toHaveLength(FATE_TABLES.camp.rows.length);
 		expect(list).toContain("<strong>4&ndash;5</strong>: The night passes uneventfully.");
+	});
+
+	// The printed row carries its INDEX in the table, which is what lets the walkthrough run the
+	// randomizer's light down the list and land it on the row the die gave. Matched on the index
+	// rather than on the printed range, which is prose ("2&ndash;3") the DOM hands back decoded;
+	// if this stamp goes, the walk silently stops finding its row and every roll lands on nothing.
+	it("stamps each printed row with its index in the table", () => {
+		const list = fateTableList(FATE_TABLES.camp);
+		FATE_TABLES.camp.rows.forEach((_, i) => expect(list).toContain('<li data-fate-row="' + i + '">'));
 	});
 
 	it("renders the weather step's parenthetical from them too", () => {
 		expect(fateInlinePhrase(FATE_TABLES.weather))
 			.toBe("1&ndash;2 nope, 3&ndash;4 partway, 5&ndash;6 just what they wanted");
+	});
+});
+
+// The walkthrough PRINTS the table and runs the GM Moves randomizer's light down it, so the card
+// has to wait for the light to land — see gm-toolkit/gm-move-drawer.js on why that order matters.
+describe("the beat before the card", () => {
+	it("hands the settled roll to beforePost, and posts only once it resolves", async () => {
+		const seen = [];
+		let release;
+		const held = new Promise(resolve => { release = resolve; });
+		const rolling = rollDieOfFate(FATE_TABLES.perilous, {
+			beforePost: (r) => { seen.push(r); return held; },
+		});
+		await Promise.resolve();
+
+		// The answer is already decided when the walk sets off: the light is theatre over it.
+		expect(seen).toHaveLength(1);
+		expect(seen[0].total).toBe(4);
+		expect(seen[0].row).toBe(FATE_TABLES.perilous.rows[2]);
+		expect(seen[0].index).toBe(2);
+		// And chat has said nothing yet, which is the whole point of the hook.
+		expect(posted).toHaveLength(0);
+
+		release();
+		await rolling;
+		expect(posted).toHaveLength(1);
+	});
+
+	// One landing, one card: a walk a later click superseded says so, and that roll goes quiet.
+	it("posts nothing when beforePost calls it off", async () => {
+		await expect(rollDieOfFate(FATE_TABLES.perilous, { beforePost: () => false })).resolves.toBeNull();
+		expect(posted).toHaveLength(0);
+	});
+
+	it("posts as ever when no hook is given", async () => {
+		const out = await rollDieOfFate(FATE_TABLES.perilous);
+		expect(posted).toHaveLength(1);
+		expect(out.index).toBe(2);
+	});
+});
+
+// The card is one of the system's roll cards and has to read like the rest of them, which for a
+// while it did not: it opened with the whole table and left the rolled answer at the bottom.
+describe("the card's shape", () => {
+	it("keeps the house order: the question, the chip, the answer, the table", async () => {
+		await rollDieOfFate(FATE_TABLES.camp);
+		const at = (needle) => card().indexOf(needle);
+		expect(at("stonetop-fate-title")).toBeGreaterThan(-1);
+		expect(at("stonetop-fate-title")).toBeLessThan(at("stonetop-roll-formula"));
+		expect(at("stonetop-roll-formula")).toBeLessThan(at("stonetop-fate-result"));
+		expect(at("stonetop-fate-result")).toBeLessThan(at("stonetop-fate-legend"));
+	});
+
+	// The result block IS the one every other roll card ends on, rather than a lookalike built
+	// beside it: same total size, same gap, same padding and radius, with the fate rules adding
+	// only the tone on the left edge and in the wash. Drop these shared classes and the card
+	// silently goes back to being its own shape.
+	it("builds the answer out of the shared result block", async () => {
+		await rollDieOfFate(FATE_TABLES.camp);
+		expect(result()).toContain("stonetop-roll-result");
+		expect(result()).toContain("stonetop-roll-result-number");
+		expect(result()).toContain("stonetop-roll-result-body");
+	});
+
+	// A range and a sentence in ONE text flow wraps back under the die face; two cells hang the
+	// sentence in its own column. The stylesheet lays them out as a grid, which needs both.
+	it("prints each table row as a range cell and a text cell", async () => {
+		await rollDieOfFate(FATE_TABLES.camp);
+		const rows = card().match(/<li class="stonetop-fate-legend-row[\s\S]*?<\/li>/g);
+		expect(rows).toHaveLength(FATE_TABLES.camp.rows.length);
+		for (const row of rows) {
+			expect(row).toContain('<strong class="stonetop-fate-legend-range">');
+			expect(row).toContain('<span class="stonetop-fate-legend-text">');
+		}
 	});
 });

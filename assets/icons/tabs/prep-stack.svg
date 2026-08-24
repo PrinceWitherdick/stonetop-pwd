@@ -1,0 +1,29 @@
+<!-- Encounters tab glyph: a stack of sheets, drawn for this project (see ATTRIBUTION.md). Worn
+     as a CSS mask, so the background square is transparent and only the glyph carries alpha.
+
+     A stack rather than crossed swords because the tab holds a scene, a journal page and a roll
+     table as often as it holds monsters: it is the pile of things gathered for tonight, not a
+     fight.
+
+     Plain geometry, nothing to re-derive. Three 288x288 sheets offset 48 down and right, at
+     (80,80), (128,128) and (176,176). Only the FRONT one is drawn whole; the two behind it are
+     drawn as the L of top and left edge that the sheet in front of them leaves showing, inset by
+     a 16 unit gap so the three read as separate sheets rather than as one shape. That gap is why
+     the back sheets stop at 112 and 160 rather than at their own edges.
+
+     The front sheet is one path with fill-rule evenodd, so its three ruled lines are holes in the
+     ink rather than lighter shapes: two full width and a short one, which is what reads as text
+     rather than as a grille. They are 32 units deep, which is 1.25px at the rail's 20px, and they
+     sit 64 units clear of the sheet's top and bottom edges so the block of them is centred.
+
+     Only the outer corner of each shape is rounded. The corners where a sheet passes behind
+     another are square on purpose: a rounded one there reads as the sheet ending rather than as it
+     continuing underneath. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<path d="M0 0h512v512H0z" fill="#ffffff" fill-opacity="0"/>
+	<g fill="#fff">
+		<path d="M100 80H368V112H112V368H80V100A20 20 0 0 1 100 80Z"/>
+		<path d="M148 128H416V160H160V416H128V148A20 20 0 0 1 148 128Z"/>
+		<path fill-rule="evenodd" d="M200 176H440A24 24 0 0 1 464 200V440A24 24 0 0 1 440 464H200A24 24 0 0 1 176 440V200A24 24 0 0 1 200 176ZM216 240H424V272H216ZM216 304H424V336H216ZM216 368H360V400H216Z"/>
+	</g>
+</svg>

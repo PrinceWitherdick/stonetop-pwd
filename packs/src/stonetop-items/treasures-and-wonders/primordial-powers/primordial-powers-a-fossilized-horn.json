@@ -8,7 +8,8 @@
     "inventoryColumn": "regular",
     "weight": 1,
     "note": "magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A spiral thing, maybe 2’ long, the remnant of some long-gone incarnation. Those sensitive to the spirit world can sense its lingering, radiant power.</p><p>When you bear the fossilized horn, you have advantage on any move to impress, intimidate, or threaten a spirit (though it grants no special ability to communicate with spirits in the first place). Should you roll a 6- on any such roll, the spirit can choose to destroy the horn and end its effect, in addition to whatever else the GM says.</p>"
   },
   "flags": {
     "stonetop": {

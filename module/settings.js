@@ -1,4 +1,5 @@
 import { DEFAULT_ROOT as DEFAULT_BOOK2_ART_ROOT } from "./book2-art/art-root.js";
+import { POSTER_MAPS, posterMapSlugOf } from "./book2-art/poster-map-catalog.js";
 import { SYSTEM_ID } from "./system-id.js";
 import { WEATHER_FX_PARTS, WEATHER_FX_SETTING } from "./seasons/weather-fx-parts.js";
 import { isPrimaryGM } from "./utils/primary-gm.js";
@@ -493,21 +494,66 @@ export function registerSettings() {
 	//
 	// ON by default, because the poster maps this system labels are the UNLABELLED printing of
 	// artwork the books print labelled, and a name you have to go hunting for with a mouse is not
-	// a name on a map. Off gives core's own behaviour back to all of them, which is the right
-	// answer for a table that would rather look at the drawing, or one running a scene where the
-	// map is on screen for its own sake.
+	// a name on a map. Off gives core's own behaviour back, which is the right answer for a table
+	// that would rather look at the drawing, or one running a scene where the map is on screen
+	// for its own sake.
 	//
-	// One switch for every pin of ours rather than one per family. They already share a treatment
-	// (the cream-on-pill label in hooks/StonetopNoteLabels.js) and differ only in WHEN it shows,
-	// so a GM who wants a quieter map wants a quieter map.
+	// This is the DEFAULT rather than the whole answer: `mapPinNamesByMap` below overrides it per
+	// poster map, and this is what every map without an override of its own follows, including
+	// every scene that is not a poster map at all (a dungeon the GM drew, with site pins on it).
+	//
+	// Still one switch for every FAMILY of pin, though. The lettered discs, the place markers and
+	// the threat/hazard/site pins share a treatment (the cream-on-pill label in
+	// hooks/StonetopNoteLabels.js) and differ only in WHEN it shows, so a GM who wants a quieter
+	// map wants a quieter map, not a quieter third of one.
+	//
+	// `config: false` because it is shown inside the Map Pin Names menu registered below, next to
+	// the per-map rows it is the fallback for. Split across two places in the settings window, a
+	// GM turning "always show names" off and watching one map ignore them would have no way to
+	// see why.
 	game.settings.register(SYSTEM_ID, "alwaysShowMapPinNames", {
 		name: "stonetop.settings.alwaysShowMapPinNames.name",
 		hint: "stonetop.settings.alwaysShowMapPinNames.hint",
 		scope: "world",
-		config: true,
+		config: false,
 		type: Boolean,
 		default: true,
 		onChange: () => applyMapPinLabelMode(),
+	});
+
+	// Per-map overrides of the switch above, as a { poster map slug -> boolean } map.
+	//
+	// SPARSE ON PURPOSE, and that is the whole design: a slug is present only once a GM has said
+	// something about that map, so absent means "follow the world default" rather than "off". A
+	// dense record of all five would freeze whatever the default happened to be on the day the
+	// setting was first written, and a GM who later flipped the default would watch every map
+	// ignore it.
+	//
+	// Keyed by SLUG rather than Scene id, so the answer survives deleting a poster map's Scene
+	// and building it again from the same artwork, which the ready-flow offer does routinely.
+	// It is the same shape and the same keys as `regionalMapMarkers`, for the same reason.
+	//
+	// Only the five poster maps are switchable. Every other scene follows the world default,
+	// because there is nothing to list it under: this is a settings menu, not a per-scene sheet,
+	// and a world can hold any number of scenes with our pins on them.
+	game.settings.register(SYSTEM_ID, "mapPinNamesByMap", {
+		name: "Map Pin Names By Map",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {},
+		onChange: () => applyMapPinLabelMode(),
+	});
+
+	game.settings.registerMenu(SYSTEM_ID, "mapPinNameSettings", {
+		name: "stonetop.settings.mapPinNameSettings.name",
+		label: "stonetop.settings.mapPinNameSettings.label",
+		hint: "stonetop.settings.mapPinNameSettings.hint",
+		icon: "fas fa-map-signs",
+		type: _createMapPinNameSettingsApp(),
+		// World-scoped, so only a GM can write it. An unrestricted menu would open for players
+		// and then throw on save, which is worse than not offering it.
+		restricted: true,
 	});
 
 	// Which poster maps have had their named-place markers laid down, as a { map slug -> keys }
@@ -1041,18 +1087,6 @@ export function registerSettings() {
 		onChange: value => applyHideRollableIcon(value),
 	});
 
-	// Prompt for a one-off situational modifier before each 2d6 move/stat roll on
-	// the character sheet (a held bonus, a GM-granted +1, etc.). Read at roll time
-	// (StonetopCharacterSheet); Shift-clicking the roll skips the prompt.
-	game.settings.register(SYSTEM_ID, "promptRollModifier", {
-		name: "stonetop.settings.promptRollModifier.name",
-		hint: "stonetop.settings.promptRollModifier.hint",
-		scope: "client",
-		config: true,
-		type: Boolean,
-		default: false,
-	});
-
 	// Open actor sheets (character / steading / monster / NPC) in Edit mode instead of
 	// Play mode. Read once when the sheet is constructed; the header wrench still
 	// toggles modes per-sheet afterward. The NPC sheet additionally requires ownership
@@ -1183,6 +1217,21 @@ export function registerSettings() {
 		default: {},
 	});
 
+	// Remembers which gear rows each character left with their write-up UNFOLDED. A Book II
+	// treasure arrives carrying the book's whole printed sidebar (data/treasure-catalog.js),
+	// which is several paragraphs down a column whose other rows are one line each, so the
+	// write-up folds away and the row rests at what the book prints in the margin: the name
+	// and the tags beside it. Like arcanaContentExpanded above, the fold defaults SHUT, so
+	// this is the EXPANDED list — an id present here means that row reopens showing its
+	// write-up. Keyed by the owned Item's id, which is what the row carries. Per-user
+	// (client) and per-actor: a map of actor id -> array of item ids. Internal.
+	game.settings.register(SYSTEM_ID, "inventoryLoreExpanded", {
+		scope: "client",
+		config: false,
+		type: Object,
+		default: {},
+	});
+
 	// Remembers which sheet sections each actor's viewer folded shut with the heading
 	// caret (the one beside the section edit pencil) — character AND steading, keyed by
 	// the caret's own collapse id rather than the edit-section id, since two groups can
@@ -1277,13 +1326,25 @@ export const HOVER_DESCRIPTION_SETTING_KEYS = [
 	"hoverDescriptionsLoreTerms",
 ];
 
-function _createHoverDescriptionSettingsApp() {
-	return class HoverDescriptionSettingsApp extends FormApplication {
+/**
+ * A settings SUBMENU application, from the four things that actually differ between them.
+ *
+ * Every one of these is the same window: 520 wide, height to content, resizable, closing on
+ * submit, rendering one template under `templates/settings/` and writing what it collected. Only
+ * the id, the title, the template and the two data methods are the menu's own, so only those are
+ * asked for.
+ *
+ * The template path is built from SYSTEM_ID rather than written out. Two of these used to hard-
+ * code `systems/stonetop-pwd/...` and one did not, which is exactly the kind of disagreement a
+ * package rename turns into a blank window with nothing logged.
+ */
+function _createSettingsMenuApp({ id, titleKey, template, getData, update }) {
+	return class StonetopSettingsMenuApp extends FormApplication {
 		static get defaultOptions() {
 			return foundry.utils.mergeObject(super.defaultOptions, {
-				id: "stonetop-hover-description-settings",
-				title: game.i18n.localize("stonetop.settings.hoverDescriptionSettings.title"),
-				template: "systems/stonetop-pwd/templates/settings/hover-descriptions.hbs",
+				id,
+				title: game.i18n.localize(titleKey),
+				template: `systems/${SYSTEM_ID}/templates/settings/${template}`,
 				width: 520,
 				height: "auto",
 				resizable: true,
@@ -1291,27 +1352,154 @@ function _createHoverDescriptionSettingsApp() {
 			});
 		}
 
-		async getData() {
-			const settings = HOVER_DESCRIPTION_SETTING_KEYS.map(key => ({
+		async getData() { return getData(); }
+
+		async _updateObject(_event, formData) { return update(formData); }
+	};
+}
+
+function _createHoverDescriptionSettingsApp() {
+	return _createSettingsMenuApp({
+		id: "stonetop-hover-description-settings",
+		titleKey: "stonetop.settings.hoverDescriptionSettings.title",
+		template: "hover-descriptions.hbs",
+		getData: () => ({
+			enabled: getSetting("hoverDescriptionsEnabled"),
+			settings: HOVER_DESCRIPTION_SETTING_KEYS.map(key => ({
 				key,
 				name: game.i18n.localize(`stonetop.settings.${key}.name`),
 				hint: game.i18n.localize(`stonetop.settings.${key}.hint`),
 				enabled: getHoverDescriptionSetting(key, { ignoreMaster: true }),
-			}));
-			return {
-				enabled: getSetting("hoverDescriptionsEnabled"),
-				settings,
-			};
-		}
-
-		async _updateObject(_event, formData) {
+			})),
+		}),
+		update: async (formData) => {
 			await setSetting("hoverDescriptionsEnabled", !!formData.hoverDescriptionsEnabled);
 			for (const key of HOVER_DESCRIPTION_SETTING_KEYS) {
 				await setSetting(key, !!formData[key]);
 			}
 			_rerenderActorSheets();
-		}
-	};
+		},
+	});
+}
+
+/**
+ * The three answers a poster map can give about its pins' names, as the values its select carries.
+ *
+ * "Follow the world setting" is the EMPTY one on purpose: it is the absence of an override, and
+ * the record it decodes to is sparse, so a map that has never been switched keeps following the
+ * default after the default itself changes. A dense record would have frozen whatever the default
+ * happened to be on the day the menu was first saved.
+ */
+export const MAP_PIN_NAME_CHOICES = Object.freeze({ follow: "", always: "on", hover: "off" });
+
+/**
+ * Each choice's wire value against the label that offers it, IN MENU ORDER.
+ *
+ * The template renders this rather than spelling the three values out again. It used to do the
+ * latter, and the encoding then lived in two places that a test had to scrape the .hbs to hold
+ * together — because the failure was silent: change a value on one side only and every row
+ * decodes as "follow", so opening the menu and saving it wipes every override the world holds.
+ */
+const MAP_PIN_NAME_OPTIONS = Object.freeze([
+	[MAP_PIN_NAME_CHOICES.follow, "stonetop.settings.mapPinNameSettings.followDefault"],
+	[MAP_PIN_NAME_CHOICES.always, "stonetop.settings.mapPinNameSettings.alwaysShow"],
+	[MAP_PIN_NAME_CHOICES.hover, "stonetop.settings.mapPinNameSettings.hoverOnly"],
+]);
+
+/**
+ * One row per poster map for the menu's template, from the stored record.
+ *
+ * The two explicit options are selected only by an actual override, never by the default. A
+ * following map's row has to read "follow the world setting", or a GM could not tell which maps
+ * they have switched from which are merely agreeing with the default today.
+ */
+export function mapPinNameRows(perMap = {}) {
+	return POSTER_MAPS.map(map => {
+		const override = perMap?.[map.slug];
+		// ONE value, not three booleans that have to stay mutually exclusive by hand.
+		const chosen = override === true ? MAP_PIN_NAME_CHOICES.always
+			: override === false ? MAP_PIN_NAME_CHOICES.hover
+				: MAP_PIN_NAME_CHOICES.follow;
+		return {
+			slug: map.slug,
+			// The map's own shipped name, which is what its Scene is called, so a row and the
+			// scene it governs are recognisably the same thing. Not localized, for the same
+			// reason the Scene's name is not.
+			name: map.name,
+			chosen,
+			options: MAP_PIN_NAME_OPTIONS.map(([value, labelKey]) => ({
+				value, labelKey, selected: value === chosen,
+			})),
+		};
+	});
+}
+
+/**
+ * The record to store, from the menu's submitted form.
+ *
+ * Rebuilt rather than merged into what is already stored, so a map handed back to the default is
+ * REMOVED. Merging would leave a stale override in place under a row now reading "follow the
+ * world setting", which is the one bug this shape exists to prevent.
+ *
+ * Anything that is not one of the two explicit answers means "follow", which covers both the
+ * empty option and a row the form did not carry at all.
+ *
+ * The rows are named `map.<slug>`, and BOTH shapes that name can arrive in are read. v13's
+ * FormApplication hands `_updateObject` a FormDataExtended's `object`, which keys by the raw
+ * field name and so stays flat; anything that dot-expands it on the way (a core change, or a
+ * subclass that calls expandObject) would deliver `{map: {<slug>: ...}}` instead. Reading only
+ * the flat one and being wrong would not throw and would not log: every row would decode as
+ * "follow", so the next save would quietly wipe every override the world holds. Reading both
+ * costs one `??`.
+ */
+export function mapPinNameRecord(formData = {}) {
+	const perMap = {};
+	for (const map of POSTER_MAPS) {
+		const choice = formData?.[`map.${map.slug}`] ?? formData?.map?.[map.slug];
+		if (choice === MAP_PIN_NAME_CHOICES.always) perMap[map.slug] = true;
+		else if (choice === MAP_PIN_NAME_CHOICES.hover) perMap[map.slug] = false;
+	}
+	return perMap;
+}
+
+/**
+ * The Map Pin Names menu: the world default, then one row per poster map.
+ *
+ * Thin on purpose: the tristate the rows encode and decode is in mapPinNameRows/mapPinNameRecord
+ * above, where it can be checked without standing up a FormApplication.
+ *
+ * Mirrors _createHoverDescriptionSettingsApp: same FormApplication shape, same save-and-apply
+ * ending, so the two menus behave alike for a GM who has used either.
+ */
+function _createMapPinNameSettingsApp() {
+	return _createSettingsMenuApp({
+		id: "stonetop-map-pin-name-settings",
+		titleKey: "stonetop.settings.mapPinNameSettings.title",
+		template: "map-pin-names.hbs",
+		getData: () => ({
+			enabled: getAlwaysShowMapPinNames(),
+			maps: mapPinNameRows(getObjectSetting("mapPinNamesByMap")),
+		}),
+		update: async (formData) => {
+			// ONLY WHAT ACTUALLY CHANGED. `game.settings.set` broadcasts whatever it is handed,
+			// identical value or not, and each of these fires `applyMapPinLabelMode` on every
+			// connected client — a full walk of the notes layer setting `refreshState` on each
+			// pin. Pressing Save without touching anything used to repaint every client twice;
+			// changing one switch repainted for the other as well.
+			const wantDefault = !!formData.alwaysShowMapPinNames;
+			if (wantDefault !== getAlwaysShowMapPinNames()) {
+				await setSetting("alwaysShowMapPinNames", wantDefault);
+			}
+			const wantMaps = mapPinNameRecord(formData);
+			if (!foundry.utils.objectsEqual(wantMaps, getObjectSetting("mapPinNamesByMap"))) {
+				await setSetting("mapPinNamesByMap", wantMaps);
+			}
+			// No repaint here: both settings are world-scoped, so core broadcasts each write and
+			// fires its onChange on every connected client. Repainting from the form as well
+			// would leave the saving GM doing it twice and every player once, which is the same
+			// picture for more work.
+		},
+	});
 }
 
 const _FONT_MAP = {
@@ -1375,11 +1563,6 @@ export function applyHideRollableIcon(value) {
 
 export function applyReduceMotion(value) {
 	document.documentElement.classList.toggle("stonetop-reduce-motion", !!value);
-}
-
-// Whether to prompt for a one-off situational modifier before a move/stat roll.
-export function getPromptRollModifierSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptRollModifier") ?? false;
 }
 
 // Whether actor sheets should open in Edit mode rather than Play mode.
@@ -1486,30 +1669,84 @@ export function stampLayoutClass(app, sheet) {
 // Whether the rollable dice icon is hidden; when it is, rolls fire from the move
 // name / stat row instead of the (now absent) icon.
 /**
- * Do this world's map pins wear their names, or wait for the cursor?
+ * A setting read that survives being asked too early, and caches only a real answer.
  *
- * Read defensively, and TRUE when there is nothing to read. This is asked from inside a PIXI
- * refresh pass that can run before settings are registered (a Scene painted during startup), and
- * the harmless answer there is the shipped default rather than a silently quieter map.
+ * Two rules, both learned the hard way and both easy to get subtly wrong a second time, so they
+ * are written once here rather than at each reader.
+ *
+ * READ IN A TRY. Optional chaining is not the guard this needs: `game.settings` exists long
+ * before our keys are on it, and `get` THROWS for a key it has never been told about. These are
+ * asked from inside a PIXI refresh pass that can run before registration (a Scene painted during
+ * startup), and that throw would come out mid-pass and take the note redraw with it.
+ *
+ * NEVER CACHE A READ THAT HAD NOTHING TO GIVE. Before the setting is registered the read comes
+ * back undefined, and caching the fallback then would freeze the shipped default over whatever
+ * the world actually wants for the rest of the session. `isValid` is what tells the two apart,
+ * so it must accept every real answer — an EMPTY record is one (a world where no map has been
+ * switched yet), a missing one is not.
  */
-let _alwaysShowMapPinNames = null;
-export function getAlwaysShowMapPinNames() {
-	if (_alwaysShowMapPinNames !== null) return _alwaysShowMapPinNames;
-	// In a try, because optional chaining is not the guard this needs: `game.settings` exists
-	// long before our keys are on it, and `get` THROWS for a key it has never been told about.
-	// That throw would come out inside a PIXI refresh pass and take the note redraw with it,
-	// which is the failure this whole function was written to avoid.
+const _settingCache = new Map();
+function _cachedSetting(key, isValid, fallback) {
+	if (_settingCache.has(key)) return _settingCache.get(key);
 	let value;
 	try {
-		value = globalThis.game?.settings?.get?.(SYSTEM_ID, "alwaysShowMapPinNames");
+		value = globalThis.game?.settings?.get?.(SYSTEM_ID, key);
 	} catch (_) {
-		return true;
+		return fallback;
 	}
-	// Only a real answer is worth keeping. Before the setting is registered the read has nothing
-	// to give back, and caching the shipped default then would freeze a world that wants it off.
-	if (typeof value !== "boolean") return true;
-	_alwaysShowMapPinNames = value;
+	if (!isValid(value)) return fallback;
+	_settingCache.set(key, value);
 	return value;
+}
+
+/**
+ * Do this world's map pins wear their names by default, or wait for the cursor?
+ *
+ * The DEFAULT, not the last word: showMapPinNamesOn below is what the drawing code asks, and a
+ * poster map with an answer of its own overrides this one. Read it directly only to show or set
+ * the default itself.
+ *
+ * TRUE when there is nothing to read: the harmless answer before registration is the shipped
+ * default rather than a silently quieter map.
+ */
+export function getAlwaysShowMapPinNames() {
+	return _cachedSetting("alwaysShowMapPinNames", v => typeof v === "boolean", true);
+}
+
+/**
+ * Do the pins on THIS scene wear their names, or wait for the cursor?
+ *
+ * The question every map pin actually asks, and the one the drawing code should be asking:
+ * a label is painted onto a scene, and which scene it is is what decides the answer.
+ *
+ * Narrowest answer first. If the scene is one of the five poster maps and that map has an
+ * override recorded, the override wins outright. Otherwise the world default answers, which is
+ * also the answer for every scene that is not a poster map at all.
+ *
+ * Cached beside the default it falls back to, and dropped by the same applyMapPinLabelMode: this
+ * runs once per pin per refresh pass, on every note on the canvas, so it is on the hot path of
+ * something that repaints whenever the cursor moves over a pin.
+ *
+ * Both reads go through `_cachedSetting`, which is what keeps them safe to ask from a PIXI
+ * refresh before the settings are registered: a failed read there lands on the shipped default
+ * rather than painting a silently quieter map.
+ */
+export function showMapPinNamesOn(scene) {
+	const slug = posterMapSlugOf(scene);
+	if (slug) {
+		const override = _perMapPinNames()[slug];
+		if (typeof override === "boolean") return override;
+	}
+	return getAlwaysShowMapPinNames();
+}
+
+/** The stored per-map record, cached, and never cached from a read that had nothing to give. */
+function _perMapPinNames() {
+	return _cachedSetting(
+		"mapPinNamesByMap",
+		v => !!v && typeof v === "object" && !Array.isArray(v),
+		{},
+	);
 }
 
 /**
@@ -1520,11 +1757,12 @@ export function getAlwaysShowMapPinNames() {
  * cursor in Note#_refreshState, and our wrapper rides that same pass, so one flag both turns the
  * labels on and hands them back to core when the switch goes off.
  *
- * Registered as the setting's own `onChange`, which is what makes it the right place to drop the
- * cached answer: every flip of the switch comes through here, and nothing else can change it.
+ * Registered as the `onChange` of BOTH settings behind the decision, the world default and the
+ * per-map overrides, which is what makes it the right place to drop the cached answers: every
+ * change to either comes through here, and nothing else can change them.
  */
 export function applyMapPinLabelMode() {
-	_alwaysShowMapPinNames = null;
+	_settingCache.clear();
 	for (const note of globalThis.canvas?.notes?.placeables ?? []) {
 		if (note?.renderFlags?.set) note.renderFlags.set({ refreshState: true });
 		else note?.refresh?.();
@@ -1809,6 +2047,17 @@ export function getArcanaCardsCollapsed(actorId) {
 
 export function setArcanaCardsCollapsed(actorId, slugs) {
 	return setSectionList("arcanaCardsCollapsed", actorId, slugs);
+}
+
+// The gear rows whose artifact / treasure write-up this user left unfolded. Write-ups
+// default to folded away, so an owned Item id present here means that row reopens with
+// its write-up showing.
+export function getInventoryLoreExpanded(actorId) {
+	return getSectionList("inventoryLoreExpanded", actorId);
+}
+
+export function setInventoryLoreExpanded(actorId, itemIds) {
+	return setSectionList("inventoryLoreExpanded", actorId, itemIds);
 }
 
 // The sheet sections (character and steading alike) this user folded shut with the

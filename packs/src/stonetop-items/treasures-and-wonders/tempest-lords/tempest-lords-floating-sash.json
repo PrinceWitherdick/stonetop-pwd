@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A length of bluish-white lamé, maybe 6 inches wide by 6 feet long, snaking about in the air. Like a belt, but for someone far larger than you.</p><p>When you wrap the sash securely around your waist, it buoys you against falls—you never fall faster than if you had fallen your own height.</p>"
   },
   "flags": {
     "stonetop": {

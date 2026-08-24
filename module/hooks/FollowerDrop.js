@@ -23,6 +23,7 @@ import { SYSTEM_ID } from "../system-id.js";
 // are shared with the sweep that now makes them at the moment a follower is added, so a follower
 // placed by a drop and one made on the sheet cannot come out as two different kinds of NPC.
 import { createFollowerActor, ensureFollowerFolder } from "../actors/character/follower-actors.js";
+import { dropActorOnCanvas } from "../utils/token-drop.js";
 
 export { ensureFollowerFolder };
 
@@ -126,22 +127,9 @@ export async function placeFollowerToken(canvas, data, event) {
 	try {
 		const actor = await _resolveFollowerActor(data);
 		if (!actor) return;
-		await _dropActorOnCanvas(canvas, actor, data, event);
+		await dropActorOnCanvas(canvas, actor, data, event);
 	} catch (err) {
 		console.error("Stonetop | Failed to place a follower on the canvas", err);
 		ui.notifications.error("Couldn't place that follower on the map (see the console for details).");
 	}
-}
-
-/**
- * Hand the resolved actor to core's own Actor-drop path, so a dropped follower is placed
- * by exactly the code that places a sidebar actor. The fallback covers the day that
- * `@internal` method changes shape: an unsnapped token at the cursor still beats nothing.
- */
-async function _dropActorOnCanvas(canvas, actor, data, event) {
-	const layer = canvas.tokens;
-	const payload = { type: "Actor", uuid: actor.uuid, x: data.x, y: data.y };
-	if (typeof layer?._onDropActorData === "function") return layer._onDropActorData(event, payload);
-	const token = await actor.getTokenDocument({ x: data.x, y: data.y }, { parent: canvas.scene });
-	return token.constructor.create(token, { parent: canvas.scene });
 }

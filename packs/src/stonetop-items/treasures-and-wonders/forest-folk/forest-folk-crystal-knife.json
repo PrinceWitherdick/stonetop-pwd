@@ -7,7 +7,8 @@
     "moveType": "inventory",
     "inventoryColumn": "small",
     "note": "<em>hand</em>, <em>crude</em>, magical",
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A blade of knapped quartz, with the hilt wrapped in glyph-covered leather. It gleams to those with the forest eyes.</p><p>When you wield the crystal knife as a weapon, you can harm the manifest form of any spirit, ignoring armor and dealing +1d4 damage. If the 1d4 comes up a 4, though, the knife shatters into useless shards.</p>"
   },
   "flags": {
     "stonetop": {

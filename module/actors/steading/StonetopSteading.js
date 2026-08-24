@@ -4,6 +4,7 @@ import {OCCUPATIONS, TRAITS, HOMES} from "../../data/steading-members.js";
 import {resolvePersonRow} from "./steading-people.js";
 import {resolvePortrait, documentPortraitFrame} from "../../utils/portrait-frame.js";
 import {playbookTitle, characterFullName} from "../../utils/playbook-actors.js";
+import {assetTakenTooltip} from "../../utils/requisition-asset.js";
 
 /**
  * The three lenses the Improvements tab filters by — the toggle chips beside its
@@ -1169,19 +1170,41 @@ export class StonetopSteading {
 		return parts;
 	}
 
-	/** Named assets that are currently on hand (have a name and are not out on requisition). */
-	getAvailableAssets() {
+	/** Every named asset, on hand or out, each carrying its index in the stored list. */
+	getNamedAssets() {
 		const assets = this._flags.assets ?? STEADING_DEFAULTS.assets;
 		return assets
 			.map((asset, index) => ({ ...asset, index }))
-			.filter(asset => asset.name && !asset.takenBy);
+			.filter(asset => asset.name);
+	}
+
+	/**
+	 * The named assets a given expedition is currently holding.
+	 *
+	 * The steading is the record of where a communal asset actually IS, so the walkthrough's
+	 * Requisition step reads this rather than trusting its own note of what it took: returning
+	 * a horse from the steading sheet has to leave the trip's list showing the horse back home.
+	 */
+	getAssetsOnExpedition(expeditionId) {
+		if (!expeditionId) return [];
+		return this.getNamedAssets().filter(asset => asset.takenBy?.expedition?.id === expeditionId);
+	}
+
+	/** Named assets that are currently on hand (have a name and are not out on requisition). */
+	getAvailableAssets() {
+		return this.getNamedAssets().filter(asset => !asset.takenBy);
 	}
 
 	/**
 	 * Mark an asset as requisitioned (taken out on an expedition): uncheck it and
-	 * record who took it. Returns false if the index is out of range.
+	 * record where it went. Returns false if the index is out of range.
+	 *
+	 * `takenBy` names a person (the player-facing Requisition move), an expedition (the GM
+	 * walkthrough's Requisition step), or both. Whatever it holds, one helper words it for
+	 * every reader: see assetTakenLabel in utils/requisition-asset.js.
+	 *
 	 * @param {number} index
-	 * @param {{name: string, id: string}} takenBy
+	 * @param {{name?: string, id?: string, expedition?: {id: string, title: string}}} takenBy
 	 */
 	async setAssetTaken(index, takenBy) {
 		const assets = foundry.utils.deepClone(this._flags.assets ?? STEADING_DEFAULTS.assets);
@@ -1189,6 +1212,51 @@ export class StonetopSteading {
 		assets[index] = { ...assets[index], checked: false, takenBy };
 		await this.setFlags({ assets });
 		return true;
+	}
+
+	/**
+	 * Bring every asset held by an expedition back into step with the log.
+	 *
+	 * The trip's name is COPIED onto the asset at take time rather than looked up, so the
+	 * steading sheet can say where the wagon went without reading the walkthrough's world
+	 * setting. That is the right trade (the sheet stays independent of the walkthrough) but a
+	 * copy goes stale in TWO ways, and both are the same question asked of the whole log:
+	 *
+	 *   RENAMED. The trip is still there under a new name, so the copy is re-stamped. An unnamed
+	 *   trip is "Expedition N" by its POSITION, so deleting one silently renames every unnamed
+	 *   trip after it, and an asset tagged "Expedition 3" against a switcher now reading
+	 *   "Expedition 2" names no trip at all.
+	 *
+	 *   GONE. The trip is not in the log any more, so it is holding nothing: the asset comes
+	 *   home. Leaving it out would strand the wagon, struck through on the sheet and tagged to a
+	 *   trip that no longer exists, which the walkthrough offers no way back from.
+	 *
+	 * `names` MUST be the whole log, because absence from it is what "deleted" means here. One
+	 * write, whatever it finds, and none at all when everything already agrees.
+	 *
+	 * @param {Map<string,string>} names  every logged trip's id to its display name
+	 * @returns {Promise<number>} how many assets were re-labelled or sent home
+	 */
+	async reconcileHeldAssets(names) {
+		const assets = foundry.utils.deepClone(this._flags.assets ?? STEADING_DEFAULTS.assets);
+		let changed = 0;
+		assets.forEach((asset, i) => {
+			const exp = asset?.takenBy?.expedition;
+			if (!exp?.id) return;
+			if (!names?.has(exp.id)) {
+				// Home again. `checked` is the on-hand tick, exactly as `returnAsset` leaves it.
+				const { takenBy, ...rest } = asset;
+				assets[i] = { ...rest, checked: true };
+				changed += 1;
+				return;
+			}
+			const title = names.get(exp.id);
+			if (exp.title === title) return;
+			assets[i] = { ...asset, takenBy: { ...asset.takenBy, expedition: { ...exp, title } } };
+			changed += 1;
+		});
+		if (changed) await this.setFlags({ assets });
+		return changed;
 	}
 
 	/** Return a requisitioned asset to the steading: re-check it and clear the taken-by note. */
@@ -1330,7 +1398,11 @@ export class StonetopSteading {
 			},
 			resources:      f.resources      ?? STEADING_DEFAULTS.resources,
 			fortifications: f.fortifications ?? STEADING_DEFAULTS.fortifications,
-			assets:         f.assets         ?? STEADING_DEFAULTS.assets,
+			// Each asset carries the one line that says where it has gone (assetTakenLabel, which
+			// the tooltip wraps), so the sheet, the player-facing picker and the walkthrough all
+			// word a struck-through asset the same way. Derived here, never stored.
+			assets:         (f.assets ?? STEADING_DEFAULTS.assets)
+				.map(a => ({ ...a, takenTooltip: assetTakenTooltip(a) })),
 		residents,
 			neighbors,
 			players,

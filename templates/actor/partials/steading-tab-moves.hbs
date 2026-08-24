@@ -2,12 +2,11 @@
       visible sidebar down the right of every steading tab; the icon rail took that edge, and
       a page gives the moves room to sit two-up instead of wrapping in a narrow column.
 
-      The Roll Modifier came across with them. It only ever governs these rolls, so it belongs
-      on the same page rather than pinned beside tabs that never roll anything. It is no longer
-      a SECTION of its own, though: a heading and a page-wide underline gave a three-way toggle
-      the visual weight of the page's actual subject, and its stacked radio list was a leftover
-      of the narrow sidebar. It rides in the moves heading now, as the same segmented pill in
-      the same spot the Relationships card's table/board toggle uses.
+      The Roll Modifier is not here, in any shape. It came across with the moves as a segmented
+      pill in the heading below, and before that it was a section of its own with a stacked
+      radio list; both were STICKY, which meant a player who rolled one move with Advantage
+      rolled the next four with it too and nobody noticed. Rolling a homefront move now asks,
+      per roll, in a window that always starts at Normal — see module/dialogs/RollDialog.js.
 
       `.steading-moves-tab` stays on an INNER wrapper rather than on the panel itself. It
       carries `display: flex`, and an unlayered `display` on a `.tab` beats core's layered
@@ -28,15 +27,12 @@
 	<section class="sheet-tab steading-moves-tab">
 
 	<div class="stonetop-move-group">
-		{{!-- The h3 is written out rather than taken from `stonetop.section-heading` for the
-		      same reason the Relationships card writes its own: the partial has no slot for a
-		      control, and the pill has to sit INSIDE the heading — that is what puts it on the
-		      heading's own line, above the underline, instead of in the padding above it.
-
-		      The tab's name lives in a tooltip now that the rail is icon-only, so this heading
-		      is also the only place the page says what it is. --}}
+		{{!-- The h3 is written out rather than taken from `stonetop.section-heading` because
+		      this heading is the tab's own title, not a section label inside it: the tab's name
+		      lives in a tooltip now that the rail is icon-only, so this is the only place the
+		      page says what it is. It used to carry the roll-mode pill on its own line as well,
+		      which is what the hand-written markup was originally for. --}}
 		<h3 class="stonetop-move-group-title">{{localize "stonetop.steading.tabs.moves"}}
-			{{> "stonetop.roll-mode-picker" rollMode=stonetop.rollMode}}
 			{{> "stonetop.section-collapse" collapse="steadingMoves"}}
 		</h3>
 		<ol class="items-list">

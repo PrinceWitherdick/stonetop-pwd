@@ -1,0 +1,21 @@
+{
+  "_id": "kkGeVEL2ADQnwEht",
+  "_key": "!items!kkGeVEL2ADQnwEht",
+  "name": "Common weapons, bronze",
+  "type": "move",
+  "system": {
+    "moveType": "inventory"
+  },
+  "flags": {
+    "stonetop": {
+      "slug": "bronze-common-weapon",
+      "inventoryColumn": "regular",
+      "sortOrder": 41,
+      "note": "<em>spears, daggers, etc.</em>; no <em>x piercing</em>",
+      "weight": 1,
+      "special": true,
+      "specialCategory": "Bronze Weapons"
+    }
+  },
+  "folder": "OL1lTSyCryWm3Xez"
+}

@@ -9,29 +9,34 @@ import {
 import { OutfitItemBuilder } from "../../model/OutfitItem.js";
 import { majorArcanaImg, isMajorArcanumItem, arcanumCardImg } from "../../arcana-icons.js";
 import { arcanaSummonFollowers } from "../../data/arcana-summons.js";
+import { isImplantedArcanumItem, isImmobileArcanumItem } from "../../data/arcana-facets.js";
 import { centerArcanumTracks } from "../../utils/glyphs.js";
 import { stonetopChatCard } from "../../utils/chat.js";
 
 // Some arcana "items" are a place, structure, or phenomenon rather than carried gear
-// (a sealed cave, a giant's dormitory, a word floating in the air). The shipped data
-// can't distinguish these from portable curios by shape alone — both carry a null
-// weight — so the non-carriable ones are listed explicitly here and kept off the
-// Inventory tab. This gates only the WEIGHTLESS side (see weightedInventoryItems): a
-// card whose front is such a place but whose unlocked BACK item is real, weighted gear
-// (e.g. vein-of-milky-crystal, huge-wooden-sphere) still surfaces that gear once realised.
+// (a sealed cave, a giant's dormitory, an arch you could walk through). Book I p.437 gives
+// a card the `immobile` tag for exactly this, and where the book prints it, that tag is what
+// holds the card back — isImmobileArcanumItem, applied in weightedInventoryItems, so a
+// HOMEBREW place needs no entry here and the rule reads as what the book says.
+//
+// What remains listed are the shipped places the book leaves untagged: it prints them plain
+// `magical`, and nothing in their data tells them apart from a portable curio (both carry a
+// null weight), so there is nothing to derive and they are named. This gates only the
+// WEIGHTLESS side (see weightedInventoryItems): a card whose front is such a place but whose
+// unlocked BACK item is real, weighted gear still surfaces that gear once realised.
+//
+// An IMPLANTED arcanum — Storm Markings up your skin, the Ineffable Words on your soul — is
+// kept off by its own printed tag too (isImplantedArcanumItem).
 const CONCEPT_ARCANA_SLUGS = new Set([
 	"crumbling-arch",
 	"giants-dormitory",
-	"huge-wooden-sphere",
 	"metal-man",
 	"odd-conveyance",
 	"patch-of-rainbow-moss",
+	"rune-etched-pillars",
 	"runes-around-a-ruined-hall",
 	"sealed-cave",
-	"sunken-tablet",
 	"timeless-vault",
-	"vein-of-milky-crystal",
-	"whispering-word",
 ]);
 
 function _isUnlocked(item, unlockCounts, arcanaBoxes, circleCount) {
@@ -563,12 +568,18 @@ export class CharacterArcana {
 			const circleCount = (item.front.unlock?.description?.match(_UNLOCK_CIRCLE_RE) || []).length;
 			const unlocked = identified.has(item.slug) && _isUnlocked(item, unlockCounts, arcanaBoxes, circleCount);
 			const sideItem = (unlocked && item.back.item) ? item.back.item : item.front.item;
-			// Skip unnamed sides, and skip a card's weightless side when the card is a
-			// non-carriable concept/place/phenomenon (CONCEPT_ARCANA_SLUGS). A weightless
+			// Skip unnamed sides, and skip a card's weightless side when the card is one of the
+			// shipped places the book leaves untagged (CONCEPT_ARCANA_SLUGS). A weightless
 			// curio ("A gold ring", "A wolf pelt") still renders — at ◇0 — since most arcana
 			// curios ship with no explicit weight; only true places are held back.
 			if (!sideItem?.name) return [];
 			if (sideItem.weight == null && CONCEPT_ARCANA_SLUGS.has(item.slug)) return [];
+			// An IMMOBILE side is too big to carry on your person, and an IMPLANTED one carries
+			// an item only so its card can print the book's tag line. Both say so in that tag
+			// line, so both are read off it: there is nothing in your hands and nothing in your
+			// load. Applied per side, so a place whose realised BACK item is real gear (the vein
+			// of milky crystal's Moonstone) still surfaces that gear once unlocked.
+			if (isImmobileArcanumItem(sideItem) || isImplantedArcanumItem(sideItem)) return [];
 			return [new OutfitItemBuilder()
 				.withSlug(item.slug)
 				.withName(sideItem.name)

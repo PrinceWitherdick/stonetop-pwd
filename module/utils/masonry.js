@@ -63,9 +63,9 @@ export function packShortest(cards, columns, heightOf, appendTo = (col, card) =>
  *   reset      optional: put the container back to its unpacked state before measuring, so every
  *              card measures at the width it will actually render at.
  *   layoutKey  optional: the only thing about `width` this grid's layout depends on (usually the
- *              column count). When it hasn't changed, the re-pack is skipped outright, so
- *              dragging a sheet edge doesn't re-parent every card on every frame. Omit for a
- *              grid whose layout varies continuously with width.
+ *              column count). Called with (width, container). When it hasn't changed, the re-pack
+ *              is skipped outright, so dragging a sheet edge doesn't re-parent every card on every
+ *              frame. Omit for a grid whose layout varies continuously with width.
  *   place      the placement itself: returns the nodes to hand the container, or null when the
  *              cards aren't measurable yet (a hidden tab), which leaves the guard unset so the
  *              next observer notification tries again.
@@ -78,7 +78,7 @@ export function createPacker({ cards: cardSelector, reset, layoutKey, place }) {
 		const width = container.clientWidth;
 		if (!cards.length || !width || container._packedWidth === width) return;
 
-		const key = layoutKey?.(width);
+		const key = layoutKey?.(width, container);
 		if (key !== undefined && container._packedKey === key) { container._packedWidth = width; return; }
 
 		reset?.(container, cards);
@@ -127,8 +127,13 @@ export function wireMasonry(pack, containers) {
 	return {
 		// Something other than width changed the cards' heights (a card collapsed, a search hid
 		// half of them), which the width guard would otherwise hold the stale packing through.
-		repack() {
-			for (const el of targets) {
+		//
+		// `only` narrows it to the grid that actually changed. A tab can show several of these at
+		// once, and folding one card open is no reason to re-parent and re-measure every card in
+		// the sibling grids, which is what packing them all again amounts to.
+		repack(only = null) {
+			for (const el of only ? [only] : targets) {
+				if (only && !targets.includes(el)) continue;
 				el._packedWidth = null;
 				el._packedKey = null;
 				pack(el);

@@ -1,0 +1,25 @@
+<form class="stonetop-map-pin-name-settings">
+	{{> "stonetop.settings-toggle-row" id="always-show-map-pin-names" name="alwaysShowMapPinNames"
+	    labelKey="stonetop.settings.alwaysShowMapPinNames.name"
+	    hintKey="stonetop.settings.alwaysShowMapPinNames.hint" checked=enabled}}
+
+	<hr>
+
+	<p class="notes">{{localize "stonetop.settings.mapPinNameSettings.perMapNote"}}</p>
+
+	{{#each maps}}
+	<div class="form-group">
+		<label for="stonetop-map-pin-names-{{slug}}">{{name}}</label>
+		<div class="form-fields">
+			{{!-- Options come from MAP_PIN_NAME_CHOICES via mapPinNameRows, never spelled out
+			      here: a value that disagrees with the decoder makes every row read "follow", so
+			      saving the menu would wipe the world's overrides with nothing logged. --}}
+			<select id="stonetop-map-pin-names-{{slug}}" name="map.{{slug}}">
+				{{#each options}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{localize labelKey}}</option>{{/each}}
+			</select>
+		</div>
+	</div>
+	{{/each}}
+
+	{{> "stonetop.settings-save-footer"}}
+</form>

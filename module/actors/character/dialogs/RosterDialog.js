@@ -22,9 +22,8 @@
  */
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { getDragEventData } from "../../../utils/foundry-compat.js";
-import { resolvePortrait, documentPortraitFrame } from "../../../utils/portrait-frame.js";
+import { portraitOrNone, documentPortraitFrame } from "../../../utils/portrait-frame.js";
 import { PERSON_ROSTER_IMG } from "../../../utils/person-portrait.js";
-import { isDefaultImg } from "../../../utils/strings.js";
 import { findNamedActor } from "../marked-people.js";
 
 /**
@@ -81,7 +80,7 @@ export class RosterDialog extends StonetopDialog {
 	_portraitRow(entry) {
 		const actor = entry.uuid ? this._resolveActor(entry.uuid) : null;
 		const portrait = actor
-			? resolvePortrait(isDefaultImg(actor.img) ? null : actor.img, documentPortraitFrame(actor))
+			? portraitOrNone(actor.img, documentPortraitFrame(actor))
 			: { src: "", style: "" };
 		return {
 			...entry,

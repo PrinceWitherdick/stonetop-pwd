@@ -6,6 +6,13 @@
 // one of those entries is a short stack of pick-or-roll tables in the same shape, so they
 // are all encoded here as one list of "manners", each carrying its own ordered tables.
 //
+// Several rows tell you to roll AGAIN on the same table and combine the results ("Sized for
+// giants, and roll 1d8 again"). That instruction is NOT part of the row's text: the row carries
+// `again` — the highest roll the second go is made on, which is how the book keeps the extra roll
+// off the instruction rows themselves — and `againCount` when it asks for more than one ("roll
+// 1d10 twice"). The wizard performs the instruction and shows each extra result in its own field,
+// so a combined answer reads as two answers rather than one run-on line.
+//
 // A few manners branch: a Green Lord site is either lingering signs OR a ruin, and a
 // Barrow Builder site is a cave, a battlefield, a reclaimed Maker-ruin, or a barrow. The
 // row that picks the branch carries `branch`, and the tables that only apply inside that
@@ -21,7 +28,7 @@ import { SITE_FEATURES, SITE_CAUSES, SITE_SEVERITIES, THEMES as THINGS_BELOW_THE
 /**
  * Build a table's rows from compact specs. A plain string takes the next single roll;
  * a `[min, max, text]` tuple takes a span (so a weighted roll reproduces the book's odds)
- * and moves the cursor past it. A 4th tuple element merges extra keys (e.g. `branch`).
+ * and moves the cursor past it. A 4th tuple element merges extra keys (e.g. `branch`, `again`).
  */
 function build(specs) {
 	let next = 1;
@@ -36,8 +43,21 @@ function build(specs) {
 	});
 }
 
-/** One pick-or-roll table: `key` identifies the pick, `die` is the book's die. */
+/**
+ * One pick-or-roll table: `key` identifies the pick, `die` is the book's die, and `combine` is
+ * the most answers it takes when the book says to take more than one ("Pick 1 or combine 2",
+ * "Pick or roll 1 to 3"). Absent means one.
+ */
 const table = (key, label, die, specs, opts = {}) => ({ key, label, die, rows: build(specs), ...opts });
+
+/**
+ * A region's Terrain table. Every one of the fifteen is the same table with different rows — the
+ * same key, the same label, the same die, and the same "roll or pick 1, or combine 2" — so only
+ * the rows are written out below. The key in particular is load-bearing: create-site-dialog.js
+ * reserves TERRAIN_KEY against it, and that agreement should not depend on the same string being
+ * retyped correctly fifteen times.
+ */
+const terrainTable = specs => table("terrain", "Terrain", "1d12", specs, { combine: 2 });
 
 // ── Shared table text ─────────────────────────────────────────────────────────
 // Four of the five Maker entries print the same condition ladder; the Tempest Lords
@@ -57,7 +77,7 @@ const MAKER_CONDITION_D12 = [
 
 // Every Maker entry closes its theme table the same way, and every Maker ruin carries the
 // same note about scale.
-const GIANT_SIZED = [9, 12, "Sized for giants, and roll 1d8 again"];
+const GIANT_SIZED = [9, 12, "Sized for giants", { again: 8 }];
 export const MAKER_SCALE_NOTE =
 	"Most Maker-ruins are sized for giants, people two or even three times as tall as humans, but often with smaller-scale rooms, passages and so forth for their servants.";
 
@@ -83,9 +103,11 @@ const GREEN_LORDS = {
 			"Tombs, mummification, constructed afterlives",
 			"The spirits of the wild, or that which they embody, bound or put to use",
 			"Fae servants/rebellion",
-			"Corruption by the Things Below, and roll again",
+			// The book says only "roll again"; 8 is the last plain theme, which keeps the second
+			// go off this row itself.
+			[8, 8, "Corruption by the Things Below", { again: 7 }],
 			GIANT_SIZED,
-		], { combine: true }),
+		], { combine: 2 }),
 		makerSiteTable(4),
 		table("sign", "Lingering sign", "1d6", [
 			"An entity, imprisoned in a strange tree, rune-carved stone, or natural feature",
@@ -145,7 +167,7 @@ const STONE_LORDS = {
 			"Human servants (slaves?): their corruption by the Things Below, their revolt, the Barrow Builders they became",
 			"Bonds broken/seals opened/collapse and chaos/the Things Below set loose",
 			GIANT_SIZED,
-		], { combine: true }),
+		], { combine: 2 }),
 		makerSiteTable(3),
 		table("sign", "Lingering sign", "1d6", [
 			[1, 1, "Something trapped in stone, crystal, or makerglass"],
@@ -202,7 +224,7 @@ const FORGE_LORDS = {
 			"Passions enflamed: hunger, lust, envy, greed, obsession, paranoia, and wrath",
 			"Cataclysm: eruptions, terror, slaughter, societal collapse, the descent into chaos",
 			GIANT_SIZED,
-		], { combine: true }),
+		], { combine: 2 }),
 		makerSiteTable(3),
 		table("sign", "Lingering sign", "1d6", [
 			"Aftermath of destruction, a scar on the world",
@@ -270,7 +292,7 @@ const RIME_LORDS = {
 			"Writing and records: the preservation of the past",
 			"Mortal servants/disciples, with their sects, schisms, and rivalries",
 			GIANT_SIZED,
-		], { combine: true }),
+		], { combine: 2 }),
 		makerSiteTable(3),
 		table("sign", "Lingering sign", "1d6", [
 			"Something preserved in ice/cold/stasis",
@@ -325,7 +347,7 @@ const TEMPEST_LORDS = {
 			"Loss of control: unexpected consequences/berserk rage/cataclysmic failure/experiments run amok",
 			"An empire collapsed: conquering armies, colonies, plunder, lost glory, resentment",
 			GIANT_SIZED,
-		], { combine: true }),
+		], { combine: 2 }),
 		makerSiteTable(3),
 		table("sign", "Lingering sign", "1d6", [
 			[1, 1, "A place bearing scars of unchecked power"],
@@ -340,9 +362,9 @@ const TEMPEST_LORDS = {
 			[4, 4, "Bunker/vault carved into the stone"],
 			[5, 5, "Platform/amphitheater/terrace(s)"],
 			[6, 6, "Tower/spire"],
-			[7, 9, "Sky-island, crashed/grounded (and roll 1d6 again)"],
-			[10, 11, "Sky-island, afloat but anchored/fixed over a particular place (and roll 1d6 again)"],
-			[12, 12, "Sky-island, free-floating across the landscape (and roll 1d6 again)"],
+			[7, 9, "Sky-island, crashed/grounded", { again: 6 }],
+			[10, 11, "Sky-island, afloat but anchored/fixed over a particular place", { again: 6 }],
+			[12, 12, "Sky-island, free-floating across the landscape", { again: 6 }],
 		], { branch: "ruin" }),
 		table("purpose", "Purpose", "1d12", [
 			[1, 2, "Dwelling (home, barracks, dormitory, etc.)"],
@@ -404,7 +426,7 @@ const BARROW_BUILDERS = {
 			"Intrigue/betrayal/civil war",
 			"Rulers clinging to power, even from the grave",
 			"Heroism and hope and perseverance, the casting off of tyrants, the slaying of monsters; the forging of a new age",
-		], { combine: true }),
+		], { combine: 2 }),
 		table("site", "What kind of site?", "1d6", [
 			[1, 1, "A cave, in which they or their victims lived/hid/died/were interred (combine with 1 or 2 themes)"],
 			[2, 2, "An old battlefield or mass grave, likely haunted"],
@@ -417,7 +439,7 @@ const BARROW_BUILDERS = {
 			[3, 4, "A Tempest Lord ruin"],
 			[5, 6, "A Forge Lord ruin"],
 			[7, 10, "A Stone Lord ruin"],
-			[11, 12, "A ruin of multiple groups (roll 1d10 twice)"],
+			[11, 12, "A ruin of multiple groups", { again: 10, againCount: 2 }],
 		], {
 			branch: "reclaimed",
 			note: "Build the ruin from that entry's tables, rolling with advantage for its condition at the time the Barrow Builders claimed it.",
@@ -430,7 +452,7 @@ const BARROW_BUILDERS = {
 			[9, 10, "Crude, human-sized additions/adaptations/repairs"],
 			[11, 11, "Altars/idols/offerings/arcane symbols"],
 			[12, 12, "Maker artifacts, repurposed"],
-		], { branch: "reclaimed", note: "Pick or roll 1 to 3 signs." }),
+		], { branch: "reclaimed", combine: 3 }),
 		table("reclaimedCondition", "Current condition", "1d12", MAKER_CONDITION_D12, { branch: "reclaimed" }),
 		table("size", "Size", "1d12", [
 			[1, 4, "Small: just a few paces across, no chambers to speak of"],
@@ -443,7 +465,7 @@ const BARROW_BUILDERS = {
 			[7, 7, "To protect the interred"],
 			[8, 9, "To hide something away"],
 			[10, 10, "To leverage/maintain fell magic"],
-			[11, 12, "Roll 1d10, twice"],
+			[11, 12, "Two purposes at once", { again: 10, againCount: 2 }],
 		], { branch: "barrow" }),
 		table("barrowElements", "Architectural elements", "1d12", [
 			[1, 2, "Megalith(s)/cairn(s)/dolmen(s)"],
@@ -454,7 +476,8 @@ const BARROW_BUILDERS = {
 			[11, 12, "Built around a spring: water bubbling up/pooling/flowing out"],
 		], {
 			branch: "barrow",
-			note: "Even in large barrows, chambers and passages are cramped and claustrophobic, often with packed-dirt floors and lined with large slabs of stone. Pick or roll 1 or 2.",
+			combine: 2,
+			note: "Even in large barrows, chambers and passages are cramped and claustrophobic, often with packed-dirt floors and lined with large slabs of stone.",
 		}),
 		table("barrowCondition", "Condition", "1d12", [
 			[1, 4, "Collapsed, torn open, only hints remaining"],
@@ -470,7 +493,7 @@ const BARROW_BUILDERS = {
 			[7, 7, "Inhabited by local beasts/bandits"],
 			[8, 8, "Useful or valuable flora growing on/in/near it"],
 			[9, 10, "Treasure (roll 1d6 to inform how much remains)"],
-			[11, 12, "Roll again, twice"],
+			[11, 12, "Two features at once", { again: 10, againCount: 2 }],
 		], { branch: "barrow" }),
 	],
 };
@@ -502,7 +525,7 @@ const HAUNTED = {
 			"The fear of death: denial, bargaining, panic, cheating",
 			"The curse of undeath: respite denied, eternal hunger/pain/loneliness/regret",
 			"Necromancy and death-magic, likely with aid from the Things Below",
-		], { combine: true }),
+		], { combine: 2 }),
 		table("howLong", "How long it's been haunted", "1d12", [
 			[1, 1, "Since the days of the Makers, at least"],
 			[2, 3, "Since the Time of Cataclysm, when the Makers fell"],
@@ -550,7 +573,7 @@ const FAE_DOMAIN = {
 			"A door/gate/opening, natural or made, literal or just an impression",
 			"A ring of toadstools or some other distinctive pattern of flora (perhaps useful or valuable)",
 			"A path/a climb/a descent/a fall",
-			"Only active at certain times (in moonlight, at sunset, in winter, etc.) and roll again",
+			[6, 6, "Only active at certain times (in moonlight, at sunset, in winter, etc.)", { again: 5 }],
 		], { note: "An entrance in the Great Wood at least 10 years old is likely marked by Forest Folk glyphs." }),
 		table("theme", "Theme", "1d12", [
 			"Fluidity of time and space: stasis, distortion, dilation, things where (and when) they oughtn't be",
@@ -565,7 +588,7 @@ const FAE_DOMAIN = {
 			"Liminality: neither spirit nor flesh, here nor there, this nor that, real nor unreal",
 			"Deep ties to the natural world and spirits of the wild",
 			"Enslavement by the Green Lords, the war against them, the lasting scars left by both",
-		], { combine: true }),
+		], { combine: 2 }),
 		table("purpose", "Original purpose", "1d6", [
 			"Containment: to imprison/preserve",
 			"Habitat: where Fae live/work/play",
@@ -580,7 +603,7 @@ const FAE_DOMAIN = {
 			"A shard of power left by a powerful Fae, buried or hidden away",
 			"One or more Fae, bound/inert, their essence sunk into the domain",
 			"Rune-carved stone infused with Fae power, a work of the Green Lords",
-			"Roll again, but it's failing, fickle, unstable, possibly abandoned",
+			[6, 6, "Failing, fickle, unstable, possibly abandoned", { again: 5 }],
 		]),
 		table("element", "Element", "1d6", [
 			"Exit(s) to Fae paths or far-off place(s) in the world",
@@ -589,7 +612,7 @@ const FAE_DOMAIN = {
 			"A real place, plucked from the world and the passing of time",
 			"A vast and shifting place, easy to get lost in, always something new",
 			"Decay/squalor/disorder, perhaps hidden by glamour or illusion",
-		], { note: "Pick or roll 1 or 2. Time dilation is a particular concern to mortal visitors." }),
+		], { combine: 2, note: "Time dilation is a particular concern to mortal visitors." }),
 	],
 };
 
@@ -608,7 +631,7 @@ const PRIMORDIAL = {
 			[6, 7, "Megalith(s)/petroglyphs/runes/cave paintings/etc."],
 			[8, 9, "Ruin(s) of the Makers, built near or around it"],
 			[10, 10, "Mysterious structure(s), placed by primordial entities"],
-			[11, 12, "Roll 1d10 twice and combine"],
+			[11, 12, "Two markers at once", { again: 10, againCount: 2 }],
 		]),
 		table("theme", "Theme", "1d12", [
 			"Vastness, enormity, incomprehensibility, the primordial void",
@@ -623,7 +646,7 @@ const PRIMORDIAL = {
 			"Mythic times and mythic deeds, the birth and death of gods and legends",
 			"Long-forgotten peoples/beings, from before the rise of the Makers",
 			"Portals, possibilities, other worlds, beings/things out of time and space",
-		], { combine: true }),
+		], { combine: 2 }),
 		table("origin", "Origin", "1d12", [
 			[1, 2, "The intent of a (the) great spirit(s)"],
 			[3, 4, "A confluence of geomantic/cosmic/celestial forces"],
@@ -646,7 +669,8 @@ const PRIMORDIAL = {
 			"The raw stuff of creation: black iron, water of life, primordial flame, etc.",
 			"One or more artifacts of primordial power",
 		], {
-			note: "Pick or roll 1 to 3. If the site lies near places that are or were populated, consider the locals' attitude to it (reverence, awe, terror, avoidance) and what signs they left.",
+			combine: 3,
+			note: "If the site lies near places that are or were populated, consider the locals' attitude to it (reverence, awe, terror, avoidance) and what signs they left.",
 		}),
 	],
 };
@@ -671,7 +695,7 @@ const SACRED = {
 			"The land/soil/stone/terrain",
 			"Blight/decay/reclamation/destruction",
 			"Water/streams/ponds/lakes (possibly corrupted by the Things Below)",
-		], { combine: true }),
+		], { combine: 2 }),
 		table("marker", "Marker", "1d12", [
 			[1, 1, "Nothing you can put your finger on, just the sense of being watched"],
 			[2, 4, "A place that resonates strongly with the spirit's theme"],
@@ -679,7 +703,7 @@ const SACRED = {
 			[7, 8, "An unusual feature, probably natural but strange or out of place"],
 			[9, 9, "An idol or altar, ancient and crumbling/buried/submerged"],
 			[10, 10, "An idol or altar, made by the locals"],
-			[11, 12, "Roll twice with a 1d10, combine"],
+			[11, 12, "Two markers at once", { again: 10, againCount: 2 }],
 		]),
 		table("activity", "Activity", "1d12", [
 			[1, 1, "Missing, dissipated, greatly weakened"],
@@ -752,7 +776,7 @@ const CAVE = {
 			"A natural beast or spirit",
 			"Stone Lords or their servants",
 			"Hillfolk or those they have cast out",
-		], { note: "Pick or roll up to 3 times. What story does this tell?" }),
+		], { combine: 3, note: "What story does this tell?" }),
 		table("beast", "Natural beast or spirit", "1d6", [
 			"Bats. So many bats",
 			"Fish, salamanders, olms, crawfish: pale blind things dwelling in dark waters",
@@ -784,7 +808,7 @@ const FOREST_FOLK = {
 			"...dwelt/worked/made things/stored things",
 			"...gathered/congregated/held festivals",
 			"...left signs of what happened to them",
-		], { note: "Pick 1 or combine 2." }),
+		], { combine: 2 }),
 		table("signs", "Signs of their presence", "1d6", [
 			"Elaborate glyphs and pictograms",
 			"Strips of leather, often dyed, hanging from trees or wrapped around trunks",
@@ -807,7 +831,7 @@ const CORRUPTED = {
 	page: "Book II p. 422",
 	tables: [
 		{ key: "feature", label: "Feature", die: "1d12", rows: SITE_FEATURES },
-		{ key: "theme", label: "Theme of the taint", die: "1d12", combine: true, rows: THINGS_BELOW_THEMES },
+		{ key: "theme", label: "Theme of the taint", die: "1d12", combine: 2, rows: THINGS_BELOW_THEMES },
 		{ key: "cause", label: "Cause of corruption", die: "1d12", rows: SITE_CAUSES },
 		{ key: "severity", label: "Severity", die: "1d12", rows: SITE_SEVERITIES },
 	],
@@ -824,12 +848,92 @@ export function siteManner(id) {
 	return SITE_MANNERS.find(m => m.id === id) ?? null;
 }
 
+// ── Combining picks ───────────────────────────────────────────────────────────
+// A table's answer is one row, or several combined: the book's "pick 1, or combine 2" on the theme
+// tables, and every "and roll again" row. Stored as ONE string joining the chosen rows with " + ",
+// a separator chosen because no row text in this file or things-below-tables.js contains it
+// (site-tables.test.js says so) — so re-opening a site splits the answer back into its own fields
+// without ever cutting a result in half.
+export const COMBINE_SEP = " + ";
+
+/**
+ * A pick as its list of chosen rows, whether it arrives as one joined string or already a list.
+ *
+ * THE ONLY reader of a stored pick. There used to be a second, `pickList`, which differed by not
+ * splitting a joined string — so `primaryPick("A + B")` answered with the whole `"A + B"` rather
+ * than with `"A"`, and the branch lookup in `visibleTables` matches that against one row's text.
+ * A combined pick on a branching table therefore selected no branch at all. One function, so the
+ * question can only have one answer.
+ */
+export const splitCombined = (v) => (Array.isArray(v) ? v : String(v ?? "").split(COMBINE_SEP))
+	.map(s => String(s ?? "").trim()).filter(Boolean);
+
+/** The chosen rows as the one string stored on the page. */
+export const joinCombined = (v) => splitCombined(v).join(COMBINE_SEP);
+
+/** The row a pick was made on (the first, when several are combined). */
+export const primaryPick = (v) => splitCombined(v)[0] ?? "";
+
+/**
+ * What a chosen row's "and roll again" asks for: `{max, count}`, or null if it asks for nothing.
+ * `max` is the highest roll the extra go is made on, so it names a sub-die of the same table.
+ */
+export function againSpec(row) {
+	const max = Number(row?.again ?? 0);
+	return max > 0 ? { max, count: Math.max(1, Number(row?.againCount ?? 1)) } : null;
+}
+
+/**
+ * The most answers a table takes: what `combine` says, or one. Read through here rather than off
+ * the field, so "does this table combine" and "how many" can never be asked as two questions with
+ * two answers.
+ */
+export const combineMax = (table) => Math.max(1, Math.floor(Number(table?.combine) || 1));
+
+/**
+ * The rows an extra pick may be made on: the sub-die `max` names, or the whole table for 0.
+ *
+ * ALWAYS A NEW ARRAY, including for the whole-table case. Handing back the module's own shipped
+ * rows by reference makes a compile-time constant writable through an ordinary-looking return
+ * value, and a caller that sorted or spliced what it was given would silently reshape the book's
+ * table for the rest of the session.
+ */
+export const combinableRows = (rows = [], max = 0) => (max > 0 ? rows.filter(r => r.max <= max) : [...rows]);
+
+/**
+ * How many of the slots AFTER `i` were rolled by the row sitting at `i`.
+ *
+ * A combined pick is a flat list, but its entries have owners: a row carrying "and roll 1d8
+ * again" claims the slots its sub-die filled, while a row the GM combined in freely off the
+ * table's own "pick 1, or combine 2" belongs to nobody. Re-picking a slot has to drop what THAT
+ * row brought and leave the rest alone, which is what this decides.
+ */
+export function claimedAfter(rows, values, i) {
+	const spec = againSpec(rows.find(r => r.text === values[i]));
+	return Math.min(spec?.count ?? 0, Math.max(0, values.length - i - 1));
+}
+
+/**
+ * The most extra slots a pick may hold: every chosen row's own "roll again" PLUS the table's free
+ * combine budget.
+ *
+ * THE TWO ADD, and reading them as one budget is what made the "Combine another" button vanish on
+ * exactly the rows that need it most. They are separate instructions in the book — "pick 1, or
+ * combine 2" is what the TABLE takes, "and roll 1d8 again" is what a ROW asks for — so a theme
+ * table that says both means two combined themes AND the sub-die roll the chosen one owes. Taking
+ * the larger of the two told the GM on screen to combine 2 and then gave them no control to do it.
+ */
+export function maxExtraPicks(table, rows, values = []) {
+	const claimed = values.reduce((n, v) => n + (againSpec(rows.find(r => r.text === v))?.count ?? 0), 0);
+	return claimed + (combineMax(table) - 1);
+}
+
 /**
  * The tables of `manner` that apply given the picks so far. A manner with a branching
  * table (Green Lord signs vs ruin, Barrow Builder barrow vs reclaimed ruin) hides the
  * tables of the branches not taken; with nothing picked yet, only the unbranched tables show.
  * @param {object|string} manner  a manner or its id
- * @param {Record<string,string>} picks  {tableKey: chosen row text}
+ * @param {Record<string,string|string[]>} picks  {tableKey: the chosen row text, or the combined list}
  */
 export function visibleTables(manner, picks = {}) {
 	const m = typeof manner === "string" ? siteManner(manner) : manner;
@@ -837,7 +941,7 @@ export function visibleTables(manner, picks = {}) {
 	// The branch a picked row selects, if any table's chosen row names one.
 	let branch = null;
 	for (const t of m.tables) {
-		const chosen = t.rows.find(r => r.text === picks[t.key]);
+		const chosen = t.rows.find(r => r.text === primaryPick(picks[t.key]));
 		if (chosen?.branch) { branch = chosen.branch; break; }
 	}
 	return m.tables.filter(t => !t.branch || t.branch === branch);
@@ -850,7 +954,7 @@ export function visibleTables(manner, picks = {}) {
  */
 export function pickLines(manner, picks = {}) {
 	return visibleTables(manner, picks)
-		.map(t => ({ key: t.key, label: t.label, value: String(picks[t.key] ?? "").trim() }))
+		.map(t => ({ key: t.key, label: t.label, value: joinCombined(picks[t.key]) }))
 		.filter(p => p.value);
 }
 
@@ -860,7 +964,7 @@ export function pickLines(manner, picks = {}) {
 export const REGIONS = [
 	{
 		id: "greatWood", label: "The Great Wood", page: "Book II p. 202",
-		terrain: build([
+		terrain: terrainTable([
 			"Pond, wetland, or lake",
 			"Creek, stream, or river",
 			"Rocky outcropping, cave(s)",
@@ -874,7 +978,7 @@ export const REGIONS = [
 	},
 	{
 		id: "steplands", label: "The Steplands", page: "Book II p. 372",
-		terrain: build([
+		terrain: terrainTable([
 			"Creek, gulley, stream, river",
 			"Stream, disappearing into cave, sinkhole, or fractured bedrock",
 			"Sinkhole, crevasse, gorge",
@@ -889,7 +993,7 @@ export const REGIONS = [
 	},
 	{
 		id: "foothills", label: "The Foothills", page: "Book II p. 144",
-		terrain: build([
+		terrain: terrainTable([
 			"Large pond/small lake",
 			"Creek, stream, gulley",
 			"Steep slope: barren, treacherous, unstable",
@@ -904,7 +1008,7 @@ export const REGIONS = [
 	},
 	{
 		id: "ferriersFen", label: "Ferrier's Fen", page: "Book II p. 116",
-		terrain: build([
+		terrain: terrainTable([
 			"Open water, who knows how deep?",
 			"Shallow pool, pond, or stream",
 			[3, 4, "Mud, muck, sodden soil, standing water"],
@@ -919,7 +1023,7 @@ export const REGIONS = [
 	},
 	{
 		id: "flats", label: "The Flats", page: "Book II p. 126",
-		terrain: build([
+		terrain: terrainTable([
 			"Ash field, burnt stalks, recent wildfire",
 			"Barren ground: sand, stone, dust",
 			"Burrow, dugout, or warren",
@@ -934,7 +1038,7 @@ export const REGIONS = [
 	},
 	{
 		id: "huffelPeaks", label: "The Huffel Peaks", page: "Book II p. 236",
-		terrain: build([
+		terrain: terrainTable([
 			"Lava/hot springs/geysers/mudpots/fumaroles",
 			"Crater/caldera/lava tubes/volcanic formations",
 			"Stream/river/waterfall/lake/boggy soil",
@@ -948,7 +1052,7 @@ export const REGIONS = [
 	},
 	{
 		id: "whitefangs", label: "The Whitefang Mountains", page: "Book II p. 480",
-		terrain: build([
+		terrain: terrainTable([
 			[1, 2, "Glacier/snowfield/snowpack"],
 			[3, 3, "Lake/river/stream/waterfall"],
 			[4, 4, "Waterlogged soil, frozen or muddy"],
@@ -963,7 +1067,7 @@ export const REGIONS = [
 	},
 	{
 		id: "northManmarch", label: "The North Manmarch", page: "Book II p. 286",
-		terrain: build([
+		terrain: terrainTable([
 			"Spring/pond/creek/stream",
 			"Ditch/wash/gully/ravine",
 			"Copse/thicket/grove of trees",
@@ -978,7 +1082,7 @@ export const REGIONS = [
 	},
 	{
 		id: "southManmarch", label: "The South Manmarch", page: "Book II p. 350",
-		terrain: build([
+		terrain: terrainTable([
 			"Ash field/barrens/sand/rocky stretch",
 			"Burrow/dugout/warren",
 			"Sodden soil/mud/pocket wetland",
@@ -993,7 +1097,7 @@ export const REGIONS = [
 	},
 	{
 		id: "dreadRiver", label: "The Dread River", page: "Book II p. 86",
-		terrain: build([
+		terrain: terrainTable([
 			"Open water, who knows how deep?",
 			"Rocks/eddies/rapids",
 			"Waterfall/smaller stream feeding the river",
@@ -1008,7 +1112,7 @@ export const REGIONS = [
 	},
 	{
 		id: "blackwaterLake", label: "Blackwater Lake", page: "Book II p. 50",
-		terrain: build([
+		terrain: terrainTable([
 			"Trees/shrubs/succulents/tall grass",
 			[2, 3, "Ridge wall/prominence/overhang"],
 			[4, 5, "Scree/rubble/rocks/boulders"],
@@ -1022,7 +1126,7 @@ export const REGIONS = [
 	},
 	{
 		id: "threeCovenBluffs", label: "Three Coven Lake (bluffs)", page: "Book II p. 441",
-		terrain: build([
+		terrain: terrainTable([
 			[1, 2, "Cliff/ledge/cleft/crevice"],
 			[3, 4, "Scree/rubble/boulders"],
 			[5, 6, "Overhang/plateau/outcrop"],
@@ -1035,20 +1139,20 @@ export const REGIONS = [
 	},
 	{
 		id: "threeCovenShore", label: "Three Coven Lake (shoreline)", page: "Book II p. 441",
-		terrain: build([
+		terrain: terrainTable([
 			[1, 2, "Marsh/mire/mudflat"],
 			[3, 4, "Beach/shingle/shallows"],
 			[5, 6, "Drop-off/strong current/undertow"],
 			[7, 8, "Jumble of boulders/rubble"],
 			[9, 9, "Barrow"],
 			[10, 10, "A Stone Lord site"],
-			[11, 11, "Island/sandbar and roll 1d10 again"],
-			[12, 12, "Cove/bay/inlet and roll 1d10 again"],
+			[11, 11, "Island/sandbar", { again: 10 }],
+			[12, 12, "Cove/bay/inlet", { again: 10 }],
 		]),
 	},
 	{
 		id: "frozenWastes", label: "The Frozen Wastes", page: "Book II p. 250",
-		terrain: build([
+		terrain: terrainTable([
 			[1, 1, "Kettle lake, small but dozens or hundreds of feet deep"],
 			[2, 3, "Stretch of shallow standing water/ice"],
 			[4, 6, "Wide open expanse, just grass and shrub for miles"],
@@ -1061,13 +1165,13 @@ export const REGIONS = [
 	},
 	{
 		id: "labyrinth", label: "The Labyrinth", page: "Book II p. 242",
-		terrain: build([
+		terrain: terrainTable([
 			[1, 2, "Lava tube or magma worm tunnel"],
 			[3, 4, "Braided/branching tunnels"],
 			[5, 6, "Chamber, cavern, or alcove"],
 			[7, 8, "Steps, terraces, ledges"],
 			[9, 10, "Forge Lord construction, worked stone passage, or ruin"],
-			[11, 12, "An obstruction, and roll 1d10 again"],
+			[11, 12, "An obstruction", { again: 10 }],
 		]),
 	},
 ];
@@ -1173,5 +1277,5 @@ export function rollMannerTable(manner, key, rng = Math.random) {
 /** Roll one terrain row for a region, or null when there's no such region. */
 export function rollTerrain(regionId, rng = Math.random) {
 	const r = region(regionId);
-	return r ? rollOnTable(r.terrain, rng) : null;
+	return r ? rollOnTable(r.terrain.rows, rng) : null;
 }

@@ -14,11 +14,15 @@
 
 import { escHtml, decodeEntities } from "./strings.js";
 import { step4Questions, step6Questions } from "../dialogs/introductions-data.js";
-import { CHART_GROUPS } from "../dialogs/expedition-data.js";
+import { CHART_GROUPS, chartPicked, chartEntryText } from "../dialogs/expedition-data.js";
 import {
-	journeyRoute, atLeastPhrase, routeLegLines, routeLine, fillChartBlank,
+	journeyRoute, routePhrase, routeLegLines, routeLine, fillChartBlank,
 } from "./travel-route.js";
+import { hasFillBlank } from "./fill-blanks.js";
 import { SEASONAL_GAINS } from "../dialogs/spring-burst-data.js";
+// One name for an unnamed trip: the switcher, the steading's held assets and this page all
+// have to agree, so the fallback wording lives in one place rather than three.
+import { expeditionLabel } from "./expedition-log-core.js";
 // Change-detection hash (pure, Foundry-free) — lets us tell a page's still-pristine
 // prose (safe to refresh from the source) from one the GM has edited in the journal.
 import { hashString } from "../hooks/journal-sync-core.js";
@@ -103,21 +107,42 @@ function qaPairsFrom(records, questions) {
 	return pairs;
 }
 
-// Render the ticked items of an expedition checklist (Chart a Course's requirements
-// & challenges) as a per-group bulleted list — the journey's shape, in the GM's own
-// words. `checks` is the saved { key: bool } map; item text is trusted authored HTML.
-// Returns "" when nothing in any group is ticked.
+// Render what a trip's Chart a Course presented — its requirements and its challenges — as a
+// per-group bulleted list: the journey's shape, in the GM's own words. Returns "" for a trip
+// that presented nothing.
 //
-// `route` is the trip's solved journey, when one was plotted. Two of the requirements carry
-// literal blanks ("at least ___ days"), and they go through the SAME filler the dialog's own
-// checklist uses — substituting in one place and not the other would print a blank in the journal
-// where the GM had read a number.
-function checkedGroups(groups, checks, route = null) {
-	return (groups ?? [])
+// THE LIST IS THE RECORD, read through `chartPicked` so this and the walkthrough are looking
+// at one thing (and so a trip logged under the older tick-and-fill pair prints the same here
+// as it draws there — that adapter is where the legacy shape is dealt with, once).
+//
+// Each line is either an authored prompt named by key, whose wording lives in expedition-data
+// as trusted HTML, or a sentence the GM wrote, which is escaped. What they said about it goes
+// through the SAME resolver the walkthrough's own rows use, in the same order of preference:
+// most of the authored requirements carry a literal blank ("at least ___ days", "watch out for
+// ___"), and what was written is spliced into it, else what the plotted route works out, else
+// the blank stands. Filling in one place and not the other would print a blank in the journal
+// where the GM had read an answer.
+//
+// A line with no blank in it ("the way is perilous") has nowhere to splice, so what was said is
+// printed after it instead. Same field either way: the record does not care which shape the step
+// drew it in.
+function chartedGroups(chart, route = null) {
+	const picked = chartPicked(chart);
+	return CHART_GROUPS
 		.map(group => {
-			const items = (group.items ?? []).filter(it => checks?.[it.key]);
-			if (!items.length) return "";
-			const lis = items.map(it => `<li>${fillChartBlank(it.text, it.key, route)}</li>`).join("");
+			const mine = picked.filter(e => e.group === group.key);
+			if (!mine.length) return "";
+			const lis = mine.map(entry => {
+				const text = chartEntryText(entry);
+				const said = String(entry.answer ?? "").trim();
+				// An authored line is the book's words; one the GM wrote is theirs, and is the
+				// only user-authored string in this list.
+				const line = entry.key
+					? fillChartBlank(text, entry.key, route, said)
+					: escHtml(text);
+				const after = (entry.key && hasFillBlank(text)) ? "" : said;
+				return `<li>${line}${after ? `: ${escHtml(after)}` : ""}</li>`;
+			}).join("");
 			return `<p><strong>${escHtml(group.label)}</strong></p><ul>${lis}</ul>`;
 		})
 		.filter(Boolean)
@@ -129,7 +154,7 @@ function journeyProse(route) {
 	if (!route) return "";
 	const legs = routeLegLines(route).map(line => `<li>${escHtml(line)}</li>`).join("");
 	return `<p><strong>${escHtml(routeLine(route))}</strong>: `
-		+ `${escHtml(atLeastPhrase(route.total))}.</p><ul>${legs}</ul>`;
+		+ `${escHtml(routePhrase(route))}.</p><ul>${legs}</ul>`;
 }
 
 // The GM's own words about the route — with OUR words dropped back out.
@@ -146,9 +171,22 @@ function journeyNote(chart, route) {
 	return paragraphs(chart?.route);
 }
 
+// What the trip took out of the steading's common stores, as ticked on the Requisition
+// step. The whole of the section now, and above whatever a GM typed back when the step
+// carried a note box: this list, and the "out on <trip>" tag the steading sheet wears
+// while they are gone, are the two halves of the answer to "where did the wagon go?".
+function requisitionedList(taken) {
+	const names = (taken ?? [])
+		.map(t => String(t?.name ?? "").trim())
+		.filter(Boolean);
+	if (!names.length) return "";
+	const lis = names.map(n => `<li>${escHtml(n)}</li>`).join("");
+	return `<p><strong>Taken from the steading</strong></p><ul>${lis}</ul>`;
+}
+
 // Compile one logged expedition into a Chronicle page, or null when it holds nothing
-// worth recording. The arriving-home checklist is GM prep (questions, not answers), so
-// only its free-text "Return Triumphant?" note carries through.
+// worth recording. The arriving-home list is GM prep — questions, not answers — and has
+// never been printed here; what came of Returning Triumphant is written on the steading.
 function buildExpeditionPage(exp, index) {
 	const chart = exp?.chart ?? {};
 	const home  = exp?.home ?? {};
@@ -158,17 +196,35 @@ function buildExpeditionPage(exp, index) {
 	const route = journeyRoute(exp?.journey);
 	const sections = [
 		proseSection("Destination & route", journeyProse(route) + journeyNote(chart, route)),
-		proseSection("The way ahead", checkedGroups(CHART_GROUPS, chart.checks, route) + paragraphs(chart.notes)),
+		proseSection("The way ahead", chartedGroups(chart, route) + paragraphs(chart.notes)),
+		// LEGACY on the same terms as "Other preparations" below. The Outfit step's note box is
+		// gone — the live party-load readout there answers "who's carrying what" off the sheets
+		// themselves — so nothing writes `exp.outfit` any more. Trips logged while the box existed
+		// still carry what a GM typed, and it goes on printing under the heading it was written
+		// for. A trip logged since simply has no such heading.
 		proseSection("Outfit & supplies", paragraphs(exp?.outfit)),
-		proseSection("Requisitioned", paragraphs(exp?.requisition)),
+		// The ticked list is what fills this heading now: the Requisition step's note box is gone,
+		// so `exp.requisition` is LEGACY in the same way `exp.outfit` above is, still printed
+		// under the list for the trips that were logged with it.
+		proseSection("Requisitioned", requisitionedList(exp?.requisitioned) + paragraphs(exp?.requisition)),
+		// LEGACY, and kept deliberately. "Other preparations" is no longer a step of the
+		// walkthrough (ExpeditionDialog's _STEPS), so nothing writes `exp.prep` any more — but
+		// trips logged while it was a step still carry what a GM typed there, and dropping this
+		// line would silently un-print it from every Chronicle page that already holds it.
+		// `proseSection` returns nothing for empty prose and the list is filtered, so a trip
+		// logged since the step went away simply has no such heading.
 		proseSection("Other preparations", paragraphs(exp?.prep)),
 		proseSection("The journey", paragraphs(exp?.running)),
+		// LEGACY, like the three above. The arriving-home step's "Return Triumphant?" box is
+		// gone — that step offers the MOVE now, and making it clears a steading debility (or
+		// raises Fortunes), which the steading's own ledger records attributed to the move. So
+		// nothing writes `home.notes` any more; trips logged with the box keep printing theirs.
 		proseSection("Coming home", paragraphs(home.notes)),
 	].filter(Boolean);
 	if (!sections.length) return null;
 
 	const title = String(exp?.title ?? "").trim();
-	const name  = title ? `Expedition: ${title}` : `Expedition ${index + 1}`;
+	const name  = title ? `Expedition: ${title}` : expeditionLabel(exp, index);
 	return { key: `${EXPEDITION_PAGE_KEY_PREFIX}${exp.id}`, name, sections };
 }
 

@@ -23,8 +23,13 @@ export const DEFAULT_FATE_TABLE = {
 };
 
 /**
- * The expedition walkthrough's tables (Book I p.301–343), keyed by the `fate` value on the
- * step that prints them (see dialogs/ExpeditionDialog.js).
+ * The expedition chapter's tables (Book I p.301–343), keyed by the `fate` value on the step
+ * that prints them (see dialogs/ExpeditionDialog.js).
+ *
+ * `weather` is the exception: its step is gone from the walkthrough (the seasonal picker is a
+ * window of its own, and the step was one of eleven on a rail that had grown into a chore), so
+ * nothing prints it today. It stays because `rollDieOfFate` takes any table here by name and
+ * this is still the book's answer to "did they get the weather they hoped for?"
  */
 export const FATE_TABLES = {
 	// Running the journey — how hard to come down on a perilous leg.
@@ -81,15 +86,22 @@ export function fateRowText(row) {
 /**
  * The table as a step body's inline reference list — the `<ul>` a walkthrough prints under
  * the paragraph that reaches for the die.
+ *
+ * Each row carries its INDEX in the table. That is what lets the surface printing this list run
+ * the randomizer's light down it and land on the row the die gave (dialogs/ExpeditionDialog.js):
+ * the roll knows which row it landed on, and this says which <li> that is — without matching on
+ * the printed range, which is prose ("2&ndash;3") and would have to survive an entity decode.
  */
 export function fateTableList(table) {
 	const rows = table.rows
-		.map(r => `<li><strong>${fateRangeLabel(r)}</strong>: ${fateRowText(r)}</li>`)
+		.map((r, i) => `<li data-fate-row="${i}"><strong>${fateRangeLabel(r)}</strong>: ${fateRowText(r)}</li>`)
 		.join("\n\t\t\t\t\t");
 	return `<ul class="stonetop-exp-fatetable">\n\t\t\t\t\t${rows}\n\t\t\t\t</ul>`;
 }
 
-/** The table as a parenthetical phrase: "1–2 nope, 3–4 partway, 5–6 just what they wanted". */
+/** The table as a parenthetical phrase: "1–2 nope, 3–4 partway, 5–6 just what they wanted".
+ *  The short form, for a table named in running prose rather than listed under it. No step
+ *  prints one this way since the weather step went; kept as the pair to fateTableList. */
 export function fateInlinePhrase(table) {
 	return table.rows.map(r => `${fateRangeLabel(r)} ${r.label ?? fateRowText(r)}`).join(", ");
 }

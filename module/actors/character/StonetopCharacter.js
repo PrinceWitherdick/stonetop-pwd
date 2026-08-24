@@ -34,11 +34,12 @@ import {
 	VitalsSnapshotBuilder,
 } from "../../model/CharacterSnapshot.js";
 import {PlaybookMoveEntry} from "./PlaybookMoveEntry.js";
+import {normalizeRollMode} from "../../dialogs/RollDialog.js";
 import {deletionEntry} from "../../utils/foundry-compat.js";
 import {statRequirementLabel, statRequirementsUnmet} from "./stat-requirement.js";
 import {MoveResources} from "./MoveResources.js";
 import {moveMarkBudget} from "./move-mark-budget.js";
-import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, resolvedFlags, resolvedFlagProperty} from "./StonetopFlags.js";
+import {StonetopFlags, STONETOP_SCOPE, resolvedFlags, resolvedFlagProperty} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG, ownsAsteriskMove} from "./WouldBeHeroAsterisk.js";
 import {ownedNamesOr} from "./owns-move.js";
@@ -71,7 +72,7 @@ import {getStonetopSteadingActor} from "../../utils/world.js";
 import {moveChatCard} from "../../utils/chat.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
 import {buildCustomMoveData, clampInt} from "../../utils/custom-move-data.js";
-import {buildInventoryItemData} from "../../utils/inventory-item-data.js";
+import {buildInventoryItemData, readInventoryItemData} from "../../utils/inventory-item-data.js";
 import {ARTIFACT_STATE, concealArtifactFields, isArtifactUpgrade, normalizeArtifactState} from "./artifact-identify.js";
 import {isLoveLetter} from "./love-letters.js";
 import {deriveLoadLevel, loadLimitsFor} from "../../utils/load.js";
@@ -112,10 +113,6 @@ const ORIGIN_DESCRIPTIONS = {
 	wild: "<p>The area around Stonetop includes the Great Wood, the Flats, and other dangerous places beyond the roads. The Forest Folk have vanished, crinwin grow bolder, and hunters bring back stories of fresh ruins, strange spirits, and twisted things in the trees.</p>",
 };
 
-function _normalizeSheetRollMode(rollMode) {
-	return ["adv", "dis"].includes(rollMode) ? rollMode : "normal";
-}
-
 // True for player-authored custom moves (flagged at creation by buildCustomMoveData).
 // The flag distinguishes them from foreign playbook moves that also land in "other".
 function _isCustomMove(item) {
@@ -130,13 +127,22 @@ function _isMoveLearned(item) {
 	return item?.flags?.[STONETOP_SCOPE]?.learned !== false;
 }
 
-// Sum a numeric `system.<field>` across every LEARNED move the actor owns. The shared
-// spine of _ownedLoadBonus / _ownedShieldLoadReduction (and any future per-move bonus),
-// so the "skip un-learned moves" rule lives in exactly one place and can't be forgotten.
-function _sumLearnedMoveField(actor, field) {
-	return actor.items
-		.filter(i => i.type === "move" && _isMoveLearned(i))
-		.reduce((sum, i) => sum + (Number(i.system?.[field]) || 0), 0);
+// Total a numeric `system.<field>` across every LEARNED move the actor owns, and name the
+// moves that actually contributed, in sheet order. The shared spine of _ownedLoadBonus /
+// _ownedShieldLoadReduction (and any future per-move bonus), so the "skip un-learned moves"
+// rule lives in exactly one place and can't be forgotten -- and so a note naming the source
+// can never disagree with the total it explains, since both come off the same single pass.
+function _learnedMoveField(actor, field) {
+	let total = 0;
+	const names = [];
+	for (const i of actor.items) {
+		if (i.type !== "move" || !_isMoveLearned(i)) continue;
+		const value = Number(i.system?.[field]) || 0;
+		if (value === 0) continue;
+		total += value;
+		if (i.name) names.push(i.name);
+	}
+	return { total, names };
 }
 
 // Resource-track snapshot for an "other" move, in the shape the resourceChecks helper
@@ -241,9 +247,13 @@ function _stripPossessionUsesAnnotation(desc, resourceDef) {
 
 // A move can raise every load cap via its `loadBonus` field (the Ranger's Pack
 // Horse sets it to 1). The caps and the count→tier bucketing live in utils/load.js
-// so the sheet, snapshot defaults, and dialog can't drift.
+// so the sheet, snapshot defaults, and dialog can't drift. The granting moves' names
+// come back alongside the total, so the notes on the sheet, in the Outfit dialog and in
+// the expedition load readout can say which move raised the caps. They used to all say
+// "Pack Horse", which is a lie on any character whose bonus came from a custom or
+// world-authored move instead.
 function _ownedLoadBonus(actor) {
-	return _sumLearnedMoveField(actor, "loadBonus");
+	return _learnedMoveField(actor, "loadBonus");
 }
 
 // The standard Shield inventory item (Book I p.86). The Heavy/Judge/Marshal's Armored
@@ -263,7 +273,7 @@ const _DEFEND_READINESS_FLAG = "readiness";
 // ◇ load by its `shieldLoadReduction`. Like loadBonus, the mechanic lives in the move's data
 // so buildSnapshot never hard-codes a move name.
 function _ownedShieldLoadReduction(actor) {
-	return _sumLearnedMoveField(actor, "shieldLoadReduction");
+	return _learnedMoveField(actor, "shieldLoadReduction").total;
 }
 
 // The id seed every standing-list row is minted with (see _rosterWrite). One width, in one place,
@@ -459,7 +469,6 @@ export class StonetopCharacter {
 			.withInventory(inventory)
 			.withArcana(await this._arcana.buildSnapshot(actor.system.stats ?? {}, this._inventory.checked, this._inventory.resources))
 			.withPostDeathInsert(postDeath)
-			.withRollMode(_normalizeSheetRollMode(resolvedFlags(actor).rollMode))
 			.withCrewBonuses(_buildCrewStats(playbookData?.crew, moveBonuses))
 			.withCompanionBonuses(_buildCompanionBonuses(moveBonuses, ownedAllByName))
 			.withViewerIsGM(!!view.viewerIsGM)
@@ -690,9 +699,11 @@ export class StonetopCharacter {
 		const commonSpecialSet = this._earnedCommonSpecialSlugs(steadingActor, allItems);
 		// A move's `loadBonus` raises every load cap (the Ranger's Pack Horse → +1).
 		// The boosted limits flow into the regular ◇ pool here and into the Outfit
-		// dialog via the snapshot. hasPackHorse drives the boosted help text/note.
-		const loadBonus      = _ownedLoadBonus(this._actor);
-		const hasPackHorse   = loadBonus > 0;
+		// dialog via the snapshot; the granting moves' names ride along so the boosted
+		// help text can name whichever move did it rather than assuming the horse.
+		const bonus          = _ownedLoadBonus(this._actor);
+		const loadBonus      = bonus.total;
+		const loadBonusMoves = loadBonus > 0 ? bonus.names : [];
 		const loadLimits     = loadLimitsFor(loadBonus);
 		// The Armored move drops a carried shield to ◆ (1 ◇) instead of ◆◆; floored at 1.
 		const shieldLoadReduction = _ownedShieldLoadReduction(this._actor);
@@ -1064,7 +1075,8 @@ export class StonetopCharacter {
 			.withTreasureSmall(treasureSmall)
 			.withSmallItemLimit(smallItemLimit)
 			.withSteadingName(steadingName)
-			.withHasPackHorse(hasPackHorse)
+			.withLoadBonus(loadBonus)
+			.withLoadBonusMoves(loadBonusMoves)
 			.withLoadLimits(loadLimits)
 			.build();
 
@@ -1502,31 +1514,23 @@ export class StonetopCharacter {
 	 *        have it re-hidden on the way in.
 	 */
 	async addDroppedInventoryItem(itemData, opts = {}) {
-		const st = itemData?.flags?.[ITEM_FLAG_SCOPE] ?? {};
-		const sys = itemData?.system ?? {};
+		// Where each field actually lives is readInventoryItemData's problem, not this method's.
+		const read = readInventoryItemData(itemData);
 		const clone = v => globalThis.foundry?.utils?.deepClone?.(v) ?? v;
-		const rawColumn = st.inventoryColumn ?? sys.inventoryColumn ?? st.column ?? sys.column;
-		const resource = st.resource ?? sys.resource;
-		const armor = st.armor ?? sys.armor;
-		const isTreasure = !!(st.isTreasure ?? sys.isTreasure);
-		const carriedState = normalizeArtifactState(st.identifyState ?? sys.identifyState);
+		const { column: rawColumn, resource, armor, isTreasure } = read;
+		const carriedState = normalizeArtifactState(read.artifact.state);
 		// Only a treasure/artifact is ever hidden by default. An ordinary write-in dragged off
 		// the sidebar has no tags worth concealing, and hiding it would strand the player with a
 		// "?" on their own gear.
 		const state = carriedState
 			|| (opts.hideArtifact && isTreasure ? ARTIFACT_STATE.UNKNOWN : ARTIFACT_STATE.NONE);
 		const data = buildInventoryItemData({
-			artifact: {
-				state,
-				hint: st.artifactHint ?? sys.artifactHint ?? "",
-				lore: st.artifactLore ?? sys.artifactLore ?? "",
-				lead: st.artifactLead ?? sys.artifactLead ?? "",
-			},
+			artifact: { ...read.artifact, state },
 			name: itemData?.name,
 			// A drop's column is untrusted; anything but an explicit "regular" reads as small.
 			column: rawColumn === "regular" ? "regular" : "small",
-			weight: st.weight ?? sys.weight ?? 1,
-			note: st.note ?? sys.note ?? "",
+			weight: read.weight ?? 1,
+			note: read.note,
 			resource: resource ? clone(resource) : null,
 			armor: armor ? clone(armor) : null,
 			moveType: "inventory-custom",
@@ -2132,7 +2136,7 @@ export class StonetopCharacter {
 	// truthy answers both mean "taken, stop looking" — the distinction is only for a caller with
 	// something to fire after the roll (see MOVE_ROLL_EFFECTS), which must not fire on a prompt
 	// nobody answered.
-	async onRoll(event, { statOverride = null, situational = 0, weaponSlug = null } = {}) {
+	async onRoll(event, { statOverride = null, situational = 0, weaponSlug = null, rollMode = "normal" } = {}) {
 		const itemId = event.currentTarget.closest(".item")?.dataset.itemId;
 		if (!itemId) return false;
 		const item = this._actor.items.get(itemId);
@@ -2167,7 +2171,6 @@ export class StonetopCharacter {
 			attackExtra = begun;
 		}
 
-		const rollMode = this.rollMode;
 		const forward  = descriptionOnly ? 0 : this._actor.system?.attributes?.forward?.value ?? 0;
 		const ongoing  = descriptionOnly ? 0 : this._actor.system?.attributes?.ongoing?.value ?? 0;
 		// A one-off situational modifier from the optional pre-roll prompt; the roll
@@ -2175,7 +2178,11 @@ export class StonetopCharacter {
 		const situ     = descriptionOnly ? 0 : situational;
 
 		const modifier    = forward + ongoing + situ;
-		const rollOptions = { rollMode, modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}) };
+		// `rollMode` is the caller's answer to the pre-roll prompt (see RollDialog.js), which is
+		// the ONLY place advantage and disadvantage are chosen — there is no sticky sheet control
+		// behind it to fall back on. A description-only click never opened the prompt, so it
+		// arrives at the default and rolls nothing anyway.
+		const rollOptions = { rollMode: normalizeRollMode(rollMode), modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}) };
 
 		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, rollOptions), descriptionOnly });
 
@@ -2531,8 +2538,10 @@ export class StonetopCharacter {
 
 	async onDirectStatRoll(stat, extraOptions = {}) {
 		const { rollStat } = await import("../../utils/roll-engine.js");
-		const { situational = 0, ...rest } = extraOptions;
-		const rollMode = this.rollMode;
+		// `rollMode` is the pre-roll prompt's answer (see RollDialog.js). Destructured rather
+		// than left in `rest` so the caller cannot half-set it: Know Things passes a mode it has
+		// already lifted through withAdvantage, and that is a value, not an override.
+		const { situational = 0, rollMode = "normal", ...rest } = extraOptions;
 		const forward  = this._actor.system?.attributes?.forward?.value ?? 0;
 		const ongoing  = this._actor.system?.attributes?.ongoing?.value ?? 0;
 		// `situational` is the one-off modifier from the optional pre-roll prompt; the
@@ -2542,7 +2551,7 @@ export class StonetopCharacter {
 		// Returned so a caller that has to act on the outcome (the arcana Identify roll) can
 		// classify the total without re-rolling or re-deriving the tier thresholds.
 		const roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat, {
-			rollMode,
+			rollMode: normalizeRollMode(rollMode),
 			modifier,
 			forward,
 			ongoing,
@@ -2631,14 +2640,6 @@ export class StonetopCharacter {
 		const base = { ...options, stonetopDebility: def?.name ?? key, stonetopDebilityTooltip: def?.description ?? "" };
 		if (options.rollMode === "adv") return { ...base, rollMode: "normal" };
 		return { ...base, rollMode: "dis" };
-	}
-
-	get rollMode() {
-		return _normalizeSheetRollMode(resolvedFlags(this._actor).rollMode);
-	}
-
-	async setRollMode(rollMode) {
-		await this._actor.setFlag(STONETOP_SCOPE, "rollMode", _normalizeSheetRollMode(rollMode));
 	}
 
 	// ── Death and dying (Book I, Harm & Healing p.245) ─────────────────────────

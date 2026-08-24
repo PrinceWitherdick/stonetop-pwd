@@ -11,10 +11,14 @@
       The storage did not move either, which is the other half of the same story: these cards
       live in a journal pointed at by a flag on the STEADING actor. See gm-prep-tabs.js.
 
-      `stonetop-readonly` when the section's pencil is off, so a GM reading their prep can't
-      delete a threat with a stray click. --}}
-<div class="tab threats steading-edit-section{{#unless stonetop.edit.threats}} stonetop-readonly{{/unless}}" data-group="primary" data-tab="threats">
-	{{> "stonetop.steading-section-toggle" section="threats" editing=stonetop.edit.threats}}
+      NO SECTION PENCIL, and so no `stonetop-readonly`. This tab had both, and what the lock
+      reached in the end was one button: the trash. Everything else on it writes nothing — a
+      threat is written in its editor and a hazard in its wizard, the doom ticks are a play-time
+      tracker, the collapse chevrons and the type reference below only fold and unfold prose — so
+      each had to be exempted by name in stonetop.css, one at a time, and the type reference was
+      never exempted at all and spent its whole life mouse-dead. Deleting is guarded by the
+      confirm dialog in `_confirmDeletePrepPage`. Sites says the same thing at its own head. --}}
+<div class="tab threats" data-group="primary" data-tab="threats">
 	<section class="sheet-tab steading-threats steading-prep-cards">
 
 		{{#if stonetop.hasSteading}}

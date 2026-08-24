@@ -3,10 +3,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import {
-	TRAVEL_PLACES, TRAVEL_LEGS, TRAVEL_MAPS, TRAVEL_EXITS, MAP_CAPTIONS, MAP_FRAMES, FULL_FRAME,
-	BEYOND_TIER,
-	travelPlace, homePlace, placesOnMap, placesBeyond, exitsOnMap,
-	spotPercent, frameFor, frameFitsImage,
+	TRAVEL_PLACES, TRAVEL_LEGS, TRAVEL_MAPS, TRAVEL_EXITS, ROAD_BENDS,
+	MAP_CAPTIONS, MAP_FRAMES, FULL_FRAME, BEYOND_TIER,
+	travelPlace, homePlace, placesOnMap, placesBeyond, exitsOnMap, roadBendsBetween,
+	spotPercent, percentSpot, frameFor, frameFitsImage,
 } from "../../module/data/travel-times.js";
 
 // The travel graph is a duplicate of prose the packs already ship — the GM playbook's Travel
@@ -166,6 +166,56 @@ describe("the travel graph is internally consistent", () => {
 	});
 });
 
+// The corners a drawn line has to turn, which the table has no room for: it prints journeys, so
+// the road from Stonetop up to the Foothills is one row and a line drawn for it pin to pin cuts
+// the corner the road turns at the Crossroads. These rows are geometry and only geometry, so what
+// they have to be held to is that each one bends a leg that exists, on a map that draws it.
+describe("the corners the roads turn", () => {
+	/** Is `slug` somewhere `map` can draw: its own spot, or the edge arrow that points at it? */
+	const drawn = (map, slug) =>
+		!!travelPlace(slug)?.spots?.[map] || TRAVEL_EXITS.some(e => e.map === map && e.node === slug);
+
+	it("bends a leg the table actually prints", () => {
+		// A row for a journey the graph solves in two legs would never be consulted: the bend is
+		// looked up between one stop and the next, and those are the legs.
+		for (const bend of ROAD_BENDS) {
+			const leg = TRAVEL_LEGS.some(l =>
+				(l.from === bend.from && l.to === bend.to) || (l.from === bend.to && l.to === bend.from));
+			expect(leg, `no leg for ${bend.from}->${bend.to}`).toBe(true);
+		}
+	});
+
+	it("names a map, and places that map can draw", () => {
+		const maps = new Set(TRAVEL_MAPS.map(m => m.slug));
+		for (const bend of ROAD_BENDS) {
+			expect(maps, `unknown map ${bend.map}`).toContain(bend.map);
+			expect(bend.through.length).toBeGreaterThan(0);
+			for (const slug of bend.through) {
+				expect(travelPlace(slug), `unknown place ${slug}`).toBeTruthy();
+				expect(drawn(bend.map, slug), `${slug} is not drawn on ${bend.map}`).toBe(true);
+				// A corner is somewhere the line passes THROUGH, so it is neither of its ends.
+				expect([bend.from, bend.to]).not.toContain(slug);
+			}
+		}
+	});
+
+	it("writes one row per road rather than one per direction", () => {
+		const seen = new Set();
+		for (const bend of ROAD_BENDS) {
+			const key = [bend.map, ...[bend.from, bend.to].sort()].join("|");
+			expect(seen, `two rows for ${key}`).not.toContain(key);
+			seen.add(key);
+		}
+		// And the lookup is what turns that one row around for the walk home.
+		expect(roadBendsBetween("vicinity", "stonetop", "the-foothills")).toEqual(["the-crossroads"]);
+		expect(roadBendsBetween("vicinity", "the-foothills", "stonetop")).toEqual(["the-crossroads"]);
+		// The great majority of legs turn no corner, and the map a row was written for is the only
+		// one it answers for.
+		expect(roadBendsBetween("vicinity", "stonetop", "the-maw")).toEqual([]);
+		expect(roadBendsBetween("worlds-end", "stonetop", "the-foothills")).toEqual([]);
+	});
+});
+
 describe("map positions", () => {
 	it("puts every spot inside its map", () => {
 		for (const place of TRAVEL_PLACES) {
@@ -193,6 +243,64 @@ describe("map positions", () => {
 	it("leaves Lygos off the maps, reachable only through the World's End arrow", () => {
 		expect(placesBeyond().map(p => p.slug)).toEqual(["lygos"]);
 		expect(exitsOnMap("worlds-end").map(e => e.to)).toContain(BEYOND_TIER);
+	});
+
+	// AN ANCHOR IS A POSITION WITHOUT A PIN. The Vicinity letters six places the World's End does
+	// not, so a trip to one of them had no route line at all on the outer map. They now carry a
+	// World's End spot marked `anchor`, which the line reads and nothing else does.
+	describe("the anchor spots", () => {
+		const INNER = ["the-crossroads", "the-maw", "the-red-grove", "cave-bears-den",
+			"the-ruined-tower", "the-foothills"];
+
+		it("gives each of the six inner places a World's End position", () => {
+			for (const slug of INNER) {
+				const spot = travelPlace(slug).spots["worlds-end"];
+				expect(spot, slug).toBeTruthy();
+				expect(spot.anchor, slug).toBe(true);
+			}
+		});
+
+		it("keeps them off the outer map's pins while leaving the inner map's alone", () => {
+			const outer = placesOnMap("worlds-end").map(place => place.slug);
+			const inner = placesOnMap("vicinity").map(place => place.slug);
+			for (const slug of INNER) {
+				expect(outer, slug).not.toContain(slug);
+				expect(inner, slug).toContain(slug);
+			}
+			// The map still draws everything it letters, Stonetop included.
+			expect(outer).toContain("stonetop");
+		});
+
+		it("marks nothing else as an anchor, on either map", () => {
+			const flagged = [];
+			for (const place of TRAVEL_PLACES) {
+				for (const [tier, spot] of Object.entries(place.spots ?? {})) {
+					if (spot.anchor) flagged.push(`${place.slug}@${tier}`);
+				}
+			}
+			expect(flagged.sort()).toEqual(INNER.map(slug => `${slug}@worlds-end`).sort());
+		});
+
+		// A refit that went wrong would show up here first: these six are the country immediately
+		// around Stonetop, and the Vicinity's whole footprint is about a quarter of the outer map.
+		// A number out in the Manmarch would draw a route line clear across the continent.
+		it("puts them in the country around Stonetop", () => {
+			const home = travelPlace("stonetop").spots["worlds-end"];
+			for (const slug of INNER) {
+				const spot = travelPlace(slug).spots["worlds-end"];
+				expect(Math.hypot(spot.fx - home.fx, spot.fy - home.fy), slug).toBeLessThan(0.15);
+			}
+		});
+
+		it("keeps every anchor inside the map", () => {
+			for (const slug of INNER) {
+				const spot = travelPlace(slug).spots["worlds-end"];
+				for (const axis of ["fx", "fy"]) {
+					expect(spot[axis], `${slug}.${axis}`).toBeGreaterThan(0);
+					expect(spot[axis], `${slug}.${axis}`).toBeLessThan(1);
+				}
+			}
+		});
 	});
 
 	it("orders a map's places down the page", () => {
@@ -238,6 +346,35 @@ describe("map positions", () => {
 		// The frame's corners are where a canonical 0,0 and 1,1 land.
 		expect(spotPercent({ fx: 0, fy: 0 }, poster)).toEqual({ left: poster.x0 * 100, top: poster.y0 * 100 });
 		expect(spotPercent({ fx: 1, fy: 1 }, poster)).toEqual({ left: poster.x1 * 100, top: poster.y1 * 100 });
+	});
+
+	// The other direction, which is how a place the BOOKS never printed gets onto these maps: a
+	// GM clicks a pixel of whichever copy their world has, and what is stored has to be the
+	// canonical fraction, or the pin walks the day that world gains the sharper render.
+	it("takes a click back to a canonical fraction, on any copy of the map", () => {
+		const poster = frameFor("assets/maps/map-vicinity.webp");
+		const printed = frameFor("assets/maps/gm-vicinity.webp");
+		// The SAME point on the drawing, addressed against two different crops of it. Both have
+		// to come back as the one fraction, which is the whole claim this pair makes.
+		const spot = { fx: 0.42, fy: 0.61 };
+		for (const frame of [poster, printed]) {
+			expect(percentSpot(spotPercent(spot, frame), frame)).toEqual(spot);
+		}
+		// And the poster's own corners are canonical 0,0 and 1,1, as the reverse says they are.
+		expect(percentSpot({ left: poster.x0 * 100, top: poster.y0 * 100 }, poster)).toEqual({ fx: 0, fy: 0 });
+		expect(percentSpot({ left: poster.x1 * 100, top: poster.y1 * 100 }, poster)).toEqual({ fx: 1, fy: 1 });
+	});
+
+	it("rounds to the precision the table itself is written to", () => {
+		// A click is a pixel on a 300 dpi map, and 0.0001 of the width is finer than that pixel.
+		const { fx, fy } = percentSpot({ left: 33.333333, top: 66.666666 });
+		expect(fx).toBe(0.3333);
+		expect(fy).toBe(0.6667);
+	});
+
+	it("answers zero for a frame with no extent rather than dividing by it", () => {
+		const flat = { x0: 0.5, y0: 0.5, x1: 0.5, y1: 0.5 };
+		expect(percentSpot({ left: 40, top: 40 }, flat)).toEqual({ fx: 0, fy: 0 });
 	});
 
 	it("checks a registration against the shape of the file it is used on", () => {

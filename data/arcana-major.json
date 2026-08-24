@@ -101,6 +101,11 @@
     "front": {
       "title": "Hungering Maw of Hlad",
       "description": "<p>A ring of black metal bands, woven in an intricate pattern beyond the skills of modern smiths. The way the bands twist on each other seems to defy reality, and the weak-willed find themselves pondering the bands for minutes or hours.</p><p>The metal is always cold. Always.</p><p>When you <strong><em>wear the ring and press it firmly into the skin of a living thing</em></strong>, the ring draws the life-force from your victim. If your victim is helpless or unable to struggle, they are reduced to 0 HP (see below).</p><p>If your <strong><em>victim struggles</em></strong>, roll +CON: <strong>on a 10+</strong>, deal 1d10 damage (ignores armor) and they are left reeling (a PC or follower marks a debility, an NPC or monster grants advantage on any moves made against it until it recovers); <strong>on a 7-9</strong>, deal 1d10 damage (ignores armor) but you suffer whatever counterattack they dish out; <strong>on a 6-</strong>, ask the GM what happens (which may or may not involve marking a consequence).</p><p>When you <strong><em>use the ring to reduce an intelligent victim to 0 HP</em></strong>, roll 1d6:</p><ul><li>1-2: Their soul is wounded but they'll live, suffering from unnatural, compulsive hungers; should they die in this state, they become a wraith.</li><li>3-4: Their soul is wounded and their body gives up; they become a wraith.</li><li>5-6: Their soul is consumed and utterly destroyed by the ring—mark 1 below.</li></ul>",
+      "item": {
+        "weight": 1,
+        "tags": "<em>magical</em>",
+        "column": "regular"
+      },
       "unlock": "○○○ When you make the last mark, you unlock the ring's mysteries. Gain Siphon (see reverse) and erase all the marks. Each time you mark the third circle, gain another move from the reverse. If you have all the moves, mark a consequence instead."
     },
     "back": {
@@ -115,6 +120,11 @@
     "front": {
       "title": "Ineffable Words",
       "description": "<p>Syllables of the first language, words of pure thought and will, emblazoned on your soul and tongue by some angelic force or being. A gift, perhaps. Or a terrible, terrible affliction.</p><p>Their power thrums inside you, pulsing against the crude vessel of your flesh and blood. Sometimes, under stress or simply out of the blue, you are struck with shakes and seizures. And when the tremors pass and your senses return, you find that you have scratched strange symbols in the dirt or on the walls. Sometimes in your own blood.</p><p>When you <strong><em>enter an ecstatic delirium and allow the Ineffable Words to pour forth</em></strong>, roll +CON: <strong>on a 10+</strong>, you speak Truth, revealing something new and interesting about the current situation—ask the GM what, and all present understand this Truth as though it were spoken in their native tongue; <strong>on a 7-9</strong>, the 10+ result applies, but choose 1 from the list below.</p><ul><li>The Truth is cryptic, vague, incomplete</li><li>You are overcome, collapsing in a full-body seizure</li><li>You draw unwanted attention</li></ul><p>When you <strong><em>spend weeks in ascetic contemplation of the incommunicable words within you</em></strong>, roll +WIS: <strong>on a 10+</strong>, you gain insight into the power within you—mark 1 below; <strong>on a 7-9</strong>, gain advantage on your next attempt to contemplate the words.</p>",
+      "item": {
+        "weight": 1,
+        "tags": "<em>implanted, magical</em>",
+        "column": "regular"
+      },
       "unlock": "○○○ When you make the last mark, you unlock the mysteries of the Ineffable Words and can Speak the Unutterable (see reverse). Choose 1 Word that you have mastered and erase all marks above. Thereafter, when you make the last mark, choose another Word to master and erase all marks."
     },
     "back": {
@@ -186,6 +196,11 @@
     "front": {
       "title": "Redwood Effigy",
       "description": "<p>A vaguely man-shaped root of blood-red wood, wrapped in tattered cloth. Bright blue markings adorn the fabric, as do rust-colored stains.</p><p>But you know that. After all, you made it yourself. You've bound your flesh and soul to the effigy, and this is the only one you will ever be able to make.</p><p>When you <strong><em>perform the secret rite</em></strong>, which requires privacy, a few hours, and a drop of your own fresh blood, hold 1 Conduit (max 1 Conduit, at least to start). ◇◇◇</p><p><strong>SURROGATE SUFFERING</strong><br>When you <strong><em>suffer physical harm while carrying the effigy on your person</em></strong>, you can spend 1 Conduit. If you do, the effigy suffers that harm in your place. You suffer no more than a passing inconvenience, and the effigy bears faint signs of the trauma it has endured in your stead.</p><p>Record the diverted harm on the image of the effigy: a brief description of the injury, the HP that would have been lost, and any debilities you would have marked. Write small, in pencil. If the <em>effigy is destroyed</em>, you suffer all this harm at once.</p><p>Each time the effigy suffers harm on your behalf, mark 1. If all 3 marks are already marked, then mark a consequence instead (see reverse).</p>",
+      "item": {
+        "weight": 1,
+        "tags": "<em>magical</em>",
+        "column": "regular"
+      },
       "unlock": "○○○ When you make the last mark, you unlock the effigy's mysteries and gain Suffering Unleashed (see reverse)."
     },
     "back": {
@@ -200,6 +215,11 @@
     "front": {
       "title": "Ring of Daagon",
       "description": "<p>A finely carved ring of copper, coated in verdigris and always a little damp. Its shape is that of a strange, reptilian creature devouring its own tail.</p><p>When you <strong><em>don the Ring</em></strong>, you feel the presence of every body of water within a few miles, natural or not, even if it is underground.</p><p>When you <strong><em>wear the Ring and caress its reptilian head</em></strong>, the air around you becomes damper and cooler. If you continue to caress it for a minute or so, a mist gathers near the ground and grows higher and thicker as long as you continue. A few minutes of caressing the Ring will blanket your immediate surroundings in thick, obscuring fog. Half an hour will blanket the countryside. The fog persists for as long as you caress the Ring, and then dissipates naturally based on the prevailing weather.</p><p>When you <strong><em>have used the Ring to summon an obscuring fog and a named creature dies within that fog</em></strong>, the Ring will ask you (silently, in your mind) <em>May I take this one?</em> Should you assent, the creature's body will be gone—vanished into the mists—as soon as no mortal is directly paying it heed. The first time this happens during each fog you summon, mark 1:</p>",
+      "item": {
+        "weight": 1,
+        "tags": "<em>magical</em>",
+        "column": "regular"
+      },
       "unlock": "○○○ When you make the last mark, you unlock the ring's mysteries and may Call Up the Deep Ones (see reverse) while wearing the ring. The ring itself becomes a follower."
     },
     "back": {
@@ -271,6 +291,11 @@
     "front": {
       "title": "Storm Markings",
       "description": "<p>A series of branching, tree-like markings coursing up and down your skin. Usually pale blue, almost like veins, but when you become agitated they seem to glow, pulse, and ripple with light.</p><p>The markings are usually seen as a blessing of Tor (rainmaker, thunderhead, slayer-of-beasts). But like most blessings of the gods, they are also a great burden.</p><p>When you <strong><em>roil with anger</em></strong>, you do +1 damage until you calm down. But when you <strong><em>try to control your temper</em></strong>, roll +WIS: <strong>on a 10+</strong>, you keep your cool and act as you wish; <strong>on a 7-9</strong>, choose 1 from the list below; <strong>on a 6-</strong>, you just lose it—tell the GM what damn fool thing you end up doing.</p><ul><li>Take some deep breaths and count to ten, fuming all the while</li><li>Vent your rage, but tell us how and on what</li></ul><p>When you <strong><em>are struck by lightning or an electrical discharge</em></strong>, mark 1, take no damage, and suffer no ill effects (your gear, alas, has no such protection):</p>",
+      "item": {
+        "weight": 1,
+        "tags": "<em>implanted, magical</em>",
+        "column": "regular"
+      },
       "unlock": "○○○ When you make the last mark, you unlock the mysteries of the Storm Markings and can use Storm's Fury (see reverse). When you would make a mark but have already marked all 3, set your Fury to 3."
     },
     "back": {

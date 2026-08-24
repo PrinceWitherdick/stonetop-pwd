@@ -1,0 +1,27 @@
+{{!-- One pick-or-roll control per row combined into a table's answer, from CreateSiteDialog's
+      _pickSlots. Called with a whole context ({{> "stonetop.cs-pick-slots" this}}) rather than
+      hash arguments, so nothing it reads can be inherited from the enclosing context by a caller
+      that forgot to pass it — the trap _PARTIAL_PARAMS exists to catch for the list partials.
+
+      Every value a slot needs rides on the SLOT, including the ones that belong to the table as a
+      whole. A `../` chain out of the inner loop would land at a depth that depends on how this
+      partial was called, and reading one wrong yields data-key="", which no handler matches.
+
+      The options carry the result alone. The roll number in front of it is the table's own
+      bookkeeping, not part of the answer. --}}
+<div class="stonetop-cs-table-pick">
+  {{#each slots}}
+  <div class="stonetop-cs-pick-slot{{#if extra}} stonetop-cs-pick-slot--extra{{/if}}">
+    <label class="stonetop-cf-label">{{label}}{{#if hint}} <span class="stonetop-cf-pick-hint">{{hint}}</span>{{/if}}
+      <select class="stonetop-cf-input stonetop-cs-pick" data-key="{{key}}" data-slot="{{slot}}">
+        <option value="">(choose or roll)</option>
+        {{#each rows}}<option value="{{text}}"{{#if selected}} selected{{/if}}>{{text}}</option>{{/each}}
+      </select>
+    </label>
+    <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" data-key="{{key}}" data-slot="{{slot}}" data-tooltip="{{rollTip}}" data-tooltip-direction="UP"><i class="fas fa-dice-d20"></i></button>
+    {{#if extra}}<button type="button" class="stonetop-cs-uncombine stonetop-cf-mini-btn" data-key="{{key}}" data-slot="{{slot}}" data-tooltip="Drop this one" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}
+  </div>
+  {{/each}}
+  {{#if canAdd}}<button type="button" class="stonetop-cs-combine stonetop-cf-mini-btn" data-key="{{key}}"><i class="fas fa-plus"></i> Combine another</button>{{/if}}
+  {{#if note}}<p class="stonetop-cs-note">{{note}}</p>{{/if}}
+</div>

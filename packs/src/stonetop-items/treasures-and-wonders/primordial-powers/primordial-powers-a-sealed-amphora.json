@@ -16,7 +16,8 @@
         ""
       ]
     },
-    "isTreasure": true
+    "isTreasure": true,
+    "artifactLore": "<p>A ceramic, two-armed jug with a wax seal. Inside is water of life, the quintessence of water, so pure that it washes away all impurity, corruption, poison, or disease from any living thing. It becomes sullied and loses its potency when used, or if left unsealed for more than a minute or so.</p><p>The amphora itself is a perfect vessel: as long as it is sealed, no substance within will rot, putrefy, or otherwise spoil.</p>"
   },
   "flags": {
     "stonetop": {

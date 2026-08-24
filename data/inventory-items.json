@@ -169,6 +169,13 @@
     "tags": "pottery, weaving, distilling, etc.; <em>immobile</em>"
   },
   {
+    "name": "Common weapons, bronze",
+    "slug": "bronze-common-weapon",
+    "column": "regular",
+    "weight": 1,
+    "tags": "<em>spears, daggers, etc.</em>; no <em>x piercing</em>"
+  },
+  {
     "name": "Composite bow",
     "slug": "composite-bow",
     "column": "regular",
@@ -314,6 +321,13 @@
     "column": "regular",
     "weight": 2,
     "tags": "enough to last 1 full night; <em>reach</em>, <em>area</em>"
+  },
+  {
+    "name": "Firkin of whisky, fine",
+    "slug": "firkin-whisky-fine",
+    "column": "regular",
+    "weight": 1,
+    "tags": ""
   },
   {
     "name": "Glass vial",
@@ -685,6 +699,13 @@
     }
   },
   {
+    "name": "Small metal tool",
+    "slug": "small-metal-tool",
+    "column": "small",
+    "weight": 1,
+    "tags": "chisel, file, nails, shears, etc."
+  },
+  {
     "name": "Snow-shoes",
     "slug": "snow-shoes",
     "column": "regular",
@@ -864,6 +885,13 @@
     "tags": ""
   },
   {
+    "name": "Weapon of war, bronze",
+    "slug": "bronze-weapon-of-war",
+    "column": "regular",
+    "weight": 1,
+    "tags": "as the iron weapons of war, but no <em>x piercing</em>"
+  },
+  {
     "name": "Wheelbarrow",
     "slug": "wheelbarrow",
     "column": "regular",
@@ -883,6 +911,20 @@
     "column": "small",
     "weight": 1,
     "tags": "",
+    "resource": {
+      "max": 2,
+      "labels": [
+        "",
+        ""
+      ]
+    }
+  },
+  {
+    "name": "Whisky, skin, fine",
+    "slug": "whisky-skin-fine",
+    "column": "regular",
+    "weight": 1,
+    "tags": "share a use with someone to get advantage on Persuade",
     "resource": {
       "max": 2,
       "labels": [

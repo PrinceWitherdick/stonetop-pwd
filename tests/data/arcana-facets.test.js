@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { ARCANUM_KINDS, ARCANUM_TIERS, arcanumKinds, arcanumTier } from "../../module/data/arcana-facets.js";
+import {
+	ARCANUM_KINDS, ARCANUM_TIERS, arcanumKinds, arcanumTier,
+	isImmobileArcanumItem, isImplantedArcanumItem,
+} from "../../module/data/arcana-facets.js";
 
 const KIND_KEYS = ARCANUM_KINDS.map(k => k.key);
 const TIER_KEYS = ARCANUM_TIERS.map(t => t.key);
 import { ARCANA_SUMMONS } from "../../module/data/arcana-summons.js";
-import { MAJOR_ARCANA_ICONS } from "../../module/arcana-icons.js";
+import { MAJOR_ARCANA_ICONS, isMajorArcanumItem } from "../../module/arcana-icons.js";
 import { loadArcanaPackDocs } from "../fakes/sourcePack.js";
 
 /** The shape arcanumKinds() reads, built from a pack doc's flags. */
@@ -104,6 +107,57 @@ describe("arcanumKinds", () => {
 	});
 });
 
+describe("isImmobileArcanumItem", () => {
+	// Book I p.437: "If it's too big to just carry on your person, give it the `immobile` tag."
+	it("reads the tag out of the printed tag line", () => {
+		expect(isImmobileArcanumItem({ note: "<em>immobile</em>" })).toBe(true);
+		expect(isImmobileArcanumItem({ note: "<em>magical, beautiful, immobile</em>" })).toBe(true);
+		expect(isImmobileArcanumItem({ note: "<em>IMMOBILE</em>" })).toBe(true);
+	});
+
+	it("is false for a curio you can pocket, and for nothing at all", () => {
+		expect(isImmobileArcanumItem({ note: "<em>magical</em>" })).toBe(false);
+		expect(isImmobileArcanumItem({ note: null })).toBe(false);
+		expect(isImmobileArcanumItem(null)).toBe(false);
+	});
+
+	it("matches a whole word, so a tag that merely contains it doesn't count", () => {
+		expect(isImmobileArcanumItem({ note: "<em>immobilizing</em>" })).toBe(false);
+	});
+
+	it("is independent of the implanted tag beside it", () => {
+		const markings = { note: "<em>implanted, magical</em>" };
+		expect(isImplantedArcanumItem(markings)).toBe(true);
+		expect(isImmobileArcanumItem(markings)).toBe(false);
+	});
+});
+
+describe("the shipped cards the book tags immobile", () => {
+	const docs = loadArcanaPackDocs();
+
+	it("finds all seven, front side, exactly as Appendix C prints them", () => {
+		const immobile = docs
+			.filter(d => isImmobileArcanumItem(d.flags.stonetop.front?.item))
+			.map(d => d.flags.stonetop.slug).sort();
+		expect(immobile).toEqual([
+			"huge-wooden-sphere",
+			"oversized-codex",
+			"rusty-cauldron",
+			"strange-skull-and-antlers",
+			"sunken-tablet",
+			"vein-of-milky-crystal",
+			"whispering-word",
+		]);
+	});
+
+	it("leaves the realised BACK item carriable — a place can still yield gear", () => {
+		// The vein of milky crystal is immobile; the Moonstone you cut out of it is not.
+		const vein = docs.find(d => d.flags.stonetop.slug === "vein-of-milky-crystal");
+		expect(isImmobileArcanumItem(vein.flags.stonetop.front.item)).toBe(true);
+		expect(isImmobileArcanumItem(vein.flags.stonetop.back.item)).toBe(false);
+	});
+});
+
 describe("arcanumKinds over the shipped arcana", () => {
 	const docs = loadArcanaPackDocs();
 
@@ -135,8 +189,37 @@ describe("arcanumKinds over the shipped arcana", () => {
 		for (const slug of ["hungering-maw-of-hlad", "ineffable-words", "redwood-effigy", "storm-markings"]) {
 			const doc = docs.find(d => d.flags.stonetop.slug === slug);
 			expect(doc.flags.stonetop.back.move, slug).toBeNull();
+			expect(arcanumKinds(arcOf(doc)), slug).toContain("power");
+		}
+	});
+
+	it("calls the two implanted majors a Power only — they are never in your load", () => {
+		// The Relic chip promises "the arcanum itself is an item in your load". Storm Markings
+		// course up and down your skin and the Ineffable Words are emblazoned on your soul, and
+		// Book II tags both `implanted` for exactly that reason. They carry a `front.item` so
+		// the card can print its tag line (pp.556, 566) — which is a NEW thing here; all four of
+		// these majors used to have a null item and so read as Powers by accident. The two that
+		// really are carried now say so, and the two that aren't are held out by their own tag.
+		for (const slug of ["ineffable-words", "storm-markings"]) {
+			const doc = docs.find(d => d.flags.stonetop.slug === slug);
+			expect(doc.flags.stonetop.front.item.note, slug).toMatch(/implanted/);
 			expect(arcanumKinds(arcOf(doc)), slug).toEqual(["power"]);
 		}
+		for (const slug of ["hungering-maw-of-hlad", "redwood-effigy"]) {
+			const doc = docs.find(d => d.flags.stonetop.slug === slug);
+			expect(arcanumKinds(arcOf(doc)), slug).toEqual(["relic", "power"]);
+		}
+	});
+
+	it("gives every major the tag line the book prints under its title", () => {
+		// Every major in Appendix D prints a tag line under its title. Five shipped with
+		// `front.item: null`, and the sheet draws a card's tags from `front.item.note`, so those
+		// five rendered with no tags at all: Ring of Daagon, Storm Markings, Ineffable Words,
+		// Redwood Effigy, Hungering Maw of Hlad.
+		const bare = docs
+			.filter(d => isMajorArcanumItem(arcOf(d)) && !d.flags.stonetop.front.item?.note)
+			.map(d => d.flags.stonetop.slug);
+		expect(bare).toEqual([]);
 	});
 
 	it("leaves only the pure-lore cards with no kind at all", () => {

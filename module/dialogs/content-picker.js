@@ -30,28 +30,118 @@ export function pickContentOption({ title, options, buttonLabel = "Continue" }) 
 			</span>
 		</label>`).join("");
 
+	return _promptRows({
+		title, rows, buttonLabel, width: 440,
+		read: form => form.contentType,
+	});
+}
+
+/**
+ * The window both choosers here are: a radio list on the Stonetop skin, resolving to whatever the
+ * caller reads out of the form.
+ *
+ * ONE SHELL, because the class list is load-bearing and was written out twice. A DialogV2 is an
+ * ApplicationV2 (`.application` root), which the `.stonetop` parchment/slate skin excludes by
+ * design (stonetop.css `:not(.application,…)`): the authoring flows we hand off to are AppV1 and
+ * pick the skin up for free, but a V2 window needs `stonetop-themed` to get the same modal look.
+ * Two copies of that list is one picker themed and one not, the next time it changes.
+ *
+ * @param {object} p
+ * @param {string} p.title        Window title.
+ * @param {string} p.rows         The radio rows, as authored markup.
+ * @param {string} p.buttonLabel  Confirm-button label.
+ * @param {number} p.width
+ * @param {Function} p.read       `(formObject) => any` — what the dialog resolves to.
+ * @param {Function} [p.wire]     `(content) => void` — listeners bound to the DETACHED node, which
+ *                                keeps them when the dialog inserts it.
+ */
+function _promptRows({ title, rows, buttonLabel, width, read, wire = null }) {
 	// DialogV2 requires the content element itself to carry no attributes, so the
 	// styled/classed container lives one level in.
 	const content = document.createElement("div");
 	content.innerHTML = `<div class="stonetop stonetop-content-picker">${rows}</div>`;
+	wire?.(content);
 
 	return foundry.applications.api.DialogV2.prompt({
-		// This is an ApplicationV2 dialog (`.application` root), which the `.stonetop`
-		// parchment/slate skin excludes by design (stonetop.css `:not(.application,…)`).
-		// The authoring flows we hand off to are AppV1 and pick the skin up for free; a V2
-		// window needs `stonetop-themed` to get the same modal look.
 		classes: ["stonetop", "stonetop-themed", "stonetop-content-picker-dialog"],
 		window: { title },
-		position: { width: 440 },
+		position: { width },
 		content,
 		ok: {
 			label: buttonLabel,
 			callback: (event, button) =>
-				new foundry.applications.ux.FormDataExtended(button.form).object.contentType,
+				read(new foundry.applications.ux.FormDataExtended(button.form).object),
 		},
 		rejectClose: false,
 	});
 }
+
+/**
+ * Pick one line off a menu, or write one that isn't on it.
+ *
+ * The other shape of chooser: `pickContentOption` above offers a handful of KINDS, each an
+ * icon and a name and a sentence about it, and every one of them leads somewhere. This one
+ * offers a list of PROMPTS — one-line sentences out of the book — and the list is a menu
+ * rather than the whole of what can be said, so it carries a row at the foot for the GM's
+ * own words. The expedition walkthrough's Chart a Course requirements and challenges are the
+ * first caller; the book prints both as "tell them one of these, or something like them".
+ *
+ * `html` on a row is TRUSTED authored markup (the entities the prompts are written with),
+ * unescaped exactly as the surfaces that print those prompts render them. Nothing
+ * user-authored is ever handed in as a row: what a GM writes goes through the text field,
+ * which is a form control and escapes nothing because it renders nothing.
+ *
+ * @param {object} params
+ * @param {string} params.title      Window title.
+ * @param {{id: string, html: string}[]} params.options  The menu, in display order.
+ * @param {string} [params.writeLabel]        The last row's own label.
+ * @param {string} [params.writePlaceholder]  Placeholder in its text field.
+ * @param {string} [params.buttonLabel="Add"] Confirm-button label.
+ * @returns {Promise<{key: string}|{text: string}|null>}
+ *          The chosen row's id, the words that were written, or null when the dialog was
+ *          dismissed — or confirmed on the write row with nothing written in it, which is
+ *          the same thing: there is no entry to add.
+ */
+export function pickOrWriteOption({
+	title, options, writeLabel = "Something else:", writePlaceholder = "", buttonLabel = "Add",
+}) {
+	const rows = options.map((opt, i) => `
+		<label class="stonetop-content-picker-option stonetop-content-picker-option--line">
+			<input type="radio" name="pick" value="${escHtml(opt.id)}"${i === 0 ? " checked" : ""}>
+			<span class="stonetop-content-picker-line">${opt.html}</span>
+		</label>`).join("");
+
+	// The write-your-own row is one of the radios, not a second control beside them: the
+	// question is "which line goes on the list", and it has exactly one answer.
+	const own = `
+		<label class="stonetop-content-picker-option stonetop-content-picker-option--line stonetop-content-picker-own">
+			<input type="radio" name="pick" value="${escHtml(_WRITE_ID)}"${options.length ? "" : " checked"}>
+			<span class="stonetop-content-picker-line">
+				<span class="stonetop-content-picker-own-label">${escHtml(writeLabel)}</span>
+				<input type="text" name="custom" maxlength="300" placeholder="${escHtml(writePlaceholder)}">
+			</span>
+		</label>`;
+
+	return _promptRows({
+		title, buttonLabel, width: 480,
+		rows: `${rows}${own}`,
+		// Typing is choosing. Without this a GM writes their line, presses Add, and gets whichever
+		// authored row happened to be selected — their words dropped with nothing said.
+		wire: content => {
+			content.querySelector('input[name="custom"]')?.addEventListener("input", () => {
+				content.querySelector(`input[name="pick"][value="${_WRITE_ID}"]`).checked = true;
+			});
+		},
+		read: form => {
+			if (form.pick !== _WRITE_ID) return form.pick ? { key: form.pick } : null;
+			const text = String(form.custom ?? "").trim();
+			return text ? { text } : null;
+		},
+	});
+}
+
+/** The write-your-own row's radio value. Not a key any menu can use. */
+const _WRITE_ID = "__write__";
 
 /**
  * Run the flow that belongs to the option that was picked.
