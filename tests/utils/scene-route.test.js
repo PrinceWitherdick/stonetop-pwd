@@ -3,7 +3,7 @@ import { readRepo } from "../fakes/css.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { POSTER_MAPS, posterSceneFor } from "../../module/book2-art/poster-map-catalog.js";
 import { frameFor, spotPercent, travelPlace } from "../../module/data/travel-times.js";
-import { journeyRoute } from "../../module/utils/travel-route.js";
+import { journeyRoute, normalizeJourney } from "../../module/utils/travel-route.js";
 import { MAP_PIN_ICON_SIZE } from "../../module/utils/map-pins.js";
 import { tierDrawing } from "../../module/utils/route-path.js";
 import {
@@ -360,6 +360,65 @@ describe("what the scene remembers", () => {
 		const scene = writableScene();
 		expect(await showRouteOnScene(scene, { origin: "stonetop", destination: "" })).toBeNull();
 		expect(sceneJourney(scene)).toBeNull();
+	});
+
+	// THE PANEL HANDS ON A PICK IT HAS ALREADY READ, and everything here reads it again — so a
+	// journey has to survive the second reading. It did not, for the one kind of start that is not
+	// a slug: `origin` is the start's slug and therefore null for a mark the GM put down, so the
+	// second read took every hand-placed start for nowhere. The flag landed with no start, the
+	// line solved from nowhere, and the scene stayed bare on every client while the GM was told
+	// the route had been drawn on it.
+	it("keeps a hand-placed start when the panel hands on a pick it has already read", async () => {
+		const scene = writableScene();
+		const inTheFlats = { tier: "vicinity", fx: 0.36, fy: 0.62 };
+		const pick = normalizeJourney({ origin: inTheFlats, destination: "the-crossroads" });
+		expect(await showRouteOnScene(scene, pick)).toBe("the Crossroads");
+		expect(scene.flags[SYSTEM_ID][SCENE_ROUTE_FLAG].origin).toEqual(inTheFlats);
+		// And there is a line to paint, rather than a solve from nowhere with no legs in it.
+		expect(sceneRoutePlan(scene).dots.length).toBeGreaterThan(0);
+	});
+
+	// ONE LINE IN THE WORLD AT A TIME. `showRouteOnScene` writes to the Scene it is handed and no
+	// other, and the panel's button only ever talks about the Scene the GM is standing on — so a
+	// route drawn on the Vicinity and then drawn on the World's End left the Vicinity painting the
+	// old one for good, on every client, with nothing anywhere that could reach it.
+	it("takes the line off the scene it was drawn on before, when it moves to another", async () => {
+		const vicinity = writableScene("vicinity");
+		const worldsEnd = writableScene("worlds-end");
+		globalThis.game = { ...globalThis.game, scenes: [vicinity, worldsEnd] };
+
+		await showRouteOnScene(vicinity, { origin: "stonetop", destination: "the-crossroads" });
+		expect(sceneJourney(vicinity)).not.toBeNull();
+
+		await showRouteOnScene(worldsEnd, { origin: "stonetop", destination: "lygos" });
+
+		expect(sceneJourney(worldsEnd)?.destination).toBe("lygos");
+		expect(sceneJourney(vicinity)).toBeNull();
+	});
+
+	it("leaves the scene it was just drawn on alone while doing it", async () => {
+		const vicinity = writableScene("vicinity");
+		globalThis.game = { ...globalThis.game, scenes: [vicinity] };
+
+		await showRouteOnScene(vicinity, { origin: "stonetop", destination: "the-crossroads" });
+
+		expect(sceneJourney(vicinity)?.destination).toBe("the-crossroads");
+	});
+
+	// Every mark start shares one null slug, so keying a re-read pick on that made two different
+	// setting-out points the same journey: the button reported the scene in step after the GM had
+	// moved where the party sets out from, which is exactly what `startKey` exists to prevent.
+	it("tells one hand-placed start from another after both have been read twice", async () => {
+		const scene = writableScene();
+		const here = normalizeJourney({
+			origin: { tier: "vicinity", fx: 0.36, fy: 0.62 }, destination: "the-crossroads",
+		});
+		const there = normalizeJourney({
+			origin: { tier: "vicinity", fx: 0.7, fy: 0.2 }, destination: "the-crossroads",
+		});
+		await showRouteOnScene(scene, here);
+		expect(sceneShowsJourney(scene, here)).toBe(true);
+		expect(sceneShowsJourney(scene, there)).toBe(false);
 	});
 
 	// A world that predates the rename must not read as bare, the same walk `posterMapSlugOf`

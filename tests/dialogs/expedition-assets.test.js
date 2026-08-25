@@ -155,7 +155,7 @@ describe("taking an asset out on this trip", () => {
 			name: "A wagon", checked: false,
 			takenBy: { expedition: { id: "trip-1", title: "The Wandering Tower" } },
 		});
-		expect(tripNow().requisitioned).toEqual([{ index: 1, name: "A wagon" }]);
+		expect(tripNow().requisitioned).toEqual([{ name: "A wagon" }]);
 		expect(picked(d)).toEqual(["A wagon"]);
 	});
 
@@ -187,7 +187,7 @@ describe("taking an asset out on this trip", () => {
 
 		await d._toggleRequisitionedAsset(1, true);
 
-		expect(tripNow().requisitioned).toEqual([{ index: 1, name: "A wagon" }]);
+		expect(tripNow().requisitioned).toEqual([{ name: "A wagon" }]);
 	});
 
 	it("takes nothing on a nameless slot, and writes nothing down", async () => {
@@ -196,6 +196,41 @@ describe("taking an asset out on this trip", () => {
 		await d._toggleRequisitionedAsset(2, true);
 
 		expect(tripNow().requisitioned ?? []).toEqual([]);
+	});
+
+	// AN ASSET'S INDEX IS ITS POSITION, AND POSITIONS MOVE. The steading sheet's delete splices
+	// the array, so a trip's record — which lives in the expedition log, a different document —
+	// came to name a different asset entirely. The record went stale in both directions at once:
+	// sending the wagon home stopped clearing it, so the Chronicle kept claiming a wagon that was
+	// back in the barn.
+	it("still sends the right asset home after a row above it was deleted", async () => {
+		const d = dialog();
+		await d._toggleRequisitionedAsset(1, true);          // the wagon, at index 1
+		expect(tripNow().requisitioned).toEqual([{ name: "A wagon" }]);
+
+		// The GM deletes the horses off the steading sheet; the wagon slides to index 0.
+		assetsNow().splice(0, 1);
+		expect(assetsNow()[0].name).toBe("A wagon");
+
+		await d._toggleRequisitionedAsset(0, false);
+
+		expect(tripNow().requisitioned).toEqual([]);
+		expect(assetsNow()[0]).toEqual({ name: "A wagon", checked: true });
+	});
+
+	// The other half of the same drift: the freed-up index was matched by the ORPHAN record, so
+	// the dedupe swallowed the next asset to land there and the trip's list named neither.
+	it("records a different asset that lands on the freed-up index", async () => {
+		const d = dialog();
+		await d._toggleRequisitionedAsset(1, true);          // the wagon, at index 1
+
+		// Delete the horses; the wagon slides to 0 and a new asset takes index 1.
+		assetsNow().splice(0, 1);
+		assetsNow()[1] = { name: "A river boat", checked: true };
+
+		await d._toggleRequisitionedAsset(1, true);
+
+		expect(tripNow().requisitioned).toEqual([{ name: "A wagon" }, { name: "A river boat" }]);
 	});
 
 	it("ignores a click that names no asset", async () => {

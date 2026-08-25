@@ -1274,6 +1274,7 @@
         "placedMoved": "{name} is on {map}, and its pin on {scene} moved to match.",
         "removed": "{name} is off the map. The write-up is still on the Sites tab.",
         "pinTip": "{name}. Click to run the way through here, shift-click to add it as another stop, right-click to take the pin off the map. The write-up is on the Sites tab.",
+        "pinRefused": "Your world's copy of {map} is not the shape this system measured the printed map against, so no pin was placed on it. Nothing already on that scene was moved or removed.",
         "offTheMap": "That click was past the printed edge of {map}, so {name} wasn't placed. The write-up is still on the Sites tab."
       },
       "draw": {

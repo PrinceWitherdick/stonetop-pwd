@@ -37,6 +37,7 @@ import { onDropFollower } from "./module/hooks/FollowerDrop.js";
 import { onPreUpdateActorDeathsDoor, onUpdateActorDeathsDoorAutoOpen, onUpdateActorDeathsDoorCard, onUpdateActorDeathsDoorRaised, wireDyingPrompt } from "./module/hooks/DeathsDoorPrompt.js";
 import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { onPreCreateThreatNote } from "./module/hooks/ThreatNotePins.js";
+import { onUpdateSiteNote } from "./module/sites/site-scene-pins.js";
 import { onDrawStonetopNote } from "./module/hooks/StonetopNoteLabels.js";
 import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
 import { bumpEncounterNotesGeneration } from "./module/actors/gmtoolkit/gm-encounters-tab.js";
@@ -618,6 +619,12 @@ Hooks.on("updateSetting", _onArtIndexPublished);
 // A threat card dragged onto a scene drops a native page-linked Note; give that
 // pin the torn-note icon, the threat's name, and global (fog-ignoring) visibility.
 Hooks.on("preCreateNote", onPreCreateThreatNote);
+
+// The other direction, for a SITE's pin: where a site stands is stored as a fraction of the
+// printed map, and that fraction is what draws the pin — so a GM who drags the pin has moved the
+// picture of the fact without moving the fact. The two maps then disagreed silently, and the next
+// placement snapped the pin back. This writes the drag home. See sites/site-scene-pins.js.
+Hooks.on("updateNote", onUpdateSiteNote);
 
 // Give our lettered Place-of-Interest discs and threat/hazard pins a thick paper text
 // halo so their labels stay legible over the illustrated Stonetop maps.

@@ -30806,7 +30806,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: block; width: 100%; height: 100%;
 	border: 1px solid rgba(0,0,0,0.22); border-radius: var(--st-radius);
 	/* The maps are ink on cream, so they carry their own ground in both themes. */
-	background: #f4ecd8;
+	background: var(--stonetop-route-case);
 }
 
 /* The route line. Two paths over the same curve: a cream casing under red dots, so each dot
@@ -30885,11 +30885,11 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    exactly like a chat card's parchment — so a pin painted in --st-text would be dark on
    light in the day theme and light on light at night, vanishing into the paper. The one
    ink used, #1b1009, is the same the system already writes onto map Notes (see
-   hooks/PlaceOfInterestDrop.js), and the cream #f4ecd8 matches the <img> backdrop above. */
+   hooks/PlaceOfInterestDrop.js), and the cream is --stonetop-route-case, the same the <img> backdrop above carries. */
 .stonetop-journey-canvas .stonetop-journey-dot {
 	width: 11px; height: 11px; border-radius: 50%;
 	background: #1b1009;
-	border: 2px solid #f4ecd8;
+	border: 2px solid var(--stonetop-route-case);
 	/* A halo so a dot stays legible over the maps' tree-line hatching. box-shadow, not a
 	   filter: a drop-shadow is erased by any mask, and these sit near masked glyphs. */
 	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
@@ -30899,8 +30899,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-journey-canvas .stonetop-journey-arrow {
 	display: inline-flex; align-items: center; justify-content: center;
 	width: 18px; height: 18px; border-radius: 50%;
-	font-size: 9px; color: #f4ecd8;
-	background: #1b1009; border: 2px solid #f4ecd8;
+	font-size: 9px; color: var(--stonetop-route-case);
+	background: #1b1009; border: 2px solid var(--stonetop-route-case);
 	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
 }
 
@@ -30921,8 +30921,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-journey-canvas .stonetop-journey-sitemark {
 	display: inline-flex; align-items: center; justify-content: center;
 	width: 18px; height: 18px; border-radius: var(--st-radius-sm);
-	font-size: 9px; color: #f4ecd8;
-	background: var(--site-accent, #5a5f6b); border: 2px solid #f4ecd8;
+	font-size: 9px; color: var(--stonetop-route-case);
+	background: var(--site-accent, #5a5f6b); border: 2px solid var(--stonetop-route-case);
 	box-shadow: 0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4);
 	transition: transform 120ms ease;
 }

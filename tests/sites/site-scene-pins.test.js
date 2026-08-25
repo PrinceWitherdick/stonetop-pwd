@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 
 import { POSTER_MAPS } from "../../module/book2-art/poster-map-catalog.js";
 import { MAP_FRAMES, TRAVEL_MAPS } from "../../module/data/travel-times.js";
-import { posterSceneForTier, siteScenePoint, syncSitePin } from "../../module/sites/site-scene-pins.js";
+import { posterSceneForTier, siteScenePoint, siteSpotFromScenePoint, syncSitePin } from "../../module/sites/site-scene-pins.js";
 
 const VICINITY = POSTER_MAPS.find(m => m.slug === "vicinity");
 const WORLDS_END = POSTER_MAPS.find(m => m.slug === "worlds-end");
@@ -128,6 +128,55 @@ describe("where a spot lands on the Scene", () => {
 		expect(siteScenePoint({ tier: "vicinity", ...MIDDLE }, wrong)).toBeNull();
 	});
 
+	// THE OTHER DIRECTION, which is what a dragged pin needs.
+	//
+	// INVERSE IN PIXELS, NOT IN FRACTIONS. `siteScenePoint` rounds to a whole pixel, and one pixel
+	// of a 4000px poster is 0.00025 of it — coarser than the 0.0001 a mark is stored at — so the
+	// fraction that comes back can differ in its last digit. What must hold, and what stops a pin
+	// drifting a little further every time anything re-syncs, is that the fraction read back lands
+	// on the very pixel it was read from.
+	it("reads a point back to a fraction that lands on that same pixel", () => {
+		const scene = posterScene(VICINITY);
+		for (const spot of [MIDDLE, { fx: 0.2, fy: 0.8 }, { fx: 0.9412, fy: 0.0618 }]) {
+			const point = siteScenePoint({ tier: "vicinity", ...spot }, scene);
+			const read = siteSpotFromScenePoint(point, scene, "vicinity");
+
+			expect(read.tier).toBe("vicinity");
+			expect(siteScenePoint(read, scene)).toEqual(point);
+			// And within a pixel's worth of where it started, so a drag writes what was aimed at.
+			expect(read.fx).toBeCloseTo(spot.fx, 3);
+			expect(read.fy).toBeCloseTo(spot.fy, 3);
+		}
+	});
+
+	// Reading back and re-placing, over and over, must not walk the pin across the map.
+	it("settles, so a site re-synced again and again stays put", () => {
+		const scene = posterScene(VICINITY);
+		let spot = { tier: "vicinity", fx: 0.2, fy: 0.8 };
+		const first = siteScenePoint(spot, scene);
+		for (let i = 0; i < 10; i++) {
+			spot = siteSpotFromScenePoint(siteScenePoint(spot, scene), scene, "vicinity");
+		}
+		expect(siteScenePoint(spot, scene)).toEqual(first);
+	});
+
+	it("reads it back through the picture's own corner on a padded Scene too", () => {
+		const scene = posterScene(VICINITY);
+		scene.dimensions = { sceneX: 200, sceneY: 140 };
+		const point = siteScenePoint({ tier: "vicinity", ...MIDDLE }, scene);
+		expect(siteScenePoint(siteSpotFromScenePoint(point, scene, "vicinity"), scene)).toEqual(point);
+	});
+
+	// Refused on the same terms as the forward conversion: a Scene that cannot say where a
+	// fraction lands cannot say what fraction a point is, either.
+	it("refuses to read back off a Scene of the wrong shape, or a point that is not one", () => {
+		const wrong = posterScene(VICINITY);
+		wrong.height = wrong.width;
+		expect(siteSpotFromScenePoint({ x: 10, y: 10 }, wrong, "vicinity")).toBeNull();
+		expect(siteSpotFromScenePoint({ x: NaN, y: 10 }, posterScene(VICINITY), "vicinity")).toBeNull();
+		expect(siteSpotFromScenePoint({ x: 10, y: 10 }, posterScene(VICINITY), "beyond")).toBeNull();
+	});
+
 	it("refuses a spot on no map, and a Scene with no size", () => {
 		expect(siteScenePoint(null, posterScene(VICINITY))).toBeNull();
 		expect(siteScenePoint({ tier: "beyond", ...MIDDLE }, posterScene(VICINITY))).toBeNull();
@@ -156,6 +205,39 @@ describe("keeping the Scenes in step with the spot", () => {
 		const vicinity = posterScene(VICINITY);
 		await syncSitePin(BARROW, { tier: "vicinity", ...MIDDLE }, { scenes: [vicinity] });
 		expect(Object.keys(vicinity.notes[0]).sort()).toEqual(["entryId", "id", "pageId", "x", "y"]);
+	});
+
+	// A REFUSAL IS NOT A REMOVAL, and the two used to run through the same branch. A Scene whose
+	// picture is not the shape the fractions were measured against cannot say where the site is —
+	// so it had its pin DELETED, and because a delete carries no `moved`, the caller was told the
+	// site had been placed and never that the mark on the table's map had just been taken off.
+	// The module's own docblock says the intent is the opposite: a missing pin is obviously
+	// missing, a silently removed one is not.
+	it("leaves the pin alone on a Scene that is the wrong shape, and says so", async () => {
+		const already = pinFor(BARROW, { x: 10, y: 20 });
+		const wrong = posterScene(VICINITY, [already]);
+		wrong.height = wrong.width;                     // a square, which no printing of this is
+
+		const answer = await syncSitePin(BARROW, { tier: "vicinity", ...MIDDLE }, { scenes: [wrong] });
+
+		expect(wrong.notes).toEqual([already]);         // untouched, not deleted
+		expect(wrong.calls).toEqual([]);                // and not written to at all
+		expect(answer).toMatchObject({ refused: true, scene: null });
+	});
+
+	// The other half of the same distinction: a Scene that genuinely is not this site's map any
+	// more still gives its pin up, which is what makes a move across the two maps work.
+	it("still takes the pin off a map the site has actually left", async () => {
+		const already = pinFor(BARROW, { x: 10, y: 20 });
+		const vicinity = posterScene(VICINITY, [already]);
+		const worldsEnd = posterScene(WORLDS_END);
+
+		const answer = await syncSitePin(BARROW, { tier: "worlds-end", ...MIDDLE }, { scenes: [vicinity, worldsEnd] });
+
+		expect(vicinity.notes).toEqual([]);
+		expect(worldsEnd.notes).toHaveLength(1);
+		expect(answer.refused).toBe(false);
+		expect(answer.scene).toBe(worldsEnd);
 	});
 
 	it("moves the pin already there rather than laying a second one", async () => {
