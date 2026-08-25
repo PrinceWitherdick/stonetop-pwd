@@ -117,6 +117,21 @@ describe("picking a debility to clear", () => {
 		expect(root.choices.map(c => c.selected())).toEqual([false, false, true]);
 		expect(root.choices.map(c => c.checked())).toEqual(["false", "false", "true"]);
 	});
+
+	// Core hands the render callback jQuery on v13 and there is no promise it always will — which
+	// is why the line above this one in the source already tests `dialog.element` both ways. Bare
+	// `html[0]` threw one line AFTER the button was disabled and before any row was wired, so the
+	// window that came up had a dead button, dead rows, and no way to make the move at all.
+	it("wires the rows whether core hands it an element or jQuery", () => {
+		const steading = fakeSteading({ marked: DEBILITY_IDS });
+		const opened   = open(steading, { onApplied });
+		const root     = fakeRoot(DEBILITY_IDS);
+
+		expect(() => opened.data.render(root)).not.toThrow();
+		root.choices[1].click();
+		expect(root.choices.map(c => c.selected())).toEqual([false, true, false]);
+		expect(opened.applyBtn.disabled).toBe(false);
+	});
 });
 
 describe("the button that commits it", () => {

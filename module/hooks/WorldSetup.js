@@ -10,6 +10,7 @@ import { openProgressNotification } from "../utils/progress-notification.js";
 import { needsBestiaryActorSeed, seedBestiaryActorsOnce, collapseBestiaryActorSubfoldersOnce } from "./SeedActors.js";
 import { needsTreasureItemSeed, seedTreasureItemsOnce, backfillTreasureWriteups } from "./SeedItems.js";
 import { reapplyBook2ArtOnVersionChange, reapplyBook2Art } from "../book2-art/reapply.js";
+import { oncePerVersion } from "../migration/once-per-version.js";
 import { book2ArtRoot } from "../book2-art/art-root.js";
 import { offerDurableArtOnce } from "../book2-art/offer-once.js";
 import { posterMapScenePlan, createPosterMapScenes } from "../book2-art/poster-maps.js";
@@ -171,12 +172,17 @@ export function runWorldSetup() {
 	});
 	const treasures = runLane(pending.treasures ? dialog : null, STEP_DEFS.treasures, async report => {
 		await seedTreasureItemsOnce({ onProgress: report });
-		// Then the same bargain the monsters lane strikes above: a per-load repair an
-		// already-seeded world still needs. The treasures shipped for years with only their
-		// tags, so every copy in an established world — sidebar and sheet alike — is missing
-		// the book's write-up that a freshly-seeded one now arrives with. Fills blanks only,
-		// and is silent once there are none. See backfillTreasureWriteups.
-		await backfillTreasureWriteups();
+		// Then a repair an already-seeded world still needs: the treasures shipped for years with
+		// only their tags, so every copy in an established world — sidebar and sheet alike — is
+		// missing the book's write-up that a freshly-seeded one now arrives with. Fills blanks
+		// only, and is silent once there are none. See backfillTreasureWriteups.
+		//
+		// ONCE PER VERSION, not once per load. Being silent is not the same as being cheap: this
+		// rebuilds a 168-entry catalog map and walks `game.items` plus every embedded item on
+		// every actor — the seeded bestiary alone is a couple of hundred — to find, in the steady
+		// state, nothing. Gated by version rather than latched so a correction to the catalog's
+		// own prose still reaches an established world on the next upgrade.
+		await oncePerVersion("treasureWriteups", backfillTreasureWriteups);
 		return "The treasure library is ready in your Items sidebar";
 	});
 

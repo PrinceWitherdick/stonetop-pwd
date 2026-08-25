@@ -3,6 +3,8 @@
 // into a load tier. Shared by the character model (buildSnapshot), the inventory
 // snapshot defaults, and the Outfit dialog so the thresholds can never drift.
 
+import { joinNames } from "./strings.js";
+
 // Maximum number of regular ◇ at each load level.
 export const LOAD_LEVEL_LIMITS = { light: 3, normal: 6, heavy: 9 };
 
@@ -44,8 +46,12 @@ export function loadBandLabels(limits = LOAD_LEVEL_LIMITS) {
 // why this character carries more than the printed 3/6/9. The Ranger's Pack Horse is the
 // one in the book, but a custom or world-authored move can carry a loadBonus just as
 // well, so nothing downstream hard-codes a move name. Returns "" when nothing granted one.
+//
+// Joined by `joinNames`, which is the system's one list-joiner: this caption sits on the
+// Outfit readout beside the deploy toast, the off-map refusal and the encounter skip list,
+// and a second joiner written here is what made this one line read "A and B" while every
+// other list on the screen read "A & B". The trim stays, because a move name is authored
+// text and may arrive padded.
 export function loadBonusLabel(names = []) {
-	const list = (names ?? []).map(n => String(n ?? "").trim()).filter(Boolean);
-	if (list.length <= 1) return list[0] ?? "";
-	return `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+	return joinNames((names ?? []).map(n => String(n ?? "").trim()));
 }

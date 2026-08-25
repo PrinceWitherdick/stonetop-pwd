@@ -165,6 +165,28 @@ export function registerSettings() {
 		default: ""
 	});
 
+	// The system version each ONE-TIME REPAIR SWEEP last completed under, keyed by the sweep's own
+	// name: `{ arcanumSlugs: "1.5.3", … }`. See migration/once-per-version.js.
+	//
+	// ONE registration for all of them, rather than a setting apiece. These sweeps arrive a couple
+	// at a time and each is a full-world scan — every Item in the sidebar, every Note on every
+	// Scene, every embedded item on every Actor — run on the primary GM's blocking `onReady`. They
+	// were added ungated on the argument that each is idempotent, which is true and is not the
+	// same as free: idempotent buys correctness, not the scan. Worse, an ungated sweep records
+	// nothing about having run, so no later maintainer can tell a sweep that is still needed from
+	// one that has been a no-op in every world for a year, and none of them can ever be deleted.
+	//
+	// Keyed by version rather than latched to a boolean so a sweep that is really "bring this up
+	// to the CURRENT design" runs again after an upgrade that changes the design — which is what
+	// the pin refits actually are.
+	game.settings.register(SYSTEM_ID, "repairSweepVersions", {
+		name: "Repair Sweep Versions",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {}
+	});
+
 	// Fingerprint of the seeded gazetteer folder colour scheme last applied in this
 	// world (see hooks/SeedCompendiums.syncSeededFolderColors). When it trails the
 	// current scheme — a fresh install, or a system update that added/retinted a
@@ -1377,12 +1399,25 @@ export const HOVER_DESCRIPTION_SETTING_KEYS = [
  * The template path is built from SYSTEM_ID rather than written out. Two of these used to hard-
  * code `systems/stonetop-pwd/...` and one did not, which is exactly the kind of disagreement a
  * package rename turns into a blank window with nothing logged.
+ *
+ * `classes` CARRIES "stonetop", which is what dresses the window: the header bar, the content
+ * background, the focus glow and `--stonetop-font-scale` are all scoped to that class on purpose.
+ * `FormApplication` contributes only `["form"]` and nothing adds ours at runtime — the one
+ * `classList.add("stonetop")` in the system is for actor sheets — so a menu without it opened in
+ * core's dark chrome while its own form rules still applied, which reads as half-styled rather
+ * than unstyled and is easy to live with without noticing. The id rides along as the second class
+ * so a menu can still be reached on its own for anything particular to it.
  */
 function _createSettingsMenuApp({ id, titleKey, template, getData, update }) {
 	return class StonetopSettingsMenuApp extends FormApplication {
 		static get defaultOptions() {
-			return foundry.utils.mergeObject(super.defaultOptions, {
+			const base = super.defaultOptions;
+			return foundry.utils.mergeObject(base, {
 				id,
+				// SPREAD RATHER THAN LISTED, because `mergeObject` REPLACES an array where it
+				// merges an object: writing the two names out would quietly drop core's own `form`
+				// class, which is what its field and button layout hangs off.
+				classes: [...(base.classes ?? []), "stonetop", id],
 				title: game.i18n.localize(titleKey),
 				template: `systems/${SYSTEM_ID}/templates/settings/${template}`,
 				width: 520,

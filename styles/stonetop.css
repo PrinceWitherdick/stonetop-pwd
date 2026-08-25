@@ -26997,7 +26997,7 @@ th:has(> .stonetop-roll-table-btn) {
 	margin-inline: -6px;
 	padding-inline-start: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap) + 6px);
 	padding-inline-end: 6px;
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 }
 
 /* The spiral is absolutely positioned against the row's padding box, whose left edge just moved
@@ -29428,20 +29428,25 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .site-group__summary:hover .site-group__title { color: var(--threat-accent); }
 .stonetop .site-group__caret {
 	flex: 0 0 auto;
-	font-size: 0.68rem;
+	/* `em`, like the threat caret it sits a few hundred lines above: sheet content scales by
+	   `calc(1em * var(--stonetop-font-scale))`, which a bare `rem` cannot hear — so a GM who
+	   raised the sheet font got a fold whose caret alone stayed put. */
+	font-size: 0.8em;
 	color: var(--threat-accent);
 	transition: transform 0.12s ease;
 }
 .stonetop .site-group[open] > .site-group__summary .site-group__caret { transform: rotate(90deg); }
 .stonetop .site-group__title {
 	font-family: var(--font-stonetop);
-	font-size: 0.9rem;
+	font-size: var(--st-fs-2xs);
 	font-weight: 700;
 	letter-spacing: 0.02em;
 }
 /* What the fold is holding, named — and only while it IS holding it. Opened, the section
    labels are on screen already and this would just be saying them twice. */
-.stonetop .site-group__holds { font-size: 0.8rem; color: var(--tc-ink-soft); }
+/* At the scale floor, not below it: this names the sections in words a GM reads, and 0.8rem was
+   both under the floor and deaf to the font setting. */
+.stonetop .site-group__holds { font-size: var(--st-fs-2xs); color: var(--tc-ink-soft); }
 .stonetop .site-group[open] > .site-group__summary .site-group__holds { display: none; }
 .stonetop .site-group__hold + .site-group__hold::before {
 	content: "\00b7";
@@ -37041,7 +37046,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: 0;
 	background: rgba(255, 255, 240, 0.8);
 	border: 1px solid var(--color-border-light-primary, rgba(0, 0, 0, 0.22));
-	border-radius: 3px;
+	border-radius: var(--st-radius-sm);
 	box-shadow: none;
 	font-size: var(--st-fs-xs);
 	color: var(--st-text-secondary);

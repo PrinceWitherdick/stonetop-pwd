@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
 	ARCANUM_KINDS, ARCANUM_TIERS, arcanumKinds, arcanumTier,
-	isImmobileArcanumItem, isImplantedArcanumItem,
+	isCarriedArcanumItem, isImmobileArcanumItem, isImplantedArcanumItem,
 } from "../../module/data/arcana-facets.js";
 
 const KIND_KEYS = ARCANUM_KINDS.map(k => k.key);
@@ -155,6 +155,34 @@ describe("the shipped cards the book tags immobile", () => {
 		const vein = docs.find(d => d.flags.stonetop.slug === "vein-of-milky-crystal");
 		expect(isImmobileArcanumItem(vein.flags.stonetop.front.item)).toBe(true);
 		expect(isImmobileArcanumItem(vein.flags.stonetop.back.item)).toBe(false);
+	});
+
+	// THE CHIP AND THE SHEET HAVE TO AGREE, because a GM can have both on screen at once. The
+	// Relic chip's hint reads, verbatim, "the arcanum itself is an item in your load" — and the
+	// Inventory tab is what decides whether it goes there. The two were written out separately
+	// and came apart: the chip excluded only the implanted, so all seven of these wore a promise
+	// the sheet then refused. One predicate answers both now.
+	it("gives none of the seven the Relic chip, since none can be in a load", () => {
+		const chipped = docs
+			.filter(d => isImmobileArcanumItem(d.flags.stonetop.front?.item))
+			.filter(d => arcanumKinds(arcOf(d)).includes("relic"))
+			.map(d => d.flags.stonetop.slug);
+		expect(chipped).toEqual([]);
+	});
+
+	it("still chips an ordinary carried curio, so the rule did not just delete Relic", () => {
+		const relics = docs.filter(d => arcanumKinds(arcOf(d)).includes("relic"));
+		expect(relics.length).toBeGreaterThan(20);
+	});
+
+	// The predicate the two surfaces share, stated on its own so a fourth tag has one place to go.
+	it("reads carriable off the printed tag, not off a list of slugs", () => {
+		expect(isCarriedArcanumItem({ name: "A rusty knife" })).toBe(true);
+		expect(isCarriedArcanumItem({ name: "A cave", note: "<em>immobile</em>" })).toBe(false);
+		expect(isCarriedArcanumItem({ name: "Storm markings", note: "<em>implanted</em>" })).toBe(false);
+		// Nothing to carry either way.
+		expect(isCarriedArcanumItem({ name: "" })).toBe(false);
+		expect(isCarriedArcanumItem(null)).toBe(false);
 	});
 });
 

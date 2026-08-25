@@ -7,6 +7,53 @@ import {STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "../actors/character/StonetopFlags
 import {newArcanumSlug, isArcanumData} from "./createArcanum.js";
 import {isKnowThings, knowThingsRollOptions} from "../actors/character/know-things.js";
 
+/**
+ * Which world item owns each arcanum slug: `slug -> item id`.
+ *
+ * First writer wins, which is the honest reading — a second item on one slug is the very thing
+ * `_arcanumSlugIsSomebodyElses` exists to prevent, so if one is already there the map only has to
+ * say that SOMEBODY has it.
+ */
+function _worldSlugOwners() {
+	const owners = new Map();
+	for (const item of globalThis.game?.items ?? []) {
+		const slug = String(item.flags?.[ITEM_FLAG_SCOPE]?.slug ?? "").trim();
+		if (slug && !owners.has(slug)) owners.set(slug, item.id);
+	}
+	return owners;
+}
+
+/**
+ * The slug bookkeeping for ONE `createDocuments` call, built on first use and shared by every
+ * document in it.
+ *
+ * TWO THINGS ONE CARD-AT-A-TIME CREATE NEVER NEEDED. `_preCreate` runs per document, against the
+ * collection as it stands:
+ *
+ *   · It cannot see its SIBLINGS. Two cards on one slug inside a single import both looked unique
+ *     and both went in -- and two cards on one slug is two cards wearing each other's play state,
+ *     which is the whole reason the check is here. `claimed` is what each card puts its slug into
+ *     on the way past, so the next one can see it.
+ *   · It re-scanned `game.items` per card. Dragging the arcana folder into the sidebar is one
+ *     call carrying eighty-odd cards; against a world holding the seeded catalogs that is the
+ *     whole item directory walked once per card. `owners` is built once and reused.
+ *
+ * Keyed off the `options` object core passes to every document in the call, through a WeakMap so
+ * nothing is written onto a document-lifecycle object that gets serialized or broadcast, and the
+ * whole entry is collected as soon as the call is over.
+ */
+const _BATCH_SLUGS = new WeakMap();
+
+function _batchSlugs(options) {
+	if (!options || typeof options !== "object") return null;
+	let batch = _BATCH_SLUGS.get(options);
+	if (!batch) {
+		batch = { owners: _worldSlugOwners(), claimed: new Set() };
+		_BATCH_SLUGS.set(options, batch);
+	}
+	return batch;
+}
+
 export function createStonetopItemClass(BaseItem) {
 	return class StonetopItem extends BaseItem {
 
@@ -34,9 +81,16 @@ export function createStonetopItemClass(BaseItem) {
 			if (allowed === false) return false;
 			if (!isArcanumData(this)) return;
 			const slug = String(this.flags?.[ITEM_FLAG_SCOPE]?.slug ?? "").trim();
-			if (!slug || this._arcanumSlugIsSomebodyElses(slug)) {
-				this.updateSource({ [`flags.${ITEM_FLAG_SCOPE}.slug`]: newArcanumSlug() });
+			let mine = slug;
+			if (!slug || this._arcanumSlugIsSomebodyElses(slug, options)) {
+				mine = newArcanumSlug();
+				this.updateSource({ [`flags.${ITEM_FLAG_SCOPE}.slug`]: mine });
 			}
+			// CLAIMED FOR THE REST OF THIS BATCH. `_preCreate` runs per document against the
+			// collection as it stands, which cannot see the siblings arriving in the SAME call --
+			// so a folder of arcana dragged into the sidebar carrying two cards on one slug had
+			// both of them pass the check that exists to stop exactly that. See `_batchSlugs`.
+			_batchSlugs(options)?.claimed.add(mine);
 		}
 
 		/**
@@ -54,18 +108,24 @@ export function createStonetopItemClass(BaseItem) {
 		 * there is no world collection to compare against.
 		 *
 		 * The sweep of `game.items` behind it catches the copies core doesn't stamp: a macro or
-		 * console `Item.create(card.toObject())`, or a module doing the same. It is a scan of the
-		 * world's items, which is why it is gated on the document being an arcanum at all --
-		 * arcana are created one at a time, by hand, and every other item type never reaches it.
+		 * console `Item.create(card.toObject())`, or a module doing the same. Read ONCE PER CREATE
+		 * CALL rather than once per card (`_batchSlugs`): a card at a time is the common gesture,
+		 * but dragging the arcana folder into the sidebar is one call carrying eighty-odd of them,
+		 * and a scan per card over a stocked world is that count times the whole item directory.
+		 *
+		 * @param {string} slug
+		 * @param {object} [options] the shared per-call options `_preCreate` was handed
 		 */
-		_arcanumSlugIsSomebodyElses(slug) {
+		_arcanumSlugIsSomebodyElses(slug, options) {
 			if (this._stats?.duplicateSource) return true;
 			if (this.pack) return false;
-			for (const item of globalThis.game?.items ?? []) {
-				if (item.id && item.id === this.id) continue;
-				if (String(item.flags?.[ITEM_FLAG_SCOPE]?.slug ?? "").trim() === slug) return true;
-			}
-			return false;
+			const batch = _batchSlugs(options);
+			// An earlier card in THIS call already took it. Always somebody else's, whoever they
+			// are: siblings mid-create have no ids to tell apart.
+			if (batch?.claimed.has(slug)) return true;
+			const owners = batch?.owners ?? _worldSlugOwners();
+			const owner = owners.get(slug);
+			return owner !== undefined && owner !== this.id;
 		}
 
 		/**

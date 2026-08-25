@@ -932,6 +932,18 @@ describe("CharacterArcana.weightedInventoryItems() — carried side follows unlo
 		expect(items).toHaveLength(0);
 	});
 
+	// TAKEN OFF THE LOAD LIST, NOT OFF THE SHEET, and worth stating in one place because the
+	// change reads as a disappearance otherwise: seven shipped cards stopped appearing on the
+	// Inventory tab when this rule landed. Nothing goes with them — all seven are weightless, none
+	// carries a resource track, so no total moves and no marked box is lost — and the card itself
+	// is still on the Arcana tab where it always was. The row was the only thing that went.
+	it("keeps an immobile card on the Arcana tab even though its row is gone", async () => {
+		const arcana = new CharacterArcana(makeFlags(LOCKED), new FakeArcanaRepository([FFYRNIG_SPHERE]));
+		const snap = await arcana.buildSnapshot();
+		expect(snap.minor.items).toHaveLength(1);
+		expect(await arcana.weightedInventoryItems()).toHaveLength(0);
+	});
+
 	it("omits a HOMEBREW immobile card, which no shipped slug list could name", async () => {
 		// The reason the rule is keyed on the tag: a card an author writes today can say
 		// `immobile` and be held back by it, exactly like the shipped places.

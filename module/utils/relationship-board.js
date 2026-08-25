@@ -13,6 +13,7 @@ import { clampHearts, readOrder, updateRelationships } from "./relationship-hear
 import { SYSTEM_ID } from "../system-id.js";
 import { readStoredColumnState, writeStoredColumnState } from "./steading-column-util.js";
 import { scrollParent } from "./scroll-parent.js";
+import { fitGrowableField } from "./growable-fields.js";
 
 // Which layout a section is showing. Per user, per browser, per table — the same key
 // space that already owns these tables' column widths and sort order, so a character
@@ -689,21 +690,6 @@ function ensureEscapeWatcher() {
 // actually edited closes on its own; persisting the state would put a fourth thing under
 // `resizeKey` in localStorage for something whose whole lifetime is "while I read this".
 
-/** Grow an open note to exactly the height its text needs. */
-function fitNote(note) {
-	// Release the previous measurement first. scrollHeight is reported against the height
-	// already set, so without this the field can only ever GROW — deleting a line would
-	// leave its gap behind, and the box would never come back down.
-	note.style.height = "auto";
-	// scrollHeight covers the content and its padding but NOT the border, while the height we
-	// are about to set is a border-box one (Foundry sets border-box globally). Handing back a
-	// bare scrollHeight therefore lands two pixels short and clips the last line by exactly
-	// the border — a bug that looks like a rounding artefact and is not one. offsetHeight -
-	// clientHeight is that border, read here while the box is still auto-sized and has no
-	// scrollbar of its own to confuse the difference.
-	const chrome = note.offsetHeight - note.clientHeight;
-	note.style.height = `${note.scrollHeight + chrome}px`;
-}
 
 /**
  * Open or close one note, and put its chevron in step.
@@ -716,7 +702,7 @@ function setNoteOpen(wrap, open, onResize) {
 	const note = wrap?.querySelector(".stonetop-rel-note-input");
 	if (!note) return;
 	wrap.classList.toggle("is-open", open);
-	if (open) fitNote(note);
+	if (open) fitGrowableField(note);
 	else {
 		// Hand the height back to CSS rather than pinning the collapsed value here, so the
 		// one-line size stays stated in exactly one place.
@@ -777,7 +763,7 @@ function wireNoteExpanders(wrapper, onResize) {
 	wrapper.addEventListener("input", ev => {
 		const note = ev.target.closest?.(".stonetop-rel-note-input");
 		if (!note?.closest(".stonetop-rel-card-note-wrap.is-open")) return;
-		fitNote(note);
+		fitGrowableField(note);
 		onResize?.();
 	});
 

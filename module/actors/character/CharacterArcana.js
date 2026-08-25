@@ -9,7 +9,7 @@ import {
 import { OutfitItemBuilder } from "../../model/OutfitItem.js";
 import { majorArcanaImg, isMajorArcanumItem, arcanumCardImg } from "../../arcana-icons.js";
 import { arcanaSummonFollowers } from "../../data/arcana-summons.js";
-import { isImplantedArcanumItem, isImmobileArcanumItem } from "../../data/arcana-facets.js";
+import { isCarriedArcanumItem } from "../../data/arcana-facets.js";
 import { centerArcanumTracks } from "../../utils/glyphs.js";
 import { stonetopChatCard } from "../../utils/chat.js";
 
@@ -572,14 +572,18 @@ export class CharacterArcana {
 			// shipped places the book leaves untagged (CONCEPT_ARCANA_SLUGS). A weightless
 			// curio ("A gold ring", "A wolf pelt") still renders — at ◇0 — since most arcana
 			// curios ship with no explicit weight; only true places are held back.
-			if (!sideItem?.name) return [];
-			if (sideItem.weight == null && CONCEPT_ARCANA_SLUGS.has(item.slug)) return [];
+			if (sideItem?.weight == null && CONCEPT_ARCANA_SLUGS.has(item.slug)) return [];
 			// An IMMOBILE side is too big to carry on your person, and an IMPLANTED one carries
 			// an item only so its card can print the book's tag line. Both say so in that tag
 			// line, so both are read off it: there is nothing in your hands and nothing in your
 			// load. Applied per side, so a place whose realised BACK item is real gear (the vein
 			// of milky crystal's Moonstone) still surfaces that gear once unlocked.
-			if (isImmobileArcanumItem(sideItem) || isImplantedArcanumItem(sideItem)) return [];
+			//
+			// THROUGH THE SHARED PREDICATE, which is also what gives a card its Relic chip in the
+			// browser: the two used to be written out separately and had already come apart, so a
+			// GM could read "the arcanum itself is an item in your load" on a chip and find no
+			// such row on the sheet. The unnamed-side check is folded into it.
+			if (!isCarriedArcanumItem(sideItem)) return [];
 			return [new OutfitItemBuilder()
 				.withSlug(item.slug)
 				.withName(sideItem.name)

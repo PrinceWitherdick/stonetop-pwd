@@ -225,3 +225,20 @@ export function refitGrowableFields(root) {
 		if (!dragged(el)) fit(el);
 	}
 }
+
+/**
+ * Fit ONE field to its text, whichever kind it is.
+ *
+ * For a surface that grows a field on a gesture of its own rather than on a wired `input` — the
+ * relationship board opens a note and fits it once, and re-fits it when its own editor writes
+ * back. That surface had a private copy of the textarea measurement, comments and all; two copies
+ * of border-box arithmetic that subtle is one of them silently going wrong later.
+ *
+ * An author's own drag still wins, exactly as it does on the wired path.
+ *
+ * @returns {boolean}  Whether it could be measured (a field in a hidden section cannot).
+ */
+export function fitGrowableField(el) {
+	if (!el || dragged(el)) return false;
+	return fit(el);
+}

@@ -101,14 +101,26 @@ export function isImmobileArcanumItem(item) {
 }
 
 /**
- * True when the arcanum's front hands the holder an item to carry (`front.item`).
+ * Does this item actually go into somebody's load?
  *
- * An implanted one does not count: the Relic chip promises "the arcanum itself is an item in
- * your load", and these never enter it.
+ * THE ONE ANSWER, because two surfaces ask it and a GM can see both at once: the Arcana browser
+ * gives a card the Relic chip off this, and the character sheet's Inventory tab decides whether
+ * to weigh the thing off this. It was written out twice and the two copies disagreed — the chip
+ * excluded only the implanted, the inventory excluded the implanted AND the immobile — so all
+ * seven immobile cards wore a chip whose hint reads, verbatim, "the arcanum itself is an item in
+ * your load" while the inventory pointedly refused to put it there.
+ *
+ * Both exclusions are read off the printed tag line rather than off a list of slugs, so the next
+ * tag the books print is added HERE, once, and a homebrew card tagged the way the book says
+ * behaves the way the book says. An item with no name is nothing to carry either.
  */
+export function isCarriedArcanumItem(item) {
+	return !!item?.name && !isImplantedArcanumItem(item) && !isImmobileArcanumItem(item);
+}
+
+/** True when the arcanum's front hands the holder something that goes into their load. */
 function _isRelic(arc) {
-	const item = arc?.front?.item;
-	return !!item && !isImplantedArcanumItem(item);
+	return isCarriedArcanumItem(arc?.front?.item);
 }
 
 /**

@@ -136,6 +136,50 @@ describe("StonetopItem#_preCreate — the arcanum slug", () => {
 		}
 	});
 
+	// ONE CALL, MANY CARDS: dragging the arcana folder into the sidebar. `_preCreate` runs per
+	// document against the collection as it STANDS, so it cannot see the siblings arriving beside
+	// it — and two cards on one slug inside a single import both looked unique and both went in,
+	// which is precisely the collision this hook exists to prevent, arriving by the gesture most
+	// likely to produce it. Core hands every document in one call the SAME options object, which
+	// is what lets a card claim its slug for the ones behind it.
+	it("tells one card in a batch from another, though neither is in the world yet", async () => {
+		const options = {};
+		const first = pending(arcanum({ slug: "azure-hand" }));
+		const second = pending(arcanum({ slug: "azure-hand" }));
+
+		await first._preCreate({}, options, {});
+		await second._preCreate({}, options, {});
+
+		expect(first.flags.stonetop.slug).toBe("azure-hand");
+		expect(second.flags.stonetop.slug).toBe("arc-IDIDIDIDIDIDIDID");
+	});
+
+	// And a SEPARATE call starts fresh, so an import of the same card into a world that does not
+	// hold it is still left alone — the case a batch-wide memory must not break.
+	it("does not carry a claim over into the next create call", async () => {
+		const first = pending(arcanum({ slug: "azure-hand" }));
+		await first._preCreate({}, {}, {});
+
+		const later = pending(arcanum({ slug: "azure-hand" }));
+		await later._preCreate({}, {}, {});
+
+		expect(later.updateSource).not.toHaveBeenCalled();
+		expect(later.flags.stonetop.slug).toBe("azure-hand");
+	});
+
+	// The world directory is walked ONCE per call, not once per card. Against a world holding the
+	// seeded catalogs, an eighty-card import was eighty walks of the whole Items sidebar.
+	it("reads the world's items once for the whole batch", async () => {
+		let reads = 0;
+		const items = [{ id: "other", flags: { stonetop: { slug: "mindgem" } } }];
+		globalThis.game = { get items() { reads += 1; return items; } };
+
+		const options = {};
+		for (let i = 0; i < 5; i++) await pending(arcanum({ slug: `card-${i}` }))._preCreate({}, options, {});
+
+		expect(reads).toBe(1);
+	});
+
 	// Every other item type goes through this hook too — inventory gear, basic moves, playbooks
 	// — and none of them has a slug to mint.
 	it("leaves every other kind of item untouched", async () => {

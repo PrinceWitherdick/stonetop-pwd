@@ -184,6 +184,36 @@ describe("settings registration", () => {
 	});
 });
 
+// Every settings SUBMENU is a Stonetop window, and our chrome — the header bar, the content
+// background, the focus glow, `--stonetop-font-scale` — is scoped to the `stonetop` class on
+// purpose. `FormApplication` contributes only `["form"]`, and nothing adds ours at runtime: the
+// system's one `classList.add("stonetop")` is for actor sheets. So a menu that omits it opens in
+// core's dark chrome while its OWN form rules still apply, which reads as half-styled rather than
+// unstyled and is easy to ship without noticing. Read out of the source because there is no
+// FormApplication here to instantiate.
+describe("settings menu windows", () => {
+	it("dresses every settings submenu as one of ours", () => {
+		const start = SETTINGS_SRC.indexOf("function _createSettingsMenuApp(");
+		expect(start, "_createSettingsMenuApp not found — did settings.js reorganize?").toBeGreaterThan(-1);
+		const body = SETTINGS_SRC.slice(start, SETTINGS_SRC.indexOf("\n}", start));
+		// The whole DECLARATION line, not a bracket scan: the value contains its own `[]` in the
+		// spread default, and a scan that stopped at the first `]` read only as far as that.
+		const classes = /^\s*classes:.*$/m.exec(body);
+		expect(classes, "the shared settings-menu app declares no classes").not.toBeNull();
+		expect(classes[0]).toContain('"stonetop"');
+		// And core's own class survives: mergeObject REPLACES an array where it merges an object,
+		// so listing the two names out rather than spreading would drop `form` silently.
+		expect(classes[0]).toContain("base.classes");
+	});
+
+	// A settings window minted WITHOUT going through the shared factory would miss the class
+	// again, which is the whole failure this guards.
+	it("mints every settings window through that one factory", () => {
+		const extended = [...SETTINGS_SRC.matchAll(/class\s+\w+\s+extends\s+FormApplication/g)];
+		expect(extended.length, "a settings window sidesteps _createSettingsMenuApp").toBe(1);
+	});
+});
+
 // The sheet-font maps. applySheetFont resolves ONE key and reads both of them with it, so a face
 // present in one and missing from the other silently sets `--st-caps-nudge: undefined` — which
 // does not throw, does not log, and surfaces only as uppercase pills sitting high on that one
