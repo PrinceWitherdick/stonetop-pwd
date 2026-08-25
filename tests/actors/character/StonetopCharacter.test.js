@@ -1115,16 +1115,26 @@ describe("StonetopCharacter.onRoll", () => {
 		expect(item.roll).toHaveBeenCalledWith(expect.objectContaining({ rollMode: "adv" }));
 	});
 
-	// A caller with nothing to say about the mode gets a normal roll, and so does one that
-	// hands over junk — the value arrives from a dialog's DOM, not from a validated flag.
-	it("falls back to a normal roll, and normalizes anything unrecognized", async () => {
+	// A caller with nothing to say about the mode falls back to the sheet's sticky selector —
+	// which is the ordinary case, since the pre-roll window omits the key entirely unless it
+	// asked. Defaulting to "normal" here instead would overrule the selector on every roll.
+	it("falls back to the actor's saved rollMode", async () => {
 		const item = makeRollableItem({ rollType: "str" });
 		const char = new TestCharacterBuilder(makeOnRollActor(item, {pbtaRollMode: "adv"})).build();
+		expect(await char.onRoll(makeItemEvent())).toBe(true);
+		expect(item.roll).toHaveBeenCalledWith(expect.objectContaining({ rollMode: "adv" }));
+	});
+
+	// Junk normalizes to normal wherever it came from: the value may arrive from a dialog's
+	// DOM rather than from a validated flag, and an old world's flag may say "def".
+	it("normalizes anything unrecognized, from the caller or from the flag", async () => {
+		const item = makeRollableItem({ rollType: "str" });
+		const char = new TestCharacterBuilder(makeOnRollActor(item, {pbtaRollMode: "def"})).build();
 		expect(await char.onRoll(makeItemEvent())).toBe(true);
 		expect(item.roll).toHaveBeenCalledWith(expect.objectContaining({ rollMode: "normal" }));
 
 		const other = makeRollableItem({ rollType: "str" });
-		const char2 = new TestCharacterBuilder(makeOnRollActor(other)).build();
+		const char2 = new TestCharacterBuilder(makeOnRollActor(other, {pbtaRollMode: "adv"})).build();
 		await char2.onRoll(makeItemEvent(), { rollMode: "def" });
 		expect(other.roll).toHaveBeenCalledWith(expect.objectContaining({ rollMode: "normal" }));
 	});
@@ -1171,14 +1181,21 @@ describe("StonetopCharacter.onRoll", () => {
 		});
 	});
 
-	// There is no sticky mode to save any more, and nothing may quietly start writing one back:
-	// a flag that outlives a roll is the whole bug this replaced.
-	it("has no sticky roll mode to read or write", async () => {
-		const actor = makeOnRollActor(makeRollableItem());
+	// The sidebar selector reads and writes this; rolling never does. A roll that wrote the
+	// mode back would make a one-off Advantage from the window stick to the sheet, which is the
+	// opposite of what the two modes are for.
+	it("reads the sticky mode off the flag and writes it only when told to", async () => {
+		const actor = makeOnRollActor(makeRollableItem(), { pbtaRollMode: "dis" });
 		const char = new TestCharacterBuilder(actor).build();
-		expect(char.setRollMode).toBeUndefined();
-		expect(char.rollMode).toBeUndefined();
-		await char.onRoll(makeItemEvent(), { rollMode: "dis" });
+		expect(char.rollMode).toBe("dis");
+
+		await char.onRoll(makeItemEvent(), { rollMode: "adv" });
 		expect(actor.setFlag).not.toHaveBeenCalledWith("stonetop-pwd", "rollMode", expect.anything());
+
+		await char.setRollMode("adv");
+		expect(actor.setFlag).toHaveBeenCalledWith("stonetop-pwd", "rollMode", "adv");
+		// And junk on the way in never reaches the flag.
+		await char.setRollMode("def");
+		expect(actor.setFlag).toHaveBeenCalledWith("stonetop-pwd", "rollMode", "normal");
 	});
 });

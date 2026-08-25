@@ -304,6 +304,11 @@ function solveFromMark(start) {
  * An unrecognised slug becomes null rather than being passed through: the graph cannot answer for
  * it, and a destination the map has never heard of is a destination nobody picked. Going nowhere
  * is likewise not a journey — it would solve to a route with no legs.
+ *
+ * SAFE TO APPLY TWICE. Its own answer is a valid argument and normalizes to itself, which the
+ * callers rely on: the panel hands an already-normalized pick to `showRouteOnScene` and to
+ * `journeyKey`, and both of those normalize again. See the note on `start` below for why that
+ * costs a hand-placed start unless the whole start is read rather than its slug.
  */
 export function normalizeJourney(journey) {
 	// WHERE THEY SET OUT FROM, which is a place, a mark the GM put down, or nowhere at all
@@ -318,7 +323,17 @@ export function normalizeJourney(journey) {
 	// never been told where it sets out from leaves the steading exactly as it always has, and only
 	// a start a GM deliberately peeled off is nowhere. Every other reader in the system takes the
 	// start this hands back, so there is no second copy of that default to drift.
-	const start = storedStart(journey?.origin);
+	//
+	// AND THIS FUNCTION'S OWN ANSWER GOES BACK THROUGH IT, which is why `start` is preferred over
+	// `origin` whenever one is there. `origin` is a LOSSY reading of the start — the slug, and so
+	// null for a mark — so a second pass that consulted it would quietly turn every hand-placed
+	// start into nowhere: the line would vanish off the Scene, and `journeyKey` would key all of
+	// them as the empty string and call two different starting points the same journey. That is
+	// not a defensive path but the ordinary one, because the panel normalizes a pick before
+	// handing it to `showRouteOnScene` and to `journeyKey` alike. A STORED trip holds only
+	// `{ origin, destination, custom }` and never a `start`, so which key is present is the honest
+	// test of which of the two shapes has arrived, and `normalizeStart` is itself idempotent.
+	const start = journey?.start ? normalizeStart(journey.start) : storedStart(journey?.origin);
 	const origin = start.slug;
 	const destination = travelPlace(journey?.destination)?.slug ?? null;
 	return {

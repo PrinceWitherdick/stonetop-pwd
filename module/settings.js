@@ -165,6 +165,28 @@ export function registerSettings() {
 		default: ""
 	});
 
+	// The system version each ONE-TIME REPAIR SWEEP last completed under, keyed by the sweep's own
+	// name: `{ arcanumSlugs: "1.5.3", … }`. See migration/once-per-version.js.
+	//
+	// ONE registration for all of them, rather than a setting apiece. These sweeps arrive a couple
+	// at a time and each is a full-world scan — every Item in the sidebar, every Note on every
+	// Scene, every embedded item on every Actor — run on the primary GM's blocking `onReady`. They
+	// were added ungated on the argument that each is idempotent, which is true and is not the
+	// same as free: idempotent buys correctness, not the scan. Worse, an ungated sweep records
+	// nothing about having run, so no later maintainer can tell a sweep that is still needed from
+	// one that has been a no-op in every world for a year, and none of them can ever be deleted.
+	//
+	// Keyed by version rather than latched to a boolean so a sweep that is really "bring this up
+	// to the CURRENT design" runs again after an upgrade that changes the design — which is what
+	// the pin refits actually are.
+	game.settings.register(SYSTEM_ID, "repairSweepVersions", {
+		name: "Repair Sweep Versions",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {}
+	});
+
 	// Fingerprint of the seeded gazetteer folder colour scheme last applied in this
 	// world (see hooks/SeedCompendiums.syncSeededFolderColors). When it trails the
 	// current scheme — a fresh install, or a system update that added/retinted a
@@ -1087,6 +1109,46 @@ export function registerSettings() {
 		onChange: value => applyHideRollableIcon(value),
 	});
 
+	// WHERE advantage and disadvantage are chosen, and it is one place or the other.
+	//
+	// OFF (the default) is how the system shipped for most of its life: a sticky Advantage /
+	// Normal / Disadvantage selector on the character sheet's Moves sidebar and on the
+	// steading's Homefront Moves, written to a flag on the actor and applying to every roll
+	// until it is put back. ON hides both selectors and asks in the pre-roll window instead,
+	// which starts at Normal every time (module/dialogs/RollDialog.js) — a question that is
+	// asked cannot be forgotten, at the price of a window on every roll.
+	//
+	// Per-client, because it decides what THIS user's sheets draw and what THIS user's clicks
+	// open. The mode itself stays a flag on the actor, so a table can mix the two safely: the
+	// window's answer overrides the selector for that one roll and never writes to it.
+	game.settings.register(SYSTEM_ID, "askRollModeEachRoll", {
+		name: "stonetop.settings.askRollModeEachRoll.name",
+		hint: "stonetop.settings.askRollModeEachRoll.hint",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		default: false,
+		// The selectors are rendered, so turning this on or off has to repaint the sheets that
+		// carry them — otherwise the control the setting just hid stays on screen and writable.
+		onChange: () => _rerenderActorSheets(),
+	});
+
+	// Prompt for a one-off situational modifier before each 2d6 move/stat roll on the
+	// character sheet (a held bonus, a GM-granted +1, etc.). Read at roll time (RollDialog.js);
+	// Shift-clicking the roll skips the prompt.
+	//
+	// Only consulted when the window is not already opening for the mode: "Ask How to Roll
+	// Each Time" carries the stepper with it. So both off is no window at all, this one alone
+	// is the stepper alone, and the other one is both halves whatever this says.
+	game.settings.register(SYSTEM_ID, "promptRollModifier", {
+		name: "stonetop.settings.promptRollModifier.name",
+		hint: "stonetop.settings.promptRollModifier.hint",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		default: false,
+	});
+
 	// Open actor sheets (character / steading / monster / NPC) in Edit mode instead of
 	// Play mode. Read once when the sheet is constructed; the header wrench still
 	// toggles modes per-sheet afterward. The NPC sheet additionally requires ownership
@@ -1337,12 +1399,25 @@ export const HOVER_DESCRIPTION_SETTING_KEYS = [
  * The template path is built from SYSTEM_ID rather than written out. Two of these used to hard-
  * code `systems/stonetop-pwd/...` and one did not, which is exactly the kind of disagreement a
  * package rename turns into a blank window with nothing logged.
+ *
+ * `classes` CARRIES "stonetop", which is what dresses the window: the header bar, the content
+ * background, the focus glow and `--stonetop-font-scale` are all scoped to that class on purpose.
+ * `FormApplication` contributes only `["form"]` and nothing adds ours at runtime — the one
+ * `classList.add("stonetop")` in the system is for actor sheets — so a menu without it opened in
+ * core's dark chrome while its own form rules still applied, which reads as half-styled rather
+ * than unstyled and is easy to live with without noticing. The id rides along as the second class
+ * so a menu can still be reached on its own for anything particular to it.
  */
 function _createSettingsMenuApp({ id, titleKey, template, getData, update }) {
 	return class StonetopSettingsMenuApp extends FormApplication {
 		static get defaultOptions() {
-			return foundry.utils.mergeObject(super.defaultOptions, {
+			const base = super.defaultOptions;
+			return foundry.utils.mergeObject(base, {
 				id,
+				// SPREAD RATHER THAN LISTED, because `mergeObject` REPLACES an array where it
+				// merges an object: writing the two names out would quietly drop core's own `form`
+				// class, which is what its field and button layout hangs off.
+				classes: [...(base.classes ?? []), "stonetop", id],
 				title: game.i18n.localize(titleKey),
 				template: `systems/${SYSTEM_ID}/templates/settings/${template}`,
 				width: 520,
@@ -1563,6 +1638,19 @@ export function applyHideRollableIcon(value) {
 
 export function applyReduceMotion(value) {
 	document.documentElement.classList.toggle("stonetop-reduce-motion", !!value);
+}
+
+// Whether the pre-roll window asks how the roll is going out (Advantage / Normal /
+// Disadvantage) instead of the sticky selector on the character and steading sheets.
+// The two are exclusive by design: whichever one is answering, the other is not drawn.
+export function getAskRollModeEachRollSetting() {
+	return globalThis.game?.settings?.get?.(SYSTEM_ID, "askRollModeEachRoll") ?? false;
+}
+
+// Whether to prompt for a one-off situational modifier before a move/stat roll. Ignored
+// while the mode is being asked per roll, since that window carries the stepper anyway.
+export function getPromptRollModifierSetting() {
+	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptRollModifier") ?? false;
 }
 
 // Whether actor sheets should open in Edit mode rather than Play mode.

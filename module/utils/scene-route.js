@@ -379,6 +379,12 @@ export async function showRouteOnScene(scene, journey) {
 		...routeFlagDeletions(scene, { except: SYSTEM_ID }),
 		[`flags.${SYSTEM_ID}.${SCENE_ROUTE_FLAG}`]: payload,
 	});
+	// AND OFF EVERY OTHER SCENE, because a party is on one journey at a time and the line is a
+	// picture of that journey. The deletions above only reach other flag SCOPES on THIS scene, so
+	// a GM who drew the route on the Vicinity and then drew it on the World's End left the
+	// Vicinity painting the old one for good — on every client, with the panel's button now
+	// talking about the scene in front of them and no control anywhere that could reach the other.
+	await clearRouteElsewhere(scene);
 	// The name to tell the GM the line landed under, or null where the way ends at a mark of their
 	// own and there is no name to give — which the caller words for itself.
 	if (!drawn) return travelPlace(destination)?.name ?? destination;
@@ -421,4 +427,35 @@ export async function clearRouteOnScene(scene) {
 	if (!sceneJourney(scene)) return false;
 	await scene.update(routeFlagDeletions(scene));
 	return true;
+}
+
+/**
+ * Take the route off every Scene EXCEPT this one.
+ *
+ * ONE LINE IN THE WORLD AT A TIME. The party is on one journey, and the line is a picture of that
+ * journey, so a route on a Scene the GM has moved on from is not a second answer but a stale copy
+ * of the first — and nothing was ever going to come back and clear it. `showRouteOnScene` writes
+ * to the Scene it was handed and no other, and the button in the panel only ever talks about the
+ * Scene the GM is standing on, so the Vicinity's line survived being redrawn on the World's End
+ * and survived the trip that drew it.
+ *
+ * Best effort, and deliberately not awaited into the caller's failure path: the route the GM just
+ * asked for is already on the Scene in front of them, and a Scene that refuses this must not turn
+ * that into a failed placement. A refusal leaves a stale line, which the button can now reach.
+ *
+ * @returns {Promise<number>} how many Scenes were cleared.
+ */
+export async function clearRouteElsewhere(keep, { scenes = globalThis.game?.scenes ?? [] } = {}) {
+	let cleared = 0;
+	for (const scene of scenes) {
+		if (scene === keep || scene?.id === keep?.id) continue;
+		if (!sceneJourney(scene)) continue;
+		try {
+			await scene.update(routeFlagDeletions(scene));
+			cleared += 1;
+		} catch (_) {
+			// Left for the button, rather than failing the draw that has already landed.
+		}
+	}
+	return cleared;
 }

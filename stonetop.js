@@ -37,6 +37,7 @@ import { onDropFollower } from "./module/hooks/FollowerDrop.js";
 import { onPreUpdateActorDeathsDoor, onUpdateActorDeathsDoorAutoOpen, onUpdateActorDeathsDoorCard, onUpdateActorDeathsDoorRaised, wireDyingPrompt } from "./module/hooks/DeathsDoorPrompt.js";
 import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { onPreCreateThreatNote } from "./module/hooks/ThreatNotePins.js";
+import { onUpdateSiteNote } from "./module/sites/site-scene-pins.js";
 import { onDrawStonetopNote } from "./module/hooks/StonetopNoteLabels.js";
 import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
 import { bumpEncounterNotesGeneration } from "./module/actors/gmtoolkit/gm-encounters-tab.js";
@@ -401,6 +402,11 @@ Hooks.once("init", () => {
 		"stonetop.post-death-choices":   "systems/stonetop-pwd/templates/dialogs/partials/post-death-choices.hbs",
 		"stonetop.move-mark-level":      "systems/stonetop-pwd/templates/actor/partials/move-mark-level.hbs",
 		"stonetop.sidebar-move-list":    "systems/stonetop-pwd/templates/actor/partials/sidebar-move-list.hbs",
+		// The sticky Advantage / Normal / Disadvantage selector, in its two shapes: the stacked
+		// radio list for a narrow sidebar and the segmented pill for a section heading. Both are
+		// mounted behind the "Ask How to Roll Each Time" client setting — see RollDialog.js.
+		"stonetop.roll-mode-radios":     "systems/stonetop-pwd/templates/actor/partials/roll-mode-radios.hbs",
+		"stonetop.roll-mode-picker":     "systems/stonetop-pwd/templates/actor/partials/roll-mode-picker.hbs",
 		"stonetop.lore-section":          "systems/stonetop-pwd/templates/actor/partials/lore-section.hbs",
 		"stonetop.lore-options-edit":     "systems/stonetop-pwd/templates/actor/partials/lore-options-edit.hbs",
 		"stonetop.lore-options-readonly": "systems/stonetop-pwd/templates/actor/partials/lore-options-readonly.hbs",
@@ -613,6 +619,12 @@ Hooks.on("updateSetting", _onArtIndexPublished);
 // A threat card dragged onto a scene drops a native page-linked Note; give that
 // pin the torn-note icon, the threat's name, and global (fog-ignoring) visibility.
 Hooks.on("preCreateNote", onPreCreateThreatNote);
+
+// The other direction, for a SITE's pin: where a site stands is stored as a fraction of the
+// printed map, and that fraction is what draws the pin — so a GM who drags the pin has moved the
+// picture of the fact without moving the fact. The two maps then disagreed silently, and the next
+// placement snapped the pin back. This writes the drag home. See sites/site-scene-pins.js.
+Hooks.on("updateNote", onUpdateSiteNote);
 
 // Give our lettered Place-of-Interest discs and threat/hazard pins a thick paper text
 // halo so their labels stay legible over the illustrated Stonetop maps.

@@ -30,9 +30,11 @@
 // the behaviour prep wants.
 
 import { posterMapFor, posterMapSlugOf, sceneOrigin } from "../book2-art/poster-map-catalog.js";
-import { TRAVEL_MAPS, frameFitsImage, frameFor, markedMap } from "../data/travel-times.js";
+import { TRAVEL_MAPS, frameFitsImage, frameFor, markedMap, percentSpot } from "../data/travel-times.js";
 import { posterSpotPixels } from "../utils/map-pins.js";
 import { warn } from "../utils/logger.js";
+import { listSitePages, sitePageById } from "./site-store.js";
+import { siteMapSpot, setSiteMapSpot } from "./site-map-spots.js";
 
 /**
  * This world's Scene for one travel tier's poster map, or null when nothing has built it.
@@ -77,6 +79,43 @@ export function siteScenePoint(spot, scene) {
 	const at = posterSpotPixels({ spot, frame, width, height });
 	const origin = sceneOrigin(scene);
 	return { x: origin.x + at.x, y: origin.y + at.y };
+}
+
+/**
+ * The other direction: a point on the Scene back to the fraction of the PRINTED crop it stands on.
+ *
+ * The inverse of `siteScenePoint`, through the same frame and the same origin. `percentSpot` is
+ * declared as the inverse of `spotPercent` and rounds to the precision marks are stored at.
+ *
+ * INVERSE IN PIXELS, NOT IN FRACTIONS, and the difference is worth stating because it looks like a
+ * bug and is not. `siteScenePoint` rounds to a whole pixel, and one pixel of a 4000px poster is
+ * 0.00025 of it — coarser than the 0.0001 a mark is stored at. So a spot converted out and back
+ * can differ in its last digit, and the round trip is only exact once the answer is put back
+ * through `siteScenePoint`: the fraction that comes back always lands on the very pixel it was
+ * read from. That is the property that matters here, because it is what stops a pin from drifting
+ * — the flag this writes and the pin the flag draws agree, so nothing walks on a re-sync.
+ *
+ * Refused on the same terms the forward conversion is refused on: a Scene whose picture is not the
+ * shape the fractions were measured against cannot say where anything on it stands, in either
+ * direction.
+ *
+ * @returns {{tier: string, fx: number, fy: number}|null}
+ */
+export function siteSpotFromScenePoint(point, scene, tier) {
+	const map = posterMapFor(tier);
+	const marked = markedMap(tier);
+	const width = Number(scene?.width);
+	const height = Number(scene?.height);
+	if (!map || !marked || !(width > 0) || !(height > 0)) return null;
+	if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return null;
+	const frame = frameFor(map.out);
+	if (!frameFitsImage(frame, width / height, marked.printedAspect)) return null;
+	const origin = sceneOrigin(scene);
+	const at = percentSpot({
+		left: ((point.x - origin.x) / width) * 100,
+		top: ((point.y - origin.y) / height) * 100,
+	}, frame);
+	return { tier: marked.slug, ...at };
 }
 
 /** Every Note on a Scene that stands for this very site page. */
@@ -135,12 +174,24 @@ export async function syncSitePin(page, spot, { scenes = globalThis.game?.scenes
 	// — the pin off the map it left, the pin onto the map it arrived on — are independent documents
 	// on independent Scenes, so they go together rather than one after the other.
 	const writes = [];
+	let refused = false;
 	for (const map of TRAVEL_MAPS) {
 		const scene = byTier.get(map.slug);
 		if (!scene) continue;
 		const pins = sitePinsOn(scene, page);
+		const mine = map.slug === spot?.tier;
+		const point = mine ? siteScenePoint(spot, scene) : null;
+		// THIS SITE'S MAP, BUT NOT A SCENE THAT CAN SAY WHERE. `siteScenePoint` refuses a Scene whose
+		// picture is not the shape the fractions were measured against — a GM who nudged the Scene's
+		// dimensions past `frameFitsImage`'s tolerance, say. That is a refusal, and a refusal leaves
+		// what is there alone: taking the pin off would delete a mark the GM put on the table's map
+		// over a Scene setting that has nothing to do with where the site stands. A missing pin is
+		// obviously missing; a pin silently removed while the placement is announced is not.
+		if (mine && !point) {
+			refused = true;
+			continue;
+		}
 		// Not this site's map any more, or not any map at all: the mark comes off.
-		const point = map.slug === spot?.tier ? siteScenePoint(spot, scene) : null;
 		if (!point) {
 			if (pins.length) writes.push({ scene, verb: "delete", payload: pins.map(note => note.id) });
 		} else if (pins.length) {
@@ -162,7 +213,12 @@ export async function syncSitePin(page, spot, { scenes = globalThis.game?.scenes
 	// Only a write that PUT the pin somewhere answers the caller, and only if the Scene took it:
 	// the notification is worded from this, so a refused write must not claim a mark.
 	const put = writes.findIndex((w, i) => w.moved !== undefined && done[i]);
-	return put < 0 ? null : { scene: writes[put].scene, moved: writes[put].moved };
+	// A Scene that could not take the mark is REPORTED rather than folded into "no Scene at all".
+	// Those read the same from here — no pin was laid — but they are different things to be told:
+	// one world has no map to mark, the other has one this system will not measure against, and
+	// only the second is something the GM can go and put right.
+	if (put < 0) return refused ? { scene: null, moved: false, refused: true } : null;
+	return { scene: writes[put].scene, moved: writes[put].moved, refused: false };
 }
 
 /**
@@ -184,4 +240,75 @@ async function wrote(scene, verb, payload) {
 		warn(`couldn't ${verb} a site pin on a scene`, err);
 		return false;
 	}
+}
+
+/**
+ * `updateNote` hook: a site pin the GM dragged writes where it landed back onto the site.
+ *
+ * THE OTHER DIRECTION OF THE SAME FACT, and its absence was the one thing this module got wrong.
+ * A spot was pushed OUT to the Scene and never read back, while the pin was deliberately made
+ * "indistinguishable from one the GM dragged on by hand" -- so dragging it was the obvious gesture
+ * and the only one that did not work. The walkthrough's map and the table's map then disagreed
+ * about where the Sunken Barrow stands, with nothing on screen saying which was right, until the
+ * next placement snapped the Note back and threw the drag away.
+ *
+ * MOVES ONLY. A Note is written for a dozen reasons -- its icon, its label, its fog setting -- and
+ * a write-back on any of them would rewrite the flag with the position it already had, and echo.
+ *
+ * GM-ONLY and best effort: this rides on a write core has already accepted, so a refusal here must
+ * not fail the drag. It leaves the two maps disagreeing, which the next placement corrects.
+ */
+export async function onUpdateSiteNote(note, changes) {
+	if (!globalThis.game?.user?.isGM) return;
+	if (changes?.x === undefined && changes?.y === undefined) return;
+
+	const scene = note?.parent;
+	const tier = posterMapSlugOf(scene);
+	if (!tier) return;
+
+	// A SITE page, not a threat's pin, a hazard's, or one of the book's own lettered discs. The
+	// site store's own resolver is what says: `gmPrepPageById` would answer for any of the three
+	// kinds, and writing a threat's drag into a site's flag is worse than not writing it at all.
+	const page = sitePageById(note.entryId, note.pageId);
+	if (!page) return;
+
+	const at = siteSpotFromScenePoint({ x: note.x, y: note.y }, scene, tier);
+	if (!at) return;
+	// Already saying this, to the precision a spot is stored at: a drag that rounds back to where
+	// the site already stands is not news, and writing it would re-render the walkthrough for
+	// nothing.
+	const now = siteMapSpot(page);
+	if (now && now.tier === at.tier && now.fx === at.fx && now.fy === at.fy) return;
+
+	try { await setSiteMapSpot(page, at); }
+	catch (err) { warn("couldn't write a dragged site pin back to its site", err); }
+}
+
+
+/**
+ * Put every placed site back on the table's maps.
+ *
+ * FOR THE WORLD THAT GAINED ITS SCENES LATER, which is an ordinary order to do things in: writing
+ * sites up and pinning them on the walkthrough's map needs no Scene at all, and `placeSiteOnMap`
+ * has a message for exactly that world. Import the book art afterwards and the poster Scenes are
+ * built with the book's own place markers laid on them by `markPosterMapScenes` -- and not one of
+ * the GM's sites, because `syncSitePin` only ever ran from a placement. The cards went on saying
+ * "already on The Vicinity" while the map the table plays on had nothing, and the only fix was to
+ * lift and re-place every site by hand.
+ *
+ * Idempotent by construction -- it asks the same question `syncSitePin` always asks, and a site
+ * already pinned where it belongs is an update to the position it already has.
+ *
+ * @returns {Promise<number>} how many sites were marked or moved.
+ */
+export async function reconcileSitePins(steading) {
+	if (!steading || !globalThis.game?.user?.isGM) return 0;
+	let marked = 0;
+	for (const page of listSitePages(steading)) {
+		const spot = siteMapSpot(page);
+		if (!spot) continue;
+		const answer = await syncSitePin(page, spot);
+		if (answer?.scene) marked += 1;
+	}
+	return marked;
 }

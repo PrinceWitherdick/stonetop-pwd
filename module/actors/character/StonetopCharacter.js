@@ -469,6 +469,7 @@ export class StonetopCharacter {
 			.withInventory(inventory)
 			.withArcana(await this._arcana.buildSnapshot(actor.system.stats ?? {}, this._inventory.checked, this._inventory.resources))
 			.withPostDeathInsert(postDeath)
+			.withRollMode(normalizeRollMode(resolvedFlags(actor).rollMode))
 			.withCrewBonuses(_buildCrewStats(playbookData?.crew, moveBonuses))
 			.withCompanionBonuses(_buildCompanionBonuses(moveBonuses, ownedAllByName))
 			.withViewerIsGM(!!view.viewerIsGM)
@@ -2136,7 +2137,7 @@ export class StonetopCharacter {
 	// truthy answers both mean "taken, stop looking" — the distinction is only for a caller with
 	// something to fire after the roll (see MOVE_ROLL_EFFECTS), which must not fire on a prompt
 	// nobody answered.
-	async onRoll(event, { statOverride = null, situational = 0, weaponSlug = null, rollMode = "normal" } = {}) {
+	async onRoll(event, { statOverride = null, situational = 0, weaponSlug = null, rollMode = null } = {}) {
 		const itemId = event.currentTarget.closest(".item")?.dataset.itemId;
 		if (!itemId) return false;
 		const item = this._actor.items.get(itemId);
@@ -2178,11 +2179,15 @@ export class StonetopCharacter {
 		const situ     = descriptionOnly ? 0 : situational;
 
 		const modifier    = forward + ongoing + situ;
-		// `rollMode` is the caller's answer to the pre-roll prompt (see RollDialog.js), which is
-		// the ONLY place advantage and disadvantage are chosen — there is no sticky sheet control
-		// behind it to fall back on. A description-only click never opened the prompt, so it
-		// arrives at the default and rolls nothing anyway.
-		const rollOptions = { rollMode: normalizeRollMode(rollMode), modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}) };
+		// `rollMode` is the pre-roll prompt's answer when the prompt asked for one (see
+		// RollDialog.js), and ABSENT when it did not — which is the ordinary case, because the
+		// mode is normally the sticky selector on this sheet. So the sheet's own flag is the
+		// fallback rather than "normal": defaulting to normal here would quietly overrule a
+		// player who set Advantage on their sheet, on every roll.
+		const rollOptions = {
+			rollMode: normalizeRollMode(rollMode ?? this.rollMode),
+			modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}),
+		};
 
 		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, rollOptions), descriptionOnly });
 
@@ -2538,10 +2543,11 @@ export class StonetopCharacter {
 
 	async onDirectStatRoll(stat, extraOptions = {}) {
 		const { rollStat } = await import("../../utils/roll-engine.js");
-		// `rollMode` is the pre-roll prompt's answer (see RollDialog.js). Destructured rather
-		// than left in `rest` so the caller cannot half-set it: Know Things passes a mode it has
-		// already lifted through withAdvantage, and that is a value, not an override.
-		const { situational = 0, rollMode = "normal", ...rest } = extraOptions;
+		// `rollMode` is the pre-roll prompt's answer when the prompt asked for one (RollDialog.js)
+		// and absent otherwise, in which case the sheet's sticky selector decides. Destructured
+		// rather than left in `rest` so the caller cannot half-set it: Know Things passes a mode
+		// it has already lifted through withAdvantage, and that is a value, not an override.
+		const { situational = 0, rollMode = null, ...rest } = extraOptions;
 		const forward  = this._actor.system?.attributes?.forward?.value ?? 0;
 		const ongoing  = this._actor.system?.attributes?.ongoing?.value ?? 0;
 		// `situational` is the one-off modifier from the optional pre-roll prompt; the
@@ -2551,7 +2557,7 @@ export class StonetopCharacter {
 		// Returned so a caller that has to act on the outcome (the arcana Identify roll) can
 		// classify the total without re-rolling or re-deriving the tier thresholds.
 		const roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat, {
-			rollMode: normalizeRollMode(rollMode),
+			rollMode: normalizeRollMode(rollMode ?? this.rollMode),
 			modifier,
 			forward,
 			ongoing,
@@ -2640,6 +2646,21 @@ export class StonetopCharacter {
 		const base = { ...options, stonetopDebility: def?.name ?? key, stonetopDebilityTooltip: def?.description ?? "" };
 		if (options.rollMode === "adv") return { ...base, rollMode: "normal" };
 		return { ...base, rollMode: "dis" };
+	}
+
+	// The STICKY roll mode: the Roll Modifier selector in the sheet's Moves sidebar
+	// (roll-mode-radios.hbs), stored as a flag on the actor so it survives a re-render and is
+	// the same for everyone looking at the character. It is what every roll uses UNLESS the
+	// caller passed a mode of its own — the pre-roll window's answer, or a rule the move
+	// itself forces. Which of the two is asked is the "Ask How to Roll Each Time" client
+	// setting; the sheet simply stops drawing this control when the window is doing the asking,
+	// and the flag then sits at whatever it was last set to, harmlessly, until it is drawn again.
+	get rollMode() {
+		return normalizeRollMode(resolvedFlags(this._actor).rollMode);
+	}
+
+	async setRollMode(rollMode) {
+		await this._actor.setFlag(STONETOP_SCOPE, "rollMode", normalizeRollMode(rollMode));
 	}
 
 	// ── Death and dying (Book I, Harm & Healing p.245) ─────────────────────────

@@ -1,0 +1,44 @@
+{{!-- Advantage / Normal / Disadvantage, as the stacked radio list that suits a narrow moves
+      sidebar. The pre-redesign shape, and the one the CLASSIC layout brings back.
+
+      Two mount points, one file: the character sheet's sidebar (which never took part in the
+      redesign and has always looked like this) and the steading's CLASSIC sidebar. They were
+      hand-copies of each other before this partial; the modern steading uses the segmented
+      pill instead, see roll-mode-picker.hbs.
+
+      RADIOS here, unlike the pill, which is buttons. A named input inside an actor sheet's
+      form does ride along into `_updateObject` as a stray top-level key — but this is the
+      markup that shipped, on the character sheet, for the whole life of the system, and
+      trading it for name-less inputs would cost the browser's own grouping: two dots would
+      read as filled between the click and the re-render that re-stamps them.
+
+      Best to worst, top to bottom, which is how the list has always read.
+
+      DRAWN ONLY WHEN THE MODE IS NOT ASKED PER ROLL — see roll-mode-picker.hbs, which says why.
+
+      Params:
+        rollMode  "adv" | "normal" | "dis" - which row is filled (server-stamped, so the flip
+                  only shows once the write re-renders; setFlag is a document update, so it does).
+        enabled   false greys the group out. The character sheet passes its own `editable`;
+                  the steading passes true on purpose, because rolling its moves is available
+                  to a player who cannot edit the sheet, so choosing HOW to roll must be too. --}}
+<div class="stonetop-roll-mode-control" role="group" aria-label="{{localize "stonetop.rollMode.label"}}">
+	<label class="stonetop-roll-mode-option{{#if (eq rollMode "adv")}} is-checked{{/if}}">
+		<input type="radio" class="stonetop-roll-mode-input" name="stonetop-roll-mode" value="adv"
+		       {{#if (eq rollMode "adv")}}checked{{/if}}
+		       {{#unless enabled}}disabled{{/unless}}>
+		<span>{{localize "stonetop.rollMode.adv"}}</span>
+	</label>
+	<label class="stonetop-roll-mode-option{{#if (eq rollMode "normal")}} is-checked{{/if}}">
+		<input type="radio" class="stonetop-roll-mode-input" name="stonetop-roll-mode" value="normal"
+		       {{#if (eq rollMode "normal")}}checked{{/if}}
+		       {{#unless enabled}}disabled{{/unless}}>
+		<span>{{localize "stonetop.rollMode.normal"}}</span>
+	</label>
+	<label class="stonetop-roll-mode-option{{#if (eq rollMode "dis")}} is-checked{{/if}}">
+		<input type="radio" class="stonetop-roll-mode-input" name="stonetop-roll-mode" value="dis"
+		       {{#if (eq rollMode "dis")}}checked{{/if}}
+		       {{#unless enabled}}disabled{{/unless}}>
+		<span>{{localize "stonetop.rollMode.dis"}}</span>
+	</label>
+</div>

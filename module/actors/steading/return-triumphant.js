@@ -110,7 +110,13 @@ export function openReturnTriumphant(steading, { onApplied } = {}) {
 			const applyBtn = appEl?.querySelector("button[data-button='apply']");
 			if (applyBtn) applyBtn.disabled = true;
 
-			const options = [...html[0].querySelectorAll(".stonetop-disaster-choice")];
+			// Both shapes, like the line above and like every other render callback in the system:
+			// core hands this callback jQuery on v13 and there is no promise it always will. Bare
+			// `html[0]` would throw HERE, one line after the button was disabled and before a
+			// single row listener was wired — leaving a Return Triumphant window whose only button
+			// is dead and whose rows do nothing, so the move could not be made at all.
+			const root    = html[0] ?? html;
+			const options = [...root.querySelectorAll(".stonetop-disaster-choice")];
 			const select = (el) => {
 				picked = marked.find(d => d.id === el.dataset.choice) ?? null;
 				for (const o of options) {

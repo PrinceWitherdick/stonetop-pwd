@@ -524,4 +524,40 @@ describe("solving from a mark on the map", () => {
 		expect(route.legs[0].toName).toBe("point 1");
 		expect(route.stops[0].mark).toBeNull();
 	});
+
+	// THE PANEL NORMALIZES BEFORE IT HANDS THE PICK ON, and both `showRouteOnScene` and
+	// `journeyKey` normalize what they are given — so the answer has to survive a second pass. It
+	// did not: `origin` is the start's slug and therefore null for a mark, so reading it back
+	// turned every hand-placed start into nowhere. The route then solved from nowhere and the
+	// Scene stayed bare while the GM was told the line had been drawn on it.
+	it("survives being read twice, mark and all", () => {
+		const once = normalizeJourney({ origin: inTheFlats, destination: "marshedge" });
+		expect(once.start).toEqual({ slug: null, tier: "vicinity", fx: 0.36, fy: 0.62 });
+		expect(normalizeJourney(once)).toEqual(once);
+		// Which is what the Scene painter and the button's own label actually depend on.
+		expect(journeyRoute(once).legs.length).toBeGreaterThan(0);
+	});
+
+	// Two marks a long way apart are not the same journey, however many times the pick has been
+	// read. Keying an already-read pick on the null slug made every one of them the empty string,
+	// so the button reported the Scene in step after the GM moved where the party sets out from.
+	it("keys a re-read pick on the mark, not on the null slug every mark shares", () => {
+		const here = normalizeJourney({ origin: inTheFlats, destination: "marshedge" });
+		const there = normalizeJourney({
+			origin: { tier: "vicinity", fx: 0.7, fy: 0.2 }, destination: "marshedge",
+		});
+		expect(journeyKey(here)).not.toBe(journeyKey(there));
+		// And a re-read pick keys the same as the stored trip it was read from.
+		expect(journeyKey(here)).toBe(journeyKey({ origin: inTheFlats, destination: "marshedge" }));
+	});
+
+	// A start somebody deliberately peeled off must not come back as home on the second reading:
+	// `storedStart` tells those two apart by an explicit null, and a normalized pick carries the
+	// answer in `start` instead.
+	it("keeps a start that was peeled off peeled off", () => {
+		const nowhere = normalizeJourney({ origin: null, destination: "marshedge" });
+		expect(nowhere.start).toEqual({ slug: null, tier: null, fx: null, fy: null });
+		expect(normalizeJourney(nowhere)).toEqual(nowhere);
+		expect(journeyKey(normalizeJourney(nowhere))).toBe(journeyKey(nowhere));
+	});
 });

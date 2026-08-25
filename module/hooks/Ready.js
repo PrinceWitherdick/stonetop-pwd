@@ -4,7 +4,8 @@ import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
 import { repairAllChronicleFlagScopes } from "../migration/chronicle-flag-scope.js";
-import { newArcanumSlug, isArcanumData } from "../item/createArcanum.js";
+import { oncePerVersion } from "../migration/once-per-version.js";
+import { createArcanumItem, newArcanumSlug, isArcanumData } from "../item/createArcanum.js";
 import { renameAllSeasonYearPages } from "../migration/season-year-page-names.js";
 import { ensureStonetopSingleton, remindDestinedOmenRoll } from "./StonetopSingleton.js";
 import { runWorldSetup, pendingSetupWork } from "./WorldSetup.js";
@@ -32,12 +33,11 @@ import { progressFor } from "../actors/character/onboarding-progress.js";
 import { readOnboardingResume, clearOnboardingResume } from "../actors/character/onboarding-resume.js";
 import { playbookSlug } from "../utils/playbook-actors.js";
 import { rollDieOfFate } from "../utils/die-of-fate.js";
-import { createArcanumItem } from "../item/createArcanum.js";
 import { LoveLetterDialog } from "../dialogs/LoveLetterDialog.js";
 import { StonetopArcanaInspireDialog } from "../item/StonetopArcanaInspireDialog.js";
 import { StonetopBrowserDialog } from "../dialogs/StonetopBrowserDialog.js";
 import { findVisibleJournal, SETTING_OVERVIEW_JOURNAL } from "../utils/seeded-journals.js";
-import { getStonetopSteadingActorOrWarn } from "../utils/world.js";
+import { getStonetopSteadingActor, getStonetopSteadingActorOrWarn } from "../utils/world.js";
 import { rollMoveFromUuid } from "./HotbarDrop.js";
 import { ensureThreatsEntry } from "../threats/threat-store.js";
 import { ensureHazardsEntry } from "../hazards/hazard-store.js";
@@ -46,6 +46,7 @@ import { deletionEntry } from "../utils/foundry-compat.js";
 import { markPosterMapScenes } from "../book2-art/poster-maps.js";
 import { linkLandmarkNotes, refitLandmarkNotes, revealLandmarkNotesOnce } from "./PlaceOfInterestDrop.js";
 import { refitGmPrepPins } from "./ThreatNotePins.js";
+import { reconcileSitePins } from "../sites/site-scene-pins.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { migrateAllSteadingPeople, ensurePeopleFolders, backfillAllResidentHomes } from "../actors/steading/steading-people.js";
 import { PERSON_DEFAULT_IMG } from "../utils/person-portrait.js";
@@ -169,8 +170,11 @@ export async function onReady() {
 		try { await repairAllChronicleFlagScopes(); }
 		catch (err) { console.error("Stonetop | chronicle flag-scope repair failed", err); }
 		// Give a slug to any arcanum card built before StonetopItem#_preCreate stamped them.
-		// Idempotent, so it needs no gate and is a no-op in every world that has none.
-		try { await _stampMissingArcanumSlugs(); }
+		// Idempotent, but GATED anyway (migration/once-per-version.js): idempotent buys the second
+		// run being safe, not the whole Items sidebar being filtered on every load of every session
+		// to find the nothing that is left. `_preCreate` is what keeps a slugless card from being
+		// made at all now, so this is legacy repair and has a last world to run in.
+		try { await oncePerVersion("arcanumSlugs", _stampMissingArcanumSlugs); }
 		catch (err) { console.error("Stonetop | arcanum slug sweep failed", err); }
 		// Catch Chronicle year pages up to the "Year One" naming the sheet and the picker
 		// already use. Same shape as the sweep above and for the same reason: it recognises a
@@ -214,8 +218,25 @@ export async function onReady() {
 		catch (err) { console.error("Stonetop | landmark map-pin refit failed", err); }
 		// Same bargain for the GM's own prep pins: a site dropped on a scene wears the Sites tab's
 		// mound now, and every site pinned before that still wears a threat's torn note.
-		try { await refitGmPrepPins(); }
+		//
+		// Gated by VERSION rather than latched, which is the right shape for a refit: it is not a
+		// one-shot repair but "bring these up to the current design", so it has to run again the
+		// next time the design moves — and it does, because the stamp trails the new version. What
+		// it stops is walking every Note on every Scene, a third time after the two landmark passes
+		// above, on every load in between.
+		try { await oncePerVersion("gmPrepPins", refitGmPrepPins); }
 		catch (err) { console.error("Stonetop | GM-prep map-pin refit failed", err); }
+		// And put the GM's already-placed sites onto the table's maps, for the world that gained
+		// its poster Scenes AFTER it wrote its sites up — an ordinary order to do things in, since
+		// pinning a site on the walkthrough's map needs no Scene at all. Nothing else does this:
+		// the Scene pin was only ever written by a placement, so those sites went on saying
+		// "already on The Vicinity" over a table map that had never heard of them.
+		try {
+			await oncePerVersion("sitePins", async () => {
+				await reconcileSitePins(getStonetopSteadingActor()?.typedActor ?? null);
+			});
+		}
+		catch (err) { console.error("Stonetop | site map-pin reconcile failed", err); }
 		// Put the named places back on the poster maps, whose printing carries no labels at all,
 		// and bring pins already down up to the current design. Every load, and
 		// silent when they already agree: the only other thing that writes a poster-map Scene is
@@ -1366,6 +1387,11 @@ const _RETIRED_ACTOR_FLAGS = [
 	// single order (known first, then alphabetically). Only a Lightbearer whose player opened that
 	// dropdown ever carried it.
 	"invocationsSort",
+	// NOT `rollMode`, though 1.5.3 did remove its last reader. The sheet's Advantage/Disadvantage
+	// picker is coming back as the "sticky advantage" alternative to the pre-roll prompt, and
+	// `StonetopCharacter#rollMode` reads that flag again — so sweeping it would reset a live
+	// preference on every load, which is exactly what the rule above this list forbids. Retire it
+	// only if that control is dropped for good.
 ];
 
 // Sweep those keys off every actor that still has one.

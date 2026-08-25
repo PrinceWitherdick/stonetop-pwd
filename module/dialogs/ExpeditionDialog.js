@@ -64,7 +64,7 @@ import { posterSceneFor } from "../book2-art/poster-map-catalog.js";
 import { format, localize } from "../utils/i18n.js";
 import {
 	clearRouteOnScene, offMapNames, routeFlagTouched, sceneRouteCheck, sceneRouteRefusal,
-	sceneShowsJourney, showRouteOnScene,
+	sceneJourney, sceneShowsJourney, showRouteOnScene,
 } from "../utils/scene-route.js";
 
 const ANSWERS_SETTING = "expeditionAnswers";
@@ -1203,17 +1203,33 @@ export class ExpeditionDialog extends StepperDialog {
 		const name   = found.steading.getNamedAssets().find(a => a.index === index)?.name ?? "";
 		const record = Array.isArray(entry.requisitioned) ? entry.requisitioned : [];
 
+		// KEYED ON THE NAME, WHICH IS ALSO THE WHOLE OF WHAT THE RECORD IS FOR. An asset's index is
+		// its POSITION in the steading's `assets` array, and the steading sheet's delete splices
+		// that array — so an index stored over here, in the expedition log, silently came to name a
+		// different asset the moment a row above it was removed. Nothing pointed at the drift: the
+		// return filter stopped matching, so the trip kept claiming a rope it had brought back,
+		// and the take dedupe then matched the orphan and swallowed the NEXT asset to land on that
+		// index, leaving the Chronicle naming one thing the party never took and omitting the one
+		// it did.
+		//
+		// The name is what `requisitionedList` prints and the only field it reads, so nothing is
+		// lost by keying on it; two assets sharing a name are indistinguishable in that list
+		// anyway. Records written before this still carry `name` beside their stale index, so they
+		// keep matching with no migration.
+		// Never matches on a blank: an index the steading no longer has resolves to "", and a
+		// predicate that then matched every nameless record would clear the trip's whole list.
+		const sameAsset = r => !!name && String(r?.name ?? "") === name;
 		try {
 			if (take) {
 				const title = expeditionLabel(entry, log.list.findIndex(e => e.id === entry.id));
 				const ok = await found.steading.setAssetTaken(index, { expedition: { id: entry.id, title } });
 				if (!ok) return;
-				// Deduped on index: an asset returned from the steading sheet and then taken
-				// again here would otherwise be recorded twice on the one trip.
-				entry.requisitioned = record.some(r => r.index === index) ? record : [...record, { index, name }];
+				// An asset returned from the steading sheet and then taken again here would
+				// otherwise be recorded twice on the one trip.
+				entry.requisitioned = record.some(sameAsset) ? record : [...record, { name }];
 			} else {
 				await found.steading.returnAsset(index);
-				entry.requisitioned = record.filter(r => r.index !== index);
+				entry.requisitioned = record.filter(r => !sameAsset(r));
 			}
 		} catch (err) {
 			warn("Could not update the steading's assets:", err);
@@ -1750,14 +1766,27 @@ export class ExpeditionDialog extends StepperDialog {
 	 */
 	_sceneRouteShowing(route) {
 		const pick = this._journeyPick();
+		const scene = globalThis.canvas?.scene ?? null;
+		if (!game.user?.isGM) {
+			this._sceneShowing = null;
+			return null;
+		}
 		// Is there anything to put on a scene at all — the cheap gate, before the solve. With the
 		// way drawn by hand that is a mark on the map rather than a destination picked off the
 		// list, and asking only about the destination hid the button on every hand-drawn way that
 		// ended somewhere the books never named.
 		const anyRoute = pick.custom.on || !!pick.destination;
-		const showing = (!game.user?.isGM || !anyRoute || !(route ?? this._journeyRoute())?.legs?.length)
-			? null
-			: sceneShowsJourney(globalThis.canvas?.scene ?? null, pick);
+		if (!anyRoute || !(route ?? this._journeyRoute())?.legs?.length) {
+			// NOTHING TO DRAW IS NOT THE SAME AS NOTHING DRAWN. A line already on this scene
+			// outlives the trip that put it there — start a new expedition, or right-click the
+			// destination off, and the trip has no route while the scene still paints one on every
+			// client, players included. Hiding the button there left the GM no control anywhere in
+			// the system that could take it off. So: no route in hand, but a line on the scene,
+			// still offers the way back off.
+			this._sceneShowing = sceneJourney(scene) ? true : null;
+			return this._sceneShowing;
+		}
+		const showing = sceneShowsJourney(scene, pick);
 		this._sceneShowing = showing;
 		return showing;
 	}
@@ -1814,7 +1843,12 @@ export class ExpeditionDialog extends StepperDialog {
 		const pick = this._journeyPick();
 
 		// Already showing exactly this journey, so the button is the way back off.
-		if (sceneShowsJourney(scene, pick)) {
+		//
+		// OR SHOWING A LINE THIS TRIP IS NO LONGER ABOUT, which is the same press and the same
+		// answer: the flag outlives the trip that wrote it, so a GM who has since started another
+		// expedition is looking at a line nothing in the panel can otherwise reach. Taking it off
+		// is never destructive — the trip keeps its own journey, and drawing it again is one press.
+		if (sceneShowsJourney(scene, pick) || (!this._journeyRoute()?.legs?.length && sceneJourney(scene))) {
 			await clearRouteOnScene(scene);
 			ui.notifications?.info(format("stonetop.expedition.route.cleared", { scene: scene.name }));
 			return;

@@ -163,24 +163,34 @@ export async function placeSiteOnMap({ tier, frame, pickPoint } = {}) {
 	// happened.
 	const pinned = await syncSitePin(page, spot);
 
+	// The write-up took the spot either way, so this is always the good news — but a Scene that
+	// refused the pin is said out loud rather than passed over, since a GM who is not told will go
+	// looking for a mark that was never laid.
 	ui.notifications?.info(format(pinnedMessage(pinned), {
 		name: page.name,
 		map: mapName,
 		scene: pinned?.scene?.name ?? "",
 	}));
+	if (pinned?.refused) {
+		ui.notifications?.warn(format("stonetop.expedition.sites.pinRefused", { map: mapName }));
+	}
 	return true;
 }
 
 /**
- * Which sentence the GM reads, out of the three things that can have happened.
+ * Which sentence the GM reads, out of the things that can have happened.
  *
  * Named separately because the difference is worth saying: a pin appearing on the Scene the table
  * plays on is news, a pin MOVING there is different news, and a world with no such Scene should not
  * be told about a map it does not have. The Scene is named rather than described, because a GM may
  * well have renamed it and it is the thing they are about to go and look at.
+ *
+ * A REFUSED pin reads as the plain "placed", because that is exactly what happened: the site knows
+ * where it stands and no Scene was marked. What was wrong with the Scene is a separate sentence
+ * (see the caller), so this one does not have to hedge.
  */
 function pinnedMessage(pinned) {
-	if (!pinned) return "stonetop.expedition.sites.placed";
+	if (!pinned || pinned.refused) return "stonetop.expedition.sites.placed";
 	return pinned.moved
 		? "stonetop.expedition.sites.placedMoved"
 		: "stonetop.expedition.sites.placedPinned";
