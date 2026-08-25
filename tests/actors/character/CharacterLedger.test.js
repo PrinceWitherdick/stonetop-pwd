@@ -945,15 +945,29 @@ describe("CharacterLedger debilities", () => {
 
 // Advantage and disadvantage are asked per roll now (module/dialogs/RollDialog.js) rather than
 // held in a flag a sheet control wrote, so there is no longer a change for the ledger to file.
-// A world that still carries the old flag is silent about it, which is what the generic
-// namespace fallback does with any path the tables do not name.
 describe("CharacterLedger roll mode", () => {
-	it("no longer files an entry for the retired sticky flag", async () => {
+	// Was "Roll mode set to dis" — the dice-formula slug, straight out of the generic formatter.
+	it("spells the mode out instead of logging the slug", async () => {
 		const actor = makeActor({}, { stonetop: { rollMode: "normal" } });
 		const entries = await CharacterLedger.entriesForActorUpdate(actor, {
 			"flags.stonetop-pwd.rollMode": "dis",
 		});
-		expect(entries.map(e => e.action)).not.toContain("Roll mode set to Disadvantage");
+		expect(entries.map(e => e.action)).toEqual(["Roll mode set to Disadvantage"]);
+	});
+
+	it("treats an unset flag as Normal, so a first pick still reads as a change", async () => {
+		const entries = await CharacterLedger.entriesForActorUpdate(makeActor(), {
+			"flags.stonetop-pwd.rollMode": "adv",
+		});
+		expect(entries.map(e => e.action)).toEqual(["Roll mode set to Advantage"]);
+	});
+
+	it("stays quiet when the mode does not actually change", async () => {
+		const actor = makeActor({}, { stonetop: { rollMode: "normal" } });
+		const entries = await CharacterLedger.entriesForActorUpdate(actor, {
+			"flags.stonetop-pwd.rollMode": "",
+		});
+		expect(entries).toEqual([]);
 	});
 });
 

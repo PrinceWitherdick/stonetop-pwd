@@ -1141,7 +1141,10 @@ describe("buildSnapshot — inventory.outfit", () => {
 		const snap = await new TestCharacterBuilder(actor).build().buildSnapshot();
 		expect(snap.inventory.outfit.loadBonus).toBe(2);
 		expect(snap.inventory.outfit.loadBonusMoves).toEqual(["Pack Horse", "Bear the Standard"]);
-		expect(snap.inventory.outfit.loadBonusFrom).toBe("Pack Horse and Bear the Standard");
+		// "&", through the system's one list-joiner. This caption sits on the Outfit readout
+		// beside the deploy toast, the off-map refusal and the encounter skip list, and it was
+		// the only one of the four that said "and".
+		expect(snap.inventory.outfit.loadBonusFrom).toBe("Pack Horse & Bear the Standard");
 		expect(snap.inventory.outfit.loadLimits).toEqual({light: 5, normal: 8, heavy: 11});
 	});
 
@@ -2682,15 +2685,26 @@ describe("buildSnapshot — movelist / level move budget", () => {
 
 // ── rollMode ──────────────────────────────────────────────────────────────────
 
-// The snapshot used to carry one, for a stacked radio list in the Moves sidebar. Nothing
-// renders a roll mode any more: it is asked per roll (module/dialogs/RollDialog.js), which is
-// what stopped players carrying yesterday's Advantage into today's rolls. A stale flag left on
-// an old actor must not come back through the snapshot and light a control up somewhere.
+// What the stacked radio list in the Moves sidebar renders as filled. Drawn only while the
+// mode is sticky — the "Ask How to Roll Each Time" setting moves the choice into the pre-roll
+// window instead (module/dialogs/RollDialog.js) — but the snapshot carries it either way,
+// because the setting is the SHEET's business and the snapshot is not the sheet.
 describe("buildSnapshot — rollMode", () => {
-	it("carries none, even for an actor that still holds the retired flag", async () => {
+	it("defaults to 'normal' when no flag set", async () => {
+		const snap = await new TestCharacterBuilder(new FakeActorBuilder().build()).build().buildSnapshot();
+		expect(snap.rollMode).toBe("normal");
+	});
+
+	it("reflects pbta rollMode flag", async () => {
 		const actor = new FakeActorBuilder().withRollMode("adv").build();
 		const snap = await new TestCharacterBuilder(actor).build().buildSnapshot();
-		expect(snap.rollMode).toBeUndefined();
+		expect(snap.rollMode).toBe("adv");
+	});
+
+	it("normalizes legacy default rollMode to normal", async () => {
+		const actor = new FakeActorBuilder().withRollMode("def").build();
+		const snap = await new TestCharacterBuilder(actor).build().buildSnapshot();
+		expect(snap.rollMode).toBe("normal");
 	});
 });
 describe("buildSnapshot - homefront moves", () => {

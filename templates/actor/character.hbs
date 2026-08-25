@@ -141,6 +141,14 @@
 						<i class="fas fa-chevron-right"></i>
 					</button>
 					<div class="stonetop-sidebar-body">
+					{{!-- The heading goes with the control: with "Ask How to Roll Each Time" on,
+					      the mode is chosen in the pre-roll window instead, and a "Roll Modifier"
+					      heading over nothing would be a section that lost its contents. --}}
+					{{#if stonetop.showRollModeControl}}
+					{{> "stonetop.section-heading" title="Roll Modifier" collapse="rollModifier"}}
+					{{> "stonetop.roll-mode-radios" rollMode=stonetop.rollMode enabled=editable}}
+					{{/if}}
+
 					{{> "stonetop.sidebar-move-list" moves=stonetop.movelist.basicMoves titleKey="stonetop.character.moves.basicMoves" openClass="stonetop-basic-move-open" sectionId="basicMoves" open=stonetop.movesOpen.basicMoves}}
 					{{> "stonetop.sidebar-move-list" moves=stonetop.movelist.expeditionMoves titleKey="stonetop.character.moves.expeditionMoves" openClass="stonetop-expedition-move-open" sectionId="expeditionMoves" open=stonetop.movesOpen.expeditionMoves}}
 					</div>

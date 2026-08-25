@@ -17,7 +17,7 @@ import {STONETOP_SCOPE, StonetopFlags} from "../character/StonetopFlags.js";
 import {SpecialItemPickerDialog} from "../character/dialogs/SpecialItemPickerDialog.js";
 import {CharacterInventory} from "../character/CharacterInventory.js";
 import {SPECIAL_ITEM_CATALOG} from "../../data/special-items.js";
-import {getRollStatChipsSetting, getOpenSheetsInEditMode, getHoverDescriptionSetting, getSidebarCollapsed, setSidebarCollapsed, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
+import {getRollStatChipsSetting, getOpenSheetsInEditMode, getHoverDescriptionSetting, getSidebarCollapsed, setSidebarCollapsed, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {promptRoll, normalizeRollMode} from "../../dialogs/RollDialog.js";
@@ -582,7 +582,13 @@ export function createStonetopSteadingSheetClass(Base) {
 				...move,
 				statChipLabel: STEADING_STAT_CHIP_LABELS[move.statLabel] ?? move.statLabel,
 			}));
+			context.stonetop.rollMode = this._sheetRollMode();
 			context.stonetop.showRollStatChips = getRollStatChipsSetting();
+			// Whether either shape of the sticky Roll Modifier is drawn — the classic sidebar's
+			// radios or the modern heading's pill. Off means the pre-roll window is asking instead
+			// (RollDialog.js), and a control that answers a question nobody is being asked is a
+			// control that quietly changes rolls.
+			context.stonetop.showRollModeControl = !getAskRollModeEachRollSetting();
 			context.stonetop.enrichedNotes = await foundry.applications.ux.TextEditor.enrichHTML(context.stonetop.notes ?? "");
 			context.stonetop.editMode = this._editMode;
 			context.stonetop.canEdit = this.isEditable;
@@ -736,10 +742,11 @@ export function createStonetopSteadingSheetClass(Base) {
 				table: STEADING_STAT_TOOLTIPS, settingKey: "hoverDescriptionsSteadingStats", direction: "UP",
 			});
 
-			// Rollable move buttons (both editable and read-only). Asking how to roll comes
-			// BEFORE the roll and belongs to nobody's sheet state: this used to read a sticky
-			// flag two controls on this sheet wrote, which is what players kept forgetting they
-			// had set. Shift-click rolls straight through, Normal at +0.
+			// Rollable move buttons (both editable and read-only). The prompt comes BEFORE the
+			// roll; WHAT it asks for is the "Ask How to Roll Each Time" setting's business rather
+			// than this handler's, and when it has nothing to ask it opens no window at all. A
+			// mode it does not answer falls back to the sticky selector wired below. Shift-click
+			// rolls straight through either way.
 			html[0].addEventListener("click", async ev => {
 				const btn = ev.target.closest(".steading-roll-btn");
 				if (!btn) return;
@@ -747,6 +754,31 @@ export function createStonetopSteadingSheetClass(Base) {
 				const prompted = await promptRoll({ title: btn.dataset.moveName || "Roll", shiftKey: ev.shiftKey });
 				if (!prompted) return;
 				await this._onSteadingRoll(btn.dataset.moveName, btn.dataset.stat, prompted);
+			}, true);
+
+			// The sticky Roll Modifier, in BOTH its shapes — the modern layout's segmented pill on
+			// the Homefront Moves heading (buttons, see roll-mode-picker.hbs) and the classic
+			// sidebar's stacked radio list (roll-mode-radios.hbs). One layout renders at a time, so
+			// only one of these ever has anything to match, but both have to be bound: which one is
+			// live is a per-user setting read at render, not something known here. Binding only the
+			// pill's is the silent failure the classic layout hit — the radios render, highlight
+			// correctly off the server-stamped `checked`, and write nothing at all.
+			//
+			// Wired here, above the isEditable guard, for the same reason the roll buttons are: a
+			// player who can roll the moves has to be able to say how. Unguarded by the setting
+			// too — neither shape is DRAWN while the window is asking, so this matches nothing.
+			//
+			// Neither renders explicitly: setFlag is a document update, and `updateActor` already
+			// re-renders every sheet on this actor. A second one here is a whole extra rebuild of
+			// six tabs (re-enriched notes, three relationship tables, the rail and frost remounts)
+			// and it flickers the tab the user is reading.
+			html[0].addEventListener("click", async ev => {
+				const btn = ev.target.closest(".stonetop-roll-mode-btn");
+				if (!btn) return;
+				ev.stopPropagation();
+				const mode = normalizeRollMode(btn.dataset.rollMode);
+				if (mode === this._sheetRollMode()) return; // already on it — nothing to write
+				await this.actor.setFlag(STONETOP_SCOPE, "rollMode", mode);
 			}, true);
 
 			// The season/year clock beside the title. Runs the MOVE, the same thing the hotbar
@@ -770,6 +802,12 @@ export function createStonetopSteadingSheetClass(Base) {
 			// GM-only, like the clock: the template renders a plain span for everyone else, so
 			// this binds nothing for a player.
 			html.find("[data-action='set-current-weather']").on("click", () => game.stonetop?.openWeather?.());
+
+			// A real radio group, so `change` rather than a delegated click: the browser owns the
+			// deselection, and change only fires on the one that became checked.
+			html.find(".stonetop-roll-mode-input").on("change", async ev => {
+				await this.actor.setFlag(STONETOP_SCOPE, "rollMode", normalizeRollMode(ev.currentTarget.value));
+			});
 
 			// Collapse / expand the whole moves sidebar (CLASSIC layout only; the modern layout
 			// has no sidebar, so this simply matches nothing). Shared with the character sheet
@@ -2253,9 +2291,11 @@ export function createStonetopSteadingSheetClass(Base) {
 				...defaultRollOptions,
 				...rest,
 				moveName,
-				// The mode is the caller's — the prompt's answer, or a rule that forced it. There
-				// is no sheet state left to fall back on.
-				rollMode: normalizeRollMode(rest.rollMode),
+				// The mode is the caller's when it has one — the prompt's answer, or a rule the move
+				// forces — and the sheet's sticky selector when it does not. `??`, not `||`: the
+				// prompt omits the key entirely when it did not ask, while a caller that genuinely
+				// means "normal" must not be quietly overruled by a selector left on Advantage.
+				rollMode: normalizeRollMode(rest.rollMode ?? this._sheetRollMode()),
 				modifier: (rest.modifier ?? 0) + situational,
 				statValue: this._stonetopSteading.getStatValue(statKey),
 			};
@@ -2273,6 +2313,12 @@ export function createStonetopSteadingSheetClass(Base) {
 			await rollStat(statKey, this.actor, {
 				...options,
 			});
+		}
+
+		// The sticky mode, off the actor's own flag: the Roll Modifier selector writes it, and
+		// every steading roll that was not told otherwise reads it. Shared by both layouts.
+		_sheetRollMode() {
+			return normalizeRollMode(this.actor.getFlag(STONETOP_SCOPE, "rollMode"));
 		}
 
 		async _onSteadingTrackChange(path, value) {

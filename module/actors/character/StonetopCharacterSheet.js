@@ -58,7 +58,7 @@ import {getDragEventData, deletionEntry, enrichHTML, imagePopout, renderTemplate
 import {STEADING_DEFAULTS, StonetopSteading} from "../steading/StonetopSteading.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
-import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getHideRollableIconSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
+import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getHideRollableIconSetting, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
 import {bringDialogToFront} from "../../utils/front-on-open.js";
 import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
@@ -1255,6 +1255,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			};
 			context.stonetop.followersEdit   = sectionEdit("followers");
 			context.stonetop.showRollStatChips = getRollStatChipsSetting();
+			// Whether the sidebar draws the sticky Roll Modifier selector at all. Off means the
+			// pre-roll window is asking instead (RollDialog.js), and two controls answering one
+			// question is how a player ends up rolling with an Advantage they cannot see.
+			context.stonetop.showRollModeControl = !getAskRollModeEachRollSetting();
 			// The tab carries the active insert — and, when there isn't one, the "Choose Your Fate"
 			// picker, which is the manual route for a table who resolved Death's Door away from the
 			// sheet. Edit mode is NOT reason enough to draw it: a tab about being dead would open on
@@ -2940,6 +2944,19 @@ export function createStonetopCharacterSheetClass(Base) {
 					const inputs = [...card.querySelectorAll(".stonetop-follower-name-field")].map(el => el.value).join(" ");
 					return `${text} ${inputs}`;
 				},
+			});
+
+			// The sticky Roll Modifier selector in the Moves sidebar (roll-mode-radios.hbs). A real
+			// radio group, so `change` rather than a delegated click: the browser owns the
+			// deselection, and change only fires on the one that became checked. Nothing renders
+			// explicitly — setFlag is a document update, and `updateActor` re-renders this sheet.
+			//
+			// Bound unconditionally. The control is only DRAWN when "Ask How to Roll Each Time" is
+			// off (see `showRollModeControl`), so with the window doing the asking this simply
+			// matches nothing; a guard here would be a second place for the same setting to be
+			// read and to disagree with the first.
+			html.find(".stonetop-roll-mode-input").on("change", async (ev) => {
+				await this._stonetopCharacter.setRollMode(ev.currentTarget.value);
 			});
 
 			// The header portrait's own click and the two pips over it, wired the same way the
@@ -5587,18 +5604,15 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		// The pre-roll prompt (RollDialog.js), titled with whatever this sheet knows the roll by.
-		// Returns `{ rollMode, situational }` to spread straight into a roll, or null when the
-		// player cancels so the caller can abort; Shift skips the window for a plain Normal roll
-		// at +0. Pass a `rollable` to derive the title from its move/stat, or an explicit `title`.
+		// Returns an object to spread straight into a roll — `{ situational }`, plus `rollMode`
+		// only when the window actually asked for one — or null when the player cancels so the
+		// caller can abort. Shift skips the window. Pass a `rollable` to derive the title from
+		// its move/stat, or an explicit `title`.
 		//
-		// TITLE DERIVATION IS ALL THIS ADDS. The window, the Shift shortcut and the shape of the
-		// answer belong to promptRoll, which the steading sheet and the Requisition dialog call
-		// for themselves — this is not a second front door to them.
-		//
-		// Nothing gates the prompt any more. It used to be opt-in behind a "Prompt for Roll
-		// Modifier" client setting that defaulted OFF, which was fair when all it asked for was a
-		// number most rolls do not have — but advantage and disadvantage live here now, and the
-		// only way to say "with advantage" cannot sit inside a window most tables never turn on.
+		// TITLE DERIVATION IS ALL THIS ADDS. The window, the Shift shortcut, the two client
+		// settings that decide which halves it asks and whether it opens at all, and the shape of
+		// the answer all belong to promptRoll, which the steading sheet and the Requisition dialog
+		// call for themselves — this is not a second front door to them.
 		_promptRollOptions({ shiftKey = false, rollable = null, title = null } = {}) {
 			const moveName = rollable?.closest(".stonetop-item")?.querySelector(".stonetop-item-name")?.textContent?.trim();
 			const statKey  = rollable?.dataset?.roll;
@@ -6858,9 +6872,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			const roll = await this._stonetopCharacter.onDirectStatRoll(picked.stat, {
 				situational: prompted.situational,
 				// The move's own advantage (Polyglot, Naturalist) stacks on top of whatever the
-				// player just chose in the prompt, which is what withAdvantage is for: it lifts
+				// roll was already going to be, which is what withAdvantage is for: it lifts
 				// Disadvantage to Normal and Normal to Advantage rather than overwriting either.
-				rollMode: withAdvantage(prompted.rollMode, picked.advantage),
+				// What it lifts is the prompt's answer when the prompt asked for a mode, and the
+				// sheet's sticky selector when it did not — this roll passes an explicit mode, so
+				// the fallback onDirectStatRoll would have applied has to be spelled out here.
+				rollMode: withAdvantage(prompted.rollMode ?? this._stonetopCharacter.rollMode, picked.advantage),
 				// This roll bypasses StonetopItem.roll, so it has to stamp the move identity and
 				// pick up Never at a Loss / the Logbook itself — otherwise the card's post-roll
 				// buttons would work from the Moves tab but not from here.

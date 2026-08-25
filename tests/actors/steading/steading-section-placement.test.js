@@ -183,16 +183,17 @@ describe("classic moves sidebar", () => {
 		expect(SIDEBAR_HBS).toContain("steading-moves-sidebar");
 	});
 
-	// Neither shape of the roll modifier comes back with the classic layout. It was a stacked
-	// radio list here and a segmented pill on the modern heading, and BOTH were sticky: whatever
-	// you last rolled with, you kept rolling with. It is a per-roll question now
-	// (module/dialogs/RollDialog.js), so a sheet that brought either control back would be
-	// writing a flag nothing reads.
-	it("brings back neither the stacked radios nor the modern pill", () => {
+	// The classic column takes the stacked RADIO list, not the modern heading's segmented pill:
+	// classic means the layout as it was, and a dark three-segment pill in a narrow column was
+	// never part of it. Behind `showRollModeControl` either way — with "Ask How to Roll Each
+	// Time" on the mode is a per-roll question (module/dialogs/RollDialog.js) and a sticky
+	// control beside it would be a second answer.
+	it("takes the stacked radios rather than the modern pill", () => {
 		const markup = stripComments(SIDEBAR_HBS);
-		expect(markup).not.toContain("roll-mode-radios");
+		expect(markup).toContain("roll-mode-radios");
 		expect(markup).not.toContain("roll-mode-picker");
-		expect(markup).not.toContain("Roll Modifier");
+		expect(markup).toContain("Roll Modifier");
+		expect(markup).toContain("stonetop.showRollModeControl");
 	});
 
 	// `.steading-moves-tab` carries `display: flex`, and an unlayered `display` on a `.tab`

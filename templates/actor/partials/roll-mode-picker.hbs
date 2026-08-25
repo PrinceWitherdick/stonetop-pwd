@@ -1,0 +1,60 @@
+{{!-- Advantage / Normal / Disadvantage, as a segmented pill.
+
+      Its own partial rather than markup inline in the moves tab so the character sheet's
+      sidebar copy can adopt the same shape later without the two being retyped. Only the
+      steading uses it today; the character sheet still carries the stacked radio list, which
+      is what suits its narrow sidebar.
+
+      It rides in a section HEADING (see steading-tab-moves.hbs), the same place and the same
+      component as the Relationships card's table/board toggle two tabs over. That is the
+      point: this used to be a section of its own, with a page-wide underline and the visual
+      weight of the page's actual subject, for a three-way toggle.
+
+      `stonetop-section-heading-control` is what makes folding the section fold the pill with
+      it (see `_wireSectionCollapse`) — a roll modifier over hidden moves is a dead end.
+
+      Buttons, not the radio inputs a segmented picker normally pairs with: a NAMED input
+      inside an actor sheet's form is submitted into `_updateObject` and lands in
+      `expandObject(formData)` as a stray top-level key. Same reason the relationships view
+      toggle is buttons. `is-active` is server-stamped, which is safe because the flip always
+      re-renders.
+
+      Worst to best, left to right — Disadvantage, Normal, Advantage — so the strip reads as a
+      scale rather than a menu.
+
+      DRAWN ONLY WHEN THE MODE IS NOT ASKED PER ROLL. The "Ask How to Roll Each Time" client
+      setting moves the choice into the pre-roll window (module/dialogs/RollDialog.js), which
+      starts at Normal every time; a sticky control beside it would be a second answer to the
+      same question, and the window would win. The mount points test the setting, not this file —
+      a partial that renders nothing would still leave its section heading behind.
+
+      Params: rollMode ("adv" | "normal" | "dis"). --}}
+<div class="stonetop-roll-mode-bar stonetop-section-heading-control">
+	<div class="stonetop-segmented-picker stonetop-roll-mode-picker" role="group"
+	     aria-label="{{localize "stonetop.rollMode.label"}}">
+		<button type="button"
+		        class="stonetop-segmented-picker-option stonetop-roll-mode-btn{{#if (eq rollMode "dis")}} is-active{{/if}}"
+		        data-roll-mode="dis"
+		        aria-pressed="{{#if (eq rollMode "dis")}}true{{else}}false{{/if}}"
+		        data-tooltip="{{localize "stonetop.rollMode.disTooltip"}}">
+			<i class="fa-solid fa-angles-down" aria-hidden="true"></i>
+			<span>{{localize "stonetop.rollMode.dis"}}</span>
+		</button>
+		<button type="button"
+		        class="stonetop-segmented-picker-option stonetop-roll-mode-btn{{#if (eq rollMode "normal")}} is-active{{/if}}"
+		        data-roll-mode="normal"
+		        aria-pressed="{{#if (eq rollMode "normal")}}true{{else}}false{{/if}}"
+		        data-tooltip="{{localize "stonetop.rollMode.normalTooltip"}}">
+			<i class="fa-solid fa-equals" aria-hidden="true"></i>
+			<span>{{localize "stonetop.rollMode.normal"}}</span>
+		</button>
+		<button type="button"
+		        class="stonetop-segmented-picker-option stonetop-roll-mode-btn{{#if (eq rollMode "adv")}} is-active{{/if}}"
+		        data-roll-mode="adv"
+		        aria-pressed="{{#if (eq rollMode "adv")}}true{{else}}false{{/if}}"
+		        data-tooltip="{{localize "stonetop.rollMode.advTooltip"}}">
+			<i class="fa-solid fa-angles-up" aria-hidden="true"></i>
+			<span>{{localize "stonetop.rollMode.adv"}}</span>
+		</button>
+	</div>
+</div>

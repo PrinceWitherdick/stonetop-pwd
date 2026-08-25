@@ -401,6 +401,11 @@ Hooks.once("init", () => {
 		"stonetop.post-death-choices":   "systems/stonetop-pwd/templates/dialogs/partials/post-death-choices.hbs",
 		"stonetop.move-mark-level":      "systems/stonetop-pwd/templates/actor/partials/move-mark-level.hbs",
 		"stonetop.sidebar-move-list":    "systems/stonetop-pwd/templates/actor/partials/sidebar-move-list.hbs",
+		// The sticky Advantage / Normal / Disadvantage selector, in its two shapes: the stacked
+		// radio list for a narrow sidebar and the segmented pill for a section heading. Both are
+		// mounted behind the "Ask How to Roll Each Time" client setting — see RollDialog.js.
+		"stonetop.roll-mode-radios":     "systems/stonetop-pwd/templates/actor/partials/roll-mode-radios.hbs",
+		"stonetop.roll-mode-picker":     "systems/stonetop-pwd/templates/actor/partials/roll-mode-picker.hbs",
 		"stonetop.lore-section":          "systems/stonetop-pwd/templates/actor/partials/lore-section.hbs",
 		"stonetop.lore-options-edit":     "systems/stonetop-pwd/templates/actor/partials/lore-options-edit.hbs",
 		"stonetop.lore-options-readonly": "systems/stonetop-pwd/templates/actor/partials/lore-options-readonly.hbs",

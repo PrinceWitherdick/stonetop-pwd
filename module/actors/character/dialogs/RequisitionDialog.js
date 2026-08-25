@@ -68,15 +68,17 @@ export class RequisitionDialog extends StonetopDialog {
 
 		wireCustomAssetSelect({ select: assetSelect, customInput });
 
-		// How this one is rolled is asked here, per roll, rather than read off a sticky flag the
-		// steading sheet used to write — see RollDialog.js. Cancelling the prompt rolls nothing.
+		// How this one is rolled is asked here, ahead of the roll — see RollDialog.js, which
+		// decides for itself whether it has anything to ask. Cancelling rolls nothing. When it
+		// does not ask for a mode the steading sheet's own sticky Roll Modifier flag answers
+		// instead, which is what that control is still there for.
 		root.querySelector(".stonetop-requisition-roll-btn")?.addEventListener("click", async ev => {
 			const prompted = await promptRoll({ title: "Requisition", shiftKey: ev.shiftKey });
 			if (!prompted) return;
 			rollStat("fortunes", this._steadingActor, {
 				moveName: "Requisition",
 				statValue: this._steading.getStatValue("fortunes"),
-				rollMode: prompted.rollMode,
+				rollMode: prompted.rollMode ?? this._steadingActor.getFlag(SYSTEM_ID, "rollMode") ?? "normal",
 				// The steading rolls carry no forward/ongoing, so the prompt's one-off IS the
 				// whole modifier here — the engine reads it back out as the Situational pill.
 				modifier: prompted.situational,

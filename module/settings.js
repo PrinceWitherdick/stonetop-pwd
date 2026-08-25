@@ -1087,6 +1087,46 @@ export function registerSettings() {
 		onChange: value => applyHideRollableIcon(value),
 	});
 
+	// WHERE advantage and disadvantage are chosen, and it is one place or the other.
+	//
+	// OFF (the default) is how the system shipped for most of its life: a sticky Advantage /
+	// Normal / Disadvantage selector on the character sheet's Moves sidebar and on the
+	// steading's Homefront Moves, written to a flag on the actor and applying to every roll
+	// until it is put back. ON hides both selectors and asks in the pre-roll window instead,
+	// which starts at Normal every time (module/dialogs/RollDialog.js) — a question that is
+	// asked cannot be forgotten, at the price of a window on every roll.
+	//
+	// Per-client, because it decides what THIS user's sheets draw and what THIS user's clicks
+	// open. The mode itself stays a flag on the actor, so a table can mix the two safely: the
+	// window's answer overrides the selector for that one roll and never writes to it.
+	game.settings.register(SYSTEM_ID, "askRollModeEachRoll", {
+		name: "stonetop.settings.askRollModeEachRoll.name",
+		hint: "stonetop.settings.askRollModeEachRoll.hint",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		default: false,
+		// The selectors are rendered, so turning this on or off has to repaint the sheets that
+		// carry them — otherwise the control the setting just hid stays on screen and writable.
+		onChange: () => _rerenderActorSheets(),
+	});
+
+	// Prompt for a one-off situational modifier before each 2d6 move/stat roll on the
+	// character sheet (a held bonus, a GM-granted +1, etc.). Read at roll time (RollDialog.js);
+	// Shift-clicking the roll skips the prompt.
+	//
+	// Only consulted when the window is not already opening for the mode: "Ask How to Roll
+	// Each Time" carries the stepper with it. So both off is no window at all, this one alone
+	// is the stepper alone, and the other one is both halves whatever this says.
+	game.settings.register(SYSTEM_ID, "promptRollModifier", {
+		name: "stonetop.settings.promptRollModifier.name",
+		hint: "stonetop.settings.promptRollModifier.hint",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		default: false,
+	});
+
 	// Open actor sheets (character / steading / monster / NPC) in Edit mode instead of
 	// Play mode. Read once when the sheet is constructed; the header wrench still
 	// toggles modes per-sheet afterward. The NPC sheet additionally requires ownership
@@ -1563,6 +1603,19 @@ export function applyHideRollableIcon(value) {
 
 export function applyReduceMotion(value) {
 	document.documentElement.classList.toggle("stonetop-reduce-motion", !!value);
+}
+
+// Whether the pre-roll window asks how the roll is going out (Advantage / Normal /
+// Disadvantage) instead of the sticky selector on the character and steading sheets.
+// The two are exclusive by design: whichever one is answering, the other is not drawn.
+export function getAskRollModeEachRollSetting() {
+	return globalThis.game?.settings?.get?.(SYSTEM_ID, "askRollModeEachRoll") ?? false;
+}
+
+// Whether to prompt for a one-off situational modifier before a move/stat roll. Ignored
+// while the mode is being asked per roll, since that window carries the stepper anyway.
+export function getPromptRollModifierSetting() {
+	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptRollModifier") ?? false;
 }
 
 // Whether actor sheets should open in Edit mode rather than Play mode.
