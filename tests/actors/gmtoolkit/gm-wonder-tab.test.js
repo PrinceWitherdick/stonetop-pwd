@@ -76,7 +76,7 @@ describe("the I wonder tab: wiring", () => {
 	// have to agree: the rail decides the button order, the body decides nothing at all, and a
 	// mismatch is invisible (the panels are shown one at a time).
 	it("sits directly above the Core Loop tab, in the rail and in the body", () => {
-		const order = ["homefront", "moves", "threats", "sites", "encounters", "wonder", "loop"];
+		const order = ["homefront", "moves", "threats", "encounters", "expeditions", "wonder", "loop"];
 		const railOrder = [...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1]);
 		expect(railOrder).toEqual(order);
 		const bodyOrder = [...SHEET_HBS.matchAll(/\{\{>\s*"stonetop\.gm-toolkit-tab-(\w+)"\}\}/g)].map(m => m[1]);

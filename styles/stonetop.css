@@ -3622,6 +3622,17 @@ input.stonetop-name-field {
    reference spent its whole life mouse-dead because it is a <button> and nobody had noticed it
    needed a line. Deleting is guarded by its confirm dialog now, which is the guard it always
    really had. */
+/* The steading Improvements tab draws the shared "write one up" bar at its foot, and that tab
+   DOES carry .stonetop-readonly whenever its pencil is shut. Its template renders the bar to any
+   owner on purpose (see steading-tab-improvements.hbs): writing down a custom improvement is
+   play, the same as dropping a journal card onto the tab, which this lock never touched. Without
+   this line the button was mouse-dead until you first unlocked the tab, which is exactly what the
+   bar was written not to require, and the same accident the threat-type reference used to be.
+   Compounded onto .improvements rather than left bare, for two reasons that are the same reason:
+   the OTHER four bars this class draws are on GM prep tabs that carry no .stonetop-readonly at
+   all, so a bare selector would claim a reach it does not have, and the allow-list is meant to
+   hold no bare prep selectors (see gm-prep-tabs.test.js). This one names the tab it unlocks. */
+.stonetop-readonly.improvements .stonetop-prep-add-btn,
 .stonetop-readonly .stonetop-deathsdoor-open-btn,
 /* Clearing "out of the action" is the GM saying otherwise mid-scene, not sheet editing —
    same play-time affordance as the Death's Door button it replaces. */
@@ -14165,7 +14176,9 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .stonetop-tab-rail .item[data-tab="neighbors"]     { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/three-friends.svg'); }
 .stonetop-tab-rail .item[data-tab="improvements"]  { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hammer-nails.svg'); }
 .stonetop-tab-rail .item[data-tab="threats"]       { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hazard-sign.svg'); }
-.stonetop-tab-rail .item[data-tab="sites"]         { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/site-mound.svg'); }
+/* No row for `sites`: it is a section at the foot of the Expeditions panel now, not a tab, so
+   nothing on any sheet renders `data-tab="sites"`. `site-mound.svg` itself stays in the tree —
+   it is also the map-pin icon a placed site wears (journal/gm-prep-page.js). */
 .stonetop-tab-rail .item[data-tab="relationships"] { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hearts.svg'); }
 .stonetop-tab-rail .item[data-tab="stats"]         { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/crossed-swords.svg'); }
 /* The village, shared with the steading's Overview tab and deliberately: the GM Toolkit's
@@ -14174,6 +14187,13 @@ button.stonetop-mark-sign-btn.is-active:hover {
    grounds. */
 .stonetop-tab-rail .item[data-tab="homefront"]     { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/village.svg'); }
 .stonetop-tab-rail .item[data-tab="encounters"]    { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/prep-stack.svg'); }
+/* A signpost, not the treasure map the "Run an Expedition" hotbar macro wears. The map is the
+   better mark for the tab and the worse one for the rail: its route and its X are fine holes in
+   a filled sheet, and at the 20px this rail scales to they close up into a dark speck. The
+   signpost is four thick strokes and survives it, which is the same bar every other glyph here
+   clears. See assets/icons/tabs/ATTRIBUTION.md for the backing square punched transparent to
+   wear it as a mask. */
+.stonetop-tab-rail .item[data-tab="expeditions"]   { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/direction-signs.svg'); }
 .stonetop-tab-rail .item[data-tab="wonder"]        { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/question-mark.svg'); }
 .stonetop-tab-rail .item[data-tab="loop"]          { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/flow-chart.svg'); }
 
@@ -15208,39 +15228,22 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	opacity: 1;
 	transition-delay: 0s;
 }
-/* The left half of a combo stat card keeps its controls at the card's OUTER
-   corner (see .steading-combo-cell--left above), so mirror the pair there: the
-   pencil on the edge, the caret just inside it. Restated after the shift above,
-   which would otherwise pin `right` on an element that is placed from the left
-   and stretch it across the card. */
-.steading-combo-cell--left > .stonetop-section-collapse {
-	right: auto;
-	left: calc(4px + 1.35em);
-}
-.steading-combo-cell--left:has(> .stonetop-section-collapse) > .steading-section-edit-toggle {
-	right: auto;
-	left: 4px;
-}
 
 /* Residents / Neighbors / Threats headings host their caret directly. */
-.steading-list-heading:has(> .stonetop-section-collapse),
 .steading-residents-heading:has(> .stonetop-section-collapse) {
 	position: relative;
 	padding-right: 1.5em;
 }
-.steading-list-heading > .stonetop-section-collapse,
 .steading-residents-heading > .stonetop-section-collapse {
 	position: absolute;
 	top: 0;
 	right: 0;
 	z-index: 2;
 }
-.steading-list-heading:hover > .stonetop-section-collapse,
 .steading-residents-heading:hover > .stonetop-section-collapse {
 	opacity: 0.5;
 	transition-delay: var(--st-edit-reveal-delay);
 }
-.steading-list-heading:hover > .stonetop-section-collapse:hover,
 .steading-residents-heading:hover > .stonetop-section-collapse:hover {
 	opacity: 1;
 	transition-delay: 0s;
@@ -35408,7 +35411,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    NOT the "I wonder..." tab, whose pencils are positioned against a section rather than a
    panel: these two tabs put ONE pencil in the whole panel's corner, which is what makes the
    panel the section here. */
-.stonetop-gm-toolkit-sheet .sheet-body > :is(.tab.threats, .tab.sites, .tab.encounters) {
+.stonetop-gm-toolkit-sheet .sheet-body > :is(.tab.threats, .tab.encounters, .tab.expeditions) {
 	position: relative;
 }
 
@@ -36710,9 +36713,15 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    "Expedition" a sibling of "Preparations" when it is the thing they sit under. The
    numbering stays off for the reason above, so the stage names simply run unmarked. */
 
-/* ── Encounters tab ───────────────────────────────────────────────────────────
-   actors/gmtoolkit/gm-encounters-tab.js: named bundles of whatever a GM gathered for a session
-   or a scene, each row holding pointers to documents rather than copies of them.
+/* ── Encounters & Expeditions tabs ────────────────────────────────────────────
+   actors/gmtoolkit/gm-bundle-tab.js: named bundles of whatever a GM gathered — for a session
+   or a scene on the Encounters tab, for a trip out of the village on the Expeditions tab —
+   each row holding pointers to documents rather than copies of them.
+
+   ONE BLOCK FOR TWO TABS. The two draw the same card and print the same class names on
+   purpose, so `stonetop-gm-encounter-*` is the shared card vocabulary here, named for the tab
+   it was written for. Only the Expeditions card's own Run button and the foot row that holds
+   it carry names of their own, at the end of this block.
 
    Every rule here is scoped to its own class rather than to the panel, because the tab is one
    list and the list is the tab: there is no second thing on this panel for a panel-wide rule to
@@ -37271,6 +37280,62 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-gm-encounter-used:hover {
 	color: var(--st-green-text);
+}
+
+/* SITES, folded in at the foot of the Expeditions panel. A sibling of the card list rather than
+   a part of it, so it needs the gap that list's flex column would have given it. The grid and
+   the cards inside are dressed by the `.steading-prep-cards` block, unchanged by the move. */
+.stonetop-gm-expedition-sites {
+	margin-top: 14px;
+}
+
+/* THE EXPEDITIONS CARD'S FOOT, where the encounter card has a lone button. The body is a flex
+   COLUMN, so two buttons in it would stack; this row is the whole reason the wrapper exists.
+
+   `align-self` rather than a width, for the same reason the lone button uses it: the pair
+   takes the width of its own words rather than the whole card. The `margin-top` that the lone
+   button carries moves onto the row, or the two buttons inside would each add their own. */
+.stonetop-gm-card-foot {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	align-self: flex-start;
+	margin-top: 2px;
+}
+
+.stonetop-gm-card-foot .stonetop-gm-encounter-used {
+	margin-top: 0;
+}
+
+/* RUN IT — the primary act on an expedition card, and the only control either bundle tab has
+   that reaches outside its own list: it opens the expedition walkthrough on this trip.
+
+   THE SLATE CTA, against the quiet outline of the complete toggle beside it. They sit in one
+   row, and two outlines would read as two halves of one control rather than as an act and an
+   afterthought. Same three tokens the dialog footers use, so it is the system's one primary
+   button and not a fourth shade of it.
+
+   The metrics are the toggle's, deliberately: the two are the same height and sit on the same
+   baseline, which is what stops the row looking like a button with a label stuck beside it. */
+.stonetop-gm-expedition-run {
+	width: auto;
+	margin: 0;
+	padding: 1px 10px;
+	border: 1px solid var(--st-btn-primary-border);
+	border-radius: var(--st-radius-sm);
+	background: var(--st-btn-primary-bg);
+	box-shadow: none;
+	font-size: var(--st-fs-xs);
+	color: var(--st-btn-primary-text);
+	cursor: pointer;
+	line-height: 1.6;
+}
+
+.stonetop-gm-expedition-run:hover {
+	background: var(--st-btn-primary-bg-hover);
+	border-color: var(--st-btn-primary-border-hover);
+	box-shadow: none;
+	color: var(--st-btn-primary-text);
 }
 
 .stonetop-gm-encounter-empty {

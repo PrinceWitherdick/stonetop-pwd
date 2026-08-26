@@ -19,7 +19,7 @@ const STEADING_JS  = read("module/actors/steading/StonetopSteadingSheet.js");
 const STEADING_HBS = read("templates/actor/steading.hbs");
 const TOOLKIT_HBS  = read("templates/actor/gm-toolkit.hbs");
 const THREATS_HBS  = read("templates/actor/partials/gm-toolkit-tab-threats.hbs");
-const SITES_HBS    = read("templates/actor/partials/gm-toolkit-tab-sites.hbs");
+const SITES_HBS    = read("templates/actor/partials/gm-toolkit-sites-section.hbs");
 // The three kind-agnostic partials both tabs render through, so the tool classes, the add bar
 // and the no-steading sentence are each written once.
 const TOOLS_HBS      = read("templates/actor/partials/gm-prep-card-tools.hbs");
@@ -74,7 +74,7 @@ describe("the prep tabs write through the STEADING, never the sheet's own actor"
 	// The templates say so too, rather than drawing an empty grid with a dead add button. Both
 	// reach the same shared partial through the `{{else}}` of their one `hasSteading` branch, so
 	// the sentence is written once and neither tab can gain a body that draws without a steading.
-	it("both tabs explain themselves when there is no steading", () => {
+	it("both surfaces explain themselves when there is no steading", () => {
 		for (const [name, hbs] of [["threats", THREATS_HBS], ["sites", SITES_HBS]]) {
 			expect(hbs, name).toContain("{{#if stonetop.hasSteading}}");
 			expect(hbs, name).toContain("{{else}}");
@@ -131,27 +131,44 @@ describe("the steading really lost them", () => {
 		expect(en.stonetop.steading.tabs.threats).toBeUndefined();
 		expect(en.stonetop.steading.tabs.sites).toBeUndefined();
 		expect(en.stonetop.gmToolkit.tabs.threats).toBe("Threats & Dangers");
-		expect(en.stonetop.gmToolkit.tabs.sites).toBe("Sites");
+		// Sites lost its rail button when it was folded into the Expeditions panel, so its name
+		// is a section heading there rather than a tab label. Both halves asserted: a key left
+		// under `tabs` is a label for a button nothing draws.
+		expect(en.stonetop.gmToolkit.tabs.sites).toBeUndefined();
+		expect(en.stonetop.gmToolkit.expeditions.sites).toBe("Sites");
 	});
 });
 
 describe("the toolkit picked them up whole", () => {
-	it("mounts both tabs and both rail buttons", () => {
-		for (const tab of ["threats", "sites"]) {
-			expect(TOOLKIT_HBS).toMatch(new RegExp(`tab-rail-item"\\s+tab="${tab}"`));
-			expect(TOOLKIT_HBS).toContain(`{{> "stonetop.gm-toolkit-tab-${tab}"}}`);
-			expect(STONETOP_JS).toContain(`"stonetop.gm-toolkit-tab-${tab}":`);
-		}
+	it("mounts Threats as a tab, and Sites inside the Expeditions panel", () => {
+		expect(TOOLKIT_HBS).toMatch(/tab-rail-item"\s+tab="threats"/);
+		expect(TOOLKIT_HBS).toContain('{{> "stonetop.gm-toolkit-tab-threats"}}');
+		expect(STONETOP_JS).toContain('"stonetop.gm-toolkit-tab-threats":');
+
+		// Sites was a tab here and is now a section at the foot of Expeditions. Every leg of
+		// that move fails silently on its own: a rail button left behind points at a panel that
+		// no longer exists, an unregistered partial renders nothing at all, and the old file
+		// path left in the preload map throws on load.
+		expect(TOOLKIT_HBS).not.toMatch(/tab-rail-item"\s+tab="sites"/);
+		expect(TOOLKIT_HBS).not.toContain('{{> "stonetop.gm-toolkit-tab-sites"}}');
+		expect(STONETOP_JS).not.toContain("gm-toolkit-tab-sites");
+		expect(repoFileExists("templates/actor/partials/gm-toolkit-tab-sites.hbs")).toBe(false);
+		expect(STONETOP_JS).toContain('"stonetop.gm-toolkit-sites-section":');
+		expect(read("templates/actor/partials/gm-toolkit-tab-expeditions.hbs"))
+			.toContain('{{> "stonetop.gm-toolkit-sites-section"}}');
 	});
 
 	// Both keys already had a glyph from when the steading carried them, and the icon table is
 	// one flat unscoped list, so they follow the markup. Pin it: an unmapped data-tab paints a
 	// solid block of currentColor where the glyph should be, and nothing is logged.
-	it("both rail keys still map to a mask icon", () => {
-		for (const [tab, icon] of [["threats", "hazard-sign"], ["sites", "site-mound"]]) {
-			expect(CSS).toMatch(new RegExp(
-				`\\.stonetop-tab-rail \\.item\\[data-tab="${tab}"\\]\\s*\\{\\s*--st-tab-icon:\\s*url\\('[^']*${icon}\\.svg'\\)`));
-		}
+	it("the Threats rail key still maps to a mask icon, and Sites no longer needs one", () => {
+		expect(CSS).toMatch(
+			/\.stonetop-tab-rail \.item\[data-tab="threats"\]\s*\{\s*--st-tab-icon:\s*url\('[^']*hazard-sign\.svg'\)/);
+		// A row for a data-tab nothing renders is a row that outlives what it was for. The FILE
+		// stays: `site-mound.svg` is also the map-pin icon a placed site wears.
+		expect(CSS).not.toMatch(/\.item\[data-tab="sites"\]/);
+		expect(repoFileExists("assets/icons/tabs/site-mound.svg")).toBe(true);
+		expect(read("module/journal/gm-prep-page.js")).toContain("tabs/site-mound.svg");
 	});
 
 	// The steading's gutter came from `.steading-sheet .sheet-tab`, which this frame does not
@@ -236,6 +253,9 @@ describe("the toolkit picked them up whole", () => {
 	// and the list kept growing because the gate was upside down — the threat-type disclosure
 	// spent its whole life mouse-dead for want of an eighth line. A prep selector back in that
 	// block would be a rule nothing matches, read by the next person as proof the gate survives.
+	// The one selector that is NOT vestigial is the shared add-bar class compounded onto the
+	// steading Improvements tab, which does lock: see the test below it. Bare, it would be back
+	// to claiming these tabs, which is what this list forbids.
 	it("keeps the prep tabs off the readonly allow-list entirely", () => {
 		for (const cls of ["stonetop-prep-edit-btn", "stonetop-prep-add-btn", "site-table-roll",
 			"threat-collapse-btn", "threat-portent", "steading-threat-type-toggle"]) {
@@ -258,14 +278,30 @@ describe("the toolkit picked them up whole", () => {
 	// the class is a pencil that toggles nothing visible, and the list surviving in the mixin is
 	// how the flag comes back.
 	it.each([["sites", () => SITES_HBS], ["threats", () => THREATS_HBS]])(
-		"leaves the %s tab ungated, with no pencil and no readonly class", (tab, hbs) => {
+		"leaves %s ungated, with no pencil and no readonly class", (kind, hbs) => {
 			const markup = stripComments(hbs());
-			expect(markup).toContain(`<div class="tab ${tab}" data-group="primary" data-tab="${tab}">`);
 			expect(markup).not.toContain("stonetop-readonly");
 			expect(markup).not.toContain("steading-edit-section");
 			expect(markup).not.toContain("steading-section-toggle");
-			expect(markup).not.toContain(`stonetop.edit.${tab}`);
+			expect(markup).not.toContain(`stonetop.edit.${kind}`);
 		});
+
+	// Threats is still a panel of its own; Sites is a folded section inside another one, and
+	// the box around its heading is what stops the fold walking on out of the tab.
+	it("wraps each one in the container its own machinery needs", () => {
+		expect(stripComments(THREATS_HBS))
+			.toContain('<div class="tab threats" data-group="primary" data-tab="threats">');
+		const sites = stripComments(SITES_HBS);
+		expect(sites).not.toContain('data-tab="sites"');
+		expect(sites).toContain('<div class="stonetop-gm-expedition-sites">');
+		// It folds, and starts OPEN like every other section on this sheet — a section shut on
+		// first open is one a GM never learns is there. `startCollapsed` is for reference
+		// sections, and its absence is also what makes a stored fold id here mean "this GM shut
+		// it" rather than "this GM pushed it open"; see utils/section-editing.js.
+		expect(sites).toContain('collapse="gm-expeditions-sites"');
+		expect(sites).not.toContain("startCollapsed");
+		expect(sites.match(/section-heading/g)).toHaveLength(1);
+	});
 
 	it("keeps the section-edit machinery out of the prep mixin", () => {
 		const prep = stripComments(PREP_JS);
@@ -314,6 +350,20 @@ describe("the toolkit picked them up whole", () => {
 			"steading-improvement-add-btn"]) {
 			expect(CSS, `${cls} is styled by name again`).not.toMatch(new RegExp(`\\.${cls}[\\s,:>]`));
 		}
+	});
+
+	// The Improvements tab is the one place this bar sits inside a section that CAN be locked,
+	// and the lock was never meant to reach it: the template renders the bar to any owner so a
+	// custom improvement can be written down without unlocking first, the same way dropping a
+	// journal card onto the tab always worked. The blanket readonly rule caught it anyway, for
+	// the same reason it had caught the threat-type reference, and the button did nothing at all
+	// until the pencil was opened.
+	it("leaves the Improvements add bar clickable while its tab is locked", () => {
+		expect(IMPROVEMENTS_HBS).toContain("stonetop-readonly");
+		expect(IMPROVEMENTS_HBS).toContain("gm-prep-add-bar");
+		const exempt = declarations(CSS, ".stonetop-readonly.improvements .stonetop-prep-add-btn");
+		expect(exempt, "the add bar locks with the rest of the tab again").toBeTruthy();
+		expect(exempt).toMatch(/pointer-events:\s*auto/);
 	});
 
 	// One partial serves all four bars, so a new prep kind inherits the look by construction.

@@ -35,6 +35,7 @@ import { runImportBookArtMacro } from "../../book2-art/macro.js";
 import { withGmPrepTabs } from "./gm-prep-tabs.js";
 import { withGmWonderTab } from "./gm-wonder-tab.js";
 import { withGmEncountersTab } from "./gm-encounters-tab.js";
+import { withGmExpeditionsTab } from "./gm-expeditions-tab.js";
 import { localizedHomefrontSections } from "../../gm-toolkit/homefront-view.js";
 import { readCurrentSeason, currentSeasonView, isCurrentSeasonChange } from "../../seasons/current-season.js";
 import { localize } from "../../utils/i18n.js";
@@ -99,7 +100,12 @@ export function createStonetopGmToolkitSheetClass(Base) {
 	// withGmWonderTab: the "I wonder..." tab, the one authored surface on this sheet. Its storage
 	// IS the toolkit's own (`actor.system.wonders`), which is the opposite of the line above and
 	// stated here so the two are never confused for one another.
-	return class StonetopGmToolkitSheet extends withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base))))) {
+	//
+	// withGmEncountersTab / withGmExpeditionsTab: the two gathered-bundle tabs. Both are thin
+	// configs over one engine (gm-bundle-tab.js) which the sheet HOLDS rather than is mixed with,
+	// because a mixin can only be applied to a class once. Each mixin adds only its own field and
+	// the three entry points below; neither can shadow the other's.
+	return class StonetopGmToolkitSheet extends withGmExpeditionsTab(withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base)))))) {
 		// Read by the mixin's `isSectionEditable`. Constant, not state: this sheet has no global
 		// edit wrench, so a section is editable exactly when its own pencil is on.
 		_editMode = false;
@@ -222,6 +228,10 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The Encounters tab has two boxes with the same problem and the same fix: an
 			// encounter name and a collected row's note, both saved on blur. See the mixin.
 			await this._flushGmEncounterEdits();
+			// The Expeditions tab is the same tab again over the same engine, and needs the same
+			// flush: its cards carry the same two boxes. Its own call because each engine searches
+			// only its OWN panel for the focused field — see `owns` in gm-bundle-tab.js.
+			await this._flushGmExpeditionEdits();
 			await super._render(force, options);
 			stripHeaderChrome(this);
 		}
@@ -231,6 +241,7 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// straight from the focused field, so its `change` event never fires.
 			await this._flushGmWonderEdits();
 			await this._flushGmEncounterEdits();
+			await this._flushGmExpeditionEdits();
 			this._unwirePrepPageSync();
 			this._unwireSeasonSync();
 			this._unwireGmPrepMasonry();
@@ -348,20 +359,34 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// writes files. This sheet is GM-only by ownership, so it is always true in practice.
 			context.stonetop.isGM = game.user?.isGM ?? false;
 
-			// Both prep tabs. They publish no edit flags — neither has a pencil.
-			// The steading resolved above, handed down rather than looked up again: it is an
-			// unindexed `game.actors` scan, and the mixin's own note says both its builders
-			// sharing one resolution is the point.
-			await this._addGmPrepContext(context, steading);
+			// The three ASYNC builders, TOGETHER rather than one after the next. They touch
+			// disjoint keys on `context.stonetop`, and each can be waiting on a pack load — a
+			// bundle row pointing into a compendium needs one to name itself (see
+			// `resolveBundleEntry`). Serialized, one tab's pack latency was added to the other's,
+			// on a sheet that repaints on every prep write ANYWHERE in the world. `_addGmPrepContext`
+			// already runs its own two this way; this is the same move one level up.
+			//
+			// The `context.stonetop.edit` MERGE both bundle tabs do stays safe: each is a single
+			// synchronous statement inside its own microtask, so the two cannot interleave
+			// mid-object.
+			//
+			// The steading is resolved above and handed down rather than looked up again: it is
+			// an unindexed `game.actors` scan, and the prep mixin's own note says both its
+			// builders sharing one resolution is the point.
+			await Promise.all([
+				// Both prep tabs. They publish no edit flags — neither has a pencil.
+				this._addGmPrepContext(context, steading),
+				// The Encounters list, off `actor.system.encounters`, with every collected row
+				// resolved to the document it points at.
+				this._addGmEncountersContext(context),
+				// The Expeditions list, off `actor.system.expeditions`, the same way.
+				this._addGmExpeditionsContext(context),
+			]);
 
 			// The "I wonder..." list, off `actor.system.wonders`, split into the open questions
-			// and the answered ones, plus the book's guidance on keeping it.
+			// and the answered ones, plus the book's guidance on keeping it. SYNC, so it stays
+			// out of the gather above.
 			this._addGmWonderContext(context);
-
-			// The Encounters list, off actor.system.encounters, with every collected row resolved
-			// to the document it points at. Awaited, unlike the wonder call above: a row pointing
-			// into a compendium can need a pack load to name itself (see resolveEncounterEntry).
-			await this._addGmEncountersContext(context);
 
 			return context;
 		}
@@ -395,6 +420,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// keyboard reorder, and both halves of the drag. Delegated on the same root, and the
 			// only thing on this sheet that takes a drop.
 			this._activateGmEncountersListeners(html[0]);
+			// The Expeditions tab, delegated on the same root. Both bind to it and both print the
+			// same class names, so each gates every handler on its own panel (`owns`).
+			this._activateGmExpeditionsListeners(html[0]);
 			// This sheet's own two buttons. Both are delegated rather than bound per element,
 			// because both are re-emitted whenever their tab re-renders and either may be absent
 			// (the import button depends on which diagrams this world already has).

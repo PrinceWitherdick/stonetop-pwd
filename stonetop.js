@@ -441,12 +441,18 @@ Hooks.once("init", () => {
 		"stonetop.gm-toolkit-tab-moves":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-moves.hbs",
 		"stonetop.gm-toolkit-tab-loop":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-loop.hbs",
 		"stonetop.gm-toolkit-tab-threats":    "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-threats.hbs",
-		"stonetop.gm-toolkit-tab-sites":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-sites.hbs",
+		// Not a tab any more: a folded section at the foot of the Expeditions panel.
+		"stonetop.gm-toolkit-sites-section": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-sites-section.hbs",
 		"stonetop.gm-toolkit-tab-homefront":  "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-homefront.hbs",
 		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
 		"stonetop.gm-toolkit-tab-encounters": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-encounters.hbs",
-		// One card, printed by BOTH of that tab's lists — the live one and the Completed fold.
+		"stonetop.gm-toolkit-tab-expeditions": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-expeditions.hbs",
+		// One card per bundle tab, printed by BOTH of that tab's lists — the live one and the
+		// Completed fold. Two files rather than one partial with a parameter, for the reason
+		// gm-expedition-card.hbs gives; both draw the same class names, so they share one
+		// stylesheet block and one engine (actors/gmtoolkit/gm-bundle-tab.js).
 		"stonetop.gm-encounter-card":         "systems/stonetop-pwd/templates/actor/partials/gm-encounter-card.hbs",
+		"stonetop.gm-expedition-card":        "systems/stonetop-pwd/templates/actor/partials/gm-expedition-card.hbs",
 		"stonetop.gm-prep-card-tools":        "systems/stonetop-pwd/templates/actor/partials/gm-prep-card-tools.hbs",
 		"stonetop.gm-prep-add-bar":           "systems/stonetop-pwd/templates/actor/partials/gm-prep-add-bar.hbs",
 		"stonetop.gm-prep-no-steading":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-no-steading.hbs",
@@ -635,12 +641,14 @@ Hooks.on("drawNote", onDrawStonetopNote);
 // carries the two place slugs and every client paints the line from them, players included.
 registerExpeditionRouteHooks();
 
-// -- ENCOUNTER NOTES: LINKS FOLLOW A RENAME --------------------
-// The GM Toolkit's Encounters tab holds each encounter's notes as already-enriched HTML, keyed
+// -- BUNDLE NOTES: LINKS FOLLOW A RENAME -----------------------
+// The GM Toolkit's Encounters and Expeditions tabs hold each card's notes as already-enriched
+// HTML, keyed
 // against the prose they were built from. That key cannot see a rename: `enrichHTML` resolves an
 // @UUID link to the target's CURRENT name, so renaming a linked monster leaves the prose
 // byte-identical and the cached HTML showing the old name for the rest of the session. Bumping a
-// counter on any rename of a thing a note can point at is what lets the next paint rebuild.
+// counter on any rename of a thing a note can point at is what lets the next paint rebuild. ONE
+// counter serves both tabs, since both run on the one cache in gm-bundle-tab.js.
 for (const doc of ["Actor", "Item", "JournalEntry", "JournalEntryPage", "Scene", "RollTable", "Macro"]) {
 	Hooks.on(`update${doc}`, (_doc, changes) => {
 		if ("name" in (changes ?? {})) bumpEncounterNotesGeneration();

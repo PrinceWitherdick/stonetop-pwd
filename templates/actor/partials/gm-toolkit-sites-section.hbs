@@ -1,0 +1,73 @@
+{{!-- SITES — interesting places the PCs can explore. A SECTION at the foot of the Expeditions
+      tab, having been a tab of its own here and, before that, a tab on the steading sheet.
+
+      WHY IT SITS UNDER EXPEDITIONS. Its own first sentence already said so: a site is "the
+      destination of an expedition, a point of interest on the way, or an incidental discovery."
+      What a GM writes up here is what a trip is FOR, and keeping the two a rail-click apart meant
+      the sites for tonight's journey could never be seen beside the journey.
+
+      IT FOLDS, AND STARTS OPEN, like every other section on this sheet and for the same reason: a
+      section shut on first open is one a GM never learns is there. It is the longest thing on the
+      panel when a world has a dozen sites written up — a site is a page-long card — and that is
+      what the caret is for: folding it is one click and is then remembered per user, which is the
+      right way round, since a GM three sessions in can choose that for themselves and a GM one
+      session in must not have it chosen for them.
+
+      NO `startCollapsed`, therefore. That parameter is for sections that are reference rather than
+      content (the toolkit's prep guidance), and its absence is what makes a stored id here mean
+      "this GM folded it" — see section-collapse.hbs for how the two readings are told apart.
+
+      THE BOX AROUND THE PAIR IS LOAD-BEARING. A fold hides its heading's FOLLOWING SIBLINGS
+      (`_sectionFoldTargets`), so without this wrapper the walk would run on past the section and
+      out of the tab. Nothing else may go in this box, and a SECOND heading in it would stop the
+      caret claiming at the first — the same rule the Completed fold above it keeps.
+
+      NOT INSIDE `.stonetop-gm-encounters`, the section holding the expedition cards, but a
+      sibling of it. That section is the one the tab's pencil locks (`--reading`) and the one
+      whose flex column spaces the cards; sites are gated by neither, and this tab having one
+      pencil that reaches exactly two delete buttons is a property worth not blurring.
+
+      THE STORAGE DID NOT MOVE and must not. A site is a JournalEntryPage inside a hidden
+      per-steading JournalEntry, pointed at by a flag on the STEADING actor — see the header of
+      module/actors/gmtoolkit/gm-prep-tabs.js, which spells out the silent data-loss path.
+
+      NO SECTION PENCIL, unlike the Threats tab, and so no `stonetop-readonly` either. A pencil
+      gates the fields you type into, and this section has none: a site is written up in the
+      wizard and re-opened in it, its d20 tables roll without writing anything, and the only
+      control left is the trash. Gating that ONE button behind a pencil bought nothing and cost
+      the obvious reading of the toolbar — the trash sat beside a live pencil and was simply
+      mouse-dead, when the confirm dialog it already opens is the real "are you sure".
+
+      The `steading-*` class names are CSS hooks kept deliberately; they and the storage rule are
+      explained at length in gm-toolkit-tab-threats.hbs and in gm-prep-tabs.js. Every listener
+      this section needs is scoped to `.steading-sites` rather than to a panel, which is why the
+      move cost the mixin nothing. --}}
+<div class="stonetop-gm-expedition-sites">
+	{{> "stonetop.section-heading" title=(localize "stonetop.gmToolkit.expeditions.sites")
+	    note=(localize "stonetop.gmToolkit.expeditions.sitesNote")
+	    collapse="gm-expeditions-sites"}}
+	<section class="sheet-tab steading-sites steading-prep-cards">
+
+		{{#if stonetop.hasSteading}}
+		<p class="steading-threats-intro">
+			Interesting places the PCs can explore (Book I, <em>Sites</em>): the destination of an expedition, a point of interest on the way, or an incidental discovery. Written up here for your eyes only. Drag a card onto a scene to pin it to the map.
+		</p>
+
+		{{#if stonetop.sites.length}}
+		<div class="steading-threats-grid">
+			{{#each stonetop.sites}}
+			<div class="threat-card-wrap" data-page-uuid="{{uuid}}">
+				{{> "stonetop.site-card" this}}
+				{{> "stonetop.gm-prep-card-tools" kind="site" uuid=uuid}}
+			</div>
+			{{/each}}
+		</div>
+		{{/if}}
+
+		{{> "stonetop.gm-prep-add-bar" kind="site" label="Create a site"}}
+		{{else}}
+		{{> "stonetop.gm-prep-no-steading" noun="Sites"}}
+		{{/if}}
+
+	</section>
+</div>

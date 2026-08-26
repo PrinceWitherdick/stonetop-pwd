@@ -1,0 +1,76 @@
+{{!-- EXPEDITIONS — a trip prepped before the night it is run: the regional map, the sites along
+      the way, the monsters on the road, the page to read aloud when they arrive. Book I p.340
+      ("What to prep", quoted in full on the walkthrough's opening step) is a list of DOCUMENTS to
+      have ready, and this is where they are kept.
+
+      THE SAME SHAPE AS THE ENCOUNTERS TAB, which is where the reasoning lives
+      (gm-toolkit-tab-encounters.hbs): two lists out of one array split in JS off each card's
+      `used` flag, never off the DOM; writes that do not go through the form, so no field carries
+      a `name`; and one pencil in the panel's corner guarding exactly the two delete buttons.
+
+      WHAT IT IS NOT is the walkthrough's log. The "Run an Expedition" window keeps its own record
+      of what happened on each trip — the route, the requirements they were told, what they
+      carried — in a world setting, and Run on a card opens that window on this card's trip. Prep
+      here; what was played is recorded there.
+
+      SITES ARE AT THE FOOT OF THIS PANEL, having had a rail button of their own until they were
+      folded in here. A site is what a trip is FOR — its own intro says so — and a rail-click
+      between the two meant the sites for tonight's journey could never be read beside the
+      journey. The section is a SIBLING of the card list below rather than a part of it, and it
+      folds; gm-toolkit-sites-section.hbs says why on both counts.
+
+      `data-tab="expeditions"` earns the rail's signpost glyph; the icon table in stonetop.css is
+      one flat list keyed by data-tab with no per-sheet scope. --}}
+<div class="tab expeditions steading-edit-section" data-group="primary" data-tab="expeditions">
+	{{> "stonetop.steading-section-toggle" section="expeditions" editing=stonetop.edit.expeditions}}
+	<section class="sheet-tab stonetop-gm-encounters{{#unless stonetop.edit.expeditions}} stonetop-gm-encounters--reading{{/unless}}">
+
+		<p class="steading-threats-intro">{{localize "stonetop.gmToolkit.expeditions.intro"}}</p>
+
+		{{#if stonetop.expeditions.active.length}}
+		<ul class="stonetop-gm-encounter-list">
+			{{#each stonetop.expeditions.active}}
+			{{> "stonetop.gm-expedition-card"}}
+			{{/each}}
+		</ul>
+		{{else}}
+		{{!-- Two empty states, because "nothing here yet" and "you have run everything you
+		      prepared" are different facts and the second one is wrong advice: there is no need to
+		      tell a GM to drag something in when what they most likely want is to lift one back
+		      out of the fold two inches below. --}}
+		<p class="stonetop-gm-encounter-empty">
+			{{#if stonetop.expeditions.completed.length}}{{localize "stonetop.gmToolkit.expeditions.emptyAllDone"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.empty"}}{{/if}}
+		</p>
+		{{/if}}
+
+		{{> "stonetop.gm-prep-add-bar" kind="stonetop-gm-encounter"
+		    label=(localize "stonetop.gmToolkit.expeditions.add")}}
+
+		{{!-- COMPLETED, rendered only when there is something in it, so an untouched tab shows one
+		      list and not two. It folds, and starts OPEN like every other section on this sheet;
+		      the caret rides ON THE HEADING because this section has no pencil of its own. The
+		      heading's FOLLOWING SIBLINGS are what the fold hides (`_sectionFoldTargets`), so the
+		      box around this pair is load-bearing and a SECOND heading in it would stop the caret
+		      claiming at the first.
+
+		      ITS COLLAPSE KEY IS ITS OWN. That preference is stored per user keyed by the id in
+		      `collapse=`, so sharing the encounters tab's key would fold both folds together. --}}
+		{{#if stonetop.expeditions.completed.length}}
+		<div class="stonetop-gm-encounters-completed">
+			{{> "stonetop.section-heading" title=(localize "stonetop.gmToolkit.expeditions.completed")
+			    note=(localize "stonetop.gmToolkit.expeditions.completedNote")
+			    collapse="gm-expeditions-completed"}}
+			<ul class="stonetop-gm-encounter-list stonetop-gm-encounter-list--completed">
+				{{#each stonetop.expeditions.completed}}
+				{{> "stonetop.gm-expedition-card"}}
+				{{/each}}
+			</ul>
+		</div>
+		{{/if}}
+
+	</section>
+
+	{{!-- Outside the section above, so neither the tab's pencil nor the card column's flex
+	      spacing reaches it. --}}
+	{{> "stonetop.gm-toolkit-sites-section"}}
+</div>

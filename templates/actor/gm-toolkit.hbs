@@ -36,13 +36,16 @@
 			      them nothing by sitting them second, while Homefront is the page you turn to when
 			      the party gets home — the start of a stretch of play rather than a moment in
 			      one. --}}
-			{{> "stonetop.tab-rail-item" tab="homefront"  label=(localize "stonetop.gmToolkit.tabs.homefront")}}
-			{{> "stonetop.tab-rail-item" tab="moves"      label=(localize "stonetop.gmToolkit.tabs.moves")}}
-			{{> "stonetop.tab-rail-item" tab="threats"    label=(localize "stonetop.gmToolkit.tabs.threats")}}
-			{{> "stonetop.tab-rail-item" tab="sites"      label=(localize "stonetop.gmToolkit.tabs.sites")}}
-			{{> "stonetop.tab-rail-item" tab="encounters" label=(localize "stonetop.gmToolkit.tabs.encounters")}}
-			{{> "stonetop.tab-rail-item" tab="wonder"     label=(localize "stonetop.gmToolkit.tabs.wonder")}}
-			{{> "stonetop.tab-rail-item" tab="loop"       label=(localize "stonetop.gmToolkit.tabs.loop")}}
+			{{> "stonetop.tab-rail-item" tab="homefront"   label=(localize "stonetop.gmToolkit.tabs.homefront")}}
+			{{> "stonetop.tab-rail-item" tab="moves"       label=(localize "stonetop.gmToolkit.tabs.moves")}}
+			{{> "stonetop.tab-rail-item" tab="threats"     label=(localize "stonetop.gmToolkit.tabs.threats")}}
+			{{!-- Expeditions follows Encounters: they are the same card, and the book's own prep
+			      list for a trip (p.340) ends by telling you to prepare seven encounters. It carries
+			      Sites as a section at its foot, which is why there is no Sites button here. --}}
+			{{> "stonetop.tab-rail-item" tab="encounters"  label=(localize "stonetop.gmToolkit.tabs.encounters")}}
+			{{> "stonetop.tab-rail-item" tab="expeditions" label=(localize "stonetop.gmToolkit.tabs.expeditions")}}
+			{{> "stonetop.tab-rail-item" tab="wonder"      label=(localize "stonetop.gmToolkit.tabs.wonder")}}
+			{{> "stonetop.tab-rail-item" tab="loop"        label=(localize "stonetop.gmToolkit.tabs.loop")}}
 		</nav>
 
 		<div class="stonetop-sheet-layout stonetop-gm-toolkit-layout stonetop-sheet-layout--own-seam">
@@ -50,8 +53,8 @@
 				{{> "stonetop.gm-toolkit-tab-homefront"}}
 				{{> "stonetop.gm-toolkit-tab-moves"}}
 				{{> "stonetop.gm-toolkit-tab-threats"}}
-				{{> "stonetop.gm-toolkit-tab-sites"}}
 				{{> "stonetop.gm-toolkit-tab-encounters"}}
+				{{> "stonetop.gm-toolkit-tab-expeditions"}}
 				{{> "stonetop.gm-toolkit-tab-wonder"}}
 				{{> "stonetop.gm-toolkit-tab-loop"}}
 			</section>

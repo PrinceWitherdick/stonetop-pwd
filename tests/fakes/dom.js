@@ -58,6 +58,16 @@ export function fakeEl({ cls = [], dataset = {}, value = "", parent = null } = {
 			},
 		},
 		setAttribute(k, v) { node.attrs[k] = v; },
+		/**
+		 * Descendants matching a selector, the same walk `fakeRoot` does.
+		 *
+		 * On the element and not only on the root because a real element has them, and the
+		 * toolkit's bundle tabs now search WITHIN their own panel rather than across the whole
+		 * sheet: both tabs print the same class names, so a flush handed the root would find the
+		 * other tab's focused box and write its value into its own list.
+		 */
+		querySelector: sel => walk(node.children, sel)[0] ?? null,
+		querySelectorAll: sel => walk(node.children, sel),
 		addEventListener: (type, fn) => { (node.handlers[type] ??= []).push(fn); },
 		contains: other => { for (let c = other; c; c = c.parent) if (c === node) return true; return false; },
 		/**

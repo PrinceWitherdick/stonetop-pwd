@@ -15,20 +15,30 @@
 //                read-aloud page — each bundle pointing at documents by uuid rather than copying
 //                them (see gm-encounters-tab.js).
 //
-// Both sit on the toolkit (a singleton — see gm-toolkit-actor.js) rather than on the User,
-// because both are world-level prep: a world has one set of open questions and one set of
-// prepared encounters whoever is running it, and a second GM opening their own toolkit should
-// see the same lists.
+//   `expeditions` a trip prepped in advance: the same card, gathering the regional map, the sites
+//                on the way, whatever is waiting at the end. It carries one field the encounter
+//                card has not, `tripId`, which is what ties a prepped expedition to the trip the
+//                "Run an Expedition" walkthrough is recording (see gm-expeditions-tab.js). The
+//                walkthrough's own log stays where it is, in the `expeditionAnswers` world
+//                setting: what it holds is what happened at the table, which is a different thing
+//                from what was gathered beforehand.
+//
+// All three sit on the toolkit (a singleton — see gm-toolkit-actor.js) rather than on the User,
+// because all three are world-level prep: a world has one set of open questions, one set of
+// prepared encounters and one set of prepared trips whoever is running it, and a second GM
+// opening their own toolkit should see the same lists.
 //
 // A field added here must tolerate absence on toolkits created before it: `initial` covers that
-// for every field type this system uses, which is what lets this stay additive with no migration.
-import { wondersField, encountersField } from "./fields.js";
+// for every field type this system uses, which is what lets this stay additive with no migration
+// — and is exactly what let `expeditions` be added to worlds whose toolkit already existed.
+import { wondersField, encountersField, expeditionsField } from "./fields.js";
 
 export class GmToolkitModel extends foundry.abstract.TypeDataModel {
 	static defineSchema() {
 		return {
 			wonders: wondersField(),
 			encounters: encountersField(),
+			expeditions: expeditionsField(),
 		};
 	}
 }

@@ -1,5 +1,8 @@
 import { StepperDialog } from "./StepperDialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
+// `openOrFocus` cannot serve `openOnTrip`: it brings an already-open window to the front without
+// running the factory, and that window still has to be told which trip to switch to.
+import { findOpenApp } from "../utils/open-windows.js";
 import { crewExists } from "../utils/crew.js";
 import { sign, rollSeasonsCard } from "../utils/roll-engine.js";
 import { getStonetopSteadingActor, isSteadingActor } from "../utils/world.js";
@@ -510,6 +513,56 @@ export class ExpeditionDialog extends StepperDialog {
 			dialog._restoreStep();   // reopen on the step left off at before a reload
 			return dialog.render(true);
 		});
+	}
+
+	/**
+	 * Open the walkthrough on ONE trip, minting that trip if the log does not hold it.
+	 *
+	 * The join between this window and the GM Toolkit's Expeditions tab, where a trip is prepped
+	 * in advance (actors/gmtoolkit/gm-expeditions-tab.js). The card there stores whatever id this
+	 * hands back, so the SECOND press of Run reaches the same trip with everything already noted
+	 * in it rather than starting the night over — and a card whose trip has since been deleted
+	 * from the log simply gets a fresh one, which is why an unknown id is not an error here.
+	 *
+	 * IT WRITES THE SETTING BEFORE IT OPENS ANYTHING, so a window minted below reads the selection
+	 * out of the setting the way it reads everything else, with no argument to thread through the
+	 * constructor.
+	 *
+	 * AN ALREADY-OPEN WINDOW IS SWITCHED, not left where it was. `openOrFocus` brings the existing
+	 * one to the front WITHOUT running the factory, so a GM with the walkthrough already up would
+	 * otherwise press Run on one card and be handed whichever trip they last had open. Its
+	 * in-memory draft has to be dropped first: `_log()` memoizes for the window's lifetime, so
+	 * `_switchExpedition` would look for the trip just minted in a copy of the log taken before it
+	 * existed and no-op.
+	 *
+	 * GM-ONLY IN PRACTICE, because `_persistLog` writes a world-scoped setting; the tab that calls
+	 * this is on a sheet only GMs can open.
+	 *
+	 * @param {object} options
+	 * @param {string} [options.tripId]  The trip to open. Ignored when the log has no such trip.
+	 * @param {string} [options.title]   What to call a trip that has to be minted.
+	 * @returns {Promise<string>} the id of the trip now being walked.
+	 */
+	static async openOnTrip({ tripId = "", title = "" } = {}) {
+		const log = normalizeLog(getSetting(ANSWERS_SETTING));
+		const known = tripId && log.list.some(e => e.id === tripId);
+		const entry = known ? null : { id: foundry.utils.randomID(), title: String(title ?? "").trim(), createdAt: Date.now() };
+		const id    = known ? tripId : entry.id;
+		await setWorldSetting(ANSWERS_SETTING, known ? selectExpedition(log, id) : addExpedition(log, entry));
+
+		const open = findOpenApp(w => w.id === "stonetop-expedition");
+		if (open?.rendered) {
+			open._logDraft = null;
+			// A trip that did not exist a moment ago has nothing on any later step, so the reader
+			// belongs at the top of it. Switching to one that DOES exist leaves them where they
+			// were, which is the same courtesy the switcher in the log bar already extends.
+			if (!known) open._step = 0;
+			await open._switchExpedition(id);
+			open.bringToTop();
+			return id;
+		}
+		ExpeditionDialog.open();
+		return id;
 	}
 
 	// Same contract as the session-zero walkthroughs, and the same implementation — see the

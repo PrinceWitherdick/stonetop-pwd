@@ -1,0 +1,134 @@
+{{!-- ONE PREPPED EXPEDITION, wherever it is rendered. Two lists print this: the live one at the
+      top of the tab and the Completed fold under it, and the card is the SAME card in both.
+
+      THIS IS gm-encounter-card.hbs WITH ONE MORE BUTTON, and that card is where the reasoning
+      lives — why the drag handle is the name button and not the row, why no field carries a
+      `name`, why expanding is a class and not a render, why the caret rides at the end of the
+      badges, why the complete toggle sits at the foot of the body rather than in the head. Every
+      one of those rules holds here unchanged; read them there rather than looking for a second
+      copy.
+
+      IT WEARS THE ENCOUNTER CARD'S CLASS NAMES, on purpose and not by oversight. The two tabs draw
+      the same object — a named bundle of pointers, with notes on it — so they share one stylesheet
+      block and one set of hooks in gm-bundle-tab.js, which is bound to a tab by the panel it
+      draws into rather than by what its cards are called. `stonetop-gm-encounter-*` is the shared
+      card vocabulary, named for the tab it was written for; only the one control this card has
+      that the other has not carries a name of its own.
+
+      TWO FILES RATHER THAN ONE PARTIAL WITH A PARAMETER, because Handlebars MERGES a partial's
+      hash into the caller's context: a `{{> card i18n="..."}}` would also be a bare lookup against
+      the card's own fields, and every label on the card would have to become an indirection
+      through a view-model built in JS. section-heading.hbs states the trap at length. The cost is
+      that a change to the card's SHAPE lands in two files; the comment above is what makes that
+      cost visible.
+
+      `used` DOES NOT MEAN "SPENT" HERE. What it files into the Completed fold is a trip that has
+      been run — everything gathered into it stays gathered, and one press of the arrow puts it
+      back on the live list to be run again. --}}
+<li class="stonetop-gm-encounter{{#if used}} is-used{{/if}}{{#unless open}} is-collapsed{{/unless}}"
+    data-encounter-id="{{id}}">
+	<div class="stonetop-gm-encounter-head">
+		<span class="stonetop-gm-encounter-grip" draggable="true" aria-hidden="true"
+		      data-tooltip="{{localize "stonetop.gmToolkit.expeditions.reorder"}}" data-tooltip-direction="UP">
+			<i class="fas fa-grip-vertical"></i>
+		</span>
+		<input type="text" class="stonetop-gm-encounter-name" value="{{name}}" maxlength="120"
+		       aria-label="{{localize "stonetop.gmToolkit.expeditions.nameLabel"}}">
+		{{#if notesPeek}}<span class="stonetop-gm-encounter-peek">{{notesPeek}}</span>{{/if}}
+		{{#if groups.length}}
+		<span class="stonetop-gm-encounter-count">
+			{{#each groups}}
+			<span class="stonetop-gm-encounter-tally stonetop-gm-encounter-tally--{{key}}"
+			      data-tooltip="{{tip}}" data-tooltip-direction="UP">{{count}}<i class="{{icon}}" aria-hidden="true"></i></span>
+			{{/each}}
+		</span>
+		{{/if}}
+		<button type="button" class="stonetop-gm-encounter-toggle" aria-expanded="{{#if open}}true{{else}}false{{/if}}"
+		        aria-label="{{#if open}}{{localize "stonetop.gmToolkit.expeditions.collapse"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.expand"}}{{/if}}">
+			<i class="fas fa-caret-down"></i>
+		</button>
+		<span class="stonetop-gm-encounter-tools">
+			<button type="button" class="stonetop-gm-encounter-remove"
+			        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.removeEncounter"}}" data-tooltip-direction="UP">
+				<i class="fas fa-trash"></i>
+			</button>
+		</span>
+	</div>
+
+	<div class="stonetop-gm-encounter-body">
+		<div class="stonetop-gm-encounter-notes-block">
+			{{#if notesHtml}}
+			<div class="stonetop-gm-encounter-notes">{{{notesHtml}}}</div>
+			{{else}}
+			<p class="stonetop-gm-encounter-notes stonetop-gm-encounter-notes--empty">{{localize "stonetop.gmToolkit.expeditions.notesEmpty"}}</p>
+			{{/if}}
+			<button type="button" class="stonetop-gm-encounter-notes-edit"
+			        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.notesEdit"}}" data-tooltip-direction="UP">
+				<i class="fas fa-pen"></i>
+			</button>
+		</div>
+
+		{{#each groups}}
+		<section class="stonetop-gm-entry-card" data-entry-kind="{{key}}">
+			<div class="stonetop-gm-entry-card-head">
+				<i class="{{icon}}" aria-hidden="true"></i>
+				<span class="stonetop-gm-entry-card-title">{{title}}</span>
+				{{#if canDeploy}}
+				<button type="button" class="stonetop-gm-encounter-deploy"
+				        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.deploy"}}" data-tooltip-direction="UP">
+					<span class="stonetop-gm-encounter-deploy-icon" aria-hidden="true"></span>
+				</button>
+				{{/if}}
+				<span class="stonetop-gm-entry-card-count">{{count}}</span>
+			</div>
+			<ul class="stonetop-gm-encounter-entries">
+				{{#each entries}}
+				<li class="stonetop-gm-encounter-entry{{#if unresolved}} is-unresolved{{/if}}" data-entry-id="{{id}}">
+					<button type="button" class="stonetop-gm-encounter-entry-open"
+					        draggable="{{#if unresolved}}false{{else}}true{{/if}}"
+					        data-uuid="{{uuid}}" data-doc-type="{{type}}"
+					        data-tooltip="{{#if unresolved}}{{localize "stonetop.gmToolkit.expeditions.entryGoneTip"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.entryOpenTip"}}{{/if}}"
+					        data-tooltip-direction="UP">{{name}}</button>
+					<button type="button" class="stonetop-gm-encounter-entry-remove"
+					        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.removeEntry"}}" data-tooltip-direction="UP">
+						<i class="fas fa-xmark"></i>
+					</button>
+					<input type="text" class="stonetop-gm-encounter-entry-note" value="{{note}}" maxlength="200"
+					       placeholder="{{localize "stonetop.gmToolkit.expeditions.entryNotePlaceholder"}}"
+					       aria-label="{{localize "stonetop.gmToolkit.expeditions.entryNoteLabel"}}">
+				</li>
+				{{/each}}
+			</ul>
+		</section>
+		{{/each}}
+
+		<p class="stonetop-gm-encounter-dropzone">{{localize "stonetop.gmToolkit.expeditions.dropHere"}}</p>
+
+		{{!-- THE FOOT: what to do with the card now, in the order the night goes. Run opens the
+		      walkthrough on this trip; the toggle beside it files the card away once the trip is
+		      over. A ROW, where the encounter card has one lone button, which is the whole reason
+		      the wrapper exists — the body is a flex COLUMN, so two buttons in it would stack.
+
+		      RUN IS THE PRIMARY ACT and wears the slate CTA, against the quiet outline the toggle
+		      keeps: they sit side by side, and if both were outlines the pair would read as two
+		      halves of one control.
+
+		      IT SAYS "OPEN" ONCE THE CARD IS BOUND. A trip minted by the first press keeps
+		      everything the GM then writes into the walkthrough, and the second press reaches that
+		      same trip — so a button still offering to start one would be lying about what it is
+		      about to do. `tripId` is what turns it, and it is set by the run itself
+		      (gm-expeditions-tab.js), never by hand. --}}
+		<div class="stonetop-gm-card-foot">
+			<button type="button" class="stonetop-gm-expedition-run"
+			        data-tooltip="{{#if tripId}}{{localize "stonetop.gmToolkit.expeditions.reopenTip"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.runTip"}}{{/if}}"
+			        data-tooltip-direction="UP">
+				<i class="fas fa-person-hiking"></i> {{#if tripId}}{{localize "stonetop.gmToolkit.expeditions.reopen"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.run"}}{{/if}}
+			</button>
+			<button type="button" class="stonetop-gm-encounter-used"
+			        data-tooltip="{{#if used}}{{localize "stonetop.gmToolkit.expeditions.markUnused"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.markUsed"}}{{/if}}"
+			        data-tooltip-direction="UP">
+				<i class="fas {{#if used}}fa-rotate-left{{else}}fa-check{{/if}}"></i> {{#if used}}{{localize "stonetop.gmToolkit.expeditions.markUnusedShort"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.markUsedShort"}}{{/if}}
+			</button>
+		</div>
+	</div>
+</li>
