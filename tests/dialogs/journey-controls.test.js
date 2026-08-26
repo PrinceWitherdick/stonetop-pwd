@@ -42,29 +42,77 @@ function root(present = {}) {
 }
 
 describe("what a click on a mark means", () => {
-	/** Every arm, recorded. */
-	function ran(data) {
-		const seen = { picked: null, tiered: null, sited: null };
-		journeyPick(data, {
-			showTier: tier => { seen.tiered = tier; },
-			markSite: uuid => { seen.sited = uuid; },
-			markPlace: (slug) => { seen.picked = slug; },
+	/**
+	 * Every arm, recorded — and the ORDER they ran in, which is half of what an edge arrow means.
+	 *
+	 * Awaited, because an arrow that names a place does two things and the second waits on the
+	 * first: writing the destination re-decides which map the panel is pinned to, so a zoom that
+	 * did not wait would be undone a tick later. See `journeyPick`.
+	 */
+	async function ran(data) {
+		const seen = { picked: null, tiered: null, sited: null, order: [] };
+		await journeyPick(data, {
+			showTier: tier => { seen.tiered = tier; seen.order.push("tier"); },
+			markSite: uuid => { seen.sited = uuid; seen.order.push("site"); },
+			// Resolved a turn late on purpose: the planner's own handlers are async, and a zoom
+			// that fired before the write landed is exactly the bug this ordering exists to stop.
+			markPlace: (slug) => {
+				seen.picked = slug;
+				seen.order.push("place");
+				return Promise.resolve();
+			},
 		});
 		return seen;
 	}
 
 	// Handed on rather than answered here: whether a place is the destination or a stop on a way
 	// being drawn is the planner's call, and it is tested there (_chooseJourneyPlace).
-	it("hands the place a hotspot names to the planner", () => {
-		expect(ran({ slug: "marshedge" }).picked).toBe("marshedge");
+	it("hands the place a hotspot names to the planner", async () => {
+		expect((await ran({ slug: "marshedge" })).picked).toBe("marshedge");
+	});
+
+	// A lettered pin carries no tier at all, so picking one never moves the map out from under the
+	// reader. Only the marks on the EDGE of a map say "off this paper".
+	it("leaves the map alone for a pin that is not on the edge", async () => {
+		expect((await ran({ slug: "marshedge" })).tiered).toBeNull();
 	});
 
 	// The "Steplands & Marshedge" arrow names no single place: it renders `data-slug=""` and only
 	// moves out a tier. Both surfaces have always read it that way.
-	it("moves out a tier for an arrow that names no place", () => {
-		const seen = ran({ slug: "", tier: "worlds-end" });
+	it("moves out a tier for an arrow that names no place", async () => {
+		const seen = await ran({ slug: "", tier: "worlds-end" });
 		expect(seen.tiered).toBe("worlds-end");
 		expect(seen.picked).toBeNull();
+	});
+
+	// AND THE OTHER TWO ARROWS BESIDE IT DO BOTH (user, 2026-08-25). "To Gordin's Delve" and "To
+	// Barrier Pass" name one place each, and used to pick it and stay put — leaving a GM who had
+	// just chosen Gordin's Delve looking at the one map it is not drawn on, while the third arrow
+	// in the same corner zoomed as asked. An arrow means "the road goes on, that way", so following
+	// it goes there.
+	it("picks the place an edge arrow names AND moves out to the map that draws it", async () => {
+		const seen = await ran({ slug: "gordins-delve", tier: "worlds-end" });
+		expect(seen.picked).toBe("gordins-delve");
+		expect(seen.tiered).toBe("worlds-end");
+	});
+
+	// The order is the point, not an accident of how it is written: `_setJourneyPlace` re-pins the
+	// panel's tier as it writes, and on a trip out of Stonetop it pins it to the VICINITY, since the
+	// Vicinity draws both ends — the far one being this very arrow. Zoom first and the pick undoes
+	// it a tick later with nothing on screen to say why.
+	it("writes the pick before it moves the map, so the write cannot undo the move", async () => {
+		expect((await ran({ slug: "gordins-delve", tier: "worlds-end" })).order)
+			.toEqual(["place", "tier"]);
+	});
+
+	// The Lygos arrow points past every map there is: its tier is `beyond`, which is a GROUP in the
+	// destination list rather than a picture. It needs no arm of its own here, because both
+	// surfaces' `showTier` refuses a tier no map draws — but it must still reach one, or the arrow
+	// that is the only thing in the books pointing at Lygos would stop picking it.
+	it("still hands an arrow pointing past every map to both handlers", async () => {
+		const seen = await ran({ slug: "lygos", tier: "beyond" });
+		expect(seen.picked).toBe("lygos");
+		expect(seen.tiered).toBe("beyond");
 	});
 
 	// A SITE IS A PLACE ON THE WAY (user, 2026-08-24), and no longer a link to a journal. Tapping
@@ -72,8 +120,8 @@ describe("what a click on a mark means", () => {
 	// could not be part of the journey drawn across it. It goes to the planner now, exactly as a
 	// lettered place does — but through its own arm, because a site has no slug the travel table
 	// knows and the planner has to look its spot up rather than solve for it.
-	it("hands a site to the planner as a place on the way, not as a write-up to open", () => {
-		const seen = ran({ siteUuid: "JournalEntry.a.JournalEntryPage.b" });
+	it("hands a site to the planner as a place on the way, not as a write-up to open", async () => {
+		const seen = await ran({ siteUuid: "JournalEntry.a.JournalEntryPage.b" });
 		expect(seen.sited).toBe("JournalEntry.a.JournalEntryPage.b");
 		expect(seen.picked).toBeNull();
 		expect(seen.tiered).toBeNull();
@@ -89,14 +137,18 @@ describe("what a click on a mark means", () => {
 		expect(seen.site).toBe(true);
 	});
 
-	it("does nothing at all for a mark that names nothing", () => {
-		expect(ran({})).toEqual({ picked: null, tiered: null, sited: null });
+	it("does nothing at all for a mark that names nothing", async () => {
+		expect(await ran({})).toEqual({ picked: null, tiered: null, sited: null, order: [] });
 	});
 
 	// The popout hands this the whole dataset of whatever matched its control selector, which can
 	// include a mark this surface has no handler for.
-	it("stays quiet when the handler for a mark was not supplied", () => {
-		expect(() => journeyPick({ siteUuid: "x" }, { showTier: () => {} })).not.toThrow();
+	// AWAITED rather than merely called, because this returns a promise now: a throw from a missing
+	// handler comes back as a rejection, and an un-awaited one would pass this test while failing
+	// the run somewhere else entirely.
+	it("stays quiet when the handler for a mark was not supplied", async () => {
+		await expect(journeyPick({ siteUuid: "x" }, { showTier: () => {} })).resolves.toBeUndefined();
+		await expect(journeyPick({ slug: "marshedge" }, { showTier: () => {} })).resolves.toBeUndefined();
 	});
 });
 

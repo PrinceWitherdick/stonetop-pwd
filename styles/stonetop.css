@@ -26876,6 +26876,12 @@ th:has(> .stonetop-roll-table-btn) {
    push this one back out to the longest gloss. */
 .stonetop-guide-moves-sidebar .stonetop-sidebar-body {
 	min-width: 0;
+	/* And the top gutter the shared body has no reason to carry. On the character sheet
+	   this rail starts below the tab strip, which already holds it off the top edge; in
+	   the dialog it butts straight against the window content and "Exploration moves"
+	   sat on the frame. 12px is the TOC rail's own top padding (`.stonetop-guide-toc`,
+	   above), so the two bookends start their first line on the same baseline. */
+	padding-top: 12px;
 }
 
 /* Collapsed, the fixed width has to yield to the 14px strip, which is also one class
@@ -30539,6 +30545,108 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: 12px; font-size: var(--st-fs-sm); color: var(--st-text-muted); font-style: italic; text-align: center;
 }
 
+/* ── Whoever came back, setting out with the rest ─────────────────────────────
+   A Revenant, Ghost or Thrall still outfits, still carries, still trips a load-gated move —
+   so they keep their row rather than being dropped from it (the DEAD are dropped, in the
+   readout's own builder: nothing on this panel is a question you can ask a corpse). What
+   the row says instead is that they are other, in the one language the system already uses
+   for it: their sheet is black, their chat cards are black, and their line on the roster is
+   black too. The insert names itself beside them, because at row height the black alone
+   cannot tell the three apart — the same reason the sheet earned its Dead tag.
+
+   Same recipe as the past-death sheet: the row REDEFINES the palette tokens its own
+   furniture already reads, so the pill, the pips, the ◇ count, the gated-move chips and the
+   overload note all turn over without one of them being named here. The values are that
+   sheet's, deliberately — a Ghost's row and a Ghost's sheet are two views of one character
+   and must not be tuned apart.
+
+   Placed after the `.lvl-*` row rules on purpose: `.row.is-undead` ties with `.row.lvl-over`
+   at (0,3,0), and later is what wins. The overload wash rides as its own layer variable so
+   an overloaded Revenant keeps that signal instead of the two backgrounds fighting. */
+.stonetop-expedition-dialog .stonetop-exp-load-row.is-undead {
+	color-scheme: dark;
+	--st-text:           hsl(38 22% 88%);
+	--st-text-body:      hsl(38 20% 84%);
+	--st-text-secondary: hsl(38 12% 71%);
+	--st-text-muted:     hsl(0 0% 58%);
+	--st-text-faint:     hsl(0 0% 44%);
+	--st-green-text:     hsl(140 32% 66%);
+	--st-green-bg:       hsla(140, 35%, 30%, 0.32);
+	--st-green-border:   hsl(140 30% 50%);
+	--st-red-text:       hsl(6 62% 70%);
+	--st-red-bg:         hsla(6, 45%, 32%, 0.35);
+	--st-red-border:     hsl(6 45% 46%);
+	--st-gold-text:      hsl(40 55% 68%);
+	/* The neutral default, for a kind the three rules below have never heard of. Each kind
+	   overrides the INK only; the tint is derived from it here so the pair can't drift, and at
+	   row height it is carried harder than the 5% a whole sheet is washed with. */
+	--st-past-death-ink:  hsl(0 0% 52%);
+	--st-past-death-wash: color-mix(in srgb, var(--st-past-death-ink) 12%, transparent);
+	--st-load-row-wash:   transparent;
+	color: var(--st-text-body);
+	background:
+		linear-gradient(var(--st-load-row-wash), var(--st-load-row-wash)),
+		linear-gradient(var(--st-past-death-wash), var(--st-past-death-wash)),
+		linear-gradient(var(--st-black-lift), var(--st-black-lift)),
+		hsl(0 0% 12%);
+	border-bottom-color: rgba(255, 255, 255, 0.10);
+}
+/* The three hues the sheet and the chat cards read, so all three surfaces agree about what
+   brought them back: grave-blue, bile-moss, spectral violet (see "the sheet of someone who
+   came back"). Ties with the base rule at (0,3,0) and sits after it. */
+.stonetop-expedition-dialog .stonetop-exp-load-row.is-undead--revenant { --st-past-death-ink: hsl(210 40% 55%); }
+.stonetop-expedition-dialog .stonetop-exp-load-row.is-undead--thrall   { --st-past-death-ink: hsl(96 30% 52%); }
+.stonetop-expedition-dialog .stonetop-exp-load-row.is-undead--ghost    { --st-past-death-ink: hsl(283 34% 58%); }
+/* Overloaded is the one band that paints the row itself, and it has to survive the black:
+   the flipped red above is already a translucent wash, so it goes on as the top layer. */
+.stonetop-expedition-dialog .stonetop-exp-load-row.is-undead.lvl-over { --st-load-row-wash: var(--st-red-bg); }
+/* The face is left alone, and deliberately. Painting the initial disc in the insert's ink was
+   tried and dropped: the disc is the fourth place a row says the LOAD band (with the edge, the
+   pips and the pill), so a Thrall's bile-moss green sat at the head of an overloaded red row
+   reading as "light". The insert is already said by the black and by the tag; the band is the
+   thing a GM is scanning this column for. */
+/* Hairlines drawn in black ink are gone on black paper: the empty ◇ outline and the neutral
+   pill's edge are both invisible rather than merely faint. Only those two — every coloured
+   edge on the row comes down through the tokens above. */
+.stonetop-expedition-dialog .stonetop-exp-load-row.is-undead .stonetop-exp-load-pip { border-color: rgba(255, 255, 255, 0.30); }
+.stonetop-expedition-dialog .stonetop-exp-load-row.is-undead .stonetop-exp-load-pill.normal { border-color: rgba(255, 255, 255, 0.25); }
+.stonetop-expedition-dialog .stonetop-exp-load-row.is-undead .stonetop-exp-load-move { border-color: rgba(255, 255, 255, 0.20); }
+.stonetop-expedition-dialog .stonetop-exp-load-row.is-undead .stonetop-exp-load-move.on  { border-color: var(--st-green-border); }
+.stonetop-expedition-dialog .stonetop-exp-load-row.is-undead .stonetop-exp-load-move.off { border-color: var(--st-red-border); }
+/* Which of the three, said in words. Sits where a follower's tag sits and is built like it,
+   so a row can wear either without the name line changing shape. */
+.stonetop-expedition-dialog .stonetop-exp-load-undead {
+	font-family: var(--font-stonetop); font-weight: 400; font-size: var(--st-fs-2xs);
+	text-transform: uppercase; letter-spacing: 0.04em;
+	color: var(--st-past-death-ink);
+	border: 1px solid color-mix(in srgb, var(--st-past-death-ink) 55%, transparent);
+	background: color-mix(in srgb, var(--st-past-death-ink) 16%, transparent);
+	border-radius: var(--st-radius-sm); padding: 0 4px;
+}
+/* The chip says the same thing at pill size, where there is no room to say it in words: the
+   ink is the edge and the fill, and the black is what carries "other" across the pick line.
+   The base chip's own fill and border are (0,2,0), and `is-out` is (0,3,0) — a chip both dark
+   and toggled off must keep the dashed strike, so this only takes what those two do not:
+   the paper and the ink. */
+.stonetop-expedition-dialog .stonetop-exp-load-chip.is-undead {
+	--st-past-death-ink: hsl(0 0% 52%);
+	color: hsl(38 20% 84%);
+	background: hsl(0 0% 14%);
+	border-color: color-mix(in srgb, var(--st-past-death-ink) 60%, transparent);
+}
+.stonetop-expedition-dialog .stonetop-exp-load-chip.is-undead--revenant { --st-past-death-ink: hsl(210 40% 55%); }
+.stonetop-expedition-dialog .stonetop-exp-load-chip.is-undead--thrall   { --st-past-death-ink: hsl(96 30% 52%); }
+.stonetop-expedition-dialog .stonetop-exp-load-chip.is-undead--ghost    { --st-past-death-ink: hsl(283 34% 58%); }
+.stonetop-expedition-dialog .stonetop-exp-load-chip.is-undead .tick { color: var(--st-past-death-ink); }
+.stonetop-expedition-dialog .stonetop-exp-load-chip.is-undead:hover { background: hsl(0 0% 20%); }
+/* Toggled off AND other: the strike and the dashed edge are the state, so they win the edge
+   back from the ink, and the label goes to the muted grey the rest of the panel uses for it.
+   (0,4,0), so it sits above both the `is-out` rule and the undead one. */
+.stonetop-expedition-dialog .stonetop-exp-load-chip.is-undead.is-out {
+	color: hsl(0 0% 55%); border-color: rgba(255, 255, 255, 0.28);
+}
+.stonetop-expedition-dialog .stonetop-exp-load-chip.is-undead.is-out .tick { color: hsl(0 0% 45%); }
+
 /* ── Run an Expedition · Requisition step · the steading's assets ──────────────
    The same card chrome as the Party load readout above (head, hint, list, foot), because
    the two panels sit on adjacent steps of one walkthrough and a second card idiom on the
@@ -31272,6 +31380,17 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: 0; text-align: left;
 	font-size: var(--st-fs-xs); color: var(--st-text-body);
 	border: none; background: none;
+}
+/* ONE HOVER TO A ROW, and it is the pill's. Core's V1-compatibility layer paints
+   `box-shadow: 0 0 5px var(--color-shadow-primary)` on every `.app button:hover` — slate here rather
+   than red, because our window roots re-point the glow tokens, but still a second lit shape drawn
+   INSIDE the <li> that just lit up around it (user, 2026-08-25). The pill is the hover; the button
+   inside it is furniture. Background and border are already unpinned on the base rule above and only
+   restated here so a hovered row cannot pick either back up. Ink is deliberately untouched: the
+   `.is-needing-start` rule below turns the name green on hover and that is the row talking. */
+.stonetop-journey .stonetop-journey-row:hover,
+.stonetop-journey .stonetop-journey-row:focus {
+	box-shadow: none; outline: none; border: none; background: none;
 }
 .stonetop-journey .stonetop-journey-row .j-name {
 	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

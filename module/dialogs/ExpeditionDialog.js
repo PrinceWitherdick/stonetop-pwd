@@ -4,7 +4,7 @@ import { crewExists } from "../utils/crew.js";
 import { sign, rollSeasonsCard } from "../utils/roll-engine.js";
 import { getStonetopSteadingActor, isSteadingActor } from "../utils/world.js";
 import { getSetting, setWorldSetting } from "../settings.js";
-import { escHtml, decodeEntities, stripHtmlToText } from "../utils/strings.js";
+import { capitalizeFirst, escHtml, decodeEntities, stripHtmlToText } from "../utils/strings.js";
 import { portraitOrNone, documentPortraitFrame } from "../utils/portrait-frame.js";
 import { wireAvatarPreview, removeAvatarPreview } from "../utils/avatar-preview.js";
 import { warn } from "../utils/logger.js";
@@ -26,6 +26,9 @@ import { StonetopSteading } from "../actors/steading/StonetopSteading.js";
 import { openReturnTriumphant } from "../actors/steading/return-triumphant.js";
 import { assetTakenLabel } from "../utils/requisition-asset.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
+// Who on the roster is past the Door: the dead don't outfit, and the three who came back set
+// out on the same black their sheet wears.
+import { actorPastDeathKind } from "../actors/character/deaths-door-actor.js";
 import { deriveLoadLevel, LOAD_LEVEL_LIMITS } from "../utils/load.js";
 import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
 import { renderTemplate } from "../utils/foundry-compat.js";
@@ -74,6 +77,13 @@ const ANSWERS_SETTING = "expeditionAnswers";
 // `{{> }}` in its template), so the partial-registration sweep in stonetop.js cannot be the only
 // place the path is written down.
 const JOURNEY_PINS_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-pins.hbs";
+
+// The scene-route refusals that mean "the reader is standing on the wrong map" rather than
+// "this cannot be drawn". Each of these is answered by going to the map the journey belongs to
+// (see `_drawOnItsOwnMap`); the rest — a picture trimmed to the wrong shape, a scene with no
+// dimensions, a trip with nowhere to go — are faults walking somewhere else would not mend, and
+// keep their words. The strings are `sceneRouteCheck`'s own reasons, from utils/scene-route.js.
+const SCENE_SWITCH_REFUSALS = new Set(["no-scene", "not-a-map", "wrong-map", "off-map"]);
 
 // The Outfit step's party-load block, for the same reason: it is redrawn on its own whenever a
 // sheet under it changes (see `_refreshLoadReadout`), not only through the `{{> }}` in the
@@ -124,6 +134,21 @@ function _offHooks(registered) {
  */
 function _carriesLoad(actor) {
 	return actor?.type === "character" || isSteadingActor(actor);
+}
+
+/**
+ * The tag a returned PC wears on their load row: `{ kind, label }`, or null for the living.
+ *
+ * The black alone can't say WHICH of the three came back — the same reason the sheet earned its
+ * Dead tag — and on a roster the GM is reading to plan a trip, "Ghost" is the word that changes
+ * what they ask for. The label is the insert's own name off the snapshot, so a world that renamed
+ * one in the pack sees its name here; the slug, capitalised, is the fallback for a row whose
+ * snapshot didn't build (they still get the tag, since the flag is what says they are one).
+ */
+function _undeadTag(kind, snap) {
+	if (!kind) return null;
+	const name = snap?.postDeathInsert?.activeInsert?.name;
+	return { kind, label: name || capitalizeFirst(kind) };
 }
 
 /**
@@ -1726,14 +1751,15 @@ export class ExpeditionDialog extends StepperDialog {
 			showing,
 			label: localize(`stonetop.expedition.route.${showing ? "take" : "draw"}`),
 			icon: showing ? "fa-eraser" : "fa-map-location-dot",
-			// THE DRAW TIP NAMES THE SCENE THEY HAVE TO BE STANDING ON, because the one thing this
-			// button does that surprises people is that it writes on the CANVAS, not on the picture
-			// in this window. A GM reading the Vicinity here with the village scene open presses it,
-			// gets a refusal, and has no way of knowing from the label that the two were ever
-			// different things. `tierDrawing` is the same answer `sceneRouteCheck` refuses with, so
-			// the warning after the press and the hint before it cannot name two different maps.
-			// Null when no one map draws both ends: there is no scene to send them to, and the
-			// fallback says what is wanted rather than pretending to know its name.
+			// THE DRAW TIP NAMES THE SCENE THE PRESS LANDS ON, because the one thing this button
+			// does that surprises people is that it writes on the CANVAS, not on the picture in
+			// this window. A GM reading the Vicinity here with the village scene open presses it
+			// and the canvas moves under the table (`_drawOnItsOwnMap`), which is the right
+			// outcome and still a startling one to meet unannounced. `tierDrawing` is the same
+			// answer that switch is made on, so the tip before the press and the map that comes up
+			// after it cannot come to name two different things. Null when no one map draws both
+			// ends: there is nowhere to send them, and the fallback says what is wanted rather
+			// than pretending to know its name.
 			//
 			// Only the draw side says it. Once the route IS showing, the reader is by definition on
 			// the scene it went onto, and telling them to go there would be telling them nothing.
@@ -1834,9 +1860,11 @@ export class ExpeditionDialog extends StepperDialog {
 	 * World's End while the table is still looking at the Vicinity, and most journeys are drawable
 	 * on either map. Refusing because the two disagreed would be refusing something that works.
 	 *
-	 * Every refusal says which map WOULD take it, because that is the only part of a "no" the
-	 * reader can act on. The check itself is in utils/scene-route.js, where it can be tested
-	 * without a canvas.
+	 * AND WHERE THE SCENE THEY ARE ON CANNOT TAKE IT, it goes to the one that can rather than
+	 * refusing: see `_drawOnItsOwnMap`. What is left of the refusals is the handful no amount of
+	 * walking to another map would fix, and each of those still says which map WOULD take it,
+	 * because that is the only part of a "no" the reader can act on. The check itself is in
+	 * utils/scene-route.js, where it can be tested without a canvas.
 	 */
 	async _putRouteOnScene() {
 		const scene = globalThis.canvas?.scene ?? null;
@@ -1854,8 +1882,11 @@ export class ExpeditionDialog extends StepperDialog {
 			return;
 		}
 
-		const check = sceneRouteCheck(scene, this._journeyRoute());
+		const route = this._journeyRoute();
+		const check = sceneRouteCheck(scene, route);
 		if (!check.ok) {
+			// The wrong map under them is not a refusal any more, it is a scene switch.
+			if (await this._drawOnItsOwnMap(check, route, pick)) return;
 			const hasScene = !!posterSceneFor(check.wanted, game.scenes ?? []);
 			ui.notifications?.warn(sceneRouteRefusal(check, { hasScene }));
 			return;
@@ -1874,6 +1905,58 @@ export class ExpeditionDialog extends StepperDialog {
 		// panel twice for one press, and would still leave the case that matters uncovered — a
 		// SECOND GM drawing the route from their own walkthrough, which this client only ever
 		// hears about as the very same hook.
+	}
+
+	/**
+	 * The refusal that is really "you are standing on the wrong map": go to the right one and draw
+	 * the route there.
+	 *
+	 * WHY THE BUTTON MOVES THE TABLE RATHER THAN SENDING THE GM OFF TO DO IT. Three of the five
+	 * refusals amount to the same fact — this journey belongs to the OTHER poster map — and the
+	 * GM's answer to all three was always the same two gestures: open that scene, press the button
+	 * again. The route already names the one map that can draw it (`tierDrawing`, the same answer
+	 * the refusal was built from), and the world either has a scene for that map or it does not.
+	 * Where it does, there is nothing left for the reader to decide.
+	 *
+	 * ONLY THE REFUSALS THAT ARE ABOUT THE SCENE UNDER THE READER. A picture trimmed to the wrong
+	 * shape or a scene with no dimensions is a fault in the map they are already on and walking
+	 * somewhere else neither fixes nor explains it, so those still get their words. So does a
+	 * journey with nowhere to go.
+	 *
+	 * AND IT VERIFIES BEFORE IT MOVES. The other map is asked the whole question first, on its own
+	 * document rather than on the canvas, so a world whose copy of that scene is itself unusable
+	 * yanks nobody's canvas around on the way to the same "no" — the original refusal, naming the
+	 * map that would have taken it, is still the honest answer.
+	 *
+	 * @returns {Promise<boolean>} whether the route went down somewhere else.
+	 */
+	async _drawOnItsOwnMap(check, route, pick) {
+		if (!SCENE_SWITCH_REFUSALS.has(check.reason)) return false;
+		// `no-scene` is the one branch that refuses before it has worked out which map is wanted
+		// (there is no scene to name one against), so it is asked of the route directly.
+		const wanted = check.wanted ?? tierDrawing(route);
+		if (!wanted) return false;
+
+		const target = posterSceneFor(wanted, game.scenes ?? []);
+		if (!target || target.id === globalThis.canvas?.scene?.id) return false;
+		const there = sceneRouteCheck(target, route);
+		if (!there.ok) return false;
+
+		// THE CANVAS FIRST, then the flag: the line appears on a map the table is already looking
+		// at rather than landing on one that swings into view a moment later carrying it. Both
+		// orders end in the same place — the overlay paints from the flag on every client, and
+		// redraws on `canvasReady` as much as on the update — so this is only about what the room
+		// sees. `view` is optional so a world running with the canvas switched off still writes.
+		await target.view?.();
+		const where = await showRouteOnScene(target, pick);
+		// SAYING THE CANVAS MOVED, and not only where the line went. A scene switch is the loudest
+		// thing this button can do and the one the GM did not ask for in so many words, so the
+		// notification names the map it brought up rather than reading as though they had been on
+		// it all along.
+		ui.notifications?.info(where
+			? format("stonetop.expedition.route.movedPlaced", { place: where, map: there.tierName })
+			: format("stonetop.expedition.route.movedPlacedDrawn", { map: there.tierName }));
+		return true;
 	}
 
 	// ── Sites on the map ────────────────────────────────────────────────────────
@@ -2919,22 +3002,36 @@ export class ExpeditionDialog extends StepperDialog {
 	// the current load switches off) and each PC's in-party custom followers (band from
 	// their ✓ gear marks). The per-trip roster — who's been toggled out — lives on the
 	// current expedition entry, so switching trips shows that trip's party.
+	//
+	// THE DEAD ARE NOT OFFERED. A character who stepped through the Last Door packs nothing
+	// and carries nothing, so they are dropped from the chips as well as the rows rather than
+	// shown as someone the GM could still tick onto the trip. Whoever CAME BACK is a different
+	// answer: a Revenant, Ghost or Thrall walks out with the party and their load matters as
+	// much as anyone's, so they stay — on the black their sheet and their chat cards already
+	// wear, because what is setting out is worth saying plainly on a list of who is setting out.
+	// The party watch redraws this block on `updateActor`, so a death mid-window drops them
+	// without the GM touching anything.
 	async _buildLoadReadout() {
 		const out = this._currentExpedition()?.partyOut ?? {};
-		const pcs = getPlayerCharacters();
+		// The kind is read once per PC here and handed down: `_pcRow` would otherwise re-read
+		// the same two flags off the same actor a moment later.
+		const pcs = getPlayerCharacters()
+			.map(actor => ({ actor, undeadKind: actorPastDeathKind(actor) }))
+			.filter(({ undeadKind }) => undeadKind !== "dead");
 		if (!pcs.length) return { chips: [], hasRows: false, rows: [], summary: null };
 
-		const chips = pcs.map(actor => ({ id: actor.id, name: actor.name, on: !out[actor.id] }));
+		const chips = pcs.map(({ actor, undeadKind }) =>
+			({ id: actor.id, name: actor.name, on: !out[actor.id], undeadKind }));
 
 		// Only on-trip PCs need a snapshot, and each is a full character build — run them
 		// concurrently rather than awaiting one heavy build per PC in series (this re-runs
 		// on every Outfit render, including each party-toggle click).
-		const onTrip = pcs.filter(actor => !out[actor.id]);
-		const snaps  = await Promise.all(onTrip.map(actor =>
+		const onTrip = pcs.filter(({ actor }) => !out[actor.id]);
+		const snaps  = await Promise.all(onTrip.map(({ actor }) =>
 			Promise.resolve(actor.typedActor?.buildSnapshot?.()).catch(() => null)));
 
 		const rows = [];
-		onTrip.forEach((actor, i) => {
+		onTrip.forEach(({ actor, undeadKind }, i) => {
 			const snap   = snaps[i];
 			const outfit = snap?.inventory?.outfit ?? {};
 			const load   = outfit.load ?? snap?.inventory?.load ?? null;
@@ -2942,7 +3039,7 @@ export class ExpeditionDialog extends StepperDialog {
 			const tier   = load?.selected ?? null;
 			const over   = !!load?.loadLevelOverloaded;
 
-			rows.push(this._pcRow(actor, snap, tier, over, Number(load?.totalMarks) || 0, limits));
+			rows.push(this._pcRow(actor, snap, tier, over, Number(load?.totalMarks) || 0, limits, undeadKind));
 			for (const fol of this._partyFollowersOf(actor)) rows.push(fol);
 		});
 
@@ -2967,7 +3064,9 @@ export class ExpeditionDialog extends StepperDialog {
 
 	// A PC row: avatar, name/playbook, the diamond track, band pill, ◇ count, any
 	// load-gated moves, and (when overloaded, or carrying a load bonus) a note.
-	_pcRow(actor, snap, tier, over, marks, limits) {
+	// `undeadKind` is the insert they came back wearing, if any: it darkens the row and
+	// names itself beside them, since a Ghost on the list is worth reading as a Ghost.
+	_pcRow(actor, snap, tier, over, marks, limits, undeadKind = null) {
 		const band = tier || "light";           // the empty-load default, shared by both branches below
 		const key = over ? "over" : band;
 		// Whatever raised this PC's caps, by name: Pack Horse for a Ranger, but a custom or
@@ -2986,6 +3085,7 @@ export class ExpeditionDialog extends StepperDialog {
 				: null,
 			note:       over ? "risks exhaustion, accident, injury" : null,
 			noteDanger: over,
+			undead:     _undeadTag(undeadKind, snap),
 		});
 	}
 
@@ -3087,6 +3187,9 @@ export class ExpeditionDialog extends StepperDialog {
 			loadBonus:  null,
 			note:       null,
 			noteDanger: false,
+			// { kind, label } for a PC who came back wearing an insert; null for everyone else,
+			// followers included — nothing brings a follower back.
+			undead:     null,
 			...extras,
 		};
 		// The quiet second line under the name on the enlarged-portrait card: a PC's playbook,
