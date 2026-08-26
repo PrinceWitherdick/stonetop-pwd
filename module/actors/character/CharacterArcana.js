@@ -10,6 +10,7 @@ import { OutfitItemBuilder } from "../../model/OutfitItem.js";
 import { majorArcanaImg, isMajorArcanumItem, arcanumCardImg } from "../../arcana-icons.js";
 import { arcanaSummonFollowers } from "../../data/arcana-summons.js";
 import { isCarriedArcanumItem } from "../../data/arcana-facets.js";
+import { findArcanumMove, markArcanumMoveNames } from "../../data/arcana-moves.js";
 import { centerArcanumTracks } from "../../utils/glyphs.js";
 import { stonetopChatCard } from "../../utils/chat.js";
 
@@ -265,7 +266,11 @@ export class CharacterArcana {
 					item.back.move.description)
 				: null;
 
-			const backDesc = _processSideDescription(item.back.description, item.slug, "back", arcanaBoxes);
+			// The card's mysteries are moves, so their NAMES render as clickable handles before the
+			// marker pass runs (see data/arcana-moves.js) — the wrap adds no glyphs, so the □/○ each
+			// side indexes are untouched by it.
+			const backDesc = _processSideDescription(
+				markArcanumMoveNames(item.back.description, item.slug), item.slug, "back", arcanaBoxes);
 
 			// Surface the back's "Consequences" section onto the front, but ONLY for cards whose
 			// front text points at it ("mark a consequence (see reverse)"). Those cards trigger
@@ -318,6 +323,25 @@ export class CharacterArcana {
 		const major = new ArcanaSectionSnapshot("Major Arcana", allItems.filter(i => i.major));
 		const minor = new ArcanaSectionSnapshot("Minor Arcana", allItems.filter(i => !i.major));
 		return new ArcanaSnapshot(minor, major);
+	}
+
+	/**
+	 * One move printed on a card's back, by its parsed slug — the record behind a clicked move
+	 * name on the arcana tab. `learned` reads the move's own □: an un-marked mystery is still
+	 * readable (its name posts it to chat) but is not yet a move this character can roll, which
+	 * is the line an un-owned playbook move sits on too.
+	 */
+	async getArcanumMove(slug, moveSlug) {
+		const item = await this.getArcanum(slug);
+		if (!item) return null;
+		const move = findArcanumMove(item.back?.description ?? "", moveSlug);
+		if (!move) return null;
+		const boxes = this._flags.getFlag("boxes") ?? {};
+		return {
+			...move,
+			cardTitle: item.back?.title ?? item.front?.title ?? "",
+			learned:   move.boxIndex == null || !!boxes[`${slug}:back:${move.boxIndex}`],
+		};
 	}
 
 	/** The resolved {@link MinorArcanum} for a slug (pack or world), or null. */

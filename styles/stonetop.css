@@ -513,6 +513,13 @@ body {
 	order: 10;
 }
 
+/* Both halves of an affirmative PAIR (an arcanum move offers Roll and Send to chat)
+   claim the `margin-right: auto` above, which would split them across the footer
+   instead of keeping them together on the left. Only the leading one gets the spacer. */
+.vtt .dialog .dialog-buttons [data-button="roll"] + [data-button="post"] {
+	margin-right: 0;
+}
+
 /* Slate primary look for the footer buttons of our own native Dialog popups — the
    ones we tag `.stonetop` (guided moves like Struggle as One, Recover, the stat
    picker, …) — so they match the custom Application modals (Outfit, Level Up). Scoped
@@ -7807,6 +7814,34 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 
 .stonetop-arcanum-move-trigger {
 	margin: 6px 0 2px;
+}
+
+/* A mystery's SHOUTED name on a card's back is a move handle: click it to open the
+   move or post it, exactly as a move's name on the Moves tab. Wrapped into the card's
+   own prose at snapshot time (module/data/arcana-moves.js), so it lives inside the
+   authored <strong> and must not restate the weight it already inherits. */
+.stonetop-arcanum-move-name {
+	cursor: pointer;
+}
+
+.stonetop-arcanum-move-name:hover,
+.stonetop-arcanum-move-name:focus-visible {
+	text-decoration: underline;
+}
+
+/* The move's printed text inside its dialog. Same reading rhythm as the card body it
+   was lifted from, kept off the dialog's own trigger line (which it replaces). */
+.stonetop-arcanum-move-body {
+	margin-bottom: 8px;
+}
+
+.stonetop-arcanum-move-body p { margin: 0 0 6px; }
+.stonetop-arcanum-move-body ul { margin: 0 0 6px; padding-left: 1.2em; }
+
+/* What was ticked in the dialog, listed under the move's text on the posted card. */
+.stonetop-arcanum-move-picks {
+	margin: 6px 0 0;
+	padding-left: 1.2em;
 }
 
 /* Standalone mark/charge tracks (◇◇◇, ○○○○) sit on their own centered line, as on

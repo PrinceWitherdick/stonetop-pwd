@@ -77,7 +77,7 @@ import {
 	showBlessedMarks, BARKSKIN, TRACKLESS_STEP, SHARED_SOULS, AMULETS_TALISMANS, WARDS_BINDINGS,
 } from "./blessed-marks.js";
 import {BlessedMarksDialog} from "./dialogs/BlessedMarksDialog.js";
-import {wrapGlyphTextContainers} from "../../utils/glyphs.js";
+import {wrapGlyphTextContainers, wrapStonetopGlyphsInEl} from "../../utils/glyphs.js";
 import {StonetopAutocomplete} from "../../utils/autocomplete.js";
 import {canAuthorCustomMoves, canCreateArcana} from "../../utils/authoring-gates.js";
 import {enrichMoveRefsInEl, fetchMoveRef} from "../../utils/move-refs.js";
@@ -4769,6 +4769,25 @@ export function createStonetopCharacterSheetClass(Base) {
 				}).catch(err => console.error("Stonetop | could not post the arcanum card", err));
 			}, true);
 
+			// A mystery on a card's back is a move, so its NAME behaves like a move's name on the
+			// moves tab: click it to open the move (options to tick, dice when it rolls), or to
+			// post it to chat when there is nothing to choose. The handles are wrapped into the
+			// card's own prose at snapshot time — see data/arcana-moves.js.
+			html[0].addEventListener("click", ev => {
+				const handle = ev.target.closest(".stonetop-arcanum-move-name");
+				if (!handle) return;
+				ev.stopPropagation();
+				this._onArcanumMoveName(handle.dataset.arcanumSlug, handle.dataset.moveSlug);
+			}, true);
+			html[0].addEventListener("keydown", ev => {
+				if (ev.key !== "Enter" && ev.key !== " ") return;
+				const handle = ev.target.closest?.(".stonetop-arcanum-move-name");
+				if (!handle) return;
+				ev.preventDefault();
+				ev.stopPropagation();
+				this._onArcanumMoveName(handle.dataset.arcanumSlug, handle.dataset.moveSlug);
+			}, true);
+
 			html[0].addEventListener("click", ev => {
 				const btn = ev.target.closest(".stonetop-arcanum-identify-btn");
 				if (!btn) return;
@@ -5682,6 +5701,29 @@ export function createStonetopCharacterSheetClass(Base) {
 			return { name, guide };
 		}
 
+		/**
+		 * The guide behind an arcanum's back-side move, so a mystery opens the same dialog a
+		 * playbook move does. `bodyHtml` carries the move's own authored prose (a playbook guide
+		 * carries a hand-written `trigger` line instead), the card's options become the tickable
+		 * list, and `card` is what a "Send to chat" or a roll posts. Rolling is gated on the
+		 * move's □ being marked — an unlearned mystery reads, it does not yet act.
+		 */
+		_arcanumMoveGuide(move) {
+			// The options list renders as ticks below, so drop the printed copy of it from the
+			// body rather than showing the same list twice.
+			const body = move.picks.length && move.listHtml
+				? move.description.replace(move.listHtml, "")
+				: move.description;
+			return {
+				bodyHtml:   body,
+				card:       move.description,
+				picks:      move.picks,
+				picksLabel: move.picksLabel,
+				roll:       (move.learned && this.isEditable) ? move.roll : null,
+				post:       "Send to chat",
+			};
+		}
+
 		_openGuidedCharacterMove({ name, guide }, rollable) {
 			const fieldsHtml = (guide.fields ?? []).map(field => `<label class="stonetop-homestead-field">
 				<span>${_esc(field.label)}</span>
@@ -5741,24 +5783,66 @@ export function createStonetopCharacterSheetClass(Base) {
 						const prompted = await this._promptRollOptions({ title: name });
 						if (!prompted) return;
 						await this._postGuidedCharacterMove(name, guide, html);
-						await this._stonetopCharacter.onDirectStatRoll(stat, { moveName: name, ...prompted });
+						// "roll +nothing" (the Demonhide Cloak's The Flesh Remembers) is a flat 2d6:
+						// no stat stands behind it, so the value is spelled out rather than looked up.
+						const flat = stat === "nothing" ? { statValue: 0 } : {};
+						await this._stonetopCharacter.onDirectStatRoll(stat, { moveName: name, ...flat, ...prompted });
 					},
+				};
+			}
+
+			// Declared after the roll so it sits to its right (the shared dialog-button rules
+			// order affirmatives by source, cancel last). An arcanum move with options but no
+			// dice would otherwise offer nothing but Cancel; one that DOES roll still wants a
+			// way to read itself out to the table without spending the roll.
+			if (guide.post) {
+				buttons.post = {
+					label: guide.post,
+					callback: html => this._postGuidedCharacterMove(name, guide, html),
 				};
 			}
 
 			new Dialog({
 				title: name,
 				content: `<form class="stonetop-homestead-dialog stonetop-character-move-dialog">
-					<p class="stonetop-homestead-trigger"><em>${_esc(guide.trigger)}</em></p>
+					${guide.bodyHtml
+						? `<div class="stonetop-arcanum-move-body">${guide.bodyHtml}</div>`
+						: `<p class="stonetop-homestead-trigger"><em>${_esc(guide.trigger)}</em></p>`}
 					${fieldsHtml || statPickerHtml ? `<div class="stonetop-homestead-fields">${fieldsHtml}${statPickerHtml}</div>` : ""}
 					${resultsHtml}
 					${picksHtml}
 					${guide.note ? `<p class="stonetop-homestead-note">${_esc(guide.note)}</p>` : ""}
 				</form>`,
 				buttons,
-				default: (rollable || guide.roll) ? "roll" : "cancel",
-				render: bringDialogToFront,
+				default: (rollable || guide.roll) ? "roll" : (guide.post ? "post" : "cancel"),
+				// An arcanum move's body is the card's own prose, so its ◇/○/□ want the same
+				// styled glyphs the card gives them. A playbook guide's text is plain and has none.
+				render: html => {
+					bringDialogToFront(html);
+					if (guide.bodyHtml) wrapStonetopGlyphsInEl(html[0]);
+				},
 			}, { width: 520, classes: ["dialog", "stonetop", "stonetop-character-move-dialog"] }).render(true);
+		}
+
+		/**
+		 * A clicked move name on an arcanum's back. Resolves the move off the card, then takes
+		 * the same fork a playbook move's name-click takes: a move with something to decide (a
+		 * roll, a list to pick from) opens its dialog; one that is pure text posts straight to
+		 * chat. Reading is never gated — an unlearned mystery posts like an un-owned playbook
+		 * move — only the dice are (see _arcanumMoveGuide).
+		 */
+		async _onArcanumMoveName(arcanumSlug, moveSlug) {
+			const move = await this._stonetopCharacter.getArcanumMove(arcanumSlug, moveSlug);
+			if (!move) return void ui.notifications.warn("That move is no longer on this arcanum.");
+			const guide = this._arcanumMoveGuide(move);
+			if (guide.roll || guide.picks.length) {
+				this._openGuidedCharacterMove({ name: move.name, guide }, null);
+				return;
+			}
+			await ChatMessage.create({
+				content: moveChatCard(move.name, move.description),
+				speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+			});
 		}
 
 		async _postGuidedCharacterMove(name, guide, html) {
@@ -5777,6 +5861,19 @@ export function createStonetopCharacterSheetClass(Base) {
 				.filter(([key]) => key.startsWith("pick."))
 				.map(([, value]) => String(value ?? "").trim())
 				.filter(Boolean);
+			// An arcanum move posts as a move card — its printed text, plus whatever was ticked —
+			// so it reads in chat exactly like the playbook move whose name-click it mirrors. A
+			// playbook guide has no card of its own and posts the label/value summary instead.
+			if (guide.card) {
+				const picked = selected.length
+					? `<ul class="stonetop-arcanum-move-picks">${selected.map(pick => `<li>${_esc(pick)}</li>`).join("")}</ul>`
+					: "";
+				await ChatMessage.create({
+					content: moveChatCard(name, guide.card + picked),
+					speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+				});
+				return;
+			}
 			if (selected.length) rows.push({ label: "Selected", value: selected.join("\n") });
 			postMoveToChat(this.actor, name, rows);
 		}

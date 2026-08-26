@@ -92,6 +92,31 @@ const ARCANUM_WITH_BACK_OPTS = {
 	},
 };
 
+// A card whose back prints mysteries, in the shipped house style: a SHOUTED name behind a
+// learned □, then the move's text, then a Consequences list whose □ carry on the same run.
+const ARCANUM_WITH_MOVES = {
+	slug: "mystery-card",
+	front: {
+		title: "Mystery Card",
+		item: null,
+		description: "<p>A card with mysteries.</p>",
+		unlock: { description: "Unlock by…", requirements: [] },
+	},
+	back: {
+		title: "Mysteries of the Card",
+		item: null,
+		description: "<h3>Moves</h3>"
+			+ "<p><strong>□ FIRST LIGHT</strong><br>When you <em>strike the flint</em>, roll +CON: "
+			+ "<strong>on a 10+</strong>, choose 2 from the list below.</p>"
+			+ "<ul><li>It burns bright</li><li>It burns long</li></ul>"
+			+ "<p><strong>□ EMBER</strong><br>The coals stay warm until morning.</p>"
+			+ "<h3>Consequences</h3><ul><li>□ You smell of smoke.</li></ul>",
+		resource: null,
+		move: null,
+		options: [],
+	},
+};
+
 // -- Build helper -------------------------------------------------------------
 
 function makeArcana(flagStore = {}, arcana = [FFYRNIG_SPHERE]) {
@@ -797,6 +822,83 @@ const BOW_WITH_NO_STRING = {
 		options: [],
 	},
 };
+
+describe("CharacterArcana — moves printed on a card's back", () => {
+	const owned = { owned: ["mystery-card"], identified: ["mystery-card"] };
+	const makeCardArcana = (store = {}) =>
+		makeArcana({ ...owned, ...store }, [ARCANUM_WITH_MOVES]);
+
+	describe("getArcanumMove()", () => {
+		it("resolves a move off the card by its parsed slug", async () => {
+			const move = await makeCardArcana().getArcanumMove("mystery-card", "first-light");
+			expect(move.name).toBe("FIRST LIGHT");
+			expect(move.roll).toBe("con");
+			expect(move.picks).toEqual(["It burns bright", "It burns long"]);
+			expect(move.cardTitle).toBe("Mysteries of the Card");
+		});
+
+		it("reports a mystery whose □ is unmarked as not yet learned", async () => {
+			const move = await makeCardArcana().getArcanumMove("mystery-card", "first-light");
+			expect(move.learned).toBe(false);
+		});
+
+		it("reports it learned once its own □ is marked", async () => {
+			const arcana = makeCardArcana({ boxes: { "mystery-card:back:0": true } });
+			expect((await arcana.getArcanumMove("mystery-card", "first-light")).learned).toBe(true);
+			// The second mystery's box is a different index and is still unmarked.
+			expect((await arcana.getArcanumMove("mystery-card", "ember")).learned).toBe(false);
+		});
+
+		it("counts a move with no box as always available", async () => {
+			const arcana = makeArcana(
+				{ owned: ["boxless"], identified: ["boxless"] },
+				[{
+					...ARCANUM_WITH_MOVES,
+					slug: "boxless",
+					back: { ...ARCANUM_WITH_MOVES.back, description: "<h3>Moves</h3><p><strong>SOLE POWER</strong><br>It simply works.</p>" },
+				}]
+			);
+			const move = await arcana.getArcanumMove("boxless", "sole-power");
+			expect(move.boxIndex).toBeNull();
+			expect(move.learned).toBe(true);
+		});
+
+		it("answers null for an unknown card or move", async () => {
+			const arcana = makeCardArcana();
+			expect(await arcana.getArcanumMove("no-such-card", "first-light")).toBeNull();
+			expect(await arcana.getArcanumMove("mystery-card", "no-such-move")).toBeNull();
+		});
+	});
+
+	describe("buildSnapshot()", () => {
+		it("renders each move name as a clickable handle in the back description", async () => {
+			const [card] = (await makeCardArcana().buildSnapshot()).minor.items;
+			expect(card.back.description).toContain('data-move-slug="first-light"');
+			expect(card.back.description).toContain('data-move-slug="ember"');
+			expect(card.back.description).toContain(">FIRST LIGHT</span>");
+		});
+
+		it("still turns every back □ into its own indexed checkbox", async () => {
+			const [card] = (await makeCardArcana().buildSnapshot()).minor.items;
+			// Two mysteries then one consequence — the handles changed no glyph counts.
+			for (const index of [0, 1, 2]) {
+				expect(card.back.description).toContain(`data-context="back" data-index="${index}"`);
+			}
+		});
+
+		it("checks the box a marked mystery owns, and only that one", async () => {
+			const arcana = makeCardArcana({ boxes: { "mystery-card:back:1": true } });
+			const [card] = (await arcana.buildSnapshot()).minor.items;
+			expect(card.back.description).toContain('data-index="1" checked');
+			expect(card.back.description).not.toContain('data-index="0" checked');
+		});
+
+		it("leaves the front alone", async () => {
+			const [card] = (await makeCardArcana().buildSnapshot()).minor.items;
+			expect(card.front.description).not.toContain("stonetop-arcanum-move-name");
+		});
+	});
+});
 
 describe("CharacterArcana.buildSnapshot() — inventoryResources param", () => {
 	it("back.resource uses inventoryResources current for back.resource arcana", async () => {
