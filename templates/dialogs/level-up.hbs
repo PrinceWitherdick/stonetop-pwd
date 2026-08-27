@@ -66,7 +66,7 @@
 					{{/if}}
 				</div>
 				{{#if description}}
-				<div class="stonetop-levelup-move-description">{{{description}}}</div>
+				<div class="stonetop-levelup-move-description">{{{moveBody description}}}</div>
 				{{/if}}
 			</div>
 			{{/each}}
@@ -84,7 +84,7 @@
 					{{/if}}
 				</div>
 				{{#if description}}
-				<div class="stonetop-levelup-move-description">{{{description}}}</div>
+				<div class="stonetop-levelup-move-description">{{{moveBody description}}}</div>
 				{{/if}}
 			</div>
 			{{/each}}
@@ -110,7 +110,7 @@
 						{{/if}}
 					</div>
 					{{#if description}}
-					<div class="stonetop-levelup-move-description">{{{description}}}</div>
+					<div class="stonetop-levelup-move-description">{{{moveBody description}}}</div>
 					{{/if}}
 				</div>
 				{{/each}}
@@ -156,7 +156,7 @@
 					<span class="stonetop-levelup-move-req">{{playbook}}</span>
 				</div>
 				{{#if description}}
-				<div class="stonetop-levelup-move-description stonetop-levelup-foreign-description">{{{description}}}</div>
+				<div class="stonetop-levelup-move-description stonetop-levelup-foreign-description">{{{moveBody description}}}</div>
 				{{/if}}
 				{{#if requiresLabel}}<p class="stonetop-levelup-move-note">Requires: {{requiresLabel}}</p>{{/if}}
 			</div>

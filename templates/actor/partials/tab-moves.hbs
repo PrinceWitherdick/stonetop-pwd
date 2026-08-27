@@ -30,7 +30,7 @@
 						<strong class="stonetop-item-name">{{name}}</strong>
 						{{#if (and @root.stonetop.canAuthorLoveLetters rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
 					</div>
-					{{#if description}}<div class="stonetop-item-description">{{{boldMissText description}}}</div>{{/if}}
+					{{#if description}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}
 					<div class="stonetop-love-letter-actions">
 						<button type="button" class="stonetop-love-letter-read" data-item-id="{{ownedId}}">
 							<i class="fas fa-envelope-open-text" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.readButton"}}
@@ -240,7 +240,7 @@
 							</a>
 							{{/if}}
 						</div>
-						{{#if description}}<div class="stonetop-item-description">{{{boldMissText description}}}</div>{{/if}}
+						{{#if description}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}
 					</li>
 				{{/each}}
 				</ol>
