@@ -940,6 +940,36 @@ export class StonetopSteading {
 		await this.setFlags({ seasonSteps });
 	}
 
+	/**
+	 * Is advantage being held over the steading's NEXT +Fortunes roll?
+	 *
+	 * Rites of the Land: "publicly sacrifice something or someone much-loved… either clear a
+	 * steading debility or gain advantage when the steading next rolls +Fortunes." That second
+	 * half is a promise about a roll nobody has made yet — possibly not this session — so it has
+	 * to be written down somewhere the roll will look, and the steading is the only thing both
+	 * the sacrificing character and the later roll can see.
+	 *
+	 * Stored as WHAT PROMISED it, not as a bare `true`: the roll card names the source, so a
+	 * player who has forgotten why their Seasons Change is at advantage can read it off the card.
+	 */
+	fortunesAdvantage() {
+		return this._flags.fortunesAdvantage ?? null;
+	}
+
+	/** Hold advantage over the next +Fortunes roll, attributed to `source`. */
+	async holdFortunesAdvantage(source) {
+		await this.setFlags({ fortunesAdvantage: { source: String(source ?? "").trim() || "a sacrifice" } });
+	}
+
+	/**
+	 * Spend the hold. Called by the roll itself, which is the only thing that may clear it —
+	 * a hold that survived the roll it was promised to would apply to every Fortunes roll after.
+	 */
+	async clearFortunesAdvantage() {
+		if (!this.fortunesAdvantage()) return;
+		await this.setFlags({ fortunesAdvantage: null });
+	}
+
 	/** Herd shaped for the improvement card: the three tiers (with labels/Values) plus total. */
 	_herdView() {
 		const herd = this.getHerd();

@@ -2269,6 +2269,17 @@ export function createStonetopSteadingSheetClass(Base) {
 				options.stonetopDebility = "Lacking";
 				options.stonetopDebilityTooltip = "Treat Prosperity as 1 lower.";
 			}
+			// A sacrifice promised advantage on the steading's NEXT +Fortunes roll (Rites of the
+			// Land). It is applied LAST, so it beats the sticky selector and the prompt alike —
+			// like Trade & Barter's winter, it is a rule the fiction already settled, not a
+			// preference — and it is SPENT here, because this is the roll it was promised to.
+			const held = statKey === "fortunes" ? this._stonetopSteading.fortunesAdvantage() : null;
+			if (held) {
+				options.rollMode = "adv";
+				options.conditionNotes = [...(rest.conditionNotes ?? []), held.source];
+				await this._stonetopSteading.clearFortunesAdvantage();
+				this.render(false);
+			}
 			await rollStat(statKey, this.actor, {
 				...options,
 			});

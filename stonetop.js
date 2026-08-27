@@ -84,6 +84,9 @@ import { registerStonetopWindowTheme, registerStonetopLightTheme } from "./modul
 import { installWindowRestore } from "./module/utils/window-restore.js";
 import { registerUuidRedirects } from "./module/migration/compat.js";
 import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
+import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
+import { CharacterPossessions } from "./module/actors/character/CharacterPossessions.js";
+import { stockSourcesForFlags, defaultStockSource, SACRED_POUCH_SLUG, RITES_OF_THE_LAND } from "./module/actors/character/stock-cost.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
@@ -1337,6 +1340,77 @@ function _chatWireDeployMarkDiminished(message, html) {
 	});
 }
 
+// -- SPEND STOCK from a move's card -----------------------------
+// The Blessed's Stock is the one move cost with no home on the move itself: every other pool
+// (Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport, Favor) has its
+// own track, so its pips sit on the move and the player ticks them. Stock lives on the sacred
+// POUCH, several tabs away — so a card that says "spend 1 Stock" carries the button that does it.
+//
+// Rites of the Land's "Spend Favor in lieu of Stock, 1-for-1" applies here exactly as it does to
+// the gated moves, through the same reader (actors/character/stock-cost.js), so the dialog and
+// this button can never disagree about what is in the purse.
+function _chatWireSpendStock(message, html) {
+	const btn = html.querySelector(".stonetop-spend-stock");
+	if (!btn) return;
+
+	// Stamped on the message, not inferred from the button: a card is one use of the move, and
+	// one use is paid for once however many clients render it.
+	const already = message.getFlag(SYSTEM_ID, "stockSpent");
+	if (already) {
+		btn.disabled = true;
+		btn.textContent = `Spent ${already.amount} ${already.label}`;
+		return;
+	}
+
+	btn.addEventListener("click", async () => {
+		btn.disabled = true;
+		try {
+			const actor = speakerActor(message);
+			if (!actor?.isOwner || actor.type !== "character") {
+				ui.notifications.warn("You need permission to spend this character's Stock.");
+				btn.disabled = false;
+				return;
+			}
+			const amount = Math.max(1, Number(btn.dataset.amount) || 1);
+			const sources = stockSourcesForFlags(readStockFlags(actor));
+			const source = defaultStockSource(sources, amount);
+			if (!source) {
+				ui.notifications.warn("No Stock or Favor left to spend.");
+				btn.disabled = false;
+				return;
+			}
+			// The purse knows which way it counts: the pouch up as it empties, Favor down.
+			const next = source.after(amount);
+			if (source.key === "favor") {
+				await new StonetopFlags(actor, "moves").setSubKey("backgroundChoices", RITES_OF_THE_LAND, next);
+			} else {
+				const possessions = new CharacterPossessions(new StonetopFlags(actor, "possessions"));
+				await possessions.setUses(SACRED_POUCH_SLUG, next);
+			}
+			await message.setFlag(SYSTEM_ID, "stockSpent", { amount, label: source.label });
+			for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
+			ui.notifications.info(`Spent ${amount} ${source.label} (${source.remaining - amount} left).`);
+		} catch (err) {
+			console.error("Stonetop | Error spending Stock:", err);
+			btn.disabled = false;
+		}
+	});
+}
+
+/** The two flag bags the purse is read from, off a bare Actor. */
+function readStockFlags(actor) {
+	const rites = (actor.items ?? []).find(i => i.type === "move" && i.name === RITES_OF_THE_LAND);
+	return {
+		possessions: {
+			selected: new StonetopFlags(actor, "possessions").getFlag("selected") ?? [],
+			uses:     new StonetopFlags(actor, "possessions").getFlag("uses") ?? {},
+			maxUses:  new StonetopFlags(actor, "possessions").getFlag("maxUses") ?? {},
+		},
+		moveResources: new StonetopFlags(actor, "moves").getFlag("backgroundChoices") ?? {},
+		ritesMax: rites?.system?.resource?.max ?? null,
+	};
+}
+
 // -- ROLL CARD PICK LIST ---------------------------------------
 // A move that says "pick 1" renders its options as a checklist on the roll card (see
 // rollStat's pickListHtml) — a love letter's shared pool, or a homefront move's per-tier
@@ -1495,6 +1569,7 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	wireUndoXpMark(message, html);
 	_chatWireRequisitionMissCost(message, html);
 	_chatWireDeployMarkDiminished(message, html);
+	_chatWireSpendStock(message, html);
 	_chatWireSeasonsRoll(message, html);
 	_chatWireRollCardPicks(message, html);
 	wireDyingPrompt(message, html);

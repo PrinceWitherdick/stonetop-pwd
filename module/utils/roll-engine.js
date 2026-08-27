@@ -482,6 +482,14 @@ export async function rollStat(statKey, actor, options = {}) {
 			+ `${escHtml(options.stonetopDebilityIgnored)}</li>`);
 	}
 
+	// A caller's own named condition — "Sacrifice at the sacred rites" beside the Advantage pill,
+	// so a roll that is at advantage for a reason settled seasons ago says which reason. Text, not
+	// markup: the pill's chrome belongs to this card, and a caller passing HTML would be styling
+	// someone else's card from a long way off.
+	for (const note of (Array.isArray(options.conditionNotes) ? options.conditionNotes : []).filter(Boolean)) {
+		conditions.push(`<li class="stonetop-condition-note">${escHtml(note)}</li>`);
+	}
+
 	const conditionsHtml = _conditionsHtml(conditions);
 
 	const flavor = _rollCard({

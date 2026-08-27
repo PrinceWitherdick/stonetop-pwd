@@ -42,7 +42,8 @@ import {moveMarkBudget} from "./move-mark-budget.js";
 import {StonetopFlags, STONETOP_SCOPE, resolvedFlags, resolvedFlagProperty} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG, ownsAsteriskMove} from "./WouldBeHeroAsterisk.js";
-import {ownedNamesOr} from "./owns-move.js";
+import {ownedNamesOr, ownedMove} from "./owns-move.js";
+import {RITES_OF_THE_LAND} from "./stock-cost.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight} from "./holy-light.js";
 import {ONGOING_INVOCATION_FLAG, readOngoing} from "./ongoing-invocation.js";
 import {CONDEMNED_FLAG, canCondemn, readCondemned, addCondemned, removeCondemned, noteCondemned} from "./condemn.js";
@@ -1388,6 +1389,30 @@ export class StonetopCharacter {
 	async setInventoryRegularPool(count)            { await this._inventory.setRegularPool(count); }
 	async setInventorySmallPool(count)              { await this._inventory.setSmallPool(count); }
 	async removeSpecialItem(slug)                   { await this._inventory.removeSpecial(slug); }
+
+	/**
+	 * The Blessed's Favor, off Rites of the Land's own track.
+	 *
+	 * A HOLD track: the stored number is Favor currently held, not Favor spent, because a
+	 * Blessed who has never overseen the rites holds none (see stock-cost.js, which pays out of
+	 * this and explains why the pouch counts the other way). Zero for a character without the
+	 * move at all, which is also the honest answer.
+	 */
+	ritesFavorHeld() {
+		return Math.max(0, Number(this._moveResources.getMoveResources()[RITES_OF_THE_LAND]) || 0);
+	}
+
+	/** That track's capacity, read off the owned move so a homebrewed one still works. */
+	ritesFavorMax() {
+		return Number(ownedMove(this._actor, RITES_OF_THE_LAND)?.system?.resource?.max) || 0;
+	}
+
+	/** "Hold N Favor" — the move SETS the track rather than adding to it. */
+	async setRitesFavor(held) {
+		const max = this.ritesFavorMax();
+		const value = Math.max(0, Math.min(max, Math.trunc(Number(held) || 0)));
+		await this._moveResources.setUses(RITES_OF_THE_LAND, value, { stonetopMove: RITES_OF_THE_LAND });
+	}
 
 	getSteadingActor() {
 		const storedSteadingId = resolvedFlagProperty(this._actor, "steadingId");

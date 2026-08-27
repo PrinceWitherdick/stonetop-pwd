@@ -37894,3 +37894,172 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-travel-map .stonetop-journey-route { margin-top: 0; }
 .stonetop-travel-map .stonetop-journey-nomap { flex: 1 1 auto; }
 
+
+/* -- A move that charges before it rolls ------------------------ */
+/* Danu's Grasp: "spend 1 Stock and roll +WIS". The price and the purse sit above the results, so
+   the cost is read before the button rather than discovered after it. */
+.stonetop-move-cost {
+	border: 1px solid rgba(0,0,0,0.12);
+	border-radius: var(--st-radius);
+	background: rgba(0,0,0,0.03);
+	padding: 7px 10px;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-body);
+}
+
+.stonetop-move-cost-line {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 4px 10px;
+	margin: 0;
+}
+
+/* One purse. An emptied one is MARKED, not hidden: it is the reason the Roll button is missing,
+   and a purse that vanished when it ran out would read as a bug in the dialog rather than as an
+   empty pouch. */
+.stonetop-move-cost-purse {
+	border-radius: var(--st-radius);
+	background: rgba(0,0,0,0.05);
+	padding: 1px 7px;
+	white-space: nowrap;
+}
+
+.stonetop-move-cost-purse.is-empty {
+	color: var(--st-text-secondary);
+	text-decoration: line-through;
+}
+
+/* The whole block when nothing can pay — the window offers no Roll at all, so it says why. */
+.stonetop-move-cost.is-unaffordable {
+	border-color: rgba(140, 0, 0, 0.35);
+	background: rgba(140, 0, 0, 0.06);
+}
+
+.stonetop-move-cost-warn {
+	margin: 6px 0 0;
+	font-style: italic;
+	color: var(--st-text-secondary);
+}
+
+/* Only present when both purses could pay; one payable purse is spent without asking. */
+.stonetop-move-cost-pick {
+	margin-top: 8px;
+}
+
+/* A move card's Spend button. Stock is the only cost with no pips on the move itself, so this
+   is the one place a Blessed can pay for Call the Spirits or Barkskin without leaving the card
+   and hunting for the pouch. Disabled once paid, and it says so. */
+:is(.stonetop-roll-card, .stonetop-chat-move) .stonetop-spend-stock:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+/* -- Rites of the Land ------------------------------------------ */
+/* Two triggers in one move, so two sections with a rule between them: the seasonal rites are
+   upkeep, the public sacrifice is a thing you do once and feel. Each writes on its own button. */
+.stonetop-rites-dialog-body {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 4px 0 12px;
+	color: var(--st-text-body);
+}
+
+.stonetop-rites-section h3 {
+	margin: 0 0 4px;
+	font-size: var(--st-fs-md);
+	border: none;
+}
+
+.stonetop-rites-trigger {
+	margin: 0 0 6px;
+	font-style: italic;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
+
+.stonetop-rites-section p {
+	margin: 0 0 6px;
+	font-size: var(--st-fs-sm);
+}
+
+/* The rite is once per season, and saying so is the whole reason the buttons are gone. */
+.stonetop-rites-done {
+	border-radius: var(--st-radius);
+	background: rgba(0,0,0,0.05);
+	padding: 5px 9px;
+	color: var(--st-text-secondary);
+}
+
+/* "Hold", not "gain": overseeing again without the Surplus would SET a stocked track back down,
+   so a Blessed sitting on more than the plain amount is warned before they press it. */
+.stonetop-rites-warn {
+	border-left: 3px solid rgba(140, 0, 0, 0.4);
+	padding-left: 8px;
+	color: var(--st-text-body);
+}
+
+.stonetop-rites-note {
+	font-style: italic;
+	color: var(--st-text-secondary);
+}
+
+.stonetop-rites-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 4px;
+}
+
+.stonetop-rites-actions .stonetop-season-btn {
+	flex: 1 1 auto;
+	width: auto;
+	justify-content: center;
+}
+
+/* Picking and committing are separate acts, as Return Triumphant's are — a click marks the row,
+   the footer button writes it. Same list chrome, so the two windows read as one family. */
+.stonetop-rites-choices {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.stonetop-rites-choice {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	border: 1px solid rgba(0,0,0,0.12);
+	border-radius: var(--st-radius);
+	background: rgba(0,0,0,0.03);
+	padding: 6px 9px;
+	cursor: pointer;
+}
+
+.stonetop-rites-choice:hover {
+	border-color: rgba(0,0,0,0.25);
+}
+
+.stonetop-rites-choice.is-picked {
+	border-color: var(--st-btn-primary-bg);
+	background: rgba(112, 128, 144, 0.14);
+}
+
+.stonetop-rites-choice-label {
+	font-size: var(--st-fs-base);
+}
+
+.stonetop-rites-choice-detail {
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+}
+
+/* The Advantage pill's reason, beside it on the roll card: a Fortunes roll at advantage for a
+   sacrifice made seasons ago should say so rather than look unexplained. */
+.stonetop-condition-note {
+	background: rgba(112, 128, 144, 0.18);
+}

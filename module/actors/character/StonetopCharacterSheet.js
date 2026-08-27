@@ -48,6 +48,7 @@ import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct} from ".
 import {playbookIconPath, partyCharacters} from "../../utils/playbook-actors.js";
 import {postMoveToChat, moveChatCard} from "../../utils/chat.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
+import {stockSources, canPayStock, defaultStockSource, stockCostFromDescription, SACRED_POUCH_SLUG, RITES_OF_THE_LAND, DEFAULT_SACRED_POUCH_MAX} from "./stock-cost.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
 import {knowThingsRollChoices, withAdvantage, KNOW_THINGS_STAT} from "./arcana-identify.js";
 import {ARTIFACT_STATE, artifactStateForTier, knowThingsArtifactResults, seekInsightArtifactResults,
@@ -57,6 +58,8 @@ import {getStonetopSteadingActor} from "../../utils/world.js";
 import {openChroniclePageForActor} from "../../utils/chronicle.js";
 import {getDragEventData, deletionEntry, enrichHTML, imagePopout, renderTemplate} from "../../utils/foundry-compat.js";
 import {STEADING_DEFAULTS, StonetopSteading} from "../steading/StonetopSteading.js";
+import {readCurrentSeason, readCurrentYear} from "../../seasons/current-season.js";
+import {openRitesOfTheLand} from "./rites-of-the-land.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
 import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getHideRollableIconSetting, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
@@ -68,7 +71,7 @@ import {withSectionEditing} from "../../utils/section-editing.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {annotateInvocationEffects, splitEmpoweredEffect} from "./invocation-effects.js";
 import {CONSECRATED_FLAME, INVOKE_THE_SUN_GOD, EMPOWERED_INVOCATIONS, ownsMoveNamed, showHolyLight} from "./holy-light.js";
-import {ownedMoveNames} from "./owns-move.js";
+import {ownedMoveNames, ownedMove} from "./owns-move.js";
 import {invocationLabel, invokeNotice, readOngoing, resolveInvocationUse} from "./ongoing-invocation.js";
 import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE} from "./condemn.js";
 import {BINDING_ARBITRATION} from "./oaths.js";
@@ -270,6 +273,10 @@ const MOVE_USE_EFFECTS = {
 	[BARKSKIN]:           sheet => sheet._openBlessedMarksIfBlessed(),
 	[TRACKLESS_STEP]:     sheet => sheet._openBlessedMarksIfBlessed(),
 	[SHARED_SOULS]:       sheet => sheet._openBlessedMarksIfBlessed(),
+	// Rites of the Land holds Favor on the character, may spend a Surplus and clear a debility
+	// on the steading, and can promise advantage on a Fortunes roll nobody has made yet. Three
+	// documents and a fourth thing to remember next season — so it gets a walkthrough.
+	[RITES_OF_THE_LAND]:  sheet => sheet._openRitesOfTheLand(),
 };
 
 // The same idea for moves that ROLL: their use does not fall through to the post-it-to-chat tail,
@@ -2949,7 +2956,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// roll card's). Mighty Thews' "pick 1", Keep Company's questions, Censure's four
 				// reactions — the move's own list, tickable where the table can see it.
 				ChatMessage.create({
-					content: moveChatCard(name, description, { pickable: true }),
+					content: moveChatCard(name, description, { pickable: true, actions: this._stockSpendButtonHtml(description) }),
 					speaker,
 				});
 				// A description-only move has no rollType, so it falls all the way through to
@@ -3069,7 +3076,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!doc) return;
 				// Tickable for the same reason the Moves tab's name-click is: this is the move's
 				// printed text, and a move that never rolls has nowhere else to record a choice.
-				this._postMoveCard(doc.name, doc.system?.description ?? "", { pickable: true });
+				this._postMoveCard(doc.name, doc.system?.description ?? "", { pickable: true, stockSpend: true });
 			});
 
 			// Defend's Readiness circles (p.216). Clicking a circle sets held Readiness to
@@ -5688,22 +5695,30 @@ export function createStonetopCharacterSheetClass(Base) {
 				</label>`
 				: "";
 
+			// A move that CHARGES before it rolls (Danu's Grasp: "spend 1 Stock and roll +WIS").
+			// `cost` is null for every other guide, and then none of this applies.
+			const cost = guide.cost ? this._stockCostView(guide.cost) : null;
+
 			const buttons = {
 				cancel: { label: "Cancel" },
 			};
-			if (rollable) {
+			if (rollable && (!cost || cost.affordable)) {
 				buttons.roll = {
 					label: `Roll +${(rollable.dataset.roll ?? "").toUpperCase()}`,
 					// Ask how to roll it before posting, so cancelling is a clean abort (nothing
 					// hits the chat). Title comes from the rollable's move/stat.
+					//
+					// The cost is paid AFTER the prompt and BEFORE the dice: backing out of the
+					// prompt spends nothing, and any roll that happens has been paid for.
 					callback: async html => {
 						const prompted = await this._promptRollOptions({ rollable });
 						if (!prompted) return;
+						if (cost && !(await this._spendStockCost(cost, html, name))) return;
 						await this._postGuidedCharacterMove(name, guide, html);
 						await this._stonetopCharacter.onRoll({ currentTarget: rollable }, prompted);
 					},
 				};
-			} else if (guide.roll) {
+			} else if (guide.roll && !cost) {
 				const fixedStat = askStat ? null : guide.roll;
 				buttons.roll = {
 					label: fixedStat ? `Roll +${fixedStat.toUpperCase()}` : "Roll",
@@ -5737,7 +5752,8 @@ export function createStonetopCharacterSheetClass(Base) {
 					${guide.bodyHtml
 						? `<div class="stonetop-arcanum-move-body">${guide.bodyHtml}</div>`
 						: `<p class="stonetop-homestead-trigger"><em>${_esc(guide.trigger)}</em></p>`}
-					${fieldsHtml || statPickerHtml ? `<div class="stonetop-homestead-fields">${fieldsHtml}${statPickerHtml}</div>` : ""}
+					${cost ? this._stockCostHtml(cost) : ""}
+					${statPickerHtml ? `<div class="stonetop-homestead-fields">${statPickerHtml}</div>` : ""}
 					${resultsHtml}
 					${picksHtml}
 					${guide.note ? `<p class="stonetop-homestead-note">${_esc(guide.note)}</p>` : ""}
@@ -5760,6 +5776,103 @@ export function createStonetopCharacterSheetClass(Base) {
 					wirePickTally(html[0]?.querySelector(".stonetop-homestead-choice-list"), guide.pickMax, { enforce: true });
 				},
 			}, { width: 520, classes: ["dialog", "stonetop", "stonetop-character-move-dialog"] }).render(true);
+		}
+
+		/**
+		 * Rites of the Land. Reaches the steading because two of the move's three effects land
+		 * there; opens anyway without one, so a Blessed in a world with no steading yet can still
+		 * hold their Favor (the walkthrough simply offers nothing that needs a steading).
+		 */
+		_openRitesOfTheLand() {
+			if (!this.isEditable) return;
+			const steadingActor = this._stonetopCharacter.getSteadingActor();
+			const steading = steadingActor ? new StonetopSteading(steadingActor) : null;
+			openRitesOfTheLand({
+				character: this._stonetopCharacter,
+				steading,
+				year: steadingActor ? readCurrentYear(steadingActor) : 1,
+				seasonId: steadingActor ? (readCurrentSeason(steadingActor)?.season ?? "") : "",
+				onApplied: () => {
+					this.render(false);
+					for (const sheet of Object.values(steadingActor?.apps ?? {})) sheet.render(false);
+				},
+			});
+		}
+
+		/**
+		 * What this character can pay a Stock cost out of, right now.
+		 *
+		 * Both tracks store checks SPENT, not held (see stock-cost.js), so what is left is
+		 * `max - spent` in each. Favor only appears for a Blessed who owns Rites of the Land,
+		 * whose last line is "Spend Favor in lieu of Stock, 1-for-1" — without it, a Blessed
+		 * holding Favor and an empty pouch would be refused a move the book grants them.
+		 */
+		_stockCostView({ amount = 1, label = "Stock" } = {}) {
+			const possessions = this._stonetopCharacter.possessions;
+			const rites = ownedMove(this.actor, RITES_OF_THE_LAND);
+			const sources = stockSources({
+				hasPouch:   possessions.selected.has(SACRED_POUCH_SLUG),
+				pouchMax:   possessions.maxUses?.[SACRED_POUCH_SLUG] ?? DEFAULT_SACRED_POUCH_MAX,
+				pouchStored: possessions.uses?.[SACRED_POUCH_SLUG] ?? 0,
+				favorMax:   rites?.system?.resource?.max ?? null,
+				favorStored: this._stonetopCharacter.moveResources.getMoveResources()[RITES_OF_THE_LAND] ?? 0,
+			});
+			return {
+				amount, label, sources,
+				affordable: canPayStock(sources, amount),
+				payable: sources.filter(s => s.remaining >= amount),
+			};
+		}
+
+		/**
+		 * The price, the purse, and — when the pouch is empty — why there is no Roll button.
+		 * A purse the character has but cannot pay from is still SHOWN: "Stock 0 of 3" is the
+		 * sentence that explains the missing button, where hiding it would read as a bug.
+		 */
+		_stockCostHtml(cost) {
+			const purses = cost.sources.map(s =>
+				`<span class="stonetop-move-cost-purse${s.remaining >= cost.amount ? "" : " is-empty"}">`
+				+ `${_esc(s.label)} <strong>${s.remaining}</strong> of ${s.max}</span>`).join("");
+			// Only asked when there is genuinely a choice; one payable purse is spent silently.
+			const picker = cost.payable.length > 1
+				? `<label class="stonetop-homestead-field stonetop-move-cost-pick"><span>Spend from</span>
+					<select name="stockCostSource">${cost.payable
+						.map(s => `<option value="${_esc(s.key)}">${_esc(s.label)} (${s.remaining} left)</option>`).join("")}</select>
+				</label>`
+				: "";
+			return `<div class="stonetop-move-cost${cost.affordable ? "" : " is-unaffordable"}">
+				<p class="stonetop-move-cost-line"><strong>Costs ${cost.amount} ${_esc(cost.label)}.</strong> ${purses}</p>
+				${cost.affordable
+					? picker
+					: `<p class="stonetop-move-cost-warn">No ${_esc(cost.label)} left to spend, so this move cannot be made. Replenish the pouch first.</p>`}
+			</div>`;
+		}
+
+		/**
+		 * Pay the cost. Returns false — and rolls nothing — if the purse emptied between the
+		 * dialog opening and the button being pressed, which a non-modal dialog left open beside
+		 * the sheet makes perfectly possible.
+		 *
+		 * Spending INCREMENTS both tracks, because both count checks spent.
+		 */
+		async _spendStockCost(cost, html, moveName) {
+			const chosen = html?.[0]?.querySelector('[name="stockCostSource"]')?.value ?? null;
+			const live = this._stockCostView(cost);
+			const source = live.payable.find(s => s.key === chosen) ?? defaultStockSource(live.sources, cost.amount);
+			if (!source) {
+				ui.notifications?.warn(`No ${cost.label} left to spend on ${moveName}.`);
+				return false;
+			}
+			// Ask the purse: the pouch counts up as it empties, Favor counts down.
+			const next = source.after(cost.amount);
+			if (source.key === "favor") {
+				await this._stonetopCharacter.moveResources.setUses(RITES_OF_THE_LAND, next, { stonetopMove: moveName });
+			} else {
+				await this._stonetopCharacter.setPossessionUses(SACRED_POUCH_SLUG, next);
+			}
+			ui.notifications?.info(`${moveName}: spent 1 ${source.label} (${source.remaining - cost.amount} left).`);
+			this.render(false);
+			return true;
 		}
 
 		/**
@@ -6813,11 +6926,36 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * `pickable` is for the one caller that posts a move's PRINTED TEXT rather than a receipt
 		 * of something already done — see moveChatCard.
 		 */
-		_postMoveCard(title, body, { pickable = false } = {}) {
+		_postMoveCard(title, body, { pickable = false, stockSpend = false } = {}) {
 			return ChatMessage.create({
-				content: moveChatCard(title, body, { pickable }),
+				content: moveChatCard(title, body, { pickable, actions: stockSpend ? this._stockSpendButtonHtml(body) : "" }),
 				speaker: ChatMessage.getSpeaker({ actor: this.actor }),
 			});
+		}
+
+		/**
+		 * The "Spend 1 Stock" button a Stock-costing move's card carries, or "" for every move
+		 * that costs nothing.
+		 *
+		 * WHY THE CARD and not the sheet: Stock is the one cost with no home on the move itself.
+		 * Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport and Favor
+		 * each have a track of their own, so the pips sit right there on the move and the player
+		 * ticks them. Stock lives on the sacred POUCH, several tabs away, so a Blessed making
+		 * Call the Spirits had the move in front of them and the purse nowhere in sight. The
+		 * card is the record that the move was made, which makes it the honest place to pay.
+		 *
+		 * The two moves that spend AND roll on one trigger (Danu's Grasp, Suck the Poison Out)
+		 * never reach here: their name-click opens the guided dialog and returns, so there is no
+		 * card to double-charge.
+		 */
+		_stockSpendButtonHtml(description) {
+			const cost = stockCostFromDescription(description);
+			if (!cost) return "";
+			return `<div class="card-buttons stonetop-roll-actions">
+				<button type="button" class="stonetop-spend-stock" data-action="spendStock" data-amount="${cost.amount}">
+					<i class="fas fa-mortar-pestle"></i> Spend ${cost.amount} ${_esc(cost.label)}
+				</button>
+			</div>`;
 		}
 
 		/**
