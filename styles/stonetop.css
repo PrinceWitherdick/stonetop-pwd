@@ -6291,6 +6291,145 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-custom-move-check label { display: inline-flex; align-items: center; gap: 6px; font-family: inherit; font-weight: normal; }
 .stonetop-custom-move-check input { width: auto; }
 
+/* Steading-improvement builder (dialogs/ImprovementBuilderDialog.js) — the same
+   left-rail stepped-sheet frame as the custom-move dialog above: shared
+   .stonetop-guide-split / .stonetop-guide-main / .stonetop-guide-nav chrome, a
+   full-bleed flex column so only the panel column scrolls, and this window's own
+   field styling below. It carries its own class rather than borrowing the move
+   dialog's so the two can be re-shaped apart. */
+.stonetop-improvement-builder.window-app { max-height: 92vh; }
+.stonetop-improvement-builder .window-content {
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+.stonetop-improvement-builder .stonetop-improvement-builder-form {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	font-size: var(--st-fs-base);
+}
+.stonetop-improvement-builder-nav { flex: 0 0 auto; }
+.stonetop-improvement-builder-nav-btns { display: flex; gap: 10px; }
+
+/* One group of fields per panel; only the active one shows (JS toggles `hidden`). */
+.stonetop-improvement-builder-section {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 0 16px 12px;
+}
+.stonetop-improvement-builder-section[hidden] { display: none; }
+
+.stonetop-improvement-builder-field { display: flex; flex-direction: column; gap: 3px; }
+.stonetop-improvement-builder-field > label {
+	font-family: var(--font-stonetop);
+	font-weight: bold;
+	font-size: var(--st-fs-sm);
+}
+.stonetop-improvement-builder-form input[type="text"],
+.stonetop-improvement-builder-form input[type="number"],
+.stonetop-improvement-builder-form textarea,
+.stonetop-improvement-builder-form select { width: 100%; }
+.stonetop-improvement-builder-form textarea { resize: vertical; min-height: 2.4em; }
+.stonetop-improvement-builder-hint {
+	margin: 2px 0 0;
+	font-size: var(--st-fs-xs);
+	font-style: italic;
+	color: var(--color-text-dark-secondary);
+}
+.stonetop-improvement-builder-row { display: flex; gap: 8px; align-items: flex-end; }
+.stonetop-improvement-builder-row .stonetop-improvement-builder-field { flex: 1 1 0; }
+.stonetop-improvement-builder-field--num { flex: 0 0 6em; }
+.is-hidden.stonetop-improvement-builder-group-min-wrap,
+.is-hidden.stonetop-improvement-builder-group-alt { display: none; }
+
+/* One authored requirement group: heading, its all-of/at-least rule, and the lines
+   that become check-off boxes. Boxed so a card with three clauses reads as three
+   things rather than one long column of fields. */
+.stonetop-improvement-builder-groups { display: flex; flex-direction: column; gap: 10px; }
+.stonetop-improvement-builder-group {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 10px;
+	border: 1px solid rgba(0, 0, 0, 0.18);
+	border-radius: var(--st-radius-sm, 4px);
+	background: rgba(0, 0, 0, 0.03);
+}
+.stonetop-improvement-builder-group-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+.stonetop-improvement-builder-group-num {
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	font-weight: bold;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--st-text-secondary);
+}
+.stonetop-improvement-builder-group-remove {
+	width: auto;
+	flex: 0 0 auto;
+	padding: 0 6px;
+	line-height: 1.4;
+	background: none;
+	border: none;
+	color: var(--st-text-secondary);
+	cursor: pointer;
+}
+.stonetop-improvement-builder-group-remove:hover { color: var(--st-danger, #7a2f2f); }
+.stonetop-improvement-builder-group-rules {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 12px;
+	font-size: var(--st-fs-xs);
+}
+.stonetop-improvement-builder-group-rule,
+.stonetop-improvement-builder-group-min-wrap,
+.stonetop-improvement-builder-group-alt {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+}
+/* The two inline controls sit in a text sentence, so they size to their content
+   rather than taking the form column's full width. */
+.stonetop-improvement-builder-group-rules select { width: auto; }
+.stonetop-improvement-builder-group-rules input[type="number"] { width: 4em; }
+.stonetop-improvement-builder-group-alt input { width: auto; }
+
+.stonetop-improvement-builder-add-group {
+	align-self: flex-start;
+	width: auto;
+	padding: 3px 12px;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	cursor: pointer;
+}
+
+/* The automatic effects, fenced off from the prose above them: what the sheet does
+   by itself, as opposed to what the card says. */
+.stonetop-improvement-builder-grants {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding-top: 8px;
+	border-top: 1px solid rgba(0, 0, 0, 0.15);
+}
+.stonetop-improvement-builder-grants-title {
+	margin: 0;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-base);
+}
+
 /* Add-Item dialog — quick-insert gear tag chips. Each appends its term to the
    freeform note field; grouped by kind (range / quality / bonus) with a quiet
    tint so the three families read apart at a glance. */
@@ -16369,6 +16508,29 @@ a.steading-player-open:hover {
 	margin-top: 0;
 }
 
+/* Divider between a requirement group and the ALTERNATIVE that follows it (two sections
+   sharing a `group` id: Weapons of War's "either this, or all of these"). Without it the
+   two headings read as two requirements rather than two ways to meet one. Rules either
+   side, so it reads as a fork in the list rather than another line of prose. */
+.steading-req-or {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 8px 0 2px 0;
+	font-size: var(--st-fs-xs);
+	font-style: italic;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--st-text-secondary);
+}
+
+.steading-req-or::before,
+.steading-req-or::after {
+	content: "";
+	flex: 1 1 auto;
+	border-top: 1px solid rgba(0,0,0,0.14);
+}
+
 .steading-req-list {
 	list-style: none;
 	padding: 0;
@@ -25251,6 +25413,15 @@ ul:has(> li.st-treasure-line:only-child) {
 
 .stonetop-journal-improvement-effect {
 	margin: 8px 0 0 0;
+}
+
+/* The mechanical part of the effect, which the steading applies by itself when the
+   improvement is ticked complete. Quieter than the effect prose above it: it repeats
+   what that prose already says, in the sheet's terms rather than the book's. */
+.stonetop-journal-improvement-grants {
+	margin: 4px 0 0 0;
+	font-size: var(--st-fs-sm);
+	color: color-mix(in srgb, currentColor 75%, transparent);
 }
 
 /* A homebrew Threat card reuses the improvement card's structure (module/threats/

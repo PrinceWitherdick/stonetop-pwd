@@ -1,0 +1,195 @@
+{{!-- The steading-improvement authoring sheet, laid out as a left-rail stepped sheet
+      like the custom-move dialog and Make a Monster: the rail (shared
+      .stonetop-guide-toc) switches which group of fields is shown, client-side, so the
+      single <form> keeps every value (and every requirement group added so far) as you
+      move around. See dialogs/ImprovementBuilderDialog.js. --}}
+<form class="stonetop-improvement-builder-form" autocomplete="off">
+
+	<div class="stonetop-guide-split">
+
+		{{!-- Section rail (jump between the field groups; shared journal-style page list). --}}
+		<nav class="stonetop-guide-toc" aria-label="Improvement sections">
+			<ol class="stonetop-guide-toc-list">
+				{{#each sections}}
+				<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
+					<button type="button" class="stonetop-guide-toc-btn stonetop-improvement-builder-tab" data-tab="{{key}}"{{#if selected}} aria-current="true"{{/if}}>
+						<i class="fas {{icon}} stonetop-guide-toc-icon"></i>
+						<span class="stonetop-guide-toc-text">{{title}}</span>
+					</button>
+				</li>
+				{{/each}}
+			</ol>
+		</nav>
+
+		<div class="stonetop-guide-main stonetop-improvement-builder-main">
+
+			{{!-- Banner: the active section's icon + title + count (updated in JS on tab
+			      switch, so panels never re-render and keep what's been typed). --}}
+			<div class="stonetop-guide-banner">
+				<i class="fas {{active.icon}} stonetop-guide-banner-icon stonetop-improvement-builder-banner-icon"></i>
+				<div class="stonetop-guide-banner-info">
+					<div class="stonetop-guide-banner-title stonetop-improvement-builder-banner-title">{{active.title}}</div>
+					<div class="stonetop-guide-banner-sub">{{hint}}</div>
+				</div>
+				<div class="stonetop-guide-count stonetop-improvement-builder-banner-count">{{active.count}}</div>
+			</div>
+
+			{{!-- The improvement: what it is called and what it reads like --}}
+			<section class="stonetop-improvement-builder-section" data-tab="improvement"{{#unless (eq activeTab "improvement")}} hidden{{/unless}}>
+				<div class="stonetop-improvement-builder-field">
+					<label for="stonetop-improvement-name">Name</label>
+					<input type="text" id="stonetop-improvement-name" name="name" placeholder="e.g. Roadbuilding" required autofocus>
+				</div>
+
+				<div class="stonetop-improvement-builder-field">
+					<label for="stonetop-improvement-category">Category</label>
+					<select id="stonetop-improvement-category" name="category">
+						<option value="">None (always shown)</option>
+						{{#each categories}}
+						<option value="{{key}}">{{label}}</option>
+						{{/each}}
+					</select>
+					<p class="stonetop-improvement-builder-hint">Which filter chip it files under on the Improvements tab. An uncategorised improvement is shown whatever the filter.</p>
+				</div>
+
+				<div class="stonetop-improvement-builder-field">
+					<label for="stonetop-improvement-flavor">Flavor</label>
+					<textarea id="stonetop-improvement-flavor" name="flavor" rows="2" placeholder="The line in the villagers' own voice, shown under the title. Optional."></textarea>
+				</div>
+			</section>
+
+			{{!-- Requirements: one group per "requires all of these" / "requires 2 of these"
+			      clause, with later groups able to be alternatives to the one above. --}}
+			<section class="stonetop-improvement-builder-section" data-tab="requirements"{{#unless (eq activeTab "requirements")}} hidden{{/unless}}>
+				<p class="stonetop-improvement-builder-hint">
+					Every line becomes a check-off box on the improvement's card. Add a group per clause:
+					the book's improvements read "requires all of the following", "requires 2 of the following",
+					or "either this, or all of these". Leave a heading blank and it is written for you.
+				</p>
+
+				<div class="stonetop-improvement-builder-groups"></div>
+
+				<button type="button" class="stonetop-improvement-builder-add-group">
+					<i class="fas fa-plus" aria-hidden="true"></i> Add requirement group
+				</button>
+			</section>
+
+			{{!-- Effect: the prose, then the parts of it the sheet can apply by itself --}}
+			<section class="stonetop-improvement-builder-section" data-tab="effect"{{#unless (eq activeTab "effect")}} hidden{{/unless}}>
+				<div class="stonetop-improvement-builder-field">
+					<label for="stonetop-improvement-effect">What completing it does</label>
+					<textarea id="stonetop-improvement-effect" name="effect" rows="5" placeholder="The effect as the playbook would print it, including any ongoing rule (&quot;Henceforth, when...&quot;)."></textarea>
+				</div>
+
+				<div class="stonetop-improvement-builder-grants">
+					<h4 class="stonetop-improvement-builder-grants-title">Applied automatically on completion</h4>
+					<p class="stonetop-improvement-builder-hint">
+						The mechanical part of the effect, which the sheet performs when the improvement is
+						ticked complete and undoes if it is un-ticked. Leave it all blank for an improvement
+						whose effect is prose only.
+					</p>
+
+					<div class="stonetop-improvement-builder-row">
+						{{#each statFields}}
+						<div class="stonetop-improvement-builder-field stonetop-improvement-builder-field--num">
+							<label for="stonetop-improvement-grant-{{key}}">{{label}}</label>
+							<input type="number" id="stonetop-improvement-grant-{{key}}" name="grant-{{key}}" step="1" placeholder="0">
+						</div>
+						{{/each}}
+					</div>
+					<p class="stonetop-improvement-builder-hint">A change, not a total: 1 raises Fortunes by one, -1 lowers it.</p>
+
+					<div class="stonetop-improvement-builder-field">
+						<label for="stonetop-improvement-grant-resources">Add to Resources</label>
+						<textarea id="stonetop-improvement-grant-resources" name="grant-resources" rows="2" placeholder="One per line, e.g. Mill"></textarea>
+					</div>
+
+					<div class="stonetop-improvement-builder-field">
+						<label for="stonetop-improvement-grant-fortifications">Add to Fortifications</label>
+						<textarea id="stonetop-improvement-grant-fortifications" name="grant-fortifications" rows="2" placeholder="One per line, e.g. Stone Wall"></textarea>
+					</div>
+
+					<div class="stonetop-improvement-builder-field">
+						<label for="stonetop-improvement-grant-remove-fortifications">Clear from Fortifications</label>
+						<textarea id="stonetop-improvement-grant-remove-fortifications" name="grant-remove-fortifications" rows="2" placeholder="One per line, e.g. Palisade (what the new one replaces)"></textarea>
+					</div>
+
+					<div class="stonetop-improvement-builder-row">
+						<div class="stonetop-improvement-builder-field">
+							<label for="stonetop-improvement-grant-size">Set Size to</label>
+							<select id="stonetop-improvement-grant-size" name="grant-size">
+								<option value="">Leave alone</option>
+								{{#each sizes}}
+								<option value="{{value}}">{{label}}</option>
+								{{/each}}
+							</select>
+						</div>
+						<div class="stonetop-improvement-builder-field stonetop-improvement-builder-field--num">
+							<label for="stonetop-improvement-grant-set-population">Set Population to</label>
+							<input type="number" id="stonetop-improvement-grant-set-population" name="grant-set-population" step="1" placeholder="-">
+						</div>
+					</div>
+				</div>
+			</section>
+
+		</div>
+
+	</div>
+
+	{{!-- Pinned footer: the save/cancel pair at one end, the rail's Back/Next at the
+	      other (shared .stonetop-guide-nav row + button styling). --}}
+	<footer class="stonetop-guide-nav stonetop-improvement-builder-nav">
+		<span class="stonetop-improvement-builder-nav-btns">
+			<button type="button" class="stonetop-improvement-builder-save stonetop-guide-btn--primary">
+				<i class="fas fa-check" aria-hidden="true"></i> {{submitLabel}}
+			</button>
+			<button type="button" class="stonetop-improvement-builder-cancel">Cancel</button>
+		</span>
+		<span class="stonetop-improvement-builder-nav-btns">
+			<button type="button" class="stonetop-improvement-builder-back"{{#if atFirst}} disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
+			<button type="button" class="stonetop-improvement-builder-next"{{#if atLast}} disabled{{/if}}>Next<span class="stonetop-nav-arrow"></span></button>
+		</span>
+	</footer>
+
+	{{!-- The empty requirement group, cloned by JS for each "Add requirement group" (and
+	      once on open). Kept here rather than built as a string in the dialog so all of
+	      this window's markup is in one file. --}}
+	<template class="stonetop-improvement-builder-group-tpl">
+		<div class="stonetop-improvement-builder-group">
+			<div class="stonetop-improvement-builder-group-head">
+				<span class="stonetop-improvement-builder-group-num">Group 1</span>
+				<button type="button" class="stonetop-improvement-builder-group-remove" data-tooltip="Remove this group" data-tooltip-direction="UP">
+					<i class="fas fa-trash" aria-hidden="true"></i>
+				</button>
+			</div>
+
+			<div class="stonetop-improvement-builder-field">
+				<label>Heading</label>
+				<input type="text" class="stonetop-improvement-builder-group-heading" placeholder="Requires all of the following:">
+			</div>
+
+			<div class="stonetop-improvement-builder-group-rules">
+				<label class="stonetop-improvement-builder-group-rule">
+					<span>Must tick</span>
+					<select class="stonetop-improvement-builder-group-mode">
+						<option value="all">all of them</option>
+						<option value="min">at least</option>
+					</select>
+				</label>
+				<span class="stonetop-improvement-builder-group-min-wrap is-hidden">
+					<input type="number" class="stonetop-improvement-builder-group-min" min="1" step="1" value="1">
+					<span>of them</span>
+				</span>
+				<label class="stonetop-improvement-builder-group-alt is-hidden">
+					<input type="checkbox" class="stonetop-check">
+					<span>Alternative to the group above (either/or)</span>
+				</label>
+			</div>
+
+			<div class="stonetop-improvement-builder-field">
+				<label>Requirements</label>
+				<textarea class="stonetop-improvement-builder-group-items" rows="4" placeholder="One per line. Each becomes a check-off box."></textarea>
+			</div>
+		</div>
+	</template>
+</form>

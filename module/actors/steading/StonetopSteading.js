@@ -5,6 +5,13 @@ import {resolvePersonRow} from "./steading-people.js";
 import {resolvePortrait, documentPortraitFrame} from "../../utils/portrait-frame.js";
 import {playbookTitle, characterFullName} from "../../utils/playbook-actors.js";
 import {assetTakenTooltip} from "../../utils/requisition-asset.js";
+import {
+	GRANT_STAT_PATHS,
+	GRANT_STAT_LABELS,
+	alternativeSectionFlags,
+	normalizeImprovementGrants,
+	normalizeImprovementSections,
+} from "../../utils/improvement-def.js";
 
 /**
  * The three lenses the Improvements tab filters by — the toggle chips beside its
@@ -466,20 +473,6 @@ export const IMPROVEMENT_GRANTS = {
 };
 
 /** System-data path (relative to `system.`) for each stat an improvement grant can bump. */
-const GRANT_STAT_PATHS = {
-	fortunes:   "stats.fortunes.value",
-	defenses:   "stats.defenses.value",
-	prosperity: "attributes.prosperity.value",
-	population: "attributes.population.value",
-};
-
-const GRANT_STAT_LABELS = {
-	fortunes: "Fortunes",
-	defenses: "Defenses",
-	prosperity: "Prosperity",
-	population: "Population",
-};
-
 /**
  * The Herd of Horses improvement tracks its herd in three age tiers (Book I). When the
  * Seasons Change to summer, yearlings become grown horses, foals become yearlings, and
@@ -774,7 +767,12 @@ export class StonetopSteading {
 	 * `category` is optional and only kept when it names a real one — a journal card
 	 * carries none, and an uncategorised improvement is simply immune to the tab's
 	 * category filter (see IMPROVEMENT_CATEGORIES).
-	 * @param {{name:string, flavor?:string, effect?:string, category?:string, sections?:Array}} def
+	 * A section's `min` ("2 of the following") and `group` (alternatives, either/or) and
+	 * the improvement's `grants` (what completing it applies by itself) ride through
+	 * normalized rather than being dropped: the requirement check and the grant engine
+	 * both read them off the definition, so an authored improvement can carry everything
+	 * a built-in one does. See utils/improvement-def.js.
+	 * @param {{name:string, flavor?:string, effect?:string, category?:string, sections?:Array, grants?:object}} def
 	 */
 	async addCustomImprovement(def) {
 		const name = String(def?.name ?? "").trim();
@@ -791,11 +789,11 @@ export class StonetopSteading {
 			label: name,
 			category: IMPROVEMENT_CATEGORY_KEYS.has(def.category) ? def.category : "",
 			flavor: String(def.flavor ?? ""),
-			sections: (Array.isArray(def.sections) ? def.sections : []).map(s => ({
-				heading: String(s?.heading ?? ""),
-				items: (Array.isArray(s?.items) ? s.items : []).map(String),
-			})),
+			sections: normalizeImprovementSections(def.sections),
 			effect: String(def.effect ?? ""),
+			// null rather than absent: a custom improvement with no automatic effects still
+			// says so, and setImprovementCompleted reads `?? null` either way.
+			grants: normalizeImprovementGrants(def.grants),
 		};
 		await this.setFlags({ customImprovements: [...existing, normalized] });
 		return { ok: true, slug, label: name };
@@ -838,7 +836,11 @@ export class StonetopSteading {
 	 */
 	async setImprovementCompleted(slug, checked, { forceR } = {}) {
 		const def = this.improvementDef(slug);
-		const grants = IMPROVEMENT_GRANTS[slug] ?? null;
+		// A built-in improvement's grants are keyed by slug; a custom one carries its own
+		// on the definition (authored in the builder dialog, or riding in on a dropped
+		// card). The table wins, so a custom improvement can never take over a built-in
+		// slug's effects by name collision.
+		const grants = IMPROVEMENT_GRANTS[slug] ?? def?.grants ?? null;
 		const improvements = foundry.utils.deepClone(this._flags.improvements ?? {});
 		const entry = improvements[slug] ?? { completed: false, r: [] };
 		if (Array.isArray(forceR)) entry.r = forceR;
@@ -1369,8 +1371,13 @@ export class StonetopSteading {
 		const mapImprovement = (def, custom) => {
 			const stored = storedImps[def.slug] ?? {};
 			let idx = 0;
-			const sections = def.sections.map(section => ({
+			// A section that continues an either/or (it shares its predecessor's group id)
+			// is drawn with an "or" divider above it, so a card offering two ways to meet
+			// one requirement doesn't read as two requirements.
+			const alternatives = alternativeSectionFlags(def.sections);
+			const sections = def.sections.map((section, i) => ({
 				heading: section.heading,
+				alternative: alternatives[i],
 				items: section.items.map(label => {
 					const item = { label, index: idx, checked: (stored.r ?? [])[idx] ?? false };
 					idx++;

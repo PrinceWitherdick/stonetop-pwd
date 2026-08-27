@@ -30,7 +30,7 @@ import {makeColumnsResizable} from "../../utils/resizable-columns.js";
 import {makeColumnsSortable} from "../../utils/sortable-columns.js";
 import {withSectionEditing} from "../../utils/section-editing.js";
 import {STEADING_IMPROVEMENT_DRAG_TYPE} from "../../journal/steading-improvement-cards.js";
-import {improvementCategoryFieldHtml} from "../../dialogs/create-improvement-dialog.js";
+import {ImprovementBuilderDialog, steadingImprovementSaver} from "../../dialogs/ImprovementBuilderDialog.js";
 import {PLACE_OF_INTEREST_DRAG_TYPE} from "../../hooks/PlaceOfInterestDrop.js";
 import {getDragEventData, imagePopout, imagePopoutTitle} from "../../utils/foundry-compat.js";
 import {wireCardDropZone} from "../../utils/card-drop-zone.js";
@@ -2671,61 +2671,13 @@ export function createStonetopSteadingSheetClass(Base) {
 			}
 		}
 
-		// Prompt for a custom improvement (name + optional flavor/effect) and add it as a
-		// tracked custom improvement — the same path a dropped journal card takes.
+		// Author a custom improvement and add it as a tracked one — the same path a dropped
+		// journal card takes, and the same window the reusable-card flow opens
+		// (ImprovementBuilderDialog), so an improvement jotted down here can carry the
+		// requirement groups and automatic effects the book's own improvements have.
 		async _onCreateImprovementOpen() {
-			// `const`, even though the render/button callbacks below refer to `dialog`: they run
-			// after this statement completes, so the binding is always initialised by then.
-			const dialog = new Dialog({
-				title: "Create Improvement",
-				content: `<form class="stonetop-homestead-dialog">
-					<p class="stonetop-homestead-trigger"><em>Add a custom improvement to track alongside the book's built-ins.</em></p>
-					<div class="stonetop-homestead-fields">
-						<label class="stonetop-homestead-field">
-							<span>Name</span>
-							<input type="text" name="name" placeholder="e.g. Roadbuilding" autofocus>
-						</label>
-						${improvementCategoryFieldHtml()}
-						<label class="stonetop-homestead-field">
-							<span>Flavor</span>
-							<textarea name="flavor" rows="2" placeholder="A short description shown under the title (optional)."></textarea>
-						</label>
-						<label class="stonetop-homestead-field">
-							<span>Effect</span>
-							<textarea name="effect" rows="2" placeholder="What completing it does: new resources, defenses, etc. (optional)."></textarea>
-						</label>
-					</div>
-				</form>`,
-				buttons: {
-					cancel: { label: "Cancel" },
-					create: {
-						label: "Create",
-						callback: async (html) => {
-							const form = html[0].querySelector("form");
-							const val = n => form.querySelector(`[name="${n}"]`)?.value?.trim() ?? "";
-							const name = val("name");
-							if (!name) {
-								globalThis.ui?.notifications?.warn?.("Enter a name for the improvement.");
-								return;
-							}
-							const result = await this._stonetopSteading.addCustomImprovement({
-								name,
-								category: val("category"),
-								flavor: val("flavor"),
-								effect: val("effect"),
-							});
-							if (result.ok) {
-								globalThis.ui?.notifications?.info?.(`Added steading improvement: ${result.label}.`);
-								this.render(false);
-							} else if (result.reason === "duplicate") {
-								globalThis.ui?.notifications?.warn?.(`${result.label} is already a steading improvement.`);
-							}
-						},
-					},
-				},
-				default: "create",
-			}, { classes: ["dialog", "stonetop", "stonetop-create-improvement-dialog"] });
-			dialog.render(true);
+			const saver = steadingImprovementSaver(this._stonetopSteading, () => this.render(false));
+			new ImprovementBuilderDialog(saver).render(true);
 		}
 
 		async _onRemoveCustomImprovement(slug) {

@@ -57,6 +57,7 @@
 
 				<div class="steading-improvement-body">
 					{{#each sections}}
+					{{#if alternative}}<p class="steading-req-or">or</p>{{/if}}
 					<p class="steading-req-heading">{{{heading}}}</p>
 					<ul class="steading-req-list">
 						{{#each items}}
