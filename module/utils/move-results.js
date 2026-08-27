@@ -1,16 +1,37 @@
+/**
+ * THE three result tiers: their keys, their card order, and the label each is printed under.
+ *
+ * This file already claimed to be the one place the tier labels live, and it was not: the same
+ * three strings were retyped in the Death's Door and Undeath dialogs, the love letter reader,
+ * the expedition Requisition table, and the spring Seasons Change table — six copies, which had
+ * already drifted (two of them spelled the partial `7&ndash;9`, so the same rung printed with an
+ * en dash on two surfaces and a hyphen on the rest). Import from here; do NOT retype them.
+ */
+export const MOVE_TIERS = Object.freeze([
+	Object.freeze({ key: "success", label: "10+" }),
+	Object.freeze({ key: "partial", label: "7-9" }),
+	Object.freeze({ key: "failure", label: "6-"  }),
+]);
+
+/** The tier keys in card order — for the many `["success","partial","failure"]` walks. */
+export const TIER_KEYS = Object.freeze(MOVE_TIERS.map(t => t.key));
+
+/** Tier key → printed label, for the lookups that have a key in hand rather than a list. */
+export const TIER_LABELS = Object.freeze(Object.fromEntries(MOVE_TIERS.map(t => [t.key, t.label])));
+
 // Shared shaping for a move's 10+ / 7-9 / 6- result tiers, in the shape rollStat
 // consumes ({ success|partial|failure: { label, value } }). Every move that authors
-// result text goes through here — custom moves and love letters — so the tier labels
-// live in exactly one place. When `picks` is given, each tier also carries a `pick`
-// count (love letters' "on a 10+, pick 1" pools); custom moves pass none, so no
-// `pick` key is added and their stored shape is unchanged.
+// result text goes through here — custom moves and love letters. When `picks` is given, each
+// tier also carries a `pick` count (love letters' "on a 10+, pick 1" pools); custom moves pass
+// none, so no `pick` key is added and their stored shape is unchanged.
 export function buildMoveTierResults({ success = "", partial = "", failure = "" }, picks = null) {
-	const tier = (label, value, pick) => (picks ? { label, value, pick } : { label, value });
-	return {
-		success: tier("10+", success, picks?.success ?? 0),
-		partial: tier("7-9", partial, picks?.partial ?? 0),
-		failure: tier("6-",  failure, picks?.failure ?? 0),
-	};
+	const text = { success, partial, failure };
+	return Object.fromEntries(MOVE_TIERS.map(({ key, label }) => [
+		key,
+		picks
+			? { label, value: text[key], pick: picks[key] ?? 0 }
+			: { label, value: text[key] },
+	]));
 }
 
 /**

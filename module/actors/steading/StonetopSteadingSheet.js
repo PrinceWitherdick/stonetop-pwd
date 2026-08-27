@@ -1,6 +1,7 @@
 import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, improvementRequirementCount, HERD_SURPLUS_PER } from "./StonetopSteading.js";
 import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml} from "../../utils/roll-engine.js";
 import {SteadingLedger} from "./SteadingLedger.js";
+import {TIER_KEYS} from "../../utils/move-results.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
 import {wireTabSearch} from "../../utils/tab-search.js";
 import {injectHeaderToggle} from "../../utils/sheet-chrome.js";
@@ -250,11 +251,7 @@ function _moveResultsFromRows(rows) {
 		.filter(row => row.tiers?.includes(tier))
 		.map(row => row.line)
 		.join(" ");
-	return {
-		success: { value: collect("success") },
-		partial: { value: collect("partial") },
-		failure: { value: collect("failure") },
-	};
+	return Object.fromEntries(TIER_KEYS.map(key => [key, { value: collect(key) }]));
 }
 
 function _seasonFortunesResultRows(seasonId) {

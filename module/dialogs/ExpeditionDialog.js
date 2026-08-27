@@ -1,5 +1,6 @@
 import { StepperDialog } from "./StepperDialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
+import { TIER_LABELS } from "../utils/move-results.js";
 // `openOrFocus` cannot serve `openOnTrip`: it brings an already-open window to the front without
 // running the factory, and that window still has to be told which trip to switch to.
 import { findOpenApp } from "../utils/open-windows.js";
@@ -212,9 +213,9 @@ const RESUME_KEY = "expedition";
 
 // Requisition (Book I, p.308): roll +Fortunes for the steading's communal assets.
 const _REQ_RESULT = {
-	success: { label: "10+",   line: "Go ahead, but you're expected to <strong>bring it back safely</strong>." },
-	partial: { label: "7&ndash;9", line: "Someone objects. You can borrow it, but you'll need to <strong>do some convincing</strong> first (likely a Persuade)." },
-	failure: { label: "6-",    line: "Folks ain't having it. <strong>Don't mark XP.</strong> Take it anyway if you must, but <strong>reduce Fortunes by 1</strong>." },
+	success: { label: TIER_LABELS.success, line: "Go ahead, but you're expected to <strong>bring it back safely</strong>." },
+	partial: { label: TIER_LABELS.partial, line: "Someone objects. You can borrow it, but you'll need to <strong>do some convincing</strong> first (likely a Persuade)." },
+	failure: { label: TIER_LABELS.failure, line: "Folks ain't having it. <strong>Don't mark XP.</strong> Take it anyway if you must, but <strong>reduce Fortunes by 1</strong>." },
 };
 
 const _REQ_TIERS = [

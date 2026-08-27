@@ -1,7 +1,7 @@
 import { maybeRemindPotentialForGreatness } from "../actors/character/WouldBeHeroAsterisk.js";
 import { escHtml, formatOutcomeDetail, stripHtmlToText } from "./strings.js";
 import { pickLimitsFrom } from "./move-picks.js";
-import { pickLeadText } from "./move-results.js";
+import { pickLeadText, TIER_KEYS, TIER_LABELS } from "./move-results.js";
 import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge } from "./chat.js";
 import { adjustXp } from "./xp.js";
 import { SYSTEM_ID } from "../system-id.js";
@@ -37,9 +37,9 @@ export function sign(n) { return n >= 0 ? `+${n}` : `${n}`; }
 // gain on a 7+. Shared by the Spring Burst walkthrough, the steading's Seasons Change
 // flow, and the chat "ask the most hopeful to roll" prompt so all three stay in step.
 export const SPRING_SEASONS_RESULT = {
-	success: { label: "10+",       line: "Pick <strong>one seasonal gain</strong>." },
-	partial: { label: "7&ndash;9", line: "Pick <strong>one seasonal gain</strong>, but a threat to the steading makes itself known or gets worse." },
-	failure: { label: "6-",        line: "<strong>Threats abound</strong> &mdash; and don't mark XP." },
+	success: { label: TIER_LABELS.success, line: "Pick <strong>one seasonal gain</strong>." },
+	partial: { label: TIER_LABELS.partial, line: "Pick <strong>one seasonal gain</strong>, but a threat to the steading makes itself known or gets worse." },
+	failure: { label: TIER_LABELS.failure, line: "<strong>Threats abound</strong> &mdash; and don't mark XP." },
 };
 
 /** Wrap a list of pre-rendered `<li>` inner-HTML strings in the shared "Results" legend
@@ -54,7 +54,7 @@ export function resultsLegendHtml(rows) {
 
 function _resultTableLegend(resultTable) {
 	if (!resultTable) return "";
-	const rows = ["success", "partial", "failure"]
+	const rows = TIER_KEYS
 		.map(key => resultTable[key])
 		.filter(Boolean)
 		.map(result => `<strong>${result.label}:</strong> ${result.line}`);
@@ -142,7 +142,7 @@ export function postSeasonsRollPrompt({ alias = "Seasons Change: Spring", hopefu
 }
 
 // The three result tiers a pick pool can be hung off, in card order.
-const _PICK_TIERS = ["success", "partial", "failure"];
+const _PICK_TIERS = TIER_KEYS;
 
 /**
  * A card's "choose from this list" options, in ONE shape however they were declared.
