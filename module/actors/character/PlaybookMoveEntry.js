@@ -12,6 +12,9 @@ export class PlaybookMoveEntry {
 
 		this.name = entry.name;
 		this.description = entry.description ?? "";
+		// The move's own 10+/7-9/6- outcome text, carried through so the card can print it as
+		// a tier ladder under the description instead of leaving it buried in the paragraph.
+		this.moveResults = entry.moveResults ?? null;
 		this.compendiumId = entry.id;
 		this.owned = ownedInstances.length > 0;
 		this.ownedId = lastOwnedId;

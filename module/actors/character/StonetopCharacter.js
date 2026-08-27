@@ -961,6 +961,7 @@ export class StonetopCharacter {
 				.withId(i._id)
 				.withName(i.name)
 				.withDescription(i.system?.description ?? null)
+				.withMoveResults(i.system?.moveResults ?? null)
 				.withMoveType(i.system?.moveType ?? null)
 				.withOwnedId(i._id)
 				.withRollType(normalizeRollType(i.system?.rollType))
@@ -987,6 +988,7 @@ export class StonetopCharacter {
 					.withId(i._id)
 					.withName(i.name)
 					.withDescription(i.system?.description ?? null)
+					.withMoveResults(i.system?.moveResults ?? null)
 					.withMoveType(i.system?.moveType ?? null)
 					.withOwnedId(i._id)
 					.withRollType(normalizeRollType(i.system?.rollType))
@@ -1962,6 +1964,7 @@ export class StonetopCharacter {
 				rollLabel: _rollLabelForMove(e.name, e.rollType, { moveType: "basic", description: e.description }),
 				owned: instances.length > 0,
 				description: e.description,
+				moveResults: e.moveResults ?? null,
 			};
 		}).sort((a, b) => {
 			if (a.name === "Aid") return -1;
@@ -1999,6 +2002,7 @@ export class StonetopCharacter {
 				rollType: normalizeRollType(i.system?.rollType),
 				rollLabel: _rollLabelForMove(i.name, i.system?.rollType, i.system),
 				description: i.system?.description ?? null,
+				moveResults: i.system?.moveResults ?? null,
 				// Only player-authored moves (not foreign playbook moves that also land
 				// in "other") get the edit affordance on the sheet.
 				custom: _isCustomMove(i),
@@ -3796,6 +3800,7 @@ function _buildMoveEntry(entry, source, moveResourcesMap, bgSlugs = new Set(), m
 		.withOwnedId(entry.ownedIds[0] ?? null)
 		.withName(entry.name)
 		.withDescription(entry.description)
+		.withMoveResults(entry.moveResults ?? null)
 		.withRollType(entry.rollType)
 		.withRollLabel(_rollLabelForMove(entry.name, entry.rollType, entry))
 		.withIsStarting(entry.isStarting)
@@ -3837,6 +3842,7 @@ function _buildOwnedItemMoveSnapshot(item, { sourceType, isStarting }) {
 		.withOwnedId(item._id)
 		.withName(item.name)
 		.withDescription(item.system?.description ?? "")
+		.withMoveResults(item.system?.moveResults ?? null)
 		.withRollType(item.system?.rollType ?? null)
 		.withRollLabel(_rollLabelForMove(item.name, item.system?.rollType, item.system))
 		.withIsStarting(isStarting)
@@ -3867,6 +3873,7 @@ function _buildCompendiumMoveCategory(entries, { key, title }, ownedAllByName) {
 				.withOwnedId(instances[0]?._id ?? null)
 				.withName(e.name)
 				.withDescription(e.description ?? "")
+				.withMoveResults(e.moveResults ?? null)
 				.withRollType(e.rollType)
 				.withRollLabel(_rollLabelForMove(e.name, e.rollType, { moveType: key, description: e.description }))
 				.withIsStarting(false)

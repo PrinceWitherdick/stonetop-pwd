@@ -830,7 +830,7 @@ describe("StonetopCharacter.getMoves otherMoves", () => {
 		const move = { _id: "m1", type: "move", name: "Custom Move", system: { moveType: "other", rollType: "str", description: "<p>Do a thing.</p>" } };
 		const char = new TestCharacterBuilder(new FakeActorBuilder().withItems([move]).build()).build();
 		const result = await char.getMoves();
-		expect(result.otherMoves).toEqual([{ name: "Custom Move", ownedId: "m1", rollType: "str", rollLabel: "STR", description: "<p>Do a thing.</p>", custom: false }]);
+		expect(result.otherMoves).toEqual([{ name: "Custom Move", ownedId: "m1", rollType: "str", rollLabel: "STR", description: "<p>Do a thing.</p>", moveResults: null, custom: false }]);
 	});
 
 	it("normalizes object rollType values for homefront moves", async () => {
@@ -885,7 +885,7 @@ describe("StonetopCharacter.getMoves otherMoves", () => {
 			.withMoveRepo(new FakeMoveRepository([], []))
 			.build();
 		const result = await char.getMoves();
-		expect(result.otherMoves).toEqual([{ name: "Fox Move", ownedId: "m4", rollType: null, rollLabel: null, description: null, custom: false }]);
+		expect(result.otherMoves).toEqual([{ name: "Fox Move", ownedId: "m4", rollType: null, rollLabel: null, description: null, moveResults: null, custom: false }]);
 	});
 
 	it("does not include same-playbook moves in otherMoves", async () => {

@@ -95,7 +95,7 @@ describe("FoundryMoveRepository", () => {
 			expect(pack.getIndex).toHaveBeenCalledWith({
 				fields: ["system.playbook", "system.isStartingMove", "system.requirement",
 				         "system.rollType", "system.description", "system.repeatMax", "system.cap", "system.resource",
-				         "system.hpBonus", "system.armorBonus", "system.loadBonus", "system.maxLoad", "system.requiresUnarmored", "system.markOptions", "system.markBudget", "system.crossPlaybook", "system.asterisk"],
+				         "system.hpBonus", "system.armorBonus", "system.loadBonus", "system.maxLoad", "system.requiresUnarmored", "system.markOptions", "system.markBudget", "system.crossPlaybook", "system.asterisk", "system.moveResults"],
 			});
 		});
 
@@ -156,7 +156,7 @@ describe("FoundryMoveRepository", () => {
 			stubGame(null, pack);
 			const repo = new FoundryMoveRepository();
 			await repo.getBasicMoves();
-			expect(pack.getIndex).toHaveBeenCalledWith({ fields: ["system.moveType", "system.rollType", "system.description"] });
+			expect(pack.getIndex).toHaveBeenCalledWith({ fields: ["system.moveType", "system.rollType", "system.description", "system.moveResults"] });
 		});
 
 		it("caches result — getIndex not called a second time", async () => {
@@ -215,7 +215,7 @@ describe("FoundryMoveRepository", () => {
 			const repo = new FoundryMoveRepository();
 			await repo.getPostDeathMoves("revenant");
 			expect(pack.getIndex).toHaveBeenCalledWith({
-				fields: ["system.playbook", "system.rollType", "system.description", "system.resource"],
+				fields: ["system.playbook", "system.rollType", "system.description", "system.resource", "system.moveResults"],
 			});
 		});
 
