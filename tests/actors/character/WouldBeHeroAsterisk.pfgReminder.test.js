@@ -5,7 +5,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { maybeRemindPotentialForGreatness } from "../../../module/actors/character/WouldBeHeroAsterisk.js";
 
-function makeActor({ playbook = "The Would-Be Hero", level = 3, ownsPfg = true, marks = {} } = {}) {
+// `slug` is what the guard reads; `playbook` is the label, and they are separable on purpose.
+function makeActor({ playbook = "The Would-Be Hero", slug = "the-would-be-hero", level = 3, ownsPfg = true, marks = {} } = {}) {
 	const items = ownsPfg ? [{
 		type: "move", name: "Potential for Greatness",
 		system: { markOptions: [
@@ -16,7 +17,7 @@ function makeActor({ playbook = "The Would-Be Hero", level = 3, ownsPfg = true, 
 	}] : [];
 	return {
 		type: "character", name: "Wren", id: "a1",
-		system: { playbook: { name: playbook }, attributes: { level: { value: level } } },
+		system: { playbook: { name: playbook, slug }, attributes: { level: { value: level } } },
 		items,
 		getFlag: (_scope, key) => key === "moves.moveMarks" ? { "Potential for Greatness": marks } : null,
 	};
@@ -38,8 +39,15 @@ describe("maybeRemindPotentialForGreatness", () => {
 		expect(ChatMessage.create).not.toHaveBeenCalled();
 	});
 
+	// Same reason as the announcement's own retitle case: the reminder is a rule, and a rule
+	// must not switch itself off because the label above it changed.
+	it("still reminds a Would-Be Hero whose playbook has been retitled", async () => {
+		await maybeRemindPotentialForGreatness(makeActor({ playbook: "The Hero" }), "wis", 12);
+		expect(ChatMessage.create).toHaveBeenCalledTimes(1);
+	});
+
 	it("does not remind a non-Would-Be-Hero", async () => {
-		await maybeRemindPotentialForGreatness(makeActor({ playbook: "The Heavy" }), "str", 11);
+		await maybeRemindPotentialForGreatness(makeActor({ playbook: "The Heavy", slug: "the-heavy" }), "str", 11);
 		expect(ChatMessage.create).not.toHaveBeenCalled();
 	});
 

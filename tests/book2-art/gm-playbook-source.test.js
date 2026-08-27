@@ -366,6 +366,44 @@ describe("the diagrams the toolkit shows", () => {
 		expect(COMMAND).toContain('publishIndex("gmDiagramArt", diagrams');
 	});
 
+	// The playbook's own field is the LAST place a GM looks, so the likeliest wrong file the
+	// macro will ever be handed is the right file in the wrong box. Read as a rulebook, the
+	// playbook is either "the 1-up edition" (the booklet) or "12 pages where 308 are expected"
+	// (the spreads one) — two verdicts that send a GM hunting for a download they already have,
+	// which is how a world ends up with no flowcharts and a GM certain they imported them.
+	it("names the book a misfiled PDF actually is, at pick time and at run time", () => {
+		// Judged by the same two things the edition checks judge by, so the two cannot disagree.
+		expect(COMMAND).toMatch(/const bookShapeFits = \(b, oneUp, pages\) =>/);
+		expect(COMMAND).toMatch(/const bookThisLooksLike = \(book, oneUp, pages\) =>/);
+		// Both callers, and both BEFORE the edition checks that would otherwise get there first.
+		expect(COMMAND).toContain('if (misfiled) return say(misfiledMessage(book, misfiled, doc.numPages), "bad");');
+		expect(COMMAND).toContain("if (misfiled) { reject(book, misfiledMessage(book, misfiled, doc.numPages)); continue; }");
+		// Ordering, in both places, against the edition check each one sits in front of. The same
+		// `layout.oneUp` line appears twice, once per caller, so the pick-time pair is measured
+		// from the front of the command and the run-time pair from the back.
+		const oneUpCheck = "if (layout.oneUp && !BOOKS[book]?.oneUp) {";
+		expect(COMMAND.indexOf("if (misfiled) return say(")).toBeLessThan(COMMAND.indexOf(oneUpCheck));
+		const run = COMMAND.indexOf("if (misfiled) { reject(");
+		expect(run, "the run-time check is missing").toBeGreaterThan(-1);
+		expect(run).toBeLessThan(COMMAND.lastIndexOf(oneUpCheck));
+		// The sentence points at a PAGE of the window, and reads that page's name off the rail
+		// rather than spelling it: a book moved between panels must not strand this wording.
+		expect(COMMAND).toContain('SETUP_SECTIONS.find((s) => s.key === (BOOKS[b]?.panel ?? "books"))?.title');
+	});
+
+	// A run that was GIVEN the playbook and produced neither flowchart used to end on an
+	// unqualified "Book art imported": the failure was one number inside a line counting five
+	// hundred other images, and the only surface that shows them can say nothing but "not
+	// imported". Which is exactly the report this came from.
+	it("says so when the playbook went in and no flowchart came out", () => {
+		expect(COMMAND).toContain("const diagramsAsked = diagrams.filter((d) => pdfByBook.has(d.book ?? 2));");
+		expect(COMMAND).toContain("const diagramsMissed = artRun && diagramsAsked.length && !diagramArt;");
+		// Named off the BOOKS table, like every other sentence that mentions a book.
+		expect(COMMAND).toContain("esc(bookLabelCap(diagramsAsked[0].book ?? 2))");
+		// ...and it names the tab, because that is the only place a GM will go looking.
+		expect(COMMAND).toContain("The GM Toolkit's Core Loop tab will still say they are not");
+	});
+
 	// All four art indexes ride the same helper. A fifth added as a hand-rolled copy is exactly
 	// how the first four drifted into four spellings of one rule.
 	it("publishes every art index through the one helper", () => {

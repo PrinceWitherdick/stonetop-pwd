@@ -30,7 +30,7 @@ import { openReturnTriumphant } from "../actors/steading/return-triumphant.js";
 import { assetTakenLabel } from "../utils/requisition-asset.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
 // Who on the roster is past the Door: the dead don't outfit, and the three who came back set
-// out on the same black their sheet wears.
+// out wearing the name of whatever brought them back.
 import { actorPastDeathKind } from "../actors/character/deaths-door-actor.js";
 import { deriveLoadLevel, LOAD_LEVEL_LIMITS } from "../utils/load.js";
 import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
@@ -142,7 +142,7 @@ function _carriesLoad(actor) {
 /**
  * The tag a returned PC wears on their load row: `{ kind, label }`, or null for the living.
  *
- * The black alone can't say WHICH of the three came back — the same reason the sheet earned its
+ * A tint alone can't say WHICH of the three came back — the same reason the sheet earned its
  * Dead tag — and on a roster the GM is reading to plan a trip, "Ghost" is the word that changes
  * what they ask for. The label is the insert's own name off the snapshot, so a world that renamed
  * one in the pack sees its name here; the slug, capitalised, is the fallback for a row whose
@@ -454,6 +454,26 @@ const _STEPS = [
 		// move card opens (actors/steading/return-triumphant.js), so the debility is cleared here
 		// rather than written down here and cleared on another sheet later.
 		returnTriumphant: true,
+		// The book's own test for whether it counts, printed where the call actually gets made.
+		// It is the commentary under the move (Book I p.339) plus the "not a given either way"
+		// branch from Aftermath (p.492), and it sits ABOVE the button rather than among the
+		// questions on purpose: the sixth question asks WHETHER they are Returning Triumphant,
+		// and this is the paragraph a GM answers it with. Nothing else on this step is a ruling
+		// the GM has to make against a bar, so the bar goes next to the control that acts on it.
+		// GM-only, since it rides inside the GM-only triumph block.
+		triumphBody: `<p><strong>Is it a triumph?</strong> The return has to be something folks celebrate, or
+					at least talk excitedly about (p.339). If crinwin stole an infant, triumph means saving
+					the kid. It does not mean killing a few crinwin and coming home with the child's body.</p>
+				<p>Feel it out against what was really at stake. Nobody expected them to save a stranger's
+					butchered caravan, so triumph there is putting the raiders down; if it was the town's own
+					logging camp, triumph is getting most of the workers back alive, whether or not a single
+					raider fell. <strong>Priorities.</strong></p>
+				<p>If it could go either way, don't rule on it: make it a scene (p.492). Tell them what it
+					would take ("you'll all need to keep your stories straight"), or put them in a spot
+					("folks are grumbling, on the verge of panic"), then ask what they do and see if they
+					pull it off.</p>
+				<p><strong>When in doubt, poll the table.</strong> If anyone, GM or player, thinks the
+					return isn't triumphant, the move doesn't trigger.</p>`,
 	},
 ];
 
@@ -849,9 +869,10 @@ export class ExpeditionDialog extends StepperDialog {
 			// The Return Triumphant button, on the arriving-home step. GM-only, like the asset
 			// picker and for the same reason: the move writes to the steading sheet. It reports
 			// whether there is a steading to write to, so a world without one says so on the
-			// button instead of offering a control that can only fail.
+			// button instead of offering a control that can only fail. `body` is the book's test
+			// for whether the return counts, printed above the button (see the step's own note).
 			returnTriumphant: step.returnTriumphant && game.user?.isGM
-				? { hasSteading: !!getStonetopSteadingActor() }
+				? { hasSteading: !!getStonetopSteadingActor(), body: step.triumphBody ?? "" }
 				: null,
 			// The exploration moves rail. On EVERY step, not only the ones that reach for a
 			// GM move: it is furniture, and a column that came and went as the reader stepped
@@ -3060,8 +3081,8 @@ export class ExpeditionDialog extends StepperDialog {
 	// and carries nothing, so they are dropped from the chips as well as the rows rather than
 	// shown as someone the GM could still tick onto the trip. Whoever CAME BACK is a different
 	// answer: a Revenant, Ghost or Thrall walks out with the party and their load matters as
-	// much as anyone's, so they stay — on the black their sheet and their chat cards already
-	// wear, because what is setting out is worth saying plainly on a list of who is setting out.
+	// much as anyone's, so they stay — wearing the name of the insert, because what is setting
+	// out is worth saying plainly on a list of who is setting out.
 	// The party watch redraws this block on `updateActor`, so a death mid-window drops them
 	// without the GM touching anything.
 	async _buildLoadReadout() {
@@ -3117,7 +3138,7 @@ export class ExpeditionDialog extends StepperDialog {
 
 	// A PC row: avatar, name/playbook, the diamond track, band pill, ◇ count, any
 	// load-gated moves, and (when overloaded, or carrying a load bonus) a note.
-	// `undeadKind` is the insert they came back wearing, if any: it darkens the row and
+	// `undeadKind` is the insert they came back wearing, if any: it tints the row's chip and
 	// names itself beside them, since a Ghost on the list is worth reading as a Ghost.
 	_pcRow(actor, snap, tier, over, marks, limits, undeadKind = null) {
 		const band = tier || "light";           // the empty-load default, shared by both branches below

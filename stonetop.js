@@ -41,6 +41,7 @@ import { onUpdateSiteNote } from "./module/sites/site-scene-pins.js";
 import { onDrawStonetopNote } from "./module/hooks/StonetopNoteLabels.js";
 import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
 import { bumpEncounterNotesGeneration } from "./module/actors/gmtoolkit/gm-encounters-tab.js";
+import { gmToolkitActors } from "./module/actors/gmtoolkit/gm-toolkit-actor.js";
 import { invalidateMonsterRefIndex } from "./module/bestiary/monster-ref-index.js";
 import { ensureLocationSummaryIndex, applyTooltipsThenRestrict } from "./module/locations/location-tooltips.js";
 import { hideBrokenJournalArt } from "./module/journal/hide-broken-art.js";
@@ -624,6 +625,36 @@ Hooks.on("createJournalEntry", handleImportedJournalArt);
 const _onArtIndexPublished = (setting) => {
 	const key = setting?.key ?? "";
 	if ([...ART_INDEX_SETTINGS, ...ART_BROWSE_INPUTS].some((s) => key.endsWith(`.${s}`))) clearArtBrowseCache();
+	// ...and repaint the one surface that reads an art index at RENDER time with no document of
+	// its own to be repainted by.
+	//
+	// Every other picture this system imports lands ON a document — an actor's portrait, a
+	// journal page's <img> — so the write that places it re-renders whatever is showing it. The
+	// GM Toolkit's Core Loop tab has no such document: the two flowcharts point at nothing, and
+	// the tab decides between the picture and the "run Import Book Art" placeholder by reading
+	// `gmDiagramArt` in getData (module/gm-toolkit/gm-diagrams.js).
+	//
+	// Which means the GM who presses that placeholder's own Import button, hands over the
+	// playbook, and watches the import finish is looking at a sheet that will keep saying "not
+	// imported" until it is closed and reopened — the button appearing to do nothing being the
+	// exact complaint that put this here. `book2ArtPrefix` counts as well: it does not change
+	// WHICH diagrams a world has, but it changes the path they are fetched from, so a hosted
+	// world that learns its prefix mid-session is showing two broken images until it repaints.
+	if (!key.endsWith(".gmDiagramArt") && !key.endsWith(".book2ArtPrefix")) return;
+	// The sheet is an AppV1 bound to its document, so `apps` holds every open copy of it.
+	// `render(false)` — never `true` — so this repaints a window that is already up and never
+	// conjures one on a GM who has the sheet shut.
+	//
+	// EVERY toolkit, not `theGmToolkit()`. One per world is the rule and hooks/StonetopSingleton.js
+	// vetoes a second create, but that veto only ever ran forward: a world that grew a duplicate
+	// before it shipped still has one, and `theGmToolkit()` answers with whichever is first in the
+	// collection. Repainting only that one would leave the GM looking at the OTHER sheet with the
+	// same stale placeholder this exists to clear, which is the one failure it must not reproduce.
+	for (const toolkit of gmToolkitActors()) {
+		for (const app of Object.values(toolkit?.apps ?? {})) {
+			try { app.render(false); } catch (_) { /* a window mid-close is not a failure */ }
+		}
+	}
 };
 Hooks.on("createSetting", _onArtIndexPublished);
 Hooks.on("updateSetting", _onArtIndexPublished);

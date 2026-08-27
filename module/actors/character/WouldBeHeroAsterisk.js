@@ -1,8 +1,18 @@
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
 import { escHtml } from "../../utils/strings.js";
 import { stonetopChatCard } from "../../utils/chat.js";
+import { playbookSlug } from "../../utils/playbook-slug.js";
 
+// The NAME is for display and the SLUG is for matching, and the difference matters more
+// for this playbook than for any of the other eight: it is the one that renames itself.
+// A Would-Be Hero who crosses off "Would-be" reads as "The Hero" everywhere they are
+// named (heroDisplayName, below), and a player is free to retitle the field besides. Both
+// of the guards further down decide whether a RULE applies, so both ask the slug — which
+// is the pack's id for the playbook and moves only when the pack does. Match either of
+// them on the name and the feature switches itself off for the sheet that renamed it,
+// silently, with the move sitting right there on it.
 export const WBH_PLAYBOOK_NAME = "The Would-Be Hero";
+export const WBH_PLAYBOOK_SLUG = "the-would-be-hero";
 export const WBH_HERO_NAME     = "The Hero";
 export const WBH_HERO_FLAG     = "wbhBecameHero";
 
@@ -42,7 +52,7 @@ export async function maybeAnnounceBecameHero(item, userId, options = {}) {
 	if (item?.type !== "move" || !item.system?.asterisk) return;
 	const actor = item.parent;
 	if (actor?.type !== "character") return;
-	if (actor.system?.playbook?.name !== WBH_PLAYBOOK_NAME) return;
+	if (playbookSlug(actor) !== WBH_PLAYBOOK_SLUG) return;
 	if (actor.getFlag(STONETOP_SCOPE, WBH_HERO_FLAG)) return; // already announced
 	await crossOffWouldBe(actor);
 }
@@ -56,7 +66,7 @@ export async function maybeAnnounceBecameHero(item, userId, options = {}) {
  */
 export async function maybeRemindPotentialForGreatness(actor, statKey, total) {
 	if (actor?.type !== "character" || total < 10) return;
-	if (actor.system?.playbook?.name !== WBH_PLAYBOOK_NAME) return;
+	if (playbookSlug(actor) !== WBH_PLAYBOOK_SLUG) return;
 	if (!_STAT_KEYS.has(statKey)) return; // follower/crew rolls aren't "rolling a stat"
 
 	const pfg = actor.items.find(i => i.type === "move" && i.name === POTENTIAL_FOR_GREATNESS);

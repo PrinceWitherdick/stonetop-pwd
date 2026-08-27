@@ -72,6 +72,29 @@ describe("the GM playbook diagrams", () => {
 		expect(SETTINGS_JS).toMatch(/"gmDiagramArt",\s*\{[^}]*scope:\s*"world"/s);
 	});
 
+	// Publishing the index has to REPAINT the tab, and this is the only art in the system where
+	// that has to be arranged: every other picture lands on a document, whose update re-renders
+	// whatever is showing it. Here the write is a world setting and the sheet reads it in
+	// getData, so without this the GM who presses the placeholder's own Import button, imports
+	// the playbook, and comes back finds the placeholder still there — the button looking like
+	// it did nothing, which is what was reported.
+	//
+	// Both hooks, for the reason the cache-buster beside it gives: a world setting has no Setting
+	// document until it is first written, so the very first import is a create, not an update.
+	it("repaints an open GM Toolkit when the index is published", () => {
+		const src = stripComments(STONETOP_JS);
+		expect(src).toContain('key.endsWith(".gmDiagramArt")');
+		// EVERY toolkit. `theGmToolkit()` answers with the first of them, which in a world that
+		// grew a duplicate before the singleton guard shipped is not necessarily the one on screen.
+		expect(src).toMatch(/for \(const toolkit of gmToolkitActors\(\)\)/);
+		expect(src).not.toContain("theGmToolkit()");
+		// `render(false)`, never `true`: this repaints a window that is already up. `true` would
+		// pop the toolkit open on every GM in the world the moment an import finished.
+		expect(src).toMatch(/app\.render\(false\)/);
+		expect(STONETOP_JS).toContain('Hooks.on("createSetting", _onArtIndexPublished)');
+		expect(STONETOP_JS).toContain('Hooks.on("updateSetting", _onArtIndexPublished)');
+	});
+
 	it("resolves an imported diagram against the durable art root", () => {
 		const rows = withSettings({
 			gmDiagramArt: { "core-loop": "assets/diagrams/core-loop.webp" },

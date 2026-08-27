@@ -158,6 +158,29 @@ describe("Return Triumphant, on the step where it comes up", () => {
 		expect(DIALOG_JS).toMatch(/step\.returnTriumphant && game\.user\?\.isGM/);
 	});
 
+	// The sixth arriving-home question asks WHETHER they are Returning Triumphant. The book's
+	// answer to it (the commentary under the move, Book I p.339) is printed with the button, not
+	// left in the PDF: it is the one ruling this step asks the GM to make against a bar.
+	it("prints the book's test for whether it counts, above the button", () => {
+		expect(home.triumphBody, "the going-home step lost its triumph guidance").toBeTruthy();
+		// The three things that decide it: what triumph means, that priorities depend on what
+		// was at stake, and the tie-breaker when the table can't agree.
+		expect(home.triumphBody).toContain("talk excitedly");
+		expect(home.triumphBody).toContain("Priorities");
+		expect(home.triumphBody).toMatch(/poll the table/i);
+		// Cited, like the rest of the walkthrough's copy, so a GM can go read the page.
+		expect(home.triumphBody).toContain("p.339");
+		// Rides on the GM-only triumph block rather than as its own step field, so a player
+		// never gets the ruling for a button they were not offered.
+		expect(DIALOG_JS).toMatch(/body:\s*step\.triumphBody/);
+		expect(HBS).toContain("{{{returnTriumphant.body}}}");
+		// Above the button, which is the whole point of putting it here.
+		expect(HBS.indexOf("returnTriumphant.body")).toBeLessThan(HBS.indexOf("stonetop-exp-triumph-btn"));
+		// A column flex item shrinks to its content, which would set the prose in a narrower
+		// measure than the step body it continues.
+		expect(ownRule(CSS, ".stonetop-exp-triumph-body")).toMatch(/align-self:\s*stretch/);
+	});
+
 	// The world may have no steading sheet yet. The button says so instead of failing on press.
 	it("reports whether there is a steading to clear a debility on", () => {
 		expect(HBS).toContain("returnTriumphant.hasSteading");

@@ -103,7 +103,7 @@
         "flowOfPlay": "The flow of play",
         "flowOfPlayNote": "How a campaign moves between adventure and home",
         "zoom": "Open in a window you can zoom and pan",
-        "missing": "This diagram is artwork from the GM playbook, so it isn't shipped with the system. Run Import Book Art and give it your copy of the free GM playbook PDF.",
+        "missing": "This diagram is artwork from the GM playbook, so it isn't shipped with the system. Run Import Book Art and add your copy of the free GM playbook PDF on that window's own GM playbook page, not under Your rulebooks.",
         "import": "Import Book Art"
       },
       "wonder": {

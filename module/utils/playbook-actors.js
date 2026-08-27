@@ -5,17 +5,13 @@
 
 import { WBH_PLAYBOOK_NAME, WBH_HERO_FLAG, heroDisplayName, ownsAsteriskMove } from "../actors/character/WouldBeHeroAsterisk.js";
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
+import { playbookSlug } from "./playbook-slug.js";
 
-/**
- * A character's playbook slug, from either the embedded `system.playbook` data or
- * a contained playbook item. Returns "" when there's no playbook yet — which also
- * makes it the truthiness test for "is this actor a player character".
- */
-export function playbookSlug(actor) {
-	return actor?.system?.playbook?.slug
-		?? actor?.items?.find?.(i => i.type === "playbook")?.system?.slug
-		?? "";
-}
+// Lives one module down, and is re-exported from here because this is where callers look
+// for it and twenty of them already import it by this path. It had to move: the Would-Be
+// Hero's own rules guards need it, and this file imports THEM for the epithet below, so
+// leaving it here made the two files import each other. See playbook-slug.js.
+export { playbookSlug };
 
 /**
  * A character's playbook as it should READ — "The Lightbearer", "The Blessed" — or "" for
@@ -37,12 +33,21 @@ export function playbookTitle(actor) {
  * A player character named the way the table says them out loud: "Pim The Lightbearer".
  *
  * DISPLAY ONLY — the Actor document keeps the bare name it was given. The playbook is not
- * part of who somebody is on disk: it can be swapped, it renames itself mid-campaign (see
- * `playbookTitle`), and half this system matches people BY name (the steading roster, the
- * relationships tables, follower recruitment, the chronicle's page-per-PC). Baking the
- * epithet in would either strand those matches or need every one of them rewritten, and a
- * chat speaker would end up "Pim The Lightbearer The Lightbearer" (see the alias stamp in
- * stonetop.js). Surfaces that want the long form ask for it here.
+ * part of who somebody is on disk: it can be swapped, and it renames itself mid-campaign (see
+ * `playbookTitle`). What a document is NAMED is therefore the least stable thing about it, and
+ * every subsystem that has to remember a particular person keys off something else — the
+ * steading roster stores `{uuid, id, name}` pointers, relationships are a map of actor id,
+ * follower cards carry `actorUuid`/`sourceUuid`, and the chronicle finds a page by its
+ * `chronicleKey` flag. None of them would be stranded by an epithet; they would simply carry a
+ * stale label until the next resolve.
+ *
+ * (An earlier version of this note claimed all four matched BY name and cited that as the reason
+ * not to bake the epithet in. It was not true of any of them. The reason below is, and it is
+ * enough on its own.)
+ *
+ * The reason is doubling: the name on disk is already spoken in places that add the title
+ * themselves, so a chat speaker would come out "Pim The Lightbearer The Lightbearer" (see the
+ * alias stamp in stonetop.js). Surfaces that want the long form ask for it here.
  *
  * Falls back to the plain name, so it is safe to call on any actor.
  */

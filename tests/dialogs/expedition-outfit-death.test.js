@@ -14,9 +14,10 @@ import { fileURLToPath } from "node:url";
 //    GM a party member they can tick onto a trip, which is the one thing this panel must not do.
 //
 //  • WHOEVER CAME BACK IS STILL GOING. A Revenant, a Ghost or a Thrall outfits like anyone else
-//    and their load gates their moves the same way, so they keep their row — wearing the black
-//    their sheet and their chat cards already wear, because "other" is worth saying on the list
-//    of who is setting out.
+//    and their load gates their moves the same way, so they keep their row — wearing the insert's
+//    name as a tag and its ink on their pick chip, because "other" is worth saying on the list of
+//    who is setting out. Said in a tag and NOT by repainting the row: the row's colour is the
+//    load band, which is the column this whole panel exists to compare across a party.
 
 vi.mock("../../module/book2-art/travel-map-art.js", () => ({
 	browseTravelMapArt: () => Promise.resolve({ has: () => false }),
@@ -124,7 +125,7 @@ describe("the Outfit step and the dead", () => {
 	});
 });
 
-describe("the black a returned character sets out on", () => {
+describe("the tag a returned character sets out wearing", () => {
 	/** Every rule in the stylesheet whose selector mentions `sel`. */
 	const rules = sel => (CSS.match(/^[^\n]*\{[\s\S]*?\}/gm) ?? []).filter(r => r.split("{")[0].includes(sel));
 
@@ -134,29 +135,32 @@ describe("the black a returned character sets out on", () => {
 		expect(PARTIAL).toContain('<span class="stonetop-exp-load-undead">{{undead.label}}</span>');
 	});
 
-	it("darkens the row by repainting it, not by laying a film over it", () => {
-		const base = rules(".stonetop-exp-load-row.is-undead")
-			.find(r => r.split("{")[0].trim().endsWith(".is-undead"));
-		expect(base, "the undead row rule is gone").toBeTruthy();
-		// A near-black paper of its own, and the palette tokens the row's furniture reads turned
-		// over with it — an `opacity` or a translucent black over the row is the film.
-		expect(base).toMatch(/background:[\s\S]*hsl\(0 0% 12%\)/);
-		expect(base).not.toMatch(/opacity\s*:/);
+	it("leaves the row on the panel's parchment instead of repainting it", () => {
+		// The row was once painted black with the whole palette flipped under it, the way the
+		// sheet and the chat cards are. It read as a state of the LOAD column rather than as a
+		// fact about the character, and it fought the overloaded band for the same background.
+		// All the row carries now is the insert's ink, for the tag to derive itself from.
+		const row = rules(".stonetop-exp-load-row.is-undead").join("\n");
+		expect(row, "the undead row paints itself again").not.toMatch(/background|opacity\s*:|color-scheme/);
 		for (const token of ["--st-text-muted", "--st-red-text", "--st-green-text", "--st-gold-text"]) {
-			expect(base, `${token} still reads as ink on parchment`).toContain(token);
+			expect(row, `${token} is flipped under the row again`).not.toContain(token);
+		}
+		// Nothing on the row's furniture is repainted for it either: the pips, the band pill and
+		// the gated-move chips are the panel's, and white hairlines over them only made sense on
+		// black paper.
+		for (const part of ["pip", "pill", "move"]) {
+			expect(rules(`.stonetop-exp-load-row.is-undead .stonetop-exp-load-${part}`),
+				`the ${part} is still dressed for a black row`).toEqual([]);
 		}
 	});
 
-	it("sits after the load bands, which it ties with", () => {
-		// `.row.is-undead` and `.row.lvl-over` are both (0,3,0) inside the dialog scope, so the
-		// black only beats the overloaded wash by being later in the file.
-		expect(CSS.indexOf(".stonetop-exp-load-row.is-undead {"))
-			.toBeGreaterThan(CSS.indexOf(".stonetop-exp-load-row.lvl-over "));
-	});
-
-	it("keeps the overloaded warning readable on the black instead of painting over it", () => {
-		const over = rules(".stonetop-exp-load-row.is-undead.lvl-over");
-		expect(over.join("\n")).toContain("--st-load-row-wash: var(--st-red-bg)");
+	it("says which insert in words, in that insert's ink", () => {
+		const tag = rules(".stonetop-exp-load-undead").join("\n");
+		// Derived from the one ink token, so a kind is a single value and never a set of three
+		// kept in step by hand. The lettering is mixed DOWN into black: the three hues were
+		// picked to carry on a black sheet and are a pale smudge at 2xs on parchment.
+		expect(tag).toContain("var(--st-past-death-ink)");
+		expect(tag).toMatch(/color:\s*color-mix\([^)]*var\(--st-past-death-ink\)[^)]*black\)/);
 	});
 
 	it("uses the same three inks as the sheet and the chat cards", () => {
