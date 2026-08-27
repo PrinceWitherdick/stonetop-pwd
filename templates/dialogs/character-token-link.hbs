@@ -1,0 +1,87 @@
+<div class="stonetop-token-link">
+
+	<p class="stonetop-token-link-lead">
+		These player tokens are not linked to their characters, so each one has been carrying a
+		private copy, and both copies have been played. That is why a chat card can mark XP on
+		one total and spend it out of another, and why the character sheet shows different
+		numbers depending on whether a token is selected when you open it.
+	</p>
+	<p class="stonetop-token-link-lead">
+		Linking them fixes it for good, but it keeps one copy and abandons the other. Only you
+		know which is the real one, so pick per character. Nothing is changed until you apply,
+		and &ldquo;Not now&rdquo; brings this list back next time you load the world.
+	</p>
+
+	<ul class="stonetop-token-link-list">
+		{{#each rows}}
+			<li class="stonetop-token-link-row">
+
+				<div class="stonetop-token-link-who">
+					<span class="stonetop-token-link-name">{{this.name}}</span>
+					<span class="stonetop-token-link-where">
+						token on &ldquo;{{this.scene}}&rdquo;{{#if this.renamed}}, named &ldquo;{{this.tokenName}}&rdquo; there{{/if}}
+					</span>
+				</div>
+
+				{{#if this.vitals.length}}
+					<table class="stonetop-token-link-table">
+						<thead>
+							<tr>
+								<th></th>
+								<th>Token&rsquo;s copy</th>
+								<th>Character sheet</th>
+							</tr>
+						</thead>
+						<tbody>
+							{{#each this.vitals}}
+								<tr>
+									<th scope="row">{{this.label}}</th>
+									<td>{{this.token}}</td>
+									<td>{{this.sheet}}</td>
+								</tr>
+							{{/each}}
+						</tbody>
+					</table>
+				{{/if}}
+
+				{{#if this.other.length}}
+					<ul class="stonetop-token-link-other">
+						{{#each this.other}}<li>{{this}}</li>{{/each}}
+					</ul>
+				{{else if this.subtleOnly}}
+					<p class="stonetop-token-link-other-none">
+						The two differ, but not in anything summarised here. Open both sheets before choosing.
+					</p>
+				{{/if}}
+
+				<div class="stonetop-token-link-choices">
+					<label>
+						<input type="radio" name="link-{{this.index}}" value="{{@root.choices.TOKEN}}">
+						<span>Keep the token&rsquo;s copy</span>
+					</label>
+					<label>
+						<input type="radio" name="link-{{this.index}}" value="{{@root.choices.SHEET}}">
+						<span>Keep the character sheet</span>
+					</label>
+					<label data-tooltip="Keeps both copies as they are. This is an answer, not a reminder: you will not be asked about this token again.">
+						<input type="radio" name="link-{{this.index}}" value="{{@root.choices.LEAVE}}">
+						<span>Leave it unlinked</span>
+					</label>
+				</div>
+
+			</li>
+		{{/each}}
+	</ul>
+
+	<p class="stonetop-token-link-outstanding"></p>
+
+	<div class="stonetop-token-link-actions">
+		<button type="button" data-action="apply" disabled>
+			<i class="fas fa-link"></i> <span>Apply</span>
+		</button>
+		<button type="button" data-action="later">
+			<i class="fas fa-clock-rotate-left"></i> <span>Not now</span>
+		</button>
+	</div>
+
+</div>

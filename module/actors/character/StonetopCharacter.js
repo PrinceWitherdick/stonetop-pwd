@@ -58,7 +58,8 @@ import {grantsToCreate, grantSourceMap, grantAdoptionKeys, itemGrantKey} from ".
 import {CharacterInventory} from "./CharacterInventory.js";
 import {maybeBeginAttack, attackMoveFor} from "../../combat/attack-flow.js";
 import {defendReadinessHold, defendReadinessCap} from "../../combat/defend-readiness.js";
-import {classifyResult, xpToLevelUp} from "../../utils/roll-engine.js";
+import {classifyResult} from "../../utils/roll-engine.js";
+import {xpToLevelUp, withXpLock} from "../../utils/xp.js";
 import {CharacterArcana} from "./CharacterArcana.js";
 import {CharacterLore} from "./CharacterLore.js";
 import {CharacterPostDeath, buildLoreSection, insertHpPenalty} from "./CharacterPostDeath.js";
@@ -3123,12 +3124,21 @@ export class StonetopCharacter {
 	// new item's id, then the choice is applied — a mid-flow failure leaves the move owned
 	// (its choice re-collectable from the card) rather than a half-applied stat bump.
 	async applyLevelUp(selectedMoveCompendiumId, selectedInvocationSlug, choices = null) {
-		const level = this._actor.system?.attributes?.level?.value ?? 1;
-		const xp    = this._actor.system?.attributes?.xp?.value ?? 0;
-		const cost  = xpToLevelUp(level);
-		await this._actor.update({
-			"system.attributes.level.value": level + 1,
-			"system.attributes.xp.value":   Math.max(0, xp - cost),
+		// Through the XP lock (utils/xp.js), not adjustXp: the level and the XP it cost move in
+		// ONE update, and splitting them would leave a moment where the character has the new
+		// level and has not paid for it. Both are therefore read inside the lock, so a mark that
+		// landed while the level-up dialog was open is spent from rather than overwritten.
+		//
+		// Only the write is held: the move additions below reach into compendia, and keeping
+		// every other XP change on this client waiting on a pack read would trade one rare bug
+		// for a common stall.
+		await withXpLock(this._actor, async () => {
+			const level = this._actor.system?.attributes?.level?.value ?? 1;
+			const xp    = this._actor.system?.attributes?.xp?.value ?? 0;
+			await this._actor.update({
+				"system.attributes.level.value": level + 1,
+				"system.attributes.xp.value":   Math.max(0, xp - xpToLevelUp(level)),
+			});
 		});
 		let addedItem = null;
 		if (selectedMoveCompendiumId) {

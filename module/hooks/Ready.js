@@ -4,7 +4,9 @@ import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
 import { repairAllChronicleFlagScopes } from "../migration/chronicle-flag-scope.js";
-import { oncePerVersion } from "../migration/once-per-version.js";
+import { oncePerVersion, forgetSweep } from "../migration/once-per-version.js";
+import { repairCharacterTokenLinks, applyLinkChoices } from "../migration/link-character-tokens.js";
+import { CharacterTokenLinkDialog } from "../dialogs/CharacterTokenLinkDialog.js";
 import { createArcanumItem, newArcanumSlug, isArcanumData } from "../item/createArcanum.js";
 import { renameAllSeasonYearPages } from "../migration/season-year-page-names.js";
 import { ensureStonetopSingleton, remindDestinedOmenRoll } from "./StonetopSingleton.js";
@@ -176,6 +178,19 @@ export async function onReady() {
 		// made at all now, so this is legacy repair and has a last world to run in.
 		try { await oncePerVersion("arcanumSlugs", _stampMissingArcanumSlugs); }
 		catch (err) { console.error("Stonetop | arcanum slug sweep failed", err); }
+		// Point player tokens back at the characters they stand for. An unlinked PC token carries
+		// a private copy of its character, and the two drift because a roll writes to the sheet's
+		// Actor while every chat-card button resolves its Actor out of the message speaker — which
+		// core rewrites to the TOKEN whenever one is on the canvas. See
+		// migration/link-character-tokens.js for the whole account.
+		//
+		// Gated per version because it is a full walk of every token on every Scene, and
+		// `_preCreate` now stamps the link on new characters, so what is left is legacy. The gate
+		// is UNSTAMPED again below when the GM leaves a drifted token undecided: an unanswered
+		// question is not a finished sweep, and the alternative is a world that quietly never asks
+		// again about two characters wearing one name.
+		try { await _repairCharacterTokenLinks(); }
+		catch (err) { console.error("Stonetop | player-token link repair failed", err); }
 		// Catch Chronicle year pages up to the "Year One" naming the sheet and the picker
 		// already use. Same shape as the sweep above and for the same reason: it recognises a
 		// generated name and writes one, so it is idempotent and needs no gate. The years that
@@ -1460,6 +1475,37 @@ export async function _stampMissingArcanumSlugs() {
 	}
 	console.log(`Stonetop | Gave a slug to ${slugless.length} arcanum card(s) that had none.`);
 	return slugless.length;
+}
+
+const _TOKEN_LINK_SWEEP = "characterTokenLinks";
+
+/**
+ * Run the player-token link repair, and decide whether the sweep is finished.
+ *
+ * The silent half — stamping prototypes, linking tokens whose private copy is empty — always
+ * completes. The other half is a question, and a question is only answered once: a GM who
+ * dismisses the window, or who parks a character on "leave it unlinked" for now, has not
+ * finished the sweep, so the version stamp is taken back off and the next load asks again.
+ *
+ * `forgetSweep` runs AFTER `oncePerVersion` returns rather than inside its work function,
+ * because the stamp is written on the way out — forgetting from inside would be overwritten by
+ * the very stamp it is trying to remove.
+ */
+async function _repairCharacterTokenLinks() {
+	let unfinished = false;
+	await oncePerVersion(_TOKEN_LINK_SWEEP, async () => {
+		const drifted = await repairCharacterTokenLinks();
+		if (!drifted.length) return;
+		const { applied, choices } = await CharacterTokenLinkDialog.ask(drifted);
+		if (!applied) { unfinished = true; return; }
+		const { linked, left, failed } = await applyLinkChoices(drifted, choices);
+		if (linked) console.log(`Stonetop | Relinked ${linked} player token(s) to their characters.`);
+		if (left)   console.log(`Stonetop | Left ${left} player token(s) unlinked, as asked.`);
+		// Only a FAILED write reopens the sweep. A token the GM deliberately left unlinked is an
+		// answer, and asking again every load would be this system overruling them.
+		if (failed) unfinished = true;
+	});
+	if (unfinished) await forgetSweep(_TOKEN_LINK_SWEEP);
 }
 
 // The GM-prep page families (threats / hazards) used to store one JournalEntry per item in

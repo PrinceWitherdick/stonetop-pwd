@@ -33,6 +33,23 @@ function formatStatValue(value) {
  * @param {string} innerHtml       Body markup placed inside the cell.
  * @param {string} [sectionClass]  Extra class(es) for the <section>.
  */
+/**
+ * May this user act on this card in a way that rewrites it?
+ *
+ * TWO rights, not one, and the reason is a bug that only appears at one table in three: Burn
+ * Brightly gated on `actor.isOwner` alone and then called `message.update()`, which throws when
+ * the GM rolled on a player's behalf — the player owns the character but not the GM's message.
+ * Every handler that changes a character AND restamps the card needs both, so they ask together.
+ *
+ * @param {object} message
+ * @param {object} actor
+ * @returns {boolean}
+ */
+export function canRewriteCard(message, actor) {
+	if (!actor || actor.type !== "character" || !actor.isOwner) return false;
+	return message.canUserModify?.(globalThis.game?.user, "update") ?? !!globalThis.game?.user?.isGM;
+}
+
 export function stonetopCardShell(innerHtml, sectionClass = "") {
 	return `<section class="pbta-chat-card stonetop-roll-card${sectionClass ? ` ${sectionClass}` : ""}">
 		<div class="cell cell--chat">

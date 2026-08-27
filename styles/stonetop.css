@@ -33307,6 +33307,274 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-btn-primary-text);
 }
 
+/* A card's own action row, and the XP receipt's Undo ------------------------
+   `.stonetop-roll-actions` is deliberately NOT `.stonetop-card-buttons`: that row is shared
+   property that roll-shifting injects into and Burn Brightly appends to, both by exact class.
+   This one belongs to the card that rendered it. */
+:is(.stonetop-roll-card, .stonetop-chat-move) .stonetop-roll-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.4rem;
+	margin-top: 0.4rem;
+}
+
+:is(.stonetop-roll-card, .stonetop-chat-move) .stonetop-roll-actions button {
+	display: inline-flex;
+	gap: 0.4em;
+	align-items: center;
+	justify-content: center;
+	width: auto;
+	flex: 0 0 auto;
+	padding: 0.15rem 0.6rem;
+	font-size: var(--st-fs-2xs);
+	line-height: 1.6;
+}
+
+/* An undo is a correction, not an action anyone should be drawn towards, so it sits quiet
+   until the pointer is on it. */
+.stonetop-roll-card .stonetop-xp-undo {
+	opacity: 0.75;
+}
+
+.stonetop-roll-card .stonetop-xp-undo:hover:not(:disabled) {
+	opacity: 1;
+}
+
+/* Spent. Ties with the :hover rule above on specificity, so it must sit LATER to win. */
+.stonetop-roll-card .stonetop-xp-undo:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+/* The whole point of the undo is that the card stops asserting a total that is no longer true.
+   The result line is struck through rather than removed: the log is a record of what happened,
+   and what happened is that this was marked and then taken back. */
+.stonetop-xp-mark-card.is-xp-undone .stonetop-roll-result-label {
+	text-decoration: line-through;
+	opacity: 0.6;
+}
+
+.stonetop-xp-mark-card.is-xp-undone .stonetop-roll-result {
+	filter: saturate(0.35);
+}
+
+/* Player tokens holding their own copy --------------------------------------
+   The guided half of the unlinked-PC-token repair (migration/link-character-tokens.js).
+   Every row is a decision with two destructive answers, so the two copies go side by side in
+   a table with the three radios directly beneath: the numbers and the choice they settle have
+   to be readable in one look, without scrolling between them. */
+.stonetop-token-link-dialog .stonetop-token-link {
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+	padding: 0.5rem;
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-lead {
+	margin: 0;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	/* The list is the only part allowed to grow: the leads and the buttons stay put, so a world
+	   with eight split characters still shows what the buttons do without hunting for them. */
+	max-height: 48vh;
+	overflow-y: auto;
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-row {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	padding: 0.5rem 0.6rem;
+	border: 1px solid var(--st-blue-border);
+	border-radius: var(--st-radius);
+	background: var(--st-blue-bg);
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-who {
+	display: flex;
+	gap: 0.4rem;
+	align-items: baseline;
+	flex-wrap: wrap;
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-name {
+	font-weight: 600;
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-where {
+	font-size: var(--st-fs-2xs);
+	color: var(--st-text-muted);
+}
+
+/* `width: auto` so the two columns sit next to the labels rather than being stretched to the
+   window: this is a two-value comparison, and spreading it edge to edge makes the reader
+   travel to pair up numbers that belong together. */
+.stonetop-token-link-dialog .stonetop-token-link-table {
+	width: auto;
+	margin: 0;
+	border: none;
+	background: none;
+	border-collapse: collapse;
+	font-size: var(--st-fs-sm);
+}
+
+/* Core skins a bare <thead> with a half-black fill, pale text and a black bottom border, on the
+   assumption that a table is a data grid on parchment. Over this card that reads as a dark bar
+   with a line struck through its own headings, so the skin is taken off the THEAD itself: the
+   <th> rules below never reached it, and styling only the cells left the bar behind them. */
+.stonetop-token-link-dialog .stonetop-token-link-table thead,
+.stonetop-token-link-dialog .stonetop-token-link-table tbody,
+.stonetop-token-link-dialog .stonetop-token-link-table tr {
+	background: none;
+	border: none;
+	color: inherit;
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-table th,
+.stonetop-token-link-dialog .stonetop-token-link-table td {
+	padding: 0.1rem 0.9rem 0.1rem 0;
+	border: none;
+	background: none;
+	text-align: left;
+}
+
+/* `text-shadow: none` belongs with the thead reset above: core's black 1px shadow is there to
+   lift PALE text off that dark bar, and once the bar is gone it is a smear across grey type
+   that reads as a line struck through the heading. */
+.stonetop-token-link-dialog .stonetop-token-link-table thead th {
+	font-size: var(--st-fs-2xs);
+	font-weight: 600;
+	color: var(--st-text-muted);
+	text-shadow: none;
+}
+
+/* The row label (XP, HP) is a heading, not data, and reads as one. */
+.stonetop-token-link-dialog .stonetop-token-link-table tbody th {
+	font-weight: 600;
+	color: var(--st-text-secondary);
+}
+
+/* These two columns ARE the decision, so they carry the weight the prose around them does
+   not. Tabular figures so a 9 and an 11 line up rather than shifting the column. */
+.stonetop-token-link-dialog .stonetop-token-link-table tbody td {
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Spiral bullets, block flow, per the standing rule: every prose list in the system wears the
+   spiral and none wears the browser's disc. `list-style: none` plus an absolutely positioned
+   ::before, never `display: flex` on the <li> — a flex <li> makes a separate flex item of every
+   inline child, so an <em> phrase shatters into columns instead of wrapping as one run. */
+.stonetop-token-link-dialog .stonetop-token-link-other,
+.stonetop-token-link-dialog .stonetop-token-link-other-none {
+	margin: 0;
+	padding: 0;
+	font-size: var(--st-fs-2xs);
+	color: var(--st-text-muted);
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-other {
+	list-style: none;
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-other li {
+	position: relative;
+	margin: 2px 0;
+	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-other li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0.2em;
+	width: var(--stonetop-bullet-size, 10px);
+	height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain;
+	opacity: 0.55;
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-choices {
+	display: flex;
+	gap: 0.9rem;
+	flex-wrap: wrap;
+	font-size: var(--st-fs-sm);
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-choices label {
+	display: inline-flex;
+	gap: 0.35em;
+	align-items: center;
+	cursor: pointer;
+}
+
+/* v13 nudges a bare radio upward with a relative offset of its own; `top: 0` is declared flat
+   rather than left to the cascade so the dot sits with its label instead of riding above it. */
+.stonetop-token-link-dialog .stonetop-token-link-choices input[type="radio"] {
+	position: relative;
+	top: 0;
+	flex: 0 0 auto;
+	width: 20px;
+	height: 20px;
+	margin: 0;
+}
+
+/* Sits between the list and the buttons and is empty whenever the answer sheet is complete,
+   so it takes no room until it has something to say — a permanent blank line between two
+   blocks reads as a layout fault rather than as a slot. */
+.stonetop-token-link-dialog .stonetop-token-link-outstanding {
+	margin: 0;
+	font-size: var(--st-fs-2xs);
+	color: var(--st-text-muted);
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-outstanding:empty {
+	display: none;
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-actions {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-actions button {
+	display: inline-flex;
+	gap: 0.4em;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-actions button[data-action="apply"] {
+	background: var(--st-btn-primary-bg);
+	border: 1px solid var(--st-btn-primary-border);
+	color: var(--st-btn-primary-text);
+	font-weight: bold;
+}
+
+.stonetop-token-link-dialog .stonetop-token-link-actions button[data-action="apply"]:hover:not(:disabled) {
+	background: var(--st-btn-primary-bg-hover);
+	border-color: var(--st-btn-primary-border-hover);
+	color: var(--st-btn-primary-text);
+}
+
+/* Disabled until every row is answered, which is most of the time this window is open — so it
+   has to read as "not yet" rather than as a dead control. Same specificity as the :hover rule
+   above, so it must sit LATER to win when both apply. */
+.stonetop-token-link-dialog .stonetop-token-link-actions button[data-action="apply"]:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
 /* ══ Relationships: board view ═════════════════════════════════════════════════
    The standings board — the same rows the hearts table renders, dealt into three
    lanes (Trusted / Neutral / Hostile). Shared by the NPC, character and steading

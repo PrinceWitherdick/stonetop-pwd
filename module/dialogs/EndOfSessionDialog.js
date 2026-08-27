@@ -1,6 +1,7 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { resetOmenReminder } from "../hooks/StonetopSingleton.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
+import { adjustXp } from "../utils/xp.js";
 import { stonetopChatCard } from "../utils/chat.js";
 import { escHtml } from "../utils/strings.js";
 
@@ -47,8 +48,19 @@ export class EndOfSessionDialog extends StonetopDialog {
 			this.render(false);
 		});
 
-		html.find(".stonetop-eos-confirm-btn").on("click", async () => {
-			await this._applyGroupXp();
+		html.find(".stonetop-eos-confirm-btn").on("click", async (ev) => {
+			// Re-entrancy guard, the same one the level-up dialog carries and for the same
+			// reason: awarding walks every player character with a separate write apiece, then
+			// posts a card and resets the Omen reminder, and the window closes only when all of
+			// that has landed. A four-player table therefore leaves this button live and
+			// inviting for several round trips, and a second click in that gap awards the whole
+			// session's XP twice to everyone. The button is disabled as well as latched so the
+			// GM can see the press took.
+			if (this._busy) return;
+			this._busy = true;
+			ev.currentTarget.disabled = true;
+			try { await this._applyGroupXp(); }
+			finally { this._busy = false; }
 		});
 	}
 
@@ -60,9 +72,11 @@ export class EndOfSessionDialog extends StonetopDialog {
 		const playerChars = getPlayerCharacters();
 
 		if (playerChars.length > 0 && xpToAward > 0) {
+			// Through adjustXp (utils/xp.js) so the award queues behind anything else changing
+			// that character's XP and reads their total at the moment it writes. The end of a
+			// session is exactly when a last roll is still settling somewhere.
 			for (const actor of playerChars) {
-				const current = actor.system?.attributes?.xp?.value ?? 0;
-				await actor.update({ "system.attributes.xp.value": current + xpToAward }, { stonetopMove: "End of Session" });
+				await adjustXp(actor, xpToAward, { move: "End of Session" });
 			}
 
 			const yeses = GROUP_QUESTIONS

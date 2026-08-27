@@ -2,6 +2,13 @@ import { maybeRemindPotentialForGreatness } from "../actors/character/WouldBeHer
 import { escHtml, formatOutcomeDetail } from "./strings.js";
 import { pickLeadText } from "./move-results.js";
 import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge } from "./chat.js";
+import { adjustXp } from "./xp.js";
+import { SYSTEM_ID } from "../system-id.js";
+
+// What a miss is worth (Book I p.209: "a tick mark that raises your total by 1"). Named because
+// the mark and the Undo that takes it back have to agree, and a card stamped by one number and
+// reversed by another is a bug that only shows up as a total nobody can account for.
+const XP_PER_MISS = 1;
 
 const _STAT_LABELS = {
 	str: "Strength", dex: "Dexterity", int: "Intelligence",
@@ -133,7 +140,7 @@ export function postSeasonsRollPrompt({ alias = "Seasons Change: Spring", hopefu
 	});
 }
 
-function _rollCard({ header, result = "", resultClass = "", resultDetail = "", resultOutcomes = null, resultLegend = "", pickList = "", tierActions = null, conditionsHtml = "", noticesHtml = "", buttons = false, total = null, formula = "", description = "", dieResults = "", badge = "", sectionClass = "", damage = false }) {
+function _rollCard({ header, result = "", resultClass = "", resultDetail = "", resultOutcomes = null, resultLegend = "", pickList = "", tierActions = null, conditionsHtml = "", noticesHtml = "", buttons = false, actions = "", total = null, formula = "", description = "", dieResults = "", badge = "", sectionClass = "", damage = false }) {
 	// Stash every tier's outcome on the row so a GM Shift Up/Down can swap the
 	// detail line to match the new tier (see _shiftRollCardFlavor in stonetop.js).
 	const outcomeAttrs = resultOutcomes
@@ -202,6 +209,13 @@ function _rollCard({ header, result = "", resultClass = "", resultDetail = "", r
 			<button data-action="shiftUp"><i class="fas fa-arrow-up"></i> Shift Up</button>
 		</div>`
 		: "";
+	// A row of the card's OWN controls, deliberately not the `.stonetop-card-buttons` row above.
+	// That one is shared property: roll-shifting injects into it and Burn Brightly appends to it,
+	// and both find it by that exact class. A card that rendered its own buttons there would be
+	// offering a Burn Brightly on a receipt with no roll behind it.
+	const actionsHtml = actions
+		? `<div class="card-buttons stonetop-roll-actions">${actions}</div>`
+		: "";
 
 	return `<section class="pbta-chat-card stonetop-roll-card${sectionClass ? ` ${sectionClass}` : ""}">
 		<div class="cell cell--chat">
@@ -217,6 +231,7 @@ function _rollCard({ header, result = "", resultClass = "", resultDetail = "", r
 			${pickListHtml}
 			${tierActionsHtml}
 			${conditionsHtml}
+			${actionsHtml}
 			${buttonsHtml}
 		</div>
 	</section>`;
@@ -424,24 +439,32 @@ export async function rollStat(statKey, actor, options = {}) {
  * this one. `moveName` attributes the write in the character ledger.
  *
  * XP is deliberately not capped: xpToLevelUp is a level-up threshold, not a ceiling.
+ *
+ * The write goes through adjustXp (utils/xp.js), which queues it behind anything else changing
+ * this character's XP and reads the total inside that queue. The card then reports the number
+ * that actually landed rather than one computed from a total read before the write — which is
+ * how a mark and a spend firing together came to print two totals that could not both be true.
  */
 export async function markMissXp(actor, moveName) {
-	const currentXp = actor.system?.attributes?.xp?.value ?? 0;
-	const level     = actor.system?.attributes?.level?.value ?? 1;
-	const maxXp     = xpToLevelUp(level);
-	const newXp     = currentXp + 1;
 	// Attribute the marked XP to the move that missed, so the ledger reads "via <move>".
-	await actor.update({ "system.attributes.xp.value": newXp }, moveName ? { stonetopMove: moveName } : {});
+	const { after: newXp, max: maxXp } = await adjustXp(actor, XP_PER_MISS, { move: moveName });
 	const xpCard = _rollCard({
 		header: "Miss",
 		result: `+1 XP (${newXp} / ${maxXp})`,
 		resultClass: "success",
-		description: `<p>On a <strong>miss</strong> (a total of 6 or less), you <strong>mark XP</strong>, a tick mark that raises your total by 1, unless the move says otherwise.</p>`
+		sectionClass: "stonetop-xp-mark-card",
+		description: `<p>On a <strong>miss</strong> (a total of 6 or less), you <strong>mark XP</strong>, a tick mark that raises your total by 1, unless the move says otherwise.</p>`,
+		actions: `<button type="button" class="stonetop-xp-undo" data-action="undoXpMark"><i class="fas fa-rotate-left"></i> Undo</button>`,
 	});
 	await ChatMessage.create({
 		content:  xpCard,
 		speaker:  ChatMessage.getSpeaker({ actor }),
 		rollMode: game.settings.get("core", "rollMode"),
+		// How much this card marked, stamped at creation so the Undo button takes back exactly
+		// what was given rather than a number read off the card's own text. Its presence is also
+		// what identifies the card to the wiring — a card with no `xpMark` has nothing to undo,
+		// so an ordinary roll card can never grow the button. Free: it rides on the create.
+		flags: { [SYSTEM_ID]: { xpMark: XP_PER_MISS } },
 	});
 }
 
@@ -453,12 +476,11 @@ function advDisConditionPills(rollMode) {
 	return [];
 }
 
-// Stonetop's XP-to-level rule: the XP total needed to level up at a given level is 6 + 2×level.
-// The single owner of that curve — every "N / max" readout and affordability check calls this
-// rather than re-deriving the formula, so a change to the curve lands in exactly one place.
-export function xpToLevelUp(level) {
-	return 6 + level * 2;
-}
+// `xpToLevelUp` used to live here. It now lives in utils/xp.js with the rest of what a
+// character's XP total needs — the curve, the per-Actor write queue, and the one function that
+// applies a delta — because how much XP a level costs is no more a dice engine's business than
+// the queue is. Both importers moved with it; there is no re-export, so nothing is left pointing
+// at the old home for a reader to mistake for the real one.
 
 /**
  * Apply advantage/disadvantage to a damage formula by doubling its first dice

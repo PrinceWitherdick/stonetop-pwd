@@ -57,9 +57,11 @@ import { registerStonetopSingletonHooks } from "./module/hooks/StonetopSingleton
 import { info } from "./module/utils/logger.js";
 import { boldMissText } from "./module/utils/strings.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
-import { rollSeasonsCard, sign, SPRING_SEASONS_RESULT, xpToLevelUp, markMissXp } from "./module/utils/roll-engine.js";
+import { rollSeasonsCard, sign, SPRING_SEASONS_RESULT, markMissXp } from "./module/utils/roll-engine.js";
+import { xpToLevelUp, adjustXp } from "./module/utils/xp.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
-import { moveChatCard } from "./module/utils/chat.js";
+import { moveChatCard, canRewriteCard } from "./module/utils/chat.js";
+import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
 import { wireAttackConfirm, wireApplyDamage, wireSufferAttack } from "./module/combat/attack-flow.js";
@@ -82,6 +84,7 @@ import { installWindowRestore } from "./module/utils/window-restore.js";
 import { registerUuidRedirects } from "./module/migration/compat.js";
 import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
 import { SYSTEM_ID } from "./module/system-id.js";
+import { speakerActor } from "./module/utils/speaker-actor.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
 
 // -- INIT ------------------------------------------------------
@@ -784,7 +787,7 @@ Hooks.on("updateActor", onUpdateActorDeathsDoorRaised);
 // render pass turns into the fringe under the card. Both are written in one updateSource so a
 // message costs one source edit, not two.
 Hooks.on("preCreateChatMessage", (message) => {
-	const actor = _speakerActor(message);
+	const actor = speakerActor(message);
 	if (!actor || actor.type !== "character") return;
 
 	const changes = {};
@@ -967,7 +970,7 @@ function _chatWireBurnBrightly(message, html) {
 	const cardButtons = html.querySelector(".stonetop-roll-card .stonetop-card-buttons");
 	if (!cardButtons) return;
 
-	const actor = _speakerActor(message);
+	const actor = speakerActor(message);
 
 	if (!actor || actor.type !== "character" || !actor.isOwner) return;
 
@@ -992,20 +995,24 @@ function _chatWireBurnBrightly(message, html) {
 
 	btn.addEventListener("click", async () => {
 		btn.disabled = true;
-		const currentXp    = actor.system?.attributes?.xp?.value    ?? 0;
-		const currentLevel = actor.system?.attributes?.level?.value ?? 1;
-		if (currentXp < xpToLevelUp(currentLevel)) {
-			ui.notifications.warn("You don't have enough XP to Burn Brightly.");
-			btn.disabled = false;
-			return;
-		}
 		try {
 			// Read before the update, so the re-stamped alias is the one the card was created
 			// with rather than whatever the actor has become mid-click.
 			const fullName = characterFullName(actor);
-			await actor.update({ "system.attributes.xp.value": currentXp - 2 });
-			const newXp = currentXp - 2;
-			const maxXp = xpToLevelUp(currentLevel);
+			// Affordability is checked INSIDE the write queue rather than here. Checking it at
+			// click time was right for one spend and wrong for two: a second Burn Brightly
+			// queued behind the first tested a total the first had not yet reduced, so a
+			// character with 9 XP could buy two +1s and end on 5, below the threshold that made
+			// either of them legal.
+			const { applied, after: newXp, max: maxXp } = await adjustXp(actor, -2, {
+				move: "Burn Brightly",
+				require: (xp, level) => xp >= xpToLevelUp(level),
+			});
+			if (!applied) {
+				ui.notifications.warn("You don't have enough XP to Burn Brightly.");
+				btn.disabled = false;
+				return;
+			}
 			ChatMessage.create({
 				content: `-2 XP for Burning Brightly.<br>New XP: ${newXp} / ${maxXp}`,
 				speaker: ChatMessage.getSpeaker({ actor }),
@@ -1134,18 +1141,12 @@ async function _resyncIdentification(message, actor, total) {
 	for (const sync of IDENTIFY_SYNCERS) await sync(message, actor, total);
 }
 
-// Burn Brightly gates on actor.isOwner but then calls message.update(), which throws when the GM
-// rolled on a player's behalf. Both handlers below need BOTH rights, so check them together.
-function _canRewriteCard(message, actor) {
-	if (!actor || actor.type !== "character" || !actor.isOwner) return false;
-	return message.canUserModify?.(game.user, "update") ?? game.user.isGM;
-}
 
 function _chatWireKnowThings(message, html) {
 	const card = html.querySelector(".stonetop-roll-card");
 	if (!card || !isKnowThings(_cardMoveName(message))) return;
-	const actor = _speakerActor(message);
-	if (!_canRewriteCard(message, actor)) return;
+	const actor = speakerActor(message);
+	if (!canRewriteCard(message, actor)) return;
 	_wireNeverAtALoss(message, html, actor);
 	_wireLogbook(message, html, actor, card);
 }
@@ -1253,12 +1254,11 @@ function _wireLogbook(message, html, actor, card) {
 	});
 }
 
+
 // -- REQUISITION: apply miss cost from the roll card ------------
-function _speakerActor(message) {
-	const { token: tokenId, actor: actorId } = message.speaker ?? {};
-	return (tokenId ? canvas.tokens?.get(tokenId)?.actor : null)
-		?? (actorId ? game.actors?.get(actorId) : null);
-}
+// Whose Actor a card acts on now lives in utils/speaker-actor.js (`speakerActor`), which carries
+// the account of why a character does not resolve the way a goblin does — and, being a module of
+// its own rather than a local in this hook-registering entry point, can be tested.
 
 function _chatWireRequisitionMissCost(message, html) {
 	const btn = html.querySelector(".stonetop-requisition-miss-cost");
@@ -1273,7 +1273,7 @@ function _chatWireRequisitionMissCost(message, html) {
 	btn.addEventListener("click", async () => {
 		btn.disabled = true;
 		try {
-			const actor = _speakerActor(message);
+			const actor = speakerActor(message);
 			if (!actor?.isOwner || actor.type !== "stonetop") {
 				ui.notifications.warn("You need permission to update the steading's Fortunes.");
 				btn.disabled = false;
@@ -1358,6 +1358,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// After the roll-shift pass (which hides the button row from non-GMs) and after Burn
 	// Brightly, so the logbook pill sits to its right in the shared button row.
 	_chatWireKnowThings(message, html);
+	// The XP receipt's own row, not the shared button row the two above claim — a card with no
+	// roll behind it never grows a Shift or a Burn Brightly, and this never lands on one that has.
+	wireUndoXpMark(message, html);
 	_chatWireRequisitionMissCost(message, html);
 	_chatWireSeasonsRoll(message, html);
 	_chatWireLoveLetterPicks(message, html);
@@ -1411,7 +1414,7 @@ async function _onRollShift(event, message) {
 		// A shifted Know Things card that was identifying an arcanum has to carry the new tier's
 		// disclosure with it, or a Shift Up says "You read the card, front and back" over a card
 		// still face down. No-op for every other roll — the flag is only on that one.
-		await _resyncIdentification(message, _speakerActor(message), roll.total);
+		await _resyncIdentification(message, speakerActor(message), roll.total);
 	} catch (err) {
 		console.error("Stonetop | Error shifting roll result:", err);
 	} finally {
