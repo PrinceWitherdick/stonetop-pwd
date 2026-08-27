@@ -201,6 +201,13 @@
 	--st-tier-partial-text: #6b4400;
 	--st-tier-success-text: #1a4a1a;
 
+	/* The 10+ / 7-9 / 6- label column, shared by every tier ladder: the move card's
+	   (.stonetop-move-tiers) and the love letter reader's (.stonetop-love-letter-read-tiers).
+	   One value because the whole point of a fixed width is that the outcome text starts at the
+	   same left edge each time a player meets the layout — and the two had already drifted to
+	   3em and 2.6em, which is what a second hand-typed width buys. */
+	--st-tier-label-width: 3em;
+
 	/* How far off pitch black the dead surfaces sit.
 	   Inverting the sheet's near-white paper lands on roughly #080807, which is black enough that
 	   a window reads as a hole in the screen rather than as a dark room. This is the even lift
@@ -5334,6 +5341,67 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	margin: 0;
 }
 
+/* -- Move result ladder ------------------------------------------------------
+   A move's 10+ / 7-9 / 6- outcomes, lifted out of the book's run-on paragraph by
+   utils/move-tiers.js and re-laid as labelled rows. Same shape as the love letter
+   reader's ladder (.stonetop-love-letter-read-tiers) and the Death's Door dialog's,
+   which is where a player first meets this layout.
+
+   It renders INSIDE the description container (.stonetop-item-description on the
+   sheet, .stonetop-npc-move-description / .stonetop-basic-move-desc elsewhere), so
+   it inherits that container's indent, size and colour and declares none of its own.
+
+   Every selector here carries a tag as well as its class, and that is load-bearing:
+   the spiral-bullet families each style `<container> li` and `<container> li::before`
+   at (0,1,1) / (0,2,1), far LATER in this file. A bare `.stonetop-move-tier` ties or
+   loses to those wherever the ladder is used, and the tier row would grow a spiral in
+   front of a label that is already its marker. `ul.stonetop-move-tiers` likewise
+   outweighs `.stonetop-item-description ul`. */
+ul.stonetop-move-tiers {
+	list-style: none;
+	margin: 5px 0 0;
+	padding: 5px 0 0;
+	border-top: 1px solid var(--st-card-rule);
+}
+
+.stonetop-move-tiers li.stonetop-move-tier {
+	display: flex;
+	gap: 8px;
+	position: static;
+	margin: 3px 0;
+	padding-left: 0;
+}
+
+.stonetop-move-tiers li.stonetop-move-tier::before {
+	content: none;
+}
+
+/* Fixed width so the three labels line up into a column and the outcome text starts
+   at one left edge; tabular figures keep "10+" and "7-9" the same width. */
+.stonetop-move-tier-label {
+	flex: 0 0 var(--st-tier-label-width);
+	font-weight: bold;
+	font-variant-numeric: tabular-nums;
+}
+
+/* min-width:0 or a long unbroken outcome (and the nested "pick 1" list) pushes the
+   row wider than the card instead of wrapping inside it. */
+.stonetop-move-tier-text {
+	min-width: 0;
+}
+
+.stonetop-move-tier--success .stonetop-move-tier-label { color: var(--st-tier-success-text); }
+.stonetop-move-tier--partial .stonetop-move-tier-label { color: var(--st-tier-partial-text); }
+.stonetop-move-tier--failure .stonetop-move-tier-label { color: var(--st-tier-failure-text); }
+
+/* The "either way, …" rider the book hangs off the end of its tier sentence, which
+   belongs to every tier rather than to one — so it sits under the whole ladder. */
+.stonetop-move-tiers-note {
+	margin: 4px 0 0;
+	font-style: italic;
+	opacity: 0.85;
+}
+
 .stonetop-item.move-locked {
 	opacity: 0.4;
 }
@@ -6619,6 +6687,11 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	margin: 0;
 	padding: 0;
 }
+/* Row geometry shared in spirit with the move card's ladder (.stonetop-move-tier). The two are
+   not one rule because that one has to out-weigh the spiral-bullet families it renders inside,
+   which this one does not — see the note there. The LABEL COLUMN is a shared token, because a
+   fixed width whose whole job is to line the outcome text up is worth nothing if the two
+   surfaces a player meets it on pick different numbers, which is what they had done. */
 .stonetop-love-letter-read-tiers li {
 	display: flex;
 	gap: 8px;
@@ -6626,7 +6699,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	line-height: 1.4;
 }
 .stonetop-love-letter-read-tier-label {
-	flex: 0 0 3em;
+	flex: 0 0 var(--st-tier-label-width);
 	font-weight: bold;
 	color: var(--ll-accent);
 }

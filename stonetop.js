@@ -57,6 +57,7 @@ import { characterFullName } from "./module/utils/playbook-actors.js";
 import { registerStonetopSingletonHooks } from "./module/hooks/StonetopSingleton.js";
 import { info } from "./module/utils/logger.js";
 import { boldMissText } from "./module/utils/strings.js";
+import { moveBodyHtml } from "./module/utils/move-tiers.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
 import { rollSeasonsCard, sign, SPRING_SEASONS_RESULT, markMissXp } from "./module/utils/roll-engine.js";
 import { xpToLevelUp, adjustXp } from "./module/utils/xp.js";
@@ -148,6 +149,23 @@ Hooks.once("init", () => {
 	// `{{format …}}` prints the string's own <strong> at the reader.
 	Handlebars.registerHelper("escapeHtml", value => escHtml(value));
 	Handlebars.registerHelper("boldMissText", value => boldMissText(value));
+	// A move card's body: the description with its 10+/7-9/6- prose lifted out of the paragraph
+	// and re-laid as the labelled tier ladder underneath (utils/move-tiers.js). Every surface
+	// that prints a move description calls this in its place.
+	//
+	// The second argument is OPTIONAL. Only character moves store `system.moveResults`; on an
+	// NPC, monster or steading move there is nothing to pass, and `{{{moveBody description}}}`
+	// hands Handlebars' own options object through in its place — so anything that isn't a
+	// results object is read as absent, and the tiers are parsed out of the description instead.
+	// A move whose description names no tier either way comes back untouched.
+	//
+	// Emitted with {{{ }}} — the ladder is markup, and the tier text is escaped inside it.
+	Handlebars.registerHelper("moveBody", (description, moveResults) => {
+		const results = moveResults && typeof moveResults === "object" && !moveResults.hash
+			? moveResults
+			: null;
+		return boldMissText(moveBodyHtml(description, results));
+	});
 	Handlebars.registerHelper("eq", (a, b) => a === b);
 	// `hbsTruthy`, never bare `Boolean`: these three sit beside `{{#if}}` in the same
 	// expression and have to answer the same way, and an EMPTY ARRAY is the case where
