@@ -249,6 +249,68 @@ describe("rollStat", () => {
 		expect(flavor).toContain("stonetop-requisition-miss-cost");
 	});
 
+	// A love letter draws every tier from ONE list, and the tier only says how many to take.
+	it("renders a shared pick pool once, always visible", async () => {
+		rollTotal = 10;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			pickOptions: ["Alpha", "Beta"],
+			moveResults: { success: { value: "", pick: 1 }, partial: { value: "", pick: 0 }, failure: { value: "", pick: 0 } },
+		});
+
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-card-picklist");
+		expect(flavor).toContain('data-index="0"');
+		expect(flavor).toContain('data-index="1"');
+		// One list, no per-tier wrapper, and the tier's outcome names the count.
+		expect(flavor).not.toContain("stonetop-roll-tier-picklists");
+		expect(flavor).toContain("Pick 1 from the list below");
+	});
+
+	// A homefront move names a list per tier: Deploy chooses its 10+/7-9 outcome from one list
+	// and its 6- consequences from another, so only the rolled tier's is on show.
+	it("renders per-tier pick pools with all but the rolled tier hidden", async () => {
+		rollTotal = 6;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			pickOptions: {
+				success: ["It is more effective than expected."],
+				partial: ["It is more effective than expected."],
+				failure: ["Injuries abound.", "A named NPC dies."],
+			},
+		});
+
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-tier-picklists");
+		expect(flavor).toContain('data-active-tier="failure"');
+		// Valued hidden, for the same sanitize-html reason the tier actions carry.
+		expect(flavor).toContain('data-tier="success" hidden="hidden"');
+		expect(flavor).toContain('data-tier="partial" hidden="hidden"');
+		expect(flavor).not.toContain('data-tier="failure" hidden');
+		expect(flavor).toContain("Injuries abound.");
+		// data-index runs across the WHOLE card, hidden tiers included, so the persisted
+		// checked-state array lines up with whichever list is showing.
+		for (const i of [0, 1, 2, 3]) expect(flavor).toContain(`data-index="${i}"`);
+		expect(flavor).not.toContain('data-index="4"');
+	});
+
+	it("leaves out a tier that names no pick pool, and the wrapper when none do", async () => {
+		rollTotal = 10;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			pickOptions: { partial: ["Only on a 7-9."] },
+		});
+		expect(rollMessages[0].flavor).not.toContain('data-tier="success"');
+		expect(rollMessages[0].flavor).toContain('data-tier="partial" hidden="hidden"');
+
+		rollMessages.length = 0;
+		await rollStat("str", makeActor(), { noXpOnMiss: true, pickOptions: {} });
+		expect(rollMessages[0].flavor).not.toContain("stonetop-roll-card-picklist");
+	});
+
 	it("omits the outcome line when the move has no moveResults", async () => {
 		rollTotal = 10;
 

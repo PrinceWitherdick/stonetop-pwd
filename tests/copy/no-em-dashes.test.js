@@ -69,8 +69,9 @@ const ALLOWED = {
  */
 const QUOTED = {
 	"module/actors/character/StonetopCharacterSheet.js": [
-		"\"When you return home in triumph — having saved your fellows, put do",
-		"eat, seized the opportunity, etc. — clear one of the steading's debil",
+		// The character sheet's own Return Triumphant guide was two entries here until its
+		// dialog turned out to be unreachable and the guide was dropped; the steading sheet's
+		// copy of the same rules line, which a player really does read, is still waived below.
 		"\"6-: you find yourself in a spot — the GM will describe it or ask yo",
 		"equence and they'll eventually go &mdash; otherwise they break free of your",
 		"quired. Stabilizing isn't healing — that takes Convalesce.</p>",

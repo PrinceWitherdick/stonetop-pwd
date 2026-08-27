@@ -1,4 +1,5 @@
-import {escHtml} from "./strings.js";
+import {escHtml, stripHtmlToText} from "./strings.js";
+import {pickLimitsFrom} from "./move-picks.js";
 
 /** Core stat paths (in a flattened update) mapped to their chat labels. */
 export const STAT_CHAT_LABELS = {
@@ -189,14 +190,93 @@ export function postMoveToChat(actor, title, rows) {
 }
 
 /**
+ * A move's printed options list: the FIRST `<ul>` in its description, and its items.
+ *
+ * The first, matching how an arcanum's back is read (data/arcana-moves `_picksFrom`) — a move's
+ * options are the list it leads with, and a second list is a note about them. A nested list is
+ * refused rather than half-handled: the non-greedy match closes on the inner `</ul>`, so acting
+ * on it would cut the outer list in half.
+ *
+ * Every shipped move that both rolls and prints a `<ul>` prints an OPTIONS list ("pick 1",
+ * "spend Nerve 1-for-1 to", "ask one question from the list") — none of them restates its own
+ * 10+/7-9/6- outcomes there, which is what makes it safe to treat the list as a choice.
+ *
+ * @returns {{index: number, length: number, inner: string, items: string[]}|null}
+ */
+function firstOptionList(html) {
+	const ul = /<ul\b[^>]*>([\s\S]*?)<\/ul>/i.exec(html ?? "");
+	if (!ul || /<ul\b/i.test(ul[1])) return null;
+	const items = [...ul[1].matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map(m => m[1]);
+	return items.length ? { index: ul.index, length: ul[0].length, inner: ul[1], items } : null;
+}
+
+/**
+ * Turn a move's printed options list into the shared tickable checklist — the same markup and
+ * the same `pickChecked` message flag a roll card's pick list uses (see roll-engine's
+ * pickListsHtml and _chatWireRollCardPicks), so a tick persists and every viewer sees it.
+ *
+ * One rule for every move: its printed option list is tickable wherever that list is shown. A
+ * move that never rolls gets this on the card its name-click posts (which is why 24 hand-written
+ * copies of those same lists once sat in a dialog nobody could open); a move that rolls gets it
+ * on the description its result card carries (StonetopItem#roll).
+ *
+ * IN PLACE, rather than lifted out into the card's own checklist below the result: a move's list
+ * is usually followed by more of its text, and cutting it out of the middle leaves the sentence
+ * that introduces it — "on a 10+, pick 2; on a 7-9, pick 1:" — pointing at whatever came after.
+ *
+ * The move's OWN text is the list, and its own text says HOW MANY of it you may take — so the
+ * lead-in above the list is read for a cap (utils/move-picks.js) and stamped on the `<ul>` as
+ * `data-pick-max`, or `data-pick-max-<tier>` where the move gives a count per result tier. The
+ * wiring in stonetop.js enforces it: ticking past the cap releases the earliest tick, which for
+ * a "pick 1" is exactly the radio behaviour that reading the move would lead you to expect.
+ * A move whose count cannot be read confidently is stamped with nothing and ticks freely.
+ *
+ * Nothing is retyped from the move — not the options, not the count — so nothing can drift.
+ *
+ * @param {string} description  Raw move HTML.
+ * @returns {string} The same HTML with its first option list made tickable, or unchanged.
+ */
+export function pickableMoveDescription(description) {
+	const html = String(description ?? "");
+	if (!html || html.includes("stonetop-picklist")) return html;
+	const list = firstOptionList(html);
+	if (!list) return html;
+
+	const limits = pickLimitsFrom(stripHtmlToText(html.slice(0, list.index)));
+	const limitAttrs = typeof limits === "number"
+		? ` data-pick-max="${limits}"`
+		: Object.entries(limits ?? {}).map(([tier, n]) => ` data-pick-max-${tier}="${n}"`).join("");
+
+	const items = list.items.map((inner, i) =>
+		`<li class="stonetop-picklist-item"><label>`
+		+ `<input type="checkbox" class="stonetop-check stonetop-picklist-check" data-index="${i}">`
+		// The item's own markup, raw: it carries the move's ◇/○/□ glyphs and emphasis, and the
+		// description it came from is rendered raw by moveChatCard for exactly that reason.
+		+ `<span>${inner}</span></label></li>`).join("");
+	return html.slice(0, list.index)
+		+ `<ul class="stonetop-picklist"${limitAttrs}>${items}</ul>`
+		+ html.slice(list.index + list.length);
+}
+
+/**
  * Canonical HTML for a move chat card. `name` is escaped here because it can be a
  * player-authored custom-move name (untrusted) — never pre-escape it at the call site.
  * `description` is rendered raw: it is either trusted module HTML or a custom move's
  * description, which is already escaped at storage (formatCustomMoveDescription). Shared
  * by the character model and the sheet so the two never desync the card markup/escaping.
+ *
+ * `pickable` is opt-in, and only the two places that post a move's PRINTED TEXT pass it: the
+ * Moves tab's name-click and the basic/expedition sidebar's. Every other caller here is a
+ * receipt ("Readiness lost", "Follower Down"), where a checkbox would be an offer to change
+ * something that has already happened.
  */
-export function moveChatCard(name, description) {
-	return `<div class="stonetop-chat-move"><h3 class="stonetop-chat-move-name">${escHtml(name)}</h3><div class="stonetop-chat-move-description">${description}</div></div>`;
+export function moveChatCard(name, description, { pickable = false, actions = "" } = {}) {
+	const body = pickable ? pickableMoveDescription(description) : description;
+	// `actions` goes INSIDE the card, not after it: a button concatenated onto the end would be
+	// a bare div in the message with no card around it, and the action-row styling is scoped to
+	// the card that rendered it.
+	return `<div class="stonetop-chat-move"><h3 class="stonetop-chat-move-name">${escHtml(name)}</h3>`
+		+ `<div class="stonetop-chat-move-description">${body}</div>${actions}</div>`;
 }
 
 /**

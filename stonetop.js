@@ -61,6 +61,7 @@ import { rollSeasonsCard, sign, SPRING_SEASONS_RESULT, markMissXp } from "./modu
 import { xpToLevelUp, adjustXp } from "./module/utils/xp.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
 import { moveChatCard, canRewriteCard } from "./module/utils/chat.js";
+import { paintPickTally, releaseOverLimit } from "./module/utils/pick-tally.js";
 import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
@@ -1298,14 +1299,125 @@ function _chatWireRequisitionMissCost(message, html) {
 	});
 }
 
-// -- LOVE LETTER PICK LIST -------------------------------------
-// A love letter with a shared "choose from this list" pool renders its options as a
-// checklist on the roll card (see rollStat's pickListHtml). Restore any saved ticks and
-// wire the boxes so a click persists to the message flag (author/GM) and always toggles
-// locally. The letter item itself is consumed on resolve, so the message is the only home
-// the checked state has.
-function _chatWireLoveLetterPicks(message, html) {
-	const boxes = html.querySelectorAll(".stonetop-picklist-check");
+// -- DEPLOY: mark diminished from the roll card -----------------
+// "Injuries abound; the steading marks diminished" is one of the two consequences the GM
+// chooses on a Deploy miss, so the button that applies it belongs on the miss, beside the
+// list it comes from — not in the pre-roll dialog, where it was offered before anyone knew
+// whether Deploy had missed at all.
+function _chatWireDeployMarkDiminished(message, html) {
+	const btn = html.querySelector(".stonetop-deploy-mark-diminished");
+	if (!btn) return;
+
+	if (message.getFlag(SYSTEM_ID, "deployDiminishedApplied")) {
+		btn.disabled = true;
+		btn.textContent = "Marked diminished";
+		return;
+	}
+
+	btn.addEventListener("click", async () => {
+		btn.disabled = true;
+		try {
+			const actor = speakerActor(message);
+			if (!actor?.isOwner || actor.type !== "stonetop") {
+				ui.notifications.warn("You need permission to update the steading's debilities.");
+				btn.disabled = false;
+				return;
+			}
+			// Through StonetopSteading for the same reason the miss cost above is: a raw
+			// actor.update of system.* leaves the mirrored flag the sheet reads from stale.
+			await new StonetopSteading(actor)
+				.setSystemValue("attributes.debilities.options.diminished.value", true, { stonetopMove: "Deploy" });
+			await message.setFlag(SYSTEM_ID, "deployDiminishedApplied", true);
+			for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
+			ui.notifications.info("Stonetop marked diminished.");
+		} catch (err) {
+			console.error("Stonetop | Error marking the steading diminished:", err);
+			btn.disabled = false;
+		}
+	});
+}
+
+// -- ROLL CARD PICK LIST ---------------------------------------
+// A move that says "pick 1" renders its options as a checklist on the roll card (see
+// rollStat's pickListHtml) — a love letter's shared pool, or a homefront move's per-tier
+// list, whose boxes are made once for every tier and revealed with it. Restore any saved
+// ticks and wire the boxes so a click persists to the message flag (author/GM) and always
+// toggles locally. The message is the only home the checked state has: a love letter item
+// is consumed on resolve, and a homefront move never had an item to write to.
+/**
+ * How many of THIS list the move allows, or null when nothing said clearly enough to enforce.
+ *
+ * Two sources, one attribute. A move's PRINTED list has its count read out of the prose above it
+ * (utils/move-picks.js) and stamped by chat.js#pickableMoveDescription; a card's OWN pick list is
+ * stamped by roll-engine#pickListsHtml from the same per-tier counts its result line states in
+ * words. Whichever wrote it, this is the only reader — so the cap that is enforced and the
+ * denominator in the tally above the boxes are always the one number.
+ *
+ * A per-tier cap is read against the tier the card actually rolled — so Forage's "on a 10+, pick
+ * 2; on a 7-9, pick 1" allows two on a strong hit and one on a weak one, and a GM's Shift Up/Down
+ * moves the cap with the result, because the tier is read live off the card rather than baked in.
+ */
+function _pickLimitFor(list) {
+	if (!list) return null;
+	const flat = Number(list.dataset.pickMax);
+	if (flat > 0) return flat;
+	// The tier of the card THIS list is in, found by walking up from the list rather than by
+	// searching down from the message: a per-tier cap read off a neighbouring card's result
+	// would let a weak hit be capped by somebody else's strong one.
+	const tier = list.closest(".stonetop-roll-card")?.querySelector(".stonetop-roll-result")?.classList;
+	for (const key of ["success", "partial", "failure"]) {
+		if (!tier?.contains(key)) continue;
+		const n = Number(list.dataset[`pickMax${key[0].toUpperCase()}${key.slice(1)}`]);
+		return n > 0 ? n : null;
+	}
+	return null;
+}
+
+/**
+ * Ticking past what the move allows releases the EARLIEST tick — the shared rule
+ * (utils/pick-tally.js#releaseOverLimit, which explains why it releases rather than refuses),
+ * plus the one thing that is this surface's own: a released row loses its picked styling.
+ *
+ * Scoped to the box's OWN list, so a card carrying more than one (a love letter's pool beside a
+ * per-tier list) keeps them independent.
+ */
+function _releasePicksOverLimit(justChecked) {
+	const list = justChecked.closest(".stonetop-picklist");
+	for (const box of releaseOverLimit(list, justChecked, _pickLimitFor(list))) {
+		box.closest(".stonetop-picklist-item")?.classList.remove("is-picked");
+	}
+}
+
+/**
+ * The tally above a chat card's pick list — the shared readout (utils/pick-tally.js), handed the
+ * cap this card's list actually carries.
+ *
+ * Painted on the CLIENT rather than built into the card's HTML, for two reasons: it is derived
+ * state (it would go stale the moment anyone ticked a box), and every card already posted gets it
+ * on its next render without a migration. Nothing here is ever persisted — `_shiftRollCardFlavor`
+ * rewrites the STORED flavor string in a detached element, never this live DOM.
+ *
+ * Repainted rather than wired: these boxes already have a listener of their own (it persists the
+ * tick to the message flag), so the tally rides that one instead of adding a second.
+ */
+function _paintPickCount(list) {
+	if (!list) return;
+	paintPickTally(list, _pickLimitFor(list));
+}
+
+function _chatWireRollCardPicks(message, html) {
+	// THIS message's boxes and no others.
+	//
+	// The hook hands over one message's element, so `html` should never reach another card — but
+	// "should never" is what a card wearing the previous card's ticks looks like from the outside,
+	// and the cost of proving it here is one comparison. A box whose nearest message id is not
+	// this message is somebody else's: it is neither restored from this flag nor collected into
+	// it, so one card's state cannot be stamped onto another however broad `html` turns out to be.
+	const mine = box => {
+		const owner = box.closest("[data-message-id]");
+		return !owner || owner.dataset.messageId === message.id;
+	};
+	const boxes = [...html.querySelectorAll(".stonetop-picklist-check")].filter(mine);
 	if (!boxes.length) return;
 
 	const saved   = message.getFlag(SYSTEM_ID, "pickChecked") ?? [];
@@ -1318,17 +1430,37 @@ function _chatWireLoveLetterPicks(message, html) {
 		box.checked = on;
 		item?.classList.toggle("is-picked", on);
 
+		// Bound ONCE per element. A message re-renders whenever its flag is written, and where
+		// Foundry patches the log in place rather than replacing the node, a second binding would
+		// leave every click writing the flag twice — two racing updates over one array, the later
+		// of which can carry a state read before the earlier landed.
+		if (box.dataset.picksWired === "1") continue;
+		box.dataset.picksWired = "1";
+
 		box.addEventListener("change", async () => {
+			if (box.checked) _releasePicksOverLimit(box);
 			item?.classList.toggle("is-picked", box.checked);
+			// After the release, not before: a tick that pushed the list over its cap has just let
+			// an earlier one go, and a tally painted first would read one too many.
+			_paintPickCount(box.closest(".stonetop-picklist"));
 			if (!canSave) return;
-			const arr = Array.from(boxes).map((b) => !!b.checked);
+			// Written by data-index, not DOM order: the two agree today, but a card whose
+			// hidden per-tier lists were ever reordered would silently rewrite the flag
+			// against the wrong boxes.
+			const arr = [];
+			for (const b of boxes) arr[Number(b.dataset.index)] = !!b.checked;
 			try {
-				await message.setFlag(SYSTEM_ID, "pickChecked", arr);
+				await message.setFlag(SYSTEM_ID, "pickChecked", Array.from(arr, v => !!v));
 			} catch (err) {
-				console.error("Stonetop | Error saving love-letter picks:", err);
+				console.error("Stonetop | Error saving roll-card picks:", err);
 			}
 		});
 	}
+
+	// One tally per list, painted OUTSIDE the loop above — that loop skips any box already wired,
+	// which on a re-render (a GM Shift Up/Down moves the cap with the tier) is every box on the
+	// card. A card can carry more than one list, so they are collected rather than assumed single.
+	for (const list of new Set(boxes.map(b => b.closest(".stonetop-picklist")))) _paintPickCount(list);
 }
 
 // -- WOULD-BE HERO: BECOME A HERO ------------------------------
@@ -1362,8 +1494,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// roll behind it never grows a Shift or a Burn Brightly, and this never lands on one that has.
 	wireUndoXpMark(message, html);
 	_chatWireRequisitionMissCost(message, html);
+	_chatWireDeployMarkDiminished(message, html);
 	_chatWireSeasonsRoll(message, html);
-	_chatWireLoveLetterPicks(message, html);
+	_chatWireRollCardPicks(message, html);
 	wireDyingPrompt(message, html);
 	wireAttackConfirm(message, html);
 	wireApplyDamage(message, html);
@@ -1488,16 +1621,20 @@ function _shiftRollCardFlavor(flavor, total, formula = null) {
 		}
 	}
 
-	const tierActions = wrapper.querySelector(".stonetop-roll-card .stonetop-roll-tier-actions");
-	if (tierActions && result) {
+	// Anything the card holds one of per tier — the Requisition miss-cost button and Deploy's
+	// "mark diminished" (.stonetop-roll-tier-actions), the homefront moves' pick lists
+	// (.stonetop-roll-tier-picklists) — shows the row matching the shifted tier and hides the rest.
+	if (result) {
 		const activeTier = result.key === "critical" ? "success" : result.key;
-		tierActions.dataset.activeTier = activeTier;
-		for (const action of tierActions.querySelectorAll(".stonetop-roll-tier-action")) {
-			// Set the VALUED attribute, not the `.hidden` property: this innerHTML is written back
-			// to the message's flavor (an HTMLField), and Foundry v14's sanitize-html strips
-			// valueless boolean attributes — a bare/empty `hidden` would vanish and reveal every tier.
-			if (action.dataset.tier === activeTier) action.removeAttribute("hidden");
-			else action.setAttribute("hidden", "hidden");
+		for (const group of wrapper.querySelectorAll(".stonetop-roll-card [data-active-tier]")) {
+			group.dataset.activeTier = activeTier;
+			for (const row of group.querySelectorAll(":scope > [data-tier]")) {
+				// Set the VALUED attribute, not the `.hidden` property: this innerHTML is written back
+				// to the message's flavor (an HTMLField), and Foundry v14's sanitize-html strips
+				// valueless boolean attributes — a bare/empty `hidden` would vanish and reveal every tier.
+				if (row.dataset.tier === activeTier) row.removeAttribute("hidden");
+				else row.setAttribute("hidden", "hidden");
+			}
 		}
 	}
 

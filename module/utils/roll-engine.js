@@ -1,5 +1,6 @@
 import { maybeRemindPotentialForGreatness } from "../actors/character/WouldBeHeroAsterisk.js";
-import { escHtml, formatOutcomeDetail } from "./strings.js";
+import { escHtml, formatOutcomeDetail, stripHtmlToText } from "./strings.js";
+import { pickLimitsFrom } from "./move-picks.js";
 import { pickLeadText } from "./move-results.js";
 import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge } from "./chat.js";
 import { adjustXp } from "./xp.js";
@@ -140,6 +141,102 @@ export function postSeasonsRollPrompt({ alias = "Seasons Change: Spring", hopefu
 	});
 }
 
+// The three result tiers a pick pool can be hung off, in card order.
+const _PICK_TIERS = ["success", "partial", "failure"];
+
+/**
+ * A card's "choose from this list" options, in ONE shape however they were declared.
+ *
+ * An ARRAY is a single pool every tier draws from (a love letter: one list, the tier only says
+ * how many to take). An OBJECT names a pool per tier, for a move whose lists genuinely differ —
+ * Deploy picks its 10+/7-9 outcome from one list and its 6- consequences from another.
+ *
+ * Returns `{ shared, byTier }`. `shared` is the array form's one list (null for the per-tier
+ * form), and `byTier` always names all three tiers either way, so callers can ask "does this
+ * tier have a pool" without a null check.
+ */
+export function normalizePickPools(pickOptions) {
+	const clean = list => (Array.isArray(list) ? list.filter(Boolean) : []);
+	const shared = Array.isArray(pickOptions) ? clean(pickOptions) : null;
+	return {
+		shared,
+		byTier: Object.fromEntries(_PICK_TIERS.map(tier => [tier, shared ?? clean(pickOptions?.[tier])])),
+	};
+}
+
+/**
+ * How many each tier lets the player take, from whichever of the two ways a move says so.
+ *
+ * DECLARED, when the move authored a number: a love letter's builder asks "How many to pick" per
+ * tier and stores it (move-results.js#buildMoveTierResults), and the card's outcome line is
+ * composed FROM that number ("Pick 2 from the list below").
+ *
+ * READ FROM THE PROSE otherwise: the homefront moves state their count inside the tier's own
+ * result text — "the job gets done, but pick 1", "the GM chooses 2 consequences" — with no
+ * separate field, deliberately, so the sentence a player reads and the count are one thing. That
+ * sentence is read by the same timid reader a printed move's lead-in goes through
+ * (utils/move-picks.js), which returns nothing rather than guess, so a tier whose wording it
+ * cannot place stays uncapped and its tally simply shows no denominator.
+ *
+ * Read PER TIER, against that tier's line alone. `pickLimitsFrom` can answer with an object when
+ * the text it was given names tiers of its own; a single tier's line should not, but if it does,
+ * only that tier's own answer is taken — never another's.
+ */
+export function tierPickCounts(moveResults) {
+	const countFor = (tier) => {
+		const row = moveResults?.[tier];
+		const declared = Math.trunc(Number(row?.pick)) || 0;
+		if (declared > 0) return declared;
+		const read = pickLimitsFrom(stripHtmlToText(String(row?.value ?? "")));
+		return (typeof read === "number" ? read : Math.trunc(Number(read?.[tier])) || 0) || 0;
+	};
+	return Object.fromEntries(_PICK_TIERS.map(tier => [tier, countFor(tier)]));
+}
+
+/**
+ * The checklist(s) under a roll card's result. Each item is a checkbox wired up on the client
+ * (see _chatWireLoveLetterPicks); `data-index` runs across the WHOLE card so the persisted
+ * checked-state array lines up whichever lists are on it.
+ *
+ * A shared pool renders once. Per-tier pools render one list per tier that has one, all but the
+ * rolled tier hidden — the same `data-active-tier` / `data-tier` dance the tier actions do, so a
+ * GM Shift Up/Down reveals the list matching the new tier. The hide MUST use the VALUED
+ * `hidden="hidden"`: see the note on the tier actions in {@link _rollCard}.
+ *
+ * `picks` is how many each tier lets the player take — the same numbers the result line says in
+ * words ("Pick 2 from the list below"), stamped on the list as the `data-pick-max*` a printed
+ * move's list already carries (chat.js#pickableMoveDescription). One attribute, read by one
+ * reader in stonetop.js, which both caps the ticking and gives the tally above the list its
+ * denominator ("1/2 options selected") — so a count stated in the card's prose and the count the
+ * boxes enforce cannot disagree.
+ *
+ * A SHARED pool is stamped per tier, not flat: one list serves all three, and the cap has to move
+ * with a GM's Shift Up/Down exactly as the wording above it does. A per-tier list is stamped flat,
+ * because it is only ever shown on the one tier it belongs to.
+ */
+export function pickListsHtml(pools, activeTier, picks = null) {
+	let index = 0;
+	const list = (options, limitAttrs = "") => `<ul class="stonetop-picklist"${limitAttrs}>${options.map(option =>
+		`<li class="stonetop-picklist-item"><label><input type="checkbox" class="stonetop-check stonetop-picklist-check" data-index="${index++}"><span>${escHtml(option)}</span></label></li>`
+	).join("")}</ul>`;
+	// A tier that states no count of its own (a homefront move's 6- consequences, whose result
+	// text already says how many) stamps nothing and ticks freely, same as an unreadable move.
+	const cap = tier => (Math.trunc(Number(picks?.[tier])) || 0);
+
+	if (pools.shared) {
+		if (!pools.shared.length) return "";
+		return list(pools.shared, _PICK_TIERS.map(t => (cap(t) ? ` data-pick-max-${t}="${cap(t)}"` : "")).join(""));
+	}
+
+	const tiers = _PICK_TIERS.filter(tier => pools.byTier[tier].length);
+	if (!tiers.length) return "";
+	return `<div class="stonetop-roll-tier-picklists" data-active-tier="${escHtml(activeTier)}">
+		${tiers.map(tier =>
+			`<div class="stonetop-roll-tier-picklist" data-tier="${escHtml(tier)}"${tier === activeTier ? "" : ` hidden="hidden"`}>${list(pools.byTier[tier], cap(tier) ? ` data-pick-max="${cap(tier)}"` : "")}</div>`
+		).join("")}
+	</div>`;
+}
+
 function _rollCard({ header, result = "", resultClass = "", resultDetail = "", resultOutcomes = null, resultLegend = "", pickList = "", tierActions = null, conditionsHtml = "", noticesHtml = "", buttons = false, actions = "", total = null, formula = "", description = "", dieResults = "", badge = "", sectionClass = "", damage = false }) {
 	// Stash every tier's outcome on the row so a GM Shift Up/Down can swap the
 	// detail line to match the new tier (see _shiftRollCardFlavor in stonetop.js).
@@ -192,8 +289,8 @@ function _rollCard({ header, result = "", resultClass = "", resultDetail = "", r
 	const resultLegendHtml = resultLegend
 		? `<div class="stonetop-roll-card-results">${resultLegend}</div>`
 		: "";
-	// A shared "choose from this list" checklist (love letters) — the rolled tier's detail
-	// says how many to pick; the boxes are wired up client-side (see _chatWireLoveLetterPicks).
+	// The "choose from this list" checklist(s) — see pickListsHtml, which builds them, and
+	// _chatWireLoveLetterPicks, which wires the boxes up client-side.
 	const pickListHtml = pickList
 		? `<div class="stonetop-roll-card-picklist">${pickList}</div>`
 		: "";
@@ -299,7 +396,10 @@ function _conditionsHtml(conditions) {
  *   or something is ignoring it.
  * @param {string}  [options.stonetopDebilityIgnoredName]  - Which debility is being ignored
  * @param {boolean} [options.noXpOnMiss]               - Skip the automatic +1 XP on a miss (for moves that replace it)
- * @param {string[]} [options.pickOptions]             - Shared "choose from this list" pool (love letters); rendered as a checklist
+ * @param {string[]|{success?: string[], partial?: string[], failure?: string[]}} [options.pickOptions]
+ *   "Choose from this list" options, rendered as a checklist on the card. An array is one pool
+ *   shared by every tier (love letters); an object names a pool per tier (the homefront moves,
+ *   whose 6- consequences are a different list from their 10+/7-9 options).
  * @returns {Promise<Roll>}
  */
 export async function rollStat(statKey, actor, options = {}) {
@@ -328,17 +428,20 @@ export async function rollStat(statKey, actor, options = {}) {
 	// only in moveResults and omit them from the description, so this is the only place
 	// a player would otherwise see them.
 	const moveResults    = options.moveResults ?? null;
-	// A shared "choose from this list" pool (love letters). When present, each tier's outcome
-	// leads with "Pick N from the list below" so the rolled tier tells the player how many of
-	// the checklist items to take. Kept in the outcome string (not a separate element) so the
-	// GM Shift Up/Down flow surfaces the right count for whatever tier it lands on.
-	const pickOptions = Array.isArray(options.pickOptions) ? options.pickOptions.filter(Boolean) : [];
+	// The "choose from this list" pools. A love letter draws every tier from ONE list and tells
+	// the player how many to take ("Pick N from the list below", kept in the outcome string —
+	// not a separate element — so the GM Shift Up/Down flow surfaces the right count for
+	// whatever tier it lands on). A homefront move names a list PER TIER instead: Deploy's 6-
+	// consequences are a different pool from its 10+/7-9 options, and its result text already
+	// says how many, so those tiers carry no count.
+	const pickPools = normalizePickPools(options.pickOptions);
 	// English literals on purpose: this string is persisted in the chat card (shared across
 	// clients) and parsed by the GM Shift Up/Down flow, so it must not vary by locale.
-	const pickLead = (n) => pickLeadText(n, pickOptions.length > 0, { pick: "Pick", fromList: "from the list below" });
+	const pickLead = (n, tier) =>
+		pickLeadText(n, pickPools.byTier[tier].length > 0, { pick: "Pick", fromList: "from the list below" });
 	const composeOutcome = (tier) => {
 		const prose = String(moveResults?.[tier]?.value ?? "").trim();
-		const lead  = pickLead(moveResults?.[tier]?.pick);
+		const lead  = pickLead(moveResults?.[tier]?.pick, tier);
 		if (lead && prose) return `${lead}. ${prose}`;
 		return lead || prose;
 	};
@@ -351,13 +454,7 @@ export async function rollStat(statKey, actor, options = {}) {
 		: null;
 	const resultDetail = resultOutcomes?.[result.key] ?? "";
 
-	// The checklist itself renders once (shared across tiers); each item gets a checkbox
-	// wired up on the client. data-index lets the persisted checked-state array line up.
-	const pickListHtml = pickOptions.length
-		? `<ul class="stonetop-picklist">${pickOptions.map((o, i) =>
-			`<li class="stonetop-picklist-item"><label><input type="checkbox" class="stonetop-check stonetop-picklist-check" data-index="${i}"><span>${escHtml(o)}</span></label></li>`
-		).join("")}</ul>`
-		: "";
+	const pickListHtml = pickListsHtml(pickPools, result.key, tierPickCounts(moveResults));
 
 	const header = moveName ?? statLabel;
 

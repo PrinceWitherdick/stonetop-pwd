@@ -47,6 +47,7 @@ import {normalizeRollType} from "../../utils/roll-types.js";
 import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct} from "../../utils/strings.js";
 import {playbookIconPath, partyCharacters} from "../../utils/playbook-actors.js";
 import {postMoveToChat, moveChatCard} from "../../utils/chat.js";
+import {wirePickTally} from "../../utils/pick-tally.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
 import {knowThingsRollChoices, withAdvantage, KNOW_THINGS_STAT} from "./arcana-identify.js";
 import {ARTIFACT_STATE, artifactStateForTier, knowThingsArtifactResults, seekInsightArtifactResults,
@@ -147,170 +148,89 @@ function _formatResultLine(text) {
 	return _esc(text).replace(/^(7\+|10\+|7-9|6-):/, "<strong>$1:</strong>");
 }
 
+// Whether a guided move has anything to open a dialog FOR. A move that only rolls opens one to
+// ask how; a move that neither rolls nor is rollable has nothing to decide, so its name-click
+// posts its text to chat instead.
 function _guidedCharacterMoveHasAction(guide, rollable = null) {
-	return Boolean(rollable || guide?.roll || guide?.fields?.length);
+	return Boolean(rollable || guide?.roll);
 }
 
-const GUIDED_CHARACTER_MOVES = {
-	"Censure": {
-		trigger: "When you first denounce an individual in your presence as an agent of chaos or anathema to civilization, they pick 1.",
-		picksLabel: "They pick 1:",
-		picks: ["They are ashamed, and act accordingly", "They are doubtful, and hesitate, pause", "They are afraid, and seek to escape", "They are enraged, and lash out predictably"],
-	},
-	"Piety": {
-		trigger: "When you spend at least an hour in proper worship to Helior, hold 1 Blessing. Other faithful PCs who partake also hold 1 Blessing.",
-		picksLabel: "Spend Blessing to:",
-		picks: ["Add +1 to a roll you just made in pursuit of a righteous cause"],
-	},
-	"Anger is a Gift": {
-		trigger: "When you burn with righteous anger, hold 2 Resolve.",
-		picksLabel: "Spend Resolve 1-for-1 to:",
-		picks: ["Set aside fear and doubt to do what must be done", "Act suddenly, catching them off-guard", "Inspire allies or bystanders to follow your lead", "Strike hard (+1d4 damage, forceful)", "Keep your footing, position, and/or your course despite what befalls you"],
-	},
-	"I Get Knocked Down": {
-		trigger: "When you take damage despite your best efforts to avoid it, you can halve the damage but pick 1.",
-		picksLabel: "Pick 1:",
-		picks: ["You lose something", "Something on your person breaks", "You are out of it for a moment"],
-	},
-	"Up With People": {
-		trigger: "When you converse with someone, you can hold 2 Rapport with them. If you do, they hold 1 Rapport with you.",
-		picksLabel: "Spend Rapport to ask:",
-		picks: ["What weighs you down or holds you back?", "What drives you forward?", "What lesson would you have me learn?", "What do you think of me, truly?"],
-	},
-	"A Safe Place": {
-		trigger: "When you select and prepare the party's camp site, hold 1 Precaution, or 2 if well-versed with this area and its dangers.",
-		picksLabel: "Spend Precaution to reveal:",
-		picks: ["A simple defense", "A warning", "A trick prepared in advance"],
-	},
-	"Beast of Legend": {
-		trigger: "Each time you take this move, pick 1 for your animal companion.",
-		picksLabel: "Pick 1:",
-		picks: ["They are exceptional", "They get +4 HP and +1 armor", "They develop a unique ability or trait"],
-	},
-	"Blot Out the Sun": {
-		trigger: "When you Let Fly with a bow, deplete your ammunition before rolling. If you do, choose 1.",
-		picksLabel: "Choose 1:",
-		picks: ["Gain advantage on your damage roll", "Add the area tag to your attack"],
-	},
-	"Survivalist": {
-		trigger: "When you Forage, pick 1 extra choice and add a new option.",
-		picksLabel: "Added Forage option:",
-		picks: ["Find or fashion some useful item or supply"],
-	},
-	"Second Intent": {
-		trigger: "When you Defend and spend 1 Readiness to Parry & Riposte, also pick 1 option from the Ambush list.",
-		picksLabel: "Pick 1:",
-		picks: ["Deal +1d4 damage", "Stop them from making noise/raising an alarm", "Slip away before they can react", "Create an opportunity; you or an ally gains advantage on the next move to act on it"],
-	},
-	"Potent Workings": {
-		trigger: "When you craft a protective charm, spend 1 additional Stock to choose 1.",
-		picksLabel: "Choose 1:",
-		picks: ["Name an additional type of harm", "On a 10+, the charm retains its potency"],
-	},
-	"Rites of the Land": {
-		trigger: "Once per season, when you oversee the sacred rites, hold 1 Favor. If you also sacrifice 1 Surplus, hold 4 Favor instead.",
-		picksLabel: "Public sacrifice result:",
-		picks: ["Clear a steading debility", "Gain advantage when the steading next rolls +Fortunes"],
-	},
-	"Safety First": {
-		trigger: "When you spend an hour or so preparing your mystical defenses, hold 2 Protection.",
-		picksLabel: "Spend Protection to:",
-		picks: ["Gain advantage on a roll to resist harmful magic", "Halve harmful magic's damage/effects"],
-	},
-	"Guardian": {
-		trigger: "When you Defend, hold 1 extra Readiness. Even on a 6-, hold 1 Readiness plus whatever the GM says.",
-		picksLabel: "Reminder:",
-		picks: ["Hold 1 extra Readiness", "On a 6-, hold 1 Readiness"],
-	},
-	"Mighty Thews": {
-		trigger: "When you perform a feat of extraordinary strength, you do it but pick 1.",
-		picksLabel: "Pick 1:",
-		picks: ["It takes a while", "You cause unwanted damage or harm", "It takes a toll (mark a debility)"],
-	},
-	"Front Line Leader": {
-		trigger: "When you lead your crew into battle, hold 2 Presence.",
-		picksLabel: "Spend Presence as:",
-		picks: ["Crew Loyalty", "Readiness, as if you Defended them"],
-	},
-	"Heroes to the Last": {
-		trigger: "Each time you take this move, pick 1 for your crew.",
-		picksLabel: "Pick 1:",
-		picks: ["They are exceptional", "They are inured to terror and horror", "Increase their max HP by 4 each", "Increase their damage die one size"],
-	},
-	"Stentorian": {
-		trigger: "When you go into battle, hold 2 Command. Spend 1 Command to shout an order or warning and pick 1.",
-		picksLabel: "Pick 1:",
-		picks: ["PCs get advantage on their next roll to do as you say", "You have advantage to Order Followers or Deploy"],
-	},
-	"Veteran Crew": {
-		trigger: "Each time you take this move, pick 1. You can also reselect the crew's Instinct and Cost.",
-		picksLabel: "Pick 1:",
-		picks: ["Select 2 new tags for your Crew", "Increase their damage die from d6 to d8", "Increase their max HP by 2 each"],
-	},
-
-	// ── Expedition moves ──────────────────────────────────────────────
-	// Procedural moves open a step-by-step guide; rolling moves add a Roll
-	// button driven by `roll` (a stat key, or "ask" to pick a stat). Requisition
-	// and Outfit have their own dialogs and are dispatched separately.
-	"Chart a Course": {
-		trigger: "When you wish to travel to a distant place, name or describe your destination; if the route is unclear, tell the GM how you intend to reach it. The GM tells you what's required, the risks, and how long it will take.",
+/**
+ * The moves that open a dialog before they roll, keyed by move name.
+ *
+ * THREE entries, and that is the whole reachable population. A guide is found either by
+ * _guidedMoveForRollable — which needs the move to have a rollType, since a move without one
+ * renders no dice icon (see tab-moves.hbs) — or by a caller that names it outright, which only
+ * Recover's own button does.
+ *
+ * The table used to carry 24 more: every playbook and expedition move with a "pick 1" list in
+ * its text. Not one of them could ever be reached, because none of them rolls. They were a
+ * second, abbreviated copy of prose that already ships in the compendium, behind a door with no
+ * handle — and they had already drifted from it (A Safe Place's three separate "reveal" options
+ * are one sentence in the printed move).
+ *
+ * Their lists were not lost with them, and are not wired up here either. A move that never rolls
+ * now offers its choices on the card its text is posted to (chat.js#pickableMoveDescription):
+ * the move's OWN printed list, made tickable, persisted on the message like a roll card's. That
+ * covers every such move rather than the 24 someone got to, needs no second click, and has no
+ * copy to drift.
+ *
+ * A guide is REFERENCE plus, at most, what has to be answered before the dice: `trigger`,
+ * `results` and `note` are read, and `roll` is a stat key ("wis") or "ask" to pick one in the
+ * dialog. No free-text boxes — nothing stored what was typed into them (the homefront dialogs on
+ * the steading sheet lost theirs for the same reason) — and no pre-roll tick lists: Forage's
+ * "10+ pick 2, 7-9 pick 1" cannot be chosen before the dice have said which, and its four
+ * options are printed on the result card with the tier's count above them, so ticking them in
+ * the dialog only asked for a guess. (To make those a real checklist on the card, give the
+ * Forage ITEM a `system.pickOptions` — the roll engine renders and persists one from that.)
+ */
+/**
+ * The moves that CHARGE before they roll — `cost` makes the dialog say the price, show what is
+ * in the purse, and refuse the dice when it cannot be paid (see _stockCostView).
+ *
+ * Only a move whose ONE trigger both spends and rolls belongs here. Nine shipped moves cost
+ * Stock and five of those roll, but three of the five spend at one moment and roll at quite
+ * another: Amulets & Talismans and Wards & Bindings pay when the charm is crafted or the
+ * boundary marked, and roll later — when that harm actually comes, when those wards are tested —
+ * and Veil pays at the veiling and rolls when the deception is scrutinised. Gating THOSE rolls
+ * on Stock would refuse a Blessed the roll for a charm they already paid for, possibly sessions
+ * ago. The remaining four Stock moves (Call the Spirits, Healer's Arts, Potent Workings,
+ * Trackless Step) never roll at all, so there is no dialog and no moment at which to charge;
+ * they stay paid by hand on the pouch, as the Blessed's marks deliberately do.
+ */
+export const GUIDED_CHARACTER_MOVES = {
+	"Danu's Grasp": {
+		trigger: "When you call on the world itself to bind a spirit or a perversion of nature, spend 1 Stock and roll +WIS.",
 		results: [
-			"The GM presents each challenge, plus surprises, one at a time.",
-			"Address them all to reach your destination.",
+			"10+: as 7-9, but both apply.",
+			"7-9: roots, vines, and earth pull at them, and they pick 1.",
+			"6-: the GM makes a move.",
 		],
-		note: "Travel times from Stonetop are listed in the move's description.",
+		cost: { amount: 1, label: "Stock" },
+		note: "The Stock is spent when you roll. If this brings them to 0 HP, they are pulled into the earth and bound in rune-etched stone.",
+		roll: "wis",
+	},
+	"Suck the Poison Out": {
+		trigger: "When you draw a malady from a patient's body, mind, or soul, spend 1 Stock and roll +WIS.",
+		results: [
+			"10+: you remove the malady and can discard it or store it in your pouch (taking the space of 1 Stock).",
+			"7-9: you remove it, but choose 1: lingering harm to your patient; you suffer some of its effects; or it is dangerous to discard.",
+			"6-: the GM makes a move.",
+		],
+		cost: { amount: 1, label: "Stock" },
+		note: "The Stock is spent when you roll. Storing the drawn malady costs the space of a second Stock; mark that on the pouch yourself.",
+		roll: "wis",
 	},
 	"Forage": {
 		trigger: "When you spend a few hours seeking food in the wild, roll +WIS. In winter, you have disadvantage.",
 		results: ["10+: pick 2.", "7-9: pick 1.", "6-: you find nothing, and there is danger or risk."],
-		picksLabel: "Pick:",
-		picks: [
-			"Acquire 4 provisions (1d6 uses)",
-			"Acquire an extra 1d6 uses of provisions",
-			"Discover something interesting or useful",
-			"Avoid danger or risk (else, there is some)",
-		],
-		note: "Provisions can substitute for supplies when you Make Camp, 1-for-1.",
+		note: "Provisions can substitute for supplies when you Make Camp, 1-for-1. The four options are on the result card; take as many as the roll allows.",
 		roll: "wis",
-	},
-	"Have What You Need": {
-		trigger: "When you decide that you had something all along, transfer a mark (or marks) from your unassigned inventory to a specific item or slot.",
-		results: [
-			"Mark a slot: fill it with a common mundane item or something from your special possessions.",
-			"Or expend a use of supplies to mark an additional small item/slot.",
-		],
-		note: "It must be something you could plausibly have had all along; the GM or any player can veto unreasonable items.",
-	},
-	"Keep Company": {
-		trigger: "When you spend a stretch of time together, ask the others if they want to Keep Company. If they do, take turns asking a PC or NPC one of the following.",
-		picksLabel: "Ask one another:",
-		picks: [
-			"What do you do that's annoying/endearing?",
-			"What do I do that you find annoying/endearing?",
-			"Who or what seems to be on your mind?",
-			"What do we find ourselves talking about?",
-			"How do you/we pass the time?",
-			"What new thing do you reveal about yourself?",
-		],
-	},
-	"Make Camp": {
-		trigger: "When you settle in to rest in an unsafe area, answer the GM's questions about your campsite. Each member consumes 1 use of supplies or provisions.",
-		results: ["If you eat and drink your fill and get at least a few hours' sleep, pick 1:"],
-		picksLabel: "Pick 1:",
-		picks: [
-			"Regain HP equal to ½ your max (round up)",
-			"Clear a debility",
-		],
-		note: "A mess kit (fire & water) lets 1 use provide for up to four people. If your rest was particularly peaceful, also gain advantage on your next roll. Regaining HP or clearing a debility does NOT heal problematic wounds: those need Recover to stabilize and Convalesce to heal.",
 	},
 	"Recover": {
 		trigger: "When you take time to catch your breath and tend to what ails you, expend 1 use of supplies and regain HP equal to 4 + Prosperity.",
 		results: ["You can't gain this benefit again until you take more damage."],
 		note: "When you tend to a debility or problematic wound, say how. The GM will say it's taken care of, or tell you what else is required.",
-	},
-	"Return Triumphant": {
-		trigger: "When you return home in triumph — having saved your fellows, put down the threat, seized the opportunity, etc. — clear one of the steading's debilities (diminished, lacking, or malcontent).",
-		note: "If the steading has no debilities marked, increase Fortunes by 1 instead.",
 	},
 	"Struggle as One": {
 		trigger: "When you Defy Danger as a group, establish the party's approach and each roll +STAT (per Defy Danger).",
@@ -3024,8 +2944,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				const playbookName = html[0].querySelector(".stonetop-playbook-drop-zone:not(.empty)")?.textContent?.trim() ?? "";
 				const speaker = ChatMessage.getSpeaker({ actor: this.actor });
 				speaker.alias = playbookName ? `${this.actor.name} ${playbookName}` : this.actor.name;
+				// `pickable`: a description-only move has no result card to choose on, so the
+				// options it prints become ticks on THIS card (persisted to the message, like a
+				// roll card's). Mighty Thews' "pick 1", Keep Company's questions, Censure's four
+				// reactions — the move's own list, tickable where the table can see it.
 				ChatMessage.create({
-					content: moveChatCard(name, description),
+					content: moveChatCard(name, description, { pickable: true }),
 					speaker,
 				});
 				// A description-only move has no rollType, so it falls all the way through to
@@ -3143,7 +3067,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!compendiumId) return;
 				const doc = await this._stonetopCharacter._moveRepo.getBasicMoveDocument(compendiumId);
 				if (!doc) return;
-				this._postMoveCard(doc.name, doc.system?.description ?? "");
+				// Tickable for the same reason the Moves tab's name-click is: this is the move's
+				// printed text, and a move that never rolls has nowhere else to record a choice.
+				this._postMoveCard(doc.name, doc.system?.description ?? "", { pickable: true });
 			});
 
 			// Defend's Readiness circles (p.216). Clicking a circle sets held Readiness to
@@ -5719,18 +5645,21 @@ export function createStonetopCharacterSheetClass(Base) {
 				card:       move.description,
 				picks:      move.picks,
 				picksLabel: move.picksLabel,
+				// How many of that list the mystery allows, read off its own lead-in — the
+				// denominator in the tally over the boxes (see _openGuidedCharacterMove).
+				pickMax:    move.pickMax,
 				roll:       (move.learned && this.isEditable) ? move.roll : null,
 				post:       "Send to chat",
 			};
 		}
 
+		/**
+		 * A guided move's dialog: what the move says, its result tiers, whatever it asks you to
+		 * choose from, and the button that rolls it. Deliberately holds no free-text boxes —
+		 * nothing would store what was typed into them, so they only stood between the move and
+		 * its roll (the homefront dialogs on the steading sheet lost theirs for the same reason).
+		 */
 		_openGuidedCharacterMove({ name, guide }, rollable) {
-			const fieldsHtml = (guide.fields ?? []).map(field => `<label class="stonetop-homestead-field">
-				<span>${_esc(field.label)}</span>
-				${field.type === "textarea"
-					? `<textarea name="${_esc(field.name)}" rows="2" placeholder="${_esc(field.placeholder)}"></textarea>`
-					: `<input type="text" name="${_esc(field.name)}" placeholder="${_esc(field.placeholder)}">`}
-			</label>`).join("");
 			const resultsHtml = guide.results?.length
 				? `<div class="stonetop-homestead-reference">
 					<strong>Results</strong>
@@ -5820,6 +5749,15 @@ export function createStonetopCharacterSheetClass(Base) {
 				render: html => {
 					bringDialogToFront(html);
 					if (guide.bodyHtml) wrapStonetopGlyphsInEl(html[0]);
+					// The same tally a chat card's pick list carries. A mystery makes its choice
+					// HERE rather than in chat — it is the one move surface where the list is not
+					// on a card — so without this it is the one place a player still has to count
+					// their own ticks. Its cap comes off the mystery's own lead-in (arcana-moves.js
+					// reads it), and is 0 for a guide that never had a count to read.
+					// `enforce`, because these boxes have no handler of their own: a chat card's pick
+					// list releases an over-cap tick from the handler that persists it, and a
+					// mystery that says "choose 2" must not quietly submit three.
+					wirePickTally(html[0]?.querySelector(".stonetop-homestead-choice-list"), guide.pickMax, { enforce: true });
 				},
 			}, { width: 520, classes: ["dialog", "stonetop", "stonetop-character-move-dialog"] }).render(true);
 		}
@@ -5849,21 +5787,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			const form = html[0]?.querySelector(".stonetop-character-move-dialog");
 			if (!form) return;
 			const data = Object.fromEntries(new FormData(form));
-			const rows = [];
-			for (const field of guide.fields ?? []) {
-				const raw   = data[field.name];
-				const value = field.type === "checkbox"
-					? (raw ? "yes" : "")
-					: String(raw ?? "").trim();
-				if (value) rows.push({ label: field.label, value });
-			}
 			const selected = Object.entries(data)
 				.filter(([key]) => key.startsWith("pick."))
 				.map(([, value]) => String(value ?? "").trim())
 				.filter(Boolean);
 			// An arcanum move posts as a move card — its printed text, plus whatever was ticked —
 			// so it reads in chat exactly like the playbook move whose name-click it mirrors. A
-			// playbook guide has no card of its own and posts the label/value summary instead.
+			// playbook guide has no card of its own and posts what was ticked on its own.
 			if (guide.card) {
 				const picked = selected.length
 					? `<ul class="stonetop-arcanum-move-picks">${selected.map(pick => `<li>${_esc(pick)}</li>`).join("")}</ul>`
@@ -5874,8 +5804,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				});
 				return;
 			}
-			if (selected.length) rows.push({ label: "Selected", value: selected.join("\n") });
-			postMoveToChat(this.actor, name, rows);
+			postMoveToChat(this.actor, name, selected.length ? [{ label: "Selected", value: selected.join("\n") }] : []);
 		}
 
 		async _onBackgroundChange(ev) {
@@ -6878,10 +6807,15 @@ export function createStonetopCharacterSheetClass(Base) {
 			return this.actor.update({ [key]: val }).then(() => this.render(false));
 		}
 
-		/** Post a move-result card to chat, spoken by this actor. Returns the create promise. */
-		_postMoveCard(title, body) {
+		/**
+		 * Post a move-result card to chat, spoken by this actor. Returns the create promise.
+		 *
+		 * `pickable` is for the one caller that posts a move's PRINTED TEXT rather than a receipt
+		 * of something already done — see moveChatCard.
+		 */
+		_postMoveCard(title, body, { pickable = false } = {}) {
 			return ChatMessage.create({
-				content: moveChatCard(title, body),
+				content: moveChatCard(title, body, { pickable }),
 				speaker: ChatMessage.getSpeaker({ actor: this.actor }),
 			});
 		}

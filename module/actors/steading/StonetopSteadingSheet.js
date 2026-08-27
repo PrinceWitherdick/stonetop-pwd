@@ -290,24 +290,55 @@ function _seasonRollOptions(seasonId) {
 	};
 }
 
+// Deploy reads from two lists, not one: its 10+/7-9 outcome is chosen from the good column,
+// its 6- consequences from the bad one. Named up here because `pickPools` hangs each off its
+// own tier below, and the roll card renders whichever the dice landed on.
+const DEPLOY_CHOICES = [
+	"It is more effective than expected.",
+	"It is quick, over soon.",
+	"It causes little collateral damage, expense, or blowback.",
+	"Someone involved distinguishes themselves.",
+];
+const DEPLOY_CONSEQUENCES = [
+	"It is less effective than expected.",
+	"Injuries abound; the steading marks diminished.",
+	"The GM picks a named NPC involved in the action; they die.",
+];
+const MUSTER_CHOICES = [
+	"Increase Defenses by 1 as long as the muster holds.",
+	"Everyone is willing to pitch in; do not reduce Fortunes after all.",
+	"The muster holds together even without your presence.",
+	"1 or 2 individuals show real potential; ask the GM who and how.",
+];
+
+/**
+ * The homefront moves, as their dialog and their roll card between them present them.
+ *
+ * A flow is REFERENCE plus, at most, the controls that change the roll — `trigger`, `results`
+ * and `note` are read before the dice, `fields` is only for something the roll itself needs
+ * (Trade & Barter's Value and its winter disadvantage). It deliberately holds no free-text
+ * boxes: nothing stored the answers, so all they did was stand between the move and its roll.
+ *
+ * `pickPools` names, per result tier, the list that tier chooses from. Those render on the
+ * ROLL CARD (roll-engine's pickOptions), as a checklist whose ticks persist on the message —
+ * so the choice is made once the dice have said which tier, and how many, rather than being
+ * guessed at in the dialog beforehand. How many to take is already in each tier's `results`
+ * line ("choose 2", "the GM chooses 2 consequences"), so no count is repeated here.
+ */
 const HOMESTEAD_MOVE_FLOWS = {
 	pullTogether: {
 		label: "Pull Together",
 		stat: "population",
 		statLabel: "Population",
 		trigger: "When you set a community to work on improvements, to secure new resources, or to make major repairs, spend whatever the GM says is required and roll +Population.",
-		fields: [
-			{ name: "project", label: "Project", type: "text", placeholder: "What are you trying to build, repair, clear, or prepare?" },
-			{ name: "approach", label: "Approach", type: "textarea", placeholder: "Who is helping, and how are you organizing the work?" },
-			{ name: "cost", label: "Required cost", type: "textarea", placeholder: "Time, materiel, Surplus, coin, labor, or other requirements" },
-		],
-		picksLabel: "On a 7-9, pick 1:",
-		picks: [
-			"It gets done, but other work does not; reduce Fortunes by 1.",
-			"It gets done, but the work is shoddy or crude.",
-			"It gets done, but there is a consequence.",
-			"There is an unforeseen cost, requirement, or challenge; address it and the job gets done.",
-		],
+		pickPools: {
+			partial: [
+				"It gets done, but other work does not; reduce Fortunes by 1.",
+				"It gets done, but the work is shoddy or crude.",
+				"It gets done, but there is a consequence.",
+				"There is an unforeseen cost, requirement, or challenge; address it and the job gets done.",
+			],
+		},
 		results: [
 			RESULT.strong("the job gets done."),
 			RESULT.weak("the job gets done, but pick 1."),
@@ -321,18 +352,10 @@ const HOMESTEAD_MOVE_FLOWS = {
 		statLabel: "Population",
 		trigger: "When Stonetop needs mustering against a threat, reduce Fortunes by 1 and roll +Population.",
 		beforeRoll: "musterCost",
-		fields: [
-			{ name: "threat", label: "Threat", type: "textarea", placeholder: "What is Stonetop mustering against?" },
-			{ name: "overseer", label: "Who oversees the muster?", type: "text", placeholder: "A PC, NPC, council, or militia leader" },
-			{ name: "orders", label: "Orders", type: "textarea", placeholder: "Where are they gathering, and what are they preparing to do?" },
-		],
-		picksLabel: "On a 10+, pick 2; on a 7-9, pick 1:",
-		picks: [
-			"Increase Defenses by 1 as long as the muster holds.",
-			"Everyone is willing to pitch in; do not reduce Fortunes after all.",
-			"The muster holds together even without your presence.",
-			"1 or 2 individuals show real potential; ask the GM who and how.",
-		],
+		pickPools: {
+			success: MUSTER_CHOICES,
+			partial: MUSTER_CHOICES,
+		},
 		results: [
 			RESULT.hit("the steading is alert and ready for action until the threat passes, the Seasons Change, or you cease to oversee the muster."),
 			RESULT.strong("also pick 2."),
@@ -346,24 +369,18 @@ const HOMESTEAD_MOVE_FLOWS = {
 		stat: "defenses",
 		statLabel: "Defenses",
 		trigger: "When Stonetop's militia goes into action, say what they're doing and roll +Defenses.",
-		fields: [
-			{ name: "action", label: "Action", type: "textarea", placeholder: "What is the militia doing?" },
-			{ name: "objective", label: "Objective", type: "text", placeholder: "Drive them off, hold the ford, protect evacuees..." },
-			{ name: "support", label: "Support", type: "textarea", placeholder: "Which force, fortification, tactic, or leader matters here?" },
-		],
-		picksLabel: "On a 10+, choose 2; on a 7-9, choose 1:",
-		picks: [
-			"It is more effective than expected.",
-			"It is quick, over soon.",
-			"It causes little collateral damage, expense, or blowback.",
-			"Someone involved distinguishes themselves.",
-		],
-		consequencesLabel: "On a 6-, the GM chooses 2:",
-		consequences: [
-			"It is less effective than expected.",
-			"Injuries abound; the steading marks diminished.",
-			"The GM picks a named NPC involved in the action; they die.",
-		],
+		pickPools: {
+			success: DEPLOY_CHOICES,
+			partial: DEPLOY_CHOICES,
+			failure: DEPLOY_CONSEQUENCES,
+		},
+		// "Injuries abound" is one of the consequences above, so the button that applies it
+		// rides the miss with them (wired in stonetop.js).
+		tierActions: {
+			failure: `<button type="button" class="stonetop-deploy-mark-diminished" data-action="deploy-mark-diminished">
+				<i class="fas fa-band-aid"></i> Injuries abound: mark diminished
+			</button>`,
+		},
 		results: [
 			RESULT.hit("it gets done."),
 			RESULT.strong("choose 2."),
@@ -377,11 +394,10 @@ const HOMESTEAD_MOVE_FLOWS = {
 		stat: "prosperity",
 		statLabel: "Prosperity",
 		trigger: "When you wish to acquire or sell a commonly available item, you can. When you seek to acquire or sell a special item, roll +Prosperity and subtract the item's Value. In winter, you have disadvantage.",
+		// The only two controls in any homefront dialog, because these two are the only ones
+		// the dice read: Value is subtracted as a modifier, and winter forces disadvantage.
 		fields: [
-			{ name: "want", label: "What do you want to buy or sell?", type: "textarea", placeholder: "Item, service, animal, coin, Surplus, or trade goods" },
 			{ name: "value", label: "Item Value", type: "number", placeholder: "0", min: 0 },
-			{ name: "partner", label: "Trade partner", type: "text", placeholder: "Who are you dealing with?" },
-			{ name: "offer", label: "Offer or price", type: "textarea", placeholder: "What is being offered, paid, or risked?" },
 			{ name: "winter", label: "It is winter", type: "checkbox" },
 		],
 		results: [
@@ -391,12 +407,13 @@ const HOMESTEAD_MOVE_FLOWS = {
 			RESULT.weak("you can sell it now, but you won't get its full worth.", "7-9 when selling"),
 			RESULT.miss("don't mark XP. If you still want to acquire/sell it, you'll need to travel elsewhere or wait until next season.", "6- either way"),
 		],
-		picks: [
-			"You can get it, but it'll cost more than usual",
-			"Someone has it, but they aren't keen to give it up",
-			"You can get something close, but not quite right",
-		],
-		picksLabel: "7-9 when buying, the GM picks 1:",
+		pickPools: {
+			partial: [
+				"You can get it, but it'll cost more than usual",
+				"Someone has it, but they aren't keen to give it up",
+				"You can get something close, but not quite right",
+			],
+		},
 		note: "For unique or truly exceptional items, don't Trade & Barter — Make a Plan with the GM or wait for a trade opportunity when Seasons Change. Lacking treats Prosperity as 1 lower; subtract the item's Value as a modifier.",
 	},
 	persuade: {
@@ -404,11 +421,6 @@ const HOMESTEAD_MOVE_FLOWS = {
 		stat: "fortunes",
 		statLabel: "Fortunes",
 		trigger: "When you need to convince the residents of Stonetop to do something costly, dangerous, or against their interests, roll +Fortunes.",
-		fields: [
-			{ name: "audience", label: "Who needs convincing?", type: "text", placeholder: "A family, trade, faction, crowd, or named NPCs" },
-			{ name: "request", label: "The ask", type: "textarea", placeholder: "What do you want them to do?" },
-			{ name: "cost", label: "Why is it hard?", type: "textarea", placeholder: "What makes it costly, dangerous, or against their interests?" },
-		],
 		results: [
 			RESULT.strong("they go along with it, at least for now."),
 			RESULT.weak("they need something in return, or they'll only go partway."),
@@ -1398,86 +1410,62 @@ export function createStonetopSteadingSheetClass(Base) {
 			});
 		}
 
+		/**
+		 * A homefront move's dialog: what the move says, what its tiers do, and the button that
+		 * rolls it. The only controls it ever shows are the two Trade & Barter's dice actually
+		 * read (Value, winter) plus its special-item picker — everything a player would have
+		 * typed into it went nowhere, and every list it used to make them tick before the roll
+		 * now rides the result card, under the tier that calls for it.
+		 */
 		_onHomesteadMove(moveSlug) {
 			const flow = HOMESTEAD_MOVE_FLOWS[moveSlug];
 			if (!flow) return;
 
-			const fieldHtml = flow.fields.map(field => {
+			const fieldHtml = (flow.fields ?? []).map(field => {
 				if (field.type === "checkbox") {
 					return `<label class="stonetop-homestead-field stonetop-homestead-field--check">
 						<input type="checkbox" class="stonetop-check" name="${_esc(field.name)}" value="yes">
 						<span>${_esc(field.label)}</span>
 					</label>`;
 				}
-				const common = `name="${_esc(field.name)}" placeholder="${_esc(field.placeholder)}"`;
-				const control = field.type === "textarea"
-					? `<textarea ${common} rows="2"></textarea>`
-					: field.type === "number"
-						? `<input type="number" ${common} min="${field.min ?? 0}" value="${field.value ?? ""}">`
-						: `<input type="text" ${common}>`;
 				return `<label class="stonetop-homestead-field">
 					<span>${_esc(field.label)}</span>
-					${control}
+					<input type="number" name="${_esc(field.name)}" placeholder="${_esc(field.placeholder)}" min="${field.min ?? 0}" value="${field.value ?? ""}">
 				</label>`;
 			}).join("");
 
-			const picksHtml = flow.picks?.length
-				? `<div class="stonetop-homestead-reference">
-					<strong>${_esc(flow.picksLabel ?? "Choose from:")}</strong>
-					<div class="stonetop-homestead-choice-list">
-						${flow.picks.map((item, index) => `<label class="stonetop-homestead-choice">
-							<input type="checkbox" class="stonetop-check" name="pick.${index}" value="${_esc(item)}">
-							<span>${_esc(item)}</span>
-						</label>`).join("")}
-					</div>
-				</div>`
-				: "";
-
-			const consequencesHtml = flow.consequences?.length
-				? `<div class="stonetop-homestead-reference">
-					<strong>${_esc(flow.consequencesLabel ?? "Consequences")}</strong>
-					<div class="stonetop-homestead-choice-list">
-						${flow.consequences.map((item, index) => `<label class="stonetop-homestead-choice">
-							<input type="checkbox" class="stonetop-check" name="consequence.${index}" value="${_esc(item)}">
-							<span>${_esc(item)}</span>
-						</label>`).join("")}
-					</div>
-					${flow.label === "Deploy" ? `<button type="button" class="stonetop-season-btn" data-action="mark-diminished"><i class="fas fa-band-aid"></i> Mark diminished</button>` : ""}
-				</div>`
-				: "";
-
-			const resultsHtml = _resultsLegendHtml(flow.results);
-
-			// Trade & Barter is how special items are acquired — let the player pick one
-			// from the handout list (which fills the item + Value fields for the roll).
+			// Trade & Barter is how special items are acquired — let the player pick one from the
+			// handout list. The pick fills the Value field for the roll, adds the item to a
+			// character's inventory, and names itself in the chip beside the button (which is a
+			// readout, not an input: nothing reads it back).
 			const specialItemHtml = flow.label === "Trade & Barter"
-				? `<button type="button" class="stonetop-tb-special-btn"><i class="fas fa-gem"></i> Choose a special item…</button>`
+				? `<div class="stonetop-tb-special">
+					<button type="button" class="stonetop-tb-special-btn"><i class="fas fa-gem"></i> Choose a special item…</button>
+					<span class="stonetop-tb-special-chosen" data-tb-chosen hidden="hidden"></span>
+				</div>`
 				: "";
 
-			const dialog = new Dialog({
+			new Dialog({
 				title: flow.label,
 				content: `<form class="stonetop-homestead-dialog">
 					<p class="stonetop-homestead-trigger"><em>${_esc(flow.trigger)}</em></p>
-					<div class="stonetop-homestead-fields">${fieldHtml}</div>
+					${fieldHtml ? `<div class="stonetop-homestead-fields">${fieldHtml}</div>` : ""}
 					${specialItemHtml}
-					${resultsHtml}
-					${picksHtml}
-					${consequencesHtml}
+					${_resultsLegendHtml(flow.results)}
 					<p class="stonetop-homestead-note">${_esc(flow.note)}</p>
 				</form>`,
 				buttons: {
 					cancel: { label: "Cancel" },
 					roll: {
 						label: `Roll +${flow.statLabel}`,
-						// The prompt comes first, ahead of the summary card and the move's own
-						// before-the-roll costs, so backing out of it is a clean abort: nothing
-						// posted, nothing spent. `_homesteadRollOptions` spreads AFTER the
-						// prompt because the one mode it carries is a rule, not a preference —
-						// Trade & Barter in winter is at disadvantage whatever was picked.
+						// The prompt comes first, ahead of the move's own before-the-roll costs, so
+						// backing out of it is a clean abort: nothing spent, nothing posted.
+						// `_homesteadRollOptions` spreads AFTER the prompt because the one mode it
+						// carries is a rule, not a preference — Trade & Barter in winter is at
+						// disadvantage whatever was picked.
 						callback: async html => {
 							const prompted = await promptRoll({ title: flow.label });
 							if (!prompted) return;
-							await this._postHomesteadMoveSummary(flow, html);
 							await this._applyHomesteadBeforeRoll(flow);
 							await this._onSteadingRoll(flow.label, flow.stat, {
 								...prompted, ...this._homesteadRollOptions(flow, html),
@@ -1487,30 +1475,28 @@ export function createStonetopSteadingSheetClass(Base) {
 				},
 				default: "roll",
 				render: (html) => {
-					html[0].querySelector("[data-action='mark-diminished']")?.addEventListener("click", async () => {
-						await this._stonetopSteading.setSystemValue("attributes.debilities.options.diminished.value", true);
-						this.render(false);
-						ui.notifications.info("Stonetop marked diminished.");
-					});
 					html[0].querySelector(".stonetop-tb-special-btn")?.addEventListener("click", () => this._onPickSpecialItem(html));
 				},
 			}, {
 				width: 520,
 				classes: ["dialog", "stonetop", "stonetop-homestead-move-dialog"],
-			});
-			dialog.render(true);
+			}).render(true);
 		}
 
-		// Trade & Barter: open the Special Items picker. Picking an item fills the move's
-		// item + Value fields and adds it to a chosen character's inventory.
+		// Trade & Barter: open the Special Items picker. Picking an item sets the move's Value
+		// (the modifier the roll subtracts), names itself in the chip beside the button, and
+		// adds itself to a chosen character's inventory.
 		_onPickSpecialItem(dialogHtml) {
 			const picker = new SpecialItemPickerDialog(SPECIAL_ITEM_CATALOG, async (slug) => {
 				const item = SPECIAL_ITEM_CATALOG.flatMap(g => g.items).find(i => i.slug === slug);
 				if (!item) return;
-				const wantField  = dialogHtml[0].querySelector('[name="want"]');
 				const valueField = dialogHtml[0].querySelector('[name="value"]');
-				if (wantField)  wantField.value  = item.traits ? `${item.name} (${item.traits})` : item.name;
 				if (valueField) valueField.value = parseInt(item.value, 10) || 0;
+				const chosen = dialogHtml[0].querySelector("[data-tb-chosen]");
+				if (chosen) {
+					chosen.textContent = item.traits ? `${item.name} (${item.traits})` : item.name;
+					chosen.removeAttribute("hidden");
+				}
 
 				const character = await this._promptSpecialItemCharacter();
 				if (character) {
@@ -1556,43 +1542,21 @@ export function createStonetopSteadingSheetClass(Base) {
 			ui.notifications.info(`Muster cost applied: Fortunes ${ sign(fortunes) } -> ${ sign(Math.max(fortunes - 1, -1)) }.`);
 		}
 
+		// What the dialog adds to the roll. Every flow's tier text, legend, pick pools and tier
+		// actions come off the flow itself in _onSteadingRoll — shared with the bare roll button
+		// on the Moves tab, which has no dialog to read — so all that is left here is the one
+		// move whose dialog holds controls: Trade & Barter's Value and its winter disadvantage.
 		_homesteadRollOptions(flow, html) {
-			const options = {
-				moveResults: _moveResultsFromRows(flow.results),
-				resultLegend: _resultsLegendHtml(flow.results),
-			};
-			if (flow.label !== "Trade & Barter") return options;
+			if (flow.label !== "Trade & Barter") return {};
 			const data = this._formDataFromDialog(html);
 			const value = Math.max(0, parseInt(data.value, 10) || 0);
 			return {
-				...options,
 				modifier: value ? -value : 0,
 				// Only present when it applies. It is spread over the player's prompt answer, so
 				// a key that is always there would blank their choice with `undefined` every
 				// other season of the year.
 				...(data.winter ? { rollMode: "dis" } : {}),
 			};
-		}
-
-		async _postHomesteadMoveSummary(flow, html) {
-			const data = this._formDataFromDialog(html);
-			const rows = flow.fields
-				.map(field => {
-					const raw   = data[field.name];
-					const value = field.type === "checkbox"
-						? (raw ? "yes" : "")
-						: String(raw ?? "").trim();
-					return value ? { label: field.label, value } : null;
-				})
-				.filter(Boolean);
-
-			const selectedPicks = Object.entries(data)
-				.filter(([key]) => key.startsWith("pick.") || key.startsWith("consequence."))
-				.map(([, value]) => String(value ?? "").trim())
-				.filter(Boolean);
-			if (selectedPicks.length) rows.push({ label: "Selected", value: selectedPicks.join("\n") });
-
-			postMoveToChat(this.actor, flow.label, rows);
 		}
 
 		async _onMeetWithDisaster() {
@@ -1698,14 +1662,6 @@ export function createStonetopSteadingSheetClass(Base) {
 			const assetOptions = availableAssets
 				.map(asset => `<option value="${escHtml(asset.name)}">${escHtml(asset.name)}</option>`)
 				.join("");
-			const requisitionFlow = {
-				label: "Requisition",
-				fields: [
-					{ name: "asset", label: "Asset" },
-					{ name: "risk", label: "Risk" },
-					{ name: "convincing", label: "Who needs convincing?" },
-				],
-			};
 			// Single source for the three outcome lines; both the dialog reference block
 			// and the chat card's legend + per-tier text derive from it (see the season flows).
 			const requisitionResults = [
@@ -1728,14 +1684,6 @@ export function createStonetopSteadingSheetClass(Base) {
 							<input type="text" class="stonetop-requisition-custom-input" data-requisition-custom-asset placeholder="Enter an asset or item" disabled hidden>
 							<input type="hidden" name="asset" data-requisition-asset-value value="${availableAssets[0]?.name ? escHtml(availableAssets[0].name) : ""}">
 						</label>
-						<label class="stonetop-homestead-field">
-							<span>Risk</span>
-							<textarea name="risk" rows="2" placeholder="Where is it going, and how might it be lost or damaged?"></textarea>
-						</label>
-						<label class="stonetop-homestead-field">
-							<span>Who needs convincing?</span>
-							<input type="text" name="convincing" placeholder="Owner, family, council, militia, publican...">
-						</label>
 					</div>
 					${_resultsLegendHtml(requisitionResults)}
 				</form>`,
@@ -1743,10 +1691,15 @@ export function createStonetopSteadingSheetClass(Base) {
 					cancel: { label: "Cancel" },
 					roll: {
 						label: "Roll +Fortunes",
+						// The asset is the one thing a homefront dialog still says out loud, because
+						// it is the one thing a homefront dialog still chooses — the whole move is
+						// "I am borrowing THIS", and the miss-cost button on the card below is about
+						// keeping it. Posted after the prompt, so cancelling leaves no card behind.
 						callback: async html => {
 							const prompted = await promptRoll({ title: "Requisition" });
 							if (!prompted) return;
-							await this._postHomesteadMoveSummary(requisitionFlow, html);
+							const asset = String(this._formDataFromDialog(html).asset ?? "").trim();
+							if (asset) postMoveToChat(this.actor, "Requisition", [{ label: "Asset", value: asset }]);
 							await this._onSteadingRoll("Requisition", "fortunes", {
 								...prompted,
 								moveResults: _moveResultsFromRows(requisitionResults),
@@ -2276,11 +2229,17 @@ export function createStonetopSteadingSheetClass(Base) {
 			if (!statKey) return;
 			const diminished = this._stonetopSteading.getSystemValue("attributes.debilities.options.diminished.value", false);
 			const lacking = this._stonetopSteading.getSystemValue("attributes.debilities.options.lacking.value", false);
+			// Everything the flow itself decides about the card — its tier text and legend, the
+			// list each tier chooses from, and any button a tier offers. Read from the flow here
+			// rather than passed in, so the bare roll button on the Moves tab produces the same
+			// card as the move's dialog does; the dialog only adds what its own controls answered.
 			const flow = Object.values(HOMESTEAD_MOVE_FLOWS).find(f => f.label === moveName);
 			const defaultRollOptions = flow
 				? {
 					moveResults: _moveResultsFromRows(flow.results),
 					resultLegend: _resultsLegendHtml(flow.results),
+					...(flow.pickPools  ? { pickOptions: flow.pickPools }  : {}),
+					...(flow.tierActions ? { tierActions: flow.tierActions } : {}),
 				}
 				: {};
 			// `situational` is the one-off modifier from the pre-roll prompt; it lands on top of

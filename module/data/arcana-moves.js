@@ -1,4 +1,5 @@
 import { capitalizeFirst, escHtml, slugify, stripHtmlToText } from "../utils/strings.js";
+import { pickLimitsFrom } from "../utils/move-picks.js";
 
 /**
  * The mysteries on an arcanum's BACK are moves — "choose one of the moves on the reverse"
@@ -62,7 +63,7 @@ const _ROLL_RE = /\broll\s*\+\s*(str|dex|con|int|wis|cha|nothing)\b/i;
 /** The options list a move offers — the first <ul> in its block, one entry per <li>. */
 function _picksFrom(blockHtml) {
 	const ul = /<ul\b[^>]*>([\s\S]*?)<\/ul>/i.exec(blockHtml);
-	if (!ul) return { picks: [], picksLabel: "", listHtml: "" };
+	if (!ul) return { picks: [], picksLabel: "", listHtml: "", pickMax: 0 };
 	const picks = [...ul[1].matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)]
 		.map(m => stripHtmlToText(m[1]))
 		.filter(Boolean);
@@ -74,7 +75,24 @@ function _picksFrom(blockHtml) {
 	const picksLabel = claim && claim.length <= 80
 		? `${capitalizeFirst(claim)}:`
 		: "Choose:";
-	return { picks, picksLabel, listHtml: ul[0] };
+	// How many of the list the mystery allows, out of that same lead-in and through the same
+	// timid reader every other move's count goes through (utils/move-picks.js). A mystery makes
+	// its choice in a DIALOG rather than on a chat card, so this is what gives the tally over
+	// those boxes its denominator — the one number, read the one way, on either surface.
+	//
+	// A tiered answer collapses to its HIGHEST count. Two shipped mysteries state a count per
+	// result (the Azure Hand's Eye of the Storm, "on a 10+ … choose 2 … on a 7-9 … choose 1"; the
+	// Demonhide Cloak's The Flesh Remembers, "on a 7-9, choose 1"), and the dialog they are picked
+	// in posts BEFORE the dice — so at the moment the boxes are ticked, which tier applies is not
+	// yet known. The most generous tier is the only cap that cannot be wrong in the direction that
+	// matters: too loose lets a player tick one box more than their roll turned out to allow, and
+	// the move's own text beside them still says so; too tight would refuse them what a strong hit
+	// plainly grants. Taking nothing at all (which this used to do) just loses the denominator.
+	const limits  = pickLimitsFrom(lead);
+	const pickMax = typeof limits === "number"
+		? limits
+		: Math.max(0, ...Object.values(limits ?? {}).map(n => Math.trunc(Number(n)) || 0));
+	return { picks, picksLabel, listHtml: ul[0], pickMax };
 }
 
 /**
@@ -82,7 +100,7 @@ function _picksFrom(blockHtml) {
  *
  * @param {string} description  The card's raw `back.description` HTML.
  * @returns {{slug: string, name: string, boxIndex: number|null, description: string,
- *            roll: string|null, picks: string[], picksLabel: string}[]}
+ *            roll: string|null, picks: string[], picksLabel: string, pickMax: number}[]}
  *   `boxIndex` is the move's learned-box index within the back side's □ run — the same index
  *   {@link module:actors/character/CharacterArcana} writes under `boxes[`slug:back:i`]`, so a
  *   caller can tell a learned mystery from one still to come. null when the move prints no box.
@@ -116,7 +134,7 @@ export function parseArcanumMoves(description) {
 		// text, then re-open the paragraph the head's own <p> started.
 		const tail = body.slice(head.headEnd, heads[i + 1]?.blockStart ?? body.length)
 			.replace(/^\s*(?:<br\s*\/?>|[\u2014\u2013-])\s*/, "");
-		const { picks, picksLabel, listHtml } = _picksFrom(block);
+		const { picks, picksLabel, listHtml, pickMax } = _picksFrom(block);
 		// A slug per card, so two moves that shout the same name still address separately.
 		let slug = slugify(head.name);
 		for (let n = 2; usedSlugs.has(slug); n++) slug = `${slugify(head.name)}-${n}`;
@@ -132,6 +150,7 @@ export function parseArcanumMoves(description) {
 			roll:        _ROLL_RE.exec(stripHtmlToText(block))?.[1]?.toLowerCase() ?? null,
 			picks,
 			picksLabel,
+			pickMax,
 			listHtml,
 		};
 	});

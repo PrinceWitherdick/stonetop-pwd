@@ -6686,28 +6686,81 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	text-align: center;
 }
 
-/* Chat: the shared "choose from this list" checklist on a resolved love letter.
+/* Chat: a roll card's "choose from this list" checklist — a resolved love letter's shared
+   pool, or a homefront move's per-tier list (Deploy's 6- consequences are a different list
+   from its 10+/7-9 options), of which only the rolled tier's is shown.
    Chat-scoped (#chat ID specificity) so it beats core's default padding-inline-start
    and disc bullets on chat-message <ul>s, matching the roll-card description/conditions
    lists above. Without the #chat prefix core's list indent wins and the options render
    pushed far to the right of the checkboxes. */
-.stonetop-roll-card-picklist { padding: 6px 8px 8px; }
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card-picklist .stonetop-picklist {
+/* The ink is SAID, like every other line of card prose (.stonetop-roll-card-description does
+   the same): the card's paper is parchment in both themes, but the chat log around it hands
+   down its own near-white UI ink, and an inherited cream on cream is a list nobody can read. */
+.stonetop-roll-card-picklist {
+	padding: 6px 8px 8px;
+	color: var(--st-text-body);
+}
+/* Belt and braces: the UA's [hidden]{display:none} already hides the non-active tiers, and
+   nothing here sets a display that would out-specify it — but the tier ACTIONS learned that
+   lesson the hard way (see .stonetop-roll-tier-action[hidden] above), so say it outright. */
+.stonetop-roll-tier-picklist[hidden] { display: none; }
+/* Three homes, one checklist: a roll card's own pick list (a love letter's pool, a homefront
+   move's per-tier options), and the options a move prints in its TEXT — which is tickable in
+   place wherever that text is shown, on a posted move card and on a roll card's description
+   alike (see chat.js#pickableMoveDescription). Selected together rather than copied.
+   The two description arms carry the same explicit ink as the pick list for the same reason:
+   neither declares one of its own, so both would inherit the chat log's near-white. */
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist {
 	list-style: none;
 	margin: 0;
 	padding: 0;
+	color: var(--st-text-body);
 }
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card-picklist .stonetop-picklist-item { margin: 3px 0; padding: 0; }
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card-picklist .stonetop-picklist-item label {
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-item {
+	margin: 3px 0;
+	padding: 0;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-item label {
 	display: flex;
 	align-items: flex-start;
 	gap: 6px;
 	cursor: pointer;
 	line-height: 1.35;
 }
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card-picklist .stonetop-picklist-check { margin: 1px 0 0; }
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card-picklist .stonetop-picklist-item.is-picked span {
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-check {
+	margin: 1px 0 0;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-item.is-picked span {
 	font-weight: bold;
+}
+/* The running tally above the boxes ("1/3 options selected"), inserted by _paintPickCount in
+   stonetop.js. Quieter than the options it counts — it is a readout, not one of the choices —
+   and it goes green once the list is full, which is the one moment a player wants to be told
+   without counting. Same explicit ink as the arms above: nothing here inherits a colour. */
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-count {
+	margin: 0 0 4px;
+	font-size: 0.85em;
+	font-weight: bold;
+	letter-spacing: 0.02em;
+	color: var(--st-text-muted);
+}
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-count.is-full {
+	color: var(--st-green-text);
+}
+/* A move description hangs a spiral marker off every <li>, absolutely positioned at left: 0 —
+   which is exactly where the checkbox now sits. The box IS this item's marker, so the spiral
+   goes: two markers in one slot reads as a broken glyph behind the tick. (The padding that
+   reserved room for it is already dropped by the .stonetop-picklist-item rule above.) */
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-item::before {
+	content: none;
 }
 
 /* Special possessions — 2-column card list, matching the Moves tab
@@ -16913,13 +16966,6 @@ a.steading-player-open:hover {
 
 .stonetop-season-btn:hover { background: var(--st-btn-primary-bg-hover); }
 
-/* This one sits outside .stonetop-season-actions, so it needs its own top gap,
-   and centers its label (the base rule aligns season buttons left). */
-.stonetop-season-btn[data-action="mark-diminished"] {
-	margin-top: 8px;
-	justify-content: center;
-}
-
 .stonetop-season-divider {
 	margin: 10px 0;
 	border: none;
@@ -17066,6 +17112,49 @@ a.steading-player-open:hover {
 	padding: 4px 0 12px;
 }
 
+/* Trade & Barter's special-item picker: the button, and the chip naming whatever it
+   picked. The chip is a READOUT, not a field — nothing reads it back — so it stays a
+   <span> and wraps rather than truncating; a trait list is the long half of the name. */
+.stonetop-tb-special {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+/* Wears the house button, like the dialog's own Roll/Cancel: as one of the three controls left
+   in the window it is read, not skimmed past, and core's bare <button> is near-white text on
+   near-white fill in here. `width: auto` because v13 core lays `body.game .app button` out at
+   100% — unlayered, so this wins without !important. */
+.stonetop-tb-special-btn {
+	flex: 0 0 auto;
+	width: auto;
+	padding: 6px 12px;
+	border: none;
+	border-radius: var(--st-radius);
+	background: var(--st-btn-primary-bg);
+	color: var(--st-btn-primary-text);
+	font-size: var(--st-fs-base);
+	cursor: pointer;
+}
+
+.stonetop-tb-special-btn:hover { background: var(--st-btn-primary-bg-hover); }
+
+.stonetop-tb-special-chosen {
+	flex: 1 1 12ch;
+	min-width: 0;
+	border-radius: var(--st-radius);
+	background: rgba(0,0,0,0.05);
+	padding: 3px 8px;
+	font-size: var(--st-fs-sm);
+	font-weight: bold;
+	color: var(--st-text-body);
+}
+
+/* Empty until something is picked. Said outright rather than left to the UA's
+   [hidden]{display:none}, which any `display` landing on this span would beat. */
+.stonetop-tb-special-chosen[hidden] { display: none; }
+
 .stonetop-homestead-trigger {
 	margin: 0;
 	color: #3f3f3f;
@@ -17147,6 +17236,25 @@ a.steading-player-open:hover {
 	flex-direction: column;
 	gap: 5px;
 	margin-top: 6px;
+}
+
+/* The same tally the chat card's pick list carries, on the one move surface that is not a card:
+   the guided-move dialog an arcanum's mystery opens (wirePickTally, utils/pick-tally.js). Sits
+   between the list's heading and its boxes, so it reads as part of the instruction rather than
+   as another option. Green once the list is full — the one state worth saying twice. */
+.stonetop-homestead-reference .stonetop-picklist-count {
+	margin-top: 6px;
+	font-size: 0.85em;
+	font-weight: bold;
+	letter-spacing: 0.02em;
+	color: var(--st-text-muted);
+}
+.stonetop-homestead-reference .stonetop-picklist-count.is-full {
+	color: var(--st-green-text);
+}
+/* The list's own top margin would double the gap under the readout. */
+.stonetop-homestead-reference .stonetop-picklist-count + .stonetop-homestead-choice-list {
+	margin-top: 3px;
 }
 
 .stonetop-homestead-choice {
