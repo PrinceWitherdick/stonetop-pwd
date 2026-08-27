@@ -28,18 +28,21 @@ const toCount = word => WORD_NUMBERS[String(word).toLowerCase()] ?? (Number(word
  * otherwise seize on ("spend Readiness 1-for-1", "hold 1 Rapport"), which is exactly why the
  * veto is checked first.
  */
+import { decodeEntities } from "./strings.js";
+
 const UNBOUNDED = /1[-\s]for[-\s]1|for each\b|add (?:the )?(?:following|these)\b|as many\b|(?:all(?: \d| three| that)?|both) apply/i;
 
-/**
- * The handful of entities the shipped move text actually uses. Decoded BEFORE anything is read,
- * because the book writes its tiers with en dashes: a raw "7&ndash;9" is not "7-9" to any
- * pattern here, and the cost is not a missed cap but a WRONG one — the tier marker before it
- * ("on a 10+") then swallows the 7-9's own count and caps the strong hit with it.
- */
-const ENTITIES = { "&ndash;": "\u2013", "&mdash;": "\u2014", "&nbsp;": " ", "&amp;": "&", "&#8211;": "\u2013", "&#8212;": "\u2014" };
-const decode = text => text.replace(/&(?:ndash|mdash|nbsp|amp|#8211|#8212);/gi, m => ENTITIES[m.toLowerCase()] ?? m);
 
-/** Result tiers as the book writes them, mapped to the card's own tier keys. */
+/**
+ * Result tiers as the book writes them, mapped to the card's own tier keys.
+ *
+ * DELIBERATELY not the same table as the move card's ladder (utils/move-tiers.js#_TIER_HEAD_RE):
+ * that one refuses "12+" because a 12+ line is a bonus ON TOP of the hit and labelling its row
+ * "10+" would read as a lie, while a 12+ HERE names the same pick count the hit does and must
+ * cap it. The two also anchor differently — this scans a whole lead for every marker in it, that
+ * one tests a single clause's opening. They share the spellings, not the semantics; keep the
+ * dash variants in step, and see the note there before adding a tier to either.
+ */
 const TIER_KEYS = [
 	[/^(?:10\+|12\+)$/, "success"],
 	[/^7[-\u2013\u2014]9$/,       "partial"],
@@ -98,7 +101,12 @@ const firstCountIn = segment => {
  * mistake: a count belongs to the marker it sits after, and there is nowhere else for it to go.
  */
 export function pickLimitsFrom(lead) {
-	const text = decode(String(lead ?? ""));
+	// Entities decoded BEFORE anything is read: the book writes its tiers with en dashes, and a
+	// raw "7&ndash;9" is not "7-9" to any pattern here. The cost is not a missed cap but a WRONG
+	// one - the tier marker before it ("on a 10+") then swallows the 7-9's own count and caps the
+	// strong hit with it. strings.js#decodeEntities knows the numeric forms this used to keep a
+	// private table for.
+	const text = decodeEntities(String(lead ?? ""));
 	if (!text) return null;
 
 	const marks = [...text.matchAll(TIER_MARK_RE)];

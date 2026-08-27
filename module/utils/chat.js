@@ -203,7 +203,7 @@ export function postMoveToChat(actor, title, rows) {
  *
  * @returns {{index: number, length: number, inner: string, items: string[]}|null}
  */
-function firstOptionList(html) {
+export function firstOptionList(html) {
 	const ul = /<ul\b[^>]*>([\s\S]*?)<\/ul>/i.exec(html ?? "");
 	if (!ul || /<ul\b/i.test(ul[1])) return null;
 	const items = [...ul[1].matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map(m => m[1]);

@@ -85,7 +85,14 @@ export function stripHtmlToText(value) {
 }
 
 /**
- * Decode the named entities our authored prose carries, PRESERVING typography.
+ * Decode the entities our authored prose carries, PRESERVING typography.
+ *
+ * NUMERIC forms are decoded alongside the named ones, and the match is case-insensitive. Both
+ * matter: move-picks.js used to keep a private decoder purely because it needed `&#8211;`, and
+ * its own comment explains the stakes — a tier written `7&#8211;9` that one pattern sees and
+ * another does not is "not a missed cap but a WRONG one". `&#x27;` is here because escHtml
+ * EMITS it, so anything that escapes text and later reads it back needs to get its apostrophe
+ * home again.
  *
  * The one entity decoder — do NOT add ad-hoc copies. There used to be two, and neither was a
  * superset of the other: one knew `&mdash; &ndash; &hellip; &rsquo; &lsquo;` and the other knew
@@ -100,17 +107,17 @@ export function stripHtmlToText(value) {
  */
 export function decodeEntities(text) {
 	return String(text ?? "")
-		.replace(/&mdash;/g, "—")
-		.replace(/&ndash;/g, "–")
-		.replace(/&hellip;/g, "…")
-		.replace(/&rsquo;/g, "’")
-		.replace(/&lsquo;/g, "‘")
-		.replace(/&nbsp;/g, " ")
-		.replace(/&quot;/g, '"')
-		.replace(/&#39;/g, "'")
-		.replace(/&lt;/g, "<")
-		.replace(/&gt;/g, ">")
-		.replace(/&amp;/g, "&");
+		.replace(/&mdash;|&#8212;|&#x2014;/gi, "—")
+		.replace(/&ndash;|&#8211;|&#x2013;/gi, "–")
+		.replace(/&hellip;|&#8230;/gi, "…")
+		.replace(/&rsquo;|&#8217;/gi, "’")
+		.replace(/&lsquo;|&#8216;/gi, "‘")
+		.replace(/&nbsp;|&#160;/gi, " ")
+		.replace(/&quot;|&#34;/gi, '"')
+		.replace(/&#39;|&#x27;/gi, "'")
+		.replace(/&lt;|&#60;/gi, "<")
+		.replace(/&gt;|&#62;/gi, ">")
+		.replace(/&amp;|&#38;/gi, "&");
 }
 
 // A move outcome's flattened value reads "<lead-in> pick 1: <option> / <option> / …"
@@ -130,26 +137,48 @@ const _PICK_MARKER = /\b(?:pick|choose|select)\b[^:]{0,40}:/i;
 export const PICK_SEPARATOR = /\s+\/\s+|\s*;?\s*\bOR\b\s+/;
 
 /**
+ * Split a "…pick N: <option> / <option> / …" outcome into its lead-in and its options, or
+ * return null when the text presents no such list (no hinge, or fewer than two options
+ * after it). PLAIN TEXT in, plain text out — escaping is the caller's job.
+ *
+ * The one pick-list parser: {@link formatOutcomeDetail} renders it, and the move card's tier
+ * ladder (utils/move-tiers.js) asks the same question to decide whether a tier's options are
+ * already listed in the move's own prose above it. Two parsers would disagree the moment one
+ * learned a separator the other didn't.
+ */
+export function splitPickList(text) {
+	const raw = String(text ?? "").trim();
+	if (!raw) return null;
+	const m = raw.match(_PICK_MARKER);
+	if (!m) return null;
+	const markerEnd = m.index + m[0].length;
+	const intro   = raw.slice(0, markerEnd).trim();
+	const rest    = raw.slice(markerEnd).trim().replace(/\.\s*$/, "");
+	const options = rest.split(PICK_SEPARATOR).map((s) => s.trim()).filter(Boolean);
+	if (options.length < 2) return null;
+	return { intro, options };
+}
+
+/**
  * Render a move-result outcome string as HTML. When the text presents a "pick N:" list
  * of slash-separated options, the lead-in stays as prose and the options become a
  * spiral-bulleted <ul class="stonetop-roll-result-picks"> — otherwise the text is just
  * HTML-escaped. Pure (no DOM), so both the server-side card builder (roll-engine) and the
  * GM shift-tier reformatter (stonetop.js) can share it. Returns "" for empty input.
+ *
+ * `introOnly` keeps the lead-in and DROPS the option list: the move card's tier ladder sets
+ * it when the very same options are already bulleted in the move's description right above
+ * the ladder, so a "pick 1" move doesn't print its list twice.
  */
-export function formatOutcomeDetail(text) {
+export function formatOutcomeDetail(text, { introOnly = false } = {}) {
 	const raw = String(text ?? "").trim();
 	if (!raw) return "";
-	const m = raw.match(_PICK_MARKER);
-	if (m) {
-		const markerEnd = m.index + m[0].length;
-		const intro   = raw.slice(0, markerEnd).trim();
-		const rest    = raw.slice(markerEnd).trim().replace(/\.\s*$/, "");
-		const options = rest.split(PICK_SEPARATOR).map((s) => s.trim()).filter(Boolean);
-		if (options.length >= 2) {
-			const items = options.map((o) => `<li>${escHtml(o)}</li>`).join("");
-			return `<span class="stonetop-roll-result-lead">${escHtml(intro)}</span>`
-				+ `<ul class="stonetop-roll-result-picks">${items}</ul>`;
-		}
+	const split = splitPickList(raw);
+	if (split) {
+		if (introOnly) return `<span class="stonetop-roll-result-lead">${escHtml(split.intro)}</span>`;
+		const items = split.options.map((o) => `<li>${escHtml(o)}</li>`).join("");
+		return `<span class="stonetop-roll-result-lead">${escHtml(split.intro)}</span>`
+			+ `<ul class="stonetop-roll-result-picks">${items}</ul>`;
 	}
 	return escHtml(raw);
 }
