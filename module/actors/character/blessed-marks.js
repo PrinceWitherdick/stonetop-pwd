@@ -39,7 +39,7 @@
  * Kept Foundry-free so all of this can be tested without a world in sight.
  */
 
-import { ownsMoveNamed, ownedNamesOr, ownedMoveNames } from "./owns-move.js";
+import { ownsMoveNamed, ownedNamesOr } from "./owns-move.js";
 import { createRoster, showStandingList } from "./marked-people.js";
 
 // Re-exported so the dialog and this playbook's tests keep reaching the predicate through the
@@ -280,14 +280,19 @@ export function setMarkLoyalty(list, id, loyalty, { liftOnEnd = false } = {}) {
 /**
  * The roster split into its kinds, each with its definition and rows, ready to render.
  *
- * A kind appears when it has rows OR when the character owns its move — so a Blessed who owns
- * Barkskin sees an empty Barkskin group to add into, and a Blessed who has since lost the move
- * still sees the marks they laid with it.
+ * ONLY KINDS SOMEBODY IS ACTUALLY WEARING. A group with no rows is a heading and a rule line about
+ * nobody, and five of those is most of the window on a Blessed who has laid two marks — this roster
+ * answers "who is wearing what", so a kind nobody wears has nothing to answer with. Which kinds can
+ * be LAID is a different question, and the add row answers it from availableKinds, so an owned move
+ * with no marks out is still one pick away from its first: the empty group was never the way in.
+ *
+ * No longer asks what the character owns, and so no longer asks for the actor. A Blessed who has
+ * since dropped the move still sees the marks they laid with it, because those rows are still on
+ * the list and still need lifting.
  */
-export function groupMarks(list, actor) {
+export function groupMarks(list) {
 	const rows = readMarks(list);
-	const owned = ownedMoveNames(actor);
 	return MARK_KINDS
 		.map(def => ({ def, rows: rows.filter(m => m.kind === def.key) }))
-		.filter(group => group.rows.length || owned.has(group.def.move));
+		.filter(group => group.rows.length);
 }

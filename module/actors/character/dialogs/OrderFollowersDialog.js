@@ -35,7 +35,7 @@ const _ORDER_MOVES = [
 	{ key: "interfere",     label: "Interfere" },
 	{ key: "seek-insight",  label: "Seek Insight" },
 	{ key: "know-things",   label: "Know Things" },
-	{ key: "persuade-npcs", label: "Persuade NPCs" },
+	{ key: "persuade-npcs", label: "Persuade (vs. NPCs)" },
 	{ key: "custom",        label: "Custom / other…" },
 ];
 

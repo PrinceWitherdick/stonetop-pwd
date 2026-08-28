@@ -1759,7 +1759,13 @@ function _shiftRollCardFlavor(flavor, total, formula = null) {
 				partial: resultEl.dataset.outcomePartial,
 				failure: resultEl.dataset.outcomeFailure,
 			}[tierKey];
-			if (outcome !== undefined) details.innerHTML = formatOutcomeDetail(outcome);
+			// `introOnly` on the tiers whose options the card lists as checkboxes below (stamped by
+			// _rollCard as data-picked-tiers): a shift onto one of those must not start reprinting
+			// the list inside the result block that the boxes below already carry.
+			const picked = (resultEl.dataset.pickedTiers ?? "").split(" ").filter(Boolean);
+			if (outcome !== undefined) {
+				details.innerHTML = formatOutcomeDetail(outcome, { introOnly: picked.includes(tierKey) });
+			}
 		}
 	}
 

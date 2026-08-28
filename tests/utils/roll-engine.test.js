@@ -332,6 +332,50 @@ describe("rollStat", () => {
 		expect(rollMessages[0].flavor).not.toContain("stonetop-roll-card-picklist");
 	});
 
+	// The result block and the boxes below it are the same list; printing it in both makes the
+	// card say every option twice, once unclickable. The block keeps the lead-in only.
+	it("prints the lead-in alone in the result block when the boxes below list the options", async () => {
+		rollTotal = 10;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			pickOptions: ["Avoid, prevent, or counter your enemy's attack", "Strike hard and fast"],
+			moveResults: {
+				success: { value: "Your maneuver works as expected and pick 1: Avoid, prevent, or counter your enemy's attack / Strike hard and fast" },
+				partial: { value: "" },
+				failure: { value: "" },
+			},
+		});
+
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-result-lead");
+		expect(flavor).not.toContain("stonetop-roll-result-picks");
+		// The options appear exactly where they can be ticked, and nowhere else.
+		expect(flavor).toContain("stonetop-picklist-check");
+		// Every tier a shared pool serves is stamped, so a GM Shift Up/Down keeps the block short.
+		expect(flavor).toContain('data-picked-tiers="success partial failure"');
+	});
+
+	// ...but a tier with no boxes of its own still shows its options, or they would be nowhere.
+	it("keeps the options in the result block on a tier the card lists no boxes for", async () => {
+		rollTotal = 6;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			pickOptions: { success: ["Alpha", "Beta"] },
+			moveResults: {
+				success: { value: "" },
+				partial: { value: "" },
+				failure: { value: "The GM will choose 1: a hard bargain / a worse spot" },
+			},
+		});
+
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-result-picks");
+		expect(flavor).toContain("a hard bargain");
+		expect(flavor).toContain('data-picked-tiers="success"');
+	});
+
 	it("omits the outcome line when the move has no moveResults", async () => {
 		rollTotal = 10;
 

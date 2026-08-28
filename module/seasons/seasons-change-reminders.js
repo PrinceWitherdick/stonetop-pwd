@@ -15,6 +15,17 @@ import { SYSTEM_ID } from "../system-id.js";
 //   • "move"       — an embedded move Item with this exact name.
 //   • "possession" — a selected special-possession slug (flags.stonetop-pwd.possessions.selected).
 // `rule` is the season-facing reminder text shown in the card.
+// `seasons` (optional) limits an entry to the seasons listed; omitted means every season.
+//
+// EVERYTHING HERE IS QUOTED FROM THE BOOK, and the card goes out publicly to the whole
+// table, so an entry that paraphrases loosely teaches the table a rule that does not exist.
+// Before adding one, find the printed line. Holy relics (The Lightbearer) was listed here
+// with a "Restore 1 use this season" refresh and a "+1 to a roll involving Helior's favor"
+// effect; it has NEITHER. Book I p.430, Book II's Helior entry, and the Lightbearer playbook
+// all read the same and say nothing about seasons: "Holy relics (___ uses): if you have one
+// in inventory when you Invoke the Sun God, you can mark a use in lieu of choosing a
+// consequence." (The +1 belongs to Piety's Blessing, a different thing entirely.) Its uses
+// are a one-way pool, so it does not belong in a seasonal-upkeep card at all.
 const SEASONAL_REMINDERS = [
 	{
 		kind:     "move",
@@ -37,11 +48,13 @@ const SEASONAL_REMINDERS = [
 		rule:     "Each season, there's a 1-in-4 chance your goat herd produces a bezoar: swallow it to cure poison. Roll to see if you have one.",
 	},
 	{
+		// Spring only, unlike its neighbours: "Each SPRING, d4 uses of bendis root."
 		kind:     "possession",
-		slug:     "holy-relics",
-		label:    "Holy relics",
-		playbook: "The Lightbearer",
-		rule:     "Restore 1 use this season. (Expend a use to add +1 to a roll involving Helior's favor or power.)",
+		slug:     "herb-garden",
+		label:    "Herb garden",
+		playbook: "The Blessed",
+		seasons:  ["spring"],
+		rule:     "Each spring, the garden yields d4 uses of bendis root (reach, area, burns ~1 hr, fumes repel perversions of nature). Roll this year's crop.",
 	},
 ];
 
@@ -62,21 +75,26 @@ export function seasonLabel(season) {
 
 // Which registered reminders apply to one character — a move match needs an
 // embedded move Item of that name; a possession match needs the slug selected.
-export function remindersForActor(actor) {
+//
+// `season` filters the season-limited entries (Herb garden is spring-only). Omitting it
+// lists everything the character carries regardless of season, which is what a caller
+// asking "what seasonal upkeep does this PC have?" wants; the chat card always passes one.
+export function remindersForActor(actor, season = "") {
 	if (actor?.type !== "character") return [];
 	const moveNames = new Set(actor.items.filter(i => i.type === "move").map(i => i.name));
 	const selected  = new Set(actor.getFlag?.(SYSTEM_ID, "possessions.selected") ?? []);
-	return SEASONAL_REMINDERS.filter(r =>
-		r.kind === "move" ? moveNames.has(r.name) : selected.has(r.slug),
-	);
+	return SEASONAL_REMINDERS.filter(r => {
+		if (season && r.seasons && !r.seasons.includes(season)) return false;
+		return r.kind === "move" ? moveNames.has(r.name) : selected.has(r.slug);
+	});
 }
 
 // Display rows for every seasonal item carried by the given actors: the matched
 // move/possession's season-facing rule, tagged with the owning character. Pure
 // (no globals), so the card builder and the tests can drive it directly.
-export function collectSeasonalReminders(actors) {
+export function collectSeasonalReminders(actors, season = "") {
 	return actors.flatMap(actor =>
-		remindersForActor(actor).map(r =>
+		remindersForActor(actor, season).map(r =>
 			({ character: actor.name, name: r.label ?? r.name, playbook: r.playbook, rule: r.rule })),
 	);
 }
@@ -112,7 +130,7 @@ export function seasonsReminderCard(season, reminders) {
 // party carries seasonal upkeep (so off-season parties get no empty card).
 export function postSeasonsChangeReminder(season) {
 	if (!globalThis.ChatMessage) return;
-	const reminders = collectSeasonalReminders(getPlayerCharacters());
+	const reminders = collectSeasonalReminders(getPlayerCharacters(), season);
 	if (!reminders.length) return;
 	ChatMessage.create({
 		speaker: { alias: "The Seasons Change" },

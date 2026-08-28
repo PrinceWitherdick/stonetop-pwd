@@ -623,6 +623,65 @@ describe("the ladder in a chat card", () => {
 	});
 });
 
+// THE SAME LADDER ON A HOVER PANEL. The tier inks are chosen for the light paper a sheet and a
+// chat card are, and one of the four panels that show a move under the pointer is near-black, so
+// on it the labels were the one part of the move that could not be read. A hover panel has no
+// roll attached to it either, so there is no rung to pick out: the labels take the panel's ink.
+describe("the ladder on a hover panel", () => {
+	const CSS = readCss();
+	// The two hosts the CSS names. The test below proves these are all four panels, rather than
+	// the two someone happened to remember.
+	const HOSTS = [".stonetop-basic-move-panel", ".stonetop-word-tooltip"];
+
+	for (const host of HOSTS) {
+		it(`drops the tier tint on ${host}`, () => {
+			const rule = declarations(CSS, `${host} .stonetop-move-tier .stonetop-move-tier-label`);
+			expect(rule).toContain("color: inherit");
+			// Never a second palette for the dark host: `inherit` is the point, and a hex here
+			// would be a third set of tier inks to keep in step with the other two.
+			expect(rule).not.toMatch(/#[0-9a-f]{3,6}/i);
+		});
+	}
+
+	// The rule reaches PAST the row (0,3,0) rather than tying with `.stonetop-move-tier--success
+	// .stonetop-move-tier-label` at (0,2,0), so it wins on specificity wherever either rule ends
+	// up in the file — this one sits beside them today, and a later move of either must not
+	// silently put the tint back.
+	it("out-specifies the tint rather than tying with it", () => {
+		for (const host of HOSTS) {
+			const prelude = CSS.match(
+				new RegExp(`\\${host} \\.stonetop-move-tier \\.stonetop-move-tier-label`)
+			);
+			expect(prelude).not.toBeNull();
+		}
+	});
+
+	// Every surface that runs the shared hover pass (utils/move-hover.js) is one of the hosts
+	// above. Read off the sources rather than listed here, because the failure mode is a FIFTH
+	// panel added later with a class of its own: it would show the ladder like the other four
+	// and be tinted like a card, and nothing else would notice.
+	it("covers every panel that runs the shared hover pass", () => {
+		const SOURCES = [
+			"module/actors/character/StonetopCharacterSheet.js",
+			"module/actors/character/dialogs/CharacterOnboardingDialog.js",
+			"module/actors/steading/StonetopSteadingSheet.js",
+		];
+		const sites = [];
+		for (const rel of SOURCES) {
+			const src = readRepo(rel);
+			for (const [, ident] of src.matchAll(/prepareMoveHoverBody\(\s*([A-Za-z_$][\w$]*)\s*\)/g)) {
+				const named = src.match(new RegExp(`\\b${ident}\\.className\\s*=\\s*"([^"]+)"`));
+				expect(named, `${rel}: no class literal found for ${ident}`).not.toBeNull();
+				sites.push(`.${named[1]}`);
+			}
+		}
+		// Four call sites, and between them only the two hosts the CSS de-tints. The count is
+		// asserted so the scan cannot pass by finding nothing at all.
+		expect(sites.length).toBe(4);
+		for (const host of sites) expect(HOSTS).toContain(host);
+	});
+});
+
 // Which rung the dice landed on, said on the ladder itself. The result block above already
 // states that one outcome; the mark is what puts it back among the other two.
 describe("markRolledTier", () => {

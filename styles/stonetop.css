@@ -205,8 +205,11 @@
 	   (.stonetop-move-tiers) and the love letter reader's (.stonetop-love-letter-read-tiers).
 	   One value because the whole point of a fixed width is that the outcome text starts at the
 	   same left edge each time a player meets the layout — and the two had already drifted to
-	   3em and 2.6em, which is what a second hand-typed width buys. */
-	--st-tier-label-width: 3em;
+	   3em and 2.6em, which is what a second hand-typed width buys. Sized to the widest label
+	   ("10+" in bold tabular figures) plus a hair, not to a round number: the column is a
+	   gutter, and every extra em of it reads as the label having drifted away from the
+	   outcome it introduces. */
+	--st-tier-label-width: 2.1em;
 
 	/* How far off pitch black the dead surfaces sit.
 	   Inverting the sheet's near-white paper lands on roughly #080807, which is black enough that
@@ -5111,9 +5114,12 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 /* A pick-1 radio / optional-add-on checkbox row: the checkbox-SVG control + its label.
    Sized to the card body (--font-size-13, matching the description/outcome text) so the
    options read like the rest of the card rather than as fine print. */
+/* Top-aligned, not centred: these labels are the move's own printed bullets, which wrap to two
+   lines in a chat card, and a centred box floats to the middle of the wrapped block instead of
+   sitting beside the line it belongs to. */
 .stonetop-attack-pick-row {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 8px;
 	cursor: pointer;
 	line-height: 1.3;
@@ -5561,7 +5567,7 @@ ul.stonetop-move-tiers,
 .stonetop-move-tiers li.stonetop-move-tier,
 :is(#chat, #chat-notifications, #chat-popout) .message ul.stonetop-move-tiers li.stonetop-move-tier {
 	display: flex;
-	gap: 8px;
+	gap: 5px;
 	position: static;
 	margin: 3px 0;
 	padding-left: 0;
@@ -5589,6 +5595,28 @@ ul.stonetop-move-tiers,
 .stonetop-move-tier--success .stonetop-move-tier-label { color: var(--st-tier-success-text); }
 .stonetop-move-tier--partial .stonetop-move-tier-label { color: var(--st-tier-partial-text); }
 .stonetop-move-tier--failure .stonetop-move-tier-label { color: var(--st-tier-failure-text); }
+
+/* EXCEPT ON A HOVER PANEL, where the labels take the panel's own ink.
+
+   The four panels that show a move under the pointer (utils/move-hover.js, and the two host
+   classes named here are all four of them) print this same ladder, and the tier inks are chosen
+   for the light paper a sheet and a chat card are: #6e0000, #6b4400, #1a4a1a. The basic-move
+   panel is `background: #1f1f1f`, so on it those three land close enough to the ground that
+   "10+" and "7-9" are the one part of a move a reader cannot make out, while every other word in
+   the panel is the near-white it sets.
+
+   Not darkened-to-suit or re-tinted per host: a hover panel has no roll attached to it, so there
+   is no rung to pick out in the first place. All three tiers are equally live there, exactly as
+   on an unrolled card, and the colour was only ever carrying the reader's eye to a result that
+   this surface never has. The rolled-rung mark is unaffected either way, since nothing outside a
+   result card carries `data-rolled-tier`.
+
+   Three levels (0,3,0) against the (0,2,0) rules above rather than a tie broken by order, so it
+   holds wherever either lands in the file. */
+.stonetop-basic-move-panel .stonetop-move-tier .stonetop-move-tier-label,
+.stonetop-word-tooltip .stonetop-move-tier .stonetop-move-tier-label {
+	color: inherit;
+}
 
 /* THE LIST THE RUNGS SEND YOU TO. A move whose options were introduced by a tier clause has
    that clause lifted into the ladder, so the list is re-hung directly under it (move-tiers.js
@@ -6951,7 +6979,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    surfaces a player meets it on pick different numbers, which is what they had done. */
 .stonetop-love-letter-read-tiers li {
 	display: flex;
-	gap: 8px;
+	gap: 5px;
 	margin: 3px 0;
 	line-height: 1.4;
 }

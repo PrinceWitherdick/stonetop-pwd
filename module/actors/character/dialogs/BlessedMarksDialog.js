@@ -62,14 +62,13 @@ export class BlessedMarksDialog extends RosterDialog {
 
 	getData() {
 		const stored = this._character.blessedMarks;
-		const groups = groupMarks(stored, this._actor).map(group => ({
+		// Only the kinds somebody is wearing — see blessed-marks.js. Nothing here needs a word for
+		// an empty group, because a group that would be empty is not built.
+		const groups = groupMarks(stored).map(group => ({
 			key:   group.def.key,
 			label: group.def.label,
 			rule:  group.def.rule,
 			rows:  group.rows.map(entry => this._row(entry, group.def)),
-			// Said per group rather than once at the bottom: "name a beast" and "name a doorway"
-			// are different asks, and a single placeholder could only get one of them right.
-			empty: this._emptyLabel(group.def),
 		}));
 		// The kinds this Blessed can actually lay. A kind with rows but no move (a mark that
 		// outlived the move that made it) is listed above but NOT offered here — there is nothing
@@ -119,13 +118,6 @@ export class BlessedMarksDialog extends RosterDialog {
 			// still see whose marks they are carrying.
 			playbookImg: playbookIconPath(BLESSED_SLUG),
 		};
-	}
-
-	/** What a group with nothing in it says, in the terms of what that move marks. */
-	_emptyLabel(def) {
-		if (def.subject === "beast") return "No beast bears this mark.";
-		if (def.subject === "place") return "Nothing is warded.";
-		return "Nobody bears this mark.";
 	}
 
 	/**

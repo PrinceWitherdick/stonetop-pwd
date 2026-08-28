@@ -216,6 +216,17 @@ export function tierPickCounts(moveResults) {
  * with a GM's Shift Up/Down exactly as the wording above it does. A per-tier list is stamped flat,
  * because it is only ever shown on the one tier it belongs to.
  */
+/**
+ * Which tiers show their options as ticked boxes under the card, from the same pools
+ * {@link pickListsHtml} renders. A shared pool serves every tier; a per-tier pool serves the
+ * tier it belongs to. The result block reads this to decide whether to reprint the tier's
+ * options inside itself: when the boxes below already list them, it prints the lead-in alone
+ * ("...and pick 1:") rather than saying the same three options twice, once unclickable.
+ */
+export function pickedTiers(pools) {
+	return _PICK_TIERS.filter(tier => pools.byTier[tier].length);
+}
+
 export function pickListsHtml(pools, activeTier, picks = null) {
 	let index = 0;
 	const list = (options, limitAttrs = "") => `<ul class="stonetop-picklist"${limitAttrs}>${options.map(option =>
@@ -239,7 +250,7 @@ export function pickListsHtml(pools, activeTier, picks = null) {
 	</div>`;
 }
 
-function _rollCard({ header, result = "", resultClass = "", resultDetail = "", resultOutcomes = null, resultLegend = "", pickList = "", tierActions = null, conditionsHtml = "", noticesHtml = "", buttons = false, actions = "", total = null, formula = "", description = "", dieResults = "", badge = "", sectionClass = "", damage = false }) {
+function _rollCard({ header, result = "", resultClass = "", resultDetail = "", resultOutcomes = null, resultLegend = "", pickList = "", pickTiers = [], tierActions = null, conditionsHtml = "", noticesHtml = "", buttons = false, actions = "", total = null, formula = "", description = "", dieResults = "", badge = "", sectionClass = "", damage = false }) {
 	// Stash every tier's outcome on the row so a GM Shift Up/Down can swap the
 	// detail line to match the new tier (see _shiftRollCardFlavor in stonetop.js).
 	const outcomeAttrs = resultOutcomes
@@ -247,6 +258,12 @@ function _rollCard({ header, result = "", resultClass = "", resultDetail = "", r
 			+ ` data-outcome-partial="${escHtml(resultOutcomes.partial ?? "")}"`
 			+ ` data-outcome-failure="${escHtml(resultOutcomes.failure ?? "")}"`
 		: "";
+	// ...and which of those tiers has its options ticked off below, so the shift keeps printing
+	// the lead-in alone on a tier whose list is already on the card (see `detailHtml`).
+	const pickedAttr = pickTiers.length ? ` data-picked-tiers="${escHtml(pickTiers.join(" "))}"` : "";
+	// The tier's own options are reprinted inside the result block ONLY when nothing below lists
+	// them. A card that shows them as checkboxes shows the lead-in here and the boxes there.
+	const detailHtml = formatOutcomeDetail(resultDetail, { introOnly: pickTiers.includes(resultClass) });
 	// The die formula gets its own chip above the result, mirroring Foundry's vanilla
 	// dice-formula placement. We hide Foundry's auto-rendered dice block in CSS, so
 	// this is the only place the formula appears. The chip carries the individual die
@@ -262,11 +279,11 @@ function _rollCard({ header, result = "", resultClass = "", resultDetail = "", r
 	// mark instead — the same one the attack flow's per-target damage rows use.
 	const resultNumberHtml = damage ? damageMark(total, dieResults) : rollResultNumber(total, dieResults);
 	const resultBlockHtml = (total != null || result)
-		? `<div class="stonetop-roll-result ${resultClass}"${outcomeAttrs}>
+		? `<div class="stonetop-roll-result ${resultClass}"${outcomeAttrs}${pickedAttr}>
 			${total != null ? resultNumberHtml : ""}
 			<div class="stonetop-roll-result-body">
 				${result ? `<span class="stonetop-roll-result-label">${result}</span>` : ""}
-				<span class="stonetop-roll-result-details">${formatOutcomeDetail(resultDetail)}</span>
+				<span class="stonetop-roll-result-details">${detailHtml}</span>
 			</div>
 		</div>`
 		: "";
@@ -510,6 +527,7 @@ export async function rollStat(statKey, actor, options = {}) {
 		resultOutcomes,
 		resultLegend: options.resultLegend ?? "",
 		pickList: pickListHtml,
+		pickTiers: pickListHtml ? pickedTiers(pickPools) : [],
 		tierActions: options.tierActions ?? null,
 		conditionsHtml,
 		noticesHtml: _woundReminderHtml(actor, moveName),

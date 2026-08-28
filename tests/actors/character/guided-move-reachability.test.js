@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { readRepo } from "../../fakes/css.js";
 import { GUIDED_CHARACTER_MOVES } from "../../../module/actors/character/StonetopCharacterSheet.js";
@@ -23,7 +24,7 @@ import { GUIDED_CHARACTER_MOVES } from "../../../module/actors/character/Stoneto
 // has its own button, which builds its dialog from GUIDED_CHARACTER_MOVES.Recover.
 
 const SHEET_JS = readRepo("module/actors/character/StonetopCharacterSheet.js");
-const PACK_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.slice(1)), "../../../packs/src/stonetop-items");
+const PACK_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../packs/src/stonetop-items");
 
 function packMoves(dir = PACK_ROOT, out = new Map()) {
 	for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

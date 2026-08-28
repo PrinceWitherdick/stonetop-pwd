@@ -31,9 +31,32 @@ describe("remindersForActor", () => {
 		expect(names(remindersForActor(actor)).sort()).toEqual(["Collected offerings", "Goat herd"]);
 	});
 
-	it("matches The Lightbearer's Holy relics possession", () => {
+	// Holy relics has NO seasonal rule in the book: not in Book I, not in Book II's Helior
+	// entry, not on the Lightbearer playbook. Its uses are a one-way pool. It was listed here
+	// with an invented "Restore 1 use this season" (and an effect belonging to Piety), so the
+	// public card taught the table two rules that do not exist. This is what keeps it out.
+	it("does not invent a seasonal refresh for Holy relics", () => {
 		const actor = fakeCharacter({ possessions: ["holy-relics"] });
-		expect(names(remindersForActor(actor))).toEqual(["Holy relics"]);
+		expect(remindersForActor(actor)).toEqual([]);
+	});
+
+	// "Each SPRING, d4 uses of bendis root": the one entry that is not every-season.
+	it("matches the spring-only Herb garden in spring, and not otherwise", () => {
+		const actor = fakeCharacter({ possessions: ["herb-garden"] });
+		expect(names(remindersForActor(actor, "spring"))).toEqual(["Herb garden"]);
+		expect(remindersForActor(actor, "autumn")).toEqual([]);
+	});
+
+	// A caller that names no season is asking "what does this PC carry?", not "what fires
+	// now", so the season-limited entries are all in.
+	it("lists season-limited upkeep when no season is given", () => {
+		const actor = fakeCharacter({ possessions: ["herb-garden"] });
+		expect(names(remindersForActor(actor))).toEqual(["Herb garden"]);
+	});
+
+	it("keeps the every-season entries in a season the garden misses", () => {
+		const actor = fakeCharacter({ possessions: ["goat-herd", "herb-garden"] });
+		expect(names(remindersForActor(actor, "winter"))).toEqual(["Goat herd"]);
 	});
 
 	it("combines a move and a possession on the same character", () => {
@@ -61,12 +84,12 @@ describe("collectSeasonalReminders", () => {
 	it("tags each matched reminder with its owning character", () => {
 		const reminders = collectSeasonalReminders([
 			fakeCharacter({ name: "Brother Hale", moves: ["Rites of the Land"], possessions: ["collected-offerings"] }),
-			fakeCharacter({ name: "Mira", possessions: ["holy-relics"] }),
+			fakeCharacter({ name: "Mira", possessions: ["goat-herd"] }),
 		]);
 		expect(reminders).toEqual([
 			expect.objectContaining({ character: "Brother Hale", name: "Rites of the Land" }),
 			expect.objectContaining({ character: "Brother Hale", name: "Collected offerings" }),
-			expect.objectContaining({ character: "Mira", name: "Holy relics" }),
+			expect.objectContaining({ character: "Mira", name: "Goat herd" }),
 		]);
 	});
 
