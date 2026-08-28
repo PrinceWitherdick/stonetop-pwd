@@ -30,7 +30,54 @@ const toCount = word => WORD_NUMBERS[String(word).toLowerCase()] ?? (Number(word
  */
 import { decodeEntities } from "./strings.js";
 
-const UNBOUNDED = /1[-\s]for[-\s]1|for each\b|add (?:the )?(?:following|these)\b|as many\b|(?:all(?: \d| three| that)?|both) apply/i;
+// The two phrasings that appear in BOTH questions below — the veto on a count, and the narrower
+// "this list is not a choice" test. Named once because they are the same book wording read twice
+// for different purposes, and a fix to either spelling (an en dash in "1-for-1", a "the
+// following ones") has to reach both or the two answers start disagreeing about one sentence.
+const ONE_FOR_ONE = String.raw`1[-\s]for[-\s]1`;
+const THE_FOLLOWING = String.raw`(?:the )?(?:following|these)\b`;
+
+const UNBOUNDED = new RegExp(
+	`${ONE_FOR_ONE}|for each\\b|add ${THE_FOLLOWING}|as many\\b|(?:all(?: \\d| three| that)?|both) apply`, "i");
+
+/**
+ * The narrower question: is this list something the move SHOWS you rather than asks you to
+ * choose from? Two shapes qualify, and neither is a choice the move ever offers.
+ *
+ * A RESOURCE'S SPEND MENU. "You can spend Readiness 1-for-1 to:" (Defend), and the same on
+ * Silver Tongued's Nerve, We Happy Few's Inspiration, Anger is a Gift's Resolve, Strengthen
+ * Your Bond's Loyalty. What follows is what the points you are now holding BUY, one at a time,
+ * over the rest of the fight — you may buy the same line twice, and the roll never asked you to
+ * choose between them.
+ *
+ * A LIST ADDED TO ANOTHER MOVE. "When you Seek Insight, add the following to the list of
+ * questions you can ask:" (Situational Awareness, Predator). Those questions are not picked
+ * here at all; they are appended, permanently, to a list that lives on a different move and is
+ * chosen from there.
+ *
+ * Either way a tick would record a decision nobody made, so these print as prose with the
+ * system's spiral bullets instead of as a checklist (see chat.js#pickableMoveDescription).
+ *
+ * Deliberately NARROWER than `UNBOUNDED` above, which vetoes a COUNT for several reasons that
+ * have nothing to do with this one. End of Session's questions are vetoed by "for each 'yes'"
+ * and are the most tickable list in the book; Dark Succor and Danu's Grasp are vetoed by "all 3
+ * apply" and "both apply" while their lists are still choices. Only these two shapes stop being
+ * a choice, so only they are named here — and note how close the near misses run: "ask 1 of the
+ * following" (Under Your Skin, Read the Land, Warden of the Wild) IS a choice and keeps its
+ * boxes, which is why the verb is part of each pattern rather than "the following" alone.
+ *
+ * Both are sentence-bounded (`[^.;:]*`), so a "spend" or an "add" earlier in the move's text
+ * cannot reach across a full stop to meet a phrase belonging to a different sentence.
+ *
+ * @param {string} lead  The move's text BEFORE its options list, tags already stripped.
+ */
+const SPEND_MENU = new RegExp(String.raw`\bspends?\b[^.;:]*\b${ONE_FOR_ONE}`, "i");
+const ADDED_TO_ANOTHER_MOVE = new RegExp(String.raw`\badds?\b[^.;:]*\b${THE_FOLLOWING}`, "i");
+
+export function isReferenceList(lead) {
+	const text = decodeEntities(String(lead ?? ""));
+	return SPEND_MENU.test(text) || ADDED_TO_ANOTHER_MOVE.test(text);
+}
 
 
 /**

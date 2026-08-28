@@ -42,6 +42,44 @@ describe("pickableMoveDescription", () => {
 		expect(pickableMoveDescription(plain)).toBe(plain);
 	});
 
+	// Defend's list is not a choice the roll makes you make — it is what the Readiness you now
+	// hold buys, one point at a time, over the rest of the fight, and the same line can be bought
+	// twice. Left as prose it takes the spiral bullets every other prose list on these surfaces
+	// wears, which is what it always should have been.
+	it("does not tick a resource's spend menu", () => {
+		const defend = "<p>When you defend, roll +CON: on a 10+, hold 3 Readiness."
+			+ " You can spend Readiness 1-for-1 to:</p>"
+			+ "<ul><li>Suffer an attack's damage instead of your ward</li><li>Halve an attack's damage</li></ul>";
+		expect(pickableMoveDescription(defend)).toBe(defend);
+	});
+
+	// Situational Awareness' three questions are not picked here either. They are appended,
+	// permanently, to Seek Insight's list and chosen from there.
+	it("does not tick a list a move adds to another move", () => {
+		const situational = "<p>When you Seek Insight, add the following to the list of questions you can ask:</p>"
+			+ "<ul><li>Who or what here is the biggest threat?</li><li>What here can I use as a weapon?</li></ul>";
+		expect(pickableMoveDescription(situational)).toBe(situational);
+	});
+
+	// The near miss, one word away, and still a genuine choice.
+	it("still ticks 'ask 1 of the following'", () => {
+		const underYourSkin = "<p>You can ask the GM 1 of these and get an honest answer:</p>"
+			+ "<ul><li>What are they expecting me to do?</li><li>What do they want to happen?</li></ul>";
+		const html = pickableMoveDescription(underYourSkin);
+		expect(html).toContain("stonetop-picklist-check");
+		expect(html).toContain('data-pick-max="1"');
+	});
+
+	// The narrow test earns its keep here: End of Session's questions are vetoed for a COUNT by
+	// the same "for each" clause, and they are the most tickable list in the book.
+	it("still ticks a list whose count merely could not be read", () => {
+		const endOfSession = '<p>Answer these questions as a group. For each "yes," everyone marks XP.</p>'
+			+ "<ul><li>Did we learn something new about Stonetop?</li><li>Did we overcome a threat?</li></ul>";
+		const html = pickableMoveDescription(endOfSession);
+		expect(html).toContain("stonetop-picklist-check");
+		expect(html).not.toContain("data-pick-max");
+	});
+
 	it("ticks only the FIRST list — a second one is a note about the options, not more of them", () => {
 		const two = "<p>Pick 1:</p><ul><li>A</li></ul><p>Also:</p><ul><li>B</li></ul>";
 		const html = pickableMoveDescription(two);

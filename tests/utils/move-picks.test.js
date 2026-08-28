@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { pickLimitsFrom } from "../../module/utils/move-picks.js";
+import { isReferenceList, pickLimitsFrom } from "../../module/utils/move-picks.js";
 
 // How many of a move's printed options you may take is printed too, in the lead-in above the
 // list. It is read from there rather than restated anywhere, so it cannot drift from the move —
@@ -86,6 +86,58 @@ describe("pickLimitsFrom", () => {
 		// No count at all.
 		expect(pickLimitsFrom("hold Preparation based on the amount of time you devote:")).toBeNull();
 		expect(pickLimitsFrom("")).toBeNull();
+	});
+});
+
+// Two lists in this system were never a choice at all, and a checkbox on either offers something
+// the move does not: a resource's SPEND MENU (what the Readiness you now hold buys, one point at
+// a time, over the rest of the fight — the same line twice if you like), and a list a move ADDS
+// to a different move (Situational Awareness' questions are appended to Seek Insight's list and
+// chosen from there, never here).
+describe("isReferenceList", () => {
+	it("knows the shipped spend menus by their shape, not by name", () => {
+		for (const lead of [
+			"On a 7-9, hold 1 Readiness (or 2 with a shield). You can spend Readiness 1-for-1 to:",
+			"You may spend Nerve, 1-for-1, to:",
+			"Your allies can spend their Inspiration at any time, 1-for-1 to:",
+			"Hold 2 Resolve. You can spend your Resolve 1-for-1 to:",
+			"Spend your follower's Loyalty 1-for-1 to have them:",
+			"Spend Guise, 1-for-1 to:",
+		]) expect(isReferenceList(lead)).toBe(true);
+	});
+
+	it("knows a list a move adds to another move's list", () => {
+		expect(isReferenceList("When you Seek Insight, add the following to the list of questions you can ask:")).toBe(true);
+		expect(isReferenceList("When you Seek Insight, add the following to the list of questions you can ask."
+			+ " When acting on the answer to either question, deal an extra 1d4 damage.")).toBe(true);
+	});
+
+	// The near misses run CLOSE, which is why the verb is part of each pattern rather than "the
+	// following" on its own: asking 1 of the following IS a choice, and keeps its boxes.
+	it("leaves 'ask N of the following' alone — that one is a choice", () => {
+		for (const lead of [
+			"You can ask the GM 1 of these and get an honest answer:",
+			"Ask the GM one of the following; gain advantage on your next roll to act on the answer.",
+			"You can ask the GM 2 of the following and get a useful answer:",
+			"Take turns asking a PC or NPC one of the following.",
+		]) expect(isReferenceList(lead)).toBe(false);
+	});
+
+	// NARROWER than the UNBOUNDED veto beside it, which refuses a COUNT for several reasons that
+	// have nothing to do with this one. Conflating the two would strip the boxes off the most
+	// tickable list in the book.
+	it("is not the same question as 'the count could not be read'", () => {
+		expect(isReferenceList('Answer these questions as a group. For each "yes," everyone marks XP.')).toBe(false);
+		expect(isReferenceList("On a 10+, choose 1; on a 7-9, choose 2; on a 6-, all 3 apply:")).toBe(false);
+		expect(isReferenceList("They pick 1; on a 10+, as a 7-9, but both apply.")).toBe(false);
+		expect(isReferenceList("")).toBe(false);
+	});
+
+	// Sentence-bounded, so neither verb can reach across a full stop to meet its other half.
+	it("does not reach across a full stop to pair the halves of either pattern", () => {
+		expect(isReferenceList("Spend 1 Stock to craft it. Damage is dealt 1-for-1 against Armor:")).toBe(false);
+		expect(isReferenceList("Spend 1 Stock and choose 1:")).toBe(false);
+		expect(isReferenceList("Add 1 to your damage. Pick one of the following:")).toBe(false);
 	});
 });
 

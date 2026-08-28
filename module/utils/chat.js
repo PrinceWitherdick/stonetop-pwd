@@ -1,5 +1,5 @@
 import {escHtml, stripHtmlToText} from "./strings.js";
-import {pickLimitsFrom} from "./move-picks.js";
+import {isReferenceList, pickLimitsFrom} from "./move-picks.js";
 
 /** Core stat paths (in a flattened update) mapped to their chat labels. */
 export const STAT_CHAT_LABELS = {
@@ -224,6 +224,11 @@ export function firstOptionList(html) {
  * is usually followed by more of its text, and cutting it out of the middle leaves the sentence
  * that introduces it — "on a 10+, pick 2; on a 7-9, pick 1:" — pointing at whatever came after.
  *
+ * The lists that are NOT tickable are the ones that were never a choice: a resource's SPEND MENU
+ * ("You can spend Readiness 1-for-1 to:"), and a list a move ADDS to another move ("When you
+ * Seek Insight, add the following to the list of questions you can ask:"). See `isReferenceList`
+ * for both shapes, and for why that is a narrower test than "the count could not be read".
+ *
  * The move's OWN text is the list, and its own text says HOW MANY of it you may take — so the
  * lead-in above the list is read for a cap (utils/move-picks.js) and stamped on the `<ul>` as
  * `data-pick-max`, or `data-pick-max-<tier>` where the move gives a count per result tier. The
@@ -242,7 +247,16 @@ export function pickableMoveDescription(description) {
 	const list = firstOptionList(html);
 	if (!list) return html;
 
-	const limits = pickLimitsFrom(stripHtmlToText(html.slice(0, list.index)));
+	const lead = stripHtmlToText(html.slice(0, list.index));
+	// SOME LISTS WERE NEVER A CHOICE. Defend's is what the Readiness you are now holding buys,
+	// one point at a time, for the rest of the fight — the same line twice if you like, and the
+	// roll never asked you to choose between them. Situational Awareness' three questions are
+	// not picked here at all: they are added, permanently, to Seek Insight's list and chosen
+	// from there. A checkbox on either is an offer the move does not make, so both print as
+	// prose and take the spiral bullets every other prose list on these surfaces already wears.
+	if (isReferenceList(lead)) return html;
+
+	const limits = pickLimitsFrom(lead);
 	const limitAttrs = typeof limits === "number"
 		? ` data-pick-max="${limits}"`
 		: Object.entries(limits ?? {}).map(([tier, n]) => ` data-pick-max-${tier}="${n}"`).join("");
