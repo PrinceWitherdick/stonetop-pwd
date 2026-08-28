@@ -2,6 +2,7 @@ import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvemen
 import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml} from "../../utils/roll-engine.js";
 import {SteadingLedger} from "./SteadingLedger.js";
 import {TIER_KEYS} from "../../utils/move-results.js";
+import {prepareMoveHoverBody} from "../../utils/move-hover.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
 import {wireTabSearch} from "../../utils/tab-search.js";
 import {injectHeaderToggle} from "../../utils/sheet-chrome.js";
@@ -879,6 +880,11 @@ export function createStonetopSteadingSheetClass(Base) {
 					nameEl.className = "stonetop-basic-move-panel-name";
 					nameEl.textContent = nameText;
 					panel.replaceChildren(nameEl, ...Array.from(descEl.cloneNode(true).childNodes));
+					// The same hover-panel pass the character sheet's two panels run: drop the
+					// collapsibles a panel that closes on mouseleave can't open, redraw the ◇/□
+					// a move is written with. This is the fourth surface to show a move's text
+					// this way and the only one that had neither.
+					prepareMoveHoverBody(panel);
 					panel.hidden = false;
 					const rect = li.getBoundingClientRect();
 					panel.style.top   = `${Math.max(4, Math.min(rect.top, window.innerHeight - panel.offsetHeight - 8))}px`;

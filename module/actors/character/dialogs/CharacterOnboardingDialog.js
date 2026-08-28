@@ -11,6 +11,7 @@ import { splitFillBlank, fillBlank } from "../../../utils/fill-blanks.js";
 import { STAT_KEYS } from "../../../utils/roll-types.js";
 import { sign } from "../../../utils/roll-engine.js";
 import { wrapStonetopGlyphsInEl, wrapGlyphTextContainers, centerArcanumTracks } from "../../../utils/glyphs.js";
+import { prepareMoveHoverBody } from "../../../utils/move-hover.js";
 import { enrichMoveRefsInEl } from "../../../utils/move-refs.js";
 import { faqForStep, faqPage } from "../../../utils/onboarding-faq.js";
 import { markFaqItems } from "../../../utils/faq-bullets.js";
@@ -3433,9 +3434,11 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		tip.innerHTML =
 			`<p class="stonetop-word-tooltip-name">${text}</p>` +
 			`<div class="stonetop-word-tooltip-desc">${description}</div>`;
-		// Drop collapsible <details> (e.g. Chart a Course's "Travel Times") that
-		// can't be opened in a hover tooltip; they stay clickable on the item sheet.
-		tip.querySelectorAll("details").forEach(d => d.remove());
+		// The shared hover-panel pass (utils/move-hover.js), the same one the character sheet's
+		// move-ref panel runs: the description is written here straight from the compendium, so
+		// nothing else would drop the collapsibles or redraw the ◇ / □ a move like Outfit is
+		// written with.
+		prepareMoveHoverBody(tip);
 		this._positionPopup(tip, anchor, { gap: 6, placement: "above" });
 	}
 

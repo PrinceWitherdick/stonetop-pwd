@@ -58,6 +58,9 @@ export const GLYPH_TEXT_CONTAINERS = [
 	".stonetop-onboarding-arcana-front-body",
 	// Dialogs
 	".stonetop-special-pick-traits",                         // Add Special Item catalog traits
+	// (Hover panels are NOT here. A move's basic-move panel, cross-reference tooltip and word
+	// tooltip hold no editable prose at all, so they take the whole-root pass this list's
+	// docblock sends such surfaces to — see utils/move-hover.js.)
 	// Chat cards
 	".stonetop-chat-move-description",
 	".stonetop-roll-card-description",

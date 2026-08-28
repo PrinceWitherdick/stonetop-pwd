@@ -82,6 +82,7 @@ import {
 } from "./blessed-marks.js";
 import {BlessedMarksDialog} from "./dialogs/BlessedMarksDialog.js";
 import {wrapGlyphTextContainers, wrapStonetopGlyphsInEl} from "../../utils/glyphs.js";
+import {prepareMoveHoverBody} from "../../utils/move-hover.js";
 import {StonetopAutocomplete} from "../../utils/autocomplete.js";
 import {canAuthorCustomMoves, canCreateArcana} from "../../utils/authoring-gates.js";
 import {enrichMoveRefsInEl, fetchMoveRef} from "../../utils/move-refs.js";
@@ -3117,11 +3118,12 @@ export function createStonetopCharacterSheetClass(Base) {
 					nameEl.className = "stonetop-basic-move-panel-name";
 					nameEl.textContent = nameText;
 					const descClone = descEl.cloneNode(true);
-					// Drop collapsible <details> (e.g. Chart a Course's "Travel Times"
-					// table) — they can't be opened in this floating panel, which
-					// disappears on mouseleave. They stay clickable on the item sheet.
-					descClone.querySelectorAll("details").forEach(d => d.remove());
 					panel.replaceChildren(nameEl, ...Array.from(descClone.childNodes));
+					// The shared hover-panel pass: drop the collapsibles this panel can't open,
+					// redraw the ◇/□ a move like Outfit is written with. Run on the PANEL rather
+					// than on the clone because the spread above keeps the clone's children and
+					// discards its `.stonetop-basic-move-desc` wrapper.
+					prepareMoveHoverBody(panel);
 					panel.hidden = false;
 					const rect = li.getBoundingClientRect();
 					panel.style.top   = `${Math.max(4, Math.min(rect.top, window.innerHeight - panel.offsetHeight - 8))}px`;
@@ -3416,9 +3418,11 @@ export function createStonetopCharacterSheetClass(Base) {
 					moveRefPanel.innerHTML =
 						`<p class="stonetop-word-tooltip-name">${name}</p>` +
 						`<div class="stonetop-word-tooltip-desc">${desc}</div>`;
-					// Same as the move panel: drop collapsible <details> (e.g. Chart a
-					// Course's "Travel Times") that can't be opened in a hover tooltip.
-					moveRefPanel.querySelectorAll("details").forEach(d => d.remove());
+					// The same hover-panel pass the basic-move panel gets: collapsibles this
+					// tooltip can't open go, and the glyphs are redrawn. This body is written
+					// straight from a compendium description, so it never went past the sheet's
+					// own pass below.
+					prepareMoveHoverBody(moveRefPanel);
 					moveRefPanel.hidden = false;
 					const ar = anchor.getBoundingClientRect();
 					const pr = moveRefPanel.getBoundingClientRect();

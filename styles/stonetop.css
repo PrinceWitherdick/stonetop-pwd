@@ -666,6 +666,15 @@ body {
 .stonetop-journal-body .stonetop-glyph--diamond-selected,
 .stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond,
 .stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond-selected,
+.stonetop-basic-move-panel .stonetop-glyph--diamond,
+.stonetop-basic-move-panel .stonetop-glyph--diamond-selected,
+/* THE BASIC-MOVE HOVER PANEL IS THE ONE DARK HOST, so it needs the box and the arrow rescued
+   from the shipped art's near-black fill as well as the diamonds -- every other surface here
+   paints on paper. Same recipe, so it joins the list rather than restating it; only the
+   mask-image differs, below. */
+.stonetop-basic-move-panel .stonetop-glyph--checkbox,
+.stonetop-basic-move-panel .stonetop-glyph--checkbox-checked,
+.stonetop-basic-move-panel .stonetop-glyph--arrow,
 .st-treasure-badge .stonetop-glyph--diamond,
 .stonetop-arcanum-card--readout .stonetop-item-load .stonetop-glyph--diamond {
 	color: inherit;
@@ -685,21 +694,45 @@ body {
 .stonetop-journal-body .stonetop-glyph--diamond,
 .stonetop-journal-body .stonetop-glyph--diamond-selected,
 .stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond,
-.stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond-selected {
+.stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond-selected,
+.stonetop-basic-move-panel .stonetop-glyph--diamond,
+.stonetop-basic-move-panel .stonetop-glyph--diamond-selected {
 	margin-right: 0.3em;
 }
 .stonetop-location-body .stonetop-glyph--diamond-selected,
 .stonetop-journal-body .stonetop-glyph--diamond-selected,
-.stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond-selected {
+.stonetop-onboarding-faq-popup-body .stonetop-glyph--diamond-selected,
+.stonetop-basic-move-panel .stonetop-glyph--diamond-selected {
 	-webkit-mask-image: var(--stonetop-diamond-selected-icon);
 	mask-image: var(--stonetop-diamond-selected-icon);
+}
+
+/* The other two glyphs the panel redraws, so a move written with a □ (Have What You Need's
+   "small item/slot", Outfit's "a number of □ in the Small items section") reads there as the
+   same square it is on the sheet.
+
+   The URLs are literal rather than `var(--stonetop-checkbox-icon)` on purpose: that token swaps
+   to `checkbox-light.svg` under a dark theme, which is right for a background IMAGE carrying its
+   own ink and wrong for a MASK, where the fill is currentColor and only the SHAPE is read. */
+.stonetop-basic-move-panel .stonetop-glyph--checkbox {
+	-webkit-mask-image: url('/systems/stonetop-pwd/assets/icons/steading/checkbox.svg');
+	mask-image: url('/systems/stonetop-pwd/assets/icons/steading/checkbox.svg');
+}
+.stonetop-basic-move-panel .stonetop-glyph--checkbox-checked {
+	-webkit-mask-image: url('/systems/stonetop-pwd/assets/icons/steading/checkbox-checked.svg');
+	mask-image: url('/systems/stonetop-pwd/assets/icons/steading/checkbox-checked.svg');
+}
+.stonetop-basic-move-panel .stonetop-glyph--arrow {
+	-webkit-mask-image: url('/systems/stonetop-pwd/assets/icons/playbooks/arrow_icon.svg');
+	mask-image: url('/systems/stonetop-pwd/assets/icons/playbooks/arrow_icon.svg');
 }
 /* Consecutive diamonds in a run (the "◇◇" load track) are tagged `--joined` by
    wrapStonetopGlyphsInEl — drop the trailing gap between them so they read as one
    unit; the margin above still opens the gap before the following text. */
 .stonetop-location-body .stonetop-glyph--joined,
 .stonetop-journal-body .stonetop-glyph--joined,
-.stonetop-onboarding-faq-popup-body .stonetop-glyph--joined {
+.stonetop-onboarding-faq-popup-body .stonetop-glyph--joined,
+.stonetop-basic-move-panel .stonetop-glyph--joined {
 	margin-right: 0;
 }
 
