@@ -825,22 +825,49 @@ export function _registerGmToolkitAdopt() {
 	});
 }
 
+// Is this character one of MINE, for the purposes of the creation prompt below?
+//
+// Not `game.user.character` on its own. That field holds ONE id, and a player may run more than
+// one character (see actors/character/create-character.js): a second one is added without taking
+// the assignment, so an assignment test would never re-prompt it — reload mid-creation on your
+// second sheet and the resume never fires, leaving you on a blank sheet with an hour of answers
+// sitting in localStorage.
+//
+// Not `actor.isOwner` on its own either. That is also true of a sheet the whole table can edit
+// through `ownership.default`, and a world set up that way would ask every player to go and
+// finish somebody else's half-built character. The test is the ownership entry made out to me BY
+// NAME — the same one charactersOwnedBy reads and the mint stamps, so "do you already have
+// characters?" and "is this one of mine?" can never disagree.
+//
+// Finally, a character somebody ELSE has assigned is theirs, whoever else can edit it. That
+// leaves two co-owners of an UNassigned character both being prompted, which is the right answer
+// for a PC being built jointly, and is guarded per client by creationFlowOpen() regardless.
+//
+// GMs are excluded outright: a GM owns every actor in the world.
+function _isMyCharacter(actor) {
+	if (game.user.isGM || !actor?.id) return false;
+	const mine = game.user.character?.id === actor.id
+		|| (actor.ownership?.[game.user.id] ?? 0) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
+	if (!mine) return false;
+	const users = game.users?.contents ?? game.users ?? [];
+	return ![...users].some(u => u.id !== game.user.id && u.character?.id === actor.id);
+}
+
 // Greet a player with character creation, or resume an interrupted one:
 //   • a freshly GM-minted character (the `autoOpenFor` flag names its owner) gets
 //     the creation intro, once; and
-//   • the player's own assigned character that still has no playbook is re-prompted
-//     every load until they actually pick one: with saved progress it resumes
-//     straight back into onboarding at that page (a reload mid-creation drops them
-//     back in); with none it re-pops the creation intro. Either way a player who
-//     reloaded before choosing a playbook lands back in creation rather than on a
-//     blank sheet they'd have to start onboarding from themselves.
+//   • the player's OWN character that still has no playbook is re-prompted every load
+//     until they actually pick one: with saved progress it resumes straight back into
+//     onboarding at that page (a reload mid-creation drops them back in); with none it
+//     re-pops the creation intro. Either way a player who reloaded before choosing a
+//     playbook lands back in creation rather than on a blank sheet they'd have to start
+//     onboarding from themselves.
 // A character that already has a playbook is finished (or was explicitly saved):
 // only a brand-new mint pops its sheet; a reload leaves a finished character alone.
 function _maybeOpenCharacterCreation(actor) {
 	if (actor?.type !== "character") return;
-	const mintedForMe  = actor.getFlag?.(STONETOP_SCOPE, "autoOpenFor") === game.user.id;
-	const isMyAssigned = !game.user.isGM && game.user.character?.id === actor.id;
-	if (!mintedForMe && !isMyAssigned) return;
+	const mintedForMe = actor.getFlag?.(STONETOP_SCOPE, "autoOpenFor") === game.user.id;
+	if (!mintedForMe && !_isMyCharacter(actor)) return;
 
 	// Someone on this screen is already mid-creation — the intro, the playbook picker or
 	// the onboarding walkthrough is up, for this character or another. Re-entering now
@@ -857,7 +884,14 @@ function _maybeOpenCharacterCreation(actor) {
 		// Finished — never re-enter creation. Clear any progress flag / resume
 		// snapshot a mid-creation "Save & close" (or an edit pass) left behind, so the
 		// GM roster reads "Finished" rather than a stale "exited"/page note.
-		actor.unsetFlag?.(STONETOP_SCOPE, "onboardingProgress").catch(() => {});
+		//
+		// Only when there IS one: unsetFlag issues its update unconditionally, and this
+		// runs once per character of mine on every load. With a player able to run several,
+		// an unguarded call is a document write and a broadcast per finished sheet per
+		// login, all of them deleting a key that is already gone.
+		if (actor.getFlag?.(STONETOP_SCOPE, "onboardingProgress")) {
+			actor.unsetFlag?.(STONETOP_SCOPE, "onboardingProgress").catch(() => {});
+		}
 		clearOnboardingResume(actor);
 		if (mintedForMe) actor.sheet.render(true);
 		return;
