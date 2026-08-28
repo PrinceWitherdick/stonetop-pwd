@@ -22,6 +22,7 @@ Where our filename differs from the original, the game-icons.net source name is 
 | hearts.svg | Relationships | hearts | Skoll | https://game-icons.net |
 | crossed-swords.svg | Stats (NPC), Overview (character) | crossed-swords | Lorc | https://lorcblog.blogspot.com |
 | direction-signs.svg | Expeditions | direction-signs | Delapouite | https://delapouite.com |
+| settings-knobs.svg | Preferences | settings-knobs | Delapouite | https://delapouite.com |
 
 No artwork above is altered. Every rail icon is worn as a CSS *mask* (`-webkit-mask` /
 `mask`, tinted by `background-color`) so one glyph can take the rail's rest, hover and
@@ -31,7 +32,8 @@ icons exported from game-icons.net already ship that way — a 512x512 backgroun
 of `assets/icons/hearts.svg`, already in the tree for the relationship hearts.
 
 `village.svg`, `hammer-nails.svg`, `hazard-sign.svg`, `crossed-swords.svg`, `round-star.svg`,
-`school-bag.svg` and `direction-signs.svg` were taken from the game-icons.net repository instead
+`school-bag.svg`, `direction-signs.svg` and `settings-knobs.svg` were taken from the game-icons.net
+repository instead
 (`direction-signs.svg` by way of `assets/icons/macros/direction-signs.svg`, already in the tree
 as a hotbar macro's icon), where the same
 drawings are stored INVERTED — an opaque black background square under a white glyph, which
