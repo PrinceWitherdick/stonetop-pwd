@@ -626,16 +626,39 @@ body {
 /* Diamond/circle glyphs should never be slanted, even inside italic contexts. */
 .stonetop-glyph { font-style: normal; }
 
+/* EVERY GLYPH IS AN ATOMIC INLINE, and CSS Text gives one a soft wrap opportunity on both
+   sides "even when adjacent to a character that would normally suppress them" — a word joiner
+   or an &nbsp; does not close it. So Have What You Need's "(□)." would break after the "(" and
+   strand the square at the head of the next line, and a "◇◇◇" load track could split down the
+   middle. wrapStonetopGlyphsInEl (module/utils/glyphs.js) therefore emits each glyph inside
+   the punctuation it was written in, and this holds that cluster on one line. The one place a
+   break is suppressed rather than the whole surface, which is why it is a wrapper and not
+   `white-space: nowrap` on the prose. */
+.stonetop-glyph-run { white-space: nowrap; }
+
+/* THE BOX SIZE THESE ARE DRAWN AT. Sized off the text they sit in, so a glyph tracks the
+   container's type rather than needing a per-surface override.
+
+   0.95em, not the 0.78em they were first drawn at: at body size that came out ~10px, and the
+   shipped art is a thin outline at that scale — near enough to the fallback font's own ◇/□ that
+   the SVG was doing no work, which is exactly what a reader reported. Two surfaces had already
+   worked around it locally with a `font-size` bump (the journal's treasure badge, the arcanum
+   readout chip); both are scaled back below so raising the base leaves them where they were.
+
+   `vertical-align` follows from the size: the box is centred on the cap band (a cap height of
+   ~0.70em, so a centre at 0.35em), which puts its bottom edge at height/2 − 0.35em below the
+   baseline. That is where the old -0.04em came from at 0.78em, and -0.125em is the same
+   placement at 0.95em — change one and the other has to move with it. */
 .stonetop-glyph--diamond,
 .stonetop-glyph--diamond-selected,
 .stonetop-glyph--arrow,
 .stonetop-glyph--checkbox,
 .stonetop-glyph--checkbox-checked {
 	display: inline-block;
-	width: 0.78em;
-	height: 0.78em;
+	width: 0.95em;
+	height: 0.95em;
 	line-height: 1;
-	vertical-align: -0.04em;
+	vertical-align: -0.125em;
 	background: center / contain no-repeat;
 	color: transparent;
 	font-size: 1em;
@@ -809,16 +832,20 @@ figure.stonetop-map figcaption {
 /* Inline ASCII circles (e.g. arcana charge tracks "○○○○") drawn to match the
    round trackers on the sheets — there's no circle SVG; the in-app circles are
    CSS-drawn too, so draw it here and let currentColor track the text colour.
-   The source glyph is pushed out and clipped so only the ring shows. */
+   The source glyph is pushed out and clipped so only the ring shows.
+
+   Kept a hair under the box glyphs above, at the ratio the two have always had (0.72/0.78), so
+   raising one raises the other and a "◇◇ ○○" line stays in proportion. `vertical-align` is the
+   same cap-band centring the boxes take, worked from the circle's own height. */
 .stonetop-glyph--circle,
 .stonetop-glyph--circle-filled {
 	display: inline-block;
 	box-sizing: border-box;
-	width: 0.72em;
-	height: 0.72em;
+	width: 0.88em;
+	height: 0.88em;
 	border: 0.1em solid currentColor;
 	border-radius: 50%;
-	vertical-align: -0.02em;
+	vertical-align: -0.1em;
 	overflow: hidden;
 	text-indent: 1.5em;
 	white-space: nowrap;
@@ -829,8 +856,9 @@ figure.stonetop-map figcaption {
 }
 
 /* Load ◇ and use ○ marks printed in possession prose read too small at body size, so the
-   section paints every one of them at a single size: the 1.3em bump the 0.85rem
-   description has always carried (0.85 × 1.3 = 1.105rem), stated absolutely.
+   section paints every one of them at a single size, stated absolutely: the em basis is the
+   1.3em bump the 0.85rem description has always carried (0.85 × 1.3 = 1.105rem), and the mark
+   boxes themselves are pinned in px below.
 
    Absolute, not the relative --st-fs-xl, because the same authored line surfaces in
    containers whose text sizes differ. A gear-bearing bundle's option — a Heavy's or
@@ -853,6 +881,20 @@ figure.stonetop-map figcaption {
 	font-size: var(--st-possession-glyph);
 	line-height: 1;
 	vertical-align: -0.04em;
+}
+
+/* A ◇ here stands for the LOAD BOX the sheet draws a line away from it, so it is pinned to
+   that box (14px) rather than taken from the prose multiplier the base rule sets — the same
+   thing the ○ block below has always done for the uses circle. Held apart from the multiplier
+   on purpose: raising the prose glyph so it stops reading as a fallback-font ◇ is a decision
+   about running text, and it must not drag these marks off the controls they name. */
+.tab-section--possessions [data-glyphs-wrapped] .stonetop-glyph--diamond,
+.tab-section--possessions [data-glyphs-wrapped] .stonetop-glyph--diamond-selected,
+.tab-section--possessions [data-glyphs-wrapped] .stonetop-glyph--checkbox,
+.tab-section--possessions [data-glyphs-wrapped] .stonetop-glyph--checkbox-checked,
+.tab-section--possessions [data-glyphs-wrapped] .stonetop-glyph--arrow {
+	width:  calc(14px * var(--stonetop-font-scale, 1));
+	height: calc(14px * var(--stonetop-font-scale, 1));
 }
 
 /* …except a ○, which is drawn as the uses circle it stands for rather than at the ◇ size.
@@ -7574,12 +7616,16 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-arcanum-card--readout .stonetop-item-load { color: var(--st-blue-text, #3f5560); }
 .stonetop-arcanum-card--readout .stonetop-item-uses { color: var(--st-green-text, #4d6b3f); }
 /* At header type the ◇ and ○ read as specks — the same problem the journal's treasure
-   badge has, so take its answer: the same 1.3em bump. The diamond is painted as a
+   badge has, so take its answer: the same bump. The diamond is painted as a
    currentColor mask, so it takes the chip's own colour instead of staying near-black on it;
-   that recipe is declared with the other masked-diamond hosts near the top of this file. */
+   that recipe is declared with the other masked-diamond hosts near the top of this file.
+
+   1.07em rather than the 1.3em this was first written at: the bump is a correction on top of
+   the base glyph size, and that base has since been raised from 0.78em to 0.95em. Scaling the
+   correction down by the same ratio leaves the chip drawing them at the size it was tuned to. */
 .stonetop-arcanum-card--readout .stonetop-item-load .stonetop-glyph,
 .stonetop-arcanum-card--readout .stonetop-item-uses .stonetop-glyph {
-	font-size: 1.3em;
+	font-size: 1.07em;
 }
 .stonetop-arcanum-card--readout .stonetop-item-treasure {
 	color: var(--st-gold-text, #8a6d12);
@@ -23422,9 +23468,13 @@ li.question-bullet::before {
    currentColor mask (declared with the other masked-diamond hosts near the top of this file)
    so it stays legible on both light and dark journal backgrounds regardless of which body
    wrapper the render path carries; the circle is a currentColor ring already, and gets a hair
-   of spacing so a "○○○" use track reads as separate uses. */
+   of spacing so a "○○○" use track reads as separate uses.
+
+   1.07em rather than the 1.3em this was first written at, for the reason given on the arcanum
+   readout chip that copied it: the base glyph has since gone from 0.78em to 0.95em, and the
+   correction scales down by the same ratio so the badge keeps the size it was tuned to. */
 .st-treasure-badge .stonetop-glyph {
-	font-size: 1.3em;
+	font-size: 1.07em;
 }
 .st-treasure-uses .stonetop-glyph--circle {
 	margin-right: .16em;
