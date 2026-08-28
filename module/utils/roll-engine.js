@@ -5,6 +5,7 @@ import { pickLeadText, TIER_KEYS, TIER_LABELS } from "./move-results.js";
 import { markRolledTier } from "./move-tiers.js";
 import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge } from "./chat.js";
 import { adjustXp } from "./xp.js";
+import { composeDamageFormula, normalizeDamageBonusDice } from "./damage.js";
 import { SYSTEM_ID } from "../system-id.js";
 
 // What a miss is worth (Book I p.209: "a tick mark that raises your total by 1"). Named because
@@ -360,7 +361,15 @@ function _woundReminderHtml(actor, moveName) {
 	</div>`;
 }
 
-function _conditionsHtml(conditions) {
+/**
+ * The "Conditions Applied:" row a roll card wears under its result — the Advantage /
+ * Forward / Situational pills.
+ *
+ * Exported because the attack flow's damage
+ * results card is built by hand rather than by `_rollCard`, and a hand-written copy of this
+ * row is a second place for the heading, the class names and the empty case to drift.
+ */
+export function conditionsRowHtml(conditions) {
 	if (!conditions.length) return "";
 	const localized = game.i18n?.localize("PBTA.ConditionsApplied");
 	const label = localized && localized !== "PBTA.ConditionsApplied" && localized !== "PBTA.CONDITIONSAPPLIED"
@@ -491,7 +500,7 @@ export async function rollStat(statKey, actor, options = {}) {
 		conditions.push(`<li class="stonetop-condition-note">${escHtml(note)}</li>`);
 	}
 
-	const conditionsHtml = _conditionsHtml(conditions);
+	const conditionsHtml = conditionsRowHtml(conditions);
 
 	const flavor = _rollCard({
 		header,
@@ -585,6 +594,28 @@ function advDisConditionPills(rollMode) {
 	return [];
 }
 
+/**
+ * The pills that say how a damage roll went out and what was added to it before it did.
+ *
+ * The formula chip above them already shows the arithmetic; what it cannot show is that the
+ * "+1" was a one-off the player declared rather than part of their weapon, which is the whole
+ * question a table asks when a d10 comes back as an 11. The bonus pills wear the same class
+ * the move card's one-off modifier does, because they ARE the same thing on the other kind of
+ * roll.
+ *
+ * Exported for the attack flow, which rolls once per target and builds its own results card;
+ * both surfaces report an adjusted damage roll in the same words.
+ */
+export function damageConditionPills({ rollMode = "normal", bonus = 0, extraDice = "" } = {}) {
+	const pills = advDisConditionPills(rollMode);
+	const flat = Math.trunc(Number(bonus)) || 0;
+	if (flat !== 0) pills.push(`<li class="stonetop-condition-situational">Damage ${sign(flat)}</li>`);
+	for (const term of (Array.isArray(extraDice) ? extraDice : [extraDice]).map(normalizeDamageBonusDice)) {
+		if (term) pills.push(`<li class="stonetop-condition-situational">Extra ${escHtml(term.startsWith("-") ? term : `+${term}`)}</li>`);
+	}
+	return pills;
+}
+
 // `xpToLevelUp` used to live here. It now lives in utils/xp.js with the rest of what a
 // character's XP total needs — the curve, the per-Actor write queue, and the one function that
 // applies a delta — because how much XP a level costs is no more a dice engine's business than
@@ -596,8 +627,12 @@ function advDisConditionPills(rollMode) {
  * term and keeping the better/worse half — Stonetop "roll damage twice, take the
  * higher/lower" (e.g. "d6" with disadvantage → "2d6kl1", "d8+2" → "2d8kl1+2").
  * Non-adv/dis modes and dieless formulas pass through unchanged.
+ *
+ * Exported because the attack flow evaluates its own Rolls (one per target) rather than
+ * going through {@link rollDamage}, and a mode that only applied on the single-target path
+ * would be a control that silently does nothing the moment a second foe is targeted.
  */
-function _damageRollFormula(formula, rollMode) {
+export function damageRollFormula(formula, rollMode) {
 	if (rollMode !== "adv" && rollMode !== "dis") return formula;
 	return String(formula).replace(/(\d*)d(\d+)/i, (match, count, faces) => {
 		const n = Number(count || 1);
@@ -610,23 +645,34 @@ function _damageRollFormula(formula, rollMode) {
  * Roll a character or monster damage formula using the same Stonetop chat card
  * shell as stat rolls.
  *
+ * `bonus` and `extraDice` are the one-off adjustment from the pre-roll damage window
+ * (module/dialogs/RollDialog.js) — the Storm Markings' "+1 damage until you calm down", a
+ * spent Fury's "+1d6", a GM's call. They are folded in HERE rather than by each caller so the
+ * formula on the card and the pills that explain it are built in one place; a caller that has
+ * nothing to add passes nothing and rolls exactly what it always did.
+ *
  * @param {string} formula
  * @param {Actor} actor
  * @param {object} options
  * @param {string} [options.label]
  * @param {string} [options.rollMode]  - "adv" | "dis" | "normal" (advantage/disadvantage on the damage die)
+ * @param {number} [options.bonus]     - Flat one-off damage modifier
+ * @param {string|string[]} [options.extraDice] - One-off extra damage dice ("1d6")
  * @returns {Promise<Roll>}
  */
 export async function rollDamage(formula, actor, options = {}) {
 	const rollMode = options.rollMode ?? "normal";
-	const roll = await new Roll(_damageRollFormula(formula, rollMode)).evaluate();
+	const bonus     = Math.trunc(Number(options.bonus)) || 0;
+	const extraDice = options.extraDice ?? "";
+	const adjusted  = composeDamageFormula(formula, { bonus, extraDice });
+	const roll = await new Roll(damageRollFormula(adjusted, rollMode)).evaluate();
 	const label = options.label ?? "Damage";
 
-	const conditions = advDisConditionPills(rollMode);
+	const conditions = damageConditionPills({ rollMode, bonus, extraDice });
 
 	await roll.toMessage({
 		speaker:  ChatMessage.getSpeaker({ actor }),
-		flavor:   _rollCard({ header: label, buttons: true, total: roll.total, formula: roll.formula, dieResults: dieResultsText(roll), conditionsHtml: _conditionsHtml(conditions), badge: damageBadge(), sectionClass: "stonetop-damage-roll-card", damage: true }),
+		flavor:   _rollCard({ header: label, buttons: true, total: roll.total, formula: roll.formula, dieResults: dieResultsText(roll), conditionsHtml: conditionsRowHtml(conditions), badge: damageBadge(), sectionClass: "stonetop-damage-roll-card", damage: true }),
 		rollMode: game.settings.get("core", "rollMode"),
 	});
 

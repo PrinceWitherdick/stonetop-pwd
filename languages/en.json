@@ -612,6 +612,10 @@
         "name": "Prompt for Roll Modifier",
         "hint": "Ask for a one-off modifier (a held bonus, a GM-granted +1, etc.) before each move or stat roll. Already included when \"Ask How to Roll Each Time\" is on. Hold Shift while clicking the roll to skip the prompt."
       },
+      "promptDamageModifier": {
+        "name": "Adjust Damage Before Rolling",
+        "hint": "Ask how to roll damage and what to add to it before each damage roll: advantage or disadvantage on the die, a flat modifier, and extra dice. This is how a bonus your sheet can't know about reaches the dice, like the Storm Markings' +1 damage while you roil with anger. Hold Shift while clicking to skip it for one roll."
+      },
       "openSheetsInEditMode": {
         "name": "Open Sheets in Edit Mode",
         "hint": "Open character, steading, monster, and NPC sheets in Edit mode instead of Play mode. The header wrench still switches modes per sheet. NPC sheets you don't own always open in Play mode."

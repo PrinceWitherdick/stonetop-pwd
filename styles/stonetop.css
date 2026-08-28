@@ -548,9 +548,22 @@ body {
    default gap between the message and the buttons reads cramped. At least 16px, scoped
    to dialogs we tag with the bare `.stonetop` class (the generic confirm popups). The
    bespoke-footer dialogs that manage their own spacing carry only a `stonetop-*` class,
-   not bare `.stonetop`, so this leaves them untouched. */
+   not bare `.stonetop`, so this leaves them untouched.
+
+   `flex: 0 0 auto` rides along in the same rule, because that footer is a flex item of `.window-content`
+   and core grows EVERY one of those (`.window-app .window-content > * { flex: 1 }`). Drag one
+   of these popups taller than its content and the row - not the message - swallowed the slack:
+   core centres the buttons inside it (`align-items: center`), so they came to rest floating a
+   hundred-odd px above the bottom edge. Un-stretched, the row keeps its own height and the
+   sibling `.dialog-content` (still `flex: 1`) takes the slack instead, which leaves the buttons
+   at the bottom where a footer belongs.
+
+   The ROW is the only thing pinned here. Buttons keep core's own `flex: 1` so a row of them
+   still shares the width evenly; that flex only turns harmful in a COLUMN footer, where it is
+   vertical - see `.stonetop-letfly-mode-dialog`, the one dialog that stacks its buttons. */
 .vtt .stonetop.dialog .dialog-buttons {
 	margin-top: 16px;
+	flex: 0 0 auto;
 }
 
 /* Strange Scene navigation bug fix */
@@ -3181,6 +3194,63 @@ input.stonetop-name-field {
 	line-height: 1;
 }
 
+/* Pre-roll DAMAGE prompt (RollDialog.js#promptDamage) — the same window one step over: the
+   Advantage / Normal / Disadvantage pill and the −/＋ stepper are the move prompt's own
+   controls, reused, and everything below is what damage adds. The whole window is the
+   "Adjust Damage Before Rolling" client setting; Shift on the roll skips it. */
+
+/* The stepper and the dice box are two answers to one question, so they share a row rather
+   than stacking into two unrelated controls, and each gets a label of its own — beside a
+   labelled "Extra dice" box, an unlabelled number reads as the thing "Extra dice" names.
+
+   A 2x2 GRID, not two flex columns, and that is the whole point of it: the stepper's height is
+   set by its buttons, whose font size core anchors in PIXELS, while everything around it scales
+   with the sheet font. Any attempt to match the two heights in `em` lines up at one UI font
+   size and drifts at every other (2px at the default, 10px at a large one). A grid row simply
+   takes the taller of the two and centres both in it, at any size, with no arithmetic. */
+.stonetop-damage-adjust {
+	display: grid;
+	grid-template-columns: auto auto;
+	justify-content: center;
+	justify-items: center;
+	align-items: center;
+	gap: 2px 14px;
+}
+.stonetop-damage-field-label {
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-muted, #6b6257);
+}
+.stonetop-damage-extra-dice {
+	width: 5em;
+	text-align: center;
+	font-size: var(--st-fs-lg);
+	font-weight: bold;
+}
+
+/* A term the roll is going to drop. Said in the field itself, because the preview below shows
+   the formula WITHOUT it and a player who mistypes "1d" otherwise sees a window that looks
+   like it worked. */
+.stonetop-damage-extra-dice.is-invalid {
+	border-color: var(--st-red-border);
+	background: var(--st-red-bg);
+	color: var(--st-red-text);
+}
+
+/* What is about to be rolled, in full. This replaces the mode tooltips the move prompt shows
+   under its pill: "Roll 3d6 and keep the highest two" is a 2d6 move roll's answer and would be
+   a lie here, where advantage doubles the DAMAGE die. */
+.stonetop-damage-preview {
+	margin: 12px 0 0;
+	text-align: center;
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	color: var(--st-text-muted, #6b6257);
+}
+.stonetop-damage-preview strong {
+	font-style: normal;
+	color: var(--st-text, #2f2a24);
+}
+
 /* Basic move hover panel */
 .stonetop-basic-move-panel {
 	position: fixed;
@@ -5149,7 +5219,14 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	align-items: stretch;
 	gap: 6px;
 }
+/* The one footer in the system that stacks, and so the one place core's `flex: 1` on a dialog
+   button is a HEIGHT: in a column the main axis is vertical, so dragging the window taller used
+   to fatten both buttons to fill it. (The row above them is already held to its own height by
+   `.vtt .stonetop.dialog .dialog-buttons`, which every `.stonetop` Dialog gets; don't repeat
+   that flex here, and don't set margin-top here either - at 0-4-0 that shared rule out-specifies
+   this 0-3-0 one and would win.) */
 .vtt .stonetop-letfly-mode-dialog .dialog-buttons button {
+	flex: 0 0 auto;
 	width: 100%;
 	justify-content: center;
 }

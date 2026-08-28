@@ -1145,6 +1145,28 @@ export function registerSettings() {
 		default: false,
 	});
 
+	// Open the damage window before a damage roll (module/dialogs/RollDialog.js#promptDamage):
+	// advantage/disadvantage on the damage die, a flat modifier, and extra dice.
+	//
+	// Its own switch rather than a share of the two above, because it is a different question
+	// asked at a different moment. Those two are about a 2d6 move roll and fire on every stat
+	// click; this one fires only when damage is actually rolled, which is rare enough that the
+	// window is worth having open by default — and it is the ONLY way a bonus the sheet cannot
+	// know about ("when you roil with anger, you do +1 damage until you calm down") reaches the
+	// dice instead of being applied by hand to the target's HP afterwards.
+	//
+	// Defaults ON for that reason; Shift-clicking the roll skips it for one roll, and a table
+	// that never adjusts damage unticks it once. Per-client, like both of its neighbours: it
+	// decides what THIS user's clicks open and nothing about the world.
+	game.settings.register(SYSTEM_ID, "promptDamageModifier", {
+		name: "stonetop.settings.promptDamageModifier.name",
+		hint: "stonetop.settings.promptDamageModifier.hint",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		default: true,
+	});
+
 	// Open actor sheets (character / steading / monster / NPC) in Edit mode instead of
 	// Play mode. Read once when the sheet is constructed; the header wrench still
 	// toggles modes per-sheet afterward. The NPC sheet additionally requires ownership
@@ -1643,6 +1665,14 @@ export function getAskRollModeEachRollSetting() {
 // while the mode is being asked per roll, since that window carries the stepper anyway.
 export function getPromptRollModifierSetting() {
 	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptRollModifier") ?? false;
+}
+
+// Whether the damage window opens before a damage roll (how to roll it, plus a one-off
+// modifier and extra dice). Defaults TRUE here as well as at registration, so a client that
+// asks before the setting is registered — a macro firing early, a test — gets the shipped
+// behaviour rather than silently losing the window.
+export function getPromptDamageModifierSetting() {
+	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptDamageModifier") ?? true;
 }
 
 // Whether actor sheets should open in Edit mode rather than Play mode.

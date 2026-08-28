@@ -415,6 +415,45 @@ describe("rollDamage", () => {
 		expect(rollInstances[0].formula).toBe("2d8kh1+2");
 		expect(rollMessages[0].flavor).toContain("stonetop-condition-advantage");
 	});
+
+	// The one-off adjustment from the pre-roll damage window (RollDialog.js#promptDamage) — the
+	// only route a bonus the sheet cannot know about ("when you roil with anger, you do +1
+	// damage until you calm down") has to the dice. Folded in HERE rather than by each caller,
+	// so the formula and the pills that explain it are built once.
+	it("folds a flat bonus into the formula and names it on the card", async () => {
+		await rollDamage("d10", makeActor(), { label: "Clash: hafted spear", bonus: 1 });
+
+		expect(rollInstances[0].formula).toBe("d10+1");
+		expect(rollMessages[0].flavor).toContain("Damage +1");
+	});
+
+	it("folds extra dice in and names them", async () => {
+		await rollDamage("d10", makeActor(), { label: "Storm's Fury", extraDice: "1d6" });
+
+		expect(rollInstances[0].formula).toBe("d10+1d6");
+		expect(rollMessages[0].flavor).toContain("Extra +1d6");
+	});
+
+	it("keeps advantage on the DAMAGE die when extra dice ride along", async () => {
+		// Not "2d10kh1+2d6kh1": Stonetop's advantage is "roll your damage twice, take the
+		// higher", and the die that is rolled twice is the damage die, not the bonus dice.
+		await rollDamage("d10", makeActor(), { rollMode: "adv", bonus: 1, extraDice: "1d6" });
+
+		expect(rollInstances[0].formula).toBe("2d10kh1+1d6+1");
+	});
+
+	it("drops a half-typed dice term rather than throwing on it", async () => {
+		await rollDamage("d6", makeActor(), { extraDice: "1d" });
+
+		expect(rollInstances[0].formula).toBe("d6");
+		expect(rollMessages[0].flavor).not.toContain("Extra");
+	});
+
+	it("says nothing extra when nothing was added", async () => {
+		await rollDamage("d6", makeActor(), { label: "Hammer" });
+
+		expect(rollMessages[0].flavor).not.toContain("stonetop-condition-situational");
+	});
 });
 
 describe("rollFormula", () => {

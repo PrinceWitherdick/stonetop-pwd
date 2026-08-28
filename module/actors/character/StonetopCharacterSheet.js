@@ -39,7 +39,7 @@ import {withSheetSizeMemory} from "../../utils/sheet-size.js";
 import { crewExists, effectiveCrewSize, customGroupSize, crewAnonMemberLabel, crewIndividualLabel, CREW_SIZE_MAX } from "../../utils/crew.js";
 import {resolvedFlags, resolvedFlagProperty, STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "./StonetopFlags.js";
 import {createArcanumItem} from "../../item/createArcanum.js";
-import {rollDamage, rollStat, sign, classifyResult} from "../../utils/roll-engine.js";
+import {rollStat, sign, classifyResult} from "../../utils/roll-engine.js";
 import {defendReadinessHold} from "../../combat/defend-readiness.js";
 import {dieFromDamage} from "../../utils/damage.js";
 import {normalizeDamageDie} from "../../utils/damage-die.js";
@@ -68,7 +68,7 @@ import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen
 import {bringDialogToFront} from "../../utils/front-on-open.js";
 import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
-import {promptRoll, UNPROMPTED_ROLL} from "../../dialogs/RollDialog.js";
+import {promptRoll, rollDamagePrompted, UNPROMPTED_ROLL} from "../../dialogs/RollDialog.js";
 import {withSectionEditing} from "../../utils/section-editing.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {annotateInvocationEffects, splitEmpoweredEffect} from "./invocation-effects.js";
@@ -3090,15 +3090,19 @@ export function createStonetopCharacterSheetClass(Base) {
 						} else {
 							label = rollable.dataset.label ?? roll;
 						}
-						await rollDamage(roll, this.actor, { label });
+						// A raw formula IS a damage roll — the character's own die, a follower's
+						// attack — so it gets the damage window rather than the move prompt, which
+						// asked it nothing upstream (see _resolveMoveRollPrompts). Shift on the
+						// originating click skips it, exactly as it skips the move prompt.
+						await rollDamagePrompted(roll, this.actor, { label, shiftKey: ev.shiftKey });
 					}
 				}
 			}, true);
 
-			// The whole basic/expedition row is tappable, not just the dice icon.
-			// The dice icon and the "+stat" chip roll via the capture handler above
+			// The whole basic/expedition row is tappable, not just its title.
+			// The title and the "+stat" chip roll via the capture handler above
 			// (which stopPropagation()s), so a click only reaches here when it lands
-			// on the move name or empty row space.
+			// on empty row space, or on a row whose move does not roll.
 			html.find(".stonetop-move-item").on("click", async ev => {
 				if (!this.isEditable) return;
 				// A tap on Defend's Readiness circles adjusts held Readiness — it must never
