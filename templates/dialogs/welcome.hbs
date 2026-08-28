@@ -139,8 +139,11 @@
               </span>
               {{/if}}
             </div>
-            <button type="button" class="stonetop-welcome-create{{#if characters.length}} stonetop-welcome-create--replace{{/if}}" data-user-id="{{id}}">
-              <i class="fas fa-user-plus"></i> {{#if characters.length}}New Character{{else}}Create Character{{/if}}
+            {{!-- Not styled as destructive for a player who already has one: the button now
+                  asks whether the new character joins theirs or replaces it, and only the
+                  second answer deletes anything. --}}
+            <button type="button" class="stonetop-welcome-create" data-user-id="{{id}}">
+              <i class="fas fa-user-plus"></i> {{#if characters.length}}Another Character{{else}}Create Character{{/if}}
             </button>
           </li>
           {{/each}}

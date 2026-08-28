@@ -27182,13 +27182,10 @@ th:has(> .stonetop-roll-table-btn) {
 .stonetop-welcome-create:hover { background: var(--st-btn-primary-bg-hover); }
 .stonetop-welcome-create > i { margin-right: 4px; }
 
-/* Replacing an existing character deletes the old one — flag it as destructive. */
-.stonetop-welcome-create--replace {
-	border-color: var(--st-red-border);
-	background: var(--st-red-bg);
-	color: var(--st-red-text);
-}
-.stonetop-welcome-create--replace:hover { background: var(--st-red-bg-hover); }
+/* No destructive variant of this button. It used to go red for a player who already had a
+   character, because pressing it deleted that character; it now asks whether the new one
+   joins theirs or replaces it, and the red belongs on the Replace answer inside that dialog
+   rather than on the button that raises the question. */
 
 .stonetop-welcome-outro {
 	margin: 16px 0 4px;
