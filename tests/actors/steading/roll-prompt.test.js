@@ -542,19 +542,28 @@ describe("what asks before it rolls", () => {
 	// …and a surface that FORWARDS to another one has to carry the Shift with it. A bare
 	// `.click()` synthesises an event that reports `shiftKey: false` however the click that
 	// caused it was made, so Shift-clicking a move's NAME would sit through the very window
-	// Shift exists to skip. Both sheets re-dispatch a MouseEvent instead.
+	// Shift exists to skip. The character sheet's move rows still forward that way — their dice
+	// icon is the surface that rolls, and the name hands the click to it.
 	it("keeps the Shift when a move's name forwards to its dice button", () => {
-		for (const [name, js] of [["steading", STEADING_JS], ["character", CHARACTER_SHEET_JS]]) {
-			const forwards = [...js.matchAll(/rollable\.dispatchEvent\(new MouseEvent\(\s*"click",\s*\{([^}]*)\}/g)];
-			expect(forwards.length, `${name} forwards no click`).toBeGreaterThan(0);
-			for (const [, init] of forwards) {
-				expect(init, `${name} drops the Shift`).toContain("shiftKey: ev.shiftKey");
-				// It has to reach the delegated listener on the sheet root, which is an ancestor.
-				expect(init, `${name} forwards a non-bubbling click`).toContain("bubbles: true");
-			}
-			// And nothing forwards the bare way, which is the bug this replaced.
-			expect(js, `${name} still bare-clicks a rollable`).not.toMatch(/\brollable\.click\(\)/);
+		const forwards = [...CHARACTER_SHEET_JS.matchAll(/rollable\.dispatchEvent\(new MouseEvent\(\s*"click",\s*\{([^}]*)\}/g)];
+		expect(forwards.length, "character forwards no click").toBeGreaterThan(0);
+		for (const [, init] of forwards) {
+			expect(init, "character drops the Shift").toContain("shiftKey: ev.shiftKey");
+			// It has to reach the delegated listener on the sheet root, which is an ancestor.
+			expect(init, "character forwards a non-bubbling click").toContain("bubbles: true");
 		}
+		// And nothing forwards the bare way, which is the bug this replaced.
+		expect(CHARACTER_SHEET_JS, "character still bare-clicks a rollable").not.toMatch(/\brollable\.click\(\)/);
+	});
+
+	// The steading has nothing to forward TO. Its homefront moves carry no dice icon: the name
+	// is the click target itself, so the handler reads the real event's Shift rather than
+	// stitching a synthetic one — which is the same fix as above with the hop removed.
+	it("reads the Shift straight off the click on the steading's move names", () => {
+		const at = STEADING_JS.indexOf('closest(".stonetop-steading-move-open, .stonetop-move-roll-chip")');
+		expect(at, "the steading no longer opens moves from their name").toBeGreaterThan(-1);
+		expect(STEADING_JS.slice(at, at + 1400)).toContain("shiftKey: ev.shiftKey");
+		expect(STEADING_JS, "a move icon came back").not.toMatch(/steading-(roll|interactive)-btn/);
 	});
 
 	// The prompt answers in the shape a roll call takes, so a caller spreads it rather than

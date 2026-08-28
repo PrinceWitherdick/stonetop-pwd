@@ -51,12 +51,25 @@
 	{{> "stonetop.section-heading" title=(localize "stonetop.steading.tabs.moves") collapse="steadingMoves"}}
 	<section class="steading-moves-tab">
 
+		{{!-- No dice button at the head of the row: the NAME is the click target, and always
+		      was the one people used — the icon's handler is what a name-click forwarded to. The
+		      move's identity rides on the `<li>` instead, exactly as it does on the modern card
+		      (see steading-tab-moves.hbs for the whole of why). Both shapes print the SAME
+		      attributes, resolved for them in StonetopSteadingSheet#getData, so the two cannot
+		      drift apart over what a click means and the sheet reads one set of keys. --}}
 		<ol class="items-list steading-moves-list">
 			{{#each stonetop.moves}}
-			<li class="stonetop-move-item steading-move-row{{#unless rollable}}{{#unless interactive}} move-unowned{{/unless}}{{/unless}}">
+			<li class="stonetop-move-item steading-move-row{{#if unowned}} move-unowned{{/if}}"
+			    data-move-slug="{{moveSlug}}" data-move-name="{{moveName}}" data-stat="{{stat}}">
 
-				{{> "stonetop.steading-move-controls"}}
+				{{!-- Chip AFTER the name here too. This row is a flex line like the card's, but
+				      the name does not grow into it (`.stonetop-moves-sidebar .items-list li` in
+				      stonetop.css), so the chip sits one gap from the title and the pair reads as
+				      "Muster +POP" rather than pinning to the column's right edge. --}}
 				<span class="stonetop-move-name stonetop-steading-move-open">{{label}}</span>
+				{{#if (and @root.stonetop.showRollStatChips statChipLabel)}}
+				<span class="stonetop-move-roll-chip steading-move-stat-tag">+{{statChipLabel}}</span>
+				{{/if}}
 				{{#if description}}<div class="stonetop-basic-move-desc" hidden>{{{moveBody description moveResults}}}</div>{{/if}}
 
 			</li>

@@ -4,13 +4,19 @@
 	      carries no `name`: the die shown is the computed one (playbook + move bonuses), so
 	      letting the blanket form submit write it back would pin that value as an override
 	      every time any other field changed. Typing here goes through the sheet's own change
-	      handler instead, which normalizes to "d#" and stores a real override. --}}
+	      handler instead, which normalizes to "d#" and stores a real override.
+
+	      NO DICE ICON. The `<a class="rollable">` spans the whole cell and the die readout
+	      inside it is `pointer-events: none` in play mode (see the .cell--Roll rules), so the
+	      readout IS the button: clicking the number rolls it. The icon that used to lead the
+	      row was a second, smaller target for the same click. In edit mode the input takes its
+	      clicks back so it can be typed in, and the anchor still rolls from the space around
+	      it. --}}
 	<div class="cell cell--Roll cell--attr-damage">
 		<div class="stonetop-vital-inner">
 			<label class="cell__title" data-vital="damage">{{localize "stonetop.character.attributes.damage"}}</label>
 			<div class="cell__roll">
 				<a class="rollable" data-roll="{{system.attributes.damage.value}}" data-label="Damage">
-					<i class="fas fa-dice-d6"></i>
 					<input class="attr-value stonetop-damage-die-input" type="text"
 					       data-damage-die
 					       data-damage-base="{{stonetop.vitals.damageBase}}"

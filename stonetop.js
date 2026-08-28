@@ -460,7 +460,6 @@ Hooks.once("init", () => {
 		"stonetop.steading-stats-bar":        "systems/stonetop-pwd/templates/actor/partials/steading-stats-bar.hbs",
 		"stonetop.steading-settlements-card": "systems/stonetop-pwd/templates/actor/partials/steading-settlements-card.hbs",
 		"stonetop.steading-moves-sidebar":    "systems/stonetop-pwd/templates/actor/partials/steading-moves-sidebar.hbs",
-		"stonetop.steading-move-controls":    "systems/stonetop-pwd/templates/actor/partials/steading-move-controls.hbs",
 		"stonetop.steading-tab-overview":     "systems/stonetop-pwd/templates/actor/partials/steading-tab-overview.hbs",
 		"stonetop.steading-tab-neighbors":    "systems/stonetop-pwd/templates/actor/partials/steading-tab-neighbors.hbs",
 		"stonetop.steading-tab-improvements": "systems/stonetop-pwd/templates/actor/partials/steading-tab-improvements.hbs",

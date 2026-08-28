@@ -1283,10 +1283,6 @@ body :is(.app, .window-app).stonetop-height-resized {
 	color: var(--color-text-hyperlink, slategrey);
 }
 
-.sheet-attributes-top .cell--Roll .cell__roll .rollable .fa-dice-d6 {
-	flex-shrink: 0;
-}
-
 .sheet-attributes-top .cell--Roll .cell__roll input.attr-value {
 	flex: 1;
 	min-width: 0;
@@ -1699,14 +1695,10 @@ input.stonetop-name-field {
 	line-height: 1;
 }
 
-.pbta.sheet .sheet-attributes .cell--stats .stat-icon {
-	color: var(--st-text) !important;
-	font-size: calc(0.85rem * var(--stonetop-font-scale, 1)) !important;
-	line-height: 1;
-	flex-shrink: 0;
-	width: auto !important;
-	height: auto !important;
-}
+/* NO `.stat-icon` RULE ANY MORE, and no icon for it to size: a stat cell is its label, its box
+   and its abbreviation, and the whole cell is the roll (actor-stats.hbs). The six `!important`s
+   that used to live here were all beating pbta's own icon sizing, which is one more reason the
+   die is not worth having back. */
 
 .stonetop-playbook-block {
 	margin-top: 0;
@@ -3039,8 +3031,9 @@ input.stonetop-name-field {
 }
 
 /* Each row is a left-aligned, vertically-centered flex row. No left padding so
-   the dice icon (or name, for non-rollable moves) sits flush with the left edge
-   of the "Basic Moves" / "Expedition Moves" heading above it. Specificity (0,2,1)
+   the move's NAME sits flush with the left edge of the "Basic Moves" /
+   "Expedition Moves" heading above it. (A dice icon used to lead the row, with
+   the name behind it; the name is the rollable itself now, and leads.) Specificity (0,2,1)
    beats pbta's .items-list .item (0,2,0). */
 .stonetop-moves-sidebar .items-list li {
 	display: flex;
@@ -3071,16 +3064,15 @@ input.stonetop-name-field {
 	font-style: normal;
 }
 
-/* "Hide Rollable Icon" client setting (settings.js -> applyHideRollableIcon adds
-   this root class). Hides the decorative dice that marks rollable moves and stats.
-   Rolling is unaffected: clicking the move name or stat row fires the same roll
-   (StonetopCharacterSheet/StonetopSteadingSheet name handlers). Scoped to the
-   move/stat markers only — damage and monster roll dice are the sole click target
-   for their rolls, so they are deliberately left visible. */
-.stonetop-hide-rollable-icon .move-rollable,
-.stonetop-hide-rollable-icon .cell--stat.rollable .stat-icon {
-	display: none !important;
-}
+/* NO "HIDE ROLLABLE ICON" BLOCK, and no setting behind it either — both are gone.
+   It hid two things: the die on a move row and the die on a stat row. Neither is drawn any
+   more. What used to be an icon beside the thing is the thing itself now: a move's TITLE is
+   its `.rollable` (move-group.hbs), and a stat's whole CELL always was (actor-stats.hbs), so
+   there is nothing left to hide that is not the label itself.
+
+   The dice that DO remain — a follower's damage, a monster's rolls — are each the sole click
+   target for their roll, so they were never in this rule's reach and must not be put in one:
+   hiding one would take its roll with it. */
 
 /* "Reduce Motion" client setting (settings.js -> applyReduceMotion adds this root
    class). Strips the decorative animations, transitions, and hover-zoom image
@@ -3241,7 +3233,22 @@ input.stonetop-name-field {
 	display: inline-flex;
 	align-items: center;
 	width: fit-content;
-	padding: 2px 7px;
+	/* The vertical padding is ASYMMETRIC on purpose, and the two halves still sum to 4px, so the
+	   pill is exactly the height it was. `align-items: center` centres the LINE BOX, but the label
+	   is all-caps with no descenders: its ink fills only the top of that box, so a symmetric 2px/2px
+	   left the words riding visibly high -- measured on the default face, 5.00px of paper above the
+	   caps against 7.25px below. Adding the nudge above and taking the same amount off below moves
+	   the INK down without moving the box. --st-caps-nudge is the shared, per-font answer to this
+	   (settings.js#_FONT_CAPS_NUDGE); see .stonetop-condemned-tag-text, which solves the same bug
+	   with a transform because it has a real element to move -- this chip's label is a bare text
+	   node, so padding is the only seam.
+
+	   Capped at the 2px it is subtracted from: the nudge is in `em`, so on the largest face at a
+	   raised font scale it can outgrow the padding it borrows against, and an uncapped subtraction
+	   would floor the bottom at 0 while the top kept growing -- the pill would get TALLER instead
+	   of staying put, which is the one thing this must not do. */
+	--stonetop-chip-caps-nudge: min(2px, var(--st-caps-nudge, 0.073em));
+	padding: calc(2px + var(--stonetop-chip-caps-nudge)) 7px calc(2px - var(--stonetop-chip-caps-nudge));
 	border: 1px solid rgba(100,116,139,0.35);
 	border-radius: 999px;
 	background: hsl(210 12% 92%);
@@ -3651,8 +3658,35 @@ input.stonetop-name-field {
    descriptor, not part of the name, so it sits at normal weight inside the bold
    <strong>. The <em> inside it keeps its italics via the rule above. */
 
+/* The "+STAT" chip that follows a move's name, in the moves sidebar and on a move card alike.
+   In BOTH it is a flex item (`.stonetop-move-item` and `.stonetop-item-header` are flex rows with
+   `align-items: center`), so its box is its line box and that box is centred exactly.
+
+   The vertical padding is ASYMMETRIC anyway, and the two halves still sum to 2px, so the chip is
+   exactly the height it was. Centring the BOX is not centring the INK: the label is a run of
+   capitals with no descenders, so its ink stops at the baseline and the face's whole descender
+   band is empty paper underneath it. Measured on the default face at the 20px root, that is
+   4.10px of paper above the caps against 4.90px below -- the chip reads high, which is what the
+   nudge added above and taken off below corrects.
+
+   Its own constant, NOT --st-caps-nudge, and that is deliberate. That variable is the Condemned
+   pill's per-face table (settings.js#_FONT_CAPS_NUDGE); re-measuring the same quantity for this
+   chip -- (capHeight + descent - ascent) / 2, straight off the metrics Chrome lays the text out
+   with -- does not reproduce its numbers, and its Signika entry (0.073em) is nearly three times
+   what this chip wants. Borrowing it would drop the label as far BELOW centre as it now sits
+   above, so the pill's table is left alone and this rule carries what it measured.
+
+   0.028em is the DEFAULT face's correction, and it is also the smallest of the three the sheet
+   can render in (Libre Caslon wants ~0.043em, IM Fell English ~0.119em). A single constant is
+   therefore an under-correction on the other two rather than an over-correction: every face ends
+   nearer centred than the symmetric padding left it, and none is pushed past it. Capped at the
+   1px it is subtracted from -- the nudge is in `em`, so a raised font scale could otherwise
+   outgrow the padding it borrows against and floor the bottom at 0 while the top kept growing,
+   making the chip TALLER instead of leaving it put.
+   Measured with roll-chip-fonts.mjs and caps-metrics.mjs in the verify harness. */
 .stonetop-move-roll-chip {
-	padding: 1px 6px;
+	--stonetop-roll-chip-caps-nudge: min(1px, 0.028em);
+	padding: calc(1px + var(--stonetop-roll-chip-caps-nudge)) 6px calc(1px - var(--stonetop-roll-chip-caps-nudge));
 	border: 1px solid var(--color-text-dark-secondary);
 	border-radius: var(--st-radius-sm);
 	font-size: calc(0.72rem * var(--stonetop-font-scale, 1));
@@ -3688,8 +3722,9 @@ input.stonetop-name-field {
 	visibility: visible !important;
 }
 
-.stonetop-readonly .steading-roll-btn,
-.stonetop-readonly .steading-interactive-btn,
+/* The homefront moves are NOT on this list any more, and do not need to be: their dice buttons
+   are gone and the click target is the move's NAME, a <strong>/<span> that the read-only lock's
+   `pointer-events: none` (inputs, buttons, selects, labels) never reached in the first place. */
 .stonetop-readonly .stonetop-answer-character-questions-btn,
 .stonetop-readonly .steading-list-add,
 /* NOTHING FROM THE GM-PREP TABS IS ON THIS LIST ANY MORE, and nothing should go back on.
@@ -8845,10 +8880,20 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 }
 
 /* Block flow drops the flex `align-items:center`, so re-centre the now-inline
-   controls vertically. Their horizontal spacing comes from the normal
-   whitespace between the inline elements. */
+   controls vertically. */
 :is(.tab.moves, .tab.post-death) .stonetop-move-group .stonetop-item-header:has(.stonetop-item-source) > * {
 	vertical-align: middle;
+}
+
+/* Block flow also drops the header's `gap: 8px`, leaving only the collapsed
+   whitespace between the inline elements (roughly 4px). That reads as a visibly
+   tighter checkbox-to-title gap on a badged card ("Starting move",
+   "Background") than on an un-badged one, so top the space back up by hand.
+   Only the leading control needs it: the title and everything after it sit at
+   the same word-space they do in the flex header. */
+:is(.tab.moves, .tab.post-death) .stonetop-move-group .stonetop-item-header:has(.stonetop-item-source)
+	> :is(.stonetop-item-check, .stonetop-repeat-checks) {
+	margin-right: 4px;
 }
 
 :is(.tab.moves, .tab.post-death) .stonetop-move-group .stonetop-item-source {
@@ -17060,33 +17105,11 @@ a.steading-player-open:hover {
 	padding-bottom: 4px;
 }
 
-.steading-roll-btn,
-.steading-interactive-btn {
-	background: transparent;
-	color: var(--color-text-dark-secondary);
-	border: none;
-	border-radius: 0;
-	width: auto;
-	height: auto;
-	padding: 0;
-	cursor: pointer;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	flex-shrink: 0;
-	line-height: 1;
-}
-
-.steading-roll-btn:hover,
-.steading-interactive-btn:hover {
-	background: transparent;
-	color: var(--color-text-dark-primary);
-}
-
-.steading-roll-btn,
-.steading-interactive-btn {
-	font-size: var(--st-fs-base);
-}
+/* NOTHING HERE FOR A MOVE'S DICE BUTTON. There isn't one: a homefront move is opened by
+   clicking its NAME, in both layouts, and the three blocks that used to un-button that icon
+   (transparent background, no border, no box, a hover that only changed the ink) went with it.
+   The name already carries `cursor: pointer` from `.stonetop-item-name` on the modern card and
+   from `.steading-move-row` in the classic sidebar. */
 
 /* -- Seasons Change dialog ------------------------------------- */
 
@@ -23309,6 +23332,25 @@ li.question-bullet::before {
 
 .stonetop-stat-picker-dialog .stonetop-stat-picker-why p {
 	margin: 4px 0 0;
+}
+
+/* What the move says each stat means here (Defy Danger's and Interfere's printed approaches),
+   read off the move itself. A plain list, not the quoted-move box above: this is the choice the
+   buttons below make, so it sits between the question and them with nothing boxing it off. */
+.stonetop-stat-picker-dialog .stonetop-stat-picker-approaches {
+	list-style: none;
+	margin: 8px 0 0;
+	padding: 0;
+	font-size: var(--st-fs-sm);
+}
+
+.stonetop-stat-picker-dialog .stonetop-stat-picker-approaches li {
+	margin: 0 0 2px;
+	padding: 0;
+}
+
+.stonetop-stat-picker-dialog .stonetop-stat-picker-approaches li:last-child {
+	margin-bottom: 0;
 }
 
 /* Claiming an advantage grant (Polyglot, Naturalist) on the arcana identify roll. Sits above

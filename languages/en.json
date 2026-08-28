@@ -604,10 +604,6 @@
         "name": "Edit Pencil Reveal Delay",
         "hint": "How long to hover a section (in seconds) before its edit pencil fades in. The pencils stay clickable while still invisible, so you can click one without waiting. Set to 0 to show them instantly."
       },
-      "hideRollableIcon": {
-        "name": "Hide Rollable Icon",
-        "hint": "Hide the dice icon that marks rollable moves and stats. Rolling still works: click the move name or stat row to roll."
-      },
       "askRollModeEachRoll": {
         "name": "Ask How to Roll Each Time",
         "hint": "Ask for Advantage / Normal / Disadvantage in a window before every move or stat roll, starting fresh at Normal each time. Ticked, the Roll Modifier selector is hidden from the character and steading sheets. Unticked, that selector is how you say it, and it stays set until you change it. Hold Shift while clicking a roll to skip the window."
@@ -630,7 +626,7 @@
       },
       "showRollStatChips": {
         "name": "Show Roll Stat Chips",
-        "hint": "Show labels like +STR and +ANY beside rollable move icons on character and steading sheets."
+        "hint": "Show labels like +STR and +ANY beside the titles of rollable moves on character and steading sheets. Clicking one rolls the move, the same as clicking its title."
       },
       "showMoveDescriptionsInChat": {
         "name": "Show Move Descriptions in Chat",

@@ -48,6 +48,7 @@ import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct} from ".
 import {playbookIconPath, partyCharacters} from "../../utils/playbook-actors.js";
 import {postMoveToChat, moveChatCard, pickableMoveDescription} from "../../utils/chat.js";
 import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
+import {statApproaches} from "../../utils/stat-approaches.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
 import {stockSources, canPayStock, defaultStockSource, stockCostFromDescription, SACRED_POUCH_SLUG, RITES_OF_THE_LAND, DEFAULT_SACRED_POUCH_MAX} from "./stock-cost.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
@@ -63,7 +64,7 @@ import {readCurrentSeason, readCurrentYear} from "../../seasons/current-season.j
 import {openRitesOfTheLand} from "./rites-of-the-land.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
-import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getHideRollableIconSetting, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
+import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
 import {bringDialogToFront} from "../../utils/front-on-open.js";
 import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
@@ -186,7 +187,7 @@ function _guidedCharacterMoveHasAction(guide, rollable = null) {
  *
  * THREE entries, and that is the whole reachable population. A guide is found either by
  * _guidedMoveForRollable — which needs the move to have a rollType, since a move without one
- * renders no dice icon (see tab-moves.hbs) — or by a caller that names it outright, which only
+ * has no `.rollable` on its title (see tab-moves.hbs) — or by a caller that names it outright, which only
  * Recover's own button does.
  *
  * The table used to carry 24 more: every playbook and expedition move with a "pick 1" list in
@@ -2933,7 +2934,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// Read & Resolve / Roll button, never a name-click that would post it to chat
 				// without removing it. Its edit/delete pencils have their own handlers.
 				if (nameEl.closest(".stonetop-love-letter")) return;
-				// An un-learned custom move is inactive — no dice icon, bonuses off — but its TEXT
+				// An un-learned custom move is inactive — its title does not roll, bonuses off — but its TEXT
 				// is still readable, so a name-click posts it to chat like any other move. That
 				// matches an un-owned playbook move, which posts to chat without being owned;
 				// the roll is what's gated, not the reading.
@@ -2948,26 +2949,29 @@ export function createStonetopCharacterSheetClass(Base) {
 				const item = li?.dataset.itemId ? this.actor.items.get(li.dataset.itemId) : null;
 				const isOtherMove = item?.system?.moveType === "other";
 				const guide = isOtherMove ? null : GUIDED_CHARACTER_MOVES[name];
+				// A ROLLABLE MOVE NEVER REACHES HERE. Its name element IS the `.rollable` now
+				// (see move-group.hbs), and the rollable handler below runs in the CAPTURE phase
+				// on this same root — it takes the click and stops it before this bubble-phase
+				// listener is ever asked. So what this handler answers is exactly the rows that
+				// do not roll: a description-only move, an un-owned row, an un-learned custom
+				// move — and any row at all for an observer, whose clicks the rollable handler
+				// declines on `isEditable`, leaving them the move's text and no dice.
+				//
+				// There used to be a forwarding branch here, dispatching a synthetic click at
+				// the dice icon when the "Hide Rollable Icon" setting had hidden it. Nothing to
+				// forward to any more: the die is gone from every move row, the name does the
+				// rolling itself, and the Shift state is the real click's rather than one copied
+				// onto a MouseEvent by hand.
 				const rollable = li?.querySelector(".rollable");
 				if (guide && _guidedCharacterMoveHasAction(guide, rollable)) {
 					this._openGuidedCharacterMove({ name, guide }, rollable);
-					return;
-				}
-				// With "Hide Rollable Icon" on, the dice icon is gone, so the move name
-				// becomes the roll trigger — forward to the (hidden) rollable the way the
-				// steading sheet does. Only rollable moves have a `.rollable`; description-
-				// only moves (no rollType, hence no icon) fall through and post to chat.
-				// Re-dispatch a click carrying the Shift state (a plain `.click()` would drop
-				// it) so "Shift to skip the roll prompt" still works when rolling here.
-				if (rollable && getHideRollableIconSetting()) {
-					rollable.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: ev.shiftKey }));
 					return;
 				}
 				// A move whose whole offer is "this counts as a weapon" (Purifying Flames) has no
 				// roll of its own, so using it IS the attack it grants — run below, after the tail,
 				// with the weapon already in hand.
 				//
-				// AFTER, not INSTEAD. Having no rollType means having no dice icon, so this
+				// AFTER, not INSTEAD. Having no rollType means the title does not roll, so this
 				// name-click is the move's ONLY surface: a shortcut that took the click would be
 				// the one move on the sheet its owner cannot show the table. So it does both, in
 				// the order they read — here is what Purifying Flames says, and here is the Clash
@@ -3013,19 +3017,33 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (grantedAttack) await this._rollGrantedWeaponAttack(item, grantedAttack, { shiftKey: ev.shiftKey });
 			});
 
-			// Clicking the move name fires the same roll as the dice icon.
-			// For moves without a rollType (Aid), fetch the full doc and post to chat.
-			// Restricted to owners/GMs (isEditable) so observers cannot roll on others' actors.
-			// Rollable click handler — replaces PBTA's built-in listener.
+			// THE ROLLABLE CLICK HANDLER — replaces PbtA's built-in listener, and the one place a
+			// move roll starts from a click on the sheet.
+			//
+			// A move's TITLE is its `.rollable` now — no move row draws a dice icon any more — so
+			// this is what a click on a move's name reaches. CAPTURE phase, and it stops the click
+			// it takes: that is what keeps the name handler above off a rollable move while leaving
+			// it every row that does not roll (a description-only move, an un-owned row, an
+			// un-learned custom move), which it posts to chat.
+			// Restricted to owners/GMs (isEditable) so observers cannot roll on others' actors —
+			// their click falls through to that handler and gets the move's text instead.
 			html[0].addEventListener("click", async ev => {
 				// Don't intercept clicks on enabled inputs (e.g. editing a stat value).
 				if (ev.target.tagName === "INPUT" && !ev.target.disabled && !ev.target.readOnly) return;
-				// Clicking the "+STAT" chip rolls the same as tapping the dice icon beside it.
+				// The "+STAT" chip beside a title rolls the move too: it reads as part of the same
+				// label, so it answers like one.
 				const chip = ev.target.closest(".stonetop-move-roll-chip");
 				const rollable = ev.target.closest(".rollable")
 					?? chip?.closest("li")?.querySelector(".rollable");
 				if (!rollable || !this.isEditable) return;
 				ev.stopPropagation();
+				// AN EXPEDITION MOVE OPENS ITS OWN DOOR FIRST — Requisition's assets, Outfit's
+				// load, Forage's guided step. That used to belong to the row handler below,
+				// because the row's NAME was not the rollable: the die rolled and the name did
+				// this, and the two were different answers to the same move. One door now, so it
+				// has to be this one, or Requisition would open the stat picker its icon opened
+				// and never the dialog its name did.
+				if (this._openExpeditionMoveDoor(rollable.closest("li"))) return;
 				// Guided move, the two stat pickers, then the roll prompt — the same ladder the
 				// hotbar path walks. See _resolveMoveRollPrompts.
 				const prompted = await this._resolveMoveRollPrompts(rollable, { shiftKey: ev.shiftKey });
@@ -3089,21 +3107,13 @@ export function createStonetopCharacterSheetClass(Base) {
 				const li     = ev.currentTarget;
 				const nameEl = li.querySelector(".stonetop-move-name");
 				if (!nameEl) return;
-				const moveName = nameEl.textContent.trim();
 
 				// Expedition moves each do something on click: a bespoke dialog
 				// (Requisition assets, Outfit), a guided step/roll modal, a direct
-				// roll, or — failing those — posting the move text to chat.
-				if (nameEl.classList.contains("stonetop-expedition-move-open")) {
-					const handler = EXPEDITION_MOVE_HANDLERS[moveName];
-					if (handler) { handler(this); return; }
-					const guide = GUIDED_CHARACTER_MOVES[moveName];
-					const rollable = li.querySelector(".rollable");
-					if (guide && _guidedCharacterMoveHasAction(guide, rollable)) {
-						this._openGuidedCharacterMove({ name: moveName, guide }, rollable);
-						return;
-					}
-				}
+				// roll, or — failing those — posting the move text to chat. Shared with the
+				// rollable handler above, which is where the same click lands when it is the
+				// TITLE that was tapped rather than the empty space beside it.
+				if (this._openExpeditionMoveDoor(li)) return;
 
 				const rollable = li.querySelector(".rollable");
 				// Re-dispatched with the Shift state rather than a bare `.click()`, which reports
@@ -5389,11 +5399,11 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		// Roll one of this character's owned moves by its embedded item id, running the
-		// exact same dispatch a click on the move's dice icon would — guided-move dialog,
+		// exact same dispatch a click on the move's title would — guided-move dialog,
 		// "ask"/alt-stat picker, and the pre-roll prompt all included.
 		// This is the entry point used by the hotbar move-macros (drag a move onto the
 		// hotbar): it works whether or not the sheet is currently rendered, because it
-		// builds a detached stand-in for the row's rollable icon (see _makeSyntheticRollable)
+		// builds a detached stand-in for the row's rollable (see _makeSyntheticRollable)
 		// and feeds it to the same helpers the inline click handler uses — literally the same
 		// ladder, via _resolveMoveRollPrompts, so the two can no longer fall out of step.
 		async rollMoveById(itemId, { shiftKey = false } = {}) {
@@ -5459,7 +5469,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			await item.delete();   // single-use — the section vanishes with the last letter
 		}
 
-		// Build a detached DOM element that stands in for a move row's rollable dice icon,
+		// Build a detached DOM element that stands in for a move row's rollable title,
 		// carrying just the structure the rollable-dispatch helpers read: an ancestor
 		// `.item.stonetop-item` with the item id, a `.stonetop-item-name`, and the stat on
 		// the rollable's data-roll. Returns null for a move with no rollType (nothing to
@@ -5498,7 +5508,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * its card, and the effects of having rolled all belong to the latter.
 		 *
 		 * BOTH CALLERS POST THE MOVE'S TEXT FIRST and then call this. A granting move has no
-		 * rollType, so it renders no dice icon and its name-click is its only surface; taking that
+		 * rollType, so its title never rolls and a name-click is its only surface; taking that
 		 * click for the attack alone would leave it the one move on the sheet its owner cannot show
 		 * the table. The card then reads as the reason for the roll under it.
 		 *
@@ -5534,7 +5544,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * and any one-off modifier).
 		 *
 		 * One ladder, because it has to BE one — dragging a move to the hotbar must ask exactly
-		 * what clicking its dice icon on the sheet asks. It used to be written out twice, with a
+		 * what clicking its title on the sheet asks. It used to be written out twice, with a
 		 * comment on the second copy telling the reader to keep the branch order in step with the
 		 * first by hand; that instruction is what this replaces.
 		 *
@@ -5661,12 +5671,58 @@ export function createStonetopCharacterSheetClass(Base) {
 					${weaponNote}
 				</div>`;
 			}).join("");
+			// What the move itself says each stat means here — Defy Danger's and Interfere's six
+			// printed approaches, read off the move rather than restated (see statApproaches).
+			// Without them this window asks "which stat?" and shows six abbreviations, when the
+			// answer the player needs is on the move in front of them.
+			const approaches = statApproaches(item.system?.description);
+			const listed = [...statKeys].filter(key => approaches[key]);
+			const approachHtml = listed.length
+				? `<ul class="stonetop-stat-picker-approaches">${listed.map(key =>
+					`<li><strong>${_esc(Handlebars.helpers.statLabel(key))}</strong> ${_esc(approaches[key])}</li>`).join("")}</ul>`
+				: "";
 			new Dialog({
 				title: `${item.name}: Choose a Stat`,
-				content: `<p>Which stat are you rolling with?</p>${whyHtml}`,
+				content: `<p>Which stat are you rolling with?</p>${approachHtml}${whyHtml}`,
 				buttons,
 				render: bringDialogToFront,
 			}, { width: 480, classes: ["dialog", "stonetop", "stonetop-stat-picker-dialog"] }).render(true);
+		}
+
+		/**
+		 * What an EXPEDITION move opens before any dice, given the row's name element: its own
+		 * bespoke dialog (Requisition's assets, Outfit's load) or its guided step. Answers true
+		 * when it took the click, false when the move has neither and the ordinary roll should
+		 * go ahead.
+		 *
+		 * ONE COPY, TWO CALLERS, and they are two halves of the same click. The row's title is a
+		 * `.rollable` now, so tapping it lands in the rollable handler while tapping the empty
+		 * space beside it lands in the row handler — and both have to give the same answer, or
+		 * Requisition means the assets dialog or the stat picker depending on which pixel was
+		 * hit. That is exactly the split this replaced: the old dice icon rolled and the old
+		 * name opened the dialog, and which one a player got was which one they aimed at.
+		 *
+		 * Guarded on the class rather than the name table alone: `stonetop-expedition-move-open`
+		 * is only on the sidebar's expedition rows (character.hbs), so a playbook move that
+		 * happens to share a name with one of these cannot borrow its door.
+		 */
+		_openExpeditionMoveDoor(li) {
+			// Takes the ROW, because the row is what both callers already hold and what this
+			// needs anyway: it reads the name off it and then the rollable beside it. Handed the
+			// name element instead, the rollable path had to walk li → name → li to get back
+			// here, which on the sidebar rows means starting from the element it ended at.
+			const nameEl = li?.querySelector?.(".stonetop-move-name");
+			if (!nameEl?.classList?.contains("stonetop-expedition-move-open")) return false;
+			const moveName = nameEl.textContent.trim();
+			const handler = EXPEDITION_MOVE_HANDLERS[moveName];
+			if (handler) { handler(this); return true; }
+			const guide = GUIDED_CHARACTER_MOVES[moveName];
+			const rollable = li.querySelector(".rollable");
+			if (guide && _guidedCharacterMoveHasAction(guide, rollable)) {
+				this._openGuidedCharacterMove({ name: moveName, guide }, rollable);
+				return true;
+			}
+			return false;
 		}
 
 		_guidedMoveForRollable(rollable) {
@@ -6709,7 +6765,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					// asks. Without it this was the one 2d6 move on the sheet that could never be
 					// rolled with advantage, disadvantage, or a one-off modifier — the sticky sheet
 					// control that used to carry those is gone, and this window is where they live
-					// now. Shift on the glyph skips it, exactly as it does on a dice icon.
+					// now. Shift on the glyph skips it, exactly as it does on a move's title.
 					const prompted = await this._resolveMoveRollPrompts(rollable, { shiftKey: ev.shiftKey });
 					// "handled" — a dialog owns the roll from here and will run it through the same
 					// model call, which drops the raging state itself. "cancel" — they backed out of

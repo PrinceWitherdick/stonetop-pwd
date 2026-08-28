@@ -1096,18 +1096,14 @@ export function registerSettings() {
 		onChange: value => applyEditPencilRevealDelay(value),
 	});
 
-	// Hide the decorative dice (rollable) icon that marks rollable moves and stats.
-	// Rolling still works without it — clicking the move name or stat row fires the
-	// same roll. Drives the `stonetop-hide-rollable-icon` root class.
-	game.settings.register(SYSTEM_ID, "hideRollableIcon", {
-		name: "stonetop.settings.hideRollableIcon.name",
-		hint: "stonetop.settings.hideRollableIcon.hint",
-		scope: "client",
-		config: true,
-		type: Boolean,
-		default: false,
-		onChange: value => applyHideRollableIcon(value),
-	});
+	// NO "HIDE ROLLABLE ICON" SETTING. It used to sit here, between the pencil delay and the
+	// roll-mode switch, and it hid the dice icon on move rows and stat rows. Both icons are
+	// gone outright: a move is rolled by its TITLE and a stat by its whole CELL, so the switch
+	// had nothing left to hide but the labels themselves. A registered setting that changes
+	// nothing is worse than no setting — it reads as a promise the sheet does not keep.
+	//
+	// Nothing needs cleaning up on a world that had it set: an unregistered client setting is
+	// simply never read again, and the root class it drove is no longer applied by anything.
 
 	// WHERE advantage and disadvantage are chosen, and it is one place or the other.
 	//
@@ -1632,10 +1628,6 @@ export function applyEditPencilRevealDelay(value) {
 	document.documentElement.style.setProperty("--st-edit-reveal-delay", `${safe}s`);
 }
 
-export function applyHideRollableIcon(value) {
-	document.documentElement.classList.toggle("stonetop-hide-rollable-icon", !!value);
-}
-
 export function applyReduceMotion(value) {
 	document.documentElement.classList.toggle("stonetop-reduce-motion", !!value);
 }
@@ -1754,8 +1746,6 @@ export function stampLayoutClass(app, sheet) {
 	app?.element?.[0]?.classList.toggle("stonetop-layout-classic", isClassicLayout(sheet));
 }
 
-// Whether the rollable dice icon is hidden; when it is, rolls fire from the move
-// name / stat row instead of the (now absent) icon.
 /**
  * A setting read that survives being asked too early, and caches only a real answer.
  *
@@ -1855,10 +1845,6 @@ export function applyMapPinLabelMode() {
 		if (note?.renderFlags?.set) note.renderFlags.set({ refreshState: true });
 		else note?.refresh?.();
 	}
-}
-
-export function getHideRollableIconSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "hideRollableIcon") ?? false;
 }
 
 export function getSetting(key) {

@@ -43,7 +43,7 @@ export const BOOT_SENTINELS = Object.freeze([
 	"peopleArt",
 	"sessionZeroDone",
 	"sheetFontScale",
-	"hideRollableIcon",
+	"editPencilRevealDelay",
 	"arcanaSectionsCollapsed",
 ]);
 

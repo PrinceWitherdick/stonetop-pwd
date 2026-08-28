@@ -92,7 +92,7 @@ const _STEADING_MOVES_RAW = [
   <img src="systems/stonetop-pwd/assets/icons/seasons/winter_icon.svg" class="stonetop-season-row-icon" alt="Winter">
   <div><strong>Winter</strong> — The <em>weariest</em> rolls 1d4+Population (min 0); the steading consumes that much Surplus. If there isn't enough: Surplus → 0, Fortunes −1, pick 1 consequence. Then roll +Fortunes. Reset Fortunes to +1.</div>
 </div>
-<p class="stonetop-seasons-cta">Click <i class="fas fa-dice-d6"></i> to walk through the current season step by step.</p>`,
+<p class="stonetop-seasons-cta">Click <strong>Seasons Change</strong> above to walk through the current season step by step.</p>`,
 	},
 	{
 		slug: "pullTogether",
@@ -611,9 +611,20 @@ export function createStonetopSteadingSheetClass(Base) {
 		async getData() {
 			const context = await super.getData();
 			context.stonetop = await this._stonetopSteading.buildSnapshot();
+			// The click target is resolved HERE, once, rather than branched in each template.
+			// The modern card and the classic row differ in their wrapper, their name element and
+			// where the description goes, but they agree exactly on what a click means — and the
+			// delegated handler below reads one set of `li.dataset` keys from both. Resolving it
+			// in the view model is what keeps those two shapes from drifting apart: a move with a
+			// walkthrough carries its slug, one that only rolls carries its name and stat, and a
+			// move this steading cannot make carries neither (the handler's own guard covers the
+			// empty pair, so the templates emit the attributes unconditionally).
 			context.stonetop.moves = STEADING_MOVES.map(move => ({
 				...move,
 				statChipLabel: STEADING_STAT_CHIP_LABELS[move.statLabel] ?? move.statLabel,
+				moveSlug: move.interactive ? move.slug : "",
+				moveName: !move.interactive && move.rollable ? move.label : "",
+				unowned: !move.rollable && !move.interactive,
 			}));
 			context.stonetop.rollMode = this._sheetRollMode();
 			context.stonetop.showRollStatChips = getRollStatChipsSetting();
@@ -783,18 +794,46 @@ export function createStonetopSteadingSheetClass(Base) {
 				table: STEADING_STAT_TOOLTIPS, settingKey: "hoverDescriptionsSteadingStats", direction: "UP",
 			});
 
-			// Rollable move buttons (both editable and read-only). The prompt comes BEFORE the
-			// roll; WHAT it asks for is the "Ask How to Roll Each Time" setting's business rather
-			// than this handler's, and when it has nothing to ask it opens no window at all. A
-			// mode it does not answer falls back to the sticky selector wired below. Shift-click
-			// rolls straight through either way.
+			// Homefront moves — ONE click target per move, in both layouts: its NAME, plus the
+			// "+STAT" chip beside it. There is no dice button any more; the name always forwarded
+			// to it, so the icon was a second door onto the same room, and both shapes now carry
+			// what the move is on the `<li>` instead (see steading-tab-moves.hbs).
+			//
+			// Which of the two things a move does is the DATA's answer, not the click's: a move
+			// with a walkthrough carries `data-move-slug`, a move that only rolls carries
+			// `data-move-name`/`data-stat`, and a move that does neither carries nothing and is
+			// inert — the `move-unowned` row. Every move the system ships is interactive today,
+			// so the roll-only branch is the one that keeps a bare rollable move working.
+			//
+			// Bound for editable and read-only alike: rolling a homefront move is play, open to a
+			// player who cannot edit the steading. Hence the position, above the isEditable guard.
+			//
+			// The prompt comes BEFORE the roll; WHAT it asks for is the "Ask How to Roll Each
+			// Time" setting's business rather than this handler's, and when it has nothing to ask
+			// it opens no window at all. A mode it does not answer falls back to the sticky
+			// selector wired below. Shift-click rolls straight through either way — which is why
+			// the click's own `shiftKey` is read here rather than re-dispatched through anything.
 			html[0].addEventListener("click", async ev => {
-				const btn = ev.target.closest(".steading-roll-btn");
-				if (!btn) return;
+				const opener = ev.target.closest(".stonetop-steading-move-open, .stonetop-move-roll-chip");
+				if (!opener) return;
+				const li = opener.closest("li");
+				if (!li) return;
+				const { moveSlug, moveName, stat } = li.dataset;
+				if (!moveSlug && !moveName) return; // a move this steading cannot make
 				ev.stopPropagation();
-				const prompted = await promptRoll({ title: btn.dataset.moveName || "Roll", shiftKey: ev.shiftKey });
+
+				if (moveSlug) {
+					if (moveSlug === "meetWithDisaster") this._onMeetWithDisaster();
+					else if (moveSlug === "requisition") this._onRequisitionWalkthrough();
+					else if (moveSlug === "returnTriumphant") this._onReturnTriumphant();
+					else if (moveSlug === "seasonsChange") this._onSeasonsChange();
+					else if (HOMESTEAD_MOVE_FLOWS[moveSlug]) this._onHomesteadMove(moveSlug);
+					return;
+				}
+
+				const prompted = await promptRoll({ title: moveName || "Roll", shiftKey: ev.shiftKey });
 				if (!prompted) return;
-				await this._onSteadingRoll(btn.dataset.moveName, btn.dataset.stat, prompted);
+				await this._onSteadingRoll(moveName, stat, prompted);
 			}, true);
 
 			// The sticky Roll Modifier, in BOTH its shapes — the modern layout's segmented pill on
@@ -860,33 +899,11 @@ export function createStonetopSteadingSheetClass(Base) {
 				persist:       collapsed => setSidebarCollapsed(this.actor?.id, collapsed),
 			});
 
-			// Clicking the move name or its "+STAT" chip rolls the same as tapping the dice icon
-			// beside it. Re-dispatched as a MouseEvent carrying the Shift state rather than a bare
-			// `.click()`, which reports `shiftKey: false` however the name was clicked — so
-			// Shift-clicking a move's NAME would sit through the roll prompt that Shift exists to
-			// skip. The character sheet's own name-click forwards the same way, for the same reason.
-			html.find(".stonetop-steading-move-open, .stonetop-move-roll-chip").on("click", ev => {
-				const li = ev.currentTarget.closest("li");
-				const rollable = li?.querySelector(".steading-roll-btn, .steading-interactive-btn");
-				if (rollable) {
-					rollable.dispatchEvent(new MouseEvent("click", {
-						bubbles: true, cancelable: true, shiftKey: ev.shiftKey,
-					}));
-				}
-			});
-
-			// Interactive move buttons (e.g. Meet with Disaster)
-			html[0].addEventListener("click", ev => {
-				const btn = ev.target.closest(".steading-interactive-btn");
-				if (!btn) return;
-				ev.stopPropagation();
-				const { moveSlug } = btn.dataset;
-				if (moveSlug === "meetWithDisaster") this._onMeetWithDisaster();
-				else if (moveSlug === "requisition") this._onRequisitionWalkthrough();
-				else if (moveSlug === "returnTriumphant") this._onReturnTriumphant();
-				else if (moveSlug === "seasonsChange") this._onSeasonsChange();
-				else if (HOMESTEAD_MOVE_FLOWS[moveSlug]) this._onHomesteadMove(moveSlug);
-			}, true);
+			// NO SECOND HANDLER FOR THE MOVE NAME. It used to re-dispatch a MouseEvent at the
+			// dice icon beside it (carrying the Shift state by hand, because a bare `.click()`
+			// reports `shiftKey: false` and would sit through the prompt Shift exists to skip).
+			// With the icon gone the name is the handler's own target, above, and the Shift state
+			// is the real click's.
 
 			// Hover panel for the CLASSIC sidebar's one-line move rows: the row shows only a
 			// name, so its text has to come from somewhere. Gated on the ROWS EXISTING, not on
