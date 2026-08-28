@@ -52,6 +52,33 @@ export async function openSystemSetting(key) {
 }
 
 /**
+ * Open Configure Settings on this system's own category, without singling out a row.
+ *
+ * For the "everything else lives over there" button on the character sheet's Preferences tab:
+ * the tab carries the dozen settings a player is likely to want, and this is the way out to the
+ * rest — the world-wide options, the GM-only gates, and whatever modules registered.
+ *
+ * The category is revealed by looking up ONE of our settings and showing the tab it sits on,
+ * the same best-effort walk `openSystemSetting` makes, minus the scroll and the flash: there is
+ * no one row this button is about, and lighting an arbitrary one would say there was. The key is
+ * only a probe for "which tab are this system's settings on", so any registered, visible
+ * (`config: true`) key serves — it is the FONT one because that is also the first row the
+ * Preferences tab lists, so the two open on the same neighbourhood.
+ *
+ * @returns {Promise<boolean>} true when the settings window was opened, as above.
+ */
+export async function openSystemSettings() {
+	const app = globalThis.game?.settings?.sheet;
+	if (!app?.render) return false;
+
+	await app.render(true);
+
+	const row = await findSettingRow(app, `${SYSTEM_ID}.sheetFont`);
+	if (row) showTabFor(app, row);
+	return true;
+}
+
+/**
  * The `.form-group` holding the setting with this id, once the window has painted one.
  *
  * Found by the input's NAME, which core builds as `<namespace>.<key>` (SettingsConfig's
