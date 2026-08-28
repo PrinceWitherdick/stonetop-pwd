@@ -117,6 +117,10 @@
 				{{> "stonetop.tab-nav-item" tab="details"       label=(localize "stonetop.sheet.tabs.details")}}
 				{{> "stonetop.tab-nav-item" tab="special-moves" label=(localize "stonetop.sheet.tabs.specialMoves")}}
 				{{> "stonetop.tab-nav-item" tab="notes"         label=(localize "stonetop.sheet.tabs.notes")}}
+				{{!-- Last, and deliberately: it is the only tab that is not about the character.
+				      A player opens it once to set their text size and then rarely again, so it
+				      sits below everything they read every session. --}}
+				{{> "stonetop.tab-nav-item" tab="preferences"   label=(localize "stonetop.sheet.tabs.preferences")}}
 			</nav>
 
 			<div class="stonetop-sheet-layout">
@@ -132,6 +136,7 @@
 					{{> "stonetop.tab-details"}}
 					{{> "stonetop.tab-special-moves"}}
 					{{> "stonetop.tab-notes"}}
+					{{> "stonetop.tab-preferences"}}
 				</section>
 
 				<div class="stonetop-moves-sidebar{{#if stonetop.sidebarCollapsed}} is-collapsed{{/if}}">

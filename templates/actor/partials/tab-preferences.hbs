@@ -1,0 +1,101 @@
+{{!-- The player's own settings, surfaced where they read their character rather than three
+      menus deep in Foundry's sidebar. Every control here writes the same client setting the
+      settings menu writes (module/utils/sheet-preferences.js) — nothing on this tab is stored
+      on the actor, and nothing is this sheet's alone.
+
+      Which is what the note at the top says, and it is not decoration: a control sitting on
+      Corvus's sheet reads as Corvus's, and it is not. These are per-PERSON, so a change here
+      shows on every Stonetop sheet this browser opens, including the other characters of a
+      player running two.
+
+      NO `name` ATTRIBUTES on any input below. A named input inside an actor sheet's form rides
+      along into `_updateObject` as a stray top-level key — see the note in roll-mode-radios.hbs,
+      which keeps its names only because radios need them for the browser's own grouping. These
+      controls are checkboxes, selects and ranges, none of which group, so they are addressed by
+      `data-pref` (the setting key) and the form never sees them.
+
+      Labels, hints, choices and slider bounds all come from the setting REGISTRATION, so this
+      template names no setting and carries no copy of a hint that could drift from the one the
+      settings menu shows. --}}
+<div class="tab preferences" data-group="primary" data-tab="preferences">
+	<section class="sheet-tab stonetop-preferences">
+
+		<p class="stonetop-preferences-intro">
+			{{localize "stonetop.sheet.preferences.intro"}}
+		</p>
+
+		{{#each stonetop.preferences}}
+		<div class="stonetop-preference-group" data-preference-group="{{id}}">
+			{{> "stonetop.section-heading" title=title collapse=collapse}}
+
+			{{#each rows}}
+			<div class="stonetop-preference-row" data-preference-key="{{key}}">
+				{{#if isCheck}}
+				{{!-- The checkbox is INSIDE the label so the whole title line toggles it, which
+				      is how every other checklist on these sheets behaves. `.stonetop-check`
+				      takes the shared 15px glyph skin; core's own margin is left alone, which is
+				      what seats the glyph on the first line of the label. --}}
+				<label class="stonetop-preference-label" for="stonetop-pref-{{key}}">
+					<input id="stonetop-pref-{{key}}" type="checkbox" class="stonetop-check"
+					       data-pref="{{key}}"{{#if checked}} checked{{/if}}>
+					<span>{{label}}</span>
+				</label>
+				{{else}}
+				<label class="stonetop-preference-label" for="stonetop-pref-{{key}}">
+					<span>{{label}}</span>
+				</label>
+
+				{{#if isChoice}}
+				<select id="stonetop-pref-{{key}}" class="stonetop-preference-select" data-pref="{{key}}">
+					{{#each choices}}
+					<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>
+					{{/each}}
+				</select>
+				{{/if}}
+
+				{{#if isRange}}
+				{{!-- The readout is repainted live by the sheet's `input` handler; the setting
+				      itself is written on `change`. A dragged handle fires `input` on every
+				      pixel and `change` once, when it is let go — so the number tracks the drag
+				      and only the value landed on is stored, rather than a burst of localStorage
+				      writes and onChange work for every value passed through on the way. (Arrow
+				      keys fire both per press, which is one press to one stored value anyway.) --}}
+				<div class="stonetop-preference-range">
+					<input id="stonetop-pref-{{key}}" type="range" data-pref="{{key}}"
+					       min="{{min}}" max="{{max}}" step="{{step}}" value="{{value}}">
+					<output class="stonetop-preference-range-value"
+					        for="stonetop-pref-{{key}}">{{display}}</output>
+				</div>
+				{{/if}}
+				{{/if}}
+
+				{{#if hint}}<p class="notes">{{hint}}</p>{{/if}}
+			</div>
+			{{/each}}
+
+			{{#if menu}}
+			<div class="stonetop-preference-row stonetop-preference-menu-row">
+				<button type="button" class="stonetop-preference-menu" data-preference-menu="{{menu.id}}">
+					<i class="fas fa-sliders" aria-hidden="true"></i>
+					<span>{{menu.label}}</span>
+				</button>
+				{{#if menu.hint}}<p class="notes">{{menu.hint}}</p>{{/if}}
+			</div>
+			{{/if}}
+		</div>
+		{{/each}}
+
+		{{!-- The escape hatch, and the reason the tab does not try to be the whole settings menu:
+		      the world-wide options, the GM-only gates and everything a module registered are all
+		      still over there, and a player who wants one should not have to be told where it
+		      lives. Rendered for everyone — Foundry's settings sidebar is not GM-only, it simply
+		      shows a player fewer rows. --}}
+		<p class="stonetop-preferences-more">
+			<button type="button" class="stonetop-preferences-open-settings">
+				<i class="fas fa-gear" aria-hidden="true"></i>
+				<span>{{localize "stonetop.sheet.preferences.openSettings"}}</span>
+			</button>
+		</p>
+
+	</section>
+</div>

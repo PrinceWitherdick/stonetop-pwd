@@ -33,6 +33,8 @@ import {CharacterLedger} from "./CharacterLedger.js";
 import {wireTabSearch} from "../../utils/tab-search.js";
 import {createPacker, fitColumns, makeColumns, packShortest, wireMasonry} from "../../utils/masonry.js";
 import {mountTabRail} from "../../utils/tab-rail.js";
+import {buildPreferenceGroups, formatRange, openPreferenceMenu, setPreference} from "../../utils/sheet-preferences.js";
+import {openSystemSettings} from "../../utils/open-settings.js";
 import {injectHeaderToggle} from "../../utils/sheet-chrome.js";
 import {mountScrollFrost} from "../../utils/scroll-frost.js";
 import {withSheetSizeMemory} from "../../utils/sheet-size.js";
@@ -1215,6 +1217,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			// pre-roll window is asking instead (RollDialog.js), and two controls answering one
 			// question is how a player ends up rolling with an Advantage they cannot see.
 			context.stonetop.showRollModeControl = !getAskRollModeEachRollSetting();
+			// The Preferences tab: this PLAYER's client settings, grouped, with each row's label,
+			// hint and control shape read off its registration rather than restated. Built fresh
+			// every render so a value changed in Foundry's settings menu (or on another sheet's
+			// copy of this tab) is what the tab draws. Not gated on `editable`: none of it is
+			// actor data, so a player reading a locked sheet still owns their own font size.
+			context.stonetop.preferences = buildPreferenceGroups();
 			// The tab carries the active insert — and, when there isn't one, the "Choose Your Fate"
 			// picker, which is the manual route for a table who resolved Death's Door away from the
 			// sheet. Edit mode is NOT reason enough to draw it: a tab about being dead would open on
@@ -3645,6 +3653,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			this._wireSectionCollapse(html,
 				".stonetop-details-heading-row, .stonetop-move-group-title, .stonetop-moves-collapsible");
 
+			// The Preferences tab. Above the isEditable guard with the fold carets and for the same
+			// reason: nothing on that tab is actor data, so a player looking at a locked sheet - or
+			// at somebody else's - still gets to set their own font size from it.
+			this._wirePreferences(html);
+
 			if (!this.isEditable) return;
 
 			// Details-tab per-section edit pencils: toggle just that section's edit
@@ -5227,6 +5240,65 @@ export function createStonetopCharacterSheetClass(Base) {
 				merged.splice(at, 0, key);
 			}
 			return merged;
+		}
+
+		/**
+		 * The Preferences tab: read a control, write the client setting behind it.
+		 *
+		 * Delegated off the PANEL rather than bound per control, so the wiring survives the tab
+		 * being re-rendered under it and costs three listeners instead of one per row.
+		 *
+		 * The setting key is the control's `data-pref`, and `setPreference` refuses any key the tab
+		 * does not offer - the attribute is DOM, and a delegated handler that trusted it would write
+		 * whatever a stray one named, world-scoped settings included.
+		 *
+		 * No `stopPropagation` and no re-render here. These inputs carry no `name`, so the form
+		 * submit they set off collects exactly the fields it collected before and writes nothing new
+		 * (see the note at the top of tab-preferences.hbs) - the same bargain the moves tab's unnamed
+		 * view checkboxes have always made. Repainting is the SETTING's job: the ones that change
+		 * what a sheet draws re-render every open sheet from their own `onChange`, and the ones that
+		 * only move a CSS variable must not, or a font-size drag would rebuild the sheet under the
+		 * handle mid-drag.
+		 */
+		_wirePreferences(html) {
+			const panel = html[0].querySelector(".stonetop-preferences");
+			if (!panel) return;
+
+			// `change`, not `input`: a dragged slider fires `input` per pixel, and each of those
+			// would be a localStorage write plus whatever the setting's onChange does - for values
+			// the player is only passing through on the way to the one they want.
+			panel.addEventListener("change", ev => {
+				const control = ev.target.closest("[data-pref]");
+				if (!control) return;
+				const raw = control.type === "checkbox" ? control.checked : control.value;
+				// Caught, not dropped: a failed write leaves the control showing a preference the
+				// player believes is set, which is the one state nothing else would report.
+				setPreference(control.dataset.pref, raw).catch(err => {
+					console.error("Stonetop | could not save that preference", err);
+					ui.notifications?.error("That preference could not be saved.");
+				});
+			});
+
+			// The slider's number, repainted while the handle moves so the value being chosen can
+			// be read before the `change` above commits it.
+			panel.addEventListener("input", ev => {
+				const control = ev.target.closest('input[type="range"][data-pref]');
+				if (!control) return;
+				const readout = control.parentElement?.querySelector(".stonetop-preference-range-value");
+				if (readout) readout.textContent = formatRange(control.value, control.step);
+			});
+
+			panel.addEventListener("click", ev => {
+				const menuButton = ev.target.closest("[data-preference-menu]");
+				if (menuButton) {
+					ev.preventDefault();
+					openPreferenceMenu(menuButton.dataset.preferenceMenu);
+					return;
+				}
+				if (!ev.target.closest(".stonetop-preferences-open-settings")) return;
+				ev.preventDefault();
+				openSystemSettings();
+			});
 		}
 
 		_getDragEventData(ev) {

@@ -419,6 +419,7 @@ Hooks.once("init", () => {
 		"stonetop.tab-post-death":      "systems/stonetop-pwd/templates/actor/partials/tab-post-death.hbs",
 		"stonetop.tab-special-moves":   "systems/stonetop-pwd/templates/actor/partials/tab-special-moves.hbs",
 		"stonetop.tab-notes":           "systems/stonetop-pwd/templates/actor/partials/tab-notes.hbs",
+		"stonetop.tab-preferences":     "systems/stonetop-pwd/templates/actor/partials/tab-preferences.hbs",
 		"stonetop.tab-rail-item":       "systems/stonetop-pwd/templates/actor/partials/tab-rail-item.hbs",
 		"stonetop.tab-nav-item":        "systems/stonetop-pwd/templates/actor/partials/tab-nav-item.hbs",
 		"stonetop.npc-quick-facts":     "systems/stonetop-pwd/templates/actor/partials/npc-quick-facts.hbs",

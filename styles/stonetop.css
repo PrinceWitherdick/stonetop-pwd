@@ -2838,6 +2838,128 @@ input.stonetop-name-field {
 	min-height: 0;
 }
 
+/* -- Preferences tab -------------------------------------------------------------------
+   The reader's own client settings, surfaced on the sheet. See tab-preferences.hbs and
+   module/utils/sheet-preferences.js; nothing here is actor data.
+
+   Laid out as a measured column rather than edge to edge: the sheet is 960px wide and a
+   settings hint set the full width of that is a 140-character line. `margin: 0 auto` does
+   the centring, NOT `justify-content` — this tab is a scrollport, and centring a scrolling
+   box's contents with flex hides the overflow above the fold. */
+.stonetop-preferences {
+	max-width: 44em;
+	margin: 0 auto;
+}
+
+.stonetop-preferences-intro {
+	margin: 0 0 14px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--color-border-light-2);
+	color: var(--st-text-secondary);
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+}
+
+.stonetop-preference-group + .stonetop-preference-group {
+	margin-top: var(--stonetop-section-gap, 12px);
+}
+
+/* Label left, control right, hint spanning both underneath. A GRID, not a flex row: the
+   hint has to start at the label's left edge on its own line, and core's own form-hint rule
+   (`body.game .app form .notes { flex: 0 0 100% }`) would claim a flex COLUMN's whole height
+   — grid items ignore `flex`, so the row is immune to it by construction. */
+.stonetop-preference-row {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: center;
+	column-gap: 12px;
+	padding: 6px 0;
+}
+
+.stonetop-preference-row + .stonetop-preference-row {
+	border-top: 1px solid var(--color-border-light-2);
+}
+
+/* The label line. A checkbox row puts the box INSIDE this label, so it is a flex row; a
+   select/range row is text alone and the flex does nothing to it. Core's `margin: 3px 5px`
+   on the checkbox is left alone on purpose — it is what seats the 15px glyph on the first
+   line of the label, the same as every other checklist on these sheets. */
+.stonetop-preference-label {
+	display: flex;
+	align-items: flex-start;
+	/* On top of the 5px core already puts to the right of a checkbox: a bold label set hard
+	   against the box reads as one glyph rather than a box and its name. */
+	gap: 4px;
+	margin: 0;
+	color: var(--st-text-body);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+/* The hint. Colour and size declared rather than left to core's form-hint rule, which
+   reaches in here (it matches any `.notes` under a form) with a fixed 12px and a token
+   tuned for core's own chrome rather than for parchment. Body-relative, like
+   `.stonetop-section-note`, so it stays a caption instead of inheriting the label's weight
+   — and still answers the font-scale setting two rows above it. */
+.stonetop-preferences .stonetop-preference-row .notes {
+	grid-column: 1 / -1;
+	margin: 2px 0 0;
+	color: var(--st-text-muted);
+	font-size: calc(0.78rem * var(--stonetop-font-scale, 1));
+	line-height: 1.35;
+}
+
+/* A folded group hides its rows; the heading and its caret stay. The shared fold machinery
+   stamps this class on each of the heading's following siblings — see section-editing.js. */
+.stonetop-preference-row.stonetop-section-folded {
+	display: none;
+}
+
+.stonetop-preference-select {
+	width: auto;
+	min-width: 12em;
+	max-width: 18em;
+}
+
+.stonetop-preference-range {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.stonetop-preference-range input[type="range"] {
+	width: 10em;
+}
+
+/* Tabular figures so the readout does not jitter sideways as the handle drags: the digits
+   change every few pixels, and proportional ones re-flow the row each time. */
+.stonetop-preference-range-value {
+	min-width: 2.5em;
+	color: var(--st-text-secondary);
+	font-size: var(--st-fs-sm);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+/* The two buttons: the submenu opener inside a group, and the way out to Foundry's own
+   settings under the lot. Both are the neutral slate CTA, not the blue step button — they
+   open a window rather than advancing anything. */
+.stonetop-preference-menu,
+.stonetop-preferences-open-settings {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	width: auto;
+	grid-column: 1 / -1;
+	justify-self: start;
+}
+
+.stonetop-preferences-more {
+	margin: 16px 0 0;
+	padding-top: 12px;
+	border-top: 1px solid var(--color-border-light-2);
+}
+
 .stonetop-moves-sidebar {
 	display: flex;
 	align-items: stretch;
@@ -8837,11 +8959,12 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    a `.tab.moves` of its own (Homefront Moves, since the moves sidebar was retired). That page
    insets itself the way its sibling steading tabs do — an inner `.sheet-tab`, styled by
    `.steading-sheet .sheet-tab` — so this rule reaching it only doubled the padding. */
-/* `:is()` so the eight tabs are named once. It takes the specificity of its heaviest argument
-   — all eight are one `.tab` plus one name class — so this weighs exactly what the eight
+/* `:is()` so the nine tabs are named once. It takes the specificity of its heaviest argument
+   — all nine are one `.tab` plus one name class — so this weighs exactly what the nine
    spelled-out selectors did, and the classic override below still settles on source order. */
 .pbta.sheet.actor.character :is(.tab.moves, .tab.equipment, .tab.arcana, .tab.details,
-	.tab.followers, .tab.stonetop-invocations, .tab.post-death, .tab.stonetop-special-moves) {
+	.tab.followers, .tab.stonetop-invocations, .tab.post-death, .tab.stonetop-special-moves,
+	.tab.preferences) {
 	/* No top inset: in the modern layout the tab starts flush against the pinned header above
 	   it, so the first row of a page (the stat block on Moves, the first card elsewhere) reads
 	   as continuous with the header rather than floating a gap below it. Sides and bottom keep
@@ -14808,6 +14931,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .stonetop-tab-rail .item[data-tab="post-death"]    { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/death-skull.svg'); }
 .stonetop-tab-rail .item[data-tab="special-moves"] { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/round-star.svg'); }
 .stonetop-tab-rail .item[data-tab="notes"]         { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/notebook.svg'); }
+.stonetop-tab-rail .item[data-tab="preferences"]   { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/settings-knobs.svg'); }
 .stonetop-tab-rail .item[data-tab="overview"]      { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/village.svg'); }
 .stonetop-tab-rail .item[data-tab="neighbors"]     { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/three-friends.svg'); }
 .stonetop-tab-rail .item[data-tab="improvements"]  { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hammer-nails.svg'); }
@@ -14909,13 +15033,13 @@ button.stonetop-mark-sign-btn.is-active:hover {
    nav strip and its 2px slategrey underline, and a page flush against a rule reads as
    clipped. Notes insets its inner `.character-notes`, which is where its padding lives.
 
-   The tab list is the same eight as the modern rule and is written the same way — see the note
+   The tab list is the same nine as the modern rule and is written the same way — see the note
    there on `:is()` and specificity. Notes is deliberately NOT folded into that `:is()`: it is
    the one entry whose target is a DESCENDANT, and `:is()` takes the specificity of its heaviest
-   argument, so including it would quietly add a class's worth of weight to the other eight. */
+   argument, so including it would quietly add a class's worth of weight to the other nine. */
 .stonetop-layout-classic.pbta.sheet.actor.character :is(.tab.moves, .tab.equipment, .tab.arcana,
 	.tab.details, .tab.followers, .tab.stonetop-invocations, .tab.post-death,
-	.tab.stonetop-special-moves),
+	.tab.stonetop-special-moves, .tab.preferences),
 .stonetop-layout-classic.pbta.sheet.actor.character .tab.notes .character-notes {
 	padding-top: 12px;
 }

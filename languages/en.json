@@ -53,7 +53,16 @@
         "postDeath": "Post-Death",
         "specialMoves": "Special Moves",
         "notes": "Notes",
+        "preferences": "Preferences",
         "railLabel": "Sheet sections"
+      },
+      "preferences": {
+        "intro": "These are your own settings, not this character's. They change every Stonetop sheet you open in this browser, and nobody else at the table sees the difference.",
+        "appearance": "Look and Feel",
+        "rolling": "Rolling and Chat",
+        "windows": "Windows",
+        "hover": "On Hover Info",
+        "openSettings": "All Stonetop Settings\u2026"
       }
     },
     "gmToolkit": {
