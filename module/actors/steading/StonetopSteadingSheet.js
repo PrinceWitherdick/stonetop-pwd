@@ -1,4 +1,4 @@
-import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, improvementRequirementCount, HERD_SURPLUS_PER } from "./StonetopSteading.js";
+import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, improvementRequirementCount, HERD_SURPLUS_PER, WEAPONS_SEASON_STEP } from "./StonetopSteading.js";
 import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml} from "../../utils/roll-engine.js";
 import {SteadingLedger} from "./SteadingLedger.js";
 import {TIER_KEYS} from "../../utils/move-results.js";
@@ -14,6 +14,7 @@ import {addPersonToSteading, personFieldPath, isActorRow, personRowActor, usedPe
 import {PERSON_DEFAULT_IMG} from "../../utils/person-portrait.js";
 import {openNpcNotesDialog} from "./npc-notes-dialog.js";
 import {openReturnTriumphant} from "./return-triumphant.js";
+import {openInnGathering} from "./inn-gathering.js";
 import {openPeoplePortraitPicker} from "./PeopleGalleryDialog.js";
 import {STONETOP_SCOPE, StonetopFlags} from "../character/StonetopFlags.js";
 import {SpecialItemPickerDialog} from "../character/dialogs/SpecialItemPickerDialog.js";
@@ -309,6 +310,23 @@ const MUSTER_CHOICES = [
 	"1 or 2 individuals show real potential; ask the GM who and how.",
 ];
 
+// A 7+ leaves the steading "alert and ready for action until the threat passes, the Seasons
+// Change, or you cease to oversee the muster" — a STATE, not a one-off, and the only steading
+// move that leaves one behind. Raising it from the card rather than the pre-roll dialog for the
+// reason Deploy's diminished button is there too: on a 6- there is no muster to raise, and
+// offering it before the dice were read asks about an outcome nobody has yet.
+//
+// Two buttons because "Increase Defenses by 1 as long as the muster holds" is one of the picks
+// above, and it is the half that MUST be given back when the muster ends. A +1 nobody remembers
+// to remove is worse than one nobody remembers to add: it is invisible on the sheet either way,
+// but the stale one is wrong. Taking it here is what lets standing down undo it.
+const MUSTER_RAISE_ACTIONS = `<button type="button" class="stonetop-muster-raise" data-action="muster-raise">
+		<i class="fas fa-tower-observation"></i> Raise the muster
+	</button>
+	<button type="button" class="stonetop-muster-raise" data-action="muster-raise" data-defenses="1">
+		<i class="fas fa-shield-halved"></i> Raise it, +1 Defenses while it holds
+	</button>`;
+
 /**
  * The homefront moves, as their dialog and their roll card between them present them.
  *
@@ -353,6 +371,11 @@ const HOMESTEAD_MOVE_FLOWS = {
 		pickPools: {
 			success: MUSTER_CHOICES,
 			partial: MUSTER_CHOICES,
+		},
+		// Both 7+ tiers, since both leave the steading alert; only the number of picks differs.
+		tierActions: {
+			success: MUSTER_RAISE_ACTIONS,
+			partial: MUSTER_RAISE_ACTIONS,
 		},
 		results: [
 			RESULT.hit("the steading is alert and ready for action until the threat passes, the Seasons Change, or you cease to oversee the muster."),
@@ -661,6 +684,14 @@ export function createStonetopSteadingSheetClass(Base) {
 			// Weather picker when the GM posts a result; fine weather until they do (see
 			// module/seasons/current-weather.js).
 			context.stonetop.currentWeather = currentWeatherView(readCurrentWeather(this.actor));
+			// And between the title and that clock, what the steading is still owed or still
+			// owes: one glyph per unresolved thing, empty when there is nothing outstanding
+			// (see module/actors/steading/steading-holds.js for what qualifies and why).
+			// A row is a BUTTON only when it has somewhere to go and the viewer may go there;
+			// for everyone else it is the same glyph as a plain readout, so a player still sees
+			// what the steading owes without being handed a control that would refuse them.
+			context.stonetop.holds = this._stonetopSteading.holdsView()
+				.map(h => ({ ...h, interactive: !!h.action && context.stonetop.isGM }));
 			return context;
 		}
 
@@ -1137,6 +1168,24 @@ export function createStonetopSteadingSheetClass(Base) {
 				if (!inp) return;
 				ev.stopPropagation();
 				this._onHerdInput(inp.dataset.tier, inp.value);
+			}, true);
+
+			// The Inn's once-per-season gathering, opened from its improvement card OR from the
+			// header's hold glyph, which is the same act reached from the other end of the sheet.
+			html[0].addEventListener("click", ev => {
+				const btn = ev.target.closest("[data-action='inn-gathering']");
+				if (!btn || btn.disabled) return;
+				ev.stopPropagation();
+				this._openInnGathering();
+			}, true);
+
+			// Standing the muster down from its header glyph, which is the only place the state
+			// is visible and so the only sensible place to end it.
+			html[0].addEventListener("click", ev => {
+				const btn = ev.target.closest("[data-action='stand-down-muster']");
+				if (!btn || btn.disabled) return;
+				ev.stopPropagation();
+				this._standDownMuster();
 			}, true);
 
 			// Drag-and-drop for adding player characters to the Neighbors tab.
@@ -1848,7 +1897,33 @@ export function createStonetopSteadingSheetClass(Base) {
 			updates["stats.fortunes.value"] = resetFortunes;
 			notices.push(`Fortunes reset to ${sign(resetFortunes)}.`);
 
-			await this._stonetopSteading.setSystemValues(updates, { stonetopMove: "Seasons Change" });
+			// Tor's blessing is the one gain that leaves something BEHIND: "+1 to Pull Together
+			// this season, and when you roll the Die of Fate for weather, roll twice and take
+			// your pick." Recorded against this year+season so it expires by simply ceasing to
+			// match the clock, and shows in the header while it lasts. The other four ticked
+			// gains are either applied above or narrative, and leave nothing to track.
+			const flagUpdates = {};
+			if (checkedKeys.includes("tor")) {
+				Object.assign(flagUpdates, this._stonetopSteading.torsBlessingFlags(year, seasonId));
+				notices.push("Tor's blessing holds for the season.");
+			}
+
+			// A muster does not survive the turning of the season ("until the threat passes, the
+			// Seasons Change, or you cease to oversee it"). It would lapse on its own by the
+			// clock, but a muster that took the +1 Defenses has to be stood DOWN rather than
+			// simply forgotten, or the bonus is stranded on the sheet with nothing left to
+			// explain it. Read raw, since the clock may already have moved past it.
+			const lapse = this._stonetopSteading.musterLapseChanges();
+			if (lapse) {
+				Object.assign(updates, lapse.system);
+				Object.assign(flagUpdates, lapse.flags);
+				notices.push(lapse.held.defenses
+					? "The muster lapses with the season; its +1 Defenses is given back."
+					: "The muster lapses with the season.");
+			}
+
+			await this._stonetopSteading.applyChanges(
+				{ system: updates, flags: flagUpdates }, { stonetopMove: "Seasons Change" });
 			for (const notice of notices) ui.notifications.info(notice);
 
 			const surplusChange = Number.isFinite(initialSurplus) ? finalSurplus - initialSurplus : 0;
@@ -1947,6 +2022,40 @@ export function createStonetopSteadingSheetClass(Base) {
 				<textarea class="stonetop-season-notes" rows="2" placeholder="The omen, threat, or hook this season opens…"></textarea>
 			</div>`;
 
+			// Standing Watch: "At the start of each season, the watch consumes 1 Surplus or it
+			// disbands." EVERY season, unlike the herd's summer/winter steps, so this block is
+			// appended to all four. Both outcomes are offered as buttons because the book makes
+			// them a genuine choice, not a failure state: a steading that would rather keep the
+			// Surplus can let the watch go. Feeding is hidden outright with no Surplus to feed it
+			// with, which leaves disbanding as the only thing the season can do.
+			const watchBlock = this._hasImprovement("standingWatch") ? `<hr class="stonetop-season-divider">
+				<div class="stonetop-season-watch">
+					<p class="stonetop-season-note"><i class="fas fa-shield-halved"></i> <strong>Standing Watch</strong> consumes <strong>1 Surplus</strong> at the start of the season, or it disbands. Surplus: <strong>${surplus}</strong>.</p>
+					<div class="stonetop-season-actions">
+						${surplus >= 1 ? `<button class="stonetop-season-btn" data-action="feed-watch">
+							<i class="fas fa-drumstick-bite"></i> Feed the watch (1 Surplus)
+						</button>` : ""}
+						<button class="stonetop-season-btn stonetop-season-btn--warn" data-action="disband-watch">
+							<i class="fas fa-person-walking-arrow-right"></i> Disband the watch
+						</button>
+					</div>
+				</div>` : "";
+
+			// Weapons of War: "Each spring, the village must expend 1 Surplus to maintain and
+			// replace the town's weapons." SPRING only, and unlike the watch the book names no
+			// penalty for skipping it, so there is one button and no disband twin — what a
+			// neglected ballista costs is the GM's to say, not ours to automate.
+			const weaponsBlock = (seasonId === "spring" && this._hasImprovement("weaponsOfWar"))
+				? `<hr class="stonetop-season-divider">
+				<div class="stonetop-season-watch">
+					<p class="stonetop-season-note"><i class="fas fa-hammer"></i> <strong>Weapons of War</strong> want <strong>1 Surplus</strong> this spring, to maintain and replace them. Surplus: <strong>${surplus}</strong>.</p>
+					${surplus >= 1 ? `<div class="stonetop-season-actions">
+						<button class="stonetop-season-btn" data-action="pay-weapons">
+							<i class="fas fa-hammer"></i> Pay the upkeep (1 Surplus)
+						</button>
+					</div>` : `<p class="stonetop-season-note"><em>No Surplus to spend. What the neglect costs is the GM's call.</em></p>`}
+				</div>` : "";
+
 			let content;
 			if (seasonId === "spring") {
 				content = `<div class="stonetop-season-flow">
@@ -1958,8 +2067,8 @@ export function createStonetopSteadingSheetClass(Base) {
 						<li><strong>6−:</strong> Threats abound. Don't mark XP.</li>
 					</ul>
 					<p class="stonetop-season-note">Whatever the result, reset Fortunes to +1.</p>
-					${statsNote}${gainsRef}${fortunesBtns}${notesBlock}
-				</div>`;
+					${statsNote}${gainsRef}${fortunesBtns}
+				`;
 			} else if (seasonId === "summer") {
 				content = `<div class="stonetop-season-flow">
 					${header}
@@ -1976,13 +2085,12 @@ export function createStonetopSteadingSheetClass(Base) {
 							<i class="fas fa-dice-d4"></i> Roll 1d4−1 Surplus (add to steading)
 						</button>
 					</div>
-					${this._hasHerd() ? `<div class="stonetop-season-actions">
+					${this._hasImprovement("herdOfHorses") ? `<div class="stonetop-season-actions">
 						<button class="stonetop-season-btn" data-action="advance-herd">
 							<i class="fas fa-horse"></i> Advance the herd (promote tiers, add foals)
 						</button>
 					</div>` : ""}
-					${notesBlock}
-				</div>`;
+				`;
 			} else if (seasonId === "autumn") {
 				content = `<div class="stonetop-season-flow">
 					${header}
@@ -1999,8 +2107,7 @@ export function createStonetopSteadingSheetClass(Base) {
 							<i class="fas fa-dice-d4"></i> Roll 1d4 Surplus (Harvest)
 						</button>
 					</div>
-					${notesBlock}
-				</div>`;
+				`;
 			} else {
 				// Winter
 				content = `<div class="stonetop-season-flow">
@@ -2052,16 +2159,22 @@ export function createStonetopSteadingSheetClass(Base) {
 						<p class="stonetop-season-note">Whatever the result, reset Fortunes to +1.</p>
 						${fortunesBtns}
 					</div>
-					${this._hasHerd() ? `<hr class="stonetop-season-divider">
+					${this._hasImprovement("herdOfHorses") ? `<hr class="stonetop-season-divider">
 					<p class="stonetop-season-note">The herd eats 1 Surplus per ${HERD_SURPLUS_PER} grown-or-yearling horses; each Surplus it goes short costs 1d6 horses.</p>
 					<div class="stonetop-season-actions">
 						<button class="stonetop-season-btn" data-action="feed-herd">
 							<i class="fas fa-horse"></i> Feed the herd (consume Surplus, roll any losses)
 						</button>
 					</div>` : ""}
-					${notesBlock}
-				</div>`;
+				`;
 			}
+
+			// Every season closes the same way, so the tail is appended ONCE rather than pasted
+			// into each of the four branches: the standing watch's upkeep, spring's weapons
+			// upkeep (empty in the other three, since `weaponsBlock` gates on the season itself),
+			// then the notes field. A fifth seasonal obligation is one edit here, not four.
+			content += `${watchBlock}${weaponsBlock}${notesBlock}
+				</div>`;
 
 			// `const`, even though the render/button callbacks below refer to `dialog`: they run
 			// after this statement completes, so the binding is always initialised by then.
@@ -2140,6 +2253,85 @@ export function createStonetopSteadingSheetClass(Base) {
 							await this._feedHerdWinter();
 							await this._stonetopSteading.setSeasonStepApplied("feedHerd", year, seasonId);
 						} catch (err) { feedHerdBtn.disabled = false; throw err; }
+					});
+
+					// Standing Watch upkeep. Both buttons settle the SAME season step, so taking
+					// either one closes the season's question and a close+reopen can't be used to
+					// feed the watch twice (or to feed it after disbanding it).
+					const feedWatchBtn    = root.querySelector("[data-action='feed-watch']");
+					const disbandWatchBtn = root.querySelector("[data-action='disband-watch']");
+					const settleWatch = () => {
+						if (feedWatchBtn) feedWatchBtn.disabled = true;
+						if (disbandWatchBtn) disbandWatchBtn.disabled = true;
+					};
+					// Asked of the STEADING, not of whether a given button came back from the
+					// query: with no Surplus the feed button is never rendered, so keying "already
+					// settled" off its return value would read false on a season that is done.
+					this._disableIfSeasonStepDone(feedWatchBtn, "standingWatch", year, seasonId);
+					this._disableIfSeasonStepDone(disbandWatchBtn, "standingWatch", year, seasonId);
+					if (this._stonetopSteading.seasonStepApplied("standingWatch", year, seasonId)) settleWatch();
+
+					feedWatchBtn?.addEventListener("click", async () => {
+						if (feedWatchBtn.disabled) return;
+						settleWatch();
+						try {
+							// Spends and closes the step in one write, off a LIVE Surplus read: the
+							// herd feed and the surplus roll in this same dialog may have moved it
+							// since the window was built. Null means it could not be afforded, and
+							// nothing was written — so the choice reverts to disbanding.
+							const left = await this._stonetopSteading.spendSurplus(1,
+								{ ...seasonsMove, step: "standingWatch", year, seasonId });
+							if (left === null) {
+								ui.notifications.warn("No Surplus left to feed the watch. It disbands unless you find one.");
+								if (feedWatchBtn) feedWatchBtn.disabled = true;
+								if (disbandWatchBtn) disbandWatchBtn.disabled = false;
+								return;
+							}
+							this.render(false);
+							ui.notifications.info(`The watch is fed: 1 Surplus spent (${left} left).`);
+						} catch (err) {
+							if (feedWatchBtn) feedWatchBtn.disabled = false;
+							if (disbandWatchBtn) disbandWatchBtn.disabled = false;
+							throw err;
+						}
+					});
+
+					disbandWatchBtn?.addEventListener("click", async () => {
+						if (disbandWatchBtn.disabled) return;
+						settleWatch();
+						try {
+							// Un-completing runs the improvement's own revert, which is what takes
+							// "Standing Watch" back off the Fortifications list. Doing it by hand here
+							// would leave the improvement ticked and the grant record stale, so a later
+							// re-complete would refuse to re-apply the fortification.
+							await this._stonetopSteading.setImprovementCompleted("standingWatch", false);
+							await this._stonetopSteading.setSeasonStepApplied("standingWatch", year, seasonId);
+							this.render(false);
+							ui.notifications.info("The standing watch disbands. Its warriors go back to their trades.");
+						} catch (err) {
+							if (feedWatchBtn) feedWatchBtn.disabled = false;
+							if (disbandWatchBtn) disbandWatchBtn.disabled = false;
+							throw err;
+						}
+					});
+
+					// Weapons of War's spring maintenance. One button, one step key, the same
+					// live re-read as the watch's for the same reason.
+					const payWeaponsBtn = root.querySelector("[data-action='pay-weapons']");
+					this._disableIfSeasonStepDone(payWeaponsBtn, WEAPONS_SEASON_STEP, year, seasonId);
+					payWeaponsBtn?.addEventListener("click", async () => {
+						if (payWeaponsBtn.disabled) return;
+						payWeaponsBtn.disabled = true;
+						try {
+							const left = await this._stonetopSteading.spendSurplus(1,
+								{ ...seasonsMove, step: WEAPONS_SEASON_STEP, year, seasonId });
+							if (left === null) {
+								ui.notifications.warn("No Surplus left for the weapons' upkeep.");
+								return;
+							}
+							this.render(false);
+							ui.notifications.info(`Weapons of War maintained: 1 Surplus spent (${left} left).`);
+						} catch (err) { payWeaponsBtn.disabled = false; throw err; }
 					});
 
 					const rollSurplusBtn = root.querySelector("[data-action='roll-surplus']");
@@ -2577,9 +2769,54 @@ export function createStonetopSteadingSheetClass(Base) {
 			await this._stonetopSteading.setFlags({ improvements });
 		}
 
-		/** Whether the Herd of Horses improvement is earned (so the herd tracker/season steps apply). */
-		_hasHerd() {
-			return !!this._stonetopSteading._flags.improvements?.herdOfHorses?.completed;
+		/** True once the named improvement is built, which is what gates its seasonal upkeep. */
+		_hasImprovement(slug) {
+			return this._stonetopSteading.improvementCompleted(slug);
+		}
+
+		/**
+		 * Stand the muster down, giving back the Defenses it borrowed.
+		 *
+		 * Confirmed rather than immediate: the glyph is small, it sits in a header people click
+		 * around, and the write is not trivially undoable (it moves a stat). The dialog names
+		 * the Defenses change when there is one, so the press is never a surprise.
+		 */
+		async _standDownMuster() {
+			if (!this.isEditable) return;
+			const held = this._stonetopSteading.musterHold();
+			if (!held) return;
+			const defenses = this._stonetopSteading.getStatValue("defenses");
+			const confirmed = await Dialog.confirm({
+				title: "Stand Down the Muster",
+				content: `<div class="stonetop-disaster-dialog">
+					<p>Folks go back to their own work, and Stonetop is no longer alert.</p>
+					${held.defenses
+						? `<p>Defenses: <strong>${sign(defenses)}</strong> to <strong>${sign(defenses - 1)}</strong>, giving back what the muster borrowed.</p>`
+						: `<p class="stonetop-rites-note">The muster took no Defenses bonus, so nothing is given back.</p>`}
+				</div>`,
+				options: { classes: ["dialog", "stonetop", "stonetop-disaster-move-dialog"] },
+			});
+			if (!confirmed) return;
+			await this._stonetopSteading.standDownMuster();
+			this.render(false);
+			ui.notifications.info(held.defenses
+				? `The muster stands down. Defenses back to ${sign(defenses - 1)}.`
+				: "The muster stands down.");
+		}
+
+		/**
+		 * The Inn's seasonal gathering. Reads the season clock at OPEN time rather than
+		 * trusting the sheet-data snapshot: the card behind this may have been rendered
+		 * before a Seasons Change moved the clock on.
+		 */
+		_openInnGathering() {
+			if (!this.isEditable) return;
+			openInnGathering({
+				steading: this._stonetopSteading,
+				year: readCurrentYear(this.actor),
+				seasonId: readCurrentSeason(this.actor)?.season ?? "",
+				onApplied: () => this.render(false),
+			});
 		}
 
 		async _onHerdStep(tier, delta) {

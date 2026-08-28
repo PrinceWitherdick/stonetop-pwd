@@ -14163,6 +14163,78 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: var(--st-text-body);
 }
 
+/* ── The hold tray ─────────────────────────────────────────────────────────────────
+   What the steading is still owed or still owes, between the title and the clock. Usually
+   empty: the rule for earning a place here is that the thing must be UNRESOLVED and must go
+   away when it resolves (module/actors/steading/steading-holds.js), so a quiet steading wears
+   nothing and a lit glyph always means somebody has something to do.
+
+   `margin-right: auto` is what keeps the clock at the header's right edge: the tray sits
+   immediately after the title and takes the slack, rather than the clock's own auto margin
+   having to split it (the note above the clock explains why two auto margins in one row is
+   the thing to avoid here). */
+.steading-header .steading-header-holds {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: 12px;
+	margin-right: auto;
+}
+
+/* Smaller than the weather glyph next door, and deliberately: the sky is one big readout of
+   the header's own, while these are a variable-length row of up to six. At 1.5em a full tray
+   is about the width of the title, which is as much of the header as it should ever take. */
+.steading-header .steading-hold {
+	display: block;
+	padding: 0;
+	border: none;
+	background: none;
+	font-size: 1.5em;
+	line-height: 1;
+	color: var(--st-text-body);
+	transition: background 0.15s, color 0.15s;
+}
+
+/* The drawing, worn as a MASK over currentColor, exactly as the weather glyph above is and for
+   the same reason: one file takes the header's ink in both themes with no second copy of the
+   art. `--st-hold-icon` has no fallback on purpose — a row whose rule went missing paints
+   nothing visible, which is what the test pinning every key to a rule is there to catch. */
+.steading-header .steading-hold-glyph {
+	display: block;
+	width: 1em;
+	height: 1em;
+	background: currentColor;
+	-webkit-mask: var(--st-hold-icon) no-repeat center / contain;
+	mask: var(--st-hold-icon) no-repeat center / contain;
+}
+
+/* One rule per hold, keyed by the modifier the template interpolates from `icon` — a flat list
+   like the weather's, so adding a hold is one line here and one row in HOLD_DEFS. */
+.steading-header .steading-hold--fortunes-advantage { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/fortunes-advantage.svg'); }
+.steading-header .steading-hold--muster             { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/muster.svg'); }
+.steading-header .steading-hold--tors-blessing      { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/tors-blessing.svg'); }
+.steading-header .steading-hold--inn-gathering      { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/inn-gathering.svg'); }
+.steading-header .steading-hold--standing-watch     { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/standing-watch.svg'); }
+.steading-header .steading-hold--weapons-upkeep     { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/weapons-upkeep.svg'); }
+
+/* Two tones, and only two: what the steading HAS versus what it OWES. A due reads warmer so an
+   unpaid obligation is not mistaken for a gift at a glance. Both tie with the base rule on
+   specificity, so both have to stay BELOW it. */
+.steading-header .steading-hold--boon { color: var(--st-text-body); }
+.steading-header .steading-hold--due  { color: var(--st-red-text); }
+
+/* A row that leads somewhere is a <button>; the glyph has no surface of its own to warm, so the
+   hover paints one just big enough to sit behind it, the same way the weather's does. */
+.steading-header button.steading-hold {
+	cursor: pointer;
+	padding: 4px;
+	margin: -4px;
+}
+
+.steading-header button.steading-hold:hover {
+	background: var(--st-slate-hover-bg);
+}
+
 .steading-header .steading-header-season {
 	display: flex;
 	flex-direction: column;
@@ -16809,7 +16881,11 @@ a.steading-player-open:hover {
 	gap: 6px;
 }
 
-.steading-herd-header {
+/* The header line and the footnote of an improvement card's own inset block -- the herd
+   tracker and the Inn's gathering both wear these, and both are meant to. They were written
+   out twice, identically, which is how one gets restyled and the other quietly does not. */
+.steading-herd-header,
+.steading-inn-gathering-header {
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
@@ -16895,12 +16971,66 @@ a.steading-player-open:hover {
 	background: white;
 }
 
-.steading-herd-hint {
+.steading-herd-hint,
+.steading-inn-gathering-hint {
 	font-size: var(--st-fs-2xs);
 	color: var(--st-text-secondary);
 	line-height: 1.4;
-	margin: 2px 0 0 0;
+	margin: 0;
 	font-style: italic;
+}
+
+/* The herd's footnote follows a control row rather than sitting flush under the button. */
+.steading-herd-hint { margin-top: 2px; }
+
+/* The Inn's once-per-season gathering, on the Inn's own improvement card. Same block chrome as
+   the herd tracker above, because both are "this improvement does a thing each season" widgets
+   and a table should recognise the second from having used the first. */
+.steading-inn-gathering {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 8px;
+	padding: 8px 10px;
+	border: 1px solid rgba(0,0,0,0.12);
+	border-radius: var(--st-radius);
+	background: rgba(0,0,0,0.03);
+}
+
+.steading-inn-gathering-title {
+	font-weight: 600;
+	font-size: var(--st-fs-sm);
+}
+
+.steading-inn-gathering-season {
+	font-size: var(--st-fs-2xs);
+	color: var(--st-text-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.steading-inn-gathering-btn {
+	width: 100%;
+	padding: 6px 10px;
+	background: var(--st-btn-primary-bg);
+	color: var(--st-btn-primary-text);
+	border: none;
+	border-radius: var(--st-radius);
+	cursor: pointer;
+	/* V13 core makes <button> a flexbox; centre icon + label rather than letting them
+	   sit against the left edge as the season-flow buttons deliberately do. */
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	font-size: var(--st-fs-sm);
+}
+
+.steading-inn-gathering-btn:hover:not(:disabled) { background: var(--st-btn-primary-bg-hover); }
+
+.steading-inn-gathering-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 
 /* -- Moves tab ------------------------------------------------- */
@@ -17350,6 +17480,37 @@ a.steading-player-open:hover {
 
 .stonetop-season-btn:hover { background: var(--st-btn-primary-bg-hover); }
 
+/* Disbanding the Standing Watch is the one seasonal button that TAKES something away for good,
+   so it reads as the reluctant option beside "Feed the watch" rather than a peer of it.
+   Declared after `.stonetop-season-btn` because a `--mod` ties with its base on specificity
+   and the later rule is the one that wins. */
+.stonetop-season-btn--warn {
+	background: transparent;
+	color: var(--st-text-body);
+	border: 1px solid rgba(140, 0, 0, 0.45);
+}
+
+.stonetop-season-btn--warn:hover { background: rgba(140, 0, 0, 0.10); }
+
+.stonetop-season-btn:disabled,
+.stonetop-season-btn--warn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* The watch's seasonal upkeep sits in its own block so the two outcomes (feed it, or let it go)
+   read as one question with two answers rather than as two unrelated buttons. */
+.stonetop-season-watch .stonetop-season-actions {
+	flex-direction: row;
+	flex-wrap: wrap;
+}
+
+.stonetop-season-watch .stonetop-season-btn {
+	flex: 1 1 auto;
+	width: auto;
+	justify-content: center;
+}
+
 .stonetop-season-divider {
 	margin: 10px 0;
 	border: none;
@@ -17477,6 +17638,35 @@ a.steading-player-open:hover {
 
 .stonetop-disaster-choice-detail {
 	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+}
+
+/* -- The Inn: bringing folks together -------------------------- */
+/* Reuses the disaster dialog's card + choice chrome above (same act: pick 1 debility, then
+   commit from the footer), so only the notices this window adds are declared here. */
+
+.stonetop-inn-dialog-body .stonetop-inn-trigger {
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+	margin: 0;
+}
+
+/* One gathering per season, and saying so is the whole reason there is no button. */
+.stonetop-inn-done {
+	border-radius: var(--st-radius);
+	background: rgba(0,0,0,0.05);
+	padding: 5px 9px;
+	color: var(--st-text-secondary);
+}
+
+.stonetop-inn-warn {
+	border-left: 3px solid rgba(140, 0, 0, 0.4);
+	padding-left: 8px;
+	color: var(--st-text-body);
+}
+
+.stonetop-inn-note {
+	font-style: italic;
 	color: var(--st-text-secondary);
 }
 

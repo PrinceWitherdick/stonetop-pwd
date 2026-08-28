@@ -5,6 +5,50 @@
 			<div class="steading-header-name">
 				<h1 class="steading-title">Stonetop</h1>
 			</div>
+			{{!-- What the steading is still owed, and what it still owes: one glyph per
+			      unresolved thing, beside the title. The rule for what earns a place here is in
+			      module/actors/steading/steading-holds.js, and it is deliberately narrow: an
+			      icon shows only while something is UNRESOLVED and disappears when it resolves.
+			      So instant effects, held pools (Favor, Blessing, and the rest) and permanent
+			      passives are all absent, and the row means one specific thing — if a glyph is
+			      lit, somebody has something to do. Usually that is nothing, and the whole block
+			      is gone.
+
+			      Each row is an empty <span> wearing its drawing as a CSS mask, exactly like the
+			      weather glyph further along this header, so one file takes the header's ink in
+			      both themes. Which drawing is which is in assets/icons/holds/ATTRIBUTION.md.
+
+			      A row that leads somewhere is a <button> for a GM and the same glyph as a plain
+			      readout for everyone else: a player should still see that the watch wants
+			      feeding without being given a control that would only refuse them. Complementary
+			      {{#if}}/{{#unless}} rather than {{else}}, as everything else in this file does
+			      (steading-section-placement.test.js asserts the file is free of {{else}}).
+
+			      `role="img"` with the label on the wrapper and the glyph hidden: an empty span
+			      painting a masked background has no text to announce. --}}
+			{{#if stonetop.holds.length}}
+			<div class="steading-header-holds" role="group" aria-label="Outstanding at Stonetop">
+				{{#each stonetop.holds}}
+				{{#if interactive}}
+				<button type="button"
+				        class="steading-hold steading-hold--{{tone}} steading-hold--{{icon}}"
+				        data-action="{{action}}"
+				        aria-label="{{label}}"
+				        data-tooltip="{{tooltip}}" data-tooltip-direction="DOWN">
+					<span class="steading-hold-glyph" aria-hidden="true"></span>
+				</button>
+				{{/if}}
+				{{#unless interactive}}
+				<span class="steading-hold steading-hold--{{tone}} steading-hold--{{icon}}"
+				      role="img"
+				      aria-label="{{label}}"
+				      data-tooltip="{{tooltip}}" data-tooltip-direction="DOWN">
+					<span class="steading-hold-glyph" aria-hidden="true"></span>
+				</span>
+				{{/unless}}
+				{{/each}}
+			</div>
+			{{/if}}
 			{{!-- The campaign's clock, beside the title: the season the table is playing in and
 			      the year it belongs to, stamped by the Seasons Change move (see
 			      module/seasons/current-season.js). Both halves always show: a world that has

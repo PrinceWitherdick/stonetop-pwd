@@ -196,10 +196,15 @@ describe("Return Triumphant, on the step where it comes up", () => {
 		expect(SHEET_JS).not.toContain("You return home in triumph");
 
 		expect(MOVE_JS).toContain("You return home in triumph");
-		expect(MOVE_JS).toContain("attributes.debilities.options");
 		expect(MOVE_JS).toContain("stats.fortunes.value");
-		// Every write is attributed, so the steading ledger names the move that caused it.
-		expect(MOVE_JS.match(/stonetopMove: "Return Triumphant"/g)).toHaveLength(2);
+		// The debility path itself now lives in the shared table three clearing moves read
+		// (Return Triumphant, Rites of the Land, the Inn's gathering), so this asserts the
+		// call rather than the path string it used to spell out inline.
+		expect(MOVE_JS).toContain("steading-debilities.js");
+		expect(MOVE_JS).toContain('clearDebility(steading, picked.id, "Return Triumphant")');
+		// Every write is attributed, so the steading ledger names the move that caused it:
+		// the Fortunes bump inline, the debility clear through clearDebility's third argument.
+		expect(MOVE_JS.match(/stonetopMove: "Return Triumphant"/g)).toHaveLength(1);
 	});
 
 	it("warns rather than throws when the world has no steading", () => {

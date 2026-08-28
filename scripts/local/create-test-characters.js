@@ -993,6 +993,23 @@
   const TEST_DEBILITIES = ["diminished", "lacking", "malcontent"];
   const TEST_DEBILITY   = "lacking";
 
+  // ── The steading header's hold tray ──────────────────────────────────────────────
+  // The row of glyphs beside the steading's title: what Stonetop is still owed, and what it
+  // still owes (module/actors/steading/steading-holds.js). It is empty on a quiet steading BY
+  // DESIGN, which makes it the one piece of the header a test world never shows by accident —
+  // so these fixtures light ALL SIX AT ONCE, which is the widest the tray ever gets.
+  //
+  // The three built improvements are the ones that FEED the tray, not decoration: the Inn
+  // offers its once-per-season gathering, the Standing Watch wants its Surplus each season,
+  // and the Weapons of War want theirs each SPRING. That last one is why the seeded clock is
+  // spring — in any other season the weapons chip is correctly absent and the tray shows five.
+  const TEST_HOLD_SEASON       = "spring";
+  const TEST_HOLD_IMPROVEMENTS = ["inn", "standingWatch", "weaponsOfWar"];
+  // The once-per-season markers the three DUE chips read. A chip shows while its step has NOT
+  // run this season, so seeding the tray means clearing these for the seeded season.
+  const TEST_HOLD_STEPS        = ["innGathering", "standingWatch", "weaponsUpkeep"];
+  const TEST_HOLD_FORTUNES_SRC = "Sacrifice (Rites of the Land)";
+
   // Formatted rich-text seeded into the steading's Notes tab (the prose-mirror editor
   // bound to flags["stonetop-pwd"].steading.notes, rendered through TextEditor.enrichHTML).
   // Deliberately exercises the full range of blocks the editor produces — headings,
@@ -2041,6 +2058,57 @@
       // content (leave notes the GM has since edited alone).
       if (steadingFlags.notes === TEST_STEADING_NOTES) { steadingFlags.notes = ""; memberChanged = true; }
       if (memberChanged) await steadingDel.setFlag(FLAG_SCOPE, "steading", steadingFlags);
+
+      // Take the seeded hold tray back down. Each of the three held states goes only while it
+      // still holds EXACTLY what was seeded — a Fortunes advantage promised by something else,
+      // a muster raised in a season the table has since played, or a blessing granted for a
+      // different season all belong to the campaign now and are left alone.
+      //
+      // The three IMPROVEMENTS go too, but only while they still carry the fixture's own
+      // signature: `applied: null` (this macro granted nothing) with a full requirement array.
+      // A steading that has since really built its Inn has an `applied` record of what that
+      // grant did, and that one is the village's history rather than our demo.
+      //
+      // The season CLOCK is left stamped either way. It is what the seeded Chronicle entries
+      // and the expeditions logged "last season" are dated against, so un-stamping it here
+      // would leave the world's own history reading against a season it no longer admits to.
+      // It is also a single control in the steading header for the GM to move.
+      //
+      // setFlag can't drop a key, so each goes through the "-=" deletion syntax.
+      const holdKill = {};
+      const holdBase = `flags.${FLAG_SCOPE}.steading`;
+      if (steadingFlags.fortunesAdvantage?.source === TEST_HOLD_FORTUNES_SRC) {
+        holdKill[`${holdBase}.-=fortunesAdvantage`] = null;
+      }
+      const seededStamp = steadingDel.getFlag(FLAG_SCOPE, "seasonsCurrent");
+      const seededKey   = seededStamp?.season
+        ? `${Number(seededStamp.year) || 1}:${seededStamp.season}`
+        : null;
+      if (steadingFlags.torsBlessing && steadingFlags.torsBlessing === seededKey) {
+        holdKill[`${holdBase}.-=torsBlessing`] = null;
+      }
+      const heldMuster = steadingFlags.musterHold;
+      if (heldMuster?.defenses === true && seededStamp?.season
+          && heldMuster.season === seededStamp.season
+          && Number(heldMuster.year) === (Number(seededStamp.year) || 1)) {
+        holdKill[`${holdBase}.-=musterHold`] = null;
+        // The seeded muster took the +1 Defenses, so dropping it has to give that point back
+        // the way standing it down would. Otherwise the cleanup leaves a stat one too high
+        // with nothing left on the sheet to explain it.
+        const defNow = Number(
+          foundry.utils.getProperty(steadingFlags, "system.stats.defenses.value")
+          ?? foundry.utils.getProperty(steadingDel.system, "stats.defenses.value")
+          ?? 0);
+        holdKill["system.stats.defenses.value"] = defNow - 1;
+        holdKill[`${holdBase}.system.stats.defenses.value`] = defNow - 1;
+      }
+      for (const slug of TEST_HOLD_IMPROVEMENTS) {
+        const entry = steadingFlags.improvements?.[slug];
+        if (!entry?.completed || entry.applied !== null) continue;
+        if (!Array.isArray(entry.r) || entry.r.length !== 16 || !entry.r.every(Boolean)) continue;
+        holdKill[`${holdBase}.improvements.-=${slug}`] = null;
+      }
+      if (Object.keys(holdKill).length) await steadingDel.update(holdKill);
 
       // Clear the seeded "Other Settlements" ratings. Everything else this macro writes
       // rides on a document it deletes; these live in the singleton steading's
@@ -3704,7 +3772,102 @@
     const { entryId: sitesEntryId, pages: sitePages } = await seedTestSites(steading, sf);
     testSitePages = sitePages;
     if (sitesEntryId) sf.sitesEntryId = sitesEntryId;
+
+    // ── Light the header's hold tray ─────────────────────────────────────────────
+    // All six chips at once (see TEST_HOLD_* above). Three are state the steading simply
+    // holds, and three are seasonal obligations that show while unpaid.
+    //
+    // THE CLOCK IS ONLY STAMPED WHEN NOTHING IS STAMPED, on the same rule as the Notes, the
+    // settlement standings and the debility below: a steading mid-campaign is playing in a
+    // season of its own and rewinding it is not ours to do. On a fresh test world that means
+    // spring and the full six; on a world already in autumn it means five, correctly, because
+    // the weapons' upkeep is a spring bill. The console line below says which case it was.
+    const stampedSeason = steading.getFlag(FLAG_SCOPE, "seasonsCurrent");
+    const holdYear      = Number(steading.getFlag(FLAG_SCOPE, "seasonsCurrentYear")) || 1;
+    const clockSeeded   = !stampedSeason?.season;
+    if (clockSeeded) {
+      await steading.update({
+        [`flags.${FLAG_SCOPE}.seasonsCurrent`]:     { season: TEST_HOLD_SEASON, year: holdYear },
+        [`flags.${FLAG_SCOPE}.seasonsCurrentYear`]: holdYear,
+      });
+    }
+    const holdSeason = clockSeeded ? TEST_HOLD_SEASON : stampedSeason.season;
+    const holdStamp  = `${clockSeeded ? holdYear : (Number(stampedSeason.year) || holdYear)}:${holdSeason}`;
+
+    // The three the steading HOLDS. The muster takes the "+1 Defenses as long as the muster
+    // holds" pick, because that is the half with a revert to exercise: standing it down from
+    // the glyph, or letting the Seasons Change lapse it, has to give the point back.
+    //
+    // And that bonus is APPLIED here, not merely claimed. Recording `defenses: true` without
+    // moving the stat would seed a muster whose +1 does not exist, and the first stand-down
+    // would then subtract a point the steading never gained.
+    //
+    // EACH IS SEEDED ONLY WHEN ABSENT, the same rule the Notes and the standings follow. A
+    // steading that already holds an advantage promised by a real sacrifice, or a muster the
+    // table actually raised, lights the same chip without being overwritten — and the cleanup
+    // below can then tell its own seed from the campaign's.
+    const holdDefenses = Number(
+      foundry.utils.getProperty(sf, "system.stats.defenses.value")
+      ?? foundry.utils.getProperty(steading.system, "stats.defenses.value")
+      ?? 0);
+    if (!sf.musterHold) {
+      foundry.utils.setProperty(sf, "system.stats.defenses.value", holdDefenses + 1);
+      await steading.update({ "system.stats.defenses.value": holdDefenses + 1 });
+      sf.musterHold = { year: Number(holdStamp.split(":")[0]), season: holdSeason, defenses: true };
+    }
+    if (!sf.fortunesAdvantage) sf.fortunesAdvantage = { source: TEST_HOLD_FORTUNES_SRC };
+    if (sf.torsBlessing !== holdStamp) sf.torsBlessing = holdStamp;
+
+    // The three improvements whose obligations the tray reads.
+    //
+    // `applied: null` EXPLICITLY, rather than leaving it undefined. The grants engine treats an
+    // undefined `applied` on a completed improvement as "finished before this engine shipped"
+    // and back-fills a presumed footprint on the next toggle — so un-completing the seeded Inn
+    // would subtract a Fortune it never granted and strike a resource it never added. Null says
+    // the true thing instead: this fixture applied no grants, so there are none to take back.
+    // (Which is also why the tray is what these three are for, not their book effects.)
+    //
+    // `r` is the positional requirement array the tick-boxes read, filled well past any
+    // improvement's requirement count so the card does not read as complete-but-unbuilt.
+    // Over-long is harmless: improvementRequirementsMet only walks the indices it has items for.
+    //
+    // And, like the held states above, ONLY WHEN NOT ALREADY BUILT. A steading that really
+    // raised its Standing Watch has an `applied` record of what that grant did, and replacing
+    // it with the fixture's empty one would orphan the fortification on the next un-complete.
+    sf.improvements = { ...(sf.improvements ?? {}) };
+    const improvementsSeeded = [];
+    for (const slug of TEST_HOLD_IMPROVEMENTS) {
+      if (sf.improvements[slug]?.completed) continue;
+      sf.improvements[slug] = { completed: true, applied: null, r: Array(16).fill(true) };
+      improvementsSeeded.push(slug);
+    }
+
+    // The inn's gathering costs 1 Surplus, and a chip for something unaffordable is not an
+    // unspent opportunity. Raised only when the steading is actually broke, so a stocked
+    // steading keeps its own count.
+    const holdSurplus = Number(
+      foundry.utils.getProperty(sf, "system.attributes.surplus.value")
+      ?? foundry.utils.getProperty(steading.system, "attributes.surplus.value")
+      ?? 0);
+    if (holdSurplus < 1) {
+      foundry.utils.setProperty(sf, "system.attributes.surplus.value", 1);
+      await steading.update({ "system.attributes.surplus.value": 1 });
+    }
+
     await steading.setFlag(FLAG_SCOPE, "steading", sf);
+
+    // And clear this season's markers for the three seasonal steps, so the dues read as unpaid.
+    // AFTER the setFlag and through the "-=" deletion syntax, not by deleting the keys off `sf`:
+    // setFlag MERGES, so a sub-key dropped from the object it is handed survives in the stored
+    // flags untouched — the same trap the threats-folder pointer in the cleanup above documents.
+    //
+    // Unlike the Notes and the standings, this one DOES overwrite what is there: a paid step is
+    // precisely the state that hides a chip, and showing the tray is the point of the fixture.
+    const stepKill = {};
+    for (const step of TEST_HOLD_STEPS) {
+      if (sf.seasonSteps?.[step] !== undefined) stepKill[`flags.${FLAG_SCOPE}.steading.seasonSteps.-=${step}`] = null;
+    }
+    if (Object.keys(stepKill).length) await steading.update(stepKill);
 
     // Other Settlements — the steading's own relations table, keyed by settlement slug (see
     // TEST_SETTLEMENT_RELS). Written to `system.relationships`, NOT to the steading flags.
@@ -3748,6 +3911,13 @@
     }
 
     console.log(`[TEST] Seeded steading "${steading.name}": ${people.residents.length} residents, ${people.neighbors.length} neighbors (as NPC actors), ${created.length} players${notesSeeded ? ", formatted Notes" : " (left existing Notes untouched)"}${threatsEntryId ? `, ${testThreatPages.length} threats` : ""}${sitesEntryId ? `, ${testSitePages.length} sites` : ""}, ${Object.keys(relUpdate).length}/${Object.keys(TEST_SETTLEMENT_RELS).length} settlement standings${debilitySeeded ? `, the "${TEST_DEBILITY}" debility marked` : " (left the debilities the GM had marked)"}.`);
+    // The tray is only as full as the season allows, so say which case this world got rather
+    // than leaving a missing chip to look like a bug.
+    console.log(`[TEST] Hold tray: ${holdSeason === TEST_HOLD_SEASON ? "all six chips" : "five chips"} lit `
+      + `(Fortunes advantage, the muster with its +1 Defenses, Tor's blessing, the inn's gathering, the watch's upkeep`
+      + `${holdSeason === TEST_HOLD_SEASON ? ", the weapons' upkeep" : ""}). `
+      + `${clockSeeded ? `Clock stamped ${TEST_HOLD_SEASON}, year ${holdYear}.` : `Left the GM's clock at ${holdSeason}; the weapons' upkeep is a spring bill, so its chip is correctly absent.`}`
+      + `${improvementsSeeded.length ? ` Built: ${improvementsSeeded.join(", ")}.` : " (every improvement it needs was already built)."}`);
   } else {
     ui.notifications.warn("[TEST] No steading actor found, so nothing was seeded for residents/neighbors/players/notes/threats/sites/settlement standings.");
   }

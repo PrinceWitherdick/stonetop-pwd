@@ -96,6 +96,28 @@
 						<p class="steading-herd-hint">Summer promotes each tier and adds 1d4+Fortunes foals; winter feeds off grown + yearlings. Run it via <em>Seasons Change</em>.</p>
 					</div>
 					{{/if}}
+
+					{{!-- The Inn's once-per-season gathering. Not a Seasons Change step: the
+					      trigger fires whenever the fiction reaches for it during a season, so
+					      it lives on the card, and only the CAP is seasonal. --}}
+					{{#if innGathering}}
+					<div class="steading-inn-gathering" data-slug="{{slug}}">
+						<div class="steading-inn-gathering-header">
+							<span class="steading-inn-gathering-title"><i class="fas fa-hand-holding-heart"></i> Bring Folks Together</span>
+							<span class="steading-inn-gathering-season">{{innGathering.seasonLabel}}</span>
+						</div>
+						<button type="button" class="steading-inn-gathering-btn" data-action="inn-gathering"
+						        {{#unless innGathering.canGather}}disabled{{/unless}}
+						        {{#unless @root.stonetop.canEdit}}disabled{{/unless}}>
+							<i class="fas fa-beer-mug-empty"></i> Spend 1 Surplus, clear a debility
+						</button>
+						{{!-- One sentence, chosen by the state itself (GATHERING_HINT in
+						      inn-gathering.js) rather than re-derived from booleans here: the
+						      window says the same thing, and a rule written in two languages
+						      is a rule that drifts. --}}
+						<p class="steading-inn-gathering-hint">{{innGathering.hint}}</p>
+					</div>
+					{{/if}}
 				</div>
 
 			</div>

@@ -102,9 +102,23 @@ describe("steading stat band", () => {
 	// steading-stats-bar.hbs reaches up with `../stonetop.edit.*`, so a mount inside an
 	// {{#each}} or with a `this=` override renders the whole band permanently read-only —
 	// no error, just disabled controls.
+	//
+	// Asked as a NESTING DEPTH rather than as `/\{\{#each[\s\S]*steading-stats-bar/`, which is
+	// what this used to be: that pattern cannot tell an each that was closed from one that was
+	// not, so it started failing the moment the header grew an unrelated (and properly closed)
+	// {{#each}} above the band. Counting opens against closes asks the actual question.
 	it("mounts the band at top level in both layouts", () => {
-		expect(STEADING_MARKUP).not.toMatch(/\{\{#each[\s\S]*steading-stats-bar/);
-		expect(stripComments(OVERVIEW_HBS)).not.toMatch(/\{\{#each[\s\S]*steading-stats-bar/);
+		for (const [name, markup] of [
+			["steading.hbs", STEADING_MARKUP],
+			["steading-tab-overview.hbs", stripComments(OVERVIEW_HBS)],
+		]) {
+			const at = markup.indexOf("steading-stats-bar");
+			expect(at, `${name}: the band's mount`).toBeGreaterThan(-1);
+			const before = markup.slice(0, at);
+			const opens  = (before.match(/\{\{#each\b/g) ?? []).length;
+			const closes = (before.match(/\{\{\/each\}\}/g) ?? []).length;
+			expect(opens - closes, `${name}: {{#each}} depth at the band's mount`).toBe(0);
+		}
 	});
 
 	it("leaves the classic constant top as the title and the band alone", () => {

@@ -1,5 +1,6 @@
 import { escHtml } from "../../utils/strings.js";
 import { sign } from "../../utils/roll-engine.js";
+import { DEBILITIES, clearDebility, markedDebilities } from "../steading/steading-debilities.js";
 
 // ── Rites of the Land (The Blessed) ──────────────────────────────────────────────
 // "Once per season, when you oversee the sacred rites, hold 1 Favor. If you also sacrifice
@@ -20,12 +21,6 @@ import { sign } from "../../utils/roll-engine.js";
 export const RITES_MOVE = "Rites of the Land";
 /** Which season's rites have been overseen — one per season, per the move's first line. */
 export const RITES_SEASON_STEP = "ritesOfTheLand";
-
-const DEBILITIES = [
-	{ id: "diminished", label: "Diminished", detail: "disadvantage to Deploy, Muster, Pull Together" },
-	{ id: "lacking",    label: "Lacking",    detail: "treat Prosperity as 1 lower" },
-	{ id: "malcontent", label: "Malcontent", detail: "Fortunes reset to +0 each season; folks need Persuading more often" },
-];
 
 /** Favor held for overseeing the rites, and for doing so having given up a Surplus. */
 export const FAVOR_PLAIN = 1;
@@ -82,8 +77,7 @@ export function openRitesOfTheLand({ character, steading, year = 1, seasonId = "
 		favorMax,
 		surplus: steading?.getStatValue("surplus") ?? 0,
 		ritesDone: !!(steading && seasonId && steading.seasonStepApplied(RITES_SEASON_STEP, year, seasonId)),
-		debilities: DEBILITIES.map(d => d.id)
-			.filter(id => steading?.getSystemValue(`attributes.debilities.options.${id}.value`, false)),
+		debilities: markedDebilities(steading).map(d => d.id),
 	});
 
 	const seasonLine = seasonId
@@ -223,7 +217,7 @@ async function _applySacrifice({ steading, picked }) {
 	const id = picked.replace(/^clear:/, "");
 	const debility = DEBILITIES.find(d => d.id === id);
 	if (!debility) return;
-	await steading.setSystemValue(`attributes.debilities.options.${id}.value`, false, { stonetopMove: RITES_MOVE });
+	await clearDebility(steading, id, RITES_MOVE);
 	globalThis.ui?.notifications?.info?.(`${debility.label} cleared.`);
 }
 

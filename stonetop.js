@@ -81,6 +81,7 @@ import { bindSteadingImprovementDrag } from "./module/journal/steading-improveme
 import { bindThreatSeedDrag } from "./module/threats/threat-seed-cards.js";
 import { maybeAnnounceBecameHero } from "./module/actors/character/WouldBeHeroAsterisk.js";
 import { StonetopSteading } from "./module/actors/steading/StonetopSteading.js";
+import { debilityPath } from "./module/actors/steading/steading-debilities.js";
 import { onSteadingPeopleUpdate, repaintOpenSteadingRosters } from "./module/actors/steading/steading-people.js";
 import { makeDialogsResizable, enableAutoHeightVerticalResize } from "./module/utils/resizable-dialogs.js";
 import { registerStonetopWindowTheme, registerStonetopLightTheme } from "./module/utils/window-theme.js";
@@ -1314,41 +1315,69 @@ function _wireLogbook(message, html, actor, card) {
 // the account of why a character does not resolve the way a goblin does — and, being a module of
 // its own rather than a local in this hook-registering entry point, can be tested.
 
-function _chatWireRequisitionMissCost(message, html) {
-	const btn = html.querySelector(".stonetop-requisition-miss-cost");
-	if (!btn) return;
+/**
+ * Wire a one-shot steading button on a chat card — or a group of them that settle together.
+ *
+ * The skeleton every such button needs, written once: latch on a flag stamped on the MESSAGE
+ * (one card is one use of the move, however many clients render it), disable while the write
+ * is in flight, refuse politely without permission, go through StonetopSteading so the write
+ * lands in BOTH `system.*` and the mirrored steading flag the sheet actually reads from (a raw
+ * `actor.update` of `system.*` alone leaves the mirror stale and the change invisible), then
+ * re-render the steading's open sheets and say what happened. Any throw puts the buttons back.
+ *
+ * @param {ChatMessage} message
+ * @param {HTMLElement[]} btns          the buttons; they enable and disable as one
+ * @param {object} opts
+ * @param {string} opts.flag            message flag that latches the card as used
+ * @param {Function} opts.onSettled     (storedFlag, btns) => void, relabels an already-used card
+ * @param {string} opts.warn            what to say to someone without permission
+ * @param {string} opts.errorNote       console context if the write throws
+ * @param {Function} opts.run           (steading, btn) => {stamp?, notice?} — does the work
+ */
+function _wireSteadingCardButtons(message, btns, { flag, onSettled, warn, errorNote, run }) {
+	if (!btns.length) return;
 
-	if (message.getFlag(SYSTEM_ID, "requisitionMissCostApplied")) {
-		btn.disabled = true;
-		btn.textContent = "Miss cost applied";
+	const already = message.getFlag(SYSTEM_ID, flag);
+	if (already) {
+		for (const b of btns) b.disabled = true;
+		onSettled(already, btns);
 		return;
 	}
 
-	btn.addEventListener("click", async () => {
-		btn.disabled = true;
-		try {
-			const actor = speakerActor(message);
-			if (!actor?.isOwner || actor.type !== "stonetop") {
-				ui.notifications.warn("You need permission to update the steading's Fortunes.");
-				btn.disabled = false;
-				return;
+	for (const btn of btns) {
+		btn.addEventListener("click", async () => {
+			for (const b of btns) b.disabled = true;
+			try {
+				const actor = speakerActor(message);
+				if (!actor?.isOwner || actor.type !== "stonetop") {
+					ui.notifications.warn(warn);
+					for (const b of btns) b.disabled = false;
+					return;
+				}
+				const { stamp = true, notice } = await run(new StonetopSteading(actor), btn) ?? {};
+				await message.setFlag(SYSTEM_ID, flag, stamp);
+				for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
+				if (notice) ui.notifications.info(notice);
+			} catch (err) {
+				console.error(`Stonetop | ${errorNote}:`, err);
+				for (const b of btns) b.disabled = false;
 			}
+		});
+	}
+}
 
-			// Go through StonetopSteading so the write lands in BOTH system.* and the
-			// mirrored steading flag that getStatValue (and the sheet) actually read from —
-			// a raw actor.update of system.* alone leaves the mirror stale and the reduction
-			// invisible.
-			const steading = new StonetopSteading(actor);
-			const fortunes = steading.getStatValue("fortunes");
-			const newFortunes = Math.max(fortunes - 1, -1);
+function _chatWireRequisitionMissCost(message, html) {
+	const btn = html.querySelector(".stonetop-requisition-miss-cost");
+	_wireSteadingCardButtons(message, btn ? [btn] : [], {
+		flag: "requisitionMissCostApplied",
+		onSettled: (_already, [b]) => { b.textContent = "Miss cost applied"; },
+		warn: "You need permission to update the steading's Fortunes.",
+		errorNote: "Error applying Requisition miss cost",
+		run: async steading => {
+			const newFortunes = Math.max(steading.getStatValue("fortunes") - 1, -1);
 			await steading.setSystemValue("stats.fortunes.value", newFortunes, { stonetopMove: "Requisition" });
-			await message.setFlag(SYSTEM_ID, "requisitionMissCostApplied", true);
-			for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
-			ui.notifications.info(`Fortunes reduced to ${sign(newFortunes)}.`);
-		} catch (err) {
-			console.error("Stonetop | Error applying Requisition miss cost:", err);
-			btn.disabled = false;
-		}
+			return { notice: `Fortunes reduced to ${sign(newFortunes)}.` };
+		},
 	});
 }
 
@@ -1359,34 +1388,51 @@ function _chatWireRequisitionMissCost(message, html) {
 // whether Deploy had missed at all.
 function _chatWireDeployMarkDiminished(message, html) {
 	const btn = html.querySelector(".stonetop-deploy-mark-diminished");
-	if (!btn) return;
+	_wireSteadingCardButtons(message, btn ? [btn] : [], {
+		flag: "deployDiminishedApplied",
+		onSettled: (_already, [b]) => { b.textContent = "Marked diminished"; },
+		warn: "You need permission to update the steading's debilities.",
+		errorNote: "Error marking the steading diminished",
+		run: async steading => {
+			await steading.setSystemValue(debilityPath("diminished"), true, { stonetopMove: "Deploy" });
+			return { notice: "Stonetop marked diminished." };
+		},
+	});
+}
 
-	if (message.getFlag(SYSTEM_ID, "deployDiminishedApplied")) {
-		btn.disabled = true;
-		btn.textContent = "Marked diminished";
-		return;
-	}
-
-	btn.addEventListener("click", async () => {
-		btn.disabled = true;
-		try {
-			const actor = speakerActor(message);
-			if (!actor?.isOwner || actor.type !== "stonetop") {
-				ui.notifications.warn("You need permission to update the steading's debilities.");
-				btn.disabled = false;
-				return;
-			}
-			// Through StonetopSteading for the same reason the miss cost above is: a raw
-			// actor.update of system.* leaves the mirrored flag the sheet reads from stale.
-			await new StonetopSteading(actor)
-				.setSystemValue("attributes.debilities.options.diminished.value", true, { stonetopMove: "Deploy" });
-			await message.setFlag(SYSTEM_ID, "deployDiminishedApplied", true);
-			for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
-			ui.notifications.info("Stonetop marked diminished.");
-		} catch (err) {
-			console.error("Stonetop | Error marking the steading diminished:", err);
-			btn.disabled = false;
-		}
+// -- RAISE THE MUSTER from its card -----------------------------
+// Muster's 7+ leaves the steading "alert and ready for action until the threat passes, the
+// Seasons Change, or you cease to oversee the muster" — the one steading move whose result is a
+// STATE rather than a change, which is why it gets a glyph in the sheet header and a button
+// here to put it there.
+//
+// The optional half is "+1 Defenses as long as the muster holds", carried on `data-defenses`.
+// Taking it through raiseMuster (rather than nudging the stat by hand) is what records that it
+// was taken, so standing the muster down gives it back.
+function _chatWireMusterRaise(message, html) {
+	// TWO buttons that settle together, which is why the shared wiring takes a list: a muster
+	// must not be raisable twice at different Defenses. The stamp is an object rather than
+	// `true` so a re-rendered card can relabel the button that was actually pressed.
+	_wireSteadingCardButtons(message, [...html.querySelectorAll(".stonetop-muster-raise")], {
+		flag: "musterRaised",
+		onSettled: (already, btns) => {
+			const chosen = btns.find(b => !!b.dataset.defenses === !!already.defenses) ?? btns[0];
+			chosen.textContent = already.defenses ? "Muster raised, +1 Defenses" : "Muster raised";
+		},
+		warn: "You need permission to update the steading.",
+		errorNote: "Error raising the muster",
+		run: async (steading, btn) => {
+			const defenses = !!btn.dataset.defenses;
+			// Taking it through raiseMuster (rather than nudging the stat by hand) is what
+			// records that the +1 was taken, so standing the muster down gives it back.
+			await steading.raiseMuster({ defenses });
+			return {
+				stamp: { defenses },
+				notice: defenses
+					? "The muster is up: Stonetop is alert, with +1 Defenses while it holds."
+					: "The muster is up: Stonetop is alert and ready for action.",
+			};
+		},
 	});
 }
 
@@ -1590,6 +1636,7 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	wireUndoXpMark(message, html);
 	_chatWireRequisitionMissCost(message, html);
 	_chatWireDeployMarkDiminished(message, html);
+	_chatWireMusterRaise(message, html);
 	_chatWireSpendStock(message, html);
 	_chatWireSeasonsRoll(message, html);
 	_chatWireRollCardPicks(message, html);
