@@ -1,5 +1,9 @@
 import {escHtml, stripHtmlToText} from "./strings.js";
 import {isReferenceList, pickLimitsFrom} from "./move-picks.js";
+import {MOVE_TIERS_CLASS} from "./move-results.js";
+
+// The tier ladder's own `<ul>`, recognised in an attribute string — see `firstOptionList`.
+const _LADDER_CLASS_RE = new RegExp(`\\bclass="[^"]*\\b${MOVE_TIERS_CLASS}\\b`, "i");
 
 /** Core stat paths (in a flattened update) mapped to their chat labels. */
 export const STAT_CHAT_LABELS = {
@@ -204,10 +208,22 @@ export function postMoveToChat(actor, title, rows) {
  * @returns {{index: number, length: number, inner: string, items: string[]}|null}
  */
 export function firstOptionList(html) {
-	const ul = /<ul\b[^>]*>([\s\S]*?)<\/ul>/i.exec(html ?? "");
-	if (!ul || /<ul\b/i.test(ul[1])) return null;
-	const items = [...ul[1].matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map(m => m[1]);
-	return items.length ? { index: ul.index, length: ul[0].length, inner: ul[1], items } : null;
+	const re = /<ul\b([^>]*)>([\s\S]*?)<\/ul>/gi;
+	let ul;
+	while ((ul = re.exec(html ?? "")) !== null) {
+		// The result ladder (utils/move-tiers.js) is a `<ul>` too, and it is appended AFTER the
+		// move's own text — so on a move that prints no options of its own it would be the first
+		// list found here, and its 10+ / 7-9 / 6- rows would come back as the move's choices and
+		// be handed a checkbox each. Skipped by class rather than by position: the ladder is
+		// never a choice, wherever in the body it lands. Matched inside `class` and on whole-word
+		// boundaries, so neither a longer class that merely starts the same way nor a `data-`
+		// value that happens to carry the text takes a real option list out of the running.
+		if (_LADDER_CLASS_RE.test(ul[1])) continue;
+		if (/<ul\b/i.test(ul[2])) return null;
+		const items = [...ul[2].matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)].map(m => m[1]);
+		return items.length ? { index: ul.index, length: ul[0].length, inner: ul[2], items } : null;
+	}
+	return null;
 }
 
 /**
@@ -279,10 +295,11 @@ export function pickableMoveDescription(description) {
  * description, which is already escaped at storage (formatCustomMoveDescription). Shared
  * by the character model and the sheet so the two never desync the card markup/escaping.
  *
- * `pickable` is opt-in, and only the two places that post a move's PRINTED TEXT pass it: the
- * Moves tab's name-click and the basic/expedition sidebar's. Every other caller here is a
- * receipt ("Readiness lost", "Follower Down"), where a checkbox would be an offer to change
- * something that has already happened.
+ * `pickable` is opt-in, and only a caller posting a move's PRINTED TEXT passes it: the Moves
+ * tab's name-click here, and the basic/expedition sidebar's through `_postMoveCard`, which ticks
+ * and lays out the tier ladder together (utils/move-tiers.js#moveCardBody) because the two have
+ * to happen in that order. Every other caller here is a receipt ("Readiness lost", "Follower
+ * Down"), where a checkbox would be an offer to change something that has already happened.
  */
 export function moveChatCard(name, description, { pickable = false, actions = "" } = {}) {
 	const body = pickable ? pickableMoveDescription(description) : description;

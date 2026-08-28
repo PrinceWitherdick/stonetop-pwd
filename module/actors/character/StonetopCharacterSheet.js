@@ -46,7 +46,8 @@ import {normalizeDamageDie} from "../../utils/damage-die.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
 import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct} from "../../utils/strings.js";
 import {playbookIconPath, partyCharacters} from "../../utils/playbook-actors.js";
-import {postMoveToChat, moveChatCard} from "../../utils/chat.js";
+import {postMoveToChat, moveChatCard, pickableMoveDescription} from "../../utils/chat.js";
+import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
 import {stockSources, canPayStock, defaultStockSource, stockCostFromDescription, SACRED_POUCH_SLUG, RITES_OF_THE_LAND, DEFAULT_SACRED_POUCH_MAX} from "./stock-cost.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
@@ -147,6 +148,27 @@ const FOLLOWER_ARMOR_SOURCES = [
 ];
 
 const _esc = escHtml;
+
+/**
+ * Every move in a snapshot's movelist, flattened — basic, expedition, playbook, learned, the
+ * "other" moves both flat and in their custom groups, post-death, and love letters.
+ *
+ * One enumeration because two callers need the same one and would drift apart: the wound
+ * reminder's name list, and `_printedMoveSource`, which has to find a row's SOURCE text whether
+ * or not that row is an owned item. A section added to the sheet and missed here goes quiet in
+ * both — no reminder to attach a wound to, and a card that falls back to scraping the DOM.
+ */
+function* _movelistMoves(movelist) {
+	if (!movelist) return;
+	yield* movelist.basicMoves ?? [];
+	yield* movelist.expeditionMoves ?? [];
+	yield* movelist.playbookMoves ?? [];
+	yield* movelist.learnedMoves ?? [];
+	yield* movelist.otherMoves ?? [];
+	for (const group of movelist.otherGroups ?? []) yield* group?.moves ?? [];
+	yield* movelist.postDeathGroup?.moves ?? [];
+	yield* movelist.loveLetters ?? [];
+}
 
 function _formatResultLine(text) {
 	return _esc(text).replace(/^(7\+|10\+|7-9|6-):/, "<strong>$1:</strong>");
@@ -1066,6 +1088,11 @@ export function createStonetopCharacterSheetClass(Base) {
 				? await foundry.applications.ux.TextEditor.enrichHTML(context.stonetop.notes)
 				: "";
 			context.stonetop.movelist ??= {};
+			// Kept for the name-click, which needs a move's SOURCE text to build its card and
+			// cannot read it off an item: a playbook move you have not taken is rendered from
+			// this list and owns no document. Held from the render that drew the rows, so what
+			// the card is built from is exactly what the reader clicked on.
+			this._renderedMovelist = context.stonetop.movelist;
 			const overageKey = context.stonetop.movelist.levelMovesOverageKey ?? null;
 			const dismissedOverageKey = this.actor.getFlag(STONETOP_SCOPE, "moves.dismissedLevelOverage");
 			context.stonetop.movelist.showLevelMovesOverLimit =
@@ -2948,16 +2975,33 @@ export function createStonetopCharacterSheetClass(Base) {
 				// editability gate sits with the decision it gates: an observer gets the card and
 				// no roll, which is the same tail every other move gives them.
 				const grantedAttack = this.isEditable ? grantedWeaponAttackFor(this.actor, item) : null;
-				const description = li.querySelector(".stonetop-item-description")?.innerHTML ?? "";
+				// BUILT FROM THE SOURCE, NOT FROM THE ROW. The row's `.stonetop-item-description`
+				// has already been through `moveBody`, so scraping it composed the card in the
+				// opposite order from every other surface: the ladder had lifted "on a 10+, pick
+				// 2; on a 7-9, pick 1:" out before the ticks were added, and that sentence is
+				// where the cap is read from. Fourteen shipped moves posted an option list with
+				// no limit at all (Forage, Let Fly, Muster, Ambush, Burgle…) and ten more got one
+				// flat cap where the move gives a different count per tier (Seek Insight offers
+				// 3 on a 10+ and 1 on a 7-9; the card said 3 either way).
+				const source = this._printedMoveSource(name, item);
 				const playbookName = html[0].querySelector(".stonetop-playbook-drop-zone:not(.empty)")?.textContent?.trim() ?? "";
 				const speaker = ChatMessage.getSpeaker({ actor: this.actor });
 				speaker.alias = playbookName ? `${this.actor.name} ${playbookName}` : this.actor.name;
-				// `pickable`: a description-only move has no result card to choose on, so the
-				// options it prints become ticks on THIS card (persisted to the message, like a
-				// roll card's). Mighty Thews' "pick 1", Keep Company's questions, Censure's four
-				// reactions — the move's own list, tickable where the table can see it.
+				// A description-only move has no result card to choose on, so the options it
+				// prints become ticks on THIS card (persisted to the message, like a roll card's).
+				// Mighty Thews' "pick 1", Keep Company's questions, Censure's four reactions —
+				// the move's own list, tickable where the table can see it. `moveCardBody` ticks
+				// and lays the ladder in the one order those can happen in.
+				//
+				// A row whose name is in neither the actor's items nor the render's movelist
+				// falls back to the rendered text: that card keeps the layout it always had
+				// rather than losing its body over a lookup that came back empty.
+				const stockBody = source?.description ?? li.querySelector(".stonetop-item-description")?.innerHTML ?? "";
+				const printed = source
+					? moveCardBody(source.description, source.moveResults)
+					: pickableMoveDescription(stockBody);
 				ChatMessage.create({
-					content: moveChatCard(name, description, { pickable: true, actions: this._stockSpendButtonHtml(description) }),
+					content: moveChatCard(name, printed, { actions: this._stockSpendButtonHtml(stockBody) }),
 					speaker,
 				});
 				// A description-only move has no rollType, so it falls all the way through to
@@ -3077,7 +3121,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!doc) return;
 				// Tickable for the same reason the Moves tab's name-click is: this is the move's
 				// printed text, and a move that never rolls has nowhere else to record a choice.
-				this._postMoveCard(doc.name, doc.system?.description ?? "", { pickable: true, stockSpend: true });
+				this._postPrintedMove(doc);
 			});
 
 			// Defend's Readiness circles (p.216). Clicking a circle sets held Readiness to
@@ -5894,8 +5938,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				this._openGuidedCharacterMove({ name: move.name, guide }, null);
 				return;
 			}
+			// A move read off an arcanum's back has no `system.moveResults` to draw on: it is prose
+			// parsed out of the card (data/arcana-moves), so its outcomes are only ever in the
+			// sentence. `moveBodyHtml` reads them back out of it, which is the same ladder the
+			// arcana tab prints for the same move.
 			await ChatMessage.create({
-				content: moveChatCard(move.name, move.description),
+				content: moveChatCard(move.name, moveBodyHtml(move.description, null)),
 				speaker: ChatMessage.getSpeaker({ actor: this.actor }),
 			});
 		}
@@ -6925,14 +6973,60 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		/**
-		 * Post a move-result card to chat, spoken by this actor. Returns the create promise.
+		 * Post a RECEIPT to chat, spoken by this actor: one thing that already happened, as a
+		 * hand-built `<p>` ("Readiness lost", "Follower Down", "Send Them Back"). Returns the
+		 * create promise.
 		 *
-		 * `pickable` is for the one caller that posts a move's PRINTED TEXT rather than a receipt
-		 * of something already done — see moveChatCard.
+		 * No ticks and no tier ladder, because a receipt has neither a choice left to make nor
+		 * rungs to lay out. A move's PRINTED TEXT goes through `_postPrintedMove` instead — the
+		 * two were one method wearing three flags that only ever moved together, which read as
+		 * three independent features and left seventeen callers carrying options they never used.
 		 */
-		_postMoveCard(title, body, { pickable = false, stockSpend = false } = {}) {
+		_postMoveCard(title, body, { stockSpend = false } = {}) {
 			return ChatMessage.create({
-				content: moveChatCard(title, body, { pickable, actions: stockSpend ? this._stockSpendButtonHtml(body) : "" }),
+				content: moveChatCard(title, body, { actions: stockSpend ? this._stockSpendButtonHtml(body) : "" }),
+				speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+			});
+		}
+
+		/**
+		 * A move's SOURCE text and stored outcomes, by the name its row shows.
+		 *
+		 * An owned move answers from its own document. A playbook move you have not taken owns
+		 * no document at all — its row is drawn from the render's movelist — so that list is
+		 * where the question is really asked, and it holds both kinds.
+		 *
+		 * Returns null for a name in neither, which is the caller's cue to fall back.
+		 */
+		_printedMoveSource(name, item = null) {
+			if (item?.system?.description) {
+				return { description: item.system.description, moveResults: item.system?.moveResults ?? null };
+			}
+			for (const m of _movelistMoves(this._renderedMovelist)) {
+				if (m?.name === name && typeof m.description === "string") {
+					return { description: m.description, moveResults: m.moveResults ?? null };
+				}
+			}
+			return null;
+		}
+
+		/**
+		 * Post a move document's PRINTED TEXT, composed the one way it is composed everywhere:
+		 * its options made tickable, then its outcomes re-laid as the tier ladder. `moveCardBody`
+		 * (utils/move-tiers.js) does both, in the order they have to happen in.
+		 *
+		 * Takes the DOCUMENT rather than a handful of loose fields, so the next thing a printed
+		 * card needs from it is read here instead of destructured at the call site.
+		 *
+		 * The Stock button reads the ORIGINAL description, not the composed body: it is looking
+		 * for the move's cost, and should not have to care how the outcomes were laid out around
+		 * it.
+		 */
+		_postPrintedMove(doc) {
+			const description = doc?.system?.description ?? "";
+			return ChatMessage.create({
+				content: moveChatCard(doc?.name ?? "", moveCardBody(description, doc?.system?.moveResults ?? null),
+					{ actions: this._stockSpendButtonHtml(description) }),
 				speaker: ChatMessage.getSpeaker({ actor: this.actor }),
 			});
 		}
@@ -8682,17 +8776,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		// renders, so a stored reminderMove matches the moveName that rollStat passes when
 		// that move is rolled (that's what the echo keys on).
 		_woundReminderMoveNames(snapshot) {
-			const ml = snapshot?.movelist;
 			const names = new Set();
-			const push = (arr) => { for (const m of (arr ?? [])) if (m?.name) names.add(m.name); };
-			push(ml?.basicMoves);
-			push(ml?.expeditionMoves);
-			push(ml?.playbookMoves);
-			push(ml?.learnedMoves);
-			push(ml?.otherMoves);
-			for (const group of (ml?.otherGroups ?? [])) push(group?.moves);
-			push(ml?.postDeathGroup?.moves);
-			push(ml?.loveLetters);
+			for (const m of _movelistMoves(snapshot?.movelist)) if (m?.name) names.add(m.name);
 			return [...names].sort((a, b) => a.localeCompare(b));
 		}
 

@@ -1,6 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { readRepo as read } from "../fakes/css.js";
 import { moveChatCard, pickableMoveDescription } from "../../module/utils/chat.js";
@@ -14,8 +11,6 @@ import { formatCustomMoveDescription } from "../../module/utils/custom-move-text
 // lists, in a dialog that could never open (a move with no rollType renders no dice icon, and
 // nothing else reached the guide table). The lists here are the MOVE'S OWN, read out of its
 // printed description, so there is no second copy to drift.
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const CENSURE = "<p>When you <strong>denounce</strong> someone, they pick 1:</p>"
 	+ "<ul><li>They are <em>ashamed</em></li><li>They are doubtful</li></ul>";
@@ -99,6 +94,24 @@ describe("pickableMoveDescription", () => {
 		expect(pickableMoveDescription(once)).toBe(once);
 	});
 
+	// The result ladder (utils/move-tiers.js) is a <ul> as well, and the moves tab renders it
+	// INSIDE the description div the name-click posts from — so on a move that prints no options
+	// of its own the ladder is the first list in the body, and a checkbox in front of each rung
+	// would offer a player a choice of which result they rolled.
+	it("never mistakes the tier ladder for the move's option list", () => {
+		const laddered = '<p>Roll +INT.</p><ul class="stonetop-move-tiers">'
+			+ '<li class="stonetop-move-tier"><span>10+</span></li>'
+			+ '<li class="stonetop-move-tier"><span>7-9</span></li></ul>';
+		expect(pickableMoveDescription(laddered)).toBe(laddered);
+	});
+
+	it("still ticks the move's own list when the ladder sits below it", () => {
+		const both = CENSURE + '<ul class="stonetop-move-tiers"><li class="stonetop-move-tier">10+</li></ul>';
+		const html = pickableMoveDescription(both);
+		expect((html.match(/stonetop-picklist-check/g) ?? []).length).toBe(2);
+		expect(html).toContain('<ul class="stonetop-move-tiers">');
+	});
+
 	it("does nothing for a list with no items", () => {
 		const empty = "<p>Nothing:</p><ul></ul>";
 		expect(pickableMoveDescription(empty)).toBe(empty);
@@ -131,21 +144,39 @@ describe("moveChatCard", () => {
 describe("who asks for ticks", () => {
 	const SHEET = read("module/actors/character/StonetopCharacterSheet.js");
 
-	// Exactly the two places that post a move's PRINTED TEXT. Everything else moveChatCard
-	// serves is a receipt ("Readiness lost", "Follower Down"), where a checkbox would be an
-	// offer to change something that has already happened.
-	it("is only the two name-click paths", () => {
-		expect((SHEET.match(/pickable: true/g) ?? []).length).toBe(2);
-		// Both also carry the Stock Spend button (see stock-cost.test.js) — one call each.
-		expect(SHEET).toContain("moveChatCard(name, description, { pickable: true, actions: this._stockSpendButtonHtml(description) })");
-		expect(SHEET).toContain('this._postMoveCard(doc.name, doc.system?.description ?? "", { pickable: true, stockSpend: true })');
+	// Exactly the two places that post a move's PRINTED TEXT, and BOTH now compose it the same
+	// way. Everything else moveChatCard serves is a receipt ("Readiness lost", "Follower Down"),
+	// where a checkbox would be an offer to change something that has already happened.
+	it("is only the two name-click paths, both through moveCardBody", () => {
+		// The basic/expedition sidebar's, which holds the document.
+		expect(SHEET).toContain("this._postPrintedMove(doc)");
+		expect(SHEET).toContain("moveCardBody(description, doc?.system?.moveResults ?? null)");
+		// The Moves tab's, which resolves the row's source rather than scraping the rendered
+		// text — scraping composed the card in the opposite order and lost the pick cap.
+		expect(SHEET).toContain("moveCardBody(source.description, source.moveResults)");
+		expect(SHEET).not.toContain("moveChatCard(name, description, { pickable: true");
+	});
+
+	// The scrape survives only as the fallback for a row in neither the actor's items nor the
+	// render's movelist: that card keeps the layout it had rather than losing its body.
+	it("falls back to the rendered row only when the source cannot be found", () => {
+		expect((SHEET.match(/pickableMoveDescription\(/g) ?? []).length).toBe(1);
+		expect(SHEET).toContain('li.querySelector(".stonetop-item-description")?.innerHTML ?? ""');
+	});
+
+	// The receipts keep no way to ask for either. `_postMoveCard` posts a hand-built <p> for
+	// something that already happened, and a flag it could be handed would be an invitation.
+	it("and a receipt cannot ask for them at all", () => {
+		expect(SHEET).toContain("_postMoveCard(title, body, { stockSpend = false } = {})");
+		expect(SHEET).not.toContain("_postMoveCard(title, body, { pickable");
 	});
 
 	// A move that ROLLS gets the same treatment on its result card's description — one rule for
-	// every move, rather than a second way of showing the same list.
+	// every move, rather than a second way of showing the same list. `moveCardBody` is the tick
+	// and the tier ladder in the one order they can happen in (utils/move-tiers.js).
 	it("and the roll card's description, through the item", () => {
 		const item = read("module/item/StonetopItem.js");
-		expect(item).toContain("pickableMoveDescription(moveDescription)");
+		expect(item).toContain("moveCardBody(moveDescription, this.system?.moveResults");
 		expect(item).toContain("moveDescription: cardDescription");
 	});
 

@@ -19,6 +19,20 @@ export const TIER_KEYS = Object.freeze(MOVE_TIERS.map(t => t.key));
 /** Tier key → printed label, for the lookups that have a key in hand rather than a list. */
 export const TIER_LABELS = Object.freeze(Object.fromEntries(MOVE_TIERS.map(t => [t.key, t.label])));
 
+/**
+ * The class on the tier LADDER's `<ul>` (utils/move-tiers.js `moveTiersHtml`), and the attribute
+ * a roll card stamps on it to say which rung the dice landed on.
+ *
+ * Here rather than in move-tiers.js because the four places that need the class do not all share
+ * an import edge with it: move-tiers.js BUILDS the ladder, utils/chat.js `firstOptionList` must
+ * SKIP it (a ladder is never a move's option list, and tier rows handed a checkbox each was the
+ * bug), stonetop.js re-stamps the attribute when a GM shifts a result, and the stylesheet paints
+ * it. This file imports nothing, so chat.js can read it without closing the move-tiers → chat
+ * cycle. Retyping the string is what let those four disagree silently.
+ */
+export const MOVE_TIERS_CLASS = "stonetop-move-tiers";
+export const ROLLED_TIER_ATTR = "data-rolled-tier";
+
 // Shared shaping for a move's 10+ / 7-9 / 6- result tiers, in the shape rollStat
 // consumes ({ success|partial|failure: { label, value } }). Every move that authors
 // result text goes through here — custom moves and love letters. When `picks` is given, each

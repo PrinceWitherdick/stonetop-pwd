@@ -184,6 +184,27 @@ describe("rollStat", () => {
 		expect(flavor).toContain('data-outcome-failure="Things get worse."');
 	});
 
+	// The card's description carries the move's whole ladder (utils/move-tiers.js), and the roll
+	// is what says which of its rungs actually happened. Without the mark the reader is left
+	// matching the total against the labels themselves, on the one card that already knows.
+	it("marks the rung the dice landed on in the move's own ladder", async () => {
+		rollTotal = 8;
+		const description = '<p>Roll +STR.</p><ul class="stonetop-move-tiers">'
+			+ '<li class="stonetop-move-tier stonetop-move-tier--partial" data-tier="partial">7-9</li></ul>';
+
+		await rollStat("str", makeActor(), { noXpOnMiss: true, moveDescription: description });
+
+		expect(rollMessages[0].flavor).toContain('<ul class="stonetop-move-tiers" data-rolled-tier="partial">');
+	});
+
+	it("leaves a description with no ladder alone", async () => {
+		rollTotal = 8;
+
+		await rollStat("str", makeActor(), { noXpOnMiss: true, moveDescription: "<p>Roll +STR.</p>" });
+
+		expect(rollMessages[0].flavor).not.toContain("data-rolled-tier");
+	});
+
 	it("shows the failure outcome on a miss", async () => {
 		rollTotal = 6;
 

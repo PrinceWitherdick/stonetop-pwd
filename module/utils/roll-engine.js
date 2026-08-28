@@ -2,6 +2,7 @@ import { maybeRemindPotentialForGreatness } from "../actors/character/WouldBeHer
 import { escHtml, formatOutcomeDetail, stripHtmlToText } from "./strings.js";
 import { pickLimitsFrom } from "./move-picks.js";
 import { pickLeadText, TIER_KEYS, TIER_LABELS } from "./move-results.js";
+import { markRolledTier } from "./move-tiers.js";
 import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge } from "./chat.js";
 import { adjustXp } from "./xp.js";
 import { SYSTEM_ID } from "../system-id.js";
@@ -507,7 +508,10 @@ export async function rollStat(statKey, actor, options = {}) {
 		total: roll.total,
 		formula: roll.formula,
 		dieResults: dieResultsText(roll),
-		description: moveDescription,
+		// The move's own ladder, with the rung the dice landed on marked. The result block above
+		// it already states that one outcome; what the mark adds is WHERE it sits among the other
+		// two, which is the reading that says whether a 7-9 was a near miss or a near hit.
+		description: markRolledTier(moveDescription, result.key),
 	});
 
 	const resultMessage = await roll.toMessage({
@@ -559,7 +563,7 @@ export async function markMissXp(actor, moveName) {
 		resultClass: "success",
 		sectionClass: "stonetop-xp-mark-card",
 		description: `<p>On a <strong>miss</strong> (a total of 6 or less), you <strong>mark XP</strong>, a tick mark that raises your total by 1, unless the move says otherwise.</p>`,
-		actions: `<button type="button" class="stonetop-xp-undo" data-action="undoXpMark"><i class="fas fa-rotate-left"></i> Undo</button>`,
+		actions: `<button type="button" class="stonetop-xp-undo" data-action="undoXpMark"><i class="fas fa-rotate-left"></i> Undo XP Gain</button>`,
 	});
 	await ChatMessage.create({
 		content:  xpCard,

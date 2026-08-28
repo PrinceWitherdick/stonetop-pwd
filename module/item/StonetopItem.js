@@ -2,7 +2,7 @@ import {StonetopPlaybook} from "./StonetopPlaybook.js";
 import {rollFormula, rollStat} from "../utils/roll-engine.js";
 import {normalizeRollType} from "../utils/roll-types.js";
 import {filterStatOptionLines, escHtml} from "../utils/strings.js";
-import {pickableMoveDescription} from "../utils/chat.js";
+import {moveCardBody} from "../utils/move-tiers.js";
 import {stonetopThumbnail} from "../utils/item-icon.js";
 import {STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "../actors/character/StonetopFlags.js";
 import {newArcanumSlug, isArcanumData} from "./createArcanum.js";
@@ -203,10 +203,15 @@ export function createStonetopItemClass(BaseItem) {
 				// post the same text the Moves tab's name-click posts, minus the boxes — so
 				// Mighty Thews dragged to the bar offered a "pick 1" nobody could tick, and no
 				// tally above it, while the same move on the tab did both.
+				//
+				// And the ladder too, which is the same argument again: the sheet re-lays a move's
+				// 10+ / 7-9 / 6- as labelled rows (utils/move-tiers.js), so a card that posted the
+				// book's run-on paragraph instead was the one surface still leaving the outcomes
+				// buried in the sentence.
 				return ChatMessage.create({
 					content: `<div class="stonetop-chat-move">
 						<h3 class="stonetop-chat-move-name">${escHtml(this.name)}</h3>
-						<div class="stonetop-chat-move-description">${pickableMoveDescription(this.system?.description ?? "")}${signoff}</div>
+						<div class="stonetop-chat-move-description">${moveCardBody(this.system?.description ?? "", this.system?.moveResults)}${signoff}</div>
 					</div>`,
 					speaker: ChatMessage.getSpeaker({ actor }),
 				});
@@ -218,9 +223,12 @@ export function createStonetopItemClass(BaseItem) {
 			// with DEX) isn't an "ask" move but should still label the chosen stat.
 			const usingAltStat = !!options.statOverride && options.statOverride !== rollType;
 			const description = this.system?.description ?? "";
-			const moveDescription = (isStatChoice
+			// The signoff is appended LAST, below the ladder, rather than carried through the
+			// rewrite: "XOXO, your GM" closes the letter, and a set of tier rows printed under
+			// the signature would read as a postscript nobody wrote.
+			const moveDescription = isStatChoice
 				? filterStatOptionLines(description, options.statOverride)
-				: description) + signoff;
+				: description;
 			const moveName = (isStatChoice || usingAltStat)
 				? `${this.name} with ${options.statOverride.toUpperCase()}`
 				: this.name;
@@ -258,9 +266,8 @@ export function createStonetopItemClass(BaseItem) {
 			// that pool renders as its own checklist, and a second list in the description would
 			// start its data-index at 0 again and scramble the message's saved ticks.
 			const declaredPicks = this.system?.pickOptions ?? [];
-			const cardDescription = declaredPicks.length
-				? moveDescription
-				: pickableMoveDescription(moveDescription);
+			const cardDescription = moveCardBody(moveDescription, this.system?.moveResults,
+				{ pickable: !declaredPicks.length }) + signoff;
 
 			if (stat) return rollStat(stat, actor, {
 				...options,

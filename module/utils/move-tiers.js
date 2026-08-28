@@ -1,6 +1,6 @@
 import { capitalizeFirst, escHtml, formatOutcomeDetail, splitPickList, stripHtmlToText } from "./strings.js";
-import { firstOptionList } from "./chat.js";
-import { MOVE_TIERS } from "./move-results.js";
+import { firstOptionList, pickableMoveDescription } from "./chat.js";
+import { MOVE_TIERS, MOVE_TIERS_CLASS, ROLLED_TIER_ATTR } from "./move-results.js";
 
 /**
  * Move cards used to print the book's prose verbatim, and the book states a move's outcomes as
@@ -37,6 +37,12 @@ const _BLOCKISH_RE = /<\s*(?:p|ul|ol|li|div|table|h[1-6]|blockquote)\b/i;
 
 // Tags that never close, so the inline-balancer must not push them onto its stack.
 const _VOID_TAGS = new Set(["br", "hr", "img", "input", "wbr", "source", "col"]);
+
+// A semicolon that closes an HTML entity rather than a clause — see `splitClauses`. Matched
+// against the run from the nearest preceding "&", which is why it is anchored at both ends.
+const _ENTITY_RE = /^&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]{1,31});$/;
+// The longest an entity can be: "&" + the 32-character name the pattern above allows + ";".
+const _ENTITY_MAX = 34;
 
 // A clause that RESTATES one of the tiers, i.e. the prose the ladder is about to replace, and
 // the ONE pattern that both recognises such a clause and says which rung it names. Built from
@@ -171,6 +177,12 @@ export function balanceInlineHtml(html) {
  * straight against a tag like that. Requiring real whitespace left every one of those glued to
  * the clause before it — so Know Things' "either way" rider was swallowed by the 7-9 clause and
  * deleted along with it, off one of the six moves every character owns.
+ *
+ * An HTML ENTITY ends in a semicolon, and that one is never a boundary. Dark Succor is written
+ * "<strong>on a 6&ndash;</strong>, all 3 apply:", where the `&ndash;` closes right before a tag
+ * and so met the rule above exactly: the clause split inside the entity, "on a 6" went out as a
+ * tier while ", all 3 apply:" stayed behind as a fragment, and the move lost its 6- rung and
+ * gained a sentence starting with a comma.
  */
 export function splitClauses(inner) {
 	const parts = [];
@@ -182,6 +194,13 @@ export function splitClauses(inner) {
 		if (ch === ">") { inTag = false; continue; }
 		if (inTag) continue;
 		if (ch !== ";" && ch !== "." && ch !== ":") continue;
+		// The tail of "&ndash;" / "&#8211;", not a separator. Read backwards from the "&" rather
+		// than by slicing the whole prefix, which made every semicolon cost the length of the text
+		// before it.
+		if (ch === ";") {
+			const amp = inner.lastIndexOf("&", i);
+			if (amp !== -1 && i - amp <= _ENTITY_MAX && _ENTITY_RE.test(inner.slice(amp, i + 1))) continue;
+		}
 		// A boundary needs whitespace, a tag, or the end of the string after it, so "1-for-1"
 		// and a decimal keep their neighbours while "GM's call. Then" splits.
 		const rest = inner.slice(i + 1);
@@ -212,8 +231,14 @@ function _capitalizeVisible(html) {
 // what follows (the last kept clause of the last kept block) and badly when more of the
 // author's own prose does — "roll +CON: You can spend Readiness 1-for-1 to:" — so a colon with
 // kept text after it becomes a full stop. Trailing closers are stepped over.
+//
+// ONE regex, read both ways: `_colonToStop` rewrites the colon it finds, and the block walk
+// below TESTS for it to ask whether what survives a cut still leads into the next block. The
+// "step over the trailing closers" half is subtle enough that a second copy would drift.
+const _ENDS_ON_COLON = /:(\s*(?:<\/[a-zA-Z][a-zA-Z0-9]*\s*>\s*)*)$/;
+
 function _colonToStop(clause) {
-	return clause.replace(/:(\s*(?:<\/[a-zA-Z][a-zA-Z0-9]*\s*>\s*)*)$/, ".$1");
+	return clause.replace(_ENDS_ON_COLON, ".$1");
 }
 
 // The LAST kept clause of a paragraph was joined to the clause that got cut out from under it
@@ -342,42 +367,54 @@ function _joinParts(parts) {
  */
 function _sentence(text) {
 	const trimmed = String(text).trim().replace(/\s*[;,]+$/, "");
-	return capitalizeFirst(/[.!?]["'’”)\]]?$/.test(trimmed) ? trimmed : trimmed + ".");
+	// A colon counts as terminal. A rung that ends on one is introducing the option list now
+	// hanging under the ladder ("…and pick 1:" — Clash, Forage, Let Fly), and a full stop added
+	// after it spelled the row "pick 1:." with the list it was pointing at right underneath.
+	return capitalizeFirst(/[.!?:]["'’”)\]]?$/.test(trimmed) ? trimmed : trimmed + ".");
 }
 
 /**
  * Strip the tier restatements out of a move's description.
  *
  * Returns `{ body, riders }` — the description with every tier clause removed (blocks that end
- * up empty are dropped whole), and the "either way, …" riders lifted out to sit under the
- * ladder. Content that is NOT a tier restatement always survives: Defend's "You can spend
- * Readiness 1-for-1 to:" and the `<ul>` under it, Seek Insight's six questions, Defy Danger's
- * six "… +STAT to …" lines. A description that restates no tier comes back verbatim.
+ * up empty are dropped whole), the "either way, …" riders lifted out to sit under the ladder,
+ * and `listLeadCut`: whether the move's option list lost the sentence that introduced it.
+ * Content that is NOT a tier restatement always survives: Defend's "You can spend Readiness
+ * 1-for-1 to:" and the `<ul>` under it, Seek Insight's six questions, Defy Danger's six
+ * "… +STAT to …" lines. A description that restates no tier comes back verbatim.
  *
  * `moveResults` is what the ladder will say, and is consulted only to decide whether a clause
  * left behind by a cut is already covered there — see `_COVERED`.
  */
 export function stripTierProse(description, moveResults = null) {
 	const src = String(description ?? "");
-	if (!src.trim()) return { body: "", riders: [] };
+	if (!src.trim()) return { body: "", riders: [], listLeadCut: false };
 	const corpus = _tierCorpus(moveResults);
 	const riders = [];
 	let dropped = false;
 
+	// Returns `{ html, leadLost }` — the rewritten block, and whether it has stopped introducing
+	// whatever follows it. `leadLost` is HANDED BACK rather than set on a variable the block walk
+	// reads afterwards: the two are a step apart in the same loop, and as shared state the
+	// ordering ("rewrite before you read it, clear it after every other block") was a rule written
+	// down nowhere but in the assignments themselves.
 	const rewriteParagraph = (block) => {
 		const m = block.match(/^(<p\b[^>]*>)([\s\S]*?)(<\/p\s*>)$/i);
-		if (!m) return block;
+		if (!m) return { html: block, leadLost: false };
 		const [, openTag, inner, closeTag] = m;
 		const clauses = splitClauses(inner);
-		if (!clauses.length) return block;
+		if (!clauses.length) return { html: block, leadLost: false };
 		const kept = [];
 		let droppedHere = false;
+		// Was the paragraph's LAST clause one of the ones cut? If so, nothing at all now stands
+		// between what survives and whatever block follows.
+		let lastClauseCut = false;
 		// Set by a tier cut and held until a clause that clearly starts something new: the
 		// clauses immediately after a cut are usually the rest of the sentence it was in.
 		let armed = false;
 		for (const clause of clauses) {
 			const head = _headText(clause);
-			if (_TIER_HEAD_RE.test(head)) { armed = droppedHere = dropped = true; continue; }
+			if (_TIER_HEAD_RE.test(head)) { armed = droppedHere = dropped = lastClauseCut = true; continue; }
 			if (armed) {
 				// A rider, or a lower-case opening — the tail of the sentence the cut landed in
 				// ("On a 7-9 when you're looking to sell: | you can sell it now, but…"). Left
@@ -395,14 +432,27 @@ export function stripTierProse(description, moveResults = null) {
 				if (_coverage(head, corpus) >= _COVERED) continue;
 				armed = false;
 			}
+			lastClauseCut = false;
 			kept.push(clause.trim());
 		}
-		if (!droppedHere) return block;
+		if (!droppedHere) return { html: block, leadLost: false };
 		const joined = kept
 			.map((c, i) => (i < kept.length - 1 ? _colonToStop(c) : _trailingStop(c)))
 			.join(" ");
 		const body = balanceInlineHtml(joined).trim();
-		return body ? openTag + body + closeTag : "";
+		// What is left introduces the next block only if it ENDS on a colon and that colon was
+		// still the paragraph's last word after the cut. Both halves are needed and each catches
+		// a real move:
+		//   Clash keeps "…roll +STR:" and then loses "on a 10+, … pick 1:" from under it — a
+		//     trailing colon that now introduces the LADDER, not the list (`_trailingStop` leaves
+		//     it there for exactly that reason), so the colon alone must not hold the list here.
+		//   All is Illuminated loses "ask them 2 questions from the list below" out of the MIDDLE
+		//     and keeps "In any case, they must answer truthfully." — its last clause survived, so
+		//     nothing was cut from the end, and yet the list above is stranded all the same.
+		return {
+			html: body ? openTag + body + closeTag : "",
+			leadLost: lastClauseCut || !_ENDS_ON_COLON.test(body),
+		};
 	};
 
 	// Walk the top-level blocks, rewriting only <p>. Bare text outside any block (a homebrew
@@ -410,31 +460,43 @@ export function stripTierProse(description, moveResults = null) {
 	let out = "";
 	let last = 0;
 	let m;
+	// Whether the FIRST `<ul>` lost the sentence that introduced it. A move's option list is led
+	// into either by a tier clause ("on a 10+, pick 2; on a 7-9, pick 1:" — Clash, Forage,
+	// Interfere) or by prose that is not a tier at all ("You can spend Readiness 1-for-1 to:" —
+	// Defend, Silver Tongued). The first kind is lifted into the ladder and the list is left
+	// pointing at nothing; the second stays exactly where its author put it. This is the flag
+	// that tells the two apart, and it is answered by what was CUT rather than by reading the
+	// remaining sentence for a colon: an introducer can end any way at all.
+	let listLeadCut = false;
+	let seenList = false;
+	// What the block just before this one said about whether it still introduces the next.
+	let prevLeadLost = false;
 	_BLOCK_RE.lastIndex = 0;
 	while ((m = _BLOCK_RE.exec(src)) !== null) {
 		out += src.slice(last, m.index);
 		last = m.index + m[0].length;
-		out += /^<p\b/i.test(m[0]) ? rewriteParagraph(m[0]) : m[0];
+		if (/^<p\b/i.test(m[0])) {
+			const rewritten = rewriteParagraph(m[0]);
+			out += rewritten.html;
+			prevLeadLost = rewritten.leadLost;
+			continue;
+		}
+		if (!seenList && /^<ul\b/i.test(m[0])) {
+			seenList = true;
+			listLeadCut = prevLeadLost;
+		}
+		prevLeadLost = false;
+		out += m[0];
 	}
 	const tail = src.slice(last);
 	if (tail.trim() && !_BLOCKISH_RE.test(tail)) {
-		out += rewriteParagraph("<p>" + tail + "</p>").replace(/^<p>|<\/p>$/g, "");
+		out += rewriteParagraph("<p>" + tail + "</p>").html.replace(/^<p>|<\/p>$/g, "");
 	} else {
 		out += tail;
 	}
-	return { body: dropped ? out : src, riders };
-}
-
-/**
- * The options the description already bullets, as plain text.
- *
- * `firstOptionList` (utils/chat.js) rather than every `<li>` in the body, because that helper is
- * where "what is a move's printed option list" is decided for the whole system: the FIRST list,
- * since a second one is a note about the first, and never a nested one. Reading every `<li>`
- * instead let a note's items vote a real "pick 1" list off the ladder as already-shown.
- */
-function _listItemTexts(html) {
-	return (firstOptionList(html)?.items ?? []).map(stripHtmlToText).filter(Boolean);
+	// No `dropped &&` guard: `leadLost` is only ever true past the `droppedHere` return above, and
+	// `droppedHere` and `dropped` are set in the same statement, so a cut has always happened.
+	return { body: dropped ? out : src, riders, listLeadCut };
 }
 
 /**
@@ -457,19 +519,25 @@ function _optionsAlreadyListed(value, listed) {
  * The ladder itself: one labelled row per tier that has text. "" when there is nothing to show.
  * `listedOptions` is the plain text of the bullets the description already shows, so a tier
  * whose outcome is a choice from that same list doesn't reprint it.
+ *
+ * Each row names its rung in `data-tier` as well as in its class. The class is what the row is
+ * PAINTED from; the attribute is what the rolled-rung mark SELECTS by, so a result card's
+ * `[data-rolled-tier="partial"] > [data-tier="partial"]` reaches its row without depending on
+ * how that row happens to be painted. Same split the rest of the roll card already uses for
+ * anything it holds one of per tier.
  */
 export function moveTiersHtml(moveResults, listedOptions = []) {
 	const rows = moveTierRows(moveResults);
 	if (!rows.length) return "";
 	const items = rows.map(r =>
-		'<li class="stonetop-move-tier stonetop-move-tier--' + r.key + '">'
+		'<li class="stonetop-move-tier stonetop-move-tier--' + r.key + '" data-tier="' + r.key + '">'
 		+ '<span class="stonetop-move-tier-label">' + escHtml(r.label) + '</span>'
 		+ '<span class="stonetop-move-tier-text">'
 		+ formatOutcomeDetail(r.value, { introOnly: _optionsAlreadyListed(r.value, listedOptions) })
 		+ '</span>'
 		+ '</li>'
 	).join("");
-	return '<ul class="stonetop-move-tiers">' + items + '</ul>';
+	return '<ul class="' + MOVE_TIERS_CLASS + '">' + items + '</ul>';
 }
 
 /**
@@ -508,8 +576,93 @@ export function moveBodyHtml(description, moveResults) {
 	// Suck the Poison Out — 5 of the 54 shipped, and the reason this argument exists).
 	const results = _mergeTiers(parseTiersFromProse(description), moveResults);
 	if (!moveTierRows(results).length) return String(description ?? "");
-	const { body, riders } = stripTierProse(description, results);
-	const ladder = moveTiersHtml(results, _listItemTexts(body));
+	const { body, riders, listLeadCut } = stripTierProse(description, results);
 	const notes = riders.map(r => '<p class="stonetop-move-tiers-note">' + r + '</p>').join("");
-	return body + ladder + notes;
+
+	// THE move's printed option list, found ONCE and used for both questions below — which
+	// options the ladder must not reprint, and which list gets re-hung under it. `firstOptionList`
+	// (utils/chat.js) is where "what is a move's printed option list" is decided for the whole
+	// system: the FIRST list, since a second one is a note about the first, and never a nested
+	// one. Asking it twice invited the two answers to disagree.
+	const list = firstOptionList(body);
+	const ladder = moveTiersHtml(results, (list?.items ?? []).map(stripHtmlToText).filter(Boolean));
+
+	// THE LIST FOLLOWS THE ROWS THAT SEND YOU TO IT. A move whose options were introduced by a
+	// tier clause — "on a 10+, pick 2; on a 7-9, pick 1:" (Clash, Forage, Interfere, Let Fly) —
+	// has that sentence lifted into the ladder, which left the bullets stranded above the rows
+	// that now say "pick 1 from the list" and pointed the reader upwards to find it.
+	//
+	// Only a list whose introducer was CUT moves (`listLeadCut`). Defend's "You can spend
+	// Readiness 1-for-1 to:" and Silver Tongued's "You may spend Nerve, 1-for-1, to:" are not
+	// tier clauses and survive the strip, and their lists are a separate offer rather than the
+	// outcome of a roll — those stay attached to the sentence that opens them.
+	if (!listLeadCut || !list) return body + ladder + notes;
+	// Moved WHOLE and unmodified, ticked options and all: `data-index` is positional within its
+	// own `<ul>`, so a message's saved ticks still land on the option they were put on. The rider
+	// goes last of all — it comments on the whole move ("either way, gain advantage on your next
+	// roll to act on the answer"), and the answers it means are in the list above it.
+	const withoutList = (body.slice(0, list.index) + body.slice(list.index + list.length)).trim();
+	return withoutList + ladder + body.slice(list.index, list.index + list.length) + notes;
+}
+
+/**
+ * The body of a move's CHAT CARD: its printed options made tickable, then its outcomes re-laid
+ * as the ladder. A move that states no outcome comes back exactly as it was, so every card
+ * posted through here is safe to build this way.
+ *
+ * THE ORDER IS LOAD-BEARING, both ways round.
+ *
+ * Ticking first, because `pickableMoveDescription` reads the lead-in ABOVE the list for a cap,
+ * and that cap is written in the very tier prose the ladder is about to lift out: "on a 10+,
+ * pick 2; on a 7-9, pick 1:". Stripping first would leave every option list uncapped.
+ *
+ * And the ladder second, because it is a `<ul>` of its own. On a move that prints no options of
+ * its own it would be the FIRST list in the body, which is the other half of why
+ * `firstOptionList` refuses it by class: either order alone would have handed the tier rows a
+ * checkbox each.
+ *
+ * @param {string} description   The move's HTML, already filtered for an "ask" move's chosen stat.
+ * @param {object|null} [moveResults]  `system.moveResults`, or null on a move that stores none
+ *   (an NPC or monster move, an arcanum's mystery), whose tiers are read out of the prose.
+ * @param {{pickable?: boolean}} [opts]  `pickable: false` for a move that declares its own pool
+ *   in `system.pickOptions` (a love letter), whose list is the card's own checklist instead.
+ */
+export function moveCardBody(description, moveResults = null, { pickable = true } = {}) {
+	const body = pickable ? pickableMoveDescription(description) : String(description ?? "");
+	return moveBodyHtml(body, moveResults ?? null);
+}
+
+/**
+ * Mark the rung a roll landed on, so the ladder on a RESULT card says which of the three
+ * outcomes actually happened rather than leaving the reader to match the total against the
+ * labels themselves.
+ *
+ * A stamp on the `<ul>` naming the rung, not a class on the row: the row is then chosen in CSS
+ * (`[data-rolled-tier="partial"] > [data-tier="partial"]`), which means the mark MOVES when a
+ * GM's Shift Up/Down rewrites one attribute, with no row to find and no second row to unmark.
+ * It also keeps the mark out of `moveTiersHtml`, whose output is the same ladder on eighteen
+ * sheet surfaces where no dice have been rolled and nothing should be lit.
+ *
+ * Only the FIRST ladder is stamped, which is the only one a card can have — a move's description
+ * is laid out once. A body with no ladder in it (a move that states no outcome, a damage roll)
+ * comes back untouched, so every roll can be run through this.
+ *
+ * @param {string} html      A move card body, as `moveCardBody` built it.
+ * @param {string} tierKey   "success" | "partial" | "failure". A 12+ is a strong hit, so a caller
+ *                           holding "critical" passes "success".
+ */
+export function markRolledTier(html, tierKey) {
+	const src = String(html ?? "");
+	if (!MOVE_TIERS.some(t => t.key === tierKey)) return src;
+	// Matched on the opening tag alone. The ladder is built here and never nested, so there is
+	// nothing to balance, and rewriting only the tag leaves the rows exactly as they were.
+	//
+	// The tag is matched by CLASS rather than by the exact string `moveTiersHtml` writes: an `id`
+	// or a second class added there would have slid a byte-identical literal out from under this
+	// one silently, leaving an unmarked ladder and no failure to read.
+	// The attribute is appended AFTER whatever the tag already carries, so the ladder's markup is
+	// the same string it always was with one attribute more on the end.
+	const open = new RegExp(
+		`<ul\\b(?![^>]*\\b${ROLLED_TIER_ATTR}=)([^>]*\\bclass="[^"]*\\b${MOVE_TIERS_CLASS}\\b[^>]*)>`);
+	return src.replace(open, `<ul$1 ${ROLLED_TIER_ATTR}="${tierKey}">`);
 }

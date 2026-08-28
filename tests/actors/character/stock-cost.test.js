@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import { readRepo as read } from "../../fakes/css.js";
 import {
 	stockSources, canPayStock, defaultStockSource, stockCostFromDescription,
-	SACRED_POUCH_SLUG, RITES_OF_THE_LAND, DEFAULT_SACRED_POUCH_MAX,
+	SACRED_POUCH_SLUG, DEFAULT_SACRED_POUCH_MAX,
 } from "../../../module/actors/character/stock-cost.js";
 import { GUIDED_CHARACTER_MOVES } from "../../../module/actors/character/StonetopCharacterSheet.js";
 
@@ -221,7 +221,6 @@ describe("Danu's Grasp, on the sheet", () => {
 describe("paying for a move that does not roll", () => {
 	const SHEET = read("module/actors/character/StonetopCharacterSheet.js");
 	const STONETOP = read("stonetop.js");
-	const strip = h => h.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 	const moves = new Map();
 	const walk = dir => {
 		for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

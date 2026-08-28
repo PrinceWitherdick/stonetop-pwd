@@ -5389,15 +5389,23 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
    at (0,1,1) / (0,2,1), far LATER in this file. A bare `.stonetop-move-tier` ties or
    loses to those wherever the ladder is used, and the tier row would grow a spiral in
    front of a label that is already its marker. `ul.stonetop-move-tiers` likewise
-   outweighs `.stonetop-item-description ul`. */
-ul.stonetop-move-tiers {
+   outweighs `.stonetop-item-description ul`.
+
+   IN CHAT the same three rules need an ID in front of them, and that is why each carries a
+   second selector rather than a second block: the move card and the roll card give their
+   description container a spiral bullet on every `li` from selectors that carry `#chat`, and
+   the ladder has to outrank those where it is read most. Specificity is counted per SELECTOR,
+   not per rule, so one declaration serves both. */
+ul.stonetop-move-tiers,
+:is(#chat, #chat-notifications, #chat-popout) .message ul.stonetop-move-tiers {
 	list-style: none;
 	margin: 5px 0 0;
 	padding: 5px 0 0;
 	border-top: 1px solid var(--st-card-rule);
 }
 
-.stonetop-move-tiers li.stonetop-move-tier {
+.stonetop-move-tiers li.stonetop-move-tier,
+:is(#chat, #chat-notifications, #chat-popout) .message ul.stonetop-move-tiers li.stonetop-move-tier {
 	display: flex;
 	gap: 8px;
 	position: static;
@@ -5405,7 +5413,8 @@ ul.stonetop-move-tiers {
 	padding-left: 0;
 }
 
-.stonetop-move-tiers li.stonetop-move-tier::before {
+.stonetop-move-tiers li.stonetop-move-tier::before,
+:is(#chat, #chat-notifications, #chat-popout) .message ul.stonetop-move-tiers li.stonetop-move-tier::before {
 	content: none;
 }
 
@@ -5427,12 +5436,73 @@ ul.stonetop-move-tiers {
 .stonetop-move-tier--partial .stonetop-move-tier-label { color: var(--st-tier-partial-text); }
 .stonetop-move-tier--failure .stonetop-move-tier-label { color: var(--st-tier-failure-text); }
 
+/* THE LIST THE RUNGS SEND YOU TO. A move whose options were introduced by a tier clause has
+   that clause lifted into the ladder, so the list is re-hung directly under it (move-tiers.js
+   `moveBodyHtml`). Butted straight against the last rung it reads as a fourth rung with an
+   empty label, and this gap is the only thing that says otherwise.
+
+   Two SELECTORS, one declaration, for the reason the whole ladder is: in chat the list is a
+   `.stonetop-picklist` whose margin is zeroed at (1,3,0) a few thousand lines below, so the chat
+   arm has to carry the same three classes to outrank it. The sheet arm only has to beat
+   `<container> ul`, which the tag in front of the class is enough for. */
+ul.stonetop-move-tiers + ul,
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
+	ul.stonetop-move-tiers + ul {
+	margin-top: 7px;
+}
+
 /* The "either way, …" rider the book hangs off the end of its tier sentence, which
    belongs to every tier rather than to one — so it sits under the whole ladder. */
 .stonetop-move-tiers-note {
 	margin: 4px 0 0;
 	font-style: italic;
 	opacity: 0.85;
+}
+
+/* THE RUNG THE DICE LANDED ON, marked on a RESULT card. `data-rolled-tier` is stamped on the
+   list by utils/move-tiers.js `markRolledTier` and re-stamped by the GM's Shift Up/Down, so the
+   mark moves by rewriting one attribute rather than by finding a row to light and another to
+   put out. Nothing on a SHEET carries the attribute, which is what keeps the same ladder unlit
+   on the eighteen surfaces where no dice have been rolled.
+
+   Painted as the result block above it is (`.stonetop-roll-result.success` and its siblings): a
+   rule down the left edge in the tier's own ink over the faintest wash of it. That is the tie
+   the mark is FOR — the eye goes from the big total to the row it belongs to.
+
+   Colour comes from the shared `--st-tier-*-text` tokens rather than the result block's own
+   hardcoded greens and reds, so the inverted card of a character who came back from the dead
+   re-points these along with everything else it re-points (see "What the undead say").
+
+   The geometry cancels itself: the padding that gives the wash room to breathe is taken back
+   out as negative margin, so a marked row sits at exactly the same left edge as the two around
+   it and the ladder does not jump when a Shift moves the mark.
+
+   WHICH rung is marked is answered once per rung, by naming that rung's ink; everything the
+   mark then paints is stated once for all three below. The row is matched on `data-tier`
+   rather than on its class, which is the split the rest of the roll card uses: painted from
+   the class, selected by the attribute.
+
+   These three carry no `#chat` prefix because they need none — nothing else in the file
+   declares this property, and a custom property has no competitor to outrank. */
+ul.stonetop-move-tiers[data-rolled-tier="success"] > li[data-tier="success"] { --st-rolled-ink: var(--st-tier-success-text); }
+ul.stonetop-move-tiers[data-rolled-tier="partial"] > li[data-tier="partial"] { --st-rolled-ink: var(--st-tier-partial-text); }
+ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { --st-rolled-ink: var(--st-tier-failure-text); }
+
+/* The mark itself, once for all three rungs. The three pairings are repeated here WITH the
+   chat prefix, and that is not avoidable: the plain-row rule above zeroes `margin`/`padding`
+   from a selector carrying an ID, so the geometry has to outrank it — and it must land on the
+   LANDED row only, which no property-reading selector can express. Only the ink is deduped by
+   the property; the rung↔row pairing is what CSS makes us say twice. */
+:is(#chat, #chat-notifications, #chat-popout) .message ul.stonetop-move-tiers[data-rolled-tier="success"] > li[data-tier="success"],
+:is(#chat, #chat-notifications, #chat-popout) .message ul.stonetop-move-tiers[data-rolled-tier="partial"] > li[data-tier="partial"],
+:is(#chat, #chat-notifications, #chat-popout) .message ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] {
+	background: color-mix(in srgb, var(--st-rolled-ink) 10%, transparent);
+	box-shadow: inset 3px 0 0 var(--st-rolled-ink);
+	margin: 3px -8px;
+	padding: 3px 8px;
+	border-radius: var(--st-radius-sm);
+	font-weight: bold;
 }
 
 .stonetop-item.move-locked {
@@ -33680,6 +33750,14 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    until the pointer is on it. */
 .stonetop-roll-card .stonetop-xp-undo {
 	opacity: 0.75;
+}
+
+/* The undo is the only control on its card, and unlike the tier actions it has no row of
+   siblings to sit beside, so it takes the whole width. The extra class is there to beat the
+   shared `width: auto; flex: 0 0 auto` the action row puts on every button in it. */
+.stonetop-roll-card .stonetop-roll-actions .stonetop-xp-undo {
+	width: 100%;
+	flex: 1 1 auto;
 }
 
 .stonetop-roll-card .stonetop-xp-undo:hover:not(:disabled) {

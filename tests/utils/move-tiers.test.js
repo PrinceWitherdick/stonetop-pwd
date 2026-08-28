@@ -1,13 +1,17 @@
 import { describe, it, expect } from "vitest";
 import {
 	balanceInlineHtml,
+	markRolledTier,
 	moveBodyHtml,
+	moveCardBody,
 	moveTierRows,
 	moveTiersHtml,
 	parseTiersFromProse,
 	splitClauses,
 	stripTierProse,
 } from "../../module/utils/move-tiers.js";
+import { declarations, readCss, readRepo } from "../fakes/css.js";
+import { MOVE_TIERS_CLASS } from "../../module/utils/move-results.js";
 
 // The shipped moveResults for the moves each case is drawn from, verbatim from
 // packs/src/stonetop-items — the transform is only ever as good as the pairing of a
@@ -30,6 +34,17 @@ describe("splitClauses", () => {
 		expect(splitClauses("roll +STR: on a 10+, it works; on a 7-9, it doesn't.")).toEqual([
 			"roll +STR:", "on a 10+, it works;", "on a 7-9, it doesn't.",
 		]);
+	});
+
+	// An HTML entity ends in a semicolon, and Dark Succor is written "<strong>on a 6&ndash;
+	// </strong>, all 3 apply:" — the entity closes right in front of a tag, which is exactly
+	// what the rule above counts as a boundary. Split there, "on a 6" went out as a tier and
+	// ", all 3 apply:" stayed behind as a fragment, taking the move's 6- rung with it.
+	it("does not cut inside an HTML entity", () => {
+		expect(splitClauses("<strong>on a 6&ndash;</strong>, all 3 apply:"))
+			.toEqual(["<strong>on a 6&ndash;</strong>, all 3 apply:"]);
+		expect(splitClauses("<em>on a 7&#8211;9</em>, choose 2; then stop."))
+			.toEqual(["<em>on a 7&#8211;9</em>, choose 2;", "then stop."]);
 	});
 
 	it("does not cut inside a tag, so markup is never split mid-attribute", () => {
@@ -236,6 +251,23 @@ describe("parseTiersFromProse", () => {
 		expect(r.failure.value).toBe("You see nothing.");
 	});
 
+	// The list the rung is pointing at is right underneath it now, so the colon is where the
+	// sentence ends. Left to the full-stop rule it read "…and pick 1:." above its own options.
+	it("lets a rung end on the colon that leads into the option list", () => {
+		const r = parseTiersFromProse("<p>Roll +STR: on a 10+, it works and pick 1:</p>"
+			+ "<ul><li>A</li></ul><p>On a 7-9, it mostly works.</p>");
+		expect(r.success.value).toBe("It works and pick 1:");
+	});
+
+	// The entity's own semicolon is not a clause boundary, so a rung written with an en dash
+	// keeps its text (Dark Succor's 6-, which used to vanish entirely).
+	it("reads a rung whose dash is written as an entity", () => {
+		const r = parseTiersFromProse("<p>Roll +Favor: <strong>on a 10+</strong>, choose 1;"
+			+ " <strong>on a 7&ndash;9</strong>, choose 2; <strong>on a 6&ndash;</strong>, all 3 apply.</p>");
+		expect(r.partial.value).toBe("Choose 2.");
+		expect(r.failure.value).toBe("All 3 apply.");
+	});
+
 	it("reads the steading's own labelled lines, 'On a miss' included", () => {
 		const r = parseTiersFromProse(
 			"<p>Roll +Fortunes.</p><p><strong>On a 10+:</strong> they go along with it.</p>"
@@ -387,5 +419,263 @@ describe("moveBodyHtml", () => {
 		const html = moveBodyHtml("Roll +INT: on a 10+, good.", KNOW_THINGS);
 		expect(html).toContain('<ul class="stonetop-move-tiers">');
 		expect(html.startsWith("Roll +INT:")).toBe(true);
+	});
+});
+
+// A move's option list is introduced either by a tier clause ("on a 10+, pick 2; on a 7-9, pick
+// 1:") or by prose that is not a tier at all ("You can spend Readiness 1-for-1 to:"). Lifting the
+// tier prose into the ladder strands the first kind: the bullets end up ABOVE the rows that say
+// "pick 1 from the list", pointing the reader back up the card to find what they mean.
+describe("where the option list ends up", () => {
+	const INTERFERE = "<p>When you foil another PC, roll...</p>"
+		+ "<p>On a 10+, they pick 1 from the list below; on a 7-9, they pick 1 but you are exposed.</p>"
+		+ "<ul><li>Do it anyway, with disadvantage</li><li>Relent and be foiled</li></ul>";
+	const RESULTS = {
+		success: { label: "10+", value: "They pick 1 from the list below." },
+		partial: { label: "7-9", value: "They pick 1 but you are exposed." },
+		failure: { label: "6-",  value: "The GM makes a hard move." },
+	};
+
+	const order = (html) => ({
+		ladder: html.indexOf('<ul class="stonetop-move-tiers"'),
+		list:   html.search(/<ul(?![^>]*stonetop-move-tiers)/i),
+	});
+
+	it("hangs the list under the ladder when a tier clause was its lead-in", () => {
+		const { ladder, list } = order(moveBodyHtml(INTERFERE, RESULTS));
+		expect(ladder).toBeGreaterThan(-1);
+		expect(list).toBeGreaterThan(ladder);
+	});
+
+	it("moves the list whole, options and markup intact", () => {
+		const html = moveBodyHtml(INTERFERE, RESULTS);
+		expect(html).toContain("<ul><li>Do it anyway, with disadvantage</li><li>Relent and be foiled</li></ul>");
+		expect((html.match(/Relent and be foiled/g) ?? []).length).toBe(1);
+	});
+
+	// Defend's list is a separate offer rather than the outcome of a roll, and the sentence that
+	// opens it survives the strip — so it stays where its author put it, above the ladder.
+	it("leaves a list whose own prose lead-in survived exactly where it was", () => {
+		const defend = "<p>When you defend, roll +CON: on a 10+, hold 3 Readiness; on a 7-9, hold 1."
+			+ " You can spend Readiness 1-for-1 to:</p>"
+			+ "<ul><li>Suffer an attack's damage instead of your ward</li><li>Halve an attack's damage</li></ul>";
+		const { ladder, list } = order(moveBodyHtml(defend, null));
+		expect(ladder).toBeGreaterThan(-1);
+		expect(list).toBeLessThan(ladder);
+	});
+
+	// A trailing colon is not enough on its own to hold the list: Clash keeps "roll +STR:" and
+	// then loses "on a 10+, … pick 1:" from under it, so that colon introduces the LADDER.
+	it("still moves the list when the surviving colon leads into the ladder instead", () => {
+		const clash = "<p>When you fight, roll +STR: on a 10+, it works and pick 1:</p>"
+			+ "<ul><li>Avoid the attack</li><li>Strike hard and fast</li></ul>";
+		const { ladder, list } = order(moveBodyHtml(clash, CLASH));
+		expect(list).toBeGreaterThan(ladder);
+	});
+
+	// All is Illuminated loses its lead-in out of the MIDDLE of the paragraph and keeps a last
+	// clause that introduces nothing, so the list is stranded even though the cut was not at
+	// the end.
+	it("moves the list when the lead-in was cut from the middle of the paragraph", () => {
+		const illuminated = "<p>When you look closely, roll +WIS: on a 10+, ask 2 questions from the"
+			+ " list below; on a 7-9, ask 1. In any case, they must answer truthfully.</p>"
+			+ "<ul><li>Of what are they most ashamed?</li><li>What do they most desire?</li></ul>";
+		const html = moveBodyHtml(illuminated, null);
+		const { ladder, list } = order(html);
+		expect(list).toBeGreaterThan(ladder);
+		expect(html).toContain("they must answer truthfully");
+	});
+
+	// The rider comments on the whole move, and the answers it talks about are in the list.
+	it("puts the either-way rider after the moved list, not between it and the ladder", () => {
+		const seekInsight = "<p>When you study a situation, roll +WIS: on a 10+, ask 3 from the list"
+			+ " below; on a 7-9, ask 1; either way, gain advantage on your next move.</p>"
+			+ "<ul><li>What happened here recently?</li><li>What is about to happen?</li></ul>";
+		const html = moveBodyHtml(seekInsight, null);
+		const { ladder, list } = order(html);
+		expect(list).toBeGreaterThan(ladder);
+		expect(html.indexOf("stonetop-move-tiers-note")).toBeGreaterThan(list);
+	});
+
+	it("says so on the strip itself, so the decision has one home", () => {
+		expect(stripTierProse(INTERFERE, RESULTS).listLeadCut).toBe(true);
+		expect(stripTierProse("<p>Pick 1:</p><ul><li>A</li></ul>", null).listLeadCut).toBe(false);
+	});
+
+	// Moved by `moveCardBody` too, ticks and cap and all: `data-index` is positional within the
+	// list's own <ul>, so a message's saved ticks still land on the option they were put on.
+	it("carries a ticked list under the ladder with its indices unchanged", () => {
+		const html = moveCardBody(INTERFERE, RESULTS);
+		const { ladder, list } = order(html);
+		expect(list).toBeGreaterThan(ladder);
+		expect(html).toContain('data-index="0"');
+		expect(html).toContain('data-index="1"');
+	});
+});
+
+// The ladder reached every SHEET surface a commit ago, and the CHAT CARD was the one that still
+// printed the book's run-on sentence: rolling Defy Danger, or posting any move's text, put a
+// paragraph in the log with "on a 10+ … on a 7-9 …" buried in the middle of it, while the same
+// move on the moves tab laid the three rungs out in a column.
+describe("moveCardBody", () => {
+	const CLASH_DESC = "<p>When you fight, roll +STR: on a 10+, it works and pick 1:</p>"
+		+ "<ul><li>Avoid, prevent, or counter your enemy's attack</li>"
+		+ "<li>Strike hard and fast, for 1d6 extra damage, but suffer your enemy's attack</li></ul>"
+		+ "<p>On a 7-9, it mostly works.</p>";
+
+	it("ticks the move's options AND lays out its tiers", () => {
+		const html = moveCardBody(CLASH_DESC, CLASH);
+		expect(html).toContain("stonetop-picklist-check");
+		expect(html).toContain('<ul class="stonetop-move-tiers">');
+	});
+
+	// The cap is written in the very tier prose the ladder lifts out ("on a 10+, it works and
+	// pick 1:"), so stripping first would leave the list uncapped and every option tickable.
+	it("reads the pick cap before the sentence stating it is lifted out", () => {
+		expect(moveCardBody(CLASH_DESC, CLASH)).toContain('data-pick-max-success="1"');
+	});
+
+	// The other half of the same ordering problem: the ladder is a <ul> too, and on a move that
+	// prints no options of its own it is the only list in the body.
+	it("never hands the tier rows a checkbox each", () => {
+		const html = moveCardBody("<p>Roll +INT: on a 10+, good; on a 7-9, less good.</p>", KNOW_THINGS);
+		expect(html).toContain('<ul class="stonetop-move-tiers">');
+		expect(html).not.toContain("stonetop-picklist");
+	});
+
+	it("leaves the list alone for a move that declares its own pool", () => {
+		const html = moveCardBody(CLASH_DESC, CLASH, { pickable: false });
+		expect(html).not.toContain("stonetop-picklist");
+		expect(html).toContain('<ul class="stonetop-move-tiers">');
+	});
+
+	it("returns a move that states no outcome exactly as it was", () => {
+		const plain = "<p>You are hard to kill.</p>";
+		expect(moveCardBody(plain, null)).toBe(plain);
+	});
+});
+
+// The ladder inherits its container's ink and indent everywhere else, which is why it declares
+// almost nothing of its own. Chat is the exception: both card description containers give every
+// list item a spiral bullet through a selector carrying an ID, so the row's own "content: none"
+// loses to it and the "10+" that IS the row's marker grows a second marker in front of it.
+describe("the ladder in a chat card", () => {
+	const CSS = readCss();
+	const CHAT = ":is(#chat, #chat-notifications, #chat-popout) .message ul.stonetop-move-tiers";
+
+	// `declarations` splits a prelude at paren depth 0 (tests/fakes/css.js), so the `:is(…)`
+	// these selectors are built on no longer hides them from it — and a rule that states one
+	// declaration for both the sheet and the chat arm answers to either.
+	const ruleFor = (selector) => declarations(CSS, selector);
+
+	it("kills the spiral on a tier row with an ID in front of the selector", () => {
+		expect(ruleFor(`${CHAT} li.stonetop-move-tier::before`)).toContain("content: none");
+	});
+
+	it("keeps the hairline over the ladder that the chat list rules would zero", () => {
+		const rule = ruleFor(CHAT);
+		expect(rule).toContain("border-top");
+		expect(rule).toContain("margin: 5px 0 0");
+	});
+
+	it("keeps the label and its outcome on one row", () => {
+		expect(ruleFor(`${CHAT} li.stonetop-move-tier`)).toContain("display: flex");
+	});
+
+	// The mark is selected by pairing the list's `data-rolled-tier` with the row's `data-tier`,
+	// which is what lets a GM's Shift Up/Down move it by rewriting one attribute. Each rung
+	// names its own ink and the mark reads it, so the ink is stated once per rung and the paint
+	// once for all three.
+	for (const tier of ["success", "partial", "failure"]) {
+		it(`names the ${tier} rung's ink from the shared tier token`, () => {
+			const rule = ruleFor(`ul.stonetop-move-tiers[data-rolled-tier="${tier}"] > li[data-tier="${tier}"]`);
+			expect(rule).toContain(`--st-rolled-ink: var(--st-tier-${tier}-text)`);
+		});
+	}
+
+	it("paints the rolled row from whichever ink its rung named", () => {
+		// The failure arm is last in the shared rule's prelude, so it is the one `ruleFor` can
+		// look up whole; the block it returns is the one all three rungs share.
+		const rule = ruleFor(`${CHAT}[data-rolled-tier="failure"] > li[data-tier="failure"]`);
+		expect(rule).toContain("box-shadow: inset");
+		expect(rule).toContain("var(--st-rolled-ink)");
+		// Never the hardcoded greens and reds — an inverted undead card re-points the tokens.
+		expect(rule).not.toMatch(/#[0-9a-f]{3,6}/i);
+	});
+
+	// A list re-hung under the ladder is butted straight against the last rung, where it reads
+	// as a fourth rung with an empty label. The gap is the only thing that says otherwise.
+	it("gives a re-hung option list room to read as its own block", () => {
+		expect(ruleFor("ul.stonetop-move-tiers + ul")).toContain("margin-top: 7px");
+		// In chat that list is a `.stonetop-picklist` whose margin is zeroed at (1,3,0) far
+		// below, so the chat arm has to carry the same three classes to outrank it.
+		const chatArm = CSS.match(/\.stonetop-roll-card-description\)\s*ul\.stonetop-move-tiers \+ ul \{([^{}]*)\}/);
+		expect(chatArm?.[1]).toContain("margin-top: 7px");
+	});
+
+	// A marked row is padded so the wash has room, and the padding is taken straight back out
+	// as negative margin — otherwise the row would step right as the mark landed on it, and
+	// step back again on a Shift. Matched by regex, not by `ruleFor`: this one rule is shared
+	// by all three rungs, so its prelude is three selectors rather than the one to look up.
+	it("marks a row without moving it", () => {
+		const shared = CSS.match(/\[data-rolled-tier="failure"\][^{}]*\{([^{}]*margin: 3px -8px[^{}]*)\}/);
+		expect(shared?.[1]).toContain("padding: 3px 8px");
+	});
+});
+
+// Which rung the dice landed on, said on the ladder itself. The result block above already
+// states that one outcome; the mark is what puts it back among the other two.
+describe("markRolledTier", () => {
+	const LADDER = '<p>Roll +INT.</p><ul class="stonetop-move-tiers">'
+		+ '<li class="stonetop-move-tier stonetop-move-tier--success" data-tier="success">10+</li>'
+		+ '<li class="stonetop-move-tier stonetop-move-tier--partial" data-tier="partial">7-9</li></ul>';
+
+	it("stamps the rolled rung on the list", () => {
+		expect(markRolledTier(LADDER, "partial")).toContain('<ul class="stonetop-move-tiers" data-rolled-tier="partial">');
+	});
+
+	it("leaves the rows themselves alone, so nothing has to be unmarked later", () => {
+		const html = markRolledTier(LADDER, "partial");
+		expect(html).toContain('<li class="stonetop-move-tier stonetop-move-tier--success" data-tier="success">');
+		expect((html.match(/data-rolled-tier/g) ?? []).length).toBe(1);
+	});
+
+	it("passes a body with no ladder through untouched", () => {
+		const plain = "<p>You are hard to kill.</p>";
+		expect(markRolledTier(plain, "success")).toBe(plain);
+	});
+
+	it("refuses a tier it does not know, rather than stamping a class nothing paints", () => {
+		// "critical" is the shifted 12+ label, and the caller is expected to fold it into the
+		// strong hit — the ladder has the three rungs a move states and no fourth.
+		expect(markRolledTier(LADDER, "critical")).toBe(LADDER);
+		expect(markRolledTier(LADDER, "")).toBe(LADDER);
+	});
+
+	it("is idempotent, so a re-render cannot stack a second stamp", () => {
+		const once = markRolledTier(LADDER, "success");
+		expect(markRolledTier(once, "failure")).toBe(once);
+	});
+
+	// A GM's Shift Up/Down rewrites a landed card's tier, and every per-tier thing on that card
+	// has to follow it. The ladder follows by MOVING the stamp — not by joining the hide/show
+	// loop beside it, which would take two thirds of a move's printed text off the card.
+	it("is moved, not re-hidden, when the GM shifts a landed card", () => {
+		const boot = readRepo("stonetop.js");
+		// Selected off the shared constants rather than a retyped selector, so this asserts the
+		// shift handler finds the ladder and re-stamps it — not how the string was spelled.
+		expect(boot).toContain("ul.${MOVE_TIERS_CLASS}[${ROLLED_TIER_ATTR}]");
+		expect(boot).toContain("ladder.setAttribute(ROLLED_TIER_ATTR, activeTier)");
+		// And it must NOT be swept into the hide/show loop beside it.
+		expect(boot).not.toContain(`${MOVE_TIERS_CLASS} [hidden]`);
+	});
+});
+
+// The rows have to be selectable by rung for any of the above to hold.
+describe("the ladder's rows name their rung", () => {
+	it("carries data-tier alongside the class it is painted from", () => {
+		const html = moveTiersHtml(KNOW_THINGS);
+		expect(html).toContain('class="stonetop-move-tier stonetop-move-tier--success" data-tier="success"');
+		expect(html).toContain('data-tier="failure"');
 	});
 });

@@ -58,6 +58,7 @@ import { registerStonetopSingletonHooks } from "./module/hooks/StonetopSingleton
 import { info } from "./module/utils/logger.js";
 import { boldMissText } from "./module/utils/strings.js";
 import { moveBodyHtml } from "./module/utils/move-tiers.js";
+import { MOVE_TIERS_CLASS, ROLLED_TIER_ATTR } from "./module/utils/move-results.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
 import { rollSeasonsCard, sign, SPRING_SEASONS_RESULT, markMissXp } from "./module/utils/roll-engine.js";
 import { xpToLevelUp, adjustXp } from "./module/utils/xp.js";
@@ -1750,6 +1751,15 @@ function _shiftRollCardFlavor(flavor, total, formula = null) {
 	// (.stonetop-roll-tier-picklists) — shows the row matching the shifted tier and hides the rest.
 	if (result) {
 		const activeTier = result.key === "critical" ? "success" : result.key;
+
+		// The move's tier ladder marks the rung the roll landed on rather than hiding the other
+		// two (utils/move-tiers.js `markRolledTier`), so it moves the mark instead of joining the
+		// hide/show loop below: the ladder is the move's printed text, and a Shift Down must not
+		// take two thirds of it off a card the table has already read.
+		const ladder = wrapper.querySelector(
+			`.stonetop-roll-card ul.${MOVE_TIERS_CLASS}[${ROLLED_TIER_ATTR}]`);
+		if (ladder) ladder.setAttribute(ROLLED_TIER_ATTR, activeTier);
+
 		for (const group of wrapper.querySelectorAll(".stonetop-roll-card [data-active-tier]")) {
 			group.dataset.activeTier = activeTier;
 			for (const row of group.querySelectorAll(":scope > [data-tier]")) {
