@@ -64,7 +64,7 @@ import { rollSeasonsCard, sign, SPRING_SEASONS_RESULT, markMissXp } from "./modu
 import { xpToLevelUp, adjustXp } from "./module/utils/xp.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
 import { moveChatCard, canRewriteCard } from "./module/utils/chat.js";
-import { paintPickTally, releaseOverLimit } from "./module/utils/pick-tally.js";
+import { paintPickTally, pickLimitFor, releaseOverLimit } from "./module/utils/pick-tally.js";
 import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
@@ -1469,35 +1469,6 @@ function readStockFlags(actor) {
 // toggles locally. The message is the only home the checked state has: a love letter item
 // is consumed on resolve, and a homefront move never had an item to write to.
 /**
- * How many of THIS list the move allows, or null when nothing said clearly enough to enforce.
- *
- * Two sources, one attribute. A move's PRINTED list has its count read out of the prose above it
- * (utils/move-picks.js) and stamped by chat.js#pickableMoveDescription; a card's OWN pick list is
- * stamped by roll-engine#pickListsHtml from the same per-tier counts its result line states in
- * words. Whichever wrote it, this is the only reader — so the cap that is enforced and the
- * denominator in the tally above the boxes are always the one number.
- *
- * A per-tier cap is read against the tier the card actually rolled — so Forage's "on a 10+, pick
- * 2; on a 7-9, pick 1" allows two on a strong hit and one on a weak one, and a GM's Shift Up/Down
- * moves the cap with the result, because the tier is read live off the card rather than baked in.
- */
-function _pickLimitFor(list) {
-	if (!list) return null;
-	const flat = Number(list.dataset.pickMax);
-	if (flat > 0) return flat;
-	// The tier of the card THIS list is in, found by walking up from the list rather than by
-	// searching down from the message: a per-tier cap read off a neighbouring card's result
-	// would let a weak hit be capped by somebody else's strong one.
-	const tier = list.closest(".stonetop-roll-card")?.querySelector(".stonetop-roll-result")?.classList;
-	for (const key of ["success", "partial", "failure"]) {
-		if (!tier?.contains(key)) continue;
-		const n = Number(list.dataset[`pickMax${key[0].toUpperCase()}${key.slice(1)}`]);
-		return n > 0 ? n : null;
-	}
-	return null;
-}
-
-/**
  * Ticking past what the move allows releases the EARLIEST tick — the shared rule
  * (utils/pick-tally.js#releaseOverLimit, which explains why it releases rather than refuses),
  * plus the one thing that is this surface's own: a released row loses its picked styling.
@@ -1507,7 +1478,7 @@ function _pickLimitFor(list) {
  */
 function _releasePicksOverLimit(justChecked) {
 	const list = justChecked.closest(".stonetop-picklist");
-	for (const box of releaseOverLimit(list, justChecked, _pickLimitFor(list))) {
+	for (const box of releaseOverLimit(list, justChecked, pickLimitFor(list))) {
 		box.closest(".stonetop-picklist-item")?.classList.remove("is-picked");
 	}
 }
@@ -1526,7 +1497,7 @@ function _releasePicksOverLimit(justChecked) {
  */
 function _paintPickCount(list) {
 	if (!list) return;
-	paintPickTally(list, _pickLimitFor(list));
+	paintPickTally(list, pickLimitFor(list));
 }
 
 function _chatWireRollCardPicks(message, html) {

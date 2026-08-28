@@ -7,7 +7,7 @@ import { pickCountLabel } from "../../module/utils/move-picks.js";
 import { pickListsHtml, normalizePickPools, tierPickCounts } from "../../module/utils/roll-engine.js";
 import { pickableMoveDescription } from "../../module/utils/chat.js";
 import { parseArcanumMoves } from "../../module/data/arcana-moves.js";
-import { paintPickTally, wirePickTally, releaseOverLimit, PICK_TALLY_CLASS } from "../../module/utils/pick-tally.js";
+import { paintPickTally, pickLimitFor, wirePickTally, releaseOverLimit, PICK_TALLY_CLASS } from "../../module/utils/pick-tally.js";
 import { pickLimitsFrom } from "../../module/utils/move-picks.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -142,7 +142,7 @@ describe("every move source reaches a tickable, tallied list", () => {
 		const item = read("module/item/StonetopItem.js");
 		const at = item.indexOf("if (descriptionOnly) {");
 		expect(at).toBeGreaterThan(-1);
-		expect(item.slice(at, at + 800)).toContain("pickableMoveDescription(this.system?.description");
+		expect(item.slice(at, at + 1200)).toContain("moveCardBody(this.system?.description");
 	});
 
 	// The steading's homefront moves hand rollStat a pool per tier and state their count in the
@@ -303,6 +303,71 @@ function fakeList(ticks) {
 
 const readoutOf = parent => parent.children.find(c => c.classList.contains(PICK_TALLY_CLASS)) ?? null;
 
+/**
+ * A pick list as `pickLimitFor` sees it: the `data-pick-max*` it carries, and the card around it.
+ * `tier` is the result line's class on a card that rolled; `card: false` is the Moves tab's
+ * printed move, posted to a `.stonetop-chat-move` that has no result line to read at all.
+ */
+function fakePickList(dataset, { card = true, tier = null } = {}) {
+	const result = tier ? { classList: { contains: c => c === tier } } : null;
+	const cardEl = { querySelector: sel => (sel === ".stonetop-roll-result" ? result : null) };
+	return { dataset, closest: sel => (card && sel === ".stonetop-roll-card" ? cardEl : null) };
+}
+
+describe("pickLimitFor", () => {
+	it("takes a flat cap as stated, whatever the card rolled", () => {
+		expect(pickLimitFor(fakePickList({ pickMax: "2" }, { tier: "failure" }))).toBe(2);
+	});
+
+	it("reads a per-tier cap against the tier the card actually rolled", () => {
+		const forage = { pickMaxSuccess: "2", pickMaxPartial: "1" };
+		expect(pickLimitFor(fakePickList(forage, { tier: "success" }))).toBe(2);
+		expect(pickLimitFor(fakePickList(forage, { tier: "partial" }))).toBe(1);
+	});
+
+	// The 6- hands over the whole list, and the 10+'s 2 has no business capping it.
+	it("leaves a rolled tier that stamped no count of its own ticking free", () => {
+		expect(pickLimitFor(fakePickList({ pickMaxSuccess: "2" }, { tier: "failure" }))).toBeNull();
+	});
+
+	// The Moves tab posts a move's printed list on a card that never rolled, so a move stating
+	// its count per tier arrives with both counts and no tier to choose between them. Reading
+	// nothing there loses the cap AND the tally's denominator, which is what left Clash,
+	// Interfere, Seek Insight, The Hammer and the Book, Work With What You've Got and Formidable
+	// ticking free under a bare "0 options selected".
+	it("stands in the most generous tier when no roll says which applies", () => {
+		expect(pickLimitFor(fakePickList({ pickMaxSuccess: "2", pickMaxPartial: "1" }, { card: false }))).toBe(2);
+		expect(pickLimitFor(fakePickList({ pickMaxPartial: "1" }, { card: false }))).toBe(1);
+	});
+
+	// Same reasoning as data/arcana-moves.js, where a mystery is picked in its dialog BEFORE the
+	// dice: too loose lets a player tick one more than a weak hit turned out to allow, with the
+	// move's own ladder printed beside them saying so; too tight refuses what a 10+ plainly grants.
+	it("stands in the maximum on a card whose result line is not there either", () => {
+		expect(pickLimitFor(fakePickList({ pickMaxSuccess: "1", pickMaxPartial: "3" }))).toBe(3);
+	});
+
+	it("caps nothing when nothing was stamped", () => {
+		expect(pickLimitFor(fakePickList({}, { card: false }))).toBeNull();
+		expect(pickLimitFor(fakePickList({ pickMax: "0" }, { tier: "success" }))).toBeNull();
+		expect(pickLimitFor(null)).toBeNull();
+	});
+
+	// End to end on the move that regressed: its own shipped text, through the composer the Moves
+	// tab posts with, into the reader the boxes are enforced by.
+	it("caps Clash's printed list, as posted from the Moves tab", () => {
+		const clash = "<p>When you fight, roll +STR: on a 10+, it works and pick 1:</p>"
+			+ "<ul><li>Avoid your enemy's attack</li><li>Strike hard and fast</li></ul>";
+		const html = pickableMoveDescription(clash);
+		const dataset = {};
+		for (const [, tier, n] of html.matchAll(/data-pick-max-(success|partial|failure)="(\d+)"/g)) {
+			dataset[`pickMax${tier[0].toUpperCase()}${tier.slice(1)}`] = n;
+		}
+		expect(dataset).toEqual({ pickMaxSuccess: "1" });
+		expect(pickLimitFor(fakePickList(dataset, { card: false }))).toBe(1);
+	});
+});
+
 describe("paintPickTally", () => {
 	it("puts the tally immediately before the list it counts", () => {
 		const { parent, list } = fakeList([false, false, false]);
@@ -454,7 +519,7 @@ describe("the chat card's tally rides the wiring that is already there", () => {
 	it("reads its denominator from the one cap reader, so shown and enforced agree", () => {
 		const at = SRC.indexOf("function _paintPickCount");
 		expect(at).toBeGreaterThan(-1);
-		expect(SRC.slice(at, at + 400)).toContain("paintPickTally(list, _pickLimitFor(list))");
+		expect(SRC.slice(at, at + 400)).toContain("paintPickTally(list, pickLimitFor(list))");
 	});
 
 	// The same release the dialog uses, so the two surfaces cannot drift on what a click past
@@ -463,7 +528,7 @@ describe("the chat card's tally rides the wiring that is already there", () => {
 		const at = SRC.indexOf("function _releasePicksOverLimit");
 		expect(at).toBeGreaterThan(-1);
 		const body = SRC.slice(at, at + 400);
-		expect(body).toContain("releaseOverLimit(list, justChecked, _pickLimitFor(list))");
+		expect(body).toContain("releaseOverLimit(list, justChecked, pickLimitFor(list))");
 		expect(body).toContain('classList.remove("is-picked")');
 	});
 
