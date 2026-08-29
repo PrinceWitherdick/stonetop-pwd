@@ -3955,27 +3955,39 @@ input.stonetop-name-field {
    The vertical padding is ASYMMETRIC anyway, and the two halves still sum to 2px, so the chip is
    exactly the height it was. Centring the BOX is not centring the INK: the label is a run of
    capitals with no descenders, so its ink stops at the baseline and the face's whole descender
-   band is empty paper underneath it. Measured on the default face at the 20px root, that is
-   4.10px of paper above the caps against 4.90px below -- the chip reads high, which is what the
-   nudge added above and taken off below corrects.
+   band is empty paper underneath it. The chip therefore reads high, and the nudge added above
+   and taken off below is what pushes the caps back down onto the box's centre.
 
    Its own constant, NOT --st-caps-nudge, and that is deliberate. That variable is the Condemned
-   pill's per-face table (settings.js#_FONT_CAPS_NUDGE); re-measuring the same quantity for this
-   chip -- (capHeight + descent - ascent) / 2, straight off the metrics Chrome lays the text out
-   with -- does not reproduce its numbers, and its Signika entry (0.073em) is nearly three times
-   what this chip wants. Borrowing it would drop the label as far BELOW centre as it now sits
-   above, so the pill's table is left alone and this rule carries what it measured.
+   pill's per-face table (settings.js#_FONT_CAPS_NUDGE), and it does not describe this chip: it
+   asks Libre Caslon for the SMALLEST correction of the three (0.016em) where this chip measures
+   it as wanting MORE than Signika. The pill's table is left alone and this rule carries what it
+   measured.
 
-   0.028em is the DEFAULT face's correction, and it is also the smallest of the three the sheet
-   can render in (Libre Caslon wants ~0.043em, IM Fell English ~0.119em). A single constant is
+   MEASURE THIS GEOMETRICALLY, NOT BY SCANNING PIXELS. An earlier pass read the paper above and
+   below the caps off a magnified screenshot, and the rounded corners bend the border arc inward
+   far enough that the scan picks up a different border row for a wide label than for a narrow
+   one -- a whole row of drift between +CON and +DEX, which is twice the quantity being measured.
+   It under-read the error as 0.4px and set this constant to 0.028em, a THIRD of the correction
+   the chip actually wants, so the label stayed visibly high on every face. Take the baseline
+   from a Range over the label plus the face's own ascent, and the cap height from measureText at
+   100x the font size (at 14.4px its actualBoundingBox* are integer-quantised, which is far too
+   coarse for a sub-pixel question). On Signika at the 20px root that puts 3.81px of paper above
+   the caps against 5.34px below the baseline: the caps sit 0.77px high, or 0.081em including the
+   0.028em already being applied.
+
+   0.081em is the DEFAULT face's correction, and it is also the smallest of the three the sheet
+   can render in (Libre Caslon wants ~0.090em, IM Fell English ~0.116em). A single constant is
    therefore an under-correction on the other two rather than an over-correction: every face ends
-   nearer centred than the symmetric padding left it, and none is pushed past it. Capped at the
-   1px it is subtracted from -- the nudge is in `em`, so a raised font scale could otherwise
-   outgrow the padding it borrows against and floor the bottom at 0 while the top kept growing,
-   making the chip TALLER instead of leaving it put.
-   Measured with roll-chip-fonts.mjs and caps-metrics.mjs in the verify harness. */
+   nearer centred than the symmetric padding left it (Signika 0.77px high to 0.16px, Libre Caslon
+   1.01px to 0.40px, IM Fell 1.49px to 0.89px), and none is pushed past it. Capped at the 1px it
+   is subtracted from -- the nudge is in `em`, so a raised font scale could otherwise outgrow the
+   padding it borrows against and floor the bottom at 0 while the top kept growing, making the
+   chip TALLER instead of leaving it put. That cap binds at roots above ~17px, which is why
+   Signika lands at 0.16px rather than 0.
+   Measured with chip-exact.mjs in the verify harness. */
 .stonetop-move-roll-chip {
-	--stonetop-roll-chip-caps-nudge: min(1px, 0.028em);
+	--stonetop-roll-chip-caps-nudge: min(1px, 0.081em);
 	padding: calc(1px + var(--stonetop-roll-chip-caps-nudge)) 6px calc(1px - var(--stonetop-roll-chip-caps-nudge));
 	border: 1px solid var(--color-text-dark-secondary);
 	border-radius: var(--st-radius-sm);
