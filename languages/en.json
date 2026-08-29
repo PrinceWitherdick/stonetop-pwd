@@ -66,6 +66,29 @@
         "openSettings": "All Stonetop Settings\u2026"
       }
     },
+    "books": {
+      "title": "Your rulebooks",
+      "groupLabel": "Your rulebooks",
+      "openTip": "Open {title}",
+      "setTip": "Point at your copy of {title}",
+      "popOut": "New tab",
+      "settings": "Your books",
+      "notPdf": "That file does not look like a PDF. It has been recorded anyway, but the reader may not be able to open it.",
+      "copying": "Copying {title} into this world. A rulebook is a big file, so give it a moment.",
+      "copied": "{title} is ready to read.",
+      "copyFailed": "{title} could not be copied into this world. Your host may have refused the upload, or the file may be too large for it.",
+      "otherEdition": "Stonetop | The Book {book} PDF this world points at has {pages} pages rather than the {expected} of the spreads edition. It reads perfectly; only a jump to a printed page number would land in the wrong place.",
+      "book1": {
+        "label": "Book I",
+        "title": "Book I: Stonetop",
+        "hint": "The core rules. Usually the 308 page spreads PDF."
+      },
+      "book2": {
+        "label": "Book II",
+        "title": "Book II: The Wider World and Other Wonders",
+        "hint": "The gazetteer. Usually the 302 page spreads PDF."
+      }
+    },
     "gmToolkit": {
       "tabs": {
         "homefront": "Homefront",

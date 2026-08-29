@@ -1,4 +1,5 @@
 import { DEFAULT_ROOT as DEFAULT_BOOK2_ART_ROOT } from "./book2-art/art-root.js";
+import { RULEBOOKS_SETTING } from "./books/rulebooks.js";
 import { POSTER_MAPS, posterMapSlugOf } from "./book2-art/poster-map-catalog.js";
 import { SYSTEM_ID } from "./system-id.js";
 import { WEATHER_FX_PARTS, WEATHER_FX_SETTING } from "./seasons/weather-fx-parts.js";
@@ -476,6 +477,25 @@ export function registerSettings() {
 		config: false,
 		type: Boolean,
 		default: false
+	});
+
+	// Where this world's copies of the rulebooks are, as a { book number -> path } record, so
+	// the GM Toolkit's two book icons have something to open. Nothing is shipped and nothing is
+	// extracted here: this is a POINTER to a PDF the GM already owns, handed to the pdf.js
+	// reader Foundry itself bundles. See module/books/rulebooks.js for the whole model.
+	//
+	// `config: false` because a path typed into a settings row is a path typed wrong. It is set
+	// through the "Your rulebooks" window (module/books/RulebooksDialog.js), which browses.
+	//
+	// One record rather than a key per book: `book: 3` is already a number this codebase cites
+	// (the free GM playbook, see gm-toolkit/book-ref.js), so a third book should be a row in
+	// RULEBOOKS and nothing else.
+	game.settings.register(SYSTEM_ID, RULEBOOKS_SETTING, {
+		name: "Your Rulebook PDFs",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {}
 	});
 
 	// The durable folder (a top-level data path, OUTSIDE the system folder) the "Import

@@ -1,0 +1,83 @@
+<div class="stonetop-rulebooks">
+
+	<p class="stonetop-rulebooks-lead">
+		The books are not ours to hand out, so this system ships none of them. Point it at the
+		PDFs you already own and they open in a window here, with the chapter list, the search
+		and the books' own page links all working.
+	</p>
+
+	<ul class="stonetop-rulebooks-list">
+		{{#each rows}}
+			<li class="stonetop-rulebook{{#unless this.path}} stonetop-rulebook--unset{{/unless}}">
+				<i class="stonetop-rulebook-icon {{this.icon}}"></i>
+				<span class="stonetop-rulebook-body">
+					<span class="stonetop-rulebook-name">{{this.title}}</span>
+					{{#if this.path}}
+						{{!-- Tooltipped as well as printed: the row truncates a long path from the
+						      end, which is the end that says which FILE it is. --}}
+						<span class="stonetop-rulebook-path" data-tooltip="{{this.path}}">{{this.path}}</span>
+					{{else}}
+						<span class="stonetop-rulebook-note">{{this.hint}}</span>
+					{{/if}}
+				</span>
+				<span class="stonetop-rulebook-actions">
+					{{#if this.path}}
+						<button type="button" data-action="read" data-book="{{this.book}}"
+							data-tooltip="Open this book">
+							<i class="fas fa-book-open"></i>
+						</button>
+					{{/if}}
+					{{!-- THE ORDINARY DOOR, and it opens your computer's own file dialog, exactly
+					      as Import Book Art does. What happens next is the part that differs: the
+					      file is copied into this world so the reader can still fetch it next
+					      session (module/books/book-store.js explains why it has to be). --}}
+					<button type="button" class="stonetop-rulebook-choose"
+						data-action="choose" data-book="{{this.book}}"
+						{{#unless ../canStore}}disabled{{/unless}}
+						data-tooltip="Choose the PDF on this computer">
+						<i class="fas fa-upload"></i>
+					</button>
+					{{!-- The second door, for a book already on the server: one copied in earlier,
+					      or, on a hosted setup, one already sitting in the assets library. --}}
+					<button type="button" data-action="browse" data-book="{{this.book}}"
+						{{#unless ../canBrowse}}disabled{{/unless}}
+						data-tooltip="Pick one already in this world">
+						<i class="fas fa-folder-open"></i>
+					</button>
+					{{#if this.path}}
+						<button type="button" data-action="forget" data-book="{{this.book}}"
+							data-tooltip="Forget this file">
+							<i class="fas fa-xmark"></i>
+						</button>
+					{{/if}}
+				</span>
+				{{!-- Hidden, and clicked by the button above it. An <input type="file"> is the only
+				      thing that can open the OS dialog, and its selection cannot be handed back to
+				      it from script, so it is read in its own change handler and never re-rendered
+				      with a value to preserve. --}}
+				<input type="file" class="stonetop-rulebook-file" data-book="{{this.book}}"
+				       accept="application/pdf,.pdf" hidden>
+			</li>
+		{{/each}}
+	</ul>
+
+	{{#if canStore}}
+		<p class="stonetop-rulebooks-note">
+			Choosing a book copies it into this world, under
+			<span class="stonetop-rulebook-path">{{dir}}</span>, which is what lets the reader
+			open it again tomorrow. A book kept there can be fetched by anyone signed in to this
+			world who knows its address, so copy one in only if that suits your table.
+		</p>
+	{{else}}
+		<p class="stonetop-rulebooks-note">
+			Your account cannot add files to this world, so only a GM can set these.
+		</p>
+	{{/if}}
+
+	<div class="stonetop-rulebooks-actions">
+		<button type="button" class="stonetop-rulebooks-done" data-action="done">
+			<i class="fas fa-check"></i> <span>Done</span>
+		</button>
+	</div>
+
+</div>

@@ -1,0 +1,9 @@
+{{!-- One book, in Foundry's own bundled pdf.js viewer.
+
+     Deliberately nothing but the frame. The viewer inside it brings its own toolbar, sidebar
+     (chapters and thumbnails) and find bar, and a second row of our controls above it would be
+     a second place to look for the same three things. What this window adds instead lives in
+     its header, where a window's own controls belong. --}}
+<div class="stonetop-book-reader">
+	<iframe class="stonetop-book-reader-frame" src="{{src}}" title="{{frameTitle}}"></iframe>
+</div>

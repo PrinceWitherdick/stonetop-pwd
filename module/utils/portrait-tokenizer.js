@@ -2,7 +2,7 @@ import { loadImage, cropToCanvas, artImageUrl } from "../book2-art/rebuild-crops
 import {
 	normalizeRect, PORTRAIT_FRAME_BAKE_DIR, documentPortraitFrame, isValidFrame, sameSrc
 } from "./portrait-frame.js";
-import { filePicker, uploadFile } from "./foundry-compat.js";
+import { ensureDataDir, uploadFile } from "./foundry-compat.js";
 
 /**
  * The bridge to the Tokenizer module (`vtta-tokenizer`), which is where a token actually gets made.
@@ -185,7 +185,6 @@ function bakeDir() {
 	return `worlds/${game.world?.id ?? "world"}/${PORTRAIT_FRAME_BAKE_DIR}`;
 }
 
-const FP = filePicker;
 
 /**
  * ONE baked file per person, overwritten on every save. Deliberately carries no rect in its name.
@@ -202,11 +201,6 @@ export function bakeFileName(name, id) {
 	const slug = String(name ?? "").trim().replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
 	const suffix = String(id ?? "").replace(/[^\w-]+/g, "").slice(0, 16);
 	return `${slug || "portrait"}${suffix ? `-${suffix}` : ""}-frame.webp`;
-}
-
-/** Create the target folder if it is missing. A folder that already exists throws; that is fine. */
-async function ensureDir(dir) {
-	try { await FP().createDirectory("data", dir, {}); } catch { /* already there */ }
 }
 
 /**
@@ -231,7 +225,7 @@ export async function bakeFrameToFile(src, rect, { name = "portrait", id = "" } 
 	if (!blob) return null;
 
 	const dir = bakeDir();
-	await ensureDir(dir);
+	await ensureDataDir(dir);
 	const file = new File([blob], bakeFileName(name, id), { type: "image/webp" });
 	// `uploadFile` already answers null for a refused upload — which is exactly this function's own
 	// "could not bake" signal (see portrait-token-frame.js), so a rejection needs no handling here

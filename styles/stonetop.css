@@ -36729,13 +36729,82 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* Everything about how this reads — Avara at the display size, the optical nudge that
    centres it in the banner — comes from `.steading-title`, whose rule this shares. Only
-   the leading and the row sizing are local: the h1 is the banner's one flex item now
-   that the subtitle is gone, so it claims the row itself rather than through a wrapper. */
+   the leading and the row sizing are local.
+
+   `flex: 0 1 auto`, not `flex: 1`, and for exactly the reason `.steading-header-name` carries
+   that pair: the rulebook icons are the banner's second flex item and park themselves against
+   the right edge with an auto left margin, which only has slack to swallow while the name
+   leaves the row unclaimed. Under `flex: 1` the h1 takes the slack first and the margin has
+   nothing left to push with, so the icons end up back against the title. `min-width: 0` stays
+   either way, so a long name shrinks rather than shoving them off the end. */
 .stonetop-gm-toolkit-name {
-	flex: 1;
+	flex: 0 1 auto;
 	min-width: 0;
 	line-height: 1.1;
 }
+
+/* YOUR OWN COPIES OF THE BOOKS, held to the right edge of the banner (user, 2026-08-29) by the
+   same `margin-left: auto` the steading's season clock uses, rather than sitting against the
+   title the way its holds do. Same row, same gap, and the same 3px nudge onto the title's
+   optical centre (the banner centres flex BOXES, and Avara's cap box sits high in its line box
+   — see `.steading-title`). */
+.stonetop-gm-toolkit-books {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+	position: relative;
+	top: 3px;
+}
+
+/* Un-buttoned, exactly as `.stonetop-gm-diagram-zoom` is and for the same reason: core paints
+   every button in an app with a fill, a border, a radius and a width, all of which would frame
+   a glyph in a control it is not.
+
+   1.6em where the steading's holds are 2.25em, and that is the same optical size rather than a
+   smaller one. Those are game-icons.net art with generous margins inside a 512 square, scaled
+   to the WHOLE square, so a good deal of their em is air; a Font Awesome glyph fills its box.
+   Matching the numbers would have made these read as the biggest thing in the banner.
+
+   The 1px nudge is FA's own lopsided metrics, not a taste: its artwork sits flush with the top
+   of the box and every bit of the slack collects underneath, so a perfectly centred BOX still
+   reads high. Half-leading is symmetric and cannot correct it; moving the glyph can. */
+.stonetop-gm-toolkit-book {
+	display: block;
+	width: auto;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	background: none;
+	font-size: 1.6em;
+	line-height: 1;
+	color: var(--st-text-body);
+	cursor: pointer;
+	position: relative;
+	top: 1px;
+	transition: color 0.15s;
+}
+
+/* Core's button hover is a fill and a glow, which would box the glyph on the way to clicking
+   it. The focus ring is kept: these are keyboard-reachable controls. */
+.stonetop-gm-toolkit-book:hover,
+.stonetop-gm-toolkit-book:focus {
+	background: none;
+	box-shadow: none;
+}
+.stonetop-gm-toolkit-book:hover {
+	color: var(--st-btn-primary-bg);
+}
+.stonetop-gm-toolkit-book:focus-visible {
+	outline: 2px solid var(--st-btn-primary-bg);
+	outline-offset: 2px;
+}
+
+/* A book this world has not been pointed at yet. The same 0.4 as the header's steading
+   shortcut with no steading to jump to: dimmed rather than hidden, because the icon is still
+   the way to set one and a control that is not there cannot say so. */
+.stonetop-gm-toolkit-book--unset { opacity: 0.4; }
 
 /* -- Tab body -------------------------------------------------------------
    NOTHING below the container clips or scrolls on this frame. The scroll lives
@@ -39092,6 +39161,152 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    sacrifice made seasons ago should say so rather than look unexplained. */
 .stonetop-condition-note {
 	background: rgba(112, 128, 144, 0.18);
+}
+
+/* ══ YOUR RULEBOOKS: the reader window, and the window that points at it ═══════════════════
+   Two surfaces, and they want opposite things from this stylesheet.
+
+   THE READER IS AN IFRAME, AND THE IFRAME IS THE WHOLE WINDOW. Everything inside it belongs to
+   the pdf.js viewer Foundry bundles: its own toolbar, its own sidebar, its own page mat, its
+   own dark mode, none of which can see this file (an iframe is a separate document, so nothing
+   here crosses into it and nothing there leaks out). So the only job on this side is to hand
+   over the entire content box. Leaving the window's usual padding on would frame the viewer's
+   grey mat in a parchment border, which reads as a rendering fault rather than as chrome.
+
+   What is being overridden is core's `.window-app .window-content`, which sets a padding and
+   `overflow: hidden auto`. Both classes are named to clear it on specificity as well as on
+   order, rather than relying on either alone: core's rule is inside a cascade layer and this
+   file is unlayered, so today we win whatever the specificity, but that is a fact about how
+   core's stylesheet is built rather than something this rule should depend on. Core's
+   `flex-direction: column` is deliberately left in place; the frame below is its one child. */
+.stonetop.stonetop-book-reader-window .window-content {
+	display: flex;
+	padding: 0;
+	overflow: hidden;
+	/* A flex item's floor is its content, and the frame's content is a page. Without this the
+	   window will not drag smaller than the book it is showing. */
+	min-height: 0;
+}
+
+.stonetop-book-reader {
+	display: flex;
+	flex: 1;
+	/* Both floors are load-bearing on a RESIZABLE window: a flex item's default `min-height`
+	   and `min-width` are its content, so without these the frame refuses to shrink and the
+	   window cannot be dragged smaller than the page it happens to be showing. */
+	min-width: 0;
+	min-height: 0;
+}
+
+.stonetop-book-reader-frame {
+	flex: 1;
+	width: 100%;
+	height: 100%;
+	border: 0;
+	/* No background declared on purpose: the framed document paints its own, which follows the
+	   reader's light or dark preference. Painting one here would show as a flash of the wrong
+	   colour for as long as a 60 MB book takes to open. */
+}
+
+/* The setup window, which is ordinary dialog chrome. -------------------------------------- */
+.stonetop-rulebooks-dialog .stonetop-rulebooks {
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+	padding: 0.5rem;
+}
+
+.stonetop-rulebooks-dialog .stonetop-rulebooks-lead,
+.stonetop-rulebooks-dialog .stonetop-rulebooks-note {
+	margin: 0;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
+
+.stonetop-rulebooks-dialog .stonetop-rulebooks-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.stonetop-rulebooks-dialog .stonetop-rulebook {
+	display: flex;
+	gap: 0.6rem;
+	align-items: center;
+	padding: 0.45rem 0.55rem;
+	border: 1px solid var(--st-blue-border);
+	border-radius: var(--st-radius);
+	background: var(--st-blue-bg);
+}
+
+/* A book this world has not been pointed at yet is offered as an empty slot rather than as a
+   suggestion, the same way an already-imported poster map is: still actionable, not shouting. */
+.stonetop-rulebooks-dialog .stonetop-rulebook--unset {
+	border-color: rgba(0, 0, 0, 0.18);
+	background: rgba(0, 0, 0, 0.05);
+}
+
+.stonetop-rulebooks-dialog .stonetop-rulebook-icon {
+	flex: 0 0 auto;
+	font-size: var(--st-fs-lg);
+	color: var(--st-text-secondary);
+}
+
+.stonetop-rulebooks-dialog .stonetop-rulebook-body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	/* So the path below can actually ellipsize: a flex item's floor is its content width, and a
+	   data path is long enough to push the buttons off the end of the row without this. */
+	min-width: 0;
+}
+
+.stonetop-rulebooks-dialog .stonetop-rulebook-name {
+	font-size: var(--st-fs-base);
+}
+
+.stonetop-rulebooks-dialog .stonetop-rulebook-path,
+.stonetop-rulebooks-dialog .stonetop-rulebook-note {
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.stonetop-rulebooks-dialog .stonetop-rulebook-actions {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 0.25rem;
+}
+
+.stonetop-rulebooks-dialog .stonetop-rulebook-actions button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 2em;
+	flex: 0 0 auto;
+	padding: 0;
+}
+
+/* The row's ordinary door: the one that opens the computer's own file dialog. Weighted over the
+   two beside it because the other two are for the cases where the book is already here, and a
+   row of three identical squares makes a GM read all three tooltips to find the first one. */
+.stonetop-rulebooks-dialog .stonetop-rulebook-choose {
+	background: var(--st-btn-primary-bg);
+	color: var(--st-btn-primary-text);
+}
+
+/* The lone action button in a modal footer runs the full width with a centred label. */
+.stonetop-rulebooks-dialog .stonetop-rulebooks-done {
+	display: flex;
+	gap: 0.4em;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
 }
 
 /* ══ ACCESSIBILITY: the paper, and the two switches a reader can turn ══════════════════════

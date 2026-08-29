@@ -41,6 +41,7 @@ import { readCurrentSeason, currentSeasonView, isCurrentSeasonChange } from "../
 import { localize } from "../../utils/i18n.js";
 import { localizedOnce } from "../../utils/localized-once.js";
 import { getStonetopSteadingActor, stonetopSteadingHeaderButton } from "../../utils/world.js";
+import { rulebookIconRows, openRulebook } from "../../books/rulebook-icons.js";
 
 /**
  * What counts as a foldable section heading on this sheet — see `_wireSectionCollapse`.
@@ -301,6 +302,10 @@ export function createStonetopGmToolkitSheetClass(Base) {
 		// whose Threats and Sites STORAGE these tabs read (see gm-prep-tabs.js). Built from the
 		// shared descriptor in utils/world.js so the label, marker and unset-state class match
 		// the same button everywhere else it appears.
+		//
+		// The two rulebook icons are NOT here: they sit in the sheet's own banner, beside the
+		// title, with the rest of what this sheet is (see `stonetop.books` in getData and the
+		// header block in gm-toolkit.hbs).
 		_getHeaderButtons() {
 			const buttons = super._getHeaderButtons().filter(b => b.class !== "configure-sheet");
 			buttons.unshift(stonetopSteadingHeaderButton());
@@ -358,6 +363,15 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The Core Loop tab's Import Book Art button asks, because the macro browses and
 			// writes files. This sheet is GM-only by ownership, so it is always true in practice.
 			context.stonetop.isGM = game.user?.isGM ?? false;
+
+			// The two rulebook icons in the banner, beside the title. Reference this sheet OWES:
+			// every move, diagram and homefront heading on it cites the printed page it was
+			// transcribed from, and the shortest way from a citation to the page it names is the
+			// GM's own copy of the book one click away. Nothing is shipped by them (see
+			// module/books/rulebooks.js); an unset book draws dimmed and opens the window that
+			// points at a file. Rebuilt per render because "is this book set yet" is exactly what
+			// changes between one render and the next.
+			context.stonetop.books = rulebookIconRows();
 
 			// The three ASYNC builders, TOGETHER rather than one after the next. They touch
 			// disjoint keys on `context.stonetop`, and each can be waiting on a pack load — a
@@ -443,6 +457,16 @@ export function createStonetopGmToolkitSheetClass(Base) {
 		 */
 		_wireToolkitButtons(root) {
 			root.addEventListener("click", async (ev) => {
+				// A rulebook icon in the banner. First, and cheaply: it is the one control on this
+				// sheet that lives above the tabs, so it can never be confused with anything below
+				// and every other check that ran before it would be asked for nothing.
+				const bookIcon = ev.target.closest(".stonetop-gm-toolkit-book");
+				if (bookIcon) {
+					ev.preventDefault();
+					openRulebook(Number(bookIcon.dataset.book));
+					return;
+				}
+
 				// A diagram, opened big. In OUR zoom window rather than a browser tab: the picture
 				// is a page of the GM's own rulebook, and reading it should not mean leaving the
 				// game to do it. Keyed by slug, so the two charts of the spread open as two windows

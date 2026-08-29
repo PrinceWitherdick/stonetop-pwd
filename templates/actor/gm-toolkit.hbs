@@ -23,6 +23,31 @@
 
 		<header class="sheet-header stonetop-sheet-header stonetop-gm-toolkit-header">
 			<h1 class="stonetop-gm-toolkit-name">{{actor.name}}</h1>
+			{{!-- Your own copies of the books, on the title's own row, held to the far end of the
+			      banner the way the steading's season clock is. They belong to the banner rather
+			      than to the window controls: everything on this sheet is transcribed from a
+			      printed page and cites the page it came off, so the books are part of what this
+			      sheet IS.
+
+			      Nothing is shipped by them. Each opens a PDF the GM already owns, in the pdf.js
+			      reader Foundry itself bundles (module/books/rulebooks.js). A book this world has
+			      not been pointed at yet draws DIMMED and opens the window that points at one, so
+			      the icon is never dead — its tooltip says which of the two it will do.
+
+			      Always buttons, unlike the steading's holds, which draw as plain readouts for a
+			      player: this sheet is GM-only by ownership, so there is no one here to refuse. --}}
+			<div class="stonetop-gm-toolkit-books" role="group"
+			     aria-label="{{localize "stonetop.books.groupLabel"}}">
+				{{#each stonetop.books}}
+				<button type="button"
+				        class="stonetop-gm-toolkit-book{{#unless this.have}} stonetop-gm-toolkit-book--unset{{/unless}}"
+				        data-book="{{this.book}}"
+				        aria-label="{{this.label}}"
+				        data-tooltip="{{this.tooltip}}" data-tooltip-direction="DOWN">
+					<i class="{{this.icon}}" aria-hidden="true"></i>
+				</button>
+				{{/each}}
+			</div>
 		</header>
 
 		{{!-- The rail's position in the form is arbitrary: tab-rail.js lifts this node onto the
