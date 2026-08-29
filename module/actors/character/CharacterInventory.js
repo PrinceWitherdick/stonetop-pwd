@@ -5,6 +5,12 @@ export class CharacterInventory {
 
 	get checked()      { return this._flags.getFlag("checked") ?? {}; }
 	get resources()    { return this._flags.getFlag("resources") ?? {}; }
+	// Capacity for a track whose size is ACQUIRED rather than printed, keyed by slug alongside
+	// `resources`. Provisions are the case that needs it (see provisions.js): the Inventory
+	// insert prints no Provisions row and no number of uses, because how much of a larder you
+	// carry is whatever the last Forage or butchering brought in. Absent — which is every other
+	// item — means "use the item's printed max".
+	get resourceMax()  { return this._flags.getFlag("resourceMax") ?? {}; }
 	get addedSpecial() { return this._flags.getFlag("addedSpecial") ?? []; }
 	get regularPool()  { return this._flags.getFlag("regularPool") ?? 0; }
 	get smallPool()    { return this._flags.getFlag("smallPool") ?? 0; }
@@ -22,6 +28,17 @@ export class CharacterInventory {
 		// Targeted sub-key write (not a spread of the whole resources object) so two near-
 		// simultaneous writes to different tracks can't clobber each other's value.
 		await this._flags.setSubKey("resources", slug, count, options);
+	}
+
+	// The same write as `setResource`, as a fragment rather than its own document update, so a
+	// caller spending from several tracks at once (Make Camp spills a meal across up to five
+	// purses) lands them in ONE actor.update instead of one per purse.
+	resourceData(slug, count) {
+		return this._flags.subKeyData("resources", slug, count);
+	}
+
+	async setResourceMax(slug, max, options) {
+		await this._flags.setSubKey("resourceMax", slug, max, options);
 	}
 
 	// Drop a removed arcanum's resource tracks (the back-power track keyed by slug and the
@@ -61,14 +78,39 @@ export class CharacterInventory {
 		await this._flags.setFlag("addedSpecial", [...this.addedSpecial, slug]);
 	}
 
+	// Add a special item and top up its uses / acquired-capacity tracks in ONE document write,
+	// the counterpart of removeSpecial below. Provisions is what needs it: a Forage payout would
+	// otherwise be four sequential writes (addedSpecial, checked, resourceMax, resources), and
+	// every one of them re-renders every open sheet for that actor — four full snapshot rebuilds
+	// for one haul of food, with four chances to leave the larder half-recorded.
+	//
+	// The track values go through `sets` as one-key objects rather than `setSubKey` dot-paths
+	// because a plain-object flag value deep-MERGES (see StonetopFlags.batch), which lands the
+	// same targeted write without disturbing the other slugs' entries.
+	async addSpecialWithResource(slug, { held, max, carry = false } = {}) {
+		const sets = {
+			addedSpecial: this.addedSpecial.includes(slug) ? this.addedSpecial : [...this.addedSpecial, slug],
+			resources:    { [slug]: held },
+			resourceMax:  { [slug]: max },
+		};
+		if (carry) sets.checked = { [slug]: true };
+		await this._flags.batch({ sets });
+	}
+
+	// Drops the item AND everything keyed to it: its carried mark (so it stops counting toward
+	// load and armor) and its uses / acquired-capacity tracks. The tracks go for the same reason
+	// clearArcanumResources drops an arcanum's — a re-acquired item must not inherit stale
+	// charges. Provisions is where that bites: a larder tossed to the crows with 2 uses left,
+	// then re-foraged, would otherwise come back holding those 2.
+	//
+	// Every key goes through `deletes` rather than a smaller object through `sets`: writing an
+	// object flag MERGES, so re-setting `checked` without the slug left the old `true` sitting
+	// there and a re-added item came back already marked as carried.
 	async removeSpecial(slug) {
-		await this._flags.setFlag("addedSpecial", this.addedSpecial.filter(s => s !== slug));
-		// Clear its carried/checked state so a removed item no longer counts toward load or armor.
-		if (slug in this.checked) {
-			const next = { ...this.checked };
-			delete next[slug];
-			await this._flags.setFlag("checked", next);
-		}
+		await this._flags.batch({
+			sets:    { addedSpecial: this.addedSpecial.filter(s => s !== slug) },
+			deletes: { checked: [slug], resources: [slug], resourceMax: [slug] },
+		});
 	}
 
 	// Clears item marks, both undefined ◇/□ reserves (which is what drives the

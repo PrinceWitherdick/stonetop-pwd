@@ -19,6 +19,18 @@
 		<span class="stonetop-inv-label">{{name}}</span>
 	</label>
 	{{> "stonetop.inv-note" note=note resource=resource resourceFirst=resourceFirst slug=slug}}
+	{{!-- A row whose own note offers provisions (butcher a goat, harvest a brightberry) gets the
+	      button that collects them. Shown only while carried: you cannot butcher a goat you left
+	      at home. See provisions.js#readProvisionsYield for what counts as an offer. --}}
+	{{#if checked}}{{#with (provisionsYield note)}}
+	{{!-- `data-name` so the chat record names what was butchered from the scope that drew the row,
+	      rather than the handler scraping the rendered label back out of the DOM. --}}
+	<button type="button" class="stonetop-inv-harvest" data-name="{{../name}}" data-formula="{{formula}}"
+	        data-roll="{{#if isRoll}}1{{else}}0{{/if}}"
+	        title="{{#if isRoll}}Roll {{formula}} uses of provisions{{else}}Take {{formula}} uses of provisions{{/if}}">
+		<i class="fas {{#if isRoll}}fa-dice-d6{{else}}fa-basket-shopping{{/if}}"></i>
+	</button>
+	{{/with}}{{/if}}
 	{{> "stonetop.inv-artifact" deletable=deletable}}
 	{{#if (and deletable @root.stonetop.editMode)}}
 	<a class="stonetop-inv-delete" data-owned-id="{{ownedId}}" title="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-times"></i></a>

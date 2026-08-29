@@ -59,8 +59,14 @@ export class StonetopFlags {
 	// resource) is safe; it must not contain '.'. `options` (e.g. { render: false }) routes
 	// through actor.update.
 	async setSubKey(key, subKey, value, options) {
-		const path = `flags.${_scope}.${this.buildKey(key)}.${subKey}`;
-		await this._actor.update({ [path]: value }, options);
+		await this._actor.update(this.subKeyData(key, subKey, value), options);
+	}
+
+	// The `setSubKey` counterpart of `updateData` below: the fragment on its own, so a caller with
+	// several changes to make can put them all in ONE actor.update (one document write, one sheet
+	// re-render) rather than one per track.
+	subKeyData(key, subKey, value) {
+		return { [`flags.${_scope}.${this.buildKey(key)}.${subKey}`]: value };
 	}
 
 	// Returns an `actor.update()` fragment that writes this flag, so callers can

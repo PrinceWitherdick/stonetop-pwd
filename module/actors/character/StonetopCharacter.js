@@ -691,6 +691,7 @@ export class StonetopCharacter {
 		const viewerIsGM     = !!view.viewerIsGM;
 		const checked        = this._inventory.checked;
 		const resources      = this._inventory.resources;
+		const acquiredMaxes  = this._inventory.resourceMax;
 		const possessionUses = this._possessions.uses;
 		const rPool          = this._inventory.regularPool;
 		const sPool          = this._inventory.smallPool;
@@ -715,8 +716,13 @@ export class StonetopCharacter {
 			const res    = outfitItem.resource;
 			const isProsperityResource = outfitItem.prosperityResource
 				|| _PROSPERITY_RESOURCE_SLUGS.has(outfitItem.slug);
-			const resMax = (isProsperityResource && smallItemLimit !== null)
-				? smallItemLimit
+			// Three sources of a track's size, most specific first. An ACQUIRED capacity wins
+			// outright: provisions have no printed number of uses because the larder is however
+			// much the last Forage brought in (CharacterInventory#resourceMax). Then the
+			// 4+Prosperity supplies rule, then the number printed on the item.
+			const acquiredMax = Number(acquiredMaxes[outfitItem.slug]);
+			const resMax = Number.isFinite(acquiredMax) ? acquiredMax
+				: (isProsperityResource && smallItemLimit !== null) ? smallItemLimit
 				: res?.max;
 			// Armored reduces a carried shield's ◇ cost (min 1), so it reads ◆ instead of ◆◆.
 			const weight = (outfitItem.slug === _SHIELD_SLUG && shieldLoadReduction > 0)
@@ -1388,6 +1394,10 @@ export class StonetopCharacter {
 
 	async setInventoryItemChecked(slug, isChecked) { await this._inventory.setItemChecked(slug, isChecked); }
 	async setInventoryResource(slug, count)         { await this._inventory.setResource(slug, count); }
+	// Fragment forms, for a move that changes several things at once and wants one write for the
+	// lot of them (see StonetopCharacterSheet#_applyMakeCamp).
+	inventoryResourceData(slug, count)              { return this._inventory.resourceData(slug, count); }
+	rollModeData(rollMode)                          { return { [`flags.${STONETOP_SCOPE}.rollMode`]: normalizeRollMode(rollMode) }; }
 	async setInventoryRegularPool(count)            { await this._inventory.setRegularPool(count); }
 	async setInventorySmallPool(count)              { await this._inventory.setSmallPool(count); }
 	async removeSpecialItem(slug)                   { await this._inventory.removeSpecial(slug); }

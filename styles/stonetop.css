@@ -6591,6 +6591,85 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-inv-item:hover .stonetop-inv-delete,
 .stonetop-inv-item:hover .stonetop-inv-remove-special { display: inline; }
 
+/* The butcher/harvest die on a row whose note offers provisions. Always visible, unlike the ✕s
+   above, because it is an action the row offers rather than an edit affordance — a goat you can
+   butcher should say so without being hovered. Sized in em so it tracks the reader's font size,
+   and pushed to the row's end so a run of them line up down the column. */
+.stonetop-inv-harvest {
+	flex: 0 0 auto;
+	margin-left: auto;
+	width: auto;
+	padding: 0 4px;
+	line-height: 1.2;
+	font-size: var(--st-fs-xs);
+	border: 1px solid var(--st-btn-primary-border);
+	border-radius: var(--st-radius);
+	background: var(--st-btn-primary-bg);
+	color: var(--st-btn-primary-text);
+	cursor: pointer;
+}
+
+.stonetop-inv-harvest:hover { background: var(--st-btn-primary-bg-hover); }
+.stonetop-inv-harvest:disabled { opacity: 0.55; cursor: default; }
+
+/* Both ✕s sit after this button, so they need their own auto margin dropped or the two fight
+   over the same free space and the ✕ lands mid-row. */
+.stonetop-inv-harvest ~ .stonetop-inv-delete,
+.stonetop-inv-harvest ~ .stonetop-inv-remove-special { margin-left: 4px; }
+
+/* -- "Pay with…": the supplies purse field ---------------------- */
+/* Shared by Recover and Make Camp (StonetopCharacterSheet#_supplyPurseFieldHtml). */
+.stonetop-supply-purses { margin: 10px 0 4px; }
+
+.stonetop-supply-purse,
+.stonetop-camp-benefit,
+.stonetop-camp-extra,
+.stonetop-camp-messkit {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	margin: 3px 0;
+	cursor: pointer;
+	line-height: 1.35;
+}
+
+.stonetop-supply-purse-only { margin: 3px 0; }
+.stonetop-supply-purse-left { color: var(--st-text-secondary); }
+
+/* What is being carried but cannot pay, with the rule that refuses it. Quieter than the choices
+   above — it is an explanation, not an option — but never hidden: this list IS the answer to
+   "why can't I Recover on my provisions?" */
+.stonetop-supply-purse-refused {
+	margin: 6px 0 0;
+	padding-left: 18px;
+	font-size: 0.9em;
+	font-style: italic;
+	color: var(--st-text-secondary);
+}
+
+/* -- Make Camp ------------------------------------------------- */
+.stonetop-camp-people {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin: 3px 0;
+}
+
+.stonetop-camp-people input { width: 4em; }
+
+/* The running bill under the head count, repainted by _wireCampBill as the numbers change.
+   Goes red the moment the camp cannot feed itself, which is the one state worth interrupting for. */
+.stonetop-camp-bill {
+	margin: 6px 0 0;
+	font-weight: bold;
+	color: var(--st-text-secondary);
+}
+
+.stonetop-camp-bill.is-short { color: var(--st-red-text); }
+
+.stonetop-camp-benefits { margin-top: 10px; }
+.stonetop-camp-benefits select { margin-left: 4px; width: auto; }
+
 .stonetop-edit-mode .stonetop-inv-delete {
 	display: inline;
 	color: var(--st-red-text);
@@ -7574,6 +7653,56 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-item::before {
 	content: none;
+}
+
+/* -- Forage: the die a ticked option owes ----------------------- */
+/* Sits under its option rather than beside it, indented to the text: the options wrap freely at
+   chat width, and a button on the same line would be pushed wherever the last word ended. The
+   left offset is the checkbox plus the label's gap, so the button hangs off the words it belongs
+   to and not off the tick. Sized in em so it rides the reader's font-size setting.
+   Marked hidden by the wiring in stonetop.js until the option is actually ticked. */
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
+	.stonetop-provisions-roll {
+	display: block;
+	margin: 3px 0 5px 22px;
+	width: auto;
+	padding: 2px 9px;
+	font-size: 0.85em;
+	line-height: 1.4;
+	border-radius: var(--st-radius);
+	border: 1px solid var(--st-btn-primary-border);
+	background: var(--st-btn-primary-bg);
+	color: var(--st-btn-primary-text);
+	cursor: pointer;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
+	.stonetop-provisions-roll:hover {
+	background: var(--st-btn-primary-bg-hover);
+	border-color: var(--st-btn-primary-border-hover, var(--st-btn-primary-border));
+}
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
+	.stonetop-provisions-roll[hidden] {
+	display: none;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
+	.stonetop-provisions-roll:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+/* What the die paid, once it has been thrown. Green for the same reason the pick tally goes
+   green when the list fills: it is the one number on the card that settled something. */
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
+	.stonetop-provisions-paid {
+	display: block;
+	margin: 1px 0 4px 22px;
+	font-size: 0.85em;
+	font-weight: bold;
+	color: var(--st-green-text);
 }
 
 /* Special possessions — 2-column card list, matching the Moves tab

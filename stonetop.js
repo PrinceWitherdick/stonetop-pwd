@@ -91,6 +91,7 @@ import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
 import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
 import { CharacterPossessions } from "./module/actors/character/CharacterPossessions.js";
 import { stockSourcesForFlags, defaultStockSource, SACRED_POUCH_SLUG, RITES_OF_THE_LAND } from "./module/actors/character/stock-cost.js";
+import { readProvisionsYield, rollProvisions } from "./module/actors/character/provisions.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
@@ -228,6 +229,13 @@ Hooks.once("init", () => {
 	});
 
 	Handlebars.registerHelper("times", n => Array.from({ length: n ?? 0 }, (_, i) => i));
+
+	// Whether an inventory row's own parenthetical offers provisions, and how many — a goat's
+	// "butcher for ◇ Provisions (6 uses)", a brightberry's "(3 uses)", snowembers' "1d4+4".
+	// A helper rather than a snapshot field because the answer is already written on the row: it
+	// is the book's sentence, read where it is shown, so a GM-written beast whose note says the
+	// same thing grows the same button without being taught to.
+	Handlebars.registerHelper("provisionsYield", note => readProvisionsYield(note));
 
 	Handlebars.registerHelper("repeatChecks", move => {
 		if (!move?.repeat) return [];
@@ -1546,19 +1554,26 @@ function _paintPickCount(list) {
 	paintPickTally(list, pickLimitFor(list));
 }
 
+/**
+ * Whether a chat-log element belongs to THIS message and no other.
+ *
+ * The hook hands over one message's element, so `html` should never reach another card — but
+ * "should never" is what a card wearing the previous card's ticks looks like from the outside,
+ * and the cost of proving it here is one comparison. An element whose nearest message id is not
+ * this message is somebody else's: it is neither read from this flag nor written into it, so one
+ * card's state cannot be stamped onto another however broad `html` turns out to be.
+ *
+ * Shared by both passes over a card's pick list — the ticks and the provisions buttons run over
+ * the same nodes, so one guard rather than two copies of it.
+ */
+function _belongsToMessage(el, message) {
+	const owner = el.closest("[data-message-id]");
+	return !owner || owner.dataset.messageId === message.id;
+}
+
 function _chatWireRollCardPicks(message, html) {
-	// THIS message's boxes and no others.
-	//
-	// The hook hands over one message's element, so `html` should never reach another card — but
-	// "should never" is what a card wearing the previous card's ticks looks like from the outside,
-	// and the cost of proving it here is one comparison. A box whose nearest message id is not
-	// this message is somebody else's: it is neither restored from this flag nor collected into
-	// it, so one card's state cannot be stamped onto another however broad `html` turns out to be.
-	const mine = box => {
-		const owner = box.closest("[data-message-id]");
-		return !owner || owner.dataset.messageId === message.id;
-	};
-	const boxes = [...html.querySelectorAll(".stonetop-picklist-check")].filter(mine);
+	const boxes = [...html.querySelectorAll(".stonetop-picklist-check")]
+		.filter(box => _belongsToMessage(box, message));
 	if (!boxes.length) return;
 
 	const saved   = message.getFlag(SYSTEM_ID, "pickChecked") ?? [];
@@ -1604,6 +1619,115 @@ function _chatWireRollCardPicks(message, html) {
 	for (const list of new Set(boxes.map(b => b.closest(".stonetop-picklist")))) _paintPickCount(list);
 }
 
+// -- FORAGE: THE PROVISIONS A TICK OWES YOU ---------------------
+/**
+ * Two of Forage's four options pay out in provisions and neither says how many until a d6 is
+ * thrown: "You acquire ◇ provisions (1d6 uses)" and "You acquire an extra 1d6 uses of provisions".
+ * Ticking one is choosing it; this hangs the die on that choice, so the roll happens on the card
+ * that owes it and lands in the character's larder rather than being announced and forgotten.
+ *
+ * The button appears only while its option is ticked, because an untaken option owes nothing —
+ * and once thrown it stays put, showing what it paid, whatever happens to the tick afterwards.
+ * Untaking the option does not take the food back out of the pack: the ○ track on the sheet is
+ * where a larder is corrected, the same as when it is eaten.
+ *
+ * Which options qualify is read off their text (see provisions.js#readProvisionsYield) rather than
+ * declared, so a world that has reworded Forage — or a homebrew move that pays in provisions —
+ * gets the same die. The ◇ in the first option is what makes it claim a point of load; the
+ * second tops up a pack that is already being carried.
+ */
+function _chatWireProvisionsPicks(message, html) {
+	const items = [...html.querySelectorAll(".stonetop-picklist-item")]
+		.filter(item => _belongsToMessage(item, message));
+	if (!items.length) return;
+
+	const rolled = message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {};
+
+	for (const item of items) {
+		const box  = item.querySelector(".stonetop-picklist-check");
+		// Read before anything of ours is in the row, so a re-render cannot match on our own
+		// "+4 uses" readout instead of the option's text.
+		const pick = readProvisionsYield(item.textContent);
+		item.querySelectorAll(".stonetop-provisions-roll, .stonetop-provisions-paid")
+			.forEach(el => el.remove());
+		if (!box || !pick) continue;
+		const index = box.dataset.index;
+
+		// Already paid out: the card carries the number, not a second chance at it. Stamped on
+		// the MESSAGE, so every client shows the same haul and no one can roll it twice.
+		const paid = rolled[index];
+		if (paid) {
+			item.appendChild(_provisionsPaidEl(paid.uses));
+			continue;
+		}
+
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.className = "stonetop-provisions-roll";
+		const die = document.createElement("i");
+		// An option that names a flat number has nothing to throw — the icon and the verb both
+		// say so, rather than offering to "roll" a 6.
+		die.className = pick.isRoll ? "fas fa-dice-d6" : "fas fa-basket-shopping";
+		btn.append(die, pick.isRoll ? ` Roll ${pick.formula} uses` : ` Take ${pick.formula} uses`);
+		btn.hidden = !box.checked;
+		item.appendChild(btn);
+
+		// Bound once per element, for the same reason the pick boxes are: a message re-renders
+		// whenever its flag is written, and Foundry may patch the log in place.
+		if (item.dataset.provisionsWired !== "1") {
+			item.dataset.provisionsWired = "1";
+			box.addEventListener("change", () => {
+				const live = item.querySelector(".stonetop-provisions-roll");
+				if (live) live.hidden = !box.checked;
+			});
+		}
+
+		btn.addEventListener("click", () => _onRollProvisions(message, btn, index, pick));
+	}
+}
+
+/** The static readout a rolled option wears from then on. */
+function _provisionsPaidEl(uses) {
+	const el = document.createElement("span");
+	el.className = "stonetop-provisions-paid";
+	el.textContent = `+${uses} ${uses === 1 ? "use" : "uses"}`;
+	return el;
+}
+
+async function _onRollProvisions(message, btn, index, pick) {
+	btn.disabled = true;
+	try {
+		const actor = speakerActor(message);
+		if (!actor?.isOwner || actor.type !== "character") {
+			ui.notifications.warn("You need permission to add provisions to this character.");
+			btn.disabled = false;
+			return;
+		}
+
+		// Rolled to chat rather than quietly: how much food the party came back with is a number
+		// the whole table plays off, and a die nobody saw is a number they have to take on faith.
+		// A flat count has no such doubt and posts nothing — a card announcing a rolled "6" out of
+		// a formula that is the literal 6 is noise.
+		const { uses, larder } = await rollProvisions(actor, {
+			formula:  pick.formula,
+			announce: pick.isRoll,
+			carry:    pick.claimsLoad,
+			speaker:  message.speaker,
+		});
+		btn.replaceWith(_provisionsPaidEl(uses));
+		for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
+		if (larder) ui.notifications.info(`${actor.name} gained ${uses} uses of provisions (${larder.held} in the pack).`);
+
+		// Stamped last: the larder is the thing that had to land, and a stamp written before it
+		// would lock out the retry if the write failed.
+		const rolled = { ...(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {}), [index]: { uses, formula: pick.formula } };
+		await message.setFlag(SYSTEM_ID, "provisionsRolled", rolled);
+	} catch (err) {
+		console.error("Stonetop | Error rolling provisions:", err);
+		btn.disabled = false;
+	}
+}
+
 // -- WOULD-BE HERO: BECOME A HERO ------------------------------
 // The first time a Would-Be Hero gains a hero-making (asterisked) move, cross off
 // "Would-be" and announce it once. The playbook header already derives "The Hero"
@@ -1640,6 +1764,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	_chatWireSpendStock(message, html);
 	_chatWireSeasonsRoll(message, html);
 	_chatWireRollCardPicks(message, html);
+	// After the picks pass, which is what restores each box's ticked state — the provisions
+	// button is shown or hidden by exactly that.
+	_chatWireProvisionsPicks(message, html);
 	wireDyingPrompt(message, html);
 	wireAttackConfirm(message, html);
 	wireApplyDamage(message, html);

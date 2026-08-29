@@ -53,6 +53,8 @@ import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
 import {statApproaches} from "../../utils/stat-approaches.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
 import {stockSources, canPayStock, defaultStockSource, stockCostFromDescription, SACRED_POUCH_SLUG, RITES_OF_THE_LAND, DEFAULT_SACRED_POUCH_MAX} from "./stock-cost.js";
+import {supplyPursesFor, defaultSupplyPurse, spendSupplies, campUsesNeeded, SUPPLY_PURPOSE} from "./supply-cost.js";
+import {rollProvisions, ON_THE_HOOF} from "./provisions.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
 import {knowThingsRollChoices, withAdvantage, KNOW_THINGS_STAT} from "./arcana-identify.js";
 import {ARTIFACT_STATE, artifactStateForTier, knowThingsArtifactResults, seekInsightArtifactResults,
@@ -278,6 +280,7 @@ export const GUIDED_CHARACTER_MOVES = {
 const EXPEDITION_MOVE_HANDLERS = {
 	Requisition: sheet => sheet._onRequisition(),
 	Outfit:      sheet => sheet._onOutfitOpen(),
+	"Make Camp": sheet => sheet._onMakeCampOpen(),
 };
 
 // Description-only moves whose USE does something beyond posting their text. These have no
@@ -303,6 +306,10 @@ const MOVE_USE_EFFECTS = {
 	// on the steading, and can promise advantage on a Fortunes roll nobody has made yet. Three
 	// documents and a fourth thing to remember next season — so it gets a walkthrough.
 	[RITES_OF_THE_LAND]:  sheet => sheet._openRitesOfTheLand(),
+	// A Ranger On the Hoof procures the day's food while the party walks. There is no roll tier
+	// to it, so using the move IS collecting: the prompt asks the one question its text asks
+	// (winter or barren terrain?) and rolls the 1d6 accordingly.
+	[ON_THE_HOOF]:        sheet => sheet._onTheHoof(),
 };
 
 // The same idea for moves that ROLL: their use does not fall through to the post-it-to-chat tail,
@@ -356,9 +363,66 @@ function _toggleGlyphKeys(keys, on, editable) {
 	return { labelKey: keys.label[state], tooltipKey: (editable ? keys.tooltip : keys.readOnly)[state] };
 }
 
-// Inventory slugs that hold "uses of supplies", in the order Recover depletes
-// them. Mirrors _PROSPERITY_RESOURCE_SLUGS in StonetopCharacter.js.
-const RECOVER_SUPPLY_SLUGS = ["supplies", "more-supplies", "even-more-supplies"];
+/**
+ * The "pay with…" field shared by every dialog that spends a use of supplies.
+ *
+ * A single eligible purse renders as a sentence, not a radio: there is nothing to choose, and a
+ * lone radio button that cannot be unpicked is a control pretending to be one. Two or more render
+ * as radios, defaulting to the first (supply-cost.js#defaultSupplyPurse drains the printed rows
+ * before a larder or a vial).
+ *
+ * Whatever is being carried but CANNOT pay is listed underneath with the reason, because that is
+ * the question the field actually raises: a player with four uses of provisions looking at a
+ * Recover dialog wants to know why they are not on the list, and "they are not on the list" is
+ * not an answer. See supply-cost.js for both directions of that rule.
+ */
+function _supplyPurseFieldHtml(purses, legend) {
+	const { eligible, ineligible } = purses;
+	const body = eligible.length === 1
+		? `<p class="stonetop-supply-purse-only">${_esc(eligible[0].label)} <span class="stonetop-supply-purse-left">(${eligible[0].remaining} left)</span></p>`
+		: eligible.map((p, i) => `<label class="stonetop-supply-purse">
+				<input type="radio" name="supplyPurse" value="${_esc(p.slug)}"${i === 0 ? " checked" : ""}>
+				<span>${_esc(p.label)} <span class="stonetop-supply-purse-left">(${p.remaining} left)</span></span>
+			</label>`).join("");
+	const refused = ineligible.map(p => `<li><strong>${_esc(p.label)}</strong> (${p.remaining}): ${_esc(p.reason)}</li>`).join("");
+	return `<div class="stonetop-supply-purses">
+		<p class="stonetop-homestead-subhead">${_esc(legend)}</p>
+		${body}
+		${refused ? `<ul class="stonetop-supply-purse-refused">${refused}</ul>` : ""}
+	</div>`;
+}
+
+/** Which purse the player picked in that field, or null when the field offered no choice. */
+function _chosenSupplyPurse(html, purses) {
+	const slug = html?.find?.('input[name="supplyPurse"]:checked')?.val();
+	return purses.eligible.find(p => p.slug === slug) ?? null;
+}
+
+/**
+ * Keep the camp's bill under the head count as the player changes it. Written live rather than
+ * left to the confirm step because "we're five, we have a mess kit" is arithmetic the table would
+ * otherwise do out loud, and because seeing the bill go red is what prompts someone to Forage
+ * before the night rather than after it.
+ */
+function _wireCampBill(html, purses) {
+	const root  = html[0] ?? html;
+	const out   = root.querySelector("[data-camp-bill]");
+	const stock = purses.eligible.reduce((sum, p) => sum + p.remaining, 0);
+	if (!out) return;
+	const paint = () => {
+		const people  = root.querySelector('[name="people"]')?.value;
+		const messKit = !!root.querySelector('[name="messKit"]')?.checked;
+		const needed  = campUsesNeeded(people, messKit);
+		const short   = Math.max(0, needed - stock);
+		out.textContent = short
+			? `Needs ${needed}; you have ${stock}. ${short} short: someone goes hungry.`
+			: `Needs ${needed} of the ${stock} you can spend.`;
+		out.classList.toggle("is-short", short > 0);
+	};
+	root.querySelector('[name="people"]')?.addEventListener("input", paint);
+	root.querySelector('[name="messKit"]')?.addEventListener("change", paint);
+	paint();
+}
 
 // The GM's artifact control (_onArtifactGmControl). The rungs in ladder order, weakest first,
 // and the three text fields in the order p.430-431 introduces them — the hint that stands in
@@ -1688,7 +1752,10 @@ export function createStonetopCharacterSheetClass(Base) {
 		_buildRecoverData(snapshot) {
 			const locked      = !!this.actor.getFlag(STONETOP_SCOPE, "recover.spent");
 			const resources   = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
-			const suppliesLeft = RECOVER_SUPPLY_SLUGS.reduce((sum, slug) => sum + (Number(resources[slug]) || 0), 0);
+			// Only what may actually pay for a Recover is counted: a pack full of provisions is
+			// not an answer to "can you Recover?" (supply-cost.js, Book I p.89), and counting it
+			// here would light the button and then have the dialog refuse it.
+			const suppliesLeft = supplyPursesFor(resources, SUPPLY_PURPOSE.RECOVER).total;
 			const healAmount  = snapshot.inventory?.smallItemLimit ?? 4;
 			const hp          = snapshot.vitals.hp;
 			const atFullHp    = hp.value >= hp.max;
@@ -3782,6 +3849,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-inv-add-btn").on("click", this._onAddInventoryItem.bind(this));
 			html.find(".stonetop-inv-delete").on("click", this._onDeleteCustomInventoryItem.bind(this));
 			html.find(".stonetop-inv-remove-special").on("click", this._onRemoveSpecialItem.bind(this));
+			html.find(".stonetop-inv-harvest").on("click", this._onHarvestProvisions.bind(this));
 			// Identifying artifacts (Book I pp.430-431): the player's magnifier rolls, the GM's
 			// mask hands the thing over (or hides it in the first place).
 			html.find(".stonetop-inv-artifact-identify").on("click", ev =>
@@ -6449,6 +6517,83 @@ export function createStonetopCharacterSheetClass(Base) {
 			await this._stonetopCharacter.removeSpecialItem(ev.currentTarget.dataset.slug);
 		}
 
+		/**
+		 * ON THE HOOF (the Ranger): 1d6 uses of provisions for a day's travel, "with disadvantage
+		 * in winter or barren terrain". Disadvantage on a single d6 is the lower of two, which is
+		 * what `2d6kl` rolls — the same shape the roll dialog's adv/dis uses on 2d6, applied to
+		 * this move's one die.
+		 *
+		 * Gated on owning the move, like every other MOVE_USE_EFFECTS handler: the row posts its
+		 * text for anyone reading another playbook's page, and only a Ranger actually procures.
+		 */
+		async _onTheHoof() {
+			if (!this.isEditable || !ownedMove(this.actor, ON_THE_HOOF)) return;
+			new Dialog({
+				title: ON_THE_HOOF,
+				content: `<form class="stonetop-homestead-dialog">
+					<p class="stonetop-homestead-trigger"><em>When you travel through the wilderness, you can procure 1d6 uses of provisions each day.</em></p>
+					<label class="stonetop-camp-extra"><input type="checkbox" name="lean">
+						<span>Winter, or barren terrain: roll with <strong>disadvantage</strong></span></label>
+				</form>`,
+				buttons: {
+					cancel:  { label: "Cancel" },
+					procure: {
+						label: "Procure the day's food",
+						callback: (html) => this._procureProvisions(html.find('[name="lean"]').is(":checked")),
+					},
+				},
+				default: "procure",
+				render: bringDialogToFront,
+			}, { width: 460, classes: this._pastDeathWindowClasses(["dialog", "stonetop"]) }).render(true);
+		}
+
+		async _procureProvisions(lean) {
+			const { uses, larder } = await rollProvisions(this.actor, {
+				formula: lean ? "2d6kl" : "1d6",
+				carry:   true,
+				flavor:  lean ? `${ON_THE_HOOF}: provisions (1d6, disadvantage)` : `${ON_THE_HOOF}: provisions (1d6)`,
+			});
+			if (larder) ui.notifications.info(`Procured ${uses} uses of provisions (${larder.held} in the pack).`);
+			this.render(false);
+		}
+
+		/**
+		 * Butcher the goat, harvest the brightberries: turn a carried thing into uses of
+		 * provisions. One handler for every such row, because what is on offer is read off the
+		 * row's own printed note rather than a list of slugs kept somewhere else.
+		 *
+		 * The source is deliberately NOT consumed. A goat butchered is a goat gone, but a
+		 * brightberry bush is not, snowembers are picked "with a few hours' effort" and the note
+		 * says nothing about the shrub, and guessing wrong either way silently destroys a
+		 * player's gear or silently duplicates food. The ◇ is one click away on the same row.
+		 */
+		async _onHarvestProvisions(ev) {
+			ev.preventDefault();
+			const btn = ev.currentTarget;
+			const { formula, roll: isRoll, name } = btn.dataset;
+			if (!formula) return;
+			btn.disabled = true;
+			try {
+				// Always claims the ◇: this food is going into the pack as its own load, which is
+				// what "◇ Provisions" in every one of these notes means.
+				const { uses, larder } = await rollProvisions(this.actor, {
+					formula,
+					announce: isRoll === "1",
+					carry:    true,
+				});
+				if (larder) {
+					postMoveToChat(this.actor, "Provisions", [
+						{ label: name || "Harvested",
+						  value: `+${uses} ${uses === 1 ? "use" : "uses"} (${larder.held} in the pack)` },
+					]);
+				}
+				this.render(false);
+			} catch (err) {
+				console.error("Stonetop | Error harvesting provisions:", err);
+				btn.disabled = false;
+			}
+		}
+
 		async _onInventoryReset() {
 			Dialog.confirm({
 				title: game.i18n.localize("stonetop.inventory.resetTitle"),
@@ -8643,9 +8788,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (this.actor.getFlag(STONETOP_SCOPE, "recover.spent")) return;
 			if (hp.value >= hp.max) return;
 
-			const resources  = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
-			const supplySlug = RECOVER_SUPPLY_SLUGS.find(slug => (Number(resources[slug]) || 0) > 0);
-			if (!supplySlug) return;
+			const resources = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
+			const purses    = supplyPursesFor(resources, SUPPLY_PURPOSE.RECOVER);
+			const fallback  = defaultSupplyPurse(purses);
+			if (!fallback) return;
 
 			const healAmount = snapshot.inventory?.smallItemLimit ?? 4;
 			const newHp      = Math.min(hp.value + healAmount, hp.max);
@@ -8661,13 +8807,18 @@ export function createStonetopCharacterSheetClass(Base) {
 							<li>Regain HP: <strong>${hp.value} &rarr; ${newHp}</strong> (4+Prosperity = ${healAmount}).</li>
 						</ul>
 					</div>
+					${_supplyPurseFieldHtml(purses, "Pay with")}
 					<p class="stonetop-homestead-note">${_esc(guide.note)} You can't gain this benefit again until you take more damage.</p>
 				</form>`,
 				buttons: {
 					cancel:  { label: "Cancel" },
 					recover: {
 						label: `Recover (+${newHp - hp.value} HP)`,
-						callback: () => this._applyRecover({ supplySlug, currentUses: Number(resources[supplySlug]) || 0, oldHp: hp.value, newHp }),
+						callback: (html) => this._applyRecover({
+							purse:  _chosenSupplyPurse(html, purses) ?? fallback,
+							oldHp:  hp.value,
+							newHp,
+						}),
 					},
 				},
 				default: "recover",
@@ -8675,15 +8826,15 @@ export function createStonetopCharacterSheetClass(Base) {
 			}, { width: 480, classes: this._pastDeathWindowClasses(["dialog", "stonetop", "stonetop-recover-dialog"]) }).render(true);
 		}
 
-		async _applyRecover({ supplySlug, currentUses, oldHp, newHp }) {
-			await this._stonetopCharacter.setInventoryResource(supplySlug, Math.max(0, currentUses - 1));
+		async _applyRecover({ purse, oldHp, newHp }) {
+			await this._stonetopCharacter.setInventoryResource(purse.slug, Math.max(0, purse.remaining - 1));
 			await this.actor.update({
 				"system.attributes.hp.value": newHp,
 				"flags.stonetop-pwd.recover.spent": true,
 			});
 
 			const rows = [
-				{ label: "Supplies", value: "Expended 1 use" },
+				{ label: purse.label, value: `Expended 1 use (${purse.remaining - 1} left)` },
 				{ label: "HP", value: `${oldHp} → ${newHp} (+${newHp - oldHp})` },
 			];
 			postMoveToChat(this.actor, "Recover", rows);
@@ -8800,6 +8951,152 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!rows.length)        rows.push({ label: "Convalesce", value: "Rested in safety and comfort." });
 			postMoveToChat(this.actor, "Convalesce", rows);
 
+			this.render(false);
+		}
+
+		/**
+		 * MAKE CAMP (expedition move, Book I p.334) — the move provisions exist for.
+		 *
+		 * "Each member of the party must consume 1 use of supplies or provisions; if you use a
+		 * mess kit (requires fire & water), then 1 use can provide for up to four people." So the
+		 * bill is people ÷ (mess kit ? 4 : 1), rounded up, and it may be paid out of any mix of
+		 * the printed supplies rows and the larder (supply-cost.js#spendSupplies spills across
+		 * them). Only the character running the dialog pays: the move is written per-PC, and one
+		 * player reaching into another's pack is not something a sheet should do quietly.
+		 *
+		 * Then "pick 1: regain HP equal to ½ your max, or clear a debility" — offered only when
+		 * the camp was actually fed, because deprivation's first cost is exactly that you get no
+		 * choice (p.335). A carried bedroll adds its printed 1d6, and a peaceful night can set the
+		 * sheet's advantage toggle.
+		 */
+		async _onMakeCampOpen() {
+			const snapshot = await this._stonetopCharacter.buildSnapshot();
+			const hp        = snapshot.vitals.hp;
+			const resources = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
+			const purses    = supplyPursesFor(resources, SUPPLY_PURPOSE.CAMP);
+			const carried   = slug => !!(snapshot.inventory?.outfit?.regularItems ?? []).find(i => i.slug === slug)?.checked;
+			const hasMessKit = carried("mess-kit");
+			const hasBedroll = carried("bedroll");
+			const debilities = (snapshot.debilities ?? []).filter(d => d.active);
+			// Halves round UP throughout Stonetop, so a 15 HP character regains 8, not 7.
+			const halfMax    = Math.ceil(hp.max / 2);
+
+			const messKitRow = hasMessKit
+				? `<label class="stonetop-camp-messkit"><input type="checkbox" name="messKit" checked>
+						<span>Use the mess kit: 1 use feeds up to 4 <em>(requires fire &amp; water)</em></span></label>`
+				: `<p class="stonetop-homestead-note">No mess kit carried, so 1 use feeds 1 person.</p>`;
+			const benefitRows = [
+				`<label class="stonetop-camp-benefit"><input type="radio" name="benefit" value="hp" checked>
+					<span>Regain HP equal to ½ your max: <strong>${hp.value} &rarr; ${Math.min(hp.value + halfMax, hp.max)}</strong> (+${halfMax})</span></label>`,
+				debilities.length
+					? `<label class="stonetop-camp-benefit"><input type="radio" name="benefit" value="debility">
+							<span>Clear a debility:</span>
+							<select name="debility">${debilities.map(d => `<option value="${_esc(d.key)}">${_esc(d.name)}</option>`).join("")}</select>
+						</label>`
+					: `<p class="stonetop-homestead-note">No debilities marked.</p>`,
+			].join("");
+
+			new Dialog({
+				title: "Make Camp",
+				content: `<form class="stonetop-homestead-dialog stonetop-camp-dialog">
+					<p class="stonetop-homestead-trigger"><em>When you settle in to rest in an unsafe area, answer the GM's questions about your campsite.</em></p>
+					<div class="stonetop-camp-feed">
+						<p class="stonetop-homestead-subhead">Feed the camp</p>
+						<label class="stonetop-camp-people">People fed from your pack
+							<input type="number" name="people" value="1" min="0" max="20" step="1"></label>
+						${messKitRow}
+						<p class="stonetop-camp-bill" data-camp-bill></p>
+					</div>
+					${_supplyPurseFieldHtml(purses, "Pay with")}
+					<div class="stonetop-camp-benefits">
+						<p class="stonetop-homestead-subhead">Eat and drink your fill, get a few hours' sleep, then pick 1</p>
+						${benefitRows}
+						${hasBedroll ? `<label class="stonetop-camp-extra"><input type="checkbox" name="bedroll" checked>
+							<span>Bedroll: regain <strong>1d6</strong> extra HP</span></label>` : ""}
+						<label class="stonetop-camp-extra"><input type="checkbox" name="peaceful">
+							<span>The rest was peaceful, comfortable or enjoyable: take <strong>advantage</strong> on your next roll</span></label>
+					</div>
+					<p class="stonetop-homestead-note">If the camp goes unfed, take no benefit: deprivation's first cost is that you get no choice here (Book I p.335).</p>
+				</form>`,
+				buttons: {
+					cancel: { label: "Cancel" },
+					camp:   {
+						// Read the form here and hand _applyMakeCamp plain values, the way
+						// _applyConvalesce is called: what the move DOES is then a function of
+						// numbers and choices rather than of a live dialog, and can be tested
+						// as one.
+						label: "Make Camp",
+						callback: (html) => this._applyMakeCamp({
+							purses, hp, halfMax, debilities,
+							people:    html.find('[name="people"]').val(),
+							messKit:   html.find('[name="messKit"]').is(":checked"),
+							preferred: _chosenSupplyPurse(html, purses)?.slug ?? null,
+							benefit:   html.find('[name="benefit"]:checked').val() ?? "hp",
+							debility:  html.find('[name="debility"]').val() ?? null,
+							bedroll:   html.find('[name="bedroll"]').is(":checked"),
+							peaceful:  html.find('[name="peaceful"]').is(":checked"),
+						}),
+					},
+				},
+				default: "camp",
+				render: (html) => { bringDialogToFront(html); _wireCampBill(html, purses); },
+			}, { width: 500, classes: this._pastDeathWindowClasses(["dialog", "stonetop", "stonetop-camp-dialog"]) }).render(true);
+		}
+
+		async _applyMakeCamp({ purses, hp, halfMax, debilities = [], people, messKit = false,
+		                       preferred = null, benefit = "hp", debility = null,
+		                       bedroll = false, peaceful = false }) {
+			const needed = campUsesNeeded(people, messKit);
+			const { spends, short } = spendSupplies(purses, needed, preferred);
+
+			// Everything this move changes goes into ONE update at the bottom: a meal spilling
+			// across three purses, the HP or the cleared debility, and the peaceful night's
+			// advantage are one act at the table, and writing them one at a time is a document
+			// write and a full sheet rebuild apiece.
+			const update = {};
+			for (const s of spends) Object.assign(update, this._stonetopCharacter.inventoryResourceData(s.slug, s.left));
+
+			const rows = spends.length
+				? spends.map(s => ({ label: s.label, value: `Expended ${s.spend} ${s.spend === 1 ? "use" : "uses"} (${s.left} left)` }))
+				: [{ label: "Rations", value: "Nothing consumed" }];
+			if (short > 0) rows.push({ label: "Short", value: `${short} ${short === 1 ? "use" : "uses"}; someone goes hungry (deprivation, p.335)` });
+
+			// Fed means fed: the benefit is what eating and sleeping buys, so a camp that came up
+			// short of its own bill takes none of it. `needed` of 0 (nobody eating from this pack)
+			// is not the same as going short, and still rests.
+			const fed = short === 0;
+			let newHp = hp.value;
+			if (fed) {
+				if (benefit === "debility") {
+					const cleared = debilities.find(d => d.key === debility);
+					if (cleared) {
+						update[`system.attributes.debilities.options.${cleared.key}.value`] = false;
+						rows.push({ label: "Debility", value: `Cleared ${cleared.name}` });
+					}
+				} else {
+					newHp = Math.min(hp.value + halfMax, hp.max);
+					rows.push({ label: "HP", value: `${hp.value} → ${newHp} (+${newHp - hp.value}, ½ max)` });
+				}
+				// The bedroll's own 1d6 is rolled to chat: it is a die the table can see, and it
+				// stacks on whichever benefit was taken (its text says "extra HP when you Make
+				// Camp", not "instead of").
+				if (bedroll) {
+					const roll = await new Roll("1d6").evaluate();
+					await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: this.actor }), flavor: "Bedroll (1d6 extra HP)" });
+					const before = newHp;
+					newHp = Math.min(newHp + Math.max(0, roll.total), hp.max);
+					rows.push({ label: "Bedroll", value: `${before} → ${newHp} (+${newHp - before})` });
+				}
+				if (newHp !== hp.value) update["system.attributes.hp.value"] = newHp;
+
+				if (peaceful) {
+					Object.assign(update, this._stonetopCharacter.rollModeData("adv"));
+					rows.push({ label: "Advantage", value: "A peaceful night; set on the sheet until you spend it" });
+				}
+			}
+
+			if (Object.keys(update).length) await this.actor.update(update, { stonetopMove: "Make Camp" });
+			postMoveToChat(this.actor, "Make Camp", rows);
 			this.render(false);
 		}
 

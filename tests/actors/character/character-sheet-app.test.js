@@ -1085,17 +1085,29 @@ describe("StonetopCharacterSheet._buildRecoverData", () => {
 });
 
 describe("StonetopCharacterSheet._applyRecover", () => {
-	it("decrements one use of the chosen supply slug", async () => {
+	// A purse as supply-cost.js hands them over: which row, what it is called, what is in it.
+	const purse = (slug, remaining, label = "Supplies") => ({ slug, label, remaining });
+
+	it("decrements one use of the chosen purse", async () => {
 		const actor = makeActor();
 		const sheet = makeSheet(actor);
-		await sheet._applyRecover({ supplySlug: "supplies", currentUses: 3, oldHp: 4, newHp: 8 });
+		await sheet._applyRecover({ purse: purse("supplies", 3), oldHp: 4, newHp: 8 });
 		expect(actor.typedActor.setInventoryResource).toHaveBeenCalledWith("supplies", 2);
+	});
+
+	// The one thing that may stand in for supplies at a Recover (Book II p.462). It is spent
+	// through the same path, which is the point of the purse abstraction.
+	it("spends a Twisting Pine vial when that is what was picked", async () => {
+		const actor = makeActor();
+		const sheet = makeSheet(actor);
+		await sheet._applyRecover({ purse: purse("twisting-pine", 1, "Twisting Pine sap"), oldHp: 4, newHp: 8 });
+		expect(actor.typedActor.setInventoryResource).toHaveBeenCalledWith("twisting-pine", 0);
 	});
 
 	it("heals to the new HP and locks the move", async () => {
 		const actor = makeActor();
 		const sheet = makeSheet(actor);
-		await sheet._applyRecover({ supplySlug: "supplies", currentUses: 1, oldHp: 4, newHp: 9 });
+		await sheet._applyRecover({ purse: purse("supplies", 1), oldHp: 4, newHp: 9 });
 		expect(actor.update).toHaveBeenCalledWith({
 			"system.attributes.hp.value": 9,
 			"flags.stonetop-pwd.recover.spent": true,
@@ -1105,7 +1117,7 @@ describe("StonetopCharacterSheet._applyRecover", () => {
 	it("re-renders after applying", async () => {
 		const actor = makeActor();
 		const sheet = makeSheet(actor);
-		await sheet._applyRecover({ supplySlug: "supplies", currentUses: 2, oldHp: 4, newHp: 8 });
+		await sheet._applyRecover({ purse: purse("supplies", 2), oldHp: 4, newHp: 8 });
 		expect(sheet.render).toHaveBeenCalledWith(false);
 	});
 });
