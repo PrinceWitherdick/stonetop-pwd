@@ -922,21 +922,118 @@ export function registerSettings() {
 		onChange: value => applySheetFont(value),
 	});
 
+	// A SLIDER, not a dropdown, and the same one the pencil-reveal delay below uses. Text size is
+	// the setting a reader adjusts by feel: they want the size that works, not the nearest of five
+	// named stops, and five stops is what the choice list could offer without becoming a list
+	// nobody reads. The bounds keep every value the dropdown offered (0.9, 1, 1.1, 1.25, 1.4 all
+	// land on the 0.05 grid) and fill in the gaps between them.
+	//
+	// The value is a MULTIPLIER on the sheet's own text size, written straight into
+	// --stonetop-font-scale by applySheetFontScale, so 1 is the size the sheets were drawn at.
+	//
+	// SWITCHING FROM String TO Number NEEDS NO MIGRATION. The choice keys were already the
+	// numbers ("1.25"), and a client setting is cast to its registered type on every read
+	// (Setting#_castType), so a stored "1.25" comes back as 1.25 the first time this build reads
+	// it. The registration is the only thing that had to change.
 	game.settings.register(SYSTEM_ID, "sheetFontScale", {
 		name: "stonetop.settings.sheetFontScale.name",
 		hint: "stonetop.settings.sheetFontScale.hint",
 		scope: "client",
 		config: true,
-		type: String,
-		choices: {
-			"0.9":  "stonetop.settings.sheetFontScale.smaller",
-			"1":    "stonetop.settings.sheetFontScale.normal",
-			"1.1":  "stonetop.settings.sheetFontScale.large",
-			"1.25": "stonetop.settings.sheetFontScale.larger",
-			"1.4":  "stonetop.settings.sheetFontScale.largest",
-		},
-		default: "1",
+		type: Number,
+		range: { min: 0.9, max: 1.4, step: 0.05 },
+		default: 1,
 		onChange: value => applySheetFontScale(value),
+	});
+
+	// THE ACCESSIBILITY PAIR. Both client-scoped, both applied by a class on the document root, and
+	// both here because they are what a low-vision player reaches for first.
+	//
+	// They exist because a player at a real table could not read their sheet. Their words: "the off
+	// white background combined with the faint pattern in the background sometimes makes it hard for
+	// him to read especially when its the lighter grey text". Every part of that is measurable and
+	// every part of it was true:
+	//   - the paper a sheet actually paints is sheet-bg.webp, an OPAQUE near-white grain whose
+	//     luminance runs 0.936-1.000, so the page a reader tracks along is not one tone but a field
+	//     that moves by ~7% under the words;
+	//   - --st-text-muted (#777) measured 4.38:1 on it and --st-text-faint (#999) measured 2.79:1,
+	//     against WCAG AA's 4.5:1 for body text. The "lighter grey text" was failing, by the numbers.
+	//
+	// KEPT APART, AND FULLY APART, because they answer different complaints and a reader can want
+	// either alone: one takes the grain off and changes no colour, the other repitches every ink and
+	// changes no grain. Folding the grain into the contrast switch would have meant a reader who
+	// simply wants a flat page has to accept a repainted one to get it.
+	//
+	// The palette USED to take the grain off as well, on the reasoning that a reader who got this
+	// far has already said the pattern defeats them. Two things were wrong with that. It made
+	// "Paper Texture" a switch that saved a value and moved nothing while this was on, which reads
+	// as broken rather than as overridden; and it decided for a reader who wants the parchment AND
+	// the darker greys that they cannot have both. Uncoupled 2026-08-28 at the user's request. The
+	// grain costs about 0.3:1 at the faintest step (7.27:1 on the image against 7.57:1 on bare
+	// white), so both ways round still clear AAA and the choice is genuinely the reader's.
+	game.settings.register(SYSTEM_ID, "sheetContrast", {
+		name: "stonetop.settings.sheetContrast.name",
+		hint: "stonetop.settings.sheetContrast.hint",
+		scope: "client",
+		config: true,
+		type: String,
+		// A CHOICE rather than a checkbox, though it has two options today. The palette is the axis,
+		// not the boolean "more contrast": a light-on-dark option is the next thing asked for by
+		// readers who need the glare down rather than the separation up, and it lands here as a third
+		// value rather than as a second setting that has to be kept exclusive with this one by hand.
+		choices: {
+			"normal": "stonetop.settings.sheetContrast.normal",
+			"high":   "stonetop.settings.sheetContrast.high",
+		},
+		default: "normal",
+		// NO re-render, unlike most of the settings below it: the palette is tokens on the document
+		// root, so every open window repaints itself with no help. There was one, for the
+		// Preferences tab: this used to draw the "Paper Texture" row disabled, and that state is
+		// decided when the tab is BUILT, so nothing would grey or un-grey it until the sheet was
+		// next drawn for some other reason. The row is never disabled now (see the note above), so
+		// the re-render had nothing left to keep in step and every open sheet was being rebuilt to
+		// produce identical markup.
+		onChange: value => applySheetContrast(value),
+	});
+
+	game.settings.register(SYSTEM_ID, "sheetTexture", {
+		name: "stonetop.settings.sheetTexture.name",
+		hint: "stonetop.settings.sheetTexture.hint",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		// ON, because the grain is the system's look and nobody who has not been bothered by it
+		// should have to turn it back on.
+		default: true,
+		onChange: value => applySheetTexture(value),
+	});
+
+	// ITALICS OFF. A third setting in the same family, and kept apart from the other two for the
+	// same reason they are kept apart from each other: it answers a complaint neither of them
+	// touches. A slanted face is harder to resolve than an upright one -- the strokes a reader
+	// tracks a letter by are the ones the slant moves -- and a magnifier makes that worse rather
+	// than better, because it magnifies the slant along with the letter.
+	//
+	// WHOLE CLIENT, not just our windows. Every other setting in this family stops at the system's
+	// own surfaces, because that is where the system's own paper and palette are. This one does
+	// not, and should not: italics are no easier to read in the sidebar, in a module's window or
+	// in core's own hints than they are on a sheet, and a reader who has said the slant costs them
+	// has not said it costs them only on the character sheet. The stylesheet block pays for that
+	// reach with an unscoped !important -- see the comment there for why nothing smaller reaches.
+	//
+	// WHAT IT COSTS, stated in the hint rather than hidden: italic is a real signal in this system
+	// (a move's fiction, a hint under a field, an empty-list note), and turning it off flattens
+	// those into the text around them wherever colour is not already carrying the distinction too.
+	// That is a trade the reader is making knowingly, which is why the setting is theirs and
+	// defaults OFF.
+	game.settings.register(SYSTEM_ID, "noItalics", {
+		name: "stonetop.settings.noItalics.name",
+		hint: "stonetop.settings.noItalics.hint",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		default: false,
+		onChange: value => applyNoItalics(value),
 	});
 
 	// CLASSIC vs MODERN sheet layout: the table's answer, one person's override of it, and
@@ -1652,6 +1749,57 @@ export function applyEditPencilRevealDelay(value) {
 
 export function applyReduceMotion(value) {
 	document.documentElement.classList.toggle("stonetop-reduce-motion", !!value);
+}
+
+/**
+ * The high-contrast palette, as a class on the document ROOT.
+ *
+ * The root and not the sheet, because the tokens it re-points are declared on `:root` and every
+ * surface a player reads inherits them from there — the sheets, our dialogs, the chat cards where
+ * the dice land, the journal pages, the themed core windows. A class on a sheet would repaint the
+ * sheet and leave the card reporting its roll in the greys the reader could not read.
+ *
+ * `.stonetop-high-contrast` on the same element `:root` matches, so the block that answers to it
+ * beats the base tokens on specificity (0,2,0 against 0,1,0) with no `!important` anywhere. Scopes
+ * that re-point those tokens on a DESCENDANT — the Death's Door moods, an undead character's
+ * sheet — still win inside themselves, which is right: those are already light-on-black and
+ * already well past AA.
+ *
+ * Compared as a string against the one value that means "on", so an unreadable or retired setting
+ * lands on the normal palette rather than on a half-applied one.
+ */
+export function applySheetContrast(value) {
+	document.documentElement.classList.toggle("stonetop-high-contrast", value === "high");
+}
+
+/**
+ * The paper grain, likewise — but keyed on the class being ABSENT from the normal case, so the
+ * markup carries a class only for the reader who has turned something off.
+ *
+ * NB the stylesheet moves the paper COLOUR along with the grain, and has to. sheet-bg.webp is
+ * opaque and near-white (mean rgb(251, 250, 250)), so it does not tint `--stonetop-bg` — it hides
+ * it. Dropping the image without lifting the colour would drop the page from ~0.977 luminance to
+ * the token's 0.875 and make every grey on it HARDER to read, which is the opposite of why anyone
+ * reaches for this. See the `--stonetop-bg-texture` comment in stonetop.css.
+ */
+export function applySheetTexture(value) {
+	document.documentElement.classList.toggle("stonetop-no-texture", !value);
+}
+
+/**
+ * Italics off, as a class on the document ROOT -- and the one skin in this family that is
+ * deliberately not scoped to our own windows.
+ *
+ * The class goes on when the setting is ON, the opposite way round from applySheetTexture above,
+ * because here the default IS the absent class: nobody who has not asked for this should carry a
+ * marker for it.
+ *
+ * Nothing is written inline and nothing is rewritten in the DOM. The whole of the change lives in
+ * the stylesheet block keyed on this class, so turning it back off restores every slant with no
+ * second pass over anything.
+ */
+export function applyNoItalics(value) {
+	document.documentElement.classList.toggle("stonetop-no-italics", !!value);
 }
 
 // Whether the pre-roll window asks how the roll is going out (Advantage / Normal /

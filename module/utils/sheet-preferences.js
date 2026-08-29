@@ -13,7 +13,8 @@
  * thing this file states is which keys a player is offered and in what order.
  *
  * Scope is per-PLAYER, not per-character: these are all client-scoped, and several of them
- * (`sheetFont`, `reduceMotion`, `sheetFontScale`) are applied by setting a variable or a class
+ * (`sheetFont`, `reduceMotion`, `sheetFontScale`, `sheetContrast`, `sheetTexture`, `noItalics`)
+ * are applied by setting a variable or a class
  * on `document.documentElement`, so one character's sheet could not hold its own value even if
  * it wanted to. The tab is where a player finds them, not what owns them.
  *
@@ -33,10 +34,28 @@ import { SYSTEM_ID } from "../system-id.js";
  */
 export const PREFERENCE_GROUPS = [
 	{
+		id: "accessibility",
+		titleKey: "stonetop.sheet.preferences.accessibility",
+		// A group of its own, first on the tab, because these are the settings someone arrives
+		// LOOKING for — a reader who cannot make out the sheet is not going to browse a list
+		// called "Look and Feel" for the one row that fixes it, and the difference between the
+		// two headings is the difference between finding it and giving up.
+		//
+		// Font SIZE first: it is the one most likely to be wanted and the reason the tab exists.
+		// Then the three that decide whether the text is legible at all — contrast, the paper
+		// grain, and the slant. `reduceMotion` is here rather than below because it is the same
+		// kind of setting: a need, not a taste. What stays in Look and Feel is what a reader who
+		// can see the sheet fine would still want to change.
+		//
+		// `noItalics` sits beside the grain because it is the same shape of request — a reader
+		// saying a treatment costs them more than it gives — and it is the one key here that
+		// reaches past our own windows to the whole client. See its registration in settings.js.
+		keys: ["sheetFontScale", "sheetContrast", "sheetTexture", "noItalics", "reduceMotion"],
+	},
+	{
 		id: "appearance",
 		titleKey: "stonetop.sheet.preferences.appearance",
-		// Font SIZE first: it is the one most likely to be wanted and the reason the tab exists.
-		keys: ["sheetFontScale", "sheetFont", "sheetLayout", "editPencilRevealDelay", "reduceMotion"],
+		keys: ["sheetFont", "sheetLayout", "editPencilRevealDelay"],
 	},
 	{
 		id: "rolling",
@@ -96,6 +115,41 @@ export const PREFERENCE_KEYS = new Set(PREFERENCE_GROUPS.flatMap(group => group.
  */
 export const GM_ONLY_KEYS = new Set(["openSheetsInEditMode"]);
 
+/**
+ * NO ROW ON THIS TAB IS EVER DRAWN DISABLED BY ANOTHER ROW, and that is worth saying because
+ * one of them used to be.
+ *
+ * Sheet Contrast: High took the paper grain off as part of repainting the page, from a later
+ * rule than the grain's own, so "Paper Texture" ticked ON under High Contrast was a switch that
+ * saved, reported success and changed nothing on screen. This file answered that by drawing the
+ * row disabled with a sentence explaining what was overriding it, which was the right answer to
+ * the wrong question: the honest fix was for the contrast palette to stop reaching a setting
+ * that is not its own, and it now does (2026-08-28, at the user's request; see the accessibility
+ * block at the end of styles/stonetop.css). The two are separate needs and a reader can want
+ * either alone.
+ *
+ * So the machinery that greyed a row out is gone rather than kept empty for a future second
+ * case. If one ever turns up, the thing to try FIRST is uncoupling the settings, because a
+ * control that flips and does nothing is a design fault wearing an explanation.
+ */
+
+/**
+ * One setting's current value, falling back to its default on a client that cannot read it —
+ * a registered-but-unreadable setting (a client mid-boot) takes its default rather than
+ * answering `undefined`, which a control would write back on its first touch.
+ *
+ * `cfg` is passed in by the one caller that already holds the registration, so a row does not
+ * look it up twice.
+ */
+function settingValue(key, cfg = registration(key)) {
+	try {
+		const value = globalThis.game?.settings?.get?.(SYSTEM_ID, key);
+		return value === undefined ? cfg?.default : value;
+	} catch {
+		return cfg?.default;
+	}
+}
+
 /** Whether this client is offered `key` at all. */
 function offeredToThisUser(key) {
 	if (!GM_ONLY_KEYS.has(key)) return true;
@@ -128,23 +182,17 @@ function buildRow(key) {
 	const cfg = registration(key);
 	if (!cfg) return null;
 
-	let value;
-	try {
-		value = globalThis.game?.settings?.get?.(SYSTEM_ID, key);
-	} catch {
-		// A registered-but-unreadable setting (a client mid-boot) takes its default rather
-		// than drawing an empty control that would write `undefined` on the first touch.
-		value = cfg.default;
-	}
-	if (value === undefined) value = cfg.default;
+	const value = settingValue(key, cfg);
 
 	const row = { key, label: loc(cfg.name), hint: loc(cfg.hint) };
 
 	if (cfg.choices) {
 		row.isChoice = true;
-		// String() both sides: `sheetFontScale` stores its scale as a STRING ("1.25") so its
-		// choice keys can be numbers, and an option compared as a number to a string never
-		// matches — which shows as a select that opens with nothing selected.
+		// String() both sides: a choice list keys its options by their stored value, and those
+		// keys are strings even when the setting's own type is not (Foundry casts the value on
+		// read, the keys of the `choices` object it is matched against stay strings). An option
+		// compared as a number to a string never matches, which shows as a select that opens
+		// with nothing selected.
 		row.choices = Object.entries(cfg.choices).map(([optValue, optLabel]) => ({
 			value:    optValue,
 			label:    loc(optLabel),

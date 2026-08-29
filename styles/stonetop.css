@@ -2920,14 +2920,8 @@ input.stonetop-name-field {
    The reader's own client settings, surfaced on the sheet. See tab-preferences.hbs and
    module/utils/sheet-preferences.js; nothing here is actor data.
 
-   Laid out as a measured column rather than edge to edge: the sheet is 960px wide and a
-   settings hint set the full width of that is a 140-character line. `margin: 0 auto` does
-   the centring, NOT `justify-content` — this tab is a scrollport, and centring a scrolling
-   box's contents with flex hides the overflow above the fold. */
-.stonetop-preferences {
-	max-width: 44em;
-	margin: 0 auto;
-}
+   Edge to edge, like every other page on this sheet: the tab's own 12px side gutter is the
+   whole inset — see the nine-tab padding rule further down. */
 
 .stonetop-preferences-intro {
 	margin: 0 0 14px;
@@ -2979,13 +2973,21 @@ input.stonetop-name-field {
    tuned for core's own chrome rather than for parchment. Body-relative, like
    `.stonetop-section-note`, so it stays a caption instead of inheriting the label's weight
    — and still answers the font-scale setting two rows above it. */
+/* Only this row's own geometry here. The ink and the size it shares with the settings submenus,
+   from the one rule that owns all three — search "THE SETTINGS CAPTION" further down the file. */
 .stonetop-preferences .stonetop-preference-row .notes {
 	grid-column: 1 / -1;
 	margin: 2px 0 0;
-	color: var(--st-text-muted);
-	font-size: calc(0.78rem * var(--stonetop-font-scale, 1));
-	line-height: 1.35;
 }
+
+/* NO ROW HERE IS DRAWN DISABLED, so there is no `:disabled` skin and no override note.
+   There were both, for "Paper Texture" while Sheet Contrast was High: the palette took the grain
+   off from a later rule than the grain's own switch, so that row saved a value and changed
+   nothing, and this file dressed the dead control and the sentence explaining it. The palette no
+   longer reaches the grain (2026-08-28; see the accessibility block at the end of this file), so
+   every row on the tab does what it says and the two rules had nothing left to paint. If a row
+   ever needs to go dead again, uncouple the settings first: a control that flips and does
+   nothing is a design fault, and skinning it is dressing the fault rather than fixing it. */
 
 /* A folded group hides its rows; the heading and its caret stay. The shared fold machinery
    stamps this class on each of the heading's following siblings — see section-editing.js. */
@@ -3825,6 +3827,11 @@ input.stonetop-name-field {
 		var(--stonetop-checkbox-icon) no-repeat center / contain !important;
 }
 
+/* `.stonetop-check` is the shared skin, so it joins the list rather than growing a rule of its
+   own: the Preferences tab is the first place one of these is drawn disabled (Paper Texture
+   while Sheet Contrast is High), and a disabled box that looks exactly like a live one is the
+   thing that made the setting read as broken in the first place. */
+.stonetop-check:disabled,
 .stonetop-item-check:disabled,
 .stonetop-lore-option-check:disabled,
 .stonetop-move-mark-check:disabled,
@@ -4084,7 +4091,8 @@ input.stonetop-name-field {
 	align-items: flex-start;
 }
 
-.stonetop-hover-settings .form-fields,
+/* Only the map menu still has a `.form-fields` — the hover menu's rows are checkboxes, and those
+   carry their control inside the label now (see the toggle rules below). */
 .stonetop-map-pin-name-settings .form-fields {
 	flex: 0 0 auto;
 }
@@ -4093,6 +4101,81 @@ input.stonetop-name-field {
 .stonetop-map-pin-name-settings .sheet-footer {
 	margin-top: 12px;
 	justify-content: flex-end;
+}
+
+/* A CHECKBOX row, which is every row of the hover list and the master toggle both menus open
+   with. The box is inside its label and to the LEFT of the title, matching the character sheet's
+   Preferences tab (`.stonetop-preference-row`) — that tab's "More…" button is how this window is
+   reached, and a control that swapped sides one click later would read as a different kind of
+   thing. The hint keeps its own line underneath.
+
+   A GRID and not core's flex `.form-group`, for the reason the tab's row is one: core's form-hint
+   rule (`body.game .app form .notes { flex: 0 0 100% }`, @layer compatibility) means "take a full
+   LINE", which in a flex COLUMN is 100% of the HEIGHT. Grid items ignore `flex` by construction,
+   so the row is immune to it rather than having to answer it. MODIFIER-STYLE: later than the
+   `.form-group` rule above it extends, so the two do not tie on specificity.
+
+   Keyed on the class the PARTIAL stamps, not on the two windows that use it today: the row's
+   appearance is the partial's own property, and a host-window list here would be a second
+   place to edit every time a third menu adopts it — which would show up as an unstyled row
+   rather than as an error. (0,2,0) still lands later in the file than the `.form-group` rule
+   above, which is what the tie was resting on anyway. */
+.form-group.stonetop-settings-toggle {
+	display: grid;
+	grid-template-columns: 1fr;
+	padding: 2px 0;
+}
+
+/* The label line. Flex, so the 15px box and the title sit on one row with the box first; the
+   4px is on top of the gap core's checkbox margin used to give (`.stonetop-check` zeroes that
+   margin, so without this the title sets hard against the glyph and the two read as one mark).
+
+   `line-height` declared because core gives any label in a form-group the full form-field height
+   (28px), which double-spaces a title long enough to wrap — and several of the fourteen are. */
+.stonetop-settings-toggle-label {
+	display: flex;
+	align-items: flex-start;
+	gap: 4px;
+	margin: 0;
+	font-weight: 600;
+	line-height: 1.4;
+	cursor: pointer;
+}
+
+/* THE SETTINGS CAPTION, in ONE place for all three surfaces that wear it: the character sheet's
+   Preferences tab and the two settings submenus its "More…" button opens into. They are the same
+   sentence doing the same job one click apart, and this used to be two rules 1200 lines away from
+   each other, each carrying a copy of the reasoning and a comment pointing at the other.
+
+   Core dresses any `.notes` inside a form at a FIXED 12px (`body.game .app form .notes`, @layer
+   compatibility), so without this the sentences explaining what each toggle does were the one
+   text in the system that did not answer the font-size setting: at scale 1.6 every title around
+   them grew and the captions stayed 12px. That is backwards for a list a low-vision reader
+   arrives at through the accessibility rows at the top of that tab.
+
+   SECONDARY, NOT MUTED, and unconditionally — these are the hints a reader has to get through
+   BEFORE the setting that would make them legible is available. Muted at this size measures
+   under 4:1 on a character sheet's washed paper, which would mean the sentence explaining High
+   Contrast was written in the palette High Contrast exists to replace. Every other `.notes` on
+   the sheet keeps the muted grey.
+
+   Later in the file than the Preferences row's own geometry rule, so it lands on that row too. */
+.stonetop-preferences .stonetop-preference-row .notes,
+.stonetop-hover-settings .notes,
+.stonetop-map-pin-name-settings .notes {
+	color: var(--st-text-secondary);
+	font-size: calc(0.78rem * var(--stonetop-font-scale, 1));
+	line-height: 1.35;
+}
+
+/* A toggle's hint additionally indents to start under the TITLE rather than under the box. It
+   explains the title, not the checkbox, and a caption running back out to the box's left edge
+   reads as a second row rather than as this one continuing. The inset is the box plus the label
+   gap, through the same font-scale the box itself answers, so the two stay lined up at every
+   size. */
+.stonetop-settings-toggle .notes {
+	margin: 2px 0 0;
+	padding-left: calc(15px * var(--stonetop-font-scale, 1) + 4px);
 }
 
 /* The per-map rows carry a select rather than a checkbox, and `flex: 0 0 auto` above sizes it
@@ -4899,12 +4982,32 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 :is(#chat, #chat-notifications, #chat-popout) .message:has(.stonetop-roll-card),
 :is(#chat, #chat-notifications, #chat-popout) .message:has(.stonetop-startup-card),
 :is(#chat, #chat-notifications, #chat-popout) .message:has(.stonetop-chat-move) {
-	background: var(--stonetop-bg, #f0ece3) url(/systems/stonetop-pwd/assets/graphics/sheet-bg.webp) center / cover;
+	background: var(--st-page) var(--stonetop-bg-texture) center / cover;
 	border-radius: var(--st-radius-lg);
 	border-width: 1px;
 	border-bottom-width: 2px;
 	font-family: var(--font-stonetop);
-	font-size: var(--font-size-13);
+	/* THE CARD'S OWN INK, DECLARED. The paper above is pinned parchment in every theme — that
+	   is the whole point of the rule — so anything on it that is left to INHERIT its colour
+	   takes core's, which goes bone-white the moment a reader picks a dark interface. The file
+	   already documents that trap twice (see `.cell__title` and `.stonetop-fate-title`, both of
+	   which declare their way out of it), but the three elements carrying the ANSWER were the
+	   ones missed: `.stonetop-roll-result-number`, `.stonetop-roll-result-label` and
+	   `.stonetop-roll-formula` name no colour at all, so on a dark interface the dice total
+	   rendered near-white on parchment, about 1.1:1. Declared once HERE, on the card itself,
+	   rather than three times on the three elements: everything on the card inherits it, and
+	   the next element added to a card is covered by construction instead of by remembering.
+	   A descendant that names its own colour still wins, which is every tier ink and every
+	   heading below; and the black-paper drip card re-points this token on itself, so an
+	   undead speaker's card resolves it to their light ink and comes down with them. */
+	color: var(--st-text-body);
+	/* AND THE READER'S OWN TEXT SIZE. `--stonetop-font-scale` is anchored on `.stonetop
+	   .window-content`, and a chat message is in the sidebar, not in one of our windows, so the
+	   Sheet Font Size setting reached every sheet and dialog and stopped at the log. Which left
+	   the one surface a player reads most often, and the one that answers their rolls, pinned at
+	   13px however large they had asked for their text. Scaled here rather than by moving the
+	   anchor: the card is the unit, and everything inside it is already em-based off this. */
+	font-size: calc(var(--font-size-13) * var(--stonetop-font-scale, 1));
 }
 
 /* Every Stonetop roll card prints its own rolled total and carries its die formula
@@ -38989,4 +39092,461 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    sacrifice made seasons ago should say so rather than look unexplained. */
 .stonetop-condition-note {
 	background: rgba(112, 128, 144, 0.18);
+}
+
+/* ══ ACCESSIBILITY: the paper, and the two switches a reader can turn ══════════════════════
+   Driven by two client settings (module/settings.js → applySheetContrast, applySheetTexture),
+   each a class on the document ROOT.
+
+   WHY THIS EXISTS, in the words that asked for it: a table wrote in about a player who is
+   around 90% blind and reads their sheet through Windows Magnifier. "The off white background
+   combined with the faint pattern in the background sometimes makes it hard for him to read
+   especially when its the lighter grey text." Every clause of that turned out to be measurable,
+   and every clause of it was true.
+
+   WHAT THE PAPER ACTUALLY IS. Not `--stonetop-bg`. sheet-bg.webp is an opaque lossy WebP with
+   no alpha channel painted at `cover`, so it does not tint the colour under it, it hides it:
+   the surface a reader tracks along is the image, mean rgb(251, 250, 250), and its luminance
+   runs 0.936 to 1.000. That spread is the "faint pattern" — about 7% of ground moving under the
+   glyphs, which is nothing to a sighted reader and is exactly the kind of interference that
+   breaks up a light-grey letterform for somebody magnifying it.
+
+   AND THE GROUND IS NOT EVEN THAT, on the sheet that matters most. A character sheet washes its
+   whole form in 10% of its playbook's colour (`.pbta.sheet.playbook-the-… form`, further up), so
+   the real paper is anywhere from #FDEFE9 for a Fox to #E5E3EA for a Judge. Measured against
+   those nine grounds, `--st-text-muted` (#777) lands between 3.53:1 and 4.08:1 and
+   `--st-text-faint` (#999) between 2.24:1 and 2.59:1, against WCAG AA's 4.5:1 for body text.
+   Inside a card, where `--st-card-fill` stacks another 3% of black on top, the Judge's worst
+   case is 3.31:1 and 2.10:1. The lighter grey text was failing. By the numbers, on every
+   playbook, for everybody — this reader simply had no margin left to absorb it.
+
+   WHAT HIGH CONTRAST DOES ABOUT IT. Plain white paper with no playbook wash, and an ink ramp
+   whose FAINTEST step is 7.57:1 — AAA, where the same step is 2.24:1 today. Every number in the
+   block below is the measured contrast of that value on the white this mode paints; they are
+   written down so the next person to touch one can see what it costs.
+
+   IT DOES NOT TOUCH THE GRAIN, and that is deliberate (2026-08-28, at the user's request). It
+   used to, on the reasoning that a reader here has already said the pattern defeats them, which
+   made "Paper Texture" a switch that saved and changed nothing while this was on. But the two
+   are separate needs and a reader can want either alone: the grain is interference under the
+   letterform, the palette is the ink on it, and somebody who reads best on parchment with the
+   greys darkened was being told they had to give up the parchment to get them. Both switches
+   now do only their own job, and a reader who wants both simply turns both on.
+
+   What that costs, since every other number here is written down: with the grain left on, the
+   surface is the image rather than this white, so the ramp is measured against rgb(251, 250, 250)
+   at its mean and its darkest pixel instead of #fff. The faintest step lands 7.27:1 and 7.13:1
+   there against 7.57:1 on bare white, so it clears AAA either way — which is what makes this a
+   choice a reader is allowed to make rather than one the stylesheet has to make for them. The
+   panels are already tighter than that (`--stonetop-bg` puts the same step at 7.07:1) and always
+   were, so nothing here is newly the worst case.
+
+   WHY IT IS A LIGHT MODE. Because a stranded literal has to stay readable. This stylesheet
+   holds about 1,500 hard-coded colour values outside `:root`, and no re-pointing of tokens
+   reaches any of them. Keeping the paper light means every one of those still renders the way
+   it always has: a mode that missed one is a mode that failed to IMPROVE that pixel. Turning
+   the paper black would mean every one it missed is black ink on black paper, and the reader
+   this was built for is the last person who can afford that failure mode. A light-on-dark
+   option is worth having and is the obvious next step, but it is a migration of those literals,
+   not a palette.
+
+   WHERE IT SITS. Last in the file, so nothing after it can win an order tie, and on `:root` so
+   the tokens reach every surface a player reads — the sheets, our dialogs, the chat cards where
+   the dice land, the journal pages, the themed core windows. `:root.stonetop-high-contrast` is
+   (0,2,0) against the base `:root` block's (0,1,0), so it wins on specificity with no
+   `!important` anywhere.
+
+   WHAT IT LEAVES ALONE, AND THE LIMIT OF THAT. The three black-paper scopes (Death's Door, an
+   undead character's sheet, their chat cards) declare these tokens on their own `.window-content`
+   at (0,6,0), and a property declared on an element always beats one inherited from an ancestor,
+   so every token they NAME keeps its skin whatever is set here. That is right: they are already
+   light-on-black and already well past AA. Their grain is left alone too, for the reason above:
+   it answers to its own switch, not to this one.
+
+   The catch is the word "name". A token those blocks never mention has nothing to beat this one
+   with, so it inherits from here and lands a value chosen for white paper on black paper, which
+   is the one direction this mode can make a thing worse. Five do: their faintest step, the quiet
+   slate in both its jobs, and two of core's own names that only the app-root rule below repairs.
+   All five are corrected at the end of this block, and a value added to the palette above wants
+   a moment's thought about whether it belongs down there too.
+
+   The rules under the palette are not colour. They are the other half of what a magnifier user
+   needs: a focus ring that exists, hairlines heavy enough to navigate by, and marks that stay
+   legible on a tab the reader cannot edit. */
+
+/* ── "Paper Texture" off, on its own ───────────────────────────────────────────────────────
+   The grain goes and nothing else moves, which is the whole of what the setting promises, and
+   the whole of what it is allowed to do: this is the ONLY block in the file that takes the paper
+   off, whatever else a reader has turned on. It can be this small only because `--st-page` names
+   the page separately from `--stonetop-bg`: the colour under the image is already the image's own
+   tone, so taking the image away reveals the page the reader was looking at rather than a darker
+   one. See both tokens at the top of this file for why that needed two names instead of one. */
+:root.stonetop-no-texture {
+	--stonetop-bg-texture: none;
+	/* And off the four black papers, which invert their grain rather than laying it over a
+	   colour. A flat white sheet here is a flat black one there. See --st-inverted-paper. */
+	--st-inverted-paper: linear-gradient(#fff, #fff);
+}
+
+/* ── "Sheet Contrast: High" — the palette ──────────────────────────────────────────────────
+   The ink and the paper COLOUR; the grain above is not its business and is not repeated here
+   (see "IT DOES NOT TOUCH THE GRAIN" in the note above). The two blocks no longer declare a
+   property in common, so which of them is written first decides nothing — but this one still
+   goes last, because it is the palette and nothing after it should be able to win an order tie
+   against it. */
+:root.stonetop-high-contrast {
+	--st-page: #fff;
+	/* The panels keep a step off the page rather than dissolving into it. Three points of white is
+	   nothing to somebody reading in this mode — which is why their borders are the thing taken to
+	   4.76:1 below — but it costs nothing, and it keeps the sheet from flattening into one field
+	   for everyone else who has the mode on. */
+	--stonetop-bg: hsl(0 0% 97%);
+
+	/* THE INK RAMP. Kept as a ramp rather than collapsed to black: the steps are how a page
+	   says which words are its own and which are the system talking, and flattening them costs
+	   a reader the structure at the moment they can least afford to hunt for it. Every step
+	   clears AAA on white, so the hierarchy survives and none of it is unreadable. */
+	--st-text:           #000;      /* 21.00:1 */
+	--st-text-body:      #0f0f0f;   /* 19.17:1 */
+	--st-text-secondary: #262626;   /* 15.13:1 */
+	--st-text-muted:     #3d3d3d;   /* 10.86:1, from 3.53:1 on a Judge's sheet */
+	--st-text-faint:     #545454;   /*  7.57:1, from 2.24:1 on a Judge's sheet */
+
+	/* THE CARD. A 3% fill and a 12% rule (1.07:1 and 1.32:1) are a suggestion of an edge; at
+	   magnification they are nothing at all. The fill goes entirely — a wash that faint only
+	   costs contrast — and the edge becomes a real line at 4.76:1. */
+	--st-card-fill: transparent;
+	--st-card-rule: rgba(0, 0, 0, 0.55);
+
+	/* THE SEMANTIC FAMILIES. Their fills stay light and stay coloured: green still means done
+	   and red still means this destroys something, and a mode that greyed them out would take
+	   away a cue rather than sharpen one. What moves is the ink on them and the border round
+	   them, so the meaning is legible instead of merely present. */
+	--st-green-border: #3f6b4f;     /* 6.13:1 */
+	--st-green-text:   #163420;     /* 13.6:1 on white, 10.9:1 on its own fill */
+	--st-blue-border:  #3f6b9e;     /* 5.51:1 */
+	--st-blue-text:    #1b3a5e;     /* 11.6:1 */
+	--st-red-border:   #a04444;     /* 6.17:1 */
+	--st-red-text:     #6b1e1e;     /* 11.5:1 */
+	--st-gold-border:  #8a6f14;     /* 4.81:1 */
+	--st-gold-text:    #5c470b;     /* 8.89:1, from 4.91:1 */
+
+	/* THE PRIMARY BUTTON, which is the worst single failure in the normal palette by reach:
+	   white on slategrey is 4.05:1, and it labels every confirm and submit in the system. */
+	--st-btn-primary-bg:       #3f4a55;   /* white on it: 9.04:1 */
+	--st-btn-primary-bg-hover: #2c353d;   /* white on it: 12.47:1 */
+	--st-btn-primary-border:   #000;
+	--st-slate-hover-bg:       rgba(63, 74, 85, 0.16);
+	--st-slate-hover-border:   #3f4a55;
+
+	/* THE CANDLE and the BRAND. The Lightbearer's gold and the Judge's near-black are worn as
+	   furniture as well as light; the halo values are left alone (a glow is not text) and only
+	   the ink and the edge move. */
+	--st-holy-light-ink:    #5e400f;      /* 8.62:1 on its own fill */
+	--st-holy-light-border: #8a6f14;      /* 4.81:1 */
+	--st-condemned-border:  rgba(0, 0, 0, 0.7);
+
+	/* THE SEASONS. Their own comment says they are "pitched at WCAG AA for LARGE text (3:1)
+	   rather than for body copy", and buys recognisable colour with the difference. That is a
+	   sound trade at normal contrast and it is exactly the trade this mode exists to refuse:
+	   the four are taken to AAA and stay unmistakably four different colours. Re-DEFINED here,
+	   never read — the header's clock is still the only thing that reads them. */
+	--stonetop-season-spring-ink: hsl(140 72% 22%);   /* 7.16:1 */
+	--stonetop-season-summer-ink: hsl(35 95% 24%);    /* 7.31:1 */
+	--stonetop-season-autumn-ink: hsl(12 80% 33%);    /* 7.31:1 */
+	--stonetop-season-winter-ink: hsl(205 80% 30%);   /* 7.18:1 */
+
+	/* THE SYSTEM'S QUIET SLATE, in both its jobs. As ink it is the label above a step, the
+	   caption under a picker, the hint beside a field, and at 3.57:1 it was itself part of the
+	   "lighter grey text" that was written in about. As a fill it is what a selected chip or a
+	   checked radio is signalled with, carrying a white label at 4.05:1. Both stay slate. */
+	--st-quiet-ink:   #46525e;   /* 7.99:1, from 3.57:1 */
+	--st-accent-fill: #3f4a55;   /* white on it: 9.04:1, from 4.05:1 */
+
+	/* THE CLASSIC TAB STRIP at rest, which was the worst-reading navigation in the system at
+	   2.85:1. Only the FILL moves — the label stays white, exactly as `--st-btn-primary-text`
+	   stays white under this block while its fill darkens. An ink that sits on a chip rather
+	   than on the paper is measured against the chip, and re-declaring it here would put it in
+	   the way of the ink sweep above, which measures every `-ink` it finds against the paper.
+	   The active tab needs nothing at all: it reads `--st-btn-primary-bg`, re-pointed above. */
+	--st-tabstrip-bg: #5c6773;   /* white on it: 5.76:1, from 2.85:1 */
+
+	/* THE THREE PLAYBOOKS whose colour cannot carry a 3:1 edge. The other six already do. */
+	--color-the-fox:         #a4501f;   /* 5.61:1, from 2.49:1 */
+	--color-the-blessed:     #2f6b3f;   /* 6.37:1, from 2.48:1 */
+	--color-the-lightbearer: #8a5c04;   /* 5.81:1, from 2.08:1 */
+}
+
+/* CORE'S OWN COLOUR NAMES, RE-DECLARED WHERE THEY CAN BE SEEN.
+
+   `--color-text-dark-secondary` is the most-read ink in this stylesheet — 181 declarations
+   take their colour from it — and neither this system nor the block above can set it from
+   `:root`, because Foundry declares it, and every name below it, on an ELEMENT:
+
+       @layer variables.base { body.game .app { --color-text-dark-secondary: #4b4a44; … } }
+
+   A property declared on an element always beats one inherited from an ancestor, whatever the
+   ancestor's specificity and whatever the layer, so a `:root` value for any of these never
+   reaches the inside of a window. This file already learned that once and says so near the top,
+   where the focus glow is re-asserted on our window roots for exactly this reason; these are the
+   same trap with a different set of names, and they are repaired the same way.
+
+   Two scopes, because the reads are in two places: our windows carry 341 of them (the sheets and
+   every dialog inside them), and the chat cards carry the rest. Both are named rather than
+   reaching for `body.game .app` itself, which would repaint every other module's windows too. */
+:root.stonetop-high-contrast :is(.app, .application, .window-app).stonetop,
+:root.stonetop-high-contrast :is(.app, .application, .window-app).stonetop-themed,
+:root.stonetop-high-contrast :is(#chat, #chat-notifications, #chat-popout) .message {
+	--color-text-dark-primary:   #000;        /* 21.00:1 */
+	--color-text-dark-secondary: #262626;     /* 15.13:1, from core's #4b4a44 at 8.89:1 */
+	--color-text-dark-inactive:  #545454;     /*  7.57:1, from core's #7a7971 at 4.37:1 */
+	--color-text-primary:        #000;
+	--color-text-emphatic:       #000;
+
+	/* Links. Inert at `:root` for the same reason, which is why every link inside a sheet has
+	   been core's #ff6400 rather than the slate the base block asks for — 2.61:1 on the paper.
+	   The underline rule below is the half of this that survives when the reader cannot resolve
+	   the colour at all. */
+	--color-text-hyperlink: #0b4a7a;          /* 9.23:1 */
+
+	/* Boundaries. WCAG asks 3:1 of anything that carries meaning by its shape, and the hairlines
+	   on these sheets are how a low-vision reader tells one card from the next. */
+	--color-border-dark:            rgba(0, 0, 0, 0.75);
+	--color-border-light-primary:   rgba(0, 0, 0, 0.55);
+	--color-border-light-secondary: rgba(0, 0, 0, 0.45);
+	--color-border-light-tertiary:  rgba(0, 0, 0, 0.48);
+}
+
+/* THE PLAYBOOK WASH, which is the single biggest thing between this reader and their sheet.
+   Ten percent of the playbook colour over the whole form is what turns #F3F0ED paper into a
+   Judge's #E5E3EA, and it is decoration: the sheet says which playbook it is in its title, its
+   art, and every move on it. Specificity (0,4,1) against the nine washes' (0,3,1). */
+:root.stonetop-high-contrast .pbta.sheet form {
+	background-color: transparent;
+}
+
+/* (The classic layout's tab strip is repainted from `:root` above, by re-pointing
+   `--st-tabstrip-bg`. It used to be two rules here, each retyping the base rule's three-sheet
+   selector list — which meant a fourth sheet type added to that list silently kept its 2.85:1
+   navigation, and the ACTIVE half was re-specifying `--st-btn-primary-bg` / `-text` that this
+   block already re-points. Both are gone; the token carries it.
+
+   That also puts the black-paper sheets back under the rule stated below: those overrides sat at
+   one class heavier than `.stonetop-past-death`'s own strip rules and so reached inside a scope
+   this block otherwise leaves alone. A token cannot do that — past-death overrides the base rule
+   and never reads the token at all.) */
+
+/* A FOCUS RING THAT EXISTS. Today there is none on a text field anywhere on these sheets:
+   Foundry's own compatibility layer carries `body.game .app input:focus { outline: none }`,
+   which beats the `--input-focus-outline-color` this system carefully re-points, and four more
+   of our own controls delete their ring on purpose. For somebody driving a magnified viewport
+   the ring is not a nicety, it is the only thing on screen that answers "where am I".
+
+   Unlayered, so it beats core's layered `outline: none` whatever the specificity; last in the
+   file and (0,5,2), so it beats ours. `:focus-visible` rather than `:focus` because browsers
+   already match it on a text field however it was reached, so nothing is lost and a mouse click
+   on a button does not leave a ring behind it. */
+:root.stonetop-high-contrast body :is(.app, .application, .window-app):is(.stonetop, .stonetop-themed)
+	:is(input, textarea, select, button, a, summary, [tabindex]):focus-visible {
+	outline: 3px solid #0b4a7a;
+	outline-offset: 1px;
+}
+
+/* LINKS SAY SO WITHOUT THEIR COLOUR. A hyperlink told apart from body text by hue alone is
+   invisible to a reader who cannot resolve the hue, whatever its contrast ratio. */
+:root.stonetop-high-contrast .stonetop a.content-link,
+:root.stonetop-high-contrast .stonetop a[href],
+:root.stonetop-high-contrast .journal-entry-page a.content-link,
+:root.stonetop-high-contrast #chat a.content-link {
+	text-decoration: underline;
+}
+
+/* NO RULE HERE PINNING THE EDIT PENCILS ON. This block used to force every section's edit control
+   to `opacity: 1` (the section pencils, the fold carets, the follower and concept pencils, the
+   edit-toggle checkbox), on the reasoning that a control a hover hides is a control a magnified
+   reader cannot find. What it did in practice was stipple every sheet with pencils that never go
+   away, on the one mode whose whole job is to make the sheet quieter to read. Contrast is not a
+   licence to add ink.
+
+   The need it was answering has its own control, and always did: `editPencilRevealDelay` (client
+   scope, Configure Settings) takes the reveal delay to 0, so a pencil appears the instant the
+   pointer is over its section. That is a separate axis from contrast, and it belongs to the reader
+   who wants it rather than to everyone who turns this mode on. The pencils also stay clickable
+   while invisible, so nothing here was ever gating an action.
+
+   If it comes back, it comes back as its own setting, not as a rider on this one. */
+
+/* THE MARKS ON A SHEET IN PLAY MODE, which is the state a player reads their character in. Every
+   tick and every radio on a read-only tab is drawn at half opacity, which puts a near-black mark
+   at about 3.5:1 on the paper — and these are not decoration, they are the answer to "have I
+   marked this". The two families that dim to 0.35 are the same thing further down.
+
+   Lifted rather than removed: half opacity is also what says the mark cannot be clicked from
+   here, and a reader who can now SEE the mark still needs to be told that. 0.85 keeps the
+   difference visible and takes the mark to about 12:1.
+
+   Disabled BUTTONS are deliberately left where they are. WCAG exempts them, their labels are not
+   information the reader is missing, and a floor applied across every `:disabled` would have
+   dimmed the ones that are currently at full opacity rather than lifting anything. */
+:root.stonetop-high-contrast .stonetop-readonly :is(input[type="radio"], input[type="checkbox"]),
+:root.stonetop-high-contrast .stonetop :is(.stonetop-check, .stonetop-item-check,
+	.stonetop-lore-option-check, .stonetop-inv-diamond, .stonetop-inventory-item-check):disabled {
+	opacity: 0.85;
+}
+
+/* THE POPUPS THAT LIVE OUTSIDE THE WINDOW. Six of these are appended to <body> to escape a
+   scrolling ancestor's clip, so they are not inside `.window-content` and take none of its paper:
+   each paints its own `#fffdf7` and leans on a drop shadow to sit off the page. A shadow is not a
+   boundary at magnification, so they get the same rule every card gets. */
+:root.stonetop-high-contrast :is(.stonetop-avatar-preview, .stonetop-autocomplete,
+	.stonetop-arcana-preview-popup, .stonetop-word-tooltip, .stonetop-onboarding-faq-popup,
+	.stonetop-people-preview) {
+	border-color: var(--st-card-rule);
+}
+
+/* THE WARM-PAPER CARDS. A love letter and a threat card carry their own small palette so they
+   read as something handed over rather than as more sheet, and they declare it on themselves —
+   which puts it out of reach of the root block, exactly like the black-paper scopes. Their ink is
+   already strong (#1b1510 on #f6f1e6 is 16:1); it is the RULES that are not, at 1.77:1, and the
+   rule is the whole of what says "this is a separate thing". The paper stays warm: the point of
+   the card survives, and only the lines that draw it are taken far enough to be seen. */
+:root.stonetop-high-contrast .tab.moves .stonetop-item.stonetop-love-letter,
+:root.stonetop-high-contrast .stonetop-love-letter-read-dialog,
+:root.stonetop-high-contrast .stonetop .threat-card {
+	--tc-rule:      #6b5c45;   /* 5.75:1 on their paper, from 1.77:1 */
+	--tc-rule-hard: #4a3d2a;   /* 9.36:1, from 3.46:1 */
+	--tc-ink-soft:  #33291d;   /* 12.6:1, from 8.99:1 */
+}
+
+/* THE ONE PLACE THE RAMP SITS ON A DARK GROUND. The playbook picker's tooltip paints itself
+   #2a2a2a and letters its complexity line in `--st-text-faint`, which works at 5.04:1 while
+   that token is #999 and would fall to 1.99:1 the moment this mode darkens it. The token is
+   right and the ground is the exception, so the exception is what gets pinned. */
+:root.stonetop-high-contrast .stonetop-playbook-picker-tooltip-complexity {
+	color: #d8d8d8;   /* 10.1:1 on #2a2a2a */
+}
+
+/* THE BLACK-PAPER SCOPES, which keep the skin of every token they DECLARE (they declare it on
+   their own element, and an element beats an ancestor however specific the ancestor is). What
+   follows is the short list they do not declare, each of which was therefore inheriting a value
+   picked for white paper onto near-black. Reached by naming each scope's own selector with the
+   root class in front, which is one class heavier than the block it is correcting and later in
+   the file besides. Ratios are against their paper, the inverted spiral field at about #121212.
+
+   THE FAINTEST STEP was always here: 3.8:1 before this mode, and the one thing they were owed.
+
+   THE QUIET SLATE, in both its jobs, is the one this mode actively broke. `--st-quiet-ink`
+   letters the follower and crew labels and `--st-accent-fill` fills the loyalty, readiness,
+   supply and ammo pips; at the shared `slategrey` both came to 4.6:1 on this paper, and the
+   palette above darkens each to sit on white, which took them to 2.4:1 and 2.1:1. The
+   pips are the worse half by some way: they carry no label beside them, so a pip that has sunk
+   into the paper has not gone dim, it has gone missing, and a filled one reads as empty.
+
+   Lightened rather than merely put back, because on this paper nothing reads the fill as a bed
+   for text. Its white-label consumers (the window header, an active move chip, a steading
+   place's letter, the onboarding chips) are all either outside `.window-content` or in windows
+   these three selectors never match, so the fill has one job here and can be pitched for it.
+   The ink is kept a step brighter than the fill so a label still leads its own pips.
+
+   CORE'S TWO REMAINING NAMES. The app-root rule above repairs seven of core's names; these
+   blocks re-declare five of them and not these two, so the repair inherits straight through.
+   `--color-text-hyperlink` is the one that shows: every cross-link in a sheet or a drip card
+   reads it, and this mode's #0b4a7a navy is 2.0:1 here (core's own #ff6400 was 6.4:1, so the
+   mode was three times worse than doing nothing). Answered in the warm family this paper already
+   wears rather than with a blue, so a link still reads as the lit thing in a dark room.
+   `--color-text-dark-inactive` is core's faint step, and this mode sets it to the same value as
+   ours on white; it is given the same value as ours here, so the pairing holds on both papers. */
+:root.stonetop-high-contrast .vtt :is(.stonetop-deathsdoor-dialog, .stonetop-undeath-dialog):is(.deaths-door-mood--dusk,
+	.deaths-door-mood--waved-off, .deaths-door-mood--door).stonetop.window-app .window-content,
+:root.stonetop-high-contrast .vtt .stonetop.app.stonetop-past-death.window-app .window-content,
+:root.stonetop-high-contrast :is(#chat, #chat-notifications, #chat-popout)
+	.message.stonetop-death-drip.stonetop-death-drip--insert {
+	--st-text-faint:             hsl(0 0% 66%);     /*  7.9:1 on their paper, from 3.8:1 */
+	--st-quiet-ink:              hsl(210 14% 72%);  /*  9.3:1, from 2.4:1 under this mode */
+	--st-accent-fill:            hsl(210 15% 68%);  /*  8.2:1 as a pip, from 2.1:1 */
+	--color-text-hyperlink:      hsl(30 90% 70%);   /* 10.4:1, from 2.0:1 */
+	--color-text-dark-inactive:  hsl(0 0% 66%);     /*  7.9:1, from 2.5:1 */
+}
+
+/* ── "No Italic Text" ──────────────────────────────────────────────────
+   Every slanted word drawn upright, for a reader who finds the slant costs them more than the
+   emphasis is worth. A slanted face moves the very strokes a letter is told apart by, and a
+   magnifier scales the slant up along with the letter rather than resolving it -- so this is the
+   same kind of setting as the two above it, not a taste.
+
+   WHY IT IS UNSCOPED, which is the one thing about this block that needs defending. Every other
+   accessibility rule in this file stops at our own surfaces, because our paper and our palette
+   are what they are correcting and core's are not ours to repaint. Italics are different: they
+   are no easier to read in the sidebar, in a module's window, or in core's own hints than they
+   are on a character sheet, and a reader who has said the slant costs them has not said it costs
+   them only on the sheets. So this reaches the whole client on purpose. It is the deliberate
+   exception to the SCOPING RULE near the top of this file, and the exception is safe in a way
+   the rule's usual violations are not: it declares exactly one property, that property is
+   inherited and purely presentational, and the class it hangs off is absent from every client
+   whose reader has not asked for this.
+
+   WHY `!important`, and why on `*` rather than on the root alone. `font-style` inherits, so the
+   root alone would carry it to most of the page -- but any element with its own `font-style:
+   italic` (there are ~190 in this file, and core and modules add their own) declares the property
+   ON the element, and a declaration on an element always beats an inherited one however specific
+   its source. Reaching those means matching them, and beating them means `!important`.
+
+   WHY THE `:is(#…)` CLAUSE, which is the strange-looking part. `!important` settles ties against
+   ordinary rules, but between two `!important` author declarations it is SPECIFICITY that
+   decides -- so the plain form of this rule, at (0,2,0), lost to anything more specific that
+   also shouted. That is not hypothetical: this install carries a competing Stonetop system as a
+   module whose sheet CSS italicises at (0,7,1) with `!important` throughout. `:is()` takes the
+   weight of its heaviest argument, so naming an id that will never exist alongside the class that
+   actually matches buys ID-level weight (1,2,0) in one short clause, with no arms race of
+   repeated class names and no change to what the selector MATCHES. The id is a counterweight and
+   nothing else; do not go looking for an element that carries it.
+
+   WHY THE PSEUDO-ELEMENTS GET THEIR OWN RULES. `*` does not match a pseudo-element, and a
+   declaration made directly on one BEATS the value it would otherwise inherit from the element
+   it belongs to -- so an italic `::placeholder` survived the first cut of this block entirely.
+   Ours are in the onboarding dialog, core italicises `#chat-message::placeholder`, and modules
+   add more. They are listed as SEPARATE rules rather than as more entries in the list above
+   because one pseudo-element a browser does not recognise invalidates the whole selector list it
+   appears in: split up, an unknown one costs only itself instead of taking the main rule down
+   with it. `::selection` is deliberately absent -- it accepts only colour and decoration
+   properties, so `font-style` in it would be dropped anyway.
+
+   WHAT IT CANNOT REACH, stated so the next person does not hunt for it: a declaration inside a
+   web component's shadow stylesheet. Nothing sets one today -- and shadow content with no
+   declaration of its own inherits `normal` from its host, which this block does set -- so the
+   gap is theoretical rather than visible.
+
+   WHAT IT COSTS. Italic carries meaning in places (a move's fiction, the hint under a field, an
+   empty-list note), and those flatten into the text around them wherever colour is not already
+   drawing the distinction as well. That is the trade the setting exists to let a reader make, it
+   is named in the setting's hint rather than hidden, and it defaults off.
+
+   The bracket-upright `@font-face` rules at the top of the file simply go unused while this is
+   on: with no italic ever requested, the italic faces they patch are never selected.
+
+   WHERE IT SITS. After the high-contrast block, which is harmless to it and to which it is
+   harmless: that block's "last in the file" note is about winning ORDER TIES between equally
+   specific re-pointings of custom properties, and this declares no property either block reads. */
+:root.stonetop-no-italics:is(#st-no-italics, .stonetop-no-italics),
+:root.stonetop-no-italics:is(#st-no-italics, .stonetop-no-italics) *,
+:root.stonetop-no-italics:is(#st-no-italics, .stonetop-no-italics) *::before,
+:root.stonetop-no-italics:is(#st-no-italics, .stonetop-no-italics) *::after {
+	font-style: normal !important;
+}
+
+/* The text-bearing pseudo-elements, one rule each. See the note above for why they are split. */
+:root.stonetop-no-italics:is(#st-no-italics, .stonetop-no-italics) *::placeholder {
+	font-style: normal !important;
+}
+:root.stonetop-no-italics:is(#st-no-italics, .stonetop-no-italics) *::marker {
+	font-style: normal !important;
+}
+:root.stonetop-no-italics:is(#st-no-italics, .stonetop-no-italics) *::first-line {
+	font-style: normal !important;
+}
+:root.stonetop-no-italics:is(#st-no-italics, .stonetop-no-italics) *::first-letter {
+	font-style: normal !important;
+}
+:root.stonetop-no-italics:is(#st-no-italics, .stonetop-no-italics) *::file-selector-button {
+	font-style: normal !important;
 }

@@ -69,6 +69,11 @@
 				{{/if}}
 				{{/if}}
 
+				{{!-- No "something else is overriding this" note, and no `disabled` on the controls
+				      above: no row on this tab can be made dead by another row. One used to be
+				      ("Paper Texture" while Sheet Contrast was High) and the settings were
+				      uncoupled instead, which is the fix a row like that wants. See the note at
+				      the top of module/utils/sheet-preferences.js. --}}
 				{{#if hint}}<p class="notes">{{hint}}</p>{{/if}}
 			</div>
 			{{/each}}

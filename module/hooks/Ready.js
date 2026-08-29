@@ -18,7 +18,7 @@ import { offerDurableArtOnce } from "../book2-art/offer-once.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
 import { stonetopChatCard } from "../utils/chat.js";
 import { stampWorldLayoutBaseline } from "../utils/sheet-layout.js";
-import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyReduceMotion, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope } from "../settings.js";
+import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyReduceMotion, applySheetContrast, applySheetTexture, applyNoItalics, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope } from "../settings.js";
 import { EndOfSessionDialog } from "../dialogs/EndOfSessionDialog.js";
 import { IntroductionsDialog } from "../dialogs/IntroductionsDialog.js";
 import { SpringBurstDialog } from "../dialogs/SpringBurstDialog.js";
@@ -144,6 +144,13 @@ export async function onReady() {
 	applySheetFontScale(getSetting("sheetFontScale"));
 	applyEditPencilRevealDelay(getSetting("editPencilRevealDelay"));
 	applyReduceMotion(getSetting("reduceMotion"));
+	// The three accessibility skins. Applied here with the rest rather than left to their own
+	// `onChange`, because that only fires when somebody CHANGES the setting — a client that
+	// stored "high" last session would otherwise load every sheet in the palette it could not
+	// read, until it touched the control again.
+	applySheetContrast(getSetting("sheetContrast"));
+	applySheetTexture(getSetting("sheetTexture"));
+	applyNoItalics(getSetting("noItalics"));
 	// Fold the pre-world-keying Setting Overview gate under this world, so every OTHER
 	// world stops reading it as already-shown (see settings.js).
 	await migrateFlatSettingOverviewShown();

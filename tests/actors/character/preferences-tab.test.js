@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { readRepo as read, readCss, repoFileExists, declarations } from "../../fakes/css.js";
+import { readRepo as read, readCss, repoFileExists, declarations, stripComments } from "../../fakes/css.js";
 import {
 	GM_ONLY_KEYS, PREFERENCE_GROUPS, PREFERENCE_KEYS, buildPreferenceGroups, formatRange, openPreferenceMenu, setPreference,
 } from "../../../module/utils/sheet-preferences.js";
@@ -121,7 +121,7 @@ describe("Preferences tab wiring", () => {
 	// has any business in the form's submit data — and none of them needs a name, because only
 	// radios group by it.
 	it("gives no control on the tab a name attribute", () => {
-		const body = TAB_HBS.replace(/\{\{!--[\s\S]*?--\}\}/g, "");
+		const body = stripComments(TAB_HBS);
 		expect(body).not.toMatch(/<(input|select|textarea)[^>]*\sname=/);
 	});
 
@@ -214,18 +214,28 @@ describe("buildPreferenceGroups", () => {
 
 	it("shapes each row from its registration: choices, range, or checkbox", () => {
 		globalThis.game = fakeGame({
-			sheetFontScale: { name: "Size", hint: "h", type: String, default: "1",
-				choices: { "1": "Normal", "1.25": "Larger" }, value: "1.25" },
+			sheetFont: { name: "Font", hint: "h", type: String, default: "libre-caslon",
+				choices: { "libre-caslon": "Libre Caslon", "signika": "Signika" }, value: "signika" },
+			sheetFontScale: { name: "Size", type: Number, default: 1,
+				range: { min: 0.9, max: 1.4, step: 0.05 }, value: 1.25 },
 			editPencilRevealDelay: { name: "Delay", type: Number, default: 1,
 				range: { min: 0, max: 3, step: 0.1 }, value: 1.5 },
 			reduceMotion: { name: "Motion", type: Boolean, default: false, value: true },
 		});
 		const rows = new Map(buildPreferenceGroups().flatMap(g => g.rows).map(r => [r.key, r]));
 
+		const font = rows.get("sheetFont");
+		expect(font.isChoice).toBe(true);
+		expect(font.choices.find(c => c.value === "signika").selected).toBe(true);
+		expect(font.choices.find(c => c.value === "libre-caslon").selected).toBe(false);
+
+		// Font size is a slider, not a dropdown: it is the one a reader adjusts by feel.
 		const scale = rows.get("sheetFontScale");
-		expect(scale.isChoice).toBe(true);
-		expect(scale.choices.find(c => c.value === "1.25").selected).toBe(true);
-		expect(scale.choices.find(c => c.value === "1").selected).toBe(false);
+		expect(scale.isRange).toBe(true);
+		expect({ min: scale.min, max: scale.max, step: scale.step })
+			.toEqual({ min: 0.9, max: 1.4, step: 0.05 });
+		expect(scale.value).toBe(1.25);
+		expect(scale.display).toBe("1.25");
 
 		const delay = rows.get("editPencilRevealDelay");
 		expect(delay.isRange).toBe(true);
@@ -237,11 +247,12 @@ describe("buildPreferenceGroups", () => {
 		expect(rows.get("reduceMotion").checked).toBe(true);
 	});
 
-	// `sheetFontScale` stores its scale as a STRING so its choice keys can be numbers. Comparing
-	// a number to a string never matches, which shows as a select that opens with nothing chosen.
+	// A choice list keys its options by their stored value, and those keys are strings even when
+	// the setting's own type is not. Comparing a number to a string never matches, which shows as
+	// a select that opens with nothing chosen.
 	it("matches the chosen option across the string/number divide", () => {
 		globalThis.game = fakeGame({
-			sheetFontScale: { name: "Size", type: String, default: "1",
+			sheetFontScale: { name: "Size", type: Number, default: 1,
 				choices: { "1": "Normal", "1.25": "Larger" }, value: 1.25 },
 		});
 		const [row] = buildPreferenceGroups().flatMap(g => g.rows);
@@ -321,6 +332,97 @@ describe("the GM-only rows", () => {
 	});
 });
 
+// Sheet Contrast and Paper Texture are SEPARATE SETTINGS, and this is the block that proves they
+// stayed that way.
+//
+// They were not. The contrast palette took the grain off as part of repainting the page, from a
+// later rule than the grain's own setting, so "Paper Texture" ticked under High Contrast was a
+// switch that saved, reported success and changed nothing on screen. The answer here used to be
+// to draw that row disabled with a sentence explaining the override, and it was the wrong answer:
+// a reader who wants the parchment AND the darker greys was being told to pick one. The palette
+// was uncoupled from the grain instead (2026-08-28, at the user's request), and everything below
+// guards the uncoupling rather than the explanation that used to stand in for it.
+describe("Sheet Contrast and Paper Texture, kept separate", () => {
+	const withContrast = (contrast, texture = true) => fakeGame({
+		sheetContrast: { name: "Contrast", type: String, default: "normal",
+			choices: { normal: "Normal", high: "High" }, value: contrast },
+		sheetTexture: { name: "Paper Texture", hint: "The grain.", type: Boolean,
+			default: true, value: texture },
+	});
+
+	const textureRow = () => buildPreferenceGroups()
+		.flatMap(g => g.rows).find(r => r.key === "sheetTexture");
+
+	// The regression this exists for, stated the way a player would: turning contrast up must not
+	// reach across and switch the paper off.
+	it("leaves Paper Texture live and checked at High contrast", () => {
+		globalThis.game = withContrast("high", true);
+		const row = textureRow();
+		expect(row.disabled, "the row is drawn dead by another row again").toBeFalsy();
+		expect(row.disabledNote, "a row is explaining an override again").toBeFalsy();
+		expect(row.isCheck).toBe(true);
+		expect(row.checked, "the row stopped showing its own value").toBe(true);
+		expect(row.hint).toBeTruthy();
+	});
+
+	it("leaves it alone at Normal contrast too", () => {
+		globalThis.game = withContrast("normal", true);
+		const row = textureRow();
+		expect(row.disabled).toBeFalsy();
+		expect(row.checked).toBe(true);
+	});
+
+	it("keeps the grain OFF at High contrast if that is what the reader stored", () => {
+		globalThis.game = withContrast("high", false);
+		expect(textureRow().checked).toBe(false);
+	});
+
+	it("still allows the write at either contrast", async () => {
+		globalThis.game = withContrast("high");
+		expect(await setPreference("sheetTexture", false)).toBe(true);
+	});
+
+	// The palette is tokens on the document root, so every open window repaints itself. The
+	// re-render that used to ride along was there to redraw the disabled row, and with no row to
+	// redraw it was rebuilding every open sheet to produce identical markup.
+	it("does not rebuild every open sheet when contrast changes", () => {
+		const body = REGISTRATIONS.get("sheetContrast");
+		expect(body, "sheetContrast is not registered").toBeTruthy();
+		expect(body).toContain("applySheetContrast(value)");
+		expect(body, "contrast re-renders sheets for a row that is no longer drawn")
+			.not.toContain("_rerenderActorSheets()");
+	});
+
+	// The machinery, gone rather than kept empty: a `disabled` attribute the context can never set
+	// and a note it can never fill are a standing invitation to couple two settings again.
+	it("keeps the disabling machinery out of the template", () => {
+		const body = stripComments(TAB_HBS);
+		expect(body, "a control can be drawn disabled again").not.toContain("{{#if disabled}}");
+		expect(body, "a row can explain an override again").not.toContain("{{#if disabledNote}}");
+		expect(body, "the hint is gone from the rows").toContain("{{#if hint}}<p class=\"notes\">");
+	});
+
+	it("keeps it out of the context builder and the strings", () => {
+		expect(stripComments(read("module/utils/sheet-preferences.js")), "the suppression table is back")
+			.not.toMatch(/SUPPRESSED_BY|disabledNote/);
+		expect(EN.stonetop.sheet.preferences.suppressedByContrast,
+			"the override sentence is back in the language file").toBeUndefined();
+	});
+
+	// The other half of the uncoupling, in the stylesheet: the contrast palette must not name the
+	// grain tokens. Only the "Paper Texture" block is allowed to take the paper off.
+	it("keeps the grain out of the contrast palette", () => {
+		const palette = declarations(CSS, ":root.stonetop-high-contrast");
+		expect(palette, "the high-contrast palette is gone or renamed").toBeTruthy();
+		expect(palette, "the palette takes the grain off again")
+			.not.toMatch(/--stonetop-bg-texture|--st-inverted-paper/);
+		const flat = declarations(CSS, ":root.stonetop-no-texture");
+		expect(flat, "the no-texture block is gone or renamed").toBeTruthy();
+		expect(flat, "the grain switch stopped taking the grain off")
+			.toMatch(/--stonetop-bg-texture:\s*none/);
+	});
+});
+
 describe("setPreference", () => {
 	it("refuses a key the tab does not offer", async () => {
 		globalThis.game = fakeGame({ classicLayoutCharacter: { name: "World", type: Boolean, default: false } });
@@ -341,15 +443,21 @@ describe("setPreference", () => {
 		globalThis.game = fakeGame({
 			editPencilRevealDelay: { name: "Delay", type: Number, default: 1, range: { min: 0, max: 3, step: 0.1 } },
 			reduceMotion:          { name: "Motion", type: Boolean, default: false },
-			sheetFontScale:        { name: "Size", type: String, default: "1" },
+			sheetFontScale:        { name: "Size", type: Number, default: 1,
+				range: { min: 0.9, max: 1.4, step: 0.05 } },
+			sheetFont:             { name: "Font", type: String, default: "libre-caslon" },
 		});
 		await setPreference("editPencilRevealDelay", "1.5");
 		await setPreference("reduceMotion", "");
-		await setPreference("sheetFontScale", 1.25);
+		await setPreference("sheetFontScale", "1.25");
+		await setPreference("sheetFont", "signika");
 
 		expect(globalThis.game._values.get(`${SYSTEM_ID}.editPencilRevealDelay`)).toBe(1.5);
 		expect(globalThis.game._values.get(`${SYSTEM_ID}.reduceMotion`)).toBe(false);
-		expect(globalThis.game._values.get(`${SYSTEM_ID}.sheetFontScale`)).toBe("1.25");
+		// The slider hands back "1.25"; stored uncoerced it would reach applySheetFontScale as a
+		// string and land in --stonetop-font-scale as one.
+		expect(globalThis.game._values.get(`${SYSTEM_ID}.sheetFontScale`)).toBe(1.25);
+		expect(globalThis.game._values.get(`${SYSTEM_ID}.sheetFont`)).toBe("signika");
 	});
 
 	it("refuses a Number that is not one, rather than storing NaN", async () => {
