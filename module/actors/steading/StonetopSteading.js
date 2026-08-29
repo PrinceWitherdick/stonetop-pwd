@@ -11,12 +11,14 @@ import {
 	alternativeSectionFlags,
 	normalizeImprovementGrants,
 	normalizeImprovementSections,
+	sectionRequiredCount,
 } from "../../utils/improvement-def.js";
-import {readCurrentSeason, readCurrentYear} from "../../seasons/current-season.js";
+import {readCurrentSeason, seasonStampKey, seasonStampParts} from "../../seasons/current-season.js";
 import {seasonLabel} from "../../seasons/seasons-change-reminders.js";
 import {markedDebilities} from "./steading-debilities.js";
 import {innGatheringState, INN_SEASON_STEP} from "./inn-gathering.js";
 import {steadingHolds} from "./steading-holds.js";
+import {MILITIA_SEASON_STEP} from "./season-effects.js";
 
 /** Which season's Weapons of War maintenance has been paid ("each spring, 1 Surplus"). */
 export const WEAPONS_SEASON_STEP = "weaponsUpkeep";
@@ -500,11 +502,6 @@ export const HERD_SURPLUS_PER = 6;
 /** Lower-cased built-in improvement labels, used to reject custom dupes of a book improvement. */
 const BUILTIN_IMPROVEMENT_LABELS = new Set(IMPROVEMENT_DEFINITIONS.map(d => d.label.toLowerCase()));
 
-/** How many of a requirement section's items must be checked (defaults to all). */
-function sectionRequiredCount(section) {
-	return Number.isFinite(section?.min) ? section.min : (section?.items?.length ?? 0);
-}
-
 /**
  * Whether every requirement group of an improvement is satisfied by its flat,
  * in-order stored checkbox state `r`. A section's `min` is how many of its items
@@ -527,16 +524,6 @@ export function improvementRequirementsMet(def, r = []) {
 		groups.set(key, (groups.get(key) ?? false) || satisfied);
 	});
 	return [...groups.values()].every(Boolean);
-}
-
-/**
- * Total number of requirement checkboxes across an improvement's sections — i.e. the
- * flat length of its `r` tracking array. Used to force-complete every step at once
- * when the user opts to earn an improvement whose requirements aren't all met.
- * @param {{sections?: Array}} def
- */
-export function improvementRequirementCount(def) {
-	return (def?.sections ?? []).reduce((n, s) => n + (s?.items?.length ?? 0), 0);
 }
 
 export const STEADING_DEFAULTS = {
@@ -1010,14 +997,21 @@ export class StonetopSteading {
 	 * @param {number} [opts.year]
 	 * @param {string} [opts.seasonId]
 	 * @param {object} [opts.also]          further `system.*` paths to set in that same write
+	 * @param {object} [opts.alsoFlags]     further steading FLAGS to set in that same write —
+	 *                                      what a spend that also closes something the season
+	 *                                      steps do not cover needs (winter's second consumption
+	 *                                      clears its own debt this way)
 	 * @returns {Promise<number|null>} Surplus remaining, or null if it could not be afforded
 	 */
-	async spendSurplus(amount, { stonetopMove, step = "", year, seasonId, also = {} } = {}) {
+	async spendSurplus(amount, { stonetopMove, step = "", year, seasonId, also = {}, alsoFlags = {} } = {}) {
 		const live = this.getStatValue("surplus");
 		if (live < amount) return null;
 		await this.applyChanges({
 			system: { "attributes.surplus.value": live - amount, ...also },
-			flags: step && seasonId ? this.seasonStepFlags(step, year, seasonId) : {},
+			flags: {
+				...(step && seasonId ? this.seasonStepFlags(step, year, seasonId) : {}),
+				...alsoFlags,
+			},
 		}, { stonetopMove });
 		return live - amount;
 	}
@@ -1068,23 +1062,20 @@ export class StonetopSteading {
 	musterHold() {
 		const held = this._flags.musterHold ?? null;
 		if (!held?.season) return null;
-		const stamp = readCurrentSeason(this._actor);
-		const seasonId = stamp?.season ?? "";
-		const year = readCurrentYear(this._actor);
+		const now = seasonStampKey(readCurrentSeason(this._actor));
 		// Raised in a season the clock has since left: the muster lapsed with it.
-		if (seasonId && `${year}:${seasonId}` !== `${held.year}:${held.season}`) return null;
+		if (now && now !== `${held.year}:${held.season}`) return null;
 		return held;
 	}
 
 	/** Raise the muster for the current season, optionally taking the +1 Defenses pick. */
 	async raiseMuster({ defenses = false } = {}) {
-		const stamp = readCurrentSeason(this._actor);
-		const year = readCurrentYear(this._actor);
+		const { seasonId, year } = seasonStampParts(this._actor);
 		// The Defenses bump and the hold itself are one move, so they go out as one update:
 		// two would append the muster to the ledger twice and card the stat change on its own.
 		await this.applyChanges({
 			system: defenses ? { "stats.defenses.value": this.getStatValue("defenses") + 1 } : {},
-			flags: { musterHold: { year, season: stamp?.season ?? "", defenses: !!defenses } },
+			flags: { musterHold: { year, season: seasonId, defenses: !!defenses } },
 		}, { stonetopMove: "Muster" });
 	}
 
@@ -1134,9 +1125,8 @@ export class StonetopSteading {
 	torsBlessingActive() {
 		const held = this._flags.torsBlessing ?? null;
 		if (!held) return false;
-		const stamp = readCurrentSeason(this._actor);
-		if (!stamp?.season) return false;
-		return held === `${readCurrentYear(this._actor)}:${stamp.season}`;
+		const now = seasonStampKey(readCurrentSeason(this._actor));
+		return !!now && held === now;
 	}
 
 	/** The flag a Tor's-blessing grant sets, WITHOUT writing it — so the Seasons Change, which
@@ -1149,6 +1139,45 @@ export class StonetopSteading {
 	/** Grant Tor's blessing for a year+season (the Seasons Change gain that hands it out). */
 	async setTorsBlessing(year, seasonId) {
 		await this.setFlags(this.torsBlessingFlags(year, seasonId));
+	}
+
+	/**
+	 * Winter's second bite: "the steading must consume 1d4+Population more Surplus before winter
+	 * ends, or suffer the consequences again" (the Seasons Change 7-9 in winter, and the 6- that
+	 * repeats it).
+	 *
+	 * The ONE thing in the seasonal flow the steading never used to remember. It is said once, in
+	 * a chat card, and then the table has to carry it across however many sessions winter takes.
+	 * So unlike the other holds this one is stored rather than derived: `{ stamp, amount }`, where
+	 * the stamp is the "<year>:<season>" it was rolled for, exactly like Tor's blessing.
+	 *
+	 * That stamp is also its expiry, and it expires by ceasing to match the clock rather than by
+	 * being swept up. "Before winter ends" is the deadline, so when the clock leaves that winter
+	 * the debt stops being collectable and the glyph goes out. What an unpaid winter cost is the
+	 * GM's to narrate: the book says "suffer the consequences again", and a system that quietly
+	 * charged a steading for it on the way into spring would be inventing a ruling.
+	 */
+	winterDebt() {
+		const held = this._flags.winterDebt ?? null;
+		const amount = Math.max(0, Math.trunc(Number(held?.amount) || 0));
+		if (!amount) return null;
+		const now = seasonStampKey(readCurrentSeason(this._actor));
+		if (!now || held.stamp !== now) return null;
+		return { amount, surplus: this.getStatValue("surplus") };
+	}
+
+	/** Record what winter still wants, for the year+season it was rolled in. Writes nothing at
+	 *  all with no season to stamp against: a debt rolled before any Seasons Change has nothing
+	 *  to expire against, and a stamp it could never match would neither show nor clear. */
+	async setWinterDebt(amount, year, seasonId) {
+		if (!seasonId) return;
+		await this.setFlags({ winterDebt: { stamp: `${year}:${seasonId}`, amount } });
+	}
+
+	/** Settle it. Null rather than a "-=" deletion: the tray reads the AMOUNT, so a zeroed debt
+	 *  is already invisible, and a null leaves the flag readable by anything auditing the year. */
+	async clearWinterDebt() {
+		await this.setFlags({ winterDebt: null });
 	}
 
 	/** Has this improvement been built? What gates every improvement-fed seasonal obligation. */
@@ -1164,14 +1193,20 @@ export class StonetopSteading {
 	 * that gate a fresh steading would open wearing obligations it has had no season to meet.
 	 */
 	holdsView() {
-		const stamp = readCurrentSeason(this._actor);
-		const seasonId = stamp?.season ?? "";
-		const year = readCurrentYear(this._actor);
+		const { seasonId, year } = seasonStampParts(this._actor);
 		const inn = this.improvementCompleted("inn") ? this._innGatheringView() : null;
+		// The herd's two seasonal steps read exactly like the watch's and the weapons': built,
+		// in the right season, and not yet stamped. They are the SAME markers the Seasons Change
+		// dialog disables its buttons from (advanceHerd, feedHerd), so the tray and that dialog
+		// can never disagree about whether the herd has been seen to.
+		const herd = this.improvementCompleted("herdOfHorses");
+		const herdCost = herd ? StonetopSteading.herdWinterCost(this.getHerd()) : 0;
 		return steadingHolds({
 			fortunesAdvantage: this.fortunesAdvantage(),
 			muster: this.musterHold(),
 			torsBlessing: this.torsBlessingActive(),
+			herdAdvance: seasonId === "summer" && herd
+				&& !this.seasonStepApplied("advanceHerd", year, seasonId),
 			// Only when it would actually do something: an inn with no debility to clear, or
 			// no Surplus to spend, is not an unspent opportunity, it is just an inn.
 			innGathering: !!inn?.canGather,
@@ -1181,6 +1216,21 @@ export class StonetopSteading {
 			weaponsUpkeep: seasonId === "spring"
 				&& this.improvementCompleted("weaponsOfWar")
 				&& !this.seasonStepApplied(WEAPONS_SEASON_STEP, year, seasonId),
+			// Summer's drills, read exactly like the weapons' spring bill. The improvements'
+			// seasonal YIELDS are deliberately not here beside it: what the Market and the
+			// Township generate is collected inside the Seasons Change window, like the season's
+			// own Surplus roll, which has never worn a glyph either. A due that costs you
+			// something if you skip it does; Surplus waiting to be picked up does not.
+			militiaTraining: seasonId === "summer"
+				&& this.improvementCompleted("wellTrainedMilitia")
+				&& !this.seasonStepApplied(MILITIA_SEASON_STEP, year, seasonId),
+			// A herd under HERD_SURPLUS_PER head eats nothing, and a bill for 0 Surplus is not
+			// an obligation, so `herdCost` gates the row as well as filling in its number.
+			herdFeed: seasonId === "winter" && herd && herdCost > 0
+				&& !this.seasonStepApplied("feedHerd", year, seasonId)
+				? { needed: herdCost, surplus: this.getStatValue("surplus") }
+				: null,
+			winterDebt: this.winterDebt(),
 		});
 	}
 
@@ -1198,9 +1248,7 @@ export class StonetopSteading {
 	 * the alternative is an inn that cannot be used until someone runs the seasonal flow.
 	 */
 	_innGatheringView() {
-		const stamp = readCurrentSeason(this._actor);
-		const year = readCurrentYear(this._actor);
-		const seasonId = stamp?.season ?? "";
+		const { seasonId, year } = seasonStampParts(this._actor);
 		const state = innGatheringState({
 			surplus: this.getStatValue("surplus"),
 			done: !!(seasonId && this.seasonStepApplied(INN_SEASON_STEP, year, seasonId)),

@@ -18,8 +18,19 @@ const _STAT_LABELS = {
 	wis: "Wisdom", con: "Constitution", cha: "Charisma",
 };
 
+/**
+ * The dice half of a PbTA roll, for a mode. Advantage rolls three and keeps the best two.
+ *
+ * Exported because the spring Seasons Change roll is not made here: it is handed to the table
+ * as a chat card and rolled on whoever's machine clicks it, from a formula built in stonetop.js.
+ * That formula was `2d6` outright, so a roll made at advantage lost it on the way across.
+ */
+export function pbtaDiceFormula(rollMode) {
+	return rollMode === "adv" ? "3d6kh2" : rollMode === "dis" ? "3d6kl2" : "2d6";
+}
+
 function _rollFormula(rollMode, modifier = 0) {
-	const dice = rollMode === "adv" ? "3d6kh2" : rollMode === "dis" ? "3d6kl2" : "2d6";
+	const dice = pbtaDiceFormula(rollMode);
 	return modifier !== 0 ? `${dice}+@stat+@mod` : `${dice}+@stat`;
 }
 
@@ -43,6 +54,57 @@ export const SPRING_SEASONS_RESULT = {
 	partial: { label: TIER_LABELS.partial, line: "Pick <strong>one seasonal gain</strong>, but a threat to the steading makes itself known or gets worse." },
 	failure: { label: TIER_LABELS.failure, line: "<strong>Threats abound</strong> &mdash; and don't mark XP." },
 };
+
+// The Inn's own +Fortunes roll, which is a SECOND roll the season makes and not a variant of the
+// one above: "Henceforth, when the Seasons Change, whoever is friendliest rolls +Fortunes: on a
+// 10+, ask the GM 3 questions about the wider world; on a 7-9, ask 1 question; on a 6-, ask 1
+// question, but the GM describes some trouble that stems from the inn or its guests."
+//
+// Every season, not just spring — the improvement says "when the Seasons Change" with no season
+// named — and handed to the table like spring's is, because "whoever is friendliest" is a player.
+export const INN_SEASONS_RESULT = {
+	success: { label: TIER_LABELS.success, line: "Ask the GM <strong>3 questions</strong> about the wider world." },
+	partial: { label: TIER_LABELS.partial, line: "Ask the GM <strong>1 question</strong> about the wider world." },
+	failure: { label: TIER_LABELS.failure, line: "Ask <strong>1 question</strong>, but the GM describes some trouble that stems from the inn or its guests." },
+};
+
+/**
+ * Every roll the Seasons Change hands to the table: what its card SAYS, and the ladder its
+ * answer is read against, in one entry apiece.
+ *
+ * A registry rather than a table passed through the card, because what crosses to the player's
+ * machine is HTML: a chat button can carry an id and nothing else. The id is also why the
+ * default matters — cards posted before the Inn's roll existed carry no `data-table` at all, and
+ * they are all spring cards.
+ *
+ * The wording lives HERE, beside the ladder, rather than at the call site that posts it: the two
+ * halves are keyed by the same id and are useless apart, and a third handed-over roll should be
+ * one row added here rather than a row plus four strings somewhere in a season dialog.
+ */
+export const SEASONS_ROLL_TABLES = {
+	spring: {
+		lead:    "Spring bursts forth!",
+		asks:    "most hopeful",
+		tail:    "for the <em>Seasons Change</em>",
+		results: SPRING_SEASONS_RESULT,
+	},
+	inn: {
+		lead:    "Talk at the inn turns to the world beyond.",
+		asks:    "friendliest",
+		tail:    "for the inn",
+		results: INN_SEASONS_RESULT,
+	},
+};
+
+/** One entry, falling back to spring's for a card that names none. */
+function _seasonsRollEntry(id) {
+	return SEASONS_ROLL_TABLES[id] ?? SEASONS_ROLL_TABLES.spring;
+}
+
+/** The result table a handed-over roll names, falling back to spring's for a card that has none. */
+export function seasonsRollTable(id) {
+	return _seasonsRollEntry(id).results;
+}
 
 /** Wrap a list of pre-rendered `<li>` inner-HTML strings in the shared "Results" legend
  *  block, so every result table (roll cards, homestead / season walkthroughs) renders the
@@ -122,17 +184,49 @@ export async function rollSeasonsCard({ formula, title = "", alias = "", resultT
 /**
  * Post a chat card asking the most hopeful character's player to make the spring
  * Seasons Change roll (+Fortunes). The card carries a button anyone at the table can
- * click to roll it (wired in stonetop.js `_chatWireSeasonsRoll`, which rolls 2d6 +
- * the carried Fortunes against SPRING_SEASONS_RESULT). `hopeful` is the recorded
+ * click to roll it (wired in stonetop.js `_chatWireSeasonsRoll`, which rolls the carried
+ * dice + Fortunes against SPRING_SEASONS_RESULT). `hopeful` is the recorded
  * "most hopeful" note, if any; `fortunes` is the steading's +Fortunes modifier.
+ *
+ * `rollMode` and `why` carry the roll's CONDITIONS across, because this is the one roll in the
+ * system that is decided in one place and made in another. Spring's Seasons Change is only ever
+ * handed to the table — the window offers no roll button of its own — so a Blessed who
+ * sacrificed Surplus for "advantage on the steading's next +Fortunes roll" (Rites of the Land)
+ * had bought a thing that could not be spent on the very roll it names. The GM's side reads and
+ * clears the hold and stamps the answer here; the button is then only a trigger, which is right,
+ * since the player who clicks it may not own the steading and could not read the hold anyway.
+ *
+ * @param {string} [rollMode]  "adv" | "dis" | "normal" — NOT core's public/gmroll/blind.
+ * @param {string} [why]       What bought the advantage, named on the card so the table can see
+ *   the sacrifice land rather than reading two extra dice and wondering.
  */
-export function postSeasonsRollPrompt({ alias = "Seasons Change: Spring", hopeful = "", fortunes = 0 } = {}) {
+export function postSeasonsRollPrompt({
+	alias = "Seasons Change: Spring",
+	hopeful = "",
+	fortunes = 0,
+	rollMode = "normal",
+	why = "",
+	// WHICH handed-over roll this is. Everything that differs between them — the opening line,
+	// who is asked, what the roll is for, and the ladder the answer is read against — comes off
+	// its entry in SEASONS_ROLL_TABLES, so a caller names the roll and nothing else.
+	table = "spring",
+} = {}) {
 	if (!globalThis.ChatMessage) return;
-	const who = hopeful ? `<strong>${escHtml(hopeful)}</strong>` : "Whoever is the <strong>most hopeful</strong>";
+	const { lead, asks, tail } = _seasonsRollEntry(table);
+	const who = hopeful ? `<strong>${escHtml(hopeful)}</strong>` : `Whoever is <strong>${escHtml(asks)}</strong>`;
+	// One plain line rather than the roll card's pill row: this is a small ask-card, and what a
+	// player needs before clicking is a sentence, not a badge. It names the source when there is
+	// one, because two extra dice with nothing explaining them is a table wondering whether the
+	// button is broken.
+	const named = rollMode === "adv" ? "advantage" : rollMode === "dis" ? "disadvantage" : "";
+	const conditions = named
+		? `<p class="stonetop-seasons-prompt-mode"><em>Rolled with <strong>${named}</strong>${why ? `: ${escHtml(why)}` : ""}.</em></p>`
+		: "";
 	const body = `<div class="card-content stonetop-seasons-prompt">
-		<p class="stonetop-seasons-prompt-text">Spring bursts forth! ${who}, roll <strong>+Fortunes</strong> (${sign(fortunes)}) for the <em>Seasons Change</em>.</p>
+		<p class="stonetop-seasons-prompt-text">${lead} ${who}, roll <strong>+Fortunes</strong> (${sign(fortunes)}) ${tail}.</p>
+		${conditions}
 		<div class="card-buttons stonetop-card-buttons">
-			<button type="button" class="stonetop-seasons-roll-btn" data-fortunes="${fortunes}" data-alias="${escHtml(alias)}">
+			<button type="button" class="stonetop-seasons-roll-btn" data-fortunes="${fortunes}" data-alias="${escHtml(alias)}" data-roll-mode="${escHtml(rollMode)}" data-table="${escHtml(table)}">
 				<i class="fas fa-dice-d6"></i> Roll +Fortunes (${sign(fortunes)})
 			</button>
 		</div>

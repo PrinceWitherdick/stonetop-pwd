@@ -29,12 +29,29 @@
 			{{#if stonetop.holds.length}}
 			<div class="steading-header-holds" role="group" aria-label="Outstanding at Stonetop">
 				{{#each stonetop.holds}}
+				{{!-- The hover NAMES the glyph before it explains it. A masked drawing is a picture
+				      the reader has to learn, and a hover that opened straight into "The herd eats
+				      2 Surplus this winter" asked them to work out which of the nine they were on
+				      from the sentence itself. So the heading is the row's `label` and the body is
+				      its `tooltip` (see HOLD_DEFS, where the label is written to be a name).
+
+				      `data-tooltip-html` rather than `data-tooltip`: core hands the HTML form
+				      straight to `cleanHTML` (which permits span and strong), where the plain form
+				      is first offered to `game.i18n.has()` as though it might be a key. These are
+				      sentences, not keys, so that lookup would always miss, but asking it at all is
+				      a question with a wrong answer available. Handlebars still escapes both halves
+				      into the attribute, so an apostrophe in "Tor's Blessing" stays text.
+
+				      `data-tooltip-class` is what lets the two halves be styled at all: core
+				      rebuilds #tooltip's class list on every activation, so a rule can only reach
+				      inside through the class named here. --}}
 				{{#if interactive}}
 				<button type="button"
 				        class="steading-hold steading-hold--{{tone}} steading-hold--{{icon}}"
 				        data-action="{{action}}"
 				        aria-label="{{label}}"
-				        data-tooltip="{{tooltip}}" data-tooltip-direction="DOWN">
+				        data-tooltip-html="<span class=&quot;stonetop-hold-tip-name&quot;>{{label}}</span><span class=&quot;stonetop-hold-tip-text&quot;>{{tooltip}}</span>"
+				        data-tooltip-class="stonetop-hold-tip" data-tooltip-direction="DOWN">
 					<span class="steading-hold-glyph" aria-hidden="true"></span>
 				</button>
 				{{/if}}
@@ -42,7 +59,8 @@
 				<span class="steading-hold steading-hold--{{tone}} steading-hold--{{icon}}"
 				      role="img"
 				      aria-label="{{label}}"
-				      data-tooltip="{{tooltip}}" data-tooltip-direction="DOWN">
+				      data-tooltip-html="<span class=&quot;stonetop-hold-tip-name&quot;>{{label}}</span><span class=&quot;stonetop-hold-tip-text&quot;>{{tooltip}}</span>"
+				      data-tooltip-class="stonetop-hold-tip" data-tooltip-direction="DOWN">
 					<span class="steading-hold-glyph" aria-hidden="true"></span>
 				</span>
 				{{/unless}}

@@ -76,7 +76,10 @@ const PICKER_DIALOG_OPTIONS = { classes: ["dialog", "stonetop", "stonetop-disast
  * @param {Function} [opts.applyLabelFor] (debility) => footer button once one is
  * @param {string} [opts.bodyClass]       extra class on the dialog body
  * @param {object} [opts.buttons]         further buttons, merged after `apply`
+ * @param {string} [opts.choicesLabel]    what the radiogroup is choosing, for a screen reader
  * @param {object} [opts.dialogOptions]   Dialog application options
+ * @param {Function} [opts.onRender]      (root, dialog) => void, for a window with a control of
+ *                                        its own in `introHtml` (winter's "pay it instead")
  * @param {Function} opts.onApply         (debility) => void, run when the footer commits
  */
 export function openDebilityPicker({
@@ -87,7 +90,9 @@ export function openDebilityPicker({
 	applyLabelFor = d => `Clear ${d.label}`,
 	bodyClass = "",
 	buttons = {},
+	choicesLabel = "Debility to clear",
 	dialogOptions = PICKER_DIALOG_OPTIONS,
+	onRender,
 	onApply,
 }) {
 	const choicesHtml = marked.map((d, i) => `
@@ -105,7 +110,7 @@ export function openDebilityPicker({
 		title,
 		content: `<div class="stonetop-disaster-dialog${bodyClass ? ` ${bodyClass}` : ""}">
 			${introHtml}
-			<ol class="stonetop-disaster-choices" role="radiogroup" aria-label="Debility to clear">${choicesHtml}</ol>
+			<ol class="stonetop-disaster-choices" role="radiogroup" aria-label="${escHtml(choicesLabel)}">${choicesHtml}</ol>
 		</div>`,
 		buttons: {
 			apply: {
@@ -150,6 +155,8 @@ export function openDebilityPicker({
 					select(el);
 				});
 			}
+
+			onRender?.(root, dialog);
 		},
 	}, dialogOptions);
 	dialog.render(true);

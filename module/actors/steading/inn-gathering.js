@@ -107,8 +107,12 @@ export function openInnGathering({ steading, year = 1, seasonId = "", onApplied 
 	// only the cost named on the footer button differs, because this one spends a Surplus.
 	openDebilityPicker({
 		title: "Bring Folks Together",
+		// Both halves of the price, because only one of them is a number: the Surplus, and the
+		// season's single gathering. A window that named only the Surplus made the second look
+		// free, and it is the half that cannot be got back.
 		introHtml: `${trigger}
-		<p>Spend <strong>1 Surplus</strong> (of ${state.surplus}) and clear one of the steading's debilities:</p>`,
+		<p>Spend <strong>1 Surplus</strong> (of ${state.surplus}) and clear one of the steading's debilities. There is no roll, and it uses up the inn's one gathering for ${seasonLine}.</p>
+		<p class="stonetop-season-note">Pick the debility it clears:</p>`,
 		marked: state.marked,
 		applyLabelFor: d => `Spend 1 Surplus, clear ${d.label}`,
 		bodyClass: "stonetop-inn-dialog-body",

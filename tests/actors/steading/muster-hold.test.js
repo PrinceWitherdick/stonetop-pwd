@@ -74,7 +74,46 @@ describe("the muster's three exits", () => {
 	it("stands down through the header glyph, behind a confirm", () => {
 		expect(SHEET).toContain(`data-action='stand-down-muster'`);
 		expect(SHEET).toContain("async _standDownMuster()");
-		expect(SHEET).toContain("Dialog.confirm({");
+		expect(SHEET).toContain(`title: "Stand Down the Muster"`);
+	});
+
+	// Deliberately NOT `Dialog.confirm`: its buttons are hard-wired to Yes/No, and "Yes" under a
+	// paragraph about Defenses does not say what it agrees to. Both labels name an outcome, and
+	// the affirmative is declared first so it renders LEFT (Foundry's order).
+	it("names both outcomes on its buttons rather than asking Yes/No", () => {
+		const at = SHEET.indexOf("async _standDownMuster()");
+		const body = SHEET.slice(at, at + 2600);
+		expect(body).not.toContain("Dialog.confirm");
+		expect(body).toContain(`label: "Stand the muster down"`);
+		expect(body).toContain(`label: "No, keep it mustered"`);
+		expect(body.indexOf("Stand the muster down")).toBeLessThan(body.indexOf("keep it mustered"));
+	});
+
+	// "Defenses: +1 to 0" read as an instruction to ADD +1. The house before/after form is
+	// `<before> &rarr; <after>`, and the reason for the change is spelled out beside it.
+	it("shows the Defenses give-back as a before/after, not as an operation", () => {
+		const at = SHEET.indexOf("async _standDownMuster()");
+		const body = SHEET.slice(at, at + 2600);
+		expect(body).toContain("${sign(defenses)} &rarr; ${sign(defenses - 1)}");
+		expect(body).not.toContain("</strong> to <strong>");
+		// The no-bonus case answers the same question in the same box rather than in a stray note.
+		expect(body).toContain("Nothing on the sheet.");
+		expect(body.match(/stonetop-muster-change-head/g)).toHaveLength(1);
+	});
+
+	it("styles the change block it renders", () => {
+		const css = read("styles/stonetop.css");
+		for (const cls of ["stonetop-muster-change", "stonetop-muster-change-head",
+			"stonetop-muster-change-row", "stonetop-muster-change-why"]) {
+			expect(css).toContain(`.${cls}`);
+		}
+	});
+
+	// `.stonetop-inn-trigger` is scoped per window on purpose, so wearing the class is not
+	// enough: a window that borrows the quoted-trigger line has to be named in that rule or
+	// its lead paragraph silently renders as body text.
+	it("is named in the shared trigger-line rule it borrows", () => {
+		expect(read("styles/stonetop.css")).toContain(".stonetop-muster-body .stonetop-inn-trigger");
 	});
 
 	// Seasons Change must stand it DOWN rather than let it lapse silently, or a muster that

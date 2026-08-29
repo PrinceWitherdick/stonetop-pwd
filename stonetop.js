@@ -60,7 +60,7 @@ import { boldMissText } from "./module/utils/strings.js";
 import { moveBodyHtml } from "./module/utils/move-tiers.js";
 import { MOVE_TIERS_CLASS, ROLLED_TIER_ATTR } from "./module/utils/move-results.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
-import { rollSeasonsCard, sign, SPRING_SEASONS_RESULT, markMissXp } from "./module/utils/roll-engine.js";
+import { rollSeasonsCard, sign, markMissXp, pbtaDiceFormula, seasonsRollTable } from "./module/utils/roll-engine.js";
 import { xpToLevelUp, adjustXp } from "./module/utils/xp.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
 import { moveChatCard, canRewriteCard } from "./module/utils/chat.js";
@@ -1788,9 +1788,18 @@ function _chatWireSeasonsRoll(message, html) {
 		// The carried name ("Seasons Change — <season>") heads the result card; the
 		// speaker is left to default to whoever clicked (see rollSeasonsCard).
 		const title    = btn.dataset.alias || "Seasons Change — Spring";
-		const formula  = fortunes >= 0 ? `2d6 + ${fortunes}` : `2d6 - ${-fortunes}`;
+		// The mode rides on the card because it was decided on the GM's machine when the roll was
+		// handed over — a Rites of the Land sacrifice buys advantage on the steading's next
+		// +Fortunes roll, and spring's is only ever made from here. This used to be a flat 2d6,
+		// which quietly dropped that advantage on the one roll it was bought for.
+		const dice     = pbtaDiceFormula(btn.dataset.rollMode);
+		const formula  = fortunes >= 0 ? `${dice} + ${fortunes}` : `${dice} - ${-fortunes}`;
+		// Which ladder the total is read against. Two rolls are handed to the table this way now
+		// — spring's Seasons Change and the Inn's questions — and they share everything but their
+		// outcomes. A card from before the Inn's roll existed carries no id and gets spring's.
+		const table    = seasonsRollTable(btn.dataset.table);
 		try {
-			await rollSeasonsCard({ formula, title, resultTable: SPRING_SEASONS_RESULT });
+			await rollSeasonsCard({ formula, title, resultTable: table });
 		} catch (err) {
 			console.error("Stonetop | Error rolling Seasons Change from chat:", err);
 			btn.disabled = false;

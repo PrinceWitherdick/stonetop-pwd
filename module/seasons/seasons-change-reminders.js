@@ -26,7 +26,7 @@ import { SYSTEM_ID } from "../system-id.js";
 // in inventory when you Invoke the Sun God, you can mark a use in lieu of choosing a
 // consequence." (The +1 belongs to Piety's Blessing, a different thing entirely.) Its uses
 // are a one-way pool, so it does not belong in a seasonal-upkeep card at all.
-const SEASONAL_REMINDERS = [
+export const SEASONAL_REMINDERS = [
 	{
 		kind:     "move",
 		name:     "Rites of the Land",
@@ -55,6 +55,24 @@ const SEASONAL_REMINDERS = [
 		playbook: "The Blessed",
 		seasons:  ["spring"],
 		rule:     "Each spring, the garden yields d4 uses of bendis root (reach, area, burns ~1 hr, fumes repel perversions of nature). Roll this year's crop.",
+	},
+	{
+		// The only entry that RESETS something rather than producing it, and the only one whose
+		// trigger is the move by name: "When the Seasons Change, reset your logbook to 2 uses."
+		// Nothing in the system resets it, and nothing should — the pips are on the Seeker's own
+		// move track, on their own sheet, and a GM's Seasons Change reaching across to write
+		// another player's character is not how any other seasonal upkeep here works.
+		kind:     "move",
+		name:     "Logbook",
+		playbook: "The Seeker",
+		rule:     "When the Seasons Change, reset your logbook to 2 uses. (Expend a use to treat a Know Things roll you just made as a 10+.)",
+	},
+	{
+		kind:     "possession",
+		slug:     "laboratory",
+		label:    "Laboratory",
+		playbook: "The Seeker",
+		rule:     "Every season, the laboratory produces d4−1 uses of naphtha (thrown, area, dangerous, ignores armor). Roll this season's yield.",
 	},
 ];
 

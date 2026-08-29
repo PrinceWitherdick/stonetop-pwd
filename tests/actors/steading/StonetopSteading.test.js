@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { StonetopSteading, improvementRequirementsMet, improvementRequirementCount, IMPROVEMENT_DEFINITIONS, IMPROVEMENT_CATEGORIES, IMPROVEMENT_GRANTS } from "../../../module/actors/steading/StonetopSteading.js";
+import { StonetopSteading, improvementRequirementsMet, IMPROVEMENT_DEFINITIONS, IMPROVEMENT_CATEGORIES, IMPROVEMENT_GRANTS } from "../../../module/actors/steading/StonetopSteading.js";
+import { improvementRequirementCount } from "../../../module/utils/improvement-def.js";
 
 function makeSteadingActor({ system = {}, steadingFlags = {} } = {}) {
 	return {

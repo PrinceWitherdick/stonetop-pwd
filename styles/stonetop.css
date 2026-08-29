@@ -1282,6 +1282,16 @@ body :is(.app, .window-app).stonetop-height-resized {
 	min-width: 800px;
 }
 
+/* The steading's width floor. pbta already floors every actor frame at
+   `.pbta.sheet.actor { min-width: 650px }`, and Foundry clamps a resize against the
+   COMPUTED min-width, so that inherited 650 -- not the sheet's own `minWidth` option --
+   is what the drag actually stopped at. The option is only read by sheet-size.js's save
+   guard. Stating it here at a higher specificity is what lets the window go narrower;
+   the pair is kept in step with `minWidth` in StonetopSteadingSheet's defaultOptions. */
+.pbta.sheet.actor.steading {
+	min-width: 600px;
+}
+
 .pbta.sheet .sheet-resources .cell--roll-formula {
 	display: none;
 }
@@ -7044,7 +7054,14 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    .stonetop-guide-split / .stonetop-guide-main / .stonetop-guide-nav chrome, a
    full-bleed flex column so only the panel column scrolls, and this window's own
    field styling below. It carries its own class rather than borrowing the move
-   dialog's so the two can be re-shaped apart. */
+   dialog's so the two can be re-shaped apart.
+
+   Its scrolling-panel-column override is grouped with the wound and custom-move
+   dialogs' (search ".deaths-door-choices-main"). That opt-in is per dialog, and
+   without it the panel column has no `overflow-y` of its own: a tall panel — the
+   Effect step, with its Resources and Fortifications boxes — overflowed the split
+   instead of scrolling, and since the footer below it is a bare border-top row with
+   no fill of its own, the spilled fields showed straight through the buttons. */
 .stonetop-improvement-builder.window-app { max-height: 92vh; }
 .stonetop-improvement-builder .window-content {
 	padding: 0;
@@ -14768,24 +14785,59 @@ button.stonetop-mark-sign-btn.is-active:hover {
    `margin-right: auto` is what keeps the clock at the header's right edge: the tray sits
    immediately after the title and takes the slack, rather than the clock's own auto margin
    having to split it (the note above the clock explains why two auto margins in one row is
-   the thing to avoid here). */
+   the thing to avoid here).
+
+   Nudged down 3px, for the same reason the title is and against the same reference. The banner
+   is inset 6px at the top and 10px at the bottom under a 2px rule (see `.steading-header`), so
+   `align-items: center` centres its children in the CONTENT box, whose middle sits 3px above the
+   middle of the box a reader actually sees — half of the 4px descender clearance, plus the 1px
+   the rule adds. Every flex child inherits that: the tray, the weather and the clock all report a
+   box centre exactly -3px, and only the title escapes it, because its own optical nudge is
+   documented as already carrying these same two terms.
+
+   Measured, not guessed. Scanned as PIXELS the five tall drawings land 3.00-3.10px high, so the
+   art is well centred in its 512 square and effectively all of the error is the box. The odd one
+   is the weapon rack, high by only 1.6px: it is a wide, short band of ink sitting low in its own
+   square, so the shared nudge leaves it about 1.4px low. That is the drawing, not the tray, and
+   it is not worth a second rule — per-icon nudges would trade one visible 3px for six invisible
+   ones that drift the moment any drawing is replaced.
+
+   `top`, not margin or padding: the nudge must not change what the banner MEASURES, since that
+   height is what module/utils/tab-rail.js places the icon rail against. And a literal 3px rather
+   than an em, unlike the title's: what it corrects is a padding and a border, both pixel values,
+   so it must NOT scale with the tray's font-size. */
 .steading-header .steading-header-holds {
 	display: flex;
 	align-items: center;
 	gap: 6px;
 	margin-left: 12px;
 	margin-right: auto;
+	position: relative;
+	top: 3px;
 }
 
 /* Smaller than the weather glyph next door, and deliberately: the sky is one big readout of
-   the header's own, while these are a variable-length row of up to six. At 1.5em a full tray
-   is about the width of the title, which is as much of the header as it should ever take. */
+   the header's own, while these are a variable-length row of up to seven. But not as much
+   smaller as it first looked. These carry the same game-icons.net art the weather does, with
+   the same generous margins inside the 512 square, and `contain` scales to the WHOLE square —
+   so at 1.5em the ink landed well short of an already small box and the row read as a line of
+   bullets hung off the title rather than as glyphs anyone could name. The reason the weather
+   sits at 2.75em is that same margin handed back; these want their share of it too.
+
+   2.25em is where a crossed pair of swords and a tankard are legible at a glance while the
+   pair still reads as one big readout and up to seven small ones. It costs the header nothing:
+   the banner is a centred flex row whose height the 2.75em weather already sets, so the tray
+   grows into slack that was there anyway. A full tray is then a little under twice the width of
+   the title, which the row has room for — the clock is held to the right edge by the tray's
+   own `margin-right: auto`, so a longer tray shortens the gap and moves nothing. Seven is the
+   most it can ever be, and only in winter: the herd's feed and winter's second consumption are
+   both winter rows, and the weapons' spring bill and the herd's summer growth are shut out. */
 .steading-header .steading-hold {
 	display: block;
 	padding: 0;
 	border: none;
 	background: none;
-	font-size: 1.5em;
+	font-size: 2.25em;
 	line-height: 1;
 	color: var(--st-text-body);
 	transition: background 0.15s, color 0.15s;
@@ -14809,9 +14861,59 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .steading-header .steading-hold--fortunes-advantage { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/fortunes-advantage.svg'); }
 .steading-header .steading-hold--muster             { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/muster.svg'); }
 .steading-header .steading-hold--tors-blessing      { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/tors-blessing.svg'); }
+.steading-header .steading-hold--herd-advance       { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/herd-advance.svg'); }
 .steading-header .steading-hold--inn-gathering      { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/inn-gathering.svg'); }
 .steading-header .steading-hold--standing-watch     { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/standing-watch.svg'); }
 .steading-header .steading-hold--weapons-upkeep     { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/weapons-upkeep.svg'); }
+.steading-header .steading-hold--militia-drill      { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/militia-drill.svg'); }
+.steading-header .steading-hold--herd-feed          { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/herd-feed.svg'); }
+.steading-header .steading-hold--winter-debt        { --st-hold-icon: url('/systems/stonetop-pwd/assets/icons/holds/winter-debt.svg'); }
+
+/* ── The hold tray's hover ──────────────────────────────────────────────────────
+   Two lines: the row's NAME, then what it means. A glyph is a picture the reader has to learn,
+   and a hover that opened straight into "The herd eats 2 Surplus this winter" made them work
+   out which of the nine they were on from the sentence. The heading is the answer.
+
+   Reached through `#tooltip`, which is CORE's element, not ours — it lives at the end of
+   <body>, outside every sheet, so none of the sheet-scoped selectors in this file can see it.
+   The class comes from `data-tooltip-class` on the glyph; core wipes #tooltip's class list on
+   every activation and re-adds only `active themed theme-dark` plus that one, which is also why
+   this cannot be scoped any tighter than the class itself.
+
+   THE GROUND IS ALWAYS DARK. Core hard-codes `theme-dark` on the tooltip whatever the sheet or
+   the world is set to, so the page's own ink tokens are exactly wrong here: `--st-text-body` is
+   near-black and would paint an invisible heading. Both halves therefore take core's own light
+   tooltip colours.
+
+   And the BODY is not dimmed to make the heading stand out, which is the usual way to do this.
+   The heading is distinguished by weight, letterspacing and a rule under it instead. The body
+   line is the half carrying the actual information, some of it numbers, and a reader on a
+   magnifier is the one who most needs a hover to say what a picture means. */
+#tooltip.stonetop-hold-tip {
+	text-align: left;
+}
+
+/* No display face here, deliberately. Avara is the steading's title font and the obvious reach
+   for a heading, but it stands its capitals on the full ascent (see `.steading-title`) and is
+   drawn for a banner, not for 14px on a dark wash. The heading earns its rank on weight,
+   letterspacing and the rule under it, in the same face as the line below it. */
+#tooltip.stonetop-hold-tip .stonetop-hold-tip-name {
+	display: block;
+	font-weight: bold;
+	letter-spacing: 0.04em;
+	/* Same size as the body, not larger: the tooltip is capped at 320px, and a bigger heading
+	   would wrap names that fit on one line today. */
+	color: var(--color-light-1, #f0f0e0);
+	padding-bottom: 3px;
+	margin-bottom: 4px;
+	border-bottom: 1px solid rgba(255,255,255,0.25);
+}
+
+#tooltip.stonetop-hold-tip .stonetop-hold-tip-text {
+	display: block;
+	font-weight: normal;
+	color: var(--color-light-1, #f0f0e0);
+}
 
 /* Two tones, and only two: what the steading HAS versus what it OWES. A due reads warmer so an
    unpaid obligation is not mistaken for a gift at a glance. Both tie with the base rule on
@@ -18049,6 +18151,13 @@ a.steading-player-open:hover {
 	margin-top: 8px;
 }
 
+/* The `display: flex` above out-specifies the UA's `[hidden] { display: none }`, so an action
+   row that JS hides stays on screen — the same trap `.stonetop-roll-tier-action[hidden]` and
+   `.stonetop-custom-move-section[hidden]` are here for. Winter's walkthrough is the one that
+   pays for it: it hides `#stonetop-winter-step1` (an action row) when the consumption has been
+   rolled, and the dead button sat there above the result the whole time. */
+.stonetop-season-actions[hidden] { display: none; }
+
 .stonetop-season-btn {
 	width: 100%;
 	padding: 7px 12px;
@@ -18141,6 +18250,64 @@ a.steading-player-open:hover {
 .stonetop-season-gain-name { font-weight: 600; }
 .stonetop-season-gain-text { color: var(--st-text-secondary); line-height: 1.4; }
 
+/* -- What the improvements bring, when the season turns -------- */
+/* Deliberately NOT the gains checklist's shape above, even though both are lists of named
+   things with a rule under each. A gain is something the GM TICKS and Done applies; a yield is
+   Surplus the steading has earned and someone takes now, once, with a button. Same list, same
+   window, two different acts — so a yield is a card with an amount on its right and a button
+   under it, and cannot be mistaken for something to check off.
+
+   Scoped past `.stonetop-season-flow ul/li`, as the gains list is, so these do not inherit the
+   season's disc bullets and their indent. */
+.stonetop-season-yields {
+	margin: 10px 0 4px;
+}
+
+.stonetop-season-yields .stonetop-season-yield-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.stonetop-season-yields .stonetop-season-yield {
+	margin: 0;
+	padding: 8px 10px;
+	border: 1px solid rgba(0, 0, 0, 0.15);
+	border-radius: var(--st-radius);
+	background: rgba(0, 0, 0, 0.03);
+}
+
+/* The name and the amount on one line, pushed apart, so a season's yields can be read down
+   their right-hand edge as a column of numbers — which is the question a GM actually has
+   ("how much Surplus does this season bring?"). */
+.stonetop-season-yield-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.stonetop-season-yield-name { font-weight: 600; }
+
+.stonetop-season-yield-amount {
+	flex: 0 0 auto;
+	font-variant-numeric: tabular-nums;
+	color: var(--st-text-secondary);
+}
+
+/* The book's own line for the rule, quiet under the name: it is there to be checked against a
+   rulebook, not read every season. */
+.stonetop-season-yield-rule {
+	margin: 2px 0 0;
+	font-size: var(--st-fs-sm);
+	line-height: 1.4;
+	color: var(--st-text-secondary);
+}
+
+
 /* Free-text notes recorded onto the season's Chronicle page. */
 .stonetop-season-notes-wrap {
 	display: flex;
@@ -18228,11 +18395,33 @@ a.steading-player-open:hover {
 	color: var(--st-text-secondary);
 }
 
+/* A choice already made this season: the militia's tactics, once one has been forgotten or the
+   drills paid for. The list is the disaster choice's chrome, so this only says what "spent"
+   looks like — the treatment `.stonetop-season-btn:disabled` gets, because it is the same fact
+   about the same window.
+
+   Declared after `.stonetop-disaster-choice:hover`, which it ties with on specificity: a later
+   rule is the one that wins a tie, and without that the hover would still light a row that no
+   longer answers a click. `:hover` is spelled out for the same reason and not because it needs
+   the extra weight. */
+.stonetop-disaster-choice.is-disabled,
+.stonetop-disaster-choice.is-disabled:hover {
+	opacity: 0.5;
+	cursor: default;
+	background: none;
+}
+
 /* -- The Inn: bringing folks together -------------------------- */
 /* Reuses the disaster dialog's card + choice chrome above (same act: pick 1 debility, then
    commit from the footer), so only the notices this window adds are declared here. */
 
-.stonetop-inn-dialog-body .stonetop-inn-trigger {
+/* Shared with the winter-debt and stand-down-the-muster windows, both of which open off a
+   header hold glyph and lead with the same shape of line: the quoted trigger, quiet, above the
+   choice it forces. One selector per window rather than one loose `.stonetop-inn-trigger`, so
+   the class keeps saying which windows are allowed to wear it. */
+.stonetop-inn-dialog-body .stonetop-inn-trigger,
+.stonetop-winter-debt-body .stonetop-inn-trigger,
+.stonetop-muster-body .stonetop-inn-trigger {
 	font-size: var(--st-fs-sm);
 	color: var(--st-text-secondary);
 	margin: 0;
@@ -18254,6 +18443,39 @@ a.steading-player-open:hover {
 
 .stonetop-inn-note {
 	font-style: italic;
+	color: var(--st-text-secondary);
+}
+
+/* -- Standing the muster down ---------------------------------- */
+/* The one number that moves, boxed off from the prose so it is not read as another sentence.
+   Three stacked lines: the heading that says these are consequences and not instructions, the
+   `+1 -> +0` itself, and the reason underneath. The no-bonus case wears the same box with
+   "Nothing on the sheet." in the middle row, so both answers to "what will this do?" are found
+   in the same place rather than one being a box and the other a stray italic line. */
+.stonetop-muster-change {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	margin: 0 0 10px;
+	padding: 8px 10px;
+	border: 1px solid rgba(0,0,0,0.15);
+	border-radius: var(--st-radius);
+	background: rgba(0,0,0,0.03);
+}
+
+.stonetop-muster-change-head {
+	font-size: var(--st-fs-xs);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--st-text-secondary);
+}
+
+.stonetop-muster-change-row {
+	font-size: var(--st-fs-base);
+}
+
+.stonetop-muster-change-why {
+	font-size: var(--st-fs-xs);
 	color: var(--st-text-secondary);
 }
 
@@ -28046,6 +28268,7 @@ th:has(> .stonetop-roll-table-btn) {
    dialog scrolling): same four declarations, so they share one rule. */
 .stonetop-wound-edit-dialog .stonetop-guide-main,
 .stonetop-custom-move-dialog .stonetop-guide-main,
+.stonetop-improvement-builder .stonetop-guide-main,
 .deaths-door-choices-main {
 	flex: 1 1 auto;
 	min-width: 0;
@@ -28501,6 +28724,18 @@ th:has(> .stonetop-roll-table-btn) {
    chat-card button (see `.pbta-chat-card .card-buttons button` above), like the
    Become-a-Hero prompt — no bespoke styling, so it matches every other chat card. */
 .stonetop-seasons-prompt-text { margin: 0 0 8px; }
+
+/* Why this roll carries extra dice — a Rites of the Land sacrifice, most often. Quiet, because
+   it is a footnote to the ask above it and not a second instruction, but it has to be THERE:
+   this is the only roll in the system decided on one machine and made on another, so a player
+   about to roll 3d6 has nothing else to tell them the sacrifice landed. `--st-text-secondary`
+   rather than the muted tone, since chat-card paper is parchment in both themes and the card's
+   own ink has to be declared. */
+.stonetop-seasons-prompt-mode {
+	margin: -4px 0 8px;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
 
 .stonetop-spring-roll-result {
 	display: flex;

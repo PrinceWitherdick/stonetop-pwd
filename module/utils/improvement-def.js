@@ -219,6 +219,30 @@ export function buildImprovementDef(input = {}) {
 }
 
 /**
+ * How many of a section's items must be ticked for it to count: its `min` when it declares
+ * one, otherwise all of them.
+ * @param {{min?: number, items?: string[]}} section
+ */
+export function sectionRequiredCount(section) {
+	return Number.isFinite(section?.min) ? section.min : (section?.items?.length ?? 0);
+}
+
+/**
+ * Total number of requirement checkboxes across an improvement's sections - i.e. the flat
+ * length of its `r` tracking array.
+ *
+ * The one definition of that arithmetic, because three separate readers walk the same flat
+ * index and must agree on it: the requirement check, the force-complete that fills every box
+ * at once, and season-effects.js's two rules that turn on WHICH box was ticked while building.
+ * If a heading-only section ever started consuming a box, a second copy of this sum would
+ * leave one of those three quietly pointing at the wrong requirement.
+ * @param {{sections?: Array}} def
+ */
+export function improvementRequirementCount(def) {
+	return (def?.sections ?? []).reduce((n, s) => n + (s?.items?.length ?? 0), 0);
+}
+
+/**
  * Which sections of a definition are alternatives to the one before them, for display: a
  * section whose group id matches its predecessor's continues an either/or rather than
  * adding a further requirement. Returned as a parallel array of booleans so the sheet's

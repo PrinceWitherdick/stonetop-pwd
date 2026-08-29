@@ -21,16 +21,20 @@ name is listed for every one.
 | fortunes-advantage.svg | Advantage held over the next +Fortunes roll | clover | Lorc | https://lorcblog.blogspot.com |
 | muster.svg | The muster holds | swords-emblem | Lorc | https://lorcblog.blogspot.com |
 | tors-blessing.svg | Tor's blessing, for the season | sunbeams | Lorc | https://lorcblog.blogspot.com |
+| herd-advance.svg | The herd's growth, unclaimed this summer | barn | Delapouite | https://delapouite.com |
 | inn-gathering.svg | The inn's gathering, unspent this season | beer-stein | Lorc | https://lorcblog.blogspot.com |
 | standing-watch.svg | The watch's upkeep, unpaid this season | medieval-gate | Delapouite | https://delapouite.com |
 | weapons-upkeep.svg | Weapons of War maintenance, unpaid this spring | anvil | Lorc | https://lorcblog.blogspot.com |
+| militia-drill.svg | The militia's summer drills, unpaid | archery-target | Lorc | https://lorcblog.blogspot.com |
+| herd-feed.svg | The herd's winter feed, unpaid | horse-head | Lorc | https://lorcblog.blogspot.com |
+| winter-debt.svg | Winter's second consumption, still owed | hourglass | Lorc | https://lorcblog.blogspot.com |
 
 No artwork above is altered. Every glyph is worn as a CSS *mask* tinted by `background-color`,
 the same way the weather glyph beside them and the tab rail's icons are, so one file takes the
 header's ink in both themes and the warmer "due" tone. That means each file must carry alpha
 ONLY where the glyph is.
 
-All six were taken from the game-icons.net repository, where the drawings are stored INVERTED:
+All ten were taken from the game-icons.net repository, where the drawings are stored INVERTED:
 an opaque black background square under a white glyph, which as a mask resolves to a solid slab.
 Their background square (and only that square) was punched transparent to match the export form
 the weather set already uses: `<path d="M0 0h512v512H0z"/>` became

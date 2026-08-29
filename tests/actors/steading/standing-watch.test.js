@@ -20,10 +20,12 @@ describe("the Standing Watch seasonal upkeep", () => {
 	// unconditional — so what this checks is that no branch closes the flow before the tail can
 	// reach it. A branch that grew its own `</div>` would strand the watch outside the dialog.
 	it("rides every season's flow, not just two of them", () => {
-		const at = SHEET.indexOf("content += `${watchBlock}");
+		const at = SHEET.indexOf("content += `${");
 		expect(at).toBeGreaterThan(-1);
 		// The append is the only place the flow is closed, and it sits after the season branch.
-		expect(SHEET.slice(at, at + 200)).toContain("</div>");
+		const tail = SHEET.slice(at, at + 300);
+		expect(tail).toContain("${watchBlock}");
+		expect(tail).toContain("</div>");
 		const branch = SHEET.slice(SHEET.indexOf("let content;"), at);
 		expect(branch.match(/stonetop-season-flow/g) ?? []).toHaveLength(4);
 		expect(branch).not.toContain("</div>`;");

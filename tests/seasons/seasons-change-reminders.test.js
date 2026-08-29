@@ -1,9 +1,15 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
 	collectSeasonalReminders,
 	remindersForActor,
 	seasonsReminderCard,
+	SEASONAL_REMINDERS,
 } from "../../module/seasons/seasons-change-reminders.js";
+
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 // A minimal stand-in for a character actor: `move` names become embedded move
 // Items, and `possessions` become the selected special-possession slugs (the
@@ -112,5 +118,85 @@ describe("seasonsReminderCard", () => {
 		expect(html).toContain("Brother Hale");
 		expect(html).toContain("Collected offerings");
 		expect(html).toContain("Restore 1 use this season");
+	});
+});
+
+// ── The registry against the books it quotes ────────────────────────────────────
+// The card is only worth posting if it is COMPLETE: an upkeep it forgets is one the table
+// forgets, because the card's presence is exactly what stops anyone checking by hand. The
+// registry was hand-written, and it had drifted — it carried all four of the Blessed's seasonal
+// rules and neither of the Seeker's, so a Seeker's logbook went unreset and their laboratory
+// unrolled for as many seasons as a campaign ran.
+//
+// So the shipped compendium sources are the authority here, not this list. Every playbook move
+// and every special possession whose printed text names a seasonal TRIGGER has to be registered
+// or deliberately excused, and a new playbook that ships one fails this until someone decides
+// which it is.
+describe("every seasonal rule the books print is registered", () => {
+	const PLAYBOOKS = "packs/src/stonetop-items/playbooks";
+	const MOVES     = "packs/src/stonetop-items/playbook-moves";
+
+	// Deliberately narrow, because it is looking for a trigger rather than for the word: a
+	// possession that merely mentions winter in its flavour is not swept in, and neither is a
+	// Value tier that prices "a season of unskilled labor".
+	const SEASONAL = /(each|every|once per)\s+(season|spring|summer|autumn|winter)|when\s+the\s+seasons\s+change/i;
+	// The pack files store their prose as HTML, and the Logbook's trigger is wrapped mid-phrase
+	// ("When <strong><em>the Seasons Change</em></strong>"), so the tags come out before the
+	// match is attempted or the one entry this test was written for slips straight past it.
+	const plain = html => String(html ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+
+	function docsUnder(rel) {
+		const out = [];
+		const walk = dir => {
+			for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+				const full = path.join(dir, entry.name);
+				if (entry.isDirectory()) walk(full);
+				else if (entry.name.endsWith(".json")) out.push(full);
+			}
+		};
+		walk(path.resolve(REPO, rel));
+		return out.map(f => JSON.parse(fs.readFileSync(f, "utf8")));
+	}
+
+	// `specialPossessions` is the whole picker (its note, its count, what comes preselected);
+	// the possessions themselves are its `options`.
+	const possessions = () => docsUnder(PLAYBOOKS).flatMap(p => p?.flags?.stonetop?.specialPossessions?.options ?? []);
+
+	// Named sets rather than inline skips, so an exception has to be written down as one.
+	// Both are empty today: Holy relics is not excused here because it has no seasonal line to
+	// match in the first place — see the note on SEASONAL_REMINDERS for why that matters.
+	const EXCUSED_MOVES = new Set();
+	const EXCUSED_POSSESSIONS = new Set();
+
+	it("registers every playbook move whose printed text names a season", () => {
+		const seasonal = docsUnder(MOVES)
+			.filter(m => SEASONAL.test(plain(m?.system?.description)))
+			.map(m => m.name);
+		// The scan finding nothing would pass the assertion below while proving nothing, which is
+		// the failure mode of every test that greps a tree.
+		expect(seasonal).toContain("Logbook");
+		const registered = new Set(SEASONAL_REMINDERS.filter(r => r.kind === "move").map(r => r.name));
+		expect(seasonal.filter(n => !registered.has(n) && !EXCUSED_MOVES.has(n))).toEqual([]);
+	});
+
+	it("registers every special possession whose printed text names a season", () => {
+		const seasonal = possessions()
+			.filter(p => SEASONAL.test(plain(p?.description)))
+			.map(p => p.slug);
+		expect(seasonal).toContain("laboratory");
+		const registered = new Set(SEASONAL_REMINDERS.filter(r => r.kind === "possession").map(r => r.slug));
+		expect(seasonal.filter(s => !registered.has(s) && !EXCUSED_POSSESSIONS.has(s))).toEqual([]);
+	});
+
+	// The other direction. An entry matching nothing shipped is a rule the card would announce
+	// that no character could ever carry — which is how the invented Holy relics refresh went
+	// out to tables for as long as it did.
+	it("registers nothing the compendium does not ship", () => {
+		const moveNames = new Set(docsUnder(MOVES).map(m => m.name));
+		const slugs = new Set(possessions().map(p => p.slug));
+		for (const r of SEASONAL_REMINDERS) {
+			if (r.kind === "move") expect([...moveNames], r.name).toContain(r.name);
+			else expect([...slugs], r.slug).toContain(r.slug);
+		}
 	});
 });
