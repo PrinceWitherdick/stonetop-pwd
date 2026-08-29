@@ -23,11 +23,12 @@
 // or every render strands another copy on the frame.
 //
 // Hanging outside the window also means nothing keeps the rail on screen, so this file measures
-// two things and stamps both on the frame for the stylesheet to act on: `--st-rail-top` (how far
-// down the rail starts, off the sheet's own header banner) and `stonetop-tab-rail-left` (which
-// edge it hangs off, when the right-hand one runs out of viewport). See `railTopFor` and
-// `railHangsLeft` below — both pure, both with a failure mode that renders perfectly and puts
-// the rail somewhere useless.
+// three things and stamps them all on the frame for the stylesheet to act on: `--st-rail-top`
+// (how far down the rail would start, off the sheet's own header banner), `--st-rail-height`
+// (the rail's own natural height, which the depth cap takes half of — see `stampRailHeight`),
+// and `stonetop-tab-rail-left` (which edge it hangs off, when the right-hand one runs out of
+// viewport). See `railTopFor` and `railHangsLeft` below — both pure, both with a failure mode
+// that renders perfectly and puts the rail somewhere useless.
 
 /**
  * Move a sheet's tab rail from its rendered position inside the form out onto the window
@@ -186,8 +187,10 @@ export function railHangsLeft(frameRect, railWidth, viewportWidth) {
 function stampRailTop(frame, form) {
 	requestAnimationFrame(() => {
 		// The edge is picked whatever happens to the top: a rail whose anchor cannot be found or
-		// measured still has to be ON SCREEN, and it retries for itself.
+		// measured still has to be ON SCREEN, and it retries for itself. Same for the rail's own
+		// height, which the stylesheet needs whether or not the banner can be measured.
 		stampRailSide(frame);
+		stampRailHeight(frame);
 		const anchor = form.querySelector(".stonetop-sheet-header, .steading-header");
 		if (!anchor) return;
 		const anchorRect = anchor.getBoundingClientRect();
@@ -199,6 +202,42 @@ function stampRailTop(frame, form) {
 		const px = `${top}px`;
 		if (frame.style.getPropertyValue("--st-rail-top") !== px) frame.style.setProperty("--st-rail-top", px);
 	});
+}
+
+/**
+ * Set `--st-rail-height`: the rail's own natural height.
+ *
+ * The stylesheet takes half of this off `--st-rail-max-depth`, because the cap on how far down
+ * the window the rail may sit is a cap on its MIDDLE rather than its top — the rail is a panel
+ * with a height of its own, and topping a 154px four-tab rail at a third of a 400px NPC window
+ * leaves its midpoint at 52%, which reads as centred rather than as a third of the way down.
+ * See the `--st-rail-anchor` comment in stonetop.css for the measurements.
+ *
+ * Measured with the cap OFF, and that is the whole difficulty. The rail's LAID-OUT height is
+ * limited by `max-height`, which the stylesheet computes from the very anchor this number feeds:
+ * read the rendered box and a short window shrinks the rail, which raises the anchor, which
+ * gives the rail room to grow again. Its NATURAL height depends on nothing but the tab count, so
+ * lifting the cap for one read breaks the loop.
+ *
+ * `offsetHeight` rather than a client rect: it is the untransformed border-box height, which is
+ * the unit `top:` and `max-height:` both resolve in, so there is no scale to divide back out the
+ * way `railTopFor` has to.
+ * @param {HTMLElement} frame
+ */
+function stampRailHeight(frame) {
+	const rail = frame?.querySelector?.(":scope > nav.stonetop-tab-rail");
+	if (!rail) return;
+	const capped = rail.style.maxHeight;
+	rail.style.maxHeight = "none";
+	const height = rail.offsetHeight;
+	rail.style.maxHeight = capped;
+	// Zero means the frame is still behind `_injectHTML`'s fadeIn — the same first-render case
+	// the top and the edge both handle. Leave the property unset rather than stamping a zero:
+	// the stylesheet's `var(--st-rail-height, 0px)` fallback is exactly that value, so an
+	// unmeasured rail is simply top-anchored as it was before, and the next render restamps.
+	if (!height) return;
+	const px = `${height}px`;
+	if (frame.style.getPropertyValue("--st-rail-height") !== px) frame.style.setProperty("--st-rail-height", px);
 }
 
 /** How many frames to keep waiting for a first-render fade to give the rail a width. */

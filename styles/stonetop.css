@@ -15172,17 +15172,33 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	   just past the details block below it, so the rail — three tabs, on a sheet that short —
 	   sat in the window's bottom third with empty frame above it.
 
-	   `--st-rail-max-depth` caps how far down the rail may START, as a share of the window's
-	   own height. That pulls it back into the upper third on a short sheet and changes
-	   nothing on a tall one: a character sheet floored at 620px has its banner bottom well
-	   inside a third already, so `min()` keeps the measured anchor there. A percentage rather
-	   than px so it tracks a drag-resize on its own — the stamped value cannot, being
-	   rewritten only on render.
+	   `--st-rail-max-depth` caps how far down the rail may sit, as a share of the window's own
+	   height. It changes nothing on a tall sheet — `min()` keeps the measured anchor there —
+	   and pulls a short one back up. A percentage rather than px so it tracks a drag-resize on
+	   its own; the stamped value cannot, being rewritten only on render.
+
+	   The cap is on the rail's MIDDLE, not its top, which is why half its height comes off.
+	   Capping the top instead was the first attempt and it reads wrong on exactly the sheet it
+	   was written for: the panel is a piece of furniture with a height of its own, so a 154px
+	   four-tab rail topped at a third of a 400px NPC window has its midpoint at 52% and its
+	   bottom at 72% — 132px of empty frame above it, 114px below, which the eye reads as
+	   centred rather than as a third of the way down. Measured in a browser against this
+	   stylesheet, not guessed. Taking the middle to the same third puts the panel where a
+	   reader expects it (top 14%, bottom 52%) and leaves a tall rail alone: a nine-tab
+	   character rail on a full-height window has its banner anchor inside the cap already.
+
+	   `--st-rail-height` is the rail's own natural height, stamped by tab-rail.js beside the
+	   top. Defaulted to zero here so a frame that has not been measured yet — and any rail
+	   whose height could not be read — falls back to the plain top-anchored cap rather than
+	   to nothing.
 
 	   The `max()` floor keeps the rail off the window's own title bar: a third of a window
-	   dragged down to core's 50px minimum is 16px, which is inside the bar. */
+	   dragged down to core's 50px minimum is 16px, which is inside the bar — and now that
+	   half a rail comes off the cap, a rail taller than two thirds of the window drives it
+	   negative on its own. */
 	--st-rail-max-depth: 33%;
-	--st-rail-anchor: max(30px, min(var(--st-rail-top, 150px), var(--st-rail-max-depth)));
+	--st-rail-anchor: max(30px, min(var(--st-rail-top, 150px),
+		calc(var(--st-rail-max-depth) - var(--st-rail-height, 0px) / 2)));
 	top: var(--st-rail-anchor);
 	/* Fully outside the frame's right edge — the whole point. `.window-app` is positioned
 	   (`position: fixed`), so it is the containing block and 100% is its own width. */

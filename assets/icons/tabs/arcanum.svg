@@ -8,15 +8,23 @@
 	     Archimedean recipe, the handedness, and why the pitch and cap clearances are what they
 	     are). Two things differ, both because there is no octagon left to fit inside:
 
-	     - Scaled 1.25 about the centre. arcanum.svg holds the arms to an outer radius of 162
-	       of 256 so they clear the octagon's chamfered corners; with the token gone that reads
-	       small beside neighbours like backpack.svg, which fill the frame. 1.25 puts the outer
-	       edge (162 + half the 31 band = 177.5) at 222 of 256, in line with the rest of the set.
+	     - Scaled 1.6 about the INKED bounding box, not the viewBox centre. arcanum.svg holds the
+	       arms to an outer radius of 162 of 256 so they clear the octagon's chamfered corners;
+	       with the token gone that reads small beside neighbours like school-bag.svg, which fill
+	       the frame. The three arms are not concentric with the frame either — stroke included,
+	       they occupy 98..387.6 x 100..394.4, a box centred on (242.8, 247.2) and only 290 wide
+	       of the 512 square. Recentring that box and scaling it 1.6 puts the glyph at 235 of 256
+	       in its longer axis, which is the 21..491 extent the game-icons.net exports beside it
+	       share (info.svg is a disc of exactly that radius). The rail wears the whole viewBox as
+	       a `contain` mask, so this ratio is what decides the drawn size inside the 20px box:
+	       before, the mark rendered ~14px against its neighbours' ~18.
+	       Scale is uniform, so the band and the gaps between the arms grow together — the pitch
+	       clearances the geometry was built for are untouched.
 	     - Stroked #fff rather than #f0ece3. Colour is irrelevant under an alpha mask — what
 	       matters is that it is opaque — and #fff is what the game-icons.net exports beside it
 	       use, so the whole folder reads the same way. The rail tints it from CSS. -->
 	<path d="M0 0h512v512H0z" fill="#ffffff" fill-opacity="0"/>
-	<g transform="translate(256,256) scale(1.25) translate(-256,-256)">
+	<g transform="translate(256,256) scale(1.6) translate(-242.8,-247.2)">
 		<g fill="none" stroke="#fff" stroke-width="31" stroke-linecap="round">
 			<path d="M256 256C278.2 258.5 300.4 251.6 316.4 238.6C332.4 225.6 342.1 206.6 343.8 187.8C345.6 168.9 339.4 150.5 328.3 137.4C317.1 124.3 301.3 116.7 285.8 115.6C270.4 114.6 255.6 120.1 245.4 129.4C235.3 138.6 229.7 151.4 229.4 163.5C229.1 175.5 234 186.6 241.3 193.9C248.7 201.1 258.4 204.5 267 204.1C275.7 203.7 283.1 199.6 287.5 194.1C291.8 188.6 293.1 182 292 176.7"/>
 			<path d="M256 256C242.8 274 237.6 296.6 240.9 317C244.2 337.4 255.7 355.3 271.2 366.2C286.6 377.1 305.7 381 322.6 377.9C339.5 374.8 354 364.9 362.6 352C371.2 339.2 373.9 323.6 371 310.2C368 296.7 359.7 285.6 349.4 279.3C339.2 273 327.1 271.6 317.2 274.3C307.2 277.1 299.4 283.8 295.4 291.5C291.5 299.2 291.3 307.7 293.9 314.2C296.4 320.7 301.5 325.1 306.7 326.8"/>
