@@ -3977,6 +3977,19 @@ input.stonetop-name-field {
    it only shows the rest of a note too long for one line — which is precisely what a viewer
    who cannot type in the field has no other way to reach. */
 .stonetop-readonly .stonetop-rel-note-toggle,
+/* The Herd of Horses tracker and the Inn's gathering button, both on improvement CARDS inside the
+   Improvements tab, which carries `stonetop-readonly` whenever its pencil is shut. Their template
+   disables them on `stonetop.canEdit` and on nothing else (steading-tab-improvements.hbs), which
+   is the card saying who may use them: any owner, in play, the same as ticking an improvement
+   complete two lines above. The blanket lock disagreed, so the herd could not be counted and the
+   gathering could not be spent until somebody first opened a pencil that has nothing to do with
+   either. The inn button made the mismatch visible from both ends: the header's hold glyph fires
+   the SAME `[data-action='inn-gathering']` handler and always worked, because the header is not
+   inside the locked tab. See readonly-creation-controls.test.js, which now sweeps for this shape:
+   a control gated on ownership alone is claiming to be play, and the lock must let it through. */
+.stonetop-readonly .steading-herd-step,
+.stonetop-readonly .steading-herd-input,
+.stonetop-readonly .steading-inn-gathering-btn,
 .stonetop-readonly .stonetop-item-resource-check {
 	pointer-events: auto;
 	opacity: 1;

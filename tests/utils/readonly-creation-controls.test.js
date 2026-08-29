@@ -135,3 +135,69 @@ describe("a creation control inside a lockable section stays clickable", () => {
 		});
 	}
 });
+
+/**
+ * The same rule again, for the controls that are not creation bars.
+ *
+ * A locked section is meant to lock EDITING: the inputs of a list row, the trash beside it, the
+ * radios of a stat track. Every one of those says so twice, once in the stylesheet's blanket and
+ * once in its own markup, by carrying `{{#unless stonetop.edit.<section>}}disabled{{/unless}}`.
+ * The pencil and the lock agree, which is what agreement looks like in the markup.
+ *
+ * A control gated on OWNERSHIP instead (`{{#unless stonetop.canEdit}}disabled{{/unless}}`) says
+ * the opposite. It names the one thing standing between the reader and using it, and the pencil
+ * is not it: that is a play-time control which happens to sit on a card in a lockable tab, and
+ * the blanket has no business reaching it.
+ *
+ * The Herd of Horses steppers and the Inn's gathering button were both written that way and both
+ * spent their lives mouse-dead until a pencil was opened, which is the same accident the sweep
+ * above exists to catch, on buttons that never say "add" or "create". The inn button could be
+ * seen failing from both ends: the header's hold glyph fires the same handler and always worked,
+ * because the header is not inside the locked tab. The tell was in the markup the whole time, so
+ * it is read here rather than left to a list somebody has to remember to extend.
+ */
+
+// `<button {{#unless x.canEdit}}disabled{{/unless}}>`: disabled only when the reader does not own
+// the sheet. Deliberately narrow. An `edit.<section>` gate is the pencil agreeing with the lock,
+// and those are exactly the ones this must NOT flag.
+const OWNERSHIP_DISABLED = /\{\{#unless\s+[\w.@]*canEdit\s*\}\}\s*disabled\s*\{\{\/unless\}\}/;
+
+/** The static class tokens of every ownership-gated control in this source, tag by tag. */
+function ownershipGatedControls(src) {
+	const found = new Map();   // class string -> tokens, so a control drawn twice is one entry
+	for (const [, , attrs] of src.matchAll(/<(button|input|select|textarea)\b([^>]*)>/g)) {
+		if (!OWNERSHIP_DISABLED.test(attrs)) continue;
+		const cls = attrs.match(/class="([^"]*)"/)?.[1] ?? "";
+		found.set(cls, cls.split(/\s+/).filter(t => t && !t.includes("{{")));
+	}
+	return found;
+}
+
+describe("a play-time control inside a lockable section stays clickable", () => {
+	// The same three ways to find nothing as the sweep above, plus a fourth: the attribute could
+	// be written some other way (`disabled={{...}}`, a helper) and the regex would match no tag
+	// anywhere, quietly passing every file.
+	it("actually finds the ownership-gated controls", () => {
+		const all = new Set(LOCKABLE.flatMap(rel => [...ownershipGatedControls(expand(rel)).values()].flat()));
+		expect(all).toContain("steading-herd-step");
+		expect(all).toContain("steading-inn-gathering-btn");
+	});
+
+	for (const rel of LOCKABLE) {
+		const controls = [...ownershipGatedControls(expand(rel))];
+		if (!controls.length) continue;
+		it(`keeps every ownership-gated control in ${rel} clickable while locked`, () => {
+			for (const [cls, tokens] of controls) {
+				// A control with no static class cannot be named by a stylesheet rule, so it cannot
+				// be exempted and this cannot pass. Said plainly, rather than as a baffling "not
+				// exempt" failure on an empty class list.
+				expect(tokens.length,
+					`<… class="${cls}"> is gated on ownership but carries no static class for the allow-list to name`)
+					.toBeGreaterThan(0);
+				expect(tokens.some(exemptUnderReadonly),
+					`.${tokens.join(".")} is disabled on ownership alone, so it is meant to work in play, but the readonly lock leaves it mouse-dead until the pencil is opened`)
+					.toBe(true);
+			}
+		});
+	}
+});
