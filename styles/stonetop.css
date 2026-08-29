@@ -33878,14 +33878,39 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 /* Quick-fact stat block (following, home, embodiment, instinct, occupation, relations) —
    tight line spacing like the monster stat block, vs. the roomier body sections.
 
-   In the MODERN layout it opens the Details tab, and that panel is `display: block`, so flex
-   properties on the block itself do nothing there. In CLASSIC it is a direct `.flexcol` child
-   of `.stonetop-npc-main` again, where it needs the `flex: 0 0 auto` below (see that rule).
-   `display: flex` here earns its place in both: it lays out the block's OWN rows. */
+   A GRID, not a stack of self-laying-out rows. The six labels differ in width by half the
+   panel, so with each row sizing its own label the values started at six different x
+   positions and the block read as ragged prose rather than a stat block. Two tracks —
+   `max-content`, which sizes to the longest label, and the rest for the value — put every
+   value on one left edge, and a wrapped Embodiment note still hangs under itself rather than
+   returning to the margin. The rows are the `<section>` wrappers, which take `display:
+   contents` below to hand their label and value up to this grid.
+
+   In the MODERN layout it opens the Details tab, and that panel is `display: block`, so the
+   block's own outer sizing is moot there. In CLASSIC it is a direct `.flexcol` child of
+   `.stonetop-npc-main` again, where it needs the `flex: 0 0 auto` below (see that rule). */
 .stonetop-npc-stat-block {
-	display: flex;
-	flex-direction: column;
-	gap: 3px;
+	display: grid;
+	grid-template-columns: max-content minmax(0, 1fr);
+	align-items: baseline;
+	column-gap: 5px;
+	row-gap: 3px;
+}
+/* The wrappers carry one field's {{#if}} and its class hooks, never a box, so `contents` drops
+   them out of the box tree and their two children land in the grid's two tracks. Scoped to
+   children of the block: `.stonetop-npc-stat-line` is also the monster stat block's row class
+   in npc.hbs, where it is not a `.stonetop-npc-field` and must stay a flex row of its own. */
+.stonetop-npc-stat-block > .stonetop-npc-field {
+	display: contents;
+}
+/* Sentence case, in PAINT only. The book writes these fields lowercase ("war-chief of the
+   high-country Hillfolk", "to take what his people need"), and six lowercase openings under
+   six bold labels read as fragments rather than lines. The stored string is untouched, so a
+   value comes back exactly as typed in the edit-mode input, in the ledger and in the steading
+   tables that read the same fields. Grid items are blockified, which is what gives
+   ::first-letter something to select — on an inline span there would be nothing. */
+.stonetop-npc-stat-block > .stonetop-npc-field > .stonetop-npc-prose::first-letter {
+	text-transform: uppercase;
 }
 .stonetop-npc-prose {
 	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
@@ -33906,7 +33931,10 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	margin: 0;
 }
 
-/* Stat lines (label: value), copying the monster idiom. */
+/* Stat lines (label: value), copying the monster idiom. Inside the quick-facts block these
+   sections are grid rows instead (`display: contents` above wins on specificity), and only the
+   inherited font-size below reaches them; the flex shape here is what lays out the monster
+   stat block's own `.stonetop-npc-stat-line` divs in npc.hbs. */
 .stonetop-npc-stat-line,
 .stonetop-npc-instinct,
 .stonetop-npc-embodiment {
@@ -33919,12 +33947,16 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 /* The value has to wrap INSIDE its own flex item rather than get bumped whole onto
    the next flex line. Left at `flex: 0 1 auto`, its hypothetical size is the value's
-   max-content width, so a long Embodiment or Instinct note doesn't fit beside the
-   label and the wrap drops all of it below, stranding "Embodiment:" alone on a line.
-   `flex: 1 1 0` plus `min-width: 0` zeroes that hypothetical size: the value always
-   shares the label's line, takes the width that's left, and wraps its own text there
+   max-content width, so a long damage or tags note doesn't fit beside the label and
+   the wrap drops all of it below, stranding "Damage:" alone on a line. `flex: 1 1 0`
+   plus `min-width: 0` zeroes that hypothetical size: the value always shares the
+   label's line, takes the width that's left, and wraps its own text there
    (continuation lines hang under the value, not back at the margin). Edit-mode inputs
-   already behave this way via .stonetop-npc-stat-input. */
+   already behave this way via .stonetop-npc-stat-input.
+
+   The quick-facts rows get the same shape from their grid track instead, where the
+   flex longhands are inert; `min-width: 0` and the break-word below still land on
+   them, and both are worth keeping there. */
 .stonetop-npc-stat-line > .stonetop-npc-prose,
 .stonetop-npc-instinct > .stonetop-npc-prose,
 .stonetop-npc-embodiment > .stonetop-npc-prose {
