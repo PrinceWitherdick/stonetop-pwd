@@ -33254,6 +33254,14 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--st-text-muted);
 	font-style: italic;
 }
+/* What happens to the book AFTER the import: it stays, and is readable in Foundry. A note under
+   the fields rather than beside one of them, because it is true of both books at once. Muted like
+   every other aside here, since it describes a consequence rather than asking for anything. */
+.stonetop-people-gallery .stonetop-people-book-keep {
+	margin: 0;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-muted);
+}
 /* The line under the Import button, which says why it is waiting and then where the book goes.
    A footnote to the button, like the browse aside is to the pair above it. */
 .stonetop-people-gallery .stonetop-people-import-hint {

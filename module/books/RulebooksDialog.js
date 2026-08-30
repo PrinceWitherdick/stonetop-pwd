@@ -22,7 +22,7 @@ import { openOrFocus } from "../utils/open-or-focus.js";
 import { filePicker } from "../utils/foundry-compat.js";
 import { RULEBOOKS, rulebookPath, saveRulebookPath } from "./rulebooks.js";
 import {
-	RULEBOOK_DIR, canBrowseRulebooks, canStoreRulebook, storeRulebookWithNotice,
+	RULEBOOK_DIR, canBrowseRulebooks, canStoreRulebook, keepRulebook,
 } from "./book-store.js";
 import { openBookReader } from "./BookReaderWindow.js";
 import { localize } from "../utils/i18n.js";
@@ -135,15 +135,14 @@ export class RulebooksDialog extends StonetopDialog {
 	/**
 	 * Record a file chosen off the GM's computer: copy it in, then remember where it landed.
 	 *
-	 * The copy is what makes the choice outlive the page (see book-store.js), and a host can
-	 * refuse it, so nothing is recorded until there is a path. Writing one down on a refusal is
-	 * how a book icon comes to open a reader showing nothing, with no error naming the cause.
+	 * The copy is what makes the choice outlive the page, and a host can refuse it, so nothing is
+	 * recorded until there is a path. Both halves live in `keepRulebook` (book-store.js) rather
+	 * than here, because the Import Book Art macro makes the same gesture with a book it has
+	 * already been handed, and the rule that a refusal records nothing has to hold on both paths.
 	 */
 	async _accept(book, file) {
 		if (!file) return;
-		const stored = await storeRulebookWithNotice(book, file);
-		if (!stored) return;
-		await saveRulebookPath(book, stored);
+		if (!await keepRulebook(book, file)) return;
 		this.renderIfOpen();
 	}
 

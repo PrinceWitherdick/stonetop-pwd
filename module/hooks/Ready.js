@@ -24,6 +24,7 @@ import { IntroductionsDialog } from "../dialogs/IntroductionsDialog.js";
 import { SpringBurstDialog } from "../dialogs/SpringBurstDialog.js";
 import { reopenOpenWalkthroughs, sessionZeroComplete } from "../dialogs/walkthrough-resume.js";
 import { reopenOpenBookReaders } from "../books/reader-resume.js";
+import { rulebookMacroApi } from "../books/rulebook-api.js";
 import { writeChronicle } from "../utils/chronicle.js";
 import { ExpeditionDialog } from "../dialogs/ExpeditionDialog.js";
 import { WeatherDialog } from "../dialogs/WeatherDialog.js";
@@ -417,6 +418,13 @@ export async function onReady() {
 	// and the Welcome guide's "Import Book Art" button both call. Callable from the console:
 	//   game.stonetop.importBookArt()
 	game.stonetop.importBookArt     = () => runImportBookArtMacro();
+	// What that macro asks about the books it has been handed: may this world keep a copy of one
+	// for reading, has it got one already, and here is the file. The macro is a self-contained
+	// string in a compendium and imports nothing of ours, so this is the only way it can reach
+	// the reader (books/rulebook-api.js says why at length). A GM who supplies Book I to have its
+	// illustrations cut out of it should not then be asked for Book I a second time to be able to
+	// READ it, which is what the two features did to them before this existed.
+	game.stonetop.rulebooks         = rulebookMacroApi();
 
 	_registerCharacterAutoOpen();
 	_registerGmToolkitAdopt();

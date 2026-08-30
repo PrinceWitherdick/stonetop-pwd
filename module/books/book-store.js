@@ -21,7 +21,7 @@
 // afterwards without making the GM find the folder themselves. The FilePicker stays as the
 // second door, for a book already on the server, which is the whole story on a hosted setup.
 import { ensureDataDir, uploadFile } from "../utils/foundry-compat.js";
-import { rulebook, bookTitle } from "./rulebooks.js";
+import { rulebook, bookTitle, saveRulebookPath } from "./rulebooks.js";
 import { format } from "../utils/i18n.js";
 
 /**
@@ -98,4 +98,27 @@ export async function storeRulebookWithNotice(book, file) {
 	if (path) ui.notifications?.info?.(format("stonetop.books.copied", { title }));
 	else ui.notifications?.error?.(format("stonetop.books.copyFailed", { title }));
 	return path;
+}
+
+/**
+ * Copy a book in AND write down where it landed: the whole "keep this book" gesture.
+ *
+ * Two callers, and the second is why this is a function rather than two lines in a dialog. The
+ * rulebooks window does it because keeping the book IS its errand. The Import Book Art macro
+ * does it because a GM has already handed it the very same 60 MB file to pull illustrations out
+ * of, and asking for that file a second time, through a different window, to put it somewhere
+ * else, is a chore we were imposing for no reason a GM can see.
+ *
+ * The ORDER is the load-bearing part and it is the same one RulebooksDialog always used: nothing
+ * is recorded until there is a path. A refused upload does not throw (see storeRulebookFile), so
+ * writing the path first, or writing it unconditionally, is how a world comes to hold a pointer
+ * to a file nobody wrote, and the only symptom is a book icon that opens an empty reader.
+ *
+ * @returns {Promise<string|null>} the stored path, or null if nothing was written.
+ */
+export async function keepRulebook(book, file) {
+	const stored = await storeRulebookWithNotice(book, file);
+	if (!stored) return null;
+	await saveRulebookPath(book, stored);
+	return stored;
 }
