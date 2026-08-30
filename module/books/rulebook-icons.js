@@ -34,17 +34,38 @@ import { localize, format } from "../utils/i18n.js";
  * @returns {Array<{book: number, icon: string, label: string, have: boolean, tooltip: string}>}
  */
 export function rulebookIconRows() {
-	return RULEBOOKS.map(entry => {
-		const title = localize(entry.titleKey);
-		const have  = hasRulebook(entry.book);
-		return {
-			book:    entry.book,
-			icon:    entry.icon,
-			label:   localize(entry.labelKey),
-			have,
-			tooltip: format(have ? "stonetop.books.openTip" : "stonetop.books.setTip", { title }),
-		};
-	});
+	return RULEBOOKS.map(iconRow);
+}
+
+/** One book's row. Shared so the two surfaces cannot come to draw the same book differently. */
+function iconRow(entry) {
+	const title = localize(entry.titleKey);
+	const have  = hasRulebook(entry.book);
+	return {
+		book:    entry.book,
+		icon:    entry.icon,
+		label:   localize(entry.labelKey),
+		have,
+		tooltip: format(have ? "stonetop.books.openTip" : "stonetop.books.setTip", { title }),
+	};
+}
+
+/**
+ * One book's row, but ONLY if this world actually has a copy. Null otherwise.
+ *
+ * For the surfaces a PLAYER reads, the character sheet above all. The GM Toolkit draws an unset
+ * book dimmed because the person looking at it is the person who can fix that; a player is not,
+ * and a dim icon that opens a window full of controls their account cannot use is worse than no
+ * icon at all. So this answers null and the sheet draws nothing, and the icon appears for the
+ * whole table the moment the GM points at a file.
+ *
+ * @param {number} book
+ * @returns {?{book: number, icon: string, label: string, have: boolean, tooltip: string}}
+ */
+export function readyRulebookIcon(book) {
+	const entry = RULEBOOKS.find(b => b.book === Number(book));
+	if (!entry || !hasRulebook(entry.book)) return null;
+	return iconRow(entry);
 }
 
 /**
@@ -58,4 +79,23 @@ export function rulebookIconRows() {
 export function openRulebook(book) {
 	if (hasRulebook(book)) openBookReader(book);
 	else openRulebooksDialog();
+}
+
+/**
+ * The same click for someone who cannot do anything about a missing book.
+ *
+ * The difference from `openRulebook` is what happens when there is no file: opening the setup
+ * would show a player a window whose every control their account refuses, so they are told in
+ * one line instead, and told whose job it is. Reachable at all only through a race — the icon is
+ * drawn from `readyRulebookIcon`, so it was there when the sheet last rendered — but a GM
+ * forgetting a book while a player has the sheet open is an ordinary evening, and a click that
+ * does nothing at all is the one outcome with no explanation in it.
+ */
+export function openSharedRulebook(book) {
+	if (hasRulebook(book)) return openBookReader(book);
+	const entry = RULEBOOKS.find(b => b.book === Number(book));
+	ui.notifications?.warn?.(format("stonetop.books.notShared", {
+		title: localize(entry?.titleKey ?? "stonetop.books.title"),
+	}));
+	return null;
 }

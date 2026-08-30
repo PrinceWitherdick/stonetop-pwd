@@ -76,6 +76,7 @@
       "stillOpening": "This book is still opening. Give it a moment, then show your players the page.",
       "settings": "Your books",
       "notPdf": "That file does not look like a PDF. It has been recorded anyway, but the reader may not be able to open it.",
+      "notShared": "There is no copy of {title} in this world. Your GM adds one from the GM Toolkit.",
       "copying": "Copying {title} into this world. A rulebook is a big file, so give it a moment.",
       "copied": "{title} is ready to read.",
       "copyFailed": "{title} could not be copied into this world. Your host may have refused the upload, or the file may be too large for it.",

@@ -54,6 +54,22 @@
 				</span>
 				{{/if}}
 				{{/if}}
+				{{!-- Book I, held to the far end of this row. Drawn ONLY once the GM has pointed
+				      the world at a copy: `stonetop.book` is null until then (see getData), and a
+				      player cannot supply one, so there is no dimmed "press me to fix this" state
+				      here the way there is on the GM Toolkit's own banner. It appears for the
+				      whole table the moment the GM sets one.
+
+				      Wired for readers as well as owners: reading the rules is looking, not
+				      writing, so this is not behind `editable` the way the header's writing
+				      controls are. --}}
+				{{#if stonetop.book}}
+				<button type="button" class="stonetop-open-book"
+				        aria-label="{{stonetop.book.label}}"
+				        data-tooltip="{{stonetop.book.tooltip}}" data-tooltip-direction="DOWN">
+					<i class="{{stonetop.book.icon}}" aria-hidden="true"></i>
+				</button>
+				{{/if}}
 			</div>
 			{{#if stonetop.playbook.description}}
 			<p class="stonetop-playbook-description">{{stonetop.playbook.description}}</p>

@@ -150,6 +150,20 @@ describe("where the icons sit", () => {
 		expect(CSS.slice(name, name + 90)).toContain("flex: 0 1 auto");
 	});
 
+	// Light grey at rest, slate on hover (user, 2026-08-29), the same pair the character sheet's
+	// own Book I icon wears. `--st-text-muted` rather than a literal or `--st-text-faint`: faint
+	// is the DISABLED token, and muted is the one re-pointed in every mode this system paints.
+	it("is drawn in the light grey, not the body's near-black", () => {
+		const at = CSS.indexOf(".stonetop-gm-toolkit-book {");
+		const rule = CSS.slice(at, CSS.indexOf("}", at));
+		expect(rule).toContain("color: var(--st-text-muted)");
+		expect(rule).not.toContain("--st-text-body");
+		expect(rule).not.toContain("--st-text-faint");
+
+		const hover = CSS.indexOf(".stonetop-gm-toolkit-book:hover {");
+		expect(CSS.slice(hover, CSS.indexOf("}", hover))).toContain("color: var(--st-btn-primary-bg)");
+	});
+
 	// The icon class goes on a child <i>, never on the <button>: `.vtt .stonetop button` sets a
 	// font-family, and an FA class on the button itself loses its glyph to that and paints the
 	// raw codepoint instead.

@@ -80,6 +80,13 @@ import {CONSECRATED_FLAME, INVOKE_THE_SUN_GOD, EMPOWERED_INVOCATIONS, ownsMoveNa
 import {ownedMoveNames, ownedMove} from "./owns-move.js";
 import {invocationLabel, invokeNotice, readOngoing, resolveInvocationUse} from "./ongoing-invocation.js";
 import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE} from "./condemn.js";
+import {readyRulebookIcon, openSharedRulebook} from "../../books/rulebook-icons.js";
+
+/**
+ * The one book a PLAYER's sheet offers. Book I is the rules they play by; Book II is the
+ * gazetteer, which is the GM's side of the screen and stays on the GM Toolkit.
+ */
+const PLAYER_BOOK = 1;
 import {BINDING_ARBITRATION} from "./oaths.js";
 import {CondemnedDialog} from "./dialogs/CondemnedDialog.js";
 import {showBattleJoy, BATTLE_JOY} from "./battle-joy.js";
@@ -1665,6 +1672,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			// anyone — Aratis does not exempt the party — and condemnersOf already skips self, so a
 			// Judge cannot brand themself into their own header.
 			context.stonetop.condemned = condemnedContext(this.actor);
+			// Book I, at the end of the playbook row, but ONLY once the GM has pointed this world
+			// at a copy. `readyRulebookIcon` answers null until then and the row draws nothing:
+			// a player cannot add the file, so the dimmed "press me to fix this" state the GM
+			// Toolkit wears would be an icon offering them a window their account refuses. It
+			// appears for the whole table the moment the GM sets one.
+			//
+			// Book I only. Book II is the gazetteer, which is the GM's side of the screen.
+			context.stonetop.book = readyRulebookIcon(PLAYER_BOOK);
 			return context;
 		}
 
@@ -3903,6 +3918,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// points on a dead sheet, and a table that plays the resurrection out in the fiction
 			// first has no reason to have touched HP yet.
 			html.find(".stonetop-dead-tag").on("click", this._onDeadTagClick.bind(this));
+			// Book I at the end of the playbook row. Wired for READERS as well as owners, like
+			// the scales below and unlike the candle: opening the rules is looking, not writing.
+			// Only ever drawn once the GM has pointed the world at a copy (see getData).
+			html.find(".stonetop-open-book").on("click", () => openSharedRulebook(PLAYER_BOOK));
 			// The header candle. `button.` on purpose: the read-only copy is a <span> and must
 			// not be wired, so nothing offers a click that would do nothing.
 			html.find("button.stonetop-holy-light").on("click", this._onHolyLightToggle.bind(this));

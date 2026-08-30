@@ -7753,6 +7753,55 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	gap: 10px;
 }
 
+/* BOOK I, at the far end of the playbook row. `margin-left: auto` and nothing else does the
+   placing: the row's other items (the playbook name, and the struck-through one a post-death
+   insert leaves behind) are all content-width, so the whole of the row's slack is here for the
+   margin to swallow. That also means the icon does not move when a name grows.
+
+   The same un-buttoning as the GM Toolkit's pair, for the same reason: core paints every button
+   in an app with a fill, a border, a radius and a width, and a glyph beside a title is not a
+   control shaped like that. 1.5em is a touch under the toolkit's 1.6, because this row's
+   neighbour is the display-size playbook name rather than a banner title and the icon is a
+   companion to it, not a second heading. The 1px nudge is Font Awesome's own lopsided metrics
+   (its ink sits flush with the top of the box and the slack all collects underneath), the same
+   correction and the same reason as `.stonetop-gm-toolkit-book`.
+
+   Light grey at rest and slate on hover, the same pair and the same tokens as the toolkit's
+   icons; the reasoning for `--st-text-muted` over a literal or over `--st-text-faint` is written
+   out there. It matters a little more here: this icon sits beside a playbook name set at the
+   display size, so the quieter ink is also what keeps it a companion to that name rather than
+   competing with it. */
+.stonetop-open-book {
+	display: block;
+	width: auto;
+	margin-left: auto;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	background: none;
+	font-size: 1.5em;
+	line-height: 1;
+	color: var(--st-text-muted);
+	cursor: pointer;
+	position: relative;
+	top: 1px;
+	transition: color 0.15s;
+}
+
+.stonetop-open-book:hover,
+.stonetop-open-book:focus {
+	background: none;
+	box-shadow: none;
+}
+.stonetop-open-book:hover {
+	color: var(--st-btn-primary-bg);
+}
+.stonetop-open-book:focus-visible {
+	outline: 2px solid var(--st-btn-primary-bg);
+	outline-offset: 2px;
+}
+
 /* -- Hide PBTA advancement controls on Stonetop sheets -------- */
 .stonetop .sheet-playbook .advancement,
 .stonetop .sheet-playbook input[name="system.advancements"] {
@@ -37192,7 +37241,18 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
    The 1px nudge is FA's own lopsided metrics, not a taste: its artwork sits flush with the top
    of the box and every bit of the slack collects underneath, so a perfectly centred BOX still
-   reads high. Half-leading is symmetric and cannot correct it; moving the glyph can. */
+   reads high. Half-leading is symmetric and cannot correct it; moving the glyph can.
+
+   THE LIGHT GREY, not the body's near-black (user, 2026-08-29). `--st-text-muted` rather than a
+   literal, and rather than `--st-text-faint`, for two reasons worth stating: faint is the token
+   for something DISABLED, which is the opposite of what these are, and muted is re-pointed in
+   every mode this system paints — the two dark scopes lift it to hsl(0 0% 58%) so it stays light
+   grey on dark paper rather than vanishing into it, and high contrast drops it to #3d3d3d
+   (10.86:1) for the reader the accessibility block at the foot of this file exists for. A literal
+   #777 would be right in exactly one of the four.
+
+   Which leaves the SLATE free to be the hover, where it now reads as a colour change rather than
+   the near-miss it would be against a slate rest state. */
 .stonetop-gm-toolkit-book {
 	display: block;
 	width: auto;
@@ -37203,7 +37263,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	background: none;
 	font-size: 1.6em;
 	line-height: 1;
-	color: var(--st-text-body);
+	color: var(--st-text-muted);
 	cursor: pointer;
 	position: relative;
 	top: 1px;
