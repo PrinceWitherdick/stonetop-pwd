@@ -5982,7 +5982,11 @@ export function createStonetopCharacterSheetClass(Base) {
 					${guide.note ? `<p class="stonetop-homestead-note">${_esc(guide.note)}</p>` : ""}
 				</form>`,
 				buttons,
-				default: (rollable || guide.roll) ? "roll" : (guide.post ? "post" : "cancel"),
+				// Read off the buttons that were actually BUILT, never off the guide: a rollable
+				// move whose cost is unaffordable (a Blessed opening Danu's Grasp with an empty
+				// pouch) has no `roll` button, and naming a missing one makes Enter submit
+				// `undefined`, which throws inside Dialog#submit.
+				default: buttons.roll ? "roll" : (buttons.post ? "post" : "cancel"),
 				// An arcanum move's body is the card's own prose, so its ◇/○/□ want the same
 				// styled glyphs the card gives them. A playbook guide's text is plain and has none.
 				render: html => {

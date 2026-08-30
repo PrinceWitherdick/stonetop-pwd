@@ -647,6 +647,46 @@ body {
 	flex: 0 0 auto;
 }
 
+/* -- A footer button whose label wraps ------------------------- */
+/* Our dialog buttons NAME the outcome they commit -- "Spend 1 Surplus, clear Malcontent",
+   "Suffer: The mill burns", "Stand the muster down". That is house style, and it is also longer
+   than half a 400px dialog, so some of them wrap.
+
+   Two lines then read as two separate things, because v13's legacy-app compatibility layer
+   (`body.game .app button`) unsets core's flex button and pins `line-height: 28px` -- double
+   leading on 14px text, and a hard pixel value that does not scale with the root font, so the
+   wrap gets worse the larger the UI is set. Restoring core's own centred flex box gives the
+   label normal leading; `min-height` holds a ONE-line label at exactly the 32px it has today
+   (28px leading + 1px padding + 1px border, top and bottom). Pixels deliberately, matching what
+   core anchors in pixels here.
+
+   Scoped to `.stonetop.dialog` rather than to the one window that reported it, because a long
+   label is a property of how we word buttons and not of any single dialog. Measured across all
+   61 footer buttons in the system: nothing moves at a 16px root, and the only changes at 20/24
+   are the three buttons that were already wrapping (the muster pair, Make Camp's "Procure the
+   day's food"). No button changes WIDTH at any size.
+
+   A window whose button relabels itself AFTER opening also has to be told it grew: a `Dialog`
+   carries no `height: "auto"`, so the frame stays pinned at whatever the content measured
+   first. The debility pickers re-fit on each relabel (steading-debilities.js). Seasons Change
+   relabels its Done too, but opens at 560 precisely so that label never wraps.
+
+   SPECIFICITY, because this rule now OWNS five properties for every `.stonetop` Dialog in the
+   system. It is 0-4-1 and unlayered, which beats core's layered `body.game .app button` outright
+   — that is the point — but it also beats a per-dialog rule written the obvious way, since
+   `.stonetop-foo-dialog .dialog-buttons button` is only 0-2-1. Being specificity and not order,
+   moving such a rule later in the file does not help it, and nothing is logged when it loses. So
+   a per-dialog override of `display`, `align-items`, `justify-content`, `min-height` or
+   `line-height` has to carry this same `.vtt .stonetop.dialog` scope to get above it.
+   tests/styles/dialog-button-specificity.test.js fails any that does not. */
+.vtt .stonetop.dialog .dialog-buttons button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 32px;
+	line-height: 1.25;
+}
+
 /* Strange Scene navigation bug fix */
 #navigation {
 	overflow: visible;
@@ -1645,6 +1685,21 @@ input.stonetop-name-field {
 	);
 }
 
+/* THE NAME DOES NOT TAKE THE FONT-SCALE SETTING. THE LABEL ABOVE IT DOES. The split is the whole
+   point of this block, so it is worth being plain about which half is which.
+
+   The NAME is exempt because it is the one thing on the sheet that is already far larger than it
+   has to be to be read — 40px against a body text of ~14 — so a reader who turns the slider up is
+   asking for the text they are STRUGGLING with to grow, and the name answering too only costs
+   them header. At 1.4 it reached 56px and pushed the rest of the header down; the glyphs standing
+   beside it (the Lightbearer's candle, the Judge's scales) are a fixed 50px and never moved, so
+   it also outgrew the row it shares with them.
+
+   The LABEL is NOT exempt, and must not be swept in with the name on the strength of sitting in
+   the same plate: none of that reasoning reaches it. At 0.65rem it is ~10px, the smallest text on
+   the sheet — freezing it made it the one piece of sheet text the slider could not reach, so it
+   shrank relative to everything around it the further the setting was turned up, for the reader
+   the setting exists for. The four pixels it gains at 1.4 are not what was crowding the header. */
 .stonetop-name-called-label {
 	display: block;
 	font-family: var(--font-stonetop);
@@ -1656,8 +1711,14 @@ input.stonetop-name-field {
 	user-select: none;
 }
 
+/* The name itself, at a flat 40px for the reason the block above gives. `px` rather than `em`:
+   `.stonetop .window-content` scales the em on every descendant, so an em-based size here would
+   track the setting again through the back door. (Foundry's own Interface Scale still grows the
+   whole window, name included, for a reader who wants everything bigger.) `!important` is still
+   needed on top of that: it is beating the `var(--font-size-display) !important` on the shared
+   `.stonetop-name-field` rule, which the monster and NPC headers also use. */
 .stonetop-name-called-box .stonetop-name-field {
-	font-size: calc(40px * var(--stonetop-font-scale, 1)) !important;
+	font-size: 40px !important;
 	line-height: 1.1;
 	padding: 0;
 	min-height: unset;
@@ -5568,11 +5629,14 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
    to fatten both buttons to fill it. (The row above them is already held to its own height by
    `.vtt .stonetop.dialog .dialog-buttons`, which every `.stonetop` Dialog gets; don't repeat
    that flex here, and don't set margin-top here either - at 0-4-0 that shared rule out-specifies
-   this 0-3-0 one and would win.) */
+   this 0-3-0 one and would win.)
+
+   Centring the label is not set here for the same reason: `.vtt .stonetop.dialog .dialog-buttons
+   button` makes every one of our dialog buttons a centred flex box at 0-4-1, over this rule's
+   0-3-1, so a `justify-content` written here is a statement rather than an instruction. */
 .vtt .stonetop-letfly-mode-dialog .dialog-buttons button {
 	flex: 0 0 auto;
 	width: 100%;
-	justify-content: center;
 }
 
 /* Shared mask-icon recipe — size/repeat/position are constant; each class supplies its own url + background. */
@@ -12980,6 +13044,14 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	--color-text-dark-secondary:   hsl(38 12% 71%);
 	--color-border-light-primary:  hsl(0 0% 25%);
 	--color-border-light-tertiary: hsl(0 0% 21%);
+	/* THE NATIVE OPTION LIST, the one piece of this window that is not drawn inside it. Chromium
+	   paints a select's popup outside the page, so none of the black paper reaches it: core fills
+	   every option from --color-select-option-bg, a #dad8cc parchment in the legacy palette, and
+	   the option takes its INK by inheritance from the select, which this block turns over to
+	   bone. Bone on parchment is 1.06:1, so opening a dropdown in a dark-mood window showed a
+	   blank strip with nothing readable in it. Opaque, unlike the translucent wash the closed
+	   well wears: a popup has no paper behind it to let through. Bone on this is 12.0:1. */
+	--color-select-option-bg:      hsl(0 0% 14%);
 	--st-text-faint:               hsl(0 0% 44%);
 	--st-green-text:               hsl(140 32% 66%);
 	--st-red-text:                 hsl(6 62% 70%);
@@ -13192,6 +13264,11 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	--color-border-light-primary:  hsl(0 0% 25%);
 	--color-border-light-tertiary: hsl(0 0% 21%);
 	--color-border-dark:           hsl(0 0% 32%);
+	/* The same for this sheet's dropdowns and for every dialog it raises, 1.11:1 before this: the
+	   option list is a popup Chromium draws outside the window, so it keeps core's parchment fill
+	   under the bone ink set just above unless the token is turned over here as well. The dark-mood
+	   dialog block earlier in the file carries the whole of the explanation. */
+	--color-select-option-bg:      hsl(0 0% 14%);
 	--st-text:                     hsl(38 22% 88%);
 	--st-text-body:                hsl(38 20% 84%);
 	--st-text-secondary:           hsl(38 12% 71%);
@@ -23954,32 +24031,26 @@ li.question-bullet::before {
 	flex-direction: column;
 }
 
+/* The buttons in that footer — GEOMETRY ONLY, and deliberately so.
+   Colour and leading are not this rule's to set: `.vtt .stonetop.dialog .dialog-buttons button`
+   near the top of this file owns background, border, colour and line-height for every dialog we
+   tag `.stonetop`, and this one is tagged `.stonetop`. At 0-4-1 against this rule's 0-2-1 it wins
+   wherever they overlap, so the transparent quiet-ink outline that used to be declared here — and
+   the slate `[data-button="save"]` pair written to stand out against it — had already stopped
+   painting anything and were only describing a look the sheet could not produce. Slate on both
+   buttons is the house style those shared rules exist to apply; they are not being fought here.
+   What remains is the size and spacing, which nothing else claims. */
 .stonetop-individual-dialog .dialog-buttons button {
 	flex: 0 0 auto;
 	width: auto;
 	height: auto;
 	padding: 5px 16px;
-	line-height: 1.4;
 	font-size: var(--st-fs-base);
 	font-family: var(--font-stonetop);
 	border-radius: var(--st-radius);
 	cursor: pointer;
-	border: 1.5px solid var(--st-quiet-ink);
-	background: transparent;
-	color: var(--st-quiet-ink);
 	transition: background 0.15s;
 	white-space: nowrap;
-}
-
-.stonetop-individual-dialog .dialog-buttons [data-button="save"] {
-	background: var(--st-btn-primary-bg);
-	border-color: var(--st-btn-primary-border);
-	color: var(--st-btn-primary-text);
-}
-
-.stonetop-individual-dialog .dialog-buttons [data-button="save"]:hover {
-	background: var(--st-btn-primary-bg-hover);
-	border-color: var(--st-btn-primary-border-hover);
 }
 
 /* ── Followers: Group Fight ────────────────────────────────────────────────── */

@@ -59,6 +59,15 @@ const PICKER_DIALOG_OPTIONS = { classes: ["dialog", "stonetop", "stonetop-disast
  *   button cannot take focus — so without a focus target inside the window, Tab would never
  *   get a keyboard user in. Starting focus on a row leaves Tab to the browser from then on.
  *
+ * · Arming the button GROWS it, and the window has to be told. A `Dialog` carries no
+ *   `height: "auto"`, so core pins `style.height` to whatever the content measured on the very
+ *   first render — before anything is picked and while the button still reads "Clear Debility".
+ *   The armed label names its debility and takes a second line (see the footer-button rule in
+ *   stonetop.css), and that extra line was landing outside the window and being clipped. So
+ *   each relabel re-measures the frame's natural height and grows to it. GROWS only: a window
+ *   the table has dragged taller keeps its height, and shrinking back on the next pick would
+ *   make the frame twitch under the cursor.
+ *
  * · The apply callback is guarded rather than trusted to be unreachable: Foundry submits the
  *   `default` button on Enter whenever focus sits anywhere in the window, and `disabled` only
  *   stops the click. With nothing picked it closes writing nothing, like Escape.
@@ -138,6 +147,27 @@ export function openDebilityPicker({
 			const applyBtn = appEl?.querySelector("button[data-button='apply']");
 			if (applyBtn) applyBtn.disabled = true;
 
+			// Measured off the FRAME, blanked for a moment so it shrink-wraps its content the
+			// way core's own auto-height windows do. Not off `.window-content`'s scrollHeight:
+			// `.dialog-content` is `flex: 1` and shrinks to absorb the taller footer, so its
+			// text overflows IT rather than the scroll container and the overflow reads as 0.
+			// Blanking and restoring within the one statement costs two reflows and paints
+			// nothing, so the window never flickers through its natural size.
+			//
+			// `left`/`top` ride along deliberately: a bare finite `{height}` is the signature
+			// the auto-height resize patch reads as a manual drag (utils/resizable-dialogs.js),
+			// and this is not one.
+			const refit = () => {
+				const { left, top, height } = dialog.position ?? {};
+				if (!appEl || !Number.isFinite(height)) return;
+				const pinned = appEl.style.height;
+				appEl.style.height = "";
+				const natural = appEl.offsetHeight + 1;
+				appEl.style.height = pinned;
+				if (natural <= height) return;
+				dialog.setPosition({ height: natural, left, top });
+			};
+
 			const root    = html[0] ?? html;
 			const options = [...root.querySelectorAll(".stonetop-disaster-choice")];
 			const select = el => {
@@ -150,6 +180,7 @@ export function openDebilityPicker({
 				if (!applyBtn) return;
 				applyBtn.disabled = !picked;
 				applyBtn.textContent = picked ? applyLabelFor(picked) : applyLabel;
+				refit();
 			};
 
 			for (const el of options) {
