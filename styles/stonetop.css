@@ -5645,6 +5645,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-condemn-icon,
 .stonetop-blessed-marks-icon,
 .stonetop-battle-joy-icon,
+.stonetop-held-advantage-icon,
 .stonetop-nav-arrow {
 	-webkit-mask-size: contain;
 	mask-size: contain;
@@ -5666,7 +5667,8 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-holy-light-icon,
 .stonetop-condemn-icon,
 .stonetop-blessed-marks-icon,
-.stonetop-battle-joy-icon {
+.stonetop-battle-joy-icon,
+.stonetop-held-advantage-icon {
 	display: block;
 	width: auto;
 	background: currentColor;
@@ -9834,6 +9836,7 @@ button.stonetop-dead-tag:hover {
 .stonetop-holy-light,
 .stonetop-condemn,
 .stonetop-blessed-marks,
+.stonetop-held-advantage,
 .stonetop-battle-joy {
 	display: inline-flex;
 	align-items: center;
@@ -9857,7 +9860,8 @@ button.stonetop-dead-tag:hover {
 button.stonetop-holy-light:focus-visible,
 .stonetop-condemn:focus-visible,
 .stonetop-blessed-marks:focus-visible,
-.stonetop-battle-joy:focus-visible {
+.stonetop-battle-joy:focus-visible,
+.stonetop-held-advantage:focus-visible {
 	outline: 2px solid var(--color-shadow-primary, slategrey);
 	outline-offset: 2px;
 }
@@ -10159,6 +10163,38 @@ button.stonetop-battle-joy:not(.is-raging):hover { color: var(--st-text-body); }
 /* Red, in the sheet's own red token rather than a hand-mixed one, so it comes down with the black
    scope's repaint like every other red here. Declared AFTER the base rule, per the tie note above. */
 .stonetop-battle-joy.is-raging { color: var(--st-red-text); }
+
+/* ── An advantage held over the next roll ──────────────────────────────────
+   The steading's own promised +Fortunes advantage wears this same clover in its holds tray, and
+   this is the character's half of the same promise, so it is the same drawing rather than a
+   second one meaning the same thing (assets/icons/holds/ATTRIBUTION.md lists both).
+
+   ONE state, unlike the two glyphs above: it is drawn only while something is held, so there is
+   no off colour to declare and no `is-` modifier to lose a specificity tie with. It sits at the
+   system's own slate rather than the faint ink the others rest at, because it is never merely
+   present — every appearance of it is something outstanding. `--st-quiet-ink` rather than the
+   literal, so the accessibility scope at the foot of this file can re-pitch it with the rest.
+
+   38px, matching the scales: the drawing is square, so the 40 the near-square Battle Joy needs to
+   hold equal painted area would read slightly large beside them. */
+.stonetop-held-advantage {
+	color: var(--st-quiet-ink);
+	transition: color 0.15s ease;
+}
+
+/* Only the editable copy is a button, so only it says "press me". */
+button.stonetop-held-advantage { cursor: pointer; }
+
+/* No `:not()` guard needed here, unlike the candle's and the Heavy's: there is one state, so a
+   hover rule cannot out-specify a modifier that does not exist. */
+button.stonetop-held-advantage:hover { color: var(--st-text-body); }
+
+.stonetop-held-advantage-icon {
+	height: 38px;
+	aspect-ratio: 1 / 1;
+	-webkit-mask-image: url('/systems/stonetop-pwd/assets/icons/holds/fortunes-advantage.svg');
+	mask-image: url('/systems/stonetop-pwd/assets/icons/holds/fortunes-advantage.svg');
+}
 
 /* The three debility boxes while that rage lasts. They stay TICKED and stop doing anything ("you
    ignore … the effects of debilities as long as you keep fighting"), so this fades them rather

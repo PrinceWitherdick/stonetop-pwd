@@ -168,6 +168,33 @@
 			    on=stonetop.battleJoy.raging labelKey=stonetop.battleJoy.labelKey
 			    tooltipKey=stonetop.battleJoy.tooltipKey}}
 			{{/if}}
+			{{! An advantage HELD over the next roll (a peaceful camp, p.334), on the steading's
+			    holds-tray terms rather than the candle's: it is not a state anyone toggles on, so
+			    it is drawn only while one is held and it goes when a roll spends it.
+
+			    Written out rather than sent through header-toggle-glyph because its sentence names
+			    WHAT PROMISED the advantage, and that string is built in getData — widening a
+			    partial shared by the candle and the Heavy to carry one caller's argument buys
+			    nothing. `aria-pressed` would be wrong here for the same reason: nothing is pressed,
+			    something is owed.
+
+			    A <button> that RELEASES it where the sheet is editable, and a plain readout where
+			    it is not, exactly as the two glyphs above split. `type="button"` is not optional:
+			    the whole sheet is one <form> and a bare button submits it. }}
+			{{#if stonetop.heldAdvantage.show}}
+			{{#if editable}}
+			<button type="button" class="stonetop-held-advantage"
+			        aria-label="{{stonetop.heldAdvantage.label}}"
+			        data-tooltip="{{stonetop.heldAdvantage.tooltip}}"
+			        data-tooltip-direction="UP"><span class="stonetop-held-advantage-icon" aria-hidden="true"></span></button>
+			{{/if}}
+			{{#unless editable}}
+			<span class="stonetop-held-advantage" role="img"
+			      aria-label="{{stonetop.heldAdvantage.label}}"
+			      data-tooltip="{{stonetop.heldAdvantage.tooltip}}"
+			      data-tooltip-direction="UP"><span class="stonetop-held-advantage-icon" aria-hidden="true"></span></span>
+			{{/unless}}
+			{{/if}}
 		</div>
 		{{! Through the Last Door, with no insert. The three returns say what they are in the name
 		    at the top of the header (a Ghost reads "Ghost"), so only a plain death needs a word of

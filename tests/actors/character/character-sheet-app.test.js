@@ -45,6 +45,11 @@ function makeCharacterMock(actor) {
 	let canMark = false;
 	let raging = false;
 	let canRage = false;
+	// An advantage HELD over the next roll (Make Camp's peaceful night). Live for the reason the
+	// rest are: getData draws the header glyph off it and the release control clears it, and the
+	// rule that releasing takes the glyph off is only assertable if the two share a value. Null
+	// rather than absent, matching the real accessor, which always answers the object or null.
+	let held = null;
 	// The Invocation being held open, live for the same reason the holy light is: getData reads
 	// the getter, the End control and the candle both write through the setter, and the rule that
 	// a snuffed light takes the Invocation with it is only assertable if the two share a value.
@@ -72,6 +77,13 @@ function makeCharacterMock(actor) {
 		get canMarkBlessed() { return canMark; },
 		set canMarkBlessed(value) { canMark = !!value; },
 		get battleJoy() { return raging; },
+		// A METHOD, matching the real accessor's signature, for the reason headerGlyphOwnership
+		// below is one: a getter here would keep passing while the sheet called a function.
+		// `holdAdvantage` is the tests' knob rather than a setter of the same name, which cannot
+		// share a key with the method in one object literal.
+		heldAdvantage: () => held,
+		holdAdvantage: (value) => { held = value ?? null; },
+		clearHeldAdvantage: vi.fn(async () => { held = null; }),
 		get canEnterBattleJoy() { return canRage; },
 		set canEnterBattleJoy(value) { canRage = !!value; },
 		// What getData actually reads for the five header glyphs — the real one answers all five
@@ -578,6 +590,57 @@ describe("StonetopCharacterSheet holy light candle", () => {
 			blessedMarks: { show: true, count: 1 },
 			battleJoy:    { show: true, raging: true },
 		});
+	});
+
+	// An advantage held over the next roll (Make Camp's peaceful night, p.334). Unlike the five
+	// glyphs above it is gated on NOTHING a character owns — anything may come to promise one —
+	// so it appears exactly while one is held and goes when a roll spends it. Without a surface
+	// the promise sat in a flag nobody could see, across sessions, until some roll ate it.
+	it("shows the header a held advantage only while one is held, and names what promised it", async () => {
+		installGetDataGlobals();
+		const actor = makeActor();
+		actor.typedActor.playbook = vi.fn(async () => null);
+		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
+		const sheet = makeSheet(actor);
+		const held = async () => (await sheet.getData()).stonetop.heldAdvantage;
+
+		expect(await held()).toMatchObject({ show: false });
+
+		actor.typedActor.holdAdvantage({ source: "A peaceful night's rest" });
+		const shown = await held();
+		expect(shown.show).toBe(true);
+		// The whole value of storing WHAT promised it is that the hover can say so.
+		expect(shown.tooltip).toContain("A peaceful night's rest");
+
+		await sheet._stonetopCharacter.clearHeldAdvantage();
+		expect(await held()).toMatchObject({ show: false });
+	});
+
+	// Releasing is not a toggle: it puts nothing back, so it asks first — and answering "keep
+	// holding it" must leave the promise exactly where it was.
+	it("asks before releasing a held advantage, and keeps it when the answer is no", async () => {
+		const clickEvent = () => ({ preventDefault: vi.fn(), stopPropagation: vi.fn() });
+		const actor = makeActor();
+		const sheet = makeSheet(actor);
+		actor.typedActor.holdAdvantage({ source: "A peaceful night's rest" });
+
+		let buttons = null;
+		global.Dialog = class {
+			constructor(data) { buttons = data.buttons; }
+			render() {}
+		};
+
+		await sheet._onReleaseHeldAdvantage(clickEvent());
+		expect(Object.keys(buttons)).toEqual(["release", "keep"]);
+		// Nothing is given up by opening the window.
+		expect(sheet._stonetopCharacter.heldAdvantage()).not.toBeNull();
+
+		await buttons.release.callback();
+		expect(sheet._stonetopCharacter.clearHeldAdvantage).toHaveBeenCalled();
+		expect(sheet._stonetopCharacter.heldAdvantage()).toBeNull();
+
+		delete global.Dialog;
 	});
 
 	// Turning it ON is a declaration and writes nothing else; turning it OFF is the move's own

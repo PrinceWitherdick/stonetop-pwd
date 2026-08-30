@@ -1673,6 +1673,24 @@ export function createStonetopCharacterSheetClass(Base) {
 				raging,
 				..._toggleGlyphKeys(BATTLE_JOY_GLYPH, raging, context.editable),
 			};
+			// An advantage HELD over the next roll — a peaceful camp, so far (p.334). Shown for the
+			// same reason the steading shows its own promised +Fortunes advantage: the roll it is
+			// owed to has not been made yet, possibly not this session, and a promise nobody can
+			// see is a promise the table forgets it made. Not gated on owning any move — anything
+			// may come to promise one — so it appears only while one is actually held, and takes
+			// itself off the header the moment a roll spends it.
+			//
+			// The tooltip is BUILT here rather than resolved from a key in the template: the whole
+			// value of storing what promised it is saying so, and that argument does not belong in
+			// either shared glyph partial for the one caller that has it.
+			const heldAdvantage = this._stonetopCharacter.heldAdvantage();
+			context.stonetop.heldAdvantage = {
+				show:    !!heldAdvantage,
+				label:   game.i18n.localize("stonetop.heldAdvantage.label"),
+				tooltip: format(context.editable
+					? "stonetop.heldAdvantage.tooltip"
+					: "stonetop.heldAdvantage.readOnlyTooltip", { source: heldAdvantage?.source ?? "" }),
+			};
 			// And the Blessed's marks, on the candle's and the scales' terms exactly.
 			const marks = this._stonetopCharacter.blessedMarks;
 			context.stonetop.blessedMarks = {
@@ -3955,6 +3973,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			// The Heavy's Battle Joy, on the CANDLE's terms: `button.` on purpose, since the
 			// read-only copy is a <span> and must not be wired.
 			html.find("button.stonetop-battle-joy").on("click", this._onBattleJoyToggle.bind(this));
+			// Releasing a held advantage, on the same `button.` terms: the read-only copy is a
+			// <span> and must not be wired.
+			html.find("button.stonetop-held-advantage").on("click", this._onReleaseHeldAdvantage.bind(this));
 			html.find(".stonetop-recover-open-btn").on("click", this._onRecoverOpen.bind(this));
 			html.find(".stonetop-convalesce-open-btn").on("click", this._onConvalesceOpen.bind(this));
 
@@ -6931,6 +6952,45 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * player gets by clicking the move on the Moves tab; both go through the model, which drops
 		 * the state before building the roll so their debilities are back in play for it.
 		 */
+		/**
+		 * Let go of a held advantage without rolling for it.
+		 *
+		 * The promise is ordinarily spent by the next roll and needs no control at all. This is
+		 * for the table that decides it does not apply after all — the peaceful night was three
+		 * sessions ago, or the GM rules the promise lapsed — because the alternative was rolling
+		 * something unimportant to burn it off, which is worse than a button.
+		 *
+		 * CONFIRMED, unlike the candle and the Heavy's rage, because it is not a toggle: those two
+		 * put back what a mis-click took, and this puts back nothing. The prompt names what is
+		 * being given up, since by the time it is being released the source may be the only record
+		 * anyone still has of it.
+		 */
+		async _onReleaseHeldAdvantage(ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			if (!this.isEditable) return;
+			const held = this._stonetopCharacter.heldAdvantage();
+			if (!held) return;
+			// Named buttons rather than Dialog.confirm's Yes/No: each one says what it does, so
+			// the question can be answered off the buttons alone. Affirmative first, as everywhere.
+			new Dialog({
+				title: localize("stonetop.heldAdvantage.releaseTitle"),
+				content: `<p>${escHtml(format("stonetop.heldAdvantage.releasePrompt", { source: held.source }))}</p>`,
+				buttons: {
+					release: {
+						label: localize("stonetop.heldAdvantage.releaseConfirm"),
+						callback: async () => {
+							await this._stonetopCharacter.clearHeldAdvantage();
+							this.render(false);
+						},
+					},
+					keep: { label: localize("stonetop.heldAdvantage.releaseCancel") },
+				},
+				default: "keep",
+				render: bringDialogToFront,
+			}, { classes: ["dialog", "stonetop"] }).render(true);
+		}
+
 		async _onBattleJoyToggle(ev) {
 			ev.preventDefault();
 			ev.stopPropagation();
@@ -9005,7 +9065,7 @@ export function createStonetopCharacterSheetClass(Base) {
 						// as one.
 						label: "Make Camp",
 						callback: (html) => this._applyMakeCamp({
-							purses, hp, halfMax, debilities,
+							halfMax, maxHp: hp.max, debilities,
 							people:    html.find('[name="people"]').val(),
 							messKit:   html.find('[name="messKit"]').is(":checked"),
 							preferred: _chosenSupplyPurse(html, purses)?.slug ?? null,
@@ -9021,9 +9081,21 @@ export function createStonetopCharacterSheetClass(Base) {
 			}, { width: 500, classes: this._pastDeathWindowClasses(["dialog", "stonetop", "stonetop-camp-dialog"]) }).render(true);
 		}
 
-		async _applyMakeCamp({ purses, hp, halfMax, debilities = [], people, messKit = false,
+		async _applyMakeCamp({ maxHp, halfMax, debilities = [], people, messKit = false,
 		                       preferred = null, benefit = "hp", debility = null,
 		                       bedroll = false, peaceful = false }) {
+			// The dialog hands over CHOICES; the volatile state is read HERE, live, the way the
+			// steading's spendSurplus re-reads its Surplus. The sheet behind this window stays
+			// interactive: a Recover, a Forage payout, or another client touching the same
+			// character between opening and confirming would otherwise be silently undone, because
+			// what lands below is an ABSOLUTE remaining count and an absolute HP, not a delta.
+			//
+			// `maxHp` is not volatile and is NOT re-read: it is the COMPUTED max off the snapshot
+			// this dialog was built from, and the persisted `hp.max` field is stale by design.
+			const resources = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
+			const purses    = supplyPursesFor(resources, SUPPLY_PURPOSE.CAMP);
+			const hpValue   = Math.trunc(Number(this.actor.system?.attributes?.hp?.value) || 0);
+
 			const needed = campUsesNeeded(people, messKit);
 			const { spends, short } = spendSupplies(purses, needed, preferred);
 
@@ -9043,7 +9115,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// short of its own bill takes none of it. `needed` of 0 (nobody eating from this pack)
 			// is not the same as going short, and still rests.
 			const fed = short === 0;
-			let newHp = hp.value;
+			let newHp = hpValue;
 			if (fed) {
 				if (benefit === "debility") {
 					const cleared = debilities.find(d => d.key === debility);
@@ -9052,8 +9124,8 @@ export function createStonetopCharacterSheetClass(Base) {
 						rows.push({ label: "Debility", value: `Cleared ${cleared.name}` });
 					}
 				} else {
-					newHp = Math.min(hp.value + halfMax, hp.max);
-					rows.push({ label: "HP", value: `${hp.value} → ${newHp} (+${newHp - hp.value}, ½ max)` });
+					newHp = Math.min(hpValue + halfMax, maxHp);
+					rows.push({ label: "HP", value: `${hpValue} → ${newHp} (+${newHp - hpValue}, ½ max)` });
 				}
 				// The bedroll's own 1d6 is rolled to chat: it is a die the table can see, and it
 				// stacks on whichever benefit was taken (its text says "extra HP when you Make
@@ -9062,14 +9134,19 @@ export function createStonetopCharacterSheetClass(Base) {
 					const roll = await new Roll("1d6").evaluate();
 					await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: this.actor }), flavor: "Bedroll (1d6 extra HP)" });
 					const before = newHp;
-					newHp = Math.min(newHp + Math.max(0, roll.total), hp.max);
+					newHp = Math.min(newHp + Math.max(0, roll.total), maxHp);
 					rows.push({ label: "Bedroll", value: `${before} → ${newHp} (+${newHp - before})` });
 				}
-				if (newHp !== hp.value) update["system.attributes.hp.value"] = newHp;
+				if (newHp !== hpValue) update["system.attributes.hp.value"] = newHp;
 
 				if (peaceful) {
-					Object.assign(update, this._stonetopCharacter.rollModeData("adv"));
-					rows.push({ label: "Advantage", value: "A peaceful night; set on the sheet until you spend it" });
+					// A HELD advantage, not the sticky selector. "Take advantage on your NEXT roll"
+					// is a promise about one roll: parked on the selector it would be overruled by
+					// the pre-roll window on any client with "Ask How to Roll Each Time" on (which
+					// hides that selector), and never spent on the ones without it. See
+					// StonetopCharacter#heldAdvantage.
+					Object.assign(update, this._stonetopCharacter.heldAdvantageData("A peaceful night's rest"));
+					rows.push({ label: "Advantage", value: "A peaceful night; held for your next roll" });
 				}
 			}
 

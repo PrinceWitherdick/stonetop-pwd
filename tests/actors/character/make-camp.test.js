@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
-import { supplyPursesFor, SUPPLY_PURPOSE } from "../../../module/actors/character/supply-cost.js";
 import { STONETOP_SCOPE } from "../../../module/actors/character/StonetopFlags.js";
 
 /**
@@ -9,14 +8,20 @@ import { STONETOP_SCOPE } from "../../../module/actors/character/StonetopFlags.j
  * one rule that is easy to get backwards: an unfed camp takes no benefit at all (p.335).
  */
 
-function makeActor() {
+/**
+ * The character as the move finds it AT CONFIRM TIME. What is carried and the current HP live on
+ * the actor rather than in the arguments, because that is where the move reads them: the dialog
+ * hands over the player's CHOICES, and the volatile state is re-read when the button is pressed
+ * (see _applyMakeCamp). Passing them in would test a contract the move no longer has.
+ */
+function makeActor({ carried = { supplies: 4 }, hp = HP } = {}) {
 	const actor = {
 		name: "Aeliana",
 		type: "character",
-		system: { attributes: { hp: { value: 4, max: 15 } } },
+		system: { attributes: { hp: { ...hp } } },
 		apps: {},
 		flags: {},
-		getFlag: vi.fn(() => ({})),
+		getFlag: vi.fn((scope, key) => (key === "inventory.resources" ? carried : {})),
 		update: vi.fn(async () => {}),
 	};
 	// The move batches everything it changes into ONE actor.update, so what it asks the character
@@ -24,13 +29,13 @@ function makeActor() {
 	// StonetopCharacter, so the assertions below read the write that actually lands.
 	actor.typedActor = {
 		inventoryResourceData: (slug, count) => ({ [resourcePath(slug)]: count }),
-		rollModeData: (rollMode) => ({ [ROLL_MODE_PATH]: rollMode }),
+		heldAdvantageData: (source) => ({ [HELD_ADVANTAGE_PATH]: { source } }),
 	};
 	return actor;
 }
 
-const resourcePath   = slug => `flags.${STONETOP_SCOPE}.inventory.resources.${slug}`;
-const ROLL_MODE_PATH = `flags.${STONETOP_SCOPE}.rollMode`;
+const resourcePath        = slug => `flags.${STONETOP_SCOPE}.inventory.resources.${slug}`;
+const HELD_ADVANTAGE_PATH = `flags.${STONETOP_SCOPE}.heldAdvantage`;
 
 /**
  * The data of the one update the move lands - and proof that it IS one. A camp feeds from up to
@@ -63,16 +68,9 @@ function makeSheet(actor) {
 const HP = { value: 4, max: 15 };
 const HALF_MAX = 8;
 
-function camp(carried) {
-	return supplyPursesFor(carried, SUPPLY_PURPOSE.CAMP);
-}
-
 /** The arguments the dialog's confirm button hands over, with this test's defaults filled in. */
 function campArgs(overrides = {}) {
-	return {
-		purses: camp({ supplies: 4 }), hp: HP, halfMax: HALF_MAX, debilities: [],
-		people: 1, ...overrides,
-	};
+	return { maxHp: HP.max, halfMax: HALF_MAX, debilities: [], people: 1, ...overrides };
 }
 
 let rolled;
@@ -110,19 +108,15 @@ describe("Make Camp — feeding the camp", () => {
 
 	// The move provisions exist for (Book I p.89): at camp they are supplies, 1-for-1.
 	it("eats the larder when provisions are what the player picked", async () => {
-		const actor = makeActor();
-		await makeSheet(actor)._applyMakeCamp(campArgs({
-			purses: camp({ supplies: 4, provisions: 5 }), people: 2, preferred: "provisions",
-		}));
+		const actor = makeActor({ carried: { supplies: 4, provisions: 5 } });
+		await makeSheet(actor)._applyMakeCamp(campArgs({ people: 2, preferred: "provisions" }));
 		expect(written(actor)[resourcePath("provisions")]).toBe(3);
 		expect(written(actor)).not.toHaveProperty(resourcePath("supplies"));
 	});
 
 	it("spills onto the supplies rows when the larder cannot cover the night", async () => {
-		const actor = makeActor();
-		await makeSheet(actor)._applyMakeCamp(campArgs({
-			purses: camp({ supplies: 4, provisions: 2 }), people: 5, preferred: "provisions",
-		}));
+		const actor = makeActor({ carried: { supplies: 4, provisions: 2 } });
+		await makeSheet(actor)._applyMakeCamp(campArgs({ people: 5, preferred: "provisions" }));
 		expect(written(actor)[resourcePath("provisions")]).toBe(0);
 		expect(written(actor)[resourcePath("supplies")]).toBe(1);
 	});
@@ -139,8 +133,8 @@ describe("Make Camp — the benefit", () => {
 	});
 
 	it("never heals past max", async () => {
-		const actor = makeActor();
-		await makeSheet(actor)._applyMakeCamp(campArgs({ hp: { value: 14, max: 15 }, benefit: "hp" }));
+		const actor = makeActor({ hp: { value: 14, max: 15 } });
+		await makeSheet(actor)._applyMakeCamp(campArgs({ benefit: "hp" }));
 		expect(written(actor)["system.attributes.hp.value"]).toBe(15);
 	});
 
@@ -162,10 +156,42 @@ describe("Make Camp — the benefit", () => {
 		expect(written(actor)["system.attributes.hp.value"]).toBe(15);
 	});
 
-	it("sets the sheet's advantage when the night was peaceful", async () => {
+	// "Take advantage on your next roll" is a PROMISE about one roll, so it is held as one
+	// (StonetopCharacter#heldAdvantage) rather than set on the sticky Roll Modifier selector: the
+	// selector is a preference, it is not even drawn for a player who asks how to roll each time,
+	// and a promise parked there is overruled by that window on every roll.
+	it("holds an advantage for the next roll when the night was peaceful", async () => {
 		const actor = makeActor();
 		await makeSheet(actor)._applyMakeCamp(campArgs({ peaceful: true }));
-		expect(written(actor)[ROLL_MODE_PATH]).toBe("adv");
+		expect(written(actor)[HELD_ADVANTAGE_PATH]).toEqual({ source: "A peaceful night's rest" });
+	});
+});
+
+// ── the state it reads ───────────────────────────────────────────────────────
+
+describe("Make Camp — reads the character live", () => {
+	// The window stays open while the sheet behind it stays interactive, and what lands is an
+	// ABSOLUTE remaining count, not a delta. A Recover, a Forage payout, or another client
+	// spending a use between opening and confirming would be silently undone by a count derived
+	// from the purse this dialog was BUILT with — the trap the steading's spendSurplus re-reads
+	// its Surplus to avoid.
+	it("spends out of the supplies carried at confirm time, not at dialog-open", async () => {
+		const actor = makeActor({ carried: { supplies: 4 } });
+		const sheet = makeSheet(actor);
+		// Two more uses are foraged in while the window sits open.
+		actor.getFlag = vi.fn((scope, key) => (key === "inventory.resources" ? { supplies: 6 } : {}));
+		await sheet._applyMakeCamp(campArgs({ people: 2 }));
+		expect(written(actor)[resourcePath("supplies")]).toBe(4);
+	});
+
+	it("heals from the HP the character has at confirm time", async () => {
+		const actor = makeActor({ hp: { value: 4, max: 15 } });
+		const sheet = makeSheet(actor);
+		// They take 3 harm while the window sits open, so the night is 1 + 8 = 9, not the 12 the
+		// dialog offered when it opened.
+		actor.system.attributes.hp.value = 1;
+		await sheet._applyMakeCamp(campArgs({ benefit: "hp" }));
+		expect(written(actor)["system.attributes.hp.value"]).toBe(9);
 	});
 });
 
@@ -176,9 +202,9 @@ describe("Make Camp — an unfed camp", () => {
 	// that they don't get to make a choice when they Make Camp." So a camp that cannot pay its own
 	// bill takes NO benefit — not the HP, not the debility, not the bedroll, not the advantage.
 	it("takes no benefit at all when the bill cannot be paid", async () => {
-		const actor = makeActor();
+		const actor = makeActor({ carried: { supplies: 1 } });
 		await makeSheet(actor)._applyMakeCamp(campArgs({
-			purses: camp({ supplies: 1 }), people: 4, benefit: "hp", bedroll: true, peaceful: true,
+			people: 4, benefit: "hp", bedroll: true, peaceful: true,
 		}));
 		// What it had is still spent (the test below); what an unfed camp must not carry is any
 		// part of the benefit, so the one write holds the spend and nothing else.
@@ -186,8 +212,8 @@ describe("Make Camp — an unfed camp", () => {
 	});
 
 	it("still spends everything it had before going short", async () => {
-		const actor = makeActor();
-		await makeSheet(actor)._applyMakeCamp(campArgs({ purses: camp({ supplies: 1 }), people: 4 }));
+		const actor = makeActor({ carried: { supplies: 1 } });
+		await makeSheet(actor)._applyMakeCamp(campArgs({ people: 4 }));
 		expect(written(actor)[resourcePath("supplies")]).toBe(0);
 	});
 

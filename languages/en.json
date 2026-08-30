@@ -1325,6 +1325,15 @@
       "notMarkable": "{name} is not somebody a mark can be laid on.",
       "fromCompendium": "{name} came from a compendium, so the mark records the name only; it will not link to that person in this world."
     },
+    "heldAdvantage": {
+      "label": "Advantage held for your next roll",
+      "tooltip": "Advantage on your next roll, promised by {source}. It is spent the moment you roll. Click to let it go without rolling.",
+      "readOnlyTooltip": "Advantage on their next roll, promised by {source}. It is spent the moment they roll.",
+      "releaseTitle": "Let the advantage go",
+      "releasePrompt": "Give up the advantage promised by {source}? Your next roll goes out as it otherwise would, and nothing records the promise afterwards.",
+      "releaseConfirm": "Let it go",
+      "releaseCancel": "Keep holding it"
+    },
     "battleJoy": {
       "onLabel": "Lost in your Battle Joy",
       "offLabel": "Not in your Battle Joy",

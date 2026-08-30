@@ -1397,7 +1397,7 @@ export class StonetopCharacter {
 	// Fragment forms, for a move that changes several things at once and wants one write for the
 	// lot of them (see StonetopCharacterSheet#_applyMakeCamp).
 	inventoryResourceData(slug, count)              { return this._inventory.resourceData(slug, count); }
-	rollModeData(rollMode)                          { return { [`flags.${STONETOP_SCOPE}.rollMode`]: normalizeRollMode(rollMode) }; }
+	heldAdvantageData(source)                       { return { [`flags.${STONETOP_SCOPE}.heldAdvantage`]: { source: String(source ?? "").trim() || "a promised advantage" } }; }
 	async setInventoryRegularPool(count)            { await this._inventory.setRegularPool(count); }
 	async setInventorySmallPool(count)              { await this._inventory.setSmallPool(count); }
 	async removeSpecialItem(slug)                   { await this._inventory.removeSpecial(slug); }
@@ -2229,7 +2229,11 @@ export class StonetopCharacter {
 			modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}),
 		};
 
-		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, rollOptions), descriptionOnly });
+		// A promise made earlier (a peaceful camp) is spent HERE — after the guards above, so
+		// reading a move's text or backing out of the weapon prompt never burns it.
+		const promised = descriptionOnly ? rollOptions : await this._spendHeldAdvantage(rollOptions);
+
+		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, promised), descriptionOnly });
 
 		// Defend: fill the character's Readiness circles from the tier they just rolled
 		// (p.216), never lowering a pool they already hold.
@@ -2596,13 +2600,14 @@ export class StonetopCharacter {
 
 		// Returned so a caller that has to act on the outcome (the arcana Identify roll) can
 		// classify the total without re-rolling or re-deriving the tier thresholds.
-		const roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat, {
-			rollMode: normalizeRollMode(rollMode ?? this.rollMode),
-			modifier,
-			forward,
-			ongoing,
-			...rest,
-		}));
+		const roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat,
+			await this._spendHeldAdvantage({
+				rollMode: normalizeRollMode(rollMode ?? this.rollMode),
+				modifier,
+				forward,
+				ongoing,
+				...rest,
+			})));
 
 		if (forward !== 0) {
 			await this._actor.update({ "system.attributes.forward.value": 0 }, extraOptions.moveName ? { stonetopMove: extraOptions.moveName } : {});
@@ -2701,6 +2706,59 @@ export class StonetopCharacter {
 
 	async setRollMode(rollMode) {
 		await this._actor.setFlag(STONETOP_SCOPE, "rollMode", normalizeRollMode(rollMode));
+	}
+
+	/**
+	 * A HELD advantage: "take advantage on your next roll", promised by something that has
+	 * already happened (Make Camp's peaceful night, p.334). The steading holds the same promise
+	 * the same way — see StonetopSteading#fortunesAdvantage — and for the same reason: the roll
+	 * it is owed to has not been made yet, possibly not this session, so it has to be written
+	 * down somewhere that roll will look.
+	 *
+	 * NOT the sticky selector. The sticky flag is a PREFERENCE the player sets and unsets, and it
+	 * is not even drawn when "Ask How to Roll Each Time" is on — a promise parked there would be
+	 * overruled by the pre-roll window on every client that asks, and never spent on the ones
+	 * that don't. This is a promise: it outranks both, it names itself on the card, and it is
+	 * consumed by the one roll it was owed to.
+	 *
+	 * Stored as WHAT PROMISED it rather than a bare `true`, so the card can say why.
+	 */
+	heldAdvantage() {
+		return resolvedFlags(this._actor).heldAdvantage ?? null;
+	}
+
+	async clearHeldAdvantage() {
+		if (!this.heldAdvantage()) return;
+		await this._actor.setFlag(STONETOP_SCOPE, "heldAdvantage", null);
+	}
+
+	/**
+	 * Spend a held advantage into the options of the roll about to be made, if one is held.
+	 *
+	 * A held advantage OUTRANKS the sticky selector and the pre-roll window as a source of
+	 * advantage — those are preferences, this is a rule the fiction already settled — but it never
+	 * beats a disadvantage, from wherever that came. Advantage and disadvantage CANCEL in Stonetop,
+	 * so a promise spent against one leaves a flat roll: a player who picked Disadvantage in the
+	 * window because they are doing this in the dark must not be silently upgraded past it, and
+	 * nor must a character who camped peacefully and is still Weakened. That second case is why
+	 * this runs BEFORE `applyDebilityRollMode` — it hands that method an "adv" to cancel, exactly
+	 * as the sticky selector would have.
+	 *
+	 * Either way the pill NAMES the promise, so a cancellation reads as a trade rather than as a
+	 * mode that quietly vanished — and either way the promise is SPENT, because it was made about
+	 * this roll and this is the roll that happened.
+	 *
+	 * Cleared BEFORE the dice, like the steading's, so a second roll cannot spend the same promise.
+	 */
+	async _spendHeldAdvantage(options) {
+		const held = this.heldAdvantage();
+		if (!held) return options;
+		await this.clearHeldAdvantage();
+		return {
+			...options,
+			rollMode: options.rollMode === "dis" ? "normal" : "adv",
+			conditionNotes: [...(options.conditionNotes ?? []), held.source],
+		};
 	}
 
 	// ── Death and dying (Book I, Harm & Healing p.245) ─────────────────────────

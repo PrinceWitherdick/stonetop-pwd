@@ -29,6 +29,12 @@ name is listed for every one.
 | herd-feed.svg | The herd's winter feed, unpaid | horse-head | Lorc | https://lorcblog.blogspot.com |
 | winter-debt.svg | Winter's second consumption, still owed | hourglass | Lorc | https://lorcblog.blogspot.com |
 
+`fortunes-advantage.svg` is worn TWICE, and deliberately by one file rather than two: the
+steading holds a promised advantage over its next +Fortunes roll, and a character holds one over
+their next roll of any kind (a peaceful Make Camp, Book I p.334). Same promise, same clover, so
+the character header's `.stonetop-held-advantage-icon` masks this very file. A second drawing
+meaning the same thing would be a picture the table has to learn twice.
+
 No artwork above is altered. Every glyph is worn as a CSS *mask* tinted by `background-color`,
 the same way the weather glyph beside them and the tab rail's icons are, so one file takes the
 header's ink in both themes and the warmer "due" tone. That means each file must carry alpha
