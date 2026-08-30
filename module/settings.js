@@ -899,6 +899,24 @@ export function registerSettings() {
 		default: {}
 	});
 
+	// One reader's own bookmarks in the rulebooks, listed in a tab of the viewer's own sidebar
+	// (module/books/reader-bookmarks-tab.js). Shape:
+	//   { "1": [ { id, label, page, hash, created } ], "2": [ ... ] }
+	//
+	// USER-scoped, which is neither of the two scopes the settings above use, and deliberately.
+	// WORLD would put every reader's marks in one list and let only a GM write it. CLIENT would
+	// tie a player's marks to the browser they made them in and lose them on the laptop they
+	// play from next week. `user` is stored in the world's settings database keyed by the user,
+	// which is exactly what a bookmark is a fact about — and being per-world already, it needs
+	// none of the world-id nesting the client-scoped records above have to do for themselves.
+	game.settings.register(SYSTEM_ID, "bookBookmarks", {
+		name: "Rulebook Bookmarks",
+		scope: "user",
+		config: false,
+		type: Object,
+		default: {}
+	});
+
 	// -- CLIENT SPECIFIC SETTINGS --------------------------------
 
 	// Which worlds this user has had the Setting Overview journal auto-opened in (see
