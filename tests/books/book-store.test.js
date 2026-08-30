@@ -112,16 +112,32 @@ describe("what the GM is told while it copies", () => {
 });
 
 describe("who may do which", () => {
-	// Separate rights: adding a file needs FILES_UPLOAD, picking one already there needs
+	/** A non-GM holding exactly these rights and no others. */
+	const holding = (...rights) => ({ isGM: false, can: right => rights.includes(right) });
+
+	// Separate rights: keeping a book needs to WRITE one, picking one already there needs
 	// FILES_BROWSE, and a world can grant either without the other.
 	it("asks about adding and about browsing separately", () => {
-		global.game.user = { isGM: false, can: right => right === "FILES_UPLOAD" };
+		global.game.user = holding("FILES_UPLOAD", "SETTINGS_MODIFY");
 		expect(canStoreRulebook()).toBe(true);
 		expect(canBrowseRulebooks()).toBe(false);
 
-		global.game.user = { isGM: false, can: right => right === "FILES_BROWSE" };
+		global.game.user = holding("FILES_BROWSE");
 		expect(canStoreRulebook()).toBe(false);
 		expect(canBrowseRulebooks()).toBe(true);
+	});
+
+	// Keeping a book is a copy AND a record of where it went, and the record is a WORLD-scoped
+	// setting. Asking only about the upload offered a trusted player a button that put 60 MB on
+	// the host and then could not write the one line that makes it findable.
+	it("refuses to keep a book for someone who can upload but cannot record where it went", () => {
+		global.game.user = holding("FILES_UPLOAD");
+		expect(canStoreRulebook()).toBe(false);
+	});
+
+	it("refuses just as flatly the other way round", () => {
+		global.game.user = holding("SETTINGS_MODIFY");
+		expect(canStoreRulebook()).toBe(false);
 	});
 
 	it("lets a GM do both", () => {

@@ -512,9 +512,12 @@ describe("formatRange", () => {
 // as "mine" and answers "yes" for every actor in the world on a GM's client, which is the exact
 // state being fixed — so a GM here is always given `isOwner: true`, the way a real client would.
 describe("who is offered the Preferences tab", () => {
-	const gm     = { id: "gm1",      isGM: true,  character: { id: "toolkit1" } };
-	const player = { id: "player1",  isGM: false, character: { id: "char1" } };
-	const other  = { id: "player2",  isGM: false, character: { id: "char2" } };
+	// `user.character` is an ACTOR, so these carry the `type` a real one has: the rule reads it to
+	// tell an assignment that is a PLACE (a sheet the tab appears on) from one that is only a
+	// speaking-as choice.
+	const gm     = { id: "gm1",      isGM: true,  character: { id: "toolkit1", type: "gmToolkit" } };
+	const player = { id: "player1",  isGM: false, character: { id: "char1", type: "character" } };
+	const other  = { id: "player2",  isGM: false, character: { id: "char2", type: "character" } };
 
 	/** A character sheet's actor: owned by name unless told otherwise, and `isOwner` for a GM. */
 	const character = (ownership = {}) => ({ id: "char1", type: "character", ownership, isOwner: true });
@@ -558,13 +561,24 @@ describe("who is offered the Preferences tab", () => {
 	// is the sheet their own settings belong on — shutting them out sent them to the world's shared
 	// toolkit to change their own text size.
 	it("offers an assistant GM their own character, and only that", () => {
-		const assistant = { id: "gm3", isGM: true, character: { id: "char1" } };
+		const assistant = { id: "gm3", isGM: true, character: { id: "char1", type: "character" } };
 		expect(showsPreferencesTab(character({ gm3: 3 }), assistant)).toBe(true);
 		// Still one place per person: their PC is it, so the shared toolkit is not also offered.
 		expect(showsPreferencesTab(toolkit, assistant)).toBe(false);
 		// And their GM reach still buys them nothing on anyone else's sheet.
 		expect(showsPreferencesTab({ id: "char2", type: "character", ownership: { player2: 3 }, isOwner: true }, assistant))
 			.toBe(false);
+	});
+
+	// `user.character` is a GM's speaking-as choice as much as it is their character, and one left
+	// on an NPC is ordinary — `_assignGmToolkitToGm` deliberately leaves an assignment it finds,
+	// so it latches. Homed there, the tab went to a sheet that does not carry it AND came off the
+	// toolkit, which left that GM no copy anywhere in the world.
+	it("falls back to the toolkit for a GM whose assignment is an actor the tab never appears on", () => {
+		const speaker = { id: "gm4", isGM: true, character: { id: "npc1", type: "npc" } };
+		expect(showsPreferencesTab(toolkit, speaker)).toBe(true);
+		// And that fallback is still not a claim on anyone's character sheet.
+		expect(showsPreferencesTab(character({ player1: 3 }), speaker)).toBe(false);
 	});
 
 	// Asked on every render of every sheet that carries the tab, including a client mid-boot.

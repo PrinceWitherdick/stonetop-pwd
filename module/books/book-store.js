@@ -33,10 +33,20 @@ import { format } from "../utils/i18n.js";
  */
 export const RULEBOOK_DIR = "stonetop-books";
 
-/** May this user copy a file in at all? Writing one needs FILES_UPLOAD, which most worlds keep
- *  to the GM. Browsing for one already on the server is a separate right, asked separately. */
+/**
+ * May this user KEEP a book — the whole gesture, not half of it?
+ *
+ * BOTH rights, because the gesture is a copy AND a record of where it went, and the record is a
+ * WORLD-scoped setting (`rulebookPdfs`). A world that hands trusted players FILES_UPLOAD without
+ * SETTINGS_MODIFY is an ordinary arrangement, and asking only about the upload offered them a
+ * button that copied 60 MB onto the host and then could not write the one line that makes it
+ * findable — an orphan file the world has no pointer to and no way to open.
+ *
+ * Browsing for a book already on the server is a separate right, asked separately.
+ */
 export function canStoreRulebook() {
-	return !!(game.user?.isGM || game.user?.can?.("FILES_UPLOAD"));
+	if (game.user?.isGM) return true;
+	return !!(game.user?.can?.("FILES_UPLOAD") && game.user?.can?.("SETTINGS_MODIFY"));
 }
 
 /** May this user browse the server for a book already there? */
@@ -114,11 +124,25 @@ export async function storeRulebookWithNotice(book, file) {
  * writing the path first, or writing it unconditionally, is how a world comes to hold a pointer
  * to a file nobody wrote, and the only symptom is a book icon that opens an empty reader.
  *
+ * The RECORD can fail on its own, and separately: it is a world-scoped setting, so a client
+ * without SETTINGS_MODIFY is refused it after the upload has already landed. `canStoreRulebook`
+ * asks about both rights precisely so that gate is not reached, but permissions can change under
+ * a run that is already going, and a throw from here would leave the two callers — a macro that
+ * logs to the console and a dialog with no catch of its own — showing a GM nothing at all. So it
+ * is caught, NAMED, and answered as the refusal it is: the copy is on the host either way, and
+ * the honest report is that the book was not kept.
+ *
  * @returns {Promise<string|null>} the stored path, or null if nothing was written.
  */
 export async function keepRulebook(book, file) {
 	const stored = await storeRulebookWithNotice(book, file);
 	if (!stored) return null;
-	await saveRulebookPath(book, stored);
+	try {
+		await saveRulebookPath(book, stored);
+	} catch (err) {
+		console.error("Stonetop | Copied a rulebook in but could not record where it went.", err);
+		ui.notifications?.error?.(format("stonetop.books.keepFailed", { title: bookTitle(book) }));
+		return null;
+	}
 	return stored;
 }

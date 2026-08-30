@@ -26,6 +26,21 @@ function ownerLevel() {
 }
 
 /**
+ * The actor subtypes whose sheets carry the tab — the two that register the partial.
+ *
+ * A list rather than a truth read off the sheet class, because this is asked about `user.character`
+ * (an Actor, not an open sheet) and often before any sheet of it exists. A third sheet growing the
+ * tab adds itself here; forgetting to only costs its owner the fallback, never a wrong answer on
+ * somebody else's sheet.
+ */
+const TAB_TYPES = new Set(["character", GM_TOOLKIT_TYPE]);
+
+/** Is this actor one whose sheet can show the tab at all? */
+function carriesTab(actor) {
+	return !!actor && TAB_TYPES.has(actor.type);
+}
+
+/**
  * Does the person reading this sheet get the Preferences tab on it?
  *
  * ONE PLACE PER PERSON, is the whole rule. The tab is a surface onto that reader's own client
@@ -70,8 +85,14 @@ export function showsPreferencesTab(actor, user = globalThis.game?.user) {
 	// actor in the world is not a claim on any of them. For a full GM that assignment is the
 	// toolkit, and for an assistant who also plays it is their own character — both land here.
 	// The unassigned case falls back to the toolkit so a GM who cleared theirs still has one.
+	//
+	// An assignment only counts as their PLACE when it points at a sheet the tab can actually
+	// appear on. `user.character` is a GM's speaking-as choice as much as it is their character,
+	// and one left on an NPC is common — `_assignGmToolkitToGm` deliberately does not disturb an
+	// assignment it finds, so it latches. Homing a GM there sent the tab to a sheet that does not
+	// carry it and took it off the toolkit at the same time, which left them no copy anywhere.
 	if (user.isGM) {
-		return user.character ? user.character.id === actor.id : actor.type === GM_TOOLKIT_TYPE;
+		return carriesTab(user.character) ? user.character.id === actor.id : actor.type === GM_TOOLKIT_TYPE;
 	}
 
 	// Nobody else is offered the toolkit: it is the GM's sheet, and a player who can open it at

@@ -57,6 +57,20 @@ describe("keeping a book the importer was handed", () => {
 		expect(rulebookPath(1)).toBe("");
 		expect(notifications.error).toHaveBeenCalled();
 	});
+
+	// The RECORD can fail on its own: `rulebookPdfs` is world-scoped, so a client without
+	// SETTINGS_MODIFY is refused it AFTER the upload has already landed. `canStoreRulebook` asks
+	// about both rights so this gate is not normally reached, but rights can change under a run
+	// that has already started — and a throw here reached a macro that only logs and a dialog with
+	// no catch, so a GM saw nothing at all where a 60 MB file had just gone onto their host.
+	it("answers null, and says so, when the copy lands but the record is refused", async () => {
+		game.settings.set = vi.fn(() => Promise.reject(new Error("User lacks permission")));
+		const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(await keepRulebook(1, pdf())).toBeNull();
+		expect(rulebookPath(1)).toBe("");
+		expect(notifications.error).toHaveBeenCalled();
+		quiet.mockRestore();
+	});
 });
 
 describe("what the macro can ask of the reader", () => {

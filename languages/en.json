@@ -80,6 +80,7 @@
       "copying": "Copying {title} into this world. A rulebook is a big file, so give it a moment.",
       "copied": "{title} is ready to read.",
       "copyFailed": "{title} could not be copied into this world. Your host may have refused the upload, or the file may be too large for it.",
+      "keepFailed": "{title} was copied in, but this world would not record where it went, so the reader cannot open it yet. Ask your GM to keep this book.",
       "bookmarks": {
         "tab": "Your bookmarks",
         "add": "Bookmark this page",
