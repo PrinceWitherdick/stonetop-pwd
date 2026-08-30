@@ -48,6 +48,7 @@ import { hideBrokenJournalArt } from "./module/journal/hide-broken-art.js";
 import { addJournalShareButton } from "./module/journal/share-journal.js";
 import { patchJournalImagePopoutTitles } from "./module/journal/journal-image-titles.js";
 import { onRenderPause } from "./module/hooks/RenderPause.js";
+import { registerBookBroadcast } from "./module/books/book-broadcast.js";
 import { onRenderCompendiumItemIcons } from "./module/hooks/CompendiumItemIcons.js";
 import { decoratePortraitRow, onUpdateActorPortraitFrame } from "./module/hooks/ActorDirectoryPortraits.js";
 import { decorateNameRow, onUpdateActorPlaybookName } from "./module/hooks/ActorDirectoryNames.js";
@@ -597,6 +598,12 @@ Hooks.once("ready", () => {
 	game.stonetop.bootReport = bootReport;
 });
 Hooks.once("ready", onReady);
+// EVERY user, not just the GM: this is the listening half of "Show Players" on a rulebook
+// window, and a player who is not listening is the only person the feature is for. Its own
+// `ready` hook rather than a line inside onReady, because onReady is a long sweep that can
+// throw on a half-migrated world, and a table should not lose the ability to be shown a page
+// because a portrait backfill failed. See module/books/book-broadcast.js.
+Hooks.once("ready", registerBookBroadcast);
 Hooks.once("ready", () => applyMoveDescriptionBodyClass(getSetting("showMoveDescriptionsInChat")));
 
 // -- THREAT BOARD (opt-in on-canvas threat cards) --------------
