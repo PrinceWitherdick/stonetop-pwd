@@ -24,6 +24,7 @@
  */
 
 import { SYSTEM_ID } from "../system-id.js";
+import { localize } from "./i18n.js";
 
 /**
  * The groups, in the order the tab draws them, and the keys each one carries.
@@ -158,8 +159,7 @@ function offeredToThisUser(key) {
 
 /** Localize a registration string, tolerating one that is already plain text. */
 function loc(value) {
-	if (!value) return "";
-	return globalThis.game?.i18n?.localize?.(value) ?? value;
+	return value ? localize(value) : "";
 }
 
 /** The registration behind a key, or undefined on a client that has not registered it yet. */

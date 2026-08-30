@@ -21,8 +21,8 @@
 // afterwards without making the GM find the folder themselves. The FilePicker stays as the
 // second door, for a book already on the server, which is the whole story on a hosted setup.
 import { ensureDataDir, uploadFile } from "../utils/foundry-compat.js";
-import { rulebook } from "./rulebooks.js";
-import { localize, format } from "../utils/i18n.js";
+import { rulebook, bookTitle } from "./rulebooks.js";
+import { format } from "../utils/i18n.js";
 
 /**
  * Where a copied book lands: a TOP-LEVEL data folder, outside `systems/`.
@@ -87,7 +87,7 @@ export async function storeRulebookFile(book, file) {
  * @returns {Promise<string|null>} the stored path, or null if it was refused.
  */
 export async function storeRulebookWithNotice(book, file) {
-	const title = localize(rulebook(book)?.titleKey ?? "stonetop.books.title");
+	const title = bookTitle(book);
 	ui.notifications?.info?.(format("stonetop.books.copying", { title }));
 	let path = null;
 	try {

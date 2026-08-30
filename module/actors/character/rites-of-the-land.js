@@ -1,6 +1,7 @@
 import { escHtml } from "../../utils/strings.js";
-import { sign } from "../../utils/roll-engine.js";
-import { DEBILITIES, clearDebility, markedDebilities } from "../steading/steading-debilities.js";
+import { seasonLabel } from "../../seasons/seasons-change-reminders.js";
+import { RITES_OF_THE_LAND } from "./stock-cost.js";
+import { DEBILITIES, clearDebility, markedDebilities, openDebilityPicker } from "../steading/steading-debilities.js";
 
 // ── Rites of the Land (The Blessed) ──────────────────────────────────────────────
 // "Once per season, when you oversee the sacred rites, hold 1 Favor. If you also sacrifice
@@ -18,7 +19,10 @@ import { DEBILITIES, clearDebility, markedDebilities } from "../steading/steadin
 // yet (see StonetopSteading#holdFortunesAdvantage). A player asked to do that by hand has to
 // find three screens and remember the fourth thing next season.
 
-export const RITES_MOVE = "Rites of the Land";
+// The SAME string as stock-cost.js's RITES_OF_THE_LAND, aliased rather than retyped: it is a
+// move NAME used both to find the item and as a flag key, so a rename that touched one half
+// would read Favor from one key and write it to another.
+export const RITES_MOVE = RITES_OF_THE_LAND;
 /** Which season's rites have been overseen — one per season, per the move's first line. */
 export const RITES_SEASON_STEP = "ritesOfTheLand";
 
@@ -80,9 +84,8 @@ export function openRitesOfTheLand({ character, steading, year = 1, seasonId = "
 		debilities: markedDebilities(steading).map(d => d.id),
 	});
 
-	const seasonLine = seasonId
-		? `${escHtml(seasonId[0].toUpperCase() + seasonId.slice(1))}, year ${year}`
-		: "this season";
+	// seasonLabel is the canonical id→name map; no escaping needed, it returns one of four literals.
+	const seasonLine = seasonId ? `${seasonLabel(seasonId)}, year ${year}` : "this season";
 
 	// ── The rites ────────────────────────────────────────────────────────────────
 	const ritesBody = state.ritesDone
@@ -102,26 +105,38 @@ export function openRitesOfTheLand({ character, steading, year = 1, seasonId = "
 	];
 
 	// ── The public sacrifice ─────────────────────────────────────────────────────
+	//
+	// The choices, in the shape openDebilityPicker offers: `id` is what _applySacrifice reads
+	// back, `label` is the plain text the footer button prints, `labelHtml` the emphasis this
+	// window authored. The last row is not a debility at all — the move's other branch — which
+	// the picker does not mind: it offers what it is given.
 	const sacrificeChoices = [
 		...state.marked.map(d => ({
-			key: `clear:${d.id}`,
-			label: `Clear <strong>${escHtml(d.label)}</strong>`,
+			id: `clear:${d.id}`,
+			label: `Clear ${d.label}`,
+			labelHtml: `Clear <strong>${escHtml(d.label)}</strong>`,
 			detail: d.detail,
 		})),
 		{
-			key: "fortunes",
-			label: "Advantage on the steading's next <strong>+Fortunes</strong> roll",
+			id: "fortunes",
+			label: "Hold the Fortunes advantage",
+			labelHtml: "Advantage on the steading's next <strong>+Fortunes</strong> roll",
 			detail: "Held on the steading until that roll is made, then spent.",
 		},
 	];
-	const sacrificeList = sacrificeChoices.map(c => `
-		<li class="stonetop-rites-choice" data-choice="${escHtml(c.key)}">
-			<span class="stonetop-rites-choice-label">${c.label}</span>
-			<span class="stonetop-rites-choice-detail">${escHtml(c.detail)}</span>
-		</li>`).join("");
 
-	const content = `<div class="stonetop-rites-dialog-body">
-		<section class="stonetop-rites-section">
+	// THROUGH THE SHARED PICKER (steading-debilities.js), which the Inn's gathering and Return
+	// Triumphant already put the same question in. This window used to hand-build the same
+	// pick-one-then-commit shell — the rows, the is-picked toggle, the footer button relabelling
+	// itself, the `dialog.element?.jquery` dance — and the copy silently did without the picker's
+	// `role="radio"` / tabindex / Enter-Space handling and its autofocus on the first row, which
+	// that helper's docblock calls load-bearing for reaching the choices by keyboard at all.
+	//
+	// The rites half rides in `introHtml`, and its two buttons are wired in `onRender` — the hook
+	// that exists for exactly this (winter's debt window uses it for its own control).
+	openDebilityPicker({
+		title: RITES_MOVE,
+		introHtml: `<section class="stonetop-rites-section">
 			<h3>Oversee the sacred rites</h3>
 			<p class="stonetop-rites-trigger"><em>Once per season (${seasonLine}).</em></p>
 			${ritesBody}
@@ -134,76 +149,61 @@ export function openRitesOfTheLand({ character, steading, year = 1, seasonId = "
 			<h3>Publicly sacrifice something or someone much-loved</h3>
 			<p class="stonetop-rites-trigger"><em>Pick one. This is a separate act from the rites above.</em></p>
 			${state.marked.length ? "" : `<p class="stonetop-rites-note">No debilities are marked, so the sacrifice can only buy the Fortunes advantage.</p>`}
-			<ol class="stonetop-rites-choices">${sacrificeList}</ol>
-		</section>
-	</div>`;
-
-	const dialog = new Dialog({
-		title: RITES_MOVE,
-		content,
-		// Picking and committing stay separate, as Return Triumphant's do: a click marks the
-		// choice and the footer button writes it, so an irreversible steading edit is never one
-		// mis-click away. Nothing starts picked, so the button starts disabled.
-		buttons: {
-			apply: { label: "Apply the sacrifice", callback: () => {} },
-			cancel: { label: "Close" },
-		},
-		default: "cancel",
-		render: html => {
-			const root = html[0];
-			const appEl = dialog.element?.jquery ? dialog.element[0] : dialog.element;
-			const applyBtn = appEl?.querySelector("button[data-button='apply']");
-			let picked = null;
-			const refresh = () => {
-				if (!applyBtn) return;
-				applyBtn.disabled = !picked;
-				const choice = sacrificeChoices.find(c => c.key === picked);
-				applyBtn.textContent = choice
-					? (picked === "fortunes" ? "Hold the Fortunes advantage" : `Clear ${choice.label.replace(/<[^>]+>/g, "").replace(/^Clear\s+/, "")}`)
-					: "Apply the sacrifice";
-			};
-			refresh();
-
-			root.querySelectorAll(".stonetop-rites-choice").forEach(el => {
-				el.addEventListener("click", () => {
-					picked = el.dataset.choice;
-					root.querySelectorAll(".stonetop-rites-choice").forEach(o => o.classList.toggle("is-picked", o === el));
-					refresh();
-				});
-			});
-
+		</section>`,
+		marked: sacrificeChoices,
+		applyLabel: "Apply the sacrifice",
+		applyLabelFor: c => c.label,
+		choicesLabel: "Sacrifice to make",
+		bodyClass: "stonetop-rites-dialog-body",
+		buttons: { cancel: { label: "Close" } },
+		dialogOptions: DIALOG_OPTIONS,
+		onRender: (root, dialog) => {
 			root.querySelectorAll("[data-rites]").forEach(el => {
 				el.addEventListener("click", async () => {
 					if (el.disabled) return;
 					el.disabled = true;
-					const withSurplus = el.dataset.rites === "surplus";
-					await _overseeRites({ character, steading, year, seasonId, withSurplus, state });
+					await _overseeRites({
+						character, steading, year, seasonId, state,
+						withSurplus: el.dataset.rites === "surplus",
+					});
 					onApplied?.();
 					dialog.close();
 				});
 			});
-
-			applyBtn?.addEventListener("click", async () => {
-				if (!picked) return;
-				await _applySacrifice({ steading, picked });
-				onApplied?.();
-			});
 		},
-	}, DIALOG_OPTIONS);
-	dialog.render(true);
+		onApply: async choice => {
+			await _applySacrifice({ steading, picked: choice.id });
+			onApplied?.();
+		},
+	});
 }
 
 /** Hold the Favor, spend the Surplus if that is the bargain, and mark the season done. */
 async function _overseeRites({ character, steading, year, seasonId, withSurplus, state }) {
-	const held = withSurplus ? state.surplusFavor : state.plainFavor;
-	await character.setRitesFavor(held);
+	// THE SURPLUS FIRST, and the Favor set to what was actually paid for.
+	//
+	// The sacrifice and the season marker ride ONE write, through the same reader the Inn's
+	// gathering and the watch's upkeep go through: spendSurplus owns the LIVE re-read (this
+	// window stays open beside an interactive sheet, so the steading may have spent elsewhere
+	// since it was built) and answers null rather than writing back a stale count minus one.
+	// A bare setSystemValue did neither, and carded the Surplus and the marker separately.
+	//
+	// That live answer is why the order matters. The old clamp could not fail, so holding the 4
+	// Favor first was safe; a spend that CAN be refused would otherwise leave a Blessed holding
+	// the sacrifice's Favor for a Surplus nobody paid. Refused, the rites still happen — they
+	// just happen as the plain ones, which is the bargain the book offers when there is nothing
+	// to give up.
+	let paid = withSurplus;
 	if (withSurplus && steading) {
-		const surplus = steading.getStatValue("surplus");
-		await steading.setSystemValue("attributes.surplus.value", Math.max(0, surplus - 1), { stonetopMove: RITES_MOVE });
+		paid = await steading.spendSurplus(1, { stonetopMove: RITES_MOVE, step: RITES_SEASON_STEP, year, seasonId }) !== null;
+		if (!paid) globalThis.ui?.notifications?.warn?.("No Surplus left to sacrifice. The rites are overseen without it.");
 	}
-	if (steading && seasonId) await steading.setSeasonStepApplied(RITES_SEASON_STEP, year, seasonId);
+	if (!paid && steading && seasonId) await steading.setSeasonStepApplied(RITES_SEASON_STEP, year, seasonId);
+
+	const held = paid ? state.surplusFavor : state.plainFavor;
+	await character.setRitesFavor(held);
 	globalThis.ui?.notifications?.info?.(
-		`${RITES_MOVE}: holding ${held} Favor${withSurplus ? " (1 Surplus sacrificed)" : ""}.`);
+		`${RITES_MOVE}: holding ${held} Favor${paid ? " (1 Surplus sacrificed)" : ""}.`);
 }
 
 /** Clear the chosen debility, or hold the advantage over the next +Fortunes roll. */
@@ -221,4 +221,3 @@ async function _applySacrifice({ steading, picked }) {
 	globalThis.ui?.notifications?.info?.(`${debility.label} cleared.`);
 }
 
-export { DEBILITIES as RITES_DEBILITIES, sign };

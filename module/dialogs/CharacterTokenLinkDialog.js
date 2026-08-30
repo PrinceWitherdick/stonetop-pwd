@@ -29,7 +29,7 @@ import { driftSummary } from "../migration/link-character-tokens.js";
  * the sweep closes on it and does not ask again. Deferring is done by dismissing the window,
  * which answers nothing and brings the whole list back next load.
  */
-export const LINK_CHOICES = Object.freeze({ TOKEN: "token", SHEET: "sheet", LEAVE: "leave" });
+const LINK_CHOICES = Object.freeze({ TOKEN: "token", SHEET: "sheet", LEAVE: "leave" });
 
 export class CharacterTokenLinkDialog extends StonetopDialog {
 	/** @param {Array<{token: object, base: object, scene: object}>} rows */

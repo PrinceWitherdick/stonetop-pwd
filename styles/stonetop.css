@@ -39601,50 +39601,16 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	justify-content: center;
 }
 
-/* Picking and committing are separate acts, as Return Triumphant's are — a click marks the row,
-   the footer button writes it. Same list chrome, so the two windows read as one family. */
-.stonetop-rites-choices {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.stonetop-rites-choice {
-	display: flex;
-	flex-direction: column;
-	gap: 1px;
-	border: 1px solid rgba(0,0,0,0.12);
-	border-radius: var(--st-radius);
-	background: rgba(0,0,0,0.03);
-	padding: 6px 9px;
-	cursor: pointer;
-}
-
-.stonetop-rites-choice:hover {
-	border-color: rgba(0,0,0,0.25);
-}
-
-.stonetop-rites-choice.is-picked {
-	border-color: var(--st-btn-primary-bg);
-	background: rgba(112, 128, 144, 0.14);
-}
-
-.stonetop-rites-choice-label {
-	font-size: var(--st-fs-base);
-}
-
-.stonetop-rites-choice-detail {
-	font-size: var(--st-fs-xs);
-	color: var(--st-text-secondary);
-}
+/* NO rites-specific choice rules: the rites window's sacrifice list is drawn by the
+   shared picker (steading-debilities.js), so it wears `.stonetop-disaster-choice` and the
+   `.is-selected` state above. The five rules that used to live here were a copy of those,
+   and had already drifted -- a different gap and padding, no :focus-visible outline, and a
+   raw slate literal where the original uses --st-green-bg / --st-green-border. */
 
 /* The Advantage pill's reason, beside it on the roll card: a Fortunes roll at advantage for a
    sacrifice made seasons ago should say so rather than look unexplained. */
 .stonetop-condition-note {
-	background: rgba(112, 128, 144, 0.18);
+	background: var(--st-slate-hover-bg);
 }
 
 /* ══ YOUR RULEBOOKS: the reader window, and the window that points at it ═══════════════════

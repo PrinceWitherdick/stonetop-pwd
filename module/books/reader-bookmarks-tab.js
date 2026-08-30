@@ -248,11 +248,6 @@ class BookmarksTab {
 		this._onSidebarView = (evt) => this._sidebarViewChanged(evt);
 	}
 
-	/** Is our panel the one showing? */
-	get isActive() {
-		return !!this._button && this._button.getAttribute("aria-checked") === "true";
-	}
-
 	mount() {
 		this._injectStyle();
 		this._button = this._makeButton();

@@ -17,7 +17,7 @@
 // unset book opens the window that sets it. It is drawn dimmed while unset, the same way and
 // with the same 0.4 as the steading shortcut with no steading to jump to, so the row still says
 // which of the two states it is in before it is clicked.
-import { RULEBOOKS, hasRulebook } from "./rulebooks.js";
+import { RULEBOOKS, rulebook, bookTitle, hasRulebook } from "./rulebooks.js";
 import { openBookReader } from "./BookReaderWindow.js";
 import { openRulebooksDialog } from "./RulebooksDialog.js";
 import { localize, format } from "../utils/i18n.js";
@@ -63,7 +63,7 @@ function iconRow(entry) {
  * @returns {?{book: number, icon: string, label: string, have: boolean, tooltip: string}}
  */
 export function readyRulebookIcon(book) {
-	const entry = RULEBOOKS.find(b => b.book === Number(book));
+	const entry = rulebook(book);
 	if (!entry || !hasRulebook(entry.book)) return null;
 	return iconRow(entry);
 }
@@ -93,9 +93,6 @@ export function openRulebook(book) {
  */
 export function openSharedRulebook(book) {
 	if (hasRulebook(book)) return openBookReader(book);
-	const entry = RULEBOOKS.find(b => b.book === Number(book));
-	ui.notifications?.warn?.(format("stonetop.books.notShared", {
-		title: localize(entry?.titleKey ?? "stonetop.books.title"),
-	}));
+	ui.notifications?.warn?.(format("stonetop.books.notShared", { title: bookTitle(book) }));
 	return null;
 }

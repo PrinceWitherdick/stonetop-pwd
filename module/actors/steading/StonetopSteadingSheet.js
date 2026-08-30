@@ -1,4 +1,4 @@
-import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, HERD_SURPLUS_PER, WEAPONS_SEASON_STEP, IMPROVEMENT_DEFINITIONS } from "./StonetopSteading.js";
+import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, HERD_SURPLUS_PER, WEAPONS_SEASON_STEP, WATCH_SEASON_STEP } from "./StonetopSteading.js";
 import { improvementRequirementCount } from "../../utils/improvement-def.js";
 import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml} from "../../utils/roll-engine.js";
 import {SteadingLedger} from "./SteadingLedger.js";
@@ -417,6 +417,14 @@ const HOMESTEAD_MOVE_FLOWS = {
 		label: "Trade & Barter",
 		stat: "prosperity",
 		statLabel: "Prosperity",
+		// BEHAVIOUR FLAGS, not decoration — the same way `beforeRoll: "musterCost"` is read by
+		// key rather than by name. Both of these used to be selected by testing `flow.label`
+		// against the string "Trade &amp; Barter", so renaming the move on screen (or changing how
+		// the ampersand is escaped) silently took away the special-item button and stopped the
+		// item's Value being subtracted from the roll — no error, no failing test, the move just
+		// rolled wrong.
+		specialItems: true,
+		rollFields: true,
 		trigger: "When you wish to acquire or sell a commonly available item, you can. When you seek to acquire or sell a special item, roll +Prosperity and subtract the item's Value. In winter, you have disadvantage.",
 		// The only two controls in any homefront dialog, because these two are the only ones
 		// the dice read: Value is subtracted as a modifier, and winter forces disadvantage.
@@ -1190,32 +1198,29 @@ export function createStonetopSteadingSheetClass(Base) {
 				this._onHerdInput(inp.dataset.tier, inp.value);
 			}, true);
 
-			// The Inn's once-per-season gathering, opened from its improvement card OR from the
-			// header's hold glyph, which is the same act reached from the other end of the sheet.
+			// The three things a header hold glyph can be clicked to settle. ONE listener over a
+			// map rather than three byte-identical ones, and the keys are exactly the `action`
+			// values HOLD_DEFS declares (steading-holds.js) — so the wiring is tied back to that
+			// table instead of to three loose literals that nothing checks against it.
+			//
+			// inn-gathering: the Inn's once-per-season gathering, also reachable from its
+			//   improvement card at the other end of the sheet — the same act, either way in.
+			// stand-down-muster: the header is the only place the muster's state is visible, and
+			//   so the only sensible place to end it.
+			// settle-winter-debt: unlike the other seasonal dues this one outlives the Seasons
+			//   Change window it was rolled in, so the glyph is the only way back to it
+			//   (see module/actors/steading/winter-debt.js).
+			const holdActions = {
+				"inn-gathering":      () => this._openInnGathering(),
+				"stand-down-muster":  () => this._standDownMuster(),
+				"settle-winter-debt": () => openWinterDebtDialog(this._stonetopSteading, { onApplied: () => this.render(false) }),
+			};
 			html[0].addEventListener("click", ev => {
-				const btn = ev.target.closest("[data-action='inn-gathering']");
-				if (!btn || btn.disabled) return;
+				const btn = ev.target.closest("[data-action]");
+				const run = btn && !btn.disabled ? holdActions[btn.dataset.action] : null;
+				if (!run) return;
 				ev.stopPropagation();
-				this._openInnGathering();
-			}, true);
-
-			// Standing the muster down from its header glyph, which is the only place the state
-			// is visible and so the only sensible place to end it.
-			html[0].addEventListener("click", ev => {
-				const btn = ev.target.closest("[data-action='stand-down-muster']");
-				if (!btn || btn.disabled) return;
-				ev.stopPropagation();
-				this._standDownMuster();
-			}, true);
-
-			// Winter's second consumption, settled from its header glyph. Unlike the other
-			// seasonal dues this one outlives the Seasons Change window it was rolled in, so the
-			// glyph is the only way back to it (see module/actors/steading/winter-debt.js).
-			html[0].addEventListener("click", ev => {
-				const btn = ev.target.closest("[data-action='settle-winter-debt']");
-				if (!btn || btn.disabled) return;
-				ev.stopPropagation();
-				openWinterDebtDialog(this._stonetopSteading, { onApplied: () => this.render(false) });
+				run();
 			}, true);
 
 			// Drag-and-drop for adding player characters to the Neighbors tab.
@@ -1520,7 +1525,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// handout list. The pick fills the Value field for the roll, adds the item to a
 			// character's inventory, and names itself in the chip beside the button (which is a
 			// readout, not an input: nothing reads it back).
-			const specialItemHtml = flow.label === "Trade & Barter"
+			const specialItemHtml = flow.specialItems
 				? `<div class="stonetop-tb-special">
 					<button type="button" class="stonetop-tb-special-btn"><i class="fas fa-gem"></i> Choose a special item…</button>
 					<span class="stonetop-tb-special-chosen" data-tb-chosen hidden="hidden"></span>
@@ -1629,7 +1634,7 @@ export function createStonetopSteadingSheetClass(Base) {
 		// on the Moves tab, which has no dialog to read — so all that is left here is the one
 		// move whose dialog holds controls: Trade & Barter's Value and its winter disadvantage.
 		_homesteadRollOptions(flow, html) {
-			if (flow.label !== "Trade & Barter") return {};
+			if (!flow.rollFields) return {};
 			const data = this._formDataFromDialog(html);
 			const value = Math.max(0, parseInt(data.value, 10) || 0);
 			return {
@@ -2082,33 +2087,45 @@ export function createStonetopSteadingSheetClass(Base) {
 			// them a genuine choice, not a failure state: a steading that would rather keep the
 			// Surplus can let the watch go. Feeding is hidden outright with no Surplus to feed it
 			// with, which leaves disbanding as the only thing the season can do.
-			const watchBlock = this._hasImprovement("standingWatch") ? `<hr class="stonetop-season-divider">
+			// ONE shape for the three seasonal dues below. Each was written out in full — the
+			// divider, the `.stonetop-season-watch` box, the icon/name/"Surplus: N" line, then
+			// the body — so the three differed only in their sentence and their controls, and had
+			// already drifted on where the weapons' block put its `.stonetop-season-actions`.
+			const upkeepBlock = ({ icon, name, sentence, body }) => `<hr class="stonetop-season-divider">
 				<div class="stonetop-season-watch">
-					<p class="stonetop-season-note"><i class="fas fa-shield-halved"></i> <strong>Standing Watch</strong> consumes <strong>1 Surplus</strong> at the start of the season, or it disbands. Surplus: <strong>${surplus}</strong>.</p>
-					<div class="stonetop-season-actions">
+					<p class="stonetop-season-note"><i class="fas ${icon}"></i> <strong>${name}</strong> ${sentence} Surplus: <strong>${surplus}</strong>.</p>
+					${body}
+				</div>`;
+
+			const watchBlock = this._hasImprovement("standingWatch") ? upkeepBlock({
+				icon: "fa-shield-halved",
+				name: "Standing Watch",
+				sentence: "consumes <strong>1 Surplus</strong> at the start of the season, or it disbands.",
+				body: `<div class="stonetop-season-actions">
 						${surplus >= 1 ? `<button class="stonetop-season-btn" data-action="feed-watch">
 							<i class="fas fa-drumstick-bite"></i> Feed the watch (1 Surplus)
 						</button>` : ""}
 						<button class="stonetop-season-btn stonetop-season-btn--warn" data-action="disband-watch">
 							<i class="fas fa-person-walking-arrow-right"></i> Disband the watch
 						</button>
-					</div>
-				</div>` : "";
+					</div>`,
+			}) : "";
 
 			// Weapons of War: "Each spring, the village must expend 1 Surplus to maintain and
 			// replace the town's weapons." SPRING only, and unlike the watch the book names no
 			// penalty for skipping it, so there is one button and no disband twin — what a
 			// neglected ballista costs is the GM's to say, not ours to automate.
 			const weaponsBlock = (seasonId === "spring" && this._hasImprovement("weaponsOfWar"))
-				? `<hr class="stonetop-season-divider">
-				<div class="stonetop-season-watch">
-					<p class="stonetop-season-note"><i class="fas fa-hammer"></i> <strong>Weapons of War</strong> want <strong>1 Surplus</strong> this spring, to maintain and replace them. Surplus: <strong>${surplus}</strong>.</p>
-					${surplus >= 1 ? `<div class="stonetop-season-actions">
+				? upkeepBlock({
+					icon: "fa-hammer",
+					name: "Weapons of War",
+					sentence: "want <strong>1 Surplus</strong> this spring, to maintain and replace them.",
+					body: surplus >= 1 ? `<div class="stonetop-season-actions">
 						<button class="stonetop-season-btn" data-action="pay-weapons">
 							<i class="fas fa-hammer"></i> Pay the upkeep (1 Surplus)
 						</button>
-					</div>` : `<p class="stonetop-season-note"><em>No Surplus to spend. What the neglect costs is the GM's call.</em></p>`}
-				</div>` : "";
+					</div>` : `<p class="stonetop-season-note"><em>No Surplus to spend. What the neglect costs is the GM's call.</em></p>`,
+				}) : "";
 
 			// Well-Trained Militia: "Each summer, the militia must spend 1 Surplus and a week or so
 			// practicing or else lose its training in 1 tactic." SUMMER only, and the watch's shape
@@ -2122,10 +2139,11 @@ export function createStonetopSteadingSheetClass(Base) {
 			const drillsDue = seasonId === "summer" && this._hasImprovement("wellTrainedMilitia");
 			const tactics = drillsDue ? this._militiaTactics() : [];
 			const militiaBlock = drillsDue
-				? `<hr class="stonetop-season-divider">
-				<div class="stonetop-season-watch">
-					<p class="stonetop-season-note"><i class="fas fa-bullseye"></i> <strong>Well-Trained Militia</strong> wants <strong>1 Surplus</strong> and a week of drills this summer, or it loses its training in 1 tactic. Surplus: <strong>${surplus}</strong>.</p>
-					${surplus >= 1 ? `<div class="stonetop-season-actions">
+				? upkeepBlock({
+					icon: "fa-bullseye",
+					name: "Well-Trained Militia",
+					sentence: "wants <strong>1 Surplus</strong> and a week of drills this summer, or it loses its training in 1 tactic.",
+					body: `${surplus >= 1 ? `<div class="stonetop-season-actions">
 						<button class="stonetop-season-btn" data-action="drill-militia">
 							<i class="fas fa-bullseye"></i> Drill this summer (1 Surplus)
 						</button>
@@ -2138,8 +2156,8 @@ export function createStonetopSteadingSheetClass(Base) {
 									<span class="stonetop-disaster-choice-detail">${_esc(t.label)}</span>
 								</li>`).join("")}
 							</ol>`
-						: `<p class="stonetop-season-note"><em>The militia has no trained tactics left to lose.</em></p>`}
-				</div>` : "";
+						: `<p class="stonetop-season-note"><em>The militia has no trained tactics left to lose.</em></p>`}`,
+				}) : "";
 
 			// Aurochs Hunting, and the one seasonal improvement that gets a LINE rather than a
 			// button. "When you lead the aurochs hunt in spring, roll +Defenses" is a thing the
@@ -2490,33 +2508,26 @@ export function createStonetopSteadingSheetClass(Base) {
 					// Asked of the STEADING, not of whether a given button came back from the
 					// query: with no Surplus the feed button is never rendered, so keying "already
 					// settled" off its return value would read false on a season that is done.
-					this._disableIfSeasonStepDone(feedWatchBtn, "standingWatch", year, seasonId);
-					this._disableIfSeasonStepDone(disbandWatchBtn, "standingWatch", year, seasonId);
-					if (this._stonetopSteading.seasonStepApplied("standingWatch", year, seasonId)) settleWatch();
+					this._disableIfSeasonStepDone(disbandWatchBtn, WATCH_SEASON_STEP, year, seasonId);
+					if (this._stonetopSteading.seasonStepApplied(WATCH_SEASON_STEP, year, seasonId)) settleWatch();
 
-					feedWatchBtn?.addEventListener("click", async () => {
-						if (feedWatchBtn.disabled) return;
-						settleWatch();
-						try {
-							// Spends and closes the step in one write, off a LIVE Surplus read: the
-							// herd feed and the surplus roll in this same dialog may have moved it
-							// since the window was built. Null means it could not be afforded, and
-							// nothing was written — so the choice reverts to disbanding.
-							const left = await this._stonetopSteading.spendSurplus(1,
-								{ ...seasonsMove, step: "standingWatch", year, seasonId });
-							if (left === null) {
-								ui.notifications.warn("No Surplus left to feed the watch. It disbands unless you find one.");
-								if (feedWatchBtn) feedWatchBtn.disabled = true;
-								if (disbandWatchBtn) disbandWatchBtn.disabled = false;
-								return;
-							}
-							this.render(false);
-							ui.notifications.info(`The watch is fed: 1 Surplus spent (${left} left).`);
-						} catch (err) {
+					// Spends and closes the step in one write, off a LIVE Surplus read: the herd
+					// feed and the surplus roll in this same dialog may have moved it since the
+					// window was built. Could-not-afford writes nothing — so the choice reverts to
+					// disbanding, which is why the short unlock differs from the throw's.
+					this._wireSurplusUpkeep(feedWatchBtn, {
+						step: WATCH_SEASON_STEP, year, seasonId, seasonsMove,
+						lock: settleWatch,
+						shortUnlock: () => {
+							if (feedWatchBtn) feedWatchBtn.disabled = true;
+							if (disbandWatchBtn) disbandWatchBtn.disabled = false;
+						},
+						unlock: () => {
 							if (feedWatchBtn) feedWatchBtn.disabled = false;
 							if (disbandWatchBtn) disbandWatchBtn.disabled = false;
-							throw err;
-						}
+						},
+						shortWarning: "No Surplus left to feed the watch. It disbands unless you find one.",
+						doneMessage: left => `The watch is fed: 1 Surplus spent (${left} left).`,
 					});
 
 					disbandWatchBtn?.addEventListener("click", async () => {
@@ -2528,7 +2539,7 @@ export function createStonetopSteadingSheetClass(Base) {
 							// would leave the improvement ticked and the grant record stale, so a later
 							// re-complete would refuse to re-apply the fortification.
 							await this._stonetopSteading.setImprovementCompleted("standingWatch", false);
-							await this._stonetopSteading.setSeasonStepApplied("standingWatch", year, seasonId);
+							await this._stonetopSteading.setSeasonStepApplied(WATCH_SEASON_STEP, year, seasonId);
 							this.render(false);
 							ui.notifications.info("The standing watch disbands. Its warriors go back to their trades.");
 						} catch (err) {
@@ -2540,21 +2551,10 @@ export function createStonetopSteadingSheetClass(Base) {
 
 					// Weapons of War's spring maintenance. One button, one step key, the same
 					// live re-read as the watch's for the same reason.
-					const payWeaponsBtn = root.querySelector("[data-action='pay-weapons']");
-					this._disableIfSeasonStepDone(payWeaponsBtn, WEAPONS_SEASON_STEP, year, seasonId);
-					payWeaponsBtn?.addEventListener("click", async () => {
-						if (payWeaponsBtn.disabled) return;
-						payWeaponsBtn.disabled = true;
-						try {
-							const left = await this._stonetopSteading.spendSurplus(1,
-								{ ...seasonsMove, step: WEAPONS_SEASON_STEP, year, seasonId });
-							if (left === null) {
-								ui.notifications.warn("No Surplus left for the weapons' upkeep.");
-								return;
-							}
-							this.render(false);
-							ui.notifications.info(`Weapons of War maintained: 1 Surplus spent (${left} left).`);
-						} catch (err) { payWeaponsBtn.disabled = false; throw err; }
+					this._wireSurplusUpkeep(root.querySelector("[data-action='pay-weapons']"), {
+						step: WEAPONS_SEASON_STEP, year, seasonId, seasonsMove,
+						shortWarning: "No Surplus left for the weapons' upkeep.",
+						doneMessage: left => `Weapons of War maintained: 1 Surplus spent (${left} left).`,
 					});
 
 					// What the improvements bring. One button and one season marker per row, so a
@@ -2576,8 +2576,14 @@ export function createStonetopSteadingSheetClass(Base) {
 							btn.disabled = true;
 							try {
 								const now = this._stonetopSteading.getStatValue("surplus");
-								await this._stonetopSteading.setSystemValue("attributes.surplus.value", now + gain, seasonsMove);
-								await this._stonetopSteading.setSeasonStepApplied(key, year, seasonId);
+								// ONE write, the way spendSurplus does it: the gain and the season
+								// marker are two halves of a single act, and a write apiece cards
+								// the Surplus and the marker separately in the ledger and re-renders
+								// every open steading sheet twice.
+								await this._stonetopSteading.applyChanges({
+									system: { "attributes.surplus.value": now + gain },
+									flags: this._stonetopSteading.seasonStepFlags(key, year, seasonId),
+								}, seasonsMove);
 								this.render(false);
 								ui.notifications.info(`${name} generates ${gain} Surplus. New total: ${now + gain}.`);
 							} catch (err) { btn.disabled = false; throw err; }
@@ -2611,25 +2617,21 @@ export function createStonetopSteadingSheetClass(Base) {
 						this._disableIfSeasonStepDone(drillMilitiaBtn, MILITIA_SEASON_STEP, year, seasonId);
 						settleMilitia();
 					}
-					drillMilitiaBtn?.addEventListener("click", async () => {
-						if (drillMilitiaBtn.disabled) return;
-						settleMilitia();
-						try {
-							const left = await this._stonetopSteading.spendSurplus(1,
-								{ ...seasonsMove, step: MILITIA_SEASON_STEP, year, seasonId });
-							if (left === null) {
-								ui.notifications.warn("No Surplus left for the militia's drills. It loses a tactic unless you find one.");
-								drillMilitiaBtn.disabled = true;
-								tacticEls.forEach(el => el.classList.remove("is-disabled"));
-								return;
-							}
-							this.render(false);
-							ui.notifications.info(`The militia drills: 1 Surplus spent (${left} left).`);
-						} catch (err) {
+					this._wireSurplusUpkeep(drillMilitiaBtn, {
+						step: MILITIA_SEASON_STEP, year, seasonId, seasonsMove,
+						lock: settleMilitia,
+						// A militia that cannot be paid for must still be able to forget a tactic,
+						// so the drill button stays down and only the tactics come back.
+						shortUnlock: () => {
+							drillMilitiaBtn.disabled = true;
+							tacticEls.forEach(el => el.classList.remove("is-disabled"));
+						},
+						unlock: () => {
 							drillMilitiaBtn.disabled = false;
 							tacticEls.forEach(el => el.classList.remove("is-disabled"));
-							throw err;
-						}
+						},
+						shortWarning: "No Surplus left for the militia's drills. It loses a tactic unless you find one.",
+						doneMessage: left => `The militia drills: 1 Surplus spent (${left} left).`,
 					});
 					tacticEls.forEach(el => {
 						el.addEventListener("click", async () => {
@@ -2671,8 +2673,12 @@ export function createStonetopSteadingSheetClass(Base) {
 							const roll = await new Roll(formula).evaluate();
 							const gain = Math.max(0, roll.total);
 							await roll.toMessage({ flavor: `Surplus Generation (${label})` });
-							await this._stonetopSteading.setSystemValue("attributes.surplus.value", surplus + gain, seasonsMove);
-							await this._stonetopSteading.setSeasonStepApplied("surplus", year, seasonId);
+							// ONE write — the generated Surplus and its season marker together, as
+							// spendSurplus does for the spending side.
+							await this._stonetopSteading.applyChanges({
+								system: { "attributes.surplus.value": surplus + gain },
+								flags: this._stonetopSteading.seasonStepFlags("surplus", year, seasonId),
+							}, seasonsMove);
 							this.render(false);
 							ui.notifications.info(`Generated ${gain} Surplus. New total: ${surplus + gain}.`);
 						} catch (err) { rollSurplusBtn.disabled = false; throw err; }
@@ -3127,23 +3133,25 @@ export function createStonetopSteadingSheetClass(Base) {
 			return this._stonetopSteading.improvementCompleted(slug);
 		}
 
-		/** An improvement's flat, in-order requirement state — the array its checkboxes write, and
-		 *  what the two rules that turn on a CHOICE made while building are read from. */
-		_improvementRequirements(slug) {
-			return this._stonetopSteading._flags.improvements?.[slug]?.r ?? [];
-		}
-
 		/** The militia's currently-trained tactics, as {index, label} rows the summer window can
-		 *  offer for the losing. Index is into the improvement's requirement array. */
+		 *  offer for the losing. Index is into the improvement's requirement array.
+		 *
+		 *  Definition and requirement state both come off the MODEL: `improvementDef` resolves a
+		 *  custom improvement as well as a built-in, which a bare IMPROVEMENT_DEFINITIONS.find
+		 *  here did not, and it is where the sibling views already live. */
 		_militiaTactics() {
-			const def = IMPROVEMENT_DEFINITIONS.find(d => d.slug === "wellTrainedMilitia");
-			return militiaTactics(def, this._improvementRequirements("wellTrainedMilitia"));
+			const steading = this._stonetopSteading;
+			return militiaTactics(
+				steading.improvementDef("wellTrainedMilitia"),
+				steading.improvementRequirements("wellTrainedMilitia"));
 		}
 
 		/** Whether Additional Housing was built on the fields, which is what docks the harvest. */
 		_builtOnTheFields() {
-			const def = IMPROVEMENT_DEFINITIONS.find(d => d.slug === "additionalHousing");
-			return builtOnTheFields(def, this._improvementRequirements("additionalHousing"));
+			const steading = this._stonetopSteading;
+			return builtOnTheFields(
+				steading.improvementDef("additionalHousing"),
+				steading.improvementRequirements("additionalHousing"));
 		}
 
 		/**
@@ -3249,6 +3257,53 @@ export function createStonetopSteadingSheetClass(Base) {
 			btn.disabled = true;
 			btn.title = "Already done this season: reopening won't repeat it.";
 			return true;
+		}
+
+		/**
+		 * A "spend 1 Surplus and close this season's step" button, wired.
+		 *
+		 * The three seasonal dues — the watch's feed, Weapons of War's maintenance, the militia's
+		 * drill — are the same six steps in the same order, and were written out three times: a
+		 * re-entry guard, lock the controls, `spendSurplus` (which owns the LIVE re-read and the
+		 * one write), the could-not-afford branch that puts back only what should come back, the
+		 * re-render and the report, and a catch that unlocks and rethrows. Only the lock/unlock
+		 * and two sentences differ, so only those are passed.
+		 *
+		 * `shortUnlock` rather than reusing `unlock`: what a steading too poor to pay leaves
+		 * clickable is not what a throw leaves clickable. The watch that cannot be fed must be
+		 * disbandable but not re-feedable; a throw puts both buttons back.
+		 *
+		 * @param {HTMLElement|null} btn
+		 * @param {object} opts
+		 * @param {string} opts.step             season-step key closed in the same write
+		 * @param {number} opts.year
+		 * @param {string} opts.seasonId
+		 * @param {object} opts.seasonsMove      ledger cause, spread into the spend
+		 * @param {Function} [opts.lock]         called before the write
+		 * @param {Function} [opts.unlock]       called when the write throws
+		 * @param {Function} [opts.shortUnlock]  called when there was no Surplus to spend
+		 * @param {string} opts.shortWarning     what to say when it could not be afforded
+		 * @param {Function} opts.doneMessage    left => what to say when it was
+		 */
+		_wireSurplusUpkeep(btn, { step, year, seasonId, seasonsMove, lock, unlock, shortUnlock, shortWarning, doneMessage }) {
+			this._disableIfSeasonStepDone(btn, step, year, seasonId);
+			btn?.addEventListener("click", async () => {
+				if (btn.disabled) return;
+				if (lock) lock(); else btn.disabled = true;
+				try {
+					const left = await this._stonetopSteading.spendSurplus(1, { ...seasonsMove, step, year, seasonId });
+					if (left === null) {
+						ui.notifications.warn(shortWarning);
+						shortUnlock?.();
+						return;
+					}
+					this.render(false);
+					ui.notifications.info(doneMessage(left));
+				} catch (err) {
+					if (unlock) unlock(); else btn.disabled = false;
+					throw err;
+				}
+			});
 		}
 
 		/**

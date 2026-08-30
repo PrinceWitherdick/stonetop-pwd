@@ -116,7 +116,7 @@ export function stockCostFromDescription(html) {
 export function stockSourcesForFlags({ possessions = {}, moveResources = {}, ritesMax = null } = {}) {
 	const selected = possessions.selected ?? [];
 	return stockSources({
-		hasPouch:   [...(Array.isArray(selected) ? selected : selected)].includes(SACRED_POUCH_SLUG),
+		hasPouch:   [...selected].includes(SACRED_POUCH_SLUG),
 		pouchMax:   possessions.maxUses?.[SACRED_POUCH_SLUG] ?? DEFAULT_SACRED_POUCH_MAX,
 		pouchStored: possessions.uses?.[SACRED_POUCH_SLUG] ?? 0,
 		favorMax:   ritesMax,

@@ -102,9 +102,14 @@ describe("how it is wired", () => {
 
 	it("is styled", () => {
 		const css = read("styles/stonetop.css");
-		for (const rule of [".stonetop-rites-dialog-body", ".stonetop-rites-choice.is-picked", ".stonetop-rites-warn"]) {
+		for (const rule of [".stonetop-rites-dialog-body", ".stonetop-rites-warn"]) {
 			expect(css, rule).toContain(rule);
 		}
+		// The sacrifice list is the SHARED picker's, so it wears the shared chrome and this file
+		// carries no rules of its own for it. A `.stonetop-rites-choice` block coming back would
+		// mean the window had gone back to hand-building its own rows.
+		expect(css).not.toContain(".stonetop-rites-choice");
+		expect(css).toContain(".stonetop-disaster-choice.is-selected");
 	});
 
 	it("still opens for a Blessed whose world has no steading yet", () => {

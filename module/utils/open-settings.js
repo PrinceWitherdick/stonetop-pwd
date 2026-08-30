@@ -34,7 +34,7 @@ export const SETTING_FLASH_MS = 2600;
  * @returns {Promise<boolean>} true when the settings window was opened. NOT whether the row was
  *          found: the caller offered a way to the settings, and the settings are what opened.
  */
-export async function openSystemSetting(key) {
+export async function openSystemSetting(key, { highlight = true } = {}) {
 	const app = globalThis.game?.settings?.sheet;
 	if (!app?.render) return false;
 
@@ -45,8 +45,12 @@ export async function openSystemSetting(key) {
 	const row = await findSettingRow(app, `${SYSTEM_ID}.${key}`);
 	if (row) {
 		showTabFor(app, row);
-		row.scrollIntoView?.({ block: "center", behavior: "smooth" });
-		flashHighlight(row, { className: SETTING_FLASH_CLASS, duration: SETTING_FLASH_MS });
+		// `highlight: false` stops at the tab — see openSystemSettings for why singling out a
+		// row is wrong when the button is not about any one of them.
+		if (highlight) {
+			row.scrollIntoView?.({ block: "center", behavior: "smooth" });
+			flashHighlight(row, { className: SETTING_FLASH_CLASS, duration: SETTING_FLASH_MS });
+		}
 	}
 	return true;
 }
@@ -68,14 +72,7 @@ export async function openSystemSetting(key) {
  * @returns {Promise<boolean>} true when the settings window was opened, as above.
  */
 export async function openSystemSettings() {
-	const app = globalThis.game?.settings?.sheet;
-	if (!app?.render) return false;
-
-	await app.render(true);
-
-	const row = await findSettingRow(app, `${SYSTEM_ID}.sheetFont`);
-	if (row) showTabFor(app, row);
-	return true;
+	return openSystemSetting("sheetFont", { highlight: false });
 }
 
 /**

@@ -49,18 +49,13 @@ export class EndOfSessionDialog extends StonetopDialog {
 		});
 
 		html.find(".stonetop-eos-confirm-btn").on("click", async (ev) => {
-			// Re-entrancy guard, the same one the level-up dialog carries and for the same
-			// reason: awarding walks every player character with a separate write apiece, then
-			// posts a card and resets the Omen reminder, and the window closes only when all of
-			// that has landed. A four-player table therefore leaves this button live and
-			// inviting for several round trips, and a second click in that gap awards the whole
-			// session's XP twice to everyone. The button is disabled as well as latched so the
-			// GM can see the press took.
-			if (this._busy) return;
-			this._busy = true;
-			ev.currentTarget.disabled = true;
-			try { await this._applyGroupXp(); }
-			finally { this._busy = false; }
+			// Re-entrancy guard, the shared one (StonetopDialog#_guardBusy): awarding walks every
+			// player character with a separate write apiece, then posts a card and resets the
+			// Omen reminder, and the window closes only when all of that has landed. A
+			// four-player table therefore leaves this button live and inviting for several round
+			// trips, and a second click in that gap awards the whole session's XP twice to
+			// everyone.
+			await this._guardBusy(ev, () => this._applyGroupXp());
 		});
 	}
 

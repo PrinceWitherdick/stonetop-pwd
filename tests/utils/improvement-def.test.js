@@ -189,7 +189,9 @@ describe("summarizeImprovementGrants", () => {
 			setPopulation: 0,
 		}))).toEqual([
 			"Fortunes +1",
-			"Prosperity -1",
+			// U+2212, from the shared statGrantLine: this surface and the applied-record twin on
+			// StonetopSteading used to print the same −1 with two different minus glyphs.
+			"Prosperity −1",
 			"Fortifications: Stone Wall",
 			"Fortifications cleared: Palisade",
 			"Size becomes town",

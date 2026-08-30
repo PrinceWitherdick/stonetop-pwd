@@ -126,7 +126,9 @@ export function sectionsFromGroups(groups = []) {
  * section that lacked one into a single OR.
  */
 function normalizeSection(raw) {
-	const items = (Array.isArray(raw?.items) ? raw.items : []).map(i => String(i ?? "").trim()).filter(Boolean);
+	// The Array.isArray guard stays: `toLines` SPLITS a bare string on newlines, and a section
+	// that arrived with `items` as a string should normalize to no items, not to a line list.
+	const items = toLines(Array.isArray(raw?.items) ? raw.items : []);
 	const section = { heading: String(raw?.heading ?? "").trim(), items };
 	const min = asInt(raw?.min);
 	if (min !== null && min >= 1 && min < items.length) section.min = min;
@@ -187,11 +189,21 @@ export function normalizeImprovementGrants(raw) {
  * @param {object|null} grants
  * @returns {string[]}
  */
+/**
+ * One stat line of a grant, signed. Shared with StonetopSteading#_summarizeGrantChanges, which
+ * says the same thing about an APPLIED record: two twins reading different inputs is fair, two
+ * copies of the wording is not — they had already drifted to different minus glyphs, so the same
+ * ±1 printed two ways depending on which surface you read it from. U+2212 is the one that stays.
+ */
+export function statGrantLine(key, delta) {
+	return `${GRANT_STAT_LABELS[key] ?? key} ${delta >= 0 ? "+" : "−"}${Math.abs(delta)}`;
+}
+
 export function summarizeImprovementGrants(grants) {
 	if (!grants) return [];
 	const lines = [];
 	for (const [key, delta] of Object.entries(grants.stats ?? {})) {
-		lines.push(`${GRANT_STAT_LABELS[key] ?? key} ${delta >= 0 ? "+" : "-"}${Math.abs(delta)}`);
+		lines.push(statGrantLine(key, delta));
 	}
 	if (grants.resources?.length) lines.push(`Resources: ${grants.resources.join(", ")}`);
 	if (grants.fortifications?.length) lines.push(`Fortifications: ${grants.fortifications.join(", ")}`);

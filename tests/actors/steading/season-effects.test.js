@@ -222,7 +222,9 @@ describe("how the seasonal effects are wired", () => {
 		expect(at).toBeGreaterThan(-1);
 		const body = SHEET.slice(at, at + 1200);
 		expect(body).toContain("_disableIfSeasonStepDone(btn, key, year, seasonId)");
-		expect(body).toContain("setSeasonStepApplied(key, year, seasonId)");
+		// The gain and its marker go out as ONE write, the way spendSurplus does it.
+		expect(body).toContain("seasonStepFlags(key, year, seasonId)");
+		expect(body).toContain("applyChanges({");
 		// Live, like every other spend and grant in this window.
 		expect(body).toContain(`getStatValue("surplus")`);
 	});
@@ -233,7 +235,9 @@ describe("how the seasonal effects are wired", () => {
 		const at = SHEET.indexOf(`data-action='drill-militia'`);
 		expect(at).toBeGreaterThan(-1);
 		const body = SHEET.slice(at, at + 2600);
-		expect(body).toContain("spendSurplus(1");
+		// The spend goes through the shared _wireSurplusUpkeep, as the watch's and the
+		// weapons' do; the tactic half writes its own marker on the same step key.
+		expect(body).toContain("_wireSurplusUpkeep(drillMilitiaBtn");
 		expect(body).toContain("MILITIA_SEASON_STEP");
 		expect(body).toContain(`_onImprovementReq("wellTrainedMilitia"`);
 	});

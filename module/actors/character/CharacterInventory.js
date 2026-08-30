@@ -37,10 +37,6 @@ export class CharacterInventory {
 		return this._flags.subKeyData("resources", slug, count);
 	}
 
-	async setResourceMax(slug, max, options) {
-		await this._flags.setSubKey("resourceMax", slug, max, options);
-	}
-
 	// Drop a removed arcanum's resource tracks (the back-power track keyed by slug and the
 	// back-item ammo track keyed "<slug>:item"), so a later re-acquire doesn't inherit stale
 	// charges. No-op when the card had no tracks.

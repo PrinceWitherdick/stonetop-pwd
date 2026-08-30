@@ -90,34 +90,20 @@ export function withGmEncountersTab(Base) {
 		// Straight forwarders, no logic. Every one is documented where it lives, on GmBundleTab.
 
 		_encounterList()                        { return this._encounters.list(); }
-		_encounter(id)                          { return this._encounters.card(id); }
-		_encounterEditing()                     { return this._encounters.editing(); }
 		_mutateEncounters(transform, options)   { return this._encounters.mutate(transform, options); }
 		_addEncounter(name, options)            { return this._encounters.add(name, options); }
-		_createEncounterFrom(entry)             { return this._encounters.createFrom(entry); }
 		_setEncounterField(id, key, v, options) { return this._encounters.setField(id, key, v, options); }
 		_setEncounterUsed(id, used)             { return this._encounters.setUsed(id, used); }
-		_removeEncounter(id)                    { return this._encounters.removeCard(id); }
 		_reorderEncounter(dragId, overId)       { return this._encounters.reorder(dragId, overId); }
 		_nudgeEncounter(id, delta)              { return this._encounters.nudge(id, delta); }
-		_mutateEntries(encId, fn, options)      { return this._encounters.mutateEntries(encId, fn, options); }
-		_addEncounterEntry(encId, entry, before = null) { return this._encounters.addEntry(encId, entry, before); }
 		_moveEntry(fromId, entryId, toId, before = null) { return this._encounters.moveEntry(fromId, entryId, toId, before); }
 		_nudgeEntry(encId, entryId, delta, groupIds = null) { return this._encounters.nudgeEntry(encId, entryId, delta, groupIds); }
 		_setEntryNote(encId, entryId, note)     { return this._encounters.setEntryNote(encId, entryId, note); }
 		_removeEntry(encId, entryId)            { return this._encounters.removeEntry(encId, entryId); }
-		_encounterEntryFrom(data)               { return this._encounters.entryFrom(data); }
 		_onEncounterDrop(data, target)          { return this._encounters.onDrop(data, target); }
 		_sameEntryKind(data, target)            { return this._encounters.sameEntryKind(data, target); }
-		_wireGmEncounterDrag(root)              { return this._encounters.wireDrag(root); }
 		_deployEncounter(id)                    { return this._encounters.deploy(id); }
-		_deployableActor(entry, worldCopy)      { return this._encounters.deployableActor(entry, worldCopy); }
-		_encounterIdFrom(el)                    { return this._encounters.cardIdFrom(el); }
-		_entryIdFrom(el)                        { return this._encounters.entryIdFrom(el); }
-		_openEncounterEntry(uuid)               { return this._encounters.openEntry(uuid); }
-		_onEncounterAdd()                       { return this._encounters.onAdd(); }
 		_onEncounterRemove(id)                  { return this._encounters.onRemove(id); }
-		_encounterWarn(key, data)               { return this._encounters.warn(key, data); }
 		_restoreGmEncounterFocus(root)          { return this._encounters.restoreFocus(root); }
 
 		/* ── state the sheet and its tests reach for by name ─────────────────────── */

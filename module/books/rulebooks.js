@@ -23,6 +23,7 @@
 // knows the path. That is the GM's call to make about their own table, not a surprise to
 // discover.
 import { SYSTEM_ID } from "../system-id.js";
+import { localize } from "../utils/i18n.js";
 
 /**
  * Where the paths live: ONE world setting holding a record keyed by book number.
@@ -75,6 +76,17 @@ export const RULEBOOKS = Object.freeze([
 /** One book's descriptor by its number, or null. */
 export function rulebook(book) {
 	return RULEBOOKS.find(b => b.book === Number(book)) ?? null;
+}
+
+/**
+ * One book's own title, or the generic one when the number names no book.
+ *
+ * The fallback is the point: three surfaces wrote `localize(rulebook(book)?.titleKey ??
+ * "stonetop.books.title")` out longhand and one of them reached past `rulebook()` to re-find
+ * the entry itself, so the generic title was spelled three times and could drift.
+ */
+export function bookTitle(book) {
+	return localize(rulebook(book)?.titleKey ?? "stonetop.books.title");
 }
 
 /**

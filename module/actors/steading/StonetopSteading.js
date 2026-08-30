@@ -7,7 +7,7 @@ import {playbookTitle, characterFullName} from "../../utils/playbook-actors.js";
 import {assetTakenTooltip} from "../../utils/requisition-asset.js";
 import {
 	GRANT_STAT_PATHS,
-	GRANT_STAT_LABELS,
+	statGrantLine,
 	alternativeSectionFlags,
 	normalizeImprovementGrants,
 	normalizeImprovementSections,
@@ -22,6 +22,18 @@ import {MILITIA_SEASON_STEP} from "./season-effects.js";
 
 /** Which season's Weapons of War maintenance has been paid ("each spring, 1 Surplus"). */
 export const WEAPONS_SEASON_STEP = "weaponsUpkeep";
+
+/**
+ * Which season's standing watch has been fed (or disbanded).
+ *
+ * NAMED, like its three siblings (WEAPONS_SEASON_STEP here, MILITIA_SEASON_STEP in
+ * season-effects.js, INN_SEASON_STEP in inn-gathering.js, RITES_SEASON_STEP in
+ * rites-of-the-land.js), because the string is character-identical to the improvement SLUG
+ * "standingWatch" a few hundred lines below — two namespaces that look the same at a glance,
+ * so a rename of one reads as safe for the other. The slug sites stay literal on purpose:
+ * they are not this key, they only spell the same.
+ */
+export const WATCH_SEASON_STEP = "standingWatch";
 
 /**
  * The three lenses the Improvements tab filters by — the toggle chips beside its
@@ -837,6 +849,20 @@ export class StonetopSteading {
 			?? null;
 	}
 
+	/**
+	 * An improvement's flat, in-order requirement state — the array its checkboxes write, and
+	 * what the two rules that turn on a CHOICE made while building are read from (the militia's
+	 * trained tactics, whether Additional Housing went up on the fields).
+	 *
+	 * HERE rather than on the sheet, where it was: it is derived steading state like every
+	 * sibling on this class (`holdsView`, `improvementCompleted`, `_herdView`), the sheet's copy
+	 * reached into `_flags` from the view layer, and a macro or a chat handler asking the same
+	 * question had nowhere to ask it.
+	 */
+	improvementRequirements(slug) {
+		return this._flags.improvements?.[slug]?.r ?? [];
+	}
+
 	/** Remove a custom improvement and clear its tracking state. */
 	async removeCustomImprovement(slug) {
 		const existing = this._flags.customImprovements ?? [];
@@ -1212,7 +1238,7 @@ export class StonetopSteading {
 			innGathering: !!inn?.canGather,
 			standingWatch: !!seasonId
 				&& this.improvementCompleted("standingWatch")
-				&& !this.seasonStepApplied("standingWatch", year, seasonId),
+				&& !this.seasonStepApplied(WATCH_SEASON_STEP, year, seasonId),
 			weaponsUpkeep: seasonId === "spring"
 				&& this.improvementCompleted("weaponsOfWar")
 				&& !this.seasonStepApplied(WEAPONS_SEASON_STEP, year, seasonId),
@@ -1470,7 +1496,7 @@ export class StonetopSteading {
 		const parts = [];
 		if (applied.stats) {
 			for (const [key, delta] of Object.entries(applied.stats)) {
-				parts.push(`${GRANT_STAT_LABELS[key] ?? key} ${delta >= 0 ? "+" : "−"}${Math.abs(delta)}`);
+				parts.push(statGrantLine(key, delta));
 			}
 		}
 		if (applied.resources?.length) parts.push(`Resources +${applied.resources.join(", ")}`);

@@ -257,6 +257,26 @@ export function firstOptionList(html) {
  * @param {string} description  Raw move HTML.
  * @returns {string} The same HTML with its first option list made tickable, or unchanged.
  */
+/**
+ * ONE tickable pick-list row.
+ *
+ * Two surfaces emit these — a move's printed list made tickable here, and a roll card's pick
+ * pools in roll-engine.js — and five selectors in stonetop.js plus `paintPickTally` and
+ * `releaseOverLimit` key off these exact class names. Two emitters had to stay byte-identical
+ * forever with nothing enforcing it, so there is one.
+ *
+ * `inner` is inserted RAW: the move's own list markup carries its ◇/○/□ glyphs and emphasis.
+ * A caller holding plain text escapes it itself (roll-engine passes escHtml'd options).
+ *
+ * @param {string} inner  the row's label markup, already escaped if it needed to be
+ * @param {number} index  positional index the tally and cap wiring reads back
+ */
+export function pickListItem(inner, index) {
+	return `<li class="stonetop-picklist-item"><label>`
+		+ `<input type="checkbox" class="stonetop-check stonetop-picklist-check" data-index="${index}">`
+		+ `<span>${inner}</span></label></li>`;
+}
+
 export function pickableMoveDescription(description) {
 	const html = String(description ?? "");
 	if (!html || html.includes("stonetop-picklist")) return html;
@@ -273,16 +293,14 @@ export function pickableMoveDescription(description) {
 	if (isReferenceList(lead)) return html;
 
 	const limits = pickLimitsFrom(lead);
+	// (pickListItem is exported below — one emitter for the two surfaces that print these.)
 	const limitAttrs = typeof limits === "number"
 		? ` data-pick-max="${limits}"`
 		: Object.entries(limits ?? {}).map(([tier, n]) => ` data-pick-max-${tier}="${n}"`).join("");
 
-	const items = list.items.map((inner, i) =>
-		`<li class="stonetop-picklist-item"><label>`
-		+ `<input type="checkbox" class="stonetop-check stonetop-picklist-check" data-index="${i}">`
-		// The item's own markup, raw: it carries the move's ◇/○/□ glyphs and emphasis, and the
-		// description it came from is rendered raw by moveChatCard for exactly that reason.
-		+ `<span>${inner}</span></label></li>`).join("");
+	// The item's own markup, raw: it carries the move's ◇/○/□ glyphs and emphasis, and the
+	// description it came from is rendered raw by moveChatCard for exactly that reason.
+	const items = list.items.map((inner, i) => pickListItem(inner, i)).join("");
 	return html.slice(0, list.index)
 		+ `<ul class="stonetop-picklist"${limitAttrs}>${items}</ul>`
 		+ html.slice(list.index + list.length);

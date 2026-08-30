@@ -72,7 +72,9 @@ describe("the muster's three exits", () => {
 	});
 
 	it("stands down through the header glyph, behind a confirm", () => {
-		expect(SHEET).toContain(`data-action='stand-down-muster'`);
+		// Dispatched from the shared hold-action map, whose keys are the `action` values
+		// HOLD_DEFS declares — one delegated listener, not one per glyph.
+		expect(SHEET).toContain(`"stand-down-muster":`);
 		expect(SHEET).toContain("async _standDownMuster()");
 		expect(SHEET).toContain(`title: "Stand Down the Muster"`);
 	});
@@ -165,11 +167,12 @@ describe("Weapons of War upkeep", () => {
 	});
 
 	it("settles its own once-per-season step", () => {
-		const at = SHEET.indexOf("const payWeaponsBtn");
+		const at = SHEET.indexOf(`_wireSurplusUpkeep(root.querySelector("[data-action='pay-weapons']")`);
 		expect(at).toBeGreaterThan(-1);
-		const block = SHEET.slice(at, at + 1100);
-		// Spent and settled in the one shared write; the live Surplus re-read lives there too.
+		const block = SHEET.slice(at, at + 400);
+		// Spent and settled in the one shared write; the live Surplus re-read and the
+		// spendSurplus call live in _wireSurplusUpkeep, which all three dues go through.
 		expect(block).toContain("step: WEAPONS_SEASON_STEP, year, seasonId");
-		expect(block).toContain("spendSurplus(1,");
+		expect(SHEET).toContain("spendSurplus(1, { ...seasonsMove, step, year, seasonId })");
 	});
 });

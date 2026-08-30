@@ -1,6 +1,28 @@
 import { replaceTextMatches } from "./text-nodes.js";
 
-const _GLYPH_CHARS = "○●◇◆□☐■☑▶";
+/**
+ * Every glyph we draw, and the modifier class its shape is drawn from.
+ *
+ * ONE table, and `_GLYPH_CHARS` derived from it — the two used to be independent lists of the
+ * same nine characters, a string here and a seven-branch if/else in `_glyphSpan`. Adding a
+ * glyph to one and not the other gives either a matched glyph with no modifier class or a
+ * styled one that never matches, silently, with no test that could catch it.
+ *
+ * Insertion order IS the character order of `_GLYPH_CHARS`, which `_GLYPH_RE` is built from.
+ */
+const _GLYPH_MODIFIERS = new Map([
+	["○", "stonetop-glyph--circle"],
+	["●", "stonetop-glyph--circle-filled"],
+	["◇", "stonetop-glyph--diamond"],
+	["◆", "stonetop-glyph--diamond-selected"],
+	["□", "stonetop-glyph--checkbox"],
+	["☐", "stonetop-glyph--checkbox"],
+	["■", "stonetop-glyph--checkbox-checked"],
+	["☑", "stonetop-glyph--checkbox-checked"],
+	["▶", "stonetop-glyph--arrow"],
+]);
+
+const _GLYPH_CHARS = [..._GLYPH_MODIFIERS.keys()].join("");
 
 /**
  * A run of glyphs TOGETHER WITH THE PUNCTUATION IT WAS WRITTEN IN — "(□).", "◇◇◇,", the "○○○)"
@@ -107,13 +129,8 @@ export function wrapGlyphTextContainers(root) {
 function _glyphSpan(glyph, next) {
 	const span = document.createElement("span");
 	span.className = "stonetop-glyph";
-	if (glyph === "◇") span.classList.add("stonetop-glyph--diamond");
-	else if (glyph === "◆") span.classList.add("stonetop-glyph--diamond-selected");
-	else if (glyph === "▶") span.classList.add("stonetop-glyph--arrow");
-	else if (glyph === "□" || glyph === "☐") span.classList.add("stonetop-glyph--checkbox");
-	else if (glyph === "■" || glyph === "☑") span.classList.add("stonetop-glyph--checkbox-checked");
-	else if (glyph === "○") span.classList.add("stonetop-glyph--circle");
-	else if (glyph === "●") span.classList.add("stonetop-glyph--circle-filled");
+	const modifier = _GLYPH_MODIFIERS.get(glyph);
+	if (modifier) span.classList.add(modifier);
 	// A diamond directly followed by another diamond in the same run is
 	// "joined": the journal CSS drops its trailing gap so a "◇◇" load track
 	// reads as one unit — the gap only opens up before the following text.

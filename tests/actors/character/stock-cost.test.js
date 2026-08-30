@@ -280,9 +280,12 @@ describe("paying for a move that does not roll", () => {
 	it("stamps the spend on the message so it cannot be paid twice", () => {
 		const at = STONETOP.indexOf("function _chatWireSpendStock");
 		const body = STONETOP.slice(at, at + 2200);
-		expect(body).toContain('message.getFlag(SYSTEM_ID, "stockSpent")');
-        expect(body).toContain('message.setFlag(SYSTEM_ID, "stockSpent"');
-		expect(body).toContain("btn.disabled = true");
+		// Through the same card-button skeleton the steading's buttons use: it owns the latch
+		// (getFlag/setFlag on `flag`), the disable, and the put-it-back on a throw.
+		expect(body).toContain("_wireSteadingCardButtons(message,");
+		expect(body).toContain('flag: "stockSpent"');
+		expect(STONETOP).toContain("const already = message.getFlag(SYSTEM_ID, flag);");
+		expect(STONETOP).toContain("await message.setFlag(SYSTEM_ID, flag, stamp);");
 	});
 
 	// The two moves gated at ROLL time never reach the posting tail, so no card of theirs can

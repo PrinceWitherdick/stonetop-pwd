@@ -93,6 +93,7 @@ import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
 import { CharacterPossessions } from "./module/actors/character/CharacterPossessions.js";
 import { stockSourcesForFlags, defaultStockSource, SACRED_POUCH_SLUG, RITES_OF_THE_LAND } from "./module/actors/character/stock-cost.js";
 import { readProvisionsYield, rollProvisions } from "./module/actors/character/provisions.js";
+import { ownedMove } from "./module/actors/character/owns-move.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
@@ -1347,9 +1348,18 @@ function _wireLogbook(message, html, actor, card) {
  * @param {Function} opts.onSettled     (storedFlag, btns) => void, relabels an already-used card
  * @param {string} opts.warn            what to say to someone without permission
  * @param {string} opts.errorNote       console context if the write throws
- * @param {Function} opts.run           (steading, btn) => {stamp?, notice?} — does the work
+ * @param {Function} opts.run           (subject, btn) => {stamp?, notice?, abort?} — does the work
+ * @param {string} [opts.actorType]     which actor subtype may press it; "stonetop" by default
+ * @param {Function} [opts.subject]     actor => what `run` is handed; a StonetopSteading by default
+ *
+ * `abort: true` from `run` means it declined to do anything — the buttons come back and the card
+ * is left unstamped, which is what a purse that emptied between render and click needs.
  */
-function _wireSteadingCardButtons(message, btns, { flag, onSettled, warn, errorNote, run }) {
+function _wireSteadingCardButtons(message, btns, {
+	flag, onSettled, warn, errorNote, run,
+	actorType = "stonetop",
+	subject = actor => new StonetopSteading(actor),
+}) {
 	if (!btns.length) return;
 
 	const already = message.getFlag(SYSTEM_ID, flag);
@@ -1364,12 +1374,16 @@ function _wireSteadingCardButtons(message, btns, { flag, onSettled, warn, errorN
 			for (const b of btns) b.disabled = true;
 			try {
 				const actor = speakerActor(message);
-				if (!actor?.isOwner || actor.type !== "stonetop") {
+				if (!actor?.isOwner || actor.type !== actorType) {
 					ui.notifications.warn(warn);
 					for (const b of btns) b.disabled = false;
 					return;
 				}
-				const { stamp = true, notice } = await run(new StonetopSteading(actor), btn) ?? {};
+				const { stamp = true, notice, abort = false } = await run(subject(actor), btn) ?? {};
+				if (abort) {
+					for (const b of btns) b.disabled = false;
+					return;
+				}
 				await message.setFlag(SYSTEM_ID, flag, stamp);
 				for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
 				if (notice) ui.notifications.info(notice);
@@ -1462,60 +1476,49 @@ function _chatWireMusterRaise(message, html) {
 // this button can never disagree about what is in the purse.
 function _chatWireSpendStock(message, html) {
 	const btn = html.querySelector(".stonetop-spend-stock");
-	if (!btn) return;
-
-	// Stamped on the message, not inferred from the button: a card is one use of the move, and
-	// one use is paid for once however many clients render it.
-	const already = message.getFlag(SYSTEM_ID, "stockSpent");
-	if (already) {
-		btn.disabled = true;
-		btn.textContent = `Spent ${already.amount} ${already.label}`;
-		return;
-	}
-
-	btn.addEventListener("click", async () => {
-		btn.disabled = true;
-		try {
-			const actor = speakerActor(message);
-			if (!actor?.isOwner || actor.type !== "character") {
-				ui.notifications.warn("You need permission to spend this character's Stock.");
-				btn.disabled = false;
-				return;
-			}
-			const amount = Math.max(1, Number(btn.dataset.amount) || 1);
-			const sources = stockSourcesForFlags(readStockFlags(actor));
-			const source = defaultStockSource(sources, amount);
+	// Through the same skeleton as the steading's card buttons — the latch, the permission
+	// check, the re-render and the put-the-button-back-on-a-throw are one sequence, and this
+	// was the fourth copy of it. Only the actor subtype and the purse differ.
+	_wireSteadingCardButtons(message, btn ? [btn] : [], {
+		// Stamped on the message, not inferred from the button: a card is one use of the move,
+		// and one use is paid for once however many clients render it.
+		flag: "stockSpent",
+		onSettled: (already, [b]) => { b.textContent = `Spent ${already.amount} ${already.label}`; },
+		warn: "You need permission to spend this character's Stock.",
+		errorNote: "Error spending Stock",
+		actorType: "character",
+		subject: actor => actor,
+		run: async (actor, button) => {
+			const amount = Math.max(1, Number(button.dataset.amount) || 1);
+			const source = defaultStockSource(stockSourcesForFlags(readStockFlags(actor)), amount);
 			if (!source) {
 				ui.notifications.warn("No Stock or Favor left to spend.");
-				btn.disabled = false;
-				return;
+				return { abort: true };
 			}
 			// The purse knows which way it counts: the pouch up as it empties, Favor down.
 			const next = source.after(amount);
 			if (source.key === "favor") {
 				await new StonetopFlags(actor, "moves").setSubKey("backgroundChoices", RITES_OF_THE_LAND, next);
 			} else {
-				const possessions = new CharacterPossessions(new StonetopFlags(actor, "possessions"));
-				await possessions.setUses(SACRED_POUCH_SLUG, next);
+				await new CharacterPossessions(new StonetopFlags(actor, "possessions")).setUses(SACRED_POUCH_SLUG, next);
 			}
-			await message.setFlag(SYSTEM_ID, "stockSpent", { amount, label: source.label });
-			for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
-			ui.notifications.info(`Spent ${amount} ${source.label} (${source.remaining - amount} left).`);
-		} catch (err) {
-			console.error("Stonetop | Error spending Stock:", err);
-			btn.disabled = false;
-		}
+			return {
+				stamp: { amount, label: source.label },
+				notice: `Spent ${amount} ${source.label} (${source.remaining - amount} left).`,
+			};
+		},
 	});
 }
 
 /** The two flag bags the purse is read from, off a bare Actor. */
 function readStockFlags(actor) {
-	const rites = (actor.items ?? []).find(i => i.type === "move" && i.name === RITES_OF_THE_LAND);
+	const rites = ownedMove(actor, RITES_OF_THE_LAND);
+	const possessions = new StonetopFlags(actor, "possessions");
 	return {
 		possessions: {
-			selected: new StonetopFlags(actor, "possessions").getFlag("selected") ?? [],
-			uses:     new StonetopFlags(actor, "possessions").getFlag("uses") ?? {},
-			maxUses:  new StonetopFlags(actor, "possessions").getFlag("maxUses") ?? {},
+			selected: possessions.getFlag("selected") ?? [],
+			uses:     possessions.getFlag("uses") ?? {},
+			maxUses:  possessions.getFlag("maxUses") ?? {},
 		},
 		moveResources: new StonetopFlags(actor, "moves").getFlag("backgroundChoices") ?? {},
 		ritesMax: rites?.system?.resource?.max ?? null,
@@ -1800,7 +1803,7 @@ function _chatWireSeasonsRoll(message, html) {
 		// +Fortunes roll, and spring's is only ever made from here. This used to be a flat 2d6,
 		// which quietly dropped that advantage on the one roll it was bought for.
 		const dice     = pbtaDiceFormula(btn.dataset.rollMode);
-		const formula  = fortunes >= 0 ? `${dice} + ${fortunes}` : `${dice} - ${-fortunes}`;
+		const formula  = `${dice} ${sign(fortunes)}`;
 		// Which ladder the total is read against. Two rolls are handed to the table this way now
 		// — spring's Seasons Change and the Inn's questions — and they share everything but their
 		// outcomes. A card from before the Inn's roll existed carries no id and gets spring's.

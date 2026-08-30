@@ -47,11 +47,14 @@ describe("the Standing Watch seasonal upkeep", () => {
 		expect(at).toBeGreaterThan(-1);
 		const block = SHEET.slice(at, at + 2600);
 		// Both answers close the SAME key: feeding closes it inside the one spendSurplus write,
-		// disbanding writes the marker on its own (it spends nothing to close it).
-		expect(block).toContain(`step: "standingWatch", year, seasonId`);
-		expect(block).toContain(`setSeasonStepApplied("standingWatch", year, seasonId)`);
-		expect(block).toContain(`_disableIfSeasonStepDone(feedWatchBtn, "standingWatch"`);
-		expect(block).toContain(`_disableIfSeasonStepDone(disbandWatchBtn, "standingWatch"`);
+		// disbanding writes the marker on its own (it spends nothing to close it). The key is
+		// NAMED, because the string is character-identical to the improvement slug.
+		expect(block).toContain(`step: WATCH_SEASON_STEP, year, seasonId`);
+		expect(block).toContain(`setSeasonStepApplied(WATCH_SEASON_STEP, year, seasonId)`);
+		expect(block).toContain(`_disableIfSeasonStepDone(disbandWatchBtn, WATCH_SEASON_STEP`);
+		// The feed button's own guard lives in _wireSurplusUpkeep, which takes the same key.
+		expect(SHEET).toContain("_disableIfSeasonStepDone(btn, step, year, seasonId);");
+		expect(STEADING).toContain(`export const WATCH_SEASON_STEP = "standingWatch";`);
 	});
 
 	// The herd feed and the Surplus roll in this same dialog can move Surplus after the window
@@ -59,9 +62,15 @@ describe("the Standing Watch seasonal upkeep", () => {
 	// re-read lives in StonetopSteading#spendSurplus, which every seasonal spend goes through;
 	// a null answer there means it could not be afforded and nothing was written.
 	it("re-reads Surplus at click time", () => {
-		const at = SHEET.indexOf("feedWatchBtn?.addEventListener");
-		const block = SHEET.slice(at, at + 900);
-		expect(block).toContain("spendSurplus(1,");
+		// The spend, the null answer and the re-lock are _wireSurplusUpkeep's — the one shape
+		// all three seasonal dues go through. The watch supplies only its own two sentences and
+		// the short-unlock that leaves it disbandable but not re-feedable.
+		const at = SHEET.indexOf("_wireSurplusUpkeep(feedWatchBtn");
+		expect(at).toBeGreaterThan(-1);
+		expect(SHEET.slice(at, at + 900)).toContain("shortWarning:");
+		const wire = SHEET.indexOf("_wireSurplusUpkeep(btn, {");
+		const block = SHEET.slice(wire, wire + 900);
+		expect(block).toContain("spendSurplus(1, { ...seasonsMove, step, year, seasonId })");
 		expect(block).toContain("left === null");
 		const spend = STEADING.indexOf("async spendSurplus(");
 		expect(spend).toBeGreaterThan(-1);

@@ -29,6 +29,22 @@ vi.mock("../../module/utils/stonetop-dialog.js", () => ({
 		activateListeners() {}
 		async close() {}
 		render() { return this; }
+		// The real one, copied: the latch and the disable are the behaviour under test here, so
+		// stubbing them out would leave these cases proving nothing. See utils/stonetop-dialog.js.
+		async _guardBusy(ev, fn) {
+			if (this._busy) return;
+			this._busy = true;
+			const control = ev?.currentTarget;
+			if (control) control.disabled = true;
+			try {
+				return await fn();
+			} catch (err) {
+				if (control) control.disabled = false;
+				throw err;
+			} finally {
+				this._busy = false;
+			}
+		}
 	},
 }));
 

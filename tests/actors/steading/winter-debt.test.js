@@ -223,7 +223,8 @@ describe("how the debt is wired", () => {
 	});
 
 	it("is settled from the header glyph, which is the only way back to it", () => {
-		expect(SHEET).toContain(`data-action='settle-winter-debt'`);
+		// Dispatched from the shared hold-action map, keyed by the `action` HOLD_DEFS declares.
+		expect(SHEET).toContain(`"settle-winter-debt":`);
 		expect(SHEET).toContain("openWinterDebtDialog(this._stonetopSteading");
 	});
 

@@ -20,7 +20,7 @@ import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { openingSize } from "../utils/opening-size.js";
 import { localize, format } from "../utils/i18n.js";
-import { rulebook, rulebookPath, rulebookViewerUrl, isSpreadsEdition } from "./rulebooks.js";
+import { rulebook, bookTitle, rulebookPath, rulebookViewerUrl, isSpreadsEdition } from "./rulebooks.js";
 import { showBookToPlayers } from "./book-broadcast.js";
 import { markBookReaderOpen, markBookReaderClosed } from "./reader-resume.js";
 import { mountBookmarksTab } from "./reader-bookmarks-tab.js";
@@ -159,7 +159,7 @@ export class BookReaderWindow extends StonetopDialog {
 	}
 
 	get title() {
-		return this._entry ? localize(this._entry.titleKey) : localize("stonetop.books.title");
+		return bookTitle(this._book);
 	}
 
 	getData() {

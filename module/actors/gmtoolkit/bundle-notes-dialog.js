@@ -39,7 +39,7 @@ export async function openBundleNotesDialog(bundle, i18n, onSave) {
 		// The row handed in is NOT written back to: `ActorListStore.get` copies on read, so this
 		// object is a snapshot nothing else is holding, and assigning to it only looked like
 		// keeping something in step.
-		onSave: (value) => onSave(value),
+		onSave,
 		// NO `name`: the value goes back to an ARRAY ELEMENT (`system.encounters[n].notes`), and
 		// there is no field name that addresses one.
 		width: 560,

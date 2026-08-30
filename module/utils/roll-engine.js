@@ -3,7 +3,7 @@ import { escHtml, formatOutcomeDetail, stripHtmlToText } from "./strings.js";
 import { pickLimitsFrom } from "./move-picks.js";
 import { pickLeadText, TIER_KEYS, TIER_LABELS } from "./move-results.js";
 import { markRolledTier } from "./move-tiers.js";
-import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge } from "./chat.js";
+import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge, pickListItem } from "./chat.js";
 import { adjustXp } from "./xp.js";
 import { composeDamageFormula, normalizeDamageBonusDice } from "./damage.js";
 import { SYSTEM_ID } from "../system-id.js";
@@ -62,7 +62,7 @@ export const SPRING_SEASONS_RESULT = {
 //
 // Every season, not just spring — the improvement says "when the Seasons Change" with no season
 // named — and handed to the table like spring's is, because "whoever is friendliest" is a player.
-export const INN_SEASONS_RESULT = {
+const INN_SEASONS_RESULT = {
 	success: { label: TIER_LABELS.success, line: "Ask the GM <strong>3 questions</strong> about the wider world." },
 	partial: { label: TIER_LABELS.partial, line: "Ask the GM <strong>1 question</strong> about the wider world." },
 	failure: { label: TIER_LABELS.failure, line: "Ask <strong>1 question</strong>, but the GM describes some trouble that stems from the inn or its guests." },
@@ -237,9 +237,6 @@ export function postSeasonsRollPrompt({
 	});
 }
 
-// The three result tiers a pick pool can be hung off, in card order.
-const _PICK_TIERS = TIER_KEYS;
-
 /**
  * A card's "choose from this list" options, in ONE shape however they were declared.
  *
@@ -256,7 +253,7 @@ export function normalizePickPools(pickOptions) {
 	const shared = Array.isArray(pickOptions) ? clean(pickOptions) : null;
 	return {
 		shared,
-		byTier: Object.fromEntries(_PICK_TIERS.map(tier => [tier, shared ?? clean(pickOptions?.[tier])])),
+		byTier: Object.fromEntries(TIER_KEYS.map(tier => [tier, shared ?? clean(pickOptions?.[tier])])),
 	};
 }
 
@@ -286,7 +283,7 @@ export function tierPickCounts(moveResults) {
 		const read = pickLimitsFrom(stripHtmlToText(String(row?.value ?? "")));
 		return (typeof read === "number" ? read : Math.trunc(Number(read?.[tier])) || 0) || 0;
 	};
-	return Object.fromEntries(_PICK_TIERS.map(tier => [tier, countFor(tier)]));
+	return Object.fromEntries(TIER_KEYS.map(tier => [tier, countFor(tier)]));
 }
 
 /**
@@ -318,24 +315,25 @@ export function tierPickCounts(moveResults) {
  * ("...and pick 1:") rather than saying the same three options twice, once unclickable.
  */
 export function pickedTiers(pools) {
-	return _PICK_TIERS.filter(tier => pools.byTier[tier].length);
+	return TIER_KEYS.filter(tier => pools.byTier[tier].length);
 }
 
 export function pickListsHtml(pools, activeTier, picks = null) {
 	let index = 0;
-	const list = (options, limitAttrs = "") => `<ul class="stonetop-picklist"${limitAttrs}>${options.map(option =>
-		`<li class="stonetop-picklist-item"><label><input type="checkbox" class="stonetop-check stonetop-picklist-check" data-index="${index++}"><span>${escHtml(option)}</span></label></li>`
-	).join("")}</ul>`;
+	// Rows through the shared emitter (utils/chat.js), so this surface and a move's own printed
+	// list cannot drift apart on the class names the tally and cap wiring keys off.
+	const list = (options, limitAttrs = "") => `<ul class="stonetop-picklist"${limitAttrs}>${
+		options.map(option => pickListItem(escHtml(option), index++)).join("")}</ul>`;
 	// A tier that states no count of its own (a homefront move's 6- consequences, whose result
 	// text already says how many) stamps nothing and ticks freely, same as an unreadable move.
 	const cap = tier => (Math.trunc(Number(picks?.[tier])) || 0);
 
 	if (pools.shared) {
 		if (!pools.shared.length) return "";
-		return list(pools.shared, _PICK_TIERS.map(t => (cap(t) ? ` data-pick-max-${t}="${cap(t)}"` : "")).join(""));
+		return list(pools.shared, TIER_KEYS.map(t => (cap(t) ? ` data-pick-max-${t}="${cap(t)}"` : "")).join(""));
 	}
 
-	const tiers = _PICK_TIERS.filter(tier => pools.byTier[tier].length);
+	const tiers = TIER_KEYS.filter(tier => pools.byTier[tier].length);
 	if (!tiers.length) return "";
 	return `<div class="stonetop-roll-tier-picklists" data-active-tier="${escHtml(activeTier)}">
 		${tiers.map(tier =>

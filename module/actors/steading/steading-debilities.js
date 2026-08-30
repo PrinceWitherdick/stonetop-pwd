@@ -71,7 +71,10 @@ const PICKER_DIALOG_OPTIONS = { classes: ["dialog", "stonetop", "stonetop-disast
  * @param {object} opts
  * @param {string} opts.title             window title
  * @param {string} opts.introHtml         the line above the choices (trusted HTML)
- * @param {Array}  opts.marked            debilities to offer, from {@link markedDebilities}
+ * @param {Array}  opts.marked            debilities to offer, from {@link markedDebilities}.
+ *                                        Each `{id, label, detail}`; an optional `labelHtml`
+ *                                        prints instead of the escaped `label` for a caller
+ *                                        offering choices whose markup it authored itself.
  * @param {string} [opts.applyLabel]      footer button before anything is picked
  * @param {Function} [opts.applyLabelFor] (debility) => footer button once one is
  * @param {string} [opts.bodyClass]       extra class on the dialog body
@@ -95,10 +98,15 @@ export function openDebilityPicker({
 	onRender,
 	onApply,
 }) {
+	// `labelHtml` is the opt-out from escaping, and it is opt-IN for a reason: a debility's
+	// `label` is plain text and stays escaped, because a homebrew one is not ours to trust.
+	// A caller offering choices IT authored (the rites' "Clear <strong>Diminished</strong>",
+	// and its non-debility "Fortunes advantage" row) passes the markup it wrote deliberately.
+	// `label` is still required alongside it — the footer button prints that one as text.
 	const choicesHtml = marked.map((d, i) => `
 		<li class="stonetop-disaster-choice" data-choice="${escHtml(d.id)}"
 		    role="radio" aria-checked="false" tabindex="0"${i === 0 ? " autofocus" : ""}>
-			<span class="stonetop-disaster-choice-label">${escHtml(d.label)}</span>
+			<span class="stonetop-disaster-choice-label">${d.labelHtml ?? escHtml(d.label)}</span>
 			<span class="stonetop-disaster-choice-detail">${escHtml(d.detail)}</span>
 		</li>`).join("");
 

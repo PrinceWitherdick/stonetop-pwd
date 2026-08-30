@@ -52,7 +52,7 @@ import {postMoveToChat, moveChatCard, pickableMoveDescription} from "../../utils
 import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
 import {statApproaches} from "../../utils/stat-approaches.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
-import {stockSources, canPayStock, defaultStockSource, stockCostFromDescription, SACRED_POUCH_SLUG, RITES_OF_THE_LAND, DEFAULT_SACRED_POUCH_MAX} from "./stock-cost.js";
+import {stockSourcesForFlags, canPayStock, defaultStockSource, stockCostFromDescription, SACRED_POUCH_SLUG, RITES_OF_THE_LAND} from "./stock-cost.js";
 import {supplyPursesFor, defaultSupplyPurse, spendSupplies, campUsesNeeded, SUPPLY_PURPOSE} from "./supply-cost.js";
 import {rollProvisions, ON_THE_HOOF} from "./provisions.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
@@ -6075,14 +6075,13 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * holding Favor and an empty pouch would be refused a move the book grants them.
 		 */
 		_stockCostView({ amount = 1, label = "Stock" } = {}) {
-			const possessions = this._stonetopCharacter.possessions;
-			const rites = ownedMove(this.actor, RITES_OF_THE_LAND);
-			const sources = stockSources({
-				hasPouch:   possessions.selected.has(SACRED_POUCH_SLUG),
-				pouchMax:   possessions.maxUses?.[SACRED_POUCH_SLUG] ?? DEFAULT_SACRED_POUCH_MAX,
-				pouchStored: possessions.uses?.[SACRED_POUCH_SLUG] ?? 0,
-				favorMax:   rites?.system?.resource?.max ?? null,
-				favorStored: this._stonetopCharacter.moveResources.getMoveResources()[RITES_OF_THE_LAND] ?? 0,
+			// THROUGH stockSourcesForFlags, not stockSources: its whole reason for existing is
+			// that this dialog and the chat card's Spend button must never disagree about what
+			// the purse holds, and it was doing that job for one of the two callers it names.
+			const sources = stockSourcesForFlags({
+				possessions: this._stonetopCharacter.possessions,
+				moveResources: this._stonetopCharacter.moveResources.getMoveResources(),
+				ritesMax: ownedMove(this.actor, RITES_OF_THE_LAND)?.system?.resource?.max ?? null,
 			});
 			return {
 				amount, label, sources,
