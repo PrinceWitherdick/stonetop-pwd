@@ -1,8 +1,16 @@
+{{!-- THE WHOLE CELL IS THE ROLL, and always was: the `<li>` carries `.rollable` and the stat
+      key, so a click anywhere on it — the label, the box, the abbreviation — rolls that stat.
+      The dice icon that used to sit in front of the label was decoration on top of that, and
+      is gone; nothing about what rolls changed with it.
+
+      The value input is `readonly` outside edit mode, which is what lets a click on the number
+      itself fall through to the roll (the sheet's rollable handler steps aside for an ENABLED,
+      writable input, so in edit mode the same click types instead). --}}
 <div class="cell--stats">
 	<ul class="stats-list">
 	{{#each system.stats}}
 	<li class="stat cell--stat rollable" data-stat="{{@key}}" data-roll="{{@key}}">
-		<span class="cell__title"><i class="stat-icon fas fa-dice-d6"></i> {{statLabel @key}}</span>
+		<span class="cell__title">{{statLabel @key}}</span>
 		<div class="stonetop-stat-box">
 			<div class="stonetop-stat-inner">
 				<input class="stat-value" type="number"

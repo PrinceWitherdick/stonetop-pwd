@@ -6,11 +6,22 @@
 
       "name" is the form field the menu's update reads back, and "id" is only there to tie the
       label to the input. Pass label/hint already localized, or labelKey/hintKey to have it done
-      here — the hover menu localizes per row in getData, the master toggles do not. --}}
-<div class="form-group">
-	<label for="stonetop-{{id}}">{{#if labelKey}}{{localize labelKey}}{{else}}{{label}}{{/if}}</label>
-	<div class="form-fields">
+      here — the hover menu localizes per row in getData, the master toggles do not.
+
+      The box sits INSIDE the label and to the LEFT of the title, which is where the character
+      sheet's Preferences tab puts it (tab-preferences.hbs) — and that tab's "More…" button is
+      how this window is reached, so a box that jumped to the far right one click later would
+      read as a different kind of control. Inside the label also means the whole title line
+      toggles it, the way every checklist on these sheets behaves.
+
+      No "form-fields" wrapper any more: it exists to hold a control at the row's right edge,
+      and there is no longer one there. Nothing reads it — FormDataExtended collects a named
+      input wherever in the form it sits — so it was a div that only moved the box away from
+      its own label. --}}
+<div class="form-group stonetop-settings-toggle">
+	<label class="stonetop-settings-toggle-label" for="stonetop-{{id}}">
 		<input id="stonetop-{{id}}" type="checkbox" class="stonetop-check" name="{{name}}" {{#if checked}}checked{{/if}}>
-	</div>
+		<span>{{#if labelKey}}{{localize labelKey}}{{else}}{{label}}{{/if}}</span>
+	</label>
 	<p class="notes">{{#if hintKey}}{{localize hintKey}}{{else}}{{hint}}{{/if}}</p>
 </div>

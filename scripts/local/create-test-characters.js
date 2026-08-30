@@ -20,9 +20,10 @@
 //             wherever a load is shown (the expedition Outfit page most visibly), which is not
 //             what a normal party looks like. The four Book I p.569 love letters (Rhianna, Caradoc, Vahid,
 //             Blodwen — both structures + the no-XP-on-miss case) are spread across the
-//             roster rather than given to everyone: by position a character gets all four,
-//             exactly one, or none at all, so the Moves tab's Love Letters section is seen
-//             full, holding a single card, and absent entirely.
+//             roster rather than given to everyone: by position a character gets two (the most
+//             any of them carries), exactly one, or none at all, so the Moves tab's Love Letters
+//             section is seen holding a pair, holding a single card, and absent entirely. All
+//             four are still seen, because the pair windows along the list with the slot.
 //             Also creates a "Graveyard" Actor folder holding four more filled-out characters,
 //             one per fate past the Last Door — a Revenant, a Ghost, a Thrall (each with the
 //             insert's own questions answered: Terrible Purpose and who it is about, a first
@@ -134,7 +135,8 @@
   const TEST_FLAG    = "isTestCharacter";     // key within that scope
   const PACK_ID      = "stonetop-pwd.stonetop-items";
   const ARCANA_PACK_ID = "stonetop-pwd.stonetop-arcana";
-  // The other three shipped packs, which only the Encounters fixtures reach into: a bundle that
+  // The other three shipped packs, which only the Encounters and Expeditions fixtures reach into
+  // (they store the same card, so they gather the same kinds of row): a bundle that
   // could not point INTO a compendium would be a bundle of almost nothing, since the bestiary,
   // the arcana, the journals and the macros all ship as packs.
   const BESTIARY_PACK_ID = "stonetop-pwd.stonetop-bestiary";
@@ -992,6 +994,94 @@
   // here because "is any of them marked?" is the question both the seed and the cleanup ask.
   const TEST_DEBILITIES = ["diminished", "lacking", "malcontent"];
   const TEST_DEBILITY   = "lacking";
+
+  // ── The steading header's hold tray ──────────────────────────────────────────────
+  // The row of glyphs beside the steading's title: what Stonetop is still owed, and what it
+  // still owes (module/actors/steading/steading-holds.js). It is empty on a quiet steading BY
+  // DESIGN, which makes it the one piece of the header a test world never shows by accident —
+  // so these fixtures light every chip the seeded season allows.
+  //
+  // NO SEASON LIGHTS THEM ALL, and that is a property of the tray rather than a gap in the
+  // seed: three of the nine are season-locked and two of those locks are mutually exclusive.
+  // The weapons want their Surplus in SPRING; the herd's growth is claimed in SUMMER; the
+  // herd's feed and winter's second consumption both fall in WINTER. So what is seeded here is
+  // season-INDEPENDENT state, and the clock alone decides how much of it shows:
+  //     spring  6   the six the tray has always shown, weapons included
+  //     summer  6   weapons out, the herd's growth in
+  //     autumn  5   both out
+  //     winter  7   the widest it ever gets: the herd's feed and winter's debt together
+  // The clock is seeded to spring because that is the case the tray shipped with, and only on
+  // a world that has never turned a season: a steading mid-campaign keeps its own.
+  //
+  // TO SEE ANOTHER SEASON'S TRAY, turn the season and RE-RUN THIS MACRO. Three of the held
+  // states expire by ceasing to match the clock rather than by being cleared, so the seed made
+  // in one season is dead in the next; the re-run re-stamps them onto the season the world is
+  // actually in (see the hold block far below, which explains what it will and will not touch).
+  const TEST_HOLD_SEASON       = "spring";
+  const TEST_HOLD_IMPROVEMENTS = ["inn", "standingWatch", "weaponsOfWar", "herdOfHorses", "wellTrainedMilitia"];
+
+  // The improvements the SEASONS CHANGE WINDOW reads, as opposed to the tray. Every one of them
+  // ends in a seasonal "Henceforth…", and none of them earns a glyph — what they do is rewrite a
+  // roll or hand over Surplus inside the window, which is why they are a second list rather than
+  // more entries in the first.
+  //
+  // Seeding all nine is the point: it is the only way to see the window do the whole job in one
+  // sitting. With these built, running the move gives
+  //     spring  Market +1 and Township +Pop+1 to take, Harnessing the Stream's 7+ Surplus, the
+  //             weapons' spring bill, and the line saying the aurochs hunt is open
+  //     summer  Market and Township again, Raincatching's 7+, the herd's growth, and the
+  //             militia's drills with two tactics to lose one of
+  //     autumn  a harvest of 1d4 + 1d4 + 1 − 1 (Greater Harvest, the Mill, and the fields
+  //             Additional Housing was built on) plus the Market's +1
+  //     winter  2d6 for the consumption instead of 1d4 (Township), Population counted a point
+  //             lower (Additional Housing), one off the total (Stone Wall), then the herd's feed
+  // and the Inn's own +Fortunes roll in all four.
+  //
+  // A steading this built is not a plausible campaign state — it is nearly every improvement in
+  // the book at once. That is deliberate for a fixture, and Expanded Trades, Heroic Reputation
+  // and the Palisade are left unbuilt so there is still something to complete by hand.
+  const TEST_SEASON_IMPROVEMENTS = [
+    "market", "township", "harnessingStream", "raincatching",
+    "greaterHarvest", "mill", "additionalHousing", "stoneWall", "aurochsHunting",
+  ];
+
+  // The militia is seeded with exactly TWO tactics rather than the all-ticked shape its
+  // neighbours get, and the reason is the notice that fires on the way down: "when the militia
+  // has trained in 2+ tactics, increase Defenses by 1", so forgetting the SECOND is the loss
+  // that changes a number, and the window says so. Five trained would take four summers to
+  // reach that moment, since only one tactic can be lost per season marker.
+  //
+  // Flat requirement indices: 0 is the veteran warrior, 1-5 the five tactics. Archery and
+  // Cavalry, and Cavalry is honest here because the fixture builds the Herd of Horses too.
+  const TEST_MILITIA_R = [true, true, true, false, false, false];
+
+  // The once-per-season markers the DUE chips read. A chip shows while its step has NOT run
+  // this season, so seeding the tray means clearing these for the seeded season. The herd's
+  // two are the same markers the Seasons Change window disables its own buttons from.
+  const TEST_HOLD_STEPS        = ["innGathering", "standingWatch", "weaponsUpkeep", "advanceHerd", "feedHerd", "militiaDrill"];
+  // The window's own markers, cleared for the same reason: a GM who has already run the move
+  // once this season would otherwise re-open it to a window of spent buttons. `surplus` and
+  // `consumption` are the season's own generation and winter's bill; the four Yields are one
+  // marker each, which is what stops a re-open taking any single one of them twice.
+  const TEST_SEASON_STEPS      = ["marketYield", "townshipYield", "streamYield", "raincatchingYield", "surplus", "consumption"];
+
+  // What the fixture tops the steading up to, and only ever UP — a stocked steading keeps its
+  // own count, on the same rule as the Notes and the settlement standings.
+  //
+  // Surplus 6 is chosen to make the season's costs payable rather than comfortable: the watch
+  // wants 1, the weapons or the militia another, the inn's gathering a third and the herd's
+  // winter feed 2, and winter then rolls 2d6 against what is left. A shortfall is likely, which
+  // is the point — it is the path that reaches the four consequences and winter's debt.
+  //
+  // Population +1 is the Market's own gate ("and Population is +1 or better"): at +0 its row
+  // renders explaining why it pays nothing, which is worth seeing once but not every run.
+  const TEST_HOLD_SURPLUS      = 6;
+  const TEST_HOLD_POPULATION   = 1;
+  const TEST_HOLD_FORTUNES_SRC = "Sacrifice (Rites of the Land)";
+  // Winter's second consumption, the one hold with storage of its own rather than a derivation
+  // (see module/actors/steading/winter-debt.js). Stamped for WINTER specifically, whatever the
+  // seeded clock says, because winter is the only season it can exist in.
+  const TEST_HOLD_WINTER_DEBT  = 3;
 
   // Formatted rich-text seeded into the steading's Notes tab (the prose-mirror editor
   // bound to flags["stonetop-pwd"].steading.notes, rendered through TextEditor.enrichHTML).
@@ -1855,6 +1945,138 @@
     return { toolkit, added: rows.length, kept: keep.length, entries: rows.reduce((n, r) => n + r.entries.length, 0) };
   };
 
+  // ── GM Toolkit: three prepped Expeditions ──────────────────────────────
+  // THE SAME CARD THE ENCOUNTERS TAB HOLDS, deliberately (actors/gmtoolkit/gm-expeditions-tab.js):
+  // one array on the toolkit's own `actor.system.expeditions`, one normalizer, one piece of
+  // machinery, and one field of its own — `tripId`, the JOIN to the walkthrough.
+  //
+  // THAT JOIN IS THE WHOLE REASON THIS FIXTURE EXISTS, and it is the one thing the Encounters
+  // seed next door cannot show. Prep lives on the toolkit; what happened at the table lives in
+  // the world-scoped `expeditionAnswers` log, keyed by trip. A card carries a pointer from one
+  // into the other, written the first time Run is pressed, so that pressing Run again reaches
+  // the trip already half-filled in rather than starting the night over. Two of the three cards
+  // here are bound to the two example trips this macro seeds into that log (see
+  // TEST_EXPEDITIONS), which is why this pass runs LAST of all — the trips have to have ids
+  // before a card can name one.
+  //
+  // The three cover the states the tab renders and presses differently:
+  //   * one bound to the trip that is STILL OUT, richly noted and gathering everything the walk
+  //     needs — the map page, the site, the threat, the monster waiting at the end. Pressing Run
+  //     drops the GM back into a half-finished walkthrough;
+  //   * one NEVER RUN: no `tripId` and no bundle notes, which is both the ordinary card a GM
+  //     builds the week before and the two blank states (the "no notes" line, and a Run that
+  //     mints a fresh trip named after the card rather than reopening one);
+  //   * one marked USED and bound to the trip that came HOME, which is its own skin and the
+  //     callback a GM keeps a card for after the night it was run.
+  // A STALE `tripId` NEEDS NO FIXTURE. It renders identically to a live one — the card shows the
+  // name it was given, never the trip — and differs only on press, where the next Run mints a
+  // fresh trip and writes the new id back. That is the documented repair-by-use, not an error
+  // state worth staging.
+  //
+  // Pointers are resolved at seed time and tagged by id prefix, both for the same reasons the
+  // Encounters seed states at length: a row must carry the uuid a real drag would have put there,
+  // and a bundle is scaffolding around fixtures that are themselves about to be deleted.
+  const TEST_EXPEDITION_ID_PREFIX = "stonetopTestExp";
+
+  // Build and store the three cards. Takes the same live fixtures the Encounters pass does, plus
+  // `trips` — the example expeditions already built for the log, which is where `tripId` comes
+  // from. An unmatched title yields "", which is exactly what a card that has never been Run
+  // carries, so a thin world gets unbound cards rather than dangling ones. Returns null when the
+  // world has no toolkit, matching seedGmToolkitWonders.
+  const seedGmToolkitExpeditions = async ({ monsters, npc, threatPages, sitePages, trips }) => {
+    const toolkit = game.actors?.find(a => a.type === GM_TOOLKIT_TYPE) ?? null;
+    if (!toolkit) return null;
+
+    const named  = (list, name) => (list ?? []).find(d => d?.name === name) ?? null;
+    const tripId = (title) => (trips ?? []).find(t => t?.title === title)?.id ?? "";
+
+    // Every pack lookup at once: each is a load, and none depends on any other. The location
+    // PAGE rather than its entry, on the rule the threat and site rows follow — the page is the
+    // document a GM reads aloud from, so its uuid is the one worth storing.
+    const [packFlats, packMarshedge, packLake, packSteplands, packChart, packRequisition, packReturn] = await Promise.all([
+      packPageByName(JOURNAL_PACK_ID, "The Flats"),
+      packPageByName(JOURNAL_PACK_ID, "Marshedge"),
+      packPageByName(JOURNAL_PACK_ID, "Blackwater Lake"),
+      packPageByName(JOURNAL_PACK_ID, "The Steplands"),
+      packDocByName(PACK_ID, "Chart a Course"),
+      packDocByName(PACK_ID, "Requisition"),
+      packDocByName(PACK_ID, "Return Triumphant"),
+    ]);
+    const scene = game.scenes?.contents?.[0] ?? null;
+
+    const seeds = [
+      {
+        id:     `${TEST_EXPEDITION_ID_PREFIX}1`,
+        name:   "The Wandering Tower",
+        used:   false,
+        tripId: tripId("The Wandering Tower"),
+        notes: `<h3>They are out there now</h3>`
+             + `<p>Prep for the trip already half-run: <strong>press Run and the walkthrough opens where they left it</strong>, route drawn by hand and the requirements already stated.</p>`
+             + `<ul>`
+             + `<li>Branok takes them as far as the ford and turns back. After that nothing on the heath is a landmark.</li>`
+             + `<li>The singing starts on the second night, whichever direction they are facing.</li>`
+             + `</ul>`
+             + `<p>If they camp within earshot: <strong>[[/r 1d6]]</strong> hours before somebody gets up and walks toward it.</p>`,
+        entries: [
+          encounterRow(named(sitePages, "The Tower on the Heath"), "Read the outside impressions on the approach, before the mat comes out."),
+          encounterRow(named(threatPages, "The Singing Tower"), "The portent that ticks the night they answer it."),
+          encounterRow(named(monsters, "Echo of the Singing Tower"), "Waiting at the end, and in no hurry at all."),
+          encounterRow(packFlats, "The heath they cross once the treeline is behind them."),
+          encounterRow(packChart, "The way was drawn by hand, so the requirements are the GM's to state rather than the table's."),
+          encounterRow(scene, "Whatever map is loaded; swap it for the Vicinity crop if the world has one."),
+        ],
+      },
+      {
+        id:     `${TEST_EXPEDITION_ID_PREFIX}2`,
+        name:   "Downriver to Marshedge",
+        used:   false,
+        // Never run: Run mints a fresh trip and names it after this card.
+        tripId: "",
+        notes: "",
+        entries: [
+          encounterRow(packMarshedge, "Where they are bound, and who wants a word with them when they arrive."),
+          encounterRow(packRequisition, "The cart goes out of the common stores, which the steading has to agree to first."),
+          encounterRow(named(monsters, "Hillfolk Raider"), "Only if the war-band has moved down onto the road since the last patrol."),
+          encounterRow(npc, "If the road meets him, it meets him with a cart to lose."),
+        ],
+      },
+      {
+        id:     `${TEST_EXPEDITION_ID_PREFIX}3`,
+        name:   "North to Blackwater Lake (run last season)",
+        used:   true,
+        tripId: tripId("North to Blackwater Lake"),
+        notes: `<p>They came home with a rubbing of the stones and no answer. Somebody at the table will remember that the trader who sold them the story has not been seen since.</p>`
+             + `<p><em>Kept for the callback, and because the log is still worth reopening.</em></p>`,
+        entries: [
+          encounterRow(packSteplands, "The long leg, and the outriders who wanted to know whose cart that was."),
+          encounterRow(packLake, "The shore, the standing stones, and four days of nothing on the way to them."),
+          encounterRow(named(sitePages, "The Barrow Beneath the Black Water"), "What they went looking for. The stones at the lake are the same stones."),
+          encounterRow(packReturn, "Rolled at the gate on the way in."),
+        ],
+      },
+    ];
+
+    // Entry ids derived from the card's, as the Encounters seed derives its own and for the same
+    // reason: a stable id leaves an open toolkit looking at the same list after a re-run.
+    const rows = seeds.map(exp => ({
+      id:      exp.id,
+      name:    exp.name,
+      notes:   exp.notes ?? "",
+      used:    !!exp.used,
+      tripId:  exp.tripId ?? "",
+      entries: exp.entries.filter(Boolean).map((e, i) => ({ id: `${exp.id}e${String(i + 1).padStart(2, "0")}`, ...e })),
+    }));
+    const list = Array.isArray(toolkit.system?.expeditions) ? toolkit.system.expeditions : [];
+    const keep = list.filter(exp => !String(exp?.id ?? "").startsWith(TEST_EXPEDITION_ID_PREFIX));
+    // The whole array, not a path into it: Foundry diffs an ArrayField by REPLACEMENT.
+    await toolkit.update({ "system.expeditions": [...keep, ...rows] });
+    return {
+      toolkit, added: rows.length, kept: keep.length,
+      entries: rows.reduce((n, r) => n + r.entries.length, 0),
+      bound:   rows.filter(r => r.tripId).length,
+    };
+  };
+
   // ── Toggle: delete existing test fixtures ──────────────────────────────
   // Any actor carrying the test flag — the [TEST] characters, the seeded Monster stat blocks,
   // and the example NPC (as well as any NPC fixtures left by older versions of this macro).
@@ -2042,6 +2264,78 @@
       if (steadingFlags.notes === TEST_STEADING_NOTES) { steadingFlags.notes = ""; memberChanged = true; }
       if (memberChanged) await steadingDel.setFlag(FLAG_SCOPE, "steading", steadingFlags);
 
+      // Take the seeded hold tray back down. Each of the four held states goes only while it
+      // still holds EXACTLY what was seeded — a Fortunes advantage promised by something else,
+      // a muster raised in a season the table has since played, a blessing granted for a
+      // different season, or a winter debt of the table's own figure all belong to the
+      // campaign now and are left alone.
+      //
+      // The four IMPROVEMENTS go too, but only while they still carry the fixture's own
+      // signature: `applied: null` (this macro granted nothing) with a full requirement array.
+      // A steading that has since really built its Inn has an `applied` record of what that
+      // grant did, and that one is the village's history rather than our demo.
+      //
+      // The season CLOCK is left stamped either way. It is what the seeded Chronicle entries
+      // and the expeditions logged "last season" are dated against, so un-stamping it here
+      // would leave the world's own history reading against a season it no longer admits to.
+      // It is also a single control in the steading header for the GM to move.
+      //
+      // setFlag can't drop a key, so each goes through the "-=" deletion syntax.
+      const holdKill = {};
+      const holdBase = `flags.${FLAG_SCOPE}.steading`;
+      if (steadingFlags.fortunesAdvantage?.source === TEST_HOLD_FORTUNES_SRC) {
+        holdKill[`${holdBase}.-=fortunesAdvantage`] = null;
+      }
+      const seededStamp = steadingDel.getFlag(FLAG_SCOPE, "seasonsCurrent");
+      const seededKey   = seededStamp?.season
+        ? `${Number(seededStamp.year) || 1}:${seededStamp.season}`
+        : null;
+      if (steadingFlags.torsBlessing && steadingFlags.torsBlessing === seededKey) {
+        holdKill[`${holdBase}.-=torsBlessing`] = null;
+      }
+      const heldMuster = steadingFlags.musterHold;
+      if (heldMuster?.defenses === true && seededStamp?.season
+          && heldMuster.season === seededStamp.season
+          && Number(heldMuster.year) === (Number(seededStamp.year) || 1)) {
+        holdKill[`${holdBase}.-=musterHold`] = null;
+        // The seeded muster took the +1 Defenses, so dropping it has to give that point back
+        // the way standing it down would. Otherwise the cleanup leaves a stat one too high
+        // with nothing left on the sheet to explain it.
+        const defNow = Number(
+          foundry.utils.getProperty(steadingFlags, "system.stats.defenses.value")
+          ?? foundry.utils.getProperty(steadingDel.system, "stats.defenses.value")
+          ?? 0);
+        holdKill["system.stats.defenses.value"] = defNow - 1;
+        holdKill[`${holdBase}.system.stats.defenses.value`] = defNow - 1;
+      }
+      // Winter's debt, on the same rule: only while it is still the fixture's own number. A
+      // table that rolled their own 7-9 has a figure that means something, and it is stored
+      // rather than derived, so nothing else would ever clear it for them.
+      if (steadingFlags.winterDebt?.amount === TEST_HOLD_WINTER_DEBT
+          && String(steadingFlags.winterDebt?.stamp ?? "").endsWith(":winter")) {
+        holdKill[`${holdBase}.-=winterDebt`] = null;
+      }
+      // The fixture's own improvements, by their signature: completed, `applied: null` (it ran
+      // no grants, so there are none to take back), and a requirement array of exactly the shape
+      // it writes. Two shapes now — the all-ticked one, and the militia's two trained tactics —
+      // so a militia the table drilled itself is not mistaken for ours and swept away.
+      const fixtureR = (slug, r) => {
+        if (!Array.isArray(r)) return false;
+        // The militia's shape counts for the militia and for nothing else: an inn that happened
+        // to hold six boxes in that pattern is not this fixture's, and must not be swept away.
+        if (slug === "wellTrainedMilitia") {
+          return r.length === TEST_MILITIA_R.length && r.every((v, i) => v === TEST_MILITIA_R[i]);
+        }
+        return r.length === 16 && r.every(Boolean);
+      };
+      for (const slug of [...TEST_HOLD_IMPROVEMENTS, ...TEST_SEASON_IMPROVEMENTS]) {
+        const entry = steadingFlags.improvements?.[slug];
+        if (!entry?.completed || entry.applied !== null) continue;
+        if (!fixtureR(slug, entry.r)) continue;
+        holdKill[`${holdBase}.improvements.-=${slug}`] = null;
+      }
+      if (Object.keys(holdKill).length) await steadingDel.update(holdKill);
+
       // Clear the seeded "Other Settlements" ratings. Everything else this macro writes
       // rides on a document it deletes; these live in the singleton steading's
       // `system.relationships` and would otherwise outlive every cleanup. Same rule as the
@@ -2114,6 +2408,20 @@
       if (encounterCount) await toolkitEnc.update({ "system.encounters": encKeep });
     }
 
+    // And the seeded Expeditions off the same singleton, on their own id prefix. The same
+    // argument applies twice over: the card points at documents that are about to be deleted,
+    // AND it points at a trip in the `expeditionAnswers` log that the pass above has just
+    // emptied. Leaving one behind would leave a card of unresolved rows with a Run button that
+    // silently mints a brand new trip. Cards the GM prepped themselves carry a random id and
+    // are left alone, trip pointer and all.
+    let expeditionCount = 0;
+    if (toolkitEnc) {
+      const expList = Array.isArray(toolkitEnc.system?.expeditions) ? toolkitEnc.system.expeditions : [];
+      const expKeep = expList.filter(e => !String(e?.id ?? "").startsWith(TEST_EXPEDITION_ID_PREFIX));
+      expeditionCount = expList.length - expKeep.length;
+      if (expeditionCount) await toolkitEnc.update({ "system.expeditions": expKeep });
+    }
+
     // Sweep up the old "Stonetop Test Fixtures" folders if a prior run left them behind and
     // they're now empty. (The "PCs" folder is left alone — it may hold real characters; the
     // steading singleton is never touched.)
@@ -2129,7 +2437,7 @@
         if (!f.contents.length) await f.delete();
       }
     }
-    ui.notifications.info(`[TEST] Deleted ${existing.length} test actor(s), ${testItems.length} item(s), ${testThreatCount} threat(s), ${testSiteCount} site(s)${wonderCount ? `, ${wonderCount} "I wonder..." question(s)` : ""}${encounterCount ? `, ${encounterCount} prepared encounter(s)` : ""}${strayPeople ? `, ${strayPeople} migrated resident/neighbor NPC(s) an older run left behind` : ""}, and their test data.`);
+    ui.notifications.info(`[TEST] Deleted ${existing.length} test actor(s), ${testItems.length} item(s), ${testThreatCount} threat(s), ${testSiteCount} site(s)${wonderCount ? `, ${wonderCount} "I wonder..." question(s)` : ""}${encounterCount ? `, ${encounterCount} prepared encounter(s)` : ""}${expeditionCount ? `, ${expeditionCount} prepped expedition(s)` : ""}${strayPeople ? `, ${strayPeople} migrated resident/neighbor NPC(s) an older run left behind` : ""}, and their test data.`);
     return;
   }
 
@@ -2636,21 +2944,29 @@
   // everyone only ever showed the section at its fullest, so the roster is split three ways
   // instead — deterministically, like every other choice this macro makes (position decides,
   // nothing is rolled):
-  //   slot % 3 === 0 → all four: both structures, the shared-list checklist, and the
-  //                    no-XP-on-miss case, all stacked in one section
+  //   slot % 3 === 0 → TWO, which is the most any test character is given. A GM writes a love
+  //                    letter to a player between sessions, not a stack of them, and a sheet
+  //                    carrying the whole set reads as a fixture rather than as a game
   //   slot % 3 === 1 → exactly one, so the section is seen holding a single card (and its
   //                    header count reads 1). Which one rotates with the slot, so across a
   //                    full run several different letters are seen standing alone
   //   slot % 3 === 2 → none, so the section is absent entirely and the tab has to lay out
   //                    without it
   // Over the 9-playbook roster that lands 3 characters in each state.
+  //
+  // COVERAGE MOVED FROM THE SHEET TO THE ROSTER when the cap came down. Every one of the four
+  // still has to be seen — both structures, the shared-list checklist and the no-XP-on-miss
+  // case — and no single sheet holds them all any more, so the pair (and the lone letter)
+  // WINDOW ALONG the list with the slot: the three characters in each state show letters
+  // 0+1, 1+2, 2+3 and 0, 1, 2 respectively. Nothing is rolled, and nothing is skipped.
   const testLoveLettersFor = (slot) => {
     const all = buildTestLoveLetters();
     const i   = Number.isFinite(slot) && slot >= 0 ? Math.floor(slot) : 0;
+    const at  = Math.floor(i / 3) % all.length;   // where this character's window starts
     switch (i % 3) {
-      case 1:  return [all[Math.floor(i / 3) % all.length]];
+      case 1:  return [all[at]];
       case 2:  return [];
-      default: return all;
+      default: return [all[at], all[(at + 1) % all.length]];
     }
   };
 
@@ -2710,7 +3026,7 @@
       for (const treasure of TEST_TREASURES) await typed.addDroppedInventoryItem(buildWorldItemItem(treasure));
     }
     // This character's share of the Book I p.569 love letters (embedded move items flagged
-    // loveLetter) — all four, one, or none, per testLoveLettersFor. Created directly rather
+    // loveLetter) — two, one, or none, per testLoveLettersFor. Created directly rather
     // than via a typed-wrapper method — a love letter is a plain embedded item; the shaping
     // (buildLoveLetterItem) mirrors buildLoveLetterData.
     const letters = testLoveLettersFor(slot);
@@ -3704,7 +4020,170 @@
     const { entryId: sitesEntryId, pages: sitePages } = await seedTestSites(steading, sf);
     testSitePages = sitePages;
     if (sitesEntryId) sf.sitesEntryId = sitesEntryId;
+
+    // ── Light the header's hold tray ─────────────────────────────────────────────
+    // Every chip the season allows (see TEST_HOLD_* above, which lists what each season shows
+    // and why no season shows all nine). Three are state the steading simply holds, one more is
+    // stored, and the rest are seasonal obligations that show while unpaid.
+    //
+    // THE CLOCK IS ONLY STAMPED WHEN NOTHING IS STAMPED, on the same rule as the Notes, the
+    // settlement standings and the debility below: a steading mid-campaign is playing in a
+    // season of its own and rewinding it is not ours to do. On a fresh test world that means
+    // spring and its six; on a world already in autumn it means five, correctly, because both
+    // of autumn's neighbours have a bill autumn does not. The console line below says which
+    // case it was, and names the chips, so a missing one never has to look like a bug.
+    const stampedSeason = steading.getFlag(FLAG_SCOPE, "seasonsCurrent");
+    const holdYear      = Number(steading.getFlag(FLAG_SCOPE, "seasonsCurrentYear")) || 1;
+    const clockSeeded   = !stampedSeason?.season;
+    if (clockSeeded) {
+      await steading.update({
+        [`flags.${FLAG_SCOPE}.seasonsCurrent`]:     { season: TEST_HOLD_SEASON, year: holdYear },
+        [`flags.${FLAG_SCOPE}.seasonsCurrentYear`]: holdYear,
+      });
+    }
+    const holdSeason = clockSeeded ? TEST_HOLD_SEASON : stampedSeason.season;
+    const holdStamp  = `${clockSeeded ? holdYear : (Number(stampedSeason.year) || holdYear)}:${holdSeason}`;
+
+    // The four the steading HOLDS. The muster takes the "+1 Defenses as long as the muster
+    // holds" pick, because that is the half with a revert to exercise: standing it down from
+    // the glyph, or letting the Seasons Change lapse it, has to give the point back.
+    //
+    // And that bonus is APPLIED here, not merely claimed. Recording `defenses: true` without
+    // moving the stat would seed a muster whose +1 does not exist, and the first stand-down
+    // would then subtract a point the steading never gained.
+    //
+    // RE-STAMPED TO THE CURRENT CLOCK, not merely seeded when absent, and that is the whole
+    // reason this macro can be re-run to fill the tray in a season it did not seed. Three of
+    // these expire by ceasing to match the clock rather than by being cleared, so a seed made
+    // in spring is silently dead in summer: re-running would find the flag present, leave it,
+    // and hand back a tray three chips short with nothing to say why.
+    //
+    // What is NOT overwritten is a hold that currently MATCHES the clock. A table that really
+    // raised a muster this season, or rolled a 7-9 this winter, keeps their own — the re-stamp
+    // only ever revives one of these that has already lapsed.
+    const holdYearNum  = Number(holdStamp.split(":")[0]);
+    const holdDefenses = Number(
+      foundry.utils.getProperty(sf, "system.stats.defenses.value")
+      ?? foundry.utils.getProperty(steading.system, "stats.defenses.value")
+      ?? 0);
+    const musterLive = sf.musterHold
+      && `${sf.musterHold.year}:${sf.musterHold.season}` === holdStamp;
+    // A lapsed muster is only re-dated when it carries the fixture's own signature — the +1
+    // Defenses pick — which is the same mark the cleanup uses to tell its seed from a real
+    // one. A muster the table raised WITHOUT that pick and then let lapse is theirs, and
+    // quietly standing it back up would be reviving a thing their fiction had finished with.
+    const musterOurs = sf.musterHold?.defenses === true;
+    let musterNote = "";
+    if (!sf.musterHold) {
+      // No muster at all: raise one, and pay for its +1 the way raising it really would.
+      foundry.utils.setProperty(sf, "system.stats.defenses.value", holdDefenses + 1);
+      await steading.update({ "system.stats.defenses.value": holdDefenses + 1 });
+      sf.musterHold = { year: holdYearNum, season: holdSeason, defenses: true };
+    } else if (musterLive) {
+      musterNote = "";
+    } else if (musterOurs) {
+      // Lapsed by the clock, and its +1 is STILL ON THE SHEET — a muster only gives that back
+      // when it is stood down or when the Seasons Change folds the lapse into its own write
+      // (StonetopSteading#musterLapseChanges). So this re-dates the muster it found rather
+      // than raising a new one: applying another +1 here would stack a second point onto one
+      // that was never given back, and the first stand-down would hand back only one of them.
+      sf.musterHold = { ...sf.musterHold, year: holdYearNum, season: holdSeason };
+    } else {
+      musterNote = " The muster chip is dark: this steading holds a lapsed muster of its own"
+        + " (no +1 Defenses), which is the table's to stand up again, not ours.";
+    }
+    if (!sf.fortunesAdvantage) sf.fortunesAdvantage = { source: TEST_HOLD_FORTUNES_SRC };
+    if (sf.torsBlessing !== holdStamp) sf.torsBlessing = holdStamp;
+    // Winter's debt is stamped for WINTER of the hold year rather than for the seeded season:
+    // it is the one chip that cannot exist outside winter, so stamping it to a spring clock
+    // would seed a debt that is already expired. Re-stamped on the same rule as the muster, so
+    // that reaching winter of the NEXT year and re-running lights it again.
+    const winterStamp = `${holdYearNum}:winter`;
+    if (sf.winterDebt?.stamp !== winterStamp) {
+      sf.winterDebt = { stamp: winterStamp, amount: TEST_HOLD_WINTER_DEBT };
+    }
+
+    // The four improvements whose obligations the tray reads.
+    //
+    // `applied: null` EXPLICITLY, rather than leaving it undefined. The grants engine treats an
+    // undefined `applied` on a completed improvement as "finished before this engine shipped"
+    // and back-fills a presumed footprint on the next toggle — so un-completing the seeded Inn
+    // would subtract a Fortune it never granted and strike a resource it never added. Null says
+    // the true thing instead: this fixture applied no grants, so there are none to take back.
+    // (Which is also why the tray is what these three are for, not their book effects.)
+    //
+    // `r` is the positional requirement array the tick-boxes read, filled well past any
+    // improvement's requirement count so the card does not read as complete-but-unbuilt.
+    // Over-long is harmless: improvementRequirementsMet only walks the indices it has items for.
+    //
+    // And, like the held states above, ONLY WHEN NOT ALREADY BUILT. A steading that really
+    // raised its Standing Watch has an `applied` record of what that grant did, and replacing
+    // it with the fixture's empty one would orphan the fortification on the next un-complete.
+    sf.improvements = { ...(sf.improvements ?? {}) };
+    const improvementsSeeded = [];
+    for (const slug of [...TEST_HOLD_IMPROVEMENTS, ...TEST_SEASON_IMPROVEMENTS]) {
+      if (sf.improvements[slug]?.completed) continue;
+      // All-ticked for everything but the militia, whose tactics are the requirement boxes the
+      // summer window offers for the losing — see TEST_MILITIA_R.
+      //
+      // The all-ticked shape also decides Additional Housing's harvest: index 1 of its first
+      // section is "Building on parts of the fields, resulting in −1 Surplus generated with each
+      // autumn's harvest", so a fixture steading has taken that bargain and autumn is a point
+      // shorter for it. That is the branch worth seeing — the untaken one is simply no rule.
+      sf.improvements[slug] = {
+        completed: true,
+        applied: null,
+        r: slug === "wellTrainedMilitia" ? [...TEST_MILITIA_R] : Array(16).fill(true),
+      };
+      improvementsSeeded.push(slug);
+    }
+
+    // The inn's gathering costs 1 Surplus, and a chip for something unaffordable is not an
+    // unspent opportunity. Raised only when the steading is actually broke, so a stocked
+    // steading keeps its own count.
+    //
+    // Topped up to TEST_HOLD_SURPLUS rather than to 1, now that a season has more than the
+    // gathering to pay for: the watch, the weapons or the militia, the herd's winter feed and
+    // winter's own consumption all come out of the same pile, and a steading holding 1 can only
+    // ever demonstrate the refusals. Written to BOTH places a steading system value lives, the
+    // way the debility below is, because going through setSystemValues would append a ledger
+    // entry for a change no move made.
+    const holdSurplus = Number(
+      foundry.utils.getProperty(sf, "system.attributes.surplus.value")
+      ?? foundry.utils.getProperty(steading.system, "attributes.surplus.value")
+      ?? 0);
+    if (holdSurplus < TEST_HOLD_SURPLUS) {
+      foundry.utils.setProperty(sf, "system.attributes.surplus.value", TEST_HOLD_SURPLUS);
+      await steading.update({ "system.attributes.surplus.value": TEST_HOLD_SURPLUS });
+    }
+
+    // And Population, which is the Market's own gate: "and Population is +1 or better". Raised
+    // only when it is below, on the same never-overwrite rule — a steading the GM has run down
+    // to −1 is telling the truth about its own winter, and the Market's row explains itself in
+    // that case rather than disappearing.
+    const holdPopulation = Number(
+      foundry.utils.getProperty(sf, "system.attributes.population.value")
+      ?? foundry.utils.getProperty(steading.system, "attributes.population.value")
+      ?? 0);
+    if (holdPopulation < TEST_HOLD_POPULATION) {
+      foundry.utils.setProperty(sf, "system.attributes.population.value", TEST_HOLD_POPULATION);
+      await steading.update({ "system.attributes.population.value": TEST_HOLD_POPULATION });
+    }
+
     await steading.setFlag(FLAG_SCOPE, "steading", sf);
+
+    // And clear this season's markers for the seasonal steps, so the dues read as unpaid.
+    // AFTER the setFlag and through the "-=" deletion syntax, not by deleting the keys off `sf`:
+    // setFlag MERGES, so a sub-key dropped from the object it is handed survives in the stored
+    // flags untouched — the same trap the threats-folder pointer in the cleanup above documents.
+    //
+    // Unlike the Notes and the standings, this one DOES overwrite what is there: a paid step is
+    // precisely the state that hides a chip, and showing the tray is the point of the fixture.
+    const stepKill = {};
+    for (const step of [...TEST_HOLD_STEPS, ...TEST_SEASON_STEPS]) {
+      if (sf.seasonSteps?.[step] !== undefined) stepKill[`flags.${FLAG_SCOPE}.steading.seasonSteps.-=${step}`] = null;
+    }
+    if (Object.keys(stepKill).length) await steading.update(stepKill);
 
     // Other Settlements — the steading's own relations table, keyed by settlement slug (see
     // TEST_SETTLEMENT_RELS). Written to `system.relationships`, NOT to the steading flags.
@@ -3748,6 +4227,39 @@
     }
 
     console.log(`[TEST] Seeded steading "${steading.name}": ${people.residents.length} residents, ${people.neighbors.length} neighbors (as NPC actors), ${created.length} players${notesSeeded ? ", formatted Notes" : " (left existing Notes untouched)"}${threatsEntryId ? `, ${testThreatPages.length} threats` : ""}${sitesEntryId ? `, ${testSitePages.length} sites` : ""}, ${Object.keys(relUpdate).length}/${Object.keys(TEST_SETTLEMENT_RELS).length} settlement standings${debilitySeeded ? `, the "${TEST_DEBILITY}" debility marked` : " (left the debilities the GM had marked)"}.`);
+    // The tray is only as full as the season allows, so say which case this world got rather
+    // than leaving a missing chip to look like a bug. Five chips are seasonless; the rest are
+    // the season's own, and autumn has none of them.
+    const HOLD_ALWAYS   = ["Fortunes advantage", "the muster with its +1 Defenses", "Tor's blessing",
+                           "the inn's gathering", "the watch's upkeep"];
+    const HOLD_SEASONAL = {
+      spring: ["the weapons' upkeep"],
+      summer: ["the herd's growth"],
+      autumn: [],
+      winter: ["the herd's winter feed", "winter's second consumption"],
+    };
+    const holdChips = [...HOLD_ALWAYS, ...(HOLD_SEASONAL[holdSeason] ?? [])]
+      .filter(chip => !(musterNote && chip.startsWith("the muster")));
+    console.log(`[TEST] Hold tray: ${holdChips.length} chips lit (${holdChips.join(", ")}). `
+      + `${clockSeeded ? `Clock stamped ${TEST_HOLD_SEASON}, year ${holdYear}.` : `Left the GM's clock at ${holdSeason}.`} `
+      + `No season lights every chip: the weapons' bill is spring, the herd's growth and the militia's drills are summer, and the herd's feed and winter's debt are both winter. `
+      + `Turn the season and re-run to fill the tray for the season you land in.`
+      + `${musterNote}`
+      + `${improvementsSeeded.length ? ` Built: ${improvementsSeeded.join(", ")}.` : " (every improvement it needs was already built)."}`);
+
+    // The other half of what this seeds, and the half with no glyph to advertise it: nine more
+    // improvements whose seasonal clauses the Seasons Change WINDOW reads rather than the tray.
+    // Printed separately because a GM about to run the move needs to know what to expect from
+    // it, and because "why is autumn rolling three dice?" is a question worth answering before
+    // it is asked rather than after.
+    console.log(`[TEST] Seasons Change: run the move on the steading to exercise them. `
+      + `Surplus ${Math.max(holdSurplus, TEST_HOLD_SURPLUS)}, Population ${Math.max(holdPopulation, TEST_HOLD_POPULATION) >= 0 ? "+" : ""}${Math.max(holdPopulation, TEST_HOLD_POPULATION)}. `
+      + `Spring: Market and Township Surplus to take, Harnessing the Stream on a 7+, the weapons' bill, and a line saying the aurochs hunt is open. `
+      + `Summer: Market and Township again, Raincatching on a 7+, the herd's growth, and the militia's drills with two tactics trained (forgetting one drops it below 2+, which the window says out loud). `
+      + `Autumn: the harvest rolls 1d4 + 1d4 + 1 - 1 (Greater Harvest, Mill, and the fields Additional Housing was built on), plus the Market. `
+      + `Winter: 2d6 instead of 1d4 (Township), Population counted a point lower (Additional Housing), one off the total (Stone Wall), then the herd's feed. `
+      + `The Inn's own +Fortunes roll is offered in all four. `
+      + `A shortfall in winter is likely at this Surplus, which is the path to the four consequences and to winter's debt on the header.`);
   } else {
     ui.notifications.warn("[TEST] No steading actor found, so nothing was seeded for residents/neighbors/players/notes/threats/sites/settlement standings.");
   }
@@ -3815,12 +4327,26 @@
   const tripKit  = await seedTripAssets(steading, examples);
   await game.settings.set(FLAG_SCOPE, "expeditionAnswers", { currentId: examples.at(-1).id, list: [...keep, ...examples] });
 
+  // ── Seed the GM Toolkit's Expeditions tab ──────────────────────────────
+  // LAST OF EVERYTHING, and later even than the Encounters pass, because a prepped expedition
+  // points at two things rather than one: the documents it gathers (which the passes above
+  // created) and the TRIP it is bound to, which does not have an id until the log is written a
+  // line above. A card seeded any earlier would have to invent a trip pointer, and inventing one
+  // is the same as not binding it at all.
+  const expeditions = await seedGmToolkitExpeditions({
+    monsters: testMonsters, npc: exampleNpc,
+    threatPages: testThreatPages, sitePages: testSitePages, trips: examples,
+  });
+  if (expeditions) {
+    console.log(`[TEST] Seeded the GM Toolkit "${expeditions.toolkit.name}" with ${expeditions.added} prepped expedition(s) holding ${expeditions.entries} collected row(s), ${expeditions.bound} bound to a logged trip${expeditions.kept ? `, alongside ${expeditions.kept} the GM had already prepped` : ""}.`);
+  }
+
   // Compile + open the Chronicle straight away, so the recorded answers are visible
   // without running game.stonetop.saveChronicle() by hand. (Guarded in case the macro
   // is somehow run before onReady wires up the API.)
   await game.stonetop?.saveChronicle?.();
 
-  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
+  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${expeditions ? `${expeditions.added} prepped expeditions (${expeditions.bound} bound to a logged trip), ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
   } finally {
     globalThis.__stonetopTestFixturesRunning = false;
   }

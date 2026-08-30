@@ -38,7 +38,13 @@ const TAB_HBS     = read("templates/actor/partials/gm-toolkit-tab-encounters.hbs
 const CARD_HBS    = read("templates/actor/partials/gm-encounter-card.hbs");
 const SHEET_JS    = read("module/actors/gmtoolkit/StonetopGmToolkitSheet.js");
 const MODEL_JS    = read("module/data-models/GmToolkitModel.js");
-const TAB_JS      = read("module/actors/gmtoolkit/gm-encounters-tab.js");
+/**
+ * Both halves of the tab's JS as one string, for the same reason `PANEL_MARKUP` below joins both
+ * halves of its markup: the machinery was lifted out into gm-bundle-tab.js when the Expeditions
+ * tab wanted the same card, and an assertion pinned to gm-encounters-tab.js alone would now pass
+ * against a file holding nothing but a config object.
+ */
+const TAB_JS      = `${read("module/actors/gmtoolkit/gm-encounters-tab.js")}\n${read("module/actors/gmtoolkit/gm-bundle-tab.js")}`;
 const FIELDS_JS   = read("module/data-models/fields.js");
 
 /** Markup with the Handlebars comments stripped, so prose cannot answer for the template. */
@@ -153,9 +159,12 @@ describe("the Encounters tab: wiring", () => {
 	// The user asked for it beside the other prep tabs. The rail's order is the source order of
 	// these partial calls, and the body's is a second list that has to agree: a mismatch is
 	// invisible, because the panels are shown one at a time.
-	it("sits between Sites and I Wonder, in the rail and in the body", () => {
-		const order = ["homefront", "moves", "threats", "sites", "encounters", "wonder", "loop"];
-		expect([...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1])).toEqual(order);
+	it("sits between Threats and Expeditions, in the rail and in the body", () => {
+		// The PANEL order. The rail carries one more entry after these seven — the shared
+		// Preferences tab, whose panel comes from "stonetop.tab-preferences" rather than from a
+		// gm-toolkit-tab partial, so it is absent from the body list this regex builds.
+		const order = ["homefront", "moves", "threats", "encounters", "expeditions", "wonder", "loop"];
+		expect([...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1])).toEqual([...order, "preferences"]);
 		expect([...SHEET_HBS.matchAll(/\{\{>\s*"stonetop\.gm-toolkit-tab-(\w+)"\}\}/g)].map(m => m[1])).toEqual(order);
 	});
 
@@ -189,7 +198,7 @@ describe("the Encounters tab: wiring", () => {
 	// section's containing block by joining the shared `:is()`. Left out, the pencil floats
 	// against whatever positioned ancestor is next up the frame, with nothing logged.
 	it("is the positioning context its corner pencil floats in", () => {
-		expect(CSS).toMatch(/\.sheet-body > :is\(\.tab\.threats, \.tab\.sites, \.tab\.encounters\)\s*\{\s*position: relative/);
+		expect(CSS).toMatch(/\.sheet-body > :is\(\.tab\.threats, \.tab\.encounters, \.tab\.expeditions\)\s*\{\s*position: relative/);
 		expect(TAB_HBS).toContain('class="tab encounters steading-edit-section"');
 	});
 
@@ -245,7 +254,10 @@ describe("the Encounters tab: wiring", () => {
 
 	it("is composed into the sheet, and flushed before every paint and every close", () => {
 		expect(SHEET_JS).toMatch(/withGmEncountersTab\(withGmWonderTab\(/);
-		expect(SHEET_JS).toContain("await this._addGmEncountersContext(context);");
+		// Inside the `Promise.all` gather in `_getData` rather than awaited on a line of its own:
+		// this builder and the two beside it can each be waiting on a pack load, so the sheet
+		// runs them together. The trailing comma is what says it is still IN the gather.
+		expect(SHEET_JS).toContain("this._addGmEncountersContext(context),");
 		expect(SHEET_JS).toContain("this._activateGmEncountersListeners(html[0]);");
 		// Once in `_render` and once in `close`: Escape shuts an AppV1 window straight from the
 		// focused field, so its `change` never fires.
@@ -268,7 +280,10 @@ describe("the Encounters list: storage", () => {
 	// The sheet writes these on blur WITHOUT re-rendering, so a field the model silently trimmed
 	// would leave the box holding one string and the document holding another.
 	it("does not trim the prose it stores", () => {
-		const field = FIELDS_JS.slice(FIELDS_JS.indexOf("export const encountersField"));
+		// From the factory both bundle lists are built out of, not from `encountersField`
+		// itself: that is now one line long, and a slice taken at it would read as empty and
+		// pass against nothing.
+		const field = FIELDS_JS.slice(FIELDS_JS.indexOf("const bundleSchema"));
 		const body = field.slice(0, field.indexOf("simpleMoveSchema"));
 		expect(body.match(/trim: false/g)?.length).toBe(3);
 	});
@@ -277,7 +292,10 @@ describe("the Encounters list: storage", () => {
 	// be a cached field with no reader: the only row that needs one is the broken row, and that
 	// shows its type icon instead.
 	it("stores the type and the name of an entry, and no img", () => {
-		const field = FIELDS_JS.slice(FIELDS_JS.indexOf("export const encountersField"));
+		// From the factory both bundle lists are built out of, not from `encountersField`
+		// itself: that is now one line long, and a slice taken at it would read as empty and
+		// pass against nothing.
+		const field = FIELDS_JS.slice(FIELDS_JS.indexOf("const bundleSchema"));
 		const body = field.slice(0, field.indexOf("simpleMoveSchema"));
 		expect(body).toMatch(/uuid:\s*new fields\.StringField/);
 		expect(body).toMatch(/type:\s*new fields\.StringField/);
@@ -1143,8 +1161,7 @@ describe("the Encounters tab: notes, used and delete", () => {
 	// write anywhere in the world, so one open here would be torn out from under a GM mid-sentence.
 	it("still writes in a dialog rather than in place", () => {
 		expect(CARD_MARKUP).not.toContain("prose-mirror");
-		expect(SHEET_JS + read("module/actors/gmtoolkit/gm-encounters-tab.js"))
-			.toContain("openEncounterNotesDialog");
+		expect(SHEET_JS + TAB_JS).toContain("openBundleNotesDialog");
 	});
 
 	it("draws the note above the collected rows, not after them", () => {

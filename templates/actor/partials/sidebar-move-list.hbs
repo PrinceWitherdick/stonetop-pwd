@@ -8,25 +8,26 @@
 	{{else}}
 	<li class="stonetop-move-item{{#unless owned}} move-unowned{{/unless}}">
 	{{/if}}
-		{{#if (and owned rollType)}}
-		<span class="rollable move-rollable" data-roll="{{rollType}}" data-mod="">
-			<i class="fas fa-dice-d6"></i>
-		</span>
-		{{/if}}
+		{{!-- No dice icon: the NAME is the `.rollable`, carrying the stat and the classes the
+		      icon used to (see move-group.hbs for the whole of why). The row as a whole is still
+		      tappable — StonetopCharacterSheet's row handler forwards a click on empty row space
+		      to this element — so what changed here is only that the die is gone.
+
+		      The "+STAT" chip follows the name, as it does on the Moves tab's cards. --}}
+		<span class="stonetop-move-name {{openClass}}{{#if (and owned rollType)}} rollable move-rollable{{/if}}"
+		      {{#if (and owned rollType)}}data-roll="{{rollType}}" data-mod="" {{/if}}data-compendium-id="{{compendiumId}}">{{name}}</span>
 		{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
-		<span class="stonetop-move-name {{openClass}}"
-		      data-compendium-id="{{compendiumId}}">{{name}}</span>
 		{{#if readiness}}
 		{{!-- Readiness circles (Defend, p.216): filled from a Defend roll's tier, lost when
 		      you go on the offense. Click a circle to set how much you hold; click the
 		      highest filled one to spend back down. --}}
-		<span class="stonetop-move-readiness" data-tooltip="Readiness (Defend, p.216). 10+: hold 3{{#if readiness.hasShield}} (4 with a shield){{/if}}. 7&ndash;9: hold 1{{#if readiness.hasShield}} (2 with a shield){{/if}}.{{#if readiness.hasGuardian}} Guardian: +1, and 1 even on a 6-.{{/if}} Filled when you Defend; lost when you go on the offense (Clash / Let Fly). Click a circle to set how much you hold; spend it to weather an attack for a ward, halve it, draw all attention, or strike back." data-tooltip-direction="UP">
+		<span class="stonetop-move-readiness" data-tooltip="Readiness (Defend, p.216). 10+: hold 3{{#if readiness.hasShield}} (4 with a shield){{/if}}. 7&ndash;9: hold 1{{#if readiness.hasShield}} (2 with a shield){{/if}}.{{#if readiness.hasGuardian}} Guardian: +1, and 1 even on a 6-.{{/if}} Filled when you Defend; lost when you go on the offense (Clash / Let Fly). Click a circle to set how much you hold. Spend it 1-for-1 to suffer an attack's damage/effects instead of your ward, halve an attack's effect or damage, draw all attention from your ward to yourself, or strike back at an attacker (deal your damage, with disadvantage)." data-tooltip-direction="UP">
 			{{#each readiness.pips}}
 			<button type="button" class="stonetop-readiness-pip stonetop-move-readiness-pip{{#if filled}} is-filled{{/if}}" data-index="{{index}}" title="Set Readiness"></button>
 			{{/each}}
 		</span>
 		{{/if}}
-		{{#if description}}<div class="stonetop-basic-move-desc" hidden>{{{boldMissText description}}}</div>{{/if}}
+		{{#if description}}<div class="stonetop-basic-move-desc" hidden>{{{moveBody description moveResults}}}</div>{{/if}}
 	</li>
 {{/each}}
 </ol>

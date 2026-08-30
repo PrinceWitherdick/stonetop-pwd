@@ -2,6 +2,7 @@
  * @property {string} id
  * @property {string} name
  * @property {string|null} description
+ * @property {object|null} moveResults - tier outcome text, drawn as the card's tier ladder
  * @property {string|null} moveType
  * @property {string} ownedId - same as id; provided for template convenience
  * @property {string|null} rollType - normalized stat/"ask" so the row renders a dice control
@@ -21,6 +22,7 @@ export class OtherItemSnapshot {
 		this.id          = b._id;
 		this.name        = b._name;
 		this.description = b._description;
+		this.moveResults = b._moveResults ?? null;
 		this.moveType    = b._moveType;
 		this.ownedId     = b._ownedId;
 		this.rollType    = b._rollType ?? null;
@@ -41,6 +43,7 @@ export class OtherItemSnapshotBuilder {
 	withId(v)          { this._id          = v; return this; }
 	withName(v)        { this._name        = v; return this; }
 	withDescription(v) { this._description = v; return this; }
+	withMoveResults(v) { this._moveResults = v ?? null; return this; }
 	withMoveType(v)    { this._moveType    = v; return this; }
 	withOwnedId(v)     { this._ownedId     = v; return this; }
 	withRollType(v)    { this._rollType    = v; return this; }

@@ -25,7 +25,7 @@
   },
   {
     "name": "Defend",
-    "description": "<p>When you <strong><em>take up a defensive stance or jump in to protect others</em></strong>,  roll +CON: <strong>on a 10+</strong>, hold 3 Readiness (or 4 if you bear a shield); <strong><em>On a 7-9</em></strong>, hold 1 Readiness (or 2 with a shield). You can spend Readiness 1-for-1 to:</p><ul><li>Suffer an attack's damage/effects instead of your ward</li><li>Halve an attack's effect or damage</li><li>Draw all attention from your ward to yourself</li><li>Strike back at an attacker (deal your damage, with disadvantage)</li></ul><p>When you go on the offense, cease to focus on defense, or the threat passes, lose any Readiness that you hold.</p>",
+    "description": "<p>When you <strong><em>take up a defensive stance or jump in to protect others</em></strong>, roll +CON: <strong>on a 10+</strong>, hold 3 Readiness (or 4 if you bear a shield); <strong><em>on a 7-9</em></strong>, hold 1 Readiness (or 2 with a shield). You can spend Readiness 1-for-1 to:</p><ul><li>Suffer an attack's damage/effects instead of your ward</li><li>Halve an attack's effect or damage</li><li>Draw all attention from your ward to yourself</li><li>Strike back at an attacker (deal your damage, with disadvantage)</li></ul><p>When you go on the offense, cease to focus on defense, or the threat passes, lose any Readiness that you hold.</p>",
     "rollType": "con",
     "results": {
       "success": {
@@ -63,7 +63,7 @@
   },
   {
     "name": "Interfere",
-    "description": "<p>When you try to foil another PC’s action and neither of you back down, roll...</p><p>... +STR to power through or test your might</p><p>... +DEX to employ speed, agility, or finesse</p><p>... +CON to endure or hold steady</p><p>... +INT to apply expertise or enact a clever plan</p><p>... +WIS to exert willpower or rely on your senses</p><p>... +CHA to charm, bluff, impress, or fit in</p><p><strong><em>On a 10+</em></strong>, they pick 1 from the list below; <strong><em>on a 7-9</em></strong>, they pick 1 from the list below but you are left off-balance, exposed, or otherwise vulnerable.</p><ul><li>Do it anyway, but with disadvantage on their (next) roll</li><li>Relent, change course, or otherwise allow their move to be foiled</li></ul>",
+    "description": "<p>When you <strong><em>try to foil another PC’s action and neither of you back down</em></strong>, roll...</p><p>... +STR to power through or test your might</p><p>... +DEX to employ speed, agility, or finesse</p><p>... +CON to endure or hold steady</p><p>... +INT to apply expertise or enact a clever plan</p><p>... +WIS to exert willpower or rely on your senses</p><p>... +CHA to charm, bluff, impress, or fit in</p><p><strong><em>On a 10+</em></strong>, they pick 1 from the list below; <strong><em>on a 7-9</em></strong>, they pick 1 from the list below but you are left off-balance, exposed, or otherwise vulnerable.</p><ul><li>Do it anyway, but with disadvantage on their (next) roll</li><li>Relent, change course, or otherwise allow their move to be foiled</li></ul>",
     "rollType": "ask",
     "results": {
       "success": {
@@ -82,7 +82,7 @@
   },
   {
     "name": "Know Things",
-    "description": "<p>When you <strong><em>consult your accumulated knowledge</em></strong>, roll +INT: <strong>on a 10+</strong>, The GM will tell you something interesting and useful about the topic at hand; <strong><em>On a 7-9</em></strong>, the GM will tell you something interesting—it's on you to make it useful;<strong><em>either way</em></strong>, the GM might ask “how do you know this?”</p>",
+    "description": "<p>When you <strong><em>consult your accumulated knowledge</em></strong>, roll +INT: <strong>on a 10+</strong>, the GM will tell you something interesting and useful about the topic at hand; <strong><em>on a 7-9</em></strong>, the GM will tell you something interesting—it's on you to make it useful; <strong><em>either way</em></strong>, the GM might ask “how do you know this?”</p>",
     "rollType": "int",
     "results": {
       "success": {
@@ -101,7 +101,7 @@
   },
   {
     "name": "Let Fly",
-    "description": "<p>When you <strong><em>take an easy shot with a ranged weapon</em></strong>, deal your damage. If <strong><em>the shot is tricky or you’re under pressure</em></strong>, first roll +DEX: <strong>on a 10+</strong>, you have a clear shot, deal your damage; <strong>on a 7-9</strong>, pick 1:</p><ul><li>Deal your damage, but deplete your ammo (mark the next status by your weapon; don’t pick this if your weapon lacks such statuses)</li><li>Hold steady and wait for a clear shot; when the moment arrives (GM’s call), deal your damage</li><li>Move to get a clear shot - exposing yourself to danger or giving up some advantage (GM says how) - then deal your damage</li><li>Rush the shot and deal your damage, leading to a cost or complication of the GM’s choice</li></ul>",
+    "description": "<p>When you <strong><em>take an easy shot with a ranged weapon</em></strong>, deal your damage. If <strong><em>the shot is tricky or you’re under pressure</em></strong>, first roll +DEX: <strong>on a 10+</strong>, you have a clear shot, deal your damage; <strong>on a 7-9</strong>, pick 1:</p><ul><li>Deal your damage, but deplete your ammo (mark the next status by your weapon; don’t pick this if your weapon lacks such statuses)</li><li>Hold steady and wait for a clear shot; when the moment arrives (GM’s call), deal your damage</li><li>Move to get a clear shot—exposing yourself to danger or giving up some advantage (GM says how)—then deal your damage</li><li>Rush the shot and deal your damage, leading to a cost or complication of the GM’s choice</li></ul>",
     "rollType": "dex",
     "results": {
       "success": {
@@ -110,7 +110,7 @@
       },
       "partial": {
         "label": "7-9",
-        "value": "Pick 1: Deal your damage, but deplete your ammo (mark the next status by your weapon; don’t pick this if your weapon lacks such statuses) / Hold steady and wait for a clear shot; when the moment arrives (GM’s call), deal your damage / Move to get a clear shot - exposing yourself to danger or giving up some advantage (GM says how) - then deal your damage / Rush the shot and deal your damage, leading to a cost or complication of the GM’s choice."
+        "value": "Pick 1: Deal your damage, but deplete your ammo (mark the next status by your weapon; don’t pick this if your weapon lacks such statuses) / Hold steady and wait for a clear shot; when the moment arrives (GM’s call), deal your damage / Move to get a clear shot—exposing yourself to danger or giving up some advantage (GM says how)—then deal your damage / Rush the shot and deal your damage, leading to a cost or complication of the GM’s choice."
       },
       "failure": {
         "label": "6-",
@@ -158,16 +158,16 @@
   },
   {
     "name": "Seek Insight",
-    "description": "<p>When you <strong><em>study a situation or person, looking to the GM for insight</em></strong>, roll +WIS: <strong>on a 10+</strong>, ask the GM 3 questions from the list below; <strong>on a 7-9</strong>, ask 1; <strong><em>either way</em></strong>, gain advantage on your next move that acts on the answers.</p><ul><li>What happened here recently?</li><li>What is about to happen?</li><li>What should I be on the lookout for?</li><li>What here is useful or valuable to me?</li><li>Who or what is really in control here?</li><li>What here is not what it appears to be?</li></ul>",
+    "description": "<p>When you <strong><em>study a situation or person, looking to the GM for insight</em></strong>, roll +WIS: <strong>on a 10+</strong>, ask the GM 3 questions from the list below; <strong>on a 7-9</strong>, ask 1; <strong><em>either way</em></strong>, take advantage on your next move to act on the answers.</p><ul><li>What happened here recently?</li><li>What is about to happen?</li><li>What should I be on the lookout for?</li><li>What here is useful or valuable to me?</li><li>Who or what is really in control here?</li><li>What here is not what it appears to be?</li></ul>",
     "rollType": "wis",
     "results": {
       "success": {
         "label": "10+",
-        "value": "Ask the GM 3 questions from the list. Gain advantage on your next move that acts on the answers."
+        "value": "Ask the GM 3 questions from the list. Take advantage on your next move to act on the answers."
       },
       "partial": {
         "label": "7-9",
-        "value": "Ask the GM 1 question from the list. Gain advantage on your next move that acts on the answers."
+        "value": "Ask the GM 1 question from the list. Take advantage on your next move to act on the answers."
       },
       "failure": {
         "label": "6-",

@@ -68,6 +68,7 @@
       <section class="stonetop-welcome-section" data-tab="book-art"{{#unless (eq activeTab "book-art")}} hidden{{/unless}}>
         <p>If you own the Stonetop PDFs, you can rebuild the monster and location illustrations right here in your world: portraits, tokens, and journal art all filled in from your own books. Nothing is uploaded anywhere; the pictures are reconstructed locally on your machine.</p>
         <p>The same window turns the five poster maps you own into ready-to-use Scenes, from either the separate map images or the single all-maps PDF. You can do that on its own, without supplying a book.</p>
+        <p>While a book is open, the importer also offers to <strong>keep a copy of it in this world</strong>, so you can read it here as well: Book I and Book II from the GM Toolkit, and Book I from your players&rsquo; character sheets. It is a tick-box beside each book, ticked to begin with, so supplying a PDF once is enough for both. Untick it if you came for the art alone. The copy stays on your own Foundry; nothing is sent anywhere.</p>
         {{#if bookArtImported}}
           <div class="stonetop-welcome-notice stonetop-welcome-notice--done">
             <i class="fas fa-circle-check"></i>
@@ -139,8 +140,11 @@
               </span>
               {{/if}}
             </div>
-            <button type="button" class="stonetop-welcome-create{{#if characters.length}} stonetop-welcome-create--replace{{/if}}" data-user-id="{{id}}">
-              <i class="fas fa-user-plus"></i> {{#if characters.length}}New Character{{else}}Create Character{{/if}}
+            {{!-- Not styled as destructive for a player who already has one: the button now
+                  asks whether the new character joins theirs or replaces it, and only the
+                  second answer deletes anything. --}}
+            <button type="button" class="stonetop-welcome-create" data-user-id="{{id}}">
+              <i class="fas fa-user-plus"></i> {{#if characters.length}}Another Character{{else}}Create Character{{/if}}
             </button>
           </li>
           {{/each}}

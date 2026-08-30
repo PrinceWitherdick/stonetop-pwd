@@ -1,6 +1,7 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { stonetopChatCard } from "../../../utils/chat.js";
 import { escHtml } from "../../../utils/strings.js";
+import { TIER_LABELS } from "../../../utils/move-results.js";
 import { classifyResult, rollStat } from "../../../utils/roll-engine.js";
 import { guideRailStep } from "../../../utils/guide-rail.js";
 import { DEATHS_DOOR_STATE, zeroHpMove } from "../deaths-door.js";
@@ -84,17 +85,17 @@ const _FATES = [
 const _TIERS = [
 	{
 		key:   "success",
-		label: "10+",
+		label: TIER_LABELS.success,
 		text:  "You wrest yourself back to the realm of the living—return to 1 HP but say how your brush with death has marked you.",
 	},
 	{
 		key:   "partial",
-		label: "7-9",
+		label: TIER_LABELS.partial,
 		text:  "The Lady waves you off—you’re no longer dying but you’re out of the action.",
 	},
 	{
 		key:     "failure",
-		label:   "6-",
+		label:   TIER_LABELS.failure,
 		text:    "Your time has come—choose 1:",
 		// The same three fates the miss offers as buttons, so the preview and the choice read alike.
 		options: _FATES.map(f => f.label),

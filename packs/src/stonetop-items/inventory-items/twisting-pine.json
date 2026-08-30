@@ -14,7 +14,14 @@
       "note": "A vial of its quick-hardening sap, used in lieu of supplies to Recover (seals wounds, flakes away days later). A harvested jar is Value 1 as a sealant or pottery glaze.",
       "weight": 1,
       "special": true,
-      "specialCategory": "Flora & Herbs"
+      "specialCategory": "Flora & Herbs",
+      "resource": {
+        "max": 1,
+        "title": null,
+        "labels": [
+          "vial"
+        ]
+      }
     }
   },
   "folder": "OL1lTSyCryWm3Xez"

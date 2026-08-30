@@ -1234,6 +1234,12 @@ describe("drawing the route on the scene", () => {
 	function scene(slug = "vicinity", { name = null, width = 6000, height = 4714 } = {}) {
 		const doc = {
 			id: `scene-${slug}`,
+			// What `Scene#view` does to a real canvas, in the one part these tests can ask about:
+			// the scene the reader is now looking at. Counted as well as recorded, because "it
+			// drew on the right map" and "it moved the table to get there" are two facts and only
+			// one of them is visible in the flag afterwards.
+			viewed: 0,
+			view: async () => { doc.viewed += 1; globalThis.canvas = { scene: doc }; },
 			name: name ?? (slug === "vicinity" ? "The Vicinity" : "The World's End"),
 			width, height,
 			flags: { "stonetop-pwd": slug ? { posterMap: slug } : {} },
@@ -1375,20 +1381,71 @@ describe("drawing the route on the scene", () => {
 	});
 
 	// The whole point of the alert. "Nothing happened" is the one answer none of the refusals
-	// deserve, and the map that WOULD take it is the only part of a no the GM can act on.
-	it("says why, and writes nothing, when the scene is no map of ours", async () => {
+	// deserve, and the map that WOULD take it is the only part of a no the GM can act on. This is
+	// what is left of them now the wrong-map cases walk to the right map instead: a world that
+	// never imported the book art has no scene to walk to, so the words are all there is.
+	it("says why, and writes nothing, when the scene is no map of ours and the world has no other", async () => {
 		const doc = scene(null, { name: "The Barrow", width: 4000, height: 3000 });
-		const said = onCanvas(doc, [scene("vicinity")]);
+		const said = onCanvas(doc);
 		await dialog({ destination: "the-crossroads" })._putRouteOnScene();
 		expect(doc.flags["stonetop-pwd"].expeditionRoute).toBeUndefined();
 		expect(said.info).toHaveLength(0);
-		expect(said.warn[0]).toContain("The Vicinity");
+		// No scene to walk to, so what the refusal owes them is the way to build one.
+		expect(said.warn[0]).toContain("Import Book Art");
 	});
 
-	it("says which end the scene's map cannot place", async () => {
-		const said = onCanvas(scene("vicinity"), [scene("worlds-end")]);
-		await dialog({ destination: "tors-fist" })._putRouteOnScene();
-		expect(said.warn[0]).toContain("The World's End");
+	// The route is fractions of ONE picture, and the scene the table is on is the other one. Being
+	// told so was never useful: the GM's answer was always the same two gestures, open that map
+	// and press the button again, so the button does them.
+	describe("going to the map the journey belongs to", () => {
+		it("opens the scene that draws it, and draws it there, when the canvas is on no map of ours", async () => {
+			const vicinity = scene("vicinity");
+			const said = onCanvas(scene(null, { name: "The Barrow", width: 4000, height: 3000 }), [vicinity]);
+			await dialog({ destination: "the-crossroads" })._putRouteOnScene();
+			expect(vicinity.viewed).toBe(1);
+			expect(vicinity.flags["stonetop-pwd"].expeditionRoute)
+				.toMatchObject({ origin: "stonetop", destination: "the-crossroads" });
+			expect(said.warn).toHaveLength(0);
+			// It says the canvas moved, not only where the line went: a scene switch is the
+			// loudest thing this button does and the GM did not ask for it in so many words.
+			expect(said.info[0]).toContain("The Vicinity");
+			expect(said.info[0]).toContain("the Crossroads");
+			expect(said.info[0]).toContain("on the canvas now");
+		});
+
+		// The end this map cannot place is on the other one, which is the same fact wearing a
+		// different refusal.
+		it("crosses to the other poster map when this one cannot place an end of the way", async () => {
+			const worldsEnd = scene("worlds-end");
+			const said = onCanvas(scene("vicinity"), [worldsEnd]);
+			await dialog({ destination: "tors-fist" })._putRouteOnScene();
+			expect(worldsEnd.viewed).toBe(1);
+			expect(worldsEnd.flags["stonetop-pwd"].expeditionRoute).toBeTruthy();
+			expect(said.info[0]).toContain("The World's End");
+		});
+
+		// Nothing to walk to, so the words are still the whole of the answer, and the canvas the
+		// table is looking at is left exactly where it was.
+		it("says which end the scene's map cannot place when the world has no scene for the other", async () => {
+			const here = scene("vicinity");
+			const said = onCanvas(here);
+			await dialog({ destination: "tors-fist" })._putRouteOnScene();
+			expect(said.warn[0]).toContain("Tor's Fist");
+			expect(said.warn[0]).toContain("Import Book Art");
+			expect(globalThis.canvas.scene).toBe(here);
+			expect(here.flags["stonetop-pwd"].expeditionRoute).toBeUndefined();
+		});
+
+		// A fault in the map it would have walked to is not mended by walking there. The reader
+		// keeps the refusal that names the map, and keeps their canvas.
+		it("stays put when the scene that draws it could not take the route either", async () => {
+			const broken = scene("worlds-end", { width: 6000, height: 2000 });
+			const said = onCanvas(scene("vicinity"), [broken]);
+			await dialog({ destination: "tors-fist" })._putRouteOnScene();
+			expect(broken.viewed).toBe(0);
+			expect(broken.flags["stonetop-pwd"].expeditionRoute).toBeUndefined();
+			expect(said.warn[0]).toContain("The World's End");
+		});
 	});
 
 	// The panel is on the World's End and the table is on the Vicinity, which is the ordinary

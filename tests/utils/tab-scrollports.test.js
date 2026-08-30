@@ -28,15 +28,12 @@ const CHARACTER_SHEET = read("module/actors/character/StonetopCharacterSheet.js"
 const STEADING_SHEET = read("module/actors/steading/StonetopSteadingSheet.js");
 const TOOLKIT_SHEET = read("module/actors/gmtoolkit/StonetopGmToolkitSheet.js");
 
-/** The declaration block for the first rule whose selector list contains `selector`. */
-function ruleFor(selector) {
-	const at = CSS.indexOf(selector);
-	if (at === -1) return null;
-	const open = CSS.indexOf("{", at);
-	const close = CSS.indexOf("}", open);
-	if (open === -1 || close === -1) return null;
-	return CSS.slice(open + 1, close);
-}
+// Every declaration that reaches `selector`, comment-stripped and matched as a whole entry in
+// the rule's selector list — the shared reader (tests/fakes/css.js), the same one the GM Toolkit
+// block below already used. What stood here was a raw `indexOf` over the uncommented source,
+// which answered with whichever block followed the first MENTION of a selector, a comment
+// describing it included.
+const ruleFor = (selector) => declarations(readCss(), selector);
 
 describe("character sheet tab scrollports", () => {
 	it("relinks the height chain for every tab, not only Notes", () => {
@@ -67,7 +64,10 @@ describe("character sheet tab scrollports", () => {
 	});
 
 	it("pins the header and stats so only the tab body scrolls", () => {
-		const block = ruleFor(".pbta.sheet.actor.character .sheet-wrapper > :not(.sheet-main)");
+		// The blank-sheet exclusion is part of the selector, not an afterthought — see the test
+		// below. Named in full here because the reader matches a whole selector-list entry; the
+		// raw `indexOf` this replaced matched the prefix and never showed which rule it found.
+		const block = ruleFor(".pbta.sheet.actor.character .sheet-wrapper > :not(.sheet-main):not(.stonetop-no-playbook-state)");
 		expect(block).toBeTruthy();
 		expect(block).toContain("flex: 0 0 auto");
 	});

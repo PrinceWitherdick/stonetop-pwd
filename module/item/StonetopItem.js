@@ -2,6 +2,7 @@ import {StonetopPlaybook} from "./StonetopPlaybook.js";
 import {rollFormula, rollStat} from "../utils/roll-engine.js";
 import {normalizeRollType} from "../utils/roll-types.js";
 import {filterStatOptionLines, escHtml} from "../utils/strings.js";
+import {moveCardBody} from "../utils/move-tiers.js";
 import {stonetopThumbnail} from "../utils/item-icon.js";
 import {STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "../actors/character/StonetopFlags.js";
 import {newArcanumSlug, isArcanumData} from "./createArcanum.js";
@@ -196,10 +197,21 @@ export function createStonetopItemClass(BaseItem) {
 			const signoff = signed ? `<p class="stonetop-move-signoff">${escHtml(signed)}</p>` : "";
 
 			if (descriptionOnly) {
+				// Tickable here too, and for the same reason it is everywhere else: ONE rule for
+				// every move, wherever its printed list is shown. This is the path a move takes
+				// from the HOTBAR (rollMoveById) and from an NPC or monster sheet, and it used to
+				// post the same text the Moves tab's name-click posts, minus the boxes — so
+				// Mighty Thews dragged to the bar offered a "pick 1" nobody could tick, and no
+				// tally above it, while the same move on the tab did both.
+				//
+				// And the ladder too, which is the same argument again: the sheet re-lays a move's
+				// 10+ / 7-9 / 6- as labelled rows (utils/move-tiers.js), so a card that posted the
+				// book's run-on paragraph instead was the one surface still leaving the outcomes
+				// buried in the sentence.
 				return ChatMessage.create({
 					content: `<div class="stonetop-chat-move">
 						<h3 class="stonetop-chat-move-name">${escHtml(this.name)}</h3>
-						<div class="stonetop-chat-move-description">${this.system?.description ?? ""}${signoff}</div>
+						<div class="stonetop-chat-move-description">${moveCardBody(this.system?.description ?? "", this.system?.moveResults)}${signoff}</div>
 					</div>`,
 					speaker: ChatMessage.getSpeaker({ actor }),
 				});
@@ -211,9 +223,12 @@ export function createStonetopItemClass(BaseItem) {
 			// with DEX) isn't an "ask" move but should still label the chosen stat.
 			const usingAltStat = !!options.statOverride && options.statOverride !== rollType;
 			const description = this.system?.description ?? "";
-			const moveDescription = (isStatChoice
+			// The signoff is appended LAST, below the ladder, rather than carried through the
+			// rewrite: "XOXO, your GM" closes the letter, and a set of tier rows printed under
+			// the signature would read as a postscript nobody wrote.
+			const moveDescription = isStatChoice
 				? filterStatOptionLines(description, options.statOverride)
-				: description) + signoff;
+				: description;
 			const moveName = (isStatChoice || usingAltStat)
 				? `${this.name} with ${options.statOverride.toUpperCase()}`
 				: this.name;
@@ -236,15 +251,33 @@ export function createStonetopItemClass(BaseItem) {
 				? knowThingsRollOptions(actor)
 				: null;
 
+			// "On a 10+, pick 2" needs something to pick. A move prints its options in its own
+			// text, so they are made tickable exactly where they are printed — the same treatment
+			// a non-rolling move's posted card gets, and ticks persist on the message either way.
+			//
+			// In PLACE, not lifted into the card's own checklist below the result: a move's list
+			// is usually followed by more of its text (Clash's 7-9 line, Forage's note about
+			// provisions), and cutting the list out of the middle leaves the sentence that
+			// introduces it — "on a 10+, pick 2; on a 7-9, pick 1:" — pointing straight at
+			// whatever came after. Thirteen of the twenty-nine shipped rolling moves with a list
+			// read that way.
+			//
+			// Skipped for a move that names its own pool in `system.pickOptions` (love letters):
+			// that pool renders as its own checklist, and a second list in the description would
+			// start its data-index at 0 again and scramble the message's saved ticks.
+			const declaredPicks = this.system?.pickOptions ?? [];
+			const cardDescription = moveCardBody(moveDescription, this.system?.moveResults,
+				{ pickable: !declaredPicks.length }) + signoff;
+
 			if (stat) return rollStat(stat, actor, {
 				...options,
 				messageFlags,
 				moveName,
-				moveDescription,
+				moveDescription: cardDescription,
 				moveResults: this.system?.moveResults ?? null,
-				// Shared "choose from this list" pool (love letters) — rendered as a checklist,
-				// with the rolled tier's moveResults.<tier>.pick saying how many to take.
-				pickOptions: this.system?.pickOptions ?? [],
+				// A love letter's shared pool — the rolled tier's moveResults.<tier>.pick says
+				// how many of it to take.
+				pickOptions: options.pickOptions ?? declaredPicks,
 				// Moves that explicitly override the standard "+1 XP on a miss" (e.g. Danger
 				// Sense, Hard to Kill / Death's Door rolls) set system.noXpOnMiss.
 				noXpOnMiss:  this.system?.noXpOnMiss ?? false,
@@ -252,8 +285,11 @@ export function createStonetopItemClass(BaseItem) {
 				...(knowThings ?? {}),
 			});
 
-			// Raw formula path — used by npcMove items
-			return rollFormula(rawFormula, actor, { label: this.name, description: moveDescription });
+			// Raw formula path — used by npcMove items. `cardDescription`, not the raw text, so
+			// the last way a move can reach chat obeys the same rule as the other three: no
+			// shipped NPC or monster move prints a list today, but a homebrew one that does gets
+			// tickable options and a tally rather than bullets nobody can act on.
+			return rollFormula(rawFormula, actor, { label: this.name, description: cardDescription });
 		}
 	};
 }

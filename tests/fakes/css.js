@@ -79,11 +79,37 @@ export function readCss(rel = "styles/stonetop.css") {
 	return readRepo(rel).replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
+/**
+ * Split a selector list on the commas that SEPARATE its entries, stepping over the ones inside
+ * `:is(…)` / `:where(…)` / `:not(…)`.
+ *
+ * A plain `split(",")` tears `:is(#chat, #chat-notifications, #chat-popout) .message .x` into
+ * three fragments, none of which is a selector anyone would assert about — so every rule written
+ * with `:is()` was invisible to `declarations` and `ownRule`, and the tests that needed one had
+ * to hand-roll their own scanner instead. Three had, and they had drifted into three behaviours.
+ */
+export function splitSelectorList(prelude) {
+	const out = [];
+	let depth = 0;
+	let start = 0;
+	for (let i = 0; i < prelude.length; i++) {
+		const ch = prelude[i];
+		if (ch === "(") depth++;
+		else if (ch === ")") depth--;
+		else if (ch === "," && depth === 0) { out.push(prelude.slice(start, i)); start = i + 1; }
+	}
+	out.push(prelude.slice(start));
+	// Newlines and tabs inside a wrapped selector are whitespace like any other, so a selector
+	// written across two lines answers to the one-line spelling a test asks with.
+	return out.map(s => s.trim().replace(/\s+/g, " ")).filter(Boolean);
+}
+
 /** Every rule whose prelude names `selector` as a whole comma-separated entry, in source order. */
 function rulesNaming(css, selector) {
 	const found = [];
+	const want = selector.trim().replace(/\s+/g, " ");
 	for (const [, prelude, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-		if (prelude.split(",").map(s => s.trim()).includes(selector)) found.push({ prelude, body });
+		if (splitSelectorList(prelude).includes(want)) found.push({ prelude, body });
 	}
 	return found;
 }
@@ -122,6 +148,9 @@ export function declarations(css, selector) {
  * about it into a vacuous pass.
  */
 export function ownRule(css, selector) {
-	const own = rulesNaming(css, selector).filter(r => r.prelude.trim() === selector).map(r => r.body);
+	const want = selector.trim().replace(/\s+/g, " ");
+	const own = rulesNaming(css, selector)
+		.filter(r => splitSelectorList(r.prelude).length === 1 && splitSelectorList(r.prelude)[0] === want)
+		.map(r => r.body);
 	return own.length ? own.join("\n") : declarations(css, selector);
 }

@@ -153,8 +153,10 @@ export function actorOptionsFor(isGM, { haveToolkit = false } = {}) {
 
 /**
  * Rows for the "whose character is this?" step: one per player, plus an unassigned option.
- * A player who already has a character says so in their hint, because minting a second one
- * replaces the first (see createCharacterForUser).
+ * A player who already has a character says so in their hint, and says which question that
+ * raises — a second character to play alongside, or a replacement for the one they have.
+ * The choice itself is made after this step (see createCharacterForUser); naming it here
+ * means the GM picks a row already knowing the row isn't a delete.
  *
  * @param {Array} users              The world's users; GMs are filtered out (they run the world).
  * @param {(userId: string) => Array} charactersFor  Existing characters for a user.
@@ -178,7 +180,8 @@ export function ownerOptions(users = [], charactersFor = () => []) {
 function _ownerHint(user, existing = []) {
 	const names = existing.map(a => a?.name).filter(Boolean);
 	if (names.length) {
-		return `Already plays ${names.join(", ")}. Creating a new character replaces ${names.length === 1 ? "it" : "them"}.`;
+		return `Already plays ${names.join(", ")}. You'll be asked whether to add another character `
+			+ `alongside, or replace ${names.length === 1 ? "it" : "them"}.`;
 	}
 	return user.active
 		? "Online. Character creation opens on their screen."

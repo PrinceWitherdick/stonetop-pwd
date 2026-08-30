@@ -12,7 +12,7 @@
 <div class="stonetop-exp-load-pick">
   <span class="stonetop-exp-load-picklab">On this trip:</span>
   {{#each loadReadout.chips}}
-  <button type="button" class="stonetop-exp-load-chip{{#unless on}} is-out{{/unless}}" data-actor-id="{{id}}">
+  <button type="button" class="stonetop-exp-load-chip{{#unless on}} is-out{{/unless}}{{#if undeadKind}} is-undead is-undead--{{undeadKind}}{{/if}}" data-actor-id="{{id}}">
     <span class="tick">✓</span> {{name}}
   </button>
   {{/each}}
@@ -29,12 +29,12 @@
 </div>
 
 {{#each loadReadout.rows}}
-<div class="stonetop-exp-load-row {{levelClass}}{{#if isFollower}} is-follower{{/if}}">
+<div class="stonetop-exp-load-row {{levelClass}}{{#if isFollower}} is-follower{{/if}}{{#if undead}} is-undead is-undead--{{undead.kind}}{{/if}}">
   {{!-- `stonetop-portrait-box` marks the CLIPPING box a hover preview measures itself against,
         so a hand-framed portrait raises its enlarged card beside the face and not off where the
         oversized image really sits (module/utils/avatar-preview.js). --}}
   <span class="stonetop-exp-load-ava stonetop-portrait-box{{#if img}} stonetop-exp-load-ava--photo{{/if}}">{{#if img}}<img class="stonetop-exp-load-ava-img" src="{{img}}" alt="" draggable="false" data-name="{{name}}"{{#if previewSub}} data-subtitle="{{previewSub}}"{{/if}}{{#if imgStyle}} style="{{imgStyle}}"{{/if}}>{{else}}{{initial}}{{/if}}</span>
-  <span class="stonetop-exp-load-name">{{name}}{{#if sub}} <em>{{sub}}</em>{{/if}}{{#if folTag}} <span class="stonetop-exp-load-fol">{{folTag}}</span>{{/if}}</span>
+  <span class="stonetop-exp-load-name">{{name}}{{#if sub}} <em>{{sub}}</em>{{/if}}{{#if folTag}} <span class="stonetop-exp-load-fol">{{folTag}}</span>{{/if}}{{#if undead}} <span class="stonetop-exp-load-undead">{{undead.label}}</span>{{/if}}</span>
   <span class="stonetop-exp-load-track">
     {{#each bands}}<span class="stonetop-exp-load-band">{{#each pips}}<i class="stonetop-exp-load-pip{{#if on}} on{{/if}}"></i>{{/each}}</span>{{/each}}
     {{#if overflow}}<span class="stonetop-exp-load-over">+{{overflow}}</span>{{/if}}

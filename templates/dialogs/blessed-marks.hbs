@@ -11,14 +11,15 @@
 
 	{{#if hasGroups}}
 	{{#each groups}}
-	{{!-- One group per kind. The heading is the move; the line under it is what the mark is
-	      DOING for the person wearing it, quoted from the move rather than paraphrased, since
-	      that is the question this window exists to answer without a trip to the Moves tab. --}}
+	{{!-- One group per kind SOMEBODY WEARS — a kind with no rows is not built at all, so this
+	      window is only ever as long as the marks that are out. The heading is the move; the line
+	      under it is what the mark is DOING for the person wearing it, quoted from the move rather
+	      than paraphrased, since that is the question this window exists to answer without a trip
+	      to the Moves tab. --}}
 	<section class="stonetop-marks-group" data-mark-kind="{{key}}">
 		<h3 class="stonetop-marks-group-heading">{{label}}</h3>
 		<p class="stonetop-marks-group-rule">{{rule}}</p>
 
-		{{#if rows.length}}
 		<ul class="stonetop-marks-list">
 			{{#each rows}}
 			{{#> "stonetop.roster-row" prefix="stonetop-marks" editable=../../editable
@@ -77,9 +78,6 @@
 			{{/"stonetop.roster-row"}}
 			{{/each}}
 		</ul>
-		{{else}}
-		<p class="stonetop-marks-empty">{{empty}}</p>
-		{{/if}}
 	</section>
 	{{/each}}
 	{{else}}

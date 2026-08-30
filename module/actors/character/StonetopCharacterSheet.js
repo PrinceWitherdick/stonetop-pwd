@@ -33,20 +33,28 @@ import {CharacterLedger} from "./CharacterLedger.js";
 import {wireTabSearch} from "../../utils/tab-search.js";
 import {createPacker, fitColumns, makeColumns, packShortest, wireMasonry} from "../../utils/masonry.js";
 import {mountTabRail} from "../../utils/tab-rail.js";
+import {buildPreferenceGroups} from "../../utils/sheet-preferences.js";
+import {showsPreferencesTab, withPreferencesTab} from "../../utils/preferences-tab.js";
 import {injectHeaderToggle} from "../../utils/sheet-chrome.js";
 import {mountScrollFrost} from "../../utils/scroll-frost.js";
 import {withSheetSizeMemory} from "../../utils/sheet-size.js";
 import { crewExists, effectiveCrewSize, customGroupSize, crewAnonMemberLabel, crewIndividualLabel, CREW_SIZE_MAX } from "../../utils/crew.js";
 import {resolvedFlags, resolvedFlagProperty, STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "./StonetopFlags.js";
 import {createArcanumItem} from "../../item/createArcanum.js";
-import {rollDamage, rollStat, sign, classifyResult} from "../../utils/roll-engine.js";
+import {rollStat, sign, classifyResult} from "../../utils/roll-engine.js";
 import {defendReadinessHold} from "../../combat/defend-readiness.js";
 import {dieFromDamage} from "../../utils/damage.js";
 import {normalizeDamageDie} from "../../utils/damage-die.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
 import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct} from "../../utils/strings.js";
 import {playbookIconPath, partyCharacters} from "../../utils/playbook-actors.js";
-import {postMoveToChat, moveChatCard} from "../../utils/chat.js";
+import {postMoveToChat, moveChatCard, pickableMoveDescription} from "../../utils/chat.js";
+import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
+import {statApproaches} from "../../utils/stat-approaches.js";
+import {wirePickTally} from "../../utils/pick-tally.js";
+import {stockSourcesForFlags, canPayStock, defaultStockSource, stockCostFromDescription, SACRED_POUCH_SLUG, RITES_OF_THE_LAND} from "./stock-cost.js";
+import {supplyPursesFor, defaultSupplyPurse, spendSupplies, campUsesNeeded, SUPPLY_PURPOSE} from "./supply-cost.js";
+import {rollProvisions, ON_THE_HOOF} from "./provisions.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
 import {knowThingsRollChoices, withAdvantage, KNOW_THINGS_STAT} from "./arcana-identify.js";
 import {ARTIFACT_STATE, artifactStateForTier, knowThingsArtifactResults, seekInsightArtifactResults,
@@ -56,20 +64,29 @@ import {getStonetopSteadingActor} from "../../utils/world.js";
 import {openChroniclePageForActor} from "../../utils/chronicle.js";
 import {getDragEventData, deletionEntry, enrichHTML, imagePopout, renderTemplate} from "../../utils/foundry-compat.js";
 import {STEADING_DEFAULTS, StonetopSteading} from "../steading/StonetopSteading.js";
+import {readCurrentSeason, readCurrentYear} from "../../seasons/current-season.js";
+import {openRitesOfTheLand} from "./rites-of-the-land.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
-import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getHideRollableIconSetting, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
+import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
 import {bringDialogToFront} from "../../utils/front-on-open.js";
 import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
-import {promptRoll, UNPROMPTED_ROLL} from "../../dialogs/RollDialog.js";
+import {promptRoll, rollDamagePrompted, UNPROMPTED_ROLL} from "../../dialogs/RollDialog.js";
 import {withSectionEditing} from "../../utils/section-editing.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {annotateInvocationEffects, splitEmpoweredEffect} from "./invocation-effects.js";
 import {CONSECRATED_FLAME, INVOKE_THE_SUN_GOD, EMPOWERED_INVOCATIONS, ownsMoveNamed, showHolyLight} from "./holy-light.js";
-import {ownedMoveNames} from "./owns-move.js";
+import {ownedMoveNames, ownedMove} from "./owns-move.js";
 import {invocationLabel, invokeNotice, readOngoing, resolveInvocationUse} from "./ongoing-invocation.js";
 import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE} from "./condemn.js";
+import {readyRulebookIcon, openSharedRulebook} from "../../books/rulebook-icons.js";
+
+/**
+ * The one book a PLAYER's sheet offers. Book I is the rules they play by; Book II is the
+ * gazetteer, which is the GM's side of the screen and stays on the GM Toolkit.
+ */
+const PLAYER_BOOK = 1;
 import {BINDING_ARBITRATION} from "./oaths.js";
 import {CondemnedDialog} from "./dialogs/CondemnedDialog.js";
 import {showBattleJoy, BATTLE_JOY} from "./battle-joy.js";
@@ -77,7 +94,8 @@ import {
 	showBlessedMarks, BARKSKIN, TRACKLESS_STEP, SHARED_SOULS, AMULETS_TALISMANS, WARDS_BINDINGS,
 } from "./blessed-marks.js";
 import {BlessedMarksDialog} from "./dialogs/BlessedMarksDialog.js";
-import {wrapGlyphTextContainers} from "../../utils/glyphs.js";
+import {wrapGlyphTextContainers, wrapStonetopGlyphsInEl} from "../../utils/glyphs.js";
+import {prepareMoveHoverBody} from "../../utils/move-hover.js";
 import {StonetopAutocomplete} from "../../utils/autocomplete.js";
 import {canAuthorCustomMoves, canCreateArcana} from "../../utils/authoring-gates.js";
 import {enrichMoveRefsInEl, fetchMoveRef} from "../../utils/move-refs.js";
@@ -143,174 +161,114 @@ const FOLLOWER_ARMOR_SOURCES = [
 
 const _esc = escHtml;
 
+/**
+ * Every move in a snapshot's movelist, flattened — basic, expedition, playbook, learned, the
+ * "other" moves both flat and in their custom groups, post-death, and love letters.
+ *
+ * One enumeration because two callers need the same one and would drift apart: the wound
+ * reminder's name list, and `_printedMoveSource`, which has to find a row's SOURCE text whether
+ * or not that row is an owned item. A section added to the sheet and missed here goes quiet in
+ * both — no reminder to attach a wound to, and a card that falls back to scraping the DOM.
+ */
+function* _movelistMoves(movelist) {
+	if (!movelist) return;
+	yield* movelist.basicMoves ?? [];
+	yield* movelist.expeditionMoves ?? [];
+	yield* movelist.playbookMoves ?? [];
+	yield* movelist.learnedMoves ?? [];
+	yield* movelist.otherMoves ?? [];
+	for (const group of movelist.otherGroups ?? []) yield* group?.moves ?? [];
+	yield* movelist.postDeathGroup?.moves ?? [];
+	yield* movelist.loveLetters ?? [];
+}
+
 function _formatResultLine(text) {
 	return _esc(text).replace(/^(7\+|10\+|7-9|6-):/, "<strong>$1:</strong>");
 }
 
+// Whether a guided move has anything to open a dialog FOR. A move that only rolls opens one to
+// ask how; a move that neither rolls nor is rollable has nothing to decide, so its name-click
+// posts its text to chat instead.
 function _guidedCharacterMoveHasAction(guide, rollable = null) {
-	return Boolean(rollable || guide?.roll || guide?.fields?.length);
+	return Boolean(rollable || guide?.roll);
 }
 
-const GUIDED_CHARACTER_MOVES = {
-	"Censure": {
-		trigger: "When you first denounce an individual in your presence as an agent of chaos or anathema to civilization, they pick 1.",
-		picksLabel: "They pick 1:",
-		picks: ["They are ashamed, and act accordingly", "They are doubtful, and hesitate, pause", "They are afraid, and seek to escape", "They are enraged, and lash out predictably"],
-	},
-	"Piety": {
-		trigger: "When you spend at least an hour in proper worship to Helior, hold 1 Blessing. Other faithful PCs who partake also hold 1 Blessing.",
-		picksLabel: "Spend Blessing to:",
-		picks: ["Add +1 to a roll you just made in pursuit of a righteous cause"],
-	},
-	"Anger is a Gift": {
-		trigger: "When you burn with righteous anger, hold 2 Resolve.",
-		picksLabel: "Spend Resolve 1-for-1 to:",
-		picks: ["Set aside fear and doubt to do what must be done", "Act suddenly, catching them off-guard", "Inspire allies or bystanders to follow your lead", "Strike hard (+1d4 damage, forceful)", "Keep your footing, position, and/or your course despite what befalls you"],
-	},
-	"I Get Knocked Down": {
-		trigger: "When you take damage despite your best efforts to avoid it, you can halve the damage but pick 1.",
-		picksLabel: "Pick 1:",
-		picks: ["You lose something", "Something on your person breaks", "You are out of it for a moment"],
-	},
-	"Up With People": {
-		trigger: "When you converse with someone, you can hold 2 Rapport with them. If you do, they hold 1 Rapport with you.",
-		picksLabel: "Spend Rapport to ask:",
-		picks: ["What weighs you down or holds you back?", "What drives you forward?", "What lesson would you have me learn?", "What do you think of me, truly?"],
-	},
-	"A Safe Place": {
-		trigger: "When you select and prepare the party's camp site, hold 1 Precaution, or 2 if well-versed with this area and its dangers.",
-		picksLabel: "Spend Precaution to reveal:",
-		picks: ["A simple defense", "A warning", "A trick prepared in advance"],
-	},
-	"Beast of Legend": {
-		trigger: "Each time you take this move, pick 1 for your animal companion.",
-		picksLabel: "Pick 1:",
-		picks: ["They are exceptional", "They get +4 HP and +1 armor", "They develop a unique ability or trait"],
-	},
-	"Blot Out the Sun": {
-		trigger: "When you Let Fly with a bow, deplete your ammunition before rolling. If you do, choose 1.",
-		picksLabel: "Choose 1:",
-		picks: ["Gain advantage on your damage roll", "Add the area tag to your attack"],
-	},
-	"Survivalist": {
-		trigger: "When you Forage, pick 1 extra choice and add a new option.",
-		picksLabel: "Added Forage option:",
-		picks: ["Find or fashion some useful item or supply"],
-	},
-	"Second Intent": {
-		trigger: "When you Defend and spend 1 Readiness to Parry & Riposte, also pick 1 option from the Ambush list.",
-		picksLabel: "Pick 1:",
-		picks: ["Deal +1d4 damage", "Stop them from making noise/raising an alarm", "Slip away before they can react", "Create an opportunity; you or an ally gains advantage on the next move to act on it"],
-	},
-	"Potent Workings": {
-		trigger: "When you craft a protective charm, spend 1 additional Stock to choose 1.",
-		picksLabel: "Choose 1:",
-		picks: ["Name an additional type of harm", "On a 10+, the charm retains its potency"],
-	},
-	"Rites of the Land": {
-		trigger: "Once per season, when you oversee the sacred rites, hold 1 Favor. If you also sacrifice 1 Surplus, hold 4 Favor instead.",
-		picksLabel: "Public sacrifice result:",
-		picks: ["Clear a steading debility", "Gain advantage when the steading next rolls +Fortunes"],
-	},
-	"Safety First": {
-		trigger: "When you spend an hour or so preparing your mystical defenses, hold 2 Protection.",
-		picksLabel: "Spend Protection to:",
-		picks: ["Gain advantage on a roll to resist harmful magic", "Halve harmful magic's damage/effects"],
-	},
-	"Guardian": {
-		trigger: "When you Defend, hold 1 extra Readiness. Even on a 6-, hold 1 Readiness plus whatever the GM says.",
-		picksLabel: "Reminder:",
-		picks: ["Hold 1 extra Readiness", "On a 6-, hold 1 Readiness"],
-	},
-	"Mighty Thews": {
-		trigger: "When you perform a feat of extraordinary strength, you do it but pick 1.",
-		picksLabel: "Pick 1:",
-		picks: ["It takes a while", "You cause unwanted damage or harm", "It takes a toll (mark a debility)"],
-	},
-	"Front Line Leader": {
-		trigger: "When you lead your crew into battle, hold 2 Presence.",
-		picksLabel: "Spend Presence as:",
-		picks: ["Crew Loyalty", "Readiness, as if you Defended them"],
-	},
-	"Heroes to the Last": {
-		trigger: "Each time you take this move, pick 1 for your crew.",
-		picksLabel: "Pick 1:",
-		picks: ["They are exceptional", "They are inured to terror and horror", "Increase their max HP by 4 each", "Increase their damage die one size"],
-	},
-	"Stentorian": {
-		trigger: "When you go into battle, hold 2 Command. Spend 1 Command to shout an order or warning and pick 1.",
-		picksLabel: "Pick 1:",
-		picks: ["PCs get advantage on their next roll to do as you say", "You have advantage to Order Followers or Deploy"],
-	},
-	"Veteran Crew": {
-		trigger: "Each time you take this move, pick 1. You can also reselect the crew's Instinct and Cost.",
-		picksLabel: "Pick 1:",
-		picks: ["Select 2 new tags for your Crew", "Increase their damage die from d6 to d8", "Increase their max HP by 2 each"],
-	},
-
-	// ── Expedition moves ──────────────────────────────────────────────
-	// Procedural moves open a step-by-step guide; rolling moves add a Roll
-	// button driven by `roll` (a stat key, or "ask" to pick a stat). Requisition
-	// and Outfit have their own dialogs and are dispatched separately.
-	"Chart a Course": {
-		trigger: "When you wish to travel to a distant place, name or describe your destination; if the route is unclear, tell the GM how you intend to reach it. The GM tells you what's required, the risks, and how long it will take.",
+/**
+ * The moves that open a dialog before they roll, keyed by move name.
+ *
+ * THREE entries, and that is the whole reachable population. A guide is found either by
+ * _guidedMoveForRollable — which needs the move to have a rollType, since a move without one
+ * has no `.rollable` on its title (see tab-moves.hbs) — or by a caller that names it outright, which only
+ * Recover's own button does.
+ *
+ * The table used to carry 24 more: every playbook and expedition move with a "pick 1" list in
+ * its text. Not one of them could ever be reached, because none of them rolls. They were a
+ * second, abbreviated copy of prose that already ships in the compendium, behind a door with no
+ * handle — and they had already drifted from it (A Safe Place's three separate "reveal" options
+ * are one sentence in the printed move).
+ *
+ * Their lists were not lost with them, and are not wired up here either. A move that never rolls
+ * now offers its choices on the card its text is posted to (chat.js#pickableMoveDescription):
+ * the move's OWN printed list, made tickable, persisted on the message like a roll card's. That
+ * covers every such move rather than the 24 someone got to, needs no second click, and has no
+ * copy to drift.
+ *
+ * A guide is REFERENCE plus, at most, what has to be answered before the dice: `trigger`,
+ * `results` and `note` are read, and `roll` is a stat key ("wis") or "ask" to pick one in the
+ * dialog. No free-text boxes — nothing stored what was typed into them (the homefront dialogs on
+ * the steading sheet lost theirs for the same reason) — and no pre-roll tick lists: Forage's
+ * "10+ pick 2, 7-9 pick 1" cannot be chosen before the dice have said which, and its four
+ * options are printed on the result card with the tier's count above them, so ticking them in
+ * the dialog only asked for a guess. (To make those a real checklist on the card, give the
+ * Forage ITEM a `system.pickOptions` — the roll engine renders and persists one from that.)
+ */
+/**
+ * The moves that CHARGE before they roll — `cost` makes the dialog say the price, show what is
+ * in the purse, and refuse the dice when it cannot be paid (see _stockCostView).
+ *
+ * Only a move whose ONE trigger both spends and rolls belongs here. Nine shipped moves cost
+ * Stock and five of those roll, but three of the five spend at one moment and roll at quite
+ * another: Amulets & Talismans and Wards & Bindings pay when the charm is crafted or the
+ * boundary marked, and roll later — when that harm actually comes, when those wards are tested —
+ * and Veil pays at the veiling and rolls when the deception is scrutinised. Gating THOSE rolls
+ * on Stock would refuse a Blessed the roll for a charm they already paid for, possibly sessions
+ * ago. The remaining four Stock moves (Call the Spirits, Healer's Arts, Potent Workings,
+ * Trackless Step) never roll at all, so there is no dialog and no moment at which to charge;
+ * they stay paid by hand on the pouch, as the Blessed's marks deliberately do.
+ */
+export const GUIDED_CHARACTER_MOVES = {
+	"Danu's Grasp": {
+		trigger: "When you call on the world itself to bind a spirit or a perversion of nature, spend 1 Stock and roll +WIS.",
 		results: [
-			"The GM presents each challenge, plus surprises, one at a time.",
-			"Address them all to reach your destination.",
+			"10+: as 7-9, but both apply.",
+			"7-9: roots, vines, and earth pull at them, and they pick 1.",
+			"6-: the GM makes a move.",
 		],
-		note: "Travel times from Stonetop are listed in the move's description.",
+		cost: { amount: 1, label: "Stock" },
+		note: "The Stock is spent when you roll. If this brings them to 0 HP, they are pulled into the earth and bound in rune-etched stone.",
+		roll: "wis",
+	},
+	"Suck the Poison Out": {
+		trigger: "When you draw a malady from a patient's body, mind, or soul, spend 1 Stock and roll +WIS.",
+		results: [
+			"10+: you remove the malady and can discard it or store it in your pouch (taking the space of 1 Stock).",
+			"7-9: you remove it, but choose 1: lingering harm to your patient; you suffer some of its effects; or it is dangerous to discard.",
+			"6-: the GM makes a move.",
+		],
+		cost: { amount: 1, label: "Stock" },
+		note: "The Stock is spent when you roll. Storing the drawn malady costs the space of a second Stock; mark that on the pouch yourself.",
+		roll: "wis",
 	},
 	"Forage": {
 		trigger: "When you spend a few hours seeking food in the wild, roll +WIS. In winter, you have disadvantage.",
 		results: ["10+: pick 2.", "7-9: pick 1.", "6-: you find nothing, and there is danger or risk."],
-		picksLabel: "Pick:",
-		picks: [
-			"Acquire 4 provisions (1d6 uses)",
-			"Acquire an extra 1d6 uses of provisions",
-			"Discover something interesting or useful",
-			"Avoid danger or risk (else, there is some)",
-		],
-		note: "Provisions can substitute for supplies when you Make Camp, 1-for-1.",
+		note: "Provisions can substitute for supplies when you Make Camp, 1-for-1. The four options are on the result card; take as many as the roll allows.",
 		roll: "wis",
-	},
-	"Have What You Need": {
-		trigger: "When you decide that you had something all along, transfer a mark (or marks) from your unassigned inventory to a specific item or slot.",
-		results: [
-			"Mark a slot: fill it with a common mundane item or something from your special possessions.",
-			"Or expend a use of supplies to mark an additional small item/slot.",
-		],
-		note: "It must be something you could plausibly have had all along; the GM or any player can veto unreasonable items.",
-	},
-	"Keep Company": {
-		trigger: "When you spend a stretch of time together, ask the others if they want to Keep Company. If they do, take turns asking a PC or NPC one of the following.",
-		picksLabel: "Ask one another:",
-		picks: [
-			"What do you do that's annoying/endearing?",
-			"What do I do that you find annoying/endearing?",
-			"Who or what seems to be on your mind?",
-			"What do we find ourselves talking about?",
-			"How do you/we pass the time?",
-			"What new thing do you reveal about yourself?",
-		],
-	},
-	"Make Camp": {
-		trigger: "When you settle in to rest in an unsafe area, answer the GM's questions about your campsite. Each member consumes 1 use of supplies or provisions.",
-		results: ["If you eat and drink your fill and get at least a few hours' sleep, pick 1:"],
-		picksLabel: "Pick 1:",
-		picks: [
-			"Regain HP equal to ½ your max (round up)",
-			"Clear a debility",
-		],
-		note: "A mess kit (fire & water) lets 1 use provide for up to four people. If your rest was particularly peaceful, also gain advantage on your next roll. Regaining HP or clearing a debility does NOT heal problematic wounds: those need Recover to stabilize and Convalesce to heal.",
 	},
 	"Recover": {
 		trigger: "When you take time to catch your breath and tend to what ails you, expend 1 use of supplies and regain HP equal to 4 + Prosperity.",
 		results: ["You can't gain this benefit again until you take more damage."],
 		note: "When you tend to a debility or problematic wound, say how. The GM will say it's taken care of, or tell you what else is required.",
-	},
-	"Return Triumphant": {
-		trigger: "When you return home in triumph — having saved your fellows, put down the threat, seized the opportunity, etc. — clear one of the steading's debilities (diminished, lacking, or malcontent).",
-		note: "If the steading has no debilities marked, increase Fortunes by 1 instead.",
 	},
 	"Struggle as One": {
 		trigger: "When you Defy Danger as a group, establish the party's approach and each roll +STAT (per Defy Danger).",
@@ -329,6 +287,7 @@ const GUIDED_CHARACTER_MOVES = {
 const EXPEDITION_MOVE_HANDLERS = {
 	Requisition: sheet => sheet._onRequisition(),
 	Outfit:      sheet => sheet._onOutfitOpen(),
+	"Make Camp": sheet => sheet._onMakeCampOpen(),
 };
 
 // Description-only moves whose USE does something beyond posting their text. These have no
@@ -350,6 +309,14 @@ const MOVE_USE_EFFECTS = {
 	[BARKSKIN]:           sheet => sheet._openBlessedMarksIfBlessed(),
 	[TRACKLESS_STEP]:     sheet => sheet._openBlessedMarksIfBlessed(),
 	[SHARED_SOULS]:       sheet => sheet._openBlessedMarksIfBlessed(),
+	// Rites of the Land holds Favor on the character, may spend a Surplus and clear a debility
+	// on the steading, and can promise advantage on a Fortunes roll nobody has made yet. Three
+	// documents and a fourth thing to remember next season — so it gets a walkthrough.
+	[RITES_OF_THE_LAND]:  sheet => sheet._openRitesOfTheLand(),
+	// A Ranger On the Hoof procures the day's food while the party walks. There is no roll tier
+	// to it, so using the move IS collecting: the prompt asks the one question its text asks
+	// (winter or barren terrain?) and rolls the 1d6 accordingly.
+	[ON_THE_HOOF]:        sheet => sheet._onTheHoof(),
 };
 
 // The same idea for moves that ROLL: their use does not fall through to the post-it-to-chat tail,
@@ -403,9 +370,66 @@ function _toggleGlyphKeys(keys, on, editable) {
 	return { labelKey: keys.label[state], tooltipKey: (editable ? keys.tooltip : keys.readOnly)[state] };
 }
 
-// Inventory slugs that hold "uses of supplies", in the order Recover depletes
-// them. Mirrors _PROSPERITY_RESOURCE_SLUGS in StonetopCharacter.js.
-const RECOVER_SUPPLY_SLUGS = ["supplies", "more-supplies", "even-more-supplies"];
+/**
+ * The "pay with…" field shared by every dialog that spends a use of supplies.
+ *
+ * A single eligible purse renders as a sentence, not a radio: there is nothing to choose, and a
+ * lone radio button that cannot be unpicked is a control pretending to be one. Two or more render
+ * as radios, defaulting to the first (supply-cost.js#defaultSupplyPurse drains the printed rows
+ * before a larder or a vial).
+ *
+ * Whatever is being carried but CANNOT pay is listed underneath with the reason, because that is
+ * the question the field actually raises: a player with four uses of provisions looking at a
+ * Recover dialog wants to know why they are not on the list, and "they are not on the list" is
+ * not an answer. See supply-cost.js for both directions of that rule.
+ */
+function _supplyPurseFieldHtml(purses, legend) {
+	const { eligible, ineligible } = purses;
+	const body = eligible.length === 1
+		? `<p class="stonetop-supply-purse-only">${_esc(eligible[0].label)} <span class="stonetop-supply-purse-left">(${eligible[0].remaining} left)</span></p>`
+		: eligible.map((p, i) => `<label class="stonetop-supply-purse">
+				<input type="radio" name="supplyPurse" value="${_esc(p.slug)}"${i === 0 ? " checked" : ""}>
+				<span>${_esc(p.label)} <span class="stonetop-supply-purse-left">(${p.remaining} left)</span></span>
+			</label>`).join("");
+	const refused = ineligible.map(p => `<li><strong>${_esc(p.label)}</strong> (${p.remaining}): ${_esc(p.reason)}</li>`).join("");
+	return `<div class="stonetop-supply-purses">
+		<p class="stonetop-homestead-subhead">${_esc(legend)}</p>
+		${body}
+		${refused ? `<ul class="stonetop-supply-purse-refused">${refused}</ul>` : ""}
+	</div>`;
+}
+
+/** Which purse the player picked in that field, or null when the field offered no choice. */
+function _chosenSupplyPurse(html, purses) {
+	const slug = html?.find?.('input[name="supplyPurse"]:checked')?.val();
+	return purses.eligible.find(p => p.slug === slug) ?? null;
+}
+
+/**
+ * Keep the camp's bill under the head count as the player changes it. Written live rather than
+ * left to the confirm step because "we're five, we have a mess kit" is arithmetic the table would
+ * otherwise do out loud, and because seeing the bill go red is what prompts someone to Forage
+ * before the night rather than after it.
+ */
+function _wireCampBill(html, purses) {
+	const root  = html[0] ?? html;
+	const out   = root.querySelector("[data-camp-bill]");
+	const stock = purses.eligible.reduce((sum, p) => sum + p.remaining, 0);
+	if (!out) return;
+	const paint = () => {
+		const people  = root.querySelector('[name="people"]')?.value;
+		const messKit = !!root.querySelector('[name="messKit"]')?.checked;
+		const needed  = campUsesNeeded(people, messKit);
+		const short   = Math.max(0, needed - stock);
+		out.textContent = short
+			? `Needs ${needed}; you have ${stock}. ${short} short: someone goes hungry.`
+			: `Needs ${needed} of the ${stock} you can spend.`;
+		out.classList.toggle("is-short", short > 0);
+	};
+	root.querySelector('[name="people"]')?.addEventListener("input", paint);
+	root.querySelector('[name="messKit"]')?.addEventListener("change", paint);
+	paint();
+}
 
 // The GM's artifact control (_onArtifactGmControl). The rungs in ladder order, weakest first,
 // and the three text fields in the order p.430-431 introduces them — the hint that stands in
@@ -765,7 +789,11 @@ export function createStonetopCharacterSheetClass(Base) {
 	// withSheetSizeMemory: reopen at the size this user last left this character's sheet. Both
 	// dimensions are restored independently — a sheet carried over from when only width was
 	// remembered has no stored height, and keeps the default one.
-	return class StonetopCharacterSheet extends withSectionEditing(withSheetSizeMemory(Base)) {
+	//
+	// withPreferencesTab: the Preferences tab's three delegated handlers, shared with the GM
+	// Toolkit sheet, which carries the same tab. The tab's rows and values come from
+	// module/utils/sheet-preferences.js either way; the mixin is only the wiring.
+	return class StonetopCharacterSheet extends withPreferencesTab(withSectionEditing(withSheetSizeMemory(Base))) {
 		_stonetopCharacter;
 		_editMode = false;
 		// The playbook's Invocation list as of the last render, so a click can name one without
@@ -1138,6 +1166,11 @@ export function createStonetopCharacterSheetClass(Base) {
 				? await foundry.applications.ux.TextEditor.enrichHTML(context.stonetop.notes)
 				: "";
 			context.stonetop.movelist ??= {};
+			// Kept for the name-click, which needs a move's SOURCE text to build its card and
+			// cannot read it off an item: a playbook move you have not taken is rendered from
+			// this list and owns no document. Held from the render that drew the rows, so what
+			// the card is built from is exactly what the reader clicked on.
+			this._renderedMovelist = context.stonetop.movelist;
 			const overageKey = context.stonetop.movelist.levelMovesOverageKey ?? null;
 			const dismissedOverageKey = this.actor.getFlag(STONETOP_SCOPE, "moves.dismissedLevelOverage");
 			context.stonetop.movelist.showLevelMovesOverLimit =
@@ -1259,6 +1292,23 @@ export function createStonetopCharacterSheetClass(Base) {
 			// pre-roll window is asking instead (RollDialog.js), and two controls answering one
 			// question is how a player ends up rolling with an Advantage they cannot see.
 			context.stonetop.showRollModeControl = !getAskRollModeEachRollSetting();
+			// The Preferences tab: this PLAYER's client settings, grouped, with each row's label,
+			// hint and control shape read off its registration rather than restated. Built fresh
+			// every render so a value changed in Foundry's settings menu (or on another sheet's
+			// copy of this tab) is what the tab draws. Not gated on `editable`: none of it is
+			// actor data, so a player reading a locked sheet still owns their own font size.
+			//
+			// It IS gated on whose character this is (`showsPreferencesTab`). The settings behind
+			// it are the reader's own wherever they are changed from, so the tab belongs on the
+			// one sheet that is theirs: a GM opening a player's character found their OWN font
+			// size sitting on it, reading as the player's. A GM's copy is wherever their own
+			// `user.character` points — the GM Toolkit for a full GM, and this very sheet for an
+			// assistant gamemaster who also plays a character at the table.
+			//
+			// Nothing is built for a reader who is not being offered the tab: the rows come from
+			// `game.settings` on every render, and this sheet re-renders often.
+			context.stonetop.showPreferences = showsPreferencesTab(this.actor);
+			context.stonetop.preferences = context.stonetop.showPreferences ? buildPreferenceGroups() : [];
 			// The tab carries the active insert — and, when there isn't one, the "Choose Your Fate"
 			// picker, which is the manual route for a table who resolved Death's Door away from the
 			// sheet. Edit mode is NOT reason enough to draw it: a tab about being dead would open on
@@ -1623,6 +1673,24 @@ export function createStonetopCharacterSheetClass(Base) {
 				raging,
 				..._toggleGlyphKeys(BATTLE_JOY_GLYPH, raging, context.editable),
 			};
+			// An advantage HELD over the next roll — a peaceful camp, so far (p.334). Shown for the
+			// same reason the steading shows its own promised +Fortunes advantage: the roll it is
+			// owed to has not been made yet, possibly not this session, and a promise nobody can
+			// see is a promise the table forgets it made. Not gated on owning any move — anything
+			// may come to promise one — so it appears only while one is actually held, and takes
+			// itself off the header the moment a roll spends it.
+			//
+			// The tooltip is BUILT here rather than resolved from a key in the template: the whole
+			// value of storing what promised it is saying so, and that argument does not belong in
+			// either shared glyph partial for the one caller that has it.
+			const heldAdvantage = this._stonetopCharacter.heldAdvantage();
+			context.stonetop.heldAdvantage = {
+				show:    !!heldAdvantage,
+				label:   game.i18n.localize("stonetop.heldAdvantage.label"),
+				tooltip: format(context.editable
+					? "stonetop.heldAdvantage.tooltip"
+					: "stonetop.heldAdvantage.readOnlyTooltip", { source: heldAdvantage?.source ?? "" }),
+			};
 			// And the Blessed's marks, on the candle's and the scales' terms exactly.
 			const marks = this._stonetopCharacter.blessedMarks;
 			context.stonetop.blessedMarks = {
@@ -1637,6 +1705,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			// anyone — Aratis does not exempt the party — and condemnersOf already skips self, so a
 			// Judge cannot brand themself into their own header.
 			context.stonetop.condemned = condemnedContext(this.actor);
+			// Book I, at the end of the playbook row, but ONLY once the GM has pointed this world
+			// at a copy. `readyRulebookIcon` answers null until then and the row draws nothing:
+			// a player cannot add the file, so the dimmed "press me to fix this" state the GM
+			// Toolkit wears would be an icon offering them a window their account refuses. It
+			// appears for the whole table the moment the GM sets one.
+			//
+			// Book I only. Book II is the gazetteer, which is the GM's side of the screen.
+			context.stonetop.book = readyRulebookIcon(PLAYER_BOOK);
 			return context;
 		}
 
@@ -1724,7 +1800,10 @@ export function createStonetopCharacterSheetClass(Base) {
 		_buildRecoverData(snapshot) {
 			const locked      = !!this.actor.getFlag(STONETOP_SCOPE, "recover.spent");
 			const resources   = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
-			const suppliesLeft = RECOVER_SUPPLY_SLUGS.reduce((sum, slug) => sum + (Number(resources[slug]) || 0), 0);
+			// Only what may actually pay for a Recover is counted: a pack full of provisions is
+			// not an answer to "can you Recover?" (supply-cost.js, Book I p.89), and counting it
+			// here would light the button and then have the dialog refuse it.
+			const suppliesLeft = supplyPursesFor(resources, SUPPLY_PURPOSE.RECOVER).total;
 			const healAmount  = snapshot.inventory?.smallItemLimit ?? 4;
 			const hp          = snapshot.vitals.hp;
 			const atFullHp    = hp.value >= hp.max;
@@ -2978,7 +3057,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// Read & Resolve / Roll button, never a name-click that would post it to chat
 				// without removing it. Its edit/delete pencils have their own handlers.
 				if (nameEl.closest(".stonetop-love-letter")) return;
-				// An un-learned custom move is inactive — no dice icon, bonuses off — but its TEXT
+				// An un-learned custom move is inactive — its title does not roll, bonuses off — but its TEXT
 				// is still readable, so a name-click posts it to chat like any other move. That
 				// matches an un-owned playbook move, which posts to chat without being owned;
 				// the roll is what's gated, not the reading.
@@ -2993,26 +3072,29 @@ export function createStonetopCharacterSheetClass(Base) {
 				const item = li?.dataset.itemId ? this.actor.items.get(li.dataset.itemId) : null;
 				const isOtherMove = item?.system?.moveType === "other";
 				const guide = isOtherMove ? null : GUIDED_CHARACTER_MOVES[name];
+				// A ROLLABLE MOVE NEVER REACHES HERE. Its name element IS the `.rollable` now
+				// (see move-group.hbs), and the rollable handler below runs in the CAPTURE phase
+				// on this same root — it takes the click and stops it before this bubble-phase
+				// listener is ever asked. So what this handler answers is exactly the rows that
+				// do not roll: a description-only move, an un-owned row, an un-learned custom
+				// move — and any row at all for an observer, whose clicks the rollable handler
+				// declines on `isEditable`, leaving them the move's text and no dice.
+				//
+				// There used to be a forwarding branch here, dispatching a synthetic click at
+				// the dice icon when the "Hide Rollable Icon" setting had hidden it. Nothing to
+				// forward to any more: the die is gone from every move row, the name does the
+				// rolling itself, and the Shift state is the real click's rather than one copied
+				// onto a MouseEvent by hand.
 				const rollable = li?.querySelector(".rollable");
 				if (guide && _guidedCharacterMoveHasAction(guide, rollable)) {
 					this._openGuidedCharacterMove({ name, guide }, rollable);
-					return;
-				}
-				// With "Hide Rollable Icon" on, the dice icon is gone, so the move name
-				// becomes the roll trigger — forward to the (hidden) rollable the way the
-				// steading sheet does. Only rollable moves have a `.rollable`; description-
-				// only moves (no rollType, hence no icon) fall through and post to chat.
-				// Re-dispatch a click carrying the Shift state (a plain `.click()` would drop
-				// it) so "Shift to skip the roll prompt" still works when rolling here.
-				if (rollable && getHideRollableIconSetting()) {
-					rollable.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: ev.shiftKey }));
 					return;
 				}
 				// A move whose whole offer is "this counts as a weapon" (Purifying Flames) has no
 				// roll of its own, so using it IS the attack it grants — run below, after the tail,
 				// with the weapon already in hand.
 				//
-				// AFTER, not INSTEAD. Having no rollType means having no dice icon, so this
+				// AFTER, not INSTEAD. Having no rollType means the title does not roll, so this
 				// name-click is the move's ONLY surface: a shortcut that took the click would be
 				// the one move on the sheet its owner cannot show the table. So it does both, in
 				// the order they read — here is what Purifying Flames says, and here is the Clash
@@ -3020,12 +3102,33 @@ export function createStonetopCharacterSheetClass(Base) {
 				// editability gate sits with the decision it gates: an observer gets the card and
 				// no roll, which is the same tail every other move gives them.
 				const grantedAttack = this.isEditable ? grantedWeaponAttackFor(this.actor, item) : null;
-				const description = li.querySelector(".stonetop-item-description")?.innerHTML ?? "";
+				// BUILT FROM THE SOURCE, NOT FROM THE ROW. The row's `.stonetop-item-description`
+				// has already been through `moveBody`, so scraping it composed the card in the
+				// opposite order from every other surface: the ladder had lifted "on a 10+, pick
+				// 2; on a 7-9, pick 1:" out before the ticks were added, and that sentence is
+				// where the cap is read from. Fourteen shipped moves posted an option list with
+				// no limit at all (Forage, Let Fly, Muster, Ambush, Burgle…) and ten more got one
+				// flat cap where the move gives a different count per tier (Seek Insight offers
+				// 3 on a 10+ and 1 on a 7-9; the card said 3 either way).
+				const source = this._printedMoveSource(name, item);
 				const playbookName = html[0].querySelector(".stonetop-playbook-drop-zone:not(.empty)")?.textContent?.trim() ?? "";
 				const speaker = ChatMessage.getSpeaker({ actor: this.actor });
 				speaker.alias = playbookName ? `${this.actor.name} ${playbookName}` : this.actor.name;
+				// A description-only move has no result card to choose on, so the options it
+				// prints become ticks on THIS card (persisted to the message, like a roll card's).
+				// Mighty Thews' "pick 1", Keep Company's questions, Censure's four reactions —
+				// the move's own list, tickable where the table can see it. `moveCardBody` ticks
+				// and lays the ladder in the one order those can happen in.
+				//
+				// A row whose name is in neither the actor's items nor the render's movelist
+				// falls back to the rendered text: that card keeps the layout it always had
+				// rather than losing its body over a lookup that came back empty.
+				const stockBody = source?.description ?? li.querySelector(".stonetop-item-description")?.innerHTML ?? "";
+				const printed = source
+					? moveCardBody(source.description, source.moveResults)
+					: pickableMoveDescription(stockBody);
 				ChatMessage.create({
-					content: moveChatCard(name, description),
+					content: moveChatCard(name, printed, { actions: this._stockSpendButtonHtml(stockBody) }),
 					speaker,
 				});
 				// A description-only move has no rollType, so it falls all the way through to
@@ -3037,19 +3140,33 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (grantedAttack) await this._rollGrantedWeaponAttack(item, grantedAttack, { shiftKey: ev.shiftKey });
 			});
 
-			// Clicking the move name fires the same roll as the dice icon.
-			// For moves without a rollType (Aid), fetch the full doc and post to chat.
-			// Restricted to owners/GMs (isEditable) so observers cannot roll on others' actors.
-			// Rollable click handler — replaces PBTA's built-in listener.
+			// THE ROLLABLE CLICK HANDLER — replaces PbtA's built-in listener, and the one place a
+			// move roll starts from a click on the sheet.
+			//
+			// A move's TITLE is its `.rollable` now — no move row draws a dice icon any more — so
+			// this is what a click on a move's name reaches. CAPTURE phase, and it stops the click
+			// it takes: that is what keeps the name handler above off a rollable move while leaving
+			// it every row that does not roll (a description-only move, an un-owned row, an
+			// un-learned custom move), which it posts to chat.
+			// Restricted to owners/GMs (isEditable) so observers cannot roll on others' actors —
+			// their click falls through to that handler and gets the move's text instead.
 			html[0].addEventListener("click", async ev => {
 				// Don't intercept clicks on enabled inputs (e.g. editing a stat value).
 				if (ev.target.tagName === "INPUT" && !ev.target.disabled && !ev.target.readOnly) return;
-				// Clicking the "+STAT" chip rolls the same as tapping the dice icon beside it.
+				// The "+STAT" chip beside a title rolls the move too: it reads as part of the same
+				// label, so it answers like one.
 				const chip = ev.target.closest(".stonetop-move-roll-chip");
 				const rollable = ev.target.closest(".rollable")
 					?? chip?.closest("li")?.querySelector(".rollable");
 				if (!rollable || !this.isEditable) return;
 				ev.stopPropagation();
+				// AN EXPEDITION MOVE OPENS ITS OWN DOOR FIRST — Requisition's assets, Outfit's
+				// load, Forage's guided step. That used to belong to the row handler below,
+				// because the row's NAME was not the rollable: the die rolled and the name did
+				// this, and the two were different answers to the same move. One door now, so it
+				// has to be this one, or Requisition would open the stat picker its icon opened
+				// and never the dialog its name did.
+				if (this._openExpeditionMoveDoor(rollable.closest("li"))) return;
 				// Guided move, the two stat pickers, then the roll prompt — the same ladder the
 				// hotbar path walks. See _resolveMoveRollPrompts.
 				const prompted = await this._resolveMoveRollPrompts(rollable, { shiftKey: ev.shiftKey });
@@ -3096,15 +3213,19 @@ export function createStonetopCharacterSheetClass(Base) {
 						} else {
 							label = rollable.dataset.label ?? roll;
 						}
-						await rollDamage(roll, this.actor, { label });
+						// A raw formula IS a damage roll — the character's own die, a follower's
+						// attack — so it gets the damage window rather than the move prompt, which
+						// asked it nothing upstream (see _resolveMoveRollPrompts). Shift on the
+						// originating click skips it, exactly as it skips the move prompt.
+						await rollDamagePrompted(roll, this.actor, { label, shiftKey: ev.shiftKey });
 					}
 				}
 			}, true);
 
-			// The whole basic/expedition row is tappable, not just the dice icon.
-			// The dice icon and the "+stat" chip roll via the capture handler above
+			// The whole basic/expedition row is tappable, not just its title.
+			// The title and the "+stat" chip roll via the capture handler above
 			// (which stopPropagation()s), so a click only reaches here when it lands
-			// on the move name or empty row space.
+			// on empty row space, or on a row whose move does not roll.
 			html.find(".stonetop-move-item").on("click", async ev => {
 				if (!this.isEditable) return;
 				// A tap on Defend's Readiness circles adjusts held Readiness — it must never
@@ -3113,21 +3234,13 @@ export function createStonetopCharacterSheetClass(Base) {
 				const li     = ev.currentTarget;
 				const nameEl = li.querySelector(".stonetop-move-name");
 				if (!nameEl) return;
-				const moveName = nameEl.textContent.trim();
 
 				// Expedition moves each do something on click: a bespoke dialog
 				// (Requisition assets, Outfit), a guided step/roll modal, a direct
-				// roll, or — failing those — posting the move text to chat.
-				if (nameEl.classList.contains("stonetop-expedition-move-open")) {
-					const handler = EXPEDITION_MOVE_HANDLERS[moveName];
-					if (handler) { handler(this); return; }
-					const guide = GUIDED_CHARACTER_MOVES[moveName];
-					const rollable = li.querySelector(".rollable");
-					if (guide && _guidedCharacterMoveHasAction(guide, rollable)) {
-						this._openGuidedCharacterMove({ name: moveName, guide }, rollable);
-						return;
-					}
-				}
+				// roll, or — failing those — posting the move text to chat. Shared with the
+				// rollable handler above, which is where the same click lands when it is the
+				// TITLE that was tapped rather than the empty space beside it.
+				if (this._openExpeditionMoveDoor(li)) return;
 
 				const rollable = li.querySelector(".rollable");
 				// Re-dispatched with the Shift state rather than a bare `.click()`, which reports
@@ -3143,7 +3256,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!compendiumId) return;
 				const doc = await this._stonetopCharacter._moveRepo.getBasicMoveDocument(compendiumId);
 				if (!doc) return;
-				this._postMoveCard(doc.name, doc.system?.description ?? "");
+				// Tickable for the same reason the Moves tab's name-click is: this is the move's
+				// printed text, and a move that never rolls has nowhere else to record a choice.
+				this._postPrintedMove(doc);
 			});
 
 			// Defend's Readiness circles (p.216). Clicking a circle sets held Readiness to
@@ -3184,11 +3299,12 @@ export function createStonetopCharacterSheetClass(Base) {
 					nameEl.className = "stonetop-basic-move-panel-name";
 					nameEl.textContent = nameText;
 					const descClone = descEl.cloneNode(true);
-					// Drop collapsible <details> (e.g. Chart a Course's "Travel Times"
-					// table) — they can't be opened in this floating panel, which
-					// disappears on mouseleave. They stay clickable on the item sheet.
-					descClone.querySelectorAll("details").forEach(d => d.remove());
 					panel.replaceChildren(nameEl, ...Array.from(descClone.childNodes));
+					// The shared hover-panel pass: drop the collapsibles this panel can't open,
+					// redraw the ◇/□ a move like Outfit is written with. Run on the PANEL rather
+					// than on the clone because the spread above keeps the clone's children and
+					// discards its `.stonetop-basic-move-desc` wrapper.
+					prepareMoveHoverBody(panel);
 					panel.hidden = false;
 					const rect = li.getBoundingClientRect();
 					panel.style.top   = `${Math.max(4, Math.min(rect.top, window.innerHeight - panel.offsetHeight - 8))}px`;
@@ -3483,9 +3599,11 @@ export function createStonetopCharacterSheetClass(Base) {
 					moveRefPanel.innerHTML =
 						`<p class="stonetop-word-tooltip-name">${name}</p>` +
 						`<div class="stonetop-word-tooltip-desc">${desc}</div>`;
-					// Same as the move panel: drop collapsible <details> (e.g. Chart a
-					// Course's "Travel Times") that can't be opened in a hover tooltip.
-					moveRefPanel.querySelectorAll("details").forEach(d => d.remove());
+					// The same hover-panel pass the basic-move panel gets: collapsibles this
+					// tooltip can't open go, and the glyphs are redrawn. This body is written
+					// straight from a compendium description, so it never went past the sheet's
+					// own pass below.
+					prepareMoveHoverBody(moveRefPanel);
 					moveRefPanel.hidden = false;
 					const ar = anchor.getBoundingClientRect();
 					const pr = moveRefPanel.getBoundingClientRect();
@@ -3650,6 +3768,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			this._wireSectionCollapse(html,
 				".stonetop-details-heading-row, .stonetop-move-group-title, .stonetop-moves-collapsible");
 
+			// The Preferences tab. Above the isEditable guard with the fold carets and for the same
+			// reason: nothing on that tab is actor data, so a player looking at a locked sheet - or
+			// at somebody else's - still gets to set their own font size from it.
+			this._wirePreferences(html);
+
 			if (!this.isEditable) return;
 
 			// Details-tab per-section edit pencils: toggle just that section's edit
@@ -3774,6 +3897,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-inv-add-btn").on("click", this._onAddInventoryItem.bind(this));
 			html.find(".stonetop-inv-delete").on("click", this._onDeleteCustomInventoryItem.bind(this));
 			html.find(".stonetop-inv-remove-special").on("click", this._onRemoveSpecialItem.bind(this));
+			html.find(".stonetop-inv-harvest").on("click", this._onHarvestProvisions.bind(this));
 			// Identifying artifacts (Book I pp.430-431): the player's magnifier rolls, the GM's
 			// mask hands the thing over (or hides it in the first place).
 			html.find(".stonetop-inv-artifact-identify").on("click", ev =>
@@ -3827,6 +3951,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// points on a dead sheet, and a table that plays the resurrection out in the fiction
 			// first has no reason to have touched HP yet.
 			html.find(".stonetop-dead-tag").on("click", this._onDeadTagClick.bind(this));
+			// Book I at the end of the playbook row. Wired for READERS as well as owners, like
+			// the scales below and unlike the candle: opening the rules is looking, not writing.
+			// Only ever drawn once the GM has pointed the world at a copy (see getData).
+			html.find(".stonetop-open-book").on("click", () => openSharedRulebook(PLAYER_BOOK));
 			// The header candle. `button.` on purpose: the read-only copy is a <span> and must
 			// not be wired, so nothing offers a click that would do nothing.
 			html.find("button.stonetop-holy-light").on("click", this._onHolyLightToggle.bind(this));
@@ -3845,6 +3973,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			// The Heavy's Battle Joy, on the CANDLE's terms: `button.` on purpose, since the
 			// read-only copy is a <span> and must not be wired.
 			html.find("button.stonetop-battle-joy").on("click", this._onBattleJoyToggle.bind(this));
+			// Releasing a held advantage, on the same `button.` terms: the read-only copy is a
+			// <span> and must not be wired.
+			html.find("button.stonetop-held-advantage").on("click", this._onReleaseHeldAdvantage.bind(this));
 			html.find(".stonetop-recover-open-btn").on("click", this._onRecoverOpen.bind(this));
 			html.find(".stonetop-convalesce-open-btn").on("click", this._onConvalesceOpen.bind(this));
 
@@ -4769,6 +4900,25 @@ export function createStonetopCharacterSheetClass(Base) {
 				}).catch(err => console.error("Stonetop | could not post the arcanum card", err));
 			}, true);
 
+			// A mystery on a card's back is a move, so its NAME behaves like a move's name on the
+			// moves tab: click it to open the move (options to tick, dice when it rolls), or to
+			// post it to chat when there is nothing to choose. The handles are wrapped into the
+			// card's own prose at snapshot time — see data/arcana-moves.js.
+			html[0].addEventListener("click", ev => {
+				const handle = ev.target.closest(".stonetop-arcanum-move-name");
+				if (!handle) return;
+				ev.stopPropagation();
+				this._onArcanumMoveName(handle.dataset.arcanumSlug, handle.dataset.moveSlug);
+			}, true);
+			html[0].addEventListener("keydown", ev => {
+				if (ev.key !== "Enter" && ev.key !== " ") return;
+				const handle = ev.target.closest?.(".stonetop-arcanum-move-name");
+				if (!handle) return;
+				ev.preventDefault();
+				ev.stopPropagation();
+				this._onArcanumMoveName(handle.dataset.arcanumSlug, handle.dataset.moveSlug);
+			}, true);
+
 			html[0].addEventListener("click", ev => {
 				const btn = ev.target.closest(".stonetop-arcanum-identify-btn");
 				if (!btn) return;
@@ -5389,11 +5539,11 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		// Roll one of this character's owned moves by its embedded item id, running the
-		// exact same dispatch a click on the move's dice icon would — guided-move dialog,
+		// exact same dispatch a click on the move's title would — guided-move dialog,
 		// "ask"/alt-stat picker, and the pre-roll prompt all included.
 		// This is the entry point used by the hotbar move-macros (drag a move onto the
 		// hotbar): it works whether or not the sheet is currently rendered, because it
-		// builds a detached stand-in for the row's rollable icon (see _makeSyntheticRollable)
+		// builds a detached stand-in for the row's rollable (see _makeSyntheticRollable)
 		// and feeds it to the same helpers the inline click handler uses — literally the same
 		// ladder, via _resolveMoveRollPrompts, so the two can no longer fall out of step.
 		async rollMoveById(itemId, { shiftKey = false } = {}) {
@@ -5459,7 +5609,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			await item.delete();   // single-use — the section vanishes with the last letter
 		}
 
-		// Build a detached DOM element that stands in for a move row's rollable dice icon,
+		// Build a detached DOM element that stands in for a move row's rollable title,
 		// carrying just the structure the rollable-dispatch helpers read: an ancestor
 		// `.item.stonetop-item` with the item id, a `.stonetop-item-name`, and the stat on
 		// the rollable's data-roll. Returns null for a move with no rollType (nothing to
@@ -5498,7 +5648,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * its card, and the effects of having rolled all belong to the latter.
 		 *
 		 * BOTH CALLERS POST THE MOVE'S TEXT FIRST and then call this. A granting move has no
-		 * rollType, so it renders no dice icon and its name-click is its only surface; taking that
+		 * rollType, so its title never rolls and a name-click is its only surface; taking that
 		 * click for the attack alone would leave it the one move on the sheet its owner cannot show
 		 * the table. The card then reads as the reason for the roll under it.
 		 *
@@ -5534,7 +5684,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * and any one-off modifier).
 		 *
 		 * One ladder, because it has to BE one — dragging a move to the hotbar must ask exactly
-		 * what clicking its dice icon on the sheet asks. It used to be written out twice, with a
+		 * what clicking its title on the sheet asks. It used to be written out twice, with a
 		 * comment on the second copy telling the reader to keep the branch order in step with the
 		 * first by hand; that instruction is what this replaces.
 		 *
@@ -5661,12 +5811,58 @@ export function createStonetopCharacterSheetClass(Base) {
 					${weaponNote}
 				</div>`;
 			}).join("");
+			// What the move itself says each stat means here — Defy Danger's and Interfere's six
+			// printed approaches, read off the move rather than restated (see statApproaches).
+			// Without them this window asks "which stat?" and shows six abbreviations, when the
+			// answer the player needs is on the move in front of them.
+			const approaches = statApproaches(item.system?.description);
+			const listed = [...statKeys].filter(key => approaches[key]);
+			const approachHtml = listed.length
+				? `<ul class="stonetop-stat-picker-approaches">${listed.map(key =>
+					`<li><strong>${_esc(Handlebars.helpers.statLabel(key))}</strong> ${_esc(approaches[key])}</li>`).join("")}</ul>`
+				: "";
 			new Dialog({
 				title: `${item.name}: Choose a Stat`,
-				content: `<p>Which stat are you rolling with?</p>${whyHtml}`,
+				content: `<p>Which stat are you rolling with?</p>${approachHtml}${whyHtml}`,
 				buttons,
 				render: bringDialogToFront,
 			}, { width: 480, classes: ["dialog", "stonetop", "stonetop-stat-picker-dialog"] }).render(true);
+		}
+
+		/**
+		 * What an EXPEDITION move opens before any dice, given the row's name element: its own
+		 * bespoke dialog (Requisition's assets, Outfit's load) or its guided step. Answers true
+		 * when it took the click, false when the move has neither and the ordinary roll should
+		 * go ahead.
+		 *
+		 * ONE COPY, TWO CALLERS, and they are two halves of the same click. The row's title is a
+		 * `.rollable` now, so tapping it lands in the rollable handler while tapping the empty
+		 * space beside it lands in the row handler — and both have to give the same answer, or
+		 * Requisition means the assets dialog or the stat picker depending on which pixel was
+		 * hit. That is exactly the split this replaced: the old dice icon rolled and the old
+		 * name opened the dialog, and which one a player got was which one they aimed at.
+		 *
+		 * Guarded on the class rather than the name table alone: `stonetop-expedition-move-open`
+		 * is only on the sidebar's expedition rows (character.hbs), so a playbook move that
+		 * happens to share a name with one of these cannot borrow its door.
+		 */
+		_openExpeditionMoveDoor(li) {
+			// Takes the ROW, because the row is what both callers already hold and what this
+			// needs anyway: it reads the name off it and then the rollable beside it. Handed the
+			// name element instead, the rollable path had to walk li → name → li to get back
+			// here, which on the sidebar rows means starting from the element it ended at.
+			const nameEl = li?.querySelector?.(".stonetop-move-name");
+			if (!nameEl?.classList?.contains("stonetop-expedition-move-open")) return false;
+			const moveName = nameEl.textContent.trim();
+			const handler = EXPEDITION_MOVE_HANDLERS[moveName];
+			if (handler) { handler(this); return true; }
+			const guide = GUIDED_CHARACTER_MOVES[moveName];
+			const rollable = li.querySelector(".rollable");
+			if (guide && _guidedCharacterMoveHasAction(guide, rollable)) {
+				this._openGuidedCharacterMove({ name: moveName, guide }, rollable);
+				return true;
+			}
+			return false;
 		}
 
 		_guidedMoveForRollable(rollable) {
@@ -5682,13 +5878,39 @@ export function createStonetopCharacterSheetClass(Base) {
 			return { name, guide };
 		}
 
+		/**
+		 * The guide behind an arcanum's back-side move, so a mystery opens the same dialog a
+		 * playbook move does. `bodyHtml` carries the move's own authored prose (a playbook guide
+		 * carries a hand-written `trigger` line instead), the card's options become the tickable
+		 * list, and `card` is what a "Send to chat" or a roll posts. Rolling is gated on the
+		 * move's □ being marked — an unlearned mystery reads, it does not yet act.
+		 */
+		_arcanumMoveGuide(move) {
+			// The options list renders as ticks below, so drop the printed copy of it from the
+			// body rather than showing the same list twice.
+			const body = move.picks.length && move.listHtml
+				? move.description.replace(move.listHtml, "")
+				: move.description;
+			return {
+				bodyHtml:   body,
+				card:       move.description,
+				picks:      move.picks,
+				picksLabel: move.picksLabel,
+				// How many of that list the mystery allows, read off its own lead-in — the
+				// denominator in the tally over the boxes (see _openGuidedCharacterMove).
+				pickMax:    move.pickMax,
+				roll:       (move.learned && this.isEditable) ? move.roll : null,
+				post:       "Send to chat",
+			};
+		}
+
+		/**
+		 * A guided move's dialog: what the move says, its result tiers, whatever it asks you to
+		 * choose from, and the button that rolls it. Deliberately holds no free-text boxes —
+		 * nothing would store what was typed into them, so they only stood between the move and
+		 * its roll (the homefront dialogs on the steading sheet lost theirs for the same reason).
+		 */
 		_openGuidedCharacterMove({ name, guide }, rollable) {
-			const fieldsHtml = (guide.fields ?? []).map(field => `<label class="stonetop-homestead-field">
-				<span>${_esc(field.label)}</span>
-				${field.type === "textarea"
-					? `<textarea name="${_esc(field.name)}" rows="2" placeholder="${_esc(field.placeholder)}"></textarea>`
-					: `<input type="text" name="${_esc(field.name)}" placeholder="${_esc(field.placeholder)}">`}
-			</label>`).join("");
 			const resultsHtml = guide.results?.length
 				? `<div class="stonetop-homestead-reference">
 					<strong>Results</strong>
@@ -5717,22 +5939,30 @@ export function createStonetopCharacterSheetClass(Base) {
 				</label>`
 				: "";
 
+			// A move that CHARGES before it rolls (Danu's Grasp: "spend 1 Stock and roll +WIS").
+			// `cost` is null for every other guide, and then none of this applies.
+			const cost = guide.cost ? this._stockCostView(guide.cost) : null;
+
 			const buttons = {
 				cancel: { label: "Cancel" },
 			};
-			if (rollable) {
+			if (rollable && (!cost || cost.affordable)) {
 				buttons.roll = {
 					label: `Roll +${(rollable.dataset.roll ?? "").toUpperCase()}`,
 					// Ask how to roll it before posting, so cancelling is a clean abort (nothing
 					// hits the chat). Title comes from the rollable's move/stat.
+					//
+					// The cost is paid AFTER the prompt and BEFORE the dice: backing out of the
+					// prompt spends nothing, and any roll that happens has been paid for.
 					callback: async html => {
 						const prompted = await this._promptRollOptions({ rollable });
 						if (!prompted) return;
+						if (cost && !(await this._spendStockCost(cost, html, name))) return;
 						await this._postGuidedCharacterMove(name, guide, html);
 						await this._stonetopCharacter.onRoll({ currentTarget: rollable }, prompted);
 					},
 				};
-			} else if (guide.roll) {
+			} else if (guide.roll && !cost) {
 				const fixedStat = askStat ? null : guide.roll;
 				buttons.roll = {
 					label: fixedStat ? `Roll +${fixedStat.toUpperCase()}` : "Roll",
@@ -5741,44 +5971,204 @@ export function createStonetopCharacterSheetClass(Base) {
 						const prompted = await this._promptRollOptions({ title: name });
 						if (!prompted) return;
 						await this._postGuidedCharacterMove(name, guide, html);
-						await this._stonetopCharacter.onDirectStatRoll(stat, { moveName: name, ...prompted });
+						// "roll +nothing" (the Demonhide Cloak's The Flesh Remembers) is a flat 2d6:
+						// no stat stands behind it, so the value is spelled out rather than looked up.
+						const flat = stat === "nothing" ? { statValue: 0 } : {};
+						await this._stonetopCharacter.onDirectStatRoll(stat, { moveName: name, ...flat, ...prompted });
 					},
+				};
+			}
+
+			// Declared after the roll so it sits to its right (the shared dialog-button rules
+			// order affirmatives by source, cancel last). An arcanum move with options but no
+			// dice would otherwise offer nothing but Cancel; one that DOES roll still wants a
+			// way to read itself out to the table without spending the roll.
+			if (guide.post) {
+				buttons.post = {
+					label: guide.post,
+					callback: html => this._postGuidedCharacterMove(name, guide, html),
 				};
 			}
 
 			new Dialog({
 				title: name,
 				content: `<form class="stonetop-homestead-dialog stonetop-character-move-dialog">
-					<p class="stonetop-homestead-trigger"><em>${_esc(guide.trigger)}</em></p>
-					${fieldsHtml || statPickerHtml ? `<div class="stonetop-homestead-fields">${fieldsHtml}${statPickerHtml}</div>` : ""}
+					${guide.bodyHtml
+						? `<div class="stonetop-arcanum-move-body">${guide.bodyHtml}</div>`
+						: `<p class="stonetop-homestead-trigger"><em>${_esc(guide.trigger)}</em></p>`}
+					${cost ? this._stockCostHtml(cost) : ""}
+					${statPickerHtml ? `<div class="stonetop-homestead-fields">${statPickerHtml}</div>` : ""}
 					${resultsHtml}
 					${picksHtml}
 					${guide.note ? `<p class="stonetop-homestead-note">${_esc(guide.note)}</p>` : ""}
 				</form>`,
 				buttons,
-				default: (rollable || guide.roll) ? "roll" : "cancel",
-				render: bringDialogToFront,
+				// Read off the buttons that were actually BUILT, never off the guide: a rollable
+				// move whose cost is unaffordable (a Blessed opening Danu's Grasp with an empty
+				// pouch) has no `roll` button, and naming a missing one makes Enter submit
+				// `undefined`, which throws inside Dialog#submit.
+				default: buttons.roll ? "roll" : (buttons.post ? "post" : "cancel"),
+				// An arcanum move's body is the card's own prose, so its ◇/○/□ want the same
+				// styled glyphs the card gives them. A playbook guide's text is plain and has none.
+				render: html => {
+					bringDialogToFront(html);
+					if (guide.bodyHtml) wrapStonetopGlyphsInEl(html[0]);
+					// The same tally a chat card's pick list carries. A mystery makes its choice
+					// HERE rather than in chat — it is the one move surface where the list is not
+					// on a card — so without this it is the one place a player still has to count
+					// their own ticks. Its cap comes off the mystery's own lead-in (arcana-moves.js
+					// reads it), and is 0 for a guide that never had a count to read.
+					// `enforce`, because these boxes have no handler of their own: a chat card's pick
+					// list releases an over-cap tick from the handler that persists it, and a
+					// mystery that says "choose 2" must not quietly submit three.
+					wirePickTally(html[0]?.querySelector(".stonetop-homestead-choice-list"), guide.pickMax, { enforce: true });
+				},
 			}, { width: 520, classes: ["dialog", "stonetop", "stonetop-character-move-dialog"] }).render(true);
+		}
+
+		/**
+		 * Rites of the Land. Reaches the steading because two of the move's three effects land
+		 * there; opens anyway without one, so a Blessed in a world with no steading yet can still
+		 * hold their Favor (the walkthrough simply offers nothing that needs a steading).
+		 */
+		_openRitesOfTheLand() {
+			if (!this.isEditable) return;
+			const steadingActor = this._stonetopCharacter.getSteadingActor();
+			const steading = steadingActor ? new StonetopSteading(steadingActor) : null;
+			openRitesOfTheLand({
+				character: this._stonetopCharacter,
+				steading,
+				year: steadingActor ? readCurrentYear(steadingActor) : 1,
+				seasonId: steadingActor ? (readCurrentSeason(steadingActor)?.season ?? "") : "",
+				onApplied: () => {
+					this.render(false);
+					for (const sheet of Object.values(steadingActor?.apps ?? {})) sheet.render(false);
+				},
+			});
+		}
+
+		/**
+		 * What this character can pay a Stock cost out of, right now.
+		 *
+		 * Both tracks store checks SPENT, not held (see stock-cost.js), so what is left is
+		 * `max - spent` in each. Favor only appears for a Blessed who owns Rites of the Land,
+		 * whose last line is "Spend Favor in lieu of Stock, 1-for-1" — without it, a Blessed
+		 * holding Favor and an empty pouch would be refused a move the book grants them.
+		 */
+		_stockCostView({ amount = 1, label = "Stock" } = {}) {
+			// THROUGH stockSourcesForFlags, not stockSources: its whole reason for existing is
+			// that this dialog and the chat card's Spend button must never disagree about what
+			// the purse holds, and it was doing that job for one of the two callers it names.
+			const sources = stockSourcesForFlags({
+				possessions: this._stonetopCharacter.possessions,
+				moveResources: this._stonetopCharacter.moveResources.getMoveResources(),
+				ritesMax: ownedMove(this.actor, RITES_OF_THE_LAND)?.system?.resource?.max ?? null,
+			});
+			return {
+				amount, label, sources,
+				affordable: canPayStock(sources, amount),
+				payable: sources.filter(s => s.remaining >= amount),
+			};
+		}
+
+		/**
+		 * The price, the purse, and — when the pouch is empty — why there is no Roll button.
+		 * A purse the character has but cannot pay from is still SHOWN: "Stock 0 of 3" is the
+		 * sentence that explains the missing button, where hiding it would read as a bug.
+		 */
+		_stockCostHtml(cost) {
+			const purses = cost.sources.map(s =>
+				`<span class="stonetop-move-cost-purse${s.remaining >= cost.amount ? "" : " is-empty"}">`
+				+ `${_esc(s.label)} <strong>${s.remaining}</strong> of ${s.max}</span>`).join("");
+			// Only asked when there is genuinely a choice; one payable purse is spent silently.
+			const picker = cost.payable.length > 1
+				? `<label class="stonetop-homestead-field stonetop-move-cost-pick"><span>Spend from</span>
+					<select name="stockCostSource">${cost.payable
+						.map(s => `<option value="${_esc(s.key)}">${_esc(s.label)} (${s.remaining} left)</option>`).join("")}</select>
+				</label>`
+				: "";
+			return `<div class="stonetop-move-cost${cost.affordable ? "" : " is-unaffordable"}">
+				<p class="stonetop-move-cost-line"><strong>Costs ${cost.amount} ${_esc(cost.label)}.</strong> ${purses}</p>
+				${cost.affordable
+					? picker
+					: `<p class="stonetop-move-cost-warn">No ${_esc(cost.label)} left to spend, so this move cannot be made. Replenish the pouch first.</p>`}
+			</div>`;
+		}
+
+		/**
+		 * Pay the cost. Returns false — and rolls nothing — if the purse emptied between the
+		 * dialog opening and the button being pressed, which a non-modal dialog left open beside
+		 * the sheet makes perfectly possible.
+		 *
+		 * Spending INCREMENTS both tracks, because both count checks spent.
+		 */
+		async _spendStockCost(cost, html, moveName) {
+			const chosen = html?.[0]?.querySelector('[name="stockCostSource"]')?.value ?? null;
+			const live = this._stockCostView(cost);
+			const source = live.payable.find(s => s.key === chosen) ?? defaultStockSource(live.sources, cost.amount);
+			if (!source) {
+				ui.notifications?.warn(`No ${cost.label} left to spend on ${moveName}.`);
+				return false;
+			}
+			// Ask the purse: the pouch counts up as it empties, Favor counts down.
+			const next = source.after(cost.amount);
+			if (source.key === "favor") {
+				await this._stonetopCharacter.moveResources.setUses(RITES_OF_THE_LAND, next, { stonetopMove: moveName });
+			} else {
+				await this._stonetopCharacter.setPossessionUses(SACRED_POUCH_SLUG, next);
+			}
+			ui.notifications?.info(`${moveName}: spent 1 ${source.label} (${source.remaining - cost.amount} left).`);
+			this.render(false);
+			return true;
+		}
+
+		/**
+		 * A clicked move name on an arcanum's back. Resolves the move off the card, then takes
+		 * the same fork a playbook move's name-click takes: a move with something to decide (a
+		 * roll, a list to pick from) opens its dialog; one that is pure text posts straight to
+		 * chat. Reading is never gated — an unlearned mystery posts like an un-owned playbook
+		 * move — only the dice are (see _arcanumMoveGuide).
+		 */
+		async _onArcanumMoveName(arcanumSlug, moveSlug) {
+			const move = await this._stonetopCharacter.getArcanumMove(arcanumSlug, moveSlug);
+			if (!move) return void ui.notifications.warn("That move is no longer on this arcanum.");
+			const guide = this._arcanumMoveGuide(move);
+			if (guide.roll || guide.picks.length) {
+				this._openGuidedCharacterMove({ name: move.name, guide }, null);
+				return;
+			}
+			// A move read off an arcanum's back has no `system.moveResults` to draw on: it is prose
+			// parsed out of the card (data/arcana-moves), so its outcomes are only ever in the
+			// sentence. `moveBodyHtml` reads them back out of it, which is the same ladder the
+			// arcana tab prints for the same move.
+			await ChatMessage.create({
+				content: moveChatCard(move.name, moveBodyHtml(move.description, null)),
+				speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+			});
 		}
 
 		async _postGuidedCharacterMove(name, guide, html) {
 			const form = html[0]?.querySelector(".stonetop-character-move-dialog");
 			if (!form) return;
 			const data = Object.fromEntries(new FormData(form));
-			const rows = [];
-			for (const field of guide.fields ?? []) {
-				const raw   = data[field.name];
-				const value = field.type === "checkbox"
-					? (raw ? "yes" : "")
-					: String(raw ?? "").trim();
-				if (value) rows.push({ label: field.label, value });
-			}
 			const selected = Object.entries(data)
 				.filter(([key]) => key.startsWith("pick."))
 				.map(([, value]) => String(value ?? "").trim())
 				.filter(Boolean);
-			if (selected.length) rows.push({ label: "Selected", value: selected.join("\n") });
-			postMoveToChat(this.actor, name, rows);
+			// An arcanum move posts as a move card — its printed text, plus whatever was ticked —
+			// so it reads in chat exactly like the playbook move whose name-click it mirrors. A
+			// playbook guide has no card of its own and posts what was ticked on its own.
+			if (guide.card) {
+				const picked = selected.length
+					? `<ul class="stonetop-arcanum-move-picks">${selected.map(pick => `<li>${_esc(pick)}</li>`).join("")}</ul>`
+					: "";
+				await ChatMessage.create({
+					content: moveChatCard(name, guide.card + picked),
+					speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+				});
+				return;
+			}
+			postMoveToChat(this.actor, name, selected.length ? [{ label: "Selected", value: selected.join("\n") }] : []);
 		}
 
 		async _onBackgroundChange(ev) {
@@ -6124,6 +6514,83 @@ export function createStonetopCharacterSheetClass(Base) {
 
 		async _onRemoveSpecialItem(ev) {
 			await this._stonetopCharacter.removeSpecialItem(ev.currentTarget.dataset.slug);
+		}
+
+		/**
+		 * ON THE HOOF (the Ranger): 1d6 uses of provisions for a day's travel, "with disadvantage
+		 * in winter or barren terrain". Disadvantage on a single d6 is the lower of two, which is
+		 * what `2d6kl` rolls — the same shape the roll dialog's adv/dis uses on 2d6, applied to
+		 * this move's one die.
+		 *
+		 * Gated on owning the move, like every other MOVE_USE_EFFECTS handler: the row posts its
+		 * text for anyone reading another playbook's page, and only a Ranger actually procures.
+		 */
+		async _onTheHoof() {
+			if (!this.isEditable || !ownedMove(this.actor, ON_THE_HOOF)) return;
+			new Dialog({
+				title: ON_THE_HOOF,
+				content: `<form class="stonetop-homestead-dialog">
+					<p class="stonetop-homestead-trigger"><em>When you travel through the wilderness, you can procure 1d6 uses of provisions each day.</em></p>
+					<label class="stonetop-camp-extra"><input type="checkbox" name="lean">
+						<span>Winter, or barren terrain: roll with <strong>disadvantage</strong></span></label>
+				</form>`,
+				buttons: {
+					cancel:  { label: "Cancel" },
+					procure: {
+						label: "Procure the day's food",
+						callback: (html) => this._procureProvisions(html.find('[name="lean"]').is(":checked")),
+					},
+				},
+				default: "procure",
+				render: bringDialogToFront,
+			}, { width: 460, classes: this._pastDeathWindowClasses(["dialog", "stonetop"]) }).render(true);
+		}
+
+		async _procureProvisions(lean) {
+			const { uses, larder } = await rollProvisions(this.actor, {
+				formula: lean ? "2d6kl" : "1d6",
+				carry:   true,
+				flavor:  lean ? `${ON_THE_HOOF}: provisions (1d6, disadvantage)` : `${ON_THE_HOOF}: provisions (1d6)`,
+			});
+			if (larder) ui.notifications.info(`Procured ${uses} uses of provisions (${larder.held} in the pack).`);
+			this.render(false);
+		}
+
+		/**
+		 * Butcher the goat, harvest the brightberries: turn a carried thing into uses of
+		 * provisions. One handler for every such row, because what is on offer is read off the
+		 * row's own printed note rather than a list of slugs kept somewhere else.
+		 *
+		 * The source is deliberately NOT consumed. A goat butchered is a goat gone, but a
+		 * brightberry bush is not, snowembers are picked "with a few hours' effort" and the note
+		 * says nothing about the shrub, and guessing wrong either way silently destroys a
+		 * player's gear or silently duplicates food. The ◇ is one click away on the same row.
+		 */
+		async _onHarvestProvisions(ev) {
+			ev.preventDefault();
+			const btn = ev.currentTarget;
+			const { formula, roll: isRoll, name } = btn.dataset;
+			if (!formula) return;
+			btn.disabled = true;
+			try {
+				// Always claims the ◇: this food is going into the pack as its own load, which is
+				// what "◇ Provisions" in every one of these notes means.
+				const { uses, larder } = await rollProvisions(this.actor, {
+					formula,
+					announce: isRoll === "1",
+					carry:    true,
+				});
+				if (larder) {
+					postMoveToChat(this.actor, "Provisions", [
+						{ label: name || "Harvested",
+						  value: `+${uses} ${uses === 1 ? "use" : "uses"} (${larder.held} in the pack)` },
+					]);
+				}
+				this.render(false);
+			} catch (err) {
+				console.error("Stonetop | Error harvesting provisions:", err);
+				btn.disabled = false;
+			}
 		}
 
 		async _onInventoryReset() {
@@ -6485,6 +6952,45 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * player gets by clicking the move on the Moves tab; both go through the model, which drops
 		 * the state before building the roll so their debilities are back in play for it.
 		 */
+		/**
+		 * Let go of a held advantage without rolling for it.
+		 *
+		 * The promise is ordinarily spent by the next roll and needs no control at all. This is
+		 * for the table that decides it does not apply after all — the peaceful night was three
+		 * sessions ago, or the GM rules the promise lapsed — because the alternative was rolling
+		 * something unimportant to burn it off, which is worse than a button.
+		 *
+		 * CONFIRMED, unlike the candle and the Heavy's rage, because it is not a toggle: those two
+		 * put back what a mis-click took, and this puts back nothing. The prompt names what is
+		 * being given up, since by the time it is being released the source may be the only record
+		 * anyone still has of it.
+		 */
+		async _onReleaseHeldAdvantage(ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			if (!this.isEditable) return;
+			const held = this._stonetopCharacter.heldAdvantage();
+			if (!held) return;
+			// Named buttons rather than Dialog.confirm's Yes/No: each one says what it does, so
+			// the question can be answered off the buttons alone. Affirmative first, as everywhere.
+			new Dialog({
+				title: localize("stonetop.heldAdvantage.releaseTitle"),
+				content: `<p>${escHtml(format("stonetop.heldAdvantage.releasePrompt", { source: held.source }))}</p>`,
+				buttons: {
+					release: {
+						label: localize("stonetop.heldAdvantage.releaseConfirm"),
+						callback: async () => {
+							await this._stonetopCharacter.clearHeldAdvantage();
+							this.render(false);
+						},
+					},
+					keep: { label: localize("stonetop.heldAdvantage.releaseCancel") },
+				},
+				default: "keep",
+				render: bringDialogToFront,
+			}, { classes: ["dialog", "stonetop"] }).render(true);
+		}
+
 		async _onBattleJoyToggle(ev) {
 			ev.preventDefault();
 			ev.stopPropagation();
@@ -6518,7 +7024,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					// asks. Without it this was the one 2d6 move on the sheet that could never be
 					// rolled with advantage, disadvantage, or a one-off modifier — the sticky sheet
 					// control that used to carry those is gone, and this window is where they live
-					// now. Shift on the glyph skips it, exactly as it does on a dice icon.
+					// now. Shift on the glyph skips it, exactly as it does on a move's title.
 					const prompted = await this._resolveMoveRollPrompts(rollable, { shiftKey: ev.shiftKey });
 					// "handled" — a dialog owns the roll from here and will run it through the same
 					// model call, which drops the raging state itself. "cancel" — they backed out of
@@ -6781,12 +7287,88 @@ export function createStonetopCharacterSheetClass(Base) {
 			return this.actor.update({ [key]: val }).then(() => this.render(false));
 		}
 
-		/** Post a move-result card to chat, spoken by this actor. Returns the create promise. */
-		_postMoveCard(title, body) {
+		/**
+		 * Post a RECEIPT to chat, spoken by this actor: one thing that already happened, as a
+		 * hand-built `<p>` ("Readiness lost", "Follower Down", "Send Them Back"). Returns the
+		 * create promise.
+		 *
+		 * No ticks and no tier ladder, because a receipt has neither a choice left to make nor
+		 * rungs to lay out. A move's PRINTED TEXT goes through `_postPrintedMove` instead — the
+		 * two were one method wearing three flags that only ever moved together, which read as
+		 * three independent features and left seventeen callers carrying options they never used.
+		 */
+		_postMoveCard(title, body, { stockSpend = false } = {}) {
 			return ChatMessage.create({
-				content: moveChatCard(title, body),
+				content: moveChatCard(title, body, { actions: stockSpend ? this._stockSpendButtonHtml(body) : "" }),
 				speaker: ChatMessage.getSpeaker({ actor: this.actor }),
 			});
+		}
+
+		/**
+		 * A move's SOURCE text and stored outcomes, by the name its row shows.
+		 *
+		 * An owned move answers from its own document. A playbook move you have not taken owns
+		 * no document at all — its row is drawn from the render's movelist — so that list is
+		 * where the question is really asked, and it holds both kinds.
+		 *
+		 * Returns null for a name in neither, which is the caller's cue to fall back.
+		 */
+		_printedMoveSource(name, item = null) {
+			if (item?.system?.description) {
+				return { description: item.system.description, moveResults: item.system?.moveResults ?? null };
+			}
+			for (const m of _movelistMoves(this._renderedMovelist)) {
+				if (m?.name === name && typeof m.description === "string") {
+					return { description: m.description, moveResults: m.moveResults ?? null };
+				}
+			}
+			return null;
+		}
+
+		/**
+		 * Post a move document's PRINTED TEXT, composed the one way it is composed everywhere:
+		 * its options made tickable, then its outcomes re-laid as the tier ladder. `moveCardBody`
+		 * (utils/move-tiers.js) does both, in the order they have to happen in.
+		 *
+		 * Takes the DOCUMENT rather than a handful of loose fields, so the next thing a printed
+		 * card needs from it is read here instead of destructured at the call site.
+		 *
+		 * The Stock button reads the ORIGINAL description, not the composed body: it is looking
+		 * for the move's cost, and should not have to care how the outcomes were laid out around
+		 * it.
+		 */
+		_postPrintedMove(doc) {
+			const description = doc?.system?.description ?? "";
+			return ChatMessage.create({
+				content: moveChatCard(doc?.name ?? "", moveCardBody(description, doc?.system?.moveResults ?? null),
+					{ actions: this._stockSpendButtonHtml(description) }),
+				speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+			});
+		}
+
+		/**
+		 * The "Spend 1 Stock" button a Stock-costing move's card carries, or "" for every move
+		 * that costs nothing.
+		 *
+		 * WHY THE CARD and not the sheet: Stock is the one cost with no home on the move itself.
+		 * Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport and Favor
+		 * each have a track of their own, so the pips sit right there on the move and the player
+		 * ticks them. Stock lives on the sacred POUCH, several tabs away, so a Blessed making
+		 * Call the Spirits had the move in front of them and the purse nowhere in sight. The
+		 * card is the record that the move was made, which makes it the honest place to pay.
+		 *
+		 * The two moves that spend AND roll on one trigger (Danu's Grasp, Suck the Poison Out)
+		 * never reach here: their name-click opens the guided dialog and returns, so there is no
+		 * card to double-charge.
+		 */
+		_stockSpendButtonHtml(description) {
+			const cost = stockCostFromDescription(description);
+			if (!cost) return "";
+			return `<div class="card-buttons stonetop-roll-actions">
+				<button type="button" class="stonetop-spend-stock" data-action="spendStock" data-amount="${cost.amount}">
+					<i class="fas fa-mortar-pestle"></i> Spend ${cost.amount} ${_esc(cost.label)}
+				</button>
+			</div>`;
 		}
 
 		/**
@@ -8244,9 +8826,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (this.actor.getFlag(STONETOP_SCOPE, "recover.spent")) return;
 			if (hp.value >= hp.max) return;
 
-			const resources  = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
-			const supplySlug = RECOVER_SUPPLY_SLUGS.find(slug => (Number(resources[slug]) || 0) > 0);
-			if (!supplySlug) return;
+			const resources = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
+			const purses    = supplyPursesFor(resources, SUPPLY_PURPOSE.RECOVER);
+			const fallback  = defaultSupplyPurse(purses);
+			if (!fallback) return;
 
 			const healAmount = snapshot.inventory?.smallItemLimit ?? 4;
 			const newHp      = Math.min(hp.value + healAmount, hp.max);
@@ -8262,13 +8845,18 @@ export function createStonetopCharacterSheetClass(Base) {
 							<li>Regain HP: <strong>${hp.value} &rarr; ${newHp}</strong> (4+Prosperity = ${healAmount}).</li>
 						</ul>
 					</div>
+					${_supplyPurseFieldHtml(purses, "Pay with")}
 					<p class="stonetop-homestead-note">${_esc(guide.note)} You can't gain this benefit again until you take more damage.</p>
 				</form>`,
 				buttons: {
 					cancel:  { label: "Cancel" },
 					recover: {
 						label: `Recover (+${newHp - hp.value} HP)`,
-						callback: () => this._applyRecover({ supplySlug, currentUses: Number(resources[supplySlug]) || 0, oldHp: hp.value, newHp }),
+						callback: (html) => this._applyRecover({
+							purse:  _chosenSupplyPurse(html, purses) ?? fallback,
+							oldHp:  hp.value,
+							newHp,
+						}),
 					},
 				},
 				default: "recover",
@@ -8276,15 +8864,15 @@ export function createStonetopCharacterSheetClass(Base) {
 			}, { width: 480, classes: this._pastDeathWindowClasses(["dialog", "stonetop", "stonetop-recover-dialog"]) }).render(true);
 		}
 
-		async _applyRecover({ supplySlug, currentUses, oldHp, newHp }) {
-			await this._stonetopCharacter.setInventoryResource(supplySlug, Math.max(0, currentUses - 1));
+		async _applyRecover({ purse, oldHp, newHp }) {
+			await this._stonetopCharacter.setInventoryResource(purse.slug, Math.max(0, purse.remaining - 1));
 			await this.actor.update({
 				"system.attributes.hp.value": newHp,
 				"flags.stonetop-pwd.recover.spent": true,
 			});
 
 			const rows = [
-				{ label: "Supplies", value: "Expended 1 use" },
+				{ label: purse.label, value: `Expended 1 use (${purse.remaining - 1} left)` },
 				{ label: "HP", value: `${oldHp} → ${newHp} (+${newHp - oldHp})` },
 			];
 			postMoveToChat(this.actor, "Recover", rows);
@@ -8404,6 +8992,169 @@ export function createStonetopCharacterSheetClass(Base) {
 			this.render(false);
 		}
 
+		/**
+		 * MAKE CAMP (expedition move, Book I p.334) — the move provisions exist for.
+		 *
+		 * "Each member of the party must consume 1 use of supplies or provisions; if you use a
+		 * mess kit (requires fire & water), then 1 use can provide for up to four people." So the
+		 * bill is people ÷ (mess kit ? 4 : 1), rounded up, and it may be paid out of any mix of
+		 * the printed supplies rows and the larder (supply-cost.js#spendSupplies spills across
+		 * them). Only the character running the dialog pays: the move is written per-PC, and one
+		 * player reaching into another's pack is not something a sheet should do quietly.
+		 *
+		 * Then "pick 1: regain HP equal to ½ your max, or clear a debility" — offered only when
+		 * the camp was actually fed, because deprivation's first cost is exactly that you get no
+		 * choice (p.335). A carried bedroll adds its printed 1d6, and a peaceful night can set the
+		 * sheet's advantage toggle.
+		 */
+		async _onMakeCampOpen() {
+			const snapshot = await this._stonetopCharacter.buildSnapshot();
+			const hp        = snapshot.vitals.hp;
+			const resources = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
+			const purses    = supplyPursesFor(resources, SUPPLY_PURPOSE.CAMP);
+			const carried   = slug => !!(snapshot.inventory?.outfit?.regularItems ?? []).find(i => i.slug === slug)?.checked;
+			const hasMessKit = carried("mess-kit");
+			const hasBedroll = carried("bedroll");
+			const debilities = (snapshot.debilities ?? []).filter(d => d.active);
+			// Halves round UP throughout Stonetop, so a 15 HP character regains 8, not 7.
+			const halfMax    = Math.ceil(hp.max / 2);
+
+			const messKitRow = hasMessKit
+				? `<label class="stonetop-camp-messkit"><input type="checkbox" name="messKit" checked>
+						<span>Use the mess kit: 1 use feeds up to 4 <em>(requires fire &amp; water)</em></span></label>`
+				: `<p class="stonetop-homestead-note">No mess kit carried, so 1 use feeds 1 person.</p>`;
+			const benefitRows = [
+				`<label class="stonetop-camp-benefit"><input type="radio" name="benefit" value="hp" checked>
+					<span>Regain HP equal to ½ your max: <strong>${hp.value} &rarr; ${Math.min(hp.value + halfMax, hp.max)}</strong> (+${halfMax})</span></label>`,
+				debilities.length
+					? `<label class="stonetop-camp-benefit"><input type="radio" name="benefit" value="debility">
+							<span>Clear a debility:</span>
+							<select name="debility">${debilities.map(d => `<option value="${_esc(d.key)}">${_esc(d.name)}</option>`).join("")}</select>
+						</label>`
+					: `<p class="stonetop-homestead-note">No debilities marked.</p>`,
+			].join("");
+
+			new Dialog({
+				title: "Make Camp",
+				content: `<form class="stonetop-homestead-dialog stonetop-camp-dialog">
+					<p class="stonetop-homestead-trigger"><em>When you settle in to rest in an unsafe area, answer the GM's questions about your campsite.</em></p>
+					<div class="stonetop-camp-feed">
+						<p class="stonetop-homestead-subhead">Feed the camp</p>
+						<label class="stonetop-camp-people">People fed from your pack
+							<input type="number" name="people" value="1" min="0" max="20" step="1"></label>
+						${messKitRow}
+						<p class="stonetop-camp-bill" data-camp-bill></p>
+					</div>
+					${_supplyPurseFieldHtml(purses, "Pay with")}
+					<div class="stonetop-camp-benefits">
+						<p class="stonetop-homestead-subhead">Eat and drink your fill, get a few hours' sleep, then pick 1</p>
+						${benefitRows}
+						${hasBedroll ? `<label class="stonetop-camp-extra"><input type="checkbox" name="bedroll" checked>
+							<span>Bedroll: regain <strong>1d6</strong> extra HP</span></label>` : ""}
+						<label class="stonetop-camp-extra"><input type="checkbox" name="peaceful">
+							<span>The rest was peaceful, comfortable or enjoyable: take <strong>advantage</strong> on your next roll</span></label>
+					</div>
+					<p class="stonetop-homestead-note">If the camp goes unfed, take no benefit: deprivation's first cost is that you get no choice here (Book I p.335).</p>
+				</form>`,
+				buttons: {
+					cancel: { label: "Cancel" },
+					camp:   {
+						// Read the form here and hand _applyMakeCamp plain values, the way
+						// _applyConvalesce is called: what the move DOES is then a function of
+						// numbers and choices rather than of a live dialog, and can be tested
+						// as one.
+						label: "Make Camp",
+						callback: (html) => this._applyMakeCamp({
+							halfMax, maxHp: hp.max, debilities,
+							people:    html.find('[name="people"]').val(),
+							messKit:   html.find('[name="messKit"]').is(":checked"),
+							preferred: _chosenSupplyPurse(html, purses)?.slug ?? null,
+							benefit:   html.find('[name="benefit"]:checked').val() ?? "hp",
+							debility:  html.find('[name="debility"]').val() ?? null,
+							bedroll:   html.find('[name="bedroll"]').is(":checked"),
+							peaceful:  html.find('[name="peaceful"]').is(":checked"),
+						}),
+					},
+				},
+				default: "camp",
+				render: (html) => { bringDialogToFront(html); _wireCampBill(html, purses); },
+			}, { width: 500, classes: this._pastDeathWindowClasses(["dialog", "stonetop", "stonetop-camp-dialog"]) }).render(true);
+		}
+
+		async _applyMakeCamp({ maxHp, halfMax, debilities = [], people, messKit = false,
+		                       preferred = null, benefit = "hp", debility = null,
+		                       bedroll = false, peaceful = false }) {
+			// The dialog hands over CHOICES; the volatile state is read HERE, live, the way the
+			// steading's spendSurplus re-reads its Surplus. The sheet behind this window stays
+			// interactive: a Recover, a Forage payout, or another client touching the same
+			// character between opening and confirming would otherwise be silently undone, because
+			// what lands below is an ABSOLUTE remaining count and an absolute HP, not a delta.
+			//
+			// `maxHp` is not volatile and is NOT re-read: it is the COMPUTED max off the snapshot
+			// this dialog was built from, and the persisted `hp.max` field is stale by design.
+			const resources = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
+			const purses    = supplyPursesFor(resources, SUPPLY_PURPOSE.CAMP);
+			const hpValue   = Math.trunc(Number(this.actor.system?.attributes?.hp?.value) || 0);
+
+			const needed = campUsesNeeded(people, messKit);
+			const { spends, short } = spendSupplies(purses, needed, preferred);
+
+			// Everything this move changes goes into ONE update at the bottom: a meal spilling
+			// across three purses, the HP or the cleared debility, and the peaceful night's
+			// advantage are one act at the table, and writing them one at a time is a document
+			// write and a full sheet rebuild apiece.
+			const update = {};
+			for (const s of spends) Object.assign(update, this._stonetopCharacter.inventoryResourceData(s.slug, s.left));
+
+			const rows = spends.length
+				? spends.map(s => ({ label: s.label, value: `Expended ${s.spend} ${s.spend === 1 ? "use" : "uses"} (${s.left} left)` }))
+				: [{ label: "Rations", value: "Nothing consumed" }];
+			if (short > 0) rows.push({ label: "Short", value: `${short} ${short === 1 ? "use" : "uses"}; someone goes hungry (deprivation, p.335)` });
+
+			// Fed means fed: the benefit is what eating and sleeping buys, so a camp that came up
+			// short of its own bill takes none of it. `needed` of 0 (nobody eating from this pack)
+			// is not the same as going short, and still rests.
+			const fed = short === 0;
+			let newHp = hpValue;
+			if (fed) {
+				if (benefit === "debility") {
+					const cleared = debilities.find(d => d.key === debility);
+					if (cleared) {
+						update[`system.attributes.debilities.options.${cleared.key}.value`] = false;
+						rows.push({ label: "Debility", value: `Cleared ${cleared.name}` });
+					}
+				} else {
+					newHp = Math.min(hpValue + halfMax, maxHp);
+					rows.push({ label: "HP", value: `${hpValue} → ${newHp} (+${newHp - hpValue}, ½ max)` });
+				}
+				// The bedroll's own 1d6 is rolled to chat: it is a die the table can see, and it
+				// stacks on whichever benefit was taken (its text says "extra HP when you Make
+				// Camp", not "instead of").
+				if (bedroll) {
+					const roll = await new Roll("1d6").evaluate();
+					await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: this.actor }), flavor: "Bedroll (1d6 extra HP)" });
+					const before = newHp;
+					newHp = Math.min(newHp + Math.max(0, roll.total), maxHp);
+					rows.push({ label: "Bedroll", value: `${before} → ${newHp} (+${newHp - before})` });
+				}
+				if (newHp !== hpValue) update["system.attributes.hp.value"] = newHp;
+
+				if (peaceful) {
+					// A HELD advantage, not the sticky selector. "Take advantage on your NEXT roll"
+					// is a promise about one roll: parked on the selector it would be overruled by
+					// the pre-roll window on any client with "Ask How to Roll Each Time" on (which
+					// hides that selector), and never spent on the ones without it. See
+					// StonetopCharacter#heldAdvantage.
+					Object.assign(update, this._stonetopCharacter.heldAdvantageData("A peaceful night's rest"));
+					rows.push({ label: "Advantage", value: "A peaceful night; held for your next roll" });
+				}
+			}
+
+			if (Object.keys(update).length) await this.actor.update(update, { stonetopMove: "Make Camp" });
+			postMoveToChat(this.actor, "Make Camp", rows);
+			this.render(false);
+		}
+
 		// ── Damage die ─────────────────────────────────────────────────────────────
 		// Hand-editing the Damage field. It has to end up as a "d#" the roller can use, so
 		// loose spellings are tidied ("8", "D8", "1d8" → "d8") and anything that isn't a
@@ -8509,17 +9260,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		// renders, so a stored reminderMove matches the moveName that rollStat passes when
 		// that move is rolled (that's what the echo keys on).
 		_woundReminderMoveNames(snapshot) {
-			const ml = snapshot?.movelist;
 			const names = new Set();
-			const push = (arr) => { for (const m of (arr ?? [])) if (m?.name) names.add(m.name); };
-			push(ml?.basicMoves);
-			push(ml?.expeditionMoves);
-			push(ml?.playbookMoves);
-			push(ml?.learnedMoves);
-			push(ml?.otherMoves);
-			for (const group of (ml?.otherGroups ?? [])) push(group?.moves);
-			push(ml?.postDeathGroup?.moves);
-			push(ml?.loveLetters);
+			for (const m of _movelistMoves(snapshot?.movelist)) if (m?.name) names.add(m.name);
 			return [...names].sort((a, b) => a.localeCompare(b));
 		}
 

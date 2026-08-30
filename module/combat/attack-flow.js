@@ -24,8 +24,9 @@ import {STONETOP_SCOPE} from "../actors/character/StonetopFlags.js";
 import {weaponMeta, isClashWeapon, isLetFlyWeapon, weaponTraitText, weaponArmorBits, grantedWeaponForMove, MOVE_GRANTED_WEAPONS, UNARMED_META} from "../data/weapons.js";
 import {escHtml} from "../utils/strings.js";
 import {stonetopChatCard, rollFormulaChip, damageMark, damageBadge} from "../utils/chat.js";
-import {rollDamage, multiDieFaces, sign} from "../utils/roll-engine.js";
-import {mitigateDamage, resolvePiercing, applyDamageToActor, dieFromDamage} from "../utils/damage.js";
+import {rollDamage, multiDieFaces, sign, damageRollFormula, damageConditionPills, conditionsRowHtml} from "../utils/roll-engine.js";
+import {mitigateDamage, resolvePiercing, applyDamageToActor, dieFromDamage, composeDamageFormula} from "../utils/damage.js";
+import {promptDamage} from "../dialogs/RollDialog.js";
 import {bringDialogToFront} from "../utils/front-on-open.js";
 import {isPrimaryGM} from "../utils/primary-gm.js";
 
@@ -212,14 +213,20 @@ function promptWeaponChoice(candidates, moveName, { preferSlug = null, forceSlug
 }
 
 // Let Fly's default use is a no-roll "easy shot". Returns "easy" | "pressure" | "cancel".
+//
+// The question is the move's own trigger, split in two: "when you take an easy shot with a ranged
+// weapon, deal your damage. If the shot is tricky or you're under pressure, first roll +DEX." So
+// both halves are asked in the book's words rather than paraphrased — what counts as easy is the
+// table's call (p.223: a deadeye Ranger just rolls damage; a Seeker who has never killed is under
+// pressure), and a prompt that reworded the trigger would be quietly moving that line.
 function promptLetFlyMode() {
 	return new Promise(resolve => {
 		new Dialog({
 			title: "Let Fly",
-			content: `<form class="stonetop-letfly-mode"><p>Is this a calm, easy shot, or are you under pressure?</p></form>`,
+			content: `<form class="stonetop-letfly-mode"><p>Is this an <strong>easy shot</strong>, or is <strong>the shot tricky or are you under pressure</strong>?</p></form>`,
 			buttons: {
-				easy:     { icon: '<i class="fas fa-crosshairs"></i>', label: "Easy shot (deal damage, no roll)", callback: () => resolve("easy") },
-				pressure: { icon: '<i class="fas fa-dice-d6"></i>',    label: "Under pressure (roll +DEX)",       callback: () => resolve("pressure") },
+				easy:     { icon: '<i class="fas fa-crosshairs"></i>', label: "Easy shot (deal your damage, no roll)", callback: () => resolve("easy") },
+				pressure: { icon: '<i class="fas fa-dice-d6"></i>',    label: "Tricky, or under pressure (roll +DEX)", callback: () => resolve("pressure") },
 			},
 			default: "pressure",
 			close: () => resolve("cancel"),
@@ -293,12 +300,19 @@ function sufferBtn(label = "Suffer your enemy's attack") {
 // stays "Confirm" (confirm your pick). Clash's 7-9 rolls damage and suffers the attack; its 6-
 // only suffers. Let Fly rolls damage on 10+/7-9 and does nothing automatic on 6-; its 7-9 grows
 // an optional "deplete your ammo" checkbox only when the chosen weapon has ammo statuses.
+//
+// Every option is labelled with the move's OWN printed bullet, word for word, because these
+// controls stand in for a list the player would otherwise be reading off the card: a condensed
+// label ("avoid their attack" for "avoid, prevent, or counter your enemy's attack") quietly
+// narrows what the pick licenses. The one clause dropped is Let Fly's "don't pick this if your
+// weapon lacks such statuses", which the `weapon?.ammo` gate below enforces rather than asks.
 function buildTierActions(move, weapon) {
 	if (move.key === "clash") {
 		return {
 			success:
-				pickRow("clash-pick", "avoid", "Deal damage, avoid their attack", { checked: true })
-				+ pickRow("clash-pick", "strike-hard", "Strike hard (+1d6, suffer their attack)", { extraDice: "1d6", counter: true })
+				pickRow("clash-pick", "avoid", "Avoid, prevent, or counter your enemy's attack", { checked: true })
+				+ pickRow("clash-pick", "strike-hard", "Strike hard and fast, for 1d6 extra damage, but suffer your enemy's attack",
+					{ extraDice: "1d6", counter: true })
 				+ confirmBtn("roll"),
 			partial: confirmBtn("roll", { counter: true, label: "Roll your damage", icon: "fa-dice-d6" }),
 			failure: confirmBtn("suffer", { label: "Suffer your enemy's attack", icon: "fa-shield-halved" }),
@@ -306,7 +320,7 @@ function buildTierActions(move, weapon) {
 	}
 	return {
 		success: confirmBtn("roll", { label: "Roll your damage", icon: "fa-dice-d6" }),
-		partial: (weapon?.ammo ? addonRow("deplete", "Deplete your ammo (mark next status)") : "")
+		partial: (weapon?.ammo ? addonRow("deplete", "Deal your damage, but deplete your ammo (mark the next status by your weapon)") : "")
 			+ confirmBtn("roll", { label: "Roll your damage", icon: "fa-dice-d6" }),
 	};
 }
@@ -352,7 +366,12 @@ export async function maybeBeginAttack(actor, item, { stat = null, weaponSlug = 
 	}
 
 	if (easyShot) {
-		await rollAndPostDamage(actor, { move: item.name, weapon, targets, pick: "base", counter: false });
+		// An easy shot deals its damage with no 2d6 roll at all, so this is the only moment it
+		// can be adjusted — and backing out of the window has to abort the shot rather than fire
+		// it unmodified, which is what "cancel" tells the caller.
+		const damage = await askDamageAdjustment(actor, { move: item.name, weapon });
+		if (!damage) return "cancel";
+		await rollAndPostDamage(actor, { move: item.name, weapon, targets, counter: false, damage });
 		return "handled";
 	}
 
@@ -386,8 +405,32 @@ async function pcDamageDie(actor) {
 async function damageFormula(actor, weapon, extraDice) {
 	const die   = weapon?.damageDie || await pcDamageDie(actor) || "d6";
 	const bonus = weapon?.damageBonus ? sign(weapon.damageBonus) : "";
-	const extra = extraDice ? `+${extraDice}` : "";
-	return `${die}${bonus}${extra}`;
+	return composeDamageFormula(`${die}${bonus}`, { extraDice });
+}
+
+// How this attack's damage is named — on the window that asks about it and on the card that
+// reports it, which have to be the same words or the window reads as belonging to some other roll.
+function damageLabel(move, weapon) {
+	return `${move}${weapon ? `: ${weapon.name}` : ""}`;
+}
+
+/**
+ * Ask what this attack's damage roll should be, and return everything rolling it needs:
+ * `{ base, rollMode, bonus, extraDice }`, or null if the player backed out.
+ *
+ * Split out from the rolling itself because the caller has irreversible work to do in
+ * between — latching the card resolved, marking the ammo spent — and a cancelled window has
+ * to leave the Confirm button clickable, not a locked card with no damage on it. So the
+ * question is asked FIRST, and nothing is committed until it has an answer.
+ *
+ * `base` travels with the answer so the die is derived once. Working it out means resolving
+ * the playbook and its damage-raising marks (see pcDamageDie), and doing that a second time
+ * just to compose the same string is work the roll can skip.
+ */
+async function askDamageAdjustment(actor, { move, weapon, extraDice = "", shiftKey = false } = {}) {
+	const base   = await damageFormula(actor, weapon, extraDice);
+	const adjust = await promptDamage({ title: damageLabel(move, weapon), formula: base, shiftKey });
+	return adjust ? { base, ...adjust } : null;
 }
 
 // Hover text for the "problematic wound" link in the messy reminder (Book I, Harm &
@@ -440,13 +483,18 @@ function postTagReminders(actor, weapon) {
 // Roll damage once per applyable target and post the results card. With no applyable
 // targets, fall back to a single plain damage roll (no Apply button). Tagged weapons
 // (messy / forceful) add follow-up reminder cards either way.
-async function rollAndPostDamage(actor, { move, weapon, targets, extraDice = "", counter = false }) {
-	const formula   = await damageFormula(actor, weapon, extraDice);
+async function rollAndPostDamage(actor, { move, weapon, targets, counter = false, damage }) {
+	// The window's answer, folded in once for every branch below. The single-target branch hands
+	// the pieces to rollDamage instead, which composes them itself and paints the pills that say
+	// what was added; the branches that build their own Rolls compose here and pass the same
+	// pills to the results card, so all three report the adjustment identically.
+	const { base, rollMode, bonus, extraDice } = damage;
+	const formula   = damageRollFormula(composeDamageFormula(base, { bonus, extraDice }), rollMode);
 	const applyable = (targets ?? []).filter(t => t.hasActor !== false && t.uuid);
 
 	if (applyable.length === 0) {
 		if (!counter) {
-			await rollDamage(formula, actor, { label: `${move}${weapon ? `: ${weapon.name}` : ""}` });
+			await rollDamage(base, actor, { label: damageLabel(move, weapon), rollMode, bonus, extraDice });
 		} else {
 			// No foe targeted, but the tier (Clash 7-9 / strike-hard) still demands the PC
 			// suffer the counter-attack. Roll the damage for the fiction and post a results
@@ -454,7 +502,7 @@ async function rollAndPostDamage(actor, { move, weapon, targets, extraDice = "",
 			// manual incoming-damage prompt. Without this branch the counter is silently lost.
 			const roll = await new Roll(formula).evaluate();
 			const results = [{ raw: roll.total, formula: roll.formula, faces: multiDieFaces(roll) }];
-			await postDamageResultsCard(actor, { move, weapon, results, counter });
+			await postDamageResultsCard(actor, { move, weapon, results, counter, damage });
 		}
 	} else {
 		// One damage roll per target — independent, so evaluate them concurrently; they're
@@ -464,7 +512,7 @@ async function rollAndPostDamage(actor, { move, weapon, targets, extraDice = "",
 			uuid: t.uuid, name: t.name, actorId: t.actorId, disposition: t.disposition,
 			raw: rolls[i].total, formula: rolls[i].formula, faces: multiDieFaces(rolls[i]),
 		}));
-		await postDamageResultsCard(actor, { move, weapon, results, counter });
+		await postDamageResultsCard(actor, { move, weapon, results, counter, damage });
 	}
 
 	await postTagReminders(actor, weapon);
@@ -478,7 +526,7 @@ function damageRowDetail(weapon) {
 	return [escHtml(weapon.name), ...weaponArmorBits(weapon)].join(" · ");
 }
 
-function postDamageResultsCard(actor, { move, weapon, results, counter }) {
+function postDamageResultsCard(actor, { move, weapon, results, counter, damage }) {
 	const multiWarn = results.length > 1 && !weapon?.area
 		? `<p class="stonetop-attack-warn"><i class="fas fa-triangle-exclamation"></i> ${escHtml(move)} is a single-foe move: applying to multiple targets is a GM abstraction.</p>`
 		: "";
@@ -510,6 +558,12 @@ function postDamageResultsCard(actor, { move, weapon, results, counter }) {
 	const chipFaces = results.length === 1 ? (results[0]?.faces ?? "") : "";
 	const hasApplyable = results.some(r => r.uuid);
 
+	// What the damage window added, said out loud. The formula chip above shows the arithmetic
+	// but not its provenance: a "d10+2+1" cannot tell the table which of those numbers is the
+	// weapon's and which is the one-off the player just declared. Same pills, same wording as a
+	// single damage roll's card (roll-engine#damageConditionPills).
+	const adjustHtml = conditionsRowHtml(damageConditionPills(damage ?? {}));
+
 	const body = `<div class="card-content">
 		${rollFormulaChip(results[0]?.formula ?? "", chipFaces)}
 		${multiWarn}
@@ -518,7 +572,7 @@ function postDamageResultsCard(actor, { move, weapon, results, counter }) {
 			${hasApplyable ? `<button type="button" class="stonetop-attack-btn stonetop-apply-damage"><i class="fas fa-heart-crack"></i> Apply damage</button>` : ""}
 			${counter ? sufferBtn() : ""}
 		</div>
-	</div>`;
+	</div>${adjustHtml}`;
 
 	return ChatMessage.create({
 		speaker: ChatMessage.getSpeaker({ actor }),
@@ -583,15 +637,16 @@ export function wireAttackConfirm(message, html) {
 				btn.title = "Ask the GM to confirm this attack";
 				continue;
 			}
-			btn.addEventListener("click", () => resolveAttackTier(message, actor, btn, root));
+			btn.addEventListener("click", ev => resolveAttackTier(message, actor, btn, root, ev?.shiftKey === true));
 		}
 	}).catch(err => console.error("Stonetop | could not wire the attack card's Confirm buttons", err));
 }
 
 // Enact one tier's Confirm. Disables the clicked button while it runs; only marks the whole
 // card resolved (locking every tier's Confirm) once the action actually completes, so a
-// cancelled "suffer" prompt leaves the card clickable again.
-async function resolveAttackTier(message, actor, btn, root) {
+// cancelled "suffer" or damage prompt leaves the card clickable again. `shiftKey` is the
+// Confirm click's own modifier, which skips the damage window for this one roll.
+async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	if (btn.disabled || message.getFlag(SCOPE, "attack")?.resolved) return;
 	btn.disabled = true;
 	const attack = message.getFlag(SCOPE, "attack");
@@ -615,10 +670,17 @@ async function resolveAttackTier(message, actor, btn, root) {
 	const counter   = (pick ? pick.dataset.counter : btn.dataset.counter) === "1";
 	const deplete   = !!tier?.querySelector('input[data-addon="deplete"]:checked');
 
+	// ASKED BEFORE ANYTHING IS COMMITTED. What follows latches the card resolved and can spend
+	// the weapon's ammo, and neither undoes itself: a window cancelled after them would leave a
+	// dead card, a depleted quiver and no damage rolled. So the question comes first, and a
+	// cancel simply hands the Confirm button back.
+	const damage = await askDamageAdjustment(actor, { move: attack.move, weapon: attack.weapon, extraDice, shiftKey });
+	if (!damage) { btn.disabled = false; return; }
+
 	await lockAttackCard(message, root, { pick: pick?.value ?? null, targets });
 	if (deplete) await depleteAmmoAndPost(message, actor, attack);
 	await rollAndPostDamage(actor, {
-		move: attack.move, weapon: attack.weapon, targets, extraDice, counter,
+		move: attack.move, weapon: attack.weapon, targets, counter, damage,
 	});
 }
 

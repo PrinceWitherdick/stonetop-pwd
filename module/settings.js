@@ -1,4 +1,5 @@
 import { DEFAULT_ROOT as DEFAULT_BOOK2_ART_ROOT } from "./book2-art/art-root.js";
+import { RULEBOOKS_SETTING } from "./books/rulebooks.js";
 import { POSTER_MAPS, posterMapSlugOf } from "./book2-art/poster-map-catalog.js";
 import { SYSTEM_ID } from "./system-id.js";
 import { WEATHER_FX_PARTS, WEATHER_FX_SETTING } from "./seasons/weather-fx-parts.js";
@@ -478,6 +479,25 @@ export function registerSettings() {
 		default: false
 	});
 
+	// Where this world's copies of the rulebooks are, as a { book number -> path } record, so
+	// the GM Toolkit's two book icons have something to open. Nothing is shipped and nothing is
+	// extracted here: this is a POINTER to a PDF the GM already owns, handed to the pdf.js
+	// reader Foundry itself bundles. See module/books/rulebooks.js for the whole model.
+	//
+	// `config: false` because a path typed into a settings row is a path typed wrong. It is set
+	// through the "Your rulebooks" window (module/books/RulebooksDialog.js), which browses.
+	//
+	// One record rather than a key per book: `book: 3` is already a number this codebase cites
+	// (the free GM playbook, see gm-toolkit/book-ref.js), so a third book should be a row in
+	// RULEBOOKS and nothing else.
+	game.settings.register(SYSTEM_ID, RULEBOOKS_SETTING, {
+		name: "Your Rulebook PDFs",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {}
+	});
+
 	// The durable folder (a top-level data path, OUTSIDE the system folder) the "Import
 	// Book Art" macro writes extracted illustrations to. Living outside systems/stonetop-pwd
 	// is what keeps the art across a system update or reinstall; the runtime re-apply
@@ -879,6 +899,42 @@ export function registerSettings() {
 		default: {}
 	});
 
+	// Which rulebook readers this browser had open when it last unloaded, so they come back
+	// (module/books/reader-resume.js). Same reasoning as the record above and the same shape of
+	// answer: the reader is a plain Application, a reload never runs its `close`, so a book still
+	// listed here is one that was open. CLIENT-scoped because it is this browser's window state,
+	// not the world's — a GM reloading must not open a book on a player's screen. Keyed by world
+	// id for the same reason the walkthroughs are: a flat blob would reopen a book in every world
+	// opened in this browser, including ones with no copy of it. Shape:
+	//   { "<worldId>": [1, 2] }
+	// The PAGE is deliberately absent: pdf.js keeps its own view history and restores the exact
+	// scroll and zoom, which is more than a page number could say.
+	game.settings.register(SYSTEM_ID, "bookReaderResume", {
+		name: "Rulebook Reader Resume State",
+		scope: "client",
+		config: false,
+		type: Object,
+		default: {}
+	});
+
+	// One reader's own bookmarks in the rulebooks, listed in a tab of the viewer's own sidebar
+	// (module/books/reader-bookmarks-tab.js). Shape:
+	//   { "1": [ { id, label, page, hash, created } ], "2": [ ... ] }
+	//
+	// USER-scoped, which is neither of the two scopes the settings above use, and deliberately.
+	// WORLD would put every reader's marks in one list and let only a GM write it. CLIENT would
+	// tie a player's marks to the browser they made them in and lose them on the laptop they
+	// play from next week. `user` is stored in the world's settings database keyed by the user,
+	// which is exactly what a bookmark is a fact about — and being per-world already, it needs
+	// none of the world-id nesting the client-scoped records above have to do for themselves.
+	game.settings.register(SYSTEM_ID, "bookBookmarks", {
+		name: "Rulebook Bookmarks",
+		scope: "user",
+		config: false,
+		type: Object,
+		default: {}
+	});
+
 	// -- CLIENT SPECIFIC SETTINGS --------------------------------
 
 	// Which worlds this user has had the Setting Overview journal auto-opened in (see
@@ -922,21 +978,118 @@ export function registerSettings() {
 		onChange: value => applySheetFont(value),
 	});
 
+	// A SLIDER, not a dropdown, and the same one the pencil-reveal delay below uses. Text size is
+	// the setting a reader adjusts by feel: they want the size that works, not the nearest of five
+	// named stops, and five stops is what the choice list could offer without becoming a list
+	// nobody reads. The bounds keep every value the dropdown offered (0.9, 1, 1.1, 1.25, 1.4 all
+	// land on the 0.05 grid) and fill in the gaps between them.
+	//
+	// The value is a MULTIPLIER on the sheet's own text size, written straight into
+	// --stonetop-font-scale by applySheetFontScale, so 1 is the size the sheets were drawn at.
+	//
+	// SWITCHING FROM String TO Number NEEDS NO MIGRATION. The choice keys were already the
+	// numbers ("1.25"), and a client setting is cast to its registered type on every read
+	// (Setting#_castType), so a stored "1.25" comes back as 1.25 the first time this build reads
+	// it. The registration is the only thing that had to change.
 	game.settings.register(SYSTEM_ID, "sheetFontScale", {
 		name: "stonetop.settings.sheetFontScale.name",
 		hint: "stonetop.settings.sheetFontScale.hint",
 		scope: "client",
 		config: true,
-		type: String,
-		choices: {
-			"0.9":  "stonetop.settings.sheetFontScale.smaller",
-			"1":    "stonetop.settings.sheetFontScale.normal",
-			"1.1":  "stonetop.settings.sheetFontScale.large",
-			"1.25": "stonetop.settings.sheetFontScale.larger",
-			"1.4":  "stonetop.settings.sheetFontScale.largest",
-		},
-		default: "1",
+		type: Number,
+		range: { min: 0.9, max: 1.4, step: 0.05 },
+		default: 1,
 		onChange: value => applySheetFontScale(value),
+	});
+
+	// THE ACCESSIBILITY PAIR. Both client-scoped, both applied by a class on the document root, and
+	// both here because they are what a low-vision player reaches for first.
+	//
+	// They exist because a player at a real table could not read their sheet. Their words: "the off
+	// white background combined with the faint pattern in the background sometimes makes it hard for
+	// him to read especially when its the lighter grey text". Every part of that is measurable and
+	// every part of it was true:
+	//   - the paper a sheet actually paints is sheet-bg.webp, an OPAQUE near-white grain whose
+	//     luminance runs 0.936-1.000, so the page a reader tracks along is not one tone but a field
+	//     that moves by ~7% under the words;
+	//   - --st-text-muted (#777) measured 4.38:1 on it and --st-text-faint (#999) measured 2.79:1,
+	//     against WCAG AA's 4.5:1 for body text. The "lighter grey text" was failing, by the numbers.
+	//
+	// KEPT APART, AND FULLY APART, because they answer different complaints and a reader can want
+	// either alone: one takes the grain off and changes no colour, the other repitches every ink and
+	// changes no grain. Folding the grain into the contrast switch would have meant a reader who
+	// simply wants a flat page has to accept a repainted one to get it.
+	//
+	// The palette USED to take the grain off as well, on the reasoning that a reader who got this
+	// far has already said the pattern defeats them. Two things were wrong with that. It made
+	// "Paper Texture" a switch that saved a value and moved nothing while this was on, which reads
+	// as broken rather than as overridden; and it decided for a reader who wants the parchment AND
+	// the darker greys that they cannot have both. Uncoupled 2026-08-28 at the user's request. The
+	// grain costs about 0.3:1 at the faintest step (7.27:1 on the image against 7.57:1 on bare
+	// white), so both ways round still clear AAA and the choice is genuinely the reader's.
+	game.settings.register(SYSTEM_ID, "sheetContrast", {
+		name: "stonetop.settings.sheetContrast.name",
+		hint: "stonetop.settings.sheetContrast.hint",
+		scope: "client",
+		config: true,
+		type: String,
+		// A CHOICE rather than a checkbox, though it has two options today. The palette is the axis,
+		// not the boolean "more contrast": a light-on-dark option is the next thing asked for by
+		// readers who need the glare down rather than the separation up, and it lands here as a third
+		// value rather than as a second setting that has to be kept exclusive with this one by hand.
+		choices: {
+			"normal": "stonetop.settings.sheetContrast.normal",
+			"high":   "stonetop.settings.sheetContrast.high",
+		},
+		default: "normal",
+		// NO re-render, unlike most of the settings below it: the palette is tokens on the document
+		// root, so every open window repaints itself with no help. There was one, for the
+		// Preferences tab: this used to draw the "Paper Texture" row disabled, and that state is
+		// decided when the tab is BUILT, so nothing would grey or un-grey it until the sheet was
+		// next drawn for some other reason. The row is never disabled now (see the note above), so
+		// the re-render had nothing left to keep in step and every open sheet was being rebuilt to
+		// produce identical markup.
+		onChange: value => applySheetContrast(value),
+	});
+
+	game.settings.register(SYSTEM_ID, "sheetTexture", {
+		name: "stonetop.settings.sheetTexture.name",
+		hint: "stonetop.settings.sheetTexture.hint",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		// ON, because the grain is the system's look and nobody who has not been bothered by it
+		// should have to turn it back on.
+		default: true,
+		onChange: value => applySheetTexture(value),
+	});
+
+	// ITALICS OFF. A third setting in the same family, and kept apart from the other two for the
+	// same reason they are kept apart from each other: it answers a complaint neither of them
+	// touches. A slanted face is harder to resolve than an upright one -- the strokes a reader
+	// tracks a letter by are the ones the slant moves -- and a magnifier makes that worse rather
+	// than better, because it magnifies the slant along with the letter.
+	//
+	// WHOLE CLIENT, not just our windows. Every other setting in this family stops at the system's
+	// own surfaces, because that is where the system's own paper and palette are. This one does
+	// not, and should not: italics are no easier to read in the sidebar, in a module's window or
+	// in core's own hints than they are on a sheet, and a reader who has said the slant costs them
+	// has not said it costs them only on the character sheet. The stylesheet block pays for that
+	// reach with an unscoped !important -- see the comment there for why nothing smaller reaches.
+	//
+	// WHAT IT COSTS, stated in the hint rather than hidden: italic is a real signal in this system
+	// (a move's fiction, a hint under a field, an empty-list note), and turning it off flattens
+	// those into the text around them wherever colour is not already carrying the distinction too.
+	// That is a trade the reader is making knowingly, which is why the setting is theirs and
+	// defaults OFF.
+	game.settings.register(SYSTEM_ID, "noItalics", {
+		name: "stonetop.settings.noItalics.name",
+		hint: "stonetop.settings.noItalics.hint",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		default: false,
+		onChange: value => applyNoItalics(value),
 	});
 
 	// CLASSIC vs MODERN sheet layout: the table's answer, one person's override of it, and
@@ -1096,18 +1249,14 @@ export function registerSettings() {
 		onChange: value => applyEditPencilRevealDelay(value),
 	});
 
-	// Hide the decorative dice (rollable) icon that marks rollable moves and stats.
-	// Rolling still works without it — clicking the move name or stat row fires the
-	// same roll. Drives the `stonetop-hide-rollable-icon` root class.
-	game.settings.register(SYSTEM_ID, "hideRollableIcon", {
-		name: "stonetop.settings.hideRollableIcon.name",
-		hint: "stonetop.settings.hideRollableIcon.hint",
-		scope: "client",
-		config: true,
-		type: Boolean,
-		default: false,
-		onChange: value => applyHideRollableIcon(value),
-	});
+	// NO "HIDE ROLLABLE ICON" SETTING. It used to sit here, between the pencil delay and the
+	// roll-mode switch, and it hid the dice icon on move rows and stat rows. Both icons are
+	// gone outright: a move is rolled by its TITLE and a stat by its whole CELL, so the switch
+	// had nothing left to hide but the labels themselves. A registered setting that changes
+	// nothing is worse than no setting — it reads as a promise the sheet does not keep.
+	//
+	// Nothing needs cleaning up on a world that had it set: an unregistered client setting is
+	// simply never read again, and the root class it drove is no longer applied by anything.
 
 	// WHERE advantage and disadvantage are chosen, and it is one place or the other.
 	//
@@ -1147,6 +1296,28 @@ export function registerSettings() {
 		config: true,
 		type: Boolean,
 		default: false,
+	});
+
+	// Open the damage window before a damage roll (module/dialogs/RollDialog.js#promptDamage):
+	// advantage/disadvantage on the damage die, a flat modifier, and extra dice.
+	//
+	// Its own switch rather than a share of the two above, because it is a different question
+	// asked at a different moment. Those two are about a 2d6 move roll and fire on every stat
+	// click; this one fires only when damage is actually rolled, which is rare enough that the
+	// window is worth having open by default — and it is the ONLY way a bonus the sheet cannot
+	// know about ("when you roil with anger, you do +1 damage until you calm down") reaches the
+	// dice instead of being applied by hand to the target's HP afterwards.
+	//
+	// Defaults ON for that reason; Shift-clicking the roll skips it for one roll, and a table
+	// that never adjusts damage unticks it once. Per-client, like both of its neighbours: it
+	// decides what THIS user's clicks open and nothing about the world.
+	game.settings.register(SYSTEM_ID, "promptDamageModifier", {
+		name: "stonetop.settings.promptDamageModifier.name",
+		hint: "stonetop.settings.promptDamageModifier.hint",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		default: true,
 	});
 
 	// Open actor sheets (character / steading / monster / NPC) in Edit mode instead of
@@ -1632,12 +1803,59 @@ export function applyEditPencilRevealDelay(value) {
 	document.documentElement.style.setProperty("--st-edit-reveal-delay", `${safe}s`);
 }
 
-export function applyHideRollableIcon(value) {
-	document.documentElement.classList.toggle("stonetop-hide-rollable-icon", !!value);
-}
-
 export function applyReduceMotion(value) {
 	document.documentElement.classList.toggle("stonetop-reduce-motion", !!value);
+}
+
+/**
+ * The high-contrast palette, as a class on the document ROOT.
+ *
+ * The root and not the sheet, because the tokens it re-points are declared on `:root` and every
+ * surface a player reads inherits them from there — the sheets, our dialogs, the chat cards where
+ * the dice land, the journal pages, the themed core windows. A class on a sheet would repaint the
+ * sheet and leave the card reporting its roll in the greys the reader could not read.
+ *
+ * `.stonetop-high-contrast` on the same element `:root` matches, so the block that answers to it
+ * beats the base tokens on specificity (0,2,0 against 0,1,0) with no `!important` anywhere. Scopes
+ * that re-point those tokens on a DESCENDANT — the Death's Door moods, an undead character's
+ * sheet — still win inside themselves, which is right: those are already light-on-black and
+ * already well past AA.
+ *
+ * Compared as a string against the one value that means "on", so an unreadable or retired setting
+ * lands on the normal palette rather than on a half-applied one.
+ */
+export function applySheetContrast(value) {
+	document.documentElement.classList.toggle("stonetop-high-contrast", value === "high");
+}
+
+/**
+ * The paper grain, likewise — but keyed on the class being ABSENT from the normal case, so the
+ * markup carries a class only for the reader who has turned something off.
+ *
+ * NB the stylesheet moves the paper COLOUR along with the grain, and has to. sheet-bg.webp is
+ * opaque and near-white (mean rgb(251, 250, 250)), so it does not tint `--stonetop-bg` — it hides
+ * it. Dropping the image without lifting the colour would drop the page from ~0.977 luminance to
+ * the token's 0.875 and make every grey on it HARDER to read, which is the opposite of why anyone
+ * reaches for this. See the `--stonetop-bg-texture` comment in stonetop.css.
+ */
+export function applySheetTexture(value) {
+	document.documentElement.classList.toggle("stonetop-no-texture", !value);
+}
+
+/**
+ * Italics off, as a class on the document ROOT -- and the one skin in this family that is
+ * deliberately not scoped to our own windows.
+ *
+ * The class goes on when the setting is ON, the opposite way round from applySheetTexture above,
+ * because here the default IS the absent class: nobody who has not asked for this should carry a
+ * marker for it.
+ *
+ * Nothing is written inline and nothing is rewritten in the DOM. The whole of the change lives in
+ * the stylesheet block keyed on this class, so turning it back off restores every slant with no
+ * second pass over anything.
+ */
+export function applyNoItalics(value) {
+	document.documentElement.classList.toggle("stonetop-no-italics", !!value);
 }
 
 // Whether the pre-roll window asks how the roll is going out (Advantage / Normal /
@@ -1651,6 +1869,14 @@ export function getAskRollModeEachRollSetting() {
 // while the mode is being asked per roll, since that window carries the stepper anyway.
 export function getPromptRollModifierSetting() {
 	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptRollModifier") ?? false;
+}
+
+// Whether the damage window opens before a damage roll (how to roll it, plus a one-off
+// modifier and extra dice). Defaults TRUE here as well as at registration, so a client that
+// asks before the setting is registered — a macro firing early, a test — gets the shipped
+// behaviour rather than silently losing the window.
+export function getPromptDamageModifierSetting() {
+	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptDamageModifier") ?? true;
 }
 
 // Whether actor sheets should open in Edit mode rather than Play mode.
@@ -1754,8 +1980,6 @@ export function stampLayoutClass(app, sheet) {
 	app?.element?.[0]?.classList.toggle("stonetop-layout-classic", isClassicLayout(sheet));
 }
 
-// Whether the rollable dice icon is hidden; when it is, rolls fire from the move
-// name / stat row instead of the (now absent) icon.
 /**
  * A setting read that survives being asked too early, and caches only a real answer.
  *
@@ -1855,10 +2079,6 @@ export function applyMapPinLabelMode() {
 		if (note?.renderFlags?.set) note.renderFlags.set({ refreshState: true });
 		else note?.refresh?.();
 	}
-}
-
-export function getHideRollableIconSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "hideRollableIcon") ?? false;
 }
 
 export function getSetting(key) {

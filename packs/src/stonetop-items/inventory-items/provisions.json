@@ -1,0 +1,26 @@
+{
+  "_id": "stGearProvisions",
+  "_key": "!items!stGearProvisions",
+  "name": "Provisions",
+  "type": "move",
+  "system": {
+    "moveType": "inventory"
+  },
+  "flags": {
+    "stonetop": {
+      "slug": "provisions",
+      "inventoryColumn": "regular",
+      "sortOrder": 4,
+      "note": "food taken from the wild; substitutes for supplies when you <em>Make Camp</em>, 1-for-1, but is likelier to spoil or draw beasts",
+      "weight": 1,
+      "special": true,
+      "specialCategory": "Flora & Herbs",
+      "resource": {
+        "max": 12,
+        "title": null,
+        "labels": []
+      }
+    }
+  },
+  "folder": "OL1lTSyCryWm3Xez"
+}

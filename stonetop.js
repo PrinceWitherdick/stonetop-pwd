@@ -41,12 +41,14 @@ import { onUpdateSiteNote } from "./module/sites/site-scene-pins.js";
 import { onDrawStonetopNote } from "./module/hooks/StonetopNoteLabels.js";
 import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
 import { bumpEncounterNotesGeneration } from "./module/actors/gmtoolkit/gm-encounters-tab.js";
+import { gmToolkitActors } from "./module/actors/gmtoolkit/gm-toolkit-actor.js";
 import { invalidateMonsterRefIndex } from "./module/bestiary/monster-ref-index.js";
 import { ensureLocationSummaryIndex, applyTooltipsThenRestrict } from "./module/locations/location-tooltips.js";
 import { hideBrokenJournalArt } from "./module/journal/hide-broken-art.js";
 import { addJournalShareButton } from "./module/journal/share-journal.js";
 import { patchJournalImagePopoutTitles } from "./module/journal/journal-image-titles.js";
 import { onRenderPause } from "./module/hooks/RenderPause.js";
+import { registerBookBroadcast } from "./module/books/book-broadcast.js";
 import { onRenderCompendiumItemIcons } from "./module/hooks/CompendiumItemIcons.js";
 import { decoratePortraitRow, onUpdateActorPortraitFrame } from "./module/hooks/ActorDirectoryPortraits.js";
 import { decorateNameRow, onUpdateActorPlaybookName } from "./module/hooks/ActorDirectoryNames.js";
@@ -56,10 +58,15 @@ import { characterFullName } from "./module/utils/playbook-actors.js";
 import { registerStonetopSingletonHooks } from "./module/hooks/StonetopSingleton.js";
 import { info } from "./module/utils/logger.js";
 import { boldMissText } from "./module/utils/strings.js";
+import { moveBodyHtml } from "./module/utils/move-tiers.js";
+import { MOVE_TIERS_CLASS, ROLLED_TIER_ATTR } from "./module/utils/move-results.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
-import { rollSeasonsCard, sign, SPRING_SEASONS_RESULT, xpToLevelUp, markMissXp } from "./module/utils/roll-engine.js";
+import { rollSeasonsCard, sign, markMissXp, pbtaDiceFormula, seasonsRollTable } from "./module/utils/roll-engine.js";
+import { xpToLevelUp, adjustXp } from "./module/utils/xp.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
-import { moveChatCard } from "./module/utils/chat.js";
+import { moveChatCard, canRewriteCard } from "./module/utils/chat.js";
+import { paintPickTally, pickLimitFor, releaseOverLimit } from "./module/utils/pick-tally.js";
+import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
 import { wireAttackConfirm, wireApplyDamage, wireSufferAttack } from "./module/combat/attack-flow.js";
@@ -75,13 +82,20 @@ import { bindSteadingImprovementDrag } from "./module/journal/steading-improveme
 import { bindThreatSeedDrag } from "./module/threats/threat-seed-cards.js";
 import { maybeAnnounceBecameHero } from "./module/actors/character/WouldBeHeroAsterisk.js";
 import { StonetopSteading } from "./module/actors/steading/StonetopSteading.js";
+import { debilityPath } from "./module/actors/steading/steading-debilities.js";
 import { onSteadingPeopleUpdate, repaintOpenSteadingRosters } from "./module/actors/steading/steading-people.js";
 import { makeDialogsResizable, enableAutoHeightVerticalResize } from "./module/utils/resizable-dialogs.js";
 import { registerStonetopWindowTheme, registerStonetopLightTheme } from "./module/utils/window-theme.js";
 import { installWindowRestore } from "./module/utils/window-restore.js";
 import { registerUuidRedirects } from "./module/migration/compat.js";
 import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
+import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
+import { CharacterPossessions } from "./module/actors/character/CharacterPossessions.js";
+import { stockSourcesForFlags, defaultStockSource, SACRED_POUCH_SLUG, RITES_OF_THE_LAND } from "./module/actors/character/stock-cost.js";
+import { readProvisionsYield, rollProvisions } from "./module/actors/character/provisions.js";
+import { ownedMove } from "./module/actors/character/owns-move.js";
 import { SYSTEM_ID } from "./module/system-id.js";
+import { speakerActor } from "./module/utils/speaker-actor.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
 
 // -- INIT ------------------------------------------------------
@@ -140,6 +154,23 @@ Hooks.once("init", () => {
 	// `{{format …}}` prints the string's own <strong> at the reader.
 	Handlebars.registerHelper("escapeHtml", value => escHtml(value));
 	Handlebars.registerHelper("boldMissText", value => boldMissText(value));
+	// A move card's body: the description with its 10+/7-9/6- prose lifted out of the paragraph
+	// and re-laid as the labelled tier ladder underneath (utils/move-tiers.js). Every surface
+	// that prints a move description calls this in its place.
+	//
+	// The second argument is OPTIONAL. Only character moves store `system.moveResults`; on an
+	// NPC, monster or steading move there is nothing to pass, and `{{{moveBody description}}}`
+	// hands Handlebars' own options object through in its place — so anything that isn't a
+	// results object is read as absent, and the tiers are parsed out of the description instead.
+	// A move whose description names no tier either way comes back untouched.
+	//
+	// Emitted with {{{ }}} — the ladder is markup, and the tier text is escaped inside it.
+	Handlebars.registerHelper("moveBody", (description, moveResults) => {
+		const results = moveResults && typeof moveResults === "object" && !moveResults.hash
+			? moveResults
+			: null;
+		return boldMissText(moveBodyHtml(description, results));
+	});
 	Handlebars.registerHelper("eq", (a, b) => a === b);
 	// `hbsTruthy`, never bare `Boolean`: these three sit beside `{{#if}}` in the same
 	// expression and have to answer the same way, and an EMPTY ARRAY is the case where
@@ -200,6 +231,13 @@ Hooks.once("init", () => {
 	});
 
 	Handlebars.registerHelper("times", n => Array.from({ length: n ?? 0 }, (_, i) => i));
+
+	// Whether an inventory row's own parenthetical offers provisions, and how many — a goat's
+	// "butcher for ◇ Provisions (6 uses)", a brightberry's "(3 uses)", snowembers' "1d4+4".
+	// A helper rather than a snapshot field because the answer is already written on the row: it
+	// is the book's sentence, read where it is shown, so a GM-written beast whose note says the
+	// same thing grows the same button without being taught to.
+	Handlebars.registerHelper("provisionsYield", note => readProvisionsYield(note));
 
 	Handlebars.registerHelper("repeatChecks", move => {
 		if (!move?.repeat) return [];
@@ -391,6 +429,7 @@ Hooks.once("init", () => {
 		"stonetop.tab-post-death":      "systems/stonetop-pwd/templates/actor/partials/tab-post-death.hbs",
 		"stonetop.tab-special-moves":   "systems/stonetop-pwd/templates/actor/partials/tab-special-moves.hbs",
 		"stonetop.tab-notes":           "systems/stonetop-pwd/templates/actor/partials/tab-notes.hbs",
+		"stonetop.tab-preferences":     "systems/stonetop-pwd/templates/actor/partials/tab-preferences.hbs",
 		"stonetop.tab-rail-item":       "systems/stonetop-pwd/templates/actor/partials/tab-rail-item.hbs",
 		"stonetop.tab-nav-item":        "systems/stonetop-pwd/templates/actor/partials/tab-nav-item.hbs",
 		"stonetop.npc-quick-facts":     "systems/stonetop-pwd/templates/actor/partials/npc-quick-facts.hbs",
@@ -432,7 +471,6 @@ Hooks.once("init", () => {
 		"stonetop.steading-stats-bar":        "systems/stonetop-pwd/templates/actor/partials/steading-stats-bar.hbs",
 		"stonetop.steading-settlements-card": "systems/stonetop-pwd/templates/actor/partials/steading-settlements-card.hbs",
 		"stonetop.steading-moves-sidebar":    "systems/stonetop-pwd/templates/actor/partials/steading-moves-sidebar.hbs",
-		"stonetop.steading-move-controls":    "systems/stonetop-pwd/templates/actor/partials/steading-move-controls.hbs",
 		"stonetop.steading-tab-overview":     "systems/stonetop-pwd/templates/actor/partials/steading-tab-overview.hbs",
 		"stonetop.steading-tab-neighbors":    "systems/stonetop-pwd/templates/actor/partials/steading-tab-neighbors.hbs",
 		"stonetop.steading-tab-improvements": "systems/stonetop-pwd/templates/actor/partials/steading-tab-improvements.hbs",
@@ -441,12 +479,18 @@ Hooks.once("init", () => {
 		"stonetop.gm-toolkit-tab-moves":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-moves.hbs",
 		"stonetop.gm-toolkit-tab-loop":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-loop.hbs",
 		"stonetop.gm-toolkit-tab-threats":    "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-threats.hbs",
-		"stonetop.gm-toolkit-tab-sites":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-sites.hbs",
+		// Not a tab any more: a folded section at the foot of the Expeditions panel.
+		"stonetop.gm-toolkit-sites-section": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-sites-section.hbs",
 		"stonetop.gm-toolkit-tab-homefront":  "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-homefront.hbs",
 		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
 		"stonetop.gm-toolkit-tab-encounters": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-encounters.hbs",
-		// One card, printed by BOTH of that tab's lists — the live one and the Completed fold.
+		"stonetop.gm-toolkit-tab-expeditions": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-expeditions.hbs",
+		// One card per bundle tab, printed by BOTH of that tab's lists — the live one and the
+		// Completed fold. Two files rather than one partial with a parameter, for the reason
+		// gm-expedition-card.hbs gives; both draw the same class names, so they share one
+		// stylesheet block and one engine (actors/gmtoolkit/gm-bundle-tab.js).
 		"stonetop.gm-encounter-card":         "systems/stonetop-pwd/templates/actor/partials/gm-encounter-card.hbs",
+		"stonetop.gm-expedition-card":        "systems/stonetop-pwd/templates/actor/partials/gm-expedition-card.hbs",
 		"stonetop.gm-prep-card-tools":        "systems/stonetop-pwd/templates/actor/partials/gm-prep-card-tools.hbs",
 		"stonetop.gm-prep-add-bar":           "systems/stonetop-pwd/templates/actor/partials/gm-prep-add-bar.hbs",
 		"stonetop.gm-prep-no-steading":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-no-steading.hbs",
@@ -555,6 +599,12 @@ Hooks.once("ready", () => {
 	game.stonetop.bootReport = bootReport;
 });
 Hooks.once("ready", onReady);
+// EVERY user, not just the GM: this is the listening half of "Show Players" on a rulebook
+// window, and a player who is not listening is the only person the feature is for. Its own
+// `ready` hook rather than a line inside onReady, because onReady is a long sweep that can
+// throw on a half-migrated world, and a table should not lose the ability to be shown a page
+// because a portrait backfill failed. See module/books/book-broadcast.js.
+Hooks.once("ready", registerBookBroadcast);
 Hooks.once("ready", () => applyMoveDescriptionBodyClass(getSetting("showMoveDescriptionsInChat")));
 
 // -- THREAT BOARD (opt-in on-canvas threat cards) --------------
@@ -611,6 +661,36 @@ Hooks.on("createJournalEntry", handleImportedJournalArt);
 const _onArtIndexPublished = (setting) => {
 	const key = setting?.key ?? "";
 	if ([...ART_INDEX_SETTINGS, ...ART_BROWSE_INPUTS].some((s) => key.endsWith(`.${s}`))) clearArtBrowseCache();
+	// ...and repaint the one surface that reads an art index at RENDER time with no document of
+	// its own to be repainted by.
+	//
+	// Every other picture this system imports lands ON a document — an actor's portrait, a
+	// journal page's <img> — so the write that places it re-renders whatever is showing it. The
+	// GM Toolkit's Core Loop tab has no such document: the two flowcharts point at nothing, and
+	// the tab decides between the picture and the "run Import Book Art" placeholder by reading
+	// `gmDiagramArt` in getData (module/gm-toolkit/gm-diagrams.js).
+	//
+	// Which means the GM who presses that placeholder's own Import button, hands over the
+	// playbook, and watches the import finish is looking at a sheet that will keep saying "not
+	// imported" until it is closed and reopened — the button appearing to do nothing being the
+	// exact complaint that put this here. `book2ArtPrefix` counts as well: it does not change
+	// WHICH diagrams a world has, but it changes the path they are fetched from, so a hosted
+	// world that learns its prefix mid-session is showing two broken images until it repaints.
+	if (!key.endsWith(".gmDiagramArt") && !key.endsWith(".book2ArtPrefix")) return;
+	// The sheet is an AppV1 bound to its document, so `apps` holds every open copy of it.
+	// `render(false)` — never `true` — so this repaints a window that is already up and never
+	// conjures one on a GM who has the sheet shut.
+	//
+	// EVERY toolkit, not `theGmToolkit()`. One per world is the rule and hooks/StonetopSingleton.js
+	// vetoes a second create, but that veto only ever ran forward: a world that grew a duplicate
+	// before it shipped still has one, and `theGmToolkit()` answers with whichever is first in the
+	// collection. Repainting only that one would leave the GM looking at the OTHER sheet with the
+	// same stale placeholder this exists to clear, which is the one failure it must not reproduce.
+	for (const toolkit of gmToolkitActors()) {
+		for (const app of Object.values(toolkit?.apps ?? {})) {
+			try { app.render(false); } catch (_) { /* a window mid-close is not a failure */ }
+		}
+	}
 };
 Hooks.on("createSetting", _onArtIndexPublished);
 Hooks.on("updateSetting", _onArtIndexPublished);
@@ -635,12 +715,14 @@ Hooks.on("drawNote", onDrawStonetopNote);
 // carries the two place slugs and every client paints the line from them, players included.
 registerExpeditionRouteHooks();
 
-// -- ENCOUNTER NOTES: LINKS FOLLOW A RENAME --------------------
-// The GM Toolkit's Encounters tab holds each encounter's notes as already-enriched HTML, keyed
+// -- BUNDLE NOTES: LINKS FOLLOW A RENAME -----------------------
+// The GM Toolkit's Encounters and Expeditions tabs hold each card's notes as already-enriched
+// HTML, keyed
 // against the prose they were built from. That key cannot see a rename: `enrichHTML` resolves an
 // @UUID link to the target's CURRENT name, so renaming a linked monster leaves the prose
 // byte-identical and the cached HTML showing the old name for the rest of the session. Bumping a
-// counter on any rename of a thing a note can point at is what lets the next paint rebuild.
+// counter on any rename of a thing a note can point at is what lets the next paint rebuild. ONE
+// counter serves both tabs, since both run on the one cache in gm-bundle-tab.js.
 for (const doc of ["Actor", "Item", "JournalEntry", "JournalEntryPage", "Scene", "RollTable", "Macro"]) {
 	Hooks.on(`update${doc}`, (_doc, changes) => {
 		if ("name" in (changes ?? {})) bumpEncounterNotesGeneration();
@@ -776,7 +858,7 @@ Hooks.on("updateActor", onUpdateActorDeathsDoorRaised);
 // render pass turns into the fringe under the card. Both are written in one updateSource so a
 // message costs one source edit, not two.
 Hooks.on("preCreateChatMessage", (message) => {
-	const actor = _speakerActor(message);
+	const actor = speakerActor(message);
 	if (!actor || actor.type !== "character") return;
 
 	const changes = {};
@@ -959,7 +1041,7 @@ function _chatWireBurnBrightly(message, html) {
 	const cardButtons = html.querySelector(".stonetop-roll-card .stonetop-card-buttons");
 	if (!cardButtons) return;
 
-	const actor = _speakerActor(message);
+	const actor = speakerActor(message);
 
 	if (!actor || actor.type !== "character" || !actor.isOwner) return;
 
@@ -984,20 +1066,24 @@ function _chatWireBurnBrightly(message, html) {
 
 	btn.addEventListener("click", async () => {
 		btn.disabled = true;
-		const currentXp    = actor.system?.attributes?.xp?.value    ?? 0;
-		const currentLevel = actor.system?.attributes?.level?.value ?? 1;
-		if (currentXp < xpToLevelUp(currentLevel)) {
-			ui.notifications.warn("You don't have enough XP to Burn Brightly.");
-			btn.disabled = false;
-			return;
-		}
 		try {
 			// Read before the update, so the re-stamped alias is the one the card was created
 			// with rather than whatever the actor has become mid-click.
 			const fullName = characterFullName(actor);
-			await actor.update({ "system.attributes.xp.value": currentXp - 2 });
-			const newXp = currentXp - 2;
-			const maxXp = xpToLevelUp(currentLevel);
+			// Affordability is checked INSIDE the write queue rather than here. Checking it at
+			// click time was right for one spend and wrong for two: a second Burn Brightly
+			// queued behind the first tested a total the first had not yet reduced, so a
+			// character with 9 XP could buy two +1s and end on 5, below the threshold that made
+			// either of them legal.
+			const { applied, after: newXp, max: maxXp } = await adjustXp(actor, -2, {
+				move: "Burn Brightly",
+				require: (xp, level) => xp >= xpToLevelUp(level),
+			});
+			if (!applied) {
+				ui.notifications.warn("You don't have enough XP to Burn Brightly.");
+				btn.disabled = false;
+				return;
+			}
 			ChatMessage.create({
 				content: `-2 XP for Burning Brightly.<br>New XP: ${newXp} / ${maxXp}`,
 				speaker: ChatMessage.getSpeaker({ actor }),
@@ -1126,18 +1212,12 @@ async function _resyncIdentification(message, actor, total) {
 	for (const sync of IDENTIFY_SYNCERS) await sync(message, actor, total);
 }
 
-// Burn Brightly gates on actor.isOwner but then calls message.update(), which throws when the GM
-// rolled on a player's behalf. Both handlers below need BOTH rights, so check them together.
-function _canRewriteCard(message, actor) {
-	if (!actor || actor.type !== "character" || !actor.isOwner) return false;
-	return message.canUserModify?.(game.user, "update") ?? game.user.isGM;
-}
 
 function _chatWireKnowThings(message, html) {
 	const card = html.querySelector(".stonetop-roll-card");
 	if (!card || !isKnowThings(_cardMoveName(message))) return;
-	const actor = _speakerActor(message);
-	if (!_canRewriteCard(message, actor)) return;
+	const actor = speakerActor(message);
+	if (!canRewriteCard(message, actor)) return;
 	_wireNeverAtALoss(message, html, actor);
 	_wireLogbook(message, html, actor, card);
 }
@@ -1245,59 +1325,265 @@ function _wireLogbook(message, html, actor, card) {
 	});
 }
 
+
 // -- REQUISITION: apply miss cost from the roll card ------------
-function _speakerActor(message) {
-	const { token: tokenId, actor: actorId } = message.speaker ?? {};
-	return (tokenId ? canvas.tokens?.get(tokenId)?.actor : null)
-		?? (actorId ? game.actors?.get(actorId) : null);
+// Whose Actor a card acts on now lives in utils/speaker-actor.js (`speakerActor`), which carries
+// the account of why a character does not resolve the way a goblin does — and, being a module of
+// its own rather than a local in this hook-registering entry point, can be tested.
+
+/**
+ * Wire a one-shot steading button on a chat card — or a group of them that settle together.
+ *
+ * The skeleton every such button needs, written once: latch on a flag stamped on the MESSAGE
+ * (one card is one use of the move, however many clients render it), disable while the write
+ * is in flight, refuse politely without permission, go through StonetopSteading so the write
+ * lands in BOTH `system.*` and the mirrored steading flag the sheet actually reads from (a raw
+ * `actor.update` of `system.*` alone leaves the mirror stale and the change invisible), then
+ * re-render the steading's open sheets and say what happened. Any throw puts the buttons back.
+ *
+ * @param {ChatMessage} message
+ * @param {HTMLElement[]} btns          the buttons; they enable and disable as one
+ * @param {object} opts
+ * @param {string} opts.flag            message flag that latches the card as used
+ * @param {Function} opts.onSettled     (storedFlag, btns) => void, relabels an already-used card
+ * @param {string} opts.warn            what to say to someone without permission
+ * @param {string} opts.errorNote       console context if the write throws
+ * @param {Function} opts.run           (subject, btn) => {stamp?, notice?, abort?} — does the work
+ * @param {string} [opts.actorType]     which actor subtype may press it; "stonetop" by default
+ * @param {Function} [opts.subject]     actor => what `run` is handed; a StonetopSteading by default
+ *
+ * `abort: true` from `run` means it declined to do anything — the buttons come back and the card
+ * is left unstamped, which is what a purse that emptied between render and click needs.
+ */
+function _wireSteadingCardButtons(message, btns, {
+	flag, onSettled, warn, errorNote, run,
+	actorType = "stonetop",
+	subject = actor => new StonetopSteading(actor),
+}) {
+	if (!btns.length) return;
+
+	const already = message.getFlag(SYSTEM_ID, flag);
+	if (already) {
+		for (const b of btns) b.disabled = true;
+		onSettled(already, btns);
+		return;
+	}
+
+	for (const btn of btns) {
+		btn.addEventListener("click", async () => {
+			for (const b of btns) b.disabled = true;
+			try {
+				const actor = speakerActor(message);
+				if (!actor?.isOwner || actor.type !== actorType) {
+					ui.notifications.warn(warn);
+					for (const b of btns) b.disabled = false;
+					return;
+				}
+				const { stamp = true, notice, abort = false } = await run(subject(actor), btn) ?? {};
+				if (abort) {
+					for (const b of btns) b.disabled = false;
+					return;
+				}
+				await message.setFlag(SYSTEM_ID, flag, stamp);
+				for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
+				if (notice) ui.notifications.info(notice);
+			} catch (err) {
+				console.error(`Stonetop | ${errorNote}:`, err);
+				for (const b of btns) b.disabled = false;
+			}
+		});
+	}
 }
 
 function _chatWireRequisitionMissCost(message, html) {
 	const btn = html.querySelector(".stonetop-requisition-miss-cost");
-	if (!btn) return;
-
-	if (message.getFlag(SYSTEM_ID, "requisitionMissCostApplied")) {
-		btn.disabled = true;
-		btn.textContent = "Miss cost applied";
-		return;
-	}
-
-	btn.addEventListener("click", async () => {
-		btn.disabled = true;
-		try {
-			const actor = _speakerActor(message);
-			if (!actor?.isOwner || actor.type !== "stonetop") {
-				ui.notifications.warn("You need permission to update the steading's Fortunes.");
-				btn.disabled = false;
-				return;
-			}
-
-			// Go through StonetopSteading so the write lands in BOTH system.* and the
-			// mirrored steading flag that getStatValue (and the sheet) actually read from —
-			// a raw actor.update of system.* alone leaves the mirror stale and the reduction
-			// invisible.
-			const steading = new StonetopSteading(actor);
-			const fortunes = steading.getStatValue("fortunes");
-			const newFortunes = Math.max(fortunes - 1, -1);
+	_wireSteadingCardButtons(message, btn ? [btn] : [], {
+		flag: "requisitionMissCostApplied",
+		onSettled: (_already, [b]) => { b.textContent = "Miss cost applied"; },
+		warn: "You need permission to update the steading's Fortunes.",
+		errorNote: "Error applying Requisition miss cost",
+		run: async steading => {
+			const newFortunes = Math.max(steading.getStatValue("fortunes") - 1, -1);
 			await steading.setSystemValue("stats.fortunes.value", newFortunes, { stonetopMove: "Requisition" });
-			await message.setFlag(SYSTEM_ID, "requisitionMissCostApplied", true);
-			for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
-			ui.notifications.info(`Fortunes reduced to ${sign(newFortunes)}.`);
-		} catch (err) {
-			console.error("Stonetop | Error applying Requisition miss cost:", err);
-			btn.disabled = false;
-		}
+			return { notice: `Fortunes reduced to ${sign(newFortunes)}.` };
+		},
 	});
 }
 
-// -- LOVE LETTER PICK LIST -------------------------------------
-// A love letter with a shared "choose from this list" pool renders its options as a
-// checklist on the roll card (see rollStat's pickListHtml). Restore any saved ticks and
-// wire the boxes so a click persists to the message flag (author/GM) and always toggles
-// locally. The letter item itself is consumed on resolve, so the message is the only home
-// the checked state has.
-function _chatWireLoveLetterPicks(message, html) {
-	const boxes = html.querySelectorAll(".stonetop-picklist-check");
+// -- DEPLOY: mark diminished from the roll card -----------------
+// "Injuries abound; the steading marks diminished" is one of the two consequences the GM
+// chooses on a Deploy miss, so the button that applies it belongs on the miss, beside the
+// list it comes from — not in the pre-roll dialog, where it was offered before anyone knew
+// whether Deploy had missed at all.
+function _chatWireDeployMarkDiminished(message, html) {
+	const btn = html.querySelector(".stonetop-deploy-mark-diminished");
+	_wireSteadingCardButtons(message, btn ? [btn] : [], {
+		flag: "deployDiminishedApplied",
+		onSettled: (_already, [b]) => { b.textContent = "Marked diminished"; },
+		warn: "You need permission to update the steading's debilities.",
+		errorNote: "Error marking the steading diminished",
+		run: async steading => {
+			await steading.setSystemValue(debilityPath("diminished"), true, { stonetopMove: "Deploy" });
+			return { notice: "Stonetop marked diminished." };
+		},
+	});
+}
+
+// -- RAISE THE MUSTER from its card -----------------------------
+// Muster's 7+ leaves the steading "alert and ready for action until the threat passes, the
+// Seasons Change, or you cease to oversee the muster" — the one steading move whose result is a
+// STATE rather than a change, which is why it gets a glyph in the sheet header and a button
+// here to put it there.
+//
+// The optional half is "+1 Defenses as long as the muster holds", carried on `data-defenses`.
+// Taking it through raiseMuster (rather than nudging the stat by hand) is what records that it
+// was taken, so standing the muster down gives it back.
+function _chatWireMusterRaise(message, html) {
+	// TWO buttons that settle together, which is why the shared wiring takes a list: a muster
+	// must not be raisable twice at different Defenses. The stamp is an object rather than
+	// `true` so a re-rendered card can relabel the button that was actually pressed.
+	_wireSteadingCardButtons(message, [...html.querySelectorAll(".stonetop-muster-raise")], {
+		flag: "musterRaised",
+		onSettled: (already, btns) => {
+			const chosen = btns.find(b => !!b.dataset.defenses === !!already.defenses) ?? btns[0];
+			chosen.textContent = already.defenses ? "Muster raised, +1 Defenses" : "Muster raised";
+		},
+		warn: "You need permission to update the steading.",
+		errorNote: "Error raising the muster",
+		run: async (steading, btn) => {
+			const defenses = !!btn.dataset.defenses;
+			// Taking it through raiseMuster (rather than nudging the stat by hand) is what
+			// records that the +1 was taken, so standing the muster down gives it back.
+			await steading.raiseMuster({ defenses });
+			return {
+				stamp: { defenses },
+				notice: defenses
+					? "The muster is up: Stonetop is alert, with +1 Defenses while it holds."
+					: "The muster is up: Stonetop is alert and ready for action.",
+			};
+		},
+	});
+}
+
+// -- SPEND STOCK from a move's card -----------------------------
+// The Blessed's Stock is the one move cost with no home on the move itself: every other pool
+// (Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport, Favor) has its
+// own track, so its pips sit on the move and the player ticks them. Stock lives on the sacred
+// POUCH, several tabs away — so a card that says "spend 1 Stock" carries the button that does it.
+//
+// Rites of the Land's "Spend Favor in lieu of Stock, 1-for-1" applies here exactly as it does to
+// the gated moves, through the same reader (actors/character/stock-cost.js), so the dialog and
+// this button can never disagree about what is in the purse.
+function _chatWireSpendStock(message, html) {
+	const btn = html.querySelector(".stonetop-spend-stock");
+	// Through the same skeleton as the steading's card buttons — the latch, the permission
+	// check, the re-render and the put-the-button-back-on-a-throw are one sequence, and this
+	// was the fourth copy of it. Only the actor subtype and the purse differ.
+	_wireSteadingCardButtons(message, btn ? [btn] : [], {
+		// Stamped on the message, not inferred from the button: a card is one use of the move,
+		// and one use is paid for once however many clients render it.
+		flag: "stockSpent",
+		onSettled: (already, [b]) => { b.textContent = `Spent ${already.amount} ${already.label}`; },
+		warn: "You need permission to spend this character's Stock.",
+		errorNote: "Error spending Stock",
+		actorType: "character",
+		subject: actor => actor,
+		run: async (actor, button) => {
+			const amount = Math.max(1, Number(button.dataset.amount) || 1);
+			const source = defaultStockSource(stockSourcesForFlags(readStockFlags(actor)), amount);
+			if (!source) {
+				ui.notifications.warn("No Stock or Favor left to spend.");
+				return { abort: true };
+			}
+			// The purse knows which way it counts: the pouch up as it empties, Favor down.
+			const next = source.after(amount);
+			if (source.key === "favor") {
+				await new StonetopFlags(actor, "moves").setSubKey("backgroundChoices", RITES_OF_THE_LAND, next);
+			} else {
+				await new CharacterPossessions(new StonetopFlags(actor, "possessions")).setUses(SACRED_POUCH_SLUG, next);
+			}
+			return {
+				stamp: { amount, label: source.label },
+				notice: `Spent ${amount} ${source.label} (${source.remaining - amount} left).`,
+			};
+		},
+	});
+}
+
+/** The two flag bags the purse is read from, off a bare Actor. */
+function readStockFlags(actor) {
+	const rites = ownedMove(actor, RITES_OF_THE_LAND);
+	const possessions = new StonetopFlags(actor, "possessions");
+	return {
+		possessions: {
+			selected: possessions.getFlag("selected") ?? [],
+			uses:     possessions.getFlag("uses") ?? {},
+			maxUses:  possessions.getFlag("maxUses") ?? {},
+		},
+		moveResources: new StonetopFlags(actor, "moves").getFlag("backgroundChoices") ?? {},
+		ritesMax: rites?.system?.resource?.max ?? null,
+	};
+}
+
+// -- ROLL CARD PICK LIST ---------------------------------------
+// A move that says "pick 1" renders its options as a checklist on the roll card (see
+// rollStat's pickListHtml) — a love letter's shared pool, or a homefront move's per-tier
+// list, whose boxes are made once for every tier and revealed with it. Restore any saved
+// ticks and wire the boxes so a click persists to the message flag (author/GM) and always
+// toggles locally. The message is the only home the checked state has: a love letter item
+// is consumed on resolve, and a homefront move never had an item to write to.
+/**
+ * Ticking past what the move allows releases the EARLIEST tick — the shared rule
+ * (utils/pick-tally.js#releaseOverLimit, which explains why it releases rather than refuses),
+ * plus the one thing that is this surface's own: a released row loses its picked styling.
+ *
+ * Scoped to the box's OWN list, so a card carrying more than one (a love letter's pool beside a
+ * per-tier list) keeps them independent.
+ */
+function _releasePicksOverLimit(justChecked) {
+	const list = justChecked.closest(".stonetop-picklist");
+	for (const box of releaseOverLimit(list, justChecked, pickLimitFor(list))) {
+		box.closest(".stonetop-picklist-item")?.classList.remove("is-picked");
+	}
+}
+
+/**
+ * The tally above a chat card's pick list — the shared readout (utils/pick-tally.js), handed the
+ * cap this card's list actually carries.
+ *
+ * Painted on the CLIENT rather than built into the card's HTML, for two reasons: it is derived
+ * state (it would go stale the moment anyone ticked a box), and every card already posted gets it
+ * on its next render without a migration. Nothing here is ever persisted — `_shiftRollCardFlavor`
+ * rewrites the STORED flavor string in a detached element, never this live DOM.
+ *
+ * Repainted rather than wired: these boxes already have a listener of their own (it persists the
+ * tick to the message flag), so the tally rides that one instead of adding a second.
+ */
+function _paintPickCount(list) {
+	if (!list) return;
+	paintPickTally(list, pickLimitFor(list));
+}
+
+/**
+ * Whether a chat-log element belongs to THIS message and no other.
+ *
+ * The hook hands over one message's element, so `html` should never reach another card — but
+ * "should never" is what a card wearing the previous card's ticks looks like from the outside,
+ * and the cost of proving it here is one comparison. An element whose nearest message id is not
+ * this message is somebody else's: it is neither read from this flag nor written into it, so one
+ * card's state cannot be stamped onto another however broad `html` turns out to be.
+ *
+ * Shared by both passes over a card's pick list — the ticks and the provisions buttons run over
+ * the same nodes, so one guard rather than two copies of it.
+ */
+function _belongsToMessage(el, message) {
+	const owner = el.closest("[data-message-id]");
+	return !owner || owner.dataset.messageId === message.id;
+}
+
+function _chatWireRollCardPicks(message, html) {
+	const boxes = [...html.querySelectorAll(".stonetop-picklist-check")]
+		.filter(box => _belongsToMessage(box, message));
 	if (!boxes.length) return;
 
 	const saved   = message.getFlag(SYSTEM_ID, "pickChecked") ?? [];
@@ -1310,16 +1596,145 @@ function _chatWireLoveLetterPicks(message, html) {
 		box.checked = on;
 		item?.classList.toggle("is-picked", on);
 
+		// Bound ONCE per element. A message re-renders whenever its flag is written, and where
+		// Foundry patches the log in place rather than replacing the node, a second binding would
+		// leave every click writing the flag twice — two racing updates over one array, the later
+		// of which can carry a state read before the earlier landed.
+		if (box.dataset.picksWired === "1") continue;
+		box.dataset.picksWired = "1";
+
 		box.addEventListener("change", async () => {
+			if (box.checked) _releasePicksOverLimit(box);
 			item?.classList.toggle("is-picked", box.checked);
+			// After the release, not before: a tick that pushed the list over its cap has just let
+			// an earlier one go, and a tally painted first would read one too many.
+			_paintPickCount(box.closest(".stonetop-picklist"));
 			if (!canSave) return;
-			const arr = Array.from(boxes).map((b) => !!b.checked);
+			// Written by data-index, not DOM order: the two agree today, but a card whose
+			// hidden per-tier lists were ever reordered would silently rewrite the flag
+			// against the wrong boxes.
+			const arr = [];
+			for (const b of boxes) arr[Number(b.dataset.index)] = !!b.checked;
 			try {
-				await message.setFlag(SYSTEM_ID, "pickChecked", arr);
+				await message.setFlag(SYSTEM_ID, "pickChecked", Array.from(arr, v => !!v));
 			} catch (err) {
-				console.error("Stonetop | Error saving love-letter picks:", err);
+				console.error("Stonetop | Error saving roll-card picks:", err);
 			}
 		});
+	}
+
+	// One tally per list, painted OUTSIDE the loop above — that loop skips any box already wired,
+	// which on a re-render (a GM Shift Up/Down moves the cap with the tier) is every box on the
+	// card. A card can carry more than one list, so they are collected rather than assumed single.
+	for (const list of new Set(boxes.map(b => b.closest(".stonetop-picklist")))) _paintPickCount(list);
+}
+
+// -- FORAGE: THE PROVISIONS A TICK OWES YOU ---------------------
+/**
+ * Two of Forage's four options pay out in provisions and neither says how many until a d6 is
+ * thrown: "You acquire ◇ provisions (1d6 uses)" and "You acquire an extra 1d6 uses of provisions".
+ * Ticking one is choosing it; this hangs the die on that choice, so the roll happens on the card
+ * that owes it and lands in the character's larder rather than being announced and forgotten.
+ *
+ * The button appears only while its option is ticked, because an untaken option owes nothing —
+ * and once thrown it stays put, showing what it paid, whatever happens to the tick afterwards.
+ * Untaking the option does not take the food back out of the pack: the ○ track on the sheet is
+ * where a larder is corrected, the same as when it is eaten.
+ *
+ * Which options qualify is read off their text (see provisions.js#readProvisionsYield) rather than
+ * declared, so a world that has reworded Forage — or a homebrew move that pays in provisions —
+ * gets the same die. The ◇ in the first option is what makes it claim a point of load; the
+ * second tops up a pack that is already being carried.
+ */
+function _chatWireProvisionsPicks(message, html) {
+	const items = [...html.querySelectorAll(".stonetop-picklist-item")]
+		.filter(item => _belongsToMessage(item, message));
+	if (!items.length) return;
+
+	const rolled = message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {};
+
+	for (const item of items) {
+		const box  = item.querySelector(".stonetop-picklist-check");
+		// Read before anything of ours is in the row, so a re-render cannot match on our own
+		// "+4 uses" readout instead of the option's text.
+		const pick = readProvisionsYield(item.textContent);
+		item.querySelectorAll(".stonetop-provisions-roll, .stonetop-provisions-paid")
+			.forEach(el => el.remove());
+		if (!box || !pick) continue;
+		const index = box.dataset.index;
+
+		// Already paid out: the card carries the number, not a second chance at it. Stamped on
+		// the MESSAGE, so every client shows the same haul and no one can roll it twice.
+		const paid = rolled[index];
+		if (paid) {
+			item.appendChild(_provisionsPaidEl(paid.uses));
+			continue;
+		}
+
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.className = "stonetop-provisions-roll";
+		const die = document.createElement("i");
+		// An option that names a flat number has nothing to throw — the icon and the verb both
+		// say so, rather than offering to "roll" a 6.
+		die.className = pick.isRoll ? "fas fa-dice-d6" : "fas fa-basket-shopping";
+		btn.append(die, pick.isRoll ? ` Roll ${pick.formula} uses` : ` Take ${pick.formula} uses`);
+		btn.hidden = !box.checked;
+		item.appendChild(btn);
+
+		// Bound once per element, for the same reason the pick boxes are: a message re-renders
+		// whenever its flag is written, and Foundry may patch the log in place.
+		if (item.dataset.provisionsWired !== "1") {
+			item.dataset.provisionsWired = "1";
+			box.addEventListener("change", () => {
+				const live = item.querySelector(".stonetop-provisions-roll");
+				if (live) live.hidden = !box.checked;
+			});
+		}
+
+		btn.addEventListener("click", () => _onRollProvisions(message, btn, index, pick));
+	}
+}
+
+/** The static readout a rolled option wears from then on. */
+function _provisionsPaidEl(uses) {
+	const el = document.createElement("span");
+	el.className = "stonetop-provisions-paid";
+	el.textContent = `+${uses} ${uses === 1 ? "use" : "uses"}`;
+	return el;
+}
+
+async function _onRollProvisions(message, btn, index, pick) {
+	btn.disabled = true;
+	try {
+		const actor = speakerActor(message);
+		if (!actor?.isOwner || actor.type !== "character") {
+			ui.notifications.warn("You need permission to add provisions to this character.");
+			btn.disabled = false;
+			return;
+		}
+
+		// Rolled to chat rather than quietly: how much food the party came back with is a number
+		// the whole table plays off, and a die nobody saw is a number they have to take on faith.
+		// A flat count has no such doubt and posts nothing — a card announcing a rolled "6" out of
+		// a formula that is the literal 6 is noise.
+		const { uses, larder } = await rollProvisions(actor, {
+			formula:  pick.formula,
+			announce: pick.isRoll,
+			carry:    pick.claimsLoad,
+			speaker:  message.speaker,
+		});
+		btn.replaceWith(_provisionsPaidEl(uses));
+		for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
+		if (larder) ui.notifications.info(`${actor.name} gained ${uses} uses of provisions (${larder.held} in the pack).`);
+
+		// Stamped last: the larder is the thing that had to land, and a stamp written before it
+		// would lock out the retry if the write failed.
+		const rolled = { ...(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {}), [index]: { uses, formula: pick.formula } };
+		await message.setFlag(SYSTEM_ID, "provisionsRolled", rolled);
+	} catch (err) {
+		console.error("Stonetop | Error rolling provisions:", err);
+		btn.disabled = false;
 	}
 }
 
@@ -1350,9 +1765,18 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// After the roll-shift pass (which hides the button row from non-GMs) and after Burn
 	// Brightly, so the logbook pill sits to its right in the shared button row.
 	_chatWireKnowThings(message, html);
+	// The XP receipt's own row, not the shared button row the two above claim — a card with no
+	// roll behind it never grows a Shift or a Burn Brightly, and this never lands on one that has.
+	wireUndoXpMark(message, html);
 	_chatWireRequisitionMissCost(message, html);
+	_chatWireDeployMarkDiminished(message, html);
+	_chatWireMusterRaise(message, html);
+	_chatWireSpendStock(message, html);
 	_chatWireSeasonsRoll(message, html);
-	_chatWireLoveLetterPicks(message, html);
+	_chatWireRollCardPicks(message, html);
+	// After the picks pass, which is what restores each box's ticked state — the provisions
+	// button is shown or hidden by exactly that.
+	_chatWireProvisionsPicks(message, html);
 	wireDyingPrompt(message, html);
 	wireAttackConfirm(message, html);
 	wireApplyDamage(message, html);
@@ -1374,9 +1798,18 @@ function _chatWireSeasonsRoll(message, html) {
 		// The carried name ("Seasons Change — <season>") heads the result card; the
 		// speaker is left to default to whoever clicked (see rollSeasonsCard).
 		const title    = btn.dataset.alias || "Seasons Change — Spring";
-		const formula  = fortunes >= 0 ? `2d6 + ${fortunes}` : `2d6 - ${-fortunes}`;
+		// The mode rides on the card because it was decided on the GM's machine when the roll was
+		// handed over — a Rites of the Land sacrifice buys advantage on the steading's next
+		// +Fortunes roll, and spring's is only ever made from here. This used to be a flat 2d6,
+		// which quietly dropped that advantage on the one roll it was bought for.
+		const dice     = pbtaDiceFormula(btn.dataset.rollMode);
+		const formula  = `${dice} ${sign(fortunes)}`;
+		// Which ladder the total is read against. Two rolls are handed to the table this way now
+		// — spring's Seasons Change and the Inn's questions — and they share everything but their
+		// outcomes. A card from before the Inn's roll existed carries no id and gets spring's.
+		const table    = seasonsRollTable(btn.dataset.table);
 		try {
-			await rollSeasonsCard({ formula, title, resultTable: SPRING_SEASONS_RESULT });
+			await rollSeasonsCard({ formula, title, resultTable: table });
 		} catch (err) {
 			console.error("Stonetop | Error rolling Seasons Change from chat:", err);
 			btn.disabled = false;
@@ -1403,7 +1836,7 @@ async function _onRollShift(event, message) {
 		// A shifted Know Things card that was identifying an arcanum has to carry the new tier's
 		// disclosure with it, or a Shift Up says "You read the card, front and back" over a card
 		// still face down. No-op for every other roll — the flag is only on that one.
-		await _resyncIdentification(message, _speakerActor(message), roll.total);
+		await _resyncIdentification(message, speakerActor(message), roll.total);
 	} catch (err) {
 		console.error("Stonetop | Error shifting roll result:", err);
 	} finally {
@@ -1473,20 +1906,39 @@ function _shiftRollCardFlavor(flavor, total, formula = null) {
 				partial: resultEl.dataset.outcomePartial,
 				failure: resultEl.dataset.outcomeFailure,
 			}[tierKey];
-			if (outcome !== undefined) details.innerHTML = formatOutcomeDetail(outcome);
+			// `introOnly` on the tiers whose options the card lists as checkboxes below (stamped by
+			// _rollCard as data-picked-tiers): a shift onto one of those must not start reprinting
+			// the list inside the result block that the boxes below already carry.
+			const picked = (resultEl.dataset.pickedTiers ?? "").split(" ").filter(Boolean);
+			if (outcome !== undefined) {
+				details.innerHTML = formatOutcomeDetail(outcome, { introOnly: picked.includes(tierKey) });
+			}
 		}
 	}
 
-	const tierActions = wrapper.querySelector(".stonetop-roll-card .stonetop-roll-tier-actions");
-	if (tierActions && result) {
+	// Anything the card holds one of per tier — the Requisition miss-cost button and Deploy's
+	// "mark diminished" (.stonetop-roll-tier-actions), the homefront moves' pick lists
+	// (.stonetop-roll-tier-picklists) — shows the row matching the shifted tier and hides the rest.
+	if (result) {
 		const activeTier = result.key === "critical" ? "success" : result.key;
-		tierActions.dataset.activeTier = activeTier;
-		for (const action of tierActions.querySelectorAll(".stonetop-roll-tier-action")) {
-			// Set the VALUED attribute, not the `.hidden` property: this innerHTML is written back
-			// to the message's flavor (an HTMLField), and Foundry v14's sanitize-html strips
-			// valueless boolean attributes — a bare/empty `hidden` would vanish and reveal every tier.
-			if (action.dataset.tier === activeTier) action.removeAttribute("hidden");
-			else action.setAttribute("hidden", "hidden");
+
+		// The move's tier ladder marks the rung the roll landed on rather than hiding the other
+		// two (utils/move-tiers.js `markRolledTier`), so it moves the mark instead of joining the
+		// hide/show loop below: the ladder is the move's printed text, and a Shift Down must not
+		// take two thirds of it off a card the table has already read.
+		const ladder = wrapper.querySelector(
+			`.stonetop-roll-card ul.${MOVE_TIERS_CLASS}[${ROLLED_TIER_ATTR}]`);
+		if (ladder) ladder.setAttribute(ROLLED_TIER_ATTR, activeTier);
+
+		for (const group of wrapper.querySelectorAll(".stonetop-roll-card [data-active-tier]")) {
+			group.dataset.activeTier = activeTier;
+			for (const row of group.querySelectorAll(":scope > [data-tier]")) {
+				// Set the VALUED attribute, not the `.hidden` property: this innerHTML is written back
+				// to the message's flavor (an HTMLField), and Foundry v14's sanitize-html strips
+				// valueless boolean attributes — a bare/empty `hidden` would vanish and reveal every tier.
+				if (row.dataset.tier === activeTier) row.removeAttribute("hidden");
+				else row.setAttribute("hidden", "hidden");
+			}
 		}
 	}
 

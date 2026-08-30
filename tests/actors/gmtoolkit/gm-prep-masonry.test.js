@@ -18,7 +18,7 @@ import { packGmPrepGrid, wireGmPrepMasonry, GM_PREP_GRID_SELECTOR, GM_PREP_CARD_
 const MASONRY_JS = read("module/actors/gmtoolkit/gm-prep-masonry.js");
 const PREP_JS    = read("module/actors/gmtoolkit/gm-prep-tabs.js");
 const SHEET_JS   = read("module/actors/gmtoolkit/StonetopGmToolkitSheet.js");
-const SITES_HBS  = read("templates/actor/partials/gm-toolkit-tab-sites.hbs");
+const SITES_HBS  = read("templates/actor/partials/gm-toolkit-sites-section.hbs");
 const THREATS_HBS = read("templates/actor/partials/gm-toolkit-tab-threats.hbs");
 const CSS = readCss();
 

@@ -23,6 +23,31 @@
 
 		<header class="sheet-header stonetop-sheet-header stonetop-gm-toolkit-header">
 			<h1 class="stonetop-gm-toolkit-name">{{actor.name}}</h1>
+			{{!-- Your own copies of the books, on the title's own row, held to the far end of the
+			      banner the way the steading's season clock is. They belong to the banner rather
+			      than to the window controls: everything on this sheet is transcribed from a
+			      printed page and cites the page it came off, so the books are part of what this
+			      sheet IS.
+
+			      Nothing is shipped by them. Each opens a PDF the GM already owns, in the pdf.js
+			      reader Foundry itself bundles (module/books/rulebooks.js). A book this world has
+			      not been pointed at yet draws DIMMED and opens the window that points at one, so
+			      the icon is never dead — its tooltip says which of the two it will do.
+
+			      Always buttons, unlike the steading's holds, which draw as plain readouts for a
+			      player: this sheet is GM-only by ownership, so there is no one here to refuse. --}}
+			<div class="stonetop-gm-toolkit-books" role="group"
+			     aria-label="{{localize "stonetop.books.groupLabel"}}">
+				{{#each stonetop.books}}
+				<button type="button"
+				        class="stonetop-gm-toolkit-book{{#unless this.have}} stonetop-gm-toolkit-book--unset{{/unless}}"
+				        data-book="{{this.book}}"
+				        aria-label="{{this.label}}"
+				        data-tooltip="{{this.tooltip}}" data-tooltip-direction="DOWN">
+					<i class="{{this.icon}}" aria-hidden="true"></i>
+				</button>
+				{{/each}}
+			</div>
 		</header>
 
 		{{!-- The rail's position in the form is arbitrary: tab-rail.js lifts this node onto the
@@ -36,13 +61,26 @@
 			      them nothing by sitting them second, while Homefront is the page you turn to when
 			      the party gets home — the start of a stretch of play rather than a moment in
 			      one. --}}
-			{{> "stonetop.tab-rail-item" tab="homefront"  label=(localize "stonetop.gmToolkit.tabs.homefront")}}
-			{{> "stonetop.tab-rail-item" tab="moves"      label=(localize "stonetop.gmToolkit.tabs.moves")}}
-			{{> "stonetop.tab-rail-item" tab="threats"    label=(localize "stonetop.gmToolkit.tabs.threats")}}
-			{{> "stonetop.tab-rail-item" tab="sites"      label=(localize "stonetop.gmToolkit.tabs.sites")}}
-			{{> "stonetop.tab-rail-item" tab="encounters" label=(localize "stonetop.gmToolkit.tabs.encounters")}}
-			{{> "stonetop.tab-rail-item" tab="wonder"     label=(localize "stonetop.gmToolkit.tabs.wonder")}}
-			{{> "stonetop.tab-rail-item" tab="loop"       label=(localize "stonetop.gmToolkit.tabs.loop")}}
+			{{> "stonetop.tab-rail-item" tab="homefront"   label=(localize "stonetop.gmToolkit.tabs.homefront")}}
+			{{> "stonetop.tab-rail-item" tab="moves"       label=(localize "stonetop.gmToolkit.tabs.moves")}}
+			{{> "stonetop.tab-rail-item" tab="threats"     label=(localize "stonetop.gmToolkit.tabs.threats")}}
+			{{!-- Expeditions follows Encounters: they are the same card, and the book's own prep
+			      list for a trip (p.340) ends by telling you to prepare seven encounters. It carries
+			      Sites as a section at its foot, which is why there is no Sites button here. --}}
+			{{> "stonetop.tab-rail-item" tab="encounters"  label=(localize "stonetop.gmToolkit.tabs.encounters")}}
+			{{> "stonetop.tab-rail-item" tab="expeditions" label=(localize "stonetop.gmToolkit.tabs.expeditions")}}
+			{{> "stonetop.tab-rail-item" tab="wonder"      label=(localize "stonetop.gmToolkit.tabs.wonder")}}
+			{{> "stonetop.tab-rail-item" tab="loop"        label=(localize "stonetop.gmToolkit.tabs.loop")}}
+			{{!-- Last, and deliberately, exactly as on the character sheet: it is the only tab here
+			      that is not about running the game. A GM opens it to set their own text size and
+			      then rarely again, so it sits below everything they read every session. Same
+			      partial, same client settings, same label as the copy over there — the tab is one
+			      surface onto this person's settings, not this sheet's own page.
+
+			      Gated on the same rule as that copy, which on this sheet answers "is the reader a
+			      GM": it is what keeps the tab OFF the player sheets a GM opens all session, and
+			      this is where it goes instead. --}}
+			{{#if stonetop.showPreferences}}{{> "stonetop.tab-rail-item" tab="preferences" label=(localize "stonetop.sheet.tabs.preferences")}}{{/if}}
 		</nav>
 
 		<div class="stonetop-sheet-layout stonetop-gm-toolkit-layout stonetop-sheet-layout--own-seam">
@@ -50,10 +88,11 @@
 				{{> "stonetop.gm-toolkit-tab-homefront"}}
 				{{> "stonetop.gm-toolkit-tab-moves"}}
 				{{> "stonetop.gm-toolkit-tab-threats"}}
-				{{> "stonetop.gm-toolkit-tab-sites"}}
 				{{> "stonetop.gm-toolkit-tab-encounters"}}
+				{{> "stonetop.gm-toolkit-tab-expeditions"}}
 				{{> "stonetop.gm-toolkit-tab-wonder"}}
 				{{> "stonetop.gm-toolkit-tab-loop"}}
+				{{#if stonetop.showPreferences}}{{> "stonetop.tab-preferences"}}{{/if}}
 			</section>
 		</div>
 

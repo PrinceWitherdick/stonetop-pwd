@@ -1,6 +1,6 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { normalizeRollType, STAT_KEYS } from "../utils/roll-types.js";
-import { pickLeadText } from "../utils/move-results.js";
+import { MOVE_TIERS, pickLeadText } from "../utils/move-results.js";
 
 /**
  * Player-facing reader for a love letter (Book I, p.568). Opened from the "Read letter"
@@ -51,8 +51,8 @@ export class LoveLetterReadDialog extends StonetopDialog {
 
 		const mr = sys.moveResults ?? {};
 		const tiers = isRolled
-			? [["success", "10+"], ["partial", "7-9"], ["failure", "6-"]]
-				.map(([key, label]) => {
+			? MOVE_TIERS
+				.map(({ key, label }) => {
 					const t = mr[key] ?? {};
 					return { label, lead: pickLead(t.pick), value: String(t.value ?? "").trim() };
 				})

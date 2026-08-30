@@ -93,6 +93,12 @@
 			</label>
 			{{/each}}
 		</div>
+		{{!-- Said here because this shortcut skips the importer's own window, where the same
+		      thing is a tick-box the GM can see and untick. A book supplied here is kept as well
+		      as read, and a 60 MB copy of somebody's rulebook should never be a surprise. --}}
+		{{#if empty.keepsBooks}}
+		<p class="stonetop-people-book-keep">A book you supply is also kept in this world, so you can read it here afterwards: from the GM Toolkit, and your players from their character sheets. You will not be asked for it again.</p>
+		{{/if}}
 		{{!-- Disabled until a book is chosen, and re-armed by _activateBookImport. The fields it is
 		      waiting on are two lines above it, which is what makes a dead button read as waiting
 		      rather than as broken; the hint under it says the same thing in words. --}}

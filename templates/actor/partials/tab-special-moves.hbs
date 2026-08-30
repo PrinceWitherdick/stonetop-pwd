@@ -6,7 +6,7 @@
 
 		<div class="stonetop-special-move-card">
 			<h3 class="stonetop-special-move-name">{{localize "stonetop.specialMoves.burnBrightly.title"}}</h3>
-			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.burnBrightly.description"}}}</p>
+			<div class="stonetop-special-move-summary">{{{moveBody (localize "stonetop.specialMoves.burnBrightly.description")}}}</div>
 			<p class="stonetop-special-move-locked-hint">
 				<i class="fas fa-comment-dots"></i>
 				{{localize "stonetop.specialMoves.burnBrightly.promptNote"}}
@@ -15,7 +15,7 @@
 
 		<div class="stonetop-special-move-card{{#unless (or stonetop.deathsDoor.canFace stonetop.deathsDoor.isFatePending)}} is-locked{{/unless}}">
 			<h3 class="stonetop-special-move-name">{{localize "stonetop.specialMoves.deathsDoor.title"}}</h3>
-			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.deathsDoor.summary"}}}</p>
+			<div class="stonetop-special-move-summary">{{{moveBody (localize "stonetop.specialMoves.deathsDoor.summary")}}}</div>
 
 			{{! Hint and control are both decided in _buildDeathsDoorData: the state they're in
 			    wins over the "which move do I trigger" hint, which only matters while they're up. }}

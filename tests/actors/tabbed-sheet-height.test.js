@@ -99,17 +99,38 @@ describe("the tab rail sizes to its own content", () => {
 		expect(rail).toMatch(/max-height:\s*max\(/);
 	});
 
-	it("cannot start lower than a third of the way down the window", () => {
+	it("cannot sit lower than a third of the way down the window", () => {
 		// The rail hangs off the sheet's own header banner, which is a good anchor only while
 		// the window is tall enough to make it one. The NPC is the counter-example: portrait,
 		// name and a line of prose put the banner's bottom nearly halfway down a window that
 		// is `height: "auto"` and stops just past the details block, so three tabs landed in
-		// the bottom third with empty frame above them. `--st-rail-max-depth` is the ceiling
-		// on how far down the rail may start; it bites only when the measured anchor is
-		// lower, so a tall sheet keeps the banner anchor untouched.
+		// the bottom third with empty frame above them. `--st-rail-max-depth` is the ceiling;
+		// it bites only when the measured anchor is lower, so a tall sheet on a tall window
+		// keeps the banner anchor untouched.
 		expect(rail).toMatch(/--st-rail-max-depth:\s*\d+%/);
 		expect(rail).toMatch(/--st-rail-anchor:\s*max\([^;]*min\(var\(--st-rail-top[^;]*--st-rail-max-depth/);
 		expect(rail).toMatch(/top:\s*var\(--st-rail-anchor\)/);
+	});
+
+	it("caps its MIDDLE, not its top, so the panel's own height is counted", () => {
+		// Capping the top read wrong on the sheet the cap was written for. The rail is a panel
+		// with a height of its own: a 154px four-tab NPC rail topped at a third of a 400px
+		// window has its midpoint at 52% and its bottom at 72% — 132px of empty frame above,
+		// 114px below — which the eye reads as centred, not as a third of the way down.
+		// Measured in a browser against this stylesheet. Half the rail's height has to come
+		// off the cap, and `--st-rail-height` is what tab-rail.js stamps for it.
+		expect(rail).toMatch(
+			/--st-rail-anchor:[^;]*calc\(\s*var\(--st-rail-max-depth\)\s*-\s*var\(--st-rail-height,\s*0px\)\s*\/\s*2\s*\)/
+		);
+	});
+
+	it("falls back to the plain top-anchored cap before the rail has been measured", () => {
+		// `--st-rail-height` is stamped on the frame a frame AFTER the render (the first one
+		// lands while core's fadeIn still has the window at `display: none`, where everything
+		// measures 0). Without a zero fallback the whole `calc()` is invalid at that moment,
+		// which takes `--st-rail-anchor` with it and drops the rail to `top: auto` — static
+		// position, at the frame's top-left, on top of the sheet.
+		expect(rail).toMatch(/var\(--st-rail-height,\s*0px\)/);
 	});
 
 	it("subtracts the SAME anchor from its height cap that it positions against", () => {

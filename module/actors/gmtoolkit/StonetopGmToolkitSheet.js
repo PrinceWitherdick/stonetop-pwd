@@ -24,6 +24,8 @@ import { stripHeaderChrome } from "../../utils/sheet-chrome.js";
 import { mountTabRail } from "../../utils/tab-rail.js";
 import { withSheetSizeMemory } from "../../utils/sheet-size.js";
 import { withSectionEditing } from "../../utils/section-editing.js";
+import { showsPreferencesTab, withPreferencesTab } from "../../utils/preferences-tab.js";
+import { buildPreferenceGroups } from "../../utils/sheet-preferences.js";
 import { gmMoveSections } from "../../gm-toolkit/gm-moves.js";
 import { bookPageRef } from "../../gm-toolkit/book-ref.js";
 import { moveBlurb } from "../../gm-toolkit/gm-move-blurb.js";
@@ -35,11 +37,13 @@ import { runImportBookArtMacro } from "../../book2-art/macro.js";
 import { withGmPrepTabs } from "./gm-prep-tabs.js";
 import { withGmWonderTab } from "./gm-wonder-tab.js";
 import { withGmEncountersTab } from "./gm-encounters-tab.js";
+import { withGmExpeditionsTab } from "./gm-expeditions-tab.js";
 import { localizedHomefrontSections } from "../../gm-toolkit/homefront-view.js";
 import { readCurrentSeason, currentSeasonView, isCurrentSeasonChange } from "../../seasons/current-season.js";
 import { localize } from "../../utils/i18n.js";
 import { localizedOnce } from "../../utils/localized-once.js";
 import { getStonetopSteadingActor, stonetopSteadingHeaderButton } from "../../utils/world.js";
+import { rulebookIconRows, openRulebook } from "../../books/rulebook-icons.js";
 
 /**
  * What counts as a foldable section heading on this sheet — see `_wireSectionCollapse`.
@@ -99,7 +103,17 @@ export function createStonetopGmToolkitSheetClass(Base) {
 	// withGmWonderTab: the "I wonder..." tab, the one authored surface on this sheet. Its storage
 	// IS the toolkit's own (`actor.system.wonders`), which is the opposite of the line above and
 	// stated here so the two are never confused for one another.
-	return class StonetopGmToolkitSheet extends withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base))))) {
+	//
+	// withGmEncountersTab / withGmExpeditionsTab: the two gathered-bundle tabs. Both are thin
+	// configs over one engine (gm-bundle-tab.js) which the sheet HOLDS rather than is mixed with,
+	// because a mixin can only be applied to a class once. Each mixin adds only its own field and
+	// the three entry points below; neither can shadow the other's.
+	//
+	// withPreferencesTab: the Preferences tab at the foot of the rail, the same one the
+	// character sheet carries — same partial, same descriptor module, same client settings. A
+	// GM runs a session from this sheet and may never open a character sheet at all, so the one
+	// place their own text size lives has to be reachable from here too.
+	return class StonetopGmToolkitSheet extends withPreferencesTab(withGmExpeditionsTab(withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base))))))) {
 		// Read by the mixin's `isSectionEditable`. Constant, not state: this sheet has no global
 		// edit wrench, so a section is editable exactly when its own pencil is on.
 		_editMode = false;
@@ -222,6 +236,10 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The Encounters tab has two boxes with the same problem and the same fix: an
 			// encounter name and a collected row's note, both saved on blur. See the mixin.
 			await this._flushGmEncounterEdits();
+			// The Expeditions tab is the same tab again over the same engine, and needs the same
+			// flush: its cards carry the same two boxes. Its own call because each engine searches
+			// only its OWN panel for the focused field — see `owns` in gm-bundle-tab.js.
+			await this._flushGmExpeditionEdits();
 			await super._render(force, options);
 			stripHeaderChrome(this);
 		}
@@ -231,6 +249,7 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// straight from the focused field, so its `change` event never fires.
 			await this._flushGmWonderEdits();
 			await this._flushGmEncounterEdits();
+			await this._flushGmExpeditionEdits();
 			this._unwirePrepPageSync();
 			this._unwireSeasonSync();
 			this._unwireGmPrepMasonry();
@@ -290,6 +309,10 @@ export function createStonetopGmToolkitSheetClass(Base) {
 		// whose Threats and Sites STORAGE these tabs read (see gm-prep-tabs.js). Built from the
 		// shared descriptor in utils/world.js so the label, marker and unset-state class match
 		// the same button everywhere else it appears.
+		//
+		// The two rulebook icons are NOT here: they sit in the sheet's own banner, beside the
+		// title, with the rest of what this sheet is (see `stonetop.books` in getData and the
+		// header block in gm-toolkit.hbs).
 		_getHeaderButtons() {
 			const buttons = super._getHeaderButtons().filter(b => b.class !== "configure-sheet");
 			buttons.unshift(stonetopSteadingHeaderButton());
@@ -348,20 +371,59 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// writes files. This sheet is GM-only by ownership, so it is always true in practice.
 			context.stonetop.isGM = game.user?.isGM ?? false;
 
-			// Both prep tabs. They publish no edit flags — neither has a pencil.
-			// The steading resolved above, handed down rather than looked up again: it is an
-			// unindexed `game.actors` scan, and the mixin's own note says both its builders
-			// sharing one resolution is the point.
-			await this._addGmPrepContext(context, steading);
+			// The Preferences tab: this GM's own client settings, grouped, with each row's label,
+			// hint and control shape read off its registration rather than restated — the character
+			// sheet's copy of the tab is built from this same call. Rebuilt every render, so a value
+			// changed in Foundry's settings menu (or on that other copy) is what this one draws.
+			//
+			// One copy per person is the rule, and for most GMs this sheet is where their copy
+			// lands: `showsPreferencesTab` keeps the tab off the player character sheets a GM opens
+			// all session, and this is the sheet they were given instead. Not unconditional, all
+			// the same — an ASSISTANT gamemaster who also plays keeps their own character in
+			// `user.character`, and their copy belongs on that sheet rather than in the world's
+			// shared toolkit, so this asks and comes back false for them. Which is exactly why the
+			// call asks rather than assuming a GM: the answer is the one rule the character sheet
+			// is gated on too, and a sheet that decided for itself is how the two come to disagree.
+			context.stonetop.showPreferences = showsPreferencesTab(this.actor);
+			context.stonetop.preferences = context.stonetop.showPreferences ? buildPreferenceGroups() : [];
+
+			// The two rulebook icons in the banner, beside the title. Reference this sheet OWES:
+			// every move, diagram and homefront heading on it cites the printed page it was
+			// transcribed from, and the shortest way from a citation to the page it names is the
+			// GM's own copy of the book one click away. Nothing is shipped by them (see
+			// module/books/rulebooks.js); an unset book draws dimmed and opens the window that
+			// points at a file. Rebuilt per render because "is this book set yet" is exactly what
+			// changes between one render and the next.
+			context.stonetop.books = rulebookIconRows();
+
+			// The three ASYNC builders, TOGETHER rather than one after the next. They touch
+			// disjoint keys on `context.stonetop`, and each can be waiting on a pack load — a
+			// bundle row pointing into a compendium needs one to name itself (see
+			// `resolveBundleEntry`). Serialized, one tab's pack latency was added to the other's,
+			// on a sheet that repaints on every prep write ANYWHERE in the world. `_addGmPrepContext`
+			// already runs its own two this way; this is the same move one level up.
+			//
+			// The `context.stonetop.edit` MERGE both bundle tabs do stays safe: each is a single
+			// synchronous statement inside its own microtask, so the two cannot interleave
+			// mid-object.
+			//
+			// The steading is resolved above and handed down rather than looked up again: it is
+			// an unindexed `game.actors` scan, and the prep mixin's own note says both its
+			// builders sharing one resolution is the point.
+			await Promise.all([
+				// Both prep tabs. They publish no edit flags — neither has a pencil.
+				this._addGmPrepContext(context, steading),
+				// The Encounters list, off `actor.system.encounters`, with every collected row
+				// resolved to the document it points at.
+				this._addGmEncountersContext(context),
+				// The Expeditions list, off `actor.system.expeditions`, the same way.
+				this._addGmExpeditionsContext(context),
+			]);
 
 			// The "I wonder..." list, off `actor.system.wonders`, split into the open questions
-			// and the answered ones, plus the book's guidance on keeping it.
+			// and the answered ones, plus the book's guidance on keeping it. SYNC, so it stays
+			// out of the gather above.
 			this._addGmWonderContext(context);
-
-			// The Encounters list, off actor.system.encounters, with every collected row resolved
-			// to the document it points at. Awaited, unlike the wonder call above: a row pointing
-			// into a compendium can need a pack load to name itself (see resolveEncounterEntry).
-			await this._addGmEncountersContext(context);
 
 			return context;
 		}
@@ -380,6 +442,10 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// Folding a section is a reading preference, so this is wired outside any
 			// editability guard, exactly as the character and steading sheets wire theirs.
 			this._wireSectionCollapse(html, HEADING_SELECTOR);
+			// The Preferences tab, from the shared mixin the character sheet takes it from, and
+			// outside the same guards for the same reason: nothing on it is actor data, so a GM
+			// still owns their own text size on a sheet they cannot edit.
+			this._wirePreferences(html);
 			// The per-section edit pencil, now Encounters' and Wonder's only. Same class hook the
 			// steading used, because the shared `section-edit-toggle` partial emits it and moved
 			// here unchanged along with the rest of that markup.
@@ -395,6 +461,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// keyboard reorder, and both halves of the drag. Delegated on the same root, and the
 			// only thing on this sheet that takes a drop.
 			this._activateGmEncountersListeners(html[0]);
+			// The Expeditions tab, delegated on the same root. Both bind to it and both print the
+			// same class names, so each gates every handler on its own panel (`owns`).
+			this._activateGmExpeditionsListeners(html[0]);
 			// This sheet's own two buttons. Both are delegated rather than bound per element,
 			// because both are re-emitted whenever their tab re-renders and either may be absent
 			// (the import button depends on which diagrams this world already has).
@@ -415,6 +484,16 @@ export function createStonetopGmToolkitSheetClass(Base) {
 		 */
 		_wireToolkitButtons(root) {
 			root.addEventListener("click", async (ev) => {
+				// A rulebook icon in the banner. First, and cheaply: it is the one control on this
+				// sheet that lives above the tabs, so it can never be confused with anything below
+				// and every other check that ran before it would be asked for nothing.
+				const bookIcon = ev.target.closest(".stonetop-gm-toolkit-book");
+				if (bookIcon) {
+					ev.preventDefault();
+					openRulebook(Number(bookIcon.dataset.book));
+					return;
+				}
+
 				// A diagram, opened big. In OUR zoom window rather than a browser tab: the picture
 				// is a page of the GM's own rulebook, and reading it should not mean leaving the
 				// game to do it. Keyed by slug, so the two charts of the spread open as two windows

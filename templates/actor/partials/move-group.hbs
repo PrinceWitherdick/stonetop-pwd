@@ -78,7 +78,7 @@
 		{{!-- Every OWNED move is a draggable .item (so it can be dragged onto the macro
 		      hotbar — rollable moves make a roll macro, description-only ones a post-to-chat
 		      macro). Un-owned rows (the unpicked side of an either/or choice) stay
-		      non-draggable. The dice icon itself is still gated on rollType below. --}}
+		      non-draggable. Whether the title ROLLS is gated on rollType below. --}}
 		{{#if owned}}
 		<li class="item stonetop-item is-checked{{#if requirementsUnmet}} move-requirements-unmet{{/if}}{{#if (or markBudget.needsChoice statChoiceNeeded)}} move-needs-choice{{/if}}{{#if isStarting}} move-starting{{/if}}" data-item-id="{{ownedId}}">
 		{{else}}
@@ -87,7 +87,7 @@
 			<div class="stonetop-item-header">
 				{{!-- The source badge ("Starting move", "Background", "Granted by …") comes
 				      FIRST so it can float into the top-right corner while the checkbox /
-				      dice / +stat chip / title flow around it (see the .stonetop-item-source
+				      title / +stat chip flow around it (see the .stonetop-item-source
 				      float rules). A right float only reserves its corner on line 1 if it
 				      precedes the inline content in the DOM. --}}
 				{{#if sourceLabel}}<span class="stonetop-item-source">{{sourceLabel}}</span>{{/if}}
@@ -116,13 +116,21 @@
 			             — it then shows the "requirement not met" warning. --}}
 				       {{#if (or (and isStarting owned) (not @root.stonetop.movesEdit))}}disabled{{/if}}>
 				{{/if}}
-				{{#if (and owned rollType)}}
-				<span class="rollable move-rollable" data-roll="{{rollType}}" data-mod="">
-					<i class="fas fa-dice-d6"></i>
-				</span>
-				{{/if}}
+				{{!-- THE TITLE IS THE ROLL. There is no dice icon beside a move any more: the
+				      name element IS the `.rollable`, carrying the stat and the classes the
+				      icon used to, so the sheet's rollable handler answers a click on the
+				      title exactly as it answered a click on the die.
+
+				      That is what the icon's click always did anyway — the name forwarded to
+				      it under the "Hide Rollable Icon" setting, which is now how every sheet
+				      behaves. A move with no roll (or an un-owned row) gets a plain name and
+				      falls through to the name handler, which posts its text to chat.
+
+				      The "+STAT" chip follows the title rather than leading it, so the header
+				      line reads as a title with its stat beside it rather than a stat with a
+				      title trailing after. It rolls too — see the chip's own handler. --}}
+				<strong class="stonetop-item-name{{#if (and owned rollType)}} rollable move-rollable{{/if}}"{{#if (and owned rollType)}} data-roll="{{rollType}}" data-mod=""{{/if}}>{{name}}</strong>
 				{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
-				<strong class="stonetop-item-name">{{name}}</strong>
 				{{#if requirementsUnmet}}<i class="fas fa-triangle-exclamation stonetop-move-req-warning" data-tooltip="You own this move but do not meet its requirement{{#if requiresLabel}} ({{requiresLabel}}){{/if}}. Add the missing prerequisite, or drop this move." data-tooltip-direction="UP" aria-hidden="true"></i>{{/if}}
 				{{#if markBudget.needsChoice}}<i class="fas fa-hand-pointer stonetop-move-choice-needed" data-tooltip="This move has selections left to make ({{markBudget.used}} of {{markBudget.max}} chosen). Tap the hand to jump into the moves editor and choose the rest." data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
 				{{#if statChoiceNeeded}}<i class="fas fa-hand-pointer stonetop-move-stat-choice-needed" data-tooltip="You took this move but haven't chosen which stat to raise, so it isn't boosting anything yet. Tap the hand to pick a stat (+1, max +{{statChoiceNeeded.cap}})." data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
@@ -150,7 +158,7 @@
 				</a>
 				{{/if}}
 			</div>
-			<div class="stonetop-item-description">{{{boldMissText description}}}</div>
+			<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>
 			{{#if markBudget}}
 			<p class="stonetop-move-mark-budget{{#if markBudget.atBudget}} is-at-budget{{/if}}{{#if markBudget.over}} is-over{{/if}}"
 			   data-tooltip="Each time you take this move you may choose another option." data-tooltip-direction="UP">

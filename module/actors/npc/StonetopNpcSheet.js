@@ -6,7 +6,7 @@
 //
 // Wears the same edit/lock header chrome as the monster/bestiary sheets (shared
 // sheet-chrome helpers) so it reads as one system.
-import { rollDamage } from "../../utils/roll-engine.js";
+import { rollDamagePrompted } from "../../dialogs/RollDialog.js";
 import { hideBrokenPortrait, stripHeaderChrome, injectHeaderToggle, fitDisplayName } from "../../utils/sheet-chrome.js";
 import { isDefaultImg } from "../../utils/strings.js";
 import { headerPortraitContext, wirePortraitPopout } from "../../utils/actor-portrait-picker.js";
@@ -393,9 +393,8 @@ export function createStonetopNpcSheetClass(Base) {
 				if (dmgRoll) {
 					const formula = this.actor.system?.attributes?.damage?.rollFormula;
 					if (!formula) return;
-					await rollDamage(formula, this.actor, {
-						label: this.actor.system?.attributes?.damage?.value || "Damage",
-					});
+					const label  = this.actor.system?.attributes?.damage?.value || "Damage";
+					await rollDamagePrompted(formula, this.actor, { label, shiftKey: ev.shiftKey });
 					return;
 				}
 				const moveRoll = ev.target.closest(".stonetop-npc-move-roll");

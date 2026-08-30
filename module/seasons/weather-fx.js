@@ -120,6 +120,16 @@ const driven = lean => DOWN + Math.sign(WIND_DIRECTION - DOWN) * lean;
  * FXMaster's `clouds` carries most of the sky's mood, so it appears under most weathers at
  * different densities and speeds: a few drifting for `fair`, a lid of them for `cloud`, racing
  * for `wind`, and dark and fast under the storms.
+ *
+ * `scale` multiplies the drop sprite (`_applyScaleToConfig` scales every `scale`/`scaleStatic`
+ * behaviour by it, times the grid's own size over 100), and every falling sky sets one because
+ * FXMaster's default of 1 is not a raindrop anyone can see over a map. Rain's own sprite is
+ * already faint by design — its alpha behaviour fades each drop from 0.7 to 0.1 over its life,
+ * and the `alpha` option cannot lift that, since its descriptor maxes out at the 1 we are
+ * already on — so size is the only lever there is. For reference, the module's own presets sit
+ * at 1.5 for `drizzle`, 2 for `acid-rain` and 4 for `hurricane`, against the 1 our plain rain
+ * used to take by default. What matters when tuning is that the drops never SHRINK as the
+ * weather worsens, which the tests pin.
  */
 export const SKY_EFFECTS = Object.freeze({
 	sun:  [],
@@ -133,11 +143,11 @@ export const SKY_EFFECTS = Object.freeze({
 
 	rain: [
 		{ type: "clouds", options: { density: 0.06, speed: 1, alpha: 0.55, direction: WIND_DIRECTION } },
-		{ type: "rain",   options: { density: 0.8, speed: 1.2, direction: driven(10) } },
+		{ type: "rain",   options: { density: 0.8, speed: 1.2, scale: 1.6, direction: driven(10) } },
 	],
 	downpour: [
 		{ type: "clouds", options: { density: 0.12, speed: 1.6, alpha: 0.7, direction: WIND_DIRECTION } },
-		{ type: "rain",   options: { density: 2.4, speed: 2, scale: 1.2, direction: driven(15) } },
+		{ type: "rain",   options: { density: 2.4, speed: 2, scale: 1.9, direction: driven(15) } },
 	],
 	// The one weather that tints: a storm's light is the half of it the particles cannot show,
 	// and slate-grey cloud is what tells a storm from a heavy shower at a glance.
@@ -146,7 +156,7 @@ export const SKY_EFFECTS = Object.freeze({
 			density: 0.16, speed: 2.4, alpha: 0.85, direction: WIND_DIRECTION,
 			tint: { value: "#6f7683", apply: true },
 		} },
-		{ type: "rain",   options: { density: 2.6, speed: 2.6, scale: 1.2, direction: driven(20) } },
+		{ type: "rain",   options: { density: 2.6, speed: 2.6, scale: 2.1, direction: driven(20) } },
 		{ type: "hail",   options: { density: 0.5, speed: 2.2, direction: driven(20) } },
 	],
 	// No tornado effect exists in FXMaster, so the row that names them gets the worst storm the
@@ -156,7 +166,7 @@ export const SKY_EFFECTS = Object.freeze({
 			density: 0.2, speed: 4.6, alpha: 0.9, direction: WIND_DIRECTION,
 			tint: { value: "#5f6570", apply: true },
 		} },
-		{ type: "rain",   options: { density: 2.2, speed: 3.4, scale: 1.3, direction: driven(25) } },
+		{ type: "rain",   options: { density: 2.2, speed: 3.4, scale: 2.3, direction: driven(25) } },
 	],
 
 	// driven(25) is the exact mirror of snow's own default heading of 65: FXMaster already tips

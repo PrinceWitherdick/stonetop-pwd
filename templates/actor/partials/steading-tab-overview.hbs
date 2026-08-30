@@ -14,7 +14,7 @@
 		      stretch to a shared height, filling down to Places of Interest. --}}
 		<div class="steading-overview-cards">
 			<div class="steading-card steading-edit-section{{#unless stonetop.edit.resources}} stonetop-readonly{{/unless}}">
-				{{> "stonetop.steading-section-toggle" section="resources" editing=stonetop.edit.resources collapse="resources"}}
+				{{> "stonetop.steading-section-toggle" section="resources" editing=stonetop.edit.resources}}
 				<h3 class="steading-list-heading">Resources</h3>
 				<ul class="steading-list">
 					{{#each stonetop.resources}}
@@ -39,7 +39,7 @@
 			</div>
 
 			<div class="steading-card steading-fortifications-block steading-edit-section{{#unless stonetop.edit.fortifications}} stonetop-readonly{{/unless}}">
-				{{> "stonetop.steading-section-toggle" section="fortifications" editing=stonetop.edit.fortifications collapse="fortifications"}}
+				{{> "stonetop.steading-section-toggle" section="fortifications" editing=stonetop.edit.fortifications}}
 				<h3 class="steading-list-heading">Fortifications, etc.</h3>
 				<ul class="steading-list">
 					{{#each stonetop.fortifications}}
@@ -64,7 +64,7 @@
 			</div>
 
 			<div class="steading-card steading-assets-section steading-edit-section{{#unless stonetop.edit.assets}} stonetop-readonly{{/unless}}">
-				{{> "stonetop.steading-section-toggle" section="assets" editing=stonetop.edit.assets collapse="assets"}}
+				{{> "stonetop.steading-section-toggle" section="assets" editing=stonetop.edit.assets}}
 				<h3 class="steading-list-heading">Assets
 					<span class="steading-list-heading-note">Owned by residents in common. Requisition to use them on expeditions.</span>
 				</h3>
@@ -157,7 +157,7 @@
 		{{!-- Places of Interest gets the full-width bottom row to itself. --}}
 		<div class="steading-overview-bottom">
 			<div class="steading-card steading-places-section steading-edit-section{{#unless stonetop.edit.places}} stonetop-readonly{{/unless}}">
-				{{> "stonetop.steading-section-toggle" section="places" editing=stonetop.edit.places collapse="places"}}
+				{{> "stonetop.steading-section-toggle" section="places" editing=stonetop.edit.places}}
 				<h3 class="steading-list-heading">Places of Interest</h3>
 				<div class="steading-places-grid">
 					{{#each stonetop.places}}

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { declarations, readCss } from "../../fakes/css.js";
 import { promptRoll, DEFAULT_ROLL_MODE } from "../../../module/dialogs/RollDialog.js";
 
 // Advantage and disadvantage live in ONE of two places, and which one is the "Ask How to Roll
@@ -401,15 +402,95 @@ describe("what asks before it rolls", () => {
 		expect(read("module/actors/character/dialogs/RequisitionDialog.js")).toContain("promptRoll(");
 	});
 
-	// The two flows post a summary card and spend the move's costs. Asking after either would
-	// make "Cancel" mean "the card is out, the cost is paid, and no dice were rolled".
+	// Muster spends Fortunes before it rolls, and Requisition names the borrowed asset in chat.
+	// Asking after either would make "Cancel" mean "the cost is paid (or the card is out) and no
+	// dice were rolled".
 	it("asks before anything is posted or spent", () => {
-		for (const post of ["_postHomesteadMoveSummary(flow, html)", "_postHomesteadMoveSummary(requisitionFlow, html)"]) {
-			const at = STEADING_JS.indexOf(post);
-			expect(at, post).toBeGreaterThan(-1);
+		for (const step of ["_applyHomesteadBeforeRoll(flow)", 'postMoveToChat(this.actor, "Requisition"']) {
+			const at = STEADING_JS.indexOf(step);
+			expect(at, step).toBeGreaterThan(-1);
 			const before = STEADING_JS.slice(STEADING_JS.lastIndexOf("callback: async html => {", at), at);
-			expect(before, post).toContain("promptRoll(");
+			expect(before, step).toContain("promptRoll(");
 		}
+	});
+
+	// The homefront dialogs are reference plus the button that rolls — the free-text boxes they
+	// used to carry stored nothing, so all they did was stand between the move and its dice. The
+	// only controls left are the two Trade & Barter's roll actually reads.
+	it("keeps no write-in fields in the homefront move dialogs", () => {
+		const flows = STEADING_JS.slice(
+			STEADING_JS.indexOf("const HOMESTEAD_MOVE_FLOWS = {"),
+			STEADING_JS.indexOf("const STEADING_EDIT_SECTIONS"),
+		);
+		expect(flows).not.toMatch(/type: "text(area)?"/);
+		expect((flows.match(/\bfields: \[/g) ?? []).length).toBe(1);
+		expect(flows).toContain('{ name: "value", label: "Item Value", type: "number"');
+		expect(flows).toContain('{ name: "winter", label: "It is winter", type: "checkbox" }');
+		// And the renderer can only build those two: no text/textarea branch survives it.
+		const render = STEADING_JS.slice(STEADING_JS.indexOf("_onHomesteadMove(moveSlug)"));
+		expect(render.slice(0, 2000)).not.toContain("<textarea");
+	});
+
+	// "On a 7-9, pick 1" is a choice the dice have to be thrown before anyone can make, so the
+	// list rides the RESULT card (roll-engine's per-tier pickOptions), not the dialog. Derived in
+	// _onSteadingRoll off the flow, so the bare roll button on the Moves tab gets the same card
+	// the dialog's Roll button does.
+	it("hands each move's pick lists to the roll card, per tier", () => {
+		const roll = STEADING_JS.slice(STEADING_JS.indexOf("async _onSteadingRoll(moveName, statKey"));
+		expect(roll.slice(0, 1200)).toContain("pickOptions: flow.pickPools");
+		expect(roll.slice(0, 1200)).toContain("tierActions: flow.tierActions");
+		// Deploy is the move that needs them per-tier: its 6- consequences are a different list.
+		const deploy = STEADING_JS.slice(STEADING_JS.indexOf("\tdeploy: {"), STEADING_JS.indexOf("\ttradeBarter: {"));
+		expect(deploy).toContain("success: DEPLOY_CHOICES");
+		expect(deploy).toContain("partial: DEPLOY_CHOICES");
+		expect(deploy).toContain("failure: DEPLOY_CONSEQUENCES");
+		// "Injuries abound; the steading marks diminished" is one of those consequences, so the
+		// button that applies it rides the miss with them rather than the pre-roll dialog.
+		expect(deploy).toContain("stonetop-deploy-mark-diminished");
+		expect(STEADING_JS).not.toContain("data-action='mark-diminished'");
+		expect(STONETOP_JS).toContain("function _chatWireDeployMarkDiminished");
+		expect(STONETOP_JS).toContain("_chatWireDeployMarkDiminished(message, html);");
+	});
+
+	// The character sheet's guided-move dialog lost its write-in boxes for the same reason: a
+	// GUIDED_CHARACTER_MOVES entry is a trigger, its tiers, and what to choose from — never a
+	// form. The machinery that used to render and harvest fields went with them, so a guide that
+	// grew a `fields` key again would render nothing rather than half-work.
+	it("keeps no write-in fields in the character sheet's guided move dialog", () => {
+		// Anchored on the DECLARATION (leading tabs, no `this.`) — the name reads as a call site
+		// three times further up the file, and matching one of those slices in half the sheet.
+		const open = CHARACTER_SHEET_JS.slice(
+			CHARACTER_SHEET_JS.indexOf("\n\t\t_openGuidedCharacterMove({ name, guide }, rollable) {"),
+			CHARACTER_SHEET_JS.indexOf("\n\t\tasync _onArcanumMoveName("),
+		);
+		expect(open.length, "the _openGuidedCharacterMove slice").toBeGreaterThan(0);
+		expect(open).not.toContain("<textarea");
+		expect(open).not.toContain("guide.fields");
+		const guides = CHARACTER_SHEET_JS.slice(
+			CHARACTER_SHEET_JS.indexOf("const GUIDED_CHARACTER_MOVES = {"),
+			CHARACTER_SHEET_JS.indexOf("const EXPEDITION_MOVE_HANDLERS"),
+		);
+		expect(guides).not.toMatch(/\bfields: \[/);
+		// The stat picker is the one control it still draws, for a guide that rolls "ask".
+		expect(open).toContain('select name="guidedRollStat"');
+	});
+
+	// The card's paper is parchment; the chat log around it hands down its own near-white UI ink.
+	// A pick list that took the inherited value was cream on cream — invisible, and only a love
+	// letter ever showed one, so nobody hit it. Every homefront move shows one now.
+	it("says the pick list's ink rather than inheriting the chat log's", () => {
+		// `readCss()`, not this file's raw CSS text: declarations() reads a parsed stylesheet.
+		expect(declarations(readCss(), ".stonetop-roll-card-picklist"))
+			.toMatch(/color:\s*var\(--st-text-body\)/);
+	});
+
+	// One toggle for every per-tier row on a card — the tier ACTIONS and the tier PICK LISTS —
+	// so a new one is revealed by a GM's Shift Up/Down without a second copy of this loop.
+	it("reveals every per-tier row on a shift, not just the buttons", () => {
+		const shift = STONETOP_JS.slice(STONETOP_JS.indexOf("function _shiftRollCardFlavor"));
+		expect(shift).toContain('querySelectorAll(".stonetop-roll-card [data-active-tier]")');
+		expect(shift).toContain('querySelectorAll(":scope > [data-tier]")');
+		expect(shift).toContain('setAttribute("hidden", "hidden")');
 	});
 
 	// A mode the prompt did not answer falls through to the sticky selector, on every surface
@@ -461,19 +542,28 @@ describe("what asks before it rolls", () => {
 	// …and a surface that FORWARDS to another one has to carry the Shift with it. A bare
 	// `.click()` synthesises an event that reports `shiftKey: false` however the click that
 	// caused it was made, so Shift-clicking a move's NAME would sit through the very window
-	// Shift exists to skip. Both sheets re-dispatch a MouseEvent instead.
+	// Shift exists to skip. The character sheet's move rows still forward that way — their dice
+	// icon is the surface that rolls, and the name hands the click to it.
 	it("keeps the Shift when a move's name forwards to its dice button", () => {
-		for (const [name, js] of [["steading", STEADING_JS], ["character", CHARACTER_SHEET_JS]]) {
-			const forwards = [...js.matchAll(/rollable\.dispatchEvent\(new MouseEvent\(\s*"click",\s*\{([^}]*)\}/g)];
-			expect(forwards.length, `${name} forwards no click`).toBeGreaterThan(0);
-			for (const [, init] of forwards) {
-				expect(init, `${name} drops the Shift`).toContain("shiftKey: ev.shiftKey");
-				// It has to reach the delegated listener on the sheet root, which is an ancestor.
-				expect(init, `${name} forwards a non-bubbling click`).toContain("bubbles: true");
-			}
-			// And nothing forwards the bare way, which is the bug this replaced.
-			expect(js, `${name} still bare-clicks a rollable`).not.toMatch(/\brollable\.click\(\)/);
+		const forwards = [...CHARACTER_SHEET_JS.matchAll(/rollable\.dispatchEvent\(new MouseEvent\(\s*"click",\s*\{([^}]*)\}/g)];
+		expect(forwards.length, "character forwards no click").toBeGreaterThan(0);
+		for (const [, init] of forwards) {
+			expect(init, "character drops the Shift").toContain("shiftKey: ev.shiftKey");
+			// It has to reach the delegated listener on the sheet root, which is an ancestor.
+			expect(init, "character forwards a non-bubbling click").toContain("bubbles: true");
 		}
+		// And nothing forwards the bare way, which is the bug this replaced.
+		expect(CHARACTER_SHEET_JS, "character still bare-clicks a rollable").not.toMatch(/\brollable\.click\(\)/);
+	});
+
+	// The steading has nothing to forward TO. Its homefront moves carry no dice icon: the name
+	// is the click target itself, so the handler reads the real event's Shift rather than
+	// stitching a synthetic one — which is the same fix as above with the hop removed.
+	it("reads the Shift straight off the click on the steading's move names", () => {
+		const at = STEADING_JS.indexOf('closest(".stonetop-steading-move-open, .stonetop-move-roll-chip")');
+		expect(at, "the steading no longer opens moves from their name").toBeGreaterThan(-1);
+		expect(STEADING_JS.slice(at, at + 1400)).toContain("shiftKey: ev.shiftKey");
+		expect(STEADING_JS, "a move icon came back").not.toMatch(/steading-(roll|interactive)-btn/);
 	});
 
 	// The prompt answers in the shape a roll call takes, so a caller spreads it rather than

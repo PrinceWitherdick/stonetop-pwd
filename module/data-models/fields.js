@@ -117,13 +117,19 @@ export const wondersField = () => new fields.ArrayField(new fields.SchemaField({
 //   note  the per-entry line ("opens the door on round 2").
 //
 // `notes` is an HTMLField and the rest are plain: the encounter's own box holds read-aloud text
-// and @UUID links and is edited in a pop-up ProseMirror (encounter-notes-dialog.js), while the
+// and @UUID links and is edited in a pop-up ProseMirror (bundle-notes-dialog.js), while the
 // name and the per-entry note are single lines typed in place.
 //
 // `trim: false` on the plain prose, for the reason `wondersField` gives: these save on BLUR
 // without re-rendering, and a field the model quietly trimmed would leave the box holding one
 // string and the document holding another with nothing on screen saying which was saved.
-export const encountersField = () => new fields.ArrayField(new fields.SchemaField({
+//
+// SHARED WITH THE EXPEDITIONS TAB, which stores the same card — see `expeditionsField` below. The
+// shape is built by a factory rather than written twice, because the two lists are read and
+// written by ONE piece of machinery (actors/gmtoolkit/gm-bundle-tab.js) and a field it did not
+// know about on one of them would be silently dropped on the first edit: an ArrayField is diffed
+// by REPLACEMENT, so every write is the whole list.
+const bundleSchema = (extra = {}) => ({
 	id:    new fields.StringField({ required: true, blank: true, initial: () => foundry.utils.randomID() }),
 	name:  new fields.StringField({ required: true, blank: true, trim: false }),
 	notes: new fields.HTMLField({ required: true, blank: true }),
@@ -135,7 +141,30 @@ export const encountersField = () => new fields.ArrayField(new fields.SchemaFiel
 		name: new fields.StringField({ required: true, blank: true, trim: false }),
 		note: new fields.StringField({ required: true, blank: true, trim: false }),
 	}), { required: false, initial: [] }),
-}), { required: false, initial: [] });
+	...extra,
+});
+
+export const encountersField = () => new fields.ArrayField(new fields.SchemaField(bundleSchema()), { required: false, initial: [] });
+
+// The GM Toolkit's Expeditions tab: a trip prepped in advance, gathering the maps, the sites, the
+// monsters on the road and the page to read aloud when the party arrives — the same card the
+// Encounters tab holds, with one field of its own.
+//
+// `tripId` is the JOIN to the walkthrough. The "Run an Expedition" window (dialogs/
+// ExpeditionDialog.js) keeps its own LOG of trips in the world-scoped `expeditionAnswers`
+// setting, because what it records is what happened at the table on a particular night — the
+// route they took, what they were told, what they carried — and that is a different thing from
+// the prep gathered here. Pressing Run on this card opens the walkthrough on the trip named here,
+// minting one the first time; the id is written back so the second press reaches the SAME trip
+// with everything already noted in it, rather than starting the night over.
+//
+// A STALE ID IS NOT AN ERROR. Deleting a trip from the walkthrough's own log leaves this pointing
+// at nothing, and the next Run simply mints a fresh trip and overwrites it (see
+// `ExpeditionDialog.openOnTrip`). Blank on every card until the first Run, which is also what
+// every card written before this field existed reads as.
+export const expeditionsField = () => new fields.ArrayField(new fields.SchemaField(bundleSchema({
+	tripId: new fields.StringField({ required: true, blank: true }),
+})), { required: false, initial: [] });
 
 // Schema for the two minimal move subtypes (npcMove / monsterMove): just a
 // rich-text description and an optional roll formula.

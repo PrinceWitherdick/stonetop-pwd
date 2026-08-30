@@ -42,7 +42,8 @@ import {moveMarkBudget} from "./move-mark-budget.js";
 import {StonetopFlags, STONETOP_SCOPE, resolvedFlags, resolvedFlagProperty} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG, ownsAsteriskMove} from "./WouldBeHeroAsterisk.js";
-import {ownedNamesOr} from "./owns-move.js";
+import {ownedNamesOr, ownedMove} from "./owns-move.js";
+import {RITES_OF_THE_LAND} from "./stock-cost.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight} from "./holy-light.js";
 import {ONGOING_INVOCATION_FLAG, readOngoing} from "./ongoing-invocation.js";
 import {CONDEMNED_FLAG, canCondemn, readCondemned, addCondemned, removeCondemned, noteCondemned} from "./condemn.js";
@@ -58,7 +59,8 @@ import {grantsToCreate, grantSourceMap, grantAdoptionKeys, itemGrantKey} from ".
 import {CharacterInventory} from "./CharacterInventory.js";
 import {maybeBeginAttack, attackMoveFor} from "../../combat/attack-flow.js";
 import {defendReadinessHold, defendReadinessCap} from "../../combat/defend-readiness.js";
-import {classifyResult, xpToLevelUp} from "../../utils/roll-engine.js";
+import {classifyResult} from "../../utils/roll-engine.js";
+import {xpToLevelUp, withXpLock} from "../../utils/xp.js";
 import {CharacterArcana} from "./CharacterArcana.js";
 import {CharacterLore} from "./CharacterLore.js";
 import {CharacterPostDeath, buildLoreSection, insertHpPenalty} from "./CharacterPostDeath.js";
@@ -689,6 +691,7 @@ export class StonetopCharacter {
 		const viewerIsGM     = !!view.viewerIsGM;
 		const checked        = this._inventory.checked;
 		const resources      = this._inventory.resources;
+		const acquiredMaxes  = this._inventory.resourceMax;
 		const possessionUses = this._possessions.uses;
 		const rPool          = this._inventory.regularPool;
 		const sPool          = this._inventory.smallPool;
@@ -713,8 +716,13 @@ export class StonetopCharacter {
 			const res    = outfitItem.resource;
 			const isProsperityResource = outfitItem.prosperityResource
 				|| _PROSPERITY_RESOURCE_SLUGS.has(outfitItem.slug);
-			const resMax = (isProsperityResource && smallItemLimit !== null)
-				? smallItemLimit
+			// Three sources of a track's size, most specific first. An ACQUIRED capacity wins
+			// outright: provisions have no printed number of uses because the larder is however
+			// much the last Forage brought in (CharacterInventory#resourceMax). Then the
+			// 4+Prosperity supplies rule, then the number printed on the item.
+			const acquiredMax = Number(acquiredMaxes[outfitItem.slug]);
+			const resMax = Number.isFinite(acquiredMax) ? acquiredMax
+				: (isProsperityResource && smallItemLimit !== null) ? smallItemLimit
 				: res?.max;
 			// Armored reduces a carried shield's ◇ cost (min 1), so it reads ◆ instead of ◆◆.
 			const weight = (outfitItem.slug === _SHIELD_SLUG && shieldLoadReduction > 0)
@@ -959,6 +967,7 @@ export class StonetopCharacter {
 				.withId(i._id)
 				.withName(i.name)
 				.withDescription(i.system?.description ?? null)
+				.withMoveResults(i.system?.moveResults ?? null)
 				.withMoveType(i.system?.moveType ?? null)
 				.withOwnedId(i._id)
 				.withRollType(normalizeRollType(i.system?.rollType))
@@ -985,6 +994,7 @@ export class StonetopCharacter {
 					.withId(i._id)
 					.withName(i.name)
 					.withDescription(i.system?.description ?? null)
+					.withMoveResults(i.system?.moveResults ?? null)
 					.withMoveType(i.system?.moveType ?? null)
 					.withOwnedId(i._id)
 					.withRollType(normalizeRollType(i.system?.rollType))
@@ -1384,9 +1394,37 @@ export class StonetopCharacter {
 
 	async setInventoryItemChecked(slug, isChecked) { await this._inventory.setItemChecked(slug, isChecked); }
 	async setInventoryResource(slug, count)         { await this._inventory.setResource(slug, count); }
+	// Fragment forms, for a move that changes several things at once and wants one write for the
+	// lot of them (see StonetopCharacterSheet#_applyMakeCamp).
+	inventoryResourceData(slug, count)              { return this._inventory.resourceData(slug, count); }
+	heldAdvantageData(source)                       { return { [`flags.${STONETOP_SCOPE}.heldAdvantage`]: { source: String(source ?? "").trim() || "a promised advantage" } }; }
 	async setInventoryRegularPool(count)            { await this._inventory.setRegularPool(count); }
 	async setInventorySmallPool(count)              { await this._inventory.setSmallPool(count); }
 	async removeSpecialItem(slug)                   { await this._inventory.removeSpecial(slug); }
+
+	/**
+	 * The Blessed's Favor, off Rites of the Land's own track.
+	 *
+	 * A HOLD track: the stored number is Favor currently held, not Favor spent, because a
+	 * Blessed who has never overseen the rites holds none (see stock-cost.js, which pays out of
+	 * this and explains why the pouch counts the other way). Zero for a character without the
+	 * move at all, which is also the honest answer.
+	 */
+	ritesFavorHeld() {
+		return Math.max(0, Number(this._moveResources.getMoveResources()[RITES_OF_THE_LAND]) || 0);
+	}
+
+	/** That track's capacity, read off the owned move so a homebrewed one still works. */
+	ritesFavorMax() {
+		return Number(ownedMove(this._actor, RITES_OF_THE_LAND)?.system?.resource?.max) || 0;
+	}
+
+	/** "Hold N Favor" — the move SETS the track rather than adding to it. */
+	async setRitesFavor(held) {
+		const max = this.ritesFavorMax();
+		const value = Math.max(0, Math.min(max, Math.trunc(Number(held) || 0)));
+		await this._moveResources.setUses(RITES_OF_THE_LAND, value, { stonetopMove: RITES_OF_THE_LAND });
+	}
 
 	getSteadingActor() {
 		const storedSteadingId = resolvedFlagProperty(this._actor, "steadingId");
@@ -1936,6 +1974,7 @@ export class StonetopCharacter {
 				rollLabel: _rollLabelForMove(e.name, e.rollType, { moveType: "basic", description: e.description }),
 				owned: instances.length > 0,
 				description: e.description,
+				moveResults: e.moveResults ?? null,
 			};
 		}).sort((a, b) => {
 			if (a.name === "Aid") return -1;
@@ -1973,6 +2012,7 @@ export class StonetopCharacter {
 				rollType: normalizeRollType(i.system?.rollType),
 				rollLabel: _rollLabelForMove(i.name, i.system?.rollType, i.system),
 				description: i.system?.description ?? null,
+				moveResults: i.system?.moveResults ?? null,
 				// Only player-authored moves (not foreign playbook moves that also land
 				// in "other") get the edit affordance on the sheet.
 				custom: _isCustomMove(i),
@@ -2189,7 +2229,11 @@ export class StonetopCharacter {
 			modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}),
 		};
 
-		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, rollOptions), descriptionOnly });
+		// A promise made earlier (a peaceful camp) is spent HERE — after the guards above, so
+		// reading a move's text or backing out of the weapon prompt never burns it.
+		const promised = descriptionOnly ? rollOptions : await this._spendHeldAdvantage(rollOptions);
+
+		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, promised), descriptionOnly });
 
 		// Defend: fill the character's Readiness circles from the tier they just rolled
 		// (p.216), never lowering a pool they already hold.
@@ -2556,13 +2600,14 @@ export class StonetopCharacter {
 
 		// Returned so a caller that has to act on the outcome (the arcana Identify roll) can
 		// classify the total without re-rolling or re-deriving the tier thresholds.
-		const roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat, {
-			rollMode: normalizeRollMode(rollMode ?? this.rollMode),
-			modifier,
-			forward,
-			ongoing,
-			...rest,
-		}));
+		const roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat,
+			await this._spendHeldAdvantage({
+				rollMode: normalizeRollMode(rollMode ?? this.rollMode),
+				modifier,
+				forward,
+				ongoing,
+				...rest,
+			})));
 
 		if (forward !== 0) {
 			await this._actor.update({ "system.attributes.forward.value": 0 }, extraOptions.moveName ? { stonetopMove: extraOptions.moveName } : {});
@@ -2661,6 +2706,59 @@ export class StonetopCharacter {
 
 	async setRollMode(rollMode) {
 		await this._actor.setFlag(STONETOP_SCOPE, "rollMode", normalizeRollMode(rollMode));
+	}
+
+	/**
+	 * A HELD advantage: "take advantage on your next roll", promised by something that has
+	 * already happened (Make Camp's peaceful night, p.334). The steading holds the same promise
+	 * the same way — see StonetopSteading#fortunesAdvantage — and for the same reason: the roll
+	 * it is owed to has not been made yet, possibly not this session, so it has to be written
+	 * down somewhere that roll will look.
+	 *
+	 * NOT the sticky selector. The sticky flag is a PREFERENCE the player sets and unsets, and it
+	 * is not even drawn when "Ask How to Roll Each Time" is on — a promise parked there would be
+	 * overruled by the pre-roll window on every client that asks, and never spent on the ones
+	 * that don't. This is a promise: it outranks both, it names itself on the card, and it is
+	 * consumed by the one roll it was owed to.
+	 *
+	 * Stored as WHAT PROMISED it rather than a bare `true`, so the card can say why.
+	 */
+	heldAdvantage() {
+		return resolvedFlags(this._actor).heldAdvantage ?? null;
+	}
+
+	async clearHeldAdvantage() {
+		if (!this.heldAdvantage()) return;
+		await this._actor.setFlag(STONETOP_SCOPE, "heldAdvantage", null);
+	}
+
+	/**
+	 * Spend a held advantage into the options of the roll about to be made, if one is held.
+	 *
+	 * A held advantage OUTRANKS the sticky selector and the pre-roll window as a source of
+	 * advantage — those are preferences, this is a rule the fiction already settled — but it never
+	 * beats a disadvantage, from wherever that came. Advantage and disadvantage CANCEL in Stonetop,
+	 * so a promise spent against one leaves a flat roll: a player who picked Disadvantage in the
+	 * window because they are doing this in the dark must not be silently upgraded past it, and
+	 * nor must a character who camped peacefully and is still Weakened. That second case is why
+	 * this runs BEFORE `applyDebilityRollMode` — it hands that method an "adv" to cancel, exactly
+	 * as the sticky selector would have.
+	 *
+	 * Either way the pill NAMES the promise, so a cancellation reads as a trade rather than as a
+	 * mode that quietly vanished — and either way the promise is SPENT, because it was made about
+	 * this roll and this is the roll that happened.
+	 *
+	 * Cleared BEFORE the dice, like the steading's, so a second roll cannot spend the same promise.
+	 */
+	async _spendHeldAdvantage(options) {
+		const held = this.heldAdvantage();
+		if (!held) return options;
+		await this.clearHeldAdvantage();
+		return {
+			...options,
+			rollMode: options.rollMode === "dis" ? "normal" : "adv",
+			conditionNotes: [...(options.conditionNotes ?? []), held.source],
+		};
 	}
 
 	// ── Death and dying (Book I, Harm & Healing p.245) ─────────────────────────
@@ -3004,6 +3102,7 @@ export class StonetopCharacter {
 		await this._writeWounds(wounds, "Convalesce");
 	}
 	async getArcanum(slug)                           { return this._arcana.getArcanum(slug); }
+	async getArcanumMove(slug, moveSlug)             { return this._arcana.getArcanumMove(slug, moveSlug); }
 	async addArcanum(slug)                           { await this._arcana.addArcanum(slug); }
 	async removeArcanum(slug)                        { await this._arcana.removeArcanum(slug); await this._inventory.clearArcanumResources(slug); }
 	async identifyArcanum(slug, options)             { await this._arcana.identifyArcanum(slug, options); }
@@ -3122,12 +3221,21 @@ export class StonetopCharacter {
 	// new item's id, then the choice is applied — a mid-flow failure leaves the move owned
 	// (its choice re-collectable from the card) rather than a half-applied stat bump.
 	async applyLevelUp(selectedMoveCompendiumId, selectedInvocationSlug, choices = null) {
-		const level = this._actor.system?.attributes?.level?.value ?? 1;
-		const xp    = this._actor.system?.attributes?.xp?.value ?? 0;
-		const cost  = xpToLevelUp(level);
-		await this._actor.update({
-			"system.attributes.level.value": level + 1,
-			"system.attributes.xp.value":   Math.max(0, xp - cost),
+		// Through the XP lock (utils/xp.js), not adjustXp: the level and the XP it cost move in
+		// ONE update, and splitting them would leave a moment where the character has the new
+		// level and has not paid for it. Both are therefore read inside the lock, so a mark that
+		// landed while the level-up dialog was open is spent from rather than overwritten.
+		//
+		// Only the write is held: the move additions below reach into compendia, and keeping
+		// every other XP change on this client waiting on a pack read would trade one rare bug
+		// for a common stall.
+		await withXpLock(this._actor, async () => {
+			const level = this._actor.system?.attributes?.level?.value ?? 1;
+			const xp    = this._actor.system?.attributes?.xp?.value ?? 0;
+			await this._actor.update({
+				"system.attributes.level.value": level + 1,
+				"system.attributes.xp.value":   Math.max(0, xp - xpToLevelUp(level)),
+			});
 		});
 		let addedItem = null;
 		if (selectedMoveCompendiumId) {
@@ -3760,6 +3868,7 @@ function _buildMoveEntry(entry, source, moveResourcesMap, bgSlugs = new Set(), m
 		.withOwnedId(entry.ownedIds[0] ?? null)
 		.withName(entry.name)
 		.withDescription(entry.description)
+		.withMoveResults(entry.moveResults ?? null)
 		.withRollType(entry.rollType)
 		.withRollLabel(_rollLabelForMove(entry.name, entry.rollType, entry))
 		.withIsStarting(entry.isStarting)
@@ -3801,6 +3910,7 @@ function _buildOwnedItemMoveSnapshot(item, { sourceType, isStarting }) {
 		.withOwnedId(item._id)
 		.withName(item.name)
 		.withDescription(item.system?.description ?? "")
+		.withMoveResults(item.system?.moveResults ?? null)
 		.withRollType(item.system?.rollType ?? null)
 		.withRollLabel(_rollLabelForMove(item.name, item.system?.rollType, item.system))
 		.withIsStarting(isStarting)
@@ -3831,6 +3941,7 @@ function _buildCompendiumMoveCategory(entries, { key, title }, ownedAllByName) {
 				.withOwnedId(instances[0]?._id ?? null)
 				.withName(e.name)
 				.withDescription(e.description ?? "")
+				.withMoveResults(e.moveResults ?? null)
 				.withRollType(e.rollType)
 				.withRollLabel(_rollLabelForMove(e.name, e.rollType, { moveType: key, description: e.description }))
 				.withIsStarting(false)

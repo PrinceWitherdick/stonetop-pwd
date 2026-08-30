@@ -1,6 +1,6 @@
 import { CREATURE_TYPE_CHOICES, creatureTypeIcon, creatureTypeLabel } from "../../bestiary/creature-types.js";
 import { hasText } from "../bestiary/codex.js";
-import { rollDamage } from "../../utils/roll-engine.js";
+import { rollDamagePrompted } from "../../dialogs/RollDialog.js";
 import { DAMAGE_DIE_RE } from "../../utils/damage.js";
 import { hideBrokenPortrait, stripHeaderChrome, injectHeaderToggle } from "../../utils/sheet-chrome.js";
 import { escHtml, isDefaultImg } from "../../utils/strings.js";
@@ -460,7 +460,10 @@ export function createStonetopMonsterSheetClass(Base) {
 					// w/disadvantage"), and a noted dis/advantage applies to the die.
 					const label    = dmgRoll.dataset.rollLabel || "Damage";
 					const rollMode = dmgRoll.dataset.rollMode  || "normal";
-					await rollDamage(formula, this.actor, { label, rollMode });
+					// The stat block's own noted advantage SEEDS the damage window rather than
+					// being replaced by it: skipping the window (Shift, or the setting off) still
+					// has to roll "icy touch d6 w/disadvantage" at disadvantage, as it always did.
+					await rollDamagePrompted(formula, this.actor, { label, rollMode, shiftKey: ev.shiftKey });
 
 				} else if (ev.target.closest(".stonetop-monster-move-roll")) {
 					const li   = ev.target.closest("[data-item-id]");

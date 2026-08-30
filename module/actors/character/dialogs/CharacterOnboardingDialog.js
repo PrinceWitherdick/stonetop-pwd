@@ -10,7 +10,8 @@ import { normalizePlaybookGlyphs, composeInstinct, parseInstinct } from "../../.
 import { splitFillBlank, fillBlank } from "../../../utils/fill-blanks.js";
 import { STAT_KEYS } from "../../../utils/roll-types.js";
 import { sign } from "../../../utils/roll-engine.js";
-import { wrapStonetopGlyphsInEl, wrapGlyphTextContainers, centerArcanumTracks } from "../../../utils/glyphs.js";
+import { wrapStonetopGlyphsInEl, wrapGlyphTextContainers, centerArcanumTracks, injectGlyphCheckboxes } from "../../../utils/glyphs.js";
+import { prepareMoveHoverBody } from "../../../utils/move-hover.js";
 import { enrichMoveRefsInEl } from "../../../utils/move-refs.js";
 import { faqForStep, faqPage } from "../../../utils/onboarding-faq.js";
 import { markFaqItems } from "../../../utils/faq-bullets.js";
@@ -928,27 +929,28 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			img:   option.img ?? null,
 			title: option.name,
 			descriptionHtml: this._injectSeekerMarks(
-				centerArcanumTracks(option.frontDescription), slug, "front", "stonetop-arcanum-box", /□/g, marked),
+				centerArcanumTracks(option.frontDescription), slug, "front", "stonetop-arcanum-box", /□+/g, marked),
 			unlockHtml: this._injectSeekerMarks(
-				centerArcanumTracks(option.unlockDescription), slug, "unlock", "stonetop-arcanum-circle", /○/g, marked),
+				centerArcanumTracks(option.unlockDescription), slug, "unlock", "stonetop-arcanum-circle", /○+/g, marked),
 		};
 	}
 
-	// Rewrite each glyph matched by `re` into an interactive onboarding mark checkbox,
-	// indexed in document order to match CharacterArcana._injectMarkers (and _frontTaskBoxes)
-	// so the persisted key lands on the right box on the sheet. `marked` is the set of
-	// currently-checked "context:index" keys. Also tags each input with the shared
-	// stonetop-onboarding-arcana-mark class the change handler listens on.
+	// Rewrite each glyph matched by `re` into an interactive onboarding mark checkbox, through
+	// the SAME injector the sheet uses (CharacterArcana._injectMarkers). That shared helper is
+	// what guarantees the document-order indexing the two must agree on: the index a box gets
+	// here is the key its state is persisted under, so a differently-indexed copy would land an
+	// onboarding mark on the wrong box once the sheet opens. `marked` is the set of
+	// currently-checked "context:index" keys — the onboarding dialog knows only one arcanum at
+	// a time, so its keys carry no slug, while the sheet's do.
+	//
+	// Each input also wears the shared stonetop-onboarding-arcana-mark class its change handler
+	// listens on.
 	_injectSeekerMarks(html, slug, context, cssClass, re, marked) {
-		let index = 0;
-		// `re` matches a single glyph at a time (/□/g, /○/g), so each replacement is one box.
-		return String(html ?? "").replace(re, () => {
-			const i = index++;
-			const checked = marked.has(`${context}:${i}`);
-			return `<input type="checkbox" class="${cssClass} stonetop-onboarding-arcana-mark"`
-				+ ` data-arcanum-slug="${slug}" data-context="${context}" data-index="${i}"`
-				+ `${checked ? " checked" : ""}>`;
-		});
+		return injectGlyphCheckboxes(html, re, {
+			slug, context,
+			cssClass: `${cssClass} stonetop-onboarding-arcana-mark`,
+			isChecked: i => marked.has(`${context}:${i}`),
+		}).html ?? "";
 	}
 
 	async _loadPlaybookMoves() {
@@ -3433,9 +3435,11 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		tip.innerHTML =
 			`<p class="stonetop-word-tooltip-name">${text}</p>` +
 			`<div class="stonetop-word-tooltip-desc">${description}</div>`;
-		// Drop collapsible <details> (e.g. Chart a Course's "Travel Times") that
-		// can't be opened in a hover tooltip; they stay clickable on the item sheet.
-		tip.querySelectorAll("details").forEach(d => d.remove());
+		// The shared hover-panel pass (utils/move-hover.js), the same one the character sheet's
+		// move-ref panel runs: the description is written here straight from the compendium, so
+		// nothing else would drop the collapsibles or redraw the ◇ / □ a move like Outfit is
+		// written with.
+		prepareMoveHoverBody(tip);
 		this._positionPopup(tip, anchor, { gap: 6, placement: "above" });
 	}
 

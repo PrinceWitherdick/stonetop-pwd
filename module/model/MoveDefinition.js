@@ -8,6 +8,9 @@ export class MoveDefinition {
 		this.playbook    = data.system?.playbook        ?? null;
 		this.rollType    = normalizeRollType(data.system?.rollType);
 		this.description = data.system?.description     ?? null;
+		// The move's own 10+/7-9/6- outcome text, as { success|partial|failure: {label, value} }.
+		// The roll card reads it, and so does the move card's tier ladder (utils/move-tiers.js).
+		this.moveResults = data.system?.moveResults     ?? null;
 		this.isStarting  = data.system?.isStartingMove  ?? false;
 		this.requirement = data.system?.requirement     ?? null;
 		this.repeatMax   = data.system?.repeatMax       ?? null;

@@ -1,4 +1,5 @@
 import { sign } from "../../utils/roll-engine.js";
+import { clearDebility, markedDebilities, openDebilityPicker } from "./steading-debilities.js";
 
 // ── Return Triumphant (Book I p.339) ────────────────────────────────────────────
 // No dice: the move clears one of the steading's marked debilities, or raises Fortunes
@@ -9,12 +10,6 @@ import { sign } from "../../utils/roll-engine.js";
 // own move card, and the last step of the Run an Expedition walkthrough, which is where a
 // table actually is when the move comes up. One copy, so the two cannot come to disagree
 // about what "triumphant" does to Fortunes.
-
-const DEBILITIES = [
-	{ id: "diminished", label: "Diminished", detail: "disadvantage to Deploy, Muster, Pull Together" },
-	{ id: "lacking",    label: "Lacking",    detail: "treat Prosperity as 1 lower" },
-	{ id: "malcontent", label: "Malcontent", detail: "Fortunes reset to +0 each season; folks need Persuading more often" },
-];
 
 const DIALOG_OPTIONS = { classes: ["dialog", "stonetop", "stonetop-disaster-move-dialog"] };
 
@@ -31,8 +26,7 @@ export function openReturnTriumphant(steading, { onApplied } = {}) {
 	if (!steading) return;
 	const done = () => onApplied?.();
 
-	const marked = DEBILITIES.filter(d =>
-		steading.getSystemValue(`attributes.debilities.options.${d.id}.value`, false));
+	const marked = markedDebilities(steading);
 
 	// No debilities marked → the move raises Fortunes by 1 instead.
 	if (marked.length === 0) {
@@ -60,87 +54,17 @@ export function openReturnTriumphant(steading, { onApplied } = {}) {
 		return;
 	}
 
-	// One or more debilities marked → the GM clears 1.
-	//
-	// Picking and committing are two separate acts. A click used to write the clear and shut the
-	// window in one motion, which put an irreversible steading edit a single mis-click away and
-	// left no moment to read the row before it landed. A click now only marks the choice; the
-	// footer button is what writes it, and it names the debility it is about to clear so there is
-	// no doubt what the press does. Nothing starts picked, so the button starts disabled.
-	//
-	// `autofocus` on the first row is load-bearing, not polish: Foundry's own Tab handler pulls
-	// focus to the first `.dialog-button` whenever focus is outside the dialog, and a DISABLED
-	// button cannot take focus, so without a focus target inside the window Tab would never
-	// get a keyboard user in. Starting focus on a row leaves Tab to the browser from then on.
-	const choicesHtml = marked.map((d, i) => `
-		<li class="stonetop-disaster-choice" data-choice="${d.id}"
-		    role="radio" aria-checked="false" tabindex="0"${i === 0 ? " autofocus" : ""}>
-			<span class="stonetop-disaster-choice-label">${d.label}</span>
-			<span class="stonetop-disaster-choice-detail">${d.detail}</span>
-		</li>`).join("");
-
-	let picked = null;
-
-	// `const`, even though the render/button callbacks below refer to `dialog`: they run
-	// after this statement completes, so the binding is always initialised by then.
-	const dialog = new Dialog({
+	// One or more debilities marked -> the GM clears 1. The window itself is the shared
+	// debility picker (steading-debilities.js): the Inn's seasonal gathering asks the same
+	// question the same way, and the accessibility details that make it work are documented
+	// there rather than kept in step across two copies.
+	openDebilityPicker({
 		title: "Return Triumphant",
-		content: `<div class="stonetop-disaster-dialog">
-			<p><em>You return home in triumph.</em> Clear 1 of the steading's debilities:</p>
-			<ol class="stonetop-disaster-choices" role="radiogroup" aria-label="Debility to clear">${choicesHtml}</ol>
-		</div>`,
-		buttons: {
-			apply: {
-				label: "Clear Debility",
-				// Guarded rather than trusted to be unreachable: Foundry submits the `default`
-				// button on Enter whenever focus sits anywhere in the window, and `disabled` only
-				// stops the click. With nothing picked this closes writing nothing, like Escape.
-				callback: async () => {
-					if (!picked) return;
-					await steading.setSystemValue(`attributes.debilities.options.${picked.id}.value`, false, { stonetopMove: "Return Triumphant" });
-					done();
-				},
-			},
+		introHtml: "<p><em>You return home in triumph.</em> Clear 1 of the steading's debilities:</p>",
+		marked,
+		onApply: async picked => {
+			await clearDebility(steading, picked.id, "Return Triumphant");
+			done();
 		},
-		// Named even though it is the only button: omitting it makes Enter submit `undefined`,
-		// which throws inside Dialog#submit.
-		default: "apply",
-		render: (html) => {
-			const appEl    = dialog.element?.jquery ? dialog.element[0] : dialog.element;
-			const applyBtn = appEl?.querySelector("button[data-button='apply']");
-			if (applyBtn) applyBtn.disabled = true;
-
-			// Both shapes, like the line above and like every other render callback in the system:
-			// core hands this callback jQuery on v13 and there is no promise it always will. Bare
-			// `html[0]` would throw HERE, one line after the button was disabled and before a
-			// single row listener was wired — leaving a Return Triumphant window whose only button
-			// is dead and whose rows do nothing, so the move could not be made at all.
-			const root    = html[0] ?? html;
-			const options = [...root.querySelectorAll(".stonetop-disaster-choice")];
-			const select = (el) => {
-				picked = marked.find(d => d.id === el.dataset.choice) ?? null;
-				for (const o of options) {
-					const on = o === el;
-					o.classList.toggle("is-selected", on);
-					o.setAttribute("aria-checked", String(on));
-				}
-				if (!applyBtn) return;
-				applyBtn.disabled  = !picked;
-				applyBtn.textContent = picked ? `Clear ${picked.label}` : "Clear Debility";
-			};
-
-			for (const el of options) {
-				el.addEventListener("click", () => select(el));
-				// Space would scroll the window and Enter would reach Foundry's document-level
-				// handler and submit the dialog, so a keyboard pick swallows its own key.
-				el.addEventListener("keydown", (event) => {
-					if ((event.key !== "Enter") && (event.key !== " ")) return;
-					event.preventDefault();
-					event.stopPropagation();
-					select(el);
-				});
-			}
-		},
-	}, DIALOG_OPTIONS);
-	dialog.render(true);
+	});
 }

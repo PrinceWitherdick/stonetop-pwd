@@ -14,6 +14,8 @@ export class RequirementSnapshot {
  * @property {string|null} ownedId
  * @property {string} name
  * @property {string} description
+ * @property {object|null} moveResults - { success|partial|failure: {label, value} } tier text,
+ *   rendered under the description as the card's tier ladder (utils/move-tiers.js)
  * @property {string|null} rollType - stat key | "ask" | "prompt" | null
  * @property {string|null} rollLabel - display label for the roll chip, e.g. "Fortunes"
  * @property {boolean} isStarting
@@ -39,6 +41,7 @@ export class MoveSnapshot {
 		this.ownedId       = b._ownedId;
 		this.name          = b._name;
 		this.description   = b._description;
+		this.moveResults   = b._moveResults ?? null;
 		this.rollType      = b._rollType;
 		this.rollLabel     = b._rollLabel;
 		this.isStarting    = b._isStarting;
@@ -81,6 +84,7 @@ export class MoveSnapshotBuilder {
 	withOwnedId(v)       { this._ownedId       = v; return this; }
 	withName(v)          { this._name          = v; return this; }
 	withDescription(v)   { this._description   = v; return this; }
+	withMoveResults(v)   { this._moveResults   = v ?? null; return this; }
 	withRollType(v)      { this._rollType      = normalizeRollType(v); return this; }
 	withRollLabel(v)     { this._rollLabel     = v ?? null; return this; }
 	withIsStarting(v)    { this._isStarting    = v; return this; }

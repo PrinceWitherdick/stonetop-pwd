@@ -68,6 +68,21 @@ export async function uploadFile(source, dir, file, options = { overwrite: true 
 }
 
 /**
+ * Make sure a data directory exists, so an upload into it has somewhere to land.
+ *
+ * Here with `uploadFile` because it is the same kind of fact and just as undiscoverable from the
+ * call site: `createDirectory` THROWS when the folder is already there, so the ordinary case is
+ * an exception. A caller that does not know that either crashes on the second run or wraps it in
+ * a try/catch that also swallows the real failures. Swallowing is still the right answer, because
+ * the only thing that matters is whether the upload afterwards succeeds, and `uploadFile`
+ * already answers that honestly.
+ */
+export async function ensureDataDir(dir) {
+	try { await filePicker()?.createDirectory("data", dir, {}); }
+	catch { /* already there, or the host will refuse the upload and say so */ }
+}
+
+/**
  * Repoint one key of a rendered Application's `options`. ApplicationV2 hands out a frozen
  * options object (`this.options = Object.freeze(...)`), so assigning a key through it throws
  * under strict mode — but the field holding it is a plain writable property, so swap in a

@@ -30,7 +30,7 @@
 						<strong class="stonetop-item-name">{{name}}</strong>
 						{{#if (and @root.stonetop.canAuthorLoveLetters rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
 					</div>
-					{{#if description}}<div class="stonetop-item-description">{{{boldMissText description}}}</div>{{/if}}
+					{{#if description}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}
 					<div class="stonetop-love-letter-actions">
 						<button type="button" class="stonetop-love-letter-read" data-item-id="{{ownedId}}">
 							<i class="fas fa-envelope-open-text" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.readButton"}}
@@ -156,17 +156,14 @@
 					{{#each moves}}
 						{{!-- These "other" moves are all real owned items, so every row is a
 						      draggable .item (drag onto the hotbar → roll or post-to-chat macro).
-						      The dice icon stays gated on rollType. Owned means learned, so they
-						      carry `is-checked` like any owned playbook move and survive the
-						      tab's "Hide un-learned moves" filter. --}}
+						      Whether the TITLE rolls stays gated on rollType — there is no dice
+						      icon beside it any more; the name element is the `.rollable` itself
+						      (see move-group.hbs). Owned means learned, so they carry
+						      `is-checked` like any owned playbook move and survive the tab's
+						      "Hide un-learned moves" filter. --}}
 						<li class="item stonetop-item is-checked" data-item-id="{{ownedId}}">
 							<div class="stonetop-item-header">
-								{{#if rollType}}
-								<span class="rollable move-rollable" data-roll="{{rollType}}" data-mod="">
-									<i class="fas fa-dice-d6"></i>
-								</span>
-								{{/if}}
-								<strong class="stonetop-item-name">{{name}}</strong>
+								<strong class="stonetop-item-name{{#if rollType}} rollable move-rollable{{/if}}"{{#if rollType}} data-roll="{{rollType}}" data-mod=""{{/if}}>{{name}}</strong>
 								{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
 								{{#if @root.stonetop.movesEdit}}
 								<a class="stonetop-other-move-delete" data-item-id="{{ownedId}}" title="{{localize 'stonetop.character.moves.removeMove'}}">
@@ -206,12 +203,11 @@
 							       title="{{localize 'stonetop.character.moves.learnedTitle'}}"
 							       {{#if learned}}checked{{/if}}
 							       {{#unless (and @root.stonetop.movesEdit (or (not custom) @root.stonetop.canAuthorCustomMoves))}}disabled{{/unless}}>
-							{{#if (and rollType learned)}}
-							<span class="rollable move-rollable" data-roll="{{rollType}}" data-mod="">
-								<i class="fas fa-dice-d6"></i>
-							</span>
-							{{/if}}
-							<strong class="stonetop-item-name">{{name}}</strong>
+							{{!-- Un-learning a move takes the roll off its title, which is what the
+							      dice icon's `learned` gate used to do by vanishing: the name keeps
+							      its text (the move stays readable, and a click posts it to chat)
+							      and loses the `.rollable` that makes it roll. --}}
+							<strong class="stonetop-item-name{{#if (and rollType learned)}} rollable move-rollable{{/if}}"{{#if (and rollType learned)}} data-roll="{{rollType}}" data-mod=""{{/if}}>{{name}}</strong>
 							{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
 							{{#if (and resource learned)}}
 							{{!-- Right-pins the track while it shares the title's line; see
@@ -240,7 +236,7 @@
 							</a>
 							{{/if}}
 						</div>
-						{{#if description}}<div class="stonetop-item-description">{{{boldMissText description}}}</div>{{/if}}
+						{{#if description}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}
 					</li>
 				{{/each}}
 				</ol>

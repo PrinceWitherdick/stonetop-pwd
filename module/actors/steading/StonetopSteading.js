@@ -5,6 +5,35 @@ import {resolvePersonRow} from "./steading-people.js";
 import {resolvePortrait, documentPortraitFrame} from "../../utils/portrait-frame.js";
 import {playbookTitle, characterFullName} from "../../utils/playbook-actors.js";
 import {assetTakenTooltip} from "../../utils/requisition-asset.js";
+import {
+	GRANT_STAT_PATHS,
+	statGrantLine,
+	alternativeSectionFlags,
+	normalizeImprovementGrants,
+	normalizeImprovementSections,
+	sectionRequiredCount,
+} from "../../utils/improvement-def.js";
+import {readCurrentSeason, seasonStampKey, seasonStampParts} from "../../seasons/current-season.js";
+import {seasonLabel} from "../../seasons/seasons-change-reminders.js";
+import {markedDebilities} from "./steading-debilities.js";
+import {innGatheringState, INN_SEASON_STEP} from "./inn-gathering.js";
+import {steadingHolds} from "./steading-holds.js";
+import {MILITIA_SEASON_STEP} from "./season-effects.js";
+
+/** Which season's Weapons of War maintenance has been paid ("each spring, 1 Surplus"). */
+export const WEAPONS_SEASON_STEP = "weaponsUpkeep";
+
+/**
+ * Which season's standing watch has been fed (or disbanded).
+ *
+ * NAMED, like its three siblings (WEAPONS_SEASON_STEP here, MILITIA_SEASON_STEP in
+ * season-effects.js, INN_SEASON_STEP in inn-gathering.js, RITES_SEASON_STEP in
+ * rites-of-the-land.js), because the string is character-identical to the improvement SLUG
+ * "standingWatch" a few hundred lines below — two namespaces that look the same at a glance,
+ * so a rename of one reads as safe for the other. The slug sites stay literal on purpose:
+ * they are not this key, they only spell the same.
+ */
+export const WATCH_SEASON_STEP = "standingWatch";
 
 /**
  * The three lenses the Improvements tab filters by — the toggle chips beside its
@@ -466,20 +495,6 @@ export const IMPROVEMENT_GRANTS = {
 };
 
 /** System-data path (relative to `system.`) for each stat an improvement grant can bump. */
-const GRANT_STAT_PATHS = {
-	fortunes:   "stats.fortunes.value",
-	defenses:   "stats.defenses.value",
-	prosperity: "attributes.prosperity.value",
-	population: "attributes.population.value",
-};
-
-const GRANT_STAT_LABELS = {
-	fortunes: "Fortunes",
-	defenses: "Defenses",
-	prosperity: "Prosperity",
-	population: "Population",
-};
-
 /**
  * The Herd of Horses improvement tracks its herd in three age tiers (Book I). When the
  * Seasons Change to summer, yearlings become grown horses, foals become yearlings, and
@@ -498,11 +513,6 @@ export const HERD_SURPLUS_PER = 6;
 
 /** Lower-cased built-in improvement labels, used to reject custom dupes of a book improvement. */
 const BUILTIN_IMPROVEMENT_LABELS = new Set(IMPROVEMENT_DEFINITIONS.map(d => d.label.toLowerCase()));
-
-/** How many of a requirement section's items must be checked (defaults to all). */
-function sectionRequiredCount(section) {
-	return Number.isFinite(section?.min) ? section.min : (section?.items?.length ?? 0);
-}
 
 /**
  * Whether every requirement group of an improvement is satisfied by its flat,
@@ -526,16 +536,6 @@ export function improvementRequirementsMet(def, r = []) {
 		groups.set(key, (groups.get(key) ?? false) || satisfied);
 	});
 	return [...groups.values()].every(Boolean);
-}
-
-/**
- * Total number of requirement checkboxes across an improvement's sections — i.e. the
- * flat length of its `r` tracking array. Used to force-complete every step at once
- * when the user opts to earn an improvement whose requirements aren't all met.
- * @param {{sections?: Array}} def
- */
-export function improvementRequirementCount(def) {
-	return (def?.sections ?? []).reduce((n, s) => n + (s?.items?.length ?? 0), 0);
 }
 
 export const STEADING_DEFAULTS = {
@@ -674,10 +674,50 @@ export class StonetopSteading {
 		return resolvedFlagProperty(this._actor, "steading") ?? {};
 	}
 
+	/**
+	 * Write `system.*` values AND steading flags in ONE actor update.
+	 *
+	 * The single seam every steading write goes through, because "one update" is what the
+	 * ledger reads: each `actor.update` carrying a `stonetopMove` produces its own ledger
+	 * append and its own stat-change chat card, so a move that changes three things across a
+	 * mix of system fields and flags must present them together or the table gets three cards
+	 * for one move. The system values are mirrored into the steading flag copy here too, so a
+	 * caller never has to know that mirror exists.
+	 */
+	async applyChanges({ system = {}, flags = {} } = {}, options = {}) {
+		const systemEntries = Object.entries(system);
+		const flagEntries = Object.entries(flags);
+		if (!systemEntries.length && !flagEntries.length) return;
+
+		// A flag-only change stays on setFlag with the whole steading object, which is the path
+		// every flag write has always taken: there is no stat for the ledger to card, so it has
+		// nothing to batch WITH, and whole-object replacement is the semantics callers that drop
+		// a subkey (an emptied list, a cleared pick) already rely on.
+		if (!systemEntries.length) {
+			const merged = { ...foundry.utils.deepClone(this._flags), ...flags };
+			await this._actor.setFlag(STONETOP_SCOPE, "steading", merged);
+			return;
+		}
+
+		// A change that moves a stat AND sets a flag — the reason this method exists — goes out
+		// as ONE update, so the ledger appends once and cards the stats together. Both halves
+		// are written as targeted dotted keys: the whole flag object cannot be replaced here
+		// without colliding with the `…steading.system.*` mirrors in the same payload. That
+		// makes the flag half a MERGE, so this path sets values and must not be used to drop a
+		// key (see setFlags above for that).
+		const data = {};
+		for (const [path, value] of systemEntries) {
+			data[`system.${path}`] = value;
+			data[`flags.${STONETOP_SCOPE}.steading.system.${path}`] = value;
+		}
+		for (const [key, value] of flagEntries) {
+			data[`flags.${STONETOP_SCOPE}.steading.${key}`] = value;
+		}
+		await this._actor.update(data, options);
+	}
+
 	async setFlags(updates) {
-		const current = foundry.utils.deepClone(this._flags);
-		const merged = { ...current, ...updates };
-		await this._actor.setFlag(STONETOP_SCOPE, "steading", merged);
+		await this.applyChanges({ flags: updates });
 	}
 
 	getSystemValue(path, defaultValue = 0) {
@@ -690,14 +730,10 @@ export class StonetopSteading {
 
 	/** Write several `system.*` values (and their mirrored steading-flag copies) in a
 	 *  single actor update, so move-driven batches (e.g. Seasons Change) produce one
-	 *  ledger append and one combined stat-change card rather than one per field. */
+	 *  ledger append and one combined stat-change card rather than one per field.
+	 *  See {@link applyChanges}, which also carries flags in that same update. */
 	async setSystemValues(updates, options = {}) {
-		const data = {};
-		for (const [path, value] of Object.entries(updates)) {
-			data[`system.${path}`] = value;
-			data[`flags.${STONETOP_SCOPE}.steading.system.${path}`] = value;
-		}
-		await this._actor.update(data, options);
+		await this.applyChanges({ system: updates }, options);
 	}
 
 	getStatValue(statKey) {
@@ -774,7 +810,12 @@ export class StonetopSteading {
 	 * `category` is optional and only kept when it names a real one — a journal card
 	 * carries none, and an uncategorised improvement is simply immune to the tab's
 	 * category filter (see IMPROVEMENT_CATEGORIES).
-	 * @param {{name:string, flavor?:string, effect?:string, category?:string, sections?:Array}} def
+	 * A section's `min` ("2 of the following") and `group` (alternatives, either/or) and
+	 * the improvement's `grants` (what completing it applies by itself) ride through
+	 * normalized rather than being dropped: the requirement check and the grant engine
+	 * both read them off the definition, so an authored improvement can carry everything
+	 * a built-in one does. See utils/improvement-def.js.
+	 * @param {{name:string, flavor?:string, effect?:string, category?:string, sections?:Array, grants?:object}} def
 	 */
 	async addCustomImprovement(def) {
 		const name = String(def?.name ?? "").trim();
@@ -791,11 +832,11 @@ export class StonetopSteading {
 			label: name,
 			category: IMPROVEMENT_CATEGORY_KEYS.has(def.category) ? def.category : "",
 			flavor: String(def.flavor ?? ""),
-			sections: (Array.isArray(def.sections) ? def.sections : []).map(s => ({
-				heading: String(s?.heading ?? ""),
-				items: (Array.isArray(s?.items) ? s.items : []).map(String),
-			})),
+			sections: normalizeImprovementSections(def.sections),
 			effect: String(def.effect ?? ""),
+			// null rather than absent: a custom improvement with no automatic effects still
+			// says so, and setImprovementCompleted reads `?? null` either way.
+			grants: normalizeImprovementGrants(def.grants),
 		};
 		await this.setFlags({ customImprovements: [...existing, normalized] });
 		return { ok: true, slug, label: name };
@@ -806,6 +847,20 @@ export class StonetopSteading {
 		return IMPROVEMENT_DEFINITIONS.find(d => d.slug === slug)
 			?? (this._flags.customImprovements ?? []).find(d => d.slug === slug)
 			?? null;
+	}
+
+	/**
+	 * An improvement's flat, in-order requirement state — the array its checkboxes write, and
+	 * what the two rules that turn on a CHOICE made while building are read from (the militia's
+	 * trained tactics, whether Additional Housing went up on the fields).
+	 *
+	 * HERE rather than on the sheet, where it was: it is derived steading state like every
+	 * sibling on this class (`holdsView`, `improvementCompleted`, `_herdView`), the sheet's copy
+	 * reached into `_flags` from the view layer, and a macro or a chat handler asking the same
+	 * question had nowhere to ask it.
+	 */
+	improvementRequirements(slug) {
+		return this._flags.improvements?.[slug]?.r ?? [];
 	}
 
 	/** Remove a custom improvement and clear its tracking state. */
@@ -838,7 +893,11 @@ export class StonetopSteading {
 	 */
 	async setImprovementCompleted(slug, checked, { forceR } = {}) {
 		const def = this.improvementDef(slug);
-		const grants = IMPROVEMENT_GRANTS[slug] ?? null;
+		// A built-in improvement's grants are keyed by slug; a custom one carries its own
+		// on the definition (authored in the builder dialog, or riding in on a dropped
+		// card). The table wins, so a custom improvement can never take over a built-in
+		// slug's effects by name collision.
+		const grants = IMPROVEMENT_GRANTS[slug] ?? def?.grants ?? null;
 		const improvements = foundry.utils.deepClone(this._flags.improvements ?? {});
 		const entry = improvements[slug] ?? { completed: false, r: [] };
 		if (Array.isArray(forceR)) entry.r = forceR;
@@ -934,16 +993,294 @@ export class StonetopSteading {
 		return this._flags.seasonSteps?.[step] === `${year}:${seasonId}`;
 	}
 
+	/** The flag a once-per-season marker sets, WITHOUT writing it — so a move that spends a
+	 *  stat AND closes its season step (the Inn's gathering, the watch's upkeep) can carry
+	 *  both in one update instead of firing a second one the ledger cards on its own. */
+	seasonStepFlags(step, year, seasonId) {
+		return { seasonSteps: { ...(this._flags.seasonSteps ?? {}), [step]: `${year}:${seasonId}` } };
+	}
+
 	/** Record that a once-per-season step ran for this year+season (see seasonStepApplied). */
 	async setSeasonStepApplied(step, year, seasonId) {
-		const seasonSteps = { ...(this._flags.seasonSteps ?? {}), [step]: `${year}:${seasonId}` };
-		await this.setFlags({ seasonSteps });
+		await this.setFlags(this.seasonStepFlags(step, year, seasonId));
+	}
+
+	/**
+	 * Spend Surplus on a seasonal obligation, and close that obligation's season step, in ONE
+	 * write. Returns what is left, or null when the steading cannot afford it (nothing written).
+	 *
+	 * The one place the rule lives. It was written out at each of the Inn's gathering, the
+	 * watch's upkeep and the weapons' upkeep, and all three had to agree on the part that is
+	 * easy to get wrong: Surplus is re-read LIVE here rather than taken from whatever the
+	 * window was built with, because the sheet behind these dialogs stays interactive and a
+	 * Surplus spent elsewhere in the meantime would otherwise be handed back by writing a
+	 * stale count minus one.
+	 *
+	 * @param {number} amount               Surplus to spend
+	 * @param {object} opts
+	 * @param {string} opts.stonetopMove    what the ledger names as the cause
+	 * @param {string} [opts.step]          season-step key to close in the same write
+	 * @param {number} [opts.year]
+	 * @param {string} [opts.seasonId]
+	 * @param {object} [opts.also]          further `system.*` paths to set in that same write
+	 * @param {object} [opts.alsoFlags]     further steading FLAGS to set in that same write —
+	 *                                      what a spend that also closes something the season
+	 *                                      steps do not cover needs (winter's second consumption
+	 *                                      clears its own debt this way)
+	 * @returns {Promise<number|null>} Surplus remaining, or null if it could not be afforded
+	 */
+	async spendSurplus(amount, { stonetopMove, step = "", year, seasonId, also = {}, alsoFlags = {} } = {}) {
+		const live = this.getStatValue("surplus");
+		if (live < amount) return null;
+		await this.applyChanges({
+			system: { "attributes.surplus.value": live - amount, ...also },
+			flags: {
+				...(step && seasonId ? this.seasonStepFlags(step, year, seasonId) : {}),
+				...alsoFlags,
+			},
+		}, { stonetopMove });
+		return live - amount;
+	}
+
+	/**
+	 * Is advantage being held over the steading's NEXT +Fortunes roll?
+	 *
+	 * Rites of the Land: "publicly sacrifice something or someone much-loved… either clear a
+	 * steading debility or gain advantage when the steading next rolls +Fortunes." That second
+	 * half is a promise about a roll nobody has made yet — possibly not this session — so it has
+	 * to be written down somewhere the roll will look, and the steading is the only thing both
+	 * the sacrificing character and the later roll can see.
+	 *
+	 * Stored as WHAT PROMISED it, not as a bare `true`: the roll card names the source, so a
+	 * player who has forgotten why their Seasons Change is at advantage can read it off the card.
+	 */
+	fortunesAdvantage() {
+		return this._flags.fortunesAdvantage ?? null;
+	}
+
+	/** Hold advantage over the next +Fortunes roll, attributed to `source`. */
+	async holdFortunesAdvantage(source) {
+		await this.setFlags({ fortunesAdvantage: { source: String(source ?? "").trim() || "a sacrifice" } });
+	}
+
+	/**
+	 * Spend the hold. Called by the roll itself, which is the only thing that may clear it —
+	 * a hold that survived the roll it was promised to would apply to every Fortunes roll after.
+	 */
+	async clearFortunesAdvantage() {
+		if (!this.fortunesAdvantage()) return;
+		await this.setFlags({ fortunesAdvantage: null });
+	}
+
+	/**
+	 * Is the muster up, and what did raising it cost?
+	 *
+	 * "The steading is alert and ready for action UNTIL the threat passes, the Seasons Change,
+	 * or you cease to oversee the muster" — a state with three exits, only one of which the
+	 * system can see coming (the season). So it is stored with the season it was raised in and
+	 * read back against the clock: a muster nobody stood down lapses on its own when the season
+	 * turns, which is exactly what the book says happens.
+	 *
+	 * `defenses` records whether the "+1 Defenses as long as the muster holds" pick was taken,
+	 * because that bonus has to be TAKEN BACK when the muster ends. An un-reverted +1 on the
+	 * sheet is worse than a missing one: nobody can tell by looking that it is stale.
+	 */
+	musterHold() {
+		const held = this._flags.musterHold ?? null;
+		if (!held?.season) return null;
+		const now = seasonStampKey(readCurrentSeason(this._actor));
+		// Raised in a season the clock has since left: the muster lapsed with it.
+		if (now && now !== `${held.year}:${held.season}`) return null;
+		return held;
+	}
+
+	/** Raise the muster for the current season, optionally taking the +1 Defenses pick. */
+	async raiseMuster({ defenses = false } = {}) {
+		const { seasonId, year } = seasonStampParts(this._actor);
+		// The Defenses bump and the hold itself are one move, so they go out as one update:
+		// two would append the muster to the ledger twice and card the stat change on its own.
+		await this.applyChanges({
+			system: defenses ? { "stats.defenses.value": this.getStatValue("defenses") + 1 } : {},
+			flags: { musterHold: { year, season: seasonId, defenses: !!defenses } },
+		}, { stonetopMove: "Muster" });
+	}
+
+	/**
+	 * Stand the muster down, giving back the Defenses it borrowed.
+	 *
+	 * Reads the RAW flag rather than `musterHold()`: a muster that has already lapsed by the
+	 * clock still has a +1 on the sheet if it took one, and that is precisely the case where
+	 * the bonus would otherwise be stranded.
+	 */
+	async standDownMuster() {
+		const lapse = this.musterLapseChanges();
+		if (!lapse) return null;
+		await this.applyChanges({ system: lapse.system, flags: lapse.flags },
+			{ stonetopMove: "Muster" });
+		return lapse.held;
+	}
+
+	/**
+	 * What standing the muster down would change, WITHOUT writing it.
+	 *
+	 * Exists so the Seasons Change — which lapses the muster as one of several things it does
+	 * at once — can fold the give-back into its own single update rather than firing a second
+	 * one, which would card the Defenses change separately and credit it to the wrong move.
+	 * Returns null when no muster is held.
+	 */
+	musterLapseChanges() {
+		const held = this._flags.musterHold ?? null;
+		if (!held) return null;
+		return {
+			held,
+			system: held.defenses
+				? { "stats.defenses.value": this.getStatValue("defenses") - 1 }
+				: {},
+			flags: { musterHold: null },
+		};
+	}
+
+	/**
+	 * Tor's blessing: "+1 to Pull Together this season, and when you roll the Die of Fate for
+	 * weather, roll twice and take your pick."
+	 *
+	 * Stored as the "<year>:<season>" it was granted for, exactly like the once-per-season step
+	 * markers, so it expires by simply ceasing to match the clock. Nothing has to remember to
+	 * sweep it up when the season turns.
+	 */
+	torsBlessingActive() {
+		const held = this._flags.torsBlessing ?? null;
+		if (!held) return false;
+		const now = seasonStampKey(readCurrentSeason(this._actor));
+		return !!now && held === now;
+	}
+
+	/** The flag a Tor's-blessing grant sets, WITHOUT writing it — so the Seasons Change, which
+	 *  hands the blessing out alongside its Fortunes reset and any ticked gains, can carry it
+	 *  in the same update as the rest. Empty when there is no season to stamp it against. */
+	torsBlessingFlags(year, seasonId) {
+		return seasonId ? { torsBlessing: `${year}:${seasonId}` } : {};
+	}
+
+	/** Grant Tor's blessing for a year+season (the Seasons Change gain that hands it out). */
+	async setTorsBlessing(year, seasonId) {
+		await this.setFlags(this.torsBlessingFlags(year, seasonId));
+	}
+
+	/**
+	 * Winter's second bite: "the steading must consume 1d4+Population more Surplus before winter
+	 * ends, or suffer the consequences again" (the Seasons Change 7-9 in winter, and the 6- that
+	 * repeats it).
+	 *
+	 * The ONE thing in the seasonal flow the steading never used to remember. It is said once, in
+	 * a chat card, and then the table has to carry it across however many sessions winter takes.
+	 * So unlike the other holds this one is stored rather than derived: `{ stamp, amount }`, where
+	 * the stamp is the "<year>:<season>" it was rolled for, exactly like Tor's blessing.
+	 *
+	 * That stamp is also its expiry, and it expires by ceasing to match the clock rather than by
+	 * being swept up. "Before winter ends" is the deadline, so when the clock leaves that winter
+	 * the debt stops being collectable and the glyph goes out. What an unpaid winter cost is the
+	 * GM's to narrate: the book says "suffer the consequences again", and a system that quietly
+	 * charged a steading for it on the way into spring would be inventing a ruling.
+	 */
+	winterDebt() {
+		const held = this._flags.winterDebt ?? null;
+		const amount = Math.max(0, Math.trunc(Number(held?.amount) || 0));
+		if (!amount) return null;
+		const now = seasonStampKey(readCurrentSeason(this._actor));
+		if (!now || held.stamp !== now) return null;
+		return { amount, surplus: this.getStatValue("surplus") };
+	}
+
+	/** Record what winter still wants, for the year+season it was rolled in. Writes nothing at
+	 *  all with no season to stamp against: a debt rolled before any Seasons Change has nothing
+	 *  to expire against, and a stamp it could never match would neither show nor clear. */
+	async setWinterDebt(amount, year, seasonId) {
+		if (!seasonId) return;
+		await this.setFlags({ winterDebt: { stamp: `${year}:${seasonId}`, amount } });
+	}
+
+	/** Settle it. Null rather than a "-=" deletion: the tray reads the AMOUNT, so a zeroed debt
+	 *  is already invisible, and a null leaves the flag readable by anything auditing the year. */
+	async clearWinterDebt() {
+		await this.setFlags({ winterDebt: null });
+	}
+
+	/** Has this improvement been built? What gates every improvement-fed seasonal obligation. */
+	improvementCompleted(slug) {
+		return !!this._flags.improvements?.[slug]?.completed;
+	}
+
+	/**
+	 * The header's hold tray: everything the steading is still owed or still owes.
+	 *
+	 * The seasonal DUES are gated on the clock having been stamped at all. Before a world's
+	 * first Seasons Change nothing has turned, so an upkeep cannot yet be overdue — without
+	 * that gate a fresh steading would open wearing obligations it has had no season to meet.
+	 */
+	holdsView() {
+		const { seasonId, year } = seasonStampParts(this._actor);
+		const inn = this.improvementCompleted("inn") ? this._innGatheringView() : null;
+		// The herd's two seasonal steps read exactly like the watch's and the weapons': built,
+		// in the right season, and not yet stamped. They are the SAME markers the Seasons Change
+		// dialog disables its buttons from (advanceHerd, feedHerd), so the tray and that dialog
+		// can never disagree about whether the herd has been seen to.
+		const herd = this.improvementCompleted("herdOfHorses");
+		const herdCost = herd ? StonetopSteading.herdWinterCost(this.getHerd()) : 0;
+		return steadingHolds({
+			fortunesAdvantage: this.fortunesAdvantage(),
+			muster: this.musterHold(),
+			torsBlessing: this.torsBlessingActive(),
+			herdAdvance: seasonId === "summer" && herd
+				&& !this.seasonStepApplied("advanceHerd", year, seasonId),
+			// Only when it would actually do something: an inn with no debility to clear, or
+			// no Surplus to spend, is not an unspent opportunity, it is just an inn.
+			innGathering: !!inn?.canGather,
+			standingWatch: !!seasonId
+				&& this.improvementCompleted("standingWatch")
+				&& !this.seasonStepApplied(WATCH_SEASON_STEP, year, seasonId),
+			weaponsUpkeep: seasonId === "spring"
+				&& this.improvementCompleted("weaponsOfWar")
+				&& !this.seasonStepApplied(WEAPONS_SEASON_STEP, year, seasonId),
+			// Summer's drills, read exactly like the weapons' spring bill. The improvements'
+			// seasonal YIELDS are deliberately not here beside it: what the Market and the
+			// Township generate is collected inside the Seasons Change window, like the season's
+			// own Surplus roll, which has never worn a glyph either. A due that costs you
+			// something if you skip it does; Surplus waiting to be picked up does not.
+			militiaTraining: seasonId === "summer"
+				&& this.improvementCompleted("wellTrainedMilitia")
+				&& !this.seasonStepApplied(MILITIA_SEASON_STEP, year, seasonId),
+			// A herd under HERD_SURPLUS_PER head eats nothing, and a bill for 0 Surplus is not
+			// an obligation, so `herdCost` gates the row as well as filling in its number.
+			herdFeed: seasonId === "winter" && herd && herdCost > 0
+				&& !this.seasonStepApplied("feedHerd", year, seasonId)
+				? { needed: herdCost, surplus: this.getStatValue("surplus") }
+				: null,
+			winterDebt: this.winterDebt(),
+		});
 	}
 
 	/** Herd shaped for the improvement card: the three tiers (with labels/Values) plus total. */
 	_herdView() {
 		const herd = this.getHerd();
 		return { ...herd, tiers: HERD_TIERS.map((t) => ({ ...t, count: herd[t.key] })) };
+	}
+
+	/**
+	 * The Inn's once-per-season gathering, as the improvement card renders it.
+	 *
+	 * Reads the season clock off this same actor, so a card drawn before any Seasons Change
+	 * has been recorded (no stamp yet) reports `done: false` and lets the gathering happen —
+	 * the alternative is an inn that cannot be used until someone runs the seasonal flow.
+	 */
+	_innGatheringView() {
+		const { seasonId, year } = seasonStampParts(this._actor);
+		const state = innGatheringState({
+			surplus: this.getStatValue("surplus"),
+			done: !!(seasonId && this.seasonStepApplied(INN_SEASON_STEP, year, seasonId)),
+			debilities: markedDebilities(this).map(d => d.id),
+		});
+		return { ...state, seasonLabel: seasonId ? seasonLabel(seasonId) : "this season" };
 	}
 
 	/**
@@ -1159,7 +1496,7 @@ export class StonetopSteading {
 		const parts = [];
 		if (applied.stats) {
 			for (const [key, delta] of Object.entries(applied.stats)) {
-				parts.push(`${GRANT_STAT_LABELS[key] ?? key} ${delta >= 0 ? "+" : "−"}${Math.abs(delta)}`);
+				parts.push(statGrantLine(key, delta));
 			}
 		}
 		if (applied.resources?.length) parts.push(`Resources +${applied.resources.join(", ")}`);
@@ -1339,8 +1676,13 @@ export class StonetopSteading {
 		const mapImprovement = (def, custom) => {
 			const stored = storedImps[def.slug] ?? {};
 			let idx = 0;
-			const sections = def.sections.map(section => ({
+			// A section that continues an either/or (it shares its predecessor's group id)
+			// is drawn with an "or" divider above it, so a card offering two ways to meet
+			// one requirement doesn't read as two requirements.
+			const alternatives = alternativeSectionFlags(def.sections);
+			const sections = def.sections.map((section, i) => ({
 				heading: section.heading,
+				alternative: alternatives[i],
 				items: section.items.map(label => {
 					const item = { label, index: idx, checked: (stored.r ?? [])[idx] ?? false };
 					idx++;
@@ -1368,6 +1710,8 @@ export class StonetopSteading {
 				custom: !!custom,
 				// Herd of Horses carries an interactive herd tracker once earned.
 				herd: def.slug === "herdOfHorses" && completed ? this._herdView() : null,
+				// The Inn carries its once-per-season gathering once built.
+				innGathering: def.slug === "inn" && completed ? this._innGatheringView() : null,
 			};
 		};
 		// Built-in improvements first, then any journal-sourced custom ones (dropped

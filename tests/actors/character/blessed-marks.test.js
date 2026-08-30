@@ -271,16 +271,17 @@ describe("laying and lifting", () => {
 });
 
 describe("grouping for the roster", () => {
-	it("keeps only kinds with rows or with the move owned", () => {
+	it("keeps only the kinds somebody wears, owned or not", () => {
 		const list = [{ kind: "ward", name: "the gate" }];
-		const keys = groupMarks(list, blessed).map(g => g.def.key);
-		// barkskin + beast are owned; ward has a row on a sheet that never took the move.
-		expect(keys).toEqual(["barkskin", "beast", "ward"]);
+		// barkskin + beast are owned and have nobody in them, so neither is a group; the ward has a
+		// row on a sheet that never took the move, and is one anyway — that row still needs lifting.
+		expect(groupMarks(list).map(g => g.def.key)).toEqual(["ward"]);
+		expect(groupMarks([])).toEqual([]);
 	});
 
 	it("filters a kind's own rows", () => {
 		const list = [{ kind: "ward", name: "the gate" }, { kind: "barkskin", name: "Alun" }];
-		const groups = groupMarks(list, blessed);
+		const groups = groupMarks(list);
 		expect(groups.find(g => g.def.key === "ward").rows.map(m => m.name)).toEqual(["the gate"]);
 		expect(groups.find(g => g.def.key === "barkskin").rows.map(m => m.name)).toEqual(["Alun"]);
 	});

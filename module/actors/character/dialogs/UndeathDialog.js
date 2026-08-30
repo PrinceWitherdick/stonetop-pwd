@@ -1,6 +1,7 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { stonetopChatCard } from "../../../utils/chat.js";
 import { escHtml } from "../../../utils/strings.js";
+import { TIER_LABELS } from "../../../utils/move-results.js";
 import { classifyResult, rollStat } from "../../../utils/roll-engine.js";
 import { DEATHS_DOOR_STATE, resolutionTier, resolvedHp } from "../deaths-door.js";
 import { NEVER_CHOSEN_OPTIONS } from "../post-death-choices.js";
@@ -133,7 +134,7 @@ export class UndeathDialog extends StonetopDialog {
 			rollLabel:   res?.roll?.label ?? "",
 			favor:       res?.roll?.loreCount ? this._character.favor() : null,
 			rolledTotal: this._rolledTotal ?? null,
-			tierLabel:   _TIER_LABELS[this._tierKey] ?? "",
+			tierLabel:   TIER_LABELS[this._tierKey] ?? "",
 
 			effects,
 			pick,
@@ -492,7 +493,7 @@ export class UndeathDialog extends StonetopDialog {
 	}
 }
 
-const _TIER_LABELS = { success: "10+", partial: "7-9", failure: "6-" };
+// Labels from utils/move-results.js — see MOVE_TIERS there for why they are not retyped.
 
 /** The effect kinds picked from a list of options, and so the only ones that can run out. */
 const _OPTION_KINDS = new Set(["consequence", "mark-gain", "mark-crossoff"]);

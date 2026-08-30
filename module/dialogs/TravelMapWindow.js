@@ -26,6 +26,7 @@ import {
 	bindJourneyControls, bindJourneySiteRemoval, journeyPick,
 } from "./journey-controls.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
+import { openingSize } from "../utils/opening-size.js";
 import { percentSpot, travelMap } from "../data/travel-times.js";
 // Not the bare global: v13 moved it under foundry.applications.handlebars and deprecated that,
 // and the shim picks whichever this core has.
@@ -42,31 +43,15 @@ const ROUTE_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expediti
 
 // HOW BIG IT OPENS. The books print these maps at 300 dpi and this window exists to give one room,
 // so it takes most of the screen rather than a fixed box every reader has to drag out again. The
-// share is read at construction (an Application merges `defaultOptions` per instance), so it
-// follows the window the reader actually has, and falls back to a fixed size when there is no
-// window to measure - a headless test run, chiefly.
-const SCREEN_SHARE = 0.8;
-// ...but no wider than this much of its own height (user, 2026-08-24). On an ultrawide, 80% of the
-// width is a letterbox: the maps are roughly landscape-page shaped, so the picture fits to the
-// height and everything past that is white mat down both sides. Widening past 1.2 buys margin, not
-// map. Only the DEFAULT is clamped - the frame stays resizable, so a reader who wants the whole
-// width can drag it there.
+// arithmetic is shared with the rulebook reader, which wants the same thing for the same reason
+// (utils/opening-size.js); what is decided HERE is the one number the two disagree about.
+//
+// No wider than this much of its own height (user, 2026-08-24). On an ultrawide, 80% of the width
+// is a letterbox: the maps are roughly landscape-page shaped, so the picture fits to the height and
+// everything past that is white mat down both sides. Widening past 1.2 buys margin, not map. Only
+// the DEFAULT is clamped - the frame stays resizable, so a reader who wants the whole width can
+// drag it there.
 const MAX_ASPECT = 1.2;
-const FALLBACK_WIDTH = 900;
-const FALLBACK_HEIGHT = 800;
-
-function screenShare(available, fallback) {
-	const measured = Number(available);
-	return Number.isFinite(measured) && measured > 0
-		? Math.round(measured * SCREEN_SHARE)
-		: fallback;
-}
-
-function openingSize() {
-	const height = screenShare(globalThis.window?.innerHeight, FALLBACK_HEIGHT);
-	const width = screenShare(globalThis.window?.innerWidth, FALLBACK_WIDTH);
-	return { width: Math.min(width, Math.round(height * MAX_ASPECT)), height };
-}
 
 export class TravelMapWindow extends ImageZoomWindow {
 	/**
@@ -125,7 +110,7 @@ export class TravelMapWindow extends ImageZoomWindow {
 	}
 
 	static get defaultOptions() {
-		const { width, height } = openingSize();
+		const { width, height } = openingSize({ maxAspect: MAX_ASPECT });
 		return foundry.utils.mergeObject(super.defaultOptions, {
 			classes: ["stonetop", "stonetop-image-zoom", "stonetop-travel-map-app"],
 			template: TEMPLATE,

@@ -4,7 +4,9 @@ import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
 import { repairAllChronicleFlagScopes } from "../migration/chronicle-flag-scope.js";
-import { oncePerVersion } from "../migration/once-per-version.js";
+import { oncePerVersion, forgetSweep } from "../migration/once-per-version.js";
+import { repairCharacterTokenLinks, applyLinkChoices } from "../migration/link-character-tokens.js";
+import { CharacterTokenLinkDialog } from "../dialogs/CharacterTokenLinkDialog.js";
 import { createArcanumItem, newArcanumSlug, isArcanumData } from "../item/createArcanum.js";
 import { renameAllSeasonYearPages } from "../migration/season-year-page-names.js";
 import { ensureStonetopSingleton, remindDestinedOmenRoll } from "./StonetopSingleton.js";
@@ -16,11 +18,13 @@ import { offerDurableArtOnce } from "../book2-art/offer-once.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
 import { stonetopChatCard } from "../utils/chat.js";
 import { stampWorldLayoutBaseline } from "../utils/sheet-layout.js";
-import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyHideRollableIcon, applyReduceMotion, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope } from "../settings.js";
+import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyReduceMotion, applySheetContrast, applySheetTexture, applyNoItalics, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope } from "../settings.js";
 import { EndOfSessionDialog } from "../dialogs/EndOfSessionDialog.js";
 import { IntroductionsDialog } from "../dialogs/IntroductionsDialog.js";
 import { SpringBurstDialog } from "../dialogs/SpringBurstDialog.js";
 import { reopenOpenWalkthroughs, sessionZeroComplete } from "../dialogs/walkthrough-resume.js";
+import { reopenOpenBookReaders } from "../books/reader-resume.js";
+import { rulebookMacroApi } from "../books/rulebook-api.js";
 import { writeChronicle } from "../utils/chronicle.js";
 import { ExpeditionDialog } from "../dialogs/ExpeditionDialog.js";
 import { WeatherDialog } from "../dialogs/WeatherDialog.js";
@@ -141,8 +145,14 @@ export async function onReady() {
 	applySheetFont(getSetting("sheetFont"));
 	applySheetFontScale(getSetting("sheetFontScale"));
 	applyEditPencilRevealDelay(getSetting("editPencilRevealDelay"));
-	applyHideRollableIcon(getSetting("hideRollableIcon"));
 	applyReduceMotion(getSetting("reduceMotion"));
+	// The three accessibility skins. Applied here with the rest rather than left to their own
+	// `onChange`, because that only fires when somebody CHANGES the setting — a client that
+	// stored "high" last session would otherwise load every sheet in the palette it could not
+	// read, until it touched the control again.
+	applySheetContrast(getSetting("sheetContrast"));
+	applySheetTexture(getSetting("sheetTexture"));
+	applyNoItalics(getSetting("noItalics"));
 	// Fold the pre-world-keying Setting Overview gate under this world, so every OTHER
 	// world stops reading it as already-shown (see settings.js).
 	await migrateFlatSettingOverviewShown();
@@ -176,6 +186,19 @@ export async function onReady() {
 		// made at all now, so this is legacy repair and has a last world to run in.
 		try { await oncePerVersion("arcanumSlugs", _stampMissingArcanumSlugs); }
 		catch (err) { console.error("Stonetop | arcanum slug sweep failed", err); }
+		// Point player tokens back at the characters they stand for. An unlinked PC token carries
+		// a private copy of its character, and the two drift because a roll writes to the sheet's
+		// Actor while every chat-card button resolves its Actor out of the message speaker — which
+		// core rewrites to the TOKEN whenever one is on the canvas. See
+		// migration/link-character-tokens.js for the whole account.
+		//
+		// Gated per version because it is a full walk of every token on every Scene, and
+		// `_preCreate` now stamps the link on new characters, so what is left is legacy. The gate
+		// is UNSTAMPED again below when the GM leaves a drifted token undecided: an unanswered
+		// question is not a finished sweep, and the alternative is a world that quietly never asks
+		// again about two characters wearing one name.
+		try { await _repairCharacterTokenLinks(); }
+		catch (err) { console.error("Stonetop | player-token link repair failed", err); }
 		// Catch Chronicle year pages up to the "Year One" naming the sheet and the picker
 		// already use. Same shape as the sweep above and for the same reason: it recognises a
 		// generated name and writes one, so it is idempotent and needs no gate. The years that
@@ -395,6 +418,13 @@ export async function onReady() {
 	// and the Welcome guide's "Import Book Art" button both call. Callable from the console:
 	//   game.stonetop.importBookArt()
 	game.stonetop.importBookArt     = () => runImportBookArtMacro();
+	// What that macro asks about the books it has been handed: may this world keep a copy of one
+	// for reading, has it got one already, and here is the file. The macro is a self-contained
+	// string in a compendium and imports nothing of ours, so this is the only way it can reach
+	// the reader (books/rulebook-api.js says why at length). A GM who supplies Book I to have its
+	// illustrations cut out of it should not then be asked for Book I a second time to be able to
+	// READ it, which is what the two features did to them before this existed.
+	game.stonetop.rulebooks         = rulebookMacroApi();
 
 	_registerCharacterAutoOpen();
 	_registerGmToolkitAdopt();
@@ -525,6 +555,14 @@ export async function onReady() {
 	} else {
 		reopenOpenWalkthroughs();
 	}
+
+	// Same idea, same evidence, for the rulebook readers: a plain Application does not survive a
+	// refresh and a reload never runs its `close`, so a book still recorded as open was open when
+	// the page went away (module/books/reader-resume.js). Per-client, and unconditional rather
+	// than sequenced behind the Welcome guide the way the walkthroughs are: a book is reference
+	// the reader parked beside their sheet, so it belongs UNDER whatever opens after it rather
+	// than needing to land on top.
+	reopenOpenBookReaders();
 
 	// A player logging in / reloading mid-introductions: rejoin the running session by
 	// opening the dialog whenever the GM has it open (following read-only until it's their
@@ -811,22 +849,49 @@ export function _registerGmToolkitAdopt() {
 	});
 }
 
+// Is this character one of MINE, for the purposes of the creation prompt below?
+//
+// Not `game.user.character` on its own. That field holds ONE id, and a player may run more than
+// one character (see actors/character/create-character.js): a second one is added without taking
+// the assignment, so an assignment test would never re-prompt it — reload mid-creation on your
+// second sheet and the resume never fires, leaving you on a blank sheet with an hour of answers
+// sitting in localStorage.
+//
+// Not `actor.isOwner` on its own either. That is also true of a sheet the whole table can edit
+// through `ownership.default`, and a world set up that way would ask every player to go and
+// finish somebody else's half-built character. The test is the ownership entry made out to me BY
+// NAME — the same one charactersOwnedBy reads and the mint stamps, so "do you already have
+// characters?" and "is this one of mine?" can never disagree.
+//
+// Finally, a character somebody ELSE has assigned is theirs, whoever else can edit it. That
+// leaves two co-owners of an UNassigned character both being prompted, which is the right answer
+// for a PC being built jointly, and is guarded per client by creationFlowOpen() regardless.
+//
+// GMs are excluded outright: a GM owns every actor in the world.
+function _isMyCharacter(actor) {
+	if (game.user.isGM || !actor?.id) return false;
+	const mine = game.user.character?.id === actor.id
+		|| (actor.ownership?.[game.user.id] ?? 0) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
+	if (!mine) return false;
+	const users = game.users?.contents ?? game.users ?? [];
+	return ![...users].some(u => u.id !== game.user.id && u.character?.id === actor.id);
+}
+
 // Greet a player with character creation, or resume an interrupted one:
 //   • a freshly GM-minted character (the `autoOpenFor` flag names its owner) gets
 //     the creation intro, once; and
-//   • the player's own assigned character that still has no playbook is re-prompted
-//     every load until they actually pick one: with saved progress it resumes
-//     straight back into onboarding at that page (a reload mid-creation drops them
-//     back in); with none it re-pops the creation intro. Either way a player who
-//     reloaded before choosing a playbook lands back in creation rather than on a
-//     blank sheet they'd have to start onboarding from themselves.
+//   • the player's OWN character that still has no playbook is re-prompted every load
+//     until they actually pick one: with saved progress it resumes straight back into
+//     onboarding at that page (a reload mid-creation drops them back in); with none it
+//     re-pops the creation intro. Either way a player who reloaded before choosing a
+//     playbook lands back in creation rather than on a blank sheet they'd have to start
+//     onboarding from themselves.
 // A character that already has a playbook is finished (or was explicitly saved):
 // only a brand-new mint pops its sheet; a reload leaves a finished character alone.
 function _maybeOpenCharacterCreation(actor) {
 	if (actor?.type !== "character") return;
-	const mintedForMe  = actor.getFlag?.(STONETOP_SCOPE, "autoOpenFor") === game.user.id;
-	const isMyAssigned = !game.user.isGM && game.user.character?.id === actor.id;
-	if (!mintedForMe && !isMyAssigned) return;
+	const mintedForMe = actor.getFlag?.(STONETOP_SCOPE, "autoOpenFor") === game.user.id;
+	if (!mintedForMe && !_isMyCharacter(actor)) return;
 
 	// Someone on this screen is already mid-creation — the intro, the playbook picker or
 	// the onboarding walkthrough is up, for this character or another. Re-entering now
@@ -843,7 +908,14 @@ function _maybeOpenCharacterCreation(actor) {
 		// Finished — never re-enter creation. Clear any progress flag / resume
 		// snapshot a mid-creation "Save & close" (or an edit pass) left behind, so the
 		// GM roster reads "Finished" rather than a stale "exited"/page note.
-		actor.unsetFlag?.(STONETOP_SCOPE, "onboardingProgress").catch(() => {});
+		//
+		// Only when there IS one: unsetFlag issues its update unconditionally, and this
+		// runs once per character of mine on every load. With a player able to run several,
+		// an unguarded call is a document write and a broadcast per finished sheet per
+		// login, all of them deleting a key that is already gone.
+		if (actor.getFlag?.(STONETOP_SCOPE, "onboardingProgress")) {
+			actor.unsetFlag?.(STONETOP_SCOPE, "onboardingProgress").catch(() => {});
+		}
 		clearOnboardingResume(actor);
 		if (mintedForMe) actor.sheet.render(true);
 		return;
@@ -1460,6 +1532,37 @@ export async function _stampMissingArcanumSlugs() {
 	}
 	console.log(`Stonetop | Gave a slug to ${slugless.length} arcanum card(s) that had none.`);
 	return slugless.length;
+}
+
+const _TOKEN_LINK_SWEEP = "characterTokenLinks";
+
+/**
+ * Run the player-token link repair, and decide whether the sweep is finished.
+ *
+ * The silent half — stamping prototypes, linking tokens whose private copy is empty — always
+ * completes. The other half is a question, and a question is only answered once: a GM who
+ * dismisses the window, or who parks a character on "leave it unlinked" for now, has not
+ * finished the sweep, so the version stamp is taken back off and the next load asks again.
+ *
+ * `forgetSweep` runs AFTER `oncePerVersion` returns rather than inside its work function,
+ * because the stamp is written on the way out — forgetting from inside would be overwritten by
+ * the very stamp it is trying to remove.
+ */
+async function _repairCharacterTokenLinks() {
+	let unfinished = false;
+	await oncePerVersion(_TOKEN_LINK_SWEEP, async () => {
+		const drifted = await repairCharacterTokenLinks();
+		if (!drifted.length) return;
+		const { applied, choices } = await CharacterTokenLinkDialog.ask(drifted);
+		if (!applied) { unfinished = true; return; }
+		const { linked, left, failed } = await applyLinkChoices(drifted, choices);
+		if (linked) console.log(`Stonetop | Relinked ${linked} player token(s) to their characters.`);
+		if (left)   console.log(`Stonetop | Left ${left} player token(s) unlinked, as asked.`);
+		// Only a FAILED write reopens the sweep. A token the GM deliberately left unlinked is an
+		// answer, and asking again every load would be this system overruling them.
+		if (failed) unfinished = true;
+	});
+	if (unfinished) await forgetSweep(_TOKEN_LINK_SWEEP);
 }
 
 // The GM-prep page families (threats / hazards) used to store one JournalEntry per item in

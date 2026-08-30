@@ -147,6 +147,43 @@ describe("the mounted rail", () => {
 	});
 });
 
+// The stylesheet caps how far down the window the rail may sit by capping its MIDDLE, so it
+// needs the rail's own height. That number is measured here, and the measurement has a loop in
+// it: the rail's laid-out height is limited by a `max-height` the stylesheet computes from the
+// very anchor this feeds, so reading the rendered box lets a short window shrink the rail,
+// which raises the anchor, which gives it room to grow again.
+describe("the rail's own height", () => {
+	const height = RAIL_JS.slice(RAIL_JS.indexOf("function stampRailHeight"));
+
+	it("measures with the cap lifted, so the number cannot feed back into itself", () => {
+		expect(RAIL_JS).toContain("function stampRailHeight");
+		expect(height).toMatch(/rail\.style\.maxHeight = "none";/);
+		// offsetHeight, not a client rect: untransformed border-box px, the unit `top:` and
+		// `max-height:` both resolve in, so there is no scale to divide back out.
+		expect(height).toContain("rail.offsetHeight");
+		// And the inline cap goes back, or the rail is left free to hang past the window.
+		expect(height.indexOf("rail.style.maxHeight = capped;"))
+			.toBeGreaterThan(height.indexOf("rail.offsetHeight"));
+	});
+
+	it("leaves the property unset rather than stamping the zero a first render measures", () => {
+		// A first render is still behind _injectHTML's fadeIn, where everything measures 0.
+		// Stamping that is harmless only because the stylesheet's fallback IS 0 — but it would
+		// also be indistinguishable from a measured value, so bail and let the next render
+		// stamp the real one.
+		expect(height).toMatch(/if \(!height\) return;/);
+		expect(height).toContain('frame.style.setProperty("--st-rail-height"');
+	});
+
+	it("is stamped even when the header banner cannot be measured", () => {
+		// Same reasoning as the edge: a rail whose anchor is missing still has to be placed,
+		// and the depth cap is what places it then. So it runs ahead of stampRailTop's bail-outs.
+		const top = RAIL_JS.slice(RAIL_JS.indexOf("function stampRailTop"));
+		expect(top).toContain("stampRailHeight(frame)");
+		expect(top.indexOf("stampRailHeight(frame)")).toBeLessThan(top.indexOf("if (!anchor) return;"));
+	});
+});
+
 describe("the mirrored rail CSS", () => {
 	const flipped = () => block(".stonetop.stonetop-tab-rail-left .sheet-tabs.stonetop-tab-rail");
 

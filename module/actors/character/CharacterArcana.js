@@ -10,7 +10,8 @@ import { OutfitItemBuilder } from "../../model/OutfitItem.js";
 import { majorArcanaImg, isMajorArcanumItem, arcanumCardImg } from "../../arcana-icons.js";
 import { arcanaSummonFollowers } from "../../data/arcana-summons.js";
 import { isCarriedArcanumItem } from "../../data/arcana-facets.js";
-import { centerArcanumTracks } from "../../utils/glyphs.js";
+import { findArcanumMove, markArcanumMoveNames } from "../../data/arcana-moves.js";
+import { centerArcanumTracks, injectGlyphCheckboxes } from "../../utils/glyphs.js";
 import { stonetopChatCard } from "../../utils/chat.js";
 
 // Some arcana "items" are a place, structure, or phenomenon rather than carried gear
@@ -52,35 +53,31 @@ function _isUnlocked(item, unlockCounts, arcanaBoxes, circleCount) {
 }
 
 /**
- * Replace every glyph matched by `runRe` with an indexed, selectable checkbox. `runRe`
- * may match a single glyph (□ boxes, ○ unlock circles) or a whole run (◇◇◇ / ○○○ charge
- * tracks) — each glyph in the match gets its own checkbox and sequential index. Distinct
- * `context` values keep the indices of different markers in the same description from
- * colliding. Returns the rewritten html and the number of checkboxes injected.
+ * The sheet's own marker injection: {@link injectGlyphCheckboxes} with this card's persisted
+ * box states supplying the checked test. Keys are `slug:context:index`, which is how the
+ * sheet stores them; the onboarding dialog indexes the same boxes the same way through the
+ * same helper, so a mark made there lands on this box when the sheet opens.
  *
- * The two track patterns require a run of 2+ so a lone glyph stays a display glyph: a
+ * The two track patterns below require a run of 2+ so a lone glyph stays a display glyph: a
  * single ◇/○ is an inline indicator ("a ◇ jar of butter", "BATTERY ○ ____"), only a run
  * is a markable track (◇◇◇ Conduit, ○○○ Loyalty). The patterns are precompiled module
  * constants so nothing recompiles inside the per-item loop (String.replace resets a
  * global regex's lastIndex, so sharing them across calls is safe).
  */
 function _injectMarkers(html, slug, context, boxStates, cssClass, runRe) {
-	if (!html) return { html, count: 0 };
-	let index = 0;
-	const processed = html.replace(runRe, run =>
-		[...run].map(() => {
-			const key = `${slug}:${context}:${index}`;
-			const checked = !!boxStates[key];
-			return `<input type="checkbox" class="${cssClass}" data-arcanum-slug="${slug}" data-context="${context}" data-index="${index++}"${checked ? " checked" : ""}>`;
-		}).join("")
-	);
-	return { html: processed, count: index };
+	return injectGlyphCheckboxes(html, runRe, {
+		slug, context, cssClass,
+		isChecked: i => !!boxStates[`${slug}:${context}:${i}`],
+	});
 }
 
 const _DIAMOND_TRACK_RE = /◇{2,}/g;
 const _CIRCLE_TRACK_RE  = /○{2,}/g;
-const _BOX_RE           = /□/g;
-const _UNLOCK_CIRCLE_RE = /○/g;
+// Runs, not single glyphs, purely so the wrapper above can hold consecutive boxes on one line —
+// every □ / unlock ○ is a checkbox either way, and each still gets its own index in the same
+// document order a per-glyph pattern produced.
+const _BOX_RE           = /□+/g;
+const _UNLOCK_CIRCLE_RE = /○+/g;
 
 // A few cards' FRONT text tells you to "mark a consequence (see reverse)" (Hec'tumel Codex,
 // Redwood Effigy). The consequences themselves live in a "Consequences" section on the BACK,
@@ -265,7 +262,11 @@ export class CharacterArcana {
 					item.back.move.description)
 				: null;
 
-			const backDesc = _processSideDescription(item.back.description, item.slug, "back", arcanaBoxes);
+			// The card's mysteries are moves, so their NAMES render as clickable handles before the
+			// marker pass runs (see data/arcana-moves.js) — the wrap adds no glyphs, so the □/○ each
+			// side indexes are untouched by it.
+			const backDesc = _processSideDescription(
+				markArcanumMoveNames(item.back.description, item.slug), item.slug, "back", arcanaBoxes);
 
 			// Surface the back's "Consequences" section onto the front, but ONLY for cards whose
 			// front text points at it ("mark a consequence (see reverse)"). Those cards trigger
@@ -318,6 +319,25 @@ export class CharacterArcana {
 		const major = new ArcanaSectionSnapshot("Major Arcana", allItems.filter(i => i.major));
 		const minor = new ArcanaSectionSnapshot("Minor Arcana", allItems.filter(i => !i.major));
 		return new ArcanaSnapshot(minor, major);
+	}
+
+	/**
+	 * One move printed on a card's back, by its parsed slug — the record behind a clicked move
+	 * name on the arcana tab. `learned` reads the move's own □: an un-marked mystery is still
+	 * readable (its name posts it to chat) but is not yet a move this character can roll, which
+	 * is the line an un-owned playbook move sits on too.
+	 */
+	async getArcanumMove(slug, moveSlug) {
+		const item = await this.getArcanum(slug);
+		if (!item) return null;
+		const move = findArcanumMove(item.back?.description ?? "", moveSlug);
+		if (!move) return null;
+		const boxes = this._flags.getFlag("boxes") ?? {};
+		return {
+			...move,
+			cardTitle: item.back?.title ?? item.front?.title ?? "",
+			learned:   move.boxIndex == null || !!boxes[`${slug}:back:${move.boxIndex}`],
+		};
 	}
 
 	/** The resolved {@link MinorArcanum} for a slug (pack or world), or null. */

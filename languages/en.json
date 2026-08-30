@@ -53,7 +53,57 @@
         "postDeath": "Post-Death",
         "specialMoves": "Special Moves",
         "notes": "Notes",
+        "preferences": "Preferences",
         "railLabel": "Sheet sections"
+      },
+      "preferences": {
+        "intro": "These are your own settings. They change every Stonetop sheet you open in this browser, and nobody else at the table sees the difference.",
+        "accessibility": "Accessibility",
+        "appearance": "Look and Feel",
+        "rolling": "Rolling and Chat",
+        "windows": "Windows",
+        "hover": "On Hover Info",
+        "openSettings": "All Stonetop Settings\u2026"
+      }
+    },
+    "books": {
+      "title": "Your rulebooks",
+      "groupLabel": "Your rulebooks",
+      "openTip": "Open {title}",
+      "setTip": "Point at your copy of {title}",
+      "showPlayers": "Show Players",
+      "shownPlayers": "{title}, page {page}, is now open for your players.",
+      "stillOpening": "This book is still opening. Give it a moment, then show your players the page.",
+      "settings": "Your books",
+      "notPdf": "That file does not look like a PDF. It has been recorded anyway, but the reader may not be able to open it.",
+      "notShared": "There is no copy of {title} in this world. Your GM adds one from the GM Toolkit.",
+      "copying": "Copying {title} into this world. A rulebook is a big file, so give it a moment.",
+      "copied": "{title} is ready to read.",
+      "copyFailed": "{title} could not be copied into this world. Your host may have refused the upload, or the file may be too large for it.",
+      "keepFailed": "{title} was copied in, but this world would not record where it went, so the reader cannot open it yet. Ask your GM to keep this book.",
+      "bookmarks": {
+        "tab": "Your bookmarks",
+        "add": "Bookmark this page",
+        "addTip": "Keep this page, at this zoom, so you can come straight back to it",
+        "empty": "No bookmarks yet. Turn to a page you keep looking up, then press the button above. These marks are your own: nobody else at the table sees them, and they follow you to whatever computer you play from.",
+        "goTip": "Go back to this page",
+        "rename": "Rename this bookmark",
+        "remove": "Remove this bookmark",
+        "printedPages": "pp. {from}-{to}",
+        "printedPage": "p. {page}",
+        "sheetPage": "Sheet {page} of the file",
+        "saveFailed": "That bookmark could not be saved. Your bookmarks are stored in this world, so this usually means the connection dropped."
+      },
+      "otherEdition": "Stonetop | The Book {book} PDF this world points at has {pages} pages rather than the {expected} of the spreads edition. It reads perfectly; only a jump to a printed page number would land in the wrong place.",
+      "book1": {
+        "label": "Book I",
+        "title": "Book I: Stonetop",
+        "hint": "The core rules. Usually the 308 page spreads PDF."
+      },
+      "book2": {
+        "label": "Book II",
+        "title": "Book II: The Wider World and Other Wonders",
+        "hint": "The gazetteer. Usually the 302 page spreads PDF."
       }
     },
     "gmToolkit": {
@@ -62,8 +112,8 @@
         "moves": "GM Moves",
         "loop": "Core Loop",
         "threats": "Threats & Dangers",
-        "sites": "Sites",
         "encounters": "Encounters",
+        "expeditions": "Expeditions",
         "wonder": "I Wonder..."
       },
       "moves": {
@@ -103,7 +153,7 @@
         "flowOfPlay": "The flow of play",
         "flowOfPlayNote": "How a campaign moves between adventure and home",
         "zoom": "Open in a window you can zoom and pan",
-        "missing": "This diagram is artwork from the GM playbook, so it isn't shipped with the system. Run Import Book Art and give it your copy of the free GM playbook PDF.",
+        "missing": "This diagram is artwork from the GM playbook, so it isn't shipped with the system. Run Import Book Art and add your copy of the free GM playbook PDF on that window's own GM playbook page, not under Your rulebooks.",
         "import": "Import Book Art"
       },
       "wonder": {
@@ -204,6 +254,54 @@
             "unknown": "things of a kind this build doesn't know"
           }
         }
+      },
+      "expeditions": {
+        "sites": "Sites",
+        "sitesNote": "Where a trip is going, and what is on the way",
+        "intro": "Trips prepped before the night they are run (Book I, p.340): the map of the route, the sites along the way, whatever waits at the end, and the page you mean to read aloud when they get there. Drag anything in from the sidebar or a compendium. Run one to open the expedition walkthrough on it.",
+        "add": "Prep a new expedition",
+        "newName": "New expedition",
+        "nameLabel": "What you call this expedition",
+        "empty": "Nothing prepped yet. Drag a map, a site or a monster onto this tab and it will start an expedition for you.",
+        "emptyAllDone": "Every trip you prepped has been run. Prep another, or lift one back out of Completed below.",
+        "completed": "Completed",
+        "completedNote": "Run, with everything still gathered",
+        "dropHere": "Drop anything here: maps, sites, monsters, journals, tables.",
+        "reorder": "Drag to reorder, or use alt and the arrow keys",
+        "expand": "Show what is in this expedition",
+        "collapse": "Hide what is in this expedition",
+        "deploy": "Put every monster in this expedition on the current map",
+        "run": "Run it",
+        "runTip": "Open the expedition walkthrough on a new trip, named after this one",
+        "reopen": "Open the walkthrough",
+        "reopenTip": "Open the expedition walkthrough on this trip, with everything already noted in it",
+        "markUsed": "Mark this one run, and file it below",
+        "markUsedShort": "Mark run",
+        "markUnused": "Put this one back on the list above",
+        "markUnusedShort": "Put back on the list",
+        "removeEncounter": "Delete this expedition",
+        "removeEntry": "Take this out of the expedition",
+        "removeTitle": "Delete Expedition",
+        "removeBody": "Delete <strong>{name}</strong> and the {count} things gathered into it? Nothing they point at is touched: the maps, sites and monsters themselves stay exactly where they are, and so does anything the walkthrough has recorded about the trip. To take an expedition off the list but keep what is in it, mark it run with the tick instead and it moves to Completed.",
+        "removeUnnamed": "this expedition",
+        "entryOpenTip": "Open it, or drag it onto the map",
+        "entryGoneTip": "This is no longer in the world. The name is what was gathered.",
+        "entryGone": "That is no longer in the world, so there is nothing to open.",
+        "entryNoteLabel": "What this one is for",
+        "entryNotePlaceholder": "Two days out, if they take the low road...",
+        "unnamedEntry": "Unnamed",
+        "notesEmpty": "No notes on this expedition yet.",
+        "notesEdit": "Write the notes for this expedition",
+        "notesTitle": "{name}: Notes",
+        "notesDone": "Done",
+        "deployed": "Put {count} on the map for {name}.",
+        "deployImported": "Brought {count} into this world from a compendium, so there is an actor for the token to point at.",
+        "deploySkipped": "Could not place: {names}.",
+        "noScene": "There is no scene open, so there is nowhere to put them.",
+        "noTokens": "You do not have permission to create tokens on this scene.",
+        "nothingToDeploy": "There are no monsters or NPCs in this expedition to place. Everything else in it is opened rather than deployed.",
+        "noUuid": "That one carries no reference to store, so it cannot be gathered. Make it a real item first, then drag that in.",
+        "writeFailed": "Couldn't save the expeditions list. See the console for details."
       },
       "threats": {
         "intro": "Ongoing problems that will trouble Stonetop if left unchecked (Book I, Threats). Written up here for your eyes only. Drag a card onto a scene to pin it to the map.",
@@ -520,12 +618,21 @@
       },
       "sheetFontScale": {
         "name": "Sheet Font Size",
-        "hint": "Scale the text on Stonetop sheets and dialogs to make it easier to read.",
-        "smaller": "Smaller (90%)",
-        "normal": "Normal (100%)",
-        "large": "Large (110%)",
-        "larger": "Larger (125%)",
-        "largest": "Largest (140%)"
+        "hint": "Scale the text on Stonetop sheets, dialogs and chat cards to make it easier to read. 1.00 is the size the sheets were drawn at, so 1.25 is a quarter larger again and 1.40 is the largest."
+      },
+      "sheetContrast": {
+        "name": "Sheet Contrast",
+        "hint": "High Contrast repaints Stonetop sheets, dialogs and chat cards on plain white paper and darkens every grey and coloured text on them well past the readability guideline. It leaves the paper grain alone, so set that below to taste. Pair it with a larger font size above.",
+        "normal": "Normal (Parchment)",
+        "high": "High Contrast"
+      },
+      "sheetTexture": {
+        "name": "Paper Texture",
+        "hint": "Show the faint grain on the paper behind Stonetop sheets, dialogs and chat cards. Turn it off for a flat page, which is easier to read text on. This works on its own, whatever Sheet Contrast is set to."
+      },
+      "noItalics": {
+        "name": "No Italic Text",
+        "hint": "Draw every slanted word upright instead, everywhere in Foundry rather than only on Stonetop sheets. Italic text is harder to read, especially under a magnifier. The trade is that italics are how some things mark themselves out (a move's fiction, the hint under a field, a note saying a list is empty), so those will read the same as the text around them once this is on."
       },
       "worldSheetLayout": {
         "name": "Sheet Layout (Whole Table)",
@@ -556,10 +663,6 @@
         "name": "Edit Pencil Reveal Delay",
         "hint": "How long to hover a section (in seconds) before its edit pencil fades in. The pencils stay clickable while still invisible, so you can click one without waiting. Set to 0 to show them instantly."
       },
-      "hideRollableIcon": {
-        "name": "Hide Rollable Icon",
-        "hint": "Hide the dice icon that marks rollable moves and stats. Rolling still works: click the move name or stat row to roll."
-      },
       "askRollModeEachRoll": {
         "name": "Ask How to Roll Each Time",
         "hint": "Ask for Advantage / Normal / Disadvantage in a window before every move or stat roll, starting fresh at Normal each time. Ticked, the Roll Modifier selector is hidden from the character and steading sheets. Unticked, that selector is how you say it, and it stays set until you change it. Hold Shift while clicking a roll to skip the window."
@@ -567,6 +670,10 @@
       "promptRollModifier": {
         "name": "Prompt for Roll Modifier",
         "hint": "Ask for a one-off modifier (a held bonus, a GM-granted +1, etc.) before each move or stat roll. Already included when \"Ask How to Roll Each Time\" is on. Hold Shift while clicking the roll to skip the prompt."
+      },
+      "promptDamageModifier": {
+        "name": "Adjust Damage Before Rolling",
+        "hint": "Ask how to roll damage and what to add to it before each damage roll: advantage or disadvantage on the die, a flat modifier, and extra dice. This is how a bonus your sheet can't know about reaches the dice, like the Storm Markings' +1 damage while you roil with anger. Hold Shift while clicking to skip it for one roll."
       },
       "openSheetsInEditMode": {
         "name": "Open Sheets in Edit Mode",
@@ -582,7 +689,7 @@
       },
       "showRollStatChips": {
         "name": "Show Roll Stat Chips",
-        "hint": "Show labels like +STR and +ANY beside rollable move icons on character and steading sheets."
+        "hint": "Show labels like +STR and +ANY beside the titles of rollable moves on character and steading sheets. Clicking one rolls the move, the same as clicking its title."
       },
       "showMoveDescriptionsInChat": {
         "name": "Show Move Descriptions in Chat",
@@ -1219,6 +1326,15 @@
       "notMarkable": "{name} is not somebody a mark can be laid on.",
       "fromCompendium": "{name} came from a compendium, so the mark records the name only; it will not link to that person in this world."
     },
+    "heldAdvantage": {
+      "label": "Advantage held for your next roll",
+      "tooltip": "Advantage on your next roll, promised by {source}. It is spent the moment you roll. Click to let it go without rolling.",
+      "readOnlyTooltip": "Advantage on their next roll, promised by {source}. It is spent the moment they roll.",
+      "releaseTitle": "Let the advantage go",
+      "releasePrompt": "Give up the advantage promised by {source}? Your next roll goes out as it otherwise would, and nothing records the promise afterwards.",
+      "releaseConfirm": "Let it go",
+      "releaseCancel": "Keep holding it"
+    },
     "battleJoy": {
       "onLabel": "Lost in your Battle Joy",
       "offLabel": "Not in your Battle Joy",
@@ -1247,11 +1363,13 @@
         "refused": "The route can't go on this scene.",
         "draw": "Draw it on the scene",
         "take": "Take it off the scene",
-        "drawTip": "Draw this route on the map the table is looking at. It goes on the scene open on your canvas rather than on the picture in this window, so open {map} first or it has nowhere to land.",
+        "drawTip": "Draw this route on the map the table is looking at. It goes on the scene open on your canvas rather than on the picture in this window, so if that isn't {map}, this brings {map} up first.",
         "drawTipMap": "the map it runs across",
         "takeTip": "Take this route back off the map the table is looking at.",
         "cleared": "The way there is off {scene}.",
         "placed": "The way to {place} is on {map}.",
+        "movedPlaced": "{map} is on the canvas now, and the way to {place} is on it.",
+        "movedPlacedDrawn": "{map} is on the canvas now, and the way you drew is on it.",
         "panelOffMap": "This map doesn't draw {places}, so the way there isn't on it.",
         "panelShow": "Show {map}",
         "panelNoMap": "No one map draws both ends of this journey, so the way there isn't drawn. The legs below still hold.",

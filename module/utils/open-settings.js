@@ -34,7 +34,7 @@ export const SETTING_FLASH_MS = 2600;
  * @returns {Promise<boolean>} true when the settings window was opened. NOT whether the row was
  *          found: the caller offered a way to the settings, and the settings are what opened.
  */
-export async function openSystemSetting(key) {
+export async function openSystemSetting(key, { highlight = true } = {}) {
 	const app = globalThis.game?.settings?.sheet;
 	if (!app?.render) return false;
 
@@ -45,10 +45,34 @@ export async function openSystemSetting(key) {
 	const row = await findSettingRow(app, `${SYSTEM_ID}.${key}`);
 	if (row) {
 		showTabFor(app, row);
-		row.scrollIntoView?.({ block: "center", behavior: "smooth" });
-		flashHighlight(row, { className: SETTING_FLASH_CLASS, duration: SETTING_FLASH_MS });
+		// `highlight: false` stops at the tab — see openSystemSettings for why singling out a
+		// row is wrong when the button is not about any one of them.
+		if (highlight) {
+			row.scrollIntoView?.({ block: "center", behavior: "smooth" });
+			flashHighlight(row, { className: SETTING_FLASH_CLASS, duration: SETTING_FLASH_MS });
+		}
 	}
 	return true;
+}
+
+/**
+ * Open Configure Settings on this system's own category, without singling out a row.
+ *
+ * For the "everything else lives over there" button on the character sheet's Preferences tab:
+ * the tab carries the dozen settings a player is likely to want, and this is the way out to the
+ * rest — the world-wide options, the GM-only gates, and whatever modules registered.
+ *
+ * The category is revealed by looking up ONE of our settings and showing the tab it sits on,
+ * the same best-effort walk `openSystemSetting` makes, minus the scroll and the flash: there is
+ * no one row this button is about, and lighting an arbitrary one would say there was. The key is
+ * only a probe for "which tab are this system's settings on", so any registered, visible
+ * (`config: true`) key serves — it is the FONT one because that is also the first row the
+ * Preferences tab lists, so the two open on the same neighbourhood.
+ *
+ * @returns {Promise<boolean>} true when the settings window was opened, as above.
+ */
+export async function openSystemSettings() {
+	return openSystemSetting("sheetFont", { highlight: false });
 }
 
 /**

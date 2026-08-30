@@ -517,14 +517,16 @@ export class LevelUpDialog extends StonetopDialog {
 			this.render(false);
 		});
 
-		html.find(".stonetop-levelup-next-btn").on("click", async () => {
-			// Re-entrancy guard: the handler awaits compendium reads and the level-up writes
-			// (which add moves / grant possessions). A fast double-click before those resolve
-			// would otherwise apply twice — bump the level and add the move/foreign move/pouch
-			// a second time. Ignore clicks while one is in flight.
-			if (this._busy) return;
-			this._busy = true;
-			try {
+		html.find(".stonetop-levelup-next-btn").on("click", async (ev) => {
+			// Re-entrancy guard, the shared one (StonetopDialog#_guardBusy): the handler awaits
+			// compendium reads and the level-up writes (which add moves / grant possessions). A
+			// fast double-click before those resolve would otherwise apply twice — bump the
+			// level and add the move/foreign move/pouch a second time.
+			//
+			// The button greys while that is in flight, which this handler used to latch without
+			// doing: it ignored the second click but still looked live, so the press that was
+			// being dropped looked exactly like a press that had not registered.
+			await this._guardBusy(ev, async () => {
 				const next = this._adjacentStep(+1);
 				if (!next) {
 					await this._apply(); // nothing left to ask — commit the level-up
@@ -534,9 +536,7 @@ export class LevelUpDialog extends StonetopDialog {
 					this._step = next;
 				}
 				this.render(false);
-			} finally {
-				this._busy = false;
-			}
+			});
 		});
 	}
 

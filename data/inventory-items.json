@@ -580,6 +580,16 @@
     "tags": "HP 6, d4 damage; butcher for &#9671; Provisions (6 uses)"
   },
   {
+    "name": "Provisions",
+    "slug": "provisions",
+    "column": "regular",
+    "weight": 1,
+    "tags": "food taken from the wild; substitutes for supplies when you <em>Make Camp</em>, 1-for-1, but is likelier to spoil or draw beasts",
+    "resource": {
+      "max": 12
+    }
+  },
+  {
     "name": "Purse of coppers, ~10 handfuls",
     "slug": "purse-of-coppers",
     "column": "regular",
@@ -826,7 +836,13 @@
     "slug": "twisting-pine",
     "column": "regular",
     "weight": 1,
-    "tags": "A vial of its quick-hardening sap, used in lieu of supplies to Recover (seals wounds, flakes away days later). A harvested jar is Value 1 as a sealant or pottery glaze."
+    "tags": "A vial of its quick-hardening sap, used in lieu of supplies to Recover (seals wounds, flakes away days later). A harvested jar is Value 1 as a sealant or pottery glaze.",
+    "resource": {
+      "max": 1,
+      "labels": [
+        "vial"
+      ]
+    }
   },
   {
     "name": "Uncommon trade tools",

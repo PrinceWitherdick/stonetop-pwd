@@ -29,6 +29,19 @@ const DECLARED = [...CSS.matchAll(
 
 const ON_DISK = fs.readdirSync(ICON_DIR).filter(f => f.endsWith(".svg"));
 
+/**
+ * Every `.js` under `module/`, joined — for the one question the icon table cannot answer: does
+ * anything OUTSIDE the rail point at this file? See "ships no icon nothing points at".
+ */
+const SOURCE = (function walk(dir, out = []) {
+	for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+		const full = path.join(dir, entry.name);
+		if (entry.isDirectory()) walk(full, out);
+		else if (entry.name.endsWith(".js")) out.push(fs.readFileSync(full, "utf8"));
+	}
+	return out;
+})(path.join(ROOT, "module")).join("\n");
+
 describe("tab rail icons", () => {
 	it("finds the declarations at all (guards the scan itself)", () => {
 		expect(DECLARED.length).toBeGreaterThan(10);
@@ -76,9 +89,16 @@ describe("tab rail icons", () => {
 
 	// These ship in the release zip, so an icon nothing points at is dead weight that also
 	// outlives the reason it was added.
-	it("ships no icon the rail does not use", () => {
+	//
+	// THE RAIL IS NOT THE ONLY READER, which is why this scans the source rather than only the
+	// icon table. `site-mound.svg` is the case that proved it: Sites stopped being a tab when it
+	// was folded into the Expeditions panel, so its row left the table — but the same file is
+	// still the map-pin icon a placed site wears (module/journal/gm-prep-page.js). Asking only
+	// the rail would have called it dead and deleted the pin's glyph.
+	it("ships no icon nothing points at", () => {
 		const used = new Set(DECLARED.map(d => d.file));
-		expect(ON_DISK.filter(f => !used.has(f))).toEqual([]);
+		const orphans = ON_DISK.filter(f => !used.has(f) && !SOURCE.includes(`tabs/${f}`));
+		expect(orphans, `Icons nothing references:\n  ${orphans.join("\n  ")}`).toEqual([]);
 	});
 
 	// Every glyph here is either CC BY 3.0 (game-icons.net, attribution REQUIRED) or derived

@@ -4,7 +4,13 @@ import { fileURLToPath } from "node:url";
 import Handlebars from "handlebars";
 import { escHtml } from "../module/utils/strings.js";
 
-global.Application = class {};
+// AppV1's base. Only the members our own classes call `super` on need to be here; a window
+// that adds a header button calls `super._getHeaderButtons()` first, and core's answer for a
+// window with no document is an empty list.
+global.Application = class {
+	_getHeaderButtons() { return []; }
+	async close() {}
+};
 
 const _systemRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 

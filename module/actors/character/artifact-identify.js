@@ -160,17 +160,18 @@ export function knowThingsArtifactResults() {
 /** The three tiers of a Seek Insight aimed at an artifact (p.430). */
 export function seekInsightArtifactResults() {
 	return {
-		success: "Ask the GM 3 questions about the artifact from the list. They answer honestly and helpfully. Gain advantage on your next move that acts on the answers.",
-		partial: "Ask the GM 1 question about the artifact from the list. They answer honestly and helpfully. Gain advantage on your next move that acts on the answers.",
+		success: "Ask the GM 3 questions about the artifact from the list. They answer honestly and helpfully. Take advantage on your next move to act on the answers.",
+		partial: "Ask the GM 1 question about the artifact from the list. They answer honestly and helpfully. Take advantage on your next move to act on the answers.",
 		failure: "You're interrupted or surprised as you study it, or trouble announces itself.",
 	};
 }
 
 /**
- * The Seek Insight question list, with the two the book's own worked example turns on the
- * artifact appended. p.430 resolves the move as written — the standard list — and its example
- * answers "What should you be on the lookout for?" about the urn; the last two here are that
- * same list read as questions about a thing rather than a place.
+ * The Seek Insight question list, exactly as the move prints it. p.430 resolves the move as
+ * written rather than substituting an artifact-specific list — its worked example asks "What
+ * should you be on the lookout for?" about the urn — so these are the move's own six questions,
+ * read as questions about a thing rather than a place. Nothing is added to them: a question this
+ * list doesn't carry is one the move never let the player ask.
  */
 export const ARTIFACT_INSIGHT_QUESTIONS = Object.freeze([
 	"What happened here recently?",

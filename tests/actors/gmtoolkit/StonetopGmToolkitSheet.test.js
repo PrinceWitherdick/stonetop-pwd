@@ -41,7 +41,7 @@ const stripComments = src => src
  * The sheet, over a five-line stand-in for Foundry's ActorSheet. `options` and `position` are
  * what withSheetSizeMemory writes a restored size into on construction.
  */
-function makeSheet(actor = { id: "toolkit1", name: "GM Toolkit", system: {} }) {
+function makeSheet(actor = { id: "toolkit1", name: "GM Toolkit", type: "gmToolkit", system: {} }) {
 	const Base = class {
 		options  = {};
 		position = {};
@@ -929,5 +929,125 @@ describe("things that break silently", () => {
 		expect(groups).toHaveLength(1);
 		expect(MOVES_HBS.indexOf("{{#each stonetop.moveSections}}"))
 			.toBeLessThan(MOVES_HBS.indexOf('class="stonetop-move-group"'));
+	});
+});
+
+// ── The Preferences tab ───────────────────────────────────────────────────────────────────
+//
+// The SAME tab the character sheet carries, at the foot of this rail: one partial, one
+// descriptor module (module/utils/sheet-preferences.js), one set of client settings. A GM runs a
+// session out of this sheet and may never open a character sheet at all, so this is where their
+// own text size has to be reachable from.
+//
+// What is guarded here is that it stays one tab rather than becoming two. Everything about the
+// tab's CONTENTS — which keys it offers, how a row is shaped, what a write coerces to — is
+// asserted once, in tests/actors/character/preferences-tab.test.js, and would be a second copy
+// here. What this file adds is the wiring, all of which fails silently: an unmounted partial
+// renders nothing, a rail button with no panel blanks the sheet, and a sheet that publishes no
+// `stonetop.preferences` draws a heading over an empty tab.
+describe("the Preferences tab", () => {
+	it("is mounted, has a rail button, and comes last on the rail", () => {
+		expect(SHEET_HBS).toContain('{{> "stonetop.tab-preferences"}}');
+		expect(SHEET_HBS).toMatch(/\{\{>\s*"stonetop\.tab-rail-item"\s+tab="preferences"/);
+		expect([...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1]).at(-1))
+			.toBe("preferences");
+	});
+
+	// The character sheet's partial, its label key and its rail glyph, all reused rather than
+	// restated: a second copy of any of them is how the two tabs start disagreeing about what a
+	// setting is called or which rows exist.
+	it("reuses the character sheet's tab rather than growing a copy of it", () => {
+		expect(SHEET_HBS).toContain('label=(localize "stonetop.sheet.tabs.preferences")');
+		expect(read("templates/actor/character.hbs")).toContain('{{> "stonetop.tab-preferences"}}');
+		expect(repoFileExists("templates/actor/partials/tab-preferences.hbs")).toBe(true);
+		// The glyph row is keyed on `data-tab` alone, so this rail earns it with no rule of its own.
+		expect(CSS).toMatch(/\.stonetop-tab-rail \.item\[data-tab="preferences"\]\s*\{\s*--st-tab-icon:/);
+	});
+
+	// Both sheets take the three delegated handlers from one mixin. Two hand-kept copies of them
+	// is the shape that drifts: one sheet's slider writing on every pixel of a drag, or one
+	// sheet's "Open Settings" button doing nothing, on a surface nobody re-reads once it works.
+	it("takes its handlers from the shared mixin, not a second copy", () => {
+		expect(SHEET_JS).toContain('withPreferencesTab } from "../../utils/preferences-tab.js"');
+		expect(SHEET_JS).toContain("this._wirePreferences(html)");
+		// The handler bodies live in the mixin: nothing here reads a `data-pref` control directly.
+		expect(stripComments(SHEET_JS)).not.toContain("data-pref");
+		expect(read("module/actors/character/StonetopCharacterSheet.js"))
+			.toContain('withPreferencesTab} from "../../utils/preferences-tab.js"');
+	});
+
+	// Nothing on this tab is actor data, so it is wired outside every editability guard — the
+	// same call the fold carets and the prep tabs make, and for the same reason.
+	it("wires ahead of any isEditable guard", () => {
+		const body  = SHEET_JS.slice(SHEET_JS.indexOf("\t\tactivateListeners(html) {"));
+		const wired = body.indexOf("this._wirePreferences(html);");
+		const guard = body.indexOf("if (!this.isEditable)");
+		expect(wired).toBeGreaterThan(-1);
+		if (guard > -1) expect(wired).toBeLessThan(guard);
+	});
+
+	// A rail button whose panel has no rows is a heading over nothing. The rows themselves come
+	// from the shared builder, so all this asks is that the sheet calls it and publishes the
+	// result where the partial looks.
+	it("publishes the grouped rows the partial draws", async () => {
+		const saved = game.settings;
+		const savedUser = game.user;
+		game.user = { id: "gm1", isGM: true };
+		game.settings = {
+			settings: new Map([["stonetop-pwd.reduceMotion",
+				{ name: "Reduce Motion", hint: "", type: Boolean, default: false }]]),
+			menus: new Map(),
+			get: () => true,
+		};
+		try {
+			const data = await makeSheet().getData();
+			const rows = data.stonetop.preferences.flatMap(group => group.rows);
+			expect(rows.map(row => row.key)).toContain("reduceMotion");
+			expect(rows.find(row => row.key === "reduceMotion").checked).toBe(true);
+		} finally {
+			if (saved === undefined) delete game.settings;
+			else game.settings = saved;
+			if (savedUser === undefined) delete game.user;
+			else game.user = savedUser;
+		}
+	});
+
+	// With no settings registry up yet, the builder answers an empty list rather than throwing:
+	// the tab draws nothing and the rest of the sheet is untouched. Pinned because getData runs
+	// this on every render of a sheet that re-renders on every prep write in the world.
+	it("survives a client whose settings registry is not up", async () => {
+		const savedUser = game.user;
+		game.user = { id: "gm1", isGM: true };
+		try {
+			const data = await makeSheet().getData();
+			expect(data.stonetop.showPreferences).toBe(true);
+			expect(data.stonetop.preferences).toEqual([]);
+		} finally {
+			if (savedUser === undefined) delete game.user;
+			else game.user = savedUser;
+		}
+	});
+
+	// The tab is one surface per PERSON, and this sheet is where the GM's own copy lives — which
+	// is what lets it come off every player character sheet a GM opens. Both halves of the gate
+	// are asserted: the flag the sheet publishes, and the `{{#if}}` in the template that reads it.
+	// Without the second, hiding the rows would leave a rail button opening an empty tab.
+	it("offers the tab to a GM and to nobody else, in the context and in the template", async () => {
+		const savedUser = game.user;
+		try {
+			game.user = { id: "gm1", isGM: true };
+			expect((await makeSheet().getData()).stonetop.showPreferences).toBe(true);
+
+			// A player cannot open this sheet at all (ownership.default is NONE), so this is the
+			// belt to that braces: the rule says no, whatever route got them here.
+			game.user = { id: "player1", isGM: false };
+			expect((await makeSheet().getData()).stonetop.showPreferences).toBe(false);
+		} finally {
+			if (savedUser === undefined) delete game.user;
+			else game.user = savedUser;
+		}
+
+		expect(SHEET_HBS).toContain('{{#if stonetop.showPreferences}}{{> "stonetop.tab-preferences"}}{{/if}}');
+		expect(SHEET_HBS).toMatch(/\{\{#if stonetop\.showPreferences\}\}\{\{>\s*"stonetop\.tab-rail-item"\s+tab="preferences"/);
 	});
 });

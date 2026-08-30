@@ -66,16 +66,20 @@ describe("ownerOptions", () => {
 		expect(rows.map(r => r.id)).not.toContain("gm");
 	});
 
-	it("warns that a player with a character would have it replaced", () => {
+	// A player who already has one is not a dead end and is not a silent delete either: the
+	// row has to say that picking it raises a question, so the GM knows before they pick it
+	// that the button is not the destructive thing it used to be.
+	it("tells the GM a player with a character will be asked to add or replace", () => {
 		const rows = ownerOptions(players, id => (id === "u1" ? [{ name: "Wren" }] : []));
 		expect(rows[0].hint).toContain("Wren");
-		expect(rows[0].hint).toContain("replaces it");
+		expect(rows[0].hint).toContain("add another character");
+		expect(rows[0].hint).toContain("replace it");
 	});
 
-	it("agrees in number when the player somehow has several characters", () => {
+	it("agrees in number when the player already runs several characters", () => {
 		const rows = ownerOptions(players, id => (id === "u1" ? [{ name: "Wren" }, { name: "Gethin" }] : []));
 		expect(rows[0].hint).toContain("Wren, Gethin");
-		expect(rows[0].hint).toContain("replaces them");
+		expect(rows[0].hint).toContain("replace them");
 	});
 
 	it("says where creation will open for a player with no character yet", () => {

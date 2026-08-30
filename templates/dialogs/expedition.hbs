@@ -287,6 +287,12 @@
           to clear a debility on. --}}
     {{#if returnTriumphant}}
     <div class="stonetop-exp-triumph">
+      {{#if returnTriumphant.body}}
+      {{!-- How to tell whether it counts, from the book's own commentary under the move. The
+            questions above are the GM thinking through the homecoming; this is the one ruling
+            they have to make, so it stands with the control that acts on it. --}}
+      <div class="stonetop-exp-triumph-body stonetop-spring-body">{{{returnTriumphant.body}}}</div>
+      {{/if}}
       <button type="button" class="stonetop-exp-triumph-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary"
               {{#unless returnTriumphant.hasSteading}}disabled{{/unless}}>
         <i class="fas fa-house-chimney-heart"></i> Return Triumphant

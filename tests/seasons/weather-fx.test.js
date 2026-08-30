@@ -153,6 +153,28 @@ describe("the sky-to-particles table", () => {
 		}
 	});
 
+	// FXMaster's default drop is scale 1, which over a map is a hairline nobody at the table can
+	// see (the module's own presets run 1.5 for `drizzle` up to 4 for `hurricane`). So every sky
+	// that rains names a size, and the sizes climb with the weather: a storm whose drops were
+	// smaller than the shower before it would read as the rain easing off just as the card said
+	// it got worse. Not a fixed list of numbers, which would only restate the table.
+	it("gives every rain a drop size, and never a smaller one for worse weather", () => {
+		const worsening = ["rain", "downpour", "storm", "tornado"];
+		let last = 1;
+		for (const sky of worsening) {
+			const rain = SKY_EFFECTS[sky].find(fx => fx.type === "rain");
+			expect(rain, sky).toBeTruthy();
+			expect(rain.options.scale, sky).toBeGreaterThan(1);
+			expect(rain.options.scale, sky).toBeGreaterThanOrEqual(last);
+			last = rain.options.scale;
+		}
+		// And no rain outside that ladder, which would be a sky tuned by nobody.
+		const rains = Object.entries(SKY_EFFECTS)
+			.filter(([, effects]) => effects.some(fx => fx.type === "rain"))
+			.map(([sky]) => sky);
+		expect(rains.sort()).toEqual([...worsening].sort());
+	});
+
 	// Fog keeps no heading, and that is not an oversight: its rotation spread is the whole circle,
 	// so setting one would re-centre a circle and change nothing on screen.
 	it("gives the haze no heading at all", () => {
@@ -310,11 +332,16 @@ describe("the scene update with parts switched off", () => {
 			expect(clouds.options.tint).toBeUndefined();
 		});
 
-		it("names last sky's scale for deletion, so the drops go back to their own size", () => {
+		// The same bug from its other side, and the side that is left now that every falling sky
+		// names its own `scale`: an option this sky DOES set has to arrive as this sky's value, not
+		// as the heavier one's left standing by the merge. A shower after a downpour is the case
+		// that would show it — same effect, same key, smaller drops.
+		it("writes the lighter sky's own drop size over the heavier one's", () => {
 			const update = weatherFxUpdate("rain", asStored("downpour"));
 			const rain = update[`flags.fxmaster.effects.${FX_KEY_PREFIX}rain`];
-			expect(rain.options["-=scale"]).toBeNull();
-			expect(rain.options.scale).toBeUndefined();
+			const [, shower] = SKY_EFFECTS.rain;
+			expect(rain.options.scale).toBe(shower.options.scale);
+			expect(rain.options.scale).toBeLessThan(SKY_EFFECTS.downpour[1].options.scale);
 		});
 
 		// The switch that had nothing to switch: `keptEffects` copies the options without the tint,

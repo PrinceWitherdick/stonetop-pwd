@@ -110,6 +110,9 @@ describe("organize-by-category toggle", () => {
 		hb.registerHelper("not", v => !hbsTruthy(v));
 		hb.registerHelper("concat", (...a) => a.slice(0, -1).join(""));
 		hb.registerHelper("boldMissText", t => new hb.SafeString(t ?? ""));
+		// The real helper (stonetop.js) folds the move's tier ladder in under the description;
+		// this suite is about which GROUP a move lands in, so the body passes straight through.
+		hb.registerHelper("moveBody", t => new hb.SafeString(t ?? ""));
 		hb.registerHelper("repeatChecks", () => []);
 		hb.registerHelper("resourceChecks", () => []);
 		hb.registerPartial("stonetop.section-heading", "[heading:{{title}}]");

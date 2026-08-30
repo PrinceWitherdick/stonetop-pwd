@@ -11,12 +11,14 @@ import {
 	WBH_HERO_FLAG,
 } from "../../../module/actors/character/WouldBeHeroAsterisk.js";
 
-function makeActor({ playbook = "The Would-Be Hero", isHero = false } = {}) {
+// `slug` is what the guards read and `playbook` is only the label, so they default together
+// and can be set apart — which is the whole point of the change these fixtures follow.
+function makeActor({ playbook = "The Would-Be Hero", slug = "the-would-be-hero", isHero = false } = {}) {
 	const flags = { [WBH_HERO_FLAG]: isHero || undefined };
 	return {
 		type: "character",
 		name: "Wren",
-		system: { playbook: { name: playbook } },
+		system: { playbook: { name: playbook, slug } },
 		getFlag: (_scope, key) => flags[key],
 		setFlag: vi.fn(async (_scope, key, value) => { flags[key] = value; }),
 	};
@@ -94,8 +96,26 @@ describe("maybeAnnounceBecameHero", () => {
 		expect(actor.setFlag).not.toHaveBeenCalled();
 	});
 
+	// The reason the guard reads the slug. This playbook is the one that RENAMES ITSELF: the
+	// sheet already shows a hero who has crossed off "Would-be" as "The Hero", and a player is
+	// free to retitle the field on top of that. Matched on the name, the announcement stops
+	// firing for exactly the character it is about, with the move sitting on their sheet.
+	it("still fires for a Would-Be Hero whose playbook has been retitled", async () => {
+		const actor = makeActor({ playbook: "The Hero" });
+		await maybeAnnounceBecameHero(makeMove(actor), "u1");
+		expect(actor.setFlag).toHaveBeenCalledTimes(1);
+	});
+
+	// ...and the other way round: a different playbook retitled INTO this one's name is still a
+	// different playbook, and must not collect its rules.
+	it("does not fire for another playbook renamed to look like this one", async () => {
+		const actor = makeActor({ playbook: "The Would-Be Hero", slug: "the-heavy" });
+		await maybeAnnounceBecameHero(makeMove(actor), "u1");
+		expect(actor.setFlag).not.toHaveBeenCalled();
+	});
+
 	it("ignores asterisked moves owned by a different playbook", async () => {
-		const actor = makeActor({ playbook: "The Heavy" });
+		const actor = makeActor({ playbook: "The Heavy", slug: "the-heavy" });
 		await maybeAnnounceBecameHero(makeMove(actor), "u1");
 		expect(actor.setFlag).not.toHaveBeenCalled();
 		expect(ChatMessage.create).not.toHaveBeenCalled();

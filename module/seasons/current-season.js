@@ -74,6 +74,49 @@ export function readCurrentSeason(actor) {
 }
 
 /**
+ * The season the clock is in, as the "<year>:<season>" key every once-per-season marker on
+ * the steading is stored under — the season steps, Tor's blessing, the muster, winter's debt.
+ *
+ * THE YEAR HERE IS THE STAMP'S, and that is the whole reason this exists. `readCurrentYear` is
+ * a different number: it is the picker's high-water count, and Done on a WINTER advances it to
+ * `year + 1` while stamping the season as `{winter, year}`, because a completed winter closes
+ * the year out. The two agree for three seasons in four and disagree for the whole of a
+ * winter, so a reader that paired `readCurrentYear()` with `stamp.season` spent every winter
+ * asking for a key nothing had ever written. That cost, silently: a winter debt vanished the
+ * moment the window that rolled it was closed (so the glyph and its settle window were
+ * unreachable in the only season they exist for), a Tor's blessing granted in winter expired
+ * as it was granted, and the watch's and the herd's glyphs re-lit having just been settled.
+ *
+ * The pair written together is the fact. `readCurrentYear` answers a different question — what
+ * year should the picker open on — and belongs only to the picker.
+ *
+ * @param {{season: string, year: number}|null} stamp  From readCurrentSeason.
+ * @returns {string} "" when nothing is stamped, which no stored marker can equal.
+ */
+export function seasonStampKey(stamp) {
+	return stamp?.season ? `${campaignYear(stamp.year)}:${stamp.season}` : "";
+}
+
+/**
+ * The same pair, unjoined: the season the clock is in and the year to file it under, for the
+ * readers that need the two halves separately rather than as a key (the muster's hold, the
+ * holds tray, the Inn's gathering).
+ *
+ * The pairing is the whole point, and it is why this is one call rather than two: the year MUST
+ * be the stamp's, and falls back to the picker's count only when nothing has been stamped at
+ * all. Written out at each site, that fallback is a line anyone could reasonably rewrite as
+ * `readCurrentYear(actor)` — which is the bug described above, and which cost a winter debt,
+ * a Tor's blessing and two re-lit glyphs the last time it was made.
+ *
+ * @param {Actor} actor  the steading
+ * @returns {{seasonId: string, year: number}}  seasonId is "" when nothing is stamped
+ */
+export function seasonStampParts(actor) {
+	const stamp = readCurrentSeason(actor);
+	return { seasonId: stamp?.season ?? "", year: stamp?.year ?? readCurrentYear(actor) };
+}
+
+/**
  * Does this `updateActor` diff touch the season clock?
  *
  * Lives here beside the reader and the writer because it is the same knowledge: where on the

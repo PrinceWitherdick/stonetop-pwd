@@ -100,9 +100,27 @@ export function bindJourneyControls(root, {
  * list alike.
  *
  * One rule in one place: a `siteUuid` is one of the GM's own written-up places, a `slug` names a
- * place the books charted, and a bare `tier` is an edge arrow off the side of the map and only
- * zooms out. Both surfaces read the same dataset off the same partials, so both have to agree about
- * this or the same arrow does two different things.
+ * place the books charted, and a `tier` is an edge arrow off the side of the map. Both surfaces read
+ * the same dataset off the same partials, so both have to agree about this or the same arrow does
+ * two different things.
+ *
+ * AN ARROW DOES BOTH, WHEN IT NAMES A PLACE (user, 2026-08-25). Only a pin on the edge carries a
+ * tier at all, and the whole of what one says is "the road goes on, off this paper, that way" — so
+ * following it has to actually go there. The two Vicinity arrows that name one place used to pick it
+ * and stay put, which left a GM who had just chosen Gordin's Delve staring at a map Gordin's Delve is
+ * not drawn on, while the third arrow beside them ("To Steplands & Marshedge", which names two places
+ * and so can only zoom) moved out to the World's End as asked. One arrow, one meaning: it picks what
+ * it names AND it moves out a tier, which is what TRAVEL_EXITS has always said it meant.
+ *
+ * THE PICK IS AWAITED FIRST, and the order is the whole of why this is not two independent calls.
+ * Writing the destination is what re-decides which map the panel is pinned to (`_setJourneyPlace`),
+ * and on a trip out of Stonetop it decides on the VICINITY — because the Vicinity does draw both
+ * ends, the far one being this very arrow. Zooming before that lands would be the pick undoing the
+ * zoom a moment later, silently, with nothing on screen to say why the map came back.
+ *
+ * AN ARROW POINTING PAST EVERY MAP still only picks, and needs no arm of its own: the Lygos arrow's
+ * tier is `beyond`, which is a group in the destination list rather than a picture, and both
+ * surfaces' `showTier` already refuse a tier no map draws.
  *
  * A SITE IS A PLACE ON THE WAY, and no longer a link to a journal (user, 2026-08-24). Tapping one
  * used to open its write-up, which made the GM's own barrow the ONE mark on this map that could not
@@ -127,10 +145,14 @@ export function bindJourneyControls(root, {
  * @param {DOMStringMap|object} data  A hotspot's dataset: `{ siteUuid, slug, tier }`, any absent.
  * @param {Event|null} ev             the click itself, for the modifiers on it.
  */
-export function journeyPick({ siteUuid, slug, tier } = {}, { showTier, markSite = null, markPlace = null } = {}, ev = null) {
-	if (siteUuid) markSite?.(siteUuid, ev);
-	else if (slug) markPlace?.(slug, ev);
-	else if (tier) showTier(tier);
+export async function journeyPick({ siteUuid, slug, tier } = {}, { showTier, markSite = null, markPlace = null } = {}, ev = null) {
+	if (siteUuid) return markSite?.(siteUuid, ev);
+	// The bare arrow ("To Steplands & Marshedge"), which renders `data-slug=""` and has only ever
+	// meant "move out a tier", and every mark that names nothing at all.
+	if (!slug) return tier ? showTier(tier) : undefined;
+	await markPlace?.(slug, ev);
+	if (tier) return showTier(tier);
+	return undefined;
 }
 
 /**

@@ -8,6 +8,7 @@ import { IMPORT_BOOKS, runImportBookArtMacro } from "../../book2-art/macro.js";
 import { getObjectSetting } from "../../settings.js";
 import { filePicker } from "../../utils/foundry-compat.js";
 import { pickRandomExcluding } from "../../utils/arrays.js";
+import { canStoreRulebook } from "../../books/book-store.js";
 
 // How long the grid takes to travel to a rolled portrait, however far away it landed. The
 // browser's own `scrollIntoView({behavior:"smooth"})` picks its own duration and scales it
@@ -151,6 +152,12 @@ export function emptyGalleryOffer({ isGM = false, artOnDisk = false, rebuildable
 		// Only the rulebooks. The poster maps and the free GM playbook are separate errands with
 		// nothing to do with faces, and the window is still one click away for them.
 		books: IMPORT_BOOKS,
+		// A book handed over here is also KEPT, so it can be read in Foundry afterwards: this
+		// empty state skips the importer's own window, so there is no tick-box to offer and the
+		// copy would otherwise be a silent 60 MB upload the GM never agreed to. Said in words
+		// instead. Gated on the right to write a file at all, so an Assistant GM without it is
+		// not promised something that will not happen.
+		keepsBooks: canStoreRulebook(),
 		blurb: n
 			? "You already have the book art these faces are cut from, so they can be built right here without opening your PDFs again."
 			: artOnDisk

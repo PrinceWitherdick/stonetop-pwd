@@ -184,6 +184,27 @@ describe("rollStat", () => {
 		expect(flavor).toContain('data-outcome-failure="Things get worse."');
 	});
 
+	// The card's description carries the move's whole ladder (utils/move-tiers.js), and the roll
+	// is what says which of its rungs actually happened. Without the mark the reader is left
+	// matching the total against the labels themselves, on the one card that already knows.
+	it("marks the rung the dice landed on in the move's own ladder", async () => {
+		rollTotal = 8;
+		const description = '<p>Roll +STR.</p><ul class="stonetop-move-tiers">'
+			+ '<li class="stonetop-move-tier stonetop-move-tier--partial" data-tier="partial">7-9</li></ul>';
+
+		await rollStat("str", makeActor(), { noXpOnMiss: true, moveDescription: description });
+
+		expect(rollMessages[0].flavor).toContain('<ul class="stonetop-move-tiers" data-rolled-tier="partial">');
+	});
+
+	it("leaves a description with no ladder alone", async () => {
+		rollTotal = 8;
+
+		await rollStat("str", makeActor(), { noXpOnMiss: true, moveDescription: "<p>Roll +STR.</p>" });
+
+		expect(rollMessages[0].flavor).not.toContain("data-rolled-tier");
+	});
+
 	it("shows the failure outcome on a miss", async () => {
 		rollTotal = 6;
 
@@ -247,6 +268,112 @@ describe("rollStat", () => {
 		expect(flavor).toContain('data-active-tier="success"');
 		expect(flavor).toContain('data-tier="failure" hidden="hidden"');
 		expect(flavor).toContain("stonetop-requisition-miss-cost");
+	});
+
+	// A love letter draws every tier from ONE list, and the tier only says how many to take.
+	it("renders a shared pick pool once, always visible", async () => {
+		rollTotal = 10;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			pickOptions: ["Alpha", "Beta"],
+			moveResults: { success: { value: "", pick: 1 }, partial: { value: "", pick: 0 }, failure: { value: "", pick: 0 } },
+		});
+
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-card-picklist");
+		expect(flavor).toContain('data-index="0"');
+		expect(flavor).toContain('data-index="1"');
+		// One list, no per-tier wrapper, and the tier's outcome names the count.
+		expect(flavor).not.toContain("stonetop-roll-tier-picklists");
+		expect(flavor).toContain("Pick 1 from the list below");
+	});
+
+	// A homefront move names a list per tier: Deploy chooses its 10+/7-9 outcome from one list
+	// and its 6- consequences from another, so only the rolled tier's is on show.
+	it("renders per-tier pick pools with all but the rolled tier hidden", async () => {
+		rollTotal = 6;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			pickOptions: {
+				success: ["It is more effective than expected."],
+				partial: ["It is more effective than expected."],
+				failure: ["Injuries abound.", "A named NPC dies."],
+			},
+		});
+
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-tier-picklists");
+		expect(flavor).toContain('data-active-tier="failure"');
+		// Valued hidden, for the same sanitize-html reason the tier actions carry.
+		expect(flavor).toContain('data-tier="success" hidden="hidden"');
+		expect(flavor).toContain('data-tier="partial" hidden="hidden"');
+		expect(flavor).not.toContain('data-tier="failure" hidden');
+		expect(flavor).toContain("Injuries abound.");
+		// data-index runs across the WHOLE card, hidden tiers included, so the persisted
+		// checked-state array lines up with whichever list is showing.
+		for (const i of [0, 1, 2, 3]) expect(flavor).toContain(`data-index="${i}"`);
+		expect(flavor).not.toContain('data-index="4"');
+	});
+
+	it("leaves out a tier that names no pick pool, and the wrapper when none do", async () => {
+		rollTotal = 10;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			pickOptions: { partial: ["Only on a 7-9."] },
+		});
+		expect(rollMessages[0].flavor).not.toContain('data-tier="success"');
+		expect(rollMessages[0].flavor).toContain('data-tier="partial" hidden="hidden"');
+
+		rollMessages.length = 0;
+		await rollStat("str", makeActor(), { noXpOnMiss: true, pickOptions: {} });
+		expect(rollMessages[0].flavor).not.toContain("stonetop-roll-card-picklist");
+	});
+
+	// The result block and the boxes below it are the same list; printing it in both makes the
+	// card say every option twice, once unclickable. The block keeps the lead-in only.
+	it("prints the lead-in alone in the result block when the boxes below list the options", async () => {
+		rollTotal = 10;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			pickOptions: ["Avoid, prevent, or counter your enemy's attack", "Strike hard and fast"],
+			moveResults: {
+				success: { value: "Your maneuver works as expected and pick 1: Avoid, prevent, or counter your enemy's attack / Strike hard and fast" },
+				partial: { value: "" },
+				failure: { value: "" },
+			},
+		});
+
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-result-lead");
+		expect(flavor).not.toContain("stonetop-roll-result-picks");
+		// The options appear exactly where they can be ticked, and nowhere else.
+		expect(flavor).toContain("stonetop-picklist-check");
+		// Every tier a shared pool serves is stamped, so a GM Shift Up/Down keeps the block short.
+		expect(flavor).toContain('data-picked-tiers="success partial failure"');
+	});
+
+	// ...but a tier with no boxes of its own still shows its options, or they would be nowhere.
+	it("keeps the options in the result block on a tier the card lists no boxes for", async () => {
+		rollTotal = 6;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			pickOptions: { success: ["Alpha", "Beta"] },
+			moveResults: {
+				success: { value: "" },
+				partial: { value: "" },
+				failure: { value: "The GM will choose 1: a hard bargain / a worse spot" },
+			},
+		});
+
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-result-picks");
+		expect(flavor).toContain("a hard bargain");
+		expect(flavor).toContain('data-picked-tiers="success"');
 	});
 
 	it("omits the outcome line when the move has no moveResults", async () => {
@@ -331,6 +458,45 @@ describe("rollDamage", () => {
 
 		expect(rollInstances[0].formula).toBe("2d8kh1+2");
 		expect(rollMessages[0].flavor).toContain("stonetop-condition-advantage");
+	});
+
+	// The one-off adjustment from the pre-roll damage window (RollDialog.js#promptDamage) — the
+	// only route a bonus the sheet cannot know about ("when you roil with anger, you do +1
+	// damage until you calm down") has to the dice. Folded in HERE rather than by each caller,
+	// so the formula and the pills that explain it are built once.
+	it("folds a flat bonus into the formula and names it on the card", async () => {
+		await rollDamage("d10", makeActor(), { label: "Clash: hafted spear", bonus: 1 });
+
+		expect(rollInstances[0].formula).toBe("d10+1");
+		expect(rollMessages[0].flavor).toContain("Damage +1");
+	});
+
+	it("folds extra dice in and names them", async () => {
+		await rollDamage("d10", makeActor(), { label: "Storm's Fury", extraDice: "1d6" });
+
+		expect(rollInstances[0].formula).toBe("d10+1d6");
+		expect(rollMessages[0].flavor).toContain("Extra +1d6");
+	});
+
+	it("keeps advantage on the DAMAGE die when extra dice ride along", async () => {
+		// Not "2d10kh1+2d6kh1": Stonetop's advantage is "roll your damage twice, take the
+		// higher", and the die that is rolled twice is the damage die, not the bonus dice.
+		await rollDamage("d10", makeActor(), { rollMode: "adv", bonus: 1, extraDice: "1d6" });
+
+		expect(rollInstances[0].formula).toBe("2d10kh1+1d6+1");
+	});
+
+	it("drops a half-typed dice term rather than throwing on it", async () => {
+		await rollDamage("d6", makeActor(), { extraDice: "1d" });
+
+		expect(rollInstances[0].formula).toBe("d6");
+		expect(rollMessages[0].flavor).not.toContain("Extra");
+	});
+
+	it("says nothing extra when nothing was added", async () => {
+		await rollDamage("d6", makeActor(), { label: "Hammer" });
+
+		expect(rollMessages[0].flavor).not.toContain("stonetop-condition-situational");
 	});
 });
 

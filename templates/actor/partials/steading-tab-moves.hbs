@@ -43,14 +43,36 @@
 			{{#if stonetop.showRollModeControl}}{{> "stonetop.roll-mode-picker" rollMode=stonetop.rollMode}}{{/if}}
 			{{> "stonetop.section-collapse" collapse="steadingMoves"}}
 		</h3>
+		{{!-- WHAT A MOVE DOES WHEN CLICKED rides on the `<li>`, not on a control inside it.
+
+		      There is no dice button at the head of a move any more, in either shape. The NAME
+		      was always the bigger target and always did exactly the same thing — the icon's
+		      click handler is the one the name forwarded to — so the icon was a second door onto
+		      one room, and the row reads as a title rather than a toolbar without it.
+
+		      That leaves the row's two clickable parts (the name and the "+STAT" chip) with
+		      nowhere of their own to carry what the move IS, so the `<li>` carries it. WHICH of
+		      the two it carries — a slug for a move with a walkthrough, a name and stat for one
+		      that only rolls — is decided once in StonetopSteadingSheet#getData and arrives here
+		      already resolved, so this template and the classic row cannot disagree about what a
+		      click means. Both openers reach the `<li>` with `closest("li")` — the same hop the
+		      name-click already made to find the button. StonetopSteadingSheet#activateListeners
+		      reads these; renaming one silently stops that move working. --}}
 		<ol class="items-list">
 			{{#each stonetop.moves}}
-			<li class="stonetop-item steading-move-card{{#unless rollable}}{{#unless interactive}} move-unowned{{/unless}}{{/unless}}">
+			<li class="stonetop-item steading-move-card{{#if unowned}} move-unowned{{/if}}"
+			    data-move-slug="{{moveSlug}}" data-move-name="{{moveName}}" data-stat="{{stat}}">
+				{{!-- The "+STAT" chip sits AFTER the name, which has `flex: 1` — so it rides the
+				      far right of the card's header line rather than crowding in front of the
+				      title. Same placement the character sheet's Other Moves list uses. It stays
+				      a click target: tapping the stat rolls the move, as tapping the name does. --}}
 				<div class="stonetop-item-header">
-					{{> "stonetop.steading-move-controls"}}
 					<strong class="stonetop-item-name stonetop-steading-move-open">{{label}}</strong>
+					{{#if (and @root.stonetop.showRollStatChips statChipLabel)}}
+					<span class="stonetop-move-roll-chip steading-move-stat-tag">+{{statChipLabel}}</span>
+					{{/if}}
 				</div>
-				{{#if description}}<div class="stonetop-item-description">{{{boldMissText description}}}</div>{{/if}}
+				{{#if description}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}
 			</li>
 			{{/each}}
 		</ol>

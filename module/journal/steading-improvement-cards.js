@@ -13,6 +13,12 @@
 
 import { escHtml } from "../utils/strings.js";
 import { createHomebrewCard, readHomebrewCardPayload, bindHomebrewCardDrag } from "./homebrew-cards.js";
+import {
+	alternativeSectionFlags,
+	normalizeImprovementGrants,
+	normalizeImprovementSections,
+	summarizeImprovementGrants,
+} from "../utils/improvement-def.js";
 
 export const STEADING_IMPROVEMENT_DRAG_TYPE = "StonetopSteadingImprovement";
 
@@ -22,32 +28,48 @@ export const STEADING_IMPROVEMENT_DRAG_TYPE = "StonetopSteadingImprovement";
  * in-app, so a dropped homebrew card lands as an identical custom improvement. User
  * input is plain text, so it's HTML-escaped (the built-ins ship light markdown that
  * the generator processes; here there's none to process).
- * @param {{name:string, flavor?:string, effect?:string, category?:string, sections?:Array<{heading?:string, items?:string[]}>}} def
+ * Each section's `min` ("2 of the following") and `group` (either/or alternatives) and
+ * the improvement's `grants` (what completing it applies by itself) ride in the payload
+ * alongside the prose, so a card dropped onto a steading is the same improvement that
+ * was authored rather than a flattened copy of it.
+ * @param {{name:string, flavor?:string, effect?:string, category?:string, sections?:Array<{heading?:string, min?:number, group?:string, items?:string[]}>, grants?:object}} def
  */
 export function renderImprovementCardHtml(def) {
 	const name = escHtml(def?.name ?? "");
 	const flavor = def?.flavor ? escHtml(def.flavor) : "";
 	const effect = def?.effect ? escHtml(def.effect) : "";
-	const sections = (Array.isArray(def?.sections) ? def.sections : []).map(s => ({
-		heading: escHtml(s?.heading ?? ""),
-		items: (Array.isArray(s?.items) ? s.items : []).map(escHtml),
+	const sections = normalizeImprovementSections(def?.sections).map(s => ({
+		...s,
+		heading: escHtml(s.heading),
+		items: s.items.map(escHtml),
 	}));
+	const alternatives = alternativeSectionFlags(sections);
+	const grants = normalizeImprovementGrants(def?.grants);
 
 	// Payload mirrors the built-in IMPROVEMENT_DEFINITIONS shape (items are HTML
 	// strings); double-escaped for the double-quoted attribute, decoded on read.
 	// `category` rides along so a dropped card lands under the right filter chip on the
 	// steading sheet; the build-time gazetteer emits no category, and those cards stay
 	// uncategorised (and so unfiltered). Validated by StonetopSteading.addCustomImprovement.
-	const payload = { name: def?.name ?? "", category: def?.category ?? "", flavor, effect, sections };
+	const payload = { name: def?.name ?? "", category: def?.category ?? "", flavor, effect, sections, grants };
 	const dataAttr = escHtml(JSON.stringify(payload));
 
 	const body = [];
 	if (flavor) body.push(`<p class="stonetop-journal-improvement-flavor">${flavor}</p>`);
-	for (const s of sections) {
+	sections.forEach((s, index) => {
+		// The same "or" divider the steading sheet draws above a continued either/or, so
+		// the card reads the way the improvement will once it is dropped.
+		if (alternatives[index]) body.push(`<p class="steading-req-or">or</p>`);
 		if (s.heading) body.push(`<p class="steading-req-heading">${s.heading}</p>`);
 		if (s.items.length) body.push(`<ul class="steading-req-list">${s.items.map(i => `<li class="check-bullet">${i}</li>`).join("")}</ul>`);
-	}
+	});
 	if (effect) body.push(`<p class="stonetop-journal-improvement-effect">${effect}</p>`);
+	// What the sheet will apply by itself when this is ticked complete, spelled out: the
+	// effect prose says it in the book's voice, and this says which of it is automatic.
+	const applied = summarizeImprovementGrants(grants);
+	if (applied.length) {
+		body.push(`<p class="stonetop-journal-improvement-grants"><strong>On completion:</strong> ${escHtml(applied.join("; "))}</p>`);
+	}
 
 	return `<div class="stonetop-journal-improvement" draggable="true" data-steading-improvement="${dataAttr}" title="Drag onto the Stonetop steading sheet">`
 		+ `<div class="stonetop-journal-improvement-head">`

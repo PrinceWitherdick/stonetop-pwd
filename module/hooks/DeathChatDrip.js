@@ -1,5 +1,6 @@
-import { STONETOP_SCOPE, resolvedFlagProperty } from "../actors/character/StonetopFlags.js";
-import { DEATHS_DOOR_FLAG, POST_DEATH_INSERT_SLUGS, pastDeathKind } from "../actors/character/deaths-door.js";
+import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
+import { POST_DEATH_INSERT_SLUGS } from "../actors/character/deaths-door.js";
+import { actorPastDeathKind } from "../actors/character/deaths-door-actor.js";
 
 /**
  * The dead keep talking, and the log should say so.
@@ -22,7 +23,7 @@ import { DEATHS_DOOR_FLAG, POST_DEATH_INSERT_SLUGS, pastDeathKind } from "../act
  * in the log when a PC dies are never repainted — which is the reading we want anyway.
  */
 
-/** Message flag (under the system scope) holding the speaker's {@link pastDeathKind}. */
+/** Message flag (under the system scope) holding the speaker's {@link actorPastDeathKind}. */
 export const DEATH_DRIP_FLAG = "deathDrip";
 
 const DRIP_CLASS = "stonetop-death-drip";
@@ -33,10 +34,7 @@ const DRIP_CLASS = "stonetop-death-drip";
  * the preCreate hook can fold it in with the changes it is already making.
  */
 export function deathDripStamp(actor) {
-	const kind = pastDeathKind({
-		state:      resolvedFlagProperty(actor, DEATHS_DOOR_FLAG) ?? null,
-		insertSlug: resolvedFlagProperty(actor, "postDeathInsert.slug") ?? null,
-	});
+	const kind = actorPastDeathKind(actor);
 	return kind ? { [`flags.${STONETOP_SCOPE}.${DEATH_DRIP_FLAG}`]: kind } : null;
 }
 

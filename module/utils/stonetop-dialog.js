@@ -90,6 +90,44 @@ export class StonetopDialog extends Application {
 		finally { resolve?.(result); }
 	}
 
+	/**
+	 * Run `fn` once, ignoring further clicks until it settles, and grey the control meanwhile.
+	 *
+	 * The dialogs in this system commit through several awaited document writes — a level-up
+	 * adds moves and grants possessions, end-of-session walks every player character with a
+	 * write apiece — and the window closes only when all of them have landed. That leaves the
+	 * button live and inviting for several round trips, and a second click in the gap applies
+	 * the whole thing twice.
+	 *
+	 * Both halves matter and had been written out separately, once each, already disagreeing:
+	 * the LATCH is what actually prevents the double apply, and DISABLING the control is what
+	 * tells the person their press took. A dialog that latched without disabling still looked
+	 * unresponsive and invited the second click it was busy ignoring.
+	 *
+	 * The control is put BACK only when the work throws. On success the caller has either closed
+	 * the window or re-rendered it, so the button is gone or freshly drawn either way; greying it
+	 * back in between would offer a second press at the one moment the latch has just let go. A
+	 * throw is the case where neither of those happened and the window is still sitting there,
+	 * and leaving it dead would give a GM no way to try again but to close and reopen.
+	 *
+	 * @param {Event|{currentTarget?: HTMLElement}} ev  the click, for the control to grey
+	 * @param {Function} fn  the work; awaited, and the latch is released in a `finally`
+	 */
+	async _guardBusy(ev, fn) {
+		if (this._busy) return;
+		this._busy = true;
+		const control = ev?.currentTarget;
+		if (control) control.disabled = true;
+		try {
+			return await fn();
+		} catch (err) {
+			if (control) control.disabled = false;
+			throw err;
+		} finally {
+			this._busy = false;
+		}
+	}
+
 	/** Override to true for a content-hugging window that re-fits its height each render. */
 	get _autoHeight() { return false; }
 

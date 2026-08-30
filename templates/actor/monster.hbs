@@ -262,7 +262,7 @@
 								<span class="stonetop-monster-move-name"{{#if boostTooltip}} data-tooltip="{{boostTooltip}}" data-tooltip-direction="UP"{{/if}}>{{#if showBoostIcon}}<i class="fas fa-shield-halved stonetop-monster-move-boost-icon"></i> {{/if}}{{name}}</span>
 							</div>
 							{{#if system.description}}
-							<div class="stonetop-monster-move-description">{{{boldMissText system.description}}}</div>
+							<div class="stonetop-monster-move-description">{{{moveBody system.description system.moveResults}}}</div>
 							{{/if}}
 							{{/if}}
 						</div>
