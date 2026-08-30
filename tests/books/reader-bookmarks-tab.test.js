@@ -221,6 +221,32 @@ describe("marking the page you are on", () => {
 		await addButton(doc).click();
 		expect(bookmarksFor(BOOK)[0]).toMatchObject({ page: 91, hash: "page=91" });
 	});
+
+	// pdf.js answers `page` 1 in a viewer holding no document, so the count is what tells a book
+	// still parsing apart from a reader on the first sheet. Asking `page` marked page 1 of a book
+	// nobody had read a word of yet.
+	it("says so rather than marking page one of a book that is still opening", async () => {
+		const warn = vi.fn();
+		global.ui = { notifications: { warn } };
+		const { doc } = mounted({ app: viewerApp({ page: 1, params: null, pagesCount: 0 }) });
+		await addButton(doc).click();
+		expect(warn).toHaveBeenCalled();
+		expect(bookmarksFor(BOOK)).toHaveLength(0);
+	});
+
+	// The first mark in a book waits on the document's outline, which is a promise per heading:
+	// long enough on a rulebook to press the button again, and every press used to make another
+	// mark on the same page.
+	it("makes one mark however many times the button is pressed while it is working", async () => {
+		const { doc } = mounted({ app: viewerApp({ outline: fakeOutline() }) });
+		const first = addButton(doc).click();
+		expect(addButton(doc).disabled).toBe(true);
+		const second = addButton(doc).click();
+		await Promise.all([first, second]);
+		expect(bookmarksFor(BOOK)).toHaveLength(1);
+		// And it is offered again once the mark is on the list.
+		expect(addButton(doc).disabled).toBe(false);
+	});
 });
 
 describe("naming and unnaming", () => {
@@ -261,6 +287,48 @@ describe("naming and unnaming", () => {
 		await rows(doc)[0].byClass("stonetopBookmarkRename")[0].click();
 		const typed = await rows(doc)[0].byClass("stonetopBookmarkInput")[0].emit("keydown", { key: "n" });
 		expect(typed.propagationStopped).toBe(true);
+	});
+
+	// Blur commits, and one way to blur an input is to start renaming a DIFFERENT row: that click
+	// has already repainted the panel with the other row's input in it. The commit's own repaint
+	// then landed on top of a session that had been typed into, and the text in an input is
+	// nowhere else yet.
+	it("does not repaint over a rename the reader has already started on another row", async () => {
+		withBookmarks({ 1: [
+			{ id: "a", label: "", page: 91, hash: "page=91" },
+			{ id: "b", label: "", page: 120, hash: "page=120" },
+		] });
+		const { doc } = mounted();
+		await rows(doc)[0].byClass("stonetopBookmarkRename")[0].click();
+		const first = rows(doc)[0].byClass("stonetopBookmarkInput")[0];
+		first.value = "Named on the way past";
+		// The pencil on the other row: this is the repaint that blurs the input above.
+		await rows(doc)[1].byClass("stonetopBookmarkRename")[0].click();
+		const second = rows(doc)[1].byClass("stonetopBookmarkInput")[0];
+		second.value = "Being typed right now";
+		await first.emit("blur");
+		// The first row's name was still saved...
+		expect(bookmarksFor(BOOK)[0].label).toBe("Named on the way past");
+		// ...and the session that was open when it landed is the same input, still holding what
+		// had been typed into it.
+		expect(rows(doc)[1].byClass("stonetopBookmarkInput")[0]).toBe(second);
+		expect(second.value).toBe("Being typed right now");
+	});
+
+	// Same hazard from the other side: a removal is a write, and its repaint has to wait too.
+	it("does not repaint over a rename when another row is removed under it", async () => {
+		withBookmarks({ 1: [
+			{ id: "a", label: "Staying", page: 91, hash: "page=91" },
+			{ id: "b", label: "Going", page: 120, hash: "page=120" },
+		] });
+		const { doc } = mounted();
+		await rows(doc)[0].byClass("stonetopBookmarkRename")[0].click();
+		const input = rows(doc)[0].byClass("stonetopBookmarkInput")[0];
+		input.value = "Half typed";
+		await rows(doc)[1].byClass("stonetopBookmarkDelete")[0].click();
+		expect(bookmarksFor(BOOK).map(row => row.id)).toEqual(["a"]);
+		expect(rows(doc)[0].byClass("stonetopBookmarkInput")[0]).toBe(input);
+		expect(input.value).toBe("Half typed");
 	});
 
 	it("removes one mark and repaints without it", async () => {

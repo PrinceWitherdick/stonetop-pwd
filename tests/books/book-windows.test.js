@@ -16,9 +16,10 @@ function withBooks(paths = {}) {
 // A viewer stood in for the pdf.js one in the frame: the handful of members our window drives,
 // and no more. `_accumulateTicks` is pdf.js's own running total, copied because the whole point
 // of the wheel arithmetic is that it matches theirs.
-function fakeViewer({ scale = 1, presentation = false } = {}) {
+function fakeViewer({ scale = 1, presentation = false, page = 91, pagesCount = 308 } = {}) {
 	return {
-		page: 91,
+		page,
+		pagesCount,
 		pdfViewer: { currentScale: scale, isInPresentationMode: presentation },
 		_wheelUnusedTicks: 0,
 		_accumulateTicks(ticks, prop) {
@@ -155,6 +156,24 @@ describe("the reader window", () => {
 		const notifications = global.ui.notifications;
 		global.ui.notifications = { ...notifications, warn };
 		try { new BookReaderWindow({ book: 1 })._showPlayers(); }
+		finally { global.ui.notifications = notifications; }
+		expect(game.socket.emit).not.toHaveBeenCalled();
+		expect(warn).toHaveBeenCalled();
+	});
+
+	// A viewer object that exists but holds no document yet answers `page` 1, so asking it alone
+	// could not tell that state from a reader on the first sheet -- and this is exactly the wait a
+	// GM presses the button during. `pagesCount` is what knows.
+	it("says so rather than sending page one out of a book that is still parsing", () => {
+		withBooks({ 1: "books/one.pdf" });
+		game.user = { isGM: true, id: "gm" };
+		game.socket = { emit: vi.fn() };
+		const warn = vi.fn();
+		const notifications = global.ui.notifications;
+		global.ui.notifications = { ...notifications, warn };
+		const win = new BookReaderWindow({ book: 1 });
+		win._viewerApp = fakeViewer({ page: 1, pagesCount: 0 });
+		try { win._showPlayers(); }
 		finally { global.ui.notifications = notifications; }
 		expect(game.socket.emit).not.toHaveBeenCalled();
 		expect(warn).toHaveBeenCalled();

@@ -203,10 +203,18 @@ export class BookReaderWindow extends StonetopDialog {
 	 * because by the time a GM presses this they have read their way to somewhere else: the URL
 	 * is where the book started, not where it is. A frame that has not finished loading has no
 	 * page to send yet, and says so rather than sending page one.
+	 *
+	 * WHETHER IT HAS IS ASKED OF `pagesCount`, NOT OF `page`. pdf.js's `page` reads the viewer's
+	 * current page number, and a viewer holding no document answers 1 -- so `page` cannot tell a
+	 * book still parsing apart from a reader sitting on the first sheet, and the guard below it
+	 * never fired. On a book this size the wait is long enough to press the button in, and what
+	 * it did was send page one to the whole table. `pagesCount` is 0 until the document is there,
+	 * which is the question this is actually asking.
 	 */
 	_showPlayers() {
-		const page = Number(this._viewerApp?.page);
-		if (!Number.isFinite(page) || page < 1) {
+		const app = this._viewerApp;
+		const page = Number(app?.page);
+		if (!(Number(app?.pagesCount) > 0) || !Number.isFinite(page) || page < 1) {
 			ui.notifications?.warn?.(localize("stonetop.books.stillOpening"));
 			return;
 		}

@@ -119,6 +119,12 @@ const BOOKMARKS_CSS = `
 	background-color: var(--treeitem-bg-color, rgb(255 255 255 / 0.1));
 	color: var(--treeitem-hover-color, currentColor);
 }
+/* Held while the first mark in a book waits on the outline. Says so, rather than simply not
+   answering: a button that ignores a press reads as broken. */
+.stonetopBookmarkAdd:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
 .stonetopBookmarkRow {
 	display: flex;
 	align-items: start;
@@ -232,6 +238,13 @@ class BookmarksTab {
 		// While our own activation is toggling things, so the sidebar event it provokes is not
 		// read as the reader switching away from us.
 		this._activating = false;
+		// Which row the panel is currently showing an input for, "" for none. This is the panel's
+		// claim on itself: the text in that input is nowhere else yet, so anything that finishes
+		// later and would repaint has to ask whether the panel it is repainting is still its own.
+		this._editing = "";
+		// The add button, and whether it is already busy making a mark.
+		this._addButton = null;
+		this._adding = false;
 		this._onSidebarView = (evt) => this._sidebarViewChanged(evt);
 	}
 
@@ -359,6 +372,10 @@ class BookmarksTab {
 	/** Repaint the panel from the stored list. Cheap, and the only way anything gets in here. */
 	refresh({ editing = "" } = {}) {
 		if (!this._view) return;
+		// BEFORE the panel is torn down, not after it is rebuilt. Emptying the view blurs whatever
+		// input was in it, and a blur commits -- so the commit that is about to run has to already
+		// be able to see that the panel has changed hands.
+		this._editing = editing;
 		this._view.replaceChildren();
 		this._view.append(this._makeAddButton());
 		const rows = bookmarksFor(this._book);
@@ -381,8 +398,24 @@ class BookmarksTab {
 		button.type = "button";
 		button.textContent = localize("stonetop.books.bookmarks.add");
 		button.title = localize("stonetop.books.bookmarks.addTip");
+		// Held so `_addHere` can put it out of reach while it is working. A repaint replaces the
+		// element, so this is reassigned every time rather than looked up once.
+		button.disabled = this._adding;
 		button.addEventListener("click", () => this._addHere());
+		this._addButton = button;
 		return button;
+	}
+
+	/**
+	 * Repaint, unless the reader is in the middle of naming something.
+	 *
+	 * For the writes that finish on their own time. A repaint that lands while a row is being
+	 * renamed throws away the text typed into that input, which exists nowhere else -- and the
+	 * list it would have drawn gets drawn anyway the moment the rename ends, which is the next
+	 * thing that happens.
+	 */
+	_refreshUnlessNaming() {
+		if (!this._editing) this.refresh();
 	}
 
 	_makeEmptyNote() {
@@ -431,7 +464,7 @@ class BookmarksTab {
 		item.append(this._makeTool("stonetopBookmarkRename", "stonetop.books.bookmarks.rename",
 			() => this.refresh({ editing: row.id })));
 		item.append(this._makeTool("stonetopBookmarkDelete", "stonetop.books.bookmarks.remove",
-			async () => { await removeBookmark(this._book, row.id); this.refresh(); }));
+			async () => { await removeBookmark(this._book, row.id); this._refreshUnlessNaming(); }));
 		return item;
 	}
 
@@ -481,7 +514,13 @@ class BookmarksTab {
 			if (done) return;
 			done = true;
 			if (save) await renameBookmark(this._book, row.id, input.value);
-			this.refresh();
+			// The repaint is OURS to make only while the panel is still showing our input. The way
+			// it stops being ours is the reader clicking the pencil on another row: that click
+			// repaints with the other row's input in it, which blurs this one, which commits -- and
+			// the repaint that used to happen here landed after the write and wiped the input they
+			// had already started typing into, keystrokes and all. The row's new name goes unshown
+			// until that rename ends, which repaints from the stored list and shows both.
+			if (this._editing === row.id) this.refresh();
 		};
 		input.addEventListener("keydown", (evt) => {
 			evt.stopPropagation();
@@ -510,6 +549,10 @@ class BookmarksTab {
 	 * honestly say.
 	 */
 	_here() {
+		// Nothing to mark until the document is actually there. `page` answers 1 in a viewer that
+		// has not loaded one, so asking it alone would mark page 1 of a book still parsing; the
+		// count is 0 until then, and is the honest form of the question.
+		if (!this._pageCount()) return null;
 		const location = this._app.pdfViewer?._location;
 		const page = Math.trunc(Number(location?.pageNumber ?? this._app.page));
 		if (!Number.isFinite(page) || page < 1) return null;
@@ -517,16 +560,36 @@ class BookmarksTab {
 		return { page, hash: params.startsWith("#") ? params.slice(1) : `page=${page}` };
 	}
 
+	/**
+	 * Mark where the reader is.
+	 *
+	 * HELD WHILE IT WORKS, because the first mark in a book is slow: naming it means resolving the
+	 * document's outline, which is a promise per heading and on a book this size is comfortably
+	 * long enough to press the button again. Every press during that wait made ANOTHER mark on the
+	 * same page, and the panel then repainted once per press, so the reader ended up with three
+	 * identical rows and an input on whichever won. The button is out of reach until the first one
+	 * is on the list; the repaint that ends this replaces it with a fresh, enabled one.
+	 */
 	async _addHere() {
-		const here = this._here();
-		if (!here) {
-			ui.notifications?.warn?.(localize("stonetop.books.stillOpening"));
-			return;
+		if (this._adding) return;
+		this._adding = true;
+		if (this._addButton) this._addButton.disabled = true;
+		try {
+			const here = this._here();
+			if (!here) {
+				ui.notifications?.warn?.(localize("stonetop.books.stillOpening"));
+				return;
+			}
+			const row = await addBookmark(this._book, { ...here, label: await this._suggestLabel(here.page) });
+			// Straight into rename, with the suggestion selected: marking a place and saying what
+			// it is are one gesture, and a reader who likes the suggested name just presses Enter.
+			this.refresh({ editing: row?.id ?? "" });
+		} finally {
+			this._adding = false;
+			// The button here is the one the repaint above just made, when there was one; on the
+			// paths that returned early it is still the one that was pressed.
+			if (this._addButton) this._addButton.disabled = false;
 		}
-		const row = await addBookmark(this._book, { ...here, label: await this._suggestLabel(here.page) });
-		// Straight into rename, with the suggestion selected: marking a place and saying what it
-		// is are one gesture, and a reader who likes the suggested name just presses Enter.
-		this.refresh({ editing: row?.id ?? "" });
 	}
 
 	/**

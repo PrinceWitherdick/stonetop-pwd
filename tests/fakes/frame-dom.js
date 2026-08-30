@@ -21,7 +21,7 @@ export function frameEl(doc, tag) {
 		tagName: String(tag).toUpperCase(),
 		id: "", className: "", type: "", title: "", href: "", value: "", maxLength: 0,
 		textContent: "", dataset: {}, children: [], parent: null, attrs: {}, handlers: {},
-		focused: false, selected: false,
+		focused: false, selected: false, disabled: false,
 		get classes() { return node.className.split(/\s+/).filter(Boolean); },
 		classList: {
 			contains: name => node.classes.includes(name),

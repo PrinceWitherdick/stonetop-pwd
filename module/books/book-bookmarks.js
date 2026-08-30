@@ -90,6 +90,29 @@ async function writeBook(book, rows) {
 }
 
 /**
+ * Every change to the list, one at a time.
+ *
+ * WHY A QUEUE. Each of add, rename and remove is the same three steps: read the whole setting,
+ * change one row, write the whole thing back. Two of those overlapping both read the SAME list,
+ * and the second write puts back a list that never saw the first change -- so a reader who names
+ * a mark and immediately deletes another one loses the name, and a name typed while an earlier
+ * write is still in flight loses the row. Neither is rare: the write is a database round trip and
+ * the gestures that start one are a click apart. Chaining them means every read happens after the
+ * previous write has landed, so each change sees the list it is about to change.
+ *
+ * The chain itself is never left rejected. `writeBook` already answers false rather than throwing,
+ * but a link that somehow threw would otherwise poison every write after it for the life of the
+ * session, which is a worse failure than the one that caused it.
+ */
+let writeChain = Promise.resolve();
+
+function queueWrite(task) {
+	const run = writeChain.then(() => task());
+	writeChain = run.then(() => {}, () => {});
+	return run;
+}
+
+/**
  * A label, trimmed to something a list can show.
  *
  * Newlines collapse to spaces rather than being stripped: a label pasted out of the book's own
@@ -118,25 +141,31 @@ export async function addBookmark(book, { label, page, hash } = {}) {
 		created: Date.now(),
 	};
 	if (!isBookmark(row)) return null;
-	if (!await writeBook(book, [...bookmarksFor(book), row])) return null;
-	return row;
+	return queueWrite(async () => {
+		if (!await writeBook(book, [...bookmarksFor(book), row])) return null;
+		return row;
+	});
 }
 
 export async function renameBookmark(book, id, label) {
-	const rows = bookmarksFor(book);
-	const at = rows.findIndex(row => row.id === id);
-	if (at < 0) return null;
-	const next = rows.map((row, i) => (i === at ? { ...row, label: cleanLabel(label) } : row));
-	await writeBook(book, next);
-	return next[at];
+	return queueWrite(async () => {
+		const rows = bookmarksFor(book);
+		const at = rows.findIndex(row => row.id === id);
+		if (at < 0) return null;
+		const next = rows.map((row, i) => (i === at ? { ...row, label: cleanLabel(label) } : row));
+		await writeBook(book, next);
+		return next[at];
+	});
 }
 
 export async function removeBookmark(book, id) {
-	const rows = bookmarksFor(book);
-	const next = rows.filter(row => row.id !== id);
-	if (next.length === rows.length) return false;
-	await writeBook(book, next);
-	return true;
+	return queueWrite(async () => {
+		const rows = bookmarksFor(book);
+		const next = rows.filter(row => row.id !== id);
+		if (next.length === rows.length) return false;
+		await writeBook(book, next);
+		return true;
+	});
 }
 
 /**

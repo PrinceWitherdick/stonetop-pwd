@@ -84,6 +84,57 @@ describe("a reader's bookmarks in one book", () => {
 	});
 });
 
+/**
+ * Overlapping is ORDINARY here, not a stress case. A write is a round trip to the world's
+ * database, and the gestures that start one are a click apart: naming a mark and then deleting
+ * another, or making a second mark while the first is still going in. Each of add, rename and
+ * remove reads the whole list, changes one row and writes it all back, so two that read the SAME
+ * list mean the second write puts back a list the first change never reached.
+ */
+describe("two changes to the list at once", () => {
+	/** A `set` that takes a turn to land, which is the only thing the instant fake gets wrong. */
+	function withSlowWrites(store) {
+		game.settings.set = vi.fn(async (_scope, key, value) => {
+			await new Promise(resolve => setTimeout(resolve, 5));
+			store[key] = structuredClone(value);
+		});
+	}
+
+	it("keeps both marks when two are made before the first has landed", async () => {
+		const store = withBookmarks();
+		withSlowWrites(store);
+		await Promise.all([
+			addBookmark(1, { label: "First", page: 30, hash: "page=30" }),
+			addBookmark(1, { label: "Second", page: 91, hash: "page=91" }),
+		]);
+		expect(bookmarksFor(1).map(row => row.label)).toEqual(["First", "Second"]);
+	});
+
+	it("keeps the new name when a rename and a removal overlap", async () => {
+		const store = withBookmarks({ 1: [
+			{ id: "a", label: "", page: 30, hash: "page=30" },
+			{ id: "b", label: "Doomed", page: 91, hash: "page=91" },
+		] });
+		withSlowWrites(store);
+		await Promise.all([
+			renameBookmark(1, "a", "Named while the other went"),
+			removeBookmark(1, "b"),
+		]);
+		expect(bookmarksFor(1).map(row => [row.id, row.label]))
+			.toEqual([["a", "Named while the other went"]]);
+	});
+
+	// The queue must not become a way for one refused write to take every later one with it.
+	it("goes on writing after one change was refused", async () => {
+		game.settings = { get: () => ({}), set: vi.fn(async () => { throw new Error("refused"); }) };
+		global.ui = { notifications: { warn: vi.fn() } };
+		expect(await addBookmark(1, { label: "Lost", page: 30, hash: "page=30" })).toBeNull();
+		const store = withBookmarks();
+		expect(await addBookmark(1, { label: "Kept", page: 91, hash: "page=91" })).not.toBeNull();
+		expect(store[BOOKMARKS_SETTING][1]).toHaveLength(1);
+	});
+});
+
 describe("what a bookmark is called", () => {
 	it("collapses a pasted passage onto one line and cuts it to a length a row can show", () => {
 		const label = cleanLabel(`  Steadings\n\tand   Seasons ${"x".repeat(200)}  `);
