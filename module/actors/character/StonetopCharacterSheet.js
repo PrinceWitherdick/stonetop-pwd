@@ -33,8 +33,8 @@ import {CharacterLedger} from "./CharacterLedger.js";
 import {wireTabSearch} from "../../utils/tab-search.js";
 import {createPacker, fitColumns, makeColumns, packShortest, wireMasonry} from "../../utils/masonry.js";
 import {mountTabRail} from "../../utils/tab-rail.js";
-import {buildPreferenceGroups, formatRange, openPreferenceMenu, setPreference} from "../../utils/sheet-preferences.js";
-import {openSystemSettings} from "../../utils/open-settings.js";
+import {buildPreferenceGroups} from "../../utils/sheet-preferences.js";
+import {showsPreferencesTab, withPreferencesTab} from "../../utils/preferences-tab.js";
 import {injectHeaderToggle} from "../../utils/sheet-chrome.js";
 import {mountScrollFrost} from "../../utils/scroll-frost.js";
 import {withSheetSizeMemory} from "../../utils/sheet-size.js";
@@ -789,7 +789,11 @@ export function createStonetopCharacterSheetClass(Base) {
 	// withSheetSizeMemory: reopen at the size this user last left this character's sheet. Both
 	// dimensions are restored independently — a sheet carried over from when only width was
 	// remembered has no stored height, and keeps the default one.
-	return class StonetopCharacterSheet extends withSectionEditing(withSheetSizeMemory(Base)) {
+	//
+	// withPreferencesTab: the Preferences tab's three delegated handlers, shared with the GM
+	// Toolkit sheet, which carries the same tab. The tab's rows and values come from
+	// module/utils/sheet-preferences.js either way; the mixin is only the wiring.
+	return class StonetopCharacterSheet extends withPreferencesTab(withSectionEditing(withSheetSizeMemory(Base))) {
 		_stonetopCharacter;
 		_editMode = false;
 		// The playbook's Invocation list as of the last render, so a click can name one without
@@ -1293,7 +1297,18 @@ export function createStonetopCharacterSheetClass(Base) {
 			// every render so a value changed in Foundry's settings menu (or on another sheet's
 			// copy of this tab) is what the tab draws. Not gated on `editable`: none of it is
 			// actor data, so a player reading a locked sheet still owns their own font size.
-			context.stonetop.preferences = buildPreferenceGroups();
+			//
+			// It IS gated on whose character this is (`showsPreferencesTab`). The settings behind
+			// it are the reader's own wherever they are changed from, so the tab belongs on the
+			// one sheet that is theirs: a GM opening a player's character found their OWN font
+			// size sitting on it, reading as the player's. A GM's copy is wherever their own
+			// `user.character` points — the GM Toolkit for a full GM, and this very sheet for an
+			// assistant gamemaster who also plays a character at the table.
+			//
+			// Nothing is built for a reader who is not being offered the tab: the rows come from
+			// `game.settings` on every render, and this sheet re-renders often.
+			context.stonetop.showPreferences = showsPreferencesTab(this.actor);
+			context.stonetop.preferences = context.stonetop.showPreferences ? buildPreferenceGroups() : [];
 			// The tab carries the active insert — and, when there isn't one, the "Choose Your Fate"
 			// picker, which is the manual route for a table who resolved Death's Door away from the
 			// sheet. Edit mode is NOT reason enough to draw it: a tab about being dead would open on
@@ -5327,65 +5342,6 @@ export function createStonetopCharacterSheetClass(Base) {
 				merged.splice(at, 0, key);
 			}
 			return merged;
-		}
-
-		/**
-		 * The Preferences tab: read a control, write the client setting behind it.
-		 *
-		 * Delegated off the PANEL rather than bound per control, so the wiring survives the tab
-		 * being re-rendered under it and costs three listeners instead of one per row.
-		 *
-		 * The setting key is the control's `data-pref`, and `setPreference` refuses any key the tab
-		 * does not offer - the attribute is DOM, and a delegated handler that trusted it would write
-		 * whatever a stray one named, world-scoped settings included.
-		 *
-		 * No `stopPropagation` and no re-render here. These inputs carry no `name`, so the form
-		 * submit they set off collects exactly the fields it collected before and writes nothing new
-		 * (see the note at the top of tab-preferences.hbs) - the same bargain the moves tab's unnamed
-		 * view checkboxes have always made. Repainting is the SETTING's job: the ones that change
-		 * what a sheet draws re-render every open sheet from their own `onChange`, and the ones that
-		 * only move a CSS variable must not, or a font-size drag would rebuild the sheet under the
-		 * handle mid-drag.
-		 */
-		_wirePreferences(html) {
-			const panel = html[0].querySelector(".stonetop-preferences");
-			if (!panel) return;
-
-			// `change`, not `input`: a dragged slider fires `input` per pixel, and each of those
-			// would be a localStorage write plus whatever the setting's onChange does - for values
-			// the player is only passing through on the way to the one they want.
-			panel.addEventListener("change", ev => {
-				const control = ev.target.closest("[data-pref]");
-				if (!control) return;
-				const raw = control.type === "checkbox" ? control.checked : control.value;
-				// Caught, not dropped: a failed write leaves the control showing a preference the
-				// player believes is set, which is the one state nothing else would report.
-				setPreference(control.dataset.pref, raw).catch(err => {
-					console.error("Stonetop | could not save that preference", err);
-					ui.notifications?.error("That preference could not be saved.");
-				});
-			});
-
-			// The slider's number, repainted while the handle moves so the value being chosen can
-			// be read before the `change` above commits it.
-			panel.addEventListener("input", ev => {
-				const control = ev.target.closest('input[type="range"][data-pref]');
-				if (!control) return;
-				const readout = control.parentElement?.querySelector(".stonetop-preference-range-value");
-				if (readout) readout.textContent = formatRange(control.value, control.step);
-			});
-
-			panel.addEventListener("click", ev => {
-				const menuButton = ev.target.closest("[data-preference-menu]");
-				if (menuButton) {
-					ev.preventDefault();
-					openPreferenceMenu(menuButton.dataset.preferenceMenu);
-					return;
-				}
-				if (!ev.target.closest(".stonetop-preferences-open-settings")) return;
-				ev.preventDefault();
-				openSystemSettings();
-			});
 		}
 
 		_getDragEventData(ev) {

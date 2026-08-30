@@ -119,8 +119,13 @@
 				{{> "stonetop.tab-nav-item" tab="notes"         label=(localize "stonetop.sheet.tabs.notes")}}
 				{{!-- Last, and deliberately: it is the only tab that is not about the character.
 				      A player opens it once to set their text size and then rarely again, so it
-				      sits below everything they read every session. --}}
-				{{> "stonetop.tab-nav-item" tab="preferences"   label=(localize "stonetop.sheet.tabs.preferences")}}
+				      sits below everything they read every session.
+
+				      Only on a sheet that is the reader's OWN (`showsPreferencesTab`). The settings
+				      behind it are per-person, so a GM reading a player's character has no business
+				      being shown them there — their copy sits on whichever sheet is theirs, the GM
+				      Toolkit or, for an assistant who also plays, their own character. --}}
+				{{#if stonetop.showPreferences}}{{> "stonetop.tab-nav-item" tab="preferences"   label=(localize "stonetop.sheet.tabs.preferences")}}{{/if}}
 			</nav>
 
 			<div class="stonetop-sheet-layout">
@@ -136,7 +141,7 @@
 					{{> "stonetop.tab-details"}}
 					{{> "stonetop.tab-special-moves"}}
 					{{> "stonetop.tab-notes"}}
-					{{> "stonetop.tab-preferences"}}
+					{{#if stonetop.showPreferences}}{{> "stonetop.tab-preferences"}}{{/if}}
 				</section>
 
 				<div class="stonetop-moves-sidebar{{#if stonetop.sidebarCollapsed}} is-collapsed{{/if}}">

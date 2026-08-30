@@ -82,8 +82,11 @@ describe("the Expeditions tab: wiring", () => {
 	// The rail's order is the source order of these partial calls, and the body's is a second list
 	// that has to agree: a mismatch is invisible, because the panels are shown one at a time.
 	it("sits directly after Encounters, in the rail and in the body", () => {
+		// The PANEL order. The rail carries one more entry after these seven — the shared
+		// Preferences tab, whose panel comes from "stonetop.tab-preferences" rather than from a
+		// gm-toolkit-tab partial, so it is absent from the body list this regex builds.
 		const order = ["homefront", "moves", "threats", "encounters", "expeditions", "wonder", "loop"];
-		expect([...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1])).toEqual(order);
+		expect([...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1])).toEqual([...order, "preferences"]);
 		expect([...SHEET_HBS.matchAll(/\{\{>\s*"stonetop\.gm-toolkit-tab-(\w+)"\}\}/g)].map(m => m[1])).toEqual(order);
 	});
 

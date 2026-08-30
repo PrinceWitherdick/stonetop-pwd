@@ -24,6 +24,8 @@ import { stripHeaderChrome } from "../../utils/sheet-chrome.js";
 import { mountTabRail } from "../../utils/tab-rail.js";
 import { withSheetSizeMemory } from "../../utils/sheet-size.js";
 import { withSectionEditing } from "../../utils/section-editing.js";
+import { showsPreferencesTab, withPreferencesTab } from "../../utils/preferences-tab.js";
+import { buildPreferenceGroups } from "../../utils/sheet-preferences.js";
 import { gmMoveSections } from "../../gm-toolkit/gm-moves.js";
 import { bookPageRef } from "../../gm-toolkit/book-ref.js";
 import { moveBlurb } from "../../gm-toolkit/gm-move-blurb.js";
@@ -106,7 +108,12 @@ export function createStonetopGmToolkitSheetClass(Base) {
 	// configs over one engine (gm-bundle-tab.js) which the sheet HOLDS rather than is mixed with,
 	// because a mixin can only be applied to a class once. Each mixin adds only its own field and
 	// the three entry points below; neither can shadow the other's.
-	return class StonetopGmToolkitSheet extends withGmExpeditionsTab(withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base)))))) {
+	//
+	// withPreferencesTab: the Preferences tab at the foot of the rail, the same one the
+	// character sheet carries — same partial, same descriptor module, same client settings. A
+	// GM runs a session from this sheet and may never open a character sheet at all, so the one
+	// place their own text size lives has to be reachable from here too.
+	return class StonetopGmToolkitSheet extends withPreferencesTab(withGmExpeditionsTab(withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base))))))) {
 		// Read by the mixin's `isSectionEditable`. Constant, not state: this sheet has no global
 		// edit wrench, so a section is editable exactly when its own pencil is on.
 		_editMode = false;
@@ -364,6 +371,22 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// writes files. This sheet is GM-only by ownership, so it is always true in practice.
 			context.stonetop.isGM = game.user?.isGM ?? false;
 
+			// The Preferences tab: this GM's own client settings, grouped, with each row's label,
+			// hint and control shape read off its registration rather than restated — the character
+			// sheet's copy of the tab is built from this same call. Rebuilt every render, so a value
+			// changed in Foundry's settings menu (or on that other copy) is what this one draws.
+			//
+			// One copy per person is the rule, and for most GMs this sheet is where their copy
+			// lands: `showsPreferencesTab` keeps the tab off the player character sheets a GM opens
+			// all session, and this is the sheet they were given instead. Not unconditional, all
+			// the same — an ASSISTANT gamemaster who also plays keeps their own character in
+			// `user.character`, and their copy belongs on that sheet rather than in the world's
+			// shared toolkit, so this asks and comes back false for them. Which is exactly why the
+			// call asks rather than assuming a GM: the answer is the one rule the character sheet
+			// is gated on too, and a sheet that decided for itself is how the two come to disagree.
+			context.stonetop.showPreferences = showsPreferencesTab(this.actor);
+			context.stonetop.preferences = context.stonetop.showPreferences ? buildPreferenceGroups() : [];
+
 			// The two rulebook icons in the banner, beside the title. Reference this sheet OWES:
 			// every move, diagram and homefront heading on it cites the printed page it was
 			// transcribed from, and the shortest way from a citation to the page it names is the
@@ -419,6 +442,10 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// Folding a section is a reading preference, so this is wired outside any
 			// editability guard, exactly as the character and steading sheets wire theirs.
 			this._wireSectionCollapse(html, HEADING_SELECTOR);
+			// The Preferences tab, from the shared mixin the character sheet takes it from, and
+			// outside the same guards for the same reason: nothing on it is actor data, so a GM
+			// still owns their own text size on a sheet they cannot edit.
+			this._wirePreferences(html);
 			// The per-section edit pencil, now Encounters' and Wonder's only. Same class hook the
 			// steading used, because the shared `section-edit-toggle` partial emits it and moved
 			// here unchanged along with the rest of that markup.

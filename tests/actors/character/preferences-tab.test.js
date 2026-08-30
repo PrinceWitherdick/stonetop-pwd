@@ -3,6 +3,7 @@ import { readRepo as read, readCss, repoFileExists, declarations, stripComments 
 import {
 	GM_ONLY_KEYS, PREFERENCE_GROUPS, PREFERENCE_KEYS, buildPreferenceGroups, formatRange, openPreferenceMenu, setPreference,
 } from "../../../module/utils/sheet-preferences.js";
+import { showsPreferencesTab } from "../../../module/utils/preferences-tab.js";
 
 // The character sheet's Preferences tab: this PLAYER's client settings, surfaced where they read
 // their character. See module/utils/sheet-preferences.js and tab-preferences.hbs.
@@ -56,6 +57,17 @@ describe("Preferences tab wiring", () => {
 		expect(SHEET_HBS).toContain('{{> "stonetop.tab-nav-item" tab="preferences"');
 		expect(SHEET_HBS).toContain('{{> "stonetop.tab-preferences"}}');
 		expect(TAB_HBS).toContain('data-tab="preferences"');
+	});
+
+	// BOTH halves take the same gate. A nav entry left ungated is a rail button that opens an
+	// empty tab; a panel left ungated is the whole tab still on the sheet with no way to reach
+	// it but a saved rail order — which is a state a GM's sheet can genuinely be in.
+	it("gates the nav entry and the panel on the same flag", () => {
+		expect(SHEET_HBS).toContain('{{#if stonetop.showPreferences}}{{> "stonetop.tab-preferences"}}{{/if}}');
+		expect(SHEET_HBS).toMatch(
+			/\{\{#if stonetop\.showPreferences\}\}\{\{> "stonetop\.tab-nav-item" tab="preferences"[^}]*\}\}\{\{\/if\}\}/);
+		// And the flag is the shared rule, not a second answer written here.
+		expect(SHEET_JS).toContain("context.stonetop.showPreferences = showsPreferencesTab(this.actor);");
 	});
 
 	// LAST in the template is what puts it at the foot of the modern rail and the right-hand end
@@ -485,5 +497,91 @@ describe("formatRange", () => {
 		expect(formatRange(1.5, 0.1)).toBe("1.5");
 		expect(formatRange(2, 1)).toBe("2");
 		expect(formatRange(0.25, 0.05)).toBe("0.25");
+	});
+});
+
+// ── Who is offered the tab ────────────────────────────────────────────────────────────────
+//
+// The settings behind this tab are the READER's own, the same values wherever they are changed
+// from, so a copy of it on a sheet that is not theirs is not extra reach — it is the same tab in
+// somebody else's house, reading as though it belonged to the character on screen. One surface
+// per person: your own character, or the GM Toolkit if you are the GM.
+//
+// The trap this is written around is `isOwner`, which short-circuits to true for ANY gamemaster
+// (see module/utils/preferences-tab.js and the note in hooks/Ready.js). A rule built on it reads
+// as "mine" and answers "yes" for every actor in the world on a GM's client, which is the exact
+// state being fixed — so a GM here is always given `isOwner: true`, the way a real client would.
+describe("who is offered the Preferences tab", () => {
+	const gm     = { id: "gm1",      isGM: true,  character: { id: "toolkit1" } };
+	const player = { id: "player1",  isGM: false, character: { id: "char1" } };
+	const other  = { id: "player2",  isGM: false, character: { id: "char2" } };
+
+	/** A character sheet's actor: owned by name unless told otherwise, and `isOwner` for a GM. */
+	const character = (ownership = {}) => ({ id: "char1", type: "character", ownership, isOwner: true });
+	const toolkit   = { id: "toolkit1", type: "gmToolkit", ownership: { default: 0 }, isOwner: true };
+
+	it("offers a player their own character, by ownership entry or by assignment", () => {
+		expect(showsPreferencesTab(character({ player1: 3 }), player)).toBe(true);
+		// No entry, but it is the sheet this player was handed — a world that shares its PCs
+		// through `ownership.default` never writes one.
+		expect(showsPreferencesTab(character({ default: 3 }), player)).toBe(true);
+	});
+
+	it("keeps it off another player's character", () => {
+		expect(showsPreferencesTab(character({ player1: 3 }), other)).toBe(false);
+		// Editable by the whole table is not the same as theirs.
+		expect(showsPreferencesTab(character({ default: 3 }), other)).toBe(false);
+	});
+
+	// The case that prompted the rule: a GM opens a player's character to fix a stat and finds
+	// their own font size sitting on it. `isOwner` is true here, as it is on a real GM client.
+	it("keeps it off every character sheet a GM opens", () => {
+		expect(showsPreferencesTab(character({ player1: 3 }), gm)).toBe(false);
+		expect(showsPreferencesTab(character({ gm1: 3 }), gm)).toBe(false);
+	});
+
+	// ...and gives them one of their own instead, so nobody is left without a copy.
+	it("offers the GM Toolkit to a GM, and to a GM only", () => {
+		expect(showsPreferencesTab(toolkit, gm)).toBe(true);
+		expect(showsPreferencesTab(toolkit, player)).toBe(false);
+	});
+
+	// A GM who cleared their assignment, or whose mint has not landed yet: still a GM, still needs
+	// somewhere, and the toolkit is where the assignment would have pointed anyway.
+	it("offers the toolkit to a GM with no assigned character", () => {
+		expect(showsPreferencesTab(toolkit, { id: "gm2", isGM: true, character: null })).toBe(true);
+	});
+
+	// The other half of `isGM`, and the reason the rule cannot be "no GM on any character sheet":
+	// an ASSISTANT gamemaster who also plays. `_assignGmToolkitToGm` finds their PC already in
+	// `user.character` and deliberately leaves it there, so the sheet they read their character on
+	// is the sheet their own settings belong on — shutting them out sent them to the world's shared
+	// toolkit to change their own text size.
+	it("offers an assistant GM their own character, and only that", () => {
+		const assistant = { id: "gm3", isGM: true, character: { id: "char1" } };
+		expect(showsPreferencesTab(character({ gm3: 3 }), assistant)).toBe(true);
+		// Still one place per person: their PC is it, so the shared toolkit is not also offered.
+		expect(showsPreferencesTab(toolkit, assistant)).toBe(false);
+		// And their GM reach still buys them nothing on anyone else's sheet.
+		expect(showsPreferencesTab({ id: "char2", type: "character", ownership: { player2: 3 }, isOwner: true }, assistant))
+			.toBe(false);
+	});
+
+	// Asked on every render of every sheet that carries the tab, including a client mid-boot.
+	it("answers no rather than throwing when there is no actor or no reader", () => {
+		expect(showsPreferencesTab(null, player)).toBe(false);
+		expect(showsPreferencesTab(character({ player1: 3 }), null)).toBe(false);
+		expect(showsPreferencesTab({ type: "character" }, player)).toBe(false);
+	});
+
+	// Core's constants are absent in this environment, and the OWNER level is 3 either way. A
+	// helper that read `CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER` unguarded would throw here — and,
+	// worse, on any client asking before core's globals are up.
+	it("reads OWNER without core's constants present", () => {
+		expect(globalThis.CONST?.DOCUMENT_OWNERSHIP_LEVELS).toBeUndefined();
+		expect(showsPreferencesTab(character({ player1: 3 }), player)).toBe(true);
+		// OBSERVER, on a character this player is not the one assigned to: below OWNER is a no.
+		expect(showsPreferencesTab({ id: "char9", type: "character", ownership: { player1: 2 } }, player))
+			.toBe(false);
 	});
 });

@@ -57,7 +57,7 @@
         "railLabel": "Sheet sections"
       },
       "preferences": {
-        "intro": "These are your own settings, not this character's. They change every Stonetop sheet you open in this browser, and nobody else at the table sees the difference.",
+        "intro": "These are your own settings. They change every Stonetop sheet you open in this browser, and nobody else at the table sees the difference.",
         "accessibility": "Accessibility",
         "appearance": "Look and Feel",
         "rolling": "Rolling and Chat",
