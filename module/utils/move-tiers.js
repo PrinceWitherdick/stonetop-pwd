@@ -102,16 +102,52 @@ const _STOP_WORDS = new Set(["a", "an", "and", "the", "or", "of", "to", "in", "o
 	"is", "as", "be", "by", "for", "you", "your", "so", "if", "but", "that", "this",
 	"with", "from", "s", "t"]);
 
+/**
+ * A description's top-level blocks in order, then whatever trailed the last one.
+ *
+ * ONE walk, because there were two — `parseTiersFromProse` reading and `stripTierProse`
+ * rewriting — and they agreed on three things that are easy to get wrong separately:
+ *
+ * · `_BLOCK_RE.lastIndex = 0` before the loop. It is a module-level `/g` regex, so a walk that
+ *   forgets the reset starts wherever the previous one stopped and silently drops the front of
+ *   the description. That reset now happens in the only place that runs the loop.
+ * · the `last` cursor, and therefore the GAP between one block and the next — which the
+ *   rewriting walk has to preserve and the reading walk ignores.
+ * · the trailing implicit paragraph: a fragment after the final block that carries no block
+ *   markup is one paragraph, inline tags and all (see `_BLOCKISH_RE`).
+ *
+ * Yields `{gap, html}` per block, then exactly one final `{gap, html: null, implicitParagraph}`
+ * carrying the tail — so a caller handles the tail in the same loop rather than repeating the
+ * rule underneath it.
+ */
+function* _blocks(src) {
+	_BLOCK_RE.lastIndex = 0;
+	let last = 0;
+	let m;
+	while ((m = _BLOCK_RE.exec(src)) !== null) {
+		yield { gap: src.slice(last, m.index), html: m[0] };
+		last = m.index + m[0].length;
+	}
+	const tail = src.slice(last);
+	yield { gap: tail, html: null, implicitParagraph: !!tail.trim() && !_BLOCKISH_RE.test(tail) };
+}
+
 /** Significant lowercase word tokens of a plain-text string. */
 function _words(text) {
 	return String(text ?? "").toLowerCase().match(/[a-z0-9]+/g)?.filter(w => !_STOP_WORDS.has(w)) ?? [];
 }
 
-/** Fraction of `text`'s significant words that also appear in `corpus`. 0 for an empty text. */
-function _coverage(text, corpus) {
-	const words = _words(text);
+/**
+ * Fraction of `words` that appear in the prebuilt set `have`. 0 for an empty word list.
+ *
+ * Takes both sides ALREADY TOKENIZED, because every caller has a loop-invariant side: the tier
+ * corpus in `stripTierProse` was being re-tokenized and rebuilt into a fresh Set on every
+ * clause, and `_optionsAlreadyListed` tokenized both strings twice per candidate pair (once to
+ * compare lengths, once inside the coverage call) — 4 tokenizations where 0 new ones are needed,
+ * inside a nested options-by-listed-items loop.
+ */
+function _coverageOf(words, have) {
 	if (!words.length) return 0;
-	const have = new Set(_words(corpus));
 	return words.filter(w => have.has(w)).length / words.length;
 }
 
@@ -203,10 +239,17 @@ export function splitClauses(inner) {
 		}
 		// A boundary needs whitespace, a tag, or the end of the string after it, so "1-for-1"
 		// and a decimal keep their neighbours while "GM's call. Then" splits.
-		const rest = inner.slice(i + 1);
-		if (rest && !/^[\s<]/.test(rest)) continue;
+		//
+		// Read by INDEX, not by slicing the tail: `inner.slice(i + 1)` allocated the whole
+		// remainder for every candidate separator only to look at its first character and count
+		// its leading spaces — the same O(n²) the comment above says was taken out of the entity
+		// check, reintroduced on the other side of the index.
+		const next = inner[i + 1];
+		if (next !== undefined && !/[\s<]/.test(next)) continue;
 		parts.push(inner.slice(start, i + 1));
-		start = i + 1 + (rest.match(/^\s*/)?.[0].length ?? 0);
+		let j = i + 1;
+		while (j < inner.length && /\s/.test(inner[j])) j++;
+		start = j;
 		i = start - 1;
 	}
 	if (start < inner.length) parts.push(inner.slice(start));
@@ -317,18 +360,16 @@ export function parseTiersFromProse(description) {
 		}
 	};
 
-	_BLOCK_RE.lastIndex = 0;
-	let last = 0;
-	let m;
-	while ((m = _BLOCK_RE.exec(src)) !== null) {
-		last = m.index + m[0].length;
+	for (const { gap, html, implicitParagraph } of _blocks(src)) {
+		if (html === null) {
+			if (implicitParagraph) readParagraph(gap);
+			continue;
+		}
 		// Only <p> is read. A <ul> under a tier clause is that clause's option list, and it stays
 		// in the body where its lead-in is, rather than being swallowed into a rung.
-		const p = m[0].match(/^<p\b[^>]*>([\s\S]*?)<\/p\s*>$/i);
+		const p = html.match(/^<p\b[^>]*>([\s\S]*?)<\/p\s*>$/i);
 		if (p) readParagraph(p[1]);
 	}
-	const tail = src.slice(last);
-	if (tail.trim() && !_BLOCKISH_RE.test(tail)) readParagraph(tail);
 
 	if (!found) return null;
 	const results = {};
@@ -390,6 +431,10 @@ export function stripTierProse(description, moveResults = null) {
 	const src = String(description ?? "");
 	if (!src.trim()) return { body: "", riders: [], listLeadCut: false };
 	const corpus = _tierCorpus(moveResults);
+	// Tokenized ONCE for the whole walk: `corpus` is loop-invariant, and the two coverage tests
+	// below run per kept clause, so this was up to 2N tokenizations of the full ladder text plus
+	// 2N identical Set constructions per move.
+	const corpusWords = new Set(_words(corpus));
 	const riders = [];
 	let dropped = false;
 
@@ -423,13 +468,13 @@ export function stripTierProse(description, moveResults = null) {
 				// footnote under the ladder (Shake It Off's NPC caveat, which the ladder only
 				// abbreviates). Never simply dropped on the strength of its lower case.
 				if (_RIDER_RE.test(head) || /^[a-z]/.test(head)) {
-					if (_coverage(head, corpus) < _TAIL_COVERED) {
+					if (_coverageOf(_words(head), corpusWords) < _TAIL_COVERED) {
 						riders.push(_capitalizeVisible(balanceInlineHtml(clause.trim())));
 					}
 					continue;
 				}
 				// A new sentence, but one the ladder already states in its own words.
-				if (_coverage(head, corpus) >= _COVERED) continue;
+				if (_coverageOf(_words(head), corpusWords) >= _COVERED) continue;
 				armed = false;
 			}
 			lastClauseCut = false;
@@ -458,8 +503,6 @@ export function stripTierProse(description, moveResults = null) {
 	// Walk the top-level blocks, rewriting only <p>. Bare text outside any block (a homebrew
 	// description typed as a plain string) is treated as one implicit paragraph.
 	let out = "";
-	let last = 0;
-	let m;
 	// Whether the FIRST `<ul>` lost the sentence that introduced it. A move's option list is led
 	// into either by a tier clause ("on a 10+, pick 2; on a 7-9, pick 1:" — Clash, Forage,
 	// Interfere) or by prose that is not a tier at all ("You can spend Readiness 1-for-1 to:" —
@@ -471,28 +514,26 @@ export function stripTierProse(description, moveResults = null) {
 	let seenList = false;
 	// What the block just before this one said about whether it still introduces the next.
 	let prevLeadLost = false;
-	_BLOCK_RE.lastIndex = 0;
-	while ((m = _BLOCK_RE.exec(src)) !== null) {
-		out += src.slice(last, m.index);
-		last = m.index + m[0].length;
-		if (/^<p\b/i.test(m[0])) {
-			const rewritten = rewriteParagraph(m[0]);
+	for (const { gap, html, implicitParagraph } of _blocks(src)) {
+		if (html === null) {
+			out += implicitParagraph
+				? rewriteParagraph("<p>" + gap + "</p>").html.replace(/^<p>|<\/p>$/g, "")
+				: gap;
+			continue;
+		}
+		out += gap;
+		if (/^<p\b/i.test(html)) {
+			const rewritten = rewriteParagraph(html);
 			out += rewritten.html;
 			prevLeadLost = rewritten.leadLost;
 			continue;
 		}
-		if (!seenList && /^<ul\b/i.test(m[0])) {
+		if (!seenList && /^<ul\b/i.test(html)) {
 			seenList = true;
 			listLeadCut = prevLeadLost;
 		}
 		prevLeadLost = false;
-		out += m[0];
-	}
-	const tail = src.slice(last);
-	if (tail.trim() && !_BLOCKISH_RE.test(tail)) {
-		out += rewriteParagraph("<p>" + tail + "</p>").html.replace(/^<p>|<\/p>$/g, "");
-	} else {
-		out += tail;
+		out += html;
 	}
 	// No `dropped &&` guard: `leadLost` is only ever true past the `droppedHere` return above, and
 	// `droppedHere` and `dropped` are set in the same statement, so a cut has always happened.
@@ -508,10 +549,15 @@ function _optionsAlreadyListed(value, listed) {
 	if (!listed.length) return false;
 	const split = splitPickList(value);
 	if (!split) return false;
-	const matched = split.options.filter(opt => listed.some((li) => {
-		const [short, long] = _words(opt).length <= _words(li).length ? [opt, li] : [li, opt];
-		return _coverage(short, long) >= _SAME_OPTION;
-	}));
+	// Each side tokenized ONCE, not once per candidate pair: this is options × listed items.
+	const listedWords = listed.map(_words);
+	const matched = split.options.filter(opt => {
+		const optWords = _words(opt);
+		return listedWords.some(liWords => {
+			const [short, long] = optWords.length <= liWords.length ? [optWords, liWords] : [liWords, optWords];
+			return _coverageOf(short, new Set(long)) >= _SAME_OPTION;
+		});
+	});
 	return matched.length >= Math.ceil(split.options.length / 2);
 }
 
@@ -553,12 +599,46 @@ function _mergeTiers(primary, fallback) {
 }
 
 /**
+ * Rendered bodies, keyed by the two inputs that decide one.
+ *
+ * PURE FUNCTION, HOT PATH. `moveBodyHtml` is a full parse — block split, clause split per
+ * paragraph, word-coverage tests per clause, then the ladder build — and this release put it
+ * behind the `moveBody` Handlebars helper on every move row of eight templates, replacing a
+ * single regex. AppV1 sheets re-render on every actor update (an HP tick, a checkbox, a flag
+ * write), and a character sheet draws several dozen move rows, some into hidden panels it may
+ * never show. So the same descriptions were re-parsed from scratch on every one of those.
+ *
+ * Safe to cache because both inputs are immutable in practice: a description is a pack or item
+ * string, and `moveResults` is stored data. Keyed on the pair, so a move whose results change
+ * (an edited custom move) misses and re-parses rather than reading a stale body.
+ *
+ * Capped and cleared wholesale rather than evicted one at a time: entries are cheap, the bound
+ * only exists so a world full of homebrew cannot grow it without limit, and an LRU here would
+ * cost more bookkeeping than the parse it is saving.
+ */
+const _BODY_CACHE = new Map();
+const _BODY_CACHE_MAX = 500;
+
+/**
  * A move card's full body: the trigger prose with its tier restatements lifted out, then the
  * tier ladder, then any "either way" rider. A move that names no tier either in its description
  * or in its stored results comes back untouched, so this is safe to use wherever a move
  * description is printed.
  */
 export function moveBodyHtml(description, moveResults) {
+	// NUL between the halves, written as an ESCAPE and never as the character itself: it
+	// cannot occur in a description, so no pair of inputs can spell the same key as a
+	// different pair.
+	const key = `${String(description ?? "")}\u0000${moveResults ? JSON.stringify(moveResults) : ""}`;
+	const hit = _BODY_CACHE.get(key);
+	if (hit !== undefined) return hit;
+	const built = _buildMoveBodyHtml(description, moveResults);
+	if (_BODY_CACHE.size >= _BODY_CACHE_MAX) _BODY_CACHE.clear();
+	_BODY_CACHE.set(key, built);
+	return built;
+}
+
+function _buildMoveBodyHtml(description, moveResults) {
 	// THE DESCRIPTION'S OWN PROSE WINS. `moveResults` was authored for the roll card, where one
 	// tier is shown at a time and terse is right, so it abbreviates: measured over the 54 shipped
 	// moves that carry both, the stored rows drop 110 words of the book's wording that the prose

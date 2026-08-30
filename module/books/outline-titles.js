@@ -57,11 +57,16 @@ export async function outlineHeadings(pdfDocument) {
 	};
 	walk(outline);
 
-	const headings = [];
-	for (const { title, dest } of flat) {
-		const page = await destinationPage(pdfDocument, dest);
-		if (page) headings.push({ page, title });
-	}
+	// Resolved TOGETHER, not one after another. Each `destinationPage` is one or two pdf.js
+	// WORKER round trips, and MAX_HEADINGS is 600, so a book with a full outline stalled on up
+	// to 600 serialized worker messages while the rename field was already opening. The calls
+	// are read-only and mutually independent, and pdf.js pipelines concurrent worker messages,
+	// so this collapses to roughly one batch. `Promise.all` preserves order, which the stable
+	// sort below relies on.
+	const pages = await Promise.all(flat.map(f => destinationPage(pdfDocument, f.dest)));
+	const headings = flat
+		.map((f, i) => ({ page: pages[i], title: f.title }))
+		.filter(h => h.page);
 	// A stable sort, so two headings resolved to the same page stay in the order the outline
 	// listed them -- which is the order the book prints them in, and therefore the one where
 	// the LAST match is the more specific of the two.

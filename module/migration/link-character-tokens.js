@@ -302,6 +302,14 @@ export async function repairCharacterTokenLinks() {
 	const unlinked = findUnlinkedCharacterTokens();
 	if (!unlinked.length) return [];
 
+	// ONE TOKEN AT A TIME, deliberately, and NOT batched per scene the way
+	// `linkCharacterPrototypes` above batches per world. Batching is faster — a round trip and a
+	// canvas refresh per token, on the primary GM's `ready` — but a scene-wide
+	// `updateEmbeddedDocuments` fails as a unit, so one token the server refuses would take
+	// every other token on its scene down with it. This loop is a one-off migration (it is
+	// oncePerVersion-gated by its caller), so the round trips are paid once and the isolation is
+	// worth more than the speed: a sweep that repairs what it can and reports what it cannot is
+	// the point of it.
 	const clean = unlinked.filter(row => !row.drifted);
 	for (const row of clean) {
 		try { await linkToken(row.token); }

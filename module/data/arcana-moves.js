@@ -1,5 +1,6 @@
 import { capitalizeFirst, escHtml, slugify, stripHtmlToText } from "../utils/strings.js";
 import { pickLimitsFrom } from "../utils/move-picks.js";
+import { firstOptionList } from "../utils/chat.js";
 
 /**
  * The mysteries on an arcanum's BACK are moves — "choose one of the moves on the reverse"
@@ -60,17 +61,26 @@ function _movesSection(description) {
 /** Roll a move asks for: a stat key, or "nothing" for the book's "roll +nothing". */
 const _ROLL_RE = /\broll\s*\+\s*(str|dex|con|int|wis|cha|nothing)\b/i;
 
-/** The options list a move offers — the first <ul> in its block, one entry per <li>. */
+/**
+ * The options list a move offers — the first <ul> in its block, one entry per <li>.
+ *
+ * Through `firstOptionList` (utils/chat.js), which is where "what is a move's printed option
+ * list" is decided for the whole system and whose docblock names THIS function as the reading
+ * it matches. Two copies of the same pair of regexes plus the offset arithmetic on both sides
+ * of one rule is how the two ends up disagreeing.
+ *
+ * It is slightly stricter than the local regexes were, both ways that matter here: it skips a
+ * tier-ladder `<ul>` (never a choice, wherever it lands) and refuses a nested list rather than
+ * flattening one. Neither can turn a real list of options into no list.
+ */
 function _picksFrom(blockHtml) {
-	const ul = /<ul\b[^>]*>([\s\S]*?)<\/ul>/i.exec(blockHtml);
-	if (!ul) return { picks: [], picksLabel: "", listHtml: "", pickMax: 0 };
-	const picks = [...ul[1].matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)]
-		.map(m => stripHtmlToText(m[1]))
-		.filter(Boolean);
+	const list = firstOptionList(blockHtml);
+	if (!list) return { picks: [], picksLabel: "", listHtml: "", pickMax: 0 };
+	const picks = list.items.map(stripHtmlToText).filter(Boolean);
 	// What the prose calls the list, taken from the clause that introduces it ("choose 2 from
 	// the list below", "Spend Guise, 1-for-1 to"). Long lead-ins fall back to a plain label
 	// rather than dragging half a paragraph into the dialog's heading.
-	const lead  = stripHtmlToText(blockHtml.slice(0, ul.index));
+	const lead  = stripHtmlToText(blockHtml.slice(0, list.index));
 	const claim = /([^.;:]*\b(?:choose|pick|spend)\b[^.;:]*)[.;:]?\s*$/i.exec(lead)?.[1]?.trim() ?? "";
 	const picksLabel = claim && claim.length <= 80
 		? `${capitalizeFirst(claim)}:`
@@ -92,7 +102,7 @@ function _picksFrom(blockHtml) {
 	const pickMax = typeof limits === "number"
 		? limits
 		: Math.max(0, ...Object.values(limits ?? {}).map(n => Math.trunc(Number(n)) || 0));
-	return { picks, picksLabel, listHtml: ul[0], pickMax };
+	return { picks, picksLabel, listHtml: blockHtml.slice(list.index, list.index + list.length), pickMax };
 }
 
 /**
@@ -106,6 +116,36 @@ function _picksFrom(blockHtml) {
  *   caller can tell a learned mystery from one still to come. null when the move prints no box.
  */
 export function parseArcanumMoves(description) {
+	const key = String(description ?? "");
+	const hit = _MOVES_CACHE.get(key);
+	if (hit !== undefined) return hit;
+	const built = _parseArcanumMoves(description);
+	if (_MOVES_CACHE.size >= _MOVES_CACHE_MAX) _MOVES_CACHE.clear();
+	_MOVES_CACHE.set(key, built);
+	return built;
+}
+
+/**
+ * Parsed backs, keyed by the description they were parsed from.
+ *
+ * THREE CALLERS, ALL HOT. `markArcanumMoveNames` parses the card it was just handed and then
+ * walks the same heads a second time; `findArcanumMove` parses a whole card on every click and
+ * throws away all but one row; and both run out of `CharacterArcana.buildSnapshot`, i.e. once
+ * per owned arcanum on every character-sheet render — and AppV1 sheets re-render on every actor
+ * update. The parse is a section slice, a head walk, a `_picksFrom` per move and a multi-KB
+ * substring per box index.
+ *
+ * Safe to cache: descriptions are pack or item strings, and nothing here mutates a document.
+ * The returned array is shared between callers, so treat it as read-only — every caller today
+ * reads or `.find()`s it.
+ *
+ * Cleared wholesale at the cap rather than evicted one at a time, for the reason move-tiers.js
+ * gives: the bound exists only so homebrew cannot grow it without limit.
+ */
+const _MOVES_CACHE = new Map();
+const _MOVES_CACHE_MAX = 200;
+
+function _parseArcanumMoves(description) {
 	const section = _movesSection(description);
 	if (!section) return [];
 	const body = description.slice(section.start, section.end);
