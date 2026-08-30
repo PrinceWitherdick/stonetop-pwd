@@ -899,6 +899,24 @@ export function registerSettings() {
 		default: {}
 	});
 
+	// Which rulebook readers this browser had open when it last unloaded, so they come back
+	// (module/books/reader-resume.js). Same reasoning as the record above and the same shape of
+	// answer: the reader is a plain Application, a reload never runs its `close`, so a book still
+	// listed here is one that was open. CLIENT-scoped because it is this browser's window state,
+	// not the world's — a GM reloading must not open a book on a player's screen. Keyed by world
+	// id for the same reason the walkthroughs are: a flat blob would reopen a book in every world
+	// opened in this browser, including ones with no copy of it. Shape:
+	//   { "<worldId>": [1, 2] }
+	// The PAGE is deliberately absent: pdf.js keeps its own view history and restores the exact
+	// scroll and zoom, which is more than a page number could say.
+	game.settings.register(SYSTEM_ID, "bookReaderResume", {
+		name: "Rulebook Reader Resume State",
+		scope: "client",
+		config: false,
+		type: Object,
+		default: {}
+	});
+
 	// One reader's own bookmarks in the rulebooks, listed in a tab of the viewer's own sidebar
 	// (module/books/reader-bookmarks-tab.js). Shape:
 	//   { "1": [ { id, label, page, hash, created } ], "2": [ ... ] }

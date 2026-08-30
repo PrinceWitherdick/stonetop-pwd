@@ -23,6 +23,7 @@ import { EndOfSessionDialog } from "../dialogs/EndOfSessionDialog.js";
 import { IntroductionsDialog } from "../dialogs/IntroductionsDialog.js";
 import { SpringBurstDialog } from "../dialogs/SpringBurstDialog.js";
 import { reopenOpenWalkthroughs, sessionZeroComplete } from "../dialogs/walkthrough-resume.js";
+import { reopenOpenBookReaders } from "../books/reader-resume.js";
 import { writeChronicle } from "../utils/chronicle.js";
 import { ExpeditionDialog } from "../dialogs/ExpeditionDialog.js";
 import { WeatherDialog } from "../dialogs/WeatherDialog.js";
@@ -546,6 +547,14 @@ export async function onReady() {
 	} else {
 		reopenOpenWalkthroughs();
 	}
+
+	// Same idea, same evidence, for the rulebook readers: a plain Application does not survive a
+	// refresh and a reload never runs its `close`, so a book still recorded as open was open when
+	// the page went away (module/books/reader-resume.js). Per-client, and unconditional rather
+	// than sequenced behind the Welcome guide the way the walkthroughs are: a book is reference
+	// the reader parked beside their sheet, so it belongs UNDER whatever opens after it rather
+	// than needing to land on top.
+	reopenOpenBookReaders();
 
 	// A player logging in / reloading mid-introductions: rejoin the running session by
 	// opening the dialog whenever the GM has it open (following read-only until it's their
