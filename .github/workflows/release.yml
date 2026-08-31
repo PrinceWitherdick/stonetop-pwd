@@ -43,7 +43,7 @@ jobs:
           fi
           echo "tag ok: ${{ github.ref_name }}"
 
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # This job's token is `contents: write`, and nothing below it runs a git command:
           # action-gh-release authenticates over the API with GITHUB_TOKEN, not over git.
