@@ -12,7 +12,7 @@
     "reorganize-packs": "node scripts/reorganize-playbook-moves.js"
   },
   "devDependencies": {
-    "@foundryvtt/foundryvtt-cli": "^3.0.3",
+    "@foundryvtt/foundryvtt-cli": "^3.0.4",
     "eslint": "^9.39.5",
     "eslint-plugin-promise": "^7.3.0",
     "globals": "^17.11.0",
