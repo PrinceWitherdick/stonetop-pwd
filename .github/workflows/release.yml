@@ -173,7 +173,7 @@ jobs:
       - name: Create release
         # SHA-pinned, not tag-pinned. This is the step that decides what every installed world
         # pulls from its Update button, and a floating `@v3` tag is mutable by definition.
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           generate_release_notes: true
           make_latest: ${{ steps.manifest.outputs.make_latest }}
