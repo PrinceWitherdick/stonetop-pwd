@@ -70,7 +70,7 @@
 					      it in stonetop.css — so a step wearing it lays out like any other. --}}
 					<li class="stonetop-gm-loop-step">
 						<strong class="stonetop-gm-loop-name">{{name}}</strong>
-						{{#if pageRef}}<span class="stonetop-gm-loop-page">{{pageRef}}</span>{{/if}}
+						{{#if pageCites}}<span class="stonetop-gm-loop-page">{{> "stonetop.book-page-cite" cites=pageCites}}</span>{{/if}}
 						{{#if note}}<p class="stonetop-gm-loop-note">{{note}}</p>{{/if}}
 						{{#if items}}
 						<ul class="stonetop-gm-loop-items">

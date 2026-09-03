@@ -13,7 +13,7 @@
 // comparing each block's `key` against a value the sheet puts on the context beside this list.
 import { localize } from "../utils/i18n.js";
 import { localizedOnce } from "../utils/localized-once.js";
-import { bookPageRef } from "./book-ref.js";
+import { bookPageCites } from "./book-ref.js";
 import {
 	HOMEFRONT_SECTIONS, LIFE_IN_STONETOP, HOMEFRONT_QUESTIONS, THE_YEARS_WORK,
 	AFTERMATH, DOWNTIME, MAKE_A_PLAN, RELATIVE_VALUE,
@@ -28,7 +28,7 @@ import {
  * decorate one is the kind of tidiness that reads as though something needed the copy.
  */
 function stepsWithRefs(steps) {
-	return steps.map(step => (step.page ? { ...step, pageRef: bookPageRef(step) } : step));
+	return steps.map(step => (step.page ? { ...step, pageCites: bookPageCites(step) } : step));
 }
 
 /**
@@ -39,46 +39,46 @@ function stepsWithRefs(steps) {
  * Downtime carries an end condition Aftermath has no equivalent of. One builder per section is
  * what lets the two share a renderer without sharing a source.
  *
- * Every entry resolves its own `pageRef`, and that is the whole reason this file needs `localize`
+ * Every entry resolves its own `pageCites`, and that is the whole reason this file needs `localize`
  * at all — a citation is a formatted i18n string ("Book II, page 16"), so none of these can be
  * built at import time. See `localizedHomefrontSections`.
  */
 const SECTION_BODIES = {
 	// Four groups of facts, each citing its own Book II spread rather than the entry's first page.
 	life: () => ({
-		groups: LIFE_IN_STONETOP.map(group => ({ ...group, pageRef: bookPageRef(group) })),
+		groups: LIFE_IN_STONETOP.map(group => ({ ...group, pageCites: bookPageCites(group) })),
 	}),
 	questions: () => ({
 		items:   HOMEFRONT_QUESTIONS.items,
-		pageRef: bookPageRef(HOMEFRONT_QUESTIONS),
+		pageCites: bookPageCites(HOMEFRONT_QUESTIONS),
 	}),
 	year: () => ({
 		seasons: THE_YEARS_WORK.seasons,
-		pageRef: bookPageRef(THE_YEARS_WORK),
+		pageCites: bookPageCites(THE_YEARS_WORK),
 	}),
 	// NUMBERED, unlike downtime's: the playbook numbers these three because they are a sequence.
 	aftermath: () => ({
 		numbered: true,
 		steps:    stepsWithRefs(AFTERMATH.steps),
-		pageRef:  bookPageRef(AFTERMATH),
+		pageCites: bookPageCites(AFTERMATH),
 	}),
 	downtime: () => ({
 		steps:   stepsWithRefs(DOWNTIME.steps),
 		ends:    DOWNTIME.ends,
-		pageRef: bookPageRef(DOWNTIME),
+		pageCites: bookPageCites(DOWNTIME),
 	}),
 	plan: () => ({
 		trigger:      MAKE_A_PLAN.trigger,
 		guidance:     MAKE_A_PLAN.guidance,
 		requirements: MAKE_A_PLAN.requirements,
-		pageRef:      bookPageRef(MAKE_A_PLAN),
+		pageCites:    bookPageCites(MAKE_A_PLAN),
 	}),
 	value: () => ({
 		lead:    RELATIVE_VALUE.lead,
 		intro:   RELATIVE_VALUE.intro,
 		tiers:   RELATIVE_VALUE.tiers,
 		notes:   RELATIVE_VALUE.notes,
-		pageRef: bookPageRef(RELATIVE_VALUE),
+		pageCites: bookPageCites(RELATIVE_VALUE),
 	}),
 };
 

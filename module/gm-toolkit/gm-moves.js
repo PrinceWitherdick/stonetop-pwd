@@ -336,7 +336,10 @@ export const EXPLORATION_GM_MOVES = [
 		name:    "Introduce a danger, person, or faction",
 		gloss:   "It's here, not looming.",
 		page:    320,
-		pageAlt: 354,
+		// 353, not 354: the sites chapter's re-framing of this move starts in the right-hand
+		// column of 353, and 354 is where "Bar the way" begins. Checked against the spreads PDF
+		// (the folio is printed on the page), along with every other citation on this sheet.
+		pageAlt: 353,
 		detail: [
 			"With this move, you're putting a danger on screen. You're not pointing to it, it's not looming, it's here, what do you do?",
 			"Alternately, you're introducing an NPC and giving the PCs a chance to interact with them. Or, you're revealing that there's a subset of creatures or people that they didn't know about before: different strains of crinwin, a cult within the Hillfolk, rivalries and allegiances among the Fae, etc.",

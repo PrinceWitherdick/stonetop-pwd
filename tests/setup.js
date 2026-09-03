@@ -9,6 +9,9 @@ import { escHtml } from "../module/utils/strings.js";
 // window with no document is an empty list.
 global.Application = class {
 	_getHeaderButtons() { return []; }
+	// A no-op, but present: a test that drives a handler which OPENS a window needs the
+	// window to be constructible, and needs somewhere to hang a spy asserting it opened.
+	render() { return this; }
 	async close() {}
 };
 

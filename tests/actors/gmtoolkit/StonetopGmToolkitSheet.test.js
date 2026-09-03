@@ -347,6 +347,7 @@ function renderMovesTab(stonetop) {
 	hb.registerPartial("stonetop.section-heading", read("templates/actor/partials/section-heading.hbs"));
 	hb.registerPartial("stonetop.section-collapse", read("templates/actor/partials/section-collapse.hbs"));
 	hb.registerPartial("stonetop.section-randomize", read("templates/actor/partials/section-randomize.hbs"));
+	hb.registerPartial("stonetop.book-page-cite", read("templates/actor/partials/book-page-cite.hbs"));
 	return hb.compile(MOVES_HBS)({ stonetop });
 }
 

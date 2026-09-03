@@ -1,0 +1,18 @@
+{{!-- A book citation, as controls rather than as text: "Book I, page 180" opens the GM's own
+      copy of Book I at that page (module/books/rulebook-icons.js, openBookPage).
+
+      ONE CHIP PER PAGE, which is what `bookPageCites` builds the list for: a move with a second
+      printing reads "Book I, page 180, and again on page 300 for a site", and one control over
+      that whole sentence would take a GM who pressed the words "page 300" to page 180.
+
+      `sep` is printed BEFORE its chip and is empty on the first, so this loop never has to ask
+      which chip it is on.
+
+      A BUTTON, not a link. It is not a URL -- what it opens depends on what this world has been
+      pointed at -- and a button is the element a keyboard already knows how to reach and press.
+      Its styling (styles/stonetop.css) takes core's button chrome back off so it reads as the
+      quiet run of text it replaced.
+
+      Emitted on ONE line, because every one of the four places that draws this puts it inside a
+      run of prose where a stray newline is a stray space. --}}
+{{#each cites}}{{sep}}<button type="button" class="stonetop-book-cite" data-book="{{book}}" data-page="{{page}}" data-tooltip="{{tip}}">{{text}}</button>{{/each~}}

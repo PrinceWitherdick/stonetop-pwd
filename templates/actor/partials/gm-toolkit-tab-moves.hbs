@@ -79,8 +79,8 @@
 						{{#each examples}}
 						<blockquote class="stonetop-gm-move-example">{{this}}</blockquote>
 						{{/each}}
-						{{#if pageRef}}
-						<p class="stonetop-gm-move-page">{{pageRef}}</p>
+						{{#if pageCites}}
+						<p class="stonetop-gm-move-page">{{> "stonetop.book-page-cite" cites=pageCites}}</p>
 						{{/if}}
 					</div>
 				</li>

@@ -38028,6 +38028,59 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 .stonetop-gm-wonder-item .stonetop-gm-wonder-answer:focus {
+/* THE PAGE CITATION, AS A CONTROL. "Book I, page 180" on the GM Toolkit opens the
+   GM's own copy of Book I at that page (templates/actor/partials/book-page-cite.hbs,
+   module/books/rulebook-icons.js). It sits INSIDE prose on four different surfaces --
+   under a move, beside a Homefront step, on a Core Loop stage -- each of which has
+   already decided how a citation reads: small, italic, muted, faded. So this takes
+   every one of those decisions from its parent and adds exactly one thing, the
+   underline that says it can be pressed.
+
+   `font: inherit` is not tidiness. Core anchors a BUTTON's font-size in pixels while
+   the text around it is set in em off the reader's own scale, so a citation that did
+   not inherit would drift a size away from its own sentence at every setting but the
+   default -- the same trap `.stonetop-open-book` and the sheet's other bare buttons
+   sidestep, written out here because this one lives mid-sentence where the mismatch
+   is visible against the words either side of it.
+
+   `display: inline` and `width: auto` for the same reason in the other direction:
+   core gives buttons a block box and a full-width stretch, and either would break a
+   citation out of the line it belongs to. */
+.stonetop .stonetop-book-cite {
+	display: inline;
+	width: auto;
+	margin: 0;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	background: none;
+	font: inherit;
+	line-height: inherit;
+	color: inherit;
+	text-align: left;
+	text-decoration: underline dotted;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+/* Core paints a background on button hover, which on a run of text inside a paragraph
+   reads as a highlighter mark. Taken back off, and the answer to the pointer is the
+   underline going solid and the ink coming up out of muted instead. */
+.stonetop .stonetop-book-cite:hover,
+.stonetop .stonetop-book-cite:focus {
+	background: none;
+	box-shadow: none;
+}
+.stonetop .stonetop-book-cite:hover {
+	color: var(--st-text);
+	text-decoration: underline solid;
+}
+.stonetop .stonetop-book-cite:focus-visible {
+	outline: 2px solid var(--st-btn-primary-bg);
+	outline-offset: 2px;
+}
+
 	border-color: var(--st-btn-primary-border);
 	background: var(--st-warm-hover-bg);
 	font-style: normal;

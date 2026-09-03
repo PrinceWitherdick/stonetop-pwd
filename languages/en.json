@@ -96,6 +96,7 @@
       },
       "otherEdition": "Stonetop | The Book {book} PDF this world points at has {pages} pages rather than the {expected} of the spreads edition. It reads perfectly; only a jump to a printed page number would land in the wrong place.",
       "book1": {
+      "pageMayBeOff": "Your Book {book} PDF has {pages} pages rather than the {expected} of the spreads edition, so a page number from the book will not line up with a page of this file. Use the outline or the search bar to find the page.",
         "label": "Book I",
         "title": "Book I: Stonetop",
         "hint": "The core rules. Usually the 308 page spreads PDF."
@@ -125,7 +126,9 @@
         "homefrontNote": "At home in Stonetop, or in another steading",
         "randomize": "Draw one at random (whispered to the GM)",
         "bookPage": "Book {book}, page {page}",
-        "bookPageAlt": "Book {book}, page {page}, and again on page {alt} for a site",
+        "bookPageAlt": "and again on page {alt} for a site",
+        "bookPageJoin": ", ",
+        "bookPageOpen": "Open Book {book} at page {page}",
         "expand": "What the book says about this move"
       },
       "homefront": {

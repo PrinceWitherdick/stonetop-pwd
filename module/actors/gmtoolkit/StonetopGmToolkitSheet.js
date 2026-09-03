@@ -27,7 +27,7 @@ import { withSectionEditing } from "../../utils/section-editing.js";
 import { showsPreferencesTab, withPreferencesTab } from "../../utils/preferences-tab.js";
 import { buildPreferenceGroups } from "../../utils/sheet-preferences.js";
 import { gmMoveSections } from "../../gm-toolkit/gm-moves.js";
-import { bookPageRef } from "../../gm-toolkit/book-ref.js";
+import { bookPageCites } from "../../gm-toolkit/book-ref.js";
 import { moveBlurb } from "../../gm-toolkit/gm-move-blurb.js";
 import { GmMoveDrawer } from "../../gm-toolkit/gm-move-drawer.js";
 import { toggleDisclosure } from "../../utils/disclosure.js";
@@ -43,7 +43,7 @@ import { readCurrentSeason, currentSeasonView, isCurrentSeasonChange } from "../
 import { localize } from "../../utils/i18n.js";
 import { localizedOnce } from "../../utils/localized-once.js";
 import { getStonetopSteadingActor, stonetopSteadingHeaderButton } from "../../utils/world.js";
-import { rulebookIconRows, openRulebook } from "../../books/rulebook-icons.js";
+import { rulebookIconRows, openRulebook, followBookCite } from "../../books/rulebook-icons.js";
 
 /**
  * What counts as a foldable section heading on this sheet — see `_wireSectionCollapse`.
@@ -75,7 +75,7 @@ const localizedMoveSections = localizedOnce(() =>
 		// not allowed to hold localized text (it is imported by the Expedition dialog too, and
 		// that module is loaded long before `game.i18n` exists).
 		moves:      section.moves.map(move => ({
-			...move, pageRef: bookPageRef(move), blurb: moveBlurb(move),
+			...move, pageCites: bookPageCites(move), blurb: moveBlurb(move),
 		})),
 		// The die beside the note, and the tooltip on every entry's disclosure. Carried
 		// per-section rather than hung on the context beside the list, so a section stays one
@@ -503,6 +503,20 @@ export function createStonetopGmToolkitSheetClass(Base) {
 					ev.preventDefault();
 					openImageZoom({
 						src: diagram.dataset.src,
+				// A page citation, followed: the same book the banner icon opens, at the page
+				// the line was pointing at. Checked next because it is the smallest control on
+				// the sheet and the only one that appears on four different tabs -- Moves,
+				// Homefront, the Core Loop charts -- so its own class is the only thing that can
+				// identify it, and asking the bigger checks below about it first buys nothing.
+				//
+				// The selector and the printed-page rule live with the partial's opener rather
+				// than here: the chip is a shared partial any surface may print, and a branch in
+				// this sheet is not something the next one can reach.
+				if (followBookCite(ev.target)) {
+					ev.preventDefault();
+					return;
+				}
+
 						title: diagram.dataset.caption,
 						key: diagram.dataset.slug,
 					});

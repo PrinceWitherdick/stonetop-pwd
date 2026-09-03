@@ -20,7 +20,9 @@ import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { openingSize } from "../utils/opening-size.js";
 import { localize, format } from "../utils/i18n.js";
-import { rulebook, bookTitle, rulebookPath, rulebookViewerUrl, isSpreadsEdition } from "./rulebooks.js";
+import {
+	rulebook, bookTitle, rulebookPath, rulebookViewerUrl, isSpreadsEdition, spreadPageFor,
+} from "./rulebooks.js";
 import { showBookToPlayers } from "./book-broadcast.js";
 import { markBookReaderOpen, markBookReaderClosed } from "./reader-resume.js";
 import { mountBookmarksTab } from "./reader-bookmarks-tab.js";
@@ -123,16 +125,24 @@ const ZOOM_STEP = 0.1;
 export class BookReaderWindow extends StonetopDialog {
 	/**
 	 * @param {object} config
-	 * @param {number} config.book    which book, numbered as `bookPageRef` cites them
-	 * @param {number} [config.page]  page of the FILE to open at; see `spreadPageFor` for
-	 *                                turning a printed page number into one of these
+	 * @param {number} config.book           which book, numbered as `bookPageRef` cites them
+	 * @param {number} [config.page]         page of the FILE to open at
+	 * @param {number} [config.printedPage]  the page number PRINTED in the book's own corner,
+	 *                                       which is what a citation cites. Converted here, once,
+	 *                                       through `spreadPageFor`; `page` wins if both are given.
 	 */
-	constructor({ book, page } = {}, options = {}) {
+	constructor({ book, page, printedPage } = {}, options = {}) {
 		const size = openingSize({ maxAspect: PAGE_ASPECT });
 		super(StonetopDialog.perDocumentOptions(READER_ID_PREFIX, book, { ...size, ...options }));
 		this._book = Number(book);
 		this._entry = rulebook(this._book);
-		this._src = rulebookViewerUrl(rulebookPath(this._book), { page });
+		// Held so `_checkEdition` knows whether the mismatch it may be about to find MATTERS to
+		// this window. A book opened to be read is unharmed by being the 1-up edition; a book
+		// opened AT a printed page has already landed somewhere wrong by the time we find out,
+		// and only that case is worth interrupting a GM over.
+		this._printedPage = Number(printedPage) > 0 ? Math.trunc(printedPage) : null;
+		const openAt = page ?? (this._printedPage ? spreadPageFor(this._printedPage) : null);
+		this._src = rulebookViewerUrl(rulebookPath(this._book), { page: openAt });
 		// The viewer's own application object, once the frame has loaded. Same origin, so it is
 		// reachable; null until then and null again after a close.
 		this._viewerApp = null;
@@ -462,6 +472,40 @@ export class BookReaderWindow extends StonetopDialog {
  * The scale one notch away from where the page is now, on a flat grid of tenths.
  *
  * SNAPPED to the grid before stepping, not just stepped, because the scale a book is sitting
+		// SAID OUT LOUD only when a printed page was asked for. The console line above is for the
+		// GM who goes looking; this one interrupts, and it earns that only because the window in
+		// front of them is already showing the wrong page and nothing about it looks wrong. There
+		// is no correcting it from here: a 1-up file's front matter is however many sheets its
+		// publisher put there, and we have no way to count them.
+		if (this._printedPage) ui.notifications?.warn?.(format("stonetop.books.pageMayBeOff", {
+			book: this._entry.numeral, pages, expected: this._entry.spreadPages,
+		}));
+	}
+
+	/**
+	 * Turn an already open book to a page the BOOK numbers, rather than one the file does.
+	 *
+	 * The conversion happens here, against the count of the document actually loaded, which is
+	 * the only place it can be trusted: `spreadPageFor` is arithmetic on the spreads edition and
+	 * a GM who owns the 1-up file would be sent sixty pages wide by it. So a file that is not the
+	 * spreads edition is left where it is and said so, which is the same answer `_checkEdition`
+	 * gives -- being taken to a page nobody asked for is worse than not being taken anywhere.
+	 *
+	 * A frame still loading is left alone deliberately: it is already opening at the page its URL
+	 * named, and that URL was built from the same arithmetic.
+	 */
+	goToPrintedPage(printed) {
+		const n = Number(printed);
+		const pages = Number(this._viewerApp?.pagesCount);
+		if (!(pages > 0) || !Number.isFinite(n) || n < 1) return;
+		if (!isSpreadsEdition(this._book, pages)) {
+			ui.notifications?.warn?.(format("stonetop.books.pageMayBeOff", {
+				book: this._entry?.numeral ?? this._book, pages,
+				expected: this._entry?.spreadPages ?? pages,
+			}));
+			return;
+		}
+		this.goToPage(spreadPageFor(n));
  * at is usually not a round number: "fit page" on a spread lands somewhere like 0.63, and
  * adding a tenth to that gives 0.73 and then 0.83, a grid of its own that no other control in
  * the viewer shares. Rounding toward the direction of travel means the first notch tidies the
@@ -492,17 +536,18 @@ export function zoomStepTarget(scale, direction) {
  * do about it. The header buttons open the setup instead; a future page citation would want to
  * do the same, and neither should have to learn that from a thrown error.
  */
-export function openBookReader(book, { page } = {}) {
+export function openBookReader(book, { page, printedPage } = {}) {
 	if (!rulebookPath(book)) return null;
 	const win = openOrFocus(bookReaderWindowId(book), () => {
-		const opened = new BookReaderWindow({ book, page });
+		const opened = new BookReaderWindow({ book, page, printedPage });
 		opened.render(true);
 		return opened;
 	});
 	// A window that was ALREADY open opened at whatever page it was left on, so a caller that
 	// named one has to be answered here. A window this call just minted is already going there
-	// (the page is in its URL) and `goToPage` no-ops on it, which is why this can be
+	// (the page is in its URL) and both jumps no-op on it, which is why these can be
 	// unconditional rather than branching on which of the two happened.
 	if (page) win?.goToPage?.(page);
 	return win;
 }
+	else if (printedPage) win?.goToPrintedPage?.(printedPage);

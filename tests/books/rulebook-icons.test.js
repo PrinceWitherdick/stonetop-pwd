@@ -7,7 +7,7 @@ import { readRepo as read, readCss } from "../fakes/css.js";
 vi.mock("../../module/books/BookReaderWindow.js", () => ({ openBookReader: vi.fn() }));
 vi.mock("../../module/books/RulebooksDialog.js", () => ({ openRulebooksDialog: vi.fn() }));
 
-import { rulebookIconRows, openRulebook } from "../../module/books/rulebook-icons.js";
+import { rulebookIconRows, openRulebook, openBookPage } from "../../module/books/rulebook-icons.js";
 import { openBookReader } from "../../module/books/BookReaderWindow.js";
 import { openRulebooksDialog } from "../../module/books/RulebooksDialog.js";
 import { RULEBOOKS_SETTING } from "../../module/books/rulebooks.js";
@@ -15,6 +15,7 @@ import { createStonetopGmToolkitSheetClass } from "../../module/actors/gmtoolkit
 
 const TOOLKIT_HBS = "templates/actor/gm-toolkit.hbs";
 const SHEET_JS    = read("module/actors/gmtoolkit/StonetopGmToolkitSheet.js");
+const ICONS_JS    = read("module/books/rulebook-icons.js");
 const CSS         = readCss();
 
 function withBooks(paths = {}) {
@@ -178,5 +179,69 @@ describe("where the icons sit", () => {
 	it("is wired on the sheet's own delegated click handler", () => {
 		expect(SHEET_JS).toContain('closest(".stonetop-gm-toolkit-book")');
 		expect(SHEET_JS).toContain("openRulebook(Number(bookIcon.dataset.book))");
+	});
+});
+
+// FOLLOWING A CITATION. Every reference surface on the GM Toolkit prints the page it was
+// transcribed from ("Book I, page 180"), and until this those were words. Now they are the way
+// into the GM's own copy of that book, at that page.
+//
+// What has to hold is the PAGE, and it is the half with nothing to see when it is wrong: a
+// citation cites the number printed in the book's corner, the spreads PDF puts two printed pages
+// on every sheet, and handing the printed number straight to the viewer opens a real page of a
+// real book 89 sheets past the one that was cited. So the printed number goes down as
+// `printedPage` and the conversion happens against the loaded document -- see
+// `goToPrintedPage` in BookReaderWindow.js, and the manifest-wide check in rulebooks.test.js.
+describe("following a page citation", () => {
+	beforeEach(() => { vi.clearAllMocks(); });
+	afterEach(() => { delete game.settings; });
+
+	it("opens the cited book at the PRINTED page, leaving the sheet arithmetic to the reader", () => {
+		withBooks({ 1: "books/one.pdf" });
+		openBookPage(1, 180);
+		expect(openBookReader).toHaveBeenCalledWith(1, { printedPage: 180 });
+		// Never a page of the file: this side cannot know which edition the GM owns.
+		expect(openBookReader).not.toHaveBeenCalledWith(1, { page: 91 });
+	});
+
+	// Same answer the banner icons give, and for the same reason: a control that does nothing is
+	// indistinguishable from a broken one, so a citation into a book this world has not been
+	// pointed at opens the window that points it.
+	it("opens the setup for a citation into a book this world has no copy of", () => {
+		withBooks({ 2: "books/two.pdf" });
+		openBookPage(1, 180);
+		expect(openRulebooksDialog).toHaveBeenCalled();
+		expect(openBookReader).not.toHaveBeenCalled();
+	});
+
+	// The one case the banner icons cannot reach. `book: 3` is the free GM playbook, a real value
+	// elsewhere in this codebase, and no reader opens it -- so the setup would show a window
+	// listing two books, neither of them the one that was clicked.
+	it("does nothing at all for a book no reader knows about", () => {
+		withBooks({ 1: "books/one.pdf" });
+		expect(openBookPage(3, 4)).toBe(null);
+		expect(openBookReader).not.toHaveBeenCalled();
+		expect(openRulebooksDialog).not.toHaveBeenCalled();
+	});
+
+	// THE BEHAVIOUR LIVES WITH THE PARTIAL, not with one of its callers. The chip is precached
+	// globally and styled at system scope, so any surface may print one; while the only thing that
+	// made it work was a branch inside the GM Toolkit sheet, the next surface to print a row of
+	// citations got chips that look pressable and do nothing, with no error to say why.
+	it("reads the chip's own data, beside the opener it calls", () => {
+		expect(ICONS_JS).toContain('".stonetop-book-cite"');
+		expect(ICONS_JS).toContain("openBookPage(Number(cite.dataset.book), Number(cite.dataset.page))");
+	});
+
+	// One delegated listener on the sheet, not one per control: the sheet's handler asks this as a
+	// link in its `closest` chain, which is why `followBookCite` answers whether it handled the
+	// click rather than wiring a listener of its own.
+	it("is asked for by the sheet's own delegated click handler", () => {
+		expect(SHEET_JS).toContain("followBookCite(ev.target)");
+	});
+
+	// And a surface with no click chain of its own gets it in one call.
+	it("offers a one-call wiring for a surface that has no chain to add it to", () => {
+		expect(ICONS_JS).toContain("export function wireBookCites(root)");
 	});
 });
