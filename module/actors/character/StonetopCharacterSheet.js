@@ -309,7 +309,7 @@ const MOVE_USE_EFFECTS = {
 	[BARKSKIN]:           sheet => sheet._openBlessedMarksIfBlessed(),
 	[TRACKLESS_STEP]:     sheet => sheet._openBlessedMarksIfBlessed(),
 	[SHARED_SOULS]:       sheet => sheet._openBlessedMarksIfBlessed(),
-	// Rites of the Land holds Favor on the character, may spend a Surplus and clear a debility
+	// Rites of the Land holds the Boon on the character, may spend a Surplus and clear a debility
 	// on the steading, and can promise advantage on a Fortunes roll nobody has made yet. Three
 	// documents and a fourth thing to remember next season — so it gets a walkthrough.
 	[RITES_OF_THE_LAND]:  sheet => sheet._openRitesOfTheLand(),
@@ -6029,7 +6029,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		/**
 		 * Rites of the Land. Reaches the steading because two of the move's three effects land
 		 * there; opens anyway without one, so a Blessed in a world with no steading yet can still
-		 * hold their Favor (the walkthrough simply offers nothing that needs a steading).
+		 * hold their Boon (the walkthrough simply offers nothing that needs a steading).
 		 */
 		_openRitesOfTheLand() {
 			if (!this.isEditable) return;
@@ -6051,9 +6051,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * What this character can pay a Stock cost out of, right now.
 		 *
 		 * Both tracks store checks SPENT, not held (see stock-cost.js), so what is left is
-		 * `max - spent` in each. Favor only appears for a Blessed who owns Rites of the Land,
-		 * whose last line is "Spend Favor in lieu of Stock, 1-for-1" — without it, a Blessed
-		 * holding Favor and an empty pouch would be refused a move the book grants them.
+		 * `max - spent` in each. The Boon only appears for a Blessed who owns Rites of the Land,
+		 * whose last line is "Spend Boon in lieu of Stock, 1-for-1" — without it, a Blessed
+		 * holding Boon and an empty pouch would be refused a move the book grants them.
 		 */
 		_stockCostView({ amount = 1, label = "Stock" } = {}) {
 			// THROUGH stockSourcesForFlags, not stockSources: its whole reason for existing is
@@ -6110,9 +6110,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				ui.notifications?.warn(`No ${cost.label} left to spend on ${moveName}.`);
 				return false;
 			}
-			// Ask the purse: the pouch counts up as it empties, Favor counts down.
+			// Ask the purse: the pouch counts up as it empties, the Boon counts down.
 			const next = source.after(cost.amount);
-			if (source.key === "favor") {
+			if (source.key === "boon") {
 				await this._stonetopCharacter.moveResources.setUses(RITES_OF_THE_LAND, next, { stonetopMove: moveName });
 			} else {
 				await this._stonetopCharacter.setPossessionUses(SACRED_POUCH_SLUG, next);
@@ -7351,7 +7351,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * that costs nothing.
 		 *
 		 * WHY THE CARD and not the sheet: Stock is the one cost with no home on the move itself.
-		 * Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport and Favor
+		 * Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport and Boon
 		 * each have a track of their own, so the pips sit right there on the move and the player
 		 * ticks them. Stock lives on the sacred POUCH, several tabs away, so a Blessed making
 		 * Call the Spirits had the move in front of them and the purse nowhere in sight. The

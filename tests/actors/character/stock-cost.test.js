@@ -34,18 +34,18 @@ describe("stockSources", () => {
 		expect(stockSources({ pouchMax: 5, pouchStored: 1 })[0].remaining).toBe(4);
 	});
 
-	it("offers Favor only to a character who owns Rites of the Land", () => {
-		expect(stockSources({ favorMax: null }).map(s => s.key)).toEqual(["stock"]);
-		expect(stockSources({ favorMax: 4, favorStored: 1 }).map(s => s.key)).toEqual(["stock", "favor"]);
+	it("offers the Boon only to a character who owns Rites of the Land", () => {
+		expect(stockSources({ boonMax: null }).map(s => s.key)).toEqual(["stock"]);
+		expect(stockSources({ boonMax: 4, boonStored: 1 }).map(s => s.key)).toEqual(["stock", "boon"]);
 	});
 
 	// THE TWO PURSES COUNT OPPOSITE WAYS. The test that settles it is the one know-things.js
 	// states for the Logbook: whatever a stored ZERO means has to be true of a character who
-	// has never touched the move. A fresh Blessed has a FULL pouch and NO Favor.
-	it("reads Favor as HELD, not as spent", () => {
-		expect(stockSources({ favorMax: 4, favorStored: 0 })[1].remaining).toBe(0);
-		expect(stockSources({ favorMax: 4, favorStored: 1 })[1].remaining).toBe(1);
-		expect(stockSources({ favorMax: 4, favorStored: 4 })[1].remaining).toBe(4);
+	// has never touched the move. A fresh Blessed has a FULL pouch and NO Boon.
+	it("reads the Boon as HELD, not as spent", () => {
+		expect(stockSources({ boonMax: 4, boonStored: 0 })[1].remaining).toBe(0);
+		expect(stockSources({ boonMax: 4, boonStored: 1 })[1].remaining).toBe(1);
+		expect(stockSources({ boonMax: 4, boonStored: 4 })[1].remaining).toBe(4);
 	});
 
 	it("reads the pouch as a CAPACITY, the other way round", () => {
@@ -54,13 +54,13 @@ describe("stockSources", () => {
 	});
 
 	// Spending moves them in opposite directions, so each purse is asked rather than told.
-	it("spends the pouch UP and Favor DOWN", () => {
-		const [pouch, favor] = stockSources({ pouchStored: 1, favorMax: 4, favorStored: 3 });
+	it("spends the pouch UP and the Boon DOWN", () => {
+		const [pouch, boon] = stockSources({ pouchStored: 1, boonMax: 4, boonStored: 3 });
 		expect(pouch.after(1)).toBe(2);
-		expect(favor.after(1)).toBe(2);
+		expect(boon.after(1)).toBe(2);
 		// Neither runs off its end.
 		expect(stockSources({ pouchStored: 3 })[0].after(1)).toBe(3);
-		expect(stockSources({ favorMax: 4, favorStored: 0 })[1].after(1)).toBe(0);
+		expect(stockSources({ boonMax: 4, boonStored: 0 })[1].after(1)).toBe(0);
 	});
 
 	// An empty purse is still listed: "Stock 0 of 3" is the sentence that explains the missing
@@ -71,40 +71,40 @@ describe("stockSources", () => {
 
 	it("drops the pouch for a character who does not carry one", () => {
 		expect(stockSources({ hasPouch: false })).toEqual([]);
-		expect(stockSources({ hasPouch: false, favorMax: 4 }).map(s => s.key)).toEqual(["favor"]);
+		expect(stockSources({ hasPouch: false, boonMax: 4 }).map(s => s.key)).toEqual(["boon"]);
 	});
 });
 
 describe("paying", () => {
-	// "Spend Favor in lieu of Stock, 1-for-1" (Rites of the Land). A gate that only knew about
-	// the pouch would refuse a Blessed holding Favor a move the book grants them.
-	it("lets Favor stand in for an empty pouch", () => {
-		const sources = stockSources({ pouchStored: 3, favorMax: 4, favorStored: 1 });
+	// "Spend Boon in lieu of Stock, 1-for-1" (Rites of the Land). A gate that only knew about
+	// the pouch would refuse a Blessed holding Boon a move the book grants them.
+	it("lets the Boon stand in for an empty pouch", () => {
+		const sources = stockSources({ pouchStored: 3, boonMax: 4, boonStored: 1 });
 		expect(canPayStock(sources, 1)).toBe(true);
-		expect(defaultStockSource(sources, 1).key).toBe("favor");
+		expect(defaultStockSource(sources, 1).key).toBe("boon");
 	});
 
-	it("spends the pouch first when both could pay — Favor is the substitute, not the default", () => {
-		const sources = stockSources({ pouchStored: 1, favorMax: 4, favorStored: 1 });
+	it("spends the pouch first when both could pay — the Boon is the substitute, not the default", () => {
+		const sources = stockSources({ pouchStored: 1, boonMax: 4, boonStored: 1 });
 		expect(defaultStockSource(sources, 1).key).toBe("stock");
 	});
 
-	it("will not spend Favor a Blessed has not earned", () => {
+	it("will not spend Boon a Blessed has not earned", () => {
 		// Owns Rites of the Land, has never overseen the rites: the track is empty, so is the purse.
-		const sources = stockSources({ pouchStored: 3, favorMax: 4, favorStored: 0 });
+		const sources = stockSources({ pouchStored: 3, boonMax: 4, boonStored: 0 });
 		expect(sources.map(s => s.remaining)).toEqual([0, 0]);
 		expect(canPayStock(sources, 1)).toBe(false);
 	});
 
 	it("refuses when neither purse can cover it", () => {
-		const broke = stockSources({ pouchStored: 3, favorMax: 4, favorStored: 0 });
+		const broke = stockSources({ pouchStored: 3, boonMax: 4, boonStored: 0 });
 		expect(canPayStock(broke, 1)).toBe(false);
 		expect(defaultStockSource(broke, 1)).toBeNull();
 	});
 
-	// Costs are not split across purses: one Stock and one Favor is not two of anything.
+	// Costs are not split across purses: one Stock and one Boon is not two of anything.
 	it("does not split a cost across two purses", () => {
-		const sources = stockSources({ pouchStored: 2, favorMax: 4, favorStored: 1 });
+		const sources = stockSources({ pouchStored: 2, boonMax: 4, boonStored: 1 });
 		expect(sources.map(s => s.remaining)).toEqual([1, 1]);
 		expect(canPayStock(sources, 2)).toBe(false);
 	});
@@ -214,7 +214,7 @@ describe("Danu's Grasp, on the sheet", () => {
 });
 
 // Stock is the ONE move cost with no home on the move itself. Every other pool named as a cost
-// — Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport, Favor — has a
+// — Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport, Boon — has a
 // resource track of its own, so its pips sit on the move and the player ticks them there. Stock
 // lives on the sacred POUCH, several tabs away, so the nine Stock moves that are not gated at
 // roll time had a cost with nothing to click. They pay on the card their name-click posts.

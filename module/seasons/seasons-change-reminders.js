@@ -31,7 +31,7 @@ export const SEASONAL_REMINDERS = [
 		kind:     "move",
 		name:     "Rites of the Land",
 		playbook: "The Blessed",
-		rule:     "Once per season, when you oversee the sacred rites, hold 1 Favor. If you also sacrifice 1 Surplus, hold 4 Favor instead. Spend Favor in lieu of Stock, 1-for-1.",
+		rule:     "Once per season, when you oversee the sacred rites, hold 1 Boon. If you also sacrifice 1 Surplus, hold 4 Boon instead. Spend Boon in lieu of Stock, 1-for-1.",
 	},
 	{
 		kind:     "possession",

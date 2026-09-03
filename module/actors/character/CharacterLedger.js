@@ -84,7 +84,7 @@ const FLAG_NAMESPACE_LABELS = byFlagPath({
 const SORTED_NAMESPACE_PREFIXES = Object.keys(FLAG_NAMESPACE_LABELS).sort((a, b) => b.length - a.length);
 const INVENTORY_CHECKED_PREFIX = `flags.${LEDGER_SCOPE}.inventory.checked.`;
 const INVENTORY_RESOURCE_PREFIX = `flags.${LEDGER_SCOPE}.inventory.resources.`;
-// Move resource tracks (e.g. the Blessed's "Rites of the Land" Favor) live under the
+// Move resource tracks (e.g. the Blessed's "Rites of the Land" Boon) live under the
 // misnamed "backgroundChoices" sub-flag (see MoveResources), keyed by move name for
 // shipped moves and by stable item id for player-authored custom moves.
 const MOVE_RESOURCE_PREFIX = `flags.${LEDGER_SCOPE}.moves.backgroundChoices.`;
@@ -407,7 +407,7 @@ function inventorySelectionEntry(path, oldValue, newValue, names) {
 }
 
 // "<Name> - <Title>" for a titled track (an arcanum's "Souls", the Blessed's
-// "Favor"), else "<Name> resource". Shared by inventory- and move-resource tracks.
+// "Boon"), else "<Name> resource". Shared by inventory- and move-resource tracks.
 function resourceEntry(name, title, oldValue, newValue) {
 	const label = title ? `${name} - ${title}` : `${name} resource`;
 	return { action: actionForField(label, oldValue, newValue) };

@@ -1467,11 +1467,11 @@ function _chatWireMusterRaise(message, html) {
 
 // -- SPEND STOCK from a move's card -----------------------------
 // The Blessed's Stock is the one move cost with no home on the move itself: every other pool
-// (Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport, Favor) has its
+// (Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport, Boon) has its
 // own track, so its pips sit on the move and the player ticks them. Stock lives on the sacred
 // POUCH, several tabs away — so a card that says "spend 1 Stock" carries the button that does it.
 //
-// Rites of the Land's "Spend Favor in lieu of Stock, 1-for-1" applies here exactly as it does to
+// Rites of the Land's "Spend Boon in lieu of Stock, 1-for-1" applies here exactly as it does to
 // the gated moves, through the same reader (actors/character/stock-cost.js), so the dialog and
 // this button can never disagree about what is in the purse.
 function _chatWireSpendStock(message, html) {
@@ -1492,12 +1492,12 @@ function _chatWireSpendStock(message, html) {
 			const amount = Math.max(1, Number(button.dataset.amount) || 1);
 			const source = defaultStockSource(stockSourcesForFlags(readStockFlags(actor)), amount);
 			if (!source) {
-				ui.notifications.warn("No Stock or Favor left to spend.");
+				ui.notifications.warn("No Stock or Boon left to spend.");
 				return { abort: true };
 			}
-			// The purse knows which way it counts: the pouch up as it empties, Favor down.
+			// The purse knows which way it counts: the pouch up as it empties, the Boon down.
 			const next = source.after(amount);
-			if (source.key === "favor") {
+			if (source.key === "boon") {
 				await new StonetopFlags(actor, "moves").setSubKey("backgroundChoices", RITES_OF_THE_LAND, next);
 			} else {
 				await new CharacterPossessions(new StonetopFlags(actor, "possessions")).setUses(SACRED_POUCH_SLUG, next);

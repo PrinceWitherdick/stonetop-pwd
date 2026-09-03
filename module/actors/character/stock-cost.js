@@ -4,9 +4,9 @@
  * Danu's Grasp says "spend 1 Stock and roll +WIS", and a move that charges before it rolls has
  * to be able to answer two questions before the dice: can this character pay, and out of what.
  *
- * TWO PURSES, not one. Rites of the Land ends "Spend Favor in lieu of Stock, 1-for-1", so a
- * Blessed holding Favor and no Stock can still make the move — and a gate that only knew about
- * the pouch would block them from a move the book grants. Favor is only offered to a character
+ * TWO PURSES, not one. Rites of the Land ends "Spend Boon in lieu of Stock, 1-for-1", so a
+ * Blessed holding Boon and no Stock can still make the move — and a gate that only knew about
+ * the pouch would block them from a move the book grants. Boon is only offered to a character
  * who actually owns that move, so nobody else sees a purse they do not have.
  *
  * THE TWO PURSES COUNT IN OPPOSITE DIRECTIONS, and getting that backwards is silent. Both store
@@ -16,11 +16,11 @@
  *
  *   · The sacred pouch is a CAPACITY. A Blessed starts with it FULL, so zero means nothing spent
  *     and a filled pip is Stock gone: `remaining = max - stored`, and spending INCREMENTS.
- *   · Favor is a POOL. "Once per season, when you oversee the sacred rites, hold 1 Favor" — a
+ *   · Boon is a POOL. "Once per season, when you oversee the sacred rites, hold 1 Boon" — a
  *     Blessed who has not done so holds NONE, so zero means an empty purse and a filled pip is
- *     Favor held: `remaining = stored`, and spending DECREMENTS.
+ *     Boon held: `remaining = stored`, and spending DECREMENTS.
  *
- * Read Favor the pouch's way and every Blessed who owns Rites of the Land is handed four Favor
+ * Read the Boon the pouch's way and every Blessed who owns Rites of the Land is handed four Boon
  * they never earned, while one who has actually banked three reads as holding one.
  *
  * Foundry-free: every source is plain numbers plus an `after` that hands back the number to
@@ -37,13 +37,13 @@ export const DEFAULT_SACRED_POUCH_MAX = 3;
  * @param {number} snapshot.pouchMax        the pouch's capacity
  * @param {number} snapshot.pouchStored     the number stored on the pouch (pips ticked = Stock SPENT)
  * @param {boolean} snapshot.hasPouch       is the pouch actually one of this character's possessions
- * @param {number|null} snapshot.favorMax   Rites of the Land's capacity, or null when unowned
- * @param {number} snapshot.favorStored     the number stored on that move (pips ticked = Favor HELD)
+ * @param {number|null} snapshot.boonMax    Rites of the Land's capacity, or null when unowned
+ * @param {number} snapshot.boonStored      the number stored on that move (pips ticked = Boon HELD)
  * @returns {{key: string, label: string, remaining: number, spent: number, max: number}[]}
  *   Every purse this character HAS, empty ones included — an empty pouch is still worth showing,
  *   because "you have 0 Stock" is the sentence that explains why the roll is not offered.
  */
-export function stockSources({ pouchMax = DEFAULT_SACRED_POUCH_MAX, pouchStored = 0, hasPouch = true, favorMax = null, favorStored = 0 } = {}) {
+export function stockSources({ pouchMax = DEFAULT_SACRED_POUCH_MAX, pouchStored = 0, hasPouch = true, boonMax = null, boonStored = 0 } = {}) {
 	const purse = (key, label, max, stored, countsHeld) => {
 		const cap = Math.max(0, Math.trunc(Number(max) || 0));
 		const have = Math.min(cap, Math.max(0, Math.trunc(Number(stored) || 0)));
@@ -62,10 +62,10 @@ export function stockSources({ pouchMax = DEFAULT_SACRED_POUCH_MAX, pouchStored 
 	const out = [];
 	// The pouch is a CAPACITY: a Blessed starts with it full, so a filled pip is Stock spent.
 	if (hasPouch) out.push(purse("stock", "Stock", pouchMax, pouchStored, false));
-	// Favor is a POOL: "once per season… hold 1 Favor" — a Blessed who has not overseen the rites
-	// holds none, so a filled pip is Favor HELD and an empty track is an empty purse. Reading it
-	// the pouch's way handed four Favor to every Blessed who owns the move and had never used it.
-	if (favorMax) out.push(purse("favor", "Favor", favorMax, favorStored, true));
+	// The Boon is a POOL: "once per season… hold 1 Boon" — a Blessed who has not overseen the
+	// rites holds none, so a filled pip is Boon HELD and an empty track is an empty purse. Reading
+	// it the pouch's way handed four Boon to every Blessed who owns the move and never used it.
+	if (boonMax) out.push(purse("boon", "Boon", boonMax, boonStored, true));
 	return out;
 }
 
@@ -75,7 +75,7 @@ export function canPayStock(sources, amount = 1) {
 }
 
 /**
- * Which purse to spend from when the player has not said. The pouch first — Favor is the
+ * Which purse to spend from when the player has not said. The pouch first — the Boon is the
  * substitute the move offers ("in lieu of Stock"), not the default.
  */
 export function defaultStockSource(sources, amount = 1) {
@@ -119,7 +119,7 @@ export function stockSourcesForFlags({ possessions = {}, moveResources = {}, rit
 		hasPouch:   [...selected].includes(SACRED_POUCH_SLUG),
 		pouchMax:   possessions.maxUses?.[SACRED_POUCH_SLUG] ?? DEFAULT_SACRED_POUCH_MAX,
 		pouchStored: possessions.uses?.[SACRED_POUCH_SLUG] ?? 0,
-		favorMax:   ritesMax,
-		favorStored: moveResources?.[RITES_OF_THE_LAND] ?? 0,
+		boonMax:    ritesMax,
+		boonStored: moveResources?.[RITES_OF_THE_LAND] ?? 0,
 	});
 }

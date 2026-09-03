@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { readRepo as read } from "../../fakes/css.js";
 import {
-	ritesOptions, RITES_MOVE, RITES_SEASON_STEP, FAVOR_PLAIN, FAVOR_WITH_SURPLUS,
+	ritesOptions, RITES_MOVE, RITES_SEASON_STEP, BOON_PLAIN, BOON_WITH_SURPLUS,
 } from "../../../module/actors/character/rites-of-the-land.js";
 
 // Rites of the Land is two triggers in one move, and its effects land on three documents:
-// Favor on the CHARACTER, Surplus and any cleared debility on the STEADING, and a promise of
+// The Boon on the CHARACTER, Surplus and any cleared debility on the STEADING, and a promise of
 // advantage on a +Fortunes roll that has not happened yet. That is why it is a walkthrough.
 
 describe("ritesOptions", () => {
@@ -15,23 +15,23 @@ describe("ritesOptions", () => {
 	});
 
 	it("names both amounts the move grants", () => {
-		const o = ritesOptions({ surplus: 1, favorMax: 4 });
-		expect(o.plainFavor).toBe(FAVOR_PLAIN);
-		expect(o.surplusFavor).toBe(FAVOR_WITH_SURPLUS);
+		const o = ritesOptions({ surplus: 1, boonMax: 4 });
+		expect(o.plainBoon).toBe(BOON_PLAIN);
+		expect(o.surplusBoon).toBe(BOON_WITH_SURPLUS);
 	});
 
-	// "HOLD 1 Favor", not "gain 1" — the move SETS the track. A Blessed already sitting on more
+	// "HOLD 1 Boon", not "gain 1" — the move SETS the track. A Blessed already sitting on more
 	// than that would be knocked DOWN by overseeing without the Surplus, so they are warned
 	// before they press it rather than after.
-	it("warns when overseeing would cost a stocked Blessed their Favor", () => {
-		expect(ritesOptions({ favorHeld: 3 }).wouldLoseFavor).toBe(true);
-		expect(ritesOptions({ favorHeld: 1 }).wouldLoseFavor).toBe(false);
-		expect(ritesOptions({ favorHeld: 0 }).wouldLoseFavor).toBe(false);
+	it("warns when overseeing would cost a stocked Blessed their Boon", () => {
+		expect(ritesOptions({ boonHeld: 3 }).wouldLoseBoon).toBe(true);
+		expect(ritesOptions({ boonHeld: 1 }).wouldLoseBoon).toBe(false);
+		expect(ritesOptions({ boonHeld: 0 }).wouldLoseBoon).toBe(false);
 	});
 
-	it("never offers more Favor than the track can hold", () => {
-		const o = ritesOptions({ favorMax: 2, surplus: 5 });
-		expect(o.surplusFavor).toBe(2);
+	it("never offers more Boon than the track can hold", () => {
+		const o = ritesOptions({ boonMax: 2, surplus: 5 });
+		expect(o.surplusBoon).toBe(2);
 	});
 
 	it("reports the rites already overseen this season", () => {
@@ -60,10 +60,10 @@ describe("how it is wired", () => {
 		expect(SHEET).toContain("_openRitesOfTheLand()");
 	});
 
-	// The Favor track is a HOLD track, and the move says "hold N" — so it SETS rather than adds.
-	it("sets the Favor track rather than adding to it", () => {
-		expect(CHAR).toContain("async setRitesFavor(held)");
-		const at = CHAR.indexOf("async setRitesFavor(held)");
+	// The Boon track is a HOLD track, and the move says "hold N" — so it SETS rather than adds.
+	it("sets the Boon track rather than adding to it", () => {
+		expect(CHAR).toContain("async setRitesBoon(held)");
+		const at = CHAR.indexOf("async setRitesBoon(held)");
 		expect(CHAR.slice(at, at + 400)).toContain("Math.min(max,");
 		expect(CHAR.slice(at, at + 400)).not.toMatch(/held\s*\+/);
 	});

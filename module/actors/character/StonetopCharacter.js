@@ -1403,25 +1403,25 @@ export class StonetopCharacter {
 	async removeSpecialItem(slug)                   { await this._inventory.removeSpecial(slug); }
 
 	/**
-	 * The Blessed's Favor, off Rites of the Land's own track.
+	 * The Blessed's Boon, off Rites of the Land's own track.
 	 *
-	 * A HOLD track: the stored number is Favor currently held, not Favor spent, because a
+	 * A HOLD track: the stored number is Boon currently held, not Boon spent, because a
 	 * Blessed who has never overseen the rites holds none (see stock-cost.js, which pays out of
 	 * this and explains why the pouch counts the other way). Zero for a character without the
 	 * move at all, which is also the honest answer.
 	 */
-	ritesFavorHeld() {
+	ritesBoonHeld() {
 		return Math.max(0, Number(this._moveResources.getMoveResources()[RITES_OF_THE_LAND]) || 0);
 	}
 
 	/** That track's capacity, read off the owned move so a homebrewed one still works. */
-	ritesFavorMax() {
+	ritesBoonMax() {
 		return Number(ownedMove(this._actor, RITES_OF_THE_LAND)?.system?.resource?.max) || 0;
 	}
 
-	/** "Hold N Favor" — the move SETS the track rather than adding to it. */
-	async setRitesFavor(held) {
-		const max = this.ritesFavorMax();
+	/** "Hold N Boon" — the move SETS the track rather than adding to it. */
+	async setRitesBoon(held) {
+		const max = this.ritesBoonMax();
 		const value = Math.max(0, Math.min(max, Math.trunc(Number(held) || 0)));
 		await this._moveResources.setUses(RITES_OF_THE_LAND, value, { stonetopMove: RITES_OF_THE_LAND });
 	}
