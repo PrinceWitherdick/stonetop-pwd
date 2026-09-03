@@ -177,11 +177,15 @@ export class BookReaderWindow extends StonetopDialog {
 	}
 
 	/**
-	 * Two things the viewer inside the frame cannot offer, because neither is about this copy
-	 * of the book.
+	 * Three things the viewer inside the frame cannot offer, because none of them is about this
+	 * copy of the book.
 	 *
 	 * "Show Players" is the reason a GM reads a rulebook at the table at all: to put a page in
 	 * front of everybody. GM-only, because it opens a window on other people's screens.
+	 *
+	 * "New tab" is the one request a window like this always gets: a GM with a second monitor
+	 * wants the book over there, not docked in the same 80% of the same screen as the game. See
+	 * `_popOut` for why it is a NEW tab and never this one.
 	 *
 	 * "Your rulebooks" is the way back to the setup when the file has moved. A PDF that no
 	 * longer exists at the recorded path fails inside the iframe, where pdf.js says so in its
@@ -192,6 +196,11 @@ export class BookReaderWindow extends StonetopDialog {
 		// Ours go ahead of core's, and Show Players goes first of ours: it is the one a GM
 		// reaches for mid-session, and the setup is the one they touched once and are done with.
 		buttons.unshift({
+			label:   localize("stonetop.books.popOut"),
+			class:   "stonetop-book-pop-out",
+			icon:    "fas fa-arrow-up-right-from-square",
+			onclick: () => this._popOut(),
+		}, {
 			label:   localize("stonetop.books.settings"),
 			class:   "stonetop-book-settings",
 			icon:    "fas fa-folder-open",
@@ -232,6 +241,32 @@ export class BookReaderWindow extends StonetopDialog {
 		ui.notifications?.info?.(format("stonetop.books.shownPlayers", {
 			title: this.title, page,
 		}));
+	}
+
+	/**
+	 * The same book, in a browser tab of its own.
+	 *
+	 * A GM with a second monitor wants the book over there, not docked in the same 80% of the
+	 * same screen as the game. The far end is the same viewer at the same URL, so the tab and
+	 * this window agree about what a page is and pdf.js keeps its own view history for both.
+	 *
+	 * A NEW TAB AND NEVER THIS ONE. `_blank` plus `noopener` is what keeps the game where it is:
+	 * navigating the game frame itself to a PDF is a control that loses the session, and there
+	 * is no way back from it but the browser's own history. This is also why the URL is handed
+	 * to `window.open` rather than to a link in the header: an anchor without both of those is
+	 * one mis-set attribute away from doing exactly that.
+	 *
+	 * OPENED AT THE PAGE BEING READ, not at the page the window opened at, for the same reason
+	 * `_showPlayers` is: by the time a GM presses this they have read their way somewhere else,
+	 * and `this._src` is where the book started. A frame still loading has no page to name yet
+	 * and falls back to that opening URL, which is where it is sitting anyway.
+	 */
+	_popOut() {
+		const page = Number(this._viewerApp?.page);
+		const src = (Number(this._viewerApp?.pagesCount) > 0 && Number.isFinite(page) && page >= 1)
+			? rulebookViewerUrl(rulebookPath(this._book), { page: Math.trunc(page) })
+			: this._src;
+		if (src) globalThis.window?.open?.(src, "_blank", "noopener");
 	}
 
 	async _openSetup() {
@@ -437,6 +472,40 @@ export class BookReaderWindow extends StonetopDialog {
 		console.info(format("stonetop.books.otherEdition", {
 			book: this._entry.numeral, pages, expected: this._entry.spreadPages,
 		}));
+		// SAID OUT LOUD only when a printed page was asked for. The console line above is for the
+		// GM who goes looking; this one interrupts, and it earns that only because the window in
+		// front of them is already showing the wrong page and nothing about it looks wrong. There
+		// is no correcting it from here: a 1-up file's front matter is however many sheets its
+		// publisher put there, and we have no way to count them.
+		if (this._printedPage) ui.notifications?.warn?.(format("stonetop.books.pageMayBeOff", {
+			book: this._entry.numeral, pages, expected: this._entry.spreadPages,
+		}));
+	}
+
+	/**
+	 * Turn an already open book to a page the BOOK numbers, rather than one the file does.
+	 *
+	 * The conversion happens here, against the count of the document actually loaded, which is
+	 * the only place it can be trusted: `spreadPageFor` is arithmetic on the spreads edition and
+	 * a GM who owns the 1-up file would be sent sixty pages wide by it. So a file that is not the
+	 * spreads edition is left where it is and said so, which is the same answer `_checkEdition`
+	 * gives -- being taken to a page nobody asked for is worse than not being taken anywhere.
+	 *
+	 * A frame still loading is left alone deliberately: it is already opening at the page its URL
+	 * named, and that URL was built from the same arithmetic.
+	 */
+	goToPrintedPage(printed) {
+		const n = Number(printed);
+		const pages = Number(this._viewerApp?.pagesCount);
+		if (!(pages > 0) || !Number.isFinite(n) || n < 1) return;
+		if (!isSpreadsEdition(this._book, pages)) {
+			ui.notifications?.warn?.(format("stonetop.books.pageMayBeOff", {
+				book: this._entry?.numeral ?? this._book, pages,
+				expected: this._entry?.spreadPages ?? pages,
+			}));
+			return;
+		}
+		this.goToPage(spreadPageFor(n));
 	}
 
 	/**
@@ -472,40 +541,6 @@ export class BookReaderWindow extends StonetopDialog {
  * The scale one notch away from where the page is now, on a flat grid of tenths.
  *
  * SNAPPED to the grid before stepping, not just stepped, because the scale a book is sitting
-		// SAID OUT LOUD only when a printed page was asked for. The console line above is for the
-		// GM who goes looking; this one interrupts, and it earns that only because the window in
-		// front of them is already showing the wrong page and nothing about it looks wrong. There
-		// is no correcting it from here: a 1-up file's front matter is however many sheets its
-		// publisher put there, and we have no way to count them.
-		if (this._printedPage) ui.notifications?.warn?.(format("stonetop.books.pageMayBeOff", {
-			book: this._entry.numeral, pages, expected: this._entry.spreadPages,
-		}));
-	}
-
-	/**
-	 * Turn an already open book to a page the BOOK numbers, rather than one the file does.
-	 *
-	 * The conversion happens here, against the count of the document actually loaded, which is
-	 * the only place it can be trusted: `spreadPageFor` is arithmetic on the spreads edition and
-	 * a GM who owns the 1-up file would be sent sixty pages wide by it. So a file that is not the
-	 * spreads edition is left where it is and said so, which is the same answer `_checkEdition`
-	 * gives -- being taken to a page nobody asked for is worse than not being taken anywhere.
-	 *
-	 * A frame still loading is left alone deliberately: it is already opening at the page its URL
-	 * named, and that URL was built from the same arithmetic.
-	 */
-	goToPrintedPage(printed) {
-		const n = Number(printed);
-		const pages = Number(this._viewerApp?.pagesCount);
-		if (!(pages > 0) || !Number.isFinite(n) || n < 1) return;
-		if (!isSpreadsEdition(this._book, pages)) {
-			ui.notifications?.warn?.(format("stonetop.books.pageMayBeOff", {
-				book: this._entry?.numeral ?? this._book, pages,
-				expected: this._entry?.spreadPages ?? pages,
-			}));
-			return;
-		}
-		this.goToPage(spreadPageFor(n));
  * at is usually not a round number: "fit page" on a spread lands somewhere like 0.63, and
  * adding a tenth to that gives 0.73 and then 0.83, a grid of its own that no other control in
  * the viewer shares. Rounding toward the direction of travel means the first notch tidies the
@@ -548,6 +583,6 @@ export function openBookReader(book, { page, printedPage } = {}) {
 	// (the page is in its URL) and both jumps no-op on it, which is why these can be
 	// unconditional rather than branching on which of the two happened.
 	if (page) win?.goToPage?.(page);
+	else if (printedPage) win?.goToPrintedPage?.(printedPage);
 	return win;
 }
-	else if (printedPage) win?.goToPrintedPage?.(printedPage);

@@ -71,6 +71,7 @@
       "groupLabel": "Your rulebooks",
       "openTip": "Open {title}",
       "setTip": "Point at your copy of {title}",
+      "popOut": "New tab",
       "showPlayers": "Show Players",
       "shownPlayers": "{title}, page {page}, is now open for your players.",
       "stillOpening": "This book is still opening. Give it a moment, then show your players the page.",
@@ -95,8 +96,8 @@
         "saveFailed": "That bookmark could not be saved. Your bookmarks are stored in this world, so this usually means the connection dropped."
       },
       "otherEdition": "Stonetop | The Book {book} PDF this world points at has {pages} pages rather than the {expected} of the spreads edition. It reads perfectly; only a jump to a printed page number would land in the wrong place.",
-      "book1": {
       "pageMayBeOff": "Your Book {book} PDF has {pages} pages rather than the {expected} of the spreads edition, so a page number from the book will not line up with a page of this file. Use the outline or the search bar to find the page.",
+      "book1": {
         "label": "Book I",
         "title": "Book I: Stonetop",
         "hint": "The core rules. Usually the 308 page spreads PDF."
