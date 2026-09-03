@@ -1,0 +1,102 @@
+{{!-- RELATIONSHIP MAP — who at this table knows whom, and how.
+
+      One window per map (there are several named maps in a world), driven by
+      module/dialogs/RelationshipMapWindow.js. The board inside it pans and zooms as a whole; the
+      bar above it does not ride the board, so the controls stay put while the web moves behind them.
+
+      ONE root element, as AppV1 requires. --}}
+<div class="stonetop-relmap{{#unless canEdit}} is-readonly{{/unless}}{{#if locked}} is-locked{{/if}}">
+
+  <div class="stonetop-relmap-bar">
+    <div class="stonetop-relmap-bar-title">{{title}}</div>
+
+    {{#if canEdit}}
+    <div class="stonetop-relmap-tools">
+      {{!-- The lock, and why it is the DEFAULT state. Everybody at the table owns these maps, so
+            everybody can move a portrait — which means everybody can move one by accident while
+            trying to drag the board. Reading a map is the common act and editing it is the
+            deliberate one, so the deliberate one asks first. --}}
+      {{!-- A TOGGLE NEEDS A CONSTANT NAME AND A CHANGING STATE, and it is easy to give it two
+            changing halves that then contradict each other. The accessible name stays "Edit the
+            board" whichever way the lock is set; `aria-pressed` carries the state, and is spelled
+            out both ways because `{{#unless}}` alone renders `aria-pressed=""`, which tells a
+            screen reader the control is a toggle and then gives it nothing to report. The visible
+            label and the tooltip still say what pressing it will DO. --}}
+      <button type="button" class="stonetop-relmap-tool" data-relmap-action="lock"
+              aria-pressed="{{#if locked}}false{{else}}true{{/if}}"
+              data-tooltip="{{lockHint}}" aria-label="{{lockToggle}}">
+        <i class="fas {{#if locked}}fa-lock{{else}}fa-lock-open{{/if}}"></i>
+        <span>{{lockLabel}}</span>
+      </button>
+
+      <button type="button" class="stonetop-relmap-tool" data-relmap-action="add"
+              {{#if locked}}disabled{{/if}}
+              data-tooltip="{{addHint}}" aria-label="{{addHint}}">
+        <i class="fas fa-user-plus"></i>
+        <span>{{addLabel}}</span>
+      </button>
+
+      {{!-- The whole cast at once: every player character and everybody on a steading's
+            rosters. What a fresh map wants first, so it sits beside the one-at-a-time
+            button rather than being buried behind it. --}}
+      <button type="button" class="stonetop-relmap-tool" data-relmap-action="cast"
+              {{#if locked}}disabled{{/if}}
+              data-tooltip="{{castHint}}" aria-label="{{castHint}}">
+        <i class="fas fa-users"></i>
+        <span>{{castLabel}}</span>
+      </button>
+
+      <button type="button" class="stonetop-relmap-tool" data-relmap-action="tidy"
+              {{#if locked}}disabled{{/if}}
+              data-tooltip="{{tidyHint}}" aria-label="{{tidyHint}}">
+        <i class="fas fa-circle-nodes"></i>
+        <span>{{tidyLabel}}</span>
+      </button>
+
+      {{!-- Seeds the board from the 1-5 hearts the sheets already carry. A ONE-TIME import,
+            not a live mirror: the hearts stay their own feature, and a line renamed here is
+            never overwritten by a heart moved over there. Pressing it twice adds nothing. --}}
+      <button type="button" class="stonetop-relmap-tool" data-relmap-action="pull"
+              {{#if locked}}disabled{{/if}}
+              data-tooltip="{{pullHint}}" aria-label="{{pullHint}}">
+        <i class="fas fa-heart"></i>
+        <span>{{pullLabel}}</span>
+      </button>
+    </div>
+    {{/if}}
+  </div>
+
+  {{!-- The window the board moves behind: it clips, it does not scroll. A scroll container can only
+        reach what is inside its own content box, so it would pin the board to its edges and grow
+        scrollbars over a diagram that is meant to be dragged around freely. --}}
+  <div class="stonetop-relmap-view">
+    <div class="stonetop-relmap-board">{{{board}}}</div>
+
+    {{!-- Nobody on the map yet. Inside the viewport rather than instead of it, so the board is
+          still there to be dropped onto — which is the other way somebody arrives.
+
+          ALWAYS RENDERED, hidden rather than absent, because `_toggleEmpty` can only show and hide
+          what the markup already has. Behind an `{{#if}}` it existed on exactly the maps that
+          opened empty, so removing the last person from a populated one left a blank board with no
+          lead text and no "Add everyone" — the moment the panel is most wanted. The button inside
+          it is still gated, and a lock turning re-renders the window whole. --}}
+    <div class="stonetop-relmap-empty" {{#unless empty}}hidden{{/unless}}>
+      <p class="stonetop-relmap-empty-lead">{{emptyLead}}</p>
+      <p class="stonetop-relmap-empty-hint">{{emptyHint}}</p>
+      {{!-- The one press a brand new map wants. The panel itself takes no pointer events (the
+            board underneath it has to stay droppable), so the button opts back in. Absent while
+            the board is locked, because it would be a control that cannot do anything. --}}
+      {{#if canEdit}}{{#unless locked}}
+      <button type="button" class="stonetop-cta stonetop-relmap-empty-cast" data-relmap-action="cast">
+        <i class="fas fa-users"></i>
+        <span>{{castLabel}}</span>
+      </button>
+      {{/unless}}{{/if}}
+    </div>
+  </div>
+
+  {{!-- Spoken to a screen reader when something moves, and deliberately OUTSIDE the board: the
+        board's markup is replaced wholesale on every repaint, and a live region that goes with it
+        is a live region nothing is ever announced from. --}}
+  <div class="stonetop-relmap-live" aria-live="polite" role="status"></div>
+</div>

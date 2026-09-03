@@ -1,0 +1,73 @@
+{{!-- What one line on a relationship map SAYS: the words, the colour, and which way it is read.
+
+      One root element, as AppV1 requires. Driven by module/dialogs/RelationshipLinkDialog.js. --}}
+<form class="stonetop-relmap-link">
+
+  <p class="stonetop-relmap-link-who">{{between}}</p>
+
+  <div class="stonetop-form-row">
+    <label for="relmap-link-label">{{labelLabel}}</label>
+    {{!-- Autocomplete off the labels already used on this map, so a table that says "sweet on"
+          keeps saying it rather than drifting into "sweet on"/"soft on"/"in love with" for one
+          idea. It is a suggestion and never a restriction: the field takes anything. --}}
+    <input type="text" id="relmap-link-label" name="label" value="{{edge.label}}"
+           maxlength="{{maxLength}}" placeholder="{{placeholder}}" list="relmap-link-suggestions"
+           autocomplete="off">
+    <datalist id="relmap-link-suggestions">
+      {{#each suggestions}}<option value="{{this}}"></option>{{/each}}
+    </datalist>
+  </div>
+
+  {{!-- THE COLOUR, as a row of named swatches rather than a colour picker. The map stores a KEY,
+        not a hex, so the eight inks can be retuned for the high-contrast skin without rewriting
+        anybody's map — and a free colour picker would let a reader choose one that vanishes
+        against the paper for the person at this table reading on a magnifier.
+
+        Each swatch shows its DASH PATTERN as well as its colour, because that pattern is how the
+        line still says which kind of tie it is when the colour cannot be seen at all. --}}
+  <fieldset class="stonetop-relmap-link-inks">
+    <legend>{{inkLabel}}</legend>
+    {{#each inks}}
+    <label class="stonetop-relmap-ink stonetop-relmap-ink--{{key}}">
+      <input type="radio" name="ink" value="{{key}}"{{#if checked}} checked{{/if}}>
+      <span class="stonetop-relmap-ink-swatch" aria-hidden="true"></span>
+      <span class="stonetop-relmap-ink-name">{{name}}</span>
+    </label>
+    {{/each}}
+  </fieldset>
+
+  {{!-- WHICH WAY IT IS READ. "Both ways" is first and is the default, because most ties between
+        people are mutual and the one-way ones are the notable exception ("secretly in love with"
+        is the whole reason this control exists). --}}
+  <fieldset class="stonetop-relmap-link-dirs">
+    <legend>{{dirLabel}}</legend>
+    {{#each dirs}}
+    <label class="stonetop-relmap-dir">
+      <input type="radio" name="dir" value="{{key}}"{{#if checked}} checked{{/if}}>
+      <span>{{name}}</span>
+    </label>
+    {{/each}}
+  </fieldset>
+
+  <div class="stonetop-form-row">
+    <label for="relmap-link-note">{{noteLabel}}</label>
+    <textarea id="relmap-link-note" name="note" rows="2"
+              placeholder="{{notePlaceholder}}">{{edge.note}}</textarea>
+  </div>
+
+  {{!-- Affirmative on the LEFT, and every button NAMES its outcome rather than answering a
+        question the reader has to remember. --}}
+  <footer class="stonetop-relmap-link-foot">
+    <button type="button" class="stonetop-cta" data-relmap-link="save">
+      <i class="fas fa-check"></i> <span>{{saveLabel}}</span>
+    </button>
+    {{#if canDelete}}
+    <button type="button" class="stonetop-relmap-link-drop" data-relmap-link="delete">
+      <i class="fas fa-link-slash"></i> <span>{{deleteLabel}}</span>
+    </button>
+    {{/if}}
+    <button type="button" data-relmap-link="cancel">
+      <i class="fas fa-xmark"></i> <span>{{cancelLabel}}</span>
+    </button>
+  </footer>
+</form>

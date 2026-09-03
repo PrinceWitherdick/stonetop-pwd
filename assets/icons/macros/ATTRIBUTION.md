@@ -9,6 +9,7 @@ Where our filename differs from the original, the game-icons.net source name is 
 |------|-----------------------|--------|-------------|
 | animal-skull.svg | animal-skull | Lorc | https://lorcblog.blogspot.com |
 | bookmarklet.svg | bookmarklet | Lorc | https://lorcblog.blogspot.com |
+| brain.svg | brain | Lorc | https://lorcblog.blogspot.com |
 | die-of-fate.svg | perspective-dice-six-faces-random | Delapouite | https://delapouite.com |
 | direction-signs.svg | direction-signs | Delapouite | https://delapouite.com |
 | hazard-sign.svg | hazard-sign | Lorc | https://lorcblog.blogspot.com |

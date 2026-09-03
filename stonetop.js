@@ -26,6 +26,8 @@ import { HazardPageModel } from "./module/journal/HazardPageModel.js";
 import { createStonetopHazardPageSheetClass } from "./module/journal/StonetopHazardPageSheet.js";
 import { SitePageModel } from "./module/journal/SitePageModel.js";
 import { createStonetopSitePageSheetClass } from "./module/journal/StonetopSitePageSheet.js";
+import { createRelationshipMapEntrySheetClass } from "./module/journal/RelationshipMapEntrySheet.js";
+import { RELMAP_SHEET_CLASS } from "./module/relmap/relmap-doc.js";
 import { ThreatBoard } from "./module/threats/threat-board.js";
 import { onReady } from "./module/hooks/Ready.js";
 import { handleImportedJournalArt, ART_INDEX_SETTINGS } from "./module/book2-art/reapply.js";
@@ -39,9 +41,9 @@ import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { onPreCreateThreatNote } from "./module/hooks/ThreatNotePins.js";
 import { onUpdateSiteNote } from "./module/sites/site-scene-pins.js";
 import { onDrawStonetopNote } from "./module/hooks/StonetopNoteLabels.js";
+import { installMapPinNameToggle } from "./module/hooks/MapPinNameToggle.js";
 import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
 import { bumpEncounterNotesGeneration } from "./module/actors/gmtoolkit/gm-encounters-tab.js";
-import { installMapPinNameToggle } from "./module/hooks/MapPinNameToggle.js";
 import { gmToolkitActors } from "./module/actors/gmtoolkit/gm-toolkit-actor.js";
 import { invalidateMonsterRefIndex } from "./module/bestiary/monster-ref-index.js";
 import { ensureLocationSummaryIndex, applyTooltipsThenRestrict } from "./module/locations/location-tooltips.js";
@@ -389,6 +391,27 @@ Hooks.once("init", () => {
 		label:       "Stonetop Site Page",
 	});
 
+	// A relationship map is a JournalEntry, so it has a row in every player's Journal sidebar.
+	// Clicking that row must open the BOARD, not Foundry's prose editor on an entry whose only
+	// content is a flag, which is a blank window that reads as the map being broken. Each map
+	// stamps this class into flags.core.sheetClass, so only OUR entries are affected.
+	//
+	// makeDefault stays FALSE. Core clears every other sheet's default flag for the type when a
+	// new default is registered, so `true` here would hijack every journal in the world.
+	const JournalSheetV1 = foundry.appv1?.sheets?.JournalSheet ?? globalThis.JournalSheet;
+	const StonetopRelationshipMapSheet = createRelationshipMapEntrySheetClass(JournalSheetV1);
+	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntry, SYSTEM_ID, StonetopRelationshipMapSheet, {
+		types:       ["base"],
+		makeDefault: false,
+		label:       "Stonetop Relationship Map",
+	});
+	// The id core stores is `scope.ClassName`, and every existing map already carries that string
+	// in its own flag. If a rename ever splits the two, those entries fall back to the generic
+	// sheet with no error anywhere, so the two halves are checked against each other here.
+	if (RELMAP_SHEET_CLASS !== `${SYSTEM_ID}.${StonetopRelationshipMapSheet.name}`) {
+		console.error("Stonetop | relationship map sheet id does not match RELMAP_SHEET_CLASS");
+	}
+
 	const StonetopArcanumSheet = createStonetopArcanumSheetClass(ItemSheet);
 	Items.registerSheet(SYSTEM_ID, StonetopArcanumSheet, {
 		types:       ["move"],
@@ -428,6 +451,9 @@ Hooks.once("init", () => {
 		"stonetop.move-group":           "systems/stonetop-pwd/templates/actor/partials/move-group.hbs",
 		"stonetop.tab-search-control":   "systems/stonetop-pwd/templates/actor/partials/tab-search-control.hbs",
 		"stonetop.catalog-shell":        "systems/stonetop-pwd/templates/dialogs/partials/catalog-shell.hbs",
+		"stonetop.relationship-map":       "systems/stonetop-pwd/templates/dialogs/relationship-map.hbs",
+		"stonetop.relationship-map-board": "systems/stonetop-pwd/templates/dialogs/partials/relationship-map-board.hbs",
+		"stonetop.relationship-link":      "systems/stonetop-pwd/templates/dialogs/relationship-link.hbs",
 		// Rendered by BOTH Death's Door's last step and the standalone Post-Death chooser.
 		"stonetop.post-death-choices":   "systems/stonetop-pwd/templates/dialogs/partials/post-death-choices.hbs",
 		"stonetop.move-mark-level":      "systems/stonetop-pwd/templates/actor/partials/move-mark-level.hbs",
@@ -445,6 +471,8 @@ Hooks.once("init", () => {
 		"stonetop.relationships-board": "systems/stonetop-pwd/templates/actor/partials/relationships-board.hbs",
 		"stonetop.relationships-view":  "systems/stonetop-pwd/templates/actor/partials/relationships-view.hbs",
 		"stonetop.relationships-viewbar": "systems/stonetop-pwd/templates/actor/partials/relationships-viewbar.hbs",
+		// The clickable page citation, shared by every GM Toolkit surface that cites the book.
+		"stonetop.book-page-cite":  "systems/stonetop-pwd/templates/actor/partials/book-page-cite.hbs",
 		"stonetop.section-heading":  "systems/stonetop-pwd/templates/actor/partials/section-heading.hbs",
 		"stonetop.section-collapse": "systems/stonetop-pwd/templates/actor/partials/section-collapse.hbs",
 		"stonetop.section-randomize": "systems/stonetop-pwd/templates/actor/partials/section-randomize.hbs",
@@ -472,8 +500,6 @@ Hooks.once("init", () => {
 		"stonetop.gm-toolkit-tab-threats":    "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-threats.hbs",
 		// Not a tab any more: a folded section at the foot of the Expeditions panel.
 		"stonetop.gm-toolkit-sites-section": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-sites-section.hbs",
-		// The clickable page citation, shared by every GM Toolkit surface that cites the book.
-		"stonetop.book-page-cite":  "systems/stonetop-pwd/templates/actor/partials/book-page-cite.hbs",
 		"stonetop.gm-toolkit-tab-homefront":  "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-homefront.hbs",
 		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
 		"stonetop.gm-toolkit-tab-encounters": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-encounters.hbs",
@@ -652,6 +678,22 @@ Hooks.on("createJournalEntry", handleImportedJournalArt);
 // the folder changed", and a listing taken before one was known answers nothing about the folder
 // a listing taken after would find. Neither module names the other's settings.
 const _onArtIndexPublished = (setting) => {
+//
+// Joined ONCE, at module scope, into the fully-qualified keys the hook is actually handed. This
+// fires on `createSetting`/`updateSetting`, which is every world-scoped setting write from every
+// module and from core, not just ours — a rate this system does not own — and spreading two
+// arrays into a fresh `.some` closure per event to answer a membership question is work a Set
+// answers in one lookup.
+//
+// Deliberately an EXACT key match where this used to be a `.endsWith(".${name}")` suffix test.
+// Our art cache is invalidated by OUR settings; another package that happens to store something
+// it calls `treasureArt` was clearing it too, and now does not. Both writers of these settings
+// namespace them with SYSTEM_ID — `setSetting` (module/settings.js) and the import macro, which
+// spells `game.settings.set("stonetop-pwd", …)` — so nothing of ours stops being caught.
+const _ART_CACHE_KEYS = new Set(
+	[...ART_INDEX_SETTINGS, ...ART_BROWSE_INPUTS].map((s) => `${SYSTEM_ID}.${s}`),
+);
+
 	const key = setting?.key ?? "";
 	if (_ART_CACHE_KEYS.has(key)) clearArtBrowseCache();
 	// ...and repaint the one surface that reads an art index at RENDER time with no document of
@@ -681,22 +723,6 @@ const _onArtIndexPublished = (setting) => {
 	// same stale placeholder this exists to clear, which is the one failure it must not reproduce.
 	for (const toolkit of gmToolkitActors()) {
 		for (const app of Object.values(toolkit?.apps ?? {})) {
-//
-// Joined ONCE, at module scope, into the fully-qualified keys the hook is actually handed. This
-// fires on `createSetting`/`updateSetting`, which is every world-scoped setting write from every
-// module and from core, not just ours — a rate this system does not own — and spreading two
-// arrays into a fresh `.some` closure per event to answer a membership question is work a Set
-// answers in one lookup.
-//
-// Deliberately an EXACT key match where this used to be a `.endsWith(".${name}")` suffix test.
-// Our art cache is invalidated by OUR settings; another package that happens to store something
-// it calls `treasureArt` was clearing it too, and now does not. Both writers of these settings
-// namespace them with SYSTEM_ID — `setSetting` (module/settings.js) and the import macro, which
-// spells `game.settings.set("stonetop-pwd", …)` — so nothing of ours stops being caught.
-const _ART_CACHE_KEYS = new Set(
-	[...ART_INDEX_SETTINGS, ...ART_BROWSE_INPUTS].map((s) => `${SYSTEM_ID}.${s}`),
-);
-
 			try { app.render(false); } catch (_) { /* a window mid-close is not a failure */ }
 		}
 	}
@@ -720,6 +746,11 @@ Hooks.on("updateNote", onUpdateSiteNote);
 Hooks.on("drawNote", onDrawStonetopNote);
 
 // -- EXPEDITION ROUTE ON THE MAP -------------------------------
+// And the eye button beside the sidebar that quiets those labels on the map you are looking at,
+// for you alone. `ready` rather than `init`: it mounts into core's own `#ui-right` row, which
+// does not exist until the interface has been rendered. See hooks/MapPinNameToggle.js.
+Hooks.once("ready", installMapPinNameToggle);
+
 // A journey put on a poster-map scene from the Run an Expedition walkthrough. The scene
 // carries the two place slugs and every client paints the line from them, players included.
 registerExpeditionRouteHooks();
@@ -746,11 +777,6 @@ Hooks.once("ready", () => ensureLocationSummaryIndex());
 const _onJournalRender = (app, html) => {
 	// Give cross-links their hover summary FIRST, then neuter any a player can't
 	// follow. Tooltips then restriction, in that order and for the reasons written down
-// And the eye button beside the sidebar that quiets those labels on the map you are looking at,
-// for you alone. `ready` rather than `init`: it mounts into core's own `#ui-right` row, which
-// does not exist until the interface has been rendered. See hooks/MapPinNameToggle.js.
-Hooks.once("ready", installMapPinNameToggle);
-
 	// in applyTooltipsThenRestrict.
 	applyTooltipsThenRestrict(html);
 	// Drop any book-art image whose file fails to load, so no reader — player or GM —

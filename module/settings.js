@@ -612,19 +612,6 @@ export function registerSettings() {
 		onChange: () => applyMapPinLabelMode(),
 	});
 
-	game.settings.registerMenu(SYSTEM_ID, "mapPinNameSettings", {
-		name: "stonetop.settings.mapPinNameSettings.name",
-		label: "stonetop.settings.mapPinNameSettings.label",
-		hint: "stonetop.settings.mapPinNameSettings.hint",
-		icon: "fas fa-map-signs",
-		type: _createMapPinNameSettingsApp(),
-		// World-scoped, so only a GM can write it. An unrestricted menu would open for players
-		// and then throw on save, which is worse than not offering it.
-		restricted: true,
-	});
-
-	// Which poster maps have had their named-place markers laid down, as a { map slug -> keys }
-	// map. Per MAP rather than one flag for the set, and that is the whole point of the shape:
 	// ONE READER'S OWN ANSWER, per scene — what the eye button beside the sidebar writes
 	// (hooks/MapPinNameToggle.js). Overrides both settings above, for this browser only.
 	//
@@ -666,6 +653,19 @@ export function registerSettings() {
 		onChange: () => applyMapPinLabelMode(),
 	});
 
+	game.settings.registerMenu(SYSTEM_ID, "mapPinNameSettings", {
+		name: "stonetop.settings.mapPinNameSettings.name",
+		label: "stonetop.settings.mapPinNameSettings.label",
+		hint: "stonetop.settings.mapPinNameSettings.hint",
+		icon: "fas fa-map-signs",
+		type: _createMapPinNameSettingsApp(),
+		// World-scoped, so only a GM can write it. An unrestricted menu would open for players
+		// and then throw on save, which is worse than not offering it.
+		restricted: true,
+	});
+
+	// Which poster maps have had their named-place markers laid down, as a { map slug -> keys }
+	// map. Per MAP rather than one flag for the set, and that is the whole point of the shape:
 	// the Scenes can arrive years apart (a GM who imported the Vicinity, then the World's End
 	// with the next book), and a single latch would have marked whichever existed first and left
 	// the others bare forever.
@@ -2118,6 +2118,8 @@ export function getAlwaysShowMapPinNames() {
  * rather than painting a silently quieter map.
  */
 export function showMapPinNamesOn(scene) {
+	const mine = localMapPinNameOverride(scene);
+	if (typeof mine === "boolean") return mine;
 	const slug = posterMapSlugOf(scene);
 	if (slug) {
 		const override = _perMapPinNames()[slug];
@@ -2126,21 +2128,6 @@ export function showMapPinNamesOn(scene) {
 	return getAlwaysShowMapPinNames();
 }
 
-/** The stored per-map record, cached, and never cached from a read that had nothing to give. */
-function _perMapPinNames() {
-	return _cachedSetting(
-		"mapPinNamesByMap",
-		v => !!v && typeof v === "object" && !Array.isArray(v),
-	const mine = localMapPinNameOverride(scene);
-	if (typeof mine === "boolean") return mine;
-		{},
-	);
-}
-
-/**
- * Push the label setting onto the notes already drawn, so flipping it takes effect on the map the
- * GM is looking at rather than on their next reload.
- *
 /**
  * THIS reader's own answer for this scene, or undefined when they have not given one.
  *
@@ -2211,6 +2198,19 @@ export async function toggleLocalMapPinNames(scene) {
 	return next;
 }
 
+/** The stored per-map record, cached, and never cached from a read that had nothing to give. */
+function _perMapPinNames() {
+	return _cachedSetting(
+		"mapPinNamesByMap",
+		v => !!v && typeof v === "object" && !Array.isArray(v),
+		{},
+	);
+}
+
+/**
+ * Push the label setting onto the notes already drawn, so flipping it takes effect on the map the
+ * GM is looking at rather than on their next reload.
+ *
  * `refreshState` is the narrowest flag that does it: core recomputes tooltip visibility from the
  * cursor in Note#_refreshState, and our wrapper rides that same pass, so one flag both turns the
  * labels on and hands them back to core when the switch goes off.

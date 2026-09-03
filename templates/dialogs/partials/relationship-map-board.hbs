@@ -1,0 +1,102 @@
+{{!-- The board itself: the lines between people, what each line is called, and the portraits.
+
+      ITS OWN PARTIAL BECAUSE IT IS RE-RENDERED ON ITS OWN. Every live change to a map — somebody
+      else moving a portrait, a link being drawn at the far end of the table — repaints THIS and
+      swaps it into the open window, without re-rendering the Application. A full render would
+      re-fit the board and throw away the corner the reader had zoomed into, which is exactly the
+      state they were using when the change arrived. See RelationshipMapWindow#sync.
+
+      Everything is positioned in PERCENTAGES of the board, which is a box of fixed notional size
+      that utils/zoom-pan-surface.js scales and moves as a whole. So one set of numbers serves the
+      stroke, the labels and the portraits at any magnification. --}}
+
+{{!-- THE LINES. One stretched SVG for all of them, in the same 0-100 space everything else is
+      placed in: preserveAspectRatio="none" maps that space onto the board whatever shape it is,
+      and stretching a quadratic leaves a quadratic. `vector-effect` then keeps the stroke an even
+      width in SCREEN space, which the stretch would otherwise smear along one axis.
+
+      Takes no clicks: a drag that starts on empty board has to pan, and the line layer covers all
+      of it. The label above each line is what a reader aims at. --}}
+<svg class="stonetop-relmap-lines" viewBox="0 0 100 100" preserveAspectRatio="none"
+     aria-hidden="true" focusable="false">
+  {{#each edges}}
+  <path class="stonetop-relmap-line stonetop-relmap-line--{{ink}}" data-relmap-line="{{id}}" d="{{d}}"
+        vector-effect="non-scaling-stroke"></path>
+  {{/each}}
+</svg>
+
+{{!-- WHICH WAY A LINK IS READ, where it is not simply mutual. Each head is its own fixed-size SVG
+      rather than a marker on the path above, for the reason the journey's heads are: that path is
+      stretched to the board, which would squash the triangle and (with orient="auto") aim it off
+      any diagonal. These are turned by an angle already worked out in the board's real proportions,
+      taken from the curve where the head actually sits rather than from the straight line between
+      two portraits — so each lies along the line it belongs to even though that line is bowed.
+
+      The triangle is `headD`, imported from utils/route-path.js rather than written out here: the
+      expedition's two renderers draw the same shape from the same points, and a shape spelt out in
+      three places is one that gets reshaped in two of them. --}}
+{{#each heads}}
+<svg class="stonetop-relmap-head stonetop-relmap-head--{{ink}}" viewBox="0 0 {{../headBox}} {{../headBox}}"
+     aria-hidden="true" focusable="false" data-relmap-head="{{id}}" data-relmap-end="{{end}}"
+     style="left:{{left}}%;top:{{top}}%;--relmap-turn:{{angle}}deg">
+  <path d="{{../headD}}"></path>
+</svg>
+{{/each}}
+
+{{!-- WHAT EACH LINK IS CALLED. HTML, deliberately, and not an SVG <text> in the stretched viewBox
+      above — that would shear every glyph along one axis, badly and differently depending on the
+      window's shape.
+
+      A chip of paper rather than coloured text. The ink says which KIND of tie this is, and colour
+      cannot be the only thing that says it: there is a reader at this table on a screen magnifier,
+      and coloured small type is exactly what fails for them. So the line carries the colour (and a
+      dash pattern, which says the same thing again without any colour at all), while the words stay
+      body ink on paper at full contrast, with a stripe of the ink down the leading edge to tie the
+      two together.
+
+      The turn is a CSS variable rather than a whole transform, because the transform also has to
+      centre the chip on its own anchor and that half belongs to the stylesheet. --}}
+{{#each labels}}
+<button type="button" class="stonetop-relmap-label stonetop-relmap-label--{{ink}}"
+        data-relmap-edge="{{id}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
+        style="left:{{left}}%;top:{{top}}%;--relmap-turn:{{angle}}deg">
+  <span class="stonetop-relmap-label-text">{{text}}</span>
+</button>
+{{/each}}
+
+{{!-- THE PEOPLE. A round portrait, a name under it, and a handle on the rim for drawing a line to
+      somebody else.
+
+      The face is a BUTTON and opens the actor's sheet; dragging the same element moves the portrait
+      instead (utils/relmap-drag.js decides which happened, by how far the pointer travelled). The
+      handle is separate so that "draw a line from here" is never something a reader does by
+      accident on the way to reading a sheet.
+
+      `imgStyle` is the crop the GM chose for this actor's portrait, from utils/portrait-frame.js —
+      the same one the relationships table uses, so a face framed once is framed everywhere. --}}
+{{#each nodes}}
+<div class="stonetop-relmap-node{{#if missing}} is-missing{{/if}}" data-relmap-node="{{id}}"
+     style="left:{{left}}%;top:{{top}}%">
+  <button type="button" class="stonetop-relmap-face" data-relmap-open="{{id}}"
+          data-tooltip="{{tooltip}}" aria-label="{{tooltip}}">
+    <span class="stonetop-relmap-portrait">
+      {{#if img}}
+      <img src="{{img}}" alt="" draggable="false" style="{{imgStyle}}">
+      {{else}}
+      <i class="fas fa-user"></i>
+      {{/if}}
+    </span>
+  </button>
+  <span class="stonetop-relmap-name">{{name}}</span>
+  {{!-- Focusable, and it does something on a plain CLICK as well as on a drag: dragging it to
+        another portrait draws the line, and clicking it asks who to draw to. Drag is the quick way
+        and not the only way, which is what keeps the board usable from a keyboard and on a touch
+        screen where a precise drag between two small circles is unpleasant. --}}
+  {{#if ../canEdit}}
+  <button type="button" class="stonetop-relmap-handle" data-relmap-handle="{{id}}"
+          data-tooltip="{{../linkHint}}" aria-label="{{linkLabel}}">
+    <i class="fas fa-link"></i>
+  </button>
+  {{/if}}
+</div>
+{{/each}}
