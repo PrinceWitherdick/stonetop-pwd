@@ -35,6 +35,18 @@ function reconcileWeatherFx() {
 	return _debouncedReconcile();
 }
 
+/**
+ * The settings that decide whether a Stonetop map pin wears its name.
+ *
+ * Named here, beside the registrations, because they are ALSO what the sidebar eye watches for
+ * (hooks/MapPinNameToggle.js). Stated in both files, a fourth setting or a rename leaves the
+ * button showing a stale eye with nothing failing anywhere, and the file that knows about the
+ * change has no reason to look in hooks/.
+ */
+export const MAP_PIN_NAME_SETTINGS = Object.freeze([
+	"alwaysShowMapPinNames", "mapPinNamesByMap", "mapPinNamesLocal",
+]);
+
 export function registerSettings() {
 	// -- WORLD SETTINGS ------------------------------------------
 
@@ -600,6 +612,47 @@ export function registerSettings() {
 
 	// Which poster maps have had their named-place markers laid down, as a { map slug -> keys }
 	// map. Per MAP rather than one flag for the set, and that is the whole point of the shape:
+	// ONE READER'S OWN ANSWER, per scene — what the eye button beside the sidebar writes
+	// (hooks/MapPinNameToggle.js). Overrides both settings above, for this browser only.
+	//
+	// CLIENT-scoped, and that is the point rather than an implementation detail. The two settings
+	// above are a world's configuration and only a GM may write them, so a player who finds the
+	// names crowding the artwork has no recourse at all: their only options are to ask the GM to
+	// change it for the whole table or to live with it. This is the quiet-my-own-screen switch,
+	// and it costs the world nothing — nothing is broadcast, and the GM's configuration is still
+	// there underneath, untouched, for every scene the reader has not spoken about.
+	//
+	// A CLIENT setting sits here among the world ones deliberately: it is the third and narrowest
+	// answer to one question, and the resolution order in showMapPinNamesOn is only legible if
+	// all three are read together. Split across the file it would be an orphan.
+	//
+	// Keyed by SCENE ID, not by poster-map slug. The per-map record is a settings menu that can
+	// only list the five maps it ships, but this is a button on the canvas: whatever scene is on
+	// screen is a scene it has to be able to answer for, poster map or a dungeon the GM drew.
+	//
+	// SPARSE, for the same reason `mapPinNamesByMap` is: an absent scene means "follow whatever
+	// the GM configured", so a GM who later flips the world default moves every scene this reader
+	// has not overridden. Right-clicking the eye deletes the key and hands the scene back.
+	//
+	// Nested under the WORLD ID, which client settings have to do for themselves: they live in
+	// browser localStorage under `namespace.key` alone, with no world in the path, so a flat
+	// { sceneId: bool } blob would accumulate every scene of every world opened in this browser.
+	// Scene ids are random enough not to collide, so nothing would misread — the record would
+	// just grow forever with keys naming scenes this world has never heard of. Same fix, and the
+	// same `worldKey()`, as `walkthroughResume` and `settingOverviewShown`. Shape:
+	//   { "<worldId>": { "<sceneId>": true | false } }
+	game.settings.register(SYSTEM_ID, "mapPinNamesLocal", {
+		name: "Map Pin Names (This Browser)",
+		scope: "client",
+		config: false,
+		type: Object,
+		default: {},
+		// Core fires a client setting's onChange synchronously from `set`, and skips it when the
+		// written value is identical — so this is the whole repaint path, and the writers below
+		// deliberately do not repaint again on top of it.
+		onChange: () => applyMapPinLabelMode(),
+	});
+
 	// the Scenes can arrive years apart (a GM who imported the Vicinity, then the World's End
 	// with the next book), and a single latch would have marked whichever existed first and left
 	// the others bare forever.
@@ -2031,15 +2084,23 @@ export function getAlwaysShowMapPinNames() {
  * The question every map pin actually asks, and the one the drawing code should be asking:
  * a label is painted onto a scene, and which scene it is is what decides the answer.
  *
- * Narrowest answer first. If the scene is one of the five poster maps and that map has an
- * override recorded, the override wins outright. Otherwise the world default answers, which is
- * also the answer for every scene that is not a poster map at all.
+ * Narrowest answer first, three deep. This reader's own override for this very scene wins over
+ * everything (the eye button beside the sidebar wrote it, and it is about their screen). Failing
+ * that, if the scene is one of the five poster maps and that map has an override recorded, the
+ * override wins. Otherwise the world default answers, which is also the answer for every scene
+ * that is not a poster map at all.
+ *
+ * The local record is asked FIRST rather than last for the obvious reason and a less obvious one:
+ * a reader who has just pressed the button is entitled to see it take effect on the map they are
+ * looking at, whatever the GM has configured for it — and because the record is sparse, asking it
+ * first costs one missing-key lookup on every scene nobody has spoken about, which is most of
+ * them.
  *
  * Cached beside the default it falls back to, and dropped by the same applyMapPinLabelMode: this
  * runs once per pin per refresh pass, on every note on the canvas, so it is on the hot path of
  * something that repaints whenever the cursor moves over a pin.
  *
- * Both reads go through `_cachedSetting`, which is what keeps them safe to ask from a PIXI
+ * All three reads go through `_cachedSetting`, which is what keeps them safe to ask from a PIXI
  * refresh before the settings are registered: a failed read there lands on the shipped default
  * rather than painting a silently quieter map.
  */
@@ -2057,6 +2118,8 @@ function _perMapPinNames() {
 	return _cachedSetting(
 		"mapPinNamesByMap",
 		v => !!v && typeof v === "object" && !Array.isArray(v),
+	const mine = localMapPinNameOverride(scene);
+	if (typeof mine === "boolean") return mine;
 		{},
 	);
 }
@@ -2065,6 +2128,76 @@ function _perMapPinNames() {
  * Push the label setting onto the notes already drawn, so flipping it takes effect on the map the
  * GM is looking at rather than on their next reload.
  *
+/**
+ * THIS reader's own answer for this scene, or undefined when they have not given one.
+ *
+ * Distinct from `showMapPinNamesOn` and both are needed: that one says what to paint, this one
+ * says whether the reader has overruled the world — which is what lets the button offer to hand
+ * the scene back, and lets it say so in its tooltip. Collapsing the two would make "following the
+ * GM, who says show" and "I said show" indistinguishable.
+ */
+export function localMapPinNameOverride(scene) {
+	const sceneId = scene?.id;
+	if (!sceneId) return undefined;
+	const mine = _localMapPinNames()[sceneId];
+	return typeof mine === "boolean" ? mine : undefined;
+}
+
+/** This world's slice of the local record, cached, and tolerant of every shape but the right one. */
+function _localMapPinNames() {
+	const all = _cachedSetting(
+		"mapPinNamesLocal",
+		v => !!v && typeof v === "object" && !Array.isArray(v),
+		{},
+	);
+	const mine = all[worldKey()];
+	return !!mine && typeof mine === "object" && !Array.isArray(mine) ? mine : {};
+}
+
+/**
+ * Record (or clear) this reader's own answer for one scene, and repaint.
+ *
+ * `null` CLEARS rather than storing a third value: the record is sparse, and absent is what means
+ * "follow whatever the GM configured". Storing a null would make an override that reads as no
+ * override to `localMapPinNameOverride` and yet keeps the scene listed forever.
+ *
+ * Written back through the whole blob because that is the only shape a setting has — the nesting
+ * under `worldKey()` is ours, so the other worlds' slices have to be carried through by hand.
+ * No repaint here: this is a client setting, so core fires its onChange from the write above,
+ * and that is `applyMapPinLabelMode`.
+ */
+export async function setLocalMapPinNames(scene, value) {
+	const sceneId = scene?.id;
+	if (!sceneId) return;
+	const world = worldKey();
+	// Copied a level at a time rather than deep-cloned: only this world's slice is edited, and
+	// the other worlds' slices are carried through by reference because nothing here mutates them.
+	const all = { ...getObjectSetting("mapPinNamesLocal") };
+	const mine = { ...(all[world] ?? {}) };
+	if (value === null) delete mine[sceneId];
+	else mine[sceneId] = !!value;
+	// An emptied slice is dropped rather than left as `{}`, so a reader who turns every override
+	// back off leaves the same record they started with instead of a husk per world.
+	if (Object.keys(mine).length) all[world] = mine;
+	else delete all[world];
+	await setSetting("mapPinNamesLocal", all);
+}
+
+/**
+ * Flip what this reader sees on one scene, and return what they now see.
+ *
+ * Flips the EFFECTIVE answer, not a stored boolean — which is why it reads `showMapPinNamesOn`
+ * rather than the override. On a map the GM has set to hover-only, an override of "false" would
+ * already be the picture on screen, so a button that toggled the stored value would have to be
+ * pressed twice to do anything the first time. Flipping what is actually painted means one press
+ * always changes the map.
+ */
+export async function toggleLocalMapPinNames(scene) {
+	const next = !showMapPinNamesOn(scene);
+	await setLocalMapPinNames(scene, next);
+	return next;
+}
+
  * `refreshState` is the narrowest flag that does it: core recomputes tooltip visibility from the
  * cursor in Note#_refreshState, and our wrapper rides that same pass, so one flag both turns the
  * labels on and hands them back to core when the switch goes off.

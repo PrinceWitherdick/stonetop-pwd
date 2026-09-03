@@ -41,6 +41,7 @@ import { onUpdateSiteNote } from "./module/sites/site-scene-pins.js";
 import { onDrawStonetopNote } from "./module/hooks/StonetopNoteLabels.js";
 import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
 import { bumpEncounterNotesGeneration } from "./module/actors/gmtoolkit/gm-encounters-tab.js";
+import { installMapPinNameToggle } from "./module/hooks/MapPinNameToggle.js";
 import { gmToolkitActors } from "./module/actors/gmtoolkit/gm-toolkit-actor.js";
 import { invalidateMonsterRefIndex } from "./module/bestiary/monster-ref-index.js";
 import { ensureLocationSummaryIndex, applyTooltipsThenRestrict } from "./module/locations/location-tooltips.js";
@@ -745,6 +746,11 @@ Hooks.once("ready", () => ensureLocationSummaryIndex());
 const _onJournalRender = (app, html) => {
 	// Give cross-links their hover summary FIRST, then neuter any a player can't
 	// follow. Tooltips then restriction, in that order and for the reasons written down
+// And the eye button beside the sidebar that quiets those labels on the map you are looking at,
+// for you alone. `ready` rather than `init`: it mounts into core's own `#ui-right` row, which
+// does not exist until the interface has been rendered. See hooks/MapPinNameToggle.js.
+Hooks.once("ready", installMapPinNameToggle);
+
 	// in applyTooltipsThenRestrict.
 	applyTooltipsThenRestrict(html);
 	// Drop any book-art image whose file fails to load, so no reader — player or GM —

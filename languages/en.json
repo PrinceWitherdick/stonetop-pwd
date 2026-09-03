@@ -1417,6 +1417,14 @@
         "offTheMap": "That click was past the printed edge of {map}, so where they set out from is unchanged. Click inside the map itself.",
         "pinLabel": "setting out"
       }
+    },
+    "mapPinNames": {
+      "hideLabel": "Hide place names on this map",
+      "showLabel": "Show place names on this map",
+      "hideTooltip": "Hide the place names on this map. The pins keep their names for the cursor. Only on your screen.",
+      "showTooltip": "Show the place names on this map, instead of only on hover. Only on your screen.",
+      "followHint": "Right-click to follow the world setting for this map again.",
+      "followed": "This map's pin names follow the world setting again."
     }
   }
 }

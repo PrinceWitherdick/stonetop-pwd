@@ -4182,7 +4182,8 @@ input.stonetop-name-field {
 
 .stonetop-hover-settings .sheet-footer,
 .stonetop-map-pin-name-settings .sheet-footer {
-	margin-top: 12px;
+	margin-top: auto;
+	padding-top: 12px;
 	justify-content: flex-end;
 }
 
@@ -4230,6 +4231,48 @@ input.stonetop-name-field {
    sentence doing the same job one click apart, and this used to be two rules 1200 lines away from
    each other, each carrying a copy of the reasoning and a comment pointing at the other.
 
+/* THE FORM IS THE COLUMN THE SAVE ROW HANGS OFF. Both menus are `height: "auto"` and
+   `resizable`, so they open exactly as tall as their rows and the Save then looked pinned —
+   until the window was dragged taller, where the button stayed sitting directly under the last
+   row with the empty space below it. Core already gives the form the whole window (it is a
+   direct child of `.window-content`, and `.window-app .window-content > * { flex: 1 }` grows
+   it); what was missing was a way to hand that slack to the space ABOVE the footer, which is
+   flex column here plus `margin-top: auto` on the footer below. Same two-part pattern as the
+   "Pin modal footers" block near the end of this file.
+
+   NO `min-height: 0`, deliberately: when the list is TALLER than the window the form has to keep
+   its natural height and let `.window-content` scroll it, which is what it does today. Letting
+   it shrink would clip the last rows instead, since the form has no overflow of its own. */
+.stonetop-hover-settings,
+.stonetop-map-pin-name-settings {
+	display: flex;
+	flex-direction: column;
+}
+
+/* Every direct child handed back automatic sizing, because core's form-hint rule
+   (`body.game .app form .notes { flex: 0 0 100% }`, @layer compatibility) means "take a full
+   LINE" — and in the flex COLUMN just declared, a 100% basis is 100% of the HEIGHT. The map menu
+   has exactly that shape: a `.notes` paragraph sitting directly inside the form, above the
+   per-map selects. Without this it would claim the entire window on its own and push every
+   select out through the bottom — the same failure the artifact dialog hit (see
+   `.stonetop-artifact-form .notes`). Unlayered, so it beats `@layer compatibility` whatever the
+   specificity. It also stops the rows and the footer being stretched by the growth above. */
+.stonetop-hover-settings > *,
+.stonetop-map-pin-name-settings > * {
+	flex: 0 0 auto;
+	/* THE ROW RHYTHM, RESTATED because the flex column above ends margin collapsing. Core gives
+	   every `.form-group` `margin: 3px 0`, and in the block flow these forms used to be, each
+	   pair's touching 3px collapsed into one — so the fix on its own quietly loosened the list
+	   by 3px a row (48px down a fifteen-row menu) without changing a single declaration about
+	   spacing. Top-only margins can't collapse in the first place, so the gap is 3px here the
+	   same as it was. The footer keeps its own `margin-top: auto` below (higher specificity),
+	   which is what does the pinning. */
+	margin-block: 3px 0;
+}
+
+/* `padding-top` and not `margin-top`, because the margin is now the pin: an auto margin eats the
+   free space, so a 12px one would only be that 12px on a window with no slack left to give. The
+   padding keeps the gap under the last row at every window height. */
    Core dresses any `.notes` inside a form at a FIXED 12px (`body.game .app form .notes`, @layer
    compatibility), so without this the sentences explaining what each toggle does were the one
    text in the system that did not answer the font-size setting: at scale 1.6 every title around
@@ -32164,6 +32207,74 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* Anyone with a portrait wears their own face here instead of an initial: the disc becomes a
    clipping box (the shared People crop and the hand-cut frame both apply, as everywhere else a
+/* --- map pin name toggle (the eye beside the sidebar) ---------------------- */
+/* Mounted by module/hooks/MapPinNameToggle.js as a flex SIBLING between core's chat
+   notification column and #sidebar, inside #ui-right. That placement is the whole
+   layout: the button sits against the sidebar's left edge and slides with it when the
+   sidebar collapses, with no measuring and nothing listening for the collapse.
+
+   It wears core's own `ui-control` class, so the square, the palettes in both themes,
+   the hover and the [aria-pressed] state all come from core. Everything below is either
+   placement (which core cannot know) or the one colour decision that is ours. */
+#stonetop-map-pin-names {
+	/* `flex: none` guards the button against #ui-right's row trying to size it, and
+	   flex-start puts it at the top of the interface rather than centred down the side. */
+	flex: none;
+	align-self: flex-start;
+	/* 16px down puts the button's top edge level with the first sidebar tab icon: #sidebar sits
+	   at the top of this row and #sidebar-tabs insets its icons by `padding: 16px 16px 16px 0`.
+
+	   The right margin is NEGATIVE, and that is not a fudge. #ui-right sets `gap: 16px` between
+	   its children and a flex gap has no per-item override, so 16px is the floor a margin can
+	   only add to. Pulling 8px back leaves 8px of clear space, which is exactly the gap the
+	   sidebar's own tab icons keep between themselves (#sidebar-tabs > menu { gap: 8px }) — and
+	   because that rail has NO left padding, its left edge is the icon column itself, so this
+	   margin is the whole of what a reader sees between the eye and the first icon. */
+	margin: 16px -8px 0 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	cursor: pointer;
+}
+
+/* THE ACTIVE COLOUR IS OURS, and this is the only reason the rule exists. Core paints a
+   pressed .ui-control with the warm amber/terracotta accent; this system replaced that
+   family with slate everywhere else it appears, and an orange square beside a slate
+   interface is exactly the mismatch that change existed to remove.
+
+   Re-pointed as core's own TOKENS rather than as `background`/`border-color`, so the hover
+   and disabled behaviour core defines in terms of them keeps working. UNLAYERED and on the
+   element core sets them on: every rule in foundry2.css is inside an @layer, so an
+   unlayered declaration wins outright whatever its specificity, and a token set on an
+   ancestor would never reach an element core assigns it on directly. */
+#stonetop-map-pin-names {
+	--control-active-bg-color: var(--st-accent-fill, slategrey);
+	--control-active-border-color: var(--st-accent-fill, slategrey);
+	--control-hover-border-color: var(--st-accent-fill, slategrey);
+}
+
+/* `hidden` has to be re-asserted: the display above would otherwise beat the UA rule that
+   makes the attribute mean anything, and the button would stay on screen on scenes that
+   carry no pins of ours. #id[hidden] outweighs the #id rules above it. */
+#stonetop-map-pin-names[hidden] { display: none; }
+
+/* A whisper of a mark saying "you have told this map something", which is what makes the
+   right-click-to-follow line in the tooltip worth reading. Deliberately not a badge: it is
+   a footnote about where a setting came from, not a state anyone acts on. */
+#stonetop-map-pin-names.is-overridden::after {
+	content: "";
+	position: absolute;
+	right: 3px;
+	bottom: 3px;
+	width: 4px;
+	height: 4px;
+	border-radius: 50%;
+	background: currentColor;
+	opacity: 0.75;
+}
+#stonetop-map-pin-names.is-overridden { position: relative; }
+
    small face appears).
 
    NO band-coloured ring around the face. It used to carry the light/heavy/overloaded colour,
