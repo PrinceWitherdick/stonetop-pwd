@@ -31,6 +31,7 @@ import { WeatherDialog } from "../dialogs/WeatherDialog.js";
 import { refreshWeatherFx } from "../seasons/current-weather.js";
 import { WelcomeDialog } from "../dialogs/WelcomeDialog.js";
 import { FoundryBasicsDialog } from "../dialogs/FoundryBasicsDialog.js";
+import { postFxMasterSuggestionOnce } from "../seasons/fxmaster-suggestion.js";
 import { CharacterCreationDialog } from "../actors/character/dialogs/CharacterCreationDialog.js";
 import { creationFlowOpen, registerCreationFlowCleanup } from "../actors/character/creation-flow.js";
 import { progressFor } from "../actors/character/onboarding-progress.js";
@@ -524,6 +525,13 @@ export async function onReady() {
 		// Backgrounded and folder-browsing like the two above, and ordered LAST of the three on
 		// purpose: it is the only one that is not about a gap. The rebuild fixes pictures the GM
 		// is owed for free, the partial import fixes ones that failed; this one offers to improve
+		// After the art reminder, and for the same reason it is ordered where it is: both are
+		// once-per-world nudges held until the GM is past the Welcome guide, and a world owed
+		// both should read about its missing pictures before it reads about optional weather.
+		// Caught rather than awaited bare: everything below this point in the sweep matters more
+		// than a suggestion about an optional module, so a failed post must not take it with it.
+		try { await postFxMasterSuggestionOnce(); }
+		catch (err) { console.error("Stonetop | FXMaster suggestion failed:", err); }
 		// art that is already there and already looks fine, so it yields to both.
 		_offerGmPlaybookArtOnce()
 			.catch(err => console.error("Stonetop | GM playbook art offer failed:", err));

@@ -410,6 +410,19 @@ export function registerSettings() {
 		default: false
 	});
 
+	// Whether the one-time "you could have weather on the map" chat card has been posted
+	// (see seasons/fxmaster-suggestion.js). Same shape and the same gate as the art reminder
+	// above: resolved once for a GM who is past the Welcome guide, whispered when FXMaster is
+	// absent and simply marked done when it is already installed. World-scoped for the same
+	// reason: "has this world been told" is world state, and only a GM can act on it.
+	game.settings.register(SYSTEM_ID, "fxMasterSuggestionShown", {
+		name: "Weather Effects Module Suggestion Shown",
+		scope: "world",
+		config: false,
+		type: Boolean,
+		default: false
+	});
+
 	// RETIRED KEY: "peopleCropRebuildOffered". Superseded by bookArtRebuildOffered below and
 	// no longer registered — nothing reads it, and Foundry simply ignores a stored value whose
 	// key it does not know, so leaving it registered bought nothing. Named here so the key is
