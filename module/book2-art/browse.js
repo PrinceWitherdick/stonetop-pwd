@@ -27,7 +27,7 @@
 // Off a hosted setup the two are the same string and nothing changes.
 
 import { filePicker } from "../utils/foundry-compat.js";
-import { book2ArtPrefix } from "./art-root.js";
+import { book2ArtPrefix, book2ArtSrcWith, book2ArtServedWith } from "./art-root.js";
 
 /** Every directory the importer writes durable art into. */
 export const DURABLE_ART_DIRS = [
@@ -112,8 +112,19 @@ export function clearArtBrowseCache() {
  * A rejected browse means the directory does not exist yet (the GM hasn't imported) -> nothing
  * on disk from there. A browse that RESOLVES with an empty file list is a different and far
  * more slippery answer — see `readDir`.
+ *
+ * try/catch rather than `.catch()`, so a SYNCHRONOUS throw is caught as well as a rejection.
+ * `filePicker()` returns undefined where neither FilePicker global is defined (its own docblock
+ * says so, and the sibling `ensureDataDir` optional-chains it for exactly this reason), and
+ * `FP.browse(...)` then throws a TypeError before any promise exists for `.catch` to attach to.
+ * That matters more than it looks: `readDir` is async, so a throw escaping this became a REJECTED
+ * promise, and `browseDir` caches the promise — poisoning that directory for the whole session,
+ * where the same failure used to be transient and the next caller got a working browse.
  */
-const listDir = (FP, target) => FP.browse("data", target).catch(() => null);
+const listDir = async (FP, target) => {
+	try { return await FP.browse("data", target); }
+	catch { return null; }
+};
 
 /**
  * One directory's file list, asked a second way when the first way answers "nothing".
@@ -133,15 +144,28 @@ const listDir = (FP, target) => FP.browse("data", target).catch(() => null);
  * `peopleArt` / `peoplePortraitArt` / `treasureArt` / `gmDiagramArt` as empty on every GM load,
  * and the People gallery goes blank on a world holding all 306 portraits.
  *
- * So when the data-relative listing yields no files, and this world has OBSERVED something in
- * front of its art (`book2ArtPrefix` — published from a real listing, or from the importer's own
- * upload results), ask again with that in front. A host that serves user files from elsewhere
- * recognises its own absolute path and answers about the right folder.
+ * So where this world has OBSERVED something in front of its art (`book2ArtPrefix` — published
+ * from a real listing, or from the importer's own upload results), ask a second time with that in
+ * front. A host that serves user files from elsewhere recognises its own absolute path and answers
+ * about the right folder.
+ *
+ * BOTH answers are kept, rather than whichever spoke first. Asking again only when the first ask
+ * found NOTHING sounds thriftier and is a trap: one stray file at the data-relative path is enough
+ * to satisfy that test and hide the entire Assets Library listing behind it. That is not exotic —
+ * a world imported self-hosted and later moved onto a host carries its Data folder along, and
+ * Foundry's own file browser can drop a file there. The indexes are AUTHORITATIVE, so the folder
+ * holding 306 portraits would be republished as the 3 the stale path happened to hold, and the
+ * count being non-zero is exactly what keeps reapply.js's cleared-index warning quiet about it.
+ * A union cannot lose a file to either spelling; `ArtInventory` keys by the root-relative
+ * remainder, so a picture listed both ways files once and a directory genuinely split across the
+ * two files both halves.
  *
  * Vendor-neutral by construction: no hostname is named here or anywhere else. The prefix is
  * whatever this host handed back, and an empty one — every self-hosted world — short-circuits to
- * exactly the single browse this has always made. The retry costs a second round trip ONLY for a
- * directory that came back empty, which in a world with art imported is no directory at all.
+ * exactly the single browse this has always made. Where a prefix IS recorded the directory costs
+ * two round trips, every time, which is the honest price of not being able to tell a folder the
+ * GM emptied from a folder the host is answering about on our behalf. They go out CONCURRENTLY,
+ * so it is two round trips but not two waits.
  *
  * WHAT THIS CANNOT REPAIR, and deliberately does not pretend to. The retry needs a prefix, and a
  * prefix can only come from an import that recorded one. `book2ArtPrefix` was registered in 1.5.0
@@ -164,16 +188,26 @@ const listDir = (FP, target) => FP.browse("data", target).catch(() => null);
  */
 async function readDir(root, dir) {
 	const FP = filePicker();
-	const rel = `${root}/${dir}`;
-	const listed = await listDir(FP, rel);
-	if (listed?.files?.length) return listed;
-
+	// Both targets come from art-root.js rather than being spelled out here. It owns the
+	// `${root}/${out}` join and the prefix in front of it ("here and nowhere else", per its header)
+	// for the reason that applies with full force to a BROWSE: list the folder under one spelling
+	// and look the files up under another and every row misses, which republishes every index as
+	// empty on a world whose art is all present.
+	// TOGETHER, not one after the other: the prefix is known synchronously, so nothing about the
+	// first answer decides whether to ask the second, and awaiting in turn makes a hosted world
+	// pay two serial round trips on every one of the seven directories `browseArtDirs` sweeps.
+	// `listDir` answers null rather than throwing, so neither leg can reject the pair.
 	const prefix = book2ArtPrefix();
-	if (!prefix) return listed;
-	const viaPrefix = await listDir(FP, `${prefix}${rel}`);
-	// Only PROMOTE a listing that found something: a second empty answer tells us nothing the
-	// first did not, and the first is the one the caller's own path built.
-	return viaPrefix?.files?.length ? viaPrefix : listed;
+	const [listed, viaPrefix] = await Promise.all([
+		listDir(FP, book2ArtSrcWith(root, dir)),
+		// Nothing observed in front of the art on this world, so there is no second way to ask.
+		prefix ? listDir(FP, book2ArtServedWith(root, dir, prefix)) : null,
+	]);
+	if (!viaPrefix?.files?.length) return listed;
+	// Served paths FIRST, so a picture that exists under both spellings resolves to the one the
+	// importer is actually writing today; `ArtInventory` files the first listing of a key and
+	// ignores an empty prefix, so this is also what lets it learn the prefix off a mixed listing.
+	return { ...viaPrefix, files: [...viaPrefix.files, ...(listed?.files ?? [])] };
 }
 
 /** One directory's file list, from cache when we have already asked this session. */
@@ -306,7 +340,12 @@ export async function browseArtDirs(root, dirs = DURABLE_ART_DIRS) {
 		if (!res) continue;
 		// A malformed %-escape in a stray filename must not reject the whole pass — keep the
 		// raw name on decode failure so the caller still gets everything else.
-		for (const f of res.files) {
+		//
+		// `?? []` because `readDir` already concedes `.files` may be absent (it tests
+		// `listed?.files?.length` and then hands that same object straight through), and a host that
+		// answers an empty directory with `{ target, dirs }` and no `files` key would otherwise throw
+		// "res.files is not iterable" out of the Promise.all and take the whole art pass with it.
+		for (const f of res.files ?? []) {
 			try { present.add(decodeURIComponent(f)); }
 			catch { present.add(f); }
 		}

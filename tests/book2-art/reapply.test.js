@@ -14,6 +14,14 @@ const JRN_SOURCE = (entryId) => `Compendium.stonetop-pwd.stonetop-journal.Journa
 const VERSION = "9.9.9";
 const ROOT = "stonetop-book-art";
 const { monsters, locations, settingOverviewMaps = [], gmDiagrams = [], treasures = [], steadings = [], people = [] } = BOOK2_ART_APPLY_MANIFEST;
+
+// `utils/logger.js` captures the console writer when it is first evaluated, so a later spy on
+// `console.warn` would never see the call. Mock the seam the code actually uses.
+vi.mock("../../module/utils/logger.js", async importOriginal => ({
+	...(await importOriginal()),
+	warn: vi.fn(),
+}));
+import { warn as logWarn } from "../../module/utils/logger.js";
 const DEFAULT_ICON = "icons/svg/mystery-man.svg";
 
 function setDotted(obj, path, value) {
@@ -251,6 +259,37 @@ describe("reapplyBook2ArtOnVersionChange", () => {
 			h.store.treasureArt = { stale: "assets/treasures/stale.webp" };
 			await reapplyBook2Art();
 			expect(h.store.treasureArt).toEqual({ stale: "assets/treasures/stale.webp" });
+		});
+
+		// The index is what the People gallery and the treasure drop read, so an index that quietly
+		// loses most of its entries is a gallery that quietly goes blank. Warning only on a wipe to
+		// ZERO missed the shape a partly-answered browse actually produces.
+		it("says so in the console when the index SHRINKS, not only when it empties", async () => {
+			logWarn.mockClear();
+			const h = makeHarness({ present: [treasures[0].out] });
+			h.store.treasureArt = Object.fromEntries(treasures.map((t) => [t.slug, t.out]));
+			await reapplyBook2Art();
+			expect(logWarn.mock.calls.flat().join(" ")).toContain("treasure art index shrank from 5 to 1");
+		});
+
+		it("keeps quiet about an index that GREW", async () => {
+			logWarn.mockClear();
+			const h = makeHarness({});
+			h.store.treasureArt = { [treasures[0].slug]: treasures[0].out };
+			await reapplyBook2Art();
+			expect(logWarn.mock.calls.flat().join(" ")).not.toContain("art index shrank");
+		});
+
+		// `prev` is whatever the world setting holds. A value that came back a STRING used to have
+		// its CHARACTER count reported as an entry count, in the one message whose job is to report
+		// a real number honestly.
+		it("does not invent a previous entry count from a setting that is not an object", async () => {
+			logWarn.mockClear();
+			const h = makeHarness({ present: "none" });
+			h.store.treasureArt = '{"a":1}';
+			await reapplyBook2Art();
+			expect(h.store.treasureArt).toEqual({});
+			expect(logWarn.mock.calls.flat().join(" ")).not.toContain("art index shrank");
 		});
 	});
 
@@ -1661,6 +1700,18 @@ describe("art served from a host prefix", () => {
 		// An empty listing cannot tell "no art here" from "that call failed", and an empty prefix
 		// would re-point every document at a path this host does not resolve.
 		const h = makeHarness({ hostPrefix: FORGE, present: "none" });
+		h.store.book2ArtPrefix = FORGE;
+		await reapplyBook2Art();
+		expect(h.store.book2ArtPrefix).toBe(FORGE);
+	});
+
+	it("never CLEARS a recorded prefix from a listing that observed none", async () => {
+		// The sharper version of the test above, and the one `!present.size` does not cover: a
+		// listing that DID return files, none of which carried a prefix. That is one stray file at
+		// the data-relative path on a hosted world, and publishing "" from it is not cosmetic — the
+		// prefix is what browse.js asks its second question with, so clearing it blinds the browse
+		// for every directory from the next load on. A prefix is learned here and never unlearned.
+		const h = makeHarness(); // bare paths, as a world with a stale data-relative copy lists
 		h.store.book2ArtPrefix = FORGE;
 		await reapplyBook2Art();
 		expect(h.store.book2ArtPrefix).toBe(FORGE);

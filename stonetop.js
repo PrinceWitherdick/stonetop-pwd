@@ -650,7 +650,7 @@ Hooks.on("createJournalEntry", handleImportedJournalArt);
 // a listing taken after would find. Neither module names the other's settings.
 const _onArtIndexPublished = (setting) => {
 	const key = setting?.key ?? "";
-	if ([...ART_INDEX_SETTINGS, ...ART_BROWSE_INPUTS].some((s) => key.endsWith(`.${s}`))) clearArtBrowseCache();
+	if (_ART_CACHE_KEYS.has(key)) clearArtBrowseCache();
 	// ...and repaint the one surface that reads an art index at RENDER time with no document of
 	// its own to be repainted by.
 	//
@@ -678,6 +678,22 @@ const _onArtIndexPublished = (setting) => {
 	// same stale placeholder this exists to clear, which is the one failure it must not reproduce.
 	for (const toolkit of gmToolkitActors()) {
 		for (const app of Object.values(toolkit?.apps ?? {})) {
+//
+// Joined ONCE, at module scope, into the fully-qualified keys the hook is actually handed. This
+// fires on `createSetting`/`updateSetting`, which is every world-scoped setting write from every
+// module and from core, not just ours — a rate this system does not own — and spreading two
+// arrays into a fresh `.some` closure per event to answer a membership question is work a Set
+// answers in one lookup.
+//
+// Deliberately an EXACT key match where this used to be a `.endsWith(".${name}")` suffix test.
+// Our art cache is invalidated by OUR settings; another package that happens to store something
+// it calls `treasureArt` was clearing it too, and now does not. Both writers of these settings
+// namespace them with SYSTEM_ID — `setSetting` (module/settings.js) and the import macro, which
+// spells `game.settings.set("stonetop-pwd", …)` — so nothing of ours stops being caught.
+const _ART_CACHE_KEYS = new Set(
+	[...ART_INDEX_SETTINGS, ...ART_BROWSE_INPUTS].map((s) => `${SYSTEM_ID}.${s}`),
+);
+
 			try { app.render(false); } catch (_) { /* a window mid-close is not a failure */ }
 		}
 	}
