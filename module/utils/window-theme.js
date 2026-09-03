@@ -35,6 +35,20 @@ function tagWindow(_app, element) {
 	root?.classList?.add(MARKER_CLASS);
 }
 
+/**
+ * The classes a Stonetop DialogV2 must wear, plus whatever else the caller needs.
+ *
+ * ONE spelling, because the list is load-bearing rather than decorative: a DialogV2 is an
+ * ApplicationV2, which the parchment skin excludes by selector and which core does NOT hand
+ * `themed theme-light` the way it does every AppV1 window (see the note below). Drop either
+ * name and that one dialog comes up in Foundry default chrome, or half dark in a dark-mode
+ * world. Spelled out at each call site, the next change to it themes some of them and not the
+ * rest.
+ */
+export function themedDialogClasses(...extra) {
+	return ["stonetop", MARKER_CLASS, ...extra];
+}
+
 /** Register render hooks for every allowlisted core window. Call once, in init. */
 export function registerStonetopWindowTheme() {
 	for (const className of THEMED_WINDOWS) Hooks.on(`render${className}`, tagWindow);

@@ -5,6 +5,7 @@
 // — so no step of any flow can drift away from the others in look or behaviour.
 
 import { escHtml } from "../utils/strings.js";
+import { themedDialogClasses } from "../utils/window-theme.js";
 
 /**
  * Present a one-of-N chooser and resolve to the picked option's id.
@@ -63,7 +64,7 @@ function _promptRows({ title, rows, buttonLabel, width, read, wire = null }) {
 	wire?.(content);
 
 	return foundry.applications.api.DialogV2.prompt({
-		classes: ["stonetop", "stonetop-themed", "stonetop-content-picker-dialog"],
+		classes: themedDialogClasses("stonetop-content-picker-dialog"),
 		window: { title },
 		position: { width },
 		content,
