@@ -504,6 +504,7 @@ Hooks.once("init", () => {
 		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
 		"stonetop.gm-toolkit-tab-encounters": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-encounters.hbs",
 		"stonetop.gm-toolkit-tab-expeditions": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-expeditions.hbs",
+		"stonetop.gm-toolkit-tab-relmaps": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-relmaps.hbs",
 		// One card per bundle tab, printed by BOTH of that tab's lists — the live one and the
 		// Completed fold. Two files rather than one partial with a parameter, for the reason
 		// gm-expedition-card.hbs gives; both draw the same class names, so they share one
@@ -677,7 +678,6 @@ Hooks.on("createJournalEntry", handleImportedJournalArt);
 // side. A published index means "the folder changed"; the art prefix means "the question we ask
 // the folder changed", and a listing taken before one was known answers nothing about the folder
 // a listing taken after would find. Neither module names the other's settings.
-const _onArtIndexPublished = (setting) => {
 //
 // Joined ONCE, at module scope, into the fully-qualified keys the hook is actually handed. This
 // fires on `createSetting`/`updateSetting`, which is every world-scoped setting write from every
@@ -694,6 +694,7 @@ const _ART_CACHE_KEYS = new Set(
 	[...ART_INDEX_SETTINGS, ...ART_BROWSE_INPUTS].map((s) => `${SYSTEM_ID}.${s}`),
 );
 
+const _onArtIndexPublished = (setting) => {
 	const key = setting?.key ?? "";
 	if (_ART_CACHE_KEYS.has(key)) clearArtBrowseCache();
 	// ...and repaint the one surface that reads an art index at RENDER time with no document of
@@ -745,12 +746,12 @@ Hooks.on("updateNote", onUpdateSiteNote);
 // halo so their labels stay legible over the illustrated Stonetop maps.
 Hooks.on("drawNote", onDrawStonetopNote);
 
-// -- EXPEDITION ROUTE ON THE MAP -------------------------------
 // And the eye button beside the sidebar that quiets those labels on the map you are looking at,
 // for you alone. `ready` rather than `init`: it mounts into core's own `#ui-right` row, which
 // does not exist until the interface has been rendered. See hooks/MapPinNameToggle.js.
 Hooks.once("ready", installMapPinNameToggle);
 
+// -- EXPEDITION ROUTE ON THE MAP -------------------------------
 // A journey put on a poster-map scene from the Run an Expedition walkthrough. The scene
 // carries the two place slugs and every client paints the line from them, players included.
 registerExpeditionRouteHooks();

@@ -39,6 +39,7 @@ import { withGmPrepTabs } from "./gm-prep-tabs.js";
 import { withGmWonderTab } from "./gm-wonder-tab.js";
 import { withGmEncountersTab } from "./gm-encounters-tab.js";
 import { withGmExpeditionsTab } from "./gm-expeditions-tab.js";
+import { withGmRelationshipMapsTab } from "./gm-relmaps-tab.js";
 import { localizedHomefrontSections } from "../../gm-toolkit/homefront-view.js";
 import { readCurrentSeason, currentSeasonView, isCurrentSeasonChange } from "../../seasons/current-season.js";
 import { localize } from "../../utils/i18n.js";
@@ -85,8 +86,8 @@ const localizedMoveSections = localizedOnce(() =>
 		// entries need exactly one level of it.
 		randomizeTitle: localize("stonetop.gmToolkit.moves.randomize"),
 		expandTitle:    localize("stonetop.gmToolkit.moves.expand"),
-	})));
 		postTitle:      localize("stonetop.gmToolkit.moves.post"),
+	})));
 
 export function createStonetopGmToolkitSheetClass(Base) {
 	// withSheetSizeMemory: reopen at the size this GM last left the toolkit at. This sheet has
@@ -116,7 +117,7 @@ export function createStonetopGmToolkitSheetClass(Base) {
 	// character sheet carries — same partial, same descriptor module, same client settings. A
 	// GM runs a session from this sheet and may never open a character sheet at all, so the one
 	// place their own text size lives has to be reachable from here too.
-	return class StonetopGmToolkitSheet extends withPreferencesTab(withGmExpeditionsTab(withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base))))))) {
+	return class StonetopGmToolkitSheet extends withPreferencesTab(withGmRelationshipMapsTab(withGmExpeditionsTab(withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base)))))))) {
 		// Read by the mixin's `isSectionEditable`. Constant, not state: this sheet has no global
 		// edit wrench, so a section is editable exactly when its own pencil is on.
 		_editMode = false;
@@ -421,6 +422,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 				this._addGmEncountersContext(context),
 				// The Expeditions list, off `actor.system.expeditions`, the same way.
 				this._addGmExpeditionsContext(context),
+				// The world's relationship maps. Not a list off this actor like the two above:
+				// the maps are JournalEntries the whole table owns, and this only lists them.
+				this._addGmRelationshipMapsContext(context),
 			]);
 
 			// The "I wonder..." list, off `actor.system.wonders`, split into the open questions
@@ -467,6 +471,8 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The Expeditions tab, delegated on the same root. Both bind to it and both print the
 			// same class names, so each gates every handler on its own panel (`owns`).
 			this._activateGmExpeditionsListeners(html[0]);
+			// The Relationship Maps tab, scoped to its own panel for the same reason.
+			this._activateGmRelationshipMapsListeners(html[0]);
 			// This sheet's own two buttons. Both are delegated rather than bound per element,
 			// because both are re-emitted whenever their tab re-renders and either may be absent
 			// (the import button depends on which diagrams this world already has).
@@ -511,12 +517,6 @@ export function createStonetopGmToolkitSheetClass(Base) {
 					return;
 				}
 
-						title: diagram.dataset.caption,
-						key: diagram.dataset.slug,
-					});
-					return;
-				}
-
 				// A diagram, opened big. In OUR zoom window rather than a browser tab: the picture
 				// is a page of the GM's own rulebook, and reading it should not mean leaving the
 				// game to do it. Keyed by slug, so the two charts of the spread open as two windows
@@ -526,6 +526,12 @@ export function createStonetopGmToolkitSheetClass(Base) {
 					ev.preventDefault();
 					openImageZoom({
 						src: diagram.dataset.src,
+						title: diagram.dataset.caption,
+						key: diagram.dataset.slug,
+					});
+					return;
+				}
+
 				// Only rendered for a GM in the first place (the macro browses and writes files);
 				// asked again here because a delegated handler cannot rely on that.
 				if (ev.target.closest(".stonetop-gm-diagram-import")) {
@@ -564,12 +570,6 @@ export function createStonetopGmToolkitSheetClass(Base) {
 		}
 
 		/**
-		 * Open or shut what Book I prints under one move: its description, the soft/hard line,
-		 * its examples of play, and the page they came off.
-		 *
-		 * A class toggle on the panel's `hidden`, not a re-render. The tab is thirty entries of
-		 * static reference text and a render would cost a scroll jump, which is the same reasoning
-		/**
 		 * Post the move whose name was clicked, as the card the randomizer posts.
 		 *
 		 * The SAME card, deliberately, and by the same function: a GM who picks "Hurt someone"
@@ -596,6 +596,12 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			await postGmMove(key, move, { speaker: ChatMessage.getSpeaker({ actor: this.actor }) });
 		}
 
+		/**
+		 * Open or shut what Book I prints under one move: its description, the soft/hard line,
+		 * its examples of play, and the page they came off.
+		 *
+		 * A class toggle on the panel's `hidden`, not a re-render. The tab is thirty entries of
+		 * static reference text and a render would cost a scroll jump, which is the same reasoning
 		 * the fold in section-editing.js gives. It also means the open entry does NOT survive a
 		 * re-render, and this sheet re-renders on every prep-page write in the world: a GM who
 		 * opens an entry and then edits a threat finds it shut again. Persisting it would mean a

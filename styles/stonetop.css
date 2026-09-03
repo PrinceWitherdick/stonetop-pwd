@@ -15758,6 +15758,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
    grounds. */
 .stonetop-tab-rail .item[data-tab="homefront"]     { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/village.svg'); }
 .stonetop-tab-rail .item[data-tab="encounters"]    { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/prep-stack.svg'); }
+.stonetop-tab-rail .item[data-tab="relmaps"]       { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/three-friends.svg'); }
 /* A signpost, not the treasure map the "Run an Expedition" hotbar macro wears. The map is the
    better mark for the tab and the worse one for the rail: its route and its X are fine holes in
    a filled sheet, and at the 20px this rail scales to they close up into a dark speck. The
@@ -17794,12 +17795,12 @@ a.steading-player-open:hover {
 	vertical-align: middle;
 }
 
-.steading-improvement-remove {
 /* The two controls an ADDED improvement carries in its header, edit-mode only. Same
    chrome, so they read as a pair; only the ink differs, since one of them is the
    destructive half. Declared together and the destructive colours after, so the shared
    rule cannot win the tie (see the BEM ordering note). */
 .steading-improvement-edit,
+.steading-improvement-remove {
 	flex-shrink: 0;
 	width: auto;
 	line-height: 1;
@@ -17811,7 +17812,6 @@ a.steading-player-open:hover {
 	cursor: pointer;
 }
 
-.steading-improvement-remove:hover {
 .steading-improvement-edit:hover {
 	background: var(--st-text-secondary);
 	color: var(--st-page, #fff);
@@ -17821,6 +17821,7 @@ a.steading-player-open:hover {
 	color: #8a3a3a;
 }
 
+.steading-improvement-remove:hover {
 	background: #8a3a3a;
 	color: #fff;
 }
@@ -32206,7 +32207,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.4));
 }
 
-/* --- threat editor dialog -------------------------------------------------- */
 /* --- map pin name toggle (the eye beside the sidebar) ---------------------- */
 /* Mounted by module/hooks/MapPinNameToggle.js as a flex SIBLING between core's chat
    notification column and #sidebar, inside #ui-right. That placement is the whole
@@ -32275,6 +32275,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 #stonetop-map-pin-names.is-overridden { position: relative; }
 
+/* --- threat editor dialog -------------------------------------------------- */
 .stonetop-threat-editor-dialog.window-app { max-height: 88vh; }
 .stonetop-threat-editor-dialog .window-content { overflow-y: auto; }
 .stonetop .threat-editor { gap: 0.75rem; padding: 0.2rem 0.15rem; }
@@ -37870,7 +37871,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    affordance arrives on hover, where the pointer already is. */
 .stonetop-gm-toolkit-moves .stonetop-gm-move-name {
 	display: block;
-	font-size: var(--st-gm-name-size);
 	width: 100%;
 	margin: 0;
 	padding: 0;
@@ -37883,13 +37883,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-weight: bold;
 	color: var(--st-text);
 	cursor: pointer;
+	font-size: var(--st-gm-name-size);
 	line-height: var(--st-gm-name-line);
 	/* The caret's lane, kept clear. Four of the thirty names wrap in a 368px column
 	   ("Tell them the consequences/requirements (then ask)"), and without this the
 	   second line would run under the arrow. */
 	padding-right: var(--st-gm-caret-lane);
 }
-
 /* The affordance, on hover and on the keyboard alike. An UNDERLINE rather than a
    fill or a colour shift: a name is a phrase, and underlining the phrase says
    "this does something" without repainting a row the eye is reading down. It is
@@ -37909,6 +37909,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	box-shadow: none;
 	outline: none;
 }
+
 /* THE BLURB is the button. The line under the name is the book's first sentence,
    and opening the entry continues that sentence in place, so what is clickable is
    the text itself rather than a separate control beside it.
@@ -38027,7 +38028,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop-gm-toolkit-moves .stonetop-gm-move-example::before { content: "\201C"; }
 .stonetop-gm-toolkit-moves .stonetop-gm-move-example::after  { content: "\201D"; }
-.stonetop-gm-toolkit-moves .stonetop-gm-move-page {
 /* THE PAGE CITATION, AS A CONTROL. "Book I, page 180" on the GM Toolkit opens the
    GM's own copy of Book I at that page (templates/actor/partials/book-page-cite.hbs,
    module/books/rulebook-icons.js). It sits INSIDE prose on four different surfaces --
@@ -38081,6 +38081,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	outline-offset: 2px;
 }
 
+.stonetop-gm-toolkit-moves .stonetop-gm-move-page {
 	margin: 0;
 	font-size: calc(0.8rem * var(--stonetop-font-scale, 1));
 	opacity: 0.7;
@@ -40251,7 +40252,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	width: 100%;
 }
 
-/* ══ ACCESSIBILITY: the paper, and the two switches a reader can turn ══════════════════════
 /* The GM Toolkit's list of the world's maps. Rows, not prose: no marker, and the row itself is
    the button, so the whole width of it opens the map rather than only the words. */
 .stonetop-gm-relmap-list {
@@ -40735,6 +40735,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-relmap-link-drop { margin-left: auto; }
 
+/* ══ ACCESSIBILITY: the paper, and the two switches a reader can turn ══════════════════════
    Driven by two client settings (module/settings.js → applySheetContrast, applySheetTexture),
    each a class on the document ROOT.
 
@@ -40915,7 +40916,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	--color-the-fox:         #a4501f;   /* 5.61:1, from 2.49:1 */
 	--color-the-blessed:     #2f6b3f;   /* 6.37:1, from 2.48:1 */
 	--color-the-lightbearer: #8a5c04;   /* 5.81:1, from 2.08:1 */
-}
 
 	/* THE RELATIONSHIP MAP'S EIGHT INKS. Their own note says they are measured as graphical
 	   objects at 3:1, which is the right bar for a stroke and is the bar this mode exists to
@@ -40931,6 +40931,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	--st-relmap-ink-rust:   hsl(25deg 32% 41%);
 	--st-relmap-ink-teal:   hsl(170deg 62% 29%);
 	--st-relmap-ink-slate:  hsl(215deg 16% 44%);
+}
 
 /* CORE'S OWN COLOUR NAMES, RE-DECLARED WHERE THEY CAN BE SEEN.
 

@@ -1,0 +1,46 @@
+{{!-- RELATIONSHIP MAPS — who at this table knows whom, as a list of the world's maps.
+
+      NOT PREP, unlike every other card list on this sheet. A relationship map is a JournalEntry
+      owned by the whole table, and this tab only lists them and opens them; nothing about a map is
+      stored on the toolkit actor. So there is no pencil, no edit section and no drag reordering
+      here — the maps are edited in their own window, by anyone.
+
+      `data-tab="relmaps"` earns the rail's glyph; the icon table in stonetop.css is one flat list
+      keyed by data-tab. --}}
+<div class="tab relmaps" data-group="primary" data-tab="relmaps">
+	<section class="sheet-tab stonetop-gm-relmaps">
+
+		<p class="steading-threats-intro">{{localize "stonetop.relmap.maps.blurb"}}</p>
+
+		{{#if stonetop.relmaps.maps.length}}
+		<ul class="stonetop-gm-relmap-list">
+			{{#each stonetop.relmaps.maps}}
+			<li class="stonetop-gm-relmap-row">
+				<button type="button" class="stonetop-gm-relmap-open" data-relmap-open-id="{{id}}">
+					<i class="fas fa-circle-nodes" aria-hidden="true"></i>
+					<span class="stonetop-gm-relmap-name">{{name}}</span>
+					<span class="stonetop-gm-relmap-count">{{count}}</span>
+				</button>
+			</li>
+			{{/each}}
+		</ul>
+		{{else}}
+		<p class="stonetop-gm-relmap-none">{{localize "stonetop.relmap.maps.none"}}</p>
+		{{/if}}
+
+		{{!-- OUTSIDE the list's own emptiness check, deliberately. A control that only appears once
+		      there is something to list is a control that can never make the first one, and a world
+		      with no maps is exactly when this button is wanted. --}}
+		{{#if stonetop.relmaps.canCreate}}
+		<button type="button" class="stonetop-cta stonetop-gm-relmap-new" data-relmap-new="1">
+			<i class="fas fa-plus" aria-hidden="true"></i>
+			<span>{{localize "stonetop.relmap.maps.newMap"}}</span>
+		</button>
+		{{else}}
+		{{!-- Making a map needs the journal-create right, which a plain player does not have;
+		      editing one needs only ownership, which everybody has. Said plainly rather than
+		      leaving a dead button. --}}
+		<p class="stonetop-gm-relmap-cannot">{{localize "stonetop.relmap.maps.cannotCreate"}}</p>
+		{{/if}}
+	</section>
+</div>
