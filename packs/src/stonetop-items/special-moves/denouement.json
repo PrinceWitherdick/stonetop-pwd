@@ -3,7 +3,7 @@
   "type": "move",
   "system": {
     "moveType": "special",
-    "description": "<p>When the <strong><em>game comes to an end</em></strong>, go around the table. On your turn, pick a scene below and ask the player or the GM to describe it.</p><p>When you describe a scene, make it involve your PC, an NPC important to them, or (if you're the GM) any NPC you like.</p><ul><li>A return home</li><li>A funeral, a farewell, an ending</li><li>A struggle, an absence, grief</li><li>A time of rebuilding, renewal, hope</li><li>A lasting change, a transition</li><li>A beginning, a fresh start, a birth</li><li>A memory, a story, a legend</li></ul><p>Go around as many times as you like. Change who you ask each time, or just pick a scene to describe yourself.</p><p>When you're done, thank your friends, wish them well, and say goodbye.</p>"
+    "description": "<p>When the <strong><em>game comes to an end</em></strong>, go around the table. On your turn, pick a scene below and ask a player or the GM to describe it.</p><p>When you describe a scene, make it involve your PC, an NPC important to them, or (if you're the GM) any NPC you like.</p><ul><li>A return home</li><li>A funeral, a farewell, an ending</li><li>A struggle, an absence, grief</li><li>A time of rebuilding, renewal, hope</li><li>A lasting change, a transition</li><li>A beginning, a fresh start, a birth</li><li>A memory, a story, a legend</li></ul><p>Go around as many times as you like. Change who you ask each time, or just pick a scene to describe yourself.</p><p>When you're done, thank your friends, wish them well, and say goodbye.</p>"
   },
   "_id": "FZsIHmroLP9ZolZd",
   "_key": "!items!FZsIHmroLP9ZolZd",

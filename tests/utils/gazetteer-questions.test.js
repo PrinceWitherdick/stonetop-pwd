@@ -34,8 +34,8 @@ describeGen("questionsToPairs", () => {
 
 	it("renders a bold group lead-in as a **lead** prefix the qa sheet can split", () => {
 		const out = questionsToPairs(
-			"<ul><li><strong>According to the tales…</strong> How did Tor come to be? What's his origin story?</li></ul>");
-		expect(out[0].prompt).toBe("**According to the tales…** How did Tor come to be? What's his origin story?");
+			"<ul><li><strong>According to the tales:</strong> How did Tor come to be? What's his origin story?</li></ul>");
+		expect(out[0].prompt).toBe("**According to the tales:** How did Tor come to be? What's his origin story?");
 	});
 
 	it("keeps a non-question note bullet as its own row", () => {

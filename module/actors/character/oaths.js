@@ -5,9 +5,9 @@
  *   "When you bear witness to someone's promise or oath, HENCEFORTH you may ask their player if
  *    they have kept their word. They must answer honestly. The character need not be present. If
  *    they have broken their word, you gain advantage on ALL rolls against them UNTIL they admit
- *    their wrong and suffer an appropriate consequence (your call)."
+ *    their wrongdoing and suffer an appropriate consequence (your call)."
  *
- * "Henceforth", "need not be present", "until they admit their wrong": three clauses that each say
+ * "Henceforth", "need not be present", "until they admit their wrongdoing": three clauses that each say
  * this outlives the table's memory of it. A Judge who witnessed an oath in session four and cannot
  * remember whose it was has lost the move, and nothing on any sheet wrote it down.
  *

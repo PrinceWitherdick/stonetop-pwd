@@ -181,14 +181,19 @@ export const IMPROVEMENT_DEFINITIONS = [
 		flavor: "A shallow creek flows just below the town. If only it could be harnessed!",
 		sections: [
 			{
-				heading: "Requires 2 of the following:",
+				// EITHER route, not both (errata, first printing): the printed page asked for two
+				// of three, and the corrected one asks for one of two. Without `min` a section
+				// means ALL of its items, so the number in the heading and the number the tick
+				// check enforces have to be set together.
+				heading: "Requires 1 of the following:",
+				min: 1,
 				items: [
-					"A reservoir for the Stream to pool in, and some way for water to flow uphill",
-					"A series of aqueducts, from the Stream's source to Stonetop",
+					"A reservoir for the Stream to pool in, and some way for the water to flow uphill",
+					"A series of aqueducts, from the Stream's source back to Stonetop",
 				],
 			},
 		],
-		effect: "Add them to the Resources list and increase Fortunes by 1. Henceforth, when spring breaks forth and you roll a 7+ with Fortunes, the steading generates 1 Surplus.",
+		effect: "Add it to the Resources list and increase Fortunes by 1. Henceforth, when spring breaks forth and you roll a 7+ with Fortunes, the steading generates 1 Surplus.",
 	},
 	{
 		slug: "herdOfHorses",
@@ -397,7 +402,7 @@ export const IMPROVEMENT_DEFINITIONS = [
 				],
 			},
 		],
-		effect: "Change Size to town and its Population to +0. Henceforth: When you <em>Muster</em>, <em>Pull Together</em>, or <em>Trade & Barter</em>, you have advantage. When the <em>Seasons Change</em> to spring or summer, the town generates Surplus equal to Population+1. But, when winter grips the land, roll 2d6+Population to consume Surplus instead of 1d4+Population.",
+		effect: "Change Size to town and its Population to +0. Henceforth: When you <em>Muster</em>, <em>Pull Together</em>, or <em>Trade &amp; Barter</em>, you have advantage. When the <em>Seasons Change</em> to spring or summer, the town generates Surplus equal to Population+1. But, when winter grips the land, roll 2d6+Population to consume Surplus instead of 1d4+Population.",
 	},
 	{
 		slug: "weaponsOfWar",

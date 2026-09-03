@@ -176,7 +176,7 @@
         }
       ],
       "specialPossessions": {
-        "pickNote": "Pick 1, in addition to your symbol of authority and scribe's kit",
+        "pickNote": "Pick 1, in addition to your symbol of authority and scribe's tools",
         "pickCount": 1,
         "preselected": [
           "symbol-of-authority",
