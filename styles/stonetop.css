@@ -37567,8 +37567,29 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    and the other without, at the same height, side by side. Every entry keeps
    its rule and both columns close the same way. */
 
-/* The name. A plain block, so a long one wraps inside its column rather than
-   being sized to content the way a flex row would. */
+/* THE NAME IS A BUTTON — clicking it whispers the move to chat. A block one, so a
+   long name wraps inside its column rather than being sized to content the way a
+   flex row would.
+
+   Everything from `width` to `cursor` strips the control back to the heading it
+   used to be a <strong> of: core sets `.app button { width: 100% }` with a border,
+   a fill and a radius, and on v13 a `display: flex` that would lay a two-line name
+   out as a centred flex row. `font-weight` is here because a <strong> carried the
+   bold and a <button> does not, and `color` because a button inherits no ink.
+
+   `font-family` is declared HERE as well as in the shared list near the top of this
+   file, which is not a duplicate: a control does not inherit its face, so the face
+   has to be declared at it, and the shared rule declares it at the bare class —
+   which core's own `.app button` outranks. This selector carries the tab too, so it
+   does not.
+
+   The SIZE is declared, not inherited, and that is load-bearing rather than tidy:
+   core anchors button font-size in PIXELS, so a name left to inherit would hold at
+   13px while every line around it grew with the reader's font scale.
+
+   No fill, no underline at rest. Thirty of these stacked two columns deep, each
+   painted as a control, is a wall of buttons rather than a list to read down; the
+   affordance arrives on hover, where the pointer already is. */
 .stonetop-gm-toolkit-moves .stonetop-gm-move-name {
 	display: block;
 	font-size: var(--st-gm-name-size);
@@ -37850,6 +37871,18 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	margin: 6px 0 0;
 	padding: 0;
 	list-style: none;
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+	text-align: left;
+	font-family: var(--font-stonetop);
+	font-weight: bold;
+	color: var(--st-text);
+	cursor: pointer;
 }
 
 /* The rule under each entry IS the playbook's ruled line, so it is drawn under
@@ -37857,6 +37890,25 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    stops short of the bottom reads as a list that has been cut off. */
 .stonetop-gm-wonder-item {
 	padding: 5px 0 6px var(--stonetop-wonder-gutter);
+/* The affordance, on hover and on the keyboard alike. An UNDERLINE rather than a
+   fill or a colour shift: a name is a phrase, and underlining the phrase says
+   "this does something" without repainting a row the eye is reading down. It is
+   also the one gesture the blurb under it deliberately refuses (a whole sentence
+   underlined fights the reading), so the two controls in an entry stay told
+   apart by what they do on hover. */
+.stonetop-gm-toolkit-moves .stonetop-gm-move-name:is(:hover, :focus-visible) {
+	text-decoration: underline;
+}
+/* Being a real <button> costs the same thing the randomizer's die costs: a click
+   focuses it and the focus OUTLIVES the click, and core's V1-compat sheet paints
+   every focused button a halo through a plain `:focus` that outranks this rule. So
+   the last move a GM posted would sit lit until they clicked elsewhere, which
+   reads as a hover that will not let go. `:not(:focus-visible)` is what keeps the
+   keyboard ring while taking the mouse's glow away. */
+.stonetop-gm-toolkit-moves .stonetop-gm-move-name:focus:not(:focus-visible) {
+	box-shadow: none;
+	outline: none;
+}
 	border-bottom: 1px solid var(--st-card-rule);
 }
 
@@ -37976,58 +38028,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    this is the live list a GM reads on the road, and the wording is the book's,
    which is the whole reason there is nothing here to edit. */
 .stonetop-gm-wonder-question--fixed {
-	color: var(--st-text);
-}
-
-/* The answer sits UNDER the question and one step in past it, so the pair reads
-   as one entry rather than as two rows of a table, and so the question's own x
-   stays the only one the eye has to run down. Two lines at rest, because that is
-   about what a hunch runs to, and draggable taller for the ones that don't.
-   `min-height: 0` because a textarea's default `rows` floor otherwise fights the
-   resize in a flex column.
-
-   The width has to lose what the margin takes or the box runs off the right edge:
-   `width: 100%` is the item's content box, which the indent starts inside. */
-.stonetop-gm-wonder-item .stonetop-gm-wonder-answer {
-	display: block;
-	width: calc(100% - var(--stonetop-wonder-answer-step));
-	min-height: 0;
-	margin: 3px 0 0 var(--stonetop-wonder-answer-step);
-	padding: 2px 4px 2px 8px;
-	border: 1px solid transparent;
-	border-radius: var(--st-radius-sm);
-	background: transparent;
-	/* THE ACCENT BAR, and core's inset input ring off in the same declaration —
-	   which is why it is a shadow and not a `border-left`. The ring is the reason
-	   `box-shadow: none` stood here (see the note on the question above), and the
-	   three border rules on this control set `border-color` as a shorthand, so a
-	   left border would be recoloured by every hover and focus.
-	   `inset 2px 0 0` draws exactly the 2px rule the journals' answers wear
-	   (.stonetop-entry-qa-answer-text, .stonetop-lore-readonly-value) at the inner
-	   edge of the transparent border, and nothing else on this control can reach
-	   it. The extra 4px of left padding is its clearance. */
-	box-shadow: inset 2px 0 0 var(--st-card-rule);
-	resize: vertical;
-	font-size: var(--st-fs-sm);
-	font-style: italic;
-	line-height: 1.4;
-	color: var(--st-text-secondary);
-}
-
-/* No bar on a box with nothing in it. The bar's whole claim is "this question has
-   been answered", and a question that hasn't been is the common case here — a
-   rule beside a placeholder says the opposite of what the placeholder says.
-   `:placeholder-shown` re-evaluates as the GM types, so the bar arrives on the
-   first character and leaves if the answer is cleared. */
-.stonetop-gm-wonder-item .stonetop-gm-wonder-answer:placeholder-shown {
-	box-shadow: none;
-}
-
-.stonetop-gm-wonder-item .stonetop-gm-wonder-answer:hover {
-	border-color: var(--st-card-rule);
-}
-
-.stonetop-gm-wonder-item .stonetop-gm-wonder-answer:focus {
 /* THE PAGE CITATION, AS A CONTROL. "Book I, page 180" on the GM Toolkit opens the
    GM's own copy of Book I at that page (templates/actor/partials/book-page-cite.hbs,
    module/books/rulebook-icons.js). It sits INSIDE prose on four different surfaces --
@@ -38081,6 +38081,58 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	outline-offset: 2px;
 }
 
+	color: var(--st-text);
+}
+
+/* The answer sits UNDER the question and one step in past it, so the pair reads
+   as one entry rather than as two rows of a table, and so the question's own x
+   stays the only one the eye has to run down. Two lines at rest, because that is
+   about what a hunch runs to, and draggable taller for the ones that don't.
+   `min-height: 0` because a textarea's default `rows` floor otherwise fights the
+   resize in a flex column.
+
+   The width has to lose what the margin takes or the box runs off the right edge:
+   `width: 100%` is the item's content box, which the indent starts inside. */
+.stonetop-gm-wonder-item .stonetop-gm-wonder-answer {
+	display: block;
+	width: calc(100% - var(--stonetop-wonder-answer-step));
+	min-height: 0;
+	margin: 3px 0 0 var(--stonetop-wonder-answer-step);
+	padding: 2px 4px 2px 8px;
+	border: 1px solid transparent;
+	border-radius: var(--st-radius-sm);
+	background: transparent;
+	/* THE ACCENT BAR, and core's inset input ring off in the same declaration —
+	   which is why it is a shadow and not a `border-left`. The ring is the reason
+	   `box-shadow: none` stood here (see the note on the question above), and the
+	   three border rules on this control set `border-color` as a shorthand, so a
+	   left border would be recoloured by every hover and focus.
+	   `inset 2px 0 0` draws exactly the 2px rule the journals' answers wear
+	   (.stonetop-entry-qa-answer-text, .stonetop-lore-readonly-value) at the inner
+	   edge of the transparent border, and nothing else on this control can reach
+	   it. The extra 4px of left padding is its clearance. */
+	box-shadow: inset 2px 0 0 var(--st-card-rule);
+	resize: vertical;
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	line-height: 1.4;
+	color: var(--st-text-secondary);
+}
+
+/* No bar on a box with nothing in it. The bar's whole claim is "this question has
+   been answered", and a question that hasn't been is the common case here — a
+   rule beside a placeholder says the opposite of what the placeholder says.
+   `:placeholder-shown` re-evaluates as the GM types, so the bar arrives on the
+   first character and leaves if the answer is cleared. */
+.stonetop-gm-wonder-item .stonetop-gm-wonder-answer:placeholder-shown {
+	box-shadow: none;
+}
+
+.stonetop-gm-wonder-item .stonetop-gm-wonder-answer:hover {
+	border-color: var(--st-card-rule);
+}
+
+.stonetop-gm-wonder-item .stonetop-gm-wonder-answer:focus {
 	border-color: var(--st-btn-primary-border);
 	background: var(--st-warm-hover-bg);
 	font-style: normal;

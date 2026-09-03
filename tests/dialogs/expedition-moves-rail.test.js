@@ -110,7 +110,7 @@ describe("the rail's markup", () => {
 
 	// Reference only: a GM move is something you say, so the ROWS take none of the character
 	// sheet's rolling machinery or one looks like something to click. The die beside the
-	// heading is not that — it draws one of the seven and whispers it, and it lives on the
+	// heading is not that — it draws one of the seven and posts it, and it lives on the
 	// heading rather than on any row. See "the rail's die" below.
 	it("carries none of the rolling machinery those rows do", () => {
 		const rail = HBS.match(/<div class="stonetop-moves-sidebar[\s\S]*?\n {4}<\/div>/)?.[0];
@@ -303,7 +303,7 @@ describe("the rail as it renders", () => {
 // The rail is a list to read down when there is time. The die is for the other case, which is
 // most of an expedition: the party has walked into something, the table is looking at the GM,
 // and seven moves have gone to soup. One click draws one move, runs a light down the list to
-// it, and whispers it — the same three beats, off the same two functions, as the GM Toolkit's
+// it, and posts it — the same three beats, off the same two functions, as the GM Toolkit's
 // move groups, because it is the same seven moves off the same table.
 //
 // A minimal stand-in for the rail's DOM. The suite runs on `environment: "node"`, so this is the
@@ -440,7 +440,7 @@ describe("the rail's die, as markup", () => {
 });
 
 describe("the rail's die, as it behaves", () => {
-	it("draws one of the seven, lands the light on that row, and whispers that same move", async () => {
+	it("draws one of the seven, lands the light on that row, and posts that same move", async () => {
 		vi.useFakeTimers();
 		const { button, rows, lit } = fakeRail();
 		const d = dialog();
@@ -465,12 +465,13 @@ describe("the rail's die, as it behaves", () => {
 		expect(lit()).toHaveLength(0);
 	});
 
-	// Whispered, never public: naming the move announces the trick before it is played, and
-	// hands the players the move the GM has not made yet.
-	it("whispers to the GMs and to nobody else", async () => {
+	// Public, to the whole table, the same as every other GM move card (see the header of
+	// gm-toolkit/random-gm-move.js). Asserted as the absence of the key, because that is what
+	// the poster must not start filling in again.
+	it("posts to the whole table, not to the GMs alone", async () => {
 		const { button } = fakeRail({ hidden: true });
 		await dialog()._drawExplorationMove(button);
-		expect(posted[0].whisper).toEqual(["gm1", "gm2"]);
+		expect(posted[0]).not.toHaveProperty("whisper");
 	});
 
 	// Seven moves: "Bar the way" twice running is a one-in-seven event, not a curiosity, and it
@@ -525,7 +526,7 @@ describe("the rail's die, as it behaves", () => {
 
 	// A walk nobody can watch is two or three seconds of delay in front of the card the click was
 	// actually for. `spinHighlight` skips it and resolves at once, and this is the dialog holding
-	// up its end: the whisper still goes out. (Off a click it cannot happen — the rail's collapse
+	// up its end: the card still goes out. (Off a click it cannot happen — the rail's collapse
 	// takes the die away with the rows — but a re-render mid-walk can detach them underneath it.)
 	it("skips the walk when the rows are off the page, and posts at once", async () => {
 		vi.useFakeTimers();

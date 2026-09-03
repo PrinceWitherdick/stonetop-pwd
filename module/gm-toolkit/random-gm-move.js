@@ -1,16 +1,19 @@
-// "Give me one" — the randomizer beside each GM Moves heading. Picks a move out of that
-// section's list, and whispers it to the GM once the sheet's light has landed on it
-// (gm-move-drawer.js `GmMoveDrawer#spinTo`).
+// The GM move card, and the "give me one" that draws a move for it. Picks a move out of a
+// section's list, and posts it once the sheet's light has landed on it (gm-move-drawer.js
+// `GmMoveDrawer#spinTo`).
 //
 // The paper playbook's lists are for reading down when there is time. This is for the other
 // case: the table has just handed the GM a golden opportunity, everyone is looking at them,
 // and the list has gone to soup. One move, named, with its gloss, is something to react to in
 // a way that thirty of them is not.
 //
-// WHISPERED, never public, and that is not a preference. A GM move lands when it arrives as
-// fiction — "the bridge gives" — so posting the mechanical name of the move to the table
-// announces the trick before it is played, and hands the players the move the GM has not made
-// yet. Public would break the thing this is meant to help with.
+// PUBLIC, to the whole table, on every surface that posts one — the die's draw and the name a
+// GM clicks alike. This card used to be whispered to the GMs on the reasoning that a move lands
+// as fiction ("the bridge gives"), so naming the mechanism announces the trick before it is
+// played. That is a choice about how a table likes to play rather than a rule, and this one
+// plays it in the open: the card names the move, quotes the book on how it sounds, and the
+// table gets to see the machinery the GM is working with. Anything genuinely secret is not in
+// a move's NAME — it is in what the GM does with it, which is still theirs.
 //
 // The pick is a pure function over an injectable `rng`, the way every other random pick in
 // this system is written (pickRandomPortrait, rollOnTable, rollTerrain), so the tests pin the
@@ -74,7 +77,7 @@ function gmMoveCardBody(move, rng) {
 }
 
 /**
- * Whisper a drawn move to the GMs. Returns the move posted; null when nothing went out.
+ * Post a move to chat, for the whole table. Returns the move posted; null when nothing went out.
  *
  * Takes the move rather than drawing one, because the two are separated by the walk: the sheet
  * draws first (it needs the answer to know which row to land the light on), spins, and posts when
@@ -105,9 +108,10 @@ export async function postGmMove(sectionKey, move, { speaker, rng } = {}) {
 			moveChatCard(move.name, gmMoveCardBody(move, rng)),
 			"stonetop-gm-move-chat-card",
 		),
-		// All GMs, which is what "GM only" means here: a second GM at the table is running the
-		// same fiction and is not who this is being hidden from. Players are.
-		whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
+		// No `whisper` key: a message carrying none goes to the whole table. An empty array says
+		// the same thing to Foundry, but it says it by negation — "whispered to nobody" — where
+		// an absent key simply IS a public message, and cannot be misread as a list that was
+		// meant to be filled in.
 		speaker,
 	});
 	return move;

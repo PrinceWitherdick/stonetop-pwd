@@ -6,7 +6,7 @@
 //   1. draw a move from the section, avoiding the last one this section gave;
 //   2. REMEMBER IT AT THE DRAW, not after the card posts;
 //   3. run the light down the visible rows and land it on the one drawn;
-//   4. whisper the card — and only then.
+//   4. post the card — and only then.
 //
 // Two surfaces press this button: the GM Toolkit sheet's three move lists, and the expedition
 // walkthrough's exploration rail. They differ in exactly three selectors and a speaker, and in
@@ -24,12 +24,12 @@
 //   card would leave a walk still in flight with its move unrecorded, so the click that
 //   interrupts it is free to land on the very same move.
 //
-//   The whisper WAITS for the light. A card that posted at the click would answer the question
-//   the walk is still in the middle of asking, and a GM reading chat would have no reason to
-//   watch the list at all.
+//   The card WAITS for the light. One that posted at the click would answer the question the
+//   walk is still in the middle of asking, and a GM reading chat would have no reason to watch
+//   the list at all.
 //
 //   One landing, one card. A walk that a later click cancels resolves false and posts NOTHING —
-//   otherwise a GM who pressed twice gets two whispers for one light.
+//   otherwise a GM who pressed twice gets two cards for one light.
 import { randomGmMove, postGmMove } from "./random-gm-move.js";
 import { SpinTrack } from "../utils/flash-highlight.js";
 
@@ -56,11 +56,11 @@ export class GmMoveDrawer {
 	}
 
 	/**
-	 * Press the die on `button` (which carries `data-section`): draw, walk the light, whisper.
+	 * Press the die on `button` (which carries `data-section`): draw, walk the light, post.
 	 *
 	 * @param   {object} button
 	 * @param   {object} [options]
-	 * @param   {object} [options.speaker]  Chat speaker for the whisper — the host's, since the
+	 * @param   {object} [options.speaker]  Chat speaker for the card — the host's, since the
 	 *                                      toolkit speaks as its actor and a dialog does not.
 	 * @returns {Promise<object|null>}  The move drawn, or null when nothing was drawn or a later
 	 *                                  click superseded this one.
@@ -91,7 +91,7 @@ export class GmMoveDrawer {
 	 *
 	 * @returns {Promise<boolean>}  false if a later click superseded this one, which is the
 	 *          caller's cue to post nothing. True when there was no walk to make at all (a row not
-	 *          on the page, a folded section, motion turned off) — the whisper must still go out.
+	 *          on the page, a folded section, motion turned off) — the card must still go out.
 	 */
 	async spinTo(button, name) {
 		const scope  = button.closest(this._scopeSel);

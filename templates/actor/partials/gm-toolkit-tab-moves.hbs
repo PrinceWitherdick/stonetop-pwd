@@ -29,7 +29,7 @@
 			      headings are the only place the page says what it is.
 
 			      `randomize` is the die beside the note: it draws one move out of THIS section
-			      and whispers it to the GM (module/gm-toolkit/random-gm-move.js). Keyed by the
+			      and posts it to the table (module/gm-toolkit/random-gm-move.js). Keyed by the
 			      section's own key, so the three buttons need no wiring of their own. --}}
 			{{> "stonetop.section-heading" title=title note=note collapse=collapseId
 			                              randomize=key randomizeTitle=randomizeTitle}}
@@ -63,7 +63,28 @@
 				      and the page. It is `hidden` at render, always. The tab is a scannable
 				      reference list first, and thirty open entries is a chapter. --}}
 				<li class="stonetop-gm-move" data-move="{{name}}">
-					<strong class="stonetop-gm-move-name">{{name}}</strong>
+					{{!-- THE NAME IS THE POST. Clicking it sends this move to chat, to the whole
+					      table, as the very card the die posts (random-gm-move.js `postGmMove`)
+					      — same frame, same gloss, same quoted example, same page — the only
+					      difference being that the GM chose it instead of the die.
+
+					      That is the whole point of the tab: a GM scanning the list has already
+					      found the move they want by the time they know they want it, and the
+					      only way to get it onto the screen they are about to speak from was to
+					      press the die and hope. So the name a GM reads is the name a GM clicks.
+
+					      NOT a re-render, and nothing is stored: this posts and returns. It does
+					      not touch the die's don't-repeat memory either — that memory is about
+					      what the DIE has already offered, and a move the GM picked deliberately
+					      says nothing about what the next random draw should avoid.
+
+					      `data-section` rides on the BUTTON, the way it does on the randomizer
+					      beside the heading, because the two are the same errand: every control
+					      that posts a move carries the section it posts from. The move itself is
+					      read off the row's `data-move` — already there for the light to land on,
+					      and already the move's exact printed name. --}}
+					<button type="button" class="stonetop-gm-move-name" data-section="{{../key}}"
+					        data-tooltip="{{../postTitle}}">{{name}}</button>
 					<button type="button" class="stonetop-gm-move-toggle" aria-expanded="false"
 					        data-tooltip="{{../expandTitle}}"><span class="stonetop-gm-move-lead">{{blurb.lead}}</span>{{#if blurb.rest}}<span class="stonetop-gm-move-rest" hidden> {{blurb.rest}}</span>{{/if}}</button>
 					<div class="stonetop-gm-move-book" hidden>

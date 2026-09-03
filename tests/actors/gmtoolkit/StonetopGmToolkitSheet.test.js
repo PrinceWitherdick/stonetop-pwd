@@ -2,7 +2,7 @@ import Handlebars from "handlebars";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readRepo as read, readCss, repoFileExists } from "../../fakes/css.js";
 import { createStonetopGmToolkitSheetClass } from "../../../module/actors/gmtoolkit/StonetopGmToolkitSheet.js";
-import { BASIC_GM_MOVES, EXPLORATION_GM_MOVES, HOMEFRONT_GM_MOVES, gmMoveSections } from "../../../module/gm-toolkit/gm-moves.js";
+import { BASIC_GM_MOVES, EXPLORATION_GM_MOVES, HOMEFRONT_GM_MOVES, gmMoveSections, gmMoveByName } from "../../../module/gm-toolkit/gm-moves.js";
 import { actorOptionsFor } from "../../../module/dialogs/create-actor-dialog.js";
 import { FLASH_CLASS, FLASH_MS, SPIN_CLASS } from "../../../module/utils/flash-highlight.js";
 import { postGmMove } from "../../../module/gm-toolkit/random-gm-move.js";
@@ -19,7 +19,7 @@ import { escHtml } from "../../../module/utils/strings.js";
 
 
 const SHEET_JS      = read("module/actors/gmtoolkit/StonetopGmToolkitSheet.js");
-// The draw/walk/whisper sequence itself lives here, shared with the expedition rail, so the
+// The draw/walk/post sequence itself lives here, shared with the expedition rail, so the
 // guards below that are about the ORDER of those beats read this file and the ones about how
 // this sheet WIRES it read the sheet.
 const DRAWER_JS     = read("module/gm-toolkit/gm-move-drawer.js");
@@ -128,7 +128,7 @@ describe("GM Toolkit move lists", () => {
 
 // What Book I prints UNDER each move: its description, the soft/hard line, its examples of play,
 // and the page. Transcribed in gm-moves.js and shown in two places (the sheet's expanded entry,
-// the whispered card), so what these guard is the transcription itself: a move that lost its
+// the chat card), so what these guard is the transcription itself: a move that lost its
 // examples still renders, still reads, and is simply missing the half a GM came for.
 describe("the book's own text, per move", () => {
 	const ALL_MOVES = [...BASIC_GM_MOVES, ...EXPLORATION_GM_MOVES, ...HOMEFRONT_GM_MOVES];
@@ -407,7 +407,7 @@ describe("the rendered moves tab", () => {
 		expect(html).toContain(`<span class="stonetop-gm-move-rest" hidden> ${rest}</span>`);
 		expect(html).toMatch(/stonetop-gm-move-lead[^<]*<\/span><span class="stonetop-gm-move-rest"/);
 		// Our gloss is NOT what the row shows any more. It stays in the data (the Expedition
-		// walkthrough renders it, the whispered card leads with it), just not here, where it would
+		// walkthrough renders it, the chat card leads with it), just not here, where it would
 		// have to be read and then replaced by the book saying the same thing again.
 		expect(html).not.toContain(BASIC_GM_MOVES[0].gloss);
 	});
@@ -621,7 +621,7 @@ describe("the move randomizer", () => {
 			.toBeLessThan(drawer.indexOf("this.spinTo(button, move.name)"));
 	});
 
-	// The whisper says WHICH move; the light says where in the list it came from — and gets there
+	// The card says WHICH move; the light says where in the list it came from — and gets there
 	// by running down the section's entries and slowing onto the one drawn. Every leg fails
 	// silently: a row with no `data-move` is never found, a class the stylesheet does not know is
 	// a class nobody can see, and a card posted at the click instead of at the landing simply
@@ -683,7 +683,7 @@ describe("the move randomizer", () => {
 			expect(drawer).toMatch(/this\._spin \?\?= new SpinTrack\(\)/);
 			expect(drawer).toMatch(/if \(!await this\.spinTo\(button, move\.name\)\) return null;/);
 			// The card goes out AFTER the walk, which is the whole point of splitting the draw
-			// from the whisper: `postGmMove` takes a move rather than drawing one.
+			// from the post: postGmMove takes a move rather than drawing one.
 			expect(drawer.indexOf("this.spinTo(button, move.name)"))
 				.toBeLessThan(drawer.indexOf("postGmMove(key, move,"));
 		});
@@ -737,9 +737,9 @@ describe("the move randomizer", () => {
 		});
 	});
 
-	// The whispered card. What it carries beyond the name is what makes it worth reading rather
+	// The card. What it carries beyond the name is what makes it worth reading rather
 	// than glancing at: a line of the book's own GM speech, the soft/hard note, and the page.
-	describe("the whispered card", () => {
+	describe("the posted card", () => {
 		const posted = [];
 		beforeEach(() => {
 			posted.length = 0;
@@ -789,6 +789,161 @@ describe("the move randomizer", () => {
 			expect(posted[0].content).not.toMatch(/<blockquote[^>]*>[^<]*'/);
 			expect(posted[0].content).toContain("&#x27;");
 		});
+	});
+});
+
+// Clicking a move's NAME posts it, as the very card the die posts. The die answers "give me
+// one"; this answers "that one" — which is the question a GM scanning a printed list is actually
+// asking, and until the name was clickable the only way to get an answer on screen was to press
+// the die and hope it landed on the move already chosen.
+//
+// Silent failures throughout: a name that is not a button is a heading nobody thinks to click, a
+// button with no section key resolves no move and posts nothing at all, and a card that went out
+// to the GMs alone would look right from the only screen this is ever tested from.
+describe("posting a move by clicking its name", () => {
+	const posted = [];
+	beforeEach(() => {
+		posted.length = 0;
+		globalThis.ChatMessage = {
+			create: data => { posted.push(data); return Promise.resolve(data); },
+			getWhisperRecipients: () => [{ id: "gm1" }],
+			getSpeaker: () => ({ alias: "GM Toolkit" }),
+		};
+	});
+	afterEach(() => { delete globalThis.ChatMessage; });
+
+	/** The click target the handler is written against: the button, and the row above it. */
+	const nameButton = (section, move) => ({
+		dataset: { section },
+		closest: sel => (sel === ".stonetop-gm-move" ? { dataset: { move: move.name } } : null),
+	});
+
+	// A real <button>, so Enter and Space post it with no keydown handler of ours. A <strong> or
+	// a <span> with a click handler is mouse-only, and nothing about that shows up on screen.
+	it("makes every name a button carrying its own section", async () => {
+		const html = renderMovesTab((await makeSheet().getData()).stonetop);
+		const keys = [...html.matchAll(
+			/<button type="button" class="stonetop-gm-move-name" data-section="([^"]+)"/g)]
+			.map(m => m[1]);
+		expect(keys).toHaveLength(30);
+		expect(keys.filter(k => k === "basic")).toHaveLength(13);
+		expect(keys.filter(k => k === "exploration")).toHaveLength(7);
+		expect(keys.filter(k => k === "homefront")).toHaveLength(10);
+		// The name itself is still the label, unchanged — it is what `data-move` is matched on.
+		expect(html).toContain(">Announce trouble (future or offscreen)</button>");
+	});
+
+	// Nothing on the row says what clicking the name does, so the tooltip is the only place it is
+	// said. Carried per section for the same reason the other two are (see localizedMoveSections).
+	it("says what the click does, in a localized tooltip", async () => {
+		const { stonetop } = await makeSheet().getData();
+		expect(stonetop.moveSections.every(s => s.postTitle)).toBe(true);
+		expect(MOVES_HBS).toContain('data-tooltip="{{../postTitle}}"');
+		expect(JSON.parse(read("languages/en.json")).stonetop.gmToolkit.moves.post)
+			.toBeTruthy();
+	});
+
+	it("hands the sheet the click, ahead of the disclosure under it", () => {
+		const src = stripComments(SHEET_JS);
+		expect(src).toMatch(/closest\("\.stonetop-gm-move-name"\)/);
+		expect(src).toMatch(/this\._postNamedMove\(named\)/);
+		// Both buttons live in the same entry and neither contains the other, so the order is
+		// only a reading order — but the name check must not be written so loosely that it also
+		// catches the blurb.
+		expect(src).not.toMatch(/closest\("\.stonetop-gm-move"\)\s*;/);
+	});
+
+	// The SAME card the die posts, by the same function. Two shapes for one move would mean the
+	// second one had to be learned, and who the card reaches is not this handler's to decide.
+	it("posts the clicked move as the card the die posts", async () => {
+		const move = EXPLORATION_GM_MOVES[2];
+		await makeSheet()._postNamedMove(nameButton("exploration", move));
+
+		expect(posted).toHaveLength(1);
+		expect(posted[0].content).toContain(escHtml(move.name));
+		expect(posted[0].content).toContain(escHtml(move.gloss));
+		// To the whole table. A card that quietly went back to whispering would look identical
+		// from the GM's own screen, which is the only screen this handler is ever tested from.
+		expect(posted[0]).not.toHaveProperty("whisper");
+	});
+
+	// Scoped to the section the button carries, not searched across all three: the card is FRAMED
+	// by its section's heading, so a loosely resolved name could post under the wrong one.
+	it("resolves the move inside its own section only", () => {
+		const move = HOMEFRONT_GM_MOVES[0];
+		expect(gmMoveByName("homefront", move.name)).toBe(move);
+		expect(gmMoveByName("basic", move.name)).toBeNull();
+		expect(gmMoveByName("nonesuch", move.name)).toBeNull();
+	});
+
+	// Markup that no longer matches the handler resolves nothing. It must post NOTHING rather
+	// than an empty card with a heading and no move under it.
+	it("posts nothing at all when the row resolves to no move", async () => {
+		await makeSheet()._postNamedMove({ dataset: {}, closest: () => null });
+		expect(posted).toHaveLength(0);
+	});
+
+	// The die's don't-repeat memory is about what the DIE has already offered. A move the GM
+	// picked deliberately says nothing about what the next random draw should avoid — and worse,
+	// recording it would make the next draw skip the move the GM just chose to talk about.
+	it("leaves the randomizer's memory alone", async () => {
+		const sheet = makeSheet();
+		await sheet._postNamedMove(nameButton("basic", BASIC_GM_MOVES[0]));
+		expect(sheet._moveDrawer._last).toEqual({});
+	});
+});
+
+// A <button> arrives wearing core's chrome — a border, a fill, a radius, a full-width flex box
+// on v13 — and this one has to read as the heading it replaced. Every leg here is visible but
+// only once it ships: thirty painted buttons stacked two columns deep is a wall of controls
+// where a list of moves should be.
+describe("a move's name still reads as a name", () => {
+	const bodyOf = selector => {
+		const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		return CSS.match(new RegExp(`\\n${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+	};
+
+	it("strips the button back to the text it wraps", () => {
+		const rule = bodyOf(".stonetop-gm-toolkit-moves .stonetop-gm-move-name");
+		expect(rule, "no rule dressing the name button").toBeTruthy();
+		// v13's `.app button { display: flex }` would lay a two-line name out as a centred row.
+		expect(rule).toMatch(/display:\s*block/);
+		expect(rule).toMatch(/border:\s*0/);
+		expect(rule).toMatch(/background:\s*none/);
+		expect(rule).toMatch(/box-shadow:\s*none/);
+		expect(rule).toMatch(/text-align:\s*left/);
+		// A <strong> carried the bold and a <button> does not, and a button inherits no ink.
+		expect(rule).toMatch(/font-weight:\s*bold/);
+		expect(rule).toMatch(/color:\s*var\(--st-text\)/);
+	});
+
+	// Core anchors button font-size in PIXELS, so a name left to inherit holds at 13px while
+	// every line around it grows with the reader's font scale. This GM runs a large UI font.
+	it("keeps the name on the row's own metrics and face", () => {
+		const rule = bodyOf(".stonetop-gm-toolkit-moves .stonetop-gm-move-name");
+		expect(rule).toMatch(/font-size:\s*var\(--st-gm-name-size\)/);
+		expect(rule).toMatch(/line-height:\s*var\(--st-gm-name-line\)/);
+		// Declared AT the control: the shared face rule near the top of this file sets it on the
+		// bare class, which core's own `.app button` outranks.
+		expect(rule).toMatch(/font-family:\s*var\(--font-stonetop\)/);
+		// And the caret's lane is still kept clear, or a wrapped name runs under the arrow.
+		expect(rule).toMatch(/padding-right:\s*var\(--st-gm-caret-lane\)/);
+	});
+
+	// The affordance arrives on hover, where the pointer already is — and reaches the keyboard
+	// too, or a GM tabbing the list has no idea which entry they are on.
+	it("answers the pointer and the keyboard alike", () => {
+		expect(CSS).toMatch(
+			/\.stonetop-gm-move-name:is\(:hover, :focus-visible\)\s*\{[^}]*text-decoration:\s*underline/);
+	});
+
+	// The same cost the die pays: a click focuses the button and the focus OUTLIVES it, and
+	// core's V1-compat sheet paints every focused button a halo through a plain `:focus`.
+	it("does not stay lit after the click that posted a move", () => {
+		const undo = bodyOf(".stonetop-gm-toolkit-moves .stonetop-gm-move-name:focus:not(:focus-visible)");
+		expect(undo, "nothing clears core's focus glow off a posted name").toBeTruthy();
+		expect(undo).toMatch(/box-shadow:\s*none/);
+		expect(undo).toMatch(/outline:\s*none/);
 	});
 });
 
