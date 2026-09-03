@@ -36,6 +36,25 @@
 
 			{{!-- The improvement: what it is called and what it reads like --}}
 			<section class="stonetop-improvement-builder-section" data-tab="improvement"{{#unless (eq activeTab "improvement")}} hidden{{/unless}}>
+
+				{{!-- Copy an improvement that already exists into the form, rather than
+				      retyping one of the book's out of the playbook. Fills every panel
+				      (see ImprovementBuilderDialog._fillFrom). --}}
+				<div class="stonetop-improvement-builder-field stonetop-improvement-builder-startfrom">
+					<label for="stonetop-improvement-source">Start from</label>
+					<select id="stonetop-improvement-source" class="stonetop-improvement-builder-source">
+						<option value="">A blank improvement</option>
+						{{#each sourceGroups}}
+						<optgroup label="{{label}}">
+							{{#each options}}
+							<option value="{{value}}">{{label}}</option>
+							{{/each}}
+						</optgroup>
+						{{/each}}
+					</select>
+					<p class="stonetop-improvement-builder-hint">Fills every panel with that improvement's own requirements and effects, ready to rename and change. It replaces what is in the form.</p>
+				</div>
+
 				<div class="stonetop-improvement-builder-field">
 					<label for="stonetop-improvement-name">Name</label>
 					<input type="text" id="stonetop-improvement-name" name="name" placeholder="e.g. Roadbuilding" required autofocus>
@@ -62,10 +81,11 @@
 			      clause, with later groups able to be alternatives to the one above. --}}
 			<section class="stonetop-improvement-builder-section" data-tab="requirements"{{#unless (eq activeTab "requirements")}} hidden{{/unless}}>
 				<p class="stonetop-improvement-builder-hint">
-					Every line becomes a check-off box on the improvement's card. Add a group per clause:
-					the book's improvements read "requires all of the following", "requires 2 of the following",
-					or "either this, or all of these". Leave a heading blank and it is written for you.
+					Each requirement is one check-off box; a group is one clause. Leave a heading blank and it is
+					written for you ("requires all of the following", "requires 2 of the following", "or all of these").
+					Set a requirement's <strong>&times;</strong> above 1 and it becomes that many boxes, numbered (1st), (2nd).
 				</p>
+				<p class="stonetop-improvement-builder-hint stonetop-improvement-builder-emphasis-hint">Wrap a move name in *asterisks* for italics, the way the book prints *Pull Together*.</p>
 
 				<div class="stonetop-improvement-builder-groups"></div>
 
@@ -79,6 +99,7 @@
 				<div class="stonetop-improvement-builder-field">
 					<label for="stonetop-improvement-effect">What completing it does</label>
 					<textarea id="stonetop-improvement-effect" name="effect" rows="5" placeholder="The effect as the playbook would print it, including any ongoing rule (&quot;Henceforth, when...&quot;)."></textarea>
+					<p class="stonetop-improvement-builder-hint stonetop-improvement-builder-emphasis-hint">Wrap a move name in *asterisks* for italics, the way the book prints *Pull Together*.</p>
 				</div>
 
 				<div class="stonetop-improvement-builder-grants">
@@ -132,6 +153,17 @@
 				</div>
 			</section>
 
+			{{!-- Preview: the card as the Improvements tab will draw it, rebuilt from the
+			      form every time this panel is opened (and while it is open, as you type).
+			      Same class names as the real card, so the same CSS paints it.
+			      See utils/improvement-preview.js. --}}
+			<section class="stonetop-improvement-builder-section" data-tab="preview"{{#unless (eq activeTab "preview")}} hidden{{/unless}}>
+				<p class="stonetop-improvement-builder-hint">
+					How the improvement will read on Stonetop's Improvements tab. The boxes here are inert.
+				</p>
+				<div class="stonetop-improvement-builder-preview" aria-live="polite"></div>
+			</section>
+
 		</div>
 
 	</div>
@@ -158,13 +190,20 @@
 		<div class="stonetop-improvement-builder-group">
 			<div class="stonetop-improvement-builder-group-head">
 				<span class="stonetop-improvement-builder-group-num">Group 1</span>
-				<button type="button" class="stonetop-improvement-builder-group-remove" data-tooltip="Remove this group" data-tooltip-direction="UP">
-					<i class="fas fa-trash" aria-hidden="true"></i>
-				</button>
+				<span class="stonetop-improvement-builder-group-btns">
+					<button type="button" class="stonetop-improvement-builder-group-up" data-tooltip="Move this group up" data-tooltip-direction="UP" aria-label="Move group up"><i class="fas fa-chevron-up" aria-hidden="true"></i></button>
+					<button type="button" class="stonetop-improvement-builder-group-down" data-tooltip="Move this group down" data-tooltip-direction="UP" aria-label="Move group down"><i class="fas fa-chevron-down" aria-hidden="true"></i></button>
+					<button type="button" class="stonetop-improvement-builder-group-remove" data-tooltip="Remove this group" data-tooltip-direction="UP" aria-label="Remove group">
+						<i class="fas fa-trash" aria-hidden="true"></i>
+					</button>
+				</span>
 			</div>
 
 			<div class="stonetop-improvement-builder-field">
 				<label>Heading</label>
+				{{!-- The placeholder is kept in step with the group's own rules by
+				      _syncGroupHeading, so "leave it blank and it is written for you"
+				      shows you what it would write. --}}
 				<input type="text" class="stonetop-improvement-builder-group-heading" placeholder="Requires all of the following:">
 			</div>
 
@@ -188,8 +227,33 @@
 
 			<div class="stonetop-improvement-builder-field">
 				<label>Requirements</label>
-				<textarea class="stonetop-improvement-builder-group-items" rows="4" placeholder="One per line. Each becomes a check-off box."></textarea>
+				<div class="stonetop-improvement-builder-rows"></div>
+				<button type="button" class="stonetop-improvement-builder-add-row">
+					<i class="fas fa-plus" aria-hidden="true"></i> Add requirement
+				</button>
 			</div>
+		</div>
+	</template>
+
+	{{!-- One requirement: the text that goes beside the checkbox, how many boxes it makes,
+	      and the controls to move or drop it. Cloned per row by _addRow. --}}
+	<template class="stonetop-improvement-builder-row-tpl">
+		<div class="stonetop-improvement-builder-req">
+			<span class="stonetop-improvement-builder-req-box" aria-hidden="true"></span>
+			{{!-- Labelled, not placeholder-labelled: a placeholder is not an accessible name,
+			      and it is gone the moment there is anything in the field. --}}
+			<input type="text" class="stonetop-improvement-builder-req-text" aria-label="Requirement" placeholder="What has to be true or done">
+			<label class="stonetop-improvement-builder-req-repeat" data-tooltip="How many boxes this makes. Above 1 they are numbered (1st), (2nd)…" data-tooltip-direction="UP">
+				<span aria-hidden="true">&times;</span>
+				{{!-- `max` comes from MAX_REQUIREMENT_REPEAT, the same ceiling itemsFromRows
+				      clamps to, so the control and the rule cannot drift apart. --}}
+				<input type="number" class="stonetop-improvement-builder-req-count" min="1" max="{{maxRepeat}}" step="1" value="1" aria-label="How many boxes this requirement makes">
+			</label>
+			<span class="stonetop-improvement-builder-req-btns">
+				<button type="button" class="stonetop-improvement-builder-req-up" data-tooltip="Move up" data-tooltip-direction="UP" aria-label="Move requirement up"><i class="fas fa-chevron-up" aria-hidden="true"></i></button>
+				<button type="button" class="stonetop-improvement-builder-req-down" data-tooltip="Move down" data-tooltip-direction="UP" aria-label="Move requirement down"><i class="fas fa-chevron-down" aria-hidden="true"></i></button>
+				<button type="button" class="stonetop-improvement-builder-req-remove" data-tooltip="Remove this requirement" data-tooltip-direction="UP" aria-label="Remove requirement"><i class="fas fa-trash" aria-hidden="true"></i></button>
+			</span>
 		</div>
 	</template>
 </form>

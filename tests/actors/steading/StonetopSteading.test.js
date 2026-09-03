@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { StonetopSteading, improvementRequirementsMet, IMPROVEMENT_DEFINITIONS, IMPROVEMENT_CATEGORIES, IMPROVEMENT_GRANTS } from "../../../module/actors/steading/StonetopSteading.js";
-import { improvementRequirementCount } from "../../../module/utils/improvement-def.js";
+import { improvementRequirementCount, sectionRequiredCount } from "../../../module/utils/improvement-def.js";
 
 function makeSteadingActor({ system = {}, steadingFlags = {} } = {}) {
 	return {
@@ -353,6 +353,27 @@ describe("StonetopSteading", () => {
 			]);
 		});
 
+		// The heading is prose and `min` is the rule, and nothing makes them agree. The first
+		// printing shipped Harnessing the Stream as "Requires 2 of the following" over three
+		// items, and the errata rewrote it to 1 of 2 — a change that is only half made if the
+		// heading moves and `min` does not. So the number a heading SAYS is checked against the
+		// number the tick check actually enforces, for every built-in that names one.
+		it("makes each 'Requires N of the following' heading match what the section enforces", () => {
+			const named = [];
+			for (const def of IMPROVEMENT_DEFINITIONS) {
+				for (const section of def.sections ?? []) {
+					const m = /^(?:Requires|And) (\d+) of the following/.exec(section.heading ?? "");
+					if (!m) continue;
+					named.push(def.slug);
+					expect(sectionRequiredCount(section), `${def.slug}: "${section.heading}"`).toBe(Number(m[1]));
+				}
+			}
+			// A guard that matched nothing would pass forever; these are the ones that say a number.
+			expect(named).toEqual([
+				"aurochsHunting", "greaterHarvest", "harnessingStream", "market", "wellTrainedMilitia",
+			]);
+		});
+
 		it("puts every Fortifications-granting improvement in wall, and no other", () => {
 			// The wall bucket is meant to be exactly the Fortifications list, so a future
 			// improvement that adds one can't be quietly filed elsewhere.
@@ -454,11 +475,138 @@ describe("StonetopSteading", () => {
 			});
 			const steading = new StonetopSteading(actor);
 
-			expect(await steading.removeCustomImprovement("custom-roadbuilding")).toBe(true);
+			expect(await steading.removeCustomImprovement("custom-roadbuilding"))
+				.toMatchObject({ label: "ROADBUILDING", reverted: [] });
 			expect(actor.flags.stonetop.steading.customImprovements).toEqual([]);
 			expect(actor.flags.stonetop.steading.improvements).toEqual({ palisade: { completed: true, r: [] } });
 			// Removing an unknown slug is a no-op.
 			expect(await steading.removeCustomImprovement("custom-nope")).toBe(false);
+		});
+
+		// Editing in place, rather than copy-fix-remove: that lost every ticked step and left
+		// a moment where the steading held two of the thing.
+		describe("editing one in place", () => {
+			const roadbuilding = {
+				slug: "custom-roadbuilding", label: "Roadbuilding", category: "renown",
+				flavor: "The mud takes a wagon a week.", effect: "Increase Prosperity by 1.",
+				sections: [{ heading: "Requires all of the following:", items: ["A surveyor", "Gravel"] }],
+				grants: { stats: { prosperity: 1 } },
+			};
+			const edited = { ...roadbuilding, name: "Roadbuilding" };
+			const withRoad = (improvements = {}) => makeMutableSteadingActor({
+				customImprovements: [foundry.utils.deepClone(roadbuilding)],
+				improvements,
+			});
+
+			it("rewrites it without minting a new one", async () => {
+				const actor = withRoad();
+				const result = await new StonetopSteading(actor).updateCustomImprovement("custom-roadbuilding", {
+					...edited, flavor: "Two days, in the wet.", effect: "Increase Prosperity by 2.",
+				});
+
+				expect(result).toMatchObject({ ok: true, slug: "custom-roadbuilding", label: "Roadbuilding" });
+				const stored = actor.flags.stonetop.steading.customImprovements;
+				expect(stored).toHaveLength(1);
+				expect(stored[0].flavor).toBe("Two days, in the wet.");
+			});
+
+			// The slug is an id, not a name: the ticked steps, the applied-grants record and
+			// season-effects' own rules are all keyed by it, and none survive being re-keyed.
+			it("keeps the slug across a rename, so the ticked steps stay attached", async () => {
+				const actor = withRoad({ "custom-roadbuilding": { completed: false, r: [true, false] } });
+				const result = await new StonetopSteading(actor).updateCustomImprovement(
+					"custom-roadbuilding", { ...edited, name: "The Maker's Roads" });
+
+				expect(result).toMatchObject({ ok: true, slug: "custom-roadbuilding", label: "The Maker's Roads" });
+				expect(actor.flags.stonetop.steading.customImprovements[0].slug).toBe("custom-roadbuilding");
+				expect(actor.flags.stonetop.steading.improvements["custom-roadbuilding"].r).toEqual([true, false]);
+			});
+
+			it("carries a ticked step across an insertion rather than sliding it", async () => {
+				const actor = withRoad({ "custom-roadbuilding": { completed: false, r: [false, true] } });
+				await new StonetopSteading(actor).updateCustomImprovement("custom-roadbuilding", {
+					...edited,
+					sections: [{ heading: "Requires all of the following:", items: ["A charter", "A surveyor", "Gravel"] }],
+				});
+
+				// Gravel was the ticked one, and still is; the new first step starts unticked.
+				expect(actor.flags.stonetop.steading.improvements["custom-roadbuilding"].r)
+					.toEqual([false, false, true]);
+			});
+
+			it("refuses a rename onto another improvement's name, but not onto its own", async () => {
+				const steading = new StonetopSteading(withRoad());
+				await expect(steading.updateCustomImprovement("custom-roadbuilding", { ...edited, name: "Palisade" }))
+					.resolves.toMatchObject({ ok: false, reason: "duplicate" });
+				// Its own name is not a clash with itself, however it is punctuated.
+				await expect(steading.updateCustomImprovement("custom-roadbuilding", { ...edited, name: "Roadbuilding!" }))
+					.resolves.toMatchObject({ ok: true });
+			});
+
+			it("refuses an empty name and an improvement that is no longer there", async () => {
+				const steading = new StonetopSteading(withRoad());
+				await expect(steading.updateCustomImprovement("custom-roadbuilding", { ...edited, name: "  " }))
+					.resolves.toMatchObject({ ok: false, reason: "empty" });
+				await expect(steading.updateCustomImprovement("custom-nope", edited))
+					.resolves.toMatchObject({ ok: false, reason: "missing" });
+			});
+
+			// `applied` records what completing it DID, and un-completing has to reverse that.
+			// Editing the grants of a completed improvement must not rewrite history, and must
+			// not silently move stats either; the caller is told so it can say as much.
+			it("leaves what completion already applied alone when the grants are edited", async () => {
+				const actor = withRoad({
+					"custom-roadbuilding": { completed: true, r: [true, true], applied: { stats: { prosperity: 1 } } },
+				});
+				const result = await new StonetopSteading(actor).updateCustomImprovement("custom-roadbuilding", {
+					...edited, grants: { stats: { prosperity: 3 } },
+				});
+
+				expect(result).toMatchObject({ grantsChanged: true, completed: true, structureChanged: false });
+				expect(actor.flags.stonetop.steading.improvements["custom-roadbuilding"].applied)
+					.toEqual({ stats: { prosperity: 1 } });
+				expect(actor.update).not.toHaveBeenCalled();
+			});
+		});
+
+		// A completed improvement's grants are recorded so un-completing can reverse them
+		// exactly. Removing it used to delete that record WITHOUT reversing anything, so the
+		// +1 Fortunes and the Fortifications entry stayed on the steading with nothing left to
+		// explain them and no way to take them back.
+		it("gives back what completing it applied, rather than orphaning it", async () => {
+			const actor = makeMutableSteadingActor({
+				customImprovements: [{
+					slug: "custom-palisade-homebrew", label: "Palisade (homebrew)", flavor: "", effect: "",
+					sections: [], grants: { stats: { fortunes: 1 }, fortifications: ["Palisade (homebrew)"] },
+				}],
+				improvements: {
+					"custom-palisade-homebrew": {
+						completed: true,
+						r: [],
+						applied: { stats: { fortunes: 1 }, fortifications: ["Palisade (homebrew)"] },
+					},
+				},
+				system: { stats: { fortunes: { value: 2 } } },
+				fortifications: [{ name: "Palisade (homebrew)", checked: true }],
+			});
+			const steading = new StonetopSteading(actor);
+
+			const result = await steading.removeCustomImprovement("custom-palisade-homebrew");
+			// The summary names what completing it APPLIED (the sheet puts "Reverted:" in front).
+			expect(result.reverted).toEqual(["Fortunes +1", "Fortifications +Palisade (homebrew)"]);
+
+			// The reversal itself, read off the update payload: this fake's `update` is a spy
+			// that applies nothing, so the stat has to be checked where it is written. Both the
+			// system value and its flag mirror, as every grant write does.
+			const payload = actor.update.mock.calls.at(-1)[0];
+			expect(payload["system.stats.fortunes.value"]).toBe(1);
+			expect(payload["flags.stonetop-pwd.steading.system.stats.fortunes.value"]).toBe(1);
+			expect(payload["flags.stonetop-pwd.steading.fortifications"])
+				.not.toContainEqual(expect.objectContaining({ name: "Palisade (homebrew)" }));
+
+			// And the definition and its tracking entry are gone.
+			expect(actor.flags.stonetop.steading.customImprovements).toEqual([]);
+			expect(actor.flags.stonetop.steading.improvements).toEqual({});
 		});
 	});
 

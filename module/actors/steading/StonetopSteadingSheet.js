@@ -1,5 +1,5 @@
 import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, HERD_SURPLUS_PER, WEAPONS_SEASON_STEP, WATCH_SEASON_STEP } from "./StonetopSteading.js";
-import { improvementRequirementCount } from "../../utils/improvement-def.js";
+import { improvementRequirementCount, summarizeImprovementGrants } from "../../utils/improvement-def.js";
 import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml} from "../../utils/roll-engine.js";
 import {SteadingLedger} from "./SteadingLedger.js";
 import {TIER_KEYS} from "../../utils/move-results.js";
@@ -36,7 +36,7 @@ import {makeColumnsResizable} from "../../utils/resizable-columns.js";
 import {makeColumnsSortable} from "../../utils/sortable-columns.js";
 import {withSectionEditing} from "../../utils/section-editing.js";
 import {STEADING_IMPROVEMENT_DRAG_TYPE} from "../../journal/steading-improvement-cards.js";
-import {ImprovementBuilderDialog, steadingImprovementSaver} from "../../dialogs/ImprovementBuilderDialog.js";
+import {ImprovementBuilderDialog, improvementEditSaver, steadingImprovementSaver} from "../../dialogs/ImprovementBuilderDialog.js";
 import {PLACE_OF_INTEREST_DRAG_TYPE} from "../../hooks/PlaceOfInterestDrop.js";
 import {getDragEventData, imagePopout, imagePopoutTitle} from "../../utils/foundry-compat.js";
 import {wireCardDropZone} from "../../utils/card-drop-zone.js";
@@ -437,7 +437,7 @@ const HOMESTEAD_MOVE_FLOWS = {
 			RESULT.strong("you can get it or sell it for a fair price."),
 			RESULT.weak("the GM picks 1 (below).", "7-9 when buying"),
 			RESULT.weak("you can sell it now, but you won't get its full worth.", "7-9 when selling"),
-			RESULT.miss("don't mark XP. If you still want to acquire/sell it, you'll need to travel elsewhere or wait until next season.", "6- either way"),
+			RESULT.miss("don't mark XP. If you still want to acquire/sell it, you'll need to travel elsewhere or wait until next season, and then try again.", "6- either way"),
 		],
 		pickPools: {
 			partial: [
@@ -959,7 +959,10 @@ export function createStonetopSteadingSheetClass(Base) {
 				const hdr = ev.target.closest(".steading-improvement-header");
 				if (!hdr) return;
 				if (ev.target.closest(".steading-improvement-complete-label")) return;
+				// The card's own controls sit inside the header; clicking one is not a click
+				// on the header, or every edit and removal would also toggle the card.
 				if (ev.target.closest(".steading-improvement-remove")) return;
+				if (ev.target.closest(".steading-improvement-edit")) return;
 				const card = hdr.closest(".steading-improvement");
 				if (!card) return;
 				const open = card.classList.toggle("is-open");
@@ -1264,12 +1267,12 @@ export function createStonetopSteadingSheetClass(Base) {
 			wireCardDropZone(html[0].querySelector(".tab.improvements"),
 				STEADING_IMPROVEMENT_DRAG_TYPE, (data) => this._onDropSteadingImprovement(data.improvement));
 
-			// Remove a custom (journal-sourced) improvement.
+			// Edit or remove a custom (journal-sourced) improvement.
 			html[0].addEventListener("click", (ev) => {
-				const btn = ev.target.closest(".steading-improvement-remove");
-				if (!btn) return;
-				ev.stopPropagation();
-				this._onRemoveCustomImprovement(btn.dataset.slug);
+				const remove = ev.target.closest(".steading-improvement-remove");
+				if (remove) { ev.stopPropagation(); this._onRemoveCustomImprovement(remove.dataset.slug); return; }
+				const edit = ev.target.closest(".steading-improvement-edit");
+				if (edit) { ev.stopPropagation(); this._onEditCustomImprovement(edit.dataset.slug); }
 			}, true);
 
 			// Create a custom improvement from a small form (the button counterpart to
@@ -3383,10 +3386,82 @@ export function createStonetopSteadingSheetClass(Base) {
 			new ImprovementBuilderDialog(saver).render(true);
 		}
 
+		/**
+		 * Rewrite an added improvement in place: the same builder window, opened on it, saving
+		 * back over it. Not confirmed, unlike removal: nothing is lost that Cancel does not
+		 * keep, and the write moves no stats (see updateCustomImprovement).
+		 */
+		_onEditCustomImprovement(slug) {
+			if (!slug || !this.isEditable) return;
+			const saver = improvementEditSaver(this._stonetopSteading, slug, () => this.render(false));
+			if (!saver.editing) return;
+			new ImprovementBuilderDialog(saver).render(true);
+		}
+
+		/**
+		 * Remove an added improvement, after asking.
+		 *
+		 * Confirmed rather than immediate, on the same grounds as standing down the muster: the
+		 * control is a small glyph on a card people click around, the authored definition and
+		 * its ticked steps go with it and cannot be got back, and if it was ever completed the
+		 * write MOVES STATS, since removing it gives back what completing it applied. The two
+		 * buttons name the two outcomes, and the body says which of those three things this
+		 * particular improvement will actually do.
+		 */
 		async _onRemoveCustomImprovement(slug) {
-			if (!slug) return;
-			const removed = await this._stonetopSteading.removeCustomImprovement(slug);
-			if (removed) this.render(false);
+			if (!slug || !this.isEditable) return;
+			const steading = this._stonetopSteading;
+			const def = steading.improvementDef(slug);
+			if (!def) return;
+
+			const grants = def.grants ?? null;
+			const completed = steading.improvementCompleted(slug);
+			const ticked = steading.improvementRequirements(slug).filter(Boolean).length;
+			const gives = completed ? summarizeImprovementGrants(grants) : [];
+
+			new Dialog({
+				title: "Remove Improvement",
+				content: `<div class="stonetop-disaster-dialog">
+					<p>Remove <strong>${escHtml(def.label)}</strong> from this steading. Its requirements, its effect and everything written on it go with it, and there is no undo.</p>
+					<div class="stonetop-muster-change">
+						<span class="stonetop-muster-change-head">What changes</span>
+						${gives.length
+							? `<span class="stonetop-muster-change-row">${escHtml(gives.join("; "))}</span>
+								<span class="stonetop-muster-change-why">Completing it applied these, so removing it gives them back.</span>`
+							: `<span class="stonetop-muster-change-row">Nothing else on the sheet.</span>
+								<span class="stonetop-muster-change-why">${completed
+									? "It is complete, but nothing was applied automatically."
+									: "It was never completed, so nothing was applied to give back."}</span>`}
+						${ticked ? `<span class="stonetop-muster-change-why">${ticked} ticked requirement${ticked === 1 ? "" : "s"} will be forgotten.</span>` : ""}
+					</div>
+					<p class="stonetop-rites-note">A homebrew card in the journal is a separate copy and is not touched; this only removes it from this steading.</p>
+				</div>`,
+				buttons: {
+					yes: {
+						icon: '<i class="fas fa-trash"></i>',
+						label: `Remove ${def.label}`,
+						callback: () => this._applyRemoveCustomImprovement(slug),
+					},
+					no: {
+						icon: '<i class="fas fa-screwdriver-wrench"></i>',
+						label: "Keep it on the steading",
+					},
+				},
+				default: "no",
+			}, { classes: ["dialog", "stonetop", "stonetop-disaster-move-dialog"] }).render(true);
+		}
+
+		/** The write behind the confirm, split out so the button is a one-liner. */
+		async _applyRemoveCustomImprovement(slug) {
+			const result = await this._stonetopSteading.removeCustomImprovement(slug);
+			if (!result) return;
+			this.render(false);
+			// "Reverted" rather than "Given back", matching what un-completing an improvement
+			// says: the summary lists what completing it APPLIED, so any other verb in front of
+			// "Fortunes +1" reads as though Fortunes had just gone up.
+			ui.notifications?.info?.(result.reverted.length
+				? `Removed ${result.label}. Reverted: ${result.reverted.join("; ")}.`
+				: `Removed ${result.label}.`);
 		}
 	};
 }

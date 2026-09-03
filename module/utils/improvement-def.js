@@ -19,6 +19,15 @@
 // The first two are already understood by improvementRequirementsMet and the third by
 // setImprovementCompleted; what was missing was any way to author them, and anywhere
 // for them to survive between the form and the steading.
+//
+// A heading, a requirement item and the effect prose are stored as HTML, because that is
+// what the book's own definitions already are ("<em>Pull Together</em>") and what both
+// readers paint unescaped. Authored text therefore passes through formatImprovementText
+// on its way in: escaped once, then the single piece of markup the playbook actually
+// uses, *asterisks* around a move name, resolved to <em>. unformatImprovementText is the
+// way back out, for re-opening an improvement that already exists in the builder.
+
+import { decodeEntities, escHtml } from "./strings.js";
 
 /** Where each grantable steading stat lives, keyed by the name a grant uses. */
 export const GRANT_STAT_PATHS = {
@@ -39,8 +48,18 @@ export const GRANT_STAT_LABELS = {
 /** The four sizes a steading can be set to (matching the Size radios on the sheet). */
 export const STEADING_SIZES = ["hamlet", "village", "town", "city"];
 
-/** A stat delta or population target as an integer; null when it is not a number. */
+/**
+ * A stat delta or population target as an integer; null when it is not a number.
+ *
+ * A BLANK field is not a zero. `Number("")` is 0, and that one coercion was enough to
+ * make the untouched "Set Population to" box read as a real grant: every improvement the
+ * builder saved carried `setPopulation: 0`, so completing any of them reset the
+ * steading's Population to +0. An explicit "0" still means zero (Township sets exactly
+ * that), which is why the emptiness test is on the input rather than on the result.
+ */
 function asInt(value) {
+	if (value === null || value === undefined) return null;
+	if (typeof value === "string" && !value.trim()) return null;
 	const n = Number(value);
 	return Number.isFinite(n) ? Math.trunc(n) : null;
 }
@@ -86,7 +105,10 @@ export function sectionsFromGroups(groups = []) {
 	let runs = 0;
 
 	for (const raw of groups) {
-		const items = toLines(raw?.items);
+		// `rows` is what the dialog reads now: one control per checkbox, each with its own
+		// repeat. `items` stays for a caller holding a plain line-list, which is what the
+		// pure tests and a dropped card's payload hand over.
+		const items = raw?.rows ? itemsFromRows(raw.rows) : toLines(raw?.items);
 		const typed = String(raw?.heading ?? "").trim();
 		// A group left completely blank is not a requirement, it is a row the author
 		// added and did not use. Dropped here rather than kept with the heading that
@@ -213,6 +235,159 @@ export function summarizeImprovementGrants(grants) {
 	return lines;
 }
 
+// ── Authored text ───────────────────────────────────────────
+
+/**
+ * One line of authored text as the HTML a definition stores: escaped first, so nothing
+ * typed can become markup, then *asterisks* resolved to <em>. Italics are the only thing
+ * the playbook's improvements mark up, and they mark up a great deal with them (a move
+ * name in nearly every requirement), which is why there is a shorthand for that and for
+ * nothing else.
+ *
+ * A lone or unclosed asterisk is left alone rather than swallowed, so "Value 2 * 3" and a
+ * half-typed emphasis both survive.
+ */
+export function formatImprovementText(raw) {
+	return escHtml(String(raw ?? "").trim()).replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+}
+
+/**
+ * The inverse, for filling the builder from a definition that already exists: <em> back
+ * to *asterisks*, then the escapes undone, so what the author is shown is what they would
+ * have typed. Any other markup a built-in carries is shown as its own source, which is
+ * honest about the fact that re-saving would escape it.
+ *
+ * Undone through `decodeEntities`, the system's one decoder, rather than a local table of the
+ * six entities `escHtml` writes: the book's own definitions carry `&mdash;` and `&rsquo;`, and a
+ * narrower table shows those raw on screen the moment an author presses "Start from".
+ */
+export function unformatImprovementText(html) {
+	const starred = String(html ?? "").replace(/<em>([\s\S]*?)<\/em>/gi, "*$1*");
+	return decodeEntities(starred).trim();
+}
+
+/** Ceiling on a row's repeat, so a mistyped count cannot mint a thousand checkboxes. */
+export const MAX_REQUIREMENT_REPEAT = 20;
+
+/** 1st, 2nd, 3rd, 4th: the suffix the book uses when a requirement is done N times. */
+export function ordinal(n) {
+	const num = Math.trunc(Number(n) || 0);
+	const tens = Math.abs(num) % 100;
+	const ones = Math.abs(num) % 10;
+	const suffix = (tens >= 11 && tens <= 13) ? "th" : (["th", "st", "nd", "rd"][ones] ?? "th");
+	return `${num}${suffix}`;
+}
+
+/**
+ * A group's requirement ROWS as the flat item list a definition stores. A row repeated
+ * more than once becomes that many boxes, numbered the way the playbook numbers them:
+ * "Pull Together (1st)" through "(5th)". Additional Housing, Raincatching, Stone Wall,
+ * Township and Weapons of War are all built that way, and typing the same line five times
+ * with the ordinals spelled out by hand is the part of authoring one that nobody should
+ * be doing.
+ *
+ * @param {Array<{text?: string, repeat?: number|string}>} rows
+ * @returns {string[]}
+ */
+export function itemsFromRows(rows = []) {
+	const items = [];
+	for (const row of Array.isArray(rows) ? rows : []) {
+		const text = String(row?.text ?? "").trim();
+		if (!text) continue;
+		const repeat = Math.min(Math.max(asInt(row?.repeat) ?? 1, 1), MAX_REQUIREMENT_REPEAT);
+		if (repeat === 1) { items.push(text); continue; }
+		for (let i = 1; i <= repeat; i++) items.push(`${text} (${ordinal(i)})`);
+	}
+	return items;
+}
+
+/**
+ * The inverse of itemsFromRows: a stored item list back as authoring rows, collapsing any
+ * run that itemsFromRows would have produced (the same text, ordinals running from one)
+ * into a single repeated row. Anything else stays one row per item, which is the honest
+ * reading: the Inn's numbered steps each carry their own cost text and are not one
+ * requirement listed twice.
+ * @param {string[]} items
+ */
+export function rowsFromItems(items = []) {
+	const list = (Array.isArray(items) ? items : []).map(i => String(i ?? ""));
+	const rows = [];
+	for (let i = 0; i < list.length;) {
+		const match = /^(.*) \(1st\)$/.exec(list[i]);
+		let run = 1;
+		if (match) {
+			while (i + run < list.length && list[i + run] === `${match[1]} (${ordinal(run + 1)})`) run++;
+		}
+		if (match && run > 1) rows.push({ text: match[1], repeat: run });
+		else rows.push({ text: list[i], repeat: 1 });
+		i += run;
+	}
+	return rows;
+}
+
+/**
+ * Carry an improvement's ticked requirement boxes across an EDIT to its requirements.
+ *
+ * The stored tick array `r` is FLAT and POSITIONAL, indexed by box across all sections, so
+ * inserting a step at the top of a half-finished improvement would otherwise slide every
+ * tick onto the wrong requirement. Boxes are matched on their TEXT instead: a step that
+ * survived the edit keeps its tick wherever it moved to, a new one starts unticked, and a
+ * deleted one takes its tick with it.
+ *
+ * Repeated text (the same row written twice, or a repeat's numbered boxes if they were
+ * renumbered) is matched in order, first old occurrence to first new one, which is the only
+ * reading available when the texts are identical.
+ *
+ * @param {string[]} oldItems  the flat item list the ticks were recorded against
+ * @param {string[]} newItems  the flat item list after the edit
+ * @param {boolean[]} ticks    the stored `r`
+ * @returns {boolean[]} `r` for the new list
+ */
+export function remapRequirementTicks(oldItems = [], newItems = [], ticks = []) {
+	const byText = new Map();
+	(Array.isArray(oldItems) ? oldItems : []).forEach((item, i) => {
+		const key = String(item ?? "");
+		if (!byText.has(key)) byText.set(key, []);
+		byText.get(key).push(!!ticks?.[i]);
+	});
+	return (Array.isArray(newItems) ? newItems : []).map(item => {
+		const queue = byText.get(String(item ?? ""));
+		return queue?.length ? queue.shift() : false;
+	});
+}
+
+/** Every requirement box of a definition, flat and in order: the list `r` is indexed by. */
+export function flatRequirementItems(def) {
+	return (def?.sections ?? []).flatMap(section => section?.items ?? []);
+}
+
+/**
+ * A definition's sections back as the builder's requirement GROUPS: the round trip of
+ * sectionsFromGroups, so an improvement that already exists (one of the book's, or one
+ * already added to a steading) can be opened in the builder and copied or corrected
+ * rather than retyped out of the playbook.
+ *
+ * An authored heading comes back verbatim rather than being dropped for the written-for-
+ * you one, because a built-in's heading is often not the one defaultSectionHeading would
+ * write ("Requires either one of these:", "And these:"), and a copy that silently
+ * reworded itself would not be a copy.
+ * @param {Array<{heading?:string, items?:string[], min?:number, group?:string}>} sections
+ */
+export function groupsFromSections(sections = []) {
+	const alternatives = alternativeSectionFlags(sections);
+	return (Array.isArray(sections) ? sections : []).map((section, i) => {
+		const items = section?.items ?? [];
+		const partial = Number.isFinite(section?.min) && section.min > 0 && section.min < items.length;
+		return {
+			heading: unformatImprovementText(section?.heading ?? ""),
+			rows: rowsFromItems(items.map(unformatImprovementText)),
+			partial,
+			min: partial ? section.min : 1,
+			alternative: alternatives[i],
+		};
+	});
+}
+
 /**
  * A complete improvement definition from raw authored input, in the shape both save
  * targets and the steading's own tracking expect. `category` is NOT validated here: the
@@ -220,12 +395,20 @@ export function summarizeImprovementGrants(grants) {
  * the categories themselves and importing it would make this file circular.
  */
 export function buildImprovementDef(input = {}) {
+	// `name` and `flavor` are plain text everywhere they are painted (both readers use a
+	// double-stash), so they are trimmed and otherwise left alone. The other three are
+	// HTML in the book's own definitions and are painted unescaped, so authored text is
+	// escaped and its *asterisks* resolved once here rather than at each surface.
 	return {
 		name: String(input.name ?? "").trim(),
 		category: String(input.category ?? "").trim(),
 		flavor: String(input.flavor ?? "").trim(),
-		sections: normalizeImprovementSections(input.sections),
-		effect: String(input.effect ?? "").trim(),
+		sections: normalizeImprovementSections(input.sections).map(section => ({
+			...section,
+			heading: formatImprovementText(section.heading),
+			items: section.items.map(formatImprovementText),
+		})),
+		effect: formatImprovementText(input.effect),
 		grants: normalizeImprovementGrants(input.grants),
 	};
 }

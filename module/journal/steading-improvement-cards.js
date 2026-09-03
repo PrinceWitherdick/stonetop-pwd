@@ -25,9 +25,16 @@ export const STEADING_IMPROVEMENT_DRAG_TYPE = "StonetopSteadingImprovement";
 /**
  * Runtime twin of the gazetteer's `renderSteadingImprovementCard` (build-time,
  * scripts/local) — builds the same draggable card HTML for an improvement authored
- * in-app, so a dropped homebrew card lands as an identical custom improvement. User
- * input is plain text, so it's HTML-escaped (the built-ins ship light markdown that
- * the generator processes; here there's none to process).
+ * in-app, so a dropped homebrew card lands as an identical custom improvement.
+ *
+ * A definition's `heading`, requirement items and `effect` are already HTML: authored
+ * ones were escaped and had their *asterisks* resolved by buildImprovementDef, and the
+ * generator's own cards ship the same light markdown already processed. They are emitted
+ * as-is, exactly as the steading tab emits them. `name` and `flavor` are plain text on
+ * both paths and are escaped here for display only, never in the payload: escaping them
+ * into the payload is what used to put a literal `&#x27;` in the flavor line of every
+ * dropped card, since the steading tab escapes it a second time on the way out.
+ *
  * Each section's `min` ("2 of the following") and `group` (either/or alternatives) and
  * the improvement's `grants` (what completing it applies by itself) ride in the payload
  * alongside the prose, so a card dropped onto a steading is the same improvement that
@@ -35,14 +42,10 @@ export const STEADING_IMPROVEMENT_DRAG_TYPE = "StonetopSteadingImprovement";
  * @param {{name:string, flavor?:string, effect?:string, category?:string, sections?:Array<{heading?:string, min?:number, group?:string, items?:string[]}>, grants?:object}} def
  */
 export function renderImprovementCardHtml(def) {
-	const name = escHtml(def?.name ?? "");
-	const flavor = def?.flavor ? escHtml(def.flavor) : "";
-	const effect = def?.effect ? escHtml(def.effect) : "";
-	const sections = normalizeImprovementSections(def?.sections).map(s => ({
-		...s,
-		heading: escHtml(s.heading),
-		items: s.items.map(escHtml),
-	}));
+	const name = String(def?.name ?? "");
+	const flavor = String(def?.flavor ?? "");
+	const effect = String(def?.effect ?? "");
+	const sections = normalizeImprovementSections(def?.sections);
 	const alternatives = alternativeSectionFlags(sections);
 	const grants = normalizeImprovementGrants(def?.grants);
 
@@ -51,11 +54,11 @@ export function renderImprovementCardHtml(def) {
 	// `category` rides along so a dropped card lands under the right filter chip on the
 	// steading sheet; the build-time gazetteer emits no category, and those cards stay
 	// uncategorised (and so unfiltered). Validated by StonetopSteading.addCustomImprovement.
-	const payload = { name: def?.name ?? "", category: def?.category ?? "", flavor, effect, sections, grants };
+	const payload = { name, category: def?.category ?? "", flavor, effect, sections, grants };
 	const dataAttr = escHtml(JSON.stringify(payload));
 
 	const body = [];
-	if (flavor) body.push(`<p class="stonetop-journal-improvement-flavor">${flavor}</p>`);
+	if (flavor) body.push(`<p class="stonetop-journal-improvement-flavor">${escHtml(flavor)}</p>`);
 	sections.forEach((s, index) => {
 		// The same "or" divider the steading sheet draws above a continued either/or, so
 		// the card reads the way the improvement will once it is dropped.
@@ -75,7 +78,7 @@ export function renderImprovementCardHtml(def) {
 		+ `<div class="stonetop-journal-improvement-head">`
 		+ `<i class="fas fa-screwdriver-wrench" aria-hidden="true"></i>`
 		+ `<span class="stonetop-journal-improvement-eyebrow">Steading Improvement</span>`
-		+ `<span class="stonetop-journal-improvement-name">${name}</span>`
+		+ `<span class="stonetop-journal-improvement-name">${escHtml(name)}</span>`
 		+ `</div>`
 		+ `<div class="stonetop-journal-improvement-body">${body.join("")}</div>`
 		+ `</div>`;

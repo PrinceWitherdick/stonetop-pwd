@@ -7270,7 +7270,6 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	color: var(--st-text-secondary);
 	cursor: pointer;
 }
-.stonetop-improvement-builder-group-remove:hover { color: var(--st-danger, #7a2f2f); }
 .stonetop-improvement-builder-group-rules {
 	display: flex;
 	flex-wrap: wrap;
@@ -7351,6 +7350,83 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-add-item-ammo.is-hidden { display: none; }
 /* Weight/armor apply to the regular Items column only; hidden for Small Items. */
 .stonetop-add-item-weight-block.is-hidden { display: none; }
+/* One requirement per row, rather than one per line of a textarea: a row can be moved,
+   dropped, or repeated into several numbered boxes without retyping its neighbours.
+   The little square at its head is the checkbox this row will become on the card. */
+.stonetop-improvement-builder-rows { display: flex; flex-direction: column; gap: 4px; }
+.stonetop-improvement-builder-req {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.stonetop-improvement-builder-req-box {
+	flex: 0 0 auto;
+	width: 12px;
+	height: 12px;
+	border: 1px solid rgba(0, 0, 0, 0.35);
+	border-radius: 2px;
+	background: rgba(255, 255, 255, 0.4);
+}
+/* Both of these have to out-specify the panel's blanket `width: 100%` on form inputs,
+   which is (0,2,1); they match it and sit later, the same way the group's own inline
+   number box does above. */
+.stonetop-improvement-builder-req input[type="text"] {
+	flex: 1 1 0;
+	min-width: 0;
+	width: auto;
+}
+.stonetop-improvement-builder-req input[type="number"] { width: 3.6em; }
+.stonetop-improvement-builder-req-repeat {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	margin: 0;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+}
+.stonetop-improvement-builder-req-btns { flex: 0 0 auto; display: flex; }
+.stonetop-improvement-builder-group-btns { display: flex; flex: 0 0 auto; }
+/* The row's move/remove buttons and the group's are the SAME control — a bare glyph that only
+   darkens on hover — so they are described once. The group's sits a pixel wider on each side,
+   which is the whole of the difference and the only thing stated twice. */
+.stonetop-improvement-builder-req-btns button,
+.stonetop-improvement-builder-group-btns button {
+	width: auto;
+	flex: 0 0 auto;
+	padding: 0 4px;
+	line-height: 1.4;
+	background: none;
+	border: none;
+	color: var(--st-text-secondary);
+	cursor: pointer;
+}
+.stonetop-improvement-builder-group-btns button { padding: 0 5px; }
+.stonetop-improvement-builder-req-btns button:hover,
+.stonetop-improvement-builder-group-btns button:hover { color: var(--st-text-body); }
+.stonetop-improvement-builder-req-btns button[disabled],
+.stonetop-improvement-builder-group-btns button[disabled] { opacity: 0.3; cursor: default; }
+/* Both remove buttons turn red rather than darkening. Each sits inside the -btns span, so the
+   shared "... button:hover" above is (0,2,1) and beats a bare ".…-remove:hover" (0,2,0);
+   naming the parent takes these to (0,3,0), which is what makes the red land. */
+.stonetop-improvement-builder-req-btns .stonetop-improvement-builder-req-remove:hover,
+.stonetop-improvement-builder-group-btns .stonetop-improvement-builder-group-remove:hover { color: var(--st-red-text); }
+.stonetop-improvement-builder-add-row {
+	align-self: flex-start;
+	width: auto;
+	margin-top: 2px;
+	padding: 1px 8px;
+	font-size: var(--st-fs-xs);
+	cursor: pointer;
+}
+
+/* "Start from", fenced off below: it replaces the form rather than adding to it, so it
+   should not read as one more field being filled in alongside Name. */
+.stonetop-improvement-builder-startfrom {
+	padding-bottom: 10px;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+}
+
 
 /* Love letters (Book I p.568): a single-use, GM-authored move at the top of the Moves
    tab, given the steading Threat cards' warm "tan paper" treatment (shared --tc-* palette:
@@ -7366,6 +7442,33 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    specificity, so the .stonetop-item.stonetop-love-letter chain still outranks the generic
    `.tab.moves .stonetop-item` card rule. */
 .tab.moves .stonetop-item.stonetop-love-letter,
+/* The Preview panel. The card inside it carries the Improvements tab's own class names
+   and is painted by that tab's own (unscoped) rules, so what is previewed is what will
+   be drawn; only the frame around it and the inertness belong to this window. */
+.stonetop-improvement-builder-preview {
+	padding: 10px;
+	border: 1px dashed rgba(0, 0, 0, 0.22);
+	border-radius: var(--st-radius-sm, 4px);
+	background: rgba(0, 0, 0, 0.02);
+}
+.stonetop-improvement-preview-card { cursor: default; }
+.stonetop-improvement-preview-card .steading-improvement-header { cursor: default; }
+.stonetop-improvement-preview-card input[type="checkbox"] { cursor: default; }
+.stonetop-improvement-preview-grants {
+	margin: 8px 0 0;
+	padding-top: 6px;
+	border-top: 1px dashed rgba(0, 0, 0, 0.15);
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+}
+.stonetop-improvement-preview-grants.is-none { font-style: italic; }
+.stonetop-improvement-preview-empty {
+	margin: 0;
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	color: var(--color-text-dark-secondary);
+}
+
 .stonetop-love-letter-read-dialog {
 	--tc-paper: #f6f1e6;
 	--tc-paper-hi: #fbf7ee;
@@ -17649,7 +17752,7 @@ a.steading-player-open:hover {
 	border: 1px solid rgba(0,0,0,0.18);
 	border-radius: var(--st-radius-sm);
 	background: rgba(255,255,255,0.5);
-	color: #8a3a3a;
+	color: var(--st-text-secondary);
 	cursor: pointer;
 }
 
@@ -17692,6 +17795,11 @@ a.steading-player-open:hover {
 .stonetop-prep-add-btn:hover { background: hsl(210 10% 92%); }
 
 /* Drop the leading "+" a pixel so it sits on the button's centre line.
+/* The two controls an ADDED improvement carries in its header, edit-mode only. Same
+   chrome, so they read as a pair; only the ink differs, since one of them is the
+   destructive half. Declared together and the destructive colours after, so the shared
+   rule cannot win the tie (see the BEM ordering note). */
+.steading-improvement-edit,
    `align-items: center` above already centres the <i>'s BOX exactly, but Font
    Awesome 7's vertical metrics are lopsided (it reports far more ascent than
    descent), so the glyph paints flush against the top of that box and all the
@@ -17704,6 +17812,15 @@ a.steading-player-open:hover {
 .stonetop-prep-add-btn > i {
 	position: relative;
 	top: 1px;
+.steading-improvement-edit:hover {
+	background: var(--st-text-secondary);
+	color: var(--st-page, #fff);
+}
+
+.steading-improvement-remove {
+	color: #8a3a3a;
+}
+
 }
 
 /* Drop target highlight while a Stonetop card is dragged over a tab that accepts one.

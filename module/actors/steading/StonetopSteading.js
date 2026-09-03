@@ -9,8 +9,10 @@ import {
 	GRANT_STAT_PATHS,
 	statGrantLine,
 	alternativeSectionFlags,
+	flatRequirementItems,
 	normalizeImprovementGrants,
 	normalizeImprovementSections,
+	remapRequirementTicks,
 	sectionRequiredCount,
 } from "../../utils/improvement-def.js";
 import {readCurrentSeason, seasonStampKey, seasonStampParts} from "../../seasons/current-season.js";
@@ -828,7 +830,7 @@ export class StonetopSteading {
 
 		const slug = this._customImprovementSlug(name);
 		const existing = this._flags.customImprovements ?? [];
-		if (BUILTIN_IMPROVEMENT_LABELS.has(name.toLowerCase()) || existing.some(d => d.slug === slug)) {
+		if (this.improvementNameTaken(name)) {
 			return { ok: false, reason: "duplicate", slug, label: name };
 		}
 
@@ -847,10 +849,43 @@ export class StonetopSteading {
 		return { ok: true, slug, label: name };
 	}
 
+	/**
+	 * The improvements added to this steading by hand or by a dropped card, in the same
+	 * definition shape as the book's own. Read by the builder dialog, which offers them
+	 * alongside IMPROVEMENT_DEFINITIONS as something to start a new one from.
+	 */
+	get customImprovements() {
+		return this._flags.customImprovements ?? [];
+	}
+
+	/**
+	 * Whether this steading already has an improvement by that name: one of the book's, or
+	 * one already added. The ONE rule for it, because two callers ask the same question and
+	 * must not disagree — addCustomImprovement, which refuses the write, and the builder's
+	 * "Start from", which offers a free name up front rather than letting the author fill in
+	 * a whole copy of Palisade and only then be told the steading has a Palisade.
+	 *
+	 * Names, not slugs: a custom slug is minted `custom-…`, so it can never collide with a
+	 * built-in's, and what is being prevented here is two cards on one sheet reading alike.
+	 *
+	 * @param {string} name
+	 * @param {{except?: string}} [opts] a custom slug that is allowed to hold the name, for
+	 *   an EDIT: an improvement keeping its own name is not clashing with itself. Matched on
+	 *   slug rather than on label, so a rename that lands on the same slug ("Roadbuilding!"
+	 *   to "Roadbuilding") is correctly seen as this improvement keeping its place.
+	 */
+	improvementNameTaken(name, { except = null } = {}) {
+		const trimmed = String(name ?? "").trim();
+		if (!trimmed) return false;
+		const slug = this._customImprovementSlug(trimmed);
+		return BUILTIN_IMPROVEMENT_LABELS.has(trimmed.toLowerCase())
+			|| this.customImprovements.some(d => d.slug !== except && d.slug === slug);
+	}
+
 	/** Resolve an improvement definition by slug — built-in first, then custom. */
 	improvementDef(slug) {
 		return IMPROVEMENT_DEFINITIONS.find(d => d.slug === slug)
-			?? (this._flags.customImprovements ?? []).find(d => d.slug === slug)
+			?? this.customImprovements.find(d => d.slug === slug)
 			?? null;
 	}
 
@@ -868,15 +903,111 @@ export class StonetopSteading {
 		return this._flags.improvements?.[slug]?.r ?? [];
 	}
 
-	/** Remove a custom improvement and clear its tracking state. */
+	/**
+	 * Rewrite an improvement already on this steading, in place.
+	 *
+	 * The alternative was copy, correct, remove the original, which lost every ticked step and
+	 * left a window where the steading held two of the thing.
+	 *
+	 * Two things are deliberately kept rather than rebuilt:
+	 *
+	 *   the SLUG, even across a rename. It is an id, not a name: the ticked steps, the record
+	 *     of what completing it applied, and the season-effects rules that turn on which box
+	 *     was ticked are all keyed by it, and none of them survive being re-keyed.
+	 *   the APPLIED record, even when the grants are edited. It says what completing this
+	 *     improvement DID, not what the definition now says it would do, and un-completing has
+	 *     to reverse the former. Editing grants on a completed improvement therefore does not
+	 *     retroactively move stats; the caller is told so it can say as much.
+	 *
+	 * The ticked steps are carried across by TEXT (remapRequirementTicks), because `r` is a
+	 * flat positional array and an inserted step would otherwise slide every tick onto the
+	 * wrong requirement.
+	 *
+	 * @returns {{ok: false, reason: string, label?: string}
+	 *   | {ok: true, slug: string, label: string, structureChanged: boolean,
+	 *      grantsChanged: boolean, completed: boolean}}
+	 */
+	async updateCustomImprovement(slug, def) {
+		const existing = this.customImprovements;
+		const current = existing.find(d => d.slug === slug);
+		if (!current) return { ok: false, reason: "missing" };
+
+		const name = String(def?.name ?? "").trim();
+		if (!name) return { ok: false, reason: "empty" };
+		if (this.improvementNameTaken(name, { except: slug })) {
+			return { ok: false, reason: "duplicate", label: name };
+		}
+
+		const sections = normalizeImprovementSections(def.sections);
+		const grants = normalizeImprovementGrants(def.grants);
+		const oldItems = flatRequirementItems(current);
+		const newItems = flatRequirementItems({ sections });
+		const structureChanged = oldItems.length !== newItems.length
+			|| oldItems.some((item, i) => item !== newItems[i]);
+
+		const updated = {
+			...current,
+			label: name,
+			category: IMPROVEMENT_CATEGORY_KEYS.has(def.category) ? def.category : "",
+			flavor: String(def.flavor ?? ""),
+			sections,
+			effect: String(def.effect ?? ""),
+			grants,
+		};
+		const flagUpdates = { customImprovements: existing.map(d => (d.slug === slug ? updated : d)) };
+
+		const entry = this._flags.improvements?.[slug];
+		if (structureChanged && entry) {
+			const improvements = foundry.utils.deepClone(this._flags.improvements ?? {});
+			improvements[slug] = { ...entry, r: remapRequirementTicks(oldItems, newItems, entry.r ?? []) };
+			flagUpdates.improvements = improvements;
+		}
+		await this.setFlags(flagUpdates);
+
+		return {
+			ok: true,
+			slug,
+			label: name,
+			structureChanged,
+			grantsChanged: JSON.stringify(current.grants ?? null) !== JSON.stringify(grants),
+			completed: !!entry?.completed,
+		};
+	}
+
+	/**
+	 * Remove a custom improvement, giving back anything completing it applied.
+	 *
+	 * That second half used to be missing, and it was a one-way leak: a completed improvement's
+	 * grants are recorded on `improvements[slug].applied` so un-completing can reverse them
+	 * exactly, and this method deleted that record without reversing it. Removing a completed
+	 * homebrew improvement therefore left its +1 Fortunes on the steading, and its name on the
+	 * Fortifications list, with nothing on the sheet left to explain either and no way to take
+	 * them back. Reachable from one unconfirmed click on the card's trash button.
+	 *
+	 * The reversal goes through setImprovementCompleted rather than being done here, for two
+	 * reasons: it owns that arithmetic (including the back-fill for improvements completed
+	 * before the grant engine existed), and its targeted dotted-key write is a flag MERGE,
+	 * which cannot drop `improvements[slug]`. Dropping a key needs the whole-object flag
+	 * replacement below (see applyChanges), so these stay two writes rather than one.
+	 *
+	 * @returns {false|{label: string, reverted: string[]}} false when there was no such
+	 *   improvement; otherwise its label and a description of what was given back.
+	 */
 	async removeCustomImprovement(slug) {
-		const existing = this._flags.customImprovements ?? [];
-		const next = existing.filter(d => d.slug !== slug);
-		if (next.length === existing.length) return false;
+		const existing = this.customImprovements;
+		const def = existing.find(d => d.slug === slug);
+		if (!def) return false;
+
+		const reverted = this.improvementCompleted(slug)
+			? (await this.setImprovementCompleted(slug, false))?.summary ?? []
+			: [];
+
+		// Re-read: the await above rewrote the flags this is filtering.
+		const next = this.customImprovements.filter(d => d.slug !== slug);
 		const improvements = { ...(this._flags.improvements ?? {}) };
 		delete improvements[slug];
 		await this.setFlags({ customImprovements: next, improvements });
-		return true;
+		return { label: def.label ?? slug, reverted };
 	}
 
 	/**

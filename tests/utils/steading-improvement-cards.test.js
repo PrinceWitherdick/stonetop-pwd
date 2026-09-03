@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { describeLocal, loadLocal } from "../local-only.js";
 import { readImprovementCard, renderImprovementCardHtml, STEADING_IMPROVEMENT_DRAG_TYPE } from "../../module/journal/steading-improvement-cards.js";
+import { buildImprovementDef } from "../../module/utils/improvement-def.js";
 
 // sectionHtml / renderSteadingImprovementCard come from the local-only generator; the
 // readImprovementCard suite below tests the shipped module and runs everywhere.
@@ -14,8 +15,14 @@ function payloadFrom(html) {
 	const m = html.match(/data-steading-improvement="([^"]*)"/);
 	if (!m) return null;
 	const json = m[1]
-		.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+		.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+		.replace(/&#x27;/g, "'").replace(/&amp;/g, "&");
 	return JSON.parse(json);
+}
+
+/** The visible half of a card, with the payload attribute (escaped JSON) taken off. */
+function bodyOf(html) {
+	return html.replace(/ data-steading-improvement="[^"]*"/, "");
 }
 
 const DEF = {
@@ -107,5 +114,26 @@ describe("renderImprovementCardHtml", () => {
 
 	it("emits an empty category when none was chosen", () => {
 		expect(payloadFrom(renderImprovementCardHtml(DEF)).category).toBe("");
+	});
+
+	// A definition's heading, items and effect are already HTML (buildImprovementDef escaped
+	// them and resolved their *asterisks*), and both readers paint them unescaped. Escaping
+	// them a second time here put the tag source itself on the card.
+	it("paints the already-marked-up fields rather than escaping them again", () => {
+		const html = renderImprovementCardHtml(buildImprovementDef(DEF));
+		expect(html).toContain(`<li class="check-bullet"><em>Pull Together</em> a crew</li>`);
+		// The payload attribute legitimately carries `&lt;em&gt;` (the whole JSON is escaped
+		// for the double-quoted attribute and decoded on read), so only the visible half of
+		// the card can say that no tag source leaked into the prose.
+		expect(bodyOf(html)).not.toContain("&lt;em&gt;");
+	});
+
+	// `name` and `flavor` ARE plain text, and the steading tab escapes them itself on the way
+	// out. Escaping them into the payload as well is what used to leave a literal `&#x27;` in
+	// the flavor line of every dropped card.
+	it("escapes the plain fields for display only, never into the payload", () => {
+		const html = renderImprovementCardHtml({ ...DEF, flavor: "It's a long walk." });
+		expect(html).toContain("It&#x27;s a long walk.");
+		expect(payloadFrom(html).flavor).toBe("It's a long walk.");
 	});
 });

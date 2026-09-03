@@ -45,8 +45,16 @@
 						<p class="steading-improvement-flavor">{{flavor}}</p>
 					</div>
 					{{#if (and custom @root.stonetop.edit.improvements)}}
+					{{!-- Edit in place, keeping the ticked steps: the alternative was copying it,
+					      correcting the copy and removing the original, which lost them. --}}
+					<button type="button" class="steading-improvement-edit" data-slug="{{slug}}"
+					        data-tooltip="Edit this added improvement" data-tooltip-direction="UP"
+					        aria-label="Edit {{label}}">
+						<i class="fas fa-pen"></i>
+					</button>
 					<button type="button" class="steading-improvement-remove" data-slug="{{slug}}"
-					        data-tooltip="Remove this added improvement" data-tooltip-direction="UP">
+					        data-tooltip="Remove this added improvement" data-tooltip-direction="UP"
+					        aria-label="Remove {{label}}">
 						<i class="fas fa-trash"></i>
 					</button>
 					{{/if}}
