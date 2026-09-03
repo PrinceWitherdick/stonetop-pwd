@@ -99,6 +99,24 @@ describe("steading stat band", () => {
 		expect(STATS_BAR_HBS).toContain('data-steading-stat="debilities"');
 	});
 
+	// Defenses used to label its rungs feeble/mediocre/strong/formidable/legendary, off a
+	// `steadingDefenseTrack` helper that existed for nothing else. The first-printing errata
+	// struck those tags from Book I p.154 and the Steading playbook p.2, so the rung is now
+	// the same plain `steadingTrack` as Fortunes, Population and Prosperity. Guarded here
+	// because the helper is the kind of thing a later change would reach for by name and
+	// quietly reinstate — and because the removal is only half done if the helper survives
+	// the template. (stripComments first: the markup's own note names the tags it dropped.)
+	it("gives Defenses the same plain track as every other stat, tags and all removed", () => {
+		const markup = stripComments(STATS_BAR_HBS);
+		expect(markup).not.toContain("steadingDefenseTrack");
+		expect(markup).not.toContain("sublabel");
+		expect(markup).toContain("{{#each (steadingTrack stonetop.system.stats.defenses.value 0)}}");
+		for (const tag of ["feeble", "mediocre", "strong", "formidable", "legendary"])
+			expect(markup, tag).not.toContain(tag);
+		// And the helper itself is gone, not merely unused.
+		expect(read("stonetop.js")).not.toContain("steadingDefenseTrack");
+	});
+
 	// steading-stats-bar.hbs reaches up with `../stonetop.edit.*`, so a mount inside an
 	// {{#each}} or with a `this=` override renders the whole band permanently read-only —
 	// no error, just disabled controls.

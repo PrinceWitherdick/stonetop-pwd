@@ -259,16 +259,6 @@ Hooks.once("init", () => {
 		});
 	});
 
-	Handlebars.registerHelper("steadingDefenseTrack", (currentValue, defaultValue = 0) => {
-		const raw = currentValue?.value ?? currentValue;
-		const current = Number(raw ?? defaultValue);
-		const sublabels = ["feeble", "mediocre", "strong", "formidable", "legendary"];
-		return Array.from({ length: 5 }, (_, i) => {
-			const val = i - 1;
-			return { val, label: (val >= 0 ? "+" : "") + val, sublabel: sublabels[i], checked: val === current };
-		});
-	});
-
 	CONFIG.Actor.documentClass = createStonetopActorClass(CONFIG.Actor.documentClass);
 	CONFIG.Item.documentClass  = createStonetopItemClass(CONFIG.Item.documentClass);
 

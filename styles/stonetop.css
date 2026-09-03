@@ -16128,12 +16128,6 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: var(--st-text);
 }
 
-.steading-track-sublabel {
-	font-size: var(--st-fs-2xs);
-	color: var(--st-text-faint);
-	font-style: italic;
-}
-
 /* Surplus */
 
 .steading-surplus-block {
