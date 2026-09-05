@@ -44,8 +44,22 @@ export function createRelationshipMapEntrySheetClass(Base) {
 		 * still runs, so core's own bookkeeping (the document's `_sheet`, the apps registry) is
 		 * left tidy.
 		 */
-		async _render(_force, _options) {
-			openRelationshipMap(this.document);
+		async _render(_force, options = {}) {
+			// The options are forwarded WHOLE, not dropped, and two different things ride in them.
+			//
+			// The geometry, because utils/window-restore.js reopens a saved window by rendering
+			// `doc.sheet` at the position it was left in, and `doc.sheet` for a map is THIS — so a
+			// bouncer that ignored its options would put every restored board back in the middle of
+			// the screen at its default size.
+			//
+			// And `pageId`, which is core's own option and now names one of the map's boards. A map
+			// is several named pages (module/relmap/relmap-doc.js), each a JournalEntryPage, so
+			// every one of them has a row of its own under the entry in the Journal sidebar and in
+			// its search results. Clicking one has always sent `{pageId}` through here; what is new
+			// is that the board on the other side knows what to do with it. Forwarded rather than
+			// picked out by name, because the day core adds another of these is not a day this
+			// bouncer should have to be edited.
+			this._board = openRelationshipMap(this.document, options);
 			// Not awaited inside the render: closing an Application from inside its own render is
 			// how AppV1 gets left with a half-registered app. A task of its own lets this return
 			// first. Its failure is swallowed on purpose — the board is already open, and a window
@@ -53,6 +67,19 @@ export function createRelationshipMapEntrySheetClass(Base) {
 			Promise.resolve()
 				.then(() => this.close())
 				.catch(err => console.warn("Stonetop | relationship map bouncer could not close", err));
+		}
+
+		/**
+		 * Forwarded to the board, because the board is the only window there is.
+		 *
+		 * utils/window-restore.js minimizes a restored sheet immediately after rendering it. Here
+		 * that sheet painted nothing and is about to close, and the board it opened has not finished
+		 * its first render — and `Application#minimize` does nothing at all for a window that is not
+		 * on screen yet, silently. So the request is handed to the board, which holds it until it has
+		 * something to minimize.
+		 */
+		async minimize() {
+			return this._board?.openMinimized?.();
 		}
 	};
 }

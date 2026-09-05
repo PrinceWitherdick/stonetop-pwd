@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
-	RELMAP_DIR_DEFAULT, RELMAP_INKS, RELMAP_INK_DEFAULT, RELMAP_LABEL_MAX, RELMAP_VERSION,
+	RELMAP_DIR_DEFAULT, RELMAP_INKS, RELMAP_INK_DEFAULT, RELMAP_LABEL_MAX, RELMAP_ORIGIN_MAX,
+	RELMAP_VERSION,
 	addEdgePatch, addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, edgesBetween,
-	edgesTouching, emptyGraph, fanIndexes, isSafeId, nodePatch, normalizeGraph, relmapPath,
+	edgesTouching, emptyGraph, fanIndexes, isImportedEdge, isSafeId, nodePatch, normalizeGraph,
+	relmapPath, tidyPatch,
 } from "../../module/relmap/relmap-store.js";
+import { RELMAP_SHAPE_CLUSTERS, RELMAP_SHAPE_RING } from "../../module/utils/relmap-layout.js";
+import {
+	RELMAP_KIN_NONE, RELMAP_KIN_PARENT, RELMAP_KIN_UNSET,
+} from "../../module/utils/relmap-kin.js";
 
 // The map's data layer: the only place in the feature that writes a flag path string, and the
 // guard that stops an id from destroying the map it is stored in.
@@ -105,6 +111,15 @@ describe("the shape of a write", () => {
 		const patch = edgePatch("link1", { ink: "chartreuse", dir: "sideways" });
 		expect(patch[`${PREFIX}.edges.link1.ink`]).toBe(RELMAP_INK_DEFAULT);
 		expect(patch[`${PREFIX}.edges.link1.dir`]).toBe(RELMAP_DIR_DEFAULT);
+	});
+
+	// A family tie is a leaf like any other, so marking one is a write two people can make at once
+	// on two different lines, and a made-up one is refused the same way a made-up ink is.
+	it("writes a family tie as its own leaf, and refuses one it does not know", () => {
+		expect(edgePatch("link1", { kin: RELMAP_KIN_PARENT })).toEqual({
+			[`${PREFIX}.edges.link1.kin`]: RELMAP_KIN_PARENT,
+		});
+		expect(edgePatch("link1", { kin: "uncle" })[`${PREFIX}.edges.link1.kin`]).toBe(RELMAP_KIN_NONE);
 	});
 
 	it("writes a whole person when somebody is added", () => {
@@ -236,6 +251,29 @@ describe("reading a stored map back", () => {
 			expect(g.edges.e1.ink).toBe(ink);
 		}
 	});
+
+	// EVERY MAP WRITTEN BEFORE THE FAMILY TREE IS A MAP NOBODY HAS BEEN ASKED ABOUT, and that has
+	// to stay distinguishable from a map whose lines somebody has looked at and said "not family"
+	// to: both draw as nothing, but only the first is one "find family ties" may guess at. Absent
+	// therefore stays absent rather than being filled in with a default on the way through.
+	it("reads a line written before family ties existed as unanswered, not as not-family", () => {
+		const g = normalizeGraph({
+			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			edges: { e1: { a: "a", b: "b" } },
+		});
+		expect(g.edges.e1.kin).toBe(RELMAP_KIN_UNSET);
+	});
+
+	it("keeps a family tie it knows and reads anything else as an answered no", () => {
+		const read = kin => normalizeGraph({
+			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			edges: { e1: { a: "a", b: "b", kin } },
+		}).edges.e1.kin;
+		expect(read(RELMAP_KIN_PARENT)).toBe(RELMAP_KIN_PARENT);
+		// A tie a NEWER version wrote. Drawn as nothing here, but it is somebody's answer and the
+		// guess must not march in over it, so it does not read back as unanswered.
+		expect(read("half-sibling")).toBe(RELMAP_KIN_NONE);
+	});
 });
 
 describe("fanning a pair's links apart", () => {
@@ -271,5 +309,171 @@ describe("fanning a pair's links apart", () => {
 	it("has nothing to fan on an empty map", () => {
 		expect(fanIndexes(emptyGraph())).toEqual({});
 		expect(edgesBetween(emptyGraph(), "a", "b")).toEqual([]);
+	});
+});
+
+describe("re-seating the whole board at once", () => {
+	// ONE write for the lot. Several would be several broadcasts, and everybody else at the table
+	// would watch the portraits walk to their places one at a time with the lines whipping about.
+	it("writes every seat and the shape in a single patch of leaf paths", () => {
+		const patch = tidyPatch({ elena: { left: 10, top: 20 }, stefan: { left: 90, top: 80 } },
+			RELMAP_SHAPE_CLUSTERS);
+		expect(patch).toEqual({
+			[`${PREFIX}.shape`]: RELMAP_SHAPE_CLUSTERS,
+			[`${PREFIX}.nodes.elena.x`]: 10,
+			[`${PREFIX}.nodes.elena.y`]: 20,
+			[`${PREFIX}.nodes.stefan.x`]: 90,
+			[`${PREFIX}.nodes.stefan.y`]: 80,
+		});
+	});
+
+	// Leaves only, which is the whole concurrency story: two people re-arranging one board write
+	// paths that MERGE, rather than one of them replacing the `nodes` object the other just wrote.
+	it("names no branch, so a concurrent drag survives it", () => {
+		const patch = tidyPatch({ elena: { left: 1, top: 2 } }, RELMAP_SHAPE_RING);
+		for (const key of Object.keys(patch)) expect(key.startsWith(PREFIX)).toBe(true);
+		expect(Object.keys(patch)).not.toContain(`${PREFIX}.nodes`);
+	});
+
+	it("clamps a seat onto the board rather than trusting the layout", () => {
+		const patch = tidyPatch({ elena: { left: 900, top: -4 } }, RELMAP_SHAPE_RING);
+		expect(patch[`${PREFIX}.nodes.elena.x`]).toBe(100);
+		expect(patch[`${PREFIX}.nodes.elena.y`]).toBe(0);
+	});
+
+	// A person the layout had no seat for stays where they are. Written anyway, `clampPct` would
+	// be handed nothing and answer 50, which looks exactly like the layout choosing the middle.
+	it("leaves somebody with no seat alone, rather than moving them to the middle", () => {
+		const patch = tidyPatch({ elena: null, stefan: { left: 30, top: 40 } }, RELMAP_SHAPE_RING);
+		expect(Object.keys(patch)).not.toContain(`${PREFIX}.nodes.elena.x`);
+		expect(patch[`${PREFIX}.nodes.stefan.x`]).toBe(30);
+	});
+
+	it("refuses an id that could not have been written, and still records the shape", () => {
+		const patch = tidyPatch({ "Actor.7d2": { left: 5, top: 5 } }, RELMAP_SHAPE_RING);
+		expect(patch).toEqual({ [`${PREFIX}.shape`]: RELMAP_SHAPE_RING });
+	});
+});
+
+describe("the shape a board was last laid out in", () => {
+	it("comes back as it was stored", () => {
+		expect(normalizeGraph({ shape: RELMAP_SHAPE_CLUSTERS }).shape).toBe(RELMAP_SHAPE_CLUSTERS);
+	});
+
+	// A map made before the shapes existed IS a ring, so there is nothing to migrate: an absent
+	// shape reads as the thing every such board already is.
+	it("reads a map that predates the shapes as the ring", () => {
+		expect(normalizeGraph({ nodes: {} }).shape).toBe(RELMAP_SHAPE_RING);
+		expect(emptyGraph().shape).toBe(RELMAP_SHAPE_RING);
+	});
+
+	it("reads a shape it does not know as the ring rather than as nothing", () => {
+		expect(normalizeGraph({ shape: "spiral" }).shape).toBe(RELMAP_SHAPE_RING);
+	});
+});
+
+// ── Where a line came from ───────────────────────────────────────────────────
+//
+// One stamp, written by the ratings import and by nothing else, so that a reader can put those
+// lines away without touching the ones they drew themselves. What matters most here is the
+// DEFAULT: an unstamped line is a hand-drawn line, which is what every line on every map written
+// before this field existed is, and reading one of those as imported would hide somebody's own work
+// behind a checkbox they never ticked.
+
+describe("where a line came from", () => {
+	/** A graph with two people and whatever lines a test wants between them. */
+	const withEdges = edges => normalizeGraph({
+		nodes: {
+			elena: { name: "Elena", x: 20, y: 30 },
+			stefan: { name: "Stefan", x: 70, y: 30 },
+		},
+		edges,
+	});
+
+	it("reads an unstamped line as somebody's own hand", () => {
+		const read = withEdges({ link1: { a: "elena", b: "stefan" } });
+		expect(read.edges.link1.src).toBe("");
+		expect(isImportedEdge(read.edges.link1)).toBe(false);
+	});
+
+	it("keeps the import's stamp, and drops anything else somebody wrote there", () => {
+		const read = withEdges({
+			pulled: { a: "elena", b: "stefan", src: "hearts" },
+			invented: { a: "elena", b: "stefan", src: "whatever" },
+		});
+		expect(read.edges.pulled.src).toBe("hearts");
+		expect(isImportedEdge(read.edges.pulled)).toBe(true);
+		expect(read.edges.invented.src).toBe("");
+		expect(isImportedEdge(read.edges.invented)).toBe(false);
+	});
+
+	// Written in the same breath as the rest of the line, so a line drawn by hand today says so
+	// rather than merely failing to say otherwise.
+	it("writes an empty source on a line somebody draws", () => {
+		expect(addEdgePatch("e1", { a: "aa", b: "bb", label: "exes" })[`${PREFIX}.edges.e1.src`])
+			.toBe("");
+	});
+
+	it("writes the import's stamp when the import asks for it", () => {
+		expect(addEdgePatch("e1", { a: "aa", b: "bb", src: "hearts" })[`${PREFIX}.edges.e1.src`])
+			.toBe("hearts");
+	});
+
+	// The same guard the ink and the direction beside it carry: nothing but a known answer reaches a
+	// world flag, whoever is calling.
+	it("refuses to write a source it does not know", () => {
+		expect(edgePatch("e1", { src: "sockets" })[`${PREFIX}.edges.e1.src`]).toBe("");
+	});
+});
+
+// ── WHICH answer a seeded line came from ───────────────────────────────────────────────────────
+//
+// `src` says the party board drew it; `origin` says which answer. The board matches by that key, so
+// an answer is recognised wherever it lands in the list -- counting a list that reorders itself is
+// how a board came to draw a second copy of a line and drop the new answer entirely. Opaque here:
+// what a key is made of belongs to relmap/relmap-intros.js.
+
+describe("which answer a line was seeded from", () => {
+	const withEdges = edges => normalizeGraph({
+		nodes: {
+			elena: { name: "Elena", x: 20, y: 30 },
+			stefan: { name: "Stefan", x: 70, y: 30 },
+		},
+		edges,
+	});
+
+	// EVERY line on every board written before this existed, and every line a reader drew.
+	it("reads a line with no key as one that cannot be named", () => {
+		expect(withEdges({ link1: { a: "elena", b: "stefan" } }).edges.link1.origin).toBe("");
+	});
+
+	it("carries the key back out again, whatever it is made of", () => {
+		const read = withEdges({
+			seeded: { a: "elena", b: "stefan", src: "intros", origin: "pim::step4::0" },
+		});
+		expect(read.edges.seeded.origin).toBe("pim::step4::0");
+	});
+
+	// A stored key is world data any owner could have written, so it is bounded on the way out like
+	// every other string here rather than trusted at whatever length it arrives.
+	it("shortens a key somebody stored at absurd length", () => {
+		const read = withEdges({
+			seeded: { a: "elena", b: "stefan", origin: "k".repeat(500) },
+		});
+		expect(read.edges.seeded.origin).toHaveLength(RELMAP_ORIGIN_MAX);
+	});
+
+	it("writes an empty key on a line somebody draws, and the seeder's key when it asks", () => {
+		expect(addEdgePatch("e1", { a: "aa", b: "bb", label: "exes" })[`${PREFIX}.edges.e1.origin`])
+			.toBe("");
+		expect(addEdgePatch("e1", { a: "aa", b: "bb", origin: "pim::step6::1" })[`${PREFIX}.edges.e1.origin`])
+			.toBe("pim::step6::1");
+	});
+
+	// The write the ADOPTION makes: one leaf on a line that already exists, so nothing else about
+	// it -- a caption the table rewrote, where it sits, who it joins -- is touched.
+	it("writes the key on its own, without disturbing the rest of the line", () => {
+		const patch = edgePatch("e1", { origin: "pim::step4::2" });
+		expect(Object.keys(patch)).toEqual([`${PREFIX}.edges.e1.origin`]);
 	});
 });

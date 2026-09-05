@@ -10,10 +10,11 @@
 // context / listeners / flush; there is nothing being typed here, so there is no third method.
 
 import { format, localize } from "../../utils/i18n.js";
-import { themedDialogClasses } from "../../utils/window-theme.js";
+import { promptForText } from "../../dialogs/content-picker.js";
 import { openRelationshipMap } from "../../dialogs/RelationshipMapWindow.js";
 import {
-	canCreateRelationshipMap, createRelationshipMap, listRelationshipMaps, relationshipMapSize,
+	canCreateRelationshipMap, createRelationshipMap, listRelationshipMaps,
+	relationshipMapPageCount, relationshipMapSize,
 } from "../../relmap/relmap-doc.js";
 
 /** Ask for a name, then make the map and open it. */
@@ -29,29 +30,18 @@ async function newMap(sheet) {
 /**
  * One text field in a dialog.
  *
- * DialogV2 rather than one of our own AppV1 windows, because that is what the rest of the system
- * reaches for when the whole question is one line (see dialogs/content-picker.js). The
- * `stonetop-themed` class is not optional: a DialogV2 is an ApplicationV2, which the parchment skin
- * excludes by selector, so without it this one window would come up in Foundry's default chrome.
+ * ⚠ THROUGH THE SHARED PROMPT, and that is not tidiness. This function used to build the window
+ * itself and set `className` on the element it handed DialogV2 as its content — which core refuses
+ * outright (`config.content element must have no attributes`), from inside the constructor, as an
+ * unhandled rejection. So this button was DEAD from the day it shipped: pressing "New map" did
+ * nothing at all, with the error only visible in the console. `promptForText` is the one place that
+ * knows the rule; see dialogs/content-picker.js.
  */
 async function promptForName() {
-	const content = document.createElement("div");
-	const field = document.createElement("input");
-	field.type = "text";
-	field.name = "name";
-	field.placeholder = localize("stonetop.relmap.maps.newPlaceholder");
-	content.className = "stonetop";
-	content.appendChild(field);
-	return foundry.applications.api.DialogV2.prompt({
-		classes: themedDialogClasses(),
-		window: { title: localize("stonetop.relmap.maps.newTitle") },
-		position: { width: 420 },
-		content,
-		ok: {
-			label: localize("stonetop.relmap.maps.newMap"),
-			callback: (event, button) => button.form.elements.name?.value?.trim() ?? "",
-		},
-		rejectClose: false,
+	return promptForText({
+		title: localize("stonetop.relmap.maps.newTitle"),
+		buttonLabel: localize("stonetop.relmap.maps.newMap"),
+		placeholder: localize("stonetop.relmap.maps.newPlaceholder"),
 	});
 }
 
@@ -69,11 +59,21 @@ export function withGmRelationshipMapsTab(Base) {
 		 * not. The button is hidden rather than disabled, and the note below the list says who can.
 		 */
 		_addGmRelationshipMapsContext(context) {
-			const maps = listRelationshipMaps().map(entry => ({
-				id: entry.id,
-				name: entry.name,
-				count: format("stonetop.relmap.maps.count", { count: relationshipMapSize(entry) }),
-			}));
+			const maps = listRelationshipMaps().map(entry => {
+				// HOW MANY BOARDS, said only where there is more than one. A map is several named
+				// pages now, and "3 pages" is the thing a GM scanning this list wants to know
+				// about the one that has them; putting "1 page" beside every other row would bury
+				// that under a column of noise. The people count stays what it always was: how
+				// many DIFFERENT people are on the map, counted once each however many pages they
+				// stand on (see `relationshipMapSize`).
+				const pages = relationshipMapPageCount(entry);
+				return {
+					id: entry.id,
+					name: entry.name,
+					count: format("stonetop.relmap.maps.count", { count: relationshipMapSize(entry) }),
+					pages: pages > 1 ? format("stonetop.relmap.maps.pageCount", { count: pages }) : "",
+				};
+			});
 			context.stonetop ??= {};
 			context.stonetop.relmaps = {
 				maps,

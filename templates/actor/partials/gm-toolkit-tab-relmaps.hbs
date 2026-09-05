@@ -19,6 +19,11 @@
 				<button type="button" class="stonetop-gm-relmap-open" data-relmap-open-id="{{id}}">
 					<i class="fas fa-circle-nodes" aria-hidden="true"></i>
 					<span class="stonetop-gm-relmap-name">{{name}}</span>
+					{{!-- Only on a map that HAS more than one board. The window builds this string
+					      or leaves it empty, so the decision is made once, where the count is. --}}
+					{{#if pages}}
+					<span class="stonetop-gm-relmap-pages">{{pages}}</span>
+					{{/if}}
 					<span class="stonetop-gm-relmap-count">{{count}}</span>
 				</button>
 			</li>
