@@ -18,11 +18,22 @@ import { localize } from "../utils/i18n.js";
 // nothing anyone else can see.
 //
 // WHERE IT SITS, and why that needs no positioning maths. Foundry's `#ui-right` is a flex ROW
-// holding `#ui-right-column-1` (the chat notification stack) and then the sidebar itself. Slot a
-// button in between the two and it lands hard against the sidebar's left edge, top-aligned — and
-// because it is a flex SIBLING rather than something positioned against a measured edge, it
-// tracks the sidebar for free: collapse the sidebar and core shrinks that element, and the
-// button slides right along with it, transition and all. Nothing here listens for a collapse.
+// holding `#ui-right-column-1` (the chat notification stack) and then the sidebar itself. The
+// button goes INSIDE that first column, at the top, right-aligned: the column is exactly as wide
+// as the sidebar (`#chat-notifications` is `width: var(--sidebar-width)`), so its right edge is
+// always one `#ui-right` gap from the sidebar's left edge, and a right-aligned child lands hard
+// against that edge, top-aligned, with no measuring. It tracks the sidebar's collapse for free,
+// because the whole row is right-anchored and shrink-to-fit.
+//
+// NOT a third flex item between the column and the sidebar, which is where this started. That
+// row is shrink-to-fit, so a third item makes it 48px wider and shoves the column 48px LEFT —
+// and core pins the chat roll-mode buttons to `calc(100% + 16px)` of the notification stack, so
+// they travel with the column and stop being flush against the sidebar. Riding inside the column
+// costs the row no width at all: the button is narrower than the column already is.
+//
+// `#chat-notifications` carries `order: 99`, so it stays below the button whatever order the two
+// are appended in — and ChatLog re-appends its stack on a re-render, which would otherwise put
+// it first.
 //
 // WHAT IT WRITES. `mapPinNamesLocal`, a client setting keyed by scene id — see the note on its
 // registration. It flips the EFFECTIVE answer rather than a stored boolean, so one press always
@@ -116,7 +127,12 @@ function _mount() {
 	// `[aria-pressed="true"]` state we are already setting. A bespoke parchment button would have
 	// had to reinvent all of that and would still have read as a foreign object beside the
 	// sidebar. Our stylesheet only re-points its active colour to the system slate.
-	button.className = "ui-control stonetop-map-pin-names";
+	// `faded-ui` is core's own idle translucency — 40% at rest, full on hover, with core's delay
+	// and duration. The sidebar's tab rail wears it (`templates/sidebar/tabs.hbs` opens with
+	// `<nav class="tabs faded-ui">`), as do the scene controls, the hotbar and the chat stack this
+	// button now sits in, so without it the eye is the one opaque square on that side of the
+	// screen.
+	button.className = "ui-control faded-ui stonetop-map-pin-names";
 	// The icon on a CHILD `<i>`, never on the button itself. Font Awesome draws the glyph from an
 	// inherited `::before`, and this system sets `font-family` on `button` — put the fa class on
 	// the button and the glyph renders as a raw codepoint box.
@@ -126,11 +142,12 @@ function _mount() {
 	button.addEventListener("click", _onClick);
 	button.addEventListener("contextmenu", _onClearOverride);
 
-	// BEFORE the sidebar, which is what puts it against the sidebar's left edge and makes it
-	// follow the collapse. If core ever moves the sidebar out of this row, appending still leaves
+	// The chat column when core has drawn it; failing that, before the sidebar, which still puts
 	// a usable button at the right of the interface rather than none at all.
+	const column = document.getElementById("ui-right-column-1");
 	const sidebar = document.getElementById("sidebar");
-	if (sidebar?.parentElement === right) right.insertBefore(button, sidebar);
+	if (column?.parentElement === right) column.prepend(button);
+	else if (sidebar?.parentElement === right) right.insertBefore(button, sidebar);
 	else right.append(button);
 	return button;
 }

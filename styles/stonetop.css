@@ -32229,29 +32229,36 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* --- map pin name toggle (the eye beside the sidebar) ---------------------- */
-/* Mounted by module/hooks/MapPinNameToggle.js as a flex SIBLING between core's chat
-   notification column and #sidebar, inside #ui-right. That placement is the whole
-   layout: the button sits against the sidebar's left edge and slides with it when the
-   sidebar collapses, with no measuring and nothing listening for the collapse.
+/* Mounted by module/hooks/MapPinNameToggle.js at the TOP of core's chat column,
+   #ui-right-column-1, which is the flex item immediately left of #sidebar. That
+   placement is the whole layout: the column is as wide as the sidebar, so a
+   right-aligned child of it sits one #ui-right gap from the sidebar's left edge and
+   slides with it when the sidebar collapses, with no measuring and nothing listening.
 
-   It wears core's own `ui-control` class, so the square, the palettes in both themes,
-   the hover and the [aria-pressed] state all come from core. Everything below is either
-   placement (which core cannot know) or the one colour decision that is ours. */
+   Inside the column rather than beside it because #ui-right is shrink-to-fit: a third
+   flex item there widens the row and drags the column (and with it the chat roll-mode
+   buttons core pins to its right edge) 48px away from the sidebar.
+
+   It wears core's own `ui-control` and `faded-ui` classes, so the square, the palettes
+   in both themes, the hover, the [aria-pressed] state and the idle translucency all come
+   from core. Everything below is either placement (which core cannot know) or the one
+   colour decision that is ours. */
 #stonetop-map-pin-names {
-	/* `flex: none` guards the button against #ui-right's row trying to size it, and
-	   flex-start puts it at the top of the interface rather than centred down the side. */
+	/* The column is a flexCOL, so `flex: none` keeps the button its own 32px tall rather than a
+	   share of the column's height, and flex-end is its RIGHT edge, not its bottom. */
 	flex: none;
-	align-self: flex-start;
-	/* 16px down puts the button's top edge level with the first sidebar tab icon: #sidebar sits
-	   at the top of this row and #sidebar-tabs insets its icons by `padding: 16px 16px 16px 0`.
+	align-self: flex-end;
+	/* No top margin: #ui-right-column-1 already insets its children by `padding: 16px 0 14px`,
+	   which is the same 16px #sidebar-tabs insets its icons by (`padding: 16px 16px 16px 0`), so
+	   the button's top edge lands level with the first sidebar tab icon on its own.
 
 	   The right margin is NEGATIVE, and that is not a fudge. #ui-right sets `gap: 16px` between
-	   its children and a flex gap has no per-item override, so 16px is the floor a margin can
-	   only add to. Pulling 8px back leaves 8px of clear space, which is exactly the gap the
-	   sidebar's own tab icons keep between themselves (#sidebar-tabs > menu { gap: 8px }) — and
-	   because that rail has NO left padding, its left edge is the icon column itself, so this
+	   the column and the sidebar and a flex gap has no per-item override, so 16px is the floor a
+	   margin can only add to. Pulling 8px back leaves 8px of clear space, which is exactly the gap
+	   the sidebar's own tab icons keep between themselves (#sidebar-tabs > menu { gap: 8px }) —
+	   and because that rail has NO left padding, its left edge is the icon column itself, so this
 	   margin is the whole of what a reader sees between the eye and the first icon. */
-	margin: 16px -8px 0 0;
+	margin: 0 -8px 0 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
