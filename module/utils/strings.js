@@ -44,6 +44,33 @@ export function escapeRegExp(v) {
 	return String(v ?? "").replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
 }
 
+/**
+ * A pattern that matches `word` ONLY as a whole word, under Unicode letter boundaries.
+ *
+ * WHOLE WORDS ONLY, and this is not fussiness. "smothered her at the mill" contains "mother", and a
+ * substring match would read that line as a birth; "Pim" matches inside "Pimble", and a guess built
+ * on that is a line asserting something nobody said.
+ *
+ * ⚠ THE BOUNDARY IS `\p{L}` AND NOT `\b`, which is why this exists rather than a caller writing
+ * `\b…\b` around {@link escapeRegExp}. `\b` is defined on `\w`, which is ASCII, so it fires in the
+ * MIDDLE of any name or word with an accent in it — exactly the words a boundary rule is for.
+ *
+ * ⚠ AND THE ESCAPE IS NOT {@link escapeRegExp}. That one escapes `-` as well, so its output is safe
+ * inside a character class but a SyntaxError under the `u` flag this needs for `\p{L}` — see the
+ * warning on it. The set below is the same one minus the hyphen.
+ *
+ * The one whole-word matcher: relmap-kin.js guesses a family tie from a caption and relmap-intros.js
+ * finds who an introduction answer names, and the two agreeing about where a word ends is the whole
+ * of what keeps one of them from reading a name out of the middle of another.
+ *
+ * @param {string} word  matched literally; regex metacharacters in it are escaped.
+ * @param {string} [flags]  always includes `u`; pass "i" for a case-insensitive match.
+ */
+export function wholeWordPattern(word, flags = "") {
+	const literal = String(word ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return new RegExp(`(?<!\\p{L})${literal}(?!\\p{L})`, `${flags.replace("u", "")}u`);
+}
+
 // Join names for display: ["Astor","Halix"] → "Astor & Halix"; three or more use an
 // Oxford-free serial comma ("A, B & C"). Blanks are dropped, so a missing name can't leave a
 // stray separator behind.

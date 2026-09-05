@@ -87,6 +87,27 @@ export function enableAutoHeightVerticalResize() {
 		// gets core's untouched behaviour.
 		if (!_isStonetopWindow(this)) return baseSetPosition.call(this, position);
 
+		// A WINDOW THAT NO LONGER HAS A FRAME HAS NOTHING TO POSITION, and core does not check:
+		// `Application#setPosition` opens with `getComputedStyle(this.element[0])`, and on an
+		// application that has been closed `_element` is null, so `element[0]` is undefined and the
+		// call throws `parameter 1 is not of type 'Element'`.
+		//
+		// WHICH IS REACHABLE BY ORDINARY USE, because the window-frame `Draggable` binds its
+		// mousemove to the WINDOW and calls `app.setPosition` on every one until the mouseup that
+		// unbinds it. Anything that closes the application mid-gesture -- Escape, a sheet closing
+		// under the pointer, another client deleting the document being looked at -- leaves that
+		// listener running against an app whose element has gone, and then every mouse movement
+		// throws until the button comes up. Nothing is broken by it and nothing is fixed by it
+		// either: there is no box on screen to move.
+		//
+		// Guarded HERE and not for every V1 window, because this file promises above that a foreign
+		// window keeps core's exact `setPosition` and that promise is worth more than tidying up
+		// somebody else's console.
+		//
+		// `nodeType` rather than `instanceof HTMLElement`, which is the same question asked in a way
+		// that does not need a DOM global to be in scope to answer it.
+		if (this.element?.[0]?.nodeType !== 1) return this.position;
+
 		const isAutoHeight = this.options?.height === "auto";
 		// The resize drag's tell: a finite numeric height with no left/top (Draggable
 		// passes only { width?, height? }); internal reflows always carry left/top.

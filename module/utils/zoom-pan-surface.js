@@ -56,6 +56,8 @@ export class ZoomPanSurface {
 		this._viewH = 0;
 
 		this._pan = null;
+		// The frame a pending pan is waiting on, so many pointer moves collapse into one paint.
+		this._frameId = 0;
 		this._observer = null;
 		this._bound = null;
 		// Whether the board's fixed width/height/origin have been written. See `_sizeContent`.
@@ -95,6 +97,10 @@ export class ZoomPanSurface {
 	destroy() {
 		this._observer?.disconnect();
 		this._observer = null;
+		if (this._frameId) {
+			globalThis.cancelAnimationFrame?.(this._frameId);
+			this._frameId = 0;
+		}
 		if (this._view && this._bound) {
 			for (const [type, handler] of this._bound) this._view.removeEventListener(type, handler);
 		}
@@ -105,6 +111,27 @@ export class ZoomPanSurface {
 
 	get scale() { return this._scale; }
 	get offset() { return { ...this._offset }; }
+	/**
+	 * The board this surface is showing has become a different SIZE.
+	 *
+	 * Not a thing a picture ever does, which is why the size arrived in the constructor and is
+	 * otherwise treated as a constant. A DOM board can: the relationship map's sheet grows with the
+	 * number of people on it, so somebody else adding a portrait can change it under an open window.
+	 *
+	 * Only re-fits when the reader has not placed the board themselves. Somebody who has zoomed
+	 * into a corner to read it keeps their corner; re-fitting under them would throw away the very
+	 * thing they were looking at, which is the rule the whole live-update path is built on.
+	 */
+	setNaturalSize(width, height) {
+		const w = Number(width) || 0;
+		const h = Number(height) || 0;
+		if (!w || !h || (w === this._naturalWidth && h === this._naturalHeight)) return;
+		this._naturalWidth = w;
+		this._naturalHeight = h;
+		this._sized = false;
+		if (this._fitting) this.fit();
+		else this.apply();
+	}
 
 	/**
 	 * Follow the window as it is dragged bigger, rather than snapping once it is let go.
@@ -189,10 +216,11 @@ export class ZoomPanSurface {
 			x: clampPan({ offset: this._offset.x, painted: width, view: this._viewW }),
 			y: clampPan({ offset: this._offset.y, painted: height, view: this._viewH }),
 		};
-		// TRANSFORM ONLY. The other three are constants of the board this surface was handed, and a
-		// pan writes this path several times per painted frame — a 125Hz mouse delivers more moves
-		// than the browser paints — so re-setting a width that cannot have changed is three
-		// needless style invalidations on every one of them.
+		// TRANSFORM ONLY. The other three are constants of the board this surface was handed, so
+		// re-setting a width that cannot have changed is three needless style invalidations on every
+		// frame of a drag. A pan reaches this once per PAINTED frame rather than once per pointer
+		// event (see `_schedule`) — a 125Hz mouse delivers more moves than the browser paints, and
+		// each surplus one would cost the whole `onChange` chain behind this as well as the write.
 		if (!this._sized) this._sizeContent();
 		this._content.style.transform =
 			`translate(${this._offset.x}px, ${this._offset.y}px) scale(${this._scale})`;
@@ -290,7 +318,33 @@ export class ZoomPanSurface {
 		// resized afterwards still re-fits rather than being stuck where a stray click left it.
 		if (dx || dy) this._fitting = false;
 		this._offset = { x: this._pan.offsetX + dx, y: this._pan.offsetY + dy };
-		this.apply();
+		// ⚠ ONCE PER PAINTED FRAME, not once per pointer event. `apply` says it plainly: a 125Hz
+		// mouse delivers more moves than the browser paints, and every surplus one costs the whole
+		// `onChange` chain behind it as well as the transform -- on the relationship map that is a
+		// board query and a class sweep per event. The node drag beside this (utils/relmap-drag.js)
+		// coalesces the same way and for the same reason. Zoom and `fit` stay synchronous: they are
+		// one-shot, and a frame's delay on them would be felt.
+		this._schedule();
+	}
+
+	/**
+	 * Paint the pending offset on the next frame, and only once however many moves arrive first.
+	 *
+	 * Off the bare global, as utils/relmap-drag.js schedules its own coalesced paint: one convention
+	 * for the two things batching against the same board. A host with no `requestAnimationFrame`
+	 * paints synchronously rather than not at all.
+	 */
+	_schedule() {
+		if (this._frameId) return;
+		if (typeof globalThis.requestAnimationFrame !== "function") {
+			this.apply();
+			return;
+		}
+		this._frameId = globalThis.requestAnimationFrame(() => {
+			this._frameId = 0;
+			// The surface may have been torn down between the request and the frame.
+			if (this._bound) this.apply();
+		});
 	}
 
 	_onPanEnd(ev) {
@@ -298,6 +352,17 @@ export class ZoomPanSurface {
 		this._view.releasePointerCapture?.(ev.pointerId);
 		this._view.classList.remove("stonetop-zoom-pan--panning");
 		this._pan = null;
+		// The last move may still be waiting on a frame, and the pointer is gone: paint where it
+		// finished rather than leaving the board a few pixels behind where it was let go.
+		this._paintNow();
+	}
+
+	/** Drop any pending frame and paint immediately. */
+	_paintNow() {
+		if (!this._frameId) return;
+		globalThis.cancelAnimationFrame?.(this._frameId);
+		this._frameId = 0;
+		this.apply();
 	}
 
 	/** The gesture everyone tries first: out to the whole board, in to full size, under the cursor. */

@@ -41,6 +41,30 @@ export function dragTranslation({ dx = 0, dy = 0, scale = 1 } = {}) {
 }
 
 /**
+ * Where a portrait has been carried to, written for the stylesheet to fold into its own transform.
+ *
+ * TWO CUSTOM PROPERTIES AND NOT AN INLINE `transform`, and this is the whole reason the drop lands
+ * where the gesture said it would. A node is positioned by its CENTRE, which the stylesheet does
+ * with the `translate(-50%, -50%)` that the geometry trimming the lines is written against. An
+ * inline `transform` REPLACES that declaration rather than adding to it, so writing one un-centres
+ * the portrait for the length of the gesture: it jumps half its own width down and right the
+ * instant the threshold is crossed, rides that far off the lines still drawn to its true centre,
+ * and snaps back the moment the transform is dropped on release, which reads as the release
+ * teleporting the portrait onto the cursor. Two variables leave the centring where it is written,
+ * once, and cost the same one composited style write per frame.
+ */
+function writeTravel(el, x, y) {
+	el.style.setProperty?.("--relmap-drag-x", `${x}px`);
+	el.style.setProperty?.("--relmap-drag-y", `${y}px`);
+}
+
+/** No travel at all, so the node is painted from its own coordinates again. */
+function clearTravel(el) {
+	el.style.removeProperty?.("--relmap-drag-x");
+	el.style.removeProperty?.("--relmap-drag-y");
+}
+
+/**
  * Wire every pointer gesture on one rendered board.
  *
  * @param {HTMLElement} root      The window's root element.
@@ -61,14 +85,33 @@ export function dragTranslation({ dx = 0, dy = 0, scale = 1 } = {}) {
  * @param {Function} handlers.onOpen    `id => void` — a portrait clicked without dragging.
  * @param {Function} handlers.onEditEdge `id => void` — a label clicked.
  * @param {Function} handlers.onRemove  `id => void` — Delete pressed on a focused portrait.
- * @param {Function} handlers.canEdit   `() => boolean` — re-asked per gesture, because the lock
- *                                      can be turned while a board is open.
+ * @param {Function} handlers.canEdit   `() => boolean` — re-asked per gesture, because a map's
+ *                                      ownership can change while a board is open.
+ * @param {Function} handlers.canMove   `() => boolean` — whether a PORTRAIT may be picked up,
+ *                                      asked separately from `canEdit` and defaulting to it. The
+ *                                      narrow views work the portraits out for themselves and write
+ *                                      none of them, so on those boards a drag would have nowhere
+ *                                      to be remembered and would spring back; every other gesture
+ *                                      (open a sheet, open a line) still means what it always did.
+ *                                      Refused at the press, so the click a press becomes still
+ *                                      opens the sheet.
+ * @param {Function} handlers.canRemove `() => boolean` — whether Delete on a focused portrait may
+ *                                      take that person off the map. Its own question and not part
+ *                                      of `canEdit`: on a board that seats itself, Delete would be
+ *                                      the ONE writing gesture the keyboard still offered, and the
+ *                                      destructive one — a reader tabbing round a six-face view and
+ *                                      pressing it would rub that person and every line touching
+ *                                      them (including the ones the view is not drawing) off the
+ *                                      shared map. Defaults to `canEdit`, which is what a board the
+ *                                      reader can rearrange means.
  * @returns {Function} teardown.
  */
 export function wireRelmapDrag(root, {
 	surface, nodeAt, onMove, onNudge, onDragMove, onDragEnd, onLink, onLinkFrom, onOpen, onEditEdge,
 	onRemove,
 	canEdit = () => true,
+	canMove = canEdit,
+	canRemove = canEdit,
 } = {}) {
 	const board = root?.querySelector?.(".stonetop-relmap-board");
 	const view = root?.querySelector?.(".stonetop-relmap-view");
@@ -109,7 +152,7 @@ export function wireRelmapDrag(root, {
 		if (!finished) return null;
 		try { view.releasePointerCapture?.(finished.pointerId); } catch { /* already gone */ }
 		if (finished.el) {
-			finished.el.style.transform = "";
+			clearTravel(finished.el);
 			finished.el.classList.remove("is-dragging");
 		}
 		rubber.remove();
@@ -136,7 +179,7 @@ export function wireRelmapDrag(root, {
 			const { x, y } = dragTranslation({ dx: drag.dx, dy: drag.dy, scale: surface.scale });
 			// A transform, not left/top: it composites instead of re-laying out every node on the
 			// board on every frame of the drag.
-			drag.el.style.transform = `translate(${x}px, ${y}px)`;
+			writeTravel(drag.el, x, y);
 			// AND THE LINES COME WITH IT. Without this the portrait moves and every line attached
 			// to it stays pinned to the spot it was picked up from until the pointer is released,
 			// which reads as the map not having noticed the drag. Reported from the same travel
@@ -167,6 +210,10 @@ export function wireRelmapDrag(root, {
 		const handle = ev.target.closest?.("[data-relmap-handle]");
 		const node = ev.target.closest?.("[data-relmap-node]");
 		if (!handle && !node) return;
+		// A board that places its own portraits is not one they can be dragged about on. Returning
+		// here and not consuming the event is what keeps the press working as a CLICK: the sheet
+		// still opens, and the only thing missing is the drag that had nowhere to go.
+		if (!handle && !canMove()) return;
 
 		const id = handle ? handle.dataset.relmapHandle : node.dataset.relmapNode;
 		const spot = nodeAt?.(id);
@@ -237,9 +284,9 @@ export function wireRelmapDrag(root, {
 		// each, so the last one or two before the release may never have been processed.
 		const dropX = ev.clientX;
 		const dropY = ev.clientY;
-		// Asked BEFORE the teardown, because the teardown needs the answer: the lock can be turned
-		// while a drag is in the air, and a drop that is going to be refused has to put the lines
-		// back rather than leave them where the pointer stopped.
+		// Asked BEFORE the teardown, because the teardown needs the answer: the right to edit can
+		// be taken away while a drag is in the air, and a drop that is going to be refused has to
+		// put the lines back rather than leave them where the pointer stopped.
 		const commit = canEdit();
 		const finished = end(commit);
 		if (!finished || !commit) return;
@@ -301,22 +348,67 @@ export function wireRelmapDrag(root, {
 	// stopPropagation, not just preventDefault: core's KeyboardManager would otherwise pan the
 	// scene canvas behind this window on every arrow press.
 	view.addEventListener("keydown", ev => {
+		// A CAPTION IS NOT A REAL BUTTON ANY MORE, so Enter and Space have to be handed to it. It
+		// is an SVG `<text>` wearing `role="button"` and a `tabindex` — every caption on the board
+		// shares one SVG root, for reasons the board partial gives, and a hundred HTML buttons over
+		// the top of it were exactly what that merge got rid of. Everything else about it (the
+		// click, the tooltip, the accessible name) already worked without one.
+		if (ev.key === "Enter" || ev.key === " ") {
+			const words = ev.target.closest?.("[data-relmap-edge]");
+			if (words) {
+				ev.preventDefault();
+				ev.stopPropagation();
+				if (canEdit()) onEditEdge?.(words.dataset.relmapEdge);
+				return;
+			}
+		}
 		const face = ev.target.closest?.("[data-relmap-open]");
-		if (!face || !canEdit()) return;
+		// ⚠ THE BOARD CLAIMS THESE KEYS, NOT THE PORTRAIT. Anchoring on the face alone was a real
+		// hole: a portrait carries TWO tab stops — the face and, right beside it, the link handle,
+		// which is a SIBLING so `closest("[data-relmap-open]")` walks straight past it — and every
+		// caption is a third, an SVG `<text role="button" tabindex="0">` whose own branch above
+		// claims Enter and Space and nothing else. A reader tabbing this board therefore alternates
+		// between a stop that swallows Delete and one that does not, which is the worst possible
+		// shape for a key with the consequence below.
+		const mine = face ?? ev.target.closest?.("[data-relmap-edge], [data-relmap-handle]");
+		if (!mine) return;
+		const step = ev.shiftKey ? NUDGE_FINE : NUDGE_STEP;
+		const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[ev.key];
+		if (ev.key !== "Delete" && !move) return;
+
+		// ⚠ SWALLOWED FIRST, PERMISSION ASKED SECOND, and the order is the whole of it. Every
+		// `return` before this pair hands the key on to core's KeyboardManager, which binds keydown
+		// in the BUBBLE phase and never looks at `defaultPrevented` — so a refusal here is not "the
+		// board ignores that key", it is "the scene behind this window gets it". Delete is bound to
+		// deleting the selected placeables, with no confirmation: a GM with three tokens selected,
+		// focused anywhere on a board they may not rearrange, pressing Delete to mean "take this
+		// off" would lose three tokens off the scene. The arrows pan the canvas.
+		//
+		// (Core's `KeyboardManager#hasFocus` does not save us here: it counts a BUTTON only when it
+		// is inside a form, and this window is an AppV1 dialog with no form in its template, so the
+		// face and the handle both read as unfocused. An SVG `<text>` is not an HTMLElement at all.)
+		//
+		// The caption branch above already had this right. This one did not, and grew two more ways
+		// to be wrong the day `canMove` and `canRemove` arrived: the guards were written where the
+		// action is decided rather than where the event is claimed.
+		ev.preventDefault();
+		ev.stopPropagation();
+		// Claimed on behalf of the board, but a caption and a handle have nothing to do with a
+		// portrait's Delete or its nudge. They stop the key and do nothing with it.
+		if (!face) return;
+		if (!canEdit()) return;
 		const id = face.dataset.relmapOpen;
 
+		// Taking somebody off the map answers to its OWN question, not to `canEdit`. See
+		// `canRemove`: on a board that places its own portraits this would otherwise be the one
+		// writing gesture the keyboard still offered, and the destructive one.
 		if (ev.key === "Delete") {
-			ev.preventDefault();
-			ev.stopPropagation();
-			onRemove?.(id);
+			if (canRemove()) onRemove?.(id);
 			return;
 		}
 
-		const step = ev.shiftKey ? NUDGE_FINE : NUDGE_STEP;
-		const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[ev.key];
-		if (!move) return;
-		ev.preventDefault();
-		ev.stopPropagation();
+		// The arrow keys are the keyboard's drag, so they answer to the same question a drag does.
+		if (!canMove()) return;
 		const spot = nodeAt?.(id);
 		if (!spot) return;
 		(onNudge ?? onMove)?.(id, { x: spot.x + move[0], y: spot.y + move[1] });

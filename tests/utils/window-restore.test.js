@@ -12,6 +12,7 @@ let listeners;  // window event name -> callbacks
 
 let installWindowRestore;
 let restoreOpenWindows;
+let RELMAP_WINDOW_CLASS;
 
 function fire(hook, ...args) {
 	(hooks[hook] ?? []).forEach((fn) => fn(...args));
@@ -62,7 +63,8 @@ beforeEach(async () => {
 
 	// Fresh module instance per test — the live registry of open sheets is module state.
 	vi.resetModules();
-	({ installWindowRestore, restoreOpenWindows } = await import("../../module/utils/window-restore.js"));
+	({ installWindowRestore, restoreOpenWindows, RELMAP_WINDOW_CLASS } =
+		await import("../../module/utils/window-restore.js"));
 	installWindowRestore();
 });
 
@@ -160,5 +162,78 @@ describe("restoring the edit/lock mode", () => {
 		await restore();
 		expect(sheet._editMode).toBe(false);
 		expect(sheet.render).not.toHaveBeenCalled();
+	});
+});
+
+// The relationship map board is the one window tracked here that is not a DocumentSheet: a table
+// leaves it open all session, so it is worth restoring, and it exposes `document` for that. Its
+// hooks are named after its class, which is the join nothing else would notice breaking.
+describe("the relationship map board", () => {
+	it("is watched under the hook the board's own class name fires", async () => {
+		const { RelationshipMapWindow } =
+			await import("../../module/dialogs/RelationshipMapWindow.js");
+		expect(RelationshipMapWindow.name).toBe(RELMAP_WINDOW_CLASS);
+	});
+
+	it("is saved and reopened like any sheet over its entry", async () => {
+		const board = fakeSheet({ uuid: "JournalEntry.map1" });
+		// A board has no edit/lock mode of the kind the sheets carry; its own lock is per window.
+		delete board._editMode;
+		fire(`render${RELMAP_WINDOW_CLASS}`, board);
+		vi.advanceTimersByTime(500);
+		expect(saved("JournalEntry.map1")).toMatchObject({ left: 100, top: 50, width: 800, height: 600 });
+
+		// Reopened through `doc.sheet` — which for a map is the bouncer that opens the board.
+		settings.openWindowsState = { "JournalEntry.map1": { left: 10, top: 20, width: 900, height: 700 } };
+		await restoreOpenWindows();
+		await vi.runAllTimersAsync();
+		expect(board.render).toHaveBeenCalledWith(true, { left: 10, top: 20, width: 900, height: 700 });
+	});
+
+	it("drops the board from the snapshot once it is closed", () => {
+		const board = fakeSheet({ uuid: "JournalEntry.map2" });
+		fire(`render${RELMAP_WINDOW_CLASS}`, board);
+		vi.advanceTimersByTime(500);
+		fire(`close${RELMAP_WINDOW_CLASS}`, board);
+		vi.advanceTimersByTime(500);
+		expect(saved("JournalEntry.map2")).toBeUndefined();
+	});
+
+	// One map is several named boards, and which one a reader was on is as much a part of "where
+	// this window was" as its corner of the screen: a table leaves the board open all session, and
+	// it is open ON something. Asked for by name (`restorePageId`) because this is not a
+	// DocumentSheet and has no `_tabs` for the tab snapshot to find.
+	it("saves which of the map's pages was up", () => {
+		const board = fakeSheet({ uuid: "JournalEntry.map3" });
+		delete board._editMode;
+		board.restorePageId = "page7";
+		fire(`render${RELMAP_WINDOW_CLASS}`, board);
+		vi.advanceTimersByTime(500);
+		expect(saved("JournalEntry.map3").pageId).toBe("page7");
+	});
+
+	// ⚠ IT TRAVELS BACK IN THE SAME RENDER OPTIONS THE GEOMETRY DOES, which is not a shortcut:
+	// `pageId` is already core's own option for "open this entry at this page", and the map's
+	// bouncer sheet forwards the whole options object to the board. So the board is handed its page
+	// BEFORE its first render, rather than being switched to it afterwards, which the reader would
+	// see as the wrong board painting and then jumping.
+	it("hands the page back to the board in the render that reopens it", async () => {
+		const board = fakeSheet({ uuid: "JournalEntry.map4" });
+		settings.openWindowsState = {
+			"JournalEntry.map4": { left: 10, top: 20, width: 900, height: 700, pageId: "page7" },
+		};
+		await restoreOpenWindows();
+		await vi.runAllTimersAsync();
+		expect(board.render).toHaveBeenCalledWith(true,
+			{ left: 10, top: 20, width: 900, height: 700, pageId: "page7" });
+	});
+
+	// Every other window tracked here has no pages, and must not grow a stray option because one
+	// of them does.
+	it("saves no page for a window that has none", () => {
+		const sheet = fakeSheet({ uuid: "Actor.plain" });
+		fire("renderActorSheet", sheet);
+		vi.advanceTimersByTime(500);
+		expect(saved("Actor.plain")).not.toHaveProperty("pageId");
 	});
 });

@@ -21,10 +21,27 @@
 import { vi } from "vitest";
 import { matchesSelector } from "./dom.js";
 
+/**
+ * A `style` that answers `setProperty`, because CUSTOM PROPERTIES are how a drag moves a portrait.
+ *
+ * A plain object would swallow every write silently (optional-call syntax on a missing method is
+ * a no-op), and a test could then only assert that nothing was written wrong. Storing them under
+ * their own names lets one assert the two things that matter: that the travel is written, and that
+ * `transform` is left alone, since an inline transform would replace the centring the stylesheet
+ * puts every node's coordinates through.
+ */
+function styleBag() {
+	const style = {
+		setProperty(name, value) { style[name] = String(value); },
+		removeProperty(name) { delete style[name]; },
+	};
+	return style;
+}
+
 /** One element: a parent chain, classes, a dataset, a style object and the handlers on it. */
 export function boardEl({ cls = [], dataset = {}, parent = null } = {}) {
 	const node = {
-		classes: [...cls], dataset, children: [], parent, style: {}, handlers: {}, attrs: {},
+		classes: [...cls], dataset, children: [], parent, style: styleBag(), handlers: {}, attrs: {},
 		matches: sel => matchesSelector(node, sel),
 		setAttribute(k, v) { node.attrs[k] = String(v); },
 		getAttribute: k => node.attrs[k] ?? null,
@@ -98,7 +115,7 @@ export function walk(nodes, sel, out = []) {
  * The globals are installed here and taken back by `destroy`, so a file that forgets the teardown
  * cannot leak a `document` into the suites that run after it.
  */
-export function pointerBoard({ nodes = ["n1", "n2"] } = {}) {
+export function pointerBoard({ nodes = ["n1", "n2"], edges = ["e1"] } = {}) {
 	const frames = [];
 	const previous = {
 		document: globalThis.document,
@@ -121,17 +138,40 @@ export function pointerBoard({ nodes = ["n1", "n2"] } = {}) {
 	const view = boardEl({ cls: ["stonetop-relmap-view"], parent: root });
 	const board = boardEl({ cls: ["stonetop-relmap-board"], parent: view });
 
-	// A portrait is a node that is also the click target, with its link handle inside it — the
-	// nesting the board template prints, and the reason `closest` has to distinguish the two.
+	// A portrait EXACTLY AS THE BOARD PARTIAL PRINTS ONE: an outer node that carries the id and
+	// takes the drag, with TWO SEPARATE BUTTONS inside it — the face, which opens the sheet, and the
+	// link handle, which is its SIBLING and not its child.
+	//
+	// ⚠ THIS FAKE USED TO PUT `relmapOpen` ON THE NODE ITSELF, and that one shortcut hid a real
+	// defect for as long as it stood: `closest("[data-relmap-open]")` from the handle found the
+	// node, so every test agreed the handle was part of the face. In the shipped markup it walks
+	// past the handle to `.stonetop-relmap-node`, which carries no such attribute, and finds
+	// nothing — which is how Delete and the arrow keys came to leak past the board to the scene
+	// canvas from every second tab stop. A fake that is easier to press than the real thing is a
+	// fake that certifies handlers the real thing never reaches.
 	const portraits = {};
 	for (const id of nodes) {
-		const el = boardEl({ cls: ["stonetop-relmap-node"], dataset: { relmapNode: id, relmapOpen: id }, parent: board });
+		const el = boardEl({ cls: ["stonetop-relmap-node"], dataset: { relmapNode: id }, parent: board });
+		el.face = boardEl({ cls: ["stonetop-relmap-face"], dataset: { relmapOpen: id }, parent: el });
+		el.name = boardEl({ cls: ["stonetop-relmap-name"], parent: el });
 		el.handle = boardEl({ cls: ["stonetop-relmap-handle"], dataset: { relmapHandle: id }, parent: el });
 		portraits[id] = el;
 	}
 
+	// A caption, as the board template prints one: a group inside the shared caption layer, with the
+	// WORDS inside it. The words are the thing a reader aims at and focuses — there is no HTML
+	// button any more (a hundred of those over one svg is what the merge got rid of), so they wear
+	// `role` and `tabindex` themselves and relmap-drag has to hand them Enter and Space.
+	const labels = boardEl({ cls: ["stonetop-relmap-labels"], parent: board });
+	const captions = {};
+	for (const id of edges) {
+		const g = boardEl({ cls: ["stonetop-relmap-label"], dataset: { relmapEdge: id }, parent: labels });
+		g.words = boardEl({ cls: ["stonetop-relmap-label-text"], parent: g });
+		captions[id] = g;
+	}
+
 	return {
-		root, view, board, portraits,
+		root, view, board, portraits, captions,
 		/** Where `elementsFromPoint` will say the cursor is, topmost first. */
 		setHits(list) { hits = list; },
 		/** Run every frame queued so far, the way one paint would. */

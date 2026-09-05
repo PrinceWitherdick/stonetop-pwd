@@ -4,7 +4,7 @@
 // document sheets, persist a snapshot (geometry, active tab, edit/lock mode) to a
 // per-client setting, and re-render each one on ready from that snapshot.
 //
-// Scope is deliberately narrow: only actual document sheets (things resolvable by uuid
+// Scope is deliberately narrow: only windows over a document (things resolvable by uuid
 // and re-openable via `doc.sheet`). Transient dialogs — the level-up wizard, the
 // introductions walkthrough, pickers — are NOT tracked here: reopening a half-finished
 // wizard is worse than not, and the session-zero walkthroughs already have their own
@@ -25,11 +25,24 @@ const TOGGLE_SETTING = "restoreWindowsOnReload";
 // (`JournalSheet`) and v13+ (`JournalEntrySheet`) entry-sheet class names. Each render
 // hook fires for the whole sheet-class inheritance chain, so one entry per base class
 // catches every subclass.
+//
+// The relationship map board is the one window here that is not a DocumentSheet. It earns its
+// place: it is a window over a JournalEntry, it is opened from that entry's sidebar row like any
+// sheet, and a table leaves it open for a whole session. It is a StonetopDialog only because a
+// class cannot be both a registered sheet and a plain Application, so it exposes `document` and is
+// reopened through `doc.sheet` — the bouncer sheet, which forwards the geometry to the board
+// (journal/RelationshipMapEntrySheet.js).
+// Exported so the hook names can be checked against the class that fires them: AppV1 builds a
+// render hook out of `constructor.name`, so a rename of the board would stop it being restored
+// with no error anywhere (tests/utils/window-restore.test.js holds the two together).
+export const RELMAP_WINDOW_CLASS = "RelationshipMapWindow";
+
 const HOOK_PAIRS = [
 	["renderActorSheet",        "closeActorSheet"],
 	["renderItemSheet",         "closeItemSheet"],
 	["renderJournalSheet",        "closeJournalSheet"],
 	["renderJournalEntrySheet",   "closeJournalEntrySheet"],
+	[`render${RELMAP_WINDOW_CLASS}`, `close${RELMAP_WINDOW_CLASS}`],
 ];
 
 // Live registry of currently-open tracked sheets, keyed by document uuid → app. We read
@@ -90,6 +103,13 @@ function _snapshotPosition(app) {
 	// Store both states, not just `true`: a sheet the user deliberately LOCKED must reopen
 	// locked even when the "Open Sheets in Edit Mode" client setting would default it open.
 	if (_hasEditMode(app)) out.editMode = app._editMode;
+	// Which page of a multi-page window was up. The relationship map is the only window that
+	// answers this: one map is several named boards, each a JournalEntryPage, and which one a
+	// reader was on is as much a part of "where this window was" as its corner of the screen —
+	// a table leaves that board open all session, and it is open ON something. Asked by name
+	// rather than reached for, exactly as `document` is, because the board is not a
+	// DocumentSheet and has no `_tabs` for `_snapshotTabs` above to find.
+	if (typeof app?.restorePageId === "string") out.pageId = app.restorePageId;
 	return out;
 }
 
@@ -223,6 +243,14 @@ export async function restoreOpenWindows() {
 				if (Array.isArray(saved.tabs)) _pendingTabs.set(uuid, saved.tabs);
 				_applyEditMode(sheet, saved.editMode);
 				const geom = { left: pos.left, top: pos.top, width: pos.width, height: pos.height };
+				// The page a multi-page window was left on travels back in the SAME render
+				// options the geometry does. That is not a shortcut: `pageId` is already core's
+				// own option for "open this journal entry at this page", and the relationship
+				// map's bouncer sheet forwards the whole options object to the board it opens
+				// (journal/RelationshipMapEntrySheet.js), so the board is handed its page before
+				// its first render rather than being switched to it afterwards — which the
+				// reader would see as the wrong board painting and then jumping.
+				if (saved.pageId) geom.pageId = saved.pageId;
 				if (_isAppV2(sheet)) sheet.render({ force: true, position: geom });
 				else sheet.render(true, geom);
 				if (saved.minimized) sheet.minimize?.();
