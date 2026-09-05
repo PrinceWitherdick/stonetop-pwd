@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { playbookSlug, getPlayerCharacters, playbookIconPath, playbookTitle, characterFullName } from "../../module/utils/playbook-actors.js";
+import { playbookSlug, getPlayerCharacters, playbookIconPath, hasOwnRingArt, playbookTitle, characterFullName } from "../../module/utils/playbook-actors.js";
 import { WBH_HERO_FLAG } from "../../module/actors/character/WouldBeHeroAsterisk.js";
 
 // Shared "player character" helpers. The logic worth guarding is the slug lookup
@@ -38,6 +38,48 @@ describe("playbookIconPath", () => {
 
 	it("is server-root-relative (no leading slash) so it matches the stored avatar", () => {
 		expect(playbookIconPath("the-fox").startsWith("systems/")).toBe(true);
+	});
+});
+
+// Every badge is a woodcut inside a hand-drawn circle, so a surface that frames a face in a ring of
+// its own draws a second one a few pixels outside the first. The relationship map asks this and
+// leaves its rim off those portraits; what the test is guarding is the pair of edges the answer
+// turns on — the badges no playbook slug names, and the ringless marks sharing their folder.
+describe("hasOwnRingArt", () => {
+	it("knows the art playbookIconPath hands out", () => {
+		for (const slug of ["the-fox", "the-blessed", "the-would-be-hero"]) {
+			expect(hasOwnRingArt(playbookIconPath(slug))).toBe(true);
+		}
+	});
+
+	it("knows the badges no playbook slug names — the ghost, the revenant, the thrall", () => {
+		for (const file of ["ghost_icon.webp", "revenant_icon.webp", "thrall_icon.webp"]) {
+			expect(hasOwnRingArt(`systems/stonetop-pwd/assets/icons/playbooks/${file}`)).toBe(true);
+		}
+	});
+
+	it("knows the same file written with a leading slash, which is how it gets typed by hand", () => {
+		expect(hasOwnRingArt("/systems/stonetop-pwd/assets/icons/playbooks/the_heavy_icon.webp")).toBe(true);
+	});
+
+	it("says no to the ringless marks that share the badges' folder", () => {
+		for (const file of ["arrow_icon.svg", "blood-filled.svg", "diamond.svg"]) {
+			expect(hasOwnRingArt(`systems/stonetop-pwd/assets/icons/playbooks/${file}`)).toBe(false);
+		}
+	});
+
+	it("says no to a portrait of somebody's own, to the core silhouette, and to no picture at all", () => {
+		expect(hasOwnRingArt("worlds/stonetop/art/pim.webp")).toBe(false);
+		expect(hasOwnRingArt("icons/svg/mystery-man.svg")).toBe(false);
+		expect(hasOwnRingArt("")).toBe(false);
+		expect(hasOwnRingArt(null)).toBe(false);
+		expect(hasOwnRingArt(undefined)).toBe(false);
+	});
+
+	// The folder is matched from a slash or from the start of the string, so a path that merely
+	// ENDS in the badges' folder name is a different place and not our art.
+	it("is not fooled by a folder whose name merely ends in theirs", () => {
+		expect(hasOwnRingArt("worlds/x/notassets/icons/playbooks/the_fox_icon.webp")).toBe(false);
 	});
 });
 

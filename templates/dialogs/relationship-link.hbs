@@ -49,6 +49,26 @@
     {{/each}}
   </fieldset>
 
+  {{!-- WHAT FAMILY TIE IT IS, which is the one thing on this line the board reads rather than
+        simply draws: the family tree view is built out of these and out of nothing else.
+
+        THE OPTIONS NAME BOTH PEOPLE where the window knows them ("Ordga is Marrec's parent"),
+        rather than saying "the first person" as the direction control above does. A tie set the
+        wrong way round is invisible in the writing and glaring in the tree, and the names are what
+        stop the reader having to hold "which of these two did I draw from" in their head.
+
+        NOT A FAMILY TIE is first and is the default: nearly every line on a map is not one. --}}
+  <fieldset class="stonetop-relmap-link-kins">
+    <legend>{{kinLabel}}</legend>
+    {{#each kins}}
+    <label class="stonetop-relmap-kin">
+      <input type="radio" name="kin" value="{{key}}"{{#if checked}} checked{{/if}}>
+      <span>{{name}}</span>
+    </label>
+    {{/each}}
+    <p class="stonetop-relmap-link-hint">{{kinHint}}</p>
+  </fieldset>
+
   <div class="stonetop-form-row">
     <label for="relmap-link-note">{{noteLabel}}</label>
     <textarea id="relmap-link-note" name="note" rows="2"

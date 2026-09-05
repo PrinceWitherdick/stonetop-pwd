@@ -5,71 +5,276 @@
       bar above it does not ride the board, so the controls stay put while the web moves behind them.
 
       ONE root element, as AppV1 requires. --}}
-<div class="stonetop-relmap{{#unless canEdit}} is-readonly{{/unless}}{{#if locked}} is-locked{{/if}}">
+<div class="stonetop-relmap labels-{{labelMode}}{{#unless canEdit}} is-readonly{{/unless}}">
 
+  {{!-- ⚠ NO MAP NAME ON THIS BAR. It used to open with the entry's name, which is the same name the
+        window's own title bar is already carrying an inch above it — the map said twice, one line
+        apart, for the width of a title. What is gone with it is the spacer that pushed everything
+        else to the right-hand edge: the tools now start where the reader's eye starts. --}}
   <div class="stonetop-relmap-bar">
-    <div class="stonetop-relmap-bar-title">{{title}}</div>
-
-    {{#if canEdit}}
     <div class="stonetop-relmap-tools">
-      {{!-- The lock, and why it is the DEFAULT state. Everybody at the table owns these maps, so
-            everybody can move a portrait — which means everybody can move one by accident while
-            trying to drag the board. Reading a map is the common act and editing it is the
-            deliberate one, so the deliberate one asks first. --}}
-      {{!-- A TOGGLE NEEDS A CONSTANT NAME AND A CHANGING STATE, and it is easy to give it two
-            changing halves that then contradict each other. The accessible name stays "Edit the
-            board" whichever way the lock is set; `aria-pressed` carries the state, and is spelled
-            out both ways because `{{#unless}}` alone renders `aria-pressed=""`, which tells a
-            screen reader the control is a toggle and then gives it nothing to report. The visible
-            label and the tooltip still say what pressing it will DO. --}}
-      <button type="button" class="stonetop-relmap-tool" data-relmap-action="lock"
-              aria-pressed="{{#if locked}}false{{else}}true{{/if}}"
-              data-tooltip="{{lockHint}}" aria-label="{{lockToggle}}">
-        <i class="fas {{#if locked}}fa-lock{{else}}fa-lock-open{{/if}}"></i>
-        <span>{{lockLabel}}</span>
-      </button>
 
+      {{!-- WHICH QUESTION THIS MAP IS BEING ASKED, and it is the first control on the bar because
+            on a crowded board it is the one that helps most.
+
+            Four readings of the same data: the whole web the table has arranged; only the player
+            characters and the lines between them; one person and everybody with a line straight to
+            them; and the family tree. The last three narrow
+            the picture rather than rearrange it, because a board with forty people and two hundred
+            lines is not badly laid out — it is being asked to say too much at once, and no layout
+            wins that back.
+
+            A `<select>` AND NOT FOUR PRESSED BUTTONS. One-of-four is a radio group's question, and
+            a group is one tab stop with arrow keys inside it and a spoken name for the whole
+            control; four toggles are four unrelated "pressed / not pressed" announcements with no
+            group and no "2 of 4". It also FITS, which four labelled buttons do not: measured, they
+            are 350-450px of chrome against this one's ~150, on a bar that was already over the edge
+            at 1366px wide before anything was added to it. (The bar wraps now as well — that went
+            in alongside this, as the backstop for a large font scale — but wrapping is what keeps a
+            row that does not fit reachable, not a reason to build one that does not.) And its own
+            value is the label, so the control says which view is up with no second element to keep
+            in step.
+
+            OUTSIDE the editing gate, like the captions control below and for the same reason: not
+            one of these writes anything at all. The board is exactly as everybody left it. --}}
+      <label class="stonetop-relmap-viewpick" data-tooltip="{{viewHint}}">
+        <span class="stonetop-relmap-viewpick-label">{{viewLabel}}</span>
+        <select data-relmap-view aria-label="{{viewLabel}}">
+          {{#each views}}
+          <option value="{{id}}" {{#if chosen}}selected{{/if}}>{{label}}</option>
+          {{/each}}
+        </select>
+      </label>
+
+      {{#if showFocusPick}}
+      {{!-- WHOSE WEB IS BEING SHOWN, and it stands right beside the view it belongs to so that the
+            bar reads as one sentence: "Showing | One person's web | of | Ordga". Not a board tool:
+            it writes nothing, and a player who may only read this map is exactly who wants to point
+            it at themselves.
+
+            A SECOND `<select>` RATHER THAN THE BUTTON THIS WAS. It used to open a modal list, which
+            is a window to open and dismiss between every person — and walking the party one player
+            at a time is the whole of what this view is for. Its own value is the label, so the
+            control says who is in the middle without a second element to keep in step, and a native
+            list has type-ahead, which is the search the modal was carrying.
+
+            ⚠ ITS ROWS ARE DROPPED IN WHOLE, as the board is, and are built in
+            `_focusOptions` — not written out here as an `{{#each}}`. They go out of date whenever
+            somebody at the far end of the table puts a person on the map, and the repaint that
+            fixes that can only reach the DOM. One builder, two writers; see `_paintFocusPick`. --}}
+      <label class="stonetop-relmap-viewpick stonetop-relmap-viewpick--person"
+             data-tooltip="{{focusHint}}">
+        <span class="stonetop-relmap-viewpick-label">{{focusOf}}</span>
+        <select data-relmap-focus aria-label="{{focusAria}}">{{{focusPick}}}</select>
+      </label>
+      {{/if}}
+
+      {{!-- BRING THE PARTY BOARD UP TO DATE. Only on that board, because it is the only one this
+            touches: a player who made their character after the map was last opened is not on it
+            yet, and the board only tops itself up by itself when the primary GM opens the map.
+
+            It ADDS and nothing else. Nobody is moved, nobody is removed, and a caption the table
+            has rewritten in their own words does not gain a duplicate beside it, so pressing this
+            twice is the same as pressing it once. --}}
+      {{#if showRefreshParty}}
+      <button type="button" class="stonetop-relmap-tool" data-relmap-action="refreshparty"
+              data-tooltip="{{refreshPartyHint}}" aria-label="{{refreshPartyHint}}">
+        <i class="fas fa-arrows-rotate"></i>
+        <span>{{refreshPartyLabel}}</span>
+      </button>
+      {{/if}}
+
+      {{!-- BRING THE VILLAGE IN. The same errand on the other board that fills itself: the board
+            takes on whoever has joined the steading's Residents roster when the map is opened, and
+            this is for the resident added five minutes ago -- and for the one somebody took off
+            this board and wants back, which the automatic pass deliberately will not do. --}}
+      {{#if showRefreshVillage}}
+      <button type="button" class="stonetop-relmap-tool" data-relmap-action="refreshvillage"
+              data-tooltip="{{refreshVillageHint}}" aria-label="{{refreshVillageHint}}">
+        <i class="fas fa-house-chimney-user"></i>
+        <span>{{refreshVillageLabel}}</span>
+      </button>
+      {{/if}}
+
+      {{!-- MATCH ANSWERS TO PEOPLE. Beside the button above because the two are the same errand:
+            that one draws what the introductions recorded, and this one is how a table whose
+            answers were recorded before the introductions asked "who is this about?" tells the
+            board where to point. GM only, and it says so by not being there: what it writes is a
+            world setting, which core refuses a player outright. --}}
+      {{#if showMatchIntros}}
+      <button type="button" class="stonetop-relmap-tool" data-relmap-action="matchintros"
+              data-tooltip="{{matchIntrosHint}}" aria-label="{{matchIntrosHint}}">
+        <i class="fas fa-people-arrows"></i>
+        <span>{{matchIntrosLabel}}</span>
+      </button>
+      {{/if}}
+
+      {{#if showFindKin}}
+      {{!-- Only on the tree, where it is the thing a reader wants the moment they find it thinner
+            than the map they know. It reads the writing on every unmarked line and marks the ones
+            that name a tie, and says out loud how many, because a guess applied silently to
+            somebody else's map is not a guess anybody can check. --}}
+      <button type="button" class="stonetop-relmap-tool" data-relmap-action="findkin"
+              data-tooltip="{{findKinHint}}" aria-label="{{findKinHint}}">
+        <i class="fas fa-wand-magic-sparkles"></i>
+        <span>{{findKinLabel}}</span>
+      </button>
+      {{/if}}
+
+    {{!-- THE BOARD'S OWN TOOLS, and they are off while a narrow view is showing rather than merely
+          disabled. Every one of them acts on the arrangement that view is not displaying: laying
+          the board out again, adding somebody it would not draw, rubbing out lines it does not
+          show. A button whose effect is invisible from where the reader is standing is worse than
+          one that is not there. --}}
+    {{#if showBoardTools}}
       <button type="button" class="stonetop-relmap-tool" data-relmap-action="add"
-              {{#if locked}}disabled{{/if}}
               data-tooltip="{{addHint}}" aria-label="{{addHint}}">
         <i class="fas fa-user-plus"></i>
         <span>{{addLabel}}</span>
       </button>
 
-      {{!-- The whole cast at once: every player character and everybody on a steading's
-            rosters. What a fresh map wants first, so it sits beside the one-at-a-time
-            button rather than being buried behind it. --}}
-      <button type="button" class="stonetop-relmap-tool" data-relmap-action="cast"
-              {{#if locked}}disabled{{/if}}
-              data-tooltip="{{castHint}}" aria-label="{{castHint}}">
-        <i class="fas fa-users"></i>
-        <span>{{castLabel}}</span>
-      </button>
-
+      {{!-- Lays the whole board out again, in a shape it ASKS for: a ring seated by who knows
+            whom, or knots of people pulled together by their links. It asks every time rather than
+            repeating whatever it did last, because the two are for different boards and different
+            evenings, and a button that quietly picked one would be a button whose behaviour
+            depends on something the reader cannot see. --}}
       <button type="button" class="stonetop-relmap-tool" data-relmap-action="tidy"
-              {{#if locked}}disabled{{/if}}
               data-tooltip="{{tidyHint}}" aria-label="{{tidyHint}}">
         <i class="fas fa-circle-nodes"></i>
         <span>{{tidyLabel}}</span>
       </button>
 
-      {{!-- Seeds the board from the 1-5 hearts the sheets already carry. A ONE-TIME import,
-            not a live mirror: the hearts stay their own feature, and a line renamed here is
-            never overwritten by a heart moved over there. Pressing it twice adds nothing. --}}
-      <button type="button" class="stonetop-relmap-tool" data-relmap-action="pull"
-              {{#if locked}}disabled{{/if}}
-              data-tooltip="{{pullHint}}" aria-label="{{pullHint}}">
-        <i class="fas fa-heart"></i>
-        <span>{{pullLabel}}</span>
+      {{!-- THE WAY OUT OF A BUTTON THAT IS GONE. "Pull in ratings" used to stand here: it wrote a
+            line into this shared board for every rating anybody in the world had stored, one each
+            way round, and a table that filled its sheets in during the introductions ended up with
+            the handful of ties they drew by hand buried under a hundred they did not. What carries
+            that information now is the board called "The Party", which seats the party by itself
+            and draws what they actually answered about each other.
+
+            This rubs out what the old button left behind, and only that: every line it made carries
+            a stamp made at the moment of writing, so nothing anybody drew by hand is touched. The
+            people stay on the map — taking somebody off is its own act, with its own question.
+
+            ⚠ RENDERED ALWAYS AND HIDDEN, never behind an `{{#if}}`, for the reason the panels over
+            the board are: `_paintChrome` can only write onto markup a repaint left standing, and
+            whether this board still has any such lines changes the moment somebody at the far end
+            of the table presses this. Behind a condition, their window would go on offering a
+            button whose work was already done until they happened to re-render. --}}
+      <button type="button" class="stonetop-relmap-tool" data-relmap-action="droppulled"
+              data-tooltip="{{dropPulledHint}}" aria-label="{{dropPulledHint}}"
+              {{#unless hasPulled}}hidden{{/unless}}>
+        <i class="fas fa-eraser"></i>
+        <span>{{dropPulledLabel}}</span>
+      </button>
+    {{/if}}
+
+      {{!-- HOW MUCH OF THE BOARD'S PROSE IS SHOWING, and it is OUTSIDE the gate above because it
+            is not an edit. A player who may only read a crowded map is exactly the person who
+            needs to be able to turn its captions down; leaving this with the editing tools would
+            hand the one control that rescues a dense board to the one person who does not need it.
+
+            A CYCLE RATHER THAN A MENU: three settings, each a press away, and the button says
+            which one is on. A dropdown for three values is a second window to open and dismiss for
+            something the reader wants to flick through while looking at the board.
+
+            The accessible name is written by the window on every press, so it carries the setting
+            with it; the visible label is only the current one.
+
+            ASKED AFFIRMATIVELY of the view (`captions`), not as "am I not the tree?". The tree is
+            the one view that draws no captions — what a descent line says is said by where it goes
+            — and the two narrow views DO carry them, so the negation would have taken this control
+            away from exactly the boards it was built for. It is also load-bearing beyond the
+            markup: `_paintLabelMode` writes onto this element, and where it is missing it returns
+            without writing anything, silently and with no test to notice. --}}
+      {{#if captions}}
+      <button type="button" class="stonetop-relmap-tool stonetop-relmap-tool--labels"
+              data-relmap-action="labels" data-relmap-labels="{{labelMode}}"
+              data-tooltip="{{labelsHint}}" aria-label="{{labelsAria}}">
+        <i class="fas fa-comment-dots"></i>
+        <span class="stonetop-relmap-tool-text">{{labelsLabel}}</span>
+      </button>
+      {{/if}}
+    </div>
+  </div>
+
+  {{!-- WHICH BOARD OF THIS MAP IS UP.
+
+        One map is several named boards, and each is a JournalEntryPage of the same entry carrying
+        its own people, its own lines and its own layout (module/relmap/relmap-doc.js). A page is
+        not another arrangement of one web: adding somebody to "The Millers" does not put them on
+        "Marshedge", and the same person may stand on both, in different places, with different
+        lines drawn to them. That is what actually thins out a village of forty.
+
+        ITS OWN ROW, not another control on the bar above. The bar was measured over the edge at
+        1366px wide before any of this, and — more to the point — this is not one of the bar's
+        questions. The bar holds what the board can be asked and what can be done to it; this says
+        which board that is, which is the frame everything on the bar happens inside.
+
+        A TAB STRIP AND NOT A DROPDOWN, which is the one place this window deliberately spends the
+        height. Pages are a thing a table has to KNOW it can make, and a `<select>` showing one
+        value tells nobody that a second is possible; a row of tabs with a "+" on the end is the
+        whole feature, visible. It is also where a reader's eye already goes to ask "which one of
+        these am I looking at".
+
+        ⚠ THE TABS ARE DROPPED IN WHOLE, as the board and the person chooser are, and are built in
+        `_pageTabs` — never written out here as an `{{#each}}`. Somebody at the far end of the table
+        adds and renames these under an open window, and the repaint that keeps up with that can
+        only reach the DOM. One builder, two writers; see `_paintPages`.
+
+        The strip is ONE tab stop with the arrow keys inside it (a roving tabindex, written by the
+        same builder), because a map with eight boards is otherwise eight stops between the bar and
+        the board for every reader who moves by keyboard. --}}
+  {{#if showPages}}
+  <div class="stonetop-relmap-pages">
+    <div class="stonetop-relmap-pages-strip" role="tablist"
+         aria-label="{{pagesLabel}}">{{{pageTabs}}}</div>
+
+    {{!-- WHAT CAN BE DONE TO THE BOARDS, and all three are edits, so the whole group is behind the
+          gate. Outside the scrolling strip beside it: a map with a dozen pages scrolls its tabs
+          sideways, and tools that scrolled away with them would be tools a reader has to go looking
+          for. Rename and delete act on the board that is UP — they are the current tab's own
+          controls, standing where the current tab can always be seen. --}}
+    {{#if canEdit}}
+    <div class="stonetop-relmap-pages-tools">
+      <button type="button" class="stonetop-relmap-page-tool" data-relmap-action="pagenew"
+              data-tooltip="{{pageNewHint}}" aria-label="{{pageNewHint}}">
+        <i class="fas fa-plus"></i>
+        <span>{{pageNewLabel}}</span>
+      </button>
+
+      <button type="button" class="stonetop-relmap-page-tool" data-relmap-action="pagerename"
+              data-tooltip="{{pageRenameHint}}" aria-label="{{pageRenameHint}}">
+        <i class="fas fa-pen"></i>
+        <span>{{pageRenameLabel}}</span>
+      </button>
+
+      {{!-- ⚠ ALWAYS RENDERED AND HIDDEN, never behind an `{{#if}}`, for the reason the two panels
+            over the board are: `_paintPages` can only write onto markup a repaint left standing,
+            and whether the last board may be rubbed out changes whenever anybody at the table adds
+            or removes one. Behind a condition this button would exist on precisely the maps that
+            already had two pages when the window last rendered — so a reader who adds a second
+            page would have no way to remove it again until they reopened the window. --}}
+      <button type="button" class="stonetop-relmap-page-tool stonetop-relmap-page-tool--drop"
+              data-relmap-action="pagedelete" data-tooltip="{{pageDeleteHint}}"
+              aria-label="{{pageDeleteHint}}" {{#unless canDropPage}}hidden{{/unless}}>
+        <i class="fas fa-trash"></i>
+        <span>{{pageDeleteLabel}}</span>
       </button>
     </div>
     {{/if}}
   </div>
+  {{/if}}
 
   {{!-- The window the board moves behind: it clips, it does not scroll. A scroll container can only
         reach what is inside its own content box, so it would pin the board to its edges and grow
-        scrollbars over a diagram that is meant to be dragged around freely. --}}
-  <div class="stonetop-relmap-view">
+        scrollbars over a diagram that is meant to be dragged around freely.
+
+        It is also the PANEL the strip above names, which is why it carries the tab roles' other
+        half: a `role="tab"` with nothing saying what it controls is a tab in name only. The label
+        is rewritten by `_paintPages`, because which tab is selected can change without a render —
+        somebody else deleting the board this reader was standing on moves them to another. --}}
+  <div class="stonetop-relmap-view" {{#if showPages}}role="tabpanel"
+       aria-labelledby="{{pagePanelId}}"{{/if}}>
     <div class="stonetop-relmap-board">{{{board}}}</div>
 
     {{!-- Nobody on the map yet. Inside the viewport rather than instead of it, so the board is
@@ -78,21 +283,103 @@
           ALWAYS RENDERED, hidden rather than absent, because `_toggleEmpty` can only show and hide
           what the markup already has. Behind an `{{#if}}` it existed on exactly the maps that
           opened empty, so removing the last person from a populated one left a blank board with no
-          lead text and no "Add everyone" — the moment the panel is most wanted. The button inside
-          it is still gated, and a lock turning re-renders the window whole. --}}
+          lead text and no way in — the moment the panel is most wanted. The button inside it is
+          still gated on permission, and the window re-renders whole either way.
+
+          ⚠ THE PANEL MUST KEEP EXACTLY ONE CALL TO ACTION. This panel takes no pointer events (the
+          board underneath it has to stay droppable), so its button opts back in — and it is the
+          only thing inside the viewport a reader can tab to on a brand new map. It used to be "Add
+          everyone", which put the whole cast on in one press; that button is gone, because a board
+          with everybody on it is the crowding this window's views exist to escape. What replaced
+          it is "Add someone", which is what the hint beside it already told the reader to use. --}}
     <div class="stonetop-relmap-empty" {{#unless empty}}hidden{{/unless}}>
       <p class="stonetop-relmap-empty-lead">{{emptyLead}}</p>
       <p class="stonetop-relmap-empty-hint">{{emptyHint}}</p>
-      {{!-- The one press a brand new map wants. The panel itself takes no pointer events (the
-            board underneath it has to stay droppable), so the button opts back in. Absent while
-            the board is locked, because it would be a control that cannot do anything. --}}
-      {{#if canEdit}}{{#unless locked}}
-      <button type="button" class="stonetop-cta stonetop-relmap-empty-cast" data-relmap-action="cast">
-        <i class="fas fa-users"></i>
-        <span>{{castLabel}}</span>
+      {{!-- ALWAYS RENDERED AND HIDDEN, for the reason its neighbour in the no-kin panel is: the
+            window can only WRITE onto markup a repaint left standing, and which button this is
+            depends on the view and on whether the reader may edit — both of which can change
+            without the render that would otherwise have to put it there. --}}
+      <button type="button" class="stonetop-cta stonetop-relmap-empty-cast"
+              data-relmap-action="{{emptyAction.action}}" {{#unless emptyAction}}hidden{{/unless}}>
+        <i class="fas {{emptyAction.icon}}"></i>
+        <span>{{emptyAction.label}}</span>
       </button>
-      {{/unless}}{{/if}}
     </div>
+
+    {{!-- THIS VIEW IS SHOWING NOBODY, though the map has people on it. Its own panel and not a
+          second state of the one above: a map with nobody on it and a map whose people this
+          particular view does not draw are different situations, wanting different words and a
+          different button.
+
+          THREE SITUATIONS THROUGH ONE PANEL, because they want the same thing from the markup and
+          differ only in what they say: no family tie marked anywhere, nobody on this map is a
+          player character, nothing is linked to the person in the middle. Each is the picture a
+          reader sees when a view looks broken and is not, so each has to be said in words rather
+          than left as a blank sheet — and each needs a way out, which is what the button is. The
+          window writes the words on every repaint, because they name a person and a count and both
+          can change without a render.
+
+          ALWAYS RENDERED and hidden, for the reason the empty panel gives. --}}
+    <div class="stonetop-relmap-nokin" {{#unless noKin}}hidden{{/unless}}>
+      <p class="stonetop-relmap-empty-lead">{{bareLead}}</p>
+      <p class="stonetop-relmap-empty-hint">{{bareHint}}</p>
+      {{!-- Wearing the empty panel's button class as well, because it is the same button in the
+            same place doing the same job: the panel takes no pointer events so the board under it
+            stays droppable, and that class is what opts one control back in.
+
+            ⚠ ALWAYS RENDERED AND HIDDEN, exactly like the panel around it, and for a reason one
+            step further on. `_paintChrome` can only write onto markup that is already there, and
+            it is the only thing that runs on a repaint — so behind an `{{#if bareAction}}` this
+            button existed on precisely the views that were ALREADY showing nobody when the window
+            last rendered. Tick "hide the lines the sheets drew" and watch the focus ring empty, or
+            have somebody at the far end of the table remove the last player character, and the
+            panel would appear carrying its sentence and nothing to press. Its click handler is
+            bound once per render, so it cannot be created here later either.
+
+            The action, the words and the icon are all written by the window, because which of them
+            this is depends on why the view is empty. --}}
+      <button type="button" class="stonetop-cta stonetop-relmap-empty-cast"
+              data-relmap-action="{{bareAction.action}}" {{#unless bareAction}}hidden{{/unless}}>
+        <i class="fas {{bareAction.icon}}"></i>
+        <span>{{bareAction.label}}</span>
+      </button>
+    </div>
+
+    {{!-- Who this view is NOT showing, said quietly in the corner rather than left to be noticed.
+          A reader who knows this map has thirty people on it and is looking at nine needs to be
+          told that the other twenty-one are still there, or the view looks like it has lost them.
+
+          OUTSIDE the board and inside the viewport, so it stays put while the picture is panned and
+          zoomed underneath it. --}}
+    <p class="stonetop-relmap-aside" {{#unless omittedSaid}}hidden{{/unless}}>{{omittedSaid}}</p>
+  </div>
+
+  {{!-- THE LINES AN OLD IMPORT LEFT ON THIS BOARD, put away or brought back.
+
+        DOWN HERE AND NOT ON THE BAR ABOVE, which is the one place in this window a control is
+        offered twice over. The bar is the map's tools: things that change the map, or which
+        question you are asking of it. This changes neither. It is a filter on what is drawn, it
+        belongs to one reader, and it is the sort of thing that is looked for once and then left
+        alone — so it sits out of the way of the buttons that get pressed all evening, in the
+        corner where a board's own settings live.
+
+        IT IS STILL WORTH HAVING NOW THAT NOTHING CREATES SUCH LINES, and it is the half of this
+        pair that a PLAYER can reach: rubbing them out is an edit, and a reader who may only look
+        still has to be able to see past a hundred of them. Nothing here is destroyed either way.
+
+        RENDERED ALWAYS AND HIDDEN, like the two panels above and for the same reason: `_paint`
+        can only show what the markup already has, and somebody at the far end of the table rubbing
+        the last of these out is the moment this reader stops having anything to hide.
+
+        The tooltip is on the LABEL, so resting on either the box or its words explains why anybody
+        would want this — which is not obvious from four words, and is the whole reason the option
+        exists. --}}
+  <div class="stonetop-relmap-foot" {{#unless hasPulled}}hidden{{/unless}}>
+    <label class="stonetop-relmap-foot-check" data-tooltip="{{pulledHint}}">
+      <input type="checkbox" class="stonetop-check" data-relmap-action="hidepulled"
+             {{#if hidePulled}}checked{{/if}}>
+      <span>{{pulledLabel}}</span>
+    </label>
   </div>
 
   {{!-- Spoken to a screen reader when something moves, and deliberately OUTSIDE the board: the

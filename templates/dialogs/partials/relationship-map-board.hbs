@@ -17,10 +17,31 @@
 
       Takes no clicks: a drag that starts on empty board has to pan, and the line layer covers all
       of it. The label above each line is what a reader aims at. --}}
+{{!-- THE FAMILY TREE, when that is what the reader has asked for, and empty every other time.
+
+      A SECOND LAYER RATHER THAN MORE OF THE ONE BELOW, because these are not the same kind of
+      mark. The lines below join two people and bow around whatever is in the way; each of these is
+      one HOUSEHOLD drawn in one stroke: a bar between the parents, a stem down from it, a rail
+      across the children and a drop into each of them. The square corners are the information, and
+      they are what says "these four are siblings" where four separate curves would say only that
+      four lines exist. Worked out in utils/relmap-tree.js.
+
+      DECORATION, and deliberately: `aria-hidden`, no clicks, nothing to aim at. A stroke here
+      stands for as many lines as the household has children, so there is no one line for a click
+      to mean. A tie that needs fixing is fixed where it was written, on the ordinary board. --}}
+<svg class="stonetop-relmap-tree" viewBox="0 0 100 100" preserveAspectRatio="none"
+     aria-hidden="true" focusable="false">
+  {{#each tree}}
+  <path class="stonetop-relmap-tree-line{{#if couple}} is-couple{{/if}}" d="{{d}}"
+        data-relmap-who="{{who}}" vector-effect="non-scaling-stroke"></path>
+  {{/each}}
+</svg>
+
 <svg class="stonetop-relmap-lines" viewBox="0 0 100 100" preserveAspectRatio="none"
      aria-hidden="true" focusable="false">
   {{#each edges}}
   <path class="stonetop-relmap-line stonetop-relmap-line--{{ink}}" data-relmap-line="{{id}}" d="{{d}}"
+        data-relmap-who="{{a}} {{b}}"
         vector-effect="non-scaling-stroke"></path>
   {{/each}}
 </svg>
@@ -43,26 +64,64 @@
 </svg>
 {{/each}}
 
-{{!-- WHAT EACH LINK IS CALLED. HTML, deliberately, and not an SVG <text> in the stretched viewBox
-      above — that would shear every glyph along one axis, badly and differently depending on the
-      window's shape.
+{{!-- WHAT EACH LINK IS CALLED, SET IN THE LINE ITSELF.
 
-      A chip of paper rather than coloured text. The ink says which KIND of tie this is, and colour
-      cannot be the only thing that says it: there is a reader at this table on a screen magnifier,
-      and coloured small type is exactly what fails for them. So the line carries the colour (and a
-      dash pattern, which says the same thing again without any colour at all), while the words stay
-      body ink on paper at full contrast, with a stripe of the ink down the leading edge to tie the
-      two together.
+      NOT THE STRETCHED viewBox ABOVE. The stroke layer maps 0-100 onto whatever shape the board
+      happens to be, which shears every glyph along one axis; so the captions get a layer of their
+      own, in board PIXELS and at the board's own proportions — one user unit is one board pixel and
+      nothing is squashed.
 
-      The turn is a CSS variable rather than a whole transform, because the transform also has to
-      centre the chip on its own anchor and that half belongs to the stylesheet. --}}
-{{#each labels}}
-<button type="button" class="stonetop-relmap-label stonetop-relmap-label--{{ink}}"
-        data-relmap-edge="{{id}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
-        style="left:{{left}}%;top:{{top}}%;--relmap-turn:{{angle}}deg">
-  <span class="stonetop-relmap-label-text">{{text}}</span>
-</button>
-{{/each}}
+      ⚠ STRAIGHT, AND TURNED TO THE ANGLE OF ITS LINE WHERE IT SITS. It was text on a PATH, which
+      followed a bowed line glyph by glyph and was beautiful and unaffordable: warping gives every
+      glyph its own transform, so the browser's glyph cache misses on every one, and with the halo
+      stroked around each warped outline as well ONE TILE of this board cost 73ms to raster —
+      panning it was a slideshow, and the whole application went with it, because Foundry's canvas
+      shares that thread. The same words, straight, with the same halo: 1.2ms. Sixty times less.
+      Most lines are near enough straight across the stretch one caption covers that the two are
+      hard to tell apart; a strongly bowed line now carries its caption as a chord.
+
+      ONE SVG FOR ALL OF THEM. Each caption used to carry its own small SVG over the patch of board
+      its own words cover; a hundred separate roots is a hundred paint chunks, and it would put the
+      lit-web dimming on a hundred elements rather than on one — opacity on a `<g>` costs an
+      offscreen buffer apiece.
+
+      THE LAYER IS NOT THE TARGET, THE WRITING IS. The layer covers the whole board, and a target
+      that size would swallow every click meant for anything underneath it. So the layer takes no
+      pointer events and the glyphs take them back (see the stylesheet), which makes the aimable
+      area the words themselves — smaller than the chip it replaced, and exactly what the reader
+      sees.
+
+      THE WORDS ARE THE BUTTON, and carry a button's manners themselves: `role`, `tabindex` and the
+      accessible name sit on the `<text>` because there is no HTML button around them any more — a
+      wrapper would have to be either that enormous box or a second element kept in step with the
+      glyphs, and both were what this layer was merged to be rid of. utils/relmap-drag.js gives
+      them Enter and Space, which is the one thing a real button gave for free.
+
+      A chip of paper rather than coloured text, still: the ink says which KIND of tie this is, and
+      colour cannot be the only thing that says it — there is a reader at this table on a screen
+      magnifier, and coloured small type is exactly what fails for them. So the line carries the
+      colour (and, under the high-contrast skin, a dash pattern saying the same thing again with no
+      colour at all), while the words stay body ink on paper at full contrast.
+
+      THE TOOLTIP IS THE SENTENCE AND NOTHING ELSE, and the accessible name is not. What a tooltip
+      is for here is the words the caption could not fit, so on a crowded board it is the only place
+      the whole of one can be read; an instruction about clicking, repeated on eighty lines, buries
+      that under something the reader learned the first time. A screen reader gets no other clue
+      that this is a button, so the instruction stays in `aria-label`, which is why the two are
+      separate fields and must not be re-merged.
+
+      A POINT AND A TURN, in ABSOLUTE board pixels, which is exactly the space this one viewBox is
+      in. The words are centred on that point and rotated about it (`text-anchor`,
+      `dominant-baseline` and this `transform`), so a caption is placed the way an arrowhead is. --}}
+<svg class="stonetop-relmap-labels" viewBox="0 0 {{boardWidth}} {{boardHeight}}" focusable="false">
+  {{#each labels}}
+  <g class="stonetop-relmap-label" data-relmap-edge="{{id}}" data-relmap-who="{{a}} {{b}}">
+    <text class="stonetop-relmap-label-text" role="button" tabindex="0"
+          data-relmap-words="{{id}}" data-tooltip="{{tooltip}}" aria-label="{{ariaLabel}}"
+          x="{{x}}" y="{{y}}" transform="rotate({{angle}} {{x}} {{y}})">{{text}}</text>
+  </g>
+  {{/each}}
+</svg>
 
 {{!-- THE PEOPLE. A round portrait, a name under it, and a handle on the rim for drawing a line to
       somebody else.
@@ -74,9 +133,18 @@
 
       `imgStyle` is the crop the GM chose for this actor's portrait, from utils/portrait-frame.js —
       the same one the relationships table uses, so a face framed once is framed everywhere. --}}
+{{!-- `is-centre` marks the one person a focus view is about. Nothing but the stylesheet reads it,
+      and what it buys is a ring round the face in the middle: the lines already say which person
+      the picture is around, but finding the middle of a star at four times magnification means
+      panning until you meet it, and a mark you can recognise without reading a name saves that. --}}
+{{!-- `is-own-ring` marks a face that arrived with a rim already painted on it — the playbook badge
+      a character who never chose a portrait is given, each of them a woodcut inside a hand-drawn
+      circle. The board's own rim then lands three pixels outside that one, and two concentric rings
+      round a small picture read as a target rather than as somebody's face. The stylesheet drops
+      ours on these and lets the drawn one be the rim. --}}
 {{#each nodes}}
-<div class="stonetop-relmap-node{{#if missing}} is-missing{{/if}}" data-relmap-node="{{id}}"
-     style="left:{{left}}%;top:{{top}}%">
+<div class="stonetop-relmap-node{{#if missing}} is-missing{{/if}}{{#if centre}} is-centre{{/if}}{{#if ownRing}} is-own-ring{{/if}}"
+     data-relmap-node="{{id}}" style="left:{{left}}%;top:{{top}}%">
   <button type="button" class="stonetop-relmap-face" data-relmap-open="{{id}}"
           data-tooltip="{{tooltip}}" aria-label="{{tooltip}}">
     <span class="stonetop-relmap-portrait">
@@ -92,7 +160,10 @@
         another portrait draws the line, and clicking it asks who to draw to. Drag is the quick way
         and not the only way, which is what keeps the board usable from a keyboard and on a touch
         screen where a precise drag between two small circles is unpleasant. --}}
-  {{#if ../canEdit}}
+  {{!-- `canLink` and not `canEdit`: the family tree is still an editable board (a caption on it
+        still opens its line) but drawing a NEW line onto it would put one where the tree cannot
+        show it, so the handle is not offered there. --}}
+  {{#if ../canLink}}
   <button type="button" class="stonetop-relmap-handle" data-relmap-handle="{{id}}"
           data-tooltip="{{../linkHint}}" aria-label="{{linkLabel}}">
     <i class="fas fa-link"></i>
@@ -100,3 +171,26 @@
   {{/if}}
 </div>
 {{/each}}
+
+{{!-- THE CAPTIONS ON A LIT WEB, drawn a second time.
+
+      EMPTY UNTIL SOMEBODY RESTS ON A FACE, and filled by `_lightPerson` with a copy of each
+      caption touching that person. The copies are what carries the highlight: full ink over the
+      dimmed layer above, in a heavier weight, and — being last on the board — over the portraits
+      too, which is the "brought forward" the old chip got from a `z-index`.
+
+      ⚠ WHY A SECOND LAYER AND NOT A CLASS ON THE ORIGINAL. Dimming the quiet captions used to be
+      an `opacity` on each of a hundred `<g>` elements, and opacity on a group costs an offscreen
+      buffer apiece — a hundred of them, rebuilt every time the pointer crossed onto or off a
+      portrait. One opacity on the layer as a whole costs one. So the layer is dimmed entire, and
+      the handful of captions that should stay bright are drawn OVER it rather than exempted
+      inside it.
+
+      A COPY AND NOT A MOVE, so the layer above never changes and never loses its texture. The
+      copy's rail is the ORIGINAL rail, referenced by the id it already has — which is also what
+      makes a lit caption follow a live drag without anything here being told about it.
+
+      DECORATION: `aria-hidden`, no clicks, nothing to aim at. The caption it copies is still in
+      the layer above, still focusable, still says what it says. --}}
+<svg class="stonetop-relmap-labels-lit" viewBox="0 0 {{boardWidth}} {{boardHeight}}"
+     aria-hidden="true" focusable="false"></svg>

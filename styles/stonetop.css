@@ -353,13 +353,18 @@
 	--st-relmap-ink-teal:   hsl(170deg 62% 34%);
 	--st-relmap-ink-slate:  hsl(215deg 16% 54%);
 
-	/* AND A DASH PATTERN EACH, which is the point of them.
+	/* AND A DASH PATTERN EACH, PAINTED ONLY UNDER THE HIGH-CONTRAST SKIN.
 
-	   Colour is never the only thing that says what kind of tie a line is. Eight distinct
-	   dashes carry the same distinction with no colour at all, which serves the reader on the
-	   magnifier, the two players at this table who are red-green colour-blind, and anybody who
-	   prints the board out. Measured in the SVG's 0-100 user space with a non-scaling stroke,
-	   so a dash is the same length on screen at any zoom. */
+	   Eight distinct dashes carry the same distinction as the eight colours with no colour at
+	   all, which serves the reader on the magnifier, the two players at this table who are
+	   red-green colour-blind, and anybody who prints the board out. They were once on every
+	   board and are not any more: eighty lines in eight dot-and-dash patterns read as static
+	   rather than as a diagram. So an ordinary board is drawn in solid strokes and the patterns
+	   are kept for the mode whose whole job is to carry a distinction colour cannot — see the
+	   dashed rule down in the accessibility family, which is the only thing that reads these.
+
+	   Measured in the SVG's 0-100 user space with a non-scaling stroke, so a dash is the same
+	   length on screen at any zoom. */
 	--st-relmap-dash-rose:   none;
 	--st-relmap-dash-sage:   6 3;
 	--st-relmap-dash-ochre:  1 4;
@@ -27326,21 +27331,81 @@ th:has(> .stonetop-roll-table-btn) {
 
 /* Primary "go" button (Begin / Done / Save). !important to beat the base nav-button
    background, whose descendant selector outspecifies this one class. */
-.stonetop-guide-btn--primary {
+/* THE SLATE FILL, DECLARED ONCE. `.stonetop-cta` below wears exactly this skin and used to
+   re-declare all three properties, both state rules included; a fill stated twice is one that comes
+   apart the first time a token is retuned in only one of them. Which button it is put ON still
+   differs: the nav rail hands it to its affirmative, and a window with no rail wears the CTA. */
+.stonetop-guide-btn--primary,
+.stonetop-cta {
 	font-weight: 600;
 	background: var(--st-btn-primary-bg) !important;
 	border-color: var(--st-btn-primary-border) !important;
 	color: var(--st-btn-primary-text) !important;
 }
 
-.stonetop-guide-btn--primary:hover:not(:disabled) { background: var(--st-btn-primary-bg-hover) !important; }
+.stonetop-guide-btn--primary:hover:not(:disabled),
+.stonetop-cta:hover:not(:disabled) { background: var(--st-btn-primary-bg-hover) !important; }
 
 /* A disabled primary (e.g. Begin Introductions before the order is set) drops the
    slate fill and reads as a plain disabled button. */
-.stonetop-guide-btn--primary:disabled {
+.stonetop-guide-btn--primary:disabled,
+.stonetop-cta:disabled {
 	background: var(--stonetop-bg, #f5f0e8) !important;
 	border-color: var(--color-border-dark, #7a7971) !important;
 	color: inherit !important;
+}
+
+/* THE STANDALONE CALL TO ACTION, for a window with no nav rail to hang a primary button on: the
+   link editor's Save, the party matcher's, "Add someone" on an empty board, "New map" on the GM
+   toolkit. Same slate fill as `.stonetop-guide-btn--primary` above, and the same content-sizing as
+   the nav buttons beside it, because a button on its own in a footer meets both of core's traps at
+   once and neither is survivable:
+
+   ⚠ `body.game .app button` (v13's legacy-app compatibility layer) sets `width: 100%` and pins
+   `line-height: 28px`. In a flex footer the width makes two buttons SHARE the row and shrink to
+   about 85px each, which wraps the label; the pinned leading then gives each of those lines 28
+   hard pixels, so a two-word button measures 62px tall and looks like a mistake. It gets worse the
+   larger the reader has set their UI font, since the 28px does not scale with it.
+
+   So: `width: auto` and `flex: 0 0 auto` to stop the squeeze, `white-space: nowrap` so the label
+   cannot wrap even in a narrow window, and `line-height: 1.25` with a `min-height` to put the
+   leading back under our own control. Unlayered, which is what lets one class beat core's
+   two-class rule: everything in this file sits outside `@layer compatibility`.
+
+   The fill is `!important` for the reason the guide's primary gives: a window that also writes a
+   `.its-footer button` rule outspecifies this one class with a descendant selector. */
+.stonetop-cta,
+.stonetop-intro-match-foot button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4em;
+	width: auto;
+	flex: 0 0 auto;
+	min-height: 32px;
+	padding: 4px 14px;
+	white-space: nowrap;
+	font-family: var(--font-stonetop);
+	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
+	line-height: 1.25;
+	cursor: pointer;
+	border: 1px solid var(--color-border-dark, #7a7971);
+	border-radius: var(--st-radius-sm);
+	/* ⚠ COLOUR ONLY, NEVER A METRIC, and this is the half that stops a window SHAKING rather than
+	   merely looking wrong. Core hands a button inside a window `transition: all 0.5s`, so anything
+	   that changes a metric -- a font face landing, our own font-scale or contrast variables being
+	   applied on ready, a label swapped -- animates the button's size over half a second. A button
+	   growing under the pointer keeps crossing its own edge, so `:hover` flickers on and off, and
+	   each flicker restarts the transition: the footer jitters and the text beside it walks up and
+	   down while nobody is moving the mouse. Naming the properties leaves every metric to settle
+	   instantly, as `.stonetop-guide-nav button` has always done. */
+	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+/* The fill and its two state rules are the primary's, above. Only the dimming is the CTA's own. */
+.stonetop-cta:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* ── Introductions Dialog ─────────────────────────────────────────────────────── */
@@ -40362,6 +40427,15 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-gm-relmap-count { color: var(--st-quiet-ink, #5b6672); }
 
+/* How many named boards a map has, and only on the maps that have more than one. Quieter than the
+   people count beside it and set apart from it: the two are different questions about the same map,
+   and run together they read as one number. */
+.stonetop-gm-relmap-pages {
+	color: var(--st-quiet-ink, #5b6672);
+	font-size: var(--st-fs-sm, 0.9em);
+	white-space: nowrap;
+}
+
 .stonetop-gm-relmap-none,
 .stonetop-gm-relmap-cannot {
 	margin: 0.4em 0;
@@ -40382,14 +40456,40 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-relmap {
 	display: grid;
-	/* A ROW EACH, and the viewport takes what is left. `1fr` and not `auto` on the middle row:
+	/* A ROW EACH, and the viewport takes what is left. `1fr` and not `auto` on the viewport's row:
 	   the board must be given a definite height to clip against, and an auto row would size to
-	   the board's own 960px and push the window's scrollbar out instead. */
-	grid-template-rows: auto 1fr auto;
+	   the board's own 960px and push the window's scrollbar out instead.
+
+	   FIVE ROWS: the bar, the page strip, the viewport, the footer, and the live region, which is
+	   clipped to a pixel and so costs nothing. The footer is `auto` and empty when hidden, which is
+	   a row of nothing rather than a gap: `gap` is 0 here.
+
+	   ⚠ AND EVERY CHILD NAMES ITS OWN ROW, which is not tidiness. This grid used to rely on
+	   auto-placement, and the day a fifth child was added above the viewport the board landed in an
+	   `auto` row and collapsed to ZERO HEIGHT — a window with a bar, a strip and no map at all,
+	   from a change that never touched the viewport. Auto-placement also cannot survive a row that
+	   is CONDITIONAL: the page strip is absent entirely on a one-board map a reader may only look
+	   at, and with the rows unnamed everything below it would move up one and the board would land
+	   on `auto` again. Named rows leave an absent row simply empty, at `auto`, costing nothing. */
+	grid-template-rows: auto auto 1fr auto auto;
+	/* ⚠ ONE COLUMN, AND IT IS THE WINDOW'S WIDTH. An implicit grid column is `minmax(auto,
+	   max-content)`, so it grows past the container to fit whatever the widest row wants and the
+	   whole window scrolls sideways under a diagram that is meant to be dragged. Measured: twelve
+	   named boards made this grid 1825px wide inside a 760px window, carrying the page tools off
+	   the right-hand edge with it. `minmax(0, 1fr)` pins the column to the space there actually is
+	   and lets each row deal with not fitting in its own way — the bar wraps, the strip scrolls,
+	   the viewport clips. */
+	grid-template-columns: minmax(0, 1fr);
 	height: 100%;
 	min-height: 0;
 	gap: 0;
 }
+
+.stonetop-relmap-bar   { grid-row: 1; }
+.stonetop-relmap-pages { grid-row: 2; }
+.stonetop-relmap-view  { grid-row: 3; }
+.stonetop-relmap-foot  { grid-row: 4; }
+.stonetop-relmap-live  { grid-row: 5; }
 
 .stonetop-relmap-bar {
 	display: flex;
@@ -40398,16 +40498,19 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: 0.4em 0.6em;
 	border-bottom: 1px solid var(--stonetop-border, rgba(0, 0, 0, 0.18));
 	background: var(--stonetop-bg);
-}
-
-.stonetop-relmap-bar-title {
-	font-family: var(--stonetop-font-display, inherit);
-	font-size: var(--st-fs-lg, 1.1em);
-	margin-right: auto;
-	/* One line, elided: a long map name must not push the tools off the bar. */
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	/* IT WRAPS, and this is a repair rather than a nicety. The tools do not give up any width (they
+	   are `flex: none`, and rightly: a squashed button is a button whose words are gone), so
+	   without this the last tool simply leaves the bar — clipped by the window's content box, with
+	   no scrollbar and no sign that it was ever there. Measured, the row was already over the edge
+	   at 1366x768 before the view chooser was added, back when a map name was sharing it. Wrapping
+	   puts the tools on a second line instead, which costs a few pixels of board and loses
+	   nothing. */
+	flex-wrap: wrap;
+	/* THE TOOLS START AT THE LEFT EDGE, which is where they start because nothing pushes them
+	   anywhere else. This bar used to open with the map's name under `flex: 1 1 0`, and that
+	   spacer — not any alignment written here — is what held the whole row against the right-hand
+	   edge. The name is gone (the window's own title bar says it), so the row simply sits where a
+	   flex row sits. Nothing to declare, and nothing to undo if a second item is ever added. */
 }
 
 .stonetop-relmap-tools {
@@ -40415,6 +40518,14 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	align-items: center;
 	gap: 0.35em;
 	flex: none;
+	/* AND THIS ROW WRAPS TOO. Wrapping only the bar moves this whole block below the title in one
+	   piece, which is no help at all when the block itself is wider than the window -- the last tool
+	   still leaves the bar, clipped by the window's content box with no scrollbar and no sign it was
+	   ever there. The two together are what actually bound it: the group drops to its own line, and
+	   then breaks inside itself if it still does not fit. Reached at a large font scale, or on a
+	   narrow window with a long map name. */
+	flex-wrap: wrap;
+	row-gap: 0.35em;
 }
 
 /* A grid row rather than a matched height. Core anchors a BUTTON's font-size in PIXELS, so an
@@ -40434,6 +40545,142 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-relmap-tool[aria-pressed="true"] {
 	background: var(--st-accent-fill);
 	color: #fff;
+}
+
+/* ── The page strip ───────────────────────────────────────────────────────────
+   WHICH BOARD OF THIS MAP IS UP. One map is several named pages, each its own board with its own
+   people and its own layout (module/relmap/relmap-doc.js).
+
+   ITS OWN ROW UNDER THE BAR, and it reads as a second stratum rather than more of the first: the
+   bar holds what the board can be asked and what can be done to it, and this says WHICH board that
+   is, which is the frame all of that happens inside. So it sits on the page tone rather than the
+   panel tone, which is also what puts the current tab visually on the same sheet as the board it
+   opens onto. (`--st-page` vs `--stonetop-bg`: the two are not interchangeable, see the tokens at
+   the top of this file.) */
+.stonetop-relmap-pages {
+	display: flex;
+	align-items: stretch;
+	gap: 0.5em;
+	/* THE 1px OF TOP PADDING PAYS FOR THE RULE UNDERNEATH. What a reader sees as this row is the
+	   band INCLUDING the line that closes it, but everything in the row is laid out in the content
+	   box, which is that line short — so a row that is perfectly centred by the box model reads a
+	   pixel high. Matched to `border-bottom` below; change one and change the other. */
+	padding: 1px 0.6em 0;
+	border-bottom: 1px solid var(--stonetop-border, rgba(0, 0, 0, 0.18));
+	background: var(--st-page);
+	flex: none;
+}
+
+/* THE TABS SCROLL SIDEWAYS and the tools beside them do not, which is the whole reason these are
+   two boxes rather than one wrapping row. A map with a dozen boards has a strip wider than the
+   window; wrapped, it would eat the board a row at a time, and with the tools inside it the "New
+   page" button would wrap away out of reach. `min-width: 0` is what actually lets it shrink: a flex
+   item's floor is its content, so without it the strip refuses to be narrower than all its tabs and
+   pushes the tools off the window instead of scrolling. */
+.stonetop-relmap-pages-strip {
+	display: flex;
+	align-items: stretch;
+	gap: 0.15em;
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: thin;
+}
+
+/* One board's tab.
+   A grid row rather than a matched height, for the reason the tools above give: core anchors a
+   BUTTON's font-size in PIXELS, so an em-matched neighbour drifts several pixels at different root
+   sizes. Everything core paints onto a button is undone here — this is a tab, not a control with a
+   face. */
+.stonetop-relmap-page {
+	display: inline-grid;
+	align-items: center;
+	/* ⚠ IT KEEPS ITS WIDTH AND THE STRIP SCROLLS. Left to shrink, twelve boards were squeezed to a
+	   few pixels of ellipsis each: the strip fitted perfectly and no tab could be told from any
+	   other, which is worse than a row that has to be scrolled. `max-width` still elides the one
+	   board somebody has named after a sentence. */
+	flex: none;
+	width: auto;
+	max-width: 16em;
+	margin: 0;
+	/* The vertical padding is only a FLOOR: the strip stretches every tab to the row's height, which
+	   the page tools beside them set. It is 0.2em rather than the 0.3em it was so that the two
+	   reserved 3px stripes below do not make a tab taller than that row and push the whole strip
+	   down — the point of this change was to level the names, not to spend more of the board. */
+	padding: 0.2em 0.8em;
+	border: none;
+	/* ⚠ THE UNDERLINE IS RESERVED AT BOTH ENDS, and the top one is the whole reason this line
+	   exists: a 3px stripe on the bottom edge alone is 3px of the tab's height that the words can
+	   never be centred in, so every tab name on this row sat visibly high in its band — measured,
+	   6.4px of air above the text against 10.8px below. A transparent twin at the top gives the
+	   centring something symmetric to work with; only the bottom one is ever painted (`.is-current`
+	   colours it), so nothing about how the row LOOKS changes except that the names sit level. */
+	border-top: 3px solid transparent;
+	border-bottom: 3px solid transparent;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+	color: var(--st-quiet-ink, #5b6672);
+	font-family: var(--stonetop-font-display, inherit);
+	line-height: 1.6;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+}
+
+/* The tab rail's own hover wash, spelt the same way it is there: slate at 22%, which reads on both
+   the light and the dark ground without a token of its own. `:focus-visible` and not `:focus`,
+   because the strip's arrow keys move focus between tabs and a permanent highlight on a tab that
+   is merely focused would compete with the underline that says which one is actually up. */
+.stonetop-relmap-page:hover,
+.stonetop-relmap-page:focus-visible {
+	color: var(--st-text, inherit);
+	background: rgba(112, 128, 144, 0.22);
+}
+
+/* THE ONE THAT IS UP. An underline AND full-strength ink, never colour alone: which tab is
+   selected is the single most load-bearing thing on this row, and there is a reader at this table
+   on a screen magnifier for whom a two-tone difference between two words is no difference at all.
+   Later than the base rule, as a modifier must be (they tie on specificity). */
+.stonetop-relmap-page.is-current {
+	color: var(--st-text, inherit);
+	border-bottom-color: var(--st-accent-fill);
+	background: none;
+	font-weight: 600;
+}
+
+/* WHAT CAN BE DONE TO THE BOARDS. Outside the scrolling strip, so they stay put while the tabs
+   move under them. */
+.stonetop-relmap-pages-tools {
+	display: flex;
+	align-items: center;
+	gap: 0.25em;
+	flex: none;
+	padding: 0.25em 0;
+}
+
+/* Quieter and smaller than a board tool: these are about the strip rather than about the map, and
+   a row of full-weight buttons here would out-shout the bar above it. Same grid-row construction,
+   same reason. */
+.stonetop-relmap-page-tool {
+	display: inline-grid;
+	grid-auto-flow: column;
+	align-items: center;
+	gap: 0.3em;
+	width: auto;
+	padding: 0.15em 0.55em;
+	font-size: var(--st-fs-sm, 0.9em);
+	line-height: 1.6;
+	white-space: nowrap;
+}
+
+/* Rubbing out a board destroys everyone on it, so the one destructive control on this row says so
+   before it is pressed rather than only in the dialog it opens. Later than the base rule above,
+   which it modifies. */
+.stonetop-relmap-page-tool--drop:hover {
+	color: var(--st-danger, #8b2f2f);
 }
 
 /* THE VIEWPORT. It clips, it does not scroll: a scroll container can only reach what is inside
@@ -40498,11 +40745,18 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	stroke: var(--relmap-ink, var(--st-relmap-ink-slate));
 	stroke-width: 3.5;
 	stroke-linecap: round;
-	stroke-dasharray: var(--relmap-dash, none);
+	/* SOLID. The dash patterns are still declared, on the ink pairs below and in the tokens at the
+	   top of this file, and they are still what the high-contrast skin paints with — see the rule
+	   in the accessibility family. They are simply not what an ordinary board looks like: a web of
+	   eighty lines in eight different dot-and-dash patterns reads as static rather than as a
+	   diagram, and the pattern is doing its work for the one reader who needs it in the one mode
+	   that reader turns on. */
+	stroke-dasharray: none;
 }
 
-/* Every ink, as a pair. The line reads its two custom properties off these, so a link's colour
-   and its dash pattern can never be set apart from one another. */
+/* Every ink, as a pair. A link's colour and its dash pattern can never be set apart from one
+   another, whichever of them a given skin ends up painting with: the stroke is solid here and the
+   high-contrast rule in the accessibility family picks the dash up off the same declaration. */
 .stonetop-relmap-line--rose   { --relmap-ink: var(--st-relmap-ink-rose);   --relmap-dash: var(--st-relmap-dash-rose); }
 .stonetop-relmap-line--sage   { --relmap-ink: var(--st-relmap-ink-sage);   --relmap-dash: var(--st-relmap-dash-sage); }
 .stonetop-relmap-line--ochre  { --relmap-ink: var(--st-relmap-ink-ochre);  --relmap-dash: var(--st-relmap-dash-ochre); }
@@ -40555,41 +40809,193 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-relmap-head--slate  { --relmap-ink: var(--st-relmap-ink-slate); }
 
 /* ── The labels ───────────────────────────────────────────────────────────────
-   A chip of paper riding on the line, turned to lie along it.
+   Bare words set IN the line, turned to lie along it.
 
-   THE WORDS ARE NEVER THE COLOURED THING. Body ink on the page tone at full contrast, with the
-   link's ink as a stripe down the leading edge. Small coloured type is what fails a reader on a
+   NO BOX. They used to be chips of paper with a border, a fill and a stripe of the link's ink
+   down the leading edge, and on a board carrying eighty of them the boxes were most of what the
+   eye saw: a heap of paper with a diagram somewhere underneath. The words alone read as
+   annotation on the drawing, which is what they are.
+
+   SO THE PAPER MOVED BEHIND THE LETTERS. Take the fill away and a caption crossing a stroke or a
+   portrait is unreadable, and that is not a small matter here — there is a reader at this table
+   on a magnifier. The halo below is the page tone painted in a ring around every glyph, which
+   keeps exactly the contrast the chip gave (body ink on the page, and the board's own ground IS
+   the page tone) while covering only the letters instead of a rectangle around them.
+
+   AND THEY SIT ON THE STROKE, not above it: the LINE gets out of the way instead. `curveWithGap`
+   in utils/relmap-geometry.js cuts a length out of the stroke exactly where the caption goes, so
+   the words sit in the line rather than over it, and the gap is re-cut against the caption that
+   actually painted (`_fitGapsToPaint`). Nothing here lifts or offsets a caption — see
+   `edgeLabelAnchor`, which is where that decision lives and why a stylesheet transform would have
+   been one line and would have been wrong.
+
+   THE WORDS ARE NEVER THE COLOURED THING. Body ink at full contrast, and the colour of the tie is
+   carried by the stroke running underneath. Small coloured type is what fails a reader on a
    magnifier, and it is the one thing on this board that must not. */
-.stonetop-relmap-label {
+/* EVERY CAPTION IN ONE SVG, over the whole board. NOT stretched — that is the whole reason it is
+   separate from the line layer, which maps 0-100 onto the board and would shear every glyph along
+   one axis. Its viewBox is the board's own pixels (written by the markup, because the sheet grows
+   with the number of people on it), so one user unit is one board pixel and the type comes out the
+   size the rule below asks for.
+
+   ONE ROOT AND NOT ONE PER CAPTION: a hundred separate roots is a hundred paint chunks, and the
+   lit-web dimming below would have to be written on a hundred elements rather than on this one —
+   opacity on a `<g>` costs an offscreen buffer apiece.
+
+   ⚠ WHAT MAKES THE CAPTIONS AFFORDABLE, though, is neither that nor `.captions-too-small` below:
+   it is that the words are set STRAIGHT and turned to their line's angle rather than warped onto
+   the curve. Warping gives every glyph its own transform, so the browser's glyph cache misses on
+   every one, and with the halo stroked around each warped outline as well ONE TILE of a real board
+   cost 73ms to raster — panning it was a slideshow, and Foundry's canvas went with it. Straight,
+   the same words with the same halo: 1.2ms a tile. See the board partial. */
+.stonetop-relmap-labels,
+.stonetop-relmap-labels-lit {
 	position: absolute;
-	width: auto;
-	max-width: 220px;
-	padding: 0.1em 0.5em 0.1em 0.4em;
-	border: 1px solid var(--stonetop-border, rgba(0, 0, 0, 0.2));
-	border-left: 3px solid var(--relmap-ink, var(--st-relmap-ink-slate));
-	border-radius: 3px;
-	background: var(--st-page);
-	color: var(--st-text-body, var(--color-text-dark-primary, #191813));
-	font-size: 12px;
-	line-height: 1.5;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	transform: translate(-50%, -50%) rotate(var(--relmap-turn, 0deg));
-	transform-origin: 50% 50%;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	/* THE LAYER TAKES NO CLICKS, THE WRITING DOES. It covers the whole board, and a target that
+	   size would swallow every click meant for the faces underneath it. Handed straight back on the
+	   glyphs below, which makes the aimable area the words themselves. `pointer-events` is one of
+	   the few things a descendant CAN take back from an ancestor, which is what makes this work. */
+	pointer-events: none;
+	/* The halo is painted outside the glyphs, and a caption may sit right on the edge of the
+	   board. */
+	overflow: visible;
+}
+
+/* ⚠ NO `will-change` HERE, AND THAT IS A FINDING RATHER THAN AN OMISSION. Giving this layer a
+   texture of its own does NOT make it cheaper to raster — the glyphs are warped either way — and it
+   moves the cost somewhere far worse: the main thread then blocks in `Commit` waiting for that one
+   enormous texture. A trace of the real window showed 8.8 SECONDS of Commit across ten seconds, in
+   blocks of a second and a half each, with ~100 frames dropped a second throughout. Without it the
+   same raster happens on the worker threads and Commit is ~3ms. Do not put it back.
+
+   What actually makes the captions affordable is not painting them when they are too small to read:
+   `.captions-too-small`, below. */
+
+/* ── Type too small to be type ────────────────────────────────────────────────
+   Written on the root by `_paintCaptionZoom` whenever the board's scale would paint a caption under
+   `CAPTION_FLOOR_PX`. Both caption layers go away with it.
+
+   ⚠ THIS IS THE MAP'S PERFORMANCE FIX, and it is a legibility rule that happens to be one. Text on
+   a path is expensive to RASTER, per glyph ON SCREEN, so it is worst at the scale the window opens
+   at — the whole board fitted into the viewport, every one of a hundred captions drawn at once.
+   Measured on the real map: 5.3 SECONDS of raster at a third size, 2.6s at 0.4, 76ms at 0.7, 3ms at
+   1. Zoomed in the browser rasters only what is in view and the cost is bounded by the window;
+   zoomed out there is no bound but the board.
+
+   And at those scales the writing is three pixels tall — never readable, a grey thicket over the
+   diagram, costing seconds to say nothing. `display`, so it is neither painted nor tabbed to: the
+   same bargain `labels-off` makes a few rules down, and hidden means hidden to everybody. */
+.stonetop-relmap.captions-too-small .stonetop-relmap-labels,
+.stonetop-relmap.captions-too-small .stonetop-relmap-labels-lit { display: none; }
+
+/* The copies `_lightPerson` puts down: nothing at rest, one person's captions while the pointer is
+   on them. NOT given a texture of its own — it is rebuilt from scratch every time the lit person
+   changes, so there would be nothing for one to preserve. */
+.stonetop-relmap-labels-lit .stonetop-relmap-label-text {
+	/* Set in a heavier weight. It used to be a drop shadow, which said nothing once the chip it was
+	   cast by went away; weight is what a word has instead of an edge, and it reads at a
+	   magnification where a shadow does not. */
+	font-weight: 700;
+	/* A copy is not a target. The caption it copies is still in the layer above, still focusable,
+	   still the thing a click means. */
+	pointer-events: none;
+	cursor: default;
+}
+
+/* One caption: its rail and its words. Nothing is drawn by the group itself — it exists so that
+   a whole caption can be lit, hidden or found by its link's id in one place. */
+.stonetop-relmap-label {
 	cursor: pointer;
 }
 
-.stonetop-relmap-label--rose   { --relmap-ink: var(--st-relmap-ink-rose); }
-.stonetop-relmap-label--sage   { --relmap-ink: var(--st-relmap-ink-sage); }
-.stonetop-relmap-label--ochre  { --relmap-ink: var(--st-relmap-ink-ochre); }
-.stonetop-relmap-label--indigo { --relmap-ink: var(--st-relmap-ink-indigo); }
-.stonetop-relmap-label--plum   { --relmap-ink: var(--st-relmap-ink-plum); }
-.stonetop-relmap-label--rust   { --relmap-ink: var(--st-relmap-ink-rust); }
-.stonetop-relmap-label--teal   { --relmap-ink: var(--st-relmap-ink-teal); }
-.stonetop-relmap-label--slate  { --relmap-ink: var(--st-relmap-ink-slate); }
+.stonetop-relmap-label-text {
+	font-size: 12px;
+	fill: var(--st-text-body, var(--color-text-dark-primary, #191813));
+	/* ON the line rather than above it, and CENTRED on the point the spreader chose: a baseline
+	   sitting on the line would put every caption a half-line clear of the stroke it belongs to,
+	   and the gap cut in that stroke would be a hole underneath the words instead of around them.
+	   These two are also what make placing a caption a point and a turn (`placeCaption`) rather
+	   than a box to keep in step with. */
+	dominant-baseline: central;
+	text-anchor: middle;
+	/* The paper, behind the letters instead of behind a rectangle — the same bargain the chip made
+	   when it went away, and cheaper here than it was in HTML: one stroke painted UNDER the fill is
+	   an even ring around every glyph, where the flat caption needed eight stacked shadows to
+	   approximate the same thing. */
+	paint-order: stroke;
+	stroke: var(--st-page);
+	stroke-width: 3px;
+	stroke-linejoin: round;
+	stroke-linecap: round;
+	/* Taken back from the layer above: these glyphs are what the reader aims at, and — since there
+	   is no HTML button around them any more — what the reader focuses and presses. */
+	pointer-events: auto;
+	cursor: pointer;
+	/* The default ring would be drawn round the text's BOUNDING BOX, which for a caption running
+	   diagonally across the board is a rectangle most of the board wide with a sentence somewhere
+	   inside it. Focus is marked on the halo instead, below. */
+	outline: none;
+}
 
-.stonetop-relmap.is-locked .stonetop-relmap-label { cursor: default; }
+/* Focus, marked on the words because the bounding box is not a shape anybody should see. The halo
+   goes to the system's accent and thickens, which is a change of both colour AND weight — the rule
+   the captions are already written to, for the reader on a magnifier. */
+.stonetop-relmap-label-text:focus-visible {
+	stroke: var(--st-accent-fill);
+	stroke-width: 4px;
+}
+
+.stonetop-relmap.is-readonly .stonetop-relmap-label,
+.stonetop-relmap.is-readonly .stonetop-relmap-label-text { cursor: default; }
+
+/* ── How much of the board's prose is showing ─────────────────────────────────
+   Three settings on one button, cycled, written onto the ROOT by the window. `labels-all` is the
+   default and needs no rule; the other two are here.
+
+   `visibility`, NEVER `opacity: 0`. A chip faded to nothing is still in the tab order and still
+   read aloud, so a reader who has turned the captions off would keep tabbing through eighty
+   invisible buttons and hearing every one of them. Hidden means hidden to everybody. */
+.stonetop-relmap.labels-off .stonetop-relmap-label { visibility: hidden; }
+
+/* On hover: nothing until the pointer (or the keyboard) rests on one of the two people a line
+   joins, and then only that person's captions. The window marks them; this paints them. */
+.stonetop-relmap.labels-hover .stonetop-relmap-label { visibility: hidden; }
+.stonetop-relmap.labels-hover .stonetop-relmap-label.is-lit { visibility: visible; }
+
+/* ── One person's web, lit ────────────────────────────────────────────────────
+   Resting on a face marks every line and caption touching it. What the rest of the board does is
+   QUIET DOWN rather than disappear: the shape of the whole web is the context that makes one
+   person's part of it mean anything, and a board that blanked to a single star would have thrown
+   that away to answer a smaller question.
+
+   Only while something IS lit, so an ordinary board is painted at full strength. */
+.stonetop-relmap.is-lit .stonetop-relmap-line { opacity: 0.18; }
+.stonetop-relmap.is-lit .stonetop-relmap-line.is-lit { opacity: 1; }
+.stonetop-relmap.is-lit .stonetop-relmap-head { opacity: 0.18; }
+.stonetop-relmap.is-lit .stonetop-relmap-node { opacity: 0.5; }
+.stonetop-relmap.is-lit .stonetop-relmap-node.is-lit { opacity: 1; }
+
+/* The lit lines are thickened as well as brightened. Colour and weight say the same thing twice,
+   which is the rule the labels are already written to: there is a reader at this table on a
+   magnifier, and a highlight carried by brightness alone is one they would not see. */
+.stonetop-relmap.is-lit .stonetop-relmap-line.is-lit { stroke-width: 5; }
+
+/* A caption on a lit line is brought forward, and the quiet ones sink behind the lit portraits so
+   they cannot cover the faces the reader is looking at. */
+/* ⚠ ON THE LAYER AND NEVER ON A CAPTION. One opacity on a textured layer is a compositor job and
+   costs nothing; the same dim written per caption restyles the inside of that layer, throws its
+   texture away and re-warps every glyph on the board — a quarter of a second, on every hover. The
+   lit person's own captions are not exempted here either, for the same reason: they are drawn
+   again at full ink in `.stonetop-relmap-labels-lit`, over the top. */
+.stonetop-relmap.is-lit .stonetop-relmap-labels { opacity: 0.25; }
+
+/* The captions setting is a cycle, so its button carries the current value rather than a
+   pressed/unpressed state. Dimmed when the captions are off, which says at a glance that the board
+   is not showing everything it has. */
+.stonetop-relmap-tool--labels[data-relmap-labels="off"] { opacity: 0.7; }
 
 /* ── The people ───────────────────────────────────────────────────────────────
    A round portrait, a name under it, and a handle on the rim. Positioned by its CENTRE, which
@@ -40597,7 +41003,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-relmap-node {
 	position: absolute;
 	width: 72px;
-	transform: translate(-50%, -50%);
+	/* Centred on its own coordinates, PLUS wherever a live drag has carried it. The drag layer
+	   writes only the two variables, so the centring lives in one place: an inline
+	   `transform` written from JS would replace this whole declaration, and the portrait would
+	   jump half its own width the instant the drag started and jump back on release. */
+	transform: translate(-50%, -50%)
+		translate(var(--relmap-drag-x, 0px), var(--relmap-drag-y, 0px));
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -40624,8 +41035,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	flex: none;
 }
 
-.stonetop-relmap.is-locked .stonetop-relmap-face { cursor: pointer; }
-.stonetop-relmap:not(.is-locked) .stonetop-relmap-face { cursor: grab; }
+.stonetop-relmap:not(.is-readonly) .stonetop-relmap-face { cursor: grab; }
 
 .stonetop-relmap-portrait {
 	display: block;
@@ -40655,6 +41065,27 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-size: 28px;
 	line-height: 1;
 	color: var(--st-quiet-ink, #5b6672);
+}
+
+/* A FACE THAT CAME WITH ITS OWN RIM. The playbook badge a character who never chose a portrait
+   wears (utils/playbook-actors.js `hasOwnRingArt`) is a woodcut inside a hand-drawn circle, and the
+   ring above lands three pixels outside that one — two concentric rings round a 72px picture, which
+   reads as a target rather than as somebody's face. So the border comes off and the DRAWN ring
+   becomes the rim.
+
+   ⚠ `border: none` AND NOT A TRANSPARENT COLOUR, and the difference is the whole point. Everything
+   here is `box-sizing: border-box` (core's reset), so dropping the border grows the art from 66px
+   to the full 72px and its painted circle lands exactly where the border was — the same rim, in the
+   same place, at the same size as every other portrait on the board. A transparent border would
+   instead leave the badge inset inside a 3px ring of panel tone, visibly smaller than its
+   neighbours. Nothing about the layout moves either way: the node is 72px wide regardless, and the
+   geometry trims its lines to a radius of its own.
+
+   NOT ON A MISSING PERSON, whose dashed rim is the only thing saying their actor has gone — and
+   whose stored picture can perfectly well be a badge, since that is what it was when they were
+   still here. The mark is worth more there than the doubling costs. */
+.stonetop-relmap-node.is-own-ring:not(.is-missing) .stonetop-relmap-face {
+	border: none;
 }
 
 /* Somebody whose actor has gone. Drawn dashed rather than dropped: the lines drawn to them are
@@ -40714,7 +41145,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    Inside the viewport rather than instead of it, so the board underneath is still there to be
    dropped onto — which is the other way somebody arrives. Takes no pointer events for the same
    reason. */
-.stonetop-relmap-empty {
+.stonetop-relmap-empty,
+.stonetop-relmap-nokin {
 	position: absolute;
 	inset: 0;
 	display: grid;
@@ -40730,7 +41162,20 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    `[hidden] { display: none }` loses to any author declaration whatever its specificity. Without
    this line `_toggleEmpty(false)` sets the attribute and the panel goes on covering a board that
    now has people on it. The same lesson as `.stonetop-roll-tier-picklist[hidden]` above. */
-.stonetop-relmap-empty[hidden] { display: none; }
+.stonetop-relmap-empty[hidden],
+.stonetop-relmap-nokin[hidden] { display: none; }
+
+/* ⚠ THE WORDS SIT ON THEIR OWN PAPER, because the panel is `inset: 0` and centres its content —
+   and so does the focus view, which puts the person it is about at the middle of the board. A
+   focus on somebody nothing is linked to therefore prints "Nothing is linked to Ordga yet" exactly
+   over Ordga's portrait. The aside in the corner already solves this the same way; the panels were
+   only ever seen over an EMPTY board, so it had not come up. */
+.stonetop-relmap-empty-lead,
+.stonetop-relmap-empty-hint {
+	background: var(--st-page);
+	border-radius: 3px;
+	padding: 0.1em 0.5em;
+}
 
 .stonetop-relmap-empty-lead {
 	font-family: var(--stonetop-font-display, inherit);
@@ -40751,6 +41196,110 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	align-items: center;
 	gap: 0.4em;
 	padding: 0.35em 0.9em;
+}
+
+/* ── The family tree ──────────────────────────────────────────────────────────
+   The same map read as generations: utils/relmap-tree.js works out the seats and the strokes,
+   RelationshipMapWindow paints them, and NOTHING here is written to the document. The other view's
+   arrangement is still in the map and comes back untouched the moment the reader switches away.
+
+   ITS OWN LAYER over the board, in the same stretched 0-100 space as the lines below it and taking
+   pointer events for the same reason they do not: a drag starting on empty board has to pan, and
+   this covers all of it.
+
+   ONE NEUTRAL INK, and not the eight the lines use. On this view the colour is not carrying
+   anything (there is no "kind of family tie" to distinguish) and the structure is: what says who
+   descends from whom is where the corners are, so the strokes are body ink and the chart reads as
+   one drawing rather than as eight. That also keeps it right under the high-contrast skin with
+   nothing extra to declare. */
+.stonetop-relmap-tree {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	overflow: visible;
+}
+
+.stonetop-relmap-tree-line {
+	fill: none;
+	stroke: var(--st-text-body, var(--color-text-dark-primary, #191813));
+	stroke-width: 3;
+	/* ROUND, and it is doing real work rather than softening anything: a household is drawn as
+	   several separate subpaths that MEET at the corners (a stem arriving at a rail, a rail turning
+	   into a drop), and butt caps would leave a visible notch at every one of them. */
+	stroke-linecap: round;
+	opacity: 0.75;
+}
+
+/* The bar between two parents, drawn a shade heavier than the descent it carries. The one place
+   this chart says something with weight, and it is saying "these two, together" — which is the
+   line a reader looks for first when they are trying to find a couple. */
+.stonetop-relmap-tree-line.is-couple { stroke-width: 4; opacity: 0.9; }
+
+/* Lit with the rest of the board, and the whole household at once: the stroke joins as many people
+   as there are children, so resting on any one of them brings all of it forward. Thickened as well
+   as brightened, because a highlight carried by brightness alone is one the reader on a magnifier
+   would not see. */
+.stonetop-relmap.is-lit .stonetop-relmap-tree-line { opacity: 0.15; }
+.stonetop-relmap.is-lit .stonetop-relmap-tree-line.is-lit { opacity: 1; stroke-width: 5; }
+
+/* Who the tree is NOT showing, in the corner of the viewport. Outside the board, so it stays put
+   while the chart is panned and zoomed under it, and quiet enough not to compete with the chart
+   for the eye it is only murmuring to. */
+.stonetop-relmap-aside {
+	position: absolute;
+	left: 0.6em;
+	bottom: 0.5em;
+	margin: 0;
+	padding: 0.15em 0.5em;
+	border-radius: 3px;
+	background: var(--st-page);
+	color: var(--st-quiet-ink, #5b6672);
+	font-size: var(--st-fs-sm, 0.85em);
+	pointer-events: none;
+}
+.stonetop-relmap-aside[hidden] { display: none; }
+
+/* THE BOARD'S OWN SETTINGS, under the viewport rather than up on the bar. What is on the bar
+   acts on the map, or picks which map you are reading; this only filters what is drawn, for one
+   reader, and is looked for once an evening at most. Bottom LEFT because that is the corner the
+   eye returns to last, and because the window's own resize grip lives in the other one.
+
+   Quiet type, like the aside above it: a checkbox competing with the map for attention would be
+   a control shouting about how little it does. */
+.stonetop-relmap-foot {
+	display: flex;
+	align-items: center;
+	gap: 0.6em;
+	padding: 0.3em 0.6em;
+	border-top: 1px solid var(--stonetop-border, rgba(0, 0, 0, 0.18));
+	background: var(--stonetop-bg);
+}
+
+/* `display: flex` above beats the attribute on its own, so the hidden state has to be said. */
+.stonetop-relmap-foot[hidden] { display: none; }
+
+/* A grid row, for the reason the tools above are one: core anchors a checkbox's size in PIXELS,
+   so an em-matched label drifts off its box at other font scales. The whole label is the target,
+   words included, which matters most for the reader on a magnifier aiming at a 20px box. */
+.stonetop-relmap-foot-check {
+	display: inline-grid;
+	grid-auto-flow: column;
+	align-items: center;
+	gap: 0.4em;
+	width: auto;
+	cursor: pointer;
+	font-size: var(--st-fs-sm, 0.85em);
+	color: var(--st-quiet-ink, #5b6672);
+}
+
+/* The box keeps the size core gives it (see the checkbox block at the top of this file); what is
+   set here is only that it does not stretch to the grid row's height. */
+.stonetop-relmap-foot-check input[type="checkbox"] {
+	align-self: center;
+	margin: 0;
+	flex: none;
 }
 
 /* The screen-reader announcement channel. Outside the board, because the board's markup is
@@ -40808,8 +41357,19 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-relmap-ink--teal   { --relmap-ink: var(--st-relmap-ink-teal); }
 .stonetop-relmap-ink--slate  { --relmap-ink: var(--st-relmap-ink-slate); }
 
-.stonetop-relmap-link-dirs { display: grid; gap: 0.15em; }
-.stonetop-relmap-dir { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0.4em; }
+/* WHICH WAY THE LINE IS READ, and WHAT FAMILY TIE IT IS: the same shape, said once, because they
+   are the same kind of question. The kin options name both people rather than saying "the first
+   person": a tie set the wrong way round leaves no trace in the writing on the line and turns the
+   tree upside down. */
+.stonetop-relmap-link-dirs,
+.stonetop-relmap-link-kins { display: grid; gap: 0.15em; }
+.stonetop-relmap-dir,
+.stonetop-relmap-kin { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0.4em; }
+.stonetop-relmap-link-hint {
+	margin: 0.25em 0 0;
+	color: var(--st-quiet-ink, #5b6672);
+	font-size: var(--st-fs-sm, 0.85em);
+}
 
 /* Affirmative on the LEFT, and the destructive one held apart from both. */
 .stonetop-relmap-link-foot {
@@ -40820,6 +41380,393 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 .stonetop-relmap-link-drop { margin-left: auto; }
+
+/* ── "Who did they mean?": matching recorded introduction answers to people ────────────────────
+   A long read that the reader works down in one pass, so the window is a fixed frame with ONE
+   scrolling middle: the standing instruction at the top and the count and buttons at the foot both
+   stay put, and the answers move between them. A whole-window scroll would take the Save button
+   off the bottom of a table with nine characters and eight answers each. */
+.stonetop-intro-match {
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	gap: 0.6em;
+	min-height: 0;
+	height: 100%;
+	/* Whole pixels, not the 0.2em this had: an em padding here resolves to 2.8px, so every
+	   paragraph in the list began at x.8 of a pixel, and a serif face at this size has stems about
+	   a pixel wide. Whole-pixel hardening rather than a proven fix -- measured, the raster barely
+	   moves -- but a text box has no reason to start on a fraction. */
+	padding: 3px;
+}
+
+/* The window's own body, a flex column so the list inside owns the scroll rather than the whole
+   window doing it. Scoped to the app class, as the catalogue's is, so it cannot reach another
+   window's content. */
+.stonetop-intro-match-app .window-content {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.stonetop-intro-match-intro {
+	margin: 0;
+	color: var(--st-quiet-ink, #5b6672);
+	font-size: var(--st-fs-sm, 0.85em);
+}
+
+/* ⚠ `min-height: 0` on the row above AND overflow here: a grid row sized `1fr` refuses to shrink
+   below its content by default, so without it the list pushes the footer out of the window
+   instead of scrolling inside it. */
+.stonetop-intro-match-body {
+	overflow-y: auto;
+	min-height: 0;
+	/* Whole pixels here too, for the reason the form's padding gives: this box is the text's
+	   left edge, and half a pixel of it is spent on every stem in the window. */
+	padding-right: 4px;
+}
+
+.stonetop-intro-match-group { margin-bottom: 0.9em; }
+
+/* Whose account this is. Sticky, because on a long list the name is the context every row below it
+   is read in, and a reader four answers down has scrolled it away. */
+.stonetop-intro-match-writer {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	margin: 0 0 0.35em;
+	padding: 0.15em 0;
+	background: var(--stonetop-bg, #f4ecd8);
+	border-bottom: 1px solid var(--st-rule, rgba(0, 0, 0, 0.15));
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-md, 1em);
+}
+
+.stonetop-intro-match-row {
+	padding: 0.4em 0 0.5em;
+	border-bottom: 1px solid var(--st-rule-faint, rgba(0, 0, 0, 0.07));
+}
+
+.stonetop-intro-match-q {
+	margin: 0;
+	color: var(--st-quiet-ink, #5b6672);
+	font-size: var(--st-fs-sm, 0.85em);
+}
+
+/* The writing itself, which is what the reader is actually deciding about, so it keeps the
+   near-body step rather than dropping to the base one: this is seventy-odd paragraphs of prose
+   somebody reads end to end, and 5% smaller is the wrong trade for a window like that. */
+.stonetop-intro-match-a {
+	margin: 0.15em 0 0.35em;
+	font-size: var(--st-fs-md, 1em);
+	line-height: 1.4;
+}
+
+.stonetop-intro-match-pick {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.3em 0.5em;
+	margin: 0;
+}
+
+.stonetop-intro-match-pick-label {
+	font-size: var(--st-fs-sm, 0.85em);
+	color: var(--st-quiet-ink, #5b6672);
+}
+
+/* No fixed height: this list sits beside a scaled-up label for the reader on a magnifier, and a
+   height in pixels would clip its own text the moment the font scale moved. */
+.stonetop-intro-match-pick select {
+	flex: 1 1 12em;
+	min-width: 0;
+	height: auto;
+	padding: 2px 6px;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm, 0.85em);
+}
+
+/* Where a pre-filled answer came from. Quiet, but never only a colour: it is a word. */
+.stonetop-intro-match-guessed {
+	flex: 0 0 auto;
+	font-size: var(--st-fs-xs, 0.78em);
+	font-style: italic;
+	color: var(--st-quiet-ink, #5b6672);
+}
+
+/* Affirmative on the LEFT, with the tally of what is being looked at held apart from both. */
+.stonetop-intro-match-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5em;
+}
+
+.stonetop-intro-match-buttons { display: flex; gap: 0.5em; }
+
+/* Both footer buttons are content-sized by the `.stonetop-cta` rule, which names this selector
+   alongside itself: core's compatibility layer makes a button fill its row and pins its leading at
+   28 pixels, so two in a flex row share the width, wrap their labels, and come out double-leaded
+   and twice as tall as they should be. The save button also wears the CTA's fill; the cancel button
+   beside it takes the sizing and nothing else. */
+
+.stonetop-intro-match-count {
+	color: var(--st-quiet-ink, #5b6672);
+	font-size: var(--st-fs-sm, 0.85em);
+}
+
+/* WHICH QUESTION THIS MAP IS BEING ASKED. A labelled `<select>` rather than four pressed buttons:
+   one tab stop, arrow keys inside it, one spoken name for the whole control, and — the practical
+   half — about a third of the width four labelled toggles would need on a bar that was already
+   over the edge. See the template for the rest of the reasoning.
+
+   The word beside it is a real label and not a placeholder inside the list, because the list's
+   value has to stay readable as the ANSWER ("The party"), and a control whose only text changes
+   with its state gives the reader nothing stable to look for. */
+.stonetop-relmap-viewpick {
+	display: inline-grid;
+	grid-auto-flow: column;
+	align-items: center;
+	gap: 0.35em;
+	width: auto;
+	flex: none;
+	margin: 0;
+}
+
+.stonetop-relmap-viewpick-label {
+	font-size: var(--st-fs-sm, 0.85em);
+	color: var(--st-quiet-ink, #5b6672);
+	white-space: nowrap;
+}
+
+/* Sized off the row rather than given a height, for the reason the tool button gives: core anchors
+   a form control's font-size in PIXELS, so an em-matched height drifts at other root sizes. */
+.stonetop-relmap-viewpick select {
+	width: auto;
+	min-width: 11ch;
+	height: auto;
+	padding: 0.2em 0.4em;
+	line-height: 1.6;
+}
+
+/* WHOSE WEB THE FOCUS VIEW IS SHOWING. The same control as its neighbour, holding names rather than
+   four fixed phrases, so it is given room for a name and a ceiling short of taking the bar over: a
+   settlement called "The Old Mill at Marshedge" is a legitimate centre and must not push the
+   captions control off the row. Past the ceiling the browser truncates the closed control; the open
+   list is sized by the browser and shows every name whole, and so does the face in the middle of
+   the board.
+
+   AFTER the base rule and not merged with it, so the modifier wins the tie (see the BEM ordering
+   this stylesheet keeps throughout). */
+.stonetop-relmap-viewpick--person select {
+	min-width: 12ch;
+	max-width: 22ch;
+}
+
+/* THE ONE PERSON A FOCUS VIEW IS ABOUT. A ring around the face, in the accent, and NOT a colour
+   swap on the portrait: at four times magnification the reader meets one face at a time, and what
+   they need is a mark they can recognise from the shape of it without reading the name under it.
+
+   A `box-shadow` rather than a border, so nothing about the layout moves when the mark appears — a
+   border would grow the circle and shift the name beneath it.
+
+   ⚠ ON THE FACE AND NOT ON THE PORTRAIT INSIDE IT. `.stonetop-relmap-face` is `overflow: hidden`
+   (it is what clips a rectangular portrait into a circle), so a shadow painted on the inner span is
+   clipped away to nothing and the mark simply does not appear — which is exactly what the first
+   version of this rule did. The second ring is the page tone, so the accent reads as a ring rather
+   than as a halo bleeding into whatever line passes behind it. */
+.stonetop-relmap-node.is-centre .stonetop-relmap-face {
+	box-shadow: 0 0 0 3px var(--st-accent-fill, slategrey), 0 0 0 5px var(--st-page, #fff);
+}
+
+.stonetop-relmap-node.is-centre .stonetop-relmap-name {
+	font-weight: 700;
+}
+
+/* ── "Who goes on the map?": the people chooser ────────────────────────────────────────────
+   The window that used to be a single alphabetical column of everybody in the world, now
+   wearing the shared guide-rail chrome (.stonetop-guide-split / -toc / -main / -nav) with one
+   list per part of the village on the rail. See dialogs/PersonPickerDialog.js.
+
+   A FIXED FRAME WITH ONE SCROLLING MIDDLE, exactly as the answer matcher above: the find box
+   at the top and the buttons at the foot stay put, and the names move between them. Letting
+   this window size to its content is what made the old chooser open taller than the screen on
+   a village of two dozen, with its own confirm button below the desk. */
+.stonetop-person-picker-app .window-content {
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.stonetop-person-picker {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	font-family: var(--font-stonetop);
+}
+
+/* ⚠ `hidden` HAS TO WIN HERE. The rail switches lists by setting `hidden` and the find box
+   hides a row the same way, and a `display` declared on either element beats the browser's own
+   `[hidden]` rule — which is a window showing every list at once and a find box that narrows
+   nothing. Scoped to this window, so it settles nothing else. */
+.stonetop-person-picker [hidden] { display: none !important; }
+
+/* The panel column beside the rail. Shared .stonetop-guide-main supplies the flex column; this
+   is its own scroll, the room to shrink beside a fixed-width rail, and a tighter padding than
+   a guide step wants: the content here is a list, not prose. */
+.stonetop-person-picker-main {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	padding: 10px 12px 12px;
+	gap: 8px;
+}
+
+.stonetop-person-picker-rail { padding-top: 10px; }
+
+/* How many are on each list, rewritten as the find box narrows them: a name on a list the
+   reader is not looking at still shows up as a count that stayed. Tabular figures so the
+   column of numbers does not jitter as it counts down. */
+.stonetop-person-picker-count {
+	flex: 0 0 auto;
+	margin-left: auto;
+	font-size: var(--st-fs-xs);
+	color: var(--st-quiet-ink, #5b6672);
+	font-variant-numeric: tabular-nums;
+}
+
+.stonetop-person-picker-hintline {
+	margin: 0;
+	font-size: var(--st-fs-sm);
+	color: var(--st-quiet-ink, #5b6672);
+}
+
+/* The find box: one control made of two elements, so the glass sits inside the field's own
+   edge rather than beside it. */
+.stonetop-person-picker-find {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	flex: 0 0 auto;
+	padding: 0 0.5em;
+	border: 1px solid var(--color-border-dark, #7a7971);
+	border-radius: var(--st-radius-sm);
+	background: var(--stonetop-bg, #f5f0e8);
+}
+
+.stonetop-person-picker-find > i {
+	flex: 0 0 auto;
+	color: var(--st-quiet-ink, #5b6672);
+}
+
+/* Borderless inside the box above, which is what makes the two read as one control. Height
+   left to the content for the reason the view chooser gives: core anchors a form control's
+   font-size in pixels, so an em-matched height drifts at other root sizes. */
+.stonetop-person-picker-find-input {
+	flex: 1 1 auto;
+	width: auto;
+	min-width: 0;
+	height: auto;
+	padding: 0.25em 0;
+	border: none;
+	background: none;
+	box-shadow: none;
+}
+
+.stonetop-person-picker-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.stonetop-person-picker-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+/* One person, and the whole row is the label: the face and the name answer the question as
+   readily as the radio does, which on a list of names is where the pointer already is. */
+.stonetop-person-picker-row {
+	display: flex;
+	align-items: center;
+	gap: 0.6em;
+	padding: 4px 6px;
+	border: 1px solid transparent;
+	border-radius: var(--st-radius-sm);
+	cursor: pointer;
+}
+
+.stonetop-person-picker-row:hover {
+	background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+/* The picked row, marked as the content picker marks its own: an accented edge and a filled
+   bed, so the answer can be seen without reading down the radios. */
+.stonetop-person-picker-row:has(input:checked) {
+	border-color: var(--st-btn-primary-bg, currentColor);
+	background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+/* Pinned to slate for the reason .stonetop-content-picker-option gives: unstyled it takes
+   Foundry v14's core orange accent and is the odd radio out in the system. */
+.stonetop-person-picker-row input[type="radio"] {
+	accent-color: slategrey;
+	flex: 0 0 auto;
+	margin: 0;
+}
+
+/* The clipping box a hand-framed portrait is positioned against (utils/portrait-frame.js
+   writes the crop inline, in percentages of THIS box). Round at this size, matching
+   .steading-member-avatar and the character sheet's relationship faces, so the same village
+   reads as one set of portraits wherever it is listed. The centred glyph is the fallback for
+   somebody with no art of their own. */
+.stonetop-person-picker-face {
+	flex: 0 0 26px;
+	width: 26px;
+	height: 26px;
+	position: relative;
+	overflow: hidden;
+	display: grid;
+	place-items: center;
+	border: 1px solid rgba(0, 0, 0, 0.22);
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.55);
+	color: var(--st-quiet-ink, #5b6672);
+	font-size: var(--st-fs-xs);
+}
+
+.stonetop-person-picker-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+/* The note under a name (a home, an occupation) is secondary and may run long; the name it
+   belongs to never truncates. */
+.stonetop-person-picker-note {
+	font-size: var(--st-fs-xs);
+	color: var(--st-quiet-ink, #5b6672);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+/* What a list narrowed to nothing says. Points at the rail rather than at itself: the counts
+   there are already showing which list the name is actually on. */
+.stonetop-person-picker-none {
+	margin: 0.6em 0 0;
+	font-size: var(--st-fs-sm);
+	color: var(--st-quiet-ink, #5b6672);
+}
+
+.stonetop-person-picker-foot { flex: 0 0 auto; }
 
 /* ══ ACCESSIBILITY: the paper, and the two switches a reader can turn ══════════════════════
    Driven by two client settings (module/settings.js → applySheetContrast, applySheetTexture),
@@ -41008,7 +41955,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	   raise. Taken to 4.6:1 and still eight recognisably different colours. Re-DEFINED here,
 	   never read: the lines are the only thing that reads them, and the labels those lines
 	   carry are body ink on paper in both modes. The dash patterns are untouched, being the
-	   half of the distinction that never depended on seeing colour at all. */
+	   half of the distinction that never depended on seeing colour at all, and the rule below
+	   is what puts them on the board. */
 	--st-relmap-ink-rose:   hsl(340deg 62% 48%);
 	--st-relmap-ink-sage:   hsl(100deg 55% 30.5%);
 	--st-relmap-ink-ochre:  hsl(62deg 62% 27%);
@@ -41017,6 +41965,21 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	--st-relmap-ink-rust:   hsl(25deg 32% 41%);
 	--st-relmap-ink-teal:   hsl(170deg 62% 29%);
 	--st-relmap-ink-slate:  hsl(215deg 16% 44%);
+}
+
+/* AND THE EIGHT DASH PATTERNS, WHICH ONLY THIS MODE PAINTS.
+
+   An ordinary board draws every line solid: a web of eighty strokes in eight different
+   dot-and-dash patterns reads as static rather than as a diagram, and that is the board most
+   people are looking at. This mode is the one whose entire job is to carry a distinction that
+   colour alone cannot, so it is the one that spends legibility on the pattern. The values come
+   off the same `--relmap-dash` the ink pairs already set, so a colour and its dash still cannot
+   be set apart from one another.
+
+   More specific than the plain `.stonetop-relmap-line` rule that sets it solid, so it wins
+   wherever it sits; it is here because this is where the mode's rules live. */
+:root.stonetop-high-contrast .stonetop-relmap-line {
+	stroke-dasharray: var(--relmap-dash, none);
 }
 
 /* CORE'S OWN COLOUR NAMES, RE-DECLARED WHERE THEY CAN BE SEEN.

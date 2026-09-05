@@ -63,7 +63,7 @@
         "rolling": "Rolling and Chat",
         "windows": "Windows",
         "hover": "On Hover Info",
-        "openSettings": "All Stonetop Settings\u2026"
+        "openSettings": "All Stonetop Settings…"
       }
     },
     "books": {
@@ -1422,29 +1422,20 @@
       "noun": "relationship map",
       "untitled": "Relationship Map",
       "someone": "Someone",
-      "locked": "Locked",
-      "unlocked": "Editing",
-      "lockToggle": "Edit the board",
-      "lockHintOn": "The board is locked. Unlock it to move people and draw lines.",
-      "lockHintOff": "The board can be edited. Lock it to pan and read without moving anything.",
-      "lockedNow": "The board is locked.",
-      "unlockedNow": "The board can be edited.",
       "add": "Add someone",
       "addHint": "Put another person on the map.",
-      "cast": "Add everyone",
-      "castHint": "Put the whole cast on the map: every player character, and everybody on the Stonetop sheet's Residents and Neighbors rosters. Adds people, not lines, and never moves anyone already placed.",
-      "castAdded": "Added {count} to the map.",
-      "castAllHere": "Everyone from the Stonetop sheet is already on this map.",
-      "castNobody": "There is nobody to add yet. Player characters and the Residents and Neighbors on your Stonetop sheet are what this pulls from.",
       "addTitle": "Who goes on the map?",
+      "addNamed": "Add {name}",
       "tidy": "Tidy up",
-      "tidyHint": "Put everyone back on a ring, evenly spaced.",
-      "pull": "Pull in ratings",
-      "pullHint": "Put everyone the sheets have actually rated onto this map, with a line each way somebody has judged. Does not change the sheets, and never overwrites a line you have already drawn.",
-      "pulled": "Added {people} on the map and {links} lines.",
-      "pullNothingNew": "Everything the sheets have rated is already on this map.",
-      "pullNothingRated": "Nobody has rated anybody yet, so there is nothing to pull in. Ratings are the hearts on a character or NPC sheet.",
-      "tidied": "Everyone has been put back on a ring.",
+      "tidyHint": "Lay the whole board out again, and choose how.",
+      "dropPulled": "Rub out pulled-in lines",
+      "dropPulledHint": "Rub out the lines an older version of this window pulled in from the hearts on the sheets. Everything anyone drew by hand is left alone, and so is everyone on the map. What the party answered about each other is on the board called The Party instead.",
+      "dropPulledTitle": "Rub out the pulled-in lines?",
+      "dropPulledBody": "{count} line(s) on this board were pulled in from the hearts on the sheets, not drawn by anyone. They will be rubbed out for everyone. Lines drawn by hand are not touched, nobody comes off the map, and no sheet is changed. There is no undo.",
+      "dropPulledConfirm": "Rub out {count} line(s)",
+      "dropPulledCancel": "Leave them",
+      "dropPulledDone": "{count} pulled-in line(s) have been rubbed out.",
+      "dropPulledNothing": "There are no pulled-in lines left on this board.",
       "choose": "Add",
       "cancel": "Never mind",
       "emptyLead": "Nobody is on this map yet.",
@@ -1460,6 +1451,7 @@
       "linkFrom": "Draw a line from {name}",
       "linkFromTitle": "Draw a line from {name} to whom?",
       "linkPickTitle": "Draw a line to whom?",
+      "linkToNamed": "Draw a line to {name}",
       "nobodyToLink": "There is nobody else on this map to draw a line to yet.",
       "linked": "{a} and {b} are now linked.",
       "unlinked": "That line has been rubbed out.",
@@ -1498,16 +1490,184 @@
         "b-a": "One way, to the first person",
         "both": "Both ways, marked at each end"
       },
+      "kinField": "Family tie",
+      "kinHint": "Set this and the line joins up the family tree, which is the other way of reading this map.",
+      "kins": {
+        "none": "Not a family tie",
+        "parent": "The first is the second's parent",
+        "child": "The first is the second's child",
+        "partner": "They are partners"
+      },
+      "kinsNamed": {
+        "none": "Not a family tie",
+        "parent": "{a} is {b}'s parent",
+        "child": "{a} is {b}'s child",
+        "partner": "{a} and {b} are partners"
+      },
+      "kinWords": {
+        "parent": "mother, father, mum, mam, dad, da, papa, mama, ma, pa, parent, stepmother, stepfather, godmother, godfather, foster mother, foster father, adoptive mother, adoptive father, birth mother, birth father, sired, fathered, bore",
+        "child": "son, daughter, child, sons, daughters, children, stepson, stepdaughter, godson, goddaughter, foster son, foster daughter, adopted son, adopted daughter, offspring",
+        "partner": "wife, husband, spouse, partner, married, wed, wedded, betrothed, handfasted, consort, widow, widower"
+      },
+      "familyNone": "No family ties are marked on this map yet.",
+      "familyNoneHint": "Open a line and say what family tie it is: a parent, a child, or a partner. Everything marked joins up here as a tree.",
+      "familyNoneHintReadonly": "Whoever keeps this map has not marked any family ties on it yet.",
+      "familyOmitted": "{count} more on this map, with no family tie recorded.",
+      "findKin": "Find family ties",
+      "findKinHint": "Read the writing on every line and mark the ones that name a family tie: mother, son, wife. A line you have already marked is never changed.",
+      "findKinFound": "Marked {count} line(s) as family ties. Worth a look: a line is read as saying the FIRST person is the second's mother, son or wife, so any drawn the other way round want turning about.",
+      "findKinNone": "Nothing left on this map reads like a family tie. Open a line to set one by hand.",
       "maps": {
         "heading": "Relationship maps",
         "blurb": "Who at this table knows whom, and how. Every player can move people and draw lines on these.",
         "open": "Open",
         "newMap": "New map",
         "newTitle": "Name the new map",
-        "newPlaceholder": "The people of Stonetop",
+        "newPlaceholder": "Stonetop",
         "none": "No relationship maps yet.",
         "cannotCreate": "Ask your GM to make a relationship map. Making one needs a trusted-player role; once it exists you can edit it.",
-        "count": "{count} on the map"
+        "count": "{count} on the map",
+        "pageCount": "{count} page(s)"
+      },
+      "pages": {
+        "label": "Pages of this map",
+        "untitled": "New page",
+        "placeholder": "The Millers, Marshedge, who owes whom",
+        "new": "New page",
+        "newHint": "Start another board on this map, with nobody on it yet. Each page has its own people, its own lines and its own layout.",
+        "newTitle": "Name the new page",
+        "added": "{name} has been added, and is the page you are on.",
+        "rename": "Rename",
+        "renameHint": "Rename the page you are on.",
+        "renameTitle": "Rename this page",
+        "renameGo": "Rename it",
+        "renamed": "This page is now called {name}.",
+        "delete": "Delete page",
+        "deleteHint": "Rub out the page you are on, and everyone on it. The other pages of this map are untouched.",
+        "deleteTitle": "Rub out this page?",
+        "deleteBody": "{name} will be rubbed out. Nobody is on it, and the other pages of this map are untouched.",
+        "deleteBodyPeople": "{name} will be rubbed out, along with the {count} person(s) on it and every line drawn between them. Their character sheets are not touched, and neither are the other pages of this map.",
+        "deleteConfirm": "Rub out {name}",
+        "deleteCancel": "Keep this page",
+        "deleted": "{name} has been rubbed out.",
+        "now": "Showing {name}.",
+        "failed": "That page could not be made. You may no longer have permission to change this map.",
+        "party": "The Party",
+        "partySeeded": "{name}: added {people} player character(s) and {lines} line(s) from the introductions.",
+        "partyRefresh": "Bring the party in",
+        "partyRefreshHint": "Put any player character who is not on this board yet onto it, and draw any introduction answer that has been recorded since. Nobody is moved, nobody is taken off, and nothing you have rewritten is drawn twice, so pressing this again is safe.",
+        "partyNothingNew": "Everyone in the party is already on this board, with everything they have answered.",
+        "villageSeeded": "{people} resident(s) of Stonetop are now on {name}.",
+        "villageRefresh": "Bring the village in",
+        "villageRefreshHint": "Put every resident on the steading's Residents list onto this board. Nobody is moved and nobody is taken off, so pressing it again is safe. It also brings back anyone you have taken off this board, whom the map will not put back on its own.",
+        "villageNothingNew": "Every resident of Stonetop is already on this board.",
+        "villageNone": "The steading has nobody on its Residents list yet. Add them on the steading sheet and they will come onto this board."
+      },
+      "match": {
+        "button": "Match answers to people",
+        "buttonHint": "Go through every answer recorded during the introductions and say who at this table each one is about. Answers recorded before the introductions began asking that only reach this board if the writing happens to name somebody, and this is how to tell it the rest. Nothing is written until you save.",
+        "title": "Who did they mean?",
+        "intro": "Every answer your table recorded during the introductions. Where the writing names somebody, they are already chosen and marked as a guess: read it, correct what is wrong, and leave the answers about people outside the party on \"nobody at this table\". The party board draws an arrow for each one you match.",
+        "about": "About",
+        "none": "Nobody at this table",
+        "guessed": "guessed from the writing",
+        "count": "{count} answer(s) recorded.",
+        "save": "Save these",
+        "nothing": "Nobody has recorded an introduction answer yet, so there is nothing to match.",
+        "saved": "{count} answer(s) now say who they are about."
+      },
+      "tidyTitle": "How should the board be laid out?",
+      "tidyGo": "Lay it out",
+      "shape": {
+        "ring": "Around a ring",
+        "clusters": "By who knows whom"
+      },
+      "shapeHint": {
+        "ring": "One circle of faces, seated so that people who are linked sit near each other. Short lines near the rim, and few reaching across the middle.",
+        "clusters": "Let the lines pull people together. Households, factions and anyone a crowd has opinions about end up as knots with space between them."
+      },
+      "tidied": {
+        "ring": "Everyone has been seated round a ring, next to the people they are linked to.",
+        "clusters": "Everyone has been pulled into groups by who they are linked to."
+      },
+      "labelsToggle": "What the lines say",
+      "labelsHint": "How much of the writing on the lines is showing. Yours alone: it changes nothing for anyone else at the table.",
+      "labels": {
+        "all": "All labels",
+        "hover": "Labels on hover",
+        "off": "No labels"
+      },
+      "labelsNow": {
+        "all": "Every line's label is showing.",
+        "hover": "A line's label shows while you rest on one of the people it joins.",
+        "off": "The labels are hidden. The lines and their colours are still there."
+      },
+      "hidePulled": "Hide pulled-in lines",
+      "hidePulledHint": "Put away the lines an older version of this window pulled in from the hearts on the sheets: the regard everybody recorded while introducing their characters. There is one for every rating anybody made, and a separate one each way round, so a table that filled its sheets in properly can bury the ties it drew by hand under a hundred of them. Nothing is rubbed out. The lines are still on the map, still on everyone else's screen, and unticking this brings them straight back. Only lines pulled in while that button existed can be told apart, so anything imported before then stays showing.",
+      "pulledNow": {
+        "on": "The lines pulled in from the sheets are hidden. Everything drawn by hand is still there.",
+        "off": "The lines pulled in from the sheets are showing again."
+      },
+      "viewLabel": "Showing",
+      "viewHint": "Which question you are asking of this map. All four read the same board and none of them changes it: yours alone, and everybody's arrangement is exactly as you left it when you switch back.",
+      "view": {
+        "everyone": "Everyone on the map",
+        "party": "The party",
+        "focus": "One person's web",
+        "family": "Family tree"
+      },
+      "viewNow": {
+        "everyone": "Showing everyone on the map.",
+        "party": "Showing the {count} player character(s) and the {links} line(s) between them.",
+        "focus": "Showing {name} and the {count} person(s) with a line to them.",
+        "family": "Showing the family tree."
+      },
+      "noDrop": "This view arranges the board itself, so nobody can be dropped onto it. Switch to Everyone on the map to put someone new on it.",
+      "partyOmitted": "{count} more on this map, who are not player characters.",
+      "partyNone": "Nobody on this map is a player character.",
+      "partyNoneHint": "This view narrows any board to the player characters and the lines between them. Put them on the map and they will appear here.",
+      "focusHint": "Choose whose web this shows: that person in the middle, everybody with a line straight to them around the outside, and only the lines that touch them.",
+      "focusOf": "of",
+      "focusAria": "Whose web this shows",
+      "focusYours": "{name} (your character)",
+      "focusNoneChosen": "Nobody chosen",
+      "focusGroups": {
+        "party": "Player characters",
+        "others": "Everyone else"
+      },
+      "focusOmitted": "{count} more on this map, with no line shown to {name}.",
+      "focusNone": "Nothing is linked to {name} yet.",
+      "focusNoneHint": "This view shows the lines drawn straight to one person. Draw a line to them on the whole map and it will appear here.",
+      "focusUnset": "Nobody is chosen yet.",
+      "focusUnsetHint": "Pick somebody from the chooser above and this view will show them, everybody with a line straight to them, and nothing else.",
+      "showAll": "Show everyone",
+      "focusGone": "The person this was showing is no longer on this map.",
+      "focusGoneHint": "Somebody has taken them off the board. Choose whoever you want to look at next from the chooser above, or switch back to the whole map.",
+      "emptyHintNarrow": "This view arranges the board itself, so nobody can be added or dropped onto it. Switch to Everyone on the map to put the first person on.",
+      "focusLeftMap": "That person has been taken off this map.",
+      "partyNoneHintReadonly": "This view narrows any board to the player characters and the lines between them. Whoever keeps this map has not put any of them on it yet.",
+      "focusNoneHintReadonly": "This view shows the lines drawn straight to one person, and nobody has drawn one to them yet.",
+      "openSheetFixed": "{name}. Click to open their sheet.",
+      "introLine": "{question} {answer}"
+    },
+    "people": {
+      "choose": "Choose",
+      "cancel": "Never mind",
+      "find": "Find someone",
+      "findAria": "Find someone by name",
+      "listsAria": "Which list to look in",
+      "noMatches": "Nobody on this list matches what you typed. The counts beside the other lists say where they are.",
+      "groups": {
+        "players": "Players",
+        "residents": "Residents",
+        "neighbors": "Neighbors",
+        "others": "Everyone else"
+      },
+      "groupHints": {
+        "players": "The player characters at this table.",
+        "residents": "The people of Stonetop.",
+        "neighbors": "People whose home is somewhere else.",
+        "others": "Everybody the steading sheet does not list."
       }
     },
     "mapPinNames": {
