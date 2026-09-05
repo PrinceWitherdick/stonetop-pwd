@@ -30162,8 +30162,29 @@ th:has(> .stonetop-roll-table-btn) {
 /* ── Share With Players ─────────────────────────────────────────────────────── */
 
 /* Header button on the journal entry sheet. The v12 <a> form shows an icon +
-   "Share"; the v13+ icon-only <button> inherits the native header-control look. */
-.stonetop-share-journal.is-shared { color: var(--st-green-text); }
+   "Share"; the v13+ icon-only <button> inherits the native header-control look.
+
+   The shared tint is a LIGHT green written out here, NOT --st-green-text. That token is ink
+   for parchment (hsl(140 40% 18%)), and this button is the one piece of Stonetop chrome that
+   never lands on parchment: a journal entry window sets --color-header-background to
+   transparent over a --color-cool-5-90 frame (#0b0a13 at 90%), so the bar is near-black and
+   the core controls beside us are #f7f3e8. Parchment ink on that measured 1.35:1, which is
+   what "the share eye is hard to see" looked like: the glyph was there, just not readable,
+   and "players can see this journal" is precisely the state a GM has to read at a glance.
+   hsl(140 32% 66%) is the same light green the dark-mood windows already swap
+   --st-green-text to, so the pair stays one colour idea, and it clears 7.84:1 on that bar
+   (the frame is 90% opaque, so that is the worst case of it sitting over a white page; over
+   a dark canvas it is 10.53:1) while still reading as green rather than as another white
+   control.
+
+   HOVER HANDS THE GLYPH BACK. Core fills a hovered header control with #c9593f and paints it
+   #f7f3e8 (3.80:1), and the tint above is unlayered while all of core is inside @layer
+   applications, so ours wins the hover too unless it says otherwise: the green would have
+   ridden onto that terracotta at 2.11:1, making the one control you are actually pointing at
+   the hardest one to read. On hover the fill IS the signal, so the colour goes back to core's
+   own, tracked through its variable rather than copied. */
+.stonetop-share-journal.is-shared { color: hsl(140 32% 66%); }
+.stonetop-share-journal.is-shared:hover { color: var(--button-hover-text-color, #f7f3e8); }
 a.stonetop-share-journal > i { margin-right: 3px; }
 
 .stonetop-share {
