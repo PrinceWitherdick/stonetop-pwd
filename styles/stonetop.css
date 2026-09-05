@@ -27675,6 +27675,62 @@ th:has(> .stonetop-roll-table-btn) {
 	line-height: 1.45;
 }
 
+/* Who at this table the answer is about: the optional pick that sits under the answer field and
+   draws the arrow on the relationship map's party board (IntroductionsDialog, relmap-intros.js).
+   A row rather than a stacked label, because it is a small aside beneath a field somebody is
+   writing in, and it must not read as a second question being asked of them. Wraps, so a long
+   character name on a narrow window drops the control under its label instead of squeezing it. */
+.stonetop-intros-about {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px 8px;
+	margin-top: 2px;
+}
+
+.stonetop-intros-about-label {
+	font-size: calc(0.72rem * var(--stonetop-font-scale, 1));
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--color-text-dark-secondary);
+}
+
+/* No fixed height, unlike the expedition switcher next door: this one sits beside a low-vision
+   reader's scaled-up label, and a height in pixels would clip the text the moment the font
+   scale went past 1. Padding sizes it instead, so it grows with what is in it. */
+.stonetop-intros-about-pick {
+	flex: 1 1 140px;
+	min-width: 0;
+	height: auto;
+	padding: 2px 6px;
+	border: 1px solid rgba(0, 0, 0, 0.22);
+	border-radius: var(--st-radius);
+	background: rgba(255, 255, 255, 0.4);
+	font-family: var(--font-stonetop);
+	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
+	color: inherit;
+}
+
+/* The same fact for a watcher, who has no control to read it off. */
+.stonetop-intros-about-said {
+	margin: 2px 0 0;
+	font-size: calc(0.8rem * var(--stonetop-font-scale, 1));
+	color: var(--color-text-dark-secondary);
+}
+
+.stonetop-intros-about-said > i { font-size: 0.9em; opacity: 0.8; }
+
+/* And on a line already recorded, so a pick can be seen to have stuck. */
+.stonetop-intros-recorded-about {
+	margin-left: 6px;
+	font-size: calc(0.8rem * var(--stonetop-font-scale, 1));
+	color: var(--color-text-dark-secondary);
+	white-space: nowrap;
+}
+
+.stonetop-intros-recorded-about > i { font-size: 0.85em; opacity: 0.8; }
+
 /* Read-only recorded answer shown to players for the active PC's turn. */
 .stonetop-intros-recorded {
 	padding: 8px 12px;

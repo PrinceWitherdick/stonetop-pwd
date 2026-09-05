@@ -118,6 +118,14 @@ function _getCombatPcs() {
 // A chosen-question index normalized to an int, or null (no/blank prompt).
 const _normQ = (v) => (Number.isInteger(v) ? v : null);
 
+// Who an answer is about, normalized to an actor id, or null (nobody at this table was picked).
+//
+// ⚠ NULL IS THE ORDINARY ANSWER, not a fault. Most "Bonds & ties" answers are about somebody
+// outside the party ("my sister Maeve"), and the pick is offered rather than required, so a blank
+// one is simply an answer nobody was asked to point at. The relationship map falls back to looking
+// for a name in the writing (relmap/relmap-intros.js), which is all it ever had before this.
+const _normWho = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
 // ── IntroductionsDialog ───────────────────────────────────────────────────────
 
 export class IntroductionsDialog extends StonetopDialog {
@@ -393,16 +401,27 @@ export class IntroductionsDialog extends StonetopDialog {
 		// only then re-renders, so between the two the DOM is a render behind — and a blur
 		// `change` fires exactly there, when clicking a question is what moved focus off the
 		// textarea. Reading the DOM wrote the old pick back over the new one.
-		const pickedQ = (actorId, stepKey) => this._stepDraft(actorId, stepKey).q;
+		//
+		// ⚠ EXCEPT `who`, WHICH COMES OFF ITS OWN CONTROL, and the asymmetry is the point. The about
+		// pick shows its own state and deliberately does NOT re-render (see its handler), so its DOM
+		// is never a render behind — while its flag is a `setFlag` behind, for as long as that write
+		// is in the air. Read off the flag, a keystroke landing in that window carried the OLD pick
+		// forward and the debounced write 300ms later put it back over the one the writer had just
+		// made, with nothing on screen to say so.
+		const composed = (actorId, stepKey) => {
+			const { q, who } = this._stepDraft(actorId, stepKey);
+			return { q, who: this._aboutPicked(actorId, stepKey) ?? who };
+		};
 		html.find(".stonetop-intros-draft").on("input", ev => {
 			const el = ev.currentTarget;
+			const { q, who } = composed(el.dataset.actorId, el.dataset.stepKey);
 			this._setSaveStatus("saving");
-			this._scheduleLiveDraft(el.dataset.actorId, el.dataset.stepKey, pickedQ(el.dataset.actorId, el.dataset.stepKey), el.value);
+			this._scheduleLiveDraft(el.dataset.actorId, el.dataset.stepKey, q, el.value, who);
 		});
 		html.find(".stonetop-intros-draft").on("change", async ev => {
 			const el = ev.currentTarget;
 			this._cancelLiveDraft();
-			await this._saveDraft(el.dataset.actorId, el.dataset.stepKey, { q: pickedQ(el.dataset.actorId, el.dataset.stepKey), a: el.value });
+			await this._saveDraft(el.dataset.actorId, el.dataset.stepKey, { a: el.value });
 			this._setSaveStatus("saved");
 		});
 		// Pick (or toggle off) which question the draft answers/asks, preserving any typed
@@ -410,11 +429,27 @@ export class IntroductionsDialog extends StonetopDialog {
 		html.find(".stonetop-intros-question-pick").on("click", async ev => {
 			const el      = ev.currentTarget;
 			const idx     = Number(el.dataset.qIndex);
-			const current = this._stepDraft(el.dataset.actorId, el.dataset.stepKey).q;
+			const { q: current } = composed(el.dataset.actorId, el.dataset.stepKey);
 			const domA    = this.element?.[0]?.querySelector(".stonetop-intros-draft")?.value ?? "";
 			this._cancelLiveDraft();
 			await this._saveDraft(el.dataset.actorId, el.dataset.stepKey, { q: current === idx ? null : idx, a: domA });
 			this.render(false);
+		});
+		// Who at this table the answer is about. Written to the flag the moment it changes, like a
+		// question pick and for the same reason: from here on the flag is what every other writer
+		// reads the pick back out of, so it must never be a render behind the control.
+		//
+		// NO RE-RENDER OF ITS OWN, unlike the question pick, which has a highlight and a gray-out
+		// to move. This select shows its own state, and rebuilding the step here would take the
+		// caret out of the answer field somebody is very likely still typing in. The write
+		// broadcasts, so the other client's view of the pick follows on its own.
+		html.find(".stonetop-intros-about-pick").on("change", async ev => {
+			const el   = ev.currentTarget;
+			const domA = this.element?.[0]?.querySelector(".stonetop-intros-draft")?.value ?? "";
+			this._cancelLiveDraft();
+			this._setSaveStatus("saving");
+			await this._saveDraft(el.dataset.actorId, el.dataset.stepKey, { a: domA, who: el.value });
+			this._setSaveStatus("saved");
 		});
 
 		this._registerCombatHooks();
@@ -435,8 +470,9 @@ export class IntroductionsDialog extends StonetopDialog {
 	// flags.stonetop-pwd.intro (a write the owning player is always allowed to make —
 	// see Phase 3), so it survives reload and a momentarily-absent GM. The GM harvests
 	// it into the world-scoped introductionsAnswers (the Chronicle source) below. Shape:
-	//   intro = { step4:{answers:[{q,a}],passed}, step6:{…}, live:{stepKey,q,a}|null }
-	// where `live` is the single in-progress draft buffer (one step is active at a time).
+	//   intro = { step4:{answers:[{q,a,who}],passed}, step6:{…}, live:{stepKey,q,a,who}|null }
+	// where `live` is the single in-progress draft buffer (one step is active at a time) and `who`
+	// is the actor id of the player character the answer is about, where the writer picked one.
 
 	_actor(actorId) {
 		return game.actors?.get(actorId) ?? null;
@@ -453,34 +489,61 @@ export class IntroductionsDialog extends StonetopDialog {
 		return this._actor(actorId)?.getFlag(_FLAG_SCOPE, _INTRO_FLAG) ?? {};
 	}
 
-	// This PC's committed record for a step: { answers:[{q,a}], passed }.
+	// This PC's committed record for a step: { answers:[{q,a,who}], passed }.
 	_stepRecord(actorId, stepKey) {
 		const s = this._intro(actorId)[stepKey];
 		return { answers: Array.isArray(s?.answers) ? s.answers : [], passed: !!s?.passed };
 	}
 
-	// The in-progress draft ({ q, a }) for a step — the shared `live` buffer, but only
+	// The in-progress draft ({ q, a, who }) for a step — the shared `live` buffer, but only
 	// when it currently belongs to this step.
 	_stepDraft(actorId, stepKey) {
 		const live = this._intro(actorId).live;
 		return (live && live.stepKey === stepKey)
-			? { q: _normQ(live.q), a: typeof live.a === "string" ? live.a : "" }
-			: { q: null, a: "" };
+			? { q: _normQ(live.q), a: typeof live.a === "string" ? live.a : "", who: _normWho(live.who) }
+			: { q: null, a: "", who: null };
 	}
 
-	// Update the live draft for a step. Writes the whole live buffer (all three keys)
+	// Who the "Who is this about?" select on screen is showing, or undefined when this step has no
+	// such control (a narration round, or a readonly preview) — which is the difference `composed`
+	// leans on, since "" is a real answer there meaning "nobody at this table".
+	//
+	// There is only ever ONE editable capture on screen, the same assumption `_setSaveStatus` makes,
+	// so the control is found without building a selector out of ids; its own data-* are then
+	// checked, so a select left over from another turn cannot answer for this one.
+	_aboutPicked(actorId, stepKey) {
+		const el = this.element?.[0]?.querySelector(".stonetop-intros-about-pick");
+		if (!el || el.dataset.actorId !== actorId || el.dataset.stepKey !== stepKey) return undefined;
+		return el.value;
+	}
+
+	// Update the live draft for a step. Writes the whole live buffer (every key)
 	// so a step switch or a cleared field can't leave a stale sub-key behind (setFlag
 	// deep-merges). No-op without write permission (a non-owning player off-turn), and a
 	// no-op when nothing actually changed — so per-keystroke drafting (and the blur `change`
 	// that repeats the last input) doesn't spam a document write + broadcast to every client.
-	async _saveDraft(actorId, stepKey, { q, a } = {}) {
+	//
+	// ⚠ A PATCH, MERGED OVER THE STEP'S CURRENT DRAFT, and the merge happens HERE rather than at
+	// each call site. The buffer is still written whole (see above), so a caller that named only
+	// two of the three fields used to rub out the third — a keystroke handler missing `who` would
+	// erase the person the writer had just picked, on the very next character they typed. That was
+	// an invariant every one of six call sites had to remember, enforced by nothing, and its failure
+	// was silent and destructive. Now a caller passes what it is CHANGING; anything it does not name
+	// is carried over. An explicit `null` still overrides, which is what the question-pick toggle
+	// needs to mean "no question chosen".
+	//
+	// The fields it does name are still read off the FLAG rather than the DOM where they are
+	// composed — see the note on the draft listeners for why that half matters.
+	async _saveDraft(actorId, stepKey, patch = {}) {
 		const actor = this._ownedActor(actorId);
 		if (!actor) return;
+		const cur = this._stepDraft(actorId, stepKey);
+		const { q, a, who } = { ...cur, ...patch };
 		const nq  = _normQ(q);
 		const na  = typeof a === "string" ? a : "";
-		const cur = this._stepDraft(actorId, stepKey);
-		if (cur.q === nq && cur.a === na) return;
-		await actor.setFlag(_FLAG_SCOPE, `${_INTRO_FLAG}.live`, { stepKey, q: nq, a: na });
+		const nw  = _normWho(who);
+		if (cur.q === nq && cur.a === na && cur.who === nw) return;
+		await actor.setFlag(_FLAG_SCOPE, `${_INTRO_FLAG}.live`, { stepKey, q: nq, a: na, who: nw });
 	}
 
 	// Shared 300ms debounce behind the near-live draft/narration writes. Cancellable via the
@@ -503,10 +566,16 @@ export class IntroductionsDialog extends StonetopDialog {
 	}
 
 	// Schedule a debounced live-draft write for an answer/ask step.
-	_scheduleLiveDraft(actorId, stepKey, q, a) {
+	//
+	// ⚠ ALL THREE FIELDS ARE PASSED HERE ON PURPOSE, and this is the one caller that should. They
+	// were SNAPSHOTTED at input time (see the draft listeners), and the whole point of the snapshot
+	// is that the write 300ms later records what was on screen when the key was pressed rather than
+	// whatever the flag says by then. Letting `_saveDraft` merge these from the current draft would
+	// quietly undo that.
+	_scheduleLiveDraft(actorId, stepKey, q, a, who) {
 		this._scheduleLiveWrite(actorId,
 			phase => _isStep(phase) && phase.stepKey === stepKey,
-			() => this._saveDraft(actorId, stepKey, { q, a }));
+			() => this._saveDraft(actorId, stepKey, { q, a, who }));
 	}
 
 	_cancelLiveDraft() {
@@ -523,18 +592,24 @@ export class IntroductionsDialog extends StonetopDialog {
 		if (el) el.dataset.state = state;
 	}
 
-	// Commit the current draft as a recorded answer: append { q, a } to the step's
+	// Commit the current draft as a recorded answer: append { q, a, who } to the step's
 	// answers list (written whole, since arrays replace wholesale) and clear the live
 	// buffer (the -= unset key, since setFlag/update merges). Returns false when the
 	// draft has no answer text. A null q is allowed (blank prompt), matching the
 	// Chronicle's "answer with no marked question" handling.
+	//
+	// The pick is written only when there IS one, so a record carries `who` or carries nothing:
+	// every world that ran its introductions before the picker existed has answers without the
+	// key, and the readers all treat absent and null alike (see _normWho). Writing `who: null` on
+	// every answer would spend a field on saying nothing, in a blob the Chronicle stores whole.
 	async _recordDraft(actorId, stepKey) {
 		const actor = this._ownedActor(actorId);
 		if (!actor) return false;
 		const draft = this._stepDraft(actorId, stepKey);
 		const a     = String(draft.a ?? "").trim();
 		if (!a) return false;
-		const answers = [...this._stepRecord(actorId, stepKey).answers, { q: _normQ(draft.q), a }];
+		const entry   = { q: _normQ(draft.q), a, ...(draft.who ? { who: draft.who } : {}) };
+		const answers = [...this._stepRecord(actorId, stepKey).answers, entry];
 		await this._commitStep(actor, stepKey, "answers", answers);
 		return true;
 	}
@@ -1066,9 +1141,25 @@ export class IntroductionsDialog extends StonetopDialog {
 					isSelected: index === selectedQ,
 					isUsed:     usedQ.has(index) && index !== selectedQ,
 				}));
+				// WHO AN ANSWER IS ABOUT, picked from the table itself rather than left to be read
+				// back out of the prose. The relationship map's party board draws an arrow to the
+				// person named here (see relmap/relmap-intros.js): a question like "which one of
+				// you has stayed my hand?" is answered about somebody at this table by
+				// construction, but the ANSWER is a sentence, and "I asked her outright and she
+				// only laughed" names nobody the board can find. Everyone but the writer, in the
+				// turn order the table is already reading down.
+				const about = pcs
+					.filter(other => other.id !== actor.id)
+					.map(other => ({ id: other.id, name: other.name, isSelected: other.id === draft.who }));
+				const nameOf = id => pcs.find(other => other.id === id)?.name ?? "";
 				const recorded = answers.map(x => ({
 					question: Number.isInteger(x.q) ? wrapLoreTerms(qList[x.q] ?? "") : "",
 					answer:   x.a,
+					// Said back on the recorded line so a pick can be SEEN to have stuck. It is the
+					// one part of a recorded answer that is not in the writing itself, so without
+					// this there is nothing on screen to show it was ever made. A person since
+					// removed from the run resolves to nothing and simply is not shown.
+					about:    nameOf(x.who),
 				}));
 				const total   = qList.length;
 				capture = {
@@ -1078,6 +1169,12 @@ export class IntroductionsDialog extends StonetopDialog {
 					stepKey,
 					coEdit,
 					draftAnswer:  typeof draft.a === "string" ? draft.a : "",
+					about,
+					// A one-person run has nobody to point at, so the picker is not offered at all
+					// rather than offered empty.
+					hasAbout:     about.length > 0,
+					// What the read-only watcher sees instead of the control.
+					aboutName:    nameOf(draft.who),
 					saveState:    String(draft.a ?? "").trim() ? "saved" : "idle",
 					placeholder:  phase.kind === "ask" ? "Who you asked, and what they answered…" : "Their answer…",
 					canEdit,
@@ -1254,9 +1351,11 @@ export class IntroductionsDialog extends StonetopDialog {
 				// PICK is never DOM-only — every click writes the flag before re-rendering. So
 				// read q from the flag. Reading it back off the last render instead re-wrote the
 				// pick the player had just moved OFF, which is what made a second choice on
-				// "Bonds & ties" / "Asking the others" look like it did nothing at all.
-				const { q } = this._stepDraft(draft.dataset.actorId, draft.dataset.stepKey);
-				await this._saveDraft(draft.dataset.actorId, draft.dataset.stepKey, { q, a: draft.value });
+				// "Bonds & ties" / "Asking the others" look like it did nothing at all. The same
+				// holds for `who`: choosing somebody writes the flag on the `change` event, so
+				// the flag is never behind the select, and carrying it here is what stops this
+				// flush from writing the whole buffer back with the pick missing.
+				await this._saveDraft(draft.dataset.actorId, draft.dataset.stepKey, { a: draft.value });
 			}
 		} catch (err) {
 			console.warn("Stonetop | Introductions: capture flush before re-render failed", err);
@@ -1309,13 +1408,12 @@ export class IntroductionsDialog extends StonetopDialog {
 
 	// Flush the compose UI's current state to the draft flag and await it, so a fast
 	// type-then-Next records the latest text rather than racing the debounced/blur writes.
-	// The textarea is authoritative (it holds the live value); the PICK comes from the flag,
+	// The textarea is authoritative (it holds the live value); the PICKS come from the flag,
 	// which a click always writes before the highlight moves — see _flushCaptureFromDom.
 	async _flushDraftFromDom(actor, phase) {
 		const el = this.element?.[0]?.querySelector(".stonetop-intros-draft");
 		if (!el || el.dataset.actorId !== actor.id) return;
-		const { q } = this._stepDraft(actor.id, phase.stepKey);
-		await this._saveDraft(actor.id, phase.stepKey, { q, a: el.value });
+		await this._saveDraft(actor.id, phase.stepKey, { a: el.value });
 	}
 
 	// Record the active PC's draft, then move the cursor on within the step. Only the GM has

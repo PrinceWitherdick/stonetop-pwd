@@ -75,8 +75,17 @@ function proseSection(heading, bodyHtml) {
 }
 
 // A Q&A section (prompt/answer pairs), or null when no pair has an answer.
+//
+// ⚠ PROJECTED DOWN TO THE TWO FIELDS A PAGE STORES, and deliberately. `introQaPairs` also carries
+// `who` (which player character the writer said the answer is about, picked during the
+// introductions), and that is a LINK rather than prose: the relationship map draws it, the journal
+// page has no field for it (LocationPageModel's pairs are prompt + answer), and the section
+// signature `mergeChronicleSections` dedupes on is built from the whole pair. Letting it ride
+// through would change every stored section's shape to carry something nothing here can show.
 function qaSection(heading, pairs) {
-	return pairs.length ? { kind: "qa", heading, group: SECTION_GROUP, pairs } : null;
+	return pairs.length
+		? { kind: "qa", heading, group: SECTION_GROUP, pairs: pairs.map(({ prompt, answer }) => ({ prompt, answer })) }
+		: null;
 }
 
 // Build the prompt/answer pairs for the answer/ask step, from a flat list of { q, a }
@@ -88,10 +97,10 @@ function qaSection(heading, pairs) {
 // mergeChronicleSections, so a legacy round later normalized into the step list never
 // doubles. The question strings are trusted authored text (entities decoded); answers
 // are user text (the page sheet escapes them on display).
-function qaPairsFrom(records, questions) {
+function qaPairsFrom(entries, questions) {
 	const seen  = new Set();
 	const pairs = [];
-	for (const rec of records ?? []) {
+	for (const { rec, at } of entries ?? []) {
 		const answer = String(rec?.a ?? "").trim();
 		if (!answer) continue;
 		const qIdx   = Number.isInteger(rec?.q) ? rec.q : null;
@@ -102,9 +111,81 @@ function qaPairsFrom(records, questions) {
 		const key = JSON.stringify([prompt, answer]);
 		if (seen.has(key)) continue;
 		seen.add(key);
-		pairs.push({ prompt, answer });
+		pairs.push({ prompt, answer, who: whoOf(rec), at });
 	}
 	return pairs;
+}
+
+// One step's records IN READING ORDER, each with the slot it is stored in: the step's own list
+// first, then the legacy single-answer rounds behind it.
+//
+// ⚠ THE SLOT TRAVELS WITH THE ANSWER because something has to be able to WRITE one. "Match answers
+// to people" (relmap/relmap-intro-match.js) sets `who` on an answer recorded before that pick
+// existed, and an answer read out of here is otherwise unfindable again: the same prose can be a
+// list entry, `r4`, or both, and the dedupe above deliberately hides which. Handing back where it
+// came from is what stops the matcher from having to walk the blob a second way and disagree with
+// this one about what counts as an answer.
+/**
+ * WHERE ONE STEP'S ANSWERS LIVE: its own list, plus the legacy single-answer rounds that fold in
+ * behind it. The whole shape of the `introductionsAnswers` record, in one table.
+ *
+ * ⚠ EXPORTED FOR THE SAME REASON `introQaPairs` IS, and it is the half that is easy to re-spell:
+ * a caller that only needs to know whether ANYTHING was written (the relationship map's matcher,
+ * deciding whether to offer its button) has no use for the full read and would otherwise inline
+ * `rec.r4, rec.r5, rec.r6, rec.r7` and be a second place to edit when the introductions grow a
+ * round. That kind of miss is silent -- a button that stops appearing, or one that opens on nothing.
+ */
+export const INTRO_ANSWER_SLOTS = Object.freeze({
+	step4: Object.freeze(["r4", "r5"]),
+	step6: Object.freeze(["r6", "r7"]),
+});
+
+function answerEntries(step, source, legacy) {
+	const entries = (Array.isArray(step?.answers) ? step.answers : [])
+		.map((rec, index) => ({ rec, at: { source, index } }));
+	for (const [legacySource, rec] of legacy) entries.push({ rec, at: { source: legacySource, index: null } });
+	return entries;
+}
+
+// Which player character the writer said this answer is about: an actor id, chosen from the table
+// while the answer was being recorded (IntroductionsDialog's "Who is this about?"). Null on every
+// answer recorded before that picker existed, and on every answer about somebody outside the party,
+// which is most of the "Bonds & ties" ones. The relationship map's party board reads it and falls
+// back to looking for a name in the writing (relmap/relmap-intros.js); the Chronicle's own pages
+// do not show it, so a blank one costs nothing.
+//
+// ⚠ NOT PART OF THE DEDUPE KEY ABOVE, on purpose. The step list comes first and the legacy r4/r5
+// rounds fold in behind it, so a legacy round that duplicates a step entry has to collide with it
+// on (prompt, answer) alone. Keying on `who` as well would let the pick's presence split the two
+// apart and print the same answer twice.
+const whoOf = rec => (typeof rec?.who === "string" && rec.who.trim() ? rec.who.trim() : null);
+
+/**
+ * What ONE player character answered during the introductions, as prompt/answer pairs per step.
+ *
+ * Each pair is `{ prompt, answer, who, at }`, where `who` is the player character the writer said
+ * the answer is about (see `whoOf`) and is null far more often than not, and `at` is the slot the
+ * answer is stored in (see `answerEntries`). The journal pages drop both at `qaSection`; the
+ * relationship map reads the first and its matcher writes through the second.
+ *
+ * ⚠ EXPORTED SO THAT NOTHING SPELLS THIS RULE TWICE. "What did they record" is four things at once,
+ * and none of them is obvious: the player-driven flow keeps a LIST per step, the two legacy
+ * single-answer rounds fold in behind it, a stored question is an INDEX that has to be resolved
+ * back through that playbook's authored text, and the whole lot dedupes on (prompt, answer). The
+ * Chronicle's pages are built from this, and so is the relationship map's party view
+ * (relmap/relmap-intros.js) -- which draws a line for every answer that names another player
+ * character. Two readings of one record is how the map comes to show a bond the Chronicle does not.
+ *
+ * @param {object} record  one PC's entry in the `introductionsAnswers` blob.
+ * @param {string} slug    their playbook, which is what the question indexes are indexes INTO.
+ */
+export function introQaPairs(record, slug) {
+	const a = record ?? {};
+	const slots = step => INTRO_ANSWER_SLOTS[step].map(source => [source, a[source]]);
+	return {
+		step4: qaPairsFrom(answerEntries(a.step4, "step4", slots("step4")), step4Questions(slug) ?? []),
+		step6: qaPairsFrom(answerEntries(a.step6, "step6", slots("step6")), step6Questions(slug) ?? []),
+	};
 }
 
 // Render what a trip's Chart a Course presented — its requirements and its challenges — as a
@@ -333,18 +414,18 @@ export function buildChroniclePages({ pcs = [], introAnswers = {}, springAnswers
 
 	for (const pc of pcs) {
 		const a     = introAnswers?.[pc.id] ?? {};
-		const step4 = step4Questions(pc.slug) ?? [];
-		const step6 = step6Questions(pc.slug) ?? [];
+		// The player-driven flow records a LIST per step, the legacy single-answer rounds fold in
+		// behind it, and a stored question index is resolved back to its authored text. All of that
+		// is `introQaPairs`, which the relationship map reads through as well so the two surfaces
+		// cannot come to disagree about what somebody recorded.
+		const said = introQaPairs(a, pc.slug);
 
 		const sections = [
 			proseSection("Introduction", paragraphs(a.r1)),
 			proseSection("Possessions & contribution", paragraphs(a.r2)),
 			proseSection("Their place in Stonetop", paragraphs(a.r3)),
-			// The player-driven flow records a LIST per step (a.step4/a.step6.answers);
-			// the legacy single-answer rounds (r4/r5, r6/r7) fold in behind them so
-			// already-run worlds compile unchanged and mixed worlds dedupe on merge.
-			qaSection("Bonds & ties", qaPairsFrom([...(a.step4?.answers ?? []), a.r4, a.r5], step4)),
-			qaSection("Asked of the others", qaPairsFrom([...(a.step6?.answers ?? []), a.r6, a.r7], step6)),
+			qaSection("Bonds & ties", said.step4),
+			qaSection("Asked of the others", said.step6),
 			proseSection("What excites their player", paragraphs(excites[pc.id])),
 		].filter(Boolean);
 
