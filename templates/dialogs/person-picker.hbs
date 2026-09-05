@@ -1,0 +1,86 @@
+{{!-- Which person? A rail of the lists this table thinks in (Players / Residents / Neighbors),
+      a find box, and the names in one scrolling column beside it.
+
+      One root element, as AppV1 requires, and a <div> rather than a <form>: a form holding a
+      single text field submits itself on Enter, and Enter here means "take the first match".
+
+      Driven by module/dialogs/PersonPickerDialog.js; the lists come from utils/people-groups.js. --}}
+<div class="stonetop-person-picker">
+
+  <div class="stonetop-guide-split stonetop-person-picker-split">
+
+    {{!-- The lists. Each entry carries its own count, which the find box rewrites as it narrows:
+          a name in a list you are not looking at still shows up as a number that stayed. --}}
+    {{#unless single}}
+    <nav class="stonetop-guide-toc stonetop-person-picker-rail" aria-label="{{listsAria}}">
+      <ol class="stonetop-guide-toc-list">
+        {{#each groups}}
+        <li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
+          <button type="button" class="stonetop-guide-toc-btn stonetop-person-picker-tab" data-group="{{key}}"
+                  {{#if hint}}data-tooltip="{{hint}}"{{/if}}{{#if selected}} aria-current="true"{{/if}}>
+            <i class="fas {{icon}} stonetop-guide-toc-icon" aria-hidden="true"></i>
+            <span class="stonetop-guide-toc-text">{{label}}</span>
+            <span class="stonetop-person-picker-count" data-count-for="{{key}}">{{count}}</span>
+          </button>
+        </li>
+        {{/each}}
+      </ol>
+    </nav>
+    {{/unless}}
+
+    <div class="stonetop-guide-main stonetop-person-picker-main">
+
+      {{#if hint}}<p class="stonetop-person-picker-hintline">{{hint}}</p>{{/if}}
+
+      {{!-- Takes the focus as the window opens. A real label rather than a placeholder alone, so
+            the control still has a name once somebody has typed in it. --}}
+      <label class="stonetop-person-picker-find">
+        <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+        <input type="text" class="stonetop-person-picker-find-input" autocomplete="off"
+               placeholder="{{findLabel}}" aria-label="{{findAria}}">
+      </label>
+
+      <div class="stonetop-person-picker-body">
+        {{#each groups}}
+        <section class="stonetop-person-picker-group" data-group="{{key}}"{{#unless selected}} hidden{{/unless}}>
+          <ul class="stonetop-person-picker-list">
+            {{#each people}}
+            {{!-- `data-search` is the name and the note folded to lower case once, at render. --}}
+            <li class="stonetop-person-picker-item" data-search="{{search}}">
+              <label class="stonetop-person-picker-row">
+                <input type="radio" name="person" value="{{id}}">
+                <span class="stonetop-person-picker-face">
+                  {{#if img}}<img class="stonetop-person-picker-face-img" src="{{img}}" alt="" draggable="false"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}>
+                  {{else}}<i class="fas fa-user" aria-hidden="true"></i>{{/if}}
+                </span>
+                <span class="stonetop-person-picker-text">
+                  <span class="stonetop-person-picker-name">{{name}}</span>
+                  {{#if hint}}<span class="stonetop-person-picker-note">{{hint}}</span>{{/if}}
+                </span>
+              </label>
+            </li>
+            {{/each}}
+          </ul>
+          <p class="stonetop-person-picker-none" hidden>{{../noMatches}}</p>
+        </section>
+        {{/each}}
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- Affirmative on the left, as everywhere else in the system. It opens dead and unnamed:
+        there is no default person, and a button that said "Add" over a list nobody had answered
+        would be offering to add whoever happened to be first. --}}
+  <footer class="stonetop-guide-nav stonetop-guide-nav--end stonetop-person-picker-foot">
+    <button type="button" class="stonetop-guide-btn--primary stonetop-person-picker-choose"
+            data-person-picker="choose" disabled>
+      <i class="fas {{chooseIcon}}" aria-hidden="true"></i>
+      <span class="stonetop-person-picker-choose-label">{{chooseLabel}}</span>
+    </button>
+    <button type="button" data-person-picker="cancel">
+      <i class="fas fa-xmark" aria-hidden="true"></i> <span>{{cancelLabel}}</span>
+    </button>
+  </footer>
+
+</div>
