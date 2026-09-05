@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
-	RELMAP_BOARD_ASPECT, clampPct, edgeArrowheads, edgeCurve, edgeLabelAnchor, fanBow, freeSpot,
-	nodeRadiusPct, ringLayout, ringsLayout,
+	RELMAP_BOARD_ASPECT, RELMAP_BOARD_MAX, RELMAP_BOARD_WIDTH, boardMetrics, clampPct, clearanceBow,
+	edgeArrowheads, edgeBow, edgeCurve, edgeLabelAnchor, fanBow, freeSpot, labelCapPx, labelSize,
+	captionRoomPx, captionSize, curveWithGap, nodeRadiusPct, ringLayout, ringsLayout,
+	spreadLabels,
 } from "../../module/utils/relmap-geometry.js";
 
 // The relationship map's arithmetic, which three renderers share: the stretched SVG that strokes
@@ -213,6 +215,23 @@ describe("the arrowheads that say which way a link is read", () => {
 		}
 	});
 
+	// The complaint this replaced a flat percentage back-off for: the head belongs AT the end of
+	// its line, and the tip is 6.4 board pixels ahead of the centre the stylesheet positions by,
+	// so on a 1200-wide sheet the centre lands 6.4/1200 of the width short of the rim and no more.
+	it("lands the tip of the head on the end of the line", () => {
+		const line = curve();
+		const [head] = edgeArrowheads(line, ASPECT, "a-b", { boardWidthPx: 1200 });
+		expect(line.to.left - head.left).toBeCloseTo((100 * 16 * 0.4) / 1200, 2);
+	});
+
+	// And it is a PIXEL stand-off, so a bigger sheet does not push the head back down its line:
+	// the same head on a board four times as wide sits four times closer to the rim in percent.
+	it("keeps the same pixel stand-off however wide the sheet grows", () => {
+		const line = curve();
+		const [near] = edgeArrowheads(line, ASPECT, "a-b", { boardWidthPx: 4800 });
+		expect(line.to.left - near.left).toBeCloseTo((100 * 16 * 0.4) / 4800, 2);
+	});
+
 	it("has no heads to place for a link that could not be drawn", () => {
 		expect(edgeArrowheads(null, ASPECT, "both")).toEqual([]);
 	});
@@ -399,5 +418,497 @@ describe("finding room on a board that is filling up", () => {
 		}
 		const middle = taken.filter(p => p.left === 50 && p.top === 50);
 		expect(middle.length).toBeLessThanOrEqual(1);
+	});
+});
+describe("bowing a line clear of somebody it has nothing to do with", () => {
+	const r = nodeRadiusPct(72, 1200); // 3% of the board's width
+	const opts = { aspect: ASPECT, r };
+
+	/** How close a link's drawn curve ever comes to one portrait's centre, as the eye sees it.
+	 * Sampled off the TRIMMED curve, which is the only part anybody looks at. */
+	function nearest(curve, spot) {
+		let closest = Infinity;
+		for (let i = 0; i <= 200; i++) {
+			closest = Math.min(closest, seen(pointOn(curve, i / 200), spot));
+		}
+		return closest;
+	}
+
+	/** The curve a link is actually drawn as: its dodge, plus its place in its pair's fan, put
+	 * together the one way `edgeShapes` puts them together. */
+	function drawn(from, to, avoid, fan = 0) {
+		const dodge = clearanceBow({ from, to, avoid, ...opts });
+		return edgeCurve({ from, to, bow: edgeBow(fan, dodge), ...opts });
+	}
+
+	it("leaves a link alone when there is nobody in the way", () => {
+		const from = { left: 20, top: 50 };
+		const to = { left: 80, top: 50 };
+		// Both ends are in the list, as they are on the real board: they are recognised by sitting
+		// at the very ends of the link and left out, or every line would dodge itself.
+		expect(clearanceBow({ from, to, avoid: [from, to, { left: 50, top: 10 }], ...opts })).toBe(0);
+	});
+
+	it("bends a link that would otherwise run straight through a face", () => {
+		const from = { left: 20, top: 50 };
+		const to = { left: 80, top: 50 };
+		const between = { left: 50, top: 50 };
+		expect(nearest(edgeCurve({ from, to, ...opts }), between)).toBeLessThan(r);
+		expect(nearest(drawn(from, to, [from, to, between]), between)).toBeGreaterThanOrEqual(r);
+	});
+
+	it("bends AWAY from the face rather than further into it", () => {
+		// The one thing that would silently be wrong with the perpendicular measured the other way
+		// round: the dodge would still be a dodge, and it would swerve into what it was avoiding.
+		const from = { left: 20, top: 50 };
+		const to = { left: 80, top: 50 };
+		for (const side of [-1, 1]) {
+			const face = { left: 50, top: 50 + side * 1.5 };
+			const curve = drawn(from, to, [from, to, face]);
+			// The middle of the bent line has gone to the other side of the face from where it was.
+			expect(Math.sign(pointOn(curve, 0.5).top - face.top)).toBe(-side);
+		}
+	});
+
+	it("takes the gentlest bend that clears, not the first one it tries", () => {
+		const from = { left: 20, top: 50 };
+		const to = { left: 80, top: 50 };
+		const grazing = { left: 50, top: 50 + 3.4 };
+		const squarely = { left: 50, top: 50 };
+		const small = Math.abs(clearanceBow({ from, to, avoid: [from, to, grazing], ...opts }));
+		const large = Math.abs(clearanceBow({ from, to, avoid: [from, to, squarely], ...opts }));
+		expect(small).toBeGreaterThan(0);
+		expect(small).toBeLessThan(large);
+	});
+
+	it("ignores a face sitting on one of the link's own ends, which cannot be dodged", () => {
+		// The curve is anchored at the rims, so there is no deflection to be had down there, and
+		// asking for it is what makes the arithmetic demand an unbounded bow.
+		const from = { left: 20, top: 50 };
+		const to = { left: 80, top: 50 };
+		expect(clearanceBow({ from, to, avoid: [from, to, { left: 21, top: 50 }], ...opts })).toBe(0);
+	});
+
+	it("keeps the fan it was given, so two links between one pair still part company", () => {
+		// The dodge is ADDED to the fan rather than replacing it. Were it to replace it, two links
+		// between the same two people that both had to clear the same face would be handed the
+		// same answer and lie exactly on top of one another.
+		const from = { left: 20, top: 50 };
+		const to = { left: 80, top: 50 };
+		const face = { left: 50, top: 50 };
+		const first = drawn(from, to, [from, to, face], 0);
+		const second = drawn(from, to, [from, to, face], 1);
+		expect(pointOn(second, 0.5).top).not.toBeCloseTo(pointOn(first, 0.5).top, 1);
+	});
+
+	it("answers nothing for a link with no length, rather than dividing by it", () => {
+		const spot = { left: 50, top: 50 };
+		expect(clearanceBow({ from: spot, to: spot, avoid: [{ left: 60, top: 50 }], ...opts })).toBe(0);
+		expect(clearanceBow({ from: null, to: spot, avoid: [spot], ...opts })).toBe(0);
+	});
+});
+
+describe("keeping the captions off one another", () => {
+	const r = nodeRadiusPct(72, 1200);
+	const opts = { aspect: ASPECT, r };
+	const curveOf = (from, to) => edgeCurve({ from, to, ...opts });
+
+	/** Two links whose middles land on the same spot, running at right angles: exactly the case a
+	 * ring of chords produces, where every line's middle is the middle of the board. */
+	const crossing = () => ({
+		across: curveOf({ left: 15, top: 50 }, { left: 85, top: 50 }),
+		down: curveOf({ left: 50, top: 12 }, { left: 50, top: 88 }),
+	});
+
+	it("leaves a lone caption in the middle of its own line", () => {
+		const { across } = crossing();
+		const out = spreadLabels({ labels: [{ id: "a", curve: across, text: "old friends" }], ...opts });
+		expect(out.get("a")).toEqual(edgeLabelAnchor(across, ASPECT, 0.5));
+	});
+
+	it("slides one of two captions that would land on the same spot", () => {
+		const { across, down } = crossing();
+		const text = "has never forgiven her";
+		const out = spreadLabels({
+			labels: [{ id: "a", curve: across, text }, { id: "b", curve: down, text }],
+			...opts,
+		});
+		const middles = [
+			edgeLabelAnchor(across, ASPECT, 0.5),
+			edgeLabelAnchor(down, ASPECT, 0.5),
+		];
+		const stayed = ["a", "b"].filter((id, i) => {
+			const at = out.get(id);
+			return at.left === middles[i].left && at.top === middles[i].top;
+		});
+		expect(stayed.length).toBeLessThan(2);
+	});
+
+	it("never lets a caption leave its own line", () => {
+		// The whole meaning of a caption here is which stroke it belongs to. A caption pushed
+		// sideways into free space belongs to nothing, so the only freedom it has is to slide
+		// ALONG its own line: every position it can take is a fixed hop above some point the line
+		// actually passes through.
+		const { across, down } = crossing();
+		const curves = { a: across, b: down };
+		const out = spreadLabels({
+			labels: [{ id: "a", curve: across, text: "a long caption here" },
+				{ id: "b", curve: down, text: "another long caption" }],
+			...opts,
+		});
+		for (const [id, at] of out) {
+			const alongIt = [];
+			for (let i = 0; i <= 400; i++) alongIt.push(edgeLabelAnchor(curves[id], ASPECT, i / 400));
+			expect(alongIt.some(p => Math.hypot(p.left - at.left, p.top - at.top) < 0.2)).toBe(true);
+		}
+	});
+
+	it("gives the same board to every client, whatever order the links arrive in", () => {
+		// Two people looking at one map must see the captions in the same places, so the placement
+		// cannot depend on the order the links came out of a flag object.
+		const { across, down } = crossing();
+		const text = "owes her a great deal";
+		const one = spreadLabels({
+			labels: [{ id: "a", curve: across, text }, { id: "b", curve: down, text }], ...opts,
+		});
+		const two = spreadLabels({
+			labels: [{ id: "b", curve: down, text }, { id: "a", curve: across, text }], ...opts,
+		});
+		expect([...two.entries()].sort()).toEqual([...one.entries()].sort());
+	});
+
+	it("has nothing to place for a link with no caption, or no curve", () => {
+		const { across } = crossing();
+		const out = spreadLabels({
+			labels: [{ id: "a", curve: across, text: "" }, { id: "b", curve: null, text: "hi" }],
+			...opts,
+		});
+		expect(out.size).toBe(0);
+	});
+
+	it("sizes a caption by its words, and stops where the stylesheet stops it", () => {
+		expect(labelSize("ab").w).toBeLessThan(labelSize("a much longer caption").w);
+		expect(labelSize("x".repeat(500)).w).toBeCloseTo(labelSize("x".repeat(400)).w, 5);
+	});
+});
+
+describe("where along its line a caption sits", () => {
+	const r = nodeRadiusPct(72, 1200);
+	const opts = { aspect: ASPECT, r };
+
+	it("is the middle when nothing says otherwise", () => {
+		const curve = edgeCurve({ from: { left: 20, top: 30 }, to: { left: 70, top: 80 }, ...opts });
+		expect(edgeLabelAnchor(curve, ASPECT)).toEqual(edgeLabelAnchor(curve, ASPECT, 0.5));
+	});
+
+	it("moves along the line as it is asked to, and never off the ends of it", () => {
+		const curve = edgeCurve({ from: { left: 20, top: 50 }, to: { left: 80, top: 50 }, ...opts });
+		expect(edgeLabelAnchor(curve, ASPECT, 0.2).left).toBeLessThan(edgeLabelAnchor(curve, ASPECT, 0.8).left);
+		expect(edgeLabelAnchor(curve, ASPECT, -5)).toEqual(edgeLabelAnchor(curve, ASPECT, 0));
+		expect(edgeLabelAnchor(curve, ASPECT, 9)).toEqual(edgeLabelAnchor(curve, ASPECT, 1));
+	});
+
+	it("treats rubbish as the middle rather than as nowhere", () => {
+		const curve = edgeCurve({ from: { left: 20, top: 50 }, to: { left: 80, top: 50 }, ...opts });
+		for (const bad of [null, undefined, "x", NaN]) {
+			expect(edgeLabelAnchor(curve, ASPECT, bad)).toEqual(edgeLabelAnchor(curve, ASPECT, 0.5));
+		}
+	});
+});
+
+describe("putting a link's dodge and its place in the fan together", () => {
+	it("is the plain fan when there was nothing to dodge", () => {
+		expect([0, 1, 2, 3].map(i => edgeBow(i, 0))).toEqual([0, 1, -1, 2]);
+	});
+
+	// The rule that stops a fan being spread back into the face its route was bent aside from.
+	// `fanBow` alternates, which is right off a straight line and wrong off a dodged one.
+	it("spreads the fan the SAME way the dodge went, whichever way that was", () => {
+		for (const dodge of [1.5, -1.5]) {
+			const spread = [0, 1, 2, 3].map(i => edgeBow(i, dodge));
+			// Every link in the fan is at least as far aside as the first, and no nearer the face.
+			for (const bow of spread) expect(Math.abs(bow)).toBeGreaterThanOrEqual(Math.abs(dodge));
+			for (const bow of spread) expect(Math.sign(bow)).toBe(Math.sign(dodge));
+		}
+	});
+
+	it("still gives every link in a fan its own bow, so none lies on another", () => {
+		const bows = [0, 1, 2, 3, 4].map(i => edgeBow(i, -2));
+		expect(new Set(bows).size).toBe(bows.length);
+	});
+
+	it("treats rubbish as no dodge at all", () => {
+		for (const bad of [null, undefined, "x", NaN]) expect(edgeBow(1, bad)).toBe(fanBow(1));
+	});
+});
+
+describe("how wide a caption is allowed to get", () => {
+	// The measured claim behind this: on a board of thirty-five people and eighty-five links,
+	// sliding the chips along their lines takes the captions sitting on one another down by about
+	// a tenth, and narrowing the widest chip takes it down by a further third again. There is only
+	// so much paper, and eighty captions at full width want a third of the board to themselves.
+	it("narrows the chips as the board fills up, in steps", () => {
+		const widths = [0, 8, 24, 25, 60, 61, 200].map(labelCapPx);
+		// Never wider as the board gets busier, and it really does narrow somewhere along the way.
+		for (let i = 1; i < widths.length; i++) expect(widths[i]).toBeLessThanOrEqual(widths[i - 1]);
+		expect(widths.at(-1)).toBeLessThan(widths[0]);
+	});
+
+	it("leaves a small map's captions whole, which is the common board", () => {
+		expect(labelCapPx(8)).toBe(labelCapPx(0));
+	});
+
+	it("reads rubbish as an empty board rather than as no width at all", () => {
+		for (const bad of [null, undefined, "x", NaN, -5]) expect(labelCapPx(bad)).toBe(labelCapPx(0));
+	});
+
+	it("measures a chip at the width it will be painted at", () => {
+		const text = "buys cheap from people who need the coin";
+		expect(labelSize(text, 1200, 140).w).toBeLessThan(labelSize(text, 1200, 220).w);
+		// Short enough not to reach either cap: the two agree, so the cap is a CAP and not a width.
+		expect(labelSize("exes", 1200, 140).w).toBeCloseTo(labelSize("exes", 1200, 220).w, 6);
+	});
+});
+
+describe("the sheet, which grows with the cast on it", () => {
+	// THE ONLY LEVER THERE IS. Everything on this board is either positioned in percentages or
+	// sized in fixed pixels, and the ratio between the two is the whole of "is there room for the
+	// writing". On a fixed sheet forty people share exactly the room eight had.
+	it("gives a small map the sheet the board has always had, at 1:1", () => {
+		for (const few of [1, 2, 4, 6]) {
+			expect(boardMetrics(few).width).toBe(RELMAP_BOARD_WIDTH);
+			expect(boardMetrics(few).r).toBeCloseTo(nodeRadiusPct(72, RELMAP_BOARD_WIDTH), 6);
+		}
+	});
+
+	it("grows for a bigger cast, and never shrinks as one arrives", () => {
+		const widths = [6, 8, 12, 20, 39, 60].map(n => boardMetrics(n).width);
+		for (let i = 1; i < widths.length; i++) expect(widths[i]).toBeGreaterThan(widths[i - 1]);
+	});
+
+	// The AREA per person is what is held, so the room each of them gets stays about the same
+	// however many arrive. Four times the people is twice the sheet.
+	it("holds the room per person roughly constant, so width goes as the square root", () => {
+		expect(boardMetrics(24).width / boardMetrics(6).width).toBeCloseTo(2, 1);
+		expect(boardMetrics(96).width / boardMetrics(24).width).toBeCloseTo(2, 1);
+	});
+
+	// A portrait is a fixed 72 pixels, so on a bigger sheet it is a SMALLER share of it. That is
+	// the whole point, and it is why nothing may assume the radius is a constant.
+	it("makes a portrait a smaller share of a bigger sheet", () => {
+		expect(boardMetrics(39).r).toBeLessThan(boardMetrics(6).r);
+		expect(boardMetrics(39).r).toBeCloseTo(nodeRadiusPct(72, boardMetrics(39).width), 6);
+	});
+
+	it("stops growing somewhere, so a runaway map cannot ask for an unbounded sheet", () => {
+		expect(boardMetrics(100000).width).toBe(RELMAP_BOARD_MAX);
+	});
+
+	it("keeps the board's proportions whatever size it is", () => {
+		for (const n of [1, 12, 39, 500]) {
+			const sheet = boardMetrics(n);
+			expect(sheet.width / sheet.height).toBeCloseTo(RELMAP_BOARD_ASPECT, 2);
+		}
+	});
+
+	it("reads rubbish as one person rather than as a sheet of no size", () => {
+		for (const bad of [null, undefined, "x", NaN, -4]) {
+			expect(boardMetrics(bad).width).toBe(RELMAP_BOARD_WIDTH);
+		}
+	});
+});
+
+describe("a caption may run the whole length of the line it sits on", () => {
+	const r = nodeRadiusPct(72, 1200);
+	const opts = { aspect: ASPECT, r };
+	const sized = (text, curve) => captionSize(text, curve, { boardWidthPx: 1200, capPx: 220 });
+	const across = { from: { left: 10, top: 50 }, to: { left: 90, top: 50 } };
+	const sentence = "buys cheap from people who need the coin";
+
+	// THE POINT OF THE CAPTION IS THE SENTENCE ON IT. A line with the length to carry the whole of
+	// it carries the whole of it, whatever the board's promise to the short lines happens to be:
+	// two words and an ellipsis is not a shorter caption, it is a caption that has stopped saying
+	// anything.
+	it("lets a long line carry its whole sentence, past the crowding width", () => {
+		const long = edgeCurve({ ...across, ...opts });
+		expect(sized(sentence, long).w).toBeGreaterThan(labelSize(sentence, 1200, 220).w);
+	});
+
+	it("stops at the two faces the line joins, so the words stay between them", () => {
+		const long = edgeCurve({ ...across, ...opts });
+		const huge = "x".repeat(400);
+		expect(sized(huge, long).w).toBeCloseTo(long.length, 6);
+	});
+
+	// The other half of it: a line too short for a few words does NOT trim to the line, or two
+	// people standing close together would have nothing readable between them at all. It takes the
+	// board's promise instead and overhangs to get it.
+	it("gives a short line the width the board promises rather than trimming to it", () => {
+		const short = edgeCurve({ from: { left: 40, top: 50 }, to: { left: 52, top: 50 }, ...opts });
+		const out = spreadLabels({ labels: [{ id: "a", curve: short, text: sentence }], ...opts });
+		expect(out.has("a")).toBe(true);
+		expect(short.length).toBeLessThan(labelSize(sentence, 1200, 220).w);
+		expect(sized(sentence, short).w).toBeCloseTo(labelSize(sentence, 1200, 220).w, 6);
+	});
+
+	// And that promise is smaller on a crowded board, where a caption overhanging its line by the
+	// full amount would be sitting on somebody else's.
+	it("promises a short line less on a crowded board than on an empty one", () => {
+		const short = edgeCurve({ from: { left: 40, top: 50 }, to: { left: 52, top: 50 }, ...opts });
+		const crowded = captionSize(sentence, short, { boardWidthPx: 1200, capPx: 140 });
+		expect(crowded.w).toBeLessThan(sized(sentence, short).w);
+	});
+
+	it("leaves a short caption alone on any line", () => {
+		const long = edgeCurve({ ...across, ...opts });
+		expect(sized("exes", long).w).toBeCloseTo(labelSize("exes", 1200, 220).w, 6);
+	});
+
+	// ONE ANSWER, because three things have to agree about it to the pixel: the spreader that
+	// slides the captions apart, the stylesheet that paints them, and the gap cut in the line for
+	// the words to sit in. A gap measured off a different width leaves a stub of stroke inside it.
+	it("never trims a caption to a smudge, however short its line", () => {
+		const stub = edgeCurve({ from: { left: 49, top: 50 }, to: { left: 56, top: 50 }, ...opts });
+		expect(sized("has never forgiven her", stub).w).toBeGreaterThan(0);
+	});
+});
+
+
+
+// THE FAULT THIS SUITE EXISTS TO CATCH. The gap cut in a stroke is as wide as the caption sitting
+// in it, and until the caption is in a document "as wide as" is a character count times a
+// constant. That constant cannot tell an `i` from an `m`, and on the face this board paints in it
+// overshoots by about a fifth: a hundred-and-fourteen-character sentence estimates at 728 pixels
+// and paints at 585. The estimate is slack the spreader wants; in the STROKE it is a hundred and
+// forty pixels of line rubbed out for words that were never there, and the reader sees a sentence
+// floating in a hole with the line picking up again somewhere off in the distance.
+describe("a caption whose real width somebody has measured", () => {
+	const r = nodeRadiusPct(72, 1200);
+	const opts = { aspect: ASPECT, r };
+	const sentence = "shut the great gate in his face and left him on the mountain overnight";
+	const long = edgeCurve({ from: { left: 8, top: 50 }, to: { left: 92, top: 50 }, ...opts });
+
+	it("is measured at what it measured, not at what the character count guessed", () => {
+		const guessed = labelSize(sentence, 1200, 900).w;
+		const measured = labelSize(sentence, 1200, 900, 360).w;
+		expect(measured).toBeLessThan(guessed);
+		expect(measured).toBeCloseTo((360 * 100) / 1200, 6);
+	});
+
+	it("is still held to the room its own line has, because that is what the paint is held to", () => {
+		const stub = edgeCurve({ from: { left: 46, top: 50 }, to: { left: 54, top: 50 }, ...opts });
+		const room = captionRoomPx(stub, { boardWidthPx: 1200, capPx: 220 });
+		const out = captionSize(sentence, stub, { boardWidthPx: 1200, capPx: 220, paintedPx: 5000 });
+		expect(out.w).toBeCloseTo((room * 100) / 1200, 6);
+	});
+
+	// The measurement is the one thing here that can be absent: the spreader runs before there is
+	// anything on screen to measure, and this module's own tests run with no document at all.
+	it("falls back to the count when nobody could measure it", () => {
+		const guessed = captionSize(sentence, long, { boardWidthPx: 1200, capPx: 220 });
+		for (const none of [null, undefined, 0, -5, NaN, "wide"]) {
+			const out = captionSize(sentence, long, { boardWidthPx: 1200, capPx: 220, paintedPx: none });
+			expect(out.w).toBeCloseTo(guessed.w, 6);
+		}
+	});
+
+	// The whole point of measuring: the hole in the stroke shrinks to the words that are in it.
+	it("cuts a narrower gap in the stroke than the guess would have", () => {
+		const gapOf = d => {
+			const [first, second] = d.split("M").filter(Boolean);
+			const end = first.split("Q")[1].trim().split(/[ ,]/).slice(2).map(Number);
+			const start = second.trim().split(" ")[0].split(",").map(Number);
+			return Math.hypot(start[0] - end[0], start[1] - end[1]);
+		};
+		const cut = paintedPx => curveWithGap(long, {
+			t: 0.5,
+			span: captionSize(sentence, long, { boardWidthPx: 1200, capPx: 220, paintedPx }).w,
+			boardWidthPx: 1200,
+		});
+		const guessed = gapOf(cut(null));
+		const measured = gapOf(cut(360));
+		expect(measured).toBeLessThan(guessed);
+		// And by the difference between the two widths, not by some rounding: the guess for this
+		// sentence is about 450 board pixels, so a caption that painted at 360 leaves 90 fewer.
+		expect((guessed - measured) * 12).toBeCloseTo(
+			labelSize(sentence, 1200, 900).w * 12 - 360, 0,
+		);
+	});
+});
+
+// ⚠ THE HOLE IS CUT ALONG THE CURVE WHILE THE WORDS GO STRAIGHT, and that is a knowing compromise
+// rather than an oversight. The words were set on the curve itself for a while, which is exact and
+// was unaffordable: warping text gives every glyph its own transform, the browser's glyph cache
+// misses on every one, and with the halo stroked around each warped outline ONE TILE of a real
+// board cost 73ms to raster. Straight, the same words cost 1.2ms.
+//
+// So a strongly bowed line now carries its caption as a CHORD: the sentence leaves the stroke a
+// little at both ends and crosses it in the middle. What keeps that from reading as a mistake is
+// that most lines are near enough straight across the stretch one caption covers, and that the
+// caption is only ever as long as the room its own line has (`captionRoomPx`). The gap below is
+// still cut along the curve, because that is where the stroke actually is.
+describe("cutting the line open where its caption sits", () => {
+	const r = nodeRadiusPct(72, 1200);
+	const opts = { aspect: ASPECT, r };
+	const curveOf = (from, to) => edgeCurve({ from, to, ...opts });
+	const runs = d => d.split("M").filter(Boolean).length;
+
+	it("leaves the line whole when there is no caption to make room for", () => {
+		const curve = curveOf({ left: 15, top: 50 }, { left: 85, top: 50 });
+		expect(curveWithGap(curve, { t: 0.5, span: 0 })).toBe(curve.d);
+	});
+
+	// TWO SUBPATHS OF ONE `d`, which is what makes the break cost nothing: no extra element, no
+	// change to the markup, and nothing at all to the live drag, which already rewrites `d`.
+	it("breaks it into two runs, with the caption's length missing from the middle", () => {
+		const curve = curveOf({ left: 15, top: 50 }, { left: 85, top: 50 });
+		const broken = curveWithGap(curve, { t: 0.5, span: 8, boardWidthPx: 1200 });
+		expect(runs(broken)).toBe(2);
+		expect(runs(curve.d)).toBe(1);
+	});
+
+	it("starts where the line started and ends where it ended", () => {
+		const curve = curveOf({ left: 15, top: 40 }, { left: 85, top: 70 });
+		const broken = curveWithGap(curve, { t: 0.5, span: 8, boardWidthPx: 1200 });
+		expect(broken.startsWith(`M ${curve.from.left},${curve.from.top}`)).toBe(true);
+		expect(broken.endsWith(`${curve.to.left},${curve.to.top}`)).toBe(true);
+	});
+
+	it("puts the gap where the caption actually is, not always in the middle", () => {
+		const curve = curveOf({ left: 15, top: 50 }, { left: 85, top: 50 });
+		const early = curveWithGap(curve, { t: 0.3, span: 6, boardWidthPx: 1200 });
+		const late = curveWithGap(curve, { t: 0.7, span: 6, boardWidthPx: 1200 });
+		// The first run is shorter when the caption sits early on the line.
+		const firstRunEnd = d => Number(d.split("Q")[1].trim().split(/[ ,]/)[2]);
+		expect(firstRunEnd(early)).toBeLessThan(firstRunEnd(late));
+	});
+
+	// A MISSING LINE SAYS SOMETHING FALSE about two people. A caption longer than the line it
+	// belongs to would rub out the whole relationship to make room for the words describing it,
+	// so past a point the line is left whole and the caption's halo does the work instead.
+	it("leaves the line whole rather than rubbing it out for an oversized caption", () => {
+		const curve = curveOf({ left: 40, top: 50 }, { left: 60, top: 50 });
+		expect(curveWithGap(curve, { t: 0.5, span: 500, boardWidthPx: 1200 })).toBe(curve.d);
+	});
+
+	it("leaves it whole when the caption is jammed against one end", () => {
+		const curve = curveOf({ left: 15, top: 50 }, { left: 85, top: 50 });
+		expect(curveWithGap(curve, { t: 0.02, span: 8, boardWidthPx: 1200 })).toBe(curve.d);
+		expect(curveWithGap(curve, { t: 0.98, span: 8, boardWidthPx: 1200 })).toBe(curve.d);
+	});
+
+	it("has nothing to cut when there is no curve, rather than throwing", () => {
+		expect(curveWithGap(null, { t: 0.5, span: 8 })).toBe("");
+	});
+
+	// The fourth time in this feature that `Number(null) === 0` would have read "nowhere in
+	// particular" as one particular END. Here it would have cut the gap off the start of the line
+	// while the caption sat in the middle of it.
+	it("cuts the gap in the middle when it is not told where, however that is spelt", () => {
+		const curve = curveOf({ left: 15, top: 50 }, { left: 85, top: 50 });
+		const middle = curveWithGap(curve, { t: 0.5, span: 8, boardWidthPx: 1200 });
+		for (const bad of [null, undefined, "", "x", NaN]) {
+			expect(curveWithGap(curve, { t: bad, span: 8, boardWidthPx: 1200 })).toBe(middle);
+		}
 	});
 });

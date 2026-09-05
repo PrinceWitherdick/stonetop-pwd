@@ -19,7 +19,7 @@
 // aspect. Both flat axes then scale by the same board-width-over-100, so a distance in flat space
 // is proportional to a distance in pixels, which is the space the reader's eye is actually in.
 
-import { ROUTE_HEAD_PATH, ROUTE_HEAD_VIEWBOX } from "./route-path.js";
+import { ROUTE_HEAD_PATH, ROUTE_HEAD_POINTS, ROUTE_HEAD_VIEWBOX } from "./route-path.js";
 
 // Re-exported rather than re-authored. route-path.js:286-316 records that this triangle was once
 // written twice and the two drifted; the map is a third surface drawing the same head, and the
@@ -39,7 +39,65 @@ export const RELMAP_PRECISION = 2;
  */
 export const RELMAP_BOARD_ASPECT = 1.25;
 export const RELMAP_BOARD_WIDTH = 1200;
-export const RELMAP_BOARD_HEIGHT = Math.round(RELMAP_BOARD_WIDTH / RELMAP_BOARD_ASPECT);
+
+/**
+ * THE SHEET GETS BIGGER WHEN THERE ARE MORE PEOPLE ON IT.
+ *
+ * WHY IT HAS TO, and why nothing else would do. Everything on this board is one of two kinds of
+ * thing: positioned in PERCENTAGES (the portraits, the lines, the captions) or sized in board
+ * PIXELS (a portrait is 72 of them, a caption is 12-pixel type in a chip of capped width). The
+ * ratio between those two is the whole of "is there room for the writing", and on a fixed sheet it
+ * is fixed: forty people and a hundred captions have to share exactly the room that eight had, so
+ * they overlap and no layout can win it back. A bigger sheet is the only lever, because it is the
+ * one that makes the fixed-pixel things SMALLER relative to the board while leaving them their
+ * full size to be read at.
+ *
+ * The reader pays for it in zoom, and that is the honest trade rather than a hidden cost: the
+ * window opens the whole board fitted, so a big map opens smaller and is read by zooming in, where
+ * the faces are 72 pixels and the type is 12 with room around it. Shrinking the type instead would
+ * have made it illegible at every magnification.
+ *
+ * A HANDFUL OF PEOPLE CHANGES NOTHING. `RELMAP_BOARD_HOLDS` is how many the plain sheet carries
+ * with room to spare, and up to that the sheet is exactly the one the board has always been: a
+ * small map still opens at 1:1 with 12-pixel type and 72-pixel faces, as it always did.
+ *
+ * Past it the AREA per person is what is held constant, so the width goes as the square root of
+ * the cast: twice the people is about half again the sheet.
+ *
+ * SIX WAS MEASURED, not picked. On a trial board of thirty-nine people and eighty-five captions,
+ * the number of captions sitting on one another falls steeply as the sheet grows and then
+ * flattens: 161 at the old fixed size, 61 at a sheet holding twelve, 43 at ten, 36 at eight, 17 at
+ * six, and no better at five. Six is where the curve stops paying for the zoom it costs.
+ */
+const RELMAP_BOARD_HOLDS = 6;
+export const RELMAP_BOARD_MAX = 4800;
+
+/**
+ * The sheet for a width a view has asked for: that width floored at the plain sheet and capped at
+ * `RELMAP_BOARD_MAX`, its height, and a portrait's radius on it.
+ *
+ * ONE CALL, because the three have to be worked out from the same number. The floor, the cap and
+ * the aspect are one rule and every view obeys it; what the views differ on is only how wide they
+ * want to be, which is the argument. Everything that measures a board asks here rather than
+ * reaching for the constants.
+ */
+export function sheetFor(wantWidthPx) {
+	const want = Math.round(Number(wantWidthPx) || 0);
+	const width = Math.min(RELMAP_BOARD_MAX, Math.max(RELMAP_BOARD_WIDTH, want));
+	return {
+		width,
+		height: Math.round(width / RELMAP_BOARD_ASPECT),
+		r: nodeRadiusPct(RELMAP_NODE_PX, width),
+	};
+}
+
+/** The sheet a cast of `people` gets. This is the CAST's question, which is the web view's: room
+ * for the writing on as many lines as this many people carry. The family view asks `sheetFor` a
+ * different one, because a chart carries no captions at all. */
+export function boardMetrics(people) {
+	const n = Math.max(1, Math.trunc(Number(people) || 0));
+	return sheetFor(RELMAP_BOARD_WIDTH * Math.sqrt(n / RELMAP_BOARD_HOLDS));
+}
 
 /**
  * A portrait's diameter, in board pixels at 1:1.
@@ -58,9 +116,31 @@ export const RELMAP_NODE_PX = 72;
 const RELMAP_BOW_SHARE = 0.09;
 const RELMAP_BOW_MAX = 5;
 
-// How far back from the rim an arrowhead sits, in flat units, capped at a share of the line so a
-// head on a short link cannot be pushed back past the portrait it set out from.
-const HEAD_BACKOFF = 2.2;
+/**
+ * An arrowhead's size in board pixels — what the stylesheet draws it at — and how far its TIP
+ * reaches ahead of the point it is anchored on, as a share of that size.
+ *
+ * WHY THE BACK-OFF IS MEASURED IN PIXELS AND NOT IN FLAT UNITS. It used to be a flat 2.2, which is
+ * 2.2% of the board's width, and that is not a fixed distance: the sheet grows with the cast
+ * (`boardMetrics`), so on a board of forty people the same 2.2 was over a hundred pixels and the
+ * head sat well short of the face it was pointing at — about three quarters of the way along its
+ * own line. The head itself is 16 fixed pixels whatever the sheet, so the distance it should stand
+ * off is a pixel distance too, converted per board like every other pixel measure here.
+ *
+ * AND IT IS EXACTLY THE TIP'S OWN REACH, so the point of the triangle lands ON the curve's end.
+ * The curve is already trimmed to the rims by `edgeCurve`, so a head whose tip is at the end of
+ * the line is a head touching the portrait it arrives at, which is what "which way this is read"
+ * has to look like. The share comes from the triangle's own points rather than a literal 0.4, for
+ * the reason route-path.js:286-316 gives: a reshaped head must not leave a second copy behind.
+ *
+ * The journey's trails keep their own, larger stand-off, and rightly: there the head arrives at a
+ * map pin with a label beside it, and a tip touching the pin would be buried under it.
+ */
+export const RELMAP_HEAD_PX = 16;
+const HEAD_TIP_SHARE = ROUTE_HEAD_POINTS[1][0];
+
+// Capped at a share of the line, so a head on a short link cannot be pushed back past the portrait
+// it set out from.
 const HEAD_BACKOFF_SHARE = 0.35;
 
 // How finely the trim below hunts for the rim, and how many bisections refine the answer. A
@@ -70,9 +150,11 @@ const TRIM_SAMPLES = 48;
 const TRIM_REFINE = 8;
 
 // The board's width over its height, defaulted. Every function here that measures a bow, an angle
-// or a radius depends on this being the SAME rule, so it is written once. (route-path.js keeps its
-// own copy of this one line; a shared import would tie two modules together for four characters.)
-const ratioOf = aspect => (Number(aspect) > 0 ? Number(aspect) : 1);
+// or a radius depends on this being the SAME rule, so it is written once. Exported for the modules
+// that already draw on this one: relmap-layout.js measures the same board with the same aspect.
+// (route-path.js keeps its own copy of this one line; it shares nothing else with this module, and
+// a shared import would tie two of them together for four characters.)
+export const ratioOf = aspect => (Number(aspect) > 0 ? Number(aspect) : 1);
 
 /** A quadratic Bezier on one axis. Spelled out once, for the same reason route-path.js does. */
 const quadAt = (a, b, c, t) => (1 - t) * (1 - t) * a + 2 * (1 - t) * t * b + t * t * c;
@@ -80,7 +162,24 @@ const quadAt = (a, b, c, t) => (1 - t) * (1 - t) * a + 2 * (1 - t) * t * b + t *
 /** Its slope at `t`, unnormalized. */
 const quadSlope = (a, b, c, t) => 2 * (1 - t) * (b - a) + 2 * t * (c - b);
 
-const round = n => Number(Number(n).toFixed(RELMAP_PRECISION));
+/** Every number this feature writes into markup, at `RELMAP_PRECISION`. Exported so relmap-tree.js
+ * rounds the seats it hands over by the same rule as the lines that get drawn between them. */
+export const round = n => Number(Number(n).toFixed(RELMAP_PRECISION));
+
+/**
+ * How far along a curve a caller meant, on [0, 1], defaulting to the middle.
+ *
+ * SHARED BECAUSE THE `Number(null) === 0` TRAP HAS BITTEN FOUR TIMES IN THIS ONE FEATURE, and
+ * every time it reads "nowhere in particular" as one particular END. `clampPct` above records the
+ * first; the ratings import's own band reader the second, in a module since deleted;
+ * `edgeLabelAnchor` parked a caption on a portrait's rim; and `curveWithGap` cut the gap for it in
+ * the wrong place. Two callers spelling this out is two chances to spell it differently, so it is
+ * spelt once.
+ */
+const alongT = t => {
+	const asked = t === null || t === undefined || t === "" ? NaN : Number(t);
+	return Number.isFinite(asked) ? Math.min(1, Math.max(0, asked)) : 0.5;
+};
 
 /** A coordinate a node may actually be stored at. Percentages, and never off the board. */
 export function clampPct(n) {
@@ -135,6 +234,32 @@ const at = (a, b, c, t) => ({
 });
 
 const dist = (a, b) => Math.hypot(b.left - a.left, b.top - a.top);
+
+/**
+ * The stretch of one quadratic between two parameters, as its own three points.
+ *
+ * EXACT RATHER THAN SAMPLED: a subsegment of a quadratic IS a quadratic, and
+ * `Q1 = Q0 + (t1 - t0) * B'(t0) / 2` is de Casteljau written out for the one case this needs.
+ *
+ * Written once because two callers want the same cut -- `edgeCurve` trimming a line back to the two
+ * rims, and `subPath` cutting the gap the caption sits in -- and two copies of one formula is two
+ * chances for them to disagree about the same curve.
+ *
+ * The maths is affine, so this is as true of the percentages a `d` is written in as of the flat
+ * units distances are measured in; each caller passes whichever space it is already in.
+ */
+const subQuad = (p0, p1, p2, tA, tB) => {
+	const q0 = at(p0, p1, p2, tA);
+	const span = tB - tA;
+	return {
+		q0,
+		q1: {
+			left: q0.left + (span * quadSlope(p0.left, p1.left, p2.left, tA)) / 2,
+			top: q0.top + (span * quadSlope(p0.top, p1.top, p2.top, tA)) / 2,
+		},
+		q2: at(p0, p1, p2, tB),
+	};
+};
 
 /**
  * The first `t` at which the curve is at least `r` away from `anchor`, hunted then halved.
@@ -210,13 +335,7 @@ export function edgeCurve({ from, to, bow = 0, aspect = RELMAP_BOARD_ASPECT, r =
 	const t1 = r > 0 ? escapeT(p0, p1, p2, p2, r, { from: 1, to: 0 }) : 1;
 	if (t0 === null || t1 === null || !(t1 > t0)) return null;
 
-	const q0 = at(p0, p1, p2, t0);
-	const q2 = at(p0, p1, p2, t1);
-	const span = t1 - t0;
-	const q1 = {
-		left: q0.left + (span * quadSlope(p0.left, p1.left, p2.left, t0)) / 2,
-		top: q0.top + (span * quadSlope(p0.top, p1.top, p2.top, t0)) / 2,
-	};
+	const { q0, q1, q2 } = subQuad(p0, p1, p2, t0, t1);
 
 	const back = p => ({ left: round(p.left), top: round(p.top * ratio) });
 	const curve = {
@@ -246,21 +365,195 @@ export function edgeCurve({ from, to, bow = 0, aspect = RELMAP_BOARD_ASPECT, r =
  * AND IT IS NEVER UPSIDE DOWN. Past a quarter turn either way the text is flipped to read along
  * the line the other way instead. A label is prose, and prose the reader has to tilt their head to
  * take in is worse than one that runs right-to-left along its line.
+ *
+ * `t` IS WHERE ALONG THE CURVE, and it is halfway by default because that is where a caption
+ * belongs when nothing is in its way. `spreadLabels` below is the one caller that passes anything
+ * else: on a busy board a chip is slid along its OWN line to find clear air, never off it, because
+ * a label that has left its line is a label about some other line.
+ *
+ * IT SITS ON THE STROKE, not beside it, because the stroke gets out of its way: `curveWithGap`
+ * below cuts a length out of the line exactly where the caption goes, so the words sit IN the line
+ * rather than on top of it. That is why there is no perpendicular offset here to keep in step with
+ * the stylesheet.
  */
-export function edgeLabelAnchor(curve, aspect = RELMAP_BOARD_ASPECT) {
+export function edgeLabelAnchor(curve, aspect = RELMAP_BOARD_ASPECT, t = 0.5) {
 	if (!curve) return null;
 	const ratio = ratioOf(aspect);
 	const a = flat(curve.from, ratio);
 	const b = flat(curve.control, ratio);
 	const c = flat(curve.to, ratio);
-	const point = at(a, b, c, 0.5);
-	const alongX = quadSlope(a.left, b.left, c.left, 0.5);
-	const alongY = quadSlope(a.top, b.top, c.top, 0.5);
+	const along = alongT(t);
+	const point = at(a, b, c, along);
+	const alongX = quadSlope(a.left, b.left, c.left, along);
+	const alongY = quadSlope(a.top, b.top, c.top, along);
 	let angle = (Math.atan2(alongY, alongX) * 180) / Math.PI;
 	if (angle > 90) angle -= 180;
 	if (angle < -90) angle += 180;
 	const back = unflat(point, ratio);
-	return { left: round(back.left), top: round(back.top), angle: round(angle) };
+	// `t` rides along, because the caller that placed this caption is also the one that has to cut
+	// the gap in the line for it, and the gap has to be centred on the same point.
+	return { left: round(back.left), top: round(back.top), angle: round(angle), t: along };
+}
+
+// ── Cutting the line open where its caption goes ─────────────────────────────────────
+//
+// WHY A GAP AND NOT SOMETHING CHEAPER. The caption is bare words now, and a stroke drawn straight
+// through them is the one thing that makes them hard to read. The halo behind the letters covers
+// most of it, but only a ring around each glyph: the line still shows through the counters of the
+// letters and the spaces between the words, which reads as a scratched-out caption. Taking the
+// stroke away over exactly that stretch leaves the words sitting IN the line, the way a label sits
+// in a rule on a drawing.
+//
+// AS TWO SUBPATHS OF ONE `d`, and that is what makes it cheap. A `d` may hold several `M ... Q`
+// runs, so the break costs no extra element, no change to the markup, and nothing at all to the
+// live drag, which already rewrites `d` on every frame.
+//
+// NOT `stroke-dasharray`, which is the other obvious way and does not work here. The line layer is
+// stretched with `preserveAspectRatio="none"`, so a length along a diagonal path in the SVG's own
+// units is not proportional to the length a reader sees, and a dash pattern measured in either
+// space comes out the wrong size in the other. Splitting the curve is exact in both, because the
+// subsegment of a quadratic is a quadratic and splitting is unaffected by the stretch.
+
+/** How much more than the words themselves the gap takes: the two round stroke caps, plus air, in
+ * board pixels. Without the caps the stroke creeps back in at both ends of the gap. */
+const GAP_AIR_PX = 9;
+
+/** How short a piece of line the break may leave at either end, as a share of the whole. Under
+ * this the line is left WHOLE and the caption rides on it with only its halo: a caption longer
+ * than the line it belongs to would otherwise rub out the entire relationship to make room for
+ * the words describing it, and a missing line says something false about two people. */
+const GAP_MIN_STUB = 0.1;
+
+/** The stretch of one curve between two parameters, as its own `M ... Q` run. Cut in the
+ * PERCENTAGES the curve is stored in, which `subQuad` is exactly as true of as of flat space. */
+function subPath(curve, a, b) {
+	const { q0, q1, q2 } = subQuad(curve.from, curve.control, curve.to, a, b);
+	const pt = p => `${round(p.left)},${round(p.top)}`;
+	return `M ${pt(q0)} Q ${pt(q1)} ${pt(q2)}`;
+}
+
+/**
+ * One line's `d`, with a length taken out of the middle for its caption to sit in.
+ *
+ * @param {object} curve  from `edgeCurve`.
+ * @param {object} spec
+ * @param {number} spec.t     where along the curve the caption sits, from `edgeLabelAnchor`.
+ * @param {number} spec.span  how long the caption is, in flat units, along the line.
+ * @param {number} spec.boardWidthPx  what the air either side of the words is measured against.
+ * @returns {string}  a `d` of one run or two. The whole line, unbroken, whenever breaking it would
+ *          leave less line than caption.
+ */
+export function curveWithGap(curve, {
+	t, span = 0, boardWidthPx = RELMAP_BOARD_WIDTH, aspect = RELMAP_BOARD_ASPECT,
+} = {}) {
+	if (!curve) return "";
+	const along = alongT(t);
+	const wide = Number(span);
+	if (!(wide > 0) || !(curve.length > 0)) return curve.d;
+	const ratio = ratioOf(aspect);
+	// MEASURED ALONG THE CURVE, not across its chord. The words are written on the curve itself
+	// so the hole cut for them has to be the same length of the same line: a gap
+	// worked out from the straight run between the two ends is short by however far the bow has
+	// travelled, and leaves a stub of stroke inside the caption at each end.
+	const arc = arcOf(curve, ratio);
+	if (!(arc.total > 0)) return curve.d;
+	const air = boardWidthPx > 0 ? (100 * GAP_AIR_PX) / boardWidthPx : 0;
+	const half = (wide + air) / 2;
+	const middle = arc.at(along);
+	if (middle - half < GAP_MIN_STUB * arc.total) return curve.d;
+	if (middle + half > (1 - GAP_MIN_STUB) * arc.total) return curve.d;
+	return `${subPath(curve, 0, arc.tAt(middle - half))} ${subPath(curve, arc.tAt(middle + half), 1)}`;
+}
+
+// -- Measuring along a curve -----------------------------------------------------------------
+//
+// ⚠ THIS SECTION USED TO DESCRIBE A DESIGN THAT WAS TRIED, MEASURED AND ABANDONED, and it described
+// it as the only possible one -- "SO THE CAPTION IS WRITTEN ON THE CURVE ITSELF, as SVG text on a
+// path. There is no other mechanism." A reader who believed that would rebuild the single worst
+// performance defect this feature has had, so what actually happened is recorded here instead.
+//
+// A caption WAS written as SVG text on a path, on its own unstretched rail cut from the same
+// quadratic as the stroke, so that the words bent along the line. It looked lovely and it was
+// unaffordable: warping type gives every glyph its own transform, so the browser's glyph cache
+// misses on all of them, and with the halo stroked around each warped outline as well ONE TILE of
+// this board cost 73ms to raster. Panning was a slideshow and the whole application went with it,
+// because Foundry's canvas shares that thread. The same words set STRAIGHT, turned once to the
+// angle of their line where they sit, with the same halo: 1.2ms. Sixty times less.
+//
+// So the board draws a caption as one straight `<text>` in a viewBox that is NOT stretched (the
+// stroke layer is `preserveAspectRatio="none"`, which shears glyphs), rotated about its own anchor
+// -- the way an arrowhead is placed. Most lines are near enough straight across the stretch one
+// caption covers that the two are hard to tell apart; a strongly bowed line carries its caption as
+// a chord. See the board partial, which says the same thing from the markup's side.
+//
+// WHAT SURVIVED, and what the rest of this section is for: the caption still sits IN its stroke,
+// in a hole cut for exactly the width of the words (`curveWithGap`), and cutting that hole means
+// measuring LENGTH along a quadratic -- which its parameter is not. That is what the arc table
+// below is. Nothing here bends any type.
+
+/** How finely the arc-length table below is sampled. A quadratic's parameter is not its length --
+ * a caption placed at `t = 0.5` sits at the middle of the PARAMETER, which on a bowed curve is not
+ * the middle of the line -- and every measurement a caption needs is a length. Sixty-four pieces
+ * hold a bow this shallow to a small fraction of a pixel. */
+const ARC_SAMPLES = 64;
+
+/**
+ * Where the length along a curve and its parameter meet, both ways round, in flat units.
+ *
+ * Sampled rather than solved. The arc length of a quadratic has a closed form, and it is a page of
+ * logarithms that degenerates exactly where these curves usually live -- a bow of nothing at all,
+ * which is to say a straight line. The table is four lines, is exact in that case, and is read
+ * from far more often than it is built.
+ */
+function arcTable(a, b, c) {
+	const ts = [0];
+	const ss = [0];
+	let prev = at(a, b, c, 0);
+	let run = 0;
+	for (let i = 1; i <= ARC_SAMPLES; i++) {
+		const t = i / ARC_SAMPLES;
+		const point = at(a, b, c, t);
+		run += dist(point, prev);
+		prev = point;
+		ts.push(t);
+		ss.push(run);
+	}
+	// One walk either way, because both arrays are sorted and short.
+	const read = (from, to, x) => {
+		if (!(x > from[0])) return to[0];
+		for (let i = 1; i < from.length; i++) {
+			if (x > from[i]) continue;
+			const span = from[i] - from[i - 1];
+			const share = span > 0 ? (x - from[i - 1]) / span : 0;
+			return to[i - 1] + share * (to[i] - to[i - 1]);
+		}
+		return to[to.length - 1];
+	};
+	return {
+		total: run,
+		/** How far along the curve, in flat units, the parameter `t` is. */
+		at: t => read(ts, ss, t),
+		/** Which parameter is `s` flat units along it. */
+		tAt: s => read(ss, ts, s),
+	};
+}
+
+/**
+ * That table for one curve, built at most once and kept ON the curve.
+ *
+ * KEPT ON THE CURVE because `curveWithGap` walks it on every repaint, and on every pointer frame
+ * of a live drag. `edgeCurve` builds each curve once and nothing mutates it afterwards, so the
+ * table is as good as the curve is.
+ *
+ * NON-ENUMERABLE ON PURPOSE: a curve is spread into template context and compared whole in tests,
+ * and a cache is not part of what a curve IS. The aspect is kept beside it because it is the one
+ * thing that could make the table wrong for the same curve.
+ */
+function arcOf(curve, ratio) {
+	if (curve._arc && curve._arc.ratio === ratio) return curve._arc.table;
+	const table = arcTable(flat(curve.from, ratio), flat(curve.control, ratio), flat(curve.to, ratio));
+	Object.defineProperty(curve, "_arc", { value: { ratio, table }, writable: true, configurable: true });
+	return table;
 }
 
 /**
@@ -270,11 +563,19 @@ export function edgeLabelAnchor(curve, aspect = RELMAP_BOARD_ASPECT) {
  * `to`. "None" is the ordinary case and the default: most ties between people are mutual, and a
  * board of arrows all pointing at each other says less than a board with none.
  *
- * Each head sits just short of the rim pointing INTO it, and each takes the curve's slope where it
- * actually sits rather than the angle between the two portraits, because the line is bowed and by
- * the time it arrives it is already turning.
+ * Each head lands its TIP on the end of the line, which `edgeCurve` has already cut back to the
+ * rim, so the point of the triangle touches the face it arrives at. The anchor is the head's
+ * CENTRE — that is what the stylesheet positions it by — so it is stepped back by the tip's own
+ * reach and no further; see `RELMAP_HEAD_PX` above for why that reach is a pixel measure.
+ *
+ * Each takes the curve's slope where it actually sits rather than the angle between the two
+ * portraits, because the line is bowed and by the time it arrives it is already turning.
+ *
+ * `boardWidthPx` is the sheet the head will be painted on, from `boardMetrics`.
  */
-export function edgeArrowheads(curve, aspect = RELMAP_BOARD_ASPECT, dir = "none") {
+export function edgeArrowheads(
+	curve, aspect = RELMAP_BOARD_ASPECT, dir = "none", { boardWidthPx = RELMAP_BOARD_WIDTH } = {},
+) {
 	if (!curve || dir === "none" || !dir) return [];
 	const ends = dir === "both" ? ["to", "from"] : dir === "b-a" ? ["from"] : ["to"];
 	const ratio = ratioOf(aspect);
@@ -283,7 +584,8 @@ export function edgeArrowheads(curve, aspect = RELMAP_BOARD_ASPECT, dir = "none"
 	const c = flat(curve.to, ratio);
 	const len = curve.length;
 	if (!(len > 0)) return [];
-	const backoff = Math.min(HEAD_BACKOFF, len * HEAD_BACKOFF_SHARE) / len;
+	const reach = boardWidthPx > 0 ? (100 * RELMAP_HEAD_PX * HEAD_TIP_SHARE) / boardWidthPx : 0;
+	const backoff = Math.min(reach, len * HEAD_BACKOFF_SHARE) / len;
 
 	return ends.map(end => {
 		const t = end === "to" ? 1 - backoff : backoff;
@@ -320,24 +622,59 @@ export function ringLayout(count, { aspect = RELMAP_BOARD_ASPECT, r = nodeRadius
 	const ratio = ratioOf(aspect);
 	const radius = ringRadius(ratio, r, pad);
 	if (n === 1) return [{ left: 50, top: 50 }];
-	return Array.from({ length: n }, (_, i) => {
-		const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
-		return {
-			left: clampPct(50 + radius * Math.cos(angle)),
-			top: clampPct(50 + radius * ratio * Math.sin(angle)),
-		};
-	});
+	return ringSeats(radius, n, { ratio });
 }
 
-function ringRadius(ratio, r, pad) {
+/** How far out the outermost ring sits, measured on BOTH axes so a tall board or a large portrait
+ * pulls the ring in rather than pushing half of it off the top edge. Exported because the cluster
+ * layout parks the people with no lines on this same rim, and a second opinion about where the rim
+ * is would put them through the edge of the board. */
+export function ringRadius(ratio, r, pad) {
 	const across = 50 - r - pad;
 	const down = 50 / ratio - r - pad;
 	return Math.max(8, Math.min(across, down));
 }
 
-/** How many portraits fit round a ring of radius `R` without touching, at least one. */
-function ringCapacity(radius, clear) {
+/** How many portraits fit round a ring of radius `R` without touching, at least one.
+ *
+ * Exported for the same reason `ringRadius` is: utils/relmap-views.js lays a rim of its own around
+ * a focused person, and a second opinion about how many fit on a circle is how one of them comes to
+ * overlap portraits the other would have spread. */
+export function ringCapacity(radius, clear) {
 	return Math.max(1, Math.floor((2 * Math.PI * radius) / Math.max(0.001, clear)));
+}
+
+/**
+ * The seats on ONE ring, as board percentages.
+ *
+ * ⚠ THE FLAT-SPACE-TO-PERCENTAGE CONVERSION, IN ONE PLACE. The ring is walked in flat space, where
+ * a circle is a circle, and squashed back by `ratio` on the way out so it does not come out as an
+ * oval on a landscape board. Every coordinate on this feature's boards has to agree about that, and
+ * this expression was written three times over: here, in `ringsLayout` below, and again in
+ * `rimSeats` (utils/relmap-views.js) around the focused person. `ringRadius` and `ringCapacity` were
+ * exported precisely so there could be no second opinion about where a rim is or how many fit on it;
+ * this is the remaining third of that pair, and it was the one still being copied.
+ *
+ * The three callers keep their own policies -- how many rings, how big, and how many people go on
+ * each -- because that is where they genuinely differ.
+ *
+ * @param {number} radius  in flat-space percent from the middle.
+ * @param {number} count   how many to space evenly round it.
+ * @param {object} opts
+ * @param {number} opts.ratio  the board's aspect ratio, from `ratioOf`.
+ * @param {number} [opts.turn] radians to rotate this ring by, so consecutive rings interleave
+ *        rather than lining up into spokes with corridors of empty board between them.
+ */
+export function ringSeats(radius, count, { ratio, turn = 0 } = {}) {
+	// Starts at twelve o'clock and goes clockwise, because that is the order a reader's eye takes a
+	// ring in and it makes the seating plan predictable: the first person added is always at the top.
+	return Array.from({ length: Math.max(0, count) }, (_, k) => {
+		const angle = -Math.PI / 2 + turn + (k * 2 * Math.PI) / count;
+		return {
+			left: clampPct(50 + radius * Math.cos(angle)),
+			top: clampPct(50 + radius * ratio * Math.sin(angle)),
+		};
+	});
 }
 
 /** The most rings worth trying. Past this the board is so crowded that another ring buys nothing. */
@@ -384,13 +721,7 @@ export function ringsLayout(count, { aspect = RELMAP_BOARD_ASPECT, r = nodeRadiu
 		const here = i === 1 ? left : Math.min(left, ringCapacity(radius, clear));
 		// Half a step of turn per ring, so consecutive rings interleave rather than lining up.
 		const turn = (i % 2 ? 0 : Math.PI / here);
-		for (let k = 0; k < here; k++) {
-			const angle = -Math.PI / 2 + turn + (k * 2 * Math.PI) / here;
-			out.push({
-				left: clampPct(50 + radius * Math.cos(angle)),
-				top: clampPct(50 + radius * ratio * Math.sin(angle)),
-			});
-		}
+		out.push(...ringSeats(radius, here, { ratio, turn }));
 		left -= here;
 	}
 	return out;
@@ -426,4 +757,431 @@ export function freeSpot(taken = [], { aspect = RELMAP_BOARD_ASPECT, r = nodeRad
 		}
 	}
 	return { left: 50, top: 50 };
+}
+
+// ── Bowing a line clear of somebody it has nothing to do with ────────────────────────
+//
+// THE PROBLEM THIS SOLVES IS A LIE, not an untidiness. A line that runs underneath a portrait it
+// is not attached to reads, to anybody glancing at the board, as a line attached to that portrait:
+// the reader sees a stroke going into a face and out the other side and believes it. Nothing else
+// on the board is wrong in that way. A crossing is obviously a crossing; a line through a face is
+// a relationship that does not exist.
+//
+// It is also, as it happens, exactly what makes an ordered ring readable. Two people seated three
+// apart have the two between them sitting just outside the straight line between them, so clearing
+// those two bends the link gently inward: short hops become shallow arcs near the rim, long ones
+// pass through the empty middle and stay straight. That is the look of a good chord diagram, and
+// it falls out of one rule about faces rather than a second rule about rings.
+
+/** How much daylight to leave between a line and a face it is passing, in flat units, on top of
+ * the portrait's own radius. Roughly the stroke's own width plus a little. */
+const CLEAR_GAP = 1.2;
+
+/** How far along a link a portrait has to be before it is worth dodging. A face sitting almost on
+ * top of one of the link's own ends cannot be dodged (the curve is anchored there and trimmed to
+ * the rim), and trying makes the bow explode: the deflection available at the ends is nil, so the
+ * arithmetic asks for an unbounded bow to buy it. */
+const CLEAR_MARGIN = 0.15;
+
+/** The bows worth considering, in the units `fanBow` speaks. Both signs, because a face can be on
+ * either hand, and both are tried at every size so the answer is the SMALLEST bend that works
+ * rather than the first one found. Nothing beyond three: a link bent further than that has stopped
+ * looking like a line between two people. */
+const CLEAR_STEPS = Object.freeze([0, 0.5, -0.5, 1, -1, 1.5, -1.5, 2, -2, 2.5, -2.5, 3, -3]);
+
+/**
+ * How much EXTRA bow a link needs so it does not run under anybody else's face.
+ *
+ * Added to whatever `fanBow` gave it, and returned separately rather than folded in because the
+ * two answer different questions: the fan keeps a link off its own twin, and this keeps it off
+ * third parties, and a caller reading the code has to be able to see both.
+ *
+ * SEARCHED, NOT SOLVED. The exact answer is a quartic per blocking face with the sign of the
+ * deflection flipping in the middle of it, and getting that algebra subtly wrong would show up as
+ * a line that dodges the wrong way, once, on somebody's board. Thirteen candidate bows scored
+ * against every face in the way is a handful of arithmetic per link, is obviously right by
+ * construction, and can be read.
+ *
+ * WHEN NOTHING CLEARS, the least bad bow wins rather than none. A face wedged between two people
+ * who are barely apart cannot be dodged, and the honest response to that is the bend that hides
+ * the least of it.
+ *
+ * @param {object} spec
+ * @param {{left, top}} spec.from   one end's CENTRE, in percentages.
+ * @param {{left, top}} spec.to     the other end's centre.
+ * @param {{left, top}[]} spec.avoid  every OTHER portrait's centre. The link's own two ends may be
+ *                                  in the list; they are recognised by position and ignored.
+ * @param {number} spec.bow         the bow the link already has, from `fanBow`.
+ * @returns {number}  the bow to ADD. Zero when the way is clear, which is the common case.
+ */
+export function clearanceBow({
+	from, to, avoid = [], bow = 0, aspect = RELMAP_BOARD_ASPECT, r = nodeRadiusPct(),
+} = {}) {
+	if (!from || !to || !avoid.length) return 0;
+	const ratio = ratioOf(aspect);
+	const p0 = flat(from, ratio);
+	const p2 = flat(to, ratio);
+	const dx = p2.left - p0.left;
+	const dy = p2.top - p0.top;
+	const len = Math.hypot(dx, dy);
+	if (!len) return 0;
+
+	// How far one unit of bow actually carries the curve sideways. `edgeCurve` sets its control
+	// point twice as far out as the depth it wants, because a quadratic only travels half way to
+	// its control; this is that same number, undoubled, and the two must not drift apart.
+	const depthPer = Math.min(len * RELMAP_BOW_SHARE, RELMAP_BOW_MAX);
+	if (!(depthPer > 0)) return 0;
+
+	// Each face in the way, as how far ALONG the link it sits and how far to one side. The sign of
+	// the side is what says which way to bend, and it is measured along the SAME normal that a
+	// positive bow pushes the curve down, `(dy, -dx)` in `edgeCurve`. Measured along the other
+	// normal, every dodge would be a swerve INTO the face it was avoiding.
+	const ux = dx / len;
+	const uy = dy / len;
+	const need = r + CLEAR_GAP;
+	const swing = depthPer * (Math.abs(Number(bow) || 0) + 3);
+	const blockers = [];
+	for (const spot of avoid) {
+		if (!spot) continue;
+		const p = flat(spot, ratio);
+		const alongPct = ((p.left - p0.left) * ux + (p.top - p0.top) * uy) / len;
+		if (alongPct <= CLEAR_MARGIN || alongPct >= 1 - CLEAR_MARGIN) continue;
+		const side = (p.left - p0.left) * uy - (p.top - p0.top) * ux;
+		// Out of reach of the curve however far it is bent, so it cannot be hit and cannot be
+		// swerved into either.
+		if (Math.abs(side) >= need + swing) continue;
+		blockers.push({ along: alongPct, side });
+	}
+	if (!blockers.length) return 0;
+
+	let best = 0;
+	let bestHarm = Infinity;
+	for (const step of CLEAR_STEPS) {
+		const depth = (Number(bow) + step) * depthPer;
+		let harm = 0;
+		for (const blocker of blockers) {
+			// A quadratic's sideways travel at `u`, as a share of its deepest point.
+			const reach = 4 * blocker.along * (1 - blocker.along) * depth;
+			harm += Math.max(0, need - Math.abs(reach - blocker.side));
+		}
+		// Strictly less, so a tie goes to the earlier and therefore gentler step.
+		if (harm < bestHarm - 1e-9) {
+			bestHarm = harm;
+			best = step;
+			if (!harm) break;
+		}
+	}
+	return best;
+}
+
+/**
+ * The bow a link is finally drawn with: its dodge, and its place in its pair's fan on top.
+ *
+ * THE FAN SPREADS IN THE DODGE'S OWN DIRECTION, which is the whole reason this is a function
+ * rather than an addition written at the call site. `fanBow` alternates sides so that a fan spreads
+ * both ways off a straight route, and that is right for a straight route and wrong for a dodged
+ * one: the member that alternates back would be spread straight into the face the dodge was
+ * avoiding. Once a route has been bent aside, every later link between the same two people is bent
+ * FURTHER aside, so each of them is at least as clear as the first.
+ *
+ * And a fan is still a fan. Adding the dodge to the fan naively, which is what this replaced, let
+ * the two cancel: two links between one pair that both had to clear the same face were handed the
+ * same total and drawn exactly on top of each other, which is the one thing the fan exists to
+ * prevent.
+ *
+ * `clearance` is `clearanceBow` measured on the pair's UNFANNED route, so every link in a fan gets
+ * the same dodge and they part company by their fan index alone.
+ */
+export function edgeBow(fanIndex, clearance = 0) {
+	const dodge = Number(clearance) || 0;
+	// Nothing in the way: the ordinary alternating fan, spreading both ways off a straight route.
+	if (!dodge) return fanBow(fanIndex);
+	// Bent aside: the fan spreads ONE WAY, further out with each link. Alternating here would put
+	// every second link back on the near side of the dodge, which is where the face is. A crowded
+	// pair that also has to dodge somebody therefore reaches a little further off its own line
+	// than it otherwise would, which is the right trade: a wide arc can be read and an overlap
+	// cannot.
+	const step = Math.max(0, Math.trunc(Number(fanIndex) || 0));
+	return dodge + step * (dodge < 0 ? -1 : 1);
+}
+
+// ── Keeping the captions off one another ─────────────────────────────────────────────
+//
+// WHY THE LABELS ARE THE WORST OF IT, worse than the lines. A crossing costs the reader a moment;
+// a heap of chips of prose stacked on one another costs them all of them, because the ones
+// underneath cannot be read at all and the ones on top cannot be told apart from the ones
+// underneath. On a ring in insertion order every line was a chord and every chord's midpoint was
+// the middle of the board, so every caption on the board landed in one pile.
+//
+// THE CHIP SLIDES ALONG ITS OWN LINE AND NOWHERE ELSE. Pushing a caption sideways into free space
+// is the obvious fix and it is the wrong one: the whole meaning of a caption on this board is
+// which stroke it is sitting on, and a chip floating beside three lines belongs to none of them.
+// Sliding keeps that meaning intact at every position it can take.
+//
+// THE SIZE IS ESTIMATED, and that is a real limitation written down rather than hidden. The chip
+// is HTML in a proportional font, so its true width is not knowable without measuring it in a
+// laid-out document, and this module is arithmetic that also runs under a test with no document at
+// all. The estimate errs LARGE, which is the safe direction: a slightly-too-big chip claims a
+// little more room than it needs and the board spreads a little further than it had to.
+
+/** The caption, in board pixels: what one character costs at 12px, what the halo and its padding
+ * cost around the words, and how tall a line of them is. These mirror the stylesheet and are the
+ * reason the comment above says the estimate is an estimate. Smaller than they were: the caption
+ * used to be a chip of paper with a border and a colour stripe, and is now bare words with a halo
+ * of the page tone behind them. */
+const LABEL_CHAR_PX = 6.3;
+const LABEL_CHROME_PX = 10;
+const LABEL_HEIGHT_PX = 20;
+
+/**
+ * How much room ONE caption has on ONE line, in board pixels.
+ *
+ * THE LINE'S OWN LENGTH IS THE ROOM. What a caption is for is the sentence on it, and a sentence
+ * cut to two words and an ellipsis has stopped being one; so a line long enough to carry the whole
+ * of its caption carries the whole of it, however long that is. The words never reach past the two
+ * faces they are about, which is the only boundary on this board that means anything.
+ *
+ * THE CROWDING WIDTH IS A FLOOR HERE, NOT A CEILING (`labelCapPx`). It used to clip: a busy board
+ * trimmed every caption to 140 pixels whether or not there was room for more, and short lines were
+ * trimmed twice over. It now says the LEAST a caption is given — enough for a few words even on a
+ * line too short for them, which is the case the ellipsis used to eat — and the line says the most.
+ *
+ * ONE FUNCTION because three things have to agree about it to the pixel: the spreader that slides
+ * the captions apart, the stylesheet that paints them, and the gap cut in the line for the words
+ * to sit in. A gap measured off a different width is a gap with a stub of stroke left inside it.
+ */
+export function captionRoomPx(curve, { boardWidthPx = RELMAP_BOARD_WIDTH, capPx = null } = {}) {
+	const cap = Number(capPx) > 0 ? Number(capPx) : LABEL_MAX_PX;
+	const own = ((curve?.length ?? 0) * boardWidthPx) / 100;
+	return Math.max(LABEL_MIN_PX, cap, own);
+}
+
+/** How big ONE caption is on ONE line, in flat units: its words, measured, inside the room
+ * `captionRoomPx` says it has.
+ *
+ * `paintedPx` is that caption's REAL width, read off the laid-out element by whoever has a
+ * document to read it from. See `labelSize` for why it is worth the trouble of passing. */
+export function captionSize(
+	text, curve, { boardWidthPx = RELMAP_BOARD_WIDTH, capPx = null, paintedPx = null } = {},
+) {
+	return labelSize(text, boardWidthPx, captionRoomPx(curve, { boardWidthPx, capPx }), paintedPx);
+}
+
+/**
+ * How much width a caption is GUARANTEED, whatever the line it rides on, and where a board is
+ * crowded enough to promise less of it.
+ *
+ * READ IT AS A FLOOR. A caption may always take its own line's full length (`captionRoomPx`); this
+ * is what it gets when that length is not enough, which is how a short line between two portraits
+ * standing close together still says something rather than showing two words and an ellipsis.
+ *
+ * IT DEPENDS ON THE BOARD because the guarantee is a claim on room the board may not have. A map
+ * of eight people has room to spare and short lines can overhang generously; a map of the whole
+ * village is already fighting for space, and a caption there that overhangs by 220 pixels is
+ * sitting on three other people's lines. So the promise shrinks as the cast grows, and the words a
+ * short line still cannot fit are in the tooltip, which carries the sentence in full either way.
+ *
+ * IT IS ALSO WHAT THE LAYOUT ASKS FOR (`layoutRoom`): the springs use it to decide how long a line
+ * between two people wants to be, so on an uncrowded board the lines are drawn long enough that
+ * the guarantee rarely has to be called on at all.
+ */
+const LABEL_MAX_PX = 220;
+const LABEL_MAX_BUSY = 180;
+const LABEL_MAX_CROWDED = 140;
+const LABEL_BUSY_AT = 24;
+const LABEL_CROWDED_AT = 60;
+
+/**
+ * The narrowest a caption is ever squeezed to, in board pixels: about seven characters and the
+ * chip's own trim.
+ *
+ * There is a floor because past a certain point a chip stops being a caption and becomes a smudge
+ * with an ellipsis in it, and at that point the honest thing is to let it overhang its line a
+ * little and stay readable. Below the floor the chip is drawn at the floor and simply sticks out.
+ */
+const LABEL_MIN_PX = 58;
+
+/** How far along its line a chip may slide, either way from the middle, and in how many stops.
+ * Not to the very ends: a caption sitting on a portrait's rim reads as belonging to the portrait
+ * rather than to the line. */
+const LABEL_SLIDE = 0.42;
+const LABEL_STOPS = 14;
+
+/**
+ * The width a caption is guaranteed on a board carrying `count` of them, in board pixels.
+ *
+ * ONE ANSWER FOR TWO READERS. The stylesheet paints the caption and this module measures it, and a
+ * measurement that disagreed with the paint would spread the captions to clear an overlap that was
+ * not there, or leave one it could not see. So this feeds `captionRoomPx`, whose answer the window
+ * writes onto each caption as its own custom property, and the same count comes back in here.
+ */
+export function graphCapPx(graph) {
+	return labelCapPx(Object.values(graph?.edges ?? {}).filter(edge => edge?.label).length);
+}
+
+export function labelCapPx(count) {
+	const n = Math.max(0, Math.trunc(Number(count) || 0));
+	if (n > LABEL_CROWDED_AT) return LABEL_MAX_CROWDED;
+	if (n > LABEL_BUSY_AT) return LABEL_MAX_BUSY;
+	return LABEL_MAX_PX;
+}
+
+/**
+ * How big one caption is, in flat units.
+ *
+ * `paintedPx` IS THE MEASUREMENT WINNING OVER THE ESTIMATE, and it is the whole reason this takes
+ * a fourth argument. Counting characters cannot tell an `i` from an `m`, and on this font at this
+ * size the count above overshoots by about a fifth: a sentence of a hundred and fourteen
+ * characters estimates at 728 pixels and paints at 585. For the spreader that error is slack and
+ * the comment above calls it safe, which it is. For the GAP CUT IN THE STROKE it is not slack at
+ * all: it is 143 pixels of line rubbed out for words that were never there, seventy at each end,
+ * which is exactly what a reader sees as a caption floating in a hole too big for it.
+ *
+ * So the one caller that can measure -- the window, which has the caption laid out in a document
+ * and can simply ask it how wide it came out -- passes what it read, and the arithmetic here is
+ * the fallback for the callers that cannot: the spreader on a first paint, and this module's
+ * tests, which run with no document at all.
+ *
+ * Exported for the tests, which have to be able to say what "these two overlap" meant.
+ */
+export function labelSize(
+	text, boardWidthPx = RELMAP_BOARD_WIDTH, capPx = LABEL_MAX_PX, paintedPx = null,
+) {
+	const chars = typeof text === "string" ? text.length : 0;
+	const cap = Number(capPx) > 0 ? Number(capPx) : LABEL_MAX_PX;
+	const painted = Number(paintedPx);
+	// The paint is already held to `cap` by the stylesheet's own `max-width`, so the clamp below is
+	// a no-op on a measured caption and the guard the estimate has always needed on an estimated one.
+	const asked = painted > 0 ? painted : chars * LABEL_CHAR_PX + LABEL_CHROME_PX;
+	const wide = Math.min(cap, asked);
+	const scale = boardWidthPx > 0 ? 100 / boardWidthPx : 0;
+	return { w: wide * scale, h: LABEL_HEIGHT_PX * scale };
+}
+
+/** One turned chip as the four numbers a separating-axis test needs: its centre, the two
+ * directions its own edges run in, and how far it reaches along each. */
+function labelBox(centre, w, h, angleDeg) {
+	const rad = (Number(angleDeg) || 0) * Math.PI / 180;
+	return {
+		cx: centre.left, cy: centre.top,
+		ax: Math.cos(rad), ay: Math.sin(rad),
+		hw: w / 2, hh: h / 2,
+	};
+}
+
+/** Do two turned chips overlap? The separating-axis test, on the four axes two rectangles have
+ * between them: if the two boxes' shadows are apart on ANY of them, the boxes are apart. */
+function boxesOverlap(a, b) {
+	const dx = b.cx - a.cx;
+	const dy = b.cy - a.cy;
+	const axes = [
+		[a.ax, a.ay], [-a.ay, a.ax],
+		[b.ax, b.ay], [-b.ay, b.ax],
+	];
+	for (const [nx, ny] of axes) {
+		const gap = Math.abs(dx * nx + dy * ny);
+		const spreadA = a.hw * Math.abs(a.ax * nx + a.ay * ny) + a.hh * Math.abs(-a.ay * nx + a.ax * ny);
+		const spreadB = b.hw * Math.abs(b.ax * nx + b.ay * ny) + b.hh * Math.abs(-b.ay * nx + b.ax * ny);
+		if (gap > spreadA + spreadB) return false;
+	}
+	return true;
+}
+
+/** Is a turned chip sitting on a portrait? Measured in the chip's own frame, where the box is
+ * square to the axes and the nearest point to a circle's centre is one clamp away. */
+function boxHitsCircle(box, centre, radius) {
+	const dx = centre.left - box.cx;
+	const dy = centre.top - box.cy;
+	const localX = dx * box.ax + dy * box.ay;
+	const localY = -dx * box.ay + dy * box.ax;
+	const nearX = Math.min(box.hw, Math.max(-box.hw, localX));
+	const nearY = Math.min(box.hh, Math.max(-box.hh, localY));
+	return Math.hypot(localX - nearX, localY - nearY) < radius;
+}
+
+/** The stops a chip tries, nearest the middle of its line first, alternating either side so a
+ * caption never drifts consistently toward one end. */
+function slideStops() {
+	const out = [0.5];
+	for (let i = 1; i <= LABEL_STOPS; i++) {
+		const off = (LABEL_SLIDE * i) / LABEL_STOPS;
+		out.push(0.5 + off, 0.5 - off);
+	}
+	return out;
+}
+
+/**
+ * Place every caption on the board so that as few as possible sit on one another.
+ *
+ * Greedy and first-fit: the captions are placed one at a time, each taking the stop nearest the
+ * middle of its own line that is clear of everything already down, and the hardest ones go first.
+ *
+ * LONGEST FIRST, ties by id. A long chip has the fewest places it can fit, so it has to choose
+ * while there is still room; leaving it until last means it is the one that ends up overlapping.
+ * The id tie-break is what makes the whole thing reproducible: two clients painting the same board
+ * must place the captions identically or the map looks different to different people at the table.
+ *
+ * A caption with NOWHERE clear keeps the middle of its line. Sliding it to a stop that is merely
+ * less bad would move it away from where its line is without buying legibility.
+ *
+ * @param {object} spec
+ * @param {{id: string, curve: object, text: string}[]} spec.labels  one entry per captioned link.
+ * @param {{left, top}[]} spec.nodes  every portrait's centre, which a caption also avoids.
+ * @returns {Map<string, {left, top, angle}>}  where each caption goes, by link id.
+ */
+export function spreadLabels({
+	labels = [], nodes = [], aspect = RELMAP_BOARD_ASPECT, r = nodeRadiusPct(),
+	boardWidthPx = RELMAP_BOARD_WIDTH, capPx = null,
+} = {}) {
+	const out = new Map();
+	if (!labels.length) return out;
+	const ratio = ratioOf(aspect);
+	const stops = slideStops();
+	// Everything below compares distances, so it all happens in flat space.
+	const faces = nodes.filter(Boolean).map(n => flat(n, ratio));
+	// The caller passes the cap it is PAINTING with, so the measurement and the paint agree. On
+	// its own, this works the same cap out from the same count.
+	const cap = capPx ?? labelCapPx(labels.filter(entry => entry?.curve && entry.text).length);
+
+	const queue = labels
+		.filter(entry => entry?.curve && entry.text)
+		.map(entry => ({
+			...entry,
+			size: captionSize(entry.text, entry.curve, { boardWidthPx, capPx: cap }),
+		}))
+		.sort((a, b) => b.size.w - a.size.w || String(a.id).localeCompare(String(b.id)));
+
+	const placed = [];
+	for (const entry of queue) {
+		// The first stop tried, which is the middle of this caption's own line: where it goes if
+		// none of the stops turns out to be clear. Kept apart from "did we place it" so that each
+		// says one thing -- one variable answering both read backwards in the tail below.
+		let middle = null;
+		let settled = false;
+		for (const t of stops) {
+			const anchor = edgeLabelAnchor(entry.curve, aspect, t);
+			if (!anchor) break;
+			middle ??= anchor;
+			const box = labelBox(flat(anchor, ratio), entry.size.w, entry.size.h, anchor.angle);
+			const reach = Math.hypot(box.hw, box.hh);
+			const clear = !faces.some(face => boxHitsCircle(box, face, r))
+				&& !placed.some(other => (
+					Math.hypot(other.box.cx - box.cx, other.box.cy - box.cy) <= other.reach + reach
+					&& boxesOverlap(other.box, box)
+				));
+			if (clear) {
+				out.set(entry.id, anchor);
+				placed.push({ box, reach });
+				settled = true;
+				break;
+			}
+		}
+		if (settled || !middle) continue;
+		// Nowhere clear. Back to the middle of its own line, and it takes its room in the pile
+		// like everything else so the NEXT caption knows the spot is spoken for.
+		out.set(entry.id, middle);
+		const box = labelBox(flat(middle, ratio), entry.size.w, entry.size.h, middle.angle);
+		placed.push({ box, reach: Math.hypot(box.hw, box.hh) });
+	}
+	return out;
 }
