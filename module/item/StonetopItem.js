@@ -7,6 +7,7 @@ import {stonetopThumbnail} from "../utils/item-icon.js";
 import {STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "../actors/character/StonetopFlags.js";
 import {newArcanumSlug, isArcanumData} from "./createArcanum.js";
 import {isKnowThings, knowThingsRollOptions} from "../actors/character/know-things.js";
+import {tierActionsRestateOptions} from "../utils/chat.js";
 
 /**
  * Which world item owns each arcanum slug: `slug -> item id`.
@@ -265,9 +266,15 @@ export function createStonetopItemClass(BaseItem) {
 			// Skipped for a move that names its own pool in `system.pickOptions` (love letters):
 			// that pool renders as its own checklist, and a second list in the description would
 			// start its data-index at 0 again and scramble the message's saved ticks.
+			//
+			// And skipped, for the same reason in a different shape, when the attack flow has
+			// already put this move's WHOLE list on the card as the pick radios that actually
+			// enact it (Clash) — see utils/chat.js#tierActionsRestateOptions, which is where the
+			// "already" is decided by comparing the words rather than by naming the move.
 			const declaredPicks = this.system?.pickOptions ?? [];
+			const restated = tierActionsRestateOptions(options.tierActions, moveDescription);
 			const cardDescription = moveCardBody(moveDescription, this.system?.moveResults,
-				{ pickable: !declaredPicks.length }) + signoff;
+				{ pickable: !declaredPicks.length && !restated }) + signoff;
 
 			if (stat) return rollStat(stat, actor, {
 				...options,

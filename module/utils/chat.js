@@ -1,4 +1,4 @@
-import {escHtml, stripHtmlToText} from "./strings.js";
+import {escHtml, stripHtmlToText, decodeEntities} from "./strings.js";
 import {isReferenceList, pickLimitsFrom} from "./move-picks.js";
 import {MOVE_TIERS_CLASS} from "./move-results.js";
 
@@ -304,6 +304,74 @@ export function pickableMoveDescription(description) {
 	return html.slice(0, list.index)
 		+ `<ul class="stonetop-picklist"${limitAttrs}>${items}</ul>`
 		+ html.slice(list.index + list.length);
+}
+
+/**
+ * The option labels a card's tier controls print, matched back out of the HTML that built them
+ * rather than declared beside it.
+ *
+ * The whole point of the comparison below is that the controls and the move's printed bullets say
+ * the SAME WORDS, so a label list handed over separately could drift from the one actually
+ * rendered with nothing to notice. `combat/attack-flow.js#pickRow` and `#addonRow` write this
+ * shape, and a producer of tier controls that wants the same suppression wears the same class.
+ *
+ * HERE AND NOT IN THE COMBAT FLOW. "Does this card already say this twice" is a question about a
+ * roll card and a move's printed list, which is what this module owns ({@link firstOptionList},
+ * {@link pickableMoveDescription}); asked from the attack flow it made the Item document import
+ * the combat module for one string comparison, and the answer was out of reach of every other
+ * producer of tier controls (`know-things.js`, the steading's homefront table).
+ */
+const _PICK_LABEL_RE = /<span class="stonetop-attack-pick-label">([\s\S]*?)<\/span>/gi;
+
+// Two spellings of one option compare equal: a label was written through `escHtml` (its
+// apostrophe is a numeric entity) while the bullet was authored in a book (its apostrophe may be
+// typographic). Down to letters and digits, because none of what separates "enemy's attack" from
+// "enemy’s attack" is the option.
+function _optionKey(text) {
+	// Through `decodeEntities` and not a decoder written here: strings.js says in its own header
+	// that there used to be two and neither was a superset of the other, so text routed through the
+	// wrong one came out with raw entities still in it. A miss here is silent -- it turns a match
+	// into a mismatch and hands the card back a duplicate option list.
+	return decodeEntities(stripHtmlToText(text))
+		.replace(/[^a-z0-9]+/gi, " ")
+		.trim()
+		.toLowerCase();
+}
+
+/**
+ * Whether these tier controls already restate EVERY option the move prints.
+ *
+ * A move's printed list is made tickable wherever it is shown (chat.js#pickableMoveDescription),
+ * and Clash's roll card therefore carried that list TWICE: as checkboxes with a tally over them
+ * up in the description, and again as the pick radios under the result. Only the radios do
+ * anything — they are what folds strike-hard's extra 1d6 and the enemy's counter into the damage
+ * roll — so the card offered two selections of one choice, one of them going nowhere, and locked
+ * the working one on Confirm while the decorative one stayed clickable.
+ *
+ * So the tickable list stands down when, and only when, the controls cover the whole of it.
+ * Clash's two bullets are both radios (word for word, deliberately) and its description prints
+ * plain bullets instead. Let Fly's 7-9 prints FOUR options and surfaces only "deplete your ammo"
+ * as an add-on; the other three live nowhere else on the card, so its checklist stays.
+ *
+ * Compared by TEXT rather than declared, which makes the rule self-checking: a world that rewords
+ * Clash or adds a third option to it stops matching and gets its tickable list back, rather than
+ * a card that quietly drops an option the radios can no longer offer.
+ *
+ * @param {object|null} tierActions   The per-tier control HTML, as `buildTierActions` built it.
+ * @param {string} description        The move's own HTML, before the ladder is laid over it.
+ */
+export function tierActionsRestateOptions(tierActions, description) {
+	const printed = (firstOptionList(description)?.items ?? []).map(_optionKey).filter(Boolean);
+	if (!printed.length) return false;
+	const labels = new Set();
+	for (const html of Object.values(tierActions ?? {})) {
+		for (const [, label] of String(html ?? "").matchAll(_PICK_LABEL_RE)) {
+			const key = _optionKey(label);
+			if (key) labels.add(key);
+		}
+	}
+	if (!labels.size) return false;
+	return printed.every(key => labels.has(key));
 }
 
 /**
