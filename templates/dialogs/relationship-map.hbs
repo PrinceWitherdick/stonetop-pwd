@@ -368,6 +368,108 @@
           OUTSIDE the board and inside the viewport, so it stays put while the picture is panned and
           zoomed underneath it. --}}
     <p class="stonetop-relmap-aside" {{#unless omittedSaid}}hidden{{/unless}}>{{omittedSaid}}</p>
+
+    {{!-- THE LINE THE READER HAS HOLD OF, and the four things they change about it most.
+
+          WHY IT IS NOT THE DIALOG. Clicking a line used to open a modal window asking six
+          questions, and five of them are questions nobody has: what a line SAYS, what colour it is,
+          which way it is read and whether it is broken are the four things a table changes while
+          talking, and a window that has to be opened, aimed at and dismissed for each of them is
+          four windows between one thought and the next. The dialog still exists and still asks all
+          six -- the family tie and the notes behind the line are real questions, they are simply
+          not the ones being asked forty times an evening -- and the last button here opens it.
+
+          THE WRITING FIELD IS FIRST AND TAKES THE FOCUS, which is the whole of "click a line and
+          start typing". Everything else on the bar is a press.
+
+          ⚠ INSIDE THE VIEWPORT AND OUTSIDE THE BOARD, which is the same choice the aside above
+          makes and matters more here. The board's markup is REPLACED on every live update
+          (`_repaintBoard` writes its innerHTML), so a bar that rode on the board would be destroyed
+          under the reader's hands the moment anybody else at the table moved a portrait -- taking a
+          half-typed caption and the focus with it. Out here it is only re-placed, by `place()`.
+
+          ⚠ AND IT IS `hidden` RATHER THAN ABSENT, for the reason every panel in this window is:
+          `RelmapTieBar` can only write onto markup a render left standing. --}}
+    <div class="stonetop-relmap-tiebar" role="group" aria-label="{{tie.label}}" hidden>
+      {{!-- No `list`: the caption suggestions belong to the dialog, where there is room for a popup
+            to open downwards over something that is not the board. --}}
+      <input type="text" class="stonetop-relmap-tiebar-words" data-relmap-tie="words"
+             maxlength="{{maxLength}}" placeholder="{{tie.placeholder}}"
+             aria-label="{{labelField}}" autocomplete="off" spellcheck="false">
+
+      {{!-- THE COLOUR, as the eight swatches themselves rather than a swatch that opens a chooser.
+            Eight presses' worth of bar against one press to open a second popup over the board and
+            a second to choose in it: the swatches are wider and are still fewer gestures, and they
+            say what the eight colours ARE without anybody having to go and look. Each carries its
+            dash pattern too, which is what the high-contrast skin paints instead of the colour. --}}
+      {{!-- ⚠ ONE TAB STOP PER GROUP, NOT ONE PER PRESS. A radiogroup is a single stop with the
+            arrow keys inside it, and left as fourteen ordinary buttons this bar would put fourteen
+            stops between the board and whatever comes after -- on a strip a reader arrives at by
+            clicking a line, which is the worst place in the window to lose somebody. Every press
+            starts at `-1` and `markChosen` (utils/relmap-tie-bar.js) hands the stop to whichever
+            one is set, every time the bar opens. --}}
+      <div class="stonetop-relmap-tiebar-group stonetop-relmap-tiebar-inks" role="radiogroup"
+           aria-label="{{inkLabel}}">
+        {{#each inks}}
+        <button type="button" class="stonetop-relmap-tiebar-ink stonetop-relmap-ink--{{key}}"
+                data-relmap-tie="ink" data-relmap-tie-value="{{key}}"
+                role="radio" aria-checked="false" tabindex="-1"
+                data-tooltip="{{name}}" aria-label="{{name}}">
+          <span class="stonetop-relmap-ink-swatch" aria-hidden="true"></span>
+        </button>
+        {{/each}}
+      </div>
+
+      {{!-- WHICH WAY IT IS READ. Four presses and not three, because "no arrow at either end" is
+            an answer as much as the other three are, and is the one most lines want.
+
+            ⚠ THE TWO ONE-WAY BUTTONS ARE NOT LEFT AND RIGHT. Which of the pair is drawn on the left
+            of the board is a fact about where two portraits happen to sit, and it changes when
+            either of them is dragged; a fixed left arrow would mean "towards Sonya" on one board and
+            "towards Mike" on the same board a moment later. So the icons and the words are BOTH
+            written on open, by `RelmapTieBar`, from where the two faces actually are. --}}
+      <div class="stonetop-relmap-tiebar-group stonetop-relmap-tiebar-dirs" role="radiogroup"
+           aria-label="{{dirLabel}}">
+        {{#each dirs}}
+        <button type="button" class="stonetop-relmap-tiebar-btn" data-relmap-tie="dir"
+                data-relmap-tie-value="{{key}}" role="radio" aria-checked="false" tabindex="-1"
+                data-tooltip="{{name}}" aria-label="{{name}}">
+          <i class="fas {{icon}}"></i>
+        </button>
+        {{/each}}
+      </div>
+
+      {{!-- WHETHER THE STROKE IS BROKEN. A mark the reader makes on purpose -- the rumour against
+            the fact -- and not the same thing as the dash an ink wears under the high-contrast
+            skin. See RELMAP_DASHES in relmap/relmap-store.js, which says what that costs. --}}
+      <div class="stonetop-relmap-tiebar-group stonetop-relmap-tiebar-dashes" role="radiogroup"
+           aria-label="{{dashLabel}}">
+        {{#each dashes}}
+        {{!-- ⚠ A DRAWN RULE AND NOT AN ICON. This was Font Awesome's `fa-ellipsis` for dotted,
+              which is three dots in a row -- sitting two buttons away from `fa-ellipsis-vertical`,
+              which is the "everything else" button. Two ellipses side by side on a strip this small
+              read as one control, and the busier of them at 13px reads as broken type rather than
+              as a line (the same failure the pin glyphs hit at that size). What each of these
+              buttons means is a LINE, so each one draws its own. --}}
+        <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-tiebar-dash"
+                data-relmap-tie="dash" data-relmap-tie-value="{{key}}"
+                role="radio" aria-checked="false" tabindex="-1"
+                data-tooltip="{{name}}" aria-label="{{name}}">
+          <span class="stonetop-relmap-tiebar-rule stonetop-relmap-tiebar-rule--{{key}}"
+                aria-hidden="true"></span>
+        </button>
+        {{/each}}
+      </div>
+
+      {{!-- EVERYTHING ELSE THIS LINE HAS, which is the dialog: the family tie, the notes behind it,
+            and rubbing it out. Rubbing out is deliberately NOT on this bar -- one press with no
+            question would be the only destructive gesture in this window that never asks, and the
+            bar is the surface a reader clicks around on while talking. --}}
+      <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-tiebar-more"
+              data-relmap-tie="more" data-tooltip="{{tie.more}}" aria-label="{{tie.more}}">
+        <i class="fas fa-ellipsis-vertical"></i>
+      </button>
+    </div>
   </div>
 
   {{!-- THE LINES AN OLD IMPORT LEFT ON THIS BOARD, put away or brought back.

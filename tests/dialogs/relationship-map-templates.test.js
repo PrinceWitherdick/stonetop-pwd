@@ -34,7 +34,13 @@ const boardContext = () => ({
 			tooltip: "Stefan", linkLabel: "Draw a line from Stefan",
 		},
 	],
-	edges: [{ id: "e1", a: "n1", b: "n2", d: "M 20,30 Q 45,28 70,30", ink: "rose" }],
+	edges: [{
+		id: "e1", a: "n1", b: "n2", ink: "rose",
+		// The BROKEN path the stroke is painted along -- the caption's gap is cut out of it -- and
+		// the WHOLE curve the invisible target is laid along. The two differ on purpose.
+		d: "M 20,30 Q 45,28 60,30", hit: "M 20,30 Q 45,28 70,30",
+		dotted: false,
+	}],
 	labels: [{
 		id: "e1", a: "n1", b: "n2", ink: "rose", text: "exes",
 		// Where the words sit and how far they are turned over, in ABSOLUTE board PIXELS — type
@@ -221,6 +227,35 @@ describe("the board template", () => {
 		expect(render(boardContext())).toContain('data-relmap-words="e1"');
 	});
 
+	// ⚠ A LINE WITH NOTHING WRITTEN ON IT HAD NO TARGET AT ALL. The caption was the only thing on a
+	// line a reader could aim at, so a line drawn without one could be reached from neither the
+	// mouse nor the keyboard -- and the one gesture that would put writing on it is a click on the
+	// line. The painted stroke cannot take that click: it is four screen pixels wide, in a layer
+	// that refuses pointer events so a drag on bare board pans it.
+	it("lays an invisible target along every line", () => {
+		const html = render(boardContext());
+		expect(html).toContain('<path class="stonetop-relmap-hit" data-relmap-hit="e1"');
+	});
+
+	// ⚠ THE WHOLE CURVE AND NOT THE BROKEN ONE. The gap cut out of the painted stroke for a caption
+	// to sit in is the exact stretch a reader aims at, so a target with the same gap would be dead
+	// in the middle.
+	it("gives the target the whole curve, gap and all", () => {
+		const html = render(boardContext());
+		expect(html).toMatch(/data-relmap-hit="e1" d="M 20,30 Q 45,28 70,30"/);
+		expect(html).toMatch(/data-relmap-line="e1" d="M 20,30 Q 45,28 60,30"/);
+	});
+
+	// A class and not a dash pattern written into the markup, for the reason the ink is a class:
+	// what a mark resolves to is the stylesheet's business and has to stay retunable under the
+	// accessibility skin.
+	it("marks a stroke the reader broke, and leaves a solid one bare", () => {
+		const context = boardContext();
+		expect(render(context)).not.toContain("is-dotted");
+		expect(render({ ...context, edges: [{ ...context.edges[0], dotted: true }] }))
+			.toContain("stonetop-relmap-line--rose is-dotted");
+	});
+
 	// THE WORDS ARE THE BUTTON. There is no HTML button around them any more -- a wrapper would
 	// have to be either the caption's enormous bounding box or a second element kept in step with
 	// the glyphs, and both were what merging the layer got rid of. So the `<text>` carries the
@@ -261,7 +296,6 @@ describe("the window template", () => {
 			: { action: "add", label: "Add someone", icon: "fa-user-plus" },
 		findKinLabel: "Find family ties", findKinHint: "h",
 		dropPulledLabel: "Rub out pulled-in lines", dropPulledHint: "h",
-		showRefreshParty: false, refreshPartyLabel: "Bring the party in", refreshPartyHint: "h",
 		bareLead: "No family ties yet", bareHint: "Mark a line",
 		bareAction: { action: "findkin", label: "Find family ties", icon: "fa-wand-magic-sparkles" },
 		noKin: false, omittedSaid: "",
@@ -275,11 +309,84 @@ describe("the window template", () => {
 		undoNothing: "There is nothing of yours on this board to take back.",
 		redoNothing: "There is nothing to do again.",
 		hasPulled: true, hidePulled: false, pulledLabel: "Hide pulled-in lines",
-		pulledHint: "why anybody would want this", ...over,
+		pulledHint: "why anybody would want this",
+		// THE TIE BAR'S SHELL, and only its shell: which swatch is pressed and what the arrows are
+		// called depend on a line nobody has clicked yet, so `RelmapTieBar` writes those on open.
+		maxLength: 60, labelField: "What it says", inkLabel: "Colour",
+		dirLabel: "Which way it is read", dashLabel: "The stroke",
+		inks: [{ key: "rose", name: "Rose" }, { key: "slate", name: "Slate" }],
+		// The four readings arrive the same way the eight inks do -- from `RELMAP_DIRS`, through the
+		// window -- rather than being written out in the markup. The icons are only what the buttons
+		// are BUILT with; the two one-way ones are re-pointed on open from where the faces sit.
+		dirs: [
+			{ key: "none", icon: "fa-minus", name: "Both ways, evenly" },
+			{ key: "a-b", icon: "fa-arrow-right-long", name: "One way, to the second person" },
+			{ key: "b-a", icon: "fa-arrow-left-long", name: "One way, to the first person" },
+			{ key: "both", icon: "fa-arrows-left-right", name: "Both ways, marked at each end" },
+		],
+		dashes: [{ key: "solid", name: "Solid line" }, { key: "dotted", name: "Dotted line" }],
+		tie: { label: "This line", placeholder: "what this line says", more: "Everything else" },
+		...over,
 	});
 
 	it("compiles and drops the board in unescaped", () => {
 		expect(render(context())).toContain("<board/>");
+	});
+
+	// ── The tie bar ──────────────────────────────────────────────────────────
+	//
+	// ⚠ INSIDE THE VIEWPORT AND OUTSIDE THE BOARD, which is a correctness matter rather than a
+	// layout one: `{{{board}}}` is replaced wholesale on every live update, so a bar drawn in there
+	// would be destroyed under the reader's hands the moment anybody else moved a portrait --
+	// taking a half-typed caption and the focus with it.
+	it("puts the tie bar in the viewport, beside the board and not inside it", () => {
+		const html = render(context());
+		const view = html.indexOf('class="stonetop-relmap-view"');
+		expect(html.indexOf("stonetop-relmap-tiebar")).toBeGreaterThan(view);
+		expect(html.indexOf("stonetop-relmap-tiebar")).toBeGreaterThan(html.indexOf("<board/>"));
+	});
+
+	// ⚠ RENDERED ALWAYS AND HIDDEN, never behind an `{{#if}}`, for the reason every panel over this
+	// board is: `RelmapTieBar` can only write onto markup a render left standing.
+	it("renders the bar hidden rather than leaving it out", () => {
+		expect(render(context())).toMatch(/class="stonetop-relmap-tiebar"[^>]*hidden/);
+	});
+
+	// THE FIELD IS FIRST AND TAKES THE FOCUS, which is the whole of "click a line and start typing".
+	it("opens the bar with the writing field", () => {
+		const html = render(context());
+		const bar = html.slice(html.indexOf("stonetop-relmap-tiebar"));
+		expect(bar.indexOf('data-relmap-tie="words"')).toBeLessThan(bar.indexOf('data-relmap-tie="ink"'));
+		expect(bar).toContain('maxlength="60"');
+	});
+
+	it("carries a swatch for every ink and a press for both strokes", () => {
+		const html = render(context());
+		expect(html).toContain('data-relmap-tie="ink" data-relmap-tie-value="rose"');
+		expect(html).toContain('data-relmap-tie="ink" data-relmap-tie-value="slate"');
+		expect(html).toContain('data-relmap-tie-value="dotted"');
+		// Each stroke button DRAWS the line it means rather than wearing an icon: `fa-ellipsis` sat
+		// two buttons from `fa-ellipsis-vertical` and the two read as one control.
+		expect(html).toContain("stonetop-relmap-tiebar-rule--dotted");
+	});
+
+	// Four presses and not three: "no arrow at either end" is an answer as much as the other three,
+	// and is the one most lines want.
+	it("offers all four readings of a line, none of them named here", () => {
+		const html = render(context());
+		for (const dir of ["none", "a-b", "b-a", "both"]) {
+			expect(html).toMatch(new RegExp(`data-relmap-tie="dir"\\s+data-relmap-tie-value="${dir}"`));
+		}
+	});
+
+	// Rubbing a line out is deliberately NOT on the bar: one press with no question would be the
+	// only destructive gesture in this window that never asks, on the surface a reader clicks
+	// around on while talking. It is behind the button that opens the dialog.
+	it("keeps rubbing out behind the dialog rather than on the bar", () => {
+		const html = render(context());
+		const bar = html.slice(html.indexOf("stonetop-relmap-tiebar"));
+		expect(bar).toContain('data-relmap-tie="more"');
+		expect(bar).not.toContain("fa-link-slash");
 	});
 
 	// THE BOX THAT PUTS THE PULLED-IN LINES AWAY, and it is OUTSIDE the permission gate with the
@@ -330,9 +437,16 @@ describe("the window template", () => {
 			.not.toContain('data-relmap-action="droppulled"');
 	});
 
+	// ⚠ MATCHED ON THE BOX ITSELF AND NOT ON THE WORD. This asked whether the whole document
+	// contained "checked" anywhere, which was true the day the tie bar arrived carrying nine
+	// `aria-checked` radios -- a test that failed for a reason with nothing to do with what it is
+	// about. The attribute is bare (Handlebars writes `checked` with no value), so the assertion is
+	// the input element with it and the same input without.
 	it("ticks the box when the lines are put away", () => {
-		expect(render(context({ hidePulled: true }))).toContain("checked");
-		expect(render(context({ hidePulled: false }))).not.toContain("checked");
+		expect(render(context({ hidePulled: true })))
+			.toMatch(/data-relmap-action="hidepulled"[^>]*\schecked/);
+		expect(render(context({ hidePulled: false })))
+			.not.toMatch(/data-relmap-action="hidepulled"[^>]*\schecked/);
 	});
 
 	// On the LABEL, so resting on either the box or its words says why anybody would want this,

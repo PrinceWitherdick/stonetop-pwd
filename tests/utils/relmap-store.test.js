@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
-	RELMAP_DIR_DEFAULT, RELMAP_INKS, RELMAP_INK_DEFAULT, RELMAP_LABEL_MAX, RELMAP_ORIGIN_MAX,
-	RELMAP_VERSION,
+	RELMAP_DASH_DEFAULT, RELMAP_DIR_DEFAULT, RELMAP_INKS, RELMAP_INK_DEFAULT, RELMAP_LABEL_MAX,
+	RELMAP_ORIGIN_MAX, RELMAP_VERSION,
 	addEdgePatch, addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, edgesBetween,
 	edgesTouching, emptyGraph, fanIndexes, isImportedEdge, isSafeId, nodePatch, normalizeGraph,
 	relmapPath, tidyPatch,
@@ -113,6 +113,16 @@ describe("the shape of a write", () => {
 		expect(patch[`${PREFIX}.edges.link1.dir`]).toBe(RELMAP_DIR_DEFAULT);
 	});
 
+	// WHETHER THE STROKE IS BROKEN, which is a leaf like every other: two people breaking two
+	// different lines both land, and a made-up answer is refused the way a made-up ink is.
+	it("writes the stroke as its own leaf, and refuses one it does not know", () => {
+		expect(edgePatch("link1", { dash: "dotted" })).toEqual({
+			[`${PREFIX}.edges.link1.dash`]: "dotted",
+		});
+		expect(edgePatch("link1", { dash: "squiggly" })[`${PREFIX}.edges.link1.dash`])
+			.toBe(RELMAP_DASH_DEFAULT);
+	});
+
 	// A family tie is a leaf like any other, so marking one is a write two people can make at once
 	// on two different lines, and a made-up one is refused the same way a made-up ink is.
 	it("writes a family tie as its own leaf, and refuses one it does not know", () => {
@@ -196,6 +206,25 @@ describe("removing things, on both cores", () => {
 });
 
 describe("reading a stored map back", () => {
+	// ⚠ ABSENT READS AS SOLID, which is every line on every board drawn before the field existed.
+	// Nothing migrates, and nothing has to: a map written last season opens exactly as it looked.
+	it("reads a line with no stroke recorded as a solid one", () => {
+		const read = normalizeGraph({
+			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			edges: { link1: { a: "a", b: "b" }, link2: { a: "a", b: "b", dash: "spotty" } },
+		});
+		expect(read.edges.link1.dash).toBe(RELMAP_DASH_DEFAULT);
+		expect(read.edges.link2.dash).toBe(RELMAP_DASH_DEFAULT);
+	});
+
+	it("keeps a stroke somebody broke by hand", () => {
+		const read = normalizeGraph({
+			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			edges: { link1: { a: "a", b: "b", dash: "dotted" } },
+		});
+		expect(read.edges.link1.dash).toBe("dotted");
+	});
+
 	it("survives being handed nothing at all", () => {
 		for (const bad of [null, undefined, "", 7, [], "wat"]) {
 			expect(normalizeGraph(bad)).toEqual(emptyGraph());

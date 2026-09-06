@@ -40,9 +40,31 @@
 <svg class="stonetop-relmap-lines" viewBox="0 0 100 100" preserveAspectRatio="none"
      aria-hidden="true" focusable="false">
   {{#each edges}}
-  <path class="stonetop-relmap-line stonetop-relmap-line--{{ink}}" data-relmap-line="{{id}}" d="{{d}}"
+  <path class="stonetop-relmap-line stonetop-relmap-line--{{ink}}{{#if dotted}} is-dotted{{/if}}"
+        data-relmap-line="{{id}}" d="{{d}}"
         data-relmap-who="{{a}} {{b}}"
         vector-effect="non-scaling-stroke"></path>
+  {{!-- WHAT THE CLICK ACTUALLY LANDS ON: the same curve again, invisible, and wide.
+
+        ⚠ THE PAINTED STROKE CANNOT TAKE THE CLICK ITSELF, and not for want of trying. It is three
+        and a half units wide in a stretched 0-100 space with a non-scaling stroke — about four
+        SCREEN pixels, and less than that is not a target, it is a dare. Widening the painted line
+        to something aimable would be widening the drawing. So the target is its own stroke: the
+        whole curve (never the broken one — the gap cut for a caption is the exact stretch a reader
+        aims at), transparent, and wide enough to hit while talking.
+
+        ⚠ AND IT IS THE ONE THING ON THIS LAYER THAT TAKES POINTER EVENTS. The layer covers the
+        whole board and refuses them all, because a drag starting on empty board has to pan; these
+        strokes opt back in from the stylesheet, which is the same arrangement the captions layer
+        above uses, and for the same reason.
+
+        NO ROLE AND NO TAB STOP. A line that says something is already reachable by keyboard — its
+        caption is the button, and always has been. A line with nothing written on it is reachable
+        from either of its two portraits, which are tab stops themselves. Eighty more stops between
+        the bar and the board, most of them announced as an unnamed button, would cost every
+        keyboard reader far more than it bought the one case. --}}
+  <path class="stonetop-relmap-hit" data-relmap-hit="{{id}}" d="{{hit}}"
+        aria-hidden="true" vector-effect="non-scaling-stroke"></path>
   {{/each}}
 </svg>
 

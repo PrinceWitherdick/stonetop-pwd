@@ -19,7 +19,7 @@
 // records instead is WHEN the capture was taken, which is the thing the code controls and the
 // thing that was wrong.
 import { vi } from "vitest";
-import { matchesSelector } from "./dom.js";
+import { fakeClassList, matchesSelector } from "./dom.js";
 
 /**
  * A `style` that answers `setProperty`, because CUSTOM PROPERTIES are how a drag moves a portrait.
@@ -49,14 +49,18 @@ export function boardEl({ cls = [], dataset = {}, parent = null } = {}) {
 			for (let cur = node; cur; cur = cur.parent) if (cur.matches?.(sel)) return cur;
 			return null;
 		},
-		classList: {
-			add(name) { if (!node.classes.includes(name)) node.classes.push(name); },
-			remove(name) {
-				const at = node.classes.indexOf(name);
-				if (at >= 0) node.classes.splice(at, 1);
-			},
-			contains: name => node.classes.includes(name),
-		},
+		// The other half of that walk, downwards: the click handler asks the BOARD whether what
+		// was clicked is inside it, rather than naming the viewport chrome it is not.
+		contains: other => { for (let cur = other; cur; cur = cur.parent) if (cur === node) return true; return false; },
+		/**
+		 * A box, so anything that PLACES itself can be tested.
+		 *
+		 * Zero by default and settable through `rect`, because a fake that made up a size would be
+		 * asserting arithmetic against numbers nothing in the test chose. The tie bar clamps itself
+		 * into the viewport, and both boxes in that sum have to be the test's own.
+		 */
+		rect: { left: 0, top: 0, width: 0, height: 0 },
+		getBoundingClientRect: () => ({ ...node.rect }),
 		querySelector: sel => walk(node.children, sel)[0] ?? null,
 		querySelectorAll: sel => walk(node.children, sel),
 		addEventListener: (type, fn) => { (node.handlers[type] ??= []).push(fn); },
@@ -91,6 +95,7 @@ export function boardEl({ cls = [], dataset = {}, parent = null } = {}) {
 			return ev;
 		},
 	};
+	node.classList = fakeClassList(node);
 	parent?.children.push(node);
 	return node;
 }
@@ -166,12 +171,31 @@ export function pointerBoard({ nodes = ["n1", "n2"], edges = ["e1"] } = {}) {
 	const captions = {};
 	for (const id of edges) {
 		const g = boardEl({ cls: ["stonetop-relmap-label"], dataset: { relmapEdge: id }, parent: labels });
-		g.words = boardEl({ cls: ["stonetop-relmap-label-text"], parent: g });
+		g.words = boardEl({ cls: ["stonetop-relmap-label-text"], dataset: { relmapWords: id }, parent: g });
 		captions[id] = g;
 	}
 
+	// A LINE, AS THE BOARD PARTIAL PRINTS ONE: the painted stroke, which takes no pointer events at
+	// all, and the invisible wide one over it, which is the only thing on that layer a click can
+	// land on. Both, and not just the target: what makes the pair worth having in a fake is that a
+	// test can prove the click goes to the one that can receive it.
+	const lines = boardEl({ cls: ["stonetop-relmap-lines"], parent: board });
+	const strokes = {};
+	for (const id of edges) {
+		const painted = boardEl({ cls: ["stonetop-relmap-line"], dataset: { relmapLine: id }, parent: lines });
+		painted.hit = boardEl({ cls: ["stonetop-relmap-hit"], dataset: { relmapHit: id }, parent: lines });
+		strokes[id] = painted;
+	}
+
+	// THE TIE BAR, in the VIEWPORT and not on the board -- which is exactly where the production
+	// markup puts it, and the reason it has to be here: its own presses arrive at the same
+	// delegated click handler every gesture on this board does, and a fake that left it out would
+	// certify a handler that closes the bar under the swatch operating it.
+	const tiebar = boardEl({ cls: ["stonetop-relmap-tiebar"], parent: view });
+	tiebar.hidden = true;
+
 	return {
-		root, view, board, portraits, captions,
+		root, view, board, portraits, captions, strokes, tiebar,
 		/** Where `elementsFromPoint` will say the cursor is, topmost first. */
 		setHits(list) { hits = list; },
 		/** Run every frame queued so far, the way one paint would. */

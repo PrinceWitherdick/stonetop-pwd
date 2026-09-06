@@ -83,7 +83,12 @@ function clearTravel(el) {
  * @param {Function} handlers.onLink    `(fromId, toId) => void` — a line dragged between two.
  * @param {Function} handlers.onLinkFrom `id => void` — the handle CLICKED rather than dragged.
  * @param {Function} handlers.onOpen    `id => void` — a portrait clicked without dragging.
- * @param {Function} handlers.onEditEdge `id => void` — a label clicked.
+ * @param {Function} handlers.onPickEdge `id => void` — a line taken hold of, by a click on the
+ *                                      stroke itself or on the words set in it. NOT "opened": what
+ *                                      this raises is the bar over the line (utils/relmap-tie-bar.js),
+ *                                      and the dialog behind it is one button further on.
+ * @param {Function} handlers.onPickNone `() => void` — a click that landed on the board and on
+ *                                      nothing on it, which is how a reader lets a line go.
  * @param {Function} handlers.onRemove  `id => void` — Delete pressed on a focused portrait.
  * @param {Function} handlers.canEdit   `() => boolean` — re-asked per gesture, because a map's
  *                                      ownership can change while a board is open.
@@ -107,8 +112,8 @@ function clearTravel(el) {
  * @returns {Function} teardown.
  */
 export function wireRelmapDrag(root, {
-	surface, nodeAt, onMove, onNudge, onDragMove, onDragEnd, onLink, onLinkFrom, onOpen, onEditEdge,
-	onRemove,
+	surface, nodeAt, onMove, onNudge, onDragMove, onDragEnd, onLink, onLinkFrom, onOpen, onPickEdge,
+	onPickNone, onRemove,
 	canEdit = () => true,
 	canMove = canEdit,
 	canRemove = canEdit,
@@ -333,10 +338,29 @@ export function wireRelmapDrag(root, {
 		if (swallowClick) { swallowClick = false; return; }
 		const handle = ev.target.closest?.("[data-relmap-handle]");
 		if (handle) { ev.preventDefault(); if (canEdit()) onLinkFrom?.(handle.dataset.relmapHandle); return; }
-		const label = ev.target.closest?.("[data-relmap-edge]");
-		if (label) { ev.preventDefault(); if (canEdit()) onEditEdge?.(label.dataset.relmapEdge); return; }
+		// THE WORDS FIRST AND THE STROKE SECOND, though either one takes hold of the same line: a
+		// caption sits IN its stroke, so the two overlap, and a reader aiming at the writing has
+		// aimed at the writing. (In practice the caption layer is drawn over the line layer and
+		// wins the hit test anyway; the order here says so out loud rather than relying on it.)
+		const words = ev.target.closest?.("[data-relmap-edge]");
+		if (words) { ev.preventDefault(); if (canEdit()) onPickEdge?.(words.dataset.relmapEdge); return; }
+		// THE STROKE ITSELF, which is a line with no caption's only target at all -- and the whole
+		// of "click a line and start typing" for one, since there is nothing written on it to aim
+		// at. What is actually clicked is the invisible wide stroke laid over the painted one; see
+		// the board partial for why the painted stroke cannot take the click itself.
+		const stroke = ev.target.closest?.("[data-relmap-hit]");
+		if (stroke) { ev.preventDefault(); if (canEdit()) onPickEdge?.(stroke.dataset.relmapHit); return; }
 		const face = ev.target.closest?.("[data-relmap-open]");
-		if (face) { ev.preventDefault(); onOpen?.(face.dataset.relmapOpen); }
+		if (face) { ev.preventDefault(); onOpen?.(face.dataset.relmapOpen); return; }
+		// NOTHING ON THE BOARD. Not `preventDefault`: a press on bare paper is the pan surface's,
+		// and this is only the window being told that whatever was being held has been let go.
+		//
+		// ⚠ ASKED AFFIRMATIVELY: did this land ON THE BOARD. These listeners are on the VIEWPORT,
+		// which holds the board PLUS chrome -- the tie bar floats in it, and its own swatches arrive
+		// here. Written as a list of chrome to skip, the next thing put in the viewport reads as
+		// "clicked bare paper" and closes the bar under the press operating it, which is the fault
+		// this guard exists for, rediscovered once per widget.
+		if (board.contains?.(ev.target)) onPickNone?.();
 	});
 
 	// ── Keyboard ────────────────────────────────────────────────────────────
@@ -358,7 +382,10 @@ export function wireRelmapDrag(root, {
 			if (words) {
 				ev.preventDefault();
 				ev.stopPropagation();
-				if (canEdit()) onEditEdge?.(words.dataset.relmapEdge);
+				// The SAME thing the click does, and the element it came from goes with it: a
+				// reader who pressed Enter on a caption and then thought better of the bar has to
+				// be put back on that caption rather than at the top of the window.
+				if (canEdit()) onPickEdge?.(words.dataset.relmapEdge, ev.target);
 				return;
 			}
 		}

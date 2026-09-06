@@ -26,7 +26,8 @@ const wire = (board, over = {}) => {
 		surface: fakeSurface(),
 		nodeAt: vi.fn(id => ({ x: 20, y: 30, id })),
 		onMove: vi.fn(), onNudge: vi.fn(), onDragMove: vi.fn(), onDragEnd: vi.fn(),
-		onLink: vi.fn(), onLinkFrom: vi.fn(), onOpen: vi.fn(), onEditEdge: vi.fn(), onRemove: vi.fn(),
+		onLink: vi.fn(), onLinkFrom: vi.fn(), onOpen: vi.fn(), onPickEdge: vi.fn(),
+		onPickNone: vi.fn(), onRemove: vi.fn(),
 		canEdit: () => true,
 		...over,
 	};
@@ -218,6 +219,88 @@ describe("a board the reader may not edit", () => {
 // element left to be a real `<button>`: a wrapper would be either the caption's enormous bounding
 // box, which would swallow every click meant for the faces underneath, or a second element to keep
 // in step with the glyphs. The `<text>` wears `role="button"` and a `tabindex` instead, and the one
+// ── Taking hold of a line ────────────────────────────────────────────────────
+//
+// A LINE WITH NOTHING WRITTEN ON IT HAD NO TARGET AT ALL. The caption was the only thing on a line a
+// reader could aim at, so a line drawn without one could be reached from neither the mouse nor the
+// keyboard -- and the one gesture that would put writing on it is a click on the line. The painted
+// stroke cannot take the click itself (four screen pixels, in a layer that refuses pointer events so
+// that a drag on bare board pans it), so the target is a second invisible stroke laid over it.
+describe("the stroke of a line", () => {
+	let board;
+	beforeEach(() => {
+		board = pointerBoard();
+		board.view.setPointerCapture = vi.fn();
+		board.view.releasePointerCapture = vi.fn();
+	});
+	afterEach(() => board.destroy());
+
+	it("takes hold of its line when the stroke is clicked", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.strokes.e1.hit);
+		expect(handlers.onPickEdge).toHaveBeenCalledWith("e1");
+		teardown();
+	});
+
+	// The invisible one and never the painted one. A test that pressed the painted stroke would
+	// pass on a fake that let anything be clicked, and prove nothing about the board that ships.
+	it("says nothing when the painted stroke is pressed, which cannot be", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.strokes.e1);
+		expect(handlers.onPickEdge).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	it("offers nothing to a reader who may not write", () => {
+		const { handlers, teardown } = wire(board, { canEdit: () => false });
+		press(board, board.strokes.e1.hit);
+		expect(handlers.onPickEdge).not.toHaveBeenCalled();
+		teardown();
+	});
+});
+
+// ── Letting go ──────────────────────────────────────────────────────────────
+//
+// The board is the surface a reader clicks around on while they are talking, so letting go of a
+// line has to be as easy as taking hold of one: an X on the bar would be the only way out of a
+// thing that opens on a click.
+describe("a click that lands on nothing", () => {
+	let board;
+	beforeEach(() => {
+		board = pointerBoard();
+		board.view.setPointerCapture = vi.fn();
+		board.view.releasePointerCapture = vi.fn();
+	});
+	afterEach(() => board.destroy());
+
+	it("lets go of whatever was being held", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.board);
+		expect(handlers.onPickNone).toHaveBeenCalled();
+		teardown();
+	});
+
+	// ⚠ THE PRESS ON BARE PAPER IS THE PAN SURFACE'S. Claiming it here would take the board's own
+	// drag away, and the board would stop moving.
+	it("does not claim the press, which belongs to the pan", () => {
+		const { teardown } = wire(board);
+		const ev = press(board, board.board);
+		expect(ev.defaultPrevented).toBe(false);
+		teardown();
+	});
+
+	// ⚠ THE BAR IS INSIDE THE VIEWPORT, so every swatch and every arrow on it arrives at this same
+	// delegated handler. Unclaimed, each of them would read as "clicked the board and nothing on
+	// it" and close the bar under the press that was operating it.
+	it("is not what a press on the bar itself means", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.tiebar);
+		expect(handlers.onPickNone).not.toHaveBeenCalled();
+		expect(handlers.onPickEdge).not.toHaveBeenCalled();
+		teardown();
+	});
+});
+
 // thing a real button gave for free has to be handed to it here.
 describe("a caption, which is a button only by manners", () => {
 	let board;
@@ -228,20 +311,23 @@ describe("a caption, which is a button only by manners", () => {
 	});
 	afterEach(() => board.destroy());
 
-	it("opens its link when the words are clicked", () => {
+	it("takes hold of its link when the words are clicked", () => {
 		const { handlers, teardown } = wire(board);
 		press(board, board.captions.e1.words);
-		expect(handlers.onEditEdge).toHaveBeenCalledWith("e1");
+		expect(handlers.onPickEdge).toHaveBeenCalledWith("e1");
 		teardown();
 	});
 
 	// ⚠ THE ONE A REAL BUTTON WOULD HAVE GIVEN FOR FREE. Without this the board is unusable from a
 	// keyboard: a caption can be tabbed to and then does nothing at all.
 	for (const key of ["Enter", " "]) {
-		it(`opens its link on ${key === " " ? "Space" : key}`, () => {
+		it(`takes hold of its link on ${key === " " ? "Space" : key}`, () => {
 			const { handlers, teardown } = wire(board);
 			const ev = board.view.emit("keydown", board.captions.e1.words, { key });
-			expect(handlers.onEditEdge).toHaveBeenCalledWith("e1");
+			// ⚠ AND HANDS BACK THE ELEMENT IT CAME FROM. A reader who pressed Enter on a caption and
+			// then dismissed the bar with Escape has to be put back on that caption; the bar cannot
+			// work out where they came from, so the gesture that raised it has to say.
+			expect(handlers.onPickEdge).toHaveBeenCalledWith("e1", board.captions.e1.words);
 			expect(ev.defaultPrevented).toBe(true);
 			teardown();
 		});
@@ -260,7 +346,7 @@ describe("a caption, which is a button only by manners", () => {
 		const { handlers, teardown } = wire(board, { canEdit: () => false });
 		board.view.emit("keydown", board.captions.e1.words, { key: "Enter" });
 		press(board, board.captions.e1.words);
-		expect(handlers.onEditEdge).not.toHaveBeenCalled();
+		expect(handlers.onPickEdge).not.toHaveBeenCalled();
 		teardown();
 	});
 
@@ -270,7 +356,7 @@ describe("a caption, which is a button only by manners", () => {
 		const { handlers, teardown } = wire(board);
 		board.view.emit("keydown", board.captions.e1.words, { key: "ArrowLeft" });
 		expect(handlers.onNudge).not.toHaveBeenCalled();
-		expect(handlers.onEditEdge).not.toHaveBeenCalled();
+		expect(handlers.onPickEdge).not.toHaveBeenCalled();
 		teardown();
 	});
 });

@@ -70,6 +70,31 @@ export const RELMAP_DIRS = Object.freeze(["none", "a-b", "b-a", "both"]);
 export const RELMAP_DIR_DEFAULT = "none";
 
 /**
+ * WHETHER THE STROKE IS BROKEN, as a key, and it is a mark the reader made rather than a rendering.
+ *
+ * The eight inks each already carry a dash pattern (the tokens at the top of the stylesheet), and
+ * that pattern is painted ONLY under the high-contrast skin, where its whole job is to say which of
+ * eight colours a line is to somebody who cannot resolve the colours. This is a different question
+ * that happens to have the same answer shape, and the two have to be kept apart: an ink's pattern
+ * is the colour said a second time, while this is a distinction somebody drew on purpose -- the
+ * rumour against the fact, the tie a table suspects against the one they know.
+ *
+ * SO A DELIBERATE "dotted" WINS UNDER THE HIGH-CONTRAST SKIN TOO, and that is a real cost said out
+ * loud rather than left to be discovered: a line the reader has dotted stops carrying its ink's
+ * pattern there, so its colour is the only thing left saying which ink it is. Both alternatives
+ * were worse. Letting the ink's pattern win means the one mark the reader made by hand is silently
+ * not drawn for the one reader at this table who most needs marks to be drawn at all; giving dotted
+ * lines eight more patterns of their own, each distinguishable from all eight, means sixteen
+ * patterns nobody could tell apart.
+ *
+ * A LINE LEFT "solid" IS UNTOUCHED BY ANY OF THIS and still carries its ink's pattern under that
+ * skin, which is every line on every board written before this field existed.
+ */
+export const RELMAP_DASH_DOTTED = "dotted";
+export const RELMAP_DASHES = Object.freeze(["solid", RELMAP_DASH_DOTTED]);
+export const RELMAP_DASH_DEFAULT = "solid";
+
+/**
  * WHERE A LINE CAME FROM, where it was not somebody's own hand.
  *
  * Only one answer so far, and the empty string for every other line, which is nearly all of them: a
@@ -263,6 +288,9 @@ export function normalizeGraph(raw) {
 			label: str(edge.label, RELMAP_LABEL_MAX),
 			ink: RELMAP_INKS.includes(edge.ink) ? edge.ink : RELMAP_INK_DEFAULT,
 			dir: RELMAP_DIRS.includes(edge.dir) ? edge.dir : RELMAP_DIR_DEFAULT,
+			// Solid unless somebody broke it by hand. Unknown and absent both read as solid, which
+			// is every line on every board drawn before this existed. See RELMAP_DASHES.
+			dash: RELMAP_DASHES.includes(edge.dash) ? edge.dash : RELMAP_DASH_DEFAULT,
 			// WHAT FAMILY TIE THIS IS, if any, and it is a stored KEY rather than something read
 			// back out of the caption for the same reason the ink is: prose is somebody's own
 			// sentence and must not have to be phrased a particular way for a feature to work.
@@ -351,6 +379,7 @@ export function edgePatch(id, fields = {}) {
 	if ("note" in clean) clean.note = str(clean.note, RELMAP_NOTE_MAX);
 	if ("ink" in clean && !RELMAP_INKS.includes(clean.ink)) clean.ink = RELMAP_INK_DEFAULT;
 	if ("dir" in clean && !RELMAP_DIRS.includes(clean.dir)) clean.dir = RELMAP_DIR_DEFAULT;
+	if ("dash" in clean && !RELMAP_DASHES.includes(clean.dash)) clean.dash = RELMAP_DASH_DEFAULT;
 	// Through `readKin` and not `normalizeKin`, so that "nobody has been asked" can still be
 	// written as what it is. The two differ on the empty string alone, and that one is the whole of
 	// what keeps "find family ties" from overruling a reader who answered "not a family tie".
@@ -375,10 +404,10 @@ export function addNodePatch(id, { uuid = null, name = "", img = "", x = 50, y =
  */
 export function addEdgePatch(id, {
 	a, b, label = "", ink = RELMAP_INK_DEFAULT, dir = RELMAP_DIR_DEFAULT,
-	kin = RELMAP_KIN_UNSET, src = RELMAP_SRC_NONE, origin = "", note = "",
+	dash = RELMAP_DASH_DEFAULT, kin = RELMAP_KIN_UNSET, src = RELMAP_SRC_NONE, origin = "", note = "",
 } = {}) {
 	if (!isSafeId(a) || !isSafeId(b) || a === b) return null;
-	return edgePatch(id, { a, b, label, ink, dir, kin, src, origin, note });
+	return edgePatch(id, { a, b, label, ink, dir, dash, kin, src, origin, note });
 }
 
 /**

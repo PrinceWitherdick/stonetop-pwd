@@ -112,6 +112,15 @@ export class ZoomPanSurface {
 	get scale() { return this._scale; }
 	get offset() { return { ...this._offset }; }
 	/**
+	 * The viewport's own size, from the measurement this surface already keeps up to date.
+	 *
+	 * Here so that chrome placing itself over the board does not have to measure the viewport
+	 * for itself. `_measure` is the one place that touches the DOM for this and a ResizeObserver
+	 * keeps it fresh, so asking costs nothing -- while a `getBoundingClientRect` on every painted
+	 * frame of a pan is a forced layout of the whole board per frame.
+	 */
+	get viewSize() { return { width: this._viewW, height: this._viewH }; }
+	/**
 	 * The board this surface is showing has become a different SIZE.
 	 *
 	 * Not a thing a picture ever does, which is why the size arrived in the constructor and is

@@ -2361,6 +2361,145 @@ describe("what happens to the document under the window", () => {
 // people on two pages of one map do not repaint each other.
 
 /** One board of a map: a JournalEntryPage stand-in. */
+// ── What the bar over a line is told ─────────────────────────────────────────
+//
+// ⚠ ASKED OF THE BOARD IN FRONT OF THE READER, NOT OF THE DOCUMENT. Three of the four views seat
+// the portraits themselves, so a line's middle on THIS screen is nowhere near where the stored
+// coordinates put it -- and a bar placed from the document would float over an empty patch of paper
+// on every view but one.
+describe("the line a reader has taken hold of", () => {
+	// The arrow buttons are named after the two people, so this block needs the real table back:
+	// an earlier suite replaces `globalThis.game` wholesale and takes `i18n` with it.
+	beforeEach(() => { globalThis.game.i18n = TABLE; });
+
+	/** A window whose last paint is on record, which is what `_tieAt` reads. */
+	const painted = (graph = TWO_PEOPLE) => {
+		const made = windowFor(graph);
+		made.app._boardContext(made.app._plan());
+		return made;
+	};
+
+	/** A board carrying two lines, each with its stroke, its click target and its caption. */
+	function boardWithLines() {
+		const { app, board } = windowFor();
+		const parts = {};
+		for (const id of ["link1", "link2"]) {
+			parts[id] = {
+				line: el({ dataset: { relmapLine: id } }),
+				hit: el({ dataset: { relmapHit: id } }),
+				label: el({ dataset: { relmapEdge: id } }),
+			};
+		}
+		board.all["[data-relmap-line]"] = [parts.link1.line, parts.link2.line];
+		board.all["[data-relmap-hit]"] = [parts.link1.hit, parts.link2.hit];
+		board.all["[data-relmap-edge]"] = [parts.link1.label, parts.link2.label];
+		return { app, parts };
+	}
+
+	// ⚠ THE BOARD'S MARKUP IS THE WINDOW'S. The bar floats outside the board and asks for this;
+	// a bar that walked the strokes itself would be a second module enumerating the three families a
+	// line is made of, which is how the invisible click target came to need adding in two places.
+	it("marks the stroke, its click target and its caption, and no other line's", () => {
+		const { app, parts } = boardWithLines();
+		app._paintPickedLine("link1");
+		expect(parts.link1.line.classList.contains("is-picked")).toBe(true);
+		expect(parts.link1.hit.classList.contains("is-picked")).toBe(true);
+		expect(parts.link1.label.classList.contains("is-picked")).toBe(true);
+		expect(parts.link2.line.classList.contains("is-picked")).toBe(false);
+	});
+
+	// Taken off the elements it was PUT on, rather than swept off every stroke on the board: this
+	// runs on every repaint, and a board carries eighty of each of the three.
+	it("takes the mark off the line it last marked", () => {
+		const { app, parts } = boardWithLines();
+		app._paintPickedLine("link1");
+		app._paintPickedLine("");
+		expect(parts.link1.line.classList.contains("is-picked")).toBe(false);
+		expect(parts.link1.hit.classList.contains("is-picked")).toBe(false);
+		expect(parts.link1.label.classList.contains("is-picked")).toBe(false);
+	});
+
+	it("moves the mark when the reader takes hold of another line", () => {
+		const { app, parts } = boardWithLines();
+		app._paintPickedLine("link1");
+		app._paintPickedLine("link2");
+		expect(parts.link1.line.classList.contains("is-picked")).toBe(false);
+		expect(parts.link2.line.classList.contains("is-picked")).toBe(true);
+	});
+
+	it("hands over the line, both people, and where to float", () => {
+		const { app } = painted();
+		const tie = app._tieAt("link1");
+		expect(tie.edge.label).toBe("exes");
+		expect(tie.from.name).toBe("Elena");
+		expect(tie.to.name).toBe("Stefan");
+		expect(tie.at.left).toBeGreaterThan(0);
+		expect(tie.at.top).toBeGreaterThan(0);
+	});
+
+	// The arrow buttons in the two people's own names. A tie set the wrong way round is invisible
+	// in the writing and glaring on the board, and "which end did I draw from" is not something
+	// anybody remembers.
+	it("names both arrows after the people they point at", () => {
+		const { app } = painted();
+		const tie = app._tieAt("link1");
+		// Keyed by the answers themselves, which is what the buttons carry and what the bar reads.
+		expect(tie.said["a-b"]).toContain("Stefan");
+		expect(tie.said["b-a"]).toContain("Elena");
+	});
+
+	// ⚠ THE SEAT THIS VIEW GAVE THEM, not the stored one: which way the two one-way arrows POINT is
+	// worked out from these, and on a computed board the stored coordinates would point them wrong.
+	it("gives each end the seat this view drew it at", () => {
+		const { app } = painted();
+		const tie = app._tieAt("link1");
+		expect(tie.from.x).toBe(20);
+		expect(tie.to.x).toBe(70);
+	});
+
+	// A LINE WITH NOTHING WRITTEN ON IT STILL HAS SOMEWHERE FOR THE BAR TO GO, which it needs more
+	// than a captioned one does: the bar is the only way to put writing on it at all.
+	it("floats over the middle of a line with no caption", () => {
+		const bare = {
+			...TWO_PEOPLE,
+			edges: { link1: { a: "elena", b: "stefan", label: "", ink: "rose", dir: "none" } },
+		};
+		const { app } = painted(bare);
+		expect(app._tieAt("link1").at).toBeTruthy();
+	});
+
+	// NULL IS HOW THE BAR LEARNS TO LET GO: somebody else rubbing the line out, or this reader
+	// switching to a view that does not draw it.
+	it("says nothing about a line that is not on this board", () => {
+		const { app } = painted();
+		expect(app._tieAt("nosuchline")).toBe(null);
+	});
+});
+
+// ── The two things a stroke now carries ──────────────────────────────────────
+describe("what the board draws a line with", () => {
+	it("lays the whole curve under every line for a click to land on", () => {
+		const { app } = windowFor();
+		const [line] = app._boardContext(app._plan()).edges;
+		// The painted stroke has the caption's gap cut out of it; the target must not, because that
+		// gap is the exact stretch a reader aims at.
+		expect(line.hit).toBeTruthy();
+		expect(line.hit).not.toBe(line.d);
+	});
+
+	it("says whether the reader broke this stroke themselves", () => {
+		const { app } = windowFor();
+		expect(app._boardContext(app._plan()).edges[0].dotted).toBe(false);
+
+		const broken = {
+			...TWO_PEOPLE,
+			edges: { link1: { ...TWO_PEOPLE.edges.link1, dash: "dotted" } },
+		};
+		const made = windowFor(broken);
+		expect(made.app._boardContext(made.app._plan()).edges[0].dotted).toBe(true);
+	});
+});
+
 function pageFor(name, graph, { id, sort, parent }) {
 	const doc = {
 		id, name, sort, parent,

@@ -374,6 +374,20 @@
 	--st-relmap-dash-teal:   14 3 1 3;
 	--st-relmap-dash-slate:  20 4;
 
+	/* AND THE ONE A READER SETS BY HAND, which is a different question with the same answer shape.
+
+	   The eight above are a COLOUR said a second time, for the reader who cannot resolve colours;
+	   this is a distinction somebody drew on purpose -- the rumour against the fact, the tie a table
+	   suspects against the one they know -- and it is painted on every skin, because a mark nobody
+	   asked for is worth less than a mark somebody made. See RELMAP_DASHES in
+	   module/relmap/relmap-store.js, which says plainly what that costs under the high-contrast skin.
+
+	   ROUND DOTS RATHER THAN DASHES, and that is what `stroke-linecap: round` on the line makes of a
+	   dash of nearly no length: a zero-length dash is not painted at all by some engines, so the
+	   length is a hair rather than nothing. Sparser than any of the eight above, so a dotted line
+	   still reads as dotted beside an ochre one under the skin that paints both. */
+	--st-relmap-dotted: 0.6 5;
+
 	/* ── Shared type scale ────────────────────────────────────────────────
 	   Relative (em) steps so they scale with the sheet font setting through the
 	   cascade. Use these instead of ad-hoc em sizes so windows stay consistent.
@@ -40803,6 +40817,65 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-relmap-line--teal   { --relmap-ink: var(--st-relmap-ink-teal);   --relmap-dash: var(--st-relmap-dash-teal); }
 .stonetop-relmap-line--slate  { --relmap-ink: var(--st-relmap-ink-slate);  --relmap-dash: var(--st-relmap-dash-slate); }
 
+/* THE STROKE THE READER BROKE THEMSELVES.
+
+   ⚠ LATER THAN THE EIGHT INK PAIRS ABOVE and one class heavier than the base rule, which is what
+   makes it win: `.stonetop-relmap-line` sets `stroke-dasharray: none` outright, and a rule of equal
+   weight earlier in the file would lose to it silently. (The BEM ordering rule this file keeps
+   elsewhere, for the same reason.) The high-contrast family further down carries the same pair, in
+   the same order, because the mode's own rule out-specifies both of these. */
+.stonetop-relmap-line.is-dotted {
+	stroke-dasharray: var(--st-relmap-dotted);
+}
+
+/* WHAT A CLICK ON A LINE ACTUALLY LANDS ON: the same curve, invisible, and wide enough to hit.
+
+   ⚠ THE PAINTED STROKE CANNOT DO THIS ITSELF. It is 3.5 units in a stretched 0-100 space with a
+   non-scaling stroke -- about four screen pixels -- and four pixels is not a target, it is a dare.
+   Widening it to something aimable would be widening the drawing, on a board that can carry eighty
+   lines. So the target is its own stroke, painted in nothing.
+
+   ⚠ AND IT IS THE ONE THING ON THIS LAYER THAT TAKES POINTER EVENTS, which the layer above refuses
+   wholesale so that a drag beginning on empty board pans it. `stroke` and not `all`: `all` would
+   include the path's FILL, and a bowed path's fill is the whole lens between the curve and its
+   chord -- a patch of board tens of pixels across that would swallow every click meant for a
+   portrait behind it. The captions layer opts back in the same way, one layer up.
+
+   THE WIDTH IS IN SCREEN PIXELS, through the non-scaling stroke the markup asks for, so the target
+   is the same size to aim at whether the reader is zoomed into two faces or out to forty.
+
+   ⚠ AND EVERY PIXEL OF IT IS A PIXEL THE BOARD CANNOT BE PANNED FROM, which is the cost and the
+   reason this is 16 and not 30. A press that lands on a control starts no pan (the control list in
+   RelationshipMapWindow, and utils/zoom-pan-surface.js on why the capture makes that mandatory
+   rather than polite), so a fatter target is a wider dead band down the middle of every line on the
+   board. Sixteen is about the least a pointer can be asked to hit; the portraits, at 72px, have
+   been doing the same thing to the pan since the board was written. */
+.stonetop-relmap-hit {
+	fill: none;
+	stroke: transparent;
+	stroke-width: 16;
+	stroke-linecap: round;
+	pointer-events: stroke;
+	cursor: pointer;
+}
+
+/* Nothing to aim at on a board nobody may write to: the bar it raises has nothing it could do. */
+.stonetop-relmap.is-readonly .stonetop-relmap-hit { pointer-events: none; cursor: default; }
+
+/* THE LINE THE READER IS HOLDING, marked on the board while the bar is up.
+
+   Not a colour change and not a glow: this line already has a colour, and it is the information.
+   What says "this one" is WEIGHT and a halo of the page tone under it, which reads at a glance on a
+   web of eighty and survives the reader on the magnifier. `paint-order` puts the halo behind the
+   ink of the line rather than over it, so the stroke keeps its own colour at full strength. */
+.stonetop-relmap-line.is-picked {
+	stroke-width: 6;
+}
+
+.stonetop-relmap-label.is-picked .stonetop-relmap-label-text {
+	font-weight: 700;
+}
+
 /* The half-drawn line, while a reader is dragging one out of a portrait's handle. Always plain
    and always dashed, whatever ink it will end up in: it is not a link yet. */
 .stonetop-relmap-rubber {
@@ -41008,16 +41081,21 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    person's part of it mean anything, and a board that blanked to a single star would have thrown
    that away to answer a smaller question.
 
+   ⚠ THE TIES QUIET DOWN AND THE PEOPLE DO NOT. Dimming the other portraits as well was the board
+   answering a question nobody asked: the reader is following a line, and the faces are the landmarks
+   they follow it BY. Half-faded strangers made the board read as though people had been taken off it,
+   and on a magnifier a portrait at half ink is a portrait that has gone. So a hover changes the
+   STROKES only -- who is joined to whom -- and every face stays exactly as bright as it was.
+
    Only while something IS lit, so an ordinary board is painted at full strength. */
 .stonetop-relmap.is-lit .stonetop-relmap-line { opacity: 0.18; }
 .stonetop-relmap.is-lit .stonetop-relmap-line.is-lit { opacity: 1; }
 .stonetop-relmap.is-lit .stonetop-relmap-head { opacity: 0.18; }
-.stonetop-relmap.is-lit .stonetop-relmap-node { opacity: 0.5; }
-.stonetop-relmap.is-lit .stonetop-relmap-node.is-lit { opacity: 1; }
 
 /* The lit lines are thickened as well as brightened. Colour and weight say the same thing twice,
    which is the rule the labels are already written to: there is a reader at this table on a
-   magnifier, and a highlight carried by brightness alone is one they would not see. */
+   magnifier, and a highlight carried by brightness alone is one they would not see -- and it is
+   the ONLY mark a hover makes now that the portraits keep their ink. */
 .stonetop-relmap.is-lit .stonetop-relmap-line.is-lit { stroke-width: 5; }
 
 /* A caption on a lit line is brought forward, and the quiet ones sink behind the lit portraits so
@@ -41297,6 +41375,164 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	pointer-events: none;
 }
 .stonetop-relmap-aside[hidden] { display: none; }
+
+/* ── The tie bar ───────────────────────────────────────────────────────────────
+   THE LINE THE READER HAS HOLD OF, and the four things they change about it while they are talking:
+   what it says, what colour it is, which way it is read, and whether its stroke is broken.
+
+   ⚠ INSIDE THE VIEWPORT AND NOT ON THE BOARD, which is a correctness matter and not a layout one.
+   The board's markup is replaced wholesale on every live update, so a bar drawn on it would be
+   destroyed under the reader's hands the moment anybody else at the table moved a portrait --
+   taking a half-typed caption and the focus with it. It is placed in SCREEN pixels for the same
+   family of reasons: riding the board's transform, it would shrink to nothing at the zoom a
+   forty-person map is actually read at. utils/relmap-tie-bar.js keeps both notes; this is the half
+   of them the stylesheet has to know.
+
+   ON THE PANEL TONE AND NOT THE PAGE, unlike the aside above it. The aside murmurs and belongs to
+   the paper; this is chrome laid over the drawing and has to read as a thing in front of it. */
+.stonetop-relmap-tiebar {
+	position: absolute;
+	/* Written by `place()`. Here so the first paint before it runs is off-screen rather than in the
+	   top-left corner of the board. */
+	left: -9999px;
+	top: -9999px;
+	z-index: 5;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.3em;
+	max-width: calc(100% - 12px);
+	padding: 0.3em 0.45em;
+	border: 1px solid var(--stonetop-border, rgba(0, 0, 0, 0.18));
+	border-radius: 6px;
+	background: var(--stonetop-bg);
+	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+}
+
+/* `display: flex` above beats the attribute on its own, so the hidden state has to be said. */
+.stonetop-relmap-tiebar[hidden] { display: none; }
+
+/* THE WRITING FIELD IS FIRST AND TAKES THE FOCUS, which is the whole of "click a line and start
+   typing". Wide enough for a phrase, since that is what a caption is (RELMAP_LABEL_MAX is sixty
+   characters, and the field scrolls rather than growing the bar past the board). */
+.stonetop-relmap-tiebar-words {
+	width: 15em;
+	min-width: 8em;
+	height: auto;
+	padding: 0.15em 0.4em;
+	line-height: 1.5;
+}
+
+/* Each group of one-of-N presses reads as one control, with a hairline between it and the next.
+   A border rather than a gap: at this size a gap wide enough to separate them is a gap wide enough
+   to look like the bar has come apart. */
+.stonetop-relmap-tiebar-group {
+	display: flex;
+	align-items: center;
+	gap: 0.15em;
+	padding-left: 0.35em;
+	border-left: 1px solid var(--stonetop-border, rgba(0, 0, 0, 0.18));
+}
+
+/* ⚠ EVERY DIMENSION IN PIXELS AND `font-size` SAID OUTRIGHT. Core anchors a BUTTON's font-size in
+   pixels rather than inheriting it, so an em-sized icon button on this bar is sized against
+   something the sheet's own type scale does not control -- and these sit in a row whose height is
+   the tallest thing in it. Said in pixels, the row is the same height at every font scale. */
+.stonetop-relmap-tiebar-btn,
+.stonetop-relmap-tiebar-ink {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 26px;
+	height: 26px;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: none;
+	color: var(--st-text-body, inherit);
+	font-size: 13px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+/* ⚠ SAID OUTRIGHT AND NOT LEFT TO THE BROWSER. These carry `background: none` and a transparent
+   border, which is exactly the shape of control a default ring disappears against -- and they are a
+   roving tab stop, so the ring is the ONLY thing telling a keyboard reader which of eight colours
+   the arrow keys have reached. There is a reader at this table on a magnifier. */
+.stonetop-relmap-tiebar-btn:focus-visible,
+.stonetop-relmap-tiebar-ink:focus-visible {
+	outline: 2px solid var(--st-accent-fill);
+	outline-offset: 1px;
+}
+
+.stonetop-relmap-tiebar-btn:hover,
+.stonetop-relmap-tiebar-ink:hover {
+	border-color: var(--st-slate-hover-border, rgba(0, 0, 0, 0.18));
+	background: var(--st-slate-hover-bg, rgba(0, 0, 0, 0.06));
+}
+
+/* WHICH ONE IS SET. A filled ground and not a coloured outline: an outline on a 26px square reads
+   as a hover state, and the reader on the magnifier has one control's worth of screen at a time. */
+.stonetop-relmap-tiebar-btn.is-chosen {
+	border-color: var(--st-btn-primary-border, #4f5b66);
+	background: var(--st-accent-fill);
+	color: #fff;
+}
+
+/* THE COLOUR SWATCHES. The dialog's swatch is a 3em rule beside a name; here there is no name and
+   no room for one, so it is a disc -- the colour itself, at the size of the press. */
+.stonetop-relmap-tiebar-ink .stonetop-relmap-ink-swatch {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--relmap-ink, var(--st-relmap-ink-slate));
+}
+
+/* The chosen ink is ringed rather than filled, because filling it would paint over the one thing
+   the button exists to show. Two rings, the inner one in the page tone, so the mark reads against
+   every one of the eight. */
+.stonetop-relmap-tiebar-ink.is-chosen {
+	border-color: var(--st-text-body, #2b2b2b);
+	background: var(--st-page);
+}
+
+.stonetop-relmap-tiebar-ink.is-chosen .stonetop-relmap-ink-swatch {
+	box-shadow: 0 0 0 2px var(--st-page), 0 0 0 3px var(--st-text-body, #2b2b2b);
+}
+
+/* WHAT EACH KIND OF STROKE LOOKS LIKE, drawn rather than iconified: this button means a LINE, so
+   it shows one. A border rather than a background gradient, because a border takes `dotted` from
+   the same one-word vocabulary the option itself is named in.
+
+   The dotted rule is CSS `dotted` and not the SVG pattern the line is painted with -- one is a
+   14px sample beside seven other 26px squares and the other is a stroke across a board that can be
+   zoomed to four times. Matching them exactly would make the sample read as three specks. */
+.stonetop-relmap-tiebar-rule {
+	display: block;
+	width: 18px;
+	height: 0;
+	border-top: 2px solid currentColor;
+}
+
+/* ⚠ FINE DOTS OVER A WIDE RULE, which is legibility and not taste. A CSS dotted border draws one
+   dot per border-width, so a 3px rule 15px long is THREE dots -- an ellipsis, two buttons away from
+   the vertical ellipsis that opens the dialog, and the pair read as one control. At 2px over 18px
+   it is five, which reads as a line somebody drew rather than as punctuation. */
+.stonetop-relmap-tiebar-rule--dotted {
+	border-top-style: dotted;
+}
+
+/* Everything else this line has, which is the dialog. Pushed to the end of the row and set apart
+   from the presses that act at once, because it opens a window rather than doing anything. */
+.stonetop-relmap-tiebar-more {
+	margin-left: 0.35em;
+	padding-left: 0.35em;
+	border-left: 1px solid var(--stonetop-border, rgba(0, 0, 0, 0.18));
+	border-radius: 0 4px 4px 0;
+}
 
 /* THE BOARD'S OWN SETTINGS, under the viewport rather than up on the bar. What is on the bar
    acts on the map, or picks which map you are reading; this only filters what is drawn, for one
@@ -42017,6 +42253,18 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    wherever it sits; it is here because this is where the mode's rules live. */
 :root.stonetop-high-contrast .stonetop-relmap-line {
 	stroke-dasharray: var(--relmap-dash, none);
+}
+
+/* ⚠ AND A LINE THE READER BROKE THEMSELVES KEEPS ITS OWN DOTS, EVEN HERE. This is the one place the
+   two kinds of dash meet, and the reader's wins: the pattern above is a COLOUR said again, and this
+   is a distinction somebody drew on purpose. What it costs is real and is stated where the field is
+   declared (RELMAP_DASHES, module/relmap/relmap-store.js) -- under this skin a dotted line has only
+   its colour left saying which ink it is. The alternative was to silently not draw the one mark the
+   reader made by hand, for the one reader at this table who most needs marks drawn at all.
+
+   Later than the rule above and one class heavier, which is what makes it win. */
+:root.stonetop-high-contrast .stonetop-relmap-line.is-dotted {
+	stroke-dasharray: var(--st-relmap-dotted);
 }
 
 /* CORE'S OWN COLOUR NAMES, RE-DECLARED WHERE THEY CAN BE SEEN.

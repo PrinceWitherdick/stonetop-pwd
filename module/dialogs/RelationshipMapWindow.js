@@ -36,12 +36,15 @@ import {
 	RELMAP_SHAPE_CLUSTERS, RELMAP_SHAPE_RING, layoutGraph, normalizeShape,
 } from "../utils/relmap-layout.js";
 import {
-	RELMAP_FLAG, addEdgePatch, addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, fanIndexes,
-	isImportedEdge, nodeIdentity, nodePatch, takenSpots, tidyPatch,
+	RELMAP_DASHES, RELMAP_DASH_DOTTED, RELMAP_DIRS, RELMAP_FLAG, RELMAP_INKS, RELMAP_LABEL_MAX,
+	addEdgePatch,
+	addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, fanIndexes, isImportedEdge, nodeIdentity,
+	nodePatch, takenSpots, tidyPatch,
 } from "../relmap/relmap-store.js";
 import {
 	describeWrite, forgetHistory, historyFor, stepPatch,
 } from "../relmap/relmap-history.js";
+import { RelmapTieBar, TIE_DIR_ICONS } from "../utils/relmap-tie-bar.js";
 import { unmarkedKin } from "../utils/relmap-kin.js";
 import { familyPlan } from "../utils/relmap-tree.js";
 import {
@@ -113,7 +116,8 @@ const NUDGE_COMMIT_MS = 250;
  * they are the last ones that may quietly do nothing.
  */
 const BOARD_CONTROLS =
-	"[data-relmap-node], [data-relmap-handle], [data-relmap-edge], [data-relmap-open], [data-relmap-action]";
+	"[data-relmap-node], [data-relmap-handle], [data-relmap-edge], [data-relmap-hit], "
+	+ "[data-relmap-open], [data-relmap-action], .stonetop-relmap-tiebar";
 
 /**
  * How much of the board's prose is showing.
@@ -336,6 +340,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// Whose web is lit up right now, or null. Held so that a repaint arriving while the
 		// pointer rests on a portrait can put the highlight back where it was.
 		this._lit = null;
+		// The stroke, its click target and its caption, as `_paintPickedLine` last marked them. Held
+		// so that taking the mark OFF again is three writes rather than a walk of the whole board.
+		this._pickedParts = [];
 		// Set while a repaint arrived at a moment it could not be applied. Flushed by whatever was
 		// in the way once it is out of the way.
 		this._pendingSync = false;
@@ -588,6 +595,35 @@ export class RelationshipMapWindow extends StonetopDialog {
 			redoLabel: localize("stonetop.relmap.history.redo"),
 			undoNothing: localize("stonetop.relmap.history.backNothing"),
 			redoNothing: localize("stonetop.relmap.history.forwardNothing"),
+			// ⚠ THE TIE BAR'S SHELL, AND ONLY ITS SHELL. Everything about it that depends on WHICH
+			// line is open -- which swatch is pressed, what the two arrow buttons are called, which
+			// way they point -- is written by `RelmapTieBar` when it opens, because a render knows
+			// nothing about a line the reader has not clicked yet. What is settled here is the part
+			// that never changes: the eight colours, the two kinds of stroke, and the field.
+			maxLength: RELMAP_LABEL_MAX,
+			labelField: localize("stonetop.relmap.labelField"),
+			inkLabel: localize("stonetop.relmap.inkField"),
+			dirLabel: localize("stonetop.relmap.dirField"),
+			dashLabel: localize("stonetop.relmap.dashField"),
+			inks: RELMAP_INKS.map(key => ({ key, name: localize(`stonetop.relmap.inks.${key}`) })),
+			// From `RELMAP_DIRS` and not four buttons written out by hand, which is what the ink and
+			// dash groups beside it already do: a direction the store knows and the template does not
+			// is a stored answer with no button, and `markChosen` carries a defensive branch for
+			// exactly that drift. The two one-way icons are rewritten on open from where the faces
+			// actually sit -- see `_nameDirs` -- so these are only what they are BUILT with.
+			dirs: RELMAP_DIRS.map(key => ({
+				key, icon: TIE_DIR_ICONS[key], name: localize(`stonetop.relmap.dirs.${key}`),
+			})),
+			// No icon: each of these buttons DRAWS the line it means, from the stylesheet. See the
+			// template, and `--st-relmap-dotted` for the pattern the dotted one is drawn with.
+			dashes: RELMAP_DASHES.map(key => ({
+				key, name: localize(`stonetop.relmap.dashes.${key}`),
+			})),
+			tie: {
+				label: localize("stonetop.relmap.tie.label"),
+				placeholder: localize("stonetop.relmap.tie.placeholder"),
+				more: localize("stonetop.relmap.tie.more"),
+			},
 			dropPulledLabel: localize("stonetop.relmap.dropPulled"),
 			dropPulledHint: localize("stonetop.relmap.dropPulledHint"),
 			pulledLabel: localize("stonetop.relmap.hidePulled"),
@@ -982,6 +1018,16 @@ export class RelationshipMapWindow extends StonetopDialog {
 			capPx: labelMax,
 			shapes: new Map(shapes.map(shape => [shape.id, shape])),
 			painted: null,
+			// ⚠ THE GRAPH THESE SHAPES WERE DRAWN FROM, kept beside them so that anything asking
+			// about a line the reader can SEE has one answer rather than two. Three of the four
+			// views hand back a subgraph with computed seats written into it (`_plan`), so a second
+			// reader that went to the document instead would get a line's stored coordinates while
+			// the geometry beside it holds the seat this view gave it -- which is how the tie bar
+			// would come to float over an empty patch of paper on every view but one.
+			//
+			// AND IT SAVES A SECOND PLAN PER REPAINT. `_plan` relaxes a column per generation on
+			// the family view and is not cheap; the repaint has already paid for one.
+			graph,
 		};
 		for (const shape of shapes) {
 			const { id, edge, curve, anchor } = shape;
@@ -991,7 +1037,18 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// Both ends ride on every piece of a line, so that resting on a portrait can light up
 			// that person's whole web without asking the graph again. Read off `dataset`, never
 			// built into a selector: a stored id goes into a selector as text.
-			edges.push({ id, a: edge.a, b: edge.b, d: shape.d, ink: edge.ink });
+			edges.push({
+				id, a: edge.a, b: edge.b, d: shape.d, ink: edge.ink,
+				// Whether the reader broke this stroke themselves. A class and not a dash pattern
+				// written out here, for the reason the ink is a class: what a mark RESOLVES to is
+				// the stylesheet's business and has to stay retunable under the accessibility skin.
+				dotted: edge.dash === RELMAP_DASH_DOTTED,
+				// THE WHOLE CURVE, not the broken one the stroke is painted along. What this feeds
+				// is the invisible target laid over the line, and cutting the caption's gap out of
+				// THAT would leave a dead patch in the middle of every captioned line -- which is
+				// the exact spot a reader aims at.
+				hit: shape.curve?.d ?? "",
+			});
 			// The id and the end ride on every head, because the live drag finds these elements
 			// again by them: a link may wear two, and each has to go back to its own end.
 			for (const head of shape.heads) heads.push({ ...head, id, ink: edge.ink });
@@ -1056,8 +1113,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// Everything below points into the render being replaced.
 		this._surface?.destroy();
 		this._teardownDrag?.();
+		// ⚠ WRITTEN OUT BEFORE IT IS THROWN AWAY. A re-render is not a reason to lose a sentence
+		// somebody was in the middle of: `destroy` flushes nothing, so the flush is asked for here,
+		// while the old bar still has both the id and the field.
+		this._tieBar?.flush();
+		this._tieBar?.destroy();
 		this._surface = null;
 		this._teardownDrag = null;
+		this._tieBar = null;
 
 		// Adopted BEFORE the early return. Left until after it, a render that somehow produced no
 		// viewport would leave this pointing at the PREVIOUS render, and the next live update would
@@ -1081,9 +1144,34 @@ export class RelationshipMapWindow extends StonetopDialog {
 			controls: BOARD_CONTROLS,
 			// Every pan and every zoom step, because whether the writing is big enough to be worth
 			// drawing at all is a question about the scale. See `_paintCaptionZoom`.
-			onChange: surface => this._paintCaptionZoom(surface),
+			//
+			// AND THE TIE BAR COMES WITH IT. The bar is chrome in the viewport rather than a thing
+			// on the board (utils/relmap-tie-bar.js says why at length), so nothing moves it unless
+			// it is told to -- and a bar left behind while the board slid out from under it is a bar
+			// pointing at somebody else's line.
+			onChange: surface => {
+				this._paintCaptionZoom(surface);
+				this._tieBar?.place();
+			},
 		}).attach();
 		this._paintCaptionZoom(this._surface);
+
+		// AFTER the surface, which it asks for its numbers, and after the board, which it marks.
+		this._tieBar = new RelmapTieBar(root, {
+			surface: () => this._surface,
+			tieAt: id => this._tieAt(id),
+			// ONE STEP FOR A BURST OF TYPING, keyed by the line. The bar writes within a breath of
+			// the last keystroke, so a caption typed out in full is half a dozen writes; recorded
+			// separately they would fill the history and take six presses to undo.
+			onField: (id, fields) => this._write(edgePatch(id, fields), {
+				label: localize("stonetop.relmap.history.editedLink"), coalesce: `edge:${id}`,
+			}),
+			onMore: id => this._editLink(id),
+			// THE BOARD'S MARKUP IS THE WINDOW'S, and this is the fourth mark a repaint has to put
+			// back, beside the lit web, the caption mode and the history buttons.
+			onPicked: id => this._paintPickedLine(id),
+			canEdit: () => this.canEdit,
+		});
 
 		this._teardownDrag = wireRelmapDrag(root, {
 			surface: this._surface,
@@ -1120,7 +1208,13 @@ export class RelationshipMapWindow extends StonetopDialog {
 			onLink: (a, b) => this._createLink(a, b),
 			onLinkFrom: id => this._linkFrom(id),
 			onOpen: id => this._openPerson(id),
-			onEditEdge: id => this._editLink(id),
+			// A LINE TAKEN HOLD OF, which is the bar and no longer the dialog. What the dialog
+			// still asks -- the family tie, the notes -- is a button further on, on the bar itself.
+			onPickEdge: (id, from) => this._tieBar?.open(id, { returnTo: from ?? null }),
+			// AND LET GO AGAIN, by a click that landed on bare paper. The board is the surface a
+			// reader clicks around on while talking, so letting go has to be as easy as taking
+			// hold: an X on the bar would be the only way out of a thing that opens on a click.
+			onPickNone: () => this._tieBar?.close(),
 			onRemove: id => this._removePerson(id),
 		});
 
@@ -1352,6 +1446,12 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// on the same face, and a repaint that quietly dropped the web it was lighting would look
 		// like the highlight failing at the moment somebody else touched the board.
 		if (this._lit) this._lightPerson(this._lit);
+		// AND SO IS THE MARK ON THE LINE THE READER IS HOLDING, for the same reason and with one
+		// more: the bar itself survives (it is outside the board), so without this it would go on
+		// floating over a picture with nothing on it saying which line it belongs to. `refresh`
+		// also lets go of a line somebody else has just rubbed out. It deliberately does NOT
+		// refill the caption field -- see its own note.
+		this._tieBar?.refresh();
 		this._paintChrome(plan);
 	}
 
@@ -2197,6 +2297,13 @@ export class RelationshipMapWindow extends StonetopDialog {
 		//
 		// If a text field ever does land on this bar, the guard to add is an affirmative one about
 		// UNSAVED WRITING, not a list of tag names with exceptions carved out of it.
+		//
+		// ⚠ AND ONE DID: the caption field on the tie bar. So here is that guard, asked exactly the
+		// way the paragraph above says to ask it -- about writing the document does not have yet,
+		// and never about focus. A reader merely resting in that field obstructs nothing, and the
+		// bar writes what it holds within a breath of the last keystroke (TIE_WRITE_DELAY_MS), so
+		// this can only ever hold a repaint back for that long.
+		if (this._tieBar?.isWriting()) return true;
 		return false;
 	}
 
@@ -2573,6 +2680,53 @@ export class RelationshipMapWindow extends StonetopDialog {
 		}
 		const to = await pickPersonToLink({ from, options: others });
 		if (to) await this._createLink(id, to);
+	}
+
+	/**
+	 * One line as the bar needs it: what it stores, who it joins, and where to float.
+	 *
+	 * ⚠ ASKED OF THE BOARD IN FRONT OF THE READER, not of the document. Three of the four views
+	 * seat the portraits themselves, so a line's middle on THIS screen is nowhere near where the
+	 * stored coordinates put it -- and a bar placed from the document would sit over an empty patch
+	 * of paper on every view but one. `_drawn` is the geometry the last paint actually used, which
+	 * is the only answer that can be right on all four.
+	 *
+	 * NULL FOR A LINE THAT IS NOT DRAWN, which is how the bar learns to let go: somebody else
+	 * rubbing it out, or the reader switching to a view that does not show it.
+	 */
+	_tieAt(id) {
+		const shape = this._drawn?.shapes?.get(id);
+		const graph = this._drawn?.graph;
+		const edge = graph?.edges?.[id];
+		if (!shape || !edge) return null;
+		// The caption where there is one, and the honest middle of the stroke where there is not.
+		// See `edgeShapes`, which works both out from one curve.
+		const at = shape.anchor ?? shape.mid;
+		if (!at) return null;
+		const from = graph.nodes[edge.a];
+		const to = graph.nodes[edge.b];
+		const names = { a: from?.name ?? "", b: to?.name ?? "" };
+		return {
+			edge,
+			// `x` is what decides which way the two one-way arrows point, and it is the SEAT this
+			// view gave them rather than the stored one, for the reason above.
+			from: { name: names.a, x: from?.x ?? 0 },
+			to: { name: names.b, x: to?.x ?? 0 },
+			// The arrow buttons in the two people's own names. A tie set the wrong way round is
+			// invisible in the writing and glaring on the board, and "which end did I draw from" is
+			// not a thing anybody remembers -- the same reasoning the dialog's family-tie options
+			// are named under.
+			// Keyed by the four answers themselves (`RELMAP_DIRS`), which is what the buttons carry and
+			// what the bar reads: a second set of names re-keyed on arrival was two vocabularies for one
+			// four-valued enum.
+			said: {
+				none: localize("stonetop.relmap.dirs.none"),
+				both: localize("stonetop.relmap.dirs.both"),
+				"a-b": format("stonetop.relmap.dirToward", { name: names.b }),
+				"b-a": format("stonetop.relmap.dirToward", { name: names.a }),
+			},
+			at,
+		};
 	}
 
 	/** Every label already used on this map, for the editor to suggest. */
@@ -3040,24 +3194,49 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// light up a web that is not there any more.
 		this._lit = faces.some(el => el.dataset.relmapNode === want) ? want : null;
 		root.classList.toggle("is-lit", !!this._lit);
-		// The people at the far end of a lit line are lit too. Gathered from the lines themselves
-		// rather than from the graph, so this asks nothing of the document and holds even while a
-		// repaint is being deferred: what is on the board is what gets marked.
-		//
 		// EVERY STROKE SAYS WHO IT JOINS, in one list and one attribute, whether it joins two
 		// people or a whole household. A household's stroke stands for as many ties as it has
 		// children, so resting on any one of them lights the parents, the bar, the rail and every
 		// sibling; an ordinary line's list is simply its two ends. Two encodings of one idea would
 		// be two loops here and a third the day a stroke joins three people some other way.
-		const web = new Set(this._lit ? [this._lit] : []);
+		//
+		// THE STROKES AND THE CAPTIONS, AND NOT THE FACES. Marking the people at the far end of a
+		// lit line was what let the stylesheet dim the rest of them, and that dimming is gone: the
+		// faces stay at full strength and the quieting is done on the ties alone.
 		root.querySelectorAll?.("[data-relmap-who]")?.forEach?.(el => {
 			const who = (el.dataset.relmapWho ?? "").split(" ").filter(Boolean);
-			const touches = !!this._lit && who.includes(this._lit);
-			el.classList.toggle("is-lit", touches);
-			if (touches) for (const id of who) web.add(id);
+			el.classList.toggle("is-lit", !!this._lit && who.includes(this._lit));
 		});
-		for (const el of faces) el.classList.toggle("is-lit", web.has(el.dataset.relmapNode));
 		this._paintLitCaptions(root);
+	}
+
+	/**
+	 * Mark which stroke on the board the tie bar is holding, and unmark the last one.
+	 *
+	 * ON THE WINDOW because the board's markup is the window's: it builds those elements and throws
+	 * them away wholesale on every repaint, and `indexEdgeParts` is the one walker that knows which
+	 * families a line is made of. The bar had a private copy of that list, which meant the invisible
+	 * click target had to be added in two files at once with nothing to fail if one was missed. It
+	 * asks for this instead, the way it asks for everything else about the board it cannot know.
+	 *
+	 * TAKEN OFF THE ELEMENTS IT WAS PUT ON rather than swept off the board. This runs on every
+	 * repaint -- every remote edit, every drag end -- and a sweep is a `classList` write per stroke,
+	 * per target and per caption on a board that carries eighty of each, to move one class between
+	 * three of them. The remembered elements may have been detached by then, which costs nothing.
+	 */
+	_paintPickedLine(id) {
+		for (const el of this._pickedParts ?? []) el.classList?.remove("is-picked");
+		this._pickedParts = [];
+		const board = id ? this._boardEl() : null;
+		if (!board) return;
+		// Found by walking and reading `dataset`, never by a selector built out of a stored id -- see
+		// `indexEdgeParts` itself, which says why.
+		const parts = indexEdgeParts(board).get(id);
+		for (const el of [parts?.line, parts?.hit, parts?.label]) {
+			if (!el) continue;
+			el.classList?.add("is-picked");
+			this._pickedParts.push(el);
+		}
 	}
 
 	/**
@@ -3419,6 +3598,12 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._surface = null;
 		// A nudge still waiting on its debounce would otherwise be lost with the window.
 		this._writeNudge();
+		// And so would a caption still waiting on its own. Written BEFORE the teardown, in the same
+		// breath and for the same reason: the last thing somebody typed before closing a window is
+		// the last thing they expect to have lost.
+		this._tieBar?.flush();
+		this._tieBar?.destroy();
+		this._tieBar = null;
 		this._teardownDrag?.();
 		this._teardownDrag = null;
 		if (this._onUpdate) {
@@ -3495,11 +3680,23 @@ function edgeShapes(graph, {
 			aspect: RELMAP_BOARD_ASPECT,
 			r,
 		});
+		// WHERE THE MIDDLE OF THIS LINE IS, worked out for every line and not only the ones with
+		// something written on them. It is the caption's anchor where there IS a caption, and it is
+		// also where the tie bar floats -- which a line with nothing written on it needs just as
+		// much, since the bar is the only way to write anything on it.
+		//
+		// ⚠ ONE CALL, TWO FIELDS, AND THE SPREADER MOVES ONLY ONE OF THEM. `anchor` is reassigned
+		// below (never mutated) when the captions are spread apart, so `mid` keeps the honest
+		// middle of the stroke while `anchor` follows the words wherever they were nudged to. Both
+		// are wanted: the bar sits over the caption a reader can see, and falls back to the middle
+		// of the line when there is no caption to sit over.
+		const middle = curve ? edgeLabelAnchor(curve, RELMAP_BOARD_ASPECT) : null;
 		out.push({
 			id,
 			edge,
 			curve,
-			anchor: curve && edge.label ? edgeLabelAnchor(curve, RELMAP_BOARD_ASPECT) : null,
+			mid: middle,
+			anchor: middle && edge.label ? middle : null,
 			// The sheet goes through because the head stands off the rim by a PIXEL distance and
 			// this board may be any width: see `RELMAP_HEAD_PX`.
 			heads: curve ? edgeArrowheads(curve, RELMAP_BOARD_ASPECT, edge.dir, { boardWidthPx }) : [],
@@ -3565,11 +3762,15 @@ function indexEdgeParts(board) {
 	const parts = new Map();
 	const partsFor = id => {
 		let found = parts.get(id);
-		if (!found) parts.set(id, found = { line: null, label: null, words: null, heads: {} });
+		if (!found) parts.set(id, found = { line: null, hit: null, label: null, words: null, heads: {} });
 		return found;
 	};
 	const each = (selector, put) => board.querySelectorAll?.(selector)?.forEach?.(put);
 	each("[data-relmap-line]", el => { partsFor(el.dataset.relmapLine).line = el; });
+	// The invisible wide stroke a click lands on. Found and moved with the painted one, or a line
+	// dragged across the board would leave its target behind at the spot it was picked up from --
+	// which is worse than no target, because the reader would be clicking a line that is not there.
+	each("[data-relmap-hit]", el => { partsFor(el.dataset.relmapHit).hit = el; });
 	each("[data-relmap-edge]", el => { partsFor(el.dataset.relmapEdge).label = el; });
 	// The words themselves, which are the whole of a caption: found the same way as everything else
 	// here rather than by reaching into the group with a selector built out of a stored id.
@@ -3725,9 +3926,10 @@ const hidePart = el => { if (el) el.style.display = "none"; };
  * moment the drag pulls them apart, without a repaint.
  */
 function redrawEdge(parts, { curve, d, anchor, heads: arrows }, board) {
-	const { line, label, heads } = parts;
+	const { line, hit, label, heads } = parts;
 	if (!curve) {
 		hidePart(line);
+		hidePart(hit);
 		hidePart(label);
 		for (const head of Object.values(heads)) hidePart(head);
 		return;
@@ -3737,6 +3939,13 @@ function redrawEdge(parts, { curve, d, anchor, heads: arrows }, board) {
 		// The BROKEN path, not the whole curve: `edgeShapes` has already cut the caption's gap out
 		// of it, and writing the whole one here would heal every line under the pointer.
 		line.setAttribute("d", d ?? curve.d);
+	}
+	if (hit) {
+		showPart(hit);
+		// THE WHOLE CURVE here, and the one place in this function the two differ on purpose: the
+		// target is not painted, so it has no gap to keep, and giving it one would put a dead patch
+		// in the middle of exactly the stretch a reader aims at.
+		hit.setAttribute("d", curve.d);
 	}
 	if (label && anchor) {
 		showPart(label);

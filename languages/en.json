@@ -1463,6 +1463,17 @@
       "labelPlaceholder": "best friends, secretly in love with, exes",
       "inkField": "Colour",
       "dirField": "Which way it is read",
+      "dashField": "The stroke",
+      "dashes": {
+        "solid": "Solid line",
+        "dotted": "Dotted line"
+      },
+      "dirToward": "Arrow towards {name}",
+      "tie": {
+        "label": "This line",
+        "placeholder": "what this line says",
+        "more": "Everything else about this line: the family tie, the notes behind it, and rubbing it out."
+      },
       "noteField": "Notes",
       "notePlaceholder": "Anything the line itself does not say.",
       "drawLink": "Draw the line",
