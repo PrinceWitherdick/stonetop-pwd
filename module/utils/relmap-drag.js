@@ -138,6 +138,48 @@ export function wireRelmapDrag(root, {
 	rubberLine.setAttribute("vector-effect", "non-scaling-stroke");
 	rubber.appendChild(rubberLine);
 
+	/** The portrait a half-drawn line is currently over, kept marked while it is. */
+	let linkTarget = null;
+
+	/**
+	 * Who a line released at this point would join, or null.
+	 *
+	 * ONE RESOLVER FOR THE HIGHLIGHT AND FOR THE DROP, and that is the whole reason it is a
+	 * function: a mark that lit a portrait the release then did not link to would be worse than no
+	 * mark at all, since the reader would have been told the wrong answer rather than left to
+	 * guess. Written once, both are the same answer by construction.
+	 *
+	 * elementsFromPoint and not elementFromPoint: the rubber band and the handle both ride under
+	 * the cursor, and the topmost hit is not the portrait being aimed at. `exclude` is the person
+	 * the line came FROM, who is not somebody it can be dropped on.
+	 */
+	function nodeUnder(clientX, clientY, exclude) {
+		return (document.elementsFromPoint?.(clientX, clientY) ?? [])
+			.map(el => el.closest?.("[data-relmap-node]"))
+			.find(el => el && el.dataset.relmapNode !== exclude) ?? null;
+	}
+
+	/**
+	 * Light the person the line would land on, and put out whoever was lit before.
+	 *
+	 * The early return is not a micro-optimisation: this is asked once per painted frame for the
+	 * length of the drag, and a class removed and re-added every frame on the element under the
+	 * cursor is a style invalidation per frame for no visible change at all.
+	 *
+	 * The rubber band is marked in the same breath, so the half-drawn line says the same thing its
+	 * target does. Two marks for one fact, which is the rule the lit-web styling is already written
+	 * to: there is a reader at this table on a magnifier, who may have only one of the two on
+	 * screen at once.
+	 */
+	function markLinkTarget(el) {
+		if (el === linkTarget) return;
+		linkTarget?.classList?.remove("is-link-target");
+		linkTarget = el ?? null;
+		linkTarget?.classList?.add("is-link-target");
+		if (linkTarget) rubber.classList?.add("is-over");
+		else rubber.classList?.remove("is-over");
+	}
+
 	/**
 	 * ONE exit for every way a drag can end: dropped, cancelled, Escape, or the pointer lost.
 	 *
@@ -160,6 +202,10 @@ export function wireRelmapDrag(root, {
 			clearTravel(finished.el);
 			finished.el.classList.remove("is-dragging");
 		}
+		// Before the band is taken off the board, and on EVERY exit rather than on the release:
+		// Escape, a lost pointer and a teardown mid-drag all leave a portrait ringed for a line
+		// nobody is drawing any more, and the ring would then sit there until the next repaint.
+		markLinkTarget(null);
 		rubber.remove();
 		board.classList.remove("is-dragging");
 		// After the class is off, so anything the window does in response reads a board that is no
@@ -201,8 +247,19 @@ export function wireRelmapDrag(root, {
 				});
 			}
 		} else if (drag.kind === "link") {
+			// ⚠ BOTH READS BEFORE EITHER WRITE. Layout is clean at the top of a rAF callback and
+			// dirty the moment anything is written to the document, so a hit test taken after the band
+			// had been re-pathed forced a full layout of the board on every frame of a link drag.
+			// Neither of these two depends on the other, so the order costs nothing to keep.
 			const at = surface.pointToPercent({ clientX: drag.clientX, clientY: drag.clientY });
+			// AND WHO IT WOULD LAND ON. Without this the band is drawn into empty space and the
+			// reader learns whether they hit anybody only by letting go: a portrait is 72px on a
+			// board that can be zoomed out to fit forty of them, and the name under it counts as
+			// a target too, so "am I on them" is a real question. Same frame as the band, so the
+			// ring and the line it belongs to are never a frame out of step.
+			const over = nodeUnder(drag.clientX, drag.clientY, drag.id);
 			if (at) rubberLine.setAttribute("d", `M ${drag.from.left},${drag.from.top} L ${at.left},${at.top}`);
+			markLinkTarget(over);
 		}
 	}
 
@@ -308,11 +365,11 @@ export function wireRelmapDrag(root, {
 			return;
 		}
 
-		// elementsFromPoint and not elementFromPoint: the rubber band and the handle both ride
-		// under the cursor, and the topmost hit is not the portrait being aimed at.
-		const target = (document.elementsFromPoint?.(dropX, dropY) ?? [])
-			.map(el => el.closest?.("[data-relmap-node]"))
-			.find(el => el && el.dataset.relmapNode !== finished.id);
+		// THE SAME RESOLVER THE HIGHLIGHT USED, so the line lands on exactly the person the ring
+		// promised it to. Asked again from the RELEASE position rather than reusing the last
+		// marked one: the moves are coalesced to one frame each, so the pointer may have travelled
+		// since the last frame was painted.
+		const target = nodeUnder(dropX, dropY, finished.id);
 		if (target) onLink?.(finished.id, target.dataset.relmapNode);
 	});
 

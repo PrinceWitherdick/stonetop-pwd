@@ -41856,6 +41856,47 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-weight: 700;
 }
 
+/* ── The person a half-drawn line is about to land on ─────────────────────────
+   While a line is being dragged out of somebody's handle, the portrait under the cursor is ringed.
+   Without it the band is drawn into empty space and the reader finds out whether they hit anybody
+   by letting go: a face is 72px on a board that can be zoomed out to hold forty of them, and the
+   NAME under it counts as a target too, which is not something the drawing says by itself.
+
+   THREE MARKS FOR ONE FACT — a ring, a bold green name, and the band itself going solid (below).
+   Colour alone would be the one kind of highlight the reader on a magnifier at this table cannot
+   rely on, and at that magnification the band and the face it is aimed at are often not both on
+   screen at once, so each of them has to say it on its own.
+
+   A `box-shadow`, never a border and never an outline with an offset: the cursor is mid-gesture
+   over this portrait, and anything that resized or moved it under the pointer would shift the aim
+   of the very drop the mark is there to describe. `is-centre` above is a ring for the same reason,
+   and this sits AFTER it so the two cannot tie — a focus view's centre can perfectly well be the
+   person a line is being dropped on, and it is the live gesture that should be showing then. The
+   outer ring is the page tone, so the mark reads as a ring rather than as a halo bleeding into
+   whatever line passes behind it. */
+.stonetop-relmap-node.is-link-target {
+	/* Above its neighbours, so the ring is not clipped by a portrait overlapping it. Below a node
+	   being dragged (4), which is never this one anyway. */
+	z-index: 3;
+}
+
+.stonetop-relmap-node.is-link-target .stonetop-relmap-face {
+	box-shadow: 0 0 0 4px var(--st-green-text, hsl(140 40% 18%)), 0 0 0 7px var(--st-page, #fff);
+}
+
+.stonetop-relmap-node.is-link-target .stonetop-relmap-name {
+	font-weight: 700;
+	color: var(--st-green-text, hsl(140 40% 18%));
+}
+
+/* And the band itself, once it is over somebody: SOLID, and in the same green. Dashed is how the
+   board says "not a link yet"; the moment letting go would make one, it stops saying that. */
+.stonetop-relmap-rubber.is-over path {
+	stroke: var(--st-green-text, hsl(140 40% 18%));
+	stroke-width: 3.5;
+	stroke-dasharray: none;
+}
+
 /* ── "Who goes on the map?": the people chooser ────────────────────────────────────────────
    The window that used to be a single alphabetical column of everybody in the world, now
    wearing the shared guide-rail chrome (.stonetop-guide-split / -toc / -main / -nav) with one

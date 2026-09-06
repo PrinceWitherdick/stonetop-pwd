@@ -183,6 +183,123 @@ describe("a press that becomes a drag", () => {
 	});
 });
 
+// ── The person a half-drawn line is over ────────────────────────────────────
+//
+// A line dragged out of a handle used to be drawn into empty space: the reader found out whether
+// they had hit anybody by letting go. A portrait is 72px on a board that can be zoomed out to hold
+// forty of them, so that is a real question, and the answer is cheap to give while the pointer is
+// still down.
+//
+// WHAT THESE ARE ACTUALLY GUARDING is that the mark and the drop are the SAME answer. A ring that
+// lit somebody the release then did not link to would be worse than no ring at all — the reader
+// would have been told the wrong thing rather than left to guess — so the two are resolved through
+// one function, and these press the same fake hits through both ends of the gesture.
+describe("a line being dragged towards somebody", () => {
+	let board;
+	beforeEach(() => {
+		board = pointerBoard();
+		board.view.setPointerCapture = vi.fn();
+		board.view.releasePointerCapture = vi.fn();
+	});
+	afterEach(() => board.destroy());
+
+	/** Press the handle, travel, and paint the frame that travel queued. */
+	function drawTowards(to, { pointerId = 1 } = {}) {
+		board.view.emit("pointerdown", board.portraits.n1.handle, { pointerId, clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", board.portraits.n1.handle, { pointerId, clientX: to[0], clientY: to[1] });
+		board.flush();
+	}
+
+	const lit = () => Object.entries(board.portraits)
+		.filter(([, el]) => el.classList.contains("is-link-target"))
+		.map(([id]) => id);
+
+	it("rings the portrait the line would land on", () => {
+		const { teardown } = wire(board);
+		board.setHits([board.portraits.n2.face]);
+		drawTowards([40, 0]);
+		expect(lit()).toEqual(["n2"]);
+		teardown();
+	});
+
+	// The name under a face is a target too — it is inside the node the drop resolves to — and a
+	// board zoomed out far enough to read is a board where the name is most of what the cursor can
+	// find. The ring has to appear there as well, or the mark says "miss" on a drop that will hit.
+	it("rings them from their name as readily as from their face", () => {
+		const { teardown } = wire(board);
+		board.setHits([board.portraits.n2.name]);
+		drawTowards([40, 0]);
+		expect(lit()).toEqual(["n2"]);
+		teardown();
+	});
+
+	// ⚠ THE ONE THAT MATTERS. Nobody is a valid target for a line out of their own handle, and the
+	// drop has always known that; a ring that lit the person the line came FROM would promise a
+	// link the release then refuses, which is the exact mismatch this pair of marks exists to
+	// avoid.
+	it("never rings the person the line came from", () => {
+		const { handlers, teardown } = wire(board);
+		board.setHits([board.portraits.n1.face]);
+		drawTowards([40, 0]);
+		expect(lit()).toEqual([]);
+		board.view.emit("pointerup", board.portraits.n1.handle, { clientX: 40, clientY: 0 });
+		expect(handlers.onLink).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	it("moves the ring on when the pointer moves on, and takes it off over empty board", () => {
+		const { teardown } = wire(board);
+		board.setHits([board.portraits.n2.face]);
+		drawTowards([40, 0]);
+		expect(lit()).toEqual(["n2"]);
+
+		board.setHits([]);
+		board.view.emit("pointermove", board.portraits.n1.handle, { clientX: 60, clientY: 0 });
+		board.flush();
+		expect(lit()).toEqual([]);
+		teardown();
+	});
+
+	// Every exit, not just the release: an Escape, a lost pointer or a teardown mid-gesture would
+	// otherwise leave somebody ringed for a line nobody is drawing any more.
+	const EXITS = [
+		["released onto them", b => b.view.emit("pointerup", b.portraits.n1.handle, { clientX: 40, clientY: 0 })],
+		["cancelled", b => b.view.emit("pointercancel", b.portraits.n1.handle, {})],
+		["lost with the pointer", b => b.view.emit("lostpointercapture", b.portraits.n1.handle, {})],
+	];
+	for (const [how, finish] of EXITS) {
+		it(`takes the ring off again when the drag is ${how}`, () => {
+			const { teardown } = wire(board);
+			board.setHits([board.portraits.n2.face]);
+			drawTowards([40, 0]);
+			expect(lit()).toEqual(["n2"]);
+			finish(board);
+			expect(lit()).toEqual([]);
+			teardown();
+		});
+	}
+
+	it("leaves nobody ringed when the window is torn down mid-gesture", () => {
+		const { teardown } = wire(board);
+		board.setHits([board.portraits.n2.face]);
+		drawTowards([40, 0]);
+		teardown();
+		expect(lit()).toEqual([]);
+	});
+
+	// Moving a PORTRAIT is not drawing a line, and rings nobody: the drop writes coordinates, and
+	// whoever the cursor happens to pass over on the way has nothing to do with it.
+	it("rings nobody while a portrait is only being moved", () => {
+		const { teardown } = wire(board);
+		board.setHits([board.portraits.n2.face]);
+		board.view.emit("pointerdown", board.portraits.n1.face, { clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", board.portraits.n1.face, { clientX: 40, clientY: 0 });
+		board.flush();
+		expect(lit()).toEqual([]);
+		teardown();
+	});
+});
+
 describe("a board the reader may not edit", () => {
 	let board;
 	beforeEach(() => {
