@@ -37,8 +37,16 @@ import { decodeEntities } from "./strings.js";
 const ONE_FOR_ONE = String.raw`1[-\s]for[-\s]1`;
 const THE_FOLLOWING = String.raw`(?:the )?(?:following|these)\b`;
 
+// "…and then one more, if". Take the Measure states a count and then grows it on a condition
+// nothing here can weigh — "ask their player one of the questions below … if they fear or respect
+// you (their call), you can ask another question" — so the number it opens with is a floor, not a
+// cap. Vetoed rather than read, on the file's own rule that too tight is worse than uncapped: a
+// Marshal who earned the second question must not find the box refusing it.
+const ANOTHER = String.raw`\b(?:pick|choose|select|take|ask)\s+another\b`;
+
 const UNBOUNDED = new RegExp(
-	`${ONE_FOR_ONE}|for each\\b|add ${THE_FOLLOWING}|as many\\b|(?:all(?: \\d| three| that)?|both) apply`, "i");
+	`${ONE_FOR_ONE}|for each\\b|add ${THE_FOLLOWING}|as many\\b|${ANOTHER}`
+	+ `|(?:all(?: \\d| three| that)?|both) apply`, "i");
 
 /**
  * The narrower question: is this list something the move SHOWS you rather than asks you to
@@ -89,37 +97,56 @@ export function isReferenceList(lead) {
  * cap it. The two also anchor differently — this scans a whole lead for every marker in it, that
  * one tests a single clause's opening. They share the spellings, not the semantics; keep the
  * dash variants in step, and see the note there before adding a tier to either.
+ *
+ * A marker names a LIST of tiers, because one of them covers two. "On a 7+" is how the book
+ * writes what a hit of either strength gets — Danu's Grasp, Alpha, Muster, Burgle, the Mindgem,
+ * the Seeker's fire-in-the-hands — and the count it states belongs to the 10+ AND the 7-9. Read
+ * as a tier of its own it belonged to neither, so Danu's Grasp's "on a 7+ … they pick 1" attached
+ * to nothing and its weak hit reached the card uncapped, with the move's own text beside the
+ * boxes saying pick one. A later marker still wins (see the loop below), which is how the same
+ * move's "on a 10+, … both apply" raises its strong hit back to 2 without touching the 7-9.
  */
 const TIER_KEYS = [
-	[/^(?:10\+|12\+)$/, "success"],
-	[/^7[-\u2013\u2014]9$/,       "partial"],
-	[/^6[-\u2013\u2014]$/,        "failure"],
+	[/^(?:10\+|12\+)$/, ["success"]],
+	[/^7\+$/,           ["success", "partial"]],
+	[/^7[-\u2013\u2014]9$/,       ["partial"]],
+	[/^6[-\u2013\u2014]$/,        ["failure"]],
 ];
-const tierKey = text => TIER_KEYS.find(([re]) => re.test(String(text).trim()))?.[1] ?? null;
+const tierKeys = text => TIER_KEYS.find(([re]) => re.test(String(text).trim()))?.[1] ?? [];
 
 /**
  * A count in the phrasings the shipped moves actually use, and nothing else:
  *   "pick 1" / "picks 1" / "choose 2" / "chooses 1" / "do 1" / "select 1"
- *   "ask 1" / "asks 2" / "ask them 1 question" / "ask the GM 2"
+ *   "ask 1" / "asks 2" / "ask them 1 question" / "ask the GM 2" / "ask their player 1 question"
  *   "one of the following" / "2 of these"
+ *
+ * Who is being asked sits between the verb and the number, and the alternation is a roll-call of
+ * the ways the shipped moves name them rather than a wildcard: a `\w+` there would read "pick 2
+ * seasonal gains" as "pick <someone> seasonal" and, worse, let any noun at all stand between a
+ * verb and a digit that was never its count. "their player" is All is Illuminated's — its 10+ is
+ * "ask their player 1 question from the list below", and unread it left a Seeker's strong hit
+ * free to tick all four questions when the move grants one.
  */
 const COUNT_RE = new RegExp(
 	"\\b(?:pick|picks|choose|chooses|select|selects|take|takes|do|does|ask|asks)\\b"
-	+ "(?:\\s+(?:them|the\\s+GM|another\\s+player|a\\s+PC(?:\\s+or\\s+NPC)?))?\\s+"
+	+ "(?:\\s+(?:them|their\\s+player|the\\s+GM|another\\s+player|a\\s+PC(?:\\s+or\\s+NPC)?))?\\s+"
 	+ "(one|two|three|four|\\d)\\b"
 	+ "|\\b(one|two|three|four|\\d)\\s+of\\s+(?:the\\s+following|these)\\b",
 	"gi",
 );
 
 /**
- * Where each "on a 10+ / 7-9 / 6-" begins, in the order the move writes them.
+ * Where each "on a 10+ / 7+ / 7-9 / 6-" begins, in the order the move writes them.
  *
  * Closed with a lookahead, NOT `\b`: "10+" and "6-" end in a non-word character, so a word
  * boundary after them can only match when the next character IS a word character — the exact
  * opposite of what is wanted. `\b` here silently matched "7-9" (ends in a digit) and nothing
  * else, which read as "this move only caps its 7-9" for every tiered move in the book.
+ *
+ * "7-9" is offered ahead of "7+" for reading order alone: the two cannot collide, because what
+ * follows the 7 is what tells them apart.
  */
-const TIER_MARK_RE = /on\s+an?\s+(10\+|12\+|7[-\u2013\u2014]9|6[-\u2013\u2014])(?=[\s,;:.]|$)/gi;
+const TIER_MARK_RE = /on\s+an?\s+(10\+|12\+|7[-\u2013\u2014]9|7\+|6[-\u2013\u2014])(?=[\s,;:.]|$)/gi;
 
 /**
  * "You and the GM EACH choose 1" — a count that is per person, not per list. Two get chosen, and
@@ -129,6 +156,40 @@ const TIER_MARK_RE = /on\s+an?\s+(10\+|12\+|7[-\u2013\u2014]9|6[-\u2013\u2014])(
  * 7-9 — capping that at 1 would have blocked the GM's half of the choice.
  */
 const PER_PERSON = /\beach\s+(?:\w+\s+){0,2}?(?:pick|picks|choose|chooses|select|selects|take|takes|ask|asks)\b/i;
+
+/**
+ * A tier that hands over the WHOLE list, and the number that is — "ask the GM BOTH of the
+ * questions below" (Danger Sense), "on a 10+, both" (Formidable), "as a 7-9, but both apply"
+ * (Danu's Grasp), "on a 6-, all 3 apply" (Dark Succor, Undying).
+ *
+ * These are counts the book states in words rather than digits, and until they were read the
+ * five moves that say them reached the card as "no cap" — the same answer a sentence nothing
+ * could parse gets. That is wrong twice over: the tier's boxes tick past what the move grants,
+ * and, worse, a roll that leaves NO CHOICE TO MAKE still asks the player to tick every box by
+ * hand. Read as a count, the cap covers the list, and the surface showing the list ticks it for
+ * them (utils/pick-tally.js#grantsWholeList) — which is the rule the Undying / Dark Succor
+ * walkthrough has always applied to that same 6- (see dialogs/UndeathDialog.js#_syncForcedPicks,
+ * where a tier whose pick covers every effect ticks them all).
+ *
+ * Only the shipped shapes, because a false positive here is a cap read off a sentence that was
+ * not talking about the list at all. "Both" counts only where it plainly stands for the options
+ * — followed by "apply", followed by "of …", or standing alone as the tier's whole answer —
+ * which is why Parry & Riposte's "spend 1 Readiness to both halve an attack's effects/damage"
+ * and Burn Twice as Bright's "apply any consequences to both Invocations" are not counts. "All"
+ * needs its number: "all 3 apply" is a count, while "all that apply" is a tally and stays with
+ * the UNBOUNDED phrases above.
+ *
+ * Captures: 1 = "both" before "apply"/"of", 2 = the number after "all", 3 = a lone "both".
+ */
+const TAKE_ALL_RE = new RegExp(
+	String.raw`\b(?:(both)|all\s+(\d+|two|three|four))\b(?=\s+(?:appl(?:y|ies)\b|of\s+))`
+	+ String.raw`|(?:^|[,;:]\s*)(both)\s*(?=[;:.]|$)`, "i");
+
+const takeAllCount = segment => {
+	const m = TAKE_ALL_RE.exec(String(segment));
+	if (!m) return null;
+	return (m[1] || m[3]) ? 2 : toCount(m[2]);
+};
 
 const firstCountIn = segment => {
 	if (PER_PERSON.test(segment)) return null;
@@ -163,9 +224,14 @@ export function pickLimitsFrom(lead) {
 	// through all four seasons, each with its own 10+/7-9/6-, and whose list belongs to the last
 	// of them. (Its card is not what a table actually sees; the steading sheet rolls that move
 	// through its own path.)
+	//
+	// That same rule is what makes an "on a 7+" safe to spread across two tiers: the book always
+	// writes the shared clause first and then narrows it ("on a 7+, … they pick 1; on a 10+, …
+	// both apply"), so the tier that says something of its own overwrites what the shared clause
+	// left it, and the tier that says nothing more keeps it.
 	marks.forEach((mark, i) => {
-		const tier = tierKey(mark[1]);
-		if (!tier) return;
+		const tiers = tierKeys(mark[1]);
+		if (!tiers.length) return;
 		const segment = text.slice(mark.index, marks[i + 1]?.index ?? text.length);
 		// The veto is read against THIS TIER'S sentence, not the whole lead. A tier that hands
 		// over the entire list is not a tier without a count — it is a different tier, and it has
@@ -177,9 +243,14 @@ export function pickLimitsFrom(lead) {
 		// The tier that IS unbounded still stops here, which is what leaves it uncapped — right
 		// for every phrasing this catches: "all 3 apply" takes the whole list, and "spend it
 		// 1-for-1" is not choosing from a list at all.
+		// A tier that hands over the whole list is read FIRST, because the veto above is where
+		// "both apply" and "all 3 apply" used to end their journey — counted as unreadable and
+		// left uncapped, on the two tiers in the book that leave the player nothing to decide.
+		const all = takeAllCount(segment);
+		if (all) { for (const tier of tiers) byTier[tier] = all; return; }
 		if (UNBOUNDED.test(segment)) return;
 		const n = firstCountIn(segment);
-		if (n) byTier[tier] = n;
+		if (n) for (const tier of tiers) byTier[tier] = n;
 	});
 	if (Object.keys(byTier).length) return byTier;
 

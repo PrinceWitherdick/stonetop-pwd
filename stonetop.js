@@ -68,7 +68,7 @@ import { rollSeasonsCard, sign, markMissXp, pbtaDiceFormula, seasonsRollTable } 
 import { xpToLevelUp, adjustXp } from "./module/utils/xp.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
 import { moveChatCard, canRewriteCard } from "./module/utils/chat.js";
-import { paintPickTally, pickLimitFor, releaseOverLimit } from "./module/utils/pick-tally.js";
+import { grantsWholeList, paintPickTally, pickLimitFor, releaseOverLimit } from "./module/utils/pick-tally.js";
 import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
@@ -1632,10 +1632,34 @@ function _chatWireRollCardPicks(message, html) {
 	const saved   = message.getFlag(SYSTEM_ID, "pickChecked") ?? [];
 	const canSave = message.canUserModify?.(game.user, "update") ?? game.user.isGM;
 
+	// A ROLL THAT LEAVES NOTHING TO CHOOSE COMES TICKED. Danger Sense's 10+ asks the GM BOTH of
+	// its two questions, Formidable's is "on a 10+, both", Danu's Grasp's is "as a 7-9, but both
+	// apply", and Dark Succor's and Undying's 6- is "all 3 apply" — five tiers whose cap covers
+	// the whole list (utils/pick-tally.js#grantsWholeList), where asking the player to tick every
+	// box by hand is asking them to make a choice the dice already made. It is the same rule the
+	// Undying / Dark Succor walkthrough applies to that 6- (dialogs/UndeathDialog.js).
+	//
+	// DERIVED, not written: the cap, the tier and the boxes are all on the card, so every client
+	// works it out identically and nothing is persisted that a GM's Shift Up/Down would then have
+	// to unpick. Once anyone ticks anything the flag exists and it is theirs — including a tick
+	// they took back off, which is why the test is whether the flag was written at all rather than
+	// whether it holds a `true`.
+	// Asked only where nothing has been ticked yet, which is the same test the read below makes:
+	// once the flag exists the answer is the reader's, and every one of these walks would be work
+	// whose result cannot be looked at.
+	const wholeList = new Map();
+	if (!saved.length) {
+		for (const list of new Set(boxes.map(b => b.closest(".stonetop-picklist")))) {
+			wholeList.set(list, grantsWholeList(list));
+		}
+	}
+
 	for (const box of boxes) {
 		const idx  = Number(box.dataset.index);
 		const item = box.closest(".stonetop-picklist-item");
-		const on   = !!saved[idx];
+		const on   = saved.length
+			? !!saved[idx]
+			: !!wholeList.get(box.closest(".stonetop-picklist"));
 		box.checked = on;
 		item?.classList.toggle("is-picked", on);
 

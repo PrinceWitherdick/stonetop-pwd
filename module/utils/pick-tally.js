@@ -50,15 +50,16 @@ const WIRED = "pickTallyWired";
  * denominator both, which is what left Clash, Interfere, Seek Insight, The Hammer and the Book,
  * Work With What You've Got and Formidable ticking free under a bare "0 options selected".
  *
+ * `rolledTier` comes back beside the cap because one caller needs to know WHERE the number came
+ * from, not just what it is: the stand-in above is a guess made on a card with no result, and
+ * {@link grantsWholeList} must not pre-tick a list on the strength of a guess.
+ *
  * @param {Element|null} listEl  The element holding the option checkboxes.
- * @returns {number|null} The cap, or null when this list is to tick freely.
+ * @returns {{limit: number|null, rolledTier: string|null}} The cap (null when this list is to
+ *   tick freely), and the tier the card rolled (null when it rolled nothing).
  */
-export function pickLimitFor(listEl) {
-	if (!listEl) return null;
-	const flat = Number(listEl.dataset?.pickMax);
-	if (flat > 0) return flat;
-	const perTier = TIER_KEYS.map(key =>
-		Number(listEl.dataset?.[`pickMax${key[0].toUpperCase()}${key.slice(1)}`]));
+function readPickLimit(listEl) {
+	if (!listEl) return { limit: null, rolledTier: null };
 
 	// The tier of the card THIS list is in, found by walking up from the list rather than by
 	// searching down from the message: a per-tier cap read off a neighbouring card's result
@@ -66,12 +67,52 @@ export function pickLimitFor(listEl) {
 	const rolled = listEl.closest?.(".stonetop-roll-card")
 		?.querySelector?.(".stonetop-roll-result")?.classList;
 	const at = TIER_KEYS.findIndex(key => rolled?.contains(key));
+	const rolledTier = at >= 0 ? TIER_KEYS[at] : null;
+
+	const flat = Number(listEl.dataset?.pickMax);
+	if (flat > 0) return { limit: flat, rolledTier };
+	const perTier = TIER_KEYS.map(key =>
+		Number(listEl.dataset?.[`pickMax${key[0].toUpperCase()}${key.slice(1)}`]));
+
 	// A tier that rolled and stamped no count of its own ticks FREE, and does not fall through to
 	// the standing-in maximum below: Forage's 6- hands over the whole list, and the 10+'s 2 has no
 	// business capping it.
-	if (at >= 0) return perTier[at] > 0 ? perTier[at] : null;
+	if (at >= 0) return { limit: perTier[at] > 0 ? perTier[at] : null, rolledTier };
 
-	return Math.max(0, ...perTier.filter(n => n > 0)) || null;
+	return { limit: Math.max(0, ...perTier.filter(n => n > 0)) || null, rolledTier };
+}
+
+/** Just the cap — the answer nearly every caller wants. */
+export function pickLimitFor(listEl) {
+	return readPickLimit(listEl).limit;
+}
+
+/**
+ * Whether this list, on the tier this card actually rolled, offers no choice at all — the cap
+ * covers every option on it.
+ *
+ * Five shipped moves say so, all of them in words rather than digits (utils/move-picks.js's
+ * TAKE_ALL_RE reads them): Danger Sense's "ask the GM BOTH of the questions below", Formidable's
+ * "on a 10+, both", Danu's Grasp's "as a 7-9, but both apply", and the "on a 6-, all 3 apply"
+ * that Dark Succor and Undying share. A caller ticks the whole list rather than presenting it,
+ * which is the same call dialogs/UndeathDialog.js#_syncForcedPicks makes for that same 6- —
+ * "'All 3 apply' is not a choice", said once per surface because the two hold their picks in
+ * different places.
+ *
+ * THE ROLL HAS TO HAVE HAPPENED. The Moves tab posts a move's printed list on a card that never
+ * rolled anything, and there `pickLimitFor` stands in the most generous tier — a stand-in, not a
+ * grant, so ticking Danger Sense's two questions off a reference card would be claiming an
+ * answer nobody rolled for. Same for a per-tier list hidden behind the tier it belongs to: it is
+ * on the card for a GM's Shift Up/Down to reveal, and until then it is not this card's result.
+ *
+ * @param {Element|null} listEl  The element holding the option checkboxes.
+ */
+export function grantsWholeList(listEl) {
+	if (!listEl || listEl.closest?.("[hidden]")) return false;
+	const { limit, rolledTier } = readPickLimit(listEl);
+	if (!rolledTier || !limit) return false;
+	const boxes = listEl.querySelectorAll?.('input[type="checkbox"]') ?? [];
+	return boxes.length > 0 && limit >= boxes.length;
 }
 
 /**

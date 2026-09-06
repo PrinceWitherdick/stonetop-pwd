@@ -47,22 +47,63 @@ describe("pickLimitsFrom", () => {
 			.toBe(1);
 	});
 
-	// "Unbounded" is read against the TIER'S OWN sentence, not the whole lead-in. A tier that
-	// hands over the entire list is not a tier without a count — it is a different tier, and it
-	// has no business speaking for its neighbours.
-	it("caps the tiers that state a count, even when another grants the whole list", () => {
-		// Dark Succor and Undying, as the book prints them. That closing "all 3 apply" used to
-		// veto the two real counts along with itself: a player who rolled a 10+ saw no cap and no
-		// "0/1" over their boxes, on a move whose own text says choose 1.
+	// Read against the TIER'S OWN sentence, not the whole lead-in. A tier that hands over the
+	// entire list has no business speaking for its neighbours — a closing "all 3 apply" used to
+	// veto the two real counts along with itself, leaving a player who rolled a 10+ with no cap
+	// and no "0/1" over their boxes, on a move whose own text says choose 1.
+	it("gives each tier its own count when they differ", () => {
+		// Dark Succor and Undying, as the book prints them.
 		expect(pickLimitsFrom("on a 10+, choose 1; on a 7-9, choose 2; on a 6-, all 3 apply:"))
-			.toEqual({ success: 1, partial: 2 });
+			.toEqual({ success: 1, partial: 2, failure: 3 });
 		expect(pickLimitsFrom("on a 10+, regain half your max HP and choose 1; on a 7-9, regain half your max HP and choose 2; on a 6-, either regain 1 HP and all 3 apply, or give up this insert."))
+			.toEqual({ success: 1, partial: 2, failure: 3 });
+	});
+
+	// A tier that takes the WHOLE list states a count too — the book just spells it rather than
+	// digits it. Read as nothing, those five tiers reached the card uncapped, which is the answer
+	// an unreadable sentence gets; read as a number, the cap covers the list, and the card can
+	// tick a roll that left nothing to choose (see grantsWholeList in tests/utils/pick-count).
+	it("reads a tier that hands over the whole list as the count it is", () => {
+		expect(pickLimitsFrom("on a 10+, choose 1; on a 6-, all 3 apply:")).toEqual({ success: 1, failure: 3 });
+		expect(pickLimitsFrom("on a 6-, all three apply:")).toEqual({ failure: 3 });
+		// Danger Sense: "both" naming the list it sits above.
+		expect(pickLimitsFrom("on a 10+, ask the GM both of the questions below; on a 7-9, ask 1; either way, gain advantage on your next roll to act on the answer(s)."))
+			.toEqual({ success: 2, partial: 1 });
+		// Formidable: "both" as the tier's entire answer.
+		expect(pickLimitsFrom("on a 10+, both; on a 7-9, pick 1:")).toEqual({ success: 2, partial: 1 });
+		// Danu's Grasp in full: the shared "on a 7+" states the 7-9's count, and the 10+ that
+		// follows raises its own to the whole list without disturbing it.
+		expect(pickLimitsFrom("on a 7+, roots, vines, and earth pull at them, and they pick 1; on a 10+, as a 7-9, but both apply."))
+			.toEqual({ success: 2, partial: 1 });
+	});
+
+	// "On a 7+" is one clause for two tiers — what a hit of either strength gets. Read as a tier
+	// of its own it belonged to neither, so Danu's Grasp's "they pick 1" attached to nothing and
+	// its weak hit reached the card free to tick both options, with the move's own text beside
+	// the boxes saying pick one.
+	it("spreads a shared 'on a 7+' across both halves of a hit", () => {
+		// Alpha: the 7+ carries the count and the 10+ adds something that is not one, so the
+		// count stands for both. The 6- picks nothing from the list and stays uncapped.
+		expect(pickLimitsFrom("on a 7+, they must pick 1 from the list below; on a 10+, you also have advantage on your next roll against them."))
+			.toEqual({ success: 1, partial: 1 });
+		// A narrower tier that comes after overrides what the shared clause left it — the shape
+		// Danu's Grasp, Muster and Burgle all use.
+		expect(pickLimitsFrom("on a 7+, you make it back. Then, on a 10+, also pick 2; on a 7-9, also pick 1:"))
+			.toEqual({ success: 2, partial: 1 });
+		// A 7+ that states no count of its own leaves both halves to the tiers below it.
+		expect(pickLimitsFrom("on a 7+, it answers but on a 10+, pick 1; on a 7-9, pick 2:"))
 			.toEqual({ success: 1, partial: 2 });
 	});
 
-	it("still leaves the unbounded tier itself uncapped", () => {
-		// Naming only the tiers that answered is what frees the 6- to take the whole list.
-		expect(pickLimitsFrom("on a 10+, choose 1; on a 6-, all 3 apply:")).toEqual({ success: 1 });
+	// "Both" is a count only where it plainly stands for the options. Everywhere else it is an
+	// ordinary word in an ordinary sentence, and reading it as a cap would put a number on a list
+	// nobody was talking about.
+	it("does not take every 'both' in a move for a count", () => {
+		expect(pickLimitsFrom("on a 10+, you can spend 1 Readiness to both halve an attack's effects/damage and strike back at the attacker:")).toBeNull();
+		expect(pickLimitsFrom("When you Invoke the Sun God, roll once and apply any consequences to both Invocations. Then pick 1:")).toBe(1);
+		expect(pickLimitsFrom("on a 10+, you keep both hands free and pick 1:")).toEqual({ success: 1 });
+		// "All" needs its number: a tally of everything true is not a count of anything.
+		expect(pickLimitsFrom("on a 6-, mark all that apply:")).toBeNull();
 	});
 
 	it("refuses to cap what it cannot read confidently", () => {
@@ -72,17 +113,15 @@ describe("pickLimitsFrom", () => {
 		expect(pickLimitsFrom('Answer these questions as a group. For each "yes," everyone marks XP.')).toBeNull();
 		// A move that ADDS to a question list rather than choosing from it.
 		expect(pickLimitsFrom("When you Seek Insight, add the following to the list of questions you can ask:")).toBeNull();
-		// "both apply" on the better tier would make any single number a cap that blocks it. The
-		// count here hangs off no tier the card models ("on a 7+" spans two), so there is nothing
-		// to attach it to and the whole move stays free rather than guessing.
-		expect(pickLimitsFrom("they pick 1; on a 10+, as a 7-9, but both apply.")).toBeNull();
-		// Danu's Grasp in full, which is where that sentence comes from.
-		expect(pickLimitsFrom("on a 7+, roots, vines, and earth pull at them, and they pick 1; on a 10+, as a 7-9, but both apply.")).toBeNull();
 		// The one shipped move whose rules DO let you go over the count — the extra options are
 		// paid for, not forbidden — so it must reach the card with no cap at all.
 		expect(pickLimitsFrom("the world becomes clear and pick 1. For each additional option you pick, lose 1d4 HP:")).toBeNull();
 		// Two different numbers with no tier to hang them on.
 		expect(pickLimitsFrom("pick 1 of these, then choose 3 of these:")).toBeNull();
+		// Take the Measure: a count that GROWS on a condition nothing here can weigh, so the
+		// number it opens with is a floor rather than a cap. Refusing the second question a
+		// Marshal earned is the one failure worse than no cap at all.
+		expect(pickLimitsFrom("ask their player one of the questions below and get an honest answer. If they fear or respect you (their call), you can ask another question.")).toBeNull();
 		// No count at all.
 		expect(pickLimitsFrom("hold Preparation based on the amount of time you devote:")).toBeNull();
 		expect(pickLimitsFrom("")).toBeNull();
@@ -165,17 +204,32 @@ describe("what the shipped moves derive", () => {
 	it.each([
 		["Aid", 1], ["Censure", 1], ["Mighty Thews", 1], ["Keep Company", 1], ["Read the Land", 1],
 		["Up With People", 1], ["Under Your Skin", 1], ["Rapier Wit", 1], ["Make Camp", 1],
-		["Meet with Disaster", 1], ["Stentorian", 1], ["Alpha", 1], ["Clash", { success: 1 }],
+		["Meet with Disaster", 1], ["Stentorian", 1], ["Clash", { success: 1 }],
 		["Magpie", 2], ["Warden of the Wild", 2],
 		["Ambush", { success: 2, partial: 1 }], ["Forage", { success: 2, partial: 1 }],
 		["Burgle", { success: 2, partial: 1 }], ["Call the Shot", { success: 2, partial: 1 }],
 		["Muster", { success: 2, partial: 1 }], ["Seek Insight", { success: 3, partial: 1 }],
 		["Interfere", { success: 1, partial: 1 }], ["Urges", { partial: 1 }],
+		// The four that state their count once, in an "on a 7+" that covers both halves of a
+		// hit. Alpha and Danu's Grasp carry the count IN that clause, so both tiers take it (and
+		// the 6-, which picks nothing from the list, is left free); Muster and Burgle say
+		// nothing countable there and are capped by the narrower tiers that follow.
+		["Alpha", { success: 1, partial: 1 }],
+		// "Ask THEIR PLAYER 1 question from the list below, plus <a question not on it>".
+		["All is Illuminated", { success: 1, partial: 1 }],
 		// "you and the GM each choose 1": two get chosen on a 7-9, so only its 10+ is capped.
 		["Invoke the Sun God", { success: 1 }],
 		["Death's Door", { failure: 1 }], ["Let Fly", { partial: 1 }], ["Deploy", { partial: 1 }],
-		// Both close on "all 3 apply", which speaks for its own 6- and not for the tiers above it.
-		["Dark Succor", { success: 1, partial: 2 }], ["Undying", { success: 1, partial: 2 }],
+		// The five that hand a whole tier's list over, in the book's own words. Each cap here
+		// EQUALS the number of options printed below it, which is what tells the card there is
+		// nothing left to choose and the boxes should come ticked.
+		["Danger Sense", { success: 2, partial: 1 }], ["Formidable", { success: 2, partial: 1 }],
+		// Danu's Grasp is the only one of the five whose whole-list tier sits beside a count for
+		// the OTHER half of the same hit: "on a 7+ … they pick 1; on a 10+, as a 7-9, but both
+		// apply". A 10+ ticks both boxes; a 7-9 still chooses between them.
+		["Danu's Grasp", { success: 2, partial: 1 }],
+		["Dark Succor", { success: 1, partial: 2, failure: 3 }],
+		["Undying", { success: 1, partial: 2, failure: 3 }],
 	])("%s caps at %o", (name, expected) => {
 		expect(derived.has(name), `${name} prints no option list`).toBe(true);
 		expect(derived.get(name)).toEqual(expected);
@@ -186,7 +240,7 @@ describe("what the shipped moves derive", () => {
 	it.each([
 		"Anger is a Gift", "Defend", "Silver Tongued", "We Happy Few", "Strengthen Your Bond",
 		"End of Session", "Situational Awareness", "Predator", "Order Followers", "Outfit",
-		"Bolster", "Danu's Grasp", "Disembodied", "Denouement",
+		"Bolster", "Disembodied", "Denouement",
 		"Take the Measure",
 	])("%s ticks freely", name => {
 		expect(derived.has(name), `${name} prints no option list`).toBe(true);
