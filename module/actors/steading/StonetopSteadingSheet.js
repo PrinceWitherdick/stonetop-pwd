@@ -729,11 +729,17 @@ export function createStonetopSteadingSheetClass(Base) {
 			// Residents / Neighbors filters (see utils/tab-search.js). Each is scoped to its own
 			// section so it only hides that section's rows; a row matches on the text of every
 			// cell input (name, occupation, traits, relations, notes, home).
+			//
+			// `searchTerms` lives on the SHEET, not in the DOM, so a live filter survives the
+			// re-render that follows any write and the reader keeps their place (see
+			// utils/tab-search.js). One slot per box, so the two resident sections stay apart.
+			const searchTerms = (this._tabSearchTerms ??= {});
 			const residentRowText = row => [...row.querySelectorAll(".steading-resident-input")].map(i => i.value).join(" ");
 			for (const sec of [".steading-residents-section--residents", ".steading-residents-section--neighbors"]) {
 				wireTabSearch(html[0].querySelector(sec), {
 					itemSel: ".steading-residents-row",
 					textFor: residentRowText,
+					memory: searchTerms, key: sec,
 				});
 			}
 
@@ -744,6 +750,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			wireTabSearch(html[0].querySelector(".tab.improvements"), {
 				itemSel: ".steading-improvement",
 				textFor: card => card.textContent,
+				memory: searchTerms, key: "improvements",
 			});
 
 			// Category chips beside that search box. One lights at a time, and clicking the

@@ -38,6 +38,37 @@ export function matchesSelector(node, selector) {
 	});
 }
 
+/**
+ * The four `classList` methods a caller reaches for, over a node's own `classes` array.
+ *
+ * SHARED RATHER THAN WRITTEN TWICE, for the reason `pointer-board.js` gives about
+ * `matchesSelector` in its own header: a second copy is how two fakes drift into disagreeing about
+ * the same production code. These two had already started -- one answered only `toggle` and the
+ * other only `add`/`remove`/`contains` -- and the tab filter and the tie bar between them reach
+ * for all four.
+ *
+ * ⚠ `toggle` IS REAL AND NOT OPTIONAL. Production code calls `classList?.toggle(...)`, where
+ * the `?.` guards a MISSING classList rather than a missing method, so a fake without it throws a
+ * TypeError and the failure reads as a bug in the code under test.
+ */
+export function fakeClassList(node) {
+	const list = {
+		add(name) { if (!node.classes.includes(name)) node.classes.push(name); },
+		remove(name) {
+			const at = node.classes.indexOf(name);
+			if (at >= 0) node.classes.splice(at, 1);
+		},
+		contains: name => node.classes.includes(name),
+		toggle(name, force) {
+			const want = force === undefined ? !node.classes.includes(name) : !!force;
+			if (want) list.add(name);
+			else list.remove(name);
+			return want;
+		},
+	};
+	return list;
+}
+
 /** One element: a parent chain, a class list, a dataset, a value, and the handlers on it. */
 export function fakeEl({ cls = [], dataset = {}, value = "", parent = null } = {}) {
 	const node = {
@@ -47,15 +78,6 @@ export function fakeEl({ cls = [], dataset = {}, value = "", parent = null } = {
 		closest(sel) {
 			for (let cur = node; cur; cur = cur.parent) if (cur.matches?.(sel)) return cur;
 			return null;
-		},
-		classList: {
-			toggle(name, force) {
-				const at = node.classes.indexOf(name);
-				const on = force ?? at < 0;
-				if (on && at < 0) node.classes.push(name);
-				if (!on && at >= 0) node.classes.splice(at, 1);
-				return on;
-			},
 		},
 		setAttribute(k, v) { node.attrs[k] = v; },
 		/**
@@ -100,6 +122,7 @@ export function fakeEl({ cls = [], dataset = {}, value = "", parent = null } = {
 		blur() { node.focused = false; },
 		select() { node.selected = true; },
 	};
+	node.classList = fakeClassList(node);
 	parent?.children.push(node);
 	return node;
 }

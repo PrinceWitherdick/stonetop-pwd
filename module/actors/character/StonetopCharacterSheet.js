@@ -2972,12 +2972,22 @@ export function createStonetopCharacterSheetClass(Base) {
 			// header that expands into a filter box (tab-search-control.hbs). Each call is scoped
 			// to the container that holds both the box and the items it hides, so scoping to a
 			// whole tab filters the tab and scoping to one column filters just that column.
+			//
+			// Every one of them is handed `searchTerms`, which lives on the SHEET rather than in
+			// the DOM: a live filter has to survive the re-render that follows rolling a move from
+			// its title, or any other write, instead of dumping the reader back into the whole
+			// unfiltered list at the top of it. One slot per control, so sibling sections that
+			// each carry a box (the two arcana sections, the two gear columns) keep them apart.
+			// It is not a flag: the filter is a way of reading the page just now, and reopening
+			// the sheet should start clean.
+			const searchTerms = (this._tabSearchTerms ??= {});
 			wireTabSearch(html[0].querySelector(".tab.moves"), {
 				itemSel: ".stonetop-item",
 				textFor: li => li.textContent,
 				// Hiding / revealing cards changes the column balance, so re-pack the masonry
 				// for the new visible set (defined further down, with the packer itself).
 				onFilter: () => this._repackMoves?.(),
+				memory: searchTerms, key: "moves",
 			});
 			// Invocations tab (Lightbearer): one filter over the whole tab, matched on each card's
 			// name and description. Scoped to the tab element, which is also the one carrying
@@ -2987,6 +2997,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				itemSel: ".stonetop-invocation-card",
 				textFor: card => [".stonetop-invocation-name", ".stonetop-invocation-desc"]
 					.map(sel => card.querySelector(sel)?.textContent ?? "").join(" "),
+				memory: searchTerms, key: "invocations",
 			});
 			// Arcana tab: the Major and Minor sections each get their own filter, scoped to that
 			// section, so each search only hides its own cards. An active term flags the section
@@ -2999,6 +3010,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				wireTabSearch(html[0].querySelector(`.stonetop-arcana-section[data-section="${section}"]`), {
 					itemSel: ".stonetop-arcanum-card",
 					textFor: arcanaCardText,
+					memory: searchTerms, key: section,
 				});
 			}
 			// Inventory tab: each gear column gets its OWN filter, scoped to that column, so the
@@ -3012,6 +3024,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				wireTabSearch(html[0].querySelector(col), {
 					itemSel: ".stonetop-inv-item",
 					textFor: invLabelText,
+					memory: searchTerms, key: col,
 				});
 			}
 			// Followers tab: one filter over the follower cards, matched by name / type / tags.
@@ -3025,6 +3038,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					const inputs = [...card.querySelectorAll(".stonetop-follower-name-field")].map(el => el.value).join(" ");
 					return `${text} ${inputs}`;
 				},
+				memory: searchTerms, key: "followers",
 			});
 
 			// The sticky Roll Modifier selector in the Moves sidebar (roll-mode-radios.hbs). A real
