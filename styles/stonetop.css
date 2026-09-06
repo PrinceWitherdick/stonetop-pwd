@@ -645,6 +645,7 @@ body {
 .vtt .dialog .dialog-buttons [data-button="apply"],
 .vtt .dialog .dialog-buttons [data-button="post"],
 .vtt .dialog .dialog-buttons [data-button="roll"],
+.vtt .dialog .dialog-buttons [data-button="spend"],
 .vtt .dialog .dialog-buttons [data-button="done"] {
 	order: -10;
 	margin-right: auto;
@@ -659,7 +660,11 @@ body {
 /* Both halves of an affirmative PAIR (an arcanum move offers Roll and Send to chat)
    claim the `margin-right: auto` above, which would split them across the footer
    instead of keeping them together on the left. Only the leading one gets the spacer. */
-.vtt .dialog .dialog-buttons [data-button="roll"] + [data-button="post"] {
+.vtt .dialog .dialog-buttons [data-button="roll"] + [data-button="post"],
+/* A deferred-spend move (Veil, Amulets & Talismans, Wards & Bindings) offers the same pair a rung
+   apart: Spend, for the trigger that charges, and Roll, for the later one that does not. They are
+   declared spend-then-roll, so it is the ROLL that gives up the spacer here. */
+.vtt .dialog .dialog-buttons [data-button="spend"] + [data-button="roll"] {
 	margin-right: 0;
 }
 
@@ -40173,6 +40178,14 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 /* Only present when both purses could pay; one payable purse is spent without asking. */
 .stonetop-move-cost-pick {
 	margin-top: 8px;
+}
+
+/* The receipt on the card a deferred spend posts ("Spent 1 Stock."). The card is the table's
+   record that the move was made, so it says what it cost as well as what it was. */
+.stonetop-move-cost-receipt {
+	margin: 8px 0 0;
+	font-style: italic;
+	color: var(--st-text-secondary);
 }
 
 /* A move card's Spend button. Stock is the only cost with no pips on the move itself, so this

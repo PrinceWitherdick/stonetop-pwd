@@ -232,9 +232,11 @@ function _guidedCharacterMoveHasAction(guide, rollable = null) {
  * boundary marked, and roll later — when that harm actually comes, when those wards are tested —
  * and Veil pays at the veiling and rolls when the deception is scrutinised. Gating THOSE rolls
  * on Stock would refuse a Blessed the roll for a charm they already paid for, possibly sessions
- * ago. The remaining four Stock moves (Call the Spirits, Healer's Arts, Potent Workings,
- * Trackless Step) never roll at all, so there is no dialog and no moment at which to charge;
- * they stay paid by hand on the pouch, as the Blessed's marks deliberately do.
+ * ago. They get a `spend` instead, built for them off their own printed text — the same price,
+ * the same purse, the same missing-button gate, on a button of their own that leaves the roll
+ * alone (see _deferredStockGuide). The remaining four Stock moves (Call the Spirits, Healer's
+ * Arts, Potent Workings, Trackless Step) never roll at all, so there is no dialog to open; they
+ * pay on the card their name-click posts (see _stockSpendButtonHtml).
  */
 export const GUIDED_CHARACTER_MOVES = {
 	"Danu's Grasp": {
@@ -5869,13 +5871,56 @@ export function createStonetopCharacterSheetClass(Base) {
 			const li = rollable.closest(".stonetop-item");
 			const name = li?.querySelector(".stonetop-item-name")?.textContent?.trim()
 				?? rollable.dataset.label?.trim();
-			const guide = GUIDED_CHARACTER_MOVES[name];
-			if (!guide) return null;
 			// A player-authored custom move (moveType "other") that happens to share a
-			// guided move's name should roll as itself, not hijack the built-in dialog.
+			// guided move's name should roll as itself, not hijack the built-in dialog — and its
+			// text is its own, so it never earns a deferred-spend door off it either.
 			const item = li?.dataset.itemId ? this.actor.items.get(li.dataset.itemId) : null;
 			if (item?.system?.moveType === "other") return null;
-			return { name, guide };
+			// The hand-written table first, so the two moves that spend AND roll on one trigger
+			// keep the gate that refuses their dice; anything left is asked whether its own
+			// printed text charges Stock at a trigger of its own.
+			const guide = GUIDED_CHARACTER_MOVES[name] ?? this._deferredStockGuide(name, item);
+			return guide ? { name, guide } : null;
+		}
+
+		/**
+		 * The dialog a move gets when it SPENDS at one trigger and ROLLS at another.
+		 *
+		 * Three shipped moves are that shape, all the Blessed's: Veil pays at the veiling and
+		 * rolls when the deception is scrutinised; Amulets & Talismans pays at the crafting and
+		 * rolls when that harm actually comes; Wards & Bindings pays at the marking and rolls
+		 * when the wards are first tested. Because they roll, their title IS the `.rollable`, so
+		 * a click on it went straight to the dice and the Stock they cost had no surface anywhere
+		 * on the sheet — the card's Spend button only ever reaches a move that does NOT roll. A
+		 * Blessed could veil all session and never be asked to pay, and one with an empty pouch
+		 * was never told they could not veil at all.
+		 *
+		 * DERIVED, NOT LISTED. The price is read off the move's own printed text, by the same
+		 * reader the chat card's Spend button uses, so this family is "rolls, and says it costs
+		 * Stock" rather than a roll-call of three names to drift from the book.
+		 *
+		 * `spend` rather than `cost`, and the difference is the whole point: a `cost` refuses the
+		 * ROLL when it cannot be paid, and refusing THESE rolls would deny a Blessed the roll for
+		 * a charm they paid for sessions ago. A `spend` gates its own button and nothing else.
+		 */
+		_deferredStockGuide(name, item) {
+			const source = this._printedMoveSource(name, item);
+			const spend  = stockCostFromDescription(source?.description);
+			if (!spend) return null;
+			return {
+				spend,
+				// The move's OWN body, laid out exactly as its row and its card lay it out. A
+				// hand-written trigger line here would be a third copy of prose that already
+				// ships in the compendium — the thing the guide table shed 24 entries to stop.
+				bodyHtml: moveBodyHtml(source.description, source.moveResults ?? null),
+				printed:  source,
+				// The one thing the window has to explain, and the reason the Roll button is not
+				// gated beside the Spend one: this move has two moments, and the dice belong to
+				// the later of them. It reads under the price in both states, so a Blessed with
+				// an empty pouch is told what they can still do as well as what they cannot.
+				note: `The ${spend.label} is spent at the first trigger; the roll comes at the second. `
+					+ `Roll on its own when you are rolling for a use you have already paid for.`,
+			};
 		}
 
 		/**
@@ -5942,10 +5987,38 @@ export function createStonetopCharacterSheetClass(Base) {
 			// A move that CHARGES before it rolls (Danu's Grasp: "spend 1 Stock and roll +WIS").
 			// `cost` is null for every other guide, and then none of this applies.
 			const cost = guide.cost ? this._stockCostView(guide.cost) : null;
+			// A move that spends at ONE trigger and rolls at ANOTHER (Veil, Amulets & Talismans,
+			// Wards & Bindings — see _deferredStockGuide). Priced and gated the same way, out of
+			// the same purse, but it gates its OWN button only: the roll below belongs to the
+			// second trigger, and a Blessed rolling for a veil they paid for last session must
+			// still be able to make it with an empty pouch.
+			const spend = guide.spend ? this._stockCostView(guide.spend) : null;
 
 			const buttons = {
 				cancel: { label: "Cancel" },
 			};
+			// Declared BEFORE the roll so it sits leftmost of the affirmatives: making the move is
+			// the first of its two moments and rolling is the later one, and that is the order the
+			// player reads them in. Built only when the purse can cover it — the gate is the
+			// missing button, exactly as it is for Danu's Grasp, and the readout above says why.
+			if (spend?.affordable) {
+				buttons.spend = {
+					label: `Spend ${spend.amount} ${spend.label}`,
+					callback: async html => {
+						// The purse is re-read in there, so a pouch emptied on the sheet behind
+						// this non-modal dialog pays nothing and posts nothing.
+						const paid = await this._spendStockCost(spend, html, name);
+						if (!paid) return;
+						// The card is the table's record that the move was made — the same reason
+						// the Stock moves that never roll pay on theirs. It carries no Spend
+						// button of its own (_postMoveCard's default), or this one use of the move
+						// could be charged for twice.
+						await this._postMoveCard(name,
+							moveCardBody(guide.printed?.description ?? "", guide.printed?.moveResults ?? null)
+							+ `<p class="stonetop-move-cost-receipt">Spent ${spend.amount} ${_esc(paid.label)}.</p>`);
+					},
+				};
+			}
 			if (rollable && (!cost || cost.affordable)) {
 				buttons.roll = {
 					label: `Roll +${(rollable.dataset.roll ?? "").toUpperCase()}`,
@@ -5997,6 +6070,7 @@ export function createStonetopCharacterSheetClass(Base) {
 						? `<div class="stonetop-arcanum-move-body">${guide.bodyHtml}</div>`
 						: `<p class="stonetop-homestead-trigger"><em>${_esc(guide.trigger)}</em></p>`}
 					${cost ? this._stockCostHtml(cost) : ""}
+					${spend ? this._stockCostHtml(spend, { deferred: true }) : ""}
 					${statPickerHtml ? `<div class="stonetop-homestead-fields">${statPickerHtml}</div>` : ""}
 					${resultsHtml}
 					${picksHtml}
@@ -6072,11 +6146,17 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		/**
-		 * The price, the purse, and — when the pouch is empty — why there is no Roll button.
+		 * The price, the purse, and — when the pouch is empty — why there is no button.
 		 * A purse the character has but cannot pay from is still SHOWN: "Stock 0 of 3" is the
 		 * sentence that explains the missing button, where hiding it would read as a bug.
+		 *
+		 * `deferred` for a move that spends at one trigger and rolls at another, where the two
+		 * sentences have to say something different: which of the move's two moments the price
+		 * belongs to, and — when it cannot be paid — that the ROLL is still there, because it is
+		 * for the later trigger and a use already paid for. Said the gating way round, the window
+		 * would tell a Blessed that a veil they cast last session cannot be rolled for.
 		 */
-		_stockCostHtml(cost) {
+		_stockCostHtml(cost, { deferred = false } = {}) {
 			const purses = cost.sources.map(s =>
 				`<span class="stonetop-move-cost-purse${s.remaining >= cost.amount ? "" : " is-empty"}">`
 				+ `${_esc(s.label)} <strong>${s.remaining}</strong> of ${s.max}</span>`).join("");
@@ -6087,11 +6167,15 @@ export function createStonetopCharacterSheetClass(Base) {
 						.map(s => `<option value="${_esc(s.key)}">${_esc(s.label)} (${s.remaining} left)</option>`).join("")}</select>
 				</label>`
 				: "";
+			const lead = deferred
+				? `Costs ${cost.amount} ${_esc(cost.label)}, spent when you make the move, not when you roll.`
+				: `Costs ${cost.amount} ${_esc(cost.label)}.`;
+			const warn = deferred
+				? `No ${_esc(cost.label)} left to spend, so you cannot make this move now.`
+				: `No ${_esc(cost.label)} left to spend, so this move cannot be made. Replenish the pouch first.`;
 			return `<div class="stonetop-move-cost${cost.affordable ? "" : " is-unaffordable"}">
-				<p class="stonetop-move-cost-line"><strong>Costs ${cost.amount} ${_esc(cost.label)}.</strong> ${purses}</p>
-				${cost.affordable
-					? picker
-					: `<p class="stonetop-move-cost-warn">No ${_esc(cost.label)} left to spend, so this move cannot be made. Replenish the pouch first.</p>`}
+				<p class="stonetop-move-cost-line"><strong>${lead}</strong> ${purses}</p>
+				${cost.affordable ? picker : `<p class="stonetop-move-cost-warn">${warn}</p>`}
 			</div>`;
 		}
 
@@ -6100,7 +6184,12 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * dialog opening and the button being pressed, which a non-modal dialog left open beside
 		 * the sheet makes perfectly possible.
 		 *
-		 * Spending INCREMENTS both tracks, because both count checks spent.
+		 * On success it hands back the PURSE it charged, which is still truthy for the gated
+		 * callers that only ask whether it was paid, and is what the deferred spend needs to say
+		 * "Spent 1 Boon" on its card rather than guessing which of the two it took.
+		 *
+		 * Spending INCREMENTS the pouch and DECREMENTS the Boon — the purse is asked (see
+		 * stock-cost.js), because the two count in opposite directions.
 		 */
 		async _spendStockCost(cost, html, moveName) {
 			const chosen = html?.[0]?.querySelector('[name="stockCostSource"]')?.value ?? null;
@@ -6117,9 +6206,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			} else {
 				await this._stonetopCharacter.setPossessionUses(SACRED_POUCH_SLUG, next);
 			}
-			ui.notifications?.info(`${moveName}: spent 1 ${source.label} (${source.remaining - cost.amount} left).`);
+			ui.notifications?.info(`${moveName}: spent ${cost.amount} ${source.label} (${source.remaining - cost.amount} left).`);
 			this.render(false);
-			return true;
+			return source;
 		}
 
 		/**
@@ -7357,9 +7446,13 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * Call the Spirits had the move in front of them and the purse nowhere in sight. The
 		 * card is the record that the move was made, which makes it the honest place to pay.
 		 *
-		 * The two moves that spend AND roll on one trigger (Danu's Grasp, Suck the Poison Out)
-		 * never reach here: their name-click opens the guided dialog and returns, so there is no
-		 * card to double-charge.
+		 * NO MOVE THAT ROLLS REACHES HERE, and both kinds are already paid for elsewhere. The two
+		 * that spend and roll on one trigger (Danu's Grasp, Suck the Poison Out) are charged by
+		 * their guided dialog before the dice; the three that spend at one trigger and roll at
+		 * another (Veil, Amulets & Talismans, Wards & Bindings) are charged by the Spend button on
+		 * theirs, which posts a card through `_postMoveCard` with this deliberately left off. A
+		 * rollable move's name-click opens that dialog and returns, so neither can be
+		 * double-charged by a card.
 		 */
 		_stockSpendButtonHtml(description) {
 			const cost = stockCostFromDescription(description);
