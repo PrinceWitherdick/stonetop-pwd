@@ -1554,14 +1554,7 @@
         "failed": "That page could not be made. You may no longer have permission to change this map.",
         "party": "The Party",
         "partySeeded": "{name}: added {people} player character(s) and {lines} line(s) from the introductions.",
-        "partyRefresh": "Bring the party in",
-        "partyRefreshHint": "Put any player character who is not on this board yet onto it, and draw any introduction answer that has been recorded since. Nobody is moved, nobody is taken off, and nothing you have rewritten is drawn twice, so pressing this again is safe.",
-        "partyNothingNew": "Everyone in the party is already on this board, with everything they have answered.",
-        "villageSeeded": "{people} resident(s) of Stonetop are now on {name}.",
-        "villageRefresh": "Bring the village in",
-        "villageRefreshHint": "Put every resident on the steading's Residents list onto this board. Nobody is moved and nobody is taken off, so pressing it again is safe. It also brings back anyone you have taken off this board, whom the map will not put back on its own.",
-        "villageNothingNew": "Every resident of Stonetop is already on this board.",
-        "villageNone": "The steading has nobody on its Residents list yet. Add them on the steading sheet and they will come onto this board."
+        "villageSeeded": "{people} resident(s) of Stonetop are now on {name}."
       },
       "match": {
         "button": "Match answers to people",

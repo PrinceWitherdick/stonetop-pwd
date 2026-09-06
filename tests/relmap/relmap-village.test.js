@@ -177,18 +177,19 @@ describe("the ledger, which is what makes a removal stick", () => {
 		expect(namesOn(page)).toEqual(["Brakkos", "Maeve"]);
 	});
 
-	// And the way back: pressing the button asks for the whole roster again, ledger and all, so a
-	// removal is recoverable rather than permanent.
-	it("brings them back when the reader asks outright", async () => {
+	// ⚠ AND THERE IS NO LONGER A WAY TO ASK FOR THE WHOLE ROSTER AGAIN. "Bring the village in" is
+	// gone, so no argument the caller can pass will overrule the ledger: a resident taken off is off
+	// until somebody drags them back or adds them by hand, which is the plainer answer to the same
+	// question and the one the map offers everywhere else.
+	it("cannot be talked into putting them back", async () => {
 		const map = mapped();
 		await syncVillagePage(map, VILLAGE);
 		const page = getVillagePage(map);
 		const quill = Object.entries(readGraph(page).nodes).find(([, n]) => n.name === "Quill")[0];
 		delete page.flags["stonetop-pwd"].relationshipMap.nodes[quill];
 
-		const said = await syncVillagePage(map, VILLAGE, { asked: true });
-		expect(said.addedPeople).toBe(1);
-		expect(namesOn(page)).toEqual(["Brakkos", "Maeve", "Quill"]);
+		expect(await syncVillagePage(map, VILLAGE, { asked: true, all: true })).toBe(null);
+		expect(namesOn(page)).toEqual(["Brakkos", "Maeve"]);
 	});
 
 	// A resident the TABLE put on the board by hand is accounted for too, so taking them off later

@@ -69,36 +69,14 @@
       </label>
       {{/if}}
 
-      {{!-- BRING THE PARTY BOARD UP TO DATE. Only on that board, because it is the only one this
-            touches: a player who made their character after the map was last opened is not on it
-            yet, and the board only tops itself up by itself when the primary GM opens the map.
+      {{!-- ⚠ NO "BRING THE PARTY IN" AND NO "BRING THE VILLAGE IN" BUTTONS. Both boards still seat
+            themselves when the map is opened; what stood here was a pair of buttons asking for the
+            same pass out loud, and the map already answers "somebody is missing from this board"
+            twice over -- drag them on, or press "Add someone". --}}
 
-            It ADDS and nothing else. Nobody is moved, nobody is removed, and a caption the table
-            has rewritten in their own words does not gain a duplicate beside it, so pressing this
-            twice is the same as pressing it once. --}}
-      {{#if showRefreshParty}}
-      <button type="button" class="stonetop-relmap-tool" data-relmap-action="refreshparty"
-              data-tooltip="{{refreshPartyHint}}" aria-label="{{refreshPartyHint}}">
-        <i class="fas fa-arrows-rotate"></i>
-        <span>{{refreshPartyLabel}}</span>
-      </button>
-      {{/if}}
-
-      {{!-- BRING THE VILLAGE IN. The same errand on the other board that fills itself: the board
-            takes on whoever has joined the steading's Residents roster when the map is opened, and
-            this is for the resident added five minutes ago -- and for the one somebody took off
-            this board and wants back, which the automatic pass deliberately will not do. --}}
-      {{#if showRefreshVillage}}
-      <button type="button" class="stonetop-relmap-tool" data-relmap-action="refreshvillage"
-              data-tooltip="{{refreshVillageHint}}" aria-label="{{refreshVillageHint}}">
-        <i class="fas fa-house-chimney-user"></i>
-        <span>{{refreshVillageLabel}}</span>
-      </button>
-      {{/if}}
-
-      {{!-- MATCH ANSWERS TO PEOPLE. Beside the button above because the two are the same errand:
-            that one draws what the introductions recorded, and this one is how a table whose
-            answers were recorded before the introductions asked "who is this about?" tells the
+      {{!-- MATCH ANSWERS TO PEOPLE. It draws what the introductions recorded onto the party's own
+            board: this is how a table whose answers were recorded before the introductions asked
+            "who is this about?" tells the
             board where to point. GM only, and it says so by not being there: what it writes is a
             world setting, which core refuses a player outright. --}}
       {{#if showMatchIntros}}

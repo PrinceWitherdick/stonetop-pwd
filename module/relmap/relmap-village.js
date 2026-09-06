@@ -60,12 +60,10 @@ export const RELMAP_VILLAGE_MARK = "villageBoard";
  * @param {Array<{uuid, name, img}>} people  the roster, in the order they should be seated.
  * @param {object} [options]
  * @param {string[]} [options.seated]  identities this board has been given before.
- * @param {boolean} [options.all]  ask for everybody on the roster again, ledger and all. What
- *        pressing the button means, as against what happens by itself on open.
  * @param {Function} [newId]  id minter, injected so the result is testable.
  * @returns {{nodes: object, addedPeople: number, seated: string[]}}
  */
-export function villageBoardPlan(graph, people = [], { seated = [], all = false } = {},
+export function villageBoardPlan(graph, people = [], { seated = [] } = {},
 	newId = () => foundry.utils.randomID()) {
 	const nodes = {};
 	const onBoard = new Set(Object.values(graph?.nodes ?? {}).map(nodeIdentity));
@@ -73,11 +71,13 @@ export function villageBoardPlan(graph, people = [], { seated = [], all = false 
 	const villagers = (people ?? []).filter(person => person?.uuid);
 
 	// Who this pass is actually about: everybody on the roster who is not already on the board and
-	// -- unless the reader asked for them outright -- has never been given to it.
+	// has never been given to it. The ledger is what makes taking somebody off the board STICK --
+	// there is no "offer the whole roster again" any more, so a resident deliberately removed stays
+	// removed, and the way back is to drag them on or add them by hand.
 	const wanted = villagers.filter(person => {
 		const identity = nodeIdentity(person);
 		if (onBoard.has(identity)) return false;
-		return all || !given.has(identity);
+		return !given.has(identity);
 	});
 
 	const seating = seatArrivals(graph, wanted, newId);

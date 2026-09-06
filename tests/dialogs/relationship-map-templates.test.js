@@ -306,14 +306,14 @@ describe("the window template", () => {
 		expect(tool(render(context({ hasPulled: true })))).not.toContain("hidden");
 	});
 
-	// ⚠ ONLY ON THE PARTY'S OWN BOARD, because that is the only board it does anything to. Offered
-	// on "The Millers" it would be a button that puts the whole party onto a page about somebody
-	// else's household.
-	it("offers the party refresh only on the party's own board", () => {
-		expect(bar(render(context()))).not.toContain('data-relmap-action="refreshparty"');
-		const onIt = bar(render(context({ showRefreshParty: true })));
-		expect(onIt).toContain('data-relmap-action="refreshparty"');
-		expect(onIt).toContain("Bring the party in");
+	// ⚠ GONE FOR GOOD, both of them. The party board and the village board still seat themselves on
+	// open; what was removed is the pair of buttons asking for that same pass out loud, because the
+	// map already answers "somebody is missing from this board" by drag or by "Add someone". Guarded
+	// here so a context key resurrected by accident cannot quietly put them back on the bar.
+	it("offers no refresh buttons at all", () => {
+		const on = bar(render(context({ showRefreshParty: true, showRefreshVillage: true })));
+		expect(on).not.toContain('data-relmap-action="refreshparty"');
+		expect(on).not.toContain('data-relmap-action="refreshvillage"');
 	});
 
 	// It writes to the shared board, so it is one of the board's own tools: away with the rest of

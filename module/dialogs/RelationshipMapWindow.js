@@ -176,16 +176,12 @@ const TOOLS = Object.freeze({
 	hidepulled: { needsEdit: false, run: (app, button) => app._togglePulled(button) },
 	showall: { needsEdit: false, run: app => app._setView(RELMAP_VIEW_EVERYONE) },
 	findkin: { needsEdit: true, run: app => app._findKin() },
-	// ⚠ THE SAME WORK THE BOARD DOES BY ITSELF ON OPEN, asked for out loud. It is an edit -- it puts
-	// people and lines on a shared board -- but it is NOT behind the primary-GM guard that the
-	// automatic pass is, and that difference is the whole reason it is a separate entry point. See
-	// `_refreshParty`.
-	refreshparty: { needsEdit: true, run: app => app._refreshParty() },
-	// THE SAME ERRAND ON THE OTHER BOARD THAT FILLS ITSELF, and not behind the primary-GM guard
-	// either. It asks for the WHOLE Residents roster rather than only the people this board has
-	// never been given, so it is also how somebody taken off the board is brought back. See
-	// `_refreshVillage`.
-	refreshvillage: { needsEdit: true, run: app => app._refreshVillage() },
+	// ⚠ NO "BRING THE PARTY IN" AND NO "BRING THE VILLAGE IN". Both boards still fill themselves on
+	// open; what is gone is the pair of buttons that asked for the same pass out loud. They were two
+	// controls for something the map already has two plainer answers to -- drag somebody on, or press
+	// "Add someone" -- and a bar of tools is worth more when every button on it does something the
+	// others do not. The seating passes that remain (`_syncPartyPage`, `_syncVillagePage`) are
+	// therefore automatic ONLY, which is why the primary-GM guard on them is now unconditional.
 	// ⚠ AN EDIT TWICE OVER, and neither of them is the map. It writes the recorded introduction
 	// answers (a world setting) and the player characters' own flags, and only then tops the board
 	// up. It is in this table because it is a button on this bar; the guard that matters to it is
@@ -542,19 +538,6 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// has.
 			showBoardTools: tools,
 			showFindKin: this.canEdit && plan.view === RELMAP_VIEW_FAMILY,
-		// ⚠ ONLY ON THE PARTY'S OWN BOARD, because that is the only board this does anything to.
-		// Offered on "The Millers" it would be a button that puts the whole party onto a page about
-		// somebody else's household. Off on a view that seats itself, like every other board tool:
-		// what it adds would not be drawn there, so the press would look like it had failed.
-			showRefreshParty: tools && role === "party",
-			refreshPartyLabel: localize("stonetop.relmap.pages.partyRefresh"),
-			refreshPartyHint: localize("stonetop.relmap.pages.partyRefreshHint"),
-			// The same control on the other board that fills itself, and offered on the same terms:
-			// only where it does something, and never on a computed view, which places its own
-			// portraits and would have nowhere to put a newcomer.
-			showRefreshVillage: tools && role === "village",
-			refreshVillageLabel: localize("stonetop.relmap.pages.villageRefresh"),
-			refreshVillageHint: localize("stonetop.relmap.pages.villageRefreshHint"),
 			// ⚠ THE SAME BOARD, AND A GM ON TOP OF IT, because what this writes is a world setting
 			// and core refuses a player that outright rather than quietly no-opping. And only where
 			// there is something to match: on a world that never ran its introductions it would be a
@@ -1770,26 +1753,17 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * GM's client has already put there, which on any table where the GM has opened the map once is
 	 * all of it.
 	 */
-	async _syncPartyPage({ asked = false } = {}) {
-		// ⚠ THE GUARD IS ON THE AUTOMATIC PASS ALONE. Unasked, this runs on open on every client
-		// that may edit and mints fresh ids, so two people opening the map in the same minute would
-		// each write the same missing line under a different id. ASKED, it is one person pressing
-		// one button and watching the count come back, which is a different situation entirely --
-		// and gating the button the same way would give a player a control that does nothing, with
-		// nothing on screen to say why.
-		if (!asked && !isPrimaryGM()) return null;
+	async _syncPartyPage() {
+		// ⚠ THE GUARD IS UNCONDITIONAL, because the automatic pass is now the only pass. This runs
+		// on open on every client that may edit and mints fresh ids, so two people opening the map
+		// in the same minute would each write the same missing line under a different id.
+		if (!isPrimaryGM()) return null;
 		const pcs = this._partyReaders();
 		const said = await syncPartyPage(
 			this.entry, pcs, introRegards(pcs, getObjectSetting("introductionsAnswers")),
 		);
-		if (!said) {
-			// NOTHING HAPPENING IS NEWS TO SOMEBODY WHO PRESSED A BUTTON, and silence to everybody
-			// else. A press that does nothing looks exactly like a broken button, and "everybody is
-			// already here" is the commonest and least alarming reason for it.
-			if (asked) ui.notifications?.info?.(localize("stonetop.relmap.pages.partyNothingNew"));
-			return null;
-		}
-		// SAID OUT LOUD EITHER WAY, and it is worth saying even unasked: a tab appearing by itself,
+		if (!said) return null;
+		// SAID OUT LOUD, and it is worth saying even though nobody asked: a tab appearing by itself,
 		// or lines arriving on a board somebody is not looking at, is a change to a shared document
 		// that nobody pressed a button for.
 		ui.notifications?.info?.(format("stonetop.relmap.pages.partySeeded", {
@@ -1919,22 +1893,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * on that sheet and are added by hand from the chooser, which is where the reader can see which
 	 * list somebody is on before they put them anywhere.
 	 */
-	async _syncVillagePage({ asked = false } = {}) {
-		if (!asked && !isPrimaryGM()) return null;
+	async _syncVillagePage() {
+		if (!isPrimaryGM()) return null;
 		const steading = getStonetopSteadingActor();
 		const residents = steadingListActors("residents", steading)
 			.map(actor => ({ uuid: actor.uuid, name: actor.name, img: actor.img ?? "" }));
-		if (!residents.length) {
-			// Nothing happening is news to somebody who pressed a button, and silence to everybody
-			// else -- the same bargain `_syncPartyPage` keeps.
-			if (asked) ui.notifications?.info?.(localize("stonetop.relmap.pages.villageNone"));
-			return null;
-		}
-		const said = await syncVillagePage(this.entry, residents, { asked });
-		if (!said) {
-			if (asked) ui.notifications?.info?.(localize("stonetop.relmap.pages.villageNothingNew"));
-			return null;
-		}
+		if (!residents.length) return null;
+		const said = await syncVillagePage(this.entry, residents);
+		if (!said) return null;
 		// SAID OUT LOUD EITHER WAY. A dozen faces arriving on a shared board that somebody else is
 		// looking at is a change nobody pressed a button for, and the count is how they know what
 		// happened rather than that the map broke.
@@ -1943,42 +1909,6 @@ export class RelationshipMapWindow extends StonetopDialog {
 			people: said.addedPeople,
 		}));
 		return said;
-	}
-
-	/**
-	 * Bring the village onto this board, on request.
-	 *
-	 * WHAT IT IS FOR is the resident who was added to the steading five minutes ago, and the one
-	 * somebody took off the board and wants back. The automatic pass on open skips anybody this
-	 * board has already been handed once, which is what makes taking somebody off stick; pressing
-	 * the button asks for the whole roster again, so it is also the way back.
-	 *
-	 * NO RENDER OF ITS OWN: the write broadcasts and the update hook repaints, for this reader and
-	 * for everybody else at the table on the same page. A render here would cost this reader the
-	 * corner they had zoomed into for a picture they are about to be given anyway.
-	 */
-	async _refreshVillage() {
-		return this._syncVillagePage({ asked: true });
-	}
-
-	/**
-	 * Bring the party board up to date, on request.
-	 *
-	 * WHAT IT IS FOR is a player who joined in the spring. The board tops itself up when the primary
-	 * GM opens the map, which covers most tables most of the time; this is the answer for the rest,
-	 * and for anybody who has just made a character and does not want to close the window and open
-	 * it again to see them.
-	 *
-	 * IT ADDS AND NOTHING ELSE -- relmap/relmap-party.js states all three rules at length. Nobody is
-	 * moved, nobody is removed, and a caption somebody has rewritten does not gain a duplicate. So
-	 * this is safe to lean on: pressing it twice is the same as pressing it once.
-	 *
-	 * NO RENDER OF ITS OWN. The write broadcasts, and the update hook repaints the board for this
-	 * reader and for everybody else at the table on the same page. A render here would additionally
-	 * cost this reader the corner they had zoomed into, for a picture the repaint already gives them.
-	 */
-	async _refreshParty() {
-		return this._syncPartyPage({ asked: true });
 	}
 
 	/** The DOM id of one page's tab. Per WINDOW, not per page: two maps can be open at once, and an

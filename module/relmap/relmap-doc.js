@@ -654,14 +654,11 @@ function villageSeated(page) {
  *
  * @param {JournalEntry} entry
  * @param {Array<{uuid, name, img}>} people  the Residents roster, from the caller's own reader.
- * @param {object} [options]
- * @param {boolean} [options.asked]  the reader pressed the button: offer the whole roster again,
- *        ledger and all, so a resident taken off the board can be brought back.
  * @returns {Promise<{page, addedPeople}|null>}  null when nobody was SEATED — which includes the
  *          pass that only writes the ledger down. That pass does write; what it has is nothing to
  *          say, and said out loud it is a "0 people seated" toast nobody asked for.
  */
-export async function syncVillagePage(entry, people = [], { asked = false } = {}) {
+export async function syncVillagePage(entry, people = []) {
 	if (!entry || !canEditRelationshipMap(entry)) return null;
 	const villagers = (people ?? []).filter(person => person?.uuid);
 	// A world whose steading lists no residents yet gets no board marked and nothing written. It
@@ -679,7 +676,7 @@ export async function syncVillagePage(entry, people = [], { asked = false } = {}
 	if (!page) return null;
 
 	const seated = villageSeated(page);
-	const plan = villageBoardPlan(readGraph(page), villagers, { seated, all: asked });
+	const plan = villageBoardPlan(readGraph(page), villagers, { seated });
 	// Nothing new to seat AND nothing new to remember. The second half earns its keep on the pass
 	// that adopts a board somebody had already filled in by hand: nobody is added, and what has to
 	// be written down is that those residents are accounted for.

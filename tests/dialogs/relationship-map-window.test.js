@@ -1192,12 +1192,13 @@ describe("the party view", () => {
 	});
 });
 
-// ── Bringing the party in ───────────────────────────────────────────────────────────────────
+// ── Which board is the party's ──────────────────────────────────────────────────────────────
 //
-// The board called "The Party" seats the party by itself when the primary GM opens the map. This is
-// the same work asked for out loud, which is what a table wants the moment somebody makes a
-// character mid-season: the answer to "they are not on it yet" should not be "close the window".
-describe("the party refresh", () => {
+// The board called "The Party" seats the party by itself when the primary GM opens the map, and
+// knowing that it IS that board is what decides whether "Match answers to people" is offered. There
+// is no longer a button asking for the seating pass out loud: somebody missing from the board is
+// dragged on or added by hand.
+describe("the party board's role", () => {
 
 	/** A window on a map whose party board is `PARTY_PAGE`, standing on the page given. */
 	const on = (pageId, { isOwner = true, primary = true } = {}) => {
@@ -1223,7 +1224,7 @@ describe("the party refresh", () => {
 	};
 
 	// ⚠ ASKED OF THE PAGE AND NEVER OF ITS NAME. The board is renameable like any other, and a table
-	// that calls it "Us" must not lose the button that keeps it current.
+	// that calls it "Us" must not lose the tools that belong to it.
 	it("knows the party board even after it has been renamed", () => {
 		const { app, entry } = on("party1");
 		entry.pages.contents[1].name = "Us";
@@ -1234,32 +1235,31 @@ describe("the party refresh", () => {
 		expect(on("board1").app._boardRole()).toBe("");
 	});
 
-	// ⚠ THE DIFFERENCE THAT MATTERS. The automatic pass is gated on the primary GM because it runs
-	// unasked on every client and mints fresh ids, so two opens race into two copies of one line.
-	// A press is one person watching the count come back, and gating it the same way would hand a
-	// player a button that does nothing with nothing on screen to say why.
-	it("works for somebody who is not the primary GM, where the automatic pass does not", async () => {
+	// ⚠ THE SEATING PASS IS THE PRIMARY GM'S ALONE, now that nothing else can ask for it. It runs
+	// unasked on every client that may edit and mints fresh ids, so two people opening the map in
+	// the same minute would each write the same missing line under a different id.
+	it("does not seat the party on a client that is not the primary GM", async () => {
 		const { app } = on("party1", { primary: false });
-		const asked = [];
-		app._syncPartyPage = vi.fn(opts => { asked.push(opts); return Promise.resolve(null); });
-		await app._refreshParty();
-		expect(asked).toEqual([{ asked: true }]);
+		expect(await app._syncPartyPage()).toBe(null);
 	});
 
-	it("is one of the board's tools, and needs permission", async () => {
-		const { app } = on("party1", { isOwner: false });
+	// The button that used to sit on the bar is gone, so the action it answered to is gone with it:
+	// a stray press does nothing rather than reaching the seating pass from a client that must not
+	// run it.
+	it("has no refresh action left on the tool bar", async () => {
+		const { app } = on("party1");
 		app._syncPartyPage = vi.fn();
 		await app._onToolClick({ currentTarget: { dataset: { relmapAction: "refreshparty" } } });
 		expect(app._syncPartyPage).not.toHaveBeenCalled();
 	});
 });
 
-// ── Bringing the village in ─────────────────────────────────────────────────────────────────
+// ── Which board is the village's ────────────────────────────────────────────────────────────
 //
 // The other board that fills itself: the map's own board takes on the steading's Residents roster
-// when the map is opened. The button beside it is the same errand asked for out loud, and the one
-// way back for a resident somebody has taken off the board — which the automatic pass will not do.
-describe("the village refresh", () => {
+// when the map is opened. Nothing asks for that pass out loud any more, so a resident taken off the
+// board stays off, and the way back is to drag them on or add them by hand.
+describe("the village board's role", () => {
 
 	/** A window on a map whose village board is `village1`, standing on the page given. */
 	const on = (pageId, { isOwner = true, primary = true } = {}) => {
@@ -1293,18 +1293,15 @@ describe("the village refresh", () => {
 		expect(on("party1").app._boardRole()).not.toBe("village");
 	});
 
-	// The same split the party refresh keeps: the automatic pass is the primary GM's alone because
-	// it runs unasked on every client and mints fresh ids, while a press is one person watching.
-	it("works for somebody who is not the primary GM, where the automatic pass does not", async () => {
+	// The same guard the party board keeps, and for the same reason: the pass runs unasked on every
+	// client that may edit and mints fresh ids.
+	it("does not seat the village on a client that is not the primary GM", async () => {
 		const { app } = on("village1", { primary: false });
-		const asked = [];
-		app._syncVillagePage = vi.fn(opts => { asked.push(opts); return Promise.resolve(null); });
-		await app._refreshVillage();
-		expect(asked).toEqual([{ asked: true }]);
+		expect(await app._syncVillagePage()).toBe(null);
 	});
 
-	it("is one of the board's tools, and needs permission", async () => {
-		const { app } = on("village1", { isOwner: false });
+	it("has no refresh action left on the tool bar", async () => {
+		const { app } = on("village1");
 		app._syncVillagePage = vi.fn();
 		await app._onToolClick({ currentTarget: { dataset: { relmapAction: "refreshvillage" } } });
 		expect(app._syncVillagePage).not.toHaveBeenCalled();
