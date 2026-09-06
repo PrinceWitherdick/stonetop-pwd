@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 
 // The relationship map's window, and specifically the two things about it that are easy to get
 // wrong and neither of which fails loudly:
@@ -29,6 +29,16 @@ vi.mock("../../module/utils/foundry-compat.js", () => ({
 		const i = keyPath.lastIndexOf(".");
 		return [`${keyPath.slice(0, i + 1)}-=${keyPath.slice(i + 1)}`, null];
 	},
+	// ⚠ THE OTHER HALF OF THE SAME DECISION, and it has to be here or the undo goes blind. The real
+	// pair is in utils/foundry-compat.js: `deletionEntry` spells a deletion, `deletionTarget` reads
+	// one back, and the two live together precisely so that a reader knowing only one spelling
+	// cannot exist. Pinned to the v13 form above, so this reads that form.
+	deletionTarget: (keyPath, value) => {
+		const i = keyPath.lastIndexOf(".");
+		const leaf = keyPath.slice(i + 1);
+		if (value !== null || !leaf.startsWith("-=")) return null;
+		return `${keyPath.slice(0, i + 1)}${leaf.slice(2)}`;
+	},
 }));
 /** What the shared chooser was ASKED, which is the whole of what Tidy up's question is. The window
  * never sees a dialog here; the picker's own behaviour is content-prompt.test.js's business. */
@@ -41,6 +51,8 @@ vi.mock("../../module/dialogs/content-picker.js", () => ({
 const { RelationshipMapWindow, openRelationshipMap } =
 	await import("../../module/dialogs/RelationshipMapWindow.js");
 const { readGraph } = await import("../../module/relmap/relmap-doc.js");
+const { forgetAllHistory } = await import("../../module/relmap/relmap-history.js");
+const { dropNodePatch, edgePatch } = await import("../../module/relmap/relmap-store.js");
 const { graphCapPx } = await import("../../module/utils/relmap-geometry.js");
 
 /** The real English table, kept from before the suite's `beforeEach` replaces `globalThis.game`. */
@@ -2792,5 +2804,300 @@ describe("asking which shape to lay the board out in", () => {
 		expect(await app._askShape("ring")).toBe("clusters");
 		chooser.answer = null;
 		expect(await app._askShape("ring")).toBe(null);
+	});
+});
+
+// ── Taking a change back ────────────────────────────────────────────────────────────────────────
+//
+// The stacks themselves are proved in tests/relmap/relmap-history.test.js. What matters here is the
+// wiring: that every edit this window makes is remembered by having gone through the one funnel,
+// that an undo writes leaf paths like any other edit, that it does not become a change of its own,
+// and that each board keeps its own.
+
+/** The flag path prefix, spelled out once for the assertions below. */
+const FLAG = "flags.stonetop-pwd.relationshipMap";
+
+/**
+ * A map whose boards actually KEEP what is written to them.
+ *
+ * The fakes above record their updates and never apply them, which is all the rest of this file
+ * needs. An undo cannot be proved against one: the whole question it answers is what a step
+ * recorded against one board does to the board as it stands NOW, so the board has to move.
+ *
+ * They also carry a `uuid`, which is how a history finds its board again (relmap-history.js).
+ */
+function livingMap(boards) {
+	const pages = [];
+	const entry = {
+		id: "map1",
+		name: "The people of Stonetop",
+		isOwner: true,
+		updates: [],
+		pages: { get contents() { return pages; } },
+		getFlag: (scope, key) =>
+			(scope === "stonetop-pwd" && key === "relationshipMap" ? { version: 2 } : null),
+		update(patch) { entry.updates.push(patch); return Promise.resolve(entry); },
+	};
+	boards.forEach((board, i) => {
+		const page = {
+			id: board.id,
+			name: board.name,
+			sort: i * 100000,
+			parent: entry,
+			uuid: `JournalEntry.map1.JournalEntryPage.${board.id}`,
+			updates: [],
+			flag: foundry.utils.deepClone(board.graph ?? EMPTY_BOARD),
+			getFlag: (scope, key) =>
+				(scope === "stonetop-pwd" && key === "relationshipMap" ? page.flag : null),
+			update(patch) {
+				page.updates.push(patch);
+				for (const [key, value] of Object.entries(patch)) {
+					const parts = key.slice(`${FLAG}.`.length).split(".");
+					const leaf = parts[parts.length - 1];
+					if (leaf.startsWith("-=")) {
+						delete page.flag[parts[0]][leaf.slice(2)];
+						continue;
+					}
+					if (parts.length === 1) {
+						page.flag[parts[0]] = value;
+						continue;
+					}
+					const [kind, id, field] = parts;
+					page.flag[kind] ??= {};
+					page.flag[kind][id] ??= {};
+					page.flag[kind][id][field] = value;
+				}
+				return Promise.resolve(page);
+			},
+		};
+		pages.push(page);
+	});
+	return { entry, pages };
+}
+
+const ONE_LIVING_BOARD = () => livingMap([{ id: "p1", name: "Stonetop", graph: TWO_PEOPLE }]);
+
+describe("taking a change back", () => {
+	// The stacks outlive the window they were filled through, which is the point of them -- so a
+	// board named by one test would still be carrying the last one's steps.
+	beforeEach(() => forgetAllHistory());
+	afterEach(() => forgetAllHistory());
+
+	it("puts a moved portrait back, and then forward again", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._moveNode("elena", { x: 80, y: 90 });
+		expect(readGraph(page).nodes.elena.x).toBe(80);
+		expect(app._history.canUndo).toBe(true);
+
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena.x).toBe(20);
+		expect(readGraph(page).nodes.elena.y).toBe(30);
+		expect(app._history.canUndo).toBe(false);
+		expect(app._history.canRedo).toBe(true);
+
+		await app._stepHistory("forward");
+		expect(readGraph(page).nodes.elena.x).toBe(80);
+		expect(app._history.canRedo).toBe(false);
+	});
+
+	// ⚠ THE DECISION THE WHOLE FEATURE RESTS ON, asserted where it can actually be broken. An undo
+	// that wrote the graph back would be one write of `...relationshipMap.nodes`, and it would take
+	// every change anybody else at the table had made with it.
+	it("takes a change back with LEAF paths, exactly as the change was made", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._moveNode("elena", { x: 80, y: 90 });
+		await app._stepHistory("back");
+		expect(page.updates).toHaveLength(2);
+		expect(Object.keys(page.updates[1]).sort()).toEqual([
+			`${FLAG}.nodes.elena.x`, `${FLAG}.nodes.elena.y`,
+		]);
+	});
+
+	// Otherwise the button would flip one edit on and off for ever.
+	it("never records the undo itself as a change to take back", async () => {
+		const { entry } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._moveNode("elena", { x: 80, y: 90 });
+		await app._stepHistory("back");
+		expect(app._history.canUndo).toBe(false);
+	});
+
+	it("says so, and writes nothing, when there is nothing left to take back", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		expect(await app._stepHistory("back")).toBe(false);
+		expect(page.updates).toEqual([]);
+	});
+
+	// The ask, in the user's own words: at least twenty previous states.
+	it("keeps at least the twenty states that were asked for", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		for (let step = 1; step <= 20; step += 1) await app._moveNode("elena", { x: 30 + step, y: 30 });
+		expect(readGraph(page).nodes.elena.x).toBe(50);
+		for (let step = 0; step < 20; step += 1) await app._stepHistory("back");
+		// Twenty presses reach the seat the portrait started the evening in.
+		expect(readGraph(page).nodes.elena.x).toBe(20);
+		expect(app._history.canUndo).toBe(false);
+	});
+
+	it("puts somebody taken off the map back, with every line that came off with them", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		const before = readGraph(page);
+		await app._write(dropNodePatch(before, "elena"), { label: "taking Elena off" });
+		expect(readGraph(page).nodes.elena).toBeUndefined();
+		expect(readGraph(page).edges.link1).toBeUndefined();
+
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena).toEqual(before.nodes.elena);
+		expect(readGraph(page).edges.link1).toEqual(before.edges.link1);
+	});
+
+	// ⚠ ONE MAP IS SEVERAL NAMED BOARDS, and a history shared between them would make undo mean
+	// "take back whatever I last did, wherever I did it" -- pressed on a board where nothing has
+	// changed, it would silently move a portrait on another one.
+	it("gives each board of a map its own history", async () => {
+		const { entry } = livingMap([
+			{ id: "p1", name: "Stonetop", graph: TWO_PEOPLE },
+			{ id: "p2", name: "Marshedge", graph: TWO_PEOPLE },
+		]);
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._moveNode("elena", { x: 80, y: 90 });
+		expect(app._history.canUndo).toBe(true);
+
+		app._pageId = "p2";
+		expect(app._history.canUndo).toBe(false);
+
+		app._pageId = "p1";
+		expect(app._history.canUndo).toBe(true);
+	});
+
+	// A run of arrow keys is one gesture, and a reader walking somebody across the board wants one
+	// press to put them back -- not one per pause they made on the way.
+	it("folds a run of arrow keys into one change", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._moveNode("elena", { x: 25, y: 30 }, { coalesce: "node:elena" });
+		await app._moveNode("elena", { x: 30, y: 30 }, { coalesce: "node:elena" });
+		await app._moveNode("elena", { x: 35, y: 30 }, { coalesce: "node:elena" });
+		expect(readGraph(page).nodes.elena.x).toBe(35);
+
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena.x).toBe(20);
+		expect(app._history.canUndo).toBe(false);
+	});
+
+	// A drag passes no key, because a drag is a gesture already.
+	it("never folds two deliberate drags together", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._moveNode("elena", { x: 40, y: 30 });
+		await app._moveNode("elena", { x: 60, y: 30 });
+
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena.x).toBe(40);
+	});
+
+	// ⚠ A CAPTION STILL IN THE BAR IS A CHANGE THAT HAS NOT LANDED YET, and the undo has to wait
+	// for it. Merely STARTED, the caption records itself a microtask later -- emptying the forward
+	// stack under a redo already in flight, and taking back the change before the one the reader is
+	// actually looking at.
+	it("saves a caption the reader was still typing before it takes anything back", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._moveNode("elena", { x: 80, y: 90 });
+		app._tieBar = {
+			flush: () => app._write(edgePatch("link1", { label: "friends" }),
+				{ label: "changing a line" }),
+		};
+
+		await app._stepHistory("back");
+		// The caption landed first, so it is the caption -- the reader's LAST change -- that came
+		// back off, and the portrait stayed where they had just put it.
+		expect(readGraph(page).edges.link1.label).toBe("exes");
+		expect(readGraph(page).nodes.elena.x).toBe(80);
+	});
+
+	it("refuses a reader who may only look", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		entry.isOwner = false;
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		expect(await app._stepHistory("back")).toBe(false);
+		expect(page.updates).toEqual([]);
+	});
+});
+
+describe("Ctrl+Z on the relationship map", () => {
+	beforeEach(() => forgetAllHistory());
+	afterEach(() => forgetAllHistory());
+
+	/** A keystroke, with only the surface the handler touches. */
+	const stroke = (over = {}) => ({
+		ctrlKey: true, shiftKey: false, altKey: false, metaKey: false, key: "z",
+		target: { closest: () => null },
+		prevented: false, stopped: false,
+		preventDefault() { this.prevented = true; },
+		stopPropagation() { this.stopped = true; },
+		...over,
+	});
+
+	function ready() {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const made = windowFor(null, { entry, pageId: "p1" });
+		made.app._stepHistory = vi.fn();
+		return { ...made, page };
+	}
+
+	it("takes a change back, and puts one forward on Shift", () => {
+		const { app } = ready();
+		app._onHistoryKey(stroke());
+		expect(app._stepHistory).toHaveBeenCalledWith("back");
+		app._onHistoryKey(stroke({ shiftKey: true }));
+		expect(app._stepHistory).toHaveBeenLastCalledWith("forward");
+		// Ctrl+Y as well, which is what a reader coming from a Windows drawing program presses.
+		app._onHistoryKey(stroke({ key: "y" }));
+		expect(app._stepHistory).toHaveBeenLastCalledWith("forward");
+	});
+
+	// ⚠ THE ONE THIS HANDLER EXISTS TO GET RIGHT. The tie bar carries a caption box inside this
+	// window, and Ctrl+Z in a text field is the browser undoing what the reader is TYPING. Taken
+	// here, somebody fixing a typo would silently take back a change to the shared board instead --
+	// and would have no way of telling that was what happened.
+	it("never takes the keystroke out from under a text field", () => {
+		const { app } = ready();
+		const ev = stroke({ target: { closest: sel => (sel.includes("input") ? {} : null) } });
+		app._onHistoryKey(ev);
+		expect(app._stepHistory).not.toHaveBeenCalled();
+		expect(ev.prevented).toBe(false);
+	});
+
+	it("leaves an ordinary keystroke alone", () => {
+		const { app } = ready();
+		app._onHistoryKey(stroke({ ctrlKey: false }));
+		app._onHistoryKey(stroke({ key: "a" }));
+		app._onHistoryKey(stroke({ altKey: true }));
+		expect(app._stepHistory).not.toHaveBeenCalled();
+	});
+
+	// Unhandled, it reaches core's own keybindings, which is core's undo of the last canvas
+	// operation -- a scene edit the reader never asked to take back.
+	it("stops the keystroke it has taken from going any further", () => {
+		const { app } = ready();
+		const ev = stroke();
+		app._onHistoryKey(ev);
+		expect(ev.prevented).toBe(true);
+		expect(ev.stopped).toBe(true);
+	});
+
+	it("leaves it alone for a reader who may only look", () => {
+		const { entry } = ONE_LIVING_BOARD();
+		entry.isOwner = false;
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		app._stepHistory = vi.fn();
+		app._onHistoryKey(stroke());
+		expect(app._stepHistory).not.toHaveBeenCalled();
 	});
 });

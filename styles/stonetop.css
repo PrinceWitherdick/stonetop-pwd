@@ -40561,6 +40561,29 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: #fff;
 }
 
+/* ⚠ SAID IN INK AS WELL AS IN THE ATTRIBUTE. A disabled button is announced as disabled, but a
+   reader looking at the bar has only what it looks like to go on, and core's own dimming is slight
+   enough on this panel tone to read as "a button" rather than as "a button that is off". Undo is
+   off for most of an evening — it is off the moment the window opens — so this is the state it is
+   usually in, not an edge case. `pointer-events` stays on so the tooltip still says WHY. */
+.stonetop-relmap-tool:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+/* TAKING A CHANGE BACK, AND PUTTING IT FORWARD AGAIN, as a pair set apart from the tools beside
+   them: everything else on this bar is about the board, and these two are about what this reader
+   did to it. A rule and not a gap, because the row wraps at a large font scale and a gap alone
+   would be invisible the moment the pair fell onto its own line. */
+.stonetop-relmap-history {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	padding-inline-start: 0.5em;
+	margin-inline-start: 0.2em;
+	border-inline-start: 1px solid var(--st-rule, rgba(0, 0, 0, 0.18));
+}
+
 /* ── The page strip ───────────────────────────────────────────────────────────
    WHICH BOARD OF THIS MAP IS UP. One map is several named pages, each its own board with its own
    people and its own layout (module/relmap/relmap-doc.js).

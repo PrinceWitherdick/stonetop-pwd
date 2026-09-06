@@ -172,6 +172,44 @@
         <span class="stonetop-relmap-tool-text">{{labelsLabel}}</span>
       </button>
       {{/if}}
+
+      {{!-- TAKING A CHANGE BACK, AND PUTTING IT FORWARD AGAIN.
+
+            AT THE END OF THE ROW AND IN THE SAME PLACE ON EVERY VIEW. Every other tool here comes
+            and goes with what is being shown — the board tools are absent on a view that seats its
+            own portraits, "Find family ties" only exists on the tree — and a pair the reader
+            reaches for by muscle memory must not move when they change what they are looking at.
+            These are also the only two controls on the bar that are about what the READER did
+            rather than about the board, which is why they sit apart from the rest, after a rule.
+
+            OUTSIDE `showBoardTools` FOR THAT REASON, and behind `canEdit` alone. What they reverse
+            is whatever this reader last did to this board, wherever they were standing when they
+            did it, and each press says out loud what it took back — so unlike "Add someone", the
+            effect is never invisible from where the reader is.
+
+            RENDERED DISABLED AND SWITCHED ON BY `_paintHistory`, never behind an `{{#if}}`. What
+            can be taken back changes on every edit, and buttons that appeared and vanished as the
+            reader worked would shuffle the whole bar sideways under the pointer. Their accessible
+            name is written there too, and carries WHAT a press would take back — a reader who
+            cannot see the board is exactly the one who needs telling before they press.
+
+            ⚠ THE HISTORY IS THIS READER'S OWN and is never written to the map: see the head of
+            module/relmap/relmap-history.js for why an undo here is a reversing write rather than a
+            saved copy of the board, and why the table does not share one stack. --}}
+      {{#if canEdit}}
+      <span class="stonetop-relmap-history">
+        <button type="button" class="stonetop-relmap-tool" data-relmap-action="undo" disabled
+                data-tooltip="{{undoNothing}}" aria-label="{{undoNothing}}">
+          <i class="fas fa-rotate-left"></i>
+          <span>{{undoLabel}}</span>
+        </button>
+        <button type="button" class="stonetop-relmap-tool" data-relmap-action="redo" disabled
+                data-tooltip="{{redoNothing}}" aria-label="{{redoNothing}}">
+          <i class="fas fa-rotate-right"></i>
+          <span>{{redoLabel}}</span>
+        </button>
+      </span>
+      {{/if}}
     </div>
   </div>
 

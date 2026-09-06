@@ -180,6 +180,34 @@ export function deletionEntry(keyPath) {
 }
 
 /**
+ * READ ONE BACK: given an update entry, the plain path it deletes, or null when it is an ordinary
+ * write of a value.
+ *
+ * ⚠ IT LIVES HERE, BESIDE ITS MAKER, and that is the whole point of it. `deletionEntry` above
+ * spells a deletion two different ways depending on which core is running, so anything that has to
+ * RECOGNISE one — undoing a write, say, which has to tell a rubbed-out person from a moved one —
+ * has to know both spellings. Written out at the call site it would be a second copy of that
+ * decision, kept in step with this one by nobody, and the failure is silent: a client whose reader
+ * knows only the v14 spelling reads every v13 deletion as an ordinary write of `null`, and undoing
+ * it would put a `null` into the document where a key used to be.
+ *
+ * @param {string} keyPath  the update key.
+ * @param {*} value  the value it was given.
+ * @returns {string|null}  the dotted path that entry removes, with no `-=` left on it.
+ */
+export function deletionTarget(keyPath, value) {
+	if (typeof keyPath !== "string" || !keyPath) return null;
+	const ForcedDeletion = foundry.data?.operators?.ForcedDeletion;
+	if (ForcedDeletion && value instanceof ForcedDeletion) return keyPath;
+	const i = keyPath.lastIndexOf(".");
+	const leaf = keyPath.slice(i + 1);
+	// ⚠ THE VALUE IS PART OF THE QUESTION. A person on this board could be named `-=x`; only the
+	// pairing of that leaf with a `null` is the deletion this core's `deletionEntry` writes.
+	if (value !== null || !leaf.startsWith("-=")) return null;
+	return `${keyPath.slice(0, i + 1)}${leaf.slice(2)}`;
+}
+
+/**
  * The compendium-source uuid a world document was imported from: v14 stamps
  * `_stats.compendiumSource` at import time; older cores used the legacy `flags.core.sourceId`
  * flag. Returns null for a hand-made world document that never came from a compendium.

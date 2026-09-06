@@ -267,6 +267,13 @@ describe("the window template", () => {
 		noKin: false, omittedSaid: "",
 		labelMode: "all", labelsLabel: "All labels", labelsHint: "how much writing shows",
 		labelsAria: "What the lines say: All labels",
+		// ⚠ THE VISIBLE NAMES ONLY, and no state. What the two history buttons can do is written
+		// onto them by `_paintHistory` — it lives on the reader's own machine, not in the document
+		// a render was built from — so the render's job is to put them there saying they can do
+		// nothing yet, which is the truth for a bar that has only just appeared.
+		undoLabel: "Undo", redoLabel: "Redo",
+		undoNothing: "There is nothing of yours on this board to take back.",
+		redoNothing: "There is nothing to do again.",
 		hasPulled: true, hidePulled: false, pulledLabel: "Hide pulled-in lines",
 		pulledHint: "why anybody would want this", ...over,
 	});
@@ -345,9 +352,37 @@ describe("the window template", () => {
 	// turned, and every tool carried a `disabled` that answered to it. Somebody who may edit now
 	// gets a tool that works the moment they see it, so a tool rendered disabled would be a tool
 	// disabled by an accident.
-	it("never renders an editing tool disabled", () => {
-		const html = render(context());
-		expect(html).not.toContain("disabled");
+	//
+	// ⚠ THE TWO HISTORY BUTTONS ARE THE ONE EXCEPTION, and it is named here rather than left to be
+	// discovered. What they can do is not a permission and is not in the document: it is what this
+	// reader has done to this board since they opened it, which no render can know. So they come up
+	// off and saying so, and `_paintHistory` switches them on. They are DISABLED rather than absent
+	// because a pair appearing and vanishing as the reader worked would shuffle the whole bar
+	// sideways under the pointer.
+	it("never renders an editing tool disabled, but the two history buttons", () => {
+		const off = (render(context()).match(/<button[^>]*>/g) ?? [])
+			.filter(tag => tag.includes("disabled"))
+			.map(tag => tag.match(/data-relmap-action="([^"]+)"/)?.[1]);
+		expect(off.sort()).toEqual(["redo", "undo"]);
+	});
+
+	// AND THEY STAND IN THE SAME PLACE ON EVERY VIEW, unlike every other tool on this bar. A reader
+	// reaches for undo by muscle memory, and it must not move when they change what they are
+	// looking at -- so it is outside `showBoardTools`, and behind permission alone.
+	it("keeps the history buttons on a view that has no board tools", () => {
+		// The BAR alone: the empty panel over the board carries an "Add someone" of its own, which
+		// is a different control answering a different question.
+		const narrow = bar(render(context({ canEdit: true, showBoardTools: false })));
+		expect(narrow).not.toContain('data-relmap-action="add"');
+		expect(narrow).toContain('data-relmap-action="undo"');
+		expect(narrow).toContain('data-relmap-action="redo"');
+	});
+
+	// Taking a change back is an edit like any other.
+	it("hides the history buttons from a reader who may only look", () => {
+		const html = render(context({ canEdit: false }));
+		expect(html).not.toContain('data-relmap-action="undo"');
+		expect(html).not.toContain('data-relmap-action="redo"');
 	});
 
 	it("carries a live region, and it is not inside the board", () => {

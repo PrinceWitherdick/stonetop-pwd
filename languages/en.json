@@ -1641,7 +1641,28 @@
       "partyNoneHintReadonly": "This view narrows any board to the player characters and the lines between them. Whoever keeps this map has not put any of them on it yet.",
       "focusNoneHintReadonly": "This view shows the lines drawn straight to one person, and nobody has drawn one to them yet.",
       "openSheetFixed": "{name}. Click to open their sheet.",
-      "introLine": "{question} {answer}"
+      "introLine": "{question} {answer}",
+      "history": {
+        "undo": "Undo",
+        "redo": "Redo",
+        "change": "that change",
+        "moved": "moving someone",
+        "added": "adding {name}",
+        "removed": "taking {name} off",
+        "linked": "drawing a line",
+        "unlinked": "rubbing out a line",
+        "editedLink": "changing a line",
+        "tidied": "laying the board out again",
+        "foundKin": "marking the family ties",
+        "droppedPulled": "rubbing out the pulled-in lines",
+        "backHint": "Take back {what}. Yours alone: it takes back what you did on this board, and never what anyone else at the table did. Ctrl+Z.",
+        "forwardHint": "Do {what} again. Ctrl+Shift+Z.",
+        "backNothing": "There is nothing of yours on this board to take back.",
+        "forwardNothing": "There is nothing to do again.",
+        "backDone": "Taken back: {what}.",
+        "forwardDone": "Done again: {what}.",
+        "gone": "That cannot be taken back any more: everyone it was about has since been taken off this board."
+      }
     },
     "people": {
       "choose": "Choose",

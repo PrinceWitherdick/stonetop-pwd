@@ -39,6 +39,9 @@ import {
 	RELMAP_FLAG, addEdgePatch, addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, fanIndexes,
 	isImportedEdge, nodeIdentity, nodePatch, takenSpots, tidyPatch,
 } from "../relmap/relmap-store.js";
+import {
+	describeWrite, forgetHistory, historyFor, stepPatch,
+} from "../relmap/relmap-history.js";
 import { unmarkedKin } from "../utils/relmap-kin.js";
 import { familyPlan } from "../utils/relmap-tree.js";
 import {
@@ -187,6 +190,13 @@ const TOOLS = Object.freeze({
 	// up. It is in this table because it is a button on this bar; the guard that matters to it is
 	// GM-only, and that one is on the button itself. See `_matchIntros`.
 	matchintros: { needsEdit: true, run: app => app._matchIntros() },
+	// TAKING A CHANGE BACK, AND PUTTING IT FORWARD AGAIN. Behind the editing gate, obviously, and
+	// deliberately NOT behind the "does this view seat its own portraits" gate the board tools are:
+	// the tools beside them act on the arrangement a computed view is not showing, but these two
+	// reverse whatever the reader last did on this board, wherever they did it, and they say out
+	// loud what they took back. See `_stepHistory`.
+	undo: { needsEdit: true, run: app => app._stepHistory("back") },
+	redo: { needsEdit: true, run: app => app._stepHistory("forward") },
 	add: { needsEdit: true, run: app => app._addPerson() },
 	tidy: { needsEdit: true, run: app => app._tidy() },
 	// THE LAST TRACE OF A BUTTON THAT IS GONE. "Pull in ratings" wrote a line into the shared board
@@ -570,6 +580,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 			tidyLabel: localize("stonetop.relmap.tidy"),
 			tidyHint: localize("stonetop.relmap.tidyHint"),
 			labelsHint: localize("stonetop.relmap.labelsHint"),
+			// ⚠ THE VISIBLE NAMES ONLY. What each of these two can actually do, and what it would
+			// take back, is written onto the elements by `_paintHistory` — the history is this
+			// reader's own and is not part of the document a render was built from. They come up
+			// disabled and saying so, which is the truth for a bar that has just appeared.
+			undoLabel: localize("stonetop.relmap.history.undo"),
+			redoLabel: localize("stonetop.relmap.history.redo"),
+			undoNothing: localize("stonetop.relmap.history.backNothing"),
+			redoNothing: localize("stonetop.relmap.history.forwardNothing"),
 			dropPulledLabel: localize("stonetop.relmap.dropPulled"),
 			dropPulledHint: localize("stonetop.relmap.dropPulledHint"),
 			pulledLabel: localize("stonetop.relmap.hidePulled"),
@@ -1134,6 +1152,12 @@ export class RelationshipMapWindow extends StonetopDialog {
 		});
 		strip?.addEventListener("keydown", ev => this._onPageKey(ev));
 
+		// CTRL+Z AND CTRL+SHIFT+Z, on the window as a whole rather than on the board. The reader's
+		// hands are wherever they last were — a tool on the bar, a portrait, a tab in the strip —
+		// and an undo bound to the board alone would be one that works only when it is focused.
+		// What it refuses to take is a keystroke inside a text field; see `_onHistoryKey`.
+		root.addEventListener("keydown", ev => this._onHistoryKey(ev));
+
 		// A repaint held back while a drag or an edit was in the way, let through the moment it
 		// clears. Both on a timeout so the handlers that END the obstruction run first: the drag
 		// layer takes its class off in its own pointerup, which is bound before this one.
@@ -1151,6 +1175,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// have to be put back onto the fresh elements or a re-render would silently turn the
 		// captions back on and drop the highlight the pointer is still resting on.
 		this._paintLabelMode();
+		// The same reason: what this reader can take back lives on their own machine, not in the
+		// markup a render was built from, and a fresh bar comes up with both buttons enabled until
+		// it is told otherwise.
+		this._paintHistory();
 		if (this._lit) this._lightPerson(this._lit);
 		// A change that arrived WHILE this render was in flight, let through now that there is
 		// markup to paint it into. On a timeout for the reason the other two flushes are: this
@@ -2109,6 +2137,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// rubbed out from this window or from somebody else's — and that render throws away the live
 		// region this would otherwise have spoken into. `_render` says it once the new one is up.
 		this._sayOnRender = format("stonetop.relmap.pages.deleted", { name: page.name });
+		// ⚠ FORGOTTEN BEFORE THE DELETE, not after, because after it the handle has no uuid to
+		// forget it by. Every step in it names a page that is about to stop existing, so pressing
+		// undo on the board this reader lands on next would write into nothing.
+		forgetHistory(page);
 		if (await deleteMapPage(page)) return;
 		// Refused, so nothing was written and nothing is going to re-render. The announcement must
 		// not be left waiting to be said by the next change somebody else makes.
@@ -2180,17 +2212,167 @@ export class RelationshipMapWindow extends StonetopDialog {
 
 	// ── Editing ─────────────────────────────────────────────────────────────
 
-	async _write(patch, { announce = "" } = {}) {
+	/**
+	 * EVERY EDIT THIS WINDOW MAKES, and now the only place that remembers one.
+	 *
+	 * ⚠ THE HISTORY IS TAKEN HERE AND NOWHERE ELSE, for the reason this funnel exists at all: a
+	 * write recorded at the call site is a write somebody adds a tenth of later without recording,
+	 * and the cost of that miss is an undo button that skips a change — pressing it takes back the
+	 * one BEFORE the one the reader is looking at. Recorded here, a new edit is remembered by
+	 * having been written.
+	 *
+	 * `remember: false` is for the undo and the redo themselves, which are the only writes that
+	 * must not become steps of their own. See `_stepHistory`.
+	 *
+	 * @param {object} patch  a patch from relmap/relmap-store.js.
+	 * @param {object} [options]
+	 * @param {string} [options.announce]  what to say into the live region, for a reader who cannot
+	 *        see the board change.
+	 * @param {string} [options.label]  what this change is called when the undo button offers to
+	 *        take it back. A short noun phrase: "moving someone", "taking Ordga off".
+	 * @param {string} [options.coalesce]  a key naming the GESTURE, where several writes are one.
+	 *        See RELMAP_COALESCE_MS in relmap/relmap-history.js.
+	 * @param {boolean} [options.remember]  whether this is a change to remember at all.
+	 */
+	async _write(patch, { announce = "", label = "", coalesce = "", remember = true } = {}) {
 		if (!patch) return false;
+		const doc = this.boardDoc;
+		// ⚠ READ BEFORE THE WRITE. What would put a change back can only be worked out from the
+		// board as it stands now — after `applyPatch` the old values are gone. The cost is one
+		// extra normalize per edit, which is a fraction of what a repaint already does and only
+		// happens on a write the reader made by hand.
+		const change = remember ? describeWrite(readGraph(doc), patch) : null;
 		// Announced BEFORE the write. The write repaints the board and takes the live region's
 		// neighbours with it; announcing afterwards can land on a node already replaced.
 		if (announce) this._announce(announce);
 		try {
-			return await applyPatch(this.boardDoc, patch);
+			if (!await applyPatch(doc, patch)) return false;
 		} catch (err) {
 			this.reportWriteFailure(localize("stonetop.relmap.noun"), err);
 			return false;
 		}
+		if (change) {
+			historyFor(doc).record({
+				...change,
+				label: label || localize("stonetop.relmap.history.change"),
+				coalesce,
+			});
+			this._paintHistory();
+		}
+		return true;
+	}
+
+	// ── Taking a change back ────────────────────────────────────────
+	//
+	// The stacks themselves are in relmap/relmap-history.js, which opens with why an undo on this
+	// board is a reversing WRITE rather than a saved copy of the graph, and why the history is this
+	// reader's own rather than the table's.
+
+	/**
+	 * This board's history. Asked afresh every time, never held: the reader flicks between boards
+	 * with the tab strip, and each of them keeps its own.
+	 *
+	 * ⚠ UNDERSCORED, like every other member this window adds. A public `history` is a name core
+	 * could take for something of its own on any Application subclass, and a collision there is
+	 * silent — see the property-collision rule this codebase keeps.
+	 */
+	get _history() {
+		return historyFor(this.boardDoc);
+	}
+
+	/**
+	 * Take one change back, or put it forward again.
+	 *
+	 * @param {"back"|"forward"} way  which stack to step along. The step itself is stored under the
+	 *        same two names, so this is the key as well as the direction.
+	 */
+	async _stepHistory(way) {
+		if (!this.canEdit) return false;
+		// ⚠ THE TIE BAR IS FLUSHED FIRST, AWAITED, and before the step is even peeked at. It holds a
+		// caption the document has not got yet, and that caption is a change like any other:
+		// written after this it would land on top of the undo, and merely STARTED here it would
+		// record itself a microtask later — emptying the forward stack under a redo already in
+		// flight, and leaving the board right while the two stacks were wrong.
+		await this._tieBar?.flush();
+		const history = this._history;
+		const entry = way === "back" ? history.peekUndo() : history.peekRedo();
+		const commit = () => (way === "back" ? history.commitUndo() : history.commitRedo());
+		if (!entry) {
+			ui.notifications?.info?.(localize(`stonetop.relmap.history.${way}Nothing`));
+			return false;
+		}
+		const patch = stepPatch(readGraph(this.boardDoc), entry[way]);
+		if (!patch) {
+			// Everybody this step named has been taken off the board since, so there is nothing
+			// left to write. The step is spent either way, so it moves across rather than sitting
+			// at the top of the stack refusing to do anything every time it is pressed.
+			commit();
+			ui.notifications?.info?.(localize("stonetop.relmap.history.gone"));
+			this._paintHistory();
+			return false;
+		}
+		const said = format(`stonetop.relmap.history.${way}Done`, { what: entry.label });
+		// `remember: false`: an undo that recorded itself would be a change the next undo takes
+		// back, and the button would flip the same edit on and off for ever.
+		if (!await this._write(patch, { announce: said, remember: false })) return false;
+		commit();
+		ui.notifications?.info?.(said);
+		this._paintHistory();
+		return true;
+	}
+
+	/**
+	 * Ctrl+Z, and Ctrl+Shift+Z or Ctrl+Y the other way.
+	 *
+	 * ⚠ NEVER OUT FROM UNDER A FIELD. The tie bar carries a caption box inside this window, and
+	 * Ctrl+Z in a text field is the browser's own undo of what the reader is typing. Taken here, a
+	 * reader fixing a typo would instead silently take back a change to the shared board — and
+	 * would have no way of telling that was what happened.
+	 */
+	_onHistoryKey(ev) {
+		if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
+		const key = String(ev.key ?? "").toLowerCase();
+		if (key !== "z" && key !== "y") return;
+		if (ev.target?.closest?.("input, textarea, select, [contenteditable='true']")) return;
+		if (!this.canEdit) return;
+		ev.preventDefault();
+		// Stopped as well as prevented: this window can sit over a sheet, and an unhandled Ctrl+Z
+		// reaching core's own keybindings is core's undo of the last canvas operation.
+		ev.stopPropagation();
+		this._stepHistory(key === "y" || ev.shiftKey ? "forward" : "back");
+	}
+
+	/**
+	 * The two buttons, told what they can do.
+	 *
+	 * REPAINTED RATHER THAN RENDERED, and DISABLED rather than hidden. What they can do changes on
+	 * every edit the reader makes, and a pair of buttons that appeared and vanished as the reader
+	 * worked would shuffle every other tool on the bar sideways under the pointer. Disabled, they
+	 * hold their place and say why they are off in their own name.
+	 */
+	_paintHistory() {
+		const root = this._root;
+		if (!root) return;
+		const history = this._history;
+		this._paintHistoryButton(root.querySelector("[data-relmap-action='undo']"), {
+			can: history.canUndo, what: history.undoLabel, way: "back",
+		});
+		this._paintHistoryButton(root.querySelector("[data-relmap-action='redo']"), {
+			can: history.canRedo, what: history.redoLabel, way: "forward",
+		});
+	}
+
+	/** One of them. The accessible name carries WHAT would be taken back, not just "Undo": a reader
+	 * who cannot see the board is exactly the one who needs to be told what a press would change
+	 * before they make it. */
+	_paintHistoryButton(button, { can, what, way }) {
+		if (!button) return;
+		button.disabled = !can;
+		const said = can
+			? format(`stonetop.relmap.history.${way}Hint`, { what })
+			: localize(`stonetop.relmap.history.${way}Nothing`);
+		button.dataset.tooltip = said;
+		button.setAttribute("aria-label", said);
 	}
 
 	_announce(message) {
@@ -2336,7 +2518,12 @@ export class RelationshipMapWindow extends StonetopDialog {
 		if (!pending) return;
 		this._pendingNudge = null;
 		this._preview = null;
-		this._moveNode(pending.id, pending.at);
+		// ONE STEP FOR A RUN OF ARROW KEYS, keyed by the portrait. A reader walking somebody across
+		// the board pauses several times on the way, and each pause is a write; recorded separately
+		// they would be a dozen undos to put one person back where they started. A drag does NOT
+		// pass this key: a drag is one gesture already, and two deliberate drags a second apart are
+		// two changes.
+		this._moveNode(pending.id, pending.at, { coalesce: `node:${pending.id}` });
 		// A repaint that was held back while the keys were coming lands now.
 		this._flushPendingSync();
 	}
@@ -2347,8 +2534,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * `nodePatch` clamps the coordinates itself, and a patch naming a node that has since been
 	 * removed is dropped by `normalizeGraph` on the next repaint rather than resurrecting it.
 	 */
-	async _moveNode(id, { x, y }) {
-		await this._write(nodePatch(id, { x, y }));
+	async _moveNode(id, { x, y }, { coalesce = "" } = {}) {
+		await this._write(nodePatch(id, { x, y }), {
+			label: localize("stonetop.relmap.history.moved"), coalesce,
+		});
 	}
 
 	async _openPerson(id) {
@@ -2404,6 +2593,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 			announce: format("stonetop.relmap.linked", {
 				a: graph.nodes[a].name, b: graph.nodes[b].name,
 			}),
+			label: localize("stonetop.relmap.history.linked"),
 		});
 	}
 
@@ -2418,10 +2608,15 @@ export class RelationshipMapWindow extends StonetopDialog {
 		});
 		if (!result) return;
 		if (result.deleted) {
-			await this._write(dropEdgePatch(id), { announce: localize("stonetop.relmap.unlinked") });
+			await this._write(dropEdgePatch(id), {
+				announce: localize("stonetop.relmap.unlinked"),
+				label: localize("stonetop.relmap.history.unlinked"),
+			});
 			return;
 		}
-		await this._write(edgePatch(id, result));
+		await this._write(edgePatch(id, result), {
+			label: localize("stonetop.relmap.history.editedLink"),
+		});
 	}
 
 	/**
@@ -2452,6 +2647,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		if (ok !== "remove") return;
 		await this._write(dropNodePatch(graph, id), {
 			announce: format("stonetop.relmap.removed", { name: node.name }),
+			label: format("stonetop.relmap.history.removed", { name: node.name }),
 		});
 	}
 
@@ -2489,7 +2685,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 		return this._write(addNodePatch(id, {
 			uuid: actor.uuid, name: actor.name, img: actor.img ?? "",
 			x: spot.left, y: spot.top,
-		}), { announce: format("stonetop.relmap.added", { name: actor.name }) });
+		}), {
+			announce: format("stonetop.relmap.added", { name: actor.name }),
+			label: format("stonetop.relmap.history.added", { name: actor.name }),
+		});
 	}
 
 	/**
@@ -2517,6 +2716,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		if (!Object.keys(graph.nodes).length) return;
 		await this._write(tidyPatch(layoutGraph(graph, shape), shape), {
 			announce: localize(`stonetop.relmap.tidied.${shape}`),
+			label: localize("stonetop.relmap.history.tidied"),
 		});
 	}
 
@@ -2733,7 +2933,11 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const patch = {};
 		for (const row of found) Object.assign(patch, edgePatch(row.id, { kin: row.kin }) ?? {});
 		const said = format("stonetop.relmap.findKinFound", { count: found.length });
-		if (await this._write(patch, { announce: said })) ui.notifications?.info?.(said);
+		// ONE STEP FOR THE WHOLE PASS, because it is one press. It marks however many lines read
+		// like a family tie, and a reader who does not like the guesses wants the lot gone again in
+		// one press back, not one press per line it happened to find.
+		const label = localize("stonetop.relmap.history.foundKin");
+		if (await this._write(patch, { announce: said, label })) ui.notifications?.info?.(said);
 	}
 
 	// ── How much of the board's prose is showing ────────────────────────────
@@ -3048,7 +3252,13 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const patch = {};
 		for (const id of ids) Object.assign(patch, dropEdgePatch(id) ?? {});
 		const said = format("stonetop.relmap.dropPulledDone", { count: ids.length });
-		if (await this._write(patch, { announce: said })) ui.notifications?.info?.(said);
+		// ⚠ AND THE CONFIRMATION ABOVE STILL SAYS "THERE IS NO UNDO", ON PURPOSE. What that sentence
+		// promises is that nothing at this table brings these lines back for everyone once they are
+		// gone, and that stays exactly true: this reader can take it back while their own window is
+		// open, and nobody else can, ever. A confirmation about rubbing something out for the whole
+		// table is not the place to offer a rope that lasts as long as one browser tab.
+		const label = localize("stonetop.relmap.history.droppedPulled");
+		if (await this._write(patch, { announce: said, label })) ui.notifications?.info?.(said);
 	}
 	// ── Resting on a face ───────────────────────────────────────────────────
 
