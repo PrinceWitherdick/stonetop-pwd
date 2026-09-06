@@ -696,7 +696,7 @@ body {
 
    The ROW is the only thing pinned here. Buttons keep core's own `flex: 1` so a row of them
    still shares the width evenly; that flex only turns harmful in a COLUMN footer, where it is
-   vertical - see `.stonetop-letfly-mode-dialog`, the one dialog that stacks its buttons. */
+   vertical - see `.stonetop-attack-mode-dialog`, the one dialog that stacks its buttons. */
 .vtt .stonetop.dialog .dialog-buttons {
 	margin-top: 16px;
 	flex: 0 0 auto;
@@ -5711,13 +5711,14 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-suffer-attack-dialog .stonetop-suffer-detail { opacity: 0.8; font-size: 0.9em; }
 .stonetop-suffer-attack-dialog .stonetop-suffer-fiction { font-style: italic; opacity: 0.75; font-size: 0.9em; }
 
-/* Let Fly "easy shot vs under pressure" mode dialog. Its two mode buttons carry long
-   labels; Foundry's default side-by-side row wraps them raggedly (and their `easy`/`pressure`
-   keys miss the affirmative/cancel ordering rules above). Stack them full-width so each label
-   reads on one line, with the icon+label centred. */
-.stonetop-letfly-mode-dialog .stonetop-letfly-mode { margin: 0; }
-.stonetop-letfly-mode-dialog .stonetop-letfly-mode p { margin: 0; }
-.vtt .stonetop-letfly-mode-dialog .dialog-buttons {
+/* The "which half of the move is this?" dialogs an attack asks before it rolls: Let Fly's easy
+   shot vs under pressure, Ambush's deal-or-roll, Call the Shot's "your call". Their two buttons
+   carry long labels; Foundry's default side-by-side row wraps them raggedly (and neither key is
+   an affirmative/cancel pair, so the ordering rules above have nothing to say about them). Stack
+   them full-width so each label reads on one line, with the icon+label centred. */
+.stonetop-attack-mode-dialog .stonetop-attack-mode { margin: 0; }
+.stonetop-attack-mode-dialog .stonetop-attack-mode p { margin: 0; }
+.vtt .stonetop-attack-mode-dialog .dialog-buttons {
 	flex-direction: column;
 	align-items: stretch;
 	gap: 6px;
@@ -5732,7 +5733,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
    Centring the label is not set here for the same reason: `.vtt .stonetop.dialog .dialog-buttons
    button` makes every one of our dialog buttons a centred flex box at 0-4-1, over this rule's
    0-3-1, so a `justify-content` written here is a statement rather than an instruction. */
-.vtt .stonetop-letfly-mode-dialog .dialog-buttons button {
+.vtt .stonetop-attack-mode-dialog .dialog-buttons button {
 	flex: 0 0 auto;
 	width: 100%;
 }
