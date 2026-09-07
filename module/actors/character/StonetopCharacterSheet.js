@@ -6653,7 +6653,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			const { uses, larder } = await rollProvisions(this.actor, {
 				formula: lean ? "2d6kl" : "1d6",
 				carry:   true,
-				flavor:  lean ? `${ON_THE_HOOF}: provisions (1d6, disadvantage)` : `${ON_THE_HOOF}: provisions (1d6)`,
+				title:   ON_THE_HOOF,
+				// The formula chip on the card shows "2d6kl1", which is HOW the disadvantage was
+				// rolled and not that it was one; the note says which of the two the move's own
+				// parenthetical was answered with.
+				note:    lean ? "Winter or barren terrain: rolled with disadvantage" : "",
 			});
 			if (larder) ui.notifications.info(`Procured ${uses} uses of provisions (${larder.held} in the pack).`);
 			this.render(false);
@@ -6682,8 +6686,12 @@ export function createStonetopCharacterSheetClass(Base) {
 					formula,
 					announce: isRoll === "1",
 					carry:    true,
+					title:    name || "Provisions",
 				});
-				if (larder) {
+				// A thrown harvest already announced itself on the roll card, total and pack and
+				// all; only a FLAT one (a butchered goat's printed 6 uses) has nothing posted yet,
+				// and gets the one-line receipt.
+				if (larder && isRoll !== "1") {
 					postMoveToChat(this.actor, "Provisions", [
 						{ label: name || "Harvested",
 						  value: `+${uses} ${uses === 1 ? "use" : "uses"} (${larder.held} in the pack)` },

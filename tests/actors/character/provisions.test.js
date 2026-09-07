@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { readProvisionsYield, grantProvisions, PROVISIONS_SLUG } from "../../../module/actors/character/provisions.js";
+import { afterEach, describe, expect, it } from "vitest";
+import { readProvisionsYield, grantProvisions, rollProvisions, PROVISIONS_SLUG } from "../../../module/actors/character/provisions.js";
 import { CharacterInventory } from "../../../module/actors/character/CharacterInventory.js";
 import { StonetopFlags } from "../../../module/actors/character/StonetopFlags.js";
 import { OutfitItemBuilder } from "../../../module/model/OutfitItem.js";
@@ -145,6 +145,78 @@ describe("removing the provisions row", () => {
 		await grantProvisions(actor, 2, { carry: true });
 
 		expect(inventoryOf(actor).resources[PROVISIONS_SLUG]).toBe(2);
+	});
+});
+
+// ── the card the haul comes back on ──────────────────────────────────────────
+
+/** A die that always lands on `total`, capturing what reached chat. */
+function loadedDie(total) {
+	const posted = [];
+	globalThis.Roll = class {
+		constructor(formula) { this.formula = formula; this.total = total; }
+		evaluate() { return Promise.resolve(this); }
+		toMessage(data) { posted.push(data); return Promise.resolve(data); }
+	};
+	globalThis.ChatMessage = { getSpeaker: ({ actor }) => ({ alias: actor?.name ?? "" }) };
+	return posted;
+}
+
+describe("rollProvisions", () => {
+	afterEach(() => { delete globalThis.Roll; delete globalThis.ChatMessage; });
+
+	// The regression this guards: the haul used to go out as a bare `toMessage` with a plain
+	// string flavor, which is the one shape that opts a message OUT of our chat styling. Every
+	// rule in the chat block is scoped to the shell class, and Foundry's own dice block is hidden
+	// only for messages carrying it — so a card without it wore core's chrome and printed the
+	// total twice.
+	it("answers on the house roll card", async () => {
+		const posted = loadedDie(4);
+		await rollProvisions(makeActor(), { formula: "1d6" });
+
+		const card = posted[0].flavor;
+		expect(card).toContain("stonetop-roll-card");
+		expect(card).toContain("stonetop-roll-formula");
+		expect(card).toContain("stonetop-roll-result-number");
+		expect(card).toContain("1d6");
+		expect(card).toContain(">4<");
+		expect(card).toContain("uses of provisions");
+	});
+
+	// The pack total is only knowable once the larder has been written, which is why the write
+	// comes first. A card that announced the die and then failed to add the food would be a
+	// number the table plays off and the sheet does not have.
+	it("says what is in the pack, having put the food there first", async () => {
+		const actor = makeActor();
+		const posted = loadedDie(3);
+		await grantProvisions(actor, 4, { carry: true });
+		await rollProvisions(actor, { formula: "1d6" });
+
+		expect(posted[0].flavor).toContain("7 in the pack");
+		expect(inventoryOf(actor).resources[PROVISIONS_SLUG]).toBe(7);
+	});
+
+	it("titles itself, and prints the note that says how it was thrown", async () => {
+		const posted = loadedDie(1);
+		await rollProvisions(makeActor(), {
+			formula: "2d6kl", title: "On the Hoof", note: "Winter or barren terrain: rolled with disadvantage",
+		});
+
+		expect(posted[0].flavor).toContain("On the Hoof");
+		expect(posted[0].flavor).toContain("rolled with disadvantage");
+		expect(posted[0].flavor).toContain("use of provisions");   // one lean day, singular
+	});
+
+	// A flat count (a butchered goat's printed 6 uses) has no die worth showing, so the card is
+	// suppressed — but the larder still fills.
+	it("posts nothing for a haul that was not rolled, and still fills the larder", async () => {
+		const actor = makeActor();
+		const posted = loadedDie(6);
+		const { uses, larder } = await rollProvisions(actor, { formula: "6", announce: false, carry: true });
+
+		expect(posted).toHaveLength(0);
+		expect(uses).toBe(6);
+		expect(larder).toEqual({ gained: 6, held: 6, max: 6 });
 	});
 });
 
