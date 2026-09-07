@@ -145,6 +145,19 @@ export const RELMAP_DASHES = Object.freeze(["solid", RELMAP_DASH_DASHED, RELMAP_
 export const RELMAP_DASH_DEFAULT = "solid";
 
 /**
+ * One stored stroke as something this board can draw, which for anything unrecognised is solid.
+ *
+ * ONE GATE, the way `readInk` and `readSize` are one apiece. This rule was written out by hand in
+ * `normalizeGraph` and again in `edgePatch`, and it has a third caller now (the pen a map draws its
+ * next line with, relmap/relmap-pen.js) -- three copies of "unknown reads as solid" is three places
+ * for the fourth caller not to look, and a stroke key that got through unchecked would be written
+ * into a class name on the board.
+ */
+export function readDash(value) {
+	return RELMAP_DASHES.includes(value) ? value : RELMAP_DASH_DEFAULT;
+}
+
+/**
  * HOW BIG THE WRITING ON A LINE IS SET, in board pixels, and nothing at all on nearly every line.
  *
  * ⚠ A NUMBER AND NOT A KEY, WHICH IS THE OPPOSITE OF THE COLOUR ABOVE, and the difference is worth
@@ -423,7 +436,7 @@ export function normalizeGraph(raw) {
 			dir: RELMAP_DIRS.includes(edge.dir) ? edge.dir : RELMAP_DIR_DEFAULT,
 			// Solid unless somebody broke it by hand. Unknown and absent both read as solid, which
 			// is every line on every board drawn before this existed. See RELMAP_DASHES.
-			dash: RELMAP_DASHES.includes(edge.dash) ? edge.dash : RELMAP_DASH_DEFAULT,
+			dash: readDash(edge.dash),
 			// How big the writing on it is set, and zero on nearly every line: the size the sheet
 			// sets. See RELMAP_SIZES.
 			size: readSize(edge.size),
@@ -488,7 +501,7 @@ export function edgePatch(id, fields = {}) {
 	if ("note" in clean) clean.note = str(clean.note, RELMAP_NOTE_MAX);
 	if ("ink" in clean) clean.ink = readInk(clean.ink);
 	if ("dir" in clean && !RELMAP_DIRS.includes(clean.dir)) clean.dir = RELMAP_DIR_DEFAULT;
-	if ("dash" in clean && !RELMAP_DASHES.includes(clean.dash)) clean.dash = RELMAP_DASH_DEFAULT;
+	if ("dash" in clean) clean.dash = readDash(clean.dash);
 	if ("size" in clean) clean.size = readSize(clean.size);
 	if ("src" in clean) clean.src = readSrc(clean.src);
 	if ("origin" in clean) clean.origin = str(clean.origin, RELMAP_ORIGIN_MAX);

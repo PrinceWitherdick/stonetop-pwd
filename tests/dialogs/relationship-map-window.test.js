@@ -95,13 +95,17 @@ function el(props = {}) {
 }
 
 /** A JournalEntry holding one graph. */
-function entryFor(graph, { isOwner = true, id = "map1" } = {}) {
+function entryFor(graph, { isOwner = true, id = "map1", pen = null } = {}) {
+	// The two flags a map carries that this suite reads: its graph, and the PEN it is being drawn
+	// with -- the colour, stroke and caption size the next line on it is born in, shared by
+	// everybody editing the map. See module/relmap/relmap-pen.js.
+	const flags = { relationshipMap: graph, relationshipMapPen: pen };
 	return {
 		id,
 		name: "The people of Stonetop",
 		isOwner,
 		updates: [],
-		getFlag: (scope, key) => (scope === "stonetop-pwd" && key === "relationshipMap" ? graph : null),
+		getFlag: (scope, key) => (scope === "stonetop-pwd" ? flags[key] ?? null : null),
 		update(patch) { this.updates.push(patch); return Promise.resolve(this); },
 	};
 }
@@ -116,8 +120,10 @@ const TWO_PEOPLE = {
 };
 
 /** An instance without the Application constructor, wired to a stand-in root. */
-function windowFor(graph = TWO_PEOPLE, { isOwner = true, entry: given = null, pageId = null } = {}) {
-	const entry = given ?? entryFor(graph, { isOwner });
+function windowFor(graph = TWO_PEOPLE, {
+	isOwner = true, entry: given = null, pageId = null, pen = null,
+} = {}) {
+	const entry = given ?? entryFor(graph, { isOwner, pen });
 	const app = Object.create(RelationshipMapWindow.prototype);
 	const board = el();
 	const live = el();
@@ -2122,8 +2128,8 @@ describe("drawing a line between two people", () => {
 	});
 
 	/** A window whose bar only records what it was asked to take hold of. */
-	const withBar = (graph = TWO_PEOPLE) => {
-		const made = windowFor(graph);
+	const withBar = (graph = TWO_PEOPLE, options = {}) => {
+		const made = windowFor(graph, options);
 		made.app._tieBar = { open: vi.fn(), refresh: vi.fn(), flush: vi.fn() };
 		return made;
 	};
@@ -2140,7 +2146,7 @@ describe("drawing a line between two people", () => {
 		return { id, fields };
 	};
 
-	it("draws it at once, saying nothing, in the default ink", async () => {
+	it("draws it at once, saying nothing, in the default ink on a map with no pen", async () => {
 		const { app, entry } = withBar();
 		await app._createLink("elena", "stefan");
 		expect(entry.updates).toHaveLength(1);
@@ -2183,24 +2189,113 @@ describe("drawing a line between two people", () => {
 		expect(app._tieBar.open).not.toHaveBeenCalled();
 	});
 
-	// ⚠ AND IN THE SIZE THIS READER LAST ASKED FOR, which is the one thing about a new line that is
-	// not simply the default. A reader who has settled on eighteen-pixel captions -- and the one at
-	// this table on a screen magnifier will -- would otherwise have every line they draw come up at
-	// twelve and have to reach for the chooser again, on a board where six are drawn while the
-	// table talks. It is per CLIENT and never on the map: see relmap/relmap-size.js.
-	it("draws it in the size this client last chose", async () => {
+	// ⚠ AND IN THE PEN THE MAP IS BEING DRAWN WITH, which is the one thing about a new line that
+	// is not simply the shipped default. A table that has settled on dotted plum for the rumours
+	// would otherwise get slate and solid on every line and have to say it again on the bar
+	// afterwards, on a board where six are drawn while they talk. It is the MAP that keeps it, so
+	// the convention is the same in everybody's hand: see relmap/relmap-pen.js.
+	it("draws it in the pen the map is being drawn with", async () => {
+		const { app, entry } = withBar(TWO_PEOPLE, {
+			pen: { ink: "plum", dash: "dotted", size: 24 },
+		});
+		await app._createLink("elena", "stefan");
+		expect(drawn(entry.updates[0]).fields)
+			.toMatchObject({ ink: "plum", dash: "dotted", size: 24 });
+	});
+
+	// ⚠ AND THE SIZE THIS READER LAST ASKED FOR SEEDS A MAP THAT HAS NONE, which is the one thing
+	// left of the record that used to decide this on its own. A reader who has settled on
+	// eighteen-pixel captions -- and the one at this table on a screen magnifier will -- would
+	// otherwise start every NEW map back at the base size and have to reach for the chooser again.
+	// See relmap/relmap-size.js, and `penFor`, which is where the two meet.
+	it("draws it in the size this client last chose, on a map that has no size of its own", async () => {
 		globalThis.game.settings = { get: () => 18, set: () => Promise.resolve() };
 		const { app, entry } = withBar();
 		await app._createLink("elena", "stefan");
 		expect(drawn(entry.updates[0]).fields).toMatchObject({ size: 18 });
 	});
 
-	// A client that has never said, which is every client until somebody uses the chooser. Zero is
-	// "whatever the sheet sets", and is what every line ever drawn already holds.
-	it("draws it with no size of its own when this client has never chosen one", async () => {
+	// And stops seeding it the moment the table has an answer, because the map is what they share.
+	it("lets the map's own size beat the one this client remembers", async () => {
+		globalThis.game.settings = { get: () => 18, set: () => Promise.resolve() };
+		const { app, entry } = withBar(TWO_PEOPLE, { pen: { size: 24 } });
+		await app._createLink("elena", "stefan");
+		expect(drawn(entry.updates[0]).fields).toMatchObject({ size: 24 });
+	});
+
+	// A map and a client that have both never said, which is every board until somebody uses the
+	// chooser. Zero is "whatever the sheet sets", and is what every line ever drawn already holds.
+	it("draws it with no size of its own when nobody has ever chosen one", async () => {
 		const { app, entry } = withBar();
 		await app._createLink("elena", "stefan");
 		expect(drawn(entry.updates[0]).fields).toMatchObject({ size: 0 });
+	});
+});
+
+// ⚠ THE OTHER HALF OF THE PEN: picking it up. Everything the tie bar changes about a line comes
+// through one handler, and three of those fields are what the NEXT line on this map is born in.
+//
+// The arithmetic of the pen itself is proved by tests/relmap/relmap-pen.test.js; what is held here
+// is the wiring -- that the window hands the pen the MAP and not the board page, that it keeps this
+// client's own size record alongside, and that neither can put itself in front of the line.
+describe("picking up the pen a reader drew with", () => {
+	beforeEach(() => {
+		globalThis.game.i18n = TABLE;
+		// This client's own size record, which rides alongside the map's pen. Stubbed for every
+		// test in here rather than the two that read it back: without it the setting write throws
+		// into the console on every pass, which is noise a real failure then hides in.
+		globalThis.game.settings = { get: () => 0, set: () => Promise.resolve() };
+	});
+
+	const PEN_PREFIX = "flags.stonetop-pwd.relationshipMapPen";
+
+	it("records a colour, a stroke and a size on the map, where everybody reads them", () => {
+		const { app, entry } = windowFor();
+		app._rememberPen({ ink: "plum", dash: "dotted", size: 24 });
+		expect(entry.updates).toEqual([{
+			[`${PEN_PREFIX}.ink`]: "plum",
+			[`${PEN_PREFIX}.dash`]: "dotted",
+			[`${PEN_PREFIX}.size`]: 24,
+		}]);
+	});
+
+	// What a line SAYS is the line's own business, and which way it is read is a fact about the two
+	// people rather than a house style. A pen that carried either would be the board asserting
+	// something nobody said on the next line drawn.
+	it("takes nothing else the bar wrote with it", () => {
+		const { app, entry } = windowFor();
+		app._rememberPen({ label: "her mother", dir: "a-b", note: "she never says so" });
+		expect(entry.updates).toEqual([]);
+	});
+
+	it("says nothing twice, so an unchanged choice broadcasts nothing", () => {
+		const { app, entry } = windowFor(TWO_PEOPLE, { pen: { ink: "plum" } });
+		app._rememberPen({ ink: "plum" });
+		expect(entry.updates).toEqual([]);
+	});
+
+	// The client's own record, still written beside the map's. It is flat across every world, so it
+	// is what a reader on a magnifier carries onto a map nobody has set a size on yet.
+	it("keeps this client's own size record alongside the map's", () => {
+		const sets = [];
+		globalThis.game.settings = {
+			get: () => 0,
+			set: (ns, key, value) => { sets.push([key, value]); return Promise.resolve(value); },
+		};
+		const { app } = windowFor();
+		app._rememberPen({ size: 24 });
+		expect(sets).toEqual([["lastCaptionSize", 24]]);
+	});
+
+	it("leaves that record alone when the choice was not a size", () => {
+		const sets = [];
+		globalThis.game.settings = {
+			get: () => 0,
+			set: (ns, key, value) => { sets.push([key, value]); return Promise.resolve(value); },
+		};
+		const { app } = windowFor();
+		app._rememberPen({ ink: "plum" });
+		expect(sets).toEqual([]);
 	});
 });
 

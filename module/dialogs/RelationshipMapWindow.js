@@ -44,6 +44,7 @@ import {
 import { RELMAP_INK_ACROSS, RELMAP_INK_PRESETS, inkPaint, normalizeHex }
 	from "../relmap/relmap-ink.js";
 import { rememberBoard } from "../relmap/relmap-last.js";
+import { penFor, rememberPen } from "../relmap/relmap-pen.js";
 import { getLastSize, rememberSize } from "../relmap/relmap-size.js";
 import {
 	describeWrite, forgetHistory, historyFor, stepPatch,
@@ -984,14 +985,15 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// the last keystroke, so a caption typed out in full is half a dozen writes; recorded
 			// separately they would fill the history and take six presses to undo.
 			//
-			// ⚠ AND A CHOSEN SIZE IS REMEMBERED FOR THIS CLIENT ON THE WAY PAST. It is caught here
-			// rather than inside the bar because the bar is a DOM component with no globals in it --
-			// the same reason `onNudged` is a handler rather than a notification raised there -- and
-			// because this is the one place every route to a size passes through: the five steps,
-			// the number field, and the flush that a closing bar makes. What it feeds is the next
-			// line this reader DRAWS (see `_createLink`); nothing already on the board moves.
+			// ⚠ AND THE PEN IS PICKED UP ON THE WAY PAST. A colour, a stroke or a caption size
+			// chosen here is what the NEXT line drawn on this map is born in; nothing already on
+			// the board moves. Caught here rather than inside the bar because the bar is a DOM
+			// component with no globals and no documents in it -- the same reason `onNudged` is a
+			// handler rather than a notification raised there -- and because this is the one place
+			// every route to those three passes through: the swatches, the five size steps, the hex
+			// field, the number field, and the flush that a closing bar makes. See `_rememberPen`.
 			onField: (id, fields) => {
-				if ("size" in fields) rememberSize(fields.size);
+				this._rememberPen(fields);
 				return this._write(edgePatch(id, fields), {
 					label: localize("stonetop.relmap.history.editedLink"), coalesce: `edge:${id}`,
 				});
@@ -2268,6 +2270,30 @@ export class RelationshipMapWindow extends StonetopDialog {
 		return true;
 	}
 
+	/**
+	 * PICK UP THE PEN A READER JUST DREW WITH, so the next line on this map starts in it.
+	 *
+	 * ⚠ TWO RECORDS AND THEY ARE NOT THE SAME RECORD, which is the whole of why this is a method
+	 * with a name rather than two lines in a closure.
+	 *
+	 *  • THE MAP'S, and it is what actually decides: the colour, the stroke and the caption size a
+	 *    new line is born in, shared by everybody editing that map, exactly as the table asked. It
+	 *    reads what is there before writing, so an unchanged choice -- most presses, the choosers
+	 *    being painted on every open of the bar -- broadcasts nothing. See relmap/relmap-pen.js.
+	 *  • THIS READER'S OWN SIZE, still, and it is not redundant. That one is flat across every
+	 *    world (relmap/relmap-size.js), so it is what a reader on a screen magnifier carries onto a
+	 *    map nobody has set a size on yet. `penFor` is where the two meet, and the map wins the
+	 *    moment anybody at the table has an answer.
+	 *
+	 * NEITHER IS AWAITED and neither may hold the line up. The write the reader is actually watching
+	 * is the one to the line itself, and a pen that failed to stick is not worth a word over a
+	 * colour that landed.
+	 */
+	_rememberPen(fields) {
+		rememberPen(this.entry, fields);
+		if ("size" in (fields ?? {})) rememberSize(fields.size);
+	}
+
 	// ── Taking a change back ────────────────────────────────────────
 	//
 	// The stacks themselves are in relmap/relmap-history.js, which opens with why an undo on this
@@ -2683,7 +2709,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * NOTHING IS ASKED FIRST. This used to open the editor window, which meant the gesture was
 	 * drag, release, wait for a window, type, press Save -- five steps to draw one line, on a board
 	 * where somebody is drawing six while the table talks. The line exists the moment it is
-	 * released, in the default ink, saying nothing; the bar opens over it with the caret in the
+	 * released, in the map's own pen, saying nothing; the bar opens over it with the caret in the
 	 * writing field, which is the same place clicking an existing line lands. So "draw a line and
 	 * say what it is" and "click a line and say what it is" are now one gesture with one shape.
 	 *
@@ -2691,6 +2717,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * line nobody has captioned is exactly what a table draws while working out who knows whom, and
 	 * it can be typed on at any point afterwards. Drawn by mistake, it is one press on the undo --
 	 * or the trash at the end of the bar that is already open over it.
+	 *
+	 * IT ARRIVES IN THE MAP'S OWN PEN, though, and not in the shipped defaults: whatever colour,
+	 * stroke and caption size were last chosen on this map, by anybody at the table. See
+	 * relmap/relmap-pen.js.
 	 *
 	 * ⚠ AND NO FAMILY TIE IS GUESSED AT. The editor guessed one from the caption as it was typed,
 	 * and there is no caption yet at the moment this runs. Left UNSET, which is not the same as
@@ -2702,18 +2732,19 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const graph = readGraph(this.boardDoc);
 		if (!graph.nodes[a] || !graph.nodes[b]) return;
 		const id = foundry.utils.randomID();
-		// ⚠ IN THE SIZE THIS READER LAST ASKED FOR, which is the one thing about a new line that is
-		// not the default. A reader who has settled on eighteen-pixel captions -- and the one at this
-		// table on a screen magnifier will -- would otherwise set every line they drew back to
-		// twelve and then reach for the chooser again, on a board where six lines are drawn while
-		// the table talks. Nothing else is remembered this way: the colour is deliberately NOT (see
-		// `inksInUse`, which reads what the board is already drawn in rather than what one reader
-		// last picked), because a colour means something on a map and a size is how well somebody
-		// can read it.
+		// ⚠ IN THE PEN THIS MAP IS BEING DRAWN WITH, which is the one thing about a new line that
+		// is not the shipped default: its colour, its stroke and its caption size are whichever were
+		// last chosen on this map, by anybody at the table. A table that has settled on dotted plum
+		// for the rumours would otherwise get slate and solid on every line and have to say it again
+		// on the bar afterwards, on a board where six lines are drawn while they talk. See
+		// relmap/relmap-pen.js, which is also where the one field NOT remembered -- which way the
+		// line is read -- is argued out.
 		//
-		// Zero on a client that has never said, which is `addEdgePatch`'s own default and every
-		// line ever drawn before this existed.
-		const written = await this._write(addEdgePatch(id, { a, b, size: getLastSize() }), {
+		// The shipped defaults on a map nobody has chosen anything on, which is `addEdgePatch`'s own
+		// answer and every line ever drawn before this existed. The size this READER last asked for
+		// is the seed for that case alone; `penFor` says why it still gets a say.
+		const pen = penFor(this.entry, { size: getLastSize() });
+		const written = await this._write(addEdgePatch(id, { a, b, ...pen }), {
 			announce: format("stonetop.relmap.linked", {
 				a: graph.nodes[a].name, b: graph.nodes[b].name,
 			}),

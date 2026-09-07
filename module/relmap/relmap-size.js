@@ -13,17 +13,27 @@
 // with none is drawn in whatever the sheet sets. What this file remembers is the answer to a
 // different question, asked only when a line is BORN: how big did this reader last want a caption?
 //
-// PER CLIENT, NEVER PER WORLD, and never on the map. A reader on a screen magnifier who has settled
-// on eighteen-pixel captions wants that on the next line they draw and on every board they open;
-// the GM two seats away, reading at 1:1 on a big monitor, wants nothing of the kind. Stored on the
-// map it would be one table arguing over one number. So it is a client setting, no document is
-// written for it, and it says nothing about the map at all.
+// ⚠ AND IT IS NO LONGER THE WHOLE ANSWER TO THAT QUESTION. The size a new line is born in is the
+// MAP'S, kept beside the map's colour and stroke where everybody editing that map shares it
+// (relmap/relmap-pen.js) -- which is what the table asked for and is the reverse of what this file
+// used to say in this paragraph. What is left here is the SEED for a map where nobody has chosen a
+// size yet, and that is worth keeping rather than deleting: this record is flat across every world
+// (see below), so the reader at this table on a screen magnifier carries their twenty-pixel
+// captions onto a brand-new map instead of starting it at the base size and reaching for the
+// chooser again. The moment anybody chooses a size on that map, the map is the answer for everyone,
+// this reader included. `penFor` is where the two meet, and is the only place that reads this.
+//
+// PER CLIENT, NEVER PER WORLD. Which is a claim about this record only, and not about what a new
+// line comes out at: how big a reader LIKES their type is theirs, and a GM reading at 1:1 on a big
+// monitor should not have that fact rewritten by the player beside them on a magnifier. What the
+// two of them share is the map's pen, which is a decision the table makes out loud.
 //
 // ⚠ AND IT IS NOT NESTED UNDER THE WORLD ID, which every other client setting in this feature has
 // to do for itself (see relmap/relmap-last.js). The reason those nest is that they hold an ID:
 // "the map I had open" means nothing in a world that has no such entry, so a flat record would
 // hand this world a stranger's id. This holds a NUMBER, and how big a reader likes their type is
-// the same fact in every world they open. Flat on purpose.
+// the same fact in every world they open. Flat on purpose, and it is the whole reason this record
+// is still worth writing now that the map keeps one too.
 //
 // A SIZE IS NEVER PUT ON A LINE THAT ALREADY EXISTS BY THIS. Choosing eighteen changes the line the
 // bar is open over, and stamps the ones drawn after it. It does not walk the board rewriting what
@@ -55,7 +65,7 @@ export function getLastSize() {
 }
 
 /**
- * Remember a size this reader chose, so the next line they draw is set in it.
+ * Remember a size this reader chose, so a map that has none of its own starts them there.
  *
  * THE WRITE IS SKIPPED WHEN NOTHING MOVED, which is most calls: the size chooser paints its answer
  * on every open of the bar and a reader picking the size a line already has has changed nothing.
