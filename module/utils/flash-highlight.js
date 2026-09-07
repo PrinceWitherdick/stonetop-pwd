@@ -20,6 +20,8 @@
 //    deliberate: re-applying it after a render would re-light the row on every unrelated
 //    re-render, and the GM Toolkit re-renders on every prep-page write in the world.
 
+import { prefersReducedMotion } from "./reduced-motion.js";
+
 /** How long a flash lasts, from lit to gone. Must match the animation in stonetop.css. */
 export const FLASH_MS = 5000;
 
@@ -251,9 +253,4 @@ function douseAll(scope, className) {
  */
 function isVisible(el) {
 	return el.offsetParent !== null;
-}
-
-/** Has this user asked for less motion? No `matchMedia` (a test, a headless run) means no. */
-function prefersReducedMotion() {
-	return globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
 }
