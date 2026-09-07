@@ -13,6 +13,9 @@
  * happened to match elsewhere in the sentence.
  *
  * @param {string} lead  The move's text BEFORE its options list, tags already stripped.
+ * @param {string} [below]  The move's text AFTER that list, tags already stripped. Read only for
+ *   tiers it NAMES and only where the lead was silent about them, because three shipped moves
+ *   state a tier underneath their bullets (see pickLimitsFrom).
  * @returns {number|{success?: number, partial?: number, failure?: number}|null}
  *   A number caps every tier; an object caps the tiers it names and leaves the rest free;
  *   null means no cap.
@@ -29,6 +32,7 @@ const toCount = word => WORD_NUMBERS[String(word).toLowerCase()] ?? (Number(word
  * veto is checked first.
  */
 import { decodeEntities } from "./strings.js";
+import { TIER_KEYS as TIER_ORDER } from "./move-results.js";
 
 // The two phrasings that appear in BOTH questions below — the veto on a count, and the narrower
 // "this list is not a choice" test. Named once because they are the same book wording read twice
@@ -49,8 +53,9 @@ const UNBOUNDED = new RegExp(
 	+ `|(?:all(?: \\d| three| that)?|both) apply`, "i");
 
 /**
- * The narrower question: is this list something the move SHOWS you rather than asks you to
- * choose from? Two shapes qualify, and neither is a choice the move ever offers.
+ * The narrower question: is this list something the move SHOWS you rather than asks you to make
+ * one choice from? Four shapes qualify, and none of them is a single decision with a number over
+ * it — which is what a row of checkboxes and a "1/3 options selected" claims a list is.
  *
  * A RESOURCE'S SPEND MENU. "You can spend Readiness 1-for-1 to:" (Defend), and the same on
  * Silver Tongued's Nerve, We Happy Few's Inspiration, Anger is a Gift's Resolve, Strengthen
@@ -58,33 +63,55 @@ const UNBOUNDED = new RegExp(
  * over the rest of the fight — you may buy the same line twice, and the roll never asked you to
  * choose between them.
  *
+ * THE SAME MENU WITHOUT THE "1-FOR-1". Up With People's "either of you can spend 1 Rapport to ask
+ * the other player one of the following": you hold 2 Rapport and they hold 1, so three questions
+ * can come off that one list over one conversation. Read as a choice it was capped at the "one"
+ * in the sentence, and ticking a second question silently released the first — a player blocked
+ * from what the move plainly grants, which this file's whole posture is arranged to avoid.
+ *
+ * A LIST YOU TAKE TURNS OVER. Keep Company's "take turns asking a PC or NPC one of the
+ * following", which goes round the group for as long as the stretch of time lasts. One set of
+ * boxes cannot hold a record of who asked what, and capping it at one asked the second person to
+ * un-tick the first person's question.
+ *
  * A LIST ADDED TO ANOTHER MOVE. "When you Seek Insight, add the following to the list of
  * questions you can ask:" (Situational Awareness, Predator). Those questions are not picked
  * here at all; they are appended, permanently, to a list that lives on a different move and is
  * chosen from there.
  *
- * Either way a tick would record a decision nobody made, so these print as prose with the
- * system's spiral bullets instead of as a checklist (see chat.js#pickableMoveDescription).
+ * Any of the four and a tick would claim a decision nobody made, or refuse one they may make
+ * again, so these print as prose with the system's spiral bullets instead of as a checklist (see
+ * chat.js#pickableMoveDescription).
  *
  * Deliberately NARROWER than `UNBOUNDED` above, which vetoes a COUNT for several reasons that
  * have nothing to do with this one. End of Session's questions are vetoed by "for each 'yes'"
  * and are the most tickable list in the book; Dark Succor and Danu's Grasp are vetoed by "all 3
- * apply" and "both apply" while their lists are still choices. Only these two shapes stop being
- * a choice, so only they are named here — and note how close the near misses run: "ask 1 of the
- * following" (Under Your Skin, Read the Land, Warden of the Wild) IS a choice and keeps its
- * boxes, which is why the verb is part of each pattern rather than "the following" alone.
+ * apply" and "both apply" while their lists are still choices. Only these four shapes stop being
+ * a single choice, so only they are named here — and note how close the near misses run: "ask 1
+ * of the following" (Under Your Skin, Read the Land, Warden of the Wild) IS one choice and keeps
+ * its boxes, which is why the verb is part of each pattern rather than "the following" alone.
  *
- * Both are sentence-bounded (`[^.;:]*`), so a "spend" or an "add" earlier in the move's text
- * cannot reach across a full stop to meet a phrase belonging to a different sentence.
+ * THE CAPITAL LETTER IS THE SIGNAL in the second pattern, and it is why that one is the only
+ * case-sensitive test here. Stonetop capitalises the resources it lets you hold and spend —
+ * Rapport, Readiness, Preparation, Loyalty, Resolve, Nerve, Inspiration, Guise — so "spend 1
+ * Rapport to ask" is a menu while "spend a moment to pick one of the following" is a choice made
+ * once. A `\w+` in that slot could not tell them apart.
+ *
+ * All four are sentence-bounded (`[^.;:]*`), so a "spend", an "add" or a "take turns" earlier in
+ * the move's text cannot reach across a full stop to meet a phrase belonging to another sentence.
  *
  * @param {string} lead  The move's text BEFORE its options list, tags already stripped.
  */
 const SPEND_MENU = new RegExp(String.raw`\bspends?\b[^.;:]*\b${ONE_FOR_ONE}`, "i");
+const SPEND_A_RESOURCE = new RegExp(
+	String.raw`\b[Ss]pends?\s+(?:\d+|a|an|your)\s+[A-Z]\w+\b[^.;:]*\b${THE_FOLLOWING}`);
+const TAKE_TURNS = new RegExp(String.raw`\btakes?\s+turns\b[^.;:]*\b${THE_FOLLOWING}`, "i");
 const ADDED_TO_ANOTHER_MOVE = new RegExp(String.raw`\badds?\b[^.;:]*\b${THE_FOLLOWING}`, "i");
 
 export function isReferenceList(lead) {
 	const text = decodeEntities(String(lead ?? ""));
-	return SPEND_MENU.test(text) || ADDED_TO_ANOTHER_MOVE.test(text);
+	return SPEND_MENU.test(text) || SPEND_A_RESOURCE.test(text)
+		|| TAKE_TURNS.test(text) || ADDED_TO_ANOTHER_MOVE.test(text);
 }
 
 
@@ -127,13 +154,13 @@ const tierKeys = text => TIER_KEYS.find(([re]) => re.test(String(text).trim()))?
  * "ask their player 1 question from the list below", and unread it left a Seeker's strong hit
  * free to tick all four questions when the move grants one.
  */
-const COUNT_RE = new RegExp(
+const COUNT_SOURCE =
 	"\\b(?:pick|picks|choose|chooses|select|selects|take|takes|do|does|ask|asks)\\b"
 	+ "(?:\\s+(?:them|their\\s+player|the\\s+GM|another\\s+player|a\\s+PC(?:\\s+or\\s+NPC)?))?\\s+"
 	+ "(one|two|three|four|\\d)\\b"
-	+ "|\\b(one|two|three|four|\\d)\\s+of\\s+(?:the\\s+following|these)\\b",
-	"gi",
-);
+	+ "|\\b(one|two|three|four|\\d)\\s+of\\s+(?:the\\s+following|these)\\b";
+
+const COUNT_RE = new RegExp(COUNT_SOURCE, "gi");
 
 /**
  * Where each "on a 10+ / 7+ / 7-9 / 6-" begins, in the order the move writes them.
@@ -149,13 +176,39 @@ const COUNT_RE = new RegExp(
 const TIER_MARK_RE = /on\s+an?\s+(10\+|12\+|7[-\u2013\u2014]9|7\+|6[-\u2013\u2014])(?=[\s,;:.]|$)/gi;
 
 /**
- * "You and the GM EACH choose 1" — a count that is per person, not per list. Two get chosen, and
- * how many people are choosing is not something this can count, so the number is not a cap and
- * the list is left free. Checked per SEGMENT rather than over the whole text, so Invoke the Sun
- * God (the one move that says it) keeps the plain "choose 1" its 10+ states and only frees its
- * 7-9 — capping that at 1 would have blocked the GM's half of the choice.
+ * "You and the GM EACH choose 1" — a count that is per PERSON, not per list. The number beside
+ * the verb is not the cap; the cap is that number times however many people are choosing.
+ *
+ * Checked per SEGMENT rather than over the whole text, so Invoke the Sun God (the one shipped
+ * move that says it) keeps the plain "choose 1" its 10+ states and only its 7-9 is read this way.
  */
 const PER_PERSON = /\beach\s+(?:\w+\s+){0,2}?(?:pick|picks|choose|chooses|select|selects|take|takes|ask|asks)\b/i;
+
+/**
+ * …and the case where the people CAN be counted, because the sentence names them: exactly two,
+ * joined by an "and", immediately before the "each". "You and the GM each choose 1" is two
+ * consequences and no more, both ticked off the one shared list on the one card.
+ *
+ * Left uncapped, that 7-9 let a Lightbearer tick all FOUR of Invoke the Sun God's consequences —
+ * the same shape of hole as a tier that stamped no count, on a move whose own line beside the
+ * boxes says one each. The reader could not count people, so it declined to try; here it does not
+ * have to, because the sentence has done the counting.
+ *
+ * A ROLL-CALL, not a wildcard, and the same one {@link COUNT_SOURCE} uses to name who is being
+ * asked. "Each player picks 1" at a table of five is the case this must NOT cap, and a `\w+` on
+ * either side of the "and" would have swept it in — which is the failure this file calls worse
+ * than no cap at all, a player refused what their move plainly grants.
+ */
+const PARTY = String.raw`(?:you|they|them|the\s+GM|their\s+player|another\s+player|a\s+PC(?:\s+or\s+NPC)?)`;
+const PAIR_EACH = new RegExp(String.raw`\b${PARTY}\s+and\s+${PARTY}\s+each\b`, "i");
+
+/**
+ * What a stated count has to be multiplied by to become a cap on THIS list: 1 for the ordinary
+ * "pick 2", 2 for a named pair choosing one each, and null for a per-person count whose people
+ * cannot be counted — the one answer that still means "leave it uncapped".
+ */
+const perPersonFactor = text =>
+	!PER_PERSON.test(text) ? 1 : (PAIR_EACH.test(text) ? 2 : null);
 
 /**
  * A tier that hands over the WHOLE list, and the number that is — "ask the GM BOTH of the
@@ -192,15 +245,18 @@ const takeAllCount = segment => {
 };
 
 const firstCountIn = segment => {
-	if (PER_PERSON.test(segment)) return null;
+	const factor = perPersonFactor(segment);
+	if (!factor) return null;
 	for (const m of segment.matchAll(COUNT_RE)) {
 		const n = toCount(m[1] ?? m[2]);
-		if (n) return n;
+		if (n) return n * factor;
 	}
 	return null;
 };
 
 /**
+ * Every tier marker in one stretch of text, mapped to the count that tier states beside it.
+ *
  * Read by SEGMENT rather than by one regex over the whole sentence. "On a 10+, deal your damage
  * and pick 2; on a 7-9, deal damage and pick 1" needs each count tied to the tier it follows, and
  * an optional tier prefix inside one pattern does not do that reliably — a lazy match happily
@@ -208,15 +264,7 @@ const firstCountIn = segment => {
  * tier answer and the 10+ is silently lost. Cutting the text at each tier marker cannot make that
  * mistake: a count belongs to the marker it sits after, and there is nowhere else for it to go.
  */
-export function pickLimitsFrom(lead) {
-	// Entities decoded BEFORE anything is read: the book writes its tiers with en dashes, and a
-	// raw "7&ndash;9" is not "7-9" to any pattern here. The cost is not a missed cap but a WRONG
-	// one - the tier marker before it ("on a 10+") then swallows the 7-9's own count and caps the
-	// strong hit with it. strings.js#decodeEntities knows the numeric forms this used to keep a
-	// private table for.
-	const text = decodeEntities(String(lead ?? ""));
-	if (!text) return null;
-
+function tierCountsIn(text) {
 	const marks = [...text.matchAll(TIER_MARK_RE)];
 	const byTier = {};
 	// LAST occurrence of a tier wins, not the first: the statement that introduces THIS list is
@@ -252,6 +300,36 @@ export function pickLimitsFrom(lead) {
 		const n = firstCountIn(segment);
 		if (n) for (const tier of tiers) byTier[tier] = n;
 	});
+	return byTier;
+}
+
+export function pickLimitsFrom(lead, below = "") {
+	// Entities decoded BEFORE anything is read: the book writes its tiers with en dashes, and a
+	// raw "7&ndash;9" is not "7-9" to any pattern here. The cost is not a missed cap but a WRONG
+	// one - the tier marker before it ("on a 10+") then swallows the 7-9's own count and caps the
+	// strong hit with it. strings.js#decodeEntities knows the numeric forms this used to keep a
+	// private table for.
+	const text = decodeEntities(String(lead ?? ""));
+	if (!text) return null;
+
+	const byTier = tierCountsIn(text);
+	// A TIER THAT STATES ITSELF UNDERNEATH THE BULLETS still caps them. Formidable's miss is the
+	// move that proves it: "on a 10+, both; on a 7-9, pick 1:" sits above the list and "On a 6-,
+	// pick 1 but ask the GM what you've missed" in a paragraph below it, so the lead alone answered
+	// for two tiers and left the third uncapped — and a Heavy who rolled a 6- could tick BOTH
+	// options on the one tier the book is stingiest with. pickTiersFrom below has always read the
+	// whole move for exactly this shape, and chat.js#pickableMoveDescription already holds both
+	// halves to hand it; the cap was the half still reading only upwards.
+	//
+	// FILL-INS ONLY, and only from a tier the text below NAMES. The lead wins wherever it spoke,
+	// and a sentence under the bullets that names no tier contributes nothing at all — which is
+	// what keeps Forage intact: its closing "Provisions can substitute for supplies when you Make
+	// Camp, 1-for-1" carries an UNBOUNDED phrase that, read as one string with the lead, falls
+	// inside the 7-9's segment and vetoes the "pick 1" that tier plainly states. Read on its own it
+	// names no tier, so it says nothing about the list and cannot take a cap away from one.
+	for (const [tier, n] of Object.entries(tierCountsIn(decodeEntities(String(below ?? ""))))) {
+		byTier[tier] ??= n;
+	}
 	if (Object.keys(byTier).length) return byTier;
 
 	// No tier answered. Either none is named, or the ones that are carry no count of their own —
@@ -264,10 +342,72 @@ export function pickLimitsFrom(lead) {
 	// all. Both are one rule for the whole list, and it has to be
 	// said consistently: "choose 1 … and choose 1" is one rule stated twice, while two different
 	// numbers with no tier to hang them on is a sentence this is not confident enough to read.
-	if (PER_PERSON.test(text)) return null;
+	const factor = perPersonFactor(text);
+	if (!factor) return null;
 	const all = [...text.matchAll(COUNT_RE)].map(m => toCount(m[1] ?? m[2])).filter(Boolean);
 	if (!all.length) return null;
-	return new Set(all).size === 1 ? all[0] : null;
+	return new Set(all).size === 1 ? all[0] * factor : null;
+}
+
+/** The count patterns above, asked as a yes/no. Non-global: a `g` regex carries a `lastIndex`
+ * between `.test` calls, so the same sentence would answer differently on a second reading. */
+const COUNT_TEST = new RegExp(COUNT_SOURCE, "i");
+
+/**
+ * A tier that points at the bullets without naming a number - "from the list below", "of the
+ * following", "the questions below". Nothing shipped needs it today; it is here because the cost
+ * of a phrasing this does not recognise is a player denied a pick their move grants, and the cost
+ * of one it recognises too eagerly is a list that shows anyway.
+ */
+const LIST_REF_RE = /\b(?:from|of)\s+(?:the\s+)?(?:list|options|questions|following|these)\b|\b(?:list|options|questions)\s+below\b/i;
+
+const reachesList = segment =>
+	COUNT_TEST.test(segment) || TAKE_ALL_RE.test(segment) || LIST_REF_RE.test(segment);
+
+/**
+ * Which result tiers reach the printed list at all - the question the cap alone cannot answer.
+ *
+ * A tier that states no count is TWO different things, and until they were told apart both came
+ * out of pickLimitsFrom as the same "ticks freely". Forage's 6- is "the land is barren or picked
+ * clean" and Helior's Unblinking Eye's is "the GM makes a move": the roll took the choice away,
+ * and printing the options under a "0 options selected" offers a player something the move never
+ * granted them. Formidable's 6- is "pick 1 but ask the GM what you've missed", and Invoke the Sun
+ * God's 7-9 is "you and the GM each choose 1" - both still send the reader to the list, the
+ * second with a count deliberately left uncapped (see PER_PERSON above).
+ *
+ * So this answers only the narrow question - did this tier's own clause send the reader to the
+ * list - and leaves how many to pickLimitsFrom. A tier in this set may still carry no cap.
+ *
+ * READ OVER THE WHOLE MOVE, not just the lead-in above the list. pickLimitsFrom looks only
+ * upwards because a cap has to be known before the boxes are drawn, but Formidable, Burgle and
+ * Trade & Barter all state their 6- in a paragraph BELOW their bullets, and a tier read as absent
+ * because its sentence sits under the list is exactly the tier that must not be hidden.
+ *
+ * DELIBERATELY GENEROUS, which is the opposite way round from pickLimitsFrom and for the same
+ * reason it is timid: the costs are not symmetric. A tier wrongly left out has its options taken
+ * away from a player the move meant to offer them to; a tier wrongly left in is only the status
+ * quo of a list shown where it need not be. So a count counts, "both apply" counts, and a bare
+ * pointer at the bullets counts - and a move that names no tier at all comes back EMPTY, which
+ * its caller reads as "nothing is known here", never as "no tier picks".
+ *
+ * @param {string} text  The move's text, tags already stripped: the lead-in above its list and
+ *   whatever prose follows it, which is where three shipped moves put their 6-.
+ * @returns {string[]} Tier keys in ladder order; empty when no tier was read as reaching the list.
+ */
+export function pickTiersFrom(text) {
+	const src = decodeEntities(String(text ?? ""));
+	if (!src) return [];
+
+	// The same segmentation pickLimitsFrom reads its counts out of, for the same reason: a clause
+	// belongs to the tier marker it sits after, and there is nowhere else for it to go.
+	const marks = [...src.matchAll(TIER_MARK_RE)];
+	const found = new Set();
+	marks.forEach((mark, i) => {
+		const segment = src.slice(mark.index, marks[i + 1]?.index ?? src.length);
+		if (!reachesList(segment)) return;
+		for (const tier of tierKeys(mark[1])) found.add(tier);
+	});
+	return TIER_ORDER.filter(tier => found.has(tier));
 }
 
 /**
