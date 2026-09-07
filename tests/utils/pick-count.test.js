@@ -7,10 +7,16 @@ import { pickCountLabel } from "../../module/utils/move-picks.js";
 import { pickListsHtml, normalizePickPools, tierPickCounts } from "../../module/utils/roll-engine.js";
 import { pickableMoveDescription } from "../../module/utils/chat.js";
 import { parseArcanumMoves } from "../../module/data/arcana-moves.js";
-import { grantsWholeList, paintPickTally, pickLimitFor, wirePickTally, releaseOverLimit, PICK_TALLY_CLASS } from "../../module/utils/pick-tally.js";
+import { grantsWholeList, paintPickTally, pickLimitFor, wirePickTally, releaseOverLimit, PICK_TALLY_CLASS, PICK_BOX_SELECTOR } from "../../module/utils/pick-tally.js";
 import { pickLimitsFrom } from "../../module/utils/move-picks.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+// Every home the tally is painted in, in the one spelling the stylesheet uses. ONE rule covers
+// them all so the readout's ink cannot drift between surfaces, which is what happened while the
+// tier controls carried a copy of their own.
+const CHAT_HOMES = ":is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, "
+	+ ".stonetop-roll-card-description, .stonetop-roll-tier-action)";
 
 // A move that sends its options to chat says how many you may take ONCE, in prose — a lead-in
 // above the printed list, or the result line's "Pick 2 from the list below". By the third box a
@@ -664,11 +670,79 @@ describe("the chat card's tally rides the wiring that is already there", () => {
 
 	it("is styled in every home the checklist has, chat and dialog alike", () => {
 		const css = read("styles/stonetop.css");
-		const homes = ":is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)";
-		expect(css).toContain(`${homes} .stonetop-picklist-count`);
-		expect(css).toContain(`${homes} .stonetop-picklist-count.is-full`);
+		expect(css).toContain(`${CHAT_HOMES} .stonetop-picklist-count`);
+		expect(css).toContain(`${CHAT_HOMES} .stonetop-picklist-count.is-full`);
 		expect(css).toContain(".stonetop-homestead-reference .stonetop-picklist-count");
 		expect(css).toContain(".stonetop-homestead-reference .stonetop-picklist-count.is-full");
+	});
+});
+
+// A tier whose controls REPLACED the move's printed list is the one place the count had gone
+// missing: Clash's 10+ stands its checklist down because the radios below restate both bullets
+// word for word, and the "0/1 options selected" went down with the checklist. So the controls
+// carry it — over a radio group, which is why the box selector had to stop meaning "checkbox".
+describe("the tally over a tier's own controls", () => {
+	const SRC = read("module/combat/attack-flow.js");
+
+	it("counts radios as options, from the one selector all three readers share", () => {
+		expect(PICK_BOX_SELECTOR).toContain('input[type="checkbox"]');
+		expect(PICK_BOX_SELECTOR).toContain('input[type="radio"]');
+		const tally = read("module/utils/pick-tally.js");
+		// Three readers, one selector: a list whose tally counted boxes its release could not let
+		// go of would show a number it does not enforce.
+		expect(tally.match(/querySelectorAll\??\.?\(PICK_BOX_SELECTOR\)/g)).toHaveLength(3);
+		expect(tally).not.toContain(`querySelectorAll('input[type="checkbox"]')`);
+	});
+
+	it("wraps only the controls that ARE the whole list, and stamps the cap on the wrapper", () => {
+		const at = SRC.indexOf("function pickGroup");
+		expect(at).toBeGreaterThan(-1);
+		expect(SRC.slice(at, at + 400)).toContain('<div class="stonetop-attack-picklist" data-pick-max="');
+	});
+
+	it("paints through the shared readout, off the cap the wrapper carries", () => {
+		const at = SRC.indexOf("function wireAttackPicks");
+		expect(at).toBeGreaterThan(-1);
+		const body = SRC.slice(at, SRC.indexOf("\n}", at));
+		expect(body).toContain('root.querySelectorAll(".stonetop-attack-picklist")');
+		expect(body).toContain("wirePickTally(list, pickLimitFor(list))");
+	});
+
+	// Painted AFTER the resolved-card restore, or a card that struck hard would come back from a
+	// re-render reading 0/1 over a radio it is showing as held.
+	it("counts a resolved card's restored pick, not the blank the flavor rebuilds", () => {
+		const at = SRC.indexOf("function wireAttackConfirm");
+		expect(at).toBeGreaterThan(-1);
+		const body = SRC.slice(at, SRC.indexOf("\n}", at));
+		expect(body.indexOf("attack.resolved")).toBeLessThan(body.indexOf("wireAttackPicks(root)"));
+	});
+
+	// The other half of "nothing starts selected": a state you can be put in and never leave is
+	// not a choice. A radio group cannot be cleared by clicking, and these radios are skinned as
+	// checkbox-SVGs, so the row you hold releases on a second click.
+	it("lets a held radio go, off the click the browser fires no change for", () => {
+		const at = SRC.indexOf("function wireAttackPicks");
+		const body = SRC.slice(at, SRC.indexOf("\n}", at));
+		expect(body).toContain(`radio.addEventListener("click"`);
+		expect(body).toContain(`radio.dataset.wasChecked === "1"`);
+		expect(body).toContain("radio.checked = false;");
+		// Repainted off the same listener a real tick uses, so there is one repaint path.
+		expect(body).toContain(`radio.dispatchEvent(new Event("change", { bubbles: true }))`);
+	});
+
+	it("is styled on the tier controls too, not only on the checklists", () => {
+		const css = read("styles/stonetop.css");
+		// THROUGH THE SAME RULE AS THE CHECKLISTS, as a fourth entry in the one list of homes. It
+		// was written out twice - once beside the checklists and once beside the tier controls -
+		// and the two had already drifted apart on the margin before they were folded together.
+		expect(CHAT_HOMES).toContain(".stonetop-roll-tier-action");
+		expect(css).toContain(`${CHAT_HOMES} .stonetop-picklist-count`);
+		expect(css).toContain(`${CHAT_HOMES} .stonetop-picklist-count.is-full`);
+		// The margin is the one thing the tier says for itself: its flex gap already spaces the
+		// readout off the boxes, so the checklists' bottom margin would double it.
+		expect(css).toContain(".stonetop-roll-tier-action .stonetop-picklist-count {\n\tmargin: 0;\n}");
+		// The wrapper has to space its own rows: a nested flex box inherits no gap from the tier.
+		expect(css).toContain(".stonetop-attack-picklist {");
 	});
 });
 

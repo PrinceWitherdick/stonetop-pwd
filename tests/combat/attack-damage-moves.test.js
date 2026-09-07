@@ -12,6 +12,7 @@ import { firstOptionList, tierActionsRestateOptions } from "../../module/utils/c
 const packMove = (rel) => JSON.parse(
 	fs.readFileSync(path.resolve("packs/src/stonetop-items", rel), "utf8")).system;
 
+const CLASH    = packMove("basic-moves/clash.json");
 const AMBUSH   = packMove("playbook-moves/the-fox/ambush.json");
 const CALL     = packMove("playbook-moves/the-ranger/call-the-shot.json");
 const HAMMER   = packMove("playbook-moves/the-judge/the-hammer-and-the-book.json");
@@ -54,6 +55,49 @@ describe("attackMoveFor: which moves deal a character's damage", () => {
 	});
 });
 
+describe("Clash's tier controls", () => {
+	const actions = buildTierActions(attackMoveFor(item("Clash", "basic")), null);
+
+	it("offers both printed bullets on the 10+, word for word", () => {
+		expect(labelsOf(actions.success)).toEqual([
+			"Avoid, prevent, or counter your enemy's attack",
+			"Strike hard and fast, for 1d6 extra damage, but suffer your enemy's attack",
+		]);
+		for (const label of labelsOf(actions.success)) {
+			expect(bulletsOf(CLASH.description)).toContain(label);
+		}
+	});
+
+	it("makes them a radio pair, because the move says pick 1", () => {
+		expect(actions.success.match(/type="radio"/g)).toHaveLength(2);
+		expect(actions.success).toContain('name="clash-pick"');
+	});
+
+	it("starts with NEITHER selected — the card does not pick for the player", () => {
+		// A pre-checked "avoid" showed a choice the player had not made, in a control skinned as a
+		// checkbox that a radio group gives them no way to untick. Nothing selected is a state the
+		// player can also reach again (wireAttackPicks releases a held radio on re-click), and the
+		// Confirm still rolls plain damage with no counter, which is what "avoid" comes to.
+		expect(actions.success).not.toContain(" checked");
+	});
+
+	it("wraps the pair as a counted list, so the tally the checklist carried survives", () => {
+		// Clash's radios restate its whole printed list, so the tickable version of that list —
+		// and the "0/1 options selected" over it — stands down (tierActionsRestateOptions). The
+		// count comes with the options rather than being lost with the boxes.
+		expect(actions.success).toContain('<div class="stonetop-attack-picklist" data-pick-max="1">');
+	});
+
+	it("puts the extra dice and the counter-attack on strike-hard alone", () => {
+		expect(actions.success).toContain('data-extra-dice="1d6"');
+		expect(actions.success.match(/data-counter="1"/g)).toHaveLength(1);
+	});
+
+	it("stands the checklist down, because the radios ARE the printed list", () => {
+		expect(tierActionsRestateOptions(actions, CLASH.description)).toBe(true);
+	});
+});
+
 describe("Ambush's tier controls", () => {
 	const actions = buildTierActions(attackMoveFor(item("Ambush")), null);
 
@@ -68,6 +112,11 @@ describe("Ambush's tier controls", () => {
 
 	it("carries the 1d4 into the damage roll", () => {
 		expect(actions.success).toContain('data-extra-dice="1d4"');
+	});
+
+	it("carries no counted list — its checklist is still on the card with the count", () => {
+		expect(actions.success).not.toContain("stonetop-attack-picklist");
+		expect(actions.partial).not.toContain("stonetop-attack-picklist");
 	});
 
 	it("rolls damage and nothing else — Ambush has no counter-attack to suffer", () => {
@@ -125,6 +174,14 @@ describe("The Hammer and the Book's tier controls", () => {
 	it("starts with neither selected, so a Judge taking a fictional pick gets plain damage", () => {
 		// A pre-checked default would apply +1d6 to a Judge who chose "force it from its host".
 		expect(actions.success).not.toContain(" checked");
+	});
+
+	it("carries no counted list of its own — the printed one still holds the count", () => {
+		// The radios cover two of the move's four bullets, so the description's checklist stays
+		// with the one "0/1 options selected" that spans all four. A second tally over the subset
+		// would read as a second pick the move does not offer. Same for Ambush, Call the Shot and
+		// Let Fly, whose add-on boxes sit beside a list that is still printed.
+		expect(actions.success).not.toContain("stonetop-attack-picklist");
 	});
 
 	it("puts the dice on one and the armor-ignoring on the other", () => {

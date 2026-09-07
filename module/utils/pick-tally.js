@@ -24,6 +24,18 @@ import { TIER_KEYS } from "./move-results.js";
 /** The readout's class, shared by both surfaces so one CSS rule per home covers it. */
 export const PICK_TALLY_CLASS = "stonetop-picklist-count";
 
+/**
+ * What counts as an option on a list: a checkbox, or a radio.
+ *
+ * RADIOS ARE OPTIONS TOO. A "pick 1" whose options are mutually exclusive is a radio group
+ * (combat/attack-flow.js#pickRow builds Clash's 10+ that way, skinned as checkbox-SVGs), and a
+ * reader looking at two boxes with a count over them should not have to know which element the
+ * card reached for -- "0/1 options selected" is the same sentence either way. One constant rather
+ * than three copies of the selector, because a list that painted its tally over one set of
+ * controls and released over another would be counting boxes it cannot let go of.
+ */
+export const PICK_BOX_SELECTOR = 'input[type="checkbox"], input[type="radio"]';
+
 /** Marks a list whose change listener is already bound, so a re-render cannot double it. */
 const WIRED = "pickTallyWired";
 
@@ -111,7 +123,7 @@ export function grantsWholeList(listEl) {
 	if (!listEl || listEl.closest?.("[hidden]")) return false;
 	const { limit, rolledTier } = readPickLimit(listEl);
 	if (!rolledTier || !limit) return false;
-	const boxes = listEl.querySelectorAll?.('input[type="checkbox"]') ?? [];
+	const boxes = listEl.querySelectorAll?.(PICK_BOX_SELECTOR) ?? [];
 	return boxes.length > 0 && limit >= boxes.length;
 }
 
@@ -125,7 +137,7 @@ export function grantsWholeList(listEl) {
  */
 export function paintPickTally(listEl, limit) {
 	if (!listEl) return null;
-	const boxes = [...listEl.querySelectorAll('input[type="checkbox"]')];
+	const boxes = [...listEl.querySelectorAll(PICK_BOX_SELECTOR)];
 	if (!boxes.length) return null;
 
 	let readout = listEl.previousElementSibling;
@@ -168,7 +180,7 @@ export function releaseOverLimit(listEl, justChecked, limit) {
 	// The box just clicked is excluded from the candidates BEFORE the count, not skipped inside
 	// the loop: skipping it there would spare it and release one fewer than needed, leaving the
 	// list one over its limit whenever the new tick was also the earliest one.
-	const others = [...listEl.querySelectorAll('input[type="checkbox"]')]
+	const others = [...listEl.querySelectorAll(PICK_BOX_SELECTOR)]
 		.filter(b => b.checked && b !== justChecked);
 	const release = others.slice(0, Math.max(0, others.length - (max - 1)));
 	for (const box of release) box.checked = false;

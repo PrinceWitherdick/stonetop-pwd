@@ -5723,6 +5723,15 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	min-width: 0;
 }
 
+/* The rows of a counted list (attack-flow.js#pickGroup) sit in a wrapper of their own so the
+   tally can be inserted above THEM rather than above the whole tier — the tier's own flex column
+   would otherwise put the readout wherever paintPickTally's insertBefore landed it. It repeats
+   the tier's gap because a nested flex box does not inherit one. */
+.stonetop-attack-picklist {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
 /* Confirm reads as the primary action of the tier (slate CTA tokens), like Apply damage. */
 :is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .card-buttons button.stonetop-attack-confirm {
 	background: var(--st-btn-primary-bg);
@@ -8023,12 +8032,18 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-item.is-picked span {
 	font-weight: bold;
 }
-/* The running tally above the boxes ("1/3 options selected"), inserted by _paintPickCount in
-   stonetop.js. Quieter than the options it counts — it is a readout, not one of the choices —
-   and it goes green once the list is full, which is the one moment a player wants to be told
-   without counting. Same explicit ink as the arms above: nothing here inherits a colour. */
+/* The running tally above the boxes ("1/3 options selected"), inserted by utils/pick-tally.js.
+   Quieter than the options it counts — it is a readout, not one of the choices — and it goes
+   green once the list is full, which is the one moment a player wants to be told without counting.
+   Same explicit ink as the arms above: nothing here inherits a colour.
+
+   ALL FOUR HOMES IN ONE LIST, the tier controls included. The readout is one thing wherever it is
+   painted, and it was written out twice (once here, once beside the tier controls) until the
+   two had already drifted apart on the margin alone. An :is() of single classes carries the
+   specificity of a single class, so folding the fourth home in changed nothing but the number of
+   places this ink is written. */
 :is(#chat, #chat-notifications, #chat-popout) .message
-	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-count {
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description, .stonetop-roll-tier-action) .stonetop-picklist-count {
 	margin: 0 0 4px;
 	font-size: 0.85em;
 	font-weight: bold;
@@ -8036,8 +8051,14 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	color: var(--st-text-muted);
 }
 :is(#chat, #chat-notifications, #chat-popout) .message
-	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-count.is-full {
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description, .stonetop-roll-tier-action) .stonetop-picklist-count.is-full {
 	color: var(--st-green-text);
+}
+/* The one thing that is NOT shared: a tier's controls are a flex column whose gap already spaces
+   the readout off the boxes, so the bottom margin the checklists need would double it. LATER than
+   the base above, or it would not win. */
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-tier-action .stonetop-picklist-count {
+	margin: 0;
 }
 /* A move description hangs a spiral marker off every <li>, absolutely positioned at left: 0 —
    which is exactly where the checkbox now sits. The box IS this item's marker, so the spiral

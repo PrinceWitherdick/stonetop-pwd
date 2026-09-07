@@ -31,6 +31,7 @@ import {mitigateDamage, resolvePiercing, applyDamageToActor, dieFromDamage, comp
 import {promptDamage} from "../dialogs/RollDialog.js";
 import {bringDialogToFront} from "../utils/front-on-open.js";
 import {isPrimaryGM} from "../utils/primary-gm.js";
+import {pickLimitFor, wirePickTally} from "../utils/pick-tally.js";
 
 const SCOPE = STONETOP_SCOPE;
 
@@ -336,21 +337,45 @@ function snapshotTargets() {
 // -- Tier action controls (baked into the roll card) --------------------------
 // Each hit tier presents its outcome as (optionally) a row of checkbox-SVG option controls
 // followed by a single Confirm button. Two shapes of control, chosen by what the move's own
-// list is: a mutually-exclusive "pick 1" is RADIOS (Clash's 10+, pre-selected; The Hammer and
-// the Book's two mechanical choices, not), and a standalone option you may or may not take is
-// a CHECKBOX add-on (Let Fly's deplete-ammo, Ambush's +1d4). Every other tier is a lone
-// Confirm. The Confirm's data-action ("roll" | "suffer") tells the click handler what to
-// enact; a selected pick radio overrides the button's own counter / extra-dice, and ticked
-// add-ons stack on top of it.
+// list is: a mutually-exclusive "pick 1" is RADIOS (Clash's 10+, The Hammer and the Book's two
+// mechanical choices), and a standalone option you may or may not take is a CHECKBOX add-on
+// (Let Fly's deplete-ammo, Ambush's +1d4). Every other tier is a lone Confirm. The Confirm's
+// data-action ("roll" | "suffer") tells the click handler what to enact; a selected pick radio
+// overrides the button's own counter / extra-dice, and ticked add-ons stack on top of it.
+//
+// NOTHING STARTS SELECTED. A default is the card making the player's choice for them and then
+// showing it as though they had made it -- and because these radios are skinned as checkbox-SVGs,
+// the one way to disagree with it (click the other row) does not look like the one way to clear
+// it. `wireAttackPicks` makes a held radio clickable off again, so 0 of 1 is a state the player
+// can reach as well as the one they start in.
 
 // A mutually-exclusive pick (radio, checkbox-SVG skinned) for a "pick 1" tier.
-function pickRow(group, value, label, { extraDice = "", counter = false, checked = false, ignoresArmor = false } = {}) {
+function pickRow(group, value, label, { extraDice = "", counter = false, ignoresArmor = false } = {}) {
 	return `<label class="stonetop-attack-pick-row">
 		<input type="radio" class="stonetop-attack-pick-check" name="${escHtml(group)}" value="${escHtml(value)}"
 			data-counter="${counter ? 1 : 0}"${extraDice ? ` data-extra-dice="${escHtml(extraDice)}"` : ""}${
-			ignoresArmor ? ` data-ignores-armor="1"` : ""}${checked ? " checked" : ""}>
+			ignoresArmor ? ` data-ignores-armor="1"` : ""}>
 		<span class="stonetop-attack-pick-label">${escHtml(label)}</span>
 	</label>`;
+}
+
+/**
+ * Wrap a tier's rows as a LIST that carries a count, so `wireAttackPicks` can paint the running
+ * tally over them ("0/1 options selected") the way every printed move list already carries one.
+ *
+ * ONLY WHERE THESE CONTROLS ARE THE WHOLE LIST. The tally answers "how many of this choice have
+ * you taken, of how many you may" -- one question about one list. Clash's radios restate both of
+ * its printed bullets, so the description's tickable list (and the tally over it) stands down and
+ * these ARE the list (utils/chat.js#tierActionsRestateOptions). The Hammer and the Book's two
+ * radios cover two of its four bullets, Ambush's box one of four: there the printed list is still
+ * on the card with its own "0/1" over it, and a second count over a subset would read as a second
+ * pick the move does not offer.
+ *
+ * @param {string} rows  The pick / add-on rows this list is made of.
+ * @param {number} max   How many of them the tier allows -- the tally's denominator.
+ */
+function pickGroup(rows, max) {
+	return `<div class="stonetop-attack-picklist" data-pick-max="${Math.trunc(max)}">${rows}</div>`;
 }
 
 // An optional, independent add-on (checkbox) — Let Fly's "deplete your ammo", Ambush's "+1d4
@@ -412,9 +437,12 @@ export function buildTierActions(move, weapon) {
 	if (move.key === "clash") {
 		return {
 			success:
-				pickRow("clash-pick", "avoid", "Avoid, prevent, or counter your enemy's attack", { checked: true })
-				+ pickRow("clash-pick", "strike-hard", "Strike hard and fast, for 1d6 extra damage, but suffer your enemy's attack",
-					{ extraDice: "1d6", counter: true })
+				// "Pick 1", and these two radios are the whole of that list, so they carry the
+				// count the printed list would have carried — see pickGroup.
+				pickGroup(
+					pickRow("clash-pick", "avoid", "Avoid, prevent, or counter your enemy's attack")
+					+ pickRow("clash-pick", "strike-hard", "Strike hard and fast, for 1d6 extra damage, but suffer your enemy's attack",
+						{ extraDice: "1d6", counter: true }), 1)
 				+ confirmBtn("roll"),
 			partial: confirmBtn("roll", { counter: true, ...ROLL_DAMAGE }),
 			failure: confirmBtn("suffer", { label: "Suffer your enemy's attack", icon: "fa-shield-halved" }),
@@ -439,9 +467,10 @@ export function buildTierActions(move, weapon) {
 
 	if (move.key === "hammer-and-book") {
 		// "Choose 1" on both tiers, and two of the four choices are mechanical — so they are
-		// RADIOS, and neither starts checked. A Judge who chooses "force it from its host" leaves
-		// both alone and the Confirm rolls plain damage, which a pre-selected default would have
-		// quietly overruled.
+		// RADIOS. No pickGroup around them: the other two bullets are pure fiction and stay in the
+		// tickable list up in the description, which carries the tier's one count over all four.
+		// A Judge who chooses "force it from its host" leaves both radios alone and the Confirm
+		// rolls plain damage.
 		const tier =
 			pickRow("hammer-pick", "extra-damage", "Deal +1d6 damage", { extraDice: "1d6" })
 			+ pickRow("hammer-pick", "ignore-armor", "Ignore the thing's armor or other defenses", { ignoresArmor: true })
@@ -764,6 +793,62 @@ async function actorFromUuid(uuid) {
 	return doc?.actor ?? doc ?? null;
 }
 
+/**
+ * A tier's option controls: the running tally over them, and letting a held pick go.
+ *
+ * THE TALLY. The same readout every printed move list carries (utils/pick-tally.js), over the one
+ * kind of list that had lost it: a tier whose controls REPLACED the printed bullets. Clash's 10+
+ * says "pick 1", its checklist stands down because the radios below restate it word for word
+ * (utils/chat.js#tierActionsRestateOptions), and the count went down with the checklist — leaving
+ * the one move whose choice is enacted by the card as the one move that never said how many of it
+ * you had taken. Painted on the CLIENT and never persisted, for the reason the chat card's own
+ * tally is: it is derived from the boxes, so a number baked into the message would be wrong the
+ * moment anyone clicked. Only a `pickGroup`-wrapped list gets one — see pickGroup for why the
+ * add-on boxes beside a still-printed list do not.
+ *
+ * LETTING GO. A radio group cannot be cleared by clicking, and these radios are skinned as
+ * checkbox-SVGs — so a player who picks "strike hard and fast" and then thinks better of it is
+ * looking at a box that will not untick, with no other box to move the tick to. Clicking the row
+ * you already hold releases it, which is the same answer utils/pick-tally.js#releaseOverLimit
+ * gives on the checklists: the click is always honoured, and a choice you can make is one you can
+ * take back. Nothing selected is a real state — Clash's Confirm then rolls plain damage with no
+ * counter, which is what "avoid, prevent, or counter" comes to anyway — so the tally starting at
+ * 0 of 1 is the truth about the card rather than a prompt the player cannot satisfy.
+ */
+function wireAttackPicks(root) {
+	// `wirePickTally` paints the readout and binds the repaint once per element, which is what a
+	// message re-rendering on every flag write needs: where Foundry patches the log in place
+	// rather than replacing the node, a second listener would repaint the same readout twice.
+	// Its own `pickTallyWired` latch is the one that counts, and `pickLimitFor` is the one reader
+	// of `data-pick-max` -- so the cap enforced here and the denominator over the boxes stay the
+	// same number as on every other pick list in the system. No `enforce`: the release below is
+	// the radio answer, and a radio group is never over its cap.
+	for (const list of root.querySelectorAll(".stonetop-attack-picklist")) {
+		wirePickTally(list, pickLimitFor(list));
+	}
+
+	for (const radio of root.querySelectorAll('input[type="radio"].stonetop-attack-pick-check')) {
+		if (radio.dataset.clearWired === "1") continue;
+		radio.dataset.clearWired = "1";
+		radio.dataset.wasChecked = radio.checked ? "1" : "0";
+		// `click`, not `change`: clicking the radio you already hold is precisely the case the
+		// browser fires no change event for, which is why it needs the remembered state at all.
+		// By the time this runs the browser has already ticked a newly-chosen row, so what the
+		// handler needs to know is what was true BEFORE the click.
+		radio.addEventListener("click", () => {
+			const group = [...root.querySelectorAll('input[type="radio"].stonetop-attack-pick-check')]
+				.filter(other => other.name === radio.name);
+			if (radio.dataset.wasChecked === "1") {
+				radio.checked = false;
+				// Synthesized so the tally above repaints off the same listener a real tick uses —
+				// one repaint path, whichever way the list changed.
+				radio.dispatchEvent(new Event("change", { bubbles: true }));
+			}
+			for (const other of group) other.dataset.wasChecked = other.checked ? "1" : "0";
+		});
+	}
+}
+
 // The single Confirm button per tier on the roll card. The attacking PC's owner clicks it to
 // enact the tier: "roll" rolls the PC die per target (folding in a selected pick's extra dice
 // / counter and an optional ammo depletion), "suffer" self-writes the PC's HP from the foe's
@@ -779,9 +864,9 @@ export function wireAttackConfirm(message, html) {
 	if (!attack) return;
 
 	// A resolved card is a read-only record of what was enacted: lock every pick / add-on input
-	// and restore the choice actually used. The flavor bakes `checked` on the default pick, so
-	// each re-render (setFlag triggers one) would otherwise snap the selection back to the default
-	// and leave the inputs clickable.
+	// and restore the choice actually used. Each re-render (setFlag triggers one) rebuilds the
+	// inputs from the stored flavor, which selects nothing — so without this the card would forget
+	// which row was taken and leave the rest clickable.
 	if (attack.resolved) {
 		for (const input of root.querySelectorAll(".stonetop-attack-pick-check")) {
 			input.disabled = true;
@@ -792,6 +877,11 @@ export function wireAttackConfirm(message, html) {
 			else if (input.dataset.addon === "deplete") input.checked = !!attack.ammoDepleted;
 		}
 	}
+
+	// After the restore above, not before: the tally over a resolved card's picks has to read the
+	// row that was actually enacted, and a count painted first would say 0 of 1 on a card that
+	// struck hard.
+	wireAttackPicks(root);
 
 	// Confirming writes the `resolved` latch onto this message (lockAttackCard), so it needs
 	// message ownership as well as the attacker's — see wireSufferAttack.
