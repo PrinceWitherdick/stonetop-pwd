@@ -96,7 +96,21 @@
 //             (the Hillfolk Raiders, a Proclamation widened to the whole war-band), and on a
 //             faction nobody has made an Actor for (the Cult of the Black Water) — so the header
 //             scales, the roster window and the condemned tag on all three sheet types each have a
-//             fixture. The singleton actor itself is
+//             fixture. Also builds the world's relationship map, "Stonetop", as ONE journal entry
+//             holding the two boards the feature makes for itself: the map's own home board (which
+//             the system adopts as the VILLAGE board, so it arrives holding all eight residents
+//             plus three neighbours, the example NPC, four of the party and two circles with no
+//             actor behind them at all) and "The Party", holding the whole roster. Both arrive
+//             already MARKED as the boards they are, so the window's own seeding passes have
+//             nothing left to add and cannot seat anybody twice. The lines between them are the
+//             point: they cover all eight inks, all four directions, both dashes, every family-tie
+//             state (including the unanswered ones "Find family ties" is meant to offer a guess
+//             at, and one it is meant to get wrong), fans of two and three lines between one pair,
+//             a caption longer than a caption may be drawn at, a line with no caption at all, and
+//             three lines stamped as the removed "Pull in ratings" button's own, which is the only
+//             fixture the two controls that read those will ever get. What is NOT seeded here is
+//             the party board's introductions lines: the window draws those itself the first time
+//             the map is opened, which is the pass worth watching happen. The singleton actor itself is
 //             never created or deleted — only its test members (each tagged isTest) are added and
 //             later removed.
 // Re-run:     deletes everything this macro created (characters — the roster and the Graveyard
@@ -108,7 +122,9 @@
 //             "I wonder..." questions (each only while
 //             it still holds exactly what the macro wrote) and the three seeded Encounters, deletes the seeded Threats and Sites
 //             (and their scene pins,
-//             pruning an emptied Threats folder), removes the world Moves/Items/Monsters and the
+//             pruning an emptied Threats folder), deletes the seeded relationship map (one entry,
+//             so both of its boards go with it, and the maps folder too once it is empty),
+//             removes the world Moves/Items/Monsters and the
 //             example NPC (and their now-empty folders), sends home every steading asset a test
 //             trip was holding (matched by trip id, so the GM's own requisitions are untouched),
 //             unmarks the seeded debility while it is still the only one marked, and prunes the
@@ -2207,6 +2223,18 @@
       testThreatCount += killEntryIds.size;
     }
 
+    // Delete the seeded relationship map. One JournalEntry carrying the whole thing: its boards
+    // are its PAGES, so deleting the entry takes both of them and every line on them with it, and
+    // there is nothing else to unpick. Matched on BOTH flags (ours, and the mark that says the
+    // entry is a map), so a map the GM built by hand is never caught, and the maps folder goes
+    // only when our map was the last thing in it. The nodes point at actors that are about to be
+    // deleted, but a map of portraits pointing at nobody is not a thing to leave behind either.
+    const testMaps = (game.journal?.contents ?? []).filter(
+      j => j.getFlag(FLAG_SCOPE, TEST_FLAG) && j.getFlag(FLAG_SCOPE, "relationshipMap"));
+    if (testMaps.length) await JournalEntry.deleteDocuments(testMaps.map(j => j.id));
+    const mapsFolder = game.folders?.find(f => f.type === "JournalEntry" && f.name === "Relationship Maps");
+    if (mapsFolder && !mapsFolder.contents.length) await mapsFolder.delete().catch(() => {});
+
     // Defensive: only delete ids that still exist, so a hand-deletion (or any race that
     // slips past the re-entrancy guard) can't throw "Actor id … does not exist".
     const liveIds = existing.map(a => a.id).filter(id => game.actors.has(id));
@@ -2437,7 +2465,7 @@
         if (!f.contents.length) await f.delete();
       }
     }
-    ui.notifications.info(`[TEST] Deleted ${existing.length} test actor(s), ${testItems.length} item(s), ${testThreatCount} threat(s), ${testSiteCount} site(s)${wonderCount ? `, ${wonderCount} "I wonder..." question(s)` : ""}${encounterCount ? `, ${encounterCount} prepared encounter(s)` : ""}${expeditionCount ? `, ${expeditionCount} prepped expedition(s)` : ""}${strayPeople ? `, ${strayPeople} migrated resident/neighbor NPC(s) an older run left behind` : ""}, and their test data.`);
+    ui.notifications.info(`[TEST] Deleted ${existing.length} test actor(s), ${testItems.length} item(s), ${testThreatCount} threat(s), ${testSiteCount} site(s)${wonderCount ? `, ${wonderCount} "I wonder..." question(s)` : ""}${encounterCount ? `, ${encounterCount} prepared encounter(s)` : ""}${expeditionCount ? `, ${expeditionCount} prepped expedition(s)` : ""}${testMaps.length ? `, ${testMaps.length} relationship map(s)` : ""}${strayPeople ? `, ${strayPeople} migrated resident/neighbor NPC(s) an older run left behind` : ""}, and their test data.`);
     return;
   }
 
@@ -3544,6 +3572,343 @@
     return branded;
   };
 
+  // ── The relationship map, and the two boards a map comes with ──────────
+  // ONE JournalEntry ("Stonetop"), filed in the "Relationship Maps" folder, carrying the two
+  // boards the feature makes for itself: the map's own home board (which the system adopts as
+  // the VILLAGE board and seats the steading's Residents on) and "The Party". Both arrive here
+  // already seated and already MARKED, so the window's own seeding passes find a board that is
+  // complete rather than one to fill in, and the lines below are the thing this fixture exists
+  // for: a map with nobody on it draws nothing, and every other surface of the feature (the
+  // four views, the tie bar, the family tree, the link editor, the caption spreader) has
+  // nothing to be looked at against.
+  //
+  // WHY THE MACRO SEATS THEM RATHER THAN LETTING THE WINDOW DO IT. The window seats both boards
+  // on open (RelationshipMapWindow#_ensurePage), and if it did the seating here there would be
+  // no node ids to draw a line between until somebody had opened the map once. So the boards
+  // are built whole, and the marks that say which board is which are written in the same create:
+  //   * on the ENTRY, `relationshipMap: { version, partyBoard, villageBoard }`, which is both the
+  //     mark that makes the entry a map at all (listRelationshipMaps goes by it) and the record
+  //     that says these two boards have been given, so neither is ever made a second time;
+  //   * on the PARTY page, `relationshipPartyBoard: true`;
+  //   * on the HOME page, `relationshipVillageBoard: { seated: [...] }`, the ledger of every
+  //     resident that board has been handed, so the automatic pass has nobody left to offer and
+  //     writes nothing. Without it the next open would seat all eight residents a second time.
+  // See module/relmap/relmap-doc.js, relmap-party.js and relmap-village.js, which is where all
+  // three shapes are defined; they are spelled out rather than imported because this macro is a
+  // standalone Script macro with no imports.
+  //
+  // WHAT IS DELIBERATELY LEFT TO THE SYSTEM: the party board's INTRODUCTIONS lines. The macro
+  // records introductions answers a few passes later, and the window draws one line per answer
+  // that names another player character the first time the primary GM opens the map (each
+  // stamped `src: "intros"` with the answer's own key). Seeding those here would be this macro
+  // imitating the one pass that has to stay idempotent, and drawing them by hand would make the
+  // seeder's "is this answer already drawn" question unanswerable. Everything below is drawn by
+  // HAND (`src: ""`), which is exactly the class of line the seeder must never touch, so the two
+  // sets sit on the same board without either one confusing the other. It also means the party
+  // board is seen holding a FAN: our hand line and the seeder's answer line between one pair.
+  const RELMAP_MAP_NAME    = "Stonetop";
+  const RELMAP_PARTY_PAGE  = "The Party";      // matches stonetop.relmap.pages.party
+  const RELMAP_FOLDER      = { name: "Relationship Maps", color: "#7E6BA8" };
+  const RELMAP_SHEET_CLASS = `${FLAG_SCOPE}.StonetopRelationshipMapSheet`;
+  const RELMAP_VERSION     = 2;
+  const RELMAP_PAGE_SORT   = 100000;           // core's own spacing for sortable documents
+
+  // The board's geometry, mirroring module/utils/relmap-geometry.js (boardMetrics + ringsLayout).
+  // Reproduced rather than approximated because the sheet GROWS with its cast: a portrait is a
+  // fixed 72 board pixels, so the clearance two faces need is measured against the sheet the
+  // board is about to have, and a seating plan that used the plain 1200px sheet would overlap
+  // every portrait on an eighteen-person board.
+  const RELMAP_ASPECT = 1.25, RELMAP_BOARD_W = 1200, RELMAP_BOARD_MAX = 4800;
+  const RELMAP_HOLDS  = 6, RELMAP_NODE_PX = 72, RELMAP_PAD = 3, RELMAP_MAX_RINGS = 8;
+  const relRound = (n) => Number(Number(n).toFixed(2));
+  const relClamp = (n) => relRound(Math.min(100, Math.max(0, Number(n) || 0)));
+  const relSheetR = (wantWidthPx) => {
+    const width = Math.min(RELMAP_BOARD_MAX, Math.max(RELMAP_BOARD_W, Math.round(Number(wantWidthPx) || 0)));
+    return (100 * (RELMAP_NODE_PX / 2)) / width;
+  };
+  const relRadiusFor = (people) => relSheetR(RELMAP_BOARD_W * Math.sqrt(Math.max(1, people) / RELMAP_HOLDS));
+  const relRingRadius = (r) => Math.max(8, Math.min(50 - r - RELMAP_PAD, 50 / RELMAP_ASPECT - r - RELMAP_PAD));
+  const relRingCapacity = (radius, clear) => Math.max(1, Math.floor((2 * Math.PI * radius) / Math.max(0.001, clear)));
+  // Twelve o'clock, clockwise: the first person handed over is always at the top, which is what
+  // makes the seating plan below predictable to read against the cast list.
+  const relRingSeats = (radius, count, turn = 0) => Array.from({ length: Math.max(0, count) }, (_, k) => {
+    const angle = -Math.PI / 2 + turn + (k * 2 * Math.PI) / count;
+    return {
+      left: relClamp(50 + radius * Math.cos(angle)),
+      top:  relClamp(50 + radius * RELMAP_ASPECT * Math.sin(angle)),
+    };
+  });
+  const relRingsLayout = (count) => {
+    const n = Math.max(0, Math.trunc(Number(count) || 0));
+    if (!n) return [];
+    if (n === 1) return [{ left: 50, top: 50 }];
+    const r = relRadiusFor(n);
+    const outer = relRingRadius(r);
+    const clear = 2 * r + RELMAP_PAD;
+    let rings = 1;
+    while (rings < RELMAP_MAX_RINGS) {
+      let seats = 0;
+      for (let i = 1; i <= rings; i++) seats += relRingCapacity((outer * i) / rings, clear);
+      if (seats >= n) break;
+      rings += 1;
+    }
+    const out = [];
+    let left = n;
+    for (let i = rings; i >= 1 && left > 0; i--) {
+      const radius = (outer * i) / rings;
+      // The innermost ring takes whatever is left over: it is the smallest circle and the one
+      // with the least to lose by being tight.
+      const here = i === 1 ? left : Math.min(left, relRingCapacity(radius, clear));
+      out.push(...relRingSeats(radius, here, i % 2 ? 0 : Math.PI / here));
+      left -= here;
+    }
+    return out;
+  };
+
+  // One board, as the graph a page's flag holds. `cast` is seated in the order it is handed over;
+  // `links` name their two ends by the cast's own keys, and a link naming somebody who is not on
+  // this board is dropped rather than stored (normalizeGraph would drop it on the way back out
+  // anyway, so storing one would only be a lie in the inspector).
+  //
+  // ⚠ THE CAPTION IS NOT TRIMMED HERE, and that is on purpose: one fixture below is deliberately
+  // longer than RELMAP_LABEL_MAX so the "trim on the way out" rule has something to be seen
+  // doing. Names and notes ARE trimmed, to the bounds the store keeps (120 / 480).
+  const relBoardGraph = (cast, links) => {
+    const seats = relRingsLayout(cast.length);
+    const ids = new Map();
+    const nodes = {};
+    cast.forEach((person, i) => {
+      const id = foundry.utils.randomID();
+      ids.set(person.key, id);
+      const spot = seats[i] ?? { left: 50, top: 50 };
+      nodes[id] = {
+        uuid: person.uuid ?? null,
+        name: String(person.name ?? "").slice(0, 120),
+        img:  String(person.img ?? ""),
+        x:    relClamp(spot.left),
+        y:    relClamp(spot.top),
+        note: String(person.note ?? "").slice(0, 480),
+      };
+    });
+    const edges = {};
+    for (const link of links) {
+      const a = ids.get(link.a);
+      const b = ids.get(link.b);
+      if (!a || !b || a === b) continue;
+      edges[foundry.utils.randomID()] = {
+        a, b,
+        label:  String(link.label ?? ""),
+        ink:    link.ink  ?? "slate",     // one of RELMAP_INKS
+        dir:    link.dir  ?? "none",      // none | a-b | b-a | both
+        dash:   link.dash ?? "solid",     // solid | dotted, a mark the reader made by hand
+        kin:    link.kin  ?? "",          // "" = nobody has been asked; none | parent | child | partner
+        src:    link.src  ?? "",          // "" = somebody drew it; "hearts" = the old ratings import
+        origin: "",                       // only a seeded introductions line carries one
+        note:   String(link.note ?? "").slice(0, 480),
+      };
+    }
+    // `shape` is what Tidy up last put this board into, and a ring is what was actually laid.
+    return { version: RELMAP_VERSION, shape: "ring", nodes, edges };
+  };
+
+  // Who stands on the map's own board. Residents first (they are the village board's own cast and
+  // the ones the ledger accounts for), then the people a reader would have added by hand: the
+  // example NPC, three of the neighbours, four of the party, and two nodes with NO ACTOR AT ALL.
+  // Those last two are their own fixture: a node may be a plain named circle (a faction, a place,
+  // somebody nobody has made a sheet for), and everything that resolves a portrait, sorts a
+  // chooser or decides who counts as the party has to cope with one.
+  const RELMAP_HOME_CAST = [
+    { name: "Maeve",   note: "Still sets a place at the table for her husband. Nobody in the village has ever said a word about it." },
+    { name: "Pell" },
+    { name: "Tobin",   note: "Has taken in four of Stonetop's orphans over the years, and named none of them out loud as his." },
+    { name: "Tovia" },
+    { name: "Ennis" },
+    { name: "Yannic",  note: "Gone toward the Wood before first light most mornings, and back after dark with his basket full." },
+    { name: "Bronwen", note: "Knows every birth and every death in this village by heart, and roughly half the parentage." },
+    { name: "Vahid",   note: "Every rumour in Stonetop passes over his bar, and most of them pass back out again improved." },
+    { name: "Gethin Iron-Hand", note: "Branded by the Judge before the whole square. He wears the mark up in the high country and laughs about it." },
+    { name: "Tierney" },
+    { name: "Brogan" },
+    { name: "Caradoc" },
+    { name: "Wren" },
+    { name: "Brakkos" },
+    { name: "Quill" },
+    { name: "Coria" },
+    { plain: "The Cult of the Black Water", note: "Named aloud by the Judge. Nobody yet knows which faces in Stonetop are under it." },
+    { plain: "Marshedge", note: "Not a person. A place two of these people answer to, which is exactly what a nameless node is for." },
+  ];
+
+  // The lines on the home board, and between them they reach every field a link has.
+  //
+  //  * all eight INKS (rose, sage, ochre, indigo, plum, rust, teal, slate);
+  //  * all four DIRECTIONS, including `b-a`, which is the one that catches a head drawn at the
+  //    wrong end of its own curve;
+  //  * both DASHES, with `dotted` used where the table suspects rather than knows;
+  //  * all five KIN states: parent, child, partner, an explicit `none`, and the empty string that
+  //    means nobody has been asked. Nearly every line carries a real answer, because the link
+  //    editor writes one whichever radio is chosen; the unanswered ones are the fixture for a
+  //    board drawn before the field existed. Three of THOSE carry a caption with a family word
+  //    in it, so "Find family ties" has something to offer and one thing to get WRONG ("wed her
+  //    sister" is not a marriage to her), and the explicit `none` sits on a caption thick with
+  //    family words, which is the line that button must leave alone however often it is run;
+  //  * a FAN of three lines between one pair (Vahid and Quill) and of two between another
+  //    (Coria and Pell), which is what spreads a bow and what `edgesBetween` orders;
+  //  * a caption of 68 characters, longer than the 60 a caption may be, so the trim that happens
+  //    on the way OUT of the store is visible against a stored value nothing has shortened;
+  //  * a line with NO caption at all, which draws as a bare stroke;
+  //  * three lines stamped `src: "hearts"`, the mark the removed "Pull in ratings" button left
+  //    behind. Nothing writes those any more and nothing reads the stamp either — the two controls
+  //    that did are gone, and such a line is now drawn, rubbed out and undone like any other — so
+  //    what they are still here for is a board carrying the shape a real table's map has.
+  const RELMAP_HOME_LINKS = [
+    // Family, for the tree. Read as "A is B's ...", which is the direction the editor spells out.
+    { a: "Maeve",   b: "Pell",    label: "his mother",                                   ink: "rose",   dir: "a-b",  kin: "parent",  note: "Widowed young and raised him alone. She has never once asked him to leave the watch." },
+    { a: "Bronwen", b: "Yannic",  label: "her boy, out the door before she can ask after him", ink: "green", dir: "a-b", kin: "child", note: "Drawn from the son's end on purpose: the same tie as a parent line, stored the other way round." },
+    { a: "Ennis",   b: "Wren",    label: "an understanding neither of them has said aloud", ink: "plum", dir: "none", kin: "partner", note: "Ennis is content to let another season go by before either of them says the word." },
+    // Family words in the caption, and NOBODY HAS BEEN ASKED. "Find family ties" offers a guess
+    // at these three, and is meant to be wrong about the second one.
+    { a: "Tobin",   b: "Pell",    label: "as good as a father to the boy after the raid",  ink: "ochre",  dir: "a-b" },
+    { a: "Vahid",   b: "Tovia",   label: "wed her sister, and never lets the room forget it", ink: "indigo", dir: "none" },
+    { a: "Caradoc", b: "Tobin",   label: "taught his daughter the trade at this forge",     ink: "ochre",  dir: "a-b",  note: "Sends her down from the Delve every spring for a season at the anvil." },
+    // Answered "not a family tie", on a caption thick with family words: the one line the guess
+    // must never overturn, however many times it is pressed.
+    { a: "Bronwen", b: "Maeve",   label: "delivered both her children and neither of them hers", ink: "green", dir: "none", kin: "none", note: "Forty years of midwifery between them and not a drop of blood in common." },
+
+    // The Vahid / Quill fan: three lines between one pair, so the bows spread.
+    { a: "Vahid",   b: "Quill",   label: "drinks on credit and pays in stories",           ink: "ochre",  dir: "a-b",  kin: "none", note: "Pays for about a third of what he drinks and is worth every cup of the rest." },
+    { a: "Quill",   b: "Vahid",   label: "owes him for a barrel of the good stuff",        ink: "rust",   dir: "a-b",  dash: "dotted", kin: "none", note: "Suspected rather than known. Vahid has not asked and Quill has not offered." },
+    { a: "Vahid",   b: "Quill",   label: "",                                              ink: "slate",  dir: "both", kin: "none", note: "Whatever else is between these two, neither has ever put a word to it. This line is drawn without a caption on purpose." },
+
+    // The Coria / Pell fan: two lines, pointing the same way and saying opposite things.
+    { a: "Coria",   b: "Pell",    label: "sent him to the gate",                          ink: "indigo", dir: "a-b",  kin: "none", note: "She has never defended the order and she would give it again." },
+    { a: "Pell",    b: "Coria",   label: "cannot look at her while he drills",             ink: "rose",   dir: "a-b",  kin: "none",  note: "Three fingers short, on the wall every morning, and civil to her in front of the men." },
+
+    // Deliberately 68 characters, longer than a caption may be drawn at.
+    { a: "Ennis",   b: "Quill",   label: "two of his best hoops walked off the yard the week the Fox came home", ink: "rust", dir: "a-b", dash: "dotted", kin: "none", note: "He has never accused him and he has never forgotten." },
+
+    { a: "Brakkos", b: "Pell",    label: "stood over him in the mud",                     ink: "rose",   dir: "a-b",  kin: "none",  note: "Pell knows exactly how close it was. Nobody else does." },
+    { a: "Wren",    b: "Yannic",  label: "treat the Wood as a neighbour, not a threat",    ink: "green",  dir: "both", kin: "none", note: "The only two in Stonetop who go in without counting the hours until they are out." },
+    { a: "Brogan",  b: "Coria",   label: "turned his riders back at the Maker's Road",     ink: "rust",   dir: "b-a",  kin: "none",  note: "Drawn from Brogan and read the other way: the arrow arrives at him, because this is a thing done TO him." },
+    { a: "Vahid",   b: "Bronwen", label: "trade every rumour in the village between them", ink: "indigo", dir: "both" },
+    { a: "Vahid",   b: "Tierney", label: "keeps a room for him whenever he passes",        ink: "green",  dir: "a-b" },
+    { a: "Vahid",   b: "Maeve",   label: "sends bread up the hill when she will not come", ink: "rose",   dir: "a-b",  kin: "none" },
+    { a: "Vahid",   b: "Gethin Iron-Hand", label: "served him once, and has thought about it since", ink: "crimson", dir: "none", dash: "dotted", kin: "none" },
+    { a: "Tierney", b: "Marshedge", label: "takes Stonetop's whisky down to the coast",    ink: "slate",  dir: "a-b",  kin: "none" },
+    { a: "Brogan",  b: "Marshedge", label: "rides with the Claws who run the watch there", ink: "slate",  dir: "a-b",  kin: "none" },
+    { a: "Gethin Iron-Hand", b: "The Cult of the Black Water", label: "suspected, on nothing anyone will say aloud", ink: "plum", dir: "a-b", dash: "dotted", kin: "none", note: "Nobody has proof. The Judge branded him anyway, and the brand is what the village goes by now." },
+    { a: "The Cult of the Black Water", b: "Bronwen", label: "she has heard the name three times this season", ink: "plum", dir: "b-a", dash: "dotted", kin: "none" },
+    { a: "Gethin Iron-Hand", b: "Brakkos", label: "will settle it one day",                ink: "crimson", dir: "both", kin: "none" },
+    { a: "Caradoc", b: "Quill",   label: "would not sell to him twice",                    ink: "ochre",  dir: "a-b",  dash: "dotted", kin: "none" },
+
+    // The old ratings import's own lines. Nothing writes these any more; they are here so the
+    // two controls that read them are not left without a fixture. No caption and no note, which
+    // is what that button actually drew.
+    { a: "Tovia",   b: "Quill",   src: "hearts", ink: "slate", dir: "a-b" },
+    { a: "Quill",   b: "Tovia",   src: "hearts", ink: "slate", dir: "a-b" },
+    { a: "Tierney", b: "Quill",   src: "hearts", ink: "slate", dir: "a-b" },
+  ];
+
+  // The party board's own hand-drawn lines, on top of whatever the introductions seed. Every PC
+  // is seated, so a line can be added between any two of them by hand; these cover the fields
+  // again on the board that matters most, and put ONE kin tie of each directional kind here too,
+  // so the family tree has something to draw on both boards rather than only on the village.
+  const RELMAP_PARTY_LINKS = [
+    { a: "Sael",    b: "Aerin",   label: "handfasted at midsummer, to nobody's surprise",  ink: "rose",   dir: "none", kin: "partner", note: "Half the village had money on it. Bronwen had money on the year." },
+    { a: "Old Bartholomew", b: "Pim", label: "as good as a father to the boy since the raid", ink: "ochre", dir: "a-b", kin: "parent", note: "Answered rather than guessed: the caption would have been guessed the same way, and this line proves the two agree." },
+    { a: "Brakkos", b: "Pim",     label: "has stopped shaking the lad off",                ink: "slate",  dir: "a-b",  kin: "none", note: "Short with him in front of others and has twice put himself between Pim and something worse." },
+    { a: "Pim",     b: "Brakkos", label: "would take a spear for him, and has said so",    ink: "rose",   dir: "a-b",  kin: "none" },
+    { a: "Quill",   b: "Old Bartholomew", label: "under the Judge's brand and unrepentant", ink: "rust",  dir: "a-b",  dash: "dotted", kin: "none", note: "Caught with the reeve's strongbox key in his boot and no answer for it." },
+    { a: "Old Bartholomew", b: "Quill", label: "branded him before the whole square",      ink: "rust",   dir: "a-b",  kin: "none" },
+    { a: "Aerin",   b: "Maelis",  label: "worries about what the girl is reading",         ink: "indigo", dir: "a-b",  kin: "none" },
+    { a: "Maelis",  b: "Aerin",   label: "asks her the questions she cannot answer",       ink: "indigo", dir: "b-a",  kin: "none",  note: "Drawn from Maelis and read back the other way, so the head arrives at the one doing the asking." },
+    { a: "Wren",    b: "Coria",   label: "read the ground the same way",                   ink: "green",  dir: "both", kin: "none" },
+    { a: "Coria",   b: "Brakkos", label: "counts on him and never says so",                ink: "green",  dir: "a-b",  kin: "none" },
+    { a: "Quill",   b: "Wren",    label: "",                                              ink: "plum",   dir: "none", dash: "dotted", kin: "none", note: "Something happened on the road to Marshedge. Neither of them will say what, and this line is here to be asked about." },
+  ];
+
+  // Build both boards and file them as one map. Returns what was written, or null when there is
+  // no party to put on it (a run that created nothing has no map worth making).
+  //
+  // ⚠ THE PARTY BOARD SORTS IN FRONT of the home board, which is where the system itself puts it
+  // (`partySort`, a whole step ahead of the first page). Written that way here so that the first
+  // open has nothing to correct: `liftPartyPage` compares before it writes, and a board already
+  // at the front costs one comparison instead of a broadcast to the whole table.
+  const seedRelationshipMap = async ({ pcs = [], villagers = [], npc = null }) => {
+    if (!game.user?.isGM || !pcs.length) return null;
+
+    const byName = new Map();
+    for (const actor of [...pcs, ...villagers, npc].filter(Boolean)) {
+      if (!byName.has(actor.name)) byName.set(actor.name, actor);
+    }
+    // A cast row either points at an actor (and is dropped when that actor was never created, so
+    // a partial run still produces a coherent board) or is a plain named circle with no sheet.
+    const castRow = (row) => {
+      if (row.plain) return { key: row.plain, uuid: null, name: row.plain, img: "", note: row.note ?? "" };
+      const actor = byName.get(row.name);
+      return actor
+        ? { key: row.name, uuid: actor.uuid, name: actor.name, img: actor.img ?? "", note: row.note ?? "" }
+        : null;
+    };
+
+    const homeCast  = RELMAP_HOME_CAST.map(castRow).filter(Boolean);
+    const partyCast = pcs.map(pc => ({ key: pc.name, uuid: pc.uuid, name: pc.name, img: pc.img ?? "", note: "" }));
+    if (!partyCast.length) return null;
+
+    const homeGraph  = relBoardGraph(homeCast, RELMAP_HOME_LINKS);
+    const partyGraph = relBoardGraph(partyCast, RELMAP_PARTY_LINKS);
+
+    // The village board's ledger: every RESIDENT this board has been handed, by the identity the
+    // store recognises a person by (their uuid). Only residents, because only residents are what
+    // the automatic pass would offer; the neighbours and the party on this board were put there
+    // by hand and the ledger has no opinion about them.
+    const residentNames = new Set(STEADING_TEST_RESIDENTS.map(p => p.name));
+    const seated = homeCast.filter(row => row.uuid && residentNames.has(row.key)).map(row => row.uuid);
+
+    let folder = game.folders?.find(f => f.type === "JournalEntry" && f.name === RELMAP_FOLDER.name);
+    if (!folder) {
+      folder = await Folder.create({ name: RELMAP_FOLDER.name, type: "JournalEntry", color: RELMAP_FOLDER.color });
+    }
+
+    const entry = await JournalEntry.create({
+      name:   RELMAP_MAP_NAME,
+      folder: folder?.id ?? null,
+      // Owned by EVERYBODY, which is the whole reason a map is a JournalEntry: a player may edit
+      // a document they own, and the server broadcasts their change to the rest of the table for
+      // free. A map created at OBSERVER is one the players can look at and never touch.
+      ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER },
+      pages: [
+        {
+          name: RELMAP_PARTY_PAGE, type: "text", sort: -RELMAP_PAGE_SORT,
+          flags: { [FLAG_SCOPE]: { relationshipMap: partyGraph, relationshipPartyBoard: true } },
+        },
+        {
+          name: RELMAP_MAP_NAME, type: "text", sort: 0,
+          flags: { [FLAG_SCOPE]: { relationshipMap: homeGraph, relationshipVillageBoard: { seated } } },
+        },
+      ],
+      flags: {
+        // Without this the sidebar row opens a blank prose entry instead of the board.
+        core: { sheetClass: RELMAP_SHEET_CLASS },
+        [FLAG_SCOPE]: {
+          // On the ENTRY this key is the MARK that says "this is a map" plus the record of which
+          // self-seating boards it has been given. It is NOT a graph here; the graphs are on the
+          // pages above. Both meanings share one key on purpose (see RELMAP_FLAG in
+          // module/relmap/relmap-store.js): a map found by one key and read through another is a
+          // map that can be half-recognised.
+          relationshipMap: { version: RELMAP_VERSION, partyBoard: true, villageBoard: true },
+          [TEST_FLAG]: true,
+        },
+      },
+    });
+    if (!entry) return null;
+
+    const count = (graph) => ({ people: Object.keys(graph.nodes).length, lines: Object.keys(graph.edges).length });
+    const home = count(homeGraph);
+    const party = count(partyGraph);
+    console.log(`[TEST] Relationship map "${entry.name}": ${home.people} people and ${home.lines} lines on the village board, ${party.people} and ${party.lines} on "${RELMAP_PARTY_PAGE}". The introductions lines are seeded by the window on first open.`);
+    return { entry, home, party };
+  };
+
   // ── Steading people: the Residents / Neighbors NPC actors ──────────────
   // The two Actor folders the steading's people live in, mirroring PEOPLE_FOLDERS in
   // module/actors/steading/steading-people.js — same names and colours, so the seeded NPCs
@@ -4341,12 +4706,23 @@
     console.log(`[TEST] Seeded the GM Toolkit "${expeditions.toolkit.name}" with ${expeditions.added} prepped expedition(s) holding ${expeditions.entries} collected row(s), ${expeditions.bound} bound to a logged trip${expeditions.kept ? `, alongside ${expeditions.kept} the GM had already prepped` : ""}.`);
   }
 
+  // ── The relationship map ("Stonetop") ────────────────────────────────────
+  // LAST OF THE DOCUMENT PASSES, because every portrait on the board is a POINTER at an actor:
+  // the party, the residents and neighbours, and the example NPC all have to exist before a node
+  // can name one, exactly as an encounter's rows do. It is deliberately later than the
+  // introductions above as well, though it does not read them: the party board's answer lines are
+  // drawn by the WINDOW on first open, and by then the setting they come from is already written.
+  const relmap = await seedRelationshipMap({ pcs: created, villagers: testVillagers, npc: exampleNpc });
+  if (relmap) {
+    console.log(`[TEST] Relationship map ready. Open it from the shared macro, or with game.stonetop.openRelationshipMap("${relmap.entry.name}").`);
+  }
+
   // Compile + open the Chronicle straight away, so the recorded answers are visible
   // without running game.stonetop.saveChronicle() by hand. (Guarded in case the macro
   // is somehow run before onReady wires up the API.)
   await game.stonetop?.saveChronicle?.();
 
-  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${expeditions ? `${expeditions.added} prepped expeditions (${expeditions.bound} bound to a logged trip), ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
+  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${expeditions ? `${expeditions.added} prepped expeditions (${expeditions.bound} bound to a logged trip), ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, ${relmap ? `a relationship map (${relmap.home.people} people and ${relmap.home.lines} lines on the village board, ${relmap.party.people} and ${relmap.party.lines} on the party board), ` : ""} introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
   } finally {
     globalThis.__stonetopTestFixturesRunning = false;
   }
