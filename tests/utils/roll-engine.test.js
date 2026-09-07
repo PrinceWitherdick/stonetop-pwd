@@ -44,6 +44,18 @@ function makeActor() {
 		.build();
 }
 
+// Clash, verbatim from the shipped move and from combat/attack-flow.js#buildTierActions. The two
+// say the same words on purpose; the labels reach the card through escHtml, so their apostrophes
+// are entities while the prose's are not -- which is the mismatch _optionKey exists to absorb.
+const CLASH_SUCCESS = "Your maneuver works as expected (deal your damage) and pick 1: "
+	+ "Avoid, prevent, or counter your enemy's attack / "
+	+ "Strike hard and fast, for 1d6 extra damage, but suffer your enemy's attack.";
+const CLASH_TIER_ACTIONS =
+	'<label><input type="radio" name="clash-pick" value="avoid">'
+	+ '<span class="stonetop-attack-pick-label">Avoid, prevent, or counter your enemy&#39;s attack</span></label>'
+	+ '<label><input type="radio" name="clash-pick" value="strike-hard">'
+	+ '<span class="stonetop-attack-pick-label">Strike hard and fast, for 1d6 extra damage, but suffer your enemy&#39;s attack</span></label>';
+
 describe("sign", () => {
 	it("formats positive, zero, and negative modifiers", () => {
 		expect(sign(2)).toBe("+2");
@@ -374,6 +386,53 @@ describe("rollStat", () => {
 		expect(flavor).toContain("stonetop-roll-result-picks");
 		expect(flavor).toContain("a hard bargain");
 		expect(flavor).toContain('data-picked-tiers="success"');
+	});
+
+	// Clash states its options in its own prose rather than in `system.pickOptions`, so there is no
+	// checklist to suppress the block -- the tier CONTROLS are the list, and they cover the whole of
+	// it. Without this the card said "pick 1" and then printed both options twice more.
+	it("prints the lead-in alone when the tier's own controls list every option", async () => {
+		rollTotal = 10;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			moveResults: {
+				success: { value: CLASH_SUCCESS },
+				partial: { value: "Your maneuver works, mostly (deal your damage), but you suffer your enemy's attack." },
+				failure: { value: "Your maneuver fails and you suffer your enemy's attack." },
+			},
+			tierActions: { success: CLASH_TIER_ACTIONS, partial: "<button>Roll damage</button>" },
+		});
+
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-result-lead");
+		expect(flavor).not.toContain("stonetop-roll-result-picks");
+		// Only the tier that offers the controls is stamped: a shift onto the 7-9, whose text names
+		// no options at all, must not be told its list is elsewhere.
+		expect(flavor).toContain('data-picked-tiers="success"');
+	});
+
+	// The rule is self-checking by TEXT: controls that cover only part of the list leave the rest
+	// nowhere, so the block goes on printing all of it (Let Fly surfaces one of its four bullets).
+	it("keeps the options in the result block when the controls cover only some of them", async () => {
+		rollTotal = 10;
+
+		await rollStat("str", makeActor(), {
+			noXpOnMiss: true,
+			moveResults: {
+				success: { value: CLASH_SUCCESS },
+				partial: { value: "" },
+				failure: { value: "" },
+			},
+			tierActions: {
+				success: '<span class="stonetop-attack-pick-label">Avoid, prevent, or counter your enemy&#39;s attack</span>',
+			},
+		});
+
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-result-picks");
+		expect(flavor).toContain("Strike hard and fast");
+		expect(flavor).not.toContain("data-picked-tiers");
 	});
 
 	it("omits the outcome line when the move has no moveResults", async () => {

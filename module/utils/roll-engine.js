@@ -3,7 +3,7 @@ import { escHtml, formatOutcomeDetail, stripHtmlToText } from "./strings.js";
 import { pickLimitsFrom } from "./move-picks.js";
 import { pickLeadText, TIER_KEYS, TIER_LABELS } from "./move-results.js";
 import { markRolledTier } from "./move-tiers.js";
-import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge, pickListItem } from "./chat.js";
+import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge, pickListItem, tierActionsRestatingTiers } from "./chat.js";
 import { adjustXp } from "./xp.js";
 import { composeDamageFormula, normalizeDamageBonusDice } from "./damage.js";
 import { SYSTEM_ID } from "../system-id.js";
@@ -350,11 +350,12 @@ function _rollCard({ header, result = "", resultClass = "", resultDetail = "", r
 			+ ` data-outcome-partial="${escHtml(resultOutcomes.partial ?? "")}"`
 			+ ` data-outcome-failure="${escHtml(resultOutcomes.failure ?? "")}"`
 		: "";
-	// ...and which of those tiers has its options ticked off below, so the shift keeps printing
+	// ...and which of those tiers has its options offered below, so the shift keeps printing
 	// the lead-in alone on a tier whose list is already on the card (see `detailHtml`).
 	const pickedAttr = pickTiers.length ? ` data-picked-tiers="${escHtml(pickTiers.join(" "))}"` : "";
 	// The tier's own options are reprinted inside the result block ONLY when nothing below lists
-	// them. A card that shows them as checkboxes shows the lead-in here and the boxes there.
+	// them -- neither the checklist nor the tier controls. A card that offers them as boxes shows
+	// the lead-in here and the boxes there, so one choice is stated once.
 	const detailHtml = formatOutcomeDetail(resultDetail, { introOnly: pickTiers.includes(resultClass) });
 	// The die formula gets its own chip above the result, mirroring Foundry's vanilla
 	// dice-formula placement. We hide Foundry's auto-rendered dice block in CSS, so
@@ -574,6 +575,17 @@ export async function rollStat(statKey, actor, options = {}) {
 	const resultDetail = resultOutcomes?.[result.key] ?? "";
 
 	const pickListHtml = pickListsHtml(pickPools, result.key, tierPickCounts(moveResults));
+	// Two ways a tier's options can already be on the card below the result block, and either one
+	// keeps the block from reprinting them: the checklist `pickListHtml` just built from a declared
+	// pool, and -- for a move like Clash, whose options live in its prose rather than in
+	// `system.pickOptions` -- the tier controls that enact them (utils/chat.js).
+	// Merged in TIER_KEYS order, not concatenation order: the two sources can each answer for a
+	// different tier, and `data-picked-tiers` is read back by a GM's Shift Up/Down.
+	const pickedTierSet = new Set([
+		...(pickListHtml ? pickedTiers(pickPools) : []),
+		...tierActionsRestatingTiers(options.tierActions ?? null, resultOutcomes),
+	]);
+	const pickedTierKeys = TIER_KEYS.filter(tier => pickedTierSet.has(tier));
 
 	const header = moveName ?? statLabel;
 
@@ -619,7 +631,7 @@ export async function rollStat(statKey, actor, options = {}) {
 		resultOutcomes,
 		resultLegend: options.resultLegend ?? "",
 		pickList: pickListHtml,
-		pickTiers: pickListHtml ? pickedTiers(pickPools) : [],
+		pickTiers: pickedTierKeys,
 		tierActions: options.tierActions ?? null,
 		conditionsHtml,
 		noticesHtml: _woundReminderHtml(actor, moveName),

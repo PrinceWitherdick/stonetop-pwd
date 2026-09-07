@@ -1,6 +1,6 @@
-import {escHtml, stripHtmlToText, decodeEntities} from "./strings.js";
+import {escHtml, stripHtmlToText, decodeEntities, splitPickList} from "./strings.js";
 import {isReferenceList, pickLimitsFrom} from "./move-picks.js";
-import {MOVE_TIERS_CLASS} from "./move-results.js";
+import {MOVE_TIERS_CLASS, TIER_KEYS} from "./move-results.js";
 
 // The tier ladder's own `<ul>`, recognised in an attribute string — see `firstOptionList`.
 const _LADDER_CLASS_RE = new RegExp(`\\bclass="[^"]*\\b${MOVE_TIERS_CLASS}\\b`, "i");
@@ -339,6 +339,40 @@ function _optionKey(text) {
 }
 
 /**
+ * Do these controls offer every one of those options, word for word?
+ *
+ * ONE ANSWER FOR BOTH ASKERS. `tierActionsRestateOptions` asks it of the move's printed description
+ * and `tierActionsRestatingTiers` asks it of one tier's result text, and the question underneath is
+ * the same one: are the buttons the whole of this list, so that printing the list again would be
+ * saying it twice? Written out twice it was two copies of a rule that decides whether a reader sees
+ * their options at all -- including both of the silent bails, which are the easiest half to get
+ * subtly different.
+ *
+ * BOTH BAILS ARE "NO", AND DELIBERATELY SO. Nothing wanted, or nothing offered, means the controls
+ * have NOT covered anything -- so the list keeps printing. Erring the other way hides a choice from
+ * the reader on exactly the cards where something has already gone wrong.
+ *
+ * Exact-match on the option text rather than declared, which makes the rule self-checking: the
+ * control labels are written word for word from the bullets on purpose
+ * (combat/attack-flow.js#buildTierActions), so a world that rewords a move stops matching and gets
+ * its printed list back, rather than a card that quietly drops an option nothing can offer.
+ *
+ * @param {string} html            The control HTML to read labels off.
+ * @param {string[]} wantedTexts   The option texts that have to be covered.
+ */
+function _controlsCover(html, wantedTexts) {
+	const wanted = (wantedTexts ?? []).map(_optionKey).filter(Boolean);
+	if (!wanted.length) return false;
+	const labels = new Set();
+	for (const [, label] of String(html ?? "").matchAll(_PICK_LABEL_RE)) {
+		const key = _optionKey(label);
+		if (key) labels.add(key);
+	}
+	if (!labels.size) return false;
+	return wanted.every(key => labels.has(key));
+}
+
+/**
  * Whether these tier controls already restate EVERY option the move prints.
  *
  * A move's printed list is made tickable wherever it is shown (chat.js#pickableMoveDescription),
@@ -361,17 +395,40 @@ function _optionKey(text) {
  * @param {string} description        The move's own HTML, before the ladder is laid over it.
  */
 export function tierActionsRestateOptions(tierActions, description) {
-	const printed = (firstOptionList(description)?.items ?? []).map(_optionKey).filter(Boolean);
-	if (!printed.length) return false;
-	const labels = new Set();
-	for (const html of Object.values(tierActions ?? {})) {
-		for (const [, label] of String(html ?? "").matchAll(_PICK_LABEL_RE)) {
-			const key = _optionKey(label);
-			if (key) labels.add(key);
-		}
-	}
-	if (!labels.size) return false;
-	return printed.every(key => labels.has(key));
+	return _controlsCover(
+		Object.values(tierActions ?? {}).join(""),
+		firstOptionList(description)?.items ?? [],
+	);
+}
+
+/**
+ * The tiers whose controls already list every option that tier's OWN result text offers.
+ *
+ * The sibling above asks the same question of the move's printed description, to decide whether
+ * that list stays tickable. This one asks it of the tinted result block, which composes its
+ * detail line from `system.moveResults` and would otherwise print the options a third time:
+ * once as prose bullets in the description, once inside the block, and once as the controls that
+ * actually do something. A tier answered here prints its lead-in alone ("...and pick 1:") and
+ * lets the controls below be the list -- the rule roll-engine.js already applies to a move that
+ * declares `system.pickOptions`, reaching the moves that state their options in prose instead.
+ *
+ * PER TIER, against that tier's own controls: Clash's two picks belong to its 10+ and say nothing
+ * about a 7-9, and a control row that covers one tier's list must not silence another's.
+ *
+ * Exact-match on the option text, like the sibling: these labels are written word for word from
+ * the bullets on purpose (combat/attack-flow.js#buildTierActions), so a paraphrase is a signal
+ * that the controls no longer offer the whole choice, and the block should keep printing it.
+ *
+ * @param {object|null} tierActions   The per-tier control HTML, as `buildTierActions` built it.
+ * @param {object|null} outcomes      The per-tier result text the block prints, keyed by tier.
+ * @returns {string[]} Tier keys, in TIER_KEYS order.
+ */
+export function tierActionsRestatingTiers(tierActions, outcomes) {
+	if (!tierActions || !outcomes) return [];
+	return TIER_KEYS.filter((tier) => {
+		const split = splitPickList(stripHtmlToText(String(outcomes[tier] ?? "")));
+		return !!split && _controlsCover(tierActions[tier], split.options);
+	});
 }
 
 /**
