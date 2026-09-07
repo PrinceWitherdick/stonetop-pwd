@@ -39,7 +39,6 @@ import { withGmPrepTabs } from "./gm-prep-tabs.js";
 import { withGmWonderTab } from "./gm-wonder-tab.js";
 import { withGmEncountersTab } from "./gm-encounters-tab.js";
 import { withGmExpeditionsTab } from "./gm-expeditions-tab.js";
-import { withGmRelationshipMapsTab } from "./gm-relmaps-tab.js";
 import { localizedHomefrontSections } from "../../gm-toolkit/homefront-view.js";
 import { readCurrentSeason, currentSeasonView, isCurrentSeasonChange } from "../../seasons/current-season.js";
 import { localize } from "../../utils/i18n.js";
@@ -117,7 +116,7 @@ export function createStonetopGmToolkitSheetClass(Base) {
 	// character sheet carries — same partial, same descriptor module, same client settings. A
 	// GM runs a session from this sheet and may never open a character sheet at all, so the one
 	// place their own text size lives has to be reachable from here too.
-	return class StonetopGmToolkitSheet extends withPreferencesTab(withGmRelationshipMapsTab(withGmExpeditionsTab(withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base)))))))) {
+	return class StonetopGmToolkitSheet extends withPreferencesTab(withGmExpeditionsTab(withGmEncountersTab(withGmWonderTab(withGmPrepTabs(withSectionEditing(withSheetSizeMemory(Base))))))) {
 		// Read by the mixin's `isSectionEditable`. Constant, not state: this sheet has no global
 		// edit wrench, so a section is editable exactly when its own pencil is on.
 		_editMode = false;
@@ -422,9 +421,6 @@ export function createStonetopGmToolkitSheetClass(Base) {
 				this._addGmEncountersContext(context),
 				// The Expeditions list, off `actor.system.expeditions`, the same way.
 				this._addGmExpeditionsContext(context),
-				// The world's relationship maps. Not a list off this actor like the two above:
-				// the maps are JournalEntries the whole table owns, and this only lists them.
-				this._addGmRelationshipMapsContext(context),
 			]);
 
 			// The "I wonder..." list, off `actor.system.wonders`, split into the open questions
@@ -471,8 +467,6 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The Expeditions tab, delegated on the same root. Both bind to it and both print the
 			// same class names, so each gates every handler on its own panel (`owns`).
 			this._activateGmExpeditionsListeners(html[0]);
-			// The Relationship Maps tab, scoped to its own panel for the same reason.
-			this._activateGmRelationshipMapsListeners(html[0]);
 			// This sheet's own two buttons. Both are delegated rather than bound per element,
 			// because both are re-emitted whenever their tab re-renders and either may be absent
 			// (the import button depends on which diagrams this world already has).

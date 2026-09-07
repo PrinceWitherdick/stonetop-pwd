@@ -506,7 +506,6 @@ Hooks.once("init", () => {
 		"stonetop.gm-toolkit-tab-wonder":     "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-wonder.hbs",
 		"stonetop.gm-toolkit-tab-encounters": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-encounters.hbs",
 		"stonetop.gm-toolkit-tab-expeditions": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-expeditions.hbs",
-		"stonetop.gm-toolkit-tab-relmaps": "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-relmaps.hbs",
 		// One card per bundle tab, printed by BOTH of that tab's lists — the live one and the
 		// Completed fold. Two files rather than one partial with a parameter, for the reason
 		// gm-expedition-card.hbs gives; both draw the same class names, so they share one

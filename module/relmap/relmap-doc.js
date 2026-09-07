@@ -103,42 +103,6 @@ export function getRelationshipMap(id) {
 	return entry?.getFlag?.(SYSTEM_ID, RELMAP_FLAG) ? entry : null;
 }
 
-/**
- * How many people are on a map, counting each of them ONCE.
- *
- * ⚠ NOT THE SUM OF THE PAGES. A person may stand on three pages of the same map — that is the
- * point of pages — and "27 on the map" arrived at by adding the pages up would say 51 about a
- * village of 27. Counted by `nodeIdentity`, which is the store's own rule for recognising a person
- * and the same one every other reader of a map uses, so the number this shows and the number
- * anything else in the feature reasons about cannot drift apart.
- *
- * Off the RAW flags rather than through `readGraph`, which builds a fresh object and sanitizes
- * every node and every edge to get there. A count needs none of that, and this is asked for every
- * map in the world on every render of the GM Toolkit tab that lists them.
- */
-export function relationshipMapSize(entry) {
-	const who = new Set();
-	for (const board of countableBoards(entry)) {
-		for (const node of Object.values(board?.nodes ?? {})) who.add(nodeIdentity(node));
-	}
-	return who.size;
-}
-
-/** How many named boards a map has. A map nobody has opened since the pages arrived reads as one,
- * because that is what it is: one board, still on its entry, waiting to be moved onto a page. */
-export function relationshipMapPageCount(entry) {
-	return Math.max(1, listMapPages(entry).length);
-}
-
-/** The raw graphs a count should walk: every page's, or the entry's own on a map still on
- * version 1. Never both — a converted map keeps no graph on its entry, and one mid-conversion
- * would otherwise have its people counted twice over. */
-function countableBoards(entry) {
-	const pages = listMapPages(entry);
-	if (pages.length) return pages.map(page => page.getFlag?.(SYSTEM_ID, RELMAP_FLAG));
-	return [entry?.getFlag?.(SYSTEM_ID, RELMAP_FLAG)];
-}
-
 /** May this user make a new map? Editing needs only OWNER; creating needs TRUSTED. */
 export function canCreateRelationshipMap() {
 	// Through globalThis, because these document classes are globals that may simply not be there:

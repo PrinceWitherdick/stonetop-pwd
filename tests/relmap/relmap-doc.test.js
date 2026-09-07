@@ -12,7 +12,7 @@ import {
 	createMapPage, createRelationshipMap, deleteMapPage, ensureFirstMapPage,
 	ensureRelationshipMapFolder, findRelationshipMapFolder, getMapPage, getRelationshipMap,
 	getPartyPage, hadPartyPage, listMapPages, listRelationshipMaps, mapBoardDoc, mapPageName,
-	readGraph, relationshipMapPageCount, relationshipMapSize, renameMapPage, syncPartyPage,
+	readGraph, renameMapPage, syncPartyPage,
 } from "../../module/relmap/relmap-doc.js";
 import { RELMAP_VERSION } from "../../module/relmap/relmap-store.js";
 import { createRelationshipMapEntrySheetClass } from "../../module/journal/RelationshipMapEntrySheet.js";
@@ -455,41 +455,6 @@ describe("adding, renaming and rubbing out a board", () => {
 		map.isOwner = false;
 		expect(await deleteMapPage(getMapPage(map, "p2"))).toBe(false);
 		expect(listMapPages(map)).toHaveLength(2);
-	});
-});
-
-describe("how big the GM toolkit says a map is", () => {
-	// ⚠ NOT THE SUM OF THE PAGES. A person standing on three boards of one map is one person, and
-	// adding the pages up would say 51 about a village of 27. Counted by `nodeIdentity`, the same
-	// rule the importer uses to decide who is already here.
-	it("counts each person once, however many boards they stand on", () => {
-		const ordga = { uuid: "Actor.1", name: "Ordga" };
-		const map = mapWith("A map", [
-			{ name: "Stonetop", graph: { nodes: { a: ordga, b: { uuid: "Actor.2", name: "Hafgan" } } } },
-			{ name: "Marshedge", graph: { nodes: { c: ordga, d: { uuid: "Actor.3", name: "Iarl" } } } },
-		]);
-		expect(relationshipMapSize(map)).toBe(3);
-	});
-
-	it("counts somebody with no actor behind them by their name", () => {
-		const map = mapWith("A map", [
-			{ name: "One", graph: { nodes: { a: { name: "The mill" } } } },
-			{ name: "Two", graph: { nodes: { b: { name: "The mill" } } } },
-		]);
-		expect(relationshipMapSize(map)).toBe(1);
-	});
-
-	it("falls back to the entry's own graph on a map that still has no pages", () => {
-		const legacy = entry("Old map", {
-			"stonetop-pwd": { relationshipMap: { nodes: { a: { name: "Ordga" }, b: { name: "Iarl" } } } },
-		});
-		expect(relationshipMapSize(legacy)).toBe(2);
-		expect(relationshipMapPageCount(legacy)).toBe(1);
-	});
-
-	it("says how many boards a map has", () => {
-		const map = mapWith("A map", [{ name: "One" }, { name: "Two" }, { name: "Three" }]);
-		expect(relationshipMapPageCount(map)).toBe(3);
 	});
 });
 
