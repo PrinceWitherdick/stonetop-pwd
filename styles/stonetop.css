@@ -41165,7 +41165,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    lit-web dimming below would have to be written on a hundred elements rather than on this one —
    opacity on a `<g>` costs an offscreen buffer apiece.
 
-   ⚠ WHAT MAKES THE CAPTIONS AFFORDABLE, though, is neither that nor `.captions-too-small` below:
+   ⚠ WHAT MAKES THE CAPTIONS AFFORDABLE, though, is neither of those:
    it is that the words are set STRAIGHT and turned to their line's angle rather than warped onto
    the curve. Warping gives every glyph its own transform, so the browser's glyph cache misses on
    every one, and with the halo stroked around each warped outline as well ONE TILE of a real board
@@ -41194,62 +41194,44 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    blocks of a second and a half each, with ~100 frames dropped a second throughout. Without it the
    same raster happens on the worker threads and Commit is ~3ms. Do not put it back.
 
-   What actually makes the captions affordable is not painting them when they are too small to read:
-   `.captions-too-small`, below. */
+   What makes the captions affordable is that the words are set straight rather than warped: 1.2ms
+   a tile against 73ms. */
 
-/* ── Type too small to be type ────────────────────────────────────────────────
-   Written on the root by `_paintCaptionZoom` whenever the board's scale would paint a caption under
-   `CAPTION_FLOOR_PX`. The lit layer goes away entire and so does every caption but one.
+/* ── The words turned off ─────────────────────────────────────────────────────
+   The reader's own, from the checkbox under the board (`_toggleLabels`): no lit layer, no captions,
+   and every stroke healed by `_paintLineGaps` so the lines are not left with holes cut in them for
+   nothing.
 
-   ⚠ THIS IS THE MAP'S PERFORMANCE FIX, and it is a legibility rule that happens to be one. Text on
-   a path is expensive to RASTER, per glyph ON SCREEN, so it is worst at the scale the window opens
-   at — the whole board fitted into the viewport, every one of a hundred captions drawn at once.
-   Measured on the real map: 5.3 SECONDS of raster at a third size, 2.6s at 0.4, 76ms at 0.7, 3ms at
-   1. Zoomed in the browser rasters only what is in view and the cost is bounded by the window;
-   zoomed out there is no bound but the board.
+   ⚠ THE READER'S ANSWER IS THE ONLY WAY THE WORDS GO. There used to be a second class here --
+   `.captions-too-small`, written by the zoom -- that took every caption away once the type fell
+   under the legibility floor, on the grounds that three-pixel writing is a grey thicket and cost
+   seconds of raster to say nothing. The raster half of that was paid off when the words came off
+   their rails and were set straight, and the legibility half was the board deciding for the reader:
+   somebody who zooms out to see the whole web is exactly the person who wants to see WHERE the
+   writing is. So the board paints its captions at every scale now, and a quiet board is one that
+   was asked for. See `_paintCaptionZoom`.
 
-   And at those scales the writing is three pixels tall — never readable, a grey thicket over the
-   diagram, costing seconds to say nothing. `display`, so it is neither painted nor tabbed to: the
-   same bargain the tab order asks for, and hidden means hidden to everybody.
+   `display` rather than `visibility` or an opacity: not painted, not tabbed to, and costing no
+   raster. Hidden means hidden to everybody, which is the bargain the tab order asks for.
 
-   ⚠ EXCEPT THE ONE THE READER IS HOLDING, and that exception is why this hides the CAPTIONS rather
-   than the layer they are in. The tie bar has no text box on it: what somebody is typing shows on
-   the line, and a board fitted whole into the window is under this threshold -- which is the zoom
-   the map OPENS at. Taking their own words away at the size they are most likely to be writing at
-   would leave typing with nothing to show for itself at all. So the held line's caption stays, and
-   `_paintCaptionZoom` blows it up to `CAPTION_READ_PX` on screen so it can be read.
-
-   Hiding a hundred groups instead of one layer costs a style pass over them each time the board
-   crosses the threshold -- once per crossing, not per frame -- and nothing at all in raster, which
-   is what this rule is for: `display: none` paints no glyphs whichever element carries it. */
-.stonetop-relmap.captions-too-small .stonetop-relmap-labels-lit,
-.stonetop-relmap.captions-too-small .stonetop-relmap-label:not(.is-picked) { display: none; }
-
-/* ── The words turned off outright ────────────────────────────────────────────
-   The reader's own, from the checkbox under the board (`_toggleLabels`), and the same rule as the
-   one above because it is the same board: no lit layer, no captions, and every stroke healed by
-   `_paintLineGaps` so the lines are not left with holes cut in them for nothing.
-
-   ⚠ WHY IT IS A SECOND CLASS AND NOT THE SAME ONE. The rule above is the board declining to paint
-   what it could not show anybody -- it goes on and off as the reader zooms, many times an evening
-   -- while this one is an answer the reader gave. Folded together, a zoom would untick the box, or
-   a tick would survive a zoom that should have ended it. Everything downstream asks
-   `_captionsHidden`, which is the one place the two are read as one state.
-
-   `display`, like the rule above: not painted, not tabbed to, and costing no raster. That is the
-   whole point on a village board -- a hundred captions is seconds of rastering at the zoom the
-   window opens at.
-
-   ⚠ EXCEPT THE HELD LINE'S, for the reason the zoom rule spares it: the tie bar has no text box on
-   it, so the caption is the only place a reader's typing shows. Turning the words off and then
-   writing on a line would otherwise be typing into nothing. */
+   ⚠ EXCEPT THE HELD LINE'S: the tie bar has no text box on it, so the caption is the only place a
+   reader's typing shows. Turning the words off and then writing on a line would otherwise be typing
+   into nothing. */
 .stonetop-relmap.captions-off .stonetop-relmap-labels-lit,
 .stonetop-relmap.captions-off .stonetop-relmap-label:not(.is-picked) { display: none; }
 
-/* Board pixels, written by `_paintCaptionZoom` as `CAPTION_READ_PX` divided by the board's scale,
-   so the words stay one size to read while the board shrinks under them. The fallback matches
+/* ── The one caption that is held while the type is tiny ──────────────────────
+   `.captions-tiny` is written on the root by `_paintCaptionZoom` whenever the board's scale would
+   paint a caption under `RELMAP_CAPTION_FLOOR_PX`. It hides NOTHING -- every caption on the board is
+   still drawn at whatever size the board is showing it. This is the one rule that hangs off it.
+
+   ⚠ WHY THE HELD ONE IS SPECIAL. The tie bar has no text box: what somebody is typing shows on the
+   LINE, and a board fitted whole into the window is under this threshold -- which is the zoom the
+   map OPENS at. Leaving their own words at three pixels while they wrote them would be typing into
+   a smudge. Board pixels, written as `CAPTION_READ_PX` divided by the board's scale, so the words
+   stay one size to read while the board shrinks under them. The fallback matches
    `.stonetop-relmap-label-text` and is what shows if a scale never arrives. */
-.stonetop-relmap.captions-too-small .stonetop-relmap-label.is-picked .stonetop-relmap-label-text {
+.stonetop-relmap.captions-tiny .stonetop-relmap-label.is-picked .stonetop-relmap-label-text {
 	font-size: var(--relmap-say-px, 16px);
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readCss, declarations } from "../fakes/css.js";
+import { readCss, declarations, stripComments } from "../fakes/css.js";
 import { contrastRatio, parseColor, ratioText } from "../fakes/contrast.js";
 import { RELMAP_DASHES, RELMAP_DASH_DEFAULT, RELMAP_INKS } from "../../module/relmap/relmap-store.js";
 
@@ -347,35 +347,42 @@ describe("the captions, which are bare words written along their own lines", () 
 		expect(LAYER).toMatch(/inset:\s*0/);
 	});
 
-	// A LEGIBILITY RULE. At the scale the window opens at -- the whole board fitted into the
-	// viewport -- the writing is three pixels tall: it was never readable, and it is a grey thicket
-	// over the diagram. `_paintCaptionZoom` marks the root; this puts the captions away, and
-	// `_paintLineGaps` closes the holes cut in the strokes for words that are no longer there.
-	//
-	// It is a performance rule as well, though no longer the load-bearing one: the cost of a caption
-	// is per glyph ON SCREEN, and this is the state with every one of a hundred of them on screen at
-	// once. What actually made them affordable was setting the words straight.
-	it("paints no captions at all while they would be too small to read", () => {
-		const lit = declarations(CSS, ".stonetop-relmap.captions-too-small .stonetop-relmap-labels-lit");
+	// THE READER'S ANSWER, from the checkbox under the board: `_toggleLabels` marks the root, this
+	// puts the captions away, and `_paintLineGaps` closes the holes cut in the strokes for words
+	// that are no longer there.
+	it("paints no captions at all once the reader turns the words off", () => {
+		const lit = declarations(CSS, ".stonetop-relmap.captions-off .stonetop-relmap-labels-lit");
 		expect(lit, "the lit layer").toBeTruthy();
 		expect(lit, "the lit layer").toMatch(/display:\s*none/);
 		const quiet = declarations(
-			CSS, ".stonetop-relmap.captions-too-small .stonetop-relmap-label:not(.is-picked)",
+			CSS, ".stonetop-relmap.captions-off .stonetop-relmap-label:not(.is-picked)",
 		);
 		expect(quiet, "every caption but the held one").toBeTruthy();
 		expect(quiet, "every caption but the held one").toMatch(/display:\s*none/);
 	});
 
+	// ⚠ AND ZOOMING OUT IS NOT A SECOND WAY TO LOSE THEM. There used to be a `.captions-too-small`
+	// rule here, written by the zoom, that took every caption away once the type fell under a
+	// legibility floor. It went: a reader who zooms out to see the whole web is exactly the person
+	// who wants to see WHERE the writing is, and the raster cost that justified it was paid off when
+	// the words came off their rails and were set straight. Nothing in the sheet may hide a caption
+	// on account of the scale.
+	it("never hides a caption on account of the zoom", () => {
+		// Comments stripped: the rule that went is described in one, up in the sheet.
+		expect(stripComments(CSS)).not.toMatch(/captions-too-small/);
+	});
+
 	// ⚠ EXCEPT THE ONE THE READER IS HOLDING, and this is the rule the tie bar's writing depends on.
 	// The bar has no text box on it any more: what somebody types is painted on the LINE, and a
-	// whole board fitted into the window is under this threshold -- which is the zoom the map OPENS
-	// at. Hiding that caption with the rest would leave typing with nothing at all to show for
-	// itself. So it stays, and `_paintCaptionZoom` hands it board pixels worked out from the scale
-	// (`CAPTION_READ_PX` divided by it) so the words stay one size to read while the board shrinks.
+	// whole board fitted into the window is under the legibility floor -- which is the zoom the map
+	// OPENS at. Leaving their own words at three pixels while they wrote them would be typing into a
+	// smudge. So `_paintCaptionZoom` marks the board `.captions-tiny` and hands the held caption
+	// board pixels worked out from the scale (`CAPTION_READ_PX` divided by it), so those words stay
+	// one size to read while the board shrinks under them. It hides nothing else.
 	it("keeps the caption the reader is writing on, at a size they can read", () => {
 		const held = declarations(
 			CSS,
-			".stonetop-relmap.captions-too-small .stonetop-relmap-label.is-picked .stonetop-relmap-label-text",
+			".stonetop-relmap.captions-tiny .stonetop-relmap-label.is-picked .stonetop-relmap-label-text",
 		);
 		expect(held, "the held caption").toBeTruthy();
 		expect(held).toMatch(/font-size:\s*var\(--relmap-say-px/);

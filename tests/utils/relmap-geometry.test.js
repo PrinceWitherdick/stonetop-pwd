@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
 	RELMAP_BOARD_ASPECT, RELMAP_BOARD_MAX, RELMAP_BOARD_WIDTH, RELMAP_CAPTION_PX, boardMetrics,
 	clampPct, clearanceBow,
-	edgeArrowheads, edgeBow, edgeCurve, edgeLabelAnchor, fanBow, freeSpot, labelCapPx, labelSize,
+	RELMAP_LABEL_CLEAR_PX,
+	edgeArrowheads, edgeBow, edgeCurve, edgeLabelAnchor, fanBow, freeSpot, labelSize,
 	captionRoomPx, captionSize, curvePoints, curveWithGap, nodeRadiusPct, ringsLayout,
 	spreadLabels,
 } from "../../module/utils/relmap-geometry.js";
@@ -652,9 +653,36 @@ describe("keeping the captions off one another", () => {
 		expect(out.size).toBe(0);
 	});
 
-	it("sizes a caption by its words, and stops where the stylesheet stops it", () => {
+	// ⚠ THE FACES ARE BIGGER THAN THEY LOOK TO THE SPREADER, by the clearance a caption keeps
+	// from every portrait. The room on a line is reckoned at the MIDDLE of it (`captionRoomPx`), so
+	// on its own it says nothing about a caption slid aside to get out of another's way, or about a
+	// caption passing somebody else's face on the way. Merely not TOUCHING a portrait was the old
+	// rule, and it let the words come to rest against one.
+	it("slides a caption that would come to rest too near a face, not only one that lands on it", () => {
+		const { across } = crossing();
+		// Five flat units off the line, which is well clear of a 3-unit portrait and well inside the
+		// paper a caption is supposed to keep between itself and one.
+		const near = { left: 50, top: 50 + (5 * ASPECT) };
+		const text = "old friends";
+		const middle = edgeLabelAnchor(across, ASPECT, 0.5);
+		const alone = spreadLabels({ labels: [{ id: "a", curve: across, text }], ...opts });
+		const beside = spreadLabels({
+			labels: [{ id: "a", curve: across, text }], nodes: [near], ...opts,
+		});
+		expect(alone.get("a").left).toBeCloseTo(middle.left, 6);
+		expect(beside.get("a").left).not.toBeCloseTo(middle.left, 6);
+		// Along its own line and away from the face, rather than off the line or past its ends.
+		expect(Math.abs(beside.get("a").left - near.left))
+			.toBeGreaterThan(Math.abs(middle.left - near.left));
+	});
+
+	it("sizes a caption by its words, and stops it where the room it was given stops", () => {
 		expect(labelSize("ab").w).toBeLessThan(labelSize("a much longer caption").w);
-		expect(labelSize("x".repeat(500)).w).toBeCloseTo(labelSize("x".repeat(400)).w, 5);
+		// Nothing bounds a caption but the line it sits on, so two sentences too long for the same
+		// room come out the same width, and with no room named at all they do not.
+		expect(labelSize("x".repeat(500), 1200, 140).w)
+			.toBeCloseTo(labelSize("x".repeat(400), 1200, 140).w, 6);
+		expect(labelSize("x".repeat(500)).w).toBeGreaterThan(labelSize("x".repeat(400)).w);
 	});
 });
 
@@ -708,31 +736,67 @@ describe("putting a link's dodge and its place in the fan together", () => {
 	});
 });
 
+// THE FAULT THIS BLOCK EXISTS TO CATCH, and it was on the board for a season. A caption used to be
+// promised a width whatever line it sat on -- 220 pixels, or 140 on a crowded board, and never
+// less than 58 -- so that two words and an ellipsis were not all a short line could say. But a
+// caption is set ALONG its line, so a caption wider than its line overhangs into the two faces at
+// its ends: two people standing close together had the whole sentence drawn across both their
+// portraits, and the ellipsis that should have cut it arrived only once the words were longer than
+// a promise nothing on the board could keep. The room is now the line's own run and nothing else,
+// less the paper kept clear at each end.
 describe("how wide a caption is allowed to get", () => {
-	// The measured claim behind this: on a board of thirty-five people and eighty-five links,
-	// sliding the chips along their lines takes the captions sitting on one another down by about
-	// a tenth, and narrowing the widest chip takes it down by a further third again. There is only
-	// so much paper, and eighty captions at full width want a third of the board to themselves.
-	it("narrows the chips as the board fills up, in steps", () => {
-		const widths = [0, 8, 24, 25, 60, 61, 200].map(labelCapPx);
-		// Never wider as the board gets busier, and it really does narrow somewhere along the way.
-		for (let i = 1; i < widths.length; i++) expect(widths[i]).toBeLessThanOrEqual(widths[i - 1]);
-		expect(widths.at(-1)).toBeLessThan(widths[0]);
+	const r = nodeRadiusPct(72, 1200);
+	const opts = { aspect: ASPECT, r };
+	const curveOf = (from, to) => edgeCurve({ from, to, ...opts });
+	// One flat unit is one percent of the board's width, which on a sheet of 1200 is twelve pixels.
+	const px = flat => flat * 12;
+
+	it("gives a line its own run, less the clearance kept at either end", () => {
+		const line = curveOf({ left: 15, top: 50 }, { left: 85, top: 50 });
+		expect(captionRoomPx(line, { boardWidthPx: 1200 }))
+			.toBeCloseTo(px(line.length) - (2 * RELMAP_LABEL_CLEAR_PX), 6);
 	});
 
-	it("leaves a small map's captions whole, which is the common board", () => {
-		expect(labelCapPx(8)).toBe(labelCapPx(0));
+	// TWICE, because the words are centred on their seat: a caption grows from the middle outwards,
+	// so every pixel of width it takes is half a pixel closer to each of the two faces.
+	it("keeps the same clearance at both ends, whatever the line", () => {
+		for (const to of [{ left: 60, top: 50 }, { left: 85, top: 50 }, { left: 80, top: 80 }]) {
+			const line = curveOf({ left: 15, top: 50 }, to);
+			const room = captionRoomPx(line, { boardWidthPx: 1200 });
+			expect((px(line.length) - room) / 2).toBeCloseTo(RELMAP_LABEL_CLEAR_PX, 6);
+		}
 	});
 
-	it("reads rubbish as an empty board rather than as no width at all", () => {
-		for (const bad of [null, undefined, "x", NaN, -5]) expect(labelCapPx(bad)).toBe(labelCapPx(0));
+	// The case the promise was made for, answered the other way round. What a reader gets here is
+	// the line, the tooltip and the tie bar, all of which carry the whole sentence; what they do not
+	// get is that sentence written across two faces.
+	it("gives two portraits standing close together no room at all", () => {
+		const stub = curveOf({ left: 46, top: 50 }, { left: 54, top: 50 });
+		expect(px(stub.length)).toBeLessThan(2 * RELMAP_LABEL_CLEAR_PX);
+		expect(captionRoomPx(stub, { boardWidthPx: 1200 })).toBe(0);
+		expect(captionSize("has never forgiven her", stub, { boardWidthPx: 1200 }).w).toBe(0);
 	});
 
-	it("measures a chip at the width it will be painted at", () => {
+	it("never answers less than nothing, whatever it is handed", () => {
+		for (const bad of [null, undefined, {}, { length: 0 }]) {
+			expect(captionRoomPx(bad, { boardWidthPx: 1200 })).toBe(0);
+		}
+	});
+
+	it("measures a chip at the width the room it was given will paint it at", () => {
 		const text = "buys cheap from people who need the coin";
 		expect(labelSize(text, 1200, 140).w).toBeLessThan(labelSize(text, 1200, 220).w);
-		// Short enough not to reach either cap: the two agree, so the cap is a CAP and not a width.
+		// Short enough to fit either: the two agree, so the room is a bound and not a width.
 		expect(labelSize("exes", 1200, 140).w).toBeCloseTo(labelSize("exes", 1200, 220).w, 6);
+	});
+
+	// ⚠ A ROOM OF NOTHING IS NOT AN ABSENT ROOM. Read the other way -- as "nobody measured, take
+	// the whole board" -- a stub line would put its entire sentence back across both faces, which is
+	// the failure at the top of this block.
+	it("reads a room of nothing as nothing, and only a missing one as no bound", () => {
+		const text = "buys cheap from people who need the coin";
+		expect(labelSize(text, 1200, 0).w).toBe(0);
+		expect(labelSize(text, 1200, NaN).w).toBeCloseTo(labelSize(text, 1200).w, 6);
 	});
 });
 
@@ -784,58 +848,54 @@ describe("the sheet, which grows with the cast on it", () => {
 	});
 });
 
-describe("a caption may run the whole length of the line it sits on", () => {
+describe("a caption runs the length of its line, and stops short of the faces at its ends", () => {
 	const r = nodeRadiusPct(72, 1200);
 	const opts = { aspect: ASPECT, r };
-	const sized = (text, curve) => captionSize(text, curve, { boardWidthPx: 1200, capPx: 220 });
+	const sized = (text, curve) => captionSize(text, curve, { boardWidthPx: 1200 });
 	const across = { from: { left: 10, top: 50 }, to: { left: 90, top: 50 } };
 	const sentence = "buys cheap from people who need the coin";
+	const clear = RELMAP_LABEL_CLEAR_PX / 12;
 
 	// THE POINT OF THE CAPTION IS THE SENTENCE ON IT. A line with the length to carry the whole of
-	// it carries the whole of it, whatever the board's promise to the short lines happens to be:
-	// two words and an ellipsis is not a shorter caption, it is a caption that has stopped saying
-	// anything.
-	it("lets a long line carry its whole sentence, past the crowding width", () => {
+	// one carries the whole of it, however long it is: two words and an ellipsis is not a shorter
+	// caption, it is a caption that has stopped saying anything.
+	it("lets a long line carry its whole sentence", () => {
 		const long = edgeCurve({ ...across, ...opts });
-		expect(sized(sentence, long).w).toBeGreaterThan(labelSize(sentence, 1200, 220).w);
+		expect(sized(sentence, long).w).toBeCloseTo(labelSize(sentence, 1200).w, 6);
 	});
 
-	it("stops at the two faces the line joins, so the words stay between them", () => {
+	it("stops short of the two faces the line joins, so the words stay clear of both", () => {
 		const long = edgeCurve({ ...across, ...opts });
 		const huge = "x".repeat(400);
-		expect(sized(huge, long).w).toBeCloseTo(long.length, 6);
+		expect(sized(huge, long).w).toBeCloseTo(long.length - (2 * clear), 6);
 	});
 
-	// The other half of it: a line too short for a few words does NOT trim to the line, or two
-	// people standing close together would have nothing readable between them at all. It takes the
-	// board's promise instead and overhangs to get it.
-	it("gives a short line the width the board promises rather than trimming to it", () => {
+	// The other half of it, and the half that used to be wrong. A line too short for the sentence
+	// is cut to the line rather than given a width the board cannot keep: what overhangs a line
+	// here is what lies across the two portraits at its ends.
+	it("cuts a short line's caption to the line rather than overhanging it", () => {
 		const short = edgeCurve({ from: { left: 40, top: 50 }, to: { left: 52, top: 50 }, ...opts });
 		const out = spreadLabels({ labels: [{ id: "a", curve: short, text: sentence }], ...opts });
+		// Still seated on its line: the words are the button, and the whole sentence is its tooltip.
 		expect(out.has("a")).toBe(true);
-		expect(short.length).toBeLessThan(labelSize(sentence, 1200, 220).w);
-		expect(sized(sentence, short).w).toBeCloseTo(labelSize(sentence, 1200, 220).w, 6);
+		expect(labelSize(sentence, 1200).w).toBeGreaterThan(short.length);
+		expect(sized(sentence, short).w).toBeCloseTo(short.length - (2 * clear), 6);
 	});
 
-	// And that promise is smaller on a crowded board, where a caption overhanging its line by the
-	// full amount would be sitting on somebody else's.
-	it("promises a short line less on a crowded board than on an empty one", () => {
-		const short = edgeCurve({ from: { left: 40, top: 50 }, to: { left: 52, top: 50 }, ...opts });
-		const crowded = captionSize(sentence, short, { boardWidthPx: 1200, capPx: 140 });
-		expect(crowded.w).toBeLessThan(sized(sentence, short).w);
-	});
-
-	it("leaves a short caption alone on any line", () => {
+	it("leaves a short caption alone on any line with the room for it", () => {
 		const long = edgeCurve({ ...across, ...opts });
-		expect(sized("exes", long).w).toBeCloseTo(labelSize("exes", 1200, 220).w, 6);
+		expect(sized("exes", long).w).toBeCloseTo(labelSize("exes", 1200).w, 6);
 	});
 
 	// ONE ANSWER, because three things have to agree about it to the pixel: the spreader that
 	// slides the captions apart, the stylesheet that paints them, and the gap cut in the line for
 	// the words to sit in. A gap measured off a different width leaves a stub of stroke inside it.
-	it("never trims a caption to a smudge, however short its line", () => {
+	// Nothing is a width too, and the honest one for a line with two faces almost touching on it:
+	// no words, and so no hole cut in a stroke that has no room for either.
+	it("says nothing, and cuts no hole, on a line shorter than its own clearances", () => {
 		const stub = edgeCurve({ from: { left: 49, top: 50 }, to: { left: 56, top: 50 }, ...opts });
-		expect(sized("has never forgiven her", stub).w).toBeGreaterThan(0);
+		expect(sized("has never forgiven her", stub).w).toBe(0);
+		expect(curveWithGap(stub, { t: 0.5, span: 0, boardWidthPx: 1200 })).toBe(stub.d);
 	});
 });
 
@@ -863,18 +923,19 @@ describe("a caption whose real width somebody has measured", () => {
 	});
 
 	it("is still held to the room its own line has, because that is what the paint is held to", () => {
-		const stub = edgeCurve({ from: { left: 46, top: 50 }, to: { left: 54, top: 50 }, ...opts });
-		const room = captionRoomPx(stub, { boardWidthPx: 1200, capPx: 220 });
-		const out = captionSize(sentence, stub, { boardWidthPx: 1200, capPx: 220, paintedPx: 5000 });
+		const stub = edgeCurve({ from: { left: 40, top: 50 }, to: { left: 60, top: 50 }, ...opts });
+		const room = captionRoomPx(stub, { boardWidthPx: 1200 });
+		expect(room).toBeGreaterThan(0);
+		const out = captionSize(sentence, stub, { boardWidthPx: 1200, paintedPx: 5000 });
 		expect(out.w).toBeCloseTo((room * 100) / 1200, 6);
 	});
 
 	// The measurement is the one thing here that can be absent: the spreader runs before there is
 	// anything on screen to measure, and this module's own tests run with no document at all.
 	it("falls back to the count when nobody could measure it", () => {
-		const guessed = captionSize(sentence, long, { boardWidthPx: 1200, capPx: 220 });
+		const guessed = captionSize(sentence, long, { boardWidthPx: 1200 });
 		for (const none of [null, undefined, 0, -5, NaN, "wide"]) {
-			const out = captionSize(sentence, long, { boardWidthPx: 1200, capPx: 220, paintedPx: none });
+			const out = captionSize(sentence, long, { boardWidthPx: 1200, paintedPx: none });
 			expect(out.w).toBeCloseTo(guessed.w, 6);
 		}
 	});
@@ -889,7 +950,7 @@ describe("a caption whose real width somebody has measured", () => {
 		};
 		const cut = paintedPx => curveWithGap(long, {
 			t: 0.5,
-			span: captionSize(sentence, long, { boardWidthPx: 1200, capPx: 220, paintedPx }).w,
+			span: captionSize(sentence, long, { boardWidthPx: 1200, paintedPx }).w,
 			boardWidthPx: 1200,
 		});
 		const guessed = gapOf(cut(null));
@@ -950,10 +1011,11 @@ describe("a caption set in a size of its own", () => {
 	it("is still held to the room its own line has", () => {
 		const r = nodeRadiusPct(72, 1200);
 		const stub = edgeCurve({
-			from: { left: 46, top: 50 }, to: { left: 54, top: 50 }, aspect: ASPECT, r,
+			from: { left: 40, top: 50 }, to: { left: 60, top: 50 }, aspect: ASPECT, r,
 		});
-		const room = captionRoomPx(stub, { boardWidthPx: 1200, capPx: 220 });
-		const out = captionSize(sentence, stub, { boardWidthPx: 1200, capPx: 220, px: 24 });
+		const room = captionRoomPx(stub, { boardWidthPx: 1200 });
+		expect(room).toBeGreaterThan(0);
+		const out = captionSize(sentence, stub, { boardWidthPx: 1200, px: 24 });
 		expect(out.w).toBeCloseTo((room * 100) / 1200, 6);
 	});
 });

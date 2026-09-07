@@ -806,6 +806,38 @@ describe("cutting each gap to the caption that actually painted", () => {
 		expect(app._drawn.painted.get("link1")).toBeLessThanOrEqual(room);
 	});
 
+	// ⚠ AND THE CUT COMES WHEN THE ROOM RUNS OUT, NOT WHEN THE BOARD DOES. Two portraits close
+	// enough together to leave no clear paper between them have a room of NOTHING (`captionRoomPx`),
+	// and a room of nothing read as "nobody said" is how the whole sentence used to end up drawn
+	// across both their faces. What is left is the ellipsis, which still says there is something
+	// written here; the sentence itself is in the tooltip and in the tie bar.
+	it("cuts a caption to its ellipsis where the two faces leave no room at all", () => {
+		const tight = {
+			...TALKERS,
+			nodes: {
+				elena: { ...TALKERS.nodes.elena, x: 46 },
+				stefan: { ...TALKERS.nodes.stefan, x: 54 },
+			},
+		};
+		const made = windowFor(tight);
+		const line = part({ relmapLine: "link1" });
+		const words = part({ relmapWords: "link1" });
+		words.textContent = tight.edges.link1.label;
+		words.ownerDocument = measuringDoc(5.2);
+		made.board.all = {
+			"[data-relmap-line]": [line],
+			"[data-relmap-edge]": [part({ relmapEdge: "link1" })],
+			"[data-relmap-words]": [words],
+			"[data-relmap-head]": [],
+		};
+		made.app._boardContext(made.app._plan());
+		expect(made.app._drawn.shapes.get("link1").labelMax).toBe(0);
+		made.app._fitGapsToPaint();
+		expect(words.textContent).toBe("…");
+		// And no hole cut in a stroke with no room for one: the line between them stays whole.
+		expect(line.attrs.d.split("M").filter(Boolean).length).toBe(1);
+	});
+
 	it("leaves the caption whole when it fits", () => {
 		const { app, words } = drawn(5.2);
 		app._fitGapsToPaint();
@@ -875,7 +907,7 @@ describe("cutting each gap to the caption that actually painted", () => {
 	it("neither cuts the sentence nor breaks the stroke while the captions are away", () => {
 		const { app, root, words, line } = drawn(30);
 		app._fitGapsToPaint();
-		root.classList.add("captions-too-small");
+		root.classList.add("captions-off");
 		const before = line.attrs.d;
 		const said = "a sentence far longer than this short line has any room at all for";
 		app._sayLine("link1", said);
@@ -1534,9 +1566,9 @@ describe("turning the words off", () => {
 // a portrait. One opacity on the layer as a whole costs one.
 //
 // So the layer is dimmed entire, and the captions that should stay bright are drawn AGAIN in a
-// second layer over the top. (What makes the captions affordable in the first place is a different
-// rule and a bigger one: the board paints none of them while they would be too small to read. See
-// `_paintCaptionZoom` and tests/styles/relationship-map-inks.test.js.)
+// second layer over the top. (What makes a hundred captions affordable in the first place is that
+// the words are set STRAIGHT rather than warped onto a rail: 1.2ms a raster tile against 73ms. See
+// tests/styles/relationship-map-inks.test.js.)
 describe("lighting one person's web", () => {
 	/** An element with just enough of the DOM for the copy to be made and stripped. */
 	function node(tag, { classes = [], attrs = {}, kids = [] } = {}) {
@@ -1665,36 +1697,42 @@ describe("lighting one person's web", () => {
 
 // ── Type too small to be type ───────────────────────────────────────────────
 //
-// ⚠ THE MAP'S PERFORMANCE FIX, and it is a legibility rule that happens to be one. Text on a path
-// is expensive to RASTER -- the browser warps every glyph onto its curve and, with the halo,
-// strokes each warped outline as well -- and the cost is per glyph ON SCREEN. So it is worst at the
-// scale the window OPENS at: the whole board fitted into the viewport, every one of a hundred
-// captions drawn at once. Measured on this table's own map (36 people, 102 captions of ~85
-// characters): 5.3 SECONDS of raster at a third size, 2.6s at 0.4, 76ms at 0.7, 3ms at 1. A trace of
-// the real window showed the main thread blocked in Commit for a second and a half at a time and
-// ~100 frames dropped a second, for as long as the map was open.
-//
-// And at those scales the writing is three pixels tall. It was never readable.
-describe("putting the captions away while they would be too small to read", () => {
+// ⚠ THE ZOOM DOES NOT TAKE THE WORDS AWAY. It used to: below a legibility floor every caption went,
+// on the grounds that three-pixel writing is a grey thicket and, when the words were warped onto
+// rails and stroked, cost SECONDS of raster to say nothing. The raster half was paid off when the
+// captions were set straight instead (73ms a tile down to 1.2ms), and the legibility half was the
+// board deciding for the reader -- somebody who zooms out to see the whole web is exactly the person
+// who wants to see where the writing is. So the class marks the type as tiny and hides nothing.
+describe("marking the board when its captions go under the legibility floor", () => {
 	/** A window whose root remembers the classes written on it. */
 	function windowWithRoot() {
 		const { app, root, board } = windowFor();
 		return { app, root, board, on: () => [...root.classList._set] };
 	}
 
-	it("hides them once the board is scaled below the legibility floor", () => {
+	it("marks the board once it is scaled below the legibility floor", () => {
 		const { app, root } = windowWithRoot();
 		app._drawn = { captionPx: 12 };
 		app._paintCaptionZoom({ scale: 0.3 });
-		expect(root.classList.contains("captions-too-small")).toBe(true);
+		expect(root.classList.contains("captions-tiny")).toBe(true);
 	});
 
-	it("brings them back the moment the reader zooms far enough in", () => {
+	// ⚠ THE GUARD ON THE WHOLE CHANGE. Whatever else the mark does, it must never be the thing that
+	// stops a caption being painted -- that class is gone and no zoom may bring it back.
+	it("never hides a caption, however far out the board is zoomed", () => {
+		const { app, root } = windowWithRoot();
+		app._drawn = { captionPx: 12 };
+		app._paintCaptionZoom({ scale: 0.05 });
+		expect(root.classList.contains("captions-too-small")).toBe(false);
+		expect(app._captionsHidden()).toBe(false);
+	});
+
+	it("clears the mark the moment the reader zooms far enough in", () => {
 		const { app, root } = windowWithRoot();
 		app._drawn = { captionPx: 12 };
 		app._paintCaptionZoom({ scale: 0.3 });
 		app._paintCaptionZoom({ scale: 1 });
-		expect(root.classList.contains("captions-too-small")).toBe(false);
+		expect(root.classList.contains("captions-tiny")).toBe(false);
 	});
 
 	// THE RULE IS THE PAINTED SIZE OF THE TYPE and not a zoom number, so that it moves with whatever
@@ -1704,15 +1742,14 @@ describe("putting the captions away while they would be too small to read", () =
 		const { app, root } = windowWithRoot();
 		app._drawn = { captionPx: 32 };
 		app._paintCaptionZoom({ scale: 0.3 });
-		expect(root.classList.contains("captions-too-small")).toBe(false);
+		expect(root.classList.contains("captions-tiny")).toBe(false);
 	});
 
-	// ⚠ AND THE ONE CAPTION STILL DRAWN AT THAT ZOOM IS BLOWN UP TO BE READABLE. The tie bar has no
-	// text box on it: what a reader types shows on the LINE, and a whole board fitted into the
-	// window is under this threshold -- which is the zoom the map opens at. The stylesheet keeps
-	// the held line's caption; this is the size it keeps it at, in board pixels worked out so the
-	// words come out the same size to read whatever the board is scaled to.
-	it("keeps the held caption readable while the rest are away", () => {
+	// ⚠ AND THE CAPTION THE READER IS HOLDING IS BLOWN UP TO BE READABLE. The tie bar has no text
+	// box on it: what a reader types shows on the LINE, and a whole board fitted into the window is
+	// under this threshold -- which is the zoom the map opens at. This is the size the held one
+	// keeps, in board pixels worked out so the words come out readable whatever the board is at.
+	it("keeps the held caption readable while the board's type is tiny", () => {
 		const { app, root } = windowWithRoot();
 		const set = {};
 		root.style = { setProperty: (k, v) => { set[k] = v; }, removeProperty: k => { delete set[k]; } };
@@ -1723,22 +1760,22 @@ describe("putting the captions away while they would be too small to read", () =
 		expect(set["--relmap-say-px"]).toBeUndefined();
 	});
 
-	// A board that has not been sized yet must not open blank.
-	it("shows them when it does not know the scale", () => {
+	// A board that has not been sized yet must not open with one caption blown up over the rest.
+	it("marks nothing when it does not know the scale", () => {
 		const { app, root } = windowWithRoot();
 		app._paintCaptionZoom(null);
-		expect(root.classList.contains("captions-too-small")).toBe(false);
+		expect(root.classList.contains("captions-tiny")).toBe(false);
 		app._paintCaptionZoom({ scale: 0 });
-		expect(root.classList.contains("captions-too-small")).toBe(false);
+		expect(root.classList.contains("captions-tiny")).toBe(false);
 	});
 });
 
 // ── The holes cut for words that are not there ──────────────────────────────
 //
 // Every line is drawn BROKEN, with a length cut out exactly where its caption goes, because the
-// words sit IN the line rather than over it. Take the words away -- captions turned off, or the
-// board zoomed out past the size at which they are drawn at all -- and what is left is a web of
-// lines with conspicuous breaks in them for nothing, which reads as a broken diagram.
+// words sit IN the line rather than over it. Take the words away -- which only the reader ticking
+// the box does -- and what is left is a web of lines with conspicuous breaks in them for nothing,
+// which reads as a broken diagram.
 describe("healing a stroke that has no caption to carry", () => {
 	function boardWithLines() {
 		const { app, root, board } = windowFor();
@@ -1752,26 +1789,34 @@ describe("healing a stroke that has no caption to carry", () => {
 		return { app, root, board, line };
 	}
 
-	it("closes the gaps when the type is too small to be drawn", () => {
+	it("closes the gaps when the reader turns the words off", () => {
 		const { app, line } = boardWithLines();
-		app._paintCaptionZoom({ scale: 0.3 });
+		app._toggleLabels({ checked: true });
 		expect(line.attrs.d).toBe("WHOLE");
 	});
 
 	it("cuts them again when the captions come back", () => {
 		const { app, line } = boardWithLines();
-		app._paintCaptionZoom({ scale: 0.3 });
-		app._paintCaptionZoom({ scale: 1 });
+		app._toggleLabels({ checked: true });
+		app._toggleLabels({ checked: false });
 		expect(line.attrs.d).toBe("BROKEN");
 	});
 
-	// Only when the answer CHANGES: on a zoom that is once, at the threshold, rather than a hundred
-	// attribute writes on every step of the wheel.
+	// ⚠ AND A ZOOM NEVER TOUCHES THEM. The gaps are cut for captions that are still being painted,
+	// however small the board has got: healing them would leave every line whole with the words
+	// lying across it.
+	it("leaves the gaps cut however far out the board is zoomed", () => {
+		const { app, line } = boardWithLines();
+		app._paintCaptionZoom({ scale: 0.05 });
+		expect(line.attrs.d).toBe("BROKEN");
+	});
+
+	// Only when the answer CHANGES, rather than a hundred attribute writes on every frame of a pan.
 	it("writes nothing when the answer has not changed", () => {
 		const { app, line } = boardWithLines();
-		app._paintCaptionZoom({ scale: 0.3 });
+		app._toggleLabels({ checked: true });
 		line.attrs.d = "UNTOUCHED";
-		app._paintCaptionZoom({ scale: 0.31 });
+		app._toggleLabels({ checked: true });
 		expect(line.attrs.d).toBe("UNTOUCHED");
 	});
 });

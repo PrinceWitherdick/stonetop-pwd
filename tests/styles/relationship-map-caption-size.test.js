@@ -22,7 +22,7 @@ const BOARD = stripComments(readRepo("templates/dialogs/partials/relationship-ma
 const CAPTION = declarations(CSS, ".stonetop-relmap-label-text");
 const HELD = declarations(
 	CSS,
-	".stonetop-relmap.captions-too-small .stonetop-relmap-label.is-picked .stonetop-relmap-label-text",
+	".stonetop-relmap.captions-tiny .stonetop-relmap-label.is-picked .stonetop-relmap-label-text",
 );
 
 describe("the size the writing on a line is set in", () => {

@@ -32,7 +32,7 @@ import {
 	ROUTE_HEAD_PATH, ROUTE_HEAD_VIEWBOX,
 	boardMetrics,
 	captionRoomPx, captionSize, clampPct, clearanceBow, curveWithGap, edgeArrowheads, edgeBow,
-	edgeCurve, edgeLabelAnchor, freeSpot, graphCapPx, spreadLabels,
+	edgeCurve, edgeLabelAnchor, freeSpot, spreadLabels,
 } from "../utils/relmap-geometry.js";
 import {
 	RELMAP_DASHES, RELMAP_DASH_DEFAULT, RELMAP_DIRS, RELMAP_FLAG, RELMAP_INKS, RELMAP_LABEL_MAX,
@@ -76,19 +76,15 @@ const BOARD_PARTIAL = "systems/stonetop-pwd/templates/dialogs/partials/relations
 /** How long a burst of remote writes is allowed to coalesce before the board repaints. */
 const SYNC_DEBOUNCE_MS = 50;
 
-/** What a caption is assumed to be set in before anything has measured one. Matches the sheet,
- * by being the same constant the sheet's own fallback is kept in step with rather than a third
- * copy of the number. */
-const CAPTION_FALLBACK_PX = RELMAP_CAPTION_PX;
-
 /**
- * The size, ON SCREEN, that the held line's caption is kept at while the rest are away.
+ * The size, ON SCREEN, that the held line's caption is kept at while the board is zoomed out.
  *
  * The tie bar has no text box on it: what a reader is typing shows on the LINE. A board fitted
  * whole into the window sits under `RELMAP_CAPTION_FLOOR_PX`, which is the zoom the map opens at --
  * so without this, clicking a line on a forty-person map and typing would put the words somewhere
- * three pixels tall. One caption at a readable size costs nothing; a hundred is what the floor is
- * for. See `_paintCaptionZoom` and `_sayLine`.
+ * three pixels tall. The rest of the board's captions are painted at that zoom too, at whatever
+ * size the board is showing them; this is only the one the reader is writing on, held at a size
+ * they can actually read it back at. See `_paintCaptionZoom` and `_sayLine`.
  */
 const CAPTION_READ_PX = 13;
 
@@ -554,8 +550,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * There used to be: a filter that dropped the lines an old import had written, so the picture
 	 * and the map could differ. Everything the reader can now put away is put away by the
 	 * STYLESHEET -- the captions, and nothing else -- which is why one graph does for both. Every
-	 * measurement (the fan indexes, the caption cap, `edgeShapes`' clearance dodges, the spreader's
-	 * obstacle list, the cast the partial walks) reads it, so they cannot come apart.
+	 * measurement (the fan indexes, `edgeShapes`' clearance dodges, the room each caption has, the
+	 * spreader's obstacle list, the cast the partial walks) reads it, so they cannot come apart.
 	 */
 	_plan(graph = null) {
 		const whole = graph ?? readGraph(this.boardDoc);
@@ -660,20 +656,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * IT NEVER ASKS WHICH VIEW IS UP. `plan.graph` is already the board in front of the reader —
 	 * the right cast, at the right seats, with the right lines and no others — so every number
 	 * below is measured against what is actually drawn. That is not tidiness: the fan indexes, the
-	 * caption cap, the clearance dodges and the spreader's obstacle list all have to agree about
-	 * which board they are on, and a ternary per question is four chances for one of them to be
-	 * looking at a different one.
+	 * clearance dodges and the spreader's obstacle list all have to agree about which board they
+	 * are on, and a ternary per question is three chances for one of them to be looking at a
+	 * different one.
 	 */
 	_boardContext({ graph, board }) {
 		const r = board.r;
 		const fans = fanIndexes(graph);
 		const canEdit = this.canEdit;
-		// The width a caption is PROMISED on a board this crowded, worked out once from how many it
-		// carries. What a caption actually gets is its own line's length or this, whichever is
-		// bigger (`captionRoomPx`), and that per-line answer is what both the spreader and the
-		// stylesheet work from — one number for the two of them, or the spreader clears overlaps
-		// that are not there.
-		const labelMax = graphCapPx(graph);
 		// The right-press hint, added to whatever a face's tooltip already says -- and NOT added on
 		// a board this reader may only look at, where it would teach a gesture that does nothing.
 		// One sentence, appended rather than woven in, so the three tooltips below stay the three
@@ -752,7 +742,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const labels = [];
 		const heads = [];
 		const shapes = edgeShapes(graph, {
-			r, fans, spread: true, capPx: labelMax, boardWidthPx: board.width,
+			r, fans, spread: true, boardWidthPx: board.width,
 		});
 		// HELD BACK for the second pass over this same markup. `_fitGapsToPaint` needs the curve, the
 		// anchor and the sheet these were worked out on, and re-deriving them from the document would
@@ -764,7 +754,6 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// read straight off it: a second copy of that number beside it was one more field to
 			// keep in step for nothing.
 			board,
-			capPx: labelMax,
 			shapes: new Map(shapes.map(shape => [shape.id, shape])),
 			painted: null,
 			// Each line's markup, indexed by edge id. Walked once by `_fitGapsToPaint` and kept for
@@ -894,8 +883,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 			naturalHeight: sheet.height,
 			controls: BOARD_CONTROLS,
 			menus: BOARD_MENUS,
-			// Every pan and every zoom step, because whether the writing is big enough to be worth
-			// drawing at all is a question about the scale. See `_paintCaptionZoom`.
+			// Every pan and every zoom step, because how big the held line's caption has to be set
+			// to stay readable is a question about the scale. See `_paintCaptionZoom`.
 			//
 			// AND THE TIE BAR COMES WITH IT. The bar is chrome in the viewport rather than a thing
 			// on the board (utils/relmap-tie-bar.js says why at length), so nothing moves it unless
@@ -1256,8 +1245,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const drawn = this._drawn;
 		if (parts.words.textContent !== fit.text) parts.words.textContent = fit.text;
 		const size = captionSize(shape.edge.label, shape.curve, {
-			boardWidthPx: drawn.board.width, capPx: drawn.capPx, paintedPx: fit.width,
-			px: shape.edge.size,
+			boardWidthPx: drawn.board.width, paintedPx: fit.width, px: shape.edge.size,
 		});
 		shape.size = size;
 		shape.anchor = edgeLabelAnchor(shape.curve, RELMAP_BOARD_ASPECT, shape.anchor.t, size.w)
@@ -1449,15 +1437,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// of a line that already had a caption. Asked once and kept on the shape, as that loop
 		// keeps it -- it is the line's length, and nothing being typed changes that.
 		shape.labelMax ??= Math.round(captionRoomPx(shape.curve, {
-			boardWidthPx: drawn.board.width, capPx: drawn.capPx,
+			boardWidthPx: drawn.board.width,
 		}));
-		// ⚠ NOT FITTED AND NOT GAPPED WHILE THE CAPTIONS ARE NOT BEING DRAWN -- whether that is the
-		// board zoomed out past the size at which they are worth drawing, or the reader having
-		// turned the words off outright. In either state the board shows this one caption and no
-		// other (the stylesheet keeps the held line's, so that whoever is typing can still see what
-		// they are typing), and every stroke on it is healed. Cutting a hole under the one visible
-		// caption would be the only broken line on the board, and cutting the sentence to fit would
-		// hide the tail of what they are writing behind an ellipsis.
+		// ⚠ NOT FITTED AND NOT GAPPED WHILE THE READER HAS THE WORDS TURNED OFF. In that state the
+		// board shows this one caption and no other (the stylesheet keeps the held line's, so that
+		// whoever is typing can still see what they are typing), and every stroke on it is healed.
+		// Cutting a hole under the one visible caption would be the only broken line on the board,
+		// and cutting the sentence to fit would hide the tail of what they are writing behind an
+		// ellipsis. Zoom does not reach this: a board zoomed out is still drawing every caption.
 		const tiny = this._captionsHidden();
 		// At the size THIS line is set in, as the full pass measures it: the same cut and the same
 		// gap, or the words would jump the moment the write lands. See `_fitGapsToPaint`.
@@ -2194,7 +2181,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		node.y = at.y;
 		for (const shape of edgeShapes(preview.graph, {
 			r: preview.board.r, fans: preview.fans, only: id,
-			boardWidthPx: preview.board.width, capPx: preview.capPx, painted: preview.painted,
+			boardWidthPx: preview.board.width, painted: preview.painted,
 		})) {
 			const parts = preview.parts.get(shape.id);
 			// A BOARD WITH NO CAPTIONS ON IT HAS NO HOLES IN ITS LINES, and a line being dragged has
@@ -2224,9 +2211,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 		//
 		// ⚠ AND IT IS THE PLAN'S GRAPH THAT IS PREVIEWED. The board on screen was drawn through
 		// `_plan`, and a drag that measured a graph of its own would fan the pairs apart
-		// differently and promise the captions different room: a line would slide to another fan
-		// index for the length of the drag and snap back on the drop, and the caption cap would
-		// step to a different tier than the one the paint used. Same graph in, same geometry out.
+		// differently and leave the captions different room: a line would slide to another fan index
+		// for the length of the drag, take a different bow past the same face, and snap back on the
+		// drop. Same graph in, same geometry out.
 		const plan = this._plan(whole);
 		const graph = plan.graph;
 		this._preview = {
@@ -2238,9 +2225,6 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// second copies of two of its numbers beside it were two more fields to keep in step for
 			// nothing.
 			board: plan.board,
-			// The width the captions were PAINTED at. Recomputed from a different count, the gaps
-			// cut under the drag would be a different size from the ones already on the board.
-			capPx: graphCapPx(graph),
 			// WHAT THE CAPTIONS ON SCREEN MEASURED, from the repaint that drew them
 			// (`_fitGapsToPaint`). Read here rather than per frame, because reading an element's
 			// width forces the browser to lay the board out and doing that sixty times a second is
@@ -2667,14 +2651,17 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 *
 	 * ⚠ A CLASS AND NOT A REPAINT, which is the difference between this and the filter it replaced.
 	 * The old checkbox took whole LINES out of the picture, and lines are measured: the fans, the
-	 * dodges and the caption cap all had to be worked out again, so it had to repaint. Words are
-	 * only painted. The gaps cut in the strokes for them are the one thing a stylesheet cannot put
+	 * dodges and the room each caption has all had to be worked out again, so it had to repaint.
+	 * Words are only painted. The gaps cut in the strokes for them are the one thing a stylesheet cannot put
 	 * back -- a gap is a length missing from the path data -- and `_paintLineGaps` writes the
 	 * unbroken form that every shape has been carrying all along.
 	 *
-	 * ⚠ EXCEPT THE LINE THE READER IS HOLDING, and for the same reason the zoom rule keeps it: with
-	 * no text box on the tie bar, the caption IS where typing shows. A reader who turned the words
-	 * off and then clicked a line to write on it would be typing into nothing.
+	 * ⚠ EXCEPT THE LINE THE READER IS HOLDING: with no text box on the tie bar, the caption IS where
+	 * typing shows. A reader who turned the words off and then clicked a line to write on it would
+	 * be typing into nothing.
+	 *
+	 * ⚠ AND THIS IS THE ONLY WAY THE WORDS GO. Zooming out does not take them: the board paints its
+	 * captions at every scale (`_paintCaptionZoom`), so a quiet board is one somebody asked for.
 	 */
 	_toggleLabels(box) {
 		this._hideLabels = !!box?.checked;
@@ -2804,45 +2791,44 @@ export class RelationshipMapWindow extends StonetopDialog {
 	}
 
 	/**
-	 * Put the captions away while the board is too small to read them on.
+	 * Mark the board when its captions have gone under the size type is legible at.
 	 *
-	 * ⚠ THE MAP'S PERFORMANCE FIX, and it is a legibility rule that happens to be one. Text on a
-	 * path is expensive to RASTER — the browser warps every glyph onto its curve and, with the halo,
-	 * strokes each warped outline as well. The cost is per glyph ON SCREEN, so it is worst at the
-	 * scale the window opens at, where the whole board is fitted into the viewport and every one of
-	 * a hundred captions is being drawn at once. Measured on this table's own map (36 people, 102
-	 * captions of ~85 characters): 5.3 SECONDS of raster at a third size, 2.6s at 0.4, 76ms at 0.7,
-	 * 3ms at 1. Zoomed in the browser rasters only what is in view and the cost is bounded by the
-	 * window; zoomed out there is no bound but the board.
+	 * ⚠ THE CAPTIONS ARE PAINTED AT EVERY ZOOM. This used to take them away below the floor and it
+	 * no longer does: what a line SAYS is said on the line, and a reader who zooms out to see the
+	 * shape of the whole web is exactly the reader who wants to see where the writing is. Small
+	 * type they can lean into beats a diagram that has silently stopped saying anything.
 	 *
-	 * AND AT THOSE SCALES THE WRITING IS THREE PIXELS TALL. It was never readable; it was a grey
-	 * thicket over the diagram, costing seconds of raster to say nothing. Putting it away is what
-	 * the reader would have asked for.
+	 * WHAT THAT COSTS, AND WHY IT IS AFFORDABLE NOW. Hiding them was once the map's performance fix:
+	 * the words were warped onto a `<textPath>` and stroked with a halo, which misses the glyph
+	 * cache on every glyph, and the cost is per glyph ON SCREEN — worst at exactly this scale, where
+	 * the whole board is in the viewport. Measured then: 5.3 SECONDS of raster at a third size. The
+	 * words are set STRAIGHT now, turned to their line's angle, and the same board rasters a tile in
+	 * 1.2ms. The floor was carrying a bill that has already been paid. (Do not put the rail back —
+	 * see the board partial, and never give the caption layer a `will-change`.)
 	 *
-	 * SO THE RULE IS THE PAINTED SIZE OF THE TYPE and not a zoom number: the threshold has to move
-	 * with whatever the stylesheet sets the captions in, and `_fitGapsToPaint` has already read that
-	 * off a real caption. `RELMAP_CAPTION_FLOOR_PX` is the smallest type worth drawing — and this is the
-	 * one board in the system with a reader on a screen magnifier looking at it, so it is generous.
-	 *
-	 * NOT A FOURTH SETTING. The captions control still says what the reader asked for; this is the
-	 * board declining to paint what it could not show them. Zooming in brings them back.
+	 * SO THE CLASS SAYS ONLY THAT THE TYPE IS TINY, and one rule hangs off it: the held line's
+	 * caption is blown up so that whoever is typing can read what they typed. The rule is the
+	 * PAINTED SIZE OF THE TYPE and not a zoom number, so it moves with whatever the stylesheet sets
+	 * the captions in — `_fitGapsToPaint` has already read that off a real caption.
+	 * `RELMAP_CAPTION_FLOOR_PX` is the smallest type that reads as type, and this is the one board
+	 * in the system with a reader on a screen magnifier looking at it, so it is generous.
 	 */
 	_paintCaptionZoom(surface) {
 		const root = this._root;
 		if (!root?.classList) return;
 		const scale = Number(surface?.scale);
-		const px = Number(this._drawn?.captionPx) || CAPTION_FALLBACK_PX;
-		// Unknown scale means show them: a board that has not been sized yet must not open blank.
+		const px = Number(this._drawn?.captionPx) || RELMAP_CAPTION_PX;
+		// Unknown scale means treat the type as ordinary: a board that has not been sized yet must
+		// not open with one caption blown up over the rest.
 		const tiny = scale > 0 && scale * px < RELMAP_CAPTION_FLOOR_PX;
-		root.classList.toggle("captions-too-small", tiny);
-		// ⚠ AND THE ONE CAPTION STILL DRAWN AT THAT ZOOM IS BLOWN UP TO BE READABLE. With the box
-		// gone off the tie bar, the line the reader is holding is the only place their typing shows
-		// -- and a whole board fitted into the window is under this threshold, which is the zoom it
-		// OPENS at. So the stylesheet keeps the held caption when the rest go away, and this is the
-		// size it keeps it at: board pixels chosen to come out at `CAPTION_READ_PX` on screen, so
-		// the words stay the same size to read while the board shrinks under them. Nothing else on
-		// the board is touched, and above the threshold the variable goes and the caption is set
-		// like every other one.
+		root.classList.toggle("captions-tiny", tiny);
+		// ⚠ AND THE CAPTION THE READER IS HOLDING IS BLOWN UP TO BE READABLE. With the box gone off
+		// the tie bar, the line they are holding is the only place their typing shows -- and a whole
+		// board fitted into the window is under this threshold, which is the zoom it OPENS at. Every
+		// other caption is painted at the size the board is showing it; this is the size the held
+		// one keeps: board pixels chosen to come out at `CAPTION_READ_PX` on screen, so the words
+		// stay the same size to read while the board shrinks under them. Above the threshold the
+		// variable goes and the caption is set like every other one.
 		const say = tiny ? `${Math.round((CAPTION_READ_PX / scale) * 10) / 10}px` : "";
 		// Written only when it CHANGES. This runs on every painted frame of a pan, where the scale
 		// is the one thing that has not moved.
@@ -2859,9 +2845,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 *
 	 * Every line is drawn BROKEN, with a length of it cut out exactly where its caption goes
 	 * (`curveWithGap`), because the words sit in the line rather than over it. Take the words away —
-	 * the reader turning the captions off, or the board zoomed out past the size at which they are
-	 * worth drawing — and what is left is a web of lines with conspicuous breaks in them for nothing,
-	 * which reads as a broken diagram rather than a quiet one.
+	 * which only the reader turning the captions off does — and what is left is a web of lines with
+	 * conspicuous breaks in them for nothing, which reads as a broken diagram rather than a quiet
+	 * one.
 	 *
 	 * NOT IN `hover` MODE. There the captions are still being painted, one person's at a time, and a
 	 * line healed until the pointer arrives would have to break again underneath the caption the
@@ -2870,7 +2856,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * BY REDRAWING AND NOT BY A CLASS, because a gap is a length missing from the path data and no
 	 * stylesheet can put it back. Both forms were worked out at render time and are held on the
 	 * shape, so this is a write and never a calculation; and it happens only when the answer
-	 * changes, which on a zoom is once, at the threshold.
+	 * changes, which is when the reader ticks the box and at no other time -- a pan and a zoom reach
+	 * this on every painted frame and leave at the early-out below.
 	 */
 	/**
 	 * The board element, looked up ONCE per render rather than per call.
@@ -2896,19 +2883,18 @@ export class RelationshipMapWindow extends StonetopDialog {
 	/**
 	 * Is the board drawing its captions at all?
 	 *
-	 * TWO WAYS TO ARRIVE AT THE SAME STATE, and everything downstream of it wants one answer: the
-	 * reader turned the words off (`_toggleLabels`), or the board is zoomed out past the size at
-	 * which they are worth drawing (`_paintCaptionZoom`). Both leave the same board -- every stroke
-	 * healed, no caption drawn but the held one -- so both have to be asked here, or a rule written
-	 * for one of them silently stops holding under the other.
+	 * ONE WAY TO ARRIVE HERE, AND IT IS THE READER'S OWN: the words are off because they turned them
+	 * off (`_toggleLabels`). Zoom does not answer this any more -- the board paints its captions at
+	 * every scale, however small the type gets (`_paintCaptionZoom` says why) -- so a board zoomed
+	 * out keeps its gaps cut, its sentences fitted, and its writing on it.
 	 *
-	 * READ OFF THE ROOT'S CLASSES rather than off the flags behind them, because the stylesheet is
-	 * what actually decides: these two classes ARE the state, and asking anything else invites the
-	 * paint and the arithmetic to disagree about which board is on screen.
+	 * STILL A QUESTION AND NOT A FLAG READ, and still asked of the ROOT'S CLASSES rather than of the
+	 * flag behind them, because the stylesheet is what actually decides: the class IS the state, and
+	 * asking anything else invites the paint and the arithmetic to disagree about which board is on
+	 * screen. Everything downstream asks here, so there is one answer to change.
 	 */
 	_captionsHidden() {
-		const on = this._root?.classList;
-		return !!on?.contains?.("captions-too-small") || !!on?.contains?.("captions-off");
+		return !!this._root?.classList?.contains?.("captions-off");
 	}
 
 	_paintLineGaps() {
@@ -2942,8 +2928,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * crossed onto or off a portrait. One opacity on the layer as a whole costs one.
 	 *
 	 * So the layer is dimmed entire, and the handful of captions that should stay bright are drawn
-	 * AGAIN here, over the top. (What makes the captions affordable in the first place is a
-	 * different rule and a bigger one: `_paintCaptionZoom`.)
+	 * AGAIN here, over the top. (What makes a hundred captions affordable at all is that the words
+	 * are set STRAIGHT rather than warped onto a rail — see below, and the board partial.)
 	 *
 	 * A CAPTION IS A GROUP AND ONE `<text>`, which is why there is nothing to unpick here beyond the
 	 * attributes below. It used to be words warped along a `<path>` rail, and the copy had to strip
@@ -3156,7 +3142,7 @@ export class RelationshipMapWindow extends StonetopDialog {
  * for no pixel changed.
  */
 function edgeShapes(graph, {
-	r, fans, only = null, spread = false, capPx = null, boardWidthPx = RELMAP_BOARD_WIDTH,
+	r, fans, only = null, spread = false, boardWidthPx = RELMAP_BOARD_WIDTH,
 	painted = null,
 } = {}) {
 	// Every face on the board, which each line has to get past. Gathered once for the whole
@@ -3203,7 +3189,7 @@ function edgeShapes(graph, {
 		// hole cut in the stroke are all measured off one number.
 		const size = curve && edge.label
 			? captionSize(edge.label, curve, {
-				boardWidthPx, capPx, paintedPx: painted?.get(id) ?? null, px: edge.size,
+				boardWidthPx, paintedPx: painted?.get(id) ?? null, px: edge.size,
 			})
 			: null;
 		out.push({
@@ -3236,9 +3222,6 @@ function edgeShapes(graph, {
 			nodes: faces,
 			aspect: RELMAP_BOARD_ASPECT,
 			r,
-			// The width the caller is going to PAINT the captions at. Passed in rather than worked
-			// out here, so the measurement and the paint are the same number by construction.
-			capPx,
 			boardWidthPx,
 		});
 		for (const shape of out) {
@@ -3252,9 +3235,8 @@ function edgeShapes(graph, {
 	// heal every one of its lines for the length of the gesture and break them again on release.
 	for (const shape of out) {
 		if (!shape.curve) { shape.d = ""; shape.unbroken = ""; continue; }
-		// THE SAME LINE WITH NO HOLE IN IT, kept beside the broken one because two paths put it
-		// back: the reader turning the captions off, and the board zoomed out past the size at
-		// which words are worth drawing (`_paintLineGaps`). Neither may reach for `curve.d` -- that
+		// THE SAME LINE WITH NO HOLE IN IT, kept beside the broken one because the reader turning
+		// the captions off puts it back (`_paintLineGaps`). It may not reach for `curve.d` -- that
 		// is the run end to end, and an end wearing an arrowhead has to stop short of it.
 		shape.unbroken = curveWithGap(shape.curve, { boardWidthPx, dir: shape.edge.dir });
 		if (!shape.anchor) { shape.d = shape.unbroken; continue; }
@@ -3262,7 +3244,7 @@ function edgeShapes(graph, {
 		// a long line carries its whole sentence, a short one is still promised a few words. Sent
 		// out with the shape because the stylesheet has to paint at exactly the width the gap below
 		// was cut for, and the two are only the same number if there is only one of them.
-		shape.labelMax = Math.round(captionRoomPx(shape.curve, { boardWidthPx, capPx }));
+		shape.labelMax = Math.round(captionRoomPx(shape.curve, { boardWidthPx }));
 		// THE CAPTION AS IT WAS PAINTED, where anybody has been able to measure it. Counting
 		// characters overshoots this font by about a fifth, and every pixel of that overshoot is a
 		// pixel of stroke rubbed out for a word that was never there: see `labelSize`. Absent on a
@@ -3425,15 +3407,14 @@ function captionMeasurer(parts) {
 	// three places at once now that a line can carry a size of its own: one line set in thirty-two
 	// made `measure(text, 0)` answer for thirty-two, so every ORDINARY caption on the board was cut
 	// to about half the words that fit it, `curveWithGap` opened a hole twice the width the words
-	// needed, and `captionPx` -- the size the zoom rule asks about -- said the board was showing
-	// writing twice as big as it is.
+	// needed, and `captionPx` -- the size `_paintCaptionZoom` asks about -- said the board was
+	// showing writing twice as big as it is.
 	//
 	// STILL READ OFF A LAID-OUT CAPTION rather than written down here: `_paintCaptionZoom` wants
 	// what the sheet actually painted, and the accessibility skin has a say in that. What the walk
-	// looks for is one the sheet alone decided. The board's ordinary size is what the reckoning is
-	// left to -- a line set BIGGER than the sheet's is drawn when the ordinary ones are, and one
-	// set smaller goes away with them -- so the smallest caption on the board is deliberately NOT
-	// the answer.
+	// looks for is one the sheet alone decided -- the board's ORDINARY size, which is what a
+	// judgement about the board as a whole has to be left to, rather than whatever one line the
+	// reader happened to set large or small.
 	//
 	// It stops at the first plain caption, which on a real board is the first one it looks at:
 	// the property is absent on nearly every line. A board where the reader has sized EVERY line
@@ -3461,12 +3442,12 @@ function captionMeasurer(parts) {
 	// into a forced reflow. Holding the declaration also held the caption, its board and its
 	// document alive behind the closure for a paint at a time.
 	const { fontStyle, fontWeight, fontSize, fontFamily } = style;
-	// The size the captions came out at, which is what decides whether a board zoomed this far
-	// out is showing writing or texture. Read here rather than written down twice: the
+	// The size the captions came out at, which is what tells a board zoomed this far out that its
+	// type has gone under the legibility floor. Read here rather than written down twice: the
 	// stylesheet owns the number and this is already the one place that asks it -- except where
 	// the caption in hand is a resized one, which by then is the only caption there is.
 	const read = Number.parseFloat(fontSize);
-	const px = plain && read > 0 ? read : CAPTION_FALLBACK_PX;
+	const px = plain && read > 0 ? read : RELMAP_CAPTION_PX;
 	// BUILT FROM `px` AND NOT FROM `fontSize`, so the face this board is checked for and the size
 	// everything is measured at are the same one answer.
 	const font = `${fontStyle} ${fontWeight} ${px}px ${fontFamily}`;
@@ -3520,13 +3501,20 @@ function measureAt(measure, px) {
 function fitCaption(text, roomPx, measure) {
 	const said = typeof text === "string" ? text : "";
 	const full = measure(said);
-	if (!(roomPx > 0) || full <= roomPx) return { text: said, width: full };
+	// ⚠ NO ROOM IS NOT NO LIMIT, and reading it as one is how the words used to end up on
+	// somebody's face. `captionRoomPx` answers ZERO for a line whose two portraits stand close
+	// enough together that nothing can sit between them and still keep its clearance, and a zero
+	// taken for "nobody said" put the whole sentence back across both of them. Only a room that is
+	// no number at all means as much as it likes; a zero cuts the caption back to its ellipsis,
+	// which is still a mark saying there is something written here to open.
+	const room = Number.isFinite(Number(roomPx)) ? Math.max(0, Number(roomPx)) : Infinity;
+	if (full <= room) return { text: said, width: full };
 	const cutAt = n => `${said.slice(0, n).trimEnd()}${ELLIPSIS}`;
 	let lo = 0;
 	let hi = said.length;
 	while (lo < hi) {
 		const mid = Math.ceil((lo + hi) / 2);
-		if (measure(cutAt(mid)) <= roomPx) lo = mid;
+		if (measure(cutAt(mid)) <= room) lo = mid;
 		else hi = mid - 1;
 	}
 	const cut = cutAt(lo);

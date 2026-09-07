@@ -246,8 +246,8 @@ export function readSize(value) {
  * can tell one of its lines from one somebody drew, and it drives both ways out: a checkbox that
  * puts them away for one reader, and a tool that rubs them out for everyone. It is a mark on the
  * DATA and not a class on the paint, because the hiding has to reach the geometry: a line the
- * reader has put away must not be routed around, fan a pair apart, or count towards how much room
- * the captions are promised.
+ * reader has put away must not be routed around, fan a pair apart, or shoulder another line's
+ * caption off the middle of its own stroke.
  */
 export const RELMAP_SRC_HEARTS = "hearts";
 
@@ -320,7 +320,7 @@ export function isIntroEdge(edge) {
  * after a season of using the board.
  *
  * A CAPTION IS A PHRASE AND NOT A SENTENCE, and the room it has to say its piece in is the gap
- * between two faces — where `captionRoomPx` lets it run to its own line's full length. So a caption
+ * between two faces: `captionRoomPx` lets it run the whole of its own line, and no further. So a caption
  * long enough to be prose is one that reaches right across everybody else's lines to say something
  * the reader would have opened the line to read anyway. Sixty characters is about one clause:
  * "has never forgiven her for the business at the mill" fits whole, and a paragraph does not.

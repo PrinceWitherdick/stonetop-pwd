@@ -80,8 +80,11 @@ export const RELMAP_BOARD_MAX = 4800;
  * the aspect are one rule and every view obeys it; what the views differ on is only how wide they
  * want to be, which is the argument. Everything that measures a board asks here rather than
  * reaching for the constants.
+ *
+ * MODULE-PRIVATE. It was exported for the view modules that each wanted a different width; those
+ * are gone and `boardMetrics` is the one question anything outside this file now asks.
  */
-export function sheetFor(wantWidthPx) {
+function sheetFor(wantWidthPx) {
 	const want = Math.round(Number(wantWidthPx) || 0);
 	const width = Math.min(RELMAP_BOARD_MAX, Math.max(RELMAP_BOARD_WIDTH, want));
 	return {
@@ -796,10 +799,12 @@ export function edgeArrowheads(
 }
 
 /** How far out the outermost ring sits, measured on BOTH axes so a tall board or a large portrait
- * pulls the ring in rather than pushing half of it off the top edge. Exported because the cluster
- * layout parks the people with no lines on this same rim, and a second opinion about where the rim
- * is would put them through the edge of the board. */
-export function ringRadius(ratio, r, pad) {
+ * pulls the ring in rather than pushing half of it off the top edge.
+ *
+ * MODULE-PRIVATE, though it was not always: the cluster layout parked the people with no lines on
+ * this same rim, and was exported to so there could be no second opinion about where the rim is.
+ * That module is gone and `ringsLayout` and `freeSpot` below are the only askers left. */
+function ringRadius(ratio, r, pad) {
 	const across = 50 - r - pad;
 	const down = 50 / ratio - r - pad;
 	return Math.max(8, Math.min(across, down));
@@ -807,9 +812,10 @@ export function ringRadius(ratio, r, pad) {
 
 /** How many portraits fit round a ring of radius `R` without touching, at least one.
  *
- * Exported for the same reason `ringRadius` is: a second opinion about how many portraits fit on a
- * circle is how one seating comes to overlap faces another would have spread. */
-export function ringCapacity(radius, clear) {
+ * Module-private for the same reason `ringRadius` is, and it still matters INSIDE this file: a
+ * second opinion about how many fit on a circle is how one seating comes to overlap faces another
+ * would have spread. */
+function ringCapacity(radius, clear) {
 	return Math.max(1, Math.floor((2 * Math.PI * radius) / Math.max(0.001, clear)));
 }
 
@@ -820,9 +826,9 @@ export function ringCapacity(radius, clear) {
  * a circle is a circle, and squashed back by `ratio` on the way out so it does not come out as an
  * oval on a landscape board. Every coordinate on this feature's boards has to agree about that, and
  * this expression was written three times over: here, in `ringsLayout` below, and once more in a
- * module that has since gone. `ringRadius` and `ringCapacity` were exported precisely so there
- * could be no second opinion about where a rim is or how many fit on it; this is the remaining
- * third of that pair, and it was the one still being copied.
+ * module that has since gone. `ringRadius` and `ringCapacity` are kept as the single answer to
+ * where a rim is and how many fit on it; this is the remaining third of that set, and it was the
+ * one still being copied.
  *
  * The callers keep their own policies -- how many rings, how big, and how many people go on
  * each -- because that is where they genuinely differ.
@@ -834,7 +840,7 @@ export function ringCapacity(radius, clear) {
  * @param {number} [opts.turn] radians to rotate this ring by, so consecutive rings interleave
  *        rather than lining up into spokes with corridors of empty board between them.
  */
-export function ringSeats(radius, count, { ratio, turn = 0 } = {}) {
+function ringSeats(radius, count, { ratio, turn = 0 } = {}) {
 	// Starts at twelve o'clock and goes clockwise, because that is the order a reader's eye takes a
 	// ring in and it makes the seating plan predictable: the first person added is always at the top.
 	return Array.from({ length: Math.max(0, count) }, (_, k) => {
@@ -1155,26 +1161,47 @@ function sizeScale(px) {
 }
 
 /**
+ * The paper kept between the last letter of a caption and the portrait at that end of its line, in
+ * board pixels.
+ *
+ * WHY THE WORDS MAY NOT SIMPLY RUN TO THE RIMS. A caption is set ALONG its line, so every pixel it
+ * grows by is a pixel closer to one of the two faces the line is about, and a sentence that reaches
+ * the rim reads as a label ON that portrait rather than as something said about the pair. Two
+ * people standing close together got the worst of it: the whole sentence drawn across both their
+ * faces, because the line between them was shorter than the words.
+ *
+ * ABOUT FOUR CHARACTERS OF CLEAR PAPER at the ordinary caption size, which is enough for the eye to
+ * see where the writing stops and the face begins. In BOARD pixels like everything else here, so it
+ * shrinks with the zoom as the words do rather than eating the whole of a line on a board somebody
+ * has zoomed away from.
+ */
+export const RELMAP_LABEL_CLEAR_PX = 32;
+
+/**
  * How much room ONE caption has on ONE line, in board pixels.
  *
- * THE LINE'S OWN LENGTH IS THE ROOM. What a caption is for is the sentence on it, and a sentence
- * cut to two words and an ellipsis has stopped being one; so a line long enough to carry the whole
- * of its caption carries the whole of it, however long that is. The words never reach past the two
- * faces they are about, which is the only boundary on this board that means anything.
+ * THE LINE'S OWN LENGTH IS THE ROOM, LESS THE CLEARANCE AT EITHER END. What a caption is for is the
+ * sentence on it, so a line long enough to carry the whole of one carries the whole of it, however
+ * long that is; what no caption may do is run up against the faces at its two ends. The clearance
+ * comes off TWICE because the words are centred on their seat, so every pixel of width costs half a
+ * pixel at each end.
  *
- * THE CROWDING WIDTH IS A FLOOR HERE, NOT A CEILING (`labelCapPx`). It used to clip: a busy board
- * trimmed every caption to 140 pixels whether or not there was room for more, and short lines were
- * trimmed twice over. It now says the LEAST a caption is given — enough for a few words even on a
- * line too short for them, which is the case the ellipsis used to eat — and the line says the most.
+ * ⚠ AND IT IS A CEILING WITH NOTHING UNDER IT, which it did not used to be. There were two floors
+ * here, a width promised per board (the crowding cap) and an absolute minimum, and both were there
+ * to let a caption on a SHORT line overhang its stroke rather than be cut to a smudge. Overhanging
+ * ALONG a line is overhanging into the portraits at its ends, so what the floors really bought was
+ * the failure above: the ellipsis arrived far too late, and by the time it did the words were on
+ * somebody's face. A line with little room now says little, and one with none says only its
+ * ellipsis. The whole sentence is in the tooltip and in the tie bar either way, which is where a
+ * reader who wants all of it was always going to read it.
  *
  * ONE FUNCTION because three things have to agree about it to the pixel: the spreader that slides
  * the captions apart, the stylesheet that paints them, and the gap cut in the line for the words
  * to sit in. A gap measured off a different width is a gap with a stub of stroke left inside it.
  */
-export function captionRoomPx(curve, { boardWidthPx = RELMAP_BOARD_WIDTH, capPx = null } = {}) {
-	const cap = Number(capPx) > 0 ? Number(capPx) : LABEL_MAX_PX;
+export function captionRoomPx(curve, { boardWidthPx = RELMAP_BOARD_WIDTH } = {}) {
 	const own = ((curve?.length ?? 0) * boardWidthPx) / 100;
-	return Math.max(LABEL_MIN_PX, cap, own);
+	return Math.max(0, own - 2 * RELMAP_LABEL_CLEAR_PX);
 }
 
 /** How big ONE caption is on ONE line, in flat units: its words, measured, inside the room
@@ -1190,71 +1217,30 @@ export function captionRoomPx(curve, { boardWidthPx = RELMAP_BOARD_WIDTH, capPx 
  * rather than per board. */
 export function captionSize(
 	text, curve,
-	{ boardWidthPx = RELMAP_BOARD_WIDTH, capPx = null, paintedPx = null, px = 0 } = {},
+	{ boardWidthPx = RELMAP_BOARD_WIDTH, paintedPx = null, px = 0 } = {},
 ) {
 	return labelSize(
-		text, boardWidthPx, captionRoomPx(curve, { boardWidthPx, capPx }), paintedPx, px,
+		text, boardWidthPx, captionRoomPx(curve, { boardWidthPx }), paintedPx, px,
 	);
 }
 
 /**
- * How much width a caption is GUARANTEED, whatever the line it rides on, and where a board is
- * crowded enough to promise less of it.
+ * THE WIDTH A CAPTION WAS ONCE PROMISED, AND IS NOT ANY MORE. There were three numbers here, a
+ * width a caption could always claim (220 pixels, stepping down to 140 as the cast grew) and an
+ * absolute floor of 58 under them, and what they bought was the right to OVERHANG a line too short
+ * to hold the words. On this board overhanging along a line means overhanging into the two faces
+ * at its ends, which is the failure `RELMAP_LABEL_CLEAR_PX` exists to have fixed, so the room a
+ * caption gets is now its own line's and nothing else's.
  *
- * READ IT AS A FLOOR. A caption may always take its own line's full length (`captionRoomPx`); this
- * is what it gets when that length is not enough, which is how a short line between two portraits
- * standing close together still says something rather than showing two words and an ellipsis.
- *
- * IT DEPENDS ON THE BOARD because the guarantee is a claim on room the board may not have. A map
- * of eight people has room to spare and short lines can overhang generously; a map of the whole
- * village is already fighting for space, and a caption there that overhangs by 220 pixels is
- * sitting on three other people's lines. So the promise shrinks as the cast grows, and the words a
- * short line still cannot fit are in the tooltip, which carries the sentence in full either way.
- *
- * IT IS ALSO WHAT THE LAYOUT ASKS FOR (`layoutRoom`): the springs use it to decide how long a line
- * between two people wants to be, so on an uncrowded board the lines are drawn long enough that
- * the guarantee rarely has to be called on at all.
+ * The board still narrows what it shows as it fills up. It does it by drawing more people on a
+ * BIGGER sheet (`boardMetrics`) rather than by promising each caption less of a fixed one.
  */
-const LABEL_MAX_PX = 220;
-const LABEL_MAX_BUSY = 180;
-const LABEL_MAX_CROWDED = 140;
-const LABEL_BUSY_AT = 24;
-const LABEL_CROWDED_AT = 60;
-
-/**
- * The narrowest a caption is ever squeezed to, in board pixels: about seven characters and the
- * chip's own trim.
- *
- * There is a floor because past a certain point a chip stops being a caption and becomes a smudge
- * with an ellipsis in it, and at that point the honest thing is to let it overhang its line a
- * little and stay readable. Below the floor the chip is drawn at the floor and simply sticks out.
- */
-const LABEL_MIN_PX = 58;
 
 /** How far along its line a chip may slide, either way from the middle, and in how many stops.
  * Not to the very ends: a caption sitting on a portrait's rim reads as belonging to the portrait
  * rather than to the line. */
 const LABEL_SLIDE = 0.42;
 const LABEL_STOPS = 14;
-
-/**
- * The width a caption is guaranteed on a board carrying `count` of them, in board pixels.
- *
- * ONE ANSWER FOR TWO READERS. The stylesheet paints the caption and this module measures it, and a
- * measurement that disagreed with the paint would spread the captions to clear an overlap that was
- * not there, or leave one it could not see. So this feeds `captionRoomPx`, whose answer the window
- * writes onto each caption as its own custom property, and the same count comes back in here.
- */
-export function graphCapPx(graph) {
-	return labelCapPx(Object.values(graph?.edges ?? {}).filter(edge => edge?.label).length);
-}
-
-export function labelCapPx(count) {
-	const n = Math.max(0, Math.trunc(Number(count) || 0));
-	if (n > LABEL_CROWDED_AT) return LABEL_MAX_CROWDED;
-	if (n > LABEL_BUSY_AT) return LABEL_MAX_BUSY;
-	return LABEL_MAX_PX;
-}
 
 /**
  * How big one caption is, in flat units.
@@ -1275,10 +1261,16 @@ export function labelCapPx(count) {
  * Exported for the tests, which have to be able to say what "these two overlap" meant.
  */
 export function labelSize(
-	text, boardWidthPx = RELMAP_BOARD_WIDTH, capPx = LABEL_MAX_PX, paintedPx = null, px = 0,
+	text, boardWidthPx = RELMAP_BOARD_WIDTH, roomPx = Infinity, paintedPx = null, px = 0,
 ) {
 	const chars = typeof text === "string" ? text.length : 0;
-	const cap = Number(capPx) > 0 ? Number(capPx) : LABEL_MAX_PX;
+	// ⚠ NO ROOM IS NO WIDTH, and that is the one reading of this argument that has to be spelt
+	// out. `captionRoomPx` answers zero for a line with two portraits nearly touching at its ends,
+	// and a zero read as "unmeasured, take the default" would put the whole sentence back across
+	// both their faces -- which is the bug this pair of functions was rewritten to fix. Only a
+	// number that is not one at all (a missing argument, NaN) means unbounded.
+	const said = Number(roomPx);
+	const room = Number.isFinite(said) ? Math.max(0, said) : Infinity;
 	const painted = Number(paintedPx);
 	// ⚠ THE ESTIMATE SCALES WITH THE TYPE AND THE MEASUREMENT DOES NOT. `paintedPx` was read off a
 	// caption that had already been SET in its own size, so it is the answer for that size and
@@ -1290,7 +1282,7 @@ export function labelSize(
 	const asked = painted > 0
 		? painted
 		: chars * LABEL_CHAR_PX * sizeScale(px) + LABEL_CHROME_PX;
-	const wide = Math.min(cap, asked);
+	const wide = Math.min(room, asked);
 	const scale = boardWidthPx > 0 ? 100 / boardWidthPx : 0;
 	// THE HEIGHT ALWAYS SCALES, measured or not. Nothing measures a caption's HEIGHT -- the window
 	// reads a width off the laid-out element and nothing else -- so this is the one number that is
@@ -1375,12 +1367,13 @@ function slideStops() {
  * @param {object} spec
  * @param {{id: string, curve: object, text: string, px?: number}[]} spec.labels  one entry per
  *        captioned link. `px` is the size that caption is SET in, where it has one of its own.
- * @param {{left, top}[]} spec.nodes  every portrait's centre, which a caption also avoids.
+ * @param {{left, top}[]} spec.nodes  every portrait's centre, which a caption keeps clear of by
+ *        `RELMAP_LABEL_CLEAR_PX` rather than merely not touching.
  * @returns {Map<string, {left, top, angle}>}  where each caption goes, by link id.
  */
 export function spreadLabels({
 	labels = [], nodes = [], aspect = RELMAP_BOARD_ASPECT, r = nodeRadiusPct(),
-	boardWidthPx = RELMAP_BOARD_WIDTH, capPx = null,
+	boardWidthPx = RELMAP_BOARD_WIDTH,
 } = {}) {
 	const out = new Map();
 	if (!labels.length) return out;
@@ -1388,15 +1381,20 @@ export function spreadLabels({
 	const stops = slideStops();
 	// Everything below compares distances, so it all happens in flat space.
 	const faces = nodes.filter(Boolean).map(n => flat(n, ratio));
-	// The caller passes the cap it is PAINTING with, so the measurement and the paint agree. On
-	// its own, this works the same cap out from the same count.
-	const cap = capPx ?? labelCapPx(labels.filter(entry => entry?.curve && entry.text).length);
+	// ⚠ THE FACES ARE TREATED AS BIGGER THAN THEY ARE, by the same clearance the room on a line is
+	// measured with (`RELMAP_LABEL_CLEAR_PX`). That room keeps a caption off the two portraits its
+	// OWN line joins, and it does the reckoning at the middle of the line; a caption slid along its
+	// line to get out of another's way is off that middle, and one merely touching this stroke on
+	// its way past somebody else's face was never covered by it at all. Asking every stop to clear
+	// an inflated circle says the one rule once, for every face on the board: the words keep their
+	// paper, wherever they end up sitting.
+	const keepOff = r + (boardWidthPx > 0 ? (RELMAP_LABEL_CLEAR_PX * 100) / boardWidthPx : 0);
 
 	const queue = labels
 		.filter(entry => entry?.curve && entry.text)
 		.map(entry => ({
 			...entry,
-			size: captionSize(entry.text, entry.curve, { boardWidthPx, capPx: cap, px: entry.px }),
+			size: captionSize(entry.text, entry.curve, { boardWidthPx, px: entry.px }),
 		}))
 		.sort((a, b) => b.size.w - a.size.w || String(a.id).localeCompare(String(b.id)));
 
@@ -1418,7 +1416,7 @@ export function spreadLabels({
 			middle ??= anchor;
 			const box = labelBox(flat(anchor, ratio), entry.size.w, entry.size.h, anchor.angle);
 			const reach = Math.hypot(box.hw, box.hh);
-			const clear = !faces.some(face => boxHitsCircle(box, face, r))
+			const clear = !faces.some(face => boxHitsCircle(box, face, keepOff))
 				&& !placed.some(other => (
 					Math.hypot(other.box.cx - box.cx, other.box.cy - box.cy) <= other.reach + reach
 					&& boxesOverlap(other.box, box)

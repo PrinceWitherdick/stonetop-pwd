@@ -194,8 +194,8 @@ describe("the board template", () => {
 
 	// ONE ROOT AND NOT ONE PER CAPTION: a hundred separate SVG roots are a hundred paint chunks, and
 	// they would put the lit-web dimming on a hundred elements rather than on one, where opacity on
-	// a `<g>` costs an offscreen buffer apiece. (What makes the captions affordable at all is the
-	// stylesheet's `.captions-too-small`, which is pinned in tests/styles.)
+	// a `<g>` costs an offscreen buffer apiece. (What makes a hundred captions affordable at all is
+	// that the words are set STRAIGHT rather than warped onto a rail, which is pinned below.)
 	it("draws every caption in ONE svg root, however many there are", () => {
 		const context = boardContext();
 		const label = context.labels[0];
