@@ -24,7 +24,7 @@
 //    (relmap/relmap-party.js), so on a young world it is the one with anybody on it.
 //  • Failing that, the first map, on its first page.
 
-import { getObjectSetting, setSetting, worldKey } from "../settings.js";
+import { getObjectSetting, setSettingQuietly, worldKey } from "../settings.js";
 import { getMapPage, getPartyPage, listRelationshipMaps } from "./relmap-doc.js";
 
 export const RELMAP_LAST_SETTING = "lastRelationshipBoard";
@@ -58,13 +58,8 @@ export function rememberBoard(entryId, pageId = null) {
 	if (was?.entryId === id && was.pageId === page) return null;
 	const all = { ...getObjectSetting(RELMAP_LAST_SETTING) };
 	all[worldKey()] = { entryId: id, pageId: page };
-	try {
-		return Promise.resolve(setSetting(RELMAP_LAST_SETTING, all))
-			.catch(err => console.error("Stonetop | remembering the open relationship board failed", err));
-	} catch (err) {
-		console.error("Stonetop | remembering the open relationship board failed", err);
-		return null;
-	}
+	return setSettingQuietly(RELMAP_LAST_SETTING, all,
+		"Stonetop | remembering the open relationship board failed");
 }
 
 /**

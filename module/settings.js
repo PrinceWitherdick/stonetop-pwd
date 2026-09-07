@@ -2584,6 +2584,32 @@ export function setSetting(key, value) {
 }
 
 /**
+ * Write a setting whose FAILURE IS NOT WORTH TELLING ANYONE ABOUT -- the per-client "remember what
+ * this reader was doing" records (relmap/relmap-last.js, relmap/relmap-size.js).
+ *
+ * Those writes are a convenience laid over something that has already worked: a board that opened,
+ * a line that was drawn. Losing the record costs the reader one re-pick and nothing else, so it
+ * goes to the console and never to `ui.notifications`.
+ *
+ * BOTH WAYS IT CAN FAIL are caught, because `game.settings.set` can throw synchronously (no such
+ * setting, no world yet) as well as reject. A caller that handled only the promise would take the
+ * whole gesture down with it on the one path that does not return one.
+ *
+ * @param {string} key  The setting to write.
+ * @param {*} value  What to write.
+ * @param {string} message  The console line, already prefixed by the caller's own subject.
+ * @returns {Promise|null} The write in flight, or null when it failed on the spot.
+ */
+export function setSettingQuietly(key, value, message) {
+	try {
+		return Promise.resolve(setSetting(key, value)).catch(err => console.error(message, err));
+	} catch (err) {
+		console.error(message, err);
+		return null;
+	}
+}
+
+/**
  * Write a setting that MAY be world-scoped, from a place a non-GM could reach.
  *
  * Only a GM may write a world setting: core rejects a player-side call outright rather than

@@ -29,7 +29,7 @@
 // bar is open over, and stamps the ones drawn after it. It does not walk the board rewriting what
 // the table has already set, which would be one reader silently editing everybody else's map.
 
-import { getSetting, setSetting } from "../settings.js";
+import { getSetting, setSettingQuietly } from "../settings.js";
 import { RELMAP_SIZE_NONE, readSize } from "./relmap-store.js";
 
 export const RELMAP_SIZE_SETTING = "lastCaptionSize";
@@ -72,11 +72,6 @@ export function getLastSize() {
 export function rememberSize(px) {
 	const size = readSize(px);
 	if (size === getLastSize()) return null;
-	try {
-		return Promise.resolve(setSetting(RELMAP_SIZE_SETTING, size))
-			.catch(err => console.error("Stonetop | remembering the caption size failed", err));
-	} catch (err) {
-		console.error("Stonetop | remembering the caption size failed", err);
-		return null;
-	}
+	return setSettingQuietly(RELMAP_SIZE_SETTING, size,
+		"Stonetop | remembering the caption size failed");
 }
