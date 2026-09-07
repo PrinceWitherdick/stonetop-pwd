@@ -147,6 +147,58 @@ describe("a press that becomes a drag", () => {
 		teardown();
 	});
 
+	// ⚠ AND NOT EVEN WHEN THE ONE CLICK NEVER ARRIVES. utils/zoom-pan-surface.js swallows the click
+	// derived from a press that CAUGHT A SLIDING BOARD -- in the capture phase, on this same
+	// element, and ahead of this module's handler, which therefore never runs and never spends its
+	// own flag. Drag a portrait with the press that stopped a glide and both modules mean to eat
+	// that click; only one of them gets to, and the flag left behind ate the reader's NEXT click,
+	// on a stroke, a caption or bare paper. So the flag is dropped by the next PRESS as well, which
+	// is the first moment this module can tell its click was taken.
+	it("gives up a swallow whose click was taken away by the board underneath", () => {
+		const { handlers, teardown } = wire(board);
+		board.view.emit("pointerdown", board.portraits.n1.face, { clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", board.portraits.n1.face, { clientX: 40, clientY: 0 });
+		board.flush();
+		board.view.emit("pointerup", board.portraits.n1.face, { clientX: 40, clientY: 0 });
+		// ...and no click: the surface ate it in the capture phase.
+		//
+		// ⚠ ON A CAPTION AND NOT ON A FACE, and that is what makes this a test. A press that arms a
+		// drag of its own clears the flag on its way past, so the fault heals itself on any press
+		// that happens to land on a portrait -- and the reader who meets it is the one whose next
+		// press is a LOOK rather than a move: at a line, at the words on it, at bare paper. Those
+		// arm nothing, and under the fault they did nothing either.
+		press(board, board.captions.e1.words);
+		expect(handlers.onPickEdge).toHaveBeenCalledWith("e1");
+		teardown();
+	});
+
+	// AND THE TRASH CAN GOES WITH IT. The click that was taken away is also the click that would
+	// have put an armed can away (`onArm(null)` covers every click on the board), so a can armed
+	// before the drag would otherwise sit there through a gesture that had nothing to do with it.
+	it("puts an armed trash can away once it learns its click was taken", () => {
+		const { handlers, teardown } = wire(board);
+		board.view.emit("pointerdown", board.portraits.n1.face, { clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", board.portraits.n1.face, { clientX: 40, clientY: 0 });
+		board.flush();
+		board.view.emit("pointerup", board.portraits.n1.face, { clientX: 40, clientY: 0 });
+		handlers.onArm.mockClear();
+		board.view.emit("pointerdown", board.portraits.n1.face, { clientX: 0, clientY: 0 });
+		expect(handlers.onArm).toHaveBeenCalledWith(null);
+		teardown();
+	});
+
+	// And an ordinary drag, whose click DOES arrive, asks for nothing of the sort on the next press:
+	// the flag was spent where it was meant to be, and a press that dismissed a can the reader had
+	// just armed would be the button closing itself.
+	it("asks for nothing extra on the press after a swallow that was spent", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.portraits.n1.face, { to: [40, 0] });
+		handlers.onArm.mockClear();
+		board.view.emit("pointerdown", board.portraits.n1.face, { clientX: 0, clientY: 0 });
+		expect(handlers.onArm).not.toHaveBeenCalled();
+		teardown();
+	});
+
 	// An Escape or a lost pointer ends the drag with no click to follow, so nothing may be left
 	// armed: the flag is set by the RELEASE, which is the only exit a click comes after.
 	it("leaves nothing armed when the drag is cancelled instead of released", () => {
@@ -524,6 +576,19 @@ describe("a right press on a portrait", () => {
 		teardown();
 	});
 
+	// ⚠ AND A PRESS MADE TO STOP A SLIDING BOARD IS NOT THE READER POINTING AT ANYBODY. The right
+	// button catches a glide exactly as the left one does (utils/zoom-pan-surface.js), and a press
+	// that meant "stop" stayed put by definition -- so read as this gesture it arms a delete button
+	// on whichever portrait happened to be gliding under the cursor at that instant, which is a
+	// person the reader never aimed at and very often one they have never looked at. The surface's
+	// own click swallow rules the mirror image of this out for the left button.
+	it("arms nobody from a press that was only stopping the board", () => {
+		const { handlers, teardown } = wire(board, { surface: fakeSurface({ caughtGlide: true }) });
+		rightPress(board.portraits.n1.face);
+		expect(handlers.onArm).not.toHaveBeenCalled();
+		teardown();
+	});
+
 	// Nothing on a board this reader may only look at: the trash can is not printed for them, so
 	// arming one would be a press that promises a button nobody will ever see.
 	it("asks for nothing where the removal would be refused", () => {
@@ -770,10 +835,6 @@ describe("a key the board refuses", () => {
 	const STOPS = [
 		["the link handle", b => b.portraits.n1.handle],
 		["a caption", b => b.captions.e1.words],
-		// The newest of them, and the one Delete is likeliest to be pressed on: a button that says
-		// "take them off" is a button a reader will try that key on. It has no `data-relmap-open`
-		// of its own, so without its own entry in the selector the key would go to the scene.
-		["the trash can", b => b.portraits.n1.bin],
 	];
 	for (const [what, pick] of STOPS) {
 		for (const key of ["Delete", "ArrowLeft"]) {
@@ -790,6 +851,45 @@ describe("a key the board refuses", () => {
 			});
 		}
 	}
+
+	// ⚠ THE NEWEST TAB STOP, AND THE ONLY ONE WHERE THE KEY MEANS SOMETHING. A button that says
+	// "take them off" is the button a reader will press Delete on, and it is the one place on this
+	// board where that key means exactly what the control under it means. It carries no
+	// `data-relmap-open` -- it is a SIBLING of the face, not a descendant -- so it has to be read
+	// off the can itself, and swallowing the key without acting on it (which is what the board did
+	// at first) is the shape a reader cannot tell from the board being broken.
+	it("takes somebody off the map from Delete on their trash can", () => {
+		const { handlers, teardown } = wire(board);
+		const ev = board.view.emit("keydown", board.portraits.n1.bin, { key: "Delete" });
+		expect(ev.defaultPrevented).toBe(true);
+		expect(ev.propagationStopped).toBe(true);
+		expect(handlers.onRemove).toHaveBeenCalledWith("n1");
+		teardown();
+	});
+
+	// It answers to the removal's own question and not to `canEdit`, exactly as the click on the
+	// same button does: a board that places its own portraits offers no way to take one off.
+	it("refuses Delete on the trash can where the board may not be rearranged", () => {
+		const { handlers, teardown } = wire(board, { canRemove: () => false });
+		const ev = board.view.emit("keydown", board.portraits.n1.bin, { key: "Delete" });
+		// STILL SWALLOWED. A refusal here must never mean "the scene behind this window gets it".
+		expect(ev.defaultPrevented).toBe(true);
+		expect(ev.propagationStopped).toBe(true);
+		expect(handlers.onRemove).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// An arrow on the can is claimed and dropped: the can is not a portrait, and nudging the person
+	// it is about from a button that means "remove them" would be a second gesture on one control.
+	it("claims an arrow on the trash can and does nothing with it", () => {
+		const { handlers, teardown } = wire(board);
+		const ev = board.view.emit("keydown", board.portraits.n1.bin, { key: "ArrowLeft" });
+		expect(ev.defaultPrevented).toBe(true);
+		expect(ev.propagationStopped).toBe(true);
+		expect(handlers.onRemove).not.toHaveBeenCalled();
+		expect(handlers.onNudge).not.toHaveBeenCalled();
+		teardown();
+	});
 
 	// And nothing off the board at all is still nothing to do with this handler.
 	it("leaves a key pressed on the bare viewport alone", () => {

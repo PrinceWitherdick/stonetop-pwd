@@ -76,6 +76,9 @@ export class ZoomPanSurface {
 		this._glideId = 0;
 		// Whether the press now under way was made to CATCH a sliding board. See `_onCaughtClick`.
 		this._caught = false;
+		// The same question with the button forgotten, for a caller with a gesture of its own on
+		// this element. See `caughtGlide`.
+		this._caughtGlide = false;
 		this._observer = null;
 		this._bound = null;
 		// Whether the board's fixed width/height/origin have been written. See `_sizeContent`.
@@ -93,7 +96,7 @@ export class ZoomPanSurface {
 			["pointerdown", this._onPanStart.bind(this)],
 			["pointermove", this._onPanMove.bind(this)],
 			["pointerup", this._onPanEnd.bind(this)],
-			["pointercancel", this._onPanEnd.bind(this)],
+			["pointercancel", this._onPanCancel.bind(this)],
 			["dblclick", this._onDoubleClick.bind(this)],
 			["contextmenu", this._onContextMenu.bind(this)],
 			// ⚠ CAPTURE, and the only listener here that is. It has to reach the click BEFORE the
@@ -141,6 +144,17 @@ export class ZoomPanSurface {
 
 	get scale() { return this._scale; }
 	get offset() { return { ...this._offset }; }
+	/**
+	 * Whether the press now under way was made to CATCH a sliding board.
+	 *
+	 * For a caller with a gesture of its own on this same element, so that a press meaning only
+	 * "stop" does not also perform it. This surface answers the question for itself by swallowing
+	 * the click a caught press derives (`_onCaughtClick`), but that can only cover the left button
+	 * and only the click -- a gesture read off the pointerup, as utils/relmap-drag.js reads its
+	 * right press, has to ask outright. Written by every `_onPanStart`, so it is about THIS press
+	 * and is cleared by the next one whether or not that one catches anything.
+	 */
+	get caughtGlide() { return this._caughtGlide; }
 	/**
 	 * The viewport's own size, from the measurement this surface already keeps up to date.
 	 *
@@ -364,6 +378,12 @@ export class ZoomPanSurface {
 		// on this board is. The write itself is unconditional, so a press that caught nothing still
 		// clears whatever the one before it left behind.
 		this._caught = caught && ev.button === 0;
+		// AND THE SAME ANSWER WITH THE BUTTON FORGOTTEN. The click swallow above can only speak for
+		// the left button, but "this press meant stop and nothing else" is true of every button --
+		// and the right one now carries a gesture of its own that fires on a press that stayed put,
+		// which is exactly what a press made to catch a board is. Written here beside the flag it
+		// belongs with, and unconditionally, so a press that caught nothing clears the last one.
+		this._caughtGlide = caught;
 		const right = ev.button === 2;
 		if (ev.button !== 0 && !right) return;
 		// ONE BUTTON AT A TIME. A right press while a portrait is already being dragged with the
@@ -435,6 +455,28 @@ export class ZoomPanSurface {
 			// The surface may have been torn down between the request and the frame.
 			if (this._bound) this.apply();
 		});
+	}
+
+	/**
+	 * A press taken away by the platform, rather than let go of.
+	 *
+	 * ⚠ THE FLAGS ARE DROPPED HERE AND NOT IN `_onPanEnd`, AND THAT IS THE WHOLE DIFFERENCE. A
+	 * press that ends normally is followed by the very click `_caught` was armed for, so clearing
+	 * it on the pointerup would disarm it a moment before it could be spent. A CANCELLED press
+	 * derives no click at all -- a touch the platform took for a system gesture, a pen lifted off
+	 * the tablet, a window losing the pointer -- so a flag left armed here sits waiting, and the
+	 * next click to arrive with no pointer press in front of it is a KEYBOARD activation of a
+	 * portrait or a swatch. Swallowing that is the exact fault the left-button restriction in
+	 * `_onPanStart` exists to rule out.
+	 *
+	 * BEFORE THE DELEGATION AND NOT UNDER IT: `_onPanEnd` returns at its first line when the press
+	 * was never a pan, which is every press that landed on a control -- and those are the presses
+	 * this is most about, since a press aimed at a portrait is how a reader catches a board.
+	 */
+	_onPanCancel(ev) {
+		this._caught = false;
+		this._caughtGlide = false;
+		this._onPanEnd(ev);
 	}
 
 	_onPanEnd(ev) {

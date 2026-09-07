@@ -293,6 +293,20 @@ export function wireRelmapDrag(root, {
 	}
 
 	view.addEventListener("pointerdown", ev => {
+		// ⚠ A SWALLOW STILL STANDING HERE IS ONE THE CLICK NEVER CAME FOR, and this is the only
+		// place that can notice. `swallowClick` is armed by a release that ended a drag and spent
+		// by the click the browser derives from it a moment later -- so at the next press it is
+		// false in every ordinary case, and true only where that click never reached the handler
+		// below. It has one way to happen: utils/zoom-pan-surface.js swallows the click derived
+		// from a press that CAUGHT A SLIDING BOARD, in the capture phase, on this same element and
+		// ahead of us. Drag a portrait with the press that stopped a glide and both modules mean to
+		// eat that one click; only theirs runs, and the flag left behind would eat the reader's
+		// NEXT click -- on a stroke, a caption, bare paper -- and the board would go quiet.
+		//
+		// AND THE TRASH CAN GOES WITH IT, for the same reason and one gesture late: the click that
+		// was taken away is also the click that would have put an armed can away (see `onArm(null)`
+		// in the click handler), and a press is the first moment we learn it never arrived.
+		if (swallowClick) { swallowClick = false; onArm?.(null); }
 		// BEFORE EVERY GUARD BELOW, because this is not about dragging at all: it is the note the
 		// click handler reads to tell a let-go from a pan, and it has to be taken on the presses
 		// that arm no drag -- which is every press on bare paper, the only kind that matters to it.
@@ -317,7 +331,17 @@ export function wireRelmapDrag(root, {
 		// nothing about what is under it). That is not a conflict to resolve, it is the thing the
 		// release measures: a right DRAG is a pan, and only a right press that went nowhere is the
 		// reader pointing at somebody.
-		const rightNode = ev.button === 2 ? ev.target.closest?.("[data-relmap-node]") : null;
+		//
+		// ⚠ AND NOT WHEN THE PRESS WAS MADE TO STOP A SLIDING BOARD. A right press catches a glide
+		// just as a left one does (utils/zoom-pan-surface.js), and a press that meant "stop" stayed
+		// put by definition -- so without this it reads as the reader pointing at whichever portrait
+		// happened to be gliding under the cursor at that instant, and a delete button appears on
+		// somebody they never aimed at. The surface's own click swallow rules the mirror image of
+		// this out for the left button; `caughtGlide` is that same answer, kept for every button.
+		// Its pointerdown listener is attached before ours on this element, so it is already
+		// written by the time we are asked.
+		const rightNode = ev.button === 2 && !surface?.caughtGlide
+			? ev.target.closest?.("[data-relmap-node]") : null;
 		rightPress = rightNode
 			? { id: rightNode.dataset.relmapNode, x: ev.clientX, y: ev.clientY }
 			: null;
@@ -592,6 +616,17 @@ export function wireRelmapDrag(root, {
 		// action is decided rather than where the event is claimed.
 		ev.preventDefault();
 		ev.stopPropagation();
+		// ⚠ THE TRASH CAN ACTS, rather than only swallowing. It is the one tab stop on this board
+		// whose Delete means exactly what the button under it means -- which is the reason the
+		// paragraph above put it in `mine` at all -- and it carries no `data-relmap-open`, so
+		// `face` is null on it and the portrait branch below would stop the key and drop it. The id
+		// comes off the can itself: it names the person it is about, which is how the click handler
+		// reads it too.
+		const bin = ev.target.closest?.("[data-relmap-remove]");
+		if (bin) {
+			if (ev.key === "Delete" && canRemove()) onRemove?.(bin.dataset.relmapRemove);
+			return;
+		}
 		// Claimed on behalf of the board, but a caption and a handle have nothing to do with a
 		// portrait's Delete or its nudge. They stop the key and do nothing with it.
 		if (!face) return;

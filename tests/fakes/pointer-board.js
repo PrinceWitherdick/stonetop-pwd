@@ -221,9 +221,13 @@ export function pointerBoard({ nodes = ["n1", "n2"], edges = ["e1"] } = {}) {
  * board's PAINTED size, so the scale is already in it, and a fake that divided again would let a
  * double-correction in the production code pass here.
  */
-export function fakeSurface({ scale = 1, per = 10 } = {}) {
+export function fakeSurface({ scale = 1, per = 10, caughtGlide = false } = {}) {
 	return {
 		scale,
+		// Whether the press now under way was made to CATCH a sliding board. The board's own
+		// gestures have to ask, because a press that meant only "stop" must not also perform one --
+		// see the right press in utils/relmap-drag.js.
+		caughtGlide,
 		deltaToPercent: vi.fn((dx, dy) => ({ left: dx / per, top: dy / per })),
 		pointToPercent: vi.fn(({ clientX, clientY }) => ({ left: clientX / per, top: clientY / per })),
 	};

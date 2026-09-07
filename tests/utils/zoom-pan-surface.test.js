@@ -406,6 +406,62 @@ describe("ZoomPanSurface glide", () => {
 		expect(untouched).not.toHaveBeenCalled();
 	});
 
+	// ⚠ THE ANSWER THE CLICK SWALLOW CANNOT GIVE. The flag above speaks for the left button only,
+	// because only a left press derives the click it is spent on -- but "this press meant stop and
+	// nothing else" is true of every button, and utils/relmap-drag.js reads a RIGHT press that
+	// stayed put as the reader pointing at a portrait. A right press made to catch a board stayed
+	// put by definition, on whichever portrait was gliding under the cursor at the time, so without
+	// this a delete button appears on somebody the reader never aimed at.
+	it("says a press caught the board whichever button made it", () => {
+		release(drag(5));
+		paint();
+		view.emit("pointerdown", { pointerId: 2, button: 2, buttons: 2, clientX: 0, clientY: 0, target: view });
+		expect(surface.caughtGlide).toBe(true);
+	});
+
+	it("says a press on a still board caught nothing, and clears the last one that did", () => {
+		release(drag(5));
+		paint();
+		view.emit("pointerdown", { pointerId: 2, button: 2, buttons: 2, clientX: 0, clientY: 0, target: view });
+		expect(surface.caughtGlide).toBe(true);
+		// The board is standing still now, so the next press catches nothing -- and the answer is
+		// about THIS press, not about any press ever having caught anything.
+		view.emit("pointerup", { pointerId: 2, type: "pointerup", clientX: 0, clientY: 0 });
+		view.emit("pointerdown", { pointerId: 3, button: 2, buttons: 2, clientX: 0, clientY: 0, target: view });
+		expect(surface.caughtGlide).toBe(false);
+	});
+
+	// ⚠ A CANCELLED PRESS DERIVES NO CLICK, so the flag it armed has nothing coming to spend it on
+	// and would sit waiting -- and the next click to arrive with no press in front of it is a
+	// KEYBOARD activation of a portrait or a swatch. Not cleared on the ordinary `pointerup`, which
+	// is followed by the very click the flag exists for.
+	it("drops a caught press the platform took away, rather than leaving it armed", () => {
+		release(drag(5));
+		paint();
+		view.emit("pointerdown", {
+			pointerId: 2, button: 0, buttons: 1, clientX: 0, clientY: 0,
+			// On a control, so the press was never a pan: `_onPanEnd` returns at its first line for
+			// it, which is why the clearing cannot live there.
+			target: { closest: sel => (sel.includes(".control") ? {} : null) },
+		});
+		view.emit("pointercancel", { pointerId: 2, type: "pointercancel", clientX: 0, clientY: 0 });
+		expect(surface.caughtGlide).toBe(false);
+
+		const untouched = vi.fn();
+		view.emit("click", { stopImmediatePropagation: untouched });
+		expect(untouched).not.toHaveBeenCalled();
+	});
+
+	it("still takes the click from a caught press that was let go of normally", () => {
+		release(drag(5));
+		paint();
+		view.emit("pointerdown", { pointerId: 2, button: 0, buttons: 1, clientX: 0, clientY: 0, target: view });
+		view.emit("pointerup", { pointerId: 2, type: "pointerup", clientX: 0, clientY: 0 });
+		const caught = vi.fn();
+		view.emit("click", { stopImmediatePropagation: caught });
+		expect(caught).toHaveBeenCalled();
+	});
+
 	it("gives up the axis that has run out of board, and keeps the other", () => {
 		// Hurled right, hard enough that the drag itself has already pinned the board at the end of
 		// its travel, and gently downwards at the same time.
