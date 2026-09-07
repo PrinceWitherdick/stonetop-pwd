@@ -97,6 +97,18 @@ export function listRelationshipMaps() {
 		.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Is there a map in this world at all?
+ *
+ * Separate from {@link listRelationshipMaps} because the callers that only want the yes/no are on
+ * a render path -- the steading sheet builds its context on every write to the actor, a season
+ * turning included -- and the list pays a full walk of the journal plus a `localeCompare` sort to
+ * answer a question the first hit settles.
+ */
+export function hasRelationshipMap() {
+	return (game.journal?.contents ?? []).some(entry => !!entry.getFlag?.(SYSTEM_ID, RELMAP_FLAG));
+}
+
 /** One map by id, or null when it is not one of ours. */
 export function getRelationshipMap(id) {
 	const entry = game.journal?.get?.(id) ?? null;
@@ -112,9 +124,21 @@ export function canCreateRelationshipMap() {
 	return !!globalThis.JournalEntry?.canUserCreate?.(game.user);
 }
 
-/** May this user change THIS map? The question every control on the board is gated on. */
-export function canEditRelationshipMap(entry) {
-	return !!entry?.isOwner;
+/**
+ * May this user change THIS map, or THIS board of it? The question every control is gated on.
+ *
+ * ⚠ TAKES EITHER DOCUMENT, the way `readGraph` does and for a related reason. Asked of the ENTRY it
+ * means "may I add and remove BOARDS", which is what the page strip's tools need; asked of a PAGE it
+ * means "may I put people on THIS board", which is what everything on the board itself needs. They
+ * are not the same question now that a board carries its own ownership, and the server answers the
+ * second one: an update to a page is checked against the PAGE. A shown board inherits the map's
+ * ownership, so on the ordinary map the two agree and every player who can see a board can edit it.
+ * They part company the moment a GM reaches for core's own ownership dialog on a page, and a window
+ * that asked only the entry would then offer a player every tool over a board whose every write the
+ * server refuses.
+ */
+export function canEditRelationshipMap(doc) {
+	return !!doc?.isOwner;
 }
 
 /**
@@ -192,11 +216,107 @@ export function listMapPages(entry) {
 			|| String(a.name ?? "").localeCompare(String(b.name ?? "")));
 }
 
-/** One page of a map by id, or null when it is not a board of this map. Never falls back to
- * another page: a caller asking for a named page and being handed a different one silently is how
- * a write meant for one board lands on another. */
+// ── Which boards the players may look at ────────────────────────────────────────────────────────
+//
+// A board is hidden or shown one page at a time, and it is CORE'S OWN OWNERSHIP that says which,
+// rather than a flag of ours. A flag would have been a line shorter and wrong in three ways: the
+// server enforces ownership and refuses a hidden board's write outright, where a flag only asks our
+// own window nicely; core's journal sheet, its search and its content links all already read
+// ownership, so a page our board called hidden would still turn up in the sidebar under a flag; and
+// a GM who reaches for the ownership dialog on a page is entitled to have it mean what it says.
+//
+// HIDDEN IS `default: NONE`, AND SHOWN IS `default: INHERIT`. Shown is not OBSERVER: the map entry
+// is owned by everybody at the table (see `createRelationshipMap`), and a board that inherits that
+// is a board the players may EDIT, which is most of the point of a map they share. A flat OBSERVER
+// would have quietly turned every board the GM revealed read-only.
+//
+// ⚠ THE MAKER KEEPS THEIR OWN BOARD, and it costs us nothing to arrange: core's server writes
+// `ownership[creator] = OWNER` into every document as it is created, whatever the default beside it
+// says. So a player pressing "+" on a map they may edit gets a board they can still see, hidden
+// from the rest of the table until the GM shows it. Without that, a new page would vanish the
+// instant it was made, which is the shape this defaulting would otherwise have taken for everybody
+// but the GM.
+//
+// ⚠ AND IT IS UI-LEVEL HIDING, stated honestly here rather than discovered later. Foundry ships
+// every world JournalEntry to every client in full, pages and all, and gates only what is DRAWN, so
+// a determined player at a console can read a hidden board. That is true of every hidden thing in
+// Foundry and is not something a system can fix from this side. It is a screen, not a vault.
+
+/** Core's ownership numbers, with the literals behind them. Read through a function rather than
+ * held at module scope because this module is loaded by suites where `CONST` is not up yet, and a
+ * bare reference there throws a ReferenceError rather than answering. */
+function ownershipLevels() {
+	return globalThis.CONST?.DOCUMENT_OWNERSHIP_LEVELS
+		?? { INHERIT: -1, NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
+}
+
+/**
+ * Is this board hidden from the players?
+ *
+ * ⚠ READ OFF THE RECORDED OWNERSHIP AND NOT THROUGH `testUserPermission`, because the only reader
+ * ever asked this is a GM, and a GM tests as OWNER over everything in the world. Asked the
+ * permission question instead, the eye would report every board visible and the GM would have no
+ * way at all to tell which ones the table can actually see.
+ */
+export function isMapPageHidden(page) {
+	const levels = ownershipLevels();
+	return (page?.ownership?.default ?? levels.INHERIT) === levels.NONE;
+}
+
+/**
+ * May THIS reader look at this board?
+ *
+ * Fails open for a document that cannot answer: a map still on version 1 is the ENTRY itself, whose
+ * own ownership has already been tested by everything that got this far.
+ */
+export function canSeeMapPage(page, user = undefined) {
+	return page?.testUserPermission?.(user ?? game?.user, "OBSERVER") ?? true;
+}
+
+/**
+ * The boards this reader may look at, in strip order.
+ *
+ * ⚠ THIS AND `listMapPages` ARE NOT INTERCHANGEABLE, and the split is the load-bearing part of the
+ * whole feature. Everything a reader SEES goes through this one; everything the document layer
+ * REASONS about goes through the raw one. `ensureFirstMapPage` asking this would find no pages on a
+ * map whose every board is hidden, helpfully make a fresh one, and sweep the entry's flags on the
+ * way past; `deleteMapPage`'s "never the last one" rail asking this would let the last board on a
+ * map be rubbed out because the reader happened to see only one of four.
+ */
+export function listVisibleMapPages(entry) {
+	return listMapPages(entry).filter(page => canSeeMapPage(page));
+}
+
+/** May this user hide and show boards? Only a GM. Core's own sanitizer refuses an `ownership`
+ * change from anybody else outright, so the button offered to a player would be a button that
+ * throws on the server; and it is the right rule on its own terms besides. */
+export function canHideMapPages() {
+	return !!game?.user?.isGM;
+}
+
+/**
+ * Hide this board from the players, or show it to them.
+ *
+ * Writes nothing when the board is already the way it is being asked for, so a GM pressing the eye
+ * twice does not broadcast the same state to the whole table twice over.
+ *
+ * ⚠ THE OBJECT AND NOT A DOTTED KEY. `ownership` is an ObjectField, whose update merges rather than
+ * replaces, so this changes `default` and leaves every per-user grant beside it standing. Which
+ * matters most for the grant core wrote itself: the player who made the board keeps it.
+ */
+export async function setMapPageHidden(page, hidden) {
+	if (!page || !canHideMapPages()) return false;
+	if (isMapPageHidden(page) === !!hidden) return false;
+	const levels = ownershipLevels();
+	await page.update({ ownership: { default: hidden ? levels.NONE : levels.INHERIT } });
+	return true;
+}
+
+/** One page of a map by id, or null when it is not a board of this map, or not one this reader may
+ * look at. Never falls back to another page: a caller asking for a named page and being handed a
+ * different one silently is how a write meant for one board lands on another. */
 export function getMapPage(entry, pageId) {
-	return listMapPages(entry).find(page => page.id === pageId) ?? null;
+	return listVisibleMapPages(entry).find(page => page.id === pageId) ?? null;
 }
 
 /**
@@ -209,14 +329,19 @@ export function getMapPage(entry, pageId) {
  *
  * Falls back to the first page when the id names nothing, which is the honest answer to a page
  * being deleted at the far end of the table while this reader was looking at it.
+ *
+ * ⚠ AND ONLY EVER TO A BOARD THIS READER MAY LOOK AT. It is the reader's handle, so it walks the
+ * visible strip: a player whose GM has just hidden the board under them falls through to the next
+ * one they can see, exactly as they would if it had been deleted, rather than to a board that is
+ * not theirs to read.
  */
 export function mapBoardDoc(entry, pageId = null) {
 	if (!entry) return null;
 	// ONE WALK OF THE STRIP, not two. This is the handle every read and every write in the window
 	// goes through, so it is asked several times per render and again on every repaint — and asking
-	// `getMapPage` and then falling back to `listMapPages[0]` filtered and sorted the same pages
-	// twice over each time.
-	const pages = listMapPages(entry);
+	// `getMapPage` and then falling back to `listVisibleMapPages[0]` filtered and sorted the same
+	// pages twice over each time.
+	const pages = listVisibleMapPages(entry);
 	return pages.find(page => page.id === pageId) ?? pages[0] ?? entry;
 }
 
@@ -236,12 +361,35 @@ export function mapPageName(raw) {
  * spells its own `flags` out overwrites this whole object, so it has to restate the graph as well
  * as its mark -- and `createPartyPage`, which did, was building the seeded graph twice over with
  * only the second copy surviving. One place builds the scope's object; a caller says what to put
- * beside the board in it. */
-function mapPageData(name, graph, sort, marks = {}) {
+ * beside the board in it.
+ *
+ * ⚠ A NEW BOARD IS BORN HIDDEN FROM THE PLAYERS, and this is the one place that is decided. What a
+ * board is FOR is a picture the GM is still working out: who the party has not met yet, who is
+ * lying to whom, which of the villagers answers to something under the hill. A board that arrived
+ * shared would show all of that the moment it had a single face on it, which is the wrong way round
+ * for the one control this feature adds. So every board starts as the GM's own and is shown with
+ * the eye when it is ready. See the ownership section above, including why the maker keeps theirs.
+ *
+ * `shown: true` is for the one board that is not new: the version 1 conversion, which is moving a
+ * board the table could already see and must not take it away from them. */
+function mapPageData(name, graph, sort, marks = {}, { shown = false } = {}) {
+	const levels = ownershipLevels();
+	// ⚠ THE MAKER'S OWN GRANT IS WRITTEN HERE and not left to the server. Core's `_preCreate` adds
+	// `ownership[creator] = OWNER` to a document it is handed on its own, which covers the "+" on an
+	// open map; it does NOT reach a page created INSIDE its parent's create, which is how a map's
+	// first board arrives (`createRelationshipMap`). Left to core, a trusted player making a map
+	// would be handed one whose only board they cannot see. Spelt for every page rather than only
+	// that one, so the two creation paths land on the same document. Core's sanitizer allows a
+	// non-GM to set their OWN key at creation time, and only their own.
+	const mine = game?.user?.id;
 	return {
 		name: mapPageName(name),
 		type: "text",
 		sort,
+		ownership: {
+			default: shown ? levels.INHERIT : levels.NONE,
+			...(mine ? { [mine]: levels.OWNER } : {}),
+		},
 		flags: { [SYSTEM_ID]: { [RELMAP_FLAG]: graph, ...marks } },
 	};
 }
@@ -280,8 +428,13 @@ export async function ensureFirstMapPage(entry) {
 	if (!canEditRelationshipMap(entry)) return null;
 
 	const carried = normalizeGraph(entry.getFlag?.(SYSTEM_ID, RELMAP_FLAG));
+	// ⚠ SHOWN, AND THE ONLY BOARD IN THE SYSTEM THAT IS MADE THAT WAY. Every new board starts hidden
+	// (see `mapPageData`), but this one is not new: it is the board the whole table has been looking
+	// at since before pages existed, being carried onto a page underneath them. Made hidden it would
+	// read as the conversion having stolen the map, and for whoever happened to open it first rather
+	// than as anybody's decision.
 	const made = await entry.createEmbeddedDocuments?.("JournalEntryPage", [
-		mapPageData(entry.name, carried, 0),
+		mapPageData(entry.name, carried, 0, {}, { shown: true }),
 	]);
 	const page = made?.[0] ?? null;
 	if (!page) return null;

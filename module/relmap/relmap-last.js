@@ -25,7 +25,7 @@
 //  • Failing that, the first map, on its first page.
 
 import { getObjectSetting, setSettingQuietly, worldKey } from "../settings.js";
-import { getMapPage, getPartyPage, listRelationshipMaps } from "./relmap-doc.js";
+import { canSeeMapPage, getMapPage, getPartyPage, listRelationshipMaps } from "./relmap-doc.js";
 
 export const RELMAP_LAST_SETTING = "lastRelationshipBoard";
 
@@ -83,7 +83,13 @@ export function defaultBoard(maps = listRelationshipMaps()) {
 	}
 	for (const entry of maps) {
 		const party = getPartyPage(entry);
-		if (party) return { entry, pageId: party.id };
+		// ⚠ THE MAP IS STILL THE ANSWER, AND ONLY THE BOARD IS DROPPED, when the party's board is
+		// one the GM has not shown this reader. Skipping the whole map would send a player off to a
+		// different one over a board they were never being taken to; `pageId: null` lands them on
+		// the first board of this map they can see, which is what "no board in particular" already
+		// means everywhere else here. The party board is found by the flag, which is a question
+		// about the document rather than about the reader, so the visibility is asked separately.
+		if (party) return { entry, pageId: canSeeMapPage(party) ? party.id : null };
 	}
 	return { entry: maps[0], pageId: null };
 }

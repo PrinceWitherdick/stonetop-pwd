@@ -62,11 +62,10 @@
     <div class="stonetop-relmap-pages-strip" role="tablist"
          aria-label="{{pagesLabel}}">{{{pageTabs}}}</div>
 
-    {{!-- WHAT CAN BE DONE TO THE BOARDS, and all three are edits, so the whole group is behind the
+    {{!-- WHAT CAN BE DONE TO THE BOARDS, and all three are edits, so the whole lot is behind the
           gate. Outside the scrolling strip beside it: a map with a dozen pages scrolls its tabs
           sideways, and tools that scrolled away with them would be tools a reader has to go looking
-          for. Rename and delete act on the board that is UP — they are the current tab's own
-          controls, standing where the current tab can always be seen.
+          for.
 
           ⚠ GLYPH ONLY, AND THE HINT IS THE WHOLE OF THE LABEL. These three used to carry their
           words beside the icon ("New page", "Rename", "Delete page"), which put three more pieces
@@ -80,10 +79,51 @@
           text `data-tooltip` shows on hover. The words are one hover, or one screen reader, away
           exactly as they were. --}}
     {{#if canEdit}}
+    {{!-- ⚠ NEW PAGE SITS AT THE END OF THE TABS AND NOT WITH THE OTHER TWO, which is the one thing
+          on this row that is placed by what it makes rather than by what it acts on. It makes
+          ANOTHER TAB, and the place a new tab appears is after the last one — the same spot every
+          tabbed thing a reader has ever used puts it, and near enough to the names that it reads as
+          part of the strip rather than as a tool aimed at the board. Off at the far right it was
+          the width of the whole window away from the row it adds to, and sat between two controls
+          that do something else entirely.
+
+          It is OUTSIDE the scrolling strip all the same: with a dozen boards the tabs scroll
+          sideways, and a plus that scrolled off with them would be the only way to make a board at
+          all, gone. So it stands just past the strip's right edge and stays there, which on a map
+          whose tabs do not fill the row is exactly where the last tab ends. --}}
+    <button type="button" class="stonetop-relmap-page-tool stonetop-relmap-page-tool--new"
+            data-relmap-action="pagenew"
+            data-tooltip="{{pageNewHint}}" aria-label="{{pageNewHint}}">
+      <i class="fas fa-plus"></i>
+    </button>
+
+    {{!-- THE EYE, THE PEN AND THE TRASH ACT ON THE BOARD THAT IS UP, and they are pinned to the
+          row's right-hand end rather than trailing the tabs: their target is the current tab, which
+          is somewhere in a strip that moves, so a fixed corner is the only place they can be
+          reliably reached for. Two of the three change what somebody else can see or destroy
+          something outright, and standing them apart from the plus is what keeps a mis-aimed click
+          on "another board" from being a click on "lose this one". --}}
     <div class="stonetop-relmap-pages-tools">
-      <button type="button" class="stonetop-relmap-page-tool" data-relmap-action="pagenew"
-              data-tooltip="{{pageNewHint}}" aria-label="{{pageNewHint}}">
-        <i class="fas fa-plus"></i>
+      {{!-- WHO AT THIS TABLE MAY LOOK AT THIS BOARD, and it is the first of the three because it is
+            the only one whose state a GM reads rather than presses. Every board starts hidden from
+            the players (module/relmap/relmap-doc.js): a board is a picture the GM is still working
+            out, and one that arrived shared would give away who has not been met yet, who is lying
+            to whom, and what is under the hill, the moment it had a face on it.
+
+            ⚠ ALWAYS RENDERED AND HIDDEN, like the trash below and for the same reason: `_paintSeen`
+            can only write onto markup a repaint left standing. Whether it applies at all is
+            `pageHideOn` — a GM, on a map with a board under them — and that is written on every
+            repaint rather than baked into this markup.
+
+            THE GLYPH IS THE STATE AND THE HINT IS THE OUTCOME: an open eye on a board the table can
+            see, a struck one on a board that is the GM's alone, and the sentence under the pointer
+            says what pressing it would do. The hint is the whole of the label, as it is on the
+            other three tools. --}}
+      <button type="button" class="stonetop-relmap-page-tool stonetop-relmap-page-tool--seen
+              {{~#if pageHidden}} is-hidden-board{{/if}}" data-relmap-action="pagehide"
+              data-tooltip="{{pageHideHint}}" aria-label="{{pageHideHint}}"
+              {{#unless pageHideOn}}hidden{{/unless}}>
+        <i class="fas {{pageHideIcon}}"></i>
       </button>
 
       <button type="button" class="stonetop-relmap-page-tool" data-relmap-action="pagerename"

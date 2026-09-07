@@ -153,6 +153,13 @@ function windowFor(graph = TWO_PEOPLE, { isOwner = true, entry: given = null, pa
 	root.children[".stonetop-relmap-view"] = view;
 	const dropTool = el();
 	root.children["[data-relmap-action=\"pagedelete\"]"] = dropTool;
+	// The eye, and the glyph inside it that says where the board stands. Registered here for the
+	// reason the panels are: `_paintSeen` returns without writing where the button is missing, so
+	// an assertion about it would pass against a window that never touched it.
+	const seenTool = el({ dataset: {}, attrs: {} });
+	seenTool.setAttribute = (key, value) => { seenTool.attrs[key] = value; };
+	seenTool.children["i"] = el();
+	root.children["[data-relmap-action=\"pagehide\"]"] = seenTool;
 	root.ownerDocument = { activeElement: null };
 	app._entry = entry;
 	app._entryId = entry.id;
@@ -2327,13 +2334,33 @@ describe("the colours of the table's own already on a board", () => {
 	});
 });
 
-function pageFor(name, graph, { id, sort, parent }) {
+function pageFor(name, graph, { id, sort, parent, ownership = null }) {
 	const doc = {
 		id, name, sort, parent,
 		updates: [],
+		// A page core made carries `{ default: INHERIT }`, which is what "the players see this one"
+		// means on a map the whole table owns. A board the GM has kept back carries
+		// `{ default: NONE }`. See relmap/relmap-doc.js.
+		ownership: ownership ?? { default: -1 },
 		getFlag: (scope, key) =>
 			(scope === "stonetop-pwd" && key === "relationshipMap" ? graph : null),
-		update(patch) { doc.updates.push(patch); return Promise.resolve(doc); },
+		// Core's own rule, near enough: a GM is OWNER over everything, an explicit level for this
+		// user beats the default, and INHERIT defers to the parent entry.
+		testUserPermission(user, permission) {
+			if (user?.isGM) return true;
+			const level = doc.ownership?.[user?.id] ?? doc.ownership?.default ?? -1;
+			if (level === -1) return !!doc.parent?.isOwner;
+			return level >= (permission === "OWNER" ? 3 : 2);
+		},
+		// ⚠ DERIVED AND NOT SET, exactly as core derives it: `isOwner` is
+		// `testUserPermission(game.user, "OWNER")`. A fake that carried it as a flag of its own
+		// would certify a window asking the wrong document, because both documents would say yes.
+		get isOwner() { return doc.testUserPermission(game?.user, "OWNER"); },
+		update(patch) {
+			doc.updates.push(patch);
+			if (patch.ownership) Object.assign(doc.ownership, patch.ownership);
+			return Promise.resolve(doc);
+		},
 	};
 	return doc;
 }
@@ -2363,7 +2390,11 @@ function pagedEntry(boards, { isOwner = true } = {}) {
 	};
 	boards.forEach((board, i) => pages.push(pageFor(
 		board.name, board.graph ?? EMPTY_BOARD,
-		{ id: board.id, sort: i * 100000, parent: entry },
+		{
+			id: board.id, sort: i * 100000, parent: entry,
+			// `hidden: true` is a board the GM has kept back: nobody but them may look at it.
+			ownership: board.hidden ? { default: 0 } : null,
+		},
 	)));
 	return entry;
 }
@@ -2382,8 +2413,13 @@ describe("the pages of one map", () => {
 		// The one that is up carries all three marks, because each does a different job: the class
 		// paints it, aria-selected says so out loud, and the tabindex is what makes the strip one
 		// tab stop with the arrow keys inside it rather than one stop per board.
-		expect(tabs).toMatch(/aria-selected="true" tabindex="0" data-relmap-page="p2"/);
-		expect(tabs).toMatch(/aria-selected="false" tabindex="-1" data-relmap-page="p1"/);
+		//
+		// Matched with the two attributes apart rather than adjacent: a shown board carries an
+		// `aria-label` between them (see the visibility mark's own tests), and the thing under test
+		// here is that the selected tab is the one with the open tabindex on it, not what else it
+		// happens to say.
+		expect(tabs).toMatch(/aria-selected="true" tabindex="0"[^>]*data-relmap-page="p2"/);
+		expect(tabs).toMatch(/aria-selected="false" tabindex="-1"[^>]*data-relmap-page="p1"/);
 		expect(tabs).toContain("is-current");
 	});
 
@@ -2600,12 +2636,10 @@ describe("keeping up with pages being changed elsewhere", () => {
 		const on = hooksOf();
 		const entry = TWO_BOARDS();
 		const { app } = windowFor(null, { entry, pageId: "p1" });
-		app._focus = "elena";
 		app._wireSync();
 		const [gone] = entry.pages.contents.splice(0, 1);
 		on.get("deleteJournalEntryPage")(gone);
 		expect(app._pageId).toBeNull();
-		expect(app._focus).toBeNull();
 		expect(app.mapPage.name).toBe("Marshedge");
 		expect(app.render).toHaveBeenCalled();
 	});
@@ -2769,6 +2803,18 @@ function livingMap(boards) {
 			parent: entry,
 			uuid: `JournalEntry.map1.JournalEntryPage.${board.id}`,
 			updates: [],
+			// The ownership every shown board carries: INHERIT, which takes the map's own, and a map
+			// is owned by everybody at the table. `isOwner` is DERIVED from it exactly as core
+			// derives it, because the window asks the PAGE whether this reader may edit the board
+			// and a fake that simply said yes would certify it asking anything at all.
+			ownership: board.hidden ? { default: 0 } : { default: -1 },
+			testUserPermission(user, permission) {
+				if (user?.isGM) return true;
+				const level = page.ownership?.[user?.id] ?? page.ownership?.default ?? -1;
+				if (level === -1) return !!page.parent?.isOwner;
+				return level >= (permission === "OWNER" ? 3 : 2);
+			},
+			get isOwner() { return page.testUserPermission(game?.user, "OWNER"); },
 			flag: foundry.utils.deepClone(board.graph ?? EMPTY_BOARD),
 			getFlag: (scope, key) =>
 				(scope === "stonetop-pwd" && key === "relationshipMap" ? page.flag : null),
@@ -3022,5 +3068,378 @@ describe("Ctrl+Z on the relationship map", () => {
 		app._stepHistory = vi.fn();
 		app._onHistoryKey(stroke());
 		expect(app._stepHistory).not.toHaveBeenCalled();
+	});
+});
+
+// ── Which boards the players may look at ────────────────────────────────────────────────────────
+//
+// Every board starts hidden from the players and is shown one at a time with the eye beside the
+// pen. Two halves under test here: what the GM's window says and does, and what a player's window
+// is left with when a board is not theirs.
+describe("hiding a board from the players", () => {
+	/** A GM at the keyboard. `canHideMapPages` asks nothing else. */
+	const asGM = () => { globalThis.game.user = { id: "gm1", isGM: true }; };
+	/** A player who owns the map, which every player at this table does. */
+	const asPlayer = () => { globalThis.game.user = { id: "u1", isGM: false }; };
+
+	const MIXED = () => pagedEntry([
+		{ id: "p1", name: "Stonetop", graph: TWO_PEOPLE },
+		{ id: "p2", name: "Marshedge", graph: EMPTY_BOARD, hidden: true },
+	]);
+
+	// THE GM SEES THE LOT AND THE PLAYERS SEE WHAT THEY HAVE BEEN SHOWN, which is the whole feature
+	// and the thing every other answer in the window is derived from.
+	it("keeps a hidden board out of a player's strip and leaves the GM's whole", () => {
+		asPlayer();
+		expect(windowFor(null, { entry: MIXED() }).app.mapPages.map(p => p.id)).toEqual(["p1"]);
+		asGM();
+		expect(windowFor(null, { entry: MIXED() }).app.mapPages.map(p => p.id)).toEqual(["p1", "p2"]);
+	});
+
+	// A player pointed at a board that has since been hidden falls through to one they may see,
+	// exactly as they would if it had been deleted. Never to the hidden one.
+	it("moves a player off a board that is not theirs", () => {
+		asPlayer();
+		const { app } = windowFor(null, { entry: MIXED(), pageId: "p2" });
+		expect(app.mapPage.id).toBe("p1");
+		expect(app.boardDoc.id).toBe("p1");
+	});
+
+	// ⚠ THE STATE WORTH GETTING RIGHT. A player owns the map entry, so without this they would have
+	// every tool enabled over `boardDoc`, which with no page to resolve to is the ENTRY, and every
+	// person they added would go into a flag that is drawn nowhere.
+	it("gives a player with no board of their own nothing to write to", () => {
+		asPlayer();
+		const { app } = windowFor(null, {
+			entry: pagedEntry([{ id: "p1", name: "Stonetop", hidden: true }]),
+		});
+		expect(app.noBoardForMe).toBe(true);
+		expect(app.canEdit).toBe(false);
+	});
+
+	// AND SAYS SO IN ITS OWN WORDS. "Nobody is on this map yet" would read as a map that is theirs
+	// to fill in, which is the opposite of what has happened.
+	it("tells that player what they are looking at instead", () => {
+		asPlayer();
+		const { app } = windowFor(null, {
+			entry: pagedEntry([{ id: "p1", name: "Stonetop", hidden: true }]),
+		});
+		const said = app._chrome(app._plan());
+		expect(said.empty).toBe(true);
+		expect(said.emptyLead).toBe("stonetop.relmap.unsharedLead");
+		expect(said.emptyHint).toBe("stonetop.relmap.unsharedHint");
+		expect(said.emptyAction).toBeNull();
+	});
+
+	// A map still on version 1 has no pages at all and keeps its board on the entry, which is a
+	// perfectly editable board and must not be mistaken for a map with nothing shared on it.
+	it("does not mistake a map that has no pages yet for one that is all hidden", () => {
+		asPlayer();
+		const { app } = windowFor();
+		expect(app.noBoardForMe).toBe(false);
+		expect(app.canEdit).toBe(true);
+	});
+
+	// THE GLYPH IS THE STATE AND THE HINT IS THE OUTCOME, which is the only pairing that reads
+	// correctly on a control that is both.
+	it("shows an open eye on a shown board and a struck one on a hidden board", () => {
+		asGM();
+		const entry = MIXED();
+		const shown = windowFor(null, { entry, pageId: "p1" }).app._seenTool();
+		expect(shown.pageHidden).toBe(false);
+		expect(shown.pageHideIcon).toBe("fa-eye");
+		expect(shown.pageHideHint).toBe("stonetop.relmap.pages.hideHint");
+		const dark = windowFor(null, { entry, pageId: "p2" }).app._seenTool();
+		expect(dark.pageHidden).toBe(true);
+		expect(dark.pageHideIcon).toBe("fa-eye-slash");
+		expect(dark.pageHideHint).toBe("stonetop.relmap.pages.showHint");
+	});
+
+	// Only a GM: core's own sanitizer refuses an ownership change from anybody else, so the button
+	// offered to a player would be a button that throws on the server.
+	it("offers the eye to a GM and to nobody else", () => {
+		asGM();
+		expect(windowFor(null, { entry: MIXED(), pageId: "p1" }).app._seenTool().pageHideOn).toBe(true);
+		asPlayer();
+		expect(windowFor(null, { entry: MIXED(), pageId: "p1" }).app._seenTool().pageHideOn).toBe(false);
+	});
+
+	it("hides the board that is up, and says so", async () => {
+		asGM();
+		const { app, entry, live } = windowFor(null, { entry: MIXED(), pageId: "p1" });
+		await app._hidePage();
+		expect(entry.pages.contents[0].updates).toEqual([{ ownership: { default: 0 } }]);
+		expect(live.textContent).toBe("stonetop.relmap.pages.hidden");
+	});
+
+	// The same button the other way, which is the half a GM presses when the table is ready for it.
+	// INHERIT and not OBSERVER: the map is owned by everybody, so a board that inherits is one the
+	// players may move people on, which is most of the point of showing it to them.
+	it("shows it again, and hands the right to edit it back with it", async () => {
+		asGM();
+		const { app, entry, live } = windowFor(null, { entry: MIXED(), pageId: "p2" });
+		await app._hidePage();
+		expect(entry.pages.contents[1].updates).toEqual([{ ownership: { default: -1 } }]);
+		expect(live.textContent).toBe("stonetop.relmap.pages.shown");
+	});
+
+	it("writes nothing at all for a reader who may not hide one", async () => {
+		asPlayer();
+		const { app, entry } = windowFor(null, { entry: MIXED(), pageId: "p1" });
+		await app._hidePage();
+		expect(entry.pages.contents[0].updates).toEqual([]);
+	});
+
+	// ⚠ A TAB SAYS THE BOARD'S NAME AND NOTHING ELSE. It briefly carried an eye in front of the names
+	// of the boards the players could see, and that was one mark too many on the one row whose whole
+	// job is to say which board is UP. Where a board stands is the eye in the tools beside the
+	// strip, which is one place and not eight.
+	it("puts no mark of its own on any tab", () => {
+		asGM();
+		const tabs = windowFor(null, { entry: MIXED(), pageId: "p1" }).app._pageTabs();
+		expect(tabs).not.toContain("<i");
+		expect(tabs).not.toContain("is-shared");
+		expect(tabs).toContain(">Stonetop<");
+		expect(tabs).toContain(">Marshedge<");
+	});
+
+	// ⚠ WHICH IS EXACTLY WHY THE EYE IS WRITTEN AHEAD OF `_paintPages`'s GUARD. That guard compares
+	// the strip's markup, and with no mark on any tab, hiding the board this reader is standing on
+	// changes NOTHING in that string: under the guard the glyph would go on saying "the table can
+	// see this" over a board the GM had just taken back. The board is hidden here without touching
+	// its name or the set of pages, so the strip is byte-for-byte what it was.
+	it("writes the eye again when a board is hidden under an open window", () => {
+		asGM();
+		const entry = MIXED();
+		const { app, seenTool } = windowFor(null, { entry, pageId: "p1" });
+		app._paintPages();
+		expect(seenTool.hidden).toBe(false);
+		expect(seenTool.children["i"].className).toBe("fas fa-eye");
+		expect(seenTool.dataset.tooltip).toBe("stonetop.relmap.pages.hideHint");
+		expect(seenTool.attrs["aria-label"]).toBe("stonetop.relmap.pages.hideHint");
+
+		const strip = app._pagesSaid;
+		entry.pages.contents[0].ownership = { default: 0 };
+		app._paintPages();
+		expect(app._pageTabs()).toBe(strip);
+		expect(seenTool.children["i"].className).toBe("fas fa-eye-slash");
+		expect(seenTool.dataset.tooltip).toBe("stonetop.relmap.pages.showHint");
+		expect(seenTool.classList.contains("is-hidden-board")).toBe(true);
+	});
+
+	// The button is in the markup on every map and hidden when it does not apply, for the reason the
+	// trash beside it is: behind a condition it would exist only on the maps that already had a
+	// board when the window last rendered.
+	it("takes the eye away from a reader who may not use it", () => {
+		asPlayer();
+		const { app, seenTool } = windowFor(null, { entry: MIXED(), pageId: "p1" });
+		app._paintPages();
+		expect(seenTool.hidden).toBe(true);
+	});
+
+	// ⚠ A REVEAL IS AS MUCH A RENDER AS A HIDE, and asking "was this a hide of the board they are
+	// standing on" was the wrong question. `_paintPages` can only rewrite a strip that is already
+	// there, and the two readers with no strip are exactly the ones a reveal is for: a player on a
+	// map whose every board is still the GM's own has neither strip nor board, and a player with a
+	// single visible board has no strip either (`showPages` is `canEdit || pages.length > 1`). So
+	// the GM presses the eye and the first goes on saying "there is nothing here for you to see
+	// yet" while the second never sees the new tab — until they close the window and open it again.
+	//
+	// The question is therefore asked in the two terms the render is built from: has the BOARD
+	// under this reader changed, or has the strip's being there at all?
+	describe("and showing one again", () => {
+		function hooksOf() {
+			const on = new Map();
+			globalThis.Hooks = { on: (name, fn) => on.set(name, fn), off: vi.fn() };
+			return on;
+		}
+
+		/** A render that emitted no strip, which is what `showPages: false` produces. */
+		const withNoStrip = made => { delete made.root.children[".stonetop-relmap-pages-strip"]; return made; };
+
+		const SHOW = { ownership: { default: -1 } };
+
+		it("renders again for a player who had no board at all until now", () => {
+			asPlayer();
+			const on = hooksOf();
+			const entry = pagedEntry([{ id: "p1", name: "Stonetop", hidden: true }]);
+			const { app } = withNoStrip(windowFor(null, { entry }));
+			app._wireSync();
+			expect(app.noBoardForMe).toBe(true);
+
+			entry.pages.contents[0].ownership = { default: -1 };
+			on.get("updateJournalEntryPage")(entry.pages.contents[0], SHOW);
+			expect(app.render).toHaveBeenCalled();
+			expect(app.noBoardForMe).toBe(false);
+		});
+
+		// The second reader with no strip: one board, so there was nothing to choose between. A
+		// second one arriving is the moment the strip has to exist, and no repaint can make it.
+		it("renders again when a second board turns the strip on", () => {
+			asPlayer();
+			const on = hooksOf();
+			const entry = MIXED();
+			const { app } = withNoStrip(windowFor(null, { entry, pageId: "p1" }));
+			app._wireSync();
+			expect(app.mapPages.map(page => page.id)).toEqual(["p1"]);
+
+			entry.pages.contents[1].ownership = { default: -1 };
+			on.get("updateJournalEntryPage")(entry.pages.contents[1], SHOW);
+			expect(app.render).toHaveBeenCalled();
+			// AND THEY STAY WHERE THEY WERE. The board under them did not change, so the render is
+			// about the strip appearing over it and nothing else.
+			expect(app._pageId).toBe("p1");
+		});
+
+		// The GM's own window, where the eye was pressed. Their strip has every board on it either
+		// way and the board under them is untouched, so this is the repaint case — which is what
+		// makes the eye's own glyph the thing that has to change. See `_paintSeen`.
+		it("only writes the eye again on the window that pressed it", () => {
+			asGM();
+			const on = hooksOf();
+			const entry = MIXED();
+			const { app, seenTool } = windowFor(null, { entry, pageId: "p1" });
+			app._wireSync();
+
+			entry.pages.contents[1].ownership = { default: -1 };
+			on.get("updateJournalEntryPage")(entry.pages.contents[1], SHOW);
+			expect(app.render).not.toHaveBeenCalled();
+			expect(seenTool.children["i"].className).toBe("fas fa-eye");
+		});
+
+		// The half that already worked, kept here beside its mirror image so that a change which
+		// quietly broke one of them fails as a DIFFERENCE rather than as one test nobody re-read.
+		it("still moves a player off a board taken back from them, and re-renders", () => {
+			asPlayer();
+			const on = hooksOf();
+			const entry = pagedEntry([
+				{ id: "p1", name: "Stonetop", graph: TWO_PEOPLE },
+				{ id: "p2", name: "Marshedge", graph: EMPTY_BOARD },
+			]);
+			const { app } = windowFor(null, { entry, pageId: "p1" });
+			app._wireSync();
+			app._lit = "e1";
+
+			entry.pages.contents[0].ownership = { default: 0 };
+			on.get("updateJournalEntryPage")(entry.pages.contents[0], { ownership: { default: 0 } });
+			expect(app.render).toHaveBeenCalled();
+			expect(app._pageId).toBeNull();
+			expect(app._lit).toBeNull();
+			expect(app.mapPage.id).toBe("p2");
+		});
+
+		// A strip appearing over the SAME board is not a reason to put out the line this reader was
+		// holding: they have not been moved anywhere, and the bar is about their own board.
+		it("keeps the line a reader is holding when only the strip has changed", () => {
+			asPlayer();
+			const on = hooksOf();
+			const entry = MIXED();
+			const { app } = withNoStrip(windowFor(null, { entry, pageId: "p1" }));
+			app._wireSync();
+			app._lit = "e1";
+
+			entry.pages.contents[1].ownership = { default: -1 };
+			on.get("updateJournalEntryPage")(entry.pages.contents[1], SHOW);
+			expect(app.render).toHaveBeenCalled();
+			expect(app._lit).toBe("e1");
+		});
+
+		// `rendered` is false for a CLOSED window as well as a mid-render one, and a render from
+		// here would reopen a board the reader had shut a moment before the GM pressed the eye.
+		it("renders nothing from a window that is not on screen", () => {
+			asPlayer();
+			const on = hooksOf();
+			const entry = pagedEntry([{ id: "p1", name: "Stonetop", hidden: true }]);
+			const { app } = withNoStrip(windowFor(null, { entry }));
+			app.rendered = false;
+			app._wireSync();
+
+			entry.pages.contents[0].ownership = { default: -1 };
+			on.get("updateJournalEntryPage")(entry.pages.contents[0], SHOW);
+			expect(app.render).not.toHaveBeenCalled();
+		});
+	});
+});
+
+// ── A board the players can see is a board they can work on ─────────────────────────────────────
+//
+// ⚠ THE HALF OF THE FEATURE THAT IS EASY TO GET WRONG, and the reason "shown" is spelt `INHERIT`
+// rather than `OBSERVER`. Hiding a board must not be a way of quietly making the whole map
+// read-only: the moment the GM shows a board, everybody at the table can put people on it, move
+// them and draw between them, exactly as the GM can. What makes that true is that a shown board
+// takes the MAP's ownership, and a map is owned by everybody (`createRelationshipMap`).
+describe("what a player may do on a board that has been shown to them", () => {
+	const asGM = () => { globalThis.game.user = { id: "gm1", isGM: true }; };
+	const asPlayer = () => { globalThis.game.user = { id: "u1", isGM: false }; };
+
+	const SOMEBODY = { uuid: "Actor.jaspar", name: "Jaspar", img: "jaspar.webp" };
+
+	// THE SERVER'S OWN ANSWER, which is the one that actually decides: a page write is checked
+	// against the PAGE. A shown board defers to the map, and the map is everybody's.
+	it("makes the player an owner of the board itself, and not merely of the map", () => {
+		asPlayer();
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		expect(page.testUserPermission(game.user, "OWNER")).toBe(true);
+		expect(page.isOwner).toBe(true);
+		expect(entry.isOwner).toBe(true);
+	});
+
+	it("lets them put somebody on it, and the person lands on that board", async () => {
+		asPlayer();
+		const { pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry: page.parent, pageId: "p1" });
+		expect(app.canEdit).toBe(true);
+		await app._addNodeFor(SOMEBODY, { left: 40, top: 60 });
+		const added = Object.values(readGraph(page).nodes).find(node => node.uuid === "Actor.jaspar");
+		expect(added).toBeTruthy();
+		expect([added.x, added.y]).toEqual([40, 60]);
+	});
+
+	// The same board, the same write, from the other side of the table. Named so a change that
+	// quietly made the board GM-only would fail as a DIFFERENCE between the two rather than as two
+	// separate tests that might both be adjusted together.
+	it("lets the GM do exactly the same thing, and no more", async () => {
+		const seatedBy = async () => {
+			const { pages: [page] } = ONE_LIVING_BOARD();
+			const { app } = windowFor(null, { entry: page.parent, pageId: "p1" });
+			const could = app.canEdit;
+			await app._addNodeFor(SOMEBODY, { left: 40, top: 60 });
+			return { could, nodes: Object.keys(readGraph(page).nodes).length };
+		};
+		asPlayer();
+		const player = await seatedBy();
+		asGM();
+		expect(await seatedBy()).toEqual(player);
+	});
+
+	// And moving people about, which is the other half of "working on a board".
+	it("lets them move somebody already on it", async () => {
+		asPlayer();
+		const { pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry: page.parent, pageId: "p1" });
+		await app._moveNode("elena", { x: 80, y: 90 });
+		expect(readGraph(page).nodes.elena.x).toBe(80);
+	});
+
+	// ⚠ ASKED OF THE BOARD AND NOT OF THE MAP. The two agree on every board this window makes, and
+	// part company the moment a GM reaches past it for core's own ownership dialog on a page. There
+	// the honest answer is a board that reads read-only, because the server will refuse the write
+	// whatever this window lets somebody click.
+	it("reads a board somebody has hand-set to look-only as read-only", () => {
+		asPlayer();
+		const { pages: [page] } = ONE_LIVING_BOARD();
+		page.ownership = { default: 2 };
+		const { app } = windowFor(null, { entry: page.parent, pageId: "p1" });
+		expect(app.mapPage.id).toBe("p1");
+		expect(app.canEdit).toBe(false);
+		// The map is still theirs, which is exactly the difference this is here to hold on to.
+		expect(app.entry.isOwner).toBe(true);
+	});
+
+	// A map still on version 1 keeps its whole board on the ENTRY and has no page to ask, and it is
+	// editable by everybody who owns the map. It must not be swept up by the rule above.
+	it("still lets a player edit a map that has no pages yet", () => {
+		asPlayer();
+		expect(windowFor().app.canEdit).toBe(true);
 	});
 });

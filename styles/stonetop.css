@@ -40757,12 +40757,19 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    window; wrapped, it would eat the board a row at a time, and with the tools inside it the "New
    page" button would wrap away out of reach. `min-width: 0` is what actually lets it shrink: a flex
    item's floor is its content, so without it the strip refuses to be narrower than all its tabs and
-   pushes the tools off the window instead of scrolling. */
+   pushes the tools off the window instead of scrolling.
+
+   ⚠ IT SHRINKS BUT DOES NOT GROW (`0 1 auto`, and it was `1 1 auto`). Grown to fill the row, the
+   strip's right edge was the window's right edge whether it held two tabs or twelve, and the plus
+   that follows it was flung to the far corner with it — nowhere near the names it adds to. Held to
+   its content, the strip ends where the last tab ends and the plus sits against it, which is where
+   a new tab appears. The shrink half is untouched, so a long strip still scrolls rather than
+   pushing anything off the window. */
 .stonetop-relmap-pages-strip {
 	display: flex;
 	align-items: stretch;
 	gap: 0.15em;
-	flex: 1 1 auto;
+	flex: 0 1 auto;
 	min-width: 0;
 	overflow-x: auto;
 	overflow-y: hidden;
@@ -40916,6 +40923,28 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	color: var(--st-text);
 }
 
+/* THE PLUS RIDES WITH THE TABS, and it is the only one of the three that is not in the tools group
+   beside them: it makes another tab, so it stands at the end of the strip where a new tab appears,
+   not in the far corner with the two controls that act on the board already up.
+
+   ⚠ `margin-right: auto` IS WHAT HOLDS THE OTHER TWO AT THE RIGHT-HAND END. With the strip no
+   longer growing (`flex: 0 1 auto` above), the row's leftover width has to be spent somewhere, and
+   it is spent here -- between the plus and the rename/delete pair, which is the gap that keeps the
+   first reading as part of the strip and the other two as the row's own corner.
+
+   `align-self: center` because the row stretches its children: without it this button is pulled to
+   the full height of the tabs beside it and its hover wash becomes a tall slab against their
+   underline. The tools group is centred by its own `align-items`; standing alone, this one is not
+   inside it any more.
+
+   Spelt through the row, and not as the bare modifier, because a margin is one of the things core
+   puts on a `button` inside an app with a selector of its own: the extra step is what makes sure
+   the auto one is the margin that survives. */
+.stonetop-relmap-pages .stonetop-relmap-page-tool--new {
+	align-self: center;
+	margin: 0 auto 0 0;
+}
+
 /* Rubbing out a board destroys everyone on it, so the one destructive control on this row says so
    before it is pressed rather than only in the dialog it opens. Later than the base rules above,
    which it modifies -- and it must stay later, because it ties with the hover rule that would
@@ -40923,6 +40952,21 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 .stonetop-relmap-page-tool--drop:hover,
 .stonetop-relmap-page-tool--drop:focus-visible {
 	color: var(--st-red-text);
+}
+
+/* THE EYE, ON A BOARD THE PLAYERS CAN SEE. The one tool on this row that reports as well as acts,
+   so it is the one that is ever lit: an open eye at full strength means the table is looking at
+   this board, and the struck one on the row's own faint ink means it is the GM's alone. The colour
+   is the accent the current tab's underline uses, so "shown" reads the same on the tab as on the
+   tool.
+
+   Later than the base rules and the hover rule above, which it modifies and must outlive: they tie
+   on specificity, and painted earlier this would be taken straight back to `--st-text` the moment a
+   pointer crossed it. */
+.stonetop-relmap-page-tool--seen:not(.is-hidden-board),
+.stonetop-relmap-page-tool--seen:not(.is-hidden-board):hover,
+.stonetop-relmap-page-tool--seen:not(.is-hidden-board):focus-visible {
+	color: var(--st-accent-fill);
 }
 
 /* THE VIEWPORT. It clips, it does not scroll: a scroll container can only reach what is inside

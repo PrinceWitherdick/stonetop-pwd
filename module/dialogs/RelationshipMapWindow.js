@@ -51,8 +51,9 @@ import {
 import { RelmapTieBar, TIE_DIR_ICONS } from "../utils/relmap-tie-bar.js";
 import { hasOwnRingArt, partyCharacters } from "../utils/playbook-actors.js";
 import {
-	applyPatch, canEditRelationshipMap, createMapPage, deleteMapPage, ensureFirstMapPage, getMapPage,
-	listMapPages, mapBoardDoc, mapPageName, readGraph, renameMapPage,
+	applyPatch, canEditRelationshipMap, canHideMapPages, createMapPage, deleteMapPage,
+	ensureFirstMapPage, getMapPage, isMapPageHidden, listMapPages, listVisibleMapPages, mapBoardDoc,
+	mapPageName, readGraph, renameMapPage, setMapPageHidden,
 	syncPartyPage, syncVillagePage,
 } from "../relmap/relmap-doc.js";
 import { steadingListActors } from "../actors/steading/steading-people.js";
@@ -185,13 +186,19 @@ const TOOLS = Object.freeze({
 	// left behind is read the way every other line on the board is read now: rubbed out one at a
 	// time from the tie bar, with undo behind it. What the checkbox under the board does instead is
 	// turn the WORDS off, which is the thing a hundred lines of any origin make unreadable.
-	// THE PAGE STRIP'S THREE, and all three are edits — they make, rename and destroy a document.
+	// THE PAGE STRIP'S FOUR, and all four are edits — they make, show, rename and destroy a document.
 	// They are in this table rather than beside the strip's own click handler for the reason the
 	// table exists at all: a tool gated by where it happens to be written is a tool nobody can tell
 	// was gated on purpose. Switching between pages is NOT here, because it is not a tool and not an
 	// edit: it is the strip's own value, and a reader who may only look still gets to look at every
-	// page (see `showPage`).
+	// page they are allowed to (see `showPage`).
 	pagenew: { needsEdit: true, run: app => app._addPage() },
+	// ⚠ `needsEdit` IS NOT THE GATE THAT MATTERS HERE, and it is written all the same. Who may hide
+	// a board is a narrower question than who may edit one — only a GM, because core's own sanitizer
+	// refuses an ownership change from anybody else — and `_hidePage` asks it. This entry keeps the
+	// table's own rule true for the tool: it writes to a document, so it is behind the edit gate,
+	// and being behind two gates is not a fault.
+	pagehide: { needsEdit: true, run: app => app._hidePage() },
 	pagerename: { needsEdit: true, run: app => app._renamePage() },
 	pagedelete: { needsEdit: true, run: app => app._removePage() },
 });
@@ -291,14 +298,22 @@ export class RelationshipMapWindow extends StonetopDialog {
 		return game.journal?.get?.(this._entryId) ?? this._entry ?? null;
 	}
 
-	/** Every named board this map has, in strip order. Asked afresh, never held: somebody at the
-	 * far end of the table adds and renames these while this window is open. */
+	/** Every named board of this map THIS READER MAY LOOK AT, in strip order. Asked afresh, never
+	 * held: somebody at the far end of the table adds, renames and reveals these while this window
+	 * is open.
+	 *
+	 * ⚠ THE VISIBLE STRIP AND NOT THE WHOLE ONE. Every board starts hidden from the players and is
+	 * shown one at a time with the eye (relmap/relmap-doc.js), so for a player this is a subset and
+	 * for a GM it is always the lot. Everything the window draws, counts and steps through comes
+	 * from here; the two places that must reason about boards a reader cannot see say so out loud
+	 * and reach for `listMapPages` themselves. */
 	get mapPages() {
-		return listMapPages(this.entry);
+		return listVisibleMapPages(this.entry);
 	}
 
-	/** The page this reader is on, or the first one. Null only on a map still carrying its board on
-	 * the entry, which `boardDoc` below is what answers for.
+	/** The page this reader is on, or the first one. Null on a map still carrying its board on the
+	 * entry, which `boardDoc` below is what answers for, and null again for a player on a map whose
+	 * every board is still the GM's own, which `noBoardForMe` is what tells the two apart.
 	 *
 	 * ONE WALK OF THE STRIP, the same economy `mapBoardDoc` keeps: asking `getMapPage` and then
 	 * falling back to `this.mapPages` filtered and sorted the same pages twice per call, and this is
@@ -306,6 +321,25 @@ export class RelationshipMapWindow extends StonetopDialog {
 	get mapPage() {
 		const pages = this.mapPages;
 		return pages.find(page => page.id === this._pageId) ?? pages[0] ?? null;
+	}
+
+	/**
+	 * THIS MAP HAS BOARDS AND NONE OF THEM IS THIS READER'S TO SEE.
+	 *
+	 * The state a player is in on a map whose every board the GM has kept back, and it has to be
+	 * told apart from the other way `mapPage` comes back null — a map still on version 1, whose one
+	 * board is on the entry and is perfectly editable. Both leave `boardDoc` resolving to the ENTRY,
+	 * and on a converted map the entry's graph is empty by design, so without this the reader would
+	 * be offered an empty board with an "add somebody" button on it, and every person they added
+	 * would be written into the entry's dead flag where nobody, themselves included, would ever see
+	 * them again.
+	 *
+	 * ⚠ `mapPage` FIRST, so the ordinary case costs one walk and stops. The second walk only happens
+	 * for a reader who has no board at all, which is the two rare shapes above and never a GM.
+	 */
+	get noBoardForMe() {
+		if (this.mapPage) return false;
+		return listMapPages(this.entry).length > 0;
 	}
 
 	/**
@@ -349,10 +383,42 @@ export class RelationshipMapWindow extends StonetopDialog {
 		return this.entry;
 	}
 
-	// ASKED, NEVER HELD, and asked afresh by everything below including the drag layer's
-	// per-gesture questions: permission can change under an open window.
+	/**
+	 * MAY THIS READER CHANGE THE BOARD IN FRONT OF THEM?
+	 *
+	 * ASKED, NEVER HELD, and asked afresh by everything below including the drag layer's per-gesture
+	 * questions: permission can change under an open window.
+	 *
+	 * ⚠ OF THE BOARD, AND NOT OF THE MAP, now that a board carries its own ownership. The server
+	 * checks a page write against the PAGE, so the page is the only document whose answer this can
+	 * safely be. On the ordinary map the two agree by construction: a board the players can see is
+	 * `INHERIT`, which takes the map's own ownership, and a map is owned by everybody at the table.
+	 * SO EVERY PLAYER WHO CAN SEE A BOARD CAN EDIT IT, exactly as the GM can, and that is the whole
+	 * of what "shown" means. They part company only where a GM has reached past this window for
+	 * core's own ownership dialog and set a page to OBSERVER by hand, and there the honest answer is
+	 * a board that reads as read-only rather than one whose every tool is live and whose every write
+	 * the server throws away.
+	 *
+	 * ⚠ AND A READER WITH NO BOARD AT ALL MAY NOT EDIT ONE. A player on a map whose every board is
+	 * still the GM's own owns the entry, and `boardDoc` for them falls back to that entry: they
+	 * would have every tool enabled over a flag that is drawn nowhere. The fallthrough is told from
+	 * the other document that reaches it -- a map still on version 1, whose board really is on the
+	 * entry and really is editable -- by whether the map has any pages at all.
+	 *
+	 * ONE WALK OF THE STRIP in the ordinary case, which matters: this is asked several times per
+	 * render, again on every repaint, and again on every gesture. The second walk is only paid by a
+	 * reader who has no board, which is the two rare shapes above and never a GM.
+	 */
 	get canEdit() {
-		return canEditRelationshipMap(this.entry);
+		const page = this.mapPage;
+		if (page) return canEditRelationshipMap(page);
+		return !listMapPages(this.entry).length && canEditRelationshipMap(this.entry);
+	}
+
+	/** May this reader hide a board from the players, and show it again? Only a GM, and asked afresh
+	 * for the reason `canEdit` is: a role can change under an open window. */
+	get canHidePages() {
+		return canHideMapPages() && canEditRelationshipMap(this.entry);
 	}
 
 	async getData() {
@@ -416,6 +482,12 @@ export class RelationshipMapWindow extends StonetopDialog {
 			pageNewHint: localize("stonetop.relmap.pages.newHint"),
 			pageRenameHint: localize("stonetop.relmap.pages.renameHint"),
 			pageDeleteHint: localize("stonetop.relmap.pages.deleteHint"),
+			// ⚠ THE EYE IS DERIVED, NOT SPELT, and by the same function `_paintPages` writes it
+			// from. Everything about that button changes without a render — the GM presses it, or
+			// somebody at another GM's screen does — so a render and a repaint deriving it
+			// separately would be two spellings of one question with the wrong one right until the
+			// next full render. See `_seenTool`.
+			...this._seenTool(page),
 			// ⚠ THE LAST BOARD MAY NOT BE RUBBED OUT, and the button is absent rather than disabled
 			// on a one-page map. A map with no pages is one whose next opener silently gives it a
 			// fresh empty board, so the delete would read as the map emptying itself.
@@ -1086,6 +1158,47 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// A NAME OR AN ORDER IS THE STRIP'S BUSINESS, whichever page it happened to. Somebody
 			// renaming the board this reader is NOT on still changes what the strip says.
 			if ("name" in (changed ?? {}) || "sort" in (changed ?? {})) this._paintPages();
+			// ⚠ AND SO IS A BOARD BEING HIDDEN OR SHOWN, which for a player is a tab APPEARING OR
+			// VANISHING and not a mark changing on one. Handled here rather than left to the strip's
+			// repaint because of the one case that is more than a repaint: the GM hiding the board
+			// this player is standing on. `mapPage` falls through to the next one they may see, so
+			// what that reader needs is the same full render a deletion gets — a different board is
+			// a different shape, a different bar and a different fit. The `_pageId` is dropped
+			// first, for the reason the delete path drops it: it names a board that is no longer
+			// theirs, and left standing it would pin them to nothing.
+			if ("ownership" in (changed ?? {})) {
+				// ⚠ A REVEAL IS AS MUCH A RENDER AS A HIDE, and asking "was this a hide of the
+				// board they are on" was the wrong question. `_paintPages` can only rewrite a strip
+				// that is already there, and the two readers it cannot help are exactly the ones a
+				// reveal is for: a player on a map whose every board was the GM's own has no strip
+				// AND no board (`showPages` was false and `mapPage` null), and a player on a map
+				// with one visible board has no strip either — so the GM presses the eye and the
+				// first stays on "there is nothing here for you to see yet" while the second never
+				// sees the new tab, both until they close the window and open it again.
+				//
+				// So the question is asked the other way round, in the two terms the render itself
+				// is built from: has the BOARD under this reader changed, or has the strip's being
+				// there at all? Either one is a different shape, a different bar and a different
+				// fit, and the hide-the-board-I-am-standing-on case above is the first of them.
+				const pages = this.mapPages;
+				const board = this.mapPage;
+				const moved = (board?.id ?? null) !== this._pageId;
+				const strip = !!this._root?.querySelector(".stonetop-relmap-pages-strip");
+				if (this.rendered && (moved || strip !== (this.canEdit || pages.length > 1))) {
+					// Only where the board actually changed, and for the reason the delete path
+					// drops it: the id names a board that is no longer theirs, and left standing it
+					// would pin them to nothing. A strip appearing over the SAME board is not a
+					// reason to put out the line this reader was holding.
+					if (moved) {
+						this._pageId = null;
+						this._lit = null;
+						this._armed = "";
+					}
+					this.render();
+					return;
+				}
+				this._paintPages();
+			}
 			// A graph is only this window's business when it is the graph being LOOKED AT. Two
 			// people at one table working on two pages of the same map must not repaint each other;
 			// that is the whole reason a board is its own document rather than another object
@@ -1112,10 +1225,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// and "whichever board comes first" is a board ANY deletion may have changed.
 			if (gone && (page.id === this._pageId || !this._pageId)) {
 				// The board under this reader has just been rubbed out at the far end of the table.
-				// `mapPage` falls through to the first surviving page, and all four of these
+				// `mapPage` falls through to the first surviving page, and all three of these
 				// belonged to the one that is gone.
 				this._pageId = null;
-				this._focus = null;
 				this._lit = null;
 				this._armed = "";
 				this.render();
@@ -1485,19 +1597,29 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 */
 	_chrome(plan) {
 		const nobody = !Object.keys(plan.graph.nodes).length;
+		// ⚠ A MAP WITH BOARDS AND NOT ONE OF THEM THIS READER'S TO SEE, which is a different empty
+		// from an empty board and has to say so. Every board starts hidden from the players, so this
+		// is what a player meets on a map the GM has not shown them any of yet — and told "nobody is
+		// on this board yet, add somebody" they would reasonably conclude the map was broken, or
+		// theirs to fill in. It is also the state in which the window has nothing to write to (see
+		// `noBoardForMe`), which is why `canEdit` is already false here and the button already gone.
+		const unshared = this.noBoardForMe;
 		return {
-			empty: nobody,
+			empty: nobody || unshared,
 			// ⚠ THE HEADLINE IS DERIVED HERE TOO, though it never changes, because `_paintChrome`
 			// WRITES every part of the panel it repaints. Left in `getData` alone, as it was, this
 			// came back `undefined` on every repaint and the writer blanked the sentence outright:
 			// the empty board would appear carrying only its hint and its button until the next full
 			// render. Nothing in a panel may be settled in one of the two writers only.
-			emptyLead: localize("stonetop.relmap.emptyLead"),
+			emptyLead: localize(
+				unshared ? "stonetop.relmap.unsharedLead" : "stonetop.relmap.emptyLead",
+			),
 			// ⚠ AND SO IS WHAT IT OFFERS, for the same reason and one step further on: whether the
 			// reader may add anybody is an ownership question, and ownership changes under an open
 			// window.
 			emptyHint: localize(
-				this.canEdit ? "stonetop.relmap.emptyHint" : "stonetop.relmap.emptyHintReadonly",
+				unshared ? "stonetop.relmap.unsharedHint"
+					: this.canEdit ? "stonetop.relmap.emptyHint" : "stonetop.relmap.emptyHintReadonly",
 			),
 			emptyAction: this.canEdit
 				? { action: "add", label: localize("stonetop.relmap.add"), icon: "fa-user-plus" }
@@ -1721,6 +1843,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * ROVING TABINDEX, so the strip is ONE tab stop with arrow keys inside it rather than one stop
 	 * per board. On a map with eight pages the other spelling puts eight stops between the bar and
 	 * the board for every reader who moves by keyboard.
+	 *
+	 * ⚠ A TAB SAYS THE BOARD'S NAME AND NOTHING ELSE. It briefly carried an eye in front of the
+	 * names of the boards the players could see, and that was one mark too many: every board starts
+	 * hidden, so what the mark actually did was put a second glyph on a row whose whole job is to
+	 * say WHICH BOARD IS UP, competing with the underline that answers that. Where a board stands is
+	 * the eye in the tools beside the strip, which is one place and not eight. (This also means the
+	 * strip's markup does not change when a board is hidden or shown, which `_paintPages` has to
+	 * know: see the note at the top of it.)
 	 */
 	_pageTabs(pages = this.mapPages, chosen = this.mapPage?.id ?? "") {
 		const esc = foundry.utils.escapeHTML;
@@ -1737,6 +1867,35 @@ export class RelationshipMapWindow extends StonetopDialog {
 	}
 
 	/**
+	 * THE EYE: whether it is there at all, what it shows, and what it says.
+	 *
+	 * ONE DERIVATION AND TWO WRITERS OF IT, the shape `_chrome` keeps and for the same reason. Every
+	 * part of this changes without a render — the GM presses the button, or a second GM presses
+	 * theirs, or the reader moves to another board — so a render spelling it one way and a repaint
+	 * another would leave the wrong one right until something else forced a full render.
+	 *
+	 * ⚠ THE GLYPH SAYS WHERE THE BOARD STANDS AND THE HINT SAYS WHAT PRESSING DOES, which is the
+	 * only pairing that reads correctly on a control that is both a state and a switch. An open eye
+	 * on a shown board, a struck one on a hidden board; the sentence under the pointer names the
+	 * outcome, as every button in this system does.
+	 */
+	_seenTool(page = this.mapPage) {
+		const dark = isMapPageHidden(page);
+		return {
+			// ⚠ THE BUTTON IS ALWAYS IN THE MARKUP AND HIDDEN WHEN IT DOES NOT APPLY, for the reason
+			// the delete button beside it is: a repaint can only write onto what a render left
+			// standing, and behind an `{{#if}}` this control would exist only on the maps that
+			// already had a board when the window last rendered.
+			pageHideOn: this.canHidePages && !!page,
+			pageHidden: dark,
+			pageHideIcon: dark ? "fa-eye-slash" : "fa-eye",
+			pageHideHint: localize(
+				dark ? "stonetop.relmap.pages.showHint" : "stonetop.relmap.pages.hideHint",
+			),
+		};
+	}
+
+	/**
 	 * Write the strip again after a repaint, and only when it has actually changed.
 	 *
 	 * THE GUARD IS THE POINT, not an optimization. This runs on every repaint — which is every time
@@ -1745,20 +1904,60 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * the STRING it was built from.
 	 */
 	_paintPages() {
+		// ⚠ THE EYE IS WRITTEN BEFORE THE GUARD, AND THAT IS LOAD-BEARING. Hiding or showing a board
+		// leaves the strip's markup untouched — a tab says the board's name and nothing about who
+		// can see it (`_pageTabs`) — so the string comparison below returns before anything else
+		// runs, and the glyph would go on saying "the table can see this" over a board the GM had
+		// just taken back. It was briefly safe under the guard, when a tab carried a mark of its
+		// own; the mark is gone and this is what the guard no longer covers.
+		// RESOLVED ONCE FOR THE WHOLE PASS, the same hoist `getData` makes and for the same reason.
+		// `mapPages` filters the entry's pages by what this reader may see and sorts them, and
+		// `mapPage` walks that again; the eye, the tabs, the panel's label and the delete button
+		// between them were asking five times over for the same two answers, on a method that runs
+		// on every page created, deleted, renamed or shown at the table, per open board.
+		const pages = this.mapPages;
+		const page = pages.find(one => one.id === this._pageId) ?? pages[0] ?? null;
+		this._paintSeen(page);
 		const strip = this._root?.querySelector(".stonetop-relmap-pages-strip");
 		if (!strip) return;
-		const tabs = this._pageTabs();
+		const tabs = this._pageTabs(pages, page?.id ?? "");
 		if (tabs === this._pagesSaid) return;
 		this._pagesSaid = tabs;
 		strip.innerHTML = tabs;
 		// The board is the panel for whichever tab is now selected, and which tab that is can have
 		// changed without a render: somebody else deleting the page this reader was on moves them.
 		const view = this._root?.querySelector(".stonetop-relmap-view");
-		if (view) view.setAttribute("aria-labelledby", this._pageTabId(this.mapPage?.id ?? ""));
+		if (view) view.setAttribute("aria-labelledby", this._pageTabId(page?.id ?? ""));
 		// Whether the last board can be rubbed out depends on how many there are, which is exactly
 		// what has just changed.
 		const drop = this._root?.querySelector("[data-relmap-action=\"pagedelete\"]");
-		if (drop) drop.hidden = !(this.canEdit && this.mapPages.length > 1);
+		if (drop) drop.hidden = !(this.canEdit && pages.length > 1);
+	}
+
+	/**
+	 * Write the eye onto the button a repaint left standing.
+	 *
+	 * ⚠ CALLED FROM `_paintPages` AHEAD OF ITS GUARD, never under it. The guard compares the strip's
+	 * markup, and a tab says the board's name and nothing about who can see it, so hiding or showing
+	 * a board changes nothing the guard can notice. See the note at the top of that method.
+	 *
+	 * IT WRITES THE WHOLE BUTTON EVERY TIME rather than only what changed. Nothing here costs
+	 * anything worth counting, and a writer that skipped a part is a part settled in one of the two
+	 * writers only, which is the fault `_chrome` carries its own warning about.
+	 *
+	 * THE HINT IS THE LABEL, so both attributes take the same sentence. A tooltip that said one
+	 * thing to a pointer and another to a screen reader would be two controls wearing one glyph.
+	 */
+	_paintSeen(page = this.mapPage) {
+		const eye = this._root?.querySelector("[data-relmap-action=\"pagehide\"]");
+		if (!eye) return;
+		const said = this._seenTool(page);
+		eye.hidden = !said.pageHideOn;
+		eye.dataset.tooltip = said.pageHideHint;
+		eye.setAttribute("aria-label", said.pageHideHint);
+		eye.classList.toggle("is-hidden-board", said.pageHidden);
+		const icon = eye.querySelector("i");
+		if (icon) icon.className = `fas ${said.pageHideIcon}`;
 	}
 
 	/**
@@ -1846,6 +2045,35 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this.showPage(page.id, {
 			said: format("stonetop.relmap.pages.added", { name: page.name }),
 		});
+	}
+
+	/**
+	 * Hide the board that is up from the players, or show it to them.
+	 *
+	 * NOT ASKED FIRST, and that is the whole difference between this and the delete beside it.
+	 * Nothing is destroyed and nothing is lost: the board, its people and every line on it are
+	 * exactly where they were, and one more press puts the map back the way it was. A confirm on a
+	 * control whose entire cost is one more click is a confirm a GM learns to dismiss without
+	 * reading, which is how the confirms that matter stop working.
+	 *
+	 * SAID OUT LOUD, because the visible change is small and lands somewhere the presser is not
+	 * looking: the glyph swaps, and a mark appears on a tab whose name their eye is not on. What
+	 * actually changed is who at the table can see this board, which is worth a sentence.
+	 *
+	 * ⚠ NOTHING IS RE-RENDERED HERE. The write broadcasts, and the page's own update hook is what
+	 * repaints the strip and the eye — one path, whether the board was hidden from this window or
+	 * from a second GM's. A render here would race it and throw away the live region this speaks
+	 * into.
+	 */
+	async _hidePage() {
+		const page = this.mapPage;
+		if (!page || !this.canHidePages) return;
+		const dark = !isMapPageHidden(page);
+		if (!await setMapPageHidden(page, dark)) return;
+		this._announce(format(
+			dark ? "stonetop.relmap.pages.hidden" : "stonetop.relmap.pages.shown",
+			{ name: page.name },
+		));
 	}
 
 	/** Rename the board that is up. The box opens on the name it already has, so a reader fixing a

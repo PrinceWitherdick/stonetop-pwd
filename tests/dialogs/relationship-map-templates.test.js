@@ -906,6 +906,11 @@ describe("the page strip", () => {
 		pageRenameHint: "Rename the page you are on",
 		pageDeleteHint: "Rub out the page you are on",
 		canDropPage: true,
+		// The eye: whether it applies at all, where the board stands, and what pressing it does.
+		pageHideOn: true,
+		pageHidden: false,
+		pageHideIcon: "fa-eye",
+		pageHideHint: "Hide this page from your players",
 		...over,
 	});
 
@@ -934,29 +939,40 @@ describe("the page strip", () => {
 		expect(html).toContain('aria-labelledby="stonetop-relmap-map1-page-p1"');
 	});
 
-	// All three make, rename or destroy a document, so the whole group is behind the gate. The
+	// All four make, show, rename or destroy a document, so the whole group is behind the gate. The
 	// strip itself is not: a reader who may only look still gets to look at every board.
 	it("offers no page tools at all to a reader who may only look", () => {
 		const html = render(context({ canEdit: false }));
 		expect(html).toContain("stonetop-relmap-pages-strip");
 		expect(html).not.toContain('data-relmap-action="pagenew"');
 		expect(html).not.toContain('data-relmap-action="pagedelete"');
+		expect(html).not.toContain('data-relmap-action="pagehide"');
 	});
 
-	it("offers the three page tools to a reader who may edit", () => {
+	it("offers the four page tools to a reader who may edit", () => {
 		const html = render(context());
-		for (const action of ["pagenew", "pagerename", "pagedelete"]) {
+		for (const action of ["pagenew", "pagehide", "pagerename", "pagedelete"]) {
 			expect(html).toContain(`data-relmap-action="${action}"`);
 		}
 	});
 
+	// ⚠ THE EYE STANDS TO THE LEFT OF THE PEN, which is not decoration: it is the only one of the
+	// group that reports as well as acts, so it is read before the two that change the board.
+	it("puts the eye first in the group, ahead of the pen and the trash", () => {
+		const html = render(context());
+		const at = action => html.indexOf(`data-relmap-action="${action}"`);
+		expect(at("pagehide")).toBeGreaterThan(-1);
+		expect(at("pagehide")).toBeLessThan(at("pagerename"));
+		expect(at("pagerename")).toBeLessThan(at("pagedelete"));
+	});
+
 	// ⚠ GLYPH ONLY. The words used to sit beside the icons, on the one row whose whole job is to
-	// say which board is up — three pieces of tool prose competing with the tab names, and taking
+	// say which board is up — pieces of tool prose competing with the tab names, and taking
 	// width from a strip that scrolls. What replaced them is nothing at all in the markup: no
 	// span, no text node, just the icon.
-	it("carries no words beside the three glyphs", () => {
+	it("carries no words beside the four glyphs", () => {
 		const html = render(context());
-		for (const action of ["pagenew", "pagerename", "pagedelete"]) {
+		for (const action of ["pagenew", "pagehide", "pagerename", "pagedelete"]) {
 			const button = html.match(
 				new RegExp(`<button[^>]*data-relmap-action="${action}"[^>]*>([\\s\\S]*?)</button>`),
 			)[1];
@@ -969,11 +985,33 @@ describe("the page strip", () => {
 	// both that and the tooltip.
 	it("keeps the full hint as each glyph's name and its tooltip", () => {
 		const html = render(context());
-		for (const hint of ["Start another board", "Rename the page you are on",
-			"Rub out the page you are on"]) {
+		for (const hint of ["Start another board", "Hide this page from your players",
+			"Rename the page you are on", "Rub out the page you are on"]) {
 			expect(html).toContain(`data-tooltip="${hint}"`);
 			expect(html).toContain(`aria-label="${hint}"`);
 		}
+	});
+
+	// ⚠ RENDERED AND HIDDEN, like the delete below it and for the same reason: `_paintSeen` can only
+	// write onto markup a repaint left standing, and who may press this changes with a role.
+	it("keeps the eye in the markup for a reader who may not use it, merely hidden", () => {
+		const shown = render(context()).match(/<button[^>]*data-relmap-action="pagehide"[^>]*>/)[0];
+		expect(shown).not.toContain("hidden");
+		const gone = render(context({ pageHideOn: false }))
+			.match(/<button[^>]*data-relmap-action="pagehide"[^>]*>/)[0];
+		expect(gone).toContain("hidden");
+	});
+
+	// THE GLYPH IS THE STATE. An open eye on a board the table can see, a struck one on a board
+	// that is the GM's alone, and a class beside it so the ink can say the same thing again.
+	it("wears the glyph and the class the window hands it", () => {
+		const shown = render(context()).match(/<button[^>]*data-relmap-action="pagehide"[^>]*>[\s\S]*?<\/button>/)[0];
+		expect(shown).toContain('class="fas fa-eye"');
+		expect(shown).not.toContain("is-hidden-board");
+		const dark = render(context({ pageHidden: true, pageHideIcon: "fa-eye-slash" }))
+			.match(/<button[^>]*data-relmap-action="pagehide"[^>]*>[\s\S]*?<\/button>/)[0];
+		expect(dark).toContain('class="fas fa-eye-slash"');
+		expect(dark).toContain("is-hidden-board");
 	});
 
 	// ⚠ RENDERED AND HIDDEN, never behind an `{{#if}}`. Whether the last board may be rubbed out
@@ -990,6 +1028,47 @@ describe("the page strip", () => {
 		const html = render(context({ canDropPage: true }));
 		const button = html.match(/<button[^>]*data-relmap-action="pagedelete"[^>]*>/)[0];
 		expect(button).not.toContain("hidden");
+	});
+
+	// ⚠ THE PLUS STANDS AT THE END OF THE TABS, not in the corner with the other two. It makes
+	// ANOTHER TAB, and the place a new tab appears is after the last one; off at the far right it
+	// was the width of the window away from the row it adds to. Order in the markup is half of
+	// that (the stylesheet holds the rest, in relationship-map-rows) — so it is asserted here as
+	// order: after the strip, before the group rename and delete are in.
+	it("stands the new-page plus between the tabs and the other two tools", () => {
+		const html = render(context());
+		const strip = html.indexOf("stonetop-relmap-pages-strip");
+		const plus = html.indexOf('data-relmap-action="pagenew"');
+		const group = html.indexOf("stonetop-relmap-pages-tools");
+		const rename = html.indexOf('data-relmap-action="pagerename"');
+		expect(strip).toBeGreaterThan(-1);
+		expect(plus).toBeGreaterThan(strip);
+		expect(group).toBeGreaterThan(plus);
+		expect(rename).toBeGreaterThan(group);
+	});
+
+	// And it is OUTSIDE the scrolling strip all the same: with a dozen boards the tabs scroll
+	// sideways, and a plus that scrolled away with them would be the only way to make a board at
+	// all, gone. The strip's element closes before the button opens.
+	it("keeps that plus out of the strip that scrolls", () => {
+		const html = render(context());
+		const strip = html.match(
+			/<div class="stonetop-relmap-pages-strip"[\s\S]*?<\/div>/,
+		)[0];
+		expect(strip).not.toContain('data-relmap-action="pagenew"');
+	});
+
+	// The group beside it holds the two that act on the board already up, and only those.
+	it("leaves rename and delete alone together in the tools group", () => {
+		const html = render(context());
+		// Nothing but buttons and their glyphs is inside the group, so the first `</div>` past it
+		// is its own close.
+		const group = html.match(
+			/<div class="stonetop-relmap-pages-tools">([\s\S]*?)<\/div>/,
+		)[1];
+		expect(group).toContain('data-relmap-action="pagerename"');
+		expect(group).toContain('data-relmap-action="pagedelete"');
+		expect(group).not.toContain('data-relmap-action="pagenew"');
 	});
 });
 

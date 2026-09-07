@@ -115,6 +115,25 @@ describe("the page strip inside that row", () => {
 		expect(declarations(CSS, ".stonetop-relmap-pages-tools")).toMatch(/flex\s*:\s*none/);
 	});
 
+	// ⚠ IT SHRINKS BUT DOES NOT GROW. Grown to fill the row, the strip's right edge was the
+	// window's right edge whether it held two tabs or twelve, and the plus that follows it went to
+	// the far corner with it — nowhere near the names it adds to. Held to its content, the strip
+	// ends where the last tab ends and the plus sits against it, which is where a new tab appears.
+	it("holds the strip to the width of its tabs rather than growing it", () => {
+		const strip = declarations(CSS, ".stonetop-relmap-pages-strip");
+		expect(strip).toMatch(/flex\s*:\s*0\s+1\s+auto/);
+	});
+
+	// The other half of that placement: the row's leftover width is spent BETWEEN the plus and the
+	// rename/delete pair, which is what reads the first as part of the strip and holds the other
+	// two at the row's own right-hand corner. `align-self` because the row stretches its children
+	// and this button no longer sits in the group that centres its own.
+	it("spends the row's spare width after the plus, not before it", () => {
+		const plus = declarations(CSS, ".stonetop-relmap-pages .stonetop-relmap-page-tool--new");
+		expect(plus).toMatch(/margin\s*:\s*0\s+auto\s+0\s+0/);
+		expect(plus).toMatch(/align-self\s*:\s*center/);
+	});
+
 	// Which tab is up is the most load-bearing thing on this row, and there is a reader at this
 	// table on a screen magnifier for whom a two-tone difference between two words is no difference
 	// at all. So it is said three ways: ink, weight, and an underline.
@@ -123,5 +142,33 @@ describe("the page strip inside that row", () => {
 		expect(current).toMatch(/border-bottom-color\s*:/);
 		expect(current).toMatch(/font-weight\s*:/);
 		expect(current).toMatch(/color\s*:/);
+	});
+});
+
+// ── Where a board stands, on the one control that says so ───────────────────────────────────────
+//
+// Every board of a map starts hidden, and the eye beside the pen shows one to the table. That eye
+// is the ONLY place the strip says where a board stands: the tabs briefly carried a mark of their
+// own, and it was one glyph too many on the row whose whole job is to say which board is up.
+describe("a board the players can see", () => {
+	// The tab is a single text child again, so nothing here may reintroduce a shape that only made
+	// sense with a glyph beside the name.
+	it("leaves the tabs carrying nothing but their name", () => {
+		const tab = declarations(CSS, ".stonetop-relmap-page");
+		expect(tab).not.toMatch(/grid-auto-flow/);
+		expect(tab).toMatch(/text-overflow\s*:\s*ellipsis/);
+	});
+
+	// The eye is the one tool on this row that reports as well as acts, so it is the one that is
+	// ever lit. Through the hover rule as well as under it, because the two tie on specificity and
+	// the hover would otherwise take the ink straight back the moment a pointer crossed it.
+	it("lights the eye on a board the table is looking at, hover included", () => {
+		const lit = declarations(
+			CSS,
+			".stonetop-relmap-page-tool--seen:not(.is-hidden-board):focus-visible",
+		);
+		expect(lit).toMatch(/color\s*:/);
+		expect(CSS.indexOf(".stonetop-relmap-page-tool--seen"))
+			.toBeGreaterThan(CSS.indexOf(".stonetop-relmap-page-tool:hover"));
 	});
 });

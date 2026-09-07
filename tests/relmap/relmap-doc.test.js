@@ -9,10 +9,11 @@ vi.mock("../../module/dialogs/RelationshipMapWindow.js", () => ({
 import { openRelationshipMap } from "../../module/dialogs/RelationshipMapWindow.js";
 import {
 	RELMAP_FOLDER_NAME, RELMAP_PAGE_NAME_MAX, RELMAP_SHEET_CLASS, canCreateRelationshipMap,
-	createMapPage, createRelationshipMap, deleteMapPage, ensureFirstMapPage,
-	ensureRelationshipMapFolder, findRelationshipMapFolder, getMapPage, getRelationshipMap,
-	getPartyPage, hadPartyPage, listMapPages, listRelationshipMaps, mapBoardDoc, mapPageName,
-	readGraph, renameMapPage, syncPartyPage,
+	canHideMapPages, canSeeMapPage, createMapPage, createRelationshipMap, deleteMapPage,
+	ensureFirstMapPage, ensureRelationshipMapFolder, findRelationshipMapFolder, getMapPage,
+	getRelationshipMap, getPartyPage, hadPartyPage, isMapPageHidden, listMapPages,
+	listRelationshipMaps, listVisibleMapPages, mapBoardDoc, mapPageName,
+	readGraph, renameMapPage, setMapPageHidden, syncPartyPage,
 } from "../../module/relmap/relmap-doc.js";
 import { RELMAP_VERSION } from "../../module/relmap/relmap-store.js";
 import { createRelationshipMapEntrySheetClass } from "../../module/journal/RelationshipMapEntrySheet.js";
@@ -22,6 +23,10 @@ import { createRelationshipMapEntrySheetClass } from "../../module/journal/Relat
 // right (so a plain player cannot).
 
 const OWNER = 3;
+// The two ends of "may the players look at this board": INHERIT takes the map's own ownership,
+// which on a map is OWNER for everybody at the table, and NONE is the GM keeping a board back.
+const INHERIT = -1;
+const NONE = 0;
 
 /** The real English table, kept from before the suite's `beforeEach` replaces `globalThis.game`,
  * so a page named by the code under test is asserted against the words a player would see. */
@@ -61,7 +66,9 @@ function applyDotted(doc, patch) {
  * `graph` of null makes a page that is NOT one of ours — a page of ordinary prose somebody filed
  * on the same entry, which the strip must not offer as a board.
  */
-function pageDoc(name, graph, { id = null, sort = 0, parent = null, flags: extraFlags = null } = {}) {
+function pageDoc(name, graph, {
+	id = null, sort = 0, parent = null, flags: extraFlags = null, ownership = null,
+} = {}) {
 	const flags = extraFlags ?? (graph === null ? {} : { "stonetop-pwd": { relationshipMap: graph } });
 	const doc = {
 		id: id ?? `page${++nextPageId}`,
@@ -70,10 +77,26 @@ function pageDoc(name, graph, { id = null, sort = 0, parent = null, flags: extra
 		parent,
 		updates: [],
 		flags,
+		// A board the table can see inherits the map's own ownership, which on a map is OWNER for
+		// everybody; one the GM has kept back carries NONE. See relmap/relmap-doc.js.
+		ownership: ownership ?? { default: INHERIT },
 		getFlag: (scope, key) => flags[scope]?.[key] ?? null,
+		// Core's rule, near enough for this: a GM is OWNER over everything, an explicit level for
+		// this user beats the default, and INHERIT defers to the parent entry.
+		testUserPermission(user, permission) {
+			if (user?.isGM) return true;
+			const level = doc.ownership?.[user?.id] ?? doc.ownership?.default ?? INHERIT;
+			if (level === INHERIT) return !!doc.parent?.isOwner;
+			return level >= (permission === "OWNER" ? OWNER : 2);
+		},
+		// ⚠ DERIVED AND NOT SET, exactly as core derives it: `isOwner` is
+		// `testUserPermission(game.user, "OWNER")`. A fake carrying it as a flag of its own would
+		// certify a caller asking the wrong document, because both would say yes.
+		get isOwner() { return doc.testUserPermission(game?.user, "OWNER"); },
 		update(patch) {
 			doc.updates.push(patch);
 			if ("name" in patch) doc.name = patch.name;
+			if (patch.ownership) Object.assign(doc.ownership, patch.ownership);
 			applyDotted(doc, patch);
 			return Promise.resolve(doc);
 		},
@@ -103,7 +126,13 @@ const entry = (name, flags = {}, extra = {}) => {
 			// other page by a SECOND flag beside it, and a fake that dropped it would certify a
 			// lookup that can never find anything.
 			const made = rows.map(row => pageDoc(row.name, row.flags?.["stonetop-pwd"]?.relationshipMap ?? null,
-				{ sort: row.sort, parent: doc, flags: row.flags ?? null }));
+				{
+					sort: row.sort, parent: doc, flags: row.flags ?? null,
+					// ⚠ CARRIED THROUGH, like the flags beside it. Whether a new board arrives hidden
+					// from the players is written in the create, and a fake that dropped it would
+					// certify the defaulting no matter which way round it was spelt.
+					ownership: row.ownership ?? null,
+				}));
 			pages.push(...made);
 			return Promise.resolve(made);
 		},
@@ -123,7 +152,11 @@ function mapWith(name, boards) {
 	const map = entry(name, { "stonetop-pwd": { relationshipMap: { version: 2 } } });
 	boards.forEach((board, i) => map.pages.contents.push(
 		pageDoc(board.name, board.graph ?? { nodes: {}, edges: {} },
-			{ id: board.id, sort: board.sort ?? i * 100000, parent: map }),
+			{
+				id: board.id, sort: board.sort ?? i * 100000, parent: map,
+				// `hidden: true` is a board the GM has kept back from the table.
+				ownership: board.hidden ? { default: NONE } : null,
+			}),
 	));
 	return map;
 }
@@ -141,7 +174,7 @@ beforeEach(() => {
 	nextPageId = 0;
 	canCreateJournal = true;
 	canCreateFolder = true;
-	globalThis.CONST = { DOCUMENT_OWNERSHIP_LEVELS: { OWNER, OBSERVER: 2 } };
+	globalThis.CONST = { DOCUMENT_OWNERSHIP_LEVELS: { INHERIT, NONE, LIMITED: 1, OBSERVER: 2, OWNER } };
 	globalThis.game = {
 		user: { id: "u1" },
 		i18n: TABLE,
@@ -735,5 +768,144 @@ describe("the party board", () => {
 		// which is the thing that must not be swept away by the conversion.
 		expect(getPartyPage(legacy)).toBe(pages[0]);
 		expect(Object.values(readGraph(pages[1]).nodes).map(n => n.name)).toEqual(["Ordga"]);
+	});
+});
+
+// ── Which boards the players may look at ────────────────────────────────────────────────────────
+//
+// A board is hidden or shown one page at a time, and it is core's own ownership that says which:
+// NONE for a board the GM is keeping back, INHERIT for one the table can see, which on a map owned
+// by everybody is a board they may also edit. Every new board starts hidden.
+describe("hiding a board from the players", () => {
+	const asGM = () => { globalThis.game.user = { id: "gm1", isGM: true }; };
+	const asPlayer = () => { globalThis.game.user = { id: "u1", isGM: false }; };
+
+	// THE DEFAULT, AND THE WHOLE REASON THE FEATURE HAS ONE. A board is a picture the GM is still
+	// working out, and one that arrived shared would give it away the moment it had a face on it.
+	it("makes every new board hidden from the players", async () => {
+		const map = mapWith("Stonetop", [{ name: "Stonetop" }]);
+		const page = await createMapPage(map, "Marshedge");
+		expect(page.ownership.default).toBe(NONE);
+		expect(isMapPageHidden(page)).toBe(true);
+	});
+
+	// ⚠ AND THE MAKER KEEPS THEIRS. Core's server adds this to a document it is handed on its own,
+	// but not to a page created inside its parent's create, which is how a map's first board
+	// arrives: without it a trusted player making a map would be handed one they cannot see.
+	it("leaves the board with whoever made it", async () => {
+		asPlayer();
+		const map = mapWith("Stonetop", [{ name: "Stonetop" }]);
+		const page = await createMapPage(map, "Marshedge");
+		expect(page.ownership.u1).toBe(OWNER);
+		expect(page.testUserPermission({ id: "u1" }, "OWNER")).toBe(true);
+		expect(page.testUserPermission({ id: "u2" }, "OBSERVER")).toBe(false);
+	});
+
+	// A map is made with its first board on it, and that board is new like any other.
+	it("makes a new map's own first board hidden too", async () => {
+		await createRelationshipMap("Stonetop");
+		expect(created[0].pages[0].ownership.default).toBe(NONE);
+	});
+
+	// ⚠ THE ONE EXCEPTION, and it is not a new board at all: the version 1 conversion is carrying a
+	// board the whole table has been looking at onto a page underneath them. Made hidden it would
+	// read as the conversion having stolen the map, and by whoever happened to open it first.
+	it("leaves a converted version 1 board shown, because it always was", async () => {
+		const legacy = entry("Old map", {
+			"stonetop-pwd": { relationshipMap: { nodes: { a: { name: "Jaspar" } }, edges: {} } },
+		});
+		const page = await ensureFirstMapPage(legacy);
+		expect(page.ownership.default).toBe(INHERIT);
+		expect(isMapPageHidden(page)).toBe(false);
+	});
+
+	// WHAT THE READER SEES AND WHAT THE DOCUMENT LAYER REASONS ABOUT ARE TWO LISTS, and this is the
+	// split the whole feature rests on.
+	it("keeps a hidden board out of the visible strip and in the whole one", () => {
+		asPlayer();
+		const map = mapWith("Stonetop", [
+			{ id: "p1", name: "Stonetop" },
+			{ id: "p2", name: "Marshedge", hidden: true },
+		]);
+		expect(listMapPages(map).map(p => p.id)).toEqual(["p1", "p2"]);
+		expect(listVisibleMapPages(map).map(p => p.id)).toEqual(["p1"]);
+		asGM();
+		expect(listVisibleMapPages(map).map(p => p.id)).toEqual(["p1", "p2"]);
+	});
+
+	// A reader's handle never resolves to a board that is not theirs: it falls through to the next
+	// one they may see, exactly as it would if the board had been deleted.
+	it("never hands a reader a board they may not look at", () => {
+		asPlayer();
+		const map = mapWith("Stonetop", [
+			{ id: "p1", name: "Stonetop" },
+			{ id: "p2", name: "Marshedge", hidden: true },
+		]);
+		expect(getMapPage(map, "p2")).toBeNull();
+		expect(mapBoardDoc(map, "p2").id).toBe("p1");
+		asGM();
+		expect(getMapPage(map, "p2").name).toBe("Marshedge");
+		expect(mapBoardDoc(map, "p2").id).toBe("p2");
+	});
+
+	// A GM tests as OWNER over everything in the world, so the eye cannot ask the permission
+	// question: it would report every board visible and the GM would have no way to tell.
+	it("reads the recorded ownership rather than asking what the GM may do", () => {
+		asGM();
+		const map = mapWith("Stonetop", [{ id: "p1", name: "Stonetop", hidden: true }]);
+		const [page] = listMapPages(map);
+		expect(canSeeMapPage(page)).toBe(true);
+		expect(isMapPageHidden(page)).toBe(true);
+	});
+
+	it("hides and shows a board for a GM", async () => {
+		asGM();
+		const map = mapWith("Stonetop", [{ id: "p1", name: "Stonetop" }]);
+		const [page] = listMapPages(map);
+		expect(await setMapPageHidden(page, true)).toBe(true);
+		expect(page.updates).toEqual([{ ownership: { default: NONE } }]);
+		expect(await setMapPageHidden(page, false)).toBe(true);
+		expect(page.ownership.default).toBe(INHERIT);
+	});
+
+	// Nothing is written for a board that is already the way it is being asked for, so a GM pressing
+	// the eye twice does not broadcast the same state to the whole table twice over.
+	it("writes nothing when the board is already that way", async () => {
+		asGM();
+		const map = mapWith("Stonetop", [{ id: "p1", name: "Stonetop", hidden: true }]);
+		const [page] = listMapPages(map);
+		expect(await setMapPageHidden(page, true)).toBe(false);
+		expect(page.updates).toEqual([]);
+	});
+
+	// Core's own sanitizer refuses an ownership change from anybody but a GM, so this is a rail
+	// under a button that is not offered rather than a second opinion about it.
+	it("refuses a player, however much of the map they own", async () => {
+		asPlayer();
+		expect(canHideMapPages()).toBe(false);
+		const map = mapWith("Stonetop", [{ id: "p1", name: "Stonetop" }]);
+		const [page] = listMapPages(map);
+		expect(await setMapPageHidden(page, true)).toBe(false);
+		expect(page.updates).toEqual([]);
+	});
+
+	// ⚠ THE TWO PLACES THAT MUST NOT ASK THE VISIBLE LIST. A conversion that found no pages on a map
+	// whose every board is hidden would helpfully make a fresh one and sweep the entry's flags past
+	// it; a delete rail that counted only what this reader can see would let the last board go.
+	it("reasons about every board, and not only the ones in front of the reader", async () => {
+		asPlayer();
+		const map = mapWith("Stonetop", [
+			{ id: "p1", name: "Stonetop", hidden: true },
+			{ id: "p2", name: "Marshedge", hidden: true },
+		]);
+		expect(await ensureFirstMapPage(map)).toBe(listMapPages(map)[0]);
+		expect(listMapPages(map)).toHaveLength(2);
+
+		const one = mapWith("Marshedge", [
+			{ id: "q1", name: "Marshedge" },
+			{ id: "q2", name: "Gordin's Delve", hidden: true },
+		]);
+		expect(await deleteMapPage(listMapPages(one)[0])).toBe(true);
+		expect(await deleteMapPage(listMapPages(one)[0])).toBe(false);
 	});
 });
