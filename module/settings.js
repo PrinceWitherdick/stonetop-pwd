@@ -504,6 +504,23 @@ export function registerSettings() {
 		default: false
 	});
 
+	// Whether this world has been given the relationship map it comes with (see
+	// relmap/relmap-make.js seedRelationshipMapOnce). A fresh world arrives with one map, named
+	// "Stonetop", so the steading sheet's Relationship Map tab opens on a board rather than on an
+	// invitation to make one.
+	//
+	// LATCHED, AND THAT IS THE POINT OF IT. The seed runs on every GM load like every other lane
+	// here, so without this a GM who deletes the map would find it back on the next load, which is
+	// a map nobody can be rid of. Set once the map exists -- and set WITHOUT making one on a world
+	// that already had a map of its own, so an established world is not given a second.
+	game.settings.register(SYSTEM_ID, "relationshipMapSeeded", {
+		name: "Relationship Map Seeded",
+		scope: "world",
+		config: false,
+		type: Boolean,
+		default: false
+	});
+
 	// Where this world's copies of the rulebooks are, as a { book number -> path } record, so
 	// the GM Toolkit's two book icons have something to open. Nothing is shipped and nothing is
 	// extracted here: this is a POINTER to a PDF the GM already owns, handed to the pdf.js

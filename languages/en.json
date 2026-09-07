@@ -1549,7 +1549,10 @@
         "both": "Both ways, marked at each end"
       },
       "maps": {
-        "newPlaceholder": "Stonetop",
+        "seedName": "Stonetop",
+        "newTitle": "What is this map called?",
+        "newGo": "Make the map",
+        "namePlaceholder": "Stonetop, the Hillfolk, who owes whom",
         "cannotCreate": "Ask your GM to make a relationship map. Making one needs a trusted-player role; once it exists you can edit it."
       },
       "pages": {

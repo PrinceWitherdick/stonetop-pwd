@@ -3864,6 +3864,25 @@
     const residentNames = new Set(STEADING_TEST_RESIDENTS.map(p => p.name));
     const seated = homeCast.filter(row => row.uuid && residentNames.has(row.key)).map(row => row.uuid);
 
+    // ── The empty map the world came with ────────────────────────────────
+    // Every world is given a relationship map called "Stonetop" during setup
+    // (module/relmap/relmap-make.js), so without this the fixture would leave TWO entries of that
+    // name in the sidebar: the world's untouched one, and the populated one below.
+    //
+    // ⚠ ONLY THE UNTOUCHED ONE. Matched on the map mark AND on every board being empty, so a map
+    // the GM has actually put somebody on is never caught by this even where they have kept its
+    // given name -- and neither is the fixture's own map from an earlier run, which the cleanup
+    // pass owns and matches by the test flag. An empty seeded map carries no work of anybody's;
+    // what replaces it is the same map with the whole village on it.
+    const emptySeeded = (game.journal?.contents ?? []).filter(j => (
+      j.name === RELMAP_MAP_NAME
+      && j.getFlag(FLAG_SCOPE, "relationshipMap")
+      && !j.getFlag(FLAG_SCOPE, TEST_FLAG)
+      && (j.pages?.contents ?? []).every(
+        page => !Object.keys(page.getFlag(FLAG_SCOPE, "relationshipMap")?.nodes ?? {}).length)
+    ));
+    if (emptySeeded.length) await JournalEntry.deleteDocuments(emptySeeded.map(j => j.id));
+
     let folder = game.folders?.find(f => f.type === "JournalEntry" && f.name === RELMAP_FOLDER.name);
     if (!folder) {
       folder = await Folder.create({ name: RELMAP_FOLDER.name, type: "JournalEntry", color: RELMAP_FOLDER.color });

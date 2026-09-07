@@ -14,6 +14,7 @@ import { oncePerVersion } from "../migration/once-per-version.js";
 import { book2ArtRoot } from "../book2-art/art-root.js";
 import { offerDurableArtOnce } from "../book2-art/offer-once.js";
 import { posterMapScenePlan, createPosterMapScenes } from "../book2-art/poster-maps.js";
+import { seedRelationshipMapOnce } from "../relmap/relmap-make.js";
 
 // The GM's first load of a world, narrated.
 //
@@ -252,7 +253,10 @@ async function runArtAndJournals(dialog, { narrateSeed, narrateSync } = {}) {
  *     their first session and reasonably conclude they had to run the PDF import again.
  *     It is idempotent and near-free once everything matches, which is why the every-load
  *     GM path runs it too; and
- *  2. the poster-map offer, which is a dialog, so it waits for the progress window to be
+ *  2. the relationship map this world comes with, which is here rather than in a lane of its
+ *     own because it is one guarded document create that a settled world skips on a latch --
+ *     too small to narrate, and nothing above it depends on it; and
+ *  3. the poster-map offer, which is a dialog, so it waits for the progress window to be
  *     off the screen before asking anything.
  */
 async function runFinishingTouches(dialog) {
@@ -266,6 +270,11 @@ async function runFinishingTouches(dialog) {
 		const total = result?.total ?? 0;
 		return total ? `Art added to ${total} ${total === 1 ? "entry" : "entries"}` : "Everything is in place";
 	});
+
+	// The map the steading sheet's Relationship Map tab opens on. Once per world and never after
+	// the GM has deleted it; it swallows its own failure, so nothing below waits on it going well.
+	// See relmap/relmap-make.js.
+	await seedRelationshipMapOnce();
 
 	// Resolves once the window has actually gone (auto-close, or the GM closing it first),
 	// so the map offer never lands on top of it.

@@ -1,7 +1,8 @@
 import { runStartupMigrations } from "./PbtaSheetConfig.js";
 import { theGmToolkit, createGmToolkit, isGmToolkitData, GM_TOOLKIT_DEFAULT_IMG } from "../actors/gmtoolkit/gm-toolkit-actor.js";
 import { openRelationshipMap } from "../dialogs/RelationshipMapWindow.js";
-import { canCreateRelationshipMap, createRelationshipMap, ensureRelationshipMapFolder, listRelationshipMaps } from "../relmap/relmap-doc.js";
+import { canCreateRelationshipMap, ensureRelationshipMapFolder, listRelationshipMaps } from "../relmap/relmap-doc.js";
+import { promptForNewRelationshipMap } from "../relmap/relmap-make.js";
 import { defaultBoard } from "../relmap/relmap-last.js";
 import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
@@ -1968,8 +1969,13 @@ function _buildStartupWelcomeContent() {
  * client that has never opened one). The sidebar and the map's own page strip are how you get to a
  * different map.
  *
- * With no maps at all, a GM (or anyone with the journal-create right) is offered the chance to make
- * the first one, and everybody else is told who can.
+ * With no maps at all, a GM (or anyone with the journal-create right) is asked what a new map is to
+ * be called and given it, and everybody else is told who can.
+ *
+ * ⚠ IT ASKS FOR THE NAME, and did not used to. Every world is given a map called "Stonetop" during
+ * setup (relmap/relmap-make.js), so a world with none is one whose GM deleted that map -- and
+ * minting a second "Stonetop" unasked is undoing a decision rather than saving anybody a keystroke.
+ * The same question the steading sheet's empty Relationship Map tab asks, through the same call.
  */
 async function _openRelationshipMap(which) {
 	const maps = listRelationshipMaps();
@@ -1985,6 +1991,6 @@ async function _openRelationshipMap(which) {
 		ui.notifications?.info?.(game.i18n.localize("stonetop.relmap.maps.cannotCreate"));
 		return null;
 	}
-	const made = await createRelationshipMap(game.i18n.localize("stonetop.relmap.maps.newPlaceholder"));
+	const made = await promptForNewRelationshipMap();
 	return made ? openRelationshipMap(made) : null;
 }
