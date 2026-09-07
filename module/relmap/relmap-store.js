@@ -16,10 +16,10 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
 import {
-	RELMAP_BOARD_ASPECT, boardMetrics, clampPct, freeSpot, ringsLayout,
+	RELMAP_BOARD_ASPECT, RELMAP_CAPTION_FLOOR_PX, RELMAP_CAPTION_PX, boardMetrics, clampPct,
+	freeSpot, ringsLayout,
 } from "../utils/relmap-geometry.js";
-import { RELMAP_KIN_UNSET, readKin } from "../utils/relmap-kin.js";
-import { RELMAP_SHAPE_DEFAULT, normalizeShape } from "../utils/relmap-layout.js";
+import { normalizeHex } from "./relmap-ink.js";
 
 /**
  * Bumped only for a change a stored map cannot be read through.
@@ -58,9 +58,46 @@ export const RELMAP_FLAG = "relationshipMap";
  * properties to the same set, because nothing else would notice them drifting apart.
  */
 export const RELMAP_INKS = Object.freeze([
-	"rose", "sage", "ochre", "indigo", "plum", "rust", "teal", "slate",
+	"rose", "green", "ochre", "indigo", "plum", "rust", "crimson", "slate",
 ]);
 export const RELMAP_INK_DEFAULT = "slate";
+
+/**
+ * THE TWO KEYS THAT ARE NO LONGER OFFERED, and what a line drawn in one of them is read as now.
+ *
+ * "sage" and "teal" were two greens a stroke's width apart on a board read at the zoom a
+ * forty-person map is read at, and a table that cannot tell two of eight colours apart has seven.
+ * They are gone, and the one green that replaces them is a green anybody would call green; the
+ * eighth colour is a red, which is the one a table kept reaching for and did not have.
+ *
+ * ⚠ READ RATHER THAN MIGRATED, which is the difference between a world that opens and a world that
+ * has to be visited. Every board already drawn carries these keys, and the sanitiser is the ONE
+ * gate everything reads a map through -- so an old line comes back green wherever it is read, on
+ * every client, with nothing written anywhere. The next edit to that line stores the new key by
+ * itself; a line nobody ever edits keeps the old one and goes on being read the same way forever.
+ * The alternative was a migration that would have had to find every JournalEntry in every world to
+ * change what a colour is called.
+ */
+export const RELMAP_INK_WAS = Object.freeze({ sage: "green", teal: "green" });
+
+/**
+ * One stored ink as something this board can draw: one of the eight, or a colour of the reader's own.
+ *
+ * THE NINTH ANSWER IS A HEX, and it is the same field rather than a second one beside it. A colour
+ * and "which of the eight" are one question with one answer, and two fields holding it would be two
+ * fields that can disagree -- a line with both, and nothing anywhere saying which wins.
+ *
+ * ⚠ WHAT IS CHECKED HERE IS THE SHAPE AND NOT THE CONTRAST. This runs on every read of every map,
+ * with no document to measure a colour against, and it is the gate between stored data and a `style`
+ * attribute -- so it refuses anything that is not exactly `#rrggbb` and does no arithmetic at all.
+ * Whether a colour can be FOLLOWED is settled where it is chosen, by `deepenInk`; see relmap-ink.js,
+ * which says plainly that a hex written by some other route is a hex nobody vetted.
+ */
+export function readInk(value) {
+	const key = RELMAP_INK_WAS[value] ?? value;
+	if (RELMAP_INKS.includes(key)) return key;
+	return normalizeHex(key) || RELMAP_INK_DEFAULT;
+}
 
 /**
  * Which way a link is read. `none` is the default and the ordinary case: most ties between people
@@ -89,10 +126,105 @@ export const RELMAP_DIR_DEFAULT = "none";
  *
  * A LINE LEFT "solid" IS UNTOUCHED BY ANY OF THIS and still carries its ink's pattern under that
  * skin, which is every line on every board written before this field existed.
+ *
+ * THREE AND NOT TWO, AND THE MIDDLE ONE IS THE ONE A TABLE REACHES FOR MOST. Dotted was the whole
+ * of "not solid" for a while, and it is the FAINTEST a stroke gets: at the resting weight it is a
+ * row of specks, which is exactly right for the tie nobody is sure of and wrong for the one that is
+ * merely qualified -- the thing that was, the thing that runs one way in practice, the thing the
+ * table has agreed to come back to. "dashed" is that middle answer: a stroke plainly broken and
+ * still plainly a stroke. They are ordered here the way they are offered and the way they read --
+ * whole, broken, barely -- and that order is what the chooser prints.
+ *
+ * ⚠ ANYTHING NOT IN THIS LIST FALLS BACK TO SOLID rather than being kept, which is what makes
+ * adding to it safe and taking away from it a decision: a board written by a newer version and read
+ * by an older one draws its dashed lines whole, which says nothing false about them.
  */
 export const RELMAP_DASH_DOTTED = "dotted";
-export const RELMAP_DASHES = Object.freeze(["solid", RELMAP_DASH_DOTTED]);
+export const RELMAP_DASH_DASHED = "dashed";
+export const RELMAP_DASHES = Object.freeze(["solid", RELMAP_DASH_DASHED, RELMAP_DASH_DOTTED]);
 export const RELMAP_DASH_DEFAULT = "solid";
+
+/**
+ * HOW BIG THE WRITING ON A LINE IS SET, in board pixels, and nothing at all on nearly every line.
+ *
+ * ⚠ A NUMBER AND NOT A KEY, WHICH IS THE OPPOSITE OF THE COLOUR ABOVE, and the difference is worth
+ * a paragraph because the two questions look identical from the bar: a short list of answers, plus
+ * one the reader supplies. An ink is a key because what "rose" RESOLVES to is the stylesheet's
+ * business -- it is one colour under the ordinary skin and a darker one under the high-contrast
+ * skin, and a stored hex would be the one thing on the board that did not change with it. A size
+ * resolves to nothing. Twelve board pixels is twelve board pixels under every skin, it is the unit
+ * the whole of relmap-geometry.js already measures in (a portrait is 72 of them), and it is the
+ * number the caption has to be MEASURED at to know where to cut the sentence and how big a hole to
+ * open in the stroke underneath it. Stored as a key, every one of those sums would have to go
+ * through a table to find out what the reader actually asked for.
+ *
+ * ⚠ AND ZERO IS THE ANSWER ON ALMOST EVERY LINE, which is not a missing value. It says "whatever
+ * the sheet sets", it is what every line on every board drawn before this field existed reads as,
+ * and it stays true when `RELMAP_CAPTION_PX` is retuned -- where a line stamped with the base of
+ * the day would sit at yesterday's size for ever. It HAS been retuned once, from twelve to
+ * sixteen, and every ordinary caption on every board moved with it because none of them carried a
+ * number. So the chooser offers the base as a real answer and it is stored as the absence of one;
+ * see `readSize`.
+ *
+ * THE STEPS ARE NAMED WHERE WORDS ARE, WHICH IS NOT HERE. This is the vocabulary -- what a reader
+ * is offered and in what order -- and the render prints the name beside each one, exactly as it
+ * does for the inks and the strokes. They step by about a fifth each so that two of them side by
+ * side are plainly different sizes rather than a difference a reader has to measure.
+ *
+ * ⚠ AND THEY ARE HUNG OFF THE BASE RATHER THAN OFF NOTHING. The ladder used to run
+ * 10/12/15/18/24 around a twelve-pixel base; the base is sixteen now, and the same ladder in the
+ * same proportions is 13/16/20/24/32. Retuned together on purpose: steps that stayed where they
+ * were would have put "Small" and "Normal" a pixel apart and left three of the five below the
+ * size an untouched line is already drawn at, so most of the chooser would have been ways to make
+ * the writing smaller.
+ *
+ * ⚠ THE BOUNDS ARE NOT TASTE. The floor IS the size below which the board stops drawing captions
+ * at all, taken from that constant rather than spelled again here, so that raising one for
+ * legibility cannot leave the other offering sizes a reader could choose and then never see. The
+ * ceiling is a board's worth of room: a caption is cut to the room
+ * its own line has, and past about this size a line between two neighbouring portraits carries two
+ * words and an ellipsis, which is the state the whole caption arrangement exists to avoid.
+ */
+export const RELMAP_SIZE_NONE = 0;
+export const RELMAP_SIZE_MIN = RELMAP_CAPTION_FLOOR_PX;
+export const RELMAP_SIZE_MAX = 48;
+export const RELMAP_SIZES = Object.freeze([
+	{ key: "small", px: 13 },
+	{ key: "normal", px: RELMAP_CAPTION_PX },
+	{ key: "large", px: 20 },
+	{ key: "veryLarge", px: 24 },
+	{ key: "huge", px: 32 },
+]);
+
+/**
+ * One stored size as a number this board can set type in: a size of its own, or nothing.
+ *
+ * ⚠ THE BASE COMES BACK AS NOTHING, and that is the one surprising line in here. A reader who
+ * picks "Normal" has chosen the size the sheet already sets, and the honest record of that choice
+ * is no record: it keeps the field empty on the overwhelming majority of lines, it keeps a board
+ * of ordinary captions following the stylesheet if that number is ever retuned, and it means the
+ * paint has one question to ask rather than two ("has this line a size of its own?").
+ *
+ * ROUNDED TO A WHOLE PIXEL, because this is what a `font-size` is written from and a caption set
+ * in 14.37 pixels is measured, cut and gapped at a precision no reader asked for.
+ *
+ * ⚠ HELD TO THE BOUNDS RATHER THAN REFUSED, which is what `clampPct` does to a coordinate two
+ * screens off the board and is the right answer for the same reason: a reader who types 500 into
+ * the custom field wants the biggest caption there is, and giving them the ordinary twelve says
+ * their answer was thrown away. The one thing that comes back as nothing is a value that is not a
+ * size at all.
+ *
+ * ⚠ AND IT IS THE ONE GATE. This runs on every read of every map, and it is also what the custom
+ * field on the tie bar goes through and what the remembered default goes through
+ * (relmap/relmap-size.js) -- world data, browser storage and a number somebody typed, all held to
+ * the same shape in one place.
+ */
+export function readSize(value) {
+	const px = Math.round(Number(value));
+	if (!Number.isFinite(px) || px <= 0) return RELMAP_SIZE_NONE;
+	const held = Math.min(RELMAP_SIZE_MAX, Math.max(RELMAP_SIZE_MIN, px));
+	return held === RELMAP_CAPTION_PX ? RELMAP_SIZE_NONE : held;
+}
 
 /**
  * WHERE A LINE CAME FROM, where it was not somebody's own hand.
@@ -107,8 +239,8 @@ export const RELMAP_DASH_DEFAULT = "solid";
  * drew a line for every rating anybody had stored, both ways round, straight into the shared board;
  * a table that filled its sheets in properly during the introductions ended up with the web it drew
  * by hand buried under a hundred imported ones, and the user asked for it to go. What shows that
- * information now is the party view, which derives it on the reader's own machine and stores none
- * of it (see relmap/relmap-intros.js).
+ * information now is the board called "The Party", which seats the party by itself and draws only
+ * what they actually answered about each other (see relmap/relmap-intros.js).
  *
  * WHAT THIS MARK IS FOR IS THE BOARDS THAT BUTTON WAS ALREADY PRESSED ON. It is the only thing that
  * can tell one of its lines from one somebody drew, and it drives both ways out: a checkbox that
@@ -237,7 +369,7 @@ export function isSafeId(id) {
 
 /** A map with nobody on it yet. */
 export function emptyGraph() {
-	return { version: RELMAP_VERSION, shape: RELMAP_SHAPE_DEFAULT, nodes: {}, edges: {} };
+	return { version: RELMAP_VERSION, nodes: {}, edges: {} };
 }
 
 const str = (v, max = 0) => {
@@ -260,9 +392,10 @@ const str = (v, max = 0) => {
 export function normalizeGraph(raw) {
 	const graph = emptyGraph();
 	if (!raw || typeof raw !== "object") return graph;
-	// The shape Tidy up last put this board into. An older map has none and reads as the ring,
-	// which is what every board built before the shapes existed actually is, so nothing migrates.
-	graph.shape = normalizeShape(raw.shape);
+	// ⚠ A `shape` AND A `kin` PER LINE MAY STILL BE IN THE FLAG, and both are simply not read. They
+	// belonged to "Tidy up" and to the family tree, which are gone; leaving the stored keys where
+	// they are costs a table nothing and spares every world a migration for two fields nothing asks
+	// about. A board reads exactly as it was left.
 
 	for (const [id, node] of Object.entries(raw.nodes ?? {})) {
 		if (!isSafeId(id) || !node || typeof node !== "object") continue;
@@ -286,20 +419,14 @@ export function normalizeGraph(raw) {
 			a,
 			b,
 			label: str(edge.label, RELMAP_LABEL_MAX),
-			ink: RELMAP_INKS.includes(edge.ink) ? edge.ink : RELMAP_INK_DEFAULT,
+			ink: readInk(edge.ink),
 			dir: RELMAP_DIRS.includes(edge.dir) ? edge.dir : RELMAP_DIR_DEFAULT,
 			// Solid unless somebody broke it by hand. Unknown and absent both read as solid, which
 			// is every line on every board drawn before this existed. See RELMAP_DASHES.
 			dash: RELMAP_DASHES.includes(edge.dash) ? edge.dash : RELMAP_DASH_DEFAULT,
-			// WHAT FAMILY TIE THIS IS, if any, and it is a stored KEY rather than something read
-			// back out of the caption for the same reason the ink is: prose is somebody's own
-			// sentence and must not have to be phrased a particular way for a feature to work.
-			// Absent stays ABSENT rather than becoming "not a family tie", which is a distinction
-			// `readKin` explains at length: both draw as nothing, but only one of them is an answer
-			// somebody gave, and "find family ties" must leave an answer alone. Every map written
-			// before the tree existed is therefore a map nobody has been asked about yet, and
-			// nothing migrates. See utils/relmap-kin.js.
-			kin: readKin(edge.kin),
+			// How big the writing on it is set, and zero on nearly every line: the size the sheet
+			// sets. See RELMAP_SIZES.
+			size: readSize(edge.size),
 			// Who drew it: a reader, or the ratings import. See RELMAP_SRC_HEARTS.
 			src: readSrc(edge.src),
 			// WHICH answer it was seeded from, where it was seeded at all. See RELMAP_ORIGIN_MAX.
@@ -310,9 +437,21 @@ export function normalizeGraph(raw) {
 	return graph;
 }
 
-/** The flag path to one part of the graph. The ONE place this string is built. */
+/**
+ * The flag path to one part of ANY of this system's map flags. The ONE place these are built.
+ *
+ * Not only the graph's: a board that seats itself keeps its own ledger under its own flag, and that
+ * path was being spelled out by hand at the one call site that needed it. A flag path assembled in
+ * two places is how one of them ends up wrong -- and the wrong one writes somewhere nothing reads,
+ * silently, which is the hardest way to find out.
+ */
+export function relmapFlagPath(flag, ...parts) {
+	return [`flags.${SYSTEM_ID}.${flag}`, ...parts].join(".");
+}
+
+/** The flag path to one part of the graph, which is the flag nearly every caller wants. */
 export function relmapPath(...parts) {
-	return [`flags.${SYSTEM_ID}.${RELMAP_FLAG}`, ...parts].join(".");
+	return relmapFlagPath(RELMAP_FLAG, ...parts);
 }
 
 function leafPatch(kind, id, fields) {
@@ -342,48 +481,15 @@ export function nodePatch(id, fields = {}) {
 	return leafPatch("nodes", id, clean);
 }
 
-/**
- * Re-seat the WHOLE board in one write, and remember the shape it was put into.
- *
- * ONE UPDATE, not one per person. Several would be several broadcasts, and every other client at
- * the table would watch the portraits walk to their places one at a time over a second or two,
- * with the lines whipping about between them.
- *
- * THE SHAPE RIDES ALONG in the same write for the same reason `dropNodePatch` takes a person and
- * their lines together: a board that has been re-seated but has forgotten what into is a board
- * whose next Tidy up silently does something else.
- *
- * Still leaf paths, so it merges with somebody else's concurrent drag rather than replacing the
- * `nodes` object out from under it. Last write wins for one portrait, which is the honest outcome
- * of two people arranging the same board in the same second.
- *
- * @param {Record<string, {left: number, top: number}>} seats  where each person goes, by node id.
- * @param {string} shape  what to record this board as, from `RELMAP_SHAPES`.
- */
-export function tidyPatch(seats, shape) {
-	const patch = { [relmapPath("shape")]: normalizeShape(shape) };
-	for (const [id, spot] of Object.entries(seats ?? {})) {
-		// A person the layout had no seat for is LEFT WHERE THEY ARE. Writing them anyway would
-		// hand `clampPct` nothing and move them to the middle of the board, which looks exactly
-		// like the layout deciding that is where they belong.
-		if (!spot) continue;
-		Object.assign(patch, nodePatch(id, { x: spot.left, y: spot.top }) ?? {});
-	}
-	return patch;
-}
-
 /** Change one link. Same rules, same reasons. */
 export function edgePatch(id, fields = {}) {
 	const clean = { ...fields };
 	if ("label" in clean) clean.label = str(clean.label, RELMAP_LABEL_MAX);
 	if ("note" in clean) clean.note = str(clean.note, RELMAP_NOTE_MAX);
-	if ("ink" in clean && !RELMAP_INKS.includes(clean.ink)) clean.ink = RELMAP_INK_DEFAULT;
+	if ("ink" in clean) clean.ink = readInk(clean.ink);
 	if ("dir" in clean && !RELMAP_DIRS.includes(clean.dir)) clean.dir = RELMAP_DIR_DEFAULT;
 	if ("dash" in clean && !RELMAP_DASHES.includes(clean.dash)) clean.dash = RELMAP_DASH_DEFAULT;
-	// Through `readKin` and not `normalizeKin`, so that "nobody has been asked" can still be
-	// written as what it is. The two differ on the empty string alone, and that one is the whole of
-	// what keeps "find family ties" from overruling a reader who answered "not a family tie".
-	if ("kin" in clean) clean.kin = readKin(clean.kin);
+	if ("size" in clean) clean.size = readSize(clean.size);
 	if ("src" in clean) clean.src = readSrc(clean.src);
 	if ("origin" in clean) clean.origin = str(clean.origin, RELMAP_ORIGIN_MAX);
 	return leafPatch("edges", id, clean);
@@ -394,20 +500,14 @@ export function addNodePatch(id, { uuid = null, name = "", img = "", x = 50, y =
 	return nodePatch(id, { uuid, name, img, x, y, note });
 }
 
-/**
- * Draw a link.
- *
- * THE FAMILY TIE DEFAULTS TO UNANSWERED and not to "not a family tie", because a caller that says
- * nothing about it has not asked anybody. The link editor always says something (whichever radio is
- * chosen, including the first), so a line a reader drew carries their answer; a line the ratings
- * import drew in bulk carries none, and is one "find family ties" may still offer a guess at.
- */
+/** Draw a link. Every field written, so the line is whole from its first write. */
 export function addEdgePatch(id, {
 	a, b, label = "", ink = RELMAP_INK_DEFAULT, dir = RELMAP_DIR_DEFAULT,
-	dash = RELMAP_DASH_DEFAULT, kin = RELMAP_KIN_UNSET, src = RELMAP_SRC_NONE, origin = "", note = "",
+	dash = RELMAP_DASH_DEFAULT, size = RELMAP_SIZE_NONE, src = RELMAP_SRC_NONE,
+	origin = "", note = "",
 } = {}) {
 	if (!isSafeId(a) || !isSafeId(b) || a === b) return null;
-	return edgePatch(id, { a, b, label, ink, dir, dash, kin, src, origin, note });
+	return edgePatch(id, { a, b, label, ink, dir, dash, size, src, origin, note });
 }
 
 /**

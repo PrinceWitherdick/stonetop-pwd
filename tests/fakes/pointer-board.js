@@ -160,6 +160,12 @@ export function pointerBoard({ nodes = ["n1", "n2"], edges = ["e1"] } = {}) {
 		el.face = boardEl({ cls: ["stonetop-relmap-face"], dataset: { relmapOpen: id }, parent: el });
 		el.name = boardEl({ cls: ["stonetop-relmap-name"], parent: el });
 		el.handle = boardEl({ cls: ["stonetop-relmap-handle"], dataset: { relmapHandle: id }, parent: el });
+		// THE TRASH CAN, which is a THIRD sibling and not a child of the face either — same trap as
+		// the handle above, and the same consequence if this fake pretends otherwise. It is printed
+		// on every editable board and hidden by the stylesheet until the node is armed; nothing
+		// here models that, because what relmap-drag is written against is the ATTRIBUTE, and a
+		// fake that only produced one on an armed node could not test the press that arms it.
+		el.bin = boardEl({ cls: ["stonetop-relmap-bin"], dataset: { relmapRemove: id }, parent: el });
 		portraits[id] = el;
 	}
 

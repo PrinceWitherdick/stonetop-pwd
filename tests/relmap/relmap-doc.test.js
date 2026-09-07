@@ -351,7 +351,6 @@ describe("giving a version 1 map its first page", () => {
 		const page = await ensureFirstMapPage(map);
 		expect(page.name).toBe("The people of Stonetop");
 		const moved = readGraph(page);
-		expect(moved.shape).toBe("clusters");
 		expect(moved.nodes.a).toMatchObject({ name: "Ordga", x: 10, y: 20 });
 	});
 
@@ -557,7 +556,7 @@ describe("the party board", () => {
 	const pc = (id, name) => ({ id, uuid: `Actor.${id}`, name, img: "", slug: "the-fox" });
 	const PARTY = [pc("pim", "Pim"), pc("sela", "Sela")];
 	const said = new Map([["Actor.pim", new Map([["Actor.sela", [
-		{ label: "closest kin", said: "Who is your closest kin? Sela.", ink: "sage" },
+		{ label: "closest kin", said: "Who is your closest kin? Sela.", ink: "green" },
 	]]])]]);
 
 	/** A map with its first board already converted, as every map opened since pages arrived is. */
@@ -636,7 +635,7 @@ describe("the party board", () => {
 	it("writes the answer's key onto a line that had none, and says nothing about it", async () => {
 		const map = mapped();
 		const keyed = new Map([["Actor.pim", new Map([["Actor.sela", [
-			{ key: "pim::step4::0", label: "closest kin", said: "Who is your closest kin? Sela.", ink: "sage" },
+			{ key: "pim::step4::0", label: "closest kin", said: "Who is your closest kin? Sela.", ink: "green" },
 		]]])]]);
 		// Seeded by the version that stamped no keys: the board is right, the line is unnamed.
 		await syncPartyPage(map, PARTY, said);
@@ -665,7 +664,7 @@ describe("the party board", () => {
 		// "Match answers to people" points an old Bonds & ties answer at Sela: it lands in FRONT of
 		// the step-6 line already drawn, because `introRegards` groups a pair's answers by step.
 		const both = new Map([["Actor.pim", new Map([["Actor.sela", [
-			{ key: "pim::step4::0", label: "closest kin", said: "Who is your closest kin? Sela.", ink: "sage" },
+			{ key: "pim::step4::0", label: "closest kin", said: "Who is your closest kin? Sela.", ink: "green" },
 			{ key: "pim::step6::0", label: "stayed my hand", said: "Which one of you has stayed my hand? Sela.", ink: "indigo" },
 		]]])]]);
 		const made = await syncPartyPage(map, PARTY, both);

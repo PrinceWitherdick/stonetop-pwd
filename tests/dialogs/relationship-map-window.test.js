@@ -22,8 +22,14 @@ vi.mock("../../module/utils/open-or-focus.js", () => ({
 	},
 }));
 vi.mock("../../module/utils/foundry-compat.js", () => ({
-	renderTemplate: (path, ctx) =>
-		Promise.resolve(`<board nodes="${ctx.nodes.length}" edges="${ctx.edges.length}">`),
+	// `sizes` is how big each caption is set in, which the board template turns into a custom
+	// property on the words themselves. Carried out here because it is the one thing about a line
+	// that reaches the paint through the LABEL rather than through the stroke, and a stand-in that
+	// dropped it would pass a window that had stopped sending it at all.
+	renderTemplate: (path, ctx) => Promise.resolve(
+		`<board nodes="${ctx.nodes.length}" edges="${ctx.edges.length}"`
+		+ ` sizes="${(ctx.labels ?? []).map(one => one.px).join(",")}">`,
+	),
 	getDragEventData: () => null,
 	deletionEntry: keyPath => {
 		const i = keyPath.lastIndexOf(".");
@@ -50,10 +56,9 @@ vi.mock("../../module/dialogs/content-picker.js", () => ({
 
 const { RelationshipMapWindow, openRelationshipMap } =
 	await import("../../module/dialogs/RelationshipMapWindow.js");
-const { readGraph } = await import("../../module/relmap/relmap-doc.js");
+const { mapBoardRole, readGraph } = await import("../../module/relmap/relmap-doc.js");
 const { forgetAllHistory } = await import("../../module/relmap/relmap-history.js");
 const { dropNodePatch, edgePatch } = await import("../../module/relmap/relmap-store.js");
-const { graphCapPx } = await import("../../module/utils/relmap-geometry.js");
 
 /** The real English table, kept from before the suite's `beforeEach` replaces `globalThis.game`. */
 const TABLE = globalThis.game.i18n;
@@ -110,15 +115,6 @@ const TWO_PEOPLE = {
 	edges: { link1: { a: "elena", b: "stefan", label: "exes", ink: "rose", dir: "none", note: "" } },
 };
 
-/** The same two people, with one line drawn by hand and one pulled in from the sheets. */
-const BOTH_KINDS = {
-	...TWO_PEOPLE,
-	edges: {
-		...TWO_PEOPLE.edges,
-		pulled: { a: "elena", b: "stefan", label: "likes", ink: "sage", dir: "a-b", src: "hearts" },
-	},
-};
-
 /** An instance without the Application constructor, wired to a stand-in root. */
 function windowFor(graph = TWO_PEOPLE, { isOwner = true, entry: given = null, pageId = null } = {}) {
 	const entry = given ?? entryFor(graph, { isOwner });
@@ -131,8 +127,8 @@ function windowFor(graph = TWO_PEOPLE, { isOwner = true, entry: given = null, pa
 	root.children[".stonetop-relmap-board"] = board;
 	root.children[".stonetop-relmap-live"] = live;
 	root.children[".stonetop-relmap-empty"] = empty;
-	// The "nobody is on this map yet" panel's own three parts, registered for the reason the
-	// no-kin panel's below are: `_paintPanel` returns without writing where they are missing, so an
+	// The "nobody is on this map yet" panel's own three parts. Registered here rather than
+	// per-test because `_paintPanel` returns without writing where they are missing, so an
 	// assertion about the words in it would pass against a window that never touched them.
 	const emptyLead = el();
 	const emptyHint = el();
@@ -143,26 +139,6 @@ function windowFor(graph = TWO_PEOPLE, { isOwner = true, entry: given = null, pa
 	empty.children[".stonetop-relmap-empty-hint"] = emptyHint;
 	empty.children[".stonetop-relmap-empty-cast"] = emptyCta;
 	root.children[".stonetop-relmap-foot"] = foot;
-	// The "this view is showing nobody" panel, with the three things `_paintChrome` writes into it.
-	// Registered here rather than per-test because without it that whole branch is a silent no-op
-	// and every assertion about the panel would pass against a window that never touched it.
-	const bare = el();
-	const bareLead = el();
-	const bareHint = el();
-	const bareIcon = el();
-	const bareWords = el();
-	const bareCta = el({ dataset: {} });
-	bareCta.children["span"] = bareWords;
-	bareCta.children["i"] = bareIcon;
-	bare.children[".stonetop-relmap-empty-lead"] = bareLead;
-	bare.children[".stonetop-relmap-empty-hint"] = bareHint;
-	bare.children[".stonetop-relmap-empty-cast"] = bareCta;
-	root.children[".stonetop-relmap-nokin"] = bare;
-	// The person chooser. Registered here for the same reason the panel above is: `_paintFocusPick`
-	// returns without writing anything where it is missing, so every assertion about the rows would
-	// pass against a window that never touched them.
-	const pick = el();
-	root.children["[data-relmap-focus]"] = pick;
 	// The page strip, and the two things `_paintPages` writes outside it: the board is the tab
 	// panel, so it carries the label naming whichever tab is up, and whether the last board can be
 	// rubbed out depends on how many there are. Registered here rather than per-test for the reason
@@ -181,19 +157,19 @@ function windowFor(graph = TWO_PEOPLE, { isOwner = true, entry: given = null, pa
 	app._entry = entry;
 	app._entryId = entry.id;
 	app._pendingSync = false;
+	// The world hooks this window has registered, which the constructor would have stood up. See
+	// `_hooks` on the class: `_wireSync` reads it as its already-wired guard and pushes onto it.
+	app._hooks = [];
 	app.id = "stonetop-relmap-map1";
 	app._pageId = pageId;
 	app._pagesSaid = null;
-	// The constructor never runs here, so the reader's own settings have to be set by hand. Which
-	// of the two maps they are looking at is one of them, and it is read on nearly every path.
-	app._view = "everyone";
 	app._root = root;
 	app.rendered = true;
 	app.render = vi.fn();
 	app.reportWriteFailure = vi.fn();
 	return {
-		app, entry, root, board, live, empty, emptyLead, emptyHint, emptyCta, foot, pick, strip,
-		view, dropTool, bare, bareLead, bareHint, bareCta, bareWords,
+		app, entry, root, board, live, empty, emptyLead, emptyHint, emptyCta, foot, strip,
+		view, dropTool,
 	};
 }
 
@@ -218,6 +194,21 @@ describe("repainting when somebody else changes the map", () => {
 		expect(app.render).not.toHaveBeenCalled();
 		expect(board.innerHTML).toContain("nodes=\"2\"");
 		expect(board.innerHTML).toContain("edges=\"1\"");
+	});
+
+	// HOW BIG EACH CAPTION IS SET, carried to the paint on the label rather than on the stroke.
+	// Zero on a line nobody has sized, which is nearly all of them and every line drawn before a
+	// reader could ask -- the template then prints no size markup at all and the sheet decides.
+	it("sends each caption the size its own line was set in", async () => {
+		const { app, board } = windowFor();
+		await app.sync();
+		expect(board.innerHTML).toContain("sizes=\"0\"");
+
+		const big = structuredClone(TWO_PEOPLE);
+		big.edges.link1.size = 18;
+		const grown = windowFor(big);
+		await grown.app.sync();
+		expect(grown.board.innerHTML).toContain("sizes=\"18\"");
 	});
 
 	it("never touches the zoom or the pan", async () => {
@@ -559,7 +550,7 @@ describe("the lines while a portrait is being dragged", () => {
 			},
 			edges: {
 				link1: TWO_PEOPLE.edges.link1,
-				link2: { a: "stefan", b: "marek", label: "", ink: "sage", dir: "none", note: "" },
+				link2: { a: "stefan", b: "marek", label: "", ink: "green", dir: "none", note: "" },
 			},
 		};
 		const made = boardWithLine(graph);
@@ -632,64 +623,6 @@ describe("the lines while a portrait is being dragged", () => {
 		expect(() => app._previewMove("nobody", { x: 40, y: 40 })).not.toThrow();
 		expect(line.attrs.d).toBeUndefined();
 	});
-
-	// ⚠ THE DRAG MUST SEE THE BOARD THE READER SEES. The preview used to gather its fan indexes
-	// and its caption cap from the WHOLE map while the board had been painted from the visible one,
-	// so with the imported lines put away a hand-drawn line sharing its pair with a hidden one was
-	// previewed in a fan lane it is not drawn in: it slid sideways for the length of the gesture
-	// and snapped back on the drop, with nothing on screen to explain either move.
-	describe("with the imported lines put away", () => {
-		// The imported line's id sorts BEFORE the hand-drawn one, so it is the imported line that
-		// holds lane 0 and the hand-drawn one that is bowed aside for it. Which is the whole point:
-		// put the imported one away and the hand-drawn line is alone on its pair and straightens.
-		// With the ids the other way round the hand-drawn line keeps lane 0 either way and the
-		// fault this suite is about cannot be seen.
-		const FANNED = {
-			...TWO_PEOPLE,
-			edges: {
-				"aa-pulled": { a: "elena", b: "stefan", label: "likes", ink: "sage", dir: "a-b", src: "hearts" },
-				link1: TWO_PEOPLE.edges.link1,
-			},
-		};
-
-		/** Where the hand-drawn line goes for one drag, on a board in the given state. */
-		function draggedTo(graph, hidePulled) {
-			const made = boardWithLine(graph);
-			made.app._hidePulled = hidePulled;
-			made.app._previewMove("elena", { x: 25, y: 65 });
-			return made.line.attrs.d;
-		}
-
-		it("previews the hand-drawn line in the lane the board actually drew it in", () => {
-			// A hidden line is not a line: the one left showing is alone on its pair, and traces
-			// exactly what it traces on a map that never had the other one.
-			expect(draggedTo(FANNED, true)).toBe(draggedTo(TWO_PEOPLE, false));
-		});
-
-		it("still fans the pair apart when the imported line is showing", () => {
-			expect(draggedTo(FANNED, false)).not.toBe(draggedTo(TWO_PEOPLE, false));
-		});
-
-		// The caption cap steps down in tiers as a board fills up, and the gaps cut in the strokes
-		// under a drag are sized by it. Counted over the whole map, a board whose imported lines
-		// carry it past a tier boundary would cut gaps for a crowding the reader has put away.
-		it("promises its captions the room the visible board promised them", () => {
-			// Thirty imported captions on top of the one hand-drawn one: over the boundary counted
-			// whole, comfortably under it counted as the reader sees it.
-			const crowded = { ...TWO_PEOPLE, edges: { ...TWO_PEOPLE.edges } };
-			for (let i = 0; i < 30; i++) {
-				crowded.edges[`h${i}`] = {
-					a: "elena", b: "stefan", label: `feeling ${i}`, ink: "sage", dir: "a-b", src: "hearts",
-				};
-			}
-			const made = boardWithLine(crowded);
-			made.app._hidePulled = true;
-			made.app._previewMove("elena", { x: 25, y: 65 });
-			expect(Object.keys(made.app._preview.graph.edges)).toEqual(["link1"]);
-			expect(made.app._preview.capPx).toBe(graphCapPx(TWO_PEOPLE));
-			expect(graphCapPx(crowded)).not.toBe(graphCapPx(TWO_PEOPLE));
-		});
-	});
 });
 
 // ⚠ THE BUG THIS EXISTS TO CATCH, found by clicking a portrait in a real world: every face on
@@ -709,6 +642,10 @@ describe("cutting each gap to the caption that actually painted", () => {
 	function styleOf() {
 		const style = { props: {} };
 		style.setProperty = (name, value) => { style.props[name] = value; };
+		// READ BACK AS WELL AS WRITTEN, because the window asks a caption whether the reader has
+		// set a size on it -- and a stand-in that only remembered would answer no to every one of
+		// them, which is the answer that hides the bug this pins.
+		style.getPropertyValue = name => style.props[name] ?? "";
 		return style;
 	}
 
@@ -719,20 +656,51 @@ describe("cutting each gap to the caption that actually painted", () => {
 		return node;
 	}
 
+	/** The size the stylesheet sets a caption in where the reader has not asked for another. */
+	const BASE_PX = 12;
+
+	/** The size out of a canvas font shorthand, which is the only part of it that measures. */
+	function fontPx(font) {
+		return Number.parseFloat(/(\d+(?:\.\d+)?)px/.exec(font ?? "")?.[1]) || BASE_PX;
+	}
+
 	/**
 	 * A document that can measure a caption, which is what the window asks for before it cuts
 	 * anything. The real one is a canvas 2D context set to the face the stylesheet ended up
 	 * painting in; this one charges a flat `perChar` so a test can say what a caption measured.
+	 *
+	 * ⚠ AND IT CHARGES BY THE SIZE IT WAS SET TO. The window re-assigns `ctx.font` per caption
+	 * size and leans on the answer changing with it; a stand-in on a flat rate would measure a
+	 * board cut at the wrong size as though it had been cut at the right one.
 	 */
 	function measuringDoc(perChar) {
 		return {
 			activeElement: null,
-			createElement: () => ({
-				getContext: () => ({ font: "", measureText: text => ({ width: text.length * perChar }) }),
-			}),
+			createElement: () => {
+				const ctx = {
+					font: "",
+					measureText: text => ({ width: text.length * perChar * (fontPx(ctx.font) / BASE_PX) }),
+				};
+				return { getContext: () => ctx };
+			},
+			// SVG and so by namespace, which is how the window mints a caption for a line that has
+			// never carried one. Only the surface `mintCaption` touches.
+			createElementNS: (ns, tag) => {
+				const node = part({});
+				node.tagName = tag;
+				node.childNodes = [];
+				node.append = child => { node.childNodes.push(child); };
+				return node;
+			},
 			defaultView: {
-				getComputedStyle: () => ({
-					fontStyle: "normal", fontWeight: "400", fontSize: "12px", fontFamily: "serif",
+				// ⚠ ASKED OF THE ELEMENT, not answered flat. A caption the reader has sized carries
+				// the size as a custom property and the sheet resolves it into the `font-size`; a
+				// stand-in that gave every caption the same size could not tell the two apart.
+				getComputedStyle: node => ({
+					fontStyle: "normal",
+					fontWeight: "400",
+					fontSize: node?.style?.getPropertyValue?.("--relmap-caption-px") || `${BASE_PX}px`,
+					fontFamily: "serif",
 				}),
 			},
 		};
@@ -802,16 +770,18 @@ describe("cutting each gap to the caption that actually painted", () => {
 		expect(line.attrs.d.endsWith(`${whole.to.left},${whole.to.top}`)).toBe(true);
 	});
 
-	// NOTHING TO RE-PLACE, and that is what the straight setting buys outright: the words are
-	// centred on the anchor and turned to the line's angle there, and neither of those moves when
-	// the sentence is cut shorter. What the measurement is still for is the hole in the stroke.
-	it("leaves the caption where it is and re-cuts only the hole it sits in", () => {
+	// A caption is a straight run laid over a line that may be bowed, and which straight run
+	// depends on how long the words are -- so cutting the sentence shorter re-seats it. On a line
+	// with no bow in it at all, like this one, "re-seated" comes out as exactly where it already
+	// was: what must never move is WHERE ALONG the line it sits, which the spreader settled.
+	it("re-seats the caption on the words that painted, and never slides it along its line", () => {
 		const { app, words, line } = drawn(5.2);
-		const before = { x: words.attrs.x, y: words.attrs.y, turn: words.attrs.transform };
+		const before = { ...app._drawn.shapes.get("link1").anchor };
 		app._fitGapsToPaint();
-		expect(words.attrs.x).toBe(before.x);
-		expect(words.attrs.y).toBe(before.y);
-		expect(words.attrs.transform).toBe(before.turn);
+		const after = app._drawn.shapes.get("link1").anchor;
+		expect(after).toEqual(before);
+		expect(words.attrs.x).toBe(Math.round((before.left * 1200) / 100));
+		expect(words.attrs.transform).toBe(`rotate(${before.angle} ${words.attrs.x} ${words.attrs.y})`);
 		expect(line.attrs.d).toBeTruthy();
 	});
 
@@ -854,6 +824,217 @@ describe("cutting each gap to the caption that actually painted", () => {
 	it("has nothing to re-cut before anything has been drawn, rather than throwing", () => {
 		const { app } = windowFor(TALKERS);
 		expect(() => app._fitGapsToPaint()).not.toThrow();
+	});
+
+	// ── What the reader is typing, on the line ────────────────────────────────
+	//
+	// THE TIE BAR HAS NO TEXT BOX ON IT. A caption is words drawn along a stroke, and the box that
+	// used to stand on the bar showed the sentence somewhere other than the thing it belonged to --
+	// so the letters land on the line as they are typed, with the same fit and the same hole cut
+	// for them as a real paint, and nothing at all written to the document.
+
+	it("puts what is being typed onto the caption at once", () => {
+		const { app, words } = drawn(5.2);
+		app._fitGapsToPaint();
+		app._sayLine("link1", "wed in secret");
+		expect(words.textContent).toBe("wed in secret");
+	});
+
+	// The gap is re-cut for the words that are actually there, so nothing on the line jumps when
+	// the write finally lands half a second later.
+	it("re-cuts the hole in the stroke for the words as they arrive", () => {
+		const { app, line } = drawn(5.2);
+		app._fitGapsToPaint();
+		const long = gapOf(line.attrs.d);
+		app._sayLine("link1", "wed");
+		expect(gapOf(line.attrs.d)).toBeLessThan(long);
+	});
+
+	// ⚠ AND THE SHAPE'S OWN LABEL MOVES WITH IT. `_fitGapsToPaint` and the drag preview both re-cut
+	// this line from that field: a font arriving or a portrait moving mid-sentence would otherwise
+	// re-cut the gap for the words the reader has stopped saying.
+	it("moves the line's own label with it, so a later re-cut agrees", () => {
+		const { app, words } = drawn(5.2);
+		app._fitGapsToPaint();
+		app._sayLine("link1", "wed");
+		app._fitGapsToPaint();
+		expect(words.textContent).toBe("wed");
+	});
+
+	it("writes nothing to the document for a keystroke", () => {
+		const { app, entry } = drawn(5.2);
+		app._fitGapsToPaint();
+		app._sayLine("link1", "wed in secret");
+		expect(entry.updates).toEqual([]);
+	});
+
+	// ⚠ NOT FITTED AND NOT GAPPED WHILE THE CAPTIONS ARE AWAY. In that state the board shows this
+	// caption and no other, and every stroke on it is healed: a hole under the one visible caption
+	// would be the only broken line on the board, and an ellipsis would hide the tail of what the
+	// reader is writing at the very size where they need all of it.
+	it("neither cuts the sentence nor breaks the stroke while the captions are away", () => {
+		const { app, root, words, line } = drawn(30);
+		app._fitGapsToPaint();
+		root.classList.add("captions-too-small");
+		const before = line.attrs.d;
+		const said = "a sentence far longer than this short line has any room at all for";
+		app._sayLine("link1", said);
+		expect(words.textContent).toBe(said);
+		expect(line.attrs.d).toBe(before);
+	});
+
+	it("has nothing to say about a line that is not on the board", () => {
+		const { app } = drawn(5.2);
+		app._fitGapsToPaint();
+		expect(() => app._sayLine("nobody", "wed")).not.toThrow();
+	});
+
+	// ── A line nobody has written on yet ──────────────────────────────────────
+	//
+	// THE COMMONEST WAY INTO `_sayLine` OF ALL, rather than a corner of it: draw a line, the bar
+	// opens over it, type. A line with no label is given no seat and no caption by the paint, so
+	// there was nothing on the board for the letters to land on -- and since the bar's own field is
+	// clipped to a pixel, the reader's first word showed up nowhere at all until the debounced
+	// write came back round half a second later.
+
+	/** A board whose one link has never been written on: a stroke, and no caption anywhere. */
+	function bare() {
+		const graph = { ...TALKERS, edges: { link1: { ...TALKERS.edges.link1, label: "" } } };
+		const made = windowFor(graph);
+		const doc = measuringDoc(5.2);
+		const line = part({ relmapLine: "link1" });
+		line.ownerDocument = doc;
+		const layer = el();
+		layer.ownerDocument = doc;
+		layer.childNodes = [];
+		layer.append = child => { layer.childNodes.push(child); };
+		made.board.children[".stonetop-relmap-labels"] = layer;
+		made.board.all = {
+			"[data-relmap-line]": [line],
+			"[data-relmap-edge]": [],
+			"[data-relmap-words]": [],
+			"[data-relmap-head]": [],
+		};
+		made.app._boardContext(made.app._plan());
+		return { ...made, line, layer };
+	}
+
+	it("mints a caption for a line that has never carried one, so the first letter shows at once", () => {
+		const { app, layer } = bare();
+		app._fitGapsToPaint();
+		app._sayLine("link1", "wed");
+		const [group] = layer.childNodes;
+		expect(group?.attrs["data-relmap-edge"]).toBe("link1");
+		expect(group.attrs["data-relmap-who"]).toBe("elena stefan");
+		const [words] = group.childNodes;
+		expect(words.attrs["data-relmap-words"]).toBe("link1");
+		expect(words.attrs.class).toBe("stonetop-relmap-label-text");
+		expect(words.textContent).toBe("wed");
+	});
+
+	// One caption and not one per keystroke: the second letter finds the first letter's caption in
+	// the index it was filed in, and the hole in the stroke is cut for it as for any other.
+	it("cuts the hole for the caption it minted, and mints only the one", () => {
+		const { app, line, layer } = bare();
+		app._fitGapsToPaint();
+		app._sayLine("link1", "wed");
+		app._sayLine("link1", "wed in secret");
+		expect(layer.childNodes).toHaveLength(1);
+		expect(layer.childNodes[0].childNodes[0].textContent).toBe("wed in secret");
+		expect(gapOf(line.attrs.d)).toBeGreaterThan(0);
+	});
+
+	// NOTHING WRITTEN ON IT IS NOT A CAPTION OF NO WORDS. Rubbing out what was typed gives back the
+	// line the reader started with, which is exactly what the next real paint gives them: a line
+	// with no label is given no seat and no hole at all.
+	it("takes the words away and heals the stroke when the caption is rubbed out", () => {
+		const { app, words, line } = drawn(5.2);
+		app._fitGapsToPaint();
+		app._sayLine("link1", "");
+		expect(words.textContent).toBe("");
+		expect(line.attrs.d).toBe(app._drawn.shapes.get("link1").unbroken);
+		expect(app._drawn.painted.has("link1")).toBe(false);
+	});
+
+	// AND IT COMES BACK. The seat went with the words, so a reader who carries on typing after
+	// clearing what they had is the same case as the line that never carried a caption at all.
+	it("writes on the line again after the caption has been cleared", () => {
+		const { app, words } = drawn(5.2);
+		app._fitGapsToPaint();
+		app._sayLine("link1", "");
+		app._sayLine("link1", "wed");
+		expect(words.textContent).toBe("wed");
+		expect(app._drawn.shapes.get("link1").anchor).toBeTruthy();
+	});
+
+	// ── The size the board's captions are measured at ─────────────────────────
+	//
+	// ONE NUMBER FOR THE WHOLE BOARD, and it is the size the SHEET sets: what the zoom rule asks
+	// about, and what every caption the reader has not resized is cut and gapped against. Read off
+	// whichever caption the index happened to hold first, a single line set in thirty-two answered
+	// for all of them -- the ordinary captions cut to about half the words that fit, their holes
+	// opened twice as wide as the words in them, and a board claiming to show writing twice the
+	// size it was actually showing.
+
+	const PAIR = {
+		version: 1,
+		nodes: {
+			...TALKERS.nodes,
+			marta: { uuid: null, name: "Marta", img: "", x: 8, y: 92, note: "" },
+		},
+		edges: {
+			link1: { ...TALKERS.edges.link1 },
+			link2: {
+				a: "elena", b: "marta", ink: "moss", dir: "none", note: "", label: "wed", size: 32,
+			},
+		},
+	};
+
+	/** That board drawn, with the RESIZED line first in the markup the index is walked out of. */
+	function drawnPair(perChar) {
+		const made = windowFor(PAIR);
+		const doc = measuringDoc(perChar);
+		const parts = ["link2", "link1"].map(id => {
+			const line = part({ relmapLine: id });
+			const words = part({ relmapWords: id });
+			words.textContent = PAIR.edges[id].label;
+			words.ownerDocument = doc;
+			if (PAIR.edges[id].size) {
+				words.style.setProperty("--relmap-caption-px", `${PAIR.edges[id].size}px`);
+			}
+			return { line, words };
+		});
+		made.board.all = {
+			"[data-relmap-line]": parts.map(one => one.line),
+			"[data-relmap-edge]": [],
+			"[data-relmap-words]": parts.map(one => one.words),
+			"[data-relmap-head]": [],
+		};
+		made.app._boardContext(made.app._plan());
+		return { ...made, big: parts[0], plain: parts[1] };
+	}
+
+	it("takes the board's caption size from a line nobody has resized", () => {
+		const { app } = drawnPair(5.2);
+		app._fitGapsToPaint();
+		expect(app._drawn.captionPx).toBe(12);
+	});
+
+	it("cuts an ordinary caption at the sheet's size, however big the line beside it is set", () => {
+		const { app, plain } = drawnPair(5.2);
+		app._fitGapsToPaint();
+		expect(plain.words.textContent).toBe(TALKERS.edges.link1.label);
+		expect(app._drawn.painted.get("link1"))
+			.toBeCloseTo(TALKERS.edges.link1.label.length * 5.2, 6);
+	});
+
+	// The line the reader DID resize is still measured at its own size: a caption half again as big
+	// has words half again as wide, and one cut against the board's ordinary size would run on past
+	// both ends of the line it belongs to.
+	it("still measures a resized line at the size that line is set in", () => {
+		const { app } = drawnPair(5.2);
+		app._fitGapsToPaint();
+		expect(app._drawn.painted.get("link2")).toBeCloseTo(3 * 5.2 * (32 / 12), 6);
 	});
 
 	// A FACE NOTHING HAS PAINTED WITH YET IS NOT A PENDING LOAD, so `document.fonts.ready` resolves
@@ -923,6 +1104,154 @@ describe("opening the sheet behind a portrait", () => {
 	});
 });
 
+// THE DASHED RIM IS A MARK, AND A MARK HAS TO BE LEARNED. A reader meeting one for the first time
+// has no way to tell a deleted actor from a decoration, so the words are in the tooltip — which is
+// also the face's accessible name, so the reader on a magnifier and the reader on a screen reader
+// are told the same thing by the same string, and neither has to click the face to find out.
+describe("what a portrait says when it is rested on", () => {
+	const CAST = {
+		version: 1,
+		nodes: {
+			elena: { uuid: "Actor.a1", name: "Elena", img: "", x: 20, y: 30, note: "" },
+			ghost: { uuid: "Actor.zz", name: "Tobin", img: "", x: 40, y: 30, note: "" },
+			nobody: { uuid: null, name: "The Miller", img: "", x: 70, y: 30, note: "" },
+		},
+		edges: {},
+	};
+
+	beforeEach(() => {
+		globalThis.game.i18n = TABLE;
+		globalThis.fromUuidSync = uuid => (uuid === "Actor.a1" ? { name: "Elena", img: "" } : null);
+	});
+
+	const tooltips = ({ isOwner = true } = {}) => {
+		const { app } = windowFor(CAST, { isOwner });
+		const context = app._boardContext(app._plan());
+		return Object.fromEntries(context.nodes.map(node => [node.id, node.tooltip]));
+	};
+
+	// The gesture sentence is appended to all three of these on a board the reader may edit, so
+	// each is asserted as the START of what the face says rather than the whole of it. Its own
+	// cases are below.
+	it("names a deleted actor in words and stops offering a sheet", () => {
+		expect(tooltips().ghost)
+			.toContain("Tobin (deleted actor). Their sheet is no longer in this world.");
+		expect(tooltips().ghost).not.toContain("Click to open their sheet");
+	});
+
+	it("still offers the sheet where there is one", () => {
+		expect(tooltips().elena).toContain("Click to open their sheet");
+	});
+
+	// Somebody typed onto the board who never had an actor was not DELETED and must not be told
+	// they were. `missing` is uuid-AND-no-actor, and the tooltip reads that same flag rather than
+	// asking its own question — the two cannot drift apart.
+	it("says nothing of the kind about somebody who never had an actor", () => {
+		expect(tooltips().nobody).toMatch(/^The Miller\b/);
+		expect(tooltips().nobody).not.toContain("deleted actor");
+	});
+
+	// THE ONLY PLACE THE RIGHT PRESS IS TAUGHT. It is what puts the trash can on a portrait, and a
+	// gesture nothing on screen mentions is a gesture nobody finds — which is how a board came to
+	// be a thing that could be added to and never subtracted from.
+	it("names the right press on every face, for a reader who can act on it", () => {
+		const said = tooltips();
+		for (const id of ["elena", "ghost", "nobody"]) {
+			expect(said[id]).toContain("Right-click for the button that takes them off.");
+		}
+	});
+
+	// A bare name is not a sentence, and run straight into the instruction it reads as one broken
+	// one. The two tooltips that already end in a full stop must not collect a second.
+	it("puts a full stop between the two, and only where there is not one already", () => {
+		expect(tooltips().nobody).toBe("The Miller. Right-click for the button that takes them off.");
+		expect(tooltips().elena).not.toContain("..");
+	});
+
+	// AND NOT ON A BOARD THIS READER MAY ONLY LOOK AT, where the press does nothing: the trash can
+	// is not printed for them at all, so the sentence would teach a gesture with no button behind
+	// it. Same question the handle is gated on.
+	it("says nothing of it to a reader who cannot edit the map", () => {
+		const said = tooltips({ isOwner: false });
+		expect(said.nobody).toBe("The Miller");
+		expect(said.elena).not.toContain("Right-click");
+	});
+});
+
+// THE MARK BEHIND THE TRASH CAN. A right press on a portrait arms one (utils/relmap-drag.js
+// decides what counts as one); this is the window putting the class on the portrait it belongs to,
+// and taking it off everybody else.
+describe("arming one person's trash can", () => {
+	/** A root whose `querySelectorAll` answers with portraits, the way a rendered board's does. */
+	const boardOf = (app, ids = ["elena", "stefan"]) => {
+		const nodes = ids.map(id => el({ dataset: { relmapNode: id } }));
+		app._root.all["[data-relmap-node]"] = nodes;
+		return Object.fromEntries(nodes.map((node, at) => [ids[at], node]));
+	};
+	const armed = node => node.classList.contains("is-arming");
+
+	it("marks the person asked for and nobody else", () => {
+		const { app } = windowFor();
+		const nodes = boardOf(app);
+		app._armRemove("stefan");
+		expect(armed(nodes.stefan)).toBe(true);
+		expect(armed(nodes.elena)).toBe(false);
+		expect(app._armed).toBe("stefan");
+	});
+
+	// ONE AT A TIME. The sweep is what guarantees it: a second can left open on somebody the reader
+	// has stopped pointing at is a delete button nobody asked for, sitting on a face.
+	it("moves the can rather than leaving two of them out", () => {
+		const { app } = windowFor();
+		const nodes = boardOf(app);
+		app._armRemove("stefan");
+		app._armRemove("elena");
+		expect(armed(nodes.stefan)).toBe(false);
+		expect(armed(nodes.elena)).toBe(true);
+	});
+
+	// How every ordinary click closes it: the drag layer answers `null`, and nobody is armed.
+	it("puts every can away when asked for nobody", () => {
+		const { app } = windowFor();
+		const nodes = boardOf(app);
+		app._armRemove("elena");
+		app._armRemove(null);
+		expect(armed(nodes.elena)).toBe(false);
+		expect(app._armed).toBe("");
+	});
+
+	// ⚠ SOMEBODY NO LONGER ON THE BOARD IS NOBODY, exactly as the lit web has it. This is put back
+	// after every repaint, and the repaint may be the one that carried that very person off -- the
+	// reader's own removal landing, or another player's. Written back from what the sweep actually
+	// found, so the state can never name a portrait that is not there.
+	it("forgets a person the board no longer has", () => {
+		const { app } = windowFor();
+		boardOf(app, ["elena"]);
+		app._armed = "stefan";
+		app._armRemove("stefan");
+		expect(app._armed).toBe("");
+	});
+
+	// A window with no markup yet still has to remember the answer, or the mark is lost between
+	// the gesture and the paint that would show it.
+	it("holds the answer while there is no board to paint it on", () => {
+		const { app } = windowFor();
+		app._root = null;
+		app._armRemove("elena");
+		expect(app._armed).toBe("elena");
+	});
+
+	// It belonged to the board being left, and `_armRemove` would only have to throw it away again
+	// on the next paint. Same reason `_lit` goes.
+	it("drops the can when the reader switches board", () => {
+		const entry = TWO_BOARDS();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		app._armed = "elena";
+		app.showPage("p2");
+		expect(app._armed).toBe("");
+	});
+});
+
 describe("who may change a map", () => {
 	it("is editable by an owner and by nobody else", () => {
 		const owner = windowFor(TWO_PEOPLE, { isOwner: true }).app;
@@ -941,266 +1270,6 @@ describe("who may change a map", () => {
 	it("opens ready to edit, for an owner", () => {
 		const app = new RelationshipMapWindow(entryFor(TWO_PEOPLE), {});
 		expect(app.canEdit).toBe(true);
-	});
-});
-
-// The other way of reading the same map. What is worth pinning here is the promise the whole view
-// rests on: it is the READER's, it writes nothing, and switching back leaves the board exactly as
-// the table arranged it.
-describe("the family tree view", () => {
-	const A_FAMILY = {
-		version: 1,
-		nodes: {
-			ma: { uuid: null, name: "Ma", img: "", x: 20, y: 30, note: "" },
-			pa: { uuid: null, name: "Pa", img: "", x: 70, y: 30, note: "" },
-			kid: { uuid: null, name: "Kid", img: "", x: 45, y: 80, note: "" },
-			smith: { uuid: null, name: "Smith", img: "", x: 90, y: 90, note: "" },
-		},
-		edges: {
-			e1: { a: "ma", b: "pa", label: "married", ink: "rose", dir: "none", kin: "partner", note: "" },
-			e2: { a: "ma", b: "kid", label: "her son", ink: "rose", dir: "none", kin: "parent", note: "" },
-			e3: { a: "pa", b: "kid", label: "his son", ink: "rose", dir: "none", kin: "parent", note: "" },
-			e4: { a: "ma", b: "smith", label: "owes money to", ink: "sage", dir: "none", note: "" },
-		},
-	};
-
-	const inFamilyView = (graph = A_FAMILY) => {
-		const made = windowFor(graph);
-		made.app._view = "family";
-		return made;
-	};
-
-	it("shows only the people a family line touches, at seats of its own", () => {
-		const { app } = inFamilyView();
-		const context = app._boardContext(app._plan());
-		expect(context.nodes.map(node => node.id).sort()).toEqual(["kid", "ma", "pa"]);
-		// Not where the stored map has them: `ma` is at x 20 on the board and the chart seats her
-		// by who she is descended from.
-		expect(context.nodes.find(node => node.id === "ma").left).not.toBe(20);
-	});
-
-	// The web is not hidden on the tree, it is not asked for: a bowed line between two faces saying
-	// "her son" would be drawing a second time what the chart is already saying with its corners.
-	it("draws households instead of the web, and offers no handle to add to it", () => {
-		const { app } = inFamilyView();
-		const context = app._boardContext(app._plan());
-		expect(context.edges).toEqual([]);
-		expect(context.labels).toEqual([]);
-		expect(context.tree.length).toBeGreaterThan(0);
-		expect(context.tree[0].who).toContain("kid");
-		expect(context.canEdit).toBe(true);
-		expect(context.canLink).toBe(false);
-	});
-
-	// ⚠ THE PROMISE THE VIEW RESTS ON. The chart works its seats out on this machine and writes
-	// none of them; the arrangement the table built is still in the document, so switching back
-	// puts the reader in front of it untouched.
-	it("writes nothing at all, however long it is looked at", () => {
-		const { app, entry } = inFamilyView();
-		app._boardContext(app._plan());
-		app._setView("family");
-		app._setView("everyone");
-		expect(entry.updates).toEqual([]);
-	});
-
-	it("is one reader's own, and switching it re-renders rather than repainting", () => {
-		const { app } = windowFor(A_FAMILY);
-		expect(app._view).toBe("everyone");
-		app._setView("family");
-		expect(app._view).toBe("family");
-		// A render, unlike every other repaint in this window: the tools on the bar change and the
-		// sheet changes size, so there is no corner of a zoom worth keeping.
-		expect(app.render).toHaveBeenCalled();
-	});
-
-	// ⚠ AND ONLY WHEN IT CHANGES. With a two-way toggle this could not arise; with a chooser,
-	// picking the row you are already on is the commonest idle gesture there is, and a render would
-	// re-fit the board and cost the reader the corner they had zoomed into for no change at all.
-	it("does nothing at all when asked for the view already up", () => {
-		const { app } = windowFor(A_FAMILY);
-		app._setView("everyone");
-		expect(app.render).not.toHaveBeenCalled();
-		// Absent rather than null: `windowFor` builds the instance without running the constructor.
-		expect(app._sayOnRender).toBeFalsy();
-	});
-
-	// A view name arrives from a `<select>`, and one day from a newer version of this system that
-	// had a fifth. The whole board is the one view that is always drawable.
-	it("reads a view it does not know as the whole board", () => {
-		const { app } = inFamilyView();
-		app._setView("nonsense");
-		expect(app._view).toBe("everyone");
-	});
-
-	// ⚠ SAID WHERE IT CAN BE HEARD. `render()` is fire-and-forget, so an announcement written on
-	// either side of that call goes into the live region the render is about to throw away, and a
-	// reader on a screen reader is told nothing at all about the view they just changed to. It is
-	// handed to the render instead and spoken once the new region is on screen.
-	it("tells a screen reader which map is up, after the render that replaces the region", () => {
-		const { app, live } = windowFor(A_FAMILY);
-		live.textContent = "";
-		app._setView("family");
-		// NOT yet. The region still on screen belongs to the render being replaced, and anything
-		// written into it now goes down with it.
-		expect(live.textContent).toBe("");
-		const held = app._sayOnRender;
-		expect(held).toBeTruthy();
-
-		// What `_render` does once the new region is on screen.
-		app._saySoFar();
-		expect(live.textContent).toBe(held);
-		expect(app._sayOnRender).toBeNull();
-
-		// And a later render with nothing to say does not repeat it.
-		live.textContent = "";
-		app._saySoFar();
-		expect(live.textContent).toBe("");
-	});
-
-	// FOUR VIEWS, FOUR SENTENCES. This used to key off `familyNow.on|off`, which a four-valued
-	// state cannot use: two of the views would have announced the same words, and after the render
-	// this announcement is the only thing a reader who cannot see the board learns about the press.
-	it("says a different thing for every view", () => {
-		const { app, live } = windowFor(A_FAMILY);
-		const said = new Set();
-		for (const view of ["family", "party", "everyone"]) {
-			app._setView(view);
-			app._saySoFar();
-			said.add(live.textContent);
-		}
-		expect(said.size).toBe(3);
-	});
-
-	// A reader who may only look at the map still gets every view: none of them changes anything in
-	// the document, exactly like the captions control beside them.
-	it("is offered to somebody who may not edit the map", () => {
-		const { app } = windowFor(A_FAMILY, { isOwner: false });
-		expect(app.canEdit).toBe(false);
-		app._setView("family");
-		expect(app._view).toBe("family");
-	});
-
-	// ⚠ AN AppV1 RENDER DROPS FOCUS TO THE DOCUMENT BODY, and switching views is the one thing in
-	// this window that renders. Without putting it back, changing view from the keyboard means
-	// tabbing in from the top of the window again every time -- on the control whose whole point is
-	// that it is flicked between. The announcement is the only other thing a reader who cannot see
-	// the board gets from the press.
-	it("puts the reader's focus back on the control they used", () => {
-		const { app, root } = windowFor(A_FAMILY);
-		const chooser = el();
-		chooser.focus = vi.fn();
-		root.children["[data-relmap-view]"] = chooser;
-		app._setView("family");
-		app._takeFocusBack();
-		expect(chooser.focus).toHaveBeenCalled();
-		// And an ORDINARY render -- a live update that could not be repainted, a resize -- must not
-		// move anybody's focus at all.
-		chooser.focus.mockClear();
-		app._takeFocusBack();
-		expect(chooser.focus).not.toHaveBeenCalled();
-	});
-
-	// ⚠ THE GATE THAT USED TO BE A DENYLIST. Every one of these was written as `!== VIEW_FAMILY`,
-	// so the moment a third and fourth view existed they inherited "yes" from all of them: draggable
-	// portraits on a computed board, each drag silently writing the shared document while the reader
-	// watched nothing move; sidebar drops accepted and then not drawn; and Tidy up re-seating forty
-	// people from a view showing six.
-	it("refuses every writing gesture on any view that seats itself", () => {
-		const { app } = windowFor(A_FAMILY);
-		expect(app._placesOwnSeats()).toBe(false);
-		for (const view of ["party", "focus", "family"]) {
-			app._view = view;
-			expect(app._placesOwnSeats()).toBe(true);
-		}
-	});
-});
-
-// Only the player characters, and only the lines between two of them: the introductions read back.
-describe("the party view", () => {
-	const PARTY = {
-		version: 1,
-		nodes: {
-			pim: { uuid: "Actor.pim", name: "Pim", img: "", x: 10, y: 10, note: "" },
-			sela: { uuid: "Actor.sela", name: "Sela", img: "", x: 80, y: 20, note: "" },
-			ordga: { uuid: "Actor.ordga", name: "Ordga", img: "", x: 40, y: 70, note: "" },
-		},
-		edges: {
-			e1: { a: "pim", b: "sela", label: "trusts", ink: "sage", dir: "a-b", note: "" },
-			e2: { a: "sela", b: "pim", label: "wary of", ink: "rust", dir: "a-b", note: "" },
-			e3: { a: "pim", b: "ordga", label: "her apprentice", ink: "slate", dir: "none", note: "" },
-		},
-	};
-
-	const inPartyView = (party = ["Actor.pim", "Actor.sela"]) => {
-		const made = windowFor(PARTY);
-		globalThis.game.actors = {
-			contents: party.map(uuid => ({
-				id: uuid.split(".")[1], uuid, type: "character", name: uuid, hasPlayerOwner: true,
-			})),
-		};
-		made.app._view = "party";
-		return made;
-	};
-
-	it("shows the player characters and nobody else", () => {
-		const { app } = inPartyView();
-		const context = app._boardContext(app._plan());
-		expect(context.nodes.map(node => node.id).sort()).toEqual(["pim", "sela"]);
-	});
-
-	// A NARROWING of whatever board is up. On "The Party" page, which is seeded from the Chronicle
-	// (relmap/relmap-party.js), that is an arrow each way per answer; on any other page it is
-	// whatever the table drew. The view derives nothing of its own.
-	it("keeps every line the board has between two of them", () => {
-		const { app } = inPartyView();
-		const context = app._boardContext(app._plan());
-		expect(context.edges).toHaveLength(2);
-		expect(context.labels.map(l => l.text).sort()).toEqual(["trusts", "wary of"]);
-	});
-
-	// ⚠ THE CRASH THIS AVOIDS. `edgeShapes` reads an end's `x` with no guard, so a person pruned
-	// without their lines is a TypeError inside `getData` and a window that renders blank.
-	it("leaves no line hanging off somebody it is not showing", () => {
-		const { app } = inPartyView();
-		const plan = app._plan();
-		for (const edge of Object.values(plan.graph.edges)) {
-			expect(plan.graph.nodes[edge.a]).toBeTruthy();
-			expect(plan.graph.nodes[edge.b]).toBeTruthy();
-		}
-	});
-
-	// The seats are the view's own, and they are BAKED INTO the graph the board is drawn from:
-	// carried beside it, every line would be drawn between the positions people hold on the real
-	// board while their faces stood somewhere else.
-	it("draws the lines between the seats it gave people, not the stored ones", () => {
-		const { app } = inPartyView();
-		const plan = app._plan();
-		expect(plan.graph.nodes.pim.x).not.toBe(10);
-		const context = app._boardContext(plan);
-		expect(context.nodes.find(n => n.id === "pim").left).toBe(plan.graph.nodes.pim.x);
-	});
-
-	it("writes nothing, and leaves the stored board untouched", () => {
-		const { app, entry } = inPartyView();
-		app._boardContext(app._plan());
-		expect(entry.updates).toEqual([]);
-		expect(readGraph(entry).nodes.pim.x).toBe(10);
-	});
-
-	it("draws no link handle, because a new line has nowhere to land", () => {
-		const { app } = inPartyView();
-		expect(app._boardContext(app._plan()).canLink).toBe(false);
-	});
-
-	it("says it is showing nobody rather than painting a blank sheet", () => {
-		const { app } = inPartyView([]);
-		const plan = app._plan();
-		expect(plan.bare).toBe("party");
-		const said = app._chrome(plan);
-		// `empty` stays a statement about the MAP, which has three people on it.
-		expect(said.empty).toBe(false);
-		expect(said.noKin).toBe(true);
-		expect(said.bareAction.action).toBe("showall");
 	});
 });
 
@@ -1240,11 +1309,11 @@ describe("the party board's role", () => {
 	it("knows the party board even after it has been renamed", () => {
 		const { app, entry } = on("party1");
 		entry.pages.contents[1].name = "Us";
-		expect(app._boardRole()).toBe("party");
+		expect(mapBoardRole(app.mapPage)).toBe("party");
 	});
 
 	it("is not the board the reader is on when they are on another one", () => {
-		expect(on("board1").app._boardRole()).toBe("");
+		expect(mapBoardRole(on("board1").app.mapPage)).toBe("");
 	});
 
 	// ⚠ THE SEATING PASS IS THE PRIMARY GM'S ALONE, now that nothing else can ask for it. It runs
@@ -1298,11 +1367,11 @@ describe("the village board's role", () => {
 	it("knows the village board even after it has been renamed", () => {
 		const { app, entry } = on("village1");
 		entry.pages.contents[1].name = "Home";
-		expect(app._boardRole()).toBe("village");
+		expect(mapBoardRole(app.mapPage)).toBe("village");
 	});
 
 	it("is not the board the reader is on when they are on the party's", () => {
-		expect(on("party1").app._boardRole()).not.toBe("village");
+		expect(mapBoardRole(on("party1").app.mapPage)).not.toBe("village");
 	});
 
 	// The same guard the party board keeps, and for the same reason: the pass runs unasked on every
@@ -1317,361 +1386,6 @@ describe("the village board's role", () => {
 		app._syncVillagePage = vi.fn();
 		await app._onToolClick({ currentTarget: { dataset: { relmapAction: "refreshvillage" } } });
 		expect(app._syncVillagePage).not.toHaveBeenCalled();
-	});
-});
-
-// One person, everybody with a line straight to them, and only the lines that touch them.
-describe("one person's web", () => {
-	const WEB = {
-		version: 1,
-		nodes: {
-			pim: { uuid: "Actor.pim", name: "Pim", img: "", x: 10, y: 10, note: "" },
-			sela: { uuid: null, name: "Sela", img: "", x: 80, y: 20, note: "" },
-			ordga: { uuid: null, name: "Ordga", img: "", x: 40, y: 70, note: "" },
-			away: { uuid: null, name: "Away", img: "", x: 95, y: 95, note: "" },
-		},
-		edges: {
-			e1: { a: "pim", b: "sela", label: "best friends", ink: "sage", dir: "none", note: "" },
-			e2: { a: "ordga", b: "pim", label: "her apprentice", ink: "slate", dir: "none", note: "" },
-			e3: { a: "sela", b: "ordga", label: "cannot stand her", ink: "rust", dir: "none", note: "" },
-		},
-	};
-
-	// ⚠ THE REAL LANGUAGE TABLE. The suite's `beforeEach` replaces `globalThis.game` with the two
-	// members these paths touch, which quietly takes `i18n` away; this view's panel and its
-	// announcement both name a PERSON, so without it they come back as bare keys and an assertion
-	// about the words would pass on anything.
-	beforeEach(() => {
-		globalThis.game.i18n = TABLE;
-	});
-
-	const inFocusView = (on = "pim") => {
-		const made = windowFor(WEB);
-		made.app._view = "focus";
-		made.app._focus = on;
-		return made;
-	};
-
-	it("shows the person and everybody with a line straight to them", () => {
-		const { app } = inFocusView();
-		const context = app._boardContext(app._plan());
-		expect(context.nodes.map(node => node.id).sort()).toEqual(["ordga", "pim", "sela"]);
-	});
-
-	it("puts them in the middle and marks which face that is", () => {
-		const { app } = inFocusView();
-		const context = app._boardContext(app._plan());
-		const centre = context.nodes.find(node => node.id === "pim");
-		expect(centre.left).toBe(50);
-		expect(centre.top).toBe(50);
-		expect(centre.centre).toBe(true);
-		expect(context.nodes.filter(node => node.centre)).toHaveLength(1);
-	});
-
-	// DIRECT LINKS ONLY, and this half is a choice: two of the centre's friends stand side by side
-	// with nothing between them although the board has a line there. That is the difference between
-	// a star and a small dense web, and the corner aside says so.
-	it("draws only the lines that touch the person in the middle", () => {
-		const { app } = inFocusView();
-		const context = app._boardContext(app._plan());
-		expect(context.labels.map(l => l.text).sort()).toEqual(["best friends", "her apprentice"]);
-	});
-
-	// It happens: the reader picks somebody and another player takes them off the board a minute
-	// later, and this runs again inside the repaint that carries them away.
-	it("says so when the person it is about has left the map, rather than re-centring quietly", () => {
-		const { app } = inFocusView("somebody-who-left");
-		const plan = app._plan();
-		expect(plan.centre).toBeNull();
-		const said = app._chrome(plan);
-		expect(said.noKin).toBe(true);
-		// The way OUT of the view, not a second route to the chooser standing on the bar above it.
-		expect(said.bareAction.action).toBe("showall");
-		// ⚠ AND IT SAYS WHICH OF THE TWO THIS IS. "Nobody is chosen yet" is the state a reader
-		// arrives in; this one is something that HAPPENED to them while they watched, and telling
-		// them the first reads as the window having forgotten what they asked for.
-		expect(plan.bare).toBe("gone");
-		expect(said.bareLead).not.toBe(app._bareSaid({ bare: "nobody" }).bareLead);
-	});
-
-	it("tells a reader who has chosen nobody at all something different", () => {
-		const { app } = inFocusView(null);
-		const plan = app._plan();
-		expect(plan.bare).toBe("nobody");
-	});
-
-	it("says so when nothing at all is linked to them", () => {
-		const { app } = inFocusView("away");
-		const plan = app._plan();
-		expect(plan.centre).toBe("away");
-		expect(plan.bare).toBe("focus");
-		expect(app._chrome(plan).bareLead).toContain("Away");
-	});
-
-	it("writes nothing, and leaves the stored board untouched", () => {
-		const { app, entry } = inFocusView();
-		app._boardContext(app._plan());
-		expect(entry.updates).toEqual([]);
-		expect(readGraph(entry).nodes.pim.x).toBe(10);
-	});
-
-	// The reader's own person if they are on this map; otherwise whoever has the most lines drawn
-	// to them. ⚠ NEVER `game.user.character` straight off: in this system a full GM's assigned
-	// character is their GM Toolkit actor, which cannot be on a relationship map at all.
-	it("opens on the reader's own person when they are on the map", () => {
-		const { app, entry } = inFocusView();
-		globalThis.game.user = { id: "u1", character: { uuid: "Actor.pim", name: "Pim" } };
-		expect(app._defaultFocus(readGraph(entry))).toBe("pim");
-	});
-
-	it("falls through to the busiest person when the reader's is not on the map", () => {
-		const { app, entry } = inFocusView();
-		globalThis.game.user = { id: "u1", character: { uuid: "Actor.toolkit", name: "GM Toolkit" } };
-		// `pim` and `sela` and `ordga` all carry two lines; the tie is broken by id, never by
-		// whatever order the flag came back in.
-		expect(["ordga", "pim", "sela"]).toContain(app._defaultFocus(readGraph(entry)));
-	});
-
-	it("settles on somebody on the way in, so the view never opens on nothing", () => {
-		const { app } = windowFor(WEB);
-		globalThis.game.user = { id: "u1", character: null };
-		app._setView("focus");
-		expect(app._focus).toBeTruthy();
-		expect(app._plan().centre).toBe(app._focus);
-	});
-});
-
-// THE DROPDOWN THAT POINTS THAT VIEW AT A PERSON. It replaced a button opening a modal list, and
-// the reason is the gesture rather than the chrome: walking the party one player at a time is the
-// whole of what the view is for, and a window to open and dismiss between each of them is a window
-// standing in the middle of the comparison the reader is making.
-//
-// Its rows are the one thing on the bar whose CONTENTS come off the shared document, which is what
-// the second half of this suite is about.
-describe("the chooser the focus view is pointed with", () => {
-	const CAST = {
-		version: 1,
-		nodes: {
-			pim: { uuid: "Actor.pim", name: "Pim", img: "", x: 10, y: 10, note: "" },
-			sela: { uuid: "Actor.sela", name: "Sela", img: "", x: 80, y: 20, note: "" },
-			mill: { uuid: null, name: "The Mill", img: "", x: 40, y: 70, note: "" },
-			ordga: { uuid: null, name: "Ordga <the elder>", img: "", x: 60, y: 40, note: "" },
-		},
-		edges: {
-			e1: { a: "pim", b: "sela", label: "best friends", ink: "sage", dir: "none", note: "" },
-			e2: { a: "pim", b: "mill", label: "works there", ink: "slate", dir: "none", note: "" },
-			e3: { a: "pim", b: "ordga", label: "her apprentice", ink: "rose", dir: "none", note: "" },
-		},
-	};
-
-	// ⚠ THE REAL LANGUAGE TABLE, for the reason the view above needs it: the group headings and the
-	// "your character" marker are localized, so without it every assertion about the words would be
-	// asserting on bare keys and would pass against a chooser that had never been built.
-	beforeEach(() => {
-		globalThis.game.i18n = TABLE;
-		globalThis.game.actors = {
-			contents: ["Actor.pim", "Actor.sela"].map(uuid => ({
-				id: uuid.split(".")[1], uuid, type: "character", name: uuid, hasPlayerOwner: true,
-			})),
-		};
-		globalThis.game.user = { id: "u1", character: null };
-	});
-
-	const pointedAt = (on = "pim", graph = CAST) => {
-		const made = windowFor(graph);
-		made.app._view = "focus";
-		made.app._focus = on;
-		return made;
-	};
-
-	const rows = app => app._chrome(app._plan()).focusPick;
-
-	// THE PLAYER CHARACTERS FIRST AND IN THEIR OWN GROUP. "Whose web am I looking at" is nearly
-	// always asked of one of them, and on a village of forty a flat list in name order buries the
-	// six faces it is usually about.
-	it("puts the player characters in their own group, ahead of everybody else", () => {
-		const { app } = pointedAt();
-		const html = rows(app);
-		expect(html.indexOf("Player characters")).toBeGreaterThan(-1);
-		expect(html.indexOf("Player characters")).toBeLessThan(html.indexOf("Everyone else"));
-		// Pim and Sela are the party; the mill and Ordga are not, and both are still reachable --
-		// the steading everybody is linked to is one of the most useful centres a map has.
-		const [party, others] = html.split("Everyone else");
-		expect(party).toContain("Pim");
-		expect(party).toContain("Sela");
-		expect(others).toContain("The Mill");
-		expect(others).toContain("Ordga");
-	});
-
-	// A heading over the whole of a list is a heading that says nothing.
-	it("does not group a map with nobody else on it", () => {
-		const { app } = pointedAt("pim", {
-			version: 1,
-			nodes: {
-				pim: CAST.nodes.pim,
-				sela: CAST.nodes.sela,
-			},
-			edges: { e1: CAST.edges.e1 },
-		});
-		expect(rows(app)).not.toContain("optgroup");
-	});
-
-	// ⚠ ONLY THE READER'S OWN, and only when they are on this map. `_myNode` is a different question
-	// from "who is this view showing": in this system a full GM's assigned character is their GM
-	// Toolkit actor, which cannot be on a relationship map at all, so marking the row the view
-	// happens to have opened on would be marking a stranger as somebody's own character.
-	it("says which row is the reader's own character", () => {
-		const { app } = pointedAt();
-		globalThis.game.user = { id: "u1", character: { uuid: "Actor.sela", name: "Sela" } };
-		const html = rows(app);
-		expect(html).toContain("Sela (your character)");
-		expect(html).not.toContain("Pim (your character)");
-	});
-
-	it("marks nobody at all when the reader's character is not on this map", () => {
-		const { app } = pointedAt();
-		globalThis.game.user = { id: "u1", character: { uuid: "Actor.toolkit", name: "GM Toolkit" } };
-		expect(rows(app)).not.toContain("your character");
-	});
-
-	// The rows are actor names, which is text somebody at this table typed, and they are going into
-	// markup rather than through Handlebars: the window builds them so that a repaint can write the
-	// same string again, and that makes the escaping ours.
-	it("escapes the names", () => {
-		const { app } = pointedAt();
-		const html = rows(app);
-		expect(html).toContain("Ordga &lt;the elder&gt;");
-		expect(html).not.toContain("<the elder>");
-	});
-
-	it("shows the person the board is showing as the one picked", () => {
-		const { app } = pointedAt("mill");
-		expect(rows(app)).toContain('<option value="mill" selected>The Mill</option>');
-	});
-
-	// ⚠ A `<select>` WHOSE VALUE MATCHES NO OPTION SHOWS ITS FIRST ONE. Without a row for nobody,
-	// a chooser whose centre had been taken off the map would sit there naming somebody the board
-	// is not showing, beside a panel explaining that the person it was showing has gone.
-	it("carries a row for nobody while there is no centre", () => {
-		const { app } = pointedAt("somebody-who-left");
-		const html = rows(app);
-		expect(html.startsWith('<option value="" selected>')).toBe(true);
-		expect(html).not.toContain("selected>Pim");
-	});
-
-	it("is not built at all on the other three views", () => {
-		const { app } = pointedAt();
-		app._view = "everyone";
-		expect(rows(app)).toBeNull();
-	});
-});
-
-// Picking somebody out of that chooser. A whole render, exactly as switching view is: a different
-// cast on a differently sized sheet, with everybody at a seat this view has just worked out.
-describe("showing somebody else's web", () => {
-	const WEB = {
-		version: 1,
-		nodes: {
-			pim: { uuid: null, name: "Pim", img: "", x: 10, y: 10, note: "" },
-			sela: { uuid: null, name: "Sela", img: "", x: 80, y: 20, note: "" },
-		},
-		edges: { e1: { a: "pim", b: "sela", label: "best friends", ink: "sage", dir: "none", note: "" } },
-	};
-
-	beforeEach(() => {
-		globalThis.game.i18n = TABLE;
-		globalThis.game.user = { id: "u1", character: null };
-		globalThis.ui = { notifications: { warn: vi.fn(), info: vi.fn() } };
-	});
-
-	const pointedAt = (on = "pim") => {
-		const made = windowFor(WEB);
-		made.app._view = "focus";
-		made.app._focus = on;
-		return made;
-	};
-
-	it("re-centres on them, and says whose web is up now", () => {
-		const { app } = pointedAt();
-		app._setFocus("sela");
-		expect(app._focus).toBe("sela");
-		expect(app.render).toHaveBeenCalled();
-		expect(app._sayOnRender).toContain("Sela");
-		// ⚠ AN AppV1 RENDER DROPS FOCUS TO THE DOCUMENT BODY, and this is the control a reader
-		// walking the party is about to use again.
-		expect(app._focusOnRender).toBe("[data-relmap-focus]");
-	});
-
-	// Nothing is written, here or anywhere the narrow views touch. That is what makes them views.
-	it("leaves the stored board exactly as the table left it", () => {
-		const { app, entry } = pointedAt();
-		app._setFocus("sela");
-		expect(entry.updates).toEqual([]);
-	});
-
-	// ⚠ RE-READ BEFORE IT IS BELIEVED. The rows were built when this window last painted, and
-	// somebody at the far end of the table can take a person off the map in between.
-	it("refuses somebody who has left the map since the rows were written, and says why", () => {
-		const { app } = pointedAt();
-		app._setFocus("somebody-who-left");
-		expect(app._focus).toBe("pim");
-		expect(app.render).not.toHaveBeenCalled();
-		expect(globalThis.ui.notifications.warn).toHaveBeenCalled();
-	});
-
-	// Picking the row that is already showing is the commonest idle gesture a dropdown has, and a
-	// render would cost the reader the corner they had zoomed into for no change at all.
-	it("does nothing when the reader picks the person already in the middle", () => {
-		const { app } = pointedAt();
-		app._setFocus("pim");
-		expect(app.render).not.toHaveBeenCalled();
-	});
-
-	// The empty row stands in the list only to stop the control naming a stranger; choosing it is
-	// the reader landing back where they started, not a request for anything.
-	it("does nothing when the reader picks the row for nobody", () => {
-		const { app } = pointedAt("somebody-who-left");
-		app._setFocus("");
-		expect(app.render).not.toHaveBeenCalled();
-	});
-});
-
-describe("finding the family ties already written on a map", () => {
-	// ⚠ THE ONE PLACE IN THIS FILE THAT NEEDS THE REAL LANGUAGE TABLE. The suite's own `beforeEach`
-	// replaces `globalThis.game` wholesale with the two members these paths touch, which quietly
-	// takes `i18n` away with it; everywhere else that only means a key comes back instead of a
-	// sentence, but the guess READS ITS WORD LIST out of the table, so without it there are no
-	// words to match and this would pass by finding nothing whatever the code did.
-	beforeEach(() => {
-		globalThis.game.i18n = TABLE;
-		globalThis.ui = { notifications: { info: () => {} } };
-	});
-
-	const OLD_MAP = {
-		version: 1,
-		nodes: {
-			ma: { uuid: null, name: "Ma", img: "", x: 20, y: 30, note: "" },
-			kid: { uuid: null, name: "Kid", img: "", x: 70, y: 30, note: "" },
-		},
-		edges: {
-			e1: { a: "ma", b: "kid", label: "her mother", ink: "rose", dir: "none", note: "" },
-			e2: { a: "kid", b: "ma", label: "smothered her at the mill", ink: "rose", dir: "none", note: "" },
-		},
-	};
-
-	it("marks what the captions already say, in one write, and says how many", async () => {
-		const { app, entry } = windowFor(OLD_MAP);
-		await app._findKin();
-		expect(entry.updates).toHaveLength(1);
-		expect(entry.updates[0]).toEqual({
-			"flags.stonetop-pwd.relationshipMap.edges.e1.kin": "parent",
-		});
-	});
-
-	it("writes nothing when no unanswered line reads like family", async () => {
-		const { app, entry } = windowFor(TWO_PEOPLE);
-		await app._findKin();
-		expect(entry.updates).toEqual([]);
 	});
 });
 
@@ -1704,181 +1418,111 @@ describe("opening a map", () => {
 	});
 });
 
-// ── Putting the imported lines away ──────────────────────────────────────────
+// ── Turning the words off ────────────────────────────────────────────────────
 //
-// "Pull in ratings" writes a line per rating, both ways round, so a table that rated everybody
-// while introducing their characters ends up with the ties it drew by hand somewhere underneath a
-// hundred imported ones. The box in the corner takes that whole kind of line off the board.
+// A village board carries a hundred captioned lines, and at the zoom that fits the whole of it
+// into the window the writing is a grey thicket over the diagram: the shape of who knows whom,
+// which is the question a whole board is being looked at to answer, is exactly what the words
+// bury. The box in the corner takes them off.
 //
-// WHAT HAS TO HOLD. It is one reader's own view, it writes nothing, and above all it must not reach
-// the paths that WRITE: a graph with the hidden lines filtered out of it, handed to the delete,
-// would take a portrait off the board and leave its hidden links dangling from nobody.
+// WHAT HAS TO HOLD. It is one reader's own view and it writes nothing — no caption is changed or
+// rubbed out, and nobody else's window moves. It must survive a repaint, because a change from the
+// far end of the table is not a reason to put the words back under somebody who turned them off.
+// And the holes cut in the strokes for the words have to close: a gap is a length missing from the
+// path data, so no stylesheet can heal it, and a board of lines with breaks in them for nothing
+// reads as a broken diagram rather than a quiet one.
 
-describe("hiding the lines the sheets drew", () => {
-	it("draws every line while the box is clear", async () => {
-		const { app, board } = windowFor(BOTH_KINDS);
-		await app.sync();
-		expect(board.innerHTML).toContain('edges="2"');
-	});
-
-	it("leaves the imported ones off the board once it is ticked", async () => {
-		const { app, board } = windowFor(BOTH_KINDS);
-		app._hidePulled = true;
-		await app.sync();
-		expect(board.innerHTML).toContain('edges="1"');
-		// The people stay. Somebody who is on this map only because an import put them there is
-		// still on it, and a portrait vanishing would look like the map losing people.
-		expect(board.innerHTML).toContain('nodes="2"');
-	});
-
-	// ⚠ THE ONE THAT MATTERS. Everything that writes reads the entry itself, never the filtered
-	// view: taking somebody off the board has to take EVERY link that touched them, including the
-	// ones this reader cannot see, or the map is left with a line hanging from nobody.
-	it("never lets the hiding reach what is written", () => {
-		const { app, entry } = windowFor(BOTH_KINDS);
-		app._hidePulled = true;
-		const whole = readGraph(entry);
-		expect(Object.keys(whole.edges)).toEqual(["link1", "pulled"]);
-		expect(Object.keys(app._visibleGraph(whole).edges)).toEqual(["link1"]);
-	});
-
-	// A repaint and not a render: a render re-fits the board and costs the reader the corner they
-	// had zoomed into, which is the state they were reading when they reached for the box.
-	it("repaints on the press, and never re-renders the window", async () => {
-		const { app, board, live } = windowFor(BOTH_KINDS);
-		await app._togglePulled({ checked: true });
-		expect(app.render).not.toHaveBeenCalled();
-		expect(board.innerHTML).toContain('edges="1"');
-		expect(live.textContent).toBeTruthy();
-		await app._togglePulled({ checked: false });
-		expect(board.innerHTML).toContain('edges="2"');
-	});
-
-	// ⚠ AND THE TRAP UNDER IT. The box takes focus on the click, and a focused field is one of the
-	// things `_isBusy` counts, so a toggle routed through `sync` would defer its own repaint and the
-	// box would appear to do nothing until the reader clicked elsewhere.
-	it("repaints even though the box it was pressed on now has focus", async () => {
-		const { app, root, board } = windowFor(BOTH_KINDS);
-		const box = el({ tagName: "INPUT", type: "checkbox" });
-		root.children[".box"] = box;
-		root.ownerDocument.activeElement = box;
-		await app._togglePulled({ checked: true });
-		expect(board.innerHTML).toContain('edges="1"');
-		// And a change from somebody else is not held back by it either: the window's chrome sits
-		// outside the board's markup, so a repaint could not take a ticked box away in any case.
-		expect(app._isBusy()).toBe(false);
-	});
-
-	it("offers the box only on a map something has been pulled into", async () => {
-		const { app, foot } = windowFor(BOTH_KINDS);
-		await app.sync();
-		expect(foot.hidden).toBe(false);
-
-		const plain = windowFor(TWO_PEOPLE);
-		await plain.app.sync();
-		expect(plain.foot.hidden).toBe(true);
-	});
-
-	// Asked of the WHOLE map and not of the filtered view, or ticking the box would take away the
-	// box: the last imported line disappears, the answer turns false, and the one control that could
-	// bring them back goes with it.
-	it("keeps the box on the window while it is ticked", async () => {
-		const { app, foot } = windowFor(BOTH_KINDS);
-		app._hidePulled = true;
-		await app.sync();
-		expect(foot.hidden).toBe(false);
-	});
-});
-
-// ── Rubbing those lines out for good ────────────────────────────────────────
-//
-// ⚠ THE WAY OUT OF A BUTTON THAT NO LONGER EXISTS. "Pull in ratings" wrote a line into the shared
-// board for every rating anybody in the world had stored, both ways round; it is gone, and the
-// party view shows the same regard without writing any of it. But a board somebody already pressed
-// it on is still carrying every line it made, and there is no other way to be rid of a hundred
-// lines than a hundred presses.
-describe("rubbing out the lines an old import left behind", () => {
-	/** The confirm this tool puts up, answered however the test says. */
-	const asked = answer => {
-		const calls = [];
-		globalThis.foundry = {
-			...globalThis.foundry,
-			applications: { api: { DialogV2: { wait: spec => { calls.push(spec); return Promise.resolve(answer); } } } },
+describe("turning the words off", () => {
+	/** A board with one line's markup on it, as `_paintLineGaps` expects to find it. */
+	function boardWithStroke() {
+		const made = windowFor();
+		const line = el({ dataset: { relmapLine: "link1" } });
+		line.attrs = {};
+		line.setAttribute = (key, value) => { line.attrs[key] = value; };
+		made.board.all["[data-relmap-line]"] = [line];
+		made.app._drawn = {
+			shapes: new Map([["link1", {
+				curve: { d: "M 0,0 L 100,0" },
+				d: "M 0,0 L 40,0 M 60,0 L 100,0",
+				unbroken: "M 0,0 L 100,0",
+			}]]),
 		};
-		return calls;
-	};
+		return { ...made, line };
+	}
 
-	beforeEach(() => {
-		globalThis.game.i18n = TABLE;
-		globalThis.ui = { notifications: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } };
-	});
-
-	it("rubs out what the import stamped, and nothing else", async () => {
-		asked("drop");
-		const { app, entry } = windowFor(BOTH_KINDS);
-		await app._dropImported();
-		expect(entry.updates).toHaveLength(1);
-		// One write for all of them: several would broadcast several times, and everybody else at
-		// the table would watch the lines vanish one at a time.
-		const [patch] = entry.updates;
-		expect(Object.keys(patch)).toEqual(["flags.stonetop-pwd.relationshipMap.edges.-=pulled"]);
-	});
-
-	// The count is in the question, because there is no undo and the whole point of the press is
-	// that the reader cannot see how many there are.
-	it("asks first, and says how many", async () => {
-		const calls = asked("keep");
-		const { app, entry } = windowFor(BOTH_KINDS);
-		await app._dropImported();
-		expect(calls[0].content).toContain("1 line(s)");
-		expect(entry.updates).toEqual([]);
-	});
-
-	// PEOPLE STAY. Some of them may be on the map only because the import put them there, but
-	// taking somebody off is a separate act with its own question, and a button that removed a
-	// dozen portraits as a side effect of tidying up lines is one nobody could predict.
-	it("leaves everybody on the map", async () => {
-		asked("drop");
-		const { app, entry } = windowFor(BOTH_KINDS);
-		await app._dropImported();
-		expect(Object.keys(entry.updates[0]).some(key => key.includes(".nodes."))).toBe(false);
-	});
-
-	// Nothing creates such a line any more, so on nearly every board this is never seen at all --
-	// and a press that arrives anyway means somebody else got there first.
-	it("says so rather than sitting silent on a board with none", async () => {
-		asked("drop");
-		const { app, entry } = windowFor(TWO_PEOPLE);
-		await app._dropImported();
-		expect(entry.updates).toEqual([]);
-		expect(ui.notifications.info).toHaveBeenCalled();
-	});
-
-	// It writes, so it is behind the same gate every other board tool is -- gated in the TOOLS
-	// table rather than by where it happens to be written, which is what that table is for.
-	it("does nothing at all for a reader who may only look", async () => {
-		const calls = asked("drop");
-		const { app, entry } = windowFor(BOTH_KINDS, { isOwner: false });
-		await app._onToolClick({ currentTarget: { dataset: { relmapAction: "droppulled" } } });
-		expect(calls).toEqual([]);
-		expect(entry.updates).toEqual([]);
-	});
-
-	// ⚠ AND IT MUST GO AWAY UNDER AN OPEN WINDOW. Whether this board still has any of these lines
-	// changes the moment somebody at the far end of the table presses it; `_paintChrome` is all
-	// that runs on a repaint, so the tool is rendered always and hidden, and repainted here.
-	it("takes the tool off the bar once the last of them has gone", async () => {
-		const { app, root } = windowFor(BOTH_KINDS);
-		const tool = el();
-		root.children["[data-relmap-action='droppulled']"] = tool;
+	it("draws the words while the box is clear", async () => {
+		const { app, root } = windowFor();
 		await app.sync();
-		expect(tool.hidden).toBe(false);
+		expect(root.classList.contains("captions-off")).toBe(false);
+	});
 
-		const plain = windowFor(TWO_PEOPLE);
-		const gone = el();
-		plain.root.children["[data-relmap-action='droppulled']"] = gone;
-		await plain.app.sync();
-		expect(gone.hidden).toBe(true);
+	it("takes them off the whole board when it is ticked, and puts them back", () => {
+		const { app, root } = windowFor();
+		app._toggleLabels({ checked: true });
+		expect(app._hideLabels).toBe(true);
+		expect(root.classList.contains("captions-off")).toBe(true);
+
+		app._toggleLabels({ checked: false });
+		expect(app._hideLabels).toBe(false);
+		expect(root.classList.contains("captions-off")).toBe(false);
+	});
+
+	// ⚠ NEITHER A RENDER NOR A REPAINT, which is the difference between this and the filter that
+	// used to stand here. That one took whole LINES out of the picture, and lines are measured, so
+	// every fan and dodge had to be worked out again. Words are only painted: the class is the
+	// whole of the change, and the reader keeps the corner they had zoomed into.
+	it("neither re-renders the window nor redraws the board", async () => {
+		const { app, board } = windowFor();
+		await app.sync();
+		const drawn = board.innerHTML;
+		app.render.mockClear();
+		app._toggleLabels({ checked: true });
+		expect(app.render).not.toHaveBeenCalled();
+		expect(board.innerHTML).toBe(drawn);
+	});
+
+	// Said out loud, because on a board zoomed out past the size at which captions are drawn at
+	// all, ticking this changes nothing anybody can see.
+	it("says which way it went", () => {
+		const { app, live } = windowFor();
+		app._toggleLabels({ checked: true });
+		expect(live.textContent).toBeTruthy();
+	});
+
+	// ⚠ THE HALF NO STYLESHEET CAN DO. Every line is drawn broken, with a length of it cut out
+	// exactly where its caption sits, so a board with the words off would otherwise be a web of
+	// lines with conspicuous holes in them for nothing.
+	it("heals the holes cut in the strokes, and cuts them again", () => {
+		const { app, line } = boardWithStroke();
+		app._toggleLabels({ checked: true });
+		expect(line.attrs.d).toBe("M 0,0 L 100,0");
+		app._toggleLabels({ checked: false });
+		expect(line.attrs.d).toBe("M 0,0 L 40,0 M 60,0 L 100,0");
+	});
+
+	// A change from the far end of the table repaints the board, and the box and the class both sit
+	// outside it. Written back all the same: a state settled in the render alone is one a repaint
+	// would silently undo the first time anybody else moved a portrait.
+	it("keeps the words off through a repaint somebody else caused", async () => {
+		const { app, root } = windowFor();
+		const box = el({ tagName: "INPUT", type: "checkbox", checked: false });
+		root.children["[data-relmap-action='hidelabels']"] = box;
+		app._toggleLabels({ checked: true });
+		await app.sync();
+		expect(root.classList.contains("captions-off")).toBe(true);
+		expect(box.checked).toBe(true);
+	});
+
+	// ⚠ THE ONE CONTROL IN HERE A PLAYER CAN PRESS, and gated in the TOOLS table rather than by
+	// where it happens to be written. The person most in need of quieting a hundred captions is
+	// exactly the reader who may not touch them.
+	it("works for a reader who may only look, and writes nothing", async () => {
+		const { app, root, entry } = windowFor(TWO_PEOPLE, { isOwner: false });
+		await app._onToolClick({ currentTarget: { dataset: { relmapAction: "hidelabels" }, checked: true } });
+		expect(root.classList.contains("captions-off")).toBe(true);
+		expect(entry.updates).toEqual([]);
+		// And every caption is still exactly where it was, for everybody.
+		expect(readGraph(entry).edges.link1.label).toBe("exes");
 	});
 });
 
@@ -1937,7 +1581,7 @@ describe("lighting one person's web", () => {
 			classes: ["stonetop-relmap-label-text"],
 			attrs: {
 				role: "button", tabindex: "0", "data-relmap-words": id,
-				"aria-label": id + ". Click to change or rub out this line.", "data-tooltip": id,
+				"aria-label": id + ". Click to change or delete this line.", "data-tooltip": id,
 				x: "10", y: "20", transform: "rotate(15 10 20)",
 			},
 		});
@@ -2063,6 +1707,22 @@ describe("putting the captions away while they would be too small to read", () =
 		expect(root.classList.contains("captions-too-small")).toBe(false);
 	});
 
+	// ⚠ AND THE ONE CAPTION STILL DRAWN AT THAT ZOOM IS BLOWN UP TO BE READABLE. The tie bar has no
+	// text box on it: what a reader types shows on the LINE, and a whole board fitted into the
+	// window is under this threshold -- which is the zoom the map opens at. The stylesheet keeps
+	// the held line's caption; this is the size it keeps it at, in board pixels worked out so the
+	// words come out the same size to read whatever the board is scaled to.
+	it("keeps the held caption readable while the rest are away", () => {
+		const { app, root } = windowWithRoot();
+		const set = {};
+		root.style = { setProperty: (k, v) => { set[k] = v; }, removeProperty: k => { delete set[k]; } };
+		app._drawn = { captionPx: 12 };
+		app._paintCaptionZoom({ scale: 0.25 });
+		expect(set["--relmap-say-px"]).toBe("52px");
+		app._paintCaptionZoom({ scale: 1 });
+		expect(set["--relmap-say-px"]).toBeUndefined();
+	});
+
 	// A board that has not been sized yet must not open blank.
 	it("shows them when it does not know the scale", () => {
 		const { app, root } = windowWithRoot();
@@ -2105,23 +1765,6 @@ describe("healing a stroke that has no caption to carry", () => {
 		expect(line.attrs.d).toBe("BROKEN");
 	});
 
-	it("closes them when the reader turns the captions off", () => {
-		const { app, line } = boardWithLines();
-		app._labels = "off";
-		app._paintLineGaps();
-		expect(line.attrs.d).toBe("WHOLE");
-	});
-
-	// NOT IN `hover` MODE: the captions are still being painted there, one person's at a time, and a
-	// line healed until the pointer arrives would have to break again underneath the caption.
-	it("leaves them cut on a board whose captions appear on hover", () => {
-		const { app, root, line } = boardWithLines();
-		app._labels = "hover";
-		root.classList.add("captions-too-small");
-		app._paintLineGaps();
-		expect(line.attrs.d).toBe("BROKEN");
-	});
-
 	// Only when the answer CHANGES: on a zoom that is once, at the threshold, rather than a hundred
 	// attribute writes on every step of the wheel.
 	it("writes nothing when the answer has not changed", () => {
@@ -2134,71 +1777,16 @@ describe("healing a stroke that has no caption to carry", () => {
 });
 
 // ⚠ WHAT A REPAINT CAN AND CANNOT PUT RIGHT. A live update replaces the BOARD's markup and
-// nothing else, so every panel over it can only be shown, hidden and written into -- never
-// re-rendered. The panel that explains why a view is showing nobody names a person and carries the
-// one button that gets the reader out, and both can change without a render: ticking the box that
-// puts the pulled-in lines away empties a focus ring, and somebody at the far end of the table can
-// remove the last player character.
+// nothing else, so the panel over it can only be shown, hidden and written into -- never
+// re-rendered. Everything it says has to be written on every repaint, because all of it can change
+// without a render: somebody at the far end of the table takes the last person off the board, or an
+// ownership change takes away the right to put anybody back.
 describe("the panel a repaint puts up", () => {
-	const LONELY = {
-		version: 1,
-		nodes: {
-			pim: { uuid: null, name: "Pim", img: "", x: 10, y: 10, note: "" },
-			sela: { uuid: null, name: "Sela", img: "", x: 80, y: 20, note: "" },
-		},
-		edges: {
-			e1: { a: "pim", b: "sela", label: "trusts", ink: "sage", dir: "none", src: "hearts", note: "" },
-		},
-	};
-
 	beforeEach(() => {
 		globalThis.game.i18n = TABLE;
 	});
 
-	it("writes the panel's words AND its button, so the way out is never missing", () => {
-		const made = windowFor(LONELY);
-		made.app._view = "focus";
-		made.app._focus = "pim";
-
-		// The reader's first sight of it: a ring with Sela on it, so no panel and no button needed.
-		made.app._paintChrome(made.app._plan());
-		expect(made.bare.hidden).toBe(true);
-
-		// They tick "hide the lines the sheets drew". The one line to Sela was an imported one, so
-		// the ring empties -- through a REPAINT, which never re-renders the panel.
-		made.app._hidePulled = true;
-		made.app._paintChrome(made.app._plan());
-		expect(made.bare.hidden).toBe(false);
-		expect(made.bareLead.textContent).toContain("Pim");
-		// The button is the only thing in the viewport they can reach while this is up.
-		expect(made.bareCta.hidden).toBe(false);
-		expect(made.bareCta.dataset.relmapAction).toBe("showall");
-		expect(made.bareWords.textContent).toBeTruthy();
-	});
-
-	// \u26a0 AND IT IS SAID OUT LOUD, ONCE. Switching view announces itself because the reader asked
-	// for it; this is the other way round -- the board they were reading emptied under them, because
-	// somebody at the far end of the table took the last person off it. A reader who cannot see the
-	// panel gets no other sign that anything happened.
-	it("announces a panel that appears under the reader, and does not repeat it", () => {
-		const made = windowFor(LONELY);
-		made.app._view = "focus";
-		made.app._focus = "pim";
-		made.app._paintChrome(made.app._plan());
-		made.live.textContent = "";
-
-		made.app._hidePulled = true;
-		made.app._paintChrome(made.app._plan());
-		expect(made.live.textContent).toContain("Pim");
-
-		// A repaint arrives every time anybody touches this map. A live region that repeats itself
-		// is one people learn to ignore.
-		made.live.textContent = "";
-		made.app._paintChrome(made.app._plan());
-		expect(made.live.textContent).toBe("");
-	});
-
-	// ⚠ AND THE EMPTY BOARD'S HEADLINE SURVIVES A REPAINT, which is the failure this catches:
+	// ⚠ THE EMPTY BOARD'S HEADLINE SURVIVES A REPAINT, which is the failure this catches:
 	// `_paintPanel` WRITES every part of the panel it is given, so a sentence settled in `getData`
 	// alone came back undefined here and was blanked outright. The reader was left with a board that
 	// had emptied under them and a panel with no first line -- until the window was fully rendered
@@ -2214,66 +1802,21 @@ describe("the panel a repaint puts up", () => {
 		expect(made.emptyCta.hidden).toBe(false);
 	});
 
-	// The same panel serves every view that can come out empty, and the way out is not the same one
-	// each time -- the tree offers "Find family ties", which WRITES and so is offered to editors
-	// only -- so the action is written onto the button rather than assumed.
-	it("gives the party view its own way back to the whole board", () => {
-		const made = windowFor(LONELY);
-		made.app._view = "party";
-		globalThis.game.actors = { contents: [] };
+	// And it goes away again the moment somebody arrives, without a render.
+	it("takes the panel down when the board stops being empty", () => {
+		const made = windowFor({ nodes: {}, edges: {} });
 		made.app._paintChrome(made.app._plan());
-		expect(made.bare.hidden).toBe(false);
-		expect(made.bareCta.dataset.relmapAction).toBe("showall");
-	});
-
-	/** A window in the focus view whose chooser holds the rows the last render put in it. */
-	const painted = (graph = LONELY, on = "pim") => {
-		const made = windowFor(graph);
-		made.app._view = "focus";
-		made.app._focus = on;
-		made.app._pickSaid = made.app._chrome(made.app._plan()).focusPick;
-		made.pick.innerHTML = made.app._pickSaid;
-		return made;
-	};
-
-	// THE ONE CONTROL ON THE BAR WHOSE CONTENTS COME OFF THE SHARED DOCUMENT. Until this runs, the
-	// chooser cannot be pointed at somebody who has just been put on the map -- and, worse, still
-	// offers a row for anybody taken off it, which picked warns and does nothing.
-	it("writes the chooser's rows again when the cast has changed under the reader", () => {
-		const made = painted();
-		made.app._entry = entryFor({
-			...LONELY,
-			nodes: { ...LONELY.nodes, jen: { uuid: null, name: "Jen", img: "", x: 50, y: 50, note: "" } },
-		});
+		expect(made.empty.hidden).toBe(false);
+		made.app._entry = entryFor(TWO_PEOPLE);
 		made.app._paintChrome(made.app._plan());
-		expect(made.pick.innerHTML).toContain("Jen");
-	});
-
-	// ⚠ AND ONLY THEN. A repaint arrives every time anybody at the table touches this map, and
-	// `innerHTML` on a `<select>` throws away its option elements: an open dropdown shuts, and a
-	// reader who has tabbed to the control loses it, because somebody else dragged a portrait.
-	it("leaves the control alone on a repaint that did not change the cast", () => {
-		const made = painted();
-		made.pick.innerHTML = "UNTOUCHED";
-		made.app._paintChrome(made.app._plan());
-		expect(made.pick.innerHTML).toBe("UNTOUCHED");
-	});
-
-	// A board somebody else has rearranged is not a changed cast either -- but the person in the
-	// MIDDLE is part of the answer, because the picked row is in the same string.
-	it("writes them again when the person in the middle has changed", () => {
-		const made = painted();
-		made.app._focus = "sela";
-		made.app._paintChrome(made.app._plan());
-		expect(made.pick.innerHTML).toContain('value="sela" selected');
+		expect(made.empty.hidden).toBe(true);
 	});
 });
 
-// ⚠ `_plan` IS NOT FREE, and its own doc-block records that building one four times per render
-// was a cost that had to be paid down once: the family view relaxes a column per generation and
-// settles every row, on a pass that runs every time anybody at the table touches the map. So the
-// plan a render was drawn from is handed forward to the listeners wired onto it rather than rebuilt
-// for the two numbers they want out of the sheet.
+// ⚠ `_plan` IS NOT FREE: it reads the document and filters the whole graph, on a pass that runs
+// every time anybody at the table touches the map. So the plan a render was drawn from is handed
+// forward to the listeners wired onto it rather than rebuilt for the two numbers they want out of
+// the sheet.
 describe("the plan a render is drawn from", () => {
 	const MAP = {
 		version: 1,
@@ -2363,10 +1906,9 @@ describe("what happens to the document under the window", () => {
 /** One board of a map: a JournalEntryPage stand-in. */
 // ── What the bar over a line is told ─────────────────────────────────────────
 //
-// ⚠ ASKED OF THE BOARD IN FRONT OF THE READER, NOT OF THE DOCUMENT. Three of the four views seat
-// the portraits themselves, so a line's middle on THIS screen is nowhere near where the stored
-// coordinates put it -- and a bar placed from the document would float over an empty patch of paper
-// on every view but one.
+// ⚠ ASKED OF THE BOARD IN FRONT OF THE READER, NOT OF THE DOCUMENT. The document is read afresh
+// on every repaint, and a repaint is exactly the moment a line's middle moves -- so a bar placed
+// from the document would float over an empty patch of paper until the next one arrived.
 describe("the line a reader has taken hold of", () => {
 	// The arrow buttons are named after the two people, so this block needs the real table back:
 	// an earlier suite replaces `globalThis.game` wholesale and takes `i18n` with it.
@@ -2476,6 +2018,143 @@ describe("the line a reader has taken hold of", () => {
 	});
 });
 
+// ── Drawing one, and rubbing one out ─────────────────────────────────────────
+//
+// BOTH USED TO BE A MODAL. Clicking a line, and drawing one, each opened a window asking six
+// questions about it; four of those are on the bar over the line itself now, rubbing it out is the
+// last press on that bar, and the window is gone. What is left to get right is the two ends of
+// that: a line drawn is a line the reader can immediately say something about, and a line rubbed
+// out is one press with an undo behind it rather than a question.
+describe("drawing a line between two people", () => {
+	beforeEach(() => {
+		globalThis.game.i18n = TABLE;
+		globalThis.ui = { notifications: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } };
+	});
+
+	/** A window whose bar only records what it was asked to take hold of. */
+	const withBar = (graph = TWO_PEOPLE) => {
+		const made = windowFor(graph);
+		made.app._tieBar = { open: vi.fn(), refresh: vi.fn(), flush: vi.fn() };
+		return made;
+	};
+
+	/** The one line a write drew, read back off the leaf paths it was written as. */
+	const drawn = patch => {
+		const fields = {};
+		let id = "";
+		for (const [key, value] of Object.entries(patch)) {
+			const found = /\.edges\.([^.]+)\.(.+)$/.exec(key);
+			id = found[1];
+			fields[found[2]] = value;
+		}
+		return { id, fields };
+	};
+
+	it("draws it at once, saying nothing, in the default ink", async () => {
+		const { app, entry } = withBar();
+		await app._createLink("elena", "stefan");
+		expect(entry.updates).toHaveLength(1);
+		const { fields } = drawn(entry.updates[0]);
+		expect(fields).toMatchObject({ a: "elena", b: "stefan", label: "", ink: "slate" });
+	});
+
+	// THE WHOLE POINT OF LOSING THE WINDOW. The line exists and the bar opens on it with the caret
+	// in the writing field, so "draw a line and say what it is" is one gesture -- and the same one
+	// as clicking a line that is already there.
+	//
+	// ⚠ IT WAITS FOR THE PAINT. The bar places itself over a line from `_drawn`, the geometry the
+	// markup on screen was built from, and the paint standing when a line is drawn was made before
+	// that line existed: asked at the write, the bar finds nothing and silently refuses to open --
+	// a line drawn with no way to say what it is, which is the whole gesture failing quietly.
+	it("waits for the board to have the new line before taking hold of it", async () => {
+		const { app, entry } = withBar();
+		await app._createLink("elena", "stefan");
+		expect(app._tieBar.open).not.toHaveBeenCalled();
+		expect(app._pendingPick).toBe(drawn(entry.updates[0]).id);
+	});
+
+	it("takes hold of it on the repaint the write sets off", async () => {
+		const { app } = withBar();
+		app._pendingPick = "link1";
+		await app._repaintBoard();
+		expect(app._tieBar.open).toHaveBeenCalledWith("link1");
+		// AND ONCE. Left standing, every later repaint -- somebody else moving a portrait, this
+		// reader switching view -- would drag the bar back onto a line they let go of long ago.
+		app._tieBar.open.mockClear();
+		await app._repaintBoard();
+		expect(app._tieBar.open).not.toHaveBeenCalled();
+	});
+
+	it("draws nothing between somebody and themselves, or to a face that has gone", async () => {
+		const { app, entry } = withBar();
+		await app._createLink("elena", "elena");
+		await app._createLink("elena", "nobody");
+		expect(entry.updates).toEqual([]);
+		expect(app._tieBar.open).not.toHaveBeenCalled();
+	});
+
+	// ⚠ AND IN THE SIZE THIS READER LAST ASKED FOR, which is the one thing about a new line that is
+	// not simply the default. A reader who has settled on eighteen-pixel captions -- and the one at
+	// this table on a screen magnifier will -- would otherwise have every line they draw come up at
+	// twelve and have to reach for the chooser again, on a board where six are drawn while the
+	// table talks. It is per CLIENT and never on the map: see relmap/relmap-size.js.
+	it("draws it in the size this client last chose", async () => {
+		globalThis.game.settings = { get: () => 18, set: () => Promise.resolve() };
+		const { app, entry } = withBar();
+		await app._createLink("elena", "stefan");
+		expect(drawn(entry.updates[0]).fields).toMatchObject({ size: 18 });
+	});
+
+	// A client that has never said, which is every client until somebody uses the chooser. Zero is
+	// "whatever the sheet sets", and is what every line ever drawn already holds.
+	it("draws it with no size of its own when this client has never chosen one", async () => {
+		const { app, entry } = withBar();
+		await app._createLink("elena", "stefan");
+		expect(drawn(entry.updates[0]).fields).toMatchObject({ size: 0 });
+	});
+});
+
+describe("rubbing a line out from the bar", () => {
+	beforeEach(() => {
+		globalThis.game.i18n = TABLE;
+		globalThis.ui = { notifications: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } };
+	});
+
+	// ⚠ AND IT ASKS NOTHING, which is the one destructive gesture in this window that does not.
+	// Taking a PERSON off asks because the reader cannot see everything that goes with them; a line
+	// is one thing, they are looking straight at it, and the undo puts it back with what it said.
+	it("takes the line off the map without a question", async () => {
+		const { app, entry } = windowFor();
+		await app._rubOutLink("link1");
+		expect(entry.updates).toHaveLength(1);
+		expect(Object.keys(entry.updates[0]))
+			.toEqual(["flags.stonetop-pwd.relationshipMap.edges.-=link1"]);
+	});
+
+	// Somebody else at the table got there first. Nothing to write, and nothing to say about it:
+	// the line the reader was looking at is already gone from under the bar.
+	it("writes nothing for a line that is no longer there", async () => {
+		const { app, entry } = windowFor();
+		await app._rubOutLink("nosuchline");
+		expect(entry.updates).toEqual([]);
+	});
+
+	// ONE PRESS BACK, and it is what stands in for the confirm this gesture does not ask. On a
+	// living board, so the line actually comes back rather than the write merely being recorded.
+	it("is a change the undo puts back, line and words together", async () => {
+		forgetAllHistory();
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		app._tieBar = { open: vi.fn(), refresh: vi.fn(), flush: vi.fn() };
+		await app._rubOutLink("link1");
+		expect(readGraph(page).edges.link1).toBeUndefined();
+
+		await app._stepHistory("back");
+		expect(readGraph(page).edges.link1).toMatchObject({ a: "elena", b: "stefan", label: "exes" });
+		forgetAllHistory();
+	});
+});
+
 // ── The two things a stroke now carries ──────────────────────────────────────
 describe("what the board draws a line with", () => {
 	it("lays the whole curve under every line for a click to land on", () => {
@@ -2487,16 +2166,68 @@ describe("what the board draws a line with", () => {
 		expect(line.hit).not.toBe(line.d);
 	});
 
-	it("says whether the reader broke this stroke themselves", () => {
+	// ⚠ THE KEY AND NOT A FLAG PER KIND, and "" for a whole stroke. There are three answers (see
+	// RELMAP_DASHES) and the class the board wears is the key itself, so a fourth arrives DRAWN
+	// rather than silently solid -- which is the one failure nothing on the board would show.
+	it("says how the reader broke this stroke, and nothing for one they left whole", () => {
 		const { app } = windowFor();
-		expect(app._boardContext(app._plan()).edges[0].dotted).toBe(false);
+		expect(app._boardContext(app._plan()).edges[0].broken).toBe("");
 
-		const broken = {
+		for (const dash of ["dotted", "dashed"]) {
+			const made = windowFor({
+				...TWO_PEOPLE,
+				edges: { link1: { ...TWO_PEOPLE.edges.link1, dash } },
+			});
+			expect(made.app._boardContext(made.app._plan()).edges[0].broken).toBe(dash);
+		}
+
+		// A stroke the store did not recognise is `solid` by the time it reaches here, so the board
+		// draws it whole rather than hanging a class the stylesheet has never heard of on it.
+		const odd = windowFor({
 			...TWO_PEOPLE,
-			edges: { link1: { ...TWO_PEOPLE.edges.link1, dash: "dotted" } },
-		};
-		const made = windowFor(broken);
-		expect(made.app._boardContext(made.app._plan()).edges[0].dotted).toBe(true);
+			edges: { link1: { ...TWO_PEOPLE.edges.link1, dash: "squiggly" } },
+		});
+		expect(odd.app._boardContext(odd.app._plan()).edges[0].broken).toBe("");
+	});
+});
+
+// ── The colours the table has already used ──────────────────────────────────
+//
+// The second row of the tie bar's palette, and the reason it is read off the map rather than
+// remembered per reader: a table that has settled on one particular purple wants that purple on the
+// next line too, and wants every client at the table offered the same list -- which is exactly what
+// the map already says, with nothing stored anywhere to say it twice.
+describe("the colours of the table's own already on a board", () => {
+	const MANY_INKS = {
+		...TWO_PEOPLE,
+		edges: {
+			l1: { a: "elena", b: "stefan", label: "", ink: "#7a2f8a", dir: "none" },
+			l2: { a: "elena", b: "stefan", label: "", ink: "rose", dir: "none" },
+			l3: { a: "elena", b: "stefan", label: "", ink: "#1d5f4a", dir: "none" },
+			l4: { a: "elena", b: "stefan", label: "", ink: "#7a2f8a", dir: "none" },
+		},
+	};
+
+	// MOST-USED FIRST, so a board where one colour means "owes money" and another was tried once
+	// offers the first of them first. The eight are not in here at all: they have their own row.
+	it("offers each one once, most-used first, and none of the eight", () => {
+		const { app } = windowFor(MANY_INKS);
+		expect(app._inksInUse()).toEqual(["#7a2f8a", "#1d5f4a"]);
+	});
+
+	it("offers nothing at all for a board drawn only in the eight", () => {
+		const { app } = windowFor();
+		expect(app._inksInUse()).toEqual([]);
+	});
+
+	// ⚠ READ OFF THE GRAPH AND NOT OFF `_drawn`, which is the one question this window asks of the
+	// MAP rather than of the board in front of the reader. A narrow view showing eight of forty
+	// people would otherwise offer eight people's worth of colours and lose the rest -- and the
+	// reader would find their purple missing for a reason nothing on screen explains.
+	it("reads the whole map, not the handful of people this view is showing", () => {
+		const { app } = windowFor(MANY_INKS);
+		app._drawn = { graph: { nodes: {}, edges: {} }, shapes: new Map() };
+		expect(app._inksInUse()).toEqual(["#7a2f8a", "#1d5f4a"]);
 	});
 });
 
@@ -2607,13 +2338,13 @@ describe("the pages of one map", () => {
 		expect(entry.pages.contents.flatMap(p => p.updates)).toEqual([]);
 	});
 
-	it("drops the focus and the highlight, which belonged to the board being left", () => {
+	// The highlight belonged to the board being left, and `_lightPerson` would only have to throw
+	// it away again on the next paint.
+	it("drops the highlight, which belonged to the board being left", () => {
 		const entry = TWO_BOARDS();
 		const { app } = windowFor(null, { entry, pageId: "p1" });
-		app._focus = "elena";
 		app._lit = "elena";
 		app.showPage("p2");
-		expect(app._focus).toBeNull();
 		expect(app._lit).toBeNull();
 	});
 
@@ -2900,49 +2631,6 @@ describe("adding a board from the strip", () => {
 		await app._addPage();
 		expect(entry.pages.contents).toHaveLength(2);
 		expect(app.render).not.toHaveBeenCalled();
-	});
-});
-
-// ── Which shape Tidy up lays the board out in ───────────────────────────────────────────────────
-//
-// It asks every time, because the two shapes are not better and worse: a ring is the poster of who
-// is at this table, clusters the diagram of who the factions are, and the same map wants each of
-// them on different evenings. What it must not do is reorder the question to say which one the
-// board is already in.
-
-describe("asking which shape to lay the board out in", () => {
-	beforeEach(() => {
-		chooser.asked.length = 0;
-		chooser.answer = null;
-	});
-
-	// ⚠ THE ROWS STAY PUT, and the default is SAID rather than sorted to the top. Reordering is how
-	// a reader loses the order they had learned -- Ring above Clusters on one board and below it on
-	// the next, so the row under the pointer depends on something nobody was thinking about -- and
-	// it gives no hint why the second row is the pre-selected one.
-	it("keeps the rows in one order and names the board's own shape as the default", async () => {
-		const { app } = windowFor();
-		await app._askShape("clusters");
-		const [config] = chooser.asked;
-		expect(config.options.map(row => row.id)).toEqual(["ring", "clusters"]);
-		expect(config.selected).toBe("clusters");
-	});
-
-	it("opens on the ring for a board that has never been laid out", async () => {
-		const { app } = windowFor();
-		await app._askShape(undefined);
-		expect(chooser.asked[0].options.map(row => row.id)).toEqual(["ring", "clusters"]);
-		expect(chooser.asked[0].selected).toBe("ring");
-	});
-
-	// The answer still comes back through the same guard, so a row id this version has never heard
-	// of cannot reach the layout or the flag it is written into.
-	it("hands back a known shape, or nothing when the reader backs out", async () => {
-		const { app } = windowFor();
-		chooser.answer = "clusters";
-		expect(await app._askShape("ring")).toBe("clusters");
-		chooser.answer = null;
-		expect(await app._askShape("ring")).toBe(null);
 	});
 });
 

@@ -89,31 +89,35 @@ function clearTravel(el) {
  *                                      and the dialog behind it is one button further on.
  * @param {Function} handlers.onPickNone `() => void` — a click that landed on the board and on
  *                                      nothing on it, which is how a reader lets a line go.
- * @param {Function} handlers.onRemove  `id => void` — Delete pressed on a focused portrait.
+ * @param {Function} handlers.onRemove  `id => void` — take this person off the map. Reached two
+ *                                      ways: Delete on a focused portrait, and the trash can a
+ *                                      right press puts on one (see `onArm`).
+ * @param {Function} handlers.onArm     `(id|null) => void` — show the trash can on one portrait,
+ *                                      or on nobody. NOT a removal and never confirmed: it is the
+ *                                      board saying which person the next press could take off.
+ *                                      The window owns the mark rather than this layer, because
+ *                                      the board's markup is the window's and a repaint replaces
+ *                                      every portrait on it.
  * @param {Function} handlers.canEdit   `() => boolean` — re-asked per gesture, because a map's
  *                                      ownership can change while a board is open.
  * @param {Function} handlers.canMove   `() => boolean` — whether a PORTRAIT may be picked up,
- *                                      asked separately from `canEdit` and defaulting to it. The
- *                                      narrow views work the portraits out for themselves and write
- *                                      none of them, so on those boards a drag would have nowhere
- *                                      to be remembered and would spring back; every other gesture
- *                                      (open a sheet, open a line) still means what it always did.
- *                                      Refused at the press, so the click a press becomes still
- *                                      opens the sheet.
+ *                                      asked separately from `canEdit` and defaulting to it, so a
+ *                                      board that draws its own seats could still refuse the drag
+ *                                      while every other gesture (open a sheet, open a line) went
+ *                                      on meaning what it always did. Refused at the press, so the
+ *                                      click a press becomes still opens the sheet.
  * @param {Function} handlers.canRemove `() => boolean` — whether Delete on a focused portrait may
  *                                      take that person off the map. Its own question and not part
- *                                      of `canEdit`: on a board that seats itself, Delete would be
- *                                      the ONE writing gesture the keyboard still offered, and the
- *                                      destructive one — a reader tabbing round a six-face view and
- *                                      pressing it would rub that person and every line touching
- *                                      them (including the ones the view is not drawing) off the
- *                                      shared map. Defaults to `canEdit`, which is what a board the
- *                                      reader can rearrange means.
+ *                                      of `canEdit`, for the same reason: Delete is the one writing
+ *                                      gesture the keyboard offers and the destructive one, so a
+ *                                      board that refuses drags must be able to refuse it too
+ *                                      rather than inherit a yes. Defaults to `canEdit`, which is
+ *                                      what a board the reader can rearrange means.
  * @returns {Function} teardown.
  */
 export function wireRelmapDrag(root, {
 	surface, nodeAt, onMove, onNudge, onDragMove, onDragEnd, onLink, onLinkFrom, onOpen, onPickEdge,
-	onPickNone, onRemove,
+	onPickNone, onRemove, onArm,
 	canEdit = () => true,
 	canMove = canEdit,
 	canRemove = canEdit,
@@ -127,6 +131,27 @@ export function wireRelmapDrag(root, {
 	// Set by a release that ENDED A REAL DRAG, and read by the one click the browser derives from
 	// it. See the click handler for why the pointer capture is not left to do this on its own.
 	let swallowClick = false;
+	// WHERE THE PRESS BEHIND THE CLICK LANDED, remembered because by the time the click arrives the
+	// answer is gone: a press on bare paper is a pan, the pan surface captures the pointer, and the
+	// capture RETARGETS the derived click at the viewport. See the click handler.
+	let paperPress = null;
+	// WHERE A RIGHT PRESS ON A PORTRAIT LANDED, and on whom, remembered for the release to judge.
+	// See the pointerdown handler for why the gesture is built out of these two rather than out of
+	// the `contextmenu` it so obviously wants to be.
+	let rightPress = null;
+
+	/**
+	 * Whether an element is somewhere a click means "let go of whatever was being held".
+	 *
+	 * ⚠ ASKED AFFIRMATIVELY, and it has to stay that way. These listeners are on the VIEWPORT,
+	 * which holds the board PLUS chrome -- the tie bar floats in it, and its own swatches arrive
+	 * here. Written as a list of chrome to skip, the next thing put in the viewport reads as
+	 * "clicked bare paper" and closes the bar under the press operating it, which is the fault this
+	 * guard exists for, rediscovered once per widget. Chrome is always a real element mounted IN the
+	 * viewport, so the viewport itself is the mat around a board that does not fill it: bare paper
+	 * of a second kind, and not a way in for anything mounted there.
+	 */
+	const isPaper = el => el === view || !!board.contains?.(el);
 
 	/** The rubber band a half-drawn line is shown as. Made once, reused, never re-rendered. */
 	const rubber = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -268,7 +293,50 @@ export function wireRelmapDrag(root, {
 	}
 
 	view.addEventListener("pointerdown", ev => {
+		// BEFORE EVERY GUARD BELOW, because this is not about dragging at all: it is the note the
+		// click handler reads to tell a let-go from a pan, and it has to be taken on the presses
+		// that arm no drag -- which is every press on bare paper, the only kind that matters to it.
+		paperPress = ev.button === 0 && isPaper(ev.target)
+			? { x: ev.clientX, y: ev.clientY }
+			: null;
+		// AND THE OTHER BUTTON'S NOTE, taken here for the same reason: by the time the release
+		// arrives there is no telling where the press began, and this gesture is entirely about
+		// whether it stayed put.
+		//
+		// ⚠ IT IS NOT A `contextmenu` LISTENER, which is the obvious way to write "right-click a
+		// portrait" and is unavailable twice over. Foundry preventDefaults contextmenu on the whole
+		// document (`Game#activateListeners`), so there is no menu being replaced and no event any
+		// part of this app is built to rely on; and by the time one would fire, the pan surface has
+		// taken a pointer capture on the viewport, which retargets what the browser derives from
+		// that pointer -- so the very portrait the gesture is about would not be its target. The
+		// pointerdown and the pointerup are already ours, already arrive, and between them say
+		// everything the gesture needs.
+		//
+		// THE RIGHT BUTTON ALSO PANS THE BOARD, from anywhere, deliberately (utils/zoom-pan-surface.js:
+		// a press aimed at open paper lands on one of a hundred lines, so the right button asks
+		// nothing about what is under it). That is not a conflict to resolve, it is the thing the
+		// release measures: a right DRAG is a pan, and only a right press that went nowhere is the
+		// reader pointing at somebody.
+		const rightNode = ev.button === 2 ? ev.target.closest?.("[data-relmap-node]") : null;
+		rightPress = rightNode
+			? { id: rightNode.dataset.relmapNode, x: ev.clientX, y: ev.clientY }
+			: null;
 		if (ev.button !== 0 || drag || !canEdit()) return;
+		// AND NOT WHILE THE BOARD ITSELF IS BEING DRAGGED. A left press made with the RIGHT button
+		// already down is a press made mid-pan (utils/zoom-pan-surface.js: the right button drags
+		// the board from anywhere, precisely so a line in the way cannot stop it). Arming a node
+		// drag under that would move a portrait and the board it stands on at once, and the pan's
+		// pointer capture ends this drag on release wherever it happens to have reached -- a real
+		// edit to somebody else's map from a press that was only meant to steady the hand. The
+		// surface refuses the mirror image of this for the same reason. A host reporting no
+		// `buttons` compares false and drags, as the tests' fake events do.
+		if (ev.buttons > 1) return;
+		// ⚠ THE TRASH CAN IS NOT A PLACE TO PICK A PORTRAIT UP BY, and it sits INSIDE the node, so
+		// without this the press that means "take them off" arms a drag of the person it is about:
+		// a hand that shifts three pixels between press and release then moves them across the
+		// board instead, and `swallowClick` eats the click the button was waiting for. Returning
+		// rather than consuming leaves the click intact, which is the whole of what this button is.
+		if (ev.target.closest?.("[data-relmap-remove]")) return;
 		const handle = ev.target.closest?.("[data-relmap-handle]");
 		const node = ev.target.closest?.("[data-relmap-node]");
 		if (!handle && !node) return;
@@ -333,6 +401,20 @@ export function wireRelmapDrag(root, {
 	});
 
 	view.addEventListener("pointerup", ev => {
+		// THE RIGHT BUTTON LET GO, which arms no drag and so never reaches anything below. A press
+		// that stayed on the portrait it started on puts that person's trash can on the board; one
+		// that travelled was a pan of the board and means nothing about anybody.
+		//
+		// The threshold is the one a portrait drag lifts at, so "did this move" has a single answer
+		// everywhere on this board. `canRemove` and not `canEdit`: the can is the only thing this
+		// gesture can lead to, and a board that refuses the removal must not offer the button.
+		if (ev.button === 2) {
+			const press = rightPress;
+			rightPress = null;
+			const stayedPut = press && !isLiftedDrag(ev.clientX - press.x, ev.clientY - press.y);
+			if (stayedPut && canRemove()) onArm?.(press.id);
+			return;
+		}
 		if (!drag || ev.pointerId !== drag.pointerId) return;
 		// Never crossed the threshold. Tear down WITHOUT consuming the event, so the click
 		// handlers below still see it and a press on a portrait still opens a sheet.
@@ -374,6 +456,10 @@ export function wireRelmapDrag(root, {
 	});
 
 	view.addEventListener("pointercancel", ev => {
+		// A right press the system took away is not a press that stayed put; it is a press that
+		// never finished. Cleared unconditionally, because the note is about one pointer at a time
+		// and a stale one would arm a trash can on the NEXT release anywhere on the board.
+		rightPress = null;
 		// Checked, or a second finger anywhere on the board kills a live drag.
 		if (drag && ev.pointerId === drag.pointerId) end();
 	});
@@ -393,6 +479,17 @@ export function wireRelmapDrag(root, {
 	// the derived click. One boolean says it outright, and can be tested without a real DOM.
 	view.addEventListener("click", ev => {
 		if (swallowClick) { swallowClick = false; return; }
+		// THE TRASH CAN FIRST OF ALL, and it is the one press on this board that does NOT also mean
+		// "put that can away" -- everything below this line does.
+		const bin = ev.target.closest?.("[data-relmap-remove]");
+		if (bin) { ev.preventDefault(); if (canRemove()) onRemove?.(bin.dataset.relmapRemove); return; }
+		// ⚠ AND EVERY OTHER CLICK PUTS IT AWAY, which is the whole of how it closes. A control that
+		// appears on one gesture has to disappear on the next thing the reader does, or a board
+		// clicked around for an evening ends up wearing a delete button on half the people on it --
+		// and this is the surface a table clicks around on while talking. The same bargain the tie
+		// bar strikes with `onPickNone` below, made here because it must cover the clicks that bar
+		// never sees: a face, a caption, a stroke, the handle.
+		onArm?.(null);
 		const handle = ev.target.closest?.("[data-relmap-handle]");
 		if (handle) { ev.preventDefault(); if (canEdit()) onLinkFrom?.(handle.dataset.relmapHandle); return; }
 		// THE WORDS FIRST AND THE STROKE SECOND, though either one takes hold of the same line: a
@@ -411,13 +508,25 @@ export function wireRelmapDrag(root, {
 		if (face) { ev.preventDefault(); onOpen?.(face.dataset.relmapOpen); return; }
 		// NOTHING ON THE BOARD. Not `preventDefault`: a press on bare paper is the pan surface's,
 		// and this is only the window being told that whatever was being held has been let go.
+		// `isPaper` says what counts as bare paper and why it is asked affirmatively.
 		//
-		// ⚠ ASKED AFFIRMATIVELY: did this land ON THE BOARD. These listeners are on the VIEWPORT,
-		// which holds the board PLUS chrome -- the tie bar floats in it, and its own swatches arrive
-		// here. Written as a list of chrome to skip, the next thing put in the viewport reads as
-		// "clicked bare paper" and closes the bar under the press operating it, which is the fault
-		// this guard exists for, rediscovered once per widget.
-		if (board.contains?.(ev.target)) onPickNone?.();
+		// AND THE PRESS ANSWERS FOR THE CLICK, because by then the click no longer knows where it
+		// landed. Every press on bare paper starts a pan, the pan surface takes the pointer capture
+		// to keep the pan alive off the edge of the window, and the capture RETARGETS the derived
+		// click at the VIEWPORT. So the one gesture that lets a line go arrived at the one element
+		// `board.contains` refuses, and a tie bar opened by a click could not be dismissed by
+		// clicking away from it AT ALL: the route was here, wired, tested, and no click in a real
+		// browser ever reached it.
+		//
+		// A PAN IS NOT A LET-GO, which is what the travel is measured for. Dragging the board about
+		// with a line's bar open is reading the map, not putting the line down -- the bar rides
+		// along with the board it points at -- so only a press that stayed put lets go. The
+		// threshold is the one a portrait drag lifts at, so "did this move" has one answer here.
+		const stayedPut = paperPress
+			? !isLiftedDrag(ev.clientX - paperPress.x, ev.clientY - paperPress.y)
+			: false;
+		paperPress = null;
+		if (isPaper(ev.target) && (stayedPut || board.contains?.(ev.target))) onPickNone?.();
 	});
 
 	// ── Keyboard ────────────────────────────────────────────────────────────
@@ -454,7 +563,13 @@ export function wireRelmapDrag(root, {
 		// claims Enter and Space and nothing else. A reader tabbing this board therefore alternates
 		// between a stop that swallows Delete and one that does not, which is the worst possible
 		// shape for a key with the consequence below.
-		const mine = face ?? ev.target.closest?.("[data-relmap-edge], [data-relmap-handle]");
+		// ⚠ `[data-relmap-remove]` IS IN THIS LIST FOR THE REASON THE PARAGRAPH ABOVE GIVES, and it
+		// is the newest tab stop on the board: a trash can that is showing is focusable, sits
+		// beside the handle, and carries no `data-relmap-open` of its own. Left out, a reader who
+		// tabbed onto it and pressed Delete -- the one key that means on that button exactly what
+		// the button means -- would hand the keystroke to the scene behind this window.
+		const mine = face
+			?? ev.target.closest?.("[data-relmap-edge], [data-relmap-handle], [data-relmap-remove]");
 		if (!mine) return;
 		const step = ev.shiftKey ? NUDGE_FINE : NUDGE_STEP;
 		const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[ev.key];

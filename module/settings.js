@@ -1435,6 +1435,18 @@ export function registerSettings() {
 		default: {},
 	});
 
+	// How big this client last asked the writing on a relationship line to be, in board pixels, so
+	// that the next line they draw is set in it. Internal, per client (a reader on a magnifier and
+	// a reader at 1:1 want different answers, and neither is the map's business), and NOT nested by
+	// world: it holds a number rather than an id, and how big somebody likes their type is the same
+	// fact in every world. Zero means they never said. See relmap/relmap-size.js.
+	game.settings.register(SYSTEM_ID, "lastCaptionSize", {
+		scope: "client",
+		config: false,
+		type: Number,
+		default: 0,
+	});
+
 	// Strip the decorative animations, transitions, and hover-zoom image popups
 	// from Stonetop UI for users who find them distracting or are motion-sensitive.
 	// Drives the `stonetop-reduce-motion` root class.

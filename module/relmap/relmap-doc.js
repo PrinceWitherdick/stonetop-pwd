@@ -40,8 +40,8 @@ import { SYSTEM_ID } from "../system-id.js";
 import { localize } from "../utils/i18n.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
 import {
-	RELMAP_FLAG, RELMAP_VERSION, addEdgePatch, addNodePatch, edgePatch, emptyGraph, nodeIdentity,
-	normalizeGraph, relmapPath,
+	RELMAP_FLAG, RELMAP_VERSION, addEdgePatch, addNodePatch, edgePatch, emptyGraph, normalizeGraph,
+	relmapFlagPath, relmapPath,
 } from "./relmap-store.js";
 import { RELMAP_PARTY_FLAG, RELMAP_PARTY_MARK, partyBoardPlan } from "./relmap-party.js";
 import { RELMAP_VILLAGE_FLAG, RELMAP_VILLAGE_MARK, villageBoardPlan } from "./relmap-village.js";
@@ -649,7 +649,7 @@ export async function syncVillagePage(entry, people = []) {
 	// ONE WRITE for the whole thing, as leaf paths so it merges with somebody else's concurrent drag
 	// rather than replacing the `nodes` object out from under it. The ledger rides along in the same
 	// write, so a board cannot end up holding people it has no record of handing over.
-	const patch = { [`flags.${SYSTEM_ID}.${RELMAP_VILLAGE_FLAG}.seated`]: plan.seated };
+	const patch = { [relmapFlagPath(RELMAP_VILLAGE_FLAG, "seated")]: plan.seated };
 	for (const [id, node] of Object.entries(plan.nodes)) Object.assign(patch, addNodePatch(id, node) ?? {});
 	await applyPatch(page, patch);
 	// THE MARK AFTER THE BOARD, the order `createPartyPage` keeps and for the same reason: a mark

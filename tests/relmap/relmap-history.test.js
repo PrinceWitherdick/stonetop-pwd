@@ -5,9 +5,8 @@ import {
 } from "../../module/relmap/relmap-history.js";
 import {
 	addEdgePatch, addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, nodePatch, normalizeGraph,
-	relmapPath, tidyPatch,
+	relmapPath,
 } from "../../module/relmap/relmap-store.js";
-import { RELMAP_SHAPE_CLUSTERS, RELMAP_SHAPE_RING } from "../../module/utils/relmap-layout.js";
 
 // TAKING A CHANGE BACK ON THE RELATIONSHIP MAP.
 //
@@ -22,12 +21,15 @@ const PREFIX = relmapPath();
 /** Two people and one line between them. */
 function graph(over = {}) {
 	return normalizeGraph({
-		shape: RELMAP_SHAPE_RING,
 		nodes: {
 			elena: { uuid: "Actor.a1", name: "Elena", img: "e.webp", x: 20, y: 30 },
 			stefan: { uuid: "Actor.b2", name: "Stefan", img: "s.webp", x: 70, y: 30 },
 		},
-		edges: { link1: { a: "elena", b: "stefan", label: "exes", ink: "rose" } },
+		// ⚠ THE LINE CARRIES A SIZE OF ITS OWN, which is not decoration in a fixture. Putting a
+		// rubbed-out line back is a deep comparison against every field an edge has, so a field
+		// added to the store and forgotten in `addEdgePatch` fails HERE -- the line comes back
+		// looking right and set in the ordinary size, with nothing else in the suite to notice.
+		edges: { link1: { a: "elena", b: "stefan", label: "exes", ink: "rose", size: 18 } },
 		...over,
 	});
 }
@@ -91,22 +93,6 @@ describe("what one write does, and what would put it back", () => {
 		const back = afterPatch(after, stepPatch(after, change.back));
 		expect(back.edges.link1.label).toBe("exes");
 		expect(back.edges.link1.ink).toBe("rose");
-	});
-
-	it("remembers the shape a tidy-up put the board into, alongside every seat", () => {
-		const before = graph();
-		const patch = tidyPatch(
-			{ elena: { left: 10, top: 10 }, stefan: { left: 90, top: 90 } },
-			RELMAP_SHAPE_CLUSTERS,
-		);
-		const change = describeWrite(before, patch);
-		const after = afterPatch(before, patch);
-		expect(after.shape).toBe(RELMAP_SHAPE_CLUSTERS);
-
-		const back = afterPatch(after, stepPatch(after, change.back));
-		expect(back.shape).toBe(RELMAP_SHAPE_RING);
-		expect(back.nodes.elena.x).toBe(20);
-		expect(back.nodes.stefan.x).toBe(70);
 	});
 });
 
@@ -398,7 +384,7 @@ describe("a burst that the reader means as one change", () => {
 		const before = graph();
 		const stack = history();
 		let at = before;
-		for (const ink of ["sage", "ochre", "teal"]) {
+		for (const ink of ["green", "ochre", "crimson"]) {
 			const patch = edgePatch("link1", { ink });
 			stack.record({ ...describeWrite(at, patch), coalesce: "edge:link1" });
 			at = afterPatch(at, patch);

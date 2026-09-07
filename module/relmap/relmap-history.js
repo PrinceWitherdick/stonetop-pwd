@@ -31,7 +31,7 @@ import {
 	addEdgePatch, addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, isSafeId, nodePatch,
 	relmapPath,
 } from "./relmap-store.js";
-import { RELMAP_SHAPE_DEFAULT, normalizeShape } from "../utils/relmap-layout.js";
+
 import { deletionTarget } from "../utils/foundry-compat.js";
 
 /**
@@ -39,8 +39,8 @@ import { deletionTarget } from "../utils/foundry-compat.js";
  *
  * The ask was "at least twenty", and this is that with room to spare rather than exactly twenty,
  * because the number a reader actually feels is not the count of writes: a caption typed in a burst
- * coalesces into one, but laying the board out again is one step, and so is each of the six
- * portraits somebody nudges after it. Twenty-five costs nothing — a step is a handful of small
+ * coalesces into one, but each of the six portraits somebody nudges after it is a step of its own.
+ * Twenty-five costs nothing — a step is a handful of small
  * objects — and it is the difference between "I can get back to before I started fiddling" and
  * "nearly".
  */
@@ -71,7 +71,6 @@ const KINDS = Object.freeze(["nodes", "edges"]);
  * pressing, is what lets an undo recorded ten minutes ago still be safe to apply.
  *
  * @typedef {object} RelmapStep
- * @property {string} [shape]  the layout the board is to be recorded as, where the step touches it.
  * @property {Array<{kind: string, id: string, data: object}>} make  people and lines to re-create whole.
  * @property {Array<{kind: string, id: string, field: string, value: *}>} set  one field each.
  * @property {Array<{kind: string, id: string}>} drop  people and lines to take off.
@@ -123,12 +122,6 @@ export function describeWrite(graph, patch) {
 		if (!path.startsWith(prefix)) return null;
 		const parts = path.slice(prefix.length).split(".");
 
-		if (!target && parts.length === 1 && parts[0] === "shape") {
-			forward.shape = normalizeShape(value);
-			back.shape = normalizeShape(graph?.shape ?? RELMAP_SHAPE_DEFAULT);
-			continue;
-		}
-
 		const [kind, id, field] = parts;
 		if (!KINDS.includes(kind) || !isSafeId(id)) return null;
 		if (target) {
@@ -170,8 +163,7 @@ export function describeWrite(graph, patch) {
 		if (was) back.make.push({ kind, id, data: { ...was } });
 	}
 
-	if (forward.shape === undefined
-		&& !forward.make.length && !forward.set.length && !forward.drop.length) return null;
+	if (!forward.make.length && !forward.set.length && !forward.drop.length) return null;
 	return { forward, back };
 }
 
@@ -203,7 +195,6 @@ export function describeWrite(graph, patch) {
 export function stepPatch(graph, step) {
 	if (!step) return null;
 	const patch = {};
-	if (step.shape !== undefined) patch[relmapPath("shape")] = normalizeShape(step.shape);
 
 	const make = step.make ?? [];
 	// Who will be on the board once this step has landed: what is there now, plus what this very
@@ -257,7 +248,6 @@ export function stepPatch(graph, step) {
 function foldSteps(first, second, keep) {
 	const later = keep === "later";
 	const out = {
-		shape: later ? second.shape ?? first.shape : first.shape ?? second.shape,
 		make: [...first.make, ...second.make],
 		set: [...first.set],
 		drop: [...first.drop, ...second.drop],
@@ -270,7 +260,6 @@ function foldSteps(first, second, keep) {
 		// Already held, so the earlier value is the one already in `out` and there is nothing to do.
 		else if (later) out.set[at] = one;
 	}
-	if (out.shape === undefined) delete out.shape;
 	return out;
 }
 

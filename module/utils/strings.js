@@ -59,9 +59,9 @@ export function escapeRegExp(v) {
  * inside a character class but a SyntaxError under the `u` flag this needs for `\p{L}` — see the
  * warning on it. The set below is the same one minus the hyphen.
  *
- * The one whole-word matcher: relmap-kin.js guesses a family tie from a caption and relmap-intros.js
- * finds who an introduction answer names, and the two agreeing about where a word ends is the whole
- * of what keeps one of them from reading a name out of the middle of another.
+ * The one whole-word matcher: relmap-intros.js finds who an introduction answer names, and every
+ * reader of a name agreeing about where a word ends is the whole of what keeps one of them from
+ * reading a name out of the middle of another.
  *
  * @param {string} word  matched literally; regex metacharacters in it are escaped.
  * @param {string} [flags]  always includes `u`; pass "i" for a case-insensitive match.

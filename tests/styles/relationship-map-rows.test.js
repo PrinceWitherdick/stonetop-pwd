@@ -3,23 +3,27 @@ import { readCss, readRepo, declarations } from "../fakes/css.js";
 
 // THE RELATIONSHIP MAP WINDOW IS A GRID, AND ITS ROWS ARE NAMED ONE BY ONE.
 //
-// ⚠ WHY THIS FILE EXISTS. The window used to be a four-row grid relying on AUTO-PLACEMENT, and the
-// day a fifth child (the page strip) was added above the viewport, the board landed in an `auto`
-// row and collapsed to ZERO HEIGHT: a window with a bar, a strip, and no map at all, from a change
-// that never touched the viewport's own rule. Nothing logged, nothing threw, and every unit test in
-// the feature went on passing — the markup was all present and correct, in a box no pixels high.
+// ⚠ WHY THIS FILE EXISTS. The window used to be a grid relying on AUTO-PLACEMENT, and the day a
+// child (the page strip) was added above the viewport, the board landed in an `auto` row and
+// collapsed to ZERO HEIGHT: a window with a bar, a strip, and no map at all, from a change that
+// never touched the viewport's own rule. Nothing logged, nothing threw, and every unit test in the
+// feature went on passing — the markup was all present and correct, in a box no pixels high.
 //
-// It cannot happen twice, because every child now names its row. This suite is what holds that
-// true: it checks that each element the template puts directly inside the root has a `grid-row`,
-// that the numbers run 1..5 without a gap or a repeat, and that the viewport's row is the `1fr` one
+// A row has since been REMOVED as well: the toolbar over the board is gone, its buttons moved down
+// into the footer, and the four rows that are left renumbered. That is the same fault from the
+// other direction, which is why the count is asserted and not only the shape.
+//
+// It cannot happen again, because every child names its row. This suite is what holds that true:
+// it checks that each element the template puts directly inside the root has a `grid-row`, that
+// the numbers run 1..n without a gap or a repeat, and that the viewport's row is the `1fr` one
 // (an `auto` row there sizes to the board's own 960px and pushes the window's scrollbar out
 // instead of clipping).
 //
 // It also pins the single COLUMN. An implicit grid column is `minmax(auto, max-content)`, so it
 // grows past the window to fit the widest row: twelve named boards measured 1825px of grid inside a
 // 760px window, carrying the page tools off the right-hand edge. Every row here deals with not
-// fitting in its own way (the bar wraps, the strip scrolls, the viewport clips), and all three of
-// those need the column pinned to the width there actually is.
+// fitting in its own way (the strip scrolls, the footer wraps, the viewport clips), and all three
+// of those need the column pinned to the width there actually is.
 
 const CSS = readCss();
 const WINDOW_TEMPLATE = readRepo("templates/dialogs/relationship-map.hbs");
@@ -52,9 +56,11 @@ function directChildClasses() {
 }
 
 describe("the relationship map window's grid", () => {
-	it("is a grid with five rows and the viewport's the flexible one", () => {
+	it("is a grid with four rows and the viewport's the flexible one", () => {
+		// The page strip, the viewport, the footer, and the live region. There is no toolbar row:
+		// every button this window has now stands in the footer under the board.
 		const rows = ROOT_RULE?.match(/grid-template-rows\s*:\s*([^;]+);/)?.[1].trim();
-		expect(rows).toBe("auto auto 1fr auto auto");
+		expect(rows).toBe("auto 1fr auto auto");
 	});
 
 	// ⚠ The `1fr` must be the row the VIEWPORT is on. Those two facts live in two different rules,

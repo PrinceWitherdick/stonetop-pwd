@@ -72,7 +72,7 @@ describe("finding who an answer is about", () => {
 		expect(namedIn("I put it to Sela, who only nodded once.", PARTY)).toBe("Actor.sela");
 	});
 
-	// THE EARLIEST NAME WINS, the same rule `guessKin` follows next door. These are prose: the
+	// THE EARLIEST NAME WINS, which is right for prose: the
 	// person the sentence is about is the one it opens with, and anybody named later is scenery.
 	it("takes the first person named, not the last", () => {
 		expect(namedIn("Marrec, though Sela would tell it differently.", PARTY)).toBe("Actor.marrec");

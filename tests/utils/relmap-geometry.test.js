@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
-	RELMAP_BOARD_ASPECT, RELMAP_BOARD_MAX, RELMAP_BOARD_WIDTH, boardMetrics, clampPct, clearanceBow,
+	RELMAP_BOARD_ASPECT, RELMAP_BOARD_MAX, RELMAP_BOARD_WIDTH, RELMAP_CAPTION_PX, boardMetrics,
+	clampPct, clearanceBow,
 	edgeArrowheads, edgeBow, edgeCurve, edgeLabelAnchor, fanBow, freeSpot, labelCapPx, labelSize,
-	captionRoomPx, captionSize, curveWithGap, nodeRadiusPct, ringLayout, ringsLayout,
+	captionRoomPx, captionSize, curvePoints, curveWithGap, nodeRadiusPct, ringsLayout,
 	spreadLabels,
 } from "../../module/utils/relmap-geometry.js";
 
@@ -131,6 +132,53 @@ describe("the curve between two portraits", () => {
 	});
 });
 
+// WHERE THE WHOLE STROKE GOES, for the tie bar, which has to keep OFF the line rather than sit on
+// it -- and the middle of a line says nothing about where the rest of it runs.
+describe("walking a line end to end", () => {
+	const curve = edgeCurve({
+		from: { left: 20, top: 50 }, to: { left: 80, top: 50 }, bow: 1, aspect: ASPECT,
+		r: nodeRadiusPct(72, 1200),
+	});
+
+	it("starts at one end, finishes at the other, and cuts the rest evenly", () => {
+		const points = curvePoints(curve, 8);
+		expect(points).toHaveLength(9);
+		expect(points[0].left).toBeCloseTo(curve.from.left, 6);
+		expect(points[0].top).toBeCloseTo(curve.from.top, 6);
+		expect(points[8].left).toBeCloseTo(curve.to.left, 6);
+		expect(points[8].top).toBeCloseTo(curve.to.top, 6);
+	});
+
+	// ⚠ ON THE CURVE, NOT ON THE CHORD. A bowed line's middle is a long way off the straight run
+	// between its ends, and points taken off that chord would tell a caller the line was somewhere
+	// it is not -- which for the tie bar means dodging empty board and sitting on the stroke.
+	it("follows the bow rather than the straight run between the ends", () => {
+		const points = curvePoints(curve, 8);
+		for (let i = 1; i < 8; i++) {
+			const t = i / 8;
+			const on = pointOn(curve, t);
+			expect(points[i].left).toBeCloseTo(on.left, 6);
+			expect(points[i].top).toBeCloseTo(on.top, 6);
+		}
+		// And the middle really has left the chord, or the check above proves nothing.
+		expect(Math.abs(points[4].top - 50)).toBeGreaterThan(1);
+	});
+
+	// ⚠ IN THE PERCENTAGES THE CURVE IS WRITTEN IN, unflattened. The stroke is painted into a layer
+	// stretched with `preserveAspectRatio="none"`, so these numbers times the painted box is exactly
+	// where the reader sees that piece of line; correcting for the aspect here would hand back
+	// points off the drawing on every board that is not square.
+	it("answers in the same space the curve was given in", () => {
+		const [first] = curvePoints(curve, 4);
+		expect(first).toEqual({ left: curve.from.left, top: curve.from.top });
+	});
+
+	it("has nothing to walk when there is no curve", () => {
+		expect(curvePoints(null)).toBe(null);
+		expect(curvePoints({ from: { left: 1, top: 1 } })).toBe(null);
+	});
+});
+
 describe("where a link's label rides", () => {
 	const r = nodeRadiusPct(72, 1200);
 
@@ -170,6 +218,69 @@ describe("where a link's label rides", () => {
 
 	it("has nothing to place for a link that could not be drawn", () => {
 		expect(edgeLabelAnchor(null, ASPECT)).toBeNull();
+	});
+
+	// A caption is set STRAIGHT (warping type is what made this board unaffordable to paint), so on
+	// a bowed line a straight run is laid over a curved one and the two can only meet in some
+	// places. Told how long the words are, the run is the CHORD of the stretch they cover: it meets
+	// the curve at the two joins, which are the only places a reader can check.
+	describe("the straight run a caption of a given width covers", () => {
+		const bowed = edgeCurve({
+			from: { left: 15, top: 50 }, to: { left: 85, top: 50 }, bow: 2, aspect: ASPECT, r,
+		});
+		/** How far a point is from the curve, in the space the eye is in. */
+		const offCurve = point => {
+			let best = Infinity;
+			for (let i = 0; i <= 800; i++) best = Math.min(best, seen(point, pointOn(bowed, i / 800)));
+			return best;
+		};
+		/** The two ends of a caption `span` wide, seated by `edgeLabelAnchor`. */
+		const endsOf = span => {
+			const anchor = edgeLabelAnchor(bowed, ASPECT, 0.5, span);
+			const rad = (anchor.angle * Math.PI) / 180;
+			// Back into percentages: the angle is the one the EYE sees, so the step down is taken
+			// in flat units and stretched again.
+			return [-1, 1].map(way => ({
+				left: anchor.left + way * (span / 2) * Math.cos(rad),
+				top: anchor.top + way * (span / 2) * Math.sin(rad) * ASPECT,
+			}));
+		};
+
+		it("lands both ends of the words ON the line, where the stroke picks up again", () => {
+			for (const end of endsOf(20)) expect(offCurve(end)).toBeLessThan(0.05);
+		});
+
+		it("used to leave them off it, which is what a reader saw as a caption beside its line", () => {
+			const tangent = edgeLabelAnchor(bowed, ASPECT, 0.5);
+			const rad = (tangent.angle * Math.PI) / 180;
+			const end = {
+				left: tangent.left + 10 * Math.cos(rad),
+				top: tangent.top + 10 * Math.sin(rad) * ASPECT,
+			};
+			expect(offCurve(end)).toBeGreaterThan(0.5);
+		});
+
+		it("stays centred on where along the line the caption was put", () => {
+			for (const t of [0.3, 0.5, 0.7]) {
+				expect(edgeLabelAnchor(bowed, ASPECT, t, 20).t).toBe(edgeLabelAnchor(bowed, ASPECT, t).t);
+			}
+		});
+
+		// A caption longer than its line has no stretch left to slide along, and `curveWithGap`
+		// refuses to cut a hole for one -- so what it must not do is run off the end of the curve
+		// looking for the room.
+		it("slides back inside the line rather than off the end of it", () => {
+			const seat = edgeLabelAnchor(bowed, ASPECT, 0.05, 500);
+			// The whole line's own chord: nothing is left to slide along, so the words are centred
+			// on the two ends of the line they belong to rather than hanging off one of them.
+			expect(seat.left).toBeCloseTo((bowed.from.left + bowed.to.left) / 2, 1);
+			expect(seat.top).toBeCloseTo((bowed.from.top + bowed.to.top) / 2, 1);
+			expect(seat.angle).toBe(0);
+		});
+
+		it("is the tangent again for a line with nothing written on it", () => {
+			expect(edgeLabelAnchor(bowed, ASPECT, 0.5, 0)).toEqual(edgeLabelAnchor(bowed, ASPECT));
+		});
 	});
 });
 
@@ -237,56 +348,11 @@ describe("the arrowheads that say which way a link is read", () => {
 	});
 });
 
-describe("seating people who have never been placed", () => {
-	const r = nodeRadiusPct(72, 1200);
-
-	it("puts one person in the middle", () => {
-		expect(ringLayout(1, { aspect: ASPECT, r })).toEqual([{ left: 50, top: 50 }]);
-	});
-
-	it("starts at twelve o'clock, so the first person added is always at the top", () => {
-		const [first] = ringLayout(6, { aspect: ASPECT, r });
-		expect(first.left).toBeCloseTo(50, 1);
-		expect(first.top).toBeLessThan(50);
-	});
-
-	// A ring laid out in raw percentages comes out as an oval on a landscape board. Laid out in
-	// flat space and converted back, it is a circle to the eye.
-	it("lays a ring that is round TO THE EYE, not an oval", () => {
-		const ring = ringLayout(12, { aspect: ASPECT, r });
-		const radii = ring.map(p => seen({ left: 50, top: 50 }, p));
-		for (const radius of radii) expect(radius).toBeCloseTo(radii[0], 1);
-	});
-
-	it("never seats anyone off the board, however tall it is or however big the portraits", () => {
-		for (const aspect of [0.6, 1, 1.25, 2.4]) {
-			for (const p of ringLayout(9, { aspect, r: nodeRadiusPct(120, 900) })) {
-				expect(p.left).toBeGreaterThanOrEqual(0);
-				expect(p.left).toBeLessThanOrEqual(100);
-				expect(p.top).toBeGreaterThanOrEqual(0);
-				expect(p.top).toBeLessThanOrEqual(100);
-			}
-		}
-	});
-
-	it("never seats two people on one spot", () => {
-		const ring = ringLayout(10, { aspect: ASPECT, r });
-		const spots = new Set(ring.map(p => `${p.left},${p.top}`));
-		expect(spots.size).toBe(ring.length);
-	});
-
-	it("seats nobody for a count of none, or of nonsense", () => {
-		for (const bad of [0, -2, null, undefined, "x"]) {
-			expect(ringLayout(bad, { aspect: ASPECT, r })).toEqual([]);
-		}
-	});
-});
-
 describe("finding room for one more", () => {
 	const r = nodeRadiusPct(72, 1200);
 
 	it("lands clear of everyone already placed", () => {
-		const taken = ringLayout(5, { aspect: ASPECT, r });
+		const taken = ringsLayout(5, { aspect: ASPECT, r });
 		const spot = freeSpot(taken, { aspect: ASPECT, r });
 		for (const p of taken) expect(seen(p, spot)).toBeGreaterThan(2 * r);
 	});
@@ -300,8 +366,8 @@ describe("finding room for one more", () => {
 	// A board so full there is no clear air still has to accept the person. Stacked can be dragged
 	// apart in a second; refused leaves the reader wondering whether the button works at all.
 	it("gives up onto the middle rather than refusing to place anyone", () => {
-		const crowd = ringLayout(60, { aspect: ASPECT, r: 0.2 })
-			.concat(ringLayout(60, { aspect: ASPECT, r: 0.2 }).map(p => ({ ...p, top: p.top - 1 })));
+		const crowd = ringsLayout(60, { aspect: ASPECT, r: 0.2 })
+			.concat(ringsLayout(60, { aspect: ASPECT, r: 0.2 }).map(p => ({ ...p, top: p.top - 1 })));
 		const spot = freeSpot(crowd.concat([{ left: 50, top: 50 }]), { aspect: ASPECT, r: 40 });
 		expect(Number.isFinite(spot.left)).toBe(true);
 		expect(Number.isFinite(spot.top)).toBe(true);
@@ -358,7 +424,7 @@ describe("seating a whole village", () => {
 		for (const radius of radii) expect(radius).toBeCloseTo(radii[0], 1);
 	});
 
-	// The whole reason this exists beside `ringLayout`. Twenty-odd people on ONE ring are spaced
+	// The whole reason there are rings rather than a ring. Twenty-odd people on ONE would be spaced
 	// closer than their own portraits are wide and overlap into an unreadable band.
 	it("spreads a cast too big for one ring across several", () => {
 		const seats = ringsLayout(30, opts);
@@ -778,8 +844,9 @@ describe("a caption may run the whole length of the line it sits on", () => {
 // THE FAULT THIS SUITE EXISTS TO CATCH. The gap cut in a stroke is as wide as the caption sitting
 // in it, and until the caption is in a document "as wide as" is a character count times a
 // constant. That constant cannot tell an `i` from an `m`, and on the face this board paints in it
-// overshoots by about a fifth: a hundred-and-fourteen-character sentence estimates at 728 pixels
-// and paints at 585. The estimate is slack the spreader wants; in the STROKE it is a hundred and
+// overshoots by about a fifth: measured at the twelve-pixel base this board used to set its
+// captions in, a hundred-and-fourteen-character sentence estimated at 728 pixels and painted at
+// 585. Both numbers scale with the base; the overshoot between them does not. The estimate is slack the spreader wants; in the STROKE it is a hundred and
 // forty pixels of line rubbed out for words that were never there, and the reader sees a sentence
 // floating in a hole with the line picking up again somewhere off in the distance.
 describe("a caption whose real width somebody has measured", () => {
@@ -833,6 +900,61 @@ describe("a caption whose real width somebody has measured", () => {
 		expect((guessed - measured) * 12).toBeCloseTo(
 			labelSize(sentence, 1200, 900).w * 12 - 360, 0,
 		);
+	});
+});
+
+// A LINE THE READER HAS SET IN BIGGER TYPE, which the arithmetic has to know about even though
+// nothing here paints anything. The metrics at the top of the caption section were measured at
+// `RELMAP_CAPTION_PX`, so a caption set half again as big costs half again as much room -- and a
+// spreader that measured every chip at the base would slide the quiet captions apart perfectly
+// and leave the one the table cares about lying across two of them.
+//
+// ⚠ THE SIZES HERE ARE MULTIPLES OF THE BASE AND NOT NUMBERS OF THEIR OWN, because what is
+// being proven is the PROPORTION. Written out as pixels they would be numbers to retune by hand
+// every time the base moved, and would quietly stop testing anything the day one of them landed
+// on the base itself -- where a size of one's own is stored as no size at all.
+describe("a caption set in a size of its own", () => {
+	const sentence = "shut the great gate in his face";
+
+	it("is estimated wider and taller, in proportion to the type", () => {
+		const plain = labelSize(sentence, 1200, 900);
+		const big = labelSize(sentence, 1200, 900, null, RELMAP_CAPTION_PX * 2);
+		// The trim around the words is the same ring at any size, so the words themselves are what
+		// doubles: the estimate is chars * 8.4 * scale + 10.
+		expect(big.w).toBeCloseTo((((sentence.length * 8.4 * 2) + 10) * 100) / 1200, 6);
+		expect(big.h).toBeCloseTo(plain.h * 2, 6);
+	});
+
+	// Every line on every board drawn before sizes existed, and nearly every line after.
+	it("is the ordinary caption when it has no size of its own", () => {
+		const plain = labelSize(sentence, 1200, 900);
+		for (const none of [0, null, undefined, NaN, "large"]) {
+			const out = labelSize(sentence, 1200, 900, null, none);
+			expect(out.w).toBeCloseTo(plain.w, 6);
+			expect(out.h).toBeCloseTo(plain.h, 6);
+		}
+	});
+
+	// ⚠ THE MEASUREMENT IS ALREADY AT THE RIGHT SIZE. What the window reads off the document is the
+	// width of a caption that has already been SET in the bigger type, so scaling it a second time
+	// would double the whole difference and cut a hole half again too big in the stroke.
+	it("does not scale a width somebody actually measured", () => {
+		const out = labelSize(sentence, 1200, 900, 360, RELMAP_CAPTION_PX * 2);
+		expect(out.w).toBeCloseTo((360 * 100) / 1200, 6);
+		// The height is arithmetic in every caller -- nothing measures it -- so it still scales.
+		expect(out.h).toBeCloseTo(labelSize(sentence, 1200, 900, 360).h * 2, 6);
+	});
+
+	// The room is the LINE's, not the type's: a bigger caption fits fewer words into the same
+	// stretch rather than being promised more of the board. `fitCaption` is what then cuts it.
+	it("is still held to the room its own line has", () => {
+		const r = nodeRadiusPct(72, 1200);
+		const stub = edgeCurve({
+			from: { left: 46, top: 50 }, to: { left: 54, top: 50 }, aspect: ASPECT, r,
+		});
+		const room = captionRoomPx(stub, { boardWidthPx: 1200, capPx: 220 });
+		const out = captionSize(sentence, stub, { boardWidthPx: 1200, capPx: 220, px: 24 });
+		expect(out.w).toBeCloseTo((room * 100) / 1200, 6);
 	});
 });
 
@@ -899,6 +1021,74 @@ describe("cutting the line open where its caption sits", () => {
 
 	it("has nothing to cut when there is no curve, rather than throwing", () => {
 		expect(curveWithGap(null, { t: 0.5, span: 8 })).toBe("");
+	});
+
+	// WHAT THE READER SAW BEFORE THIS: a line poking out of its own arrowhead. The head's tip
+	// lands on the end of the line, which is right, but a triangle TAPERS -- over its last pixels
+	// it is thinner than the stroke running up the middle of it, and the round cap put another
+	// pixel and a half past the point. So the stroke now stops at the head's back edge, and only
+	// at an end that has a head on it.
+	describe("and stopping it short of an arrowhead", () => {
+		const curve = curveOf({ left: 15, top: 50 }, { left: 85, top: 50 });
+		const endOf = d => {
+			const last = d.trim().split(/\s+/).pop().split(",");
+			return { left: Number(last[0]), top: Number(last[1]) };
+		};
+		const startOf = d => {
+			const first = d.trim().split(/\s+/)[1].split(",");
+			return { left: Number(first[0]), top: Number(first[1]) };
+		};
+		const flatPx = (a, b) => Math.hypot(a.left - b.left, a.top - b.top) * 12;
+
+		it("leaves a line with no heads running end to end", () => {
+			expect(curveWithGap(curve, { span: 0, boardWidthPx: 1200, dir: "none" })).toBe(curve.d);
+		});
+
+		// THE WHOLE LENGTH OF THE TRIANGLE, less the pixel of overlap that keeps the join from
+		// being a seam: a 16px head with its points at -0.4 and 0.4 is 12.8px long.
+		it("cuts the head's own length off the end it points at", () => {
+			const cut = curveWithGap(curve, { span: 0, boardWidthPx: 1200, dir: "a-b" });
+			expect(flatPx(endOf(cut), curve.to)).toBeCloseTo(11.8, 1);
+			expect(startOf(cut)).toEqual(curve.from);
+		});
+
+		it("cuts the other end instead when the arrow is read the other way", () => {
+			const cut = curveWithGap(curve, { span: 0, boardWidthPx: 1200, dir: "b-a" });
+			expect(flatPx(startOf(cut), curve.from)).toBeCloseTo(11.8, 1);
+			expect(endOf(cut)).toEqual(curve.to);
+		});
+
+		it("cuts both ends of a link read both ways", () => {
+			const cut = curveWithGap(curve, { span: 0, boardWidthPx: 1200, dir: "both" });
+			expect(flatPx(startOf(cut), curve.from)).toBeCloseTo(11.8, 1);
+			expect(flatPx(endOf(cut), curve.to)).toBeCloseTo(11.8, 1);
+		});
+
+		// A FIXED LENGTH OF LINE AND NOT A SHARE OF IT: the head is 16 board pixels whatever the
+		// sheet, so on a wider board the same head takes a smaller share of the same percentages.
+		it("takes the same pixels off however wide the board is", () => {
+			const wide = curveWithGap(curve, { span: 0, boardWidthPx: 2400, dir: "a-b" });
+			expect(Math.hypot(endOf(wide).left - curve.to.left, endOf(wide).top - curve.to.top) * 24)
+				.toBeCloseTo(11.8, 1);
+		});
+
+		// A link between two portraits almost touching keeps a stroke rather than losing it
+		// entirely to the two heads.
+		it("never eats the whole of a very short line", () => {
+			const stub = curveOf({ left: 46, top: 50 }, { left: 54, top: 50 });
+			const cut = curveWithGap(stub, { span: 0, boardWidthPx: 1200, dir: "both" });
+			const left = Math.hypot(endOf(cut).left - startOf(cut).left, endOf(cut).top - startOf(cut).top);
+			expect(left).toBeGreaterThan(0);
+			expect(left).toBeCloseTo(stub.length * 0.2, 2);
+		});
+
+		// BOTH CUTS AT ONCE. A captioned line with an arrow on it has to lose its middle AND stop
+		// short of its head, and the two used to be worked out by different callers.
+		it("still breaks for the caption on a line that also carries a head", () => {
+			const both = curveWithGap(curve, { t: 0.5, span: 8, boardWidthPx: 1200, dir: "a-b" });
+			expect(runs(both)).toBe(2);
+			expect(flatPx(endOf(both), curve.to)).toBeCloseTo(11.8, 1);
+		});
 	});
 
 	// The fourth time in this feature that `Number(null) === 0` would have read "nowhere in

@@ -27,7 +27,7 @@ const wire = (board, over = {}) => {
 		nodeAt: vi.fn(id => ({ x: 20, y: 30, id })),
 		onMove: vi.fn(), onNudge: vi.fn(), onDragMove: vi.fn(), onDragEnd: vi.fn(),
 		onLink: vi.fn(), onLinkFrom: vi.fn(), onOpen: vi.fn(), onPickEdge: vi.fn(),
-		onPickNone: vi.fn(), onRemove: vi.fn(),
+		onPickNone: vi.fn(), onRemove: vi.fn(), onArm: vi.fn(),
 		canEdit: () => true,
 		...over,
 	};
@@ -117,6 +117,21 @@ describe("a press that becomes a drag", () => {
 		press(board, board.portraits.n1.face, { to: [40, 0] });
 		expect(handlers.onMove).toHaveBeenCalledWith("n1", { x: 24, y: 30 });
 		expect(handlers.onOpen).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// NOT ONE MADE MID-PAN. The right button drags the board from anywhere on it, lines included
+	// (utils/zoom-pan-surface.js), so a left press with the right one still held is a press made
+	// while the whole board is sliding. Arming a drag under that moves a portrait and the ground it
+	// stands on at once, and the pan's capture ends the drag wherever it has got to -- an edit to a
+	// shared map from a press that was only meant to steady the hand.
+	it("arms nothing when the board is already being panned with the other button", () => {
+		const { handlers, teardown } = wire(board);
+		board.view.emit("pointerdown", board.portraits.n1.face, { buttons: 3, clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", board.portraits.n1.face, { clientX: 40, clientY: 0 });
+		board.flush();
+		expect(handlers.onDragMove).not.toHaveBeenCalled();
+		expect(board.view.setPointerCapture).not.toHaveBeenCalled();
 		teardown();
 	});
 
@@ -397,6 +412,40 @@ describe("a click that lands on nothing", () => {
 		teardown();
 	});
 
+	/**
+	 * The same press, as A REAL BROWSER delivers it once the pan surface has hold of the pointer.
+	 *
+	 * ⚠ THIS IS THE ONLY SHAPE THAT EVER HAPPENS ON PAPER. `press` above emits the click at the
+	 * thing pressed, which is what a browser does for a press the pan surface let alone -- a
+	 * portrait, a caption, the bar. Bare paper is never let alone: it IS the pan, so the surface
+	 * captures the pointer on the way down, and the capture retargets the pointerup and the click
+	 * it is derived from at the VIEWPORT. The test that asserted the tie bar could be dismissed was
+	 * written in the other shape, and so passed for a year against a window in which clicking away
+	 * from an open bar did nothing whatever.
+	 */
+	const pressUnderCapture = ({ to = [0, 0] } = {}) => {
+		board.view.emit("pointerdown", board.board, { pointerId: 1, clientX: 0, clientY: 0 });
+		board.view.emit("pointerup", board.view, { pointerId: 1, clientX: to[0], clientY: to[1] });
+		return board.view.emit("click", board.view, { pointerId: 1, clientX: to[0], clientY: to[1] });
+	};
+
+	it("lets go even though the pan has taken the click's target away", () => {
+		const { handlers, teardown } = wire(board);
+		pressUnderCapture();
+		expect(handlers.onPickNone).toHaveBeenCalled();
+		teardown();
+	});
+
+	// A PAN IS NOT A LET-GO. Dragging the board about with a line's bar open is reading the map --
+	// the bar rides along with the board it points at -- so the one gesture a reader makes most
+	// while a bar is up must not be the one that puts the line down.
+	it("keeps hold of the line while the board is being panned", () => {
+		const { handlers, teardown } = wire(board);
+		pressUnderCapture({ to: [80, 40] });
+		expect(handlers.onPickNone).not.toHaveBeenCalled();
+		teardown();
+	});
+
 	// ⚠ THE PRESS ON BARE PAPER IS THE PAN SURFACE'S. Claiming it here would take the board's own
 	// drag away, and the board would stop moving.
 	it("does not claim the press, which belongs to the pan", () => {
@@ -414,6 +463,173 @@ describe("a click that lands on nothing", () => {
 		press(board, board.tiebar);
 		expect(handlers.onPickNone).not.toHaveBeenCalled();
 		expect(handlers.onPickEdge).not.toHaveBeenCalled();
+		teardown();
+	});
+});
+
+// THE MOUSE'S ROUTE TO TAKING SOMEBODY OFF, which for a long time did not exist: it was Delete on
+// a focused portrait and nothing else, a gesture with nothing on screen to say it was there. A
+// right press on a face asks for that person's trash can; the button is the thing that removes.
+//
+// ⚠ THE RIGHT BUTTON IS ALSO THE PAN, from anywhere on the board and deliberately so
+// (utils/zoom-pan-surface.js: a press aimed at open paper lands on one of a hundred lines, so the
+// right button asks nothing about what is under it). The two share the gesture, and what separates
+// them is TRAVEL — which is why every case here is a pair.
+describe("a right press on a portrait", () => {
+	let board;
+	beforeEach(() => {
+		board = pointerBoard();
+		board.view.setPointerCapture = vi.fn();
+		board.view.releasePointerCapture = vi.fn();
+	});
+	afterEach(() => board.destroy());
+
+	/**
+	 * A right press and its release, in the shape a real browser delivers under the pan's capture.
+	 *
+	 * The release is emitted at the VIEWPORT rather than at the face, which is the whole reason the
+	 * production code remembers who was pressed at pointerdown: by the time the pointerup arrives
+	 * the pan surface has captured the pointer, and the capture retargets it. Reading the person off
+	 * the release would find nobody, every time, in every real browser and in no test written the
+	 * easy way. (The same trap `pressUnderCapture` above was written to stop repeating.)
+	 */
+	const rightPress = (target, { to = [0, 0] } = {}) => {
+		board.view.emit("pointerdown", target, { button: 2, pointerId: 1, clientX: 0, clientY: 0 });
+		board.view.emit("pointerup", board.view, { button: 2, pointerId: 1, clientX: to[0], clientY: to[1] });
+	};
+
+	it("asks for that person's trash can", () => {
+		const { handlers, teardown } = wire(board);
+		rightPress(board.portraits.n1.face);
+		expect(handlers.onArm).toHaveBeenCalledWith("n1");
+		teardown();
+	});
+
+	// The name under the face is part of the node, and a reader aiming at a small circle very often
+	// hits the words instead. `closest` walks up to the portrait from either.
+	it("takes the name under the face as the same person", () => {
+		const { handlers, teardown } = wire(board);
+		rightPress(board.portraits.n2.name);
+		expect(handlers.onArm).toHaveBeenCalledWith("n2");
+		teardown();
+	});
+
+	// AND A RIGHT DRAG IS A PAN, even one that began on somebody's face. Without this the gesture
+	// a reader makes most — shoving the board about to see the rest of it — would leave a delete
+	// button open on whoever happened to be under the hand when they started.
+	it("is a pan and nothing else once it travels", () => {
+		const { handlers, teardown } = wire(board);
+		rightPress(board.portraits.n1.face, { to: [80, 40] });
+		expect(handlers.onArm).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// Nothing on a board this reader may only look at: the trash can is not printed for them, so
+	// arming one would be a press that promises a button nobody will ever see.
+	it("asks for nothing where the removal would be refused", () => {
+		const { handlers, teardown } = wire(board, { canRemove: () => false });
+		rightPress(board.portraits.n1.face);
+		expect(handlers.onArm).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// Bare paper, a caption, the bar: a right press anywhere but a portrait is only ever the pan.
+	it("arms nobody from a press that landed on no one", () => {
+		const { handlers, teardown } = wire(board);
+		rightPress(board.board);
+		rightPress(board.captions.e1.words);
+		expect(handlers.onArm).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// ⚠ AND IT ARMS NO DRAG. The left button is what picks a portrait up; a right press that also
+	// did would leave two gestures fighting over one pointer, and the pan would slide the board out
+	// from under the portrait it was moving.
+	it("does not pick the portrait up", () => {
+		const { handlers, teardown } = wire(board);
+		board.view.emit("pointerdown", board.portraits.n1.face, { button: 2, clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", board.portraits.n1.face, { clientX: 40, clientY: 0 });
+		board.flush();
+		expect(board.view.setPointerCapture).not.toHaveBeenCalled();
+		expect(handlers.onDragMove).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// A press the system took away never finished. Left set, its note would arm a trash can on the
+	// NEXT release anywhere on the board, on somebody the reader never pointed at.
+	it("forgets a press that was cancelled", () => {
+		const { handlers, teardown } = wire(board);
+		board.view.emit("pointerdown", board.portraits.n1.face, { button: 2, pointerId: 1, clientX: 0, clientY: 0 });
+		board.view.emit("pointercancel", board.view, { pointerId: 1 });
+		board.view.emit("pointerup", board.view, { button: 2, pointerId: 1, clientX: 0, clientY: 0 });
+		expect(handlers.onArm).not.toHaveBeenCalled();
+		teardown();
+	});
+});
+
+// THE TRASH CAN ITSELF, once a right press has put one on somebody.
+describe("the trash can on a portrait", () => {
+	let board;
+	beforeEach(() => {
+		board = pointerBoard();
+		board.view.setPointerCapture = vi.fn();
+		board.view.releasePointerCapture = vi.fn();
+	});
+	afterEach(() => board.destroy());
+
+	it("takes that person off, and does not open their sheet on the way", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.portraits.n1.bin);
+		expect(handlers.onRemove).toHaveBeenCalledWith("n1");
+		expect(handlers.onOpen).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// ⚠ AND IT IS THE ONE PRESS THAT DOES NOT ALSO PUT THE CAN AWAY. Every other click on this
+	// board does, which is how the button closes; disarming on this one would be the window
+	// clearing the mark in the same breath as the removal it is about.
+	it("is not also a click that puts itself away", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.portraits.n1.bin);
+		expect(handlers.onArm).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// EVERY OTHER CLICK CLOSES IT. A control that appears on a gesture has to disappear on the next
+	// thing the reader does, or a board clicked around for an evening wears a delete button on half
+	// the people on it.
+	const AWAY = [
+		["a face", b => b.portraits.n1.face],
+		["bare board", b => b.board],
+		["a caption", b => b.captions.e1.words],
+		["the link handle", b => b.portraits.n1.handle],
+	];
+	for (const [what, pick] of AWAY) {
+		it(`is put away by a click on ${what}`, () => {
+			const { handlers, teardown } = wire(board);
+			press(board, pick(board));
+			expect(handlers.onArm).toHaveBeenCalledWith(null);
+			teardown();
+		});
+	}
+
+	// ⚠ THE PRESS ON IT MUST NOT ARM A DRAG OF THE PERSON IT IS ABOUT. The can sits INSIDE the
+	// node, so without a guard a hand that shifts three pixels between press and release carries
+	// that portrait across the board instead — and the click the button was waiting for is eaten as
+	// the tail of a drag.
+	it("does not pick the portrait up, and keeps its own click", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.portraits.n1.bin, { to: [40, 0] });
+		expect(handlers.onMove).not.toHaveBeenCalled();
+		expect(board.view.setPointerCapture).not.toHaveBeenCalled();
+		expect(handlers.onRemove).toHaveBeenCalledWith("n1");
+		teardown();
+	});
+
+	it("removes nobody on a board the reader may not edit", () => {
+		const { handlers, teardown } = wire(board, { canRemove: () => false });
+		press(board, board.portraits.n1.bin);
+		expect(handlers.onRemove).not.toHaveBeenCalled();
 		teardown();
 	});
 });
@@ -554,6 +770,10 @@ describe("a key the board refuses", () => {
 	const STOPS = [
 		["the link handle", b => b.portraits.n1.handle],
 		["a caption", b => b.captions.e1.words],
+		// The newest of them, and the one Delete is likeliest to be pressed on: a button that says
+		// "take them off" is a button a reader will try that key on. It has no `data-relmap-open`
+		// of its own, so without its own entry in the selector the key would go to the scene.
+		["the trash can", b => b.portraits.n1.bin],
 	];
 	for (const [what, pick] of STOPS) {
 		for (const key of ["Delete", "ArrowLeft"]) {

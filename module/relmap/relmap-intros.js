@@ -1,8 +1,8 @@
 // What the party answered ABOUT EACH OTHER during the introductions, as lines a relationship map
 // can draw.
 //
-// This is what the party view shows, and it is the one thing on this window that comes from
-// somewhere other than the board. Asked for as: no information should be pulled onto the lines
+// This is what the board called "The Party" is seeded from, and it is the one thing on this window
+// that comes from somewhere other than the board itself. Asked for as: no information should be pulled onto the lines
 // automatically "except for the character's only sheet that shows the introduction answers to each
 // other". Its predecessor read the 1-5 hearts, which was the wrong record; these are the answers
 // that go into the Chronicle.
@@ -43,7 +43,7 @@ import { RELMAP_LABEL_MAX } from "./relmap-store.js";
  * stroke's hue (see the accessibility rules the ink tokens are held to). The ink is the fast way to
  * tell the two kinds apart at a glance, not the record of which they are.
  */
-export const INTRO_STEP_INKS = Object.freeze({ step4: "sage", step6: "indigo" });
+export const INTRO_STEP_INKS = Object.freeze({ step4: "green", step6: "indigo" });
 
 /** The steps this reads, in the order the introductions run them. */
 export const INTRO_STEPS = Object.freeze(["step4", "step6"]);
@@ -90,12 +90,9 @@ export function questionAsPhrase(prompt) {
 }
 
 /**
- * WHOLE WORDS ONLY, with the same Unicode boundary utils/relmap-kin.js uses and for the same
- * reason: `\b` is defined on `\w`, which is ASCII, so it fires in the middle of any name with an
- * accent in it. Here it also stops "Pim" from matching inside "Pimble".
- *
- * Literally the same boundary, now: both go through `wholeWordPattern` (utils/strings.js), so the
- * two readers of one caption cannot drift apart about where a word ends.
+ * WHOLE WORDS ONLY, through `wholeWordPattern` (utils/strings.js) and never `\b`: that boundary is
+ * defined on `\w`, which is ASCII, so it fires in the middle of any name with an accent in it. Here
+ * it also stops "Pim" from matching inside "Pimble".
  */
 const wordPattern = word => wholeWordPattern(word, "i");
 
@@ -134,8 +131,7 @@ function sharedFirstNames(people) {
  * A candidate list as the matcher reads it: every name each person answers to, longest first, with
  * the pattern it is looked for by and the ambiguous first names already dropped.
  *
- * ⚠ BUILT ONCE PER LIST AND HELD, which is the rule `relmap-kin.js` states next door and is right
- * here for the same reason. `introAnswerRows` calls `namedIn` once per recorded answer per writer,
+ * ⚠ BUILT ONCE PER LIST AND HELD. `introAnswerRows` calls `namedIn` once per recorded answer per writer,
  * and every call was rebuilding the shared-first-name set and compiling up to two Unicode
  * lookbehinds per candidate: a nine-character table with seventy answers is about a thousand regex
  * compilations to open the match window, for an answer that cannot change between them.
@@ -169,8 +165,7 @@ function nameReaders(candidates) {
  * is every answer in every world that ran its introductions before the picker existed, so it stays
  * exactly as careful as it was when it was the only reader.
  *
- * ⚠ THE EARLIEST NAME WINS, which is the same rule `guessKin` follows next door and is right for
- * the same reason. These answers are prose: "I asked Rhianna whether she still trusted me after the
+ * ⚠ THE EARLIEST NAME WINS, and it is right for prose. These answers are prose: "I asked Rhianna whether she still trusted me after the
  * business at the broken gate. She held my eye a while, then said she did." The person the sentence
  * is ABOUT is the one it opens with; anybody mentioned later is scenery. A tie on position goes to
  * the LONGER name, so "Emrys Tal" beats a bare "Emrys" starting at the same place.

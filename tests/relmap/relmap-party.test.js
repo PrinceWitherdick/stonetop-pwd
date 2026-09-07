@@ -23,7 +23,7 @@ const MARREC = pc("marrec", "Marrec");
 /** One answer as `introRegards` hands it over: the caption, the whole of what was written, the
  * colour of its step, and the KEY of the answer it came from. A blank key stands for every
  * answer read by a caller that had none to give. */
-const line = (label, { ink = "sage", key = "" } = {}) => ({ key, label, said: `${label}?  yes.`, ink });
+const line = (label, { ink = "green", key = "" } = {}) => ({ key, label, said: `${label}?  yes.`, ink });
 
 /** `introRegards`' shape: from-uuid -> to-uuid -> one entry per answer. */
 const regards = rows => new Map(Object.entries(rows).map(
@@ -219,7 +219,7 @@ describe("matching drawn lines to the answers they came from", () => {
 	it("adds nothing once every answer has its line", () => {
 		const board = keyed();
 		board.edges.e2 = {
-			...board.edges.e1, label: "closest kin", ink: "sage", origin: "pim::step4::0",
+			...board.edges.e1, label: "closest kin", ink: "green", origin: "pim::step4::0",
 		};
 		const plan = partyBoardPlan(board, [PIM, SELA], both(), ids);
 		expect(plan.addedLines).toBe(0);

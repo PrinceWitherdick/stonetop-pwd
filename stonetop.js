@@ -453,7 +453,6 @@ Hooks.once("init", () => {
 		"stonetop.catalog-shell":        "systems/stonetop-pwd/templates/dialogs/partials/catalog-shell.hbs",
 		"stonetop.relationship-map":       "systems/stonetop-pwd/templates/dialogs/relationship-map.hbs",
 		"stonetop.relationship-map-board": "systems/stonetop-pwd/templates/dialogs/partials/relationship-map-board.hbs",
-		"stonetop.relationship-link":      "systems/stonetop-pwd/templates/dialogs/relationship-link.hbs",
 		"stonetop.intro-match":            "systems/stonetop-pwd/templates/dialogs/intro-match.hbs",
 		"stonetop.person-picker":          "systems/stonetop-pwd/templates/dialogs/person-picker.hbs",
 		// Rendered by BOTH Death's Door's last step and the standalone Post-Death chooser.

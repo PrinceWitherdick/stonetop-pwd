@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readCss, declarations } from "../fakes/css.js";
 import { contrastRatio, parseColor, ratioText } from "../fakes/contrast.js";
-import { RELMAP_INKS } from "../../module/relmap/relmap-store.js";
+import { RELMAP_DASHES, RELMAP_DASH_DEFAULT, RELMAP_INKS } from "../../module/relmap/relmap-store.js";
 
 // The eight colours a line on a relationship map can be drawn in.
 //
@@ -183,6 +183,159 @@ describe("solid on an ordinary board, dashed where the pattern is needed", () =>
 	});
 });
 
+// ── The mark the reader made ────────────────────────────────────────────────
+//
+// A DIFFERENT QUESTION FROM THE EIGHT PATTERNS ABOVE, with the same answer shape, and the two have
+// to be kept apart. An ink's dash is a COLOUR said a second time and is painted only under the
+// high-contrast skin; this is a distinction somebody drew on purpose -- the rumour against the
+// fact, the tie that was against the tie that is -- and it is painted on every skin.
+//
+// ⚠ AND THERE ARE THREE ANSWERS NOW, WHICH IS WHY THIS IS SWEPT RATHER THAN SPELLED OUT. Dotted was
+// the whole of "not solid" for a while and it is the faintest a line gets; dashed is the middle
+// answer. Every one of them the module offers has to be a token, a rule, and a pattern that reads
+// as itself at all three weights -- and a fourth added to `RELMAP_DASHES` without any of that would
+// be a stored answer drawn as a solid line, which is the map saying something false about a tie.
+describe("the stroke the reader broke themselves", () => {
+	// The keys that mean "not whole". `solid` is the absence of a modifier, not a pattern.
+	const BROKEN = RELMAP_DASHES.filter(key => key !== RELMAP_DASH_DEFAULT);
+
+	/** The two numbers a `stroke-dasharray` token holds: the mark, and the air after it. */
+	const rhythm = token => (BASE.get(token) ?? "").trim().split(/\s+/).map(Number);
+
+	it("has more than one way to break a stroke, or none of this is a distinction", () => {
+		expect(BROKEN.length).toBeGreaterThan(1);
+	});
+
+	it("gives every broken stroke a pattern and a rule that paints it", () => {
+		for (const key of BROKEN) {
+			expect(BASE.get(`--st-relmap-${key}`), `--st-relmap-${key}`).toBeTruthy();
+			const rule = declarations(CSS, `.stonetop-relmap-line.is-${key}`);
+			expect(rule, `.stonetop-relmap-line.is-${key}`).toBeTruthy();
+			expect(rule).toMatch(new RegExp(`stroke-dasharray:\\s*var\\(\\s*--relmap-${key}`));
+		}
+	});
+
+	// ⚠ THE WHOLE POINT OF HAVING TWO. A dashed line whose marks are the length of a dotted line's
+	// dots is two patterns nobody at this table could tell apart -- and the reader who most needs
+	// them told apart is the one who cannot resolve the colours either.
+	it("keeps the dashes plainly longer than the dots, at every weight", () => {
+		for (const at of ["", "-lit", "-picked"]) {
+			const [dash] = rhythm(`--st-relmap-dashed${at}`);
+			const [dot] = rhythm(`--st-relmap-dotted${at}`);
+			expect(dash, `--st-relmap-dashed${at}`).toBeGreaterThan(dot * 3);
+		}
+	});
+
+	// ⚠ A ROUND CAP ADDS THE WHOLE STROKE WIDTH TO EVERY DASH AND TAKES IT OUT OF EVERY GAP, so a
+	// line widened without its pattern opened up fuses into a lumpy solid -- at the exact moment the
+	// reader picked it up to look at it. Both wider weights restate both patterns, in the SAME rule
+	// that sets the width, which is what keeps the two from drifting apart.
+	it("opens both patterns up at the two wider weights", () => {
+		for (const [what, rule] of [
+			["picked", declarations(CSS, ".stonetop-relmap-line.is-picked")],
+			["lit", declarations(CSS, ".stonetop-relmap.is-lit .stonetop-relmap-line.is-lit")],
+		]) {
+			expect(rule, what).toBeTruthy();
+			expect(rule, what).toMatch(/stroke-width:\s*\d/);
+			for (const key of BROKEN) {
+				expect(rule, `${what} / ${key}`).toContain(`--relmap-${key}: var(--st-relmap-${key}-${what})`);
+				const [mark, air] = rhythm(`--st-relmap-${key}-${what}`);
+				const [wasMark, wasAir] = rhythm(`--st-relmap-${key}`);
+				// Wider stroke, wider rhythm: the declared numbers have to GROW, or the round cap
+				// eats the gap the pattern is made of.
+				expect(mark, `${key}-${what} mark`).toBeGreaterThan(wasMark);
+				expect(air, `${key}-${what} air`).toBeGreaterThan(wasAir);
+			}
+		}
+	});
+
+	// ⚠ THE READER'S OWN MARK WINS UNDER THE HIGH-CONTRAST SKIN TOO, which is the one place the two
+	// kinds of dash meet. What it costs is stated where the field is declared: a broken line has
+	// only its colour left saying which ink it is. The alternative was to silently not draw the one
+	// mark the reader made by hand, for the reader who most needs marks drawn at all.
+	it("keeps it under the high-contrast skin, where the ink's own pattern is painted", () => {
+		for (const key of BROKEN) {
+			const rule = declarations(CSS, `:root.stonetop-high-contrast .stonetop-relmap-line.is-${key}`);
+			expect(rule, key).toBeTruthy();
+			expect(rule).toMatch(new RegExp(`stroke-dasharray:\\s*var\\(\\s*--relmap-${key}`));
+		}
+	});
+
+	// AND THE CHOOSER DRAWS EACH OF THEM, which is how a reader picks one: the trigger shows the
+	// stroke the line has and each row in the panel shows the one it stands for. `solid` is in this
+	// sweep because the sample there IS the base rule -- a plain rule with no modifier.
+	it("draws a sample of every stroke the chooser offers", () => {
+		expect(declarations(CSS, ".stonetop-relmap-tiebar-rule"), "the base sample").toBeTruthy();
+		for (const key of BROKEN) {
+			expect(declarations(CSS, `.stonetop-relmap-tiebar-rule--${key}`), key).toBeTruthy();
+		}
+	});
+});
+
+// ── The ninth colour ────────────────────────────────────────────────────────
+//
+// A colour a reader picked in a system colour dialog, which is unlike the eight in the one way that
+// matters here: there is no token for it, so there is nothing for the high-contrast skin to raise
+// and nothing for the dash table to key off. What it gets instead is a dash pattern of its own and
+// a best-effort darkening, and this holds the stylesheet to both -- because the promise made to the
+// reader on the magnifier when this was built was that a custom line would still carry SOMETHING
+// under that skin, and a rule quietly dropped here would break it silently.
+describe("a colour nobody named", () => {
+	const CUSTOM = declarations(CSS, ".stonetop-relmap-line--custom");
+
+	it("draws it from the property the renderer writes, not from a token", () => {
+		expect(CUSTOM, ".stonetop-relmap-line--custom").toBeTruthy();
+		expect(CUSTOM).toContain("var(--relmap-ink-raw");
+	});
+
+	// Colour is never the only carrier, and a custom line cannot fall back on a token's pattern.
+	it("gives it a dash of its own, unlike any of the eight", () => {
+		const own = BASE.get("--st-relmap-dash-custom");
+		expect(own, "--st-relmap-dash-custom").toBeTruthy();
+		expect(CUSTOM).toContain("var(--st-relmap-dash-custom)");
+		for (const key of RELMAP_INKS) {
+			expect(BASE.get(dashToken(key)), `custom shares a dash with ${key}`).not.toBe(own);
+		}
+	});
+
+	// ⚠ A BEST EFFORT AND NOT THE PROMISE THE EIGHT MAKE, which is exactly why it is worth pinning:
+	// the eight are re-declared at a measured 4.5:1 and this cannot be, so what it must not do is
+	// silently do nothing. Read off `--relmap-ink-raw` and never off `--relmap-ink`, which is the
+	// property being set -- a declaration reading itself resolves to nothing and paints it black.
+	it("takes it darker under the high-contrast skin, off the raw colour", () => {
+		const lit = declarations(CSS, ":root.stonetop-high-contrast .stonetop-relmap-line--custom");
+		expect(lit, "the high-contrast custom rule").toBeTruthy();
+		expect(lit).toMatch(/--relmap-ink:\s*color-mix\(/);
+		expect(lit).toContain("var(--relmap-ink-raw");
+	});
+});
+
+// ── The writing field that is not on the bar ────────────────────────────────
+//
+// The tie bar has no text box on it: what a reader types is painted on the LINE (`_sayLine`). The
+// field is still a real `input` -- nothing else gives an IME, a caret, a selection, paste or a
+// screen reader anything to work with -- and it is hidden by CLIPPING, which is the only way of
+// hiding an element that leaves it able to hold the focus. `display: none`, `visibility: hidden`
+// or the `hidden` attribute would each take the focus away from it, and the field is focused the
+// moment a line is clicked: that is the whole of "click a line and start typing".
+describe("the writing field on the tie bar", () => {
+	const FIELD = declarations(CSS, ".stonetop-relmap-tiebar-words");
+
+	it("is hidden by clipping rather than by anything that would kill the focus", () => {
+		expect(FIELD, ".stonetop-relmap-tiebar-words").toBeTruthy();
+		expect(FIELD).toMatch(/clip-path:\s*inset\(/);
+		expect(FIELD).not.toMatch(/display:\s*none/);
+		expect(FIELD).not.toMatch(/visibility:\s*hidden/);
+	});
+
+	// Out of the bar's flex flow, so the presses do not sit a pixel further along than they look.
+	it("takes no room on the bar", () => {
+		expect(FIELD).toMatch(/position:\s*absolute/);
+		expect(FIELD).toMatch(/width:\s*1px/);
+		expect(FIELD).toMatch(/margin:\s*0/);
+	});
+});
+
 describe("the captions, which are bare words written along their own lines", () => {
 	const LAYER = declarations(CSS, ".stonetop-relmap-labels");
 	const LABEL = declarations(CSS, ".stonetop-relmap-label");
@@ -196,18 +349,36 @@ describe("the captions, which are bare words written along their own lines", () 
 
 	// A LEGIBILITY RULE. At the scale the window opens at -- the whole board fitted into the
 	// viewport -- the writing is three pixels tall: it was never readable, and it is a grey thicket
-	// over the diagram. `_paintCaptionZoom` marks the root; this puts both layers away, and
+	// over the diagram. `_paintCaptionZoom` marks the root; this puts the captions away, and
 	// `_paintLineGaps` closes the holes cut in the strokes for words that are no longer there.
 	//
 	// It is a performance rule as well, though no longer the load-bearing one: the cost of a caption
 	// is per glyph ON SCREEN, and this is the state with every one of a hundred of them on screen at
 	// once. What actually made them affordable was setting the words straight.
 	it("paints no captions at all while they would be too small to read", () => {
-		for (const layer of ["stonetop-relmap-labels", "stonetop-relmap-labels-lit"]) {
-			const gone = declarations(CSS, `.stonetop-relmap.captions-too-small .${layer}`);
-			expect(gone, layer).toBeTruthy();
-			expect(gone, layer).toMatch(/display:\s*none/);
-		}
+		const lit = declarations(CSS, ".stonetop-relmap.captions-too-small .stonetop-relmap-labels-lit");
+		expect(lit, "the lit layer").toBeTruthy();
+		expect(lit, "the lit layer").toMatch(/display:\s*none/);
+		const quiet = declarations(
+			CSS, ".stonetop-relmap.captions-too-small .stonetop-relmap-label:not(.is-picked)",
+		);
+		expect(quiet, "every caption but the held one").toBeTruthy();
+		expect(quiet, "every caption but the held one").toMatch(/display:\s*none/);
+	});
+
+	// ⚠ EXCEPT THE ONE THE READER IS HOLDING, and this is the rule the tie bar's writing depends on.
+	// The bar has no text box on it any more: what somebody types is painted on the LINE, and a
+	// whole board fitted into the window is under this threshold -- which is the zoom the map OPENS
+	// at. Hiding that caption with the rest would leave typing with nothing at all to show for
+	// itself. So it stays, and `_paintCaptionZoom` hands it board pixels worked out from the scale
+	// (`CAPTION_READ_PX` divided by it) so the words stay one size to read while the board shrinks.
+	it("keeps the caption the reader is writing on, at a size they can read", () => {
+		const held = declarations(
+			CSS,
+			".stonetop-relmap.captions-too-small .stonetop-relmap-label.is-picked .stonetop-relmap-label-text",
+		);
+		expect(held, "the held caption").toBeTruthy();
+		expect(held).toMatch(/font-size:\s*var\(--relmap-say-px/);
 	});
 
 	// ⚠ AND NEVER BY GIVING THE LAYER A TEXTURE. `will-change` does NOT make expensive glyphs

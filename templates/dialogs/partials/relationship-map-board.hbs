@@ -17,32 +17,24 @@
 
       Takes no clicks: a drag that starts on empty board has to pan, and the line layer covers all
       of it. The label above each line is what a reader aims at. --}}
-{{!-- THE FAMILY TREE, when that is what the reader has asked for, and empty every other time.
-
-      A SECOND LAYER RATHER THAN MORE OF THE ONE BELOW, because these are not the same kind of
-      mark. The lines below join two people and bow around whatever is in the way; each of these is
-      one HOUSEHOLD drawn in one stroke: a bar between the parents, a stem down from it, a rail
-      across the children and a drop into each of them. The square corners are the information, and
-      they are what says "these four are siblings" where four separate curves would say only that
-      four lines exist. Worked out in utils/relmap-tree.js.
-
-      DECORATION, and deliberately: `aria-hidden`, no clicks, nothing to aim at. A stroke here
-      stands for as many lines as the household has children, so there is no one line for a click
-      to mean. A tie that needs fixing is fixed where it was written, on the ordinary board. --}}
-<svg class="stonetop-relmap-tree" viewBox="0 0 100 100" preserveAspectRatio="none"
-     aria-hidden="true" focusable="false">
-  {{#each tree}}
-  <path class="stonetop-relmap-tree-line{{#if couple}} is-couple{{/if}}" d="{{d}}"
-        data-relmap-who="{{who}}" vector-effect="non-scaling-stroke"></path>
-  {{/each}}
-</svg>
-
 <svg class="stonetop-relmap-lines" viewBox="0 0 100 100" preserveAspectRatio="none"
      aria-hidden="true" focusable="false">
   {{#each edges}}
-  <path class="stonetop-relmap-line stonetop-relmap-line--{{ink}}{{#if dotted}} is-dotted{{/if}}"
+  {{!-- A COLOUR OF THE READER'S OWN RIDES INLINE, and only that one does. One of the eight is a
+        class and nothing else, because what it resolves to is the stylesheet's business and moves
+        under the accessibility skin; a custom colour has no token to move, so it is written here as
+        `--relmap-ink-raw` and the stylesheet decides what to do with it -- see the `--custom` rules,
+        which give it a dash pattern of its own and deepen it under the high-contrast skin. --}}
+  {{!-- ⚠ `broken` IS A KEY AND NOT A FLAG, and it is empty for a whole stroke rather than "solid".
+        There are three answers now (see RELMAP_DASHES) and a boolean per answer would be a boolean
+        per answer the day a fourth arrives; what the class carries is the KEY, and only when there
+        is one -- a solid line is the absence of a modifier, which is what `.stonetop-relmap-line`
+        already draws. The renderer decides which of the three this is; the stylesheet decides what
+        each resolves to, as it does for the ink beside it. --}}
+  <path class="stonetop-relmap-line stonetop-relmap-line--{{inkKey}}{{#if broken}} is-{{broken}}{{/if}}"
         data-relmap-line="{{id}}" d="{{d}}"
         data-relmap-who="{{a}} {{b}}"
+        {{#if inkHex}}style="--relmap-ink-raw:{{inkHex}}"{{/if}}
         vector-effect="non-scaling-stroke"></path>
   {{!-- WHAT THE CLICK ACTUALLY LANDS ON: the same curve again, invisible, and wide.
 
@@ -79,9 +71,9 @@
       expedition's two renderers draw the same shape from the same points, and a shape spelt out in
       three places is one that gets reshaped in two of them. --}}
 {{#each heads}}
-<svg class="stonetop-relmap-head stonetop-relmap-head--{{ink}}" viewBox="0 0 {{../headBox}} {{../headBox}}"
+<svg class="stonetop-relmap-head stonetop-relmap-head--{{inkKey}}" viewBox="0 0 {{../headBox}} {{../headBox}}"
      aria-hidden="true" focusable="false" data-relmap-head="{{id}}" data-relmap-end="{{end}}"
-     style="left:{{left}}%;top:{{top}}%;--relmap-turn:{{angle}}deg">
+     style="left:{{left}}%;top:{{top}}%;--relmap-turn:{{angle}}deg{{#if inkHex}};--relmap-ink-raw:{{inkHex}}{{/if}}">
   <path d="{{../headD}}"></path>
 </svg>
 {{/each}}
@@ -136,10 +128,22 @@
       in. The words are centred on that point and rotated about it (`text-anchor`,
       `dominant-baseline` and this `transform`), so a caption is placed the way an arrowhead is. --}}
 <svg class="stonetop-relmap-labels" viewBox="0 0 {{boardWidth}} {{boardHeight}}" focusable="false">
+  {{!-- ⚠ A CUSTOM PROPERTY AND NOT A `font-size`, on the lines the reader has set a size on, and
+        that is not a style preference. An inline `font-size` is the top of the cascade and would
+        beat the two rules that have to be able to win over it: the held line's caption, which is
+        blown up while the board is zoomed too far out to read anything (`--relmap-say-px`), and
+        anything the accessibility skin has to say about type. Handed to the stylesheet as a
+        NUMBER it can use, the size is one more thing the sheet resolves -- the same arrangement
+        the custom inks already have (`--relmap-ink-raw`).
+
+        AND IT IS ABSENT ON NEARLY EVERY LINE. Zero is "whatever the sheet sets", which is every
+        line on every board drawn before a reader could ask for a bigger one, so the attribute is
+        printed only where somebody actually chose. --}}
   {{#each labels}}
   <g class="stonetop-relmap-label" data-relmap-edge="{{id}}" data-relmap-who="{{a}} {{b}}">
     <text class="stonetop-relmap-label-text" role="button" tabindex="0"
           data-relmap-words="{{id}}" data-tooltip="{{tooltip}}" aria-label="{{ariaLabel}}"
+          {{#if px}}style="--relmap-caption-px: {{px}}px"{{/if}}
           x="{{x}}" y="{{y}}" transform="rotate({{angle}} {{x}} {{y}})">{{text}}</text>
   </g>
   {{/each}}
@@ -155,17 +159,13 @@
 
       `imgStyle` is the crop the GM chose for this actor's portrait, from utils/portrait-frame.js —
       the same one the relationships table uses, so a face framed once is framed everywhere. --}}
-{{!-- `is-centre` marks the one person a focus view is about. Nothing but the stylesheet reads it,
-      and what it buys is a ring round the face in the middle: the lines already say which person
-      the picture is around, but finding the middle of a star at four times magnification means
-      panning until you meet it, and a mark you can recognise without reading a name saves that. --}}
 {{!-- `is-own-ring` marks a face that arrived with a rim already painted on it — the playbook badge
       a character who never chose a portrait is given, each of them a woodcut inside a hand-drawn
       circle. The board's own rim then lands three pixels outside that one, and two concentric rings
       round a small picture read as a target rather than as somebody's face. The stylesheet drops
       ours on these and lets the drawn one be the rim. --}}
 {{#each nodes}}
-<div class="stonetop-relmap-node{{#if missing}} is-missing{{/if}}{{#if centre}} is-centre{{/if}}{{#if ownRing}} is-own-ring{{/if}}"
+<div class="stonetop-relmap-node{{#if missing}} is-missing{{/if}}{{#if ownRing}} is-own-ring{{/if}}"
      data-relmap-node="{{id}}" style="left:{{left}}%;top:{{top}}%">
   <button type="button" class="stonetop-relmap-face" data-relmap-open="{{id}}"
           data-tooltip="{{tooltip}}" aria-label="{{tooltip}}">
@@ -182,13 +182,33 @@
         another portrait draws the line, and clicking it asks who to draw to. Drag is the quick way
         and not the only way, which is what keeps the board usable from a keyboard and on a touch
         screen where a precise drag between two small circles is unpleasant. --}}
-  {{!-- `canLink` and not `canEdit`: the family tree is still an editable board (a caption on it
-        still opens its line) but drawing a NEW line onto it would put one where the tree cannot
-        show it, so the handle is not offered there. --}}
-  {{#if ../canLink}}
+  {{#if ../canEdit}}
   <button type="button" class="stonetop-relmap-handle" data-relmap-handle="{{id}}"
           data-tooltip="{{../linkHint}}" aria-label="{{linkLabel}}">
     <i class="fas fa-link"></i>
+  </button>
+  {{!-- TAKING SOMEBODY OFF, and the only way to do it with a mouse. It used to be the Delete key
+        and nothing else, which is a gesture with nothing on screen to suggest it exists.
+
+        ⚠ NOT THERE UNTIL IT IS ASKED FOR, and the asking is a RIGHT PRESS on the portrait
+        (utils/relmap-drag.js, which also says why that is built from a pointerdown and a pointerup
+        rather than from a `contextmenu` that Foundry has already killed document-wide). A delete
+        button standing open on every face would be forty invitations to lose somebody, on the one
+        surface a whole table clicks around on while talking; the handle beside it can afford to
+        fade in on hover because reaching it is harmless, and this one cannot. So the stylesheet
+        hides it outright -- `display`, so it is neither a tab stop nor a thing a screen reader
+        reads out -- and shows it on the one node wearing `is-arming`. Any ordinary click anywhere
+        puts it away again.
+
+        THE CORNER OPPOSITE THE HANDLE, so the two can never be confused for one another or land a
+        pixel apart: "draw a line from here" and "take them off this map" are not neighbours.
+
+        THE PRESS IS NOT THE DELETION. It opens the same confirm the Delete key does, which names
+        the person and counts the lines going with them -- see RelationshipMapWindow#_removePerson
+        for why that one asks where rubbing out a LINE does not. --}}
+  <button type="button" class="stonetop-relmap-bin" data-relmap-remove="{{id}}"
+          data-tooltip="{{removeLabel}}" aria-label="{{removeLabel}}">
+    <i class="fas fa-trash"></i>
   </button>
   {{/if}}
 </div>
