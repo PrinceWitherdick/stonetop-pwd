@@ -3958,6 +3958,7 @@ input.stonetop-name-field {
 .stonetop-pdc-instinct,
 .stonetop-pdc-subpick,
 .stonetop-pdi-writein-pick,
+.stonetop-person-picker-check,
 .steading-list-check {
 	appearance: none !important;
 	-webkit-appearance: none !important;
@@ -4023,6 +4024,7 @@ input.stonetop-name-field {
 .stonetop-pdc-instinct:checked,
 .stonetop-pdc-subpick:checked,
 .stonetop-pdi-writein-pick:checked,
+.stonetop-person-picker-check:checked,
 .steading-list-check:checked {
 	background: var(--stonetop-checkbox-checked-icon) no-repeat center / contain !important;
 }
@@ -4043,7 +4045,8 @@ input.stonetop-name-field {
    set selectAllEl.indeterminate on row toggles). appearance:none above hides the
    native dash, so paint our own: the empty checkbox SVG with a short centred bar
    layered over it, distinct from both the empty and fully-checked states. */
-.stonetop-ledger-select-all:indeterminate {
+.stonetop-ledger-select-all:indeterminate,
+.stonetop-person-picker-all-check:indeterminate {
 	background:
 		linear-gradient(currentColor, currentColor) no-repeat center / 56% 2px,
 		var(--stonetop-checkbox-icon) no-repeat center / contain !important;
@@ -4061,6 +4064,7 @@ input.stonetop-name-field {
 .stonetop-bg-action-check:disabled,
 .stonetop-pdc-pick:disabled,
 .stonetop-pdc-mark:disabled,
+.stonetop-person-picker-check:disabled,
 .stonetop-arcanum-unlock-check:disabled {
 	opacity: 0.35;
 	cursor: default;
@@ -42907,11 +42911,111 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 }
 
 /* Pinned to slate for the reason .stonetop-content-picker-option gives: unstyled it takes
-   Foundry v14's core orange accent and is the odd radio out in the system. */
+   Foundry v14's core orange accent and is the odd radio out in the system.
+
+   ⚠ THE RADIO ONLY. The several-answers question draws a real checkbox, and every checkbox in
+   this system wears the spiral SVG off the master block near the top of this file
+   (.stonetop-person-picker-check is on that list) rather than a native browser box. Adding
+   `input[type="checkbox"]` back here would not undo the skin -- the master block is all
+   `!important` -- but it would say the opposite of what is true. */
 .stonetop-person-picker-row input[type="radio"] {
 	accent-color: slategrey;
 	flex: 0 0 auto;
 	margin: 0;
+}
+
+/* ── "Select all" ──────────────────────────────────────────────────────────────────────────
+   One per list, above the names, on the several-answers question alone. Read as a control and
+   not as a person: no portrait circle, the label in the quiet ink the notes use, and a hairline
+   under it holding it off the first name.
+
+   ⚠ THE LABEL SITS BESIDE ITS OWN TICK and is NOT indented to the column the names start in.
+   It was, once — 26px of face plus the row's gap, so the words lined up with the names below —
+   and on screen it read as a checkbox that had lost its label: an empty portrait circle's worth
+   of nothing between the two, which is the one gap a reader has no reason to be shown. This is
+   not a person's row and it does not owe the portrait column anything. */
+.stonetop-person-picker-all {
+	display: flex;
+	align-items: center;
+	gap: 0.6em;
+	padding: 2px 6px 6px;
+	margin-bottom: 4px;
+	/* Off currentColor, as the row hover beside it is, so the rule follows the ink into the dark
+	   theme instead of staying a black line on a dark bed. */
+	border-bottom: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+	cursor: pointer;
+	/* Upright, and quiet by ink and size alone. Italic reads as an ASIDE -- the voice the row
+	   notes under each name are written in -- and this is a control the reader presses, not a
+	   remark about the list. */
+	color: var(--st-quiet-ink);
+	font-size: var(--st-fs-xs);
+}
+
+.stonetop-person-picker-all:hover {
+	color: inherit;
+}
+
+/* ── The picks, on a question that takes several ───────────────────────────────────────────
+   A row of ticked names under the find box, which the dialog rebuilds on every tick
+   (`_paintChosen`). It is there because a pick survives both moving between lists and the find
+   box hiding its row: by the fourth name, every row the reader ticked can be off screen, and a
+   button reading "Add 4 people" over a list showing none of them says nothing about which four.
+
+   It WRAPS and it does not scroll: this strip is the receipt, and a receipt with its own
+   scrollbar hides the very names it is up there to show. The names are short and the window is
+   resizable, so a long list costs a line of height rather than a hidden row. */
+.stonetop-person-picker-chosen {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: baseline;
+	gap: 0.5em;
+	font-size: var(--st-fs-xs);
+}
+
+.stonetop-person-picker-chosen-label {
+	flex: 0 0 auto;
+	color: var(--st-quiet-ink);
+}
+
+.stonetop-person-picker-chosen-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	min-width: 0;
+}
+
+/* One ticked name, and the press that unticks them. Filled rather than outlined, so the strip
+   reads as answers already given and not as more buttons to press. */
+.stonetop-person-picker-chip {
+	width: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	padding: 1px 8px;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-xs);
+	line-height: 1.5;
+	cursor: pointer;
+	border: 1px solid var(--st-btn-primary-bg, #3b4252);
+	border-radius: var(--st-radius-pill, 999px);
+	background: var(--st-btn-primary-bg, #3b4252);
+	color: var(--st-btn-primary-text, #f5f5f5);
+	transition: background 0.12s, border-color 0.12s;
+}
+
+.stonetop-person-picker-chip:hover {
+	background: var(--st-btn-primary-bg-hover, #434c5e);
+	border-color: var(--st-btn-primary-bg-hover, #434c5e);
+}
+
+/* The x is the smaller half of the chip: the name is what is being read, and a glyph at the
+   label's own size would read as the point of the press rather than as the way out of it. */
+.stonetop-person-picker-chip i {
+	font-size: 0.85em;
+	opacity: 0.8;
 }
 
 /* The clipping box a hand-framed portrait is positioned against (utils/portrait-frame.js
@@ -42931,7 +43035,32 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	border-radius: 50%;
 	background: rgba(255, 255, 255, 0.55);
 	color: var(--st-quiet-ink);
-	font-size: var(--st-fs-xs);
+	/* ⚠ A WHOLE PIXEL, AND THE SAME 14px THE CHARACTER SHEET'S EMPTY FACE USES
+	   (.stonetop-rel-portrait--empty i), NOT --st-fs-xs. Two reasons, and the second is the one
+	   that was actually reported.
+
+	   THE BOX DOES NOT SCALE, SO THE GLYPH MUST NOT EITHER. This circle is a fixed 26px at every
+	   UI font scale. Sizing what sits inside it from an em ran the placeholder head from 11.3px at
+	   root 14 to 19.3px at root 24 -- a head with room around it at one scale and one pressing on
+	   the ring at another, in a circle that never moved.
+
+	   AND A FRACTIONAL SIZE IS WHAT PUT IT OFF CENTRE. `place-items: center` centres the icon's
+	   BOX exactly -- both boxes measure equal in the DOM -- but a glyph is painted from its
+	   baseline, and the rasteriser snaps that to the pixel grid differently at each fractional
+	   size. Scanned off the real paint against the real Pro webfont, the ink's middle missed the
+	   circle's by 0.25, -1.25, -0.75, 0.38 and 0.00 px at roots 14/16/18/20/24 -- worst at the
+	   DEFAULT root of 16, where --st-fs-xs resolves to 12.88px. At a whole 14px the same sweep
+	   reads 0.25, 0.38, -0.50, 0.13, -0.13: half a pixel at worst, which is the quantisation
+	   itself and not an offset anything can correct.
+
+	   ⚠ SO DO NOT ADD A translateY HERE. The residual CHANGES SIGN between one root size and the
+	   next, so every nudge that improves one scale spoils another -- a sweep from 0.02em to 0.12em
+	   confirms it, and each one made the worst case worse than leaving it alone. The same argument,
+	   at length, is at .stonetop-relmap-popout > i.
+
+	   Probes: z:/tmp/foundry-verify/picker-face-nudge.mjs (the sweep that ruled a nudge out) and
+	   picker-face-size.mjs (this one). */
+	font-size: 14px;
 }
 
 .stonetop-person-picker-text {

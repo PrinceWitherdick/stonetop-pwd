@@ -2114,6 +2114,57 @@ describe("drawing a line between two people", () => {
 	});
 });
 
+describe("putting several people on the board at once", () => {
+	beforeEach(() => {
+		globalThis.game.i18n = TABLE;
+		globalThis.ui = { notifications: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } };
+	});
+
+	const ARRIVING = [
+		{ uuid: "Actor.aerin", name: "Aerin", img: "" },
+		{ uuid: "Actor.brakken", name: "Brakken", img: "" },
+		{ uuid: "Actor.corwin", name: "Corwin", img: "" },
+	];
+
+	/** The nodes a write seated, read back off the leaf paths it was written as. */
+	const seated = patch => {
+		const people = new Map();
+		for (const [key, value] of Object.entries(patch)) {
+			const found = /\.nodes\.([^.]+)\.(.+)$/.exec(key);
+			if (!found) continue;
+			people.set(found[1], { ...(people.get(found[1]) ?? {}), [found[2]]: value });
+		}
+		return [...people.values()];
+	};
+
+	// ⚠ ONE WRITE, WHICH IS THE WHOLE REASON THIS IS NOT A LOOP. Three calls is three document
+	// updates, three broadcasts, three repaints on every open window and three steps to undo
+	// something the reader did once.
+	it("seats everybody in a single update", async () => {
+		const { app, entry } = windowFor();
+		await app._addNodesFor(readGraph(app.boardDoc), ARRIVING);
+		expect(entry.updates).toHaveLength(1);
+		expect(seated(entry.updates[0]).map(node => node.name))
+			.toEqual(["Aerin", "Brakken", "Corwin"]);
+	});
+
+	// ⚠ AND NOBODY LANDS ON ANYBODY. The seater keeps its own list of what is taken as it goes,
+	// which a loop could not: `freeSpot` reads the graph, and the graph knows nothing about the
+	// arrivals still in flight, so the second would be handed the seat the first had just taken.
+	it("gives each of them a seat of their own", async () => {
+		const { app, entry } = windowFor();
+		await app._addNodesFor(readGraph(app.boardDoc), ARRIVING);
+		const spots = seated(entry.updates[0]).map(node => `${node.x},${node.y}`);
+		expect(new Set(spots).size).toBe(3);
+	});
+
+	it("writes nothing when there is nobody to seat", async () => {
+		const { app, entry } = windowFor();
+		await app._addNodesFor(readGraph(app.boardDoc), []);
+		expect(entry.updates).toEqual([]);
+	});
+});
+
 describe("rubbing a line out from the bar", () => {
 	beforeEach(() => {
 		globalThis.game.i18n = TABLE;

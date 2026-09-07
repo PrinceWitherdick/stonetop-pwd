@@ -39,7 +39,7 @@ import {
 	RELMAP_SIZES, RELMAP_SIZE_MAX, RELMAP_SIZE_MIN,
 	addEdgePatch,
 	addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, fanIndexes,
-	nodePatch, takenSpots,
+	nodePatch, seatArrivals, takenSpots,
 } from "../relmap/relmap-store.js";
 import { RELMAP_INK_ACROSS, RELMAP_INK_PRESETS, inkPaint, normalizeHex }
 	from "../relmap/relmap-ink.js";
@@ -2593,10 +2593,49 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const chosen = await pickPersonToAdd({
 			options: actors.map(actor => ({ id: actor.uuid, name: actor.name, actor })),
 		});
-		if (!chosen) return;
-		const actor = actors.find(a => a.uuid === chosen);
-		if (!actor) return;
-		await this._addNodeFor(actor, freeSpot(takenSpots(graph), { r: this._boardSize(graph).r }));
+		// An array, because that window takes as many answers as the reader ticks. Nobody ticked
+		// cannot happen (its button is dead until somebody is), so an empty one means backing out.
+		// Keyed rather than scanned: a reader adding half the village to a board with the rest of it
+		// already on would otherwise walk the candidate list once per person they ticked.
+		const byUuid = new Map(actors.map(actor => [actor.uuid, actor]));
+		const picked = (chosen ?? []).map(uuid => byUuid.get(uuid)).filter(Boolean);
+		if (!picked.length) return;
+		if (picked.length === 1) {
+			const [actor] = picked;
+			await this._addNodeFor(actor, freeSpot(takenSpots(graph), { r: this._boardSize(graph).r }));
+			return;
+		}
+		await this._addNodesFor(graph, picked);
+	}
+
+	/**
+	 * Seat several people at once, in ONE write.
+	 *
+	 * NOT A LOOP OVER `_addNodeFor`, and the difference is what the table sees. Six calls is six
+	 * document updates, six broadcasts and six repaints on every open window, six lines in the chat
+	 * of announcements, and six steps to undo something the reader did once. It is also six seatings
+	 * worked out against a board that has not been written yet, so the second arrival lands on the
+	 * first: `freeSpot` reads the graph, and the graph does not know about anybody still in flight.
+	 *
+	 * `seatArrivals` is the same seater the party and village boards fill themselves with, which is
+	 * what keeps a newcomer off somebody's lap here too: it sizes the portraits for the board these
+	 * people are about to MAKE (the sheet grows with its cast), keeps its own list of what is taken
+	 * as it goes, and lays a whole ring out where the board it is filling is empty.
+	 */
+	async _addNodesFor(graph, actors) {
+		const seating = seatArrivals(graph, actors.map(actor => ({
+			uuid: actor.uuid, name: actor.name, img: actor.img ?? "",
+		})));
+		const patch = {};
+		for (const [id, node] of Object.entries(seating.nodes)) {
+			Object.assign(patch, addNodePatch(id, node) ?? {});
+		}
+		if (!Object.keys(patch).length) return;
+		const count = Object.keys(seating.nodes).length;
+		return this._write(patch, {
+			announce: format("stonetop.relmap.addedCount", { count }),
+			label: format("stonetop.relmap.history.addedCount", { count }),
+		});
 	}
 
 	async _addNodeFor(actor, spot) {

@@ -40,7 +40,8 @@ import { format, localize } from "../utils/i18n.js";
  * else", which is where they belong rather than a hole in the list.
  */
 export function pickPersonOnMap({
-	options = [], title = "", buttonLabel = "", formatLabel = null, icon = "",
+	options = [], title = "", buttonLabel = "", formatLabel = null, formatManyLabel = null,
+	icon = "", multiple = false, hint = "",
 } = {}) {
 	const people = options.map(option => {
 		const actor = option.actor ?? null;
@@ -59,7 +60,7 @@ export function pickPersonOnMap({
 	return pickPerson({
 		title: title || localize("stonetop.relmap.linkPickTitle"),
 		buttonLabel: buttonLabel || localize("stonetop.relmap.choose"),
-		formatLabel, icon,
+		formatLabel, formatManyLabel, icon, multiple, hint,
 		groups: groupPeople(people),
 	});
 }
@@ -69,6 +70,10 @@ export function pickPersonOnMap({
  *
  * The button names the person once one is picked, and names the act rather than the press: the
  * line is drawn the moment this window closes, and "Draw a line to Maeve" is the promise it keeps.
+ *
+ * ONE ANSWER, where "who goes on the map" takes several. A line is between two people and what it
+ * says is written on it afterwards, so half a dozen at once would be half a dozen blank lines and a
+ * tie bar over each in turn. Drawing the next one is a drag from the same face.
  */
 export function pickPersonToLink({ from = "", options = [] } = {}) {
 	return pickPersonOnMap({
@@ -82,19 +87,27 @@ export function pickPersonToLink({ from = "", options = [] } = {}) {
 }
 
 /**
- * Ask who goes on the map.
+ * Ask who goes on the map. Settles on an ARRAY of ids, or null if the reader backed out.
  *
  * Its own function beside the one above rather than a flag on it: the two questions are asked of
  * different lists (everybody in the world, against everybody already on this board) and answered
  * with different words, and a shared one that told them apart by which arguments were missing was
  * how the add flow came to press a button that said "Add" over a list of people to draw lines to.
+ *
+ * AS MANY AS THEY LIKE, which is the one real difference between the two questions now. A board is
+ * set up by putting a household or a faction on it, and asking one name at a time meant reopening
+ * this window, finding the list again and typing into the find box again for every person, with the
+ * board repainting between each. The names are seated in one write, so it is also one step to undo.
  */
 export function pickPersonToAdd({ options = [] } = {}) {
 	return pickPersonOnMap({
 		options,
+		multiple: true,
 		title: localize("stonetop.relmap.addTitle"),
+		hint: localize("stonetop.relmap.addPickHint"),
 		buttonLabel: localize("stonetop.relmap.choose"),
 		icon: "fa-user-plus",
 		formatLabel: name => format("stonetop.relmap.addNamed", { name }),
+		formatManyLabel: count => format("stonetop.relmap.addNamedCount", { count }),
 	});
 }

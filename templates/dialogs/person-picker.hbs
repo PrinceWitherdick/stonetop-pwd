@@ -1,5 +1,7 @@
-{{!-- Which person? A rail of the lists this table thinks in (Players / Residents / Neighbors),
-      a find box, and the names in one scrolling column beside it.
+{{!-- Which person, or which people? A rail of the lists this table thinks in (Players /
+      Residents / Neighbors), a find box, and the names in one scrolling column beside it. The
+      rows are radios where the question takes one answer and checkboxes where it takes several,
+      which is the only difference between the two: see `inputType` below.
 
       One root element, as AppV1 requires, and a <div> rather than a <form>: a form holding a
       single text field submits itself on Enter, and Enter here means "take the first match".
@@ -40,15 +42,42 @@
                placeholder="{{findLabel}}" aria-label="{{findAria}}">
       </label>
 
+      {{!-- The picks, on a question that takes several. Empty and hidden at render; the dialog
+            fills it as rows are ticked, and each chip unticks its own person. --}}
+      {{#if multiple}}
+      <div class="stonetop-person-picker-chosen" hidden>
+        <span class="stonetop-person-picker-chosen-label">{{chosenLabel}}</span>
+        <ul class="stonetop-person-picker-chosen-list"></ul>
+      </div>
+      {{/if}}
+
       <div class="stonetop-person-picker-body">
         {{#each groups}}
         <section class="stonetop-person-picker-group" data-group="{{key}}"{{#unless selected}} hidden{{/unless}}>
+          {{!-- "Select all", on a question that takes several answers. It ticks what this
+                list is SHOWING and not what it holds, so narrowing with the find box first is how
+                a reader ticks fewer than all of them; it is per-list for the same reason, since a
+                board is usually set up one household or one village at a time. It reads back what
+                is ticked as well as setting it: half a list ticked leaves it part-way (the
+                dialog's `_syncAll` sets `indeterminate`). --}}
+          {{#if ../multiple}}
+          <label class="stonetop-person-picker-all" data-tooltip="{{../selectAllHint}}">
+            <input type="checkbox" class="stonetop-person-picker-check stonetop-person-picker-all-check"
+                   data-all-for="{{key}}">
+            <span class="stonetop-person-picker-all-text">{{../selectAllLabel}}</span>
+          </label>
+          {{/if}}
           <ul class="stonetop-person-picker-list">
             {{#each people}}
             {{!-- `data-search` is the name and the note folded to lower case once, at render. --}}
             <li class="stonetop-person-picker-item" data-search="{{search}}">
               <label class="stonetop-person-picker-row">
-                <input type="radio" name="person" value="{{id}}">
+                {{!-- A radio where the question takes one answer and a checkbox where it takes
+                      several; the NAME is `person` either way, which is what every selector in
+                      the dialog reads. The CLASS follows the type because the two are skinned
+                      apart: the checkbox joins the system's SVG master block (a checkbox left off
+                      it renders as a native browser box), and the radio is pinned to slate. --}}
+                <input type="{{../../inputType}}" class="{{../../inputClass}}" name="person" value="{{id}}">
                 <span class="stonetop-person-picker-face">
                   {{#if img}}<img class="stonetop-person-picker-face-img" src="{{img}}" alt="" draggable="false"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}>
                   {{else}}<i class="fas fa-user" aria-hidden="true"></i>{{/if}}
