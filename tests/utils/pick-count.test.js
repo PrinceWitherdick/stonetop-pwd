@@ -13,10 +13,10 @@ import { pickLimitsFrom } from "../../module/utils/move-picks.js";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // Every home the tally is painted in, in the one spelling the stylesheet uses. ONE rule covers
-// them all so the readout's ink cannot drift between surfaces, which is what happened while the
-// tier controls carried a copy of their own.
+// them all so the readout's ink cannot drift between surfaces, which is what happened while a
+// tier's own option controls carried a copy of their own.
 const CHAT_HOMES = ":is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, "
-	+ ".stonetop-roll-card-description, .stonetop-roll-tier-action)";
+	+ ".stonetop-roll-card-description)";
 
 // A move that sends its options to chat says how many you may take ONCE, in prose — a lead-in
 // above the printed list, or the result line's "Pick 2 from the list below". By the third box a
@@ -467,6 +467,41 @@ describe("grantsWholeList", () => {
 		expect(grantsWholeList(fakePickList(dataset, { tier: "partial", boxes }))).toBe(false);
 		expect(pickLimitFor(fakePickList(dataset, { tier: "partial", boxes }))).toBe(1);
 	});
+
+	// And the same walk for Formidable, whose awkwardness is WHERE it says the thing: its 10+ and
+	// 7-9 are in the lead-in above the bullets and its 6- is a paragraph below them. A cap read
+	// only upwards stamped nothing for the miss, and nothing reads as "tick freely" — so the one
+	// tier that says "pick 1 but ask the GM what you've missed" was the one tier a Heavy could
+	// take both options on.
+	it("reads Formidable's shipped 6- from under the bullets, and holds it to one", () => {
+		const move = JSON.parse(fs.readFileSync(path.resolve(HERE,
+			"../../packs/src/stonetop-items/playbook-moves/the-heavy/formidable.json"), "utf8"));
+		const html = pickableMoveDescription(move.system.description);
+		const dataset = {};
+		for (const [, tier, n] of html.matchAll(/data-pick-max-(success|partial|failure)="(\d+)"/g)) {
+			dataset[`pickMax${tier[0].toUpperCase()}${tier.slice(1)}`] = n;
+		}
+		expect(dataset).toEqual({ pickMaxSuccess: "2", pickMaxPartial: "1", pickMaxFailure: "1" });
+		const boxes = [...html.matchAll(/stonetop-picklist-check/g)].length;
+		expect(boxes).toBe(2);
+		// "On a 10+, both" leaves nothing to decide; the other two rungs are one of the two.
+		expect(grantsWholeList(fakePickList(dataset, { tier: "success", boxes }))).toBe(true);
+		expect(pickLimitFor(fakePickList(dataset, { tier: "partial", boxes }))).toBe(1);
+		expect(pickLimitFor(fakePickList(dataset, { tier: "failure", boxes }))).toBe(1);
+		expect(grantsWholeList(fakePickList(dataset, { tier: "failure", boxes }))).toBe(false);
+	});
+
+	// Forage is the move that shows why the prose below the bullets is read APART from the lead-in
+	// rather than appended to it: its closing line is about Make Camp, and the "1-for-1" in it
+	// falls inside the 7-9's segment when the two are read as one string, vetoing the count that
+	// tier states outright.
+	it("keeps Forage's 7-9 at one, whatever its closing line says about provisions", () => {
+		const move = JSON.parse(fs.readFileSync(path.resolve(HERE,
+			"../../packs/src/stonetop-items/expedition-moves/forage.json"), "utf8"));
+		const html = pickableMoveDescription(move.system.description);
+		expect(html).toContain('data-pick-max-success="2"');
+		expect(html).toContain('data-pick-max-partial="1"');
+	});
 });
 
 describe("paintPickTally", () => {
@@ -681,10 +716,13 @@ describe("the chat card's tally rides the wiring that is already there", () => {
 // missing: Clash's 10+ stands its checklist down because the radios below restate both bullets
 // word for word, and the "0/1 options selected" went down with the checklist. So the controls
 // carry it — over a radio group, which is why the box selector had to stop meaning "checkbox".
-describe("the tally over a tier's own controls", () => {
+// A tier's own option controls used to be a second list on the card, with a second tally over
+// them, and the two counts could not see each other. They are gone: a move's options are ticked
+// where the move prints them, so there is ONE list, ONE cap and ONE readout per card.
+describe("a tier adds no second list to count", () => {
 	const SRC = read("module/combat/attack-flow.js");
 
-	it("counts radios as options, from the one selector all three readers share", () => {
+	it("counts every kind of box, from the one selector all three readers share", () => {
 		expect(PICK_BOX_SELECTOR).toContain('input[type="checkbox"]');
 		expect(PICK_BOX_SELECTOR).toContain('input[type="radio"]');
 		const tally = read("module/utils/pick-tally.js");
@@ -694,55 +732,43 @@ describe("the tally over a tier's own controls", () => {
 		expect(tally).not.toContain(`querySelectorAll('input[type="checkbox"]')`);
 	});
 
-	it("wraps only the controls that ARE the whole list, and stamps the cap on the wrapper", () => {
-		const at = SRC.indexOf("function pickGroup");
-		expect(at).toBeGreaterThan(-1);
-		expect(SRC.slice(at, at + 400)).toContain('<div class="stonetop-attack-picklist" data-pick-max="');
+	it("builds no option controls of its own — only a Confirm", () => {
+		expect(SRC).not.toContain("function pickRow");
+		expect(SRC).not.toContain("function addonRow");
+		expect(SRC).not.toContain("function pickGroup");
+		expect(SRC).not.toContain("stonetop-attack-picklist");
+		expect(SRC).not.toContain("stonetop-attack-pick-label");
 	});
 
-	it("paints through the shared readout, off the cap the wrapper carries", () => {
-		const at = SRC.indexOf("function wireAttackPicks");
+	it("reads the ticks off the move's own printed list, not off a list it built", () => {
+		const at = SRC.indexOf("function pickedOptionLabels");
 		expect(at).toBeGreaterThan(-1);
 		const body = SRC.slice(at, SRC.indexOf("\n}", at));
-		expect(body).toContain('root.querySelectorAll(".stonetop-attack-picklist")');
-		expect(body).toContain("wirePickTally(list, pickLimitFor(list))");
+		// The same boxes the tally counts, the cap releases and the message flag persists.
+		expect(body).toContain('".stonetop-picklist-check:checked"');
+		// A tick behind a tier this roll did not land on is not this roll's pick: a card carries
+		// every tier's options so a GM's Shift Up/Down can reveal the right one.
+		expect(body).toContain('closest("[hidden]")');
 	});
 
-	// Painted AFTER the resolved-card restore, or a card that struck hard would come back from a
-	// re-render reading 0/1 over a radio it is showing as held.
-	it("counts a resolved card's restored pick, not the blank the flavor rebuilds", () => {
+	it("stops taking ticks once the card is resolved", () => {
+		// A resolved card is a read-only record of what was enacted. Nothing is RESTORED, though:
+		// the ticks are the printed list's and already persist in the message's pickChecked flag,
+		// so every client rebuilds them the same way.
 		const at = SRC.indexOf("function wireAttackConfirm");
-		expect(at).toBeGreaterThan(-1);
 		const body = SRC.slice(at, SRC.indexOf("\n}", at));
-		expect(body.indexOf("attack.resolved")).toBeLessThan(body.indexOf("wireAttackPicks(root)"));
+		expect(body).toContain('root.querySelectorAll(".stonetop-picklist-check")) input.disabled = true');
+		const lock = SRC.indexOf("async function lockAttackCard");
+		expect(SRC.slice(lock, SRC.indexOf("\n}", lock)))
+			.toContain('".stonetop-attack-confirm, .stonetop-picklist-check"');
 	});
 
-	// The other half of "nothing starts selected": a state you can be put in and never leave is
-	// not a choice. A radio group cannot be cleared by clicking, and these radios are skinned as
-	// checkbox-SVGs, so the row you hold releases on a second click.
-	it("lets a held radio go, off the click the browser fires no change for", () => {
-		const at = SRC.indexOf("function wireAttackPicks");
-		const body = SRC.slice(at, SRC.indexOf("\n}", at));
-		expect(body).toContain(`radio.addEventListener("click"`);
-		expect(body).toContain(`radio.dataset.wasChecked === "1"`);
-		expect(body).toContain("radio.checked = false;");
-		// Repainted off the same listener a real tick uses, so there is one repaint path.
-		expect(body).toContain(`radio.dispatchEvent(new Event("change", { bubbles: true }))`);
-	});
-
-	it("is styled on the tier controls too, not only on the checklists", () => {
+	it("keeps the readout's ink in ONE rule, now that a tier has no readout of its own", () => {
 		const css = read("styles/stonetop.css");
-		// THROUGH THE SAME RULE AS THE CHECKLISTS, as a fourth entry in the one list of homes. It
-		// was written out twice - once beside the checklists and once beside the tier controls -
-		// and the two had already drifted apart on the margin before they were folded together.
-		expect(CHAT_HOMES).toContain(".stonetop-roll-tier-action");
+		expect(CHAT_HOMES).not.toContain(".stonetop-roll-tier-action");
 		expect(css).toContain(`${CHAT_HOMES} .stonetop-picklist-count`);
 		expect(css).toContain(`${CHAT_HOMES} .stonetop-picklist-count.is-full`);
-		// The margin is the one thing the tier says for itself: its flex gap already spaces the
-		// readout off the boxes, so the checklists' bottom margin would double it.
-		expect(css).toContain(".stonetop-roll-tier-action .stonetop-picklist-count {\n\tmargin: 0;\n}");
-		// The wrapper has to space its own rows: a nested flex box inherits no gap from the tier.
-		expect(css).toContain(".stonetop-attack-picklist {");
+		// The margin override that a tier's flex column needed goes with it.
+		expect(css).not.toContain(".stonetop-roll-tier-action .stonetop-picklist-count");
 	});
 });
-

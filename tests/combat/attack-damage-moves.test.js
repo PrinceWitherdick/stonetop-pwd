@@ -2,9 +2,10 @@ import { describe, it, expect, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
-	attackMoveFor, buildTierActions, maybeBeginAttack,
+	attackMoveFor, buildTierActions, maybeBeginAttack, pickedEffects,
 } from "../../module/combat/attack-flow.js";
-import { firstOptionList, tierActionsRestateOptions } from "../../module/utils/chat.js";
+import { firstOptionList } from "../../module/utils/chat.js";
+import { moveCardBody } from "../../module/utils/move-tiers.js";
 
 // The SHIPPED moves, not a paraphrase of them. Every label these controls print is one of the
 // move's own printed bullets, word for word, so a test that retyped either side would keep
@@ -13,15 +14,14 @@ const packMove = (rel) => JSON.parse(
 	fs.readFileSync(path.resolve("packs/src/stonetop-items", rel), "utf8")).system;
 
 const CLASH    = packMove("basic-moves/clash.json");
+const LET_FLY  = packMove("basic-moves/let-fly.json");
 const AMBUSH   = packMove("playbook-moves/the-fox/ambush.json");
 const CALL     = packMove("playbook-moves/the-ranger/call-the-shot.json");
 const HAMMER   = packMove("playbook-moves/the-judge/the-hammer-and-the-book.json");
 
-// The labels a tier's controls print, and the bullets the move prints — compared as text, the
-// way the card itself compares them (utils/chat.js#tierActionsRestateOptions).
-const labelsOf = (html) =>
-	Array.from(String(html).matchAll(/<span class="stonetop-attack-pick-label">([\s\S]*?)<\/span>/g))
-		.map(([, label]) => label.replace(/&#x27;/g, "'"));
+// The bullets a move prints, read off the SHIPPED text. Every effect the card can apply is
+// keyed by one of these (combat/attack-flow.js#PICK_EFFECTS), so the tests ask what the move's
+// own words are worth rather than what a retyped copy of them would be.
 const bulletsOf = (description) => firstOptionList(description)?.items ?? [];
 
 const item = (name, moveType = "playbook") => ({ type: "move", name, system: { moveType } });
@@ -55,142 +55,156 @@ describe("attackMoveFor: which moves deal a character's damage", () => {
 	});
 });
 
-describe("Clash's tier controls", () => {
-	const actions = buildTierActions(attackMoveFor(item("Clash", "basic")), null);
+// -- The tier's controls: a button, and nothing else --------------------------
 
-	it("offers both printed bullets on the 10+, word for word", () => {
-		expect(labelsOf(actions.success)).toEqual([
-			"Avoid, prevent, or counter your enemy's attack",
-			"Strike hard and fast, for 1d6 extra damage, but suffer your enemy's attack",
-		]);
-		for (const label of labelsOf(actions.success)) {
-			expect(bulletsOf(CLASH.description)).toContain(label);
+// Every one of these tiers used to carry its own row of option controls, and the card therefore
+// carried the move's list twice — the printed bullets with their "0/1 options selected", then a
+// subset of those same bullets again under the result, with the two counts unable to see each
+// other. The options are the printed list now, wherever the move prints them, and a tier adds
+// exactly one thing to the card.
+describe("what a hit tier puts on the card", () => {
+	const ATTACKS = [
+		["Clash", "basic"], ["Let Fly", "basic"], ["Ambush", "playbook"],
+		["Call the Shot", "playbook"], ["The Hammer and the Book", "playbook"],
+	];
+
+	for (const [name, moveType] of ATTACKS) {
+		it(`${name}: offers no options of its own, on any tier`, () => {
+			const actions = buildTierActions(attackMoveFor(item(name, moveType)));
+			for (const html of Object.values(actions)) {
+				expect(html).not.toContain("<input");
+				expect(html).not.toContain("stonetop-attack-pick");
+			}
+		});
+	}
+
+	it("names the action on every tier, because the options are elsewhere on the card", () => {
+		// A bare "Confirm" is unclear on a card whose choice was made up in the move's own text.
+		for (const [name, moveType] of ATTACKS) {
+			const actions = buildTierActions(attackMoveFor(item(name, moveType)));
+			expect(actions.success).toContain("Roll your damage");
+			expect(actions.partial).toContain("Roll your damage");
 		}
 	});
 
-	it("makes them a radio pair, because the move says pick 1", () => {
-		expect(actions.success.match(/type="radio"/g)).toHaveLength(2);
-		expect(actions.success).toContain('name="clash-pick"');
+	it("Clash: keeps the two counter-attacks its tiers state unconditionally", () => {
+		// The 7-9 suffers the enemy's attack whatever the player picks, and the 6- does nothing
+		// else at all. Those are the tier's own numbers, not a pick's — so they stay on the button.
+		const clash = buildTierActions(attackMoveFor(item("Clash", "basic")));
+		expect(clash.success).toContain('data-counter="0"');
+		expect(clash.partial).toContain('data-counter="1"');
+		expect(clash.failure).toContain('data-action="suffer"');
 	});
 
-	it("starts with NEITHER selected — the card does not pick for the player", () => {
-		// A pre-checked "avoid" showed a choice the player had not made, in a control skinned as a
-		// checkbox that a radio group gives them no way to untick. Nothing selected is a state the
-		// player can also reach again (wireAttackPicks releases a held radio on re-click), and the
-		// Confirm still rolls plain damage with no counter, which is what "avoid" comes to.
-		expect(actions.success).not.toContain(" checked");
-	});
-
-	it("wraps the pair as a counted list, so the tally the checklist carried survives", () => {
-		// Clash's radios restate its whole printed list, so the tickable version of that list —
-		// and the "0/1 options selected" over it — stands down (tierActionsRestateOptions). The
-		// count comes with the options rather than being lost with the boxes.
-		expect(actions.success).toContain('<div class="stonetop-attack-picklist" data-pick-max="1">');
-	});
-
-	it("puts the extra dice and the counter-attack on strike-hard alone", () => {
-		expect(actions.success).toContain('data-extra-dice="1d6"');
-		expect(actions.success.match(/data-counter="1"/g)).toHaveLength(1);
-	});
-
-	it("stands the checklist down, because the radios ARE the printed list", () => {
-		expect(tierActionsRestateOptions(actions, CLASH.description)).toBe(true);
-	});
-});
-
-describe("Ambush's tier controls", () => {
-	const actions = buildTierActions(attackMoveFor(item("Ambush")), null);
-
-	it("offers the one bullet that changes the number, on both hit tiers", () => {
-		expect(labelsOf(actions.success)).toEqual(["Deal +1d4 damage"]);
-		expect(labelsOf(actions.partial)).toEqual(["Deal +1d4 damage"]);
-	});
-
-	it("labels it with the move's own printed bullet, word for word", () => {
-		expect(bulletsOf(AMBUSH.description)).toContain(labelsOf(actions.success)[0]);
-	});
-
-	it("carries the 1d4 into the damage roll", () => {
-		expect(actions.success).toContain('data-extra-dice="1d4"');
-	});
-
-	it("carries no counted list — its checklist is still on the card with the count", () => {
-		expect(actions.success).not.toContain("stonetop-attack-picklist");
-		expect(actions.partial).not.toContain("stonetop-attack-picklist");
-	});
-
-	it("rolls damage and nothing else — Ambush has no counter-attack to suffer", () => {
-		expect(actions.success).toContain('data-action="roll"');
-		expect(actions.success).not.toContain('data-action="suffer"');
-		// 6- is "the GM makes a move": nothing for the player to enact, so no button at all.
-		expect(actions.failure).toBeUndefined();
-	});
-
-	it("keeps the tickable list, because three of its four bullets are only printed there", () => {
-		// "Slip away before they can react" has to stay tickable somewhere; the controls cover one
-		// bullet of four, so the description's checklist is still the only place the rest live.
-		expect(tierActionsRestateOptions(actions, AMBUSH.description)).toBe(false);
-	});
-});
-
-describe("Call the Shot's tier controls", () => {
-	const actions = buildTierActions(attackMoveFor(item("Call the Shot")), null);
-
-	it("offers its one mechanical bullet as ONE box", () => {
-		// Not two. The bullet is a single pick whose effect is "your call", and splitting it would
-		// let a 7-9 "pick 1" quietly take both halves.
-		expect(labelsOf(actions.success)).toEqual(["Ignore armor or deal +1d4 damage (your call)"]);
-		expect(bulletsOf(CALL.description)).toContain(labelsOf(actions.success)[0]);
-	});
-
-	it("carries no dice of its own — which half applies is asked when the box is ticked", () => {
-		expect(actions.success).not.toContain("data-extra-dice");
-		expect(actions.success).toContain('data-addon="your-call"');
-	});
-
-	it("keeps the tickable list for the three bullets it doesn't restate", () => {
-		expect(tierActionsRestateOptions(actions, CALL.description)).toBe(false);
-	});
-});
-
-describe("The Hammer and the Book's tier controls", () => {
-	const actions = buildTierActions(attackMoveFor(item("The Hammer and the Book")), null);
-
-	it("offers both mechanical bullets, word for word", () => {
-		expect(labelsOf(actions.success)).toEqual([
-			"Deal +1d6 damage",
-			"Ignore the thing's armor or other defenses",
-		]);
-		for (const label of labelsOf(actions.success)) {
-			expect(bulletsOf(HAMMER.description)).toContain(label);
+	it("the other four have nothing to suffer, and no button on a miss", () => {
+		for (const [name, moveType] of ATTACKS.slice(1)) {
+			const actions = buildTierActions(attackMoveFor(item(name, moveType)));
+			expect(actions.success).toContain('data-action="roll"');
+			expect(actions.success).not.toContain('data-action="suffer"');
+			// 6- is "the GM makes a move" (or, for Let Fly, nothing automatic): no button at all.
+			expect(actions.failure).toBeUndefined();
 		}
 	});
+});
 
-	it("makes them a radio pair, because the move says choose 1", () => {
-		expect(actions.success.match(/type="radio"/g)).toHaveLength(2);
-		expect(actions.success).toContain('name="hammer-pick"');
+// -- What ticking a printed bullet DOES ---------------------------------------
+
+// Read against the SHIPPED bullets, never a retyped copy of them: PICK_EFFECTS is keyed by the
+// move's own words, so a reword in the pack that left a stale key behind would show up here as an
+// effect that stopped arriving — which is the whole reason to ask the question this way round.
+describe("pickedEffects: the move's own bullets, and what each one is worth", () => {
+	const effectsOfWholeList = (key, description) => pickedEffects(key, bulletsOf(description));
+
+	it("Clash: strike-hard carries the 1d6 and the counter-attack; avoiding carries neither", () => {
+		expect(pickedEffects("clash", [bulletsOf(CLASH.description)[0]]))
+			.toEqual({ extraDice: [], counter: false, ignoresArmor: false, addons: [] });
+		expect(pickedEffects("clash", [bulletsOf(CLASH.description)[1]]))
+			.toEqual({ extraDice: ["1d6"], counter: true, ignoresArmor: false, addons: [] });
 	});
 
-	it("starts with neither selected, so a Judge taking a fictional pick gets plain damage", () => {
-		// A pre-checked default would apply +1d6 to a Judge who chose "force it from its host".
-		expect(actions.success).not.toContain(" checked");
+	it("Ambush: one bullet of four changes a number, and the other three are fiction", () => {
+		expect(effectsOfWholeList("ambush", AMBUSH.description))
+			.toEqual({ extraDice: ["1d4"], counter: false, ignoresArmor: false, addons: [] });
 	});
 
-	it("carries no counted list of its own — the printed one still holds the count", () => {
-		// The radios cover two of the move's four bullets, so the description's checklist stays
-		// with the one "0/1 options selected" that spans all four. A second tally over the subset
-		// would read as a second pick the move does not offer. Same for Ambush, Call the Shot and
-		// Let Fly, whose add-on boxes sit beside a list that is still printed.
-		expect(actions.success).not.toContain("stonetop-attack-picklist");
+	it("Call the Shot: one bullet asks a question, one calls the roll off, two are fiction", () => {
+		expect(effectsOfWholeList("call-the-shot", CALL.description))
+			.toEqual({ extraDice: [], counter: false, ignoresArmor: false, addons: ["your-call", "no-harm"] });
 	});
 
-	it("puts the dice on one and the armor-ignoring on the other", () => {
-		expect(actions.success).toContain('data-extra-dice="1d6"');
-		expect(actions.success).toContain('data-ignores-armor="1"');
+	it("Call the Shot's 'your call' is ONE pick, not two halves", () => {
+		// Split into an ignore-armor option and a +1d4 option, a 7-9 "pick 1" could take both.
+		// It carries no dice of its own; which half applies is asked when the box is ticked.
+		const fx = pickedEffects("call-the-shot", [bulletsOf(CALL.description)[0]]);
+		expect(fx.addons).toEqual(["your-call"]);
+		expect(fx.extraDice).toEqual([]);
+		expect(fx.ignoresArmor).toBe(false);
 	});
 
-	it("keeps the tickable list for the two bullets that are pure fiction", () => {
-		expect(tierActionsRestateOptions(actions, HAMMER.description)).toBe(false);
+	it("The Hammer and the Book: the dice on one bullet, the armor-ignoring on another", () => {
+		expect(effectsOfWholeList("hammer-and-book", HAMMER.description))
+			.toEqual({ extraDice: ["1d6"], counter: false, ignoresArmor: true, addons: [] });
+	});
+
+	it("Let Fly: only 'deplete your ammo' spends anything", () => {
+		expect(effectsOfWholeList("let-fly", LET_FLY.description))
+			.toEqual({ extraDice: [], counter: false, ignoresArmor: false, addons: ["deplete"] });
+	});
+
+	it("is not fooled by the apostrophe, whichever way each side spells it", () => {
+		// The pack writes a typographic apostrophe and the table an ASCII one; a bullet read back
+		// off rendered HTML carries a numeric entity. utils/chat.js#optionKey settles all three.
+		expect(pickedEffects("hammer-and-book", ["Ignore the thing&#x27;s armor or other defenses"]).ignoresArmor).toBe(true);
+		expect(pickedEffects("hammer-and-book", ["Ignore the thing’s armor or other defenses"]).ignoresArmor).toBe(true);
+	});
+
+	it("gives a reworded bullet nothing, rather than an effect its text no longer describes", () => {
+		expect(pickedEffects("ambush", ["Deal +1d4 damage to everyone nearby"]).extraDice).toEqual([]);
+		expect(pickedEffects("ambush", []).extraDice).toEqual([]);
+	});
+
+	it("gives a move with no table nothing at all", () => {
+		expect(pickedEffects("defend", ["Deal +1d4 damage"]))
+			.toEqual({ extraDice: [], counter: false, ignoresArmor: false, addons: [] });
+	});
+});
+
+// -- The card body the move goes out on ---------------------------------------
+
+// The gold standard is All is Illuminated: the ladder, the move's own bullets as boxes, the tally
+// over them, the result. Every attack move reads that way now — the tier controls are one button,
+// so nothing suppresses the printed list any more.
+describe("the printed list stays on every attack card", () => {
+	const CARDS = [
+		["Clash", CLASH, { success: 1 }],
+		["Let Fly", LET_FLY, { partial: 1 }],
+		["Ambush", AMBUSH, { success: 2, partial: 1 }],
+		["Call the Shot", CALL, { success: 2, partial: 1 }],
+		["The Hammer and the Book", HAMMER, { success: 1, partial: 1 }],
+	];
+
+	for (const [name, move, caps] of CARDS) {
+		it(`${name}: keeps its bullets tickable, with the count the prose states`, () => {
+			const body = moveCardBody(move.description, move.moveResults, { pickable: true });
+			expect(body).toContain("stonetop-picklist");
+			for (const [tier, n] of Object.entries(caps)) {
+				expect(body).toContain(`data-pick-max-${tier}="${n}"`);
+			}
+			// One list, so one set of boxes: as many as the move prints, and no more.
+			expect(body.match(/stonetop-picklist-check/g)).toHaveLength(bulletsOf(move.description).length);
+		});
+	}
+
+	it("Clash's 7-9 does not reach the list, so its boxes hide on a weak hit", () => {
+		// "Your maneuver works, mostly (deal your damage), but you suffer your enemy's attack" —
+		// no pick at all. utils/move-picks.js#pickTiersFrom is what says so.
+		const body = moveCardBody(CLASH.description, CLASH.moveResults, { pickable: true });
+		expect(body).toContain('data-pick-tiers="success"');
+	});
+
+	it("still hangs the list UNDER the ladder that sends the reader to it", () => {
+		const body = moveCardBody(CLASH.description, CLASH.moveResults, { pickable: true });
+		expect(body.indexOf("stonetop-move-tiers")).toBeLessThan(body.indexOf("Avoid, prevent"));
 	});
 });
 
@@ -236,7 +250,7 @@ describe("maybeBeginAttack: Ambush", () => {
 		expect(attack.moveKey).toBe("ambush");
 		expect(attack.weapon.name).toBe("Knife or dagger");
 		expect(attack.targets).toEqual([]);
-		expect(begun.tierActions.success).toContain("Deal +1d4 damage");
+		expect(begun.tierActions.success).toContain('data-action="roll"');
 	});
 
 	it("aborts when the deal-or-roll window is closed rather than answered", async () => {

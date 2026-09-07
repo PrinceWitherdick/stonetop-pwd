@@ -3,7 +3,7 @@ import { escHtml, formatOutcomeDetail, stripHtmlToText } from "./strings.js";
 import { pickLimitsFrom } from "./move-picks.js";
 import { pickLeadText, TIER_KEYS, TIER_LABELS } from "./move-results.js";
 import { markRolledTier } from "./move-tiers.js";
-import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge, pickListItem, tierActionsRestatingTiers } from "./chat.js";
+import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge, pickListItem, descriptionPickTiers } from "./chat.js";
 import { adjustXp } from "./xp.js";
 import { composeDamageFormula, normalizeDamageBonusDice } from "./damage.js";
 import { SYSTEM_ID } from "../system-id.js";
@@ -575,15 +575,16 @@ export async function rollStat(statKey, actor, options = {}) {
 	const resultDetail = resultOutcomes?.[result.key] ?? "";
 
 	const pickListHtml = pickListsHtml(pickPools, result.key, tierPickCounts(moveResults));
-	// Two ways a tier's options can already be on the card below the result block, and either one
-	// keeps the block from reprinting them: the checklist `pickListHtml` just built from a declared
-	// pool, and -- for a move like Clash, whose options live in its prose rather than in
-	// `system.pickOptions` -- the tier controls that enact them (utils/chat.js).
+	// Two ways a tier's options can already be on the card as BOXES, and either one keeps the
+	// result block from reprinting them in prose: the checklist `pickListHtml` just built from a
+	// declared pool, and -- for a move like Clash, whose options live in its own text rather than
+	// in `system.pickOptions` -- the tickable list inside the description above
+	// (utils/chat.js#descriptionPickTiers, reading back the stamp pickableMoveDescription wrote).
 	// Merged in TIER_KEYS order, not concatenation order: the two sources can each answer for a
 	// different tier, and `data-picked-tiers` is read back by a GM's Shift Up/Down.
 	const pickedTierSet = new Set([
 		...(pickListHtml ? pickedTiers(pickPools) : []),
-		...tierActionsRestatingTiers(options.tierActions ?? null, resultOutcomes),
+		...descriptionPickTiers(moveDescription),
 	]);
 	const pickedTierKeys = TIER_KEYS.filter(tier => pickedTierSet.has(tier));
 

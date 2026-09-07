@@ -118,7 +118,7 @@ describe("maybeBeginAttack with a weapon already chosen", () => {
 		expect(attack.weapon.damageDie).toBe("d10");
 		expect(attack.weapon.piercing).toBe(2);
 		// Still a Clash: its 10+ pick-one and its counter-attack tiers come along.
-		expect(begun.tierActions.success).toContain("Strike hard");
+		expect(begun.tierActions.success).toContain('data-action="roll"');
 		expect(begun.tierActions.failure).toContain('data-action="suffer"');
 	});
 

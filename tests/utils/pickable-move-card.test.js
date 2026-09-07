@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { readRepo as read } from "../fakes/css.js";
-import { moveChatCard, pickableMoveDescription } from "../../module/utils/chat.js";
+import { descriptionPickTiers, moveChatCard, pickableMoveDescription } from "../../module/utils/chat.js";
 import { formatCustomMoveDescription } from "../../module/utils/custom-move-text.js";
 
 // A move that ROLLS makes its choice on the result card, once the dice have said how many. A
-// move that never rolls — Mighty Thews' "pick 1", Keep Company's questions, Censure's four
-// reactions — has no result card, so its choice belongs on the card its text is posted to.
+// move that never rolls — Mighty Thews' "pick 1", Censure's four reactions, Read the Land's
+// questions — has no result card, so its choice belongs on the card its text is posted to.
+// (Keep Company is NOT one of them any more: its list is one the table goes round rather than
+// chooses from once, so it prints as prose — see move-picks.js#isReferenceList.)
 //
 // This is the fix for a real hole: the sheet used to carry 24 hand-written copies of those very
 // lists, in a dialog that could never open (a move with no rollType renders no dice icon, and
@@ -210,5 +212,40 @@ describe("who asks for ticks", () => {
 		// …and the spiral marker a description hangs off every <li> is dropped where the
 		// checkbox now sits, in both description homes.
 		expect(css).toContain(":is(.stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-item::before");
+	});
+});
+
+// The result block composes its detail line from `system.moveResults`, which spells a tier's
+// options out in prose. With the same options sitting as boxes a few lines above, that is one
+// choice printed twice on one card — so the block prints its lead-in alone and lets the boxes be
+// the list. This is the question it asks to find out, read back off the markup being rendered.
+describe("descriptionPickTiers", () => {
+	const CLASH = "<p>When you <strong>fight</strong>, roll +STR: <strong>on a 10+</strong>, "
+		+ "your maneuver works and pick 1:</p>"
+		+ "<ul><li>Avoid their attack</li><li>Strike hard, but suffer theirs</li></ul>"
+		+ "<p><strong>On a 7-9</strong>, your maneuver works, mostly, but you suffer their attack.</p>";
+
+	it("says nothing about a description with no boxes on it", () => {
+		expect(descriptionPickTiers(CLASH)).toEqual([]);
+		expect(descriptionPickTiers("")).toEqual([]);
+		expect(descriptionPickTiers(null)).toEqual([]);
+	});
+
+	it("answers for the tiers the list is stamped with, and no others", () => {
+		// Clash's two bullets belong to its 10+; its 7-9 names no pick at all, so a card shifted
+		// down onto it must go on stating whatever that tier's own text offers.
+		expect(descriptionPickTiers(pickableMoveDescription(CLASH))).toEqual(["success"]);
+	});
+
+	it("answers for every tier when the list carries no stamp", () => {
+		// An unstamped list is one nothing could read a tier off, and it shows on every tier —
+		// so it is offered on every tier. Same timidity as the reader that writes the stamp.
+		const unstamped = '<p>Pick 1:</p><ul class="stonetop-picklist"><li>A</li><li>B</li></ul>';
+		expect(descriptionPickTiers(unstamped)).toEqual(["success", "partial", "failure"]);
+	});
+
+	it("returns the tiers in ladder order, however the stamp is written", () => {
+		const jumbled = '<ul class="stonetop-picklist" data-pick-tiers="failure success"><li>A</li></ul>';
+		expect(descriptionPickTiers(jumbled)).toEqual(["success", "failure"]);
 	});
 });

@@ -1,5 +1,5 @@
-import {escHtml, stripHtmlToText, decodeEntities, splitPickList} from "./strings.js";
-import {isReferenceList, pickLimitsFrom} from "./move-picks.js";
+import {escHtml, stripHtmlToText, decodeEntities} from "./strings.js";
+import {isReferenceList, pickLimitsFrom, pickTiersFrom} from "./move-picks.js";
 import {MOVE_TIERS_CLASS, TIER_KEYS} from "./move-results.js";
 
 // The tier ladder's own `<ul>`, recognised in an attribute string — see `firstOptionList`.
@@ -292,46 +292,55 @@ export function pickableMoveDescription(description) {
 	// prose and take the spiral bullets every other prose list on these surfaces already wears.
 	if (isReferenceList(lead)) return html;
 
-	const limits = pickLimitsFrom(lead);
+	// The prose UNDER the bullets, which both questions below need: Formidable, Burgle and Trade &
+	// Barter all state their 6- in a paragraph beneath their list, so a reader that stopped at the
+	// lead-in had nothing to say about the tier a player most needs held to its count.
+	const below = stripHtmlToText(html.slice(list.index + list.length));
+	// HOW MANY each tier may take. `below` fills in only the tiers the lead-in left silent, and only
+	// where it names them — see pickLimitsFrom, which explains why it may not simply be concatenated.
+	const limits = pickLimitsFrom(lead, below);
+	// WHICH tiers reach this list, beside how many each may take. A roll card carries every tier's
+	// options and shows the one it landed on, and a tier that never sends the reader here at all
+	// (Helior's Unblinking Eye's "the GM makes a move", Clash's 7-9, Forage's barren land) had no
+	// way to say so: it stamped no count, which read as "uncapped", and a miss printed the move's
+	// three options under a "0 options selected" as though the player still had a choice to make.
+	// Read from the WHOLE move, lead-in and the prose below the bullets both.
+	const tiers = pickTiersFrom(`${lead} ${below}`);
 	// (pickListItem is exported below — one emitter for the two surfaces that print these.)
 	const limitAttrs = typeof limits === "number"
 		? ` data-pick-max="${limits}"`
 		: Object.entries(limits ?? {}).map(([tier, n]) => ` data-pick-max-${tier}="${n}"`).join("");
+	// Stamped only when a tier was actually read. An empty answer is "nothing is known", and the
+	// reader (utils/pick-tally.js#tierOffersPicks) must go on showing the list for it.
+	const tierAttr = tiers.length ? ` data-pick-tiers="${tiers.join(" ")}"` : "";
 
 	// The item's own markup, raw: it carries the move's ◇/○/□ glyphs and emphasis, and the
 	// description it came from is rendered raw by moveChatCard for exactly that reason.
 	const items = list.items.map((inner, i) => pickListItem(inner, i)).join("");
 	return html.slice(0, list.index)
-		+ `<ul class="stonetop-picklist"${limitAttrs}>${items}</ul>`
+		+ `<ul class="stonetop-picklist"${limitAttrs}${tierAttr}>${items}</ul>`
 		+ html.slice(list.index + list.length);
 }
 
 /**
- * The option labels a card's tier controls print, matched back out of the HTML that built them
- * rather than declared beside it.
+ * One printed option, reduced to the words that identify it.
  *
- * The whole point of the comparison below is that the controls and the move's printed bullets say
- * the SAME WORDS, so a label list handed over separately could drift from the one actually
- * rendered with nothing to notice. `combat/attack-flow.js#pickRow` and `#addonRow` write this
- * shape, and a producer of tier controls that wants the same suppression wears the same class.
+ * Two spellings of one option compare equal: a bullet authored in a book carries a typographic
+ * apostrophe, the same bullet read back out of rendered HTML carries a numeric entity, and a
+ * bullet retyped in a lookup table carries a plain one. Down to letters and digits, because none
+ * of what separates "enemy's attack" from "enemy&#x27;s attack" is the option.
  *
- * HERE AND NOT IN THE COMBAT FLOW. "Does this card already say this twice" is a question about a
- * roll card and a move's printed list, which is what this module owns ({@link firstOptionList},
- * {@link pickableMoveDescription}); asked from the attack flow it made the Item document import
- * the combat module for one string comparison, and the answer was out of reach of every other
- * producer of tier controls (`know-things.js`, the steading's homefront table).
+ * ONE NORMALISER, because more than one surface now matches an option by its text: this module
+ * asks it of a move's printed list, and combat/attack-flow.js#PICK_EFFECTS asks it to find out
+ * what a ticked bullet DOES. A miss is silent — it turns a match into a mismatch, and the tick
+ * that should have added a die adds nothing — so the two must be the same reduction, not two
+ * reductions that happen to agree today.
+ *
+ * Through `decodeEntities` and not a decoder written here: strings.js says in its own header that
+ * there used to be two and neither was a superset of the other, so text routed through the wrong
+ * one came out with raw entities still in it.
  */
-const _PICK_LABEL_RE = /<span class="stonetop-attack-pick-label">([\s\S]*?)<\/span>/gi;
-
-// Two spellings of one option compare equal: a label was written through `escHtml` (its
-// apostrophe is a numeric entity) while the bullet was authored in a book (its apostrophe may be
-// typographic). Down to letters and digits, because none of what separates "enemy's attack" from
-// "enemy’s attack" is the option.
-function _optionKey(text) {
-	// Through `decodeEntities` and not a decoder written here: strings.js says in its own header
-	// that there used to be two and neither was a superset of the other, so text routed through the
-	// wrong one came out with raw entities still in it. A miss here is silent -- it turns a match
-	// into a mismatch and hands the card back a duplicate option list.
+export function optionKey(text) {
 	return decodeEntities(stripHtmlToText(text))
 		.replace(/[^a-z0-9]+/gi, " ")
 		.trim()
@@ -339,96 +348,40 @@ function _optionKey(text) {
 }
 
 /**
- * Do these controls offer every one of those options, word for word?
+ * Which result tiers already have the move's options on the card as ticked boxes -- read back out
+ * of the description the card is about to render, rather than declared beside it.
  *
- * ONE ANSWER FOR BOTH ASKERS. `tierActionsRestateOptions` asks it of the move's printed description
- * and `tierActionsRestatingTiers` asks it of one tier's result text, and the question underneath is
- * the same one: are the buttons the whole of this list, so that printing the list again would be
- * saying it twice? Written out twice it was two copies of a rule that decides whether a reader sees
- * their options at all -- including both of the silent bails, which are the easiest half to get
- * subtly different.
+ * THE RESULT BLOCK MUST NOT SAY THE LIST AGAIN. A tier's outcome text is composed from
+ * `system.moveResults` and spells its options out in prose ("...and pick 1: Avoid, prevent, or
+ * counter your enemy's attack / Strike hard and fast..."). With the same options sitting as boxes
+ * a few lines above, that is one choice printed twice on one card, once unclickable. A tier
+ * answered here prints its lead-in alone ("...and pick 1.") and lets the boxes be the list -- the
+ * rule roll-engine.js already applies to a move that declares `system.pickOptions`, reaching the
+ * moves that state their options in their own prose instead.
  *
- * BOTH BAILS ARE "NO", AND DELIBERATELY SO. Nothing wanted, or nothing offered, means the controls
- * have NOT covered anything -- so the list keeps printing. Erring the other way hides a choice from
- * the reader on exactly the cards where something has already gone wrong.
+ * A predecessor asked this of a tier's CONTROLS, back when a card could restate a move's list as
+ * pick radios under the result (combat/attack-flow.js, which no longer does). Asking it of the
+ * description instead is both narrower and truer: there is one list now, this is where it is, and
+ * the answer comes from the very markup being rendered rather than from a second producer whose
+ * words had to be compared against the move's.
  *
- * Exact-match on the option text rather than declared, which makes the rule self-checking: the
- * control labels are written word for word from the bullets on purpose
- * (combat/attack-flow.js#buildTierActions), so a world that rewords a move stops matching and gets
- * its printed list back, rather than a card that quietly drops an option nothing can offer.
+ * TIER BY TIER, off the stamp `pickableMoveDescription` already writes: Clash's two bullets belong
+ * to its 10+ and its 7-9 names no pick at all, so a 7-9 whose own text HAS options to state must
+ * go on stating them. An unstamped list is one nothing could read a tier off, and it shows on
+ * every tier -- so it answers for every tier.
  *
- * @param {string} html            The control HTML to read labels off.
- * @param {string[]} wantedTexts   The option texts that have to be covered.
+ * @param {string} description  The card's description HTML, after pickableMoveDescription.
+ * @returns {string[]} Tier keys in ladder order; empty when the description carries no boxes.
  */
-function _controlsCover(html, wantedTexts) {
-	const wanted = (wantedTexts ?? []).map(_optionKey).filter(Boolean);
-	if (!wanted.length) return false;
-	const labels = new Set();
-	for (const [, label] of String(html ?? "").matchAll(_PICK_LABEL_RE)) {
-		const key = _optionKey(label);
-		if (key) labels.add(key);
-	}
-	if (!labels.size) return false;
-	return wanted.every(key => labels.has(key));
-}
+const _PICKLIST_OPEN_RE = /<ul class="stonetop-picklist"([^>]*)>/i;
 
-/**
- * Whether these tier controls already restate EVERY option the move prints.
- *
- * A move's printed list is made tickable wherever it is shown (chat.js#pickableMoveDescription),
- * and Clash's roll card therefore carried that list TWICE: as checkboxes with a tally over them
- * up in the description, and again as the pick radios under the result. Only the radios do
- * anything — they are what folds strike-hard's extra 1d6 and the enemy's counter into the damage
- * roll — so the card offered two selections of one choice, one of them going nowhere, and locked
- * the working one on Confirm while the decorative one stayed clickable.
- *
- * So the tickable list stands down when, and only when, the controls cover the whole of it.
- * Clash's two bullets are both radios (word for word, deliberately) and its description prints
- * plain bullets instead. Let Fly's 7-9 prints FOUR options and surfaces only "deplete your ammo"
- * as an add-on; the other three live nowhere else on the card, so its checklist stays.
- *
- * Compared by TEXT rather than declared, which makes the rule self-checking: a world that rewords
- * Clash or adds a third option to it stops matching and gets its tickable list back, rather than
- * a card that quietly drops an option the radios can no longer offer.
- *
- * @param {object|null} tierActions   The per-tier control HTML, as `buildTierActions` built it.
- * @param {string} description        The move's own HTML, before the ladder is laid over it.
- */
-export function tierActionsRestateOptions(tierActions, description) {
-	return _controlsCover(
-		Object.values(tierActions ?? {}).join(""),
-		firstOptionList(description)?.items ?? [],
-	);
-}
-
-/**
- * The tiers whose controls already list every option that tier's OWN result text offers.
- *
- * The sibling above asks the same question of the move's printed description, to decide whether
- * that list stays tickable. This one asks it of the tinted result block, which composes its
- * detail line from `system.moveResults` and would otherwise print the options a third time:
- * once as prose bullets in the description, once inside the block, and once as the controls that
- * actually do something. A tier answered here prints its lead-in alone ("...and pick 1:") and
- * lets the controls below be the list -- the rule roll-engine.js already applies to a move that
- * declares `system.pickOptions`, reaching the moves that state their options in prose instead.
- *
- * PER TIER, against that tier's own controls: Clash's two picks belong to its 10+ and say nothing
- * about a 7-9, and a control row that covers one tier's list must not silence another's.
- *
- * Exact-match on the option text, like the sibling: these labels are written word for word from
- * the bullets on purpose (combat/attack-flow.js#buildTierActions), so a paraphrase is a signal
- * that the controls no longer offer the whole choice, and the block should keep printing it.
- *
- * @param {object|null} tierActions   The per-tier control HTML, as `buildTierActions` built it.
- * @param {object|null} outcomes      The per-tier result text the block prints, keyed by tier.
- * @returns {string[]} Tier keys, in TIER_KEYS order.
- */
-export function tierActionsRestatingTiers(tierActions, outcomes) {
-	if (!tierActions || !outcomes) return [];
-	return TIER_KEYS.filter((tier) => {
-		const split = splitPickList(stripHtmlToText(String(outcomes[tier] ?? "")));
-		return !!split && _controlsCover(tierActions[tier], split.options);
-	});
+export function descriptionPickTiers(description) {
+	const open = _PICKLIST_OPEN_RE.exec(String(description ?? ""));
+	if (!open) return [];
+	const stamped = /data-pick-tiers="([^"]*)"/i.exec(open[1])?.[1];
+	if (!stamped) return [...TIER_KEYS];
+	const named = new Set(stamped.split(/\s+/).filter(Boolean));
+	return TIER_KEYS.filter(tier => named.has(tier));
 }
 
 /**
