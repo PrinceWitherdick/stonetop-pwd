@@ -82,7 +82,10 @@ describe("character sheet tab scrollports", () => {
 describe("tab scrollbars stay hidden", () => {
 	it.each([
 		["character", ".pbta.sheet.actor.character .stonetop-sheet-layout .sheet-body > .tab.active:not(.notes)"],
-		["steading", ".steading-sheet .sheet-body > .tab.active:not(.notes)"],
+		// Two exceptions on the steading now: Notes, whose prose-mirror scrolls itself, and the
+		// Relationship Map, whose board is panned and zoomed inside a viewport that clips. Neither
+		// is a tab that could be cut off by not scrolling.
+		["steading", ".steading-sheet .sheet-body > .tab.active:not(.notes):not(.relmap)"],
 	])("%s tabs scroll without drawing a bar", (_label, selector) => {
 		const block = ruleFor(selector);
 		expect(block).toBeTruthy();
@@ -165,9 +168,17 @@ describe("retired scroll workarounds", () => {
 		// keepScrollAcrossTab ran as the Tabs callback, which fires AFTER the panel
 		// classes have already been toggled, so the offset it read was the one the
 		// browser had just clamped. Per-tab scrollports make the whole thing unnecessary.
-		for (const src of [CHARACTER_SHEET, STEADING_SHEET]) {
-			expect(src).not.toContain("keepScrollAcrossTab");
-			expect(src).not.toContain("_onChangeTab");
+		//
+		// ⚠ THE BAN IS ON MOVING A SCROLL OFFSET, NOT ON THE CALLBACK. This used to refuse
+		// `_onChangeTab` outright, which was a fair shorthand while nothing else wanted it. The
+		// steading sheet has one now, and it does something else entirely: it builds the
+		// relationship map board the first time a reader opens that tab, so the board is not
+		// rendered for somebody who only came to read the harvest. What must never come back is
+		// reading or writing a scrollTop from in there.
+		const TAB_THEN_SCROLL = /_onChangeTab[\s\S]{0,400}scrollTop/;
+		for (const [label, src] of [["character", CHARACTER_SHEET], ["steading", STEADING_SHEET]]) {
+			expect(src, label).not.toContain("keepScrollAcrossTab");
+			expect(src, `${label} moves a scroll offset from its tab callback`).not.toMatch(TAB_THEN_SCROLL);
 		}
 	});
 

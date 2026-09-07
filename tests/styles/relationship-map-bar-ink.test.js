@@ -196,3 +196,50 @@ describe("the icons on the tie bar, which carry no labels either", () => {
 		}
 	});
 });
+
+// ── The one filled button on that row ──────────────────────────────────────────────────────────
+//
+// "Add someone" is the only press in this window that puts somebody NEW on the board, and the only
+// one painted rather than left as an ordinary tool. WHAT it is painted with is the point of this
+// block: the shared slate primary token set, the same one every confirm, submit and call to action
+// in the system spends, so a colour retuned once reaches here too. A hand-mixed blue would look
+// right on the day it was written and drift away from everything else afterwards, and nothing
+// about that fails loudly.
+describe("the slate fill on Add someone", () => {
+	const ADD = ".stonetop-relmap-add";
+	const HOVER = `${ADD}:hover`;
+
+	it("spends the shared primary tokens and mixes no colour of its own", () => {
+		expect(declared(ADD, "background")).toBe("var(--st-btn-primary-bg)");
+		expect(declared(ADD, "border-color")).toBe("var(--st-btn-primary-border)");
+		expect(declared(ADD, "color")).toBe("var(--st-btn-primary-text)");
+		expect(declared(HOVER, "background")).toBe("var(--st-btn-primary-bg-hover)");
+	});
+
+	// A filled button leaves a reader on the keyboard nowhere for a focus ring to read against the
+	// row, so the hover state is worn on focus as well as under the pointer.
+	it("answers to the keyboard as well as to the pointer", () => {
+		expect(declarations(CSS, `${ADD}:focus-visible`))
+			.toBe(declarations(CSS, HOVER));
+	});
+
+	// ⚠ COLOUR ONLY. Every measurement that keeps this button level with the two square history
+	// buttons beside it belongs to `.stonetop-relmap-tool`; a padding or a line-height repeated
+	// here would be a second set of numbers to keep in step, and the row would go out of true
+	// silently the first time one of them was changed and the other was not.
+	it("leaves the geometry to the tool rule it shares the row with", () => {
+		for (const property of ["padding", "line-height", "min-height", "display", "gap"]) {
+			expect(declared(ADD, property), property).toBeNull();
+		}
+	});
+
+	// The history pair used to stand LAST, and carried a rule on its leading edge to set itself
+	// apart from the tool before it. With the filled button at the end of the row instead, that
+	// border would hang off the left-hand end of the group with nothing on its far side -- so it
+	// came off, and the fill is what separates the two halves now. Held here because a border put
+	// back "to tidy the row up" would look deliberate and be wrong.
+	it("is what sets the history pair apart, now that the rule between them is gone", () => {
+		expect(declared(".stonetop-relmap-history", "border-inline-start")).toBeNull();
+		expect(declared(".stonetop-relmap-history", "padding-inline-start")).toBeNull();
+	});
+});

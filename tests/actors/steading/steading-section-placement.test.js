@@ -49,8 +49,31 @@ describe("steading layout branches", () => {
 		expect(STEADING_MARKUP.match(/<nav /g), "nav").toHaveLength(1);
 		expect(STEADING_MARKUP.match(/<section class="sheet-body">/g), "sheet-body").toHaveLength(1);
 		expect(STEADING_MARKUP).not.toContain("{{else}}");
-		for (const tab of ["overview", "neighbors", "improvements", "notes"])
+		for (const tab of ["overview", "neighbors", "improvements", "relmap", "notes"])
 			expect(STEADING_MARKUP.match(new RegExp(`tab="${tab}"`, "g")), tab).toHaveLength(1);
+	});
+
+	// The relationship map is a NEW page rather than a moved one, so it is modern only, exactly
+	// as Homefront Moves is: classic reproduces the sheet as it was before the tab-rail redesign
+	// and does not take pages that never existed there. Classic readers reach the same board
+	// through the hotbar macro and the map's own row in the Journal sidebar, which is why there
+	// is no classic counterpart to pair this guard with.
+	it("gives the relationship map tab to modern only", () => {
+		expect(STEADING_MARKUP).toMatch(
+			/\{\{#unless stonetop\.classicLayout\}\}\{\{> "stonetop\.tab-nav-item" tab="relmap"[^}]*\}\}\{\{\/unless\}\}/);
+		expect(STEADING_MARKUP).toContain(
+			'{{#unless stonetop.classicLayout}}{{> "stonetop.steading-tab-relmap"}}{{/unless}}');
+		expect(STEADING_MARKUP.match(/steading-tab-relmap/g), "map tab mounts").toHaveLength(1);
+	});
+
+	// It sits between Improvements and Notes, which is where the ask put it and where the two
+	// tabs either side of it make sense: what the steading has built, who its people are to each
+	// other, and then the free writing.
+	it("puts the map between Improvements and Notes", () => {
+		const order = [...STEADING_MARKUP.matchAll(/tab-nav-item" tab="(\w+)"/g)].map(m => m[1]);
+		expect(order).toEqual(["overview", "moves", "neighbors", "improvements", "relmap", "notes"]);
+		const panels = [...STEADING_MARKUP.matchAll(/"stonetop\.steading-tab-(\w+)"/g)].map(m => m[1]);
+		expect(panels).toEqual(["overview", "moves", "neighbors", "improvements", "relmap", "notes"]);
 	});
 
 	// The moves sidebar and the moves TAB are the same content in two shapes; rendering both

@@ -15873,6 +15873,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .stonetop-tab-rail .item[data-tab="overview"]      { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/village.svg'); }
 .stonetop-tab-rail .item[data-tab="neighbors"]     { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/three-friends.svg'); }
 .stonetop-tab-rail .item[data-tab="improvements"]  { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hammer-nails.svg'); }
+.stonetop-tab-rail .item[data-tab="relmap"]        { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/relationship-map.svg'); }
 .stonetop-tab-rail .item[data-tab="threats"]       { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hazard-sign.svg'); }
 /* No row for `sites`: it is a section at the foot of the Expeditions panel now, not a tab, so
    nothing on any sheet renders `data-tab="sites"`. `site-mound.svg` itself stays in the tree —
@@ -16068,9 +16069,11 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	overflow: hidden;
 }
 
-/* notes manages its own internal scroll (prose-mirror), so leave it out.
+/* notes manages its own internal scroll (prose-mirror), so leave it out, and so does the
+   relationship map, whose board is panned and zoomed inside a viewport that clips rather than
+   scrolls (see the pair of rules below the container-query one).
    Scrollbar hidden but the tab still scrolls — see the matching character-sheet rule. */
-.steading-sheet .sheet-body > .tab.active:not(.notes) {
+.steading-sheet .sheet-body > .tab.active:not(.notes):not(.relmap) {
 	height: 100%;
 	overflow-y: auto;
 	overflow-x: hidden;
@@ -16082,6 +16085,109 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .steading-sheet .sheet-body > .tab.overview {
 	container-type: inline-size;
 	container-name: steading-body;
+}
+
+/* -- The Relationship Map tab ----------------------------------
+   The board is the window's own body, mounted frameless inside this tab
+   (module/dialogs/RelationshipMapPanel.js, module/actors/steading/steading-relmap-tab.js).
+   Its markup and every rule that paints it live in the Relationship map section far below;
+   nothing here restyles the board. What these two rules do is the one thing the board asks
+   of whatever holds it: A DEFINITE HEIGHT.
+
+   `.stonetop-relmap` is a grid whose viewport row is `1fr`, and `ZoomPanSurface` measures
+   that viewport with a ResizeObserver to decide the scale the whole diagram is drawn at. An
+   indefinite chain anywhere above it resolves the viewport to zero, and the symptom is not a
+   squashed board but NO BOARD AT ALL, with nothing logged. The chain is
+   `.sheet-body` (flexed, min-height 0) > `.tab.active.relmap` > `.sheet-tab` > `.stonetop-relmap`,
+   and each of the middle two has to say `height: 100%` out loud.
+
+   No `display` is set on the `.tab` element itself, which is why this needs no paired
+   unlayered re-hide the way the Notes tab does: core's layered `.tab { display: none }` is
+   left to do its job. */
+.steading-sheet .sheet-body > .tab.active.relmap {
+	height: 100%;
+	/* NOT `auto`. The board clips deliberately: it is dragged and zoomed rather than scrolled,
+	   and a scrollbar here would be a second, contradictory way to move the same picture. */
+	overflow: hidden;
+}
+
+/* Edge to edge, unlike every other tab on this sheet. The reading is that the body of this
+   tab IS the map's window body, and the strip of boards along its top wants to sit against
+   the tab's own edge the way it sits against the window's. Overrides the 12px
+   `.steading-sheet .sheet-tab` padding on four classes to its two. */
+.steading-sheet .tab.relmap .sheet-tab {
+	padding: 0;
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+}
+
+/* THE OTHER TWO HORIZONTAL INSETS, neither of which is the tab's own and neither of which the
+   `padding: 0` above can reach. Measured on a 900px-wide sheet before this block: the board's
+   left edge stood 8px inside the window content and its right edge 18px. The asymmetry is the
+   tell — that is not one gutter, it is two different things.
+
+   THE 8px IS THE FORM'S. `.pbta.sheet.actor .window-content form` insets every actor sheet by 8px
+   on all four sides (its BOTTOM is already dropped elsewhere, for the scroll edge). That inset is
+   right for every other page of this sheet and wrong only for this one, so the map bleeds back out
+   over it rather than the form dropping it: dropping it would move the `.steading-header` too, and
+   the header's tinted band would visibly change width as the reader tabs onto the map and off it
+   again — trading a static inset for a moving one.
+
+   THE OTHER 10px IS A GUTTER FOR A SCROLLBAR THAT CANNOT APPEAR. `.stonetop-sheet-layout
+   .sheet-body` reserves `scrollbar-gutter: stable` so that tabs of different heights don't reflow
+   sideways past one another as the bar pops in and out. On THIS sheet the active tab owns the
+   scroll and the body is `overflow: hidden` (see the rules at the head of this section), so the
+   body is a scroll container that never scrolls and the reserved strip is dead space on the right
+   of every steading page. Every other page hides it under 12px of its own padding; this one, which
+   has none, wears it as a lopsided margin. Given back here rather than at the layout rule because
+   the other pages' spacing is measured with it in place.
+
+   ⚠ AND THE BLEED HAS TO BE LET THROUGH. `.sheet-wrapper` is `overflow: hidden`, so a negative
+   margin on anything below it is simply clipped and NOTHING MOVES — the failure is silent and
+   looks exactly like the rule not applying. `overflow: clip` with a clip margin keeps the wrapper
+   doing the one job it is there for (it is not a scroll container and must not become one, which
+   is why this is not `visible`) while letting the map's 8px past on each side. */
+.steading-sheet .sheet-wrapper:has(.tab.relmap.active) {
+	overflow: clip;
+	overflow-clip-margin: 8px;
+}
+
+/* On the LAYOUT and not on the tab: the tab's two ancestors below the wrapper both clip as well,
+   so a negative margin down there would need this same treatment three times over. Widening the
+   layout instead lets the body and the tab inherit the extra width the ordinary way. */
+.steading-sheet-layout:has(> .sheet-body > .tab.relmap.active) {
+	margin-inline: -8px;
+}
+
+.steading-sheet .sheet-body:has(> .tab.relmap.active) {
+	scrollbar-gutter: auto;
+}
+
+/* A world that has never made a relationship map. Centred in the tab rather than parked at
+   its top: there is nothing else on this page to read, so the invitation is the page. */
+.steading-relmap-invite {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 24px;
+	text-align: center;
+}
+
+.steading-relmap-invite-lead {
+	margin: 0;
+	font-size: var(--st-fs-lg);
+	color: var(--st-text);
+}
+
+.steading-relmap-invite-hint {
+	margin: 0;
+	max-width: 46ch;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
 }
 
 .steading-sheet-layout {
@@ -40651,8 +40757,15 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
 /* TAKING A CHANGE BACK, AND PUTTING IT FORWARD AGAIN, as a pair set apart from the tool beside
    them: everything else in this footer is about the board, or about what is drawn on it, and these
-   two are about what this reader did. A rule and not a gap, because the row wraps at a large font
-   scale and a gap alone would be invisible the moment the pair fell onto its own line.
+   two are about what this reader did.
+
+   ⚠ THE RULE THAT SEPARATED THEM IS GONE, and so is the padding that paid for it. The pair used to
+   stand LAST, after "Add someone", with a `border-inline-start` between the two; the pair now
+   stands FIRST in the group and the filled button follows it, so that same border would be a
+   stray vertical line hanging off the left-hand end of the row with nothing on its far side. What
+   sets the two halves apart now is the fill on the button itself (`.stonetop-relmap-add`), which
+   is the only block of colour in the footer and reads as a join at any font scale — including the
+   one where the row wraps, which is what the rule was there to survive.
 
    ⚠ NO AUTO MARGIN HERE ANY MORE. On the old toolbar this pair pushed itself across the whole
    width with `margin-inline-start: auto`; in the footer the whole group of tools is pushed instead
@@ -40663,8 +40776,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	display: inline-flex;
 	align-items: center;
 	gap: 0.35em;
-	padding-inline-start: 0.5em;
-	border-inline-start: 1px solid var(--st-card-rule);
 }
 
 /* ⚠ AND THE GLYPH IS NOT CENTRED IN THEM UNTIL CORE'S GAP COMES OFF IT. These two carry no words
@@ -40727,6 +40838,43 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	width: 1.6em;
 	height: 1.6em;
 	line-height: 1.6;
+}
+
+/* "ADD SOMEONE", THE ONE FILLED BUTTON IN THIS WINDOW. Everything else in the footer changes what
+   is already on the board or what this reader can see of it; this is the only press that puts
+   somebody new on, and it is the one a table reaches for over and over on the evening a map is
+   started.
+
+   THE SHARED SLATE PRIMARY, and no other blue. `--st-btn-primary-*` is the one palette every
+   confirm, submit and call to action in this system is painted with (see the token block at the
+   top of this file, and `.stonetop-cta` on the empty panel's copy of this very button) — so a
+   colour retuned there reaches this too, and a saturated blue mixed in here would be a second
+   primary that only this window has.
+
+   ONLY THE COLOUR. The geometry is `.stonetop-relmap-tool`'s, untouched: this button stands in a
+   row with the two square history buttons, and every measurement that keeps the three level at
+   any font scale is up there. Which also means this rule MUST STAY BELOW that one -- one class
+   each, so the later of the two wins.
+
+   NO `!important`, unlike `.stonetop-cta`. That class is worn in windows that also write
+   `.some-footer button` rules, whose descendant selectors outspecify a lone class; nothing in this
+   window styles a button by descent, and this whole file sits outside `@layer compatibility`, so
+   one class already beats core's `body.game .app button`.
+
+   `:focus-visible` alongside `:hover` because a reader on the keyboard has no other sign of where
+   they are on this row -- the outline core draws lands on a filled button, not beside it. */
+.stonetop-relmap-add {
+	font-weight: 600;
+	background: var(--st-btn-primary-bg);
+	border-color: var(--st-btn-primary-border);
+	color: var(--st-btn-primary-text);
+}
+
+.stonetop-relmap-add:hover,
+.stonetop-relmap-add:focus-visible {
+	background: var(--st-btn-primary-bg-hover);
+	border-color: var(--st-btn-primary-border-hover);
+	color: var(--st-btn-primary-text);
 }
 
 /* ── The page strip ───────────────────────────────────────────────────────────
@@ -40993,6 +41141,134 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	touch-action: none;
 	background: var(--st-page);
 	cursor: grab;
+}
+
+/* ── The way out to a window of its own ───────────────────────────────────────
+   A small tile in the board's top-right corner, on the surfaces that have somewhere to pop out
+   FROM: the steading sheet's Relationship Map tab renders it, the window does not
+   (module/dialogs/RelationshipMapPanel.js sets `canPopOut`).
+
+   THE SAME PLACE AND THE SAME BEHAVIOUR AS THE EXPEDITION MAP'S `.stonetop-journey-zoom`, asked
+   for by name (user, 2026-09-07). What is deliberately NOT copied is its white tile: that one sits
+   over 300 dpi printed artwork and has to carry its own ground because the map underneath is
+   another paper. This sits over the board's own page tone, so it takes the PANEL tone every other
+   piece of chrome in this system takes over a page -- see `--stonetop-bg` vs `--st-page` at the
+   top of this file. A white square here would read as a hole cut in the board.
+
+   ⚠ THE HIDDEN STATE TAKES THE POINTER WITH IT. A transparent button left live over the corner
+   swallows presses meant for the board under it, and on this board a press is how a portrait is
+   dragged and how a line is taken hold of. `pointer-events: none` while it is faded out is what
+   keeps that corner part of the board.
+
+   MODIFIER ORDER: it ties with `.stonetop-relmap-tool` (one class each) and must sit later, which
+   the position in this file is doing. */
+.stonetop-relmap-popout {
+	position: absolute;
+	/* TOP RIGHT (user, 2026-09-07), the corner the expedition map's own tile stands in, so the way
+	   out of a picture is in the same place on both surfaces.
+
+	   ⚠ THE PAGE STRIP'S THREE TOOLS END IN THIS COLUMN, immediately above the viewport's top edge,
+	   and that is the one hazard here: a fourth square directly under a row of three can read as part
+	   of that row. What keeps them apart is that this tile is INSIDE the board -- over the page tone,
+	   inset from the corner, and invisible until the pointer is on the board at all -- while those
+	   three stand on the strip's own ground and are always there. */
+	top: 0.5em;
+	right: 0.5em;
+	/* Over the board and the empty panel, UNDER the tie bar (which is 5). The bar is the control
+	   the reader has just opened by pressing a line; if the two ever land on the same corner, the
+	   one they asked for is the one that must be on top. */
+	z-index: 4;
+	/* SQUARE, by the same arithmetic as the history pair in the footer: 1.6em of content plus
+	   0.25em of padding on all four sides, so it comes out square at every font scale without a
+	   pixel count and without `aspect-ratio` (neither axis is a definite size, so there would be
+	   nothing for a ratio to transfer from). */
+	padding: 0.25em;
+	justify-items: center;
+	background: var(--stonetop-bg);
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius-sm);
+	color: var(--st-text-secondary);
+	/* It is laid ON the board rather than being part of it, and over a diagram that is nothing but
+	   lines a border alone does not say so. */
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+/* Later than the base rule, per the modifier-ordering house rule. Focus stands beside hover
+   because a keyboard has no pointer to reveal it with, and a control that can be tabbed to but
+   never seen is a control that cannot be used. */
+.stonetop-relmap-view:hover .stonetop-relmap-popout,
+.stonetop-relmap-popout:focus-visible {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* The warm hover ground every other tool row in the system lights up with, the same one
+   `.stonetop-relmap-page-tool` takes. */
+.stonetop-relmap-popout:hover,
+.stonetop-relmap-popout:focus-visible {
+	background: var(--st-warm-hover-bg);
+	color: var(--st-text);
+}
+
+/* ⚠ AND THE GLYPH IS NOT CENTRED UNTIL TWO SEPARATE THINGS COME OFF IT. Both were measured on
+   the shipped page, and the second is much the larger.
+
+   FIRST, CORE'S GAP. `body.game .app button > i` carries a `margin-right: 3px` for the label it
+   assumes is coming; there is no label here, so that margin is welded to the right of the box
+   being centred and the glyph paints about 1.5px left of the middle. `margin: 0` on every side,
+   so a core change to any one of them lands the same way.
+
+   SECOND, AND THIS IS THE ONE THE EYE SEES: A GLYPH IS PLACED IN ITS LINE BOX BY ITS BASELINE, AND
+   THIS ONE'S LINE BOX WAS MUCH TALLER THAN THE GLYPH. The icon's box is 1.6em square (the line box
+   a LABEL on one of these buttons makes, which is what keeps the tile square), and it was carrying
+   a 1.6 line-height to match. Font Awesome 7 at 14px reports an ascent of 12 against a descent of
+   2 -- one em of content in a 1.6em line box -- so 0.3em of half-leading went above the glyph, the
+   baseline landed low, and `fa-expand`, whose ink is almost all above its baseline, rode high. The
+   gap grew with the type: the glyph sat 0.8px high at root 16 and 4.1px high at root 24, where the
+   space under it was nearly twice the space over it.
+
+   So the line box is collapsed to the glyph's own em (`line-height: 1`) and the icon centres that
+   box itself rather than leaving it to the baseline. Measured after: 0.4px LOW at root 16 (1.3% of
+   the tile, which is centred by any measure a reader has) and 1.7px high at root 24.
+
+   ⚠ THE REST IS THE ICON FONT'S OWN HINTING AND NO OFFSET CAN FOLLOW IT. The residual changes SIGN
+   between root 16 and root 24, because the rasteriser snaps a bracket's 3px strokes to whole pixels
+   differently at each size -- the ink measures 0.857em tall at one and 0.869em at the other. A
+   sweep of translateY candidates from 0.02em to 0.12em confirms it: every value that improves the
+   large end makes the default worse. What is here is the structural half, which is the half that
+   was actually broken; a magic constant on top would be tuned to one font scale at the expense of
+   the others.
+
+   ⚠ THE UNDO PAIR IN THE FOOTER IS DELIBERATELY NOT GIVEN THIS, and the two are not in
+   disagreement. Those are curved arrows, notched at the bottom and pointed at the top, so their
+   INK bounds sit above their optical centre and a correction measured off the ink would push the
+   arrow itself low -- which is what `.stonetop-relmap-history .stonetop-relmap-tool > i` says at
+   length. `fa-expand` is four corner brackets and is symmetric, so its ink bounds ARE its optical
+   centre and there is nothing to argue away.
+
+   Probe: z:/tmp/foundry-verify/relmap-popout-nudge.mjs, whose header records the four ways of
+   measuring this that gave wrong answers first -- including measuring the nudged glyph against its
+   own box, which moves the ruler with the thing being measured. */
+.stonetop-relmap-popout > i {
+	margin: 0;
+	width: 1.6em;
+	height: 1.6em;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
+}
+
+/* Nothing to hover with: on a touch screen a control that waits for a pointer never appears at
+   all, so there it simply stands. Same concession the expedition's makes. */
+@media (hover: none) {
+	.stonetop-relmap-popout {
+		opacity: 1;
+		pointer-events: auto;
+	}
 }
 
 .stonetop-relmap-view.stonetop-zoom-pan--panning {

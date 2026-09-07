@@ -746,16 +746,75 @@ describe("the window template", () => {
 		expect(off.sort()).toEqual(["redo", "undo"]);
 	});
 
-	// AT THE END OF THE ROW, after every board tool. A reader reaches for undo by muscle memory, so
-	// where it sits must not depend on anything but the permission that decides whether it is there
-	// at all.
-	it("puts the history buttons last in the footer, after the board's own tools", () => {
+	// AT THE END OF THE ROW, after the history pair. "Add someone" is the only press in this footer
+	// that puts somebody NEW on the board, and it is the only one painted with the slate primary --
+	// so it takes the last place, where the eye lands after everything else. The order is the one a
+	// screen reader and the keyboard follow, so it is asserted here rather than left to the CSS.
+	//
+	// ⚠ IT USED TO BE THE OTHER WAY ROUND, with the undo pair last at the far corner. If this ever
+	// flips back, the rule between the two has to come back with it: the pair's separator was
+	// dropped when the filled button took the end of the row (see `.stonetop-relmap-history`).
+	it("puts Add someone last in the footer, after the history pair", () => {
 		// The TOOL GROUP alone: the empty panel over the board carries an "Add someone" of its own,
 		// which is a different control answering a different question.
 		const row = bar(render(context()));
-		expect(row.indexOf('data-relmap-action="undo"'))
-			.toBeGreaterThan(row.indexOf('data-relmap-action="add"'));
+		expect(row.indexOf('data-relmap-action="add"'))
+			.toBeGreaterThan(row.indexOf('data-relmap-action="undo"'));
 		expect(row).toContain('data-relmap-action="redo"');
+	});
+
+	// THE ONE FILLED BUTTON, and it wears the class the stylesheet paints with the shared slate
+	// primary. A button that quietly lost the class would still render, still work, and read as
+	// one more grey tool on the row.
+	it("wears the class that paints Add someone as the primary", () => {
+		expect(bar(render(context())))
+			.toMatch(/class="stonetop-relmap-tool stonetop-relmap-add"/);
+	});
+
+	// OPENING THE BOARD IN A WINDOW OF ITS OWN, which only a surface that HAS somewhere to pop
+	// out from renders. Today that is the steading sheet's Relationship Map tab; the window
+	// itself must never draw it, or it offers to open the thing the reader is already inside.
+	it("offers the pop-out only where the context asks for it", () => {
+		expect(render(context())).not.toContain('data-relmap-action="popout"');
+		expect(render(context({ canPopOut: true }))).toContain('data-relmap-action="popout"');
+	});
+
+	// ⚠ NOT AN EDIT. Everything in the footer's tool group writes to the shared board and is
+	// behind the editing gate; this writes nothing at all, and the reader who wants it most is
+	// the one who may only LOOK -- they cannot move a portrait to see what is behind it, so more
+	// room is the only thing they have.
+	it("offers it to a reader who may only look", () => {
+		expect(render(context({ canPopOut: true, canEdit: false })))
+			.toContain('data-relmap-action="popout"');
+	});
+
+	// IN THE CORNER OF THE BOARD, where the expedition map's own way out sits, rather than on the
+	// footer row with the controls that write to the shared board.
+	//
+	// ⚠ WHICH PUTS IT INSIDE THE VIEWPORT, AND THAT IS THE THING THAT BREAKS SILENTLY. A press
+	// the pan surface does not recognise takes a pointer capture, the capture retargets the click
+	// at the viewport, and the button is dead on a dead-centre press that never moved a pixel.
+	// `BOARD_CONTROLS` names `[data-relmap-action]`, so the attribute is what keeps it alive --
+	// swap it for one of its own and the button renders perfectly and does nothing.
+	it("sits inside the viewport, and keeps the attribute that makes it clickable there", () => {
+		const html = render(context({ canPopOut: true }));
+		const view = html.indexOf('<div class="stonetop-relmap-view"');
+		const foot = html.indexOf('<div class="stonetop-relmap-foot">');
+		const button = html.indexOf('data-relmap-action="popout"');
+		expect(button).toBeGreaterThan(view);
+		expect(button).toBeLessThan(foot);
+		expect(html).toMatch(/class="stonetop-relmap-tool stonetop-relmap-popout"/);
+	});
+
+	// The glyph IS the button, so what it is called has to reach a reader some other way: the
+	// tooltip for everyone else and the accessible name for a screen reader, from one string so
+	// the two cannot drift.
+	it("carries its name in the tooltip and the accessible name alike", () => {
+		const html = render(context({ canPopOut: true, popOutLabel: "Open this board in a window" }));
+		const tag = html.match(/<button[^>]*data-relmap-action="popout"[^>]*>/)[0];
+		expect(tag).toContain('data-tooltip="Open this board in a window"');
+		expect(tag).toContain('aria-label="Open this board in a window"');
+		expect(html).toMatch(/data-relmap-action="popout"[\s\S]{0,160}fa-expand/);
 	});
 
 	// Taking a change back is an edit like any other.

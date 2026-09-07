@@ -61,6 +61,15 @@ const _pendingTabs = new Map();
 // the same way) with a stable uuid. This naturally excludes our FormApplication dialogs,
 // which have no `.document`.
 function _trackedDoc(app) {
+	// ⚠ AND NOT A BOARD MOUNTED INSIDE SOMEBODY ELSE'S SHEET. AppV1 builds its render hook out of
+	// every class name in the inheritance chain, so a frameless subclass of a tracked window fires
+	// the parent's hook too: the relationship map's steading-sheet panel
+	// (dialogs/RelationshipMapPanel.js) raises `renderRelationshipMapWindow` exactly as the window
+	// does. Left tracked it would take the map's uuid in the registry, evicting the real window on
+	// the same map, and on the next reload it would be reopened as a floating window nobody asked
+	// for. There is nothing to restore about a panel in any case: where it was is wherever its host
+	// sheet is, and the host is restored on its own account.
+	if (app?.popOut === false) return null;
 	const doc = app?.document;
 	if (!doc?.uuid) return null;
 	if (doc.pack) return null;            // compendium entry — skip

@@ -59,6 +59,7 @@ import {normalizeFrame} from "../../utils/portrait-frame.js";
 import {bindImagePopoutToActor, pointImagePopoutAt, usedActorPortraits} from "../../utils/actor-portrait-picker.js";
 import {openPortraitFrameEditor} from "../../utils/PortraitFrameDialog.js";
 import {localize} from "../../utils/i18n.js";
+import {closeRelmapTab, detachRelmapTab, makeFirstRelationshipMap, relmapTabContext, STEADING_RELMAP_TAB, syncRelmapTab} from "./steading-relmap-tab.js";
 
 /**
  * What the member-photo WINDOW shows, given the path a member actually wears.
@@ -499,6 +500,11 @@ export function createStonetopSteadingSheetClass(Base) {
 		// viewer's lens on the list, not a property of the steading, and a player with
 		// read-only access to the actor could not write a flag anyway.
 		_improvementCategory = "";
+		// The relationship map board, once this reader has opened that tab, and null until then.
+		// Held on the SHEET rather than rebuilt per render because it is a long-lived thing with a
+		// reader's zoom, pan and open tie bar in it, and because its first render seats the party
+		// and the village. See steading-relmap-tab.js, which owns every read and write of this.
+		_relmapPanel = null;
 		constructor(...args) {
 			super(...args);
 			this._stonetopSteading = this.actor.typedActor;
@@ -530,6 +536,11 @@ export function createStonetopSteadingSheetClass(Base) {
 			// over an avatar tears out the anchor without firing mouseleave — clear it up front so
 			// no orphaned floating preview is left stuck on screen.
 			removeAvatarPreview();
+			// ⚠ THE RELATIONSHIP MAP BOARD COMES OUT BEFORE THE BODY IS REPLACED, and goes back in
+			// at the foot of this method. It is the SAME element across a re-render, carried over
+			// with its pan, its zoom and its listeners, because rebuilding it would throw away the
+			// corner of the map the reader was looking at every time anything wrote to this steading.
+			detachRelmapTab(this);
 			await super._render(force, options);
 			stampLayoutClass(this, "steading");
 			// Strip any PBTA-injected playbook controls and FoundryVTT chrome from the window header
@@ -540,6 +551,34 @@ export function createStonetopSteadingSheetClass(Base) {
 				header.querySelectorAll(".document-id-link").forEach(el => el.remove());
 			}
 			this._injectHeaderToggle();
+			// ⚠ THE MAP BOARD GOES BACK IN HERE AND NOT IN `activateListeners`, WHICH IS TOO EARLY.
+			// Whether the board is wanted depends on which tab is showing, and a sheet reopened
+			// after a reload does not know that yet at listener time: utils/window-restore.js puts
+			// the reader back on the tab they left from the RENDER hook, which core fires after
+			// `activateListeners` has already run. Wired there, a GM who reloads with the sheet open
+			// on the map would be handed an empty tab until they clicked away and back.
+			//
+			// Off the frame rather than the form, because that is what this method has to hand, and
+			// the form is inside it. Cheap and idempotent on every other render: a board already
+			// mounted is simply moved into the tab this render built, and one that was never opened
+			// is not built now either.
+			syncRelmapTab(this, this.element?.[0]);
+		}
+
+		/**
+		 * ⚠ `super` FIRST AND NOTHING ELSE ABOUT SIZE. Core's own `_onChangeTab` is kept so this
+		 * sheet behaves exactly as it did; what is added is the one thing a tab change can mean
+		 * here, which is a reader arriving on the relationship map for the first time. The board
+		 * is built THEN rather than on every render: it costs a walk of every person and line on
+		 * the map, five global hooks, and (once) the writes that seat the party and the village.
+		 * None of that should happen because somebody opened the sheet to look at the harvest.
+		 *
+		 * Nothing here resizes the sheet, and nothing here may: moving between tabs never changes
+		 * a window's size in this system (tests/actors/tabbed-sheet-height.test.js).
+		 */
+		_onChangeTab(event, tabs, active) {
+			super._onChangeTab(event, tabs, active);
+			if (active === STEADING_RELMAP_TAB) syncRelmapTab(this, this.element?.[0]);
 		}
 
 		_injectHeaderToggle() {
@@ -607,6 +646,11 @@ export function createStonetopSteadingSheetClass(Base) {
 
 		async close(options) {
 			this._clearAllSectionDoneTimers();
+			// ⚠ THE MAP BOARD REGISTERS FIVE GLOBAL JOURNAL HOOKS AND ONLY ITS OWN `close` TAKES
+			// THEM OFF. Left registered they fire on every journal write at the table for the rest
+			// of the session, holding a whole board and its portraits alive behind them, once for
+			// every steading sheet anybody ever opened on that tab.
+			closeRelmapTab(this);
 			// The avatar hover preview lives on document.body, so it survives the sheet's own
 			// DOM being torn down — clear it here or it orphans if the sheet closes (e.g. Escape)
 			// while the cursor is still over an avatar and no mouseleave ever fires.
@@ -714,6 +758,11 @@ export function createStonetopSteadingSheetClass(Base) {
 			// what the steading owes without being handed a control that would refuse them.
 			context.stonetop.holds = this._stonetopSteading.holdsView()
 				.map(h => ({ ...h, interactive: !!h.action && context.stonetop.isGM }));
+			// The Relationship Map tab needs nothing from this actor: the board is a JournalEntry
+			// owned by the whole table, and it mounts itself (see steading-relmap-tab.js). All the
+			// template wants to know is whether the world has a map at all, and if not, whether
+			// this reader is one of the people who may make the first one.
+			context.stonetop.relmap = relmapTabContext();
 			return context;
 		}
 
@@ -725,6 +774,11 @@ export function createStonetopSteadingSheetClass(Base) {
 			// rail is on the frame, since that is where the tab-change watcher binds.
 			mountScrollFrost(this, html);
 			wrapStonetopGlyphsInEl(html[0]);
+
+			// The invitation shown on a world that has no relationship map yet. The BOARD is not
+			// wired here; see the tail of `_render` for why it cannot be.
+			html[0].querySelector("[data-steading-relmap-make]")
+				?.addEventListener("click", () => makeFirstRelationshipMap(this));
 
 			// Residents / Neighbors filters (see utils/tab-search.js). Each is scoped to its own
 			// section so it only hides that section's rows; a row matches on the text of every

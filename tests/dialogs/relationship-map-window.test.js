@@ -176,7 +176,7 @@ function windowFor(graph = TWO_PEOPLE, { isOwner = true, entry: given = null, pa
 	app.reportWriteFailure = vi.fn();
 	return {
 		app, entry, root, board, live, empty, emptyLead, emptyHint, emptyCta, foot, strip,
-		view, dropTool,
+		view, dropTool, seenTool,
 	};
 }
 
@@ -1196,14 +1196,14 @@ describe("what a portrait says when it is rested on", () => {
 	it("names the right press on every face, for a reader who can act on it", () => {
 		const said = tooltips();
 		for (const id of ["elena", "ghost", "nobody"]) {
-			expect(said[id]).toContain("Right-click for the button that takes them off.");
+			expect(said[id]).toContain("Right-click to see the delete button.");
 		}
 	});
 
 	// A bare name is not a sentence, and run straight into the instruction it reads as one broken
 	// one. The two tooltips that already end in a full stop must not collect a second.
 	it("puts a full stop between the two, and only where there is not one already", () => {
-		expect(tooltips().nobody).toBe("The Miller. Right-click for the button that takes them off.");
+		expect(tooltips().nobody).toBe("The Miller. Right-click to see the delete button.");
 		expect(tooltips().elena).not.toContain("..");
 	});
 
@@ -1453,6 +1453,44 @@ describe("opening a map", () => {
 
 	it("opens nothing for no entry", () => {
 		expect(openRelationshipMap(null)).toBeNull();
+		expect(opened).toEqual([]);
+	});
+
+	// POPPING A BOARD OUT OF A SHEET INTO A WINDOW. The button that runs this is rendered only
+	// on the steading sheet's tab (dialogs/RelationshipMapPanel.js sets `canPopOut`), but the
+	// method is the window's, because what it says is true of any surface: bring up a window on
+	// the board in front of me.
+	it("opens a window on the very board the reader is looking at", () => {
+		RelationshipMapWindow.prototype.render = vi.fn();
+		const { app } = windowFor(TWO_PEOPLE, { pageId: "p2" });
+		app._pageId = "p2";
+		app._popOut();
+		expect(opened).toEqual(["stonetop-relmap-map1"]);
+		delete RelationshipMapWindow.prototype.render;
+	});
+
+	// ⚠ A READER PRESSES THIS WHILE LOOKING AT ONE PARTICULAR BOARD OF THE MAP. A window that
+	// opened on whichever page comes first would be a different picture than the one they were
+	// pointing at, which reads as the button opening the wrong thing.
+	it("hands the window the page that was up, and asks for none when there is none", () => {
+		const showing = { render: vi.fn(), bringToTop: vi.fn(), showPage: vi.fn() };
+		alreadyOpen = showing;
+		const { app } = windowFor();
+		app._pageId = "p3";
+		app._popOut();
+		expect(showing.showPage).toHaveBeenCalledWith("p3");
+
+		showing.showPage.mockClear();
+		app._pageId = null;
+		app._popOut();
+		expect(showing.showPage).not.toHaveBeenCalled();
+	});
+
+	it("pops nothing out of a map that has gone", () => {
+		const { app } = windowFor();
+		app._entry = null;
+		app._entryId = "gone";
+		expect(app._popOut()).toBeNull();
 		expect(opened).toEqual([]);
 	});
 });

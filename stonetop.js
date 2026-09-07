@@ -495,6 +495,7 @@ Hooks.once("init", () => {
 		"stonetop.steading-tab-neighbors":    "systems/stonetop-pwd/templates/actor/partials/steading-tab-neighbors.hbs",
 		"stonetop.steading-tab-improvements": "systems/stonetop-pwd/templates/actor/partials/steading-tab-improvements.hbs",
 		"stonetop.steading-tab-moves":        "systems/stonetop-pwd/templates/actor/partials/steading-tab-moves.hbs",
+		"stonetop.steading-tab-relmap":       "systems/stonetop-pwd/templates/actor/partials/steading-tab-relmap.hbs",
 		"stonetop.steading-tab-notes":        "systems/stonetop-pwd/templates/actor/partials/steading-tab-notes.hbs",
 		"stonetop.gm-toolkit-tab-moves":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-moves.hbs",
 		"stonetop.gm-toolkit-tab-loop":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-loop.hbs",

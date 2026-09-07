@@ -188,6 +188,11 @@
 			      STORAGE did not move: both are still journal pages filed under this steading
 			      (module/journal/gm-prep-page-store.js), so nothing about a world's existing
 			      prep changed, only where the GM reads it. --}}
+			{{!-- The relationship map, which is a window as well (the hotbar macro and the map's
+			      own row in the Journal sidebar both open one). The tab is MODERN ONLY, like
+			      Homefront Moves above: classic is the sheet as it was before the tab-rail
+			      redesign and does not take new pages. Classic readers still have the macro. --}}
+			{{#unless stonetop.classicLayout}}{{> "stonetop.tab-nav-item" tab="relmap" label=(localize "stonetop.steading.tabs.relmap")}}{{/unless}}
 			{{> "stonetop.tab-nav-item" tab="notes"        label=(localize "stonetop.steading.tabs.notes")}}
 		</nav>
 
@@ -197,6 +202,7 @@
 				{{#unless stonetop.classicLayout}}{{> "stonetop.steading-tab-moves"}}{{/unless}}
 				{{> "stonetop.steading-tab-neighbors"}}
 				{{> "stonetop.steading-tab-improvements"}}
+				{{#unless stonetop.classicLayout}}{{> "stonetop.steading-tab-relmap"}}{{/unless}}
 				{{> "stonetop.steading-tab-notes"}}
 			</section>
 

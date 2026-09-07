@@ -236,4 +236,37 @@ describe("the relationship map board", () => {
 		vi.advanceTimersByTime(500);
 		expect(saved("Actor.plain")).not.toHaveProperty("pageId");
 	});
+
+	// ⚠ AND THE SAME BOARD MOUNTED INSIDE A SHEET IS NOT A WINDOW AT ALL. The steading sheet's
+	// Relationship Map tab holds a frameless subclass of the board (RelationshipMapPanel), and
+	// AppV1 builds its render hook out of EVERY class name in the inheritance chain -- so the
+	// panel fires this hook exactly as the window does, over the same entry.
+	//
+	// Tracked, it would take the map's uuid in the registry and evict the real window on the same
+	// map (last render wins), and on the next reload it would be reopened as a floating window
+	// over a sheet that already contains one. There is nothing to restore about it in any case:
+	// where a panel was is wherever its host sheet was, and the host is restored on its own
+	// account. `popOut` is the honest question, and it covers any future embed rather than this
+	// one class.
+	it("ignores a board mounted inside a sheet rather than opened as a window", () => {
+		const panel = fakeSheet({ uuid: "JournalEntry.map5" });
+		delete panel._editMode;
+		panel.popOut = false;
+		fire(`render${RELMAP_WINDOW_CLASS}`, panel);
+		vi.advanceTimersByTime(500);
+		expect(saved("JournalEntry.map5")).toBeUndefined();
+	});
+
+	it("and a panel closing does not un-save the window on the same map", () => {
+		// Both fire the same close hook over the same uuid. If the panel were let through here it
+		// would drop the real window's entry, and the map would simply not come back on reload.
+		const board = fakeSheet({ uuid: "JournalEntry.map6" });
+		delete board._editMode;
+		fire(`render${RELMAP_WINDOW_CLASS}`, board);
+		vi.advanceTimersByTime(500);
+		const panel = { ...board, popOut: false };
+		fire(`close${RELMAP_WINDOW_CLASS}`, panel);
+		vi.advanceTimersByTime(500);
+		expect(saved("JournalEntry.map6")).toBeTruthy();
+	});
 });

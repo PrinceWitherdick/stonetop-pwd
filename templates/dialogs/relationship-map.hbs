@@ -591,6 +591,37 @@
         <i class="fas fa-trash"></i>
       </button>
     </div>
+
+    {{!-- OPEN THIS BOARD IN A WINDOW OF ITS OWN, in the corner of the board itself.
+
+          ONLY ON A SURFACE THAT HAS SOMEWHERE TO POP OUT FROM, which today means the steading
+          sheet's Relationship Map tab (module/dialogs/RelationshipMapPanel.js sets `canPopOut`).
+          The window never renders it: a window offering to open itself would be a press that
+          brings the reader back to where they already are.
+
+          THE SAME PLACE AND THE SAME MARK AS THE EXPEDITION'S MAP (user, 2026-09-07), which has
+          had a way out to a bigger view since it was built: a small tile in the picture's top
+          right, fading in under the pointer. A reader who wants more room already has their hand
+          over the thing they want more of, so that is where the way out belongs. On the footer
+          row -- where this button first went -- it was a labelled control among the ones that
+          write to the shared board, which is a different kind of thing.
+
+          NOT AN EDIT, so it is outside the `canEdit` gate the tools below sit behind. The reader
+          who wants it most is the one who may only LOOK: they cannot move a portrait to see what
+          is behind it, so more room is the only thing they have.
+
+          ⚠ IT IS INSIDE THE VIEWPORT, so it lives or dies by `BOARD_CONTROLS`. A press the pan
+          surface does not recognise takes a pointer capture, the capture retargets the click at
+          the viewport, and the button is dead on a dead-centre press that never moved a pixel.
+          `[data-relmap-action]` is already named in that list, which is why this needs no entry of
+          its own -- and why it must keep that attribute rather than growing one of its own. --}}
+    {{#if canPopOut}}
+    <button type="button" class="stonetop-relmap-tool stonetop-relmap-popout"
+            data-relmap-action="popout"
+            data-tooltip="{{popOutLabel}}" aria-label="{{popOutLabel}}">
+      <i class="fas fa-expand"></i>
+    </button>
+    {{/if}}
   </div>
 
   {{!-- THE FOOTER: WHAT THIS READER SEES, AND WHAT THEY CAN DO.
@@ -668,17 +699,12 @@
           being asked. --}}
     {{#if canEdit}}
     <div class="stonetop-relmap-foot-tools">
-      <button type="button" class="stonetop-relmap-tool" data-relmap-action="add"
-              data-tooltip="{{addHint}}" aria-label="{{addHint}}">
-        <i class="fas fa-user-plus"></i>
-        <span>{{addLabel}}</span>
-      </button>
-
       {{!-- TAKING A CHANGE BACK, AND PUTTING IT FORWARD AGAIN.
 
-            LAST OF ALL, AT THE FAR CORNER. These are the only two controls in the window that are
-            about what the READER did rather than about the board, which is why they sit apart from
-            the tool beside them: last in the markup, after a rule.
+            BEFORE "ADD SOMEONE", AND SET APART FROM IT. These are the only two controls in the
+            window that are about what the READER did rather than about the board, which is why
+            they do not simply run on into the tool beside them: the button that follows carries
+            the window's one filled fill, and that block of colour is the join.
 
             What they reverse is whatever this reader last did to this board, wherever they were
             standing when they did it, and each press says out loud what it took back — so unlike
@@ -688,8 +714,8 @@
             the pair every program on the reader's machine draws these with, and what a press here
             actually says -- WHICH change it would take back, by name -- was never the word "Undo"
             on the button but its tooltip and its accessible name, both rewritten on every edit by
-            `_paintHistory`. Without the words the pair reads as one small thing at the end of the
-            row rather than as two more tools. The `<i>` is now all that is inside a button, so
+            `_paintHistory`. Without the words the pair reads as one small thing on the row rather
+            than as two more tools. The `<i>` is now all that is inside a button, so
             the stylesheet takes core's icon-to-label margin back off it; see
             `.stonetop-relmap-history` for why a glyph-only button is otherwise off centre.
 
@@ -712,6 +738,26 @@
           <i class="fas fa-rotate-right"></i>
         </button>
       </span>
+
+      {{!-- PUTTING SOMEBODY ON THE BOARD, and the last press on the row.
+
+            LAST, AND FILLED. It is the only thing in this footer that adds to the board rather
+            than changing what is already on it, and the only button in the window painted with
+            the slate primary (`--st-btn-primary-*`, `.stonetop-relmap-add`) — which is what puts
+            it at the end of the row: a filled button reads as the one thing to press, and a
+            reader who has just opened an empty map should land on it after their eye has passed
+            everything else rather than before.
+
+            THE SAME PRESS THE EMPTY PANEL OFFERS, and deliberately not the same button. The panel
+            over an empty board carries its own "Add someone" because a reader with nothing drawn
+            yet should not have to find the footer; this one is the way back to the picker once
+            there is a board to look at, and it stays whether the board is empty or full. --}}
+      <button type="button" class="stonetop-relmap-tool stonetop-relmap-add"
+              data-relmap-action="add"
+              data-tooltip="{{addHint}}" aria-label="{{addHint}}">
+        <i class="fas fa-user-plus"></i>
+        <span>{{addLabel}}</span>
+      </button>
     </div>
     {{/if}}
   </div>

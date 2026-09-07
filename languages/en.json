@@ -39,6 +39,7 @@
         "neighbors": "Residents",
         "improvements": "Improvements",
         "moves": "Homefront Moves",
+        "relmap": "Relationship Map",
         "notes": "Notes"
       }
     },
@@ -1422,6 +1423,7 @@
       "noun": "relationship map",
       "untitled": "Relationship Map",
       "windowTitle": "Relationship maps",
+      "popOut": "Open this board in a window",
       "someone": "Someone",
       "add": "Add someone",
       "addHint": "Put people on the map.",
@@ -1486,7 +1488,7 @@
       "removeCancel": "Leave them on the map",
       "removed": "{name} has been taken off the map.",
       "removeLabel": "Take {name} off this map",
-      "removeGesture": "Right-click for the button that takes them off.",
+      "removeGesture": "Right-click to see the delete button.",
       "inkNamed": "Colour: {name}",
       "inkCustomHeading": "Already on this board",
       "inkCustomNamed": "The colour {name}, already on this board",
@@ -1549,6 +1551,11 @@
         "a-b": "One way, to the second person",
         "b-a": "One way, to the first person",
         "both": "Both ways, marked at each end"
+      },
+      "tab": {
+        "emptyLead": "There is no relationship map in this world.",
+        "emptyHint": "Make one and the party will seat themselves on it, with the people of Stonetop on a board of their own.",
+        "makeMap": "Make the map"
       },
       "maps": {
         "seedName": "Stonetop",

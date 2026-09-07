@@ -166,6 +166,13 @@ const BOARD_MENUS = ".stonetop-relmap-tiebar";
  */
 const TOOLS = Object.freeze({
 	hidelabels: { needsEdit: false, run: (app, button) => app._toggleLabels(button) },
+	// AND THE OTHER ONE THAT IS NOT AN EDIT. Opening a board in a window of its own writes
+	// nothing anywhere, and a reader who may only look wants it more than anybody: they cannot
+	// move a portrait to see what is under it, so all they have is more room. Rendered only on a
+	// surface that has somewhere to pop out FROM (see `canPopOut`), which today is the steading
+	// sheet's tab -- a window offering to open itself would be a button that flashes and does
+	// nothing.
+	popout: { needsEdit: false, run: app => app._popOut() },
 	// ⚠ NO "BRING THE PARTY IN" AND NO "BRING THE VILLAGE IN". Both boards still fill themselves on
 	// open; what is gone is the pair of buttons that asked for the same pass out loud. They were two
 	// controls for something the map already has two plainer answers to -- drag somebody on, or press
@@ -2900,6 +2907,28 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// The holes in the strokes, healed or cut again. The class alone leaves a board of lines
 		// with conspicuous breaks in them for nothing.
 		this._paintLineGaps();
+	}
+
+	/**
+	 * Open the board in front of the reader as a window of its own.
+	 *
+	 * ⚠ THE PAGE GOES WITH IT. A reader presses this while looking at one particular board of
+	 * this map, and a window that opened on whichever page comes first would be a different
+	 * picture than the one they were pointing at. `openRelationshipMap` forwards a `pageId` both
+	 * to a window it makes and to one already open, which is the same route the Journal sidebar
+	 * and window-restore take.
+	 *
+	 * WRITTEN HERE RATHER THAN ON THE PANEL because it says something true of any surface: bring
+	 * up a window on this board. On the window itself that resolves to bringing itself to the
+	 * front, which is harmless and is why the button is gated on the CONTEXT rather than on a
+	 * method existing. The two boards that result are peers, not a copy and an original -- both
+	 * read the same document and both repaint from the same hooks -- exactly as the expedition's
+	 * map panel and its popped-out window are.
+	 */
+	_popOut() {
+		const entry = this.entry;
+		if (!entry) return null;
+		return openRelationshipMap(entry, this._pageId ? { pageId: this._pageId } : {});
 	}
 
 	/**
