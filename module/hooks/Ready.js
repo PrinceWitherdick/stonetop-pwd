@@ -2,6 +2,7 @@ import { runStartupMigrations } from "./PbtaSheetConfig.js";
 import { theGmToolkit, createGmToolkit, isGmToolkitData, GM_TOOLKIT_DEFAULT_IMG } from "../actors/gmtoolkit/gm-toolkit-actor.js";
 import { openRelationshipMap } from "../dialogs/RelationshipMapWindow.js";
 import { canCreateRelationshipMap, createRelationshipMap, ensureRelationshipMapFolder, listRelationshipMaps } from "../relmap/relmap-doc.js";
+import { defaultBoard } from "../relmap/relmap-last.js";
 import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
@@ -131,9 +132,9 @@ const _SYSTEM_MACROS = [
 	{ name: "Browse Stonetop",     img: "systems/stonetop-pwd/assets/icons/macros/magnifying-glass.svg", command: "game.stonetop?.openBrowser?.()",        slot: 7 },
 	// Shared, unlike its neighbours: everyone at the table owns the relationship maps and edits
 	// them, so a macro only the GM could reach would be a window most of its users could not open.
-	// A brain, not the truce handshake End of Session already wears: the map is what the table
-	// KNOWS about who stands where, and two macros on one picture are indistinguishable on the bar.
-	{ name: "Relationship Map",    img: "systems/stonetop-pwd/assets/icons/macros/brain.svg", command: "game.stonetop?.openRelationshipMap?.()", slot: 8, shared: true, playerSlot: 2 },
+	// The picture is the board itself: boxed people joined by lines. Not the truce handshake End
+	// of Session already wears, because two macros on one picture are indistinguishable on the bar.
+	{ name: "Relationship Map",    img: "systems/stonetop-pwd/assets/icons/macros/relationship-map.svg", command: "game.stonetop?.openRelationshipMap?.()", slot: 8, shared: true, playerSlot: 2 },
 ];
 
 // Bump to re-snap the system macros into their canonical slots once, on every client
@@ -1958,12 +1959,17 @@ function _buildStartupWelcomeContent() {
 }
 
 /**
- * Open a relationship map by name or id, or the obvious one.
+ * Open a relationship map by name or id, or the one this reader was last on.
  *
- * A world usually has one map and the macro should just open it. With several, the reader is
- * asked which — rather than the macro picking one and being wrong most of the time. With none, a
- * GM (or anyone with the journal-create right) is offered the chance to make the first one, and
- * everybody else is told who can.
+ * IT NEVER ASKS WHICH. A world with several maps used to get a picker here, on the grounds that the
+ * macro would otherwise be wrong most of the time. It is not: a table lives on one board, opens it
+ * all session, and picked the same row out of that list every time. So the macro goes where this
+ * client last was, and `relmap/relmap-last.js` holds the whole rule (and the two fallbacks, for a
+ * client that has never opened one). The sidebar and the map's own page strip are how you get to a
+ * different map.
+ *
+ * With no maps at all, a GM (or anyone with the journal-create right) is offered the chance to make
+ * the first one, and everybody else is told who can.
  */
 async function _openRelationshipMap(which) {
 	const maps = listRelationshipMaps();
@@ -1971,16 +1977,9 @@ async function _openRelationshipMap(which) {
 		const wanted = maps.find(m => m.id === which || m.name === which);
 		if (wanted) return openRelationshipMap(wanted);
 	}
-	if (maps.length === 1) return openRelationshipMap(maps[0]);
-	if (maps.length > 1) {
-		const { pickContentOption } = await import("../dialogs/content-picker.js");
-		const id = await pickContentOption({
-			title: game.i18n.localize("stonetop.relmap.maps.heading"),
-			buttonLabel: game.i18n.localize("stonetop.relmap.maps.open"),
-			options: maps.map(m => ({ id: m.id, label: m.name, icon: "fa-circle-nodes" })),
-		});
-		const chosen = maps.find(m => m.id === id);
-		return chosen ? openRelationshipMap(chosen) : null;
+	const landing = defaultBoard(maps);
+	if (landing) {
+		return openRelationshipMap(landing.entry, landing.pageId ? { pageId: landing.pageId } : {});
 	}
 	if (!canCreateRelationshipMap()) {
 		ui.notifications?.info?.(game.i18n.localize("stonetop.relmap.maps.cannotCreate"));

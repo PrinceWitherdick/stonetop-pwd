@@ -1424,6 +1424,17 @@ export function registerSettings() {
 		default: {},
 	});
 
+	// Which relationship board this client last had open, so the hotbar macro can go straight
+	// there instead of asking. Internal, per client (where somebody is reading is theirs, not the
+	// world's), and nested by world id because a client setting has no world in its localStorage
+	// key. Shape: { "<worldId>": { entryId, pageId } }. See relmap/relmap-last.js.
+	game.settings.register(SYSTEM_ID, "lastRelationshipBoard", {
+		scope: "client",
+		config: false,
+		type: Object,
+		default: {},
+	});
+
 	// Strip the decorative animations, transitions, and hover-zoom image popups
 	// from Stonetop UI for users who find them distracting or are motion-sensitive.
 	// Drives the `stonetop-reduce-motion` root class.
