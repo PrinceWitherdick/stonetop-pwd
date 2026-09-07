@@ -187,6 +187,21 @@ export function splitPickList(text) {
 }
 
 /**
+ * A line that ENDS on a colon has nothing left to introduce, so the colon becomes a full stop.
+ *
+ * Two shapes arrive here and both are the same sentence half-finished. A tier row read back out
+ * of a move's own prose keeps the colon its bullets followed ("on a 7-9, pick 1:" — the bullets
+ * are printed above the ladder, not in the row), and an `introOnly` lead-in is cut at that same
+ * colon on purpose ({@link splitPickList}) and then has its options dropped. Either way what the
+ * reader sees is "Pick 1:" and then the row simply stops, as though the card had lost the rest of
+ * the line — twelve of the shipped moves read that way, Formidable's weak hit among them.
+ *
+ * ONLY at the very end, and only after the options are gone: a colon with its list still behind
+ * it is doing its job, which is why the branch that prints that list keeps it.
+ */
+const closeLeadIn = text => String(text).replace(/\s*:\s*$/, ".");
+
+/**
  * Render a move-result outcome string as HTML. When the text presents a "pick N:" list
  * of slash-separated options, the lead-in stays as prose and the options become a
  * spiral-bulleted <ul class="stonetop-roll-result-picks"> — otherwise the text is just
@@ -202,12 +217,12 @@ export function formatOutcomeDetail(text, { introOnly = false } = {}) {
 	if (!raw) return "";
 	const split = splitPickList(raw);
 	if (split) {
-		if (introOnly) return `<span class="stonetop-roll-result-lead">${escHtml(split.intro)}</span>`;
+		if (introOnly) return `<span class="stonetop-roll-result-lead">${escHtml(closeLeadIn(split.intro))}</span>`;
 		const items = split.options.map((o) => `<li>${escHtml(o)}</li>`).join("");
 		return `<span class="stonetop-roll-result-lead">${escHtml(split.intro)}</span>`
 			+ `<ul class="stonetop-roll-result-picks">${items}</ul>`;
 	}
-	return escHtml(raw);
+	return escHtml(closeLeadIn(raw));
 }
 
 /** Ensure miss result labels are visually emphasized in rendered move text. */
