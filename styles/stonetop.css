@@ -7970,6 +7970,12 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    nothing here sets a display that would out-specify it — but the tier ACTIONS learned that
    lesson the hard way (see .stonetop-roll-tier-action[hidden] above), so say it outright. */
 .stonetop-roll-tier-picklist[hidden] { display: none; }
+/* And the printed list of a tier that never reached it — Helior's Unblinking Eye on a 6-, where
+   "the GM makes a move" and there is nothing to choose. Hidden with its tally by
+   stonetop.js#_paintPickCount, which is a live toggle rather than markup: a GM's Shift Up/Down
+   brings both back with the tier that grants them. Nothing above sets a `display` on either, so
+   the UA rule already does this — said outright on the same lesson as the line before it. */
+:is(.stonetop-picklist, .stonetop-picklist-count)[hidden] { display: none; }
 /* Three homes, one checklist: a roll card's own pick list (a love letter's pool, a homefront
    move's per-tier options), and the options a move prints in its TEXT — which is tickable in
    place wherever that text is shown, on a posted move card and on a roll card's description

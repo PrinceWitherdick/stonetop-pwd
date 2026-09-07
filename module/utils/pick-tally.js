@@ -27,12 +27,17 @@ export const PICK_TALLY_CLASS = "stonetop-picklist-count";
 /**
  * What counts as an option on a list: a checkbox, or a radio.
  *
- * RADIOS ARE OPTIONS TOO. A "pick 1" whose options are mutually exclusive is a radio group
- * (combat/attack-flow.js#pickRow builds Clash's 10+ that way, skinned as checkbox-SVGs), and a
- * reader looking at two boxes with a count over them should not have to know which element the
- * card reached for -- "0/1 options selected" is the same sentence either way. One constant rather
- * than three copies of the selector, because a list that painted its tally over one set of
- * controls and released over another would be counting boxes it cannot let go of.
+ * ONE CONSTANT, THREE READERS. A list that painted its tally over one set of controls and released
+ * over another would be showing a number it cannot enforce, so the count, the release and the
+ * whole-list test all ask the same question of the same elements.
+ *
+ * RADIOS COUNT TOO, though nothing ships one on a pick list today. A "pick 1" whose options are
+ * mutually exclusive used to be a radio group -- Clash's 10+ was built that way, skinned as
+ * checkbox-SVGs, back when a tier restated its move's list as controls of its own
+ * (combat/attack-flow.js, which no longer does). The breadth stays because a reader looking at
+ * boxes with a count over them should not have to know which element the surface reached for:
+ * "0/1 options selected" is the same sentence either way, and a list that grew radios tomorrow
+ * would be counted rather than silently read as empty.
  */
 export const PICK_BOX_SELECTOR = 'input[type="checkbox"], input[type="radio"]';
 
@@ -92,6 +97,32 @@ function readPickLimit(listEl) {
 	if (at >= 0) return { limit: perTier[at] > 0 ? perTier[at] : null, rolledTier };
 
 	return { limit: Math.max(0, ...perTier.filter(n => n > 0)) || null, rolledTier };
+}
+
+/**
+ * Whether the tier this card rolled reaches this list at all.
+ *
+ * A cap of null means "tick freely", and that was the ONE answer two very different tiers got.
+ * Dark Succor's 6- hands over the whole list and Formidable's 6- still says "pick 1", while
+ * Helior's Unblinking Eye's 6- is "the GM makes a move" and Forage's is barren land — a roll that
+ * ends the question, whose options were still printed under a "0 options selected" inviting a
+ * player to tick something the move never offered. `data-pick-tiers` is the move's own answer,
+ * read off its prose by utils/move-picks.js#pickTiersFrom and stamped by
+ * chat.js#pickableMoveDescription.
+ *
+ * TRUE unless the card plainly says otherwise, which covers the three ways it can say nothing:
+ * a list carrying no stamp (a move whose tiers nothing read, a pool the roll card built itself),
+ * a card that rolled nothing (the Moves tab posts a move's printed list with no result to read),
+ * and a tier the stamp names. Only a rolled tier absent from a stamp that named others is a
+ * "no" — the same shape of answer, and the same timidity, as the cap beside it.
+ *
+ * @param {Element|null} listEl  The element holding the option checkboxes.
+ */
+export function tierOffersPicks(listEl) {
+	const stamped = String(listEl?.dataset?.pickTiers ?? "").split(/\s+/).filter(Boolean);
+	if (!stamped.length) return true;
+	const { rolledTier } = readPickLimit(listEl);
+	return !rolledTier || stamped.includes(rolledTier);
 }
 
 /** Just the cap — the answer nearly every caller wants. */

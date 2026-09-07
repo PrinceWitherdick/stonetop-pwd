@@ -68,7 +68,7 @@ import { rollSeasonsCard, sign, markMissXp, pbtaDiceFormula, seasonsRollTable } 
 import { xpToLevelUp, adjustXp } from "./module/utils/xp.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
 import { moveChatCard, canRewriteCard } from "./module/utils/chat.js";
-import { grantsWholeList, paintPickTally, pickLimitFor, releaseOverLimit } from "./module/utils/pick-tally.js";
+import { grantsWholeList, paintPickTally, pickLimitFor, releaseOverLimit, tierOffersPicks } from "./module/utils/pick-tally.js";
 import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
@@ -1600,10 +1600,20 @@ function _releasePicksOverLimit(justChecked) {
  *
  * Repainted rather than wired: these boxes already have a listener of their own (it persists the
  * tick to the message flag), so the tally rides that one instead of adding a second.
+ *
+ * AND A TIER THAT NEVER REACHED THE LIST SHOWS NEITHER. Helior's Unblinking Eye on a 6- is "the
+ * GM makes a move" — the roll ended the question, and printing its three options under a "0
+ * options selected" offered a choice nobody has. Hidden rather than removed, and hidden HERE
+ * rather than in the card's markup, because the tier is not settled: a GM's Shift Up/Down
+ * re-renders the card and this runs again, so the list comes back with the tier that grants it,
+ * ticks and all (utils/pick-tally.js#tierOffersPicks).
  */
 function _paintPickCount(list) {
 	if (!list) return;
-	paintPickTally(list, pickLimitFor(list));
+	const offered = tierOffersPicks(list);
+	const readout = paintPickTally(list, pickLimitFor(list));
+	list.hidden = !offered;
+	if (readout) readout.hidden = !offered;
 }
 
 /**

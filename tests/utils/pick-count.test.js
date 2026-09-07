@@ -7,7 +7,7 @@ import { pickCountLabel } from "../../module/utils/move-picks.js";
 import { pickListsHtml, normalizePickPools, tierPickCounts } from "../../module/utils/roll-engine.js";
 import { pickableMoveDescription } from "../../module/utils/chat.js";
 import { parseArcanumMoves } from "../../module/data/arcana-moves.js";
-import { grantsWholeList, paintPickTally, pickLimitFor, wirePickTally, releaseOverLimit, PICK_TALLY_CLASS, PICK_BOX_SELECTOR } from "../../module/utils/pick-tally.js";
+import { grantsWholeList, paintPickTally, pickLimitFor, tierOffersPicks, wirePickTally, releaseOverLimit, PICK_TALLY_CLASS, PICK_BOX_SELECTOR } from "../../module/utils/pick-tally.js";
 import { pickLimitsFrom } from "../../module/utils/move-picks.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -383,6 +383,60 @@ describe("pickLimitFor", () => {
 	});
 });
 
+// A cap of null means "tick freely", and that was the ONE answer two very different tiers got.
+// Dark Succor's 6- hands over the whole list and Formidable's still says "pick 1", while Helior's
+// Unblinking Eye's is "the GM makes a move" and Forage's is barren land: a roll that ended the
+// question, whose options were printed anyway under a "0 options selected". `data-pick-tiers` is
+// the move's own answer, read off its prose and stamped on the list it belongs to.
+describe("tierOffersPicks", () => {
+	it("hides a rolled tier the move's stamp leaves out", () => {
+		expect(tierOffersPicks(fakePickList({ pickTiers: "success partial" }, { tier: "failure" }))).toBe(false);
+	});
+
+	it("shows a rolled tier the stamp names, capped or not", () => {
+		const helior = { pickMaxSuccess: "2", pickMaxPartial: "1", pickTiers: "success partial" };
+		expect(tierOffersPicks(fakePickList(helior, { tier: "success" }))).toBe(true);
+		expect(tierOffersPicks(fakePickList(helior, { tier: "partial" }))).toBe(true);
+		// Invoke the Sun God's 7-9: named, and deliberately uncapped, because two people choose.
+		expect(tierOffersPicks(fakePickList({ pickTiers: "success partial" }, { tier: "partial" }))).toBe(true);
+	});
+
+	// Three ways the card can say nothing, and all three go on showing the list. The reader is
+	// timid in the same direction as the cap beside it: only a rolled tier absent from a stamp
+	// that named others is a "no".
+	it("shows the list wherever the card has not plainly said otherwise", () => {
+		// A move whose tiers nothing read, and a pool the roll card built for itself.
+		expect(tierOffersPicks(fakePickList({ pickMax: "1" }, { tier: "failure" }))).toBe(true);
+		expect(tierOffersPicks(fakePickList({}, { tier: "failure" }))).toBe(true);
+		// The Moves tab, which posts a move's printed list on a card that rolled nothing.
+		expect(tierOffersPicks(fakePickList({ pickTiers: "success" }, { card: false }))).toBe(true);
+		expect(tierOffersPicks(null)).toBe(true);
+	});
+
+	// End to end on the move that was reported: its own shipped text, through the composer the
+	// roll card is built with, into the reader the card is painted by.
+	it("takes Helior's Unblinking Eye's options off its 6-, and leaves them on its hits", () => {
+		const helior = "<p>When you stare into the sun, roll +WIS: <strong>on a 10+</strong>, you glimpse"
+			+ " your subject and choose 2 from the list below; <strong>on a 7-9</strong>, you glimpse"
+			+ " your subject and choose 1.</p><ul><li>The glimpse lasts as long as you wish</li>"
+			+ "<li>Your point of view shifts to very close range</li>"
+			+ "<li>You recover your vision quickly</li></ul>";
+		const html = pickableMoveDescription(helior);
+		expect(html).toContain('data-pick-tiers="success partial"');
+		const dataset = { pickTiers: /data-pick-tiers="([^"]*)"/.exec(html)[1] };
+		expect(tierOffersPicks(fakePickList(dataset, { tier: "failure" }))).toBe(false);
+		expect(tierOffersPicks(fakePickList(dataset, { tier: "success" }))).toBe(true);
+		expect(tierOffersPicks(fakePickList(dataset, { tier: "partial" }))).toBe(true);
+	});
+
+	// Nothing is stamped when no tier was read, so a move that never splits by tier is untouched
+	// and its list shows on every result.
+	it("stamps nothing on a move whose count is one rule for the whole list", () => {
+		const aid = "<p>When you help someone, the GM picks 1:</p><ul><li>A</li><li>B</li></ul>";
+		expect(pickableMoveDescription(aid)).not.toContain("data-pick-tiers");
+	});
+});
+
 // Five shipped tiers hand over the WHOLE list — Danger Sense's "ask the GM BOTH of the questions
 // below", Formidable's "on a 10+, both", Danu's Grasp's "as a 7-9, but both apply", and the "on a
 // 6-, all 3 apply" Dark Succor and Undying share. There is no choice left in any of them, so the
@@ -701,6 +755,27 @@ describe("the chat card's tally rides the wiring that is already there", () => {
 		expect(body).toContain("wholeList.set(list, grantsWholeList(list));");
 		expect(body).toContain("const on   = saved.length");
 		expect(body).toContain('!!wholeList.get(box.closest(".stonetop-picklist"))');
+	});
+
+	// A tier that never reached the list shows neither the options nor the tally over them.
+	// Toggled on the live DOM rather than built into the card, because the tier is not settled:
+	// a GM's Shift Up/Down re-renders the card, this runs again, and the list comes back with the
+	// tier that grants it — ticks and all.
+	it("hides a list, and its tally, on a tier that never reached it", () => {
+		const at = SRC.indexOf("function _paintPickCount");
+		expect(at).toBeGreaterThan(-1);
+		const body = SRC.slice(at, SRC.indexOf("\n}", at));
+		expect(body).toContain("const offered = tierOffersPicks(list);");
+		expect(body).toContain("list.hidden = !offered;");
+		expect(body).toContain("if (readout) readout.hidden = !offered;");
+	});
+
+	// This file has learned twice over what a `display` landing on a hidden element costs
+	// (.stonetop-roll-tier-action[hidden], .stonetop-custom-move-section[hidden]), so the UA rule
+	// is said outright rather than relied on.
+	it("says the hide outright in CSS, for both halves of it", () => {
+		expect(read("styles/stonetop.css"))
+			.toContain(":is(.stonetop-picklist, .stonetop-picklist-count)[hidden] { display: none; }");
 	});
 
 	it("is styled in every home the checklist has, chat and dialog alike", () => {
