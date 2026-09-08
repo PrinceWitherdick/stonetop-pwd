@@ -4654,6 +4654,25 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	display: block;
 }
 
+/* ⚠ EXCEPT THE TICK LIST, WHICH IS NOT PROSE. A move like Clash keeps its options in its own text
+   rather than in `system.pickOptions`, so the boxes the roll just asked the player to tick are
+   INSIDE the description -- and the result block above deliberately stops reprinting them in words
+   once they are boxed anywhere on the card (utils/roll-engine.js#pickedTierSet, and the one-list
+   rule it serves). Hiding the description whole therefore hid the choice itself: a 10+ on Clash
+   read "...and pick 1." with nothing anywhere to pick from until the reader found the "?".
+
+   So the box comes back and its prose does not. `:has` asks whether a LIVE list is in there --
+   utils/pick-tally.js hides the list outright on a tier that offers no picks, and an empty framed
+   box would be worse than no box. The lead-in that would have said "choose one" is prose and goes
+   with the rest; what stands in for it is the count the result block states and the tally the list
+   carries on its own. Revealed cards are exempt from both halves: the reader asked for all of it. */
+body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card:not(.desc-revealed) .stonetop-roll-card-description:has(.stonetop-picklist:not([hidden])) {
+	display: block;
+}
+body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card:not(.desc-revealed) .stonetop-roll-card-description > *:not(.stonetop-picklist):not(:has(.stonetop-picklist:not([hidden]))) {
+	display: none;
+}
+
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card-description {
 	font-size: var(--font-size-13);
 	color: var(--st-text-body);

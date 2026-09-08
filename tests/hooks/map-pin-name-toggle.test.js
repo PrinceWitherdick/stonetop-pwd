@@ -160,6 +160,20 @@ describe("what one press of the button does", () => {
 		expect(showMapPinNamesOn(village)).toBe(true);
 	});
 
+	// ⚠ AND WHAT IS PAINTED IS NOT ALWAYS WHAT THE SETTING SAYS. A site pin wears its name whatever
+	// the map's default is and stops only on an override of false, so on a scene carrying only
+	// sites the names are up while the setting reads "hidden". Left to the setting alone the first
+	// press wrote `true` and changed nothing anybody could see — a control that reads as broken,
+	// which is the exact thing the site exemption was written to avoid.
+	it("quiets a scene whose visible names the setting says are already hidden", async () => {
+		useWorld({ fallback: false });
+		const village = scene("s1", VILLAGE);
+		expect(showMapPinNamesOn(village)).toBe(false);
+		expect(await toggleLocalMapPinNames(village, { showing: true })).toBe(false);
+		// An explicit false, which is the one answer a site pin does obey.
+		expect(localMapPinNameOverride(village)).toBe(false);
+	});
+
 	it("flips back on a second press", async () => {
 		useWorld({ fallback: true });
 		await toggleLocalMapPinNames(scene("s1"));

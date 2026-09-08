@@ -290,10 +290,18 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// The plan `getData` built for the render now in flight, for the listeners wired onto it a
 		// moment later. Lives for one render and is taken, never kept: see `_takePlan`.
 		this._renderPlan = null;
+		// Shut, and by whose arguments — the pair `_render` reads to find out that the render it
+		// just finished was for a window nobody is holding any more. See `close`.
+		this._closed = false;
+		this._closeOptions = null;
 		// Where an arrow-key nudge has put a portrait that is not written yet, and the debounced
 		// write that will. Held on the instance so `nodeAt` can answer from it: the next key must
 		// step on from where the portrait IS, not from the stale spot still in the document.
-		this._pendingNudge = null;
+		//
+		// A MAP AND NOT ONE SLOT, because the debounce is one timer for the whole board: a reader
+		// who moves one face and tabs to the next inside it has two portraits waiting on the same
+		// write, and a single slot would keep whichever was touched last. See `_writeNudge`.
+		this._pendingNudge = new Map();
 		// A LINE DRAWN A MOMENT AGO, WAITING FOR THE BOARD TO CATCH UP. The bar is placed from the
 		// last PAINT (`_drawn`), and a line drawn this instant is in the document but not yet in
 		// any paint -- so it cannot be taken hold of until the repaint the write set off arrives.
@@ -1058,7 +1066,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 			canRemove: () => this.canEdit,
 			nodeAt: id => {
 				// An unwritten nudge is where the portrait actually is, so it answers first.
-				if (this._pendingNudge?.id === id) return { ...this._pendingNudge.at };
+				if (this._pendingNudge.has(id)) return { ...this._pendingNudge.get(id) };
 				const node = readGraph(this.boardDoc).nodes[id];
 				return node ? { x: node.x, y: node.y } : null;
 			},
@@ -1221,6 +1229,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 					// would pin them to nothing. A strip appearing over the SAME board is not a
 					// reason to put out the line this reader was holding.
 					if (moved) {
+						// While `_pageId` still names the board they belong to. See `_leaveBoard`.
+						this._leaveBoard();
 						this._pageId = null;
 						this._lit = null;
 						this._armed = "";
@@ -1257,7 +1267,11 @@ export class RelationshipMapWindow extends StonetopDialog {
 			if (gone && (page.id === this._pageId || !this._pageId)) {
 				// The board under this reader has just been rubbed out at the far end of the table.
 				// `mapPage` falls through to the first surviving page, and all three of these
-				// belonged to the one that is gone.
+				// belonged to the one that is gone — as does anything half-written, which is asked
+				// for first so that it cannot be filed against the page fallen through to. A flush
+				// aimed at the deleted document writes nothing, which is the right amount to write
+				// to a board that no longer exists. See `_leaveBoard`.
+				this._leaveBoard();
 				this._pageId = null;
 				this._lit = null;
 				this._armed = "";
@@ -2011,11 +2025,11 @@ export class RelationshipMapWindow extends StonetopDialog {
 		if (!want || want === this.mapPage?.id) return;
 		const page = getMapPage(this.entry, want);
 		if (!page) return;
-		// ⚠ FIRST, AND BEFORE `_pageId` MOVES. A nudge still waiting on its debounce belongs to the
-		// board being LEFT, and written a line later it would land on the one being arrived at —
-		// moving a portrait on a page the reader never touched, by an id that very likely names
-		// nobody there.
-		this._writeNudge();
+		// ⚠ FIRST, AND BEFORE `_pageId` MOVES. A nudge or a caption still waiting on its debounce
+		// belongs to the board being LEFT, and written a line later it would land on the one being
+		// arrived at — moving a portrait on a page the reader never touched, by an id that very
+		// likely names nobody there. See `_leaveBoard`.
+		this._leaveBoard();
 		this._pageId = want;
 		// All three point at the board being left, and `_lightPerson` and `_armRemove` would only
 		// have to throw what they name away.
@@ -2323,7 +2337,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		if (board?.classList.contains("is-dragging")) return true;
 		// A nudge not written yet is the same kind of obstruction: a repaint would redraw the
 		// portrait at the spot the document still holds, undoing the keys already pressed.
-		if (this._pendingNudge) return true;
+		if (this._pendingNudge.size) return true;
 		// ⚠ AND THAT IS ALL OF IT. There used to be a third obstruction here — "a field has focus" —
 		// and it could never fire while collecting two exemptions that each undid a false positive
 		// it had created for itself. This window carries one form control, the hide-imported-lines
@@ -2673,24 +2687,44 @@ export class RelationshipMapWindow extends StonetopDialog {
 		el.style.left = `${spot.x}%`;
 		el.style.top = `${spot.y}%`;
 		this._previewMove(id, spot);
-		this._pendingNudge = { id, at: spot };
+		this._pendingNudge.set(id, spot);
 		this._commitNudge();
 	}
 
-	/** Write the nudge the reader has stopped making, and let repaints back in. */
+	/** Write the nudges the reader has stopped making, and let repaints back in. */
 	_writeNudge() {
-		const pending = this._pendingNudge;
-		if (!pending) return;
-		this._pendingNudge = null;
+		const pending = [...this._pendingNudge];
+		if (!pending.length) return;
+		this._pendingNudge.clear();
 		this._preview = null;
 		// ONE STEP FOR A RUN OF ARROW KEYS, keyed by the portrait. A reader walking somebody across
 		// the board pauses several times on the way, and each pause is a write; recorded separately
 		// they would be a dozen undos to put one person back where they started. A drag does NOT
 		// pass this key: a drag is one gesture already, and two deliberate drags a second apart are
 		// two changes.
-		this._moveNode(pending.id, pending.at, { coalesce: `node:${pending.id}` });
+		//
+		// EVERY PORTRAIT WAITING, not just the last one touched. The debounce restarts on each key,
+		// so a reader who tabs from one face to the next inside it has moved two people on one
+		// timer, and writing only the second would put the first back where the document still has
+		// it — in front of somebody who watched themselves move it.
+		for (const [id, at] of pending) this._moveNode(id, at, { coalesce: `node:${id}` });
 		// A repaint that was held back while the keys were coming lands now.
 		this._flushPendingSync();
+	}
+
+	/**
+	 * Everything half-written on the board being left, written down while it is still the board.
+	 *
+	 * ⚠ CALLED BEFORE `_pageId` MOVES, every time it moves — a switch of board, a board deleted or
+	 * hidden under the reader, and the close. Both of these resolve their target through `boardDoc`,
+	 * which answers for whatever page the window points at NOW, so either one flushed a line later
+	 * lands on the board being ARRIVED at: a portrait moved on a page the reader never touched, or
+	 * a caption filed against an edge that page does not have, leaving a label nothing draws and an
+	 * "edited a link" step in the undo of a board with no such link.
+	 */
+	_leaveBoard() {
+		this._writeNudge();
+		this._tieBar?.flush();
 	}
 
 	/**
@@ -3531,11 +3565,28 @@ export class RelationshipMapWindow extends StonetopDialog {
 	}
 
 	async _render(force, options) {
+		// A window shut earlier and opened again is this same instance, so the note that it was
+		// shut is cleared by the render rather than carried into it. See `close`.
+		this._closed = false;
 		// BEFORE ANYTHING IS DRAWN, because a map still on version 1 has no page for the strip to
 		// name and the board would come up under a tab called after the map itself. Once, and
 		// nothing at all on every map made since. See `_ensurePage`.
 		await this._ensurePage();
 		await super._render(force, options);
+		// ⚠ SHUT WHILE THIS WAS DRAWING, and nothing has been torn down. Both awaits above give a
+		// close somewhere to land — `_ensurePage` on a version-1 map is a document round trip — and
+		// AppV1's `close` returns at once for anything that is not RENDERED, so it neither stopped
+		// this render nor unwired the window: THIS render is what wires the window up, a moment from
+		// now in `activateListeners`. Left alone, five world hooks, a pan surface, a tie bar and a
+		// drag belong to a window nobody holds, and every journal write at the table for the rest of
+		// the session repaints a board that is not on screen — once for every sheet ever opened on
+		// the steading's map tab.
+		if (this._closed) {
+			this._teardown();
+			// The state is RENDERED now, so the close that could not run can. Straight to the
+			// parent, because our own `close` already ran everything it does before this line.
+			return super.close(this._closeOptions ?? {});
+		}
 		// The live region is only NOW the one the reader is on, and so is the control they pressed.
 		this._saySoFar();
 		this._takeFocusBack();
@@ -3544,15 +3595,17 @@ export class RelationshipMapWindow extends StonetopDialog {
 		await this.minimize();
 	}
 
-	async close(options = {}) {
+	/**
+	 * Unwire everything a render wired: the pan surface, the drag, the tie bar, and every world hook
+	 * this window registered.
+	 *
+	 * IDEMPOTENT, AND IT HAS TO BE — two callers reach it. The close is the ordinary one; the other
+	 * is a render finishing after a close that could do nothing, which is the only way this window
+	 * can be wired up and unheld at the same time. See `_render`.
+	 */
+	_teardown() {
 		this._surface?.destroy();
 		this._surface = null;
-		// A nudge still waiting on its debounce would otherwise be lost with the window.
-		this._writeNudge();
-		// And so would a caption still waiting on its own. Written BEFORE the teardown, in the same
-		// breath and for the same reason: the last thing somebody typed before closing a window is
-		// the last thing they expect to have lost.
-		this._tieBar?.flush();
 		this._tieBar?.destroy();
 		this._tieBar = null;
 		this._teardownDrag?.();
@@ -3562,6 +3615,19 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// itself up again rather than meeting `_wireSync`'s already-wired guard and going deaf.
 		for (const [name, handler] of this._hooks) Hooks.off(name, handler);
 		this._hooks = [];
+	}
+
+	async close(options = {}) {
+		// ⚠ READ BACK BY `_render`, and that is why it is a flag on the window rather than a local.
+		// A close can arrive while the FIRST render is still in the air, and AppV1 answers it by
+		// doing nothing at all — see there for what would otherwise be left running.
+		this._closed = true;
+		this._closeOptions = options;
+		// A nudge or a caption still waiting on its debounce would otherwise go with the window: the
+		// last thing somebody typed before closing one is the last thing they expect to have lost.
+		// BEFORE the teardown, while the bar still holds both the id and the field.
+		this._leaveBoard();
+		this._teardown();
 		return super.close(options);
 	}
 }

@@ -21,6 +21,10 @@ global.Application = class {
 	// A no-op, but present: a test that drives a handler which OPENS a window needs the
 	// window to be constructible, and needs somewhere to hang a spy asserting it opened.
 	render() { return this; }
+	// Where core actually draws, and what a window that must await something of its own first calls
+	// `super` on. It lands on RENDERED because that is the state core's `close` insists on before it
+	// will do anything — the two together are what a close arriving mid-render turns on.
+	async _render() { this._state = Application.RENDER_STATES.RENDERED; }
 	async close() {}
 };
 

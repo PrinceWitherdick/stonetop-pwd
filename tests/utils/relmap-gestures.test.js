@@ -135,6 +135,27 @@ describe("a press that becomes a drag", () => {
 		teardown();
 	});
 
+	// ⚠ ONE `pointerId` FOR EVERY BUTTON ON A MOUSE. A middle or thumb click pressed part-way
+	// through a drag releases carrying the live drag's own id, and `pointerdown` has already
+	// refused to arm on it -- so taking its release for the end of the gesture drops the portrait
+	// wherever the cursor had got to, leaves the rest of the drag moving nothing, and leaves the
+	// swallow armed to eat the reader's next real click.
+	it("ignores a second button let go in the middle of a drag", () => {
+		const { handlers, teardown } = wire(board);
+		board.view.emit("pointerdown", board.portraits.n1.face, { clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", board.portraits.n1.face, { clientX: 40, clientY: 0 });
+		board.flush();
+		board.view.emit("pointerup", board.portraits.n1.face, { button: 1, clientX: 40, clientY: 0 });
+		expect(handlers.onMove).not.toHaveBeenCalled();
+		// Still the same gesture, and it ends where the button that began it is let go.
+		board.view.emit("pointermove", board.portraits.n1.face, { clientX: 80, clientY: 0 });
+		board.flush();
+		board.view.emit("pointerup", board.portraits.n1.face, { clientX: 80, clientY: 0 });
+		expect(handlers.onMove).toHaveBeenCalledTimes(1);
+		expect(handlers.onMove).toHaveBeenCalledWith("n1", { x: 28, y: 30 });
+		teardown();
+	});
+
 	// The click after a drag is swallowed by a flag rather than by the capture's retargeting, so
 	// that exactly ONE click is eaten. A flag that stayed armed would eat the reader's next real
 	// press, which is the same class of dead-click bug in the other direction.

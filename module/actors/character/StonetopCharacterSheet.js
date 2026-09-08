@@ -5928,6 +5928,13 @@ export function createStonetopCharacterSheetClass(Base) {
 				// ships in the compendium — the thing the guide table shed 24 entries to stop.
 				bodyHtml: moveBodyHtml(source.description, source.moveResults ?? null),
 				printed:  source,
+				// ⚠ CARRIED SO THE DIALOG CAN FIRE WHAT MAKING THE MOVE DOES. Both roll entry
+				// points consult MOVE_ROLL_EFFECTS themselves, and both stop at this guide: a move
+				// that opens a dialog answers "handled" and never reaches their tail. Without this
+				// the two Blessed marking moves that spend — Amulets & Talismans and Wards &
+				// Bindings, which are the whole of that table — would lay a charm the roster never
+				// heard about. Null for an un-owned playbook row, which lays nothing.
+				item:     item ?? null,
 				// The one thing the window has to explain, and the reason the Roll button is not
 				// gated beside the Spend one: this move has two moments, and the dice belong to
 				// the later of them. It reads under the price in both states, so a Blessed with
@@ -6030,6 +6037,11 @@ export function createStonetopCharacterSheetClass(Base) {
 						await this._postMoveCard(name,
 							moveCardBody(guide.printed?.description ?? "", guide.printed?.moveResults ?? null)
 							+ `<p class="stonetop-move-cost-receipt">Spent ${spend.amount} ${_esc(paid.label)}.</p>`);
+						// AND WHAT MAKING IT DOES BEYOND THE CARD. This is the first of the move's
+						// two moments and the one the fiction lays something at: the charm is
+						// crafted here, and the roster is where a charm laid is written down. See
+						// MOVE_ROLL_EFFECTS, and `item` on the guide for why it is asked here.
+						await this._onMoveRolled(guide.item);
 					},
 				};
 			}
@@ -6047,6 +6059,11 @@ export function createStonetopCharacterSheetClass(Base) {
 						if (cost && !(await this._spendStockCost(cost, html, name))) return;
 						await this._postGuidedCharacterMove(name, guide, html);
 						await this._stonetopCharacter.onRoll({ currentTarget: rollable }, prompted);
+						// The same tail the Moves tab's own click and the hotbar both run after a
+						// roll, and for the same reason: a guided move reaches the dice through
+						// here instead of through them. `_onMoveRolled` answers for a guide that
+						// carries no item — every one of them but the deferred-spend family.
+						await this._onMoveRolled(guide.item ?? null);
 					},
 				};
 			} else if (guide.roll && !cost) {

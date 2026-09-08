@@ -123,6 +123,24 @@ describe("requirement rows", () => {
 		const call = source.match(/defaultSectionHeading\(\{[\s\S]*?\}\)/)[0];
 		expect(call).toContain("itemsFromRows(this._readRows(group)).length");
 	});
+
+	// ⚠ AND AGAINST THE POSITION THE GROUP WILL HAVE, not the one it has. The save drops a group
+	// with neither a heading nor a box (improvement-def.js#sectionsFromGroups), and the builder
+	// OPENS with an empty group — so filling in the second one and leaving the first alone is the
+	// ordinary way to use this window. Off the DOM index the field promised "And then:" for an
+	// improvement that saved as "Requires all of the following:".
+	it("numbers the written-for-you heading by the groups that will be kept", () => {
+		const source = stripComments(readRepo("module/dialogs/ImprovementBuilderDialog.js"));
+		const call = source.match(/defaultSectionHeading\(\{[\s\S]*?\}\)/)[0];
+		expect(call).not.toContain("indexOf(group)");
+		expect(call).toContain("index,");
+		// An alternative needs a kept group above it to be an alternative to, which is the same
+		// count and the same reason.
+		expect(call).toContain("index > 0");
+		// And the rule itself is `sectionsFromGroups`': boxes, or a heading somebody typed.
+		const kept = source.slice(source.indexOf("_groupIsWritten(group) {"));
+		expect(kept.slice(0, 300)).toContain("itemsFromRows(this._readRows(group)).length > 0");
+	});
 });
 
 describe("starting from an improvement that already exists", () => {

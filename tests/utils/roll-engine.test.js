@@ -411,6 +411,20 @@ describe("rollStat", () => {
 		expect(flavor).toContain('data-picked-tiers="success"');
 	});
 
+	// ⚠ AND THE READER WHO TURNED DESCRIPTIONS OFF MUST STILL SEE THE BOXES. The list the block
+	// above just stopped spelling out lives INSIDE `.stonetop-roll-card-description`, and the client
+	// setting hides that whole — so without an exemption a 10+ on Clash reads "...and pick 1." with
+	// nothing anywhere on the card to pick from, until the reader thinks to press the "?".
+	it("keeps that list on the card for a reader who hid descriptions", () => {
+		const css = fs.readFileSync(path.resolve("styles/stonetop.css"), "utf8");
+		// The framed box comes back when there is a live list in it...
+		expect(css).toContain(".stonetop-roll-card-description:has(.stonetop-picklist:not([hidden]))");
+		// ...and nothing else in it comes back with it.
+		expect(css).toContain(
+			".stonetop-roll-card-description > *:not(.stonetop-picklist):not(:has(.stonetop-picklist:not([hidden])))"
+		);
+	});
+
 	it("keeps the options in the block when the description carries no boxes", async () => {
 		rollTotal = 10;
 

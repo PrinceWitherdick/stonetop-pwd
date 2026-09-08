@@ -1348,6 +1348,21 @@ export class StonetopSteading {
 	}
 
 	/**
+	 * What un-completing or removing this improvement would actually give back, in words.
+	 *
+	 * ⚠ OFF THE RECORD OF WHAT WAS APPLIED, never off the definition's `grants`. The two are not
+	 * the same list and are not meant to be: `_collectGrantEffects` writes down only what it really
+	 * changed, so a grant of a Resource the steading already had records nothing and gives nothing
+	 * back. A confirm dialog reading the definition promised "Fresh water ... removing it gives
+	 * them back" and then handed back nothing at all — and an improvement whose grants were EDITED
+	 * after it was completed, which `updateCustomImprovement` allows, would have promised the new
+	 * grants and reverted the old ones.
+	 */
+	improvementGivesBack(slug) {
+		return this._summarizeGrantChanges(this._flags.improvements?.[slug]?.applied);
+	}
+
+	/**
 	 * The header's hold tray: everything the steading is still owed or still owes.
 	 *
 	 * The seasonal DUES are gated on the clock having been stamped at all. Before a world's

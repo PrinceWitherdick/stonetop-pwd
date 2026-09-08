@@ -2235,9 +2235,16 @@ export async function setLocalMapPinNames(scene, value) {
  * already be the picture on screen, so a button that toggled the stored value would have to be
  * pressed twice to do anything the first time. Flipping what is actually painted means one press
  * always changes the map.
+ *
+ * ⚠ AND `showing` IS HOW THE CALLER SAYS WHAT IS PAINTED, because this setting is not the whole
+ * answer: a site pin wears its name whatever the setting says and stops only on an override of
+ * false (hooks/StonetopNoteLabels.js#mapPinNameShown). On a scene carrying only site pins the names
+ * are up while this reads false, so left to itself the first press would write `true` and change
+ * nothing — the exact dead control the exemption was written to avoid. The eye passes what it can
+ * see; the default is for a caller with no notes in front of it.
  */
-export async function toggleLocalMapPinNames(scene) {
-	const next = !showMapPinNamesOn(scene);
+export async function toggleLocalMapPinNames(scene, { showing = null } = {}) {
+	const next = !(showing ?? showMapPinNamesOn(scene));
 	await setLocalMapPinNames(scene, next);
 	return next;
 }

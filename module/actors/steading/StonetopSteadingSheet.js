@@ -1,5 +1,5 @@
 import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, HERD_SURPLUS_PER, WEAPONS_SEASON_STEP, WATCH_SEASON_STEP } from "./StonetopSteading.js";
-import { improvementRequirementCount, summarizeImprovementGrants } from "../../utils/improvement-def.js";
+import { improvementRequirementCount } from "../../utils/improvement-def.js";
 import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml} from "../../utils/roll-engine.js";
 import {SteadingLedger} from "./SteadingLedger.js";
 import {TIER_KEYS} from "../../utils/move-results.js";
@@ -3475,10 +3475,13 @@ export function createStonetopSteadingSheetClass(Base) {
 			const def = steading.improvementDef(slug);
 			if (!def) return;
 
-			const grants = def.grants ?? null;
 			const completed = steading.improvementCompleted(slug);
 			const ticked = steading.improvementRequirements(slug).filter(Boolean).length;
-			const gives = completed ? summarizeImprovementGrants(grants) : [];
+			// ⚠ WHAT WAS APPLIED, not what the definition grants. Completing writes down only what
+			// it actually changed, so a grant of a Resource this steading already listed gave
+			// nothing and gives nothing back — and this window would have named it anyway, under a
+			// sentence promising it back. See StonetopSteading#improvementGivesBack.
+			const gives = completed ? steading.improvementGivesBack(slug) : [];
 
 			new Dialog({
 				title: "Remove Improvement",

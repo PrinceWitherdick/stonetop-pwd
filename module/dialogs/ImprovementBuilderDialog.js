@@ -424,16 +424,49 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 		if (!field) return;
 		const partial = group.querySelector(".stonetop-improvement-builder-group-mode")?.value === "min";
 		const alt = group.querySelector(".stonetop-improvement-builder-group-alt");
+		// ⚠ WHERE THIS GROUP WILL LAND, not where it sits. A group with neither a heading nor a box
+		// is not a requirement, and the save drops it (utils/improvement-def.js#sectionsFromGroups)
+		// — so an unused group above this one shifts every heading below it up by one. Read off the
+		// DOM, the field promised "And then:" over an improvement that saved as "Requires all of
+		// the following:", which is the one thing a placeholder showing you what will be written
+		// must never do. The builder opens with an empty group, so this is the ordinary case.
+		const index = this._keptIndex(group);
 		field.placeholder = defaultSectionHeading({
-			index: [...(group.parentElement?.children ?? [])].indexOf(group),
+			index,
 			min: partial ? Number(group.querySelector(".stonetop-improvement-builder-group-min")?.value) : null,
 			// Boxes, not rows: "2 of the following" is measured against the checkboxes the
 			// group actually makes, and a repeated row makes several. Counting rows here had
 			// the placeholder saying "And then:" for a group whose written heading would have
 			// been "And 2 of the following:", which is the one thing it must not do.
 			count: itemsFromRows(this._readRows(group)).length,
-			alternative: !alt?.classList.contains("is-hidden") && !!alt?.querySelector("input")?.checked,
+			// `index` again, for the same reason: an alternative needs something above it to be an
+			// alternative TO, and the save counts that among the groups it KEEPS. A ticked box on a
+			// group whose predecessors were all blank writes a plain heading, so the placeholder
+			// has to promise one.
+			alternative: index > 0
+				&& !alt?.classList.contains("is-hidden")
+				&& !!alt?.querySelector("input")?.checked,
 		});
+	}
+
+	/**
+	 * Where a group will sit once the save has dropped the blank ones, and whether it is one of
+	 * them. The pair of them is `sectionsFromGroups`' own rule, asked of the DOM: a group with no
+	 * boxes and no typed heading is a row the author added and did not use, and it is not written.
+	 */
+	_keptIndex(group) {
+		let kept = 0;
+		for (const sibling of group.parentElement?.children ?? []) {
+			if (sibling === group) break;
+			if (this._groupIsWritten(sibling)) kept += 1;
+		}
+		return kept;
+	}
+
+	/** True when this group would survive the save: it makes a box, or somebody typed a heading. */
+	_groupIsWritten(group) {
+		const typed = group.querySelector(".stonetop-improvement-builder-group-heading")?.value?.trim();
+		return !!typed || itemsFromRows(this._readRows(group)).length > 0;
 	}
 
 	/**

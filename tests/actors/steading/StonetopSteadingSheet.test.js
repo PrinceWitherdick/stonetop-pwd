@@ -90,6 +90,9 @@ function makeSheet({ players = [], residents = [], neighbors = [], improvements 
 		removeCustomImprovement: vi.fn(async () => removeResult ?? { label: "ROADBUILDING", reverted: [] }),
 		improvementCompleted: vi.fn(() => !!improvements?.completed),
 		improvementRequirements: vi.fn(() => improvements?.r ?? []),
+		// What completing it ACTUALLY applied, which is the record the model keeps and not the
+		// definition's grants -- see StonetopSteading#improvementGivesBack.
+		improvementGivesBack: vi.fn(() => improvements?.gives ?? []),
 		improvementNameTaken: vi.fn(() => false),
 		updateCustomImprovement: vi.fn(async () => ({ ok: true, slug: "custom-x", label: "X" })),
 	};
@@ -382,11 +385,31 @@ describe("StonetopSteadingSheet", () => {
 
 		it("says what completing it applied, since removing it gives that back", async () => {
 			const dialog = captureDialog();
-			const { sheet } = makeSheet({ improvementDef: roadbuilding, improvements: { completed: true, r: [true, true] } });
+			const { sheet } = makeSheet({
+				improvementDef: roadbuilding,
+				improvements: { completed: true, r: [true, true], gives: ["Prosperity +1"] },
+			});
 			await sheet._onRemoveCustomImprovement("custom-roadbuilding");
 
 			expect(dialog().data.content).toContain("Prosperity +1");
 			expect(dialog().data.content).toContain("2 ticked requirements will be forgotten");
+		});
+
+		// ⚠ AND IT IS THE RECORD OF WHAT WAS APPLIED THAT SAYS SO, not the definition's grants. The
+		// two part company whenever completing it changed less than it offered: a Resource the
+		// steading already listed is granted, recorded as nothing, and given back as nothing. Read
+		// off the definition, this window named it and promised it back, and the notification that
+		// followed the press said only "Removed <name>."
+		it("promises back only what was actually applied", async () => {
+			const dialog = captureDialog();
+			const { sheet } = makeSheet({
+				improvementDef: { ...roadbuilding, grants: { resources: ["Fresh water"] } },
+				improvements: { completed: true, r: [true, true], gives: [] },
+			});
+			await sheet._onRemoveCustomImprovement("custom-roadbuilding");
+
+			expect(dialog().data.content).not.toContain("Fresh water");
+			expect(dialog().data.content).toContain("nothing was applied automatically");
 		});
 
 		it("says nothing is given back when it was never completed", async () => {
