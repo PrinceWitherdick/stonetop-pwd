@@ -109,30 +109,44 @@ function _noteFamily(noteDoc) {
  * last and narrowest of those gates, the one that asks where the mouse is.
  */
 function _showPermanentLabel(note) {
-	// OURS first, and deliberately: this runs per note per refresh pass — canvas draw and every
-	// hover in and out — and it is an `includes` over a module constant, where the settings
-	// question below has to find the note's poster map first. Most notes on most scenes are not
-	// ours, and they now cost the cheap test alone.
-	const doc = note?.document;
-	const family = _noteFamily(doc);
-	if (!family) return;
-	// A SITE IS NOT SUBJECT TO THE SETTING. The setting exists because the poster maps carry
-	// dozens of the book's own places and a wall of names is a fair thing to want quieter. A GM
-	// places a HANDFUL of sites, on their own prep, and a mark whose name you have to go hunting
-	// for with the mouse is not a label - it is an anonymous blob on somebody else's artwork. The
-	// journey dialog's site pins already made this exact exception (expedition-journey-pins.hbs);
-	// this is the same mark on the table's own map, so it answers the same way.
-	//
-	// IT IS SUBJECT TO THE READER'S OWN BUTTON, though, and the difference is the whole reason the
-	// two are asked separately here. The exemption above is about a CONFIGURED default nobody set
-	// with this scene in front of them; the eye beside the sidebar is someone looking at this map
-	// and saying "quiet". If a site ignored that too, pressing the button on a scene carrying only
-	// site pins would change nothing on screen and read as a broken control.
-	const scene = doc?.parent ?? globalThis.canvas?.scene ?? null;
-	if (family.alwaysLabel) {
-		if (localMapPinNameOverride(scene) === false) return;
-	} else if (!showMapPinNamesOn(scene)) return;
+	if (!mapPinNameShown(note?.document)) return;
 	if (note.tooltip) note.tooltip.visible = true;
+}
+
+/**
+ * Whether this pin wears its name on the map, rather than only under the cursor.
+ *
+ * OURS first, and deliberately: this runs per note per refresh pass — canvas draw and every hover
+ * in and out — and it is an `includes` over a module constant, where the settings question below
+ * has to find the note's poster map first. Most notes on most scenes are not ours, and they now
+ * cost the cheap test alone.
+ *
+ * A SITE IS NOT SUBJECT TO THE SETTING. The setting exists because the poster maps carry dozens of
+ * the book's own places and a wall of names is a fair thing to want quieter. A GM places a HANDFUL
+ * of sites, on their own prep, and a mark whose name you have to go hunting for with the mouse is
+ * not a label - it is an anonymous blob on somebody else's artwork. The journey dialog's site pins
+ * already made this exact exception (expedition-journey-pins.hbs); this is the same mark on the
+ * table's own map, so it answers the same way.
+ *
+ * IT IS SUBJECT TO THE READER'S OWN BUTTON, though, and the difference is the whole reason the two
+ * are asked separately here. The exemption above is about a CONFIGURED default nobody set with this
+ * scene in front of them; the eye beside the sidebar is someone looking at this map and saying
+ * "quiet". If a site ignored that too, pressing the button on a scene carrying only site pins would
+ * change nothing on screen and read as a broken control.
+ *
+ * ⚠ EXPORTED FOR THAT BUTTON, which has to ask this same question rather than read the setting: the
+ * eye says what IS painted and its press flips it, and on a scene carrying only site pins the
+ * setting and the paint are two different answers. See hooks/MapPinNameToggle.js.
+ */
+export function mapPinNameShown(noteDoc, scene = null) {
+	const family = _noteFamily(noteDoc);
+	if (!family) return false;
+	// Which map that is comes off the note's OWN scene rather than off the canvas, because they are
+	// not always the same one; see the note above `_showPermanentLabel`.
+	const map = scene ?? noteDoc?.parent ?? globalThis.canvas?.scene ?? null;
+	return family.alwaysLabel
+		? localMapPinNameOverride(map) !== false
+		: showMapPinNamesOn(map);
 }
 
 /** Cream fill + thin ink edge; layered onto core's computed tooltip style, in place. */

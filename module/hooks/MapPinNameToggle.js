@@ -1,6 +1,6 @@
-import { isStonetopMapNote } from "./StonetopNoteLabels.js";
+import { isStonetopMapNote, mapPinNameShown } from "./StonetopNoteLabels.js";
 import {
-	MAP_PIN_NAME_SETTINGS, localMapPinNameOverride, setLocalMapPinNames, showMapPinNamesOn,
+	MAP_PIN_NAME_SETTINGS, localMapPinNameOverride, setLocalMapPinNames,
 	toggleLocalMapPinNames,
 } from "../settings.js";
 import { SYSTEM_ID } from "../system-id.js";
@@ -100,13 +100,26 @@ function _ourVisibleNotes() {
 	return placeables.filter(n => n?.visible && isStonetopMapNote(n.document));
 }
 
+/**
+ * Whether any of our pins on this scene is wearing its name right now.
+ *
+ * ⚠ ASKED OF THE PINS, not of the setting. A site pin wears its name whatever the map's default
+ * says (hooks/StonetopNoteLabels.js#mapPinNameShown), so on a scene carrying only sites the setting
+ * reads "hidden" while the names are on screen — the icon would say the opposite of the map, and
+ * the press that flipped the setting would change nothing anybody could see.
+ */
+function _namesShowing(scene, notes) {
+	return notes.some(note => mapPinNameShown(note.document, scene));
+}
+
 /** The view for the scene on screen right now. */
 export function currentMapPinNameToggleView() {
 	const scene = globalThis.canvas?.scene ?? null;
 	if (!scene) return { hidden: true };
+	const notes = _ourVisibleNotes();
 	return mapPinNameToggleView({
-		hasPins: _ourVisibleNotes().length > 0,
-		showing: showMapPinNamesOn(scene),
+		hasPins: notes.length > 0,
+		showing: _namesShowing(scene, notes),
 		overridden: typeof localMapPinNameOverride(scene) === "boolean",
 	});
 }
@@ -180,7 +193,10 @@ async function _onClick(event) {
 	event.preventDefault();
 	const scene = globalThis.canvas?.scene ?? null;
 	if (!scene) return;
-	await toggleLocalMapPinNames(scene);
+	// What the reader can actually see goes with the press, so that one press always changes the
+	// map — including on a scene whose only pins are sites, which the setting alone answers wrong
+	// for. See `_namesShowing`.
+	await toggleLocalMapPinNames(scene, { showing: _namesShowing(scene, _ourVisibleNotes()) });
 	// Restated here as well as from the setting hook because the write is this client's own: the
 	// hook is the backstop for a change made somewhere else (the settings menu, another tab), and
 	// waiting on it would leave the button a frame behind the map it just changed.

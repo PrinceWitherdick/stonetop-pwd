@@ -239,7 +239,7 @@ describe("the moves that spend at one trigger and roll at another", () => {
 		expect(html).toContain("so this move cannot be made. Replenish the pouch first.");
 		// And what the dice ARE still for is said once, in the note under the price.
 		const guide = SHEET.slice(SHEET.indexOf("_deferredStockGuide(name, item) {"));
-		expect(guide.slice(0, 1400)).toContain("the roll comes at the second");
+		expect(guide.slice(0, 2000)).toContain("the roll comes at the second");
 	});
 
 	// One use of the move, paid for once. The dialog charges, so the card it posts must not carry
@@ -255,6 +255,23 @@ describe("the moves that spend at one trigger and roll at another", () => {
 		// It says what it cost, out of the purse that was actually charged.
 		expect(body).toContain("stonetop-move-cost-receipt");
 		expect(body).toContain("${_esc(paid.label)}");
+	});
+
+	// ⚠ AND WHAT MAKING THE MOVE DOES BEYOND THE CARD. Two of these three moves are the whole of
+	// MOVE_ROLL_EFFECTS — the Blessed's Amulets & Talismans and Wards & Bindings, which open the
+	// marks roster — and both roll entry points fire that table only on the path a guide does NOT
+	// take: a move with a dialog answers "handled" and returns before their tail. So the dialog has
+	// to fire it itself, at both of the move's moments, or a Blessed lays a charm the roster never
+	// hears about.
+	it("opens what the move lays, at the spend and at the roll", () => {
+		const guide = SHEET.slice(SHEET.indexOf("_deferredStockGuide(name, item) {"));
+		// The item is carried on the guide, because the effects table is keyed by the move's own
+		// name and a dialog has only the guide.
+		expect(guide.slice(0, 2000)).toMatch(/item:\s+item \?\? null,/);
+		const spend = SHEET.indexOf("const paid = await this._spendStockCost(spend, html, name);");
+		expect(SHEET.slice(spend, spend + 1600)).toContain("this._onMoveRolled(guide.item)");
+		const roll = SHEET.indexOf("await this._postGuidedCharacterMove(name, guide, html);");
+		expect(SHEET.slice(roll, roll + 600)).toContain("this._onMoveRolled(guide.item ?? null)");
 	});
 
 	// Which is why the spend hands the purse back rather than a bare true: "Spent 1 Boon" and

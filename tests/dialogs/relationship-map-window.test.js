@@ -173,6 +173,10 @@ function windowFor(graph = TWO_PEOPLE, {
 	// The world hooks this window has registered, which the constructor would have stood up. See
 	// `_hooks` on the class: `_wireSync` reads it as its already-wired guard and pushes onto it.
 	app._hooks = [];
+	// The portraits an arrow key has moved but not written yet, which the constructor would also
+	// have stood up. One map for the whole board, so two faces nudged inside one debounce both
+	// land — see `_pendingNudge` on the class.
+	app._pendingNudge = new Map();
 	app.id = "stonetop-relmap-map1";
 	app._pageId = pageId;
 	app._pagesSaid = null;
@@ -394,7 +398,7 @@ describe("nudging a portrait from the keyboard", () => {
 		const made = windowFor();
 		const portrait = el({ style: {} });
 		made.root.children['[data-relmap-node="elena"]'] = portrait;
-		made.app._pendingNudge = null;
+		made.app._pendingNudge = new Map();
 		made.app._commitNudge = vi.fn();
 		return { ...made, portrait };
 	}
@@ -420,13 +424,29 @@ describe("nudging a portrait from the keyboard", () => {
 		expect(JSON.stringify(entry.updates[0])).toContain("22");
 	});
 
+	// ⚠ ONE DEBOUNCE FOR THE WHOLE BOARD, and it restarts on every key. A reader who moves one face
+	// and tabs to the next inside it has two portraits waiting on the same timer; kept in one slot
+	// the first was written over, and the repaint that followed put that portrait back where the
+	// document still had it — in front of somebody who had just watched themselves move it.
+	it("writes every portrait nudged inside one debounce, not only the last", async () => {
+		const { app, entry, root } = boardWithPortrait();
+		root.children['[data-relmap-node="stefan"]'] = el({ style: {} });
+		app._nudgeNode("elena", { x: 21, y: 30 });
+		app._nudgeNode("stefan", { x: 71, y: 30 });
+		app._writeNudge();
+		await Promise.resolve();
+		const wrote = JSON.stringify(entry.updates);
+		expect(wrote).toContain("21");
+		expect(wrote).toContain("71");
+	});
+
 	// The next key has to step on from where the portrait IS. Reading the document instead would
 	// take every repeat back to the spot the burst started from, so a held key would jitter between
 	// two positions instead of travelling.
 	it("steps on from the unwritten spot rather than the stale one", () => {
 		const { app } = boardWithPortrait();
 		app._nudgeNode("elena", { x: 21, y: 30 });
-		expect(app._pendingNudge).toEqual({ id: "elena", at: { x: 21, y: 30 } });
+		expect(app._pendingNudge.get("elena")).toEqual({ x: 21, y: 30 });
 	});
 
 	// A repaint landing mid-burst would redraw the portrait at the spot the document still holds,
@@ -446,7 +466,7 @@ describe("nudging a portrait from the keyboard", () => {
 		app._nudgeNode("elena", { x: 140, y: -20 });
 		expect(portrait.style.left).toBe("100%");
 		expect(portrait.style.top).toBe("0%");
-		expect(app._pendingNudge.at).toEqual({ x: 100, y: 0 });
+		expect(app._pendingNudge.get("elena")).toEqual({ x: 100, y: 0 });
 	});
 
 	it("has nothing to write when no key was pressed", () => {
@@ -2626,11 +2646,24 @@ describe("the pages of one map", () => {
 	it("lands an unwritten nudge on the board being left, not the one arrived at", () => {
 		const entry = TWO_BOARDS();
 		const { app } = windowFor(null, { entry, pageId: "p1" });
-		app._pendingNudge = { id: "elena", at: { x: 55, y: 55 } };
+		app._pendingNudge = new Map([["elena", { x: 55, y: 55 }]]);
 		app.showPage("p2");
 		const [stonetop, marshedge] = entry.pages.contents;
 		expect(stonetop.updates).toHaveLength(1);
 		expect(marshedge.updates).toEqual([]);
+	});
+
+	// ⚠ AND SO DOES AN UNSAVED CAPTION, for exactly the same reason. The bar was only ever flushed
+	// by `activateListeners`, which runs AFTER `_pageId` has moved — so the caption went out through
+	// `boardDoc`, which by then answers for the board arrived at, leaving a label nothing draws and
+	// an "edited a link" step in the undo of a board with no such link.
+	it("flushes an unsaved caption against the board being left", () => {
+		const entry = TWO_BOARDS();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		const flushedOn = [];
+		app._tieBar = { flush: () => flushedOn.push(app._pageId), destroy: vi.fn() };
+		app.showPage("p2");
+		expect(flushedOn).toEqual(["p1"]);
 	});
 
 	// A repaint runs every time anybody at the table moves a portrait, and rewriting the strip
@@ -3574,5 +3607,51 @@ describe("what a player may do on a board that has been shown to them", () => {
 	it("still lets a player edit a map that has no pages yet", () => {
 		asPlayer();
 		expect(windowFor().app.canEdit).toBe(true);
+	});
+});
+
+describe("a window shut while it was still drawing", () => {
+	// The two things AppV1 does that meet here: `close` returns at once for a window that is not
+	// RENDERED, and `_render` awaits. So a close landing in the gap this window opens for
+	// `_ensurePage` neither stops the render nor unwires the window -- and the FIRST render is the
+	// one that registers this window's five world hooks. Left standing they are hooks on a window
+	// nobody holds a reference to, and every journal write at the table for the rest of the session
+	// repaints a board that is not on screen.
+	it("unwires the hooks its own render registered after it was shut", async () => {
+		const { app } = windowFor();
+		const off = [];
+		const hooks = global.Hooks;
+		global.Hooks = { on: () => {}, once: () => {}, off: name => off.push(name) };
+		// ⚠ THE PARENT CLASS'S OWN, not the Application stand-in's: two tests above replace
+		// StonetopDialog's `close` outright and never put it back, so a spy any further up the
+		// chain is never reached and this would assert nothing.
+		const base = Object.getPrototypeOf(RelationshipMapWindow.prototype);
+		const shut = vi.spyOn(base, "close").mockResolvedValue(undefined);
+		// What `activateListeners` does a moment later, which is the whole difficulty: the wiring
+		// happens INSIDE the render the close could not stop.
+		const drew = vi.spyOn(base, "_render").mockImplementation(async function () {
+			this._hooks.push(["updateJournalEntry", () => {}]);
+			this._state = Application.RENDER_STATES.RENDERED;
+		});
+		try {
+			app._closed = false;
+			app._closeOptions = null;
+			// The two members StonetopDialog's own `_render` and `close` reach for, which the
+			// constructor this harness skips would have stood up.
+			app._frontOnOpen = { apply: () => {}, start: () => {}, stop: () => {} };
+			app._cancelThrottledRender = () => {};
+			// The reader closes the sheet while the board is still awaiting its page.
+			app._ensurePage = async () => { await app.close(); };
+			await app._render(true, {});
+			expect(app._hooks).toEqual([]);
+			expect(off).toEqual(["updateJournalEntry"]);
+			// And the close that could do nothing the first time is seen through now that the
+			// window is RENDERED, rather than leaving it on screen.
+			expect(shut).toHaveBeenCalledTimes(2);
+		} finally {
+			global.Hooks = hooks;
+			shut.mockRestore();
+			drew.mockRestore();
+		}
 	});
 });

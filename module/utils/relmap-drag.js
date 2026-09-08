@@ -439,6 +439,13 @@ export function wireRelmapDrag(root, {
 			if (stayedPut && canRemove()) onArm?.(press.id);
 			return;
 		}
+		// ANY OTHER BUTTON IS NOT THIS DRAG. A mouse reports ONE `pointerId` for every button on it,
+		// so a middle or thumb click pressed mid-gesture releases with the live drag's own id and
+		// would be taken for the end of it. `pointerdown` already refused to arm on those buttons;
+		// honouring their release would drop the portrait wherever the cursor happened to be and
+		// leave `swallowClick` armed to eat the reader's next real click. A drag ends when the
+		// button that began it is let go, and touch and pen release as button 0 as well.
+		if (ev.button !== 0) return;
 		if (!drag || ev.pointerId !== drag.pointerId) return;
 		// Never crossed the threshold. Tear down WITHOUT consuming the event, so the click
 		// handlers below still see it and a press on a portrait still opens a sheet.
