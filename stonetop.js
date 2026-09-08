@@ -26,6 +26,8 @@ import { HazardPageModel } from "./module/journal/HazardPageModel.js";
 import { createStonetopHazardPageSheetClass } from "./module/journal/StonetopHazardPageSheet.js";
 import { SitePageModel } from "./module/journal/SitePageModel.js";
 import { createStonetopSitePageSheetClass } from "./module/journal/StonetopSitePageSheet.js";
+import { createRelationshipMapEntrySheetClass } from "./module/journal/RelationshipMapEntrySheet.js";
+import { RELMAP_SHEET_CLASS } from "./module/relmap/relmap-doc.js";
 import { ThreatBoard } from "./module/threats/threat-board.js";
 import { onReady } from "./module/hooks/Ready.js";
 import { handleImportedJournalArt, ART_INDEX_SETTINGS } from "./module/book2-art/reapply.js";
@@ -39,6 +41,7 @@ import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { onPreCreateThreatNote } from "./module/hooks/ThreatNotePins.js";
 import { onUpdateSiteNote } from "./module/sites/site-scene-pins.js";
 import { onDrawStonetopNote } from "./module/hooks/StonetopNoteLabels.js";
+import { installMapPinNameToggle } from "./module/hooks/MapPinNameToggle.js";
 import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
 import { bumpEncounterNotesGeneration } from "./module/actors/gmtoolkit/gm-encounters-tab.js";
 import { gmToolkitActors } from "./module/actors/gmtoolkit/gm-toolkit-actor.js";
@@ -53,6 +56,7 @@ import { onRenderCompendiumItemIcons } from "./module/hooks/CompendiumItemIcons.
 import { decoratePortraitRow, onUpdateActorPortraitFrame } from "./module/hooks/ActorDirectoryPortraits.js";
 import { decorateNameRow, onUpdateActorPlaybookName } from "./module/hooks/ActorDirectoryNames.js";
 import { decorateActorDirectoryRows } from "./module/hooks/actor-directory-rows.js";
+import { hideRelationshipMapRows } from "./module/hooks/journal-directory-maps.js";
 import { onUpdateCondemned } from "./module/hooks/CondemnedTag.js";
 import { characterFullName } from "./module/utils/playbook-actors.js";
 import { registerStonetopSingletonHooks } from "./module/hooks/StonetopSingleton.js";
@@ -65,7 +69,7 @@ import { rollSeasonsCard, sign, markMissXp, pbtaDiceFormula, seasonsRollTable } 
 import { xpToLevelUp, adjustXp } from "./module/utils/xp.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
 import { moveChatCard, canRewriteCard } from "./module/utils/chat.js";
-import { paintPickTally, pickLimitFor, releaseOverLimit } from "./module/utils/pick-tally.js";
+import { grantsWholeList, paintPickTally, pickLimitFor, releaseOverLimit, tierOffersPicks } from "./module/utils/pick-tally.js";
 import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
@@ -259,16 +263,6 @@ Hooks.once("init", () => {
 		});
 	});
 
-	Handlebars.registerHelper("steadingDefenseTrack", (currentValue, defaultValue = 0) => {
-		const raw = currentValue?.value ?? currentValue;
-		const current = Number(raw ?? defaultValue);
-		const sublabels = ["feeble", "mediocre", "strong", "formidable", "legendary"];
-		return Array.from({ length: 5 }, (_, i) => {
-			const val = i - 1;
-			return { val, label: (val >= 0 ? "+" : "") + val, sublabel: sublabels[i], checked: val === current };
-		});
-	});
-
 	CONFIG.Actor.documentClass = createStonetopActorClass(CONFIG.Actor.documentClass);
 	CONFIG.Item.documentClass  = createStonetopItemClass(CONFIG.Item.documentClass);
 
@@ -398,6 +392,27 @@ Hooks.once("init", () => {
 		label:       "Stonetop Site Page",
 	});
 
+	// A relationship map is a JournalEntry, so it has a row in every player's Journal sidebar.
+	// Clicking that row must open the BOARD, not Foundry's prose editor on an entry whose only
+	// content is a flag, which is a blank window that reads as the map being broken. Each map
+	// stamps this class into flags.core.sheetClass, so only OUR entries are affected.
+	//
+	// makeDefault stays FALSE. Core clears every other sheet's default flag for the type when a
+	// new default is registered, so `true` here would hijack every journal in the world.
+	const JournalSheetV1 = foundry.appv1?.sheets?.JournalSheet ?? globalThis.JournalSheet;
+	const StonetopRelationshipMapSheet = createRelationshipMapEntrySheetClass(JournalSheetV1);
+	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntry, SYSTEM_ID, StonetopRelationshipMapSheet, {
+		types:       ["base"],
+		makeDefault: false,
+		label:       "Stonetop Relationship Map",
+	});
+	// The id core stores is `scope.ClassName`, and every existing map already carries that string
+	// in its own flag. If a rename ever splits the two, those entries fall back to the generic
+	// sheet with no error anywhere, so the two halves are checked against each other here.
+	if (RELMAP_SHEET_CLASS !== `${SYSTEM_ID}.${StonetopRelationshipMapSheet.name}`) {
+		console.error("Stonetop | relationship map sheet id does not match RELMAP_SHEET_CLASS");
+	}
+
 	const StonetopArcanumSheet = createStonetopArcanumSheetClass(ItemSheet);
 	Items.registerSheet(SYSTEM_ID, StonetopArcanumSheet, {
 		types:       ["move"],
@@ -437,6 +452,10 @@ Hooks.once("init", () => {
 		"stonetop.move-group":           "systems/stonetop-pwd/templates/actor/partials/move-group.hbs",
 		"stonetop.tab-search-control":   "systems/stonetop-pwd/templates/actor/partials/tab-search-control.hbs",
 		"stonetop.catalog-shell":        "systems/stonetop-pwd/templates/dialogs/partials/catalog-shell.hbs",
+		"stonetop.relationship-map":       "systems/stonetop-pwd/templates/dialogs/relationship-map.hbs",
+		"stonetop.relationship-map-board": "systems/stonetop-pwd/templates/dialogs/partials/relationship-map-board.hbs",
+		"stonetop.intro-match":            "systems/stonetop-pwd/templates/dialogs/intro-match.hbs",
+		"stonetop.person-picker":          "systems/stonetop-pwd/templates/dialogs/person-picker.hbs",
 		// Rendered by BOTH Death's Door's last step and the standalone Post-Death chooser.
 		"stonetop.post-death-choices":   "systems/stonetop-pwd/templates/dialogs/partials/post-death-choices.hbs",
 		"stonetop.move-mark-level":      "systems/stonetop-pwd/templates/actor/partials/move-mark-level.hbs",
@@ -454,6 +473,8 @@ Hooks.once("init", () => {
 		"stonetop.relationships-board": "systems/stonetop-pwd/templates/actor/partials/relationships-board.hbs",
 		"stonetop.relationships-view":  "systems/stonetop-pwd/templates/actor/partials/relationships-view.hbs",
 		"stonetop.relationships-viewbar": "systems/stonetop-pwd/templates/actor/partials/relationships-viewbar.hbs",
+		// The clickable page citation, shared by every GM Toolkit surface that cites the book.
+		"stonetop.book-page-cite":  "systems/stonetop-pwd/templates/actor/partials/book-page-cite.hbs",
 		"stonetop.section-heading":  "systems/stonetop-pwd/templates/actor/partials/section-heading.hbs",
 		"stonetop.section-collapse": "systems/stonetop-pwd/templates/actor/partials/section-collapse.hbs",
 		"stonetop.section-randomize": "systems/stonetop-pwd/templates/actor/partials/section-randomize.hbs",
@@ -475,6 +496,7 @@ Hooks.once("init", () => {
 		"stonetop.steading-tab-neighbors":    "systems/stonetop-pwd/templates/actor/partials/steading-tab-neighbors.hbs",
 		"stonetop.steading-tab-improvements": "systems/stonetop-pwd/templates/actor/partials/steading-tab-improvements.hbs",
 		"stonetop.steading-tab-moves":        "systems/stonetop-pwd/templates/actor/partials/steading-tab-moves.hbs",
+		"stonetop.steading-tab-relmap":       "systems/stonetop-pwd/templates/actor/partials/steading-tab-relmap.hbs",
 		"stonetop.steading-tab-notes":        "systems/stonetop-pwd/templates/actor/partials/steading-tab-notes.hbs",
 		"stonetop.gm-toolkit-tab-moves":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-moves.hbs",
 		"stonetop.gm-toolkit-tab-loop":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-loop.hbs",
@@ -572,6 +594,14 @@ Hooks.on("renderDocumentDirectory", onRenderCompendiumItemIcons);
 // the directory, so nobody's scroll position moves. See module/hooks/actor-directory-rows.js.
 Hooks.on("renderDocumentDirectory", (app, element) =>
 	decorateActorDirectoryRows(app, element, [decoratePortraitRow, decorateNameRow]));
+
+// -- THE MAPS ARE NOT JOURNAL FURNITURE ------------------------
+// A relationship map is a JournalEntry because that is the only storage a player may write, but it
+// is never READ as one: it opens from the steading sheet's own tab and from the hotbar macro,
+// straight onto the board. So its rows come out of the Journal sidebar, and the "Relationship Maps"
+// folder with them while nothing else is in it. Nothing about the document changes.
+// See module/hooks/journal-directory-maps.js.
+Hooks.on("renderDocumentDirectory", hideRelationshipMapRows);
 Hooks.on("updateActor", onUpdateActorPortraitFrame);
 Hooks.on("updateActor", onUpdateActorPlaybookName);
 
@@ -658,9 +688,25 @@ Hooks.on("createJournalEntry", handleImportedJournalArt);
 // side. A published index means "the folder changed"; the art prefix means "the question we ask
 // the folder changed", and a listing taken before one was known answers nothing about the folder
 // a listing taken after would find. Neither module names the other's settings.
+//
+// Joined ONCE, at module scope, into the fully-qualified keys the hook is actually handed. This
+// fires on `createSetting`/`updateSetting`, which is every world-scoped setting write from every
+// module and from core, not just ours — a rate this system does not own — and spreading two
+// arrays into a fresh `.some` closure per event to answer a membership question is work a Set
+// answers in one lookup.
+//
+// Deliberately an EXACT key match where this used to be a `.endsWith(".${name}")` suffix test.
+// Our art cache is invalidated by OUR settings; another package that happens to store something
+// it calls `treasureArt` was clearing it too, and now does not. Both writers of these settings
+// namespace them with SYSTEM_ID — `setSetting` (module/settings.js) and the import macro, which
+// spells `game.settings.set("stonetop-pwd", …)` — so nothing of ours stops being caught.
+const _ART_CACHE_KEYS = new Set(
+	[...ART_INDEX_SETTINGS, ...ART_BROWSE_INPUTS].map((s) => `${SYSTEM_ID}.${s}`),
+);
+
 const _onArtIndexPublished = (setting) => {
 	const key = setting?.key ?? "";
-	if ([...ART_INDEX_SETTINGS, ...ART_BROWSE_INPUTS].some((s) => key.endsWith(`.${s}`))) clearArtBrowseCache();
+	if (_ART_CACHE_KEYS.has(key)) clearArtBrowseCache();
 	// ...and repaint the one surface that reads an art index at RENDER time with no document of
 	// its own to be repainted by.
 	//
@@ -709,6 +755,11 @@ Hooks.on("updateNote", onUpdateSiteNote);
 // Give our lettered Place-of-Interest discs and threat/hazard pins a thick paper text
 // halo so their labels stay legible over the illustrated Stonetop maps.
 Hooks.on("drawNote", onDrawStonetopNote);
+
+// And the eye button beside the sidebar that quiets those labels on the map you are looking at,
+// for you alone. `ready` rather than `init`: it mounts into core's own `#ui-right` row, which
+// does not exist until the interface has been rendered. See hooks/MapPinNameToggle.js.
+Hooks.once("ready", installMapPinNameToggle);
 
 // -- EXPEDITION ROUTE ON THE MAP -------------------------------
 // A journey put on a poster-map scene from the Run an Expedition walkthrough. The scene
@@ -1467,11 +1518,11 @@ function _chatWireMusterRaise(message, html) {
 
 // -- SPEND STOCK from a move's card -----------------------------
 // The Blessed's Stock is the one move cost with no home on the move itself: every other pool
-// (Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport, Favor) has its
+// (Nerve, Command, Resolve, Blessing, Precaution, Protection, Presence, Rapport, Boon) has its
 // own track, so its pips sit on the move and the player ticks them. Stock lives on the sacred
 // POUCH, several tabs away — so a card that says "spend 1 Stock" carries the button that does it.
 //
-// Rites of the Land's "Spend Favor in lieu of Stock, 1-for-1" applies here exactly as it does to
+// Rites of the Land's "Spend Boon in lieu of Stock, 1-for-1" applies here exactly as it does to
 // the gated moves, through the same reader (actors/character/stock-cost.js), so the dialog and
 // this button can never disagree about what is in the purse.
 function _chatWireSpendStock(message, html) {
@@ -1492,12 +1543,12 @@ function _chatWireSpendStock(message, html) {
 			const amount = Math.max(1, Number(button.dataset.amount) || 1);
 			const source = defaultStockSource(stockSourcesForFlags(readStockFlags(actor)), amount);
 			if (!source) {
-				ui.notifications.warn("No Stock or Favor left to spend.");
+				ui.notifications.warn("No Stock or Boon left to spend.");
 				return { abort: true };
 			}
-			// The purse knows which way it counts: the pouch up as it empties, Favor down.
+			// The purse knows which way it counts: the pouch up as it empties, the Boon down.
 			const next = source.after(amount);
-			if (source.key === "favor") {
+			if (source.key === "boon") {
 				await new StonetopFlags(actor, "moves").setSubKey("backgroundChoices", RITES_OF_THE_LAND, next);
 			} else {
 				await new CharacterPossessions(new StonetopFlags(actor, "possessions")).setUses(SACRED_POUCH_SLUG, next);
@@ -1558,10 +1609,20 @@ function _releasePicksOverLimit(justChecked) {
  *
  * Repainted rather than wired: these boxes already have a listener of their own (it persists the
  * tick to the message flag), so the tally rides that one instead of adding a second.
+ *
+ * AND A TIER THAT NEVER REACHED THE LIST SHOWS NEITHER. Helior's Unblinking Eye on a 6- is "the
+ * GM makes a move" — the roll ended the question, and printing its three options under a "0
+ * options selected" offered a choice nobody has. Hidden rather than removed, and hidden HERE
+ * rather than in the card's markup, because the tier is not settled: a GM's Shift Up/Down
+ * re-renders the card and this runs again, so the list comes back with the tier that grants it,
+ * ticks and all (utils/pick-tally.js#tierOffersPicks).
  */
 function _paintPickCount(list) {
 	if (!list) return;
-	paintPickTally(list, pickLimitFor(list));
+	const offered = tierOffersPicks(list);
+	const readout = paintPickTally(list, pickLimitFor(list));
+	list.hidden = !offered;
+	if (readout) readout.hidden = !offered;
 }
 
 /**
@@ -1589,10 +1650,34 @@ function _chatWireRollCardPicks(message, html) {
 	const saved   = message.getFlag(SYSTEM_ID, "pickChecked") ?? [];
 	const canSave = message.canUserModify?.(game.user, "update") ?? game.user.isGM;
 
+	// A ROLL THAT LEAVES NOTHING TO CHOOSE COMES TICKED. Danger Sense's 10+ asks the GM BOTH of
+	// its two questions, Formidable's is "on a 10+, both", Danu's Grasp's is "as a 7-9, but both
+	// apply", and Dark Succor's and Undying's 6- is "all 3 apply" — five tiers whose cap covers
+	// the whole list (utils/pick-tally.js#grantsWholeList), where asking the player to tick every
+	// box by hand is asking them to make a choice the dice already made. It is the same rule the
+	// Undying / Dark Succor walkthrough applies to that 6- (dialogs/UndeathDialog.js).
+	//
+	// DERIVED, not written: the cap, the tier and the boxes are all on the card, so every client
+	// works it out identically and nothing is persisted that a GM's Shift Up/Down would then have
+	// to unpick. Once anyone ticks anything the flag exists and it is theirs — including a tick
+	// they took back off, which is why the test is whether the flag was written at all rather than
+	// whether it holds a `true`.
+	// Asked only where nothing has been ticked yet, which is the same test the read below makes:
+	// once the flag exists the answer is the reader's, and every one of these walks would be work
+	// whose result cannot be looked at.
+	const wholeList = new Map();
+	if (!saved.length) {
+		for (const list of new Set(boxes.map(b => b.closest(".stonetop-picklist")))) {
+			wholeList.set(list, grantsWholeList(list));
+		}
+	}
+
 	for (const box of boxes) {
 		const idx  = Number(box.dataset.index);
 		const item = box.closest(".stonetop-picklist-item");
-		const on   = !!saved[idx];
+		const on   = saved.length
+			? !!saved[idx]
+			: !!wholeList.get(box.closest(".stonetop-picklist"));
 		box.checked = on;
 		item?.classList.toggle("is-picked", on);
 

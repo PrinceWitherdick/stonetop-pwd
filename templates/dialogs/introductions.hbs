@@ -96,6 +96,9 @@
         <li>
           {{#if this.question}}<span class="stonetop-intros-recorded-q">{{{this.question}}}</span>{{/if}}
           <span class="stonetop-intros-recorded-a">{{this.answer}}</span>
+          {{!-- Who it was recorded as being about, where somebody picked. The only part of an
+                answer that is not in its own writing, so it is said back here. --}}
+          {{#if this.about}}<span class="stonetop-intros-recorded-about"><i class="fas fa-arrow-right"></i> {{this.about}}</span>{{/if}}
         </li>
         {{/each}}
       </ul>
@@ -137,6 +140,23 @@
       <textarea class="stonetop-intros-draft" rows="3"
                 data-actor-id="{{capture.actorId}}" data-step-key="{{capture.stepKey}}"
                 placeholder="{{capture.placeholder}}">{{capture.draftAnswer}}</textarea>
+      {{!-- Who at this table the answer is about. Optional, and blank by default: plenty of
+            answers are about somebody outside the party, and nobody should have to name a
+            player character to record one. What it buys is the arrow on The Party board of the
+            relationship map, which otherwise has only the names in the writing to go on. --}}
+      {{#if capture.hasAbout}}
+      <label class="stonetop-intros-about">
+        <span class="stonetop-intros-about-label">{{#if capture.isAsk}}Who did you ask?{{else}}Who is this about?{{/if}}</span>
+        <select class="stonetop-intros-about-pick"
+                data-actor-id="{{capture.actorId}}" data-step-key="{{capture.stepKey}}"
+                data-tooltip="Naming somebody here draws the arrow to them on The Party board of the relationship map. Leave it blank when the answer is about someone outside the party.">
+          <option value="">Nobody at this table</option>
+          {{#each capture.about}}
+          <option value="{{this.id}}" {{#if this.isSelected}}selected{{/if}}>{{this.name}}</option>
+          {{/each}}
+        </select>
+      </label>
+      {{/if}}
     </div>
     {{else if capture.canPreview}}
     {{!-- GM watching the active player type: read-only mirror, no data-* so no stray write. --}}
@@ -144,6 +164,9 @@
       <label class="stonetop-intros-capture-label"><i class="fas fa-feather"></i> {{#if currentPc.name}}{{currentPc.name}} is writing…{{else}}Their answer, as they write it…{{/if}}</label>
       <textarea class="stonetop-intros-draft" rows="3" readonly
                 placeholder="{{capture.placeholder}}">{{capture.draftAnswer}}</textarea>
+      {{#if capture.aboutName}}
+      <p class="stonetop-intros-about-said"><i class="fas fa-arrow-right"></i> {{#if capture.isAsk}}Asking{{else}}About{{/if}} <strong>{{capture.aboutName}}</strong></p>
+      {{/if}}
     </div>
     {{/if}}
 

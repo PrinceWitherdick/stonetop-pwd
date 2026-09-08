@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createStonetopSteadingSheetClass } from "../../../module/actors/steading/StonetopSteadingSheet.js";
+import { ImprovementBuilderDialog } from "../../../module/dialogs/ImprovementBuilderDialog.js";
 
 class FakeClassList {
 	constructor() { this.set = new Set(); }
@@ -86,7 +87,11 @@ function makeSheet({ players = [], residents = [], neighbors = [], improvements 
 		improvementDef: vi.fn(() => improvementDef ?? null),
 		setImprovementCompleted: vi.fn(async () => ({ label: improvementDef?.label ?? "X", summary: [], reverted: false })),
 		addCustomImprovement: vi.fn(async () => addResult ?? { ok: true, slug: "custom-x", label: "X" }),
-		removeCustomImprovement: vi.fn(async () => removeResult ?? true),
+		removeCustomImprovement: vi.fn(async () => removeResult ?? { label: "ROADBUILDING", reverted: [] }),
+		improvementCompleted: vi.fn(() => !!improvements?.completed),
+		improvementRequirements: vi.fn(() => improvements?.r ?? []),
+		improvementNameTaken: vi.fn(() => false),
+		updateCustomImprovement: vi.fn(async () => ({ ok: true, slug: "custom-x", label: "X" })),
 	};
 	const actor = {
 		name: "Stonetop",
@@ -310,10 +315,111 @@ describe("StonetopSteadingSheet", () => {
 		expect(typedActor.addCustomImprovement).not.toHaveBeenCalled();
 	});
 
-	it("removes a custom improvement by slug", async () => {
-		const { sheet, typedActor } = makeSheet();
-		await sheet._onRemoveCustomImprovement("custom-roadbuilding");
-		expect(typedActor.removeCustomImprovement).toHaveBeenCalledWith("custom-roadbuilding");
+	// Editing in place, rather than the copy-fix-remove dance that lost every ticked step.
+	describe("editing an added improvement", () => {
+		const roadbuilding = { slug: "custom-roadbuilding", label: "ROADBUILDING", sections: [], effect: "" };
+
+		let render;
+		beforeEach(() => {
+			render = vi.spyOn(ImprovementBuilderDialog.prototype, "render").mockImplementation(function () { return this; });
+		});
+		afterEach(() => render.mockRestore());
+
+		it("opens the builder on that improvement", () => {
+			const { sheet, typedActor } = makeSheet({ improvementDef: roadbuilding });
+			sheet._onEditCustomImprovement("custom-roadbuilding");
+
+			expect(typedActor.improvementDef).toHaveBeenCalledWith("custom-roadbuilding");
+			expect(render).toHaveBeenCalledWith(true);
+			// Filled in and titled for the improvement, rather than a blank "create" window.
+			const dialog = render.mock.instances[0];
+			expect(dialog.title).toBe("Edit ROADBUILDING");
+			expect(dialog._saver.editing).toMatchObject({ name: "ROADBUILDING", slug: "custom-roadbuilding" });
+		});
+
+		it("does nothing for an unknown slug, since there is nothing to open on", () => {
+			const { sheet } = makeSheet();
+			sheet._onEditCustomImprovement("custom-nope");
+			sheet._onEditCustomImprovement("");
+			expect(render).not.toHaveBeenCalled();
+		});
+	});
+
+	// Removing an added improvement takes the authored definition and its ticked steps with
+	// it, and when it was completed the write MOVES STATS (removing it gives back what
+	// completing it applied). Confirmed for the same reasons standing down the muster is.
+	describe("removing an added improvement", () => {
+		const roadbuilding = {
+			slug: "custom-roadbuilding",
+			label: "ROADBUILDING",
+			sections: [{ heading: "Requires:", items: ["A", "B"] }],
+			effect: "...",
+			grants: { stats: { prosperity: 1 } },
+		};
+
+		/** Capture the confirm the sheet raises, so a test can press either button. */
+		function captureDialog() {
+			let opened = null;
+			globalThis.Dialog = class {
+				constructor(data, options) { opened = { data, options }; }
+				render() {}
+			};
+			return () => opened;
+		}
+
+		it("asks before removing, and names the outcome on both buttons", async () => {
+			const dialog = captureDialog();
+			const { sheet, typedActor } = makeSheet({ improvementDef: roadbuilding });
+			await sheet._onRemoveCustomImprovement("custom-roadbuilding");
+
+			expect(typedActor.removeCustomImprovement).not.toHaveBeenCalled();
+			const { data } = dialog();
+			expect(data.buttons.yes.label).toBe("Remove ROADBUILDING");
+			expect(data.buttons.no.label).toBe("Keep it on the steading");
+			// Affirmative is not the default on a destructive, un-undoable write.
+			expect(data.default).toBe("no");
+		});
+
+		it("says what completing it applied, since removing it gives that back", async () => {
+			const dialog = captureDialog();
+			const { sheet } = makeSheet({ improvementDef: roadbuilding, improvements: { completed: true, r: [true, true] } });
+			await sheet._onRemoveCustomImprovement("custom-roadbuilding");
+
+			expect(dialog().data.content).toContain("Prosperity +1");
+			expect(dialog().data.content).toContain("2 ticked requirements will be forgotten");
+		});
+
+		it("says nothing is given back when it was never completed", async () => {
+			const dialog = captureDialog();
+			const { sheet } = makeSheet({ improvementDef: roadbuilding, improvements: { completed: false, r: [] } });
+			await sheet._onRemoveCustomImprovement("custom-roadbuilding");
+
+			expect(dialog().data.content).toContain("never completed");
+			expect(dialog().data.content).not.toContain("Prosperity +1");
+		});
+
+		it("removes it, and reports what was reverted, once the button is pressed", async () => {
+			const dialog = captureDialog();
+			const { sheet, typedActor } = makeSheet({
+				improvementDef: roadbuilding,
+				removeResult: { label: "ROADBUILDING", reverted: ["Prosperity +1"] },
+			});
+			await sheet._onRemoveCustomImprovement("custom-roadbuilding");
+			await dialog().data.buttons.yes.callback();
+
+			expect(typedActor.removeCustomImprovement).toHaveBeenCalledWith("custom-roadbuilding");
+			// "Reverted", matching what un-completing says: the summary lists what was APPLIED.
+			expect(globalThis.ui.notifications.info)
+				.toHaveBeenCalledWith("Removed ROADBUILDING. Reverted: Prosperity +1.");
+		});
+
+		it("does nothing for an unknown slug", async () => {
+			captureDialog();
+			const { sheet, typedActor } = makeSheet();
+			await sheet._onRemoveCustomImprovement("custom-nope");
+			await sheet._onRemoveCustomImprovement("");
+			expect(typedActor.removeCustomImprovement).not.toHaveBeenCalled();
+		});
 	});
 
 	describe("completing an improvement whose requirements aren't all met", () => {

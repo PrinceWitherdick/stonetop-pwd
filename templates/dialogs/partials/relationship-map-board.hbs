@@ -1,0 +1,238 @@
+{{!-- The board itself: the lines between people, what each line is called, and the portraits.
+
+      ITS OWN PARTIAL BECAUSE IT IS RE-RENDERED ON ITS OWN. Every live change to a map — somebody
+      else moving a portrait, a link being drawn at the far end of the table — repaints THIS and
+      swaps it into the open window, without re-rendering the Application. A full render would
+      re-fit the board and throw away the corner the reader had zoomed into, which is exactly the
+      state they were using when the change arrived. See RelationshipMapWindow#sync.
+
+      Everything is positioned in PERCENTAGES of the board, which is a box of fixed notional size
+      that utils/zoom-pan-surface.js scales and moves as a whole. So one set of numbers serves the
+      stroke, the labels and the portraits at any magnification. --}}
+
+{{!-- THE LINES. One stretched SVG for all of them, in the same 0-100 space everything else is
+      placed in: preserveAspectRatio="none" maps that space onto the board whatever shape it is,
+      and stretching a quadratic leaves a quadratic. `vector-effect` then keeps the stroke an even
+      width in SCREEN space, which the stretch would otherwise smear along one axis.
+
+      Takes no clicks: a drag that starts on empty board has to pan, and the line layer covers all
+      of it. The label above each line is what a reader aims at. --}}
+<svg class="stonetop-relmap-lines" viewBox="0 0 100 100" preserveAspectRatio="none"
+     aria-hidden="true" focusable="false">
+  {{#each edges}}
+  {{!-- A COLOUR OF THE READER'S OWN RIDES INLINE, and only that one does. One of the eight is a
+        class and nothing else, because what it resolves to is the stylesheet's business and moves
+        under the accessibility skin; a custom colour has no token to move, so it is written here as
+        `--relmap-ink-raw` and the stylesheet decides what to do with it -- see the `--custom` rules,
+        which give it a dash pattern of its own and deepen it under the high-contrast skin. --}}
+  {{!-- ⚠ `broken` IS A KEY AND NOT A FLAG, and it is empty for a whole stroke rather than "solid".
+        There are three answers now (see RELMAP_DASHES) and a boolean per answer would be a boolean
+        per answer the day a fourth arrives; what the class carries is the KEY, and only when there
+        is one -- a solid line is the absence of a modifier, which is what `.stonetop-relmap-line`
+        already draws. The renderer decides which of the three this is; the stylesheet decides what
+        each resolves to, as it does for the ink beside it. --}}
+  <path class="stonetop-relmap-line stonetop-relmap-line--{{inkKey}}{{#if broken}} is-{{broken}}{{/if}}"
+        data-relmap-line="{{id}}" d="{{d}}"
+        data-relmap-who="{{a}} {{b}}"
+        {{#if inkHex}}style="--relmap-ink-raw:{{inkHex}}"{{/if}}
+        vector-effect="non-scaling-stroke"></path>
+  {{!-- WHAT THE CLICK ACTUALLY LANDS ON: the same curve again, invisible, and wide.
+
+        ⚠ THE PAINTED STROKE CANNOT TAKE THE CLICK ITSELF, and not for want of trying. It is three
+        and a half units wide in a stretched 0-100 space with a non-scaling stroke — about four
+        SCREEN pixels, and less than that is not a target, it is a dare. Widening the painted line
+        to something aimable would be widening the drawing. So the target is its own stroke: the
+        whole curve (never the broken one — the gap cut for a caption is the exact stretch a reader
+        aims at), transparent, and wide enough to hit while talking.
+
+        ⚠ AND IT IS THE ONE THING ON THIS LAYER THAT TAKES POINTER EVENTS. The layer covers the
+        whole board and refuses them all, because a drag starting on empty board has to pan; these
+        strokes opt back in from the stylesheet, which is the same arrangement the captions layer
+        above uses, and for the same reason.
+
+        NO ROLE AND NO TAB STOP. A line that says something is already reachable by keyboard — its
+        caption is the button, and always has been. A line with nothing written on it is reachable
+        from either of its two portraits, which are tab stops themselves. Eighty more stops between
+        the bar and the board, most of them announced as an unnamed button, would cost every
+        keyboard reader far more than it bought the one case. --}}
+  <path class="stonetop-relmap-hit" data-relmap-hit="{{id}}" d="{{hit}}"
+        aria-hidden="true" vector-effect="non-scaling-stroke"></path>
+  {{/each}}
+</svg>
+
+{{!-- WHICH WAY A LINK IS READ, where it is not simply mutual. Each head is its own fixed-size SVG
+      rather than a marker on the path above, for the reason the journey's heads are: that path is
+      stretched to the board, which would squash the triangle and (with orient="auto") aim it off
+      any diagonal. These are turned by an angle already worked out in the board's real proportions,
+      taken from the curve where the head actually sits rather than from the straight line between
+      two portraits — so each lies along the line it belongs to even though that line is bowed.
+
+      The triangle is `headD`, imported from utils/route-path.js rather than written out here: the
+      expedition's two renderers draw the same shape from the same points, and a shape spelt out in
+      three places is one that gets reshaped in two of them. --}}
+{{#each heads}}
+<svg class="stonetop-relmap-head stonetop-relmap-head--{{inkKey}}" viewBox="0 0 {{../headBox}} {{../headBox}}"
+     aria-hidden="true" focusable="false" data-relmap-head="{{id}}" data-relmap-end="{{end}}"
+     style="left:{{left}}%;top:{{top}}%;--relmap-turn:{{angle}}deg{{#if inkHex}};--relmap-ink-raw:{{inkHex}}{{/if}}">
+  <path d="{{../headD}}"></path>
+</svg>
+{{/each}}
+
+{{!-- WHAT EACH LINK IS CALLED, SET IN THE LINE ITSELF.
+
+      NOT THE STRETCHED viewBox ABOVE. The stroke layer maps 0-100 onto whatever shape the board
+      happens to be, which shears every glyph along one axis; so the captions get a layer of their
+      own, in board PIXELS and at the board's own proportions — one user unit is one board pixel and
+      nothing is squashed.
+
+      ⚠ STRAIGHT, AND TURNED TO THE ANGLE OF ITS LINE WHERE IT SITS. It was text on a PATH, which
+      followed a bowed line glyph by glyph and was beautiful and unaffordable: warping gives every
+      glyph its own transform, so the browser's glyph cache misses on every one, and with the halo
+      stroked around each warped outline as well ONE TILE of this board cost 73ms to raster —
+      panning it was a slideshow, and the whole application went with it, because Foundry's canvas
+      shares that thread. The same words, straight, with the same halo: 1.2ms. Sixty times less.
+      Most lines are near enough straight across the stretch one caption covers that the two are
+      hard to tell apart; a strongly bowed line now carries its caption as a chord.
+
+      ONE SVG FOR ALL OF THEM. Each caption used to carry its own small SVG over the patch of board
+      its own words cover; a hundred separate roots is a hundred paint chunks, and it would put the
+      lit-web dimming on a hundred elements rather than on one — opacity on a `<g>` costs an
+      offscreen buffer apiece.
+
+      THE LAYER IS NOT THE TARGET, THE WRITING IS. The layer covers the whole board, and a target
+      that size would swallow every click meant for anything underneath it. So the layer takes no
+      pointer events and the glyphs take them back (see the stylesheet), which makes the aimable
+      area the words themselves — smaller than the chip it replaced, and exactly what the reader
+      sees.
+
+      THE WORDS ARE THE BUTTON, and carry a button's manners themselves: `role`, `tabindex` and the
+      accessible name sit on the `<text>` because there is no HTML button around them any more — a
+      wrapper would have to be either that enormous box or a second element kept in step with the
+      glyphs, and both were what this layer was merged to be rid of. utils/relmap-drag.js gives
+      them Enter and Space, which is the one thing a real button gave for free.
+
+      A chip of paper rather than coloured text, still: the ink says which KIND of tie this is, and
+      colour cannot be the only thing that says it — there is a reader at this table on a screen
+      magnifier, and coloured small type is exactly what fails for them. So the line carries the
+      colour (and, under the high-contrast skin, a dash pattern saying the same thing again with no
+      colour at all), while the words stay body ink on paper at full contrast.
+
+      THE TOOLTIP IS THE SENTENCE AND NOTHING ELSE, and the accessible name is not. What a tooltip
+      is for here is the words the caption could not fit, so on a crowded board it is the only place
+      the whole of one can be read; an instruction about clicking, repeated on eighty lines, buries
+      that under something the reader learned the first time. A screen reader gets no other clue
+      that this is a button, so the instruction stays in `aria-label`, which is why the two are
+      separate fields and must not be re-merged.
+
+      A POINT AND A TURN, in ABSOLUTE board pixels, which is exactly the space this one viewBox is
+      in. The words are centred on that point and rotated about it (`text-anchor`,
+      `dominant-baseline` and this `transform`), so a caption is placed the way an arrowhead is. --}}
+<svg class="stonetop-relmap-labels" viewBox="0 0 {{boardWidth}} {{boardHeight}}" focusable="false">
+  {{!-- ⚠ A CUSTOM PROPERTY AND NOT A `font-size`, on the lines the reader has set a size on, and
+        that is not a style preference. An inline `font-size` is the top of the cascade and would
+        beat the two rules that have to be able to win over it: the held line's caption, which is
+        blown up while the board is zoomed too far out to read anything (`--relmap-say-px`), and
+        anything the accessibility skin has to say about type. Handed to the stylesheet as a
+        NUMBER it can use, the size is one more thing the sheet resolves -- the same arrangement
+        the custom inks already have (`--relmap-ink-raw`).
+
+        AND IT IS ABSENT ON NEARLY EVERY LINE. Zero is "whatever the sheet sets", which is every
+        line on every board drawn before a reader could ask for a bigger one, so the attribute is
+        printed only where somebody actually chose. --}}
+  {{#each labels}}
+  <g class="stonetop-relmap-label" data-relmap-edge="{{id}}" data-relmap-who="{{a}} {{b}}">
+    <text class="stonetop-relmap-label-text" role="button" tabindex="0"
+          data-relmap-words="{{id}}" data-tooltip="{{tooltip}}" aria-label="{{ariaLabel}}"
+          {{#if px}}style="--relmap-caption-px: {{px}}px"{{/if}}
+          x="{{x}}" y="{{y}}" transform="rotate({{angle}} {{x}} {{y}})">{{text}}</text>
+  </g>
+  {{/each}}
+</svg>
+
+{{!-- THE PEOPLE. A round portrait, a name under it, and a handle on the rim for drawing a line to
+      somebody else.
+
+      The face is a BUTTON and opens the actor's sheet; dragging the same element moves the portrait
+      instead (utils/relmap-drag.js decides which happened, by how far the pointer travelled). The
+      handle is separate so that "draw a line from here" is never something a reader does by
+      accident on the way to reading a sheet.
+
+      `imgStyle` is the crop the GM chose for this actor's portrait, from utils/portrait-frame.js —
+      the same one the relationships table uses, so a face framed once is framed everywhere. --}}
+{{!-- `is-own-ring` marks a face that arrived with a rim already painted on it — the playbook badge
+      a character who never chose a portrait is given, each of them a woodcut inside a hand-drawn
+      circle. The board's own rim then lands three pixels outside that one, and two concentric rings
+      round a small picture read as a target rather than as somebody's face. The stylesheet drops
+      ours on these and lets the drawn one be the rim. --}}
+{{#each nodes}}
+<div class="stonetop-relmap-node{{#if missing}} is-missing{{/if}}{{#if ownRing}} is-own-ring{{/if}}"
+     data-relmap-node="{{id}}" style="left:{{left}}%;top:{{top}}%">
+  <button type="button" class="stonetop-relmap-face" data-relmap-open="{{id}}"
+          data-tooltip="{{tooltip}}" aria-label="{{tooltip}}">
+    <span class="stonetop-relmap-portrait">
+      {{#if img}}
+      <img src="{{img}}" alt="" draggable="false" style="{{imgStyle}}">
+      {{else}}
+      <i class="fas fa-user"></i>
+      {{/if}}
+    </span>
+  </button>
+  <span class="stonetop-relmap-name">{{name}}</span>
+  {{!-- Focusable, and it does something on a plain CLICK as well as on a drag: dragging it to
+        another portrait draws the line, and clicking it asks who to draw to. Drag is the quick way
+        and not the only way, which is what keeps the board usable from a keyboard and on a touch
+        screen where a precise drag between two small circles is unpleasant. --}}
+  {{#if ../canEdit}}
+  <button type="button" class="stonetop-relmap-handle" data-relmap-handle="{{id}}"
+          data-tooltip="{{../linkHint}}" aria-label="{{linkLabel}}">
+    <i class="fas fa-link"></i>
+  </button>
+  {{!-- TAKING SOMEBODY OFF, and the only way to do it with a mouse. It used to be the Delete key
+        and nothing else, which is a gesture with nothing on screen to suggest it exists.
+
+        ⚠ NOT THERE UNTIL IT IS ASKED FOR, and the asking is a RIGHT PRESS on the portrait
+        (utils/relmap-drag.js, which also says why that is built from a pointerdown and a pointerup
+        rather than from a `contextmenu` that Foundry has already killed document-wide). A delete
+        button standing open on every face would be forty invitations to lose somebody, on the one
+        surface a whole table clicks around on while talking; the handle beside it can afford to
+        fade in on hover because reaching it is harmless, and this one cannot. So the stylesheet
+        hides it outright -- `display`, so it is neither a tab stop nor a thing a screen reader
+        reads out -- and shows it on the one node wearing `is-arming`. Any ordinary click anywhere
+        puts it away again.
+
+        THE CORNER OPPOSITE THE HANDLE, so the two can never be confused for one another or land a
+        pixel apart: "draw a line from here" and "take them off this map" are not neighbours.
+
+        THE PRESS IS NOT THE DELETION. It opens the same confirm the Delete key does, which names
+        the person and counts the lines going with them -- see RelationshipMapWindow#_removePerson
+        for why that one asks where rubbing out a LINE does not. --}}
+  <button type="button" class="stonetop-relmap-bin" data-relmap-remove="{{id}}"
+          data-tooltip="{{removeLabel}}" aria-label="{{removeLabel}}">
+    <i class="fas fa-trash"></i>
+  </button>
+  {{/if}}
+</div>
+{{/each}}
+
+{{!-- THE CAPTIONS ON A LIT WEB, drawn a second time.
+
+      EMPTY UNTIL SOMEBODY RESTS ON A FACE, and filled by `_lightPerson` with a copy of each
+      caption touching that person. The copies are what carries the highlight: full ink over the
+      dimmed layer above, in a heavier weight, and — being last on the board — over the portraits
+      too, which is the "brought forward" the old chip got from a `z-index`.
+
+      ⚠ WHY A SECOND LAYER AND NOT A CLASS ON THE ORIGINAL. Dimming the quiet captions used to be
+      an `opacity` on each of a hundred `<g>` elements, and opacity on a group costs an offscreen
+      buffer apiece — a hundred of them, rebuilt every time the pointer crossed onto or off a
+      portrait. One opacity on the layer as a whole costs one. So the layer is dimmed entire, and
+      the handful of captions that should stay bright are drawn OVER it rather than exempted
+      inside it.
+
+      A COPY AND NOT A MOVE, so the layer above never changes and never loses its texture. The
+      copy's rail is the ORIGINAL rail, referenced by the id it already has — which is also what
+      makes a lit caption follow a live drag without anything here being told about it.
+
+      DECORATION: `aria-hidden`, no clicks, nothing to aim at. The caption it copies is still in
+      the layer above, still focusable, still says what it says. --}}
+<svg class="stonetop-relmap-labels-lit" viewBox="0 0 {{boardWidth}} {{boardHeight}}"
+     aria-hidden="true" focusable="false"></svg>

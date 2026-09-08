@@ -276,9 +276,13 @@ describe("selectors that would break silently", () => {
 		const m = sharedCropRule();
 		expect(m, "the shared cover/center-top rule is gone").toBeTruthy();
 		const selectors = m[1].split(",").map((s) => s.trim()).filter(Boolean);
-		expect(selectors).toHaveLength(9);
+		expect(selectors).toHaveLength(10);
 		for (const sel of [".steading-member-avatar-img", ".steading-player-portrait-img",
 			".stonetop-follower-portrait-img", ".stonetop-npc-portrait-img",
+			// The people chooser's rows ("Who goes on the map?"). Another small clipping disc in a
+			// classic Application, so the same two fixes: core's black img border, and no radius
+			// on an image a chosen frame has sized past its box.
+			".stonetop-person-picker-face-img",
 			// The character and monster headers' framed portrait. It joined this rule when those
 			// two headers started painting the crop; without it core's black img border draws
 			// inside the clipping box, which is the whole reason this list exists.

@@ -1,5 +1,9 @@
 import { runStartupMigrations } from "./PbtaSheetConfig.js";
 import { theGmToolkit, createGmToolkit, isGmToolkitData, GM_TOOLKIT_DEFAULT_IMG } from "../actors/gmtoolkit/gm-toolkit-actor.js";
+import { openRelationshipMap } from "../dialogs/RelationshipMapWindow.js";
+import { canCreateRelationshipMap, ensureRelationshipMapFolder, listRelationshipMaps } from "../relmap/relmap-doc.js";
+import { promptForNewRelationshipMap } from "../relmap/relmap-make.js";
+import { defaultBoard } from "../relmap/relmap-last.js";
 import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
@@ -16,19 +20,20 @@ import { clearArtBrowseCache } from "../book2-art/browse.js";
 import { BOOK2_ART_MACRO_NAME, findBook2ArtWorldMacro, loadBook2ArtMacroSource, runImportBookArtMacro } from "../book2-art/macro.js";
 import { offerDurableArtOnce } from "../book2-art/offer-once.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
-import { stonetopChatCard } from "../utils/chat.js";
+import { stonetopChatCard, whisperGm } from "../utils/chat.js";
 import { stampWorldLayoutBaseline } from "../utils/sheet-layout.js";
 import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyReduceMotion, applySheetContrast, applySheetTexture, applyNoItalics, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope } from "../settings.js";
 import { EndOfSessionDialog } from "../dialogs/EndOfSessionDialog.js";
 import { IntroductionsDialog } from "../dialogs/IntroductionsDialog.js";
 import { SpringBurstDialog } from "../dialogs/SpringBurstDialog.js";
-import { reopenOpenWalkthroughs, sessionZeroComplete } from "../dialogs/walkthrough-resume.js";
+import { pastWelcomeGuide, reopenOpenWalkthroughs } from "../dialogs/walkthrough-resume.js";
 import { reopenOpenBookReaders } from "../books/reader-resume.js";
 import { rulebookMacroApi } from "../books/rulebook-api.js";
 import { writeChronicle } from "../utils/chronicle.js";
 import { ExpeditionDialog } from "../dialogs/ExpeditionDialog.js";
 import { WeatherDialog } from "../dialogs/WeatherDialog.js";
 import { refreshWeatherFx } from "../seasons/current-weather.js";
+import { postFxMasterSuggestionOnce } from "../seasons/fxmaster-suggestion.js";
 import { WelcomeDialog } from "../dialogs/WelcomeDialog.js";
 import { FoundryBasicsDialog } from "../dialogs/FoundryBasicsDialog.js";
 import { CharacterCreationDialog } from "../actors/character/dialogs/CharacterCreationDialog.js";
@@ -50,6 +55,7 @@ import { deletionEntry } from "../utils/foundry-compat.js";
 import { markPosterMapScenes } from "../book2-art/poster-maps.js";
 import { linkLandmarkNotes, refitLandmarkNotes, revealLandmarkNotesOnce } from "./PlaceOfInterestDrop.js";
 import { refitGmPrepPins } from "./ThreatNotePins.js";
+import { fileGmPrepJournalsInChronicle } from "../journal/gm-prep-page.js";
 import { reconcileSitePins } from "../sites/site-scene-pins.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { migrateAllSteadingPeople, ensurePeopleFolders, backfillAllResidentHomes } from "../actors/steading/steading-people.js";
@@ -126,6 +132,11 @@ const _SYSTEM_MACROS = [
 	// dialogs/StonetopBrowserDialog.js), so a magnifying glass rather than any one list's
 	// symbol — it is the LOOKING that all three tabs have in common.
 	{ name: "Browse Stonetop",     img: "systems/stonetop-pwd/assets/icons/macros/magnifying-glass.svg", command: "game.stonetop?.openBrowser?.()",        slot: 7 },
+	// Shared, unlike its neighbours: everyone at the table owns the relationship maps and edits
+	// them, so a macro only the GM could reach would be a window most of its users could not open.
+	// The picture is the board itself: boxed people joined by lines. Not the truce handshake End
+	// of Session already wears, because two macros on one picture are indistinguishable on the bar.
+	{ name: "Relationship Map",    img: "systems/stonetop-pwd/assets/icons/macros/relationship-map.svg", command: "game.stonetop?.openRelationshipMap?.()", slot: 8, shared: true, playerSlot: 2 },
 ];
 
 // Bump to re-snap the system macros into their canonical slots once, on every client
@@ -179,6 +190,12 @@ export async function onReady() {
 		// migration/chronicle-flag-scope.js.
 		try { await repairAllChronicleFlagScopes(); }
 		catch (err) { console.error("Stonetop | chronicle flag-scope repair failed", err); }
+		// Move a world's loose Threats / Hazards / Sites journals into The Chronicle, where new
+		// ones are minted now. Swept every load rather than latched, for the same reason as the
+		// pass above: it matches only what is still unfiled, so once a world is tidy there is
+		// nothing left for it to find. It leaves a journal the GM has filed themselves alone.
+		try { await fileGmPrepJournalsInChronicle(); }
+		catch (err) { console.error("Stonetop | GM-prep journal filing failed", err); }
 		// Give a slug to any arcanum card built before StonetopItem#_preCreate stamped them.
 		// Idempotent, but GATED anyway (migration/once-per-version.js): idempotent buys the second
 		// run being safe, not the whole Items sidebar being filtered on every load of every session
@@ -216,6 +233,10 @@ export async function onReady() {
 		// (folder creation is a GM-only right; ensurePeopleFolder returns null for them).
 		try { await ensurePeopleFolders(); }
 		catch (err) { console.error("Stonetop | ensurePeopleFolders failed", err); }
+		// Same reason, for the relationship maps' folder: creating a Folder is a GM-only right,
+		// so a player making the first map would otherwise have nowhere to file it.
+		try { await ensureRelationshipMapFolder(); }
+		catch (err) { console.error("Stonetop | ensureRelationshipMapFolder failed", err); }
 		try { await _migrateTokenNameplates(); }
 		catch (err) { console.error("Stonetop | token-nameplate migration failed", err); }
 		try { await _migrateNpcPlaceholderPortraits(); }
@@ -390,6 +411,11 @@ export async function onReady() {
 	// and macro habits outlive a merge, and both are one line.
 	game.stonetop.openArcanaBrowser   = (actor)  => game.stonetop.openBrowser("arcana", actor);
 	game.stonetop.openBestiaryBrowser = (source) => game.stonetop.openBrowser(source ?? "monsters");
+	// Who at this table knows whom. OUTSIDE any GM gate: every player owns these maps and edits
+	// them, which is the whole shape of the feature. With no argument it opens the only map, or
+	// asks which one; pass a name or an id to go straight there.
+	//   game.stonetop.openRelationshipMap("The people of Stonetop")
+	game.stonetop.openRelationshipMap = (which) => _openRelationshipMap(which);
 	// Create a blank homebrew arcanum world Item and open its editor. Minor by default;
 	// pass { major: true } for a major. Callable from a macro/console/hotbar:
 	//   game.stonetop.createArcanum({ name: "My Charm" })
@@ -508,6 +534,13 @@ export async function onReady() {
 	if (game.user.isGM) {
 		await _postStartupWelcomeMessageOnce();
 		await _postBook2ArtReminderOnce();
+		// After the art reminder, and for the same reason it is ordered where it is: both are
+		// once-per-world nudges held until the GM is past the Welcome guide, and a world owed
+		// both should read about its missing pictures before it reads about optional weather.
+		// Caught rather than awaited bare: everything below this point in the sweep matters more
+		// than a suggestion about an optional module, so a failed post must not take it with it.
+		try { await postFxMasterSuggestionOnce(); }
+		catch (err) { console.error("Stonetop | FXMaster suggestion failed:", err); }
 		// Background, like the seeds above. This one has to BROWSE the art folder before it
 		// can tell there is nothing to offer, and it deliberately leaves its flag unset when
 		// the plan is empty so a later import still gets the nudge — so for a GM who never
@@ -546,7 +579,7 @@ export async function onReady() {
 	// opening, reopen only once it's up (with a timeout fallback so a failed/absent
 	// Welcome render can't strand the resume).
 	let welcomeDialog = null;
-	if (game.user.isGM && !getSetting("gmWelcomeShown") && !sessionZeroComplete()) {
+	if (game.user.isGM && !pastWelcomeGuide()) {
 		let resumed = false;
 		const resume = () => { if (resumed) return; resumed = true; reopenOpenWalkthroughs(); };
 		Hooks.once("renderWelcomeDialog", resume);
@@ -952,7 +985,7 @@ function _maybeOpenCharacterCreation(actor) {
 // walkthroughs — the guided Introductions and Let Spring Burst Forth (sessionZeroComplete).
 // Until one of those, the guide keeps greeting the GM across the first few loads.
 function _openGmWelcomeGuide() {
-	if (getSetting("gmWelcomeShown") || sessionZeroComplete()) return null;
+	if (pastWelcomeGuide()) return null;
 	return WelcomeDialog.open();
 }
 
@@ -1674,16 +1707,12 @@ async function _postBook2ArtReminderOnce() {
 	// Hold off until the Welcome guide has stopped auto-opening — the GM finished session
 	// zero or ticked "Don't show this again". Mirrors _openGmWelcomeGuide's gate. Not flagged
 	// here: a fresh world legitimately reaches this state later, so keep checking until it does.
-	if (!getSetting("gmWelcomeShown") && !sessionZeroComplete()) return;
+	if (!pastWelcomeGuide()) return;
 
 	// Past the guide, and nothing imported yet: whisper the one-time nudge to the GMs.
 	if (!(await hasImportedBook2Art())) {
 		if (!globalThis.ChatMessage?.create) return; // retry next load if chat isn't ready
-		await ChatMessage.create({
-			content: _buildBook2ArtReminderContent(),
-			whisper:  ChatMessage.getWhisperRecipients("GM").map(u => u.id),
-			speaker: { alias: "Stonetop" },
-		});
+		await whisperGm(_buildBook2ArtReminderContent());
 	}
 	await setSetting("book2ArtReminderShown", true);
 }
@@ -1931,4 +1960,40 @@ function _buildStartupWelcomeContent() {
 			</div>
 		</div>
 	</section>`;
+}
+
+/**
+ * Open a relationship map by name or id, or the one this reader was last on.
+ *
+ * IT NEVER ASKS WHICH. A world with several maps used to get a picker here, on the grounds that the
+ * macro would otherwise be wrong most of the time. It is not: a table lives on one board, opens it
+ * all session, and picked the same row out of that list every time. So the macro goes where this
+ * client last was, and `relmap/relmap-last.js` holds the whole rule (and the two fallbacks, for a
+ * client that has never opened one). The sidebar and the map's own page strip are how you get to a
+ * different map.
+ *
+ * With no maps at all, a GM (or anyone with the journal-create right) is asked what a new map is to
+ * be called and given it, and everybody else is told who can.
+ *
+ * ⚠ IT ASKS FOR THE NAME, and did not used to. Every world is given a map called "Stonetop" during
+ * setup (relmap/relmap-make.js), so a world with none is one whose GM deleted that map -- and
+ * minting a second "Stonetop" unasked is undoing a decision rather than saving anybody a keystroke.
+ * The same question the steading sheet's empty Relationship Map tab asks, through the same call.
+ */
+async function _openRelationshipMap(which) {
+	const maps = listRelationshipMaps();
+	if (which) {
+		const wanted = maps.find(m => m.id === which || m.name === which);
+		if (wanted) return openRelationshipMap(wanted);
+	}
+	const landing = defaultBoard(maps);
+	if (landing) {
+		return openRelationshipMap(landing.entry, landing.pageId ? { pageId: landing.pageId } : {});
+	}
+	if (!canCreateRelationshipMap()) {
+		ui.notifications?.info?.(game.i18n.localize("stonetop.relmap.maps.cannotCreate"));
+		return null;
+	}
+	const made = await promptForNewRelationshipMap();
+	return made ? openRelationshipMap(made) : null;
 }

@@ -20,6 +20,7 @@ Where our filename differs from the original, the game-icons.net source name is 
 | hammer-nails.svg | Improvements | hammer-nails | Lorc | https://lorcblog.blogspot.com |
 | hazard-sign.svg | Threats & Dangers | hazard-sign | Lorc | https://lorcblog.blogspot.com |
 | hearts.svg | Relationships | hearts | Skoll | https://game-icons.net |
+| relationship-map.svg | Relationship Map | checkbox-tree | Lorc | https://lorcblog.blogspot.com |
 | crossed-swords.svg | Stats (NPC), Overview (character) | crossed-swords | Lorc | https://lorcblog.blogspot.com |
 | direction-signs.svg | Expeditions | direction-signs | Delapouite | https://delapouite.com |
 | settings-knobs.svg | Preferences | settings-knobs | Delapouite | https://delapouite.com |
@@ -32,10 +33,10 @@ icons exported from game-icons.net already ship that way — a 512x512 backgroun
 of `assets/icons/hearts.svg`, already in the tree for the relationship hearts.
 
 `village.svg`, `hammer-nails.svg`, `hazard-sign.svg`, `crossed-swords.svg`, `round-star.svg`,
-`school-bag.svg`, `direction-signs.svg` and `settings-knobs.svg` were taken from the game-icons.net
-repository instead
-(`direction-signs.svg` by way of `assets/icons/macros/direction-signs.svg`, already in the tree
-as a hotbar macro's icon), where the same
+`school-bag.svg`, `direction-signs.svg`, `relationship-map.svg` and `settings-knobs.svg` were taken
+from the game-icons.net repository instead
+(`direction-signs.svg` and `relationship-map.svg` by way of `assets/icons/macros/`, where both were
+already in the tree as hotbar macro icons), where the same
 drawings are stored INVERTED — an opaque black background square under a white glyph, which
 as a mask would resolve to a solid slab. Their background square (and only that square) was
 punched transparent to match the export form: `<path d="M0 0h512v512H0z"/>` became

@@ -26,10 +26,11 @@ import { withSheetSizeMemory } from "../../utils/sheet-size.js";
 import { withSectionEditing } from "../../utils/section-editing.js";
 import { showsPreferencesTab, withPreferencesTab } from "../../utils/preferences-tab.js";
 import { buildPreferenceGroups } from "../../utils/sheet-preferences.js";
-import { gmMoveSections } from "../../gm-toolkit/gm-moves.js";
-import { bookPageRef } from "../../gm-toolkit/book-ref.js";
+import { gmMoveSections, gmMoveByName } from "../../gm-toolkit/gm-moves.js";
+import { bookPageCites } from "../../gm-toolkit/book-ref.js";
 import { moveBlurb } from "../../gm-toolkit/gm-move-blurb.js";
 import { GmMoveDrawer } from "../../gm-toolkit/gm-move-drawer.js";
+import { postGmMove } from "../../gm-toolkit/random-gm-move.js";
 import { toggleDisclosure } from "../../utils/disclosure.js";
 import { gmDiagrams } from "../../gm-toolkit/gm-diagrams.js";
 import { openImageZoom } from "../../utils/image-zoom-window.js";
@@ -43,7 +44,7 @@ import { readCurrentSeason, currentSeasonView, isCurrentSeasonChange } from "../
 import { localize } from "../../utils/i18n.js";
 import { localizedOnce } from "../../utils/localized-once.js";
 import { getStonetopSteadingActor, stonetopSteadingHeaderButton } from "../../utils/world.js";
-import { rulebookIconRows, openRulebook } from "../../books/rulebook-icons.js";
+import { rulebookIconRows, openRulebook, followBookCite } from "../../books/rulebook-icons.js";
 
 /**
  * What counts as a foldable section heading on this sheet — see `_wireSectionCollapse`.
@@ -75,14 +76,16 @@ const localizedMoveSections = localizedOnce(() =>
 		// not allowed to hold localized text (it is imported by the Expedition dialog too, and
 		// that module is loaded long before `game.i18n` exists).
 		moves:      section.moves.map(move => ({
-			...move, pageRef: bookPageRef(move), blurb: moveBlurb(move),
+			...move, pageCites: bookPageCites(move), blurb: moveBlurb(move),
 		})),
-		// The die beside the note, and the tooltip on every entry's disclosure. Carried
+		// The die beside the note, and the tooltips on both of an entry's controls — the name
+		// that posts the move and the blurb that opens the book on it. Carried
 		// per-section rather than hung on the context beside the list, so a section stays one
 		// self-contained object: the heading partial then needs no `../` walk at all, and the
 		// entries need exactly one level of it.
 		randomizeTitle: localize("stonetop.gmToolkit.moves.randomize"),
 		expandTitle:    localize("stonetop.gmToolkit.moves.expand"),
+		postTitle:      localize("stonetop.gmToolkit.moves.post"),
 	})));
 
 export function createStonetopGmToolkitSheetClass(Base) {
@@ -476,8 +479,8 @@ export function createStonetopGmToolkitSheetClass(Base) {
 		 * ONE delegated listener for both: they are two `closest` checks on the same event on the
 		 * same root, and a second `addEventListener` for the second check buys nothing.
 		 *
-		 * Neither re-renders the sheet. The randomizer's move goes to CHAT, and the page it was
-		 * drawn from is reference that never changes; a render would cost a scroll jump for
+		 * Neither re-renders the sheet. A move goes to CHAT whether it was drawn or clicked, and
+		 * the page it came off is reference that never changes; a render would cost a scroll jump for
 		 * nothing — the same reasoning the fold in section-editing.js gives for toggling classes
 		 * in place, and the same reason the drawn row is lit by a class rather than by re-rendering
 		 * the list with the draw marked on it.
@@ -491,6 +494,20 @@ export function createStonetopGmToolkitSheetClass(Base) {
 				if (bookIcon) {
 					ev.preventDefault();
 					openRulebook(Number(bookIcon.dataset.book));
+					return;
+				}
+
+				// A page citation, followed: the same book the banner icon opens, at the page
+				// the line was pointing at. Checked next because it is the smallest control on
+				// the sheet and the only one that appears on four different tabs -- Moves,
+				// Homefront, the Core Loop charts -- so its own class is the only thing that can
+				// identify it, and asking the bigger checks below about it first buys nothing.
+				//
+				// The selector and the printed-page rule live with the partial's opener rather
+				// than here: the chip is a shared partial any surface may print, and a branch in
+				// this sheet is not something the next one can reach.
+				if (followBookCite(ev.target)) {
+					ev.preventDefault();
 					return;
 				}
 
@@ -517,7 +534,17 @@ export function createStonetopGmToolkitSheetClass(Base) {
 					return;
 				}
 
-				// An entry's own name, opening what the book prints under it. Before the
+				// An entry's own NAME, posted to chat. The move the GM picked off the list, sent
+				// as the card the die sends, so choosing one deliberately and drawing one at
+				// random land on the same screen in the same shape.
+				const named = ev.target.closest(".stonetop-gm-move-name");
+				if (named) {
+					ev.preventDefault();
+					await this._postNamedMove(named);
+					return;
+				}
+
+				// An entry's blurb, opening what the book prints under it. Before the
 				// randomizer check because both live inside the same move list, and this one is
 				// the more specific of the two.
 				const toggle = ev.target.closest(".stonetop-gm-move-toggle");
@@ -530,10 +557,37 @@ export function createStonetopGmToolkitSheetClass(Base) {
 				const button = ev.target.closest(".stonetop-section-randomize");
 				if (!button) return;
 				ev.preventDefault();
-				// Draw, walk the light, whisper — the order and the don't-repeat memory both live
+				// Draw, walk the light, post — the order and the don't-repeat memory both live
 				// in the drawer (gm-move-drawer.js), shared with the expedition walkthrough's rail.
 				await this._moveDrawer.draw(button, { speaker: ChatMessage.getSpeaker({ actor: this.actor }) });
 			});
+		}
+
+		/**
+		 * Post the move whose name was clicked, as the card the randomizer posts.
+		 *
+		 * The SAME card, deliberately, and by the same function: a GM who picks "Hurt someone"
+		 * off the list and a GM who draws it are reading it for the same reason a beat later, and
+		 * two shapes for one move would mean the second one had to be learned. `postGmMove` also
+		 * owns who the card goes to (the whole table — see its header), which is the part that
+		 * must not be re-implemented here.
+		 *
+		 * Resolved from the row rather than from the render context: the tab does not re-render
+		 * between the click and the post, but the context is rebuilt (and re-localized) on every
+		 * render this sheet takes, while the DOM the GM actually clicked carries both halves of
+		 * the answer already — the section on the button, the printed name on the row.
+		 *
+		 * No walk, no light. The light exists to answer "which one did it pick?", and a GM who
+		 * clicked the row knows.
+		 *
+		 * Silent on an unknown name or section: `postGmMove` returns null for either, and the
+		 * only way to reach one is markup that no longer matches this handler, which a test
+		 * catches long before a GM does.
+		 */
+		async _postNamedMove(button) {
+			const key = button.dataset.section ?? "";
+			const move = gmMoveByName(key, button.closest(".stonetop-gm-move")?.dataset.move ?? "");
+			await postGmMove(key, move, { speaker: ChatMessage.getSpeaker({ actor: this.actor }) });
 		}
 
 		/**

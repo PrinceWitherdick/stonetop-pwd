@@ -43,11 +43,56 @@ export function fitScale({ imageWidth, imageHeight, viewWidth, viewHeight } = {}
 	return clampZoom(Math.min(viewWidth / imageWidth, viewHeight / imageHeight, 1));
 }
 
-/** One step in or out (`direction` positive = in), clamped at both ends. */
-export function stepZoom(scale, direction) {
+/**
+ * How much of a notch one wheel event is, signed (positive = in).
+ *
+ * WHY NOT JUST THE SIGN, which is what every caller here used to read. A wheel is not one device. A
+ * desktop mouse detent arrives as a whole notch and always did, but a trackpad, a free-spinning
+ * wheel and a two-finger drag all arrive as a STREAM of small deltas, and taking the sign off each
+ * of those turns one gentle push into a notch per event -- the picture leaping half a dozen steps
+ * in the time it took to think about one. Divided through instead, a small push is a small zoom and
+ * a detent is exactly the notch it has always been.
+ *
+ * ⚠ THE UNITS DEPEND ON `deltaMode`, which is why this is not a division by 100 written inline at
+ * the call site. Chrome and Safari report PIXELS, where a detent is ~100 of them; Firefox reports
+ * LINES, where a detent is 3. Read three lines as three hundredths of a notch and the wheel does
+ * nothing at all on Firefox, which is how a viewer ends up with a browser-specific bug report
+ * nobody at the table can reproduce.
+ *
+ * CAPPED AT ONE NOTCH EITHER WAY. Momentum scrolling and a page-mode wheel both deliver deltas far
+ * larger than a detent, and honouring those literally is the lurch this function exists to stop.
+ */
+export function wheelNotches({ deltaY = 0, deltaMode = 0 } = {}) {
+	const delta = Number(deltaY);
+	if (!Number.isFinite(delta) || !delta) return 0;
+	// 1 = LINE, 2 = PAGE; anything else means pixels, which is what an engine that does not say
+	// otherwise is reporting.
+	const per = deltaMode === 1 ? 3 : deltaMode === 2 ? 1 : 100;
+	// Wheels count DOWN as positive and down means out, so the sign flips here rather than at
+	// each of the two call sites.
+	return Math.max(-1, Math.min(1, -delta / per));
+}
+
+/**
+ * One step in or out, clamped at both ends.
+ *
+ * `notches` is signed (positive = in) and NEED NOT BE WHOLE: a third of a notch is a third of a
+ * step, because the multiplier is raised to it rather than picked by its sign. That is what lets a
+ * trackpad zoom smoothly through the same arithmetic a detent uses, and it leaves the old ±1 call
+ * meaning precisely what it always did.
+ *
+ * `step` is what ONE whole notch multiplies by, so a caller with finer work than a flowchart to do
+ * -- a board whose portraits are placed by hand -- can ask for a gentler wheel without a second
+ * copy of any of this. A nonsense value falls back to the shared default rather than reaching
+ * `clampZoom` as a degenerate scale.
+ */
+export function stepZoom(scale, notches, step = ZOOM_STEP) {
 	const from = clampZoom(scale);
-	if (!direction) return from;
-	return clampZoom(from * (direction > 0 ? ZOOM_STEP : 1 / ZOOM_STEP));
+	const n = Number(notches);
+	if (!Number.isFinite(n) || !n) return from;
+	const by = Number(step);
+	const factor = Number.isFinite(by) && by > 1 ? by : ZOOM_STEP;
+	return clampZoom(from * factor ** n);
 }
 
 /**

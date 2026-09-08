@@ -63,6 +63,7 @@ function renderTab(season = "") {
 	hb.registerHelper("eq", (a, b) => a === b);
 	hb.registerPartial("stonetop.section-heading", read("templates/actor/partials/section-heading.hbs"));
 	hb.registerPartial("stonetop.section-collapse", read("templates/actor/partials/section-collapse.hbs"));
+	hb.registerPartial("stonetop.book-page-cite", read("templates/actor/partials/book-page-cite.hbs"));
 	return hb.compile(HOMEFRONT_HBS)({
 		stonetop: { homefrontSections: localizedHomefrontSections(), homefrontSeason: season },
 	});
@@ -296,7 +297,11 @@ describe("Homefront tab — the view-model", () => {
 		expect(sections.map(s => s.key)).toEqual(HOMEFRONT_SECTIONS.map(s => s.key));
 
 		const life = sections.find(s => s.key === "life");
-		expect(life.body.groups[0].pageRef).toBe("Book II, page 16");
+		// The citation the tab draws is a LIST of chips, one per page it names, because each has
+		// to be separately clickable; `bookPageRef` below is the flat sentence the chat card gets.
+		expect(life.body.groups[0].pageCites).toEqual([
+			{ text: "Book II, page 16", book: 2, page: 16, sep: "", tip: "Open Book II at page 16" },
+		]);
 		// The whole reason `book` exists on these entries: without it, a Book II page prints as a
 		// Book I one, which is a citation that sends a GM to the wrong book and looks right.
 		expect(bookPageRef({ book: 2, page: 16 })).not.toBe(bookPageRef({ page: 16 }));
@@ -316,8 +321,8 @@ describe("Homefront tab — the view-model", () => {
 		expect(bookPageRef({ book: 2 })).toBe("");
 
 		for (const section of sections) {
-			const refs = section.body.pageRef ? [section.body.pageRef] : section.body.groups.map(g => g.pageRef);
-			expect(refs.every(Boolean), section.key).toBe(true);
+			const cited = section.body.pageCites ? [section.body.pageCites] : section.body.groups.map(g => g.pageCites);
+			expect(cited.every(c => c?.length), section.key).toBe(true);
 		}
 	});
 

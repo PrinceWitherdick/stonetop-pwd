@@ -109,14 +109,115 @@ describe("the reader window", () => {
 		expect(src).toMatch(/#page=91$/);
 	});
 
-	// The reader is a window inside the game, and a control that navigates the browser away
-	// from it is a control that loses the game. There is no way back from it but the header.
-	it("offers nothing that leaves this window", () => {
+	// A citation cites the number PRINTED in the book's corner, and the spreads file puts two of
+	// those on every sheet. Handing the printed number straight to the viewer is the bug this
+	// conversion exists to stop, and it is invisible: page 180 would open sheet 180, which is a
+	// real page of the book, 89 sheets past the one that was cited.
+	it("opens at the SHEET a printed page number is on, not at the number itself", () => {
+		withBooks({ 1: "books/one.pdf" });
+		expect(new BookReaderWindow({ book: 1, printedPage: 180 }).getData().src).toMatch(/#page=91$/);
+		// Its facing page shares the sheet; the next even page starts the next one.
+		expect(new BookReaderWindow({ book: 1, printedPage: 181 }).getData().src).toMatch(/#page=91$/);
+		expect(new BookReaderWindow({ book: 1, printedPage: 182 }).getData().src).toMatch(/#page=92$/);
+		// A caller that already knows a page of the FILE is not put through the conversion twice.
+		expect(new BookReaderWindow({ book: 1, page: 7, printedPage: 180 }).getData().src)
+			.toMatch(/#page=7$/);
+	});
+
+	// The book a GM already has open is the ordinary case for a citation: the window is there,
+	// showing whatever they were last reading, and it has to TURN rather than reload (a re-render
+	// throws away the loaded PDF, which on a 60 MB book is a visible stall).
+	it("turns an open book to the sheet a printed page is on", () => {
+		withBooks({ 1: "books/one.pdf" });
+		const win = new BookReaderWindow({ book: 1 });
+		win._viewerApp = fakeViewer({ page: 3, pagesCount: 308 });
+		win.goToPrintedPage(180);
+		expect(win._viewerApp.page).toBe(91);
+	});
+
+	// THE ONE THAT MUST NOT GUESS. On the 1-up edition the mapping above is simply wrong, and
+	// there is no correcting it from here: the file's front matter is however many sheets its
+	// publisher put there. Being left where you are, and told why, is the honest answer; being
+	// taken to a page nobody asked for is not.
+	it("refuses to jump in a file that is not the spreads edition, and says so", () => {
+		withBooks({ 1: "books/one.pdf" });
+		const warn = vi.fn();
+		global.ui = { notifications: { warn, info: () => {} } };
+		const win = new BookReaderWindow({ book: 1 });
+		win._viewerApp = fakeViewer({ page: 3, pagesCount: 615 });
+		win.goToPrintedPage(180);
+		expect(win._viewerApp.page).toBe(3);
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn.mock.calls[0][0]).toContain("615");
+	});
+
+	// A frame still loading has no document to measure, so the count cannot be trusted yet -- and
+	// it does not need to be: the window is already on its way to the page its own URL named.
+	it("leaves a book that is still loading to the page its URL named", () => {
+		withBooks({ 1: "books/one.pdf" });
+		const warn = vi.fn();
+		global.ui = { notifications: { warn, info: () => {} } };
+		const win = new BookReaderWindow({ book: 1, printedPage: 180 });
+		win.goToPrintedPage(180);
+		expect(warn).not.toHaveBeenCalled();
+	});
+
+	// The console line goes out for every wrong-edition book, because it costs a reader nothing.
+	// The NOTIFICATION goes out only for a book opened AT a printed page, because that is the one
+	// case where the window in front of the GM is already showing the wrong page and nothing
+	// about it looks wrong.
+	it("interrupts about the edition only when a printed page was asked for", () => {
+		withBooks({ 1: "books/one.pdf" });
+		const warn = vi.fn();
+		global.ui = { notifications: { warn, info: () => {} } };
+		vi.spyOn(console, "info").mockImplementation(() => {});
+
+		const reading = new BookReaderWindow({ book: 1 });
+		reading._checkEdition(fakeViewer({ pagesCount: 615 }));
+		expect(warn).not.toHaveBeenCalled();
+		expect(console.info).toHaveBeenCalled();
+
+		const cited = new BookReaderWindow({ book: 1, printedPage: 180 });
+		cited._checkEdition(fakeViewer({ pagesCount: 615 }));
+		expect(warn).toHaveBeenCalledTimes(1);
+
+		// And the right edition says nothing at all, either way.
+		const right = new BookReaderWindow({ book: 1, printedPage: 180 });
+		right._checkEdition(fakeViewer({ pagesCount: 308 }));
+		expect(warn).toHaveBeenCalledTimes(1);
+	});
+
+	// A second monitor is the whole point of this button, so it has to be there. What it must
+	// never be is a control that navigates the GAME away: the book opens in a tab of its own,
+	// and this window is left exactly where it was.
+	it("offers a new tab, and opens it as a new tab rather than navigating the game", () => {
 		withBooks({ 1: "books/one.pdf" });
 		game.user = { isGM: true };
 		const classes = new BookReaderWindow({ book: 1 })._getHeaderButtons().map(b => b.class);
-		expect(classes).not.toContain("stonetop-book-pop-out");
-		expect(read("module/books/BookReaderWindow.js")).not.toContain("window?.open");
+		expect(classes).toContain("stonetop-book-pop-out");
+		const source = read("module/books/BookReaderWindow.js");
+		expect(source).toContain('"_blank", "noopener"');
+		// The only navigation in the file is that one, in a tab we are not keeping a handle on.
+		expect(source).not.toMatch(/location\s*(\.href)?\s*=/);
+	});
+
+	// By the time a GM presses this they have read their way somewhere else, so the tab has to
+	// open where the reader IS. Off `_src` it would always be the page the book opened at.
+	it("opens the new tab at the page being read, and at the opening page while still loading", () => {
+		withBooks({ 1: "books/one.pdf" });
+		const open = vi.fn();
+		globalThis.window = { open };
+		try {
+			const win = new BookReaderWindow({ book: 1, page: 5 });
+			// Nothing loaded yet: the URL the window itself opened at, page and all.
+			win._popOut();
+			expect(open.mock.calls[0][0]).toMatch(/#page=5$/);
+			expect(open.mock.calls[0][1]).toBe("_blank");
+			win._viewerApp = fakeViewer({ page: 91 });
+			win._popOut();
+			expect(open.mock.calls[1][0]).toMatch(/#page=91$/);
+			expect(open.mock.calls[1][0]).toContain("scripts/pdfjs/web/viewer.html");
+		} finally { delete globalThis.window; }
 	});
 
 	// Show Players opens a window on other people's screens, which is a GM's move to make.

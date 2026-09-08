@@ -265,6 +265,13 @@ export function createStonetopItemClass(BaseItem) {
 			// Skipped for a move that names its own pool in `system.pickOptions` (love letters):
 			// that pool renders as its own checklist, and a second list in the description would
 			// start its data-index at 0 again and scramble the message's saved ticks.
+			//
+			// NOT skipped for an attack move. Clash and its four cousins used to restate their
+			// whole list as pick radios under the result and this list stood down for them, which
+			// was one choice printed in two places whichever of the two you looked at. The tier
+			// controls are a lone Confirm button now, and this — the move's own bullets, ticked
+			// where the move prints them — is the only list on the card
+			// (combat/attack-flow.js#buildTierActions).
 			const declaredPicks = this.system?.pickOptions ?? [];
 			const cardDescription = moveCardBody(moveDescription, this.system?.moveResults,
 				{ pickable: !declaredPicks.length }) + signoff;

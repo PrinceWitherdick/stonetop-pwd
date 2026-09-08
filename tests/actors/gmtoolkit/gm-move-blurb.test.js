@@ -146,8 +146,13 @@ describe("the blurb on the page", () => {
 	it("puts the revealed remainder inside the button, right after the lead", () => {
 		expect(MOVES_HBS).toMatch(
 			/<span class="stonetop-gm-move-lead">\{\{blurb\.lead\}\}<\/span>[\s\S]{0,80}?class="stonetop-gm-move-rest" hidden>/);
-		expect(MOVES_HBS.indexOf('class="stonetop-gm-move-rest"'))
-			.toBeLessThan(MOVES_HBS.indexOf("</button>"));
+		// Measured from the TOGGLE's own opening tag, not from the top of the file: the entry
+		// opens with a second button above this one — the name, which posts the move to chat —
+		// so the file's first `</button>` closes that instead, and says nothing about where the
+		// remainder of the sentence sits.
+		const toggle = MOVES_HBS.slice(MOVES_HBS.indexOf('class="stonetop-gm-move-toggle"'));
+		expect(toggle.indexOf('class="stonetop-gm-move-rest"'))
+			.toBeLessThan(toggle.indexOf("</button>"));
 	});
 
 	// Both halves move on one call, from one selector, so a blurb cannot finish its sentence above

@@ -27,7 +27,7 @@
 //               than a soft/hard pair, because the book writes it as one sentence and two of
 //               these (Capture someone, Start a conflict or crisis) cover both halves in it.
 //  • `examples` The lines of actual GM speech the book prints, VERBATIM. These are the reason
-//               this data exists: the randomizer whispers a move mid-sentence, and a name plus
+//               this data exists: the randomizer posts a move mid-sentence, and a name plus
 //               a gloss still leaves a GM to invent the sentence, while one example of how the
 //               move SOUNDS is something to say in two seconds. They use the book's own sample
 //               cast (Rhianna, Caradoc, Blodwen, Vahid, Eira, Lowri...), which is why they are
@@ -336,7 +336,10 @@ export const EXPLORATION_GM_MOVES = [
 		name:    "Introduce a danger, person, or faction",
 		gloss:   "It's here, not looming.",
 		page:    320,
-		pageAlt: 354,
+		// 353, not 354: the sites chapter's re-framing of this move starts in the right-hand
+		// column of 353, and 354 is where "Bar the way" begins. Checked against the spreads PDF
+		// (the folio is printed on the page), along with every other citation on this sheet.
+		pageAlt: 353,
 		detail: [
 			"With this move, you're putting a danger on screen. You're not pointing to it, it's not looming, it's here, what do you do?",
 			"Alternately, you're introducing an NPC and giving the PCs a chance to interact with them. Or, you're revealing that there's a subset of creatures or people that they didn't know about before: different strains of crinwin, a cult within the Hillfolk, rivalries and allegiances among the Fae, etc.",
@@ -560,4 +563,25 @@ export function gmMoveSections() {
  */
 export function gmMoveSection(key) {
 	return GM_MOVE_SECTIONS.find(s => s.key === key);
+}
+
+/**
+ * One move out of a section, by the name the playbook prints.
+ *
+ * The counterpart to `randomGmMove`: the toolkit's list posts the move a GM CLICKED, and what a
+ * click hands back is the row's printed name (`data-move`) and the section it sat in. Both
+ * callers end up at `postGmMove`, which wants the table's own object — the gloss, the examples,
+ * the page — so the name has to be resolved back to it.
+ *
+ * Scoped to the section rather than searching all three, because the sections are what the
+ * cards are FRAMED by ("GM Moves", "Exploration", "Homefront") and a name is not guaranteed
+ * unique across them; resolving loosely would let a click on one list post under another's
+ * heading.
+ *
+ * @param   {string} key   "basic" | "exploration" | "homefront"
+ * @param   {string} name  The move's name, exactly as printed.
+ * @returns {GmMove|null}  null for an unknown section or an unknown name.
+ */
+export function gmMoveByName(key, name) {
+	return gmMoveSection(key)?.moves.find(m => m.name === name) ?? null;
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readRepo as read } from "../fakes/css.js";
 import {
-	anchoredOffset, centreOffset, clampPan, clampZoom, fitScale, stepZoom,
+	anchoredOffset, centreOffset, clampPan, clampZoom, fitScale, stepZoom, wheelNotches,
 	MIN_ZOOM, MAX_ZOOM, PAN_MARGIN, ZOOM_STEP,
 } from "../../module/utils/image-zoom.js";
 import { ImageZoomWindow } from "../../module/utils/image-zoom-window.js";
@@ -69,6 +69,64 @@ describe("stepZoom", () => {
 		let scale = 0.3, notches = 0;
 		while (scale < 1 && notches < 50) { scale = stepZoom(scale, 1); notches++; }
 		expect(notches).toBeLessThanOrEqual(10);
+	});
+
+	// The half-notch a trackpad sends, which used to be read as a whole one either way.
+	it("moves a fraction of a step for a fraction of a notch", () => {
+		expect(stepZoom(1, 0.5)).toBeCloseTo(Math.sqrt(ZOOM_STEP), 10);
+		expect(stepZoom(1, 0.5)).toBeLessThan(stepZoom(1, 1));
+	});
+
+	// Two halves land where one whole notch does, which is what makes a trackpad and a detent the
+	// same gesture at different resolutions rather than two zooms that drift apart.
+	it("adds up: two half notches are one whole one", () => {
+		expect(stepZoom(stepZoom(1, 0.5), 0.5)).toBeCloseTo(stepZoom(1, 1), 10);
+	});
+
+	it("takes a caller's own step, for a board that wants a gentler wheel", () => {
+		expect(stepZoom(1, 1, 1.08)).toBeCloseTo(1.08, 10);
+		expect(stepZoom(1, -1, 1.08)).toBeCloseTo(1 / 1.08, 10);
+		// A gentler step is a smaller jump, which is the whole reason it is there.
+		expect(stepZoom(1, 1, 1.08)).toBeLessThan(stepZoom(1, 1));
+	});
+
+	// A step of 1 would multiply by nothing at all and a step of 0 would collapse the scale to the
+	// floor. Both reach here only from a caller's typo, and neither is allowed to break the wheel.
+	it("falls back to the shared step rather than trusting a nonsense one", () => {
+		for (const bad of [0, 1, -2, NaN, null, undefined, "big"]) {
+			expect(stepZoom(1, 1, bad)).toBeCloseTo(ZOOM_STEP, 10);
+		}
+	});
+});
+
+describe("wheelNotches", () => {
+	// The desktop mouse this has always been sized for: one detent, one notch, up is in.
+	it("reads a pixel-mode detent as a whole notch", () => {
+		expect(wheelNotches({ deltaY: -100, deltaMode: 0 })).toBeCloseTo(1, 10);
+		expect(wheelNotches({ deltaY: 100, deltaMode: 0 })).toBeCloseTo(-1, 10);
+	});
+
+	// The whole point: a trackpad's small deltas zoom by small amounts instead of a full step each.
+	it("reads a trackpad's small delta as a small part of a notch", () => {
+		expect(wheelNotches({ deltaY: -12 })).toBeCloseTo(0.12, 10);
+		expect(wheelNotches({ deltaY: 4 })).toBeCloseTo(-0.04, 10);
+	});
+
+	// Firefox reports LINES, three to a detent. Divided by 100 this would be a wheel that does
+	// nothing at all on one browser.
+	it("reads a line-mode detent as a whole notch too", () => {
+		expect(wheelNotches({ deltaY: -3, deltaMode: 1 })).toBeCloseTo(1, 10);
+	});
+
+	it("caps momentum and page-mode scrolling at one notch", () => {
+		expect(wheelNotches({ deltaY: -800, deltaMode: 0 })).toBe(1);
+		expect(wheelNotches({ deltaY: 3, deltaMode: 2 })).toBe(-1);
+	});
+
+	it("reads a still wheel as no zoom at all", () => {
+		expect(wheelNotches({ deltaY: 0 })).toBe(0);
+		expect(wheelNotches({ deltaY: NaN })).toBe(0);
+		expect(wheelNotches()).toBe(0);
 	});
 });
 

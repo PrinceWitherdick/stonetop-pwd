@@ -274,13 +274,82 @@ describe("browseArtDirs where the art is kept off the data path", () => {
 		expect([...await browseArtDirs(ROOT, ["assets/people"])]).toEqual([`${ROOT}/assets/people/a.webp`]);
 	});
 
-	it("asks once when the first listing found something — the retry is for empties only", async () => {
-		const browse = vi.fn(async (_s, path) => ({ target: path, files: [`${ROOT}/assets/people/a.webp`] }));
+	it("still asks the second way when the first listing found something", async () => {
+		// The trap this replaced: retrying only for an EMPTY first listing lets a single stale file
+		// at the data-relative path hide the whole assets-library listing behind it. One file is all
+		// it takes, and it is not exotic — a world imported self-hosted and later moved onto a host
+		// carries its old Data folder along.
+		const browse = vi.fn(async (_s, path) => {
+			if (path === `${FORGE}${ROOT}/assets/people`) {
+				return { target: path, files: ["b", "c", "d"].map(f => `${FORGE}${ROOT}/assets/people/${f}.webp`) };
+			}
+			return { target: path, files: [`${ROOT}/assets/people/stale.webp`] };
+		});
 		global.FilePicker = { browse };
 		global.foundry = {};
 		global.game = { settings: { get: (_ns, key) => (key === "book2ArtPrefix" ? FORGE : null) } };
+		const present = await browseArtDirs(ROOT, ["assets/people"]);
+		// All four: three the host really serves, plus the one the stale path really does hold.
+		expect(present.size).toBe(4);
+		expect(present.has(`${ROOT}/assets/people/b.webp`)).toBe(true);
+		expect(present.has(`${ROOT}/assets/people/stale.webp`)).toBe(true);
+		expect(browse).toHaveBeenCalledTimes(2);
+	});
+
+	it("learns the prefix from a listing the data-relative path also answered", async () => {
+		// The consequence that made the above a data-loss bug rather than a slow one: an inventory
+		// whose every file came back bare has an empty `prefix`, and reapply.js publishes that
+		// world-wide — which is the setting `readDir` needs to ask its second question at all.
+		const browse = vi.fn(async (_s, path) => {
+			if (path === `${FORGE}${ROOT}/assets/people`) return { target: path, files: [`${FORGE}${ROOT}/assets/people/b.webp`] };
+			return { target: path, files: [`${ROOT}/assets/people/stale.webp`] };
+		});
+		global.FilePicker = { browse };
+		global.foundry = {};
+		global.game = { settings: { get: (_ns, key) => (key === "book2ArtPrefix" ? FORGE : null) } };
+		expect((await browseArtDirs(ROOT, ["assets/people"])).prefix).toBe(FORGE);
+	});
+
+	it("prefers the served spelling for a picture that is on both paths", async () => {
+		// Same `out` in both listings: the assets-library copy is the one the importer writes today,
+		// so that is what a document must be pointed at. The data-relative copy is the leftover.
+		const browse = vi.fn(async (_s, path) => {
+			if (path === `${FORGE}${ROOT}/assets/people`) return { target: path, files: [`${FORGE}${ROOT}/assets/people/a.webp`] };
+			return { target: path, files: [`${ROOT}/assets/people/a.webp`] };
+		});
+		global.FilePicker = { browse };
+		global.foundry = {};
+		global.game = { settings: { get: (_ns, key) => (key === "book2ArtPrefix" ? FORGE : null) } };
+		const present = await browseArtDirs(ROOT, ["assets/people"]);
+		expect(present.size).toBe(1);
+		expect(present.resolve(`${ROOT}/assets/people/a.webp`)).toBe(`${FORGE}${ROOT}/assets/people/a.webp`);
+	});
+
+	it("survives a listing that answers with no `files` key at all", async () => {
+		// A host that describes an empty directory as { target, dirs } used to throw
+		// "res.files is not iterable" out of the Promise.all and take the whole art pass with it.
+		const browse = vi.fn(async (_s, path) => ({ target: path, dirs: [] }));
+		global.FilePicker = { browse };
+		global.foundry = {};
+		global.game = { settings: { get: (_ns, key) => (key === "book2ArtPrefix" ? FORGE : null) } };
+		expect((await browseArtDirs(ROOT, ["assets/people"])).size).toBe(0);
+	});
+
+	it("does not cache a failure, so a browse that was unavailable is asked again", async () => {
+		// `readDir` is async, so a SYNCHRONOUS throw from FilePicker.browse became a rejected
+		// promise — and browseDir caches the promise, which poisoned that directory for the session.
+		let broken = true;
+		const browse = vi.fn((_s, path) => {
+			if (broken) throw new TypeError("FilePicker is not available yet");
+			return Promise.resolve({ target: path, files: [`${ROOT}/assets/people/a.webp`] });
+		});
+		global.FilePicker = { browse };
+		global.foundry = {};
+		global.game = { settings: { get: () => null } };
+		await expect(browseArtDirs(ROOT, ["assets/people"])).resolves.toBeTruthy();
+		broken = false;
+		clearArtBrowseCache();
 		expect((await browseArtDirs(ROOT, ["assets/people"])).size).toBe(1);
-		expect(browse).toHaveBeenCalledTimes(1);
 	});
 
 	it("asks only once when this world has never observed a prefix", async () => {

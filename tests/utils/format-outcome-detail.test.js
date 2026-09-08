@@ -103,4 +103,52 @@ describe("formatOutcomeDetail", () => {
 		expect(html).not.toContain("<ul");
 		expect(html).toBe("Pick 1: Deal your damage.");
 	});
+
+	// A LINE THAT ENDS ON A COLON introduces nothing, whichever way it got that way. A tier row
+	// read back out of a move's own prose is cut at the colon its bullets followed (those bullets
+	// print above the ladder, not in the row), which is how Formidable's weak hit came to read
+	// "Pick 1:" and then stop. Eleven other shipped rows read the same way.
+	it("closes a line that is nothing but a lead-in", () => {
+		expect(formatOutcomeDetail("Pick 1:")).toBe("Pick 1.");
+		expect(formatOutcomeDetail("All 3 apply:")).toBe("All 3 apply.");
+		expect(formatOutcomeDetail("Your maneuver works as expected (deal your damage) and pick 1:"))
+			.toBe("Your maneuver works as expected (deal your damage) and pick 1.");
+	});
+
+	// `introOnly` is set where the card already bullets these same options just above, so the
+	// lead-in is the whole of what this line says. Its colon introduced a list that is no longer
+	// coming, and left as one Formidable's weak hit read "Pick 1:" and simply stopped.
+	describe("introOnly", () => {
+		it("drops the options and closes the lead-in with a full stop", () => {
+			const text = "Pick 1: lesser foes quail/flee OR doughty foes focus on you.";
+			const html = formatOutcomeDetail(text, { introOnly: true });
+			expect(html).not.toContain("<ul");
+			expect(html).toBe('<span class="stonetop-roll-result-lead">Pick 1.</span>');
+		});
+
+		it("keeps whatever the lead-in said before the count", () => {
+			const text = "Your maneuver works as expected (deal your damage) and pick 1: "
+				+ "Avoid the attack / Strike hard and fast";
+			expect(formatOutcomeDetail(text, { introOnly: true }))
+				.toBe('<span class="stonetop-roll-result-lead">Your maneuver works as expected '
+					+ "(deal your damage) and pick 1.</span>");
+		});
+
+		// The flag only speaks for a line that HAS a list to drop. A plain outcome is prose either
+		// way, and its own punctuation is none of this function's business.
+		it("leaves a line with no option list exactly as it was", () => {
+			expect(formatOutcomeDetail("Deal your damage and pick 2 from the list.", { introOnly: true }))
+				.toBe("Deal your damage and pick 2 from the list.");
+			expect(formatOutcomeDetail("", { introOnly: true })).toBe("");
+		});
+
+		// The list still prints for every tier the card is NOT suppressing, colon and all: there the
+		// colon does point at something.
+		it("keeps the colon when the options follow it after all", () => {
+			const text = "Pick 1: lesser foes quail/flee OR doughty foes focus on you.";
+			const html = formatOutcomeDetail(text);
+			expect(html).toContain('<span class="stonetop-roll-result-lead">Pick 1:</span>');
+			expect(html).toContain('<ul class="stonetop-roll-result-picks">');
+		});
+	});
 });

@@ -46,7 +46,7 @@
 					<ul class="stonetop-gm-homefront-items">
 						{{#each items}}<li>{{this}}</li>{{/each}}
 					</ul>
-					<p class="stonetop-gm-homefront-page">{{pageRef}}</p>
+					<p class="stonetop-gm-homefront-page">{{> "stonetop.book-page-cite" cites=pageCites}}</p>
 				</section>
 				{{/each}}
 			</div>
@@ -106,7 +106,7 @@
 			<ol class="stonetop-gm-homefront-steps{{#unless body.numbered}} stonetop-gm-homefront-steps--unnumbered{{/unless}}">
 				{{#each body.steps}}
 				<li class="stonetop-gm-homefront-step">
-					<strong class="stonetop-gm-homefront-step-name">{{name}}</strong>{{#if detail}} <span class="stonetop-gm-homefront-step-detail">{{detail}}</span>{{/if}}{{#if pageRef}} <span class="stonetop-gm-homefront-step-page">{{pageRef}}</span>{{/if}}
+					<strong class="stonetop-gm-homefront-step-name">{{name}}</strong>{{#if detail}} <span class="stonetop-gm-homefront-step-detail">{{detail}}</span>{{/if}}{{#if pageCites}} <span class="stonetop-gm-homefront-step-page">{{> "stonetop.book-page-cite" cites=pageCites}}</span>{{/if}}
 					{{#if items}}
 					<ul class="stonetop-gm-homefront-items">
 						{{#each items}}<li>{{this}}</li>{{/each}}
@@ -161,7 +161,7 @@
 			      the same line — so five copies said what one says, and a seventh section kind
 			      would have needed a sixth. Guarded because Life in Stonetop is the one section
 			      with no citation of its own: its four groups each cite their own spread, above. --}}
-			{{#if body.pageRef}}<p class="stonetop-gm-homefront-page">{{body.pageRef}}</p>{{/if}}
+			{{#if body.pageCites}}<p class="stonetop-gm-homefront-page">{{> "stonetop.book-page-cite" cites=body.pageCites}}</p>{{/if}}
 		</div>
 		{{/each}}
 

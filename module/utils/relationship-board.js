@@ -678,6 +678,24 @@ function ensureEscapeWatcher() {
 	}, true);
 }
 
+/**
+ * Arm Escape-to-cancel for the drag that is starting, wiring the watcher on first use.
+ *
+ * Exported because every pointer-drag surface in the system needs exactly this and the watcher
+ * must be ONE listener: a second copy in another module is a second capture-phase Escape
+ * swallower with its own idea of which drag is live, and the KeyboardManager discovery above
+ * would then have to be re-made in every copy the next time core changes.
+ */
+export function beginCancellableDrag(cancel) {
+	activeDragCancel = cancel;
+	ensureEscapeWatcher();
+}
+
+/** Disarm Escape-to-cancel. Safe to call when no drag is live, so it can sit in a shared exit. */
+export function endCancellableDrag() {
+	activeDragCancel = null;
+}
+
 // ── The expandable card note ─────────────────────────────────────────────────
 
 // A card's note renders as the same one clipped line the table shows, and on a ~180px card
@@ -1215,7 +1233,7 @@ function wireLaneDrag(wrapper, moveTo, reorderTo) {
 		const active = drag;
 		if (!active) return;
 		drag = null;
-		activeDragCancel = null;
+		endCancellableDrag();
 		stopDragFrames();
 		clearHighlight();
 		showZones(false);
@@ -1270,8 +1288,7 @@ function wireLaneDrag(wrapper, moveTo, reorderTo) {
 			// flash them, and until the threshold is crossed this is still a click. The card's
 			// own lane keeps its cards on show, because that is where a position is aimed.
 			showZones(true, drag.sourceLane);
-			activeDragCancel = end;
-			ensureEscapeWatcher();
+			beginCancellableDrag(end);
 		}
 		// Only once the drag is real: otherwise this would suppress text selection and
 		// ordinary presses inside the card.

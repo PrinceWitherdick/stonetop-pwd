@@ -1,0 +1,769 @@
+{{!-- RELATIONSHIP MAP — who at this table knows whom, and how.
+
+      One window per map (there are several named maps in a world), driven by
+      module/dialogs/RelationshipMapWindow.js. The board inside it pans and zooms as a whole; the
+      strip above it and the footer below it do not ride the board, so the controls stay put while
+      the web moves behind them.
+
+      ⚠ THERE IS NO TOOLBAR OVER THE BOARD ANY MORE, and this is the shape of the window rather
+      than a detail of it. A row of buttons stood between the window's title and the page strip,
+      and by the end it held three things: "Match answers to people", which is gone outright; "Add
+      someone"; and the undo/redo pair. All that is left of it now lives in the FOOTER under the
+      board, on the same line as the box that turns the captions off — so the whole top of the
+      window is what a reader came for (which board is up, and the board), and everything that is
+      pressed at it sits in one place at the bottom. The row it replaced was measured over the edge
+      at 1366px wide when it still carried a map name; three controls in the footer are not.
+
+      ONE root element, as AppV1 requires. --}}
+{{!-- ⚠ `labels-all` IS A CONSTANT AND NOT A SETTING. The window used to carry a three-way cycle for
+      it (all / on hover / off) and the class was written from wherever that stood; the cycle is
+      gone, and every line's caption is drawn. The class stays because the stylesheet's caption
+      rules hang off it, and because a board too dense to caption still has the other way down:
+      resting on a face lights that person's web and quiets the rest.
+
+      `captions-off` IS THE ONE THE READER MOVES: the checkbox under the board, written here so a
+      re-render does not put the words back under somebody who turned them off, and written again
+      by `_paintChrome` so a repaint does not either. Two classes and not one, because the other
+      way to a board with no writing on it -- zoomed out past the size at which words are worth
+      drawing -- is the board's own decision rather than the reader's, and the two must be able to
+      end without ending each other. See `_captionsHidden`. --}}
+<div class="stonetop-relmap labels-all{{#if hideLabels}} captions-off{{/if}}{{#unless canEdit}} is-readonly{{/unless}}">
+
+  {{!-- WHICH BOARD OF THIS MAP IS UP.
+
+        One map is several named boards, and each is a JournalEntryPage of the same entry carrying
+        its own people, its own lines and its own layout (module/relmap/relmap-doc.js). A page is
+        not another arrangement of one web: adding somebody to "The Millers" does not put them on
+        "Marshedge", and the same person may stand on both, in different places, with different
+        lines drawn to them. That is what actually thins out a village of forty.
+
+        ITS OWN ROW, AND NOW THE FIRST ONE. It never belonged among the tools — a tool says what
+        can be done to a board, and this says WHICH BOARD that is, which is the frame all of that
+        happens inside — and with the toolbar gone (see the head of this file) the frame is what the
+        window opens with, immediately over the board it names. The tools themselves are in the
+        footer.
+
+        A TAB STRIP AND NOT A DROPDOWN, which is the one place this window deliberately spends the
+        height. Pages are a thing a table has to KNOW it can make, and a `<select>` showing one
+        value tells nobody that a second is possible; a row of tabs with a "+" on the end is the
+        whole feature, visible. It is also where a reader's eye already goes to ask "which one of
+        these am I looking at".
+
+        ⚠ THE TABS ARE DROPPED IN WHOLE, as the board and the person chooser are, and are built in
+        `_pageTabs` — never written out here as an `{{#each}}`. Somebody at the far end of the table
+        adds and renames these under an open window, and the repaint that keeps up with that can
+        only reach the DOM. One builder, two writers; see `_paintPages`.
+
+        The strip is ONE tab stop with the arrow keys inside it (a roving tabindex, written by the
+        same builder), because a map with eight boards is otherwise eight stops between the window
+        and the board for every reader who moves by keyboard. --}}
+  {{#if showPages}}
+  <div class="stonetop-relmap-pages">
+    <div class="stonetop-relmap-pages-strip" role="tablist"
+         aria-label="{{pagesLabel}}">{{{pageTabs}}}</div>
+
+    {{!-- WHAT CAN BE DONE TO THE BOARDS, and all three are edits, so the whole lot is behind the
+          gate. Outside the scrolling strip beside it: a map with a dozen pages scrolls its tabs
+          sideways, and tools that scrolled away with them would be tools a reader has to go looking
+          for.
+
+          ⚠ GLYPH ONLY, AND THE HINT IS THE WHOLE OF THE LABEL. These three used to carry their
+          words beside the icon ("New page", "Rename", "Delete page"), which put three more pieces
+          of prose on the one row whose entire job is to say WHICH BOARD IS UP: the tab names and
+          the tools competed for the same eye, and every letter of a tool was width the strip of
+          tabs did not have. Every other row of small tools in the system is bare glyphs on a
+          transparent square (the steading's wonder and encounter headers), and this is that shape.
+
+          NOTHING IS LOST TO A READER WHO CANNOT READ THE GLYPH. The accessible name was never the
+          span: `aria-label` overrode it then and carries the same full sentence now, which is the
+          text `data-tooltip` shows on hover. The words are one hover, or one screen reader, away
+          exactly as they were. --}}
+    {{#if canEdit}}
+    {{!-- ⚠ NEW PAGE SITS AT THE END OF THE TABS AND NOT WITH THE OTHER TWO, which is the one thing
+          on this row that is placed by what it makes rather than by what it acts on. It makes
+          ANOTHER TAB, and the place a new tab appears is after the last one — the same spot every
+          tabbed thing a reader has ever used puts it, and near enough to the names that it reads as
+          part of the strip rather than as a tool aimed at the board. Off at the far right it was
+          the width of the whole window away from the row it adds to, and sat between two controls
+          that do something else entirely.
+
+          It is OUTSIDE the scrolling strip all the same: with a dozen boards the tabs scroll
+          sideways, and a plus that scrolled off with them would be the only way to make a board at
+          all, gone. So it stands just past the strip's right edge and stays there, which on a map
+          whose tabs do not fill the row is exactly where the last tab ends. --}}
+    <button type="button" class="stonetop-relmap-page-tool stonetop-relmap-page-tool--new"
+            data-relmap-action="pagenew"
+            data-tooltip="{{pageNewHint}}" aria-label="{{pageNewHint}}">
+      <i class="fas fa-plus"></i>
+    </button>
+
+    {{!-- THE EYE, THE PEN AND THE TRASH ACT ON THE BOARD THAT IS UP, and they are pinned to the
+          row's right-hand end rather than trailing the tabs: their target is the current tab, which
+          is somewhere in a strip that moves, so a fixed corner is the only place they can be
+          reliably reached for. Two of the three change what somebody else can see or destroy
+          something outright, and standing them apart from the plus is what keeps a mis-aimed click
+          on "another board" from being a click on "lose this one". --}}
+    <div class="stonetop-relmap-pages-tools">
+      {{!-- WHO AT THIS TABLE MAY LOOK AT THIS BOARD, and it is the first of the three because it is
+            the only one whose state a GM reads rather than presses. Every board starts hidden from
+            the players (module/relmap/relmap-doc.js): a board is a picture the GM is still working
+            out, and one that arrived shared would give away who has not been met yet, who is lying
+            to whom, and what is under the hill, the moment it had a face on it.
+
+            ⚠ ALWAYS RENDERED AND HIDDEN, like the trash below and for the same reason: `_paintSeen`
+            can only write onto markup a repaint left standing. Whether it applies at all is
+            `pageHideOn` — a GM, on a map with a board under them — and that is written on every
+            repaint rather than baked into this markup.
+
+            THE GLYPH IS THE STATE AND THE HINT IS THE OUTCOME: an open eye on a board the table can
+            see, a struck one on a board that is the GM's alone, and the sentence under the pointer
+            says what pressing it would do. The hint is the whole of the label, as it is on the
+            other three tools. --}}
+      <button type="button" class="stonetop-relmap-page-tool stonetop-relmap-page-tool--seen
+              {{~#if pageHidden}} is-hidden-board{{/if}}" data-relmap-action="pagehide"
+              data-tooltip="{{pageHideHint}}" aria-label="{{pageHideHint}}"
+              {{#unless pageHideOn}}hidden{{/unless}}>
+        <i class="fas {{pageHideIcon}}"></i>
+      </button>
+
+      <button type="button" class="stonetop-relmap-page-tool" data-relmap-action="pagerename"
+              data-tooltip="{{pageRenameHint}}" aria-label="{{pageRenameHint}}">
+        <i class="fas fa-pen"></i>
+      </button>
+
+      {{!-- ⚠ ALWAYS RENDERED AND HIDDEN, never behind an `{{#if}}`, for the reason the two panels
+            over the board are: `_paintPages` can only write onto markup a repaint left standing,
+            and whether the last board may be rubbed out changes whenever anybody at the table adds
+            or removes one. Behind a condition this button would exist on precisely the maps that
+            already had two pages when the window last rendered — so a reader who adds a second
+            page would have no way to remove it again until they reopened the window. --}}
+      <button type="button" class="stonetop-relmap-page-tool stonetop-relmap-page-tool--drop"
+              data-relmap-action="pagedelete" data-tooltip="{{pageDeleteHint}}"
+              aria-label="{{pageDeleteHint}}" {{#unless canDropPage}}hidden{{/unless}}>
+        <i class="fas fa-trash"></i>
+      </button>
+    </div>
+    {{/if}}
+  </div>
+  {{/if}}
+
+  {{!-- The window the board moves behind: it clips, it does not scroll. A scroll container can only
+        reach what is inside its own content box, so it would pin the board to its edges and grow
+        scrollbars over a diagram that is meant to be dragged around freely.
+
+        It is also the PANEL the strip above names, which is why it carries the tab roles' other
+        half: a `role="tab"` with nothing saying what it controls is a tab in name only. The label
+        is rewritten by `_paintPages`, because which tab is selected can change without a render —
+        somebody else deleting the board this reader was standing on moves them to another. --}}
+  <div class="stonetop-relmap-view" {{#if showPages}}role="tabpanel"
+       aria-labelledby="{{pagePanelId}}"{{/if}}>
+    <div class="stonetop-relmap-board">{{{board}}}</div>
+
+    {{!-- Nobody on the map yet. Inside the viewport rather than instead of it, so the board is
+          still there to be dropped onto — which is the other way somebody arrives.
+
+          ALWAYS RENDERED, hidden rather than absent, because `_toggleEmpty` can only show and hide
+          what the markup already has. Behind an `{{#if}}` it existed on exactly the maps that
+          opened empty, so removing the last person from a populated one left a blank board with no
+          lead text and no way in — the moment the panel is most wanted. The button inside it is
+          still gated on permission, and the window re-renders whole either way.
+
+          ⚠ THE PANEL MUST KEEP EXACTLY ONE CALL TO ACTION. This panel takes no pointer events (the
+          board underneath it has to stay droppable), so its button opts back in — and it is the
+          only thing inside the viewport a reader can tab to on a brand new map. It used to be "Add
+          everyone", which put the whole cast on in one press; that button is gone, because a board
+          with everybody on it is exactly the crowding a second page exists to escape. What replaced
+          it is "Add someone", which is what the hint beside it already told the reader to use. --}}
+    <div class="stonetop-relmap-empty" {{#unless empty}}hidden{{/unless}}>
+      <p class="stonetop-relmap-empty-lead">{{emptyLead}}</p>
+      <p class="stonetop-relmap-empty-hint">{{emptyHint}}</p>
+      {{!-- ALWAYS RENDERED AND HIDDEN: the window can only WRITE onto markup a repaint left
+            standing, and whether there is a button here at all depends on whether the reader may
+            edit — which can change without the render that would otherwise have to put it there. --}}
+      <button type="button" class="stonetop-cta stonetop-relmap-empty-cast"
+              data-relmap-action="{{emptyAction.action}}" {{#unless emptyAction}}hidden{{/unless}}>
+        <i class="fas {{emptyAction.icon}}"></i>
+        <span>{{emptyAction.label}}</span>
+      </button>
+    </div>
+
+    {{!-- THE LINE THE READER HAS HOLD OF, and the four things they change about it most.
+
+          WHY IT IS NOT THE DIALOG. Clicking a line used to open a modal window asking six
+          questions, and a window that has to be opened, aimed at and dismissed for each of them is
+          six windows between one thought and the next. What a line SAYS, what colour it is, which
+          way it is read and whether it is broken are the four a table changes while talking, and
+          they are all here. Rubbing the line out is the fifth, and it is the last button on this
+          bar. The sixth, what family tie a line is, is gone with the family tree it drew.
+
+          THE WRITING GOES ONTO THE LINE, AND THERE IS NO BOX ON THE BAR ANY MORE. A caption is
+          words drawn along a stroke, and a reader writing one used to be watching a text field on a
+          strip of chrome instead -- reading their sentence in one place while the thing it belonged
+          to sat underneath still saying something else, and finding out how it really looked only
+          once they had stopped. The field below is still a real `input`, because nothing else gives
+          an IME, a caret, a selection, paste or a screen reader anything to work with -- but it is
+          off the bar (`.stonetop-relmap-tiebar-words` clips it to a pixel) and every keystroke is
+          painted straight onto the line by `_sayLine`. It still takes the focus on opening, which
+          is the whole of "click a line and start typing"; everything else on the bar is a press,
+          and the bar's keydown hands a printable key back to this field from whichever press the
+          reader last made.
+
+          ⚠ INSIDE THE VIEWPORT AND OUTSIDE THE BOARD, which is the same choice the empty panel above
+          makes and matters more here. The board's markup is REPLACED on every live update
+          (`_repaintBoard` writes its innerHTML), so a bar that rode on the board would be destroyed
+          under the reader's hands the moment anybody else at the table moved a portrait -- taking a
+          half-typed caption and the focus with it. Out here it is only re-placed, by `place()`.
+
+          ⚠ AND IT IS `hidden` RATHER THAN ABSENT, for the reason every panel in this window is:
+          `RelmapTieBar` can only write onto markup a render left standing. --}}
+    <div class="stonetop-relmap-tiebar" role="group" aria-label="{{tie.label}}" hidden>
+      {{!-- ⚠ FIRST IN THE MARKUP AND INVISIBLE ON THE BAR. First because that is where the focus
+            lands and where a tab reaches it; invisible because what it holds is drawn on the line.
+            No `placeholder` and no `list`: neither could be seen, and what a line with nothing
+            written on it looks like is a bare stretch of stroke, which is the truth. --}}
+      <input type="text" class="stonetop-relmap-tiebar-words" data-relmap-tie="words"
+             maxlength="{{maxLength}}" aria-label="{{labelField}}"
+             autocomplete="off" spellcheck="false">
+
+      {{!-- THE COLOUR, AS THE ANSWER ON THE BAR AND A PALETTE UNDER IT.
+
+            IT WAS EIGHT DISCS IN A ROW, AND THEN A NAMED CHOOSER, AND IT IS NEITHER NOW. Eight
+            26px discs was a third of a strip that floats over the drawing, spent on one of its four
+            questions. A `select` gave that back and named all eight -- and cost 10.4em of the same
+            bar, wide enough for its longest entry, standing there all the time so that a question
+            nobody is asking went on covering the board. It cost the one press as well: open, find,
+            release, for a colour that used to be one click.
+
+            SO THE QUESTION IS ASKED WHERE THERE IS ROOM FOR IT. What stands on the bar is the
+            ANSWER -- one disc and one word, "Rose" -- and pressing it drops a palette underneath
+            with the colours laid out to be aimed at. One press to open it and one per colour after
+            that, and the palette is over the board only while somebody is actually choosing.
+
+            AND THE PALETTE IS A GRID OF DISCS, EIGHT ACROSS, which is what a table asked for and
+            what forty more colours made necessary. It was two columns with each colour's name
+            printed beside its disc; the same layout would now be eighty rows of text.
+
+            ⚠ AND THE COLOUR IS STILL NEVER THE ONLY THING SAID. Every swatch carries its NAME, in
+            the tooltip and in its spoken label, and the bar goes on saying in words which colour the
+            line is at all times -- so a reader who cannot resolve two colours against each other,
+            and there are two at this table who cannot, still chooses by reading. What is gone is the
+            word printed forty-eight times over, which is not the same thing. That promise is the
+            same one the dash patterns make on the board itself under the high-contrast skin, and it
+            is the one thing the eight-discs-in-a-row version could not keep at all. --}}
+      <div class="stonetop-relmap-tiebar-group stonetop-relmap-tiebar-inks">
+        {{!-- THE ANSWER AS IT STANDS, AND THE WAY IN. The ink class and the word are both written
+              by `RelmapTieBar` on open and on every pick: `slate` here only so the first paint is a
+              colour rather than a hole, and the word empty because a render knows nothing about a
+              line the reader has not clicked yet.
+
+              ⚠ `data-relmap-said` IS THE PATTERN ITS SPOKEN NAME IS BUILT FROM. The bar is a
+              DOM component with no globals and no i18n in it, so the words come in from the render
+              -- the same way the arrow buttons get theirs, and for the same reason. --}}
+        <button type="button" class="stonetop-relmap-tiebar-inkopen" data-relmap-tie="inkopen"
+                aria-haspopup="true" aria-expanded="false" aria-label="{{inkLabel}}"
+                data-relmap-said="{{inkNamed}}" data-tooltip="{{inkLabel}}">
+          <span class="stonetop-relmap-tiebar-inkmark stonetop-relmap-ink--slate"
+                data-relmap-tie-mark="ink" aria-hidden="true">
+            <span class="stonetop-relmap-ink-swatch"></span>
+          </span>
+          <span class="stonetop-relmap-tiebar-inkword" data-relmap-tie-name="ink"
+                aria-hidden="true"></span>
+          <i class="fas fa-caret-down" aria-hidden="true"></i>
+        </button>
+
+        {{!-- THE PALETTE.
+
+              ⚠ A CHILD OF THE BAR, WHICH IS WHAT KEEPS EVERY SWATCH IN IT CLICKABLE. `BOARD_CONTROLS`
+              in the window names `.stonetop-relmap-tiebar` as a thing a press must not start a pan
+              from; a panel opened OUTSIDE it would have its mousedown taken as the start of a pan,
+              and the pointer capture that takes retargets the click at the viewport -- so every
+              swatch in here would be dead on a dead-centre click that never moved a pixel.
+
+              ⚠ AND RENDERED ALWAYS AND HIDDEN, like every other panel over this board, because
+              `RelmapTieBar` can only write onto markup a render left standing. --}}
+        <div class="stonetop-relmap-inkpop" data-relmap-tie-pop="ink" hidden>
+          {{!-- ONE RADIO GROUP OVER BOTH ROWS. The eight and the colours already on the board are
+                one question with one answer -- a line is drawn in exactly one colour -- so they are
+                one group, with one tab stop and the arrow keys running through the whole of it. The
+                `+` and the picker below are OUTSIDE it: they ask a second question rather than
+                answering this one. --}}
+          {{!-- ⚠ `data-relmap-ink-across` IS THE ARROW KEYS AND NOT A STYLE HOOK. Up and Down in
+                here step by a ROW, and this is what a row is; `_across` in utils/relmap-tie-bar.js
+                reads it off whichever button is focused, which is why it sits on the block that
+                holds all three grids rather than on any one of them. It has to be the width the
+                stylesheet actually paints -- see `RELMAP_INK_ACROSS` in relmap/relmap-ink.js, and
+                the test that holds the two together. --}}
+          <div class="stonetop-relmap-inkpop-choices" role="radiogroup" aria-label="{{inkLabel}}"
+               data-relmap-ink-across="{{inkAcross}}">
+            {{!-- THE EIGHT THIS SYSTEM SHIPS, and they stay at the head of the palette because they
+                  are the ones that can do what a hex cannot: each is retuned under the high-contrast
+                  skin and each carries a dash pattern of its own, so a reader who cannot resolve two
+                  of them apart still has the stroke itself telling them which is which.
+
+                  ⚠ THE NAME IS OFF THE SWATCH AND NOT OUT OF THE CONTROL. It was printed beside
+                  every disc, which is what made this two columns wide; a grid of colours is what the
+                  table asked for and a grid is what reads as a palette. But the word was never
+                  decoration -- there are readers at this table who choose by reading -- so it is
+                  still on every swatch, in the tooltip and in the spoken label, and the TRIGGER goes
+                  on saying the colour of the open line in words at all times. What is gone is the
+                  word repeated forty times over; what a reader can still do is rest on a swatch, or
+                  arrow onto it, and be told which colour it is.
+
+                  `data-relmap-name` is how the bar puts that name on the trigger without
+                  knowing a word of English: it reads it off whichever swatch is set. --}}
+            <div class="stonetop-relmap-inkpop-grid">
+              {{#each inks}}
+              <button type="button"
+                      class="stonetop-relmap-inkpop-swatch stonetop-relmap-ink--{{key}}"
+                      data-relmap-tie="ink" data-relmap-tie-value="{{key}}"
+                      data-relmap-name="{{name}}" role="radio" aria-checked="false"
+                      tabindex="-1" aria-label="{{name}}" data-tooltip="{{name}}">
+                <span class="stonetop-relmap-ink-swatch" aria-hidden="true"></span>
+              </button>
+              {{/each}}
+            </div>
+
+            {{!-- THE REST OF THE WHEEL. Forty colours nobody named, offered by the handful rather
+                  than one at a time through the system colour dialog. See `RELMAP_INK_PRESETS` in
+                  relmap/relmap-ink.js, which says what each one costs against the eight above and
+                  why every one of them already clears the floor a line has to clear.
+
+                  ⚠ PRINTED FROM THE MODULE, NOT WRITTEN OUT HERE. A second copy of forty hexes is a
+                  second copy to drift, and the one that would drift silently is this one -- the
+                  swatch would go on showing a colour the board no longer draws.
+
+                  ⚠ AND THE COLOUR RIDES AS `--relmap-ink-raw` UNDER THE `--custom` CLASS, which is
+                  exactly how a line of this colour is painted on the board. Written as `--relmap-ink`
+                  instead, the swatch would sit at the raw colour under the high-contrast skin while
+                  the line it draws was taken 28% darker -- a palette lying about the board in the
+                  one skin whose whole job is to be legible.
+
+                  ⚠ AND EVERY ONE OF THEM IS NAMED, in the tooltip and in the spoken label, for the
+                  same reason the eight above are: the words came off the discs, they did not stop
+                  mattering. `data-relmap-name` is read by the bar to put that name on the
+                  trigger, so a line drawn in one of these says "Deep jade" rather than a hex. --}}
+            <div class="stonetop-relmap-inkpop-grid stonetop-relmap-inkpop-grid--more">
+              {{#each inkPresets}}
+              <button type="button"
+                      class="stonetop-relmap-inkpop-swatch stonetop-relmap-ink--custom"
+                      data-relmap-tie="ink" data-relmap-tie-value="{{hex}}"
+                      data-relmap-name="{{name}}" data-relmap-ink-preset="{{hex}}"
+                      style="--relmap-ink-raw:{{hex}}"
+                      role="radio" aria-checked="false" tabindex="-1"
+                      aria-label="{{name}}" data-tooltip="{{name}}">
+                <span class="stonetop-relmap-ink-swatch" aria-hidden="true"></span>
+              </button>
+              {{/each}}
+            </div>
+
+            {{!-- THE COLOURS ALREADY ON THIS BOARD, which is what "your own colours" means here.
+                  Not a list remembered per reader: a board drawn in one table's colours shows that
+                  table its colours, on every client at it, with nothing stored anywhere to say so.
+                  The window reads them off the graph and `RelmapTieBar` paints them in.
+
+                  ⚠ FIXED SLOTS, RENDERED AND HIDDEN, rather than elements built when they are
+                  wanted -- the house rule for everything over this board: the bar writes onto
+                  markup a render left standing. The whole block goes away on a board with no
+                  colours of its own on it, so a heading over an empty row never appears. --}}
+            <div class="stonetop-relmap-inkpop-mine" data-relmap-tie-mine="ink" hidden>
+              <span class="stonetop-relmap-inkpop-heading">{{inkCustomHeading}}</span>
+              <div class="stonetop-relmap-inkpop-row">
+                {{#each inkCustomSlots}}
+                <button type="button"
+                        class="stonetop-relmap-inkpop-swatch stonetop-relmap-ink--custom"
+                        data-relmap-tie="ink" data-relmap-tie-value=""
+                        data-relmap-ink-slot="{{this}}" data-relmap-said="{{../inkCustomNamed}}"
+                        role="radio" aria-checked="false" tabindex="-1" hidden>
+                  <span class="stonetop-relmap-ink-swatch" aria-hidden="true"></span>
+                </button>
+                {{/each}}
+              </div>
+            </div>
+          </div>
+
+          {{!-- A COLOUR OF THE READER'S OWN. Foundry's own element (`HTMLColorPickerElement`): a hex
+                field and a swatch that opens the system colour dialog, so it is the control this
+                table already knows from every other window in Foundry.
+
+                ⚠ IT OPENS ON THE COLOUR THE LINE IS ALREADY WEARING and writes nothing by itself.
+                The `+` seeds it with that -- rose, if the line is rose -- so the reader starts from
+                where they are rather than from whatever black the element came up holding, and the
+                line keeps its colour until they actually choose another.
+
+                ⚠ RENDERED ALWAYS AND HIDDEN, and unlike the rest of the panels over this board this
+                one is a CUSTOM ELEMENT, which has to have been connected to the document to have
+                built its own two inputs at all. Left out until it was wanted, it would arrive empty.
+
+                ⚠ AND WHAT COMES OUT OF IT IS NOT WHAT GOES ON THE BOARD. A colour under 3:1 against
+                the paper is a line the reader on the magnifier cannot follow, so a pale one is
+                deepened along its own hue before it is written, and the bar says it has done it.
+                See `deepenInk` in relmap/relmap-ink.js. --}}
+          <div class="stonetop-relmap-inkpop-more">
+            <button type="button" class="stonetop-relmap-inkpop-add" data-relmap-tie="inkmore">
+              <i class="fas fa-plus" aria-hidden="true"></i>
+              <span>{{inkCustomField}}</span>
+            </button>
+            <color-picker class="stonetop-relmap-tiebar-hex" data-relmap-tie="inkhex"
+                          aria-label="{{inkCustomField}}" data-tooltip="{{inkCustomField}}"
+                          value="" hidden></color-picker>
+          </div>
+        </div>
+      </div>
+
+      {{!-- WHICH WAY IT IS READ. Four presses and not three, because "no arrow at either end" is
+            an answer as much as the other three are, and is the one most lines want.
+
+            ⚠ THE TWO ONE-WAY BUTTONS ARE NOT LEFT AND RIGHT. Which of the pair is drawn on the left
+            of the board is a fact about where two portraits happen to sit, and it changes when
+            either of them is dragged; a fixed left arrow would mean "towards Sonya" on one board and
+            "towards Mike" on the same board a moment later. So the icons and the words are BOTH
+            written on open, by `RelmapTieBar`, from where the two faces actually are. --}}
+      <div class="stonetop-relmap-tiebar-group stonetop-relmap-tiebar-dirs" role="radiogroup"
+           aria-label="{{dirLabel}}">
+        {{#each dirs}}
+        <button type="button" class="stonetop-relmap-tiebar-btn" data-relmap-tie="dir"
+                data-relmap-tie-value="{{key}}" role="radio" aria-checked="false" tabindex="-1"
+                data-tooltip="{{name}}" aria-label="{{name}}">
+          <i class="fas {{icon}}"></i>
+        </button>
+        {{/each}}
+      </div>
+
+      {{!-- WHETHER THE STROKE IS BROKEN, AND HOW. A mark the reader makes on purpose -- the rumour
+            against the fact, the tie that was against the tie that is -- and not the same thing as
+            the dash an ink wears under the high-contrast skin. See RELMAP_DASHES in
+            relmap/relmap-store.js, which says what that costs and why there are three of them.
+
+            IT WAS A ROW OF PRESSES AND IT IS A CHOOSER NOW, FOR THE REASON THE COLOUR IS ONE. Two
+            26px squares was already a sixth of a strip that floats over the drawing, spent on the
+            question a table asks least of the four; a third answer would have made it a quarter,
+            standing open all evening. So what stands on the bar is the ANSWER -- the stroke this
+            line is actually drawn with -- and the three are laid out under it when it is pressed.
+            One press to open and one per stroke after that, and a fourth kind costs no width at all.
+
+            ⚠ AND THE ANSWER ON THE BAR IS A DRAWN RULE, WITH THE NAME IN WORDS UNDERNEATH IT. The
+            colour's trigger prints its name beside its disc because a colour cannot be read by
+            anybody who cannot resolve it; a stroke IS its shape, and the shape is the same one the
+            line is drawn with, so the sample carries itself. The words are still there -- on the
+            trigger's spoken label and its tooltip, and beside every rule in the panel -- because a
+            18px sample is small, and reading is how the reader on the magnifier chooses. --}}
+      <div class="stonetop-relmap-tiebar-group stonetop-relmap-tiebar-dashes">
+        {{!-- THE ANSWER AS IT STANDS, AND THE WAY IN. Which rule is drawn here, and what the
+              trigger is called, are both written by `RelmapTieBar` on open and on every pick:
+              `solid` here only so the first paint is a line rather than a hole. --}}
+        <button type="button" class="stonetop-relmap-tiebar-dashopen" data-relmap-tie="dashopen"
+                aria-haspopup="true" aria-expanded="false" aria-label="{{dashLabel}}"
+                data-relmap-said="{{dashNamed}}" data-tooltip="{{dashLabel}}">
+          <span class="stonetop-relmap-tiebar-rule stonetop-relmap-tiebar-rule--solid"
+                data-relmap-tie-mark="dash" aria-hidden="true"></span>
+          <i class="fas fa-caret-down" aria-hidden="true"></i>
+        </button>
+
+        {{!-- THE THREE STROKES.
+
+              ⚠ A CHILD OF THE BAR, like the palette above and for the same two reasons:
+              `BOARD_CONTROLS` in the window names `.stonetop-relmap-tiebar` as a thing a press must
+              not start a pan from, and a panel opened outside it would have every row in it killed
+              by the pointer capture that starts one -- and `RelmapTieBar` can only write onto markup
+              a render left standing, so it is rendered always and `hidden`.
+
+              A LIST AND NOT A GRID, which is why there is no `data-relmap-ink-across` on it: a row
+              here is one button, and `_across` answering one is exactly the stride this wants. --}}
+        <div class="stonetop-relmap-dashpop" data-relmap-tie-pop="dash" hidden>
+          <div class="stonetop-relmap-dashpop-choices" role="radiogroup" aria-label="{{dashLabel}}">
+            {{#each dashes}}
+            {{!-- ⚠ A DRAWN RULE AND NOT AN ICON. This was Font Awesome's `fa-ellipsis` for dotted,
+                  which is three dots in a row -- sitting two buttons away from `fa-ellipsis-vertical`,
+                  which is the "everything else" button. Two ellipses side by side on a strip this
+                  small read as one control, and the busier of them at 13px reads as broken type
+                  rather than as a line (the same failure the pin glyphs hit at that size). What each
+                  of these means is a LINE, so each one draws its own.
+
+                  `data-relmap-name` is how the bar puts this stroke's name on the trigger
+                  without a word of i18n in it: it reads it off whichever row is set, exactly as it
+                  reads a colour's name off its swatch. --}}
+            <button type="button" class="stonetop-relmap-dashpop-row"
+                    data-relmap-tie="dash" data-relmap-tie-value="{{key}}"
+                    data-relmap-name="{{name}}"
+                    role="radio" aria-checked="false" tabindex="-1"
+                    data-tooltip="{{name}}" aria-label="{{name}}">
+              <span class="stonetop-relmap-tiebar-rule stonetop-relmap-tiebar-rule--{{key}}"
+                    aria-hidden="true"></span>
+              <span class="stonetop-relmap-dashpop-word" aria-hidden="true">{{name}}</span>
+            </button>
+            {{/each}}
+          </div>
+        </div>
+      </div>
+
+      {{!-- HOW BIG THE WRITING ON THIS LINE IS SET, as a number on the bar and a list under it.
+
+            WHY A LINE HAS THIS AT ALL. Everything else on this bar is what the line MEANS; this is
+            how loudly it says it. A board of forty people is read zoomed in, and the two lines on
+            it a table actually cares about sit in the same twelve-pixel whisper as the thirty-eight
+            that only say who lives next door. It is the same kind of mark as the colour, and it is
+            stored on the line, so everybody at the table sees the board the reader arranged.
+
+            ⚠ THE NUMBER IS THE ANSWER ON THE BAR, which is the third arrangement of the three
+            choosers beside it and the right one here. A colour shows a disc AND its name, because a
+            colour cannot be read by somebody who cannot resolve it. A stroke shows the rule itself,
+            because a stroke IS its shape. A size has a name for the five steps offered and NO name
+            at all for one somebody typed, so the honest answer that is always there is the number.
+            The words are still said on the trigger's spoken label and its tooltip.
+
+            AND THE STEPS SHOW THEMSELVES. Each row in the panel is its own word set at its own
+            size, which is what a reader is actually choosing between; a column of five identical
+            labels would make them read the numbers to find out what the list meant.
+
+            ⚠ THE INLINE SIZE IN THAT SAMPLE IS THE DATUM AND NOT A STYLE. What each step IS is a
+            number, printed here from the one list that holds them (`RELMAP_SIZES`). A class per
+            step would mean writing those numbers again in the stylesheet, where nothing would
+            notice the two lists drifting apart. --}}
+      <div class="stonetop-relmap-tiebar-group stonetop-relmap-tiebar-sizes">
+        {{!-- THE ANSWER AS IT STANDS, AND THE WAY IN. The number here and what the trigger is
+              called are both written by `RelmapTieBar` on open and on every pick: the ordinary
+              size is printed only so the first paint is a number rather than a hole. --}}
+        <button type="button" class="stonetop-relmap-tiebar-sizeopen" data-relmap-tie="sizeopen"
+                aria-haspopup="true" aria-expanded="false" aria-label="{{sizeLabel}}"
+                data-relmap-said="{{sizeNamed}}" data-tooltip="{{sizeLabel}}">
+          <i class="fas fa-text-height" aria-hidden="true"></i>
+          <span class="stonetop-relmap-tiebar-sizeword" data-relmap-tie-mark="size"
+                aria-hidden="true">{{sizeBase}}</span>
+          <i class="fas fa-caret-down" aria-hidden="true"></i>
+        </button>
+
+        {{!-- THE STEPS, AND A FIELD FOR A SIZE NOBODY OFFERED.
+
+              ⚠ A CHILD OF THE BAR, like the two panels above and for the same two reasons:
+              `BOARD_CONTROLS` in the window names `.stonetop-relmap-tiebar` as a thing a press must
+              not start a pan from, and a panel opened outside it would have every row in it killed
+              by the pointer capture that starts one -- and `RelmapTieBar` can only write onto markup
+              a render left standing, so it is rendered always and `hidden`.
+
+              A LIST AND NOT A GRID, so no `data-relmap-ink-across`: a row here is one button, and
+              `_across` answering one is exactly the stride the arrow keys want. --}}
+        <div class="stonetop-relmap-sizepop" data-relmap-tie-pop="size" hidden>
+          <div class="stonetop-relmap-sizepop-choices" role="radiogroup" aria-label="{{sizeLabel}}">
+            {{#each sizes}}
+            {{!-- `data-relmap-name` is how the bar puts this step's name on the trigger without a
+                  word of i18n in it, exactly as the strokes and the swatches above do. --}}
+            <button type="button" class="stonetop-relmap-sizepop-row"
+                    data-relmap-tie="size" data-relmap-tie-value="{{px}}"
+                    data-relmap-name="{{name}}"
+                    role="radio" aria-checked="false" tabindex="-1"
+                    data-tooltip="{{name}}" aria-label="{{name}}">
+              <span class="stonetop-relmap-sizepop-sample" style="font-size: {{px}}px"
+                    aria-hidden="true">{{name}}</span>
+            </button>
+            {{/each}}
+          </div>
+
+          {{!-- A SIZE OF THEIR OWN, WHICH IS THE NINTH COLOUR AGAIN. Five steps are what a table
+                reaches for; the reader on the magnifier wants the one number that works on their
+                screen, and a list they cannot add to is a list that stops short of them.
+
+                ⚠ AND IT IS SHOWN RATHER THAN HIDDEN BEHIND A PRESS, which the colour picker above
+                is not. That one is a whole picker with a swatch, a hex field and a system dialog
+                behind it, and it opens for a colour nobody named; this is one small number field,
+                and a press to reach it would be a press between a reader and the only control on
+                this bar that can give them a size that suits their eyes.
+
+                `min` and `max` are the bounds `readSize` will actually keep, said to the browser
+                as well so the spinner cannot walk out of them. What is TYPED is still held to
+                them on the way through: an input's `min` is not a promise. --}}
+          <label class="stonetop-relmap-sizepop-own">
+            <span class="stonetop-relmap-sizepop-ownword">{{sizeOwnLabel}}</span>
+            <input type="number" class="stonetop-relmap-sizepop-num" data-relmap-tie="sizenum"
+                   min="{{sizeMin}}" max="{{sizeMax}}" step="1" inputmode="numeric"
+                   autocomplete="off" aria-label="{{sizeOwnField}}">
+          </label>
+        </div>
+      </div>
+
+      {{!-- DELETING THE LINE, and it asks nothing first. Every other destructive gesture in
+            this window confirms, and this one deliberately does not: the bar is the surface a
+            reader clicks around on while talking, a confirm on it is the modal this bar exists to
+            be rid of, and one press back on the undo puts the line and everything it said straight
+            back. Set apart from the presses beside it by a rule, because those change a line and
+            this one ends it. --}}
+      <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-tiebar-rub"
+              data-relmap-tie="rub" data-tooltip="{{tie.rub}}" aria-label="{{tie.rub}}">
+        <i class="fas fa-trash"></i>
+      </button>
+    </div>
+
+    {{!-- OPEN THIS BOARD IN A WINDOW OF ITS OWN, in the corner of the board itself.
+
+          ONLY ON A SURFACE THAT HAS SOMEWHERE TO POP OUT FROM, which today means the steading
+          sheet's Relationship Map tab (module/dialogs/RelationshipMapPanel.js sets `canPopOut`).
+          The window never renders it: a window offering to open itself would be a press that
+          brings the reader back to where they already are.
+
+          THE SAME PLACE AND THE SAME MARK AS THE EXPEDITION'S MAP (user, 2026-09-07), which has
+          had a way out to a bigger view since it was built: a small tile in the picture's top
+          right, fading in under the pointer. A reader who wants more room already has their hand
+          over the thing they want more of, so that is where the way out belongs. On the footer
+          row -- where this button first went -- it was a labelled control among the ones that
+          write to the shared board, which is a different kind of thing.
+
+          NOT AN EDIT, so it is outside the `canEdit` gate the tools below sit behind. The reader
+          who wants it most is the one who may only LOOK: they cannot move a portrait to see what
+          is behind it, so more room is the only thing they have.
+
+          ⚠ IT IS INSIDE THE VIEWPORT, so it lives or dies by `BOARD_CONTROLS`. A press the pan
+          surface does not recognise takes a pointer capture, the capture retargets the click at
+          the viewport, and the button is dead on a dead-centre press that never moved a pixel.
+          `[data-relmap-action]` is already named in that list, which is why this needs no entry of
+          its own -- and why it must keep that attribute rather than growing one of its own. --}}
+    {{#if canPopOut}}
+    <button type="button" class="stonetop-relmap-tool stonetop-relmap-popout"
+            data-relmap-action="popout"
+            data-tooltip="{{popOutLabel}}" aria-label="{{popOutLabel}}">
+      <i class="fas fa-expand"></i>
+    </button>
+    {{/if}}
+  </div>
+
+  {{!-- THE FOOTER: WHAT THIS READER SEES, AND WHAT THEY CAN DO.
+
+        EVERYTHING PRESSED AT THIS WINDOW IS ON THIS ONE LINE, and it is under the board rather
+        than over it. The toolbar this replaces stood between the window's title and the page
+        strip, which put three buttons in the path of the two things a reader actually opened the
+        map for: which board is up, and the board. Down here nothing is in that path, the board
+        gains the height the bar was spending, and the controls are still in one place — a corner
+        the eye returns to, and the one where a window's own settings live everywhere else in this
+        system. (The resize grip is in the OTHER corner, which is why the box below sits left and
+        the buttons sit right.)
+
+        LEFT: WHAT IS DRAWN, FOR THIS READER. Right: what changes the board, and what takes a
+        change back. The two halves are the two kinds of thing here — a filter that belongs to one
+        person and writes nothing, against edits that everyone at the table sees — and the width of
+        the window between them says so without a rule.
+
+        THE WORDS ALONG THE LINES, drawn or left off. A filter on what is drawn, belonging to one
+        reader, and the sort of thing looked for once an evening and then left alone.
+
+        ⚠ ALWAYS OFFERED. It stands in the place a narrower box used to — one that put away the
+        lines an old import had written, and appeared only on the boards carrying any — and this
+        one is about a board of forty people rather than about one board's history, so there is no
+        condition to render it behind. Nothing here is destroyed either way, which is why it is
+        the one control in this window a reader who may only look can still press.
+
+        The tooltip is on the LABEL, so resting on either the box or its words explains why anybody
+        would want this — which is not obvious from two words, and is the whole reason the option
+        exists. --}}
+  <div class="stonetop-relmap-foot">
+    <label class="stonetop-relmap-foot-check" data-tooltip="{{labelsHint}}">
+      <input type="checkbox" class="stonetop-check" data-relmap-action="hidelabels"
+             {{#if hideLabels}}checked{{/if}}>
+      <span>{{labelsLabel}}</span>
+    </label>
+
+    {{!-- THE BOARD'S OWN TOOLS, behind the editing gate and nothing else, held against the
+          right-hand edge by an auto margin on the group (`.stonetop-relmap-foot-tools`) rather
+          than by a spacer.
+
+          ⚠ NO "MATCH ANSWERS TO PEOPLE". A GM-only button stood first in this group and drew what
+          the introductions had recorded onto the party's own board, for a table whose answers were
+          taken down before the introductions thought to ask "who is this about?". It is gone: it
+          was a button most tables never had anything for, on the one row every table looks at.
+
+          ⚠ NO "BRING THE PARTY IN" AND NO "BRING THE VILLAGE IN" either. Both boards still seat
+          themselves when the map is opened; what stood here was a pair of buttons asking for the
+          same pass out loud, and the map already answers "somebody is missing from this board"
+          twice over -- drag them on, or press "Add someone".
+
+          ⚠ NO "TIDY UP". It laid the whole board out again, in a shape it asked for each time — a
+          ring seated by who knows whom, or knots pulled together by their links — and it was the
+          one tool here that threw away an arrangement the table had built up over a season in a
+          single press. Where somebody is standing on a board is now only ever where somebody put
+          them.
+
+          ⚠ NO "RUB OUT PULLED-IN LINES". Two buttons stood here in turn. "Pull in ratings" wrote
+          a line into this shared board for every rating anybody in the world had stored, one each
+          way round, and a table that filled its sheets in during the introductions ended up with
+          the handful of ties they drew by hand buried under a hundred they did not. What carries
+          that information now is the board called "The Party", which seats the party by itself
+          and draws what they actually answered about each other.
+
+          The second button was the way out of what the first left behind, and it is gone too. A
+          board somebody pressed the old import on is still carrying every line it made, and what
+          a reader has for that now is the checkbox to the left: it puts those lines away for that
+          reader alone, and rubs nothing out for anybody. One line at a time, the tie bar still
+          rubs one out, with the undo button standing behind it.
+
+          ⚠ NO CAPTIONS CYCLE. A three-way button stood here — every label, labels on hover, no
+          labels — written onto the root as a class. Every caption is drawn now. What rescues a
+          dense board instead is the lighting: resting on a face marks that person's whole web and
+          the stylesheet quiets everything else, which is the question a crowded board is actually
+          being asked. --}}
+    {{#if canEdit}}
+    <div class="stonetop-relmap-foot-tools">
+      {{!-- TAKING A CHANGE BACK, AND PUTTING IT FORWARD AGAIN.
+
+            BEFORE "ADD SOMEONE", AND SET APART FROM IT. These are the only two controls in the
+            window that are about what the READER did rather than about the board, which is why
+            they do not simply run on into the tool beside them: the button that follows carries
+            the window's one filled fill, and that block of colour is the join.
+
+            What they reverse is whatever this reader last did to this board, wherever they were
+            standing when they did it, and each press says out loud what it took back — so unlike
+            "Add someone", the effect is never invisible from where the reader is.
+
+            ⚠ NO WORDS ON THEM, and nothing is lost by taking them off: the two curved arrows are
+            the pair every program on the reader's machine draws these with, and what a press here
+            actually says -- WHICH change it would take back, by name -- was never the word "Undo"
+            on the button but its tooltip and its accessible name, both rewritten on every edit by
+            `_paintHistory`. Without the words the pair reads as one small thing on the row rather
+            than as two more tools. The `<i>` is now all that is inside a button, so
+            the stylesheet takes core's icon-to-label margin back off it; see
+            `.stonetop-relmap-history` for why a glyph-only button is otherwise off centre.
+
+            RENDERED DISABLED AND SWITCHED ON BY `_paintHistory`, never behind an `{{#if}}`. What
+            can be taken back changes on every edit, and buttons that appeared and vanished as the
+            reader worked would shuffle the whole row sideways under the pointer. Their accessible
+            name is written there too, and carries WHAT a press would take back — a reader who
+            cannot see the board is exactly the one who needs telling before they press.
+
+            ⚠ THE HISTORY IS THIS READER'S OWN and is never written to the map: see the head of
+            module/relmap/relmap-history.js for why an undo here is a reversing write rather than a
+            saved copy of the board, and why the table does not share one stack. --}}
+      <span class="stonetop-relmap-history">
+        <button type="button" class="stonetop-relmap-tool" data-relmap-action="undo" disabled
+                data-tooltip="{{undoNothing}}" aria-label="{{undoNothing}}">
+          <i class="fas fa-rotate-left"></i>
+        </button>
+        <button type="button" class="stonetop-relmap-tool" data-relmap-action="redo" disabled
+                data-tooltip="{{redoNothing}}" aria-label="{{redoNothing}}">
+          <i class="fas fa-rotate-right"></i>
+        </button>
+      </span>
+
+      {{!-- PUTTING SOMEBODY ON THE BOARD, and the last press on the row.
+
+            LAST, AND FILLED. It is the only thing in this footer that adds to the board rather
+            than changing what is already on it, and the only button in the window painted with
+            the slate primary (`--st-btn-primary-*`, `.stonetop-relmap-add`) — which is what puts
+            it at the end of the row: a filled button reads as the one thing to press, and a
+            reader who has just opened an empty map should land on it after their eye has passed
+            everything else rather than before.
+
+            THE SAME PRESS THE EMPTY PANEL OFFERS, and deliberately not the same button. The panel
+            over an empty board carries its own "Add someone" because a reader with nothing drawn
+            yet should not have to find the footer; this one is the way back to the picker once
+            there is a board to look at, and it stays whether the board is empty or full. --}}
+      <button type="button" class="stonetop-relmap-tool stonetop-relmap-add"
+              data-relmap-action="add"
+              data-tooltip="{{addHint}}" aria-label="{{addHint}}">
+        <i class="fas fa-user-plus"></i>
+        <span>{{addLabel}}</span>
+      </button>
+    </div>
+    {{/if}}
+  </div>
+
+  {{!-- Spoken to a screen reader when something moves, and deliberately OUTSIDE the board: the
+        board's markup is replaced wholesale on every repaint, and a live region that goes with it
+        is a live region nothing is ever announced from. --}}
+  <div class="stonetop-relmap-live" aria-live="polite" role="status"></div>
+</div>

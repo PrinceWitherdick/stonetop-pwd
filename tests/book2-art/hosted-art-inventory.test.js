@@ -22,12 +22,28 @@ import { readRepo as read } from "../fakes/css.js";
 const COMMAND = JSON.parse(read("packs/src/stonetop-macros/import-book2-art.json")).command;
 
 describe("the importer's on-disk inventory", () => {
-	it("asks the bare data-relative path first, so a self-hosted world is unchanged", () => {
-		expect(COMMAND).toContain("let files = await listOne(`${CONFIG.ROOT}/${dir}`);");
+	// The two questions, and nothing about the statements that ask them. An earlier version of
+	// this file pinned each line whole, which turns a rename or a reformat that preserved the
+	// behaviour perfectly into a red suite reporting a regression that does not exist — the cost
+	// tests/book2-art/gm-playbook-source.test.js has already paid twice.
+	it("asks the bare data-relative path, so a self-hosted world is unchanged", () => {
+		expect(COMMAND).toContain("listOne(`${CONFIG.ROOT}/${dir}`)");
 	});
 
-	it("asks again with the host's observed prefix when the first ask finds nothing", () => {
-		expect(COMMAND).toContain("if (!files.length && prefix) files = await listOne(`${prefix}${CONFIG.ROOT}/${dir}`);");
+	it("asks a second time with the host's observed prefix in front of the art ROOT", () => {
+		// Not `${prefix}${dir}`. The retry is only worth making if it names the same folder the
+		// first ask named: get the root out of it and it is a second useless question, which looks
+		// exactly like a host with no art on it.
+		expect(COMMAND).toContain("listOne(`${prefix}${CONFIG.ROOT}/${dir}`)");
+	});
+
+	it("keeps BOTH listings, so one stale bare file cannot hide the relocated folder", () => {
+		// The trap in "retry only when the first ask found nothing": a world imported self-hosted
+		// and later moved onto a host carries its old Data folder along, and one leftover file there
+		// is enough to satisfy that test and suppress the ask that finds the other 545. The system
+		// side unions the same two answers — see module/book2-art/browse.js `readDir`.
+		expect(COMMAND).toContain("[...viaPrefix, ...bare]");
+		expect(COMMAND).not.toContain("if (!files.length && prefix)");
 	});
 
 	it("takes that prefix from what a previous run OBSERVED, never from an assumption", () => {
@@ -62,7 +78,33 @@ describe("the importer's on-disk inventory", () => {
 	});
 
 	it("loses one unreadable filename rather than the directory it sits in", () => {
-		// decodeURIComponent throws on a malformed %-escape. Wrapped per file, not per listing.
-		expect(COMMAND).toContain("for (const f of files) { try { existingFiles.add(noteServed(decodeURIComponent(f))); } catch (_) { existingFiles.add(noteServed(f)); } }");
+		// decodeURIComponent throws on a malformed %-escape. Wrapped per file, not per listing —
+		// and the fallback is wrapped too, since it re-runs the very call that may have thrown.
+		expect(COMMAND).toContain("existingFiles.add(noteServed(decodeURIComponent(f)));");
+		expect(COMMAND).toMatch(/catch \(_\) \{ try \{ existingFiles\.add\(noteServed\(f\)\); \} catch/);
+	});
+
+	it("treats a listing that is not an array as no listing at all", () => {
+		// `?? []` only substitutes for null/undefined. A host answering `files` as anything else
+		// reaches the spread in the loop and throws from a position no catch is standing at, which
+		// kills the run before a single page is rendered.
+		expect(COMMAND).toContain("Array.isArray(files) ? files : []");
+	});
+
+	it("normalizes the art ROOT's trailing slash too, not only the prefix's", () => {
+		// art-root.js `book2ArtRoot` does exactly this and says why. Copying one half of that pair
+		// and not the other is the drift the prefix comment above warns about, one setting over: a
+		// root typed as "my-art/" keys everything "my-art//assets/..." while the system side reads
+		// "my-art/assets/...", and nothing matches across the two.
+		expect(COMMAND).toContain('"stonetop-book-art").replace(/\\/+$/, "")');
+	});
+
+	it("never publishes an EMPTY prefix over an origin this world already recorded", () => {
+		// A bare data-relative path satisfies `endsWith(key)` with nothing in front, so the first
+		// match rule could derive "" from one leftover file — and that setting is what the system
+		// side asks its second browse with, so clearing it blinds the browse world-wide from the
+		// next load on. First NON-empty wins, matching browse.js's ArtInventory.
+		expect(COMMAND).toContain("if (candidate) { prefix = candidate; break; }");
+		expect(COMMAND).toContain('!(prefix === "" && storedPrefix)');
 	});
 });

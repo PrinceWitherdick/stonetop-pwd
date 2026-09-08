@@ -199,23 +199,86 @@ export function peopleNames(steading) {
  * simply loses the section with no clue why.
  */
 export function steadingPeopleActors(steading) {
+	const seen = new Set();
+	const people = [];
+	for (const list of PEOPLE_LISTS) {
+		for (const actor of steadingListActors(list, steading)) {
+			if (seen.has(actor.id)) continue;
+			seen.add(actor.id);
+			people.push(actor);
+		}
+	}
+	return people;
+}
+
+/**
+ * The live NPC Actors on ONE of the rosters, in sheet order, deduped.
+ *
+ * `steadingPeopleActors` above is both lists at once, which is what a sheet asking "who is there to
+ * rate?" wants. This is one of them, for a caller that means the Residents in particular: the
+ * relationship map's village board seats the people of Stonetop and nobody else, and doing that off
+ * the combined list would put every neighbour on the village's own board.
+ *
+ * Takes the steading rather than finding one, exactly as its neighbour does: a caller that has the
+ * document should not have it looked up again, and a caller that has none means none.
+ *
+ * ⚠ THE PRIMITIVE THE OTHER TWO ARE BUILT ON. `steadingPeopleActors` above is this over both lists
+ * and `personListIndex` below is this remembering which list it was, so there is ONE flag read, one
+ * "is it even an array" guard and one error path between them. Three copies of that walk is how the
+ * combined list and the per-list one come to disagree about who is on the sheet.
+ */
+export function steadingListActors(list, steading = null) {
 	try {
 		const flags = steading?.getFlag?.(SYSTEM_ID, "steading") ?? {};
 		const seen = new Set();
 		const people = [];
-		for (const list of Object.keys(PEOPLE_FOLDERS)) {
-			for (const row of Array.isArray(flags[list]) ? flags[list] : []) {
-				const actor = personRowActor(row);
-				if (!actor || seen.has(actor.id)) continue;
-				seen.add(actor.id);
-				people.push(actor);
-			}
+		for (const row of Array.isArray(flags[list]) ? flags[list] : []) {
+			const actor = personRowActor(row);
+			if (!actor || seen.has(actor.id)) continue;
+			seen.add(actor.id);
+			people.push(actor);
 		}
 		return people;
 	} catch (err) {
-		console.error("Stonetop | could not resolve the steading's people actors", err);
+		console.error(`Stonetop | could not resolve the steading's ${list}`, err);
 		return [];
 	}
+}
+
+/**
+ * Which roster each of the steading's people is on, as `actor id -> "residents" | "neighbors"`.
+ *
+ * ONE PASS FOR A WHOLE WORLD OF ACTORS. The question this answers — "is this person one of ours,
+ * and which list?" — is asked by the people chooser about every NPC in the world at once, and
+ * asking it one actor at a time would re-read the flag and re-resolve every row on each call.
+ *
+ * Residents win a tie, which is the order the sheet lists them in: a person filed on both lists is
+ * a resident who also has a home elsewhere written down, not a neighbour.
+ *
+ * Best-effort like its neighbours here, and logged for the same reason: a missing steading or a
+ * failed read is an empty index, and callers fall back to what each person's own sheet says.
+ */
+export function personListIndex(steading = null) {
+	const village = steading ?? getStonetopSteadingActor();
+	const index = new Map();
+	for (const list of PEOPLE_LISTS) {
+		for (const actor of steadingListActors(list, village)) {
+			if (!index.has(actor.id)) index.set(actor.id, list);
+		}
+	}
+	return index;
+}
+
+/**
+ * The people FOLDER an actor sits in, as a roster name, or "" for anywhere else.
+ *
+ * The second-best answer to "which list is this person on", for somebody whose row has been taken
+ * off the sheet while their sheet stayed: the folder is what filed them there to begin with (see
+ * createPersonNpc), so it still says what they were made as.
+ */
+export function personFolderList(actor) {
+	const name = actor?.folder?.name ?? "";
+	return PEOPLE_LISTS.find(list => PEOPLE_FOLDERS[list].name === name) ?? "";
 }
 
 /**

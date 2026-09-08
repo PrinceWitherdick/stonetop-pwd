@@ -56,7 +56,7 @@
     },
     {
       "name": "Binding Arbitration",
-      "description": "<p>When you <strong><em>bear witness to someone's promise or oath</em></strong>, henceforth you may ask their player if they have kept their word. They must answer honestly. The character need not be present. If they have broken their word, you gain advantage on all rolls against them until they admit their wrong and suffer an appropriate consequence (your call).</p>",
+      "description": "<p>When you <strong><em>bear witness to someone's promise or oath</em></strong>, henceforth you may ask their player if they have kept their word. They must answer honestly. The character need not be present. If they have broken their word, you gain advantage on all rolls against them until they admit their wrongdoing and suffer an appropriate consequence (your call).</p>",
       "rollType": null,
       "requirement": {
         "moves": [
@@ -1441,11 +1441,11 @@
     },
     {
       "name": "Rites of the Land",
-      "description": "<p>Once per season, when you oversee the sacred rites, hold 1 Favor. If you also sacrifice 1 Surplus, hold 4 Favor instead. Spend Favor in lieu of Stock, 1-for-1.</p><p>When you <strong><em>publicly sacrifice something or someone much-loved</em></strong>, either clear a steading debility or gain advantage when the steading next rolls +Fortunes.</p>",
+      "description": "<p>Once per season, when you oversee the sacred rites, hold 1 Boon. If you also sacrifice 1 Surplus, hold 4 Boon instead. Spend Boon in lieu of Stock, 1-for-1.</p><p>When you <strong><em>publicly sacrifice something or someone much-loved</em></strong>, either clear a steading debility or gain advantage when the steading next rolls +Fortunes.</p>",
       "rollType": null,
       "resource": {
         "max": 4,
-        "title": "Favor"
+        "title": "Boon"
       },
       "playbook": "The Blessed"
     },

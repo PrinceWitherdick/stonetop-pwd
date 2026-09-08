@@ -1,5 +1,8 @@
 import { CharacterInventory } from "./CharacterInventory.js";
 import { StonetopFlags } from "./StonetopFlags.js";
+import { stonetopChatCard, rollFormulaChip, rollResultNumber } from "../../utils/chat.js";
+import { multiDieFaces } from "../../utils/roll-engine.js";
+import { escHtml } from "../../utils/strings.js";
 
 /**
  * PROVISIONS — food taken from the wild, and the one inventory track whose size is rolled for
@@ -116,6 +119,44 @@ export async function grantProvisions(actor, uses, { carry = false } = {}) {
 }
 
 /**
+ * The card a haul of provisions comes back on — the house roll card, not Foundry's default.
+ *
+ * It went out for a long time as a bare `toMessage` with a plain string flavor, which is the one
+ * shape that opts a message OUT of our styling: the shell class every rule in the chat block is
+ * scoped to (`.stonetop-roll-card`) rides on the flavor markup, so a card without it takes core's
+ * chrome AND shows Foundry's own dice block, which the rest of the system hides in favour of the
+ * chip. Built out of the shared pieces — chip, result block, total — so a Forage answers in the
+ * same shape as a damage roll or a Die of Fate.
+ *
+ * The faces readout is the MULTI-die one: "1d6" would only echo its own total in the tooltip,
+ * while "2d6kl1" (On the Hoof in winter) has a discarded die worth showing.
+ *
+ * @param {Roll} roll
+ * @param {string} title   card header
+ * @param {string} note    a line under the label — what made the throw what it was
+ * @param {{held: number}|null} larder  the pack after the haul, when there was one
+ */
+function _provisionsCard(roll, title, note, larder) {
+	const faces = multiDieFaces(roll);
+	const uses  = Math.max(0, Math.trunc(roll.total));
+	// Two things a player wants off this card: what the die paid, and what is in the pack now.
+	// The second is only knowable once the write has landed, which is why the card is built after
+	// it rather than before.
+	const details = [note, larder ? `${larder.held} in the pack` : ""].filter(Boolean).join(" • ");
+	const body = `<div class="card-content">
+		${rollFormulaChip(roll.formula, faces)}
+		<div class="stonetop-roll-result">
+			${rollResultNumber(uses, faces)}
+			<div class="stonetop-roll-result-body">
+				<span class="stonetop-roll-result-label">${uses === 1 ? "use" : "uses"} of provisions</span>
+				<span class="stonetop-roll-result-details">${escHtml(details)}</span>
+			</div>
+		</div>
+	</div>`;
+	return stonetopChatCard(title, body, "stonetop-provisions-card");
+}
+
+/**
  * Throw for a haul of provisions and put it in the pack.
  *
  * The one place the die, the clamp and the announcement live, for the three surfaces that pay in
@@ -124,26 +165,32 @@ export async function grantProvisions(actor, uses, { carry = false } = {}) {
  * a die worth showing, and whether the food claims a ◇ — so each keeps its own notification line
  * and nothing else.
  *
+ * The larder is written BEFORE the card goes out, so the card can say what is in the pack now —
+ * and so a write that fails announces nothing for the player to act on. The button that offered
+ * the throw re-enables itself on the error either way.
+ *
  * @param {Actor} actor
  * @param {object} options
  * @param {string} options.formula            anything Foundry's Roll accepts, a flat count included
  * @param {boolean} [options.announce=true]   post the die to chat; a flat count has nothing to show
  * @param {boolean} [options.carry=false]     also mark the ◇ of load
  * @param {object} [options.speaker]          defaults to this actor's
- * @param {string} [options.flavor]           defaults to "Provisions (<formula>)"
+ * @param {string} [options.title]            card header; defaults to "Provisions"
+ * @param {string} [options.note]             a line under the total, e.g. why it was a lean roll
  * @returns {Promise<{uses: number, larder: {gained: number, held: number, max: number}|null}>}
  *          `larder` is null for a throw that paid nothing, which is what the callers gate their
  *          "you gained…" line on; `uses` is reported either way, because a card that offered the
  *          throw has to record that it happened.
  */
-export async function rollProvisions(actor, { formula, announce = true, carry = false, speaker, flavor } = {}) {
+export async function rollProvisions(actor, { formula, announce = true, carry = false, speaker, title, note = "" } = {}) {
 	const roll = await new Roll(formula).evaluate();
+	const uses = Math.max(0, Math.trunc(roll.total));
+	const larder = await grantProvisions(actor, uses, { carry });
 	if (announce) {
 		await roll.toMessage({
 			speaker: speaker ?? ChatMessage.getSpeaker({ actor }),
-			flavor:  flavor ?? `Provisions (${formula})`,
+			flavor:  _provisionsCard(roll, title ?? "Provisions", note, larder),
 		});
 	}
-	const uses = Math.max(0, Math.trunc(roll.total));
-	return { uses, larder: await grantProvisions(actor, uses, { carry }) };
+	return { uses, larder };
 }

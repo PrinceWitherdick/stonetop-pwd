@@ -1,5 +1,5 @@
 import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, HERD_SURPLUS_PER, WEAPONS_SEASON_STEP, WATCH_SEASON_STEP } from "./StonetopSteading.js";
-import { improvementRequirementCount } from "../../utils/improvement-def.js";
+import { improvementRequirementCount, summarizeImprovementGrants } from "../../utils/improvement-def.js";
 import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml} from "../../utils/roll-engine.js";
 import {SteadingLedger} from "./SteadingLedger.js";
 import {TIER_KEYS} from "../../utils/move-results.js";
@@ -36,7 +36,7 @@ import {makeColumnsResizable} from "../../utils/resizable-columns.js";
 import {makeColumnsSortable} from "../../utils/sortable-columns.js";
 import {withSectionEditing} from "../../utils/section-editing.js";
 import {STEADING_IMPROVEMENT_DRAG_TYPE} from "../../journal/steading-improvement-cards.js";
-import {ImprovementBuilderDialog, steadingImprovementSaver} from "../../dialogs/ImprovementBuilderDialog.js";
+import {ImprovementBuilderDialog, improvementEditSaver, steadingImprovementSaver} from "../../dialogs/ImprovementBuilderDialog.js";
 import {PLACE_OF_INTEREST_DRAG_TYPE} from "../../hooks/PlaceOfInterestDrop.js";
 import {getDragEventData, imagePopout, imagePopoutTitle} from "../../utils/foundry-compat.js";
 import {wireCardDropZone} from "../../utils/card-drop-zone.js";
@@ -59,6 +59,7 @@ import {normalizeFrame} from "../../utils/portrait-frame.js";
 import {bindImagePopoutToActor, pointImagePopoutAt, usedActorPortraits} from "../../utils/actor-portrait-picker.js";
 import {openPortraitFrameEditor} from "../../utils/PortraitFrameDialog.js";
 import {localize} from "../../utils/i18n.js";
+import {closeRelmapTab, detachRelmapTab, makeFirstRelationshipMap, relmapTabContext, STEADING_RELMAP_TAB, syncRelmapTab} from "./steading-relmap-tab.js";
 
 /**
  * What the member-photo WINDOW shows, given the path a member actually wears.
@@ -437,7 +438,7 @@ const HOMESTEAD_MOVE_FLOWS = {
 			RESULT.strong("you can get it or sell it for a fair price."),
 			RESULT.weak("the GM picks 1 (below).", "7-9 when buying"),
 			RESULT.weak("you can sell it now, but you won't get its full worth.", "7-9 when selling"),
-			RESULT.miss("don't mark XP. If you still want to acquire/sell it, you'll need to travel elsewhere or wait until next season.", "6- either way"),
+			RESULT.miss("don't mark XP. If you still want to acquire/sell it, you'll need to travel elsewhere or wait until next season, and then try again.", "6- either way"),
 		],
 		pickPools: {
 			partial: [
@@ -499,6 +500,11 @@ export function createStonetopSteadingSheetClass(Base) {
 		// viewer's lens on the list, not a property of the steading, and a player with
 		// read-only access to the actor could not write a flag anyway.
 		_improvementCategory = "";
+		// The relationship map board, once this reader has opened that tab, and null until then.
+		// Held on the SHEET rather than rebuilt per render because it is a long-lived thing with a
+		// reader's zoom, pan and open tie bar in it, and because its first render seats the party
+		// and the village. See steading-relmap-tab.js, which owns every read and write of this.
+		_relmapPanel = null;
 		constructor(...args) {
 			super(...args);
 			this._stonetopSteading = this.actor.typedActor;
@@ -530,6 +536,11 @@ export function createStonetopSteadingSheetClass(Base) {
 			// over an avatar tears out the anchor without firing mouseleave — clear it up front so
 			// no orphaned floating preview is left stuck on screen.
 			removeAvatarPreview();
+			// ⚠ THE RELATIONSHIP MAP BOARD COMES OUT BEFORE THE BODY IS REPLACED, and goes back in
+			// at the foot of this method. It is the SAME element across a re-render, carried over
+			// with its pan, its zoom and its listeners, because rebuilding it would throw away the
+			// corner of the map the reader was looking at every time anything wrote to this steading.
+			detachRelmapTab(this);
 			await super._render(force, options);
 			stampLayoutClass(this, "steading");
 			// Strip any PBTA-injected playbook controls and FoundryVTT chrome from the window header
@@ -540,6 +551,34 @@ export function createStonetopSteadingSheetClass(Base) {
 				header.querySelectorAll(".document-id-link").forEach(el => el.remove());
 			}
 			this._injectHeaderToggle();
+			// ⚠ THE MAP BOARD GOES BACK IN HERE AND NOT IN `activateListeners`, WHICH IS TOO EARLY.
+			// Whether the board is wanted depends on which tab is showing, and a sheet reopened
+			// after a reload does not know that yet at listener time: utils/window-restore.js puts
+			// the reader back on the tab they left from the RENDER hook, which core fires after
+			// `activateListeners` has already run. Wired there, a GM who reloads with the sheet open
+			// on the map would be handed an empty tab until they clicked away and back.
+			//
+			// Off the frame rather than the form, because that is what this method has to hand, and
+			// the form is inside it. Cheap and idempotent on every other render: a board already
+			// mounted is simply moved into the tab this render built, and one that was never opened
+			// is not built now either.
+			syncRelmapTab(this, this.element?.[0]);
+		}
+
+		/**
+		 * ⚠ `super` FIRST AND NOTHING ELSE ABOUT SIZE. Core's own `_onChangeTab` is kept so this
+		 * sheet behaves exactly as it did; what is added is the one thing a tab change can mean
+		 * here, which is a reader arriving on the relationship map for the first time. The board
+		 * is built THEN rather than on every render: it costs a walk of every person and line on
+		 * the map, five global hooks, and (once) the writes that seat the party and the village.
+		 * None of that should happen because somebody opened the sheet to look at the harvest.
+		 *
+		 * Nothing here resizes the sheet, and nothing here may: moving between tabs never changes
+		 * a window's size in this system (tests/actors/tabbed-sheet-height.test.js).
+		 */
+		_onChangeTab(event, tabs, active) {
+			super._onChangeTab(event, tabs, active);
+			if (active === STEADING_RELMAP_TAB) syncRelmapTab(this, this.element?.[0]);
 		}
 
 		_injectHeaderToggle() {
@@ -607,6 +646,11 @@ export function createStonetopSteadingSheetClass(Base) {
 
 		async close(options) {
 			this._clearAllSectionDoneTimers();
+			// ⚠ THE MAP BOARD REGISTERS FIVE GLOBAL JOURNAL HOOKS AND ONLY ITS OWN `close` TAKES
+			// THEM OFF. Left registered they fire on every journal write at the table for the rest
+			// of the session, holding a whole board and its portraits alive behind them, once for
+			// every steading sheet anybody ever opened on that tab.
+			closeRelmapTab(this);
 			// The avatar hover preview lives on document.body, so it survives the sheet's own
 			// DOM being torn down — clear it here or it orphans if the sheet closes (e.g. Escape)
 			// while the cursor is still over an avatar and no mouseleave ever fires.
@@ -714,6 +758,11 @@ export function createStonetopSteadingSheetClass(Base) {
 			// what the steading owes without being handed a control that would refuse them.
 			context.stonetop.holds = this._stonetopSteading.holdsView()
 				.map(h => ({ ...h, interactive: !!h.action && context.stonetop.isGM }));
+			// The Relationship Map tab needs nothing from this actor: the board is a JournalEntry
+			// owned by the whole table, and it mounts itself (see steading-relmap-tab.js). All the
+			// template wants to know is whether the world has a map at all, and if not, whether
+			// this reader is one of the people who may make the first one.
+			context.stonetop.relmap = relmapTabContext();
 			return context;
 		}
 
@@ -726,14 +775,25 @@ export function createStonetopSteadingSheetClass(Base) {
 			mountScrollFrost(this, html);
 			wrapStonetopGlyphsInEl(html[0]);
 
+			// The invitation shown on a world that has no relationship map yet. The BOARD is not
+			// wired here; see the tail of `_render` for why it cannot be.
+			html[0].querySelector("[data-steading-relmap-make]")
+				?.addEventListener("click", () => makeFirstRelationshipMap(this));
+
 			// Residents / Neighbors filters (see utils/tab-search.js). Each is scoped to its own
 			// section so it only hides that section's rows; a row matches on the text of every
 			// cell input (name, occupation, traits, relations, notes, home).
+			//
+			// `searchTerms` lives on the SHEET, not in the DOM, so a live filter survives the
+			// re-render that follows any write and the reader keeps their place (see
+			// utils/tab-search.js). One slot per box, so the two resident sections stay apart.
+			const searchTerms = (this._tabSearchTerms ??= {});
 			const residentRowText = row => [...row.querySelectorAll(".steading-resident-input")].map(i => i.value).join(" ");
 			for (const sec of [".steading-residents-section--residents", ".steading-residents-section--neighbors"]) {
 				wireTabSearch(html[0].querySelector(sec), {
 					itemSel: ".steading-residents-row",
 					textFor: residentRowText,
+					memory: searchTerms, key: sec,
 				});
 			}
 
@@ -744,6 +804,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			wireTabSearch(html[0].querySelector(".tab.improvements"), {
 				itemSel: ".steading-improvement",
 				textFor: card => card.textContent,
+				memory: searchTerms, key: "improvements",
 			});
 
 			// Category chips beside that search box. One lights at a time, and clicking the
@@ -959,7 +1020,10 @@ export function createStonetopSteadingSheetClass(Base) {
 				const hdr = ev.target.closest(".steading-improvement-header");
 				if (!hdr) return;
 				if (ev.target.closest(".steading-improvement-complete-label")) return;
+				// The card's own controls sit inside the header; clicking one is not a click
+				// on the header, or every edit and removal would also toggle the card.
 				if (ev.target.closest(".steading-improvement-remove")) return;
+				if (ev.target.closest(".steading-improvement-edit")) return;
 				const card = hdr.closest(".steading-improvement");
 				if (!card) return;
 				const open = card.classList.toggle("is-open");
@@ -1264,12 +1328,12 @@ export function createStonetopSteadingSheetClass(Base) {
 			wireCardDropZone(html[0].querySelector(".tab.improvements"),
 				STEADING_IMPROVEMENT_DRAG_TYPE, (data) => this._onDropSteadingImprovement(data.improvement));
 
-			// Remove a custom (journal-sourced) improvement.
+			// Edit or remove a custom (journal-sourced) improvement.
 			html[0].addEventListener("click", (ev) => {
-				const btn = ev.target.closest(".steading-improvement-remove");
-				if (!btn) return;
-				ev.stopPropagation();
-				this._onRemoveCustomImprovement(btn.dataset.slug);
+				const remove = ev.target.closest(".steading-improvement-remove");
+				if (remove) { ev.stopPropagation(); this._onRemoveCustomImprovement(remove.dataset.slug); return; }
+				const edit = ev.target.closest(".steading-improvement-edit");
+				if (edit) { ev.stopPropagation(); this._onEditCustomImprovement(edit.dataset.slug); }
 			}, true);
 
 			// Create a custom improvement from a small form (the button counterpart to
@@ -3383,10 +3447,82 @@ export function createStonetopSteadingSheetClass(Base) {
 			new ImprovementBuilderDialog(saver).render(true);
 		}
 
+		/**
+		 * Rewrite an added improvement in place: the same builder window, opened on it, saving
+		 * back over it. Not confirmed, unlike removal: nothing is lost that Cancel does not
+		 * keep, and the write moves no stats (see updateCustomImprovement).
+		 */
+		_onEditCustomImprovement(slug) {
+			if (!slug || !this.isEditable) return;
+			const saver = improvementEditSaver(this._stonetopSteading, slug, () => this.render(false));
+			if (!saver.editing) return;
+			new ImprovementBuilderDialog(saver).render(true);
+		}
+
+		/**
+		 * Remove an added improvement, after asking.
+		 *
+		 * Confirmed rather than immediate, on the same grounds as standing down the muster: the
+		 * control is a small glyph on a card people click around, the authored definition and
+		 * its ticked steps go with it and cannot be got back, and if it was ever completed the
+		 * write MOVES STATS, since removing it gives back what completing it applied. The two
+		 * buttons name the two outcomes, and the body says which of those three things this
+		 * particular improvement will actually do.
+		 */
 		async _onRemoveCustomImprovement(slug) {
-			if (!slug) return;
-			const removed = await this._stonetopSteading.removeCustomImprovement(slug);
-			if (removed) this.render(false);
+			if (!slug || !this.isEditable) return;
+			const steading = this._stonetopSteading;
+			const def = steading.improvementDef(slug);
+			if (!def) return;
+
+			const grants = def.grants ?? null;
+			const completed = steading.improvementCompleted(slug);
+			const ticked = steading.improvementRequirements(slug).filter(Boolean).length;
+			const gives = completed ? summarizeImprovementGrants(grants) : [];
+
+			new Dialog({
+				title: "Remove Improvement",
+				content: `<div class="stonetop-disaster-dialog">
+					<p>Remove <strong>${escHtml(def.label)}</strong> from this steading. Its requirements, its effect and everything written on it go with it, and there is no undo.</p>
+					<div class="stonetop-muster-change">
+						<span class="stonetop-muster-change-head">What changes</span>
+						${gives.length
+							? `<span class="stonetop-muster-change-row">${escHtml(gives.join("; "))}</span>
+								<span class="stonetop-muster-change-why">Completing it applied these, so removing it gives them back.</span>`
+							: `<span class="stonetop-muster-change-row">Nothing else on the sheet.</span>
+								<span class="stonetop-muster-change-why">${completed
+									? "It is complete, but nothing was applied automatically."
+									: "It was never completed, so nothing was applied to give back."}</span>`}
+						${ticked ? `<span class="stonetop-muster-change-why">${ticked} ticked requirement${ticked === 1 ? "" : "s"} will be forgotten.</span>` : ""}
+					</div>
+					<p class="stonetop-rites-note">A homebrew card in the journal is a separate copy and is not touched; this only removes it from this steading.</p>
+				</div>`,
+				buttons: {
+					yes: {
+						icon: '<i class="fas fa-trash"></i>',
+						label: `Remove ${def.label}`,
+						callback: () => this._applyRemoveCustomImprovement(slug),
+					},
+					no: {
+						icon: '<i class="fas fa-screwdriver-wrench"></i>',
+						label: "Keep it on the steading",
+					},
+				},
+				default: "no",
+			}, { classes: ["dialog", "stonetop", "stonetop-disaster-move-dialog"] }).render(true);
+		}
+
+		/** The write behind the confirm, split out so the button is a one-liner. */
+		async _applyRemoveCustomImprovement(slug) {
+			const result = await this._stonetopSteading.removeCustomImprovement(slug);
+			if (!result) return;
+			this.render(false);
+			// "Reverted" rather than "Given back", matching what un-completing an improvement
+			// says: the summary lists what completing it APPLIED, so any other verb in front of
+			// "Fortunes +1" reads as though Fortunes had just gone up.
+			ui.notifications?.info?.(result.reverted.length
+				? `Removed ${result.label}. Reverted: ${result.reverted.join("; ")}.`
+				: `Removed ${result.label}.`);
 		}
 	};
 }

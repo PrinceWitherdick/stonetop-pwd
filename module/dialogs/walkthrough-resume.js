@@ -104,6 +104,17 @@ export function sessionZeroComplete() {
 	return !!(done.introductions && done.springBurst);
 }
 
+// Has the Welcome guide stopped auto-opening? True once the GM ticked "Don't show this
+// automatically" (which sets gmWelcomeShown) or finished both session-zero walkthroughs.
+//
+// The gate every one-time GM nudge holds behind, stated once: while a fresh world is still
+// being greeted, a second card about art or an optional module is noise at the moment the GM
+// has the most to read. Each caller deliberately does NOT latch on a false - a world sits here
+// legitimately for several loads, so the nudge asks again next time.
+export function pastWelcomeGuide() {
+	return !!getSetting("gmWelcomeShown") || sessionZeroComplete();
+}
+
 // Open an app and resolve once it has actually rendered. The v1 Application render()
 // is fire-and-forget (it returns `this`, not the render promise), so we listen for
 // its `render<ClassName>` hook; a safety timeout resolves anyway so the chain can

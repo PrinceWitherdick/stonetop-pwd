@@ -1,6 +1,6 @@
-import {escHtml, stripHtmlToText} from "./strings.js";
-import {isReferenceList, pickLimitsFrom} from "./move-picks.js";
-import {MOVE_TIERS_CLASS} from "./move-results.js";
+import {escHtml, stripHtmlToText, decodeEntities} from "./strings.js";
+import {isReferenceList, pickLimitsFrom, pickTiersFrom} from "./move-picks.js";
+import {MOVE_TIERS_CLASS, TIER_KEYS} from "./move-results.js";
 
 // The tier ladder's own `<ul>`, recognised in an attribute string — see `firstOptionList`.
 const _LADDER_CLASS_RE = new RegExp(`\\bclass="[^"]*\\b${MOVE_TIERS_CLASS}\\b`, "i");
@@ -182,6 +182,27 @@ export function postListCard(actor, title, rowsHtml) {
 }
 
 /**
+ * Whisper a card to the GMs, in the one shape every such card uses: no speaker actor, the
+ * system's own name in the alias, and the recipient list resolved at post time.
+ *
+ * Stated once because four callers post one - the book-art offer, the layout card, the
+ * FXMaster nudge and the Book 2 art reminder - and every one of them is a whisper that a
+ * player must never see. A copy that dropped the `whisper` array would not fail loudly; it
+ * would just post GM housekeeping into the table's chat log.
+ *
+ * @param {string} content  Pre-built card HTML.
+ * @returns {Promise<ChatMessage|null>} The created message, or null if chat is not up yet.
+ */
+export async function whisperGm(content) {
+	if (!globalThis.ChatMessage?.create) return null;
+	return (await ChatMessage.create({
+		content,
+		whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
+		speaker: { alias: "Stonetop" },
+	})) ?? null;
+}
+
+/**
  * Post a guided-move summary card to chat.
  * @param {Actor} actor
  * @param {string} title   Move name shown in the card header.
@@ -292,18 +313,96 @@ export function pickableMoveDescription(description) {
 	// prose and take the spiral bullets every other prose list on these surfaces already wears.
 	if (isReferenceList(lead)) return html;
 
-	const limits = pickLimitsFrom(lead);
+	// The prose UNDER the bullets, which both questions below need: Formidable, Burgle and Trade &
+	// Barter all state their 6- in a paragraph beneath their list, so a reader that stopped at the
+	// lead-in had nothing to say about the tier a player most needs held to its count.
+	const below = stripHtmlToText(html.slice(list.index + list.length));
+	// HOW MANY each tier may take. `below` fills in only the tiers the lead-in left silent, and only
+	// where it names them — see pickLimitsFrom, which explains why it may not simply be concatenated.
+	const limits = pickLimitsFrom(lead, below);
+	// WHICH tiers reach this list, beside how many each may take. A roll card carries every tier's
+	// options and shows the one it landed on, and a tier that never sends the reader here at all
+	// (Helior's Unblinking Eye's "the GM makes a move", Clash's 7-9, Forage's barren land) had no
+	// way to say so: it stamped no count, which read as "uncapped", and a miss printed the move's
+	// three options under a "0 options selected" as though the player still had a choice to make.
+	// Read from the WHOLE move, lead-in and the prose below the bullets both.
+	const tiers = pickTiersFrom(`${lead} ${below}`);
 	// (pickListItem is exported below — one emitter for the two surfaces that print these.)
 	const limitAttrs = typeof limits === "number"
 		? ` data-pick-max="${limits}"`
 		: Object.entries(limits ?? {}).map(([tier, n]) => ` data-pick-max-${tier}="${n}"`).join("");
+	// Stamped only when a tier was actually read. An empty answer is "nothing is known", and the
+	// reader (utils/pick-tally.js#tierOffersPicks) must go on showing the list for it.
+	const tierAttr = tiers.length ? ` data-pick-tiers="${tiers.join(" ")}"` : "";
 
 	// The item's own markup, raw: it carries the move's ◇/○/□ glyphs and emphasis, and the
 	// description it came from is rendered raw by moveChatCard for exactly that reason.
 	const items = list.items.map((inner, i) => pickListItem(inner, i)).join("");
 	return html.slice(0, list.index)
-		+ `<ul class="stonetop-picklist"${limitAttrs}>${items}</ul>`
+		+ `<ul class="stonetop-picklist"${limitAttrs}${tierAttr}>${items}</ul>`
 		+ html.slice(list.index + list.length);
+}
+
+/**
+ * One printed option, reduced to the words that identify it.
+ *
+ * Two spellings of one option compare equal: a bullet authored in a book carries a typographic
+ * apostrophe, the same bullet read back out of rendered HTML carries a numeric entity, and a
+ * bullet retyped in a lookup table carries a plain one. Down to letters and digits, because none
+ * of what separates "enemy's attack" from "enemy&#x27;s attack" is the option.
+ *
+ * ONE NORMALISER, because more than one surface now matches an option by its text: this module
+ * asks it of a move's printed list, and combat/attack-flow.js#PICK_EFFECTS asks it to find out
+ * what a ticked bullet DOES. A miss is silent — it turns a match into a mismatch, and the tick
+ * that should have added a die adds nothing — so the two must be the same reduction, not two
+ * reductions that happen to agree today.
+ *
+ * Through `decodeEntities` and not a decoder written here: strings.js says in its own header that
+ * there used to be two and neither was a superset of the other, so text routed through the wrong
+ * one came out with raw entities still in it.
+ */
+export function optionKey(text) {
+	return decodeEntities(stripHtmlToText(text))
+		.replace(/[^a-z0-9]+/gi, " ")
+		.trim()
+		.toLowerCase();
+}
+
+/**
+ * Which result tiers already have the move's options on the card as ticked boxes -- read back out
+ * of the description the card is about to render, rather than declared beside it.
+ *
+ * THE RESULT BLOCK MUST NOT SAY THE LIST AGAIN. A tier's outcome text is composed from
+ * `system.moveResults` and spells its options out in prose ("...and pick 1: Avoid, prevent, or
+ * counter your enemy's attack / Strike hard and fast..."). With the same options sitting as boxes
+ * a few lines above, that is one choice printed twice on one card, once unclickable. A tier
+ * answered here prints its lead-in alone ("...and pick 1.") and lets the boxes be the list -- the
+ * rule roll-engine.js already applies to a move that declares `system.pickOptions`, reaching the
+ * moves that state their options in their own prose instead.
+ *
+ * A predecessor asked this of a tier's CONTROLS, back when a card could restate a move's list as
+ * pick radios under the result (combat/attack-flow.js, which no longer does). Asking it of the
+ * description instead is both narrower and truer: there is one list now, this is where it is, and
+ * the answer comes from the very markup being rendered rather than from a second producer whose
+ * words had to be compared against the move's.
+ *
+ * TIER BY TIER, off the stamp `pickableMoveDescription` already writes: Clash's two bullets belong
+ * to its 10+ and its 7-9 names no pick at all, so a 7-9 whose own text HAS options to state must
+ * go on stating them. An unstamped list is one nothing could read a tier off, and it shows on
+ * every tier -- so it answers for every tier.
+ *
+ * @param {string} description  The card's description HTML, after pickableMoveDescription.
+ * @returns {string[]} Tier keys in ladder order; empty when the description carries no boxes.
+ */
+const _PICKLIST_OPEN_RE = /<ul class="stonetop-picklist"([^>]*)>/i;
+
+export function descriptionPickTiers(description) {
+	const open = _PICKLIST_OPEN_RE.exec(String(description ?? ""));
+	if (!open) return [];
+	const stamped = /data-pick-tiers="([^"]*)"/i.exec(open[1])?.[1];
+	if (!stamped) return [...TIER_KEYS];
+	const named = new Set(stamped.split(/\s+/).filter(Boolean));
+	return TIER_KEYS.filter(tier => named.has(tier));
 }
 
 /**

@@ -1,0 +1,46 @@
+{{!-- THE RELATIONSHIP MAP, in the sheet rather than in a window.
+
+      The body of this tab IS the board's own window body: the strip of named boards, the pan and
+      zoom viewport, the footer and the tie bar, all of it the same markup
+      (templates/dialogs/relationship-map.hbs) rendered by the same class. Nothing about the map is
+      written out here; this file is only the socket it plugs into.
+
+      ⚠ THE SECTION IS EMPTY ON PURPOSE. `RelationshipMapPanel._injectHTML` replaces its children
+      with the rendered board, and the mount is found by `[data-steading-relmap]`. It is left empty
+      by the template rather than filled with a placeholder because a board arriving beside a
+      placeholder would say two things at once, and because the board is mounted LAZILY: nothing at
+      all is built until the reader actually opens this tab (see steading-relmap-tab.js).
+
+      ⚠ NO `display` ON THE `.tab` ELEMENT, here or in the stylesheet. Core's `.tab { display: none }`
+      sits in a layer, so an unlayered `display` on the panel out-ranks it and the panel shows on
+      every tab of the sheet at once. The full-height chain lives on the inner <section> and is
+      paired with an explicit re-hide, exactly as the Notes tab does. --}}
+<div class="tab relmap" data-group="primary" data-tab="relmap">
+	<section class="sheet-tab steading-relmap" data-steading-relmap>
+		{{!-- A world with no relationship map on it. Every world is GIVEN one during setup
+		      (module/relmap/relmap-make.js), so this is what a GM who has deleted that map sees --
+		      and it is why the button asks what the next one is called rather than minting a second
+		      "Stonetop" over the answer they just gave. The board cannot render without a map, so the
+		      tab offers to make one rather than standing empty.
+
+		      ⚠ MAKING A MAP AND EDITING ONE ARE DIFFERENT RIGHTS. Every map is owned by the whole
+		      table, so any player can move portraits and write captions on one; creating a
+		      JournalEntry needs a trusted role. The button is hidden rather than disabled and the
+		      line below says who can, which is what the hotbar macro says in the same situation. --}}
+		{{#unless stonetop.relmap.hasMap}}
+		<div class="steading-relmap-invite">
+			<p class="steading-relmap-invite-lead">{{localize "stonetop.relmap.tab.emptyLead"}}</p>
+			{{#if stonetop.relmap.canCreate}}
+			<p class="steading-relmap-invite-hint">{{localize "stonetop.relmap.tab.emptyHint"}}</p>
+			<button type="button" class="stonetop-cta steading-relmap-make" data-steading-relmap-make>
+				<i class="fas fa-diagram-project"></i>
+				<span>{{localize "stonetop.relmap.tab.makeMap"}}</span>
+			</button>
+			{{/if}}
+			{{#unless stonetop.relmap.canCreate}}
+			<p class="steading-relmap-invite-hint">{{localize "stonetop.relmap.maps.cannotCreate"}}</p>
+			{{/unless}}
+		</div>
+		{{/unless}}
+	</section>
+</div>

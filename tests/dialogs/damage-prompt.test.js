@@ -286,9 +286,13 @@ describe("the damage window's reach", () => {
 	it("asks before it locks the attack card or spends ammo", () => {
 		const body = ATTACK_FLOW_JS.slice(ATTACK_FLOW_JS.indexOf("async function resolveAttackTier"));
 		const asked = body.indexOf("askDamageAdjustment");
-		const locked = body.indexOf("lockAttackCard(message, root, { pick:");
+		// The lock that ENDS A DAMAGE ROLL, named by the record it writes. Call the Shot's "do no
+		// harm" locks earlier and returns, which is not this rule breaking but the tier having no
+		// roll to ask about: nothing is spent and no window opens on that path.
+		const locked = body.indexOf("lockAttackCard(message, root, { yourCall, targets })");
 		const spent = body.indexOf("depleteAmmoAndPost");
 		expect(asked).toBeGreaterThan(-1);
+		expect(locked).toBeGreaterThan(-1);
 		expect(asked).toBeLessThan(locked);
 		expect(asked).toBeLessThan(spent);
 	});

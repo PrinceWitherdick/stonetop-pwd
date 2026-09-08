@@ -788,7 +788,7 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	/**
-	 * Draw one exploration move at random, land the light on it, and whisper it to the GM.
+	 * Draw one exploration move at random, land the light on it, and post it to the table.
 	 *
 	 * The rail lists the same seven moves off the same table as the GM Toolkit's Exploration
 	 * group, so it presses the same drawer (gm-move-drawer.js) — the beat order, the

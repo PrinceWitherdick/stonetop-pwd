@@ -14,6 +14,7 @@ import {
 	gmPrepCardTemplate, gmPrepCardVM, gmPrepPageById, isGmPrepDoc, wireGmPrepCardExtras,
 } from "../journal/gm-prep-page.js";
 import { renderTemplate } from "../utils/foundry-compat.js";
+import { coalesceMicrotask } from "../utils/coalesce.js";
 
 // Hazard and site pins ride the same board: all three cards share the threat card's markup
 // conventions (doom checkboxes, wrapper classes), so only the template + VM differ — and which
@@ -25,7 +26,7 @@ export class ThreatBoard {
 		this.layer = null;
 		this.cards = new Map();      // noteId -> { el: card element, note: placeable }
 		this._bound = false;
-		this._refreshQueued = false;
+		this._sched = null;          // the coalescing wrapper, made on first _schedule()
 	}
 
 	get enabled() { return !!getSetting("threatOnCanvasCards"); }
@@ -49,16 +50,11 @@ export class ThreatBoard {
 			});
 	}
 
-	/** Coalesce bursts (multi-note ops, a page edit) into one rebuild next microtask. */
+	/** Coalesce bursts (multi-note ops, a page edit) into one rebuild next microtask. Built on the
+	 *  first call rather than in the constructor, so a board that is never scheduled never makes one. */
 	_schedule() {
-		if (this._refreshQueued) return;
-		this._refreshQueued = true;
-		Promise.resolve()
-			.then(() => { this._refreshQueued = false; this.refresh(); })
-			// The latch is cleared above before refresh() runs, so a throw here can't wedge the
-			// board — but without the catch it would surface as an unhandled rejection with no
-			// hint that it came from a note edit.
-			.catch(err => console.error("Stonetop | threat board refresh failed", err));
+		this._sched ??= coalesceMicrotask(() => this.refresh(), "Stonetop | threat board refresh failed");
+		this._sched();
 	}
 
 	_threatNotes() {

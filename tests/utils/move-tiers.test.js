@@ -117,14 +117,18 @@ describe("moveTiersHtml", () => {
 		expect(moveTiersHtml(CLASH)).toContain('<ul class="stonetop-roll-result-picks">');
 	});
 
-	it("keeps only the lead-in when the description already bullets those options", () => {
+	// The colon goes with the options it introduced. A lead-in is cut at that colon on purpose
+	// (strings.js#splitPickList), so a row that drops the list and keeps the colon trails off
+	// mid-sentence pointing at nothing — "Pick 1:" and then the row ends.
+	it("keeps only the lead-in when the description already bullets those options, closed off", () => {
 		const listed = [
 			"Avoid, prevent, or counter your enemy's attack",
 			"Strike hard and fast, for 1d6 extra damage, but suffer your enemy's attack",
 		];
 		const html = moveTiersHtml(CLASH, listed);
 		expect(html).not.toContain('<ul class="stonetop-roll-result-picks">');
-		expect(html).toContain("and pick 1:");
+		expect(html).toContain("and pick 1.");
+		expect(html).not.toContain("and pick 1:");
 	});
 
 	it("matches an abridged option against the description's fuller wording (Formidable)", () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { readRepo as read } from "../fakes/css.js";
 import {
 	RULEBOOKS, RULEBOOKS_SETTING, rulebook, rulebookPaths, rulebookPath, hasRulebook,
 	saveRulebookPath, rulebookViewerUrl, isSpreadsEdition, spreadPageFor,
@@ -143,6 +144,41 @@ describe("printed pages and pages of the file", () => {
 
 	it("agrees with the page the art manifest was measured at", () => {
 		expect(spreadPageFor(412)).toBe(207);
+	});
+
+	// THE ARITHMETIC, CHECKED AGAINST MEASUREMENT RATHER THAN AGAINST ITSELF.
+	//
+	// Every example above is a number this file chose, which means all four of them would still
+	// pass if the mapping were off by a constant. The shipped art importer carries the only
+	// independent record of the answer there is: 348 illustrations, each one cut out of a page of
+	// a real spreads PDF by hand, each row naming BOTH the sheet it was cut from (`pdfPage`) and
+	// the page number printed on it (`printed`). Somebody looked at both of those, for every row,
+	// on both books.
+	//
+	// So this is the test that would catch a page citation quietly landing on the wrong sheet,
+	// which is a failure with nothing to see: the book opens, a page appears, and it is simply
+	// not the page that was cited.
+	it("lands on the sheet the art importer measured, for every illustration in the manifest", () => {
+		const macro = JSON.parse(read("packs/src/stonetop-macros/import-book2-art.json")).command;
+		// Off the shipped macro's own source, because that is where the measured table lives; a
+		// copy of it here would be a copy of the thing under test.
+		const rows = [...macro.matchAll(/\{[^{}]*?"pdfPage"[^{}]*?\}/g)]
+			.map(m => m[0])
+			.map(row => ({
+				pdf:     Number(row.match(/"pdfPage":(\d+)/)?.[1]),
+				printed: Number(row.match(/"printed":(\d+)/)?.[1]),
+				// The rows say `book` only when it is not Book I, exactly as a citation does.
+				book:    Number(row.match(/"book":(\d+)/)?.[1] ?? 1),
+			}))
+			.filter(row => row.pdf > 0 && row.printed > 0);
+
+		// A guard on the reading, not on the mapping: a regex that stopped matching would leave
+		// this suite passing on nothing at all.
+		expect(rows.length).toBeGreaterThan(300);
+		expect(rows.some(r => r.book === 2)).toBe(true);
+
+		const wrong = rows.filter(r => spreadPageFor(r.printed) !== r.pdf);
+		expect(wrong).toEqual([]);
 	});
 
 	it("has no answer for something that is not a page", () => {

@@ -14,7 +14,7 @@ import { book2ArtSrc } from "../book2-art/art-root.js";
 import { getObjectSetting } from "../settings.js";
 import { localize } from "../utils/i18n.js";
 import { GM_CORE_LOOP, GM_FLOW_OF_PLAY } from "./gm-loop-text.js";
-import { bookPageRef } from "./book-ref.js";
+import { bookPageCites } from "./book-ref.js";
 
 /**
  * The diagrams the tab shows, in the order the playbook prints them (core loop on the left-hand
@@ -67,7 +67,7 @@ export function gmDiagrams() {
 			numbered: d.numbered,
 			// The chart as text, with each stage's chapter citation resolved. Always present:
 			// the picture is the optional half of this tab, not this.
-			steps: d.steps.map(step => ({ ...step, pageRef: bookPageRef(step) })),
+			steps: d.steps.map(step => ({ ...step, pageCites: bookPageCites(step) })),
 		};
 	});
 }

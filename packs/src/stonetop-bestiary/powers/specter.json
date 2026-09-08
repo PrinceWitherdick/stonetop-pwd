@@ -10,7 +10,7 @@
       },
       "armor": {
         "value": 1,
-        "source": "lacks vitals"
+        "source": "lacks organs"
       },
       "damage": {
         "value": "telekinesis d10+2 (hand, close, near, grabby, forceful)",

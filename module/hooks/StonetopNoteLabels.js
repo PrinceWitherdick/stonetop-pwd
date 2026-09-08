@@ -1,5 +1,5 @@
 import { systemAssetVariants } from "../migration/compat.js";
-import { showMapPinNamesOn } from "../settings.js";
+import { localMapPinNameOverride, showMapPinNamesOn } from "../settings.js";
 import { LANDMARK_ICON_SUFFIX } from "./PlaceOfInterestDrop.js";
 import { SITE_PIN_ICON_SUFFIX, THREAT_PIN_ICON_SUFFIX } from "../journal/gm-prep-page.js";
 // Make Stonetop map-note labels legible over busy hand-drawn maps.
@@ -67,8 +67,15 @@ const _PILL_RADIUS = 10;
 const _PILL_PAD_X = 16;
 const _PILL_PAD_Y = 6;
 
-/** True when this note is one of ours, judged by its icon texture. */
-function _isStonetopMapNote(noteDoc) {
+/**
+ * True when this note is one of ours, judged by its icon texture.
+ *
+ * Exported because the eye button beside the sidebar (hooks/MapPinNameToggle.js) asks the same
+ * question for a different reason: it only offers itself on a scene that actually carries our
+ * pins, and "ours" has to mean here exactly what it means to the labelling below, or the button
+ * would appear on maps it governs nothing on and hide on maps it does.
+ */
+export function isStonetopMapNote(noteDoc) {
 	const src = noteDoc?.texture?.src;
 	if (!src) return false;
 	return _OUR_NOTE_ICONS.some((prefix) => src.includes(prefix));
@@ -115,10 +122,16 @@ function _showPermanentLabel(note) {
 	// for with the mouse is not a label - it is an anonymous blob on somebody else's artwork. The
 	// journey dialog's site pins already made this exact exception (expedition-journey-pins.hbs);
 	// this is the same mark on the table's own map, so it answers the same way.
-	if (!family.alwaysLabel) {
-		const scene = doc?.parent ?? globalThis.canvas?.scene ?? null;
-		if (!showMapPinNamesOn(scene)) return;
-	}
+	//
+	// IT IS SUBJECT TO THE READER'S OWN BUTTON, though, and the difference is the whole reason the
+	// two are asked separately here. The exemption above is about a CONFIGURED default nobody set
+	// with this scene in front of them; the eye beside the sidebar is someone looking at this map
+	// and saying "quiet". If a site ignored that too, pressing the button on a scene carrying only
+	// site pins would change nothing on screen and read as a broken control.
+	const scene = doc?.parent ?? globalThis.canvas?.scene ?? null;
+	if (family.alwaysLabel) {
+		if (localMapPinNameOverride(scene) === false) return;
+	} else if (!showMapPinNamesOn(scene)) return;
 	if (note.tooltip) note.tooltip.visible = true;
 }
 
@@ -171,7 +184,7 @@ function _redrawPill(note) {
 export function onDrawStonetopNote(note) {
 	if (!note) return;
 	if (typeof note._getTextStyle !== "function") return;
-	if (!_isStonetopMapNote(note.document)) return;
+	if (!isStonetopMapNote(note.document)) return;
 
 	// Wrap the instance methods once; the pill graphic itself is (re)built below so it
 	// survives a redraw (which destroys children but keeps these instance overrides).

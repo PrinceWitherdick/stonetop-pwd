@@ -96,3 +96,60 @@ export function openSharedRulebook(book) {
 	ui.notifications?.warn?.(format("stonetop.books.notShared", { title: bookTitle(book) }));
 	return null;
 }
+
+/**
+ * A page CITATION, followed: the book open at the page the sheet was pointing at.
+ *
+ * Same three-way answer as `openRulebook` above, and for the same reasons -- a book this world
+ * has opens, a book it has not opens the setup rather than doing nothing -- with one case those
+ * icons cannot reach: a citation may name a book the reader knows nothing about. `book: 3` is
+ * the free GM playbook, a real value elsewhere in this codebase (gm-toolkit/book-ref.js cites
+ * it), and it has no row in RULEBOOKS because nothing can open it. Handing that number to the
+ * setup would show a window listing two books, neither of them the one that was clicked.
+ *
+ * The page goes down as `printedPage`, never as a page of the file. The two differ by the whole
+ * of the spreads mapping and only the reader, holding the loaded document, can tell whether that
+ * mapping applies -- see `goToPrintedPage`.
+ *
+ * @param {number} book     the book a citation names
+ * @param {number} printed  the page number PRINTED in that book's corner
+ */
+export function openBookPage(book, printed) {
+	if (!rulebook(book)) return null;
+	if (!hasRulebook(book)) {
+		openRulebooksDialog();
+		return null;
+	}
+	return openBookReader(book, { printedPage: printed });
+}
+/**
+ * Follow a click on a `stonetop.book-page-cite` chip, if that is what was clicked.
+ *
+ * WHERE THE PARTIAL'S BEHAVIOUR LIVES. The chip is a globally precached partial styled at system
+ * scope, so any surface may print one — and a run of citation chips that look pressable and do
+ * nothing is what a caller gets if the only thing that makes them work is a branch inside one
+ * sheet's own click handler.
+ *
+ * The PRINTED page goes down, never a page of the file: the two differ by the spreads mapping, and
+ * only the reader (holding the loaded document) can tell whether that mapping applies to the
+ * edition this GM owns.
+ *
+ * Answers whether it handled the click, so a host with one delegated listener and a chain of
+ * `closest` checks can ask this as one link in that chain rather than adding a second listener.
+ *
+ * @param {EventTarget} target  the event's target.
+ * @returns {boolean}  true when a citation was found and followed.
+ */
+export function followBookCite(target) {
+	const cite = target?.closest?.(".stonetop-book-cite");
+	if (!cite) return false;
+	openBookPage(Number(cite.dataset.book), Number(cite.dataset.page));
+	return true;
+}
+
+/** Make every citation chip under `root` work, for a surface that has no click chain of its own. */
+export function wireBookCites(root) {
+	root?.addEventListener?.("click", ev => {
+		if (followBookCite(ev.target)) ev.preventDefault();
+	});
+}

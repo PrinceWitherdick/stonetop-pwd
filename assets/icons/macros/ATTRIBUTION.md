@@ -15,6 +15,7 @@ Where our filename differs from the original, the game-icons.net source name is 
 | introductions.svg | conversation | Lorc | https://lorcblog.blogspot.com |
 | love-letter.svg | love-letter | Delapouite | https://delapouite.com |
 | magnifying-glass.svg | magnifying-glass | Lorc | https://lorcblog.blogspot.com |
+| relationship-map.svg | checkbox-tree | Lorc | https://lorcblog.blogspot.com |
 | spell-book.svg | spell-book | Delapouite | https://delapouite.com |
 | sun-cloud.svg | sun-cloud | Delapouite | https://delapouite.com |
 | treasure-map.svg | treasure-map | Lorc | https://lorcblog.blogspot.com |

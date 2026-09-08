@@ -1,4 +1,4 @@
-import { improvementRequirementCount } from "../../utils/improvement-def.js";
+import { flatRequirementItems, improvementRequirementCount } from "../../utils/improvement-def.js";
 
 // ── What the steading's improvements do when the Seasons Change ──────────────────
 // Ten of the book's improvements end in a "Henceforth…" clause that fires on the turning of a
@@ -243,7 +243,6 @@ export function militiaTactics(def, r = []) {
  * @returns {boolean}
  */
 export function builtOnTheFields(def, r = []) {
-	const items = (def?.sections ?? []).flatMap(s => s.items ?? []);
-	const at = items.findIndex(t => /parts of the fields/i.test(t));
+	const at = flatRequirementItems(def).findIndex(t => /parts of the fields/i.test(t));
 	return at >= 0 && r[at] === true;
 }

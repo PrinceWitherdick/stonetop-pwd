@@ -8,7 +8,7 @@
 // that sentence rather than replacing it. The words on screen never move, they only carry on.
 //
 // So what is needed is the first sentence, verbatim, and everything after it. `gloss` is untouched
-// and still ours: the Expedition walkthrough renders it, and the whispered chat card leads with it.
+// and still ours: the Expedition walkthrough renders it, and the chat card leads with it.
 
 /**
  * @typedef {object} MoveBlurb

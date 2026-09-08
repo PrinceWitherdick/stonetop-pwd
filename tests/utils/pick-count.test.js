@@ -7,10 +7,16 @@ import { pickCountLabel } from "../../module/utils/move-picks.js";
 import { pickListsHtml, normalizePickPools, tierPickCounts } from "../../module/utils/roll-engine.js";
 import { pickableMoveDescription } from "../../module/utils/chat.js";
 import { parseArcanumMoves } from "../../module/data/arcana-moves.js";
-import { paintPickTally, pickLimitFor, wirePickTally, releaseOverLimit, PICK_TALLY_CLASS } from "../../module/utils/pick-tally.js";
+import { grantsWholeList, paintPickTally, pickLimitFor, tierOffersPicks, wirePickTally, releaseOverLimit, PICK_TALLY_CLASS, PICK_BOX_SELECTOR } from "../../module/utils/pick-tally.js";
 import { pickLimitsFrom } from "../../module/utils/move-picks.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+// Every home the tally is painted in, in the one spelling the stylesheet uses. ONE rule covers
+// them all so the readout's ink cannot drift between surfaces, which is what happened while a
+// tier's own option controls carried a copy of their own.
+const CHAT_HOMES = ":is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, "
+	+ ".stonetop-roll-card-description)";
 
 // A move that sends its options to chat says how many you may take ONCE, in prose — a lead-in
 // above the printed list, or the result line's "Pick 2 from the list below". By the third box a
@@ -307,11 +313,20 @@ const readoutOf = parent => parent.children.find(c => c.classList.contains(PICK_
  * A pick list as `pickLimitFor` sees it: the `data-pick-max*` it carries, and the card around it.
  * `tier` is the result line's class on a card that rolled; `card: false` is the Moves tab's
  * printed move, posted to a `.stonetop-chat-move` that has no result line to read at all.
+ * `boxes` is how many options are on it and `hidden` puts it behind a tier the card did not roll
+ * — the two things `grantsWholeList` weighs that the cap alone cannot say.
  */
-function fakePickList(dataset, { card = true, tier = null } = {}) {
+function fakePickList(dataset, { card = true, tier = null, boxes = 0, hidden = false } = {}) {
 	const result = tier ? { classList: { contains: c => c === tier } } : null;
 	const cardEl = { querySelector: sel => (sel === ".stonetop-roll-result" ? result : null) };
-	return { dataset, closest: sel => (card && sel === ".stonetop-roll-card" ? cardEl : null) };
+	return {
+		dataset,
+		closest: (sel) => {
+			if (sel === "[hidden]") return hidden ? {} : null;
+			return card && sel === ".stonetop-roll-card" ? cardEl : null;
+		},
+		querySelectorAll: () => Array.from({ length: boxes }, () => ({ checked: false })),
+	};
 }
 
 describe("pickLimitFor", () => {
@@ -365,6 +380,181 @@ describe("pickLimitFor", () => {
 		}
 		expect(dataset).toEqual({ pickMaxSuccess: "1" });
 		expect(pickLimitFor(fakePickList(dataset, { card: false }))).toBe(1);
+	});
+});
+
+// A cap of null means "tick freely", and that was the ONE answer two very different tiers got.
+// Dark Succor's 6- hands over the whole list and Formidable's still says "pick 1", while Helior's
+// Unblinking Eye's is "the GM makes a move" and Forage's is barren land: a roll that ended the
+// question, whose options were printed anyway under a "0 options selected". `data-pick-tiers` is
+// the move's own answer, read off its prose and stamped on the list it belongs to.
+describe("tierOffersPicks", () => {
+	it("hides a rolled tier the move's stamp leaves out", () => {
+		expect(tierOffersPicks(fakePickList({ pickTiers: "success partial" }, { tier: "failure" }))).toBe(false);
+	});
+
+	it("shows a rolled tier the stamp names, capped or not", () => {
+		const helior = { pickMaxSuccess: "2", pickMaxPartial: "1", pickTiers: "success partial" };
+		expect(tierOffersPicks(fakePickList(helior, { tier: "success" }))).toBe(true);
+		expect(tierOffersPicks(fakePickList(helior, { tier: "partial" }))).toBe(true);
+		// Invoke the Sun God's 7-9: named, and deliberately uncapped, because two people choose.
+		expect(tierOffersPicks(fakePickList({ pickTiers: "success partial" }, { tier: "partial" }))).toBe(true);
+	});
+
+	// Three ways the card can say nothing, and all three go on showing the list. The reader is
+	// timid in the same direction as the cap beside it: only a rolled tier absent from a stamp
+	// that named others is a "no".
+	it("shows the list wherever the card has not plainly said otherwise", () => {
+		// A move whose tiers nothing read, and a pool the roll card built for itself.
+		expect(tierOffersPicks(fakePickList({ pickMax: "1" }, { tier: "failure" }))).toBe(true);
+		expect(tierOffersPicks(fakePickList({}, { tier: "failure" }))).toBe(true);
+		// The Moves tab, which posts a move's printed list on a card that rolled nothing.
+		expect(tierOffersPicks(fakePickList({ pickTiers: "success" }, { card: false }))).toBe(true);
+		expect(tierOffersPicks(null)).toBe(true);
+	});
+
+	// End to end on the move that was reported: its own shipped text, through the composer the
+	// roll card is built with, into the reader the card is painted by.
+	it("takes Helior's Unblinking Eye's options off its 6-, and leaves them on its hits", () => {
+		const helior = "<p>When you stare into the sun, roll +WIS: <strong>on a 10+</strong>, you glimpse"
+			+ " your subject and choose 2 from the list below; <strong>on a 7-9</strong>, you glimpse"
+			+ " your subject and choose 1.</p><ul><li>The glimpse lasts as long as you wish</li>"
+			+ "<li>Your point of view shifts to very close range</li>"
+			+ "<li>You recover your vision quickly</li></ul>";
+		const html = pickableMoveDescription(helior);
+		expect(html).toContain('data-pick-tiers="success partial"');
+		const dataset = { pickTiers: /data-pick-tiers="([^"]*)"/.exec(html)[1] };
+		expect(tierOffersPicks(fakePickList(dataset, { tier: "failure" }))).toBe(false);
+		expect(tierOffersPicks(fakePickList(dataset, { tier: "success" }))).toBe(true);
+		expect(tierOffersPicks(fakePickList(dataset, { tier: "partial" }))).toBe(true);
+	});
+
+	// Nothing is stamped when no tier was read, so a move that never splits by tier is untouched
+	// and its list shows on every result.
+	it("stamps nothing on a move whose count is one rule for the whole list", () => {
+		const aid = "<p>When you help someone, the GM picks 1:</p><ul><li>A</li><li>B</li></ul>";
+		expect(pickableMoveDescription(aid)).not.toContain("data-pick-tiers");
+	});
+});
+
+// Five shipped tiers hand over the WHOLE list — Danger Sense's "ask the GM BOTH of the questions
+// below", Formidable's "on a 10+, both", Danu's Grasp's "as a 7-9, but both apply", and the "on a
+// 6-, all 3 apply" Dark Succor and Undying share. There is no choice left in any of them, so the
+// card ticks the boxes rather than asking the player to. It is the call
+// dialogs/UndeathDialog.js#_syncForcedPicks has always made for that same 6-.
+describe("grantsWholeList", () => {
+	it("says so when the rolled tier's cap covers every option", () => {
+		// Danger Sense on a 10+: two questions, and the move grants both.
+		expect(grantsWholeList(fakePickList({ pickMaxSuccess: "2", pickMaxPartial: "1" },
+			{ tier: "success", boxes: 2 }))).toBe(true);
+	});
+
+	it("says nothing of the kind on a tier that still asks you to choose", () => {
+		expect(grantsWholeList(fakePickList({ pickMaxSuccess: "2", pickMaxPartial: "1" },
+			{ tier: "partial", boxes: 2 }))).toBe(false);
+		// Forage's 10+ takes two of four.
+		expect(grantsWholeList(fakePickList({ pickMaxSuccess: "2" }, { tier: "success", boxes: 4 }))).toBe(false);
+	});
+
+	// The Moves tab posts a move's printed list on a card that never rolled, where `pickLimitFor`
+	// stands in the most generous tier. A stand-in is not a grant: ticking Danger Sense's two
+	// questions off a reference card would claim an answer nobody rolled for.
+	it("will not tick a list on a card that rolled nothing", () => {
+		expect(grantsWholeList(fakePickList({ pickMaxSuccess: "2", pickMaxPartial: "1" },
+			{ card: false, boxes: 2 }))).toBe(false);
+		expect(grantsWholeList(fakePickList({ pickMaxSuccess: "2" }, { boxes: 2 }))).toBe(false);
+	});
+
+	// A per-tier list is on the card for a GM's Shift Up/Down to reveal. Until then it is not this
+	// card's result, and ticking it would mark boxes nobody can see.
+	it("leaves a list hidden behind another tier alone", () => {
+		expect(grantsWholeList(fakePickList({ pickMax: "3" }, { tier: "success", boxes: 3, hidden: true }))).toBe(false);
+	});
+
+	it("has nothing to say about a list with no cap, no boxes, or no element", () => {
+		expect(grantsWholeList(fakePickList({}, { tier: "success", boxes: 2 }))).toBe(false);
+		expect(grantsWholeList(fakePickList({ pickMax: "2" }, { tier: "success", boxes: 0 }))).toBe(false);
+		expect(grantsWholeList(null)).toBe(false);
+	});
+
+	// End to end on the move that prompted this, from its shipped text to the answer the card acts
+	// on. Danger Sense's 10+ is "ask the GM both of the questions below" and there are two.
+	it("reads Danger Sense's shipped 10+ as the whole list", () => {
+		const move = JSON.parse(fs.readFileSync(path.resolve(HERE,
+			"../../packs/src/stonetop-items/playbook-moves/the-fox/danger-sense.json"), "utf8"));
+		const html = pickableMoveDescription(move.system.description);
+		const dataset = {};
+		for (const [, tier, n] of html.matchAll(/data-pick-max-(success|partial|failure)="(\d+)"/g)) {
+			dataset[`pickMax${tier[0].toUpperCase()}${tier.slice(1)}`] = n;
+		}
+		expect(dataset).toEqual({ pickMaxSuccess: "2", pickMaxPartial: "1" });
+		const boxes = [...html.matchAll(/stonetop-picklist-check/g)].length;
+		expect(boxes).toBe(2);
+		expect(grantsWholeList(fakePickList(dataset, { tier: "success", boxes }))).toBe(true);
+		expect(grantsWholeList(fakePickList(dataset, { tier: "partial", boxes }))).toBe(false);
+	});
+
+	// The same walk for Danu's Grasp, whose 10+ is the awkward one: it does not name the list at
+	// all, it names the OTHER tier — "as a 7-9, but both apply" — and its 7-9's own count is
+	// stated once, up in an "on a 7+" that covers both halves of the hit. So the two tiers have
+	// to come out of one sentence as different numbers, and both of them matter here: a 10+ ticks
+	// the whole list for the player, and a 7-9 must still hold them to one of the two.
+	it("reads Danu's Grasp's shipped 10+ as the whole list, and its 7-9 as a choice", () => {
+		const move = JSON.parse(fs.readFileSync(path.resolve(HERE,
+			"../../packs/src/stonetop-items/playbook-moves/the-blessed/danus-grasp.json"), "utf8"));
+		// The 10+ as the book writes it. The card's result line says this and nothing else — the
+		// options themselves are the 7-9's sentence, and repeating them here would state a choice
+		// on the one tier that has none left to make.
+		expect(move.system.moveResults.success.value).toBe("As 7-9, but both apply.");
+
+		const html = pickableMoveDescription(move.system.description);
+		const dataset = {};
+		for (const [, tier, n] of html.matchAll(/data-pick-max-(success|partial|failure)="(\d+)"/g)) {
+			dataset[`pickMax${tier[0].toUpperCase()}${tier.slice(1)}`] = n;
+		}
+		expect(dataset).toEqual({ pickMaxSuccess: "2", pickMaxPartial: "1" });
+		const boxes = [...html.matchAll(/stonetop-picklist-check/g)].length;
+		expect(boxes).toBe(2);
+		// Restrained AND 2d4 damage, both ticked, with nothing asked of the player.
+		expect(grantsWholeList(fakePickList(dataset, { tier: "success", boxes }))).toBe(true);
+		// A weak hit is still one or the other, and capped at one.
+		expect(grantsWholeList(fakePickList(dataset, { tier: "partial", boxes }))).toBe(false);
+		expect(pickLimitFor(fakePickList(dataset, { tier: "partial", boxes }))).toBe(1);
+	});
+
+	// And the same walk for Formidable, whose awkwardness is WHERE it says the thing: its 10+ and
+	// 7-9 are in the lead-in above the bullets and its 6- is a paragraph below them. A cap read
+	// only upwards stamped nothing for the miss, and nothing reads as "tick freely" — so the one
+	// tier that says "pick 1 but ask the GM what you've missed" was the one tier a Heavy could
+	// take both options on.
+	it("reads Formidable's shipped 6- from under the bullets, and holds it to one", () => {
+		const move = JSON.parse(fs.readFileSync(path.resolve(HERE,
+			"../../packs/src/stonetop-items/playbook-moves/the-heavy/formidable.json"), "utf8"));
+		const html = pickableMoveDescription(move.system.description);
+		const dataset = {};
+		for (const [, tier, n] of html.matchAll(/data-pick-max-(success|partial|failure)="(\d+)"/g)) {
+			dataset[`pickMax${tier[0].toUpperCase()}${tier.slice(1)}`] = n;
+		}
+		expect(dataset).toEqual({ pickMaxSuccess: "2", pickMaxPartial: "1", pickMaxFailure: "1" });
+		const boxes = [...html.matchAll(/stonetop-picklist-check/g)].length;
+		expect(boxes).toBe(2);
+		// "On a 10+, both" leaves nothing to decide; the other two rungs are one of the two.
+		expect(grantsWholeList(fakePickList(dataset, { tier: "success", boxes }))).toBe(true);
+		expect(pickLimitFor(fakePickList(dataset, { tier: "partial", boxes }))).toBe(1);
+		expect(pickLimitFor(fakePickList(dataset, { tier: "failure", boxes }))).toBe(1);
+		expect(grantsWholeList(fakePickList(dataset, { tier: "failure", boxes }))).toBe(false);
+	});
+
+	// Forage is the move that shows why the prose below the bullets is read APART from the lead-in
+	// rather than appended to it: its closing line is about Make Camp, and the "1-for-1" in it
+	// falls inside the 7-9's segment when the two are read as one string, vetoing the count that
+	// tier states outright.
+	it("keeps Forage's 7-9 at one, whatever its closing line says about provisions", () => {
+		const move = JSON.parse(fs.readFileSync(path.resolve(HERE,
+			"../../packs/src/stonetop-items/expedition-moves/forage.json"), "utf8"));
+		const html = pickableMoveDescription(move.system.description);
+		expect(html).toContain('data-pick-max-success="2"');
+		expect(html).toContain('data-pick-max-partial="1"');
 	});
 });
 
@@ -549,13 +739,111 @@ describe("the chat card's tally rides the wiring that is already there", () => {
 		expect(SRC.slice(wire)).toContain('new Set(boxes.map(b => b.closest(".stonetop-picklist")))');
 	});
 
+	// A roll that left nothing to choose comes ticked. DERIVED from the card, never written: the
+	// cap, the tier and the boxes are all on it, so every client agrees and a GM's Shift Up/Down
+	// re-derives instead of having to unpick a flag. The moment anyone ticks anything the flag
+	// exists and it is theirs — including a tick taken back off, which is why the test is whether
+	// the flag was written at all rather than whether it holds a `true`.
+	it("pre-ticks a tier that grants the whole list, until the table says otherwise", () => {
+		const wire = SRC.indexOf("function _chatWireRollCardPicks");
+		expect(wire).toBeGreaterThan(-1);
+		const body = SRC.slice(wire, SRC.indexOf("\n}", wire));
+		// Asked only where nothing has been ticked yet -- the same test the read makes, so the walk
+		// is skipped entirely on a card whose flag already exists rather than run for a row of
+		// answers nothing can look at.
+		expect(body).toContain("if (!saved.length) {");
+		expect(body).toContain("wholeList.set(list, grantsWholeList(list));");
+		expect(body).toContain("const on   = saved.length");
+		expect(body).toContain('!!wholeList.get(box.closest(".stonetop-picklist"))');
+	});
+
+	// A tier that never reached the list shows neither the options nor the tally over them.
+	// Toggled on the live DOM rather than built into the card, because the tier is not settled:
+	// a GM's Shift Up/Down re-renders the card, this runs again, and the list comes back with the
+	// tier that grants it — ticks and all.
+	it("hides a list, and its tally, on a tier that never reached it", () => {
+		const at = SRC.indexOf("function _paintPickCount");
+		expect(at).toBeGreaterThan(-1);
+		const body = SRC.slice(at, SRC.indexOf("\n}", at));
+		expect(body).toContain("const offered = tierOffersPicks(list);");
+		expect(body).toContain("list.hidden = !offered;");
+		expect(body).toContain("if (readout) readout.hidden = !offered;");
+	});
+
+	// This file has learned twice over what a `display` landing on a hidden element costs
+	// (.stonetop-roll-tier-action[hidden], .stonetop-custom-move-section[hidden]), so the UA rule
+	// is said outright rather than relied on.
+	it("says the hide outright in CSS, for both halves of it", () => {
+		expect(read("styles/stonetop.css"))
+			.toContain(":is(.stonetop-picklist, .stonetop-picklist-count)[hidden] { display: none; }");
+	});
+
 	it("is styled in every home the checklist has, chat and dialog alike", () => {
 		const css = read("styles/stonetop.css");
-		const homes = ":is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)";
-		expect(css).toContain(`${homes} .stonetop-picklist-count`);
-		expect(css).toContain(`${homes} .stonetop-picklist-count.is-full`);
+		expect(css).toContain(`${CHAT_HOMES} .stonetop-picklist-count`);
+		expect(css).toContain(`${CHAT_HOMES} .stonetop-picklist-count.is-full`);
 		expect(css).toContain(".stonetop-homestead-reference .stonetop-picklist-count");
 		expect(css).toContain(".stonetop-homestead-reference .stonetop-picklist-count.is-full");
 	});
 });
 
+// A tier whose controls REPLACED the move's printed list is the one place the count had gone
+// missing: Clash's 10+ stands its checklist down because the radios below restate both bullets
+// word for word, and the "0/1 options selected" went down with the checklist. So the controls
+// carry it — over a radio group, which is why the box selector had to stop meaning "checkbox".
+// A tier's own option controls used to be a second list on the card, with a second tally over
+// them, and the two counts could not see each other. They are gone: a move's options are ticked
+// where the move prints them, so there is ONE list, ONE cap and ONE readout per card.
+describe("a tier adds no second list to count", () => {
+	const SRC = read("module/combat/attack-flow.js");
+
+	it("counts every kind of box, from the one selector all three readers share", () => {
+		expect(PICK_BOX_SELECTOR).toContain('input[type="checkbox"]');
+		expect(PICK_BOX_SELECTOR).toContain('input[type="radio"]');
+		const tally = read("module/utils/pick-tally.js");
+		// Three readers, one selector: a list whose tally counted boxes its release could not let
+		// go of would show a number it does not enforce.
+		expect(tally.match(/querySelectorAll\??\.?\(PICK_BOX_SELECTOR\)/g)).toHaveLength(3);
+		expect(tally).not.toContain(`querySelectorAll('input[type="checkbox"]')`);
+	});
+
+	it("builds no option controls of its own — only a Confirm", () => {
+		expect(SRC).not.toContain("function pickRow");
+		expect(SRC).not.toContain("function addonRow");
+		expect(SRC).not.toContain("function pickGroup");
+		expect(SRC).not.toContain("stonetop-attack-picklist");
+		expect(SRC).not.toContain("stonetop-attack-pick-label");
+	});
+
+	it("reads the ticks off the move's own printed list, not off a list it built", () => {
+		const at = SRC.indexOf("function pickedOptionLabels");
+		expect(at).toBeGreaterThan(-1);
+		const body = SRC.slice(at, SRC.indexOf("\n}", at));
+		// The same boxes the tally counts, the cap releases and the message flag persists.
+		expect(body).toContain('".stonetop-picklist-check:checked"');
+		// A tick behind a tier this roll did not land on is not this roll's pick: a card carries
+		// every tier's options so a GM's Shift Up/Down can reveal the right one.
+		expect(body).toContain('closest("[hidden]")');
+	});
+
+	it("stops taking ticks once the card is resolved", () => {
+		// A resolved card is a read-only record of what was enacted. Nothing is RESTORED, though:
+		// the ticks are the printed list's and already persist in the message's pickChecked flag,
+		// so every client rebuilds them the same way.
+		const at = SRC.indexOf("function wireAttackConfirm");
+		const body = SRC.slice(at, SRC.indexOf("\n}", at));
+		expect(body).toContain('root.querySelectorAll(".stonetop-picklist-check")) input.disabled = true');
+		const lock = SRC.indexOf("async function lockAttackCard");
+		expect(SRC.slice(lock, SRC.indexOf("\n}", lock)))
+			.toContain('".stonetop-attack-confirm, .stonetop-picklist-check"');
+	});
+
+	it("keeps the readout's ink in ONE rule, now that a tier has no readout of its own", () => {
+		const css = read("styles/stonetop.css");
+		expect(CHAT_HOMES).not.toContain(".stonetop-roll-tier-action");
+		expect(css).toContain(`${CHAT_HOMES} .stonetop-picklist-count`);
+		expect(css).toContain(`${CHAT_HOMES} .stonetop-picklist-count.is-full`);
+		// The margin override that a tier's flex column needed goes with it.
+		expect(css).not.toContain(".stonetop-roll-tier-action .stonetop-picklist-count");
+	});
+});

@@ -9,6 +9,7 @@ import { getObjectSetting } from "../../settings.js";
 import { filePicker } from "../../utils/foundry-compat.js";
 import { pickRandomExcluding } from "../../utils/arrays.js";
 import { canStoreRulebook } from "../../books/book-store.js";
+import { prefersReducedMotion } from "../../utils/reduced-motion.js";
 
 // How long the grid takes to travel to a rolled portrait, however far away it landed. The
 // browser's own `scrollIntoView({behavior:"smooth"})` picks its own duration and scales it
@@ -600,7 +601,7 @@ export class PeopleGalleryDialog extends StonetopDialog {
 		const distance = to - from;
 		// Sub-pixel hops aren't worth a frame, and a reader who asked for less motion gets
 		// the destination without the trip.
-		if (Math.abs(distance) < 1 || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+		if (Math.abs(distance) < 1 || prefersReducedMotion()) {
 			body.scrollTop = to;
 			return;
 		}

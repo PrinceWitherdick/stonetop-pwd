@@ -153,6 +153,41 @@ describe("buildChroniclePages", () => {
 		]);
 	});
 
+	// ⚠ THE PICK DOES NOT REACH THE PAGE. An answer can now carry `who`: which player character the
+	// writer said it was about, chosen during the introductions. That is a LINK, drawn by the
+	// relationship map (relmap/relmap-intros.js reads it through introQaPairs), and the journal
+	// page has no field for it — its pairs are prompt and answer. A section that carried it would
+	// change the shape of everything stored, and the signature mergeChronicleSections dedupes on
+	// with it, to say something no page can show.
+	it("keeps who an answer is about out of the compiled page", () => {
+		const page = buildChroniclePages({
+			pcs: [blessed],
+			introAnswers: { pc1: {
+				step6: { answers: [{ q: 3, a: "I asked, and got a shrug.", who: "pc2" }], passed: false },
+			} },
+			springAnswers: {},
+		})[0];
+		expect(pairsOf(page, "Asked of the others")).toEqual([
+			{ prompt: "Which one of you doubts the power of Danu?", answer: "I asked, and got a shrug." },
+		]);
+	});
+
+	// The pick must not split the dedupe either: the step entry carries one and the legacy round
+	// does not, and they are still the same answer written down twice.
+	it("still folds a legacy round into a step entry that carries a pick", () => {
+		const page = buildChroniclePages({
+			pcs: [blessed],
+			introAnswers: { pc1: {
+				step4: { answers: [{ q: 0, a: "Old Bemis is my closest kin.", who: "pc2" }], passed: false },
+				r4:    { q: 0, a: "Old Bemis is my closest kin." },
+			} },
+			springAnswers: {},
+		})[0];
+		expect(pairsOf(page, "Bonds & ties")).toEqual([
+			{ prompt: "Who is your closest kin?", answer: "Old Bemis is my closest kin." },
+		]);
+	});
+
 	it("folds legacy r4/r5 behind the step list and dedupes an overlap", () => {
 		const page = buildChroniclePages({
 			pcs: [blessed],

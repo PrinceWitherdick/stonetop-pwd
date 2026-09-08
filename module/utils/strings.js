@@ -44,6 +44,33 @@ export function escapeRegExp(v) {
 	return String(v ?? "").replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
 }
 
+/**
+ * A pattern that matches `word` ONLY as a whole word, under Unicode letter boundaries.
+ *
+ * WHOLE WORDS ONLY, and this is not fussiness. "smothered her at the mill" contains "mother", and a
+ * substring match would read that line as a birth; "Pim" matches inside "Pimble", and a guess built
+ * on that is a line asserting something nobody said.
+ *
+ * ⚠ THE BOUNDARY IS `\p{L}` AND NOT `\b`, which is why this exists rather than a caller writing
+ * `\b…\b` around {@link escapeRegExp}. `\b` is defined on `\w`, which is ASCII, so it fires in the
+ * MIDDLE of any name or word with an accent in it — exactly the words a boundary rule is for.
+ *
+ * ⚠ AND THE ESCAPE IS NOT {@link escapeRegExp}. That one escapes `-` as well, so its output is safe
+ * inside a character class but a SyntaxError under the `u` flag this needs for `\p{L}` — see the
+ * warning on it. The set below is the same one minus the hyphen.
+ *
+ * The one whole-word matcher: relmap-intros.js finds who an introduction answer names, and every
+ * reader of a name agreeing about where a word ends is the whole of what keeps one of them from
+ * reading a name out of the middle of another.
+ *
+ * @param {string} word  matched literally; regex metacharacters in it are escaped.
+ * @param {string} [flags]  always includes `u`; pass "i" for a case-insensitive match.
+ */
+export function wholeWordPattern(word, flags = "") {
+	const literal = String(word ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return new RegExp(`(?<!\\p{L})${literal}(?!\\p{L})`, `${flags.replace("u", "")}u`);
+}
+
 // Join names for display: ["Astor","Halix"] → "Astor & Halix"; three or more use an
 // Oxford-free serial comma ("A, B & C"). Blanks are dropped, so a missing name can't leave a
 // stray separator behind.
@@ -160,6 +187,21 @@ export function splitPickList(text) {
 }
 
 /**
+ * A line that ENDS on a colon has nothing left to introduce, so the colon becomes a full stop.
+ *
+ * Two shapes arrive here and both are the same sentence half-finished. A tier row read back out
+ * of a move's own prose keeps the colon its bullets followed ("on a 7-9, pick 1:" — the bullets
+ * are printed above the ladder, not in the row), and an `introOnly` lead-in is cut at that same
+ * colon on purpose ({@link splitPickList}) and then has its options dropped. Either way what the
+ * reader sees is "Pick 1:" and then the row simply stops, as though the card had lost the rest of
+ * the line — twelve of the shipped moves read that way, Formidable's weak hit among them.
+ *
+ * ONLY at the very end, and only after the options are gone: a colon with its list still behind
+ * it is doing its job, which is why the branch that prints that list keeps it.
+ */
+const closeLeadIn = text => String(text).replace(/\s*:\s*$/, ".");
+
+/**
  * Render a move-result outcome string as HTML. When the text presents a "pick N:" list
  * of slash-separated options, the lead-in stays as prose and the options become a
  * spiral-bulleted <ul class="stonetop-roll-result-picks"> — otherwise the text is just
@@ -175,12 +217,12 @@ export function formatOutcomeDetail(text, { introOnly = false } = {}) {
 	if (!raw) return "";
 	const split = splitPickList(raw);
 	if (split) {
-		if (introOnly) return `<span class="stonetop-roll-result-lead">${escHtml(split.intro)}</span>`;
+		if (introOnly) return `<span class="stonetop-roll-result-lead">${escHtml(closeLeadIn(split.intro))}</span>`;
 		const items = split.options.map((o) => `<li>${escHtml(o)}</li>`).join("");
 		return `<span class="stonetop-roll-result-lead">${escHtml(split.intro)}</span>`
 			+ `<ul class="stonetop-roll-result-picks">${items}</ul>`;
 	}
-	return escHtml(raw);
+	return escHtml(closeLeadIn(raw));
 }
 
 /** Ensure miss result labels are visually emphasized in rendered move text. */

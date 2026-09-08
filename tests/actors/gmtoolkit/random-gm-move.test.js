@@ -3,13 +3,14 @@ import { randomGmMove, postGmMove } from "../../../module/gm-toolkit/random-gm-m
 import { BASIC_GM_MOVES, EXPLORATION_GM_MOVES, HOMEFRONT_GM_MOVES } from "../../../module/gm-toolkit/gm-moves.js";
 import { escHtml } from "../../../module/utils/strings.js";
 
-// The die beside each GM Moves heading: draw one move out of that section and whisper it to
-// the GMs.
+// The die beside each GM Moves heading: draw one move out of that section and post it to chat,
+// where the whole table reads it.
 //
-// The whisper is the part worth guarding. A GM move works because it arrives as fiction, so a
-// card that went to the whole table would hand the players the move before the GM has made it.
-// Nothing about that failure is visible from the GM's own screen: they would see their card
-// exactly as they do now, and only the players would know.
+// WHO IT REACHES is the part worth guarding, and it is guarded in the direction opposite to the
+// one this file used to guard: the card was whispered to the GMs, and is now public on purpose
+// (see the header of random-gm-move.js). Nothing about a card that quietly went back to being
+// GM-only would be visible from the GM's own screen — they would see it exactly as they do now,
+// and only the players would know they had stopped seeing it.
 
 const posted = [];
 
@@ -17,7 +18,9 @@ beforeEach(() => {
 	posted.length = 0;
 	globalThis.ChatMessage = {
 		create: data => { posted.push(data); return Promise.resolve(data); },
-		// Two GMs and a player, so "GM only" has something to actually exclude.
+		// Left on the fake although the card no longer whispers: a card that went back to being
+		// GM-only would find this and post happily, and the recipients it landed on are what the
+		// test above reads to say so.
 		getWhisperRecipients: role => role === "GM" ? [{ id: "gm1" }, { id: "gm2" }] : [{ id: "player1" }],
 		getSpeaker: () => ({ alias: "GM Toolkit" }),
 	};
@@ -64,13 +67,17 @@ describe("drawing a GM move at random", () => {
 	});
 });
 
-// The draw and the whisper are two calls, not one: the sheet needs the answer up front to know
+// The draw and the post are two calls, not one: the sheet needs the answer up front to know
 // which row to walk its light towards, and the card posts when the light lands.
-describe("whispering the drawn move", () => {
-	it("goes to the GMs and to nobody else", async () => {
+describe("posting the drawn move", () => {
+	// Public, to everyone at the table. Asserted as the ABSENCE of the key rather than as an
+	// empty array: `whisper: []` reaches the same people, but it says so by negation, and a
+	// half-finished recipient list looks exactly like it.
+	it("goes to the whole table, not to the GMs alone", async () => {
 		await postGmMove("basic", BASIC_GM_MOVES[0]);
 		expect(posted).toHaveLength(1);
-		expect(posted[0].whisper).toEqual(["gm1", "gm2"]);
+		expect(posted[0].whisper).toBeUndefined();
+		expect(posted[0]).not.toHaveProperty("whisper");
 	});
 
 	// Through escHtml on both sides: this gloss carries an apostrophe, and the raw string is

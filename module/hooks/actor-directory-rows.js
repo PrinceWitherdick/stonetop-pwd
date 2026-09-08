@@ -19,13 +19,30 @@ import { openApplications } from "../utils/open-windows.js";
  * other sidebar tab reaches the handler too.
  */
 
-const ROW_SELECTOR = "li.directory-item.document[data-entry-id]";
+/** A document row in any sidebar directory, matching core's own directory partials
+ *  (templates/sidebar/partials/). Exported because more than one feature marks up these rows
+ *  and a copied selector that drifts does not fail loudly - it just stops matching. */
+export const DIRECTORY_ROW_SELECTOR = "li.directory-item.document[data-entry-id]";
+
+const ROW_SELECTOR = DIRECTORY_ROW_SELECTOR;
+
+/**
+ * Is this app a rendered WORLD directory for `documentName` (not a compendium's index view)?
+ *
+ * Shared rather than copied, because the duck-type is the fragile part: `index` is what tells a
+ * CompendiumCollection from a world collection, and a second copy of that test would go quietly
+ * wrong the day core changes it.
+ */
+export function isWorldDirectory(app, documentName) {
+	const collection = app?.collection;
+	return collection?.documentName === documentName
+		&& typeof collection.get === "function"
+		&& !collection.index;
+}
 
 /** Is this app a rendered WORLD Actor directory (not a compendium's index view)? */
 export function isActorDirectory(app) {
-	const collection = app?.collection;
-	// Duck-typed, and `index` is what tells a CompendiumCollection from a world collection.
-	return collection?.documentName === "Actor" && typeof collection.get === "function" && !collection.index;
+	return isWorldDirectory(app, "Actor");
 }
 
 /**

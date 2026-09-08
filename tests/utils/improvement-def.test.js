@@ -3,10 +3,19 @@ import {
 	alternativeSectionFlags,
 	buildImprovementDef,
 	defaultSectionHeading,
+	flatRequirementItems,
+	formatImprovementText,
+	groupsFromSections,
+	improvementRequirementCount,
+	itemsFromRows,
 	normalizeImprovementGrants,
 	normalizeImprovementSections,
+	ordinal,
+	remapRequirementTicks,
+	rowsFromItems,
 	sectionsFromGroups,
 	summarizeImprovementGrants,
+	unformatImprovementText,
 } from "../../module/utils/improvement-def.js";
 import {
 	IMPROVEMENT_DEFINITIONS,
@@ -174,6 +183,19 @@ describe("normalizeImprovementGrants", () => {
 		expect(normalizeImprovementGrants(null)).toBeNull();
 	});
 
+	// The bug this is here for: `Number("")` is 0, so the untouched "Set Population to" box
+	// read as a real grant. EVERY improvement the builder saved carried setPopulation: 0,
+	// and completing any of them reset the steading's Population to +0 (and un-completing
+	// it put back whatever it had been). An explicit zero still has to mean zero, because
+	// Township sets exactly that.
+	it("does not read an untouched Population box as a grant of zero", () => {
+		expect(normalizeImprovementGrants({ setPopulation: "" })).toBeNull();
+		expect(normalizeImprovementGrants({ setPopulation: "   " })).toBeNull();
+		expect(normalizeImprovementGrants({ setPopulation: null })).toBeNull();
+		expect(normalizeImprovementGrants({ setPopulation: "0" })).toEqual({ setPopulation: 0 });
+		expect(normalizeImprovementGrants({ setPopulation: 0 })).toEqual({ setPopulation: 0 });
+	});
+
 	it("refuses a size that is not one of the four tiers", () => {
 		expect(normalizeImprovementGrants({ setSize: "metropolis" })).toBeNull();
 	});
@@ -219,6 +241,219 @@ describe("buildImprovementDef", () => {
 		expect(def.effect).toBe("Increase Prosperity by 1.");
 		expect(def.sections[0].min).toBe(1);
 		expect(def.grants).toEqual({ stats: { prosperity: 1 } });
+	});
+
+	// `name` and `flavor` are painted with a double-stash by both readers and `heading`,
+	// the items and `effect` with a triple. Escaping the first pair here would show the
+	// entity itself on the card; NOT escaping the second would let typed markup through.
+	it("stores the marked-up fields as HTML and leaves the plain ones plain", () => {
+		const def = buildImprovementDef({
+			name: "Roads & Bridges",
+			flavor: "It's a long walk.",
+			effect: "*Pull Together* to <build> it.",
+			sections: sectionsFromGroups([{ rows: [{ text: "*Pull Together*", repeat: 2 }] }]),
+		});
+		expect(def.name).toBe("Roads & Bridges");
+		expect(def.flavor).toBe("It's a long walk.");
+		expect(def.effect).toBe("<em>Pull Together</em> to &lt;build&gt; it.");
+		expect(def.sections[0].items).toEqual([
+			"<em>Pull Together</em> (1st)",
+			"<em>Pull Together</em> (2nd)",
+		]);
+	});
+
+	it("marks up the heading it writes for a group as well as one that was typed", () => {
+		const [written] = buildImprovementDef({
+			name: "X",
+			sections: sectionsFromGroups([{ heading: "Then *Pull Together*:", rows: [{ text: "A season" }] }]),
+		}).sections;
+		expect(written.heading).toBe("Then <em>Pull Together</em>:");
+	});
+
+	it("leaves an improvement whose Effect panel was never touched with no grants at all", () => {
+		const def = buildImprovementDef({
+			name: "Roadbuilding",
+			sections: sectionsFromGroups([{ rows: [{ text: "A surveyor" }] }]),
+			grants: {
+				stats: { fortunes: "", defenses: "", prosperity: "", population: "" },
+				resources: "", fortifications: "", removeFortifications: "",
+				setSize: "", setPopulation: "",
+			},
+		});
+		expect(def.grants).toBeNull();
+	});
+});
+
+describe("authored text", () => {
+	it("escapes what was typed, then resolves *asterisks* to the italics the book prints", () => {
+		expect(formatImprovementText("*Pull Together* to raise <it>"))
+			.toBe("<em>Pull Together</em> to raise &lt;it&gt;");
+	});
+
+	it("leaves a lone or unclosed asterisk alone rather than swallowing it", () => {
+		expect(formatImprovementText("Timber (Value 2 * 3)")).toBe("Timber (Value 2 * 3)");
+		expect(formatImprovementText("A *half-typed emphasis")).toBe("A *half-typed emphasis");
+	});
+
+	it("comes back out as what was typed, so an existing improvement can be re-opened", () => {
+		const typed = "*Pull Together*, costing a month & 1 Surplus";
+		expect(unformatImprovementText(formatImprovementText(typed))).toBe(typed);
+	});
+
+	// The steading tab and the journal card both paint these unescaped, so an escape that
+	// survived into the stored definition would show as literal entity text on both.
+	it("round-trips the book's own requirement text", () => {
+		const stored = "<em>Pulling Together</em> to build the stable and corral";
+		expect(formatImprovementText(unformatImprovementText(stored))).toBe(stored);
+	});
+});
+
+describe("repeated requirements", () => {
+	it("numbers the boxes the way the book numbers them", () => {
+		expect(ordinal(1)).toBe("1st");
+		expect(ordinal(2)).toBe("2nd");
+		expect(ordinal(3)).toBe("3rd");
+		expect(ordinal(4)).toBe("4th");
+		// The teens are the case a naive lookup gets wrong; no book improvement repeats
+		// eleven times, but the ordinal helper is not the place to bet on that.
+		expect(ordinal(11)).toBe("11th");
+		expect(ordinal(21)).toBe("21st");
+	});
+
+	it("expands one row into that many numbered boxes", () => {
+		expect(itemsFromRows([
+			{ text: "A designated building site", repeat: 1 },
+			{ text: "*Pull Together*", repeat: 3 },
+			{ text: "  ", repeat: 4 },
+		])).toEqual([
+			"A designated building site",
+			"*Pull Together* (1st)",
+			"*Pull Together* (2nd)",
+			"*Pull Together* (3rd)",
+		]);
+	});
+
+	it("caps a mistyped count rather than minting a thousand checkboxes", () => {
+		expect(itemsFromRows([{ text: "A season", repeat: 500 }])).toHaveLength(20);
+		expect(itemsFromRows([{ text: "A season", repeat: 0 }])).toEqual(["A season"]);
+	});
+
+	it("collapses a numbered run back into the row that produced it, and nothing else", () => {
+		expect(rowsFromItems([
+			"A veteran warrior",
+			"4 seasons of work (1st)",
+			"4 seasons of work (2nd)",
+			// Not a run: the ordinals do not start at one, so these stay as they are.
+			"Something else (2nd)",
+		])).toEqual([
+			{ text: "A veteran warrior", repeat: 1 },
+			{ text: "4 seasons of work", repeat: 2 },
+			{ text: "Something else (2nd)", repeat: 1 },
+		]);
+	});
+});
+
+describe("remapRequirementTicks", () => {
+	// `r` is flat and positional, so an inserted step would slide every tick onto the wrong
+	// requirement. That is the whole reason editing an improvement in place needs this.
+	it("keeps a ticked step's tick when a step is inserted above it", () => {
+		expect(remapRequirementTicks(
+			["A surveyor", "Gravel"],
+			["A charter", "A surveyor", "Gravel"],
+			[true, false],
+		)).toEqual([false, true, false]);
+	});
+
+	it("keeps it when the steps are reordered", () => {
+		expect(remapRequirementTicks(["A", "B", "C"], ["C", "A", "B"], [false, true, true]))
+			.toEqual([true, false, true]);
+	});
+
+	it("drops the tick of a step that was deleted, and starts a new step unticked", () => {
+		expect(remapRequirementTicks(["A", "B"], ["A", "C"], [true, true])).toEqual([true, false]);
+	});
+
+	it("matches repeated text in order, which is the only reading available", () => {
+		expect(remapRequirementTicks(
+			["Pull Together", "Pull Together"],
+			["Pull Together", "Pull Together", "Pull Together"],
+			[true, false],
+		)).toEqual([true, false, false]);
+	});
+
+	it("survives a missing or short tick array", () => {
+		expect(remapRequirementTicks(["A", "B"], ["A", "B"], [true])).toEqual([true, false]);
+		expect(remapRequirementTicks(["A"], ["A"], undefined)).toEqual([false]);
+	});
+});
+
+describe("flatRequirementItems", () => {
+	it("is the list `r` is indexed by, across every section", () => {
+		const def = IMPROVEMENT_DEFINITIONS.find(d => d.slug === "weaponsOfWar");
+		expect(flatRequirementItems(def)).toHaveLength(improvementRequirementCount(def));
+		expect(flatRequirementItems(null)).toEqual([]);
+	});
+});
+
+describe("groupsFromSections", () => {
+	// Copying one of the book's improvements into the builder is the round trip, and the
+	// whole of it: groupsFromSections fills the form, sectionsFromGroups reads it back, and
+	// buildImprovementDef turns the *asterisks* into the <em> the definition stores. All
+	// seventeen have to come out the way they went in, or "Start from" hands the author a
+	// copy that quietly differs from what they picked.
+	//
+	// Compared as AUTHORED text and as the either/or pattern, not byte for byte, because
+	// two differences are by design and neither changes what is rendered or checked:
+	// a re-saved definition escapes the apostrophes the hand-written built-ins carry raw
+	// (`&#x27;`, which paints as an apostrophe and comes back as one), and an either/or run
+	// is re-issued a fresh shared id, since only its equality with its neighbour is ever
+	// read (see alternativeSectionFlags, improvementRequirementsMet).
+	const meaning = sections => ({
+		sections: sections.map(s => ({
+			heading: unformatImprovementText(s.heading),
+			items: s.items.map(unformatImprovementText),
+			...(Number.isFinite(s.min) ? { min: s.min } : {}),
+		})),
+		alternatives: alternativeSectionFlags(sections),
+	});
+
+	it("round-trips every one of the book's improvements through the form", () => {
+		for (const def of IMPROVEMENT_DEFINITIONS) {
+			const rebuilt = buildImprovementDef({
+				name: def.label,
+				sections: sectionsFromGroups(groupsFromSections(def.sections)),
+			});
+			expect(meaning(rebuilt.sections), def.slug).toEqual(meaning(normalizeImprovementSections(def.sections)));
+		}
+	});
+
+	// The one thing the projection above cannot see, asserted directly: a copied
+	// requirement still carries the book's italics as markup rather than as literal text.
+	it("keeps the book's italics as markup through the copy", () => {
+		const def = IMPROVEMENT_DEFINITIONS.find(d => d.slug === "herdOfHorses");
+		const rebuilt = buildImprovementDef({
+			name: def.label,
+			sections: sectionsFromGroups(groupsFromSections(def.sections)),
+		});
+		expect(rebuilt.sections[0].items[1]).toContain("<em>Pulling Together</em>");
+	});
+
+	it("collapses Additional Housing's five Pull Togethers into one repeated row", () => {
+		const def = IMPROVEMENT_DEFINITIONS.find(d => d.slug === "additionalHousing");
+		const [, staged] = groupsFromSections(def.sections);
+		expect(staged.rows).toEqual([{ text: "*Pull Together*", repeat: 5 }]);
+	});
+
+	it("brings back Weapons of War's either/or as an alternative group", () => {
+		const def = IMPROVEMENT_DEFINITIONS.find(d => d.slug === "weaponsOfWar");
+		expect(groupsFromSections(def.sections).map(g => g.alternative)).toEqual([false, true, false]);
+	});
+
+	it("brings back Aurochs Hunting's 2-of-3 as a partial group", () => {
+		const def = IMPROVEMENT_DEFINITIONS.find(d => d.slug === "aurochsHunting");
+		const [first] = groupsFromSections(def.sections);
+		expect(first.partial).toBe(true);
+		expect(first.min).toBe(2);
 	});
 });
 

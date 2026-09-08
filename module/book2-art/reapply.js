@@ -259,22 +259,34 @@ async function refreshArtIndex(setting, rows, present, srcOf, entryOf, label, pa
 		// Key order is the manifest's on both sides, so a plain stringify compares faithfully.
 		if (JSON.stringify(prev ?? {}) === JSON.stringify(have)) return;
 		const count = Object.keys(have).length;
-		// EMPTYING an index that had entries is the one update worth saying out loud. It is
-		// legitimate — a GM who deleted or renamed the art folder must have it cleared, or every
-		// drag keeps baking a path to a file that is gone — but it is also exactly what a browse
-		// that answers "no files" about a folder full of art does, on every load, for as long as
-		// the browse keeps lying (see browse.js `readDir` for the host that did this). The
-		// difference between those two is invisible from here and enormous to the GM, so the one
-		// that ends with an empty gallery no longer happens without a word in the console.
-		const emptying = !count && Object.keys(prev ?? {}).length;
-		if (emptying) {
-			warn(`Book II art: the ${label} art index is being CLEARED. The durable art folder listed`
-				+ ` none of its ${rows.length} pictures, where it previously held ${emptying}.`
-				+ ` If that art is still on disk, this world cannot see it: check that`
-				+ ` "${book2ArtRoot()}" is the right folder and re-run Import Book Art.`);
-		}
+		// An index that SHRINKS is the one update worth saying out loud. It is legitimate — a GM who
+		// deleted or renamed some art must have it dropped, or every drag keeps baking a path to a
+		// file that is gone — but it is also exactly what a browse that under-reports a folder full
+		// of art does, on every load, for as long as the browse keeps lying (see browse.js `readDir`
+		// for the host that did this). The difference between those two is invisible from here and
+		// enormous to the GM, so a gallery losing pictures no longer happens without a word.
+		//
+		// Any shrink, not only a wipe to zero. The version of this that a partly-answered browse
+		// actually produces is 306 entries collapsing to 3, and gating on `!count` reported exactly
+		// that case with the cheerful line below.
+		//
+		// `prev` is counted defensively: it is whatever the world setting holds, and a value that
+		// came back a STRING (a stored object that failed to parse, a hand-edited setting) would put
+		// its character count into a message whose entire job is to report a real number honestly.
+		const had = (prev && typeof prev === "object") ? Object.keys(prev).length : 0;
 		await setSetting(setting, have);
-		if (!emptying) info(`Book II art: ${label} art index updated (${count} of ${rows.length} on disk)`);
+		// AFTER the write, so this reports what happened rather than predicting it. Ahead of it, a
+		// `setSetting` that then rejected left the GM reading "is being CLEARED" immediately followed
+		// by "could not update", about an index that was never touched.
+		if (had > count) {
+			warn(`Book II art: the ${label} art index shrank from ${had} to ${count} of`
+				+ ` ${rows.length} pictures. If that art is still on disk, this world cannot see it:`
+				+ ` check that "${book2ArtRoot()}" is the right folder, and on a hosted world (where`
+				+ ` uploads are redirected into an assets library) re-run Import Book Art, which records`
+				+ ` where this host serves the folder from.`);
+		} else {
+			info(`Book II art: ${label} art index updated (${count} of ${rows.length} on disk)`);
+		}
 	} catch (e) {
 		error(`Book II art: could not update the ${label} art index`, e);
 	}
@@ -295,7 +307,18 @@ async function refreshArtPrefix(present) {
 	try {
 		if (!present?.size) return;
 		const prefix = present.prefix ?? "";
-		if (getSetting("book2ArtPrefix") === prefix) return;
+		const stored = getSetting("book2ArtPrefix");
+		if (stored === prefix) return;
+		// A prefix can be LEARNED here but never unlearned. `!present.size` above is not the floor it
+		// looks like: an inventory of one file that carried no prefix has a size and an empty prefix,
+		// so a single stray file at the data-relative path would publish "" over a perfectly good
+		// hosted origin. That is not a cosmetic write — the prefix is what browse.js `readDir` asks
+		// its second question with, so clearing it blinds the browse for every directory from the
+		// next load on, and the state it lands in is the one browse.js says only a re-import cures.
+		// `publishPeopleArtIndexes` makes it cheap to hit: it publishes this world-global setting from
+		// a browse of assets/people alone. A host that stops relocating our files re-announces itself
+		// through the importer, which is the writer that actually knows.
+		if (!prefix && stored) return;
 		await setSetting("book2ArtPrefix", prefix);
 		info(`Book II art: durable art is served from "${prefix || "the data folder"}"`);
 	} catch (e) {

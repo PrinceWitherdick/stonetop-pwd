@@ -1,0 +1,50 @@
+{{!-- Every introduction answer, and who at this table it is about.
+
+      One root element, as AppV1 requires. Driven by module/dialogs/IntroMatchDialog.js. --}}
+<form class="stonetop-intro-match">
+
+  <p class="stonetop-intro-match-intro">{{intro}}</p>
+
+  <div class="stonetop-intro-match-body">
+    {{#each groups}}
+    {{!-- One writer's whole account, under their name: every row below is read as something THEY
+          said, and the heading is the only thing on screen that says so. --}}
+    <section class="stonetop-intro-match-group">
+      <h3 class="stonetop-intro-match-writer">{{this.writerName}}</h3>
+
+      {{#each this.rows}}
+      <div class="stonetop-intro-match-row">
+        {{#if this.prompt}}<p class="stonetop-intro-match-q">{{this.prompt}}</p>{{/if}}
+        <p class="stonetop-intro-match-a">{{this.answer}}</p>
+        <label class="stonetop-intro-match-pick">
+          <span class="stonetop-intro-match-pick-label">{{../../aboutLabel}}</span>
+          <select data-row-key="{{this.key}}">
+            <option value=""{{#if this.noneSelected}} selected{{/if}}>{{../../noneLabel}}</option>
+            {{#each this.options}}
+            <option value="{{this.id}}"{{#if this.selected}} selected{{/if}}>{{this.name}}</option>
+            {{/each}}
+          </select>
+          {{!-- Where the pre-filled answer came from. A control that arrives already answered and
+                does not say who answered it is asking to be confirmed blind. --}}
+          {{#if this.guessed}}<span class="stonetop-intro-match-guessed">{{../../guessedLabel}}</span>{{/if}}
+        </label>
+      </div>
+      {{/each}}
+    </section>
+    {{/each}}
+  </div>
+
+  {{!-- Affirmative on the left, as everywhere else in the system. --}}
+  <footer class="stonetop-intro-match-foot">
+    <span class="stonetop-intro-match-count">{{countLine}}</span>
+    <span class="stonetop-intro-match-buttons">
+      <button type="button" class="stonetop-cta" data-intro-match="save">
+        <i class="fas fa-feather"></i> <span>{{saveLabel}}</span>
+      </button>
+      <button type="button" data-intro-match="cancel">
+        <i class="fas fa-xmark"></i> <span>{{cancelLabel}}</span>
+      </button>
+    </span>
+  </footer>
+
+</form>

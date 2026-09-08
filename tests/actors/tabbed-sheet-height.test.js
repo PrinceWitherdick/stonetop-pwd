@@ -68,7 +68,7 @@ describe("...and a tab too tall for its frame scrolls instead of being cut off",
 	// only thing this block is asserting.
 	const SCROLLPORTS = [
 		["character", /\.pbta\.sheet\.actor\.character \.stonetop-sheet-layout \.sheet-body > \.tab\.active:not\(\.notes\)\s*\{[^}]*overflow-y:\s*auto/],
-		["steading", /\.steading-sheet \.sheet-body > \.tab\.active:not\(\.notes\)\s*\{[^}]*overflow-y:\s*auto/],
+		["steading", /\.steading-sheet \.sheet-body > \.tab\.active:not\(\.notes\):not\(\.relmap\)\s*\{[^}]*overflow-y:\s*auto/],
 		["NPC", /\.stonetop-npc-sheet \.sheet-body > \.tab\.active:not\(\.notes\)\s*\{[^}]*overflow-y:\s*auto/],
 		["GM Toolkit", /\.stonetop-gm-toolkit-container\s*\{[^}]*overflow-y:\s*auto/],
 	];
@@ -77,6 +77,27 @@ describe("...and a tab too tall for its frame scrolls instead of being cut off",
 			expect(CSS).toMatch(rx);
 		});
 	}
+
+	// THE ONE TAB THAT OPTS OUT OF SCROLLING ALTOGETHER, and the reason it is allowed to.
+	// The steading's Relationship Map tab holds the map's own board, which is a fixed diagram
+	// panned and zoomed inside a viewport that clips (utils/zoom-pan-surface.js). It cannot be
+	// too tall for its frame, because it is always exactly its frame; a scrollbar there would be
+	// a second and contradictory way to move the same picture.
+	//
+	// What it needs instead is the thing the scrollports get for free: a DEFINITE height. The
+	// board's own grid gives its viewport row `1fr` and ZoomPanSurface measures that viewport to
+	// decide the scale, so an indefinite chain resolves it to zero and the symptom is a blank
+	// tab with nothing logged. Both links in the chain are pinned here.
+	it("the steading's map tab clips at a definite height instead of scrolling", () => {
+		const tab = CSS.match(/\.steading-sheet \.sheet-body > \.tab\.active\.relmap\s*\{([^}]*)\}/)?.[1];
+		expect(tab, "no rule for the map tab").toBeTruthy();
+		expect(tab).toMatch(/height:\s*100%/);
+		expect(tab).toMatch(/overflow:\s*hidden/);
+		const inner = CSS.match(/\.steading-sheet \.tab\.relmap \.sheet-tab\s*\{([^}]*)\}/)?.[1];
+		expect(inner, "no rule for the map tab's inner section").toBeTruthy();
+		expect(inner).toMatch(/height:\s*100%/);
+		expect(inner).toMatch(/min-height:\s*0/);
+	});
 });
 
 describe("the tab rail sizes to its own content", () => {

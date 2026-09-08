@@ -173,10 +173,13 @@ describe("the GM playbook diagrams", () => {
 			}
 			const rows = withSettings({}, () => gmDiagrams());
 			const flow = rows.find(r => r.slug === "flow-of-play");
-			expect(flow.steps[0].pageRef).toBe("Book I, page 251");
+			expect(flow.steps[0].pageCites.map(c => c.text)).toEqual(["Book I, page 251"]);
+			// The PRINTED page rides along with the words, because that is what the citation opens
+			// the reader at (module/books/rulebook-icons.js, openBookPage).
+			expect(flow.steps[0].pageCites[0]).toMatchObject({ book: 1, page: 251 });
 			// The core loop's five steps are one page of one chapter, which the heading already
 			// names, so they carry no citation of their own.
-			expect(rows.find(r => r.slug === "core-loop").steps.every(s => !s.pageRef)).toBe(true);
+			expect(rows.find(r => r.slug === "core-loop").steps.every(s => !s.pageCites.length)).toBe(true);
 		});
 
 		// Numbering the flow of play would promise an order it doesn't have: a game goes from

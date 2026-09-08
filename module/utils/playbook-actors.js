@@ -123,3 +123,25 @@ export function playbookIconPath(slug) {
 		? `systems/stonetop-pwd/assets/icons/playbooks/${slug.replace(/-/g, "_")}_icon.webp`
 		: null;
 }
+
+/**
+ * Is this picture one of the playbook badges — the art `playbookIconPath` hands out, and which a
+ * character who picks a playbook with no portrait of their own is given?
+ *
+ * ⚠ ASKED BY SURFACES THAT DRAW A RING ROUND A FACE. Every badge is a woodcut with a hand-drawn
+ * ring already painted round its edge, so a circular frame of our own lands a second ring a few
+ * pixels inside the first and the face reads as a target rather than as a portrait. A caller that
+ * gets `true` here should leave its own rim off and let the drawn one be the rim — see
+ * `.stonetop-relmap-node.is-own-ring` in the stylesheet, which is what the relationship map does.
+ *
+ * MATCHED ON THE FOLDER, not by rebuilding each slug's path: the ghost, the revenant and the
+ * thrall are drawn in the same hand and sit in the same place, and no playbook slug names them.
+ * The `_icon.webp` suffix is what separates the badges from the marks sharing that folder — the
+ * blood drops, the diamonds, the arrow — which carry no ring and are not portraits.
+ *
+ * The front of the path is deliberately unanchored. The same file is quoted server-root-relative
+ * by `playbookIconPath` and with a leading slash by hand, and both are the same art.
+ */
+export function hasOwnRingArt(img) {
+	return /(^|\/)assets\/icons\/playbooks\/[^/]+_icon\.webp$/.test(String(img ?? ""));
+}
