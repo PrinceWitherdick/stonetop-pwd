@@ -55,6 +55,7 @@ import { deletionEntry } from "../utils/foundry-compat.js";
 import { markPosterMapScenes } from "../book2-art/poster-maps.js";
 import { linkLandmarkNotes, refitLandmarkNotes, revealLandmarkNotesOnce } from "./PlaceOfInterestDrop.js";
 import { refitGmPrepPins } from "./ThreatNotePins.js";
+import { fileGmPrepJournalsInChronicle } from "../journal/gm-prep-page.js";
 import { reconcileSitePins } from "../sites/site-scene-pins.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { migrateAllSteadingPeople, ensurePeopleFolders, backfillAllResidentHomes } from "../actors/steading/steading-people.js";
@@ -189,6 +190,12 @@ export async function onReady() {
 		// migration/chronicle-flag-scope.js.
 		try { await repairAllChronicleFlagScopes(); }
 		catch (err) { console.error("Stonetop | chronicle flag-scope repair failed", err); }
+		// Move a world's loose Threats / Hazards / Sites journals into The Chronicle, where new
+		// ones are minted now. Swept every load rather than latched, for the same reason as the
+		// pass above: it matches only what is still unfiled, so once a world is tidy there is
+		// nothing left for it to find. It leaves a journal the GM has filed themselves alone.
+		try { await fileGmPrepJournalsInChronicle(); }
+		catch (err) { console.error("Stonetop | GM-prep journal filing failed", err); }
 		// Give a slug to any arcanum card built before StonetopItem#_preCreate stamped them.
 		// Idempotent, but GATED anyway (migration/once-per-version.js): idempotent buys the second
 		// run being safe, not the whole Items sidebar being filtered on every load of every session

@@ -9,6 +9,7 @@
 // below plus the seed->system shaper, so the CRUD lives once here. Deleting is shared too and
 // lives at the bottom of this file; the doom-tick is threat-only and stays in threat-store.
 import { STONETOP_SCOPE, resolvedFlagProperty } from "../actors/character/StonetopFlags.js";
+import { ensureChronicleFolder } from "../utils/chronicle-journals.js";
 
 // Looked up lazily (not at module load) so callers import cleanly outside Foundry.
 const OWN = () => CONST.DOCUMENT_OWNERSHIP_LEVELS;
@@ -57,8 +58,17 @@ export function makeGmPrepPageStore({ pageType, entryFlag, entryFlagId, entrySuf
 		if (existing) return existing;
 		if (!game.user?.isGM) return null;
 
+		// Filed in The Chronicle, with the rest of what this table writes down about its world.
+		// A prep journal is still GM-only (NONE-owned, so a player never sees it in the folder):
+		// the folder is about where the GM finds it, not who may read it. Loose at the sidebar
+		// root, three of these sat above every folder in the list and pushed the shared record
+		// down; the alternative was a fourth top-level folder holding what the Chronicle already
+		// means. Creating a Folder is a GM-only right, which this line is already past.
+		const folder = await ensureChronicleFolder();
+
 		const entry = await JournalEntry.create({
 			name: `${steadingActor.name} ${entrySuffix}`,
+			folder: folder?.id ?? null,
 			ownership: { default: OWN().NONE },
 			flags: { [STONETOP_SCOPE]: { [entryFlag]: true } },
 		});

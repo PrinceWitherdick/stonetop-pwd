@@ -10,6 +10,7 @@ import { buildHazardCardVM } from "../hazards/hazard-view.js";
 import { buildSiteCardVM, wireSiteTableRoll } from "../sites/site-view.js";
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { ensureChronicleFolder } from "../utils/chronicle-journals.js";
 
 const CARD_PARTIALS = "systems/stonetop-pwd/templates/journal/partials";
 
@@ -178,6 +179,39 @@ export function gmPrepEntryIds(steading) {
 /** Whether a JournalEntry / Note document is one of our GM-prep kinds. */
 export function isGmPrepDoc(doc) {
 	return Object.keys(GM_PREP_KINDS).some(flag => !!doc?.getFlag?.(STONETOP_SCOPE, flag));
+}
+
+/**
+ * The GM-prep journals that are still loose at the sidebar root.
+ *
+ * Pure, and gated on having NO folder at all rather than on not being in the Chronicle: a GM who
+ * has deliberately filed their Threats journal somewhere of their own has answered this question
+ * already, and a sweep that runs every load must not keep overruling them.
+ *
+ * @param {Iterable<JournalEntry>} journals
+ */
+export function unfiledGmPrepJournals(journals = []) {
+	return [...journals].filter(j => isGmPrepDoc(j) && !j.folder);
+}
+
+/**
+ * File this world's Threats / Hazards / Sites journals in The Chronicle, where new ones are now
+ * minted (see gm-prep-page-store.js). Legacy repair for the worlds whose prep journals were made
+ * before that, and a no-op the moment there is nothing loose left, so it needs no version gate.
+ *
+ * The Chronicle folder is only conjured when there is something to put in it: a world with no prep
+ * journals should not gain a folder just because this ran.
+ *
+ * @returns {Promise<number>} how many were moved
+ */
+export async function fileGmPrepJournalsInChronicle() {
+	if (!game.user?.isGM) return 0;
+	const stray = unfiledGmPrepJournals(game.journal?.contents ?? []);
+	if (!stray.length) return 0;
+	const folder = await ensureChronicleFolder();
+	if (!folder) return 0;
+	await JournalEntry.updateDocuments(stray.map(j => ({ _id: j.id, folder: folder.id })));
+	return stray.length;
 }
 
 /**
