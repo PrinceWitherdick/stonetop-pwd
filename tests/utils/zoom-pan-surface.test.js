@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZoomPanSurface } from "../../module/utils/zoom-pan-surface.js";
+import { ZOOM_STEP } from "../../module/utils/image-zoom.js";
 
 // PAN COALESCING, and only that. The arithmetic this class does is utils/image-zoom.js's and is
 // tested there; what is measured here is the one thing that is this file's own — that a pan reaches
@@ -131,6 +132,54 @@ describe("ZoomPanSurface pan batching", () => {
 		const apply = vi.spyOn(surface, "apply");
 		pan([[10, 0]]);
 		expect(apply).toHaveBeenCalledTimes(1);
+	});
+});
+
+// THE WHEEL. The zoom arithmetic is utils/image-zoom.js's and is tested there; what is measured
+// here is that this surface hands it the two things a reader can feel -- HOW MUCH of a notch the
+// event was, rather than merely which way it pointed, and the step the CALLER asked for rather than
+// the flowchart default. Both are invisible when they break: the board still zooms, just in leaps
+// past whatever size the reader was aiming for.
+describe("ZoomPanSurface wheel", () => {
+	let view;
+
+	/** A surface over a 400x300 window, fitted, with an optional step of its own. */
+	const surfaceWith = (zoomStep = 0) => {
+		view = fakeEl();
+		return new ZoomPanSurface({
+			view, content: fakeEl(), naturalWidth: 1000, naturalHeight: 800, zoomStep,
+		}).attach();
+	};
+
+	const wheel = (surface, ev) => {
+		const from = surface.scale;
+		view.emit("wheel", { clientX: 0, clientY: 0, deltaY: 0, deltaMode: 0, ...ev });
+		return surface.scale / from;
+	};
+
+	it("zooms a gentler step where the caller asked for one", () => {
+		const gentle = surfaceWith(1.08);
+		expect(wheel(gentle, { deltaY: -100 })).toBeCloseTo(1.08, 10);
+		gentle.destroy();
+
+		const plain = surfaceWith();
+		expect(wheel(plain, { deltaY: -100 })).toBeCloseTo(ZOOM_STEP, 10);
+		plain.destroy();
+	});
+
+	// The trackpad. Ten of these used to be ten whole steps.
+	it("zooms a fraction of a step for a fraction of a notch", () => {
+		const surface = surfaceWith(1.08);
+		const moved = wheel(surface, { deltaY: -10 });
+		expect(moved).toBeGreaterThan(1);
+		expect(moved).toBeCloseTo(1.08 ** 0.1, 10);
+		surface.destroy();
+	});
+
+	it("leaves the board alone when the wheel reports no travel", () => {
+		const surface = surfaceWith(1.08);
+		expect(wheel(surface, { deltaY: 0 })).toBe(1);
+		surface.destroy();
 	});
 });
 

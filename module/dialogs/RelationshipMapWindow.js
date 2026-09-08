@@ -79,6 +79,24 @@ const BOARD_PARTIAL = "systems/stonetop-pwd/templates/dialogs/partials/relations
 const SYNC_DEBOUNCE_MS = 50;
 
 /**
+ * What one wheel notch multiplies the board's zoom by, and it is DELIBERATELY GENTLER than the
+ * shared `ZOOM_STEP` the picture viewer uses (user, 2026-09-07).
+ *
+ * The two are doing different jobs. A flowchart is READ: the reader wants it fitted or wants it
+ * legible, those are the only two sizes that matter, and a fifth a notch gets between them in a
+ * handful of turns. This board is ARRANGED. A GM sizing it to place one portrait beside another,
+ * or to bring a corner of a forty-person web to a size they can read the captions on, is aiming at
+ * a particular size -- and at a fifth a notch there is no notch that lands on it: the board goes
+ * from a little too small to a lot too big and back, which is exactly the complaint.
+ *
+ * Under a tenth a notch, so it takes roughly two and a half turns of the wheel to do what one used
+ * to. The travel is still there for anyone crossing the whole range -- fit to full size is a dozen
+ * or so notches, which is one unhurried flick -- and a wheel that is nudged rather than spun now
+ * nudges. Fractional deltas (`wheelNotches`) make a trackpad finer still.
+ */
+const RELMAP_ZOOM_STEP = 1.08;
+
+/**
  * The size, ON SCREEN, that the held line's caption is kept at while the board is zoomed out.
  *
  * The tie bar has no text box on it: what a reader is typing shows on the LINE. A board fitted
@@ -963,6 +981,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 			naturalHeight: sheet.height,
 			controls: BOARD_CONTROLS,
 			menus: BOARD_MENUS,
+			// A gentler wheel than a picture gets, because this board is arranged rather than
+			// read. See `RELMAP_ZOOM_STEP`.
+			zoomStep: RELMAP_ZOOM_STEP,
 			// Every pan and every zoom step, because how big the held line's caption has to be set
 			// to stay readable is a question about the scale. See `_paintCaptionZoom`.
 			//

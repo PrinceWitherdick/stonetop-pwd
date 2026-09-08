@@ -18,7 +18,9 @@
 // mean. Fixed-size nodes on a shrinking board would pile into an unreadable heap the moment anyone
 // zoomed out to see the whole web.
 
-import { anchoredOffset, centreOffset, clampPan, clampZoom, fitScale, stepZoom } from "./image-zoom.js";
+import {
+	anchoredOffset, centreOffset, clampPan, clampZoom, fitScale, stepZoom, wheelNotches,
+} from "./image-zoom.js";
 import { GLIDE_WINDOW_MS, glideStep, throwVelocity, worthGliding } from "./pan-glide.js";
 import { prefersReducedMotion } from "./reduced-motion.js";
 
@@ -36,16 +38,26 @@ export class ZoomPanSurface {
 	 *                                    menu too, where the host has left one. Everything else
 	 *                                    pans on a right drag, `controls` included: that is the
 	 *                                    whole point of the right button.
+	 * @param {number} [spec.zoomStep]    What ONE wheel notch multiplies the scale by. Defaults to
+	 *                                    the shared `ZOOM_STEP`, which is sized for reading a
+	 *                                    flowchart: a fifth each way, so a fitted picture reaches
+	 *                                    full size in a handful of notches. A board being ARRANGED
+	 *                                    rather than read wants a gentler one -- see the relationship
+	 *                                    map, where a notch that size overshoots the size the reader
+	 *                                    was aiming for every time.
 	 * @param {Function} [spec.onChange]  Called after every paint, for a caller that has its own
 	 *                                    pixel-sized furniture to keep in step.
 	 */
-	constructor({ view, content, naturalWidth, naturalHeight, controls = "", menus = "", onChange = null } = {}) {
+	constructor({ view, content, naturalWidth, naturalHeight, controls = "", menus = "", zoomStep = 0, onChange = null } = {}) {
 		this._view = view ?? null;
 		this._content = content ?? null;
 		this._naturalWidth = Number(naturalWidth) || 0;
 		this._naturalHeight = Number(naturalHeight) || 0;
 		this._controls = controls;
 		this._menus = menus;
+		// Zero, absent and nonsense all mean "the shared default", which `stepZoom` supplies rather
+		// than this constructor: one place decides what an unusable step falls back to.
+		this._zoomStep = Number(zoomStep) || 0;
 		this._onChange = onChange;
 
 		this._scale = 1;
@@ -331,12 +343,17 @@ export class ZoomPanSurface {
 	}
 
 	_onWheel(ev) {
-		if (!ev.deltaY) return;
+		// HOW MUCH OF A NOTCH, not which way. A trackpad and a free-spinning wheel send a stream of
+		// small deltas where a detent sends one big one, and zooming a whole step per event turns
+		// either of those into a board that leaps past the size the reader wanted. `wheelNotches`
+		// says the rest.
+		const notches = wheelNotches(ev);
+		if (!notches) return;
 		ev.preventDefault();
 		// Before the zoom rather than inside it: a notch that lands on the scale the board is
 		// already at (the ends of the range) still means the reader has taken hold of the board.
 		this._stopGlide();
-		this.zoomTo(stepZoom(this._scale, ev.deltaY < 0 ? 1 : -1), this.anchorFor(ev));
+		this.zoomTo(stepZoom(this._scale, notches, this._zoomStep), this.anchorFor(ev));
 	}
 
 	/**
