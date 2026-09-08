@@ -14,7 +14,7 @@
 import { escHtml } from "../utils/strings.js";
 import { createHomebrewCard, readHomebrewCardPayload, bindHomebrewCardDrag } from "./homebrew-cards.js";
 import {
-	alternativeSectionFlags,
+	requirementSectionsHtml,
 	normalizeImprovementGrants,
 	normalizeImprovementSections,
 	summarizeImprovementGrants,
@@ -46,7 +46,6 @@ export function renderImprovementCardHtml(def) {
 	const flavor = String(def?.flavor ?? "");
 	const effect = String(def?.effect ?? "");
 	const sections = normalizeImprovementSections(def?.sections);
-	const alternatives = alternativeSectionFlags(sections);
 	const grants = normalizeImprovementGrants(def?.grants);
 
 	// Payload mirrors the built-in IMPROVEMENT_DEFINITIONS shape (items are HTML
@@ -59,13 +58,10 @@ export function renderImprovementCardHtml(def) {
 
 	const body = [];
 	if (flavor) body.push(`<p class="stonetop-journal-improvement-flavor">${escHtml(flavor)}</p>`);
-	sections.forEach((s, index) => {
-		// The same "or" divider the steading sheet draws above a continued either/or, so
-		// the card reads the way the improvement will once it is dropped.
-		if (alternatives[index]) body.push(`<p class="steading-req-or">or</p>`);
-		if (s.heading) body.push(`<p class="steading-req-heading">${s.heading}</p>`);
-		if (s.items.length) body.push(`<ul class="steading-req-list">${s.items.map(i => `<li class="check-bullet">${i}</li>`).join("")}</ul>`);
-	});
+	// The same "or" divider the steading sheet draws above a continued either/or, so the
+	// card reads the way the improvement will once it is dropped. Shared with the builder's
+	// preview, whose only job is to look exactly like this.
+	body.push(requirementSectionsHtml(sections, i => `<li class="check-bullet">${i}</li>`));
 	if (effect) body.push(`<p class="stonetop-journal-improvement-effect">${effect}</p>`);
 	// What the sheet will apply by itself when this is ticked complete, spelled out: the
 	// effect prose says it in the book's voice, and this says which of it is automatic.

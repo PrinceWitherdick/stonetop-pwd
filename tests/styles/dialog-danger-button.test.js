@@ -68,15 +68,28 @@ describe("the destructive confirm in a Stonetop dialog", () => {
 
 describe("the relationship map's page delete", () => {
 	const SRC = stripComments(readRepo("module/dialogs/RelationshipMapWindow.js"));
+	// The window asks its three "are you sure"s through one shell (`_confirm`), so the red is
+	// decided in one place and asked for by name. Both halves are still checked, just where they
+	// now live: the shell, and the caller that passes `danger`.
+	const SHELL = SRC.slice(SRC.indexOf("async _confirm("), SRC.indexOf("async _removeMap("));
 
 	it("wears the danger class on the button that commits it", () => {
-		expect(SRC).toMatch(/action: "drop",[\s\S]{0,200}class: "stonetop-dialog-btn--danger"/);
+		expect(SHELL).toMatch(/action: "go",[\s\S]{0,200}class: "stonetop-dialog-btn--danger"/);
 	});
 
 	it("leaves the button that keeps the page alone", () => {
-		// One red button in the footer, or the colour stops meaning anything.
-		const at = SRC.indexOf("pages.deleteCancel");
-		const line = SRC.slice(SRC.lastIndexOf("{", at), SRC.indexOf("}", at));
-		expect(line).not.toContain("danger");
+		// One red button in the footer, or the colour stops meaning anything. The keep button is
+		// the whole rest of the shell's button list, and none of it may mention danger.
+		const keep = SHELL.slice(SHELL.indexOf('action: "keep"'));
+		expect(keep).not.toContain("danger");
+	});
+
+	it("is asked for by the two confirms that destroy work, and not by the third", () => {
+		// Dropping a map and dropping a board are gone for good; taking somebody off a board is an
+		// undo away, so it is not red.
+		const asks = (from, to) => SRC.slice(SRC.indexOf(from), SRC.indexOf(to));
+		expect(asks("async _removeMap(", "async _renamePage(")).toContain("danger: true");
+		expect(asks("async _removePage(", "One text field")).toContain("danger: true");
+		expect(asks("async _removePerson(", "The bar")).not.toContain("danger");
 	});
 });

@@ -41409,15 +41409,24 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 
 .stonetop-relmap-head path { fill: var(--relmap-ink, var(--st-relmap-ink-slate)); }
 
-.stonetop-relmap-head--rose   { --relmap-ink: var(--st-relmap-ink-rose); }
-.stonetop-relmap-head--green  { --relmap-ink: var(--st-relmap-ink-green); }
-.stonetop-relmap-head--ochre  { --relmap-ink: var(--st-relmap-ink-ochre); }
-.stonetop-relmap-head--indigo { --relmap-ink: var(--st-relmap-ink-indigo); }
-.stonetop-relmap-head--plum   { --relmap-ink: var(--st-relmap-ink-plum); }
-.stonetop-relmap-head--rust   { --relmap-ink: var(--st-relmap-ink-rust); }
-.stonetop-relmap-head--crimson{ --relmap-ink: var(--st-relmap-ink-crimson); }
-.stonetop-relmap-head--slate  { --relmap-ink: var(--st-relmap-ink-slate); }
-.stonetop-relmap-head--custom { --relmap-ink: var(--relmap-ink-raw, var(--st-relmap-ink-slate)); }
+/* THE ARROWHEAD AND THE SWATCH TAKE ONE INK EACH, off the same declaration. An arrowhead on the
+   board and a swatch in the tie-bar's ink popover are the same colour by definition -- the swatch is
+   the promise the head keeps -- and two copies of this map looked identical with nothing enforcing
+   it. (The line's own map is separate and stays separate: it pairs each ink with its DASH, which
+   the note above it says must never be set apart from it.) */
+.stonetop-relmap-head--rose,   .stonetop-relmap-ink--rose   { --relmap-ink: var(--st-relmap-ink-rose); }
+.stonetop-relmap-head--green,  .stonetop-relmap-ink--green  { --relmap-ink: var(--st-relmap-ink-green); }
+.stonetop-relmap-head--ochre,  .stonetop-relmap-ink--ochre  { --relmap-ink: var(--st-relmap-ink-ochre); }
+.stonetop-relmap-head--indigo, .stonetop-relmap-ink--indigo { --relmap-ink: var(--st-relmap-ink-indigo); }
+.stonetop-relmap-head--plum,   .stonetop-relmap-ink--plum   { --relmap-ink: var(--st-relmap-ink-plum); }
+.stonetop-relmap-head--rust,   .stonetop-relmap-ink--rust   { --relmap-ink: var(--st-relmap-ink-rust); }
+.stonetop-relmap-head--crimson,.stonetop-relmap-ink--crimson{ --relmap-ink: var(--st-relmap-ink-crimson); }
+.stonetop-relmap-head--slate,  .stonetop-relmap-ink--slate  { --relmap-ink: var(--st-relmap-ink-slate); }
+
+/* A COLOUR THE READER CHOSE has no token to point at: it arrives inline in `--relmap-ink-raw`,
+   written onto the element by the renderer (the head) or by `RelmapTieBar` (the swatch). Declared so
+   the class exists at all; slate is what is left if it ever arrives empty. */
+.stonetop-relmap-head--custom, .stonetop-relmap-ink--custom { --relmap-ink: var(--relmap-ink-raw, var(--st-relmap-ink-slate)); }
 
 /* ── The labels ───────────────────────────────────────────────────────────────
    Bare words set IN the line, turned to lie along it.
@@ -42128,6 +42137,24 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	background: var(--st-slate-hover-bg);
 }
 
+/* OUT OF REACH, said once for every control on the bar that can be. This was written out six times,
+   identically, beside the six blocks below; one list is what keeps a reader who dims one of them
+   from leaving the other five brighter than it.
+
+   ⚠ `.stonetop-relmap-tiebar-btn` IS DELIBERATELY NOT IN THIS LIST, though it heads the two lists
+   above: a tool on the bar is taken away when it cannot be used, never greyed. */
+.stonetop-relmap-tiebar-inkopen:disabled,
+.stonetop-relmap-tiebar-dashopen:disabled,
+.stonetop-relmap-tiebar-sizeopen:disabled,
+.stonetop-relmap-inkpop-swatch:disabled,
+.stonetop-relmap-inkpop-add:disabled,
+.stonetop-relmap-dashpop-row:disabled,
+.stonetop-relmap-sizepop-row:disabled,
+.stonetop-relmap-sizepop-num:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
 /* WHICH ONE IS SET. A filled ground and not a coloured outline: an outline on a 26px square reads
    as a hover state, and the reader on the magnifier has one control's worth of screen at a time. */
 .stonetop-relmap-tiebar-btn.is-chosen {
@@ -42174,13 +42201,6 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	font-size: 13px;
 	line-height: 1;
 	cursor: pointer;
-}
-
-.stonetop-relmap-tiebar-inkopen:disabled,
-.stonetop-relmap-tiebar-dashopen:disabled,
-.stonetop-relmap-tiebar-sizeopen:disabled {
-	opacity: 0.55;
-	cursor: default;
 }
 
 /* ⚠ A FIXED WIDTH AND NOT SHRINK-TO-FIT. A trigger that resized with every colour would shift the
@@ -42345,11 +42365,6 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    showing them -- an empty disc that is a tab stop and somewhere an arrow key can land. */
 .stonetop-relmap-inkpop-swatch[hidden] { display: none; }
 
-.stonetop-relmap-inkpop-swatch:disabled {
-	opacity: 0.55;
-	cursor: default;
-}
-
 /* THE DISC ITSELF. A hairline in the page tone and a rule outside it, so the palest ink in the grid
    is still a disc against the panel rather than a smudge in it -- and so the deepest is still a
    disc rather than a hole. 18px inside a 26px target: the ring outside it comes to 22px, which
@@ -42431,11 +42446,6 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	line-height: 1;
 	white-space: nowrap;
 	cursor: pointer;
-}
-
-.stonetop-relmap-inkpop-add:disabled {
-	opacity: 0.55;
-	cursor: default;
 }
 
 /* A COLOUR OF THE READER'S OWN: Foundry's `<color-picker>`, which is a hex field and a swatch that
@@ -42584,11 +42594,6 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	cursor: pointer;
 }
 
-.stonetop-relmap-dashpop-row:disabled {
-	opacity: 0.55;
-	cursor: default;
-}
-
 .stonetop-relmap-dashpop-word {
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -42669,11 +42674,6 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	cursor: pointer;
 }
 
-.stonetop-relmap-sizepop-row:disabled {
-	opacity: 0.55;
-	cursor: default;
-}
-
 /* ⚠ THE SAMPLE'S SIZE IS WRITTEN ON THE ELEMENT, from the one list that holds the steps
    (`RELMAP_SIZES`), and must not be set here. A rule per step would be those numbers written a
    second time in a place nothing checks against the first.
@@ -42733,11 +42733,6 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 .stonetop-relmap-sizepop-num:focus-visible {
 	outline: 2px solid var(--st-accent-fill);
 	outline-offset: 1px;
-}
-
-.stonetop-relmap-sizepop-num:disabled {
-	opacity: 0.55;
-	cursor: default;
 }
 
 /* Deleting the line. Pushed to the end of the row and set apart from the presses beside it,
@@ -42885,17 +42880,9 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	background: var(--relmap-ink, var(--st-relmap-ink-slate));
 }
 
-.stonetop-relmap-ink--rose   { --relmap-ink: var(--st-relmap-ink-rose); }
-.stonetop-relmap-ink--green  { --relmap-ink: var(--st-relmap-ink-green); }
-.stonetop-relmap-ink--ochre  { --relmap-ink: var(--st-relmap-ink-ochre); }
-.stonetop-relmap-ink--indigo { --relmap-ink: var(--st-relmap-ink-indigo); }
-.stonetop-relmap-ink--plum   { --relmap-ink: var(--st-relmap-ink-plum); }
-.stonetop-relmap-ink--rust   { --relmap-ink: var(--st-relmap-ink-rust); }
-.stonetop-relmap-ink--crimson{ --relmap-ink: var(--st-relmap-ink-crimson); }
-.stonetop-relmap-ink--slate  { --relmap-ink: var(--st-relmap-ink-slate); }
-/* The swatch for a custom colour takes it inline, from `RelmapTieBar`: there is no token to point
-   at. Declared so the class exists at all -- what it holds is whatever was written onto it. */
-.stonetop-relmap-ink--custom { --relmap-ink: var(--relmap-ink-raw, var(--st-relmap-ink-slate)); }
+/* ⚠ THE SWATCH'S OWN INK IS NOT SET HERE. `.stonetop-relmap-ink--*` is declared beside the
+   arrowhead's identical map, in the lines family above, so a swatch and the head it stands for
+   cannot be given different colours. Search `.stonetop-relmap-head--rose`. */
 
 /* ── "Who did they mean?": matching recorded introduction answers to people ────────────────────
    A long read that the reader works down in one pass, so the window is a fixed frame with ONE

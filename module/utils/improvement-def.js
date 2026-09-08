@@ -269,6 +269,17 @@ export function unformatImprovementText(html) {
 /** Ceiling on a row's repeat, so a mistyped count cannot mint a thousand checkboxes. */
 export const MAX_REQUIREMENT_REPEAT = 20;
 
+/**
+ * A row's repeat as a usable count: at least one box, never more than the ceiling. Shared
+ * with the builder, which shows the same number back in its count field; a second copy of
+ * the clamp there could disagree with the boxes this one actually expands into.
+ * @param {number|string|null|undefined} value
+ * @returns {number}
+ */
+export function clampRepeat(value) {
+	return Math.min(Math.max(asInt(value) ?? 1, 1), MAX_REQUIREMENT_REPEAT);
+}
+
 /** 1st, 2nd, 3rd, 4th: the suffix the book uses when a requirement is done N times. */
 export function ordinal(n) {
 	const num = Math.trunc(Number(n) || 0);
@@ -294,7 +305,7 @@ export function itemsFromRows(rows = []) {
 	for (const row of Array.isArray(rows) ? rows : []) {
 		const text = String(row?.text ?? "").trim();
 		if (!text) continue;
-		const repeat = Math.min(Math.max(asInt(row?.repeat) ?? 1, 1), MAX_REQUIREMENT_REPEAT);
+		const repeat = clampRepeat(row?.repeat);
 		if (repeat === 1) { items.push(text); continue; }
 		for (let i = 1; i <= repeat; i++) items.push(`${text} (${ordinal(i)})`);
 	}
@@ -434,7 +445,7 @@ export function sectionRequiredCount(section) {
  * @param {{sections?: Array}} def
  */
 export function improvementRequirementCount(def) {
-	return (def?.sections ?? []).reduce((n, s) => n + (s?.items?.length ?? 0), 0);
+	return flatRequirementItems(def).length;
 }
 
 /**
@@ -446,4 +457,32 @@ export function improvementRequirementCount(def) {
  */
 export function alternativeSectionFlags(sections = []) {
 	return sections.map((s, i) => !!s?.group && i > 0 && sections[i - 1]?.group === s.group);
+}
+
+/**
+ * An improvement's requirement sections as HTML: the "or" divider above a continued
+ * either/or, the written-for-you heading, and one list per section.
+ *
+ * The ONE emitter of that markup, because two readers draw it - the journal's draggable
+ * card and the builder's preview - and the preview's whole promise is that it looks like
+ * the card. Two copies looked identical and nothing enforced it. Only the box differs, so
+ * the caller passes `itemHtml`: the card renders a `check-bullet`, the preview a disabled
+ * checkbox. Items are already HTML on a definition (see buildImprovementDef) and are
+ * emitted unescaped by both, which is why this takes them as-is.
+ *
+ * @param {Array<{heading?: string, items?: string[]}>} sections
+ * @param {(item: string) => string} itemHtml  the <li> for one requirement box
+ * @returns {string}
+ */
+export function requirementSectionsHtml(sections = [], itemHtml) {
+	const list = sections ?? [];
+	const alternatives = alternativeSectionFlags(list);
+	const out = [];
+	list.forEach((section, i) => {
+		if (alternatives[i]) out.push(`<p class="steading-req-or">or</p>`);
+		if (section?.heading) out.push(`<p class="steading-req-heading">${section.heading}</p>`);
+		const items = section?.items ?? [];
+		if (items.length) out.push(`<ul class="steading-req-list">${items.map(item => itemHtml(item)).join("")}</ul>`);
+	});
+	return out.join("");
 }

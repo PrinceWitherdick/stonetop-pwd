@@ -5,6 +5,7 @@ import {
 	truncateValue, scalarEntry,
 } from "../../utils/ledger-core.js";
 import { IMPROVEMENT_DEFINITIONS } from "./StonetopSteading.js";
+import { flatRequirementItems } from "../../utils/improvement-def.js";
 import { stripHtmlToText as stripHtml } from "../../utils/strings.js";
 import { isSteadingActor } from "../../utils/world.js";
 
@@ -201,7 +202,7 @@ function improvementDefs(actor) {
 		if (!def?.slug) return;
 		defs.set(def.slug, {
 			label: def.label || prettifySlug(def.slug),
-			steps: (def.sections ?? []).flatMap(s => s.items ?? []).map(stripHtml),
+			steps: flatRequirementItems(def).map(stripHtml),
 		});
 	};
 	IMPROVEMENT_DEFINITIONS.forEach(add);

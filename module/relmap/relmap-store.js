@@ -479,6 +479,45 @@ function leafPatch(kind, id, fields) {
 }
 
 /**
+ * WHAT EACH FIELD IS PUT THROUGH ON ITS WAY INTO WORLD DATA, as a table rather than a ladder of
+ * `if ("x" in fields)` lines - the shape `relmap-pen.js` already keeps its three through.
+ *
+ * A field with no gate is written as it arrives (`uuid`, `img`, `a`, `b`): those are ids and paths,
+ * and `leafPatch` is what vets them. A table is what makes it possible to SEE that `dir` is gated
+ * and `img` is not; spelled as a ladder, the odd one out was `dir`, which had its check written
+ * inline instead of beside its three siblings.
+ */
+const NODE_GATES = Object.freeze({
+	x: clampPct,
+	y: clampPct,
+	name: v => str(v, RELMAP_NAME_MAX),
+	note: v => str(v, RELMAP_NOTE_MAX),
+});
+
+const EDGE_GATES = Object.freeze({
+	label: v => str(v, RELMAP_LABEL_MAX),
+	note: v => str(v, RELMAP_NOTE_MAX),
+	origin: v => str(v, RELMAP_ORIGIN_MAX),
+	ink: readInk,
+	dash: readDash,
+	size: readSize,
+	src: readSrc,
+	dir: v => (RELMAP_DIRS.includes(v) ? v : RELMAP_DIR_DEFAULT),
+});
+
+/**
+ * The fields a caller actually named, each through its gate. Only PRESENT keys are visited, which is
+ * what the `in` tests bought: a patch that says nothing about `note` must not go on to write one.
+ */
+function gated(gates, fields) {
+	const clean = {};
+	for (const [key, value] of Object.entries(fields ?? {})) {
+		clean[key] = gates[key] ? gates[key](value) : value;
+	}
+	return clean;
+}
+
+/**
  * Move one portrait, or change one of its fields.
  *
  * Leaves only, so this is the write two people dragging at once can both make. Coordinates are
@@ -486,31 +525,34 @@ function leafPatch(kind, id, fields) {
  * cross on their way into world data and there is exactly one of it.
  */
 export function nodePatch(id, fields = {}) {
-	const clean = { ...fields };
-	if ("x" in clean) clean.x = clampPct(clean.x);
-	if ("y" in clean) clean.y = clampPct(clean.y);
-	if ("name" in clean) clean.name = str(clean.name, RELMAP_NAME_MAX);
-	if ("note" in clean) clean.note = str(clean.note, RELMAP_NOTE_MAX);
-	return leafPatch("nodes", id, clean);
+	return leafPatch("nodes", id, gated(NODE_GATES, fields));
 }
 
 /** Change one link. Same rules, same reasons. */
 export function edgePatch(id, fields = {}) {
-	const clean = { ...fields };
-	if ("label" in clean) clean.label = str(clean.label, RELMAP_LABEL_MAX);
-	if ("note" in clean) clean.note = str(clean.note, RELMAP_NOTE_MAX);
-	if ("ink" in clean) clean.ink = readInk(clean.ink);
-	if ("dir" in clean && !RELMAP_DIRS.includes(clean.dir)) clean.dir = RELMAP_DIR_DEFAULT;
-	if ("dash" in clean) clean.dash = readDash(clean.dash);
-	if ("size" in clean) clean.size = readSize(clean.size);
-	if ("src" in clean) clean.src = readSrc(clean.src);
-	if ("origin" in clean) clean.origin = str(clean.origin, RELMAP_ORIGIN_MAX);
-	return leafPatch("edges", id, clean);
+	return leafPatch("edges", id, gated(EDGE_GATES, fields));
 }
 
 /** Put somebody on the map. Every field written, so the node is whole from its first write. */
 export function addNodePatch(id, { uuid = null, name = "", img = "", x = 50, y = 50, note = "" } = {}) {
 	return nodePatch(id, { uuid, name, img, x, y, note });
+}
+
+/**
+ * A whole seating as one patch: every person in `nodes`, folded into the leaf paths that put them
+ * on the board.
+ *
+ * ONE WRITE is the point, and it is why this is a fold rather than a loop of writes: leaf paths
+ * merge with somebody else's concurrent drag instead of replacing the `nodes` object out from under
+ * it. Three callers were spelling the fold out by hand -- the two seating passes and the window's
+ * own "add these people" -- and a fourth would have been the one that forgot the `?? {}`.
+ *
+ * @param {Record<string, object>} nodes  id -> the fields `addNodePatch` takes.
+ */
+export function addNodesPatch(nodes = {}) {
+	const patch = {};
+	for (const [id, node] of Object.entries(nodes ?? {})) Object.assign(patch, addNodePatch(id, node) ?? {});
+	return patch;
 }
 
 /** Draw a link. Every field written, so the line is whole from its first write. */
@@ -521,6 +563,13 @@ export function addEdgePatch(id, {
 } = {}) {
 	if (!isSafeId(a) || !isSafeId(b) || a === b) return null;
 	return edgePatch(id, { a, b, label, ink, dir, dash, size, src, origin, note });
+}
+
+/** The line half of {@link addNodesPatch}: every link in `edges`, folded into one patch. */
+export function addEdgesPatch(edges = {}) {
+	const patch = {};
+	for (const [id, edge] of Object.entries(edges ?? {})) Object.assign(patch, addEdgePatch(id, edge) ?? {});
+	return patch;
 }
 
 /**

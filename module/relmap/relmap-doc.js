@@ -40,7 +40,7 @@ import { SYSTEM_ID } from "../system-id.js";
 import { localize } from "../utils/i18n.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
 import {
-	RELMAP_FLAG, RELMAP_VERSION, addEdgePatch, addNodePatch, edgePatch, emptyGraph, normalizeGraph,
+	RELMAP_FLAG, RELMAP_VERSION, addEdgesPatch, addNodesPatch, edgePatch, emptyGraph, normalizeGraph,
 	relmapFlagPath, relmapPath,
 } from "./relmap-store.js";
 import { RELMAP_PARTY_FLAG, RELMAP_PARTY_MARK, partyBoardPlan } from "./relmap-party.js";
@@ -685,9 +685,7 @@ export async function syncPartyPage(entry, pcs = [], regards = new Map()) {
 	const plan = partyBoardPlan(readGraph(page), party, regards);
 	// ONE WRITE for the whole top-up, as leaf paths so it merges with somebody else's concurrent
 	// drag rather than replacing the `nodes` object out from under it.
-	const patch = {};
-	for (const [id, node] of Object.entries(plan.nodes)) Object.assign(patch, addNodePatch(id, node) ?? {});
-	for (const [id, edge] of Object.entries(plan.edges)) Object.assign(patch, addEdgePatch(id, edge) ?? {});
+	const patch = { ...addNodesPatch(plan.nodes), ...addEdgesPatch(plan.edges) };
 	// The keys onto the lines that had none, in the SAME write: a board whose newcomers landed and
 	// whose adoption did not is a board that would be guessed about again on the next open. See
 	// `adoptBareLines`.
@@ -862,8 +860,10 @@ export async function syncVillagePage(entry, people = []) {
 	// ONE WRITE for the whole thing, as leaf paths so it merges with somebody else's concurrent drag
 	// rather than replacing the `nodes` object out from under it. The ledger rides along in the same
 	// write, so a board cannot end up holding people it has no record of handing over.
-	const patch = { [relmapFlagPath(RELMAP_VILLAGE_FLAG, "seated")]: plan.seated };
-	for (const [id, node] of Object.entries(plan.nodes)) Object.assign(patch, addNodePatch(id, node) ?? {});
+	const patch = {
+		[relmapFlagPath(RELMAP_VILLAGE_FLAG, "seated")]: plan.seated,
+		...addNodesPatch(plan.nodes),
+	};
 	await applyPatch(page, patch);
 	// THE MARK AFTER THE BOARD, the order `createPartyPage` keeps and for the same reason: a mark
 	// written first, followed by a write that failed, is a map that believes it has seated its

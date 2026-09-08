@@ -131,8 +131,11 @@ describe("the upgrade offer", () => {
 		const body = fn.slice(0, fn.indexOf("\n}\n"));
 		expect(body).toContain("card: _buildGmPlaybookArtContent");
 		expect(body).not.toContain("ChatMessage.create");
-		expect(readRepo("module/book2-art/offer-once.js"))
-			.toContain('ChatMessage.getWhisperRecipients("GM")');
+		// The offer posts through the shared GM whisper (utils/chat.js#whisperGm), which is where
+		// the recipient list now lives -- it was written out at four call sites and one of them
+		// dropping the `whisper` array would post GM housekeeping into the table's chat log.
+		expect(readRepo("module/book2-art/offer-once.js")).toContain("whisperGm(");
+		expect(readRepo("module/utils/chat.js")).toContain('ChatMessage.getWhisperRecipients("GM")');
 	});
 
 	// The card's button reuses the class the two existing art cards use, which stonetop.js already

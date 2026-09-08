@@ -20,13 +20,13 @@ import { clearArtBrowseCache } from "../book2-art/browse.js";
 import { BOOK2_ART_MACRO_NAME, findBook2ArtWorldMacro, loadBook2ArtMacroSource, runImportBookArtMacro } from "../book2-art/macro.js";
 import { offerDurableArtOnce } from "../book2-art/offer-once.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
-import { stonetopChatCard } from "../utils/chat.js";
+import { stonetopChatCard, whisperGm } from "../utils/chat.js";
 import { stampWorldLayoutBaseline } from "../utils/sheet-layout.js";
 import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyReduceMotion, applySheetContrast, applySheetTexture, applyNoItalics, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope } from "../settings.js";
 import { EndOfSessionDialog } from "../dialogs/EndOfSessionDialog.js";
 import { IntroductionsDialog } from "../dialogs/IntroductionsDialog.js";
 import { SpringBurstDialog } from "../dialogs/SpringBurstDialog.js";
-import { reopenOpenWalkthroughs, sessionZeroComplete } from "../dialogs/walkthrough-resume.js";
+import { pastWelcomeGuide, reopenOpenWalkthroughs } from "../dialogs/walkthrough-resume.js";
 import { reopenOpenBookReaders } from "../books/reader-resume.js";
 import { rulebookMacroApi } from "../books/rulebook-api.js";
 import { writeChronicle } from "../utils/chronicle.js";
@@ -579,7 +579,7 @@ export async function onReady() {
 	// opening, reopen only once it's up (with a timeout fallback so a failed/absent
 	// Welcome render can't strand the resume).
 	let welcomeDialog = null;
-	if (game.user.isGM && !getSetting("gmWelcomeShown") && !sessionZeroComplete()) {
+	if (game.user.isGM && !pastWelcomeGuide()) {
 		let resumed = false;
 		const resume = () => { if (resumed) return; resumed = true; reopenOpenWalkthroughs(); };
 		Hooks.once("renderWelcomeDialog", resume);
@@ -985,7 +985,7 @@ function _maybeOpenCharacterCreation(actor) {
 // walkthroughs — the guided Introductions and Let Spring Burst Forth (sessionZeroComplete).
 // Until one of those, the guide keeps greeting the GM across the first few loads.
 function _openGmWelcomeGuide() {
-	if (getSetting("gmWelcomeShown") || sessionZeroComplete()) return null;
+	if (pastWelcomeGuide()) return null;
 	return WelcomeDialog.open();
 }
 
@@ -1707,16 +1707,12 @@ async function _postBook2ArtReminderOnce() {
 	// Hold off until the Welcome guide has stopped auto-opening — the GM finished session
 	// zero or ticked "Don't show this again". Mirrors _openGmWelcomeGuide's gate. Not flagged
 	// here: a fresh world legitimately reaches this state later, so keep checking until it does.
-	if (!getSetting("gmWelcomeShown") && !sessionZeroComplete()) return;
+	if (!pastWelcomeGuide()) return;
 
 	// Past the guide, and nothing imported yet: whisper the one-time nudge to the GMs.
 	if (!(await hasImportedBook2Art())) {
 		if (!globalThis.ChatMessage?.create) return; // retry next load if chat isn't ready
-		await ChatMessage.create({
-			content: _buildBook2ArtReminderContent(),
-			whisper:  ChatMessage.getWhisperRecipients("GM").map(u => u.id),
-			speaker: { alias: "Stonetop" },
-		});
+		await whisperGm(_buildBook2ArtReminderContent());
 	}
 	await setSetting("book2ArtReminderShown", true);
 }

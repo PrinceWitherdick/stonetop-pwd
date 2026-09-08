@@ -289,7 +289,7 @@ describe("the damage window's reach", () => {
 		// The lock that ENDS A DAMAGE ROLL, named by the record it writes. Call the Shot's "do no
 		// harm" locks earlier and returns, which is not this rule breaking but the tier having no
 		// roll to ask about: nothing is spent and no window opens on that path.
-		const locked = body.indexOf("lockAttackCard(message, root, { picks, yourCall, targets })");
+		const locked = body.indexOf("lockAttackCard(message, root, { yourCall, targets })");
 		const spent = body.indexOf("depleteAmmoAndPost");
 		expect(asked).toBeGreaterThan(-1);
 		expect(locked).toBeGreaterThan(-1);

@@ -1,6 +1,7 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { RELMAP_FLAG } from "../relmap/relmap-store.js";
 import { RELMAP_FOLDER_NAME } from "../relmap/relmap-doc.js";
+import { DIRECTORY_ROW_SELECTOR, isWorldDirectory } from "./actor-directory-rows.js";
 
 /**
  * KEEP THE RELATIONSHIP MAPS OUT OF THE JOURNAL SIDEBAR.
@@ -31,21 +32,19 @@ import { RELMAP_FOLDER_NAME } from "../relmap/relmap-doc.js";
  * (dialogs/RelationshipMapWindow.js), so this takes nothing away with it.
  */
 
-/** Row selectors, matching core's own directory partials (templates/sidebar/partials/). */
-const ENTRY_ROW = "li.directory-item.document[data-entry-id]";
+/** Row selectors, matching core's own directory partials (templates/sidebar/partials/). The
+ *  document row is the shared one; a copy that drifts does not fail loudly. */
+const ENTRY_ROW = DIRECTORY_ROW_SELECTOR;
 const FOLDER_ROW = "li.directory-item.folder[data-folder-id]";
 
 /** Is this app a rendered WORLD Journal directory (not a compendium's index view)?
  *
- * Duck-typed the way `isActorDirectory` is (hooks/actor-directory-rows.js), and for the same
- * reason: ApplicationV2 fires a render hook per class in the inheritance chain, so the stable hook
- * name is the PARENT's (`renderDocumentDirectory`) and every other sidebar tab reaches this
- * handler. `index` is what tells a CompendiumCollection from a world collection. */
+ * Duck-typed by the shared `isWorldDirectory` (hooks/actor-directory-rows.js), and for the same
+ * reason it is shared: ApplicationV2 fires a render hook per class in the inheritance chain, so the
+ * stable hook name is the PARENT's (`renderDocumentDirectory`) and every other sidebar tab reaches
+ * this handler, which makes the collection guard load-bearing. */
 export function isJournalDirectory(app) {
-	const collection = app?.collection;
-	return collection?.documentName === "JournalEntry"
-		&& typeof collection.get === "function"
-		&& !collection.index;
+	return isWorldDirectory(app, "JournalEntry");
 }
 
 /** Is this entry one of our relationship maps? By the flag, never by the name or the folder: the

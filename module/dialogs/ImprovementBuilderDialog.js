@@ -6,6 +6,7 @@ import {
 	MAX_REQUIREMENT_REPEAT,
 	STEADING_SIZES,
 	buildImprovementDef,
+	clampRepeat,
 	defaultSectionHeading,
 	groupsFromSections,
 	itemsFromRows,
@@ -486,7 +487,7 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 			const text = row.querySelector(".stonetop-improvement-builder-req-text");
 			if (text) text.value = values.text ?? "";
 			const count = row.querySelector(".stonetop-improvement-builder-req-count");
-			if (count) count.value = String(Math.min(Math.max(Number(values.repeat) || 1, 1), MAX_REQUIREMENT_REPEAT));
+			if (count) count.value = String(clampRepeat(values.repeat));
 		}
 
 		list.appendChild(row);

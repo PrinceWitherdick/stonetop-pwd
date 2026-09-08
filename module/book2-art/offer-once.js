@@ -1,5 +1,6 @@
 import { getSetting, setSetting } from "../settings.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
+import { whisperGm } from "../utils/chat.js";
 
 /**
  * Make a once-per-world offer about art the GM already has on disk.
@@ -41,11 +42,7 @@ export async function offerDurableArtOnce({ setting, findWork, card, offer }) {
 	// the latch unset so the offer is made on a later load instead of being lost.
 	offer ??= async work => {
 		if (!globalThis.ChatMessage?.create) return false;
-		await ChatMessage.create({
-			content: card(work),
-			whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
-			speaker: { alias: "Stonetop" },
-		});
+		await whisperGm(card(work));
 	};
 	// ONE GM asks. The latch is world-scoped but it is only written at the END, after findWork
 	// and offer have both awaited — so two GMs joining together both pass the check below and

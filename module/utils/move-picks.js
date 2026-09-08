@@ -255,17 +255,32 @@ const firstCountIn = segment => {
 };
 
 /**
- * Every tier marker in one stretch of text, mapped to the count that tier states beside it.
+ * A stretch of text cut at its tier markers: each marker's tier keys, with the text that follows it
+ * up to the next marker.
  *
  * Read by SEGMENT rather than by one regex over the whole sentence. "On a 10+, deal your damage
- * and pick 2; on a 7-9, deal damage and pick 1" needs each count tied to the tier it follows, and
+ * and pick 2; on a 7-9, deal damage and pick 1" needs each clause tied to the tier it follows, and
  * an optional tier prefix inside one pattern does not do that reliably — a lazy match happily
- * skips the "on a 10+" and files its count as tier-less, at which point the 7-9 count is the only
+ * skips the "on a 10+" and files what follows as tier-less, at which point the 7-9 is the only
  * tier answer and the 10+ is silently lost. Cutting the text at each tier marker cannot make that
- * mistake: a count belongs to the marker it sits after, and there is nowhere else for it to go.
+ * mistake: a clause belongs to the marker it sits after, and there is nowhere else for it to go.
+ *
+ * ONE WALK, because two readers need exactly this cut — the count a tier states (`tierCountsIn`)
+ * and whether a tier reaches the list at all (`pickTiersFrom`). A second copy of the arithmetic
+ * would be a new tier marker taught to only one of them.
  */
-function tierCountsIn(text) {
+function* tierSegments(text) {
 	const marks = [...text.matchAll(TIER_MARK_RE)];
+	for (let i = 0; i < marks.length; i++) {
+		yield {
+			tiers: tierKeys(marks[i][1]),
+			segment: text.slice(marks[i].index, marks[i + 1]?.index ?? text.length),
+		};
+	}
+}
+
+/** Every tier marker in one stretch of text, mapped to the count that tier states beside it. */
+function tierCountsIn(text) {
 	const byTier = {};
 	// LAST occurrence of a tier wins, not the first: the statement that introduces THIS list is
 	// the one nearest it. Seasons Change is the case that needs it — one item whose text runs
@@ -277,10 +292,8 @@ function tierCountsIn(text) {
 	// writes the shared clause first and then narrows it ("on a 7+, … they pick 1; on a 10+, …
 	// both apply"), so the tier that says something of its own overwrites what the shared clause
 	// left it, and the tier that says nothing more keeps it.
-	marks.forEach((mark, i) => {
-		const tiers = tierKeys(mark[1]);
-		if (!tiers.length) return;
-		const segment = text.slice(mark.index, marks[i + 1]?.index ?? text.length);
+	for (const { tiers, segment } of tierSegments(text)) {
+		if (!tiers.length) continue;
 		// The veto is read against THIS TIER'S sentence, not the whole lead. A tier that hands
 		// over the entire list is not a tier without a count — it is a different tier, and it has
 		// no business speaking for its neighbours. Undying and Dark Succor are the moves that
@@ -295,11 +308,11 @@ function tierCountsIn(text) {
 		// "both apply" and "all 3 apply" used to end their journey — counted as unreadable and
 		// left uncapped, on the two tiers in the book that leave the player nothing to decide.
 		const all = takeAllCount(segment);
-		if (all) { for (const tier of tiers) byTier[tier] = all; return; }
-		if (UNBOUNDED.test(segment)) return;
+		if (all) { for (const tier of tiers) byTier[tier] = all; continue; }
+		if (UNBOUNDED.test(segment)) continue;
 		const n = firstCountIn(segment);
 		if (n) for (const tier of tiers) byTier[tier] = n;
-	});
+	}
 	return byTier;
 }
 
@@ -398,15 +411,13 @@ export function pickTiersFrom(text) {
 	const src = decodeEntities(String(text ?? ""));
 	if (!src) return [];
 
-	// The same segmentation pickLimitsFrom reads its counts out of, for the same reason: a clause
-	// belongs to the tier marker it sits after, and there is nowhere else for it to go.
-	const marks = [...src.matchAll(TIER_MARK_RE)];
+	// The same segmentation pickLimitsFrom reads its counts out of, and literally so: `tierSegments`
+	// is the one walk, because a clause belongs to the tier marker it sits after.
 	const found = new Set();
-	marks.forEach((mark, i) => {
-		const segment = src.slice(mark.index, marks[i + 1]?.index ?? src.length);
-		if (!reachesList(segment)) return;
-		for (const tier of tierKeys(mark[1])) found.add(tier);
-	});
+	for (const { tiers, segment } of tierSegments(src)) {
+		if (!reachesList(segment)) continue;
+		for (const tier of tiers) found.add(tier);
+	}
 	return TIER_ORDER.filter(tier => found.has(tier));
 }
 

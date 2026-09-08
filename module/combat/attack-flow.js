@@ -937,8 +937,7 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	// "roll": whatever the move's OWN ticked bullets add, stacked on top of the tier's own
 	// unconditional numbers (Clash's 7-9 suffers the enemy's attack whether or not anything is
 	// ticked). One list, read where the player ticked it — see pickedOptionLabels and PICK_EFFECTS.
-	const picks = pickedOptionLabels(root);
-	const fx = pickedEffects(attack.moveKey, picks);
+	const fx = pickedEffects(attack.moveKey, pickedOptionLabels(root));
 
 	const extraDice = [btn.dataset.extraDice ?? "", ...fx.extraDice].filter(Boolean);
 	const counter   = btn.dataset.counter === "1" || fx.counter;
@@ -947,11 +946,11 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 
 	// "Do no harm; don't deal your damage after all" — Call the Shot's fourth bullet, and the one
 	// pick that CALLS THE ROLL OFF. The button already says "Deal no damage" (wireAttackNoHarm),
-	// so the click enacts that: the card latches resolved, recording what was picked, and no
-	// damage window opens and no dice are thrown. Nothing else on the tier can survive it, which
+	// so the click enacts that: the card latches resolved, and no damage window opens and no dice
+	// are thrown (what was ticked is already on the card). Nothing else on the tier can survive it, which
 	// is why it is answered before the dice and before the quiver.
 	if (fx.addons.includes(NO_HARM)) {
-		await lockAttackCard(message, root, { picks, targets });
+		await lockAttackCard(message, root, { targets });
 		return;
 	}
 
@@ -974,7 +973,7 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 		{ move: attack.move, moveKey: attack.moveKey, weapon: attack.weapon, extraDice, shiftKey });
 	if (!damage) { btn.disabled = false; return; }
 
-	await lockAttackCard(message, root, { picks, yourCall, targets });
+	await lockAttackCard(message, root, { yourCall, targets });
 	if (deplete) await depleteAmmoAndPost(message, actor, attack);
 	await rollAndPostDamage(actor, {
 		move: attack.move, weapon: attack.weapon, targets, counter, damage, ignoresArmor,
@@ -997,11 +996,11 @@ function promptYourCall(moveName) {
 	});
 }
 
-// Lock the card: mark the attack resolved (recording which of the move's bullets were held when
-// it was enacted) and disable every tier's Confirm plus the move's own option boxes. The setFlag
-// re-render also re-applies this via wireAttackConfirm; we do it here too so there's no clickable
-// window first. The ticks themselves need no restoring — they live in the message's `pickChecked`
-// flag like every other move's, and `picks` here is the record of what the damage was rolled with.
+// Lock the card: mark the attack resolved and disable every tier's Confirm plus the move's own
+// option boxes. The setFlag re-render also re-applies this via wireAttackConfirm; we do it here too
+// so there's no clickable window first. WHAT WAS TICKED IS NOT RECORDED HERE: the ticks live in the
+// message's `pickChecked` flag like every other move's, and a second copy beside them would be the
+// two records of a single choice that this card no longer keeps.
 async function lockAttackCard(message, root, extra = {}) {
 	await message.setFlag(SCOPE, "attack", { ...message.getFlag(SCOPE, "attack"), resolved: true, ...extra });
 	root.querySelectorAll(".stonetop-attack-confirm, .stonetop-picklist-check").forEach(el => (el.disabled = true));

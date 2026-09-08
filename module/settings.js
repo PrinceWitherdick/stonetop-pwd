@@ -2183,6 +2183,10 @@ export function localMapPinNameOverride(scene) {
 	return typeof mine === "boolean" ? mine : undefined;
 }
 
+/** The empty answer, shared. This runs once per pin per canvas refresh and a world with no local
+ *  overrides at all - the common case - would otherwise mint a throwaway object for every note. */
+const _NO_LOCAL_PIN_NAMES = Object.freeze({});
+
 /** This world's slice of the local record, cached, and tolerant of every shape but the right one. */
 function _localMapPinNames() {
 	const all = _cachedSetting(
@@ -2191,7 +2195,7 @@ function _localMapPinNames() {
 		{},
 	);
 	const mine = all[worldKey()];
-	return !!mine && typeof mine === "object" && !Array.isArray(mine) ? mine : {};
+	return !!mine && typeof mine === "object" && !Array.isArray(mine) ? mine : _NO_LOCAL_PIN_NAMES;
 }
 
 /**

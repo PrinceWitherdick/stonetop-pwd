@@ -1,7 +1,7 @@
 import { fxMasterActive } from "./weather-fx.js";
 import { getSetting, setSetting } from "../settings.js";
-import { sessionZeroComplete } from "../dialogs/walkthrough-resume.js";
-import { stonetopChatCard } from "../utils/chat.js";
+import { pastWelcomeGuide } from "../dialogs/walkthrough-resume.js";
+import { stonetopChatCard, whisperGm } from "../utils/chat.js";
 
 // ── "You could have weather on the map" ───────────────────────────────────────
 // The one place this system says the name FXMaster to a GM who has not got it.
@@ -46,16 +46,12 @@ export async function postFxMasterSuggestionOnce() {
 	if (getSetting(FXMASTER_SUGGESTION_SETTING)) return false;
 	// Mirrors _postBook2ArtReminderOnce's gate: past the guide means the GM ticked "Don't show
 	// this automatically", or finished both session-zero walkthroughs.
-	if (!getSetting("gmWelcomeShown") && !sessionZeroComplete()) return false;
+	if (!pastWelcomeGuide()) return false;
 
 	let posted = false;
 	if (!fxMasterActive()) {
 		if (!globalThis.ChatMessage?.create) return false; // chat isn't up yet; try again next load
-		await ChatMessage.create({
-			content: fxMasterSuggestionContent(),
-			whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
-			speaker: { alias: "Stonetop" },
-		});
+		await whisperGm(fxMasterSuggestionContent());
 		posted = true;
 	}
 	await setSetting(FXMASTER_SUGGESTION_SETTING, true);

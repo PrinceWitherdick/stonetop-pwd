@@ -1,5 +1,5 @@
 import { CLASSIC_LAYOUT_KEYS, getSetting, setSetting } from "../settings.js";
-import { stonetopChatCard } from "./chat.js";
+import { stonetopChatCard, whisperGm } from "./chat.js";
 import { joinNames } from "./strings.js";
 
 // The two layouts, as stored in `worldSheetLayout` (and as the personal `sheetLayout`
@@ -97,11 +97,7 @@ export async function showLayoutCard(now, { firstRun = false } = {}) {
 		return true;
 	}
 
-	const msg = await ChatMessage.create({
-		content,
-		whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
-		speaker: { alias: "Stonetop" },
-	});
+	const msg = await whisperGm(content);
 	if (!msg) return false;
 	await setSetting("layoutCardId", msg.id);
 	await _retireStrayCards(msg.id);

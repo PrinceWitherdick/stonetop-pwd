@@ -1024,10 +1024,14 @@ export function clearanceBow({
 	const blockers = [];
 	for (const spot of avoid) {
 		if (!spot) continue;
-		const p = flat(spot, ratio);
-		const alongPct = ((p.left - p0.left) * ux + (p.top - p0.top) * uy) / len;
+		// `flat` inlined, and deliberately: this runs for every face on the board, for every one of
+		// the dragged person's links, on every painted frame of a drag. The flattened point never
+		// leaves these four lines, so allocating an object to hold it is the whole cost of it.
+		const fx = spot.left - p0.left;
+		const fy = spot.top / ratio - p0.top;
+		const alongPct = (fx * ux + fy * uy) / len;
 		if (alongPct <= CLEAR_MARGIN || alongPct >= 1 - CLEAR_MARGIN) continue;
-		const side = (p.left - p0.left) * uy - (p.top - p0.top) * ux;
+		const side = fx * uy - fy * ux;
 		// Out of reach of the curve however far it is bent, so it cannot be hit and cannot be
 		// swerved into either.
 		if (Math.abs(side) >= need + swing) continue;

@@ -13,7 +13,7 @@
 // it testable next to the shape helpers in improvement-def.js.
 
 import { escHtml } from "./strings.js";
-import { alternativeSectionFlags, summarizeImprovementGrants } from "./improvement-def.js";
+import { requirementSectionsHtml, summarizeImprovementGrants } from "./improvement-def.js";
 
 /** What the empty preview says, so a blank panel reads as "not yet" and not as broken. */
 export const EMPTY_PREVIEW_HTML =
@@ -34,21 +34,14 @@ export const EMPTY_PREVIEW_HTML =
 export function improvementPreviewHtml(def) {
 	if (!def?.name) return EMPTY_PREVIEW_HTML;
 
-	const sections = def.sections ?? [];
-	const alternatives = alternativeSectionFlags(sections);
 	const body = [];
 
-	sections.forEach((section, i) => {
-		if (alternatives[i]) body.push(`<p class="steading-req-or">or</p>`);
-		if (section.heading) body.push(`<p class="steading-req-heading">${section.heading}</p>`);
-		const items = section.items ?? [];
-		if (!items.length) return;
-		// Disabled rather than merely unwired: a preview whose boxes tick is a preview an
-		// author will try to fill in, and nothing they tick here is stored anywhere.
-		body.push(`<ul class="steading-req-list">${items.map(item =>
-			`<li class="steading-req-item"><label><input type="checkbox" disabled><span>${item}</span></label></li>`
-		).join("")}</ul>`);
-	});
+	// Disabled rather than merely unwired: a preview whose boxes tick is a preview an
+	// author will try to fill in, and nothing they tick here is stored anywhere. The
+	// sections around the boxes are drawn by the emitter the journal card uses, so the
+	// two cannot drift apart.
+	body.push(requirementSectionsHtml(def.sections, item =>
+		`<li class="steading-req-item"><label><input type="checkbox" disabled><span>${item}</span></label></li>`));
 
 	if (def.effect) body.push(`<div class="steading-improvement-effect">${def.effect}</div>`);
 

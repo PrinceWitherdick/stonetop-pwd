@@ -38,7 +38,7 @@ import {
 	RELMAP_DASHES, RELMAP_DASH_DEFAULT, RELMAP_DIRS, RELMAP_FLAG, RELMAP_INKS, RELMAP_LABEL_MAX,
 	RELMAP_SIZES, RELMAP_SIZE_MAX, RELMAP_SIZE_MIN,
 	addEdgePatch,
-	addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, fanIndexes,
+	addNodePatch, addNodesPatch, dropEdgePatch, dropNodePatch, edgePatch, fanIndexes,
 	nodePatch, seatArrivals, takenSpots,
 } from "../relmap/relmap-store.js";
 import { RELMAP_INK_ACROSS, RELMAP_INK_PRESETS, inkPaint, normalizeHex }
@@ -1884,7 +1884,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * know: see the note at the top of it.)
 	 */
 	_pageTabs(pages = this.mapPages, chosen = this.mapPage?.id ?? "") {
-		const esc = foundry.utils.escapeHTML;
+		// The system's one audited escaper (utils/strings.js), not foundry.utils.escapeHTML: same
+		// five-character map, and Foundry-free, which is what lets the tests exercise this method.
+		const esc = escHtml;
 		const rows = pages.length
 			? pages.map(page => ({ id: page.id, name: page.name }))
 			: [{ id: "", name: this.entry?.name ?? localize("stonetop.relmap.untitled") }];
@@ -2175,6 +2177,36 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * it (the entry's own delete hook does that, on every client), so a sentence written into the
 	 * live region here would be thrown away with the markup holding it, unread.
 	 */
+	/**
+	 * The window's one "are you sure", asked three times: dropping a map, dropping a board, and
+	 * taking somebody off one.
+	 *
+	 * ONE SHELL, because all three are the same question and the parts that must not drift are the
+	 * ones nobody looks at twice — the themed classes that give the dialog our chrome at all, and
+	 * `rejectClose: false`, which is what makes dismissing the window mean "no" instead of throwing.
+	 * The buttons NAME the outcome rather than answering a question the reader has to hold in their
+	 * head, and the affirmative one is first, which is this system's order everywhere.
+	 *
+	 * `danger` wears the destructive skin (styles/stonetop.css), which is for the two that destroy
+	 * work nobody can get back; removing a person is undoable and so is not red.
+	 *
+	 * @param {{title: string, body: string, confirm: string, cancel: string, danger?: boolean}} q
+	 * @returns {Promise<boolean>} Whether the reader pressed the affirmative button.
+	 */
+	async _confirm({ title, body, confirm, cancel, danger = false }) {
+		const go = await foundry.applications.api.DialogV2.wait({
+			classes: themedDialogClasses(),
+			window: { title },
+			content: `<p>${escHtml(body)}</p>`,
+			buttons: [
+				{ action: "go", label: confirm, default: true, ...(danger ? { class: "stonetop-dialog-btn--danger" } : {}) },
+				{ action: "keep", label: cancel },
+			],
+			rejectClose: false,
+		});
+		return go === "go";
+	}
+
 	async _removeMap() {
 		const entry = this.entry;
 		if (!canDeleteRelationshipMap(entry)) return;
@@ -2182,24 +2214,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// Every face on the map, not only the ones on the board that is up: the same person seated
 		// on two boards is two of them, which is exactly what is about to be lost.
 		const people = boards.reduce((n, page) => n + Object.keys(readGraph(page).nodes).length, 0);
-		const ok = await foundry.applications.api.DialogV2.wait({
-			classes: themedDialogClasses(),
-			window: { title: localize("stonetop.relmap.maps.deleteTitle") },
-			content: `<p>${escHtml(format("stonetop.relmap.maps.deleteBody", {
-				name: entry.name, boards: boards.length, people,
-			}))}</p>`,
-			buttons: [
-				{
-					action: "drop",
-					label: localize("stonetop.relmap.maps.deleteConfirm"),
-					class: "stonetop-dialog-btn--danger",
-					default: true,
-				},
-				{ action: "keep", label: localize("stonetop.relmap.maps.deleteCancel") },
-			],
-			rejectClose: false,
+		const ok = await this._confirm({
+			title: localize("stonetop.relmap.maps.deleteTitle"),
+			body: format("stonetop.relmap.maps.deleteBody", { name: entry.name, boards: boards.length, people }),
+			confirm: localize("stonetop.relmap.maps.deleteConfirm"),
+			cancel: localize("stonetop.relmap.maps.deleteCancel"),
+			danger: true,
 		});
-		if (ok !== "drop") return;
+		if (!ok) return;
 		// ⚠ FORGOTTEN BEFORE THE DELETE, board by board, for the reason `_removePage` forgets one:
 		// after the delete there is no uuid left to forget a board's history by, and an undo step
 		// pointing at a page that has stopped existing writes into nothing.
@@ -2238,29 +2260,20 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const page = this.mapPage;
 		if (!page || this.mapPages.length <= 1) return;
 		const people = Object.keys(readGraph(page).nodes).length;
-		const ok = await foundry.applications.api.DialogV2.wait({
-			classes: themedDialogClasses(),
-			window: { title: localize("stonetop.relmap.pages.deleteTitle") },
-			content: `<p>${escHtml(format(
+		// RED: it is one of the two controls here that destroy work nobody can get back, and the
+		// footer's other button is a plain "keep". The skin comes from `_confirm`'s `danger`, not a
+		// colour typed here.
+		const ok = await this._confirm({
+			title: localize("stonetop.relmap.pages.deleteTitle"),
+			body: format(
 				people ? "stonetop.relmap.pages.deleteBodyPeople" : "stonetop.relmap.pages.deleteBody",
 				{ name: page.name, count: people },
-			))}</p>`,
-			buttons: [
-				// RED, and the only red button in this window: it is the one control here that
-				// destroys work nobody can get back, and the footer's other button is a plain
-				// "keep". The class is the system's destructive skin (styles/stonetop.css), not a
-				// colour typed here.
-				{
-					action: "drop",
-					label: localize("stonetop.relmap.pages.deleteConfirm"),
-					class: "stonetop-dialog-btn--danger",
-					default: true,
-				},
-				{ action: "keep", label: localize("stonetop.relmap.pages.deleteCancel") },
-			],
-			rejectClose: false,
+			),
+			confirm: localize("stonetop.relmap.pages.deleteConfirm"),
+			cancel: localize("stonetop.relmap.pages.deleteCancel"),
+			danger: true,
 		});
-		if (ok !== "drop") return;
+		if (!ok) return;
 		// ⚠ SAID BEFORE THE WRITE, and the window is NOT re-rendered here. The delete's own hook is
 		// what moves this reader onto a surviving board and renders — one path, whether the page was
 		// deleted from this window or from somebody else's — and that render throws away the live
@@ -2926,19 +2939,15 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const node = graph.nodes[id];
 		if (!node) return;
 		const links = Object.values(graph.edges).filter(e => e.a === id || e.b === id).length;
-		const ok = await foundry.applications.api.DialogV2.wait({
-			classes: themedDialogClasses(),
-			window: { title: localize("stonetop.relmap.removeTitle") },
-			content: `<p>${escHtml(links
+		const ok = await this._confirm({
+			title: localize("stonetop.relmap.removeTitle"),
+			body: links
 				? format("stonetop.relmap.removeBodyLinks", { name: node.name, count: links })
-				: format("stonetop.relmap.removeBody", { name: node.name }))}</p>`,
-			buttons: [
-				{ action: "remove", label: format("stonetop.relmap.removeConfirm", { name: node.name }), default: true },
-				{ action: "keep", label: localize("stonetop.relmap.removeCancel") },
-			],
-			rejectClose: false,
+				: format("stonetop.relmap.removeBody", { name: node.name }),
+			confirm: format("stonetop.relmap.removeConfirm", { name: node.name }),
+			cancel: localize("stonetop.relmap.removeCancel"),
 		});
-		if (ok !== "remove") return;
+		if (!ok) return;
 		await this._write(dropNodePatch(graph, id), {
 			announce: format("stonetop.relmap.removed", { name: node.name }),
 			label: format("stonetop.relmap.history.removed", { name: node.name }),
@@ -3001,10 +3010,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const seating = seatArrivals(graph, actors.map(actor => ({
 			uuid: actor.uuid, name: actor.name, img: actor.img ?? "",
 		})));
-		const patch = {};
-		for (const [id, node] of Object.entries(seating.nodes)) {
-			Object.assign(patch, addNodePatch(id, node) ?? {});
-		}
+		const patch = addNodesPatch(seating.nodes);
 		if (!Object.keys(patch).length) return;
 		const count = Object.keys(seating.nodes).length;
 		return this._write(patch, {
@@ -3107,12 +3113,16 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// Found by walking and reading `dataset`, never by building a selector out of a stored id:
 		// an id goes into a selector as TEXT, and the first one with a colon or a quote in it is a
 		// syntax error. `indexEdgeParts` at the foot of this file makes the same choice.
-		const faces = [...(root.querySelectorAll?.("[data-relmap-node]") ?? [])];
 		// SOMEBODY NO LONGER ON THE BOARD IS NOBODY. This is put back after every repaint, and the
 		// repaint may be the one that carried away the very person the pointer was resting on:
 		// another player taking them off the map. Left alone, the board would dim everything to
-		// light up a web that is not there any more.
-		this._lit = faces.some(el => el.dataset.relmapNode === want) ? want : null;
+		// light up a web that is not there any more. Walked rather than spread into an array: this
+		// runs on every change of the lit person, which is dozens a second across a busy board.
+		let onBoard = false;
+		for (const el of root.querySelectorAll?.("[data-relmap-node]") ?? []) {
+			if (el.dataset.relmapNode === want) { onBoard = true; break; }
+		}
+		this._lit = onBoard ? want : null;
 		root.classList.toggle("is-lit", !!this._lit);
 		// EVERY STROKE SAYS WHO IT JOINS, in one list and one attribute, whether it joins two
 		// people or a whole household. A household's stroke stands for as many ties as it has
@@ -3123,9 +3133,15 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// THE STROKES AND THE CAPTIONS, AND NOT THE FACES. Marking the people at the far end of a
 		// lit line was what let the stylesheet dim the rest of them, and that dimming is gone: the
 		// faces stay at full strength and the quieting is done on the ties alone.
+		//
+		// Matched on the padded string rather than by splitting it: the list is space-separated ids,
+		// which cannot themselves hold a space, so a padded `includes` is the same test without the
+		// two arrays per element that `split().filter()` cost — and this sweep visits every stroke
+		// AND every caption on the board each time the pointer crosses a face.
+		const lit = this._lit;
+		const needle = lit ? ` ${lit} ` : "";
 		root.querySelectorAll?.("[data-relmap-who]")?.forEach?.(el => {
-			const who = (el.dataset.relmapWho ?? "").split(" ").filter(Boolean);
-			el.classList.toggle("is-lit", !!this._lit && who.includes(this._lit));
+			el.classList.toggle("is-lit", !!lit && ` ${el.dataset.relmapWho ?? ""} `.includes(needle));
 		});
 		this._paintLitCaptions(root);
 	}
@@ -3425,8 +3441,16 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * capture-phase drop handler for it to fight with.
 	 */
 	_wireDrop(view) {
+		// ⚠ ASKED ON `dragenter`, NOT ON `dragover`. `dragover` fires continuously for as long as the
+		// pointer is over the board, and `canEdit` is not a field read: it walks the entry's pages,
+		// sorts them by name and asks core for a permission per page. That answer cannot change
+		// halfway through one drag, so it is resolved once when the drag arrives. The `drop` handler
+		// below still asks fresh, which is the check that actually gates the write.
+		let mayDrop = null;
+		view.addEventListener("dragenter", () => { mayDrop = this.canEdit; });
 		view.addEventListener("dragover", ev => {
-			if (!this.canEdit) return;
+			mayDrop ??= this.canEdit;   // a drag that began without an enter still gets one answer
+			if (!mayDrop) return;
 			ev.preventDefault();
 			view.classList.add("is-dropping");
 		});

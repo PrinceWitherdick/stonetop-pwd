@@ -182,6 +182,27 @@ export function postListCard(actor, title, rowsHtml) {
 }
 
 /**
+ * Whisper a card to the GMs, in the one shape every such card uses: no speaker actor, the
+ * system's own name in the alias, and the recipient list resolved at post time.
+ *
+ * Stated once because four callers post one - the book-art offer, the layout card, the
+ * FXMaster nudge and the Book 2 art reminder - and every one of them is a whisper that a
+ * player must never see. A copy that dropped the `whisper` array would not fail loudly; it
+ * would just post GM housekeeping into the table's chat log.
+ *
+ * @param {string} content  Pre-built card HTML.
+ * @returns {Promise<ChatMessage|null>} The created message, or null if chat is not up yet.
+ */
+export async function whisperGm(content) {
+	if (!globalThis.ChatMessage?.create) return null;
+	return (await ChatMessage.create({
+		content,
+		whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
+		speaker: { alias: "Stonetop" },
+	})) ?? null;
+}
+
+/**
  * Post a guided-move summary card to chat.
  * @param {Actor} actor
  * @param {string} title   Move name shown in the card header.

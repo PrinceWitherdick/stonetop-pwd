@@ -5,6 +5,7 @@ import {
 } from "../settings.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { localize } from "../utils/i18n.js";
+import { coalesceMicrotask } from "../utils/coalesce.js";
 
 // The eye beside the sidebar: quiet this map's place names, or bring them back.
 //
@@ -57,7 +58,6 @@ export const PIN_NAME_TOGGLE_ID = "stonetop-map-pin-names";
 const _PIN_NAME_KEYS = MAP_PIN_NAME_SETTINGS;
 
 let _installed = false;
-let _refreshQueued = false;
 
 /**
  * What the button should look like and say, from three facts and nothing else.
@@ -170,15 +170,10 @@ export function refreshMapPinNameToggle() {
 }
 
 /** Coalesce a burst (a multi-note paste, a scene swap) into one restate next microtask. */
-function _schedule() {
-	if (_refreshQueued) return;
-	_refreshQueued = true;
-	Promise.resolve()
-		.then(() => { _refreshQueued = false; refreshMapPinNameToggle(); })
-		// The latch clears before the work, so a throw cannot wedge the button — but without this
-		// it would surface as an unhandled rejection with no hint that a note edit caused it.
-		.catch(err => console.error("Stonetop | map pin name toggle refresh failed", err));
-}
+const _schedule = coalesceMicrotask(
+	() => refreshMapPinNameToggle(),
+	"Stonetop | map pin name toggle refresh failed",
+);
 
 /** Left click: flip what this reader sees on this scene. */
 async function _onClick(event) {
