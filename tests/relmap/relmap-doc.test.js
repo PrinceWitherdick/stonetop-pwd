@@ -13,6 +13,8 @@ import {
 	ensureFirstMapPage, ensureRelationshipMapFolder, findRelationshipMapFolder, getMapPage,
 	getRelationshipMap, getPartyPage, hadPartyPage, isMapPageHidden, listMapPages,
 	listRelationshipMaps, listVisibleMapPages, mapBoardDoc, mapPageName,
+	RELMAP_MAP_NAME_MAX, canDeleteRelationshipMap, deleteRelationshipMap, relationshipMapName,
+	renameRelationshipMap,
 	readGraph, renameMapPage, setMapPageHidden, syncPartyPage,
 } from "../../module/relmap/relmap-doc.js";
 import { RELMAP_VERSION } from "../../module/relmap/relmap-store.js";
@@ -907,5 +909,77 @@ describe("hiding a board from the players", () => {
 		]);
 		expect(await deleteMapPage(listMapPages(one)[0])).toBe(true);
 		expect(await deleteMapPage(listMapPages(one)[0])).toBe(false);
+	});
+});
+
+// ── Naming and rubbing out a whole map ───────────────────────────────────────────
+//
+// The map's rows are taken out of the Journal sidebar (hooks/journal-directory-maps.js), which is
+// where a GM used to rename and delete one. These two are what replaced that list, so the rules
+// they keep are the whole of what is left guarding a map.
+
+describe("naming and rubbing out a whole map", () => {
+	const asGM = () => { globalThis.game.user = { id: "gm1", isGM: true }; };
+	const asPlayer = () => { globalThis.game.user = { id: "u1", isGM: false }; };
+	/** A map that can be deleted, which the shared fake has no call for otherwise. */
+	const deletableMap = (name = "Stonetop") => {
+		const map = mapWith(name, [{ id: "p1", name }]);
+		map.deleted = false;
+		map.delete = () => { map.deleted = true; return Promise.resolve(map); };
+		return map;
+	};
+
+	it("trims a name, holds it to the bound, and never stores a blank one", () => {
+		expect(relationshipMapName("  The people of Stonetop  ")).toBe("The people of Stonetop");
+		expect(relationshipMapName("x".repeat(RELMAP_MAP_NAME_MAX + 20))).toHaveLength(RELMAP_MAP_NAME_MAX);
+		// Core's `name` field refuses an empty string outright, so a blank has to become something.
+		expect(relationshipMapName("   ")).toBe("Relationship Map");
+		expect(relationshipMapName(null)).toBe("Relationship Map");
+	});
+
+	it("renames the map for anybody who may edit it", async () => {
+		const map = deletableMap();
+		expect(await renameRelationshipMap(map, "  Who owes whom  ")).toBe(true);
+		expect(map.name).toBe("Who owes whom");
+	});
+
+	// The rule `renameMapPage` keeps, for the same reason: a reader who opens the box and saves
+	// without typing must not broadcast a change to the whole table.
+	it("writes nothing for a name that came back the same", async () => {
+		const map = deletableMap();
+		map.updates.length = 0;
+		expect(await renameRelationshipMap(map, "Stonetop")).toBe(false);
+		expect(map.updates).toEqual([]);
+	});
+
+	it("is refused to a reader who may not edit the map", async () => {
+		const map = deletableMap();
+		map.isOwner = false;
+		expect(await renameRelationshipMap(map, "Mine now")).toBe(false);
+		expect(map.name).toBe("Stonetop");
+	});
+
+	// ⚠ STRICTER THAN THE SERVER, and deliberately: core would take this delete from any player at
+	// the table, because the map is owned by everybody so that everybody can draw on it.
+	it("is a GM alone who may delete one, though every player owns it", () => {
+		asPlayer();
+		const map = deletableMap();
+		expect(map.isOwner).toBe(true);
+		expect(canDeleteRelationshipMap(map)).toBe(false);
+		asGM();
+		expect(canDeleteRelationshipMap(map)).toBe(true);
+		expect(canDeleteRelationshipMap(null)).toBe(false);
+	});
+
+	it("deletes for a GM and refuses everybody else", async () => {
+		asPlayer();
+		const mine = deletableMap();
+		expect(await deleteRelationshipMap(mine)).toBe(false);
+		expect(mine.deleted).toBe(false);
+
+		asGM();
+		const theirs = deletableMap();
+		expect(await deleteRelationshipMap(theirs)).toBe(true);
+		expect(theirs.deleted).toBe(true);
 	});
 });

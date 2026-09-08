@@ -243,3 +243,58 @@ describe("the slate fill on Add someone", () => {
 		expect(declared(".stonetop-relmap-history", "padding-inline-start")).toBeNull();
 	});
 });
+
+// ── The two presses that ride on a portrait ────────────────────────────────────────────────────
+//
+// The link handle and the trash bin sit on the corners of a 72px face, each a 22px DISC, and they
+// have core's icon-to-label margin on them exactly like every other glyph-only button in this
+// window. On a circle it reads worse than it does anywhere else: a chain link or a trash can a
+// pixel and a half off the middle of a round button looks like a badly drawn button, where the same
+// error inside a square tool reads as nothing much. That is how it was reported, from a screenshot
+// of a single portrait.
+//
+// Measured at 8x against the real webfont (`relmap-node-btn-centre.mjs`, which shoots the node once
+// with an integer clip and expresses the button rects and the ink bounds in that one coordinate
+// system): both glyphs printed 1.563px LEFT of their button's centre. Zeroed, both land 0.063px off
+// it, and the vertical was 0.188px throughout -- swept at root 14, 16, 18, 20 and 24, one figure,
+// unmoving, because these two are sized in WHOLE pixels (11px in a 22px box) and stay there at
+// every UI scale. That is why they take no `translateY` where `.stonetop-relmap-page-tool > i`
+// needs one.
+describe("the link and the trash on a portrait, which carry no labels either", () => {
+	it.each([".stonetop-relmap-handle > i", ".stonetop-relmap-bin > i"])(
+		"takes core's icon-to-label margin off %s, on every side", selector => {
+			// `margin: 0` rather than `margin-right: 0`, so a core change to any other side lands
+			// the same way. Same fix, same reason, as `.stonetop-relmap-page-tool > i` above.
+			expect(declared(selector, "margin")).toBe("0");
+		});
+
+	it("keeps both buttons square, so there is a centre to be off in the first place", () => {
+		// A disc: the width, the height and the 50% radius together. Any one of the three changed
+		// on its own turns the correction above into an offset of a different size.
+		for (const selector of [".stonetop-relmap-handle", ".stonetop-relmap-bin"]) {
+			expect(declared(selector, "width"), selector).toBe("22px");
+			expect(declared(selector, "height"), selector).toBe("22px");
+			expect(declared(selector, "border-radius"), selector).toBe("50%");
+			expect(declared(selector, "padding"), selector).toBe("0");
+			// ⚠ WHOLE PIXELS, WHICH IS WHY NO VERTICAL NUDGE IS NEEDED. A glyph sized in `em`
+			// inside a box fixed in `px` lands on a different fraction at every font scale, and
+			// the offset then swings about and cannot be corrected by any one number (see the
+			// comment on `.stonetop-relmap-page-tool > i` in the stylesheet). Both of these are
+			// deaf to the setting in both quantities, so the rounding is the same every time.
+			expect(declared(selector, "font-size"), selector).toBe("11px");
+		}
+	});
+
+	it("is aimed at presses that really do have nothing in them but an icon", () => {
+		// The whole correction is only right while these carry no label: put a word after the
+		// icon and core's margin is doing the job it was written for again.
+		const markup = stripComments(readRepo("templates/dialogs/partials/relationship-map-board.hbs"));
+		const found = [...markup.matchAll(/<button[\s\S]*?<\/button>/g)].map(match => match[0])
+			.filter(button => /class="stonetop-relmap-(?:handle|bin)"/.test(button));
+		expect(found).toHaveLength(2);
+		for (const button of found) {
+			const inside = button.replace(/^<button[\s\S]*?>/, "").replace(/<\/button>$/, "");
+			expect(inside.replace(/<[^>]*>/g, "").trim(), button).toBe("");
+		}
+	});
+});

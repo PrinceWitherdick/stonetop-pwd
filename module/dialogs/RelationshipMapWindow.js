@@ -52,10 +52,11 @@ import {
 import { RelmapTieBar, TIE_DIR_ICONS } from "../utils/relmap-tie-bar.js";
 import { hasOwnRingArt, partyCharacters } from "../utils/playbook-actors.js";
 import {
-	applyPatch, canEditRelationshipMap, canHideMapPages, createMapPage, deleteMapPage,
+	applyPatch, canDeleteRelationshipMap, canEditRelationshipMap, canHideMapPages, createMapPage,
+	deleteMapPage, deleteRelationshipMap,
 	ensureFirstMapPage, getMapPage, isMapPageHidden, listMapPages, listVisibleMapPages, mapBoardDoc,
-	mapPageName, readGraph, renameMapPage, setMapPageHidden,
-	syncPartyPage, syncVillagePage,
+	mapPageName, readGraph, relationshipMapName, renameMapPage, renameRelationshipMap,
+	setMapPageHidden, syncPartyPage, syncVillagePage,
 } from "../relmap/relmap-doc.js";
 import { steadingListActors } from "../actors/steading/steading-people.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
@@ -2104,6 +2105,109 @@ export class RelationshipMapWindow extends StonetopDialog {
 			dark ? "stonetop.relmap.pages.hidden" : "stonetop.relmap.pages.shown",
 			{ name: page.name },
 		));
+	}
+
+	/**
+	 * NAMING AND RUBBING OUT THE WHOLE MAP, in the title bar rather than on the page strip.
+	 *
+	 * ⚠ THESE TWO ARE HERE BECAUSE THE SIDEBAR IS NOT. A map is a JournalEntry, and the Journal
+	 * directory used to be where a GM renamed or deleted one; its rows are taken out of that list
+	 * now (hooks/journal-directory-maps.js), so without these the map would be a document with no
+	 * way left to name it or be rid of it.
+	 *
+	 * AND THEY ARE IN THE TITLE BAR, not beside the page tools, because that row acts on the BOARD
+	 * that is up: it already carries a pen and a trash of its own, and a second pen and trash an
+	 * inch away meaning "the whole map" is the arrangement in which somebody deletes six boards
+	 * meaning to delete one. The title bar is where an application's own document is named.
+	 *
+	 * Each is offered only to a reader who may use it: renaming to anybody who may edit the map,
+	 * deleting to a GM alone (`canDeleteRelationshipMap` says why that is stricter than the server).
+	 */
+	_getHeaderButtons() {
+		const buttons = super._getHeaderButtons();
+		const entry = this.entry;
+		// Unshifted in reverse, so the pen sits in front of the trash and both in front of Close.
+		if (canDeleteRelationshipMap(entry)) {
+			buttons.unshift({
+				label: localize("stonetop.relmap.maps.delete"),
+				class: "stonetop-relmap-map-delete",
+				icon: "fas fa-trash",
+				onclick: () => this._removeMap(),
+			});
+		}
+		if (canEditRelationshipMap(entry)) {
+			buttons.unshift({
+				label: localize("stonetop.relmap.maps.rename"),
+				class: "stonetop-relmap-map-rename",
+				icon: "fas fa-pen",
+				onclick: () => this._renameMap(),
+			});
+		}
+		return buttons;
+	}
+
+	/** Rename the whole map. The box opens on the name it has, the way the board's own rename does,
+	 * so a reader fixing a typo edits rather than retypes. */
+	async _renameMap() {
+		const entry = this.entry;
+		if (!entry) return;
+		const name = await this._askPageName(
+			localize("stonetop.relmap.maps.renameTitle"),
+			localize("stonetop.relmap.maps.renameGo"),
+			entry.name,
+		);
+		if (name === null) return;
+		if (await renameRelationshipMap(entry, name)) {
+			this._announce(format("stonetop.relmap.maps.renamed", { name: relationshipMapName(name) }));
+		}
+	}
+
+	/**
+	 * Delete the whole map, after asking.
+	 *
+	 * ASKED WITH BOTH COUNTS IN IT, for the reason the board's own delete carries one: this is the
+	 * largest thing anybody can destroy from this window, and "Delete this map?" over a year of a
+	 * table's work understates it by every board and every face on them. The button that commits it
+	 * wears the system's destructive skin, like the board's.
+	 *
+	 * ⚠ SAID THROUGH A NOTIFICATION AND NOT THE LIVE REGION, which is the one place this parts
+	 * company with `_removePage`. That one leaves a window standing to speak into; this one closes
+	 * it (the entry's own delete hook does that, on every client), so a sentence written into the
+	 * live region here would be thrown away with the markup holding it, unread.
+	 */
+	async _removeMap() {
+		const entry = this.entry;
+		if (!canDeleteRelationshipMap(entry)) return;
+		const boards = listMapPages(entry);
+		// Every face on the map, not only the ones on the board that is up: the same person seated
+		// on two boards is two of them, which is exactly what is about to be lost.
+		const people = boards.reduce((n, page) => n + Object.keys(readGraph(page).nodes).length, 0);
+		const ok = await foundry.applications.api.DialogV2.wait({
+			classes: themedDialogClasses(),
+			window: { title: localize("stonetop.relmap.maps.deleteTitle") },
+			content: `<p>${escHtml(format("stonetop.relmap.maps.deleteBody", {
+				name: entry.name, boards: boards.length, people,
+			}))}</p>`,
+			buttons: [
+				{
+					action: "drop",
+					label: localize("stonetop.relmap.maps.deleteConfirm"),
+					class: "stonetop-dialog-btn--danger",
+					default: true,
+				},
+				{ action: "keep", label: localize("stonetop.relmap.maps.deleteCancel") },
+			],
+			rejectClose: false,
+		});
+		if (ok !== "drop") return;
+		// ⚠ FORGOTTEN BEFORE THE DELETE, board by board, for the reason `_removePage` forgets one:
+		// after the delete there is no uuid left to forget a board's history by, and an undo step
+		// pointing at a page that has stopped existing writes into nothing.
+		for (const page of boards) forgetHistory(page);
+		const name = entry.name;
+		if (await deleteRelationshipMap(entry)) {
+			ui.notifications?.info(format("stonetop.relmap.maps.deleted", { name }));
+		}
 	}
 
 	/** Rename the board that is up. The box opens on the name it already has, so a reader fixing a

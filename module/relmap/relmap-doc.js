@@ -170,6 +170,66 @@ export async function createRelationshipMap(name) {
 	}) ?? null;
 }
 
+/**
+ * The longest a MAP may be named.
+ *
+ * Its own bound rather than the pages' (`RELMAP_PAGE_NAME_MAX`), because the two names are read in
+ * different places and cut for different reasons: a board's name is a TAB in a strip that has to
+ * hold several across one window, while a map's is a window title with a whole title bar to itself.
+ * Trimmed on the way in rather than refused, as every name in this feature is: silently losing the
+ * tail of a name is kinder than rejecting somebody's save.
+ */
+export const RELMAP_MAP_NAME_MAX = 60;
+
+/** A map's name, made safe to store: trimmed, shortened, and never blank, since core's `name` field
+ * refuses an empty one outright and would throw rather than answer. */
+export function relationshipMapName(raw) {
+	const want = String(raw ?? "").trim().slice(0, RELMAP_MAP_NAME_MAX).trim();
+	return want || localize("stonetop.relmap.untitled");
+}
+
+/**
+ * Rename a whole map.
+ *
+ * Gated on OWNER like every other write here, so the table can rename the map they all draw on.
+ * Nothing is written for a name that came back the same, so a reader who opens the box and saves
+ * without typing does not broadcast a change to everybody — the rule `renameMapPage` keeps.
+ *
+ * ⚠ THIS AND THE DELETE BELOW ARE HERE BECAUSE THE SIDEBAR NO LONGER OFFERS THEM. Map rows are
+ * taken out of the Journal directory (hooks/journal-directory-maps.js), and renaming or deleting a
+ * whole map was the one thing that list was still good for; without these two the map window would
+ * be a window onto a document with no way left to name or be rid of it.
+ */
+export async function renameRelationshipMap(entry, name) {
+	if (!entry || !canEditRelationshipMap(entry)) return false;
+	const want = relationshipMapName(name);
+	if (want === entry.name) return false;
+	await entry.update({ name: want });
+	return true;
+}
+
+/**
+ * May this reader rub out a whole map?
+ *
+ * ⚠ A GM ALONE, AND THAT IS STRICTER THAN THE SERVER. A map is owned by the whole table so that
+ * anybody may draw on it, and core's own rule for deleting a JournalEntry is that same OWNER — so
+ * the server would take this delete from any player at the table. That is a fine rule for a
+ * document one person made and a poor one for the shared board everybody has been drawing on all
+ * campaign: one mis-aimed click by anybody, and the map every other player is looking at is gone.
+ * The same asymmetry the eye keeps (`canHideMapPages`), for the same reason.
+ */
+export function canDeleteRelationshipMap(entry) {
+	return !!entry && !!game?.user?.isGM;
+}
+
+/** Rub out a whole map, boards and all. The caller confirms with the reader; this is the rule
+ * underneath that, because the confirm dialog is UI and this is not. */
+export async function deleteRelationshipMap(entry) {
+	if (!canDeleteRelationshipMap(entry)) return false;
+	await entry.delete();
+	return true;
+}
+
 // ── The pages a map is made of ──────────────────────────────────────────────────────────────────
 
 /**

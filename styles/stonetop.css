@@ -41872,6 +41872,32 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	place-items: center;
 }
 
+/* ⚠ NEITHER GLYPH IS CENTRED UNTIL CORE'S GAP COMES OFF IT, and the pair of them is where a reader
+   notices, because these two ride on a CIRCLE: a chain link or a trash can sitting off-centre in a
+   22px disc reads as a badly drawn button in a way the same error inside a square does not.
+   `body.game .app button > i` carries `margin-right: 3px` — core spacing an icon from the LABEL
+   that follows it in its own components — and there is no label on either of these. Measured at 8x
+   against the real webfont, that margin put both glyphs 1.563px LEFT of their button's centre;
+   zeroed, both land 0.063px off it, and the vertical was never worse than 0.188px.
+
+   `margin: 0` and not `margin-right: 0`, so a core change to any other side lands the same way.
+
+   ⚠ NO VERTICAL NUDGE HERE, unlike `.stonetop-relmap-page-tool > i` a few thousand lines up, which
+   needs a flat `translateY(1px)` for Font Awesome's tall ascent. The difference is that these two
+   are sized in WHOLE pixels (11px in a 22px box) and stay there at every UI scale, so the glyph's
+   baseline snaps the same way every time: swept at root 14/16/18/20/24 the vertical offset held at
+   0.188px, one figure, unmoving. A nudge sized for it would be noise. See
+   `.stonetop-relmap-page-tool > i` for what happens when the type scales under a fixed box instead.
+
+   ⚠ RE-MEASURE, NEVER RE-DERIVE, if the size, the font or the icons change: the figures are a
+   rendering artefact as much as a metric. Probe: z:/tmp/foundry-verify/relmap-node-btn-centre.mjs,
+   which shoots the node once with an integer clip and expresses the button rects and the ink bounds
+   in that one coordinate system. */
+.stonetop-relmap-handle > i,
+.stonetop-relmap-bin > i {
+	margin: 0;
+}
+
 /* ⚠ RED ONLY WHEN IT IS ABOUT TO BE PRESSED, which is the house pattern for a destructive press and
    the same three tokens `.stonetop-relmap-tiebar-rub` wears. At rest it is an ordinary small button
    like the handle across from it: a red disc sitting open on somebody's face would read as a

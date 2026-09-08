@@ -96,19 +96,32 @@
 //             (the Hillfolk Raiders, a Proclamation widened to the whole war-band), and on a
 //             faction nobody has made an Actor for (the Cult of the Black Water) — so the header
 //             scales, the roster window and the condemned tag on all three sheet types each have a
-//             fixture. Also builds the world's relationship map, "Stonetop", as ONE journal entry
-//             holding the two boards the feature makes for itself: the map's own home board (which
-//             the system adopts as the VILLAGE board, so it arrives holding all eight residents
-//             plus three neighbours, the example NPC, four of the party and two circles with no
-//             actor behind them at all) and "The Party", holding the whole roster. Both arrive
-//             already MARKED as the boards they are, so the window's own seeding passes have
-//             nothing left to add and cannot seat anybody twice. The lines between them are the
-//             point: they cover all eight inks, all four directions, both dashes, every family-tie
-//             state (including the unanswered ones "Find family ties" is meant to offer a guess
-//             at, and one it is meant to get wrong), fans of two and three lines between one pair,
-//             a caption longer than a caption may be drawn at, a line with no caption at all, and
-//             three lines stamped as the removed "Pull in ratings" button's own, which is the only
-//             fixture the two controls that read those will ever get. What is NOT seeded here is
+//             fixture. Also fills in the relationship map the world ALREADY HAS: the "Stonetop"
+//             map every world is given at setup, in the system's own "Relationship Maps" folder.
+//             It writes that entry's boards rather than making a map of its own, so the sidebar
+//             never ends up holding two entries of the same name and the steading sheet's own
+//             Relationship Map tab opens on the fixture. (A map is created here only when the
+//             world has none at all, which happens when the GM has deleted theirs.) Three boards:
+//             the map's own home board (which the system adopts as the VILLAGE board, so it holds
+//             all eight residents plus three neighbours, the example NPC, four of the party and
+//             two circles with no actor behind them at all) and "The Party", holding the whole
+//             roster. Both of those are left MARKED as the boards they are, so the window's own
+//             seeding passes have nothing to add and cannot seat anybody twice.
+//             The lines between them are the point: they cover all eight inks, all four
+//             directions, both dashes, every family-tie state (including the unanswered ones "Find
+//             family ties" is meant to offer a guess at, and one it is meant to get wrong), fans
+//             of two and three lines between one pair, a caption longer than a caption may be
+//             drawn at, a line with no caption at all, and three lines stamped as the removed
+//             "Pull in ratings" button's own, which is the only fixture the two controls that read
+//             those will ever get. The third board, "Test", seats the WHOLE PARTY again and is a
+//             legend rather than a scene: its captions name what each line IS, and between them
+//             the lines reach every one of the four groups the tie bar offers — all eight inks
+//             plus three colours of the reader's own and the two that are no longer offered
+//             (which read as green wherever they are read), all four directions, all three
+//             strokes, and the caption size at every rung of its ladder plus one off it, one past
+//             the ceiling, one under the floor and one stored as the base, which reads back as no
+//             size at all. It arrives HIDDEN from the players, which is how every board made with
+//             "+" arrives and the only fixture the eye in the strip has. What is NOT seeded here is
 //             the party board's introductions lines: the window draws those itself the first time
 //             the map is opened, which is the pass worth watching happen. The singleton actor itself is
 //             never created or deleted — only its test members (each tagged isTest) are added and
@@ -122,8 +135,12 @@
 //             "I wonder..." questions (each only while
 //             it still holds exactly what the macro wrote) and the three seeded Encounters, deletes the seeded Threats and Sites
 //             (and their scene pins,
-//             pruning an emptied Threats folder), deletes the seeded relationship map (one entry,
-//             so both of its boards go with it, and the maps folder too once it is empty),
+//             pruning an emptied Threats folder), takes the fixture back off the relationship map
+//             WITHOUT deleting the map itself (the "Test" board is deleted, since the fixture made
+//             it; the village and party boards are emptied and left in place, marks and all, since
+//             the system made those and only what was written on them was ever ours) — a map this
+//             macro created because the world had none is the one case deleted whole, and the maps
+//             folder goes with it once it is empty,
 //             removes the world Moves/Items/Monsters and the
 //             example NPC (and their now-empty folders), sends home every steading asset a test
 //             trip was holding (matched by trip id, so the GM's own requisitions are untouched),
@@ -149,6 +166,11 @@
   const FLAG_SCOPE   = "stonetop-pwd";        // must be a registered system/module ID
   const LEGACY_SCOPES = ["stonetop_pwd", "stonetop"]; // read-only rungs, newest first
   const TEST_FLAG    = "isTestCharacter";     // key within that scope
+  // The relationship map's stored shape (module/relmap/relmap-store.js RELMAP_VERSION). Declared
+  // up here with the flag names rather than down with the rest of the map fixture because the
+  // CLEANUP pass needs it too, and a `const` further down this same function is still in its dead
+  // zone when that pass runs.
+  const RELMAP_VERSION = 2;
   const PACK_ID      = "stonetop-pwd.stonetop-items";
   const ARCANA_PACK_ID = "stonetop-pwd.stonetop-arcana";
   // The other three shipped packs, which only the Encounters and Expeditions fixtures reach into
@@ -2223,15 +2245,57 @@
       testThreatCount += killEntryIds.size;
     }
 
-    // Delete the seeded relationship map. One JournalEntry carrying the whole thing: its boards
-    // are its PAGES, so deleting the entry takes both of them and every line on them with it, and
-    // there is nothing else to unpick. Matched on BOTH flags (ours, and the mark that says the
-    // entry is a map), so a map the GM built by hand is never caught, and the maps folder goes
-    // only when our map was the last thing in it. The nodes point at actors that are about to be
-    // deleted, but a map of portraits pointing at nobody is not a thing to leave behind either.
-    const testMaps = (game.journal?.contents ?? []).filter(
-      j => j.getFlag(FLAG_SCOPE, TEST_FLAG) && j.getFlag(FLAG_SCOPE, "relationshipMap"));
-    if (testMaps.length) await JournalEntry.deleteDocuments(testMaps.map(j => j.id));
+    // Take the fixture back off the relationship map, WITHOUT deleting the map. The map is the
+    // world's own (given to it at setup, and what the steading sheet's tab opens on); this macro
+    // writes its boards and does not own the entry, so what comes off here is what was written on.
+    //
+    // WHICH IS WHICH IS A FLAG ON EACH PAGE. Every board the fixture wrote carries the test flag:
+    // the "Test" board, which the fixture also MADE and so deletes outright, and the village and
+    // party boards, which the system made and which are emptied and left in place with their own
+    // marks intact. A board the table drew carries no such flag and is not touched at all.
+    //
+    // ⚠ EMPTIED IN TWO WRITES, for the reason the fixture wrote them in two: an update MERGES, so
+    // handing a board an empty graph leaves every node it had exactly where it was. The flag is
+    // dropped through the "-=" spelling first and then written back whole.
+    //
+    // AND A MAP THIS MACRO MADE ITSELF is deleted entry and all: the world had none when the
+    // fixture ran, so that map is the fixture's and nothing of the table's was ever on it. The maps
+    // folder goes with it, but only if that map was the last thing in it.
+    const testMaps = [];
+    let testMapPages = 0;
+    const emptiedGraph = { version: RELMAP_VERSION, shape: "ring", nodes: {}, edges: {} };
+    for (const j of [...(game.journal?.contents ?? [])]) {
+      if (!j.getFlag(FLAG_SCOPE, "relationshipMap")) continue;
+      if (j.getFlag(FLAG_SCOPE, TEST_FLAG)) {
+        testMaps.push(j);
+        await j.delete();
+        continue;
+      }
+      for (const page of [...(j.pages?.contents ?? [])]) {
+        if (!page.getFlag(FLAG_SCOPE, TEST_FLAG)) continue;
+        testMapPages++;
+        const isSystemBoard = page.getFlag(FLAG_SCOPE, "relationshipPartyBoard")
+          || page.getFlag(FLAG_SCOPE, "relationshipVillageBoard");
+        // The board the fixture ADDED. Nothing of the table's was ever on it.
+        if (!isSystemBoard) {
+          await page.delete();
+          continue;
+        }
+        // The graph AND the fixture's own mark, both dropped rather than overwritten: a flag set
+        // back to `false` is a key of ours left on the table's document for ever.
+        await page.update({
+          [`flags.${FLAG_SCOPE}.-=relationshipMap`]: null,
+          [`flags.${FLAG_SCOPE}.-=${TEST_FLAG}`]: null,
+        });
+        const restore = { flags: { [FLAG_SCOPE]: { relationshipMap: emptiedGraph } } };
+        // The village board's ledger is emptied with it, so the next open can seat the world's real
+        // residents: a ledger still naming the deleted test villagers would offer nobody at all.
+        if (page.getFlag(FLAG_SCOPE, "relationshipVillageBoard")) {
+          restore.flags[FLAG_SCOPE].relationshipVillageBoard = { seated: [] };
+        }
+        await page.update(restore);
+      }
+    }
     const mapsFolder = game.folders?.find(f => f.type === "JournalEntry" && f.name === "Relationship Maps");
     if (mapsFolder && !mapsFolder.contents.length) await mapsFolder.delete().catch(() => {});
 
@@ -2465,7 +2529,7 @@
         if (!f.contents.length) await f.delete();
       }
     }
-    ui.notifications.info(`[TEST] Deleted ${existing.length} test actor(s), ${testItems.length} item(s), ${testThreatCount} threat(s), ${testSiteCount} site(s)${wonderCount ? `, ${wonderCount} "I wonder..." question(s)` : ""}${encounterCount ? `, ${encounterCount} prepared encounter(s)` : ""}${expeditionCount ? `, ${expeditionCount} prepped expedition(s)` : ""}${testMaps.length ? `, ${testMaps.length} relationship map(s)` : ""}${strayPeople ? `, ${strayPeople} migrated resident/neighbor NPC(s) an older run left behind` : ""}, and their test data.`);
+    ui.notifications.info(`[TEST] Deleted ${existing.length} test actor(s), ${testItems.length} item(s), ${testThreatCount} threat(s), ${testSiteCount} site(s)${wonderCount ? `, ${wonderCount} "I wonder..." question(s)` : ""}${encounterCount ? `, ${encounterCount} prepared encounter(s)` : ""}${expeditionCount ? `, ${expeditionCount} prepped expedition(s)` : ""}${testMaps.length ? `, ${testMaps.length} relationship map(s)` : ""}${testMapPages ? `, ${testMapPages} relationship-map board(s) cleared` : ""}${strayPeople ? `, ${strayPeople} migrated resident/neighbor NPC(s) an older run left behind` : ""}, and their test data.`);
     return;
   }
 
@@ -3608,9 +3672,9 @@
   // board is seen holding a FAN: our hand line and the seeder's answer line between one pair.
   const RELMAP_MAP_NAME    = "Stonetop";
   const RELMAP_PARTY_PAGE  = "The Party";      // matches stonetop.relmap.pages.party
+  const RELMAP_TEST_PAGE   = "Test";           // the third board, and nobody's but ours
   const RELMAP_FOLDER      = { name: "Relationship Maps", color: "#7E6BA8" };
   const RELMAP_SHEET_CLASS = `${FLAG_SCOPE}.StonetopRelationshipMapSheet`;
-  const RELMAP_VERSION     = 2;
   const RELMAP_PAGE_SORT   = 100000;           // core's own spacing for sortable documents
 
   // The board's geometry, mirroring module/utils/relmap-geometry.js (boardMetrics + ringsLayout).
@@ -3698,9 +3762,13 @@
       edges[foundry.utils.randomID()] = {
         a, b,
         label:  String(link.label ?? ""),
-        ink:    link.ink  ?? "slate",     // one of RELMAP_INKS
+        ink:    link.ink  ?? "slate",     // one of RELMAP_INKS, or a #rrggbb of the reader's own
         dir:    link.dir  ?? "none",      // none | a-b | b-a | both
-        dash:   link.dash ?? "solid",     // solid | dotted, a mark the reader made by hand
+        dash:   link.dash ?? "solid",     // solid | dashed | dotted, a mark the reader made by hand
+        // ⚠ NOT CLAMPED HERE, for the reason the caption is not trimmed here: the Test board below
+        // stores sizes deliberately outside the bounds so `readSize` holding them to 8..48 — and
+        // turning an explicit 16 back into "no size of its own" — is visible against what is stored.
+        size:   Number(link.size ?? 0),   // 0 = whatever the sheet sets; else board pixels
         kin:    link.kin  ?? "",          // "" = nobody has been asked; none | parent | child | partner
         src:    link.src  ?? "",          // "" = somebody drew it; "hearts" = the old ratings import
         origin: "",                       // only a seeded introductions line carries one
@@ -3826,7 +3894,75 @@
     { a: "Quill",   b: "Wren",    label: "",                                              ink: "plum",   dir: "none", dash: "dotted", kin: "none", note: "Something happened on the road to Marshedge. Neither of them will say what, and this line is here to be asked about." },
   ];
 
-  // Build both boards and file them as one map. Returns what was written, or null when there is
+  // ── The third board: "Test" ────────────────────────────────────────────
+  // THE WHOLE PARTY AGAIN, AND EVERY WAY A LINE CAN BE DRAWN. The other two boards are pictures of
+  // Stonetop, and their lines say what is between two people; the captions here name what the LINE
+  // is instead, because this board is a legend rather than a scene. Every one of the four groups
+  // the tie bar offers (direction, stroke, ink, caption size) is on it, next to the two fields the
+  // bar's own text boxes write (the caption and the note) — so a reader can open the bar on any
+  // line here and see the control it came from already showing the answer, and the whole set can be
+  // taken in at once instead of a line at a time.
+  //
+  // WHAT IS DELIBERATELY OUT OF BOUNDS, and why it is not a mistake to be tidied up:
+  //   * two lines drawn in "sage" and "teal", the two colours that are no longer offered. Nothing
+  //     writes them any more and nothing migrates them either (RELMAP_INK_WAS), so the only way to
+  //     see "an old board reads green wherever it is read" is to have an old board;
+  //   * a size of 500 and a size of 4, held to 48 and to 8 on the way out, and a size of exactly 16
+  //     — the base — which comes back as no size at all. All three are `readSize` doing the one
+  //     thing about it that surprises people, against a stored value nothing has shortened;
+  //   * a caption over the 60 a caption may be drawn at, and one of exactly 60, and one of none.
+  // The macro stores these raw on purpose: `relBoardGraph` neither trims a caption nor clamps a
+  // size, so what is in the flag is what was asked for and what is drawn is what the store allows.
+  //
+  // ⚠ THIS BOARD ARRIVES HIDDEN FROM THE PLAYERS, which is how every board made with "+" arrives
+  // (`mapPageData` in module/relmap/relmap-doc.js) and the only fixture the eye in the strip has —
+  // the other two boards here are both shown. The GM who runs this macro sees it regardless: a GM
+  // tests as OWNER over everything, so `canSeeMapPage` says yes and the eye simply reads as struck
+  // through. Press it to hand the board to the table.
+  const RELMAP_TEST_LINKS = [
+    // The eight inks, each carrying a direction, a stroke and a caption size with it, so the
+    // ring reads as one pass through all four groups rather than four passes through one.
+    { a: "Aerin",   b: "Quill",   label: "rose · one way · solid",          ink: "rose",   dir: "a-b",  note: "The ordinary line: an ink, a head at the far end, an unbroken stroke and the caption size the sheet sets." },
+    { a: "Quill",   b: "Brakkos", label: "green · both ways · dashed",      ink: "green",  dir: "both", dash: "dashed", note: "The middle stroke, and the one a table reaches for most: plainly broken and still plainly a stroke." },
+    { a: "Brakkos", b: "Old Bartholomew", label: "ochre · back the other way · dotted", ink: "ochre", dir: "b-a", dash: "dotted", note: "Stored a→b and read b→a, so the head arrives at Brakkos. This is the one that catches an arrow drawn at the wrong end of its own curve." },
+    { a: "Old Bartholomew", b: "Sael", label: "indigo · no heads · small",  ink: "indigo", dir: "none", size: 13 },
+    { a: "Sael",    b: "Coria",   label: "plum · one way · large",          ink: "plum",   dir: "a-b",  size: 20 },
+    { a: "Coria",   b: "Wren",    label: "rust · both ways · very large",   ink: "rust",   dir: "both", size: 24, note: "The two heavier sizes are here beside the two lighter ones on purpose: a size is only legible as a choice next to another one." },
+    { a: "Wren",    b: "Maelis",  label: "crimson · dashed · huge",         ink: "crimson", dir: "a-b", dash: "dashed", size: 32 },
+    { a: "Maelis",  b: "Pim",     label: "slate · no heads · dotted",       ink: "slate",  dir: "none", dash: "dotted", note: "Slate is the ink a line is drawn in when nobody has chosen one, so this is what the default looks like said out loud." },
+
+    // The two colours that were taken away. Read as green, stored as they were written.
+    { a: "Pim",     b: "Aerin",   label: "sage, a colour that is gone",     ink: "sage",   dir: "a-b",  note: "Drawn before there was one green instead of three. Nothing rewrote it; the sanitiser reads it green on every client, and the next edit to it stores the new key by itself." },
+    { a: "Pim",     b: "Brakkos", label: "teal, the other one",             ink: "teal",   dir: "none", dash: "dashed", note: "The second of the two. Both read green, which is why a table could not tell them apart in the first place." },
+
+    // A colour of the reader's own: the ninth answer to the ink question, stored in the same field.
+    // All three clear the 3:1 the chooser holds a colour to (RELMAP_INK_FLOOR), because what is
+    // stored is what `deepenInk` handed back — a hex written by some other route is one nobody vetted.
+    { a: "Aerin",   b: "Brakkos", label: "a colour of the reader's own",    ink: "#7a1f5c", dir: "a-b", note: "Not one of the eight. The line carries the hex inline and the class says only that it is custom." },
+    { a: "Sael",    b: "Maelis",  label: "custom, dashed, large",           ink: "#0f5f6b", dir: "both", dash: "dashed", size: 20 },
+    { a: "Coria",   b: "Pim",     label: "custom, dotted, and quiet",       ink: "#8a3b12", dir: "none", dash: "dotted" },
+
+    // The caption size, at and past the edges of what may be asked for.
+    { a: "Quill",   b: "Maelis",  label: "a size nobody offered: 18",       ink: "indigo", dir: "a-b",  size: 18, note: "Off the ladder of five, typed into the field at the foot of the size panel." },
+    { a: "Aerin",   b: "Coria",   label: "500, held to 48",                 ink: "rust",   dir: "none", size: 500, note: "A reader who types 500 wants the biggest caption there is, so the number is held to the ceiling rather than thrown away and replaced with the ordinary size." },
+    { a: "Brakkos", b: "Wren",    label: "4, held to 8",                    ink: "ochre",  dir: "none", size: 4, note: "The floor is the size below which the board stops drawing captions at all, so nothing can be chosen and then never seen." },
+    { a: "Old Bartholomew", b: "Wren", label: "16, the base, read as none", ink: "slate",  dir: "a-b",  size: 16, note: "Stored as an explicit 16 and read back as no size of its own, which is the honest record of choosing the size the sheet already sets. Everything else on this board with no size reads the same way." },
+
+    // The caption itself: over the bound, exactly on it, and absent.
+    { a: "Quill",   b: "Sael",    label: "sixty-eight characters, which is eight more than a caption may carry", ink: "plum", dir: "a-b", note: "Stored whole and trimmed on the way out, so the 60 the store keeps is visible against what was written." },
+    { a: "Aerin",   b: "Sael",    label: "exactly sixty characters of a caption, counted to the letter", ink: "green", dir: "both", note: "The longest caption that survives the trim untouched." },
+    { a: "Brakkos", b: "Maelis",  label: "",                                ink: "crimson", dir: "b-a", dash: "dotted", note: "No caption at all: a bare stroke, and a note that only opens in the tie bar. Every other line here says what it is; this one is what a line with nothing written on it looks like." },
+
+    // A fan of three between one pair and a fan of two between another, which is what spreads the
+    // bows apart and what `edgesBetween` puts in order.
+    { a: "Old Bartholomew", b: "Coria", label: "one of three",              ink: "rose",   dir: "a-b" },
+    { a: "Coria",   b: "Old Bartholomew", label: "two of three",            ink: "indigo", dir: "b-a",  dash: "dashed" },
+    { a: "Old Bartholomew", b: "Coria", label: "three of three",            ink: "ochre",  dir: "both", dash: "dotted", size: 13 },
+    { a: "Wren",    b: "Pim",     label: "one of two",                      ink: "green",  dir: "a-b" },
+    { a: "Pim",     b: "Wren",    label: "two of two, pointing back",       ink: "rust",   dir: "a-b",  note: "Drawn from the other end, so the pair's two heads arrive at opposite portraits." },
+  ];
+
+  // Build all three boards and file them as one map. Returns what was written, or null when there is
   // no party to put on it (a run that created nothing has no map worth making).
   //
   // ⚠ THE PARTY BOARD SORTS IN FRONT of the home board, which is where the system itself puts it
@@ -3856,6 +3992,14 @@
 
     const homeGraph  = relBoardGraph(homeCast, RELMAP_HOME_LINKS);
     const partyGraph = relBoardGraph(partyCast, RELMAP_PARTY_LINKS);
+    // The Test board seats the SAME cast as the party board and shares nothing else with it: its
+    // own node ids, its own ring, its own lines. Built from a second copy of the cast rather than
+    // from the party graph, because two boards holding the same person are two nodes — that is
+    // what makes a board a board (see the header of module/relmap/relmap-doc.js) — and reusing the
+    // party's ids would draw the Test board's lines onto portraits that are not on it.
+    const testGraph  = relBoardGraph(
+      pcs.map(pc => ({ key: pc.name, uuid: pc.uuid, name: pc.name, img: pc.img ?? "", note: "" })),
+      RELMAP_TEST_LINKS);
 
     // The village board's ledger: every RESIDENT this board has been handed, by the identity the
     // store recognises a person by (their uuid). Only residents, because only residents are what
@@ -3864,68 +4008,148 @@
     const residentNames = new Set(STEADING_TEST_RESIDENTS.map(p => p.name));
     const seated = homeCast.filter(row => row.uuid && residentNames.has(row.key)).map(row => row.uuid);
 
-    // ── The empty map the world came with ────────────────────────────────
-    // Every world is given a relationship map called "Stonetop" during setup
-    // (module/relmap/relmap-make.js), so without this the fixture would leave TWO entries of that
-    // name in the sidebar: the world's untouched one, and the populated one below.
+    // ── The map this world already has ──────────────────────
+    // WRITTEN INTO THE WORLD'S OWN MAP, NEVER INTO A SECOND ONE. Every world is given a
+    // relationship map called "Stonetop" during setup (module/relmap/relmap-make.js), filed in the
+    // system's own "Relationship Maps" folder. This macro used to create an entry of its own beside
+    // it and delete the seeded one only while every board on it was still empty, and the window
+    // seats the village and party boards the first time anybody opens the map: so by the time the
+    // fixtures were run the seeded map usually was not empty any more, and the sidebar ended up
+    // holding TWO entries called "Stonetop". The map is the feature; a fixture on a map of its own
+    // is a fixture the steading sheet's own tab never opens on.
     //
-    // ⚠ ONLY THE UNTOUCHED ONE. Matched on the map mark AND on every board being empty, so a map
-    // the GM has actually put somebody on is never caught by this even where they have kept its
-    // given name -- and neither is the fixture's own map from an earlier run, which the cleanup
-    // pass owns and matches by the test flag. An empty seeded map carries no work of anybody's;
-    // what replaces it is the same map with the whole village on it.
-    const emptySeeded = (game.journal?.contents ?? []).filter(j => (
-      j.name === RELMAP_MAP_NAME
-      && j.getFlag(FLAG_SCOPE, "relationshipMap")
-      && !j.getFlag(FLAG_SCOPE, TEST_FLAG)
-      && (j.pages?.contents ?? []).every(
-        page => !Object.keys(page.getFlag(FLAG_SCOPE, "relationshipMap")?.nodes ?? {}).length)
-    ));
-    if (emptySeeded.length) await JournalEntry.deleteDocuments(emptySeeded.map(j => j.id));
+    // So: find the map, take its three boards over, and put the fixture on them. A map is created
+    // here only when the world genuinely has none (a GM deleted theirs, and the once-only seed
+    // latch in relmap-make.js means setup will not offer another), and that one is made exactly as
+    // the system makes one: in the system's folder, with the system's sheet class on it.
+    //
+    // ⚠ THE BOARDS THIS TOUCHES ARE OVERWRITTEN, which is the honest reading of what a fixture
+    // macro does: whatever stood on the village and party boards is replaced by the fixture's cast
+    // and lines. The cleanup pass EMPTIES them again rather than deleting the map, because the map
+    // is the world's and only what is written on it was ever ours.
 
-    let folder = game.folders?.find(f => f.type === "JournalEntry" && f.name === RELMAP_FOLDER.name);
-    if (!folder) {
-      folder = await Folder.create({ name: RELMAP_FOLDER.name, type: "JournalEntry", color: RELMAP_FOLDER.color });
+    // First, any map an OLDER run of this macro left behind. Those carry the test flag and are ours
+    // to remove, and removing them is what clears the duplicate "Stonetop" an old run created.
+    const strayMaps = (game.journal?.contents ?? []).filter(j => (
+      j.getFlag(FLAG_SCOPE, "relationshipMap") && j.getFlag(FLAG_SCOPE, TEST_FLAG)));
+    if (strayMaps.length) await JournalEntry.deleteDocuments(strayMaps.map(j => j.id));
+
+    // The map itself: the one named for the steading if there is one, else whichever the world has.
+    const maps = (game.journal?.contents ?? []).filter(j => j.getFlag(FLAG_SCOPE, "relationshipMap"));
+    let entry = maps.find(j => j.name === RELMAP_MAP_NAME) ?? maps[0] ?? null;
+    const made = !entry;
+    if (!entry) {
+      let folder = game.folders?.find(f => f.type === "JournalEntry" && f.name === RELMAP_FOLDER.name);
+      if (!folder) {
+        folder = await Folder.create({ name: RELMAP_FOLDER.name, type: "JournalEntry", color: RELMAP_FOLDER.color });
+      }
+      entry = await JournalEntry.create({
+        name:   RELMAP_MAP_NAME,
+        folder: folder?.id ?? null,
+        // Owned by EVERYBODY, which is the whole reason a map is a JournalEntry: a player may edit
+        // a document they own, and the server broadcasts their change to the rest of the table for
+        // free. A map created at OBSERVER is one the players can look at and never touch.
+        ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER },
+        // Without the sheet class the sidebar row opens a blank prose entry instead of the board.
+        flags: { core: { sheetClass: RELMAP_SHEET_CLASS } },
+      });
     }
-
-    const entry = await JournalEntry.create({
-      name:   RELMAP_MAP_NAME,
-      folder: folder?.id ?? null,
-      // Owned by EVERYBODY, which is the whole reason a map is a JournalEntry: a player may edit
-      // a document they own, and the server broadcasts their change to the rest of the table for
-      // free. A map created at OBSERVER is one the players can look at and never touch.
-      ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER },
-      pages: [
-        {
-          name: RELMAP_PARTY_PAGE, type: "text", sort: -RELMAP_PAGE_SORT,
-          flags: { [FLAG_SCOPE]: { relationshipMap: partyGraph, relationshipPartyBoard: true } },
-        },
-        {
-          name: RELMAP_MAP_NAME, type: "text", sort: 0,
-          flags: { [FLAG_SCOPE]: { relationshipMap: homeGraph, relationshipVillageBoard: { seated } } },
-        },
-      ],
-      flags: {
-        // Without this the sidebar row opens a blank prose entry instead of the board.
-        core: { sheetClass: RELMAP_SHEET_CLASS },
-        [FLAG_SCOPE]: {
-          // On the ENTRY this key is the MARK that says "this is a map" plus the record of which
-          // self-seating boards it has been given. It is NOT a graph here; the graphs are on the
-          // pages above. Both meanings share one key on purpose (see RELMAP_FLAG in
-          // module/relmap/relmap-store.js): a map found by one key and read through another is a
-          // map that can be half-recognised.
-          relationshipMap: { version: RELMAP_VERSION, partyBoard: true, villageBoard: true },
-          [TEST_FLAG]: true,
-        },
-      },
-    });
     if (!entry) return null;
+
+    // On the ENTRY this key is the MARK that says "this is a map" plus the record of which
+    // self-seating boards it has been given. It is NOT a graph here; the graphs are on the pages.
+    // Both meanings share one key on purpose (see RELMAP_FLAG in module/relmap/relmap-store.js): a
+    // map found by one key and read through another is a map that can be half-recognised. An UPDATE
+    // rather than a create, so a map that already carried a version keeps everything else it had;
+    // the two marks say the window's seeding passes have nothing left to do, which is now true.
+    //
+    // ONLY A MAP THIS MACRO MADE CARRIES THE TEST FLAG, and that is what the cleanup pass goes by:
+    // a map of ours is deleted whole, the world's own map is emptied and kept.
+    const entryFix = {
+      [`flags.${FLAG_SCOPE}.relationshipMap`]: { version: RELMAP_VERSION, partyBoard: true, villageBoard: true },
+    };
+    if (made) entryFix[`flags.${FLAG_SCOPE}.${TEST_FLAG}`] = true;
+    if (entry.getFlag("core", "sheetClass") !== RELMAP_SHEET_CLASS) {
+      entryFix["flags.core.sheetClass"] = RELMAP_SHEET_CLASS;
+    }
+    await entry.update(entryFix);
+
+    // The three boards, found before any is made. The system's two are recognised by their own
+    // marks and a board this macro wrote last time by its name; whatever is left over at the front
+    // of the strip is the village board, because the map's first board is what the system adopts as
+    // one. Resolved in this order so a party board sorted ahead of everything is never mistaken for
+    // the village board and quietly renamed.
+    const mapPages = (entry.pages?.contents ?? [])
+      .filter(page => page.getFlag(FLAG_SCOPE, "relationshipMap"))
+      .sort((a, b) => (Number(a.sort) || 0) - (Number(b.sort) || 0));
+    const byMark = (mark, name) => mapPages.find(page => page.getFlag(FLAG_SCOPE, mark))
+      ?? mapPages.find(page => page.name === name)
+      ?? null;
+    const partyFound   = byMark("relationshipPartyBoard", RELMAP_PARTY_PAGE);
+    const testFound    = mapPages.find(page => page.name === RELMAP_TEST_PAGE) ?? null;
+    const villageFound = byMark("relationshipVillageBoard", entry.name)
+      ?? mapPages.find(page => page !== partyFound && page !== testFound)
+      ?? null;
+
+    // One board that has to exist before it can be written: the one that was found, put under the
+    // name and the place in the strip this fixture expects, or a new one.
+    //
+    // ⚠ CREATED ON THE ENTRY AND NOT INSIDE ITS CREATE, which is what lets core hand the maker
+    // their own grant: `ownership[creator] = OWNER` is written into a document created on its own
+    // and NOT into one created inside its parent (see `mapPageData` in module/relmap/relmap-doc.js).
+    // So the hidden board made here is still one the GM who ran the macro can open.
+    const ensurePage = async (page, { name, sort, hidden = false }) => {
+      if (page) {
+        const fix = {};
+        if (page.name !== name) fix.name = name;
+        if ((Number(page.sort) || 0) !== sort) fix.sort = sort;
+        if (Object.keys(fix).length) await page.update(fix);
+        return page;
+      }
+      const data = { name, type: "text", sort, flags: { [FLAG_SCOPE]: { relationshipMap: relBoardGraph([], []) } } };
+      if (hidden) data.ownership = { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE };
+      const fresh = await entry.createEmbeddedDocuments("JournalEntryPage", [data]);
+      return fresh?.[0] ?? null;
+    };
+
+    // ⚠ THE PARTY BOARD SORTS IN FRONT of the village board, which is where the system itself puts
+    // it (`partySort`, a whole step ahead of the first page). Written that way here so that the
+    // first open has nothing to correct: `liftPartyPage` compares before it writes, and a board
+    // already at the front costs one comparison instead of a broadcast to the whole table. The Test
+    // board goes on the end, where a board somebody adds by hand lands. The village board is named
+    // after the MAP rather than after the steading, which is what `ensureFirstMapPage` calls it.
+    const villagePage = await ensurePage(villageFound, { name: entry.name, sort: 0 });
+    const partyPage   = await ensurePage(partyFound,   { name: RELMAP_PARTY_PAGE, sort: -RELMAP_PAGE_SORT });
+    const testPage    = await ensurePage(testFound,    { name: RELMAP_TEST_PAGE, sort: RELMAP_PAGE_SORT, hidden: true });
+
+    // A board, written whole. TWO WRITES AND NOT ONE, because a document update MERGES: setting the
+    // graph over a board that already has people on it would leave every one of their nodes in
+    // place under its own id, and the fixture's lines would be drawn across a board holding a
+    // crowd. So the flag is dropped outright first, through the "-=" spelling this macro uses
+    // everywhere. The test flag rides along on every board this writes: it is what the cleanup pass
+    // empties, and it is the only thing that tells the fixture's boards from the table's own.
+    const writeBoard = async (page, graph, marks = {}) => {
+      if (!page) return null;
+      await page.update({ [`flags.${FLAG_SCOPE}.-=relationshipMap`]: null });
+      await page.update({ flags: { [FLAG_SCOPE]: { relationshipMap: graph, [TEST_FLAG]: true, ...marks } } });
+      return page;
+    };
+
+    // The village board's ledger goes on with its graph: every RESIDENT this board has been handed,
+    // by the identity the store recognises a person by (their uuid). Only residents, because only
+    // residents are what the automatic pass would offer; the neighbours and the party on this board
+    // were put there by hand and the ledger has no opinion about them. Without it the next open
+    // would seat all eight residents a second time.
+    await writeBoard(villagePage, homeGraph, { relationshipVillageBoard: { seated } });
+    await writeBoard(partyPage,   partyGraph, { relationshipPartyBoard: true });
+    await writeBoard(testPage,    testGraph);
 
     const count = (graph) => ({ people: Object.keys(graph.nodes).length, lines: Object.keys(graph.edges).length });
     const home = count(homeGraph);
     const party = count(partyGraph);
-    console.log(`[TEST] Relationship map "${entry.name}": ${home.people} people and ${home.lines} lines on the village board, ${party.people} and ${party.lines} on "${RELMAP_PARTY_PAGE}". The introductions lines are seeded by the window on first open.`);
-    return { entry, home, party };
+    const test = count(testGraph);
+    console.log(`[TEST] Relationship map "${entry.name}" (${made ? "created: this world had no map at all" : "the world's own, written into rather than duplicated"}): ${home.people} people and ${home.lines} lines on the village board, ${party.people} and ${party.lines} on "${RELMAP_PARTY_PAGE}", ${test.people} and ${test.lines} on "${RELMAP_TEST_PAGE}" (hidden from the players until the eye is pressed). The introductions lines are seeded by the window on first open.`);
+    return { entry, home, party, test };
   };
 
   // ── Steading people: the Residents / Neighbors NPC actors ──────────────
@@ -4741,7 +4965,7 @@
   // is somehow run before onReady wires up the API.)
   await game.stonetop?.saveChronicle?.();
 
-  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${expeditions ? `${expeditions.added} prepped expeditions (${expeditions.bound} bound to a logged trip), ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, ${relmap ? `a relationship map (${relmap.home.people} people and ${relmap.home.lines} lines on the village board, ${relmap.party.people} and ${relmap.party.lines} on the party board), ` : ""} introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
+  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${expeditions ? `${expeditions.added} prepped expeditions (${expeditions.bound} bound to a logged trip), ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, ${relmap ? `a relationship map (${relmap.home.people} people and ${relmap.home.lines} lines on the village board, ${relmap.party.people} and ${relmap.party.lines} on the party board, ${relmap.test.people} and ${relmap.test.lines} on the hidden "Test" board), ` : ""} introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
   } finally {
     globalThis.__stonetopTestFixturesRunning = false;
   }

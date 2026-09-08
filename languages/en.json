@@ -1562,7 +1562,19 @@
         "newTitle": "What is this map called?",
         "newGo": "Make the map",
         "namePlaceholder": "Stonetop, the Hillfolk, who owes whom",
-        "cannotCreate": "Ask your GM to make a relationship map. Making one needs a trusted-player role; once it exists you can edit it."
+        "cannotCreate": "Ask your GM to make a relationship map. Making one needs a trusted-player role; once it exists you can edit it.",
+        "rename": "Rename map",
+        "renameHint": "Rename this whole map. Its boards, the people on them and every line drawn keep exactly as they are.",
+        "renameTitle": "Rename this map",
+        "renameGo": "Rename it",
+        "renamed": "This map is now called {name}.",
+        "delete": "Delete map",
+        "deleteHint": "Delete this whole map, every board on it and every line drawn. Nobody's character sheet is touched.",
+        "deleteTitle": "Delete this map?",
+        "deleteBody": "{name} will be deleted, along with all {boards} of its board(s) and the {people} person(s) standing on them. Nobody's character sheet is touched, and this cannot be undone.",
+        "deleteConfirm": "Delete the map",
+        "deleteCancel": "Keep this map",
+        "deleted": "The relationship map {name} has been deleted."
       },
       "pages": {
         "label": "Pages of this map",
