@@ -98,6 +98,16 @@ export default [
 
 	js.configs.recommended,
 
+	// ESLint 10 added `no-useless-assignment` to the recommended set. It flags the initializer in
+	// `let doc = null; try { doc = fromUuidSync(...) } catch { doc = null }`, which is the shape
+	// this codebase uses everywhere a Foundry lookup can throw: the initializer states the
+	// fallback once, at the declaration, so the reader does not have to trace the branches to
+	// learn what `doc` is when the lookup fails. The rule is right that the write is dead and
+	// wrong that removing it is an improvement.
+	{
+		rules: { "no-useless-assignment": "off" },
+	},
+
 	// System code: browser + Foundry.
 	{
 		files: ["module/**/*.js", "stonetop.js"],
