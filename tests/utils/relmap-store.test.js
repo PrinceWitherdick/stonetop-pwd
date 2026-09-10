@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
 	RELMAP_DASH_DEFAULT, RELMAP_DIR_DEFAULT, RELMAP_INKS, RELMAP_INK_DEFAULT, RELMAP_LABEL_MAX,
-	RELMAP_ORIGIN_MAX, RELMAP_SIZE_MAX, RELMAP_SIZE_MIN, RELMAP_SIZE_NONE, RELMAP_VERSION,
+	RELMAP_ORIGIN_MAX, RELMAP_SEAT_AUTO, RELMAP_SEAT_MAX, RELMAP_SEAT_MIN,
+	RELMAP_SIZE_MAX, RELMAP_SIZE_MIN, RELMAP_SIZE_NONE, RELMAP_VERSION,
 	addEdgePatch, addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, edgesBetween,
 	edgesTouching, emptyGraph, fanIndexes, isImportedEdge, isSafeId, nodePatch, normalizeGraph,
-	relmapPath,
+	readSeat, relmapPath,
 } from "../../module/relmap/relmap-store.js";
 import { RELMAP_CAPTION_PX } from "../../module/utils/relmap-geometry.js";
 
@@ -254,6 +255,23 @@ describe("reading a stored map back", () => {
 		expect(read.edges.link3.size).toBe(18);
 	});
 
+	// ⚠ THE SAME PROMISE AGAIN FOR WHERE THE WRITING SITS. Zero is not the start of the line, it is
+	// "wherever the board puts it" — which is every line on every board drawn before a caption could
+	// be dragged, and nearly every line since.
+	it("reads a line with no seat recorded as one the board still places", () => {
+		const read = normalizeGraph({
+			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			edges: {
+				link1: { a: "a", b: "b" },
+				link2: { a: "a", b: "b", seat: "halfway" },
+				link3: { a: "a", b: "b", seat: 0.25 },
+			},
+		});
+		expect(read.edges.link1.seat).toBe(RELMAP_SEAT_AUTO);
+		expect(read.edges.link2.seat).toBe(RELMAP_SEAT_AUTO);
+		expect(read.edges.link3.seat).toBe(0.25);
+	});
+
 	it("survives being handed nothing at all", () => {
 		for (const bad of [null, undefined, "", 7, [], "wat"]) {
 			expect(normalizeGraph(bad)).toEqual(emptyGraph());
@@ -495,5 +513,73 @@ describe("which answer a line was seeded from", () => {
 	it("writes the key on its own, without disturbing the rest of the line", () => {
 		const patch = edgePatch("e1", { origin: "pim::step4::2" });
 		expect(Object.keys(patch)).toEqual([`${PREFIX}.edges.e1.origin`]);
+	});
+});
+
+// ── Where along its line a caption sits ────────────────────────────────────────────────────────
+//
+// The board places every caption for itself, sliding each one along its own line to keep it off the
+// others (`spreadLabels`). This is a reader OVERRULING that on one line by dragging the words along
+// the stroke, and what is stored is where they let go — nothing else.
+
+describe("where along its line a caption was dragged to", () => {
+	const withEdges = edges => normalizeGraph({
+		nodes: {
+			elena: { name: "Elena", x: 20, y: 30 },
+			stefan: { name: "Stefan", x: 70, y: 30 },
+		},
+		edges,
+	});
+
+	// ⚠ THE TEST THIS FIELD MOST NEEDS. Zero has to mean "nobody has said", never "the very start
+	// of the line": every line on every board drawn before this gesture existed stores nothing, and
+	// a zero read as a position would pile every one of those captions onto a portrait.
+	it("reads nothing at all as a seat the board is still free to choose", () => {
+		for (const bad of [null, undefined, "", "middle", NaN, 0, -0.4, [], {}]) {
+			expect(readSeat(bad)).toBe(RELMAP_SEAT_AUTO);
+		}
+	});
+
+	it("keeps a seat somebody dragged to, rounded fine enough to land where it was dropped", () => {
+		expect(readSeat(0.5)).toBe(0.5);
+		expect(readSeat(0.371828)).toBe(0.372);
+	});
+
+	// Held to the bounds rather than refused: a slide that went too far is still a gesture, and both
+	// ends of a line run under the portraits it joins.
+	it("holds a seat off the very ends, where the words would sit on somebody's face", () => {
+		expect(readSeat(0.0001)).toBe(RELMAP_SEAT_MIN);
+		expect(readSeat(4)).toBe(RELMAP_SEAT_MAX);
+	});
+
+	// The same guard every other field on a line carries: nothing but a number this board can seat a
+	// caption at reaches a world flag, whoever is calling.
+	it("gates a seat on its way into the flag, whatever the caller passed", () => {
+		expect(edgePatch("e1", { seat: 0.25 })[`${PREFIX}.edges.e1.seat`]).toBe(0.25);
+		expect(edgePatch("e1", { seat: "sideways" })[`${PREFIX}.edges.e1.seat`])
+			.toBe(RELMAP_SEAT_AUTO);
+	});
+
+	// One leaf, so sliding the words touches neither the caption itself, nor the colour, nor who the
+	// line joins — which is what lets two people at the table work on one line at once.
+	it("writes the seat on its own, without disturbing the rest of the line", () => {
+		expect(Object.keys(edgePatch("e1", { seat: 0.8 }))).toEqual([`${PREFIX}.edges.e1.seat`]);
+	});
+
+	// ⚠ AND A LINE IS BORN WITH ITS SEAT WRITTEN, empty. Left unwritten, a line redrawn over an id
+	// that had been dragged before — taking back a deletion is exactly that — would inherit the old
+	// line's seat and open with its caption somewhere nobody on this board ever put it.
+	it("writes an empty seat on a line somebody draws", () => {
+		expect(addEdgePatch("e1", { a: "aa", b: "bb", label: "exes" })[`${PREFIX}.edges.e1.seat`])
+			.toBe(RELMAP_SEAT_AUTO);
+	});
+
+	it("carries a stored seat back out on the way to the board", () => {
+		const read = withEdges({
+			moved: { a: "elena", b: "stefan", label: "exes", seat: 0.8 },
+			untouched: { a: "elena", b: "stefan", label: "still friends" },
+		});
+		expect(read.edges.moved.seat).toBe(0.8);
+		expect(read.edges.untouched.seat).toBe(RELMAP_SEAT_AUTO);
 	});
 });

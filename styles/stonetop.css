@@ -42223,6 +42223,20 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 
 .stonetop-relmap-board.is-dragging { cursor: grabbing; }
 
+/* A CAPTION BEING SLID ALONG ITS OWN LINE. The words are redrawn at the pointer's place on the
+   stroke frame by frame (`_slideCaption`), and this is the only thing on screen that says the board
+   is doing it on purpose: the halo goes to the accent, which is a change of COLOUR and of weight at
+   once — the rule every mark on this board is written to, for the reader on a magnifier.
+
+   ⚠ PAINT ONLY, like the portrait above and for the same reason: nothing in a drag may change
+   layout, and a caption is measured by this window to decide where its line is cut. A weight or a
+   size here would be a caption painted at one width and gapped at another, for the length of the
+   gesture. */
+.stonetop-relmap-label.is-dragging .stonetop-relmap-label-text {
+	stroke: var(--st-accent-fill);
+	stroke-width: 4px;
+}
+
 /* ── Nobody here yet ──────────────────────────────────────────────────────────
    Inside the viewport rather than instead of it, so the board underneath is still there to be
    dropped onto — which is the other way somebody arrives. Takes no pointer events for the same

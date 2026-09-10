@@ -477,6 +477,65 @@ export function edgeLabelAnchor(curve, aspect = RELMAP_BOARD_ASPECT, t = 0.5, sp
 	return { left: round(back.left), top: round(back.top), angle: round(angle) + 0, t: along };
 }
 
+/** How finely a curve is walked to find the point on it nearest the cursor. Chords, like the arc
+ * table's, and the same reasoning: between this many samples a bow this shallow leaves its own
+ * chord by a fraction of a pixel, which is far inside the accuracy a dragged caption needs. */
+const SEAT_SAMPLES = 48;
+
+/**
+ * WHERE ON A LINE A POINT IS, as the parameter of the nearest place on the curve to it.
+ *
+ * WHAT THIS IS FOR is dragging a caption ALONG its own line: the pointer goes where a hand goes,
+ * which is near the line and never exactly on it, and what the board needs from that is the one
+ * number a caption is placed by. Nothing else about the pointer survives — a caption cannot be
+ * dragged OFF its line, because a label that has left its line is a label about some other line
+ * (`edgeLabelAnchor` says the same thing where the spreader slides one).
+ *
+ * IN FLAT SPACE, because it compares DISTANCES: the board is taller than it is wide, and a nearest
+ * point measured in raw percentages would be pulled along whichever axis the board is longer in —
+ * so a caption dragged square across a near-vertical line would slide when it should not.
+ *
+ * BY PROJECTING ONTO EACH CHORD rather than by taking the nearest sample: the samples are 2% of a
+ * line apart, and the nearest of them alone would step a caption in visible jumps down a long
+ * stroke. The projection puts it anywhere between two.
+ *
+ * @param {object} curve  `from`/`control`/`to` from `edgeCurve`.
+ * @param {{left: number, top: number}} point  where the pointer is, in board percentages.
+ * @returns {number|null}  0 to 1 along the curve, or null when there is no curve or no point.
+ */
+export function seatAlong(curve, point, aspect = RELMAP_BOARD_ASPECT) {
+	if (!curve?.from || !curve.control || !curve.to || !point) return null;
+	const ratio = ratioOf(aspect);
+	const left = Number(point.left);
+	const top = Number(point.top);
+	if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+	const p = flat({ left, top }, ratio);
+	const a = flat(curve.from, ratio);
+	const b = flat(curve.control, ratio);
+	const c = flat(curve.to, ratio);
+	let best = 0.5;
+	let nearest = Infinity;
+	let prev = at(a, b, c, 0);
+	for (let i = 1; i <= SEAT_SAMPLES; i++) {
+		const next = at(a, b, c, i / SEAT_SAMPLES);
+		const dx = next.left - prev.left;
+		const dy = next.top - prev.top;
+		const run = dx * dx + dy * dy;
+		// How far along THIS chord the point falls, held to the chord's own two ends so that a
+		// pointer out past one of them lands on the end rather than off the line.
+		const share = run > 0
+			? Math.min(1, Math.max(0, ((p.left - prev.left) * dx + (p.top - prev.top) * dy) / run))
+			: 0;
+		const gap = Math.hypot(p.left - (prev.left + share * dx), p.top - (prev.top + share * dy));
+		if (gap < nearest) {
+			nearest = gap;
+			best = (i - 1 + share) / SEAT_SAMPLES;
+		}
+		prev = next;
+	}
+	return best;
+}
+
 /**
  * The straight run one caption of `span` covers, as the chord of the curve under it: where its
  * middle goes, and how far it is turned over. Both in FLAT space, which is the space an angle
@@ -1406,6 +1465,16 @@ function slideStops() {
  * A caption with NOWHERE clear keeps the middle of its line. Sliding it to a stop that is merely
  * less bad would move it away from where its line is without buying legibility.
  *
+ * ⚠ AND A CAPTION THE READER HAS SEATED BY HAND IS NOT PLACED AT ALL — it is put down first, where
+ * they put it, and everything else is spread around it. A reader who drags words along a stroke has
+ * answered this question for that line, and a spreader that then slid them somewhere it liked
+ * better would be undoing the gesture in front of them, at the moment of the very next repaint.
+ *
+ * THEY GO DOWN BEFORE THE QUEUE, not merely ahead of it, and that is what makes the rest of the
+ * board give way to them: a seated caption takes its room in the pile like anything else, so the
+ * captions that CAN move are the ones that move. Ordered by id, for the reason the queue is —
+ * two clients painting the same board must place every caption identically.
+ *
  * ⚠ AND A CAPTION SET BIGGER TAKES MORE ROOM IN THE PILE, which is why each entry carries its own
  * size rather than the board carrying one. A line the reader has set in eighteen is half again as
  * tall and its words half again as long, and a spreader that measured every chip at twelve would
@@ -1413,8 +1482,9 @@ function slideStops() {
  * across two of them.
  *
  * @param {object} spec
- * @param {{id: string, curve: object, text: string, px?: number}[]} spec.labels  one entry per
- *        captioned link. `px` is the size that caption is SET in, where it has one of its own.
+ * @param {{id: string, curve: object, text: string, px?: number, seat?: number}[]} spec.labels  one
+ *        entry per captioned link. `px` is the size that caption is SET in, where it has one of its
+ *        own; `seat` is where along its line the reader dragged it, where they have.
  * @param {{left, top}[]} spec.nodes  every portrait's centre, which a caption keeps clear of by
  *        `RELMAP_LABEL_CLEAR_PX` rather than merely not touching.
  * @returns {Map<string, {left, top, angle}>}  where each caption goes, by link id.
@@ -1449,6 +1519,21 @@ export function spreadLabels({
 		.sort((a, b) => b.size.w - a.size.w || String(a.id).localeCompare(String(b.id)));
 
 	const placed = [];
+	// THE READER'S OWN SEATS FIRST, and they are not candidates for anything: each is placed where
+	// it was dragged to and takes its room in the pile, so the captions still free to move are the
+	// ones asked to give way.
+	const seated = measured
+		.filter(entry => Number(entry.seat) > 0)
+		.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+	for (const entry of seated) {
+		// Seated on its own width, like every stop below and like the paint: which straight run a
+		// caption covers depends on how long the words are. See `edgeLabelAnchor`.
+		const anchor = edgeLabelAnchor(entry.curve, aspect, entry.seat, entry.size.w);
+		if (!anchor) continue;
+		out.set(entry.id, anchor);
+		const box = labelBox(flat(anchor, ratio), entry.size.w, entry.size.h, anchor.angle);
+		placed.push({ box, reach: Math.hypot(box.hw, box.hh) });
+	}
 	for (const entry of queue) {
 		// The first stop tried, which is the middle of this caption's own line: where it goes if
 		// none of the stops turns out to be clear. Kept apart from "did we place it" so that each

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { wireRelmapDrag } from "../../module/utils/relmap-drag.js";
+import { SEAT_FINE, SEAT_STEP, wireRelmapDrag } from "../../module/utils/relmap-drag.js";
 import { fakeSurface, pointerBoard } from "../fakes/pointer-board.js";
 
 // The LISTENER PLUMBING on a relationship map, as opposed to the arithmetic behind it, which
@@ -28,6 +28,10 @@ const wire = (board, over = {}) => {
 		onMove: vi.fn(), onNudge: vi.fn(), onDragMove: vi.fn(), onDragEnd: vi.fn(),
 		onLink: vi.fn(), onLinkFrom: vi.fn(), onOpen: vi.fn(), onPickEdge: vi.fn(),
 		onPickNone: vi.fn(), onRemove: vi.fn(), onArm: vi.fn(),
+		// The caption's own four, and the seat it is sitting at when a press arrives — which the
+		// window answers off the last paint, and which is what an abandoned slide goes back to.
+		seatAt: vi.fn(() => 0.5),
+		onSeatMove: vi.fn(), onSeat: vi.fn(), onSeatEnd: vi.fn(), onSeatNudge: vi.fn(),
 		canEdit: () => true,
 		...over,
 	};
@@ -769,12 +773,16 @@ describe("a caption, which is a button only by manners", () => {
 		teardown();
 	});
 
-	// A key pressed anywhere else on the board is still the board's own business: the arrow keys
-	// nudge a portrait, and Enter on a handle asks who to link to.
-	it("leaves every other key where it was going", () => {
+	// The arrow keys on a caption are its own gesture and not the portrait's: they slide the words
+	// along the line, which is the non-drag route to the drag below. Nothing about a portrait moves.
+	it("slides along its line on an arrow key, and moves nobody", () => {
 		const { handlers, teardown } = wire(board);
 		board.view.emit("keydown", board.captions.e1.words, { key: "ArrowLeft" });
+		expect(handlers.onSeatNudge).toHaveBeenCalledWith("e1", {
+			dx: -1, dy: 0, step: SEAT_STEP,
+		});
 		expect(handlers.onNudge).not.toHaveBeenCalled();
+		expect(handlers.onMove).not.toHaveBeenCalled();
 		expect(handlers.onPickEdge).not.toHaveBeenCalled();
 		teardown();
 	});
@@ -918,6 +926,158 @@ describe("a key the board refuses", () => {
 		const ev = board.view.emit("keydown", board.view, { key: "Delete" });
 		expect(ev.defaultPrevented).toBe(false);
 		expect(ev.propagationStopped).toBe(false);
+		teardown();
+	});
+});
+
+// ⚠ THE WORDS ON A LINE ARE DRAGGED ALONG IT, and this is the third gesture on this board that
+// starts from a press and might turn out to be a click. The board places every caption for itself,
+// and a reader who disagrees about one says so by dragging it — so the press has to arm a slide
+// while still leaving the click that opens the tie bar, which is what the same press means far more
+// often. Everything about WHERE a caption may go belongs to the window: this layer reports the
+// pointer's place on the board and nothing else.
+describe("a caption dragged along its own line", () => {
+	let board;
+	beforeEach(() => {
+		board = pointerBoard();
+		board.view.setPointerCapture = vi.fn();
+		board.view.releasePointerCapture = vi.fn();
+	});
+	afterEach(() => board.destroy());
+
+	it("reports where the pointer is on the board, once a frame, while it is dragged", () => {
+		const { handlers, teardown } = wire(board);
+		board.view.emit("pointerdown", board.captions.e1.words, { clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", board.captions.e1.words, { clientX: 40, clientY: 20 });
+		board.flush();
+		// The surface's own conversion, so the scale the board is drawn at is already in it.
+		expect(handlers.onSeatMove).toHaveBeenCalledWith("e1", { left: 4, top: 2 });
+		teardown();
+	});
+
+	it("writes where it was let go, and does not also open the tie bar", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.captions.e1.words, { to: [40, 20] });
+		expect(handlers.onSeat).toHaveBeenCalledWith("e1", { left: 4, top: 2 });
+		expect(handlers.onPickEdge).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// ⚠ AND THE PRESS THAT DOES NOT TRAVEL IS STILL THE ONE THAT OPENS THE BAR, which is what a
+	// reader does to a caption far more often than they move it. A gesture that consumed the press
+	// would have taken the only way in to a line's colour, its arrows and its words.
+	it("leaves a press that never travels meaning what it always meant", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.captions.e1.words);
+		expect(handlers.onPickEdge).toHaveBeenCalledWith("e1");
+		expect(handlers.onSeat).not.toHaveBeenCalled();
+		expect(board.view.setPointerCapture).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// The capture is what keeps a fast drag alive off the edge of the window, and taking it while
+	// the press is only ARMED is what would eat the click above. The same rule as every other
+	// gesture here, which is the whole reason this file exists.
+	it("takes the capture only once the press is known to be a drag", () => {
+		const { teardown } = wire(board);
+		board.view.emit("pointerdown", board.captions.e1.words, { clientX: 0, clientY: 0 });
+		expect(board.view.setPointerCapture).not.toHaveBeenCalled();
+		board.view.emit("pointermove", board.captions.e1.words, { clientX: 40, clientY: 0 });
+		expect(board.view.setPointerCapture).toHaveBeenCalledWith(1);
+		teardown();
+	});
+
+	// A slide is not a line being drawn, and the rubber band belongs to that gesture alone. Without
+	// this the board's one gesture that moves nothing would be painted as the one that draws a link.
+	it("draws no rubber band, which belongs to drawing a line", () => {
+		const { teardown } = wire(board);
+		const before = board.board.children.length;
+		board.view.emit("pointerdown", board.captions.e1.words, { clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", board.captions.e1.words, { clientX: 40, clientY: 0 });
+		board.flush();
+		expect(board.board.children.length).toBe(before);
+		teardown();
+	});
+
+	// ⚠ AN ABANDONED SLIDE HAS TO BE PUT BACK BY SOMEBODY. The words have been redrawn at the
+	// pointer frame by frame and no write is coming, so the seat the press began at travels with the
+	// gesture and is handed back on every exit that is not a drop: Escape, a lost pointer, a
+	// teardown mid-gesture.
+	it("hands back the seat it was picked up at when the gesture is abandoned", () => {
+		const { handlers, teardown } = wire(board, { seatAt: vi.fn(() => 0.42) });
+		board.view.emit("pointerdown", board.captions.e1.words, { clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", board.captions.e1.words, { clientX: 40, clientY: 0 });
+		board.flush();
+		board.view.emit("pointercancel", board.captions.e1.words, {});
+		expect(handlers.onSeatEnd).toHaveBeenCalledWith("e1", 0.42);
+		teardown();
+	});
+
+	// And null on a real drop, which means "leave the words where the pointer left them": the write
+	// is already on its way and its repaint draws the same place over the top.
+	it("asks for nothing to be put back when the drop is being written", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.captions.e1.words, { to: [40, 20] });
+		expect(handlers.onSeatEnd).toHaveBeenCalledWith("e1", null);
+		teardown();
+	});
+
+	// A caption the window cannot place — one belonging to a line that has left the board since the
+	// last paint — arms nothing at all, rather than arming a gesture with nowhere to put anything.
+	it("arms nothing for a caption the board cannot say the seat of", () => {
+		const { handlers, teardown } = wire(board, { seatAt: vi.fn(() => null) });
+		press(board, board.captions.e1.words, { to: [40, 20] });
+		expect(handlers.onSeatMove).not.toHaveBeenCalled();
+		expect(handlers.onSeat).not.toHaveBeenCalled();
+		// And the press goes on being a click, which is the gesture that was never in doubt.
+		expect(handlers.onPickEdge).toHaveBeenCalledWith("e1");
+		teardown();
+	});
+
+	it("moves nothing on a board this reader may not edit", () => {
+		const { handlers, teardown } = wire(board, { canEdit: () => false });
+		press(board, board.captions.e1.words, { to: [40, 20] });
+		expect(handlers.onSeat).not.toHaveBeenCalled();
+		expect(handlers.onSeatMove).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// ⚠ AND IT ANSWERS TO `canEdit` RATHER THAN TO `canMove`. A board that seats its own portraits
+	// — the party, the village — is still a board whose lines the table writes and arranges, so
+	// refusing the portrait drag must not refuse this one.
+	it("still slides on a board whose portraits place themselves", () => {
+		const { handlers, teardown } = wire(board, { canMove: () => false });
+		press(board, board.captions.e1.words, { to: [40, 20] });
+		expect(handlers.onSeat).toHaveBeenCalledWith("e1", { left: 4, top: 2 });
+		teardown();
+	});
+
+	// The keyboard's half of the same gesture. Shift is the finer step, as it is for a portrait.
+	it("takes a finer step when Shift is held", () => {
+		const { handlers, teardown } = wire(board);
+		board.view.emit("keydown", board.captions.e1.words, { key: "ArrowUp", shiftKey: true });
+		expect(handlers.onSeatNudge).toHaveBeenCalledWith("e1", { dx: 0, dy: -1, step: SEAT_FINE });
+		teardown();
+	});
+
+	// stopPropagation as well as preventDefault, for the reason every key on this board is claimed
+	// that way: core's KeyboardManager binds keydown in the bubble phase and would otherwise pan the
+	// scene behind this window on every press.
+	it("keeps the arrow keys away from the scene behind the window", () => {
+		const { teardown } = wire(board);
+		const ev = board.view.emit("keydown", board.captions.e1.words, { key: "ArrowRight" });
+		expect(ev.defaultPrevented).toBe(true);
+		expect(ev.propagationStopped).toBe(true);
+		teardown();
+	});
+
+	it("slides nothing from the keyboard on a board this reader may not edit", () => {
+		const { handlers, teardown } = wire(board, { canEdit: () => false });
+		const ev = board.view.emit("keydown", board.captions.e1.words, { key: "ArrowRight" });
+		expect(handlers.onSeatNudge).not.toHaveBeenCalled();
+		// ⚠ AND THE KEY IS STILL SWALLOWED. A refusal here is not "the board ignores that key", it
+		// is "the scene behind this window gets it" — which for the arrows is a canvas pan.
+		expect(ev.propagationStopped).toBe(true);
 		teardown();
 	});
 });

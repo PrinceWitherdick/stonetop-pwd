@@ -33,14 +33,14 @@ import {
 	ROUTE_HEAD_PATH, ROUTE_HEAD_VIEWBOX,
 	boardMetrics,
 	captionRoomPx, captionSize, clampPct, clearanceBow, curveWithGap, edgeArrowheads, edgeBow,
-	edgeCurve, edgeLabelAnchor, freeSpot, spreadLabels,
+	edgeCurve, edgeLabelAnchor, freeSpot, seatAlong, spreadLabels,
 } from "../utils/relmap-geometry.js";
 import {
 	RELMAP_DASHES, RELMAP_DASH_DEFAULT, RELMAP_DIRS, RELMAP_FLAG, RELMAP_INKS, RELMAP_LABEL_MAX,
-	RELMAP_SIZES, RELMAP_SIZE_MAX, RELMAP_SIZE_MIN,
+	RELMAP_SEAT_MIN, RELMAP_SIZES, RELMAP_SIZE_MAX, RELMAP_SIZE_MIN,
 	addEdgePatch,
 	addNodePatch, addNodesPatch, dropEdgePatch, dropNodePatch, edgePatch, fanIndexes,
-	nodePatch, seatArrivals, takenSpots,
+	nodePatch, readSeat, seatArrivals, takenSpots,
 } from "../relmap/relmap-store.js";
 import { RELMAP_INK_ACROSS, RELMAP_INK_PRESETS, inkPaint, normalizeHex }
 	from "../relmap/relmap-ink.js";
@@ -340,6 +340,11 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// who moves one face and tabs to the next inside it has two portraits waiting on the same
 		// write, and a single slot would keep whichever was touched last. See `_writeNudge`.
 		this._pendingNudge = new Map();
+		// AND THE SAME FOR A CAPTION SLID ALONG ITS LINE BY THE ARROW KEYS, keyed by the link rather
+		// than by the person. Its own map and not a second kind of entry in the one above, because
+		// the two write different patches to different halves of the graph -- and one map holding
+		// both would be one place to ask "is this a node or a line?" on every flush for ever.
+		this._pendingSeat = new Map();
 		// A LINE DRAWN A MOMENT AGO, WAITING FOR THE BOARD TO CATCH UP. The bar is placed from the
 		// last PAINT (`_drawn`), and a line drawn this instant is in the document but not yet in
 		// any paint -- so it cannot be taken hold of until the repaint the write set off arrives.
@@ -352,6 +357,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// Set while a re-measure is waiting on a webfont that had not arrived; see the same.
 		this._awaitingFonts = false;
 		this._commitNudge = foundry.utils.debounce(() => this._writeNudge(), NUDGE_COMMIT_MS);
+		this._commitSeat = foundry.utils.debounce(() => this._writeSeats(), NUDGE_COMMIT_MS);
 	}
 
 	static get defaultOptions() {
@@ -1199,6 +1205,19 @@ export class RelationshipMapWindow extends StonetopDialog {
 			},
 			onMove: (id, at) => this._moveNode(id, at),
 			onNudge: (id, at) => this._nudgeNode(id, at),
+			// ⚠ THE CAPTION'S FOUR HANDLERS, AND THE GEOMETRY IS ALL ON THIS SIDE OF THEM. The drag
+			// layer reports where the POINTER is, in board percentages, and this window turns that
+			// into a place ON the line (`seatAlong`) — because the curve, the words' width and the
+			// hole cut for them are one set of numbers, and a second module working out where a
+			// caption sits is exactly how the words and their hole come to disagree.
+			seatAt: id => this._drawn?.shapes?.get(id)?.anchor?.t ?? null,
+			onSeatMove: (id, at) => this._slideCaption(id, this._seatUnder(id, at)),
+			onSeat: (id, at) => this._seatCaptionAt(id, this._seatUnder(id, at)),
+			// A slide that was abandoned — Escape, a lost pointer, a board that stopped being this
+			// reader's to edit mid-gesture. The words have been redrawn frame by frame and nothing
+			// else is coming to put them back. Null on a real drop, whose write repaints them.
+			onSeatEnd: (id, restore) => { if (restore !== null) this._slideCaption(id, restore); },
+			onSeatNudge: (id, way) => this._nudgeSeat(id, way),
 			onDragMove: (id, at) => this._previewMove(id, at),
 			onDragEnd: (id, restore) => this._endPreview(id, restore),
 			onLink: (a, b) => this._createLink(a, b),
@@ -2468,6 +2487,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// A nudge not written yet is the same kind of obstruction: a repaint would redraw the
 		// portrait at the spot the document still holds, undoing the keys already pressed.
 		if (this._pendingNudge.size) return true;
+		// And a caption slid along its line and not written either, which a repaint would slide
+		// back to wherever the last write left it — in front of the reader still pressing the key.
+		if (this._pendingSeat.size) return true;
 		// ⚠ AND THAT IS ALL OF IT. There used to be a third obstruction here — "a field has focus" —
 		// and it could never fire while collecting two exemptions that each undid a false positive
 		// it had created for itself. This window carries one form control, the hide-imported-lines
@@ -2925,6 +2947,158 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._flushPendingSync();
 	}
 
+	// ── Sliding a caption along its own line ────────────────────────────────
+	//
+	// WHAT THE GESTURE IS. The words on a line are placed by the spreader, which puts each caption
+	// at the stop nearest the middle of its own line that is clear of everything else on the board
+	// (`spreadLabels`). That is the right answer for a board of eighty lines and the wrong one often
+	// enough — two ties running the same way, a caption sitting where a reader wants to look, a
+	// crossing the words happen to land on — that a reader has to be able to say where a particular
+	// sentence goes. So they drag it, and it stays where they put it: `edge.seat`, written once per
+	// gesture, honoured by every repaint on every client at the table.
+	//
+	// ⚠ AND IT NEVER LEAVES ITS LINE, which is the whole reason the pointer's position is turned
+	// into a share of the curve rather than into a place on the board. A caption is what its stroke
+	// SAYS; carried off the stroke it is a sentence floating between two other people's lines, and a
+	// reader would have to guess which of them it belongs to. Slid along, it is unambiguous
+	// anywhere.
+
+	/**
+	 * Where on one line the pointer is, as the share of the curve a caption would be seated at.
+	 *
+	 * OFF THE PAINT AND NOT OFF THE DOCUMENT, because it has to agree with the stroke the reader
+	 * is aiming at: `_drawn` holds the geometry the markup on screen was actually built from, and a
+	 * curve worked out afresh here would be fanned and bowed by a graph read at a different moment.
+	 */
+	_seatUnder(id, at) {
+		const shape = this._drawn?.shapes?.get(id);
+		if (!shape?.curve || !at) return null;
+		return seatAlong(shape.curve, at, RELMAP_BOARD_ASPECT);
+	}
+
+	/**
+	 * Put one caption at a seat NOW: the words, the turn, and the hole re-cut in the stroke for them.
+	 *
+	 * THE SAME THREE WRITES `_seatCaption` MAKES, and deliberately not that method: this one must
+	 * not re-measure. A slide happens once per painted frame, measuring a caption forces the browser
+	 * to lay the whole board out, and the words themselves have not changed — only where along the
+	 * line they sit. What that costs is nothing: `shape.size` is the width the last paint measured
+	 * (`_fitGapsToPaint`), which is the number the seat and the gap both come off.
+	 *
+	 * THROUGH `readSeat` SO THE PAINT AND THE WRITE AGREE. What is stored is rounded and held off
+	 * the ends of the line, and a caption painted at the raw pointer's share would step a fraction
+	 * when the write came back round. Floored at the minimum first: the store reads a zero as "no
+	 * seat at all", so a slide right to the very start of a line would otherwise read as the reader
+	 * handing the caption back to the spreader.
+	 *
+	 * @returns {number|null} the seat actually used, or null when there was nothing to seat.
+	 */
+	_slideCaption(id, t) {
+		const drawn = this._drawn;
+		const shape = drawn?.shapes?.get(id);
+		if (!shape?.curve || !shape.size || !Number.isFinite(Number(t))) return null;
+		// Found in the index the paint already walked, and walked afresh only when there is not one
+		// — the same bargain `_sayLine` strikes, and for the same reason: this runs per frame.
+		let index = drawn.parts;
+		if (!index) {
+			const board = this._boardEl();
+			if (!board) return null;
+			index = indexEdgeParts(board);
+		}
+		const parts = index.get(id);
+		if (!parts?.words) return null;
+		const seat = readSeat(Math.max(Number(t), RELMAP_SEAT_MIN));
+		const anchor = edgeLabelAnchor(shape.curve, RELMAP_BOARD_ASPECT, seat, shape.size.w);
+		if (!anchor) return null;
+		shape.anchor = anchor;
+		placeCaption(parts, anchor, drawn.board);
+		shape.d = curveWithGap(shape.curve, {
+			t: anchor.t, span: shape.size.w, boardWidthPx: drawn.board.width, dir: shape.edge.dir,
+			headPx: drawn.headPx,
+		});
+		// A BOARD WITH ITS WORDS TURNED OFF HAS NO HOLES IN ITS LINES, and this line has just had one
+		// cut. The same guard the live drag keeps (`_previewMove`): `_paintLineGaps` writes what the
+		// last repaint worked out, and this stroke has been recomputed since.
+		parts.line?.setAttribute?.("d", drawn.healed ? (shape.unbroken ?? shape.d) : shape.d);
+		// AND THE BAR COMES WITH IT, where one is open on THIS line: it floats over the caption
+		// (`_tieAt`), so a bar left behind is a bar pointing at a patch of paper the words have
+		// left. `slideTo` and not `refresh`, which repaints every control on the bar -- see there.
+		this._tieBar?.slideTo(id, anchor);
+		return seat;
+	}
+
+	/**
+	 * That is where the caption goes: paint it there and write it down.
+	 *
+	 * `coalesce` is empty for a drag, which is one gesture and one step of the undo already, and
+	 * keyed by the line for the arrow keys, which are a run of presses meaning one move. The same
+	 * split `_moveNode` makes for a portrait.
+	 */
+	async _seatCaptionAt(id, t, { coalesce = "" } = {}) {
+		const seat = this._slideCaption(id, t);
+		if (!seat) return false;
+		return this._write(edgePatch(id, { seat }), {
+			label: localize("stonetop.relmap.history.movedCaption"), coalesce,
+		});
+	}
+
+	/**
+	 * One arrow key on a focused caption: slide it along its line NOW, and remember to write it.
+	 *
+	 * ⚠ WHICH WAY THE KEY POINTS IS ASKED OF THE LINE, not of the caption's own left and right. The
+	 * lines on this board run at every angle, so a fixed mapping would make the arrows mean
+	 * something different on every one of them — "Right moves it towards Ordga" on one line and
+	 * away on the next, with nothing on screen to say which. Laying the key's own direction against
+	 * the direction the line runs on screen means the pair of arrows that POINT along a line are the
+	 * pair that move its words, whichever pair that is.
+	 *
+	 * MEASURED IN BOARD PIXELS, because that is the space the reader's arrow key is in: the board is
+	 * taller than it is wide, so a run compared in raw percentages would answer for a line the
+	 * reader is not looking at.
+	 *
+	 * A KEY POINTING SQUARE ACROSS THE LINE DOES NOTHING, and is still swallowed (the drag layer
+	 * claims it before we are asked). There is nowhere across a line for a caption to go, and
+	 * sliding it along on a key that pointed the other way would be the board inventing an answer.
+	 */
+	_nudgeSeat(id, { dx = 0, dy = 0, step = 0 } = {}) {
+		const drawn = this._drawn;
+		const shape = drawn?.shapes?.get(id);
+		if (!shape?.curve || !step) return;
+		// Where it is RIGHT NOW, which on a line already slid this second is the unwritten seat.
+		const at = this._pendingSeat.get(id) ?? shape.anchor?.t ?? shape.mid?.t;
+		if (!Number.isFinite(Number(at))) return;
+		// The line's own direction where the caption sits, as a short run either side of it.
+		const ahead = edgeLabelAnchor(shape.curve, RELMAP_BOARD_ASPECT, Math.min(1, at + 0.01));
+		const behind = edgeLabelAnchor(shape.curve, RELMAP_BOARD_ASPECT, Math.max(0, at - 0.01));
+		if (!ahead || !behind) return;
+		const along = dx * (ahead.left - behind.left) * drawn.board.width
+			+ dy * (ahead.top - behind.top) * drawn.board.height;
+		if (!along) return;
+		const next = Math.min(1, Math.max(0, Number(at) + (along > 0 ? step : -step)));
+		const seat = this._slideCaption(id, next);
+		if (!seat) return;
+		// The same split a pointer drag makes: the board follows the keys, the document hears about
+		// it when they stop. A held arrow repeats about thirty times a second, and each repeat as
+		// its own write would be thirty broadcasts to the table and thirty steps to undo.
+		this._pendingSeat.set(id, seat);
+		this._commitSeat();
+	}
+
+	/** Write the caption slides the reader has stopped making, and let repaints back in. */
+	_writeSeats() {
+		const pending = [...this._pendingSeat];
+		if (!pending.length) return;
+		this._pendingSeat.clear();
+		// ONE STEP FOR A RUN OF ARROW KEYS, keyed by the line, for the reason `_writeNudge` gives:
+		// a reader walking a caption along its stroke pauses several times on the way, and each
+		// pause recorded separately would be a dozen undos to put one sentence back.
+		for (const [id, seat] of pending) {
+			this._seatCaptionAt(id, seat, { coalesce: `seat:${id}` });
+		}
+		// A repaint that was held back while the keys were coming lands now.
+		this._flushPendingSync();
+	}
+
 	/**
 	 * Everything half-written on the board being left, written down while it is still the board.
 	 *
@@ -2937,6 +3111,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 */
 	_leaveBoard() {
 		this._writeNudge();
+		// AND THE CAPTION SLIDES WITH THEM, for the same reason and with the same trap: `boardDoc`
+		// answers for whatever page the window points at NOW, so a seat flushed a line later would
+		// be filed against a link the board being ARRIVED at does not have.
+		this._writeSeats();
 		this._tieBar?.flush();
 	}
 
@@ -3994,17 +4172,23 @@ function edgeShapes(graph, {
 			aspect: RELMAP_BOARD_ASPECT,
 			r,
 		});
-		// WHERE THE MIDDLE OF THIS LINE IS, worked out for every line and not only the ones with
-		// something written on them. It is the caption's anchor where there IS a caption, and it is
-		// also where the tie bar floats -- which a line with nothing written on it needs just as
-		// much, since the bar is the only way to write anything on it.
+		// WHERE THIS LINE'S CAPTION BELONGS BEFORE ANY OF THEM ARE SPREAD APART: the middle of the
+		// stroke, or the spot along it the reader dragged the words to. `alongT` reads anything
+		// unset as the middle, and a stored seat of zero IS unset (`readSeat`) -- so the zero is
+		// turned back into no answer here rather than passed on as the very start of the line.
+		const seat = Number(edge.seat) > 0 ? edge.seat : undefined;
+		// WORKED OUT FOR EVERY LINE and not only the ones with something written on them. It is the
+		// caption's anchor where there IS a caption, and it is also where the tie bar floats --
+		// which a line with nothing written on it needs just as much, since the bar is the only way
+		// to write anything on it. A line whose caption was rubbed out keeps its seat, so the bar
+		// opens where the next words will appear rather than back at a middle nobody chose.
 		//
 		// ⚠ ONE CALL, TWO FIELDS, AND THE SPREADER MOVES ONLY ONE OF THEM. `anchor` is reassigned
-		// below (never mutated) when the captions are spread apart, so `mid` keeps the honest
-		// middle of the stroke while `anchor` follows the words wherever they were nudged to. Both
-		// are wanted: the bar sits over the caption a reader can see, and falls back to the middle
-		// of the line when there is no caption to sit over.
-		const middle = curve ? edgeLabelAnchor(curve, RELMAP_BOARD_ASPECT) : null;
+		// below (never mutated) when the captions are spread apart, so `mid` keeps the seat this
+		// line asked for while `anchor` follows the words wherever they were nudged to. Both are
+		// wanted: the bar sits over the caption a reader can see, and falls back to this when there
+		// is no caption to sit over.
+		const middle = curve ? edgeLabelAnchor(curve, RELMAP_BOARD_ASPECT, seat) : null;
 		// HOW LONG THIS CAPTION IS, worked out here rather than with the gap below because the
 		// caption's SEAT depends on it: the words are a straight run over a bowed line, and which
 		// straight run is the one whose two ends land on the stroke either side of them. See
@@ -4044,7 +4228,7 @@ function edgeShapes(graph, {
 			size,
 			capPx,
 			mid: middle,
-			anchor: size ? edgeLabelAnchor(curve, RELMAP_BOARD_ASPECT, 0.5, size.w) : null,
+			anchor: size ? edgeLabelAnchor(curve, RELMAP_BOARD_ASPECT, seat, size.w) : null,
 			// The sheet goes through because the head stands off the rim by a PIXEL distance and
 			// this board may be any width: see `RELMAP_HEAD_PX`.
 			heads: curve
@@ -4064,6 +4248,10 @@ function edgeShapes(graph, {
 			// more room in the pile. Left out, the spreader would measure every chip at the ordinary
 			// twelve, slide the board's quiet captions apart perfectly, and leave the one the table
 			// cares about lying across two of them.
+			// ⚠ AND THE SEAT THE READER DRAGGED IT TO, where they have. The spreader puts those down
+			// first and never moves them (`spreadLabels`); left out, the very next repaint would
+			// slide a hand-placed caption back to wherever the board preferred it -- which is the
+			// gesture being undone in front of whoever made it.
 			labels: out.filter(shape => shape.anchor).map(shape => ({
 				id: shape.id, curve: shape.curve, text: shape.edge.label, px: shape.capPx,
 				seat: shape.edge.seat,

@@ -317,6 +317,49 @@ export function readSrc(src) {
 	return RELMAP_SRCS.includes(src) ? src : RELMAP_SRC_NONE;
 }
 
+/**
+ * WHERE ALONG ITS OWN LINE A CAPTION SITS, as a share of the curve, and nothing at all on nearly
+ * every line.
+ *
+ * ⚠ ZERO IS "WHEREVER THE BOARD PUTS IT", not the start of the line, and that is the whole shape of
+ * this field. A caption is placed by the spreader (`spreadLabels`, utils/relmap-geometry.js), which
+ * walks the board putting each one at the stop nearest the middle of its own line that is clear of
+ * everything already down — and that arrangement is what a board with eighty lines on it needs, so
+ * it stays the answer for every line nobody has moved by hand. What this records is a reader
+ * OVERRULING it on one line: they dragged the words along the stroke, and there the words stay.
+ *
+ * A SHARE OF THE CURVE'S PARAMETER, which is what every placer in the geometry already takes
+ * (`edgeLabelAnchor`, `curveWithGap`), so a stored seat goes straight in where the spreader's own
+ * stop would have gone and nothing downstream learns a second vocabulary for the same number.
+ *
+ * ⚠ AND IT IS HELD OFF THE VERY ENDS. Both ends of a line run under the portraits it joins, and a
+ * caption slid all the way there is words sitting on somebody's face — which is what the spreader
+ * keeps every caption clear of by `RELMAP_LABEL_CLEAR_PX`. A hand seat is allowed far nearer than
+ * the spreader would ever choose, because a reader who dragged the words there chose it; it is not
+ * allowed off the end of the stroke.
+ *
+ * THREE DECIMALS, which on the longest line a board this size can hold is about a pixel. Two would
+ * be six, and six is a caption that visibly does not land where it was dropped.
+ */
+export const RELMAP_SEAT_AUTO = 0;
+export const RELMAP_SEAT_MIN = 0.02;
+export const RELMAP_SEAT_MAX = 0.98;
+
+/**
+ * One stored seat as a share this board can place a caption at, or nothing.
+ *
+ * The same bargain `readSize` strikes, for the same reason: what comes back as nothing is every
+ * line on every board drawn before a caption could be dragged, and every line since that nobody has
+ * dragged — which is nearly all of them. Held to the bounds rather than refused, because a seat out
+ * past the end is a gesture that went too far rather than a gesture that meant nothing.
+ */
+export function readSeat(value) {
+	const t = value === null || value === undefined || value === "" ? NaN : Number(value);
+	if (!Number.isFinite(t) || t <= 0) return RELMAP_SEAT_AUTO;
+	const held = Math.min(RELMAP_SEAT_MAX, Math.max(RELMAP_SEAT_MIN, t));
+	return Math.round(held * 1000) / 1000;
+}
+
 /** Was this line written by the "Pull in ratings" button that used to exist, rather than by a
  * reader? Only ever true on a board somebody pressed it on before it was removed. */
 export function isImportedEdge(edge) {
@@ -440,6 +483,9 @@ export function normalizeGraph(raw) {
 			// How big the writing on it is set, and zero on nearly every line: the size the sheet
 			// sets. See RELMAP_SIZES.
 			size: readSize(edge.size),
+			// Where along the stroke its caption was dragged to, and zero on nearly every line:
+			// wherever the spreader puts it. See RELMAP_SEAT_AUTO.
+			seat: readSeat(edge.seat),
 			// Who drew it: a reader, or the ratings import. See RELMAP_SRC_HEARTS.
 			src: readSrc(edge.src),
 			// WHICH answer it was seeded from, where it was seeded at all. See RELMAP_ORIGIN_MAX.
@@ -501,6 +547,7 @@ const EDGE_GATES = Object.freeze({
 	ink: readInk,
 	dash: readDash,
 	size: readSize,
+	seat: readSeat,
 	src: readSrc,
 	dir: v => (RELMAP_DIRS.includes(v) ? v : RELMAP_DIR_DEFAULT),
 });
@@ -558,11 +605,16 @@ export function addNodesPatch(nodes = {}) {
 /** Draw a link. Every field written, so the line is whole from its first write. */
 export function addEdgePatch(id, {
 	a, b, label = "", ink = RELMAP_INK_DEFAULT, dir = RELMAP_DIR_DEFAULT,
-	dash = RELMAP_DASH_DEFAULT, size = RELMAP_SIZE_NONE, src = RELMAP_SRC_NONE,
-	origin = "", note = "",
+	dash = RELMAP_DASH_DEFAULT, size = RELMAP_SIZE_NONE, seat = RELMAP_SEAT_AUTO,
+	src = RELMAP_SRC_NONE, origin = "", note = "",
 } = {}) {
 	if (!isSafeId(a) || !isSafeId(b) || a === b) return null;
-	return edgePatch(id, { a, b, label, ink, dir, dash, size, src, origin, note });
+	// ⚠ THE SEAT IS WRITTEN AS NOTHING and that is the field being whole rather than the field being
+	// skipped: a line is born wherever the board puts its caption, and a stored zero is exactly what
+	// says so. Left out, a line REDRAWN over an id that had been dragged before — an undo of a
+	// deletion is one — would inherit the old line's seat and open with its caption somewhere
+	// nobody on this board ever put it.
+	return edgePatch(id, { a, b, label, ink, dir, dash, size, seat, src, origin, note });
 }
 
 /** The line half of {@link addNodesPatch}: every link in `edges`, folded into one patch. */

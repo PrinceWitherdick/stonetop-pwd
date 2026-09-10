@@ -28,6 +28,20 @@ export const NUDGE_STEP = 1;
 export const NUDGE_FINE = 0.25;
 
 /**
+ * How far an arrow key slides a focused CAPTION along its own line, as a share of that line.
+ *
+ * ⚠ A SHARE AND NOT A DISTANCE, which is the one difference from the portrait's step above: a
+ * caption cannot leave its line, so what it moves along is the line's own length -- two percent of
+ * a long stroke is a bigger step in pixels than two percent of a short one, and that is right.
+ * The same key covers a line of any length in the same fifty presses.
+ *
+ * Kept HERE, beside the portrait's, so "how far is one key on this board" has one home; WHICH WAY
+ * the key points is the window's, because only the geometry knows which way the line runs.
+ */
+export const SEAT_STEP = 0.02;
+export const SEAT_FINE = 0.005;
+
+/**
  * How far a portrait has moved, in board percentages, given a pointer travel in SCREEN pixels.
  *
  * The board is scaled as a whole, so a hundred pixels of cursor is a hundred pixels of board only
@@ -80,6 +94,27 @@ function clearTravel(el) {
  * @param {Function} handlers.onDragEnd `(id, restore) => void` — that gesture is over. `restore`
  *                                      is the spot to put the lines back to when the drag was
  *                                      abandoned, and null when the drop is being written.
+ * @param {Function} handlers.seatAt    `id => number|null` — where along its line that link's
+ *                                      caption is sitting NOW, as a share of the curve. Asked at
+ *                                      the press so an abandoned slide has somewhere to go back to.
+ * @param {Function} handlers.onSeatMove `(id, {left, top}) => void` — the pointer is HERE, in board
+ *                                      percentages, once per painted frame, while a caption is
+ *                                      being dragged along its line. It is the window that turns a
+ *                                      point near a line into a place on it: this layer knows
+ *                                      nothing about curves, and a second opinion about where a
+ *                                      caption sits is exactly how the words and the hole cut for
+ *                                      them come to disagree.
+ * @param {Function} handlers.onSeat    `(id, {left, top}) => void` — and that is where it was let
+ *                                      go. Committed on release.
+ * @param {Function} handlers.onSeatEnd `(id, restore) => void` — that slide is over. `restore` is
+ *                                      the seat to put the caption back to when the drag was
+ *                                      abandoned, and null when the drop is being written.
+ * @param {Function} handlers.onSeatNudge `(id, {dx, dy, step}) => void` — one arrow key on a
+ *                                      focused caption. `dx`/`dy` are the direction the KEY points
+ *                                      on screen, for the window to lay against the line's own
+ *                                      direction: a caption on a near-vertical line answers to Up
+ *                                      and Down, one on a horizontal to Left and Right, and the
+ *                                      reader never has to work out which.
  * @param {Function} handlers.onLink    `(fromId, toId) => void` — a line dragged between two.
  * @param {Function} handlers.onLinkFrom `id => void` — the handle CLICKED rather than dragged.
  * @param {Function} handlers.onOpen    `id => void` — a portrait clicked without dragging.
@@ -118,6 +153,7 @@ function clearTravel(el) {
 export function wireRelmapDrag(root, {
 	surface, nodeAt, onMove, onNudge, onDragMove, onDragEnd, onLink, onLinkFrom, onOpen, onPickEdge,
 	onPickNone, onRemove, onArm,
+	seatAt, onSeatMove, onSeat, onSeatEnd, onSeatNudge,
 	canEdit = () => true,
 	canMove = canEdit,
 	canRemove = canEdit,
@@ -238,6 +274,14 @@ export function wireRelmapDrag(root, {
 		if (finished.started && finished.kind === "node") {
 			onDragEnd?.(finished.id, committed ? null : { x: finished.from.left, y: finished.from.top });
 		}
+		// THE SAME BARGAIN FOR A CAPTION, and it needs one for the same reason: the words have been
+		// redrawn where the pointer left them, frame by frame, and an abandoned slide has nothing
+		// else coming to put them back. `seat` is the share of the line it was picked up at, which
+		// is null on a line whose caption the window could not find -- and null is also what says
+		// "nothing to restore", so a slide that never really began asks for nothing.
+		if (finished.started && finished.kind === "seat") {
+			onSeatEnd?.(finished.id, committed ? null : finished.seat);
+		}
 		return finished;
 	}
 
@@ -271,6 +315,13 @@ export function wireRelmapDrag(root, {
 					y: drag.from.top + moved.top,
 				});
 			}
+		} else if (drag.kind === "seat") {
+			// THE POINTER'S OWN PLACE ON THE BOARD, and nothing worked out from the travel: a
+			// caption is not carried a distance, it is put at a place ON ITS LINE, and the window
+			// finds the nearest point of that line to this one. So the scale is already in it (the
+			// surface converts against the board as painted) and there is no `dragTranslation` here.
+			const at = surface.pointToPercent({ clientX: drag.clientX, clientY: drag.clientY });
+			if (at) onSeatMove?.(drag.id, at);
 		} else if (drag.kind === "link") {
 			// ⚠ BOTH READS BEFORE EITHER WRITE. Layout is clean at the top of a rAF callback and
 			// dirty the moment anything is written to the document, so a hit test taken after the band
@@ -361,6 +412,50 @@ export function wireRelmapDrag(root, {
 		// board instead, and `swallowClick` eats the click the button was waiting for. Returning
 		// rather than consuming leaves the click intact, which is the whole of what this button is.
 		if (ev.target.closest?.("[data-relmap-remove]")) return;
+		// ⚠ THE WORDS ON A LINE, WHICH ARE DRAGGED ALONG IT and are checked BEFORE the portraits
+		// below for the reason the click handler checks them first: a caption sits IN its stroke,
+		// so a press on the writing has aimed at the writing. It is not inside a node, so nothing
+		// below would have armed on it anyway -- but a caption that ends up drawn over a portrait
+		// (the spreader keeps them clear of faces; a hand-seated one may be asked to sit anywhere)
+		// would otherwise pick that person up by their own name for the tie between them.
+		//
+		// A SLIDE IS NOT A PORTRAIT DRAG, so it answers to `canEdit` and not to `canMove`: a board
+		// whose seats are drawn for it (the party, the village) is still a board whose captions the
+		// table writes and arranges. `canEdit` was asked at the top of this handler.
+		//
+		// AND A PRESS THAT NEVER TRAVELS IS STILL A CLICK. Nothing is consumed here, so the caption
+		// goes on opening the tie bar exactly as it did -- which is what a reader does to it far
+		// more often than they move it.
+		const words = ev.target.closest?.("[data-relmap-words]");
+		if (words) {
+			const id = words.dataset.relmapWords;
+			// Where it is sitting now, taken at the press: an abandoned slide has to be able to put
+			// the words back, and by the time it is abandoned the board has been redrawn many times.
+			// A caption the window cannot place answers null, and arms nothing.
+			// ⚠ A NUMBER, ASKED FOR AS ONE. `Number(null)` is zero and zero is a perfectly good seat,
+			// so the obvious `>= 0` test arms a slide on a caption the window has just said it cannot
+			// place -- and then hands that null back as the spot to restore an abandoned one to.
+			const seat = seatAt?.(id);
+			if (typeof seat !== "number" || !Number.isFinite(seat)) return;
+			drag = {
+				kind: "seat",
+				id,
+				// The GROUP and not the words, so a stylesheet marking a caption mid-slide has the
+				// whole caption to mark. `end` takes the class off again on every exit.
+				el: words.closest?.("[data-relmap-edge]") ?? words,
+				seat,
+				pointerId: ev.pointerId,
+				startX: ev.clientX, startY: ev.clientY,
+				clientX: ev.clientX, clientY: ev.clientY,
+				// The travel, kept because the threshold is measured from it like every other
+				// gesture's. There is no `from` beside it: a caption is not carried a DISTANCE from
+				// anywhere, it is put at a place on its line, and the seat above is that place.
+				dx: 0, dy: 0,
+				started: false,
+			};
+			swallowClick = false;
+			return;
+		}
 		const handle = ev.target.closest?.("[data-relmap-handle]");
 		const node = ev.target.closest?.("[data-relmap-node]");
 		if (!handle && !node) return;
@@ -416,8 +511,12 @@ export function wireRelmapDrag(root, {
 			view.setPointerCapture?.(drag.pointerId);
 			beginCancellableDrag(() => end());
 			board.classList.add("is-dragging");
-			if (drag.kind === "node") drag.el?.classList.add("is-dragging");
-			else board.appendChild(rubber);
+			// The rubber band belongs to ONE of the three gestures. A caption being slid is marked
+			// the way a portrait being carried is -- on the element itself, for the stylesheet --
+			// and a band drawn from nowhere to the cursor would be this board's one gesture that
+			// looked like a different one.
+			if (drag.kind === "link") board.appendChild(rubber);
+			else drag.el?.classList.add("is-dragging");
 		}
 		// Only once the drag is real, or this would suppress ordinary presses on the board.
 		ev.preventDefault();
@@ -465,6 +564,15 @@ export function wireRelmapDrag(root, {
 		const commit = canEdit();
 		const finished = end(commit);
 		if (!finished || !commit) return;
+
+		if (finished.kind === "seat") {
+			// FROM THE RELEASE POSITION, like the link drop above it and for the same reason: the
+			// moves are coalesced to one frame each, so the last of them before the release may
+			// never have been processed and the caption would be written a frame behind the hand.
+			const at = surface.pointToPercent({ clientX: dropX, clientY: dropY });
+			if (at) onSeat?.(finished.id, at);
+			return;
+		}
 
 		if (finished.kind === "node") {
 			// Straight from the SCREEN travel: `deltaToPercent` measures against the board's
@@ -634,8 +742,29 @@ export function wireRelmapDrag(root, {
 			if (ev.key === "Delete" && canRemove()) onRemove?.(bin.dataset.relmapRemove);
 			return;
 		}
-		// Claimed on behalf of the board, but a caption and a handle have nothing to do with a
-		// portrait's Delete or its nudge. They stop the key and do nothing with it.
+		// ⚠ AND A CAPTION SLIDES ALONG ITS LINE, which is the arrow keys' answer to the drag that
+		// moves it -- the same bargain every other gesture on this board keeps, and the reason it
+		// has to be kept here is that dragging a few words along a stroke is the hardest gesture on
+		// the board to make with a hand that shakes, and one of the two people at this table reading
+		// it is on a screen magnifier.
+		//
+		// THE KEY POINTS ON SCREEN AND THE LINE RUNS WHERE IT RUNS, so the direction is sent as it
+		// was pressed and the window lays it against the curve: whichever pair of arrows points
+		// along this line moves the words, and the reader never has to know which pair that is.
+		// Delete is not offered here -- there is nothing on a caption for it to mean, and the
+		// paragraph above says what happens to a key this handler does not claim.
+		const said = ev.target.closest?.("[data-relmap-words]");
+		if (said) {
+			if (move && canEdit()) {
+				onSeatNudge?.(said.dataset.relmapWords, {
+					dx: Math.sign(move[0]), dy: Math.sign(move[1]),
+					step: ev.shiftKey ? SEAT_FINE : SEAT_STEP,
+				});
+			}
+			return;
+		}
+		// Claimed on behalf of the board, but a caption's group and a handle have nothing to do with
+		// a portrait's Delete or its nudge. They stop the key and do nothing with it.
 		if (!face) return;
 		if (!canEdit()) return;
 		const id = face.dataset.relmapOpen;

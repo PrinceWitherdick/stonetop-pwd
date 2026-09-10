@@ -59,8 +59,10 @@ const { RelationshipMapWindow, openRelationshipMap } =
 const { mapBoardRole, readGraph } = await import("../../module/relmap/relmap-doc.js");
 const { forgetAllHistory } = await import("../../module/relmap/relmap-history.js");
 const { dropNodePatch, edgePatch } = await import("../../module/relmap/relmap-store.js");
+const { RELMAP_SEAT_MIN } = await import("../../module/relmap/relmap-store.js");
 const { RELMAP_BOARD_ASPECT, RELMAP_HEAD_PX, curveWithGap, edgeLabelAnchor } =
 	await import("../../module/utils/relmap-geometry.js");
+const { SEAT_STEP } = await import("../../module/utils/relmap-drag.js");
 
 /** The real English table, kept from before the suite's `beforeEach` replaces `globalThis.game`. */
 const TABLE = globalThis.game.i18n;
@@ -179,6 +181,10 @@ function windowFor(graph = TWO_PEOPLE, {
 	// have stood up. One map for the whole board, so two faces nudged inside one debounce both
 	// land — see `_pendingNudge` on the class.
 	app._pendingNudge = new Map();
+	// And the captions an arrow key has slid along their lines but not written yet, which the
+	// constructor stands up beside that one. Its own map for the reason the class gives: the two
+	// flush into different halves of the graph.
+	app._pendingSeat = new Map();
 	app.id = "stonetop-relmap-map1";
 	app._pageId = pageId;
 	app._pagesSaid = null;
@@ -3785,6 +3791,245 @@ describe("a window shut while it was still drawing", () => {
 		}
 	});
 });
+
+// ⚠ THE WORDS ON A LINE, MOVED ALONG IT BY HAND. The board places every caption for itself
+// (`spreadLabels`), which is the only workable answer for a board with eighty lines on it and the
+// wrong one often enough that a reader has to be able to overrule it on one line. What this suite
+// pins is the pair of promises that make the gesture worth having: the words follow the pointer
+// while it is moving, and they are STILL THERE after the write comes back round — a repaint that
+// re-spread a hand-placed caption would undo the gesture seconds after it was made, in front of
+// whoever made it, with nothing on screen to say why.
+describe("sliding a caption along its own line", () => {
+	/** A style object with the two things these paths write: properties and custom properties. */
+	function styleOf() {
+		const style = { props: {} };
+		style.setProperty = (name, value) => { style.props[name] = value; };
+		style.getPropertyValue = name => style.props[name] ?? "";
+		return style;
+	}
+
+	/** One line, caption or arrowhead, as it sits on a rendered board. */
+	function part(dataset) {
+		const node = { dataset, attrs: {}, style: styleOf() };
+		node.setAttribute = (name, value) => { node.attrs[name] = value; };
+		return node;
+	}
+
+	// Far enough apart to carry a sentence between them, so there is a line long enough to have
+	// anywhere to slide TO.
+	const TALKERS = {
+		version: 1,
+		nodes: {
+			elena: { uuid: null, name: "Elena", img: "", x: 8, y: 50, note: "" },
+			stefan: { uuid: null, name: "Stefan", img: "", x: 92, y: 50, note: "" },
+		},
+		edges: {
+			link1: {
+				a: "elena", b: "stefan", ink: "rose", dir: "none", note: "",
+				label: "shut the great gate in his face",
+			},
+		},
+	};
+
+	/** A window whose one captioned link is already drawn, with its pieces on the board. */
+	function boardWithCaption(graph = TALKERS) {
+		const made = windowFor(graph);
+		const line = part({ relmapLine: "link1" });
+		const label = part({ relmapEdge: "link1" });
+		const words = part({ relmapWords: "link1" });
+		made.board.all = {
+			"[data-relmap-line]": [line],
+			"[data-relmap-edge]": [label],
+			"[data-relmap-words]": [words],
+			"[data-relmap-head]": [],
+		};
+		// What the render works out before the markup lands, which is what every method here reads.
+		made.app._boardContext(made.app._plan());
+		made.app._pendingSeat = new Map();
+		made.app._commitSeat = vi.fn();
+		return { ...made, line, label, words };
+	}
+
+	it("turns a point near the line into the place ON the line nearest it", () => {
+		const { app } = boardWithCaption();
+		const curve = app._drawn.shapes.get("link1").curve;
+		const quarter = edgeLabelAnchor(curve, RELMAP_BOARD_ASPECT, 0.25);
+		// A hand is never exactly on the stroke, which is the whole reason this is asked of the line
+		// rather than taken from the pointer.
+		expect(app._seatUnder("link1", { left: quarter.left, top: quarter.top + 4 }))
+			.toBeCloseTo(0.25, 2);
+	});
+
+	it("has no answer for a line that is not on the board", () => {
+		const { app } = boardWithCaption();
+		expect(app._seatUnder("nobody", { left: 50, top: 50 })).toBeNull();
+	});
+
+	// The live half: the words move, the hole in the stroke moves with them, and nothing is written.
+	it("moves the words and re-cuts the hole in the stroke, without writing anything", () => {
+		const { app, words, line, entry } = boardWithCaption();
+		const before = { ...words.attrs };
+		app._slideCaption("link1", 0.8);
+		expect(words.attrs.x).not.toBe(before.x);
+		expect(line.attrs.d).toBeTruthy();
+		expect(entry.updates).toEqual([]);
+	});
+
+	// ⚠ THE WORDS AND THEIR HOLE ARE ONE STRETCH OF ONE LINE. A caption seated from one number and
+	// gapped from another is words sitting beside their own hole, which is exactly what a reader
+	// sees as the board being broken.
+	it("cuts the hole where the words went, and not where they were", () => {
+		const { app, line } = boardWithCaption();
+		app._slideCaption("link1", 0.8);
+		const shape = app._drawn.shapes.get("link1");
+		const cut = curveWithGap(shape.curve, {
+			t: shape.anchor.t, span: shape.size.w, boardWidthPx: 1200, dir: "none",
+		});
+		expect(shape.d).toBe(cut);
+		// And it is on the stroke itself, not merely in the geometry the next repaint would use.
+		expect(line.attrs.d).toBe(cut);
+	});
+
+	// ⚠ WHAT IS PAINTED IS WHAT WILL BE STORED. The store rounds a seat and holds it off the ends of
+	// the line, so a caption painted at the raw pointer's share would step a fraction the moment the
+	// write came back round — small, visible, and impossible to explain.
+	it("paints at the seat the store will keep, not at the raw pointer's share", () => {
+		const { app } = boardWithCaption();
+		expect(app._slideCaption("link1", 0.123456)).toBe(0.123);
+		// And a slide right off the start of the line stops where the words still have paper, rather
+		// than reading as a zero — which everywhere else in this feature means "unseated".
+		expect(app._slideCaption("link1", 0)).toBe(RELMAP_SEAT_MIN);
+	});
+
+	it("writes the seat once, as one step of the undo", async () => {
+		const { app, entry } = boardWithCaption();
+		await app._seatCaptionAt("link1", 0.75);
+		expect(entry.updates).toHaveLength(1);
+		expect(JSON.stringify(entry.updates[0])).toContain("0.75");
+		expect(JSON.stringify(entry.updates[0])).toContain("seat");
+	});
+
+	// ⚠ THE PROMISE THE WHOLE FEATURE IS. A repaint runs the spreader again over the whole board,
+	// and it has to leave this one alone.
+	it("draws the caption where it was seated on every repaint after", () => {
+		const seated = {
+			...TALKERS,
+			edges: { link1: { ...TALKERS.edges.link1, seat: 0.8 } },
+		};
+		const { app } = boardWithCaption(seated);
+		const shape = app._drawn.shapes.get("link1");
+		expect(shape.anchor.t).toBeCloseTo(0.8, 6);
+		expect(shape.anchor).toEqual(
+			edgeLabelAnchor(shape.curve, RELMAP_BOARD_ASPECT, 0.8, shape.size.w),
+		);
+	});
+
+	// A line whose caption was rubbed out keeps its seat, so the bar opens over the spot the next
+	// words will appear at rather than back at a middle nobody chose.
+	it("floats the tie bar over the seat on a line with nothing written on it yet", () => {
+		const bare = {
+			...TALKERS,
+			edges: { link1: { ...TALKERS.edges.link1, label: "", seat: 0.8 } },
+		};
+		const { app } = boardWithCaption(bare);
+		const shape = app._drawn.shapes.get("link1");
+		expect(shape.anchor).toBeNull();
+		expect(shape.mid).toEqual(edgeLabelAnchor(shape.curve, RELMAP_BOARD_ASPECT, 0.8));
+	});
+
+	// ── The arrow keys, which are the same gesture without a drag ──────────
+
+	// ⚠ WHICH WAY THE KEY POINTS IS ASKED OF THE LINE. These two people sit level with one another,
+	// so their line runs across the board and the arrows that move its caption are Left and Right.
+	it("slides the words the way the key points along the line", () => {
+		const { app } = boardWithCaption();
+		const from = app._drawn.shapes.get("link1").anchor.t;
+		app._nudgeSeat("link1", { dx: 1, dy: 0, step: SEAT_STEP });
+		expect(app._pendingSeat.get("link1")).toBeCloseTo(from + SEAT_STEP, 6);
+		app._nudgeSeat("link1", { dx: -1, dy: 0, step: SEAT_STEP });
+		expect(app._pendingSeat.get("link1")).toBeCloseTo(from, 6);
+	});
+
+	// And the pair that point ACROSS it do nothing, rather than the board inventing a direction: on
+	// this line there is nowhere up or down for the words to go.
+	it("does nothing for a key pointing square across the line", () => {
+		const { app } = boardWithCaption();
+		app._nudgeSeat("link1", { dx: 0, dy: -1, step: SEAT_STEP });
+		expect(app._pendingSeat.size).toBe(0);
+	});
+
+	// The same split a pointer drag makes: the board follows the keys, the document hears about it
+	// when they stop. A held arrow repeats about thirty times a second.
+	it("moves the words on every key and writes none of them yet", () => {
+		const { app, entry } = boardWithCaption();
+		for (let i = 0; i < 3; i++) app._nudgeSeat("link1", { dx: 1, dy: 0, step: SEAT_STEP });
+		expect(entry.updates).toEqual([]);
+		expect(app._commitSeat).toHaveBeenCalledTimes(3);
+	});
+
+	// Each key steps on from where the words ARE, not from the spot the document still holds — or a
+	// held arrow would jitter between two places instead of travelling.
+	it("steps on from the unwritten seat rather than the stale one", () => {
+		const { app } = boardWithCaption();
+		const from = app._drawn.shapes.get("link1").anchor.t;
+		app._nudgeSeat("link1", { dx: 1, dy: 0, step: SEAT_STEP });
+		app._nudgeSeat("link1", { dx: 1, dy: 0, step: SEAT_STEP });
+		expect(app._pendingSeat.get("link1")).toBeCloseTo(from + 2 * SEAT_STEP, 6);
+	});
+
+	it("writes once, at the seat the last key left it", async () => {
+		const { app, entry } = boardWithCaption();
+		app._nudgeSeat("link1", { dx: 1, dy: 0, step: SEAT_STEP });
+		app._nudgeSeat("link1", { dx: 1, dy: 0, step: SEAT_STEP });
+		const wrote = app._drawn.shapes.get("link1").anchor.t;
+		app._writeSeats();
+		await Promise.resolve();
+		expect(entry.updates).toHaveLength(1);
+		expect(JSON.stringify(entry.updates[0])).toContain(String(wrote));
+	});
+
+	// A repaint landing mid-burst would slide the caption back to wherever the last write left it,
+	// silently undoing the keys already pressed.
+	it("holds off a repaint while a slide is unwritten, and lets it in after", () => {
+		const { app } = boardWithCaption();
+		app._nudgeSeat("link1", { dx: 1, dy: 0, step: SEAT_STEP });
+		expect(app._isBusy()).toBe(true);
+		app._writeSeats();
+		expect(app._isBusy()).toBe(false);
+	});
+
+	// ⚠ AND IT IS FLUSHED ON THE WAY OFF THE BOARD. `boardDoc` answers for whatever page the window
+	// points at NOW, so a seat flushed a line later than the switch would be filed against a link
+	// the board being arrived at does not have.
+	it("writes what the keys did before the reader leaves the board", () => {
+		const { app } = boardWithCaption();
+		app._nudgeSeat("link1", { dx: 1, dy: 0, step: SEAT_STEP });
+		app._leaveBoard();
+		expect(app._pendingSeat.size).toBe(0);
+	});
+
+	it("has nothing to slide on a line that is not on the board", () => {
+		const { app } = boardWithCaption();
+		expect(() => app._nudgeSeat("nobody", { dx: 1, dy: 0, step: SEAT_STEP })).not.toThrow();
+		expect(app._slideCaption("nobody", 0.5)).toBeNull();
+		expect(app._pendingSeat.size).toBe(0);
+	});
+});
+
+
+// ── THE THREE DIALS ON THE FOOTER ─────────────────────────────────────────
+//
+// Three percentages beside the captions box: how heavily the arrowheads, the strokes and the
+// writing are drawn FOR THIS READER. Nothing here touches the map, which is the whole shape of it
+// (module/relmap/relmap-weights.js says why at length), so what this suite is holding is the other
+// half: that the stylesheet and the arithmetic are told the same number, and that a press reaches
+// the board rather than only the record.
+
+const {
+	RELMAP_WEIGHT_BASE, RELMAP_WEIGHT_MAX, RELMAP_WEIGHT_MIN, RELMAP_WEIGHT_SETTING,
+	RELMAP_WEIGHT_STEP,
+} = await import("../../module/relmap/relmap-weights.js");
+
 describe("how heavily this reader wants the board drawn", () => {
 	let stored;
 

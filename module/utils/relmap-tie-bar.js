@@ -1541,6 +1541,28 @@ export class RelmapTieBar {
 	}
 
 	/**
+	 * The caption this bar is floating over has been dragged along its own line: come with it.
+	 *
+	 * ⚠ NOT `refresh`, WHICH IS THE OTHER WAY THE BAR LEARNS A LINE HAS MOVED. That one is for a
+	 * REPAINT — it re-reads the tie, repaints every control on the bar, re-marks the stroke and
+	 * re-aims an open palette, all of which are right after the markup has been replaced and all of
+	 * which are far too much to do sixty times a second. A slide changes exactly one thing about
+	 * this bar: where it points. So this is the anchor and `place`, which is the same pair of steps
+	 * a pan of the whole board makes.
+	 *
+	 * ⚠ AND THE ANCHOR IS KEPT, not merely used. A pan that arrived after this would otherwise put
+	 * the bar back over the spot the caption has left.
+	 *
+	 * The id is checked because a slide is a gesture on one line and this bar may be holding
+	 * another: the reader can take hold of one line and then drag the words of a second.
+	 */
+	slideTo(id, at) {
+		if (!this.isOpen || !at || this.id !== id) return;
+		this._at = at;
+		this.place();
+	}
+
+	/**
 	 * Put the bar back over its line, wherever the board has got to.
 	 *
 	 * Called from the surface's `onChange`, so it runs on every painted frame of a pan and every

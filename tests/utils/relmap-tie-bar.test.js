@@ -2075,3 +2075,49 @@ describe("how big the writing on a line is", () => {
 		expect(handlers.onField).not.toHaveBeenCalled();
 	});
 });
+
+// ⚠ THE CAPTION CAN BE DRAGGED ALONG ITS LINE while this bar is floating over it, and the bar is
+// chrome in the viewport rather than a thing on the board — so nothing moves it unless it is told
+// to. Left behind, it points at a patch of paper the words have left, and its arrow still says it
+// belongs to that line.
+describe("a caption slid out from under the bar", () => {
+	let dom;
+	beforeEach(() => {
+		dom = barDom();
+		dom.view.rect = { left: 0, top: 0, width: 800, height: 600 };
+		dom.bar.rect = { left: 0, top: 0, width: 400, height: 30 };
+	});
+
+	it("moves the bar to where the words have got to", () => {
+		const { bar } = make(dom);
+		bar.open("e1");
+		expect(dom.bar.style.left).toBe("300px");
+		bar.slideTo("e1", { left: 30, top: 40 });
+		// 30% of a 1000px board is 300, less half the bar's 400.
+		expect(dom.bar.style.left).toBe("100px");
+	});
+
+	// ⚠ AND THE ANCHOR IS KEPT, not merely used for one placement: the reader pans the board with
+	// the bar open all the time, and a pan re-places it from the anchor it holds.
+	it("keeps the new spot, so a pan afterwards does not put it back", () => {
+		const { bar } = make(dom);
+		bar.open("e1");
+		bar.slideTo("e1", { left: 30, top: 40 });
+		bar.place();
+		expect(dom.bar.style.left).toBe("100px");
+	});
+
+	// A reader can take hold of one line and then drag the words of another. The bar belongs to the
+	// line it was opened on, and a slide somewhere else on the board is not about it.
+	it("ignores a slide on a line it is not holding", () => {
+		const { bar } = make(dom);
+		bar.open("e1");
+		bar.slideTo("e2", { left: 30, top: 40 });
+		expect(dom.bar.style.left).toBe("300px");
+	});
+
+	it("has nothing to do when no line is held at all", () => {
+		const { bar } = make(dom);
+		expect(() => bar.slideTo("e1", { left: 30, top: 40 })).not.toThrow();
+	});
+});
