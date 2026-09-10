@@ -1,6 +1,7 @@
 import { SEASON_IDS, seasonLabel } from "./seasons-change-reminders.js";
 import { yearLabel } from "./seasons-chronicle.js";
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
+import { seasonLogUpdate } from "../timeline/timeline-seasons.js";
 
 // ── The steading's clock ──────────────────────────────────────────────────────
 // The Seasons Change move is the campaign's calendar: each run names the season that
@@ -167,6 +168,20 @@ export async function recordCurrentSeason(actor, season, year, { advanceOnly = f
 	const flags = {};
 	if (!(advanceOnly && seasonRank(next) < seasonRank(readCurrentSeason(actor)))) {
 		flags[CURRENT_SEASON_KEY] = next;
+		// ⚠ AND THE LOG OF WHEN EACH SEASON BEGAN, in this same write.
+		//
+		// It rides here because this is the ONE writer of the clock, and so the only moment the
+		// system ever learns that a season has started. The timeline reads it to place a ledger
+		// entry -- which carries a wall-clock timestamp and no in-game date -- in the season it
+		// happened in; nothing else does. See timeline/timeline-seasons.js.
+		//
+		// ⚠ INSIDE THIS BRANCH, and that is the whole correctness of it. A row says "at this
+		// real moment the campaign entered this season". A GM re-recording an OLDER season to fix
+		// its journal entry has the stamp refused just above, and logging it anyway would write
+		// "the campaign entered Summer of Year One" stamped with today -- which would then date
+		// every ledger entry from today into that old summer. The clock did not move, so neither
+		// does this.
+		Object.assign(flags, seasonLogUpdate(actor, next) ?? {});
 	}
 	const wantYear = campaignYear(pickerYear ?? next.year);
 	if (advancesYear(actor, wantYear)) flags[CURRENT_YEAR_KEY] = wantYear;
