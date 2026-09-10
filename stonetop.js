@@ -97,6 +97,7 @@ import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
 import { CharacterPossessions } from "./module/actors/character/CharacterPossessions.js";
 import { stockSourcesForFlags, defaultStockSource, SACRED_POUCH_SLUG, RITES_OF_THE_LAND } from "./module/actors/character/stock-cost.js";
 import { readProvisionsYield, rollProvisions } from "./module/actors/character/provisions.js";
+import { belongsToMessage, wirePickedOptionButton } from "./module/utils/picked-option-button.js";
 import { ownedMove } from "./module/actors/character/owns-move.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
@@ -1637,14 +1638,9 @@ function _paintPickCount(list) {
  * Shared by both passes over a card's pick list — the ticks and the provisions buttons run over
  * the same nodes, so one guard rather than two copies of it.
  */
-function _belongsToMessage(el, message) {
-	const owner = el.closest("[data-message-id]");
-	return !owner || owner.dataset.messageId === message.id;
-}
-
 function _chatWireRollCardPicks(message, html) {
 	const boxes = [...html.querySelectorAll(".stonetop-picklist-check")]
-		.filter(box => _belongsToMessage(box, message));
+		.filter(box => belongsToMessage(box, message));
 	if (!boxes.length) return;
 
 	const saved   = message.getFlag(SYSTEM_ID, "pickChecked") ?? [];
@@ -1732,53 +1728,19 @@ function _chatWireRollCardPicks(message, html) {
  * second tops up a pack that is already being carried.
  */
 function _chatWireProvisionsPicks(message, html) {
-	const items = [...html.querySelectorAll(".stonetop-picklist-item")]
-		.filter(item => _belongsToMessage(item, message));
-	if (!items.length) return;
-
-	const rolled = message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {};
-
-	for (const item of items) {
-		const box  = item.querySelector(".stonetop-picklist-check");
-		// Read before anything of ours is in the row, so a re-render cannot match on our own
-		// "+4 uses" readout instead of the option's text.
-		const pick = readProvisionsYield(item.textContent);
-		item.querySelectorAll(".stonetop-provisions-roll, .stonetop-provisions-paid")
-			.forEach(el => el.remove());
-		if (!box || !pick) continue;
-		const index = box.dataset.index;
-
-		// Already paid out: the card carries the number, not a second chance at it. Stamped on
-		// the MESSAGE, so every client shows the same haul and no one can roll it twice.
-		const paid = rolled[index];
-		if (paid) {
-			item.appendChild(_provisionsPaidEl(paid.uses));
-			continue;
-		}
-
-		const btn = document.createElement("button");
-		btn.type = "button";
-		btn.className = "stonetop-provisions-roll";
-		const die = document.createElement("i");
+	wirePickedOptionButton(message, html, {
+		flagKey:      "provisionsRolled",
+		wiredKey:     "provisionsWired",
+		buttonClass:  "stonetop-provisions-roll",
+		readoutClass: "stonetop-provisions-paid",
+		read:         readProvisionsYield,
 		// An option that names a flat number has nothing to throw — the icon and the verb both
 		// say so, rather than offering to "roll" a 6.
-		die.className = pick.isRoll ? "fas fa-dice-d6" : "fas fa-basket-shopping";
-		btn.append(die, pick.isRoll ? ` Roll ${pick.formula} uses` : ` Take ${pick.formula} uses`);
-		btn.hidden = !box.checked;
-		item.appendChild(btn);
-
-		// Bound once per element, for the same reason the pick boxes are: a message re-renders
-		// whenever its flag is written, and Foundry may patch the log in place.
-		if (item.dataset.provisionsWired !== "1") {
-			item.dataset.provisionsWired = "1";
-			box.addEventListener("change", () => {
-				const live = item.querySelector(".stonetop-provisions-roll");
-				if (live) live.hidden = !box.checked;
-			});
-		}
-
-		btn.addEventListener("click", () => _onRollProvisions(message, btn, index, pick));
-	}
+		icon:    pick => (pick.isRoll ? "fas fa-dice-d6" : "fas fa-basket-shopping"),
+		label:   pick => (pick.isRoll ? ` Roll ${pick.formula} uses` : ` Take ${pick.formula} uses`),
+		readout: paid => _provisionsPaidEl(paid.uses),
+		onPress: (btn, index, pick) => _onRollProvisions(message, btn, index, pick),
+	});
 }
 
 /** The static readout a rolled option wears from then on. */
