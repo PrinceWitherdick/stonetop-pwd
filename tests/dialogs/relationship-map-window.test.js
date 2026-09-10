@@ -3169,10 +3169,16 @@ describe("Ctrl+Z on the relationship map", () => {
 	beforeEach(() => forgetAllHistory());
 	afterEach(() => forgetAllHistory());
 
+	// ⚠ WHERE THE KEYSTROKE REALLY LANDS, and the whole reason this handler sits on the document.
+	// Nothing in this window takes the focus from a press on the board -- every one of them is
+	// preventDefaulted, by the pan surface or by the drag layer -- so a reader who has just moved
+	// somebody and reached for Ctrl+Z presses it with the focus still on the page body.
+	const BODY = { closest: () => null };
+
 	/** A keystroke, with only the surface the handler touches. */
 	const stroke = (over = {}) => ({
-		ctrlKey: true, shiftKey: false, altKey: false, metaKey: false, key: "z",
-		target: { closest: () => null },
+		ctrlKey: true, shiftKey: false, altKey: false, metaKey: false, key: "z", repeat: false,
+		target: BODY,
 		prevented: false, stopped: false,
 		preventDefault() { this.prevented = true; },
 		stopPropagation() { this.stopped = true; },
@@ -3183,6 +3189,10 @@ describe("Ctrl+Z on the relationship map", () => {
 		const { entry, pages: [page] } = ONE_LIVING_BOARD();
 		const made = windowFor(null, { entry, pageId: "p1" });
 		made.app._stepHistory = vi.fn();
+		made.app._root.ownerDocument.body = BODY;
+		// The reader's last press landed in this window, which is what stands in for the focus it
+		// cannot take.
+		made.app._pointerWithin = true;
 		return { ...made, page };
 	}
 
@@ -3202,11 +3212,43 @@ describe("Ctrl+Z on the relationship map", () => {
 	// here, somebody fixing a typo would silently take back a change to the shared board instead --
 	// and would have no way of telling that was what happened.
 	it("never takes the keystroke out from under a text field", () => {
-		const { app } = ready();
-		const ev = stroke({ target: { closest: sel => (sel.includes("input") ? {} : null) } });
+		const { app, root } = ready();
+		const field = { closest: sel => (sel.includes("input") ? {} : null) };
+		// IN this window, which is where the tie bar's caption box is.
+		root.children["__caption"] = field;
+		const ev = stroke({ target: field });
 		app._onHistoryKey(ev);
 		expect(app._stepHistory).not.toHaveBeenCalled();
 		expect(ev.prevented).toBe(false);
+	});
+
+	// ⚠ THE FAULT THIS HANDLER MOVED TO THE DOCUMENT TO FIX (user, 2026-09-07: "ctrl-z didn't seem
+	// to always work"). Bound to the window, it ran only when the focus was inside the window --
+	// which a press on the board never puts it, because every such press is preventDefaulted. The
+	// buttons on the bar always worked, because a button takes focus.
+	it("takes a stroke that landed on the page body, nothing here having the focus", () => {
+		const { app } = ready();
+		app._onHistoryKey(stroke());
+		expect(app._stepHistory).toHaveBeenCalledWith("back");
+	});
+
+	// The price of a document-wide listener: it sees every Ctrl+Z on the page, including the ones
+	// pressed in somebody else's window, and may claim only its own.
+	it("leaves alone a stroke pressed after a press in another window", () => {
+		const { app } = ready();
+		app._pointerWithin = false;
+		const ev = stroke();
+		app._onHistoryKey(ev);
+		expect(app._stepHistory).not.toHaveBeenCalled();
+		expect(ev.prevented).toBe(false);
+	});
+
+	// A step peeks its entry, awaits a write and only then commits it, so a repeat firing every few
+	// dozen milliseconds would take one change back several times over.
+	it("does not take a held key for a second press", () => {
+		const { app } = ready();
+		app._onHistoryKey(stroke({ repeat: true }));
+		expect(app._stepHistory).not.toHaveBeenCalled();
 	});
 
 	it("leaves an ordinary keystroke alone", () => {
@@ -3232,8 +3274,94 @@ describe("Ctrl+Z on the relationship map", () => {
 		entry.isOwner = false;
 		const { app } = windowFor(null, { entry, pageId: "p1" });
 		app._stepHistory = vi.fn();
+		app._root.ownerDocument.body = BODY;
+		app._pointerWithin = true;
 		app._onHistoryKey(stroke());
 		expect(app._stepHistory).not.toHaveBeenCalled();
+	});
+
+	// ── Where the listener lives ────────────────────────────────────────────────────────────
+	//
+	// The half of the fix the handler above cannot show: WHERE it is bound, and that a closed
+	// window stops listening.
+
+	/** A document that remembers what was bound to it and in which phase. */
+	function fakeDoc() {
+		const bound = [];
+		return {
+			bound,
+			addEventListener: (type, fn, capture) => bound.push({ type, fn, capture }),
+			removeEventListener: (type, fn, capture) => {
+				const at = bound.findIndex(b => b.type === type && b.fn === fn && b.capture === capture);
+				if (at >= 0) bound.splice(at, 1);
+			},
+		};
+	}
+
+	// ⚠ CAPTURE, and on the DOCUMENT. Bubbling, it would be behind core's own KeyboardManager --
+	// registered at init, where this is registered at render -- and core's Ctrl+Z is core's undo of
+	// the last canvas operation.
+	it("listens on the document, ahead of core's own keybindings", () => {
+		const { app, root } = ready();
+		const doc = fakeDoc();
+		root.ownerDocument = doc;
+		app._wireHistoryKeys(root);
+		expect(doc.bound.map(b => [b.type, b.capture]))
+			.toEqual([["pointerdown", true], ["keydown", true]]);
+	});
+
+	it("takes the keys off the document again when the window closes", () => {
+		const { app, root } = ready();
+		const doc = fakeDoc();
+		root.ownerDocument = doc;
+		app._wireHistoryKeys(root);
+		app._teardown();
+		expect(doc.bound).toEqual([]);
+	});
+
+	// A second render must not leave the first render's pair behind: a window rendered a dozen
+	// times would otherwise step a dozen entries back on one keystroke.
+	it("binds one pair however many times it is rendered", () => {
+		const { app, root } = ready();
+		const doc = fakeDoc();
+		root.ownerDocument = doc;
+		app._wireHistoryKeys(root);
+		app._wireHistoryKeys(root);
+		app._wireHistoryKeys(root);
+		expect(doc.bound).toHaveLength(2);
+	});
+
+	// What stands in for the focus this window cannot take.
+	it("follows the reader's last press from window to window", () => {
+		const { app, root } = ready();
+		const doc = fakeDoc();
+		root.ownerDocument = doc;
+		app._wireHistoryKeys(root);
+		const press = doc.bound.find(b => b.type === "pointerdown").fn;
+		const mine = el();
+		root.children["__portrait"] = mine;
+		press({ target: mine });
+		expect(app._pointerWithin).toBe(true);
+		press({ target: el() });
+		expect(app._pointerWithin).toBe(false);
+	});
+
+	// ⚠ A step peeks its entry, awaits a write to the document, and only then commits it. Two
+	// overlapping would peek the SAME entry, apply it twice and commit twice -- taking one change
+	// back and throwing the next away unread.
+	it("takes one step at a time, however fast the presses come", async () => {
+		const { app } = ready();
+		delete app._stepHistory;
+		let release;
+		app._stepHistoryNow = vi.fn(() => new Promise(done => { release = done; }));
+		const first = app._stepHistory("back");
+		expect(await app._stepHistory("back")).toBe(false);
+		expect(app._stepHistoryNow).toHaveBeenCalledTimes(1);
+		release(true);
+		expect(await first).toBe(true);
+		// And the next press, once the first has landed, is a step like any other.
+		app._stepHistoryNow = vi.fn(async () => true);
+		expect(await app._stepHistory("back")).toBe(true);
 	});
 });
 

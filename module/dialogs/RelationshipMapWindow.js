@@ -276,6 +276,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// in the way once it is out of the way.
 		this._pendingSync = false;
 		this._root = null;
+		// Whether the reader's last press on the page landed in this window, which is what stands
+		// in for focus when Ctrl+Z arrives; see `_wireHistoryKeys`.
+		this._pointerWithin = false;
 		// The board inside `_root`, remembered by `_boardEl()`, and the root it was found in.
 		this._board = null;
 		this._boardRoot = null;
@@ -1108,11 +1111,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 		});
 		strip?.addEventListener("keydown", ev => this._onPageKey(ev));
 
-		// CTRL+Z AND CTRL+SHIFT+Z, on the window as a whole rather than on the board. The reader's
-		// hands are wherever they last were — a tool on the bar, a portrait, a tab in the strip —
-		// and an undo bound to the board alone would be one that works only when it is focused.
-		// What it refuses to take is a keystroke inside a text field; see `_onHistoryKey`.
-		root.addEventListener("keydown", ev => this._onHistoryKey(ev));
+		// CTRL+Z, CTRL+SHIFT+Z AND CTRL+Y. On the DOCUMENT, not on this window: see
+		// `_wireHistoryKeys` for why binding them here was an undo that only sometimes worked.
+		this._wireHistoryKeys(root);
 
 		// A repaint held back while a drag or an edit was in the way, let through the moment it
 		// clears. Both on a timeout so the handlers that END the obstruction run first: the drag
@@ -2472,6 +2473,22 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 */
 	async _stepHistory(way) {
 		if (!this.canEdit) return false;
+		// ⚠ ONE STEP AT A TIME. A step PEEKS its entry, awaits a write to the document, and only
+		// then commits it. Two of them overlapping would both peek the SAME entry, apply the same
+		// reversal twice and commit twice — taking one change back and throwing a second away
+		// unread. Two presses land that close together easily enough: a double-press on the tool,
+		// or a held key on a board whose write is waiting on the network.
+		if (this._stepping) return false;
+		this._stepping = true;
+		try {
+			return await this._stepHistoryNow(way);
+		} finally {
+			this._stepping = false;
+		}
+	}
+
+	/** The step itself, once it is this window's turn to take one. See `_stepHistory`. */
+	async _stepHistoryNow(way) {
 		// ⚠ THE TIE BAR IS FLUSHED FIRST, AWAITED, and before the step is even peeked at. It holds a
 		// caption the document has not got yet, and that caption is a change like any other:
 		// written after this it would land on top of the undo, and merely STARTED here it would
@@ -2506,6 +2523,61 @@ export class RelationshipMapWindow extends StonetopDialog {
 	}
 
 	/**
+	 * THE KEYSTROKES, TAKEN ON THE DOCUMENT AND NOT ON THIS WINDOW.
+	 *
+	 * ⚠ WHY NOT ON THE WINDOW, which is where they were and is the obvious place for them: a
+	 * keydown only reaches an element the focus is inside of, and NOTHING IN THIS WINDOW EVER TAKES
+	 * THE FOCUS FROM A PRESS ON THE BOARD. Every press there is `preventDefault`ed — the pan
+	 * surface does it to start a drag, the drag layer does it to claim a portrait or a caption —
+	 * and a prevented press is one the browser does not move the focus for. So a reader who moved
+	 * somebody, let go, and reached for Ctrl+Z was pressing it with the focus still on whatever
+	 * they had touched BEFORE the map (the page body, most often), and the window's own handler
+	 * never ran. The undo worked after a press on a tool on the bar, or a tab in the strip, because
+	 * those are real buttons that do take focus — which is exactly the "sometimes" in the report.
+	 *
+	 * ⚠ CAPTURE, so this runs before core's KeyboardManager, which claims Ctrl+Z for its own undo
+	 * of the last canvas operation. A bubbling document listener registered at render time is
+	 * behind core's, registered at init.
+	 *
+	 * Torn down with the window and re-wired by every render — a document listener left behind by a
+	 * closed window would be one undoing a board nobody is looking at.
+	 */
+	_wireHistoryKeys(root) {
+		this._teardownHistoryKeys?.();
+		const doc = root?.ownerDocument ?? globalThis.document;
+		if (!doc?.addEventListener) return;
+		// WHICH WINDOW THE READER IS WORKING IN, since the focus can no longer be asked. The last
+		// press is the answer, and it is tracked on the document because a press that lands in
+		// another window has to clear this as surely as one in here sets it.
+		const onPoint = ev => { this._pointerWithin = !!this._root?.contains?.(ev.target); };
+		const onKey = ev => this._onHistoryKey(ev);
+		doc.addEventListener("pointerdown", onPoint, true);
+		doc.addEventListener("keydown", onKey, true);
+		this._teardownHistoryKeys = () => {
+			doc.removeEventListener("pointerdown", onPoint, true);
+			doc.removeEventListener("keydown", onKey, true);
+			this._teardownHistoryKeys = null;
+		};
+	}
+
+	/**
+	 * Whether a keystroke that landed somewhere else on the page is nonetheless this window's.
+	 *
+	 * ⚠ THE GUARD THAT KEEPS A DOCUMENT LISTENER HONEST. Bound this wide, the handler sees every
+	 * Ctrl+Z anybody presses anywhere — in a character sheet, in the chat box, in another map's
+	 * window. It may only claim one of two: a stroke that arrived INSIDE this window, or one that
+	 * arrived nowhere in particular (the body, with nothing focused) after a press in here.
+	 */
+	_ownsKeystroke(target) {
+		const root = this._root;
+		if (!root) return false;
+		if (root.contains?.(target)) return true;
+		if (!this._pointerWithin) return false;
+		const doc = root.ownerDocument ?? globalThis.document;
+		return !target || target === doc || target === doc?.body || target === doc?.documentElement;
+	}
+
+	/**
 	 * Ctrl+Z, and Ctrl+Shift+Z or Ctrl+Y the other way.
 	 *
 	 * ⚠ NEVER OUT FROM UNDER A FIELD. The tie bar carries a caption box inside this window, and
@@ -2517,6 +2589,11 @@ export class RelationshipMapWindow extends StonetopDialog {
 		if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
 		const key = String(ev.key ?? "").toLowerCase();
 		if (key !== "z" && key !== "y") return;
+		// ⚠ A HELD KEY IS NOT A SECOND UNDO. The board's history is a stack of reversing WRITES to
+		// a shared document, and a repeat fires every few dozen milliseconds — far faster than one
+		// of those completes. Every press is to be a press.
+		if (ev.repeat) return;
+		if (!this._ownsKeystroke(ev.target)) return;
 		if (ev.target?.closest?.("input, textarea, select, [contenteditable='true']")) return;
 		if (!this.canEdit) return;
 		ev.preventDefault();
@@ -3610,6 +3687,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._tieBar = null;
 		this._teardownDrag?.();
 		this._teardownDrag = null;
+		// The two document-level listeners the undo keys need. A closed window that kept them would
+		// go on taking Ctrl+Z off whoever pressed it next.
+		this._teardownHistoryKeys?.();
 		// EVERY WORLD HOOK THIS WINDOW REGISTERED, from the list rather than by name: see `_hooks`.
 		// Emptied as well as unregistered, so that a window reopened on the same instance wires
 		// itself up again rather than meeting `_wireSync`'s already-wired guard and going deaf.
