@@ -81,7 +81,11 @@ describe("the board knows it has no frame", () => {
 	it("is a subclass, which is what makes it the same board", () => {
 		// And also why utils/window-restore.js has to refuse a non-popOut app: AppV1 builds its
 		// render hook out of every class name in the chain, so this fires the window's hook too.
-		expect(Object.getPrototypeOf(RelationshipMapPanel)).toBe(FakeWindow);
+		//
+		// DESCENDS FROM rather than IS DIRECTLY: `FramelessPanel` (utils/frameless-panel.js) sits
+		// between them, which is what stops the AppV1 lore behind a frameless panel being written
+		// out once per feature. The chain is what AppV1 walks, and one more link is still the chain.
+		expect(RelationshipMapPanel.prototype).toBeInstanceOf(FakeWindow);
 	});
 });
 

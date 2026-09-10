@@ -8,20 +8,10 @@
 // two hosts of the journey map -- was considered and refused: that pattern exists because the
 // journey map has two DIFFERENT markups to keep in step, and here there is only one.
 //
-// ⚠ ALL OF THIS IS APPV1 BEHAVIOUR WE ARE ASKING FOR, NOT DEFEATING. An Application with
-// `popOut: false` already knows how to be a body without a frame (client/appv1/api/application-v1.mjs):
-//
-//   • `_render` skips `_renderOuter` entirely and hands the inner HTML straight to `_injectHTML`,
-//     so no window frame, no title bar and no header buttons are built;
-//   • `_replaceHTML` does `element.replaceWith(html)` rather than painting into `.window-content`,
-//     so a re-render (switching board, an ownership change) repaints in place inside the tab;
-//   • `setPosition` returns at its first line for an app that is neither popOut nor resizable;
-//   • the app is never entered in `ui.windows`, and `minimize`/`maximize` are no-ops.
-//
-// ⚠ WHICH IS WHY `resizable` MUST BE SET FALSE AND NOT MERELY LEFT OUT. The window sets it true,
-// and a non-popOut app with `resizable` true gets a `Draggable` bound to it by core
-// (`if (!this.popOut && this.options.resizable)`) -- a drag handle on a tab body, moving nothing.
-// It is also half of what makes `setPosition` return early.
+// BEING FRAMELESS IS `FramelessPanel` (utils/frameless-panel.js), which the timeline's panel wears
+// too: the `popOut: false` behaviour AppV1 gives for free, why `resizable` must be set false rather
+// than left out, why `_injectHTML` has to be replaced, and why `bringToTop` must do nothing. Every
+// line of it is a bug somebody already had, and it is stated there once.
 //
 // THE BOARD ITSELF NEEDED NOTHING. It reads no window geometry anywhere: `ZoomPanSurface` measures
 // `.stonetop-relmap-view` with a ResizeObserver and never asks the application where it is, the tie
@@ -30,9 +20,11 @@
 // asks of whatever holds it is a definite height (`.stonetop-relmap { height: 100% }`).
 
 import { RelationshipMapWindow } from "./RelationshipMapWindow.js";
+import { FramelessPanel } from "../utils/frameless-panel.js";
 import { localize } from "../utils/i18n.js";
 
-export class RelationshipMapPanel extends RelationshipMapWindow {
+export class RelationshipMapPanel
+	extends FramelessPanel(RelationshipMapWindow, { panelClass: "stonetop-relmap-panel" }) {
 	/**
 	 * @param {JournalEntry} entry  the map
 	 * @param {object} options      as the window's, minus anything about geometry
@@ -47,18 +39,6 @@ export class RelationshipMapPanel extends RelationshipMapWindow {
 		// bug of this kind can take.
 		this._host = host;
 		this._onClosed = onClosed;
-	}
-
-	static get defaultOptions() {
-		const base = super.defaultOptions;
-		return foundry.utils.mergeObject(base, {
-			// Both halves are load-bearing; see the head of this file.
-			popOut: false,
-			resizable: false,
-			// `mergeObject` REPLACES an array rather than concatenating it, so the window's own
-			// classes are spread back in by hand.
-			classes: [...(base.classes ?? []), "stonetop-relmap-panel"],
-		});
 	}
 
 	/**
@@ -88,52 +68,14 @@ export class RelationshipMapPanel extends RelationshipMapWindow {
 	}
 
 	/**
-	 * Point the board at the element it is to be painted into.
-	 *
-	 * Called on every render of the host sheet, because the sheet's own re-render throws its whole
-	 * body away and builds a fresh mount. A board painted into the host it was given three renders
-	 * ago is painted into a node nothing is looking at.
-	 */
-	setHost(host) {
-		this._host = host ?? null;
-	}
-
-	/**
-	 * ⚠ THE ONE METHOD THAT HAS TO BE REPLACED. Core's version appends the body to `document.body`
-	 * and fades it in, which for a frameless application is the only sensible default and is not
-	 * what a tab wants.
-	 *
-	 * `replaceChildren` rather than `append`: the mount carries the "no map yet" invitation while
-	 * the world has none, and a board arriving beside that invitation would say two things at once.
-	 */
-	_injectHTML(html) {
-		const node = html?.[0];
-		if (!node) return;
-		this._host?.replaceChildren(node);
-		this._element = html;
-	}
-
-	/**
-	 * ⚠ NEVER RAISED, AND THIS IS NOT COSMETIC. `StonetopDialog._render` runs `FrontOnOpen.apply()`
-	 * on every open, whose whole job is `bringToTop()`; core's implementation stamps a `z-index` on
-	 * `this.element[0]` and sets `ui.activeWindow = this`. On a window that is exactly right. On a
-	 * board sitting inside a sheet it puts a stacking context on a grid child and tells the rest of
-	 * Foundry that the active window is something with no frame, which is how the real window under
-	 * the pointer stops being brought forward.
-	 */
-	bringToTop() {}
-
-	/**
 	 * Closing is what happens when the map is deleted out from under this board (see `_wireSync`),
 	 * as well as what the host sheet asks for on its own way out.
 	 *
-	 * ⚠ NEVER ANIMATED. Core closes a frameless application by `slideUp`-ing the element and then
-	 * removing it, which on a tab body is a diagram folding itself up over half a second and
-	 * leaving a hole. There is nothing here to watch leave: the tab either shows another board or
-	 * shows the invitation, and the host is told so it can decide which.
+	 * The un-animated close is the mixin's; what is this board's own is TELLING THE HOST, so the tab
+	 * can decide whether to show another board or the invitation.
 	 */
 	async close(options = {}) {
-		await super.close({ ...options, animate: false });
+		await super.close(options);
 		const told = this._onClosed;
 		this._onClosed = null;
 		told?.(this);
