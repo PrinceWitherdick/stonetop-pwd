@@ -27,7 +27,14 @@
       way to a board with no writing on it -- zoomed out past the size at which words are worth
       drawing -- is the board's own decision rather than the reader's, and the two must be able to
       end without ending each other. See `_captionsHidden`. --}}
-<div class="stonetop-relmap labels-all{{#if hideLabels}} captions-off{{/if}}{{#unless canEdit}} is-readonly{{/unless}}">
+{{!-- ⚠ AND THE THREE WEIGHTS RIDE ON THE ROOT AS CUSTOM PROPERTIES, printed here rather than
+      written on afterwards. `activateListeners` measures the captions the moment this markup lands
+      (`_fitGapsToPaint` reads a real one's computed size straight off the document), so a weight
+      that arrived a tick later would leave every sentence on the board cut, and every hole in every
+      stroke opened, for writing of a size it is no longer set in. `_paintWeights` is the writer for
+      every press after this one. See module/relmap/relmap-weights.js. --}}
+<div class="stonetop-relmap labels-all{{#if hideLabels}} captions-off{{/if}}{{#unless canEdit}} is-readonly{{/unless}}"
+     style="{{weightStyle}}">
 
   {{!-- WHICH BOARD OF THIS MAP IS UP.
 
@@ -658,6 +665,70 @@
              {{#if hideLabels}}checked{{/if}}>
       <span>{{labelsLabel}}</span>
     </label>
+
+    {{!-- HOW HEAVILY THIS BOARD IS DRAWN, FOR THIS READER: the arrowheads, the strokes and the
+          writing, each as a percentage of what the stylesheet sets.
+
+          WHY THERE ARE THREE AND NOT A ZOOM. The board already zooms, and zooming answers a
+          different question -- it magnifies everything at once, so a web too dense to read is still
+          too dense and there is simply less of it in the window. What a reader runs out of is one
+          THING at a time: an arrowhead is a speck at the end of a line on a board of forty, a
+          stroke is three and a half screen pixels, and the writing is sixteen. Each of these moves
+          one of those and nothing else.
+
+          ⚠ IT IS THIS READER'S OWN AND IT WRITES NOTHING TO THE MAP. Everything else pressed at
+          this window edits a board everybody shares; this edits a record in one browser, flat
+          across every world (module/relmap/relmap-weights.js says at length why it is not stored on
+          the board). So it is outside the `canEdit` gate below, like the captions box beside it:
+          the reader who needs it most is the one who may only look, because they cannot move a
+          portrait to see anything better.
+
+          ⚠ NEXT TO THE CAPTIONS BOX, WHICH IS THIS FOOTER'S OWN ARRANGEMENT rather than a place
+          found for it. The line reads LEFT: WHAT IS DRAWN, FOR THIS READER; right: what changes the
+          board for everybody. These four dials -- the box and the three weights -- are all the
+          first kind, they all write to one browser and nobody else's window moves, so they stand
+          together on the left and the auto margin on the tools keeps the other kind at the far end.
+
+          ⚠ AND OUT OF THE VIEWPORT ALTOGETHER (user, 2026-09-09). It stood in the board's top-left
+          corner as a stack of three rows, quiet until the pointer arrived. Down here it is
+          permanent, it is in the one place this window puts everything that is pressed, it takes no
+          board away from the diagram, and it is out of the pan surface -- which is three
+          arrangements it no longer has to make: no hover reveal to find, no `z-index` against the
+          tie bar, and no dependence on `BOARD_CONTROLS` to survive a pointer capture. The
+          `data-relmap-action` attributes stay because that is what the click handler dispatches on.
+
+          ⚠ ONE HINT ON EACH DIAL AND A NAME ON EVERY BUTTON. Three tooltips each explaining that
+          this belongs to the reader alone would be the same paragraph three times over on one line.
+          What a dial has to say for itself is which of the three it is. --}}
+    <div class="stonetop-relmap-heft" role="group" aria-label="{{weightGroup}}">
+      {{#each weights}}
+      <div class="stonetop-relmap-heft-dial" data-tooltip="{{hint}}">
+        <i class="stonetop-relmap-heft-mark {{icon}}" aria-hidden="true"></i>
+        {{!-- LIGHTER ON THE LEFT AND HEAVIER ON THE RIGHT, with the number between them, because
+              that is the order the value itself runs in and the order every stepper a reader has
+              met is in. Dead at the ends rather than pressing to no effect. --}}
+        <button type="button" class="stonetop-relmap-heft-step" data-relmap-action="weight"
+                data-relmap-weight="{{key}}" data-relmap-step="-1"
+                aria-label="{{down}}" {{#if atMin}}disabled{{/if}}>
+          <i class="fas fa-minus" aria-hidden="true"></i>
+        </button>
+        {{!-- THE READOUT IS ALSO THE WAY BACK to a hundred per cent, which is what its own label
+              says: a third button per dial would be twelve controls on a line that has room for
+              nine, and "put this one back" is the same question about the same one of the three.
+              `aria-disabled` and not `disabled` at the base, so a screen reader still meets the
+              number -- some skip a disabled button entirely, and the number is the point. --}}
+        <button type="button" class="stonetop-relmap-heft-now" data-relmap-action="weight"
+                data-relmap-weight="{{key}}" data-relmap-step="0"
+                data-tooltip="{{reset}}" aria-label="{{now}}"
+                aria-disabled="{{#if atBase}}true{{else}}false{{/if}}">{{pct}}%</button>
+        <button type="button" class="stonetop-relmap-heft-step" data-relmap-action="weight"
+                data-relmap-weight="{{key}}" data-relmap-step="1"
+                aria-label="{{up}}" {{#if atMax}}disabled{{/if}}>
+          <i class="fas fa-plus" aria-hidden="true"></i>
+        </button>
+      </div>
+      {{/each}}
+    </div>
 
     {{!-- THE BOARD'S OWN TOOLS, behind the editing gate and nothing else, held against the
           right-hand edge by an auto margin on the group (`.stonetop-relmap-foot-tools`) rather

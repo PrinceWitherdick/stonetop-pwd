@@ -29,6 +29,7 @@ import { ZoomPanSurface } from "../utils/zoom-pan-surface.js";
 import { wireRelmapDrag } from "../utils/relmap-drag.js";
 import {
 	RELMAP_BOARD_ASPECT, RELMAP_BOARD_WIDTH, RELMAP_CAPTION_FLOOR_PX, RELMAP_CAPTION_PX,
+	RELMAP_HEAD_PX,
 	ROUTE_HEAD_PATH, ROUTE_HEAD_VIEWBOX,
 	boardMetrics,
 	captionRoomPx, captionSize, clampPct, clearanceBow, curveWithGap, edgeArrowheads, edgeBow,
@@ -46,6 +47,10 @@ import { RELMAP_INK_ACROSS, RELMAP_INK_PRESETS, inkPaint, normalizeHex }
 import { rememberBoard } from "../relmap/relmap-last.js";
 import { penFor, rememberPen } from "../relmap/relmap-pen.js";
 import { getLastSize, rememberSize } from "../relmap/relmap-size.js";
+import {
+	RELMAP_WEIGHTS, RELMAP_WEIGHT_BASE, RELMAP_WEIGHT_MAX, RELMAP_WEIGHT_MIN, RELMAP_WEIGHT_STEP,
+	getWeights, setWeights, weightScales,
+} from "../relmap/relmap-weights.js";
 import {
 	describeWrite, forgetHistory, historyFor, stepPatch,
 } from "../relmap/relmap-history.js";
@@ -171,6 +176,30 @@ const BOARD_CONTROLS =
 const BOARD_MENUS = ".stonetop-relmap-tiebar";
 
 /**
+ * ONE GLYPH APIECE FOR THE CORNER OVER THE BOARD, and each is a picture of the thing it resizes
+ * rather than of the act of resizing it: a solid triangle, a plain rule, a letter.
+ *
+ * ⚠ SIMPLE SHAPES ON PURPOSE. These are painted at about fourteen pixels in a strip that fades
+ * under the pointer, and a busy glyph at that size reads as a smudge -- which is the one thing the
+ * corner exists to fix. Each of the three has to be recognisable at a glance and, more to the
+ * point, apart from the other two.
+ *
+ * Here rather than in `languages/en.json` for the reason every other icon in this window is: an
+ * icon is not a translation.
+ */
+const WEIGHT_ICONS = Object.freeze({
+	head: "fas fa-play",
+	// ⚠ A DIAGONAL AND NOT A RULE, which was the first answer and was wrong for a reason no
+	// amount of staring at the code would have shown: the button immediately to its right is the
+	// one that makes this weight SMALLER, and it wears a minus. A horizontal rule beside a minus
+	// sign is the same shape twice, a few pixels apart, in a strip the size of a postage stamp. A
+	// slash is unmistakably not an operator, and it is also what a line on this board actually
+	// looks like -- the strokes run corner to corner between faces, never flat.
+	line: "fas fa-slash",
+	word: "fas fa-font",
+});
+
+/**
  * WHAT EACH BUTTON ON THE BAR DOES, AND WHETHER IT IS AN EDIT.
  *
  * A TABLE RATHER THAN A CHAIN, because the permission gate used to be POSITIONAL: a tool was gated
@@ -193,6 +222,12 @@ const TOOLS = Object.freeze({
 	// sheet's tab -- a window offering to open itself would be a button that flashes and does
 	// nothing.
 	popout: { needsEdit: false, run: app => app._popOut() },
+	// ⚠ AND THE THIRD THING THAT IS NOT AN EDIT, which is the three dials on the footer: how heavily
+	// the arrowheads, the strokes and the writing are drawn FOR THIS READER. It writes to their own
+	// browser and to nothing else -- no document, no other window, nothing anybody else sees -- and
+	// the person who needs it most is once again the one who may only look, because they cannot
+	// move a portrait to get a better view of anything. See relmap/relmap-weights.js.
+	weight: { needsEdit: false, run: (app, button) => app._stepWeight(button) },
 	// ⚠ NO "BRING THE PARTY IN" AND NO "BRING THE VILLAGE IN". Both boards still fill themselves on
 	// open; what is gone is the pair of buttons that asked for the same pass out loud. They were two
 	// controls for something the map already has two plainer answers to -- drag somebody on, or press
@@ -638,10 +673,81 @@ export class RelationshipMapWindow extends StonetopDialog {
 			},
 			labelsLabel: localize("stonetop.relmap.hideLabels"),
 			labelsHint: localize("stonetop.relmap.hideLabelsHint"),
+			// ── The three dials on the footer ──────────────────────────────────────────
+			// HOW HEAVILY THIS READER WANTS IT DRAWN, in three dials. See `_weightDials`, and
+			// relmap/relmap-weights.js for why this is the reader's own and not the map's.
+			weightGroup: localize("stonetop.relmap.weightGroup"),
+			weights: this._weightDials(),
+			// ⚠ AND THE SAME THREE NUMBERS AS PROPERTIES ON THE ROOT, printed by the template
+			// rather than written by `_paintWeights` after the fact. `activateListeners` measures
+			// the captions the moment this markup lands (`_fitGapsToPaint` reads a real caption's
+			// computed size off the document), so a weight that arrived a tick later would leave
+			// the whole board cut and gapped for writing of another size until the next repaint.
+			weightStyle: this._weightStyle(),
 			// EVERY PANEL THAT CAN GO OUT OF DATE UNDER AN OPEN WINDOW, from the one derivation
 			// `_paintChrome` writes back after a repaint. See `_chrome`.
 			...chrome,
 		};
+	}
+
+	/**
+	 * The three dials on the footer are built from these.
+	 *
+	 * ONE BUILDER, because there are two writers: this, for the markup a render lays down, and
+	 * `_paintWeights`, for the same three readouts after a press. They agree about the words by both
+	 * asking `stonetop.relmap.weights.<key>.name` and about the numbers by both asking `getWeights`.
+	 *
+	 * THE ORDER IS `RELMAP_WEIGHTS`' OWN, which runs from the smallest mark on the board to the
+	 * largest -- a speck at the end of one line, a hair the length of the board, then words. See
+	 * there; it is the order a reader who has just found they cannot see something reaches in.
+	 */
+	_weightDials(weights = getWeights()) {
+		return RELMAP_WEIGHTS.map(key => {
+			const pct = weights[key];
+			const name = localize(`stonetop.relmap.weights.${key}.name`);
+			return {
+				key,
+				pct,
+				name,
+				icon: WEIGHT_ICONS[key],
+				// ⚠ ONE HINT PER DIAL AND A NAME PER BUTTON. Three tooltips each explaining that
+				// this is the reader's own and touches nobody else's board would be the same
+				// paragraph three times over on one line of a footer; what each dial needs to say
+				// for itself is which of the three it is.
+				hint: localize(`stonetop.relmap.weights.${key}.hint`),
+				up: format("stonetop.relmap.weightUp", { name }),
+				down: format("stonetop.relmap.weightDown", { name }),
+				// THE READOUT IS THE WAY BACK, and it says so rather than being a number that
+				// mysteriously responds to a click. Dead at the base, where there is nowhere to go.
+				reset: format("stonetop.relmap.weightReset", { name, pct: RELMAP_WEIGHT_BASE }),
+				now: format("stonetop.relmap.weightNow", { name, pct }),
+				atBase: pct === RELMAP_WEIGHT_BASE,
+				atMax: pct === RELMAP_WEIGHT_MAX,
+				atMin: pct === RELMAP_WEIGHT_MIN,
+			};
+		});
+	}
+
+	/**
+	 * The same three as an inline `style` for the board's root: one custom property apiece, as a
+	 * MULTIPLIER rather than a percentage, which is what every `calc()` in the stylesheet wants.
+	 *
+	 * Every value here is arithmetic on a number `readWeight` has already held to its bounds, so
+	 * there is nothing in it a template could need to escape.
+	 */
+	_weightStyle(weights = getWeights()) {
+		const scales = weightScales(weights);
+		return [
+			// ⚠ THE ARROWHEAD'S BASE SIZE TRAVELS WITH THEM, and not as a convenience. The sheet
+			// sizes a head and this file stands it off its rim, and both were spelling the same
+			// number -- 22 -- in two languages, with a stylesheet comment asking whoever changed
+			// one to remember the other. A head sized by one number and positioned by another
+			// lands short of its line or out past the face it points at. So the JS constant is
+			// the source and the sheet reads it; the `22px` still in the stylesheet is only the
+			// fallback for a board rendered before this property lands.
+			`--relmap-head-px:${RELMAP_HEAD_PX}px`,
+			...RELMAP_WEIGHTS.map(key => `--relmap-${key}-scale:${scales[key]}`),
+		].join(";");
 	}
 
 	/**
@@ -670,6 +776,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// THE SHEET GROWS WITH THE CAST, so a portrait's radius is not a constant: it is
 			// smaller, as a share of the board, on a board carrying more people.
 			board: boardMetrics(Object.keys(whole.nodes).length),
+			// ⚠ HOW HEAVILY THIS READER WANTS THE BOARD DRAWN, and it belongs in the plan for
+			// exactly the reason everything else here does: the stylesheet paints the strokes, the
+			// heads and the writing at these weights, and the arithmetic has to arrive at the same
+			// numbers, or a head sits off the end of its line and a caption floats in a hole cut
+			// for words of another size. Read fresh each pass rather than held, like the graph
+			// beside it: the reader can change it between two paints, and the press that changes it
+			// is what asks for the second one.
+			scales: weightScales(),
 		};
 	}
 
@@ -770,7 +884,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * are on, and a ternary per question is three chances for one of them to be looking at a
 	 * different one.
 	 */
-	_boardContext({ graph, board }) {
+	_boardContext({ graph, board, scales = weightScales() }) {
 		const r = board.r;
 		const fans = fanIndexes(graph);
 		const canEdit = this.canEdit;
@@ -852,7 +966,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const labels = [];
 		const heads = [];
 		const shapes = edgeShapes(graph, {
-			r, fans, spread: true, boardWidthPx: board.width,
+			r, fans, spread: true, boardWidthPx: board.width, scales,
 		});
 		// HELD BACK for the second pass over this same markup. `_fitGapsToPaint` needs the curve, the
 		// anchor and the sheet these were worked out on, and re-deriving them from the document would
@@ -864,6 +978,16 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// read straight off it: a second copy of that number beside it was one more field to
 			// keep in step for nothing.
 			board,
+			// THE TWO PIXEL SIZES THIS PAINT WAS DRAWN AT, resolved once and kept beside the sheet
+			// they were resolved against. Four passes re-cut one of these gaps or re-measure one of
+			// these captions after the render is over -- a keystroke, a caption dragged along its
+			// line, a portrait dragged across the board, and the measuring pass itself -- and each
+			// has to use the size the markup in front of it was actually built with. Re-deriving
+			// them from the setting would be four more readings of a record the reader is allowed
+			// to change between any two of them.
+			headPx: RELMAP_HEAD_PX * scales.head,
+			basePx: RELMAP_CAPTION_PX * scales.word,
+			scales,
 			shapes: new Map(shapes.map(shape => [shape.id, shape])),
 			painted: null,
 			// Each line's markup, indexed by edge id. Walked once by `_fitGapsToPaint` and kept for
@@ -1403,7 +1527,11 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const drawn = this._drawn;
 		if (parts.words.textContent !== fit.text) parts.words.textContent = fit.text;
 		const size = captionSize(shape.edge.label, shape.curve, {
-			boardWidthPx: drawn.board.width, paintedPx: fit.width, px: shape.edge.size,
+			boardWidthPx: drawn.board.width, paintedPx: fit.width,
+			// AT THE WEIGHTS THIS PAINT WAS BUILT WITH, taken off `_drawn` rather than re-read.
+			// See there: a reader who moves the corner between two frames must not have half a
+			// board measured one way and half the other.
+			px: shape.capPx, basePx: drawn.basePx,
 		});
 		shape.size = size;
 		shape.anchor = edgeLabelAnchor(shape.curve, RELMAP_BOARD_ASPECT, shape.anchor.t, size.w)
@@ -1411,6 +1539,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		placeCaption(parts, shape.anchor, drawn.board);
 		shape.d = curveWithGap(shape.curve, {
 			t: shape.anchor.t, span: size.w, boardWidthPx: drawn.board.width, dir: shape.edge.dir,
+			headPx: drawn.headPx,
 		});
 		parts.line?.setAttribute("d", shape.d);
 		return fit.width;
@@ -1479,7 +1608,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// would run a big caption on past both ends of its line and open a hole far too small
 			// for it.
 			const said = fitCaption(
-				shape.edge.label, shape.labelMax, measureAt(measure, shape.edge.size),
+				shape.edge.label, shape.labelMax, measureAt(measure, shape.capPx),
 			);
 			painted.set(id, this._seatCaption(shape, found, said));
 		}
@@ -1607,7 +1736,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// At the size THIS line is set in, as the full pass measures it: the same cut and the same
 		// gap, or the words would jump the moment the write lands. See `_fitGapsToPaint`.
 		const fit = (!tiny && drawn.measure)
-			? fitCaption(said, shape.labelMax, measureAt(drawn.measure, shape.edge.size))
+			? fitCaption(said, shape.labelMax, measureAt(drawn.measure, shape.capPx))
 			: { text: said, width: null };
 		if (tiny) {
 			if (parts.words.textContent !== fit.text) parts.words.textContent = fit.text;
@@ -2672,6 +2801,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 		for (const shape of edgeShapes(preview.graph, {
 			r: preview.board.r, fans: preview.fans, only: id,
 			boardWidthPx: preview.board.width, painted: preview.painted,
+			// THE WEIGHTS THE STILL LINES AROUND IT WERE DRAWN AT. A dragged line is redrawn sixty
+			// times a second beside lines nobody is touching, and one drawn at a different weight
+			// would visibly change size the moment it was picked up.
+			scales: preview.scales,
 		})) {
 			const parts = preview.parts.get(shape.id);
 			// A BOARD WITH NO CAPTIONS ON IT HAS NO HOLES IN ITS LINES, and a line being dragged has
@@ -2715,6 +2848,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// second copies of two of its numbers beside it were two more fields to keep in step for
 			// nothing.
 			board: plan.board,
+			// AND THE WEIGHTS THE STILL LINES AROUND IT WERE DRAWN AT. Off the plan, so the drag
+			// and the repaint that follows it agree; see `_previewMove`.
+			scales: plan.scales,
 			// WHAT THE CAPTIONS ON SCREEN MEASURED, from the repaint that drew them
 			// (`_fitGapsToPaint`). Read here rather than per frame, because reading an element's
 			// width forces the browser to lay the board out and doing that sixty times a second is
@@ -3183,6 +3319,96 @@ export class RelationshipMapWindow extends StonetopDialog {
 	}
 
 	/**
+	 * HOW HEAVILY THIS READER WANTS THE BOARD DRAWN, moved one step, or put back to the base.
+	 *
+	 * Three of these stand on the footer beside the captions box (`.stonetop-relmap-heft`): the
+	 * arrowheads, the strokes and the writing, each a percentage of what the stylesheet sets. The
+	 * button says which one and which way in its own `data-` attributes; a step of zero is the
+	 * readout between the two, which is a press that puts that one back to 100%.
+	 *
+	 * ⚠ NOTHING HERE TOUCHES THE MAP, and that is the whole shape of this control. It writes to
+	 * this reader's browser (relmap/relmap-weights.js says at length why it is not stored on the
+	 * board) and it repaints this window. Nobody else's board moves, no history entry is made, and
+	 * there is nothing for the undo button to take back -- which is also why it is ungated: a
+	 * reader who may only look wants it more than anybody.
+	 *
+	 * ⚠ THE STYLESHEET IS TOLD FIRST AND THE BOARD IS REDRAWN SECOND, in that order, because the
+	 * redraw MEASURES. `_repaintBoard` ends in `_fitGapsToPaint`, which reads a real caption's
+	 * computed size off the document to decide how much of each sentence fits and how big a hole to
+	 * cut for it; run before the new weight is on the root, every one of those measurements would be
+	 * taken at the old size and the whole board would be cut for writing it is no longer set in.
+	 *
+	 * SAID BEFORE THE BOARD CHANGES UNDER IT, as every other announcement in this window is: a
+	 * message posted after a repaint can land on markup that has already been thrown away.
+	 */
+	async _stepWeight(button) {
+		const key = button?.dataset?.relmapWeight;
+		if (!RELMAP_WEIGHTS.includes(key)) return;
+		const step = Number(button.dataset.relmapStep) || 0;
+		const now = getWeights();
+		// A STEP OF ZERO IS THE READOUT, and the readout is the way back to the base. Written as a
+		// step rather than as a third action because it is the same question about the same one of
+		// the three, and a `weightreset` beside `weight` would be a second entry in the tools table
+		// that had to be kept in step with this one.
+		const want = step === 0 ? RELMAP_WEIGHT_BASE : now[key] + step * RELMAP_WEIGHT_STEP;
+		const next = setWeights({ [key]: want });
+		if (next[key] === now[key]) return;
+		this._announce(format("stonetop.relmap.weightNow", {
+			name: localize(`stonetop.relmap.weights.${key}.name`),
+			pct: next[key],
+		}));
+		this._paintWeights(next);
+		await this._repaintBoard();
+	}
+
+	/**
+	 * Write the three weights onto the window: what the stylesheet paints at, and what the corner
+	 * says it is painting at.
+	 *
+	 * ⚠ THE PROPERTIES GO ON THE ROOT AND NOT ON THE BOARD, though only the board is drawn from
+	 * them. `_repaintBoard` replaces the board's innerHTML but never the board element itself, so
+	 * either would survive a repaint; the root is where `--relmap-say-px` already lives, and one
+	 * element carrying every custom property this window sets is one place to look.
+	 *
+	 * ⚠ AND THE FIRST PAINT DOES NOT COME THROUGH HERE. The properties are printed onto the root by
+	 * the template (`weightStyle`), because `activateListeners` measures the captions the moment the
+	 * markup lands and anything written after that would be a board measured at one size and painted
+	 * at another. This is the writer for every press after it.
+	 */
+	_paintWeights(weights = getWeights()) {
+		const root = this._root;
+		if (!root) return;
+		const scales = weightScales(weights);
+		for (const key of RELMAP_WEIGHTS) {
+			root.style?.setProperty?.(`--relmap-${key}-scale`, String(scales[key]));
+			const pct = weights[key];
+			const step = root.querySelector(`[data-relmap-weight="${key}"][data-relmap-step="0"]`);
+			if (step) {
+				step.textContent = `${pct}%`;
+				// AT THE BASE THERE IS NOWHERE TO GO BACK TO, so the readout stops being a button
+				// and goes on being a readout. `aria-disabled` and not `disabled`: a screen reader
+				// moving through this corner should still meet the number, and a disabled button is
+				// skipped by some of them entirely.
+				step.setAttribute("aria-disabled", String(pct === RELMAP_WEIGHT_BASE));
+				step.setAttribute("aria-label", format("stonetop.relmap.weightNow", {
+					name: localize(`stonetop.relmap.weights.${key}.name`), pct,
+				}));
+			}
+			// THE TWO ARROWS GO DEAD AT THE ENDS rather than pressing to no effect. `readWeight`
+			// holds the value inside the bounds whatever arrives, so this is only ever telling the
+			// reader what that gate is about to do.
+			const dim = (dir, at) => {
+				const btn = root.querySelector(
+					`[data-relmap-weight="${key}"][data-relmap-step="${dir}"]`,
+				);
+				if (btn) btn.disabled = pct === at;
+			};
+			dim("1", RELMAP_WEIGHT_MAX);
+			dim("-1", RELMAP_WEIGHT_MIN);
+		}
+	}
+
+	/**
 	 * Open the board in front of the reader as a window of its own.
 	 *
 	 * ⚠ THE PAGE GOES WITH IT. A reader presses this while looking at one particular board of
@@ -3369,7 +3595,13 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// one keeps: board pixels chosen to come out at `CAPTION_READ_PX` on screen, so the words
 		// stay the same size to read while the board shrinks under them. Above the threshold the
 		// variable goes and the caption is set like every other one.
-		const say = tiny ? `${Math.round((CAPTION_READ_PX / scale) * 10) / 10}px` : "";
+		// ⚠ AT THIS READER'S OWN WEIGHT, which is the one place the words are set from a number
+		// rather than from a declaration the stylesheet could multiply for us. `CAPTION_READ_PX` is
+		// a size ON SCREEN, chosen so the held caption stays readable while the board shrinks under
+		// it; a reader who has asked every board for heavier writing has asked for this one too,
+		// and left flat it would be the single caption on the board that ignored the corner.
+		const word = Number(this._drawn?.scales?.word) > 0 ? this._drawn.scales.word : 1;
+		const say = tiny ? `${Math.round((CAPTION_READ_PX * word / scale) * 10) / 10}px` : "";
 		// Written only when it CHANGES. This runs on every painted frame of a pan, where the scale
 		// is the one thing that has not moved.
 		if (say !== this._sayPx) {
@@ -3726,8 +3958,16 @@ export class RelationshipMapWindow extends StonetopDialog {
  */
 function edgeShapes(graph, {
 	r, fans, only = null, spread = false, boardWidthPx = RELMAP_BOARD_WIDTH,
-	painted = null,
+	painted = null, scales = weightScales(),
 } = {}) {
+	// ⚠ THE READER'S OWN WEIGHTS, TURNED INTO THE TWO PIXEL SIZES THE ARITHMETIC BELOW SPEAKS IN,
+	// once for the whole walk. Everything in this file measures in board pixels, and both of these
+	// are what the STYLESHEET is painting at on this board -- not what it paints at by default. A
+	// walk that used the defaults would place every head at the stand-off a 22-pixel triangle wants
+	// while the sheet drew a 33-pixel one, and estimate every plain caption at sixteen while the
+	// sheet set it in twenty-four. See relmap/relmap-weights.js.
+	const headPx = RELMAP_HEAD_PX * scales.head;
+	const basePx = RELMAP_CAPTION_PX * scales.word;
 	// Every face on the board, which each line has to get past. Gathered once for the whole
 	// walk rather than per link: the list is the same for all of them, and a link's own two ends
 	// are recognised by where they are and left out by `clearanceBow` itself.
@@ -3770,9 +4010,31 @@ function edgeShapes(graph, {
 		// straight run is the one whose two ends land on the stroke either side of them. See
 		// `edgeLabelAnchor`. Kept on the shape, so the seat, the spreader's obstacle box and the
 		// hole cut in the stroke are all measured off one number.
+		// ⚠ WHAT THIS ONE CAPTION IS ACTUALLY PAINTED IN, and zero where the sheet decides.
+		//
+		// A line's stored size is what the READER asked for on that line, and the weight is what
+		// this reader asked for on every board they open; a caption set in twenty on a board being
+		// drawn at 150% comes out at thirty, and thirty is the number every measurement of it has
+		// to be made at.
+		//
+		// ⚠ AND IT IS NOT ROUNDED, WHICH IS THE OPPOSITE OF WHAT `readSize` DOES TO THE STORED
+		// NUMBER. That one is rounded because it is what a `font-size` is written from. This is not
+		// written anywhere: the template still hands the sheet the line's own stored size and the
+		// STYLESHEET multiplies by the weight, so what is actually painted is 18 x 1.1 = 19.8.
+		// Rounded here to 20, the canvas would measure a caption a fifth of a pixel wider than the
+		// one on screen -- small, and still the wrong number in the one place whose entire job is to
+		// be the right one.
+		//
+		// ⚠ AND A PLAIN LINE STAYS ZERO rather than becoming the base times the weight, which is
+		// the one subtle line here. Zero means "whatever the sheet sets", and the measuring pass
+		// answers that by reading a real caption's computed size off the document -- which is the
+		// only reading that survives an accessibility skin having an opinion about type. Filling it
+		// in here would replace a measurement with a guess on every ordinary line on the board. The
+		// ESTIMATE, which has no document to ask, is told the same thing a different way: `basePx`.
+		const capPx = edge.size > 0 ? edge.size * scales.word : 0;
 		const size = curve && edge.label
 			? captionSize(edge.label, curve, {
-				boardWidthPx, paintedPx: painted?.get(id) ?? null, px: edge.size,
+				boardWidthPx, paintedPx: painted?.get(id) ?? null, px: capPx, basePx,
 			})
 			: null;
 		out.push({
@@ -3780,11 +4042,14 @@ function edgeShapes(graph, {
 			edge,
 			curve,
 			size,
+			capPx,
 			mid: middle,
 			anchor: size ? edgeLabelAnchor(curve, RELMAP_BOARD_ASPECT, 0.5, size.w) : null,
 			// The sheet goes through because the head stands off the rim by a PIXEL distance and
 			// this board may be any width: see `RELMAP_HEAD_PX`.
-			heads: curve ? edgeArrowheads(curve, RELMAP_BOARD_ASPECT, edge.dir, { boardWidthPx }) : [],
+			heads: curve
+				? edgeArrowheads(curve, RELMAP_BOARD_ASPECT, edge.dir, { boardWidthPx, headPx })
+				: [],
 		});
 	}
 
@@ -3800,12 +4065,16 @@ function edgeShapes(graph, {
 			// twelve, slide the board's quiet captions apart perfectly, and leave the one the table
 			// cares about lying across two of them.
 			labels: out.filter(shape => shape.anchor).map(shape => ({
-				id: shape.id, curve: shape.curve, text: shape.edge.label, px: shape.edge.size,
+				id: shape.id, curve: shape.curve, text: shape.edge.label, px: shape.capPx,
+				seat: shape.edge.seat,
 			})),
 			nodes: faces,
 			aspect: RELMAP_BOARD_ASPECT,
 			r,
 			boardWidthPx,
+			// What a caption with no size of its own is set in on this board, which is what the
+			// spreader has to estimate every plain one at. See `capPx` above.
+			basePx,
 		});
 		for (const shape of out) {
 			if (shape.anchor) shape.anchor = anchors.get(shape.id) ?? shape.anchor;
@@ -3821,7 +4090,7 @@ function edgeShapes(graph, {
 		// THE SAME LINE WITH NO HOLE IN IT, kept beside the broken one because the reader turning
 		// the captions off puts it back (`_paintLineGaps`). It may not reach for `curve.d` -- that
 		// is the run end to end, and an end wearing an arrowhead has to stop short of it.
-		shape.unbroken = curveWithGap(shape.curve, { boardWidthPx, dir: shape.edge.dir });
+		shape.unbroken = curveWithGap(shape.curve, { boardWidthPx, dir: shape.edge.dir, headPx });
 		if (!shape.anchor) { shape.d = shape.unbroken; continue; }
 		// HOW WIDE THIS ONE CAPTION MAY GET, which is its own line's business and not the board's:
 		// a long line carries its whole sentence, a short one is still promised a few words. Sent
@@ -3837,7 +4106,7 @@ function edgeShapes(graph, {
 		// MEASURED ONCE, ABOVE, because the same number seats the caption: the hole and the words
 		// have to be the same stretch of the same line or the words sit beside their own hole.
 		shape.d = curveWithGap(shape.curve, {
-			t: shape.anchor.t, span: shape.size.w, boardWidthPx, dir: shape.edge.dir,
+			t: shape.anchor.t, span: shape.size.w, boardWidthPx, dir: shape.edge.dir, headPx,
 		});
 	}
 	return out;

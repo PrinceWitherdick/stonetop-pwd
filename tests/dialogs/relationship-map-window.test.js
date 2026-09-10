@@ -59,6 +59,8 @@ const { RelationshipMapWindow, openRelationshipMap } =
 const { mapBoardRole, readGraph } = await import("../../module/relmap/relmap-doc.js");
 const { forgetAllHistory } = await import("../../module/relmap/relmap-history.js");
 const { dropNodePatch, edgePatch } = await import("../../module/relmap/relmap-store.js");
+const { RELMAP_BOARD_ASPECT, RELMAP_HEAD_PX, curveWithGap, edgeLabelAnchor } =
+	await import("../../module/utils/relmap-geometry.js");
 
 /** The real English table, kept from before the suite's `beforeEach` replaces `globalThis.game`. */
 const TABLE = globalThis.game.i18n;
@@ -3781,5 +3783,219 @@ describe("a window shut while it was still drawing", () => {
 			shut.mockRestore();
 			drew.mockRestore();
 		}
+	});
+});
+describe("how heavily this reader wants the board drawn", () => {
+	let stored;
+
+	/** A window whose dials are actually in its markup, with a browser to remember things in. */
+	function dialled(graph = TWO_PEOPLE) {
+		const made = windowFor(graph);
+		stored = {};
+		globalThis.game.i18n = TABLE;
+		globalThis.game.settings = {
+			get: (ns, key) => stored[key],
+			set: (ns, key, value) => { stored[key] = value; return Promise.resolve(value); },
+		};
+		// The nine buttons, registered by the same selectors `_paintWeights` looks them up with.
+		// Without them every write below would be a silent no-op and every assertion about the
+		// readouts would pass against a window that never touched one.
+		made.rows = {};
+		for (const key of ["line", "head", "word"]) {
+			const row = { now: el({ attrs: {} }), up: el(), down: el() };
+			row.now.setAttribute = (k, v) => { row.now.attrs[k] = v; };
+			made.root.children[`[data-relmap-weight="${key}"][data-relmap-step="0"]`] = row.now;
+			made.root.children[`[data-relmap-weight="${key}"][data-relmap-step="1"]`] = row.up;
+			made.root.children[`[data-relmap-weight="${key}"][data-relmap-step="-1"]`] = row.down;
+			made.rows[key] = row;
+		}
+		// What `_paintWeights` writes the three custom properties onto.
+		made.root.style = {
+			props: {},
+			setProperty(name, value) { this.props[name] = value; },
+			removeProperty(name) { delete this.props[name]; },
+		};
+		return made;
+	}
+
+	/** One press of one button on one dial. */
+	const press = (app, key, step) =>
+		app._stepWeight(el({ dataset: { relmapWeight: key, relmapStep: String(step) } }));
+
+	/** What one weight now reads, BY NAME. Every test below is about the arithmetic rather than
+	 * about the layout, and indexing the three by position quietly made each of them a second
+	 * assertion about the order they are offered in -- so re-ordering the dials for the way a
+	 * reader meets them failed three tests that had no opinion on it. The one test that IS about
+	 * that order says so out loud, once, above. */
+	const pctOf = (app, key) => app._weightDials().find(r => r.key === key).pct;
+
+	it("opens at the sheet's own answer, with nothing to go back to", () => {
+		const { app } = dialled();
+		const rows = app._weightDials();
+		// A stroke, the head on its end, then the words along it. See `RELMAP_WEIGHTS`.
+		expect(rows.map(r => r.key)).toEqual(["line", "head", "word"]);
+		expect(rows.every(r => r.pct === RELMAP_WEIGHT_BASE)).toBe(true);
+		expect(rows.every(r => r.atBase)).toBe(true);
+	});
+
+	// ⚠ THE STYLESHEET AND THE ARITHMETIC HAVE TO BE TOLD THE SAME NUMBER, which is the one join in
+	// this feature nothing else would notice breaking: the sheet paints the head at 22px times this
+	// and the geometry stands it off the rim by the tip's share of the same size, so a scale that
+	// reached one and not the other would put every arrowhead off the end of its line.
+	it("hands the stylesheet the same three numbers as a multiplier", () => {
+		const { app } = dialled();
+		expect(app._weightStyle()).toBe(
+			"--relmap-head-px:22px;--relmap-line-scale:1;--relmap-head-scale:1;--relmap-word-scale:1",
+		);
+		expect(app._weightStyle({ head: 150, line: 50, word: 200 })).toBe(
+			"--relmap-head-px:22px;--relmap-line-scale:0.5;--relmap-head-scale:1.5;--relmap-word-scale:2",
+		);
+	});
+
+	// The arrowhead's BASE size rides along with the scales, and that is what stops the sheet and
+	// the geometry drifting: the stylesheet sizes a head off this property and `edgeShapes` stands
+	// it off its rim from the same constant. When the two were spelled separately -- `22` in JS and
+	// `22px` in the stylesheet -- changing one alone put every head short of or past its line.
+	it("prints the arrowhead's base size so the sheet and the geometry cannot disagree", () => {
+		const { app } = dialled();
+		expect(app._weightStyle()).toContain(`--relmap-head-px:${RELMAP_HEAD_PX}px`);
+		// Unlike the three scales, this one is the same for every reader: it is the map's own
+		// measure, and the dial is what makes it bigger.
+		expect(app._weightStyle({ head: 300, line: 50, word: 200 }))
+			.toContain(`--relmap-head-px:${RELMAP_HEAD_PX}px`);
+	});
+
+	it("moves one weight a step at a time and leaves the other two alone", async () => {
+		const { app } = dialled();
+		await press(app, "line", 1);
+		expect(pctOf(app, "line")).toBe(RELMAP_WEIGHT_BASE + RELMAP_WEIGHT_STEP);
+		expect(pctOf(app, "head")).toBe(RELMAP_WEIGHT_BASE);
+		expect(pctOf(app, "word")).toBe(RELMAP_WEIGHT_BASE);
+		await press(app, "line", -1);
+		expect(app._weightDials().every(r => r.pct === RELMAP_WEIGHT_BASE)).toBe(true);
+	});
+
+	// THE PRESS IS REMEMBERED IN THIS BROWSER AND NOWHERE ELSE. The map itself must not be
+	// written to: how heavily one pair of eyes needs a diagram drawn is not a fact about the map,
+	// and a write here would be an undo entry offering to take somebody's eyesight back.
+	it("writes to this browser and never to the map", async () => {
+		const { app, entry } = dialled();
+		await press(app, "word", 1);
+		expect(stored[RELMAP_WEIGHT_SETTING].word).toBe(RELMAP_WEIGHT_BASE + RELMAP_WEIGHT_STEP);
+		expect(entry.updates).toHaveLength(0);
+	});
+
+	// ⚠ AND THE BOARD IS ACTUALLY REDRAWN, which is not the same thing as the stylesheet being
+	// told. The heads' stand-off, the hole cut in every stroke and how much of each sentence fits
+	// are arithmetic the window does, so a press that only wrote a custom property would leave
+	// every caption sitting in a hole cut for writing of the old size.
+	it("repaints the board rather than only the record", async () => {
+		const { app, board } = dialled();
+		board.innerHTML = "";
+		await press(app, "head", 1);
+		expect(board.innerHTML).toContain("nodes=\"2\"");
+	});
+
+	// ⚠ THE SIZE A CAPTION IS MEASURED AT IS THE SIZE IT IS PAINTED IN, and those are two different
+	// numbers arrived at two different ways: the template hands the sheet the line's own stored
+	// size and the STYLESHEET multiplies by the weight, while the window multiplies it itself
+	// before measuring. A caption set to 18 on a board drawn at 110% is painted at 19.8, and 19.8
+	// is what the cut, the hole and the spreader all have to use. The two agreeing is the join
+	// nothing else in this feature would notice breaking.
+	it("measures a sized caption at what the weight actually paints it in", async () => {
+		const big = structuredClone(TWO_PEOPLE);
+		big.edges.link1.size = 18;
+		const { app, board } = dialled(big);
+		await press(app, "word", 1);
+		// What the stylesheet is given: the line's own size, untouched, to be multiplied there.
+		expect(board.innerHTML).toContain("sizes=\"18\"");
+		// And what the window measures with: the same size, already multiplied. Not rounded, or
+		// the canvas would measure a caption a fifth of a pixel wider than the one on screen.
+		expect(app._drawn.shapes.get("link1").capPx).toBeCloseTo(19.8, 5);
+	});
+
+	// ⚠ AND A PLAIN LINE STAYS AT NOTHING, which is the subtle half. Zero means "whatever the sheet
+	// sets", and the measuring pass answers that by reading a real caption's computed size off the
+	// document -- the only reading that survives an accessibility skin having an opinion about type.
+	// Filled in here it would replace a measurement with a guess on nearly every line on the board.
+	// What the ESTIMATE is told instead, having no document to ask, is `basePx`.
+	it("leaves a line with no size of its own at no size", async () => {
+		const { app, board } = dialled();
+		await press(app, "word", 1);
+		expect(board.innerHTML).toContain("sizes=\"0\"");
+		expect(app._drawn.shapes.get("link1").capPx).toBe(0);
+		expect(app._drawn.basePx).toBeCloseTo(17.6, 5);
+	});
+
+	// AND THE HEADS' OWN PIXEL SIZE, kept beside it for the four passes that re-cut a gap after the
+	// render is over. A stand-off worked out at the sheet's 22 while the sheet drew 24.2 would put
+	// every arrowhead short of the line it ends.
+	it("keeps the size the arrowheads were drawn at, for the passes that come after", async () => {
+		const { app } = dialled();
+		await press(app, "head", 1);
+		expect(app._drawn.headPx).toBeCloseTo(22 * 1.1, 5);
+	});
+
+	it("goes back to the base when the reading itself is pressed", async () => {
+		const { app } = dialled();
+		await press(app, "head", 1);
+		await press(app, "head", 1);
+		await press(app, "head", 0);
+		expect(pctOf(app, "head")).toBe(RELMAP_WEIGHT_BASE);
+	});
+
+	it("stops at either end rather than pressing to no effect", async () => {
+		const { app, rows } = dialled();
+		for (let i = 0; i < 40; i++) await press(app, "line", 1);
+		expect(pctOf(app, "line")).toBe(RELMAP_WEIGHT_MAX);
+		expect(rows.line.up.disabled).toBe(true);
+		expect(rows.line.down.disabled).toBe(false);
+		for (let i = 0; i < 60; i++) await press(app, "line", -1);
+		expect(pctOf(app, "line")).toBe(RELMAP_WEIGHT_MIN);
+		expect(rows.line.down.disabled).toBe(true);
+	});
+
+	// A press at the end of the range changes nothing, so it must not cost a repaint of the whole
+	// board either -- these are held down.
+	it("does nothing at all for a press that cannot move", async () => {
+		const { app, board } = dialled();
+		await press(app, "head", 0);
+		expect(board.innerHTML).toBe("");
+	});
+
+	it("says the new weight out loud", async () => {
+		const { app, live } = dialled();
+		await press(app, "word", 1);
+		expect(live.textContent).toContain("110%");
+		expect(live.textContent).toContain(TABLE.localize("stonetop.relmap.weights.word.name"));
+	});
+
+	it("writes the reading, and only offers the way back where there is one", async () => {
+		const { app, rows } = dialled();
+		expect(rows.head.now.attrs["aria-disabled"]).toBeUndefined();
+		await press(app, "head", 1);
+		expect(rows.head.now.textContent).toBe("110%");
+		expect(rows.head.now.attrs["aria-disabled"]).toBe("false");
+		await press(app, "head", 0);
+		expect(rows.head.now.attrs["aria-disabled"]).toBe("true");
+	});
+
+	it("writes all three properties onto the root for the stylesheet", async () => {
+		const { app, root } = dialled();
+		await press(app, "head", 1);
+		expect(root.style.props).toEqual({
+			"--relmap-head-scale": "1.1",
+			"--relmap-line-scale": "1",
+			"--relmap-word-scale": "1",
+		});
+	});
+
+	it("ignores a press that names no weight of this window's", async () => {
+		const { app, board } = dialled();
+		await app._stepWeight(el({ dataset: { relmapWeight: "nonsense", relmapStep: "1" } }));
+		await app._stepWeight(el({ dataset: {} }));
+		await app._stepWeight(null);
+		expect(board.innerHTML).toBe("");
+		expect(stored[RELMAP_WEIGHT_SETTING]).toBeUndefined();
 	});
 });

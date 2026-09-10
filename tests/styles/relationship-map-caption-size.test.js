@@ -33,9 +33,22 @@ describe("the size the writing on a line is set in", () => {
 
 	// The join nothing else would notice breaking.
 	it("paints the ordinary caption at the size the arithmetic measures it at", () => {
-		const said = /font-size:\s*var\(\s*--relmap-caption-px\s*,\s*([\d.]+)px\s*\)/.exec(CAPTION);
-		expect(said, "font-size: var(--relmap-caption-px, <base>px)").toBeTruthy();
+		const said = /var\(\s*--relmap-caption-px\s*,\s*([\d.]+)px\s*\)/.exec(CAPTION);
+		expect(said, "var(--relmap-caption-px, <base>px)").toBeTruthy();
 		expect(Number(said[1])).toBe(RELMAP_CAPTION_PX);
+	});
+
+	// ⚠ AND THIS READER'S OWN WEIGHT MULTIPLIES IT, whichever of the two answers above it landed on.
+	// The footer's third dial asks for the writing at a percentage, and the window multiplies by
+	// the same number before it measures a caption, cuts the sentence and opens the hole in the
+	// stroke for it (module/relmap/relmap-weights.js). Painted without it, every caption on the
+	// board would sit at the sheet's size inside a gap cut for writing half again as big.
+	//
+	// THE FALLBACK IS 1 and has to be: it is what every board is drawn at until somebody presses the
+	// corner, and a missing property must leave the size exactly where it was.
+	it("multiplies both by the weight this reader asked for", () => {
+		expect(CAPTION).toMatch(/font-size:\s*calc\(/);
+		expect(CAPTION).toMatch(/var\(\s*--relmap-word-scale\s*,\s*1\s*\)/);
 	});
 
 	// ⚠ A PROPERTY AND NOT A `font-size`, so the two rules that have to out-rank a line's own size

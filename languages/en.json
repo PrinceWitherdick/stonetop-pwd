@@ -1639,6 +1639,25 @@
         "backDone": "Taken back: {what}.",
         "forwardDone": "Done again: {what}.",
         "gone": "That cannot be taken back any more: everyone it was about has since been taken off this board."
+      },
+      "weightGroup": "How heavily this board is drawn, for you",
+      "weightUp": "{name}, heavier",
+      "weightDown": "{name}, lighter",
+      "weightReset": "Put {name} back to {pct}%",
+      "weightNow": "{name}: {pct}%",
+      "weights": {
+        "head": {
+          "name": "Arrowheads",
+          "hint": "How big the arrowheads on the lines are drawn, as a percentage. Only lines that say which way they are read carry one, and on a board with a lot of people on it they are small. This is yours alone: it changes every board you open and nobody else's window, and nothing on the map itself is altered."
+        },
+        "line": {
+          "name": "Lines",
+          "hint": "How thick the lines between people are drawn, as a percentage. Broken and dotted lines open up to match, so a dotted line still reads as dotted at any weight. This is yours alone: it changes every board you open and nobody else's window, and nothing on the map itself is altered."
+        },
+        "word": {
+          "name": "Words",
+          "hint": "How big the writing along the lines is set, as a percentage. Any line you have given a size of its own grows by the same share, so the loud ones stay louder than the quiet ones. This is yours alone: it changes every board you open and nobody else's window, and nothing on the map itself is altered."
+        }
       }
     },
     "people": {

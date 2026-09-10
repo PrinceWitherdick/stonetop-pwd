@@ -199,8 +199,11 @@ describe("the stroke the reader broke themselves", () => {
 	// The keys that mean "not whole". `solid` is the absence of a modifier, not a pattern.
 	const BROKEN = RELMAP_DASHES.filter(key => key !== RELMAP_DASH_DEFAULT);
 
-	/** The two numbers a `stroke-dasharray` token holds: the mark, and the air after it. */
-	const rhythm = token => (BASE.get(token) ?? "").trim().split(/\s+/).map(Number);
+	/** One half of a rhythm token: the mark, or the air after it. */
+	const part = token => Number(BASE.get(token));
+
+	/** The base rule, which is where every weight and both rhythms are now worked out. */
+	const LINE = declarations(CSS, ".stonetop-relmap-line");
 
 	it("has more than one way to break a stroke, or none of this is a distinction", () => {
 		expect(BROKEN.length).toBeGreaterThan(1);
@@ -208,44 +211,75 @@ describe("the stroke the reader broke themselves", () => {
 
 	it("gives every broken stroke a pattern and a rule that paints it", () => {
 		for (const key of BROKEN) {
-			expect(BASE.get(`--st-relmap-${key}`), `--st-relmap-${key}`).toBeTruthy();
+			expect(part(`--st-relmap-${key}-mark`), `${key} mark`).toBeGreaterThan(0);
+			expect(part(`--st-relmap-${key}-air`), `${key} air`).toBeGreaterThan(0);
 			const rule = declarations(CSS, `.stonetop-relmap-line.is-${key}`);
 			expect(rule, `.stonetop-relmap-line.is-${key}`).toBeTruthy();
-			expect(rule).toMatch(new RegExp(`stroke-dasharray:\\s*var\\(\\s*--relmap-${key}`));
+			expect(rule).toMatch(new RegExp(`stroke-dasharray:\\s*var\\(\\s*--relmap-${key}-rhythm`));
 		}
 	});
 
 	// ⚠ THE WHOLE POINT OF HAVING TWO. A dashed line whose marks are the length of a dotted line's
 	// dots is two patterns nobody at this table could tell apart -- and the reader who most needs
 	// them told apart is the one who cannot resolve the colours either.
-	it("keeps the dashes plainly longer than the dots, at every weight", () => {
-		for (const at of ["", "-lit", "-picked"]) {
-			const [dash] = rhythm(`--st-relmap-dashed${at}`);
-			const [dot] = rhythm(`--st-relmap-dotted${at}`);
-			expect(dash, `--st-relmap-dashed${at}`).toBeGreaterThan(dot * 3);
-		}
+	//
+	// ONCE, AND AT EVERY WEIGHT. It used to be swept over three hand-tuned pairs apiece; there is
+	// one rhythm each now and every weight is that rhythm times the width being painted, so a ratio
+	// that holds here holds at all of them by construction. The test below is what holds that
+	// construction in place.
+	it("keeps the dashes plainly longer than the dots", () => {
+		expect(part("--st-relmap-dashed-mark")).toBeGreaterThan(part("--st-relmap-dotted-mark") * 3);
 	});
 
 	// ⚠ A ROUND CAP ADDS THE WHOLE STROKE WIDTH TO EVERY DASH AND TAKES IT OUT OF EVERY GAP, so a
 	// line widened without its pattern opened up fuses into a lumpy solid -- at the exact moment the
-	// reader picked it up to look at it. Both wider weights restate both patterns, in the SAME rule
-	// that sets the width, which is what keeps the two from drifting apart.
-	it("opens both patterns up at the two wider weights", () => {
+	// reader picked it up to look at it.
+	//
+	// ⚠ AND THE NUMBER OF WEIGHTS IS NO LONGER FIXED, which is why this is a test about the
+	// arithmetic rather than about a table of values. There were three (resting, lit, picked); there
+	// are now those three times whatever percentage a reader has asked the strokes to be drawn at
+	// (module/relmap/relmap-weights.js), and no table of hand-tuned pairs can cover a number chosen
+	// at run time. So every rhythm is DERIVED from the width actually being painted, and what has to
+	// hold is that derivation: both halves of both patterns multiplied by the painted width and
+	// divided by the width they were measured at.
+	it("works both rhythms out from the width actually being painted", () => {
+		expect(LINE).toBeTruthy();
+		expect(LINE).toMatch(/--relmap-line-w:\s*calc\(\s*var\(--relmap-weight\)/);
+		expect(LINE).toMatch(/stroke-width:\s*var\(--relmap-line-w\)/);
+		expect(part("--st-relmap-rhythm-at")).toBeGreaterThan(0);
+		for (const key of BROKEN) {
+			const rhythm = LINE.match(
+				new RegExp(`--relmap-${key}-rhythm:([^;]*);`),
+			)?.[1];
+			expect(rhythm, `${key} rhythm`).toBeTruthy();
+			for (const half of ["mark", "air"]) {
+				expect(rhythm, `${key} ${half}`).toContain(`var(--st-relmap-${key}-${half})`);
+			}
+			// Times the painted width and divided by the width the rhythm was measured at, twice
+			// over: the mark and the air both, or a heavier line gets fatter dots at the same
+			// spacing, which is the fusing this exists to prevent.
+			expect(rhythm.match(/var\(--relmap-line-w\)/g), `${key} width`).toHaveLength(2);
+			expect(rhythm.match(/var\(--st-relmap-rhythm-at\)/g), `${key} divisor`).toHaveLength(2);
+		}
+	});
+
+	// AND THE TWO WIDER WEIGHTS ARE NOW ONE NUMBER APIECE, which is the whole gain: a state that
+	// restated a width and both patterns was three numbers that had to be kept in step, and the
+	// rule saying so was a comment. Set the weight and everything else follows.
+	it("gives the wider weights nothing to keep in step", () => {
+		const resting = Number(LINE.match(/--relmap-weight:\s*([\d.]+)/)?.[1]);
+		expect(resting).toBeGreaterThan(0);
 		for (const [what, rule] of [
 			["picked", declarations(CSS, ".stonetop-relmap-line.is-picked")],
 			["lit", declarations(CSS, ".stonetop-relmap.is-lit .stonetop-relmap-line.is-lit")],
 		]) {
 			expect(rule, what).toBeTruthy();
-			expect(rule, what).toMatch(/stroke-width:\s*\d/);
-			for (const key of BROKEN) {
-				expect(rule, `${what} / ${key}`).toContain(`--relmap-${key}: var(--st-relmap-${key}-${what})`);
-				const [mark, air] = rhythm(`--st-relmap-${key}-${what}`);
-				const [wasMark, wasAir] = rhythm(`--st-relmap-${key}`);
-				// Wider stroke, wider rhythm: the declared numbers have to GROW, or the round cap
-				// eats the gap the pattern is made of.
-				expect(mark, `${key}-${what} mark`).toBeGreaterThan(wasMark);
-				expect(air, `${key}-${what} air`).toBeGreaterThan(wasAir);
-			}
+			const weight = Number(rule.match(/--relmap-weight:\s*([\d.]+)/)?.[1]);
+			expect(weight, `${what} weight`).toBeGreaterThan(resting);
+			// Nothing else: a width or a pattern restated here would be a second answer to a
+			// question the base rule already derives from this one number.
+			expect(rule, `${what} width`).not.toMatch(/stroke-width:/);
+			expect(rule, `${what} pattern`).not.toMatch(/stroke-dasharray:/);
 		}
 	});
 
@@ -257,7 +291,7 @@ describe("the stroke the reader broke themselves", () => {
 		for (const key of BROKEN) {
 			const rule = declarations(CSS, `:root.stonetop-high-contrast .stonetop-relmap-line.is-${key}`);
 			expect(rule, key).toBeTruthy();
-			expect(rule).toMatch(new RegExp(`stroke-dasharray:\\s*var\\(\\s*--relmap-${key}`));
+			expect(rule).toMatch(new RegExp(`stroke-dasharray:\\s*var\\(\\s*--relmap-${key}-rhythm`));
 		}
 	});
 

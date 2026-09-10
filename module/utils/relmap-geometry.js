@@ -127,8 +127,12 @@ const RELMAP_BOW_MAX = 5;
  * 2.2% of the board's width, and that is not a fixed distance: the sheet grows with the cast
  * (`boardMetrics`), so on a board of forty people the same 2.2 was over a hundred pixels and the
  * head sat well short of the face it was pointing at — about three quarters of the way along its
- * own line. The head itself is 16 fixed pixels whatever the sheet, so the distance it should stand
- * off is a pixel distance too, converted per board like every other pixel measure here.
+ * own line. The head itself is a fixed pixel size whatever the sheet, so the distance it should
+ * stand off is a pixel distance too, converted per board like every other pixel measure here.
+ *
+ * ⚠ THE STYLESHEET DRAWS THE SAME NUMBER, as the width and height of `.stonetop-relmap-head`,
+ * and the two have to agree: this file steps the head back off the rim by the tip's share of it,
+ * so a stylesheet drawing a different size would put every tip short of the line or past it.
  *
  * AND IT IS EXACTLY THE TIP'S OWN REACH, so the point of the triangle lands ON the curve's end.
  * The curve is already trimmed to the rims by `edgeCurve`, so a head whose tip is at the end of
@@ -139,7 +143,7 @@ const RELMAP_BOW_MAX = 5;
  * The journey's trails keep their own, larger stand-off, and rightly: there the head arrives at a
  * map pin with a label beside it, and a tip touching the pin would be buried under it.
  */
-export const RELMAP_HEAD_PX = 16;
+export const RELMAP_HEAD_PX = 22;
 const HEAD_TIP_SHARE = ROUTE_HEAD_POINTS[1][0];
 
 // Capped at a share of the line, so a head on a short link cannot be pushed back past the portrait
@@ -161,12 +165,32 @@ const HEAD_BACKOFF_SHARE = 0.35;
  * a reshaped head moves the stroke's end with it instead of leaving the gap this fixes.
  *
  * A PIXEL OF OVERLAP, so the join is not a seam. The stroke ends one pixel INSIDE the triangle,
- * where it is still eleven pixels across, and the round cap buries another pixel and a half in the
- * same place. Butt caps would do as well and would change how every gap in every line is capped;
- * this changes nothing but the two ends that have a head over them.
+ * where it is still most of its width across, and the round cap buries another pixel and a half in
+ * the same place. Butt caps would do as well and would change how every gap in every line is
+ * capped; this changes nothing but the two ends that have a head over them.
  */
-const HEAD_BODY_PX = RELMAP_HEAD_PX * (HEAD_TIP_SHARE - ROUTE_HEAD_POINTS[0][0]);
+const HEAD_BODY_SHARE = HEAD_TIP_SHARE - ROUTE_HEAD_POINTS[0][0];
 const HEAD_STROKE_OVERLAP_PX = 1;
+
+/**
+ * The two lengths a head of a given size takes off the line it ends: how far its TIP reaches ahead
+ * of the centre the stylesheet positions it by, and how far its BACK EDGE sits behind that tip.
+ *
+ * ⚠ A FUNCTION OF THE SIZE RATHER THAN TWO CONSTANTS, because the size is no longer one number.
+ * `RELMAP_HEAD_PX` is what the sheet draws at 100%, and a reader who has asked for heavier
+ * arrowheads (relmap/relmap-weights.js) is drawing the same triangle bigger: its tip reaches
+ * further ahead, so it has to stand further off the rim, and its taper is longer, so the stroke
+ * has to stop further back. Left as constants, a head at 200% would sit at the 100% stand-off with
+ * its point buried in the portrait and its own line showing through both sides of the taper.
+ *
+ * ⚠ AND THE SHARES ARE THE TRIANGLE'S OWN POINTS, never a literal 0.4, for the reason
+ * route-path.js:286-316 gives: a reshaped head must not leave a second copy of its old proportions
+ * behind in the geometry that places it.
+ */
+function headReach(headPx = RELMAP_HEAD_PX) {
+	const size = Number(headPx) > 0 ? Number(headPx) : RELMAP_HEAD_PX;
+	return { tip: size * HEAD_TIP_SHARE, body: size * HEAD_BODY_SHARE };
+}
 
 // And never more than this share of the line, at either end, so a link between two portraits almost
 // touching keeps a stroke at all. Under that length the heads cover the whole run anyway.
@@ -559,12 +583,13 @@ function headEnds(dir) {
 	return dir === "b-a" ? ["from"] : ["to"];
 }
 
-/** How much stroke comes off each end for the head sitting on it, in flat units. See
- * `HEAD_BODY_PX`: it is the triangle's own length, less a pixel so the two overlap. */
-function headStrokeTrim(dir, { boardWidthPx, total }) {
+/** How much stroke comes off each end for the head sitting on it, in flat units. See `headReach`:
+ * it is the triangle's own length at the size this board is drawing heads at, less a pixel so the
+ * two overlap. */
+function headStrokeTrim(dir, { boardWidthPx, total, headPx = RELMAP_HEAD_PX }) {
 	const ends = headEnds(dir);
 	if (!ends.length || !(boardWidthPx > 0)) return { from: 0, to: 0 };
-	const back = (100 * Math.max(0, HEAD_BODY_PX - HEAD_STROKE_OVERLAP_PX)) / boardWidthPx;
+	const back = (100 * Math.max(0, headReach(headPx).body - HEAD_STROKE_OVERLAP_PX)) / boardWidthPx;
 	const cut = Math.min(back, total * HEAD_STROKE_MAX_SHARE);
 	return { from: ends.includes("from") ? cut : 0, to: ends.includes("to") ? cut : 0 };
 }
@@ -595,11 +620,15 @@ function subPath(curve, a, b) {
  *        arrowheads, are measured against.
  * @param {string} spec.dir  which way this link is read, as `edgeArrowheads` takes it. That is what
  *        says which ends have a head over them to stop under.
+ * @param {number} spec.headPx  how big those heads are drawn, which is how far back the stroke has
+ *        to stop. `RELMAP_HEAD_PX` unless this reader has asked for heavier ones; see
+ *        relmap/relmap-weights.js.
  * @returns {string}  a `d` of one run or two. Unbroken whenever breaking it would leave less line
  *          than caption.
  */
 export function curveWithGap(curve, {
 	t, span = 0, boardWidthPx = RELMAP_BOARD_WIDTH, aspect = RELMAP_BOARD_ASPECT, dir = "none",
+	headPx = RELMAP_HEAD_PX,
 } = {}) {
 	if (!curve) return "";
 	const along = alongT(t);
@@ -613,7 +642,7 @@ export function curveWithGap(curve, {
 	// the room left for a head, which is a fixed length of line and not a fixed share of it.
 	const arc = arcOf(curve, ratio);
 	if (!(arc.total > 0)) return curve.d;
-	const trim = headStrokeTrim(dir, { boardWidthPx, total: arc.total });
+	const trim = headStrokeTrim(dir, { boardWidthPx, total: arc.total, headPx });
 	const head = trim.from;
 	const tail = arc.total - trim.to;
 	// The whole painted run, or a stretch of it, as its own `M ... Q`. A line with no head at
@@ -760,7 +789,8 @@ function arcOf(curve, ratio) {
  * Each head lands its TIP on the end of the line, which `edgeCurve` has already cut back to the
  * rim, so the point of the triangle touches the face it arrives at. The anchor is the head's
  * CENTRE — that is what the stylesheet positions it by — so it is stepped back by the tip's own
- * reach and no further; see `RELMAP_HEAD_PX` above for why that reach is a pixel measure.
+ * reach and no further; see `RELMAP_HEAD_PX` above for why that reach is a pixel measure, and
+ * `headPx` for why it is not always the same pixel measure.
  *
  * Each takes the curve's slope where it actually sits rather than the angle between the two
  * portraits, because the line is bowed and by the time it arrives it is already turning.
@@ -768,7 +798,8 @@ function arcOf(curve, ratio) {
  * `boardWidthPx` is the sheet the head will be painted on, from `boardMetrics`.
  */
 export function edgeArrowheads(
-	curve, aspect = RELMAP_BOARD_ASPECT, dir = "none", { boardWidthPx = RELMAP_BOARD_WIDTH } = {},
+	curve, aspect = RELMAP_BOARD_ASPECT, dir = "none",
+	{ boardWidthPx = RELMAP_BOARD_WIDTH, headPx = RELMAP_HEAD_PX } = {},
 ) {
 	const ends = headEnds(dir);
 	if (!curve || !ends.length) return [];
@@ -778,7 +809,7 @@ export function edgeArrowheads(
 	const c = flat(curve.to, ratio);
 	const len = curve.length;
 	if (!(len > 0)) return [];
-	const reach = boardWidthPx > 0 ? (100 * RELMAP_HEAD_PX * HEAD_TIP_SHARE) / boardWidthPx : 0;
+	const reach = boardWidthPx > 0 ? (100 * headReach(headPx).tip) / boardWidthPx : 0;
 	const backoff = Math.min(reach, len * HEAD_BACKOFF_SHARE) / len;
 
 	return ends.map(end => {
@@ -1156,12 +1187,24 @@ export const RELMAP_CAPTION_PX = 16;
  */
 export const RELMAP_CAPTION_FLOOR_PX = 8;
 
-/** What one caption's own size costs it, against the size the metrics above were measured at. A
- * line with no size of its own is 1, which is every line on every board drawn before sizes
- * existed. */
-function sizeScale(px) {
+/**
+ * What one caption's own size costs it, against the size the metrics above were measured at.
+ *
+ * ⚠ `basePx` IS WHAT "NO SIZE OF ITS OWN" IS WORTH ON THIS BOARD, and it is the whole reason this
+ * takes a second argument. A line with no size of its own used to be worth exactly 1, because the
+ * only thing it could be set in was `RELMAP_CAPTION_PX` and the metrics above were measured at
+ * precisely that. A reader can now ask a whole board for heavier writing (relmap/relmap-weights.js),
+ * which moves the size EVERY plain caption is painted in without writing a number onto a single
+ * line -- so the estimate has to be told what the plain size currently is, or it would go on
+ * measuring a board of 24-pixel captions as though they were sixteen and cut every sentence a third
+ * too long.
+ *
+ * It defaults to the base, so a caller that has no opinion is answered exactly as before.
+ */
+function sizeScale(px, basePx = RELMAP_CAPTION_PX) {
 	const size = Number(px);
-	return size > 0 ? size / RELMAP_CAPTION_PX : 1;
+	const base = Number(basePx) > 0 ? Number(basePx) : RELMAP_CAPTION_PX;
+	return (size > 0 ? size : base) / RELMAP_CAPTION_PX;
 }
 
 /**
@@ -1221,10 +1264,10 @@ export function captionRoomPx(curve, { boardWidthPx = RELMAP_BOARD_WIDTH } = {})
  * rather than per board. */
 export function captionSize(
 	text, curve,
-	{ boardWidthPx = RELMAP_BOARD_WIDTH, paintedPx = null, px = 0 } = {},
+	{ boardWidthPx = RELMAP_BOARD_WIDTH, paintedPx = null, px = 0, basePx = RELMAP_CAPTION_PX } = {},
 ) {
 	return labelSize(
-		text, boardWidthPx, captionRoomPx(curve, { boardWidthPx }), paintedPx, px,
+		text, boardWidthPx, captionRoomPx(curve, { boardWidthPx }), paintedPx, px, basePx,
 	);
 }
 
@@ -1266,6 +1309,7 @@ const LABEL_STOPS = 14;
  */
 export function labelSize(
 	text, boardWidthPx = RELMAP_BOARD_WIDTH, roomPx = Infinity, paintedPx = null, px = 0,
+	basePx = RELMAP_CAPTION_PX,
 ) {
 	const chars = typeof text === "string" ? text.length : 0;
 	// ⚠ NO ROOM IS NO WIDTH, and that is the one reading of this argument that has to be spelt
@@ -1285,7 +1329,7 @@ export function labelSize(
 	// slack on a number the comment above already calls an estimate.
 	const asked = painted > 0
 		? painted
-		: chars * LABEL_CHAR_PX * sizeScale(px) + LABEL_CHROME_PX;
+		: chars * LABEL_CHAR_PX * sizeScale(px, basePx) + LABEL_CHROME_PX;
 	const wide = Math.min(room, asked);
 	const scale = boardWidthPx > 0 ? 100 / boardWidthPx : 0;
 	// THE HEIGHT ALWAYS SCALES, measured or not. Nothing measures a caption's HEIGHT -- the window
@@ -1293,7 +1337,7 @@ export function labelSize(
 	// arithmetic in every caller, and a line of eighteen-pixel type is half again as tall as a line
 	// of twelve. Left flat, the spreader would slide a big caption clear sideways and leave it
 	// sitting on the one above.
-	return { w: wide * scale, h: LABEL_HEIGHT_PX * sizeScale(px) * scale };
+	return { w: wide * scale, h: LABEL_HEIGHT_PX * sizeScale(px, basePx) * scale };
 }
 
 /** One turned chip as the four numbers a separating-axis test needs: its centre, the two
@@ -1377,7 +1421,7 @@ function slideStops() {
  */
 export function spreadLabels({
 	labels = [], nodes = [], aspect = RELMAP_BOARD_ASPECT, r = nodeRadiusPct(),
-	boardWidthPx = RELMAP_BOARD_WIDTH,
+	boardWidthPx = RELMAP_BOARD_WIDTH, basePx = RELMAP_CAPTION_PX,
 } = {}) {
 	const out = new Map();
 	if (!labels.length) return out;
@@ -1394,12 +1438,14 @@ export function spreadLabels({
 	// paper, wherever they end up sitting.
 	const keepOff = r + (boardWidthPx > 0 ? (RELMAP_LABEL_CLEAR_PX * 100) / boardWidthPx : 0);
 
-	const queue = labels
+	const measured = labels
 		.filter(entry => entry?.curve && entry.text)
 		.map(entry => ({
 			...entry,
-			size: captionSize(entry.text, entry.curve, { boardWidthPx, px: entry.px }),
-		}))
+			size: captionSize(entry.text, entry.curve, { boardWidthPx, px: entry.px, basePx }),
+		}));
+	const queue = measured
+		.filter(entry => !(Number(entry.seat) > 0))
 		.sort((a, b) => b.size.w - a.size.w || String(a.id).localeCompare(String(b.id)));
 
 	const placed = [];

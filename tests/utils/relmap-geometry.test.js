@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-	RELMAP_BOARD_ASPECT, RELMAP_BOARD_MAX, RELMAP_BOARD_WIDTH, RELMAP_CAPTION_PX, boardMetrics,
+	RELMAP_BOARD_ASPECT, RELMAP_BOARD_MAX, RELMAP_BOARD_WIDTH, RELMAP_CAPTION_PX, RELMAP_HEAD_PX,
+	boardMetrics,
 	clampPct, clearanceBow,
 	RELMAP_LABEL_CLEAR_PX,
 	edgeArrowheads, edgeBow, edgeCurve, edgeLabelAnchor, fanBow, freeSpot, labelSize,
@@ -14,6 +15,14 @@ import {
 // stroke.
 
 const ASPECT = 1.25;
+
+// THE HEAD'S OWN MEASUREMENTS, taken off the constant rather than written out, so bumping the
+// arrowhead's size moves these with it instead of turning every head test red at once. Its
+// points sit at -0.4 and 0.4 of its size, so the tip reaches 0.4 of it ahead of the centre the
+// stylesheet positions by, and the triangle behind that tip is 0.8 of it long. The stroke stops
+// a pixel INSIDE that back edge, so what a head takes off its end is one less.
+const HEAD_TIP_PX = RELMAP_HEAD_PX * 0.4;
+const HEAD_CUT_PX = RELMAP_HEAD_PX * 0.8 - 1;
 
 /** The distance the EYE sees between two percentage points, which is not the distance the numbers
  * describe: a step of 1% down is a different number of pixels from a step of 1% across. */
@@ -328,12 +337,13 @@ describe("the arrowheads that say which way a link is read", () => {
 	});
 
 	// The complaint this replaced a flat percentage back-off for: the head belongs AT the end of
-	// its line, and the tip is 6.4 board pixels ahead of the centre the stylesheet positions by,
-	// so on a 1200-wide sheet the centre lands 6.4/1200 of the width short of the rim and no more.
+	// its line, and the tip is `HEAD_TIP_PX` board pixels ahead of the centre the stylesheet
+	// positions by, so on a 1200-wide sheet the centre lands that share of the width short of the
+	// rim and no more.
 	it("lands the tip of the head on the end of the line", () => {
 		const line = curve();
 		const [head] = edgeArrowheads(line, ASPECT, "a-b", { boardWidthPx: 1200 });
-		expect(line.to.left - head.left).toBeCloseTo((100 * 16 * 0.4) / 1200, 2);
+		expect(line.to.left - head.left).toBeCloseTo((100 * HEAD_TIP_PX) / 1200, 2);
 	});
 
 	// And it is a PIXEL stand-off, so a bigger sheet does not push the head back down its line:
@@ -341,11 +351,47 @@ describe("the arrowheads that say which way a link is read", () => {
 	it("keeps the same pixel stand-off however wide the sheet grows", () => {
 		const line = curve();
 		const [near] = edgeArrowheads(line, ASPECT, "a-b", { boardWidthPx: 4800 });
-		expect(line.to.left - near.left).toBeCloseTo((100 * 16 * 0.4) / 4800, 2);
+		expect(line.to.left - near.left).toBeCloseTo((100 * HEAD_TIP_PX) / 4800, 2);
 	});
 
 	it("has no heads to place for a link that could not be drawn", () => {
 		expect(edgeArrowheads(null, ASPECT, "both")).toEqual([]);
+	});
+
+	// ── A HEAD THIS READER HAS ASKED TO BE DRAWN BIGGER ──────────────────────────
+	//
+	// The footer's first dial scales the arrowheads by a percentage, and the stylesheet draws the
+	// triangle at that size. What must follow it is the STAND-OFF: the anchor is the head's centre,
+	// so a bigger triangle has to sit further back from the rim or its point buries itself in the
+	// portrait it is meant to be touching. See `headPx` and module/relmap/relmap-weights.js.
+
+	it("stands a bigger head further off the rim, by its own tip's reach", () => {
+		const line = curve();
+		const [big] = edgeArrowheads(line, ASPECT, "a-b", {
+			boardWidthPx: 1200, headPx: RELMAP_HEAD_PX * 2,
+		});
+		expect(line.to.left - big.left).toBeCloseTo((100 * HEAD_TIP_PX * 2) / 1200, 2);
+	});
+
+	it("draws the ordinary head when nobody has asked for another size", () => {
+		const line = curve();
+		const [said] = edgeArrowheads(line, ASPECT, "a-b", {
+			boardWidthPx: 1200, headPx: RELMAP_HEAD_PX,
+		});
+		const [quiet] = edgeArrowheads(line, ASPECT, "a-b", { boardWidthPx: 1200 });
+		expect(said).toEqual(quiet);
+	});
+
+	// A size that is not one falls back to the sheet's own rather than collapsing every head onto
+	// the rim. This is fed from browser storage through `weightScales`, and the gate there is not
+	// allowed to be the only one.
+	it("falls back to the ordinary head for a size that is not a size", () => {
+		const line = curve();
+		const [quiet] = edgeArrowheads(line, ASPECT, "a-b", { boardWidthPx: 1200 });
+		for (const junk of [0, -8, NaN, null, "big"]) {
+			const [said] = edgeArrowheads(line, ASPECT, "a-b", { boardWidthPx: 1200, headPx: junk });
+			expect(said, String(junk)).toEqual(quiet);
+		}
 	});
 });
 
@@ -1107,31 +1153,41 @@ describe("cutting the line open where its caption sits", () => {
 		});
 
 		// THE WHOLE LENGTH OF THE TRIANGLE, less the pixel of overlap that keeps the join from
-		// being a seam: a 16px head with its points at -0.4 and 0.4 is 12.8px long.
+		// being a seam: see `HEAD_CUT_PX`.
 		it("cuts the head's own length off the end it points at", () => {
 			const cut = curveWithGap(curve, { span: 0, boardWidthPx: 1200, dir: "a-b" });
-			expect(flatPx(endOf(cut), curve.to)).toBeCloseTo(11.8, 1);
+			expect(flatPx(endOf(cut), curve.to)).toBeCloseTo(HEAD_CUT_PX, 1);
 			expect(startOf(cut)).toEqual(curve.from);
 		});
 
 		it("cuts the other end instead when the arrow is read the other way", () => {
 			const cut = curveWithGap(curve, { span: 0, boardWidthPx: 1200, dir: "b-a" });
-			expect(flatPx(startOf(cut), curve.from)).toBeCloseTo(11.8, 1);
+			expect(flatPx(startOf(cut), curve.from)).toBeCloseTo(HEAD_CUT_PX, 1);
 			expect(endOf(cut)).toEqual(curve.to);
 		});
 
 		it("cuts both ends of a link read both ways", () => {
 			const cut = curveWithGap(curve, { span: 0, boardWidthPx: 1200, dir: "both" });
-			expect(flatPx(startOf(cut), curve.from)).toBeCloseTo(11.8, 1);
-			expect(flatPx(endOf(cut), curve.to)).toBeCloseTo(11.8, 1);
+			expect(flatPx(startOf(cut), curve.from)).toBeCloseTo(HEAD_CUT_PX, 1);
+			expect(flatPx(endOf(cut), curve.to)).toBeCloseTo(HEAD_CUT_PX, 1);
 		});
 
-		// A FIXED LENGTH OF LINE AND NOT A SHARE OF IT: the head is 16 board pixels whatever the
-		// sheet, so on a wider board the same head takes a smaller share of the same percentages.
+		// A FIXED LENGTH OF LINE AND NOT A SHARE OF IT: the head is the same board pixels whatever
+		// the sheet, so on a wider board the same head takes a smaller share of the same percentages.
 		it("takes the same pixels off however wide the board is", () => {
 			const wide = curveWithGap(curve, { span: 0, boardWidthPx: 2400, dir: "a-b" });
 			expect(Math.hypot(endOf(wide).left - curve.to.left, endOf(wide).top - curve.to.top) * 24)
-				.toBeCloseTo(11.8, 1);
+				.toBeCloseTo(HEAD_CUT_PX, 1);
+		});
+
+		// ⚠ AND A BIGGER HEAD TAKES MORE OFF, which is the other half of the corner over the
+		// board. The triangle's taper is longer, so the stroke has to stop further back or the
+		// line shows through both sides of the point it is meant to end at.
+		it("cuts back further for a head this reader has made bigger", () => {
+			const cut = curveWithGap(curve, {
+				span: 0, boardWidthPx: 1200, dir: "a-b", headPx: RELMAP_HEAD_PX * 2,
+			});
+			expect(flatPx(endOf(cut), curve.to)).toBeCloseTo(RELMAP_HEAD_PX * 2 * 0.8 - 1, 1);
 		});
 
 		// A link between two portraits almost touching keeps a stroke rather than losing it
@@ -1149,7 +1205,7 @@ describe("cutting the line open where its caption sits", () => {
 		it("still breaks for the caption on a line that also carries a head", () => {
 			const both = curveWithGap(curve, { t: 0.5, span: 8, boardWidthPx: 1200, dir: "a-b" });
 			expect(runs(both)).toBe(2);
-			expect(flatPx(endOf(both), curve.to)).toBeCloseTo(11.8, 1);
+			expect(flatPx(endOf(both), curve.to)).toBeCloseTo(HEAD_CUT_PX, 1);
 		});
 	});
 

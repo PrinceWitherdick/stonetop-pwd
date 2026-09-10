@@ -1464,6 +1464,19 @@ export function registerSettings() {
 		default: 0,
 	});
 
+	// How heavily this client wants a relationship board drawn: the arrowheads, the strokes and the
+	// writing, each as a whole percentage of what the stylesheet sets. Internal, per client (how
+	// much magnification one pair of eyes needs is not a fact about the map, and storing it on the
+	// board would have one reader rewriting another's window), and NOT nested by world: it holds
+	// three numbers rather than an id, and that need is the same in every world they open. Shape:
+	// { head, line, word }. See relmap/relmap-weights.js.
+	game.settings.register(SYSTEM_ID, "relmapWeights", {
+		scope: "client",
+		config: false,
+		type: Object,
+		default: {},
+	});
+
 	// Strip the decorative animations, transitions, and hover-zoom image popups
 	// from Stonetop UI for users who find them distracting or are motion-sensitive.
 	// Drives the `stonetop-reduce-motion` root class.

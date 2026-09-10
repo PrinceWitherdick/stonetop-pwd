@@ -402,22 +402,8 @@
 	   dash of nearly no length: a zero-length dash is not painted at all by some engines, so the
 	   length is a hair rather than nothing. Sparser than any of the eight above, so a dotted line
 	   still reads as dotted beside an ochre one under the skin that paints both. */
-	--st-relmap-dotted: 0.6 5;
-
-	/* THE SAME DOTS AT THE TWO WIDER WEIGHTS, AND THEY HAVE TO BE RESTATED OR THEY FUSE.
-
-	   ⚠ A ROUND CAP ADDS THE WHOLE STROKE WIDTH TO EVERY DASH AND TAKES IT OUT OF EVERY GAP. At the
-	   resting 3.5 that turns `0.6 5` into a 4.1-wide dot with 1.5 of air after it; at the 6 a picked
-	   line is drawn with, the same numbers give a 6.6-wide dot with MINUS one, so the dots swell and
-	   run into each other and the line the reader is holding stops reading as dotted at the exact
-	   moment they went to look at it. (`vector-effect="non-scaling-stroke"` on the paths means both
-	   the width and the pattern are in screen units, so these ratios hold at every board size.)
-
-	   So each weight carries the resting rhythm scaled by its own width -- hair and air both -- and
-	   the value is set in the SAME rule that sets the width, never in a rule of its own, so the two
-	   cannot drift apart. See `.stonetop-relmap-line.is-picked` and the lit rule beside it. */
-	--st-relmap-dotted-lit:    0.9 7.1;   /* stroke-width 5 */
-	--st-relmap-dotted-picked: 1 8.6;     /* stroke-width 6 */
+	--st-relmap-dotted-mark: 0.6;
+	--st-relmap-dotted-air:  5;
 
 	/* THE STROKE PLAINLY BROKEN, which is the answer between whole and barely there.
 
@@ -430,11 +416,30 @@
 	   line and not on the pattern: every dash is drawn the whole stroke width LONGER than it is
 	   declared and every gap that much shorter. At the resting 3.5 these numbers paint a 10-long
 	   mark with 5.5 of air after it, which is a stroke a reader can see is broken from across the
-	   table and cannot mistake for dots. The two wider weights carry that same rhythm scaled by
-	   their own width, in the SAME rule that sets the width, so the two cannot drift apart. */
-	--st-relmap-dashed:        6.5 9;     /* stroke-width 3.5 */
-	--st-relmap-dashed-lit:    9.3 12.9;  /* stroke-width 5 */
-	--st-relmap-dashed-picked: 11.1 15.4; /* stroke-width 6 */
+	   table and cannot mistake for dots. */
+	--st-relmap-dashed-mark: 6.5;
+	--st-relmap-dashed-air:  9;
+
+	/* THE WIDTH BOTH RHYTHMS ABOVE WERE MEASURED AT, which is what turns them into a rhythm PER
+	   UNIT of stroke and is why there is only one of each now.
+
+	   ⚠ A ROUND CAP ADDS THE WHOLE STROKE WIDTH TO EVERY DASH AND TAKES IT OUT OF EVERY GAP, so a
+	   pattern that does not open up as the line thickens fuses into a lumpy solid. At the resting
+	   3.5 `0.6 5` is a 4.1-wide dot with 1.5 of air after it; at the 6 a picked line is drawn with,
+	   the same numbers give a 6.6-wide dot with MINUS one, and the line the reader is holding stops
+	   reading as dotted at the exact moment they went to look at it.
+
+	   There used to be a hand-tuned pair per weight, three of each. There are now four weights and
+	   a half -- resting, lit, picked, and every one of those again at whatever percentage the
+	   reader has asked the strokes to be drawn at (module/relmap/relmap-weights.js) -- and a table
+	   of hand-tuned pairs cannot cover a number somebody chooses at run time. So the rhythm is
+	   divided by this and multiplied by the width actually being painted, in `--relmap-dotted-rhythm` and
+	   `--relmap-dashed-rhythm` on the line itself. The old pairs are what that arithmetic produces, to
+	   within the rounding they were written with.
+
+	   (`vector-effect="non-scaling-stroke"` on the paths means both the width and the pattern are
+	   in screen units, so these ratios hold at every board size.) */
+	--st-relmap-rhythm-at: 3.5;
 
 	/* ── Shared type scale ────────────────────────────────────────────────
 	   Relative (em) steps so they scale with the sheet font setting through the
@@ -41271,6 +41276,205 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	}
 }
 
+/* ── How heavily this board is drawn, for this reader ─────────────────────────
+   Three dials on the footer's line, immediately right of the captions box: the arrowheads, the
+   strokes and the writing, each a percentage of what this file sets. See
+   module/relmap/relmap-weights.js for why it is one reader's own record and never the map's.
+
+   ⚠ IT USED TO BE A PANEL FLOATING IN THE BOARD'S TOP-LEFT CORNER, quiet until the pointer arrived,
+   and every line of chrome it carried was rent paid for standing over the diagram: its own opaque
+   ground, a border, a shadow, a `z-index` argued against the tie bar, a hover reveal, and a
+   `@media (hover: none)` so a touch screen with no pointer could see it at all. On the footer it
+   needs none of them -- the row it joins already has a ground and a rule of its own, nothing is
+   underneath it to be hidden, and it is simply always there. Deleting all of it IS the port; there
+   is nothing here now but how the twelve controls line up.
+
+   ⚠ AND THE SIZES ARE ANCHORED TO OUR OWN TOKEN, WHICH IS THE ONE THING THAT NEEDED ADDING. Core
+   pins a button's `font-size` in PIXELS, so every `em` inside one is px-anchored too: on the board
+   that only meant a corner that did not grow with the interface font, but on a shared line beside
+   a `--st-fs-sm` label it is a set of controls that drift out of step with their own neighbour at
+   every scale but 16px. The group sets the size once and the buttons inherit it. */
+.stonetop-relmap-heft {
+	display: flex;
+	align-items: center;
+	/* BETWEEN DIALS. What separates them is the rule around each one (see the dial below); this is
+	   only the air outside those rules, and it is deliberately the SAME distance the footer puts
+	   between the captions box and this group (`.stonetop-relmap-foot`) so that the three boxes and
+	   the box's neighbours keep one rhythm along the line. Air alone was tried first and could not
+	   do the job on its own: a gap wide enough to part three dials is a gap wide enough to part all
+	   twelve controls. */
+	gap: 0.6em;
+	/* IT WRAPS, for the reason the footer around it wraps: nothing in here gives up any width (a
+	   readout that shrinks is a number the arrows slide about under), so at a large font scale or
+	   in a narrow window the last dial would otherwise leave the row and be clipped by the content
+	   box with no scrollbar and no sign it was ever there. The footer moves this group to a second
+	   line first; this is what saves it when the group alone is wider than the window. */
+	flex-wrap: wrap;
+	row-gap: 0.35em;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
+
+/* ONE DIAL: what it resizes, then lighter, the number, heavier.
+ *
+   ⚠ THE BOX IS WHAT MAKES THIS READ AS THREE CONTROLS AND NOT AS TWELVE (user, 2026-09-09). Laid
+   out in line with nothing but white space between them, the dials bled into one another and into
+   the captions box beside them: a reader met `Hide labels ▶ − 130% + ＼ − 100% + A − 100% +`, in
+   which the minus signs read as part of the run of numbers and no boundary said where one dial
+   stopped. Spacing alone could not fix it -- the gap that would have separated three dials is a gap
+   wide enough to separate all twelve. A hairline does what no amount of air can.
+
+   THE MARK IS INSIDE THE BOX because that is what the box is for: it makes the icon the dial's
+   LABEL rather than one more thing on the line. It is the reason the boundary buys legibility and
+   not just tidiness.
+
+   NO GROUND OF ITS OWN, ONLY A RULE. The footer already has a tone, and three filled panels on it
+   would be heavier than the buttons they contain -- the fence is the whole job here. */
+.stonetop-relmap-heft-dial {
+	display: flex;
+	align-items: center;
+	gap: 0.2em;
+	padding: 0 0.35em;
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius-sm);
+}
+
+/* WHICH OF THE THREE THIS DIAL IS. A picture and not a word: three names spelled out would be
+   three more labels on a line that already carries one, and these are a triangle, a rule and a
+   letter -- each a picture of the thing it resizes rather than of the act of resizing it. The name
+   is still on every button in the dial for a screen reader, and the tooltip on the dial says the
+   rest.
+
+   ⚠ A FIXED BOX AND A COLLAPSED LINE, for the reason the pop-out's glyph has one: a glyph is placed
+   in its line box by its baseline, and a box taller than the glyph leaves half-leading above it that
+   grows with the font scale. Squared off here so the three marks sit on the same centre line as the
+   numbers and the arrows whatever size the interface is set to. */
+.stonetop-relmap-heft-mark {
+	/* A LITTLE MORE AIR ON ITS RIGHT THAN THE DIAL'S OWN GAP, and it is doing real work: the thing
+	   immediately after the mark is a MINUS SIGN, and at an even spacing the two read as one
+	   expression rather than as a label followed by a control. */
+	margin: 0 0.15em 0 0;
+	width: 1.1em;
+	height: 1.1em;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
+	font-size: 0.85em;
+	/* Quieter than the numbers beside it: it is a label, and the number is the answer. */
+	opacity: 0.75;
+}
+
+/* THE TWO ARROWS. Small, square, and quiet until they are wanted -- these are pressed a few times
+   in a row and then left alone for an evening, so what they must not do is compete with the row of
+   words they stand in. */
+.stonetop-relmap-heft-step {
+	flex: none;
+	/* ⚠ DECLARED SO THE SQUARE IS THE GROUP'S EM AND NOT CORE'S PIXELS. `body.game .app button`
+	   pins `font-size` to `var(--font-size-14)`, which would make both dimensions below 18.9px at
+	   every interface font size there is -- level with the label beside them at 16px root and out
+	   of step with it at every other. Inherited, the whole dial grows with the line it sits on. */
+	font-size: inherit;
+	width: 1.35em;
+	height: 1.35em;
+	padding: 0;
+	/* ⚠ AND CORE'S OWN BUTTON MARGIN IS TAKEN OFF. `body.game .app button` carries `margin: 0 1px`,
+	   which across a dial of four controls is eight pixels the declared `gap` knows nothing about
+	   -- the spacing here is the gap, and nothing else. See the readout below, where the same
+	   compatibility rule was doing real damage. */
+	margin: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: none;
+	border: 1px solid transparent;
+	border-radius: var(--st-radius-sm);
+	color: var(--st-text-secondary);
+	line-height: 1;
+	transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+/* ⚠ AND THE GLYPH INSIDE IT LOSES CORE'S LABEL GAP. `body.game .app button > i` carries a
+   `margin-right: 3px` for a label that is not coming, and on a button this small three pixels is
+   most of what centring there is. Set on all four sides so a core change to any one of them lands
+   the same way. See `.stonetop-relmap-popout > i`, which says this at length. */
+.stonetop-relmap-heft-step > i {
+	margin: 0;
+	font-size: 0.7em;
+	line-height: 1;
+}
+
+/* Later than the base rule. The warm hover ground every other tool in this window takes. */
+.stonetop-relmap-heft-step:hover:not(:disabled),
+.stonetop-relmap-heft-step:focus-visible {
+	background: var(--st-warm-hover-bg);
+	border-color: var(--st-card-rule);
+	color: var(--st-text);
+}
+
+/* AT THE END OF ITS RANGE. Faded rather than hidden, so the dial keeps its shape and the reader can
+   see that there IS an end rather than finding a button gone -- and so the two dials beside it do
+   not slide sideways the moment this one is run to its limit. */
+.stonetop-relmap-heft-step:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+
+/* THE READING, WHICH IS ALSO THE WAY BACK to a hundred per cent.
+
+   ⚠ TABULAR FIGURES AND A FLOOR ON THE WIDTH, because this number is pressed repeatedly and the two
+   arrows either side of it must not move while it is. It runs from 50% to 300%: proportional digits
+   would shift the `+` a pixel or two on nearly every press, which on a control somebody is holding
+   down reads as the button sliding away from under them. */
+.stonetop-relmap-heft-now {
+	flex: none;
+	/* ⚠ DECLARED, AND THE WHOLE ROW HANGS ON IT. Foundry's compatibility layer gives every button
+	   inside an AppV1 window `width: 100%`, and this file is unlayered, so a button of ours that
+	   names no width of its own simply takes it. On a flex item that must not shrink (`flex: none`
+	   above) that is a readout as wide as the panel itself and a `+` standing 56px OUTSIDE the
+	   panel's right border -- which is what shipped, and what it looked like was the background box
+	   failing to contain its buttons rather than one button demanding the whole row.
+	   Sized to its own digits here, with the floor below doing the steadying.
+
+	   ⚠ AND THE SAME TRAP IS WHY THE MARGIN IS ZEROED: core's `margin: 0 1px` on the same rule
+	   would put two pixels either side of a control whose dial spaces itself with `gap`.
+
+	   Measured at root 16px and 20px, and at 300% where the number is widest, by
+	   z:/tmp/foundry-verify/relmap-heft-fit.mjs -- which mounts this control under a real
+	   `.app.window-app` with foundry2.css loaded, because the sibling harness that shot it before
+	   it shipped did neither and so never met either declaration. */
+	width: auto;
+	margin: 0;
+	min-width: 3.4em;
+	padding: 0 0.2em;
+	background: none;
+	border: 1px solid transparent;
+	border-radius: var(--st-radius-sm);
+	color: var(--st-text);
+	/* ⚠ THE GROUP'S SIZE, WHICH IS THE CAPTIONS BOX'S SIZE. The number is the one thing on this
+	   dial a reader has to READ rather than aim at, so it is set level with the words next to it
+	   rather than a step down from them -- and inherited rather than re-declared, so the arrows
+	   either side (which take the same size the same way) cannot drift from it. */
+	font-size: inherit;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.35;
+	text-align: center;
+	transition: background 120ms ease, border-color 120ms ease;
+}
+
+/* Later than the base rule. Only where there is somewhere to go back to: at the base this is a
+   readout and pressing it would do nothing, so it must not look like a button that will. */
+.stonetop-relmap-heft-now[aria-disabled="false"]:hover,
+.stonetop-relmap-heft-now[aria-disabled="false"]:focus-visible {
+	background: var(--st-warm-hover-bg);
+	border-color: var(--st-card-rule);
+}
+
+.stonetop-relmap-heft-now[aria-disabled="true"] {
+	cursor: default;
+	color: var(--st-text-secondary);
+}
+
 .stonetop-relmap-view.stonetop-zoom-pan--panning {
 	cursor: grabbing;
 }
@@ -41305,7 +41509,35 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 .stonetop-relmap-line {
 	fill: none;
 	stroke: var(--relmap-ink, var(--st-relmap-ink-slate));
-	stroke-width: 3.5;
+	/* ── How heavy a stroke is, in one place ──────────────────────────────────
+	   ⚠ `--relmap-weight` IS THE RESTING WIDTH AND THE ONLY THING THE THREE STATES CHANGE. A lit
+	   line sets it to 5 and a picked one to 6, and everything below follows: the width painted, and
+	   both broken rhythms, which have to open up with it or they fuse (see `--st-relmap-rhythm-at`).
+	   Three states used to restate all three numbers apiece, with a comment in each saying they must
+	   not drift apart; now there is one number to change and nothing to keep in step.
+
+	   ⚠ AND `--relmap-line-scale` IS THE READER'S OWN, off the board's root, where the window prints
+	   it (module/relmap/relmap-weights.js). It multiplies the WIDTH, and both rhythms are worked out
+	   from the width, so asking for heavier strokes opens their patterns up by exactly the same
+	   share. The fallback is 1, which is what every board is drawn at until somebody presses the
+	   corner, and 1 leaves every number below exactly what it was.
+
+	   ⚠ THE EIGHT PER-INK PATTERNS ARE NOT SCALED, and that is a limitation said out loud rather
+	   than discovered. `--relmap-dash` (the tokens at the top of this file) is painted only under
+	   the high-contrast skin, it is a variable-length list -- two marks for some inks, four for
+	   others, and `none` for rose -- and CSS has no way to multiply through one. Those patterns
+	   already fuse at the lit and picked weights for the same reason and always have; a reader who
+	   raises the strokes far enough loses the ink's own pattern under that skin and keeps its
+	   colour, its weight, and any stroke they broke by hand. */
+	--relmap-weight: 3.5;
+	--relmap-line-w: calc(var(--relmap-weight) * var(--relmap-line-scale, 1));
+	--relmap-dotted-rhythm:
+		calc(var(--st-relmap-dotted-mark) * var(--relmap-line-w) / var(--st-relmap-rhythm-at))
+		calc(var(--st-relmap-dotted-air) * var(--relmap-line-w) / var(--st-relmap-rhythm-at));
+	--relmap-dashed-rhythm:
+		calc(var(--st-relmap-dashed-mark) * var(--relmap-line-w) / var(--st-relmap-rhythm-at))
+		calc(var(--st-relmap-dashed-air) * var(--relmap-line-w) / var(--st-relmap-rhythm-at));
+	stroke-width: var(--relmap-line-w);
 	stroke-linecap: round;
 	/* SOLID. The dash patterns are still declared, on the ink pairs below and in the tokens at the
 	   top of this file, and they are still what the high-contrast skin paints with — see the rule
@@ -41341,14 +41573,14 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    elsewhere, for the same reason.) The high-contrast family further down carries the same pair, in
    the same order, because the mode's own rule out-specifies both of these. */
 .stonetop-relmap-line.is-dotted {
-	stroke-dasharray: var(--relmap-dotted, var(--st-relmap-dotted));
+	stroke-dasharray: var(--relmap-dotted-rhythm);
 }
 
 /* THE SAME, FOR THE STROKE BROKEN RATHER THAN DOTTED. Its own rule and not a shared one taking a
    variable: which of the three a line wears is a class, and a rule reading a pattern off a property
    set by another class would put the answer in two places and let a line be dotted AND dashed. */
 .stonetop-relmap-line.is-dashed {
-	stroke-dasharray: var(--relmap-dashed, var(--st-relmap-dashed));
+	stroke-dasharray: var(--relmap-dashed-rhythm);
 }
 
 /* WHAT A CLICK ON A LINE ACTUALLY LANDS ON: the same curve, invisible, and wide enough to hit.
@@ -41373,10 +41605,17 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    rather than polite), so a fatter target is a wider dead band down the middle of every line on the
    board. Sixteen is about the least a pointer can be asked to hit; the portraits, at 72px, have
    been doing the same thing to the pan since the board was written. */
+/* ⚠ AND IT NEVER SHRINKS BELOW WHAT IT IS AIMED AT. Sixteen units is the target on an ordinary
+   board and is far wider than the six a picked line is painted at, so the two never met; a reader
+   who has asked for strokes at 300% is looking at ten and a half, and a target narrower than the
+   thing it is a target FOR would be a line with dead edges. `max()` rather than arithmetic, so the
+   sixteen holds everywhere it already did and only a genuinely fatter line moves it. The plain
+   declaration before it is what a browser that cannot parse the second one keeps. */
 .stonetop-relmap-hit {
 	fill: none;
 	stroke: transparent;
 	stroke-width: 16;
+	stroke-width: max(16, calc(7 * var(--relmap-line-scale, 1)));
 	stroke-linecap: round;
 	pointer-events: stroke;
 	cursor: pointer;
@@ -41392,16 +41631,14 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    web of eighty and survives the reader on the magnifier. `paint-order` puts the halo behind the
    ink of the line rather than over it, so the stroke keeps its own colour at full strength. */
 .stonetop-relmap-line.is-picked {
-	stroke-width: 6;
-	/* ⚠ THE WIDTH AND THE DOTS, IN ONE RULE. A round cap spends the whole stroke width out of the
-	   gap, so widening the line without opening the pattern up fuses a dotted one into a lumpy
-	   solid. The token carries the resting rhythm scaled to this width; see `--st-relmap-dotted`.
-	   A line that is dotted AND lit is drawn at the lit weight, because that rule out-specifies
-	   this one -- and it hands over this variable in the same breath, so the two agree.
-
-	   Both patterns, because a picked line is one of the three and this rule cannot know which. */
-	--relmap-dotted: var(--st-relmap-dotted-picked);
-	--relmap-dashed: var(--st-relmap-dashed-picked);
+	/* ⚠ THE WIDTH, AND NOTHING ELSE TO REMEMBER. A round cap spends the whole stroke width out of
+	   every gap, so widening a line without opening its pattern up fuses a dotted one into a lumpy
+	   solid -- which is why this rule used to restate both broken rhythms as well, with a note in
+	   it saying the three must not drift apart. They cannot drift now: `--relmap-dotted-rhythm` and
+	   `--relmap-dashed-rhythm` are worked out from this number on the base rule, so changing it changes
+	   all three. A line that is dotted AND lit is drawn at the lit weight, because that rule
+	   out-specifies this one, and its rhythms follow that width in the same way. */
+	--relmap-weight: 6;
 }
 
 .stonetop-relmap-label.is-picked .stonetop-relmap-label-text {
@@ -41422,18 +41659,41 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 .stonetop-relmap-rubber path {
 	fill: none;
 	stroke: var(--st-quiet-ink);
-	stroke-width: 2.5;
-	stroke-dasharray: 5 4;
+	/* AT THIS READER'S OWN WEIGHT, like every other stroke on the board: a reader who cannot see
+	   the lines cannot see the one they are in the middle of drawing either, and that is the one
+	   they are watching. Its own dashes go with it, for the round-cap reason `--st-relmap-rhythm-at`
+	   sets out -- these two are a rhythm at 2.5, so they are divided by that and not by 3.5. */
+	stroke-width: calc(2.5 * var(--relmap-line-scale, 1));
+	stroke-dasharray:
+		calc(5 * var(--relmap-line-scale, 1))
+		calc(4 * var(--relmap-line-scale, 1));
 	stroke-linecap: round;
 }
 
 /* ── The arrowheads ───────────────────────────────────────────────────────────
    Fixed-size SVGs, turned by an angle worked out in the board's real proportions. Their own
-   viewBox, so the stretch on the line layer above cannot squash them. */
+   viewBox, so the stretch on the line layer above cannot squash them.
+
+   ⚠ THE SIZE IS WRITTEN TWICE, here and as `RELMAP_HEAD_PX` in utils/relmap-geometry.js, and the
+   two must agree. That file stands the head off the rim by the tip's own share of this number and
+   cuts the stroke back by the triangle's length in it, so a head drawn at a size the geometry has
+   not heard of lands its tip short of the line it ends -- or out past the face it points at, with
+   the stroke showing through the taper. Change one, change the other.
+
+   ⚠ AND THE SAME IS TRUE OF THE SCALE BESIDE IT. `--relmap-head-scale` is this reader's own, off
+   the board's root where the window prints it (module/relmap/relmap-weights.js), and the window
+   multiplies the base size by exactly the same number before it works out where to stand each
+   head off its rim. The fallback is 1, which is what every board is drawn at until somebody
+   presses the corner.
+
+   BOTH NUMBERS COME FROM THE WINDOW NOW. `--relmap-head-px` is `RELMAP_HEAD_PX`
+   (utils/relmap-geometry.js) printed onto the board's root beside the scales, so the size drawn
+   here and the stand-off worked out there cannot be changed apart. The `22px` below is the
+   fallback for a board rendered before that property lands, and is the only copy left. */
 .stonetop-relmap-head {
 	position: absolute;
-	width: 16px;
-	height: 16px;
+	width: calc(var(--relmap-head-px, 22px) * var(--relmap-head-scale, 1));
+	height: calc(var(--relmap-head-px, 22px) * var(--relmap-head-scale, 1));
 	margin: 0;
 	pointer-events: none;
 	transform: translate(-50%, -50%) rotate(var(--relmap-turn, 0deg));
@@ -41602,7 +41862,11 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	   inline `font-size` so that the rule below can still blow the held line's caption up while the
 	   board is zoomed too far out to read anything: an inline size is the top of the cascade and
 	   would beat it. The same arrangement the custom inks have (`--relmap-ink-raw`). */
-	font-size: var(--relmap-caption-px, 16px);
+	/* ⚠ AND THE READER'S OWN WEIGHT MULTIPLIES BOTH ANSWERS, the sheet's sixteen and a line's own
+	   size alike -- which is what keeps a caption somebody set large larger than the quiet ones
+	   beside it at every setting of the corner (module/relmap/relmap-weights.js). The window
+	   multiplies by the same number before it measures, cuts and gaps; see `_boardContext`. */
+	font-size: calc(var(--relmap-caption-px, 16px) * var(--relmap-word-scale, 1));
 	fill: var(--st-text-body);
 	/* ON the line rather than above it, and CENTRED on the point the spreader chose: a baseline
 	   sitting on the line would put every caption a half-line clear of the stroke it belongs to,
@@ -41663,11 +41927,9 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    magnifier, and a highlight carried by brightness alone is one they would not see -- and it is
    the ONLY mark a hover makes now that the portraits keep their ink. */
 .stonetop-relmap.is-lit .stonetop-relmap-line.is-lit {
-	stroke-width: 5;
-	/* And both broken patterns opened to match, in the same rule -- see
-	   `.stonetop-relmap-line.is-picked`, which carries the arithmetic. */
-	--relmap-dotted: var(--st-relmap-dotted-lit);
-	--relmap-dashed: var(--st-relmap-dashed-lit);
+	/* And both broken patterns open to match without being mentioned, because they are worked out
+	   from this number -- see `.stonetop-relmap-line`, which carries the arithmetic. */
+	--relmap-weight: 5;
 }
 
 /* A caption on a lit line is brought forward, and the quiet ones sink behind the lit portraits so
@@ -43653,11 +43915,11 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 
    Later than the rule above and one class heavier, which is what makes it win. */
 :root.stonetop-high-contrast .stonetop-relmap-line.is-dotted {
-	stroke-dasharray: var(--relmap-dotted, var(--st-relmap-dotted));
+	stroke-dasharray: var(--relmap-dotted-rhythm);
 }
 
 :root.stonetop-high-contrast .stonetop-relmap-line.is-dashed {
-	stroke-dasharray: var(--relmap-dashed, var(--st-relmap-dashed));
+	stroke-dasharray: var(--relmap-dashed-rhythm);
 }
 
 /* THE RIM ROUND EVERY FACE, RAISED WITH THE REST OF THE BOARD. The base rule states this weight as
