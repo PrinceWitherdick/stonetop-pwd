@@ -27,7 +27,7 @@ export const CURRENT_SEASON_KEY = "seasonsCurrent";
 export const CURRENT_YEAR_KEY = "seasonsCurrentYear";
 
 /** A campaign year as stored: a whole number, never below 1. */
-function campaignYear(value) {
+export function campaignYear(value) {
 	return Math.max(1, Math.trunc(Number(value)) || 1);
 }
 

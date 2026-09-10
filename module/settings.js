@@ -1416,6 +1416,26 @@ export function registerSettings() {
 		default: false,
 	});
 
+	// Fold what the system already recorded into the timeline: levels gained, moves learned, the
+	// seasons as they turned. Per client, because it is a way of READING the record rather than a
+	// fact about it -- one player wants their character's whole history, another wants only what
+	// the table wrote down, and neither should change what the other sees.
+	//
+	// OFF BY DEFAULT. These rows are derived and can be numerous (the ledger holds up to 300 per
+	// actor), and a timeline that opens full of bookkeeping buries the one line somebody actually
+	// wrote about that season. Turning them on is one click in the timeline's own toolbar, which
+	// is where the choice is made rather than here -- this registration is only where it lives.
+	//
+	// `config: false` for that reason: a setting whose control sits on the thing it affects does
+	// not also want a row in the settings window, where it would read as a second, disagreeing
+	// switch. See utils/timeline-auto-rows.js for what is actually folded in.
+	game.settings.register(SYSTEM_ID, "timelineAutoRows", {
+		scope: "client",
+		config: false,
+		type: Boolean,
+		default: false,
+	});
+
 	// Reopen the document sheets (characters, steadings, monsters, NPCs, items, journals)
 	// this user had open when they reload, at the same position and size. Per-client
 	// because window layout is personal, not shared world state. Defaults on. The
@@ -2001,6 +2021,16 @@ export function getPromptDamageModifierSetting() {
 // Whether actor sheets should open in Edit mode rather than Play mode.
 export function getOpenSheetsInEditMode() {
 	return globalThis.game?.settings?.get?.(SYSTEM_ID, "openSheetsInEditMode") ?? false;
+}
+
+/** Does this reader want the timeline to fold in what the system recorded? Defaults to no. */
+export function getTimelineAutoRows() {
+	return globalThis.game?.settings?.get?.(SYSTEM_ID, "timelineAutoRows") ?? false;
+}
+
+/** Remember this reader's answer. Client-scoped, so it never reaches anybody else at the table. */
+export function setTimelineAutoRows(on) {
+	return globalThis.game?.settings?.set?.(SYSTEM_ID, "timelineAutoRows", !!on);
 }
 
 /**

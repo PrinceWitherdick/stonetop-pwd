@@ -15,6 +15,7 @@ import { book2ArtRoot } from "../book2-art/art-root.js";
 import { offerDurableArtOnce } from "../book2-art/offer-once.js";
 import { posterMapScenePlan, createPosterMapScenes } from "../book2-art/poster-maps.js";
 import { seedRelationshipMapOnce } from "../relmap/relmap-make.js";
+import { syncTrackPages } from "../timeline/timeline-store.js";
 
 // The GM's first load of a world, narrated.
 //
@@ -275,6 +276,22 @@ async function runFinishingTouches(dialog) {
 	// the GM has deleted it; it swallows its own failure, so nothing below waits on it going well.
 	// See relmap/relmap-make.js.
 	await seedRelationshipMapOnce();
+
+	// A Timeline page for every thread this world has: Stonetop, and each character. Here rather
+	// than in a lane of its own for the same reasons as the map above -- it is one guarded create
+	// that a settled world skips entirely, and nothing waits on it.
+	//
+	// ⚠ EVERY LOAD, not once per world, and that is the point of it. Creating a JournalEntry needs
+	// TRUSTED, which a plain player is not, so this is what gives a character rolled up last
+	// session a thread to write in without their GM having to do anything. It only ever creates a
+	// page whose key is absent, so it cannot disturb one that already exists.
+	try {
+		await syncTrackPages();
+	} catch (err) {
+		// Best-effort like its neighbours: a world that cannot mint these pages should still finish
+		// setting up, and the tab says so for itself when it finds no page.
+		console.error("Stonetop | could not top up the timeline's track pages", err);
+	}
 
 	// Resolves once the window has actually gone (auto-close, or the GM closing it first),
 	// so the map offer never lands on top of it.

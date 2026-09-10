@@ -1,0 +1,19 @@
+{{!-- ONE TRACK'S THREAD, READ BACK AS A JOURNAL PAGE.
+
+      Read only, and that is the point of it: every way of CHANGING a timeline goes through the
+      entry dialog on the sheet tab or the aggregate window, where the date picker and the place
+      list live. What a page is for that the tab is not is being READ -- shared with the table,
+      printed, opened on a phone -- so this carries no controls at all.
+
+      It renders the same period blocks the tab does, off the same view model, so a track cannot
+      read one way here and another way there. `canEdit` is false on every card, which is what takes
+      the card partial's action row out. --}}
+<div class="stonetop-timeline">
+	{{#if stonetop.timeline.isEmpty}}
+	<p>{{localize "stonetop.timeline.empty.readOnly"}}</p>
+	{{else}}
+	<div class="stonetop-timeline-spine">
+		{{#each stonetop.timeline.periods}}{{> "stonetop.timeline-period"}}{{/each}}
+	</div>
+	{{/if}}
+</div>

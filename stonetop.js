@@ -26,6 +26,8 @@ import { HazardPageModel } from "./module/journal/HazardPageModel.js";
 import { createStonetopHazardPageSheetClass } from "./module/journal/StonetopHazardPageSheet.js";
 import { SitePageModel } from "./module/journal/SitePageModel.js";
 import { createStonetopSitePageSheetClass } from "./module/journal/StonetopSitePageSheet.js";
+import { TimelinePageModel } from "./module/journal/TimelinePageModel.js";
+import { createStonetopTimelinePageSheetClass } from "./module/journal/StonetopTimelinePageSheet.js";
 import { createRelationshipMapEntrySheetClass } from "./module/journal/RelationshipMapEntrySheet.js";
 import { RELMAP_SHEET_CLASS } from "./module/relmap/relmap-doc.js";
 import { ThreatBoard } from "./module/threats/threat-board.js";
@@ -392,6 +394,19 @@ Hooks.once("init", () => {
 		types:       ["site"],
 		makeDefault: true,
 		label:       "Stonetop Site Page",
+	});
+
+	// One track of the narrative timeline: Stonetop's own thread, or one character's. Unlike the
+	// three GM-prep types above, these pages are MEANT to be read in the sidebar -- the timeline the
+	// sheet draws is the good version, but a journal page is what a table can share and print, and
+	// keeping the record legible outside our own UI is half of what makes it a chronicle. The sheet
+	// is read-only: everything that writes goes through the entry dialog. See module/timeline/.
+	CONFIG.JournalEntryPage.dataModels["timeline"] = TimelinePageModel;
+	const StonetopTimelinePageSheet = createStonetopTimelinePageSheetClass(JournalPageSheetV1);
+	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, SYSTEM_ID, StonetopTimelinePageSheet, {
+		types:       ["timeline"],
+		makeDefault: true,
+		label:       "Stonetop Timeline Page",
 	});
 
 	// A relationship map is a JournalEntry, so it has a row in every player's Journal sidebar.

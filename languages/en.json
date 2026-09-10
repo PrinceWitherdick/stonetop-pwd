@@ -19,7 +19,8 @@
       "chronicle": "Chronicle",
       "threat": "Threat",
       "hazard": "Hazard",
-      "site": "Site"
+      "site": "Site",
+      "timeline": "Timeline"
     }
   },
   "stonetop": {
@@ -1693,6 +1694,64 @@
       "showTooltip": "Show the place names on this map, instead of only on hover. Only on your screen.",
       "followHint": "Right-click to follow the world setting for this map again.",
       "followed": "This map's pin names follow the world setting again."
+    },
+    "timeline": {
+      "windowTitle": "The Timeline",
+      "trackTitle": "{name}: the timeline",
+      "beforeRecord": "Before the record",
+      "newEntry": "New Entry",
+      "newEntryTooltip": "Write down something that happened, and when",
+      "openFull": "Open the full timeline",
+      "openFullTooltip": "Every thread on one timeline: Stonetop and each character",
+      "editEntry": "Edit this entry",
+      "removeEntry": "Remove this entry",
+      "moveEarlier": "Move earlier in the season",
+      "moveLater": "Move later in the season",
+      "entryCount": "{count} entries",
+      "empty": {
+        "lead": "Nothing has been written down here yet.",
+        "hint": "Press New Entry to record what happened, and the season it happened in.",
+        "readOnly": "Nothing has been written down here yet."
+      },
+      "noTrack": {
+        "lead": "This thread has no page yet.",
+        "hint": "Your GM opening the world once will make one."
+      },
+      "dialog": {
+        "titleNew": "New timeline entry",
+        "titleEdit": "Edit timeline entry",
+        "when": "When",
+        "whenHint": "The season and year this happened in.",
+        "entryTitle": "What happened",
+        "entryTitlePlaceholder": "A line to remember it by",
+        "place": "Where",
+        "placePlaceholder": "A place, named however your table names it",
+        "placeDropHint": "Drop a place, a scene or a person here to link it. Typing your own name is fine too.",
+        "placeLinked": "Linked",
+        "placeLinkedTooltip": "This place links to a document. Editing the name breaks the link; drop again to remake it.",
+        "bodyDropHint": "Drop a person, place or creature into the text to link it.",
+        "body": "The account",
+        "bodyPlaceholder": "As much or as little as you want to write down.",
+        "save": "Save the entry",
+        "cancel": "Cancel"
+      },
+      "remove": {
+        "title": "Remove this entry?",
+        "body": "This takes the entry off the timeline for everyone. The journal keeps its own version history.",
+        "untitled": "This entry has no title.",
+        "confirm": "Remove the entry",
+        "cancel": "Keep it"
+      },
+      "whichTrack": {
+        "title": "Whose thread?",
+        "confirm": "Write on this thread"
+      },
+      "auto": {
+        "show": "Show what the system recorded",
+        "hide": "Hide what the system recorded",
+        "tooltip": "Fold in level-ups, moves gained and the seasons as they turned. Only you see this choice.",
+        "badge": "Recorded"
+      }
     }
   }
 }
