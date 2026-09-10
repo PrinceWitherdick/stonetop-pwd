@@ -1,0 +1,20 @@
+{{!-- ONE SEASON'S BLOCK ON A SINGLE-TRACK TIMELINE.
+
+      A marker on the spine carrying the season's glyph and its name, then the cards filed under it.
+      The aggregate window does NOT use this partial: a row there is one season across every thread
+      and the cards hang off the lanes rather than off the block, so it lays its own row out and
+      renders the same cards inside it.
+
+      The heading itself is the shared partial, so this block and the aggregate's row head cannot
+      come to name the same season two different ways.
+
+      Context: one period view-model (timeline-view.js#periodVM). --}}
+<section class="stonetop-timeline-period" data-period="{{key}}">
+	<header class="stonetop-timeline-period-head">
+		{{> "stonetop.timeline-period-head"}}
+	</header>
+
+	<ol class="stonetop-timeline-cards">
+		{{#each entries}}{{> "stonetop.timeline-card"}}{{/each}}
+	</ol>
+</section>

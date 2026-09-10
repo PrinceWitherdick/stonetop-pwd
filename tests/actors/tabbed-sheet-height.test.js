@@ -68,7 +68,7 @@ describe("...and a tab too tall for its frame scrolls instead of being cut off",
 	// only thing this block is asserting.
 	const SCROLLPORTS = [
 		["character", /\.pbta\.sheet\.actor\.character \.stonetop-sheet-layout \.sheet-body > \.tab\.active:not\(\.notes\)\s*\{[^}]*overflow-y:\s*auto/],
-		["steading", /\.steading-sheet \.sheet-body > \.tab\.active:not\(\.notes\):not\(\.relmap\)\s*\{[^}]*overflow-y:\s*auto/],
+		["steading", /\.steading-sheet \.sheet-body > \.tab\.active:not\(\.notes\):not\(\.relmap\):not\(\.timeline\)\s*\{[^}]*overflow-y:\s*auto/],
 		["NPC", /\.stonetop-npc-sheet \.sheet-body > \.tab\.active:not\(\.notes\)\s*\{[^}]*overflow-y:\s*auto/],
 		["GM Toolkit", /\.stonetop-gm-toolkit-container\s*\{[^}]*overflow-y:\s*auto/],
 	];

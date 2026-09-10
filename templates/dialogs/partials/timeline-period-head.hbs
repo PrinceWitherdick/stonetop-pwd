@@ -1,0 +1,21 @@
+{{!-- WHAT A SEASON IS CALLED, WHEREVER IT IS PRINTED.
+
+      One heading, two hosts: the block on a single-track spine, and the row head on the aggregate
+      board. They lay their surroundings out differently but they name a season the same way, and
+      when this was written out twice the two could drift -- which on a chronicle means the same
+      season reading as two different ones depending on which view you opened.
+
+      ⚠ THE SEASON IS NAMED, NOT COLOURED. The four `--stonetop-season-*-ink` tokens belong to the
+      steading header's clock and a test counts every read of them in the whole stylesheet. The
+      glyph class here is the location journals' own season mark, which carries the picture without
+      spending the ink.
+
+      The undated block has no season and no year, so it prints its own label and no chip.
+
+      Context: one period view-model (timeline-view.js#periodVM). --}}
+<h3 class="stonetop-timeline-period-title{{#if glyphClass}} stonetop-season-entry {{glyphClass}}{{/if}}">
+	{{#if undated}}{{label}}{{else}}{{seasonLabel}}{{/if}}
+</h3>
+{{#unless undated}}
+<span class="stonetop-year-chip">{{yearLabel}}</span>
+{{/unless}}

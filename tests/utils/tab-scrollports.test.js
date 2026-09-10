@@ -82,10 +82,13 @@ describe("character sheet tab scrollports", () => {
 describe("tab scrollbars stay hidden", () => {
 	it.each([
 		["character", ".pbta.sheet.actor.character .stonetop-sheet-layout .sheet-body > .tab.active:not(.notes)"],
-		// Two exceptions on the steading now: Notes, whose prose-mirror scrolls itself, and the
-		// Relationship Map, whose board is panned and zoomed inside a viewport that clips. Neither
-		// is a tab that could be cut off by not scrolling.
-		["steading", ".steading-sheet .sheet-body > .tab.active:not(.notes):not(.relmap)"],
+		// Three exceptions on the steading now: Notes, whose prose-mirror scrolls itself; the
+		// Relationship Map, whose board is panned and zoomed inside a viewport that clips; and the
+		// Timeline, whose panel scrolls under a toolbar that stays pinned. None is a tab that could
+		// be cut off by not scrolling. Each exception is named HERE rather than overridden further
+		// down the stylesheet, because every `:not()` adds specificity and this rule would outrank
+		// the override — see the timeline's own style test.
+		["steading", ".steading-sheet .sheet-body > .tab.active:not(.notes):not(.relmap):not(.timeline)"],
 	])("%s tabs scroll without drawing a bar", (_label, selector) => {
 		const block = ruleFor(selector);
 		expect(block).toBeTruthy();

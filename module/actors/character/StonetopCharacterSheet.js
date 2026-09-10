@@ -33,6 +33,7 @@ import {CharacterLedger} from "./CharacterLedger.js";
 import {wireTabSearch} from "../../utils/tab-search.js";
 import {createPacker, fitColumns, makeColumns, packShortest, wireMasonry} from "../../utils/masonry.js";
 import {mountTabRail} from "../../utils/tab-rail.js";
+import { closeTimelineTab, detachTimelineTab, syncTimelineTab, TIMELINE_TAB } from "../../timeline/timeline-tab.js";
 import {buildPreferenceGroups} from "../../utils/sheet-preferences.js";
 import {showsPreferencesTab, withPreferencesTab} from "../../utils/preferences-tab.js";
 import {injectHeaderToggle} from "../../utils/sheet-chrome.js";
@@ -968,6 +969,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			// cursor is over a card's art tears out the anchor without firing mouseleave —
 			// clear it up front so no orphaned floating preview is left stuck on screen.
 			removeAvatarPreview();
+			// The timeline comes OUT before the body is replaced and goes back in at the foot of this
+			// method, the same element across a re-render. Rebuilding it would throw away where the
+			// reader had scrolled to in a campaign's worth of entries, on every write to this actor.
+			// See timeline/timeline-tab.js.
+			detachTimelineTab(this);
 			await super._render(force, options);
 			const newImg = portraitOf(this.element?.[0]);
 			if (oldImg && newImg
@@ -990,6 +996,27 @@ export function createStonetopCharacterSheetClass(Base) {
 				this._activateTabOnRender = null;
 				this._tabs?.[0]?.activate?.(tab);
 			}
+			// ⚠ HERE AND NOT IN `activateListeners`, WHICH IS TOO EARLY. Whether the timeline is
+			// wanted depends on which tab is showing, and a sheet reopened after a reload does not
+			// know that yet at listener time: utils/window-restore.js puts the reader back on the tab
+			// they left from the RENDER hook, which core fires after `activateListeners` has run.
+			// It also has to come after the one-shot activate above, which is the other way this sheet
+			// arrives on a tab nobody clicked. Cheap and idempotent otherwise: a panel already mounted
+			// is moved into the tab this render built, and one never opened is not built now either.
+			syncTimelineTab(this, this.element?.[0]);
+		}
+
+		/**
+		 * ⚠ `super` FIRST AND NOTHING ELSE ABOUT SIZE. What is added is the one thing a tab
+		 * change can mean here: a reader arriving on the timeline for the first time, which is when
+		 * it is built rather than on every render.
+		 *
+		 * Nothing here resizes the sheet, and nothing here may: moving between tabs never changes a
+		 * window's size in this system (tests/actors/tabbed-sheet-height.test.js).
+		 */
+		_onChangeTab(event, tabs, active) {
+			super._onChangeTab(event, tabs, active);
+			if (active === TIMELINE_TAB) syncTimelineTab(this, this.element?.[0]);
 		}
 
 		/**
@@ -1052,6 +1079,10 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		async close(options) {
+			// ⚠ THE TIMELINE REGISTERS THREE GLOBAL JOURNAL HOOKS AND ONLY ITS OWN `close` TAKES
+			// THEM OFF. Left registered they fire on every journal write at the table for the rest of
+			// the session, once for every character sheet anybody ever opened on that tab.
+			closeTimelineTab(this);
 			this._masonries?.forEach(m => m.disconnect());
 			this._movePanel?.remove();
 			this._movePanel = null;

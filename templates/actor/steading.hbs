@@ -193,6 +193,7 @@
 			      Homefront Moves above: classic is the sheet as it was before the tab-rail
 			      redesign and does not take new pages. Classic readers still have the macro. --}}
 			{{#unless stonetop.classicLayout}}{{> "stonetop.tab-nav-item" tab="relmap" label=(localize "stonetop.steading.tabs.relmap")}}{{/unless}}
+			{{#unless stonetop.classicLayout}}{{> "stonetop.tab-nav-item" tab="timeline" label=(localize "stonetop.steading.tabs.timeline")}}{{/unless}}
 			{{> "stonetop.tab-nav-item" tab="notes"        label=(localize "stonetop.steading.tabs.notes")}}
 		</nav>
 
@@ -203,6 +204,7 @@
 				{{> "stonetop.steading-tab-neighbors"}}
 				{{> "stonetop.steading-tab-improvements"}}
 				{{#unless stonetop.classicLayout}}{{> "stonetop.steading-tab-relmap"}}{{/unless}}
+				{{#unless stonetop.classicLayout}}{{> "stonetop.steading-tab-timeline"}}{{/unless}}
 				{{> "stonetop.steading-tab-notes"}}
 			</section>
 

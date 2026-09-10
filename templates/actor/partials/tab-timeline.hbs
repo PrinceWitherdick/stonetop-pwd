@@ -1,0 +1,13 @@
+{{!-- THIS CHARACTER'S THREAD OF THE STORY.
+
+      The panel is mounted here by timeline/timeline-tab.js, which builds a real TimelinePanel (the
+      window's own class, frameless) the first time a reader actually opens this tab. So the mount
+      is left EMPTY: everything inside it is built by that panel, and the mount is found by
+      `[data-stonetop-timeline]`.
+
+      Nothing is built for a reader who never opens the tab. Rendering the timeline walks every
+      entry on the track, enriches every body, and registers three global journal hooks, and none of
+      that should happen because somebody opened the sheet to look at their HP. --}}
+<div class="tab timeline" data-group="primary" data-tab="timeline">
+	<section class="sheet-tab stonetop-timeline-mount" data-stonetop-timeline></section>
+</div>

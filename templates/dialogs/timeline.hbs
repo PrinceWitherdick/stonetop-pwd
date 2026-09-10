@@ -1,0 +1,110 @@
+{{!-- THE TIMELINE, IN BOTH ITS SHAPES.
+
+      ONE TEMPLATE, because the tab, the pop-out window and the aggregate are one class in three
+      hosts (see TimelineWindow). `single` draws one thread down a spine; its absence draws one row
+      per season with a lane per thread, which is the aggregate. The CARDS are the same partial either way, which is what
+      stops an entry reading one way here and another way there.
+
+      ⚠ THE SEASON IS NAMED, NOT COLOURED, on both sides. The four `--stonetop-season-*-ink` tokens
+      belong to the steading header's clock and a test counts every read of them in the stylesheet.
+
+      `data-track-id` on a lane and on the New Entry button is what the delegated listener reads to
+      know which thread a click belongs to; in single-track mode it falls back to the panel's own
+      track, so the attribute is not repeated on every card. --}}
+<div class="stonetop-timeline">
+
+	<header class="stonetop-timeline-toolbar">
+		{{#if canEdit}}
+		<button type="button" class="stonetop-cta stonetop-timeline-new" data-track-id="{{trackId}}"
+		        data-tooltip="{{localize "stonetop.timeline.newEntryTooltip"}}">
+			<i class="fas fa-feather-pointed" aria-hidden="true"></i>
+			<span>{{localize "stonetop.timeline.newEntry"}}</span>
+		</button>
+		{{/if}}
+
+		{{#if showOpenFull}}
+		<button type="button" class="stonetop-timeline-open-full"
+		        data-tooltip="{{localize "stonetop.timeline.openFullTooltip"}}">
+			<i class="fas fa-layer-group" aria-hidden="true"></i>
+			<span>{{localize "stonetop.timeline.openFull"}}</span>
+		</button>
+		{{/if}}
+
+		{{!-- Fold in what the system already recorded. The label says what pressing it WILL do, not
+		      what the current state is, which is the house shape for a toggle that is a button
+		      rather than a checkbox; `aria-pressed` carries the state for a screen reader. --}}
+		<button type="button" class="stonetop-timeline-auto-toggle{{#if autoRows}} is-on{{/if}}"
+		        aria-pressed="{{#if autoRows}}true{{else}}false{{/if}}"
+		        data-tooltip="{{localize "stonetop.timeline.auto.tooltip"}}">
+			<i class="fas fa-scroll" aria-hidden="true"></i>
+			<span>{{autoRowsLabel}}</span>
+		</button>
+	</header>
+
+	<div class="stonetop-timeline-scroll">
+
+		{{!-- A thread with no page yet reads differently from an empty one: the first is waiting on
+		      a GM opening the world, the second on the reader picking up a pen. --}}
+		{{#unless hasPage}}
+		<div class="stonetop-timeline-invite">
+			<p class="stonetop-timeline-invite-lead">{{localize "stonetop.timeline.noTrack.lead"}}</p>
+			<p class="stonetop-timeline-invite-hint">{{localize "stonetop.timeline.noTrack.hint"}}</p>
+		</div>
+		{{else}}
+
+		{{!-- Nothing written yet reads the same in both shapes, so it is asked ONCE, above the
+		      branch that picks between them. --}}
+		{{#if timeline.isEmpty}}
+		<div class="stonetop-timeline-invite">
+			<p class="stonetop-timeline-invite-lead">{{localize "stonetop.timeline.empty.lead"}}</p>
+			{{#if canEdit}}
+			<p class="stonetop-timeline-invite-hint">{{localize "stonetop.timeline.empty.hint"}}</p>
+			{{/if}}
+		</div>
+		{{else}}
+
+		{{#if single}}
+			<div class="stonetop-timeline-spine">
+				{{#each timeline.periods}}{{> "stonetop.timeline-period"}}{{/each}}
+			</div>
+		{{else}}
+			<div class="stonetop-timeline-board">
+
+				{{!-- The thread names, once, as the board's own header row. Repeating them in every
+				      season is what would make a long campaign unreadable. --}}
+				<div class="stonetop-timeline-lane-heads">
+					<span class="stonetop-timeline-lane-spacer" aria-hidden="true"></span>
+					{{#each timeline.tracks}}
+					<div class="stonetop-timeline-lane-head" data-track-id="{{trackId}}">
+						{{#if portrait}}
+						<img class="stonetop-timeline-lane-portrait" src="{{portrait}}" alt="" draggable="false">
+						{{/if}}
+						<span class="stonetop-timeline-lane-name">{{name}}</span>
+					</div>
+					{{/each}}
+				</div>
+
+				{{#each timeline.periods}}
+				<div class="stonetop-timeline-row" data-period="{{key}}">
+					<div class="stonetop-timeline-row-head">
+						{{> "stonetop.timeline-period-head"}}
+					</div>
+
+					{{#each lanes}}
+					<div class="stonetop-timeline-lane{{#if isEmpty}} stonetop-timeline-lane--empty{{/if}}"
+					     data-track-id="{{trackId}}">
+						<ol class="stonetop-timeline-cards">
+							{{#each entries}}{{> "stonetop.timeline-card"}}{{/each}}
+						</ol>
+					</div>
+					{{/each}}
+				</div>
+				{{/each}}
+
+			</div>
+		{{/if}}
+
+		{{/if}}
+		{{/unless}}
+	</div>
+</div>

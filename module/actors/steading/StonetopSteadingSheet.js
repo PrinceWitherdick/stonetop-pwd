@@ -60,6 +60,7 @@ import {bindImagePopoutToActor, pointImagePopoutAt, usedActorPortraits} from "..
 import {openPortraitFrameEditor} from "../../utils/PortraitFrameDialog.js";
 import {localize} from "../../utils/i18n.js";
 import {closeRelmapTab, detachRelmapTab, makeFirstRelationshipMap, relmapTabContext, STEADING_RELMAP_TAB, syncRelmapTab} from "./steading-relmap-tab.js";
+import {closeTimelineTab, detachTimelineTab, syncTimelineTab, TIMELINE_TAB} from "../../timeline/timeline-tab.js";
 
 /**
  * What the member-photo WINDOW shows, given the path a member actually wears.
@@ -505,6 +506,11 @@ export function createStonetopSteadingSheetClass(Base) {
 		// reader's zoom, pan and open tie bar in it, and because its first render seats the party
 		// and the village. See steading-relmap-tab.js, which owns every read and write of this.
 		_relmapPanel = null;
+		// The timeline, once this reader has opened that tab, and null until then. Held on the SHEET
+		// for the same reason as the board above: it carries where the reader had scrolled to in a
+		// campaign's worth of entries. See timeline/timeline-tab.js, which owns every read and write
+		// of this field.
+		_timelinePanel = null;
 		constructor(...args) {
 			super(...args);
 			this._stonetopSteading = this.actor.typedActor;
@@ -541,6 +547,9 @@ export function createStonetopSteadingSheetClass(Base) {
 			// with its pan, its zoom and its listeners, because rebuilding it would throw away the
 			// corner of the map the reader was looking at every time anything wrote to this steading.
 			detachRelmapTab(this);
+			// Same for the timeline, and for the same reason: a re-render would rebuild the spine and
+			// throw away where the reader had scrolled to in it.
+			detachTimelineTab(this);
 			await super._render(force, options);
 			stampLayoutClass(this, "steading");
 			// Strip any PBTA-injected playbook controls and FoundryVTT chrome from the window header
@@ -563,6 +572,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// mounted is simply moved into the tab this render built, and one that was never opened
 			// is not built now either.
 			syncRelmapTab(this, this.element?.[0]);
+			syncTimelineTab(this, this.element?.[0]);
 		}
 
 		/**
@@ -579,6 +589,7 @@ export function createStonetopSteadingSheetClass(Base) {
 		_onChangeTab(event, tabs, active) {
 			super._onChangeTab(event, tabs, active);
 			if (active === STEADING_RELMAP_TAB) syncRelmapTab(this, this.element?.[0]);
+			if (active === TIMELINE_TAB) syncTimelineTab(this, this.element?.[0]);
 		}
 
 		_injectHeaderToggle() {
@@ -651,6 +662,8 @@ export function createStonetopSteadingSheetClass(Base) {
 			// of the session, holding a whole board and its portraits alive behind them, once for
 			// every steading sheet anybody ever opened on that tab.
 			closeRelmapTab(this);
+			// The timeline registers three of its own, with the same consequence. See timeline-tab.js.
+			closeTimelineTab(this);
 			// The avatar hover preview lives on document.body, so it survives the sheet's own
 			// DOM being torn down — clear it here or it orphans if the sheet closes (e.g. Escape)
 			// while the cursor is still over an avatar and no mouseleave ever fires.

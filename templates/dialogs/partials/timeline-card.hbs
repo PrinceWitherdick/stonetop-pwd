@@ -1,0 +1,69 @@
+{{!-- ONE ENTRY ON THE TIMELINE.
+
+      The same card on all three hosts: the tab, the aggregate window, and the journal page a track
+      reads back as. It differs only by `canEdit`, which the view model already answered per track,
+      so no host decides for itself who may write here.
+
+      A card with no title is not a broken card. An entry is a dated thing that happened, and the
+      account is the part that matters; the title is a line to find it by. So the head renders only
+      what there is, and a titleless entry reads as its body under its date.
+
+      An AUTO card is one the system wrote for itself (a season turning, a level gained) rather than
+      one somebody typed. It wears its own modifier and a quiet badge, because the one thing a
+      reader must never have to guess is which of these is the record and which is the bookkeeping.
+
+      Context: one card view-model (timeline-view.js#cardVM), plus `enrichedBody` where the host has
+      enriched it. --}}
+<li class="stonetop-timeline-card{{#if isAuto}} stonetop-timeline-card--auto{{/if}}" data-entry-id="{{id}}">
+	{{#if isAuto}}
+	<span class="stonetop-timeline-card-badge">{{localize "stonetop.timeline.auto.badge"}}</span>
+	{{/if}}
+
+	{{#if title}}
+	<h4 class="stonetop-timeline-card-title">{{title}}</h4>
+	{{/if}}
+
+	{{#if place}}
+	<p class="stonetop-timeline-card-place">
+		<i class="fas fa-location-dot" aria-hidden="true"></i>
+		{{#if placeLinked}}
+		{{!-- A place that IS a document, dropped on the field when the entry was written.
+
+		      ⚠ ALL THREE OF `class`, `data-link` AND `draggable` ARE LOAD-BEARING, and only the
+		      middle one actually does anything. Core binds content links on document.body with
+		      `event.target.closest("a[data-link]")` and then reads `.dataset.uuid` off that same
+		      element; `content-link` is the LOOK alone. A link with the class and the uuid but no
+		      `data-link` renders perfectly, carries the right target, and silently does nothing when
+		      clicked, with no console error. --}}
+		<a class="content-link" data-link data-uuid="{{placeUuid}}" draggable="true">{{place}}</a>
+		{{else}}
+		<span>{{place}}</span>
+		{{/if}}
+	</p>
+	{{/if}}
+
+	{{#if enrichedBody}}
+	<div class="stonetop-timeline-card-body">{{{enrichedBody}}}</div>
+	{{/if}}
+
+	{{#if canEdit}}
+	<div class="stonetop-timeline-card-actions">
+		<button type="button" class="stonetop-timeline-move" data-entry-id="{{id}}" data-delta="-1"
+		        aria-label="{{localize "stonetop.timeline.moveEarlier"}}"
+		        data-tooltip="{{localize "stonetop.timeline.moveEarlier"}}"
+		        data-tooltip-direction="UP"><i class="fas fa-chevron-up"></i></button>
+		<button type="button" class="stonetop-timeline-move" data-entry-id="{{id}}" data-delta="1"
+		        aria-label="{{localize "stonetop.timeline.moveLater"}}"
+		        data-tooltip="{{localize "stonetop.timeline.moveLater"}}"
+		        data-tooltip-direction="UP"><i class="fas fa-chevron-down"></i></button>
+		<button type="button" class="stonetop-timeline-edit" data-entry-id="{{id}}"
+		        aria-label="{{localize "stonetop.timeline.editEntry"}}"
+		        data-tooltip="{{localize "stonetop.timeline.editEntry"}}"
+		        data-tooltip-direction="UP"><i class="fas fa-pen"></i></button>
+		<button type="button" class="stonetop-timeline-remove" data-entry-id="{{id}}"
+		        aria-label="{{localize "stonetop.timeline.removeEntry"}}"
+		        data-tooltip="{{localize "stonetop.timeline.removeEntry"}}"
+		        data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>
+	</div>
+	{{/if}}
+</li>

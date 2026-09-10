@@ -21,6 +21,7 @@ Where our filename differs from the original, the game-icons.net source name is 
 | hazard-sign.svg | Threats & Dangers | hazard-sign | Lorc | https://lorcblog.blogspot.com |
 | hearts.svg | Relationships | hearts | Skoll | https://game-icons.net |
 | relationship-map.svg | Relationship Map | checkbox-tree | Lorc | https://lorcblog.blogspot.com |
+| hourglass.svg | Timeline | hourglass | Lorc | https://lorcblog.blogspot.com |
 | crossed-swords.svg | Stats (NPC), Overview (character) | crossed-swords | Lorc | https://lorcblog.blogspot.com |
 | direction-signs.svg | Expeditions | direction-signs | Delapouite | https://delapouite.com |
 | settings-knobs.svg | Preferences | settings-knobs | Delapouite | https://delapouite.com |

@@ -1,6 +1,7 @@
 import { runStartupMigrations } from "./PbtaSheetConfig.js";
 import { theGmToolkit, createGmToolkit, isGmToolkitData, GM_TOOLKIT_DEFAULT_IMG } from "../actors/gmtoolkit/gm-toolkit-actor.js";
 import { openRelationshipMap } from "../dialogs/RelationshipMapWindow.js";
+import { openTimelineWindow } from "../dialogs/TimelineWindow.js";
 import { canCreateRelationshipMap, ensureRelationshipMapFolder, listRelationshipMaps } from "../relmap/relmap-doc.js";
 import { promptForNewRelationshipMap } from "../relmap/relmap-make.js";
 import { defaultBoard } from "../relmap/relmap-last.js";
@@ -416,6 +417,15 @@ export async function onReady() {
 	// asks which one; pass a name or an id to go straight there.
 	//   game.stonetop.openRelationshipMap("The people of Stonetop")
 	game.stonetop.openRelationshipMap = (which) => _openRelationshipMap(which);
+	// The whole campaign on one timeline: Stonetop's thread and every character's, side by side
+	// under one column of seasons. OUTSIDE any GM gate, on the same reading as the map above it --
+	// the record is the table's, not the GM's.
+	//
+	// NO HOTBAR MACRO GOES WITH THIS, and that is a decision rather than an omission: slots 1-10
+	// are all spoken for, and the timeline already has two doors that the macros do not (a tab on
+	// the steading sheet and one on every character sheet, each with a button through to here).
+	// This entry is what lets a GM who wants it on the bar make their own.
+	game.stonetop.openTimeline = () => openTimelineWindow();
 	// Create a blank homebrew arcanum world Item and open its editor. Minor by default;
 	// pass { major: true } for a major. Callable from a macro/console/hotbar:
 	//   game.stonetop.createArcanum({ name: "My Charm" })

@@ -483,7 +483,16 @@ describe("the sheet's own wiring", () => {
 		// Order is the whole of it: detaching happens in `_render` BEFORE `super._render` throws
 		// the old body away, and the board goes back at the FOOT of the same method. Reversed, or
 		// either half missing, the board is orphaned on the first re-render.
-		expect(SHEET).toMatch(/detachRelmapTab\(this\);\s*\n\s*await super\._render\(force, options\);/);
+		//
+		// Asserted as an ORDER rather than as adjacency: the timeline tab detaches in the same
+		// place for the same reason, and pinning these two lines as neighbours made this test fail
+		// on a change that was correct. What matters is that nothing has moved the detach below
+		// the super call, so both positions are read and compared.
+		const detachAt = SHEET.indexOf("detachRelmapTab(this);");
+		const replacedAt = SHEET.indexOf("await super._render(force, options);");
+		expect(detachAt, "the board is never detached").toBeGreaterThan(-1);
+		expect(replacedAt, "_render never calls super").toBeGreaterThan(-1);
+		expect(detachAt).toBeLessThan(replacedAt);
 		expect(SHEET).toContain("syncRelmapTab(this, this.element?.[0]);");
 	});
 

@@ -69,11 +69,25 @@ describe("steading layout branches", () => {
 	// It sits between Improvements and Notes, which is where the ask put it and where the two
 	// tabs either side of it make sense: what the steading has built, who its people are to each
 	// other, and then the free writing.
+	//
+	// The timeline joined between the map and the notes, on the same reading: the map is who
+	// these people are to each other NOW, the timeline is how they got here, and the notes are
+	// still the free writing at the end.
 	it("puts the map between Improvements and Notes", () => {
 		const order = [...STEADING_MARKUP.matchAll(/tab-nav-item" tab="(\w+)"/g)].map(m => m[1]);
-		expect(order).toEqual(["overview", "moves", "neighbors", "improvements", "relmap", "notes"]);
+		expect(order).toEqual(["overview", "moves", "neighbors", "improvements", "relmap", "timeline", "notes"]);
 		const panels = [...STEADING_MARKUP.matchAll(/"stonetop\.steading-tab-(\w+)"/g)].map(m => m[1]);
-		expect(panels).toEqual(["overview", "moves", "neighbors", "improvements", "relmap", "notes"]);
+		expect(panels).toEqual(["overview", "moves", "neighbors", "improvements", "relmap", "timeline", "notes"]);
+	});
+
+	// Modern only, like the map above it: classic is the sheet as it was before the tab-rail
+	// redesign and does not take new pages.
+	it("gives the timeline tab to modern only", () => {
+		expect(STEADING_MARKUP).toMatch(
+			/\{\{#unless stonetop\.classicLayout\}\}\{\{> "stonetop\.tab-nav-item" tab="timeline"[^}]*\}\}\{\{\/unless\}\}/);
+		expect(STEADING_MARKUP).toContain(
+			'{{#unless stonetop.classicLayout}}{{> "stonetop.steading-tab-timeline"}}{{/unless}}');
+		expect(STEADING_MARKUP.match(/steading-tab-timeline/g), "timeline tab mounts").toHaveLength(1);
 	});
 
 	// The moves sidebar and the moves TAB are the same content in two shapes; rendering both

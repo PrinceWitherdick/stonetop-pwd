@@ -1,0 +1,68 @@
+{{!-- WRITING DOWN ONE THING THAT HAPPENED.
+
+      Four questions in the order somebody actually answers them: when, what, where, and then the
+      account. The date leads because it is the one the timeline needs and the one a reader is
+      least likely to volunteer; the account is last because it is the only one that can run long.
+
+      `pickerHtml` is the Seasons Change picker's own markup, built by season-picker.js and dropped
+      in whole. It is not a partial and must stay triple-stashed: rebuilding those four cards here
+      is how the date question ends up asked in two shapes in one system.
+
+      The place field is an input with a datalist, NOT a select. A party names places the book never
+      did, and a picker of known locations would refuse every one of them. --}}
+<form class="stonetop-timeline-entry" autocomplete="off">
+
+	<section class="stonetop-timeline-entry-when">
+		<h3 class="stonetop-timeline-entry-legend">{{localize "stonetop.timeline.dialog.when"}}</h3>
+		{{{pickerHtml}}}
+	</section>
+
+	<section class="stonetop-timeline-entry-what">
+		<label class="stonetop-timeline-entry-label" for="stonetop-timeline-title">
+			{{localize "stonetop.timeline.dialog.entryTitle"}}
+		</label>
+		<input id="stonetop-timeline-title" type="text" class="stonetop-timeline-entry-title"
+		       value="{{entryTitle}}" autocomplete="off"
+		       placeholder="{{localize "stonetop.timeline.dialog.entryTitlePlaceholder"}}">
+
+		<label class="stonetop-timeline-entry-label" for="stonetop-timeline-place">
+			{{localize "stonetop.timeline.dialog.place"}}
+		</label>
+		{{!-- A DROP ZONE as well as a field. Drop a location, a scene or an NPC on it and the entry
+		      remembers WHICH document that place is, so the card prints a real link; type instead and
+		      it stays a plain name, which is what most places a party names actually are.
+		      The `is-linked` class is put on and taken off by the dialog, not rendered from here:
+		      typing in the field breaks the link, and that happens without a re-render. --}}
+		<div class="stonetop-timeline-entry-place-zone{{#if placeLinked}} is-linked{{/if}}">
+			<input id="stonetop-timeline-place" type="text" class="stonetop-timeline-entry-place"
+			       value="{{place}}" autocomplete="off" list="stonetop-timeline-places"
+			       placeholder="{{localize "stonetop.timeline.dialog.placePlaceholder"}}">
+			<span class="stonetop-timeline-entry-linked"
+			      data-tooltip="{{localize "stonetop.timeline.dialog.placeLinkedTooltip"}}">
+				<i class="fas fa-link" aria-hidden="true"></i>
+				<span class="stonetop-timeline-entry-linked-text">{{localize "stonetop.timeline.dialog.placeLinked"}}</span>
+			</span>
+		</div>
+		<datalist id="stonetop-timeline-places">
+			{{#each places}}<option value="{{this}}"></option>{{/each}}
+		</datalist>
+		<p class="stonetop-timeline-entry-hint">{{localize "stonetop.timeline.dialog.placeDropHint"}}</p>
+
+		<label class="stonetop-timeline-entry-label" for="stonetop-timeline-body">
+			{{localize "stonetop.timeline.dialog.body"}}
+		</label>
+		<textarea id="stonetop-timeline-body" class="stonetop-timeline-entry-body" rows="6"
+		          placeholder="{{localize "stonetop.timeline.dialog.bodyPlaceholder"}}">{{body}}</textarea>
+		<p class="stonetop-timeline-entry-hint">{{localize "stonetop.timeline.dialog.bodyDropHint"}}</p>
+	</section>
+
+	{{!-- Affirmative on the LEFT, which is this system's own button order. --}}
+	<footer class="stonetop-timeline-entry-actions">
+		<button type="button" class="stonetop-cta stonetop-timeline-entry-save">
+			{{localize "stonetop.timeline.dialog.save"}}
+		</button>
+		<button type="button" class="stonetop-timeline-entry-cancel">
+			{{localize "stonetop.timeline.dialog.cancel"}}
+		</button>
+	</footer>
+</form>

@@ -15879,6 +15879,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .stonetop-tab-rail .item[data-tab="neighbors"]     { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/three-friends.svg'); }
 .stonetop-tab-rail .item[data-tab="improvements"]  { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hammer-nails.svg'); }
 .stonetop-tab-rail .item[data-tab="relmap"]        { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/relationship-map.svg'); }
+.stonetop-tab-rail .item[data-tab="timeline"]      { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hourglass.svg'); }
 .stonetop-tab-rail .item[data-tab="threats"]       { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hazard-sign.svg'); }
 /* No row for `sites`: it is a section at the foot of the Expeditions panel now, not a tab, so
    nothing on any sheet renders `data-tab="sites"`. `site-mound.svg` itself stays in the tree —
@@ -16076,9 +16077,13 @@ button.stonetop-mark-sign-btn.is-active:hover {
 
 /* notes manages its own internal scroll (prose-mirror), so leave it out, and so does the
    relationship map, whose board is panned and zoomed inside a viewport that clips rather than
-   scrolls (see the pair of rules below the container-query one).
+   scrolls (see the pair of rules below the container-query one). The timeline is the third: its
+   panel scrolls under a pinned toolbar, and it has to be named HERE rather than merely overridden
+   further down, because each `:not()` adds specificity — this selector is (0,6,0) and the
+   timeline's own is (0,5,0), so an override alone would quietly lose and nest two scrollbars down
+   one column.
    Scrollbar hidden but the tab still scrolls — see the matching character-sheet rule. */
-.steading-sheet .sheet-body > .tab.active:not(.notes):not(.relmap) {
+.steading-sheet .sheet-body > .tab.active:not(.notes):not(.relmap):not(.timeline) {
 	height: 100%;
 	overflow-y: auto;
 	overflow-x: hidden;
@@ -43679,6 +43684,486 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 }
 
 .stonetop-person-picker-foot { flex: 0 0 auto; }
+
+/* ══ The narrative timeline ══════════════════════════════════════════════════════════════
+   One thread of the campaign, drawn down a spine: Stonetop's own, or one character's. The
+   same markup serves three hosts (the tab on either sheet, the pop-out window, and the
+   journal page a track reads back as), and the aggregate lays every thread out side by side
+   under one shared column of seasons. See module/timeline/ and module/dialogs/TimelineWindow.js.
+
+   ⚠ NO SEASON INKS ANYWHERE IN THIS BLOCK, and that is a rule rather than an oversight. The
+   four `--stonetop-season-*-ink` tokens belong to the steading header's clock and nothing
+   else; a test in steading-header-season.test.js tallies every read of them in this whole
+   stylesheet and fails on a fifth. A period here is told apart by its season's NAME and by
+   the `.stonetop-season-entry` glyph the location journals already use, which carries the
+   picture without spending the ink. The only warmth used is the neutral `--st-warm-hover-bg`.
+   ═════════════════════════════════════════════════════════════════════════════════════ */
+
+/* -- What the tab has to give it: A DEFINITE HEIGHT ---------------------------
+   `.stonetop-timeline` is a two-row grid whose lower row is `1fr` and is the only thing that
+   scrolls, so the toolbar stays pinned while a campaign's worth of entries moves under it.
+   An indefinite chain anywhere above resolves that row to zero and the symptom is a toolbar
+   with nothing under it. The chain is `.sheet-body` > `.tab.active.timeline` > `.sheet-tab`
+   > `.stonetop-timeline`, and each of the middle two has to say `height: 100%` out loud.
+
+   `overflow: hidden` on the tab, NOT `auto`. Both sheets give every other tab its own
+   scrollport (`.tab.active:not(.notes)`), and inheriting that here would nest two scrollbars
+   down one column: the tab's, which moves the toolbar off the top of the page, and the
+   panel's, which is the one that should move. On the CHARACTER sheet this ties that rule on
+   specificity and sits later in the file, which is what makes it win (see the BEM ordering note).
+   The STEADING's rule carries one more `:not()` and so outranks anything written here — it
+   excludes `.timeline` by name instead, up where that rule is. */
+.pbta.sheet.actor.character .stonetop-sheet-layout .sheet-body > .tab.active.timeline,
+.steading-sheet .sheet-body > .tab.active.timeline {
+	height: 100%;
+	overflow: hidden;
+}
+
+.pbta.sheet.actor.character .tab.timeline .sheet-tab,
+.steading-sheet .tab.timeline .sheet-tab {
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.stonetop-timeline-mount {
+	height: 100%;
+}
+
+/* -- The frame ---------------------------------------------------------------- */
+
+.stonetop-timeline {
+	height: 100%;
+	display: grid;
+	/* The toolbar, then everything else. `1fr` and not `auto`: an auto row sizes to the
+	   content and pushes the scroll out to whatever holds this instead. */
+	grid-template-rows: auto 1fr;
+	min-height: 0;
+	color: var(--st-text-body);
+}
+
+.stonetop-timeline-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--st-card-rule);
+}
+
+/* The toolbar's quieter controls: the door through to the aggregate, and the auto-rows toggle.
+   Not CTAs -- there is one primary action on this page and it is New Entry. */
+.stonetop-timeline-open-full,
+.stonetop-timeline-auto-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 10px;
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius-sm);
+	background: transparent;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+	white-space: nowrap;
+	width: auto;
+}
+
+.stonetop-timeline-open-full:hover,
+.stonetop-timeline-auto-toggle:hover {
+	border-color: var(--st-slate-hover-border);
+	background: var(--st-slate-hover-bg);
+	color: var(--st-text);
+}
+
+/* The toggle sits at the far end, away from the two controls that DO something to the record:
+   it changes only what this reader is shown. */
+.stonetop-timeline-auto-toggle {
+	margin-left: auto;
+}
+
+/* On, said in the ink rather than in the label: the label already says what pressing it will do
+   next, so the state has to be carried by something else or the button reads as its own opposite. */
+.stonetop-timeline-auto-toggle.is-on {
+	border-color: var(--st-blue-border);
+	background: var(--st-blue-bg);
+	color: var(--st-blue-text);
+}
+
+/* The one scrollport. `min-height: 0` is load-bearing on a grid child: without it the row
+   refuses to shrink below its content and the scrollbar never appears. */
+.stonetop-timeline-scroll {
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 12px;
+}
+
+/* Nothing written down yet, or a thread with no page. Centred rather than parked at the top:
+   there is nothing else on this page to read, so the invitation IS the page.
+   ⚠ In a scrolling box, centre with `margin: auto` only. `justify-content: center` on an
+   overflowing flex column hides the overflow above the fold with no way to reach it. */
+.stonetop-timeline-invite {
+	max-width: 46ch;
+	margin: auto;
+	padding: 32px 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	text-align: center;
+}
+
+.stonetop-timeline-invite-lead {
+	margin: 0;
+	font-size: var(--st-fs-lg);
+	color: var(--st-text);
+}
+
+.stonetop-timeline-invite-hint {
+	margin: 0;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
+
+/* -- One season, on a single track -------------------------------------------- */
+
+.stonetop-timeline-period + .stonetop-timeline-period {
+	margin-top: 18px;
+}
+
+.stonetop-timeline-period-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 8px;
+}
+
+.stonetop-timeline-period-title {
+	margin: 0;
+	border: none;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-lg);
+	color: var(--st-text);
+}
+
+/* THE SPINE. A rule down the left of the season's cards, with each card marked on it by the
+   dot below. Drawn as a border on the list rather than as a pseudo-element on the block, so
+   it starts and stops exactly where the cards do and a season with one entry gets a stub
+   rather than a full-height line with nothing beside it. */
+.stonetop-timeline-cards {
+	list-style: none;
+	margin: 0 0 0 13px;
+	padding: 2px 0 2px 22px;
+	border-left: 2px solid var(--st-card-rule);
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+/* -- One entry ----------------------------------------------------------------- */
+
+.stonetop-timeline-card {
+	position: relative;
+	padding: 10px 12px;
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius);
+	background: var(--st-card-fill);
+}
+
+/* The card's mark on the spine. Centred on the border the list draws, which is 22px of
+   padding plus the card's own 1px edge away to the left. */
+.stonetop-timeline-card::before {
+	content: "";
+	position: absolute;
+	left: -28px;
+	top: 14px;
+	width: 9px;
+	height: 9px;
+	border-radius: 999px;
+	border: 2px solid var(--st-card-rule);
+	background: var(--stonetop-bg);
+}
+
+/* A row the system recorded for itself rather than one somebody typed. Quieter ink and a
+   dashed edge, so a reader can always tell the record from the bookkeeping without reading
+   a word of it. */
+.stonetop-timeline-card--auto {
+	border-style: dashed;
+	background: transparent;
+	color: var(--st-text-secondary);
+}
+
+.stonetop-timeline-card--auto::before {
+	background: var(--st-card-rule);
+}
+
+.stonetop-timeline-card-badge {
+	float: right;
+	margin-left: 8px;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-2xs);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--st-text-faint);
+}
+
+.stonetop-timeline-card-title {
+	margin: 0;
+	border: none;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-md);
+	color: var(--st-text);
+}
+
+.stonetop-timeline-card-place {
+	margin: 2px 0 0;
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-muted);
+}
+
+.stonetop-timeline-card-body {
+	margin-top: 6px;
+	font-size: var(--st-fs-sm);
+}
+
+.stonetop-timeline-card-body > :first-child { margin-top: 0; }
+.stonetop-timeline-card-body > :last-child  { margin-bottom: 0; }
+
+/* The per-entry controls, revealed on hover the way the wound rows and the roster rows are.
+   Kept in the flow rather than absolutely placed: an entry with a long account would
+   otherwise have its controls floating over the last line of it.
+   `:focus-within` as well as `:hover`, or the row is unreachable by keyboard. */
+.stonetop-timeline-card-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 2px;
+	margin-top: 6px;
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+
+.stonetop-timeline-card:hover .stonetop-timeline-card-actions,
+.stonetop-timeline-card:focus-within .stonetop-timeline-card-actions {
+	opacity: 1;
+}
+
+.stonetop-timeline-card-actions button {
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	line-height: 1;
+	border: 1px solid transparent;
+	border-radius: var(--st-radius-sm);
+	background: transparent;
+	color: var(--st-text-muted);
+}
+
+.stonetop-timeline-card-actions button:hover {
+	border-color: var(--st-slate-hover-border);
+	background: var(--st-slate-hover-bg);
+	color: var(--st-text);
+}
+
+/* -- The aggregate: every thread under one column of seasons ------------------- */
+
+/* THE COLUMNS ARE FLEX AND NOT GRID, because the number of threads is a fact about the
+   world rather than about this stylesheet. Every lane takes `flex: 1 1 0` and the season
+   gutter is a fixed width, so the header row and every season row line up without either
+   of them being told how many characters the table has. */
+.stonetop-timeline-board {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.stonetop-timeline-lane-heads,
+.stonetop-timeline-row {
+	display: flex;
+	align-items: stretch;
+	gap: 10px;
+}
+
+/* The gutter. One width, named once, so the heads row and the season rows cannot drift. */
+.stonetop-timeline-lane-spacer,
+.stonetop-timeline-row-head {
+	flex: 0 0 170px;
+	width: 170px;
+}
+
+.stonetop-timeline-lane-heads {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--st-card-rule);
+	background: var(--stonetop-bg);
+}
+
+.stonetop-timeline-lane-head {
+	flex: 1 1 0;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.stonetop-timeline-lane-portrait {
+	width: 26px;
+	height: 26px;
+	border-radius: 999px;
+	object-fit: cover;
+	border: 1px solid var(--st-card-rule);
+}
+
+.stonetop-timeline-lane-name {
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	color: var(--st-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* The season's own cell, at the head of its row. A neutral warm wash rather than a season
+   colour: see the note at the top of this block. */
+.stonetop-timeline-row-head {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+	padding: 8px 10px;
+	border-radius: var(--st-radius);
+	background: var(--st-warm-hover-bg);
+	color: var(--st-text);
+}
+
+.stonetop-timeline-lane {
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+/* An empty lane is drawn rather than dropped: a blank cell under a name is how the reader
+   sees that thread had a quiet season, and it is what keeps the columns readable as columns. */
+.stonetop-timeline-lane--empty {
+	border-left: 2px dotted var(--st-card-rule);
+}
+
+/* Inside the aggregate the cards hang off their lane, so the single-track spine and its dots
+   would draw a second, meaningless rule down the middle of every column. */
+.stonetop-timeline-board .stonetop-timeline-cards {
+	margin: 0;
+	padding: 0;
+	border-left: none;
+}
+
+.stonetop-timeline-board .stonetop-timeline-card::before {
+	content: none;
+}
+
+/* -- The entry dialog ---------------------------------------------------------- */
+
+.stonetop-timeline-entry {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 4px 2px;
+}
+
+.stonetop-timeline-entry-legend {
+	margin: 0 0 4px;
+	border: none;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-md);
+	color: var(--st-text);
+}
+
+.stonetop-timeline-entry-what {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.stonetop-timeline-entry-label {
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+}
+
+.stonetop-timeline-entry-label:not(:first-child) {
+	margin-top: 6px;
+}
+
+/* ⚠ A textarea in a flex column needs a max as well as its rows, or a long account grows the
+   dialog past the screen: `_autoHeight` re-fits the window to its content on every render. */
+.stonetop-timeline-entry-body {
+	max-height: 220px;
+	resize: vertical;
+}
+
+/* -- Linking a place, and linking into the account -----------------------------
+   The Where field is a drop zone as well as a field: drop a location, a scene or a person on it
+   and the entry remembers WHICH document that place is. The account takes a drop too, where it
+   becomes an @UUID link at the cursor. Both need to LOOK droppable while something is over them,
+   or the affordance exists only in the hint under the field. */
+
+.stonetop-timeline-entry-place-zone {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.stonetop-timeline-entry-place-zone .stonetop-timeline-entry-place {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.stonetop-timeline-entry-place-zone.is-drop-target .stonetop-timeline-entry-place,
+.stonetop-timeline-entry-body.is-drop-target {
+	border-color: var(--st-blue-border);
+	background: var(--st-blue-bg);
+}
+
+/* The link chip. Hidden until there IS a link, rather than greyed: an always-present control that
+   usually means nothing is what makes a reader stop seeing it on the occasions it does. */
+.stonetop-timeline-entry-linked {
+	display: none;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border: 1px solid var(--st-blue-border);
+	border-radius: 999px;
+	background: var(--st-blue-bg);
+	font-size: var(--st-fs-2xs);
+	color: var(--st-blue-text);
+	white-space: nowrap;
+}
+
+.stonetop-timeline-entry-place-zone.is-linked .stonetop-timeline-entry-linked {
+	display: inline-flex;
+}
+
+/* The hint under a field that takes a drop. Quiet: it is an affordance nobody has to use, and the
+   field works perfectly without ever reading it. */
+.stonetop-timeline-entry-hint {
+	margin: 2px 0 0;
+	font-size: var(--st-fs-2xs);
+	color: var(--st-text-faint);
+}
+
+/* A place that IS a document, on the card. Core paints `.content-link` itself; what is set here is
+   only that it sits on the line the way the plain name it replaces did. */
+.stonetop-timeline-card-place .content-link {
+	font-size: inherit;
+}
+
+/* Affirmative on the LEFT, which is this system's own button order. */
+.stonetop-timeline-entry-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 4px;
+}
+
 
 /* ══ ACCESSIBILITY: the paper, and the two switches a reader can turn ══════════════════════
    Driven by two client settings (module/settings.js → applySheetContrast, applySheetTexture),
