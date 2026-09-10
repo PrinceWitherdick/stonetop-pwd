@@ -73,7 +73,7 @@ import { grantsWholeList, paintPickTally, pickLimitFor, releaseOverLimit, tierOf
 import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
-import { wireAttackConfirm, wireApplyDamage, wireSufferAttack } from "./module/combat/attack-flow.js";
+import { wireAttackConfirm, wireApplyDamage, wireSufferAttack, rollOptionDamage } from "./module/combat/attack-flow.js";
 import { markQuestionBullets } from "./module/utils/question-bullets.js";
 import { wrapGlyphTextContainers } from "./module/utils/glyphs.js";
 import { applyJournalSpiralBullets, resolveEntry } from "./module/utils/journal-spiral-bullets.js";
@@ -98,6 +98,7 @@ import { CharacterPossessions } from "./module/actors/character/CharacterPossess
 import { stockSourcesForFlags, defaultStockSource, SACRED_POUCH_SLUG, RITES_OF_THE_LAND } from "./module/actors/character/stock-cost.js";
 import { readProvisionsYield, rollProvisions } from "./module/actors/character/provisions.js";
 import { belongsToMessage, wirePickedOptionButton } from "./module/utils/picked-option-button.js";
+import { readOptionDamage } from "./module/utils/damage.js";
 import { ownedMove } from "./module/actors/character/owns-move.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
@@ -1785,6 +1786,93 @@ async function _onRollProvisions(message, btn, index, pick) {
 	}
 }
 
+// -- A MOVE OPTION THAT DEALS DAMAGE ---------------------------
+/**
+ * Danu's Grasp binds a spirit and offers two things it may pick, and one of them is "They take
+ * 2d4 damage (ignores armor)". That is a whole damage roll the move owes, stated in the move's
+ * own text: no weapon, no damage die, nothing the attack flow knows about. Until this the only
+ * way to pay it was to roll a d4 twice somewhere off-card and hand-edit the target's HP, which
+ * leaves no record of the blow anywhere the table can see.
+ *
+ * So a ticked option that names its own damage grows a button, exactly the way a ticked Forage
+ * option grows the die it owes (_chatWireProvisionsPicks above, whose shape this follows to the
+ * letter). Pressing it rolls onto the shared damage card, with the per-target totals, the armor
+ * fine print and the one Apply button every other damage roll in the system already lands on
+ * (combat/attack-flow.js#rollOptionDamage).
+ *
+ * WHICH OPTIONS QUALIFY IS READ OFF THEIR TEXT (utils/damage.js#readOptionDamage) rather than
+ * listed here, so the Red Scepter's "suffer painful burns (2d4 damage, ignores armor)", the
+ * cracked femur's "take 2d4 damage", and a move a world wrote that burns someone for 1d6 all get
+ * the same button with nobody wiring them up one at a time. What that reader REFUSES is the other
+ * half of the rule: a "+1d4" or a "1d6 extra damage" rides a damage roll you are already making,
+ * and the five attack moves fold theirs into the single Confirm their card carries
+ * (attack-flow.js#PICK_EFFECTS). A second button beside those bullets would be the two-list
+ * miscount over again, in dice this time.
+ *
+ * The button appears only while its option is ticked, because an untaken option owes nothing, and
+ * once thrown it stays put showing what it dealt, whatever happens to the tick afterwards. Untaking
+ * the option does not un-hit anybody: the damage card below it is the record, and its own Apply
+ * button is where HP actually moves.
+ */
+function _chatWireOptionDamage(message, html) {
+	const move = message.getFlag(SYSTEM_ID, "move")
+		|| html.querySelector(".stonetop-chat-move-name")?.textContent?.trim()
+		|| "";
+
+	wirePickedOptionButton(message, html, {
+		flagKey:      "optionDamageRolled",
+		wiredKey:     "optionDamageWired",
+		buttonClass:  "stonetop-option-damage-roll",
+		readoutClass: "stonetop-option-damage-dealt",
+		read:         readOptionDamage,
+		// An option that names a flat number has nothing to throw, and the icon and the verb both
+		// say so rather than offering to "roll" a 3.
+		icon:    dealt => (dealt.isRoll ? "fas fa-dice-d6" : "fas fa-burst"),
+		label:   dealt => `${dealt.isRoll ? " Roll" : " Deal"} ${dealt.formula} damage`,
+		readout: paid => _optionDamageDealtEl(paid.totals),
+		onPress: (btn, index, dealt) => _onRollOptionDamage(message, btn, index, { move, dealt }),
+	});
+}
+
+/** The static readout a rolled option wears from then on: what the blow came to, per target. */
+function _optionDamageDealtEl(totals) {
+	const el = document.createElement("span");
+	el.className = "stonetop-option-damage-dealt";
+	const nums = (Array.isArray(totals) ? totals : [totals]).filter(n => Number.isFinite(Number(n)));
+	el.textContent = `${nums.join(", ") || "0"} damage`;
+	return el;
+}
+
+async function _onRollOptionDamage(message, btn, index, { move, dealt }) {
+	btn.disabled = true;
+	try {
+		const actor = speakerActor(message);
+		if (!actor) {
+			ui.notifications.warn("This card has no character behind it to roll damage for.");
+			btn.disabled = false;
+			return;
+		}
+
+		const results = await rollOptionDamage(actor, { move: move || "Damage", damage: dealt });
+		const totals = (results ?? []).map(r => r.raw);
+		btn.replaceWith(_optionDamageDealtEl(totals));
+
+		// Stamped last: the card that carries the blow is the thing that had to land, and a stamp
+		// written before it would lock out the retry if the post failed. A player who does not own
+		// the message still rolled it; the stamp simply does not stick for them, and the button
+		// comes back on the next render rather than the roll being lost.
+		const done = { ...(message.getFlag(SYSTEM_ID, "optionDamageRolled") ?? {}), [index]: { totals, formula: dealt.formula } };
+		try {
+			await message.setFlag(SYSTEM_ID, "optionDamageRolled", done);
+		} catch (err) {
+			console.warn("Stonetop | could not record the option's damage roll on the card:", err);
+		}
+	} catch (err) {
+		console.error("Stonetop | Error rolling a move option's damage:", err);
+		btn.disabled = false;
+	}
+}
+
 // -- WOULD-BE HERO: BECOME A HERO ------------------------------
 // The first time a Would-Be Hero gains a hero-making (asterisked) move, cross off
 // "Would-be" and announce it once. The playbook header already derives "The Hero"
@@ -1824,6 +1912,10 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// After the picks pass, which is what restores each box's ticked state — the provisions
 	// button is shown or hidden by exactly that.
 	_chatWireProvisionsPicks(message, html);
+	// ...and beside it, on the same ticked bullets and for the same reason: a move option that
+	// states a damage roll is a number the card owes, and a table with no button for it reaches
+	// for a calculator and the target's HP field.
+	_chatWireOptionDamage(message, html);
 	wireDyingPrompt(message, html);
 	wireAttackConfirm(message, html);
 	wireApplyDamage(message, html);

@@ -710,7 +710,7 @@ function postTagReminders(actor, weapon) {
 // Roll damage once per applyable target and post the results card. With no applyable
 // targets, fall back to a single plain damage roll (no Apply button). Tagged weapons
 // (messy / forceful) add follow-up reminder cards either way.
-async function rollAndPostDamage(actor, { move, weapon, targets, counter = false, damage, ignoresArmor = false }) {
+async function rollAndPostDamage(actor, { move, weapon, targets, counter = false, damage, ignoresArmor = false, selfHarm = false }) {
 	// A tier control that ignores armor (Call the Shot's "your call", The Hammer and the Book)
 	// records it ON THE WEAPON the card carries rather than as a second field beside it: the
 	// weapon is the one thing Apply damage reads for armor (wireApplyDamage) and the one thing the
@@ -726,30 +726,102 @@ async function rollAndPostDamage(actor, { move, weapon, targets, counter = false
 	const formula   = damageRollFormula(composeDamageFormula(base, { bonus, extraDice }), rollMode);
 	const applyable = (targets ?? []).filter(t => t.hasActor !== false && t.uuid);
 
+	let results = [];
 	if (applyable.length === 0) {
 		if (!counter) {
-			await rollDamage(base, actor, { label: damageLabel(move, weapon), rollMode, bonus, extraDice });
+			const roll = await rollDamage(base, actor, { label: damageLabel(move, weapon), rollMode, bonus, extraDice });
+			results = [{ raw: roll.total, formula: roll.formula, faces: multiDieFaces(roll) }];
 		} else {
 			// No foe targeted, but the tier (Clash 7-9 / strike-hard) still demands the PC
 			// suffer the counter-attack. Roll the damage for the fiction and post a results
 			// card that carries the Suffer button; with no target its foe die falls back to a
 			// manual incoming-damage prompt. Without this branch the counter is silently lost.
 			const roll = await new Roll(formula).evaluate();
-			const results = [{ raw: roll.total, formula: roll.formula, faces: multiDieFaces(roll) }];
-			await postDamageResultsCard(actor, { move, weapon, results, counter, damage });
+			results = [{ raw: roll.total, formula: roll.formula, faces: multiDieFaces(roll) }];
+			await postDamageResultsCard(actor, { move, weapon, results, counter, damage, selfHarm });
 		}
 	} else {
 		// One damage roll per target — independent, so evaluate them concurrently; they're
 		// aggregated into a single results card, and mapping by index preserves order.
 		const rolls   = await Promise.all(applyable.map(() => new Roll(formula).evaluate()));
-		const results = applyable.map((t, i) => ({
+		results = applyable.map((t, i) => ({
 			uuid: t.uuid, name: t.name, actorId: t.actorId, disposition: t.disposition,
 			raw: rolls[i].total, formula: rolls[i].formula, faces: multiDieFaces(rolls[i]),
 		}));
-		await postDamageResultsCard(actor, { move, weapon, results, counter, damage });
+		await postDamageResultsCard(actor, { move, weapon, results, counter, damage, selfHarm });
 	}
 
 	await postTagReminders(actor, weapon);
+	// The totals, for a caller that has to say on its own surface what the roll came to: the
+	// button on a ticked option turns into the number it dealt (stonetop.js#_chatWireOptionDamage).
+	// Every branch above fills this, the single-target one included, so a caller never has to know
+	// which of the three it took.
+	return results;
+}
+
+/**
+ * Roll the damage a move's PRINTED OPTION owes, and post it on the shared damage card.
+ *
+ * Danu's Grasp's "They take 2d4 damage (ignores armor)" is a whole damage roll with no weapon and
+ * no attack behind it: the move says the number itself. The five attack moves reach this card
+ * through {@link rollAndPostDamage} after a weapon pick and a damage window; an option reaches it
+ * with the number already stated, so nothing is asked and the button is one click.
+ *
+ * IT IS THE SAME CARD, deliberately. Per-target totals, the red burst, the formula chip, the
+ * armor fine print and the one Apply button that subtracts HP and cannot subtract it twice are
+ * all things a damage number needs whatever produced it, and a second card built alongside them
+ * would be a second place for the armor math to go quietly wrong.
+ *
+ * THE DAMAGE WINDOW IS NOT ASKED. `promptDamage` exists for the bonuses the fiction switches on
+ * and the sheet cannot know about (the Storm Markings' "+1 while you roil with anger", a spent
+ * Fury's "+1d6"), and every one of those rides YOUR damage die. A move's printed 2d4 is the
+ * move's own number, not yours, so there is nothing for those bonuses to attach to. See
+ * dialogs/RollDialog.js#promptDamage, whose four surfaces this is deliberately not a fifth of.
+ *
+ * @param {Actor} actor  whoever is speaking the card the option was ticked on
+ * @param {object} options
+ * @param {string} options.move    the move's name, for the card's title
+ * @param {ReturnType<typeof readOptionDamage>} options.damage  what the option's own words said
+ */
+export async function rollOptionDamage(actor, { move, damage }) {
+	const { formula, self = false, ignoresArmor = false, piercing = 0, tags = [] } = damage ?? {};
+	if (!actor || !formula) return null;
+
+	// A NAMELESS WEAPON, carrying only what the option's words said about armor and fiction. The
+	// card reads its armor fine print and Apply reads its piercing off exactly this record
+	// (wireApplyDamage), and the messy / forceful reminders ride its tags, so an option that says
+	// "1d10 damage, messy, ignores armor" behaves like a weapon that says the same three things.
+	// The empty name is what keeps the card's title from reading "Danu's Grasp: " with nothing
+	// after the colon (see damageLabel).
+	const weapon = { name: "", range: [], piercing, ignoresArmor, tags };
+
+	return rollAndPostDamage(actor, {
+		move, weapon, selfHarm: self, ignoresArmor,
+		// WHOSE HP. An option that says "they take" is aimed at whatever the player has targeted,
+		// the same snapshot every attack takes; one that says "take 2d4 damage" in a sentence
+		// about your own heat being sucked away is aimed at the character who picked it. Nothing
+		// is subtracted on the strength of that reading: the card names who it is pointing at and
+		// waits for the deliberate second click on the button.
+		targets: self ? [selfTarget(actor)] : snapshotTargets(),
+		// The number is the move's, whole. No adv/dis, no bonus, no extra dice, so the card's
+		// conditions row stays empty and its formula chip says exactly what the bullet says.
+		damage: { base: formula, rollMode: "normal", bonus: 0, extraDice: "" },
+	});
+}
+
+/**
+ * The acting character as a target of their own option.
+ *
+ * The ACTOR uuid, not a token's: a self-harming option is picked on a card, which may well be
+ * open with no token of that character on the current scene (or with several, on a scene the
+ * player is not looking at). `wireApplyDamage` resolves either shape.
+ *
+ * Disposition 0 rather than friendly, because the "(friendly)" marker on a damage row is a
+ * warning that you are about to hurt an ally by mistake, and this is the one damage row where
+ * hurting the person named on it is the entire point.
+ */
+function selfTarget(actor) {
+	return { uuid: actor.uuid, name: actor.name, actorId: actor.id, disposition: 0, hasActor: true };
 }
 
 // The fine print a bare number can't carry: which weapon rolled it, and whether armor
@@ -762,7 +834,7 @@ function damageRowDetail(weapon) {
 	return [escHtml(weapon.name), ...weaponArmorBits(weapon)].filter(Boolean).join(" · ");
 }
 
-function postDamageResultsCard(actor, { move, weapon, results, counter, damage }) {
+function postDamageResultsCard(actor, { move, weapon, results, counter, damage, selfHarm = false }) {
 	const multiWarn = results.length > 1 && !weapon?.area
 		? `<p class="stonetop-attack-warn"><i class="fas fa-triangle-exclamation"></i> ${escHtml(move)} is a single-foe move: applying to multiple targets is a GM abstraction.</p>`
 		: "";
@@ -800,12 +872,18 @@ function postDamageResultsCard(actor, { move, weapon, results, counter, damage }
 	// single damage roll's card (roll-engine#damageConditionPills).
 	const adjustHtml = conditionsRowHtml(damageConditionPills(damage ?? {}));
 
+	// THE BUTTON NAMES ITS OUTCOME, and here that is two different outcomes. "Apply damage" is a
+	// GM subtracting HP from the foes a player just struck; the same button on an option that
+	// burns the person who picked it ("take 2d4 damage (ignores armor)") is that player taking
+	// their own hit, and offering them a card that says "Apply damage" reads as work waiting on
+	// somebody else. Same button, same wiring, same idempotency latch (see wireApplyDamage, which
+	// lets the owner of every pending target press it).
 	const body = `<div class="card-content">
 		${rollFormulaChip(results[0]?.formula ?? "", chipFaces)}
 		${multiWarn}
 		<ul class="stonetop-damage-list">${rows}</ul>
 		<div class="card-buttons stonetop-card-buttons stonetop-attack-actions">
-			${hasApplyable ? `<button type="button" class="stonetop-attack-btn stonetop-apply-damage"><i class="fas fa-heart-crack"></i> Apply damage</button>` : ""}
+			${hasApplyable ? `<button type="button" class="stonetop-attack-btn stonetop-apply-damage"><i class="fas fa-heart-crack"></i> ${selfHarm ? "Take this damage" : "Apply damage"}</button>` : ""}
 			${counter ? sufferBtn() : ""}
 		</div>
 	</div>${adjustHtml}`;
@@ -819,7 +897,7 @@ function postDamageResultsCard(actor, { move, weapon, results, counter, damage }
 			// `applied` is an ARRAY, not a uuid-keyed object: a token uuid ("Scene.x.Token.y")
 			// used as a flag key would be dot-expanded into nested objects by setFlag, breaking
 			// the idempotency lookup so a second click re-subtracts HP.
-			results, applied: [],
+			results, applied: [], selfHarm,
 		} } },
 	});
 }
@@ -1030,31 +1108,139 @@ async function depleteAmmoAndPost(message, pc, attack) {
 	pc.sheet?.render(false);
 }
 
-// "Apply damage" on the results card — GM-only. Writes each target's HP, mitigating by
-// armor/piercing at apply time. Idempotent: an `applied` map keyed by token uuid means a
-// second click (or a second GM) only fills targets not yet done.
+/**
+ * The actor a damage row is aimed at, off the uuid the card froze at roll time.
+ *
+ * TWO SHAPES, because the two things that produce this card point at different documents. An
+ * attack targets TOKENS (an unlinked monster has to hit its own synthetic actor, not the shared
+ * prototype it was stamped from), while a move option that burns the person who picked it points
+ * at the CHARACTER, who may have no token on the scene anyone is currently looking at. A reader
+ * that only unwrapped a token document answered null for the second and left the button on a card
+ * it could never enact.
+ */
+function damageRowActor(doc) {
+	return doc?.documentName === "Actor" ? doc : (doc?.actor ?? null);
+}
+
+/**
+ * Whether THIS user may press Apply on every target still owing damage.
+ *
+ * Damage to a foe is a GM action and stays one: players do not own enemy tokens and the system
+ * has no socket relay, so a player's click could not write that HP even if the button offered to.
+ * What changed is that not every damage card is aimed at a foe. An option that reads "take 2d4
+ * damage (ignores armor)" is aimed at the character who picked it, and its player owns that
+ * actor: hiding the button from them would leave the one person who can act on the card looking
+ * at no button at all, waiting on a GM who has nothing to do.
+ *
+ * EVERY pending target, not any. A card the player half-owns is a card where pressing the button
+ * would silently skip the rows they cannot write, which reads as damage applied when it was not.
+ *
+ * `isOwner` is asked only down the non-GM path, and that is not an accident: a GM owns every
+ * actor in the world, so the answer up there is always true and means nothing (see the project's
+ * isowner-always-true-for-gm note). The GM's own right to press this comes from being the GM.
+ */
+function ownsEveryTarget(results) {
+	if (!results?.length) return false;
+	return results.every(r => {
+		let doc = null;
+		// `strict: false` because a uuid can outlive what it points at: a token deleted mid-fight,
+		// a scene closed. A throw here would take the whole render pass down with it.
+		try { doc = fromUuidSync(r.uuid, { strict: false }); } catch { return false; }
+		return !!damageRowActor(doc)?.isOwner;
+	});
+}
+
+/**
+ * Which ONE of the people looking at this card is the one whose click writes the HP.
+ *
+ * ⚠ THE `applied` LATCH DOES NOT SETTLE THIS. It is written AFTER the HP writes, which makes a
+ * SECOND click harmless but not a SIMULTANEOUS one: two clients that press within one round trip
+ * both read an empty latch and both subtract. That is exactly why the several-GMs case was gated
+ * on `isPrimaryGM` from the start -- and a player pressing their own self-harm card is the same
+ * case again, because the primary GM's copy of that card is live at the same moment.
+ *
+ * THE RULE: a card every one of whose pending targets is owned by a CONNECTED player belongs to
+ * that player. Anything else -- a foe, or a player who has logged off -- belongs to the primary
+ * GM, exactly as before. The lowest user id of the owners wins, so every client elects the same
+ * one without anybody having to talk to anybody (a co-owned character has two of them).
+ *
+ * The one cost: a player who disconnects AFTER their card was drawn leaves the GM's button
+ * deferring to somebody no longer there until that card next re-renders. A stuck button is worth
+ * more than HP subtracted twice, and any write to the message redraws it.
+ *
+ * @returns {string|null} the elected player's user id, or null for "the primary GM's".
+ */
+function electedApplier(results) {
+	const actors = [];
+	for (const r of results ?? []) {
+		let doc = null;
+		// `strict: false` and a try, as in `ownsEveryTarget`: a uuid can outlive what it points at,
+		// and a throw here would take the whole render pass down with it.
+		try { doc = fromUuidSync(r.uuid, { strict: false }); } catch { return null; }
+		const actor = damageRowActor(doc);
+		if (!actor) return null;
+		actors.push(actor);
+	}
+	if (!actors.length) return null;
+	const owners = (game.users?.players ?? [])
+		.filter(u => u.active && actors.every(a => a.testUserPermission?.(u, "OWNER")))
+		.map(u => u.id)
+		.sort();
+	return owners[0] ?? null;
+}
+
+// "Apply damage" on the results card. Writes each target's HP, mitigating by armor/piercing at
+// apply time. Idempotent: an `applied` map keyed by token uuid means a second click only fills
+// targets not yet done. The GM presses it for damage dealt to foes; a player presses it for an
+// option that damages their own character (see ownsEveryTarget). Exactly one of them has a live
+// button at a time, which is `electedApplier`'s business and not the latch's.
 export function wireApplyDamage(message, html) {
 	const root = html?.[0] ?? html;
 	const btn = root.querySelector(".stonetop-apply-damage");
 	if (!btn) return;
-
-	if (!game.user.isGM) { btn.style.display = "none"; return; }
-	// With several GMs connected, only the primary GM's click enacts, so two GMs can't
-	// both subtract HP before the applied-flag propagates.
-	if (!isPrimaryGM()) {
-		btn.disabled = true;
-		btn.title = "Another GM will apply this damage";
-		return;
-	}
 
 	const damage = message.getFlag(SCOPE, "damage");
 	if (!damage) { btn.disabled = true; return; }
 
 	const appliedUuids = new Set((Array.isArray(damage.applied) ? damage.applied : []).map(a => a.uuid));
 	const pending = damage.results.filter(r => !appliedUuids.has(r.uuid));
+
+	const owed = pending.length ? pending : damage.results;
+	const applier = electedApplier(owed);
+
+	if (!game.user.isGM) {
+		if (!ownsEveryTarget(owed)) { btn.style.display = "none"; return; }
+		// The latch that stops the same damage being taken twice lives on the MESSAGE, and a player
+		// does not own a card the GM authored. Say so rather than letting the click write HP and
+		// then fail to record that it did (the same affordance the Suffer button wears).
+		if (!message.isOwner) {
+			btn.disabled = true;
+			btn.title = "Ask the GM to apply this damage";
+			return;
+		}
+		// A co-owned character: both players own every row, and both buttons would subtract.
+		if (applier && applier !== game.user.id) {
+			btn.disabled = true;
+			btn.title = "Another player will take this damage";
+			return;
+		}
+	} else if (!isPrimaryGM()) {
+		// With several GMs connected, only the primary GM's click enacts, so two GMs can't
+		// both subtract HP before the applied-flag propagates.
+		btn.disabled = true;
+		btn.title = "Another GM will apply this damage";
+		return;
+	} else if (applier) {
+		// A card aimed at somebody's own character, with that somebody at the table: theirs to
+		// press, and the GM's copy has to stand down or both clicks land (see electedApplier).
+		btn.disabled = true;
+		btn.title = `${game.users?.get?.(applier)?.name ?? "The owning player"} will take this damage`;
+		return;
+	}
+
 	if (pending.length === 0) {
 		btn.disabled = true;
-		btn.innerHTML = '<i class="fas fa-check"></i> Damage applied';
+		btn.innerHTML = `<i class="fas fa-check"></i> ${damage.selfHarm ? "Damage taken" : "Damage applied"}`;
 		return;
 	}
 
@@ -1067,7 +1253,7 @@ export function wireApplyDamage(message, html) {
 		for (const r of current.results) {
 			if (doneUuids.has(r.uuid)) continue;
 			const td = await fromUuid(r.uuid);
-			const targetActor = td?.actor ?? null;
+			const targetActor = damageRowActor(td);
 			if (!targetActor) { lines.push(`<li><strong>${escHtml(r.name)}</strong>: no longer on the map</li>`); continue; }
 			const armor = Number(targetActor.system?.attributes?.armor?.value) || 0;
 			const effective = mitigateDamage(r.raw, { armor, piercing, ignoresArmor: current.weapon?.ignoresArmor });

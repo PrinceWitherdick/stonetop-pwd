@@ -8060,7 +8060,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	content: none;
 }
 
-/* -- Forage: the die a ticked option owes ----------------------- */
+/* -- The die a ticked option owes: Forage's provisions, and a move option's damage -- */
 /* Sits under its option rather than beside it, indented to the text: the options wrap freely at
    chat width, and a button on the same line would be pushed wherever the last word ended. The
    left offset is the checkbox plus the label's gap, so the button hangs off the words it belongs
@@ -8068,7 +8068,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    Marked hidden by the wiring in stonetop.js until the option is actually ticked. */
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
-	.stonetop-provisions-roll {
+	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll) {
 	display: block;
 	margin: 3px 0 5px 22px;
 	width: auto;
@@ -8083,18 +8083,18 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 }
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
-	.stonetop-provisions-roll:hover {
+	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll):hover {
 	background: var(--st-btn-primary-bg-hover);
 	border-color: var(--st-btn-primary-border-hover, var(--st-btn-primary-border));
 }
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
-	.stonetop-provisions-roll[hidden] {
+	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll)[hidden] {
 	display: none;
 }
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
-	.stonetop-provisions-roll:disabled {
+	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll):disabled {
 	opacity: 0.55;
 	cursor: default;
 }
@@ -8108,6 +8108,19 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	font-size: 0.85em;
 	font-weight: bold;
 	color: var(--st-green-text);
+}
+/* What the blow came to, once it has been thrown. The damage ink rather than the green above:
+   green on this card would read as a good outcome for the person whose name is under it, and
+   the number is already saying the opposite. Same place, same size, so a row that has settled
+   reads the same whichever kind of option settled it. */
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
+	.stonetop-option-damage-dealt {
+	display: block;
+	margin: 1px 0 4px 22px;
+	font-size: 0.85em;
+	font-weight: bold;
+	color: var(--st-red-text);
 }
 
 /* Special possessions — 2-column card list, matching the Moves tab

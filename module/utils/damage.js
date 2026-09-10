@@ -114,3 +114,106 @@ export async function applyDamageToActor(targetActor, amount, updateOptions = {}
 	if (newHp !== oldHp) await targetActor.update({ "system.attributes.hp.value": newHp }, updateOptions);
 	return { oldHp, newHp };
 }
+
+/**
+ * A printed option that DEALS damage, read out of the option's own words.
+ *
+ * Danu's Grasp's 7-9 is "roots, vines, and earth pull at them, and they pick 1", and one of the
+ * two things they may pick is "They take 2d4 damage (ignores armor)". That is a whole damage
+ * roll the move owes, stated in the move's own text and nowhere else: no weapon, no damage die,
+ * no attack flow. Until this, the only way to pay it was to open a calculator, roll a d4 twice in
+ * your head, and hand-edit the target's HP, which leaves no record on any card.
+ *
+ * TEXT-MATCHED, not declared, for the same reason `provisions.js#readProvisionsYield` is: the
+ * line IS the book's own wording, it appears on a move card, on an arcanum's back and in a
+ * treasure's list of outcomes, and a table that has reworded any of them (or written a homebrew
+ * move that burns someone for 1d6) gets the same button without anyone wiring it up one at a time.
+ *
+ * WHAT IT REFUSES, and why each refusal matters:
+ *
+ * A BONUS ON A ROLL YOU ARE ALREADY MAKING. "Deal +1d4 damage" (Ambush), "Deal +1d6 damage" (The
+ * Hammer and the Book), "for 1d6 extra damage" (Clash), "Ignore armor or deal +1d4 damage" (Call
+ * the Shot), "Add 1d6 to a damage roll they just made" (We Happy Few), "you take +1d6 damage"
+ * (the Redwood Effigy). None of those is a roll of its own: the five attack moves already fold
+ * theirs into the one Confirm button their card carries (combat/attack-flow.js#PICK_EFFECTS), and
+ * offering a second button beside the bullet would be the two-list miscount all over again, in
+ * dice this time. The `+` and the word "extra" are what the book uses to say "on top of", so they
+ * are what is read.
+ *
+ * A NUMBER THAT IS NOT BEING DEALT TO ANYONE. The Ring of Daagon's summoning table prints
+ * "1 = horde (2d6, HP 3, d6 damage)", and the Mindgem's "its damage becomes 1d10+5" is a weapon
+ * being rewritten. Both name a die beside the word damage and neither is a blow anybody is
+ * striking now, so a VERB is required as well: someone has to take, suffer, deal or lose it.
+ *
+ * WHO TAKES IT is read off the pronouns, because it decides which side of the table the card
+ * points at. "They take 2d4 damage" is the foe you just bound; "take 2d4 damage (ignores armor)
+ * and mark weakened" (the cracked femur), sitting in a sentence about YOUR heat being sucked
+ * away, is you. Nothing is applied on the strength of that reading alone: the card names whose
+ * HP it is aimed at and waits for a second, deliberate click before a point of it moves.
+ *
+ * @param {string} text  one printed option's plain text
+ * @returns {{formula: string, isRoll: boolean, self: boolean, ignoresArmor: boolean,
+ *            piercing: number, tags: string[]}|null}
+ *   null when the line deals no damage of its own. `formula` is always something Foundry's Roll
+ *   accepts (a flat "3" is as valid a formula as "2d4"), and `isRoll` says whether there is
+ *   really a die to throw, which is the difference between a button that offers to roll and one
+ *   that just deals the number.
+ */
+
+// The die (or flat count) immediately before the word "damage": "2d4 damage", "1d10+2 damage",
+// "3 points of damage". Anchored on "damage" rather than scanning for a die anywhere in the line,
+// so an option that mentions a foe's HP, a debility count or a Value in the same breath cannot
+// have one of those numbers read as the blow.
+const OPTION_DAMAGE_RE = /(\d*\s*d\s*\d+(?:\s*[+-]\s*\d+)?|\d+)\s*(?:points?\s+of\s+)?damage\b/i;
+
+// Someone has to be taking it. A roll-call of the verbs the books actually use, not a wildcard:
+// what this keeps out is a stat line that names a damage die without anybody striking with it.
+const DAMAGE_VERB_RE = /\b(?:takes?|taking|suffers?|suffering|deals?|dealing|inflicts?|inflicting|loses?|losing|burns?|hurts?)\b/i;
+
+// "1d6 extra damage", "add 1d6 to a damage roll": a number that rides another roll rather than
+// being one, said in words. The other half of that rule is the SIGN, and it is not read here but
+// against what sits immediately before the match (see below), because a sign inside the die
+// expression itself is not a bonus at all: "d10+2 damage" is one number, and a pattern scanning
+// the raw line for a signed damage term finds its "+2" and throws the whole blow away.
+const BONUS_DAMAGE_RE = /\bextra\s+damage\b|\badds?\b[^.;]*\bdamage\s+roll\b/i;
+
+// The armor clauses the books print beside a damage number, in the two forms the flow already
+// knows how to apply (utils/damage.js#mitigateDamage): a full bypass, and a count of armor points
+// pierced. Read here so a "(ignores armor)" on the bullet reaches the card that applies it.
+const IGNORES_ARMOR_RE = /\bignores?\s+armou?r\b/i;
+const PIERCING_RE = /\b(\d+)\s+piercing\b/i;
+
+// The two flavour tags that only live in the fiction, and so are the two the damage card reminds
+// the table about (combat/attack-flow.js#TAG_REMINDERS). `+N damage` and piercing ride the
+// numbers and need no reminder.
+const FICTION_TAG_RE = /\b(messy|forceful)\b/gi;
+
+export function readOptionDamage(text) {
+	const line = String(text ?? "");
+	if (!line || BONUS_DAMAGE_RE.test(line)) return null;
+	if (!DAMAGE_VERB_RE.test(line)) return null;
+	const match = OPTION_DAMAGE_RE.exec(line);
+	if (!match) return null;
+
+	// A SIGN IN FRONT OF THE NUMBER means it is being added to something else, and the something
+	// else is not on this card: "Deal +1d4 damage" (Ambush) is a die the attack's own Confirm
+	// folds in, and "small (-2 HP, -2 damage, hand)" is a beast being sized on a summoning table.
+	// Read off what precedes the MATCH rather than off the line, so the "+2" inside "d10+2
+	// damage" (which the pattern above has already taken as part of the die) is left alone.
+	const before = line.slice(0, match.index).trimEnd();
+	if (before.endsWith("+") || before.endsWith("-")) return null;
+
+	// Foundry's Roll wants "1d6", not "d6" or "2d4 + 1".
+	const formula = match[1].replace(/\s+/g, "").replace(/^d/i, "1d");
+	// "They" wins over "you" wherever both appear: "they take 2d4 damage" in a move whose trigger
+	// is written at you is the foe's damage, and the trigger is in the same string.
+	const them = /\b(?:they|them|their|its|the\s+target)\b/i.test(line);
+	return {
+		formula,
+		isRoll: /d/i.test(formula),
+		self: !them && /\byou(?:r|rself)?\b/i.test(line),
+		ignoresArmor: IGNORES_ARMOR_RE.test(line),
+		piercing: Number(PIERCING_RE.exec(line)?.[1]) || 0,
+		tags: Array.from(new Set(Array.from(line.matchAll(FICTION_TAG_RE), m => m[1].toLowerCase()))),
+	};
+}
