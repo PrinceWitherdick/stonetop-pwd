@@ -39,6 +39,7 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { localize } from "../utils/i18n.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
+import { moveWithin, insertionIndexIn } from "../utils/list-reorder.js";
 import {
 	RELMAP_FLAG, RELMAP_VERSION, addEdgesPatch, addNodesPatch, edgePatch, emptyGraph, normalizeGraph,
 	relmapFlagPath, relmapPath,
@@ -565,6 +566,114 @@ export async function deleteMapPage(page) {
 	return true;
 }
 
+// ── Putting the strip in an order ───────────────────────────────────────────────────────────────
+//
+// WHAT ORDER THE BOARDS ARE IN IS THE TABLE'S, and it is stored where every other thing about a
+// board is: on the document, as core's own `sort`. Not per reader. Two people talking to each other
+// about "the third tab" have to be looking at the same third tab, which is the same reason
+// `listMapPages` breaks a tie on the name rather than leaving object order to decide it.
+//
+// ⚠ AND IT IS AN EDIT LIKE ANY OTHER, gated on OWNER and not on being the GM. A player who can add,
+// rename and delete the boards of a map (see the ownership section at the top of this file) can put
+// them in an order too; a strip only the GM could arrange would be the one page tool that stopped
+// working for the table the rest of them were built for.
+
+/**
+ * The mark on the ENTRY that says this strip has been put in an order by hand.
+ *
+ * ⚠ IT EXISTS TO STOP THE PARTY BOARD BEING DRAGGED BACK TO THE FRONT. `liftPartyPage` puts that
+ * one first on every open, which was safe for exactly as long as nothing could order the strip;
+ * once a reader can drag a tab, an unconditional lift is an arrangement undone by the next person
+ * to open the map, silently and for everybody. So the first hand-made order writes this, and the
+ * lift stands down from then on. It is written for a map the moment its strip is arranged and never
+ * cleared: what it records is that the table has an opinion, and dragging the party board back to
+ * the front by hand does not make that untrue.
+ */
+export const RELMAP_ARRANGED_MARK = "pagesArranged";
+
+/** Has this map's strip been put in an order by hand? Read off the ENTRY, so it survives any one
+ * page being deleted. */
+export function mapPagesArranged(entry) {
+	return !!entry?.getFlag?.(SYSTEM_ID, RELMAP_FLAG)?.[RELMAP_ARRANGED_MARK];
+}
+
+/**
+ * WHERE ONE BOARD LANDS when it is dropped somewhere else on the strip, as `sort` numbers.
+ *
+ * Pure, and separate from the write, because the arithmetic is the half that can be got wrong and
+ * the half a test can hold still.
+ *
+ * ONE PAGE MOVES AND THE REST ARE LEFT ALONE, which is what the gap between two sorts is for
+ * (`PAGE_SORT_STEP`): a board dropped between two others takes the number halfway between them and
+ * nothing else on the strip is rewritten. Only when that halfway point has run out of room, which
+ * takes seventeen drops into the same gap, is the whole strip renumbered by the step. The other
+ * spelling, renumbering every time, is a write per board on every drop, broadcast to every client
+ * at the table, for a change that moved one tab.
+ *
+ * ⚠ THE PAGES HANDED IN ARE THE ONES THE READER CAN SEE, never `listMapPages`. A player cannot
+ * write a board the GM has kept back, so a plan that renumbered one would be a drop that half
+ * failed. It does mean a hidden board keeps its old number and can end up between two boards a
+ * player has just put next to each other, which the GM sees and the player never does; that is the
+ * honest cost of boards the two of them are looking at different sets of.
+ *
+ * @param {Array<JournalEntryPage>} pages  the strip as it stands, in the order it is drawn.
+ * @param {string} movedId  the board being dropped.
+ * @param {string|null} beforeId  the board it is dropped in FRONT of, or null for the far end.
+ * @returns {Array<{page, sort}>}  what to write. Empty when nothing would move.
+ */
+export function planPageMove(pages, movedId, beforeId = null) {
+	const strip = (pages ?? []).filter(page => page?.id);
+	const moved = strip.find(page => page.id === movedId);
+	if (!moved || movedId === beforeId) return [];
+	// Through the system's two reorder primitives, including moveWithin's no-op contract, rather
+	// than a third hand-written splice: the destination is computed against a list the board has
+	// already been taken OUT of (aiming at the original would land every forward drop one place
+	// short), and moveWithin then does the removal itself from the original index.
+	const from = strip.findIndex(page => page.id === movedId);
+	const without = strip.filter((_, i) => i !== from);
+	const index = insertionIndexIn(without, beforeId, without.length);
+	// Dropped back where it already was: the two ends of the tab it came from both name it.
+	const order = moveWithin(strip, from, index);
+	if (!order) return [];
+
+	const sortOf = page => (Number(page?.sort) || 0);
+	const before = index > 0 ? sortOf(order[index - 1]) : null;
+	const after = index < order.length - 1 ? sortOf(order[index + 1]) : null;
+	if (before === null && after === null) return [{ page: moved, sort: 0 }];
+	if (before === null) return [{ page: moved, sort: after - PAGE_SORT_STEP }];
+	if (after === null) return [{ page: moved, sort: before + PAGE_SORT_STEP }];
+	// A gap of two or more has a whole number strictly inside it. A gap of one, of none, or of a
+	// pair that only sorted in that order because their names broke the tie, has not.
+	if (after - before >= 2) return [{ page: moved, sort: Math.floor((before + after) / 2) }];
+	return order
+		.map((page, i) => ({ page, sort: i * PAGE_SORT_STEP }))
+		.filter(row => sortOf(row.page) !== row.sort);
+}
+
+/**
+ * Put one board somewhere else on the strip.
+ *
+ * ONE WRITE FOR THE WHOLE MOVE, through the parent rather than page by page: a renumbered strip
+ * arriving as eight separate updates is eight repaints at the far end of the table, with the order
+ * visibly wrong in between. `updateEmbeddedDocuments` is one round trip and one broadcast.
+ *
+ * THE MARK IS WRITTEN AFTER THE MOVE LANDS, the same order `ensureFirstMapPage` keeps: a map marked
+ * as arranged by a move that then failed would have lost its party lift for nothing.
+ *
+ * @returns {Promise<boolean>} whether anything moved.
+ */
+export async function moveMapPage(entry, movedId, beforeId = null) {
+	if (!entry || !canEditRelationshipMap(entry)) return false;
+	const rows = planPageMove(listVisibleMapPages(entry), movedId, beforeId);
+	if (!rows.length) return false;
+	await entry.updateEmbeddedDocuments?.("JournalEntryPage",
+		rows.map(row => ({ _id: row.page.id, sort: row.sort })));
+	if (!mapPagesArranged(entry)) {
+		await entry.update({ [relmapPath(RELMAP_ARRANGED_MARK)]: true });
+	}
+	return true;
+}
+
 /**
  * A board's graph, normalized. Never trusts what it reads: see `normalizeGraph`.
  *
@@ -725,14 +834,19 @@ function partySort(pages) {
  * made before it. Without this, "the party board is the first tab" would be true of new maps only,
  * and the table that has been using this since the spring would be the one it was never true for.
  *
- * IT IS NOT UNDOING AN ARRANGEMENT, which is the rule everything else about this board keeps.
- * Nothing can order the strip: `sort` is a number this file assigns at creation and there is no
- * way for a reader to drag a tab, so there is no order of anybody's to lose. If pages ever become
- * draggable, this has to go.
+ * ⚠ IT IS NOT UNDOING AN ARRANGEMENT, which is the rule everything else about this board keeps,
+ * and since tabs became draggable that rule needs a guard rather than an observation. It used to
+ * read "nothing can order the strip, so there is no order of anybody's to lose"; a reader can now
+ * drag the party board to the middle, and a lift that ran anyway would put it back on the next
+ * open, on somebody else's client, with nothing on screen to explain it. So the first hand-made
+ * order marks the map (`RELMAP_ARRANGED_MARK`) and this stands down for good on that map. What is
+ * left is exactly what it was written for: the maps made before the board had a place, whose strips
+ * nobody has ever arranged.
  *
  * Writes only when the board is not already first, so the ordinary open costs one comparison.
  */
 async function liftPartyPage(entry, page) {
+	if (mapPagesArranged(entry)) return false;
 	const pages = listMapPages(entry);
 	if (!page || pages[0]?.id === page.id) return false;
 	await page.update({ sort: partySort(pages) });

@@ -40997,6 +40997,50 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	font-weight: 600;
 }
 
+/* ── Putting the boards in an order ───────────────────────────────────────────
+   A tab can be dragged along the strip, and the order it is left in is the whole table's: it is
+   written to the pages themselves (module/relmap/relmap-doc.js), so it moves on every open window.
+
+   THE HAND IS THE ONLY THING THAT SAYS SO, which is the same amount this system says about the
+   character sheet's own draggable tab rail. A hint printed on the row would be competing with the
+   one question the row exists to answer; the sentence for the readers a cursor never reaches is on
+   the strip itself, as an `aria-describedby` (see `pageOrderHint`).
+
+   ⚠ ON `[draggable]` AND NOT ON THE TAB, so a reader who may only look, and a map with a single
+   board, keep the pointer that says "this switches boards" -- which is all a tab of theirs does. */
+.stonetop-relmap-page[draggable="true"] { cursor: grab; }
+.stonetop-relmap-page[draggable="true"]:active { cursor: grabbing; }
+
+/* The one in the reader's hand, faded so the strip reads as a row with a gap in it rather than as
+   two copies of the same tab while the drag image floats over it. */
+.stonetop-relmap-page.is-dragging {
+	opacity: 0.35;
+	cursor: grabbing;
+}
+
+/* WHERE IT WOULD LAND, drawn as a bar on the EDGE the tab would come to rest against, and never as
+   an outline around the whole tab: the question under the pointer is which side of this board the
+   dragged one goes, and a ring around it answers a different one. Inset, so it cannot widen a tab
+   mid-drag and shuffle the rest of the strip sideways under the reader's hand.
+
+   The accent, which is the colour the current tab's own underline is painted in: what this mark
+   promises is where that underline is about to be, on a row that already reads it that way. */
+.stonetop-relmap-page.is-drop-before { box-shadow: inset 3px 0 0 0 var(--st-accent-fill); }
+.stonetop-relmap-page.is-drop-after { box-shadow: inset -3px 0 0 0 var(--st-accent-fill); }
+
+/* A SENTENCE ONLY A SCREEN READER EVER GETS. The same clipping recipe the live region below uses,
+   and a class of its own because this one is not a live region: it is read when the strip takes
+   focus, not announced when it changes. */
+.stonetop-relmap-said {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
 /* WHAT CAN BE DONE TO THE BOARDS. Outside the scrolling strip, so they stay put while the tabs
    move under them. */
 .stonetop-relmap-pages-tools {

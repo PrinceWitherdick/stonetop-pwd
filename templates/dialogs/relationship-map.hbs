@@ -67,7 +67,15 @@
   {{#if showPages}}
   <div class="stonetop-relmap-pages">
     <div class="stonetop-relmap-pages-strip" role="tablist"
-         aria-label="{{pagesLabel}}">{{{pageTabs}}}</div>
+         aria-label="{{pagesLabel}}"
+         {{#if pageOrderHint}}aria-describedby="{{pageOrderHintId}}"{{/if}}>{{{pageTabs}}}</div>
+    {{!-- HOW THE BOARDS ARE PUT IN AN ORDER, for the readers a `cursor: grab` never reaches. Read
+          out when the strip takes focus and invisible to everybody else, which is the only shape
+          this can take: the row's whole job is to say WHICH BOARD IS UP, and a line of instructions
+          printed across it would be competing with the answer. See `pageOrderHint`. --}}
+    {{#if pageOrderHint}}
+    <p id="{{pageOrderHintId}}" class="stonetop-relmap-said">{{pageOrderHint}}</p>
+    {{/if}}
 
     {{!-- WHAT CAN BE DONE TO THE BOARDS, and all three are edits, so the whole lot is behind the
           gate. Outside the scrolling strip beside it: a map with a dozen pages scrolls its tabs

@@ -1603,7 +1603,10 @@
         "deleteCancel": "Keep this page",
         "deleted": "{name} has been deleted.",
         "now": "Showing {name}.",
+        "moved": "{name} is now page {index} of {count}.",
+        "orderHint": "Drag a page along the strip to put it in a different order, or hold Ctrl and press the left or right arrow key. The order is the whole table's: everyone sees these pages in the order you leave them in.",
         "failed": "That page could not be made. You may no longer have permission to change this map.",
+        "moveFailed": "That page could not be moved. You may no longer have permission to change this map.",
         "party": "The Party",
         "partySeeded": "{name}: added {people} player character(s) and {lines} line(s) from the introductions.",
         "villageSeeded": "{people} resident(s) of Stonetop are now on {name}."

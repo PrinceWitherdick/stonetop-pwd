@@ -56,7 +56,7 @@ vi.mock("../../module/dialogs/content-picker.js", () => ({
 
 const { RelationshipMapWindow, openRelationshipMap } =
 	await import("../../module/dialogs/RelationshipMapWindow.js");
-const { mapBoardRole, readGraph } = await import("../../module/relmap/relmap-doc.js");
+const { listVisibleMapPages, mapBoardRole, readGraph } = await import("../../module/relmap/relmap-doc.js");
 const { forgetAllHistory } = await import("../../module/relmap/relmap-history.js");
 const { dropNodePatch, edgePatch } = await import("../../module/relmap/relmap-store.js");
 const { RELMAP_SEAT_MIN } = await import("../../module/relmap/relmap-store.js");
@@ -72,8 +72,11 @@ function el(props = {}) {
 	const node = {
 		classList: {
 			_set: new Set(),
-			add(c) { this._set.add(c); },
-			remove(c) { this._set.delete(c); },
+			// ⚠ BOTH TAKE SEVERAL AT ONCE, as the real `DOMTokenList` does. A fake that took one
+			// silently kept every class after the first: the strip's drag puts three marks away in
+			// a single call, and two of them would have stayed on the tabs for good.
+			add(...classes) { for (const c of classes) this._set.add(c); },
+			remove(...classes) { for (const c of classes) this._set.delete(c); },
 			contains(c) { return this._set.has(c); },
 			// The board writes nearly all of its state this way -- the lit web, the caption
 			// modes, whether the type is too small to be worth painting.
@@ -2520,6 +2523,9 @@ function pageFor(name, graph, { id, sort, parent, ownership = null }) {
 		update(patch) {
 			doc.updates.push(patch);
 			if (patch.ownership) Object.assign(doc.ownership, patch.ownership);
+			// WHERE IT SITS ON THE STRIP, applied and not merely recorded: the order is the one
+			// thing a reorder can only be shown to have got right by reading the strip back.
+			if ("sort" in patch) doc.sort = patch.sort;
 			return Promise.resolve(doc);
 		},
 	};
@@ -2547,6 +2553,15 @@ function pagedEntry(boards, { isOwner = true } = {}) {
 			));
 			pages.push(...made);
 			return Promise.resolve(made);
+		},
+		// One call for the whole reorder, which is how `moveMapPage` writes it: each row still goes
+		// through the page's own `update`, so a page records the same thing either way.
+		updateEmbeddedDocuments(type, rows) {
+			for (const row of rows ?? []) {
+				const { _id, ...patch } = row;
+				pages.find(page => page.id === _id)?.update(patch);
+			}
+			return Promise.resolve(pages);
 		},
 	};
 	boards.forEach((board, i) => pages.push(pageFor(
@@ -2935,6 +2950,235 @@ describe("adding a board from the strip", () => {
 		await app._addPage();
 		expect(entry.pages.contents).toHaveLength(2);
 		expect(app.render).not.toHaveBeenCalled();
+	});
+});
+
+// ── Putting the boards in an order ──────────────────────────────────────────────────────────────
+//
+// A tab can be dragged along the strip, or moved with Ctrl and an arrow key. The arithmetic and the
+// write are `moveMapPage`'s, and proved in tests/relmap/relmap-doc.test.js; what matters here is the
+// gesture: which tab was taken hold of, which side of which tab it was let go over, that the
+// keyboard reaches the same thing, and that a reader who cannot see the strip is told where the
+// board landed.
+
+/** One tab of the strip as the handlers meet it. `closest` answers for itself, which is what a drop
+ * landing on the button rather than on the text inside it does. */
+function tabEl(id, left) {
+	const node = el({ dataset: { relmapPage: id }, tabIndex: -1, draggable: true });
+	node.closest = sel => (sel === "[data-relmap-page]" ? node : null);
+	node.getBoundingClientRect = () => ({ left, width: 100, right: left + 100 });
+	node.focus = vi.fn();
+	return node;
+}
+
+/** A window over three boards, with a strip of tabs the drag handlers can find. */
+function stripWindow() {
+	const entry = pagedEntry([
+		{ id: "p1", name: "Stonetop" },
+		{ id: "p2", name: "Marshedge" },
+		{ id: "p3", name: "The Millers" },
+	]);
+	const made = windowFor(null, { entry, pageId: "p1" });
+	const tabs = [tabEl("p1", 0), tabEl("p2", 100), tabEl("p3", 200)];
+	tabs.forEach((tab, i) => { tab.nextElementSibling = tabs[i + 1] ?? null; });
+	made.root.all["[data-relmap-page]"] = tabs;
+	return { ...made, tabs };
+}
+
+/** The strip's order, read back off the documents rather than off the markup. */
+const boardOrder = entry => listVisibleMapPages(entry).map(page => page.name);
+
+describe("putting the boards in an order", () => {
+	it("lets a reader who may edit pick a tab up, on a map with two boards to order", () => {
+		const { app } = windowFor(null, { entry: TWO_BOARDS(), pageId: "p1" });
+		expect(app._pageTabs()).toContain("draggable=\"true\"");
+	});
+
+	// A reader who may only look may not rearrange what the rest of the table sees, and a single
+	// board has no order to be in: both keep the plain pointer that says "this switches boards".
+	it("does not offer it to a reader who may only look", () => {
+		const entry = pagedEntry([{ id: "p1", name: "Stonetop" }, { id: "p2", name: "Marshedge" }],
+			{ isOwner: false });
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		expect(app._pageTabs()).not.toContain("draggable");
+	});
+
+	it("does not offer it on a map with one board", () => {
+		const entry = pagedEntry([{ id: "p1", name: "Stonetop" }]);
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		expect(app._pageTabs()).not.toContain("draggable");
+	});
+
+	it("puts a tab in front of the one whose front half it was let go over", async () => {
+		const { app, entry, tabs } = stripWindow();
+		app._onPageDragStart({ target: tabs[2], dataTransfer: { setData: vi.fn() } });
+		await app._onPageDrop({ target: tabs[0], clientX: 10, preventDefault: vi.fn() });
+		expect(boardOrder(entry)).toEqual(["The Millers", "Stonetop", "Marshedge"]);
+	});
+
+	// The same drop on the other half of the same tab means the other thing, which is what the mark
+	// under the pointer has been promising for the whole of the drag.
+	it("puts it behind when the pointer is on the back half", async () => {
+		const { app, entry, tabs } = stripWindow();
+		app._onPageDragStart({ target: tabs[2], dataTransfer: { setData: vi.fn() } });
+		await app._onPageDrop({ target: tabs[0], clientX: 90, preventDefault: vi.fn() });
+		expect(boardOrder(entry)).toEqual(["Stonetop", "The Millers", "Marshedge"]);
+	});
+
+	it("puts it on the far end when it is let go over the back half of the last tab", async () => {
+		const { app, entry, tabs } = stripWindow();
+		app._onPageDragStart({ target: tabs[0], dataTransfer: { setData: vi.fn() } });
+		await app._onPageDrop({ target: tabs[2], clientX: 290, preventDefault: vi.fn() });
+		expect(boardOrder(entry)).toEqual(["Marshedge", "The Millers", "Stonetop"]);
+	});
+
+	// ⚠ AN ACTOR CROSSING THE STRIP ON ITS WAY TO THE BOARD IS NOT A TAB. Nothing is marked up as
+	// though it could be dropped between two boards, and `preventDefault` is never called -- which
+	// is what leaves the drag to the board underneath.
+	it("takes no notice of a drag that did not start on the strip", async () => {
+		const { app, entry, tabs } = stripWindow();
+		const over = { target: tabs[1], clientX: 110, preventDefault: vi.fn(), dataTransfer: {} };
+		app._onPageDragOver(over);
+		expect(over.preventDefault).not.toHaveBeenCalled();
+		expect(tabs[1].classList.contains("is-drop-before")).toBe(false);
+		await app._onPageDrop({ target: tabs[1], clientX: 110, preventDefault: vi.fn() });
+		expect(boardOrder(entry)).toEqual(["Stonetop", "Marshedge", "The Millers"]);
+	});
+
+	it("marks the edge a drop would land against, and only one of them", () => {
+		const { app, tabs } = stripWindow();
+		app._onPageDragStart({ target: tabs[0], dataTransfer: { setData: vi.fn() } });
+		expect(tabs[0].classList.contains("is-dragging")).toBe(true);
+		app._onPageDragOver({ target: tabs[2], clientX: 210, preventDefault: vi.fn(), dataTransfer: {} });
+		expect(tabs[2].classList.contains("is-drop-before")).toBe(true);
+		app._onPageDragOver({ target: tabs[2], clientX: 290, preventDefault: vi.fn(), dataTransfer: {} });
+		expect(tabs[2].classList.contains("is-drop-before")).toBe(false);
+		expect(tabs[2].classList.contains("is-drop-after")).toBe(true);
+	});
+
+	// A drag let go of over the board, or over the desktop, never reaches a drop: the marks it left
+	// would sit on the strip for the rest of the session.
+	it("puts every mark away when a drag is abandoned", () => {
+		const { app, tabs } = stripWindow();
+		app._onPageDragStart({ target: tabs[0], dataTransfer: { setData: vi.fn() } });
+		app._onPageDragOver({ target: tabs[1], clientX: 110, preventDefault: vi.fn(), dataTransfer: {} });
+		app._clearPageDrag();
+		expect(app._dragPage).toBe("");
+		expect(tabs.some(tab => tab.classList.contains("is-dragging")
+			|| tab.classList.contains("is-drop-before")
+			|| tab.classList.contains("is-drop-after"))).toBe(false);
+	});
+
+	// ⚠ THE KEYBOARD'S WAY TO THE SAME THING, and not a convenience: a drag across a scrolling strip
+	// is the hardest thing this window could ask of the reader at this table on a screen magnifier.
+	it("moves the tab one place along on Ctrl and an arrow", async () => {
+		const right = stripWindow();
+		await right.app._onPageKey({
+			key: "ArrowRight", ctrlKey: true, target: right.tabs[0], preventDefault: vi.fn(),
+		});
+		expect(boardOrder(right.entry)).toEqual(["Marshedge", "Stonetop", "The Millers"]);
+		// A window of its own rather than a second press on the first: the strip these tabs stand
+		// for is rewritten by the repaint, and the fakes here do not move with it.
+		const left = stripWindow();
+		await left.app._onPageKey({
+			key: "ArrowLeft", ctrlKey: true, target: left.tabs[2], preventDefault: vi.fn(),
+		});
+		expect(boardOrder(left.entry)).toEqual(["Stonetop", "The Millers", "Marshedge"]);
+	});
+
+	// The strip is rewritten by the repaint the move asks for, so without this a second press would
+	// arrive at nothing -- with Ctrl still held down.
+	it("keeps the keyboard on the tab it just moved", async () => {
+		const { app, tabs } = stripWindow();
+		await app._movePage("p3", "p1");
+		expect(tabs[2].focus).toHaveBeenCalled();
+		// And the strip's one open tab stop moves with it, or the reader's next Tab press would
+		// leave the strip entirely.
+		expect(tabs[2].tabIndex).toBe(0);
+		expect(tabs.filter(tab => tab.tabIndex === 0)).toHaveLength(1);
+	});
+
+	it("does nothing at the ends of the strip", async () => {
+		const { app, entry, tabs } = stripWindow();
+		await app._onPageKey({
+			key: "ArrowLeft", ctrlKey: true, target: tabs[0], preventDefault: vi.fn(),
+		});
+		await app._onPageKey({
+			key: "ArrowRight", ctrlKey: true, target: tabs[2], preventDefault: vi.fn(),
+		});
+		expect(boardOrder(entry)).toEqual(["Stonetop", "Marshedge", "The Millers"]);
+	});
+
+	// A plain arrow key still MOVES FOCUS ONLY. The two gestures are one keypress apart, and an
+	// arrow that reordered the strip would be a reader looking for a board and rearranging the map.
+	it("leaves a plain arrow key moving the focus and nothing else", async () => {
+		const { app, entry, tabs } = stripWindow();
+		await app._onPageKey({ key: "ArrowRight", target: tabs[0], preventDefault: vi.fn() });
+		expect(boardOrder(entry)).toEqual(["Stonetop", "Marshedge", "The Millers"]);
+		expect(tabs[1].focus).toHaveBeenCalled();
+	});
+
+	// WHERE IT IS NOW, in the terms a reader who cannot see the strip can act on: which place of how
+	// many, and not merely that something moved.
+	it("says which place the board came to rest in", async () => {
+		globalThis.game.i18n = TABLE;
+		const { app, live } = stripWindow();
+		await app._movePage("p1", null);
+		expect(live.textContent).toBe(TABLE.format("stonetop.relmap.pages.moved", {
+			name: "Stonetop", index: 3, count: 3,
+		}));
+	});
+
+	it("is refused for a reader who may only look", async () => {
+		const entry = pagedEntry([{ id: "p1", name: "Stonetop" }, { id: "p2", name: "Marshedge" }],
+			{ isOwner: false });
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		expect(await app._movePage("p2", "p1")).toBe(false);
+		expect(entry.pages.contents.flatMap(page => page.updates)).toEqual([]);
+		expect(entry.updates).toEqual([]);
+	});
+
+	// ⚠ THE WRITE IS A ROUND TRIP AND CAN BE REFUSED — permission withdrawn mid-session, the page
+	// deleted by somebody else. Ctrl-and-an-arrow does not wait for it, so a rejection there had
+	// nowhere to land but an unhandled promise, with the reader looking at a strip that did not
+	// move and told nothing whatever. The writer answers for it, so both gestures are covered.
+	describe("when the write is refused", () => {
+		const refusing = () => {
+			const made = stripWindow();
+			made.entry.updateEmbeddedDocuments = () => Promise.reject(new Error("no permission"));
+			globalThis.ui = { notifications: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } };
+			globalThis.game.i18n = TABLE;
+			return made;
+		};
+
+		it("says so instead of throwing", async () => {
+			const { app, entry, live } = refusing();
+			expect(await app._movePage("p1", null)).toBe(false);
+			expect(globalThis.ui.notifications.warn)
+				.toHaveBeenCalledWith(TABLE.localize("stonetop.relmap.pages.moveFailed"));
+			// Said as well as shown: the reader on a magnifier is looking at the tab, not at the
+			// corner of the screen a notification appears in.
+			expect(live.textContent).toBe(TABLE.localize("stonetop.relmap.pages.moveFailed"));
+			expect(boardOrder(entry)).toEqual(["Stonetop", "Marshedge", "The Millers"]);
+		});
+
+		it("carries no rejection out of the keyboard's way in, which does not await it", async () => {
+			const { app, tabs } = refusing();
+			// The handler is deliberately synchronous — the keyboard must not block on a network
+			// write — so there is no promise here to attach a catch to. That the warning arrives
+			// at all is the proof the rejection was answered inside rather than escaping.
+			app._onPageKey({ key: "ArrowRight", ctrlKey: true, target: tabs[0], preventDefault: vi.fn() });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			expect(globalThis.ui.notifications.warn).toHaveBeenCalled();
+		});
+
+		it("carries none out of the drop either", async () => {
+			const { app, tabs } = refusing();
+			app._onPageDragStart({ target: tabs[2], dataTransfer: { setData: vi.fn() } });
+			await expect(app._onPageDrop({ target: tabs[0], clientX: 10, preventDefault: vi.fn() }))
+				.resolves.not.toThrow();
+			expect(globalThis.ui.notifications.warn).toHaveBeenCalled();
+		});
 	});
 });
 

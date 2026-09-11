@@ -15,6 +15,7 @@ import {
 	listRelationshipMaps, listVisibleMapPages, mapBoardDoc, mapPageName,
 	RELMAP_MAP_NAME_MAX, canDeleteRelationshipMap, deleteRelationshipMap, relationshipMapName,
 	renameRelationshipMap,
+	mapPagesArranged, moveMapPage, planPageMove,
 	readGraph, renameMapPage, setMapPageHidden, syncPartyPage,
 } from "../../module/relmap/relmap-doc.js";
 import { RELMAP_VERSION } from "../../module/relmap/relmap-store.js";
@@ -137,6 +138,21 @@ const entry = (name, flags = {}, extra = {}) => {
 				}));
 			pages.push(...made);
 			return Promise.resolve(made);
+		},
+		// ONE CALL FOR SEVERAL PAGES, which is how the strip is reordered: a renumbered strip
+		// arriving as one write is one broadcast, where page-by-page it is one per board with the
+		// order visibly wrong in between. Each row still goes through the page's own `update`, so
+		// what a page records of having been written to is the same either way.
+		updateEmbeddedDocuments(type, rows) {
+			const done = [];
+			for (const row of rows ?? []) {
+				const page = pages.find(p => p.id === row._id);
+				if (!page) continue;
+				const { _id, ...patch } = row;
+				page.update(patch);
+				done.push(page);
+			}
+			return Promise.resolve(done);
 		},
 		deleteEmbeddedDocuments(type, ids) {
 			const gone = pages.filter(p => ids.includes(p.id));
@@ -489,6 +505,140 @@ describe("adding, renaming and rubbing out a board", () => {
 		map.isOwner = false;
 		expect(await deleteMapPage(getMapPage(map, "p2"))).toBe(false);
 		expect(listMapPages(map)).toHaveLength(2);
+	});
+});
+
+// ── Putting the strip in an order ───────────────────────────────────────────────────────────────
+//
+// The order is the TABLE'S: it is written to the pages as core's own `sort`, so a tab dragged on
+// one client moves on every other. What is proved here is the arithmetic (one write for an ordinary
+// move, a renumber only when the gap has run out), the gate, and the mark that stops the party
+// board being lifted back over an order somebody has made by hand.
+
+describe("putting the boards in an order", () => {
+	const NAMES = map => listMapPages(map).map(page => page.name);
+	const strip = () => mapWith("A map", [
+		{ name: "Stonetop", id: "p1" }, { name: "Marshedge", id: "p2" }, { name: "The Millers", id: "p3" },
+	]);
+
+	it("puts one board in front of another, and writes only that one", async () => {
+		const map = strip();
+		expect(await moveMapPage(map, "p3", "p2")).toBe(true);
+		expect(NAMES(map)).toEqual(["Stonetop", "The Millers", "Marshedge"]);
+		// ONE PAGE MOVED AND THE REST LEFT ALONE, which is what the gap between two sorts is for:
+		// the whole strip renumbered on every drop is a write per board, broadcast to the table.
+		const [p1, p2, p3] = listMapPages(map);
+		expect(p1.updates).toEqual([]);
+		expect(p3.updates).toEqual([]);
+		expect(p2.updates).toEqual([{ sort: 50000 }]);
+	});
+
+	it("puts one board on the far end when it is dropped past the last tab", async () => {
+		const map = strip();
+		expect(await moveMapPage(map, "p1", null)).toBe(true);
+		expect(NAMES(map)).toEqual(["Marshedge", "The Millers", "Stonetop"]);
+	});
+
+	it("puts one board at the front when it is dropped in front of the first tab", async () => {
+		const map = strip();
+		expect(await moveMapPage(map, "p3", "p1")).toBe(true);
+		expect(NAMES(map)).toEqual(["The Millers", "Stonetop", "Marshedge"]);
+	});
+
+	// Seventeen drops into the same gap is where halving runs out of whole numbers. The renumber is
+	// the rail under that, and it must write every board whose number actually changed and no other.
+	it("renumbers the strip when the gap it is dropped into has no room left", async () => {
+		const map = mapWith("A map", [
+			{ name: "Stonetop", id: "p1", sort: 0 },
+			{ name: "Marshedge", id: "p2", sort: 1 },
+			{ name: "The Millers", id: "p3", sort: 2 },
+		]);
+		expect(await moveMapPage(map, "p3", "p2")).toBe(true);
+		expect(NAMES(map)).toEqual(["Stonetop", "The Millers", "Marshedge"]);
+		expect(listMapPages(map).map(page => page.sort)).toEqual([0, 100000, 200000]);
+		// Stonetop was already where the renumber wanted it, so nothing was written to it.
+		expect(getMapPage(map, "p1").updates).toEqual([]);
+	});
+
+	it("writes nothing at all when a board is dropped where it already is", async () => {
+		const map = strip();
+		expect(await moveMapPage(map, "p2", "p2")).toBe(false);
+		expect(await moveMapPage(map, "p2", "p3")).toBe(false);
+		expect(map.updates).toEqual([]);
+		expect(listMapPages(map).flatMap(page => page.updates)).toEqual([]);
+	});
+
+	it("is refused for a reader who may not edit the map", async () => {
+		const map = strip();
+		map.isOwner = false;
+		expect(await moveMapPage(map, "p3", "p1")).toBe(false);
+		expect(NAMES(map)).toEqual(["Stonetop", "Marshedge", "The Millers"]);
+	});
+
+	// ⚠ A PLAYER CANNOT WRITE A BOARD THE GM HAS KEPT BACK, so the plan is made from the boards the
+	// reader can SEE. A drop that tried to renumber a hidden one would half fail on the server.
+	it("leaves a board this reader cannot see out of the arithmetic", async () => {
+		const map = mapWith("A map", [
+			{ name: "Stonetop", id: "p1" },
+			{ name: "The GM's own", id: "p2", hidden: true },
+			{ name: "Marshedge", id: "p3" },
+		]);
+		game.user = { id: "u1" };
+		expect(await moveMapPage(map, "p3", "p1")).toBe(true);
+		expect(listMapPages(map).find(page => page.id === "p2").updates).toEqual([]);
+		expect(listVisibleMapPages(map).map(page => page.name)).toEqual(["Marshedge", "Stonetop"]);
+	});
+
+	it("plans nothing for a board that is not on the strip", () => {
+		expect(planPageMove(listMapPages(strip()), "nobody", "p1")).toEqual([]);
+	});
+});
+
+describe("the mark that says a strip has been arranged by hand", () => {
+	it("is not on a map nobody has ever reordered", () => {
+		expect(mapPagesArranged(mapWith("A map", [{ name: "Stonetop", id: "p1" }]))).toBe(false);
+	});
+
+	it("is written by the first move, and only once", async () => {
+		const map = mapWith("A map", [{ name: "Stonetop", id: "p1" }, { name: "Marshedge", id: "p2" }]);
+		await moveMapPage(map, "p2", "p1");
+		expect(mapPagesArranged(map)).toBe(true);
+		expect(map.updates).toEqual([
+			{ "flags.stonetop-pwd.relationshipMap.pagesArranged": true },
+		]);
+		await moveMapPage(map, "p1", "p2");
+		expect(map.updates).toHaveLength(1);
+	});
+
+	// ⚠ THE POINT OF THE MARK. `syncPartyPage` lifts the party board to the front of the strip on
+	// every open, which was written when nothing could order the strip. Left unguarded it would put
+	// that board back in front on somebody else's next open, undoing an arrangement the table made.
+	it("stops the party board being lifted back to the front", async () => {
+		const map = mapWith("A map", [
+			{ name: "The Party", id: "p1" },
+			{ name: "Stonetop", id: "p2" },
+		]);
+		const party = getMapPage(map, "p1");
+		party.flags["stonetop-pwd"].relationshipPartyBoard = true;
+		// Dragged off the front, which is the arrangement the lift would otherwise undo.
+		await moveMapPage(map, "p1", null);
+		party.updates.length = 0;
+		await syncPartyPage(map, [], new Map());
+		expect(party.updates).toEqual([]);
+		expect(listMapPages(map).map(page => page.name)).toEqual(["Stonetop", "The Party"]);
+	});
+
+	// And the maps it was written for are untouched: a strip nobody has arranged still gets the
+	// party board put in front of it, which is every map made before that board had a place.
+	it("leaves the lift alone on a map nobody has arranged", async () => {
+		const map = mapWith("A map", [
+			{ name: "Stonetop", id: "p1" },
+			{ name: "The Party", id: "p2" },
+		]);
+		const party = getMapPage(map, "p2");
+		party.flags["stonetop-pwd"].relationshipPartyBoard = true;
+		await syncPartyPage(map, [], new Map());
+		expect(listMapPages(map).map(page => page.name)).toEqual(["The Party", "Stonetop"]);
 	});
 });
 

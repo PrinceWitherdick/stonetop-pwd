@@ -60,7 +60,7 @@ import {
 	applyPatch, canDeleteRelationshipMap, canEditRelationshipMap, canHideMapPages, createMapPage,
 	deleteMapPage, deleteRelationshipMap,
 	ensureFirstMapPage, getMapPage, isMapPageHidden, listMapPages, listVisibleMapPages, mapBoardDoc,
-	mapPageName, readGraph, relationshipMapName, renameMapPage, renameRelationshipMap,
+	mapPageName, moveMapPage, readGraph, relationshipMapName, renameMapPage, renameRelationshipMap,
 	setMapPageHidden, syncPartyPage, syncVillagePage,
 } from "../relmap/relmap-doc.js";
 import { steadingListActors } from "../actors/steading/steading-people.js";
@@ -281,6 +281,13 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// The strip as it was last written, so a repaint can tell a set of pages that has changed
 		// from one that has not and leave the reader's focus alone when it has not.
 		this._pagesSaid = null;
+		// The board whose tab is in the reader's hand, while one is. Empty at every other moment,
+		// which is also how the strip's drag handlers tell a tab being moved from an actor being
+		// dragged across the row on its way to the board. See `_onPageDragStart`.
+		this._dragPage = "";
+		// And where that tab would land if it were let go now, as `<page id>:before|after`, so the
+		// drop mark is only rewritten when it would say something different. See `_onPageDragOver`.
+		this._dragOver = "";
 		this._surface = null;
 		this._teardownDrag = null;
 		/**
@@ -554,6 +561,17 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// the reader can be moved off a page that has just been deleted elsewhere.
 			pagePanelId: this._pageTabId(this._pageId ?? ""),
 			pagesLabel: localize("stonetop.relmap.pages.label"),
+			// ⚠ HOW TO PUT THE BOARDS IN AN ORDER, SAID ONLY TO THE READERS WHO CANNOT SEE IT. A tab
+			// that can be dragged says so to a pointer by the hand it puts under it, and there is
+			// nothing to say to anybody else at all: the keyboard's way in (Ctrl and an arrow) is a
+			// gesture no tab looks like it has. So it is a sentence on the strip itself, read out
+			// when the reader arrives there and silent to everybody else. It hangs off `canEdit`
+			// alone, and not off there being two boards to order, because that is the one of the two
+			// that always arrives as a full render (see the ownership branch of the entry's hook) --
+			// a count that changed under a repaint would leave the sentence behind, saying the wrong
+			// thing to exactly the reader who cannot check.
+			pageOrderHint: this.canEdit ? localize("stonetop.relmap.pages.orderHint") : "",
+			pageOrderHintId: `${this.id}-page-order`,
 			// ⚠ THE HINTS ARE THE LABELS. The three page tools are bare glyphs, and each one's
 			// hint is both its tooltip and its `aria-label` -- there is no second, shorter string
 			// on the button for it to compete with. (`pages.new` is still localized elsewhere: it
@@ -1253,6 +1271,16 @@ export class RelationshipMapWindow extends StonetopDialog {
 			if (tab) this.showPage(tab.dataset.relmapPage);
 		});
 		strip?.addEventListener("keydown", ev => this._onPageKey(ev));
+		// AND WHAT ORDER THEY ARE IN. Delegated from the strip for the same reason the click is:
+		// every tab in it is replaced whenever anybody at the table adds, renames or moves one.
+		strip?.addEventListener("dragstart", ev => this._onPageDragStart(ev));
+		strip?.addEventListener("dragover", ev => this._onPageDragOver(ev));
+		strip?.addEventListener("drop", ev => this._onPageDrop(ev));
+		// ⚠ AND THE ABANDONED DRAG. A tab let go of over the board, or over the desktop, never
+		// reaches a drop, and the marks it left would sit on the strip for the rest of the session.
+		// The drop clears them itself, first thing, because by the time it has repainted the strip
+		// the element `dragend` fires on has been replaced and no longer bubbles to anything.
+		strip?.addEventListener("dragend", () => this._clearPageDrag());
 
 		// CTRL+Z, CTRL+SHIFT+Z AND CTRL+Y. On the DOCUMENT, not on this window: see
 		// `_wireHistoryKeys` for why binding them here was an undo that only sometimes worked.
@@ -2045,19 +2073,32 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * the eye in the tools beside the strip, which is one place and not eight. (This also means the
 	 * strip's markup does not change when a board is hidden or shown, which `_paintPages` has to
 	 * know: see the note at the top of it.)
+	 *
+	 * AND A TAB CAN BE PICKED UP AND PUT DOWN SOMEWHERE ELSE, on a map with more than one board, for
+	 * a reader who may edit it. `draggable` is written here rather than set on the elements
+	 * afterwards for the reason everything else about a tab is: this markup is written twice, and an
+	 * attribute added by hand after the render would be missing from every tab a repaint replaced.
+	 * The order itself is the table's and not this reader's, so it is stored on the documents (see
+	 * `moveMapPage`); the keyboard's way to the same thing is Ctrl and an arrow, in `_onPageKey`.
 	 */
 	_pageTabs(pages = this.mapPages, chosen = this.mapPage?.id ?? "") {
+		// Reordering is exactly the edit right, read here rather than passed: every caller was
+		// handing in `this.canEdit` anyway.
+		const canOrder = this.canEdit;
 		// The system's one audited escaper (utils/strings.js), not foundry.utils.escapeHTML: same
 		// five-character map, and Foundry-free, which is what lets the tests exercise this method.
 		const esc = escHtml;
 		const rows = pages.length
 			? pages.map(page => ({ id: page.id, name: page.name }))
 			: [{ id: "", name: this.entry?.name ?? localize("stonetop.relmap.untitled") }];
+		// It takes two boards to have an order, and the one tab a version 1 map gets is not a board
+		// at all -- it names the map, carries no id, and there is nowhere to put it.
+		const drag = canOrder && pages.length > 1 ? " draggable=\"true\"" : "";
 		return rows.map(row => {
 			const on = row.id === chosen;
 			return `<button type="button" class="stonetop-relmap-page${on ? " is-current" : ""}"`
 				+ ` role="tab" id="${esc(this._pageTabId(row.id))}"`
-				+ ` aria-selected="${on ? "true" : "false"}" tabindex="${on ? "0" : "-1"}"`
+				+ ` aria-selected="${on ? "true" : "false"}" tabindex="${on ? "0" : "-1"}"${drag}`
 				+ ` data-relmap-page="${esc(row.id)}">${esc(row.name)}</button>`;
 		}).join("");
 	}
@@ -2113,6 +2154,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// on every page created, deleted, renamed or shown at the table, per open board.
 		const pages = this.mapPages;
 		const page = pages.find(one => one.id === this._pageId) ?? pages[0] ?? null;
+		// The third of them, asked once for the same reason: it decides whether the tabs can be
+		// picked up AND whether the last board can be rubbed out, and `canEdit` walks the strip too.
+		const mine = this.canEdit;
 		this._paintSeen(page);
 		const strip = this._root?.querySelector(".stonetop-relmap-pages-strip");
 		if (!strip) return;
@@ -2127,7 +2171,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// Whether the last board can be rubbed out depends on how many there are, which is exactly
 		// what has just changed.
 		const drop = this._root?.querySelector("[data-relmap-action=\"pagedelete\"]");
-		if (drop) drop.hidden = !(this.canEdit && pages.length > 1);
+		if (drop) drop.hidden = !(mine && pages.length > 1);
 	}
 
 	/**
@@ -2194,11 +2238,19 @@ export class RelationshipMapWindow extends StonetopDialog {
 	}
 
 	/**
-	 * Move focus along the strip with the arrow keys.
+	 * Move focus along the strip with the arrow keys, and the TAB ITSELF with Ctrl and an arrow.
 	 *
 	 * MOVES FOCUS ONLY; the space bar or Enter is what actually switches board, because a `<button>`
 	 * already does that. The other spelling — selecting on every arrow key — is a render per
 	 * keypress, and each render throws away the very element the reader is arrowing from.
+	 *
+	 * ⚠ CTRL AND AN ARROW IS THE KEYBOARD'S WAY TO REORDER, and it is not a convenience. Dragging a
+	 * tab is a gesture a pointer can make and a keyboard cannot, and there is a reader at this table
+	 * working at a screen magnifier for whom a drag across a scrolling strip is the hardest thing
+	 * the window could ask for. So the drag is one way in and this is the other, both writing the
+	 * same order to the same documents. It is CTRL and not Alt, which is the browser's own back and
+	 * forward, and the tab keeps its focus across the move so a second press carries on from where
+	 * the first left off.
 	 */
 	_onPageKey(ev) {
 		const steps = { ArrowLeft: -1, ArrowRight: 1 };
@@ -2207,6 +2259,17 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const tabs = Array.from(this._root?.querySelectorAll("[data-relmap-page]") ?? []);
 		const from = tabs.indexOf(ev.target);
 		if (from < 0 || tabs.length < 2) return;
+		if (step !== undefined && (ev.ctrlKey || ev.metaKey)) {
+			ev.preventDefault();
+			// One place along, said as the tab it comes to rest in FRONT of, which is the one
+			// spelling that also covers the far end (nothing to be in front of, so: null).
+			// Leftwards that is the tab it is passing; rightwards it is the one past that.
+			const to = from + step;
+			if (to < 0 || to >= tabs.length) return;
+			const before = step < 0 ? tabs[to] : tabs[to + 1];
+			this._movePage(tabs[from].dataset.relmapPage, before?.dataset?.relmapPage ?? null);
+			return;
+		}
 		ev.preventDefault();
 		const to = ev.key === "Home" ? 0
 			: ev.key === "End" ? tabs.length - 1
@@ -2214,6 +2277,178 @@ export class RelationshipMapWindow extends StonetopDialog {
 		for (const tab of tabs) tab.tabIndex = -1;
 		tabs[to].tabIndex = 0;
 		tabs[to].focus?.();
+	}
+
+	// ── Putting the boards in an order ──────────────────────────────────────
+	//
+	// TWO WAYS IN AND ONE WRITER. A tab can be dragged along the strip, or moved with Ctrl and an
+	// arrow key, and both come down to the same sentence: this board goes in front of that one.
+	// `moveMapPage` (relmap/relmap-doc.js) does the arithmetic and the write; everything here is
+	// about the gesture, the mark under the pointer, and what the reader is told afterwards.
+	//
+	// ⚠ THE ORDER IS THE TABLE'S, not this reader's. It is written to the pages themselves, so a tab
+	// dragged here moves on every open window at the table, which is the whole reason it is worth
+	// doing: two people talking about "the third tab" have to mean the same one. (Which board a
+	// reader is STANDING on stays theirs alone. See `showPage`.)
+
+	/**
+	 * Put a board somewhere else on the strip, and say where it landed.
+	 *
+	 * THE STRIP IS REPAINTED HERE RATHER THAN LEFT TO THE HOOK. The write does broadcast, and every
+	 * other client's `updateJournalEntryPage` will repaint their strip from it — but this client's
+	 * own hook fires from the same round trip, and a reader who has just dragged a tab must not
+	 * watch it snap back for the length of one. `_paintPages` is guarded on the markup, so the
+	 * hook's own pass a moment later costs a string comparison and returns.
+	 *
+	 * AND THE MOVED TAB KEEPS THE FOCUS, which is the whole of the keyboard story: the repaint
+	 * replaces every element in the strip, including the one the reader is holding with Ctrl still
+	 * down, so without this a second press would arrive at nothing.
+	 *
+	 * ⚠ AND IT ANSWERS FOR ITS OWN FAILURE, because one of its two callers cannot. The write is a
+	 * round trip to the server and can be refused — permission withdrawn mid-session, the page
+	 * deleted by someone else — and Ctrl-and-an-arrow does not wait for it (the keyboard must not
+	 * block on a network write), so a rejection there had nowhere to go but an unhandled promise,
+	 * with the reader left looking at a strip that did not move and told nothing at all. Caught
+	 * here rather than at each call site: there are two gestures and one writer, and the writer is
+	 * where the sentence "it could not be moved" belongs.
+	 */
+	async _movePage(movedId, beforeId = null) {
+		if (!movedId || !this.canEdit) return false;
+		try {
+			if (!await moveMapPage(this.entry, movedId, beforeId)) return false;
+		} catch (err) {
+			console.error("Stonetop | could not move the page", err);
+			ui.notifications?.warn?.(localize("stonetop.relmap.pages.moveFailed"));
+			// Said as well as shown: a reader on a magnifier is looking at the tab they just tried
+			// to move, not at the corner of the screen a notification appears in.
+			this._announce(localize("stonetop.relmap.pages.moveFailed"));
+			return false;
+		}
+		this._paintPages();
+		this._focusTab(movedId);
+		const pages = this.mapPages;
+		const at = pages.findIndex(page => page.id === movedId);
+		if (at < 0) return true;
+		// WHERE IT IS NOW, in the terms a reader who cannot see the strip can act on: not "moved",
+		// which says only that something happened, but which place of how many it came to rest in.
+		this._announce(format("stonetop.relmap.pages.moved", {
+			name: pages[at].name, index: at + 1, count: pages.length,
+		}));
+		return true;
+	}
+
+	/** Put the keyboard back on one tab after the strip has been rewritten, carrying the roving
+	 * tabindex with it: the moved tab is not necessarily the SELECTED one, so the single open stop
+	 * has to move to it or the reader's next Tab press would leave the strip entirely. */
+	_focusTab(id) {
+		const tabs = this._pageTabEls();
+		const want = tabs.find(tab => tab.dataset?.relmapPage === id);
+		if (!want) return;
+		for (const tab of tabs) tab.tabIndex = -1;
+		want.tabIndex = 0;
+		want.focus?.();
+	}
+
+	/**
+	 * Take hold of a tab.
+	 *
+	 * ⚠ THE ID IS REMEMBERED ON THE WINDOW as well as written into the `dataTransfer`, because the
+	 * two answer different questions. The transfer is for anybody else who might catch this drag;
+	 * the field is how the three handlers below tell OUR drag from an actor being dragged across
+	 * the strip on its way to the board, which must not be marked up as though it could be dropped
+	 * between two tabs. Something has to be written into the transfer all the same, or Firefox
+	 * declines to start the drag at all.
+	 */
+	_onPageDragStart(ev) {
+		const tab = ev.target?.closest?.("[data-relmap-page]");
+		this._dragPage = "";
+		this._dragOver = "";
+		if (!tab || tab.draggable === false || !tab.dataset?.relmapPage) return;
+		this._dragPage = tab.dataset.relmapPage;
+		if (ev.dataTransfer) {
+			ev.dataTransfer.effectAllowed = "move";
+			ev.dataTransfer.setData("text/plain", this._dragPage);
+		}
+		tab.classList?.add?.("is-dragging");
+	}
+
+	/**
+	 * Where a drop would land, marked on the tab it would land against.
+	 *
+	 * `preventDefault` is what makes the strip a drop target at all, and it is deliberately NOT
+	 * called for a drag that did not start here: an actor crossing the strip on its way to the board
+	 * belongs to the board underneath.
+	 *
+	 * ⚠ THE MARK IS ONLY REWRITTEN WHEN IT WOULD SAY SOMETHING DIFFERENT. This fires continuously
+	 * for as long as the pointer is over the strip, and the pointer spends nearly all of that time
+	 * on the same half of the same tab; a walk of every tab per event, to take off marks that were
+	 * not there and put back the one that was, is a class thrashed sixty times a second under a
+	 * reader's hand for no visible change at all.
+	 */
+	_onPageDragOver(ev) {
+		if (!this._dragPage) return;
+		const tab = ev.target?.closest?.("[data-relmap-page]");
+		if (!tab) return;
+		ev.preventDefault();
+		if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
+		const before = this._dropIsBefore(tab, ev.clientX);
+		const spot = `${tab.dataset.relmapPage}:${before ? "before" : "after"}`;
+		if (spot === this._dragOver) return;
+		this._dragOver = spot;
+		for (const other of this._pageTabEls()) {
+			other.classList?.remove?.("is-drop-before", "is-drop-after");
+		}
+		// Nothing is marked on the tab in the reader's own hand: dropping a board onto itself is
+		// where it already is, and a mark there would promise a move that cannot happen.
+		if (tab.dataset.relmapPage === this._dragPage) return;
+		tab.classList?.add?.(before ? "is-drop-before" : "is-drop-after");
+	}
+
+	/**
+	 * Let go.
+	 *
+	 * WHICH SIDE OF THE TAB THE POINTER IS ON decides where it lands, rather than which way along
+	 * the strip it came from. A tab dropped on the left half of another goes in front of it and on
+	 * the right half behind it, which is what the mark drawn under the pointer has been promising
+	 * for the whole of the drag; deciding it by direction instead makes the same drop mean two
+	 * different things depending on where the reader started.
+	 */
+	async _onPageDrop(ev) {
+		const moved = this._dragPage;
+		const tab = ev.target?.closest?.("[data-relmap-page]");
+		this._clearPageDrag();
+		if (!moved || !tab) return;
+		ev.preventDefault();
+		const before = this._dropIsBefore(tab, ev.clientX)
+			? tab
+			: tab.nextElementSibling?.closest?.("[data-relmap-page]") ?? null;
+		await this._movePage(moved, before?.dataset?.relmapPage ?? null);
+	}
+
+	/** Is the pointer on the front half of this tab? Its middle, and not its edges: a tab is as wide
+	 * as its name, so a fixed margin either side would leave the shortest ones with no front half at
+	 * all. Rects are unavailable under the test harness, where the answer is "in front", which is
+	 * what a drop with no geometry to go on should mean. */
+	_dropIsBefore(tab, clientX) {
+		const box = tab?.getBoundingClientRect?.();
+		if (!box?.width || !Number.isFinite(clientX)) return true;
+		return clientX < box.left + (box.width / 2);
+	}
+
+	/** Every tab in the strip, as elements. */
+	_pageTabEls() {
+		return Array.from(this._root?.querySelectorAll("[data-relmap-page]") ?? []);
+	}
+
+	/** Put every mark the drag left away again. Called from the drop AND from `dragend`, because a
+	 * drag abandoned outside the strip never reaches a drop and would otherwise leave a tab faded
+	 * out for the rest of the session. */
+	_clearPageDrag() {
+		this._dragPage = "";
+		this._dragOver = "";
+		for (const tab of this._pageTabEls()) {
+			tab.classList?.remove?.("is-dragging", "is-drop-before", "is-drop-after");
+		}
 	}
 
 	/**
