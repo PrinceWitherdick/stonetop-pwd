@@ -1636,12 +1636,14 @@ body :is(.app, .window-app).stonetop-height-resized {
 	box-sizing: border-box;
 }
 
-/* Max HP carrying a permanent adjustment (an arcanum's soul-wound, a Mark's boon).
-   The number alone looks like a stale field, so the box says it was set by hand — a
-   dashed rule rather than a colour, since the adjustment can go either way and neither
-   direction is a warning. Sits after the shared `.cell__resource input` rule and wins on
+/* A vital carrying a hand-set adjustment: max HP with a permanent one (an arcanum's soul-wound,
+   a Mark's boon), or armor overridden against the gear on the sheet. The number alone looks like
+   a stale field, so the box says it was set by hand — a dashed rule rather than a colour, since
+   the adjustment can go either way and neither direction is a warning. One rule for both, so the
+   two cannot drift apart. Sits after the shared `.cell__resource input` rule and wins on
    specificity, not order alone. */
-.sheet-attributes-top .cell--Resource .cell__resource input.stonetop-hp-max--adjusted {
+.sheet-attributes-top .cell--Resource .cell__resource input.stonetop-hp-max--adjusted,
+.sheet-attributes-top .cell--attr-armor input.stonetop-armor--adjusted {
 	border-style: dashed;
 	border-color: var(--st-text-muted);
 }

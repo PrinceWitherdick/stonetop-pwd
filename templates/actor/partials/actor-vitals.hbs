@@ -63,14 +63,20 @@
 		</div>
 	</div>
 
-	{{!-- Armor (computed from inventory; always read-only) --}}
+	{{!-- Armor. Derived from carried gear + move bonuses, so — exactly like Max HP above — it
+	      carries no `name`: a blanket form write would be overwritten on the next render.
+	      Editable only in edit mode, where typing goes through the sheet's handler and banks
+	      the difference as a lasting adjustment (an arcanum's boon, a curse, a GM ruling). --}}
 	<div class="cell cell--Number cell--attr-armor">
 		<div class="stonetop-vital-inner">
 			<label class="cell__title" data-vital="armor">{{localize "stonetop.character.attributes.armor"}}</label>
-			<input class="attr-value" type="number"
-			       name="system.attributes.armor.value"
-			       value="{{system.attributes.armor.value}}"
-			       disabled>
+			<span{{#if stonetop.armorNote}} data-tooltip="{{stonetop.armorNote}}"{{/if}}>
+				<input class="attr-value{{#if stonetop.armorAdjusted}} stonetop-armor--adjusted{{/if}}" type="number"
+				       data-armor
+				       value="{{system.attributes.armor.value}}"
+				       min="0"
+				       {{#unless stonetop.editMode}}disabled{{/unless}}>
+			</span>
 		</div>
 	</div>
 

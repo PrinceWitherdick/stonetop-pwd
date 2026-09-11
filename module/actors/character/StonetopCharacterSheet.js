@@ -1438,10 +1438,20 @@ export function createStonetopCharacterSheetClass(Base) {
 			for (const [path, value] of Object.entries(vitalsToSystem)) {
 				foundry.utils.setProperty(context.system, path, value);
 			}
-			// Kept for the post-render mirror (_syncStoredMaxHp). That write needs the computed max
+			// Kept for the post-render mirror (_syncStoredDerived). That write needs the computed max
 			// and this is the one place it has already been worked out — asking for it again would
 			// rebuild the whole snapshot on every render. 0 means "no playbook, nothing to mirror".
 			this._computedMaxHp = context.stonetop.playbook ? v.hp.max : 0;
+			// Same deal for armor (the same mirror), and for a sharper reason: the setProperty
+			// above writes the LIVE actor.system DataModel (getData leaves `context.system` unset,
+			// so line ~1187 aliases it to the document's own), which persists nothing and is only
+			// ever true on a client that has rendered this sheet. The combat flow reads the STORED
+			// `attributes.armor.value` off the document — on the GM's client, who has never opened
+			// the player's sheet, that was the schema initial of 0, so a PC in mail and a shield
+			// soaked nothing. Unlike max HP, 0 is a legitimate computed armor (unarmored), so this
+			// carries `null` for "no snapshot, nothing to mirror" rather than overloading 0.
+			this._computedArmor = Number.isFinite(Number(v.armor)) ? Number(v.armor) : null;
+			this._computedUnpierceable = Number(v.unpierceableArmor) || 0;
 			// A permanent max-HP change (an arcanum's soul-wound, a Mark's boon) is otherwise
 			// invisible once applied — the field just shows a number that disagrees with the
 			// playbook. Marked and spelled out here so a GM reading the sheet months later can
@@ -1451,6 +1461,17 @@ export function createStonetopCharacterSheetClass(Base) {
 			context.stonetop.hpMaxNote = hpAdjust
 				? `Max HP ${hpAdjust > 0 ? "+" : "−"}${Math.abs(hpAdjust)} permanently (your playbook gives ${v.hpBase}). Type a new max to change it, or ${v.hpBase} to clear it.`
 				: (context.stonetop.editMode ? "Type a new max to change it permanently. The difference is kept as you level." : "");
+			// Same for a hand-set armor adjustment. Spelled out rather than left as a number
+			// that silently disagrees with the gear listed on the sheet.
+			const armorAdjust = this._stonetopCharacter.armorAdjustment;
+			// Off the snapshot's own derived number rather than the clamped total minus the
+			// adjustment: see VitalsSnapshot#armorBase. The note names the number the player types
+			// to clear the adjustment, so getting it wrong hands them a number that doesn't clear.
+			const armorDerived = Number(v.armorBase) || 0;
+			context.stonetop.armorAdjusted = armorAdjust !== 0;
+			context.stonetop.armorNote = armorAdjust
+				? `Armor ${armorAdjust > 0 ? "+" : "−"}${Math.abs(armorAdjust)} by hand (your gear and moves give ${armorDerived}). Type a new total to change it, or ${armorDerived} to clear it.`
+				: (context.stonetop.editMode ? "Type a new total to set it by hand. The difference is kept as your gear changes." : "");
 			// Followers tab — build data from flags + playbook definition.
 			// Pass smallItemLimit from the already-computed snapshot so crew gear
 			// uses the exact same prosperity value as outfit inventory items.
@@ -3774,12 +3795,16 @@ export function createStonetopCharacterSheetClass(Base) {
 			syncFollowerActors(this.actor, followerSnapshots)
 				.catch(err => console.error("Stonetop | follower actor sync failed", err));
 
-			// The token's HP bar reads the PERSISTED max, which the sheet itself never does. Same
-			// call site and the same fire-and-forget shape as the follower sweeps above, for the
-			// same reason: every route that can move a character's max HP (a level, a Marshal's
-			// marked move, a Thrall's Marks, an insert's penalty) ends in a render of this sheet.
-			this._syncStoredMaxHp()
-				.catch(err => console.error("Stonetop | max HP mirror failed", err));
+			// The token's HP bar reads the PERSISTED max and combat reads the PERSISTED armor,
+			// neither of which the sheet itself ever does. Same call site and the same
+			// fire-and-forget shape as the follower sweeps above, for the same reason: every route
+			// that can move either number (a level, a Marshal's marked move, a Thrall's Marks, an
+			// insert's penalty; equipping a shield, an arcanum's cloak, a move's bonus) ends in a
+			// render of this sheet. ONE write for both: they go stale together on the first open
+			// of an existing character, and two updates would mean two broadcasts and two more
+			// renders racing on the same document.
+			this._syncStoredDerived()
+				.catch(err => console.error("Stonetop | derived vitals mirror failed", err));
 
 			// Followers tab: drag a card onto the canvas to put that follower on the map as a
 			// token (module/hooks/FollowerDrop.js turns the payload below into an Actor).
@@ -4041,6 +4066,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Max HP, same story: the rendered number is computed, so a hand-typed one is banked
 			// as a permanent adjustment instead of being written straight to the stale field.
 			html.find("[data-hp-max]").on("change", this._onMaxHpEdit.bind(this));
+
+			// Armor, same story again: derived from carried gear + move bonuses, so a hand-typed
+			// total is banked as a signed adjustment rather than pinning the derived number.
+			html.find("[data-armor]").on("change", this._onArmorEdit.bind(this));
 
 			// -- Followers tab: shared follower-card fields ----------------
 			// Common, hand-editable fields on every follower card (name,
@@ -9372,6 +9401,29 @@ export function createStonetopCharacterSheetClass(Base) {
 			this.render(false);
 		}
 
+		// ── Armor ──────────────────────────────
+		// Hand-editing the armor field, on exactly the terms the max-HP field above uses: the
+		// number in the box is derived from carried gear and move bonuses, so what gets stored
+		// is the DIFFERENCE between it and what was typed. That way a boon or a curse keeps its
+		// size when the gear underneath it changes, instead of pinning a total the next equip
+		// would fight. Typing the derived number back in clears the adjustment; blank or
+		// nonsense puts the rendered value back rather than half-saving.
+		async _onArmorEdit(ev) {
+			const el = ev.currentTarget;
+			if (!this.isEditable) return;
+			const raw = String(el.value ?? "").trim();
+			const typed = Number(raw);
+			if (!Number.isFinite(typed) || raw === "" || typed < 0) {
+				if (raw !== "") ui.notifications?.warn("Armor has to be a whole number of 0 or more.");
+				// `defaultValue` is what this field was RENDERED with, which is the derived total;
+				// the persisted field is only a mirror of it and can lag a render behind.
+				el.value = el.defaultValue || "0";
+				return;
+			}
+			await this._stonetopCharacter.setArmor(typed);
+			this.render(false);
+		}
+
 		/**
 		 * Mirror the computed max HP onto the persisted `hp.max`.
 		 *
@@ -9392,9 +9444,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * files. Writes only on a genuine difference, so it settles in one pass and costs a
 		 * comparison on every render after that.
 		 */
-		async _syncStoredMaxHp() {
-			const computed = Number(this._computedMaxHp) || 0;
-			if (computed <= 0) return;
+		async _syncStoredDerived() {
 			// `isEditable` as well as ownership. Ownership alone is true in two places this must
 			// not write: a character previewed inside a LOCKED compendium, where the update throws
 			// and leaves one console error per render forever; and an unlinked token's sheet,
@@ -9402,8 +9452,27 @@ export function createStonetopCharacterSheetClass(Base) {
 			// field the token was reading off the actor perfectly well. isEditable is the sheet's
 			// own answer to "may this be written", and it already accounts for both.
 			if (!this.actor?.isOwner || !this.isEditable) return;
-			if (Number(this.actor.system?.attributes?.hp?.max) === computed) return;
-			await this.actor.update({ "system.attributes.hp.max": computed }, { stonetopLedger: true });
+
+			const update = {};
+			const maxHp = Number(this._computedMaxHp) || 0;
+			if (maxHp > 0 && Number(this.actor.system?.attributes?.hp?.max) !== maxHp) {
+				update["system.attributes.hp.max"] = maxHp;
+			}
+			// null means the snapshot had no armor to mirror. 0 does NOT — an unarmored character
+			// is a real computed value and must still overwrite a stale stored number.
+			const armor = this._computedArmor;
+			if (armor != null) {
+				const floor = Number(this._computedUnpierceable) || 0;
+				const attrs = this.actor.system?.attributes?.armor;
+				// The two move together: a floor is part of the total above it, so a disagreement
+				// in either is settled by writing both rather than leaving half the pair stale.
+				if (Number(attrs?.value) !== armor || (Number(attrs?.unpierceable) || 0) !== floor) {
+					update["system.attributes.armor.value"] = armor;
+					update["system.attributes.armor.unpierceable"] = floor;
+				}
+			}
+			if (!Object.keys(update).length) return;
+			await this.actor.update(update, { stonetopLedger: true });
 		}
 
 		// ── Wounds (4th harm track) ────────────────────────────────────────────────

@@ -27,7 +27,21 @@ export class CharacterModel extends foundry.abstract.TypeDataModel {
 				}),
 				xp:      valueMaxField(0, 8),
 				level:   valueField(1),
-				armor:   valueField(),
+				// `value` is DERIVED — mirrored from the snapshot by the sheet's _syncStoredArmor
+				// so combat, which reads this document rather than the render context, sees the
+				// real number. Never hand-edit it; type in the sheet's Armor box instead, which
+				// banks the difference as `adjustment`.
+				armor:   new fields.SchemaField({
+					value: new fields.NumberField({ required: true, integer: true, initial: 0 }),
+					// The hand-set armor delta, exactly parallel to hp.adjustment above: a signed
+					// DELTA, so a boon or a curse keeps its size as the gear underneath it changes
+					// rather than pinning a total the next equip would fight. See setArmor.
+					adjustment: new fields.NumberField({ required: true, integer: true, initial: 0 }),
+					// Also DERIVED and mirrored: how much of `value` shrugs off piercing and
+					// "ignores armor" (the Rune-laden Scales' PROOF AGAINST HARM). Combat reads
+					// this document, so the floor has to travel with the total.
+					unpierceable: new fields.NumberField({ required: true, integer: true, initial: 0 }),
+				}),
 				forward: valueField(),
 				ongoing: valueField(),
 				damage:  new fields.SchemaField({
