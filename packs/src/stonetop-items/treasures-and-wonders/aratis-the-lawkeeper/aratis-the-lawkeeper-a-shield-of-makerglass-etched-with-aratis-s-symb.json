@@ -8,6 +8,10 @@
     "inventoryColumn": "regular",
     "weight": 2,
     "note": "indestructible, <em>+1 armor</em>, +1 Readiness of a Defend 7+, Value 2",
+    "armor": {
+      "modifier": 1
+    },
+    "shield": true,
     "isTreasure": true
   },
   "flags": {
@@ -16,7 +20,11 @@
       "inventoryColumn": "regular",
       "isTreasure": true,
       "weight": 2,
-      "note": "indestructible, <em>+1 armor</em>, +1 Readiness of a Defend 7+, Value 2"
+      "note": "indestructible, <em>+1 armor</em>, +1 Readiness of a Defend 7+, Value 2",
+      "armor": {
+        "modifier": 1
+      },
+      "shield": true
     }
   },
   "img": "systems/stonetop-pwd/assets/icons/treasures/vase.svg",

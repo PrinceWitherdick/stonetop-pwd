@@ -67,7 +67,10 @@
         "item": {
           "weight": 1,
           "tags": "<em>1 armor, warm, magical</em>",
-          "column": "regular"
+          "column": "regular",
+          "armor": {
+            "base": 1
+          }
         },
         "unlock": "○○○ When you make the last mark, you unlock the mysteries of the Cloak and can use The Flesh Remembers (see reverse)."
       },
@@ -238,7 +241,10 @@
         "item": {
           "weight": 1,
           "tags": "<em>2 armor, magical</em>",
-          "column": "regular"
+          "column": "regular",
+          "armor": {
+            "base": 2
+          }
         },
         "unlock": "○○○○○ When you make the last mark, you unlock the mysteries of the armor. Gain a move of your choice (see reverse), but also mark a consequence. Then, erase all marks."
       },
@@ -257,7 +263,10 @@
         "item": {
           "weight": 1,
           "tags": "<em>+1 armor, close, forceful, magical, +1 Readiness <strong>on a 7+</strong> to Defend</em>",
-          "column": "regular"
+          "column": "regular",
+          "armor": {
+            "modifier": 1
+          }
         },
         "unlock": "○○○○○ When you make the last mark, you unlock the shield's mysteries, and can use Spirits of the Herd (see reverse)."
       },

@@ -8,6 +8,9 @@
     "inventoryColumn": "regular",
     "weight": 2,
     "note": "<em>2 armor</em>, <em>warm</em>, <em>cumbersome</em>, Value 4",
+    "armor": {
+      "base": 2
+    },
     "isTreasure": true,
     "artifactLore": "<p>utterly immune to magic</p>"
   },
@@ -17,7 +20,10 @@
       "inventoryColumn": "regular",
       "isTreasure": true,
       "weight": 2,
-      "note": "<em>2 armor</em>, <em>warm</em>, <em>cumbersome</em>, Value 4"
+      "note": "<em>2 armor</em>, <em>warm</em>, <em>cumbersome</em>, Value 4",
+      "armor": {
+        "base": 2
+      }
     }
   },
   "img": "systems/stonetop-pwd/assets/icons/treasures/vase.svg",

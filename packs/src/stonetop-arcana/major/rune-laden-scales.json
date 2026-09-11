@@ -7,13 +7,17 @@
   "flags": {
     "stonetop": {
       "slug": "rune-laden-scales",
+      "armorUnlocks": [
+        { "label": "PROOF AGAINST HARM", "armor": { "base": 3, "unpierceable": true } }
+      ],
       "front": {
         "title": "Rune-laden Scales",
         "item": {
           "name": "Rune-laden Scales",
           "weight": 1,
           "note": "<em>2 armor, magical</em>",
-          "inventoryColumn": "regular"
+          "inventoryColumn": "regular",
+          "armor": { "base": 2 }
         },
         "description": "<p>An ancient vest of bluish steel, each scale etched with a silvery rune similar to those found among the ruins near Barrier Pass. A working of the Makers, no doubt, or at least of their most gifted students. The armor is surprisingly light and supple. The scales are always cold to the touch, and often edged in frost.</p><p>When you <strong><em>wear the Rune-laden Scales</em></strong>, you are perfectly comfortable in cold weather and suffer no harm from exposure or magic that might otherwise freeze your flesh. You have no such immunity to secondary effects of ice-magic, such as slipping, being impaled by an icicle, or becoming encased in a block of ice.</p><p>When you <strong><em>wear the Rune-laden Scales and stand fast against a magical attack</em></strong>, roll +CON: <strong>on a 10+</strong>, the magic washes over you, unpleasant perhaps but with no ill effect; <strong>on a 7-9</strong>, you're only partially affected—suffer half damage (if any) and a reduced effect; <strong>on a 6-</strong>, mark XP, and the magic affects you fully.</p><p>When you <strong><em>wear the Rune-laden Scales and defeat a wielder of chaotic magic</em></strong>, mark 1:</p>",
         "unlock": {

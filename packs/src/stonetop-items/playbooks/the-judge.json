@@ -197,7 +197,9 @@
                 },
                 {
                   "slug": "makerglass-shield",
-                  "label": "◇◇ <strong>Makerglass shield</strong>, etched with Aratis's symbol (<em>indestructible</em>, +1 armor, +1 Readiness on a Defend 7+)"
+                  "label": "◇◇ <strong>Makerglass shield</strong>, etched with Aratis's symbol (<em>indestructible</em>, +1 armor, +1 Readiness on a Defend 7+)",
+                  "armor": { "modifier": 1 },
+                  "shield": true
                 },
                 {
                   "slug": "helm",

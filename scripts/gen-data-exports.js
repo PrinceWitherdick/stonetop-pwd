@@ -143,6 +143,9 @@ function cleanArcanum(doc, type) {
             tags:   f.item.note   ?? "",
             column: f.item.inventoryColumn ?? "regular",
         };
+        // Same reason cleanItem carries it: armor is part of what the curio IS, and an export
+        // that lists the Demonhide Cloak's "1 armor" as prose alone reads as granting none.
+        if (f.item.armor) out.front.item.armor = f.item.armor;
     }
     if (f.unlock?.description) out.front.unlock = f.unlock.description;
     if (b.resource?.max)       out.back.resource = cleanResource(b.resource);
@@ -189,6 +192,13 @@ function cleanItem(doc) {
     };
     if (st.resource?.max) out.resource = cleanResource(st.resource);
     if (st.description)   out.description = st.description;
+    // Armor and the special-item markers are part of what an item IS, not Foundry plumbing, so
+    // they belong in the clean export. Leaving them out made this file actively misleading: it
+    // lists every armor in the game with no armor on any of them, so anything auditing gear from
+    // data/ concluded the catalog grants none. packs/src/ stays the source of truth either way.
+    if (st.armor)           out.armor           = st.armor;
+    if (st.special)         out.special         = true;
+    if (st.specialCategory) out.specialCategory = st.specialCategory;
     return out;
 }
 

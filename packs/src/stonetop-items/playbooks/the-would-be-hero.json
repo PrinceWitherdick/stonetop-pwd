@@ -210,7 +210,9 @@
               "options": [
                 {
                   "slug": "shield",
-                  "label": "◇◇ <strong>A shield</strong>, bearing ___'s crest"
+                  "label": "◇◇ <strong>A shield</strong>, bearing ___'s crest",
+                  "armor": { "modifier": 1 },
+                  "shield": true
                 },
                 {
                   "slug": "wool-cloak",
@@ -328,7 +330,7 @@
                 "column": "regular",
                 "weight": 1,
                 "armor": {
-                  "modifier": 1
+                  "base": 1
                 }
               }
             ]

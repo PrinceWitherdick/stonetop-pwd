@@ -14,7 +14,7 @@
       "note": "<em>messy</em>, <em>cumbersome</em>",
       "weight": 2,
       "armor": {
-        "modifier": 2
+        "base": 2
       },
       "special": true,
       "specialCategory": "Armor"

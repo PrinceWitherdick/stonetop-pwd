@@ -13,7 +13,8 @@
           "name": "Demonhide Cloak",
           "weight": 1,
           "note": "<em>1 armor, warm, magical</em>",
-          "inventoryColumn": "regular"
+          "inventoryColumn": "regular",
+          "armor": { "base": 1 }
         },
         "description": "<p>A tattered cloak, stitched from a motley patchwork of unfamiliar hides and leather. Shifting odors waft from it: damp earth, ozone, musk, sulfur, rust, rot. It is not a glamorous garment. Anything but.</p><p>When you <strong><em>wear the Cloak</em></strong>, its armor applies against demons in all cases, even if their attacks are piercing or ignore armor.</p><p>When you <strong><em>draw up the hood of the Cloak</em></strong>, you see clearly in darkness.</p><p>When you <strong><em>wrap the Cloak tightly about your person</em></strong>, you pass unnoticed by all so long as you move calmly and carefully and keep out of direct, harsh light. In retrospect, those you pass may recall a strange smell.</p><p>When you <strong><em>flay the hide from a demon, tan it, and sew it onto the cloak</em></strong>, mark 1:</p>",
         "unlock": {

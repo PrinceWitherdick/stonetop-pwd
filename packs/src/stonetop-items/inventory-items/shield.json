@@ -16,7 +16,8 @@
       "breakBefore": true,
       "armor": {
         "modifier": 1
-      }
+      },
+      "shield": true
     }
   },
   "folder": "OL1lTSyCryWm3Xez"

@@ -421,7 +421,7 @@
                 "column": "regular",
                 "weight": 1,
                 "armor": {
-                  "modifier": 1
+                  "base": 1
                 }
               }
             ]

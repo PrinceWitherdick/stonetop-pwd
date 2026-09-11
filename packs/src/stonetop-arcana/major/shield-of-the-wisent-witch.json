@@ -13,7 +13,9 @@
           "name": "Shield of the Wisent Witch",
           "weight": 1,
           "note": "<em>+1 armor, close, forceful, magical, +1 Readiness <strong>on a 7+</strong> to Defend</em>",
-          "inventoryColumn": "regular"
+          "inventoryColumn": "regular",
+          "armor": { "modifier": 1 },
+          "shield": true
         },
         "description": "<p>A shield of horn-oak, glossy from long use, shod in bronze and adorned with a stylized wisent skull. It's heavier than it looks, but its heft gives you a feeling of confidence, like anyone would be a fool to mess with a titan such as you.</p><p>When you <strong><em>bear the Shield openly</em></strong>, natural creatures give you wide berth and treat you with the respect that they would give a 1,000-lb. bison.</p><p>When you <strong><em>use the Shield to Defend with both feet planted firmly on the ground</em></strong>, so long as you hold Readiness you cannot be moved or tripped. When you <strong><em>spend Readiness to strike back at an attacker</em></strong>, you also break their momentum, knock them back, and/or send them reeling.</p><p>When you <strong><em>perform the sacred rites of the forest witches, alone in the woods under a clear crescent moon</em></strong>, mark 1:</p>",
         "unlock": {
