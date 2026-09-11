@@ -77,6 +77,7 @@ import { clusterPoint, dropActorOnCanvas } from "../../utils/token-drop.js";
 import { enrichHTML } from "../../utils/foundry-compat.js";
 import { compendiumRefTail, worldCopiesBySource } from "../../migration/compat.js";
 import { escHtml, joinNames, stripHtmlToText } from "../../utils/strings.js";
+import { moveWithin, insertionIndexIn } from "../../utils/list-reorder.js";
 import { localize, format } from "../../utils/i18n.js";
 import { error } from "../../utils/logger.js";
 import { openBundleNotesDialog } from "./bundle-notes-dialog.js";
@@ -415,31 +416,10 @@ export function normalizeBundle(enc = {}) {
 	};
 }
 
-/**
- * Move one element of `list` to `to`, clamped. Returns null for a no-op so an unchanged order
- * stays off the wire.
- *
- * Identity comparison is enough for the no-op test because nothing here rebuilds an element.
- */
-export function moveWithin(list, from, to) {
-	if (from < 0 || from >= list.length) return null;
-	const next = [...list];
-	const [moved] = next.splice(from, 1);
-	next.splice(Math.max(0, Math.min(to, next.length)), 0, moved);
-	return next.every((x, i) => x === list[i]) ? null : next;
-}
-
-/**
- * Where a drop lands: before the row it hit, or `fallback` when it named no neighbour.
- *
- * ALWAYS called against a list the dragged row has already been taken OUT of — see `moveEntry`
- * for why that ordering is the whole trick.
- */
-export function insertionIndexIn(rows, beforeId, fallback) {
-	if (!beforeId) return fallback;
-	const i = rows.findIndex(r => r.id === beforeId);
-	return i < 0 ? fallback : i;
-}
+// The two reorder primitives now live in utils/list-reorder.js, so the relationship map's board
+// strip aims its drops with the same pair rather than a third copy of the splice. Re-exported
+// here because this is where the toolkit and its tests have always imported them from.
+export { moveWithin, insertionIndexIn };
 
 /**
  * One stored entry, in the shape the row renders from.
