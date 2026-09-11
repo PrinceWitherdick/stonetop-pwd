@@ -36,7 +36,7 @@
 
 import { altStatGrantForMove } from "./alt-stat-grants.js";
 
-const M = (over = {}) => ({
+export const M = (over = {}) => ({
 	range: [],
 	damageBonus: 0,
 	piercing: 0,
@@ -120,8 +120,8 @@ export function grantedWeaponForMove(moveName) {
 	return { ...granted, whenStat: grant?.altStat ?? null, viaMove: grant?.whenMove ?? null };
 }
 
-const MELEE_RANGES  = new Set(["hand", "close", "reach"]);
-const RANGED_RANGES = new Set(["near", "far"]);
+export const MELEE_RANGES  = new Set(["hand", "close", "reach"]);
+export const RANGED_RANGES = new Set(["near", "far"]);
 
 /** Metadata for a weapon slug, or null if the slug isn't a known weapon
  *  (tools, supplies, and write-ins fall through here). */

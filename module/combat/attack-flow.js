@@ -23,6 +23,7 @@
 //    stays a player action.
 
 import {STONETOP_SCOPE} from "../actors/character/StonetopFlags.js";
+import {weaponMetaFromNote} from "../data/weapon-from-note.js";
 import {weaponMeta, isClashWeapon, isLetFlyWeapon, weaponTraitText, weaponArmorBits, grantedWeaponForMove, MOVE_GRANTED_WEAPONS, UNARMED_META} from "../data/weapons.js";
 import {escHtml} from "../utils/strings.js";
 import {stonetopChatCard, rollFormulaChip, damageMark, damageBadge, optionKey} from "../utils/chat.js";
@@ -134,45 +135,131 @@ function isFriendly(disposition) {
 }
 
 // -- Ammo statuses ------------------------------------------------------------
-// Ammo weapons (crossbow, composite bow) carry a max-2 resource track on their
-// inventory item — the ○○ "low ammo" / "all out" boxes on the equipment tab, stored
-// in flags.stonetop-pwd.inventory.resources[slug]. Let Fly's 7-9 "deplete your ammo"
-// pick marks the next box; 0 = plenty, 1 = low ammo, 2 = all out. We drive that SAME
+// Ammo weapons (crossbow, composite bow) carry a resource track on their inventory
+// item — the ○○ "low ammo" / "all out" boxes on the equipment tab, stored in
+// flags.stonetop-pwd.inventory.resources[slug]. Let Fly's 7-9 "deplete your ammo"
+// pick marks the next box; 0 = plenty, the last box = all out. We drive that SAME
 // resource so the sheet tracker and the chat button stay in lockstep.
+//
+// ⚠ HOW MANY BOXES IS THE ITEM'S TO SAY, not this file's. The bows carry the printed pair, but
+// javelins are a single throw ("◇ javelins … ○ all out"), a lantern has five hours of oil, and a
+// Book II treasure can hold four uses of anything — and the track this marks is the same one the
+// equipment tab draws. Assuming two here said "all out" on a four-use item with half of it still
+// in hand, and wrote a 2 into a track the sheet then drew with two boxes still empty. So the max
+// and the words both come off the item's own resource definition, carried on the gear record as
+// `ammoMax` / `ammoLabels` (see StonetopCharacter#_gearSources) and threaded to the chat card.
 const AMMO_MAX = 2;
 const AMMO_LABELS = ["Plenty", "Low ammo", "All out"];
+// The button's locked label while the GM resolves a choice, in the three places that set it.
+const WAITING_HTML = '<i class="fas fa-hourglass-half"></i> Waiting on the GM';
 
-function weaponAmmoIndex(actor, slug) {
+// The track a weapon record describes: its length, and the status the item prints against each
+// box. The fallback is the ammo weapons' printed pair, which is what a record with no track of
+// its own (the legacy bare-actor path, a test fixture) has always behaved as.
+function ammoTrack(weapon) {
+	const max = Math.max(1, Math.trunc(Number(weapon?.ammoMax)) || AMMO_MAX);
+	return { max, labels: Array.isArray(weapon?.ammoLabels) ? weapon.ammoLabels : [] };
+}
+
+// What to CALL the state of a track with `index` boxes marked. The item's own word for that box
+// wins — "running low" on the oil, "vial" on the twisting pine — since it is the word printed
+// beside the box the player just marked. Unlabelled boxes fall back to the ammo wording, where
+// only the last box is "all out"; nothing marked is always "plenty".
+function ammoStatusLabel(index, { max, labels }) {
+	if (index <= 0) return AMMO_LABELS[0];
+	const printed = labels[index - 1];
+	if (printed) return printed.charAt(0).toUpperCase() + printed.slice(1);
+	return index >= max ? AMMO_LABELS[2] : AMMO_LABELS[1];
+}
+
+// A gear-choice weapon (the Heavy's and Marshal's crossbow) keeps its ○○ track in
+// possessions.choiceUses under the composite `possession:choice` key, not in
+// inventory.resources — so which store to read is a property of the weapon, carried on its
+// record as `ammoStore` and threaded through to the chat card.
+function weaponAmmoIndex(actor, weapon) {
+	const { max } = ammoTrack(weapon);
+	const slug = weapon?.slug;
+	// Through the possessions store's own reader, the way the write goes through its writer:
+	// a gear-choice key contains a colon, and where those uses live is that class's business.
+	if ((weapon?.ammoStore ?? "inventory") === "possessions") {
+		const [possessionSlug, choiceSlug] = String(slug).split(":");
+		const used = actor.typedActor?.subChoiceUses?.(possessionSlug, choiceSlug) ?? 0;
+		return Math.min(Math.max(0, Number(used) || 0), max);
+	}
 	const resources = actor.getFlag(SCOPE, "inventory.resources") ?? {};
-	return Math.min(Math.max(0, Number(resources[slug]) || 0), AMMO_MAX);
+	return Math.min(Math.max(0, Number(resources[slug]) || 0), max);
 }
 
-function weaponAmmoLabel(actor, slug) {
-	return AMMO_LABELS[weaponAmmoIndex(actor, slug)];
+function weaponAmmoLabel(actor, weapon) {
+	return ammoStatusLabel(weaponAmmoIndex(actor, weapon), ammoTrack(weapon));
 }
 
-// Mark the next ammo status. `slug` is a dot-free inventory slug, so a sub-key write is
+// Mark the next ammo status. The slug is a dot-free inventory slug, so a sub-key write is
 // safe and leaves other weapons' resources untouched. Returns the new status.
-async function advanceWeaponAmmo(actor, slug) {
-	const next = Math.min(weaponAmmoIndex(actor, slug) + 1, AMMO_MAX);
-	await actor.update({ [`flags.${SCOPE}.inventory.resources.${slug}`]: next });
-	return { index: next, label: AMMO_LABELS[next], allOut: next >= AMMO_MAX };
+async function advanceWeaponAmmo(actor, weapon) {
+	const track = ammoTrack(weapon);
+	const slug = weapon?.slug;
+	const next = Math.min(weaponAmmoIndex(actor, weapon) + 1, track.max);
+	if ((weapon?.ammoStore ?? "inventory") === "possessions") {
+		// Through the possessions store's own writer rather than a dotted update path: a
+		// gear-choice key contains a colon, and a whole-object write keeps it out of Foundry's
+		// path expansion entirely (the same reason setChoiceUses is written that way).
+		const [possessionSlug, choiceSlug] = String(slug).split(":");
+		await actor.typedActor?.setSubChoiceUses?.(possessionSlug, choiceSlug, next);
+	} else {
+		await actor.update({ [`flags.${SCOPE}.inventory.resources.${slug}`]: next });
+	}
+	return { index: next, label: ammoStatusLabel(next, track), allOut: next >= track.max };
 }
 
 // -- Weapon enumeration -------------------------------------------------------
 
-// The carried weapons (checked inventory slugs present in WEAPON_META) that fit `move`,
+// What an actor with no StonetopCharacter attached can still answer: its checked inventory,
+// shaped like a gear record. Keeps the flow working for a bare actor (and for tests that build
+// one) without teaching it a second rule — a character that HAS one always uses that instead.
+function legacyCarriedGear(actor) {
+	const checked = actor.getFlag(SCOPE, "inventory.checked") ?? {};
+	return Object.entries(checked)
+		.filter(([, on]) => on)
+		// `catalog` for the same reason the real gear source sets it: these ARE outfit slugs, so
+		// the curated table is the whole answer to whether one is a weapon.
+		.map(([slug]) => ({ slug, weaponSlug: slug, name: null, note: null, ammoStore: "inventory", catalog: true }));
+}
+
+// Exported for the tests; the flow reaches it only through maybeBeginAttack.
+// The carried weapons that fit `move`,
 // plus any weapon an owned move grants (the Lightbearer's holy light). A granted weapon
 // isn't inventory, so it's appended rather than read off the checked flags; it's offered
 // whenever its move is owned, since whether the fiction supports it — wielding a holy
 // light against a creature of darkness — is the table's call, not ours.
-function carriedAttackWeapons(actor, move) {
-	const checked = actor.getFlag(SCOPE, "inventory.checked") ?? {};
+export async function carriedAttackWeapons(actor, move) {
 	const out = [];
-	for (const [slug, on] of Object.entries(checked)) {
-		if (!on) continue;
-		const meta = weaponMeta(slug);
-		if (meta && move.filter(meta)) out.push({ slug, meta, ammoLabel: meta.ammo ? weaponAmmoLabel(actor, slug) : null });
+	// Every carried thing, whichever store its ◇ lives in — see StonetopCharacter#_gearSources.
+	// Reading inventory.checked alone (as this did) meant the Heavy's and Marshal's Weapons of
+	// War were never offered for Clash or Let Fly, because a gear choice marks itself carried in
+	// possessions.choiceCarried; and arcana / treasure weapons were missed again below, for
+	// having no WEAPON_META entry to find.
+	const gear = (await actor.typedActor?.carriedWeaponGear?.()) ?? legacyCarriedGear(actor);
+	for (const g of gear) {
+		// A catalog or gear-choice weapon is in the curated table; anything picked up in play
+		// states its own mechanics in its tag line instead.
+		//
+		// ⚠ AND THE TABLE IS THE LAST WORD ON A CATALOG ITEM. Falling through to the tag line for
+		// one too meant every catalog row that merely names a range became a weapon: the torch
+		// ("reach, area, dangerous") and the oil lamp are lit, not swung; the dog, the donkey, the
+		// horse and the mule print the damage THEY deal; and a player carrying any of them was
+		// asked which one they were attacking with. The book's equipment list is exactly what
+		// WEAPON_META was curated from, so a row it doesn't name is not a weapon.
+		const meta = (g.weaponSlug ? weaponMeta(g.weaponSlug) : null)
+			?? (g.catalog ? null : weaponMetaFromNote(g.name, g.note, { ammo: !!g.ammo }));
+		if (!meta || !move.filter(meta)) continue;
+		const weapon = {
+			slug: g.slug, meta,
+			ammoStore: g.ammoStore ?? "inventory",
+			ammoMax: g.ammoMax ?? null,
+			ammoLabels: g.ammoLabels ?? null,
+		};
+		out.push({ ...weapon, ammoLabel: meta.ammo ? weaponAmmoLabel(actor, weapon) : null });
 	}
 	for (const moveName of Object.keys(MOVE_GRANTED_WEAPONS)) {
 		// Through the accessor, so the weapon carries the stat the move actually grants for
@@ -180,7 +267,7 @@ function carriedAttackWeapons(actor, move) {
 		const granted = grantedWeaponForMove(moveName);
 		if (!move.filter(granted.meta)) continue;
 		if (!actor.items.some(i => i.type === "move" && i.name === moveName)) continue;
-		out.push({ slug: granted.slug, meta: granted.meta, ammoLabel: null, grantedBy: moveName, whenStat: granted.whenStat });
+		out.push({ slug: granted.slug, meta: granted.meta, ammoLabel: null, ammoStore: "inventory", grantedBy: moveName, whenStat: granted.whenStat });
 	}
 	return withUnarmedChoice(out);
 }
@@ -199,13 +286,16 @@ function carriedAttackWeapons(actor, move) {
  */
 export function withUnarmedChoice(candidates) {
 	if (!candidates.length || !candidates.every(c => c.grantedBy)) return candidates;
-	return [{ slug: "", meta: UNARMED_META, ammoLabel: null, unarmed: true }, ...candidates];
+	return [{ slug: "", meta: UNARMED_META, ammoLabel: null, ammoStore: "inventory", unarmed: true }, ...candidates];
 }
 
-// The flattened, storable weapon record baked into the chat card (no functions).
-function serializeWeapon({ slug, meta }) {
+// The flattened, storable weapon record baked into the chat card (no functions). The ammo track's
+// shape rides along with the store it lives in: the card is what "deplete your ammo" is pressed
+// on, and by then the gear record it came from is long gone.
+function serializeWeapon({ slug, meta, ammoStore = "inventory", ammoMax = null, ammoLabels = null }) {
 	return {
-		slug, name: meta.name, range: meta.range, damageBonus: meta.damageBonus,
+		slug, ammoStore, ammoMax, ammoLabels,
+		name: meta.name, range: meta.range, damageBonus: meta.damageBonus,
 		piercing: meta.piercing, ignoresArmor: meta.ignoresArmor, area: meta.area,
 		damageDie: meta.damageDie, tags: meta.tags, ammo: meta.ammo,
 	};
@@ -552,7 +642,7 @@ export async function maybeBeginAttack(actor, item, { stat = null, weaponSlug = 
 
 	// Rolling the stat a granted weapon rides on (+WIS to Clash → Purifying Flames)
 	// pre-selects that weapon, so the d10 the move promises is what's in hand by default.
-	const candidates = carriedAttackWeapons(actor, move);
+	const candidates = await carriedAttackWeapons(actor, move);
 	const preferSlug = candidates.find(c => c.whenStat && c.whenStat === stat)?.slug ?? null;
 	// Both "which weapon should be pre-checked" and "is there anything to ask at all" are the
 	// prompt's own call — see promptWeaponChoice.
@@ -1097,7 +1187,7 @@ async function lockAttackCard(message, root, extra = {}) {
 async function depleteAmmoAndPost(message, pc, attack) {
 	const slug = attack?.weapon?.ammo ? attack.weapon.slug : null;
 	if (!slug || message.getFlag(SCOPE, "attack")?.ammoDepleted) return;
-	const status = await advanceWeaponAmmo(pc, slug);
+	const status = await advanceWeaponAmmo(pc, attack.weapon);
 	await message.setFlag(SCOPE, "attack", { ...message.getFlag(SCOPE, "attack"), ammoDepleted: true });
 	await ChatMessage.create({
 		content: stonetopChatCard("Ammunition depleted",

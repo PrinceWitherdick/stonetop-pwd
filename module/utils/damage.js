@@ -189,8 +189,8 @@ const BONUS_DAMAGE_RE = /\bextra\s+damage\b|\badds?\b[^.;]*\bdamage\s+roll\b/i;
 // The armor clauses the books print beside a damage number, in the two forms the flow already
 // knows how to apply (utils/damage.js#mitigateDamage): a full bypass, and a count of armor points
 // pierced. Read here so a "(ignores armor)" on the bullet reaches the card that applies it.
-const IGNORES_ARMOR_RE = /\bignores?\s+armou?r\b/i;
-const PIERCING_RE = /\b(\d+)\s+piercing\b/i;
+export const IGNORES_ARMOR_RE = /\bignores?\s+armou?r\b/i;
+export const PIERCING_RE = /\b(\d+)\s+piercing\b/i;
 
 // The two flavour tags that only live in the fiction, and so are the two the damage card reminds
 // the table about (combat/attack-flow.js#TAG_REMINDERS). `+N damage` and piercing ride the
