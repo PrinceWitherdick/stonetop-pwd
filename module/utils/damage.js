@@ -226,3 +226,130 @@ export function readOptionDamage(text) {
 		tags: Array.from(new Set(Array.from(line.matchAll(FICTION_TAG_RE), m => m[1].toLowerCase()))),
 	};
 }
+
+/**
+ * The printed attacks in a monster's damage line, one entry per die the GM could roll.
+ *
+ * A stat block's `damage.value` is PROSE, and for 68 of the 211 shipped bestiary entries that
+ * prose holds more than one attack: the Rime Lord's "conjured ice d12+3 (any range, area, grabby,
+ * forceful) or heat-drain d12+1 (reach, ignores armor)", the Bronze Colossus's three, the
+ * Spirit-talker's four. `damage.rollFormula` carries exactly ONE of them — the primary — which is
+ * all a single auto-rolled number ever needed. It is not enough to ASK which attack was made, and
+ * the difference is not cosmetic: those two Rime Lord attacks differ by a point of damage and by
+ * whether the victim's armor counts at all.
+ *
+ * THE SEPARATOR IS COMMA-OR-"OR", AND ONLY OUTSIDE PARENTHESES. Every tag list is itself
+ * comma-separated, so a flat split on "," tears "antler of jagged bone d10+2 (close, messy, 1
+ * piercing)" into three pieces, two of which are tags wearing an attack's clothes.
+ *
+ * A BARE FRAGMENT WITH NO DIE IS PART OF THE NEXT ATTACK'S NAME, not an attack of its own. The
+ * books write one blow under several names — "bite, maul d12+5", "talons, antlers d6+2",
+ * "whirlwind of pecks, claws, and buffets d8+3" — and those commas are the same character as the
+ * separator. The die is what settles it: the Spirit-talker's "flint-tipped spear d8 (close,
+ * thrown, crude), club, adz d8 (hand, crude), bow d8 (near)" is three attacks, the middle one
+ * named "club, adz".
+ *
+ * ⚠ UNLESS IT BROUGHT ITS OWN TAG LIST, in which case it is a WHOLE printed attack that happens
+ * to roll no damage. The Thraulgwyn Raider's "…, hair-rope net (thrown, crude, grabby), bite d6
+ * (hand)" is four attacks, and the net is one of them: it is thrown, it grabs, and it deals
+ * nothing. Folding it into the bite lost the raider an attack, put "hair-rope net, bite" on one
+ * button, and handed the bite the net's tags — which is how an "ignores armor" or an "N piercing"
+ * clause ends up on the wrong blow, changing what reaches the character. A name fragment never
+ * carries parentheses; a printed attack that deals no damage always does.
+ *
+ * Each entry carries its OWN armor clause, because that is the whole point of being asked:
+ *   label        the attack's name as printed ("heat-drain"), "" when it has none
+ *   formula      its die, as printed ("d12+1") — fed to Roll, which takes a bare leading `d`
+ *   tags         its parenthesised tags, lowercased
+ *   piercing     armor points this attack pierces, 0 when it says nothing
+ *   ignoresArmor whether it bypasses armor entirely
+ *   rollMode     "adv" | "dis" | "normal" — the stat line's own "w/advantage" on the DAMAGE die
+ *
+ * Falls back to `rollFormula` as a single unnamed attack when the prose holds no die at all, so a
+ * hand-written stat block that filled in only the formula still rolls. Returns [] when there is
+ * nothing to roll — the 22 spirits whose damage line reads "none" with no formula beside it.
+ *
+ * Verified against every shipped stat block: for the 121 single-attack entries carrying both, the
+ * die read out of the prose and `rollFormula` agree in all 121 cases, so reading the prose first
+ * changes no number that was already being rolled.
+ */
+export function parseMonsterAttacks(damageValue, rollFormula = "") {
+	const attacks = [];
+	// Fragments seen since the last die, waiting for the attack whose name they are part of.
+	let pending = [];
+	for (const segment of _splitAttackSegments(String(damageValue ?? ""))) {
+		if (!DAMAGE_DIE_RE.test(segment)) {
+			// Its own tag list makes it an attack in its own right, die or no die — so it is
+			// flushed here, ahead of anything still pending, rather than joining the next blow.
+			if (_TAG_LIST_RE.test(segment)) { attacks.push(_readAttack([...pending, segment].join(", "))); pending = []; }
+			else pending.push(segment);
+			continue;
+		}
+		attacks.push(_readAttack([...pending, segment].join(", ")));
+		pending = [];
+	}
+	if (attacks.length) return attacks;
+
+	const fallback = String(rollFormula ?? "").trim();
+	return fallback ? [_readAttack(fallback)] : [];
+}
+
+/** The separators that end one printed attack: ", ", ", or " or " or ". */
+const _ATTACK_SEPARATOR_RE = /^(?:\s*,\s*(?:or\s+)?|\s+or\s+)/i;
+
+/** A parenthesised tag list, which is what a die-less segment needs to be an attack of its own
+ *  rather than another name for the next one. */
+const _TAG_LIST_RE = /\([^)]*\)/;
+
+/**
+ * Split a damage line on its attack separators, ignoring the ones inside a tag list.
+ * Depth-counted rather than split by regex because the two uses share the same comma.
+ */
+function _splitAttackSegments(prose) {
+	const out = [];
+	let buffer = "";
+	let depth = 0;
+	let i = 0;
+	while (i < prose.length) {
+		const ch = prose[i];
+		if (ch === "(") depth++;
+		else if (ch === ")") depth = Math.max(0, depth - 1);
+		if (depth === 0) {
+			const hit = _ATTACK_SEPARATOR_RE.exec(prose.slice(i));
+			if (hit) { out.push(buffer); buffer = ""; i += hit[0].length; continue; }
+		}
+		buffer += ch;
+		i++;
+	}
+	out.push(buffer);
+	return out.map(s => s.trim()).filter(Boolean);
+}
+
+/**
+ * "w/advantage", "w/disadvantage", or the bare word inside a tag list (a few stat blocks print it
+ * that way). `(dis)?` is part of ONE pattern rather than two tests because "disadvantage" contains
+ * "advantage", and a test for the shorter one first calls every disadvantage an advantage.
+ */
+const _ATTACK_ADVANTAGE_RE = /\b(dis)?advantage\b/i;
+
+/** One printed attack — its name, its die, and the armor clause it carries. */
+function _readAttack(text) {
+	const formula = (dieFromDamage(text) ?? "").replace(/\s+/g, "");
+	// Everything before the die is what the book calls this blow; the parenthesised tail is tags.
+	// With no die at all, the tag list is still the tail and still not part of the name — the
+	// raider's net is called "hair-rope net", not "hair-rope net (thrown, crude, grabby)".
+	const named = formula ? text.slice(0, text.search(DAMAGE_DIE_RE)) : text.replace(/\([^)]*\)/g, " ");
+	const label = named.replace(/\s+/g, " ").trim().replace(/[,;]$/, "");
+	const advantage = _ATTACK_ADVANTAGE_RE.exec(text);
+	return {
+		label,
+		formula,
+		tags: Array.from(text.matchAll(/\(([^)]*)\)/g))
+			.flatMap(group => group[1].split(","))
+			.map(tag => tag.trim().toLowerCase())
+			.filter(Boolean),
+		piercing: Number(PIERCING_RE.exec(text)?.[1]) || 0,
+		ignoresArmor: IGNORES_ARMOR_RE.test(text),
+		rollMode: advantage ? (advantage[1] ? "dis" : "adv") : "normal",
+	};
+}

@@ -28,7 +28,7 @@ import {weaponMeta, isClashWeapon, isLetFlyWeapon, weaponTraitText, weaponArmorB
 import {escHtml} from "../utils/strings.js";
 import {stonetopChatCard, rollFormulaChip, damageMark, damageBadge, optionKey} from "../utils/chat.js";
 import {rollDamage, multiDieFaces, sign, damageRollFormula, damageConditionPills, conditionsRowHtml} from "../utils/roll-engine.js";
-import {mitigateDamage, resolvePiercing, applyDamageToActor, dieFromDamage, composeDamageFormula} from "../utils/damage.js";
+import {mitigateDamage, resolvePiercing, applyDamageToActor, composeDamageFormula, parseMonsterAttacks} from "../utils/damage.js";
 import {promptDamage} from "../dialogs/RollDialog.js";
 import {bringDialogToFront} from "../utils/front-on-open.js";
 import {isPrimaryGM} from "../utils/primary-gm.js";
@@ -1097,6 +1097,10 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 
 	if (btn.dataset.action === "suffer") {
 		const ok = await executeSuffer(message, actor, { targets }, "attack");
+		// A foe with several printed attacks went to the GM to choose between; the tier is spent
+		// either way, so the card locks, but the button says which of the two happened rather than
+		// going quietly dead on a blow that has not landed yet.
+		if (ok === "pending") btn.innerHTML = WAITING_HTML;
 		if (ok) await lockAttackCard(message, root, { targets });
 		else btn.disabled = false;
 		return;
@@ -1346,7 +1350,8 @@ export function wireApplyDamage(message, html) {
 			const targetActor = damageRowActor(td);
 			if (!targetActor) { lines.push(`<li><strong>${escHtml(r.name)}</strong>: no longer on the map</li>`); continue; }
 			const armor = Number(targetActor.system?.attributes?.armor?.value) || 0;
-			const effective = mitigateDamage(r.raw, { armor, piercing, ignoresArmor: current.weapon?.ignoresArmor });
+			const unpierceable = Number(targetActor.system?.attributes?.armor?.unpierceable) || 0;
+			const effective = mitigateDamage(r.raw, { armor, piercing, unpierceable, ignoresArmor: current.weapon?.ignoresArmor });
 			const t = await applyDamageToActor(targetActor, effective);
 			// A target actor with no hp attribute (e.g. a steading token) yields null. Skip it
 			// without recording it as applied, so it can be retried if the actor is fixed —
@@ -1354,7 +1359,11 @@ export function wireApplyDamage(message, html) {
 			if (!t) { lines.push(`<li><strong>${escHtml(r.name)}</strong>: has no HP to damage</li>`); continue; }
 			nextApplied.push({ uuid: r.uuid, effective, oldHp: t.oldHp, newHp: t.newHp });
 			const dead = t.newHp === 0 ? " <em>(0 HP)</em>" : "";
-			const mit = effective !== r.raw ? ` <span class="stonetop-damage-mitigated">(${r.raw}${armor ? ` − ${Math.max(0, armor - piercing)} armor` : ""})</span>` : "";
+			// Through the same helper the confirm dialog words its subtraction with: this used to
+			// restate `armor - piercing`, which stopped matching the moment mitigateDamage learned
+			// about an unpierceable floor, and printed armor the arithmetic had not applied.
+			const detail = mitigationDetail({ armor, piercing, unpierceable, ignoresArmor: current.weapon?.ignoresArmor });
+			const mit = effective !== r.raw ? ` <span class="stonetop-damage-mitigated">(${r.raw}${detail})</span>` : "";
 			lines.push(`<li><strong>${escHtml(r.name)}</strong>: ${effective} damage${mit}: ${t.oldHp} &rarr; ${t.newHp} HP${dead}</li>`);
 		}
 		await message.setFlag(SCOPE, "damage", { ...current, applied: nextApplied });
@@ -1393,7 +1402,12 @@ export function wireSufferAttack(message, html) {
 			btn.title = "Ask the GM to apply this attack's damage";
 			return;
 		}
-		if (message.getFlag(SCOPE, flagKey)?.suffered) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-check"></i> Suffered the attack'; return; }
+		const state = message.getFlag(SCOPE, flagKey);
+		if (state?.suffered) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-check"></i> Suffered the attack'; return; }
+		// A foe with several printed attacks has been handed to the GM to choose between, and the
+		// blow lands on their click, not this one. Say what is being waited on rather than leaving
+		// a live button that would post a second "Which attack?" card.
+		if (state?.awaitingChoice) { btn.disabled = true; btn.innerHTML = WAITING_HTML; return; }
 		btn.addEventListener("click", async () => {
 			if (btn.disabled) return;
 			btn.disabled = true;
@@ -1403,7 +1417,8 @@ export function wireSufferAttack(message, html) {
 			// can't double-apply.
 			try {
 				const ok = await executeSuffer(message, pc, ctx, flagKey);
-				if (ok) btn.innerHTML = '<i class="fas fa-check"></i> Suffered the attack';
+				if (ok === "pending") btn.innerHTML = WAITING_HTML;
+				else if (ok) btn.innerHTML = '<i class="fas fa-check"></i> Suffered the attack';
 				else btn.disabled = false;
 			} catch (err) {
 				console.error("Stonetop | suffering the attack failed", err);
@@ -1422,24 +1437,36 @@ export function wireSufferAttack(message, html) {
 // player taking the same attack twice, and it is not reachable through the wired button
 // without standing up a chat card and a Dialog.
 export async function executeSuffer(message, pc, ctx, flagKey) {
-	if (message.getFlag(SCOPE, flagKey)?.suffered) return false;
+	const state = message.getFlag(SCOPE, flagKey);
+	if (state?.suffered || state?.awaitingChoice) return false;
 	const foe = ctx.targets?.[0] ? await fromUuid(ctx.targets[0].uuid).then(td => td?.actor).catch(() => null) : null;
-	// The rollable die is `damage.rollFormula`; `damage.value` is PROSE ("rusty sword d8+2
-	// (forceful) or crushing grip d8+2 …") — feeding it to Roll crashes on its commas/words. Use
-	// rollFormula, else pull the first dice expression out of the prose, else leave it manual.
+	// `damage.value` is PROSE ("rusty sword d8+2 (forceful) or crushing grip d8+2 …") — feeding it
+	// to Roll crashes on its commas and words — so it is READ into its printed attacks, each with
+	// its own die and its own armor clause (utils/damage.js#parseMonsterAttacks). `rollFormula` is
+	// the fallback that function applies itself when the prose holds no die at all.
 	const dmg = foe?.system?.attributes?.damage ?? {};
 	const foeText = String(dmg.value || "").trim();
-	let foeDie = String(dmg.rollFormula || "").trim()
-		|| (dieFromDamage(foeText) || "").replace(/\s+/g, "");
-	let rolled = 0;
-	if (foeDie) {
-		try { rolled = (await new Roll(foeDie).evaluate()).total; }
-		catch (err) { console.warn(`Stonetop | Foe damage die "${foeDie}" is not rollable:`, err); foeDie = ""; }
-	}
-	const armor = Number(pc.system?.attributes?.armor?.value) || 0;
-	const suggested = Math.max(0, rolled - armor);
+	const foeName = ctx.targets?.[0]?.name ?? foe?.name ?? "";
+	const attacks = parseMonsterAttacks(foeText, dmg.rollFormula);
 
-	const amount = await promptIncomingDamage({ pcName: pc.name, foeName: ctx.targets?.[0]?.name, foeDie, foeText, rolled, armor, suggested });
+	// MORE THAN ONE PRINTED ATTACK IS A QUESTION, NOT A GUESS. 68 of the shipped stat blocks offer
+	// two to four, and which one the foe just made is the GM's fiction call — so it is asked as a
+	// card of buttons rather than silently resolved to the primary die. Latch BEFORE posting, for
+	// the same reason the HP write latches before it lands: a second click must not post a second
+	// card. `awaitingChoice` rather than `suffered`, because nothing has been suffered yet.
+	if (attacks.length > 1) {
+		try {
+			await message.setFlag(SCOPE, flagKey, { ...state, awaitingChoice: true });
+		} catch (err) {
+			console.error("Stonetop | could not hand the attack to the GM", err);
+			ui.notifications?.warn("You can't update this attack card. Ask the GM to apply the attack.");
+			return false;
+		}
+		await postSufferChoiceCard({ pc, foeName, foeText, attacks, sourceId: message.id, flagKey });
+		return "pending";
+	}
+
+	const amount = await rollAndConfirmIncoming(pc, attacks[0] ?? null, { foeName, foeText });
 	if (amount === null) return false;
 
 	// Latch BEFORE the HP write, never after.
@@ -1459,24 +1486,90 @@ export async function executeSuffer(message, pc, ctx, flagKey) {
 		return false;
 	}
 
+	await applySufferedDamage(pc, amount, attacks[0] ?? null);
+	return true;
+}
+
+/**
+ * Roll ONE printed attack and ask for the number to take. Shared by the single-attack path above
+ * and by the GM's pick below, so both roll the same way and mitigate by the same rule.
+ *
+ * The attack's OWN armor clause is what mitigates it, through the same `mitigateDamage` the flow
+ * uses for damage dealt to foes: "heat-drain d12+1 (reach, ignores armor)" is picked over the Rime
+ * Lord's other attack precisely because armor does not count against it, and a suggestion that
+ * subtracted armor anyway would make the choice meaningless. `w/advantage` on the stat line is
+ * advantage on the DAMAGE die, applied with the same helper the PC's own damage uses.
+ *
+ * @returns {Promise<number|null>} the damage to apply, or null if the prompt was cancelled.
+ */
+async function rollAndConfirmIncoming(pc, attack, { foeName, foeText }) {
+	let foeDie = attack?.formula ?? "";
+	let rolled = 0;
+	if (foeDie) {
+		const formula = damageRollFormula(foeDie, attack.rollMode);
+		try { rolled = (await new Roll(formula).evaluate()).total; }
+		catch (err) { console.warn(`Stonetop | Foe damage die "${formula}" is not rollable:`, err); foeDie = ""; }
+	}
+	const armor = Number(pc.system?.attributes?.armor?.value) || 0;
+	const unpierceableArmor = Number(pc.system?.attributes?.armor?.unpierceable) || 0;
+	const suggested = foeDie
+		? mitigateDamage(rolled, { armor, piercing: attack?.piercing ?? 0, unpierceable: unpierceableArmor, ignoresArmor: attack?.ignoresArmor ?? false })
+		: 0;
+	return promptIncomingDamage({
+		pcName: pc.name, foeName, foeText, foeDie, rolled, armor, suggested,
+		attackLabel: attack?.label ?? "", rollMode: attack?.rollMode ?? "normal",
+		piercing: attack?.piercing ?? 0, ignoresArmor: attack?.ignoresArmor ?? false,
+		unpierceable: unpierceableArmor,
+	});
+}
+
+/** Write the PC's HP and say so on a card. The one place suffered damage lands. */
+async function applySufferedDamage(pc, amount, attack) {
 	const t = await applyDamageToActor(pc, amount);
+	const named = attack?.label ? ` (${escHtml(attack.label)})` : "";
 	await ChatMessage.create({
-		content: stonetopChatCard("Suffered the enemy's attack", `<div class="card-content"><p><strong>${escHtml(pc.name)}</strong> takes <strong>${amount}</strong> damage: ${t?.oldHp} &rarr; ${t?.newHp} HP.</p></div>`, "stonetop-attack-suffer-card"),
+		content: stonetopChatCard("Suffered the enemy's attack", `<div class="card-content"><p><strong>${escHtml(pc.name)}</strong> takes <strong>${amount}</strong> damage${named}: ${t?.oldHp} &rarr; ${t?.newHp} HP.</p></div>`, "stonetop-attack-suffer-card"),
 		speaker: ChatMessage.getSpeaker({ actor: pc }),
 	});
-	return true;
+}
+
+/**
+ * How the rolled number became the suggested one, said out loud — the dialog's whole claim to
+ * being a confirmation rather than a number appearing from nowhere. An attack that bypasses armor
+ * says so instead of showing a subtraction that did not happen, and one that pierces shows the
+ * armor it actually met.
+ */
+function mitigationDetail({ armor, piercing, ignoresArmor, unpierceable = 0 }) {
+	const floor = Math.max(0, Math.min(Number(unpierceable) || 0, Number(armor) || 0));
+	// Armor that shrugs off the bypass entirely (PROOF AGAINST HARM) still soaks, so a flat
+	// "ignoring your armor" would contradict the number printed beside it.
+	if (ignoresArmor) {
+		if (!armor) return "";
+		return floor ? ` − ${floor} armor (the rest ignored)` : ", ignoring your armor";
+	}
+	// Piercing that would cut below the floor is stopped by it; say so rather than printing
+	// an armor number the arithmetic above did not actually use.
+	if (floor && (Number(piercing) || 0) > 0 && (Number(armor) || 0) - piercing < floor) {
+		return ` − ${floor} armor (piercing cannot reduce it)`;
+	}
+	const effective = Math.max(0, armor - piercing);
+	if (!armor) return "";
+	if (piercing) return ` − ${effective} armor (${armor} − ${piercing} piercing)`;
+	return ` − ${armor} armor`;
 }
 
 // Confirm the incoming-damage number for "suffer your enemy's attack". Returns the number
 // to apply, or null on cancel.
-function promptIncomingDamage({ pcName, foeName, foeDie, foeText, rolled, armor, suggested }) {
+function promptIncomingDamage({ pcName, foeName, foeDie, foeText, rolled, armor, suggested, attackLabel = "", rollMode = "normal", piercing = 0, ignoresArmor = false, unpierceable = 0 }) {
+	const adv = rollMode === "adv" ? " w/advantage" : rollMode === "dis" ? " w/disadvantage" : "";
+	const struck = attackLabel ? `${escHtml(attackLabel)} ` : "";
 	return new Promise(resolve => {
 		new Dialog({
 			title: "Suffer your enemy's attack",
 			content: `<form class="stonetop-suffer-attack">
-				<p><strong>${escHtml(foeName || "The enemy")}</strong> attacks <strong>${escHtml(pcName)}</strong>.</p>
+				<p><strong>${escHtml(foeName || "The enemy")}</strong> attacks <strong>${escHtml(pcName)}</strong>${attackLabel ? ` with <strong>${escHtml(attackLabel)}</strong>` : ""}.</p>
 				${foeText ? `<p class="stonetop-suffer-fiction">${escHtml(foeText)}</p>` : ""}
-				<p class="stonetop-suffer-detail">${foeDie ? `Rolled ${rolled} (${escHtml(foeDie)})` : "No stat-block damage found: enter the damage"}${armor ? ` − ${armor} armor` : ""}.</p>
+				<p class="stonetop-suffer-detail">${foeDie ? `Rolled ${rolled} (${struck}${escHtml(foeDie)}${adv})` : "No stat-block damage found: enter the damage"}${mitigationDetail({ armor, piercing, ignoresArmor, unpierceable })}.</p>
 				<label class="stonetop-suffer-field">Damage to take
 					<input type="number" name="amount" value="${suggested}" min="0" step="1">
 				</label>
@@ -1496,4 +1589,162 @@ function promptIncomingDamage({ pcName, foeName, foeDie, foeText, rolled, armor,
 			render: bringDialogToFront,
 		}, { classes: ["dialog", "stonetop", "stonetop-suffer-attack-dialog"] }).render(true);
 	});
+}
+
+// -- "Which attack?" — the GM's pick for a foe with more than one -------------
+
+/**
+ * Whether this card has already been answered. Index 0 is a real answer, so the test is against
+ * null/undefined and never against falsiness — `!choice.chosen` would let the first attack on
+ * every card be taken twice.
+ */
+function isChosen(choice) {
+	return choice?.chosen !== null && choice?.chosen !== undefined;
+}
+
+/**
+ * The "Which attack?" card's body: the foe's damage line printed whole, then one button per
+ * attack it offers. Exported so the card can be rendered against the real stylesheet without
+ * standing up a ChatMessage.
+ */
+export function sufferChoiceCardBody({ pcName, foeName, foeText, attacks }) {
+	const rows = attacks.map((attack, index) => {
+		// What the button must say to be worth pressing: the die it rolls, and the two clauses that
+		// change what reaches the character. Everything else on the stat line is fiction and is
+		// already printed whole, above, in the foe's own damage text.
+		// A printed attack that rolls nothing — the Thraulgwyn Raider's grabby net — says so in
+		// the die's place rather than leaving the column blank: an empty cell reads as a bug, and
+		// "no damage die" is the actual answer, which the confirm dialog then asks the GM to name.
+		const adv = attack.rollMode === "adv" ? "advantage" : attack.rollMode === "dis" ? "disadvantage" : "";
+		// The armor clauses come from weapons.js, like the weapon picker's and the damage card's,
+		// so the three cannot word the same blow differently - and so a blow that both pierces
+		// and ignores armor says both, which a ternary between them could not.
+		const notes = [adv, ...weaponArmorBits(attack)].filter(Boolean).join(", ");
+		// The die is LAST so it lands hard right on every row, notes or no notes: a column of dice
+		// that jogged left whenever a row carried "ignores armor" would be unreadable down a stack
+		// of three, and comparing the dice is what the card is for.
+		return `<li><button type="button" class="stonetop-attack-btn stonetop-suffer-choice" data-index="${index}">
+			<span class="stonetop-suffer-choice-name">${escHtml(attack.label || "Attack")}</span>
+			<span class="stonetop-suffer-choice-meta">
+				${notes ? `<span class="stonetop-suffer-choice-note">${escHtml(notes)}</span>` : ""}
+				<span class="stonetop-suffer-choice-die">${escHtml(attack.formula || "no damage die")}</span>
+			</span>
+		</button></li>`;
+	}).join("");
+
+	return `<div class="card-content">
+		<p><strong>${escHtml(foeName || "The enemy")}</strong> strikes <strong>${escHtml(pcName)}</strong>.</p>
+		${foeText ? `<p class="stonetop-suffer-fiction">${escHtml(foeText)}</p>` : ""}
+		<ul class="stonetop-suffer-choices">${rows}</ul>
+	</div>`;
+}
+
+/**
+ * Ask the GM which of a foe's printed attacks it just made, as one button per attack.
+ *
+ * WHISPERED TO THE GMs, not posted to the table. The buttons ARE the stat block's damage line —
+ * every die, every piercing value, which blow ignores armor — and that is the GM's to know. The
+ * player who clicked "Suffer your enemy's attack" learns the answer the moment it is chosen,
+ * because the damage card that follows names the attack that struck them.
+ *
+ * `sourceId` and `flagKey` point back at the card the player clicked, so the pick can retire its
+ * button from "waiting on the GM" to "suffered" once the HP is actually written.
+ */
+async function postSufferChoiceCard({ pc, foeName, foeText, attacks, sourceId, flagKey }) {
+	const body = sufferChoiceCardBody({ pcName: pc.name, foeName, foeText, attacks });
+	return ChatMessage.create({
+		content: stonetopChatCard("Which attack?", body, "stonetop-suffer-choice-card"),
+		whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
+		speaker: { alias: "Stonetop" },
+		flags: { [SCOPE]: { sufferChoice: { pcUuid: pc.uuid, foeName, foeText, attacks, sourceId, flagKey, chosen: null } } },
+	});
+}
+
+/**
+ * Wire the "Which attack?" card. The GM picks; that pick rolls the attack, opens the same confirm
+ * dialog the single-attack path opens, and writes the PC's HP on this client.
+ *
+ * THE GM WRITES THE HP HERE, and that is the one place suffering is not a player-side self-write.
+ * The card is a GM whisper, so the player has no button to press on it, and bouncing the number
+ * back to them would leave the blow hanging on a second person's click. A GM owns every actor, so
+ * the write lands; `isPrimaryGM` keeps a second GM's copy of the card from applying it twice, the
+ * same guard `wireApplyDamage` uses and for the same reason — the `chosen` latch is written before
+ * the HP, but two clients that click within one round trip both read it empty.
+ */
+export function wireSufferChoice(message, html) {
+	const root = html?.[0] ?? html;
+	const buttons = root.querySelectorAll(".stonetop-suffer-choice");
+	if (!buttons.length) return;
+
+	const choice = message.getFlag(SCOPE, "sufferChoice");
+	const settle = (label) => buttons.forEach(b => {
+		b.disabled = true;
+		if (label) b.title = label;
+	});
+	if (!choice) return settle("This card has lost the attack it was asking about");
+	if (isChosen(choice)) {
+		settle();
+		buttons[choice.chosen]?.classList.add("stonetop-suffer-choice--taken");
+		return;
+	}
+	if (!game.user.isGM) return settle("The GM chooses the enemy's attack");
+	if (!isPrimaryGM()) return settle("Another GM will choose this attack");
+
+	// Every button goes dead while one is being answered, and comes back if the GM cancels the
+	// confirm dialog — the same "a cancelled prompt leaves the card clickable" rule the tier
+	// Confirms follow (resolveAttackTier), so a mis-click costs nothing.
+	const reopen = () => buttons.forEach(b => { b.disabled = false; b.title = ""; });
+	buttons.forEach(btn => btn.addEventListener("click", async () => {
+		if (btn.disabled) return;
+		settle();
+		try {
+			if (!await resolveSufferChoice(message, Number(btn.dataset.index))) reopen();
+		} catch (err) {
+			console.error("Stonetop | choosing the enemy's attack failed", err);
+			reopen();
+		}
+	}));
+}
+
+/**
+ * Enact one pick: roll that attack, confirm the number, write the PC's HP, and retire the button
+ * on the card the player clicked. Returns false when the GM cancelled the confirm dialog, which
+ * leaves the card askable again.
+ *
+ * Exported for tests, like `executeSuffer`, because the latch-before-damage ordering is the whole
+ * guard against one attack landing twice and is not reachable through a rendered card and a Dialog.
+ */
+export async function resolveSufferChoice(message, index) {
+	const choice = message.getFlag(SCOPE, "sufferChoice");
+	const attack = choice?.attacks?.[index];
+	if (!choice || !attack || isChosen(choice)) return false;
+
+	const pc = await actorFromUuid(choice.pcUuid);
+	if (!pc) { ui.notifications?.warn("That character is no longer available."); return false; }
+
+	const amount = await rollAndConfirmIncoming(pc, attack, { foeName: choice.foeName, foeText: choice.foeText });
+	if (amount === null) return false;
+
+	// Latch before the HP write, never after — see executeSuffer.
+	try {
+		await message.setFlag(SCOPE, "sufferChoice", { ...choice, chosen: index });
+	} catch (err) {
+		console.error("Stonetop | could not record the chosen attack; damage NOT applied", err);
+		ui.notifications?.warn("That attack could not be recorded, so no damage was applied.");
+		return false;
+	}
+
+	await applySufferedDamage(pc, amount, attack);
+
+	// Retire the player's "waiting on the GM" button. Best-effort: the blow has already landed, and
+	// the source card's own `awaitingChoice` marker already stops it being clicked a second time —
+	// this only upgrades what it says. A card since deleted must not undo the damage.
+	try {
+		const source = game.messages?.get(choice.sourceId);
+		const current = source?.getFlag(SCOPE, choice.flagKey);
+		if (current) await source.setFlag(SCOPE, choice.flagKey, { ...current, awaitingChoice: false, suffered: true });
+	} catch (err) {
+		console.warn("Stonetop | could not retire the Suffer button on the source card", err);
+	}
+	return true;
 }

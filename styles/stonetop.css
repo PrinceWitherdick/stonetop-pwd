@@ -5812,7 +5812,66 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-weapon-choice-dialog .stonetop-weapon-traits { font-size: 0.85em; opacity: 0.75; }
 .stonetop-suffer-attack-dialog .stonetop-suffer-field { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .stonetop-suffer-attack-dialog .stonetop-suffer-detail { opacity: 0.8; font-size: 0.9em; }
-.stonetop-suffer-attack-dialog .stonetop-suffer-fiction { font-style: italic; opacity: 0.75; font-size: 0.9em; }
+.stonetop-suffer-attack-dialog .stonetop-suffer-fiction,
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-fiction {
+	font-style: italic;
+	opacity: 0.75;
+	font-size: 0.9em;
+}
+
+/* ── "Which attack?": the GM's pick for a foe with more than one ────────────── */
+
+/* One button per printed attack, each a row rather than a centred label: the name reads on the
+   left and the die (with any advantage / armor clause) sits hard right, so a stack of three can
+   be compared down the die column. Overrides the shared `.stonetop-attack-btn` centring above,
+   and must sit LATER than it to win the tie on specificity. */
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-choices {
+	list-style: none;
+	margin: 6px 0 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-choices > li { margin: 0; }
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-choice {
+	width: 100%;
+	justify-content: space-between;
+	text-align: left;
+	gap: 8px;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-choice-name {
+	font-weight: bold;
+}
+/* Only the first letter, never `capitalize`: the books print these names in lower case
+   ("conjured ice", "flint-tipped spear"), and word-capitalising them reads as a proper noun and
+   breaks every hyphenated one into Heat-Drain and Flint-Tipped Spear. */
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-choice-name::first-letter {
+	text-transform: uppercase;
+}
+/* The die and its notes ride together at the right edge, die last, so the dice line up down the
+   stack whether or not a given attack carries a clause. */
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-choice-meta {
+	margin-left: auto;
+	display: inline-flex;
+	align-items: baseline;
+	gap: 8px;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-choice-die {
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-choice-note {
+	font-size: 0.85em;
+	opacity: 0.75;
+	white-space: nowrap;
+}
+/* The one that was taken stays legible after every button goes dead, so the card still records
+   which attack struck. */
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-choice--taken:disabled {
+	opacity: 1;
+	font-weight: bold;
+}
 
 /* The "which half of the move is this?" dialogs an attack asks before it rolls: Let Fly's easy
    shot vs under pressure, Ambush's deal-or-roll, Call the Shot's "your call". Their two buttons
