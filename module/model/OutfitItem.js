@@ -12,6 +12,12 @@ export class OutfitItem {
 		this.smallGrid          = b._smallGrid;
 		this.breakBefore        = b._breakBefore;
 		this.armor              = b._armor ?? null;
+		// A shield in the book's sense: it grants its armor AND "+1 Readiness on a 7+ to
+		// Defend" (p.216). Marked explicitly rather than guessed from the armor shape — a
+		// `modifier` is "a bonus", which a shield is but a magic ring might also be — or from
+		// the name, which would miss the Shield of the Wisent Witch's cousins and catch a
+		// "shield-fern poultice". See StonetopCharacter#bearsShield.
+		this.shield             = b._shield ?? false;
 		this.special            = b._special ?? false;
 		this.specialCategory    = b._specialCategory ?? null;
 	}
@@ -30,6 +36,7 @@ export class OutfitItemBuilder {
 	withSmallGrid(v)          { this._smallGrid          = v; return this; }
 	withBreakBefore(v)        { this._breakBefore        = v; return this; }
 	withArmor(v)              { this._armor              = v; return this; }
+	withShield(v)             { this._shield             = v; return this; }
 	withSpecial(v)            { this._special            = v; return this; }
 	withSpecialCategory(v)    { this._specialCategory    = v; return this; }
 	build()                   { return new OutfitItem(this); }

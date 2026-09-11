@@ -53,6 +53,45 @@ function _isUnlocked(item, unlockCounts, arcanaBoxes, circleCount) {
 }
 
 /**
+ * Is the □ belonging to the named back-side mystery ticked?
+ *
+ * A mystery's box is identified by its printed LABEL, not by a hard-coded index: find the label
+ * in the back text, take the last □ at or before it (the text reads "□ GREATER CONDUIT"), then
+ * index it by counting the □ that precede it. That order matches _injectMarkers, which indexes □
+ * in document order — so this survives edits to the back text that a bare index would not.
+ *
+ * Shared by the Redwood Effigy's Conduit slots and by the armor unlocks (the Rune-laden Scales'
+ * PROOF AGAINST HARM); both used to be, or would have been, their own copy of this arithmetic.
+ */
+export function backBoxChecked(backDescription, slug, label, boxStates) {
+	const text = backDescription ?? "";
+	const labelPos = text.indexOf(label);
+	if (labelPos < 0) return false;
+	const boxPos = text.lastIndexOf("□", labelPos);
+	if (boxPos < 0) return false;
+	return !!boxStates[`${slug}:back:${(text.slice(0, boxPos).match(/□/g) || []).length}`];
+}
+
+/**
+ * The armor a card's curio is worth once its unlocked mysteries are taken into account: the best
+ * of the curio's own printed armor and every ticked `armorUnlocks` entry.
+ *
+ * "The Rune-laden Scales now provide you 3 armor" REPLACES the printed 2 rather than adding to
+ * it, which is what taking the best does — and taking the best (rather than last-wins) also keeps
+ * the answer stable however the mysteries are ordered or ticked.
+ */
+export function unlockedArcanumArmor(item, sideItem, boxStates) {
+	let best = sideItem?.armor ?? null;
+	const rank = a => Number(a?.base ?? a?.modifier ?? 0);
+	for (const u of item.armorUnlocks ?? []) {
+		if (!u?.armor || !u.label) continue;
+		if (!backBoxChecked(item.back?.description, item.slug, u.label, boxStates)) continue;
+		if (rank(u.armor) > rank(best)) best = u.armor;
+	}
+	return best;
+}
+
+/**
  * The sheet's own marker injection: {@link injectGlyphCheckboxes} with this card's persisted
  * box states supplying the checked test. Keys are `slug:context:index`, which is how the
  * sheet stores them; the onboarding dialog indexes the same boxes the same way through the
@@ -132,6 +171,8 @@ function _buildOutfitItem(slug, itemData, resolvedResource = undefined) {
 		.withNote(itemData.note ?? null)
 		.withInventoryColumn(itemData.inventoryColumn ?? null)
 		.withResource(resolvedResource !== undefined ? resolvedResource : (itemData.resource ?? null))
+		.withArmor(itemData.armor ?? null)
+		.withShield(itemData.shield ?? false)
 		.withTwoCol(false)
 		.withBreakBefore(false)
 		.build();
@@ -277,17 +318,10 @@ export class CharacterArcana {
 				? _extractConsequencesSection(backDesc)
 				: null;
 
-			// Redwood Effigy: the two "potential" Conduit slots on the front stay locked
-			// until the Greater Conduit mystery (a □ on the back) is checked. Find that
-			// box's own □ — the last one at/before the label, since the text reads
-			// "□ GREATER CONDUIT" — then index it by counting the □ before it, rather than
-			// hard-coding an index, so it survives edits to the back text. The order matches
-			// _injectMarkers, which indexes □ in document order.
-			const backDescText = item.back.description ?? "";
-			const gcLabelPos = backDescText.indexOf("GREATER CONDUIT");
-			const gcBoxPos   = gcLabelPos >= 0 ? backDescText.lastIndexOf("□", gcLabelPos) : -1;
-			const greaterConduit = gcBoxPos >= 0
-				&& !!arcanaBoxes[`${item.slug}:back:${(backDescText.slice(0, gcBoxPos).match(/□/g) || []).length}`];
+			// Redwood Effigy: the two "potential" Conduit slots on the front stay locked until
+			// the Greater Conduit mystery (a □ on the back) is checked. Resolved by LABEL through
+			// the shared helper, which the armor unlocks use too.
+			const greaterConduit = backBoxChecked(item.back.description, item.slug, "GREATER CONDUIT", arcanaBoxes);
 
 			const back = new MinorArcanumBackSnapshotBuilder()
 				.withTitle(item.back.title)
@@ -604,17 +638,19 @@ export class CharacterArcana {
 			// GM could read "the arcanum itself is an item in your load" on a chip and find no
 			// such row on the sheet. The unnamed-side check is folded into it.
 			if (!isCarriedArcanumItem(sideItem)) return [];
-			return [new OutfitItemBuilder()
-				.withSlug(item.slug)
-				.withName(sideItem.name)
-				.withWeight(sideItem.weight ?? 0)
-				.withNote(sideItem.note ?? null)
-				.withInventoryColumn(sideItem.inventoryColumn ?? "arcana")
-				.withResource(sideItem.resource ?? null)
-				.withTwoCol(false)
-				.withBreakBefore(false)
-				.build()
-			];
+			// Through the same builder the card's own item rows go through, so a field added to
+			// one reaches the other: this differs from a card row only in the two defaults a
+			// carried curio wants (a weightless curio still occupies a ◇, and it lands in the
+			// arcana column) and in the armor, which rides the REALISED side — an arcanum whose
+			// back-side curio is the armored one only protects you once it's unlocked, and it
+			// rises with any ticked mystery that raises it (the Rune-laden Scales' PROOF AGAINST
+			// HARM takes 2 armor to 3).
+			return [_buildOutfitItem(item.slug, {
+				...sideItem,
+				weight: sideItem.weight ?? 0,
+				inventoryColumn: sideItem.inventoryColumn ?? "arcana",
+				armor: unlockedArcanumArmor(item, sideItem, arcanaBoxes),
+			})];
 		});
 	}
 }

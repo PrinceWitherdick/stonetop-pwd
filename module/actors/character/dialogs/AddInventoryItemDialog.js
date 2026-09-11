@@ -118,6 +118,18 @@ export class AddInventoryItemDialog extends StonetopDialog {
 		usesInput?.addEventListener("input", syncAmmo);
 		syncAmmo();
 
+		// And the worn/bonus toggle only matters once there's an armor value to qualify.
+		const armorInput = root.querySelector("[name=armor]");
+		const wornLabel  = root.querySelector(".stonetop-add-item-armor-worn");
+		const wornHint   = root.querySelector(".stonetop-add-item-armor-worn-hint");
+		const syncWorn = () => {
+			const on = Number(armorInput?.value) > 0;
+			wornLabel?.classList.toggle("is-hidden", !on);
+			wornHint?.classList.toggle("is-hidden", !on);
+		};
+		armorInput?.addEventListener("input", syncWorn);
+		syncWorn();
+
 		root.querySelector(".stonetop-add-item-save")?.addEventListener("click", () => this._save(root));
 		root.querySelector(".stonetop-add-item-cancel")?.addEventListener("click", () => this.close());
 	}
@@ -140,8 +152,16 @@ export class AddInventoryItemDialog extends StonetopDialog {
 		const isAmmo = !!root.querySelector("[name=ammo]")?.checked;
 		const resource = uses > 0 ? buildUsesResource(uses, isAmmo) : null;
 
-		const armorMod = parseInt(val("[name=armor]"), 10) || 0;
-		const armor = isRegular && armorMod > 0 ? { modifier: armorMod } : null;
+		// `base` is worn body armor — the best one counts and they don't stack; `modifier` is a
+		// shield or a bonus, which adds on top. CharacterInventory.calculateArmor applies the two
+		// differently, so authoring only ever `modifier` (as this did) meant a hand-written mail
+		// shirt stacked with every other armor AND left its wearer reading as unarmored to the
+		// moves that require being so (Uncanny Reflexes).
+		const armorValue = parseInt(val("[name=armor]"), 10) || 0;
+		const armorWorn  = !!root.querySelector("[name=armorWorn]")?.checked;
+		const armor = isRegular && armorValue > 0
+			? (armorWorn ? { base: armorValue } : { modifier: armorValue })
+			: null;
 
 		await this._saver.create({
 			name,

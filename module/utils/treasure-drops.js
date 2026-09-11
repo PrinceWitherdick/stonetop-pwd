@@ -13,7 +13,7 @@
 import { TREASURE_CATALOG } from "../data/treasure-catalog.js";
 import { buildInventoryItemData } from "./inventory-item-data.js";
 import { wrapGearNoteTerms, buildUsesResource } from "./gear-note.js";
-import { slugify } from "./strings.js";
+import { slugify, stripHtmlToText } from "./strings.js";
 import { book2ArtSrc } from "../book2-art/art-root.js";
 import { isInJournalEditor } from "./journal-editor-guard.js";
 import { STONETOP_ITEM_ICONS } from "./item-icon.js";
@@ -99,13 +99,18 @@ export function treasureItemData(entry) {
 	const column = entry.column === "regular" ? "regular" : "small";
 	const rawNote = [entry.note, entry.value ? `Value ${entry.value}` : null].filter(Boolean).join(", ");
 	const note = wrapGearNoteTerms(rawNote);
+	// Stripped once for both readers below, through the system's one strip-HTML helper: a
+	// catalog note reaches here as authored prose, and decoding its entities is that job.
+	const noteText = stripHtmlToText(rawNote);
+	const armor = treasureArmor(noteText);
+	const shield = treasureIsShield(entry.name, noteText);
 	let resource = null;
 	if (entry.uses > 0) {
 		resource = buildUsesResource(entry.uses, false);
 		if (entry.usesLabel) resource.title = entry.usesLabel;
 	}
 	const data = buildInventoryItemData({
-		name: entry.name, column, weight: entry.weight, note, resource, moveType: "inventory", isTreasure: true,
+		name: entry.name, column, weight: entry.weight, note, resource, armor, shield, moveType: "inventory", isTreasure: true,
 		// The book's own illustration when this world has imported it; otherwise null, so
 		// buildInventoryItemData omits it and the item takes Foundry's default icon.
 		img: treasureArtSrc(entry.slug),
@@ -127,7 +132,46 @@ export function treasureItemData(entry) {
 	if (data.system.weight != null) data.flags.stonetop.weight = data.system.weight;
 	if (data.system.note) data.flags.stonetop.note = data.system.note;
 	if (data.system.resource) data.flags.stonetop.resource = data.system.resource;
+	if (data.system.armor) data.flags.stonetop.armor = data.system.armor;
+	if (data.system.shield) data.flags.stonetop.shield = true;
 	return data;
+}
+
+/**
+ * The armor a treasure's own tag line states, in the `{base}`/`{modifier}` shape
+ * CharacterInventory.calculateArmor reads — or null, which is nearly every treasure.
+ *
+ * The book writes worn body armor as a bare value ("2 armor, warm, cumbersome") and a shield
+ * or a bonus with a sign ("+1 armor"), and that is exactly the base/modifier split: base is the
+ * best-one-wins worn value, modifier adds on top. The catalog carries that line verbatim, so the
+ * tag line is the statement of record and no treasure needs its armor hand-authored.
+ *
+ * Derived here rather than from a new catalog field so the drag path and the generated pack item
+ * cannot disagree — tests/pack/treasure-items.test.js pins the two together, and a hand-edited
+ * pack file is exactly what that test exists to catch.
+ *
+ * Requires a DIGIT before the word, so the several treasures whose prose says "ignores armor"
+ * or "immune to armor" are not read as granting any.
+ */
+function treasureArmor(noteText) {
+	const m = /(^|[\s,(])(\+)?(\d+)\s*armou?r\b/i.exec(noteText);
+	if (!m) return null;
+	const n = Number(m[3]);
+	if (!(n > 0)) return null;
+	return m[2] ? { modifier: n } : { base: n };
+}
+
+/**
+ * Is this treasure a SHIELD — i.e. does it also buy "+1 Readiness on a 7+ to Defend" (p.216)?
+ *
+ * Read off the tag line, which is where the book states it ("…+1 Readiness of a Defend 7+…"),
+ * AND requiring the thing to actually be called a shield. Both halves matter: the Readiness
+ * clause alone would catch a move or a trinket that grants Readiness without being a shield,
+ * and the name alone would catch a shield-shaped ornament that grants nothing. Derived rather
+ * than hand-authored for the same reason the armor is — see treasureArmor.
+ */
+function treasureIsShield(name, noteText) {
+	return /\bshield\b/i.test(String(name ?? "")) && /readiness/i.test(noteText);
 }
 
 function writeDrag(ev, entry) {

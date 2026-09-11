@@ -121,23 +121,47 @@ export class CharacterInventory {
 		]);
 	}
 
-	// `base` defaults to the worn-armor base of `allItems`; callers that already need the
-	// base separately (the sheet snapshot gates unarmored moves on it) can pass it in so it
-	// isn't recomputed.
-	calculateArmor(allItems, base = this.wornArmorBase(allItems)) {
-		const equipped  = allItems.filter(item => this.checked[item.slug] && item.armor);
+	// `base` defaults to the worn-armor base of `allItems` (pass it in — the sheet snapshot
+	// already needs the base separately to gate unarmored moves — so it isn't recomputed).
+	//
+	// `carried` overrides which marks count as equipped, defaulting to this inventory's own
+	// `checked` map. Gear-choice rows on a special possession (the Judge's Makerglass shield)
+	// record being carried in a DIFFERENT flag namespace — possessions.choiceCarried, keyed
+	// `possessionSlug:choiceSlug` — so the snapshot unions the two stores and hands the result
+	// in. Taking an override here, rather than teaching this class about possessions, keeps the
+	// armor rule itself in one place while leaving the two stores where they belong.
+	calculateArmor(allItems, base = null, carried = null) {
+		const marks     = carried ?? this.checked;
+		// `?? ` not `|| `: a genuine computed base of 0 (unarmored) must not fall through to a
+		// recompute. Callers pass the base they already worked out, 0 included.
+		const armorBase = base ?? this.wornArmorBase(allItems, marks);
+		const equipped  = allItems.filter(item => marks[item.slug] && item.armor);
 		const modifiers = equipped.filter(i => i.armor.modifier != null).map(i => i.armor.modifier);
-		return base + modifiers.reduce((s, m) => s + m, 0);
+		return armorBase + modifiers.reduce((s, m) => s + m, 0);
 	}
 
 	// The highest worn-armor BASE among equipped items (leather/mail/etc.); shields — a
 	// `modifier` — and move bonuses are excluded, so 0 means "unarmored." This is the base
 	// half of calculateArmor, exposed on its own to gate moves that require being unarmored
 	// (e.g. Uncanny Reflexes) so the "what counts as worn armor" rule lives in one place.
-	wornArmorBase(allItems) {
+	// `carried` overrides the equipped-marks map exactly as it does for calculateArmor.
+	wornArmorBase(allItems, carried = null) {
+		const marks = carried ?? this.checked;
 		const bases = allItems
-			.filter(i => this.checked[i.slug] && i.armor?.base != null)
+			.filter(i => marks[i.slug] && i.armor?.base != null)
 			.map(i => i.armor.base);
 		return bases.length > 0 ? Math.max(...bases) : 0;
+	}
+
+	// How much of the equipped armor piercing cannot reduce and "ignores armor" cannot bypass —
+	// the Rune-laden Scales' PROOF AGAINST HARM ("3 armor, even against piercing and attacks that
+	// normally ignore armor"). Same base/modifier arithmetic as calculateArmor, restricted to
+	// entries flagged `unpierceable`, so a floor is always a real part of the total above it.
+	// Almost always 0; mitigateDamage applies it as a floor, not as a second pool.
+	unpierceableArmor(allItems, carried = null) {
+		// Through calculateArmor on the unpierceable subset rather than repeating its arithmetic:
+		// base-wins-max and modifiers-add is the rule this class owns, and a floor that stopped
+		// matching the total it is a part of would be silent.
+		return this.calculateArmor(allItems.filter(i => i.armor?.unpierceable), null, carried);
 	}
 }

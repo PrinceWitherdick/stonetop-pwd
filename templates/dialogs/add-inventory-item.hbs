@@ -28,6 +28,14 @@
 				<input type="number" id="stonetop-add-item-armor" name="armor" min="0" max="9" value="0">
 			</div>
 		</div>
+		{{!-- Worn body armor takes the BEST value rather than stacking, so which kind this is
+		      has to be authorable; without it every hand-written item was a stacking bonus and
+		      a write-in mail shirt left its wearer reading as unarmored. Hidden until there is
+		      an armor value to qualify, like the ammunition toggle above it. --}}
+		<div class="stonetop-custom-move-field stonetop-custom-move-check stonetop-add-item-armor-worn is-hidden">
+			<label><input type="checkbox" class="stonetop-check" name="armorWorn"> {{localize "stonetop.inventory.addItemArmorWorn"}}</label>
+		</div>
+		<p class="stonetop-custom-move-hint stonetop-add-item-armor-worn-hint is-hidden">{{localize "stonetop.inventory.addItemArmorWornHint"}}</p>
 		<p class="stonetop-custom-move-hint">{{localize "stonetop.inventory.addItemWeightHint"}}</p>
 	</div>
 	{{/if}}

@@ -92,11 +92,20 @@ export function resolvePiercing(piercing) {
  * Reduce raw damage by a target's armor, honouring piercing and full-bypass:
  * effective = ignoresArmor ? raw : max(0, raw − max(0, armor − piercing)).
  * `messy` / `forceful` are pure fiction and never enter this math.
+ *
+ * `unpierceable` is the portion of that armor which piercing cannot reduce and "ignores armor"
+ * cannot bypass — the Rune-laden Scales' PROOF AGAINST HARM ("3 armor, even against piercing and
+ * attacks that normally ignore armor"). It is a FLOOR under the effective armor rather than a
+ * separate pool, so a character in 3 unpierceable armor plus a +1 shield facing 1 piercing still
+ * soaks 3: piercing eats the shield's point first and then stops at the floor.
  */
-export function mitigateDamage(raw, { armor = 0, piercing = 0, ignoresArmor = false } = {}) {
+export function mitigateDamage(raw, { armor = 0, piercing = 0, ignoresArmor = false, unpierceable = 0 } = {}) {
 	const dmg = Math.max(0, Math.round(Number(raw) || 0));
-	if (ignoresArmor) return dmg;
-	const effectiveArmor = Math.max(0, (Number(armor) || 0) - (Number(piercing) || 0));
+	// Never more than the armor actually present: a floor can't invent protection a character
+	// isn't wearing (it is only ever set from armor that IS in the total).
+	const floor = Math.max(0, Math.min(Number(unpierceable) || 0, Number(armor) || 0));
+	if (ignoresArmor) return Math.max(0, dmg - floor);
+	const effectiveArmor = Math.max(floor, (Number(armor) || 0) - (Number(piercing) || 0));
 	return Math.max(0, dmg - effectiveArmor);
 }
 

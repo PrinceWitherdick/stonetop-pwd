@@ -40,6 +40,7 @@ export class FoundryOutfitItemRepository {
 					.withSmallGrid(st.smallGrid ?? false)
 					.withBreakBefore(st.breakBefore ?? false)
 					.withArmor(st.armor ?? null)
+					.withShield(st.shield ?? false)
 					.withSpecial(st.special ?? false)
 					.withSpecialCategory(st.specialCategory ?? null)
 					.build();

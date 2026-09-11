@@ -19,6 +19,7 @@ function makeOutfitItem(overrides = {}) {
 		.withSmallGrid(overrides.smallGrid ?? false)
 		.withBreakBefore(overrides.breakBefore ?? false)
 		.withArmor(overrides.armor ?? null)
+		.withShield(overrides.shield ?? false)
 		.withSpecial(overrides.special ?? false)
 		.withSpecialCategory(overrides.specialCategory ?? null)
 		.build();
@@ -1177,7 +1178,7 @@ describe("buildSnapshot — inventory.outfit", () => {
 	it("a shield costs its full 2 ◇ without the Armored move", async () => {
 		const snap = await new TestCharacterBuilder(new FakeActorBuilder().build())
 			.withInventoryRepo(new FakeInventoryRepository([
-				makeOutfitItem({ slug: "shield", name: "Shield", weight: 2 }),
+				makeOutfitItem({ slug: "shield", name: "Shield", weight: 2, shield: true }),
 			]))
 			.build().buildSnapshot();
 		const shield = snap.inventory.outfit.regularItems.find(i => i.slug === "shield");
@@ -1190,7 +1191,7 @@ describe("buildSnapshot — inventory.outfit", () => {
 			.build();
 		const snap = await new TestCharacterBuilder(actor)
 			.withInventoryRepo(new FakeInventoryRepository([
-				makeOutfitItem({ slug: "shield", name: "Shield", weight: 2 }),
+				makeOutfitItem({ slug: "shield", name: "Shield", weight: 2, shield: true }),
 			]))
 			.build().buildSnapshot();
 		const shield = snap.inventory.outfit.regularItems.find(i => i.slug === "shield");

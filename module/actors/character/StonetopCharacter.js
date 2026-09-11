@@ -258,10 +258,6 @@ function _ownedLoadBonus(actor) {
 	return _learnedMoveField(actor, "loadBonus");
 }
 
-// The standard Shield inventory item (Book I p.86). The Heavy/Judge/Marshal's Armored
-// move halves its ◇ load — see _ownedShieldLoadReduction.
-const _SHIELD_SLUG = "shield";
-
 // The Defend basic move holds Readiness (p.216) — the only move with the on-sheet
 // circle track; the Heavy's Guardian move sweetens each hold by +1 (and so needs no
 // circle of its own — it just adds one to Defend's track).
@@ -276,6 +272,20 @@ const _DEFEND_READINESS_FLAG = "readiness";
 // so buildSnapshot never hard-codes a move name.
 function _ownedShieldLoadReduction(actor) {
 	return _learnedMoveField(actor, "shieldLoadReduction").total;
+}
+
+// What a shield's ◇ cost becomes once Armored is applied to it. ONE rule for every shield,
+// whichever store it came from: the outfit catalog's and a special possession's gear choice both
+// ask here. Being a shield already means two other things — it carries armor, and it buys "+1
+// Readiness on a Defend 7+" — and each of those is answered in exactly one place; the load was the
+// odd one out, answered only for outfit items, so a Judge with Armored still paid ◇◇ for their
+// Makerglass shield.
+function _shieldAdjustedWeight(weight, isShield, reduction) {
+	const w = Number(weight) || 0;
+	// A weightless shield has no ◇ to give back, and flooring it at 1 would make the move ADD
+	// load. Only a shield that actually costs something is reduced.
+	if (!isShield || !(reduction > 0) || w <= 0) return w;
+	return Math.max(1, w - reduction);
 }
 
 // The id seed every standing-list row is minted with (see _rosterWrite). One width, in one place,
@@ -424,35 +434,49 @@ export class StonetopCharacter {
 		const actorLevel = actor.system?.attributes?.level?.value ?? 1;
 		const playbookData = await this.playbook();
 		const ownedAllByName = this._buildOwnedMovesMap();
-		const moves    = await this._buildMovesSection(playbookData, ownedAllByName, actorLevel);
-		const inventory = await this._buildInventorySection(playbookData, ownedAllByName, actorLevel, view);
-		const allOutfitItems = await this._inventoryRepo.getAll();
+		// The carried curios of every owned arcanum, resolved to the side the card has realised.
+		// Hoisted out of _buildInventorySection (which is where they render) because the armor
+		// calculation below needs the same list, and rebuilding it would walk the arcana repo
+		// twice per render.
+		const [arcanaCarried, allOutfitItems] = await Promise.all([
+			this._arcana.weightedInventoryItems(),
+			this._inventoryRepo.getAll(),
+		]);
+		// Every piece of gear this character could be wearing or bearing, from all four stores,
+		// with the marks that say which are actually carried. See _carriedGearSources.
+		//
+		// Built BEFORE the moves section and handed down to it: Defend's readiness pips ask
+		// bearsShield, which otherwise rebuilt this whole picture — a second arcana walk and a
+		// second pass over the outfit catalog — on every single render.
+		const gear = this._gearSources(playbookData, allOutfitItems, arcanaCarried);
+		const moves    = await this._buildMovesSection(playbookData, ownedAllByName, actorLevel, gear);
+		const inventory = await this._buildInventorySection(playbookData, ownedAllByName, actorLevel, view, arcanaCarried);
 		const postDeath = await this._postDeath.buildSnapshot();
 		const pdiLabel  = postDeath.activeInsert?.name ?? null;
 		const moveBonuses = await this._ownedMoveBonuses(playbookData, ownedAllByName);
-		// Armor counts standard items plus any special items the character has added —
-		// never an unadded special item whose checked flag happens to linger. A special
-		// item the character holds via a same-slug special possession (see
-		// _selectedPossessionSlugs) counts too, so a future worn-armor possession is
-		// included alongside the picker-added ones.
-		const addedSet = new Set(this._inventory.addedSpecial);
-		const possessionSpecialSet = this._selectedPossessionSlugs(playbookData);
-		const commonSpecialSet = this._earnedCommonSpecialSlugs(this.getSteadingActor(), allOutfitItems);
-		const armorItems = allOutfitItems.filter(i =>
-			!i.special || addedSet.has(i.slug) || possessionSpecialSet.has(i.slug) || commonSpecialSet.has(i.slug));
-		// Possession-granted worn gear (the Tannery's boiled leather cuirass) also
-		// counts when checked. Custom items key their checked state by item id, so the
-		// armor calc sees them as `{ slug: id, armor }` alongside the outfit items.
-		const customArmorItems = this._actor.items
-			.filter(i => i.type === "move" && i.system?.moveType === "inventory-custom" && i.system?.armor)
-			.map(i => ({ slug: i._id, armor: i.system.armor }));
 		// The worn-armor base (leather/mail/etc., excluding shields and move bonuses) gates
 		// moves that require being unarmored (Uncanny Reflexes); 0 means unarmored. Same base
 		// selection as calculateArmor — CharacterInventory owns the rule. Computed once and
 		// handed to calculateArmor so the base filter doesn't run twice per render.
-		const allArmorItems = [...armorItems, ...customArmorItems];
-		const wornArmorBase = this._inventory.wornArmorBase(allArmorItems);
-		const armor = this._inventory.calculateArmor(allArmorItems, wornArmorBase) + moveBonuses.armor;
+		const wornArmorBase = this._inventory.wornArmorBase(gear.items, gear.marks);
+		// Armor that shrugs off piercing and "ignores armor" outright. Carried separately all the
+		// way to the damage math, because it is a FLOOR under the mitigation rather than a bonus.
+		const unpierceableArmor = this._inventory.unpierceableArmor(gear.items, gear.marks);
+		// `armorAdjustment` is the GM/player's hand-set delta on top of everything derived — the
+		// same shape as hp.adjustment, and for the same reason: a lasting change the sheet can't
+		// derive (an arcanum's boon, a curse, a ruling) has to survive the next render.
+		//
+		// THE DERIVED NUMBER IS KEPT SEPARATELY, exactly as hpBase is, because the total is
+		// CLAMPED and a clamped total cannot be worked backwards. Both the sheet's note ("your
+		// gear and moves give N") and setArmor's banking of a typed total used to recover the
+		// derived number by subtracting the adjustment from the total, which is only true while
+		// the clamp is not biting: under an adjustment deep enough to bottom the total out, they
+		// read the derived armor as the size of the adjustment instead, and a typed 2 banked a
+		// delta that landed back on 0.
+		const armorBase = Math.max(0,
+			this._inventory.calculateArmor(gear.items, wornArmorBase, gear.marks)
+			+ moveBonuses.armor);
+		const armor = Math.max(0, armorBase + this.armorAdjustment);
 		const arcanaLore = (playbookData?.lore ?? []).some(e => e.arcanaImage || (e.options ?? []).some(o => o.arcanaRole))
 			? await this._arcana.buildLoreDisplay()
 			: null;
@@ -465,7 +489,7 @@ export class StonetopCharacter {
 			// A Thrall's Marks eat into their max HP ("Reduce your max HP by 2"), and they collect
 			// more as Dark Succor keeps saving them — so it's derived from the marked options
 			// every render, not written once.
-			.withVitals(_buildVitalsSection(actor, playbookData, armor, moveBonuses, wornArmorBase, insertHpPenalty(postDeath.activeInsert?.lore)))
+			.withVitals(_buildVitalsSection(actor, playbookData, armor, moveBonuses, wornArmorBase, insertHpPenalty(postDeath.activeInsert?.lore), unpierceableArmor, armorBase))
 			.withMoves(moves)
 			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null))
 			.withInventory(inventory)
@@ -476,6 +500,115 @@ export class StonetopCharacter {
 			.withCompanionBonuses(_buildCompanionBonuses(moveBonuses, ownedAllByName))
 			.withViewerIsGM(!!view.viewerIsGM)
 			.build();
+	}
+
+	/**
+	 * ONE answer to "what gear is this character wearing or bearing, and which of it is actually
+	 * on them right now" — `{ items, marks }`, where `items` are `{ slug, armor, shield }` records
+	 * and `marks` maps slug → carried.
+	 *
+	 * It exists because that question has four different answers depending on where the gear came
+	 * from, and every feature that asked it for itself got a different subset:
+	 *
+	 *   1. OUTFIT items          slug            ◇ in inventory.checked
+	 *   2. `inventory-custom`    item id         ◇ in inventory.checked   (write-ins, possession
+	 *                                            grantsItems, dropped Book II treasures)
+	 *   3. ARCANA curios         arcanum slug    ◇ in inventory.checked
+	 *   4. GEAR CHOICES          poss:choice     ◇ in possessions.choiceCarried  ← different store
+	 *
+	 * Armor read 1 and 2 and silently lost 3 and 4. `bearsShield` read a single hard-coded slug
+	 * ("shield") out of store 1, so the Judge's Makerglass shield, the Would-Be Hero's shield, the
+	 * Shield of the Wisent Witch and the makerglass shield treasure all bought no Readiness —
+	 * every one of them printing "+1 Readiness on a Defend 7+" on the sheet while granting none.
+	 * Answering it in one place is what stops the next feature losing a different three.
+	 *
+	 * `marks` is the union of the two stores, which is safe because a gear-choice key contains a
+	 * colon and no outfit slug or item id ever does.
+	 *
+	 * Pure and synchronous: the caller supplies the two lists that need awaiting (the outfit
+	 * catalog and the arcana curios), so this can also serve a non-async caller that already has
+	 * them. Special outfit items are included only when the character actually holds them —
+	 * added through the picker, granted by a selected possession, or earned commonly — never on a
+	 * stale `checked` flag for an item they never added.
+	 */
+	_gearSources(playbookData, allOutfitItems, arcanaCarried) {
+		const addedSet             = new Set(this._inventory.addedSpecial);
+		const possessionSpecialSet = this._selectedPossessionSlugs(playbookData);
+		const commonSpecialSet     = this._earnedCommonSpecialSlugs(this.getSteadingActor(), allOutfitItems);
+		// One record shape for all four stores, written once. The stores differ only in where a
+		// field is read from and in the two weapon keys, so a new gear property is added here
+		// rather than in four parallel object literals that have to be kept in step.
+		const rec = (slug, src, over = {}) => ({
+			slug, name: src.name ?? null, note: src.note ?? null,
+			armor: src.armor ?? null, shield: !!src.shield,
+			// Only a catalog or gear-choice weapon is keyed in WEAPON_META; a write-in, an
+			// arcanum's curio or a dropped Book II treasure states its mechanics in its own tag
+			// line instead (see weaponMetaFromNote), so it carries no slug.
+			weaponSlug: null, ammoStore: "inventory", ammo: !!src.resource,
+			// `catalog` says this row came from the book's own equipment list, whose weapons ARE
+			// the curated table — so a catalog item the table doesn't name is not a weapon, and
+			// its tag line is not to be read as one (the torch's "reach, area", the horse's die).
+			// Everything else has only its tag line to go on. See carriedAttackWeapons.
+			catalog: false,
+			// How many boxes the item's uses/ammo track has and what it calls each of them, off
+			// the item's own resource definition: javelins are one throw and out, a lantern has
+			// five hours of oil, and the bows carry the printed "low ammo / all out" pair.
+			ammoMax: Number(src.resource?.max) || null,
+			ammoLabels: Array.isArray(src.resource?.labels) ? src.resource.labels : null,
+			...over,
+		});
+		const outfit = allOutfitItems
+			.filter(i => !i.special || addedSet.has(i.slug) || possessionSpecialSet.has(i.slug) || commonSpecialSet.has(i.slug))
+			.map(i => rec(i.slug, i, { weaponSlug: i.slug, catalog: true }));
+		const custom = this._actor.items
+			.filter(i => i.type === "move" && i.system?.moveType === "inventory-custom")
+			// Where each gear field actually lives — the flag or the system field — is
+			// readInventoryItemData's problem, not this method's, exactly as it is on the drop path.
+			.map(i => rec(i._id, { ...readInventoryItemData(i), name: i.name }));
+		const arcana = arcanaCarried.map(i => rec(i.slug, i));
+		// Gear choices are the one store that is NOT inventory.checked, so their marks are
+		// collected alongside their items and unioned into `marks` below. Their CHOICE slug is
+		// the WEAPON_META key ("battleaxe", "long-spear"), while their carried mark and ammo
+		// track are both keyed by the composite — hence the two slugs on the record.
+		const choiceRows = [...this._buildChoiceGearByPossession(playbookData).values()]
+			.flatMap(b => [...b.regular, ...b.small])
+			.map(r => rec(`${r.possessionSlug}:${r.choiceSlug}`, { ...r, name: r.label, note: r.label }, {
+				weaponSlug: r.choiceSlug, ammoStore: "possessions", carried: r.checked,
+			}));
+		const items = [
+			...outfit, ...custom, ...arcana,
+			...choiceRows.map(({ carried, ...rest }) => rest),
+		];
+		const marks = choiceRows.length
+			? { ...this._inventory.checked, ...Object.fromEntries(choiceRows.map(r => [r.slug, r.carried])) }
+			: this._inventory.checked;
+		return { items, marks };
+	}
+
+	/**
+	 * The carried gear this character could attack WITH, as `{ slug, weaponSlug, name, note,
+	 * ammoStore }` records — everything marked as carried, whatever store its mark lives in.
+	 *
+	 * The attack flow used to read `inventory.checked` on its own, which meant the Heavy's and
+	 * Marshal's Weapons of War — their signature gear, and every one of them a real WEAPON_META
+	 * entry — were never offered for Clash or Let Fly, because a gear choice records being
+	 * carried in possessions.choiceCarried instead. Arcana and treasure weapons were missed for
+	 * the second reason: no WEAPON_META entry at all, their mechanics being stated only in their
+	 * own tag line (see weaponMetaFromNote).
+	 */
+	async carriedWeaponGear() {
+		const { items, marks } = await this._carriedGearSources();
+		return items.filter(i => marks[i.slug]);
+	}
+
+	/** The two awaited lists _gearSources needs, for callers outside buildSnapshot. */
+	async _carriedGearSources() {
+		const [playbookData, allOutfitItems, arcanaCarried] = await Promise.all([
+			this.playbook(),
+			this._inventoryRepo.getAll(),
+			this._arcana.weightedInventoryItems(),
+		]);
+		return this._gearSources(playbookData, allOutfitItems, arcanaCarried);
 	}
 
 	// Sum the max-HP and armor bonuses granted by owned playbook moves (e.g. the
@@ -493,8 +626,27 @@ export class StonetopCharacter {
 			totals.hp    += Number(i.system?.hpBonus)    || 0;
 			totals.armor += Number(i.system?.armorBonus) || 0;
 		}
+		// The character's OWN playbook definitions. Resolved before the foreign sweep below so it
+		// can tell "a move this playbook defines" (counted from the def, further down) from "a
+		// move poached out of someone else's" (counted off the embedded copy).
+		const defs = playbookData ? await this._moveRepo.getPlaybookMoves(playbookData.name) : [];
+		const ownPlaybookMoveNames = new Set(defs.map(d => d.name));
+		// A FOREIGN move — one taken from another playbook via Versatile / Worldly / Dabbler /
+		// Wild Soul / Initiate of the Secret Arts / Seasoned Warrior / Arts of War — fell between
+		// both loops: the custom sweep above is deliberately scoped to player-authored moves, and
+		// the def walk below only ever reads the character's own playbook. So a Judge who poached
+		// the Heavy's Cut from Granite ("Gain +1 armor…") got nothing for it. _applyForeignMoveChoice
+		// embeds the pack document whole, so the bonus is sitting on the owned copy.
+		//
+		// Name-gated against the own-playbook defs rather than on moveType, so a Heavy's own copy
+		// is counted once — down there, from its definition — and never here as well.
+		for (const i of this._actor.items) {
+			if (i.type !== "move" || _isCustomMove(i) || !_isMoveLearned(i)) continue;
+			if (ownPlaybookMoveNames.has(i.name)) continue;
+			totals.hp    += Number(i.system?.hpBonus)    || 0;
+			totals.armor += Number(i.system?.armorBonus) || 0;
+		}
 		if (!playbookData) return totals;
-		const defs  = await this._moveRepo.getPlaybookMoves(playbookData.name);
 		const marks = this._moveResources.getMarks();
 		for (const m of defs) {
 			// Require a genuine (non-custom) owned move of this name, so a player-authored
@@ -534,7 +686,10 @@ export class StonetopCharacter {
 		return totals;
 	}
 
-	async _buildMovesSection(playbookData, ownedAllByName, actorLevel) {
+	// `gear` is the prebuilt gear picture from buildSnapshot, passed through to Defend's
+	// readiness pips so bearsShield does not rebuild it. Optional: a caller without one
+	// (a test) still gets the correct answer, just at the cost of the rebuild.
+	async _buildMovesSection(playbookData, ownedAllByName, actorLevel, gear = null) {
 		const categories = [];
 
 		if (playbookData) {
@@ -638,7 +793,7 @@ export class StonetopCharacter {
 		const basicCategory = _buildCompendiumMoveCategory(basicEntries, { key: "basic", title: "Basic Moves" }, ownedAllByName);
 		if (basicCategory) {
 			const defend = basicCategory.moves.find(m => m.name === _DEFEND_MOVE_NAME);
-			if (defend) defend.readiness = this.defendReadinessContext();
+			if (defend) defend.readiness = await this.defendReadinessContext(gear);
 			categories.push(basicCategory);
 		}
 
@@ -687,7 +842,7 @@ export class StonetopCharacter {
 		]);
 	}
 
-	async _buildInventorySection(playbookData, ownedAllByName, actorLevel, view = {}) {
+	async _buildInventorySection(playbookData, ownedAllByName, actorLevel, view = {}, arcanaCarried = null) {
 		const viewerIsGM     = !!view.viewerIsGM;
 		const checked        = this._inventory.checked;
 		const resources      = this._inventory.resources;
@@ -725,9 +880,7 @@ export class StonetopCharacter {
 				: (isProsperityResource && smallItemLimit !== null) ? smallItemLimit
 				: res?.max;
 			// Armored reduces a carried shield's ◇ cost (min 1), so it reads ◆ instead of ◆◆.
-			const weight = (outfitItem.slug === _SHIELD_SLUG && shieldLoadReduction > 0)
-				? Math.max(1, outfitItem.weight - shieldLoadReduction)
-				: outfitItem.weight;
+			const weight = _shieldAdjustedWeight(outfitItem.weight, outfitItem.shield, shieldLoadReduction);
 			return new InventoryItemSnapshotBuilder()
 				.withSlug(outfitItem.slug)
 				.withName(outfitItem.name)
@@ -923,7 +1076,9 @@ export class StonetopCharacter {
 		//   ◇0 ones → right, alongside the small items, but INERT: they were never
 		//             markable (`times 0` renders no checkbox), so they cost nothing and
 		//             must not start eating the 4+Prosperity small allowance.
-		const arcanaAll     = await this._arcana.weightedInventoryItems();
+		// Handed in by buildSnapshot, which also needs this list for the armor calculation; the
+		// fallback keeps the section standalone for callers (and tests) that build it directly.
+		const arcanaAll     = arcanaCarried ?? await this._arcana.weightedInventoryItems();
 		const arcanaRegular = arcanaAll.filter(i => (i.weight ?? 0) > 0).map(mapItem);
 		const arcanaSmall   = arcanaAll.filter(i => (i.weight ?? 0) <= 0).map(mapItem);
 
@@ -1232,6 +1387,9 @@ export class StonetopCharacter {
 	// label are split off the authored "◇ Sword, iron (…)" form. Kept in step with the load /
 	// small-item accounting below, which folds carried rows in by their weight.
 	_buildChoiceGearByPossession(playbookData, prosperity = null) {
+		// Armored reaches a shield among the gear choices exactly as it reaches one in the
+		// outfit catalog — the Judge's and the Would-Be Hero's shields are gear choices.
+		const shieldLoadReduction = _ownedShieldLoadReduction(this._actor);
 		const out = new Map();
 		const sp = playbookData?.specialPossessions;
 		if (!sp?.options?.length) return out;
@@ -1246,7 +1404,8 @@ export class StonetopCharacter {
 			const small   = [];
 			for (const c of opt.choices.options) {
 				if (!picked.has(c.slug)) continue; // unchosen weapons aren't yours to carry
-				const { weight, label: rawLabel } = _parseChoiceGear(c.label);
+				const { weight: printedWeight, label: rawLabel } = _parseChoiceGear(c.label);
+				const weight = _shieldAdjustedWeight(printedWeight, c.shield ?? false, shieldLoadReduction);
 				// Resolve the "x piercing" marker up front so both render paths — the plain
 				// label and the fill-blank split below — read from the same transformed text
 				// (a weapon could carry both a blank and a piercing note).
@@ -1273,6 +1432,15 @@ export class StonetopCharacter {
 					labelAfter:     useInline ? inline.after : "",
 					resourceInline: useInline,
 					weight,
+					// Worn/borne gear among the choices (the Judge's Makerglass shield) carries the
+					// same `{base}`/`{modifier}` shape as an outfit item. buildSnapshot reads it off
+					// these rows rather than re-walking the possessions, so "which choices are yours
+					// and carried" stays a single rule — this method — and can't drift from what the
+					// card renders.
+					armor:          c.armor ?? null,
+					// And whether that gear is a SHIELD, which also buys "+1 Readiness on a 7+ to
+					// Defend" — read off these rows by bearsShield for the same reason armor is.
+					shield:         c.shield ?? false,
 					// Carried, not chosen: a weapon you own but left behind reads as an empty ◇.
 					checked:        this._possessions.isChoiceCarried(opt.slug, c.slug),
 					hasBlank:       blank.hasBlank,
@@ -1556,7 +1724,7 @@ export class StonetopCharacter {
 		// Where each field actually lives is readInventoryItemData's problem, not this method's.
 		const read = readInventoryItemData(itemData);
 		const clone = v => globalThis.foundry?.utils?.deepClone?.(v) ?? v;
-		const { column: rawColumn, resource, armor, isTreasure } = read;
+		const { column: rawColumn, resource, armor, shield, isTreasure } = read;
 		const carriedState = normalizeArtifactState(read.artifact.state);
 		// Only a treasure/artifact is ever hidden by default. An ordinary write-in dragged off
 		// the sidebar has no tags worth concealing, and hiding it would strand the player with a
@@ -1572,6 +1740,10 @@ export class StonetopCharacter {
 			note: read.note,
 			resource: resource ? clone(resource) : null,
 			armor: armor ? clone(armor) : null,
+			// And whether it is a shield. Dropped with the armor it rides on: a makerglass shield
+			// re-planted without this kept its 2 armor and silently stopped buying "+1 Readiness
+			// on a Defend 7+", which is the whole reason the flag exists.
+			shield,
 			moveType: "inventory-custom",
 			// A Book II treasure keeps its marker through the re-plant, so the gear tab can
 			// group it under "Treasures" rather than among the write-ins.
@@ -1924,6 +2096,10 @@ export class StonetopCharacter {
 	}
 	async selectSubChoiceExclusive(possessionSlug, choiceSlug, exclusiveSlugs) { await this._possessions.selectExclusive(possessionSlug, choiceSlug, exclusiveSlugs); }
 	async setSubChoiceUses(possessionSlug, choiceSlug, count) { await this._possessions.setChoiceUses(possessionSlug, choiceSlug, count); }
+	/** The ○○ count on one gear-choice option. The read half of setSubChoiceUses, so the
+	 *  `possessions.choiceUses` path and its `possession:choice` key shape stay in the class
+	 *  that owns that store rather than being spelled out again by the combat flow. */
+	subChoiceUses(possessionSlug, choiceSlug) { return Number(this._possessions.choiceUses[`${possessionSlug}:${choiceSlug}`]) || 0; }
 	// The ◇ on a chosen weapon's row: whether it's on your person right now (counts toward
 	// load). Independent of the pick itself — see _buildChoiceGearByPossession.
 	async setChoiceGearCarried(possessionSlug, choiceSlug, isCarried) { await this._possessions.setChoiceCarried(possessionSlug, choiceSlug, isCarried); }
@@ -2254,8 +2430,48 @@ export class StonetopCharacter {
 	// for the pure hold/cap arithmetic).
 
 	/** Whether the character currently bears a shield (its inventory slot is checked). */
-	get bearsShield() {
-		return !!(this._actor.getFlag(STONETOP_SCOPE, "inventory.checked")?.[_SHIELD_SLUG]);
+	/**
+	 * Whether the character is bearing a shield, for Defend's "+1 Readiness on a 7+" (p.216).
+	 *
+	 * Async because the answer spans all four gear stores (see _gearSources) and two of them
+	 * need a repository read. It used to be `checked["shield"]` — the ONE catalog slug — which
+	 * meant the Judge's Makerglass shield, the Would-Be Hero's shield, the Shield of the Wisent
+	 * Witch and the makerglass shield treasure each printed "+1 Readiness on a Defend 7+" beside
+	 * a tick box that bought nothing.
+	 */
+	async bearsShield(gear = null) {
+		const { items, marks } = gear ?? await this._carriedGearSources();
+		return items.some(i => i.shield && marks[i.slug]);
+	}
+
+	/**
+	 * The hand-set armor delta, banked on the actor the way `hp.adjustment` banks a permanent
+	 * max-HP change. A DELTA, not an absolute: an arcanum's boon or a GM's ruling keeps its size
+	 * when the gear underneath it changes, instead of pinning a number the next equip would fight.
+	 */
+	get armorAdjustment() {
+		return Math.trunc(Number(this._actor.system?.attributes?.armor?.adjustment) || 0);
+	}
+
+	/**
+	 * Bank a hand-typed armor total as the delta that reaches it. Mirrors setMaxHp: the typed
+	 * number is what the player wants to SEE, so the stored adjustment is that minus everything
+	 * currently derived. Typing the derived number back in clears the adjustment to 0.
+	 * Returns the total that will now render.
+	 */
+	async setArmor(input) {
+		const typed = Math.trunc(Number(input));
+		// Null rather than the rendered total: the one caller (_onArmorEdit) has already
+		// rejected a blank or nonsense box and discards this, so rebuilding the entire
+		// snapshot to answer a question nobody asked was pure cost.
+		if (!Number.isFinite(typed)) return null;
+		const target  = Math.max(0, typed);
+		// `armorBase` and NOT `armor` minus the adjustment: the total is clamped at 0, so once a
+		// negative adjustment has bottomed it out the subtraction gives back the adjustment's own
+		// size instead of the derived armor, and the delta banked from it lands somewhere else.
+		const derived = (await this.buildSnapshot()).vitals.armorBase;
+		await this._actor.update({ "system.attributes.armor.adjustment": target - derived });
+		return target;
 	}
 
 	/** The Heavy's Guardian move (+1 Readiness on every Defend, incl. a 6-). */
@@ -2267,9 +2483,10 @@ export class StonetopCharacter {
 		return Math.max(0, Math.trunc(Number(this._actor.getFlag(STONETOP_SCOPE, _DEFEND_READINESS_FLAG)) || 0));
 	}
 
-	/** The view model the sheet renders as circles beside the Defend move. */
-	defendReadinessContext() {
-		const opts  = { hasShield: this.bearsShield, hasGuardian: this.hasGuardianMove };
+	/** The view model the sheet renders as circles beside the Defend move. Async only because
+	 *  bearsShield now spans every gear store rather than one hard-coded slug. */
+	async defendReadinessContext(gear = null) {
+		const opts  = { hasShield: await this.bearsShield(gear), hasGuardian: this.hasGuardianMove };
 		const value = this.defendReadiness;
 		const cap   = defendReadinessCap(opts);
 		// Never render fewer circles than are held, so an over-held pool (e.g. shield
@@ -2557,14 +2774,16 @@ export class StonetopCharacter {
 	// a chat note when the pool actually grows.
 	async _maybeHoldDefendReadiness(total) {
 		const tier = classifyResult(total).key;
-		const hold = defendReadinessHold(tier, { hasShield: this.bearsShield, hasGuardian: this.hasGuardianMove });
+		// Resolved once: the note below must credit the shield on exactly the rolls the hold did.
+		const hasShield = await this.bearsShield();
+		const hold = defendReadinessHold(tier, { hasShield, hasGuardian: this.hasGuardianMove });
 		const existing = this.defendReadiness;
 		const next = Math.max(existing, hold);
 		if (next === existing) return;
 		await this.setDefendReadiness(next);
 		// The shield's +1 rides a 7+ hit only, so don't credit it on a 6- miss (where the
 		// hold comes solely from Guardian) — that would falsely imply the shield applied.
-		const shieldNote = (this.bearsShield && tier !== "failure") ? " (shield)" : "";
+		const shieldNote = (hasShield && tier !== "failure") ? " (shield)" : "";
 		await ChatMessage.create({
 			content: moveChatCard("Defend: Readiness held",
 				`<p><strong>${escHtml(this._actor.name)}</strong> holds <strong>${next}</strong> Readiness${escHtml(shieldNote)}.</p>`
@@ -3502,7 +3721,7 @@ function _derivedDamageDie(playbookData, moveBonuses = {}) {
 	return moveBonuses.damageDie ? maxDie(playbookData.damage, moveBonuses.damageDie) : playbookData.damage;
 }
 
-function _buildVitalsSection(actor, playbookData, armorValue, moveBonuses = {}, wornArmorBase = 0, insertHpPenalty = 0) {
+function _buildVitalsSection(actor, playbookData, armorValue, moveBonuses = {}, wornArmorBase = 0, insertHpPenalty = 0, unpierceableArmor = 0, armorBase = null) {
 	const attrs = actor.system?.attributes ?? {};
 	const level = attrs.level?.value ?? 1;
 	// Floored at 1: a Thrall who collects enough max-HP Marks would otherwise arrive at 0 max HP
@@ -3532,7 +3751,12 @@ function _buildVitalsSection(actor, playbookData, armorValue, moveBonuses = {}, 
 		.withDamage(damage)
 		.withDamageBase(damageBase)
 		.withArmor(armorValue)
+		// Defaulted to the total for a caller that hands over no derived number of its own: with
+		// no adjustment in play the two ARE the same, which is every character but the handful
+		// carrying a hand-set one.
+		.withArmorBase(armorBase ?? armorValue)
 		.withWornArmor(wornArmorBase)
+		.withUnpierceableArmor(unpierceableArmor)
 		.withLevel(level)
 		.withXp(new ValueMax(attrs.xp?.value ?? 0, xpToLevelUp(level)))
 		.build();

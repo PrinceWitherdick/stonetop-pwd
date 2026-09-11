@@ -13,7 +13,10 @@ import { ITEM_FLAG_SCOPE } from "../system-id.js";
  * @param {number} [input.weight=1]           ◇ load (regular column only)
  * @param {string} [input.note=""]            freeform tags/notes (already <em>-wrapped)
  * @param {object|null} [input.resource=null] { max, title, labels } uses/ammo track
- * @param {object|null} [input.armor=null]    { modifier } worn armor
+ * @param {object|null} [input.armor=null]    { base } worn body armor (best one wins, no
+ *        stacking) or { modifier } a shield/bonus (adds on top). See calculateArmor.
+ * @param {boolean} [input.shield=false]     the item is a shield: on top of its armor it
+ *        buys "+1 Readiness on a 7+ to Defend" (p.216). See StonetopCharacter#bearsShield.
  * @param {string} [input.moveType="inventory"] item's moveType
  * @param {boolean} [input.isTreasure=false]  a Book II journal treasure — groups the
  *        item under the gear tab's "Treasures" heading rather than the write-in columns
@@ -24,7 +27,7 @@ import { ITEM_FLAG_SCOPE } from "../system-id.js";
  *        key is written only when non-empty, so ordinary gear carries none of them and reads
  *        exactly as it did before the feature existed.
  */
-export function buildInventoryItemData({ name, column = "regular", weight = 1, note = "", resource = null, armor = null, moveType = "inventory", isTreasure = false, img = null, artifact = null }) {
+export function buildInventoryItemData({ name, column = "regular", weight = 1, note = "", resource = null, armor = null, shield = false, moveType = "inventory", isTreasure = false, img = null, artifact = null }) {
 	const isRegular = column !== "small";
 	const system = {
 		moveType,
@@ -37,6 +40,9 @@ export function buildInventoryItemData({ name, column = "regular", weight = 1, n
 	if (note) system.note = note;
 	if (resource) system.resource = resource;
 	if (armor) system.armor = armor;
+	// A shield also buys "+1 Readiness on a 7+ to Defend" (p.216), so a dropped or
+	// hand-written one has to say it is a shield for bearsShield to see it.
+	if (shield) system.shield = true;
 	if (isTreasure) system.isTreasure = true;
 	if (artifact?.state) system.identifyState = artifact.state;
 	if (artifact?.hint)  system.artifactHint  = artifact.hint;
@@ -68,7 +74,7 @@ export function buildInventoryItemData({ name, column = "regular", weight = 1, n
  *
  * @param {object} itemData  anything shaped like an Item — `{ system, flags }`
  * @returns {{column: string|undefined, weight: *, note: string, resource: object|null,
- *           armor: object|null, isTreasure: boolean,
+ *           armor: object|null, shield: boolean, isTreasure: boolean,
  *           artifact: {state: *, hint: string, lore: string, lead: string}}}
  */
 export function readInventoryItemData(itemData) {
@@ -81,6 +87,7 @@ export function readInventoryItemData(itemData) {
 		note:       st.note ?? sys.note ?? "",
 		resource:   st.resource ?? sys.resource ?? null,
 		armor:      st.armor ?? sys.armor ?? null,
+		shield:     !!(st.shield ?? sys.shield),
 		isTreasure: !!(st.isTreasure ?? sys.isTreasure),
 		artifact: {
 			state: st.identifyState ?? sys.identifyState,

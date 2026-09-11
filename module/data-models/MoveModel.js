@@ -107,6 +107,10 @@ export class MoveModel extends foundry.abstract.TypeDataModel {
 			// CharacterInventory.calculateArmor (base = max-wins, modifier = additive).
 			// Default null (falsy) so a non-armor item is skipped by that filter.
 			armor:           looseObject(),
+			// Whether that item is a SHIELD, which on top of its armor buys "+1 Readiness on a
+			// 7+ to Defend" (p.216). Declared here or the field is silently dropped on save,
+			// which is how the armor field's absence hid for so long.
+			shield:          new fields.BooleanField({ required: false, initial: false }),
 			moveResults:     looseObject(),
 			markOptions:     new fields.ArrayField(new fields.ObjectField(), { required: false, initial: [] }),
 			// Repeat-scaling selection budget for `markOptions` moves: { base, perExtra }.

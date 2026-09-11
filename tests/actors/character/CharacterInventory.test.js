@@ -148,6 +148,52 @@ describe("CharacterInventory.calculateArmor", () => {
 		const ci = new CharacterInventory(makeFlags({ checked: { "cloak": true } }));
 		expect(ci.calculateArmor([makeArmorItem("cloak", null)])).toBe(0);
 	});
+
+	// The `carried` override exists for gear choices on a special possession (the Judge's
+	// Makerglass shield), whose ◇ is recorded in possessions.choiceCarried under a
+	// `possessionSlug:choiceSlug` key — a different flag namespace from this inventory's
+	// `checked`. The snapshot unions the two stores and hands the result in.
+	describe("with a `carried` override", () => {
+		it("equips from the override instead of `checked`", () => {
+			const ci = new CharacterInventory(makeFlags({ checked: {} }));
+			const items = [makeArmorItem("symbol-of-authority:makerglass-shield", { modifier: 1 })];
+			const marks = { "symbol-of-authority:makerglass-shield": true };
+			expect(ci.calculateArmor(items, null, marks)).toBe(1);
+		});
+
+		it("REPLACES `checked` rather than merging with it", () => {
+			// The caller owns the union, so an override that omits a slug un-equips it here.
+			// Merging silently instead would make the override impossible to use for removal.
+			const ci = new CharacterInventory(makeFlags({ checked: { "thick-hides": true } }));
+			const items = [makeArmorItem("thick-hides", { base: 1 })];
+			expect(ci.calculateArmor(items, null, {})).toBe(0);
+		});
+
+		it("honours a falsy mark in the override (a chosen weapon left behind)", () => {
+			const ci = new CharacterInventory(makeFlags({ checked: {} }));
+			const items = [makeArmorItem("weapons-of-war:shield", { modifier: 1 })];
+			expect(ci.calculateArmor(items, null, { "weapons-of-war:shield": false })).toBe(0);
+		});
+
+		it("feeds wornArmorBase too, so an override-only worn piece is not 'unarmored'", () => {
+			const ci = new CharacterInventory(makeFlags({ checked: {} }));
+			const items = [makeArmorItem("symbol-of-authority:scale-coat", { base: 2 })];
+			const marks = { "symbol-of-authority:scale-coat": true };
+			expect(ci.wornArmorBase(items, marks)).toBe(2);
+			expect(ci.calculateArmor(items, null, marks)).toBe(2);
+		});
+
+		it("keeps a caller-supplied base of 0 instead of recomputing it", () => {
+			// `?? ` not `|| `: an explicit 0 is a real computed base (unarmored) and must stand,
+			// or the shield below would be added onto a silently re-derived base.
+			const ci = new CharacterInventory(makeFlags({ checked: { "thick-hides": true, "shield": true } }));
+			const items = [
+				makeArmorItem("thick-hides", { base: 1 }),
+				makeArmorItem("shield",      { modifier: 1 }),
+			];
+			expect(ci.calculateArmor(items, 0)).toBe(1);
+		});
+	});
 });
 
 // -- StonetopCharacter.toggleCarriedItem (Have What You Need) ------------------

@@ -522,6 +522,8 @@
       "addItemWeight": "Weight (◇)",
       "addItemWeightHint": "◇ counts toward your load. Armor subtracts from damage you take (worn items only).",
       "addItemArmor": "Armor",
+      "addItemArmorWorn": "Worn armor",
+      "addItemArmorWornHint": "Tick for body armor (mail, hides, a cuirass): the best worn armor counts, they don't stack. Leave clear for a shield or a bonus, which adds on top.",
       "addItemTags": "Tags / notes",
       "addItemTagsPlaceholder": "e.g. near, +1 damage, reload",
       "addItemTagsHint": "Shown in parentheses after the name. Click a tag to add it, or type your own.",

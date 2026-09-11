@@ -7,6 +7,16 @@ export class MinorArcanumItem {
 		this.note            = data.note            ?? null;
 		this.inventoryColumn = data.inventoryColumn ?? null;
 		this.resource        = data.resource ? new ResourceDef(data.resource) : null;
+		// Worn/borne arcana (the Demonhide Cloak's "1 armor", the Rune-laden Scales' "2 armor",
+		// the Shield of the Wisent Witch's "+1 armor") carry the same `{base}`/`{modifier}` shape
+		// as an outfit item, and CharacterInventory.calculateArmor applies it by the same rule.
+		// This DTO whitelists fields, so until it was declared here an authored `armor` was
+		// dropped on construction and the card's armor could never be fixed in JSON alone.
+		this.armor           = data.armor           ?? null;
+		// Declared for the same reason as `armor`: this DTO whitelists fields, so the Shield of
+		// the Wisent Witch's "+1 Readiness on a 7+ to Defend" could not be expressed in JSON at
+		// all until the flag had a home here.
+		this.shield          = data.shield          ?? false;
 	}
 }
 
@@ -52,5 +62,12 @@ export class MinorArcanum {
 		// Homebrew summoners author their manifested follower(s) here; shipped summoners
 		// use the hard-coded ARCANA_SUMMONS map instead (see arcanaSummonFollowers).
 		this.summon = data.summon ?? null;
+		// Mysteries on the BACK that change what the curio is worth as armor once ticked — the
+		// Rune-laden Scales' PROOF AGAINST HARM ("The Rune-laden Scales now provide you 3 armor").
+		// Each entry is `{ label, armor }`, where `label` is the mystery's printed name and its
+		// □ is found by that name rather than by a hard-coded index, so the card's text can be
+		// edited without silently re-pointing the unlock (see CharacterArcana#backBoxChecked).
+		// The best armor among the ticked ones wins over the curio's own printed value.
+		this.armorUnlocks = data.armorUnlocks ?? [];
 	}
 }

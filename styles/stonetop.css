@@ -7609,6 +7609,10 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-add-item-chip--bonus { font-variant-numeric: tabular-nums; }
 /* Ammo toggle only surfaces once there's a use count to label. */
 .stonetop-add-item-ammo.is-hidden { display: none; }
+/* Worn-armor toggle: only meaningful once an armor value is set, so it and its hint hide
+   together until then (same pattern as the ammunition toggle above). */
+.stonetop-add-item-armor-worn.is-hidden,
+.stonetop-add-item-armor-worn-hint.is-hidden { display: none; }
 /* Weight/armor apply to the regular Items column only; hidden for Small Items. */
 .stonetop-add-item-weight-block.is-hidden { display: none; }
 
