@@ -5,6 +5,10 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  # So a run can be repeated against a branch without an empty commit to trigger it. Worth
+  # having because `npm run pack` below builds a native dependency: a red run is occasionally
+  # the toolchain rather than the tree, and the way to tell is to run it again unchanged.
+  workflow_dispatch:
 
 # Cancel a run that a newer push to the SAME ref has already superseded.
 #
@@ -14,6 +18,11 @@ on:
 # consistently starts a few seconds after the push run, so cancel-in-progress would
 # systematically kill the PUSH run, which is the only coverage develop has in the stretches
 # when no release PR is open. The duplicate pair is cheap; losing develop coverage is not.
+#
+# A workflow_dispatch on a branch DOES share a ref with that branch's push run and will cancel
+# it. That is the intended reading of the group and costs nothing: a manual re-run is the same
+# commit through the same steps, so the coverage the cancelled run was providing is exactly
+# what replaces it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

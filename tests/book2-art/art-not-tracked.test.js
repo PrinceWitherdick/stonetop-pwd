@@ -17,16 +17,17 @@ import { DURABLE_ART_DIRS } from "../../module/book2-art/browse.js";
  *
  * THREE COPIES OF ONE LIST, which is the whole reason this test exists. `DURABLE_ART_DIRS`
  * says where the importer writes; `.gitignore` stops those paths being committed;
- * `release.yml` asserts a clean checkout has none of them before it uploads a zip to the
- * world. Nothing connected the three, and they drifted exactly as you would expect: for most
- * of this system's life the importer wrote seven directories while the other two lists named
- * the three it wrote when they were first typed. The four unguarded ones
- * (treasures, people, steading, diagrams) were one `git add -A` from public.
+ * `release.yml` holds the third as its `ART_DIRS` and checks it TWICE, once against the
+ * checkout and once against the zip built from it. Nothing connected the three, and they
+ * drifted exactly as you would expect: for most of this system's life the importer wrote
+ * seven directories while the other two lists named the three it wrote when they were first
+ * typed. The four unguarded ones (treasures, people, steading, diagrams) were one
+ * `git add -A` from public.
  *
- * The guard in `release.yml` deliberately stays hardcoded rather than reading this array at
+ * The copy in `release.yml` deliberately stays hardcoded rather than reading this array at
  * release time: it is the last gate before an irreversible upload and it should not depend on
  * a module path resolving or a parse succeeding. This test is what keeps the copies honest,
- * and it runs inside `npm test`, which `release.yml` itself runs before that guard.
+ * and it runs inside `npm test`, which `release.yml` itself runs before either guard.
  */
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -72,11 +73,44 @@ describe("private art cannot reach this repository", () => {
 		expect(tracked(dir)).toEqual([]);
 	});
 
-	it("release.yml's pre-upload guard checks every one of them", () => {
+	it("release.yml's ART_DIRS names every one of them", () => {
+		// The workflow keeps ONE copy, as a job-level env var, so its two guards cannot end up
+		// checking different lists. This asserts that copy; the test below asserts both guards
+		// still read it.
 		const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/release.yml"), "utf8");
-		const guard = yml.slice(yml.indexOf("Verify the artifact before it ships"));
-		expect(guard).not.toBe("");
-		for (const dir of artDirs) expect(guard).toContain(dir);
+		const block = yml.slice(yml.indexOf("ART_DIRS:"), yml.indexOf("\njobs:"));
+		expect(block, "no ART_DIRS ahead of jobs: in release.yml").not.toBe("");
+		for (const dir of artDirs) expect(block).toContain(dir);
+	});
+
+	it.each([
+		"Verify the checkout before it is zipped",
+		"Verify the zip that will ship",
+	])("release.yml's %s step still reads that list", (name) => {
+		// Two gates, because a clean tree is only EVIDENCE about the artifact. The zip is
+		// assembled by a hand-maintained include list, and it is what a user receives.
+		//
+		// Naming the steps rather than pattern-matching the file: renaming one of them should
+		// fail here and make whoever renamed it look at both gates, which is exactly what
+		// happened when the second one was added.
+		const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/release.yml"), "utf8");
+		const from = yml.indexOf(`- name: ${name}`);
+		expect(from, `no step named "${name}" in release.yml`).toBeGreaterThan(-1);
+
+		// To the next step at the same indent, so this cannot pass on a later step's mention.
+		const next = yml.indexOf("\n      - ", from);
+		const step = yml.slice(from, next === -1 ? undefined : next);
+
+		// COMMENTS STRIPPED, because every one of these steps explains itself and the word
+		// ART_DIRS appears in that explanation. Matching the whole step body passed happily
+		// against a guard whose loop had been rewritten to a single hardcoded directory: the
+		// prose still said ART_DIRS, so the test still agreed. Only executable lines count.
+		const code = step
+			.split("\n")
+			.filter(l => !/^\s*(#|\/\/)/.test(l))
+			.join("\n");
+		expect(code, `${name} no longer reads $ART_DIRS in any executable line`)
+			.toContain("ART_DIRS");
 	});
 
 	/**

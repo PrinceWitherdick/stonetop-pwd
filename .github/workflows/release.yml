@@ -4,17 +4,59 @@ name: Release
 # rebuilds system.json and stonetop.zip from a clean checkout, and OVERWRITES whatever was
 # attached to the release by hand. Anything you want in the shipped artifact has to happen
 # here, not in a local staging directory.
+#
+# workflow_dispatch runs the SAME pipeline as a rehearsal. Everything below happens except the
+# publish: the manifest is patched, the packs are compiled, the zip is built and verified, and
+# the result comes back as a workflow artifact. Nothing is attached to a release, and nothing a
+# Foundry client can reach is touched. Before that existed, every step past the version check
+# only ever ran after a tag had been pushed, which is to say it was untested until it was
+# irreversible.
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to rehearse, e.g. 1.5.0. Nothing is published."
+        required: true
 
-# The one package id this repository publishes. Only a release whose built manifest matches
-# it may take the repository's single Latest slot; see the make_latest step below. Each of
-# the two repositories sets this to its own id, which is what lets both serve a correct,
-# auto-updating manifest URL to their own audience without competing for one slot.
+# One release at a time, and never cancelled. Deciding the repository's single Latest slot (see
+# make_latest below) is not something two runs can do concurrently, and a run that has already
+# uploaded has to be allowed to reach its post-upload verification: cancelling it there leaves
+# the release carrying an asset nothing ever checked.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 env:
+  # The one package id this repository publishes. Only a release whose built manifest matches
+  # it may take the repository's single Latest slot; see the make_latest step below. Each of
+  # the two repositories sets this to its own id, which is what lets both serve a correct,
+  # auto-updating manifest URL to their own audience without competing for one slot.
   PUBLISHES_ID: stonetop-pwd
+
+  # ONE name for the version, because the two triggers carry it differently: a published
+  # release puts it in the tag, a rehearsal takes it as an input. Everything below reads
+  # $VERSION, and the shape check gates both, so a rehearsal cannot rehearse a version that
+  # could never ship.
+  VERSION: ${{ github.event.inputs.version || github.ref_name }}
+
+  # Whether this run may publish. Keyed on the TRIGGER, not on an input, so a rehearsal cannot
+  # be talked into shipping by filling in a field.
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+
+  # The importer's durable destinations, matching DURABLE_ART_DIRS in module/book2-art/browse.js.
+  # Guarded TWICE below: once against the checkout, once against the zip built from it.
+  #
+  # Spelled out here rather than read out of browse.js on purpose. This is the last gate before
+  # an irreversible public upload, and it must not depend on a module path resolving, an ESM/CJS
+  # quirk, or a parse. One copy in this file rather than one per step, so the two gates cannot
+  # drift apart from each other. tests/book2-art/art-not-tracked.test.js keeps this copy honest
+  # against browse.js and .gitignore, and it runs in `npm test` below.
+  ART_DIRS: >-
+    assets/maps assets/bestiary assets/locations assets/treasures
+    assets/people assets/steading assets/diagrams
 
 jobs:
   release:
@@ -23,11 +65,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Check the tag's shape
+      - name: Check the version's shape
         # First, because it needs nothing and everything after it is expensive.
         #
         # Every published tag so far is bare, with no leading `v`, and system.json's version is
-        # copied verbatim from the tag further down. A `v1.5.0` slip would therefore ship
+        # copied verbatim from it further down. A `v1.5.0` slip would therefore ship
         # "version": "v1.5.0", which Foundry compares as a string against an installed "1.5.0"
         # and reads as a DIFFERENT, unordered version: the update either never offers or never
         # settles. Nothing downstream would catch it, because the download URL still resolves.
@@ -35,18 +77,22 @@ jobs:
         #
         # Four-part versions are allowed: 1.3.5.1 has already shipped. Pre-release suffixes are
         # not, because the manifest has no way to express one.
+        #
+        # Reads $VERSION, so a rehearsal is held to exactly the same shape as a tag.
         run: |
-          if ! echo "${{ github.ref_name }}" | grep -qE '^[0-9]+(\.[0-9]+){2,3}$'; then
-            echo "FAIL: tag '${{ github.ref_name }}' is not a bare N.N.N or N.N.N.N version"
-            echo "      (no leading 'v': system.json's version is copied from this tag verbatim)"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+(\.[0-9]+){2,3}$'; then
+            echo "FAIL: version '$VERSION' is not a bare N.N.N or N.N.N.N version"
+            echo "      (no leading 'v': system.json's version is copied from this verbatim)"
             exit 1
           fi
-          echo "tag ok: ${{ github.ref_name }}"
+          echo "version ok: $VERSION (rehearsal: $DRY_RUN)"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # This job's token is `contents: write`, and nothing below it runs a git command:
-          # action-gh-release authenticates over the API with GITHUB_TOKEN, not over git.
+          # This job's token is `contents: write`, and nothing below it runs a git command that
+          # reaches the remote. `npm test` shells out to `git ls-files`, which is local, and
+          # both action-gh-release and `gh release download` authenticate over the API with
+          # GITHUB_TOKEN rather than over git.
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -64,16 +110,26 @@ jobs:
 
       - name: Patch manifest
         id: manifest
+        env:
+          REPO: ${{ github.repository }}
         run: |
           node -e "
             const fs = require('fs');
             const m = JSON.parse(fs.readFileSync('system.json', 'utf8'));
-            m.version = '${{ github.ref_name }}';
-            m.download = 'https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/stonetop.zip';
+            // Read from the environment rather than letting the runner splice an Actions
+            // expression into this program text. The shape check above already restricts
+            // VERSION to digits and dots, so this is belt-and-braces, but a value pasted into
+            // source is only ever as safe as the last edit to that check, and reading it as
+            // data removes the question entirely.
+            const version = process.env.VERSION;
+            const repo = process.env.REPO;
+            const asset = (name) => 'https://github.com/' + repo + '/releases/download/' + version + '/' + name;
+            m.version = version;
+            m.download = asset('stonetop.zip');
             // While the old package id is still shipping, the released title has to
             // disambiguate it: Foundry's Setup screen shows a package's title and never its
             // id, so during the migration window a user has two tiles both reading
-            // 'Stonetop' and no way to tell which to remove. Self-limiting — once the id is
+            // 'Stonetop' and no way to tell which to remove. Self-limiting: once the id is
             // renamed this branch stops firing and the plain title comes back. The repo copy
             // keeps the plain title so the maintainer's own worlds read normally.
             //
@@ -86,7 +142,7 @@ jobs:
             // no update rather than a bogus one. MIGRATION.md already claims this is true.
             if (m.id === 'stonetop_pwd') {
               m.title = 'Stonetop (old ID)';
-              m.manifest = 'https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/system.json';
+              m.manifest = asset('system.json');
             }
             fs.writeFileSync('system.json', JSON.stringify(m, null, '\t'));
           "
@@ -106,9 +162,19 @@ jobs:
             console.log('make_latest=' + latest + ' (built id ' + m.id + ', this repo publishes ' + expected + ')');
           "
 
-      - name: Ship only the packs system.json declares
-        # packs/ accumulates output from packs the manifest no longer declares. Foundry never
-        # loads them, but anything tracked in git reaches the checkout and then the zip.
+      - name: Drop any pack system.json does not declare
+        # This guards drift between the two pack lists: `scripts/packs.js` is what the
+        # `npm run pack` above compiles into packs/, and system.json is what Foundry mounts.
+        # A pack built but never declared is dead weight in the zip.
+        #
+        # It is NOT a guard against stale checked-in output, which an earlier version of this
+        # comment claimed. `packs/*/` is gitignored, so no compiled pack is tracked and none of
+        # it arrives with the checkout: everything in packs/ was built by this job, seconds ago.
+        #
+        # tests/system-manifest.test.js now asserts the two lists are EQUAL, and it runs in the
+        # `npm test` above, so on a green run this step finds nothing and logs nothing. It stays
+        # because it costs one readdir, and because a release is the wrong place to discover
+        # that a test's idea of "equal" had a hole in it.
         run: |
           node -e "
             const fs = require('fs');
@@ -122,20 +188,13 @@ jobs:
             }
           "
 
-      - name: Verify the artifact before it ships
+      - name: Verify the checkout before it is zipped
         # Private book art is gitignored, so a clean checkout should not contain it. Assert
-        # rather than assume: a leak here is public and irreversible.
-        #
-        # All SEVEN directories, matching DURABLE_ART_DIRS in module/book2-art/browse.js. This
-        # list used to name only the first three, which is what the importer wrote when the
-        # guard was written; it has since grown four more, and nothing noticed. The list stays
-        # spelled out here rather than read out of browse.js on purpose: this is the last gate
-        # before an irreversible public upload and it should not depend on a module path, an
-        # ESM/CJS quirk, or a parse. tests/book2-art/art-not-tracked.test.js is what keeps the
-        # two copies honest, and it runs in `npm test` above.
+        # rather than assume: a leak here is public and irreversible. $ART_DIRS is defined at
+        # the top of this file; the zip built from this tree is checked against it again below,
+        # because a clean tree is only evidence about the artifact, not the artifact itself.
         run: |
-          for d in assets/maps assets/bestiary assets/locations \
-                   assets/treasures assets/people assets/steading assets/diagrams; do
+          for d in $ART_DIRS; do
             if [ -e "$d" ]; then echo "FAIL: $d present in the checkout"; exit 1; fi
           done
           # The GM-only "(TEST ONLY) Populate World" macro fetches this file at runtime and
@@ -146,12 +205,16 @@ jobs:
           fi
           node -e "
             const m = JSON.parse(require('fs').readFileSync('system.json', 'utf8'));
-            if (m.version !== '${{ github.ref_name }}') { console.error('FAIL: version mismatch'); process.exit(1); }
+            if (m.version !== process.env.VERSION) { console.error('FAIL: version mismatch'); process.exit(1); }
             // An old-id build that still points at releases/latest is the packaging fault
             // that hands a user the renamed package from an Update button. Assert it.
             if (m.id === 'stonetop_pwd' && m.manifest.includes('releases/latest')) {
               console.error('FAIL: old-id manifest is not pinned: ' + m.manifest); process.exit(1);
             }
+            // Also covered by tests/system-manifest.test.js, which runs above. Kept because a
+            // pack that exists in the list and not on disk is a silently EMPTY compendium in
+            // every installed world, and this is the last place to notice before upload. The
+            // zip check below asks the stronger version of the same question.
             for (const p of m.packs) {
               if (!require('fs').existsSync(p.path)) { console.error('FAIL: declared pack missing: ' + p.path); process.exit(1); }
             }
@@ -170,7 +233,56 @@ jobs:
             scripts/local/create-test-characters.js \
             --exclude "packs/src/*"
 
+      - name: Verify the zip that will ship
+        # Everything above this point checks the TREE. This checks the artifact, which is the
+        # only thing a user ever receives, and which is assembled by a hand-maintained include
+        # list that had no assertion behind it at all.
+        #
+        # Four faults nothing else can see:
+        #   - `--exclude "packs/src/*"` is a string pattern, not a guarantee. If it ever stops
+        #     matching, the release quietly grows 1200-odd source JSON files and stays green.
+        #   - packs/ is zipped wholesale, so a pack that compiled to an empty directory is
+        #     declared in the manifest, present in the tree, and empty in the archive. The
+        #     checkout guard above cannot tell those apart; this one can.
+        #   - the art guard above proves the CHECKOUT carries no private art. This proves the
+        #     ZIP does not, which is the claim that actually matters.
+        #   - a zip entry whose name contains a backslash unpacks as one long filename on
+        #     POSIX rather than a path, and has had to be repaired by hand before now.
+        run: |
+          unzip -Z1 stonetop.zip > zip-entries.txt
+          node -e "
+            const fs = require('fs');
+            const entries = fs.readFileSync('zip-entries.txt', 'utf8').split('\n').filter(Boolean);
+            const m = JSON.parse(fs.readFileSync('system.json', 'utf8'));
+            const fail = [];
+
+            for (const e of entries) {
+              for (const d of process.env.ART_DIRS.split(/\s+/)) {
+                if (e === d || e.startsWith(d + '/')) fail.push('private art in the zip: ' + e);
+              }
+              if (e.startsWith('packs/src/')) fail.push('pack SOURCE in the zip: ' + e);
+              if (e.includes('\\\\')) fail.push('backslash in a zip entry name: ' + e);
+            }
+
+            if (!entries.includes('system.json')) fail.push('system.json is not in the zip');
+            for (const p of m.packs) {
+              // A directory entry alone is not enough: an empty pack still zips its folder.
+              const files = entries.filter(e => e.startsWith(p.path + '/') && !e.endsWith('/'));
+              if (!files.length) fail.push('declared pack is empty in the zip: ' + p.path);
+            }
+
+            // A floor, so none of the above can pass by matching an empty archive.
+            if (entries.length < 500) fail.push('only ' + entries.length + ' entries in the zip');
+
+            if (fail.length) {
+              for (const f of fail) console.error('FAIL: ' + f);
+              process.exit(1);
+            }
+            console.log('zip ok: ' + entries.length + ' entries, ' + m.packs.length + ' packs, no art, no pack sources');
+          "
+
       - name: Create release
+        if: env.DRY_RUN != 'true'
         # SHA-pinned, not tag-pinned. This is the step that decides what every installed world
         # pulls from its Update button, and a floating `@v3` tag is mutable by definition.
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -180,3 +292,44 @@ jobs:
           files: |
             stonetop.zip
             system.json
+
+      - name: Verify what GitHub is serving
+        if: env.DRY_RUN != 'true'
+        # The upload was the one step whose RESULT nobody checked. action-gh-release reports
+        # success on the API call; it does not read the asset back. A truncated or half-written
+        # upload is a zip that fails to open in Foundry's installer, attached to a release that
+        # looks green, and the first person to find out is a user.
+        #
+        # This was a manual re-download after every release. It is the same two commands.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir -p served
+          gh release download "$VERSION" --repo "$REPO" --pattern stonetop.zip --dir served
+          built=$(sha256sum stonetop.zip | cut -d" " -f1)
+          served=$(sha256sum served/stonetop.zip | cut -d" " -f1)
+          if [ "$built" != "$served" ]; then
+            echo "FAIL: the asset GitHub is serving is not the zip this run built"
+            echo "  built:  $built"
+            echo "  served: $served"
+            exit 1
+          fi
+          # Integrity of the downloaded copy, not the local one: this is the byte stream a
+          # user's Foundry install will actually be handed.
+          unzip -tqq served/stonetop.zip
+          echo "asset ok: sha256 $built"
+          echo "stonetop.zip $VERSION, sha256 $built" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the rehearsal build
+        if: env.DRY_RUN == 'true'
+        # Where a rehearsal ends. The same zip and the same manifest that a real run would have
+        # published, handed back for inspection and left where no Foundry client can find them.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rehearsal-${{ env.VERSION }}
+          path: |
+            stonetop.zip
+            system.json
+          # A rehearsal is for looking at now, not for keeping.
+          retention-days: 7

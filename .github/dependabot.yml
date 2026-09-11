@@ -24,5 +24,20 @@ updates:
     # Deliberately low. These are dev dependencies on a single-maintainer repo, and a wall of
     # open PRs is how this feature stops being read at all.
     open-pull-requests-limit: 3
+    # Grouping is what makes that cap survivable. There are seven devDependencies and no
+    # runtime ones, so in a month where eslint, vitest and globals all move, three separate
+    # PRs spend the whole budget and hide anything else that was waiting. One PR whose entire
+    # claim is "the tooling moved" is cheaper to read, and cheaper to revert, than three.
+    #
+    # Scoped to development on purpose rather than a bare `patterns: ["*"]`. There are no
+    # runtime dependencies today, and the day one arrives it should turn up in a PR of its
+    # own: it is the only kind of update here that changes what users actually run.
+    #
+    # github-actions above is deliberately NOT grouped. Those pins get read one at a time,
+    # because each one is a decision about what code runs holding a writable token.
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        patterns: ["*"]
     commit-message:
       prefix: "[Chore]"

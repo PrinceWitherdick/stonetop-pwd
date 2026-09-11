@@ -62,8 +62,9 @@ describe("system.json declares what the tree actually contains", () => {
 		// build succeeds either way. Foundry then either mounts a directory that was never
 		// compiled (an empty compendium, no error) or silently ignores one that was.
 		//
-		// Today the only thing that notices is release.yml's "declared pack missing" check,
-		// which runs after the tag is pushed.
+		// This assertion is why release.yml's "drop any pack system.json does not declare"
+		// step now finds nothing on a green run: the drift is caught here, in `npm test`,
+		// before a tag exists, rather than by that step after one has been pushed.
 		const declared = manifest.packs.map(p => p.path.replace(/^packs\//, "")).sort();
 		const built = PACKS.map(p => p.name).sort();
 		expect(declared).toEqual(built);
