@@ -70,7 +70,7 @@
 	<div class="cell cell--Number cell--attr-armor">
 		<div class="stonetop-vital-inner">
 			<label class="cell__title" data-vital="armor">{{localize "stonetop.character.attributes.armor"}}</label>
-			<span{{#if stonetop.armorNote}} data-tooltip="{{stonetop.armorNote}}"{{/if}}>
+			<span class="cell__number"{{#if stonetop.armorNote}} data-tooltip="{{stonetop.armorNote}}"{{/if}}>
 				<input class="attr-value{{#if stonetop.armorAdjusted}} stonetop-armor--adjusted{{/if}}" type="number"
 				       data-armor
 				       value="{{system.attributes.armor.value}}"

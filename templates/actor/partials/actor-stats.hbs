@@ -5,13 +5,26 @@
 
       The value input is `readonly` outside edit mode, which is what lets a click on the number
       itself fall through to the roll (the sheet's rollable handler steps aside for an ENABLED,
-      writable input, so in edit mode the same click types instead). --}}
+      writable input, so in edit mode the same click types instead).
+
+      A BOX THE RULES CAN'T ACCOUNT FOR wears a caution frame and carries the sentence saying
+      why. Nothing is blocked: any number can be typed and it is what the sheet keeps and what
+      the dice add. `stonetop.statIssues` is built only while this section is being edited (see
+      StonetopCharacterSheet's getData and stat-rules.js), so a sheet being played from never
+      carries the frame and the lookup below is empty on every other render.
+
+      The tooltip hangs on the BOX rather than the `<li>`, which is deliberate: the cell already
+      takes a hover description of the stat itself (applyLabelTooltips, gated on its own client
+      setting), and the nearest `[data-tooltip]` under the pointer is the one that shows. So the
+      caution is on the thing wearing the caution frame, and the description stays on the label
+      and the abbreviation either side of it. --}}
 <div class="cell--stats">
 	<ul class="stats-list">
 	{{#each system.stats}}
 	<li class="stat cell--stat rollable" data-stat="{{@key}}" data-roll="{{@key}}">
 		<span class="cell__title">{{statLabel @key}}</span>
-		<div class="stonetop-stat-box">
+		<div class="stonetop-stat-box{{#if (lookup @root.stonetop.statIssues @key)}} stonetop-stat-box--off-rules{{/if}}"
+		     {{~#with (lookup @root.stonetop.statIssues @key)}} data-tooltip="{{message}}" data-tooltip-direction="DOWN"{{/with}}>
 			<div class="stonetop-stat-inner">
 				<input class="stat-value" type="number"
 				       name="system.stats.{{@key}}.value"

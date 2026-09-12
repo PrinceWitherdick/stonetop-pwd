@@ -1615,7 +1615,8 @@ body :is(.app, .window-app).stonetop-height-resized {
 
 .sheet-attributes-top .cell--Roll .cell__roll,
 .sheet-attributes-top .cell--Resource .cell__resource,
-.sheet-attributes-top .cell--Number .stonetop-vital-inner > input {
+.sheet-attributes-top .cell--Number .stonetop-vital-inner > input,
+.sheet-attributes-top .cell--Number .cell__number {
 	margin-top: 4px;
 }
 
@@ -1641,9 +1642,10 @@ body :is(.app, .window-app).stonetop-height-resized {
    a stale field, so the box says it was set by hand — a dashed rule rather than a colour, since
    the adjustment can go either way and neither direction is a warning. One rule for both, so the
    two cannot drift apart. Sits after the shared `.cell__resource input` rule and wins on
-   specificity, not order alone. */
+   specificity, not order alone. The armor half names its wrapper span for that reason alone: the
+   number-box skin further down sets the whole border shorthand, and a shorter selector loses to it. */
 .sheet-attributes-top .cell--Resource .cell__resource input.stonetop-hp-max--adjusted,
-.sheet-attributes-top .cell--attr-armor input.stonetop-armor--adjusted {
+.sheet-attributes-top .cell--attr-armor .cell__number > input.stonetop-armor--adjusted {
 	border-style: dashed;
 	border-color: var(--st-text-muted);
 }
@@ -1729,7 +1731,8 @@ body :is(.app, .window-app).stonetop-height-resized {
 }
 
 /* Number cell (Armor, Level) */
-.sheet-attributes-top .cell--Number .stonetop-vital-inner > input {
+.sheet-attributes-top .cell--Number .stonetop-vital-inner > input,
+.sheet-attributes-top .cell--Number .cell__number > input {
 	width: 100%;
 	text-align: center;
 	border: 1px solid #aaa;
@@ -1738,6 +1741,16 @@ body :is(.app, .window-app).stonetop-height-resized {
 	font-size: calc(1rem * var(--stonetop-font-scale, 1));
 	padding: 2px 8px;
 	box-sizing: border-box;
+}
+
+/* The Armor field is wrapped so its hover note has something to hang off. In play mode the
+   input is disabled, and a disabled control fires no pointer events, so a tooltip set on the
+   field itself would never open (Max HP is wrapped in .cell__max for the same reason). The
+   wrapper has to lay out the way the bare input did, or the field loses its full width and
+   sits on the text baseline of an inline span instead of in the column flow. */
+.sheet-attributes-top .cell--Number .cell__number {
+	display: block;
+	width: 100%;
 }
 
 /* Vitals inputs (HP / Armor) hover & focus. These live inside the octagon
@@ -1750,7 +1763,9 @@ body :is(.app, .window-app).stonetop-height-resized {
 .sheet-attributes-top .cell--Resource .cell__resource input:hover,
 .sheet-attributes-top .cell--Resource .cell__resource input:focus,
 .sheet-attributes-top .cell--Number .stonetop-vital-inner > input:hover,
-.sheet-attributes-top .cell--Number .stonetop-vital-inner > input:focus {
+.sheet-attributes-top .cell--Number .stonetop-vital-inner > input:focus,
+.sheet-attributes-top .cell--Number .cell__number > input:hover,
+.sheet-attributes-top .cell--Number .cell__number > input:focus {
 	box-shadow: none;
 	outline: none;
 	border-color: var(--color-text-hyperlink, slategrey);
@@ -1974,6 +1989,37 @@ input.stonetop-name-field {
 		calc(100% - 4px) 100%, 4px 100%,
 		0% calc(100% - 4px), 0% 4px
 	);
+}
+
+/* A SCORE THE RULES AS WRITTEN CAN'T ACCOUNT FOR, while the stats section is being edited. The
+   caution tier that isn't yet a failure is exactly what --st-gold-* is for, and the mode a
+   low-vision reader turns on re-points two of its three stops for nothing extra here.
+
+   THREE cues, not one, because a hue shift alone is the weakest signal this sheet can send: the
+   frame changes colour, it gets HEAVIER (the box is a clip-path frame whose padding IS its
+   border width, so 3px is a real thickening and not a repaint), and the well behind the number
+   takes a wash. The wash is mixed rather than --st-gold-bg's 0.12 because the number sits on it
+   and a 12% tint under a stat box reads as a rendering artifact rather than as a flag. The ink
+   stays --st-text: the number is the DATA, and it must not get harder to read for being
+   questioned. The sentence itself rides a data-tooltip on the box (actor-stats.hbs).
+
+   THE FRAME IS --st-gold-TEXT, NOT --st-gold-border, which looks like the wrong stop and isn't.
+   The family's `-border` is pitched to be read against its own `-bg` wash; alone on the page it
+   is 2.32:1, which is BELOW the 3:1 floor a non-text cue has to clear and, worse, lighter than
+   the plain frame it replaces — so the box the sheet is cautioning would read as less framed
+   than the five beside it. `-text` is the only stop in the family pitched to carry against paper
+   (4.91:1 here, 8.89:1 in high contrast). `-border` still mixes the wash below, where its job is
+   the one it was tuned for. Measured in z:/tmp/foundry-verify/stat-off-rules-verify.mjs.
+
+   No box-shadow ring: the clip-path that cuts the box's corners clips a shadow away with them,
+   which is the same trap as [[filter-vs-mask]]. The weight has to come from the frame itself. */
+.stonetop-stat-box--off-rules {
+	background: var(--st-gold-text);
+	padding: 3px;
+}
+
+.stonetop-stat-box--off-rules .stonetop-stat-inner {
+	background: color-mix(in srgb, var(--st-gold-border) 20%, var(--stonetop-bg, #f0ece3));
 }
 
 .pbta.sheet .sheet-attributes .cell--stats .stonetop-stat-inner .stat-value {

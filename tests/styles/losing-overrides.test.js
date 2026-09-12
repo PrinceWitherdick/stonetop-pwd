@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { declarations, readCss, splitSelectorList } from "../fakes/css.js";
+import { beats, declarations, readCss, specificity, splitSelectorList } from "../fakes/css.js";
 
 /**
  * Overrides that are outranked by the rule they were written to beat.
@@ -18,22 +18,6 @@ import { declarations, readCss, splitSelectorList } from "../fakes/css.js";
  */
 
 const CSS = readCss();
-
-/** CSS specificity as [ids, classes, elements]. Same reading as dialog-button-specificity.js. */
-function specificity(selector) {
-	const ids = (selector.match(/#[\w-]+/g) || []).length;
-	const classes = (selector.match(/\.[\w-]+/g) || []).length
-		+ (selector.match(/\[[^\]]*\]/g) || []).length
-		+ (selector.match(/(?<!:):(?!:)[\w-]+/g) || []).length;
-	const elements = (selector
-		.replace(/[.#][\w-]+/g, "")
-		.replace(/\[[^\]]*\]/g, "")
-		.replace(/::?[\w-]+/g, "")
-		.match(/\b[a-zA-Z][\w-]*/g) || []).length;
-	return [ids, classes, elements];
-}
-
-const beats = (a, b) => (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) > 0;
 
 /** Every rule in the stylesheet, one entry per comma-separated selector, in source order. */
 const RULES = [];

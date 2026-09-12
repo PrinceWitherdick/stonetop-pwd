@@ -9,7 +9,7 @@ import { shuffle } from "../../../utils/arrays.js";
 import { normalizePlaybookGlyphs, composeInstinct, parseInstinct } from "../../../utils/strings.js";
 import { splitFillBlank, fillBlank } from "../../../utils/fill-blanks.js";
 import { STAT_KEYS } from "../../../utils/roll-types.js";
-import { sign } from "../../../utils/roll-engine.js";
+import { parseStatArray, statScoreLabel, DEFAULT_STAT_ARRAY } from "../stat-rules.js";
 import { wrapStonetopGlyphsInEl, wrapGlyphTextContainers, centerArcanumTracks, injectGlyphCheckboxes } from "../../../utils/glyphs.js";
 import { prepareMoveHoverBody } from "../../../utils/move-hover.js";
 import { enrichMoveRefsInEl } from "../../../utils/move-refs.js";
@@ -1018,8 +1018,8 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 					moveId:         compendiumId,
 					key,
 					label:          key.toUpperCase(),
-					currentDisplay: sign(value),
-					nextDisplay:    sign(Math.min(value + 1, cap)),
+					currentDisplay: statScoreLabel(value),
+					nextDisplay:    statScoreLabel(Math.min(value + 1, cap)),
 					atCap,
 					selected:       chosen === key,
 				};
@@ -1029,10 +1029,11 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 	// ── Stat helpers ──────────────────────────────────────────────────
 
+	// The ONE reader of a playbook's printed stat note. It is shared with the sheet's
+	// rules check (stat-rules.js), which has to recover the same array from the same note
+	// to tell a legal score from a typed-in one — two parsers would be two answers.
 	_parseStatScores() {
-		const note = this._playbookDoc.flags?.stonetop?.statsNote ?? "";
-		const matches = note.match(/[+-]?\d+/g);
-		return matches ? matches.map(Number) : [2, 1, 1, 0, 0, -1];
+		return parseStatArray(this._playbookDoc.flags?.stonetop?.statsNote) ?? DEFAULT_STAT_ARRAY;
 	}
 
 	_validateStats() {
@@ -1777,7 +1778,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const poolCount = this._statPoolCount;
 
 			statScores = [...scores].sort((a, b) => b - a)
-				.map(v => v >= 0 ? `+${v}` : String(v));
+				.map(statScoreLabel);
 			statScoresDisplay = statScores.join(", ");
 
 			const STAT_DEFS = [
@@ -1805,7 +1806,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 					assigned: assigned !== null,
 					options: validValues.map(v => ({
 						value:    v,
-						label:    v >= 0 ? `+${v}` : String(v),
+						label:    statScoreLabel(v),
 						selected: assigned === v,
 					})),
 				};
@@ -2568,7 +2569,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 					.sort((a, b) => b - a);
 				selectEl.innerHTML = '<option value="">—</option>' +
 					validValues.map(v => {
-						const lbl     = v >= 0 ? `+${v}` : String(v);
+						const lbl     = statScoreLabel(v);
 						const selAttr = currentVal === v ? ' selected' : '';
 						return `<option value="${v}"${selAttr}>${lbl}</option>`;
 					}).join('');

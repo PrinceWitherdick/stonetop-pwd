@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { readCss, splitSelectorList } from "../fakes/css.js";
+import { beats, readCss, specificity, splitSelectorList } from "../fakes/css.js";
 
 /**
  * A per-dialog rule that sizes its own footer buttons, and loses.
@@ -59,22 +59,6 @@ for (const file of jsFiles(MODULE_DIR)) {
 		for (const name of names) if (/^stonetop-/.test(name)) SCOPES.add(name);
 	}
 }
-
-/** CSS specificity as [ids, classes, elements]; enough for the flat selectors in this file. */
-function specificity(selector) {
-	const ids = (selector.match(/#[\w-]+/g) || []).length;
-	const classes = (selector.match(/\.[\w-]+/g) || []).length
-		+ (selector.match(/\[[^\]]*\]/g) || []).length
-		+ (selector.match(/(?<!:):(?!:)[\w-]+/g) || []).length;
-	const elements = (selector
-		.replace(/[.#][\w-]+/g, "")
-		.replace(/\[[^\]]*\]/g, "")
-		.replace(/::?[\w-]+/g, "")
-		.match(/\b[a-zA-Z][\w-]*/g) || []).length;
-	return [ids, classes, elements];
-}
-
-const beats = (a, b) => (a[0] - b[0] || a[1] - b[1] || a[2] - b[2]) > 0;
 
 /** Every rule in the stylesheet, one entry per comma-separated selector. */
 const RULES = [];

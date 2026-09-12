@@ -58,6 +58,7 @@ import {supplyPursesFor, defaultSupplyPurse, spendSupplies, campUsesNeeded, SUPP
 import {rollProvisions, ON_THE_HOOF} from "./provisions.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
 import {knowThingsRollChoices, withAdvantage, KNOW_THINGS_STAT} from "./arcana-identify.js";
+import {statRuleIssues} from "./stat-rules.js";
 import {ARTIFACT_STATE, artifactStateForTier, knowThingsArtifactResults, seekInsightArtifactResults,
 	ARTIFACT_INSIGHT_QUESTIONS, ARTIFACT_LEAD_SUGGESTIONS} from "./artifact-identify.js";
 import {knowThingsRollOptions} from "./know-things.js";
@@ -1315,6 +1316,19 @@ export function createStonetopCharacterSheetClass(Base) {
 			// column widths — a reading preference, not world data.
 			context.stonetop.rel = relationshipViewContext("characterRelationships", context.stonetop.relationships);
 			context.stonetop.statsEdit       = sectionEdit("stats");
+			// A stat box takes any number anyone types and always will: nothing here rejects,
+			// clamps or rewrites a score. What it does is say so, for the stats the rules as
+			// written can't account for (stat-rules.js works out which, and what each should
+			// read). Built only while the section is being edited, because that is the one
+			// time the reader is in a position to act on it, and a caution ring around a
+			// number nobody is editing is just noise on a sheet being played from.
+			context.stonetop.statIssues = context.stonetop.statsEdit
+				? statRuleIssues({
+					stats:     this.actor.system?.stats,
+					flags:     resolvedFlags(this.actor),
+					statsNote: context.stonetop.playbook?.statsNote ?? null,
+				})
+				: {};
 			context.stonetop.movesEdit       = sectionEdit("moves");
 			context.stonetop.possessionsEdit = sectionEdit("possessions");
 			context.stonetop.invocationsEdit = sectionEdit("invocations");
