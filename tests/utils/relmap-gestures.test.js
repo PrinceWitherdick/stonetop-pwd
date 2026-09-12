@@ -6,8 +6,9 @@ import { fakeSurface, pointerBoard } from "../fakes/pointer-board.js";
 // relmap-drag.test.js measures. Its own file because it needs a DOM stand-in and a set of globals
 // that the arithmetic tests are better off without.
 //
-// WHAT THIS IS ACTUALLY FOR. The board's two non-drag routes — click a portrait to open its sheet,
-// click the handle to be asked who to link to — were dead, and dead in a way no manual pass in the
+// WHAT THIS IS ACTUALLY FOR. The board's two non-drag routes — open a portrait's sheet (a DOUBLE
+// click now, or Enter on the face; a single click opens nothing, see below), and click the handle
+// to be asked who to link to — were dead, and dead in a way no manual pass in the
 // default state would find: a board nobody may edit never arms a drag at all, so the bug only
 // existed for the owner, which is who does everything else on a map. The cause was one
 // line of ordering. `setPointerCapture` RETARGETS every later event from that pointer at the
@@ -46,8 +47,29 @@ function press(board, target, { to = null, pointerId = 1 } = {}) {
 		board.flush();
 	}
 	board.view.emit("pointerup", target, { pointerId, clientX: to?.[0] ?? 0, clientY: to?.[1] ?? 0 });
-	return board.view.emit("click", target, { pointerId });
+	return board.view.emit("click", target, { pointerId, detail: 1 });
 }
+
+/**
+ * THE SAME GESTURE MADE TWICE, and the `dblclick` a browser pairs the two clicks into.
+ *
+ * The pairing is the browser's own — its double-click speed and its slop, both of them the
+ * reader's system settings — so the fake does what the browser does and fires the third event
+ * after the two clicks rather than counting them itself.
+ */
+function doublePress(board, target, { to = null, pointerId = 1 } = {}) {
+	press(board, target, { to, pointerId });
+	press(board, target, { to, pointerId });
+	return board.view.emit("dblclick", target, { pointerId, detail: 2 });
+}
+
+/**
+ * ENTER OR SPACE ON A FACE, which a real button turns into a click of its own.
+ *
+ * `detail: 0` is how that click is told from one a mouse made — every mouse click counts from 1 —
+ * and it is the whole of the keyboard's route to a sheet now that a single mouse click has none.
+ */
+const keyPress = (board, target) => board.view.emit("click", target, { detail: 0 });
 
 describe("a press that never travels", () => {
 	let board;
@@ -66,11 +88,44 @@ describe("a press that never travels", () => {
 		teardown();
 	});
 
-	it("opens the portrait it was made on", () => {
+	// ⚠ ONE CLICK ON A FACE OPENS NOTHING (user, 2026-09-10). The board is the surface a table
+	// clicks around on while talking, and a character sheet thrown up over the map on every one of
+	// those clicks was the map covering itself.
+	it("opens no sheet on a single click", () => {
 		const { handlers, teardown } = wire(board);
 		press(board, board.portraits.n1.face);
-		expect(handlers.onOpen).toHaveBeenCalledWith("n1");
+		expect(handlers.onOpen).not.toHaveBeenCalled();
 		expect(handlers.onMove).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// AND IT MUST NOT FALL THROUGH EITHER. A click the face did not claim would reach the bare-paper
+	// branch, and a reader who has a line's bar open and points at somebody's face would find the
+	// line let go of.
+	it("still claims that click rather than letting it land on the paper", () => {
+		const { handlers, teardown } = wire(board);
+		const ev = press(board, board.portraits.n1.face);
+		expect(ev.defaultPrevented).toBe(true);
+		expect(handlers.onPickNone).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	it("opens the portrait it was made on when the press is made twice", () => {
+		const { handlers, teardown } = wire(board);
+		doublePress(board, board.portraits.n1.face);
+		expect(handlers.onOpen).toHaveBeenCalledWith("n1");
+		expect(handlers.onOpen).toHaveBeenCalledTimes(1);
+		expect(handlers.onMove).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// ⚠ THE KEYBOARD HAS NO DOUBLE CLICK, so the rule above would have taken the sheet away from
+	// anybody not using a pointer entirely. The face is a real `<button>`: Enter and Space arrive
+	// as a click carrying `detail: 0`, and that one still opens.
+	it("opens the portrait for a reader pressing Enter on it", () => {
+		const { handlers, teardown } = wire(board);
+		keyPress(board, board.portraits.n1.face);
+		expect(handlers.onOpen).toHaveBeenCalledWith("n1");
 		teardown();
 	});
 
@@ -88,7 +143,7 @@ describe("a press that never travels", () => {
 	// about the ARMED window specifically, and a threshold of zero would pass the test above.
 	it("still opens the portrait after a twitch too small to be a drag", () => {
 		const { handlers, teardown } = wire(board);
-		press(board, board.portraits.n1.face, { to: [2, 1] });
+		doublePress(board, board.portraits.n1.face, { to: [2, 1] });
 		expect(board.view.setPointerCapture).not.toHaveBeenCalled();
 		expect(handlers.onOpen).toHaveBeenCalledWith("n1");
 		expect(handlers.onMove).not.toHaveBeenCalled();
@@ -163,11 +218,31 @@ describe("a press that becomes a drag", () => {
 	// The click after a drag is swallowed by a flag rather than by the capture's retargeting, so
 	// that exactly ONE click is eaten. A flag that stayed armed would eat the reader's next real
 	// press, which is the same class of dead-click bug in the other direction.
+	//
+	// Proved on the HANDLE, because the face's own click no longer does anything to measure: a
+	// sheet is a double click now. The handle is the other control a single click still acts on.
 	it("swallows one click and no more", () => {
 		const { handlers, teardown } = wire(board);
 		press(board, board.portraits.n1.face, { to: [40, 0] });
+		expect(handlers.onLinkFrom).not.toHaveBeenCalled();
+		press(board, board.portraits.n1.handle);
+		expect(handlers.onLinkFrom).toHaveBeenCalledWith("n1");
+		teardown();
+	});
+
+	// ⚠ AND A DRAG FOLLOWED BY ONE CLICK IS NOT A DOUBLE CLICK. The swallowed click is still a
+	// click as far as the browser is concerned, so it pairs with the reader's next one and fires a
+	// `dblclick` -- which would open a sheet on a gesture the reader made as a single click, right
+	// after moving that very portrait. The drag's swallow has to carry one event further on to
+	// cover it; see `swallowDouble`.
+	it("does not open a sheet on the single click that follows a drag", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.portraits.n1.face, { to: [40, 0] });
+		press(board, board.portraits.n1.face);
+		board.view.emit("dblclick", board.portraits.n1.face, { detail: 2 });
 		expect(handlers.onOpen).not.toHaveBeenCalled();
-		board.view.emit("click", board.portraits.n1.face);
+		// And the guard is spent by the double it ate, not left to eat the next one.
+		doublePress(board, board.portraits.n1.face);
 		expect(handlers.onOpen).toHaveBeenCalledWith("n1");
 		teardown();
 	});
@@ -231,7 +306,7 @@ describe("a press that becomes a drag", () => {
 		board.view.emit("pointerdown", board.portraits.n1.face, { clientX: 0, clientY: 0 });
 		board.view.emit("pointermove", board.portraits.n1.face, { clientX: 40, clientY: 0 });
 		board.view.emit("pointercancel", board.portraits.n1.face, {});
-		press(board, board.portraits.n1.face);
+		doublePress(board, board.portraits.n1.face);
 		expect(handlers.onOpen).toHaveBeenCalledWith("n1");
 		teardown();
 	});
@@ -406,7 +481,7 @@ describe("a board the reader may not edit", () => {
 	// pointer, so its clicks worked, which is why a player's view looked fine.
 	it("still opens a portrait, while moving nothing", () => {
 		const { handlers, teardown } = wire(board, { canEdit: () => false });
-		press(board, board.portraits.n1.face, { to: [40, 0] });
+		doublePress(board, board.portraits.n1.face, { to: [40, 0] });
 		expect(handlers.onOpen).toHaveBeenCalledWith("n1");
 		expect(handlers.onMove).not.toHaveBeenCalled();
 		expect(board.view.setPointerCapture).not.toHaveBeenCalled();

@@ -1212,11 +1212,11 @@ describe("what a portrait says when it is rested on", () => {
 	it("names a deleted actor in words and stops offering a sheet", () => {
 		expect(tooltips().ghost)
 			.toContain("Tobin (deleted actor). Their sheet is no longer in this world.");
-		expect(tooltips().ghost).not.toContain("Click to open their sheet");
+		expect(tooltips().ghost).not.toContain("Double-click to open their sheet");
 	});
 
 	it("still offers the sheet where there is one", () => {
-		expect(tooltips().elena).toContain("Click to open their sheet");
+		expect(tooltips().elena).toContain("Double-click to open their sheet");
 	});
 
 	// Somebody typed onto the board who never had an actor was not DELETED and must not be told

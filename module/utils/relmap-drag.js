@@ -117,7 +117,9 @@ function clearTravel(el) {
  *                                      reader never has to work out which.
  * @param {Function} handlers.onLink    `(fromId, toId) => void` — a line dragged between two.
  * @param {Function} handlers.onLinkFrom `id => void` — the handle CLICKED rather than dragged.
- * @param {Function} handlers.onOpen    `id => void` — a portrait clicked without dragging.
+ * @param {Function} handlers.onOpen    `id => void` — a portrait DOUBLE-clicked, or activated from
+ *                                      the keyboard. A single click on a face does not open a
+ *                                      sheet: see the click and dblclick handlers for why.
  * @param {Function} handlers.onPickEdge `id => void` — a line taken hold of, by a click on the
  *                                      stroke itself or on the words set in it. NOT "opened": what
  *                                      this raises is the bar over the line (utils/relmap-tie-bar.js),
@@ -167,6 +169,19 @@ export function wireRelmapDrag(root, {
 	// Set by a release that ENDED A REAL DRAG, and read by the one click the browser derives from
 	// it. See the click handler for why the pointer capture is not left to do this on its own.
 	let swallowClick = false;
+	// AND THE SAME NOTE CARRIED TWO CLICKS FURTHER ON, for the DOUBLE click.
+	//
+	// A `dblclick` is made of the two clicks before it, and the tail of a drag is a real click as
+	// far as the browser is concerned — so dragging a portrait and then clicking it ONCE fires a
+	// double click, and would open a sheet on a gesture the reader made as a single click, right
+	// after moving that very face. `swallowClick` cannot answer for it: it is spent by the click it
+	// was set for, which runs before the dblclick that click goes on to form.
+	//
+	// So the last two clicks are remembered, oldest first, and a double click made from either of
+	// them is dropped. A COUNT OF TWO and not a flag that simply stands until used: a swallowed
+	// click that never pairs with anything (the reader waited, or clicked elsewhere) must not sit
+	// there to eat a genuine double click made minutes later.
+	let lastClicks = [false, false];
 	// WHERE THE PRESS BEHIND THE CLICK LANDED, remembered because by the time the click arrives the
 	// answer is gone: a press on bare paper is a pan, the pan surface captures the pointer, and the
 	// capture RETARGETS the derived click at the viewport. See the click handler.
@@ -617,6 +632,9 @@ export function wireRelmapDrag(root, {
 	// effect means the rule quietly dies the day the capture moves or a browser stops retargeting
 	// the derived click. One boolean says it outright, and can be tested without a real DOM.
 	view.addEventListener("click", ev => {
+		// EVERY CLICK GOES ON THE END OF THE PAIR, swallowed or not, because a double click is made
+		// of the two before it and the dblclick handler has to be able to ask about both.
+		lastClicks = [lastClicks[1], swallowClick];
 		if (swallowClick) { swallowClick = false; return; }
 		// THE TRASH CAN FIRST OF ALL, and it is the one press on this board that does NOT also mean
 		// "put that can away" -- everything below this line does.
@@ -643,8 +661,24 @@ export function wireRelmapDrag(root, {
 		// the board partial for why the painted stroke cannot take the click itself.
 		const stroke = ev.target.closest?.("[data-relmap-hit]");
 		if (stroke) { ev.preventDefault(); if (canEdit()) onPickEdge?.(stroke.dataset.relmapHit); return; }
+		// ⚠ A SINGLE CLICK ON A FACE OPENS NOTHING ANY MORE (user, 2026-09-10). The board is the
+		// surface a whole table clicks around on while talking -- pointing at people, taking hold
+		// of the lines between them -- and a face that threw a character sheet up over the map on
+		// every one of those was the map covering itself. The sheet is on the DOUBLE click now,
+		// below; this branch still CLAIMS the click, so it never falls through to `onPickNone` and
+		// a line the reader is holding is not let go by a press on somebody's face.
+		//
+		// ⚠ EXCEPT FROM THE KEYBOARD, WHICH HAS NO DOUBLE. The face is a real `<button>`, so Enter
+		// and Space on it arrive here as a click and are the only route a reader who does not use
+		// a pointer has to a sheet at all. A keyboard-activated click carries `detail === 0`; every
+		// click a mouse makes counts from 1. Read affirmatively -- an event stand-in with no
+		// `detail` at all is not a keyboard press and must not be taken for one.
 		const face = ev.target.closest?.("[data-relmap-open]");
-		if (face) { ev.preventDefault(); onOpen?.(face.dataset.relmapOpen); return; }
+		if (face) {
+			ev.preventDefault();
+			if (ev.detail === 0) onOpen?.(face.dataset.relmapOpen);
+			return;
+		}
 		// NOTHING ON THE BOARD. Not `preventDefault`: a press on bare paper is the pan surface's,
 		// and this is only the window being told that whatever was being held has been let go.
 		// `isPaper` says what counts as bare paper and why it is asked affirmatively.
@@ -666,6 +700,33 @@ export function wireRelmapDrag(root, {
 			: false;
 		paperPress = null;
 		if (isPaper(ev.target) && (stayedPut || board.contains?.(ev.target))) onPickNone?.();
+	});
+
+	// ── The sheet ───────────────────────────────────────────────────────────
+	//
+	// A PORTRAIT'S SHEET IS A DOUBLE CLICK. The board is talked over and clicked around on, and a
+	// sheet thrown up by every single click on a face buried the map under itself; the click above
+	// says the rest of it.
+	//
+	// On the browser's own `dblclick` rather than on a count of clicks kept here, so the pair is
+	// judged by the reader's OWN system settings -- the double-click speed they set once, and the
+	// slop a shaking hand is allowed between the two presses. A timer written into this file would
+	// be one more number to get right for the one person at this table who most needs it right.
+	//
+	// ⚠ AND THE PAN SURFACE ALREADY KNOWS TO KEEP OFF. A double click on bare paper zooms the board
+	// between fit and full size (utils/zoom-pan-surface.js), and it refuses that on anything in
+	// `BOARD_CONTROLS` -- which names `[data-relmap-open]`. So this gesture is not shared with the
+	// zoom, and a reader opening a sheet does not also find the board has jumped.
+	view.addEventListener("dblclick", ev => {
+		// ⚠ NOT A DOUBLE CLICK IF EITHER HALF OF IT WAS THE TAIL OF A DRAG. See `lastClicks`.
+		// Spent here, so the pair that follows is judged on its own.
+		const drags = lastClicks[0] || lastClicks[1];
+		lastClicks = [false, false];
+		if (drags) return;
+		const face = ev.target.closest?.("[data-relmap-open]");
+		if (!face) return;
+		ev.preventDefault();
+		onOpen?.(face.dataset.relmapOpen);
 	});
 
 	// ── Keyboard ────────────────────────────────────────────────────────────

@@ -711,12 +711,8 @@ export function endCancellableDrag() {
 
 /**
  * Open or close one note, and put its chevron in step.
- *
- * `onResize` is for an auto-height host (the NPC sheet): the card just changed height, and
- * nothing re-renders, so the window has to re-measure or the board grows inside a frame
- * that does not.
  */
-function setNoteOpen(wrap, open, onResize) {
+function setNoteOpen(wrap, open) {
 	const note = wrap?.querySelector(".stonetop-rel-note-input");
 	if (!note) return;
 	wrap.classList.toggle("is-open", open);
@@ -734,7 +730,6 @@ function setNoteOpen(wrap, open, onResize) {
 		// covers the very text it was opened to reveal.
 		btn.setAttribute("aria-label", label);
 	}
-	onResize?.();
 }
 
 /**
@@ -744,7 +739,7 @@ function setNoteOpen(wrap, open, onResize) {
  * note is not an edit, and someone who cannot type in the field has no other way to reach
  * the end of it. The field itself stays `disabled` from the template.
  */
-function wireNoteExpanders(wrapper, onResize) {
+function wireNoteExpanders(wrapper) {
 	if (!wrapper.querySelector(".stonetop-rel-card-note-wrap")) return;
 
 	// No overflow measurement, and none is wanted. The chevron used to be shown only on a note
@@ -759,7 +754,7 @@ function wireNoteExpanders(wrapper, onResize) {
 		if (!btn || !wrapper.contains(btn)) return;
 		ev.preventDefault();
 		const wrap = btn.closest(".stonetop-rel-card-note-wrap");
-		setNoteOpen(wrap, !wrap?.classList.contains("is-open"), onResize);
+		setNoteOpen(wrap, !wrap?.classList.contains("is-open"));
 	});
 
 	// Focusing the field opens it too. A note too long to READ through a one-line slot is
@@ -769,7 +764,7 @@ function wireNoteExpanders(wrapper, onResize) {
 		const wrap = ev.target.closest?.(".stonetop-rel-note-input")
 			?.closest(".stonetop-rel-card-note-wrap");
 		if (!wrap || wrap.classList.contains("is-open")) return;
-		setNoteOpen(wrap, true, onResize);
+		setNoteOpen(wrap, true);
 	});
 
 	// Deliberately NO close-on-blur. Clicking the chevron of an open note moves focus off the
@@ -782,7 +777,6 @@ function wireNoteExpanders(wrapper, onResize) {
 		const note = ev.target.closest?.(".stonetop-rel-note-input");
 		if (!note?.closest(".stonetop-rel-card-note-wrap.is-open")) return;
 		fitGrowableField(note);
-		onResize?.();
 	});
 
 	// Enter must not insert a line break. The same note is edited through an <input> in the
@@ -807,7 +801,7 @@ function wireNoteExpanders(wrapper, onResize) {
  *
  * Wired regardless of ownership: a player who cannot rate can still prefer to READ the board.
  */
-function wireViewToggle(root, actor, onResize) {
+function wireViewToggle(root, actor) {
 	if (root.dataset.stRelViewToggle === "1") return;
 	root.dataset.stRelViewToggle = "1";
 	root.addEventListener("click", ev => {
@@ -825,9 +819,7 @@ function wireViewToggle(root, actor, onResize) {
 		actor?.sheet?.render(false);
 		// Wait for the new DOM, do NOT chain off render()'s return value: AppV1's render is
 		// synchronous and hands back the Application, so a `.then()` on it runs a microtask
-		// later — before `_render` has swapped anything. `onResize` is what re-fits an
-		// auto-height window (the NPC sheet), and measuring the pre-toggle markup leaves the
-		// window sized for the view the user just left.
+		// later — before `_render` has swapped anything.
 		afterRender(actor,
 			`.stonetop-rel-view-btn[data-resize-key="${CSS.escape(resizeKey)}"][data-rel-view="${view}"]`,
 			btn,
@@ -836,7 +828,6 @@ function wireViewToggle(root, actor, onResize) {
 				// replacement rather than dropping them to the body. Harmless after a mouse
 				// press, which left focus on that same button anyway.
 				found?.focus();
-				onResize?.();
 			});
 	});
 }
@@ -848,13 +839,14 @@ function wireViewToggle(root, actor, onResize) {
  * Idempotent per wrapper (`data-st-rel-board`), matching the convention the column utils
  * use, so a host that wires the same root twice is a no-op the second time.
  *
- * `onResize` lets a host react to the section changing height without a re-render — the
- * layout flip and an opened note both do it, and the NPC sheet is auto-height, so it has to
- * re-measure or the board grows inside a window that does not.
+ * A host whose frame follows its content would want to re-measure when the layout flip or an
+ * opened note changes the section's height. No host is one: all three sheets size their frame
+ * once on open and scroll the board inside it, so the board never resizes a window around the
+ * reader. Add the hook back with the host that needs it.
  */
-export function wireRelationshipBoard(root, actor, { editable = true, onResize } = {}) {
+export function wireRelationshipBoard(root, actor, { editable = true } = {}) {
 	if (!root) return;
-	wireViewToggle(root, actor, onResize);
+	wireViewToggle(root, actor);
 	root.querySelectorAll(".stonetop-rel-views[data-resize-key]").forEach(wrapper => {
 		if (wrapper.dataset.stRelBoard === "1") return;
 		wrapper.dataset.stRelBoard = "1";
@@ -868,7 +860,7 @@ export function wireRelationshipBoard(root, actor, { editable = true, onResize }
 		// Before the editable bail, on purpose: a note opens to be READ, which is not an edit,
 		// and a viewer who cannot type in the field is the one with no other way to see the
 		// end of a long note.
-		wireNoteExpanders(wrapper, onResize);
+		wireNoteExpanders(wrapper);
 
 		if (!editable) return;
 

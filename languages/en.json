@@ -1442,7 +1442,7 @@
       "emptyHintReadonly": "Whoever keeps this map has not put anyone on it yet.",
       "unsharedLead": "There is nothing on this map for you to see yet.",
       "unsharedHint": "Every page of a relationship map starts out the GM's own. When they show you one, it appears here.",
-      "openSheet": "{name}. Click to open their sheet, drag to move them.",
+      "openSheet": "{name}. Double-click to open their sheet, drag to move them.",
       "noSheet": "{name} has no character sheet in this world.",
       "gone": "That person's sheet is no longer in this world.",
       "deletedActor": "{name} (deleted actor). Their sheet is no longer in this world.",

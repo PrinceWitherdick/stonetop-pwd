@@ -152,8 +152,12 @@
 {{!-- THE PEOPLE. A round portrait, a name under it, and a handle on the rim for drawing a line to
       somebody else.
 
-      The face is a BUTTON and opens the actor's sheet; dragging the same element moves the portrait
-      instead (utils/relmap-drag.js decides which happened, by how far the pointer travelled). The
+      The face is a BUTTON and DOUBLE-clicking it opens the actor's sheet; dragging the same element
+      moves the portrait instead (utils/relmap-drag.js decides which happened, by how far the pointer
+      travelled), and a single click does nothing at all -- this is the surface a table clicks around
+      on while talking, and a sheet on every one of those clicks was the map covering itself. It is
+      still a real button, so Enter and Space open the sheet for a reader who is not using a mouse;
+      relmap-drag.js tells the two kinds of click apart. The
       handle is separate so that "draw a line from here" is never something a reader does by
       accident on the way to reading a sheet.
 
