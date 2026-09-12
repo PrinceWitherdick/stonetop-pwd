@@ -16,6 +16,13 @@
  * `blessedMarks` each define needName / ambiguous / nameOnly / sameName / matched / already — which
  * is what lets the prefix be the only variable.
  *
+ * THE OTHER THING SHARED IS THE SHAPE OF THE WINDOW. A roster with more than one list shows them
+ * one at a time behind a left rail (the `.stonetop-guide-*` chrome every stepped sheet here wears),
+ * because stacked lists that each grow without bound make a window taller than the screen: a Judge
+ * four sessions in has brands and oaths both, and a Blessed can hold five kinds of mark at once.
+ * `_railFor` builds the rail, `_selectTab` switches it, and a roster with only ONE list gets no
+ * rail at all and keeps hugging its content. See templates/dialogs/partials/guide-tabs.hbs.
+ *
  * WHAT SUBCLASSES STILL OWN: their getData, their template, their writers, and the rules that are
  * genuinely theirs — whether the roster may name its own character (a Judge cannot brand himself;
  * a Blessed may perfectly well put Barkskin on herself), and what extra fields a row carries.
@@ -25,6 +32,8 @@ import { getDragEventData } from "../../../utils/foundry-compat.js";
 import { portraitOrNone, documentPortraitFrame } from "../../../utils/portrait-frame.js";
 import { PERSON_ROSTER_IMG } from "../../../utils/person-portrait.js";
 import { findNamedActor } from "../marked-people.js";
+import { wireGrowableFields, refitGrowableFields } from "../../../utils/growable-fields.js";
+import { applyGuideRail } from "../../../utils/guide-rail.js";
 
 /**
  * Actor types a roster row can name — the same three for all of them.
@@ -35,6 +44,22 @@ import { findNamedActor } from "../marked-people.js";
  * times, so it is asked once.
  */
 export const ROSTER_ACTOR_TYPES = ["npc", "character", "monster"];
+
+/**
+ * How tall a railed roster opens.
+ *
+ * A pixel number rather than the `height: "auto"` these windows use without a rail, and that is
+ * the whole point of the rail: a window that hugged whichever panel was showing would resize under
+ * the cursor every time a tab was clicked, which is worse than the tall window this replaced. The
+ * one panel scrolls inside a stable frame instead, and the frame is drag-resizable like every
+ * other window here.
+ */
+const RAIL_HEIGHT = 520;
+
+/** Shared markup contract for the rail. Both templates carry these; the wiring below is told once. */
+const RAIL_TAB    = "stonetop-roster-tab";
+const RAIL_PANEL  = "stonetop-roster-panel";
+const RAIL_MAIN   = "stonetop-roster-main";
 
 export class RosterDialog extends StonetopDialog {
 	/**
@@ -50,10 +75,171 @@ export class RosterDialog extends StonetopDialog {
 		// Frozen after super() (see the AppV2/AppV1 options note in stonetop-dialog.js), so it is
 		// read once here rather than off this.options at every call site.
 		this._editable = options.editable !== false;
+		// Which panel the rail is showing. Instance state, not view state, because these windows
+		// re-render after every write (see renderIfOpen) — a tab held only in the DOM would snap
+		// back to the first list every time a mark was lifted or a note was blurred.
+		this._activeTab = null;
+		// Filled by _railFor each getData: the keys the rail actually offered, so a click can be
+		// checked against them, and whether there was a rail at all.
+		this._railKeys = [];
+		this._railed = false;
 	}
 
-	/** Hug the content: a roster is one row per person and usually three or four of them. */
-	get _autoHeight() { return true; }
+	/**
+	 * Hug the content — but only WITHOUT a rail.
+	 *
+	 * One list is one row per person and usually three or four of them, and a window that fits
+	 * itself to that is the right window. The moment there are several lists the height is
+	 * whichever panel happens to be showing, and re-fitting it per tab would make the frame jump
+	 * about under the cursor; RAIL_HEIGHT holds it still and the panel scrolls inside it.
+	 */
+	get _autoHeight() { return !this._railed; }
+
+	/**
+	 * Turn this roster's lists into the left rail's view-model, and settle which one is showing.
+	 *
+	 * ONE LIST GETS NO RAIL. A rail of one entry is a label dressed as a choice, and it would cost
+	 * 168px of width and a fixed height to tell a Judge who only owns Condemn something the window
+	 * title already says. The caller's template is written so that the single section renders
+	 * anyway — `_activeTab` is pointed at it — so neither template needs a second layout.
+	 *
+	 * THE ACTIVE TAB IS RE-CHECKED EVERY RENDER, not just carried. A list can stop existing under
+	 * the player's hands: lifting the last Barkskin retires that kind's panel, releasing the last
+	 * oath retires the Sworn half. Left pointing at a key nothing renders, the window would come
+	 * back with every panel hidden and a rail with nothing lit — a blank window that looks broken
+	 * and is only one click from fixed, which is the worst kind of bug to be told about.
+	 *
+	 * @param {Array<{key: string, title: string, icon: string, count?: number}>} sections
+	 *   the lists this render actually draws, in rail order.
+	 * @returns {{railed: boolean, tabs: Array, activeTab: ?string}} for the template.
+	 */
+	_railFor(sections) {
+		this._railKeys = sections.map(s => s.key);
+		const wasRailed = this._railed;
+		this._railed = sections.length > 1;
+		// Settled HERE, where the rail is decided and while getData still runs ahead of the
+		// positioning at the end of `Application#_render`. On the TRANSITION only: growing a rail
+		// takes the window to RAIL_HEIGHT, losing the last list hands it back to hugging, and an
+		// ordinary re-render in between leaves alone whatever height the frame has — including one
+		// the player dragged for themselves.
+		if (this._railed !== wasRailed) this._setFrameHeight(this._railed ? RAIL_HEIGHT : "auto");
+		if (!this._railKeys.includes(this._activeTab)) this._activeTab = this._railKeys[0] ?? null;
+		return {
+			railed:    this._railed,
+			activeTab: this._activeTab,
+			tabs:      this._railed
+				? sections.map(s => ({ ...s, selected: s.key === this._activeTab }))
+				: [],
+		};
+	}
+
+	/**
+	 * Show one list and light its rail entry.
+	 *
+	 * Purely DOM, through the shared rail sync — no re-render, so a half-typed name in one list's
+	 * add field is still there when you come back to it, and the scroll position of the list you
+	 * left is not disturbed. The same reason every other rail sheet in the system switches this
+	 * way (see utils/guide-rail.js).
+	 */
+	_selectTab(key) {
+		if (!this._railKeys.includes(key)) return;
+		this._activeTab = key;
+		applyGuideRail(this.element?.[0], {
+			key, dataKey: "tab",
+			tabSelector:     `.${RAIL_TAB}`,
+			sectionSelector: `.${RAIL_PANEL}`,
+			mainSelector:    `.${RAIL_MAIN}`,
+		});
+	}
+
+	/**
+	 * Every roster's shared listeners: the RAIL, which switches which list is shown, and the notes,
+	 * which are chrome-less textareas that fit what is written into them (see the roster-row partial
+	 * and utils/growable-fields.js).
+	 *
+	 * Subclasses call `super.activateListeners(html)` first and then wire their own, so a note grows
+	 * and a tab switches on every one of these windows without any of them saying so.
+	 *
+	 * THE PREVIOUS RENDER'S OBSERVER IS DROPPED FIRST. A render replaces every field under the
+	 * root, and a ResizeObserver holds its targets strongly — left connected, each render's dead
+	 * textareas stay pinned for the life of the page. These windows re-render after every write,
+	 * so that is a leak per note per dismissal.
+	 */
+	activateListeners(html) {
+		super.activateListeners(html);
+		const root = html[0];
+
+		// WIRED BEFORE THE EDITABLE GATE subclasses return at: reading somebody else's roster is
+		// looking, not writing, and a viewer who cannot lift a mark must still be able to see the
+		// list it is on. Delegated, so the buttons a re-render replaces stay live.
+		root.addEventListener("click", ev => {
+			const tab = ev.target.closest(`.${RAIL_TAB}`);
+			if (!tab) return;
+			ev.preventDefault();
+			this._selectTab(tab.dataset.tab);
+		});
+
+		this._dropNoteGrowth?.();
+		this._dropNoteGrowth = wireGrowableFields(root);
+		// A note that grew should be VISIBLE, not pushed under the window's lower edge: the height
+		// was fitted to the content at render time, and the content has just got taller. Same
+		// re-fit the render path does, at the other moment the content moves.
+		//
+		// ONLY WHEN THE FIELD ACTUALLY MOVED, which is a handful of keystrokes out of a sentence.
+		// The field's own listener (utils/growable-fields.js) has already run by the time this
+		// one does — a listener on the element beats this one on the root — so `style.height` is
+		// the string that fit just wrote, and comparing it costs no layout. Re-fitting the WINDOW
+		// does: setPosition resolves the frame's computed style and re-lays the whole dialog out,
+		// rail and all, so per character it was a third forced reflow on top of the two the fit
+		// itself pays, to arrive at the height the window already had.
+		if (this._autoHeight) {
+			const heights = new WeakMap();
+			root.addEventListener("input", ev => {
+				const field = ev.target;
+				if (field.tagName !== "TEXTAREA") return;
+				if (heights.get(field) === field.style.height) return;
+				heights.set(field, field.style.height);
+				this.setPosition({ height: "auto" });
+			});
+		}
+	}
+
+	/**
+	 * Fit the notes once the window is actually on the page, so the height the base class then
+	 * takes is the height of the grown notes.
+	 *
+	 * Needed because AppV1 injects a pop-out hidden and fades it in, so a field measured during
+	 * `activateListeners` can measure NOTHING — a four-line note would open as one line and only
+	 * find its height when somebody typed in it.
+	 */
+	_settleContent() {
+		refitGrowableFields(this.element?.[0]);
+	}
+
+	/**
+	 * Take the window to a fixed pixel height, or hand it back to hugging its content.
+	 *
+	 * BOTH FIELDS, and neither is optional. `options.height` is what core consults every time it
+	 * is asked to position the frame: while it reads "auto" the positioner blanks `style.height`
+	 * and measures the content, so a pixel height written anywhere else is measured away again on
+	 * the next render. And `position.height` is the value actually passed to that positioner —
+	 * `Application#_render` ends with `setPosition(this.position)` — so a frame whose options had
+	 * changed but whose position still said "auto" would spend this render being measured too.
+	 *
+	 * This is the shape every other railed window in the system is BORN in: CustomMoveDialog 480,
+	 * WoundDialog 545, CreateMonsterDialog 620. A roster is railed only sometimes, so it arrives
+	 * at that shape here instead of in `defaultOptions`.
+	 */
+	_setFrameHeight(height) {
+		this.options.height = height;
+		if (this.position) this.position.height = height;
+	}
+
+	async close(options = {}) {
+		this._dropNoteGrowth?.();
+		this._dropNoteGrowth = null;
+		return super.close(options);
+	}
 
 	/**
 	 * The actor behind a stored uuid, SYNCHRONOUSLY — getData cannot await, and a world Actor is
@@ -243,16 +429,19 @@ export class RosterDialog extends StonetopDialog {
 	 * beside it still works. This class already owns the other end of the same control in
 	 * `_clearAddField`, so the bar's lifecycle lives together.
 	 *
-	 * @param {HTMLElement} root
+	 * @param {HTMLElement} scope  what the two selectors are looked up INSIDE. The whole window for
+	 *   a roster whose bars carry distinct classes (the Judge's brand bar and his oath bar), and the
+	 *   PANEL for one whose bars are a loop over identical markup (the Blessed's, one per kind of
+	 *   mark) — a window-wide lookup there would wire every kind's button to the first kind's field.
 	 * @param {object} bar
 	 * @param {string} bar.btnSelector   the add button
 	 * @param {string} bar.nameSelector  the text field Enter should fire from
 	 * @param {() => any} bar.add        what pressing either one does
 	 */
-	_wireAddBar(root, { btnSelector, nameSelector, add }) {
-		root.querySelector(btnSelector)?.addEventListener("click", () => add());
+	_wireAddBar(scope, { btnSelector, nameSelector, add }) {
+		scope.querySelector(btnSelector)?.addEventListener("click", () => add());
 		// Without this the fields sit inside a dialog with no form, so Enter does nothing at all.
-		root.querySelector(nameSelector)?.addEventListener("keydown", ev => {
+		scope.querySelector(nameSelector)?.addEventListener("keydown", ev => {
 			if (ev.key !== "Enter") return;
 			ev.preventDefault();
 			add();
@@ -265,9 +454,13 @@ export class RosterDialog extends StonetopDialog {
 	 * Reached through the live element rather than left to the re-render: `height: "auto"` windows
 	 * re-render into fresh nodes, but the value is cleared here so the field is already empty in the
 	 * frame the player sees, rather than briefly showing the name they just used.
+	 *
+	 * `scope` for the same reason `_wireAddBar` takes one: where a roster draws one bar per panel
+	 * they all wear the same class, and clearing window-wide would empty the first panel's field
+	 * while the one just used kept the name in it.
 	 */
-	_clearAddField(selector) {
-		const field = this.element?.[0]?.querySelector(selector);
+	_clearAddField(selector, scope = null) {
+		const field = (scope ?? this.element?.[0])?.querySelector(selector);
 		if (field) field.value = "";
 	}
 

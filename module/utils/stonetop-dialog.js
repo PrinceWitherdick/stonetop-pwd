@@ -131,9 +131,19 @@ export class StonetopDialog extends Application {
 	/** Override to true for a content-hugging window that re-fits its height each render. */
 	get _autoHeight() { return false; }
 
+	/**
+	 * Override to settle content whose size the window must then take — growable notes, say.
+	 *
+	 * Runs after the render and BEFORE the auto-height fit, which is the whole point: content
+	 * adjusted after that fit invalidates the measurement it just paid for, and a subclass that
+	 * re-measured to correct itself was reflowing the entire window twice per render.
+	 */
+	_settleContent() {}
+
 	async _render(force, options) {
 		await super._render(force, options);
 		this._frontOnOpen.apply();
+		this._settleContent();
 		// Auto-height dialogs re-fit their height after each render so the window hugs the
 		// current content (AppV1 caps the result via CSS max-height).
 		if (this._autoHeight) this.setPosition({ height: "auto" });

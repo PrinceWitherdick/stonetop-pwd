@@ -14,47 +14,46 @@
  *    glance and a segmented pair with no active styling is two grey words.
  */
 import { describe, it, expect } from "vitest";
-import Handlebars from "handlebars";
 import { readRepo as read, readCss, declarations } from "../../fakes/css.js";
+import { renderRoster } from "../../fakes/hbs.js";
 import { WARD_SIGNS } from "../../../module/actors/character/blessed-marks.js";
 
 const MARKS_HBS = read("templates/dialogs/blessed-marks.hbs");
-const ROW_HBS   = read("templates/dialogs/partials/roster-row.hbs");
-const ADD_HBS   = read("templates/dialogs/partials/roster-add.hbs");
 const MARKS_JS  = read("module/actors/character/dialogs/BlessedMarksDialog.js");
 const CSS       = readCss();
 
 /** The marks window, rendered over a context. */
-function render(context) {
-	const hb = Handlebars.create();
-	hb.registerPartial("stonetop.roster-row", ROW_HBS);
-	hb.registerPartial("stonetop.roster-add", ADD_HBS);
-	hb.registerHelper("localize", k => String(k));
-	hb.registerHelper("eq", (a, b) => a === b);
-	return hb.compile(MARKS_HBS)(context);
+const render = (context) => renderRoster(MARKS_HBS, context);
+
+/** One kind's panel, in the shape getData builds them. */
+function panel({ key, label, rows = [], canAdd = true, signs = null }) {
+	return {
+		key, label, rule: `${label} does something…`, icon: "fa-shield-halved",
+		rows, hasRows: rows.length > 0,
+		canAdd, signs,
+	};
 }
 
-/** One ward group holding one row, which is all these assertions need around the toggle. */
-function wardWindow({ sign = "repelled", editable = true } = {}) {
+/** One ward panel holding one row, which is all these assertions need around the toggle. */
+function wardWindow({ sign = "repelled", editable = true, pickedSign = "repelled" } = {}) {
 	return render({
 		editable,
 		hasGroups: true,
-		groups: [{
-			key: "ward", label: "Ward or binding", rule: "Sacred signs on a boundary…",
-			empty: "Nothing is warded.",
+		railed: false,
+		activeTab: "ward",
+		// One suggestion list for every panel's add bar, named by id from each of them.
+		listId: "stonetop-marks-suggestions", suggestions: [],
+		tabs: [],
+		groups: [panel({
+			key: "ward", label: "Ward or binding", canAdd: editable,
+			signs: WARD_SIGNS.map(s => ({ ...s, selected: s.key === pickedSign })),
 			rows: [{
 				id: "w1", name: "the north gate", note: "", img: "", imgStyle: "", linked: false,
 				pips: null, notePlaceholder: "Who or what the signs affect…",
 				signs: WARD_SIGNS.map(s => ({ ...s, active: s.key === sign })),
 				signUnset: !sign,
 			}],
-		}],
-		kinds: [{ key: "ward", label: "Ward or binding", subject: "place", signs: true }],
-		canAdd: editable,
-		defaultKind: "ward",
-		signs: WARD_SIGNS,
-		defaultSign: "repelled",
-		signsOpen: true,
+		})],
 	});
 }
 
@@ -114,7 +113,7 @@ describe("the ward's repelled-or-trapped toggle", () => {
 	});
 });
 
-describe("the add row's sign picker", () => {
+describe("the add bar's sign picker", () => {
 	it("offers both, defaulting visibly to the ward", () => {
 		const html = wardWindow();
 		expect(html).toMatch(/<select class="stonetop-marks-sign"/);
@@ -122,34 +121,43 @@ describe("the add row's sign picker", () => {
 		expect(html).toMatch(/<option value="trapped">Binding<\/option>/);
 	});
 
-	// Rendered always, shown only for the ward — hidden rather than re-rendered, because the kind
-	// picker changes on every glance through the list and a re-render drops a half-typed name.
-	it("hides itself when the kind picker is not on the ward", () => {
+	// It lives in the ward's OWN panel now, so the four kinds that ask no such question simply do
+	// not render it — where the single shared add row had to hide it as a picker moved, and got a
+	// dedicated `[hidden]` CSS rule to make that stick against core's `select` styling.
+	it("appears in no panel but the ward's", () => {
 		const html = render({
-			editable: true, hasGroups: false, groups: [],
-			kinds: [{ key: "barkskin", label: "Barkskin", subject: "person", signs: false }],
-			canAdd: true, defaultKind: "barkskin",
-			signs: WARD_SIGNS, defaultSign: "repelled", signsOpen: false,
+			editable: true, hasGroups: true, railed: true, activeTab: "barkskin",
+			listId: "stonetop-marks-suggestions", suggestions: [],
+			tabs: [{ key: "barkskin", title: "Barkskin", icon: "fa-shield-halved", selected: true }],
+			groups: [panel({ key: "barkskin", label: "Barkskin" })],
 		});
-		expect(html).toMatch(/<select class="stonetop-marks-sign"[^>]*hidden/);
+		expect(html).toContain("stonetop-marks-add-btn");   // the bar is there
+		expect(html).not.toContain("stonetop-marks-sign");  // the question is not
 	});
 
-	it("is followed by the kind picker rather than left behind by it", () => {
-		expect(MARKS_JS).toMatch(/_syncSignPicker\(root\)/);
-		// The change handler reads the kind picker and re-syncs off it. Matched as a block rather
-		// than as one line, because the same handler now also remembers what was picked.
-		expect(MARKS_JS).toMatch(/stonetop-marks-kind"\)[\s\S]{0,240}?this\._syncSignPicker\(root\)/);
+	// The kind is the panel you are standing in, so there is nothing to pick it with and no state
+	// in which a name has been typed and the kind has not been chosen. The old `<select>`, the
+	// warning it needed ("Pick which mark you are laying first") and the show/hide that followed it
+	// are all gone together; leaving any one of them behind is how this half-reverts.
+	it("is the only picker left, the kind being the panel", () => {
+		expect(MARKS_JS).not.toContain("stonetop-marks-kind");
+		expect(MARKS_JS).not.toContain("_syncSignPicker");
+		expect(MARKS_JS).not.toContain("blessedMarks.noKind");
+		expect(wardWindow()).not.toContain("stonetop-marks-kind");
+		// The kind comes off the panel the bar sits in, both when typed and when dropped.
+		expect(MARKS_JS).toMatch(/panel\.dataset\.markKind/);
 	});
 
-	// `_lay` promises that laying three marks in a row does not mean re-picking the kind and the
-	// sign each time, and it finishes with a full re-render — so both have to survive one. They
-	// did not: `getData` rebuilt the add row from the constants, so the kind fell back to
-	// `kinds[0]` (never the ward, which MARK_KINDS lists last) and the sign to "repelled".
-	it("keeps the last picked kind and sign across the re-render that follows a mark", () => {
-		expect(MARKS_JS).toMatch(/this\._addKind\s*=/);
+	// `_lay` promises that warding three doorways against the same thing does not mean re-picking
+	// each time, and it finishes with a full re-render — so the answer has to survive one. It did
+	// not: `getData` rebuilt the bar from the constants, so the sign fell back to "repelled" and
+	// the second doorway was quietly stored as a Ward where the player had said Binding.
+	it("keeps the last picked sign across the re-render that follows a mark", () => {
 		expect(MARKS_JS).toMatch(/this\._addSign\s*=/);
-		expect(MARKS_JS).toMatch(/kinds\.some\(k => k\.key === this\._addKind\)/);
 		expect(MARKS_JS).toMatch(/WARD_SIGNS\.some\(s => s\.key === this\._addSign\)/);
+		// And the re-render shows it: the picker is built from that remembered answer, not the default.
+		expect(wardWindow({ pickedSign: "trapped" }))
+			.toMatch(/<option value="trapped" selected>Binding<\/option>/);
 	});
 });
 
@@ -161,7 +169,7 @@ describe("what the dialog binds", () => {
 		expect(MARKS_JS).toContain('closest(".stonetop-mark-sign-btn")');
 	});
 
-	it("reads the picker the add row actually renders", () => {
+	it("reads the picker the add bar actually renders", () => {
 		expect(wardWindow()).toContain('class="stonetop-marks-sign"');
 		expect(MARKS_JS).toContain('querySelector(".stonetop-marks-sign")');
 	});
@@ -200,9 +208,13 @@ describe("what the toggle looks like", () => {
 		expect(active).toBeGreaterThan(hover);
 	});
 
-	// `[hidden]` alone loses to core's `body.game .app select`, which is more specific — without
-	// this the ward's picker sits in the add row asking about Barkskin.
-	it("makes the add-row picker's hidden attribute stick", () => {
-		expect(declarations(CSS, ".stonetop-marks-sign[hidden]")).toMatch(/display:\s*none/);
+	// Core's `body.game .app select` sets a width these would otherwise inherit, which left the
+	// name field with none of the slack. The picker no longer needs a `[hidden]` rule beside this
+	// one: it is rendered in the ward's panel and in no other, rather than shown and hidden as a
+	// kind picker moved.
+	it("keeps the picker from eating the name field's slack", () => {
+		const sign = declarations(CSS, ".stonetop-marks-sign");
+		expect(sign).toMatch(/flex:\s*0 0 auto/);
+		expect(sign).toMatch(/max-width:/);
 	});
 });

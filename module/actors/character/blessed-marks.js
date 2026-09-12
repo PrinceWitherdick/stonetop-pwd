@@ -90,30 +90,34 @@ export const DEFAULT_WARD_SIGN = WARD_SIGNS[0].key;
  * `subject` is what the add field is asking FOR, which is not "a person" in two of the five cases:
  * Shared Souls marks a beast and Wards & Bindings marks a threshold. Getting that wrong turns a
  * perfectly good roster row into a puzzle about who "the north gate" is.
+ *
+ * `icon` is the kind's glyph in the roster's left rail (BlessedMarksDialog), where the five sit as
+ * one list and the glyph is what makes a kind findable without reading. Plain silhouettes on
+ * purpose: the rail draws them at `--st-fs-xs`, and a busy glyph at that size reads as a smudge.
  */
 export const MARK_KINDS = [
 	{
-		key: "barkskin", move: BARKSKIN, label: "Barkskin", subject: "person",
+		key: "barkskin", move: BARKSKIN, label: "Barkskin", subject: "person", icon: "fa-shield-halved",
 		rule: "They have 2 armor while touching the earth, so long as the mark remains. Costs 1 Stock.",
 	},
 	{
-		key: "trackless", move: TRACKLESS_STEP, label: "Trackless Step", subject: "person",
+		key: "trackless", move: TRACKLESS_STEP, label: "Trackless Step", subject: "person", icon: "fa-shoe-prints",
 		rule: "They make no sound, leave no trace and ignore hindering terrain, so long as the mark "
 			+ "remains. 1 Stock marks up to your level + INT of them.",
 	},
 	{
-		key: "beast", move: SHARED_SOULS, label: "Shared Souls", subject: "beast",
+		key: "beast", move: SHARED_SOULS, label: "Shared Souls", subject: "beast", icon: "fa-paw",
 		rule: "You direct this beast and perceive through its senses at any distance. Treat it as a "
 			+ "follower with 3 Loyalty; when you spend its last Loyalty, the effect ends. Costs 1 Stock.",
 		loyalty: SHARED_SOULS_LOYALTY,
 	},
 	{
-		key: "charm", move: AMULETS_TALISMANS, label: "Amulet or talisman", subject: "person",
+		key: "charm", move: AMULETS_TALISMANS, label: "Amulet or talisman", subject: "person", icon: "fa-gem",
 		rule: "Name the harm it wards against. When they would suffer it while bearing your charm, "
 			+ "roll +INT. One charm at a time each, and it loses its potency after 1 use. Costs 1 Stock.",
 	},
 	{
-		key: "ward", move: WARDS_BINDINGS, label: "Ward or binding", subject: "place",
+		key: "ward", move: WARDS_BINDINGS, label: "Ward or binding", subject: "place", icon: "fa-door-closed",
 		rule: "Sacred signs on a boundary: name who or what they affect in no more words than your "
 			+ "level, and whether those beings are repelled or trapped. Roll +INT when first tested. "
 			+ "Costs 1 Stock.",
@@ -280,19 +284,34 @@ export function setMarkLoyalty(list, id, loyalty, { liftOnEnd = false } = {}) {
 /**
  * The roster split into its kinds, each with its definition and rows, ready to render.
  *
- * ONLY KINDS SOMEBODY IS ACTUALLY WEARING. A group with no rows is a heading and a rule line about
- * nobody, and five of those is most of the window on a Blessed who has laid two marks — this roster
- * answers "who is wearing what", so a kind nobody wears has nothing to answer with. Which kinds can
- * be LAID is a different question, and the add row answers it from availableKinds, so an owned move
- * with no marks out is still one pick away from its first: the empty group was never the way in.
+ * A KIND NOBODY WEARS IS DROPPED, unless the caller asks for it by name. A group with no rows is a
+ * heading and a rule line about nobody, and five of those stacked is most of the window on a
+ * Blessed who has laid two marks — asked as a plain question, "who is wearing what" has nothing to
+ * say about a kind nobody wears.
  *
- * No longer asks what the character owns, and so no longer asks for the actor. A Blessed who has
- * since dropped the move still sees the marks they laid with it, because those rows are still on
- * the list and still need lifting.
+ * `include` is how the ROSTER WINDOW asks a slightly different question. It lays marks a kind at a
+ * time now (one panel per kind behind a rail, each with its own add bar), so a kind this Blessed
+ * owns the move for has to have a panel even while it is empty — that panel IS the way in. Passing
+ * `availableKinds(actor)` is what turns the answer from "what is out" into "what is out, and what
+ * could be". Callers who only want the first ask for nothing and get today's answer.
+ *
+ * Either way a kind with rows is kept whether or not it is included: a Blessed who has since
+ * dropped a move still sees the marks they laid with it, because those rows are still on the list
+ * and still need lifting. That is also why this never asks the actor what it owns itself.
+ *
+ * KEYS rather than definitions, because the only caller already holds the set of them — it needs
+ * the same answer a second time, to say which panels get an add bar — and handing whole MARK_KINDS
+ * entries over just to read `.key` off them meant building that set twice per render and carrying
+ * a "these are entries, not keys" convention for nothing.
+ *
+ * @param {Array} list  the stored roster
+ * @param {object} [opts]
+ * @param {Set<string>|Array<string>} [opts.include]  kind keys to keep even when empty
  */
-export function groupMarks(list) {
+export function groupMarks(list, { include = [] } = {}) {
 	const rows = readMarks(list);
+	const kept = include instanceof Set ? include : new Set(include);
 	return MARK_KINDS
 		.map(def => ({ def, rows: rows.filter(m => m.kind === def.key) }))
-		.filter(group => group.rows.length);
+		.filter(group => group.rows.length || kept.has(group.def.key));
 }

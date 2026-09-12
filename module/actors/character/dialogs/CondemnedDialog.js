@@ -8,6 +8,12 @@
  * than "here is what you are keeping". Each section stands on its own gate, so a Judge who owns
  * one move and not the other sees only their half. See condemn.js and oaths.js.
  *
+ * ONE AT A TIME, BEHIND A RAIL, once there are two of them. Both lists grow without bound and
+ * neither ever shrinks on its own, so stacked they made a window taller than the screen by the
+ * fourth session — which is the whole reason the shared rail exists (see RosterDialog `_railFor`).
+ * A Judge with only one of the two moves still gets the plain content-hugging window: a rail of
+ * one entry would cost 168px to say what the window title already says.
+ *
  * Opened from the scales in the character sheet header (`_onCondemnOpen`). Not a result dialog:
  * nobody awaits an answer, because every act in here writes straight through to the actor. It is
  * a live view of two flags, so it re-renders itself after each write rather than collecting a
@@ -30,6 +36,22 @@ import { RosterDialog } from "./RosterDialog.js";
 /** Whose move this is. Matches `system.slug` on the playbook item, which is what names the art. */
 const JUDGE_SLUG = "the-judge";
 
+/**
+ * The window's two lists, in rail order, each with the glyph that stands for it.
+ *
+ * `key` names both the rail entry (`data-tab`) and its panel (`data-tab` again) — see
+ * RosterDialog `_selectTab`. `titleKey` is the SAME i18n key the panel's own heading localizes, so
+ * a rail entry and the heading it opens cannot come to read differently.
+ *
+ * The glyphs are deliberately plain silhouettes: the rail draws them at `--st-fs-xs`, where a busy
+ * one reads as a smudge. A brand is something pressed onto somebody (the stamp); an oath is
+ * something witnessed and written down (the scroll).
+ */
+const SECTIONS = [
+	{ key: "brands", titleKey: "stonetop.condemn.brandsHeading", icon: "fa-stamp" },
+	{ key: "oaths",  titleKey: "stonetop.oaths.heading",         icon: "fa-scroll" },
+];
+
 export class CondemnedDialog extends RosterDialog {
 	/**
 	 * @param {Actor}  actor      the Judge
@@ -48,9 +70,17 @@ export class CondemnedDialog extends RosterDialog {
 			// "stonetop" carries our window chrome; omitting it leaves the window half-styled,
 			// picking up our own rules over Foundry's default dark header.
 			classes: ["stonetop", "stonetop-condemned-dialog"],
-			width: 480,
+			// The rail's 168px ON TOP OF the 480 the lists themselves want, so a railed window's
+			// content column is exactly as wide as the unrailed one has always been. A Judge with
+			// only one of the two moves gets a roomier window than before rather than a narrower
+			// one, which is the harmless direction to be wrong in; both are drag-resizable.
+			width: 650,
+			// "auto" is the UNRAILED height, re-fitted per render. With both lists in play
+			// RosterDialog swaps in a fixed one so the frame does not jump per tab.
 			height: "auto",
 			resizable: true,
+			// Both lists match, and AppV1 saves one scroll position per matching element in
+			// document order, so the list you were not looking at keeps its place too.
 			scrollY: [".stonetop-condemned-list"],
 		});
 	}
@@ -100,14 +130,30 @@ export class CondemnedDialog extends RosterDialog {
 		const pool = this._rosterPool();
 		const branded = brandIndex(brands);
 		const sworn   = oathIndex(oathList);
+		// The rail, over whichever halves this Judge actually gets. Both at once is the ordinary
+		// case for a level-6 Judge; one alone renders with no rail at all and the panel showing,
+		// which is what `activeTab` being pointed at the only section buys (see `_railFor`).
+		// The counts ride the rail because "have I branded anyone?" is the question you ask of the
+		// list you are NOT looking at; an empty one passes no count and shows no badge.
+		//
+		// Driven off SECTIONS BY KEY rather than by position, so the table above stays the one
+		// place the rail's order and glyphs are stated: reordering it reorders the rail, and a
+		// third list is a third entry there and a third line here rather than a third `SECTIONS[n]`
+		// spread that has to agree with an index.
+		const counts = { brands: showBrands ? rows.length : null, oaths: showSworn ? oaths.length : null };
+		const rail = this._railFor(SECTIONS
+			.filter(section => counts[section.key] !== null)
+			.map(section => ({
+				...section,
+				title: game.i18n.localize(section.titleKey),
+				count: counts[section.key],
+			})));
+
 		return {
 			editable: this._editable,
 			showBrands,
 			showOaths: showSworn,
-			// Both halves at once is the ordinary case for a level-6 Judge, and two lists stacked
-			// with no headings would read as one list with a strange gap in it. Headings appear
-			// only when there is something to tell apart.
-			showHeadings: showBrands && showSworn,
+			...rail,
 			rows,
 			hasRows: rows.length > 0,
 			oaths,
@@ -180,8 +226,12 @@ export class CondemnedDialog extends RosterDialog {
 
 		// Notes save on blur rather than per keystroke: each write is a document update that
 		// re-renders every sheet showing this actor, and typing a sentence should not be twenty of
-		// them. `change` fires on blur (and on Enter) with the final value, which is exactly the
-		// grain wanted — and both setters are a no-op when the text did not actually move.
+		// them. `change` fires on blur with the final value, which is exactly the grain wanted —
+		// and both setters are a no-op when the text did not actually move.
+		//
+		// ON BLUR ALONE, now that a note is a textarea rather than a one-line input: Enter inside
+		// one breaks the line instead of committing, which is the point of a note that can run to
+		// four of them. Clicking away is what ends the edit.
 		//
 		// The broken tick box arrives on the same event and is handled here for that reason: it is
 		// a checkbox, so `change` is its only sensible moment, and splitting the two by listener

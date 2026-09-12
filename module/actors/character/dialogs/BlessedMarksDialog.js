@@ -17,6 +17,15 @@
  * repelled-or-trapped toggle, since that move asks a second question as the signs go on and the
  * roster is the only place its answer could live.
  *
+ * ONE KIND AT A TIME, BEHIND THE SHARED RAIL (RosterDialog `_railFor`). Five stacked groups each
+ * growing without bound is a window taller than the screen, which is the rail's whole reason — but
+ * it also answers a question the old layout had to answer with a picker. THE PANEL YOU ARE ON IS
+ * THE KIND YOU ARE LAYING: each kind's panel carries its own add bar and is its own drop target, so
+ * there is no "which mark" `<select>` to set and nothing to forget to set, and a dropped actor can
+ * no longer land as a kind you had stopped looking at. That is also why the rail lists every kind
+ * this Blessed COULD lay and not only the ones somebody wears: an empty panel is the way in to its
+ * first mark. A Blessed who owns exactly one of the five gets no rail and the plain window.
+ *
  * READ-ONLY FOR A VIEWER WHO CANNOT WRITE, but still open to them. Unlike the Judge's brand these
  * marks are not public in the fiction, but the roster is on the Blessed's own sheet and answers to
  * that sheet's permissions: anyone who can already read the sheet can read this, and `editable`
@@ -24,7 +33,7 @@
  */
 import { StonetopAutocomplete } from "../../../utils/autocomplete.js";
 import { openLinkedActorSheet, ACTOR_LINK_MISSING } from "../../../utils/actor-link.js";
-import { groupMarks, availableKinds, markKind, markSign, DEFAULT_KIND, WARD_SIGNS, DEFAULT_WARD_SIGN } from "../blessed-marks.js";
+import { groupMarks, availableKinds, markKind, markSign, WARD_SIGNS, DEFAULT_WARD_SIGN } from "../blessed-marks.js";
 import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { RosterDialog } from "./RosterDialog.js";
 
@@ -49,10 +58,18 @@ export class BlessedMarksDialog extends RosterDialog {
 			// "stonetop" carries our window chrome; omitting it leaves the window half-styled,
 			// picking up our own rules over Foundry's default dark header.
 			classes: ["stonetop", "stonetop-blessed-marks-dialog"],
-			width: 500,
+			// The rail's 168px ON TOP OF the 500 the rows themselves want (a mark's row carries a
+			// Loyalty track or a pair of sign buttons beside the name), so a railed window's content
+			// column is exactly as wide as the unrailed one has always been.
+			width: 670,
+			// "auto" is the UNRAILED height, re-fitted per render. With more than one kind in play
+			// RosterDialog swaps in a fixed one so the frame does not jump per tab.
 			height: "auto",
 			resizable: true,
-			scrollY: [".stonetop-marks-body"],
+			// The LISTS scroll, not the body: each kind's add bar has to stay pinned under its own
+			// list however many people wear that mark. One saved position per list, in document
+			// order, so the kinds you are not looking at keep their place too.
+			scrollY: [".stonetop-marks-list"],
 		});
 	}
 
@@ -62,57 +79,63 @@ export class BlessedMarksDialog extends RosterDialog {
 
 	getData() {
 		const stored = this._character.blessedMarks;
-		// Only the kinds somebody is wearing — see blessed-marks.js. Nothing here needs a word for
-		// an empty group, because a group that would be empty is not built.
-		const groups = groupMarks(stored).map(group => ({
-			key:   group.def.key,
-			label: group.def.label,
-			rule:  group.def.rule,
-			rows:  group.rows.map(entry => this._row(entry, group.def)),
-		}));
 		// The kinds this Blessed can actually lay. A kind with rows but no move (a mark that
-		// outlived the move that made it) is listed above but NOT offered here — there is nothing
-		// left on the sheet that could lay another.
-		const kinds = availableKinds(this._actor).map(def => ({
-			key: def.key, label: def.label, subject: def.subject, signs: !!def.signs,
-		}));
-		// What the add row was last set to, not what the constants say — `_lay` promises that
-		// marking three people with Trackless Step in a row, or warding three doorways against the
-		// same thing, does not mean re-picking each time, and it finishes with a full re-render
-		// (`renderIfOpen` -> `render(true)`), which rebuilds both `<select>`s from right here.
-		// Reading the constants meant the promise was never kept: the kind fell back to `kinds[0]`
-		// — never the ward, which MARK_KINDS lists last — and the sign fell back to "repelled", so
-		// the second doorway in a row was quietly stored as a Ward where the player had said
-		// Binding. Both are per-window view state and deliberately outlive nothing else.
-		const defaultKind = kinds.some(k => k.key === this._addKind)
-			? this._addKind
-			: (kinds[0]?.key ?? DEFAULT_KIND);
+		// outlived the move that made it) still gets a panel — groupMarks keeps any kind with rows
+		// whether or not it was included — but that panel carries no add bar, because there is
+		// nothing left on the sheet that could lay another.
+		//
+		// Resolved ONCE and asked twice: it is what groupMarks keeps an EMPTY panel for, and what
+		// says which of those panels gets an add bar.
+		const canLay = new Set(availableKinds(this._actor).map(def => def.key));
+		// NOT filtered by who is already marked, which is the one place this departs from the
+		// Judge's: the same person can perfectly well wear Barkskin AND a charm, so a name already
+		// on the roster is still a name worth offering. Duplicates are refused per KIND instead, at
+		// the write (see blessed-marks.js `scope`), where the refusal can say which kind it means.
+		// Resolved ONCE and shared by every panel's field, rather than scanned per kind.
+		const suggestions = this._suggestionRows(this._rosterPool());
+		// What the sign picker was last set to, not what the constants say — `_lay` promises that
+		// warding three doorways against the same thing does not mean re-picking each time, and it
+		// finishes with a full re-render (`renderIfOpen` -> `render(true)`), which rebuilds the
+		// `<select>` from right here. Reading the constant meant the promise was never kept: the
+		// sign fell back to "repelled", so the second doorway in a row was quietly stored as a Ward
+		// where the player had said Binding. Per-window view state, outliving nothing else.
 		const defaultSign = WARD_SIGNS.some(s => s.key === this._addSign)
 			? this._addSign
 			: DEFAULT_WARD_SIGN;
+
+		const groups = groupMarks(stored, { include: canLay }).map(({ def, rows }) => ({
+			key:   def.key,
+			label: def.label,
+			rule:  def.rule,
+			icon:  def.icon,
+			rows:  rows.map(entry => this._row(entry, def)),
+			hasRows: rows.length > 0,
+			// This panel's own add bar, or none at all where the move has gone. The bar's suggestion
+			// list is NOT per panel: all five offer the same names, so one list is emitted beside
+			// the panels and every bar names it (see the template).
+			canAdd: this._editable && canLay.has(def.key),
+			// Wards & Bindings' second question, asked in the add bar rather than only on the row
+			// afterwards: the move says to choose repelled or trapped AS the signs are inscribed, so
+			// a ward laid here is answered from the moment it exists. Absent (not empty) on the
+			// other four kinds, which have no such choice and would read a stray control as one
+			// they had to make. It no longer has to be shown and hidden as a picker moves: it lives
+			// in the one panel it means anything in.
+			signs: def.signs ? WARD_SIGNS.map(s => ({ ...s, selected: s.key === defaultSign })) : null,
+		}));
+
 		return {
 			editable: this._editable,
 			groups,
 			hasGroups: groups.length > 0,
-			kinds,
-			canAdd: this._editable && kinds.length > 0,
-			// Pre-selected so the add row is usable without touching the picker in the common case
-			// of a Blessed who only owns one of the five.
-			defaultKind,
-			// Wards & Bindings' second question, asked in the add row rather than only on the row
-			// afterwards: the move says to choose repelled or trapped AS the signs are inscribed, so
-			// a ward laid here is answered from the moment it exists. Shown only while the kind
-			// picker is on the ward (see `_syncSignPicker`) — the other four kinds have no such
-			// choice and would read a stray control as one they had to make.
-			signs: WARD_SIGNS,
-			defaultSign,
-			signsOpen: !!markKind(defaultKind)?.signs,
-			// NOT filtered by who is already marked, which is the one place this departs from the
-			// Judge's: the same person can perfectly well wear Barkskin AND a charm, so a name
-			// already on the roster is still a name worth offering. Duplicates are refused per KIND
-			// instead, at the write (see blessed-marks.js `scope`), where the refusal can say which
-			// kind it means.
-			suggestions: this._suggestionRows(this._rosterPool()),
+			// The one suggestion list every panel's add field reads, and the id they name it by.
+			listId: "stonetop-marks-suggestions",
+			suggestions,
+			// The rail over those panels, with each kind's standing count beside it — "is anything
+			// out under Trackless Step" is exactly the question you have of a list you are not
+			// looking at. One kind renders with no rail and its panel showing; see `_railFor`.
+			...this._railFor(groups.map(g => ({
+				key: g.key, title: g.label, icon: g.icon, count: g.rows.length,
+			}))),
 			// The Blessed's own playbook mark, over the rule. THE BLESSED'S, not this character's:
 			// the window belongs to the moves, and a Ranger who took one through Wild Soul should
 			// still see whose marks they are carrying.
@@ -171,23 +194,11 @@ export class BlessedMarksDialog extends RosterDialog {
 
 		if (!this._editable) return;
 
-		// Enter in the name field is the same act as pressing the button — see RosterDialog.
-		this._wireAddBar(root, {
-			btnSelector: ".stonetop-marks-add-btn", nameSelector: ".stonetop-marks-name",
-			add: () => this._addTyped(root),
-		});
+		for (const panel of root.querySelectorAll(".stonetop-marks-group")) this._wirePanel(panel);
 
-		// The sign picker only means anything while the ward is the kind being laid, so it follows
-		// the kind picker rather than sitting there asking a question about Barkskin.
-		this._syncSignPicker(root);
 		root.addEventListener("change", ev => {
-			// Remembered as they are picked, because the next `_lay` re-renders this row away and
+			// Remembered as it is picked, because the next `_lay` re-renders this control away and
 			// `getData` has nowhere else to read the player's last answer from.
-			const kind = ev.target.closest(".stonetop-marks-kind");
-			if (kind) {
-				this._addKind = String(kind.value ?? "").trim();
-				this._syncSignPicker(root);
-			}
 			const sign = ev.target.closest(".stonetop-marks-sign");
 			if (sign) this._addSign = String(sign.value ?? "").trim();
 		});
@@ -212,46 +223,54 @@ export class BlessedMarksDialog extends RosterDialog {
 
 		// Notes save on blur rather than per keystroke: each write is a document update that
 		// re-renders every sheet showing this actor, and typing a sentence should not be twenty of
-		// them. `change` fires on blur (and on Enter) with the final value.
+		// them. `change` fires on blur with the final value — on blur ALONE, a note being a
+		// textarea rather than a one-line input, so Enter breaks the line instead of committing.
 		root.addEventListener("change", async ev => {
 			const field = ev.target.closest(".stonetop-mark-note");
 			if (!field) return;
 			await this._character.setBlessedMarkNote(field.dataset.rowId, field.value);
 		});
 
-		this._wireDrop(root);
 	}
 
 	/**
-	 * Drop an Actor onto the window to mark them. The one path that can never mistype a name or
-	 * pick the wrong Alun of two, since it carries the document itself. What KIND it is — and for a
-	 * ward, which of the two — comes from the add row's pickers, which is everything a drop cannot
-	 * say for itself.
+	 * Both ways INTO one kind's panel: the add bar under its list, and the panel itself as a drop
+	 * target. Wired together, per panel, on one pass over the five.
+	 *
+	 * WIRED INSIDE ITS OWN PANEL, which is what retired the old "which mark" picker. Five bars wear
+	 * the same classes, so a window-wide lookup would hand every button the first panel's field
+	 * (see the `scope` note on RosterDialog `_wireAddBar`), and a drop onto the window as a whole
+	 * could not say which of the five kinds it meant — it had to ask a `<select>` that might have
+	 * been left anywhere. The panel you typed or dropped into answers for itself. Only the ward's
+	 * second question survives, in the one panel it means anything in. Enter in the name field is
+	 * the same act as pressing the button beside it.
+	 *
+	 * A PANEL WITH NO ADD BAR (a kind whose move has gone) IS NOT A WAY IN AT ALL — not typed and
+	 * not dropped. One guard for both, because they are one rule: there is nothing left on the
+	 * sheet that could lay another, and a silent accept through either door would be the way round
+	 * a gate the rest of the window keeps. Kept apart, the drop half enforced it and the add half
+	 * merely happened not to find a button.
 	 *
 	 * `dragover` must preventDefault or the browser refuses the drop outright.
 	 */
-	_wireDrop(root) {
-		this._wireDropZone(root.querySelector(".stonetop-marks-body") ?? root, {
-			write: (entry, note) => this._lay(entry, note),
+	_wirePanel(panel) {
+		if (!panel.querySelector(".stonetop-marks-add-btn")) return;
+		this._wireAddBar(panel, {
+			btnSelector: ".stonetop-marks-add-btn", nameSelector: ".stonetop-marks-name",
+			add: () => this._addTyped(panel),
+		});
+		this._wireDropZone(panel, {
+			write: (entry, note) => this._lay(entry, note, panel),
 			wrongTypeKey:  "stonetop.blessedMarks.notMarkable",
 			compendiumKey: "stonetop.blessedMarks.fromCompendium",
-			// Read at drop time rather than at render, and through the same `_laying` the typed path
-			// uses, so a dropped ward is answered exactly as a typed one is. A Blessed with no kind
-			// to lay is told rather than silently given a default one.
-			extra: () => {
-				const kind = this._selectedKind(root);
-				return kind ? this._laying(root, kind) : this._warn("stonetop.blessedMarks.noKind");
-			},
+			// Read at drop time rather than at render, and through the same `_laying` the typed
+			// path uses, so a dropped ward is answered exactly as a typed one is.
+			extra: () => this._laying(panel),
 		});
 	}
 
-	/** Which kind the add row is set to, or "" when this Blessed can lay none. */
-	_selectedKind(root) {
-		return String(root.querySelector(".stonetop-marks-kind")?.value ?? "").trim();
-	}
-
 	/**
-	 * What the add row is about to write: the kind, and for a ward the sign along with it.
+	 * What this panel's add bar is about to write: the kind, and for a ward the sign along with it.
 	 *
 	 * Carried at the WRITE rather than left to a second click on the row, because the move asks for
 	 * both in one breath — "describe who or what they affect … ALSO, choose whether the affected
@@ -263,46 +282,39 @@ export class BlessedMarksDialog extends RosterDialog {
 	 * value, and the roster is the one place a sign key is read from afterwards. Anything the table
 	 * does not name falls back to the default, so a ward can never be stored wearing a sign the
 	 * row rendering has no definition for.
+	 *
+	 * THE PANEL IS THE ONLY ARGUMENT, because it is the only thing either caller knows: the kind is
+	 * read off it here rather than passed in beside it, so there is no two-argument call whose
+	 * halves could be made to disagree.
 	 */
-	_laying(root, kind) {
-		const def = markKind(kind);
-		if (!def?.signs) return { kind };
-		const sign = String(root.querySelector(".stonetop-marks-sign")?.value ?? "").trim();
-		return { kind, sign: markSign(sign)?.key ?? DEFAULT_WARD_SIGN };
+	_laying(panel) {
+		const kind = panel.dataset.markKind;
+		// The picker is rendered in the ward's panel and nowhere else, so its absence IS the answer
+		// for the other four kinds: no lookup into the kind table, and nothing to keep in step.
+		const picker = panel.querySelector(".stonetop-marks-sign");
+		if (!picker) return { kind };
+		return { kind, sign: markSign(String(picker.value ?? "").trim())?.key ?? DEFAULT_WARD_SIGN };
 	}
 
 	/**
-	 * Show the sign picker only while the ward is selected.
+	 * Mark whoever is named in a panel's add field — the shared search ladder, told to speak in
+	 * marks.
 	 *
-	 * `hidden` rather than a re-render: the kind picker changes on every glance through the list,
-	 * and re-rendering the window under the player's cursor would drop what they had typed in the
-	 * name field. The value is left alone while it is away, so flicking off the ward and back does
-	 * not silently reset a binding to a ward.
-	 */
-	_syncSignPicker(root) {
-		const picker = root.querySelector(".stonetop-marks-sign");
-		if (!picker) return;
-		picker.hidden = !markKind(this._selectedKind(root))?.signs;
-	}
-
-	/**
-	 * Mark whoever is named in the add field — the shared search ladder, told to speak in marks.
-	 *
-	 * The KIND is checked BEFORE the name, and that order is the one thing this adds: a Blessed who
-	 * has typed a name but has no kind selected should be told what is actually missing.
+	 * The KIND no longer has to be checked first, and that is the point of a bar per panel: it is
+	 * the panel's own, read off the section the field sits in, so there is no state in which a name
+	 * has been typed and the kind has not been chosen. "Pick which mark you are laying first" was
+	 * the warning for a question this layout does not ask.
 	 *
 	 * A warded doorway goes through the SAME field with nothing to tick. If the GM has made an
 	 * Actor for the thing being bound then the search links it; if not, "the north gate" is stored
 	 * as a name like any other unmodelled subject.
 	 */
-	_addTyped(root) {
-		const kind = this._selectedKind(root);
-		if (!kind) return this._warn("stonetop.blessedMarks.noKind");
+	_addTyped(panel) {
 		return this._addNamed({
-			name:  String(root.querySelector(".stonetop-marks-name")?.value ?? "").trim(),
+			name:  String(panel.querySelector(".stonetop-marks-name")?.value ?? "").trim(),
 			i18n:  "stonetop.blessedMarks",
-			write: (entry, note) => this._lay(entry, note),
-			extra: this._laying(root, kind),
+			write: (entry, note) => this._lay(entry, note, panel),
+			extra: this._laying(panel),
 		});
 	}
 
@@ -314,16 +326,19 @@ export class BlessedMarksDialog extends RosterDialog {
 	 * `note` is an optional i18n key announced only on SUCCESS, for the things the search did that
 	 * the player did not type (resolved a partial, or found nobody and stored a bare name).
 	 */
-	async _lay(entry, note = null) {
+	async _lay(entry, note = null, panel = null) {
 		const added = await this._character.layBlessedMark(entry);
 		if (!added) return this._warn("stonetop.blessedMarks.already", {
 			name: entry.name, kind: (markKind(entry.kind)?.label ?? "mark").toLowerCase(),
 		});
 		if (note) this._notify("info", note, { name: added.name });
-		// The KIND and the ward's sign are deliberately left alone — marking three people with
-		// Trackless Step in a row, or warding three doorways against the same thing, is one move
-		// being used once, and re-picking either each time would be busywork.
-		this._clearAddField(".stonetop-marks-name");
+		// The ward's sign is deliberately left alone — warding three doorways against the same
+		// thing is one move being used once, and re-picking each time would be busywork. The kind
+		// needs no such care now that it is the panel you are standing in.
+		//
+		// Cleared within THAT panel: five fields wear this class, and clearing window-wide would
+		// empty the first kind's field while the one just used kept the name in it.
+		this._clearAddField(".stonetop-marks-name", panel);
 		this.renderIfOpen();
 	}
 

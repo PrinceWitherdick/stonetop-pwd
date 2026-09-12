@@ -10700,36 +10700,56 @@ button.stonetop-held-advantage:hover { color: var(--st-text-body); }
    lifted. Kept in this block rather than with the other dialogs so the whole feature — the two
    icons, the tag and the window — reads as one thing.
 
-   `.window-content` padding is zeroed so the body owns its own, which is what lets the drop
-   highlight below reach the window's edges rather than leaving an unresponsive frame around a
-   target that says "drop here". */
+   `.window-content` padding is zeroed so the body owns its own, which is what lets the rail below
+   reach the window's edges rather than floating as an inset panel — and the flex column is what
+   lets a railed window (a real pixel height) hand its whole height to the split. The same four
+   declarations every rail dialog in this file opens with. */
 .stonetop-condemned-dialog .window-content,
-.stonetop-blessed-marks-dialog .window-content { padding: 0; }
+.stonetop-blessed-marks-dialog .window-content {
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
 
 /* The whole panel is capped, and the LIST is what gives way inside it — see the list rule below.
-   The cap lives here rather than on the window: this is an auto-height AppV1 dialog, so by the
-   time a `max-height` on `.window-app` could bite, setPosition has already measured the content
-   and fixed a pixel height, and the cap would crop the add row off the bottom instead of making
-   anything scroll. Capping the CONTENT means the measurement itself comes back small, so the
-   window hugs a sane height on its own. */
+   The cap lives here rather than on the window: WITHOUT A RAIL this is an auto-height AppV1
+   dialog, so by the time a `max-height` on `.window-app` could bite, setPosition has already
+   measured the content and fixed a pixel height, and the cap would crop the add row off the bottom
+   instead of making anything scroll. Capping the CONTENT means the measurement itself comes back
+   small, so the window hugs a sane height on its own.
+
+   `padding: 0`, unlike the 12px this used to carry: the rail is a full-bleed band down the window's
+   left edge, so the padding moved onto the two things that are not the rail (the heading block and
+   the panel column). Without a rail that nets out to exactly the inset it always had. */
 .stonetop-condemned-body,
 .stonetop-marks-body {
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
-	padding: 12px;
+	padding: 0;
 	max-height: 78vh;
-	/* The dashed affordance is drawn as an INSET ring rather than a border so appearing and
-	   disappearing costs no layout: a real border would grow the box by 2px on dragenter and
-	   shuffle every row down as the pointer crossed the window. */
-	box-shadow: inset 0 0 0 2px transparent;
-	transition: box-shadow 0.12s ease;
 }
 
-.stonetop-condemned-body.is-drop-target,
+/* WITH a rail, the window has a real height and the body's job is to fill it rather than to hug
+   anything — so the content cap comes off and the split takes the slack. `:has()` keyed on the
+   rail itself rather than on a class the templates would have to remember to add: the rail being
+   in the DOM IS the condition, and the two cannot drift apart.
+
+   "A REAL HEIGHT" IS A CLAIM ABOUT THE JS, and it is RosterDialog#_setFrameHeight that makes it
+   true: growing a rail puts RAIL_HEIGHT into `options.height`, which is the only thing that stops
+   core's positioner blanking `style.height` and measuring the content instead. Were the frame ever
+   left auto-height with a rail in it, lifting the cap here would open the window the full height
+   of whatever the tallest list holds — so these two are one change, not two. */
+:is(.stonetop-condemned-body, .stonetop-marks-body):has(> .stonetop-roster-split > .stonetop-guide-toc) {
+	max-height: none;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
 .stonetop-condemned-section.is-drop-target,
 .stonetop-oath-section.is-drop-target,
-.stonetop-marks-body.is-drop-target {
+.stonetop-marks-group.is-drop-target {
 	box-shadow: inset 0 0 0 2px var(--st-condemned-border);
 }
 
@@ -10741,8 +10761,52 @@ button.stonetop-held-advantage:hover { color: var(--st-text-body); }
 	flex-direction: column;
 	align-items: center;
 	gap: 8px;
+	/* Its own inset, now that the body's came off for the rail's sake. `flex: none` because this
+	   block is the window's one fixed piece of furniture: whatever height is left goes to the
+	   split under it. */
+	padding: 12px 12px 0;
+	flex: none;
 	text-align: center;
 }
+
+/* ── The rail, and the panel column beside it ──────────────────────────────
+   A roster with more than one list shows them one at a time (see RosterDialog `_railFor`), wearing
+   the same `.stonetop-guide-*` chrome as every stepped sheet here. With only one list the rail is
+   not rendered at all and everything below still lays out: the column is then simply the whole
+   width, which is the window these have always been. */
+.stonetop-roster-main {
+	/* The shared `.stonetop-guide-main` padding assumes a rail's worth of inset on the left; here
+	   the panel supplies its own and the rail's gap is added back only when a rail is there (below),
+	   so the unrailed window keeps exactly the 12px it always had. */
+	padding: 12px;
+	gap: 0;
+	display: flex;
+	flex-direction: column;
+	/* `flex: 1 1 auto` + `min-width: 0` is what makes this the column and not just a box of rows.
+	   A flex item defaults to `flex: 0 1 auto`, which sizes to its CONTENT — so the column came out
+	   as wide as its widest row and left a band of window backing between it and the rail, wider or
+	   narrower depending on how long the names on that list happened to be. The pair is the same
+	   one every other rail dialog's content column states. */
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+/* Adjacent-sibling, so the extra inset exists only where a rail actually precedes the column. */
+.stonetop-roster-split > .stonetop-guide-toc + .stonetop-roster-main { padding-left: 16px; }
+
+/* The one visible panel fills the column; its list is what scrolls inside it, so each list's add
+   bar stays pinned under it however many people are on it. */
+.stonetop-roster-panel {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+/* The sections set `display: flex` below, which out-specifies the UA's `[hidden] { display: none }`
+   and would leave every panel on screen at once. The same trap `.wd-section[hidden]` and
+   `.stonetop-custom-move-section[hidden]` are here for. */
+.stonetop-roster-panel[hidden] { display: none; }
 
 /* Height only, so the art keeps its own proportions whatever they are — `width: auto` on an
    <img> with a stated height is the one direction that never distorts. `max-width` is the guard
@@ -10767,6 +10831,27 @@ button.stonetop-held-advantage:hover { color: var(--st-text-body); }
 	font-size: var(--st-fs-sm);
 	font-style: italic;
 	color: var(--st-text-secondary);
+}
+
+/* A TITLE BAR RATHER THAN A TITLE BLOCK, in a window that has a rail under it. The centred stack
+   above is right for a window whose height is its content's — it is the first thing you see and it
+   can afford to be. A railed window's height is FIXED, so the same stack spends a quarter of it on
+   furniture before the first row, and what is left is the list. Laid as a row with a smaller mark
+   it says the same thing in half the space.
+
+   Keyed on the rail being there rather than on a class the templates would have to remember to
+   add: `:has(+ …)` asks about the very sibling this sits above, so the two cannot drift apart. */
+:is(.stonetop-condemned-heading, .stonetop-marks-heading):has(+ .stonetop-roster-split > .stonetop-guide-toc) {
+	flex-direction: row;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px 0;
+	text-align: left;
+}
+:is(.stonetop-condemned-heading, .stonetop-marks-heading):has(+ .stonetop-roster-split > .stonetop-guide-toc)
+	:is(.stonetop-condemned-mark, .stonetop-marks-mark) {
+	height: 44px;
+	max-width: 44px;
 }
 
 /* The one part of the panel that gives way. Everything else here — the mark, the rule, the add
@@ -10866,29 +10951,89 @@ a.stonetop-marks-name-text { cursor: pointer; }
 a.stonetop-condemned-name-text:hover,
 a.stonetop-marks-name-text:hover { text-decoration: underline; }
 
+/* Both faces of a roster note — the one that can be typed into and the one that cannot — set
+   here together so they are the same line of prose under the name either way. `pre-wrap` is
+   what makes a note written across several lines read back as the several lines it was
+   written as; the editable face is a <textarea> and wraps regardless, and the read-only <p>
+   would otherwise collapse every break into a space. */
 .stonetop-condemned-note,
 .stonetop-condemned-note-text,
 .stonetop-oath-note,
 .stonetop-mark-note,
 .stonetop-marks-note-text {
+	/* Named once because the four-line cap below is measured in it: a line-height changed
+	   without the ceiling beside it would cap at three lines and a sliver, or five. */
+	--st-roster-note-line: 1.35;
 	margin: 0;
+	font-family: inherit;
 	font-size: var(--st-fs-xs);
 	font-style: italic;
+	line-height: var(--st-roster-note-line);
 	color: var(--st-text-secondary);
+	white-space: pre-wrap;
+	/* THE SAME BOX for both faces, so a roster is the same shape to the person who can write in
+	   it and the person who can only read it — and so the 3px below is one number rather than
+	   two. The underline is the editable face's, but the padding and the 1px it sits on are worn
+	   by both; a <p> with no border would otherwise cap 1px later and show a sliver of a fifth
+	   line. */
+	padding: 1px 0;
+	border-bottom: 1px solid transparent;
+	/* Four lines and then it scrolls. A note is a reason, not a page, and the window holds a
+	   list of them — but one line was a slot to read a sentence through.
+	   The 3px is that chrome, which a border-box cap has to carry or the fourth line is clipped
+	   by exactly that much. Measured, not guessed — roster-note-field.mjs in the verify harness
+	   reports the fitted height in lines. */
+	max-height: calc(var(--st-roster-note-line) * 4em + 3px);
+	overflow-y: auto;
 }
 
-/* The quiet underline every editable field in this system wears, rather than a grey well —
-   a column of wells would out-shout the names they belong to. */
+/* NO FIELD CHROME UNTIL IT IS ASKED FOR. The note sits under the name as plain text; clicking
+   it puts the caret in, and only then does the box say it is one. A column of underlined wells
+   beside four-line reasons would out-shout the names they belong to, and most rows carry no
+   note at all — what those rows should show is their placeholder, quietly.
+
+   The underline is present but TRANSPARENT rather than absent, so nothing shifts by a pixel
+   when it appears on hover.
+
+   `box-shadow: none` IS THE HALF THAT MAKES IT INVISIBLE, and a transparent border alone does
+   not. Core's `@layer elements.forms` paints every textarea with
+   `box-shadow: var(--input-box-shadow)`, and under `body.theme-light` — which is every AppV1
+   window in this system, core pushes `themed theme-light` onto all of them — that token is
+   `inset 0 0 6px rgba(0, 0, 0, 0.1)`: a soft dark ring hugging the edges that reads as a border
+   and is exactly what a reader points at when they say the field is still boxed in. It has to
+   die on the shorthand-holding element rather than by re-pointing `--input-box-shadow`, because
+   core's own `:focus` / `:read-only` rules assign box-shadow directly too. The relationship
+   board's note field wears the same line for the same reason (.stonetop-rel-note-input).
+
+   `min-height: 0` is not optional: core floors every textarea at 50px, and a min-height clamps
+   a height rather than competing with it — without this a one-line note renders as a 50px box
+   and nothing in the cascade looks wrong. `resize: none` for the same reason the height is
+   script-managed at all (utils/growable-fields.js fits it to its text between the floor here
+   and the ceiling above), and `display: block` drops the inline-block baseline gap that would
+   otherwise hang under the field. */
 .stonetop-condemned-note,
 .stonetop-oath-note,
 .stonetop-mark-note {
+	display: block;
 	width: 100%;
 	height: auto;
-	padding: 1px 0;
-	border: none;
-	border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+	min-height: 0;
+	/* Only the three sides the shared rule above does not set: its bottom border is the one that
+	   lights up on hover, and re-declaring `border: none` here would take it away. */
+	box-shadow: none;
+	border-top: none;
+	border-right: none;
+	border-left: none;
 	border-radius: 0;
 	background: none;
+	resize: none;
+	cursor: text;
+}
+
+.stonetop-condemned-note:hover,
+.stonetop-oath-note:hover,
+.stonetop-mark-note:hover {
+	border-bottom-color: var(--st-text-faint);
 }
 
 .stonetop-condemned-note:focus,
@@ -10963,6 +11108,17 @@ a.stonetop-marks-name-text:hover { text-decoration: underline; }
 	color: var(--st-text-muted);
 }
 
+/* An empty list takes the slack the way a full one's `<ul>` does, so the add bar sits at the
+   bottom of the panel either way. Without it the bar floats wherever the empty line leaves it, and
+   clicking between kinds in the rail moves the one control you are reaching for up and down the
+   window. Centred in the space it claims rather than left at the top of it. */
+.stonetop-roster-panel > :is(.stonetop-condemned-empty, .stonetop-marks-empty) {
+	flex: 1 1 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
 .stonetop-condemned-add,
 .stonetop-marks-add {
 	display: flex;
@@ -10972,17 +11128,44 @@ a.stonetop-marks-name-text:hover { text-decoration: underline; }
 	border-top: 1px solid var(--color-border-light-tertiary, #ddd);
 }
 
-.stonetop-condemned-add .stonetop-condemned-name,
-.stonetop-marks-add .stonetop-marks-name {
+/* The field takes the row and the button hugs its label.
+
+   BOTH keyed to the partial's own class rather than to the per-list ones the host dialogs bind
+   their handlers to (`.stonetop-condemned-name`, `.stonetop-oath-add-btn`, …). Those have to
+   differ per list and so are the wrong hook for chrome: the brands' two spellings were written
+   here and the oaths' never were, which left the Judge's two bars sitting in one window laid out
+   differently. `-name` and `-btn` below are on every bar the partial draws, so the Blessed's five
+   and any later roster are dressed without a line being added. */
+.stonetop-roster-add-name {
 	flex: 1;
 	min-width: 0;
 }
 
-.stonetop-condemned-add-btn,
-.stonetop-marks-add-btn {
+/* Our slate primary, the same `--st-btn-primary-*` set every confirm in the system wears (the
+   model is .asm-confirm). This is the commit half of a filled-in field rather than a standing
+   "add one more" entry point, so it takes the CTA look rather than the quiet dashed one that
+   .stonetop-prep-add-btn and .stonetop-inv-add-btn use.
+
+   Paint only. The GEOMETRY is core's (AppV1 buttons are `line-height: 28px` with 0 0.5rem of
+   padding), which is what keeps the button the same height as the field beside it, and the focus
+   ring is core's too — the tokens are re-pointed under the Death's Door mood and the high-contrast
+   scope, so the fill follows those down on its own.
+
+   `width`/`min-width`/`flex` are the corrections: core's compat layer stretches every AppV1 button
+   to `width: 100%`, which would leave the label floating in a button half the row wide. */
+.stonetop-roster-add-btn {
 	width: auto;
 	min-width: 0;
 	flex: none;
+	background: var(--st-btn-primary-bg);
+	border: 1px solid var(--st-btn-primary-border);
+	color: var(--st-btn-primary-text);
+}
+
+.stonetop-roster-add-btn:hover {
+	background: var(--st-btn-primary-bg-hover);
+	border-color: var(--st-btn-primary-border-hover);
+	color: var(--st-btn-primary-text);
 }
 
 .stonetop-condemned-hint,
@@ -11078,28 +11261,19 @@ a.stonetop-marks-name-text:hover { text-decoration: underline; }
 }
 
 /* ── The Blessed's add row and Loyalty ─────────────────────────────────────
-   The kind picker leads the add row. It must not stretch: the name field is what should take the
-   slack, and a select sharing the growth would leave "Barkskin" adrift in half the window.
+   The ward's repelled-or-trapped picker leads its add bar, and is the only picker left in this
+   window: the kind is the panel you are standing in, so there is nothing to choose it with. It
+   must not stretch — the name field is what should take the slack, and a select sharing the growth
+   would leave "Binding" adrift in half the window.
 
    `width: auto` and the min/max pair are both needed, for the reason every other control in this
    file states them: core's `body.game .app select` sets a width these would otherwise inherit. */
-.stonetop-marks-kind,
 .stonetop-marks-sign {
 	flex: 0 0 auto;
 	width: auto;
-	min-width: 8em;
-	max-width: 12em;
-}
-
-/* Narrower than the kind picker: it holds two words, not five move names. */
-.stonetop-marks-sign {
 	min-width: 6em;
 	max-width: 8em;
 }
-
-/* `[hidden]` alone loses to core's `body.game .app select { display: … }`, which is more specific;
-   without this the ward's picker sits in the add row asking about Barkskin. */
-.stonetop-marks-sign[hidden] { display: none; }
 
 /* Shared Souls' three circles, on the name line beside the beast. Sized like the Moves sidebar's
    Readiness pips rather than the Crew tab's, since these sit in running text rather than in a
@@ -29168,6 +29342,19 @@ th:has(> .stonetop-roll-table-btn) {
 }
 
 .stonetop-guide-toc-text { flex: 1 1 auto; min-width: 0; }
+
+/* How many rows the panel behind this entry holds (see partials/guide-tabs.hbs). Tabular figures
+   so a column of them lines up, and `flex: none` so a two-digit count crowds the title rather than
+   being squeezed itself — the number is the part that has to stay readable. Muted against the
+   title, and it takes the active entry's accent with the rest of the row. */
+.stonetop-guide-toc-count {
+	flex: none;
+	margin-left: 0.4em;
+	font-size: var(--st-fs-2xs);
+	font-variant-numeric: tabular-nums;
+	color: var(--st-text-muted);
+}
+.stonetop-guide-toc-item.is-active .stonetop-guide-toc-count { color: inherit; }
 
 /* Active page: subtle fill + accent text/icon (green = active accent per tokens). */
 .stonetop-guide-toc-item.is-active .stonetop-guide-toc-btn {

@@ -1,0 +1,33 @@
+{{!-- The left rail of a TABBED sheet — the standing rosters (the Judge's brands and oaths, the
+      Blessed's marks), which show one list at a time so a window never grows taller than the
+      screen.
+
+      THE SIBLING OF guide-toc.hbs, AND NOT INTERCHANGEABLE WITH IT. That one drives a linear
+      walkthrough and emits `data-step-index`, read by a stepper's `_goTo`; this one names its
+      panels and emits `data-tab`, read by `applyGuideRail` with `dataKey: "tab"`. Routing one
+      through the other's handler binds nothing and throws nothing, so the two are kept apart by
+      emitting different attributes rather than by a comment asking nicely.
+
+      Context:
+        tabs      {key, title, icon, count, selected} in rail order
+        ariaLabel what the rail is a list OF, for a screen reader
+        btnClass  the host dialog's own class on each button, which it binds its click to
+
+      `count` is how many rows the panel behind this entry holds. It rides the rail because the
+      one thing worth knowing about a list you are NOT looking at is whether there is anything on
+      it: a Blessed clicking through five kinds to find which ones have marks out would be worse
+      served by the rail than by the stack it replaced. Suppressed at zero by the caller, which
+      passes no count at all for an empty list. --}}
+<nav class="stonetop-guide-toc" aria-label="{{ariaLabel}}">
+	<ol class="stonetop-guide-toc-list">
+		{{#each tabs}}
+		<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
+			<button type="button" class="stonetop-guide-toc-btn {{../btnClass}}" data-tab="{{key}}"{{#if selected}} aria-current="true"{{/if}}>
+				<i class="fas {{icon}} stonetop-guide-toc-icon"></i>
+				<span class="stonetop-guide-toc-text">{{title}}</span>
+				{{#if count}}<span class="stonetop-guide-toc-count">{{count}}</span>{{/if}}
+			</button>
+		</li>
+		{{/each}}
+	</ol>
+</nav>

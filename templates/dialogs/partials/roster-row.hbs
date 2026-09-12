@@ -17,7 +17,7 @@
         prefix          class stem for the shared chrome ("stonetop-condemned", "stonetop-marks")
         rowClass        this list's own row classes, if any ("stonetop-oath-row")
         openClass       the name link's class, which the host dialog binds its click to
-        noteClass       the note input's class
+        noteClass       the note textarea's class
         noteTextClass   the read-only note's class
         notePlaceholder placeholder text, already localized
         removeClass     the dismiss / release / lift button's class
@@ -43,9 +43,19 @@
 			{{> @partial-block}}
 		</div>
 
+		{{!-- The reason this row carries. A TEXTAREA wearing no field chrome, rather than a text
+		      input in a well: what is written here is the line of prose under the name, and it
+		      should read as one — clicking it puts the caret in, and the box announces itself only
+		      once it has focus. It grows with what is written, to four lines, and scrolls past
+		      that; the floor and the ceiling are in the stylesheet and the fitting is
+		      utils/growable-fields.js, wired for every roster in RosterDialog.
+
+		      The value sits in the element's CONTENT, which is where a textarea keeps it, and it
+		      must open flush against the tag: a newline straight after the opening tag is eaten by
+		      the parser, so a note beginning with a blank line would lose it on every render. --}}
 		{{#if editable}}
-		<input type="text" class="{{noteClass}}" data-row-id="{{id}}"
-		       value="{{note}}" autocomplete="off" placeholder="{{notePlaceholder}}">
+		<textarea class="{{noteClass}}" data-row-id="{{id}}" rows="1"
+		          autocomplete="off" placeholder="{{notePlaceholder}}">{{note}}</textarea>
 		{{else}}{{#if note}}
 		<p class="{{noteTextClass}}">{{note}}</p>
 		{{/if}}{{/if}}
