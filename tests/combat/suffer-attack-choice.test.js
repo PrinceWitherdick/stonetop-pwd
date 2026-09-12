@@ -1,224 +1,174 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { SCOPE, pc, makeMessage, installCombatChatFakes, uninstallCombatChatFakes, cardWithFlag } from "../fakes/combat-chat.js";
 
-// The HP write, mocked so the tests can assert WHETHER and WHEN it happened. Every other export
-// (parseMonsterAttacks above all) stays real: the split is the behaviour under test.
-vi.mock("../../module/utils/damage.js", async (importOriginal) => ({
-	...(await importOriginal()),
-	applyDamageToActor: vi.fn(async () => ({ oldHp: 12, newHp: 5 })),
-}));
-
-const { applyDamageToActor } = await import("../../module/utils/damage.js");
-const { executeSuffer, resolveSufferChoice } = await import("../../module/combat/attack-flow.js");
-
-const SCOPE = "stonetop-pwd";
-
-// The confirm dialog, answered immediately with whatever value the flow suggested — so the
-// assertions land on the suggestion (the roll and its armor maths), not on the prompt.
-let lastDialogContent = "";
-let lastSuggested = null;
-class AutoConfirmDialog {
-	constructor(config) { this._config = config; }
-	render() {
-		lastDialogContent = this._config.content;
-		lastSuggested = Number(/name="amount" value="(\d+)"/.exec(this._config.content)?.[1] ?? 0);
-		this._config.buttons.apply.callback({ querySelector: () => ({ value: String(lastSuggested) }) });
-	}
-}
-class CancelledDialog {
-	constructor(config) { this._config = config; }
-	render() { this._config.buttons.cancel.callback(); }
-}
-
-function makeMessage(flags = {}) {
-	return {
-		id: "msg1",
-		isOwner: true,
-		flags,
-		getFlag: (scope, key) => (scope === SCOPE ? flags[key] : undefined),
-		setFlag: vi.fn(async (scope, key, value) => { flags[key] = value; return value; }),
-	};
-}
-
-const pc = { name: "Pim", uuid: "Actor.pim", system: { attributes: { armor: { value: 2 } } } };
-
-/** A targeted foe whose stat block prints `damageValue`. */
-function targeting(damageValue, rollFormula = "") {
-	globalThis.fromUuid = async () => ({ actor: { system: { attributes: { damage: { value: damageValue, rollFormula } } } } });
-	return { attackerUuid: pc.uuid, targets: [{ uuid: "Scene.s.Token.t", name: "Rime Lord" }] };
-}
+// The two GM-whispered cards an incoming attack can route through — "Which attack?" for a foe
+// that prints several, and "Name the enemy's damage" for one that prints none — and the ordering
+// that keeps either of them from landing the same blow twice.
+//
+// NEITHER WRITES HP, which is what changed. The GM's answer POSTS a damage card; the deliberate
+// press on that card's own "Take this damage" is what reaches the character's hit points, and it
+// carries the `applied` latch that makes a second press harmless (see wireApplyDamage). What
+// these cards must not do is post TWO of them, because two cards are two blows.
+const { resolveSufferChoice, dealSufferedAmount } = await import("../../module/combat/attack-flow.js");
 
 let posted;
+const damageCard = () => cardWithFlag(posted, "damage");
 
 beforeEach(() => {
-	posted = [];
-	lastDialogContent = "";
-	lastSuggested = null;
-	applyDamageToActor.mockClear();
-	globalThis.Dialog = AutoConfirmDialog;
-	// A fixed roll, so the suggestion is pure arithmetic: 9, then armor/piercing.
-	globalThis.Roll = class { constructor(f) { this.formula = f; } async evaluate() { return { total: 9 }; } };
-	globalThis.ChatMessage = {
-		create: vi.fn(async (data) => { posted.push(data); return { ...data, id: `posted${posted.length}` }; }),
-		getSpeaker: () => ({}),
-		getWhisperRecipients: () => [{ id: "gm1" }],
-	};
-	globalThis.game = { user: { isGM: true, id: "gm1" }, users: { activeGM: { id: "gm1" } }, messages: { get: () => null } };
-	globalThis.ui = { notifications: { warn: vi.fn(), error: vi.fn() } };
-	globalThis.fromUuidSync = () => null;
+	posted = installCombatChatFakes({ game: { messages: { get: () => null } } });
+	// Every uuid these cards carry is the character's own.
+	globalThis.fromUuid = async () => pc;
 });
 
-afterEach(() => {
-	for (const key of ["Dialog", "Roll", "ChatMessage", "game", "ui", "fromUuid", "fromUuidSync"]) delete globalThis[key];
-});
+afterEach(uninstallCombatChatFakes);
 
-describe("a foe with ONE printed attack resolves as it always did", () => {
-	it("rolls, mitigates by armor and applies without asking anybody", async () => {
-		const message = makeMessage();
-		const applied = await executeSuffer(message, pc, targeting("bronze khopesh d10+2 (close, messy)", "d10+2"), "attack");
+// -- "Which attack?" -----------------------------------------------------------
 
-		expect(applied).toBe(true);
-		expect(lastSuggested).toBe(7);                    // 9 rolled − 2 armor
-		expect(applyDamageToActor).toHaveBeenCalledWith(pc, 7);
-		expect(posted.some(p => p.flags?.[SCOPE]?.sufferChoice)).toBe(false);
-	});
-
-	it("honours an attack that ignores armor", async () => {
-		// Previously armor came off every incoming blow, whatever the stat block said.
-		const message = makeMessage();
-		await executeSuffer(message, pc, targeting("heat-drain d12+1 (reach, ignores armor)", "d12+1"), "attack");
-		expect(lastSuggested).toBe(9);
-	});
-
-	it("honours an attack that pierces part of the armor", async () => {
-		const message = makeMessage();
-		await executeSuffer(message, pc, targeting("antler d10+2 (close, 1 piercing)", "d10+2"), "attack");
-		expect(lastSuggested).toBe(8);                    // 9 − max(0, 2 armor − 1 piercing)
-	});
-
-	it("shows the arithmetic it used, so the number is a confirmation and not a mystery", async () => {
-		await executeSuffer(makeMessage(), pc, targeting("bronze khopesh d10+2 (close)", "d10+2"), "attack");
-		expect(lastDialogContent).toContain("− 2 armor");
-
-		await executeSuffer(makeMessage(), pc, targeting("antler d10+2 (close, 1 piercing)", "d10+2"), "attack");
-		expect(lastDialogContent).toContain("− 1 armor (2 − 1 piercing)");
-
-		// No subtraction is SHOWN where none happened; the old line said "− 2 armor" regardless.
-		await executeSuffer(makeMessage(), pc, targeting("heat-drain d12+1 (reach, ignores armor)", "d12+1"), "attack");
-		expect(lastDialogContent).toContain("ignoring your armor");
-		expect(lastDialogContent).not.toContain("− 2 armor");
-	});
-
-	it("still offers a manual entry for a foe with no damage line at all", async () => {
-		// The 22 spirits print "none". Inventing a die for them would be damage the book never gave.
-		const message = makeMessage();
-		await executeSuffer(message, pc, targeting("none", ""), "attack");
-		expect(lastSuggested).toBe(0);
-		expect(lastDialogContent).toContain("No stat-block damage found");
-	});
-});
-
-describe("a foe with SEVERAL printed attacks asks the GM", () => {
-	const RIME_LORD = "conjured ice d12+3 (any range, area, grabby, forceful) or heat-drain d12+1 (reach, ignores armor)";
-
-	it("posts a GM-whispered card of buttons instead of guessing, and applies nothing yet", async () => {
-		const message = makeMessage();
-		const result = await executeSuffer(message, pc, targeting(RIME_LORD, "d12+3"), "attack");
-
-		expect(result).toBe("pending");
-		expect(applyDamageToActor).not.toHaveBeenCalled();
-
-		const card = posted.find(p => p.flags?.[SCOPE]?.sufferChoice);
-		expect(card).toBeTruthy();
-		// Whispered: the buttons ARE the stat block, and that is the GM's to know.
-		expect(card.whisper).toEqual(["gm1"]);
-		expect(card.flags[SCOPE].sufferChoice.attacks.map(a => a.label)).toEqual(["conjured ice", "heat-drain"]);
-		expect(card.content).toContain("d12+1");
-		expect(card.content).toContain("ignores armor");
-	});
-
-	it("latches the source card so a second click cannot post a second question", async () => {
-		const message = makeMessage();
-		await executeSuffer(message, pc, targeting(RIME_LORD, "d12+3"), "attack");
-		expect(message.flags.attack.awaitingChoice).toBe(true);
-
-		const again = await executeSuffer(message, pc, targeting(RIME_LORD, "d12+3"), "attack");
-		expect(again).toBe(false);
-		expect(posted.filter(p => p.flags?.[SCOPE]?.sufferChoice)).toHaveLength(1);
-	});
-
-	it("never asks when the card was already suffered", async () => {
-		const message = makeMessage({ attack: { suffered: true } });
-		expect(await executeSuffer(message, pc, targeting(RIME_LORD, "d12+3"), "attack")).toBe(false);
-		expect(posted).toHaveLength(0);
-	});
-});
-
-describe("the GM's pick rolls that attack and writes the HP", () => {
+describe("the GM's pick rolls the attack they chose", () => {
 	const choiceCard = (chosen = null) => makeMessage({
 		sufferChoice: {
-			pcUuid: pc.uuid, foeName: "Rime Lord", foeText: "", sourceId: "msg1", flagKey: "attack", chosen,
+			pcUuid: pc.uuid, foeName: "Rime Lord", foeText: "", chosen,
 			attacks: [
-				{ label: "conjured ice", formula: "d12+3", tags: [], piercing: 0, ignoresArmor: false, rollMode: "normal" },
+				{ label: "conjured ice", formula: "d12+3", tags: ["forceful"], piercing: 0, ignoresArmor: false, rollMode: "normal" },
 				{ label: "heat-drain", formula: "d12+1", tags: [], piercing: 0, ignoresArmor: true, rollMode: "normal" },
 			],
 		},
 	});
 
-	beforeEach(() => { globalThis.fromUuid = async () => pc; });
-
-	it("applies the PICKED attack's clause, not the primary one's", async () => {
+	it("carries the PICKED attack's clause onto the damage card, not the primary one's", async () => {
+		// Picking "heat-drain" over "conjured ice" is picking the blow armor does not stop, and a
+		// card that mitigated it anyway would make the choice meaningless.
 		const message = choiceCard();
 		expect(await resolveSufferChoice(message, 1)).toBe(true);
-		// heat-drain ignores armor: the full 9, where the other attack would have suggested 7.
-		expect(lastSuggested).toBe(9);
-		expect(applyDamageToActor).toHaveBeenCalledWith(pc, 9);
-		expect(lastDialogContent).toContain("heat-drain");
+
+		const flag = damageCard().flags[SCOPE].damage;
+		expect(flag.weapon).toMatchObject({ name: "heat-drain", ignoresArmor: true });
+		expect(flag.move).toBe("Rime Lord's attack");
+		expect(flag.selfHarm).toBe(true);
+		expect(flag.results[0]).toMatchObject({ uuid: "Actor.pim", name: "Pim", raw: 9 });
 	});
 
-	it("records which attack was taken so the card still says", async () => {
+	it("leaves the HP to the card's own button, which is the one that latches", async () => {
+		await resolveSufferChoice(choiceCard(), 0);
+		// Nothing applied yet: the card arrives with an empty latch and a live button.
+		expect(damageCard().flags[SCOPE].damage.applied).toEqual([]);
+		expect(damageCard().content).toContain("Take this damage");
+	});
+
+	it("records which attack was taken, so the whisper still says", async () => {
 		const message = choiceCard();
 		await resolveSufferChoice(message, 0);
 		expect(message.flags.sufferChoice.chosen).toBe(0);
-		expect(posted.at(-1).content).toContain("conjured ice");
+		expect(damageCard().content).toContain("conjured ice");
 	});
 
 	it("refuses a second pick once one is recorded", async () => {
 		const message = choiceCard(0);
 		expect(await resolveSufferChoice(message, 1)).toBe(false);
-		expect(applyDamageToActor).not.toHaveBeenCalled();
+		expect(damageCard()).toBeUndefined();
 	});
 
 	it("refuses an index the card does not offer", async () => {
 		expect(await resolveSufferChoice(choiceCard(), 7)).toBe(false);
-		expect(applyDamageToActor).not.toHaveBeenCalled();
+		expect(damageCard()).toBeUndefined();
 	});
 
-	it("applies nothing when the GM cancels the confirm dialog, and stays askable", async () => {
-		globalThis.Dialog = CancelledDialog;
-		const message = choiceCard();
-		expect(await resolveSufferChoice(message, 0)).toBe(false);
-		expect(applyDamageToActor).not.toHaveBeenCalled();
-		expect(message.flags.sufferChoice.chosen).toBe(null);
-	});
-
-	it("records the pick BEFORE the HP write, so a failed latch costs no damage", async () => {
+	it("records the pick BEFORE posting the blow, so a failed latch costs nothing", async () => {
+		// Two cards are two blows. Latching afterwards meant a rejected latch left one already
+		// posted and the whisper still askable.
 		const order = [];
 		const message = choiceCard();
 		message.setFlag.mockImplementation(async (scope, key, value) => {
 			order.push("latch"); message.flags[key] = value; return value;
 		});
-		applyDamageToActor.mockImplementation(async () => { order.push("damage"); return { oldHp: 12, newHp: 5 }; });
+		globalThis.ChatMessage.create.mockImplementation(async (data) => {
+			order.push("card"); posted.push(data); return { ...data, id: "posted" };
+		});
 
 		await resolveSufferChoice(message, 0);
-		expect(order).toEqual(["latch", "damage"]);
+		expect(order[0]).toBe("latch");
+		expect(order).toContain("card");
 	});
 
-	it("applies NO damage when the pick cannot be recorded", async () => {
+	it("posts nothing when the pick cannot be recorded", async () => {
 		const message = choiceCard();
 		message.setFlag.mockImplementation(async () => { throw new Error("no permission"); });
 
 		expect(await resolveSufferChoice(message, 0)).toBe(false);
-		expect(applyDamageToActor).not.toHaveBeenCalled();
+		expect(damageCard()).toBeUndefined();
 		expect(globalThis.ui.notifications.warn).toHaveBeenCalled();
+	});
+
+	it("posts nothing when the character has gone away", async () => {
+		globalThis.fromUuid = async () => null;
+		const message = choiceCard();
+		expect(await resolveSufferChoice(message, 0)).toBe(false);
+		expect(message.flags.sufferChoice.chosen).toBe(null);
+	});
+});
+
+// -- "Name the enemy's damage" --------------------------------------------------
+
+describe("the GM's number for a foe that prints no damage die", () => {
+	const amountCard = (dealt = null) => makeMessage({
+		sufferAmount: { pcUuid: pc.uuid, foeName: "Spirit of the Glade", dealt },
+	});
+
+	it("posts what they typed as an ordinary damage card", async () => {
+		const message = amountCard();
+		expect(await dealSufferedAmount(message, "5")).toBe(true);
+
+		const flag = damageCard().flags[SCOPE].damage;
+		expect(flag.move).toBe("Spirit of the Glade's attack");
+		expect(flag.selfHarm).toBe(true);
+		expect(damageCard().content).toContain("Take this damage");
+		expect(message.flags.sufferAmount.dealt).toBe(5);
+	});
+
+	it("leaves the armor to the card, so one rule meets every incoming blow", async () => {
+		// A flat number is a formula Roll takes, which is what keeps this on the one damage path:
+		// the weapon it rides carries no bypass, so wireApplyDamage subtracts armor as always.
+		await dealSufferedAmount(amountCard(), "5");
+		expect(damageCard().flags[SCOPE].damage.weapon).toMatchObject({ ignoresArmor: false, piercing: 0 });
+	});
+
+	it("takes a blow that turned out to cost nothing, and stays answered", async () => {
+		// 0 is a real answer. Tested against null rather than falsiness, or the card would come
+		// back askable after it had been answered.
+		const message = amountCard();
+		expect(await dealSufferedAmount(message, "0")).toBe(true);
+		expect(message.flags.sufferAmount.dealt).toBe(0);
+		expect(await dealSufferedAmount(message, "7")).toBe(false);
+	});
+
+	it("refuses a second answer once one is recorded", async () => {
+		expect(await dealSufferedAmount(amountCard(4), "9")).toBe(false);
+		expect(damageCard()).toBeUndefined();
+	});
+
+	it("floors a negative or unreadable entry at nothing rather than healing anybody", async () => {
+		const message = amountCard();
+		await dealSufferedAmount(message, "-4");
+		expect(message.flags.sufferAmount.dealt).toBe(0);
+
+		const blank = amountCard();
+		await dealSufferedAmount(blank, "");
+		expect(blank.flags.sufferAmount.dealt).toBe(0);
+	});
+
+	it("records the number BEFORE posting the blow, so a failed latch costs nothing", async () => {
+		const message = amountCard();
+		message.setFlag.mockImplementation(async () => { throw new Error("no permission"); });
+
+		expect(await dealSufferedAmount(message, "5")).toBe(false);
+		expect(damageCard()).toBeUndefined();
+		expect(globalThis.ui.notifications.warn).toHaveBeenCalled();
+	});
+
+	it("posts nothing when the character has gone away", async () => {
+		globalThis.fromUuid = async () => null;
+		const message = amountCard();
+		expect(await dealSufferedAmount(message, "5")).toBe(false);
+		expect(message.flags.sufferAmount.dealt).toBe(null);
 	});
 });

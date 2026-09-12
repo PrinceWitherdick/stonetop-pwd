@@ -4727,22 +4727,36 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	opacity: 0.55;
 }
 
-/* Lasting-injury reminder on a move's roll card (echoed from a wound's tag). A
-   reminder only — it doesn't change the roll — so it reads as a warm caution note. */
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-wound-notice {
-	border-left: 3px solid #a8544c;
+/* THE SHAPE OF A CARD NOTICE: an accent rule down the left, a subtitle in the same ink, and an
+   unbulleted list under it. Two of them exist — a lasting injury a roll should be read against,
+   and the fiction a weapon's tags owe the table — and both can sit on one card at once, so they
+   have to read as the same kind of thing. They differ ONLY in their ink, which each names as
+   `--st-notice-accent` below. The markup is one builder's (utils/chat.js#cardNoticeHtml), which
+   is what puts the shared class on both. */
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-card-notice {
+	border-left: 3px solid var(--st-notice-accent);
 	padding-left: 8px;
 }
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-wound-notice .cell__subtitle {
-	color: #a8544c;
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-card-notice .cell__subtitle {
+	color: var(--st-notice-accent);
 }
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-wound-notice .fa-triangle-exclamation {
+/* The heading's glyph, which the builder emits as the subtitle's first child — matched by
+   position rather than by name so a notice that changes its icon keeps its spacing. */
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-card-notice .cell__subtitle > i {
 	margin-right: 4px;
 }
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-wound-notice ul {
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-card-notice ul {
 	list-style: none;
 	margin: 3px 0 0;
 	padding-left: 2px;
+}
+
+/* Lasting-injury reminder on a move's roll card (echoed from a wound's tag). A
+   reminder only — it doesn't change the roll — so it reads as a warm caution note. */
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-wound-notice {
+	--st-notice-accent: #a8544c;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-wound-notice ul {
 	font-style: italic;
 }
 
@@ -5741,13 +5755,18 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	background: var(--st-btn-primary-bg-hover, var(--st-btn-primary-bg));
 }
 
-/* GM "Apply damage" reads as the primary action (slate CTA tokens). */
-:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .card-buttons button.stonetop-apply-damage {
+/* "Apply damage" / "Take this damage", and the GM's "Deal it" on a blow with no printed die,
+   all read as their card's primary action (slate CTA tokens) — each is the one thing its card is
+   for. The "Which attack?" buttons deliberately stay plain: they are a CHOICE among several, and
+   three slate CTAs side by side would be three competing primaries with no primary among them. */
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .card-buttons button.stonetop-apply-damage,
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .card-buttons button.stonetop-suffer-deal {
 	background: var(--st-btn-primary-bg);
 	border-color: var(--st-btn-primary-border);
 	color: var(--st-btn-primary-text);
 }
-:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .card-buttons button.stonetop-apply-damage:hover:not(:disabled) {
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .card-buttons button.stonetop-apply-damage:hover:not(:disabled),
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .card-buttons button.stonetop-suffer-deal:hover:not(:disabled) {
 	background: var(--st-btn-primary-bg-hover, var(--st-btn-primary-bg));
 }
 
@@ -5773,7 +5792,12 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	align-items: baseline;
 }
 
-/* Weapon-tag reminder cards (messy / forceful): fiction the HP number can't carry. */
+/* Weapon-tag fiction notes, printed INSIDE the damage card rather than as cards of their own:
+   the fiction the HP number can't carry, sitting with the number it qualifies. Wears the shared
+   `.stonetop-card-notice` shape (above), so all it sets here is its own ink. */
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-tag-notice {
+	--st-notice-accent: #a3341f;
+}
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-tag-note {
 	display: flex;
 	gap: 6px;
@@ -5781,10 +5805,20 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	margin: 2px 0;
 	font-size: var(--font-size-12);
 }
+/* One ink per tag, so a blow carrying three of them is three distinguishable lines rather than a
+   paragraph. The icon runs a shade brighter than its text, as the messy pair always did. */
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-messy { color: #7a1f14; }
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-messy .fa-burst { color: #a3341f; }
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-forceful { color: #4a3a12; }
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-forceful .fa-hand-fist { color: #7a5e1f; }
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-grabby { color: #1f4436; }
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-grabby .fa-link { color: #2f6b54; }
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-crude { color: #4a3b31; }
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-crude .fa-hammer { color: #75604f; }
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-reload { color: #2c3f57; }
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-reload .fa-hourglass-half { color: #45658c; }
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-dangerous { color: #6b3a10; }
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-dangerous .fa-triangle-exclamation { color: #9c5715; }
 /* Dotted underline signals the hover description for "problematic wound". */
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-problematic-wound {
 	text-decoration: underline dotted;
@@ -5792,7 +5826,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	cursor: help;
 }
 
-/* Weapon-choice + suffer-attack dialogs (both carry the .stonetop root class). */
+/* The weapon-choice dialog (carries the .stonetop root class). */
 .stonetop-weapon-choice-dialog .stonetop-weapon-options {
 	display: flex;
 	flex-direction: column;
@@ -5810,12 +5844,26 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-weapon-choice-dialog .stonetop-weapon-option:hover { background: rgba(159, 146, 117, 0.15); }
 .stonetop-weapon-choice-dialog .stonetop-weapon-name { font-weight: bold; }
 .stonetop-weapon-choice-dialog .stonetop-weapon-traits { font-size: 0.85em; opacity: 0.75; }
-.stonetop-suffer-attack-dialog .stonetop-suffer-field { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
-.stonetop-suffer-attack-dialog .stonetop-suffer-detail { opacity: 0.8; font-size: 0.9em; }
-.stonetop-suffer-attack-dialog .stonetop-suffer-fiction,
 :is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-fiction {
 	font-style: italic;
 	opacity: 0.75;
+	font-size: 0.9em;
+}
+
+/* ── "Name the enemy's damage": the GM's number for a foe with none ─────────── */
+
+/* The 22 spirits print "none" on their damage line, and a Clash rolled with nothing targeted has
+   no stat block at all — so the number is typed here rather than rolled. A stacked label so the
+   field reads under its own words, and the armor note beneath it in the same fine print the
+   fiction line wears, because what lands is that number minus the character's armor. */
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 6px;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-detail {
+	opacity: 0.8;
 	font-size: 0.9em;
 }
 
@@ -24605,10 +24653,10 @@ li.question-bullet::before {
    summary on hover (data-tooltip, set by location-tooltips.js) and opens the
    entry on click. No underline affordance — the hover background is the only
    hint — per author preference. Covers journal page content, the Setting
-   Overview dialog (a renderer over that same journal), and the Welcome guide's
-   premise lead — they share this chip-stripping reset (the lead overrides the
-   affordance to bold below). */
-:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-welcome-lead, .stonetop-npc-sheet) a.content-link {
+   Overview dialog (a renderer over that same journal), the Welcome guide's
+   premise lead, and the NPC and monster sheets — they share this chip-stripping
+   reset (the lead and the two sheets override the affordance to bold below). */
+:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-welcome-lead, .stonetop-npc-sheet, .stonetop-monster-sheet) a.content-link {
 	background: none;
 	border: none;
 	border-radius: 0;
@@ -24619,21 +24667,21 @@ li.question-bullet::before {
 	white-space: normal;
 	cursor: pointer;
 }
-:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-npc-sheet) a.content-link:hover {
+:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-npc-sheet, .stonetop-monster-sheet) a.content-link:hover {
 	background-color: rgba(0, 0, 0, 0.07);
 	text-shadow: none;
 }
 /* Hide the leading document/book icon that Foundry injects into the chip. */
-:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-welcome-lead, .stonetop-npc-sheet) a.content-link > i {
+:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-welcome-lead, .stonetop-npc-sheet, .stonetop-monster-sheet) a.content-link > i {
 	display: none;
 }
 /* A broken link (target missing) keeps Foundry's warning treatment so it's still
    obviously broken rather than masquerading as a normal cross-reference. */
-:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-npc-sheet) a.content-link.broken {
+:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-npc-sheet, .stonetop-monster-sheet) a.content-link.broken {
 	border-bottom: 1px dashed var(--color-text-bad, #aa2222);
 	color: var(--color-text-bad, #aa2222);
 }
-:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-npc-sheet) a.content-link.broken > i {
+:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-npc-sheet, .stonetop-monster-sheet) a.content-link.broken > i {
 	display: inline;
 }
 /* A cross-link a player can't open (a Location or Lore entry they haven't been
@@ -24642,7 +24690,7 @@ li.question-bullet::before {
    (restrict-content-links.js). It reads as normal prose; the help cursor is the
    only hint there's a description on hover. The bestiary codex is flattened to
    bare text instead, so it gets no such treatment. */
-:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-welcome-lead, .stonetop-npc-sheet) .content-summary[data-tooltip] {
+:is(.journal-page-content, .stonetop-so-entry-body, .stonetop-welcome-lead, .stonetop-npc-sheet, .stonetop-monster-sheet) .content-summary[data-tooltip] {
 	cursor: help;
 }
 
@@ -25478,6 +25526,15 @@ li.question-bullet::before {
 .stonetop-monster-sheet {
 	min-height: 100%;
 }
+
+/* Cross-links in the stat block's prose (Damage, Special Qualities, Instinct, the move
+   list, Notes) read like the journal's bold keywords rather than Foundry's boxed "book
+   chip" — a lone chip mid-sentence, as in "Special Qualities: [book] Fae nature; immune
+   to cold", breaks the line into furniture. `.stonetop-monster-sheet` is on the
+   chip-stripping `:is(…)` lists themselves, so all this adds is the affordance — bold,
+   matching the NPC sheet. Sheet-wide, so a link doesn't change costume between the stat
+   lines and Notes. */
+.stonetop-monster-sheet a.content-link { font-weight: bold; }
 
 /* Clamp the stat-block window so it can't be resized below the width its header
    needs. The header packs a 150px portrait, two fixed stat boxes (HP 132 + Armor
@@ -32747,8 +32804,10 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* Authored move cards + empty state. */
-.stonetop .create-monster .cm-move-list { display: flex; flex-direction: column; gap: 0.5rem; }
-.stonetop .create-monster .cm-move-list.is-empty::before {
+.stonetop .create-monster .cm-move-list,
+.stonetop .create-monster .cm-attack-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.stonetop .create-monster .cm-move-list.is-empty::before,
+.stonetop .create-monster .cm-attack-list.is-empty::before {
 	content: attr(data-empty);
 	display: block;
 	padding: 0.6rem 0.7rem;
@@ -32758,7 +32817,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-style: italic;
 	opacity: 0.62;
 }
-.stonetop .create-monster .cm-move-card {
+.stonetop .create-monster .cm-move-card,
+.stonetop .create-monster .cm-attack-card {
 	display: flex;
 	flex-direction: column;
 	gap: 0.35rem;
@@ -32767,13 +32827,16 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	border-radius: 6px;
 	background: color-mix(in srgb, var(--st-btn-primary-bg, slategrey) 5%, transparent);
 }
-.stonetop .create-monster .cm-move-card-head { display: flex; align-items: center; gap: 0.4rem; }
-.stonetop .create-monster .cm-move-name {
+.stonetop .create-monster .cm-move-card-head,
+.stonetop .create-monster .cm-attack-card-head { display: flex; align-items: center; gap: 0.4rem; }
+.stonetop .create-monster .cm-move-name,
+.stonetop .create-monster .cm-attack-name {
 	flex: 1 1 auto;
 	min-width: 0;
 	font-weight: 700;
 }
-.stonetop .create-monster .cm-move-remove {
+.stonetop .create-monster .cm-move-remove,
+.stonetop .create-monster .cm-attack-remove {
 	flex: 0 0 auto;
 	display: inline-flex;
 	align-items: center;
@@ -32790,7 +32853,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	box-shadow: none;
 	transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
-.stonetop .create-monster .cm-move-remove:hover {
+.stonetop .create-monster .cm-move-remove:hover,
+.stonetop .create-monster .cm-attack-remove:hover {
 	opacity: 1;
 	border-color: var(--st-red-border);
 	background: var(--st-red-bg);
@@ -32804,7 +32868,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-size: 0.86rem;
 	line-height: 1.35;
 }
-.stonetop .create-monster .cm-move-add {
+.stonetop .create-monster .cm-move-add,
+.stonetop .create-monster .cm-attack-add {
 	align-self: flex-start;
 	margin-top: 0.5rem; /* separate from the move list / cards above it */
 	width: fit-content; /* core forces width:100% on buttons; keep this add-button compact */
@@ -32820,10 +32885,20 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-size: 0.82rem;
 	box-shadow: none;
 }
-.stonetop .create-monster .cm-move-add:hover {
+.stonetop .create-monster .cm-move-add:hover,
+.stonetop .create-monster .cm-attack-add:hover {
 	border-color: var(--st-btn-primary-border, #4f5b66);
 	background: color-mix(in srgb, var(--st-btn-primary-bg, slategrey) 12%, transparent);
 	box-shadow: none;
+}
+
+/* An extra attack's own die sits beside its name, narrow: it holds "d10+2" at the widest, and
+   letting it share the name's flex would steal the room the name actually needs. */
+.stonetop .create-monster .cm-attack-die {
+	flex: 0 0 5.2rem;
+	min-width: 0;
+	text-align: center;
+	font-weight: 700;
 }
 
 /* Pinned footer: the section split grows, this stays put at natural height. */

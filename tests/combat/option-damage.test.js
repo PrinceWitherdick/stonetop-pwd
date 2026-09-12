@@ -65,7 +65,37 @@ describe("readOptionDamage: the bullets that owe a damage roll", () => {
 	it("carries the armor and fiction clauses the books print beside the number", () => {
 		const lava = readOptionDamage("They take d10+2 damage (grabby, messy, 3 piercing)");
 		expect(lava).toMatchObject({ formula: "1d10+2", piercing: 3, ignoresArmor: false });
-		expect(lava.tags).toEqual(["messy"]);
+		// Every fiction tag on the line, not just the two the damage card used to remind about:
+		// being grabbed is as much a consequence of this blow as being torn up by it, and the
+		// card prints both (combat/attack-flow.js#tagNoticesHtml). `3 piercing` is NOT among
+		// them — it rides the number and the card's fine print already says it.
+		//
+		// In FICTION_DAMAGE_TAGS order rather than the line's, which is what makes a move's
+		// printed bullet and a stat block's damage line grow the same notes in the same sequence:
+		// both are read by utils/damage.js#fictionTagsIn, and this line prints them the other way
+		// round from the way that list declares them.
+		expect(lava.tags).toEqual(["messy", "grabby"]);
+	});
+
+	// FOUR OF THE SIX ARE ORDINARY ENGLISH WORDS, which is new: the scan was `messy|forceful` and
+	// could afford a whole sentence, and `crude`, `reload`, `dangerous` and `grabby` cannot. A
+	// bullet is prose, so the tags are read only where a tag is SAID — inside the parenthetical,
+	// the same place a stat block prints them.
+	it("reads the tags off the parenthetical, not off the sentence around it", () => {
+		const said = readOptionDamage("They take 2d4 damage (messy, dangerous)");
+		expect(said.tags).toEqual(["messy", "dangerous"]);
+
+		const merelyUsed = readOptionDamage("They take 2d4 damage and are left in a dangerous position");
+		expect(merelyUsed.tags).toEqual([]);
+	});
+
+	it("does not read a treasure's own tags onto the damage its description rolls", () => {
+		// Bright-sticks in shape: the ITEM is tagged `fragile, dangerous, Value 1`, and the flare
+		// it describes deals `d8 damage (messy)`. Only the blast's tag belongs on the damage card
+		// — the item's `dangerous` describes carrying the box, not being burned by one.
+		const brightSticks = readOptionDamage(
+			"Bright-sticks (fragile, dangerous, Value 1): snap one and whoever holds it takes d8 damage (messy).");
+		expect(brightSticks.tags).toEqual(["messy"]);
 	});
 
 	it("says when there is no die to throw", () => {
@@ -150,12 +180,13 @@ describe("rollOptionDamage: the card a printed option's damage lands on", () => 
 
 // -- Who may press Apply ------------------------------------------------------
 
-function fakeCard({ selfHarm, results }) {
+function fakeCard({ selfHarm, results, canUserModify }) {
 	const flags = { [SCOPE]: { damage: { move: "Danu's Grasp", results, applied: [], selfHarm, weapon: null } } };
 	return {
 		isOwner: true,
 		getFlag: (scope, key) => flags[scope]?.[key],
 		setFlag: vi.fn(async () => {}),
+		...(canUserModify ? { canUserModify } : {}),
 	};
 }
 
@@ -282,6 +313,21 @@ describe("wireApplyDamage: exactly one live button per card", () => {
 		globalThis.game = { ...globalThis.game, user: GM, users: fakeUsers([GM, { ...PIM, active: false }]) };
 		const { btn, root } = fakeButton();
 		wireApplyDamage(fakeCard({ selfHarm: true, results }), root);
+
+		expect(btn.disabled).toBe(false);
+	});
+
+	// A card the GM authored and a character the PLAYER owns: the incoming attack a "Which
+	// attack?" pick posts. Electing the player on ownership alone disabled the GM's button AND
+	// handed the live one to somebody whose latch the message would refuse — two dead buttons on
+	// a card somebody has to press.
+	it("keeps a GM-authored card the GM's, even when the player owns the character", () => {
+		const results = ownedBy("pim");
+		globalThis.game = { ...globalThis.game, user: GM, users: fakeUsers([GM, PIM]) };
+		const { btn, root } = fakeButton();
+		wireApplyDamage(fakeCard({
+			selfHarm: true, results, canUserModify: (user) => user.isGM === true,
+		}), root);
 
 		expect(btn.disabled).toBe(false);
 	});

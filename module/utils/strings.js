@@ -45,6 +45,16 @@ export function escapeRegExp(v) {
 }
 
 /**
+ * A signed number as the book prints it: "+2", "+0", "-1".
+ *
+ * Here rather than beside the roll code because it is not a roll's business: a stat score on the
+ * sheet, a modifier on a chat card and a seasonal swing in the chronicle all print the same way,
+ * and the one place they can all reach without dragging in the chat/Foundry half of the system is
+ * this module. `roll-engine.js` re-exports it under its old name for the callers that had it.
+ */
+export function sign(n) { return n >= 0 ? `+${n}` : `${n}`; }
+
+/**
  * A pattern that matches `word` ONLY as a whole word, under Unicode letter boundaries.
  *
  * WHOLE WORDS ONLY, and this is not fussiness. "smothered her at the mill" contains "mother", and a

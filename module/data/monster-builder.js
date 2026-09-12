@@ -7,7 +7,7 @@
 // The dialog owns presentation; this module owns the arithmetic and the book's
 // numbers, so the two never drift and the math is verifiable in isolation.
 
-import { DIE_ORDER, stepDie as stepLadder } from "../utils/damage-die.js";
+import { DIE_ORDER, isWholeDamageDie, joinAttackProse, stripDamageDice, stepDie as stepLadder } from "../utils/damage-die.js";
 import { byId as _byId, signedBonus } from "./table-utils.js";
 
 // ── Step 3/4/6: organization (every monster has exactly one) ──────────────────
@@ -135,6 +135,52 @@ function _splitCustom(text) {
 	return String(text ?? "").split(",");
 }
 
+/**
+ * A typed attack name, cleaned up enough that it cannot corrupt the line it is about to head.
+ *
+ * The damage line is PROSE that gets read back apart again — by the sheet, for its roll buttons,
+ * and by the combat flow, for the blow a character just suffered — so the two things a name must
+ * not smuggle in are the two the readers key on:
+ *   a DIE      "claws d6" ahead of a d8+2 line makes d6 the first die in the string, so every
+ *              reader rolls d6 while `rollFormula` still says d8+2. EVERY die goes, not the
+ *              first: a name is free text, so "claws d6 and fangs d10" is a thing a GM types,
+ *              and taking one die out of it leaves the other one heading the line.
+ *   PARENS     the tag list is found by counting depth; an unclosed "(" swallows the rest.
+ * A trailing comma goes too, since the name is about to be followed by a space and a die.
+ */
+function _cleanAttackName(input) {
+	return stripDamageDice(input)
+		.replace(/[()]/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
+		.replace(/[,;:]+$/, "")
+		.trim();
+}
+
+/**
+ * One of the creature's OTHER printed attacks, written the way the book writes it.
+ *
+ * It takes the creature's die unless the GM typed one of its own, because that is how the book
+ * goes: the Rime Lord's two blows are d12+3 and d12+1, the Assassin's d10 and d8. A typed die is
+ * only honoured if it is a whole die expression — prose in that field would reach `new Roll` and
+ * throw at the table, and falling back to the creature's die is a preview that visibly does not
+ * change, which the live summary shows before anything is created.
+ *
+ * The creature-level advantage note rides along, since the picks that produce it ("Relentless or
+ * overwhelming", "Abhors violence") describe the CREATURE and not one of its blows.
+ */
+function _renderExtraAttack(extra, { rollFormula, advStr }) {
+	const name = _cleanAttackName(extra?.name);
+	const typed = String(extra?.die ?? "").trim();
+	const tags = _joinTags(extra?.tags ?? []);
+	// An entry that says nothing is not a blow. Left in, it would print as the creature's own die
+	// with no name beside it — "claws d8 or d8" — which every reader of the line then counts as a
+	// second attack, and the GM gets a phantom button to press.
+	if (!name && !tags.length && !typed) return "";
+	const die = isWholeDamageDie(typed) ? typed.replace(/\s+/g, "") : rollFormula;
+	return `${name ? `${name} ` : ""}${die}${advStr}${tags.length ? ` (${tags.join(", ")})` : ""}`;
+}
+
 // Join tags in first-seen order, dropping blanks and case-insensitive dupes.
 function _joinTags(parts) {
 	const seen = new Set();
@@ -155,7 +201,8 @@ function _joinTags(parts) {
  *
  * @param {object} sel  Selections from the dialog:
  *   organization, size, natureTags[], notableTags[], customTags,
- *   hpMods[], armorBase, armorSource, armorMods[], damageTags[], damageMods[],
+ *   hpMods[], armorBase, armorSource, attackName, damageTags[], damageMods[],
+ *   extraAttacks[] ({ name, die, tags[] } — the creature's other printed blows),
  *   concept, name, instinct, creatureType, moves[]
  * @returns {{
  *   hp:number, armorValue:number, armorSource:string,
@@ -216,7 +263,21 @@ export function computeMonster(sel = {}) {
 	const rollFormula = `${damageDie}${bonusStr}`;
 	const advStr = rollMode === "adv" ? " w/advantage" : rollMode === "dis" ? " w/disadvantage" : "";
 	const tagStr = damageTags.length ? ` (${damageTags.join(", ")})` : "";
-	const damageValue = `${rollFormula}${advStr}${tagStr}`;
+	// WHAT IT HITS WITH, first, exactly where every printed stat block puts it: "rusty sword d8+2
+	// (close, forceful)". Without a name the line is a bare die, and everything downstream that
+	// reads the damage line for the blow's NAME comes back empty-handed — the combat flow's
+	// "which attack?" buttons say nothing, and the damage card's fine print names no weapon.
+	const attackName = _cleanAttackName(sel.attackName);
+	const primary = `${attackName ? `${attackName} ` : ""}${rollFormula}${advStr}${tagStr}`;
+
+	// …and then any OTHER blows this creature is printed with. 81 of the 212 shipped stat blocks
+	// list more than one — the Assassin's "dagger d10 (hand, 1 piercing) or garrote d8 (hand,
+	// grabby, ignores armor)" — and each is a separate die with its own armor clause, which is
+	// why the sheet gives each its own roll button and Clash asks which one struck.
+	const damageValue = joinAttackProse([
+		primary,
+		...(sel.extraAttacks ?? []).map(extra => _renderExtraAttack(extra, { rollFormula, advStr })),
+	]);
 
 	// ── Tag line (organization + size + nature + notable + custom) ──────────────
 	const tags = _joinTags([

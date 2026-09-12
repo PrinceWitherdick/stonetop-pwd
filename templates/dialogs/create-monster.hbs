@@ -173,6 +173,10 @@
 			{{!-- Step 6: damage --}}
 			<section class="cm-section" data-tab="damage" hidden>
 				<p class="cm-section-hint">Step 6 &middot; The base die comes from its organization; shape the attack.</p>
+				<label class="cm-field">
+					<span class="cm-label">What does it attack with?</span>
+					<input type="text" name="attackName" placeholder="e.g. rusty sword, claws and bite, choking grip">
+				</label>
 				<div class="cm-field">
 					<span class="cm-label">Range <em>(all that apply)</em></span>
 					<div class="cm-chip-grid">
@@ -206,6 +210,41 @@
 						{{/each}}
 					</div>
 				</div>
+
+				{{!-- Other printed blows. The book gives a monster one damage value; plenty of its
+				      stat blocks then print a second ("dagger d10 (hand, 1 piercing) or garrote d8
+				      (hand, grabby, ignores armor)"), each with its own die and armor clause. --}}
+				<div class="cm-field">
+					<span class="cm-label">Other attacks <em>(optional)</em></span>
+					<div class="cm-attack-list" data-empty="Just the one attack. Add another if it fights more than one way."></div>
+					<button type="button" class="cm-attack-add"><i class="fas fa-plus"></i> Add another attack</button>
+				</div>
+
+				{{!-- Cloned per card by the dialog; kept here so the markup lives with the rest. --}}
+				<template class="cm-attack-tpl">
+					<div class="cm-attack-card">
+						<div class="cm-attack-card-head">
+							<input type="text" class="cm-attack-name" placeholder="What it attacks with (e.g. bow)">
+							<input type="text" class="cm-attack-die" placeholder="die"
+							       data-tooltip="Its own die, if it differs. Leave blank to use the creature's." data-tooltip-direction="UP">
+							<button type="button" class="cm-attack-remove" data-tooltip="Remove this attack" aria-label="Remove this attack"><i class="fas fa-xmark"></i></button>
+						</div>
+						<div class="cm-chip-grid">
+							{{#each damageRangeTags}}
+							<label class="cm-chip" data-tooltip="{{hint}}" data-tooltip-direction="UP">
+								<input type="checkbox" class="cm-attack-tag" value="{{id}}">
+								<span>{{label}}</span>
+							</label>
+							{{/each}}
+							{{#each damageEffectTags}}
+							<label class="cm-chip" data-tooltip="{{hint}}" data-tooltip-direction="UP">
+								<input type="checkbox" class="cm-attack-tag" value="{{id}}">
+								<span>{{label}}</span>
+							</label>
+							{{/each}}
+						</div>
+					</div>
+				</template>
 			</section>
 
 			{{!-- Step 8: instinct --}}

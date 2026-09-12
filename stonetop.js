@@ -75,7 +75,7 @@ import { grantsWholeList, paintPickTally, pickLimitFor, releaseOverLimit, tierOf
 import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
-import { wireAttackConfirm, wireApplyDamage, wireSufferAttack, wireSufferChoice, rollOptionDamage } from "./module/combat/attack-flow.js";
+import { wireAttackConfirm, wireApplyDamage, wireSufferAmount, wireSufferChoice, rollOptionDamage } from "./module/combat/attack-flow.js";
 import { markQuestionBullets } from "./module/utils/question-bullets.js";
 import { wrapGlyphTextContainers } from "./module/utils/glyphs.js";
 import { applyJournalSpiralBullets, resolveEntry } from "./module/utils/journal-spiral-bullets.js";
@@ -1948,7 +1948,7 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	wireDyingPrompt(message, html);
 	wireAttackConfirm(message, html);
 	wireApplyDamage(message, html);
-	wireSufferAttack(message, html);
+	wireSufferAmount(message, html);
 	// ...and the GM-whispered "Which attack?" card a foe with more than one printed attack posts
 	// instead of guessing which die it swung (attack-flow.js#postSufferChoiceCard).
 	wireSufferChoice(message, html);

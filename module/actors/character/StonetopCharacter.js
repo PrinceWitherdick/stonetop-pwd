@@ -57,7 +57,7 @@ import {CharacterOrigin} from "./CharacterOrigin.js";
 import {CharacterPossessions} from "./CharacterPossessions.js";
 import {grantsToCreate, grantSourceMap, grantAdoptionKeys, itemGrantKey} from "./possession-grants.js";
 import {CharacterInventory} from "./CharacterInventory.js";
-import {maybeBeginAttack, attackMoveFor} from "../../combat/attack-flow.js";
+import {maybeBeginAttack, maybeCounterOnMiss, attackMoveFor} from "../../combat/attack-flow.js";
 import {defendReadinessHold, defendReadinessCap} from "../../combat/defend-readiness.js";
 import {classifyResult} from "../../utils/roll-engine.js";
 import {xpToLevelUp, withXpLock} from "../../utils/xp.js";
@@ -2416,6 +2416,13 @@ export class StonetopCharacter {
 		if (!descriptionOnly && item?.name === _DEFEND_MOVE_NAME && Number.isFinite(roll?.total)) {
 			await this._maybeHoldDefendReadiness(roll.total);
 		}
+
+		// Clash's 6-: "your maneuver fails and you suffer your enemy's attack". A flat consequence
+		// with nothing in the tier to decide, so it fires off the dice rather than off a button —
+		// the same after-the-roll shape Defend's Readiness above uses, and for the same reason.
+		// After the roll card and its miss XP, which rollStat has already posted, so the chat
+		// reads in the order the move does.
+		if (!descriptionOnly) await maybeCounterOnMiss(this._actor, item, roll, attackExtra);
 
 		if (forward !== 0) {
 			await this._actor.update({ "system.attributes.forward.value": 0 }, { stonetopMove: item?.name });

@@ -87,20 +87,23 @@ describe("what a hit tier puts on the card", () => {
 		}
 	});
 
-	it("Clash: keeps the two counter-attacks its tiers state unconditionally", () => {
-		// The 7-9 suffers the enemy's attack whatever the player picks, and the 6- does nothing
-		// else at all. Those are the tier's own numbers, not a pick's — so they stay on the button.
+	it("Clash: keeps the counter-attack its 7-9 states unconditionally", () => {
+		// The 7-9 suffers the enemy's attack whatever the player picks. That is the tier's own
+		// number, not a pick's — so it stays on the button, and the 10+ says it is not there.
 		const clash = buildTierActions(attackMoveFor(item("Clash", "basic")));
 		expect(clash.success).toContain('data-counter="0"');
 		expect(clash.partial).toContain('data-counter="1"');
-		expect(clash.failure).toContain('data-action="suffer"');
 	});
 
-	it("the other four have nothing to suffer, and no button on a miss", () => {
-		for (const [name, moveType] of ATTACKS.slice(1)) {
+	it("no tier anywhere offers to be hit, Clash's own miss included", () => {
+		// "On a 6-, your maneuver fails and you suffer your enemy's attack" used to be a button,
+		// which made a flat consequence read as an offer and left the blow unstruck whenever the
+		// table moved on without pressing it. Clash's miss fires its own counter-attack now
+		// (maybeCounterOnMiss), so its failure tier is as bare as the other four's.
+		for (const [name, moveType] of ATTACKS) {
 			const actions = buildTierActions(attackMoveFor(item(name, moveType)));
-			expect(actions.success).toContain('data-action="roll"');
-			expect(actions.success).not.toContain('data-action="suffer"');
+			expect(actions.success).toContain("stonetop-attack-confirm");
+			for (const html of Object.values(actions)) expect(html).not.toContain("suffer");
 			// 6- is "the GM makes a move" (or, for Let Fly, nothing automatic): no button at all.
 			expect(actions.failure).toBeUndefined();
 		}
@@ -250,7 +253,7 @@ describe("maybeBeginAttack: Ambush", () => {
 		expect(attack.moveKey).toBe("ambush");
 		expect(attack.weapon.name).toBe("Knife or dagger");
 		expect(attack.targets).toEqual([]);
-		expect(begun.tierActions.success).toContain('data-action="roll"');
+		expect(begun.tierActions.success).toContain("stonetop-attack-confirm");
 	});
 
 	it("aborts when the deal-or-roll window is closed rather than answered", async () => {

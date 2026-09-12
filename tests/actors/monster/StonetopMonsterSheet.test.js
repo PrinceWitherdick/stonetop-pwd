@@ -177,6 +177,82 @@ describe("StonetopMonsterSheet", () => {
 		expect(data.stonetop.multiDamage).toBe(true);
 	});
 
+	it("gives the far side of an 'or' its own mode, and its own die to roll", async () => {
+		// The Assassin, verbatim. The garrote is a second printed attack — a different die, and it
+		// ignores armor — but the sheet's own comma-only split read the whole line as ONE mode, so
+		// the dagger got the only roll button and the garrote could not be rolled at all.
+		const actor = {
+			system: {
+				attributes: { damage: { value: "dagger d10 (hand, 1 piercing) or garrote d8 (hand, grabby, ignores armor)" } },
+			},
+			items: makeItems([]),
+		};
+
+		const data = await makeSheet(actor).getData();
+
+		expect(data.stonetop.damageModes).toEqual([
+			{ text: "dagger d10 (hand, 1 piercing)", formula: "d10", rollMode: "" },
+			{ text: "garrote d8 (hand, grabby, ignores armor)", formula: "d8", rollMode: "" },
+		]);
+		expect(data.stonetop.multiDamage).toBe(true);
+	});
+
+	it("keeps an 'or' that only names one blow twice as a single mode", async () => {
+		// The Bear of Winter: one attack under two names, and the "or" inside the tag list is not a
+		// separator either. Splitting here would invent a die-less mode and halve the real one.
+		const actor = {
+			system: {
+				attributes: { damage: { value: "bite or maul d12+5 (close, hand or reach, forceful, messy)" } },
+			},
+			items: makeItems([]),
+		};
+
+		const data = await makeSheet(actor).getData();
+
+		// And it prints the book's own wording — "bite or maul", not a reconstructed "bite, maul".
+		expect(data.stonetop.damageModes).toEqual([
+			{ text: "bite or maul d12+5 (close, hand or reach, forceful, messy)", formula: "d12+5", rollMode: "" },
+		]);
+		expect(data.stonetop.multiDamage).toBe(false);
+	});
+
+	it("lists a printed attack that rolls nothing, with no roll button of its own", async () => {
+		// The Thraulgwyn Raider's net: it is thrown, it grabs, and it deals no damage. A blank
+		// formula is what drops the die icon in the template, so the line shows without one.
+		const actor = {
+			system: {
+				attributes: { damage: { value: "hair-rope net (thrown, crude, grabby), bite d6 (hand)" } },
+			},
+			items: makeItems([]),
+		};
+
+		const data = await makeSheet(actor).getData();
+
+		expect(data.stonetop.damageModes).toEqual([
+			{ text: "hair-rope net (thrown, crude, grabby)", formula: "", rollMode: "" },
+			{ text: "bite d6 (hand)", formula: "d6", rollMode: "" },
+		]);
+	});
+
+	it("carries each mode's own advantage, not the first one's", async () => {
+		// Mkhalang, verbatim: both blows roll at disadvantage, and each button has to know it.
+		const actor = {
+			system: {
+				attributes: {
+					damage: {
+						value: "trample d8+3 w/disadvantage (hand, close) or ice-tusks d8+7 w/disadvantage (reach, forceful, messy, crude, 1 piercing)",
+					},
+				},
+			},
+			items: makeItems([]),
+		};
+
+		const data = await makeSheet(actor).getData();
+
+		expect(data.stonetop.damageModes.map(mode => `${mode.formula} ${mode.rollMode}`))
+			.toEqual(["d8+3 dis", "d8+7 dis"]);
+	});
+
 	it("flags a damage mode that notes disadvantage on its die", async () => {
 		const actor = {
 			system: {

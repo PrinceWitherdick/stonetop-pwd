@@ -1,21 +1,10 @@
-/**
- * Canonical Stonetop damage-die grammar — a die expression like `d8`, `2d6`,
- * `d10+2`, or `d8 - 1` (whitespace around the modifier is tolerated, matching how
- * the transcribed stat blocks print it). Shared by the character Followers tab
- * (_parseFollowerDamage) and the monster stat-block parser so the two recognise
- * exactly the same grammar instead of drifting apart.
- *
- * Stateless (no `g` flag), so it is safe to reuse the single instance across
- * `.test()` / `.match()` calls.
- */
 import {getStonetopProsperity} from "./world.js";
+import {DAMAGE_DIE_RE, isWholeDamageDie, attackSeparatorRe} from "./damage-die.js";
 
-export const DAMAGE_DIE_RE = /\d*d\d+(?:\s*[+-]\s*\d+)?/i;
-
-/** {@link DAMAGE_DIE_RE} anchored, for "is this string ONLY a die expression?". Built once:
- *  it is stateless for the same reason DAMAGE_DIE_RE is, and it is tested on every keystroke
- *  in the damage window's modifier and extra-dice fields. */
-const _WHOLE_DAMAGE_DIE_RE = new RegExp(`^${DAMAGE_DIE_RE.source}$`, "i");
+// The canonical damage-die grammar is DEFINED in damage-die.js (which has no Foundry in it, so
+// the Foundry-free Dangers worksheet can share it) and re-exported here, where most of the
+// system already reaches for it.
+export {DAMAGE_DIE_RE};
 
 /** The first die expression in a free-text damage string, or null. */
 export function dieFromDamage(str) {
@@ -41,7 +30,7 @@ export function normalizeDamageBonusDice(input) {
 	if (!raw) return "";
 	const negative = raw.startsWith("-");
 	const body = raw.replace(/^[+-]\s*/, "");
-	if (!_WHOLE_DAMAGE_DIE_RE.test(body)) return "";
+	if (!isWholeDamageDie(body)) return "";
 	return `${negative ? "-" : ""}${body.replace(/\s+/g, "")}`;
 }
 
@@ -192,10 +181,79 @@ const BONUS_DAMAGE_RE = /\bextra\s+damage\b|\badds?\b[^.;]*\bdamage\s+roll\b/i;
 export const IGNORES_ARMOR_RE = /\bignores?\s+armou?r\b/i;
 export const PIERCING_RE = /\b(\d+)\s+piercing\b/i;
 
-// The two flavour tags that only live in the fiction, and so are the two the damage card reminds
-// the table about (combat/attack-flow.js#TAG_REMINDERS). `+N damage` and piercing ride the
-// numbers and need no reminder.
-const FICTION_TAG_RE = /\b(messy|forceful)\b/gi;
+/**
+ * The flavour tags that live ONLY in the fiction, and so the ones the damage card reminds the
+ * table about (combat/attack-flow.js#TAG_NOTES, which carries one note per name here).
+ *
+ * `+N damage`, piercing and "ignores armor" are NOT on this list: they ride the numbers and are
+ * already printed in the card's own fine print (attack-flow.js#damageRowDetail), so a note would
+ * be saying twice what the card says once. Neither is `area`, which is said by the several
+ * targets the card is already rolling for, nor `awkward`, which is about swinging the thing and
+ * so applies before the roll rather than to the blow that landed.
+ *
+ * THE ORDER HERE IS THE ORDER THEY PRINT IN, and it is this list's rather than the book's: the
+ * Bear of Winter's "(close, hand, reach, forceful, grabby, messy, 1 piercing)" and the Stone
+ * Sentinel's "(hand, close, grabby, messy, forceful, 3 piercing)" are the same three
+ * consequences, and a table reading one after the other should meet them the same way down.
+ */
+export const FICTION_DAMAGE_TAGS = ["messy", "forceful", "grabby", "crude", "reload", "dangerous"];
+
+// Read out of a printed line by WORD BOUNDARY rather than matched whole, because the books don't
+// always print a tag alone in its slot: the Nine-Fingered Stranger swings "(tags by weapon,
+// +forceful)" and the Adventurer "(hand, close, maybe forceful or messy)". Both are the tag said
+// with a qualifier, and a lookup keyed on the whole slot drops them without a word.
+const FICTION_TAG_RE = new RegExp(String.raw`\b(${FICTION_DAMAGE_TAGS.join("|")})\b`, "gi");
+
+/**
+ * The fiction tags a printed line carries, in FICTION_DAMAGE_TAGS order.
+ *
+ * ONE SCAN FOR BOTH READERS. A move's ticked bullet is read off a sentence and a stat block's is
+ * read off a tag list, but "which of these six words is in there" is the same question and the
+ * word-boundary rule above is the same answer; asked twice it is two chances to drift, and the
+ * card that prints the notes (combat/attack-flow.js#tagNoticesHtml) was compiling six regexes of
+ * its own per post to ask it.
+ *
+ * The ORDER IS THIS LIST'S, not the line's, which is the reason to filter the list rather than
+ * collect the matches: the Bear of Winter and the Stone Sentinel print the same three
+ * consequences in different sequences, and a table meeting them should meet them the same way
+ * down whichever one just swung.
+ *
+ * @param {string} text  a TAG LIST — a stat block's parenthetical, or one joined from an item's
+ *   tags. Not free prose: see {@link _tagListsIn} for why a bullet is narrowed down first.
+ * @returns {string[]}   the tags present, deduped, in declaration order.
+ */
+export function fictionTagsIn(text) {
+	const found = new Set(Array.from(String(text ?? "").matchAll(FICTION_TAG_RE), m => m[1].toLowerCase()));
+	return FICTION_DAMAGE_TAGS.filter(tag => found.has(tag));
+}
+
+/**
+ * The tag list printed WITH a damage expression — the parenthetical the die sits inside, or the
+ * one that follows it. "" when the die was printed with no tags at all.
+ *
+ * A move's bullet is a sentence, and four of the six fiction tags are ordinary English words. Read
+ * off the whole bullet, "they take 2d4 damage and are left in a dangerous position" grows a
+ * "Dangerous. It causes trouble and collateral damage…" note on the damage card. When two of the
+ * six were `messy` and `forceful` the scan could afford a whole sentence; with `crude`, `reload`,
+ * `dangerous` and `grabby` in it, it cannot.
+ *
+ * NOT EVERY PARENTHETICAL EITHER, because a line can carry two and mean different things by them:
+ * "Bright-sticks (fragile, dangerous, Value 1): snap one and whoever holds it takes d8 damage
+ * (messy)" tags the BOX dangerous and the burn messy, and only the burn is what the card is about.
+ * So the list is found from the die outwards, which is also how the book prints one: "(1d8 damage,
+ * messy, ignores armor)" wraps its die, "d8+2 damage (area, forceful)" follows it.
+ *
+ * @param {string} line  the whole bullet
+ * @param {number} at    where the damage expression starts within it
+ */
+function _damageTagList(line, at) {
+	for (const group of String(line ?? "").matchAll(/\(([^)]*)\)/g)) {
+		// The die inside this list, or this list the first thing printed after the die. A list
+		// that closed before the die belongs to whatever was being described before it.
+		if (at < group.index + group[0].length) return group[1];
+	}
+	return "";
+}
 
 export function readOptionDamage(text) {
 	const line = String(text ?? "");
@@ -223,7 +281,7 @@ export function readOptionDamage(text) {
 		self: !them && /\byou(?:r|rself)?\b/i.test(line),
 		ignoresArmor: IGNORES_ARMOR_RE.test(line),
 		piercing: Number(PIERCING_RE.exec(line)?.[1]) || 0,
-		tags: Array.from(new Set(Array.from(line.matchAll(FICTION_TAG_RE), m => m[1].toLowerCase()))),
+		tags: fictionTagsIn(_damageTagList(line, match.index)),
 	};
 }
 
@@ -274,28 +332,91 @@ export function readOptionDamage(text) {
  * changes no number that was already being rolled.
  */
 export function parseMonsterAttacks(damageValue, rollFormula = "") {
-	const attacks = [];
-	// Fragments seen since the last die, waiting for the attack whose name they are part of.
-	let pending = [];
-	for (const segment of _splitAttackSegments(String(damageValue ?? ""))) {
-		if (!DAMAGE_DIE_RE.test(segment)) {
-			// Its own tag list makes it an attack in its own right, die or no die — so it is
-			// flushed here, ahead of anything still pending, rather than joining the next blow.
-			if (_TAG_LIST_RE.test(segment)) { attacks.push(_readAttack([...pending, segment].join(", "))); pending = []; }
-			else pending.push(segment);
-			continue;
-		}
-		attacks.push(_readAttack([...pending, segment].join(", ")));
-		pending = [];
-	}
+	// The split keeps a trailing name that never found a die, because the SHEET still has to print
+	// it. Here it is not an attack: "none" and "by weapon" are lines with nothing to roll, and an
+	// attack read out of them would be a die the book never gave this foe.
+	const attacks = _splitPrintedAttacks(damageValue)
+		.map(entry => entry.mechanical)
+		.filter(text => DAMAGE_DIE_RE.test(text) || _TAG_LIST_RE.test(text))
+		.map(_readAttack);
 	if (attacks.length) return attacks;
 
 	const fallback = String(rollFormula ?? "").trim();
 	return fallback ? [_readAttack(fallback)] : [];
 }
 
-/** The separators that end one printed attack: ", ", ", or " or " or ". */
-const _ATTACK_SEPARATOR_RE = /^(?:\s*,\s*(?:or\s+)?|\s+or\s+)/i;
+/**
+ * The same split, handed back as the PRINTED TEXT of each attack rather than as its parts —
+ * "bite or maul d12+5 (close, hand, …)", separators and all.
+ *
+ * The stat-block sheet lists a foe's attacks one per line, each with its own roll button, and it
+ * prints the book's own words beside the die. So it needs exactly the grouping
+ * {@link parseMonsterAttacks} does — that is how it learns the Assassin's "dagger d10 (hand, 1
+ * piercing) or garrote d8 (hand, grabby, ignores armor)" is TWO attacks and owes the garrote a
+ * button of its own — but it must not lose the wording to a reconstruction from the parts.
+ *
+ * Names folded into ONE attack keep the separator that joined them, so the Bear of Winter's blow
+ * still reads "bite or maul" and not "bite, maul". A trailing fragment with no die of its own
+ * names nothing; it joins the attack before it, so no printed word is dropped.
+ *
+ * @param {string} damageValue A stat block's `system.attributes.damage.value`.
+ * @returns {string[]} One verbatim string per printed attack.
+ */
+export function splitMonsterAttackProse(damageValue) {
+	return _splitPrintedAttacks(damageValue).map(entry => entry.printed);
+}
+
+/**
+ * The split both readers share, each attack given twice over:
+ *   printed     the book's own words, which is what the sheet puts on the line
+ *   mechanical  the part of them that says what the attack DOES, which is what gets parsed
+ *
+ * They differ in exactly one place, and it is the trailing fragment. A fragment with no die names
+ * nothing, so `printed` hands it to the attack before it rather than drop a word the book wrote —
+ * but {@link _readAttack} scans the string it is given for a tag list, an "N piercing" and an
+ * "ignores armor", and would read the fragment's words as that attack's own. A line ending
+ * "…, and 2 piercing on a charge" would give the blow before it `piercing: 2`, which
+ * `wireApplyDamage` then takes off the target's armor: an attack made stronger by a clause that
+ * was never part of it. `mechanical` stops at the last thing that was actually an attack.
+ */
+function _splitPrintedAttacks(damageValue) {
+	const attacks = [];
+	// Names seen since the last die, with the separators that joined them, waiting for the attack
+	// whose name they are part of. Kept as text, not a list, so the joins stay the book's own.
+	let pending = "";
+	// The separator that ended the last attack pushed. A trailing fragment is given back to that
+	// attack with the punctuation the book put between them, for the same reason the folded names
+	// keep theirs: re-joining "claws d8 (close) or thrashing tail" with a comma prints a line the
+	// book never wrote.
+	let joinSeparator = "";
+	const push = (printed, separator) => {
+		attacks.push({ printed, mechanical: printed });
+		pending = "";
+		joinSeparator = separator;
+	};
+	for (const { text, separator } of _splitAttackSegments(String(damageValue ?? ""))) {
+		const printed = pending + text;
+		if (!DAMAGE_DIE_RE.test(text)) {
+			// Its own tag list makes it an attack in its own right, die or no die — so it is
+			// flushed here, ahead of anything still pending, rather than joining the next blow.
+			if (_TAG_LIST_RE.test(text)) push(printed, separator);
+			else pending = printed + separator;
+			continue;
+		}
+		push(printed, separator);
+	}
+	// Names left at the end have no attack to name. Rather than drop what the book printed, give
+	// them to the last attack; with no attack at all they stand alone, as a line with no die.
+	const leftover = pending.replace(_TRAILING_SEPARATOR_RE, "");
+	if (leftover) {
+		if (attacks.length) attacks[attacks.length - 1].printed += `${joinSeparator || ", "}${leftover}`;
+		else attacks.push({ printed: leftover, mechanical: leftover });
+	}
+	return attacks;
+}
+
+/** The separator left dangling on a trailing fragment, which has nothing after it to join to. */
+const _TRAILING_SEPARATOR_RE = /\s*(?:,\s*)?(?:\bor\b)?\s*$/i;
 
 /** A parenthesised tag list, which is what a die-less segment needs to be an attack of its own
  *  rather than another name for the next one. */
@@ -304,25 +425,38 @@ const _TAG_LIST_RE = /\([^)]*\)/;
 /**
  * Split a damage line on its attack separators, ignoring the ones inside a tag list.
  * Depth-counted rather than split by regex because the two uses share the same comma.
+ *
+ * Each segment carries the separator that ENDED it, so a caller re-joining two of them can print
+ * the book's own " or " rather than inventing a comma in its place.
  */
 function _splitAttackSegments(prose) {
+	// One separator regex per scan: it is sticky, so `lastIndex` is state, and a shared instance
+	// would carry this scan's stopping point into whatever asked next (damage-die.js says more).
+	const separatorRe = attackSeparatorRe();
 	const out = [];
-	let buffer = "";
 	let depth = 0;
+	let start = 0;
 	let i = 0;
 	while (i < prose.length) {
 		const ch = prose[i];
 		if (ch === "(") depth++;
 		else if (ch === ")") depth = Math.max(0, depth - 1);
 		if (depth === 0) {
-			const hit = _ATTACK_SEPARATOR_RE.exec(prose.slice(i));
-			if (hit) { out.push(buffer); buffer = ""; i += hit[0].length; continue; }
+			separatorRe.lastIndex = i;
+			const hit = separatorRe.exec(prose);
+			if (hit) {
+				out.push({ text: prose.slice(start, i), separator: hit[0] });
+				i += hit[0].length;
+				start = i;
+				continue;
+			}
 		}
-		buffer += ch;
 		i++;
 	}
-	out.push(buffer);
-	return out.map(s => s.trim()).filter(Boolean);
+	out.push({ text: prose.slice(start), separator: "" });
+	return out
+		.map(segment => ({ text: segment.text.trim(), separator: segment.separator }))
+		.filter(segment => segment.text);
 }
 
 /**
@@ -332,6 +466,71 @@ function _splitAttackSegments(prose) {
  */
 const _ATTACK_ADVANTAGE_RE = /\b(dis)?advantage\b/i;
 
+/**
+ * Whether a printed attack rolls its damage at advantage or disadvantage: "adv", "dis", or "" for
+ * the ordinary single roll. One rule, read the same way by the stat-block sheet's roll buttons and
+ * by the attack the combat flow asks about.
+ *
+ * @param {string} text One printed attack, as the book writes it.
+ * @returns {"adv"|"dis"|""}
+ */
+export function attackRollMode(text) {
+	const hit = _ATTACK_ADVANTAGE_RE.exec(String(text ?? ""));
+	return hit ? (hit[1] ? "dis" : "adv") : "";
+}
+
+/** The item types a stat block keeps its moves in: a monster's, and a person's. */
+const _MOVE_ITEM_TYPES = new Set(["monsterMove", "npcMove"]);
+
+/**
+ * EVERY attack a foe could have just made: the ones printed on its damage line, and then the ones
+ * its MOVES roll.
+ *
+ * A SECOND ATTACK DOES NOT HAVE TO LIVE ON THE DAMAGE LINE, and the book is the reason. The
+ * Dangers worksheet gives a monster one damage value and routes anything else through a move —
+ * "it has a special form of attack: a move describing it, with tags and (if appropriate) an
+ * alternative damage value" — so 19 shipped stat blocks put a whole second blow on a
+ * `monsterMove` carrying its own `rollFormula`: Draventao's sticky fire, Bhoka's lightning, the
+ * Gwraig Wen's wail.
+ *
+ * Reading only `damage.value` left every one of them unreachable from Clash: the Gwyllgi offered
+ * its claws and its bite and never its baleful cloud, and 13 foes whose printed line holds one
+ * blow struck with that blow automatically, their second never on offer at all. Across the 212
+ * shipped stat blocks, 17 gain an attack here.
+ *
+ * A MOVE'S NAME IS ITS PRINTED ATTACK, and it reads exactly the way a damage line does: "Breathe
+ * sticky fire, d10+3 damage (near, area, grabby, messy, reload, ignores armor)" names the blow,
+ * lists its tags, and says it ignores armor. Only the DIE comes from elsewhere — `rollFormula`,
+ * the same field the sheet's own roll button uses — because a few names print it as "1d10+3" or
+ * bury it inside the tag list, and the field is the one the GM edited.
+ *
+ * A move with no `rollFormula` is not an attack and is not offered. That field is the whole
+ * signal: it is what makes the sheet draw the move a roll button in the first place.
+ *
+ * @param {Actor} actor The foe, or null.
+ * @returns {ReturnType<typeof parseMonsterAttacks>} Printed attacks first, then move attacks.
+ */
+export function foeAttacks(actor) {
+	const damage = actor?.system?.attributes?.damage ?? {};
+	const printed = parseMonsterAttacks(damage.value, damage.rollFormula);
+	const moves = actor?.items?.filter?.(item =>
+		_MOVE_ITEM_TYPES.has(item?.type) && String(item?.system?.rollFormula ?? "").trim()) ?? [];
+	return [...printed, ...moves.map(_readMoveAttack)];
+}
+
+/** One attack a MOVE rolls: read out of its name, at the die its own field carries. */
+function _readMoveAttack(item) {
+	const name = String(item?.name ?? "");
+	const attack = _readAttack(name);
+	return {
+		...attack,
+		// A name that is nothing but its die ("d8+2 damage") leaves no label behind; the move's own
+		// name is then the only thing to call it, which is better on a button than "Attack".
+		label: attack.label || name.trim(),
+		formula: String(item?.system?.rollFormula ?? "").trim().replace(/\s+/g, ""),
+	};
+}
+
 /** One printed attack — its name, its die, and the armor clause it carries. */
 function _readAttack(text) {
 	const formula = (dieFromDamage(text) ?? "").replace(/\s+/g, "");
@@ -339,8 +538,10 @@ function _readAttack(text) {
 	// With no die at all, the tag list is still the tail and still not part of the name — the
 	// raider's net is called "hair-rope net", not "hair-rope net (thrown, crude, grabby)".
 	const named = formula ? text.slice(0, text.search(DAMAGE_DIE_RE)) : text.replace(/\([^)]*\)/g, " ");
-	const label = named.replace(/\s+/g, " ").trim().replace(/[,;]$/, "");
-	const advantage = _ATTACK_ADVANTAGE_RE.exec(text);
+	// A trailing "(" or ":" is punctuation the die was about to follow, not part of the name:
+	// "Smother a prone foe with soil, leaves, and wood (d8+1 damage, near, grabby)" is called
+	// "…and wood", and "Spew a cloud of corrosive goo: d8 damage (area, close)" drops its colon.
+	const label = named.replace(/\s+/g, " ").trim().replace(/[,;:(]+$/, "").trim();
 	return {
 		label,
 		formula,
@@ -350,6 +551,6 @@ function _readAttack(text) {
 			.filter(Boolean),
 		piercing: Number(PIERCING_RE.exec(text)?.[1]) || 0,
 		ignoresArmor: IGNORES_ARMOR_RE.test(text),
-		rollMode: advantage ? (advantage[1] ? "dis" : "adv") : "normal",
+		rollMode: attackRollMode(text) || "normal",
 	};
 }

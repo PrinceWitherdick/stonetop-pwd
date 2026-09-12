@@ -52,7 +52,31 @@ function formatStatValue(value) {
  */
 export function canRewriteCard(message, actor) {
 	if (!actor || actor.type !== "character" || !actor.isOwner) return false;
-	return message.canUserModify?.(globalThis.game?.user, "update") ?? !!globalThis.game?.user?.isGM;
+	return canUserWriteCard(message, globalThis.game?.user, { whenUnknown: !!globalThis.game?.user?.isGM });
+}
+
+/**
+ * Whether `user` could store a flag on this card at all — Foundry's own answer, which for a chat
+ * message is "the GM, or whoever authored it".
+ *
+ * `whenUnknown` is what to say when the document cannot answer: no `canUserModify` at all, or one
+ * that throws or returns nothing. It is a PARAMETER because the two callers want opposite things
+ * from the same silence. A handler about to write says "only the GM, then" — an unanswerable
+ * permission check is not permission. A reader running inside a chat render pass says "don't
+ * disqualify anybody", because the alternative to a wrong guess there is a thrown render.
+ *
+ * @param {object} message
+ * @param {object} user
+ * @param {object}  [options]
+ * @param {boolean} [options.whenUnknown]  the answer when the document has none.
+ * @returns {boolean}
+ */
+export function canUserWriteCard(message, user, { whenUnknown = true } = {}) {
+	if (!message?.canUserModify) return whenUnknown;
+	let answer;
+	try { answer = message.canUserModify(user, "update"); }
+	catch { return whenUnknown; }
+	return answer ?? whenUnknown;
 }
 
 export function stonetopCardShell(innerHtml, sectionClass = "") {
@@ -185,21 +209,58 @@ export function postListCard(actor, title, rowsHtml) {
  * Whisper a card to the GMs, in the one shape every such card uses: no speaker actor, the
  * system's own name in the alias, and the recipient list resolved at post time.
  *
- * Stated once because four callers post one - the book-art offer, the layout card, the
- * FXMaster nudge and the Book 2 art reminder - and every one of them is a whisper that a
- * player must never see. A copy that dropped the `whisper` array would not fail loudly; it
- * would just post GM housekeeping into the table's chat log.
+ * Stated once because six callers post one - the book-art offer, the layout card, the
+ * FXMaster nudge, the Book 2 art reminder and the two cards the combat flow puts the foe's
+ * stat block on - and every one of them is a whisper that a player must never see. A copy
+ * that dropped the `whisper` array would not fail loudly; it would just post GM housekeeping
+ * into the table's chat log.
  *
- * @param {string} content  Pre-built card HTML.
+ * @param {string} content   Pre-built card HTML.
+ * @param {object} [opts]
+ * @param {object} [opts.flags]  Message flags, for a whisper the sender has to find again
+ *                               (the combat flow latches its GM cards by their own flag).
  * @returns {Promise<ChatMessage|null>} The created message, or null if chat is not up yet.
  */
-export async function whisperGm(content) {
+export async function whisperGm(content, { flags = null } = {}) {
 	if (!globalThis.ChatMessage?.create) return null;
 	return (await ChatMessage.create({
 		content,
 		whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
 		speaker: { alias: "Stonetop" },
+		...(flags ? { flags } : {}),
 	})) ?? null;
+}
+
+/**
+ * A bordered aside inside a card: a heading with a glyph, then one line per thing to say.
+ *
+ * The shape a card uses for what the NUMBER on it cannot carry - a lasting injury the roll
+ * should be read against (roll-engine.js#_woundReminderHtml), the fiction a weapon's tags owe
+ * the table (attack-flow.js#tagNoticesHtml). Both sat on one card at once and had been written
+ * out twice, so "a notice is a `row--border` div with an `h3.cell__subtitle` and a `ul`" was
+ * stated in two files; the two reminders have to read as the same kind of thing, and that is
+ * only true for as long as nobody edits one of them.
+ *
+ * The SHAPE is shared and set once in CSS (`.stonetop-card-notice`, added here so no caller can
+ * forget it); the caller's own class rides alongside it and carries only the ink, which is what
+ * tells a caution apart from a consequence at a glance.
+ *
+ * Returns "" for an empty list, which is the no-op every caller wants - a card with nothing to
+ * add prints no empty block.
+ *
+ * @param {object} o
+ * @param {string} o.className  the notice's own class, for its ink.
+ * @param {string} o.icon       Font Awesome glyph class for the heading.
+ * @param {string} o.title      the heading, already localized/escaped as the caller needs.
+ * @param {string[]} o.items    pre-built `<li>` HTML, one per line.
+ * @returns {string} HTML, or "" when there is nothing to say.
+ */
+export function cardNoticeHtml({ className, icon, title, items = [] }) {
+	if (!items.length) return "";
+	return `<div class="row row--border stonetop-card-notice ${className}">
+		<h3 class="cell__subtitle"><i class="fas ${icon}"></i> ${title}</h3>
+		<ul>${items.join("")}</ul>
+	</div>`;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { CREATURE_TYPE_CHOICES, creatureTypeIcon, creatureTypeLabel } from "../../bestiary/creature-types.js";
 import { hasText } from "../bestiary/codex.js";
 import { rollDamagePrompted } from "../../dialogs/RollDialog.js";
-import { DAMAGE_DIE_RE } from "../../utils/damage.js";
+import { dieFromDamage, attackRollMode, splitMonsterAttackProse } from "../../utils/damage.js";
 import { hideBrokenPortrait, stripHeaderChrome, injectHeaderToggle } from "../../utils/sheet-chrome.js";
 import { escHtml, isDefaultImg } from "../../utils/strings.js";
 import { headerPortraitContext, wirePortraitPopout } from "../../utils/actor-portrait-picker.js";
@@ -48,61 +48,27 @@ function _normalizeTag(value) {
  * Split a monster's free-text Damage value into its separate attack modes, each
  * carrying its own dice expression for a roll button.
  *
- * A comma only separates modes when each side is a complete attack with its own
- * die — e.g. "fingers d8 (close), maw d10+2 (hand, messy)" is two modes. Commas
- * can also just list verbs or tags within a single mode: "claws, bite, hug d10+4
- * (hand, messy, 1 piercing)" is ONE mode. So we split at paren depth 0, then
- * accumulate parts until one carries a die — that completes the mode.
+ * The split itself is the shared one the combat flow asks with (see
+ * `parseMonsterAttacks`), so the lines the sheet prints and the attacks a PC can
+ * suffer are the same list: comma OR "or" outside the tag lists, and a fragment
+ * with no die of its own is another NAME for the next blow rather than a blow.
+ * Reading it here from the same rule is what gives the Assassin's garrote — the
+ * far side of an "or" — the roll button its dagger already had.
  *
  * @param {string} value
- * @returns {{ text: string, formula: string }[]}
+ * @returns {{ text: string, formula: string, rollMode: string }[]}
  */
 function _parseDamageModes(value) {
-	const raw = String(value ?? "").trim();
-	if (!raw) return [];
-
-	// Split on top-level commas (commas inside (...) tag lists are not separators).
-	const parts = [];
-	let depth = 0;
-	let start = 0;
-	for (let i = 0; i < raw.length; i++) {
-		const ch = raw[i];
-		if (ch === "(") depth++;
-		else if (ch === ")") depth = Math.max(0, depth - 1);
-		else if (ch === "," && depth === 0) {
-			parts.push(raw.slice(start, i));
-			start = i + 1;
-		}
-	}
-	parts.push(raw.slice(start));
-
-	// Group parts into modes: a die-bearing part completes the current mode.
-	const modes = [];
-	let buffer = "";
-	for (const part of parts) {
-		buffer = buffer ? `${buffer},${part}` : part;
-		if (DAMAGE_DIE_RE.test(buffer)) {
-			modes.push(buffer);
-			buffer = "";
-		}
-	}
-	// Trailing descriptor with no die — fold into the previous mode, else stand alone.
-	if (buffer.trim()) {
-		if (modes.length) modes[modes.length - 1] += `,${buffer}`;
-		else modes.push(buffer);
-	}
-
-	return modes
-		.map(text => text.trim())
-		.filter(Boolean)
-		.map(text => {
-			const match = text.match(DAMAGE_DIE_RE);
-			// A mode can note "w/disadvantage" (or advantage) on its die; the roll
-			// button then rolls twice and keeps the worse/better result.
-			const rollMode = /disadvantage/i.test(text) ? "dis"
-				: /advantage/i.test(text) ? "adv" : "";
-			return { text, formula: match ? match[0].replace(/\s+/g, "") : "", rollMode };
-		});
+	return splitMonsterAttackProse(value).map(text => ({
+		text,
+		// The die read by the shared reader too, not a second expression over the same
+		// prose: a fix to how a formula is recognised ("2 d 6", a bare "d8") has to reach
+		// the sheet's roll button and the blow a PC suffers alike.
+		formula: (dieFromDamage(text) ?? "").replace(/\s+/g, ""),
+		// A mode can note "w/disadvantage" (or advantage) on its die; the roll
+		// button then rolls twice and keeps the worse/better result.
+		rollMode: attackRollMode(text),
+	}));
 }
 
 // The creature's flavor/quality tags with the organization and size dropped

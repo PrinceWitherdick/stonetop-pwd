@@ -7,7 +7,8 @@
 // hit the roll card grows a "Roll damage" action that rolls the PC's damage die once
 // per target; a follow-up card lists each target's damage with a GM-only "Apply damage"
 // button. Clash additionally resolves "suffer your enemy's attack" — incoming damage to
-// the PC — via a player-side button.
+// the PC — which nobody has to ask for: the tier that states it rolls it (see
+// sufferEnemyAttack) and posts it on that same damage card.
 //
 // Design notes (see project memory project_clash-letfly-combat-flow):
 //  - A PC has ONE damage die (system.attributes.damage.value); the weapon never changes
@@ -19,19 +20,19 @@
 //  - Targets resolve via fromUuid(TokenDocument.uuid) so an unlinked monster token hits
 //    its own synthetic actor (not the shared prototype) and works cross-scene.
 //  - Applying damage to a monster is a GM action (players don't own enemy tokens and the
-//    system has no socket relay); "suffer your enemy's attack" writes the PC's own HP and
-//    stays a player action.
+//    system has no socket relay); "suffer your enemy's attack" writes the PC's own HP, so
+//    its card is pressed by whoever can — the player, or the GM who authored it.
 
 import {STONETOP_SCOPE} from "../actors/character/StonetopFlags.js";
 import {weaponMetaFromNote} from "../data/weapon-from-note.js";
 import {weaponMeta, isClashWeapon, isLetFlyWeapon, weaponTraitText, weaponArmorBits, grantedWeaponForMove, MOVE_GRANTED_WEAPONS, UNARMED_META} from "../data/weapons.js";
 import {escHtml} from "../utils/strings.js";
-import {stonetopChatCard, rollFormulaChip, damageMark, damageBadge, optionKey} from "../utils/chat.js";
-import {rollDamage, multiDieFaces, sign, damageRollFormula, damageConditionPills, conditionsRowHtml} from "../utils/roll-engine.js";
-import {mitigateDamage, resolvePiercing, applyDamageToActor, composeDamageFormula, parseMonsterAttacks} from "../utils/damage.js";
+import {stonetopChatCard, rollFormulaChip, damageMark, damageBadge, optionKey, whisperGm, cardNoticeHtml, canUserWriteCard} from "../utils/chat.js";
+import {rollDamage, multiDieFaces, sign, damageRollFormula, damageConditionPills, conditionsRowHtml, classifyResult} from "../utils/roll-engine.js";
+import {mitigateDamage, resolvePiercing, applyDamageToActor, composeDamageFormula, foeAttacks, fictionTagsIn} from "../utils/damage.js";
 import {promptDamage} from "../dialogs/RollDialog.js";
 import {bringDialogToFront} from "../utils/front-on-open.js";
-import {isPrimaryGM} from "../utils/primary-gm.js";
+import {isPrimaryGM, anyActiveGM} from "../utils/primary-gm.js";
 
 const SCOPE = STONETOP_SCOPE;
 
@@ -54,9 +55,18 @@ const isAnyAttackWeapon = meta => isClashWeapon(meta) || isLetFlyWeapon(meta);
  *   unrolled  the move lets you skip the 2d6 and simply deal your damage ("an easy shot",
  *             Ambush's "you can deal your damage or opt to roll +DEX"). The block is the question
  *             asked before the roll, in the move's own words; see promptUnrolledDamage.
+ *   counterOnMiss  the move's 6- says the enemy hits back, flatly and with nothing else in the
+ *             tier to decide: Clash's "your maneuver fails and you suffer your enemy's attack".
+ *             That fires itself the moment the dice land (maybeCounterOnMiss) rather than waiting
+ *             on a button, because a stated consequence is not an offer. Only Clash has one — the
+ *             other four print "the GM makes a move", which is nobody's button to press.
+ *   counterOnPartial  the move's 7-9 says the enemy hits back whatever else the player picks:
+ *             Clash's "you and your foe both suffer your attacks". Unlike the 6- this one DOES
+ *             wait on the button, because the tier still deals the character's damage — so it
+ *             rides the Confirm as the tier's own unconditional number (see buildTierActions).
  */
 const ATTACK_MOVES = {
-	"Clash":   { key: "clash",   filter: isClashWeapon },
+	"Clash":   { key: "clash",   filter: isClashWeapon, counterOnMiss: true, counterOnPartial: true },
 	"Let Fly": {
 		key: "let-fly", filter: isLetFlyWeapon,
 		unrolled: {
@@ -150,8 +160,6 @@ function isFriendly(disposition) {
 // `ammoMax` / `ammoLabels` (see StonetopCharacter#_gearSources) and threaded to the chat card.
 const AMMO_MAX = 2;
 const AMMO_LABELS = ["Plenty", "Low ammo", "All out"];
-// The button's locked label while the GM resolves a choice, in the three places that set it.
-const WAITING_HTML = '<i class="fas fa-hourglass-half"></i> Waiting on the GM';
 
 // The track a weapon record describes: its length, and the status the item prints against each
 // box. The fallback is the ammo weapons' printed pair, which is what a record with no track of
@@ -429,8 +437,7 @@ function snapshotTargets() {
 // the prose states enforced on it (utils/chat.js#pickableMoveDescription, wired in stonetop.js).
 // All is Illuminated is what that looks like with nothing else on the card: the ladder, the boxes,
 // the tally, the result. Every move here reads the same way, and a hit tier adds exactly one
-// thing to it — a single Confirm button whose data-action ("roll" | "suffer") tells the click
-// handler what to enact.
+// thing to it — a single Confirm button that rolls the character's damage.
 //
 // IT WAS TWO LISTS, AND TWO LISTS CANNOT COUNT. For a while each tier grew its own row of
 // checkbox-SVG controls for the bullets that changed a number: Clash's two as radios, Ambush's
@@ -559,60 +566,59 @@ function pickedOptionLabels(root) {
 		.map(box => box.closest(".stonetop-picklist-item")?.textContent ?? "");
 }
 
-// The single button that enacts the tier. `action` is "roll" (roll the PC die per target, folding
-// in whatever the ticked bullets add) or "suffer" (self-write the PC's HP from the foe's
-// counter-attack). `counter`/`extraDice` are the tier's OWN values — what the tier says whatever
-// the player picks, like Clash's 7-9 suffering the attack — and the ticked bullets stack on top.
-function confirmBtn(action, { counter = false, extraDice = "", label = "Confirm", icon = "fa-check" } = {}) {
-	return `<button type="button" class="stonetop-attack-btn stonetop-attack-confirm" data-action="${escHtml(action)}"
-		data-counter="${counter ? 1 : 0}"${extraDice ? ` data-extra-dice="${escHtml(extraDice)}"` : ""}>
-		<i class="fas ${escHtml(icon)}"></i> ${escHtml(label)}
-	</button>`;
-}
-
 // What a Confirm that only rolls damage says. Named because five of the six tiers below use it.
 const ROLL_DAMAGE = { label: "Roll your damage", icon: "fa-dice-d6" };
+
+// The single button that enacts the tier: it rolls the PC die per target, folding in whatever the
+// move's ticked bullets add. `counter` is the tier's OWN value — what the tier says whatever the
+// player picks, like Clash's 7-9 suffering the attack, which the click fires once the damage is
+// posted — and the ticked bullets stack on top.
+//
+// IT DOES ONE THING. It used to carry a `data-action` naming which, because a failure tier could
+// hang a "Suffer your enemy's attack" here instead; that tier has no button at all now (see
+// buildTierActions), so every one of these rolls damage and an attribute saying so said nothing.
+// Its label is not a parameter either: every tier rolls damage, so every one of them says so, and
+// wireAttackNoHarm repaints the pair that Call the Shot can silence.
+function confirmBtn(counter = false) {
+	return `<button type="button" class="stonetop-attack-btn stonetop-attack-confirm"
+		data-counter="${counter ? 1 : 0}">
+		<i class="fas ${ROLL_DAMAGE.icon}"></i> ${escHtml(ROLL_DAMAGE.label)}
+	</button>`;
+}
 
 // ...and what it says instead while Call the Shot's "do no harm" is held. Same button, same
 // place — a tier that has been told to deal no damage must not offer to roll it.
 const NO_DAMAGE = { label: "Deal no damage", icon: "fa-ban" };
 
-// The "Suffer your enemy's attack" button on the damage results card (a Clash counter).
-function sufferBtn(label = "Suffer your enemy's attack") {
-	return `<button type="button" class="stonetop-attack-btn stonetop-attack-suffer">
-		<i class="fas fa-shield-halved"></i> ${escHtml(label)}
-	</button>`;
-}
-
 /**
  * One button per result tier on the roll card. Only the rolled tier's shows, so each names the
  * action it enacts — a bare "Confirm" is unclear on a card whose options are up in the move's own
- * text. Every hit tier here deals the character's damage, so five of the six say so.
+ * text. Every tier here deals the character's damage, so every one of them says so.
  *
  * NO OPTIONS LIVE HERE. They are the move's printed bullets, ticked where they are printed; what
- * they do when ticked is PICK_EFFECTS above. The only numbers a button carries are the tier's own
- * unconditional ones: Clash's 7-9 suffers the enemy's attack whatever else happens, and its 6-
- * does nothing but that.
+ * they do when ticked is PICK_EFFECTS above. The only number a button carries is the tier's own
+ * unconditional one, which the move's own entry declares (`counterOnPartial`): Clash's 7-9 suffers
+ * the enemy's attack whatever else the player picks.
+ *
+ * AND NO TIER OFFERS TO BE HIT. Clash's 6- is "your maneuver fails and you suffer your enemy's
+ * attack" — no damage dealt, no pick to make, nothing a player could decide. It carried a "Suffer
+ * your enemy's attack" button all the same, which made a flat consequence read as an offer and
+ * left the blow sitting unstruck in the log whenever the table moved on without pressing it. The
+ * miss fires its own counter-attack now (maybeCounterOnMiss), so the failure tier is back to
+ * having no button at all, like the other four moves' misses.
  */
 export function buildTierActions(move) {
-	if (move.key === "clash") {
-		return {
-			// The 10+'s "pick 1" is the description's two boxes; strike-hard's 1d6 and its
-			// counter-attack ride the tick (PICK_EFFECTS), so the button itself promises neither.
-			success: confirmBtn("roll", ROLL_DAMAGE),
-			partial: confirmBtn("roll", { counter: true, ...ROLL_DAMAGE }),
-			failure: confirmBtn("suffer", { label: "Suffer your enemy's attack", icon: "fa-shield-halved" }),
-		};
-	}
-
+	// The 10+ never carries a counter: Clash's strike-hard 1d6 and its counter-attack both ride
+	// the tick (PICK_EFFECTS), so the button itself promises neither.
+	//
 	// Ambush, Call the Shot and The Hammer and the Book deal your damage on both hit tiers and
 	// differ only in how many of the printed list you take, which the list itself counts. Their
 	// 6- is "the GM makes a move" — nothing for the player to enact, so no button at all.
 	//
-	// Let Fly falls through to the same pair: its 10+ has no list, and its 7-9's four bullets are
-	// the description's, one of which spends the quiver.
-	const tier = confirmBtn("roll", ROLL_DAMAGE);
-	return { success: tier, partial: tier };
+	// Let Fly takes the same pair: its 10+ has no list, and its 7-9's four bullets are the
+	// description's, one of which spends the quiver.
+	const roll = confirmBtn();
+	return { success: roll, partial: move.counterOnPartial ? confirmBtn(true) : roll };
 }
 
 // -- Entry point (called from StonetopCharacter.onRoll) -----------------------
@@ -661,15 +667,22 @@ export async function maybeBeginAttack(actor, item, { stat = null, weaponSlug = 
 		// the attack rather than deal it unmodified, which is what "cancel" tells the caller.
 		const damage = await askDamageAdjustment(actor, { move: item.name, moveKey: move.key, weapon });
 		if (!damage) return "cancel";
-		await rollAndPostDamage(actor, { move: item.name, weapon, targets, counter: false, damage });
+		await rollAndPostDamage(actor, { move: item.name, weapon, targets, damage });
 		return "handled";
 	}
 
 	return {
 		tierActions: buildTierActions(move),
-		messageFlags: { [SCOPE]: { attack: { move: item.name, moveKey: move.key, attackerUuid: actor.uuid, weapon, targets } } },
+		messageFlags: attackFlagEnvelope({ move: item.name, moveKey: move.key, attackerUuid: actor.uuid, weapon, targets }),
 	};
 }
+
+// The flag envelope the roll carries to its ChatMessage, and the one way to read it back before
+// that message exists to `getFlag` it off. A pair rather than two hand-written paths: the reader
+// is in another function (maybeCounterOnMiss), and a walk spelled out there goes silently empty
+// the day the key is renamed here.
+const attackFlagEnvelope = attack => ({ [SCOPE]: { attack } });
+const attackFlagsOf = extra => extra?.messageFlags?.[SCOPE]?.attack ?? null;
 
 // -- Damage rolling + the results card ----------------------------------------
 
@@ -755,52 +768,117 @@ function damageAdvantageFrom(actor, moveKey, weapon) {
 // victim now has to deal with, and messy attacks make these especially common.
 const PROBLEMATIC_WOUND_TIP = "A wound with lasting fictional consequences, a severed hand, a blow to the head that leaves them staggering, not just lost HP. It's now true in the fiction and something the victim has to deal with. Especially common with messy attacks.";
 
-// Flavour tags whose fiction the table should be reminded of at damage time — a weapon's
-// `+N damage` / piercing already ride the numbers, but `messy` and `forceful` only live in
-// the fiction and are easy to forget. Each posts its own follow-up card after the damage,
-// keyed by the tag in module/data/weapons.js. `body(name)` receives the ALREADY-escaped
-// weapon name.
-const TAG_REMINDERS = {
+// What each flavour tag actually costs the fiction, said at the moment the blow lands. A weapon's
+// `+N damage` / piercing ride the numbers and the card's fine print already prints them; these
+// only ever lived in the prose, which is why they are the ones a table forgets.
+//
+// ONE ENTRY PER NAME IN utils/damage.js#FICTION_DAMAGE_TAGS, which is what decides both WHICH
+// tags get a note and the order they print in. That list is also what the option-damage reader
+// matches on, so a move's printed bullet and a stat block's damage line grow the same notes.
+//
+// `label` is the tag AS THE BOOK PRINTS IT rather than a rephrasing, because connecting the note
+// back to the word on the stat line is most of its job. That is also why `reload` keeps its
+// un-adjectival name instead of becoming "Reloading".
+const TAG_NOTES = {
 	messy: {
-		title: "Messy attack",
-		icon: "fa-burst",
-		body: name => `<strong>${name} is messy.</strong> This attack is especially destructive, ripping
-			people and things apart. It should often use up resources, destroying a shield, weapon, or
-			gear, or inflict a
+		label: "Messy.", icon: "fa-burst",
+		body: `This attack is especially destructive, ripping people and things apart. It should often
+			use up resources, destroying a shield, weapon, or gear, or inflict a
 			<span class="stonetop-problematic-wound" data-tooltip="${escHtml(PROBLEMATIC_WOUND_TIP)}">problematic wound</span>.`,
 	},
 	forceful: {
-		title: "Forceful attack",
-		icon: "fa-hand-fist",
-		body: name => `<strong>${name} is forceful.</strong> It can knock someone around, maybe even off
-			their feet. Even if it does no damage, it should still shift the momentum or positioning of the
-			fight: driving them back, breaking their stance, or setting up an ally.`,
+		label: "Forceful.", icon: "fa-hand-fist",
+		body: `It can knock someone around, maybe even off their feet. Even if it does no damage, it
+			should still shift the momentum or positioning of the fight: driving them back, breaking
+			their stance, or setting up an ally.`,
+	},
+	grabby: {
+		label: "Grabby.", icon: "fa-link",
+		body: `It latches on. The target can be pinned, grappled, or dragged along, and tearing free
+			is a problem of its own, often costing them whatever they meant to do next.`,
+	},
+	crude: {
+		label: "Crude.", icon: "fa-hammer",
+		body: `It is prone to break. A solid hit is nearly as likely to chip, bend, or ruin the weapon
+			as it is to hurt what it struck.`,
+	},
+	reload: {
+		label: "Reload.", icon: "fa-hourglass-half",
+		body: `It takes time and effort to reset. There is no second shot this exchange unless
+			something is spent to buy one.`,
+	},
+	dangerous: {
+		label: "Dangerous.", icon: "fa-triangle-exclamation",
+		body: `It causes trouble and collateral damage if you are not careful, and maybe if you are.
+			Ask what else was standing in the way.`,
 	},
 };
 
-// Post a reminder card for each of the weapon's flavour tags we track. Called after the
-// damage roll so the cards sit beneath it; a forceful attack that dealt no damage still
-// gets its reminder.
-function postTagReminders(actor, weapon) {
-	const name = weapon?.name ? escHtml(weapon.name) : "This weapon";
-	const posts = (weapon?.tags ?? []).map(tag => {
-		const r = TAG_REMINDERS[tag];
-		if (!r) return null;
-		const body = `<div class="card-content"><p class="stonetop-attack-tag-note stonetop-attack-${tag}">
-			<i class="fas ${r.icon}"></i> <span>${r.body(name)}</span>
-		</p></div>`;
-		return ChatMessage.create({
-			speaker: ChatMessage.getSpeaker({ actor }),
-			content: stonetopChatCard(r.title, body, `stonetop-attack-tag-card stonetop-attack-${tag}-card`),
-		});
-	}).filter(Boolean);
-	return Promise.all(posts);
+/**
+ * The fiction notes a blow's tags owe the table, as a block that rides the DAMAGE CARD ITSELF.
+ *
+ * These used to be a chat card apiece, posted under the damage. That worked while there were two
+ * tags and they rarely met, but the Bear of Winter swings "(close, hand, reach, forceful, grabby,
+ * messy, 1 piercing)" and the Stone Sentinel and five others do the same: one card per tag buries
+ * the damage number under three follow-ups every time it attacks. It also put the reminder
+ * somewhere other than the thing it modifies, which is the wrong place for it to be found at all
+ * and a real cost to anyone reading the log at magnification.
+ *
+ * So it is a notice, in the shape utils/roll-engine.js#_woundReminderHtml already established for
+ * a lasting injury: a bordered block inside the card, one line per consequence, adding no messages
+ * to chat however many tags a weapon carries.
+ *
+ * Returns "" when nothing is tagged, which is the no-op every caller wants: a card with nothing to
+ * add prints no empty block.
+ *
+ * @param {{name?: string, tags?: string[]}|null} weapon
+ * @returns {string} HTML, or "" when the blow carries no fiction tag.
+ */
+export function tagNoticesHtml(weapon) {
+	// Joined and scanned through the SAME reader the option-damage parser uses, so "(tags by
+	// weapon, +forceful)" and "(hand, close, maybe forceful or messy)" are read here exactly as
+	// they are read there, and the notes come back in FICTION_DAMAGE_TAGS order regardless of how
+	// the book printed them (utils/damage.js#fictionTagsIn says why both of those matter).
+	const tags = fictionTagsIn((weapon?.tags ?? []).join(", "));
+
+	// The heading names the block, not the weapon: the card's fine print already says which weapon rolled
+	// this, and every line below names its own tag, so repeating the weapon here would be the third
+	// time one card said it.
+	// A feather on the heading rather than the burst this system marks damage with: the burst is
+	// already on the total above AND on the messy line right below, and a heading wearing its own
+	// first item's glyph reads as a repeat. The feather is what the system puts on prose
+	// elsewhere, which is exactly what this block is.
+	return cardNoticeHtml({
+		className: "stonetop-attack-tag-notice",
+		icon: "fa-feather",
+		title: "Beyond the damage",
+		items: tags.map(tag => {
+			// A tag with no note here is one added to FICTION_DAMAGE_TAGS and not to TAG_NOTES.
+			// The suite catches that ("has a note written for every tag the readers recognise"),
+			// but it must not be a THROW if one ever gets past: this runs inside the damage post,
+			// downstream of lockAttackCard, so a TypeError would be a Confirm that spent the
+			// player's click, disabled their card and never paid the damage. A missing reminder
+			// is a missing reminder; a missing damage roll is the fight stopping.
+			const note = TAG_NOTES[tag];
+			if (!note) return "";
+			return `<li class="stonetop-attack-tag-note stonetop-attack-${tag}">
+				<i class="fas ${note.icon}"></i> <span><strong>${note.label}</strong> ${note.body}</span>
+			</li>`;
+		}).filter(Boolean),
+	});
 }
 
 // Roll damage once per applyable target and post the results card. With no applyable
-// targets, fall back to a single plain damage roll (no Apply button). Tagged weapons
-// (messy / forceful) add follow-up reminder cards either way.
-async function rollAndPostDamage(actor, { move, weapon, targets, counter = false, damage, ignoresArmor = false, selfHarm = false }) {
+// targets, fall back to a single plain damage roll (no Apply button). A tagged weapon prints its
+// fiction notes ON whichever of those two cards it got (tagNoticesHtml) rather than under it, so
+// a blow that is messy, grabby AND forceful still costs chat exactly one message.
+//
+// THE FOE'S COUNTER-ATTACK IS NOT THIS FUNCTION'S BUSINESS any more. It used to take a `counter`
+// flag and hang a "Suffer your enemy's attack" button off the card it posted — which meant a
+// no-target Clash needed a whole extra branch here just to have somewhere to put that button.
+// The tier fires the counter itself now, straight after this returns (resolveAttackTier), and it
+// comes back through this same function as a damage card of its own (postIncomingDamage).
+async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignoresArmor = false, selfHarm = false }) {
 	// A tier control that ignores armor (Call the Shot's "your call", The Hammer and the Book)
 	// records it ON THE WEAPON the card carries rather than as a second field beside it: the
 	// weapon is the one thing Apply damage reads for armor (wireApplyDamage) and the one thing the
@@ -816,20 +894,16 @@ async function rollAndPostDamage(actor, { move, weapon, targets, counter = false
 	const formula   = damageRollFormula(composeDamageFormula(base, { bonus, extraDice }), rollMode);
 	const applyable = (targets ?? []).filter(t => t.hasActor !== false && t.uuid);
 
+	// Built once, for whichever branch below ends up posting: the fiction a tag owes is the same
+	// fiction whether or not anyone was targeted, and a forceful blow that dealt nothing still owes
+	// it. Both cards have the same slot for it (roll-engine.js#_rollCard's `noticesHtml`, and the
+	// results card's own body), which is what lets the two paths say it identically.
+	const notices = tagNoticesHtml(weapon);
+
 	let results = [];
 	if (applyable.length === 0) {
-		if (!counter) {
-			const roll = await rollDamage(base, actor, { label: damageLabel(move, weapon), rollMode, bonus, extraDice });
-			results = [{ raw: roll.total, formula: roll.formula, faces: multiDieFaces(roll) }];
-		} else {
-			// No foe targeted, but the tier (Clash 7-9 / strike-hard) still demands the PC
-			// suffer the counter-attack. Roll the damage for the fiction and post a results
-			// card that carries the Suffer button; with no target its foe die falls back to a
-			// manual incoming-damage prompt. Without this branch the counter is silently lost.
-			const roll = await new Roll(formula).evaluate();
-			results = [{ raw: roll.total, formula: roll.formula, faces: multiDieFaces(roll) }];
-			await postDamageResultsCard(actor, { move, weapon, results, counter, damage, selfHarm });
-		}
+		const roll = await rollDamage(base, actor, { label: damageLabel(move, weapon), rollMode, bonus, extraDice, notices });
+		results = [{ raw: roll.total, formula: roll.formula, faces: multiDieFaces(roll) }];
 	} else {
 		// One damage roll per target — independent, so evaluate them concurrently; they're
 		// aggregated into a single results card, and mapping by index preserves order.
@@ -838,10 +912,9 @@ async function rollAndPostDamage(actor, { move, weapon, targets, counter = false
 			uuid: t.uuid, name: t.name, actorId: t.actorId, disposition: t.disposition,
 			raw: rolls[i].total, formula: rolls[i].formula, faces: multiDieFaces(rolls[i]),
 		}));
-		await postDamageResultsCard(actor, { move, weapon, results, counter, damage, selfHarm });
+		await postDamageResultsCard(actor, { move, weapon, results, damage, selfHarm, notices });
 	}
 
-	await postTagReminders(actor, weapon);
 	// The totals, for a caller that has to say on its own surface what the roll came to: the
 	// button on a ticked option turns into the number it dealt (stonetop.js#_chatWireOptionDamage).
 	// Every branch above fills this, the single-target one included, so a caller never has to know
@@ -879,7 +952,7 @@ export async function rollOptionDamage(actor, { move, damage }) {
 
 	// A NAMELESS WEAPON, carrying only what the option's words said about armor and fiction. The
 	// card reads its armor fine print and Apply reads its piercing off exactly this record
-	// (wireApplyDamage), and the messy / forceful reminders ride its tags, so an option that says
+	// (wireApplyDamage), and the card's fiction notes ride its tags, so an option that says
 	// "1d10 damage, messy, ignores armor" behaves like a weapon that says the same three things.
 	// The empty name is what keeps the card's title from reading "Danu's Grasp: " with nothing
 	// after the colon (see damageLabel).
@@ -924,7 +997,7 @@ function damageRowDetail(weapon) {
 	return [escHtml(weapon.name), ...weaponArmorBits(weapon)].filter(Boolean).join(" · ");
 }
 
-function postDamageResultsCard(actor, { move, weapon, results, counter, damage, selfHarm = false }) {
+function postDamageResultsCard(actor, { move, weapon, results, damage, selfHarm = false, notices = "" }) {
 	const multiWarn = results.length > 1 && !weapon?.area
 		? `<p class="stonetop-attack-warn"><i class="fas fa-triangle-exclamation"></i> ${escHtml(move)} is a single-foe move: applying to multiple targets is a GM abstraction.</p>`
 		: "";
@@ -972,9 +1045,9 @@ function postDamageResultsCard(actor, { move, weapon, results, counter, damage, 
 		${rollFormulaChip(results[0]?.formula ?? "", chipFaces)}
 		${multiWarn}
 		<ul class="stonetop-damage-list">${rows}</ul>
+		${notices}
 		<div class="card-buttons stonetop-card-buttons stonetop-attack-actions">
 			${hasApplyable ? `<button type="button" class="stonetop-attack-btn stonetop-apply-damage"><i class="fas fa-heart-crack"></i> ${selfHarm ? "Take this damage" : "Apply damage"}</button>` : ""}
-			${counter ? sufferBtn() : ""}
 		</div>
 	</div>${adjustHtml}`;
 
@@ -1018,7 +1091,7 @@ async function actorFromUuid(uuid) {
  * listeners repainting one label.
  */
 function wireAttackNoHarm(root, moveKey) {
-	const btns = Array.from(root.querySelectorAll('.stonetop-attack-confirm[data-action="roll"]'));
+	const btns = Array.from(root.querySelectorAll(".stonetop-attack-confirm"));
 	if (!btns.length) return;
 
 	const paint = () => {
@@ -1036,9 +1109,9 @@ function wireAttackNoHarm(root, moveKey) {
 }
 
 // The single Confirm button per tier on the roll card. The attacking PC's owner clicks it to
-// enact the tier: "roll" rolls the PC die per target (folding in whatever the move's ticked
-// bullets add and an optional ammo depletion), "suffer" self-writes the PC's HP from the foe's
-// counter-attack. Once-only per card via the attack.resolved flag; non-owners see it disabled.
+// enact the tier: it rolls the PC die per target, folding in whatever the move's ticked bullets
+// add and an optional ammo depletion, and then fires the foe's counter-attack if the tier states
+// one. Once-only per card via the attack.resolved flag; non-owners see it disabled.
 // Every tier's button is wired (hidden ones included) so a GM Shift Up/Down reveals a control
 // that's already live.
 export function wireAttackConfirm(message, html) {
@@ -1063,14 +1136,14 @@ export function wireAttackConfirm(message, html) {
 	wireAttackNoHarm(root, attack.moveKey);
 
 	// Confirming writes the `resolved` latch onto this message (lockAttackCard), so it needs
-	// message ownership as well as the attacker's — see wireSufferAttack.
+	// message ownership as well as the attacker's — the same pairing wireApplyDamage makes.
 	actorFromUuid(attack.attackerUuid).then(actor => {
 		for (const btn of btns) {
 			if (!actor?.isOwner || message.getFlag(SCOPE, "attack")?.resolved) { btn.disabled = true; continue; }
 			// Owning the attacker is not enough, and the two refusals are not the same refusal.
 			// A player who owns the PC but not the GM-authored CARD gets a button that can never
 			// work, so it says why — a silently greyed-out Confirm reads as a broken card. Same
-			// affordance, same wording shape as wireSufferAttack.
+			// affordance, same wording shape as wireApplyDamage.
 			if (!message.isOwner) {
 				btn.disabled = true;
 				btn.title = "Ask the GM to confirm this attack";
@@ -1083,8 +1156,8 @@ export function wireAttackConfirm(message, html) {
 
 // Enact one tier's Confirm. Disables the clicked button while it runs; only marks the whole
 // card resolved (locking every tier's Confirm) once the action actually completes, so a
-// cancelled "suffer" or damage prompt leaves the card clickable again. `shiftKey` is the
-// Confirm click's own modifier, which skips the damage window for this one roll.
+// cancelled damage prompt leaves the card clickable again. `shiftKey` is the Confirm click's
+// own modifier, which skips the damage window for this one roll.
 async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	if (btn.disabled || message.getFlag(SCOPE, "attack")?.resolved) return;
 	btn.disabled = true;
@@ -1095,23 +1168,12 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	// what was actually hit.
 	const targets = attack.targets?.length ? attack.targets : snapshotTargets();
 
-	if (btn.dataset.action === "suffer") {
-		const ok = await executeSuffer(message, actor, { targets }, "attack");
-		// A foe with several printed attacks went to the GM to choose between; the tier is spent
-		// either way, so the card locks, but the button says which of the two happened rather than
-		// going quietly dead on a blow that has not landed yet.
-		if (ok === "pending") btn.innerHTML = WAITING_HTML;
-		if (ok) await lockAttackCard(message, root, { targets });
-		else btn.disabled = false;
-		return;
-	}
-
-	// "roll": whatever the move's OWN ticked bullets add, stacked on top of the tier's own
+	// Whatever the move's OWN ticked bullets add, stacked on top of the tier's own
 	// unconditional numbers (Clash's 7-9 suffers the enemy's attack whether or not anything is
 	// ticked). One list, read where the player ticked it — see pickedOptionLabels and PICK_EFFECTS.
 	const fx = pickedEffects(attack.moveKey, pickedOptionLabels(root));
 
-	const extraDice = [btn.dataset.extraDice ?? "", ...fx.extraDice].filter(Boolean);
+	const extraDice = fx.extraDice.filter(Boolean);
 	const counter   = btn.dataset.counter === "1" || fx.counter;
 	const deplete   = fx.addons.includes(DEPLETE);
 	let ignoresArmor = fx.ignoresArmor;
@@ -1148,8 +1210,47 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	await lockAttackCard(message, root, { yourCall, targets });
 	if (deplete) await depleteAmmoAndPost(message, actor, attack);
 	await rollAndPostDamage(actor, {
-		move: attack.move, weapon: attack.weapon, targets, counter, damage, ignoresArmor,
+		move: attack.move, weapon: attack.weapon, targets, damage, ignoresArmor,
 	});
+
+	// AFTER the damage, because that is the order the tier states it in: "your maneuver works,
+	// mostly (deal your damage), but you suffer your enemy's attack". The 7-9 says it whatever
+	// the player picked and the 10+ says it as strike-hard's price, so both arrive here as the
+	// one flag; Clash's 6-, which deals no damage at all and so has no Confirm to reach this
+	// from, fires the same counter-attack off the miss itself (maybeCounterOnMiss).
+	if (counter) await sufferEnemyAttack(actor, { targets });
+}
+
+/**
+ * Clash's miss, striking back on its own.
+ *
+ * "On a 6-, your maneuver fails and you suffer your enemy's attack" is the whole tier: no damage
+ * dealt, no bullet to tick, nothing for a player to weigh. It used to be a button all the same,
+ * and a button is an offer — one a table that had already moved on to the GM's move never went
+ * back and pressed, leaving the blow unstruck in the log. So the miss fires it.
+ *
+ * FIRED FROM THE ROLL, not from the card, and that is what makes it safe to fire without a latch.
+ * Every other suffering in this file hangs off a chat card that every client renders and any of
+ * them might click; this runs once, inside the `onRoll` that threw the dice, on the one client
+ * that threw them. There is no second copy of it anywhere to guard against.
+ *
+ * @param {Actor}  actor        the character who rolled
+ * @param {Item}   item         the move they rolled it for
+ * @param {Roll}   roll         what the dice came to
+ * @param {object} [attackExtra] what maybeBeginAttack returned, for the targets it froze
+ * @returns {Promise<boolean>} whether a counter-attack was fired
+ */
+export async function maybeCounterOnMiss(actor, item, roll, attackExtra = null) {
+	if (!attackMoveFor(item)?.counterOnMiss) return false;
+	if (!Number.isFinite(roll?.total)) return false;
+	if (classifyResult(roll.total).key !== "failure") return false;
+
+	// The targets frozen at the click, or — for a player who reached for T only once the dice had
+	// landed — whatever they hold now. This runs on the attacker's own client, where
+	// `game.user.targets` is theirs, which is the same latitude resolveAttackTier allows a hit.
+	const frozen = attackFlagsOf(attackExtra)?.targets;
+	await sufferEnemyAttack(actor, { targets: frozen?.length ? frozen : snapshotTargets() });
+	return true;
 }
 
 // Call the Shot's "(your call)": which half of its one pick is being taken. Returns
@@ -1233,15 +1334,32 @@ function damageRowActor(doc) {
  * actor in the world, so the answer up there is always true and means nothing (see the project's
  * isowner-always-true-for-gm note). The GM's own right to press this comes from being the GM.
  */
-function ownsEveryTarget(results) {
-	if (!results?.length) return false;
-	return results.every(r => {
+function ownsEveryTarget(actors) {
+	return !!actors?.length && actors.every(a => a.isOwner);
+}
+
+/**
+ * The actor behind every damage row, or null if any one of them cannot be reached.
+ *
+ * ALL OR NOTHING, because both readers below are all-or-nothing questions: "may I press this for
+ * every target" and "who owns every target". A row that resolves to nothing is a row nobody can
+ * be said to own, so it disqualifies the card rather than being skipped.
+ *
+ * `strict: false` and a try because a uuid can outlive what it points at — a token deleted
+ * mid-fight, a scene closed — and this runs inside a chat render pass, where a throw would take
+ * the whole log's render down with it.
+ */
+function resolveDamageActors(results) {
+	if (!results?.length) return null;
+	const actors = [];
+	for (const r of results) {
 		let doc = null;
-		// `strict: false` because a uuid can outlive what it points at: a token deleted mid-fight,
-		// a scene closed. A throw here would take the whole render pass down with it.
-		try { doc = fromUuidSync(r.uuid, { strict: false }); } catch { return false; }
-		return !!damageRowActor(doc)?.isOwner;
-	});
+		try { doc = fromUuidSync(r.uuid, { strict: false }); } catch { return null; }
+		const actor = damageRowActor(doc);
+		if (!actor) return null;
+		actors.push(actor);
+	}
+	return actors;
 }
 
 /**
@@ -1264,20 +1382,16 @@ function ownsEveryTarget(results) {
  *
  * @returns {string|null} the elected player's user id, or null for "the primary GM's".
  */
-function electedApplier(results) {
-	const actors = [];
-	for (const r of results ?? []) {
-		let doc = null;
-		// `strict: false` and a try, as in `ownsEveryTarget`: a uuid can outlive what it points at,
-		// and a throw here would take the whole render pass down with it.
-		try { doc = fromUuidSync(r.uuid, { strict: false }); } catch { return null; }
-		const actor = damageRowActor(doc);
-		if (!actor) return null;
-		actors.push(actor);
-	}
-	if (!actors.length) return null;
+function electedApplier(actors, message = null) {
+	if (!actors?.length) return null;
 	const owners = (game.users?.players ?? [])
 		.filter(u => u.active && actors.every(a => a.testUserPermission?.(u, "OWNER")))
+		// AND WHO CAN WRITE THE CARD. The latch that stops damage being taken twice lives on the
+		// MESSAGE, so electing a player who cannot update it hands the button to somebody it will
+		// refuse — while standing the GM's copy down at the same time, which leaves a card nobody
+		// at the table can press. That is exactly the shape of the incoming attack a GM's "Which
+		// attack?" pick posts: the GM authored it, so the GM is the one who can latch it.
+		.filter(u => canUserWriteCard(message, u))
 		.map(u => u.id)
 		.sort();
 	return owners[0] ?? null;
@@ -1300,10 +1414,13 @@ export function wireApplyDamage(message, html) {
 	const pending = damage.results.filter(r => !appliedUuids.has(r.uuid));
 
 	const owed = pending.length ? pending : damage.results;
-	const applier = electedApplier(owed);
+	// ONE resolution pass for both questions below. Each row's uuid used to be looked up twice per
+	// render, and chat re-renders on every flag write anywhere in the log.
+	const owedActors = resolveDamageActors(owed);
+	const applier = electedApplier(owedActors, message);
 
 	if (!game.user.isGM) {
-		if (!ownsEveryTarget(owed)) { btn.style.display = "none"; return; }
+		if (!ownsEveryTarget(owedActors)) { btn.style.display = "none"; return; }
 		// The latch that stops the same damage being taken twice lives on the MESSAGE, and a player
 		// does not own a card the GM authored. Say so rather than letting the click write HP and
 		// then fail to record that it did (the same affordance the Suffer button wears).
@@ -1359,9 +1476,10 @@ export function wireApplyDamage(message, html) {
 			if (!t) { lines.push(`<li><strong>${escHtml(r.name)}</strong>: has no HP to damage</li>`); continue; }
 			nextApplied.push({ uuid: r.uuid, effective, oldHp: t.oldHp, newHp: t.newHp });
 			const dead = t.newHp === 0 ? " <em>(0 HP)</em>" : "";
-			// Through the same helper the confirm dialog words its subtraction with: this used to
-			// restate `armor - piercing`, which stopped matching the moment mitigateDamage learned
-			// about an unpierceable floor, and printed armor the arithmetic had not applied.
+			// Through `mitigationDetail`, the one place the subtraction is put into words: this
+			// used to restate `armor - piercing` inline, which stopped matching the moment
+			// mitigateDamage learned about an unpierceable floor, and printed armor the
+			// arithmetic had not applied.
 			const detail = mitigationDetail({ armor, piercing, unpierceable, ignoresArmor: current.weapon?.ignoresArmor });
 			const mit = effective !== r.raw ? ` <span class="stonetop-damage-mitigated">(${r.raw}${detail})</span>` : "";
 			lines.push(`<li><strong>${escHtml(r.name)}</strong>: ${effective} damage${mit}: ${t.oldHp} &rarr; ${t.newHp} HP${dead}</li>`);
@@ -1374,170 +1492,152 @@ export function wireApplyDamage(message, html) {
 	});
 }
 
-// "Suffer your enemy's attack" — a player-side self-write of the PC's HP. Present on the
-// damage results card as a Clash counter (10+ strike-hard, 7-9); the 6- miss suffers via the
-// roll card's failure Confirm instead. Both paths run executeSuffer.
-export function wireSufferAttack(message, html) {
-	const root = html?.[0] ?? html;
-	const btn = root.querySelector(".stonetop-attack-suffer");
-	if (!btn) return;
+// -- Suffering the enemy's attack ---------------------------------------------
+//
+// NOBODY PRESSES A BUTTON TO BE HIT. Clash's 7-9 and its 6- both say "you suffer your enemy's
+// attack" flatly, and its 10+ says it as the price of strike-hard's +1d6; not one of the three is
+// an offer. They used to post a "Suffer your enemy's attack" button that opened a dialog to
+// confirm a number, which put two deliberate clicks between a stated consequence and the damage
+// it states — and left a card in the log with an unstruck blow on it whenever the table moved on
+// without pressing it. The counter-attack fires itself now, and lands on the SAME damage card
+// every other damage roll in this file lands on: the red total, the formula chip, the armor fine
+// print, and one "Take this damage" button that writes the HP once and cannot write it twice.
+//
+// THREE WAYS A FOE'S ATTACKS CAN READ, and each gets its own answer:
+//   one attack           roll it and post the card — 108 of the shipped stat blocks
+//   several              whisper the GM a card of buttons first, because which blow it made is
+//                        their fiction call and the buttons ARE the stat block — 81 of them
+//   none at all          whisper the GM a card asking for the number: the 22 spirits print
+//                        "none", and a Clash rolled with nothing targeted has no block to read.
+//
+// A PRINTED ATTACK WITH NO DIE TAKES THE THIRD ROUTE, not the first, and it is a real foe rather
+// than a hypothetical one: an attack that brought its own tag list is a whole printed attack even
+// with no die on it (utils/damage.js#splitMonsterAttackProse), so the Thraulgwyn Raider's
+// "hair-rope net (thrown, crude, grabby)" is one, and a line reading "by weapon (close, forceful)"
+// is a foe whose ENTIRE damage is die-less. Rolling those as `formula || "0"` posted a damage card
+// for 0 and called the consequence paid. What it costs is exactly the question the third card
+// asks, so it is the card they get — carrying the attack, so the number the GM names still lands
+// under that blow's name, its tags and its armor clause.
+//
+// WHAT IT COUNTS AS AN ATTACK is the damage line AND the foe's damage-rolling moves, because the
+// book puts a second blow in either place (utils/damage.js#foeAttacks). That is what moved 17 of
+// those stat blocks up a row.
 
-	const damage = message.getFlag(SCOPE, "damage");
-	const attack = message.getFlag(SCOPE, "attack");
-	const flagKey = damage ? "damage" : attack ? "attack" : null;
-	const ctx = damage
-		? { attackerUuid: damage.attackerUuid, targets: damage.results }
-		: attack
-			? { attackerUuid: attack.attackerUuid, targets: attack.targets }
-			: null;
-	if (!ctx) { btn.disabled = true; return; }
+/**
+ * The foe hits back. Reads the targeted foe's printed damage line and takes one of the three
+ * routes above; returns whatever was posted.
+ *
+ * THE FIRST TARGET, because Clash is a single-foe move — the card already warns when a player
+ * points it at several, and the one that struck back is the one they closed with.
+ */
+export async function sufferEnemyAttack(pc, { targets } = {}) {
+	if (!pc) return null;
+	const target = targets?.[0] ?? null;
+	// A caught `fromUuid`, because the foe may be an unlinked token on a scene nobody is looking
+	// at, or one deleted mid-fight — and a throw here would swallow the counter-attack whole.
+	const foe = target?.uuid
+		? await fromUuid(target.uuid).then(td => td?.actor ?? null).catch(() => null)
+		: null;
 
-	actorFromUuid(ctx.attackerUuid).then(pc => {
-		if (!pc?.isOwner) { btn.disabled = true; return; }
-		// Owning the PC is not enough: suffering writes a `suffered` latch onto this MESSAGE, and
-		// a player can't update a card the GM authored. Say so rather than letting the click fail
-		// half-way. Mirrors the multi-GM affordance in wireApplyDamage.
-		if (!message.isOwner) {
-			btn.disabled = true;
-			btn.title = "Ask the GM to apply this attack's damage";
-			return;
-		}
-		const state = message.getFlag(SCOPE, flagKey);
-		if (state?.suffered) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-check"></i> Suffered the attack'; return; }
-		// A foe with several printed attacks has been handed to the GM to choose between, and the
-		// blow lands on their click, not this one. Say what is being waited on rather than leaving
-		// a live button that would post a second "Which attack?" card.
-		if (state?.awaitingChoice) { btn.disabled = true; btn.innerHTML = WAITING_HTML; return; }
-		btn.addEventListener("click", async () => {
-			if (btn.disabled) return;
-			btn.disabled = true;
-			// A throw here used to escape the handler, so the button stayed disabled with no
-			// explanation and the rejection went unhandled. Re-enable on failure like a
-			// cancelled prompt does — executeSuffer latches before it writes HP, so a retry
-			// can't double-apply.
-			try {
-				const ok = await executeSuffer(message, pc, ctx, flagKey);
-				if (ok === "pending") btn.innerHTML = WAITING_HTML;
-				else if (ok) btn.innerHTML = '<i class="fas fa-check"></i> Suffered the attack';
-				else btn.disabled = false;
-			} catch (err) {
-				console.error("Stonetop | suffering the attack failed", err);
-				btn.disabled = false;
-			}
-		});
-	}).catch(err => console.error("Stonetop | could not wire the Suffer button", err));
-}
-
-// Roll the foe's counter-attack, confirm the number, and self-write the PC's HP. The incoming
-// number is the clashed foe's stat-block damage die minus the PC's armor, shown in a confirm
-// dialog so the table can adjust for the fiction. Once-only via `flagKey`'s `suffered` marker
-// ("attack" on the roll card, "damage" on the results card). Returns true when applied, false
-// if already suffered or the player cancelled the prompt.
-// Exported for tests: the latch-before-damage ordering below is the whole guard against a
-// player taking the same attack twice, and it is not reachable through the wired button
-// without standing up a chat card and a Dialog.
-export async function executeSuffer(message, pc, ctx, flagKey) {
-	const state = message.getFlag(SCOPE, flagKey);
-	if (state?.suffered || state?.awaitingChoice) return false;
-	const foe = ctx.targets?.[0] ? await fromUuid(ctx.targets[0].uuid).then(td => td?.actor).catch(() => null) : null;
 	// `damage.value` is PROSE ("rusty sword d8+2 (forceful) or crushing grip d8+2 …") — feeding it
 	// to Roll crashes on its commas and words — so it is READ into its printed attacks, each with
-	// its own die and its own armor clause (utils/damage.js#parseMonsterAttacks). `rollFormula` is
-	// the fallback that function applies itself when the prose holds no die at all.
+	// its own die and its own armor clause (utils/damage.js#foeAttacks). `rollFormula` is the
+	// fallback applied when the prose holds no die at all, and the foe's MOVES are read too: the
+	// book routes a second attack through a move, and 19 stat blocks keep a whole blow there.
 	const dmg = foe?.system?.attributes?.damage ?? {};
 	const foeText = String(dmg.value || "").trim();
-	const foeName = ctx.targets?.[0]?.name ?? foe?.name ?? "";
-	const attacks = parseMonsterAttacks(foeText, dmg.rollFormula);
+	const foeName = target?.name ?? foe?.name ?? "";
+	const attacks = foeAttacks(foe);
 
-	// MORE THAN ONE PRINTED ATTACK IS A QUESTION, NOT A GUESS. 68 of the shipped stat blocks offer
-	// two to four, and which one the foe just made is the GM's fiction call — so it is asked as a
-	// card of buttons rather than silently resolved to the primary die. Latch BEFORE posting, for
-	// the same reason the HP write latches before it lands: a second click must not post a second
-	// card. `awaitingChoice` rather than `suffered`, because nothing has been suffered yet.
 	if (attacks.length > 1) {
-		try {
-			await message.setFlag(SCOPE, flagKey, { ...state, awaitingChoice: true });
-		} catch (err) {
-			console.error("Stonetop | could not hand the attack to the GM", err);
-			ui.notifications?.warn("You can't update this attack card. Ask the GM to apply the attack.");
-			return false;
-		}
-		await postSufferChoiceCard({ pc, foeName, foeText, attacks, sourceId: message.id, flagKey });
-		return "pending";
+		return askTheGm(postSufferChoiceCard({ pc, foeName, foeText, attacks }), { foeName, waitingFor: "which attack it made" });
 	}
-
-	const amount = await rollAndConfirmIncoming(pc, attacks[0] ?? null, { foeName, foeText });
-	if (amount === null) return false;
-
-	// Latch BEFORE the HP write, never after.
-	//
-	// The button is gated on the PC's ownership, but this flag lives on the chat MESSAGE — which
-	// a player does NOT own when the GM rolled the attack for them. Applying damage first meant
-	// the HP write landed, the latch then threw on permission, and the card came back on the next
-	// render still unlatched, so the same attack could be suffered a second time. Writing the
-	// latch first makes the failure mode safe: nothing is deducted unless the "already suffered"
-	// marker actually stored.
-	try {
-		await message.setFlag(SCOPE, flagKey, { ...message.getFlag(SCOPE, flagKey), suffered: true });
-	} catch (err) {
-		console.error("Stonetop | could not mark the attack suffered; damage NOT applied", err);
-		ui.notifications?.warn(
-			"You can't update this attack card, so the damage was not applied. Ask the GM to apply it.");
-		return false;
-	}
-
-	await applySufferedDamage(pc, amount, attacks[0] ?? null);
-	return true;
+	// `formula`, not the count: a printed attack can be an attack and still have no die (see above).
+	const only = attacks[0] ?? null;
+	if (only?.formula) return postIncomingDamage(pc, only, { foeName });
+	return askTheGm(postSufferAmountCard({ pc, foeName, foeText, attack: only }), { foeName, waitingFor: "what it costs" });
 }
 
 /**
- * Roll ONE printed attack and ask for the number to take. Shared by the single-attack path above
- * and by the GM's pick below, so both roll the same way and mitigate by the same rule.
+ * A whispered ask, and a public word about it when there is nobody there to read it.
  *
- * The attack's OWN armor clause is what mitigates it, through the same `mitigateDamage` the flow
- * uses for damage dealt to foes: "heat-drain d12+1 (reach, ignores armor)" is picked over the Rime
- * Lord's other attack precisely because armor does not count against it, and a suggestion that
- * subtracted armor anyway would make the choice meaningless. `w/advantage` on the stat line is
- * advantage on the DAMAGE die, applied with the same helper the PC's own damage uses.
+ * `ChatMessage.getWhisperRecipients("GM")` lists every user with the role, connected or not, so a
+ * whisper always sends — it just may reach no one. At a table with the GM away (or none logged in
+ * at all: solo prep, a player trying the sheet out) the counter-attack then leaves NOTHING on the
+ * player's screen. Their own move card said "you suffer your enemy's attack" and then the log went
+ * quiet: the stated consequence silently swallowed, which is the very thing firing the counter
+ * automatically was meant to stop.
  *
- * @returns {Promise<number|null>} the damage to apply, or null if the prompt was cancelled.
+ * Only when no GM is here, and only one line. With a GM at the table the whisper is answered in
+ * seconds and the public damage card follows, so a "waiting on the GM" note every time one of the
+ * 81 multi-attack foes swings would be a message per counter-attack for no one's benefit.
+ *
+ * The blows themselves stay behind the whisper either way — the line says a choice is pending,
+ * never what there is to choose from.
  */
-async function rollAndConfirmIncoming(pc, attack, { foeName, foeText }) {
-	let foeDie = attack?.formula ?? "";
-	let rolled = 0;
-	if (foeDie) {
-		const formula = damageRollFormula(foeDie, attack.rollMode);
-		try { rolled = (await new Roll(formula).evaluate()).total; }
-		catch (err) { console.warn(`Stonetop | Foe damage die "${formula}" is not rollable:`, err); foeDie = ""; }
-	}
-	const armor = Number(pc.system?.attributes?.armor?.value) || 0;
-	const unpierceableArmor = Number(pc.system?.attributes?.armor?.unpierceable) || 0;
-	const suggested = foeDie
-		? mitigateDamage(rolled, { armor, piercing: attack?.piercing ?? 0, unpierceable: unpierceableArmor, ignoresArmor: attack?.ignoresArmor ?? false })
-		: 0;
-	return promptIncomingDamage({
-		pcName: pc.name, foeName, foeText, foeDie, rolled, armor, suggested,
-		attackLabel: attack?.label ?? "", rollMode: attack?.rollMode ?? "normal",
-		piercing: attack?.piercing ?? 0, ignoresArmor: attack?.ignoresArmor ?? false,
-		unpierceable: unpierceableArmor,
+async function askTheGm(posting, { foeName, waitingFor }) {
+	const card = await posting;
+	if (anyActiveGM()) return card;
+
+	const who = escHtml(foeName || "The enemy");
+	await ChatMessage.create({
+		content: stonetopChatCard("Waiting on the GM", `<div class="card-content">
+			<p><strong>${who}</strong> strikes back. It is for the GM to say ${escHtml(waitingFor)}, and no GM is here to answer.</p>
+		</div>`, "stonetop-suffer-waiting-card"),
+		speaker: { alias: "Stonetop" },
 	});
+	return card;
 }
 
-/** Write the PC's HP and say so on a card. The one place suffered damage lands. */
-async function applySufferedDamage(pc, amount, attack) {
-	const t = await applyDamageToActor(pc, amount);
-	const named = attack?.label ? ` (${escHtml(attack.label)})` : "";
-	await ChatMessage.create({
-		content: stonetopChatCard("Suffered the enemy's attack", `<div class="card-content"><p><strong>${escHtml(pc.name)}</strong> takes <strong>${amount}</strong> damage${named}: ${t?.oldHp} &rarr; ${t?.newHp} HP.</p></div>`, "stonetop-attack-suffer-card"),
-		speaker: ChatMessage.getSpeaker({ actor: pc }),
+/**
+ * Roll ONE of the foe's printed attacks at the character, and post it on the shared damage card.
+ *
+ * THE FOE'S ATTACK IS THE CARD'S WEAPON, which is not a pun. `rollAndPostDamage` reads a weapon
+ * for exactly the three things a printed attack also carries — what it is called, what it pierces,
+ * and whether it bypasses armor — and `wireApplyDamage` mitigates with them against the target's
+ * armor at apply time. So "heat-drain d12+1 (reach, ignores armor)" reaches a character's HP
+ * through the same arithmetic a character's own axe reaches a monster's, and the two cannot drift
+ * apart. The tags ride along too, so an incoming messy or grabby blow prints the same fiction
+ * notes on its damage card that an outgoing one does (tagNoticesHtml).
+ *
+ * `selfTarget` and `selfHarm` are the same pair a move option that burns whoever ticked it uses
+ * (rollOptionDamage): the row names the character, and the button says "Take this damage" rather
+ * than "Apply damage", which is work waiting on somebody else.
+ *
+ * THE DAMAGE WINDOW IS NOT ASKED, and could not be. It exists for the fiction-gated bonuses that
+ * ride a CHARACTER's own damage die (see dialogs/RollDialog.js#promptDamage); a stat block's
+ * printed d12+1 is the book's number, with nothing for them to attach to. `rollMode` carries the
+ * stat line's own "w/advantage", which damageRollFormula applies to the die.
+ */
+async function postIncomingDamage(pc, attack, { foeName = "" } = {}) {
+	return rollAndPostDamage(pc, {
+		// What the card's title and its follow-up both compose from: "Rime Lord's attack: damage",
+		// then "…: damage applied". The ATTACK's own name goes in the weapon slot below, where it
+		// prints as the row's fine print beside whatever armor clause it carries.
+		move: foeName ? `${foeName}'s attack` : "The enemy's attack",
+		weapon: {
+			name: attack?.label ?? "",
+			range: [],
+			piercing: attack?.piercing ?? 0,
+			ignoresArmor: attack?.ignoresArmor ?? false,
+			tags: attack?.tags ?? [],
+		},
+		targets: [selfTarget(pc)],
+		selfHarm: true,
+		damage: {
+			base: attack?.formula || "0",
+			rollMode: attack?.rollMode ?? "normal",
+			bonus: 0,
+			extraDice: "",
+		},
 	});
 }
 
 /**
- * How the rolled number became the suggested one, said out loud — the dialog's whole claim to
- * being a confirmation rather than a number appearing from nowhere. An attack that bypasses armor
- * says so instead of showing a subtraction that did not happen, and one that pierces shows the
- * armor it actually met.
+ * How the rolled number became the suggested one, said out loud — what lets a mitigated total
+ * read as arithmetic rather than a number from nowhere. An attack that bypasses armor says so
+ * instead of showing a subtraction that did not happen, and one that pierces shows the armor it
+ * actually met.
  */
 function mitigationDetail({ armor, piercing, ignoresArmor, unpierceable = 0 }) {
 	const floor = Math.max(0, Math.min(Number(unpierceable) || 0, Number(armor) || 0));
@@ -1556,39 +1656,6 @@ function mitigationDetail({ armor, piercing, ignoresArmor, unpierceable = 0 }) {
 	if (!armor) return "";
 	if (piercing) return ` − ${effective} armor (${armor} − ${piercing} piercing)`;
 	return ` − ${armor} armor`;
-}
-
-// Confirm the incoming-damage number for "suffer your enemy's attack". Returns the number
-// to apply, or null on cancel.
-function promptIncomingDamage({ pcName, foeName, foeDie, foeText, rolled, armor, suggested, attackLabel = "", rollMode = "normal", piercing = 0, ignoresArmor = false, unpierceable = 0 }) {
-	const adv = rollMode === "adv" ? " w/advantage" : rollMode === "dis" ? " w/disadvantage" : "";
-	const struck = attackLabel ? `${escHtml(attackLabel)} ` : "";
-	return new Promise(resolve => {
-		new Dialog({
-			title: "Suffer your enemy's attack",
-			content: `<form class="stonetop-suffer-attack">
-				<p><strong>${escHtml(foeName || "The enemy")}</strong> attacks <strong>${escHtml(pcName)}</strong>${attackLabel ? ` with <strong>${escHtml(attackLabel)}</strong>` : ""}.</p>
-				${foeText ? `<p class="stonetop-suffer-fiction">${escHtml(foeText)}</p>` : ""}
-				<p class="stonetop-suffer-detail">${foeDie ? `Rolled ${rolled} (${struck}${escHtml(foeDie)}${adv})` : "No stat-block damage found: enter the damage"}${mitigationDetail({ armor, piercing, ignoresArmor, unpierceable })}.</p>
-				<label class="stonetop-suffer-field">Damage to take
-					<input type="number" name="amount" value="${suggested}" min="0" step="1">
-				</label>
-			</form>`,
-			buttons: {
-				apply: {
-					label: "Take the damage",
-					callback: htmlEl => {
-						const root = htmlEl?.[0] ?? htmlEl;
-						resolve(Math.max(0, Math.round(Number(root.querySelector('input[name="amount"]')?.value) || 0)));
-					},
-				},
-				cancel: { label: "Cancel", callback: () => resolve(null) },
-			},
-			default: "apply",
-			close: () => resolve(null),
-			render: bringDialogToFront,
-		}, { classes: ["dialog", "stonetop", "stonetop-suffer-attack-dialog"] }).render(true);
-	});
 }
 
 // -- "Which attack?" — the GM's pick for a foe with more than one -------------
@@ -1644,32 +1711,33 @@ export function sufferChoiceCardBody({ pcName, foeName, foeText, attacks }) {
  *
  * WHISPERED TO THE GMs, not posted to the table. The buttons ARE the stat block's damage line —
  * every die, every piercing value, which blow ignores armor — and that is the GM's to know. The
- * player who clicked "Suffer your enemy's attack" learns the answer the moment it is chosen,
- * because the damage card that follows names the attack that struck them.
+ * table learns the answer the moment it is chosen, because the damage card that follows is public
+ * and names the attack that struck; the blows the foe did NOT make stay behind the whisper.
  *
- * `sourceId` and `flagKey` point back at the card the player clicked, so the pick can retire its
- * button from "waiting on the GM" to "suffered" once the HP is actually written.
+ * IT POINTS AT NOTHING, which it used to have to. While the player pressed a "Suffer your enemy's
+ * attack" button, this card carried that message's id so the pick could retire it from "waiting on
+ * the GM" to "suffered". There is no such button now — the tier that states the counter-attack
+ * fires it — so the pick has only its own latch to keep.
  */
-async function postSufferChoiceCard({ pc, foeName, foeText, attacks, sourceId, flagKey }) {
+async function postSufferChoiceCard({ pc, foeName, foeText, attacks }) {
 	const body = sufferChoiceCardBody({ pcName: pc.name, foeName, foeText, attacks });
-	return ChatMessage.create({
-		content: stonetopChatCard("Which attack?", body, "stonetop-suffer-choice-card"),
-		whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
-		speaker: { alias: "Stonetop" },
-		flags: { [SCOPE]: { sufferChoice: { pcUuid: pc.uuid, foeName, foeText, attacks, sourceId, flagKey, chosen: null } } },
+	return whisperGm(stonetopChatCard("Which attack?", body, "stonetop-suffer-choice-card"), {
+		flags: { [SCOPE]: { sufferChoice: { pcUuid: pc.uuid, foeName, foeText, attacks, chosen: null } } },
 	});
 }
 
 /**
- * Wire the "Which attack?" card. The GM picks; that pick rolls the attack, opens the same confirm
- * dialog the single-attack path opens, and writes the PC's HP on this client.
+ * Wire the "Which attack?" card. The GM picks; that pick rolls the attack and posts it as an
+ * ordinary damage card, which the table then sees and somebody presses.
  *
- * THE GM WRITES THE HP HERE, and that is the one place suffering is not a player-side self-write.
- * The card is a GM whisper, so the player has no button to press on it, and bouncing the number
- * back to them would leave the blow hanging on a second person's click. A GM owns every actor, so
- * the write lands; `isPrimaryGM` keeps a second GM's copy of the card from applying it twice, the
- * same guard `wireApplyDamage` uses and for the same reason — the `chosen` latch is written before
- * the HP, but two clients that click within one round trip both read it empty.
+ * `isPrimaryGM` keeps a second GM's copy of the card from posting the blow twice, the same guard
+ * `wireApplyDamage` uses and for the same reason — the `chosen` latch is written before the card,
+ * but two clients that click within one round trip both read it empty.
+ *
+ * WHO PRESSES WHAT FOLLOWS is `electedApplier`'s business, not this card's. The damage card is
+ * authored on the GM's client, so the GM is the one who can latch it — which is what the
+ * can-write-the-card filter over there exists to notice, rather than electing the player who owns
+ * the character and leaving a card with two dead buttons on it.
  */
 export function wireSufferChoice(message, html) {
 	const root = html?.[0] ?? html;
@@ -1690,9 +1758,9 @@ export function wireSufferChoice(message, html) {
 	if (!game.user.isGM) return settle("The GM chooses the enemy's attack");
 	if (!isPrimaryGM()) return settle("Another GM will choose this attack");
 
-	// Every button goes dead while one is being answered, and comes back if the GM cancels the
-	// confirm dialog — the same "a cancelled prompt leaves the card clickable" rule the tier
-	// Confirms follow (resolveAttackTier), so a mis-click costs nothing.
+	// Every button goes dead while one is being answered, and comes back if the pick could not be
+	// enacted — the same "a refused action leaves the card clickable" rule the tier Confirms
+	// follow (resolveAttackTier), so nothing is lost when a character has gone away.
 	const reopen = () => buttons.forEach(b => { b.disabled = false; b.title = ""; });
 	buttons.forEach(btn => btn.addEventListener("click", async () => {
 		if (btn.disabled) return;
@@ -1707,12 +1775,17 @@ export function wireSufferChoice(message, html) {
 }
 
 /**
- * Enact one pick: roll that attack, confirm the number, write the PC's HP, and retire the button
- * on the card the player clicked. Returns false when the GM cancelled the confirm dialog, which
- * leaves the card askable again.
+ * Enact one pick: roll that attack and post it as a damage card. Returns false when the pick could
+ * not be recorded, which leaves the card askable again.
  *
- * Exported for tests, like `executeSuffer`, because the latch-before-damage ordering is the whole
- * guard against one attack landing twice and is not reachable through a rendered card and a Dialog.
+ * LATCHED BEFORE THE CARD IS POSTED, never after. The HP itself is written by the deliberate press
+ * on the card this posts, which carries its own `applied` latch — but a second click here within
+ * one round trip would post a SECOND card, and a character can be hit twice by pressing two
+ * buttons that should never have both existed. So the latch goes down first, and a failure to
+ * store it posts nothing at all.
+ *
+ * Exported for tests: that ordering is the whole guard against one attack landing twice, and it
+ * is not reachable through a rendered card.
  */
 export async function resolveSufferChoice(message, index) {
 	const choice = message.getFlag(SCOPE, "sufferChoice");
@@ -1722,29 +1795,151 @@ export async function resolveSufferChoice(message, index) {
 	const pc = await actorFromUuid(choice.pcUuid);
 	if (!pc) { ui.notifications?.warn("That character is no longer available."); return false; }
 
-	const amount = await rollAndConfirmIncoming(pc, attack, { foeName: choice.foeName, foeText: choice.foeText });
-	if (amount === null) return false;
-
-	// Latch before the HP write, never after — see executeSuffer.
 	try {
 		await message.setFlag(SCOPE, "sufferChoice", { ...choice, chosen: index });
 	} catch (err) {
-		console.error("Stonetop | could not record the chosen attack; damage NOT applied", err);
-		ui.notifications?.warn("That attack could not be recorded, so no damage was applied.");
+		console.error("Stonetop | could not record the chosen attack; nothing was dealt", err);
+		ui.notifications?.warn("That attack could not be recorded, so nothing was dealt.");
 		return false;
 	}
 
-	await applySufferedDamage(pc, amount, attack);
+	// The card offers every printed attack, and one of them may have no die — its row says "no
+	// damage die" in the die's place. Picking it asks what it costs rather than rolling `0` and
+	// calling the blow struck; the attack rides along, so the answer still lands under its name.
+	if (attack.formula) await postIncomingDamage(pc, attack, { foeName: choice.foeName });
+	else await postSufferAmountCard({ pc, foeName: choice.foeName, foeText: choice.foeText, attack });
+	return true;
+}
 
-	// Retire the player's "waiting on the GM" button. Best-effort: the blow has already landed, and
-	// the source card's own `awaitingChoice` marker already stops it being clicked a second time —
-	// this only upgrades what it says. A card since deleted must not undo the damage.
-	try {
-		const source = game.messages?.get(choice.sourceId);
-		const current = source?.getFlag(SCOPE, choice.flagKey);
-		if (current) await source.setFlag(SCOPE, choice.flagKey, { ...current, awaitingChoice: false, suffered: true });
-	} catch (err) {
-		console.warn("Stonetop | could not retire the Suffer button on the source card", err);
+// -- "Name the enemy's damage" — the GM's number for a foe with none ----------
+
+/**
+ * Ask the GM what a blow with no printed damage die costs.
+ *
+ * TWO FOES ARRIVE HERE AND THEY ARE NOT THE SAME FOE. The 22 shipped spirits print "none" on
+ * their damage line, so there is genuinely nothing to roll and inventing a die for them would be
+ * damage the book never gave; and a Clash rolled with nothing targeted has no stat block to read
+ * at all. Either way the number is the GM's to name.
+ *
+ * WHISPERED, like the "Which attack?" card and for the same reason. Naming it used to be a field
+ * in the dialog the PLAYER was shown, which handed the player a box they had no honest way to
+ * fill: what the thing hits for is the GM's to know.
+ *
+ * WHAT THEY TYPE IS WHAT THE BLOW DEALS, not what the character ends up losing. It flows through
+ * the ordinary damage card from there, so armor comes off it exactly as it comes off every other
+ * blow in this file — said out loud under the field, so the number is typed knowing it.
+ */
+async function postSufferAmountCard({ pc, foeName, foeText, attack = null }) {
+	const armor = Number(pc.system?.attributes?.armor?.value) || 0;
+	// A named blow arrives here when the stat block printed the attack but no die for it — the
+	// raider's net. Saying which one is being priced is the difference between "name a number"
+	// and "name a number for THIS", and the tags below it are why the number might not be 0.
+	const struckWith = attack?.label ? ` with its <strong>${escHtml(attack.label)}</strong>` : "";
+	const body = `<div class="card-content">
+		<p><strong>${escHtml(foeName || "The enemy")}</strong> strikes <strong>${escHtml(pc.name)}</strong>${struckWith}.</p>
+		${foeText ? `<p class="stonetop-suffer-fiction">${escHtml(foeText)}</p>` : ""}
+		<p>No damage die is printed for this attack, so what it costs is yours to name.</p>
+		<label class="stonetop-suffer-field">Damage the blow deals
+			<input type="number" class="stonetop-suffer-amount" value="0" min="0" step="1">
+		</label>
+		<p class="stonetop-suffer-detail">${armor
+			? `${escHtml(pc.name)}'s ${armor} armor comes off it when the damage is taken.`
+			: `${escHtml(pc.name)} wears no armor, so all of it lands.`}</p>
+		<div class="card-buttons stonetop-card-buttons stonetop-attack-actions">
+			<button type="button" class="stonetop-attack-btn stonetop-suffer-deal">
+				<i class="fas fa-hand-fist"></i> Deal it
+			</button>
+		</div>
+	</div>`;
+	return whisperGm(stonetopChatCard("Name the enemy's damage", body, "stonetop-suffer-amount-card"), {
+		flags: { [SCOPE]: { sufferAmount: { pcUuid: pc.uuid, foeName, attack, dealt: null } } },
+	});
+}
+
+/**
+ * Wire the "Name the enemy's damage" card: the GM types a number and presses once.
+ *
+ * Gated like the pick above — GMs only, and the primary one of them, because the `dealt` latch is
+ * written before the card it posts and two clients clicking within a round trip both read it
+ * empty.
+ */
+export function wireSufferAmount(message, html) {
+	const root = html?.[0] ?? html;
+	const btn = root.querySelector(".stonetop-suffer-deal");
+	if (!btn) return;
+	const input = root.querySelector(".stonetop-suffer-amount");
+
+	const settle = (label) => {
+		btn.disabled = true;
+		if (input) input.disabled = true;
+		if (label) btn.title = label;
+	};
+
+	const state = message.getFlag(SCOPE, "sufferAmount");
+	if (!state) return settle("This card has lost the attack it was asking about");
+	// Against null, never falsiness: 0 is a real answer here — a blow that turned out to cost
+	// nothing — and `!state.dealt` would leave the card askable again after it was answered.
+	if (isDealt(state)) {
+		settle();
+		btn.innerHTML = `<i class="fas fa-check"></i> Dealt ${state.dealt}`;
+		return;
 	}
+	if (!game.user.isGM) return settle("The GM names this damage");
+	if (!isPrimaryGM()) return settle("Another GM will name this damage");
+
+	btn.addEventListener("click", async () => {
+		if (btn.disabled) return;
+		btn.disabled = true;
+		try {
+			if (!await dealSufferedAmount(message, input?.value)) btn.disabled = false;
+		} catch (err) {
+			console.error("Stonetop | naming the enemy's damage failed", err);
+			btn.disabled = false;
+		}
+	});
+}
+
+/** Whether this card has already been answered. Against null, for the reason above. */
+function isDealt(state) {
+	return state?.dealt !== null && state?.dealt !== undefined;
+}
+
+/**
+ * Enact the GM's number: latch it, then post it as a damage card. Returns false when it could not
+ * be recorded, which hands the button back.
+ *
+ * A FLAT NUMBER IS A FORMULA `Roll` TAKES, which is what keeps this on the one damage path rather
+ * than a second one that writes HP directly: the character's armor meets it there, the card shows
+ * the arithmetic it used, and the "Take this damage" button latches it like any other blow.
+ *
+ * Exported for tests, like the pick above, for the same latch-before-the-card ordering.
+ */
+export async function dealSufferedAmount(message, amount) {
+	const state = message.getFlag(SCOPE, "sufferAmount");
+	if (!state || isDealt(state)) return false;
+
+	const pc = await actorFromUuid(state.pcUuid);
+	if (!pc) { ui.notifications?.warn("That character is no longer available."); return false; }
+	const dealt = Math.max(0, Math.round(Number(amount) || 0));
+
+	try {
+		await message.setFlag(SCOPE, "sufferAmount", { ...state, dealt });
+	} catch (err) {
+		console.error("Stonetop | could not record the named damage; nothing was dealt", err);
+		ui.notifications?.warn("That damage could not be recorded, so nothing was dealt.");
+		return false;
+	}
+
+	// ON THE ATTACK THAT WAS PRICED, where there was one. A die-less printed attack still carries
+	// everything but its number — the raider's net is thrown, crude and grabby — so the named
+	// damage lands under that blow's name, mitigates against its armor clause, and prints its
+	// fiction notes. With no attack behind it (a foe printing "none", or nothing targeted at all)
+	// the number is all there is, and the blank below is what it rides.
+	await postIncomingDamage(pc, {
+		label: "", tags: [], piercing: 0, ignoresArmor: false, rollMode: "normal",
+		...(state.attack ?? {}),
+		// Last, so it beats the priced attack's own empty formula rather than being beaten by it.
+		formula: String(dealt),
+	}, { foeName: state.foeName });
 	return true;
 }

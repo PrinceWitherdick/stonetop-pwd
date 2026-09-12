@@ -117,9 +117,11 @@ describe("maybeBeginAttack with a weapon already chosen", () => {
 		// The d10 that replaces the PC's own die, and the piercing the damage card reads back.
 		expect(attack.weapon.damageDie).toBe("d10");
 		expect(attack.weapon.piercing).toBe(2);
-		// Still a Clash: its 10+ pick-one and its counter-attack tiers come along.
-		expect(begun.tierActions.success).toContain('data-action="roll"');
-		expect(begun.tierActions.failure).toContain('data-action="suffer"');
+		// Still a Clash: its 10+ pick-one and its counter-attack tier come along.
+		expect(begun.tierActions.success).toContain("stonetop-attack-confirm");
+		expect(begun.tierActions.partial).toContain('data-counter="1"');
+		// ...and its 6- carries no button: the miss suffers the enemy's attack on its own.
+		expect(begun.tierActions.failure).toBeUndefined();
 	});
 
 	it("falls back to the prompt when the named weapon isn't on offer", async () => {

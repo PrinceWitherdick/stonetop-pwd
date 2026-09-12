@@ -1,9 +1,9 @@
 import { maybeRemindPotentialForGreatness } from "../actors/character/WouldBeHeroAsterisk.js";
-import { escHtml, formatOutcomeDetail, stripHtmlToText } from "./strings.js";
+import { escHtml, formatOutcomeDetail, stripHtmlToText, sign } from "./strings.js";
 import { pickLimitsFrom } from "./move-picks.js";
 import { pickLeadText, TIER_KEYS, TIER_LABELS } from "./move-results.js";
 import { markRolledTier } from "./move-tiers.js";
-import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge, pickListItem, descriptionPickTiers } from "./chat.js";
+import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge, pickListItem, descriptionPickTiers, cardNoticeHtml } from "./chat.js";
 import { adjustXp } from "./xp.js";
 import { composeDamageFormula, normalizeDamageBonusDice } from "./damage.js";
 import { SYSTEM_ID } from "../system-id.js";
@@ -44,7 +44,8 @@ export function classifyResult(total) {
 	return                   { key: "failure", label: "Miss"       };
 }
 
-export function sign(n) { return n >= 0 ? `+${n}` : `${n}`; }
+// Defined in ./strings.js, re-exported here because ten modules already reach for it at this name.
+export { sign };
 
 // The spring Seasons Change result table (Book I): the rolling PC picks a seasonal
 // gain on a 7+. Shared by the Spring Burst walkthrough, the steading's Seasons Change
@@ -463,12 +464,12 @@ function _woundReminderHtml(actor, moveName) {
 		w && !w.healed && w.mechanicalTag &&
 		(w.reminderMove === "*" || (baseName && w.reminderMove === baseName)),
 	);
-	if (!matches.length) return "";
-	const items = matches.map(w => `<li>${escHtml(w.mechanicalTag)}</li>`).join("");
-	return `<div class="row row--border stonetop-roll-wound-notice">
-		<h3 class="cell__subtitle"><i class="fas fa-triangle-exclamation"></i> Lasting injury</h3>
-		<ul>${items}</ul>
-	</div>`;
+	return cardNoticeHtml({
+		className: "stonetop-roll-wound-notice",
+		icon: "fa-triangle-exclamation",
+		title: "Lasting injury",
+		items: matches.map(w => `<li>${escHtml(w.mechanicalTag)}</li>`),
+	});
 }
 
 /**
@@ -781,6 +782,10 @@ export function damageRollFormula(formula, rollMode) {
  * @param {string} [options.rollMode]  - "adv" | "dis" | "normal" (advantage/disadvantage on the damage die)
  * @param {number} [options.bonus]     - Flat one-off damage modifier
  * @param {string|string[]} [options.extraDice] - One-off extra damage dice ("1d6")
+ * @param {string} [options.notices] - Ready-made HTML for the card's notice slot: the fiction a
+ *   weapon's tags owe the table (combat/attack-flow.js#tagNoticesHtml). Passed in rather than
+ *   built here because this card is the NO-TARGET half of a pair, and the targeted half builds
+ *   its own body; one source for the HTML is what keeps the two from wording a blow differently.
  * @returns {Promise<Roll>}
  */
 export async function rollDamage(formula, actor, options = {}) {
@@ -795,7 +800,7 @@ export async function rollDamage(formula, actor, options = {}) {
 
 	await roll.toMessage({
 		speaker:  ChatMessage.getSpeaker({ actor }),
-		flavor:   _rollCard({ header: label, buttons: true, total: roll.total, formula: roll.formula, dieResults: dieResultsText(roll), conditionsHtml: conditionsRowHtml(conditions), badge: damageBadge(), sectionClass: "stonetop-damage-roll-card", damage: true }),
+		flavor:   _rollCard({ header: label, buttons: true, total: roll.total, formula: roll.formula, dieResults: dieResultsText(roll), conditionsHtml: conditionsRowHtml(conditions), noticesHtml: options.notices ?? "", badge: damageBadge(), sectionClass: "stonetop-damage-roll-card", damage: true }),
 		rollMode: game.settings.get("core", "rollMode"),
 	});
 

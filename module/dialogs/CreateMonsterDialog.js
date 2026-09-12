@@ -141,7 +141,66 @@ export class CreateMonsterDialog extends StonetopDialog {
 		form.querySelector(".cm-next")?.addEventListener("click", () => this._selectNext(form));
 		form.querySelector(".cm-create")?.addEventListener("click", () => this._submit(form));
 		this._wireMoves(form);
+		this._wireAttacks(form);
 		this._syncNext(form);
+	}
+
+	// THE ADD-A-CARD REPEATER, which both authored lists are: a `<template>` in the .hbs cloned
+	// onto a list, a remove button per card, and an `is-empty` class that shows the "none yet"
+	// placeholder while there are none. `kind` is the `cm-<kind>-*` class stem that the markup,
+	// the CSS and these two methods share.
+	//
+	// `fill` writes the new card's own fields; `afterChange` is whatever else the form owes the
+	// rest of itself when a card comes or goes (the attacks list re-derives the damage line).
+	_addCard(form, kind, { fill = null, focus = false, afterChange = null } = {}) {
+		const list = form.querySelector(`.cm-${kind}-list`);
+		const card = form.querySelector(`.cm-${kind}-tpl`)?.content?.firstElementChild?.cloneNode(true);
+		if (!list || !card) return null;
+		fill?.(card);
+		card.querySelector(`.cm-${kind}-remove`)?.addEventListener("click", () => {
+			card.remove();
+			this._syncListEmpty(form, kind);
+			afterChange?.();
+		});
+		list.appendChild(card);
+		this._syncListEmpty(form, kind);
+		afterChange?.();
+		if (focus) card.querySelector(`.cm-${kind}-name`)?.focus();
+		return card;
+	}
+
+	// Show a list's placeholder only while it holds no cards.
+	_syncListEmpty(form, kind) {
+		const list = form.querySelector(`.cm-${kind}-list`);
+		if (list) list.classList.toggle("is-empty", list.querySelectorAll(`.cm-${kind}-card`).length === 0);
+	}
+
+	// Step 6's "other attacks": the same add-a-card repeater the moves section uses, because a
+	// creature's second blow is authored the same way its moves are — a row the GM fills in, not
+	// a fixed field. Each card carries its own tag chips, so "ignores armor" lands on the blow
+	// that ignores armor and not on the one beside it.
+	_wireAttacks(form) {
+		form.querySelector(".cm-attack-add")?.addEventListener("click", () =>
+			this._addAttackCard(form, { focus: true }));
+		this._syncListEmpty(form, "attack");
+	}
+
+	// Append one editable attack card. A card changes the damage line the moment it exists,
+	// before a key is pressed: the summary has to show the extra blow rather than wait for the
+	// first keystroke to reach it.
+	_addAttackCard(form, { focus = false } = {}) {
+		return this._addCard(form, "attack", { focus, afterChange: () => this._recompute(form) });
+	}
+
+	// Read the authored attack cards, dropping any left entirely blank.
+	_readAttacks(form) {
+		return Array.from(form.querySelectorAll(".cm-attack-card")).map(card => ({
+			name: (card.querySelector(".cm-attack-name")?.value ?? "").trim(),
+			die:  (card.querySelector(".cm-attack-die")?.value ?? "").trim(),
+			// Scoped to THIS card, which is the whole reason the chips carry a class instead of a
+			// shared `name` — form-wide, every card's ticks would pile onto every attack.
+			tags: Array.from(card.querySelectorAll(".cm-attack-tag:checked")).map(i => i.value),
+		})).filter(a => a.name || a.die || a.tags.length);
 	}
 
 	// Moves section: the book prompts are quick-add buttons and every move is an
@@ -155,32 +214,19 @@ export class CreateMonsterDialog extends StonetopDialog {
 			}));
 		form.querySelector(".cm-move-add")?.addEventListener("click", () =>
 			this._addMoveCard(form, { focus: true }));
-		this._syncMovesEmpty(form);
+		this._syncListEmpty(form, "move");
 	}
 
-	// Append one editable move card (cloned from the template in the .hbs), optionally
-	// pre-filled from a book prompt and focused for immediate editing.
+	// Append one editable move card, optionally pre-filled from a book prompt and focused for
+	// immediate editing.
 	_addMoveCard(form, { name = "", description = "", focus = false } = {}) {
-		const list = form.querySelector(".cm-move-list");
-		const tpl  = form.querySelector(".cm-move-tpl");
-		const card = tpl?.content?.firstElementChild?.cloneNode(true);
-		if (!list || !card) return null;
-		card.querySelector(".cm-move-name").value = name;
-		card.querySelector(".cm-move-desc").value = description;
-		card.querySelector(".cm-move-remove")?.addEventListener("click", () => {
-			card.remove();
-			this._syncMovesEmpty(form);
+		return this._addCard(form, "move", {
+			focus,
+			fill: card => {
+				card.querySelector(".cm-move-name").value = name;
+				card.querySelector(".cm-move-desc").value = description;
+			},
 		});
-		list.appendChild(card);
-		this._syncMovesEmpty(form);
-		if (focus) card.querySelector(".cm-move-name")?.focus();
-		return card;
-	}
-
-	// Show the "no moves yet" placeholder only while the list is empty.
-	_syncMovesEmpty(form) {
-		const list = form.querySelector(".cm-move-list");
-		if (list) list.classList.toggle("is-empty", list.querySelectorAll(".cm-move-card").length === 0);
 	}
 
 	// Read the authored move cards, dropping any left entirely blank.
@@ -249,6 +295,10 @@ export class CreateMonsterDialog extends StonetopDialog {
 			advice.textContent = s.rangeAdvice;
 			advice.hidden = !s.rangeAdvice;
 		}
+		// An extra attack's die field stands empty when it shares the creature's die, so the
+		// creature's die IS its placeholder — "blank means d8+2" said in the box rather than only
+		// in a tooltip, and it follows along as the organization and modifiers change.
+		form.querySelectorAll(".cm-attack-die").forEach(el => { el.placeholder = derived.rollFormula; });
 	}
 
 	/** Read the worksheet into the shape computeMonster() and _buildActorData() expect. */
@@ -270,6 +320,8 @@ export class CreateMonsterDialog extends StonetopDialog {
 			customTags:   text("customTags"),
 			hpMods:       checks("hpMod"),
 			armorMods:    checks("armorMod"),
+			attackName:   text("attackName"),
+			extraAttacks: this._readAttacks(form),
 			damageTags:   checks("damageTag"),
 			damageMods:   checks("damageMod"),
 			moves:        withMoves ? this._readMoves(form) : [],

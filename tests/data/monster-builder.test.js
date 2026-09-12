@@ -6,6 +6,7 @@ import {
 	ORGANIZATIONS,
 	SIZES,
 } from "../../module/data/monster-builder.js";
+import { parseMonsterAttacks } from "../../module/utils/damage.js";
 
 describe("stepDie", () => {
 	it("steps up and down the ladder", () => {
@@ -120,6 +121,126 @@ describe("computeMonster — damage", () => {
 		expect(out.damageValue).toBe("d8 w/advantage");
 	});
 
+	it("heads the damage line with what the monster attacks with", () => {
+		// Every printed stat block names the blow before its die, and everything that reads the
+		// line back apart keeps that name: the combat pick's buttons, and the damage card's fine
+		// print. Without one the worksheet produced a bare "d8+2 (close)" and both came back blank.
+		const out = computeMonster({
+			organization: "group",
+			attackName: "rusty sword",
+			damageTags: ["close"],
+			damageMods: ["strong"],
+		});
+		expect(out.damageValue).toBe("rusty sword d8+2 (close, forceful)");
+		// The name is prose only. The rollable field stays the bare die it always was.
+		expect(out.rollFormula).toBe("d8+2");
+	});
+
+	it("leaves the line unnamed when nothing was typed", () => {
+		expect(computeMonster({ organization: "group" }).damageValue).toBe("d8");
+		expect(computeMonster({ organization: "group", attackName: "   " }).damageValue).toBe("d8");
+	});
+
+	it("keeps a typed name from smuggling a second die onto the line", () => {
+		// "claws d6" ahead of a d8 line makes d6 the FIRST die in the string, so every reader of
+		// the prose rolls d6 while rollFormula still says d8. The name is prose; the die is not.
+		const out = computeMonster({ organization: "group", attackName: "claws d6" });
+		expect(out.damageValue).toBe("claws d8");
+	});
+
+	it("takes EVERY die out of a typed name, not just the first", () => {
+		// The name is free text, so a GM types "claws d6 and fangs d10". Stripping one die leaves
+		// the other standing at the head of the line, which is the same bug wearing a longer
+		// name: the sheet's roll button and the counter-attack read d10 off the prose while
+		// rollFormula says d8.
+		const out = computeMonster({
+			organization: "group", attackName: "claws d6 and fangs d10", damageTags: ["close"],
+		});
+		expect(out.damageValue).toBe("claws and fangs d8 (close)");
+		expect(parseMonsterAttacks(out.damageValue, out.rollFormula).map(a => a.formula)).toEqual(["d8"]);
+	});
+
+	it("takes them out of an EXTRA attack's name too, which reads the same field", () => {
+		const out = computeMonster({
+			organization: "group", attackName: "claws",
+			extraAttacks: [{ name: "bow d6 or sling d4", tags: ["near"] }],
+		});
+		expect(out.damageValue).toContain("bow or sling d8 (near)");
+	});
+
+	it("keeps a typed name from breaking the tag list open", () => {
+		// The tag list is found by counting parens, so a stray one swallows the rest of the line.
+		const out = computeMonster({ organization: "group", attackName: "sword (rusty", damageTags: ["close"] });
+		expect(out.damageValue).toBe("sword rusty d8 (close)");
+	});
+
+	it("prints a second attack the way the book prints one", () => {
+		// The Assassin, in worksheet form: two blows, two dice, and only one of them ignores armor.
+		const out = computeMonster({
+			organization: "solitary",
+			attackName: "dagger",
+			damageTags: ["hand", "1 piercing"],
+			extraAttacks: [{ name: "garrote", die: "d8", tags: ["hand", "grabby", "ignores armor"] }],
+		});
+		expect(out.damageValue)
+			.toBe("dagger d10 (hand, 1 piercing) or garrote d8 (hand, grabby, ignores armor)");
+		// The rollable field stays the PRIMARY attack; the rest live in the prose, where the sheet
+		// and the combat pick read them back apart.
+		expect(out.rollFormula).toBe("d10");
+	});
+
+	it("punctuates three or more attacks as the books do", () => {
+		// The Chosen Shield's shape: commas between, " or " before the last. The reader that
+		// splits this line back apart keys on exactly those separators.
+		const out = computeMonster({
+			organization: "group",
+			attackName: "iron battleaxe",
+			damageTags: ["close", "messy"],
+			extraAttacks: [
+				{ name: "spear", tags: ["close", "thrown"] },
+				{ name: "knife", die: "d6", tags: ["hand"] },
+			],
+		});
+		expect(out.damageValue).toBe(
+			"iron battleaxe d8 (close, messy), spear d8 (close, thrown), or knife d6 (hand)");
+	});
+
+	it("gives an extra attack the creature's die when none was typed", () => {
+		const out = computeMonster({
+			organization: "group", size: "large",   // d8, +1 damage
+			attackName: "tusks", damageTags: ["reach"],
+			extraAttacks: [{ name: "trample", tags: ["hand", "area"] }],
+		});
+		expect(out.damageValue).toBe("tusks d8+1 (reach) or trample d8+1 (hand, area)");
+	});
+
+	it("refuses a typed die that is not a die, rather than printing an unrollable one", () => {
+		// This string reaches the sheet's roll button and then `new Roll`. Prose here would throw
+		// at the table; the creature's own die is the honest fallback, and the summary shows it.
+		const out = computeMonster({
+			organization: "group", attackName: "claws",
+			extraAttacks: [{ name: "bite", die: "big" }],
+		});
+		expect(out.damageValue).toBe("claws d8 or bite d8");
+	});
+
+	it("carries the creature's advantage onto every blow it has", () => {
+		// "Relentless or overwhelming" describes the CREATURE, so both of its attacks roll it.
+		const out = computeMonster({
+			organization: "group", damageMods: ["relentless"],
+			attackName: "claws", extraAttacks: [{ name: "bite" }],
+		});
+		expect(out.damageValue).toBe("claws d8 w/advantage or bite d8 w/advantage");
+	});
+
+	it("ignores an extra attack card left entirely blank", () => {
+		const out = computeMonster({
+			organization: "group", attackName: "claws",
+			extraAttacks: [{ name: "", die: "", tags: [] }],
+		});
+		expect(out.damageValue).toBe("claws d8");
+	});
+
 	it("renders a negative bonus (tiny)", () => {
 		// horde d6, tiny (-2 dmg) => d6-2
 		const out = computeMonster({ organization: "horde", size: "tiny" });
@@ -204,5 +325,67 @@ describe("buildMonsterActorData", () => {
 		expect(data.system.attributes.hp).toEqual({ value: 0, max: 0 });
 		expect(data.system.count).toBe(1);
 		expect(data.items).toEqual([]);
+	});
+});
+
+// The worksheet WRITES a damage line that the sheet and the combat flow then READ back apart
+// (utils/damage.js#parseMonsterAttacks). Those are two halves of one contract, and nothing checks
+// it: the writer could punctuate its list any way at all and still look right in the summary
+// chip, while the reader came back with one attack wearing three names and a single roll button.
+describe("what the worksheet writes, the stat block can read back", () => {
+	const roundTrip = sel => parseMonsterAttacks(computeMonster(sel).damageValue, computeMonster(sel).rollFormula);
+
+	it("reads two built attacks back as two, each with its own die and armor clause", () => {
+		const attacks = roundTrip({
+			organization: "solitary",
+			attackName: "dagger",
+			damageTags: ["hand", "1 piercing"],
+			extraAttacks: [{ name: "garrote", die: "d8", tags: ["hand", "grabby", "ignores armor"] }],
+		});
+
+		expect(attacks).toHaveLength(2);
+		expect(attacks[0]).toMatchObject({ label: "dagger", formula: "d10", piercing: 1, ignoresArmor: false });
+		expect(attacks[1]).toMatchObject({ label: "garrote", formula: "d8", piercing: 0, ignoresArmor: true });
+	});
+
+	it("reads three back as three, across the comma-and-or list", () => {
+		const attacks = roundTrip({
+			organization: "group",
+			attackName: "iron battleaxe",
+			damageTags: ["close", "messy"],
+			extraAttacks: [
+				{ name: "spear", tags: ["close", "thrown"] },
+				{ name: "knife", die: "d6", tags: ["hand"] },
+			],
+		});
+		expect(attacks.map(a => `${a.label} ${a.formula}`))
+			.toEqual(["iron battleaxe d8", "spear d8", "knife d6"]);
+	});
+
+	it("keeps a multi-word attack name whole rather than splitting it into blows", () => {
+		// "claws and bite" is ONE name. A writer that emitted "claws, bite" would read back as two.
+		const attacks = roundTrip({ organization: "group", attackName: "claws and bite", damageTags: ["hand"] });
+		expect(attacks).toHaveLength(1);
+		expect(attacks[0]).toMatchObject({ label: "claws and bite", formula: "d8" });
+	});
+
+	it("reads the creature's advantage off every blow", () => {
+		const attacks = roundTrip({
+			organization: "group", damageMods: ["abhorrent"],
+			attackName: "claws", extraAttacks: [{ name: "bite" }],
+		});
+		expect(attacks.map(a => a.rollMode)).toEqual(["dis", "dis"]);
+	});
+
+	it("yields a rollable formula for every attack it built", () => {
+		// Each one goes straight to Foundry's Roll. A word or a comma smuggled through throws.
+		const attacks = roundTrip({
+			organization: "solitary", size: "huge", damageMods: ["strong", "deft"],
+			attackName: "crushing hands",
+			damageTags: ["reach", "forceful"],
+			extraAttacks: [{ name: "hurled object", die: "2d6+1", tags: ["far", "area", "reload"] }],
+		});
+		expect(attacks.length).toBe(2);
+		for (const attack of attacks) expect(attack.formula).toMatch(/^\d*d\d+(?:[+-]\d+)?$/i);
 	});
 });
