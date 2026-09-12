@@ -13,7 +13,7 @@ import { outnumberBonus } from "../../data/follower-build.js";
 import { postListCard } from "../../utils/chat.js";
 import { localize, format } from "../../utils/i18n.js";
 import { deletionEntry, enrichHTML, compendiumSourceOf } from "../../utils/foundry-compat.js";
-import { withSheetSizeMemory } from "../../utils/sheet-size.js";
+import { withSheetSizeMemory, sizeOnceOnOpen } from "../../utils/sheet-size.js";
 import { condemnedContext } from "../character/condemn.js";
 import { SYSTEM_ID } from "../../system-id.js";
 
@@ -205,23 +205,19 @@ export function createStonetopMonsterSheetClass(Base) {
 		 * doesn't fight the user's manual resizing on later re-renders.
 		 */
 		_applyInitialHeight() {
-			if (this._initialHeightApplied) return;
-			const el = this.element?.[0];
-			if (!el) return;
-			const content = el.querySelector(".window-content");
-			const notes   = el.querySelector(".stonetop-monster-notes");
-			const header  = el.querySelector(".window-header");
-			if (!content || !notes) return;
-
-			// Measure after layout settles (prose-mirror upgrades asynchronously).
-			requestAnimationFrame(() => {
-				if (this._initialHeightApplied || !this.element?.[0]) return;
+			// Measured after layout settles (prose-mirror upgrades asynchronously), which is what
+			// sizeOnceOnOpen defers for.
+			sizeOnceOnOpen(this, "_initialHeightApplied", () => {
+				const el = this.element[0];
+				const content = el.querySelector(".window-content");
+				const notes   = el.querySelector(".stonetop-monster-notes");
+				const header  = el.querySelector(".window-header");
+				if (!content || !notes) return false;
 				const contentTop = content.getBoundingClientRect().top;
 				const notesTop   = notes.getBoundingClientRect().top;
 				const headerH    = header ? header.getBoundingClientRect().height : 0;
 				const height = Math.ceil(headerH + (notesTop - contentTop));
-				if (height <= 0) return;
-				this._initialHeightApplied = true;
+				if (height <= 0) return false;
 				this.setPosition({ height });
 			});
 		}

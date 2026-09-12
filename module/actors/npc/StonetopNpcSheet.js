@@ -21,9 +21,8 @@ import { NpcLedger } from "./NpcLedger.js";
 import { npcStatusMeta, NPC_STATUSES } from "../../data-models/npc-status.js";
 import { condemnedContext } from "../character/condemn.js";
 import { partyCharacters } from "../../utils/playbook-actors.js";
-import { preserveScroll } from "../../utils/scroll-parent.js";
 import { mountTabRail } from "../../utils/tab-rail.js";
-import { withSheetSizeMemory } from "../../utils/sheet-size.js";
+import { withSheetSizeMemory, sizeOnceOnOpen } from "../../utils/sheet-size.js";
 import { SYSTEM_ID } from "../../system-id.js";
 
 // Rich-text (HTMLField) fields edited inline via prose-mirror on the sheet.
@@ -39,16 +38,22 @@ const NPC_MOVE_EDITABLE_FIELDS = new Set(["name", "system.description", "system.
 
 export function createStonetopNpcSheetClass(Base) {
 	// withSheetSizeMemory: reopen at the size this user last left this NPC's sheet. This is the
-	// one sheet where restoring a HEIGHT means overriding `height: "auto"` — restoreSheetSize
-	// writes the pixel value into options.height and raises the same `_stonetopHeightLocked`
-	// flag a manual drag would, so the sheet's own `{height: "auto"}` refits stop being honoured
-	// and the size actually sticks. Without that flag core would blank the restored height on
-	// the first refit. With no stored height the sheet is auto as before, fitting its content.
+	// one sheet that starts out `height: "auto"`, so restoring a HEIGHT means overriding it —
+	// restoreSheetSize writes the pixel value into options.height and raises the same
+	// `_stonetopHeightLocked` flag a manual drag would, so nothing can blank it back to "auto"
+	// and the size actually sticks. With no stored height the sheet measures itself on the
+	// first render and adopts THAT as its height instead — see `_adoptOpeningHeight`.
 	return class StonetopNpcSheet extends withSheetSizeMemory(Base) {
 		_editMode = false;
+		/** Has the opening measurement been turned into this window's fixed height yet? */
+		_openingHeightAdopted = false;
 
 		constructor(...args) {
 			super(...args);
+			// A remembered height already IS a definite height: restoreSheetSize wrote a number
+			// into `options.height` and raised `_stonetopHeightLocked`, so there is nothing left
+			// to adopt and re-measuring would only throw the restored size away.
+			if (this._restoredSheetSize.height) this._openingHeightAdopted = true;
 			// Owners only. A resident NPC is ownership.default OBSERVER, so any player can
 			// open one — and this preference is client-scoped, so a player who turned it on
 			// would otherwise start every NPC in edit mode: seeing the relationship rows the
@@ -66,9 +71,11 @@ export function createStonetopNpcSheetClass(Base) {
 				classes:   ["stonetop", "sheet", "actor", "npc", ...layoutClasses("npc")],
 				width:     620,
 				// Auto-height so the window OPENS fitted to its content rather than at some
-				// arbitrary default. It does not follow the content after that: tab switches
-				// no longer refit (see activateListeners), and once the user drags the window
-				// to a size of their own, enableAutoHeightVerticalResize freezes it there.
+				// arbitrary default — and ONLY for that opening measurement. `_adoptOpeningHeight`
+				// writes the measured pixel height back into `options.height` on the first render,
+				// after which this is a definite-height window like every other tabbed sheet in
+				// the system, and the content stops moving the frame.
+				//
 				// A tab taller than the frame scrolls internally; there is no max-height.
 				height:    "auto",
 				// Mirrors the CSS floor in stonetop.css — see the character sheet's note.
@@ -109,6 +116,8 @@ export function createStonetopNpcSheetClass(Base) {
 				sizeVar: "--st-npc-name-size",
 				minVar:  "--st-npc-name-min-size",
 			});
+			// Last, because it measures: everything above changes the header's height.
+			this._adoptOpeningHeight();
 		}
 
 		// The name fitter watches the header for width changes; nothing else does, so it is the
@@ -119,20 +128,44 @@ export function createStonetopNpcSheetClass(Base) {
 			return super.close(options);
 		}
 
-		// Re-measure the auto-height window to the active tab's content. Foundry's Tabs
-		// toggles the panel on a click but leaves the window at its old height, which would
-		// leave a void below a short tab — so we refit after each switch.
-		//
-		// Through preserveScroll, because the measure itself throws the reader back to the
-		// top of whatever they were reading: setPosition clears the frame's inline height to
-		// read the natural one, and with no definite frame the active tab's `height: 100%`
-		// briefly resolves to its own content, so it stops overflowing and the browser zeroes
-		// its scrollTop. Nothing re-renders — the board is the same DOM it was — which is why
-		// the offsets survive the round trip. Felt worst on the relationships board, where
-		// opening a card's note near the bottom refits and every card above it scrolls away,
-		// but the same reset cost a tab its remembered position on every switch.
-		_fitHeight() {
-			preserveScroll(this.element?.[0], () => this.setPosition({ height: "auto" }));
+		/**
+		 * Measure the window once, then STOP BEING AN AUTO-HEIGHT WINDOW.
+		 *
+		 * `height: "auto"` is not a one-off instruction to core, it is a standing one: every
+		 * `setPosition` call reads `options.height === "auto"`, blanks the frame's inline height
+		 * and re-measures the content (appv1/api/application-v1.mjs). And core's own
+		 * `Application#_onChangeTab` is nothing BUT `this.setPosition()` — so on an auto-height
+		 * window every tab click re-measures, and the frame grows and shrinks under the cursor as
+		 * the reader moves between a two-line Details tab and a full relationships board. The
+		 * same re-measure happens on every re-render, which is worse for being delayed: switch to
+		 * Notes, type a word, and the window jumps when the change saves.
+		 *
+		 * None of that was reachable from this file. The sheet already refused to refit on a tab
+		 * click of its own (that is what tests/actors/tabbed-sheet-height.test.js pins), but the
+		 * refit it was refusing to make was being made for it one class up. The other three
+		 * tabbed sheets never had the problem because they declare a NUMBER, and core's height
+		 * branch is skipped entirely for a `setPosition()` with no arguments on a frame that
+		 * already has an inline height.
+		 *
+		 * So: keep "auto" for exactly as long as it is useful — the opening measurement, which is
+		 * what lets a one-line NPC open as a small window instead of at some invented default —
+		 * and then write that measurement into `options.height`, which is the same move
+		 * enableAutoHeightVerticalResize makes when the user drags the frame, and the same one
+		 * restoreSheetSize makes for a remembered size. From here the window holds still and a
+		 * tall tab scrolls inside it.
+		 *
+		 * In a frame rather than inline, because the header work above it (chrome stripping, the
+		 * edit toggle, the name fitter) all changes the height core measured at the end of
+		 * `_render`. `setPosition({height: "auto"})` re-measures and writes the pixel result into
+		 * `position.height`, so this reads back core's own arithmetic rather than repeating it.
+		 */
+		_adoptOpeningHeight() {
+			sizeOnceOnOpen(this, "_openingHeightAdopted", () => {
+				this.setPosition({ height: "auto" });
+				const height = this.position?.height;
+				if (!Number.isFinite(height) || height <= 0) return false;
+				this.options.height = height;
+			});
 		}
 
 		_injectHeaderToggle() {
@@ -317,47 +350,32 @@ export function createStonetopNpcSheetClass(Base) {
 			mountTabRail(this, html);
 			const root = html[0];
 
-			// NOTE: switching tabs deliberately does NOT resize the window any more.
+			// NOTE: nothing in here resizes the window, and nothing in here may.
 			//
-			// This used to refit on every tab click, so the frame hugged whichever tab you
-			// landed on — which meant the window grew and shrank under the cursor as you
-			// browsed, and a size you had chosen was thrown away by the next click. Holding
-			// still is worth more than hugging: the height you are looking at is the height
-			// you keep, whichever tab you move to.
+			// The frame is measured once, on open, and is a fixed height from then on — see
+			// `_adoptOpeningHeight`. Holding still is worth more than hugging: the height you
+			// are looking at is the height you keep, whichever tab you move to and whatever
+			// the content does inside it.
 			//
-			// Nothing is lost by not refitting. A tab taller than the frame scrolls
-			// internally (`.stonetop-npc-sheet .sheet-body > .tab.active:not(.notes)` is
-			// `overflow-y: auto`), and a shorter one just leaves parchment below it. The
-			// window still fits content on OPEN and on re-render, because `height: "auto"`
-			// is untouched — this only drops the extra refit that tab navigation triggered.
+			// Nothing is lost by not refitting. A tab taller than the frame scrolls internally
+			// (`.stonetop-npc-sheet .sheet-body > .tab.active:not(.notes)` is `overflow-y:
+			// auto`, and the Notes editor owns its own scroll), and a shorter one just leaves
+			// parchment below it.
 			//
-			// A manual resize is honoured on top of that by enableAutoHeightVerticalResize
-			// (module/utils/resizable-dialogs.js): the first drag adopts the dragged pixel
-			// height into `options.height` and sets `_stonetopHeightLocked`, after which
-			// every later `setPosition({height: "auto"})` has its height stripped — so a
-			// window the user has sized stops refitting on re-render too.
+			// A manual resize is honoured on top of that the ordinary way: the drag writes its
+			// height, `_onResize` latches it, and withSheetSizeMemory reopens the sheet there.
 
 			// Relationships table: resizable/sortable columns always; the hearts and
 			// note field write only when the sheet is editable (shared with the
 			// character sheet's Details-tab Relationships section).
 			wireRelationshipTable(root, this.actor, { editable: this.isEditable });
-			// Table/board toggle plus the board's lane controls. This window is auto-height, so
-			// anything that changes the section's height without a re-render has to hand the
-			// window back a refit: the board is taller than the table, and an opened card note
-			// is taller again.
-			// One pending refit at a time. A note field asks for one on every keystroke, and
-			// `_fitHeight` is not cheap — it walks the sheet to hold its scrollports still around
-			// a `setPosition({height: "auto"})` that re-measures the whole window. Typing a line
-			// would otherwise queue sixty of them to settle on the one height the last would have
-			// produced anyway.
-			let refitFrame = 0;
-			wireRelationshipBoard(root, this.actor, {
-				editable: this.isEditable,
-				onResize: () => {
-					if (refitFrame) return;
-					refitFrame = requestAnimationFrame(() => { refitFrame = 0; this._fitHeight(); });
-				},
-			});
+			// Table/board toggle plus the board's lane controls. No `onResize` hook: this window
+			// used to be auto-height for its whole life, so the board — taller than the table,
+			// and taller again with a card note open — had to hand it back a refit whenever it
+			// changed height without a re-render. A fixed frame wants the opposite. The board
+			// grows inside the tab's scrollport now, which is where the character and steading
+			// sheets have always put it.
+			wireRelationshipBoard(root, this.actor, { editable: this.isEditable });
 			// Names open their PC's sheet, portraits preview on hover. Ungated for the same
 			// reason the columns are: neither is an edit.
 			wireRelationshipLinks(root);

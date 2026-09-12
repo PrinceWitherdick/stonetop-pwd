@@ -34,6 +34,14 @@ const TABBED_SHEETS = [
 	["arcanum", "module/item/StonetopArcanumSheet.js"],
 ];
 
+/** A sheet's own `defaultOptions` body — every one of these is a method at two tabs' indent. */
+const defaultOptionsOf = (src) => {
+	const start = src.indexOf("static get defaultOptions");
+	if (start < 0) return "";
+	const end = src.indexOf("\n\t\t}", start);
+	return end < 0 ? src.slice(start) : src.slice(start, end);
+};
+
 // Anything that reads as "a tab control" next to anything that reads as "resize the window".
 const TAB_THEN_RESIZE = /(sheet-tabs|tab-rail|_onChangeTab|data-tab)[\s\S]{0,240}(setPosition|_fitHeight)/;
 const RESIZE_THEN_TAB = /(setPosition|_fitHeight)[\s\S]{0,240}(sheet-tabs|tab-rail|_onChangeTab|data-tab)/;
@@ -46,6 +54,26 @@ describe("tab switching never resizes a sheet", () => {
 			expect(src).not.toMatch(RESIZE_THEN_TAB);
 		});
 	}
+
+	// ...and not refitting from OUR code is only half of it. Core's `Application#_onChangeTab`
+	// is literally `this.setPosition()`, and `setPosition` re-reads `options.height === "auto"`
+	// on every call — blanking the frame's inline height and re-measuring the content. So a
+	// tabbed sheet that leaves "auto" standing refits on every tab click no matter how carefully
+	// this file's other assertions are satisfied, which is exactly how the NPC sheet kept moving
+	// while passing them. A sheet may still OPEN auto; it may not stay that way.
+	it("no tabbed sheet leaves `height: \"auto\"` standing for core to act on", () => {
+		for (const [name, rel] of TABBED_SHEETS) {
+			const options = defaultOptionsOf(code(rel));
+			// A `tabs:` controller is what makes core's `_onChangeTab` reachable at all; the
+			// arcanum drives its guide rail itself and never goes through it, so "auto" is
+			// harmless there. And the sheet's OWN frame only: several of these open dialogs,
+			// and an auto-height dialog has no tabs to switch between.
+			if (!/tabs:\s*\[/.test(options)) continue;
+			if (!/height:\s*"auto"/.test(options)) continue;
+			expect(code(rel), `${name} opens auto-height and must adopt a definite height`)
+				.toMatch(/options\.height\s*=/);
+		}
+	});
 
 	it("the shared guide rail does not resize its window either", () => {
 		// Used by the arcanum sheet and by four dialogs; a refit added here would reach all

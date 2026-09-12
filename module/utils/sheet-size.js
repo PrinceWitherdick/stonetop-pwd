@@ -54,6 +54,34 @@ export function restoreSheetSize(app) {
 	return stored;
 }
 
+/**
+ * Take a window's ONE opening measurement, after the frame has actually painted, and never again.
+ *
+ * The MEASUREMENT is each sheet's own — the NPC asks core to refit and reads the number back, the
+ * monster measures down to where its Notes should fall — but the guards around it are subtle,
+ * identical, and were written out twice:
+ *
+ *  - once per sheet, latched on a flag the constructor may have pre-raised because
+ *    `restoreSheetSize` already had a remembered height (a size the user chose outranks anything
+ *    measured here);
+ *  - after a paint, because the header work each sheet does during `_render` changes the very
+ *    height being measured;
+ *  - never while MINIMIZED, because a minimized frame measures as its title bar and adopting THAT
+ *    reopens the sheet as a sliver. Core skips its own end-of-render setPosition for this reason.
+ *
+ * @param {Application} app
+ * @param {string} flag  instance property latching this to once per sheet.
+ * @param {Function} size  measures and applies. Return `false` when there was nothing real to
+ *   measure, which leaves the latch open for a later render to try again.
+ */
+export function sizeOnceOnOpen(app, flag, size) {
+	if (app[flag] || !app.element?.[0]) return;
+	requestAnimationFrame(() => {
+		if (app[flag] || app._minimized || !app.element?.[0]) return;
+		if (size() !== false) app[flag] = true;
+	});
+}
+
 /** Queue a save. Safe to call on every resize frame; only the last one in a burst writes. */
 export function scheduleSheetSizeSave(app) {
 	clearTimeout(app._sizeSaveTimer);

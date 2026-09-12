@@ -22113,13 +22113,12 @@ a.steading-player-open:hover {
 
 .stonetop-followers {
 	display: grid;
-	/* At most TWO columns. The track minimum is the LARGER of a 280px floor and half
-	   the row (minus the gap): two such tracks always fill the row, so auto-fit never
-	   has room for a third. Above ~572px the two 1fr columns simply stretch to fill the
-	   full width (the cards grow with them, since they carry no max-width); below ~572px
-	   two 280px tracks no longer fit, so it collapses to a single full-width column.
-	   min(280px, 100%) keeps the floor from overflowing an extremely narrow container. */
-	grid-template-columns: repeat(auto-fit, minmax(max(min(280px, 100%), (100% - 12px) / 2), 1fr));
+	/* Always TWO columns, at every width. Two equal 1fr tracks stretch to fill the tab
+	   on a wide sheet (the cards grow with them, since they carry no max-width) and stay
+	   paired on a narrow one rather than collapsing to a single column the moment the
+	   sheet is dragged in a little. minmax(0, 1fr) lets a track shrink below its content's
+	   natural width, so the cards narrow with the tab instead of overflowing it. */
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	align-items: start;
 	gap: 12px;
 }
@@ -22131,11 +22130,15 @@ a.steading-player-open:hover {
 	overflow: hidden;
 	background: #fff;
 	/* The grid track sizes the card — no max-width, so the card fills its column and the
-	   two columns stretch to fill the tab on a wide sheet. min-width:0 lets it collapse
-	   cleanly to one column when cramped (a fixed min would overflow its track on a
-	   narrow sheet and clip). */
+	   two columns stretch to fill the tab on a wide sheet. min-width:0 lets the card
+	   narrow with its track on a cramped sheet (a fixed min would overflow the track
+	   and clip). */
 	min-width: 0;
 	width: 100%; /* fill the grid track */
+	/* Query container for the narrow-card header fallback below: with the grid pinned at two
+	   columns, a card on a shrunk sheet can get narrower than its header row needs, and the
+	   header has to answer to the CARD width, not the window width. */
+	container: follower-card / inline-size;
 }
 
 /* Crew and shared-rules cards fill their column like every other card — no wider cap,
@@ -22769,6 +22772,31 @@ a.steading-player-open:hover {
 	gap: 2px;
 	flex: 1 1 auto;
 	min-width: 0;
+}
+
+/* Narrow card: give the name its own line.
+
+   The Followers grid holds two columns at every width (see .stonetop-followers), so on a
+   shrunk sheet a card can fall below the ~275px its header row needs: portrait (75px) and HP
+   box (82px) are fixed, so every pixel the sheet loses comes out of the name column between
+   them. Measured, the name and type start clipping at about 264px of card.
+
+   Rather than shave the portrait and the HP octagon (each is at its own floor: the octagon
+   has to hold two 30px inputs side by side in edit mode), let the header row WRAP. Portrait
+   and HP box keep their row, and the title drops beneath them with the full card width to
+   wrap into. Nothing clips, and the two fixed boxes stay the size they are everywhere else.
+
+   276px is chosen so nothing changes at any width that already showed two columns: the old
+   auto-fit layout broke to one column at 280px tracks, and the header is still clean there. */
+@container follower-card (max-width: 276px) {
+	.stonetop-follower-header-main {
+		flex-wrap: wrap;
+		row-gap: 6px;
+	}
+	.stonetop-follower-title {
+		order: 3;
+		flex-basis: 100%;
+	}
 }
 
 .stonetop-follower-name {
@@ -34360,9 +34388,11 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    the show half and leak an inactive tab. */
 .stonetop-npc-sheet .sheet-body {
 	flex: 1 1 auto;
-	/* A FLOOR, not `min-height: 0`. The window is auto-height, so it hugs the active tab —
-	   and a tab can legitimately be EMPTY. This used to bite on Details itself: in play mode
-	   it rendered nothing at all until the NPC had impressions or motivations, which a freshly
+	/* A FLOOR, not `min-height: 0`. The window measures itself on open and keeps that height
+	   (StonetopNpcSheet `_adoptOpeningHeight`), so what the landing tab happens to contain at
+	   that moment IS the frame — and a tab can legitimately be EMPTY. This used to bite on
+	   Details itself: in play mode it rendered nothing at all until the NPC had impressions or
+	   motivations, which a freshly
 	   recruited follower has neither of. The window then closed up flush under the tab strip,
 	   so the tabs read as broken rather than as empty, and the sheet gave no hint that the
 	   strip led anywhere. Details is no longer that case — the quick-facts block opens it now
