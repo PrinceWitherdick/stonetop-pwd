@@ -16,6 +16,7 @@ import { offerDurableArtOnce } from "../book2-art/offer-once.js";
 import { posterMapScenePlan, createPosterMapScenes } from "../book2-art/poster-maps.js";
 import { seedRelationshipMapOnce } from "../relmap/relmap-make.js";
 import { syncTrackPages } from "../timeline/timeline-store.js";
+import { isTimelineEnabled } from "../settings.js";
 
 // The GM's first load of a world, narrated.
 //
@@ -285,8 +286,12 @@ async function runFinishingTouches(dialog) {
 	// TRUSTED, which a plain player is not, so this is what gives a character rolled up last
 	// session a thread to write in without their GM having to do anything. It only ever creates a
 	// page whose key is absent, so it cannot disturb one that already exists.
+	//
+	// BEHIND THE FEATURE FLAG, and this is the lane that decides whether the timeline exists at
+	// all in a world: no track pages means no Timeline entry in the Journal sidebar and nothing
+	// for either sheet's tab to find. See `isTimelineEnabled` in module/settings.js.
 	try {
-		await syncTrackPages();
+		if (isTimelineEnabled()) await syncTrackPages();
 	} catch (err) {
 		// Best-effort like its neighbours: a world that cannot mint these pages should still finish
 		// setting up, and the tab says so for itself when it finds no page.

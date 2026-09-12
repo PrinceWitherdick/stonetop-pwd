@@ -3,6 +3,7 @@ import { sign } from "../utils/roll-engine.js";
 import { ensureChronicleFolder, ensureChronicleJournal } from "../utils/chronicle-journals.js";
 import { seasonLabel, SEASON_IDS } from "./seasons-change-reminders.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { isTimelineEnabled } from "../settings.js";
 
 // ── Seasons Change chronicle ───────────────────────────────────────────────────
 // Records each Seasons Change move (the steading flow's "Done") into a "Seasons Change"
@@ -161,9 +162,15 @@ export async function recordSeasonsChange({ seasonId, year = 1, gainNames = [], 
 	// clock for `seasonRank`; and the timeline entry writer imports that core. Statically, the four
 	// form a ring, and the symptom is not a warning but a const read before its initializer runs,
 	// in whichever of them the loader happens to enter first.
+	//
+	// BEHIND THE FEATURE FLAG as well, inside the same try: a world with the timeline off has no
+	// track page to write this row onto, and the season page above is the whole record there. See
+	// `isTimelineEnabled` in module/settings.js.
 	try {
-		const { recordSeasonOnTimeline } = await import("../timeline/timeline-season-entry.js");
-		await recordSeasonOnTimeline({ seasonId, year: yr, gainNames, surplusChange, notes });
+		if (isTimelineEnabled()) {
+			const { recordSeasonOnTimeline } = await import("../timeline/timeline-season-entry.js");
+			await recordSeasonOnTimeline({ seasonId, year: yr, gainNames, surplusChange, notes });
+		}
 	} catch (err) {
 		console.error("Stonetop | could not add this season to the timeline", err);
 	}

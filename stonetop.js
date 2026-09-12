@@ -1,4 +1,4 @@
-import { registerSettings, getSetting, applyMoveDescriptionBodyClass } from "./module/settings.js";
+import { registerSettings, getSetting, isTimelineEnabled, applyMoveDescriptionBodyClass } from "./module/settings.js";
 import { createStonetopActorClass } from "./module/actors/StonetopActor.js";
 import { createStonetopItemClass } from "./module/item/StonetopItem.js";
 import { createStonetopArcanumSheetClass } from "./module/item/StonetopArcanumSheet.js";
@@ -401,13 +401,21 @@ Hooks.once("init", () => {
 	// sheet draws is the good version, but a journal page is what a table can share and print, and
 	// keeping the record legible outside our own UI is half of what makes it a chronicle. The sheet
 	// is read-only: everything that writes goes through the entry dialog. See module/timeline/.
-	CONFIG.JournalEntryPage.dataModels["timeline"] = TimelinePageModel;
-	const StonetopTimelinePageSheet = createStonetopTimelinePageSheetClass(JournalPageSheetV1);
-	foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, SYSTEM_ID, StonetopTimelinePageSheet, {
-		types:       ["timeline"],
-		makeDefault: true,
-		label:       "Stonetop Timeline Page",
-	});
+	//
+	// BEHIND THE FEATURE FLAG, and off in every shipped world. `registerSettings` ran at the top of
+	// this same hook, so the switch can be read here. Registering the model and the sheet for a
+	// subtype the manifest does not declare would be dead weight at best and a warning at worst, so
+	// the whole block stands or falls with `timelineEnabled`. See `isTimelineEnabled` in
+	// module/settings.js, which also says what has to go back into system.json to develop this.
+	if (isTimelineEnabled()) {
+		CONFIG.JournalEntryPage.dataModels["timeline"] = TimelinePageModel;
+		const StonetopTimelinePageSheet = createStonetopTimelinePageSheetClass(JournalPageSheetV1);
+		foundry.applications.apps.DocumentSheetConfig.registerSheet(JournalEntryPage, SYSTEM_ID, StonetopTimelinePageSheet, {
+			types:       ["timeline"],
+			makeDefault: true,
+			label:       "Stonetop Timeline Page",
+		});
+	}
 
 	// A relationship map is a JournalEntry, so it has a row in every player's Journal sidebar.
 	// Clicking that row must open the BOARD, not Foundry's prose editor on an entry whose only

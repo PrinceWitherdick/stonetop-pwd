@@ -23,7 +23,7 @@ import {STONETOP_SCOPE, StonetopFlags} from "../character/StonetopFlags.js";
 import {SpecialItemPickerDialog} from "../character/dialogs/SpecialItemPickerDialog.js";
 import {CharacterInventory} from "../character/CharacterInventory.js";
 import {SPECIAL_ITEM_CATALOG} from "../../data/special-items.js";
-import {getRollStatChipsSetting, getOpenSheetsInEditMode, getHoverDescriptionSetting, getSidebarCollapsed, setSidebarCollapsed, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
+import {getRollStatChipsSetting, getOpenSheetsInEditMode, getHoverDescriptionSetting, getSidebarCollapsed, setSidebarCollapsed, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass, isTimelineEnabled} from "../../settings.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {promptRoll, normalizeRollMode} from "../../dialogs/RollDialog.js";
@@ -708,6 +708,12 @@ export function createStonetopSteadingSheetClass(Base) {
 			// tabs, Homefront Moves as a right-hand sidebar) or today's. Client-scoped and per
 			// sheet type — see isClassicLayout in module/settings.js.
 			context.stonetop.classicLayout = isClassicLayout("steading");
+			// Is the narrative timeline part of this world at all? Unreleased, and off in every
+			// shipped world, so this is normally false and the tab below is simply not drawn. The
+			// guard sits in the TEMPLATE rather than in the tab lifecycle because that is already
+			// how classic layout withholds this tab: with no mount in the markup, `syncTimelineTab`
+			// finds nothing and builds nothing. See `isTimelineEnabled` in module/settings.js.
+			context.stonetop.timelineEnabled = isTimelineEnabled();
 			// Whether the classic moves sidebar is collapsed (defaults to expanded), persisted
 			// per-actor, per-user. Unread by the modern layout, which has no sidebar. The
 			// backing setting is still called `characterSidebarCollapsed`: the name predates the

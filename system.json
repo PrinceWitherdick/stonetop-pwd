@@ -115,8 +115,7 @@
                                                    "chronicle":  {},
                                                    "threat":  {},
                                                    "hazard":  {},
-                                                   "site":  {},
-                                                   "timeline":  {}
+                                                   "site":  {}
                                                }
                       },
     "primaryTokenAttribute":  "attributes.hp",

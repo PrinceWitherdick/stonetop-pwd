@@ -23,7 +23,7 @@ import { offerDurableArtOnce } from "../book2-art/offer-once.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
 import { stonetopChatCard, whisperGm } from "../utils/chat.js";
 import { stampWorldLayoutBaseline } from "../utils/sheet-layout.js";
-import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyReduceMotion, applySheetContrast, applySheetTexture, applyNoItalics, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope } from "../settings.js";
+import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyReduceMotion, applySheetContrast, applySheetTexture, applyNoItalics, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope, isTimelineEnabled } from "../settings.js";
 import { EndOfSessionDialog } from "../dialogs/EndOfSessionDialog.js";
 import { IntroductionsDialog } from "../dialogs/IntroductionsDialog.js";
 import { SpringBurstDialog } from "../dialogs/SpringBurstDialog.js";
@@ -425,7 +425,10 @@ export async function onReady() {
 	// are all spoken for, and the timeline already has two doors that the macros do not (a tab on
 	// the steading sheet and one on every character sheet, each with a button through to here).
 	// This entry is what lets a GM who wants it on the bar make their own.
-	game.stonetop.openTimeline = () => openTimelineWindow();
+	//
+	// BEHIND THE FEATURE FLAG: unreleased, so in a shipped world the property is simply absent
+	// rather than present and broken. See `isTimelineEnabled` in module/settings.js.
+	if (isTimelineEnabled()) game.stonetop.openTimeline = () => openTimelineWindow();
 	// Create a blank homebrew arcanum world Item and open its editor. Minor by default;
 	// pass { major: true } for a major. Callable from a macro/console/hotbar:
 	//   game.stonetop.createArcanum({ name: "My Charm" })

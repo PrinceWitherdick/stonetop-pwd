@@ -1416,6 +1416,34 @@ export function registerSettings() {
 		default: false,
 	});
 
+	// IS THE NARRATIVE TIMELINE PART OF THIS WORLD AT ALL? Off, and shipped off.
+	//
+	// The timeline is built and tested but has not been released, and it is not meant to be seen in
+	// 0.9.x. This is the one switch that decides: with it off, neither sheet grows a Timeline tab,
+	// WorldSetup mints no track pages, the Seasons Change move writes no row, the journal page type
+	// registers no model and no sheet, and `game.stonetop.openTimeline` is not defined.
+	// `isTimelineEnabled` below lists every door that reads it.
+	//
+	// WORLD scope, not client: the feature is a set of shared journal pages, so one player seeing a
+	// tab that another does not would be a bug rather than a preference. `config: false` because
+	// nobody at a table should be able to switch on an unfinished feature by browsing the settings
+	// window; this is a developer's switch, thrown from the console:
+	//
+	//     game.settings.set("stonetop-pwd", "timelineEnabled", true)
+	//
+	// AND ONE THING THE SWITCH CANNOT DO. The `timeline` JournalEntryPage subtype has to be declared
+	// in the MANIFEST, which is read long before any setting exists, so it was taken back out of
+	// `system.json` (`documentTypes.JournalEntryPage`) along with its `TYPES.JournalEntryPage` label
+	// in `languages/en.json`. Turning the feature on for development means putting those two lines
+	// back and RELAUNCHING the world, since a new subtype is not picked up by a reload. Until they
+	// are back the track pages cannot be created, and the tab says for itself that it has no page.
+	game.settings.register(SYSTEM_ID, "timelineEnabled", {
+		scope: "world",
+		config: false,
+		type: Boolean,
+		default: false,
+	});
+
 	// Fold what the system already recorded into the timeline: levels gained, moves learned, the
 	// seasons as they turned. Per client, because it is a way of READING the record rather than a
 	// fact about it -- one player wants their character's whole history, another wants only what
@@ -2021,6 +2049,26 @@ export function getPromptDamageModifierSetting() {
 // Whether actor sheets should open in Edit mode rather than Play mode.
 export function getOpenSheetsInEditMode() {
 	return globalThis.game?.settings?.get?.(SYSTEM_ID, "openSheetsInEditMode") ?? false;
+}
+
+/**
+ * Is the narrative timeline switched on in this world? Defaults to NO, and NO is what ships.
+ *
+ * Read by every door the feature has: both sheets' `getData` (which is what draws or withholds the
+ * tab) and their tab lifecycle, `stonetop.js` (the page model and sheet registration), the
+ * WorldSetup lane that mints track pages, the Seasons Change row in `seasons/seasons-chronicle.js`,
+ * and `game.stonetop.openTimeline` in `hooks/Ready.js`.
+ *
+ * Tolerant of an unregistered key, like its neighbours here: a sheet rendered in a test that never
+ * called `registerSettings` gets the shipped answer rather than a throw.
+ *
+ * NOT read by `seasons/current-season.js`, which keeps logging when each season began whatever this
+ * says. That log is an invisible flag, it is the only record of WHEN a season turned, and it can
+ * only be collected as it happens: a world that played a year with the switch off and then turned
+ * it on would otherwise have no way to place its own history. See timeline/timeline-seasons.js.
+ */
+export function isTimelineEnabled() {
+	return globalThis.game?.settings?.get?.(SYSTEM_ID, "timelineEnabled") ?? false;
 }
 
 /** Does this reader want the timeline to fold in what the system recorded? Defaults to no. */

@@ -117,7 +117,7 @@
 				{{> "stonetop.tab-nav-item" tab="details"       label=(localize "stonetop.sheet.tabs.details")}}
 				{{> "stonetop.tab-nav-item" tab="special-moves" label=(localize "stonetop.sheet.tabs.specialMoves")}}
 				{{> "stonetop.tab-nav-item" tab="notes"         label=(localize "stonetop.sheet.tabs.notes")}}
-				{{#unless stonetop.classicLayout}}{{> "stonetop.tab-nav-item" tab="timeline" label=(localize "stonetop.sheet.tabs.timeline")}}{{/unless}}
+				{{#if stonetop.timelineEnabled}}{{#unless stonetop.classicLayout}}{{> "stonetop.tab-nav-item" tab="timeline" label=(localize "stonetop.sheet.tabs.timeline")}}{{/unless}}{{/if}}
 				{{!-- Last, and deliberately: it is the only tab that is not about the character.
 				      A player opens it once to set their text size and then rarely again, so it
 				      sits below everything they read every session.
@@ -142,7 +142,7 @@
 					{{> "stonetop.tab-details"}}
 					{{> "stonetop.tab-special-moves"}}
 					{{> "stonetop.tab-notes"}}
-				{{#unless stonetop.classicLayout}}{{> "stonetop.tab-timeline"}}{{/unless}}
+				{{#if stonetop.timelineEnabled}}{{#unless stonetop.classicLayout}}{{> "stonetop.tab-timeline"}}{{/unless}}{{/if}}
 					{{#if stonetop.showPreferences}}{{> "stonetop.tab-preferences"}}{{/if}}
 				</section>
 

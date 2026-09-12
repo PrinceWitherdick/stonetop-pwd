@@ -69,7 +69,7 @@ import {readCurrentSeason, readCurrentYear} from "../../seasons/current-season.j
 import {openRitesOfTheLand} from "./rites-of-the-land.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
-import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass} from "../../settings.js";
+import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass, isTimelineEnabled} from "../../settings.js";
 import {bringDialogToFront} from "../../utils/front-on-open.js";
 import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
@@ -1253,6 +1253,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			// off whichever sheet's context it lands in, which is why all three sheets name it
 			// `stonetop.classicLayout` with no sheet suffix.
 			context.stonetop.classicLayout = isClassicLayout("character");
+			// Is the narrative timeline part of this world at all? Unreleased, and off in every
+			// shipped world, so this is normally false and the tab below is simply not drawn. The
+			// guard sits in the TEMPLATE rather than in the tab lifecycle because that is already
+			// how classic layout withholds this tab: with no mount in the markup, `syncTimelineTab`
+			// finds nothing and builds nothing. See `isTimelineEnabled` in module/settings.js.
+			context.stonetop.timelineEnabled = isTimelineEnabled();
 			context.stonetop.hideUnselected = this.actor.getFlag(STONETOP_SCOPE, "hideUnselected") ?? true;
 			// "Organize by category": whether the Playbook Moves section heads each of the
 			// playbook's three onboarding clusters, or draws one flat owned / un-owned list.
