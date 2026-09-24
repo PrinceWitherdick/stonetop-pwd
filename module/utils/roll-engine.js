@@ -9,6 +9,7 @@ import { adjustXp } from "./xp.js";
 import { composeDamageFormula, seedBonus, extraTerm } from "./damage.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { getBooleanSetting } from "../settings.js";
+import { privateMessageModeOptions } from "./foundry-compat.js";
 
 // What a miss is worth (Book I p.209: "a tick mark that raises your total by 1"). Named because
 // the mark and the Undo that takes it back have to agree, and a card stamped by one number and
@@ -597,6 +598,8 @@ export function conditionsRowHtml(conditions) {
  * @param {boolean} [options.noXpOnMiss]               - Skip the automatic +1 XP on a miss (for moves that replace it)
  * @param {string}  [options.missCountsAsPartial]      - Why a 6- counts as a 7-9 on this roll, named on
  *   the card; absent for an ordinary roll
+ * @param {string[]} [options.whisper]                  - Post the card privately, to these user ids (the
+ *   author always sees it too); absent for a card that follows the table's own chat mode
  * @param {string[]|{success?: string[], partial?: string[], failure?: string[]}} [options.pickOptions]
  *   "Choose from this list" options, rendered as a checklist on the card. An array is one pool
  *   shared by every tier (love letters); an object names a pool per tier (the homefront moves,
@@ -735,12 +738,17 @@ export async function rollStat(statKey, actor, options = {}) {
 		description: markRolledTier(moveDescription, result.key),
 	});
 
+	// A roll meant for its player and the GM only: Struggle as One keeps each result quiet until the
+	// GM shares them all (Book I p.329). The author always sees their own message, so the list names
+	// the GMs and anyone else who plays the character.
+	const whisper = Array.isArray(options.whisper) ? options.whisper.filter(Boolean) : [];
 	const resultMessage = await roll.toMessage({
 		speaker:  ChatMessage.getSpeaker({ actor }),
 		flavor,
 		flags:    options.messageFlags ?? undefined,
 		rollMode: game.settings.get("core", "rollMode"),
-	});
+		...(whisper.length ? { whisper } : {}),
+	}, whisper.length ? privateMessageModeOptions() : {});
 
 	// Wait for the Dice So Nice 3D animation (if installed) to finish before
 	// posting any follow-up cards, so the Miss/XP card doesn't reveal the result

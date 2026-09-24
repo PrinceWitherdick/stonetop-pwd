@@ -173,8 +173,7 @@ export async function enrichHTML(value, options) {
  */
 export function deletionEntry(keyPath) {
 	const ForcedDeletion = foundry.data?.operators?.ForcedDeletion;
-	const generation = Number(globalThis.game?.release?.generation) || 0;
-	if (ForcedDeletion && generation >= 14) return [keyPath, new ForcedDeletion()];
+	if (ForcedDeletion && coreGeneration() >= 14) return [keyPath, new ForcedDeletion()];
 	const i = keyPath.lastIndexOf(".");
 	return [`${keyPath.slice(0, i + 1)}-=${keyPath.slice(i + 1)}`, null];
 }
@@ -304,4 +303,36 @@ export function queryAsker(data, context = {}, users = globalThis.game?.users) {
 	if (context?.user) return context.user;
 	const claimed = typeof data?.userId === "string" ? users?.get?.(data.userId) : null;
 	return claimed && !claimed.isGM ? claimed : null;
+}
+
+/** The running core's generation (13, 14...), or 0 when it cannot be read. */
+export function coreGeneration() {
+	return Number(globalThis.game?.release?.generation) || 0;
+}
+
+/**
+ * Roll#toMessage's options for a roll whispered to a list the caller names. Core reads the mode from
+ * the SECOND argument: v14 as `messageMode`, where "gm" keeps a whisper list it is handed; v13 as the
+ * legacy `rollMode`, where "gmroll" whispers to every GM. v14 still accepts the legacy key, but with
+ * a deprecation warning on every roll, so each core gets its own spelling.
+ */
+export function privateMessageModeOptions() {
+	return coreGeneration() >= 14 ? { messageMode: "gm" } : { rollMode: "gmroll" };
+}
+
+/**
+ * Is this client's chat set to post for everyone? v14 keeps the mode in `core.messageMode`
+ * ("public"), and still answers the old `core.rollMode` key, but with a deprecation warning on
+ * every read; v13 has only `core.rollMode` ("publicroll"). Anything unreadable is NOT public:
+ * this is asked before showing something the table would otherwise not have seen, and the safe
+ * mistake is keeping a whispered roll whispered.
+ */
+export function chatModeIsPublic() {
+	try {
+		const settings = globalThis.game?.settings;
+		if (coreGeneration() >= 14) return settings?.get?.("core", "messageMode") === "public";
+		return settings?.get?.("core", "rollMode") === "publicroll";
+	} catch {
+		return false;
+	}
 }

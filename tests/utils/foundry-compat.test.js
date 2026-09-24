@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { deletionEntry, getDragEventData, hasVideoExtension, imagePopout, imagePopoutTitle, setAppOption } from "../../module/utils/foundry-compat.js";
+import { chatModeIsPublic, deletionEntry, getDragEventData, hasVideoExtension, imagePopout, imagePopoutTitle, setAppOption } from "../../module/utils/foundry-compat.js";
 
 describe("deletionEntry", () => {
 	afterEach(() => {
@@ -164,5 +164,34 @@ describe("imagePopoutTitle", () => {
 		expect(imagePopoutTitle({ options: { title: "Wren" } })).toBe("Wren");
 		expect(imagePopoutTitle({ options: {} })).toBe("");
 		expect(imagePopoutTitle(null)).toBe("");
+	});
+});
+
+describe("chatModeIsPublic", () => {
+	const realGame = globalThis.game;
+	afterEach(() => { globalThis.game = realGame; });
+	const core = (generation, settings) => {
+		globalThis.game = { release: { generation }, settings: { get: (scope, key) => (scope === "core" ? settings[key] : undefined) } };
+	};
+
+	it("reads v14's messageMode, never the deprecated rollMode", () => {
+		core(14, { messageMode: "public", rollMode: "gmroll" });
+		expect(chatModeIsPublic()).toBe(true);
+		core(14, { messageMode: "gm", rollMode: "publicroll" });
+		expect(chatModeIsPublic()).toBe(false);
+	});
+
+	it("reads v13's rollMode", () => {
+		core(13, { rollMode: "publicroll" });
+		expect(chatModeIsPublic()).toBe(true);
+		core(13, { rollMode: "blindroll" });
+		expect(chatModeIsPublic()).toBe(false);
+	});
+
+	it("counts a setting it cannot read as not public", () => {
+		globalThis.game = { release: { generation: 14 }, settings: { get: () => { throw new Error("not registered"); } } };
+		expect(chatModeIsPublic()).toBe(false);
+		globalThis.game = undefined;
+		expect(chatModeIsPublic()).toBe(false);
 	});
 });
