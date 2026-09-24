@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stepMode, betterMode, worseMode, foldModes } from "../../module/utils/roll-mode.js";
+import { stepMode, betterMode, worseMode, foldModes, layModes } from "../../module/utils/roll-mode.js";
 
 // Advantage and disadvantage cancel (p.230), and neither stacks with itself. One rule, one home --
 // asked from the roller's side, the defender's side, and every ticked line on the damage window.
@@ -59,5 +59,30 @@ describe("foldModes: every mode in play at once", () => {
 	it("tolerates nothing to fold", () => {
 		expect(foldModes(null, "adv")).toBe("adv");
 		expect(foldModes(undefined)).toBe("");
+	});
+});
+
+describe("layModes: a roll's mode built up in stages", () => {
+	// What foldModes refuses, across method boundaries: each stage re-folds everything said so far
+	// rather than folding onto the mode the last stage left.
+	it("cancels once across stages, however the sides arrive", () => {
+		const picked = { rollMode: "dis" };
+		const grudge = layModes(picked, ["adv"]);
+		expect(grudge.rollMode).toBe("normal");
+		// A held Interfere after the grudge: one side each way already, so still straight.
+		expect(layModes(grudge, ["dis"]).rollMode).toBe("normal");
+		// Which stepping the mode each stage left gets wrong.
+		expect(stepMode(grudge.rollMode, "dis")).toBe("dis");
+	});
+
+	it("keeps the roll's own mode as the base, and what each stage said", () => {
+		const laid = layModes(layModes({ rollMode: "adv", modifier: 2 }, ["", "normal", "dis"]), ["dis"]);
+		expect(laid).toMatchObject({ modeBase: "adv", modeSources: ["dis", "dis"], rollMode: "normal", modifier: 2 });
+	});
+
+	it("is the roll's own mode when no stage speaks", () => {
+		expect(layModes({ rollMode: "adv" }, []).rollMode).toBe("adv");
+		expect(layModes({ rollMode: "normal" }, ["adv"]).rollMode).toBe("adv");
+		expect(layModes({}, null).rollMode).toBe("");
 	});
 });

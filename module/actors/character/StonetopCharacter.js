@@ -62,7 +62,7 @@ import {maybeBeginAttack, maybeCounterOnMiss, maybeMissFx, attackMoveFor, attack
 import {defendReadinessHold, defendReadinessCap, readinessCount, READINESS_FLAG} from "../../combat/defend-readiness.js";
 import {settleReadinessOnAttack} from "../../combat/readiness-loss.js";
 import {classifyResult} from "../../utils/roll-engine.js";
-import {betterMode, foldModes} from "../../utils/roll-mode.js";
+import {foldModes, layModes} from "../../utils/roll-mode.js";
 import {fightStateActive, shakeNervesOnMiss, revealOnAttack, WE_HAPPY_FEW} from "./fight-states.js";
 import {spendSurpriseForRoll, regainSurpriseOnHit} from "../../combat/battle-holds.js";
 import {xpToLevelUp, withXpLock} from "../../utils/xp.js";
@@ -100,8 +100,7 @@ const CASTIGATE = "Castigate";
  */
 function foldAdvantage(options, source) {
 	return {
-		...options,
-		rollMode: betterMode(options.rollMode),
+		...layModes(options, ["adv"]),
 		conditionNotes: [...(options.conditionNotes ?? []), source],
 	};
 }
@@ -3122,8 +3121,7 @@ export class StonetopCharacter {
 		// it is the move's own price, not a debility.
 		if (!fightStateActive(this._actor, "nerves")) return out;
 		return {
-			...out,
-			rollMode: foldModes(["dis", out.stonetopDebility ? "dis" : ""], options?.rollMode ?? "normal"),
+			...layModes(out, ["dis"]),
 			conditionNotes: [...(out.conditionNotes ?? []), format("stonetop.nerves.rollNote", { move: WE_HAPPY_FEW })],
 		};
 	}
@@ -3147,9 +3145,9 @@ export class StonetopCharacter {
 		if (this.ignoresDebilities) {
 			return { ...options, stonetopDebilityIgnored: BATTLE_JOY, stonetopDebilityIgnoredName: def?.name ?? key };
 		}
-		const base = { ...options, stonetopDebility: def?.name ?? key, stonetopDebilityTooltip: def?.description ?? "" };
-		if (options.rollMode === "adv") return { ...base, rollMode: "normal" };
-		return { ...base, rollMode: "dis" };
+		// Folded with every source laid before it (layModes), so it cancels an advantage however
+		// many stages that advantage came through.
+		return { ...layModes(options, ["dis"]), stonetopDebility: def?.name ?? key, stonetopDebilityTooltip: def?.description ?? "" };
 	}
 
 	// The STICKY roll mode: the Roll Modifier selector in the sheet's Moves sidebar
