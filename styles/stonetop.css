@@ -42668,6 +42668,33 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	white-space: nowrap;
 }
 
+/* THE FIELD IS AS WIDE AS ITS WORDS, so its hover ring answers the pointer on the name and not on
+   the empty stretch of row between the name and the badges. Grown to fill the row, the box lit up
+   wherever the head was hovered.
+
+   The badges then have to be pushed right by something else, and that is an auto margin on the
+   first of them: the count when there is one, else the caret. Not on both at once, since two auto
+   margins in one row split the free space between them and park the badges in its middle.
+
+   Behind `@supports` for the same reason as the wonder answers below: Firefox has no
+   `field-sizing`, and there the field keeps filling the row, which is how it shipped. */
+@supports (field-sizing: content) {
+	.stonetop-gm-encounter-name {
+		flex: 0 1 auto;
+		width: auto;
+		min-width: 3ch;
+		field-sizing: content;
+	}
+
+	.stonetop-gm-encounter-count {
+		margin-left: auto;
+	}
+
+	.stonetop-gm-encounter-head:not(:has(> .stonetop-gm-encounter-count)) > .stonetop-gm-encounter-toggle {
+		margin-left: auto;
+	}
+}
+
 /* One kind's count and its glyph, which read as a single word and so must never be split by the
    gap above -- hence a flex box of their own with a hair's gap inside it.
 
@@ -42883,10 +42910,17 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 
 /* A button rather than an anchor (see the template), so every scrap of core's button chrome has
-   to come off before it reads as a name in a list. */
+   to come off before it reads as a name in a list.
+
+   `justify-self: start` sizes it to the name rather than stretching it across the `1fr` column, so
+   the hover underline (and the click and drag) answer the name and not the blank run beside it.
+   `max-width: 100%` is what keeps the ellipsis: a nowrap name is its own min-content, and without
+   the cap a long one would run out of its cell rather than clip. */
 .stonetop-gm-encounter-entry-open {
 	grid-column: 1;
+	justify-self: start;
 	min-width: 0;
+	max-width: 100%;
 	width: auto;
 	margin: 0;
 	padding: 0;
