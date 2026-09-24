@@ -13,8 +13,11 @@
 //
 // Seed-once: the journals are the source of truth. A page is created the first time
 // its key appears; thereafter it's left alone, so inline edits stick across re-saves
-// (we never update or prune an existing page). New PCs / expeditions get new pages on
-// the next save.
+// (a save never prunes a page on its own). New PCs / expeditions get new pages on the next
+// save. Two exceptions, both for expedition pages and both the GM's doing: a trip renamed in the
+// walkthrough has its page retitled on the next save while the page still wears the name we gave
+// it, and deleting a trip can take its page with it when the GM ticks that box in the delete
+// dialog (`deleteExpeditionChroniclePage`).
 
 import { getSetting } from "../settings.js";
 import { writePlacesOfInterest } from "./places-chronicle.js";
@@ -64,19 +67,35 @@ export async function saveChronicleFromButton(button, { context = "Chronicle", b
 	}
 }
 
-// The "Player Introductions" journal inside "The Chronicle" folder, if it's been
-// seeded. Read-only lookup (doesn't create anything), for callers that just want to
-// jump to an existing page.
-function findIntroductionsJournal() {
+// One of the journals inside "The Chronicle" folder ("Player Introductions",
+// "Expeditions"), if it's been seeded. Read-only lookup (doesn't create anything), for
+// callers that just want to jump to or check for an existing page.
+function findChronicleJournal(name) {
 	const folder = findChronicleFolder();
 	if (!folder) return null;
-	return (game.journal?.contents ?? []).find(j => j.folder?.id === folder.id && j.name === INTRODUCTIONS_JOURNAL_NAME) ?? null;
+	return (game.journal?.contents ?? []).find(j => j.folder?.id === folder.id && j.name === name) ?? null;
 }
 
-// The page in `journal` that belongs to the actor with `actorId` — matched by the
-// stable chronicleKey flag (the actor id), so it survives renames.
-function findActorChroniclePage(journal, actorId) {
-	return journal?.pages?.find(p => p.getFlag?.(SYSTEM_ID, "chronicleKey") === actorId) ?? null;
+// The page in `journal` with this chronicleKey: an actor's id, or an expedition's
+// prefixed trip id. Matched by that stable flag, so it survives renames.
+function findChroniclePage(journal, key) {
+	return journal?.pages?.find(p => p.getFlag?.(SYSTEM_ID, "chronicleKey") === key) ?? null;
+}
+
+/**
+ * The Chronicle page an expedition was saved to, or null. Read-only: creates no folder or
+ * journal just by asking, since the delete dialog asks whether there is anything to offer.
+ */
+export function findExpeditionChroniclePage(tripId) {
+	if (!tripId) return null;
+	return findChroniclePage(findChronicleJournal(EXPEDITIONS_JOURNAL_NAME), `${EXPEDITION_PAGE_KEY_PREFIX}${tripId}`);
+}
+
+/** Remove a deleted trip's Chronicle page, when the GM asked for it. Quiet if there is none. */
+export async function deleteExpeditionChroniclePage(tripId) {
+	const page = findExpeditionChroniclePage(tripId);
+	if (page) await page.delete();
+	return !!page;
 }
 
 /**
@@ -89,11 +108,11 @@ function findActorChroniclePage(journal, actorId) {
  */
 export async function openChroniclePageForActor(actor) {
 	if (!actor) return false;
-	let journal = findIntroductionsJournal();
-	let page = findActorChroniclePage(journal, actor.id);
+	let journal = findChronicleJournal(INTRODUCTIONS_JOURNAL_NAME);
+	let page = findChroniclePage(journal, actor.id);
 	if (!page && game.user?.isGM) {
 		journal = (await writeChronicle()) ?? journal;
-		page = findActorChroniclePage(journal, actor.id);
+		page = findChroniclePage(journal, actor.id);
 	}
 	if (!page) {
 		ui.notifications?.warn?.(game.user?.isGM
@@ -168,7 +187,9 @@ export async function writeChronicle({ silent = false, adoptLegacyKeys = null } 
 
 	let created = 0, updated = 0;
 	for (const [target, list] of [[intro, introPages], [expe, expePages]]) {
-		const { created: c, updated: u } = await seedChroniclePages(target, list, { adoptLegacyKeys });
+		// Expedition pages follow their trip's name: every generated one starts "Expedition".
+		const renamePrefix = target === expe ? "Expedition" : null;
+		const { created: c, updated: u } = await seedChroniclePages(target, list, { adoptLegacyKeys, renamePrefix });
 		created += c;
 		updated += u;
 	}

@@ -19,6 +19,12 @@ import { SYSTEM_ID } from "../system-id.js";
 // syncing with the source while freezing one the GM has edited in the journal.
 export const CHRONICLE_PROSE_FLAG = "chronicleProse";
 
+// Per-page flag holding the NAME we last gave the page. A page still wearing it is ours to
+// retitle when its source is renamed (an expedition renamed in the walkthrough); one the GM has
+// renamed in the journal no longer matches it, and is left alone — the same pristine-or-edited
+// test the prose hashes make for a section's body.
+export const CHRONICLE_NAME_FLAG = "chronicleName";
+
 /**
  * Find (or create) the "The Chronicle" journal folder that holds the introductions,
  * expeditions, Seasons Change and Places of Interest journals.
@@ -64,8 +70,14 @@ export async function ensureChronicleJournal(name, folderId, defaultOwnership, {
  * since — new sections, and new Q&A pairs (see mergeChronicleSections) — so a part-way or
  * later-session save isn't silently dropped. Existing/edited sections are preserved, so
  * inline edits still survive re-saves. Returns { created, updated } counts.
+ *
+ * `renamePrefix` opts a journal's pages into following their source's NAME as well (the
+ * expeditions journal: a trip renamed in the walkthrough). Only while the page still wears the name
+ * we last gave it (CHRONICLE_NAME_FLAG); a page seeded before that flag existed has no record, so it
+ * is taken as ours while its name still starts with `renamePrefix`, which every generated name does
+ * and a GM's own title almost never will.
  */
-export async function seedChroniclePages(entry, pages, { adoptLegacyKeys = null } = {}) {
+export async function seedChroniclePages(entry, pages, { adoptLegacyKeys = null, renamePrefix = null } = {}) {
 	if (!entry || !pages.length) return { created: 0, updated: 0 };
 	const existingByKey = new Map();
 	let maxSort = 0;
@@ -91,11 +103,27 @@ export async function seedChroniclePages(entry, pages, { adoptLegacyKeys = null 
 			// (pre-hash) prose may be taken over by the current text — see mergeChronicleSections.
 			const adoptLegacy = adoptLegacyKeys ? adoptLegacyKeys.has(page.key) : false;
 			const merged = mergeChronicleSections(current, page.sections, { proseManaged, adoptLegacy });
-			if (merged.added) toUpdate.push({
-				_id: existing.id,
+			const change = merged.added ? {
 				"system.sections": merged.sections,
 				[`flags.${SYSTEM_ID}.${CHRONICLE_PROSE_FLAG}`]: merged.proseManaged,
-			});
+			} : {};
+			if (renamePrefix && page.name) {
+				const given = existing.getFlag?.(SYSTEM_ID, CHRONICLE_NAME_FLAG);
+				if (existing.name !== page.name) {
+					const ours = given
+						? existing.name === given
+						: String(existing.name ?? "").startsWith(renamePrefix);
+					if (ours) {
+						change.name = page.name;
+						change[`flags.${SYSTEM_ID}.${CHRONICLE_NAME_FLAG}`] = page.name;
+					}
+				} else if (!given) {
+					// A legacy page still wearing our name gets the record now, so a GM's retitle
+					// after this is theirs, even one that keeps the prefix.
+					change[`flags.${SYSTEM_ID}.${CHRONICLE_NAME_FLAG}`] = page.name;
+				}
+			}
+			if (Object.keys(change).length) toUpdate.push({ _id: existing.id, ...change });
 			continue;
 		}
 		sort += 10;
@@ -107,7 +135,7 @@ export async function seedChroniclePages(entry, pages, { adoptLegacyKeys = null 
 			type:   "chronicle",
 			sort,
 			system: { sections: page.sections },
-			flags:  { [SYSTEM_ID]: { chronicleKey: page.key, [CHRONICLE_PROSE_FLAG]: proseManaged } },
+			flags:  { [SYSTEM_ID]: { chronicleKey: page.key, [CHRONICLE_PROSE_FLAG]: proseManaged, [CHRONICLE_NAME_FLAG]: page.name } },
 		});
 	}
 	if (toCreate.length) await entry.createEmbeddedDocuments("JournalEntryPage", toCreate);
