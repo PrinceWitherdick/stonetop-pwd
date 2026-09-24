@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { halveDamage, defendOffers, defendNotes, spendOnBlow, spentOn, handleSpendQuery, SPEND_QUERY, takeSpend, rowToken } from "../../module/fight/defend-spend.js";
+import { halveDamage, defendOffers, defendNotes, spendOnBlow, spentOn, handleSpendQuery, SPEND_QUERY, takeSpend, rowToken, pickOne } from "../../module/fight/defend-spend.js";
+import { stubAsk } from "../fakes/confirm.js";
 import { inCardTurn } from "../../module/utils/card-queue.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection } from "../fakes/fight.js";
 import { heldReadiness, READINESS_FLAG } from "../../module/combat/defend-readiness.js";
@@ -161,6 +162,83 @@ describe("spendOnBlow", () => {
 		expect(await spendOnBlow(card, "standIn", { row: card.flag.results[0], defender: aeliana })).toBe(true);
 		expect(card.flag.standIns).toEqual([{ uuid: "Token.bram", by: "Actor.aeliana", name: "aeliana", how: "standIn", free: false }]);
 		expect(await spendOnBlow(card, "halve", { row: card.flag.results[0], defender: aeliana })).toBe(false);
+	});
+
+	// I Get Knocked Down: the price is picked before anything is written.
+	describe("knocked down", () => {
+		let saved;
+		let posted;
+		beforeEach(() => {
+			saved = { document: globalThis.document, applications: globalThis.foundry.applications, ChatMessage: globalThis.ChatMessage };
+			posted = [];
+			globalThis.document = { createElement: () => ({}) };
+			globalThis.ChatMessage = { create: vi.fn(async data => posted.push(data)), getSpeaker: () => ({}) };
+		});
+		afterEach(() => {
+			globalThis.document = saved.document;
+			globalThis.foundry.applications = saved.applications;
+			globalThis.ChatMessage = saved.ChatMessage;
+		});
+		const blow = () => message({ results: [{ uuid: "Token.pim", name: "Pim" }] });
+
+		it("halves the blow at the price picked, and says which", async () => {
+			const pim = character("pim", 0, ["I Get Knocked Down"]);
+			const card = blow();
+			stubAsk("o1");
+			expect(await spendOnBlow(card, "knockedDown", { row: card.flag.results[0], defender: pim, cost: 0 })).toBe(true);
+			expect([...spentOn(card.flag).knockedDown]).toEqual(["Token.pim"]);
+			expect(posted[0].content).toContain("Something on their person breaks");
+		});
+
+		it("halves nothing when the window is closed without a price", async () => {
+			const pim = character("pim", 0, ["I Get Knocked Down"]);
+			const card = blow();
+			stubAsk(null);
+			expect(await spendOnBlow(card, "knockedDown", { row: card.flag.results[0], defender: pim, cost: 0 })).toBe(false);
+			expect(card.setFlag).not.toHaveBeenCalled();
+			expect(posted).toEqual([]);
+		});
+	});
+});
+
+// More than one spend on offer: a button each, and one to spend nothing.
+describe("pickOne", () => {
+	let saved;
+	beforeEach(() => {
+		saved = { document: globalThis.document, applications: globalThis.foundry.applications };
+		globalThis.document = { createElement: () => ({}) };
+	});
+	afterEach(() => {
+		globalThis.document = saved.document;
+		globalThis.foundry.applications = saved.applications;
+	});
+	const bram = { name: "Bram" };
+	const ilsa = { name: "Ilsa" };
+	const ask = items => pickOne(items, { title: "Halve the blow", question: "Who spends it?", labelOf: item => `${item.name} halves it` });
+
+	it("asks nothing of a list of one, or none", async () => {
+		const asked = stubAsk("o0");
+		expect(await ask([bram])).toBe(bram);
+		expect(await ask([])).toBeNull();
+		expect(asked).not.toHaveBeenCalled();
+	});
+
+	it("resolves to the one pressed, the first included", async () => {
+		const asked = stubAsk("o1");
+		expect(await ask([bram, ilsa])).toBe(ilsa);
+		const { buttons, window } = asked.mock.calls[0][0];
+		expect(window.title).toBe("Halve the blow");
+		expect(buttons.map(b => b.label)).toEqual(["Bram halves it", "Ilsa halves it", "Don't spend"]);
+		expect(buttons.find(b => b.default)?.action).toBe("o0");
+		stubAsk("o0");
+		expect(await ask([bram, ilsa])).toBe(bram);
+	});
+
+	it("resolves to null on the spend-nothing button or a closed window", async () => {
+		stubAsk("cancel");
+		expect(await ask([bram, ilsa])).toBeNull();
+		stubAsk(null);
+		expect(await ask([bram, ilsa])).toBeNull();
 	});
 });
 

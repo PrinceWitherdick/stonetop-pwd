@@ -47,7 +47,7 @@ import { format, localize } from "../utils/i18n.js";
 import { escHtml, stripHtmlToText } from "../utils/strings.js";
 import { stonetopChatCard, firstOptionList } from "../utils/chat.js";
 import { damageRowActor } from "../utils/damage.js";
-import { themedDialogClasses } from "../utils/window-theme.js";
+import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { contentElement } from "../dialogs/content-picker.js";
 import { heldReadiness, READINESS_FLAG } from "../combat/defend-readiness.js";
 import { ownsLearnedMoveNamed, ownedMove } from "../actors/character/owns-move.js";
@@ -207,21 +207,19 @@ export function defendOffers(damage, defendersOf = defendersFor, resolveActor = 
  * @param {string} p.question
  * @param {(item: object) => string} p.labelOf  each item's button
  */
-export async function pickOne(items, { title, question, labelOf, DialogV2 = globalThis.foundry?.applications?.api?.DialogV2 }) {
+export async function pickOne(items, { title, question, labelOf }) {
 	if (items.length <= 1) return items[0] ?? null;
-	if (!DialogV2) return null;
-	const index = await DialogV2.wait({
-		// A list of spends, each named for who takes what: `stonetop-ask` caps the window's width
-		// and gives every offer a row of its own (stonetop.css).
-		classes: themedDialogClasses("stonetop-ask"),
-		window: { title },
+	// A list of spends, each named for who takes what: the `stonetop-ask` window askWithButtons opens
+	// caps its width and gives every offer a row of its own (stonetop.css). The first is the default,
+	// as it was when DialogV2 picked it for a list with none marked.
+	const index = await askWithButtons({
+		title,
 		content: contentElement(`<p>${escHtml(question)}</p>`),
 		buttons: [
-			...items.map((item, i) => ({ action: `o${i}`, label: labelOf(item), callback: () => i })),
-			{ action: "cancel", label: localize(`${KEY}.cancel`), callback: () => null },
+			...items.map((item, i) => ({ key: `o${i}`, label: labelOf(item), value: i })),
+			{ key: "cancel", label: localize(`${KEY}.cancel`), value: null },
 		],
-		rejectClose: false,
-	}).catch(() => null);
+	});
 	return Number.isInteger(index) ? items[index] : null;
 }
 
@@ -351,16 +349,15 @@ export async function handleSpendQuery(data, context = {}, { messages = globalTh
  * I Get Knocked Down's price: "pick 1 of the following. Whatever you choose, the GM will describe the
  * details." Three buttons, the move's own words. Null when the window is closed, which halves nothing.
  */
-async function askKnockedDownCost(actor, { DialogV2 = globalThis.foundry?.applications?.api?.DialogV2 } = {}) {
+async function askKnockedDownCost(actor) {
 	const costs = ["lost", "broke", "outOfIt"].map(key => localize(`${HERO_KEY}.knockedDown.${key}`));
 	// With no window to ask in, the first cost stands: the move is already spent and the blow is
 	// already halved, so returning null here would quietly un-halve it.
-	if (!DialogV2) return costs[0];
+	if (!globalThis.foundry?.applications?.api?.DialogV2) return costs[0];
 	return pickOne(costs, {
 		title: localize(`${HERO_KEY}.knockedDown.title`),
 		question: format(`${HERO_KEY}.knockedDown.ask`, { name: actor?.name ?? "" }),
 		labelOf: cost => cost,
-		DialogV2,
 	});
 }
 

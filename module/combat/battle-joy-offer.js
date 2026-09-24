@@ -29,7 +29,7 @@ import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
 import { answersFor } from "../hooks/DeathsDoorPrompt.js";
 import { each } from "../fight/fight-state.js";
 import { postMoveNote } from "../utils/chat.js";
-import { themedDialogClasses } from "../utils/window-theme.js";
+import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { contentElement } from "../dialogs/content-picker.js";
 import { escHtml } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
@@ -64,19 +64,17 @@ export function offersBattleJoy(actor, totals = []) {
  * @param {Actor} actor
  * @param {string} why  the sentence saying what just happened
  */
-export async function askLoseThemselves(actor, why, { DialogV2 = globalThis.foundry?.applications?.api?.DialogV2 } = {}) {
-	if (!DialogV2) return false;
-	const answer = await DialogV2.wait({
-		classes: themedDialogClasses("stonetop-ask"),
-		window: { title: format(`${KEY}.askTitle`, { name: actor.name }) },
+export async function askLoseThemselves(actor, why) {
+	const answer = await askWithButtons({
+		title: format(`${KEY}.askTitle`, { name: actor.name }),
 		content: contentElement(`<p>${escHtml(`${why} ${format(`${KEY}.ask`, { name: actor.name })}`)}</p>`),
 		// Affirmative first. Enter keeps their head: a stray keypress should not silence their debilities.
 		buttons: [
-			{ action: "rage", label: localize(`${KEY}.askEnter`), icon: "fa-solid fa-fire", callback: () => "rage" },
-			{ action: "calm", label: localize(`${KEY}.askDecline`), icon: "fa-solid fa-hand", default: true, callback: () => "calm" },
+			{ key: "rage", label: localize(`${KEY}.askEnter`), icon: "fa-fire", value: "rage" },
+			{ key: "calm", label: localize(`${KEY}.askDecline`), icon: "fa-hand", value: "calm" },
 		],
-		rejectClose: false,
-	}).catch(() => null);
+		defaultKey: "calm",
+	});
 	return answer === "rage";
 }
 

@@ -48,6 +48,7 @@ import { followBookCite } from "../books/rulebook-icons.js";
 import { format, localize } from "../utils/i18n.js";
 import { escHtml } from "../utils/strings.js";
 import { themedDialogClasses } from "../utils/window-theme.js";
+import { confirmOutcome } from "../utils/ask-with-buttons.js";
 
 // Plain literals, not built from SYSTEM_ID: the precache check in tests finds template paths by
 // searching the source for them.
@@ -452,19 +453,17 @@ export function createFightTrackerClass(Base) {
 
 		static async #onEndFight() {
 			const combat = this.viewed;
-			const DialogV2 = globalThis.foundry?.applications?.api?.DialogV2;
-			if (!combat || !globalThis.game?.user?.isGM || !DialogV2) return;
+			if (!combat || !globalThis.game?.user?.isGM) return;
 			const content = document.createElement("div");
 			content.innerHTML = `<p>${escHtml(localize("stonetop.fight.end.body"))}</p>`;
-			// Buttons that name what they do, the affirmative first (on the left).
-			const confirmed = await DialogV2.confirm({
-				classes: themedDialogClasses(),
-				window: { title: localize("stonetop.fight.end.title") },
+			// Buttons that name what they do, the affirmative first (on the left). Enter keeps
+			// fighting, as it did under core's confirm.
+			const confirmed = await confirmOutcome({
+				title: localize("stonetop.fight.end.title"),
 				content,
-				yes: { label: localize("stonetop.fight.end.confirm"), icon: "fa-solid fa-flag" },
+				yes: { label: localize("stonetop.fight.end.confirm"), icon: "fa-flag" },
 				no: { label: localize("stonetop.fight.end.cancel") },
-				rejectClose: false,
-			}).catch(() => false);
+			});
 			if (confirmed) await combat.delete();
 		}
 	};

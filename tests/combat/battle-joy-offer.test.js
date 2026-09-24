@@ -4,6 +4,7 @@ import {
 	installBattleJoyEnd, stillFighting,
 } from "../../module/combat/battle-joy-offer.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
+import { stubAsk } from "../fakes/confirm.js";
 
 // The Heavy spilling blood, theirs or another's: dealing damage or losing HP asks whether they lose
 // themselves in battle, and a yes ticks the header glyph's own flag.
@@ -23,7 +24,7 @@ function heavy({ moves = ["Battle Joy"], raging = false, type = "character", isO
 let saved;
 let posted;
 beforeEach(() => {
-	saved = { ChatMessage: globalThis.ChatMessage, document: globalThis.document };
+	saved = { ChatMessage: globalThis.ChatMessage, document: globalThis.document, applications: globalThis.foundry.applications };
 	posted = [];
 	globalThis.ChatMessage = { create: vi.fn(async data => posted.push(data)), getSpeaker: ({ actor }) => ({ alias: actor.name }) };
 	globalThis.document = { createElement: () => ({}) };
@@ -31,6 +32,7 @@ beforeEach(() => {
 afterEach(() => {
 	globalThis.ChatMessage = saved.ChatMessage;
 	globalThis.document = saved.document;
+	globalThis.foundry.applications = saved.applications;
 });
 
 describe("offersBattleJoy", () => {
@@ -77,15 +79,18 @@ describe("offerBattleJoyOnDamage", () => {
 
 describe("askLoseThemselves", () => {
 	it("is yes only on the lose-yourself button", async () => {
-		const waitFor = answer => ({ wait: vi.fn(async ({ buttons }) => buttons.find(b => b.action === answer)?.callback() ?? null) });
-		expect(await askLoseThemselves(heavy(), "Duvin bled.", { DialogV2: waitFor("rage") })).toBe(true);
-		expect(await askLoseThemselves(heavy(), "Duvin bled.", { DialogV2: waitFor("calm") })).toBe(false);
-		expect(await askLoseThemselves(heavy(), "Duvin bled.", { DialogV2: waitFor(null) })).toBe(false);
+		stubAsk("rage");
+		expect(await askLoseThemselves(heavy(), "Duvin bled.")).toBe(true);
+		stubAsk("calm");
+		expect(await askLoseThemselves(heavy(), "Duvin bled.")).toBe(false);
+		stubAsk(null);
+		expect(await askLoseThemselves(heavy(), "Duvin bled.")).toBe(false);
 	});
 
 	it("keeps their head by default", async () => {
-		let buttons;
-		await askLoseThemselves(heavy(), "Duvin bled.", { DialogV2: { wait: async opts => { buttons = opts.buttons; return null; } } });
+		const asked = stubAsk(null);
+		await askLoseThemselves(heavy(), "Duvin bled.");
+		const { buttons } = asked.mock.calls[0][0];
 		expect(buttons[0].action).toBe("rage");
 		expect(buttons.find(b => b.default)?.action).toBe("calm");
 	});

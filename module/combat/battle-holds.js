@@ -21,7 +21,7 @@ import { ownsLearnedMoveNamed, ownedMove } from "../actors/character/owns-move.j
 import { heldOnTrack } from "../actors/character/MoveResources.js";
 import { answersFor } from "../hooks/DeathsDoorPrompt.js";
 import { postMoveNote } from "../utils/chat.js";
-import { themedDialogClasses } from "../utils/window-theme.js";
+import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { contentElement } from "../dialogs/content-picker.js";
 import { escHtml, joinNames } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
@@ -105,22 +105,20 @@ export function battleHoldsContent(actor, holds) {
 /**
  * Ask which holds to fill. Resolves to the ticked ones, or [] when closed or declined.
  */
-export async function askBattleHolds(actor, holds, { DialogV2 = globalThis.foundry?.applications?.api?.DialogV2, document = globalThis.document } = {}) {
-	if (!DialogV2 || !document || !holds.length) return [];
+export async function askBattleHolds(actor, holds, { document = globalThis.document } = {}) {
+	if (!document || !holds.length) return [];
 	const ticked = form => [...(form?.querySelectorAll?.(`input[name="${FIELD}"]:checked`) ?? [])]
 		.map(input => holds[Number(input.value)])
 		.filter(Boolean);
-	const answer = await DialogV2.wait({
-		classes: themedDialogClasses("stonetop-ask"),
-		window: { title: format(`${KEY}.title`, { name: actor.name }) },
+	const answer = await askWithButtons({
+		title: format(`${KEY}.title`, { name: actor.name }),
 		content: contentElement(battleHoldsContent(actor, holds), document),
 		// Affirmative first, and the default: the move says "hold", and each box can be unticked.
 		buttons: [
-			{ action: "hold", label: localize(`${KEY}.hold`), icon: "fa-solid fa-flag", default: true, callback: (_event, button) => ticked(button?.form) },
-			{ action: "skip", label: localize(`${KEY}.skip`), callback: () => [] },
+			{ key: "hold", label: localize(`${KEY}.hold`), icon: "fa-flag", value: ticked },
+			{ key: "skip", label: localize(`${KEY}.skip`), value: [] },
 		],
-		rejectClose: false,
-	}).catch(() => null);
+	});
 	return Array.isArray(answer) ? answer : [];
 }
 

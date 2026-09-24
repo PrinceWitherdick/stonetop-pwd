@@ -3,6 +3,7 @@ import {
 	battleHoldsToFill, battleHoldsContent, askBattleHolds, offerBattleHolds, installBattleHolds,
 	spendSurpriseForRoll, regainSurpriseOnHit, PREPARE_A_WELCOME,
 } from "../../module/combat/battle-holds.js";
+import { stubAsk } from "../fakes/confirm.js";
 
 // The Marshal going into battle: Stentorian's "hold 2 Command" and Front Line Leader's "hold 2
 // Presence" (when leading a crew in). Both tracks count what is HELD, so holding them full is max.
@@ -26,7 +27,7 @@ function marshal({ moves = ["Stentorian", "Front Line Leader"], held = {}, id = 
 let saved;
 let posted;
 beforeEach(() => {
-	saved = { ChatMessage: globalThis.ChatMessage, document: globalThis.document };
+	saved = { ChatMessage: globalThis.ChatMessage, document: globalThis.document, applications: globalThis.foundry.applications };
 	posted = [];
 	globalThis.ChatMessage = { create: vi.fn(async data => posted.push(data)), getSpeaker: ({ actor }) => ({ alias: actor.name }) };
 	globalThis.document = { createElement: () => ({}) };
@@ -34,6 +35,7 @@ beforeEach(() => {
 afterEach(() => {
 	globalThis.ChatMessage = saved.ChatMessage;
 	globalThis.document = saved.document;
+	globalThis.foundry.applications = saved.applications;
 });
 
 describe("battleHoldsToFill", () => {
@@ -77,15 +79,18 @@ describe("askBattleHolds", () => {
 	it("takes the ticked rows on the affirmative button, and nothing on the other", async () => {
 		const { actor } = marshal();
 		const holds = battleHoldsToFill(actor);
-		const form = { querySelectorAll: () => [{ value: "1" }] };
-		let spec;
-		const DialogV2 = { wait: vi.fn(async s => { spec = s; return s.buttons[0].callback(null, { form }); }) };
-		expect(await askBattleHolds(actor, holds, { DialogV2 })).toEqual([holds[1]]);
+		// The ticked boxes, as the form hands them over: only Front Line Leader's.
+		const form = { querySelectorAll: vi.fn(() => [{ value: "1" }]) };
+		const asked = stubAsk("hold", form);
+		expect(await askBattleHolds(actor, holds)).toEqual([holds[1]]);
+		expect(form.querySelectorAll).toHaveBeenCalledWith('input[name="stonetop-battle-hold"]:checked');
+		const spec = asked.mock.calls[0][0];
 		expect(spec.buttons.map(b => b.action)).toEqual(["hold", "skip"]);
-		DialogV2.wait = vi.fn(async s => s.buttons[1].callback());
-		expect(await askBattleHolds(actor, holds, { DialogV2 })).toEqual([]);
-		DialogV2.wait = vi.fn(async () => null);
-		expect(await askBattleHolds(actor, holds, { DialogV2 })).toEqual([]);
+		expect(spec.buttons.find(b => b.default)?.action).toBe("hold");
+		stubAsk("skip");
+		expect(await askBattleHolds(actor, holds)).toEqual([]);
+		stubAsk(null);
+		expect(await askBattleHolds(actor, holds)).toEqual([]);
 	});
 });
 

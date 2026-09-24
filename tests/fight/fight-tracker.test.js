@@ -5,6 +5,7 @@ import { createFightTrackerClass, fighterDragType } from "../../module/fight/Fig
 import { FIGHT_OVER, FIGHT_WINDOW_WIDTH, noteFightWindowClosed, openFightWindow, rememberFightWindowPosition } from "../../module/fight/fight-window.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection } from "../fakes/fight.js";
+import { stubConfirm } from "../fakes/confirm.js";
 
 // The Fight tab's class, over a stand-in for core's CombatTracker.
 
@@ -230,8 +231,9 @@ describe("the Fight tab class", () => {
 
 	it("ends the fight only when the GM confirms", async () => {
 		const { combat } = oneFight();
-		const confirm = vi.fn(async () => false);
-		globalThis.foundry = { ...saved.foundry, applications: { api: { DialogV2: { confirm } } } };
+		// A foundry of its own, so the fake window goes with it when afterEach puts the real one back.
+		globalThis.foundry = { ...saved.foundry, applications: { api: {} } };
+		const kept = stubConfirm(false);
 		const hadDocument = "document" in globalThis;
 		const previous = globalThis.document;
 		globalThis.document = { createElement: tag => ({ tagName: tag.toUpperCase(), innerHTML: "" }) };
@@ -240,10 +242,13 @@ describe("the Fight tab class", () => {
 			tab.viewed = combat;
 			await FightTracker.DEFAULT_OPTIONS.actions.endFight.call(tab);
 			expect(combat.delete).not.toHaveBeenCalled();
-			const asked = confirm.mock.calls[0][0];
-			expect(asked).toMatchObject({ yes: { label: "End the fight" }, no: { label: "Keep fighting" }, classes: expect.arrayContaining(["stonetop"]) });
+			const asked = kept.mock.calls[0][0];
+			expect(asked.buttons.map(b => b.label)).toEqual(["End the fight", "Keep fighting"]);
+			expect(asked.classes).toEqual(expect.arrayContaining(["stonetop"]));
+			// Enter keeps fighting, as core's confirm had it.
+			expect(asked.buttons.find(b => b.default)?.action).toBe("no");
 			expect(asked.content.innerHTML).toContain("Tokens stay where they are.");
-			confirm.mockResolvedValueOnce(true);
+			stubConfirm(true);
 			await FightTracker.DEFAULT_OPTIONS.actions.endFight.call(tab);
 			expect(combat.delete).toHaveBeenCalledTimes(1);
 		} finally {
@@ -254,13 +259,13 @@ describe("the Fight tab class", () => {
 
 	it("never lets a player end a fight", async () => {
 		const { combat } = oneFight();
-		const confirm = vi.fn(async () => true);
-		globalThis.foundry = { ...saved.foundry, applications: { api: { DialogV2: { confirm } } } };
+		globalThis.foundry = { ...saved.foundry, applications: { api: {} } };
+		const asked = stubConfirm(true);
 		globalThis.game.user = { id: "player", isGM: false };
 		const tab = new FightTracker();
 		tab.viewed = combat;
 		await FightTracker.DEFAULT_OPTIONS.actions.endFight.call(tab);
-		expect(confirm).not.toHaveBeenCalled();
+		expect(asked).not.toHaveBeenCalled();
 		expect(combat.delete).not.toHaveBeenCalled();
 	});
 

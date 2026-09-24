@@ -1,4 +1,4 @@
-import { themedDialogClasses } from "../utils/window-theme.js";
+import { askWithButtons as askWithButtonsShared } from "../utils/ask-with-buttons.js";
 import { escHtml } from "../utils/strings.js";
 import { CAMP_STATE } from "./camp-rules.js";
 import { breakCamp, campActors, campRecordOf, stateOfCamp } from "./camp-store.js";
@@ -7,35 +7,11 @@ import { breakCamp, campActors, campRecordOf, stateOfCamp } from "./camp-store.j
  * Ask a question whose buttons say what they do, and wait for the answer.
  *
  * Every question the camp asks has more in it than yes or no (which camp, which character, break
- * the camp up or keep it), and a bare "Yes" under a paragraph says nothing about what it agrees
- * to. Resolves to the pressed button's `value`, or null when the window is closed without one.
- *
- * @param {object} o
- * @param {string} o.title
- * @param {string} o.content  HTML, already escaped by the caller
- * @param {Array<{key: string, label: string, value: *, icon?: string}>} o.buttons  affirmative first
- * @param {string} [o.defaultKey]  the button Enter presses; the first unless the first destroys something
+ * the camp up or keep it). The shared helper in utils/ask-with-buttons.js, wearing the camp's own
+ * window class. Resolves to the pressed button's `value`, or null when the window is closed.
  */
-export async function askWithButtons({ title, content, buttons, defaultKey = null }) {
-	const chosen  = defaultKey ?? buttons[0]?.key;
-	const pressed = await foundry.applications.api.DialogV2.wait({
-		// `stonetop-ask` is the question-and-answers shape (stonetop.css): it caps the width a
-		// DialogV2 would otherwise take from the viewport, and gives each answer a row of its own.
-		classes: themedDialogClasses("stonetop-camp-ask", "stonetop-ask"),
-		window:  { title },
-		content,
-		buttons: buttons.map(button => ({
-			action:  button.key,
-			// Plain text: DialogV2 sets it as the button's innerText, so escaping it here would print
-			// a name like "Wren's" as "Wren&#x27;s".
-			label:   button.label,
-			default: button.key === chosen,
-			...(button.icon ? { icon: `fas ${button.icon}` } : {}),
-		})),
-		// Closing the window answers with no button, rather than throwing.
-		rejectClose: false,
-	});
-	return buttons.find(button => button.key === pressed)?.value ?? null;
+export function askWithButtons(o) {
+	return askWithButtonsShared({ ...o, classes: ["stonetop-camp-ask", ...(o.classes ?? [])] });
 }
 
 /**

@@ -16,7 +16,7 @@
 //    Repainting under a drag replaces the element the pointer is holding.
 
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
-import { themedDialogClasses } from "../utils/window-theme.js";
+import { confirmOutcome } from "../utils/ask-with-buttons.js";
 import { clipText, escHtml } from "../utils/strings.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { finitePlace } from "../utils/window-restore.js";
@@ -2681,11 +2681,12 @@ export class RelationshipMapWindow extends StonetopDialog {
 	/**
 	 * The window's one "are you sure", asked twice: dropping a board, and taking somebody off one.
 	 *
-	 * ONE SHELL, because both are the same question and the parts that must not drift are the
-	 * ones nobody looks at twice — the themed classes that give the dialog our chrome at all, and
-	 * `rejectClose: false`, which is what makes dismissing the window mean "no" instead of throwing.
-	 * The buttons NAME the outcome rather than answering a question the reader has to hold in their
-	 * head, and the affirmative one is first, which is this system's order everywhere.
+	 * ONE SHELL, because both are the same question, asked through the system's own confirm
+	 * (utils/ask-with-buttons.js#confirmOutcome), which keeps the parts that must not drift: the
+	 * themed classes that give the dialog our chrome at all, and a dismissed window meaning "no"
+	 * instead of throwing. The buttons NAME the outcome rather than answering a question the reader
+	 * has to hold in their head, and the affirmative one is first, which is this system's order
+	 * everywhere. Enter presses it, as it always has here.
 	 *
 	 * `danger` wears the destructive skin (styles/stonetop.css), which is for dropping a board: that
 	 * destroys work nobody can get back, while removing a person is undoable and so is not red.
@@ -2694,17 +2695,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * @returns {Promise<boolean>} Whether the reader pressed the affirmative button.
 	 */
 	async _confirm({ title, body, confirm, cancel, danger = false }) {
-		const go = await foundry.applications.api.DialogV2.wait({
-			classes: themedDialogClasses(),
-			window: { title },
+		const go = await confirmOutcome({
+			title,
 			content: `<p>${escHtml(body)}</p>`,
-			buttons: [
-				{ action: "go", label: confirm, default: true, ...(danger ? { class: "stonetop-dialog-btn--danger" } : {}) },
-				{ action: "keep", label: cancel },
-			],
-			rejectClose: false,
+			yes: { label: confirm, ...(danger ? { className: "stonetop-dialog-btn--danger" } : {}) },
+			no: { label: cancel },
+			defaultYes: true,
 		});
-		return go === "go";
+		return go === true;
 	}
 
 	/** Rename the board that is up. The box opens on the name it already has, so a reader fixing a

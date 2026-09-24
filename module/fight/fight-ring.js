@@ -253,13 +253,12 @@ export function hasAttacker(actor, { engagementOf = rollerEngagement } = {}) {
  * Big Damn Hero from the ring: pick the foe (asked only when there is more than one), spend the Readiness,
  * and say so. Returns whether eyes were locked.
  */
-export async function lockEyesFromRing(actor, { DialogV2 = globalThis.foundry?.applications?.api?.DialogV2 } = {}) {
+export async function lockEyesFromRing(actor) {
 	if (heldReadiness(actor) < 1) return false;
 	const foe = await pickOne(lockEyesCandidates(actor), {
 		title: localize("stonetop.fight.ring.lockEyes"),
 		question: format("stonetop.fight.ring.lockEyesAsk", { name: actor.name }),
 		labelOf: c => c.name || c.token?.name || "",
-		DialogV2,
 	});
 	if (!foe || !(await lockEyes(actor, foe.id))) return false;
 	await spendReadiness(actor);

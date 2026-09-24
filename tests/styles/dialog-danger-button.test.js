@@ -74,14 +74,17 @@ describe("the relationship map's page delete", () => {
 	const SHELL = SRC.slice(SRC.indexOf("async _confirm("), SRC.indexOf("async _renamePage("));
 
 	it("wears the danger class on the button that commits it", () => {
-		expect(SHELL).toMatch(/action: "go",[\s\S]{0,200}class: "stonetop-dialog-btn--danger"/);
+		// confirmOutcome hands a `className` on its yes button to DialogV2 as that button's `class`
+		// (tests/utils/ask-with-buttons.test.js).
+		expect(SHELL).toMatch(/yes: \{[^}]{0,200}className: "stonetop-dialog-btn--danger"/);
 	});
 
 	it("leaves the button that keeps the page alone", () => {
 		// One red button in the footer, or the colour stops meaning anything. The keep button is
-		// the whole rest of the shell's button list, and none of it may mention danger.
-		const keep = SHELL.slice(SHELL.indexOf('action: "keep"'));
-		expect(keep).not.toContain("danger");
+		// the whole rest of the shell's question, and none of it may mention danger.
+		const at = SHELL.indexOf("no: {");
+		expect(at).toBeGreaterThan(-1);
+		expect(SHELL.slice(at)).not.toContain("danger");
 	});
 
 	it("is asked for by the confirm that destroys work, and not by the other", () => {

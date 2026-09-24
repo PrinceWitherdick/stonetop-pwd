@@ -4,6 +4,7 @@ import {
 } from "../../module/combat/readiness-loss.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { collection } from "../fakes/fight.js";
+import { stubAsk } from "../fakes/confirm.js";
 
 // Losing Defend's Readiness (p.216): asked on an attack, since a defensive Clash keeps it; lost when the
 // fight ends, the character leaves it, or goes down.
@@ -88,19 +89,21 @@ describe("settleReadinessOnAttack", () => {
 describe("askGoingOnOffense", () => {
 	it("loses on the rushing-in button, keeps on the other or a closed window", async () => {
 		const bram = hero("bram", 2);
-		const document = globalThis.document;
+		const { document } = globalThis;
+		const { applications } = globalThis.foundry;
 		globalThis.document = { createElement: () => ({}) };
-		onTestFinished(() => { globalThis.document = document; });
-		let spec;
-		const DialogV2 = { wait: vi.fn(async s => { spec = s; return s.buttons[0].callback(); }) };
-		expect(await askGoingOnOffense(bram, "Let Fly", { DialogV2 })).toBe(true);
-		// The buttons name the outcome, the one that costs something on the left.
+		onTestFinished(() => { globalThis.document = document; globalThis.foundry.applications = applications; });
+		const asked = stubAsk("lose");
+		expect(await askGoingOnOffense(bram, "Let Fly")).toBe(true);
+		// The buttons name the outcome, the one that costs something on the left; Enter keeps it.
+		const spec = asked.mock.calls[0][0];
 		expect(spec.buttons.map(b => b.action)).toEqual(["lose", "keep"]);
+		expect(spec.buttons.find(b => b.default)?.action).toBe("keep");
 		expect(spec.window.title).toBe("Bram holds 2 Readiness");
-		DialogV2.wait = vi.fn(async s => s.buttons[1].callback());
-		expect(await askGoingOnOffense(bram, "Let Fly", { DialogV2 })).toBe(false);
-		DialogV2.wait = vi.fn(async () => null);
-		expect(await askGoingOnOffense(bram, "Let Fly", { DialogV2 })).toBe(false);
+		stubAsk("keep");
+		expect(await askGoingOnOffense(bram, "Let Fly")).toBe(false);
+		stubAsk(null);
+		expect(await askGoingOnOffense(bram, "Let Fly")).toBe(false);
 	});
 });
 

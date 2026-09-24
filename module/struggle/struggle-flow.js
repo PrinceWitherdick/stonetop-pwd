@@ -1,7 +1,7 @@
 import { contentElement } from "../dialogs/content-picker.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { SYSTEM_ID } from "../system-id.js";
-import { themedDialogClasses } from "../utils/window-theme.js";
+import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { STRUGGLE_ASK_FLAG, STRUGGLE_FLAG, STRUGGLE_ROLL_FLAG, isLive } from "./struggle-rules.js";
 import { askDeclinedNotice, struggleCallView } from "./struggle-view.js";
 import {
@@ -99,20 +99,18 @@ async function askTheGmDialog(actor) {
 				<textarea name="approach" rows="2" placeholder="We rope together and take turns breaking trail."></textarea>
 			</label>
 		</div>`);
-	const read = (_event, button) => ({
-		danger: String(button.form.elements.namedItem("danger")?.value ?? "").trim(),
-		approach: String(button.form.elements.namedItem("approach")?.value ?? "").trim(),
+	const read = form => ({
+		danger: String(form?.elements?.namedItem("danger")?.value ?? "").trim(),
+		approach: String(form?.elements?.namedItem("approach")?.value ?? "").trim(),
 	});
-	return foundry.applications.api.DialogV2.wait({
-		classes: themedDialogClasses("stonetop-ask"),
-		window: { title: `Struggle as One: ${actor.name}` },
+	return askWithButtons({
+		title: `Struggle as One: ${actor.name}`,
 		position: { width: 460 },
 		content,
 		buttons: [
-			{ action: "ask", label: "Ask the GM to call it", icon: "fas fa-people-group", default: true, callback: read },
-			{ action: "cancel", label: "Cancel", callback: () => null },
+			{ key: "ask", label: "Ask the GM to call it", icon: "fa-people-group", value: read },
+			{ key: "cancel", label: "Cancel", value: null },
 		],
-		rejectClose: false,
 	});
 }
 

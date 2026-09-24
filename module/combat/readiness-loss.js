@@ -17,7 +17,7 @@ import { each, isFight } from "../fight/fight-state.js";
 import { clearHarmedBy } from "../fight/hero-moves.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { postMoveNote } from "../utils/chat.js";
-import { themedDialogClasses } from "../utils/window-theme.js";
+import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { contentElement } from "../dialogs/content-picker.js";
 import { escHtml, joinNames } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
@@ -28,22 +28,18 @@ const KEY = "stonetop.readiness";
  * Ask whether an attack is going on the offense. Resolves true to lose the Readiness, false to keep it
  * (also when the window is closed, or there is no window to ask with).
  */
-export async function askGoingOnOffense(actor, moveName, { DialogV2 = globalThis.foundry?.applications?.api?.DialogV2 } = {}) {
-	if (!DialogV2) return false;
+export async function askGoingOnOffense(actor, moveName) {
 	const count = heldReadiness(actor);
-	const answer = await DialogV2.wait({
-		// `stonetop-ask` carries the window's measure and a row per answer: a DialogV2 is auto-width,
-		// so this paragraph would otherwise open as one very long line (stonetop.css).
-		classes: themedDialogClasses("stonetop-ask"),
-		window: { title: format(`${KEY}.askTitle`, { name: actor.name, count }) },
+	const answer = await askWithButtons({
+		title: format(`${KEY}.askTitle`, { name: actor.name, count }),
 		content: contentElement(`<p>${escHtml(format(`${KEY}.ask`, { name: actor.name, count, move: moveName }))}</p>`),
-		// Affirmative first: the rule's own case, the one that costs something.
+		// Affirmative first: the rule's own case, the one that costs something. Enter keeps it.
 		buttons: [
-			{ action: "lose", label: localize(`${KEY}.lose`), icon: "fa-solid fa-person-running", callback: () => "lose" },
-			{ action: "keep", label: localize(`${KEY}.keep`), icon: "fa-solid fa-shield", default: true, callback: () => "keep" },
+			{ key: "lose", label: localize(`${KEY}.lose`), icon: "fa-person-running", value: "lose" },
+			{ key: "keep", label: localize(`${KEY}.keep`), icon: "fa-shield", value: "keep" },
 		],
-		rejectClose: false,
-	}).catch(() => null);
+		defaultKey: "keep",
+	});
 	return answer === "lose";
 }
 
