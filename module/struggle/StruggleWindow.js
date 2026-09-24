@@ -111,23 +111,18 @@ export class StruggleWindow extends StonetopDialog {
 	}
 
 	/**
-	 * Redraw, and put the reader back where they were: the scroll and the keyboard. Every roll anywhere
-	 * in the party redraws the window, which would otherwise throw a reader halfway down it back to the
-	 * banner (see CampWindow#_render, which this follows).
+	 * The reader's place, kept through a redraw: the scroll, and the keyboard by each control's
+	 * `data-struggle-focus` key (StonetopDialog#_keptScrollSelector). Every roll anywhere in the party
+	 * redraws the window, which would otherwise throw a reader halfway down it back to the banner.
 	 */
+	get _keptScrollSelector() { return SCROLLER; }
+
+	get _focusKeyAttribute() { return "data-struggle-focus"; }
+
+	/** A first draw comes up only over a struggle still being played that this client is in (see CampWindow#_render: a reload's restore draws a moment after it mints). */
 	async _render(force, options) {
 		if (!this.rendered && !struggleWindowWanted(this._struggleId)) return;
-		const doc = globalThis.document;
-		const before = this.element?.[0];
-		const scrolled = before?.querySelector?.(SCROLLER)?.scrollTop ?? 0;
-		const focusKey = before && doc?.activeElement && before.contains(doc.activeElement)
-			? doc.activeElement.dataset?.struggleFocus ?? null
-			: null;
 		await super._render(force, options);
-		const after = this.element?.[0];
-		const column = after?.querySelector?.(SCROLLER);
-		if (column && scrolled) column.scrollTop = scrolled;
-		if (focusKey) after?.querySelector?.(`[data-struggle-focus="${focusKey}"]`)?.focus?.({ preventScroll: true });
 	}
 
 	activateListeners(html) {

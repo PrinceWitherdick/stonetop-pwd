@@ -94,6 +94,12 @@ export class CampWindow extends StonetopDialog {
 
 	get _autoHeight() { return true; }
 
+	/** The column a redraw keeps the reader's place in (StonetopDialog#_keptScrollSelector). */
+	get _keptScrollSelector() { return SCROLLER; }
+
+	/** Every control a player works through carries a `data-camp-focus` key, so the keyboard finds it again after a redraw. */
+	get _focusKeyAttribute() { return "data-camp-focus"; }
+
 	/** What utils/window-restore.js saves this window under, and reopens it from after a reload. */
 	get restoreKey() {
 		return `${RESTORE_KIND}:${this._camp.campId}:${this._camp.hostId}`;
@@ -128,18 +134,13 @@ export class CampWindow extends StonetopDialog {
 	}
 
 	/**
-	 * Redraw, and put the reader back where they were: the scroll, the keyboard, and the GM's pick in
-	 * the roster list (_keepRosterPick).
+	 * Redraw, and put the reader back where they were: the scroll and the keyboard, which
+	 * StonetopDialog keeps from the two declarations above, and the GM's pick in the roster list
+	 * (_keepRosterPick), which is this window's own.
 	 *
 	 * Every control writes to a character, and every write redraws the whole window, which replaces
 	 * the scrolling column with a fresh one sitting at its top. Ticking a box halfway down a camp of
 	 * four threw the reader back to the banner, and so did anyone else at the fire pressing anything.
-	 * The offset goes back AFTER super._render, not through core's `scrollY`: core restores it
-	 * before the auto-height refit at the end of StonetopDialog._render, and that refit measures the
-	 * window with its height cleared.
-	 *
-	 * Focus comes back for somebody tabbing through their offer, or reading it through a magnifier
-	 * that follows focus. `preventScroll`, so it never moves the column the line above just placed.
 	 *
 	 * ⚠ AND A FIRST DRAW OVER A CAMP THIS CLIENT NO LONGER BELONGS AT DRAWS NOTHING. A reload mints this
 	 * window from its saved key and draws it up to a few seconds later (utils/window-restore.js staggers
@@ -149,21 +150,11 @@ export class CampWindow extends StonetopDialog {
 	 */
 	async _render(force, options) {
 		if (!this.rendered && !campWindowWanted(this._camp)) return;
-		const doc      = globalThis.document;
-		const before   = this.element?.[0];
-		const scrolled = before?.querySelector?.(SCROLLER)?.scrollTop ?? 0;
-		const focusKey = before && doc?.activeElement && before.contains(doc.activeElement)
-			? doc.activeElement.dataset?.campFocus ?? null
-			: null;
 		// Null where there was no roster list to pick from.
-		const roster   = before?.querySelector?.(ROSTER);
-		const picked   = roster ? roster.selectedOptions?.[0]?.value ?? "" : null;
+		const roster = this.element?.[0]?.querySelector?.(ROSTER);
+		const picked = roster ? roster.selectedOptions?.[0]?.value ?? "" : null;
 		await super._render(force, options);
-		const after  = this.element?.[0];
-		const column = after?.querySelector?.(SCROLLER);
-		if (column && scrolled) column.scrollTop = scrolled;
-		if (picked !== null) this._keepRosterPick(after?.querySelector?.(ROSTER), picked);
-		if (focusKey) after?.querySelector?.(`[data-camp-focus="${focusKey}"]`)?.focus?.({ preventScroll: true });
+		if (picked !== null) this._keepRosterPick(this.element?.[0]?.querySelector?.(ROSTER), picked);
 	}
 
 	activateListeners(html) {

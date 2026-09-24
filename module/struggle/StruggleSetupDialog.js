@@ -9,6 +9,19 @@ import { clearAsk, liveStruggle, startStruggle } from "./struggle-store.js";
 
 const TEMPLATE = "systems/stonetop-pwd/templates/dialogs/struggle-setup.hbs";
 const WINDOW_ID = "stonetop-struggle-setup";
+const SCROLLER = ".stonetop-guide-main";
+
+/** A selector that finds this control again in a fresh draw, or null for one that has no key. */
+function controlSelector(el) {
+	const field = el?.dataset?.field;
+	if (!field) return null;
+	const owner = el.dataset.pc ? `[data-pc="${CSS.escape(el.dataset.pc)}"]` : el.dataset.follower ? `[data-follower="${CSS.escape(el.dataset.follower)}"]` : "";
+	// A stat chip or a half-miss tick is one of several boxes on the one field, told apart by its
+	// value. A select's or a text box's value is what the GM is changing, so it is never the key.
+	const box = el.type === "checkbox" || el.type === "radio";
+	const which = box && el.getAttribute?.("value") != null ? `[value="${CSS.escape(el.value)}"]` : "";
+	return `${owner}[data-field="${CSS.escape(field)}"]${which}`;
+}
 
 /** What a refused call says. */
 const START_REFUSALS = {
@@ -140,6 +153,16 @@ export class StruggleSetupDialog extends StonetopDialog {
 		}
 		return setupView(this._roster, this._draft, { askerName: this._askActor?.name ?? "", live: !!liveStruggle() });
 	}
+
+	/**
+	 * The GM's place, kept through a redraw (StonetopDialog#_keptScrollSelector). A redraw replaces the
+	 * scrolling column, so ticking somebody out, or picking who Aids them, halfway down a party threw
+	 * the form back to the banner and dropped the keyboard.
+	 */
+	get _keptScrollSelector() { return SCROLLER; }
+
+	/** The fields here are named by who they belong to and what they hold, not by one focus key. */
+	_focusSelector(el) { return controlSelector(el); }
 
 	activateListeners(html) {
 		super.activateListeners(html);

@@ -15,8 +15,10 @@ const PROGRESS_RENDER_MS = 150;
  *  • the result-dialog protocol below, for a dialog whose caller awaits its answer.
  *
  * It also offers a tiny form-value reader so each dialog's `_save` stops re-declaring the
- * same `root.querySelector(sel)?.value ?? ""`, and the throttled re-render every
- * long-running progress panel needs (see renderThrottled).
+ * same `root.querySelector(sel)?.value ?? ""`, the throttled re-render every
+ * long-running progress panel needs (see renderThrottled), and, for a window that redraws
+ * under its reader, the scroll and the keyboard kept through the redraw (see
+ * _keptScrollSelector).
  *
  * Subclasses set their own fields AFTER `super(options)`. When a subclass overrides
  * activateListeners / close / _render to add its own behaviour, it MUST call the matching
@@ -140,13 +142,76 @@ export class StonetopDialog extends Application {
 	 */
 	_settleContent() {}
 
+	// The reader's place, kept through a redraw. A window whose every control writes a document,
+	// and whose every write redraws it on every client (Make Camp, Struggle as One and its setup),
+	// replaces its scrolling column with a fresh one sitting at its top and drops the keyboard.
+	// Ticking a box halfway down threw the reader back to the banner, and so did anyone else at
+	// the table pressing anything. A subclass declares its column and how its controls are named;
+	// _render does the rest. Inert, the default, for a window that declares neither.
+
+	/**
+	 * The column whose scroll offset a redraw keeps, as a selector (its first match), or null, the
+	 * default, for none.
+	 *
+	 * Not core's `scrollY`: core puts those offsets back inside super._render, BEFORE the auto-height
+	 * fit at the end of _render below, and that fit measures the window with its height cleared,
+	 * which throws the column back to its top. So the offset is read before the redraw and written
+	 * back after the fit.
+	 */
+	get _keptScrollSelector() { return null; }
+
+	/** The attribute that names a control across redraws (`data-camp-focus`), read by _focusSelector; null, the default, for none. */
+	get _focusKeyAttribute() { return null; }
+
+	/**
+	 * A selector that finds `el`, the control that had the keyboard, again in the fresh draw; null to
+	 * let the keyboard go. By default it is `el`'s _focusKeyAttribute value; a window whose controls
+	 * are named some other way overrides this instead.
+	 *
+	 * The keyboard comes back for somebody tabbing through a form, or reading it through a magnifier
+	 * that follows focus. A control with no key, or one the fresh draw no longer has, is let go.
+	 */
+	_focusSelector(el) {
+		const attr = this._focusKeyAttribute;
+		const key = attr ? el.getAttribute?.(attr) : null;
+		return key ? `[${attr}="${key}"]` : null;
+	}
+
+	/** Where the reader is in the window as drawn: the kept column's offset, and the control with the keyboard. Null before the first draw. */
+	_readPlace() {
+		const before = this.element?.[0];
+		if (!before) return null;
+		const scroller = this._keptScrollSelector;
+		const active = globalThis.document?.activeElement;
+		return {
+			scroller,
+			scrolled: scroller ? before.querySelector?.(scroller)?.scrollTop ?? 0 : 0,
+			focused:  active && before.contains?.(active) ? this._focusSelector(active) : null,
+		};
+	}
+
+	/**
+	 * Put the reader back in the fresh draw: the offset first, then the keyboard, with
+	 * `preventScroll` so focusing a control never moves the column the line before just placed.
+	 */
+	_restorePlace(place) {
+		if (!place) return;
+		const after = this.element?.[0];
+		const column = place.scrolled ? after?.querySelector?.(place.scroller) : null;
+		if (column) column.scrollTop = place.scrolled;
+		if (place.focused) after?.querySelector?.(place.focused)?.focus?.({ preventScroll: true });
+	}
+
 	async _render(force, options) {
+		const place = this._readPlace();
 		await super._render(force, options);
 		this._frontOnOpen.apply();
 		this._settleContent();
 		// Auto-height dialogs re-fit their height after each render so the window hugs the
 		// current content (AppV1 caps the result via CSS max-height).
 		if (this._autoHeight) this.setPosition({ height: "auto" });
+		// After the fit, which is why this is not core's `scrollY` (see _keptScrollSelector).
+		this._restorePlace(place);
 	}
 
 	activateListeners(html) {
