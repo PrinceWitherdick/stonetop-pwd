@@ -51,10 +51,11 @@ describe("the pop-out tile", () => {
 	});
 
 	// It is laid ON the board rather than being part of it, over a diagram that is nothing but
-	// lines and faces. Without its own opaque ground it is unreadable over half the map.
-	it("carries its own ground, in the panel tone rather than the page tone", () => {
+	// lines and faces. See-through rather than tan (user, 2026-09-23), but never bare: with no
+	// ground at all a line under the corner runs straight through the glyph.
+	it("carries a see-through ground of the page tone, and a border and shadow to draw the tile", () => {
 		const block = rule(".stonetop-relmap-popout");
-		expect(block).toMatch(/background:\s*var\(--stonetop-bg\)/);
+		expect(block).toMatch(/background:\s*color-mix\(in srgb, var\(--st-page\) 60%, transparent\)/);
 		expect(block).toMatch(/border:\s*1px solid var\(--st-card-rule\)/);
 		expect(block).toMatch(/box-shadow:/);
 	});

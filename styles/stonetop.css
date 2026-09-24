@@ -128,7 +128,8 @@
 	/* How long a pop-out tile that waits for the pointer (the relationship map's, the expedition
 	   map's) takes to fade in and back out. 120ms read as a blink rather than a fade; ONE token so
 	   the two tiles keep behaving alike. Only the opacity rides this: the tile's own hover colours
-	   stay quick, because those answer the pointer on the button rather than on the picture. */
+	   stay quick, because those answer the pointer on the button rather than on the picture.
+	   Zeroed under reduced motion, just below this block. */
 	--st-popout-fade: 250ms;
 	--font-size-display: 42px;
 	/* THE PANEL TONE. Not the page: read the note on --st-page below before changing it.
@@ -698,6 +699,11 @@
 	--st-tabstrip-ink: #fff;
 
 	scrollbar-color: slategrey hsl(30deg 20% 94%);
+}
+
+/* Motion off: the pop-out tiles are simply there on hover and simply gone after it. */
+@media (prefers-reduced-motion: reduce) {
+	:root { --st-popout-fade: 0ms; }
 }
 
 /* Whole-app base font (sidebar, chat, hotbar, everything). This is intentional
@@ -44211,9 +44217,14 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    THE SAME PLACE AND THE SAME BEHAVIOUR AS THE EXPEDITION MAP'S `.stonetop-journey-zoom`, asked
    for by name (user, 2026-09-07). What is deliberately NOT copied is its white tile: that one sits
    over 300 dpi printed artwork and has to carry its own ground because the map underneath is
-   another paper. This sits over the board's own page tone, so it takes the PANEL tone every other
-   piece of chrome in this system takes over a page -- see `--stonetop-bg` vs `--st-page` at the
-   top of this file. A white square here would read as a hole cut in the board.
+   another paper. This sits over the board's own page tone, and a white square here would read as
+   a hole cut in the board.
+
+   SEE-THROUGH, NOT TAN (user, 2026-09-23). It used to take the PANEL tone every other piece of
+   chrome takes over a page, and a solid tan square in the corner was a heavier thing than a way out
+   should be. It is the board's own page tone at 60% now: over empty board the fill vanishes and the
+   border and shadow draw the tile, and a line that runs under the corner still shows through,
+   dimmed enough that the glyph reads over it.
 
    ⚠ THE HIDDEN STATE TAKES THE POINTER WITH IT. A transparent button left live over the corner
    swallows presses meant for the board under it, and on this board a press is how a portrait is
@@ -44244,7 +44255,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	   nothing for a ratio to transfer from). */
 	padding: 0.25em;
 	justify-items: center;
-	background: var(--stonetop-bg);
+	background: color-mix(in srgb, var(--st-page) 60%, transparent);
 	border: 1px solid var(--st-card-rule);
 	border-radius: var(--st-radius-sm);
 	color: var(--st-text-secondary);
