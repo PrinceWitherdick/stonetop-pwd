@@ -38,6 +38,7 @@ import { heldOnTrack } from "../actors/character/MoveResources.js";
 import { MELEE_RANGES } from "../data/weapons.js";
 import { betterMode, foldModes } from "../utils/roll-mode.js";
 import { fightStateActive, STORM_MARKINGS_NAME } from "../actors/character/fight-states.js";
+import { BINDING_ARBITRATION, OATHS_FLAG, readOaths, oathIndex, isSwornBy } from "../actors/character/oaths.js";
 import { HEROES, touching } from "./engagements.js";
 import { fightOnScene, gridOf } from "./fight-state.js";
 import { rollerEngagement } from "./damage-seed.js";
@@ -275,9 +276,35 @@ function upAgainAgainst(actor, targets = []) {
 	return targets.every(target => foeKey(target) === key) ? HERO_MOVES.UP_AGAIN : null;
 }
 
+/**
+ * Binding Arbitration: "If they have broken their word, you gain advantage on all rolls against them
+ * until they admit their wrongdoing and suffer an appropriate consequence." The Judge ticks an oath
+ * broken in the scales' window (actors/character/oaths.js) and unticks it for the admission, so the
+ * tick IS the condition and the advantage is simply applied, named on the card. Only rolls aimed at
+ * someone reach here, which in practice is the attack moves.
+ *
+ * Matched the way the roster matches anyone: a row's actor, or its name, against the token's name and
+ * its actor's. Every target has to be an oathbreaker, as for the other grudges here.
+ */
+export function oathbreakerAgainst(actor, targets = []) {
+	if (!has(actor, BINDING_ARBITRATION) || !targets?.length) return null;
+	const broken = readOaths(actor.getFlag?.(SYSTEM_ID, OATHS_FLAG)).filter(oath => oath.broken);
+	if (!broken.length) return null;
+	const index = oathIndex(broken);
+	const breaker = target => {
+		const doc = target?.uuid ? resolveSync(target.uuid) : null;
+		const person = doc?.documentName === "Actor" ? doc : doc?.actor;
+		return isSwornBy(index, { name: target?.name, id: target?.actorId, uuid: target?.uuid })
+			|| (!!person && isSwornBy(index, person));
+	};
+	return targets.every(breaker) ? BINDING_ARBITRATION : null;
+}
+
 /** Whichever remembered foe gives this attack roll advantage, or null. One name, for the card's pill. */
 export function foeAdvantage(actor, targets = [], { clash = false } = {}) {
-	return (clash ? relentlessAgainst(actor, targets) : null) ?? upAgainAgainst(actor, targets);
+	return (clash ? relentlessAgainst(actor, targets) : null)
+		?? upAgainAgainst(actor, targets)
+		?? oathbreakerAgainst(actor, targets);
 }
 
 /** Forget whoever knocked this character down, once the blow that answered it is rolled. */
