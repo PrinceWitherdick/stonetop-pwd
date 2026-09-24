@@ -115,6 +115,7 @@ import { registerCampHooks } from "./module/camp/camp-store.js";
 import { registerVitalsMirrorHooks } from "./module/actors/character/vitals-mirror.js";
 import { wireCampCard } from "./module/camp/camp-flow.js";
 import { registerCampWindowRestore } from "./module/camp/CampWindow.js";
+import { registerStruggleHooks } from "./module/struggle/struggle-flow.js";
 import { registerFightTab } from "./module/fight/fight-boot.js";
 
 // -- INIT ------------------------------------------------------
@@ -2081,6 +2082,11 @@ registerVitalsMirrorHooks();
 // And a camp window open when this client reloaded comes back with the sheets, where it was left
 // (utils/window-restore.js, installed in the init hook).
 registerCampWindowRestore();
+
+// -- STRUGGLE AS ONE, SHARED -----------------------------------
+// On every client: the window opens when the GM calls a struggle or shares its results, a player's
+// ask reaches the GM, and a window open at reload comes back. See module/struggle/struggle-flow.js.
+registerStruggleHooks();
 
 // -- SEASONS CHANGE: "ask the most hopeful to roll" -----------
 // Wire the roll button on a spring Seasons Change prompt card (postSeasonsRollPrompt):

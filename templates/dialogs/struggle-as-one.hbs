@@ -1,0 +1,161 @@
+{{!-- STRUGGLE AS ONE, for everyone in it (Book I p.78, p.328-331). Built by
+      module/struggle/struggle-view.js#struggleWindowView, wired by module/struggle/StruggleWindow.js.
+
+      Every participant is a card. The cards wear Make Camp's card skin (`stonetop-camp-row` and its
+      parts), so the two shared windows read as one family; what only a struggle has is
+      `stonetop-struggle-*` in styles/stonetop.css.
+
+      Until the GM shares them, a card shows its result only to its own player and the GM. Everybody
+      else reads "Rolled" or "Waiting to roll".
+
+      A label's words sit in ONE <span>: the labels are flex rows (see make-camp.hbs). --}}
+<div class="stonetop-spring stonetop-camp stonetop-struggle">
+
+  <div class="stonetop-guide-main">
+
+    <div class="stonetop-guide-banner">
+      <i class="fas fa-people-group stonetop-guide-banner-icon" aria-hidden="true"></i>
+      <div class="stonetop-guide-banner-info">
+        <div class="stonetop-guide-banner-title">{{title}}</div>
+        <div class="stonetop-guide-banner-sub">{{statusText}}</div>
+      </div>
+    </div>
+
+    {{#if gone}}
+    <p class="stonetop-camp-closed">{{goneText}}</p>
+    {{else}}
+
+    {{#if danger}}
+    <section class="stonetop-struggle-brief">
+      <p class="stonetop-struggle-brief-line"><strong>The danger:</strong> <span>{{danger}}</span></p>
+      {{#if approach}}<p class="stonetop-struggle-brief-line"><strong>The approach:</strong> <span>{{approach}}</span></p>{{/if}}
+      {{#if journey}}<p class="stonetop-struggle-brief-line stonetop-camp-note">Part of a journey.</p>{{/if}}
+    </section>
+    {{else if approach}}
+    <section class="stonetop-struggle-brief">
+      <p class="stonetop-struggle-brief-line"><strong>The approach:</strong> <span>{{approach}}</span></p>
+    </section>
+    {{/if}}
+
+    {{#if keepCompany}}<p class="stonetop-struggle-cue">{{keepCompany}}</p>{{/if}}
+
+    <ol class="stonetop-camp-rows stonetop-struggle-rows">
+      {{#each rows}}
+      <li class="stonetop-camp-row stonetop-struggle-row {{stateClass}}{{#if isMine}} is-mine{{/if}}{{#unless canDrive}} is-readonly{{/unless}}" data-row-key="{{key}}">
+        <header class="stonetop-camp-row-head">
+          {{#if img}}<img class="stonetop-camp-portrait" src="{{img}}" alt="">{{/if}}
+          <h4 class="stonetop-camp-name">{{name}}</h4>
+          <span class="stonetop-camp-state stonetop-struggle-state {{stateClass}}">{{stateText}}</span>
+        </header>
+
+        <div class="stonetop-camp-part">
+          {{#each lines}}<p class="stonetop-camp-says">{{this}}</p>{{/each}}
+          {{#if modeText}}<p class="stonetop-camp-says stonetop-struggle-mode">{{modeText}}</p>{{/if}}
+          {{#each notes}}<p class="stonetop-camp-note">{{this}}</p>{{/each}}
+        </div>
+
+        {{#if result}}
+        <div class="stonetop-camp-part stonetop-struggle-result">
+          <p class="stonetop-struggle-result-line">{{result}}</p>
+          {{#if dice}}<p class="stonetop-camp-note">Dice: {{dice}}</p>{{/if}}
+          {{#if halfMissText}}<p class="stonetop-camp-note">{{halfMissText}}</p>{{/if}}
+        </div>
+        {{/if}}
+
+        {{#if outcome.length}}
+        <div class="stonetop-camp-part stonetop-struggle-outcome">
+          {{#each outcome}}<p class="stonetop-camp-says">{{this}}</p>{{/each}}
+        </div>
+        {{/if}}
+
+        {{#if bundle}}
+        <div class="stonetop-camp-part">
+          {{#if bundle.editable}}
+          <label class="stonetop-camp-line"><span>A Bundle of Sticks Unbroken: who rolls with advantage beside you?</span>
+            <select data-struggle-field="bundle" data-row-key="{{key}}" data-struggle-focus="{{key}}:bundle">
+              {{#each bundle.options}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+            </select>
+          </label>
+          {{else}}
+          <p class="stonetop-camp-note">{{bundle.text}}</p>
+          {{/if}}
+        </div>
+        {{/if}}
+
+        {{#if rollForm}}
+        <div class="stonetop-camp-row-foot stonetop-struggle-roll">
+          {{#if rollForm.choices}}
+          <select class="stonetop-struggle-stat" data-row-key="{{key}}" aria-label="Which stat {{name}} rolls" data-struggle-focus="{{key}}:stat">
+            {{#each rollForm.choices}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+          </select>
+          {{/if}}
+          <button type="button" class="stonetop-camp-inline-btn stonetop-struggle-roll-btn" data-struggle-action="roll" data-row-key="{{key}}" data-stat="{{rollForm.stat}}" data-struggle-focus="{{key}}:roll"><i class="fas fa-dice" aria-hidden="true"></i> {{rollForm.label}}</button>
+        </div>
+        {{/if}}
+
+        {{#if rescue}}
+        <div class="stonetop-camp-row-foot stonetop-struggle-rescue">
+          {{#if rescue.canUndo}}
+          <button type="button" class="stonetop-camp-inline-btn" data-struggle-action="undo-rescue" data-row-key="{{key}}" data-struggle-focus="{{key}}:undo">{{rescue.undoLabel}}</button>
+          {{else}}
+          {{#if rescue.hint}}<p class="stonetop-camp-note stonetop-struggle-rescue-hint">{{rescue.hint}}</p>{{/if}}
+          {{#if rescue.all}}
+          <button type="button" class="stonetop-camp-inline-btn" data-struggle-action="rescue" data-row-key="{{key}}" data-targets="{{rescue.allKeys}}" data-struggle-focus="{{key}}:rescue"><i class="fas fa-hand-holding-hand" aria-hidden="true"></i> {{rescue.label}}</button>
+          {{else}}
+          <select class="stonetop-struggle-target" data-row-key="{{key}}" aria-label="Who {{name}} gets out of their spot" data-struggle-focus="{{key}}:target">
+            {{#each rescue.options}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+          </select>
+          <button type="button" class="stonetop-camp-inline-btn" data-struggle-action="rescue" data-row-key="{{key}}" data-struggle-focus="{{key}}:rescue"><i class="fas fa-hand-holding-hand" aria-hidden="true"></i> {{rescue.label}}</button>
+          {{/if}}
+          {{/if}}
+        </div>
+        {{/if}}
+
+        {{#if gm}}
+        <div class="stonetop-camp-row-foot stonetop-struggle-gm-row">
+          {{#if gm.bump}}
+          <button type="button" class="stonetop-camp-inline-btn" data-struggle-action="bump" data-row-key="{{key}}" data-by="{{gm.bump.by}}" data-struggle-focus="{{key}}:bump">{{gm.bump.label}}</button>
+          {{/if}}
+          {{#if gm.leaveOut}}
+          <button type="button" class="stonetop-camp-inline-btn stonetop-struggle-leave-out" data-struggle-action="leave-out" data-row-key="{{key}}" data-struggle-focus="{{key}}:leave">Leave them out</button>
+          {{/if}}
+        </div>
+        {{/if}}
+      </li>
+      {{/each}}
+    </ol>
+
+    {{#if gm.spots}}
+    <fieldset class="stonetop-camp-part stonetop-struggle-spots">
+      <legend class="stonetop-camp-part-label">More than one of them is in a spot. Are they in</legend>
+      {{#each gm.spots}}
+      <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="struggleSpots" value="{{value}}" data-struggle-field="spots" data-struggle-focus="spots:{{value}}"{{#if checked}} checked{{/if}}><span>{{label}}</span></label>
+      {{/each}}
+    </fieldset>
+    {{/if}}
+
+    {{#if gm.endLines.length}}
+    <section class="stonetop-struggle-brief stonetop-struggle-end-preview">
+      <p class="stonetop-camp-part-label">When you end the struggle</p>
+      {{#each gm.endLines}}<p class="stonetop-struggle-brief-line">{{this}}</p>{{/each}}
+    </section>
+    {{/if}}
+
+    {{/if}}
+  </div>
+
+  {{#if hasGmTools}}
+  <div class="stonetop-guide-nav">
+    {{#if gm.canShare}}
+    <button type="button" class="stonetop-guide-btn--primary" data-struggle-action="share"><i class="fas fa-eye" aria-hidden="true"></i> Share the results with everyone</button>
+    {{/if}}
+    {{#if gm.canEnd}}
+    <button type="button" class="stonetop-guide-btn--primary" data-struggle-action="end"><i class="fas fa-flag-checkered" aria-hidden="true"></i> End the struggle</button>
+    {{/if}}
+    {{#if gm.canCancel}}
+    <button type="button" class="stonetop-dialog-btn--danger" data-struggle-action="cancel">Call it off</button>
+    {{/if}}
+  </div>
+  {{/if}}
+
+</div>

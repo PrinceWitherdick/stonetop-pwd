@@ -8345,6 +8345,185 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-camp-card-text { margin: 4px 0 8px; color: var(--st-text-body); }
 .stonetop-camp-card-closed { margin: 0; font-style: italic; color: var(--st-text-secondary); }
 
+/* -- Struggle as One, shared (module/struggle/) ------------------ */
+/* The struggle window and the GM's setup both wear the Make Camp card skin above (and the
+   `.stonetop-camp-window` scope, for its column gap and wrapping footer). What follows is only what a
+   struggle adds: the brief, the result badges, and the setup's fields. */
+
+/* The danger and the approach, boxed like the camp's meal. */
+.stonetop-struggle-brief {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 8px 12px;
+	border: 1px solid var(--color-border-light-2, rgba(0, 0, 0, 0.15));
+	border-radius: var(--st-radius);
+	background: rgba(0, 0, 0, 0.04);
+	color: var(--st-text-body);
+}
+
+.stonetop-struggle-brief-line { margin: 0; line-height: 1.4; }
+.stonetop-struggle-brief-line strong { color: var(--st-text); }
+
+/* A cue the table may act on (Keep Company) or must (a struggle already under way): the caution gold
+   as a bar and a wash, the words in body ink, as the camp's going-without line does. */
+.stonetop-struggle-cue {
+	margin: 0;
+	padding: 4px 8px;
+	border-left: 3px solid var(--st-gold-border);
+	background: var(--st-gold-bg);
+	color: var(--st-text-body);
+}
+
+/* The badge beside a name says where the row stands. The band (10+, 7-9, 6-) is always written in it,
+   so the colour is never the only cue: green for a 10+, red for a 6-, and a 7-9 keeps the plain
+   badge. A roll the reader may not see yet reads "Rolled", in the ready green's edge only. */
+.stonetop-struggle-state.is-success,
+.stonetop-struggle-state.is-rolled {
+	border-color: var(--st-green-border);
+	color: var(--st-green-text);
+}
+
+.stonetop-struggle-state.is-success { background: var(--st-green-bg); }
+
+.stonetop-struggle-state.is-failure {
+	border-color: var(--st-red-border);
+	background: var(--st-red-bg);
+	color: var(--st-red-text);
+}
+
+.stonetop-struggle-state.is-partial { color: var(--st-text); }
+
+.stonetop-struggle-result-line {
+	margin: 0;
+	font-size: var(--st-fs-md);
+	font-weight: 700;
+	color: var(--st-text);
+}
+
+.stonetop-struggle-mode { font-weight: 600; }
+
+/* The roll, the rescue and the GM's row tools sit at the card's foot. A stat list says what each stat
+   means here (Defy Danger's approaches), so it may be long: it takes the line, and wraps its words
+   inside the list rather than pushing the button off the card. */
+.stonetop-struggle-roll select,
+.stonetop-struggle-rescue select {
+	flex: 1 1 12em;
+	width: auto;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.stonetop-struggle-roll .stonetop-camp-inline-btn,
+.stonetop-struggle-rescue .stonetop-camp-inline-btn,
+.stonetop-struggle-gm-row .stonetop-camp-inline-btn { margin: 0; }
+
+.stonetop-struggle-rescue-hint { flex: 1 0 100%; margin: 0; }
+.stonetop-struggle-gm-row .stonetop-struggle-leave-out { margin-left: auto; }
+
+/* The GM's spots question is a fieldset, so its radios are announced as one question. */
+.stonetop-struggle-spots {
+	min-width: 0;
+	padding: 0;
+	border: none;
+}
+
+/* -- The setup -- */
+.stonetop-struggle-field {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+}
+
+.stonetop-struggle-field textarea {
+	width: 100%;
+	min-height: 3.2em;
+	resize: vertical;
+	font-family: inherit;
+	font-size: inherit;
+}
+
+/* A character left out keeps their card, so ticking them back in puts them where they were. Marked by
+   a dashed edge, not by fading: faded text is the one thing a player reading through a magnifier
+   cannot get back. */
+.stonetop-struggle-setup-row.is-left-out { border-style: dashed; align-self: start; }
+
+.stonetop-struggle-include { flex: 1 1 auto; min-width: 0; margin: 0; }
+
+.stonetop-struggle-stats {
+	min-width: 0;
+	padding: 0;
+	border: none;
+}
+
+.stonetop-struggle-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 6px;
+}
+
+.stonetop-struggle-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	padding: 2px 8px;
+	border: 1px solid var(--color-border-light-2, rgba(0, 0, 0, 0.15));
+	border-radius: 999px;
+	cursor: pointer;
+	font-weight: 600;
+	color: var(--st-text-body);
+}
+
+.stonetop-struggle-chip:has(input:checked) {
+	border-color: var(--st-btn-primary-border);
+	box-shadow: inset 0 0 0 1px var(--st-btn-primary-border);
+	color: var(--st-text);
+}
+
+.stonetop-struggle-chip > input { flex: 0 0 auto; margin: 0; }
+
+.stonetop-struggle-setup .stonetop-camp-line input[type="text"] {
+	flex: 1 1 10em;
+	width: auto;
+	min-width: 0;
+}
+
+.stonetop-struggle-setup .stonetop-camp-line select { width: auto; max-width: 100%; }
+
+.stonetop-struggle-follower {
+	margin: 4px 0 0;
+	padding: 4px 0 0;
+	border-top: 1px dashed var(--color-border-light-2, rgba(0, 0, 0, 0.15));
+}
+
+/* The GM's button onto the move, on the toolkit's Expeditions tab (wearing the expedition card's Run
+   button skin) and on the walkthrough's journey step (beside the Die of Fate). The hint says what the
+   move is for, or how far one under way has got, and wraps under the button in a narrow sheet. */
+.stonetop-gm-struggle-bar {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px 10px;
+	margin: 0 0 8px;
+}
+
+.stonetop-gm-struggle-hint {
+	flex: 1 1 14em;
+	min-width: 0;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
+
+/* A player's ask (a DialogV2): the two boxes, one above the other. */
+.stonetop-struggle-ask {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.stonetop-struggle-ask p { margin: 0; }
+
 .stonetop-edit-mode .stonetop-inv-delete {
 	display: inline;
 	color: var(--st-red-text);
@@ -42689,7 +42868,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 
    The metrics are the toggle's, deliberately: the two are the same height and sit on the same
    baseline, which is what stops the row looking like a button with a label stuck beside it. */
-.stonetop-gm-expedition-run {
+.stonetop-gm-expedition-run,
+.stonetop-gm-struggle-call {
 	width: auto;
 	margin: 0;
 	padding: 1px 10px;
@@ -42703,7 +42883,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	line-height: 1.6;
 }
 
-.stonetop-gm-expedition-run:hover {
+.stonetop-gm-expedition-run:hover,
+.stonetop-gm-struggle-call:hover {
 	background: var(--st-btn-primary-bg-hover);
 	border-color: var(--st-btn-primary-border-hover);
 	box-shadow: none;

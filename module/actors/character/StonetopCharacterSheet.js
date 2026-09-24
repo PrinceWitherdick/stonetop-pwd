@@ -59,6 +59,8 @@ import {wirePickTally} from "../../utils/pick-tally.js";
 import {stockSourcesForFlags, canPayStock, defaultStockSource, stockCostFromDescription, SACRED_POUCH_SLUG, RITES_OF_THE_LAND} from "./stock-cost.js";
 import {supplyPursesFor, defaultSupplyPurse, SUPPLY_PURPOSE} from "./supply-cost.js";
 import {openMakeCamp} from "../../camp/camp-flow.js";
+import {openStruggleAsOne} from "../../struggle/struggle-flow.js";
+import {STRUGGLE_MOVE} from "../../struggle/struggle-rules.js";
 import {rollProvisions, ON_THE_HOOF} from "./provisions.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
 import {knowThingsRollChoices, withAdvantage, KNOW_THINGS_STAT} from "./arcana-identify.js";
@@ -280,6 +282,9 @@ export const GUIDED_CHARACTER_MOVES = {
 		results: ["You can't gain this benefit again until you take more damage."],
 		note: "When you tend to a debility or problematic wound, say how. The GM will say it's taken care of, or tell you what else is required.",
 	},
+	// Kept so every way into the move still arrives at _openGuidedCharacterMove, which hands it to the
+	// shared window (module/struggle/) before this text is ever drawn: the move is the party's, not
+	// one character's roll.
 	"Struggle as One": {
 		trigger: "When you Defy Danger as a group, establish the party's approach and each roll +STAT (per Defy Danger).",
 		results: [
@@ -6201,6 +6206,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * its roll (the homefront dialogs on the steading sheet lost theirs for the same reason).
 		 */
 		_openGuidedCharacterMove({ name, guide }, rollable) {
+			// Struggle as One is the whole party's move, not one character's roll: it goes to the shared
+			// window (module/struggle/), from every way the move can be reached.
+			if (name === STRUGGLE_MOVE) return this._onStruggleAsOne();
 			const resultsHtml = guide.results?.length
 				? `<div class="stonetop-homestead-reference">
 					<strong>Results</strong>
@@ -9478,6 +9486,39 @@ export function createStonetopCharacterSheetClass(Base) {
 		 */
 		_onMakeCampOpen() {
 			return openMakeCamp(this.actor);
+		}
+
+		/**
+		 * STRUGGLE AS ONE (expedition move, Book I p.78 and p.328), rolled by the whole party at once.
+		 * The GM calls it; a player asks the GM to. It all lives in module/struggle/, with
+		 * struggle-flow.js as the way in.
+		 */
+		_onStruggleAsOne() {
+			return openStruggleAsOne(this.actor);
+		}
+
+		/**
+		 * The followers who could roll alongside this character in a Struggle as One: every card that
+		 * takes orders (p.462) and is not dead, in the shape the struggle's setup reads. Built from the
+		 * same cards the Followers tab draws, so a follower's name, tags and exceptional flag are the
+		 * ones the Order button would use.
+		 */
+		async orderableFollowers() {
+			const groups = this._buildFollowersData(await this._stonetopCharacter.playbook());
+			const cards = [groups.animalCompanion, groups.crew, ...(groups.initiates ?? []), ...groups.beasts, ...groups.custom];
+			const split = csv => String(csv ?? "").split("|").map(s => s.trim()).filter(Boolean);
+			return cards
+				.filter(card => card?.ftype && card.canOrder && !card.dead)
+				.map(card => ({
+					ftype:       card.ftype,
+					slug:        card.slug ?? "",
+					name:        card.orderName,
+					img:         card.storedImg ?? card.img ?? "",
+					tags:        [...split(card.orderTagsCsv), ...split(card.orderMovesCsv)],
+					exceptional: !!card.exceptional,
+					isGroup:     !!card.isGroup || card.groupHpMax != null,
+					party:       !!card.party,
+				}));
 		}
 
 		// ── Damage die ─────────────────────────────────────────────────────────────

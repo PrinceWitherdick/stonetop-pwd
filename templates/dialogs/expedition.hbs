@@ -180,6 +180,20 @@
     <div class="stonetop-spring-body">{{{step.bodyAfterFate}}}</div>
     {{/if}}
 
+    {{!-- The GM's button onto Struggle as One, under the sentence that reaches for it (Running the
+          journey). GM-only, and its words change to "Open" while one is under way
+          (module/struggle/struggle-view.js#struggleCallView). This window does not redraw when a
+          struggle moves on, so the two marked spans are rewritten in place
+          (struggle-flow.js#refreshStruggleBars). --}}
+    {{#if struggle}}
+    <div class="stonetop-gm-struggle-bar stonetop-exp-struggle">
+      <button type="button" class="stonetop-exp-struggle-btn stonetop-spring-roll-btn">
+        <i class="fas fa-people-group" aria-hidden="true"></i> <span data-struggle-call-label>{{struggle.label}}</span>
+      </button>
+      <span class="stonetop-gm-struggle-hint" data-struggle-call-hint>{{struggle.hint}}</span>
+    </div>
+    {{/if}}
+
     {{#if qa}}
     <div class="stonetop-spring-qa-wrap">
 

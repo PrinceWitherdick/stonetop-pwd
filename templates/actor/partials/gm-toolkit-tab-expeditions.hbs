@@ -27,6 +27,19 @@
 
 		<p class="steading-threats-intro">{{localize "stonetop.gmToolkit.expeditions.intro"}}</p>
 
+		{{!-- STRUGGLE AS ONE, called from here as well as from any character's Moves tab: it is the
+		      move a journey reaches for most, and the GM is the one who calls it (Book I p.328). The
+		      words come from module/struggle/struggle-view.js#struggleCallView, and change to "Open"
+		      while one is under way, so a GM who closed its window can find it again. A player's roll
+		      does not redraw this sheet, so the marked spans are rewritten in place as rolls land
+		      (struggle-flow.js#refreshStruggleBars). --}}
+		{{#if stonetop.struggle}}
+		<div class="stonetop-gm-struggle-bar">
+			<button type="button" class="stonetop-gm-struggle-call"><i class="fas fa-people-group" aria-hidden="true"></i> <span data-struggle-call-label>{{stonetop.struggle.label}}</span></button>
+			<span class="stonetop-gm-struggle-hint" data-struggle-call-hint>{{stonetop.struggle.hint}}</span>
+		</div>
+		{{/if}}
+
 		{{#if stonetop.expeditions.active.length}}
 		<ul class="stonetop-gm-encounter-list">
 			{{#each stonetop.expeditions.active}}

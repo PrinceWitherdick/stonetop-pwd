@@ -41,6 +41,7 @@ import { EXPLORATION_GM_MOVES } from "../gm-toolkit/gm-moves.js";
 import { GmMoveDrawer } from "../gm-toolkit/gm-move-drawer.js";
 import { wireSidebarToggle } from "../utils/sidebar-toggle.js";
 import { SpinTrack } from "../utils/flash-highlight.js";
+import { callStruggleAsOne, gmStruggleCall } from "../struggle/struggle-flow.js";
 import {
 	TRAVEL_MAPS, BEYOND_TIER,
 	travelPlace, travelMap, placesOnMap, placesBeyond, exitsOnMap, spotPercent, percentSpot,
@@ -384,6 +385,15 @@ const _STEPS = [
 				<p>On a <strong>perilous</strong> leg, or whenever you&rsquo;re unsure how hard to come down, you can let the Die of Fate set the danger:</p>
 				${fateTableList(FATE_TABLES.perilous)}`,
 		fate:  "perilous",
+		// Struggle as One is the move a leg of the journey reaches for most, so the step can call it.
+		// After the Die of Fate, because the die sets how dangerous the leg is and the struggle is
+		// the party meeting that danger. Called from here it starts with "part of a journey" ticked
+		// (module/struggle/struggle-flow.js#callStruggleAsOne).
+		bodyAfterFate: `<p>When the whole party contends with the same danger on a leg (the mire, the cold,
+				   a long climb before nightfall), call on them to <strong>Struggle as One</strong>. &ldquo;If
+				   you&rsquo;re about to have everyone Defy Danger, you should probably use this move
+				   instead&rdquo; (p.328).</p>`,
+		struggle: true,
 		// No note field: the route is plotted on the step of its own before this one, and asking
 		// for the points of interest and legs a second time here only split the same answer across
 		// two pages. A trip that already recorded one keeps it — the Chronicle still prints a
@@ -666,6 +676,8 @@ export class ExpeditionDialog extends StepperDialog {
 		// specific question ("how perilous?", "does the night stay quiet?"), and a card reading
 		// only "4 — neutral / mixed" leaves the GM to look the answer back up on the page behind it.
 		html.find(".stonetop-exp-fate-btn").on("click", () => this._rollFate());
+		// Called from the journey, so the struggle starts with "part of a journey" ticked.
+		html.find(".stonetop-exp-struggle-btn").on("click", () => callStruggleAsOne({ journey: true }));
 		// Collapse / expand the exploration moves rail. By class rather than by re-rendering,
 		// for the reason the character sheet's own handle gives: the step reclaims the freed
 		// width without a flicker, and a render here would rebuild the route step's map panel
@@ -867,6 +879,9 @@ export class ExpeditionDialog extends StepperDialog {
 				? _REQ_TIERS.map(t => ({ ...t, label: _REQ_RESULT[t.key].label, isActive: roll?.tier === t.key }))
 				: null,
 			showFate:  !!step.fate,
+			// The step's button onto Struggle as One, GM-only: the GM calls the move, and a player
+			// asks for one from their own sheet instead.
+			struggle:  step.struggle && game.user?.isGM ? gmStruggleCall() : null,
 			// The headed aside below the body ("What to prep", on the intro step).
 			aside:     step.aside ?? null,
 			qa:        this._qaContext(step.qa),

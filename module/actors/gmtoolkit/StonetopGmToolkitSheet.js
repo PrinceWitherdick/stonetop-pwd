@@ -45,6 +45,7 @@ import { localize } from "../../utils/i18n.js";
 import { localizedOnce } from "../../utils/localized-once.js";
 import { getStonetopSteadingActor, stonetopSteadingHeaderButton } from "../../utils/world.js";
 import { rulebookIconRows, openRulebook, followBookCite } from "../../books/rulebook-icons.js";
+import { callStruggleAsOne, gmStruggleCall } from "../../struggle/struggle-flow.js";
 
 /**
  * What counts as a foldable section heading on this sheet — see `_wireSectionCollapse`.
@@ -373,6 +374,10 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// The Core Loop tab's Import Book Art button asks, because the macro browses and
 			// writes files. This sheet is GM-only by ownership, so it is always true in practice.
 			context.stonetop.isGM = game.user?.isGM ?? false;
+			// The Expeditions tab's button onto Struggle as One: "Call for" with nothing under way,
+			// "Open" while one is. The struggle is kept on THIS actor (module/struggle/), so every
+			// change to it repaints this sheet and the button's words never go stale.
+			context.stonetop.struggle = context.stonetop.isGM ? gmStruggleCall() : null;
 
 			// The Preferences tab: this GM's own client settings, grouped, with each row's label,
 			// hint and control shape read off its registration rather than restated — the character
@@ -523,6 +528,13 @@ export function createStonetopGmToolkitSheetClass(Base) {
 						title: diagram.dataset.caption,
 						key: diagram.dataset.slug,
 					});
+					return;
+				}
+
+				// Struggle as One, from the Expeditions tab: set one up, or open the one under way.
+				if (ev.target.closest(".stonetop-gm-struggle-call")) {
+					ev.preventDefault();
+					callStruggleAsOne();
 					return;
 				}
 

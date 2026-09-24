@@ -45,8 +45,12 @@ describe("the Die of Fate button on Player moves on the road", () => {
 		expect(playermoves.bodyAfterFate).toContain("<em>Defy Danger</em>");
 	});
 
-	it("is the only step with prose past the button", () => {
-		expect(steps.filter(s => s.bodyAfterFate).map(s => s.key)).toEqual(["playermoves"]);
+	// Prose past the button only makes sense on a step that HAS the button. Running the journey is
+	// the other one: its tail is the Struggle as One sentence, with the button that calls it under it.
+	it("shares prose past the button only with Running the journey, and only on steps with a button", () => {
+		expect(steps.filter(s => s.bodyAfterFate).map(s => s.key)).toEqual(["running", "playermoves"]);
+		expect(steps.filter(s => s.bodyAfterFate).every(s => s.fate)).toBe(true);
+		expect(step("running").bodyAfterFate).toContain("<strong>Struggle as One</strong>");
 	});
 
 	it("prints that tail after the button in the template, in the body's own styling", () => {

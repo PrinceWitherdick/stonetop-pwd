@@ -1,0 +1,112 @@
+{{!-- CALL FOR STRUGGLE AS ONE, the GM's setup (Book I p.328). Built by
+      module/struggle/struggle-setup.js#setupView, wired by module/struggle/StruggleSetupDialog.js.
+
+      In the book's order: the danger and the stakes, the party's approach, then who rolls what.
+      Every field is read back off the form when the GM calls for rolls, so nothing here writes
+      anything until then. Cards wear Make Camp's card skin, like the struggle window itself. --}}
+<div class="stonetop-spring stonetop-camp stonetop-struggle stonetop-struggle-setup">
+
+  <div class="stonetop-guide-main">
+
+    <div class="stonetop-guide-banner">
+      <i class="fas fa-people-group stonetop-guide-banner-icon" aria-hidden="true"></i>
+      <div class="stonetop-guide-banner-info">
+        <div class="stonetop-guide-banner-title">Call for Struggle as One</div>
+        <div class="stonetop-guide-banner-sub">{{#if askerName}}{{askerName}}'s player asks for a Struggle as One. {{/if}}Say the danger and the stakes, then who rolls what. Everyone rolls at once; each result goes to its player and you until you share them.</div>
+      </div>
+    </div>
+
+    {{#if live}}<p class="stonetop-struggle-cue">A Struggle as One is already under way. End it before calling another.</p>{{/if}}
+
+    <section class="stonetop-struggle-brief">
+      <label class="stonetop-struggle-field"><span class="stonetop-camp-part-label">The danger, and the stakes</span>
+        <textarea name="danger" rows="2" placeholder="The crinwin notice you, and the party is caught in the open.">{{danger}}</textarea>
+      </label>
+      <label class="stonetop-struggle-field"><span class="stonetop-camp-part-label">The party's approach</span>
+        <textarea name="approach" rows="2" placeholder="Single file, weapons out. Rhianna leads and picks the firmest ground.">{{approach}}</textarea>
+      </label>
+      {{#if showJourney}}
+      <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" name="journey"{{#if journey}} checked{{/if}}><span>This is part of a journey (for Home on the Range and Trailblazer)</span></label>
+      {{/if}}
+    </section>
+
+    {{#if empty}}
+    <p class="stonetop-camp-closed">There are no characters to call on.</p>
+    {{/if}}
+
+    <ol class="stonetop-camp-rows stonetop-struggle-rows">
+      {{#each pcs}}
+      <li class="stonetop-camp-row stonetop-struggle-setup-row{{#unless include}} is-left-out{{/unless}}" data-pc="{{actorId}}">
+        <header class="stonetop-camp-row-head">
+          {{#if img}}<img class="stonetop-camp-portrait" src="{{img}}" alt="">{{/if}}
+          <label class="stonetop-camp-check stonetop-struggle-include"><input type="checkbox" class="stonetop-check" data-pc="{{actorId}}" data-field="include"{{#if include}} checked{{/if}}><span class="stonetop-camp-name">{{name}}</span></label>
+          {{#if loadText}}<span class="stonetop-camp-state">{{loadText}}</span>{{/if}}
+        </header>
+
+        {{#if include}}
+        <fieldset class="stonetop-camp-part stonetop-struggle-stats">
+          <legend class="stonetop-camp-part-label">Rolls (none ticked: their choice)</legend>
+          <div class="stonetop-struggle-chips">
+            {{#each stats}}
+            <label class="stonetop-struggle-chip"><input type="checkbox" class="stonetop-check" data-pc="{{../actorId}}" data-field="stat" value="{{key}}"{{#if checked}} checked{{/if}}><span>+{{label}}</span></label>
+            {{/each}}
+          </div>
+        </fieldset>
+
+        <div class="stonetop-camp-part">
+          <label class="stonetop-camp-line"><span>Rolls with</span>
+            <select data-pc="{{actorId}}" data-field="mode">{{#each modes}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select>
+          </label>
+          <label class="stonetop-camp-line"><span>Aided by (someone outside the struggle)</span>
+            <input type="text" data-pc="{{actorId}}" data-field="aidBy" value="{{aidBy}}" placeholder="Nobody">
+          </label>
+          <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-pc="{{actorId}}" data-field="aidAdv"{{#if aidAdv}} checked{{/if}}><span>Their Aid gives advantage (else: they can accomplish more than alone)</span></label>
+        </div>
+
+        {{#if ticks.length}}
+        <div class="stonetop-camp-part">
+          {{#each ticks}}
+          <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-pc="{{../actorId}}" data-field="tick" value="{{name}}"{{#if checked}} checked{{/if}}><span>{{label}}</span></label>
+          {{/each}}
+        </div>
+        {{/if}}
+
+        {{#if notes.length}}
+        <div class="stonetop-camp-part">{{#each notes}}<p class="stonetop-camp-note">{{this}}</p>{{/each}}</div>
+        {{/if}}
+        {{/if}}
+
+        {{#if followers.length}}
+        <div class="stonetop-camp-part stonetop-struggle-followers">
+          <p class="stonetop-camp-part-label">Followers (roll through {{name}})</p>
+          {{#each followers}}
+          <div class="stonetop-struggle-follower" data-follower="{{fkey}}">
+            <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-follower="{{fkey}}" data-field="include"{{#if include}} checked{{/if}}><span>{{name}}{{#if isGroup}} (rolls once for the whole group){{/if}}</span></label>
+            {{#if include}}
+            <p class="stonetop-camp-note">{{tagsText}}</p>
+            <label class="stonetop-camp-line"><span>Rolls</span>
+              <select data-follower="{{fkey}}" data-field="bonus">{{#each bonuses}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select>
+            </label>
+            <label class="stonetop-camp-line"><span>With</span>
+              <select data-follower="{{fkey}}" data-field="mode">{{#each modes}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select>
+            </label>
+            {{/if}}
+          </div>
+          {{/each}}
+        </div>
+        {{/if}}
+      </li>
+      {{/each}}
+    </ol>
+
+    {{#if helpers.length}}
+    <p class="stonetop-camp-note">Outside the struggle, {{#each helpers}}{{#if @index}}, {{/if}}{{this}}{{/each}} can jump in with Many Hands Make Light Work: the window will offer the +1 once they've rolled.</p>
+    {{/if}}
+  </div>
+
+  <div class="stonetop-guide-nav">
+    <button type="button" class="stonetop-guide-btn--primary" data-setup-action="call"{{#unless canCall}} disabled data-tooltip="{{callBlocked}}" data-tooltip-direction="UP"{{/unless}}><i class="fas fa-dice" aria-hidden="true"></i> Call for rolls</button>
+    <button type="button" data-setup-action="dismiss">{{#if askerName}}Don't call it{{else}}Cancel{{/if}}</button>
+  </div>
+
+</div>
