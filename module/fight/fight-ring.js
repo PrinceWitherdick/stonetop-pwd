@@ -38,7 +38,7 @@ import { SYSTEM_ID } from "../system-id.js";
 import { isFightTabEnabled, isFightRingOn } from "../settings.js";
 import { fightOnScene } from "./fight-state.js";
 import { damageBlows, damageCardText, printedBlow } from "../utils/damage.js";
-import { pcDamageDie, rollDamageAt, rollCharacterDamageAt } from "../combat/attack-flow.js";
+import { pcDamageDie, rollDamageAt, rollCharacterDamageAt, letFlyAmmoStatuses } from "../combat/attack-flow.js";
 import { followerRingInfo, openFollowerOrder } from "./follower-fight.js";
 import { heldReadiness } from "../combat/defend-readiness.js";
 import { spendReadiness, pickOne } from "./defend-spend.js";
@@ -123,9 +123,13 @@ const tidy = formula => String(formula ?? "").replace(/\s+/g, "");
  *   same lookup, which is why ringButtonsFor gets both from followerRingInfo at once
  * @param {number} [p.readiness]  a character's held Defend Readiness
  * @param {boolean} [p.canLockEyes]  a foe in the fight they could lock eyes with (Big Damn Hero)
+ * @param {{name: string, label: string, allOut: boolean}[]} [p.ammo]  a character's carried Let Fly
+ *   weapons that are low or out (combat/attack-flow.js#letFlyAmmoStatuses), shown on the Let Fly button
+ * @param {boolean} [p.ammoOut]  whether nothing they carry for Let Fly has any left, weapons full or
+ *   with no track included, which `ammo` alone cannot say
  * @returns {{moves: RingButton[], damage: RingButton[], readiness: number}}
  */
-export function ringButtons(actor, { die = "", order = null, swarm = null, readiness = 0, canLockEyes = false, canStrikeBack = true } = {}) {
+export function ringButtons(actor, { die = "", order = null, swarm = null, readiness = 0, canLockEyes = false, canStrikeBack = true, ammo = [], ammoOut = false } = {}) {
 	const moves = [];
 	const damage = [];
 	const system = actor?.system ?? {};
@@ -136,7 +140,14 @@ export function ringButtons(actor, { die = "", order = null, swarm = null, readi
 		const items = itemsOf(actor);
 		for (const { name, icon } of RING_MOVES) {
 			const item = items.find(i => i?.type === "move" && i.name === name);
-			if (item) moves.push({ run: "move", itemId: item.id, label: item.name, icon });
+			if (!item) continue;
+			const button = { run: "move", itemId: item.id, label: item.name, icon };
+			// A bow that is low or out says so on the button that fires it, before the dice are thrown.
+			if (name === "Let Fly" && ammo?.length) {
+				button.ammo = ammo;
+				button.ammoOut = !!ammoOut;
+			}
+			moves.push(button);
 		}
 		// Big Damn Hero: "When you Defend, you can spend 1 Readiness to lock eyes with an attacker".
 		if (readiness > 0 && canLockEyes && ownsLearnedMoveNamed(actor, HERO_MOVES.BIG_DAMN_HERO)) {
@@ -216,13 +227,16 @@ export function ringButtons(actor, { die = "", order = null, swarm = null, readi
 /** An actor's ring, with the character's damage die, or a follower's character and roster, looked up. */
 export async function ringButtonsFor(actor) {
 	const isCharacter = actor?.type === "character";
-	const die = isCharacter ? await pcDamageDie(actor) : "";
+	// The ammo only for someone with a Let Fly button to put it on.
+	const letFly = isCharacter && itemsOf(actor).some(i => i?.type === "move" && i.name === "Let Fly");
+	// Both read the character's gear, and neither waits on the other.
+	const [die, ammo] = await Promise.all([isCharacter ? pcDamageDie(actor) : "", letFly ? letFlyAmmoStatuses(actor) : null]);
 	const { order, swarm } = followerRingInfo(actor);
 	const readiness = heldReadiness(actor);
 	// Working out who they could lock eyes with takes the whole fight, so only for someone who could spend on it.
 	const canLockEyes = isCharacter && readiness > 0 && ownsLearnedMoveNamed(actor, HERO_MOVES.BIG_DAMN_HERO) && lockEyesCandidates(actor).length > 0;
 	const canStrikeBack = isCharacter && readiness > 0 && hasAttacker(actor);
-	return ringButtons(actor, { die, order, swarm, readiness, canLockEyes, canStrikeBack });
+	return ringButtons(actor, { die, order, swarm, readiness, canLockEyes, canStrikeBack, ammo: ammo?.weapons ?? [], ammoOut: !!ammo?.allOut });
 }
 
 /**
@@ -410,6 +424,15 @@ export function createFightRingClass(foundryNs = globalThis.foundry) {
 }
 
 /**
+ * What a Let Fly button says about the ammo. One weapon needs no name, the button already being the one
+ * that fires it; several are told apart. `named` always names them, for the spoken label.
+ */
+function ammoText(ammo, { named = false } = {}) {
+	if (ammo.length === 1 && !named) return ammo[0].label;
+	return ammo.map(a => `${a.name}: ${a.label.toLowerCase()}`).join(", ");
+}
+
+/**
  * The template's context: the buttons with their places and spoken names. `data-index` counts through
  * the moves, then the damage buttons.
  */
@@ -426,6 +449,9 @@ export function ringContext(buttons, { name = "" } = {}) {
 				? format("stonetop.fight.ring.orderMove", { name, move: button.label })
 				: format("stonetop.fight.ring.orderAria", { name });
 		}
+		if (button.run === "move" && button.ammo?.length) {
+			return format("stonetop.fight.ring.rollMoveAmmo", { move: button.label, ammo: ammoText(button.ammo, { named: true }) });
+		}
 		return button.run === "move"
 			? format("stonetop.fight.ring.rollMove", { move: button.label })
 			: format("stonetop.fight.ring.rollDamage", { label: button.label, formula: button.formula });
@@ -437,6 +463,9 @@ export function ringContext(buttons, { name = "" } = {}) {
 		formula: button.formula ?? "",
 		icon: button.icon,
 		aria: spoken(button),
+		// Let Fly's bow, low or out. Red only when nothing it could fire has any left.
+		ammo: button.ammo?.length ? ammoText(button.ammo) : "",
+		ammoOut: !!button.ammo?.length && !!button.ammoOut,
 	});
 	// The Readiness a character holds, over the token: what they have to spend on a blow (Defend, p.216).
 	const held = Math.max(0, Math.trunc(Number(buttons?.readiness) || 0));

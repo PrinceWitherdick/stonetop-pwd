@@ -53,6 +53,7 @@ import {bringDialogToFront} from "../utils/front-on-open.js";
 import {isPrimaryGM, anyActiveGM} from "../utils/primary-gm.js";
 import {resolveSync, queryAsker} from "../utils/foundry-compat.js";
 import {inCardTurn} from "../utils/card-queue.js";
+import {belongsToMessage, wirePickedOptionButton} from "../utils/picked-option-button.js";
 import {settleReadinessOnAttack} from "./readiness-loss.js";
 
 const SCOPE = STONETOP_SCOPE;
@@ -224,6 +225,32 @@ function weaponAmmoIndex(actor, weapon) {
 
 function weaponAmmoLabel(actor, weapon) {
 	return ammoStatusLabel(weaponAmmoIndex(actor, weapon), ammoTrack(weapon));
+}
+
+/**
+ * The carried Let Fly weapons' ammo, for the fight ring's Let Fly button (fight/fight-ring.js): what a
+ * player reaching for the bow should know before they roll.
+ *
+ * `weapons` names each one with a box marked. A weapon with no track, or with nothing marked, is left
+ * out; the ring says nothing about plenty. `allOut` is asked of EVERY carried Let Fly weapon, those
+ * left out included: a full shortbow beside an empty crossbow still has shots in it, and so does a
+ * weapon with no track to run down.
+ *
+ * @returns {Promise<{weapons: {name: string, label: string, allOut: boolean}[], allOut: boolean}>}
+ */
+export async function letFlyAmmoStatuses(actor) {
+	const carried = (await carriedAttackWeapons(actor, ATTACK_MOVES["Let Fly"])).filter(w => !w.unarmed);
+	const weapons = [];
+	let loaded = 0;
+	for (const w of carried) {
+		if (!w.meta?.ammo) { loaded += 1; continue; }
+		const index = weaponAmmoIndex(actor, w);
+		const allOut = index >= ammoTrack(w).max;
+		if (!allOut) loaded += 1;
+		// carriedAttackWeapons already put the status into words.
+		if (index > 0) weapons.push({ name: w.meta.name, label: w.ammoLabel, allOut });
+	}
+	return { weapons, allOut: carried.length > 0 && loaded === 0 };
 }
 
 // Mark the next ammo status. The slug is a dot-free inventory slug, so a sub-key write is
@@ -515,10 +542,9 @@ const PICK_EFFECTS = {
 			{ extraDice: "1d6", counter: true },
 	},
 	"let-fly": {
-		// The bullet's own parenthesis carries the gate the old control used to enforce by hiding
-		// itself ("don't pick this if your weapon lacks such statuses"). A quiver with no statuses
-		// to mark spends nothing when this is ticked — see depleteAmmoAndPost, where the weapon is
-		// asked rather than the card.
+		// The bullet's own parenthesis is a gate: "don't pick this if your weapon lacks such
+		// statuses". So a weapon with no ammo track never sees it (wireAttackAmmo hides the row),
+		// and on one that has a track, ticking it grows a button that marks the next status.
 		"Deal your damage, but deplete your ammo (mark the next status by your weapon; don't pick this if your weapon lacks such statuses)":
 			{ addon: DEPLETE },
 	},
@@ -590,7 +616,15 @@ export function pickedEffects(moveKey, labels) {
 function pickedOptionLabels(root) {
 	return Array.from(root?.querySelectorAll?.(".stonetop-picklist-check:checked") ?? [])
 		.filter(box => !box.closest("[hidden]"))
-		.map(box => box.closest(".stonetop-picklist-item")?.textContent ?? "");
+		.map(pickedOptionText);
+}
+
+// A bullet's own words: the LABEL, not the whole row. A ticked row can carry a button beneath it
+// ("Deplete your ammo", wireAttackAmmo), and the row's text would then no longer be the bullet's,
+// so it would miss its PICK_EFFECTS entry and quietly do nothing.
+function pickedOptionText(box) {
+	const item = box.closest(".stonetop-picklist-item");
+	return (item?.querySelector("label") ?? item)?.textContent ?? "";
 }
 
 // What a Confirm that only rolls damage says. Named because five of the six tiers below use it.
@@ -1801,6 +1835,10 @@ export function wireAttackConfirm(message, html) {
 		for (const input of root.querySelectorAll(".stonetop-picklist-check")) input.disabled = true;
 	}
 
+	// Before the Confirm's label is painted: a weapon with no ammo track loses its deplete row
+	// here, and a tick behind a hidden row is not a pick.
+	wireAttackAmmo(message, root, attack);
+
 	// After the lock above, not before: the label has to read the ticks the card is frozen with.
 	wireAttackNoHarm(root, attack.moveKey);
 
@@ -1883,7 +1921,10 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	if (!damage) { btn.disabled = false; return; }
 
 	await lockAttackCard(message, root, { yourCall, targets });
-	if (deplete) await depleteAmmoAndPost(message, actor, attack);
+	// The deplete row's own button is the usual way to pay it. A player who ticked it and went
+	// straight to the dice has still picked it, so the Confirm pays it for them; one the button
+	// already paid is not paid twice (depleteAmmoAndPost checks the card).
+	if (deplete) await depleteAmmoAndPost(message, actor, attack, depleteRowIndex(root, attack.moveKey));
 	await rollAndPostDamage(actor, {
 		move: attack.move, weapon: attack.weapon, targets, damage, ignoresArmor,
 	});
@@ -1954,21 +1995,145 @@ async function lockAttackCard(message, root, extra = {}) {
 	root.querySelectorAll(".stonetop-attack-confirm, .stonetop-picklist-check").forEach(el => (el.disabled = true));
 }
 
-// Mark the chosen weapon's next ammo status (low ammo → all out) and announce it — folded
-// into the Let Fly 7-9 Confirm when its "deplete your ammo" bullet is ticked. Drives the SAME
-// inventory resource the equipment tab's ○○ boxes show, then refreshes the sheet.
-//
-// THE WEAPON IS ASKED HERE, not on the card. That bullet used to be hidden outright when the
-// chosen weapon had no ammo statuses, which was the card enforcing a clause the move states in
-// the bullet's own parenthesis ("don't pick this if your weapon lacks such statuses"). Now that
-// the bullet is one of the move's four printed picks it is always shown — a list that hides an
-// option cannot be the list the prose counts — and a sword that has no statuses to mark simply
-// spends nothing. The pick still stands as the fiction it names: the shot went wide of the quiver.
-async function depleteAmmoAndPost(message, pc, attack) {
+/**
+ * Let Fly's "Deal your damage, but deplete your ammo (mark the next status by your weapon; don't
+ * pick this if your weapon lacks such statuses)", doing what it says.
+ *
+ * NO STATUSES, NO ROW. The parenthesis rules the pick out for a weapon with no ammo track (a
+ * thrown spear, a sling, a granted weapon), so the row is hidden on that card rather than offered
+ * and then quietly spending nothing. Hidden, not removed: the tier's cap and the saved ticks are
+ * keyed by each box's index, and a hidden row is already skipped by pickedOptionLabels and the tally.
+ *
+ * ON A WEAPON THAT HAS THEM, ticking the row grows a button that marks the next status, the way
+ * a ticked Forage option grows its die (utils/picked-option-button.js, which owns the latch, the
+ * show-on-tick and the once-only binding). Once pressed the row shows what it marked instead.
+ */
+const AMMO_FLAG = "ammoDepleted";
+
+/**
+ * Whether this card's ammo is already marked. A card paid before the latch had a flag of its own
+ * carries it as `attack.ammoDepleted: true`, with no row and no status, and is paid all the same.
+ */
+function ammoPaid(message) {
+	return Object.keys(message.getFlag(SCOPE, AMMO_FLAG) ?? {}).length > 0
+		|| message.getFlag(SCOPE, "attack")?.ammoDepleted === true;
+}
+
+// The cards whose ammo is being marked on this client right now: the row's button and the Confirm can
+// both reach depleteAmmoAndPost before either has written the latch.
+const depleting = new Set();
+
+function isDepleteRow(moveKey, text) {
+	return pickedEffects(moveKey, [text]).addons.includes(DEPLETE);
+}
+
+// The data-index of the ticked, visible deplete row on this card, or null.
+function depleteRowIndex(root, moveKey) {
+	const box = Array.from(root?.querySelectorAll?.(".stonetop-picklist-check:checked") ?? [])
+		.find(b => !b.closest("[hidden]") && isDepleteRow(moveKey, pickedOptionText(b)));
+	return box?.dataset.index ?? null;
+}
+
+function wireAttackAmmo(message, root, attack) {
+	if (!PICK_EFFECTS[attack.moveKey]) return;
+
+	if (!attack.weapon?.ammo) {
+		for (const item of root.querySelectorAll(".stonetop-picklist-item")) {
+			if (!belongsToMessage(item, message)) continue;
+			const box = item.querySelector(".stonetop-picklist-check");
+			if (!box || !isDepleteRow(attack.moveKey, pickedOptionText(box))) continue;
+			item.hidden = true;
+			box.checked = false;
+		}
+		return;
+	}
+
+	wirePickedOptionButton(message, root, {
+		flagKey:      AMMO_FLAG,
+		wiredKey:     "ammoWired",
+		buttonClass:  "stonetop-ammo-deplete",
+		readoutClass: "stonetop-ammo-depleted",
+		read:    text => (isDepleteRow(attack.moveKey, text) ? {} : null),
+		icon:    () => "fas fa-arrow-down-short-wide",
+		label:   () => " Deplete your ammo",
+		readout: paid => ammoDepletedEl(paid),
+		onPress: (btn, index) => onDepleteAmmo(message, attack, btn, index),
+	});
+
+	// An older card's latch says only that the ammo was marked, not on which row or to what.
+	if (attack.ammoDepleted === true && !Object.keys(message.getFlag(SCOPE, AMMO_FLAG) ?? {}).length) {
+		for (const btn of root.querySelectorAll(".stonetop-ammo-deplete")) {
+			if (belongsToMessage(btn, message)) btn.replaceWith(ammoDepletedEl({}));
+		}
+	}
+
+	// A marked row is a pick already paid for: its tick stays, so the Confirm counts what was spent.
+	for (const readout of root.querySelectorAll(".stonetop-ammo-depleted")) {
+		if (!belongsToMessage(readout, message)) continue;
+		lockDepleteBox(readout.closest(".stonetop-picklist-item"));
+	}
+}
+
+function lockDepleteBox(item) {
+	const box = item?.querySelector(".stonetop-picklist-check");
+	if (!box) return;
+	box.checked = true;
+	box.disabled = true;
+}
+
+/** What a paid deplete row shows from then on: the status the weapon is now on. */
+function ammoDepletedEl({ label, allOut }) {
+	const el = document.createElement("span");
+	el.className = "stonetop-ammo-depleted";
+	el.textContent = allOut ? "Ammo marked: all out" : label ? `Ammo marked: ${String(label).toLowerCase()}` : "Ammo marked";
+	return el;
+}
+
+async function onDepleteAmmo(message, attack, btn, index) {
+	btn.disabled = true;
+	try {
+		const pc = await actorFromUuid(attack.attackerUuid);
+		// The same pairing the Confirm asks for: the character's ammo is theirs to mark, and the
+		// once-only latch is written onto this card.
+		if (!pc?.isOwner || !message.isOwner) {
+			ui.notifications.warn(pc?.isOwner ? "Ask the GM to deplete this ammo." : "You need permission to mark this character's ammo.");
+			btn.disabled = false;
+			return;
+		}
+		// Its tick is locked first: once pressed, the row cannot be unticked for a different pick.
+		const item = btn.closest(".stonetop-picklist-item");
+		const status = await depleteAmmoAndPost(message, pc, attack, index);
+		if (status) {
+			btn.replaceWith(ammoDepletedEl(status));
+			lockDepleteBox(item);
+		} else {
+			btn.disabled = false;
+		}
+	} catch (err) {
+		console.error("Stonetop | Error depleting ammo:", err);
+		btn.disabled = false;
+	}
+}
+
+// Mark the chosen weapon's next ammo status (low ammo → all out) and announce it. Pressed from
+// the deplete row's own button, or from the Confirm when the row was ticked and the button never
+// was. Drives the SAME resource the equipment tab's ○○ boxes show, then refreshes the sheet.
+// ONCE PER CARD, whichever of the two gets there first: the latch is the row's entry in the
+// message's `ammoDepleted` flag, which is also what the row's readout is drawn from, and while one
+// is marking, the other finds the card taken (`depleting`) rather than an unwritten latch.
+// Returns the new status, or null when nothing was marked.
+export async function depleteAmmoAndPost(message, pc, attack, index) {
 	const slug = attack?.weapon?.ammo ? attack.weapon.slug : null;
-	if (!slug || message.getFlag(SCOPE, "attack")?.ammoDepleted) return;
-	const status = await advanceWeaponAmmo(pc, attack.weapon);
-	await message.setFlag(SCOPE, "attack", { ...message.getFlag(SCOPE, "attack"), ammoDepleted: true });
+	if (!slug || index == null) return null;
+	if (depleting.has(message.id) || ammoPaid(message)) return null;
+	depleting.add(message.id);
+	let status;
+	try {
+		status = await advanceWeaponAmmo(pc, attack.weapon);
+		await message.setFlag(SCOPE, AMMO_FLAG, { [index]: { label: status.label, allOut: status.allOut } });
+	} finally {
+		depleting.delete(message.id);
+	}
 	await ChatMessage.create({
 		content: stonetopChatCard("Ammunition depleted",
 			`<div class="card-content"><p><strong>${escHtml(pc.name)}</strong>'s ${escHtml(attack.weapon.name)} is now <strong>${escHtml(status.label.toLowerCase())}</strong>.${status.allOut ? " It's out of ammunition." : ""}</p></div>`,
@@ -1976,6 +2141,7 @@ async function depleteAmmoAndPost(message, pc, attack) {
 		speaker: ChatMessage.getSpeaker({ actor: pc }),
 	});
 	pc.sheet?.render(false);
+	return status;
 }
 
 /**

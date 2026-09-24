@@ -1872,6 +1872,7 @@
         "damageGroup": "Damage rolls",
         "damage": "Damage",
         "rollMove": "Roll {move}",
+        "rollMoveAmmo": "Roll {move} ({ammo})",
         "rollDamage": "Roll damage: {label}, {formula}",
         "order": "Order",
         "orderAria": "Order {name}",

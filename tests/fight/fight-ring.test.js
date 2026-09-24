@@ -7,6 +7,7 @@ vi.mock("../../module/combat/attack-flow.js", () => ({
 	pcDamageDie: vi.fn(async actor => String(actor?.system?.attributes?.damage?.value ?? "")),
 	rollDamageAt: vi.fn(async () => true),
 	rollCharacterDamageAt: vi.fn(async () => true),
+	letFlyAmmoStatuses: vi.fn(async actor => actor?.ammo ?? { weapons: [], allOut: false }),
 }));
 
 import {
@@ -661,3 +662,47 @@ function fakeHooks() {
 		fire: (name, ...args) => { for (const fn of on.get(name) ?? []) fn(...args); },
 	};
 }
+
+describe("Let Fly's ammo on the ring", () => {
+	const low = { name: "Crossbow", label: "Low ammo", allOut: false };
+	const out = { name: "Composite bow", label: "All out", allOut: true };
+	const letFly = (ammo, ammoOut = false) => ringContext(ringButtons(bram(), { die: "d8", ammo, ammoOut }), { name: "Bram" })
+		.moves.find(m => m.label === "Let Fly");
+
+	it("says nothing while the quiver is full", () => {
+		expect(letFly([])).toMatchObject({ ammo: "", ammoOut: false, aria: "Roll Let Fly" });
+	});
+
+	it("puts a low bow on the Let Fly button, and only there", () => {
+		const context = ringContext(ringButtons(bram(), { die: "d8", ammo: [low] }), { name: "Bram" });
+		expect(context.moves.find(m => m.label === "Let Fly")).toMatchObject({ ammo: "Low ammo", ammoOut: false });
+		expect(context.moves.find(m => m.label === "Clash").ammo).toBe("");
+		// Spoken with the weapon's name, which the badge leaves off.
+		expect(context.moves.find(m => m.label === "Let Fly").aria).toBe("Roll Let Fly (Crossbow: low ammo)");
+	});
+
+	it("is red only when nothing they carry has any left", () => {
+		expect(letFly([out], true).ammoOut).toBe(true);
+		const both = letFly([low, out]);
+		expect(both.ammoOut).toBe(false);
+		expect(both.ammo).toBe("Crossbow: low ammo, Composite bow: all out");
+		// An empty crossbow beside a full bow, which the list leaves out: still shots to fire.
+		expect(letFly([out], false).ammoOut).toBe(false);
+	});
+
+	it("draws the badge in the template", () => {
+		const html = template(ringContext(ringButtons(bram(), { die: "d8", ammo: [out], ammoOut: true }), { name: "Bram" }));
+		expect(html).toContain('<span class="stonetop-fight-ring-ammo is-out">All out</span>');
+		expect(template(ringContext(ringButtons(bram(), { die: "d8" }), { name: "Bram" }))).not.toContain("stonetop-fight-ring-ammo");
+	});
+
+	it("is looked up for a character, and never for a monster", async () => {
+		const actor = bram();
+		actor.ammo = { weapons: [out], allOut: true };
+		const button = (await ringButtonsFor(actor)).moves.find(m => m.label === "Let Fly");
+		expect(button).toMatchObject({ ammo: [out], ammoOut: true });
+		const beast = gwyllgi();
+		beast.ammo = { weapons: [low], allOut: false };
+		expect((await ringButtonsFor(beast)).moves).toEqual([]);
+	});
+});

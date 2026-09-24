@@ -17,6 +17,7 @@
 	        aria-label="{{aria}}" data-tooltip="{{aria}}" data-tooltip-direction="LEFT">
 		<i class="{{icon}}" inert></i>
 		<span class="stonetop-fight-ring-label">{{label}}</span>
+		{{#if ammo}}<span class="stonetop-fight-ring-ammo{{#if ammoOut}} is-out{{/if}}">{{ammo}}</span>{{/if}}
 	</button>
 	{{/each}}
 </div>

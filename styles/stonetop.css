@@ -503,6 +503,9 @@
 	--stonetop-fight-ring-edge: #584a75;
 	--stonetop-fight-ring-edge-width: 1px;
 	--stonetop-fight-ring-hover: var(--color-warm-1, #ee9b3a);
+	/* Let Fly's ammo, low and all out: amber, then a red that still reads on the dark paper. */
+	--stonetop-fight-ring-ammo-low: #f2c14e;
+	--stonetop-fight-ring-ammo-out: #ff7b6e;
 
 	/* WHERE THEY SET OUT FROM, in one place for the same reason. Both ends of a journey are drawn
 	   twice over — the start the books lettered and the start a GM put down by hand — and they are
@@ -6833,6 +6836,22 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	display: none;
 }
 
+/* Let Fly's bow, low or out, on the button that fires it: in words, so it needs no colour to be read. */
+#stonetop-fight-ring .stonetop-fight-ring-ammo {
+	flex: none;
+	padding: 0 0.4em;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	color: var(--stonetop-fight-ring-ammo-low);
+	font-size: 0.8em;
+	font-weight: 700;
+	line-height: 1.4;
+}
+
+#stonetop-fight-ring .stonetop-fight-ring-ammo.is-out {
+	color: var(--stonetop-fight-ring-ammo-out);
+}
+
 /* A character's held Readiness, over the token: a pill in the ring's own paper, centred above it. The
    count is printed as well as drawn, so it reads at a glance and to a screen reader alike. */
 #stonetop-fight-ring .stonetop-fight-ring-readiness {
@@ -9469,7 +9488,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    Marked hidden by the wiring in stonetop.js until the option is actually ticked. */
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
-	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll) {
+	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll, .stonetop-ammo-deplete) {
 	display: block;
 	margin: 3px 0 5px 22px;
 	width: auto;
@@ -9484,18 +9503,18 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 }
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
-	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll):hover {
+	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll, .stonetop-ammo-deplete):hover {
 	background: var(--st-btn-primary-bg-hover);
 	border-color: var(--st-btn-primary-border-hover, var(--st-btn-primary-border));
 }
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
-	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll)[hidden] {
+	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll, .stonetop-ammo-deplete)[hidden] {
 	display: none;
 }
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
-	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll):disabled {
+	:is(.stonetop-provisions-roll, .stonetop-option-damage-roll, .stonetop-ammo-deplete):disabled {
 	opacity: 0.55;
 	cursor: default;
 }
@@ -9522,6 +9541,16 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	font-size: 0.85em;
 	font-weight: bold;
 	color: var(--st-red-text);
+}
+/* What Let Fly's deplete row marked, once pressed. Plain ink: a cost paid, neither good news nor
+   a blow landed. Same place and size as the two readouts above. */
+:is(#chat, #chat-notifications, #chat-popout) .message
+	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
+	.stonetop-ammo-depleted {
+	display: block;
+	margin: 1px 0 4px 22px;
+	font-size: 0.85em;
+	font-weight: bold;
 }
 
 /* Special possessions — 2-column card list, matching the Moves tab
@@ -46807,6 +46836,9 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	--stonetop-fight-ring-edge: #ffd400;
 	--stonetop-fight-ring-edge-width: 2px;
 	--stonetop-fight-ring-hover: #ffffff;
+	/* The words carry which it is; high contrast keeps to its own three colours. */
+	--stonetop-fight-ring-ammo-low: #ffd400;
+	--stonetop-fight-ring-ammo-out: #ffd400;
 	/* The panels keep a step off the page rather than dissolving into it. Three points of white is
 	   nothing to somebody reading in this mode — which is why their borders are the thing taken to
 	   4.76:1 below — but it costs nothing, and it keeps the sheet from flattening into one field
