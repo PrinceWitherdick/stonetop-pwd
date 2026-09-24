@@ -559,6 +559,10 @@
       }
     },
     "settings": {
+      "attackFx": {
+        "name": "Attack Effects on the Map",
+        "hint": "When on, a blow that lands is drawn on the map and heard at the table: a sword swings, an arrow flies, a thrown spear arcs, a bite snaps on the one bitten. A ranged miss flies wide, and pressing Apply bursts on every token that loses HP, or clanks when armor held. The pictures need the Sequencer and JB2A modules, and the sounds need the SoundFx Library module; without them, that half does nothing. Anyone whose system asks for reduced motion, who has switched Sequencer's Enable Effects off, or who has switched Foundry's Photosensitive Mode on, keeps the sounds without the pictures."
+      },
       "weatherSceneFx": {
         "name": "Weather on the Scene (FXMaster)",
         "hint": "When on, posting a result from the Weather window puts the matching particles on the scene your players are on: rain for rain, snow for snow, racing cloud for a storm, and a clear sky for the fine days. Requires the FXMaster module (FXMaster+ counts); without it this does nothing. Only the effects this system adds are ever touched, so any you set up yourself stay put. The Weather window carries this same switch as a Pause button, which also takes whatever is falling right now off the map."

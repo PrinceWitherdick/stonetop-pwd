@@ -1042,6 +1042,20 @@ export function registerSettings() {
 		});
 	}
 
+	// Swings, shots and hits drawn on the map and heard at the table (combat/attack-fx.js). A world
+	// switch rather than a reader's, because the effects are BROADCAST: one player's blow plays on
+	// every screen, so whether a table has them is the table's call. Default ON, and harmless where
+	// the modules it needs are missing; each reader who wants the motion gone has their system's
+	// reduced-motion setting, Sequencer's own Enable Effects, and core's Photosensitive Mode.
+	game.settings.register(SYSTEM_ID, "attackFx", {
+		name: "stonetop.settings.attackFx.name",
+		hint: "stonetop.settings.attackFx.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: true,
+	});
+
 	// The season last picked in the Weather roll dialog (see dialogs/WeatherDialog.js),
 	// so it reopens to where the GM left off. Client-scoped — it's a GM convenience,
 	// not shared world state.
@@ -2180,6 +2194,11 @@ export function isFightWindowAuto() {
 /** Does a click on a token in the fight put its fight buttons round it, for this reader? Defaults to yes. */
 export function isFightRingOn() {
 	return getBooleanSetting("fightRing", true);
+}
+
+/** Does this world draw and sound its attacks (combat/attack-fx.js)? Defaults to yes. */
+export function isAttackFxOn() {
+	return getBooleanSetting("attackFx", true);
 }
 
 /**

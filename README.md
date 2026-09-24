@@ -133,6 +133,10 @@ This does not apply to anyone installing for the first time.
 ## Recommended Modules
 
 - **[Dice So Nice!](https://foundryvtt.com/packages/dice-so-nice)** renders 3D dice rolls on the tabletop. Every move, damage, and steading roll in this system uses Foundry's dice, so Dice So Nice adds a tactile sense of immersion to the table without any extra setup.
+- **[Sequencer](https://foundryvtt.com/packages/sequencer)** and **[JB2A](https://foundryvtt.com/packages/JB2A_DnD5e)** draw attacks on the map. When damage is rolled at a target, a sword swings, an arrow flies, a thrown spear arcs, and a bite snaps on whoever was bitten. A ranged attack that rolls a 6- flies wide, and pressing Apply bursts on every token that loses HP. The system picks each animation from the weapon or the monster's printed attack, so there is nothing to configure. The free JB2A is enough; the Patreon edition adds a few more (javelins, sling stones, thrown axes).
+- **[SoundFx Library](https://foundryvtt.com/packages/soundfxlibrary)** gives those attacks their sound: the hit of a blade, an arrow's fly-by and impact, a shield's clank when armor takes the whole blow. The sounds play for everyone at the table, including anyone who runs Foundry with the game canvas switched off, and work with or without Sequencer.
+
+The attack effects are one world setting, **Attack Effects on the Map**, on by default. Without these modules it does nothing. Anyone whose computer asks for reduced motion still hears the sounds but sees no animation.
 
 ## Development
 

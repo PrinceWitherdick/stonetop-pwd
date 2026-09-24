@@ -51,12 +51,14 @@ import {format, localize} from "../utils/i18n.js";
 import {foldModes} from "../utils/roll-mode.js";
 import {bringDialogToFront} from "../utils/front-on-open.js";
 import {isPrimaryGM, anyActiveGM} from "../utils/primary-gm.js";
-import {resolveSync, queryAsker} from "../utils/foundry-compat.js";
+import {resolveSync, queryAsker, chatModeIsPublic} from "../utils/foundry-compat.js";
 import {inCardTurn} from "../utils/card-queue.js";
 import {belongsToMessage, wirePickedOptionButton} from "../utils/picked-option-button.js";
 import {settleReadinessOnAttack} from "./readiness-loss.js";
 import {offerBattleJoyOnDamage} from "./battle-joy-offer.js";
 import {revealOnAttack} from "../actors/character/fight-states.js";
+import {playBlowFx, playMissFx, playHitReactions} from "./attack-fx.js";
+import {hitReaction} from "./attack-fx-table.js";
 
 const SCOPE = STONETOP_SCOPE;
 
@@ -745,7 +747,7 @@ export async function maybeBeginAttack(actor, item, { stat = null, weaponSlug = 
 		// roll damage from later, so its damage window is the final question — and a quiver emptied before
 		// a window the player then closed would be a volley that cost ammo and dealt nothing.
 		await loosed.spend?.(actor, weapon);
-		await rollAndPostDamage(actor, { move: item.name, weapon, targets, damage });
+		await rollAndPostDamage(actor, { move: item.name, weapon, targets, damage, fx: { moveKey: move.key } });
 		return "handled";
 	}
 
@@ -1072,7 +1074,7 @@ export async function strikeBackAt(actor, attackerUuid, label, { commit = async 
 	const targets = token ? [{ uuid: token.uuid, name: token.name ?? attacker.name, actorId: attacker?.id ?? null, disposition: token.disposition ?? 0, hasActor: true }] : [];
 	const damage = await askDamageAdjustment(actor, { formula: blow.formula, rollMode: "dis", seed: null, weapon: blow.weapon, targets, strikeBack: true, commit });
 	if (!damage) return false;
-	await rollAndPostDamage(actor, { move: blow.move, weapon: blow.weapon, targets, damage });
+	await rollAndPostDamage(actor, { move: blow.move, weapon: blow.weapon, targets, damage, fx: {} });
 	return true;
 }
 
@@ -1169,6 +1171,9 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 		damage,
 		shots: !striker,
 		groupBlow: !!striker?.group,
+		// A stat block's weapon has no name: its "bite" is the label. A follower off the map has no
+		// token to swing from, so its blow is heard and not drawn.
+		fx: { blow: label, ...(striker ? { attacker: null } : {}) },
 	});
 	if (!striker) await revealOnAttack(actor, label);
 	return true;
@@ -1399,7 +1404,11 @@ export function tagNoticesHtml(weapon) {
 // no-target Clash needed a whole extra branch here just to have somewhere to put that button.
 // The tier fires the counter itself now, straight after this returns (resolveAttackTier), and it
 // comes back through this same function as a damage card of its own (postIncomingDamage).
-async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignoresArmor = false, selfHarm = false, foeUuid = "", shots = true, groupBlow = false, own = true, spillsBlood = own }) {
+async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignoresArmor = false, selfHarm = false, foeUuid = "", shots = true, groupBlow = false, own = true, spillsBlood = own, fx = null }) {
+	// What the blow is swung WITH, for the animation (combat/attack-fx.js), taken before the lines
+	// below lay armor and fiction tags over it: those change what Apply does, not what a spear is.
+	const struckWith = weapon;
+
 	// A tier control that ignores armor (Call the Shot's "your call", The Hammer and the Book)
 	// records it ON THE WEAPON the card carries rather than as a second field beside it: the
 	// weapon is the one thing Apply damage reads for armor (wireApplyDamage) and the one thing the
@@ -1448,6 +1457,17 @@ async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignores
 			raw: rolls[i].total, formula: rolls[i].formula, faces: multiDieFaces(rolls[i]),
 		}));
 		await postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm, notices, foeUuid, groupBlow });
+		// The blow on the map, as its card lands. `fx` is the caller saying this was a weapon's blow at
+		// all: a move's own number (rollOptionDamage, rollMoveDamageAt) passes none and draws nothing.
+		// Never awaited, and it cannot throw: everything before it is already spent.
+		if (fx) {
+			playBlowFx({
+				attacker: "attacker" in fx ? fx.attacker : actor,
+				weapon: struckWith, blow: fx.blow ?? "", moveKey: fx.moveKey ?? "", targets: applyable,
+				// As maybeMissFx: a whispered roll drawn on everyone's map would tell the table what it kept.
+				whispered: !chatModeIsPublic(),
+			});
+		}
 		// A blow at somebody the roller is not standing against is a shot, and the fight keeps it; a
 		// character's own hit is not a shot at anyone, and neither is a blow the card's speaker did not
 		// strike (a follower off the map, rollFollowerDamageAt).
@@ -1952,6 +1972,8 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	if (deplete) await depleteAmmoAndPost(message, actor, attack, depleteRowIndex(root, attack.moveKey));
 	await rollAndPostDamage(actor, {
 		move: attack.move, weapon: attack.weapon, targets, damage, ignoresArmor,
+		// The move is what says whether a spear was thrown or thrust (attack-fx-table.js#blowDelivery).
+		fx: { moveKey: attack.moveKey },
 	});
 
 	// AFTER the damage, because that is the order the tier states it in: "your maneuver works,
@@ -1991,6 +2013,32 @@ export async function maybeCounterOnMiss(actor, item, roll, attackExtra = null) 
 	// `game.user.targets` is theirs, which is the same latitude resolveAttackTier allows a hit.
 	const frozen = attackFlagsOf(attackExtra)?.targets;
 	await sufferEnemyAttack(actor, { targets: frozen?.length ? frozen : snapshotTargets() });
+	return true;
+}
+
+/**
+ * An attack's miss, drawn: on a 6- the arrow, the bolt or the thrown spear goes wide of the foe it
+ * was loosed at (combat/attack-fx.js). Only something that FLIES is shown missing; a sword that
+ * missed is a GM's move to describe, not an animation to guess at.
+ *
+ * Not Clash's: its 6- is the foe striking back (maybeCounterOnMiss), and that blow is drawn with
+ * its own card. Only at the targets frozen at the roll, because a miss has no card to aim later.
+ * Only when this client's chat is PUBLIC: a whispered roll drawn on everyone's map would tell the
+ * table what the whisper kept from them.
+ *
+ * Fired from the roll, like the counter-attack above and for the same reason: once, on the client
+ * that threw the dice, after Dice So Nice has settled them (roll-engine.js#rollStat waits), so the
+ * arrow never gives the result away mid-tumble.
+ *
+ * @returns {boolean} whether a miss was drawn
+ */
+export function maybeMissFx(actor, item, roll, attackExtra = null) {
+	const move = attackMoveFor(item);
+	if (!move || move.counterOnMiss) return false;
+	if (!Number.isFinite(roll?.total) || classifyResult(roll.total).key !== "failure") return false;
+	const attack = attackFlagsOf(attackExtra);
+	if (!attack?.targets?.length || !chatModeIsPublic()) return false;
+	playMissFx({ attacker: actor, weapon: attack.weapon ?? null, moveKey: move.key, targets: attack.targets });
 	return true;
 }
 
@@ -2455,6 +2503,9 @@ async function applyOwedDamage(message, damage) {
 	// or taken by a defender in the ward's place, against the defender's own armor.
 	const { halved, standIns, ignored, knockedDown } = spentOn(current);
 	const lines = [];
+	// What each token does on the map once this press lands (combat/attack-fx.js#playHitReactions):
+	// on whoever actually took the blow, which is the stand-in when a Defend put one in the way.
+	const reactions = [];
 	for (const r of current.results) {
 		if (doneUuids.has(r.uuid)) continue;
 		const td = await fromUuid(r.uuid);
@@ -2462,9 +2513,11 @@ async function applyOwedDamage(message, damage) {
 		const defender = standIn ? damageRowActor(await fromUuid(standIn.by).catch(() => null)) : null;
 		const targetActor = defender ?? damageRowActor(td);
 		const rowName = defender ? format("stonetop.fight.defend.rowFor", { defender: defender.name, ward: r.name }) : r.name;
+		const struck = defender ? standIn.by : r.uuid;
 		if (!targetActor) { lines.push(`<li><strong>${escHtml(r.name)}</strong>: no longer on the map</li>`); continue; }
 		// A Mighty Rampart: "completely ignore the effects/damage of an attack that you suffer".
 		if (ignored.has(r.uuid)) {
+			reactions.push({ uuid: struck, reaction: hitReaction({ ignored: true }) });
 			nextApplied.push({ uuid: r.uuid, effective: 0, ignored: true, ...(defender ? { by: standIn.by } : {}) });
 			lines.push(`<li><strong>${escHtml(rowName)}</strong>: ${escHtml(format("stonetop.fight.defend.ignoredLine", {}))}</li>`);
 			continue;
@@ -2499,6 +2552,7 @@ async function applyOwedDamage(message, damage) {
 		if (!current.selfHarm && !current.groupBlow && isLoneBlowOnGroup(targetActor, attacker, td?.parent ?? null)) {
 			const hit = await applyMemberHit(targetActor, effective);
 			if (hit) {
+				reactions.push({ uuid: struck, reaction: hitReaction({ raw, effective, lowered: !!hit.harmed }) });
 				nextApplied.push({ uuid: r.uuid, effective, member: true, down: hit.down, before: hit.before, after: hit.after });
 				const said = format(`stonetop.fight.groupHit.${hit.down ? "down" : hit.harmed ? "hurt" : "unhurt"}`, { after: hit.after, memberHp: hit.memberHp, hpMax: hit.hpMax });
 				lines.push(`<li><strong>${escHtml(r.name)}</strong>: ${effective} damage${back}${mitigated}: ${escHtml(said)}</li>`);
@@ -2510,6 +2564,7 @@ async function applyOwedDamage(message, damage) {
 		// without recording it as applied, so it can be retried if the actor is fixed —
 		// rather than rendering "undefined → undefined HP" and marking it done forever.
 		if (!t) { lines.push(`<li><strong>${escHtml(r.name)}</strong>: has no HP to damage</li>`); continue; }
+		reactions.push({ uuid: struck, reaction: hitReaction({ raw, effective, lowered: t.newHp < t.oldHp }) });
 		nextApplied.push({ uuid: r.uuid, effective, oldHp: t.oldHp, newHp: t.newHp, ...(defender ? { by: standIn.by } : {}) });
 		// Payback: "a foe that has harmed you or one of your allies". Written on the character who took
 		// it, by whoever applied it — the one client certain to be allowed to write anything here.
@@ -2534,6 +2589,8 @@ async function applyOwedDamage(message, damage) {
 		content: stonetopChatCard(`${current.move}: damage applied`, `<div class="card-content"><ul class="stonetop-homestead-chat-list">${lines.join("")}</ul></div>`, "stonetop-attack-applied-card"),
 		speaker: { alias: "Stonetop" },
 	});
+	// After the latch and the card: the HP is written and said, so this is only the map catching up.
+	playHitReactions(reactions, { whispered: (message.whisper?.length ?? 0) > 0 });
 	return nextApplied.length > before;
 }
 
@@ -2854,6 +2911,9 @@ async function postIncomingDamage(pc, attack, { foeName = "", seed = null } = {}
 		targets: [selfTarget(pc)],
 		selfHarm: true,
 		foeUuid: attack?.foeUuid ?? "",
+		// The foe's token strikes the character's: the card's speaker is the one struck, so the blow on
+		// the map is aimed the other way round from every other card's.
+		fx: { attacker: attack?.foeUuid || null, blow: attack?.label ?? "" },
 		damage: {
 			base: attack?.formula || "0",
 			rollMode,

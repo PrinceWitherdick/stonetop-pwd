@@ -58,7 +58,7 @@ import {CharacterOrigin} from "./CharacterOrigin.js";
 import {CharacterPossessions} from "./CharacterPossessions.js";
 import {grantsToCreate, grantSourceMap, grantAdoptionKeys, itemGrantKey} from "./possession-grants.js";
 import {CharacterInventory} from "./CharacterInventory.js";
-import {maybeBeginAttack, maybeCounterOnMiss, attackMoveFor, attackFoeAdvantage, recordClashedFoes, rollMoveDamageAt} from "../../combat/attack-flow.js";
+import {maybeBeginAttack, maybeCounterOnMiss, maybeMissFx, attackMoveFor, attackFoeAdvantage, recordClashedFoes, rollMoveDamageAt} from "../../combat/attack-flow.js";
 import {defendReadinessHold, defendReadinessCap, readinessCount, READINESS_FLAG} from "../../combat/defend-readiness.js";
 import {settleReadinessOnAttack} from "../../combat/readiness-loss.js";
 import {classifyResult} from "../../utils/roll-engine.js";
@@ -2510,7 +2510,12 @@ export class StonetopCharacter {
 		// the same after-the-roll shape Defend's Readiness above uses, and for the same reason.
 		// After the roll card and its miss XP, which rollStat has already posted, so the chat
 		// reads in the order the move does.
-		if (!descriptionOnly) await maybeCounterOnMiss(this._actor, item, roll, attackExtra);
+		// A ranged 6-, drawn: the shot goes wide on the map (attack-flow.js#maybeMissFx). Not awaited;
+		// it is only the picture of what the card already says.
+		if (!descriptionOnly) {
+			await maybeCounterOnMiss(this._actor, item, roll, attackExtra);
+			maybeMissFx(this._actor, item, roll, attackExtra);
+		}
 
 		// Nemesis and Relentless both turn on "when you Clash and your foe survives": the foes this Clash
 		// was aimed at are written down now, AFTER the dice, so the +1d6 rides the attacks that come after

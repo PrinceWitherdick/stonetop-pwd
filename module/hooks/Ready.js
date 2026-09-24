@@ -2048,7 +2048,9 @@ function _buildStartupWelcomeContent() {
 			</div>
 			<div class="row row--border stonetop-startup-card__footer">
 				Open <strong>Configure Settings</strong> and filter for <strong>Stonetop</strong> for the sheet font and size, the hover info, and the rest.
-				<a href="https://foundryvtt.com/packages/dice-so-nice">Dice So Nice!</a> is worth installing for 3D dice.
+				Worth installing: <a href="https://foundryvtt.com/packages/dice-so-nice">Dice So Nice!</a> for 3D dice,
+				<a href="https://foundryvtt.com/packages/sequencer">Sequencer</a> and <a href="https://foundryvtt.com/packages/JB2A_DnD5e">JB2A</a> to see swords swing and arrows fly on the map,
+				and <a href="https://foundryvtt.com/packages/soundfxlibrary">SoundFx Library</a> to hear them land.
 			</div>
 		</div>
 	</section>`;

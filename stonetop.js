@@ -41,6 +41,7 @@ import { onDropFollower } from "./module/hooks/FollowerDrop.js";
 import { onPreUpdateActorDeathsDoor, onUpdateActorDeathsDoorAutoOpen, onUpdateActorDeathsDoorCard, onUpdateActorDeathsDoorRaised, wireDyingPrompt } from "./module/hooks/DeathsDoorPrompt.js";
 import { installBattleJoyOnHurt, installBattleJoyEnd } from "./module/combat/battle-joy-offer.js";
 import { installBattleHolds } from "./module/combat/battle-holds.js";
+import { hideAttackFxForReducedMotion } from "./module/combat/attack-fx.js";
 import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { installOutOfTheFight } from "./module/fight/out-of-the-fight.js";
 import { onPreCreateThreatNote } from "./module/hooks/ThreatNotePins.js";
@@ -630,6 +631,12 @@ Hooks.once("init", () => {
 Hooks.on("renderPause", onRenderPause);
 Hooks.on("renderPauseBanner", onRenderPause);
 Hooks.on("pauseGame", (paused) => paused && onRenderPause());
+
+// -- ATTACK EFFECTS --------------------------------------------
+// Sequencer fires this on every client as it draws an effect, so each reader's own reduced-motion
+// setting decides whether they see this system's swings and shots (module/combat/attack-fx.js).
+// Registered whether or not Sequencer is installed: without it the hook is simply never called.
+Hooks.on("createSequencerEffect", hideAttackFxForReducedMotion);
 
 // -- COMPENDIUM ITEM ICONS -------------------------------------
 // Art-less rows in an Item compendium get the same fallback markers the world sidebar gets.
