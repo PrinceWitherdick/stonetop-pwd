@@ -61,6 +61,7 @@ import {stockSourcesForFlags, canPayStock, defaultStockSource, stockCostFromDesc
 import {supplyPursesFor, defaultSupplyPurse, SUPPLY_PURPOSE} from "./supply-cost.js";
 import {openMakeCamp} from "../../camp/camp-flow.js";
 import {openStruggleAsOne} from "../../struggle/struggle-flow.js";
+import {beginAid} from "../../pc-asks/pc-ask-flow.js";
 import {STRUGGLE_MOVE} from "../../struggle/struggle-rules.js";
 import {rollProvisions, ON_THE_HOOF} from "./provisions.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
@@ -3272,6 +3273,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				// once here: the moveType check below and _maybeConsecrateFlame both want it.
 				const item = li?.dataset.itemId ? this.actor.items.get(li.dataset.itemId) : null;
 				const isOtherMove = item?.system?.moveType === "other";
+				// Aid is made on someone else's roll: ask whom, and post the card the GM answers on
+				// (pc-asks/). Only for someone who can act for this character; a reader gets the text.
+				if (this.isEditable && await beginAid(this.actor, item)) return;
 				const guide = isOtherMove ? null : GUIDED_CHARACTER_MOVES[name];
 				// A ROLLABLE MOVE NEVER REACHES HERE. Its name element IS the `.rollable` now
 				// (see move-group.hbs), and the rollable handler below runs in the CAPTURE phase
@@ -3473,6 +3477,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!compendiumId) return;
 				const doc = await this._stonetopCharacter._moveRepo.getBasicMoveDocument(compendiumId);
 				if (!doc) return;
+				// Aid asks whom it helps and posts the card the GM answers on (pc-asks/). This list is
+				// where a character's basic moves are, so it is where Aid is most often reached.
+				if (await beginAid(this.actor, doc)) return;
 				// Tickable for the same reason the Moves tab's name-click is: this is the move's
 				// printed text, and a move that never rolls has nowhere else to record a choice.
 				this._postPrintedMove(doc);
@@ -5821,6 +5828,8 @@ export function createStonetopCharacterSheetClass(Base) {
 
 			const rollable = grantedAttack ? null : this._makeSyntheticRollable(item);
 			if (!rollable) {                     // description-only move → post to chat
+				// Aid asks whom first, exactly as the Moves tab's click does (pc-asks/).
+				if (await beginAid(this.actor, item)) return;
 				const posted = await item.roll();
 				// The other half: a move dragged to the hotbar is used from there just as truly
 				// as from the sheet, so it gets the same effects.

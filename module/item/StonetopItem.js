@@ -290,8 +290,11 @@ export function createStonetopItemClass(BaseItem) {
 			// where the move prints them — is the only list on the card
 			// (combat/attack-flow.js#buildTierActions).
 			const declaredPicks = this.system?.pickOptions ?? [];
+			// `options.pickable` is for a move whose list is answered by someone OTHER than the roller
+			// (Interfere: the foiled player picks, on a card that is not theirs to tick), which keeps
+			// the list as printed for its own answer to be drawn in (pc-asks/pc-ask-flow.js).
 			const cardDescription = moveCardBody(moveDescription, this.system?.moveResults,
-				{ pickable: !declaredPicks.length }) + signoff;
+				{ pickable: options.pickable ?? !declaredPicks.length }) + signoff;
 
 			if (stat) return rollStat(stat, actor, {
 				...options,

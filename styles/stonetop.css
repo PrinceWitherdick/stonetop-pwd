@@ -4957,10 +4957,10 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
    box would be worse than no box. The lead-in that would have said "choose one" is prose and goes
    with the rest; what stands in for it is the count the result block states and the tally the list
    carries on its own. Revealed cards are exempt from both halves: the reader asked for all of it. */
-body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card:not(.desc-revealed) .stonetop-roll-card-description:has(.stonetop-picklist:not([hidden])) {
+body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card:not(.desc-revealed) .stonetop-roll-card-description:has(:is(.stonetop-picklist, .stonetop-pc-answers):not([hidden])) {
 	display: block;
 }
-body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card:not(.desc-revealed) .stonetop-roll-card-description > *:not(.stonetop-picklist):not(:has(.stonetop-picklist:not([hidden]))) {
+body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card:not(.desc-revealed) .stonetop-roll-card-description > *:not(.stonetop-picklist, .stonetop-pc-answers):not(:has(:is(.stonetop-picklist, .stonetop-pc-answers):not([hidden]))) {
 	display: none;
 }
 
@@ -9717,6 +9717,68 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-chat-move-description, .stonetop-roll-card-description) .stonetop-picklist-item::before {
 	content: none;
+}
+
+/* ── Answered by someone else: Aid, Interfere, Persuade (vs. PCs) ─────────
+   pc-asks/pc-ask-flow.js turns the move's own printed list into the answer: a button per option
+   for whoever answers (the GM for Aid, the other character's player otherwise), the options as
+   printed with who is deciding under them for everyone else, and, once answered, the pick marked
+   and the rest faded. A button spans its row and reads left to right like the bullet it replaced,
+   so the list still reads as the move's list. Persuade has no list, so its buttons sit in the
+   tier row under the result and take the card's ordinary button chrome. */
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-pc-answers {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	color: var(--st-text-body);
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-pc-answers ul {
+	margin: 0;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-pc-answers-item:has(> .stonetop-pc-answer) {
+	padding-left: 0;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-pc-answers-item:has(> .stonetop-pc-answer)::before {
+	content: none;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-pc-answers .stonetop-pc-answer {
+	display: block;
+	width: 100%;
+	height: auto;
+	min-height: 0;
+	margin: 0;
+	padding: 4px 8px;
+	text-align: left;
+	line-height: 1.35;
+	white-space: normal;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-pc-answers-item.is-chosen {
+	font-weight: bold;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-pc-answers-item.is-passed {
+	color: var(--st-text-muted);
+	text-decoration: line-through;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-pc-ask-status {
+	margin: 0;
+	font-style: italic;
+	color: var(--st-text-body);
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-pc-ask {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	width: 100%;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-pc-ask .stonetop-pc-answer {
+	flex: 1 1 12em;
+	height: auto;
+	min-height: 0;
+	white-space: normal;
+	line-height: 1.35;
+}
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-pc-ask-lead {
+	font-weight: bold;
 }
 
 /* A NUMBERED list (Level Up's steps) already has its marker: the number. The spiral every

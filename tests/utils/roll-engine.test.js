@@ -418,10 +418,11 @@ describe("rollStat", () => {
 	it("keeps that list on the card for a reader who hid descriptions", () => {
 		const css = fs.readFileSync(path.resolve("styles/stonetop.css"), "utf8");
 		// The framed box comes back when there is a live list in it...
-		expect(css).toContain(".stonetop-roll-card-description:has(.stonetop-picklist:not([hidden]))");
+		// (or a list someone else answers in, pc-asks/pc-ask-flow.js)...
+		expect(css).toContain(".stonetop-roll-card-description:has(:is(.stonetop-picklist, .stonetop-pc-answers):not([hidden]))");
 		// ...and nothing else in it comes back with it.
 		expect(css).toContain(
-			".stonetop-roll-card-description > *:not(.stonetop-picklist):not(:has(.stonetop-picklist:not([hidden])))"
+			".stonetop-roll-card-description > *:not(.stonetop-picklist, .stonetop-pc-answers):not(:has(:is(.stonetop-picklist, .stonetop-pc-answers):not([hidden])))"
 		);
 	});
 

@@ -59,6 +59,7 @@ import {CharacterPossessions} from "./CharacterPossessions.js";
 import {grantsToCreate, grantSourceMap, grantAdoptionKeys, itemGrantKey} from "./possession-grants.js";
 import {CharacterInventory} from "./CharacterInventory.js";
 import {maybeBeginAttack, maybeCounterOnMiss, maybeMissFx, attackMoveFor, attackFoeAdvantage, recordClashedFoes, rollMoveDamageAt} from "../../combat/attack-flow.js";
+import {aimPcAskRoll} from "../../pc-asks/pc-ask-flow.js";
 import {defendReadinessHold, defendReadinessCap, readinessCount, READINESS_FLAG} from "../../combat/defend-readiness.js";
 import {settleReadinessOnAttack} from "../../combat/readiness-loss.js";
 import {classifyResult} from "../../utils/roll-engine.js";
@@ -2463,6 +2464,12 @@ export class StonetopCharacter {
 			attackExtra = begun;
 		}
 
+		// Interfere and Persuade (vs. PCs) are aimed at another player's character, whose player
+		// answers on the card: asked whom before the dice, as an attack asks its target, so backing
+		// out rolls nothing (pc-asks/pc-ask-flow.js). Null for every other move.
+		const aimed = descriptionOnly ? null : await aimPcAskRoll(this._actor, item);
+		if (aimed === "cancel") return "cancel";
+
 		const forward  = descriptionOnly ? 0 : this._actor.system?.attributes?.forward?.value ?? 0;
 		const ongoing  = descriptionOnly ? 0 : this._actor.system?.attributes?.ongoing?.value ?? 0;
 		// A one-off situational modifier from the optional pre-roll prompt; the roll
@@ -2477,7 +2484,7 @@ export class StonetopCharacter {
 		// player who set Advantage on their sheet, on every roll.
 		const rollOptions = {
 			rollMode: normalizeRollMode(rollMode ?? this.rollMode),
-			modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}),
+			modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}), ...(aimed ?? {}),
 		};
 
 		// A grudge this character is owed against the very foe they are attacking: Relentless on a Clash

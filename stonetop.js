@@ -116,6 +116,7 @@ import { registerVitalsMirrorHooks } from "./module/actors/character/vitals-mirr
 import { wireCampCard } from "./module/camp/camp-flow.js";
 import { registerCampWindowRestore } from "./module/camp/CampWindow.js";
 import { registerStruggleHooks } from "./module/struggle/struggle-flow.js";
+import { registerPcAskHooks, wirePcAskCard } from "./module/pc-asks/pc-ask-flow.js";
 import { registerFightTab } from "./module/fight/fight-boot.js";
 
 // -- INIT ------------------------------------------------------
@@ -2072,6 +2073,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	wireSufferChoice(message, html);
 	// The card a new camp posts: its Join button, or how the camp ended (camp/camp-flow.js).
 	wireCampCard(message, html);
+	// Aid, Interfere and Persuade (vs. PCs): the other person's answer, drawn where the move asks
+	// for it (pc-asks/pc-ask-flow.js).
+	wirePcAskCard(message, html);
 });
 
 // -- MAKE CAMP, SHARED -----------------------------------------
@@ -2089,6 +2093,10 @@ registerCampWindowRestore();
 // On every client: the window opens when the GM calls a struggle or shares its results, a player's
 // ask reaches the GM, and a window open at reload comes back. See module/struggle/struggle-flow.js.
 registerStruggleHooks();
+
+// -- AID, INTERFERE, PERSUADE (VS. PCS) -----------------------
+// On every client: an answer posted to one of these cards (or deleted) redraws the card it answers.
+registerPcAskHooks();
 
 // -- SEASONS CHANGE: "ask the most hopeful to roll" -----------
 // Wire the roll button on a spring Seasons Change prompt card (postSeasonsRollPrompt):

@@ -6,6 +6,7 @@ import { pickLeadText, TIER_KEYS, TIER_LABELS } from "./move-results.js";
 import { markRolledTier } from "./move-tiers.js";
 import { stonetopCardShell, stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, damageMark, damageBadge, damageKeywordsHtml, pickListItem, descriptionPickTiers, cardNoticeHtml } from "./chat.js";
 import { adjustXp } from "./xp.js";
+import { XP_MARK_FLAG } from "./undo-xp-mark.js";
 import { composeDamageFormula, seedBonus, extraTerm } from "./damage.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { getBooleanSetting } from "../settings.js";
@@ -772,6 +773,39 @@ export async function rollStat(statKey, actor, options = {}) {
 }
 
 /**
+ * Mark XP, and build the receipt that says so, with its Undo (utils/undo-xp-mark.js). A miss posts
+ * one; so does a character who does what another PC Persuaded them to (pc-asks/pc-ask-flow.js).
+ * The caller posts it, with whatever else its card carries.
+ *
+ * The write goes through adjustXp (utils/xp.js), which queues it behind anything else changing
+ * this character's XP and reads the total inside that queue. The card then reports the number
+ * that actually landed rather than one computed from a total read before the write — which is
+ * how a mark and a spend firing together came to print two totals that could not both be true.
+ *
+ * `flags` are the card's own (under SYSTEM_ID): how much it marked, stamped at creation so the Undo
+ * takes back exactly what was given rather than a number read off the card's own text. Their
+ * presence is also what identifies the card to the wiring — a card without them has nothing to
+ * undo, so an ordinary roll card can never grow the button. Free: they ride on the create.
+ *
+ * @returns {Promise<{content: string, flags: object}>}
+ */
+export async function markXpReceipt(actor, { header, description = "", move, amount = XP_PER_MISS }) {
+	// Attributed to the move, so the ledger reads "via <move>".
+	const { after, max } = await adjustXp(actor, amount, { move });
+	return {
+		content: _rollCard({
+			header,
+			result: `+${amount} XP (${after} / ${max})`,
+			resultClass: "success",
+			sectionClass: "stonetop-xp-mark-card",
+			description,
+			actions: `<button type="button" class="stonetop-xp-undo" data-action="undoXpMark"><i class="fas fa-rotate-left"></i> Undo XP Gain</button>`,
+		}),
+		flags: { [XP_MARK_FLAG]: amount },
+	};
+}
+
+/**
  * Mark the +1 XP a miss earns (Book I p.209: "On a 6 or less, it's a miss. That means: They mark
  * XP") and post the receipt card. Normally fired automatically from rollStat, but exported so a
  * move that defers the choice can suppress it with `noXpOnMiss` and then mark it later from a
@@ -779,32 +813,18 @@ export async function rollStat(statKey, actor, options = {}) {
  * this one. `moveName` attributes the write in the character ledger.
  *
  * XP is deliberately not capped: xpToLevelUp is a level-up threshold, not a ceiling.
- *
- * The write goes through adjustXp (utils/xp.js), which queues it behind anything else changing
- * this character's XP and reads the total inside that queue. The card then reports the number
- * that actually landed rather than one computed from a total read before the write — which is
- * how a mark and a spend firing together came to print two totals that could not both be true.
  */
 export async function markMissXp(actor, moveName) {
-	// Attribute the marked XP to the move that missed, so the ledger reads "via <move>".
-	const { after: newXp, max: maxXp } = await adjustXp(actor, XP_PER_MISS, { move: moveName });
-	const xpCard = _rollCard({
+	const receipt = await markXpReceipt(actor, {
 		header: "Miss",
-		result: `+1 XP (${newXp} / ${maxXp})`,
-		resultClass: "success",
-		sectionClass: "stonetop-xp-mark-card",
+		move: moveName,
 		description: `<p>On a <strong>miss</strong> (a total of 6 or less), you <strong>mark XP</strong>, a tick mark that raises your total by 1, unless the move says otherwise.</p>`,
-		actions: `<button type="button" class="stonetop-xp-undo" data-action="undoXpMark"><i class="fas fa-rotate-left"></i> Undo XP Gain</button>`,
 	});
 	await ChatMessage.create({
-		content:  xpCard,
+		content:  receipt.content,
 		speaker:  ChatMessage.getSpeaker({ actor }),
 		rollMode: game.settings.get("core", "rollMode"),
-		// How much this card marked, stamped at creation so the Undo button takes back exactly
-		// what was given rather than a number read off the card's own text. Its presence is also
-		// what identifies the card to the wiring — a card with no `xpMark` has nothing to undo,
-		// so an ordinary roll card can never grow the button. Free: it rides on the create.
-		flags: { [SYSTEM_ID]: { xpMark: XP_PER_MISS } },
+		flags:    { [SYSTEM_ID]: receipt.flags },
 	});
 }
 
