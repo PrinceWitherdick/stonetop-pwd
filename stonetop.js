@@ -40,6 +40,7 @@ import { onDropPlaceOfInterest } from "./module/hooks/PlaceOfInterestDrop.js";
 import { onDropFollower } from "./module/hooks/FollowerDrop.js";
 import { onPreUpdateActorDeathsDoor, onUpdateActorDeathsDoorAutoOpen, onUpdateActorDeathsDoorCard, onUpdateActorDeathsDoorRaised, wireDyingPrompt } from "./module/hooks/DeathsDoorPrompt.js";
 import { installBattleJoyOnHurt, installBattleJoyEnd } from "./module/combat/battle-joy-offer.js";
+import { installBattleHolds } from "./module/combat/battle-holds.js";
 import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { installOutOfTheFight } from "./module/fight/out-of-the-fight.js";
 import { onPreCreateThreatNote } from "./module/hooks/ThreatNotePins.js";
@@ -970,6 +971,8 @@ Hooks.on("updateActor", onUpdateActorDeathsDoorRaised);
 installBattleJoyOnHurt();
 // And the other end of it: the fight over, a Heavy still raging is asked to roll +CON.
 installBattleJoyEnd();
+// The Marshal going into battle: Stentorian's Command and Front Line Leader's Presence, offered full.
+installBattleHolds();
 
 // The other side of the same moment. A monster reduced to 0 HP has no move to face: it is out of
 // the fight, so the GM's client marks it there and then — core's own `defeated`, which is the skull

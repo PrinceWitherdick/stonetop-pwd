@@ -83,7 +83,7 @@ import {withSectionEditing} from "../../utils/section-editing.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {annotateInvocationEffects, splitEmpoweredEffect} from "./invocation-effects.js";
 import {CONSECRATED_FLAME, INVOKE_THE_SUN_GOD, EMPOWERED_INVOCATIONS, ownsMoveNamed, showHolyLight} from "./holy-light.js";
-import {ownedMoveNames, ownedMove} from "./owns-move.js";
+import {ownedMoveNames, ownedMove, ownsLearnedMoveNamed} from "./owns-move.js";
 import {invocationLabel, invokeNotice, readOngoing, resolveInvocationUse} from "./ongoing-invocation.js";
 import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE} from "./condemn.js";
 import {readyRulebookIcon, openSharedRulebook} from "../../books/rulebook-icons.js";
@@ -9100,6 +9100,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		async orderFollower(follower, { ftype = "", slug = "" } = {}) {
 			const members = follower?.member ? [] : groupFollowerMembers(resolvedFlags(this.actor), { ftype, slug });
 			if (members.length) follower = { ...follower, members };
+			// Shield Wall is the Marshal's order to THEIR crew, so only the crew is offered it.
+			if (ftype === "crew" && ownsLearnedMoveNamed(this.actor, SHIELD_WALL_MOVE)) follower = { ...follower, shieldWall: true };
 			new OrderFollowersDialog(this.actor, follower,
 				async (result) => {
 					const roll = await this._stonetopCharacter.onOrderFollowersRoll(result);
@@ -9133,7 +9135,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Only advertise the shield's +1 when the follower actually bears one, and only
 			// when this Defend set the (fresh) base hold — not when we kept a higher pool.
 			const bearsShield = this._followerHasShield(ftype, slug ?? "");
-			const shieldNote = (bearsShield && next === held) ? ` (${held + 1} with their shield)` : "";
+			// Formed up in a shield wall, the shields are worth +2 rather than +1 (Shield Wall).
+			const shieldNote = (bearsShield && next === held)
+				? (result?.shieldWall ? ` (${held + READINESS_SHIELD_WALL_BONUS} with the shield wall)` : ` (${held + 1} with their shield)`)
+				: "";
 			if (next !== existing) {
 				await this.actor.update({ [`flags.stonetop-pwd.${path}`]: next }, { stonetopMove: "Defend" });
 			}

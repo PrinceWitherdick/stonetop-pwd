@@ -64,6 +64,7 @@ import {settleReadinessOnAttack} from "../../combat/readiness-loss.js";
 import {classifyResult} from "../../utils/roll-engine.js";
 import {betterMode, foldModes} from "../../utils/roll-mode.js";
 import {fightStateActive, shakeNervesOnMiss, revealOnAttack, WE_HAPPY_FEW} from "./fight-states.js";
+import {spendSurpriseForRoll, regainSurpriseOnHit} from "../../combat/battle-holds.js";
 import {xpToLevelUp, withXpLock} from "../../utils/xp.js";
 import {CharacterArcana} from "./CharacterArcana.js";
 import {CharacterLore} from "./CharacterLore.js";
@@ -2483,7 +2484,11 @@ export class StonetopCharacter {
 		// reading a move's text or backing out of the weapon prompt never burns it.
 		const promised = descriptionOnly ? rollOptions : await this._spendHeldAdvantage(rollOptions);
 
-		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, promised), descriptionOnly });
+		// Prepare a Welcome spends 1 Surprise to roll; the card says so, or that there was none to spend.
+		const surprise = descriptionOnly ? null : await spendSurpriseForRoll(this._actor, item);
+		const withSurprise = surprise ? { ...promised, conditionNotes: [...(promised.conditionNotes ?? []), surprise] } : promised;
+
+		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, withSurprise), descriptionOnly });
 
 		// Defend: fill the character's Readiness circles from the tier they just rolled
 		// (p.216), never lowering a pool they already hold.
@@ -2496,6 +2501,8 @@ export class StonetopCharacter {
 		if (!descriptionOnly && Number.isFinite(roll?.total)) {
 			const tier = classifyResult(roll.total).key;
 			await shakeNervesOnMiss(this._actor, item, tier);
+			// Prepare a Welcome's 10+: "regain 1 Surprise".
+			await regainSurpriseOnHit(this._actor, item, tier);
 		}
 
 		// Clash's 6-: "your maneuver fails and you suffer your enemy's attack". A flat consequence
@@ -3054,14 +3061,15 @@ export class StonetopCharacter {
 	 * @param {string} [opts.rollMode]  - "normal" | "adv" | "dis"
 	 * @param {string} [opts.moveName]  - Card header, e.g. "Hari: Defy Danger"
 	 */
-	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", moveName } = {}) {
+	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", moveName, shieldWall = false } = {}) {
 		const { rollStat } = await import("../../utils/roll-engine.js");
 		// Return the roll so the caller can react to the result — e.g. auto-holding
 		// Readiness when a follower is ordered to Defend and rolls 7+ (p.469).
 		const mode = ["adv", "dis"].includes(rollMode) ? rollMode : "normal";
 		const nerves = fightStateActive(this._actor, "nerves");
-		// Where the disadvantage came from, named on the card.
+		// Where an advantage came from, when the Marshal's Shield Wall gave it, and a disadvantage.
 		const conditionNotes = [
+			...(shieldWall ? ["Shield Wall"] : []),
 			...(nerves ? [format("stonetop.nerves.rollNote", { move: WE_HAPPY_FEW })] : []),
 		];
 		return rollStat("follower", this._actor, {

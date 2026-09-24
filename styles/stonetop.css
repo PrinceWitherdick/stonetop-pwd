@@ -11991,6 +11991,14 @@ button.stonetop-unseen:not(.is-unseen):hover { color: var(--st-text-body); }
 
 .stonetop-unseen.is-unseen { color: var(--st-green-text); }
 
+/* The Marshal's battle holds window (combat/battle-holds.js): one ticked row per hold. */
+.stonetop-battle-hold-row {
+	display: flex;
+	align-items: baseline;
+	gap: 0.5em;
+	margin: 0.25em 0;
+}
+
 /* ── An advantage held over the next roll ──────────────────────────────────
    The steading's own promised +Fortunes advantage wears this same clover in its holds tray, and
    this is the character's half of the same promise, so it is the same drawing rather than a

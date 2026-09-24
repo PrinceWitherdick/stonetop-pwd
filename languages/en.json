@@ -1427,6 +1427,20 @@
       "revealedTitle": "Seen",
       "revealed": "{name} attacks ({move}) and is no longer unseen."
     },
+    "battleHolds": {
+      "title": "{name} goes into battle",
+      "ask": "{name} has joined a fight. Take up the holds your moves give you going into battle?",
+      "row": {
+        "stentorian": "hold {max} {title}.",
+        "frontLine": "hold {max} {title}, if you are leading your crew into battle."
+      },
+      "hold": "Take them up",
+      "skip": "Not now",
+      "cardTitle": "Into battle",
+      "held": "{name} goes into battle holding {held}.",
+      "spentSurprise": "Spent 1 Surprise ({left} left)",
+      "noSurprise": "No Surprise held to spend"
+    },
     "expedition": {
       "route": {
         "goToOpen": " Open {map} and try again.",

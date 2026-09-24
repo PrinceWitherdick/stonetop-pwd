@@ -99,6 +99,7 @@ describe("OrderFollowersDialog", () => {
 			moveKey:      "let-fly",
 			followerName: "The Crew",
 			member:       null,
+			shieldWall:   false,
 		});
 	});
 });
@@ -185,5 +186,42 @@ describe("OrderFollowersDialog, for a group", () => {
 		const dialog = crew();
 		dialog._who = "named:9";
 		expect(dialog.getData().followerName).toBe("The Crew");
+	});
+});
+
+// Shield Wall (the Marshal): "When you have your crew form a shield wall, they Defend with advantage and
+// on a 7+ they hold +2 Readiness (instead of the usual +1 for shields)." Whether they have formed up is
+// the fiction's, so it is a box of its own, ticked, shown only for a Defend by a crew that is offered it.
+describe("OrderFollowersDialog, Shield Wall", () => {
+	const crew = (extra = {}) => new OrderFollowersDialog({ name: "Maddoc" }, { name: "The Crew", tags: [], shieldWall: true, moveKey: "defend", ...extra }, () => {});
+
+	it("offers the box only on a Defend, and only when the crew is offered it", () => {
+		expect(crew().getData()).toMatchObject({ shieldWall: true, inWall: true });
+		expect(crew({ moveKey: "clash" }).getData().shieldWall).toBe(false);
+		expect(crew({ shieldWall: false }).getData().shieldWall).toBe(false);
+	});
+
+	it("Defends with advantage while ticked, and straight once unticked", () => {
+		const dialog = crew();
+		expect(dialog.getData().readout).toBe("Roll 3d6 (keep highest 2) +0, with advantage");
+		dialog._inWall = false;
+		expect(dialog.getData().readout).toBe("Roll 2d6 +0");
+	});
+
+	it("cancels against a disadvantage like any other advantage, and says so", () => {
+		const dialog = crew();
+		dialog._disadvantage = true;
+		expect(dialog.getData()).toMatchObject({
+			readout:  "Roll 2d6 +0",
+			modeNote: "Advantage and disadvantage cancel out: rolling straight (p.230).",
+		});
+	});
+
+	it("tells the caller the wall was up, for the card and the +2 Readiness", async () => {
+		let handed = null;
+		const dialog = new OrderFollowersDialog({ name: "Maddoc" }, { name: "The Crew", shieldWall: true, moveKey: "defend" }, r => { handed = r; });
+		dialog.close = () => {};
+		await dialog._finish();
+		expect(handed).toMatchObject({ moveKey: "defend", rollMode: "adv", shieldWall: true });
 	});
 });

@@ -79,6 +79,14 @@
             one side, Interfere or a GM move on the other. Both stay live — they
             cancel each other out rather than one winning (p.230). --}}
       <div class="stonetop-of-mode-block">
+        {{!-- Shield Wall (the Marshal): only for their crew, only on a Defend. Ticked, since the move
+              is why the box is here; unticked when they have not formed up. --}}
+        {{#if shieldWall}}
+        <label class="stonetop-of-adv-row stonetop-of-wall-row">
+          <input type="checkbox" class="stonetop-of-wall" {{#if inWall}}checked{{/if}}>
+          In a shield wall (Shield Wall): Defend with advantage, and +2 Readiness on a 7+
+        </label>
+        {{/if}}
         <span class="stonetop-cf-chosen-label">Anything else swinging the roll? <span class="stonetop-of-tags-hint">(Stentorian, an Aid, an Interfere…)</span></span>
         <div class="stonetop-of-mode-row">
           <label class="stonetop-of-adv-row">
