@@ -104,3 +104,83 @@ describe("a held advantage", () => {
 		expect(rolled[0].options.conditionNotes).toBeUndefined();
 	});
 });
+
+// Its other half: Interfere's "do it anyway, but with disadvantage on their (next) roll", held the
+// same way and spent the same way. Both sides can be held at once (a peaceful night, then someone
+// gets in the way), and advantage and disadvantage cancel (p.230).
+describe("a held disadvantage", () => {
+	const INTERFERED = { source: "Interfered with by Bram" };
+
+	function interfered({ held = null, dis = INTERFERED, sticky = "normal" } = {}) {
+		const made = camper({ held, sticky });
+		made.actor.flags["stonetop-pwd"].heldDisadvantage = dis;
+		return made;
+	}
+
+	it("rolls the next roll at disadvantage, names who, and is spent by it", async () => {
+		const { char } = interfered();
+		await char.onDirectStatRoll("int");
+		expect(rolled[0].options.rollMode).toBe("dis");
+		expect(rolled[0].options.conditionNotes).toContain("Interfered with by Bram");
+		expect(char.heldDisadvantage()).toBeNull();
+		await char.onDirectStatRoll("int");
+		expect(rolled[1].options.rollMode).toBe("normal");
+	});
+
+	it("cancels a held advantage, and both are named and both spent", async () => {
+		const { char } = interfered({ held: PEACEFUL });
+		await char.onDirectStatRoll("int");
+		expect(rolled[0].options.rollMode).toBe("normal");
+		expect(rolled[0].options.conditionNotes).toEqual(expect.arrayContaining(["A peaceful night's rest", "Interfered with by Bram"]));
+		expect(char.heldAdvantage()).toBeNull();
+		expect(char.heldDisadvantage()).toBeNull();
+	});
+
+	// All at once, never pairwise: a sticky Disadvantage and a held advantage cancel, and the held
+	// disadvantage is on the side that already spoke, so the roll stays straight.
+	it("folds every side at once, so a sticky Disadvantage plus both promises rolls straight", async () => {
+		const { char } = interfered({ held: PEACEFUL, sticky: "dis" });
+		await char.onDirectStatRoll("int");
+		expect(rolled[0].options.rollMode).toBe("normal");
+	});
+
+	it("does not stack with a sticky Disadvantage", async () => {
+		const { char } = interfered({ sticky: "dis" });
+		await char.onDirectStatRoll("int");
+		expect(rolled[0].options.rollMode).toBe("dis");
+	});
+
+	// And across the stages the roll is built in: the debility is folded after the promises, in a
+	// method of its own, and must see the sticky Advantage they cancelled, not the straight roll they
+	// left. One side each way (Advantage; Interfere and Weakened) is a straight roll.
+	it("folds the debility with the promises, not onto the roll they left", async () => {
+		const made = camper({ sticky: "adv", weakened: true });
+		made.actor.flags["stonetop-pwd"].heldDisadvantage = INTERFERED;
+		await made.char.onDirectStatRoll("str");
+		expect(rolled[0].options.rollMode).toBe("normal");
+		expect(rolled[0].options.stonetopDebility).toBe("Weakened");
+	});
+});
+
+describe("holding another promise", () => {
+	it("keeps both names when a second advantage is promised before the roll", async () => {
+		const { char } = camper({ held: PEACEFUL });
+		await char.holdAdvantage("Bram's Aid");
+		expect(char.heldAdvantage()).toEqual({ source: "A peaceful night's rest & Bram's Aid" });
+	});
+
+	// The camp's one-write form, too: a peaceful night after an Aid keeps the Aid's name.
+	it("keeps the earlier name in the camp's update fragment", () => {
+		const { char } = camper({ held: { source: "Bram's Aid" } });
+		expect(char.heldAdvantageData("A peaceful night's rest")).toEqual({
+			"flags.stonetop-pwd.heldAdvantage": { source: "Bram's Aid & A peaceful night's rest" },
+		});
+	});
+
+	it("does not repeat a name promised twice", async () => {
+		const { char } = camper();
+		await char.holdDisadvantage("Interfered with by Bram");
+		await char.holdDisadvantage("Interfered with by Bram");
+		expect(char.heldDisadvantage()).toEqual({ source: "Interfered with by Bram" });
+	});
+});

@@ -1763,14 +1763,20 @@ export function createStonetopCharacterSheetClass(Base) {
 			// The tooltip is BUILT here rather than resolved from a key in the template: the whole
 			// value of storing what promised it is saying so, and that argument does not belong in
 			// either shared glyph partial for the one caller that has it.
-			const heldAdvantage = this._stonetopCharacter.heldAdvantage();
-			context.stonetop.heldAdvantage = {
-				show:    !!heldAdvantage,
-				label:   game.i18n.localize("stonetop.heldAdvantage.label"),
-				tooltip: format(context.editable
-					? "stonetop.heldAdvantage.tooltip"
-					: "stonetop.heldAdvantage.readOnlyTooltip", { source: heldAdvantage?.source ?? "" }),
+			//
+			// Its other half is a DISADVANTAGE held over the next roll, which Interfere lays when the
+			// foiled character goes ahead anyway (pc-asks/). Same reasons, same place, same release.
+			const held = {
+				heldAdvantage:    this._stonetopCharacter.heldAdvantage(),
+				heldDisadvantage: this._stonetopCharacter.heldDisadvantage(),
 			};
+			for (const [key, promise] of Object.entries(held)) {
+				context.stonetop[key] = {
+					show:    !!promise,
+					label:   game.i18n.localize(`stonetop.${key}.label`),
+					tooltip: format(`stonetop.${key}.${context.editable ? "tooltip" : "readOnlyTooltip"}`, { source: promise?.source ?? "" }),
+				};
+			}
 			// And the Blessed's marks, on the candle's and the scales' terms exactly.
 			const marks = this._stonetopCharacter.blessedMarks;
 			context.stonetop.blessedMarks = {
@@ -4193,6 +4199,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Releasing a held advantage, on the same `button.` terms: the read-only copy is a
 			// <span> and must not be wired.
 			html.find("button.stonetop-held-advantage").on("click", this._onReleaseHeldAdvantage.bind(this));
+			html.find("button.stonetop-held-disadvantage").on("click", this._onReleaseHeldDisadvantage.bind(this));
 			html.find(".stonetop-recover-open-btn").on("click", this._onRecoverOpen.bind(this));
 			html.find(".stonetop-convalesce-open-btn").on("click", this._onConvalesceOpen.bind(this));
 
@@ -7335,29 +7342,30 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * anyone still has of it.
 		 */
 		async _onReleaseHeldAdvantage(ev) {
+			const character = this._stonetopCharacter;
+			return this._releaseHeldMode(ev, "stonetop.heldAdvantage", character.heldAdvantage(), () => character.clearHeldAdvantage());
+		}
+
+		/** The same release for a held disadvantage (Interfere's), which is just as likely to lapse. */
+		async _onReleaseHeldDisadvantage(ev) {
+			const character = this._stonetopCharacter;
+			return this._releaseHeldMode(ev, "stonetop.heldDisadvantage", character.heldDisadvantage(), () => character.clearHeldDisadvantage());
+		}
+
+		/** Ask, then let go of a held advantage or disadvantage. `keys` is its string family. */
+		async _releaseHeldMode(ev, keys, held, clear) {
 			ev.preventDefault();
 			ev.stopPropagation();
-			if (!this.isEditable) return;
-			const held = this._stonetopCharacter.heldAdvantage();
-			if (!held) return;
-			// Named buttons rather than Dialog.confirm's Yes/No: each one says what it does, so
-			// the question can be answered off the buttons alone. Affirmative first, as everywhere.
-			new Dialog({
-				title: localize("stonetop.heldAdvantage.releaseTitle"),
-				content: `<p>${escHtml(format("stonetop.heldAdvantage.releasePrompt", { source: held.source }))}</p>`,
-				buttons: {
-					release: {
-						label: localize("stonetop.heldAdvantage.releaseConfirm"),
-						callback: async () => {
-							await this._stonetopCharacter.clearHeldAdvantage();
-							this.render(false);
-						},
-					},
-					keep: { label: localize("stonetop.heldAdvantage.releaseCancel") },
-				},
-				default: "keep",
-				render: bringDialogToFront,
-			}, { classes: ["dialog", "stonetop"] }).render(true);
+			if (!this.isEditable || !held) return;
+			const release = await confirmOutcome({
+				title:   localize(`${keys}.releaseTitle`),
+				content: `<p>${escHtml(format(`${keys}.releasePrompt`, { source: held.source }))}</p>`,
+				yes:     { label: localize(`${keys}.releaseConfirm`) },
+				no:      { label: localize(`${keys}.releaseCancel`) },
+			});
+			if (!release) return;
+			await clear();
+			this.render(false);
 		}
 
 		async _onBattleJoyToggle(ev) {

@@ -1396,6 +1396,15 @@
       "releaseConfirm": "Let it go",
       "releaseCancel": "Keep holding it"
     },
+    "heldDisadvantage": {
+      "label": "Disadvantage held over your next roll",
+      "tooltip": "Disadvantage on your next roll: {source}. It is spent the moment you roll. Click to let it go without rolling.",
+      "readOnlyTooltip": "Disadvantage on their next roll: {source}. It is spent the moment they roll.",
+      "releaseTitle": "Let the disadvantage go",
+      "releasePrompt": "Drop the disadvantage ({source})? Your next roll goes out as it otherwise would, and nothing records it afterwards.",
+      "releaseConfirm": "Let it go",
+      "releaseCancel": "Keep it"
+    },
     "battleJoy": {
       "onLabel": "Lost in your Battle Joy",
       "offLabel": "Not in your Battle Joy",

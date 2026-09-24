@@ -51,6 +51,7 @@ function makeCharacterMock(actor) {
 	// rule that releasing takes the glyph off is only assertable if the two share a value. Null
 	// rather than absent, matching the real accessor, which always answers the object or null.
 	let held = null;
+	let heldDis = null;
 	// The Invocation being held open, live for the same reason the holy light is: getData reads
 	// the getter, the End control and the candle both write through the setter, and the rule that
 	// a snuffed light takes the Invocation with it is only assertable if the two share a value.
@@ -85,6 +86,9 @@ function makeCharacterMock(actor) {
 		heldAdvantage: () => held,
 		holdAdvantage: (value) => { held = value ?? null; },
 		clearHeldAdvantage: vi.fn(async () => { held = null; }),
+		heldDisadvantage: () => heldDis,
+		holdDisadvantage: (value) => { heldDis = value ?? null; },
+		clearHeldDisadvantage: vi.fn(async () => { heldDis = null; }),
 		get canEnterBattleJoy() { return canRage; },
 		set canEnterBattleJoy(value) { canRage = !!value; },
 		// What getData actually reads for the five header glyphs — the real one answers all five
@@ -626,22 +630,44 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		const sheet = makeSheet(actor);
 		actor.typedActor.holdAdvantage({ source: "A peaceful night's rest" });
 
-		let buttons = null;
-		global.Dialog = class {
-			constructor(data) { buttons = data.buttons; }
-			render() {}
-		};
-
+		const kept = stubConfirm(false);
 		await sheet._onReleaseHeldAdvantage(clickEvent());
-		expect(Object.keys(buttons)).toEqual(["release", "keep"]);
-		// Nothing is given up by opening the window.
+		expect(kept).toHaveBeenCalledTimes(1);
+		// Keeping it is the default: releasing puts nothing back.
+		expect(kept.mock.calls[0][0].buttons.find(b => b.default)?.action).toBe("no");
+		expect(sheet._stonetopCharacter.clearHeldAdvantage).not.toHaveBeenCalled();
 		expect(sheet._stonetopCharacter.heldAdvantage()).not.toBeNull();
 
-		await buttons.release.callback();
+		stubConfirm(true);
+		await sheet._onReleaseHeldAdvantage(clickEvent());
 		expect(sheet._stonetopCharacter.clearHeldAdvantage).toHaveBeenCalled();
 		expect(sheet._stonetopCharacter.heldAdvantage()).toBeNull();
+	});
 
-		delete global.Dialog;
+	// Its other half: Interfere's disadvantage, held until the foiled character's next roll. Shown and
+	// released exactly as the advantage is, and on its own terms: letting one go keeps the other.
+	it("shows the header a held disadvantage, names who laid it, and releases it on its own", async () => {
+		installGetDataGlobals();
+		const clickEvent = () => ({ preventDefault: vi.fn(), stopPropagation: vi.fn() });
+		const actor = makeActor();
+		actor.typedActor.playbook = vi.fn(async () => null);
+		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
+		const sheet = makeSheet(actor);
+		const glyph = async () => (await sheet.getData()).stonetop.heldDisadvantage;
+
+		expect(await glyph()).toMatchObject({ show: false });
+		actor.typedActor.holdAdvantage({ source: "A peaceful night's rest" });
+		actor.typedActor.holdDisadvantage({ source: "Interfered with by Bram" });
+		const shown = await glyph();
+		expect(shown.show).toBe(true);
+		expect(shown.tooltip).toContain("Interfered with by Bram");
+
+		const asked = stubConfirm(true);
+		await sheet._onReleaseHeldDisadvantage(clickEvent());
+		expect(asked.mock.calls[0][0].content).toContain("Interfered with by Bram");
+		expect(sheet._stonetopCharacter.heldDisadvantage()).toBeNull();
+		expect(sheet._stonetopCharacter.heldAdvantage()).not.toBeNull();
 	});
 
 	// Turning it ON is a declaration and writes nothing else; turning it OFF is the move's own

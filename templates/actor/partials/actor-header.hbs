@@ -187,21 +187,28 @@
 
 			    A <button> that RELEASES it where the sheet is editable, and a plain readout where
 			    it is not, exactly as the two glyphs above split. `type="button"` is not optional:
-			    the whole sheet is one <form> and a bare button submits it. }}
-			{{#if stonetop.heldAdvantage.show}}
+			    the whole sheet is one <form> and a bare button submits it.
+
+			    Its other half, a disadvantage held over the next roll (Interfere's "do it anyway"), is
+			    drawn and released exactly as the advantage is: one glyph, `stem` naming which. The
+			    partial reads `editable` off the context it is called from. }}
+			{{#*inline "stonetopHeldGlyph"}}
+			{{#if held.show}}
 			{{#if editable}}
-			<button type="button" class="stonetop-held-advantage"
-			        aria-label="{{stonetop.heldAdvantage.label}}"
-			        data-tooltip="{{stonetop.heldAdvantage.tooltip}}"
-			        data-tooltip-direction="UP"><span class="stonetop-held-advantage-icon" aria-hidden="true"></span></button>
+			<button type="button" class="{{stem}}"
+			        aria-label="{{held.label}}"
+			        data-tooltip="{{held.tooltip}}"
+			        data-tooltip-direction="UP"><span class="{{stem}}-icon" aria-hidden="true"></span></button>
+			{{else}}
+			<span class="{{stem}}" role="img"
+			      aria-label="{{held.label}}"
+			      data-tooltip="{{held.tooltip}}"
+			      data-tooltip-direction="UP"><span class="{{stem}}-icon" aria-hidden="true"></span></span>
 			{{/if}}
-			{{#unless editable}}
-			<span class="stonetop-held-advantage" role="img"
-			      aria-label="{{stonetop.heldAdvantage.label}}"
-			      data-tooltip="{{stonetop.heldAdvantage.tooltip}}"
-			      data-tooltip-direction="UP"><span class="stonetop-held-advantage-icon" aria-hidden="true"></span></span>
-			{{/unless}}
 			{{/if}}
+			{{/inline}}
+			{{> stonetopHeldGlyph held=stonetop.heldAdvantage stem="stonetop-held-advantage"}}
+			{{> stonetopHeldGlyph held=stonetop.heldDisadvantage stem="stonetop-held-disadvantage"}}
 		</div>
 		{{! Through the Last Door, with no insert. The three returns say what they are in the name
 		    at the top of the header (a Ghost reads "Ghost"), so only a plain death needs a word of

@@ -28,6 +28,7 @@ name is listed for every one.
 | militia-drill.svg | The militia's summer drills, unpaid | archery-target | Lorc | https://lorcblog.blogspot.com |
 | herd-feed.svg | The herd's winter feed, unpaid | horse-head | Lorc | https://lorcblog.blogspot.com |
 | winter-debt.svg | Winter's second consumption, still owed | hourglass | Lorc | https://lorcblog.blogspot.com |
+| held-disadvantage.svg | Disadvantage held over a character's next roll (Interfere) | foot-trip | Lorc | https://lorcblog.blogspot.com |
 
 `fortunes-advantage.svg` is worn TWICE, and deliberately by one file rather than two: the
 steading holds a promised advantage over its next +Fortunes roll, and a character holds one over
@@ -40,7 +41,7 @@ the same way the weather glyph beside them and the tab rail's icons are, so one 
 header's ink in both themes and the warmer "due" tone. That means each file must carry alpha
 ONLY where the glyph is.
 
-All ten were taken from the game-icons.net repository, where the drawings are stored INVERTED:
+All eleven were taken from the game-icons.net repository, where the drawings are stored INVERTED:
 an opaque black background square under a white glyph, which as a mask resolves to a solid slab.
 Their background square (and only that square) was punched transparent to match the export form
 the weather set already uses: `<path d="M0 0h512v512H0z"/>` became

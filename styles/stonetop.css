@@ -6332,6 +6332,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-roiling-icon,
 .stonetop-unseen-icon,
 .stonetop-held-advantage-icon,
+.stonetop-held-disadvantage-icon,
 .stonetop-nav-arrow {
 	-webkit-mask-size: contain;
 	mask-size: contain;
@@ -6357,7 +6358,8 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-nerves-icon,
 .stonetop-roiling-icon,
 .stonetop-unseen-icon,
-.stonetop-held-advantage-icon {
+.stonetop-held-advantage-icon,
+.stonetop-held-disadvantage-icon {
 	display: block;
 	width: auto;
 	background: currentColor;
@@ -11855,6 +11857,7 @@ button.stonetop-dead-tag:hover {
 .stonetop-condemn,
 .stonetop-blessed-marks,
 .stonetop-held-advantage,
+.stonetop-held-disadvantage,
 .stonetop-battle-joy,
 .stonetop-nerves,
 .stonetop-roiling,
@@ -11885,7 +11888,8 @@ button.stonetop-holy-light:focus-visible,
 .stonetop-nerves:focus-visible,
 .stonetop-roiling:focus-visible,
 .stonetop-unseen:focus-visible,
-.stonetop-held-advantage:focus-visible {
+.stonetop-held-advantage:focus-visible,
+.stonetop-held-disadvantage:focus-visible {
 	outline: 2px solid var(--color-shadow-primary, slategrey);
 	outline-offset: 2px;
 }
@@ -12262,23 +12266,37 @@ button.stonetop-unseen:not(.is-unseen):hover { color: var(--st-text-body); }
 
    38px, matching the scales: the drawing is square, so the 40 the near-square Battle Joy needs to
    hold equal painted area would read slightly large beside them. */
-.stonetop-held-advantage {
+.stonetop-held-advantage,
+.stonetop-held-disadvantage {
 	color: var(--st-quiet-ink);
 	transition: color 0.15s ease;
 }
 
 /* Only the editable copy is a button, so only it says "press me". */
-button.stonetop-held-advantage { cursor: pointer; }
+button.stonetop-held-advantage,
+button.stonetop-held-disadvantage { cursor: pointer; }
 
 /* No `:not()` guard needed here, unlike the candle's and the Heavy's: there is one state, so a
    hover rule cannot out-specify a modifier that does not exist. */
-button.stonetop-held-advantage:hover { color: var(--st-text-body); }
+button.stonetop-held-advantage:hover,
+button.stonetop-held-disadvantage:hover { color: var(--st-text-body); }
 
-.stonetop-held-advantage-icon {
+.stonetop-held-advantage-icon,
+.stonetop-held-disadvantage-icon {
 	height: 38px;
 	aspect-ratio: 1 / 1;
 	-webkit-mask-image: url('/systems/stonetop-pwd/assets/icons/holds/fortunes-advantage.svg');
 	mask-image: url('/systems/stonetop-pwd/assets/icons/holds/fortunes-advantage.svg');
+}
+
+/* ── A disadvantage held over the next roll ────────────────────────────────
+   The advantage's other half (Interfere's "do it anyway, with disadvantage", pc-asks/), drawn,
+   sized and released the same way by the rules above. The drawing is a foot hooked round an
+   ankle, which is what being interfered with looks like; the same quiet ink, so the two read as
+   one family and the drawings tell them apart. */
+.stonetop-held-disadvantage-icon {
+	-webkit-mask-image: url('/systems/stonetop-pwd/assets/icons/holds/held-disadvantage.svg');
+	mask-image: url('/systems/stonetop-pwd/assets/icons/holds/held-disadvantage.svg');
 }
 
 /* The three debility boxes while that rage lasts. They stay TICKED and stop doing anything ("you

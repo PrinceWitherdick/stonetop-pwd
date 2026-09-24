@@ -72,7 +72,7 @@ import {CharacterPostDeath, buildLoreSection, insertHpPenalty} from "./Character
 import {effectiveSubgroupMax, sumMoveBonus} from "./dialogs/possession-choice-cap.js";
 import {partitionMovesByGroup} from "./dialogs/onboarding-move-groups.js";
 import {FoundryRepositoryFactory} from "./repositories/FoundryRepositoryFactory.js";
-import {capitalizeFirst, slugify, composeInstinct, escHtml, stripHtmlToText} from "../../utils/strings.js";
+import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, stripHtmlToText} from "../../utils/strings.js";
 import {splitFillBlank, fillBlank} from "../../utils/fill-blanks.js";
 import {localize as _loc, format} from "../../utils/i18n.js";
 import {getStonetopSteadingActor} from "../../utils/world.js";
@@ -103,6 +103,15 @@ function foldAdvantage(options, source) {
 		...layModes(options, ["adv"]),
 		conditionNotes: [...(options.conditionNotes ?? []), source],
 	};
+}
+
+/**
+ * Two promises' names as one, joined as every list of names is (strings.js#joinNames): "A peaceful
+ * night's rest & Aeliana's Aid". Blank halves drop out, and a name promised twice is said once.
+ */
+function joinSources(held, source) {
+	const parts = [...new Set([held, source].map(part => String(part ?? "").trim()).filter(Boolean))];
+	return joinNames(parts) || "a promise";
 }
 
 const OTHER_MOVE_TYPES = ["background", "special", "follower", "homefront"];
@@ -1595,9 +1604,8 @@ export class StonetopCharacter {
 	async setInventoryItemChecked(slug, isChecked) { await this._inventory.setItemChecked(slug, isChecked); }
 	async setInventoryResource(slug, count)         { await this._inventory.setResource(slug, count); }
 	// Fragment forms, for a move that changes several things at once and wants one write for the
-	// lot of them (see camp/camp-rules.js#campShareUpdate).
+	// lot of them (see camp/camp-rules.js#campShareUpdate; heldAdvantageData is with the held modes).
 	inventoryResourceData(slug, count)              { return this._inventory.resourceData(slug, count); }
-	heldAdvantageData(source)                       { return { [`flags.${STONETOP_SCOPE}.heldAdvantage`]: { source: String(source ?? "").trim() || "a promised advantage" } }; }
 	async setInventoryRegularPool(count)            { await this._inventory.setRegularPool(count); }
 	async setInventorySmallPool(count)              { await this._inventory.setSmallPool(count); }
 	async removeSpecialItem(slug)                   { await this._inventory.removeSpecial(slug); }
@@ -2474,14 +2482,14 @@ export class StonetopCharacter {
 
 		// A grudge this character is owed against the very foe they are attacking: Relentless on a Clash
 		// with someone who survived the last one, But I Get Up Again on whoever knocked them down. Folded
-		// in like a held advantage (see _spendHeldAdvantage) — before the debility pass, so a Weakened
+		// in like a held advantage (see _spendHeldRollModes) — before the debility pass, so a Weakened
 		// Heavy's advantage cancels rather than quietly outranking the debility — and NAMED on the card.
 		const grudge = attackExtra ? attackFoeAdvantage(this._actor, attackExtra) : null;
 		if (grudge) Object.assign(rollOptions, foldAdvantage(rollOptions, grudge));
 
 		// A promise made earlier (a peaceful camp) is spent HERE — after the guards above, so
 		// reading a move's text or backing out of the weapon prompt never burns it.
-		const promised = descriptionOnly ? rollOptions : await this._spendHeldAdvantage(rollOptions);
+		const promised = descriptionOnly ? rollOptions : await this._spendHeldRollModes(rollOptions);
 
 		// Prepare a Welcome spends 1 Surprise to roll; the card says so, or that there was none to spend.
 		const surprise = descriptionOnly ? null : await spendSurpriseForRoll(this._actor, item);
@@ -3031,7 +3039,7 @@ export class StonetopCharacter {
 		// Returned so a caller that has to act on the outcome (the arcana Identify roll) can
 		// classify the total without re-rolling or re-deriving the tier thresholds.
 		const roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat,
-			await this._spendHeldAdvantage({
+			await this._spendHeldRollModes({
 				rollMode: normalizeRollMode(rollMode ?? this.rollMode),
 				modifier,
 				forward,
@@ -3181,37 +3189,103 @@ export class StonetopCharacter {
 	 * Stored as WHAT PROMISED it rather than a bare `true`, so the card can say why.
 	 */
 	heldAdvantage() {
-		return resolvedFlags(this._actor).heldAdvantage ?? null;
+		return this._heldMode("heldAdvantage");
 	}
 
 	async clearHeldAdvantage() {
-		if (!this.heldAdvantage()) return;
-		await this._actor.setFlag(STONETOP_SCOPE, "heldAdvantage", null);
+		await this._clearHeldMode("heldAdvantage");
 	}
 
 	/**
-	 * Spend a held advantage into the options of the roll about to be made, if one is held.
+	 * Take advantage on your next roll: another promise laid beside any already held.
+	 *
+	 * ONE FLAG, TWO NAMES. Advantage does not stack (p.230), so a second promise before the roll buys
+	 * nothing extra, but the card should still say who made each one: "A peaceful night's rest &
+	 * Aeliana's Aid". Both are spent by the same roll, which is what both of them were about.
+	 */
+	async holdAdvantage(source) {
+		await this._actor.update(this.heldAdvantageData(source));
+	}
+
+	/** {@link holdAdvantage} as an update fragment, for a move that writes several things at once
+	 *  (camp/camp-rules.js#campShareUpdate). Joined with a promise already held, the same way. */
+	heldAdvantageData(source) {
+		return this._heldModeData("heldAdvantage", source);
+	}
+
+	/**
+	 * The other half of a held promise: DISADVANTAGE on your next roll, owed to something already
+	 * settled. Interfere's "do it anyway, but with disadvantage on their (next) roll" is the
+	 * one that lays it so far, and the roll it lands on may be made on a different client, a while
+	 * later, by someone who has forgotten, so it is written down where that roll will look.
+	 *
+	 * Kept apart from the advantage rather than folded into one signed flag: the two CANCEL, and
+	 * that is decided at the roll, with both of them named on the card, not at the moment the
+	 * second one was laid.
+	 */
+	heldDisadvantage() {
+		return this._heldMode("heldDisadvantage");
+	}
+
+	async holdDisadvantage(source) {
+		await this._actor.update(this._heldModeData("heldDisadvantage", source));
+	}
+
+	async clearHeldDisadvantage() {
+		await this._clearHeldMode("heldDisadvantage");
+	}
+
+	// The two held promises differ only in their flag ("heldAdvantage" / "heldDisadvantage").
+	_heldMode(flag) {
+		return resolvedFlags(this._actor)[flag] ?? null;
+	}
+
+	_heldModeData(flag, source) {
+		return { [`flags.${STONETOP_SCOPE}.${flag}`]: { source: joinSources(this._heldMode(flag)?.source, source) } };
+	}
+
+	async _clearHeldMode(flag) {
+		if (!this._heldMode(flag)) return;
+		await this._actor.setFlag(STONETOP_SCOPE, flag, null);
+	}
+
+	/**
+	 * Spend whatever is held over the next roll (an advantage, a disadvantage, or both) into the
+	 * options of the roll about to be made.
 	 *
 	 * A held advantage OUTRANKS the sticky selector and the pre-roll window as a source of
-	 * advantage — those are preferences, this is a rule the fiction already settled — but it never
+	 * advantage (those are preferences, this is a rule the fiction already settled), but it never
 	 * beats a disadvantage, from wherever that came. Advantage and disadvantage CANCEL in Stonetop,
 	 * so a promise spent against one leaves a flat roll: a player who picked Disadvantage in the
 	 * window because they are doing this in the dark must not be silently upgraded past it, and
 	 * nor must a character who camped peacefully and is still Weakened. That second case is why
-	 * this runs BEFORE `applyDebilityRollMode` — it hands that method an "adv" to cancel, exactly
-	 * as the sticky selector would have.
+	 * this runs BEFORE `applyDebilityRollMode`: it hands that method an "adv" to cancel, exactly
+	 * as the sticky selector would have. A held disadvantage is the same rule from the other side.
 	 *
-	 * Either way the pill NAMES the promise, so a cancellation reads as a trade rather than as a
-	 * mode that quietly vanished — and either way the promise is SPENT, because it was made about
-	 * this roll and this is the roll that happened.
+	 * Folded ALL AT ONCE, with every source the roll has already been handed (layModes), never one
+	 * step at a time: a sticky Disadvantage, an Aid and an Interfere is one side each way and a
+	 * straight roll, where stepping would cancel the first pair and let the Interfere push the roll
+	 * back down. The same holds across stages: a grudge laid before this and a debility after it.
 	 *
-	 * Cleared BEFORE the dice, like the steading's, so a second roll cannot spend the same promise.
+	 * Either way the pills NAME the promises, so a cancellation reads as a trade rather than as a
+	 * mode that quietly vanished, and either way they are SPENT, because they were made about this
+	 * roll and this is the roll that happened.
+	 *
+	 * Cleared BEFORE the dice, like the steading's, so a second roll cannot spend the same promise:
+	 * in one write, whichever of the two were held.
 	 */
-	async _spendHeldAdvantage(options) {
-		const held = this.heldAdvantage();
-		if (!held) return options;
-		await this.clearHeldAdvantage();
-		return foldAdvantage(options, held.source);
+	async _spendHeldRollModes(options) {
+		const adv = this.heldAdvantage();
+		const dis = this.heldDisadvantage();
+		if (!adv && !dis) return options;
+		await this._actor.update({
+			...(adv ? { [`flags.${STONETOP_SCOPE}.heldAdvantage`]: null } : {}),
+			...(dis ? { [`flags.${STONETOP_SCOPE}.heldDisadvantage`]: null } : {}),
+		});
+		return {
+			...layModes(options, [adv ? "adv" : "", dis ? "dis" : ""]),
+			conditionNotes: [...(options.conditionNotes ?? []), ...[adv, dis].filter(Boolean).map(held => held.source)],
+		};
 	}
 
 	// ── Death and dying (Book I, Harm & Healing p.245) ─────────────────────────
