@@ -6328,6 +6328,9 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-condemn-icon,
 .stonetop-blessed-marks-icon,
 .stonetop-battle-joy-icon,
+.stonetop-nerves-icon,
+.stonetop-roiling-icon,
+.stonetop-unseen-icon,
 .stonetop-held-advantage-icon,
 .stonetop-nav-arrow {
 	-webkit-mask-size: contain;
@@ -6351,6 +6354,9 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-condemn-icon,
 .stonetop-blessed-marks-icon,
 .stonetop-battle-joy-icon,
+.stonetop-nerves-icon,
+.stonetop-roiling-icon,
+.stonetop-unseen-icon,
 .stonetop-held-advantage-icon {
 	display: block;
 	width: auto;
@@ -11599,7 +11605,10 @@ button.stonetop-dead-tag:hover {
 .stonetop-condemn,
 .stonetop-blessed-marks,
 .stonetop-held-advantage,
-.stonetop-battle-joy {
+.stonetop-battle-joy,
+.stonetop-nerves,
+.stonetop-roiling,
+.stonetop-unseen {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -11623,6 +11632,9 @@ button.stonetop-holy-light:focus-visible,
 .stonetop-condemn:focus-visible,
 .stonetop-blessed-marks:focus-visible,
 .stonetop-battle-joy:focus-visible,
+.stonetop-nerves:focus-visible,
+.stonetop-roiling:focus-visible,
+.stonetop-unseen:focus-visible,
 .stonetop-held-advantage:focus-visible {
 	outline: 2px solid var(--color-shadow-primary, slategrey);
 	outline-offset: 2px;
@@ -11926,6 +11938,58 @@ button.stonetop-battle-joy:not(.is-raging):hover { color: var(--st-text-body); }
 /* Red, in the sheet's own red token rather than a hand-mixed one, so it comes down with the black
    scope's repaint like every other red here. Declared AFTER the base rule, per the tie note above. */
 .stonetop-battle-joy.is-raging { color: var(--st-red-text); }
+
+/* ── Three more fight states (actors/character/fight-states.js) ────────────
+   The Battle Joy's shape exactly: one state, toggled, a <button> where the sheet is editable and a
+   <span> where it isn't, no count. Each is sized to the enrage glyph's painted AREA, not its height
+   (the header convention): the worried eyes are 2.8 times as wide as tall, so they stand 24px high.
+
+   The same `:not(.is-*)` hover guard as the Battle Joy, for the same reason: `button.x:hover`
+   out-specifies `.x.is-on`, and would drag a lit glyph back to near-black under the pointer. Each
+   colour is declared AFTER its base rule. */
+.stonetop-nerves,
+.stonetop-roiling,
+.stonetop-unseen {
+	transition: color 0.15s ease;
+}
+
+button.stonetop-nerves,
+button.stonetop-roiling,
+button.stonetop-unseen { cursor: pointer; }
+
+button.stonetop-nerves:not(.is-shaken):hover,
+button.stonetop-roiling:not(.is-roiling):hover,
+button.stonetop-unseen:not(.is-unseen):hover { color: var(--st-text-body); }
+
+/* The Marshal's shaken nerves (We Happy Few's 6-): disadvantage on every roll until they are shared. */
+.stonetop-nerves-icon {
+	height: 24px;
+	aspect-ratio: 464.35 / 166.03;
+	-webkit-mask-image: url('/systems/stonetop-pwd/assets/icons/nerves.svg');
+	mask-image: url('/systems/stonetop-pwd/assets/icons/nerves.svg');
+}
+
+.stonetop-nerves.is-shaken { color: var(--st-gold-text); }
+
+/* The Storm Markings' anger: +1 damage until they calm down. Storm blue. */
+.stonetop-roiling-icon {
+	height: 40px;
+	aspect-ratio: 479.88 / 478.30;
+	-webkit-mask-image: url('/systems/stonetop-pwd/assets/icons/storm-rage.svg');
+	mask-image: url('/systems/stonetop-pwd/assets/icons/storm-rage.svg');
+}
+
+.stonetop-roiling.is-roiling { color: var(--st-blue-text); }
+
+/* A Fox's or Ranger's being unseen, until they attack, move or draw attention. */
+.stonetop-unseen-icon {
+	height: 37px;
+	aspect-ratio: 479.75 / 400.55;
+	-webkit-mask-image: url('/systems/stonetop-pwd/assets/icons/unseen.svg');
+	mask-image: url('/systems/stonetop-pwd/assets/icons/unseen.svg');
+}
+
+.stonetop-unseen.is-unseen { color: var(--st-green-text); }
 
 /* ── An advantage held over the next roll ──────────────────────────────────
    The steading's own promised +Fortunes advantage wears this same clover in its holds tray, and

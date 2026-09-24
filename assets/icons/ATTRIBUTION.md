@@ -18,9 +18,12 @@ Where our filename differs from the original, the game-icons.net source name is 
 | landmarks/place-marker.svg | position-marker | Delapouite | https://delapouite.com |
 | landmarks/place-peak.svg | peaks | Lorc | https://lorcblog.blogspot.com |
 | move.svg | move | Delapouite | https://delapouite.com |
+| nerves.svg | worried-eyes | Lorc | https://lorcblog.blogspot.com |
 | pounce.svg | pounce | sbed | http://opengameart.org/content/95-game-icons |
 | scales.svg | scales | Lorc | https://lorcblog.blogspot.com |
+| storm-rage.svg | lightning-storm | Lorc | https://lorcblog.blogspot.com |
 | triquetra.svg | triquetra | Delapouite | https://delapouite.com |
+| unseen.svg | hood | Lorc | https://lorcblog.blogspot.com |
 
 `move.svg` recolours the glyph and sets it on the system's dark octagon token; the artwork
 itself is unchanged.

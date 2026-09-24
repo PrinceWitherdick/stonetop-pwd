@@ -1399,6 +1399,34 @@
       "askDecline": "Keep their head",
       "entered": "{name} spills blood and loses themselves in battle, ignoring fear, pain, mind-control and the effects of debilities as long as they keep fighting."
     },
+    "nerves": {
+      "onLabel": "Shaken nerves",
+      "offLabel": "Nerves steady",
+      "onTooltip": "Shaken nerves (We Happy Few): disadvantage on all rolls until you share your nerves with someone. Click once you have.",
+      "offTooltip": "Nerves steady. We Happy Few's 6- shakes them: click to mark them shaken by hand.",
+      "readOnlyOn": "Shaken nerves: disadvantage on all rolls until they share their nerves with someone.",
+      "readOnlyOff": "Nerves steady.",
+      "shaken": "{name}'s nerves are shaken: disadvantage on all rolls until they share their nerves with someone.",
+      "rollNote": "Shaken nerves ({move})"
+    },
+    "roiling": {
+      "onLabel": "Roiling with anger",
+      "offLabel": "Calm",
+      "onTooltip": "Roiling with anger (Storm Markings): +1 damage until you calm down. Click when you do.",
+      "offTooltip": "Click when you roil with anger: +1 damage until you calm down.",
+      "readOnlyOn": "Roiling with anger: +1 damage until they calm down.",
+      "readOnlyOff": "Calm."
+    },
+    "unseen": {
+      "onLabel": "Unseen",
+      "offLabel": "Seen",
+      "onTooltip": "Unseen (Catlike, Stalker): until you draw attention to yourself, move positions, or attack. Attacking ends it on its own; click for the other two.",
+      "offTooltip": "Click when you hide: you remain unseen until you draw attention to yourself, move positions, or attack.",
+      "readOnlyOn": "Unseen, until they draw attention to themselves, move positions, or attack.",
+      "readOnlyOff": "Seen.",
+      "revealedTitle": "Seen",
+      "revealed": "{name} attacks ({move}) and is no longer unseen."
+    },
     "expedition": {
       "route": {
         "goToOpen": " Open {map} and try again.",
@@ -2063,6 +2091,10 @@
         },
         "nemesis": {
           "label": "Nemesis: +{dice} damage, against a foe who survived you",
+          "pill": "{move} +{dice}"
+        },
+        "roiling": {
+          "label": "Roiling with anger: +{dice} damage",
           "pill": "{move} +{dice}"
         },
         "payback": {

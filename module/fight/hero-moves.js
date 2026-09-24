@@ -36,7 +36,8 @@ import { format } from "../utils/i18n.js";
 import { ownsLearnedMoveNamed, ownedMove } from "../actors/character/owns-move.js";
 import { heldOnTrack } from "../actors/character/MoveResources.js";
 import { MELEE_RANGES } from "../data/weapons.js";
-import { betterMode } from "../utils/roll-mode.js";
+import { betterMode, foldModes } from "../utils/roll-mode.js";
+import { fightStateActive, STORM_MARKINGS_NAME } from "../actors/character/fight-states.js";
 import { HEROES, touching } from "./engagements.js";
 import { fightOnScene, gridOf } from "./fight-state.js";
 import { rollerEngagement } from "./damage-seed.js";
@@ -104,6 +105,20 @@ export const KNOCKED_DOWN_FLAG = "knockedDownBy";
 export function dangerousMode(actor, rollMode = "") {
 	if (!has(actor, HERO_MOVES.DANGEROUS)) return rollMode;
 	return betterMode(rollMode);
+}
+
+/**
+ * A character's own damage roll's mode once THEY have had their say: Dangerous's advantage, and the
+ * Marshal's shaken nerves ("disadvantage on all rolls until you share your nerves", We Happy Few's 6-;
+ * actors/character/fight-states.js). Folded together, so the two cancel (p.230) rather than stepping
+ * one after the other, and neither stacks with the roll's own mode.
+ *
+ * @param {Actor} actor
+ * @param {string|null} rollMode  "adv", "dis", "normal", or empty for the roll's default
+ */
+export function ownDamageMode(actor, rollMode = "") {
+	if (!fightStateActive(actor, "nerves")) return dangerousMode(actor, rollMode);
+	return foldModes([has(actor, HERO_MOVES.DANGEROUS) ? "adv" : "", "dis"], rollMode || "normal");
 }
 
 /** The foes a hero has locked eyes with (Big Damn Hero), as combatant ids on the hero's combatant. */
@@ -386,6 +401,9 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 		if (earned) add("nemesis", HERO_MOVES.NEMESIS, "1d6");
 	}
 	if (paybackEarned(actor, targets)) add("payback", HERO_MOVES.PAYBACK, "1d4");
+	// Storm Markings: "When you roil with anger, you do +1 damage until you calm down." The player says
+	// when they roil and when they calm (the header's storm cloud), so while it is on the +1 is ticked.
+	if (fightStateActive(actor, "roiling")) add("roiling", STORM_MARKINGS_NAME, "1");
 	// Spent when it is taken: "your NEXT blow against them does +1d4". Left standing when the player
 	// unticks it, because a blow they chose not to sharpen is not the blow the move was owed.
 	if (upAgainAgainst(actor, targets)) add("upAgain", HERO_MOVES.UP_AGAIN, "1d4", { spend: clearKnockedDownBy });

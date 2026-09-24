@@ -27,6 +27,7 @@ import {RING_SOURCE_UUID, SERVANT_SOURCE_UUID, buildServantFollower} from "../..
 import {grantedWeaponForMove, weaponTraitText} from "../../data/weapons.js";
 import {grantedWeaponAttackFor, rollCharacterDamageAt, rollFollowerDamageAt} from "../../combat/attack-flow.js";
 import {offerBattleJoyOnDamage} from "../../combat/battle-joy-offer.js";
+import {ownDamageMode} from "../../fight/hero-moves.js";
 import {followerInFight} from "../../fight/follower-fight.js";
 import {ALT_STAT_GRANTS} from "../../data/alt-stat-grants.js";
 import {readOnboardingResume, writeOnboardingResume, clearOnboardingResume} from "./onboarding-resume.js";
@@ -95,6 +96,7 @@ const PLAYER_BOOK = 1;
 import {BINDING_ARBITRATION} from "./oaths.js";
 import {CondemnedDialog} from "./dialogs/CondemnedDialog.js";
 import {showBattleJoy, BATTLE_JOY} from "./battle-joy.js";
+import {fightStateGlyphs, fightStateForStem, fightStateOn, setFightState, revealOnAttack, FIGHT_STATES} from "./fight-states.js";
 import {
 	showBlessedMarks, BARKSKIN, TRACKLESS_STEP, SHARED_SOULS, AMULETS_TALISMANS, WARDS_BINDINGS,
 } from "./blessed-marks.js";
@@ -1742,6 +1744,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				raging,
 				..._toggleGlyphKeys(BATTLE_JOY_GLYPH, raging, context.editable),
 			};
+			// Three more on/off states a fight turns on: the Marshal's shaken nerves, the Storm Markings'
+			// anger, a Fox's or Ranger's being unseen. Same glyph, same terms (./fight-states.js).
+			context.stonetop.fightStates = fightStateGlyphs(this.actor, { editable: context.editable });
 			// An advantage HELD over the next roll — a peaceful camp, so far (p.334). Shown for the
 			// same reason the steading shows its own promised +Fortunes advantage: the roll it is
 			// owed to has not been made yet, possibly not this session, and a promise nobody can
@@ -3409,11 +3414,15 @@ export function createStonetopCharacterSheetClass(Base) {
 						// window rather than the move prompt, which asked it nothing upstream (see
 						// _resolveMoveRollPrompts). Shift on the originating click skips it, exactly as it
 						// skips the move prompt.
-						// Still the character's own damage, so the Heavy's spilled blood is asked about as it is on
-						// the Damage button's (combat/attack-flow.js#rollCharacterDamageAt).
+						// Still the character's own damage, and owed what the Damage button's is
+						// (combat/attack-flow.js#rollCharacterDamageAt): shaken nerves and Dangerous on the
+						// roll, the Heavy's spilled blood asked about, and an unseen Fox or Ranger seen.
 						const label = rollable.dataset.label ?? roll;
-						const rolled = await rollDamagePrompted(roll, this.actor, { label, shiftKey: ev.shiftKey });
-						if (rolled) offerBattleJoyOnDamage(this.actor, label, [rolled.total]).catch(err => console.error("Stonetop | offering Battle Joy failed", err));
+						const rolled = await rollDamagePrompted(roll, this.actor, { label, rollMode: ownDamageMode(this.actor, ""), shiftKey: ev.shiftKey });
+						if (rolled) {
+							offerBattleJoyOnDamage(this.actor, label, [rolled.total]).catch(err => console.error("Stonetop | offering Battle Joy failed", err));
+							await revealOnAttack(this.actor, label);
+						}
 					}
 				}
 			}, true);
@@ -4173,6 +4182,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			// The Heavy's Battle Joy, on the CANDLE's terms: `button.` on purpose, since the
 			// read-only copy is a <span> and must not be wired.
 			html.find("button.stonetop-battle-joy").on("click", this._onBattleJoyToggle.bind(this));
+			html.find(Object.values(FIGHT_STATES).map(def => `button.${def.stem}`).join(", "))
+				.on("click", this._onFightStateToggle.bind(this));
 			// Releasing a held advantage, on the same `button.` terms: the read-only copy is a
 			// <span> and must not be wired.
 			html.find("button.stonetop-held-advantage").on("click", this._onReleaseHeldAdvantage.bind(this));
@@ -7342,6 +7353,21 @@ export function createStonetopCharacterSheetClass(Base) {
 				return;
 			}
 			await this._endBattleJoy({ shiftKey: ev.shiftKey });
+		}
+
+		/**
+		 * One of the three fight states (./fight-states.js), flipped. No question either way: each is the
+		 * player's to say (they share their nerves, calm down, step out of hiding), and the other ways
+		 * each one ends (We Happy Few's 6- turning nerves on, an attack revealing the unseen) are
+		 * handled where they happen.
+		 */
+		async _onFightStateToggle(ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			if (!this.isEditable) return;
+			const key = [...ev.currentTarget.classList].map(fightStateForStem).find(Boolean);
+			if (!key) return;
+			if (await setFightState(this.actor, key, !fightStateOn(this.actor, key))) this.render(false);
 		}
 
 		/**

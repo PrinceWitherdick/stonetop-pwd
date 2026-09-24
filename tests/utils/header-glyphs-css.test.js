@@ -31,6 +31,31 @@ const GLYPHS = [
 		viewBox: /viewBox="19\.80 22\.28 475\.16 471\.71"/,
 		ratio: /aspect-ratio:\s*475\.16\s*\/\s*471\.71/,
 	},
+	// The three fight states beside it (actors/character/fight-states.js), on its terms exactly.
+	{
+		name: "the Marshal's shaken nerves",
+		icon: ".stonetop-nerves-icon",
+		control: ".stonetop-nerves",
+		svg: "assets/icons/nerves.svg",
+		viewBox: /viewBox="28\.00 154\.73 464\.35 166\.03"/,
+		ratio: /aspect-ratio:\s*464\.35\s*\/\s*166\.03/,
+	},
+	{
+		name: "the Storm Markings' anger",
+		icon: ".stonetop-roiling-icon",
+		control: ".stonetop-roiling",
+		svg: "assets/icons/storm-rage.svg",
+		viewBox: /viewBox="14\.56 17\.68 479\.88 478\.30"/,
+		ratio: /aspect-ratio:\s*479\.88\s*\/\s*478\.30/,
+	},
+	{
+		name: "a Fox's or Ranger's being unseen",
+		icon: ".stonetop-unseen-icon",
+		control: ".stonetop-unseen",
+		svg: "assets/icons/unseen.svg",
+		viewBox: /viewBox="17\.50 32\.02 479\.75 400\.55"/,
+		ratio: /aspect-ratio:\s*479\.75\s*\/\s*400\.55/,
+	},
 ];
 
 describe.each(GLYPHS)("$name", ({ icon, control, svg, viewBox, ratio }) => {

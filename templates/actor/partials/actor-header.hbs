@@ -168,6 +168,13 @@
 			    on=stonetop.battleJoy.raging labelKey=stonetop.battleJoy.labelKey
 			    tooltipKey=stonetop.battleJoy.tooltipKey}}
 			{{/if}}
+			{{! Three more states a fight turns on, on the Battle Joy's terms exactly (fight-states.js):
+			    the Marshal's shaken nerves, the Storm Markings' anger, a Fox's or Ranger's being unseen,
+			    in fightStateGlyphs' order. The partial reads `editable` off the context, and the `each`
+			    hides it, so it is handed down by hand (`../editable`). }}
+			{{#each stonetop.fightStates as |g|}}{{#if g.show}}
+			{{> "stonetop.header-toggle-glyph" stem=g.stem onClass=g.onClass on=g.on labelKey=g.labelKey tooltipKey=g.tooltipKey editable=../editable}}
+			{{/if}}{{/each}}
 			{{! An advantage HELD over the next roll (a peaceful camp, p.334), on the steading's
 			    holds-tray terms rather than the candle's: it is not a state anyone toggles on, so
 			    it is drawn only while one is held and it goes when a roll spends it.

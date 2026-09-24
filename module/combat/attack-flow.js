@@ -44,7 +44,7 @@ import {isLoneBlowOnGroup, applyMemberHit} from "../fight/group-hits.js";
 import {halveDamage, spentOn} from "../fight/defend-spend.js";
 // Playbook moves the fight turns on: Undaunted's +1 armor and +1d6, Big Damn Hero's locked eyes
 // (fight/hero-moves.js).
-import {undauntedNow, eyesLockedAgainst, dangerousMode, blowOffers as heroOffers, muscleboundWeapon, berserkNow, defenderDisadvantage, recordHarmedBy, recordClash, foeAdvantage, defenderMoveKey} from "../fight/hero-moves.js";
+import {undauntedNow, eyesLockedAgainst, ownDamageMode, blowOffers as heroOffers, muscleboundWeapon, berserkNow, defenderDisadvantage, recordHarmedBy, recordClash, foeAdvantage, defenderMoveKey} from "../fight/hero-moves.js";
 import {ownsLearnedMoveNamed} from "../actors/character/owns-move.js";
 import {armorGateKey} from "../actors/character/move-armor.js";
 import {format, localize} from "../utils/i18n.js";
@@ -56,6 +56,7 @@ import {inCardTurn} from "../utils/card-queue.js";
 import {belongsToMessage, wirePickedOptionButton} from "../utils/picked-option-button.js";
 import {settleReadinessOnAttack} from "./readiness-loss.js";
 import {offerBattleJoyOnDamage} from "./battle-joy-offer.js";
+import {revealOnAttack} from "../actors/character/fight-states.js";
 
 const SCOPE = STONETOP_SCOPE;
 
@@ -901,9 +902,10 @@ async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = ""
 	// A stat block's blow brings its own die and its own "w/disadvantage" (rollDamageAt); an attack
 	// move works both out from the character.
 	const base     = formula || await damageFormula(actor, weapon, extraDice);
-	// A follower striking from the sheet (`attacker`) is not dealing the character's damage: no Dangerous.
+	// A follower striking from the sheet (`attacker`) is not dealing the character's damage: no Dangerous,
+	// and no nerves of the character's either.
 	const moved    = noted || damageAdvantageFrom(actor, moveKey, weapon);
-	const sharp    = attacker ? moved : dangerousMode(actor, moved);
+	const sharp    = attacker ? moved : ownDamageMode(actor, moved);
 	// `defenders` is defenderModes' answer when the caller already had to work it out (rollDamageAt):
 	// asking twice means a buildSnapshot per target twice over.
 	const known    = defenders ?? await defenderModes(targets);
@@ -1127,7 +1129,7 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 		// every time, forever, and the forceful the Resolve bought never reached the table.
 		const damage = await askDamageAdjustment(actor, {
 			formula, offers, shiftKey, attacker, strikeBack,
-			rollMode: striker ? rollMode : dangerousMode(actor, rollMode),
+			rollMode: striker ? rollMode : ownDamageMode(actor, rollMode),
 			seed: seeded ? sheetSeed({ actor }) : null,
 		});
 		if (!damage) return false;
@@ -1139,8 +1141,12 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 			label, keywords, description, ...adjust,
 			...(notices ? { notices } : {}),
 		});
-		// The Heavy spilling blood (combat/battle-joy-offer.js). A follower's blow is theirs, not the character's.
-		if (!striker) askBattleJoy(actor, label, [roll?.total]);
+		// The Heavy spilling blood (combat/battle-joy-offer.js), and attacking ending a Fox's or Ranger's
+		// being unseen (actors/character/fight-states.js). A follower's blow is theirs, not the character's.
+		if (!striker) {
+			askBattleJoy(actor, label, [roll?.total]);
+			await revealOnAttack(actor, label);
+		}
 		return true;
 	}
 
@@ -1164,6 +1170,7 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 		shots: !striker,
 		groupBlow: !!striker?.group,
 	});
+	if (!striker) await revealOnAttack(actor, label);
 	return true;
 }
 

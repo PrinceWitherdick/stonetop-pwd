@@ -62,7 +62,8 @@ import {maybeBeginAttack, maybeCounterOnMiss, attackMoveFor, attackFoeAdvantage,
 import {defendReadinessHold, defendReadinessCap, readinessCount, READINESS_FLAG} from "../../combat/defend-readiness.js";
 import {settleReadinessOnAttack} from "../../combat/readiness-loss.js";
 import {classifyResult} from "../../utils/roll-engine.js";
-import {betterMode} from "../../utils/roll-mode.js";
+import {betterMode, foldModes} from "../../utils/roll-mode.js";
+import {fightStateActive, shakeNervesOnMiss, revealOnAttack, WE_HAPPY_FEW} from "./fight-states.js";
 import {xpToLevelUp, withXpLock} from "../../utils/xp.js";
 import {CharacterArcana} from "./CharacterArcana.js";
 import {CharacterLore} from "./CharacterLore.js";
@@ -72,7 +73,7 @@ import {partitionMovesByGroup} from "./dialogs/onboarding-move-groups.js";
 import {FoundryRepositoryFactory} from "./repositories/FoundryRepositoryFactory.js";
 import {capitalizeFirst, slugify, composeInstinct, escHtml, stripHtmlToText} from "../../utils/strings.js";
 import {splitFillBlank, fillBlank} from "../../utils/fill-blanks.js";
-import {localize as _loc} from "../../utils/i18n.js";
+import {localize as _loc, format} from "../../utils/i18n.js";
 import {getStonetopSteadingActor} from "../../utils/world.js";
 import {moveChatCard} from "../../utils/chat.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
@@ -2445,7 +2446,11 @@ export class StonetopCharacter {
 			// Going on the offense sheds any held Defend Readiness (p.216), but an attack made
 			// holding one's ground does not, so the player is asked (combat/readiness-loss.js):
 			// only once the attack is committed, not on a cancelled weapon/target prompt.
-			if (attackMoveFor(item)) await settleReadinessOnAttack(this._actor, item.name);
+			// And an unseen Fox or Ranger is seen: "until you ... attack" (actors/character/fight-states.js).
+			if (attackMoveFor(item)) {
+				await settleReadinessOnAttack(this._actor, item.name);
+				await revealOnAttack(this._actor, item.name);
+			}
 			if (begun === "handled") return true;
 			attackExtra = begun;
 		}
@@ -2484,6 +2489,13 @@ export class StonetopCharacter {
 		// (p.216), never lowering a pool they already hold.
 		if (!descriptionOnly && item?.name === _DEFEND_MOVE_NAME && Number.isFinite(roll?.total)) {
 			await this._maybeHoldDefendReadiness(roll.total);
+		}
+
+		// We Happy Few's 6-: "you have disadvantage on all rolls until you share your nerves with
+		// someone". Stated flatly, so the state goes on with the dice (actors/character/fight-states.js).
+		if (!descriptionOnly && Number.isFinite(roll?.total)) {
+			const tier = classifyResult(roll.total).key;
+			await shakeNervesOnMiss(this._actor, item, tier);
 		}
 
 		// Clash's 6-: "your maneuver fails and you suffer your enemy's attack". A flat consequence
@@ -3032,6 +3044,11 @@ export class StonetopCharacter {
 	 * when their follower misses). The PC's own forward/ongoing/debility/global roll
 	 * mode deliberately do NOT apply: the follower is acting, not the PC.
 	 *
+	 * Shaken nerves DO: We Happy Few's 6- is "disadvantage on ALL rolls until you share your
+	 * nerves", the move's own price on the Marshal's rolls, not a weakness of the body the way a
+	 * debility is, and giving orders is still the Marshal rolling. Folded, as applyDebilityRollMode
+	 * folds it, so it cancels a tag's or Shield Wall's advantage rather than stacking.
+	 *
 	 * @param {object} opts
 	 * @param {number} [opts.bonus]     - 0, 1, or 2
 	 * @param {string} [opts.rollMode]  - "normal" | "adv" | "dis"
@@ -3041,11 +3058,18 @@ export class StonetopCharacter {
 		const { rollStat } = await import("../../utils/roll-engine.js");
 		// Return the roll so the caller can react to the result — e.g. auto-holding
 		// Readiness when a follower is ordered to Defend and rolls 7+ (p.469).
+		const mode = ["adv", "dis"].includes(rollMode) ? rollMode : "normal";
+		const nerves = fightStateActive(this._actor, "nerves");
+		// Where the disadvantage came from, named on the card.
+		const conditionNotes = [
+			...(nerves ? [format("stonetop.nerves.rollNote", { move: WE_HAPPY_FEW })] : []),
+		];
 		return rollStat("follower", this._actor, {
 			statValue: Math.trunc(Number(bonus) || 0),
-			rollMode:  ["adv", "dis"].includes(rollMode) ? rollMode : "normal",
+			rollMode:  nerves ? foldModes(["dis"], mode) : mode,
 			moveName:  moveName || "Order Followers",
 			modifier:  0,
+			...(conditionNotes.length ? { conditionNotes } : {}),
 		});
 	}
 
@@ -3078,6 +3102,21 @@ export class StonetopCharacter {
 	 * debility applies to it exactly as the rules say.
 	 */
 	applyDebilityRollMode(stat, options) {
+		const out = this._debilityRollMode(stat, options);
+		// We Happy Few's 6-: "disadvantage on ALL rolls until you share your nerves". Folded rather than
+		// stepped, so it cancels an advantage the way a debility does and does not stack with one (p.230);
+		// and named on the card, since nothing else on it would say why. Not something Battle Joy ignores:
+		// it is the move's own price, not a debility.
+		if (!fightStateActive(this._actor, "nerves")) return out;
+		return {
+			...out,
+			rollMode: foldModes(["dis", out.stonetopDebility ? "dis" : ""], options?.rollMode ?? "normal"),
+			conditionNotes: [...(out.conditionNotes ?? []), format("stonetop.nerves.rollNote", { move: WE_HAPPY_FEW })],
+		};
+	}
+
+	/** The debility half of {@link applyDebilityRollMode}: what a marked box does to this roll. */
+	_debilityRollMode(stat, options) {
 		const debilityOptions = this._actor.system.attributes?.debilities?.options ?? {};
 		const activeEntry = Object.entries(debilityOptions).find(
 			([key, opt]) => {
