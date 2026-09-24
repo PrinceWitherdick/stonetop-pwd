@@ -1390,7 +1390,14 @@
       "endTitle": "The action stops",
       "endPrompt": "Battle Joy ends. Roll +CON now? On a 10+ that was a rush, regain 1d4 HP; on a 7-9 you are winded but will be fine; on a 6- mark a debility, but do not mark XP. Choose No to simply come out of it.",
       "noRollType": "Your Battle Joy move has no stat set on it, so there was nothing to roll. You have come out of it all the same. Give the move a roll type to get the +CON roll.",
-      "debilitiesIgnored": "Battle Joy: still marked, and doing nothing. You ignore the effects of debilities as long as you keep fighting."
+      "debilitiesIgnored": "Battle Joy: still marked, and doing nothing. You ignore the effects of debilities as long as you keep fighting.",
+      "askTitle": "{name} spills blood",
+      "dealt": "{name} has just dealt damage ({move}).",
+      "taken": "{name} has just lost {amount} HP.",
+      "ask": "Do they lose themselves in battle? While lost in their Battle Joy they ignore fear, pain, mind-control and the effects of debilities, as long as they keep fighting.",
+      "askEnter": "Lose themselves in battle",
+      "askDecline": "Keep their head",
+      "entered": "{name} spills blood and loses themselves in battle, ignoring fear, pain, mind-control and the effects of debilities as long as they keep fighting."
     },
     "expedition": {
       "route": {

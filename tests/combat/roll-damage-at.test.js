@@ -13,6 +13,8 @@ vi.mock("../../module/utils/roll-engine.js", async importOriginal => ({
 const { rollDamage: plainCard } = await import("../../module/utils/roll-engine.js");
 vi.mock("../../module/combat/readiness-loss.js", () => ({ settleReadinessOnAttack: vi.fn(async () => false) }));
 const { settleReadinessOnAttack } = await import("../../module/combat/readiness-loss.js");
+vi.mock("../../module/combat/battle-joy-offer.js", () => ({ offerBattleJoyOnDamage: vi.fn(async () => false) }));
+const { offerBattleJoyOnDamage } = await import("../../module/combat/battle-joy-offer.js");
 const { rollDamageAt, maybeBeginAttack, wireApplyDamage, withSeedTags, rollCharacterDamageAt, strikeBackAt, rollFollowerDamageAt, wireAttackConfirm, rollMoveDamageAt, wireConditionalArmor } = await import("../../module/combat/attack-flow.js");
 
 // Rolls aimed by the fight: a monster's damage at the character it is fighting, a character's at the
@@ -384,6 +386,27 @@ describe("a character's own damage, with the weapon in hand", () => {
 		expect(settleReadinessOnAttack).not.toHaveBeenCalled();
 		await rollCharacterDamageAt(pim, { label: "Damage", shiftKey: true });
 		expect(settleReadinessOnAttack).toHaveBeenCalledWith(pim, "Damage");
+	});
+
+	it("offers the Battle Joy on the character's own blow, and never on a follower's or the enemy's", async () => {
+		const pim = armed("sword");
+		fightInARow([["pim", pim], ["crin", crinwin("crinwin")]]);
+		vi.mocked(offerBattleJoyOnDamage).mockClear();
+		await rollCharacterDamageAt(pim, { label: "Damage", shiftKey: true });
+		expect(offerBattleJoyOnDamage).toHaveBeenCalledTimes(1);
+		expect(offerBattleJoyOnDamage).toHaveBeenCalledWith(pim, "Damage: Sword", [expect.any(Number)]);
+
+		vi.mocked(offerBattleJoyOnDamage).mockClear();
+		await rollFollowerDamageAt(pim, { formula: "d6", label: "Pim's crew attacks", attacker: "Pim's crew", shiftKey: true });
+		expect(offerBattleJoyOnDamage).not.toHaveBeenCalled();
+	});
+
+	it("offers the Battle Joy on the plain card too, when nobody is there to hit", async () => {
+		const pim = armed("sword");
+		vi.mocked(offerBattleJoyOnDamage).mockClear();
+		vi.mocked(plainCard).mockResolvedValueOnce({ total: 4 });
+		await rollDamageAt(pim, { formula: "d8", label: "Damage", shiftKey: true });
+		expect(offerBattleJoyOnDamage).toHaveBeenCalledWith(pim, "Damage", [4]);
 	});
 
 	it("carries a warhammer's 2 piercing to Apply", async () => {

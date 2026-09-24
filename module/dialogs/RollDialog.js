@@ -539,6 +539,6 @@ export function promptDamage({
 export async function rollDamagePrompted(formula, actor, { label, keywords, description, notices, rollMode, attacker, seed, shiftKey = false } = {}) {
 	const adjust = await promptDamage({ attacker: attacker || actor?.name, formula, ...(rollMode ? { rollMode } : {}), seed, shiftKey });
 	if (!adjust) return false;
-	await rollDamage(formula, actor, { label, keywords, description, notices, ...adjust });
-	return true;
+	// The roll itself, for a caller that acts on what it came to (the Heavy's Battle Joy asks only for blood).
+	return rollDamage(formula, actor, { label, keywords, description, notices, ...adjust });
 }

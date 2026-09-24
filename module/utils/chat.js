@@ -521,6 +521,14 @@ export function moveChatCard(name, description, { pickable = false, actions = ""
 		+ `<div class="stonetop-chat-move-description">${body}</div>${actions}</div>`;
 }
 
+/** Post a one-line note spoken as `actor` (or as "Stonetop" without one), in the move-card shape. */
+export function postMoveNote(actor, title, text) {
+	return globalThis.ChatMessage?.create?.({
+		content: moveChatCard(title, `<p>${escHtml(text)}</p>`),
+		speaker: actor ? globalThis.ChatMessage?.getSpeaker?.({ actor }) : { alias: "Stonetop" },
+	});
+}
+
 /**
  * Post a card to chat announcing one or more core-stat changes.
  * @param {Actor} actor

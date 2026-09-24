@@ -55,6 +55,7 @@ import {resolveSync, queryAsker} from "../utils/foundry-compat.js";
 import {inCardTurn} from "../utils/card-queue.js";
 import {belongsToMessage, wirePickedOptionButton} from "../utils/picked-option-button.js";
 import {settleReadinessOnAttack} from "./readiness-loss.js";
+import {offerBattleJoyOnDamage} from "./battle-joy-offer.js";
 
 const SCOPE = STONETOP_SCOPE;
 
@@ -1134,10 +1135,12 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 		// Worked out AFTER the window, because a tag a ticked line just bought owes its notice too.
 		const notices = tagNoticesHtml(withAddedTags(striker ? weapon : muscleboundWeapon(actor, weapon), damage.addTags));
 		const { base, addTags, ...adjust } = damage;
-		await rollDamage(base, actor, {
+		const roll = await rollDamage(base, actor, {
 			label, keywords, description, ...adjust,
 			...(notices ? { notices } : {}),
 		});
+		// The Heavy spilling blood (combat/battle-joy-offer.js). A follower's blow is theirs, not the character's.
+		if (!striker) askBattleJoy(actor, label, [roll?.total]);
 		return true;
 	}
 
@@ -1389,7 +1392,7 @@ export function tagNoticesHtml(weapon) {
 // no-target Clash needed a whole extra branch here just to have somewhere to put that button.
 // The tier fires the counter itself now, straight after this returns (resolveAttackTier), and it
 // comes back through this same function as a damage card of its own (postIncomingDamage).
-async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignoresArmor = false, selfHarm = false, foeUuid = "", shots = true, groupBlow = false, own = true }) {
+async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignoresArmor = false, selfHarm = false, foeUuid = "", shots = true, groupBlow = false, own = true, spillsBlood = own }) {
 	// A tier control that ignores armor (Call the Shot's "your call", The Hammer and the Book)
 	// records it ON THE WEAPON the card carries rather than as a second field beside it: the
 	// weapon is the one thing Apply damage reads for armor (wireApplyDamage) and the one thing the
@@ -1450,11 +1453,24 @@ async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignores
 		}
 	}
 
+	// The Heavy spilling blood (combat/battle-joy-offer.js): their own blow, or their move's harm to
+	// somebody else. Not the enemy's attack landing on them, and not a follower striking beside them.
+	if (!selfHarm && spillsBlood) askBattleJoy(actor, move, results.map(r => r.raw));
+
 	// The totals, for a caller that has to say on its own surface what the roll came to: the
 	// button on a ticked option turns into the number it dealt (stonetop.js#_chatWireOptionDamage).
 	// Every branch above fills this, the single-target one included, so a caller never has to know
 	// which of the three it took.
 	return results;
+}
+
+/**
+ * The Battle Joy question (combat/battle-joy-offer.js), NOT WAITED ON. It is a window the Heavy's player
+ * answers in their own time, and everything after a damage roll (a ticked option's button latching, a
+ * Clash's counter-attack) would otherwise sit behind it.
+ */
+function askBattleJoy(actor, move, totals) {
+	offerBattleJoyOnDamage(actor, move, totals).catch(err => console.error("Stonetop | offering Battle Joy failed", err));
 }
 
 /**
@@ -1522,6 +1538,8 @@ export async function rollOptionDamage(actor, { move, damage }) {
 
 	return rollAndPostDamage(actor, {
 		move, weapon, selfHarm: self, ignoresArmor,
+		// Still blood the character spilled, whosever number it is (combat/battle-joy-offer.js).
+		spillsBlood: true,
 		// NOT THE CHARACTER'S OWN BLOW, said out loud rather than left to the empty reach above to
 		// imply. A move's printed 2d4 is the move's number, not a swing of theirs, so Musclebound has
 		// nothing to make forceful and messy here — and saying so is what keeps that true the day the
@@ -1560,7 +1578,7 @@ export async function rollMoveDamageAt(actor, target, { move, formula, ignoresAr
 	const hit = target?.documentName === "Token" ? target : (target?.actor ?? target);
 	if (!actor || !formula || !hit?.uuid) return null;
 	return rollAndPostDamage(actor, {
-		move, ignoresArmor, own: false,
+		move, ignoresArmor, own: false, spillsBlood: true,
 		weapon: { name: "", range: [], piercing: 0, ignoresArmor, tags },
 		targets: [{ uuid: hit.uuid, name: hit.name ?? "", actorId: hit.id ?? null, disposition: hit.disposition ?? 0, hasActor: true }],
 		damage: { base: formula, rollMode: "normal", bonus: 0, extraDice: "" },

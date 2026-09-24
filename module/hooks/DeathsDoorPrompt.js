@@ -295,6 +295,15 @@ export function autoOpenUserId(owners = []) {
 }
 
 /**
+ * Whether THIS client is the one that answers for `actor`: its player, else the GM (autoOpenUserId).
+ * The one test for every per-character prompt or write that must happen on exactly one client.
+ */
+export function answersFor(actor) {
+	const me = game.user?.id;
+	return !!me && !!actor && autoOpenUserId(ownerUsers(actor)) === me;
+}
+
+/**
  * Open the character's 0-HP walkthrough. Both ways in — the card's button and the auto-open —
  * come through here, so there is one answer to "what does facing the Door actually open".
  *

@@ -16,21 +16,13 @@ import { heldReadiness, READINESS_FLAG } from "./defend-readiness.js";
 import { each, isFight } from "../fight/fight-state.js";
 import { clearHarmedBy } from "../fight/hero-moves.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
-import { moveChatCard } from "../utils/chat.js";
+import { postMoveNote } from "../utils/chat.js";
 import { themedDialogClasses } from "../utils/window-theme.js";
 import { contentElement } from "../dialogs/content-picker.js";
 import { escHtml, joinNames } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
 
 const KEY = "stonetop.readiness";
-
-/** Post a receipt for Readiness kept or lost, in the move-card shape the Defend notes use. */
-function postNote(actor, title, text) {
-	return globalThis.ChatMessage?.create?.({
-		content: moveChatCard(title, `<p>${escHtml(text)}</p>`),
-		speaker: actor ? globalThis.ChatMessage?.getSpeaker?.({ actor }) : { alias: "Stonetop" },
-	});
-}
 
 /**
  * Ask whether an attack is going on the offense. Resolves true to lose the Readiness, false to keep it
@@ -69,11 +61,11 @@ export async function settleReadinessOnAttack(actor, moveName, { ask = askGoingO
 	const count = heldReadiness(actor);
 	if (count <= 0) return false;
 	if (!(await ask(actor, moveName))) {
-		await postNote(actor, localize(`${KEY}.keptTitle`), format(`${KEY}.kept`, { name: actor.name, move: moveName, count }));
+		await postMoveNote(actor, localize(`${KEY}.keptTitle`), format(`${KEY}.kept`, { name: actor.name, move: moveName, count }));
 		return false;
 	}
 	await actor.setFlag(SYSTEM_ID, READINESS_FLAG, 0);
-	await postNote(actor, localize(`${KEY}.lostTitle`), format(`${KEY}.lostOffense`, { name: actor.name, move: moveName }));
+	await postMoveNote(actor, localize(`${KEY}.lostTitle`), format(`${KEY}.lostOffense`, { name: actor.name, move: moveName }));
 	return true;
 }
 
@@ -120,7 +112,7 @@ async function loseAll(actors, noteKey) {
 	if (!actors.length) return;
 	await Promise.all(actors.map(actor => actor.setFlag(SYSTEM_ID, READINESS_FLAG, 0)));
 	const names = joinNames(actors.map(a => a.name));
-	await postNote(actors.length === 1 ? actors[0] : null, localize(`${KEY}.lostTitle`), format(`${KEY}.${noteKey}`, { name: names, names }));
+	await postMoveNote(actors.length === 1 ? actors[0] : null, localize(`${KEY}.lostTitle`), format(`${KEY}.${noteKey}`, { name: names, names }));
 }
 
 /**

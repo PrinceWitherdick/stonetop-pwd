@@ -26,6 +26,7 @@ import {CallUpDeepOnesDialog} from "./dialogs/CallUpDeepOnesDialog.js";
 import {RING_SOURCE_UUID, SERVANT_SOURCE_UUID, buildServantFollower} from "../../data/servant-of-daagon.js";
 import {grantedWeaponForMove, weaponTraitText} from "../../data/weapons.js";
 import {grantedWeaponAttackFor, rollCharacterDamageAt, rollFollowerDamageAt} from "../../combat/attack-flow.js";
+import {offerBattleJoyOnDamage} from "../../combat/battle-joy-offer.js";
 import {followerInFight} from "../../fight/follower-fight.js";
 import {ALT_STAT_GRANTS} from "../../data/alt-stat-grants.js";
 import {readOnboardingResume, writeOnboardingResume, clearOnboardingResume} from "./onboarding-resume.js";
@@ -3408,7 +3409,11 @@ export function createStonetopCharacterSheetClass(Base) {
 						// window rather than the move prompt, which asked it nothing upstream (see
 						// _resolveMoveRollPrompts). Shift on the originating click skips it, exactly as it
 						// skips the move prompt.
-						await rollDamagePrompted(roll, this.actor, { label: rollable.dataset.label ?? roll, shiftKey: ev.shiftKey });
+						// Still the character's own damage, so the Heavy's spilled blood is asked about as it is on
+						// the Damage button's (combat/attack-flow.js#rollCharacterDamageAt).
+						const label = rollable.dataset.label ?? roll;
+						const rolled = await rollDamagePrompted(roll, this.actor, { label, shiftKey: ev.shiftKey });
+						if (rolled) offerBattleJoyOnDamage(this.actor, label, [rolled.total]).catch(err => console.error("Stonetop | offering Battle Joy failed", err));
 					}
 				}
 			}, true);
@@ -7336,6 +7341,16 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (await this._stonetopCharacter.setBattleJoy(true)) this.render(false);
 				return;
 			}
+			await this._endBattleJoy({ shiftKey: ev.shiftKey });
+		}
+
+		/**
+		 * "When the action stops, roll +CON." Asks, then rolls or simply comes out of it. Two ways in:
+		 * the lit glyph, and a fight ending with the Heavy still raging (combat/battle-joy-offer.js),
+		 * which calls this on the Heavy's own screen whether or not the sheet is open.
+		 */
+		async _endBattleJoy({ shiftKey = false } = {}) {
+			if (!this._stonetopCharacter.battleJoy) return;
 			const item = this.actor.items.find(i => i.type === "move" && i.name === BATTLE_JOY);
 			// No move on the sheet means this state was stranded by a playbook swap: there is
 			// nothing to roll, so the only thing left to offer is putting it out.
@@ -7361,7 +7376,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					// rolled with advantage, disadvantage, or a one-off modifier — the sticky sheet
 					// control that used to carry those is gone, and this window is where they live
 					// now. Shift on the glyph skips it, exactly as it does on a move's title.
-					const prompted = await this._resolveMoveRollPrompts(rollable, { shiftKey: ev.shiftKey });
+					const prompted = await this._resolveMoveRollPrompts(rollable, { shiftKey });
 					// "handled" — a dialog owns the roll from here and will run it through the same
 					// model call, which drops the raging state itself. "cancel" — they backed out of
 					// the roll prompt, so the roll never happened and neither did the leaving: still

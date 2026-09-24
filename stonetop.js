@@ -39,6 +39,7 @@ import { onHotbarDrop } from "./module/hooks/HotbarDrop.js";
 import { onDropPlaceOfInterest } from "./module/hooks/PlaceOfInterestDrop.js";
 import { onDropFollower } from "./module/hooks/FollowerDrop.js";
 import { onPreUpdateActorDeathsDoor, onUpdateActorDeathsDoorAutoOpen, onUpdateActorDeathsDoorCard, onUpdateActorDeathsDoorRaised, wireDyingPrompt } from "./module/hooks/DeathsDoorPrompt.js";
+import { installBattleJoyOnHurt, installBattleJoyEnd } from "./module/combat/battle-joy-offer.js";
 import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { installOutOfTheFight } from "./module/fight/out-of-the-fight.js";
 import { onPreCreateThreatNote } from "./module/hooks/ThreatNotePins.js";
@@ -963,6 +964,12 @@ Hooks.on("updateActor", onUpdateActorDeathsDoorAutoOpen);
 // The other direction: hit points appearing on a sheet that is through the Last Door. Nothing
 // walks `dead` back on its own, so this asks whoever made the change whether it was a raising.
 Hooks.on("updateActor", onUpdateActorDeathsDoorRaised);
+
+// The Heavy's own blood spilled: a Heavy who loses HP and stays up is asked, on their own screen,
+// whether they lose themselves in battle. See module/combat/battle-joy-offer.js.
+installBattleJoyOnHurt();
+// And the other end of it: the fight over, a Heavy still raging is asked to roll +CON.
+installBattleJoyEnd();
 
 // The other side of the same moment. A monster reduced to 0 HP has no move to face: it is out of
 // the fight, so the GM's client marks it there and then — core's own `defeated`, which is the skull
