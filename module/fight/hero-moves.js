@@ -34,6 +34,7 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { format } from "../utils/i18n.js";
 import { ownsLearnedMoveNamed, ownedMove } from "../actors/character/owns-move.js";
+import { heldOnTrack } from "../actors/character/MoveResources.js";
 import { MELEE_RANGES } from "../data/weapons.js";
 import { betterMode } from "../utils/roll-mode.js";
 import { HEROES, touching } from "./engagements.js";
@@ -390,17 +391,17 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 	if (upAgainAgainst(actor, targets)) add("upAgain", HERO_MOVES.UP_AGAIN, "1d4", { spend: clearKnockedDownBy });
 	// Anger is a Gift: "Strike hard (+1d4 damage, forceful)" is one of five things a Would-Be Hero's
 	// Resolve buys, so it opens UNTICKED with the cost in its label, and the pip comes off the move's own
-	// track only once the window comes back with it ticked. That track counts Resolve SPENT
-	// (actors/character/MoveResources.js), so what they hold is what is left of its `max`.
+	// track only once the window comes back with it ticked. That track counts Resolve HELD
+	// (actors/character/MoveResources.js): "hold 2 Resolve" ticks two, and a spend unticks one.
 	const anger = ownedLearned(actor, HERO_MOVES.ANGER);
 	const angerMax = Number(anger?.system?.resource?.max) || 0;
 	const resources = actor.typedActor?.moveResources;
 	if (anger && angerMax && resources) {
-		const spent = Math.max(0, Math.trunc(Number(resources.getMoveResources()?.[HERO_MOVES.ANGER]) || 0));
-		if (spent < angerMax) {
+		const held = heldOnTrack(resources, HERO_MOVES.ANGER, angerMax);
+		if (held > 0) {
 			add("anger", HERO_MOVES.ANGER, "1d4", {
 				applied: false, tags: ["forceful"],
-				spend: hero => hero.typedActor?.moveResources?.setUses(HERO_MOVES.ANGER, spent + 1, { stonetopMove: HERO_MOVES.ANGER }),
+				spend: hero => hero.typedActor?.moveResources?.setUses(HERO_MOVES.ANGER, held - 1, { stonetopMove: HERO_MOVES.ANGER }),
 			});
 		}
 	}

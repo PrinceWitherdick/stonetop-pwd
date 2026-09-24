@@ -1,4 +1,13 @@
 const key = "backgroundChoices";
+
+/**
+ * A hold pool's HELD count on `resources` (a MoveResources), within 0..max. Which way a track
+ * counts is set out on MoveResources#setUses: a pool counts what is held, so a spend is `held - 1`.
+ */
+export function heldOnTrack(resources, moveName, max) {
+	return Math.min(max, Math.max(0, Math.trunc(Number(resources?.getMoveResources?.()?.[moveName]) || 0)));
+}
+
 export class MoveResources {
 	_flags;
 
@@ -24,9 +33,11 @@ export class MoveResources {
 	 * Set one move's track outright, for callers that compute the new count themselves (the
 	 * Logbook spend on a chat card, say, rather than a pip click).
 	 *
-	 * A move track counts uses SPENT, so spending INCREMENTS — see `logbookUses` in
-	 * know-things.js for why, and do not copy that to the possession tracks, which count the
-	 * other way.
+	 * WHICH WAY A TRACK COUNTS IS THE MOVE'S. A "hold N" pool (Command, Presence, Surprise,
+	 * Resolve, Boon) counts what is HELD: a character holds none until the move triggers, so a
+	 * fresh sheet's zero has to mean empty, and spending DECREMENTS. A per-use counter like the
+	 * Logbook counts uses SPENT and spending increments — see `logbookUses` in know-things.js.
+	 * Settled for the hold pools on 2026-09-23 (the user's call: a ticked pip is held).
 	 *
 	 * Written as a SUB-KEY so it cannot clobber a sibling move's track via a stale spread.
 	 * `options` reaches `actor.update`, so a caller can attribute the write for the ledger

@@ -140,16 +140,17 @@ describe("what a blow adds", () => {
 
 	it("offers Anger is a Gift's strike hard untucked, and marks the Resolve off only when it is taken", async () => {
 		const setUses = vi.fn(async () => {});
-		const spentSoFar = { "Anger is a Gift": 0 };
+		const heldSoFar = { "Anger is a Gift": 2 };
 		const pim = hero("Pim", [{ type: "move", name: HERO_MOVES.ANGER, system: { resource: { max: 2, title: "Resolve" } } }], {
-			typedActor: { moveResources: { getMoveResources: () => spentSoFar, setUses } },
+			typedActor: { moveResources: { getMoveResources: () => heldSoFar, setUses } },
 		});
 		const offer = blowOffers(pim, {}).find(o => o.key === "anger");
 		expect(offer).toMatchObject({ dice: "1d4", applied: false, tags: ["forceful"] });
 		await offer.spend(pim);
+		// The track counts Resolve HELD: two held, one spent, one left.
 		expect(setUses).toHaveBeenCalledWith(HERO_MOVES.ANGER, 1, { stonetopMove: HERO_MOVES.ANGER });
 		// Nothing left to spend, nothing offered.
-		spentSoFar["Anger is a Gift"] = 2;
+		heldSoFar["Anger is a Gift"] = 0;
 		expect(blowOffers(pim, {}).map(o => o.key)).not.toContain("anger");
 	});
 
