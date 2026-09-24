@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { stubConfirm } from "../../fakes/confirm.js";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import {FakeActorBuilder} from "../../fakes/FakeActorBuilder.js";
 import { DEATHS_DOOR_STATE, zeroHpMove, zeroHpResolution } from "../../../module/actors/character/deaths-door.js";
@@ -650,18 +651,17 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		const actor = makeActor();
 		const sheet = makeSheet(actor);
 		sheet.render = vi.fn();
-		globalThis.Dialog = { confirm: vi.fn(async () => false) };
+		const asked = stubConfirm(false);
 
 		await sheet._onBattleJoyToggle(clickEvent());
 		expect(sheet._stonetopCharacter.battleJoy).toBe(true);
-		expect(globalThis.Dialog.confirm).not.toHaveBeenCalled();
+		expect(asked).not.toHaveBeenCalled();
 
 		// No Battle Joy item on this fake actor, so there is nothing to roll and nothing to ask —
 		// the state is simply put out, which is what a rage stranded by a playbook swap needs.
 		await sheet._onBattleJoyToggle(clickEvent());
 		expect(sheet._stonetopCharacter.battleJoy).toBe(false);
-		expect(globalThis.Dialog.confirm).not.toHaveBeenCalled();
-		delete globalThis.Dialog;
+		expect(asked).not.toHaveBeenCalled();
 	});
 
 	// The roll this glyph ends the rage WITH is a 2d6 move roll like any other, so it walks the
@@ -675,7 +675,7 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		actor.items = [{ id: "bj", type: "move", name: "Battle Joy", system: { rollType: "con" } }];
 		const sheet = makeSheet(actor);
 		sheet.render = vi.fn();
-		globalThis.Dialog = { confirm: vi.fn(async () => true) };
+		stubConfirm(true);
 		// Stubbed at the ladder, not below it: what is being pinned is that the header goes
 		// THROUGH it and hands its answer on, which is the whole of the fix.
 		const stand = { dataset: { roll: "con" } };

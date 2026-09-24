@@ -5,10 +5,11 @@
 // ledger class (any of CharacterLedger / SteadingLedger / NpcLedger — each exposes
 // the same `getEntries` / `deleteEntries` surface).
 import { escHtml } from "./strings.js";
+import { confirmOutcome } from "./ask-with-buttons.js";
 import { ledgerNounOptionsHtml, wireLedgerFilters } from "./ledger-filter.js";
 import { categoryForEntry } from "./ledger-categories.js";
 import { ledgerNoun } from "./ledger-core.js";
-import { attachFrontOnOpen, bringDialogToFront } from "./front-on-open.js";
+import { attachFrontOnOpen } from "./front-on-open.js";
 
 function ledgerDate(timestamp) {
 	const date = timestamp ? new Date(timestamp) : null;
@@ -192,15 +193,14 @@ export function openLedgerDialog(actor, ledger) {
 					return;
 				}
 
-				Dialog.confirm({
-					title: "Delete Ledger Entries",
-					content: `<p>You're about to delete ${checked.length} entries. Are you sure?</p>`,
-					yes: doDelete,
-					render: bringDialogToFront,
-					// "stonetop" carries our window chrome; without it this confirm kept Foundry's
-					// default dark header while every other confirm in the system wears ours.
-					options: { classes: ["dialog", "stonetop", "stonetop-ledger-child"] },
+				const ok = await confirmOutcome({
+					title:   "Delete Ledger Entries",
+					content: `<p>You're about to delete ${checked.length} entries. They can't be brought back.</p>`,
+					yes:     { label: `Delete ${checked.length} entries`, icon: "fa-trash" },
+					no:      { label: "Keep them" },
+					classes: ["stonetop-ledger-child"],
 				});
+				if (ok) await doDelete();
 			});
 		},
 	}, {

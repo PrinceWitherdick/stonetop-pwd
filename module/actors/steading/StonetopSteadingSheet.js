@@ -1,4 +1,5 @@
 import { StonetopSteading, IMPROVEMENT_CATEGORIES, IMPROVEMENT_COMPLETION_NOTES, STEADING_DEFAULTS, improvementRequirementsMet, HERD_SURPLUS_PER, WEAPONS_SEASON_STEP, WATCH_SEASON_STEP } from "./StonetopSteading.js";
+import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { improvementRequirementCount } from "../../utils/improvement-def.js";
 import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml} from "../../utils/roll-engine.js";
 import {SteadingLedger} from "./SteadingLedger.js";
@@ -3338,13 +3339,15 @@ export function createStonetopSteadingSheetClass(Base) {
 		// Confirm marking every requirement of a not-yet-earned improvement complete so
 		// it can be earned immediately. Resolves true when accepted, false/null otherwise.
 		_confirmForceCompleteImprovement(def) {
-			return Dialog.confirm({
+			return confirmOutcome({
 				title: "Earn this improvement?",
 				content: `<div class="stonetop-improvement-force-complete">
 					<p>Stonetop hasn't met all the requirements for <strong>${_esc(def.label)}</strong> yet.</p>
 					<p>Mark them all complete and earn this improvement?</p>
 				</div>`,
-				options: { classes: ["dialog", "stonetop", "stonetop-improvement-force-complete-dialog"] },
+				yes:     { label: "Mark them complete and earn it", icon: "fa-check-double" },
+				no:      { label: "Not yet" },
+				classes: ["stonetop-improvement-force-complete-dialog"],
 			});
 		}
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { stubConfirm } from "../../fakes/confirm.js";
 import { createStonetopSteadingSheetClass } from "../../../module/actors/steading/StonetopSteadingSheet.js";
 import { ImprovementBuilderDialog } from "../../../module/dialogs/ImprovementBuilderDialog.js";
 
@@ -455,12 +456,13 @@ describe("StonetopSteadingSheet", () => {
 
 		it("offers to mark every requirement complete, then earns it when accepted", async () => {
 			const { sheet, typedActor } = makeSheet({ improvementDef: lockedDef });
-			globalThis.Dialog = { confirm: vi.fn(async () => true) };
+			const asked = stubConfirm(true);
 			sheet.render = vi.fn();
 
 			await sheet._onImprovementComplete("palisade", true);
 
-			expect(globalThis.Dialog.confirm).toHaveBeenCalledTimes(1);
+			expect(asked).toHaveBeenCalledTimes(1);
+			expect(asked.mock.calls[0][0].buttons.map(b => b.label)).toEqual(["Mark them complete and earn it", "Not yet"]);
 			// Force-completing passes the filled requirement array through to the model,
 			// which persists completion and auto-applies the improvement's grants.
 			expect(typedActor.setImprovementCompleted).toHaveBeenCalledWith("palisade", true, { forceR: [true, true, true] });
@@ -468,7 +470,7 @@ describe("StonetopSteadingSheet", () => {
 
 		it("does nothing but revert the checkbox when declined", async () => {
 			const { sheet, typedActor } = makeSheet({ improvementDef: lockedDef });
-			globalThis.Dialog = { confirm: vi.fn(async () => false) };
+			stubConfirm(false);
 			sheet.render = vi.fn();
 
 			await sheet._onImprovementComplete("palisade", true);
@@ -482,12 +484,12 @@ describe("StonetopSteadingSheet", () => {
 				improvementDef: lockedDef,
 				improvements: { palisade: { completed: false, r: [true, true, true] } },
 			});
-			globalThis.Dialog = { confirm: vi.fn(async () => true) };
+			const asked = stubConfirm(true);
 			sheet.render = vi.fn();
 
 			await sheet._onImprovementComplete("palisade", true);
 
-			expect(globalThis.Dialog.confirm).not.toHaveBeenCalled();
+			expect(asked).not.toHaveBeenCalled();
 			expect(typedActor.setImprovementCompleted).toHaveBeenCalledWith("palisade", true, { forceR: undefined });
 		});
 
@@ -496,12 +498,12 @@ describe("StonetopSteadingSheet", () => {
 				improvementDef: lockedDef,
 				improvements: { palisade: { completed: true, r: [true, true, true] } },
 			});
-			globalThis.Dialog = { confirm: vi.fn(async () => true) };
+			const asked = stubConfirm(true);
 			sheet.render = vi.fn();
 
 			await sheet._onImprovementComplete("palisade", false);
 
-			expect(globalThis.Dialog.confirm).not.toHaveBeenCalled();
+			expect(asked).not.toHaveBeenCalled();
 			expect(typedActor.setImprovementCompleted).toHaveBeenCalledWith("palisade", false, { forceR: undefined });
 		});
 

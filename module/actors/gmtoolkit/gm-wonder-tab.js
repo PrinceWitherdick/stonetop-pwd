@@ -30,6 +30,7 @@
 // at the front of a promise chain so it always reads the list the previous write left — which is
 // ActorListStore's whole job (actor-list-store.js), shared with the Encounters tab.
 import { GM_WONDER_GUIDE } from "../../gm-toolkit/gm-wonder-guide.js";
+import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { escHtml } from "../../utils/strings.js";
 import { localize, format } from "../../utils/i18n.js";
 import { ActorListStore } from "./actor-list-store.js";
@@ -376,12 +377,14 @@ export function withGmWonderTab(Base) {
 			if (!id) return;
 			const wonder = this._wonder(id);
 			if (!wonder) return;
-			const ok = await Dialog.confirm({
+			const ok = await confirmOutcome({
 				title:   localize("stonetop.gmToolkit.wonder.removeTitle"),
 				content: `<p>${format("stonetop.gmToolkit.wonder.removeBody", {
 					question: escHtml(wonder.question || localize("stonetop.gmToolkit.wonder.removeUnnamed")),
 				})}</p>`,
-				options: { classes: ["dialog", "stonetop", "stonetop-remove-wonder-dialog"] },
+				yes:     { label: localize("stonetop.gmToolkit.wonder.removeYes"), icon: "fa-trash" },
+				no:      { label: localize("stonetop.gmToolkit.wonder.removeNo") },
+				classes: ["stonetop-remove-wonder-dialog"],
 			});
 			if (!ok) return;
 			await this._removeWonder(id);

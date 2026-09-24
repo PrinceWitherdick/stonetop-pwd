@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { stubConfirm } from "../../fakes/confirm.js";
 import { readRepo as read, readCss, repoFileExists, declarations } from "../../fakes/css.js";
 import { withGmWonderTab } from "../../../module/actors/gmtoolkit/gm-wonder-tab.js";
 import { GM_WONDER_GUIDE } from "../../../module/gm-toolkit/gm-wonder-guide.js";
@@ -468,16 +469,17 @@ describe("the I wonder tab: interactions", () => {
 	// own instruction points at — that is the tick, which is undoable. So this one asks.
 	it("asks before deleting, and leaves the list alone when told no", async () => {
 		const { host, actor } = makeHost([{ id: "a", question: "q" }]);
-		globalThis.Dialog = { confirm: vi.fn(async () => false) };
+		const asked = stubConfirm(false);
 		const root = fakeRoot();
 		const row = makeRow(root, "a", "q");
 		host._activateGmWonderListeners(root);
 
 		await root.emit("click", row.remove);
-		expect(globalThis.Dialog.confirm).toHaveBeenCalled();
+		expect(asked).toHaveBeenCalled();
+		expect(asked.mock.calls[0][0].buttons.map(b => b.label)).toEqual(["Delete the question", "Keep it"]);
 		expect(actor.system.wonders).toHaveLength(1);
 
-		globalThis.Dialog.confirm.mockResolvedValue(true);
+		asked.mockResolvedValue("yes");
 		await root.emit("click", row.remove);
 		expect(actor.system.wonders).toHaveLength(0);
 	});
@@ -486,13 +488,13 @@ describe("the I wonder tab: interactions", () => {
 	// in. Unescaped, a question with a stray angle bracket is markup in a dialog.
 	it("escapes the question in the confirmation it shows", async () => {
 		const { host } = makeHost([{ id: "a", question: '<img src=x onerror="boom">' }]);
-		globalThis.Dialog = { confirm: vi.fn(async () => false) };
+		const asked = stubConfirm(false);
 		const root = fakeRoot();
 		const row = makeRow(root, "a", "q");
 		host._activateGmWonderListeners(root);
 
 		await root.emit("click", row.remove);
-		const { content } = globalThis.Dialog.confirm.mock.calls[0][0];
+		const { content } = asked.mock.calls[0][0];
 		expect(content).not.toContain("<img");
 		expect(content).toContain("&lt;img");
 	});
@@ -510,7 +512,7 @@ describe("the I wonder tab: interactions", () => {
 describe("the I wonder tab: the edit pencils", () => {
 	beforeEach(() => {
 		globalThis.ui = { notifications: { error: vi.fn() } };
-		globalThis.Dialog = { confirm: vi.fn(async () => true) };
+		globalThis.__asked = stubConfirm(true);
 	});
 
 	it("publishes an edit flag per list, both ways", () => {
@@ -598,7 +600,7 @@ describe("the I wonder tab: the edit pencils", () => {
 		await root.emit("click", open.remove);
 
 		expect(updates).toHaveLength(0);
-		expect(globalThis.Dialog.confirm).not.toHaveBeenCalled();
+		expect(globalThis.__asked).not.toHaveBeenCalled();
 		expect(actor.system.wonders).toHaveLength(2);
 		expect(host._wonderList().map(w => w.settled)).toEqual([false, true]);
 	});

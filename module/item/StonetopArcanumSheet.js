@@ -1,11 +1,11 @@
 import { arcanumCardImg } from "../arcana-icons.js";
+import { confirmOutcome } from "../utils/ask-with-buttons.js";
 import { ITEM_FLAG_SCOPE } from "../actors/character/StonetopFlags.js";
 import { centerArcanumTracks, wrapGlyphTextContainers, wrapStonetopGlyphsInEl } from "../utils/glyphs.js";
 import { markValueTooltips } from "../utils/value-tooltips.js";
 import { markDebilityTooltips } from "../utils/debility-tooltips.js";
 import { enrichHTML } from "../utils/foundry-compat.js";
 import { isInCompendium } from "../utils/compendium-edit-guard.js";
-import { bringDialogToFront } from "../utils/front-on-open.js";
 import { applyGuideRail } from "../utils/guide-rail.js";
 import { wireGrowableFields, refitGrowableFields } from "../utils/growable-fields.js";
 import { isDefaultImg } from "../utils/strings.js";
@@ -224,12 +224,11 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 		// for a non-draft (an existing card's edits are already persisted live).
 		async _discardDraft() {
 			if (!this._arcanumDraft || this._discarded) return false;
-			const ok = await Dialog.confirm({
+			const ok = await confirmOutcome({
 				title:   "Discard arcanum?",
 				content: "<p>This arcanum hasn't been saved yet. Discard it? This can't be undone.</p>",
-				defaultYes: false,
-				render:  bringDialogToFront,
-				options: { classes: ["dialog", "stonetop"] },
+				yes:     { label: "Discard the arcanum", icon: "fa-trash" },
+				no:      { label: "Keep editing" },
 			});
 			if (!ok) return false;
 			// Re-check after the await: the confirm is non-modal, so while it was open the author

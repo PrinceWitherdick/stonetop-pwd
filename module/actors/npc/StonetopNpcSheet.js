@@ -7,9 +7,10 @@
 // Wears the same edit/lock header chrome as the monster/bestiary sheets (shared
 // sheet-chrome helpers) so it reads as one system.
 import { rollDamageAt } from "../../combat/attack-flow.js";
+import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { printedBlow } from "../../utils/damage.js";
 import { hideBrokenPortrait, stripHeaderChrome, injectHeaderToggle, fitDisplayName } from "../../utils/sheet-chrome.js";
-import { isDefaultImg } from "../../utils/strings.js";
+import { escHtml, isDefaultImg } from "../../utils/strings.js";
 import { headerPortraitContext, wirePortraitPopout } from "../../utils/actor-portrait-picker.js";
 import { updateRichTextField, updateMoveField } from "../../utils/stat-block-edit.js";
 import { getOpenSheetsInEditMode, isClassicLayout, layoutClasses, stampLayoutClass } from "../../settings.js";
@@ -476,9 +477,12 @@ export function createStonetopNpcSheetClass(Base) {
 					const li   = ev.target.closest("[data-item-id]");
 					const item = this.actor.items.get(li?.dataset?.itemId);
 					if (!item) return;
-					const confirmed = await Dialog.confirm({
+					const confirmed = await confirmOutcome({
 						title:   "Delete Move",
-						content: `<p>Delete <strong>${item.name}</strong>?</p>`,
+						// Escaped: a move name is user text, and this is HTML.
+						content: `<p>Delete <strong>${escHtml(item.name)}</strong>?</p>`,
+						yes:     { label: "Delete the move", icon: "fa-trash" },
+						no:      { label: "Keep it" },
 					});
 					if (confirmed) await item.delete();
 				}

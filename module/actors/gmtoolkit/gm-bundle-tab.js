@@ -73,6 +73,7 @@
 // step. That is exactly what `{ render: false }` above gives up, and it is why there is no
 // teardown call here to pair with the sheet's `close()`.
 import { wireDocumentDropZone } from "../../utils/card-drop-zone.js";
+import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { clusterPoint, placeActors } from "../../utils/token-drop.js";
 import { enrichHTML } from "../../utils/foundry-compat.js";
 import { worldActorsBySource, resolveDeployableActor } from "../../utils/deployable-actor.js";
@@ -1387,13 +1388,15 @@ export class GmBundleTab {
 	async onRemove(id) {
 		const encounter = this.card(id);
 		if (!encounter) return;
-		const ok = await Dialog.confirm({
+		const ok = await confirmOutcome({
 			title:   this.t("removeTitle"),
 			content: `<p>${this.f("removeBody", {
 				name:  escHtml(encounter.name || this.t("removeUnnamed")),
 				count: encounter.entries.length,
 			})}</p>`,
-			options: { classes: ["dialog", "stonetop", "stonetop-remove-encounter-dialog"] },
+			yes:     { label: this.t("removeYes"), icon: "fa-trash" },
+			no:      { label: this.t("removeNo") },
+			classes: ["stonetop-remove-encounter-dialog"],
 		});
 		if (!ok) return;
 		await this.removeCard(id);

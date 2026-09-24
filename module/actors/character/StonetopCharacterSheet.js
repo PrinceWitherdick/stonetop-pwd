@@ -1,4 +1,5 @@
 import {MoveResourceButton} from "./elements/move-resource-button.js";
+import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import {BackgroundInputChoice} from "./elements/background-input-choice.js";
 import {PossessionUseButton} from "./elements/possession-use-button.js";
 import {OutfitMoveDialog} from "./dialogs/OutfitMoveDialog.js";
@@ -4397,17 +4398,17 @@ export function createStonetopCharacterSheetClass(Base) {
 			});
 			// Remove a custom follower (built by the walkthrough or converted from a
 			// monster) entirely — drops its whole customFollowers.<id> object.
-			html.find(".stonetop-follower-remove").on("click", ev => {
+			html.find(".stonetop-follower-remove").on("click", async ev => {
 				const slug = ev.currentTarget.dataset.slug;
 				if (!slug) return;
 				const name = this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}.name`) || "this follower";
-				Dialog.confirm({
+				const ok = await confirmOutcome({
 					title:   "Remove follower",
 					content: `<p>Remove <strong>${escHtml(name)}</strong> from your followers? This can't be undone.</p>`,
-					yes:     () => this._removeCustomFollower(slug),
-					render:  bringDialogToFront,
-					options: { classes: ["dialog", "stonetop"] },
+					yes:     { label: "Remove the follower", icon: "fa-user-minus" },
+					no:      { label: "Keep them" },
 				});
+				if (ok) await this._removeCustomFollower(slug);
 			});
 			// Hand a custom follower off to another PC (p.480).
 			html.find(".stonetop-follower-handoff").on("click", ev => {
@@ -4508,7 +4509,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (raw > max) update["flags.stonetop-pwd.crew.groupHp"] = max;
 			};
 			// Delete individual crew member
-			html.find(".stonetop-crew-delete-individual").on("click", ev => {
+			html.find(".stonetop-crew-delete-individual").on("click", async ev => {
 				const idx = Number(ev.currentTarget.dataset.index);
 				const individuals = [...(this.actor.getFlag(STONETOP_SCOPE, "crew.individuals") ?? [])];
 				if (idx < 0 || idx >= individuals.length) return;
@@ -4544,13 +4545,15 @@ export function createStonetopCharacterSheetClass(Base) {
 				const newSize = Math.max(individuals.length, sizeBefore - 1);
 				update["flags.stonetop-pwd.crew.size"] = newSize;
 				clampStoredGroupHp(update);
-				Dialog.confirm({
+				const ok = await confirmOutcome({
 					title:   "Remove crew member",
 					content: `<p>Remove <strong>${escHtml(name)}</strong> from the crew? This can't be undone.</p>`,
-					yes:     async () => { await this.actor.update(update); this.render(false); },
-					render:  bringDialogToFront,
-					options: { classes: ["dialog", "stonetop"] },
+					yes:     { label: "Remove them from the crew", icon: "fa-user-minus" },
+					no:      { label: "Keep them" },
 				});
+				if (!ok) return;
+				await this.actor.update(update);
+				this.render(false);
 			});
 
 			// Crew roster size — total headcount; never below the number of named
@@ -5051,20 +5054,20 @@ export function createStonetopCharacterSheetClass(Base) {
 					shiftKey: ev.shiftKey, known, slug, ongoing: ongoing === "1",
 				});
 			});
-			html.find(".stonetop-other-move-delete").on("click", ev => {
+			html.find(".stonetop-other-move-delete").on("click", async ev => {
 				const { itemId } = ev.currentTarget.dataset;
 				const item = this.actor.items.get(itemId);
 				// Custom moves are read-only for players when authoring is GM-only — don't
 				// let them delete a GM-authored custom move either (matches the hidden +/pencil).
 				if (item?.flags?.[STONETOP_SCOPE]?.custom && !canAuthorCustomMoves()) return;
 				const name = item?.name || "this move";
-				Dialog.confirm({
+				const ok = await confirmOutcome({
 					title:   "Remove move",
 					content: `<p>Remove <strong>${escHtml(name)}</strong> from your moves? This can't be undone.</p>`,
-					yes:     () => this._stonetopCharacter.removeMove(itemId),
-					render:  bringDialogToFront,
-					options: { classes: ["dialog", "stonetop"] },
+					yes:     { label: "Remove the move", icon: "fa-trash" },
+					no:      { label: "Keep it" },
 				});
+				if (ok) await this._stonetopCharacter.removeMove(itemId);
 			});
 
 			const openCustomMove = (item = null) => {
@@ -5113,17 +5116,17 @@ export function createStonetopCharacterSheetClass(Base) {
 				const item = this.actor.items.get(ev.currentTarget.dataset.itemId);
 				if (item) new LoveLetterDialog({ item, actor: this.actor, onSaved: () => this.render(false) }).render(true);
 			});
-			html.find(".stonetop-love-letter-delete").on("click", ev => {
+			html.find(".stonetop-love-letter-delete").on("click", async ev => {
 				if (!game.user.isGM) return;
 				const item = this.actor.items.get(ev.currentTarget.dataset.itemId);
 				if (!item) return;
-				Dialog.confirm({
+				const ok = await confirmOutcome({
 					title:   game.i18n.localize("stonetop.character.moves.loveLetter.deleteMove"),
 					content: `<p>${game.i18n.format("stonetop.character.moves.loveLetter.deleteConfirm", { name: escHtml(item.name) })}</p>`,
-					yes:     () => item.delete(),
-					render:  bringDialogToFront,
-					options: { classes: ["dialog", "stonetop"] },
+					yes:     { label: game.i18n.localize("stonetop.character.moves.loveLetter.deleteYes"), icon: "fa-trash" },
+					no:      { label: game.i18n.localize("stonetop.character.moves.loveLetter.deleteNo") },
 				});
+				if (ok) await item.delete();
 			});
 
 			html[0].addEventListener("click", ev => {
@@ -5185,18 +5188,22 @@ export function createStonetopCharacterSheetClass(Base) {
 				this._onArcanumStudyBack(btn.dataset.slug);
 			}, true);
 
-			html[0].addEventListener("click", ev => {
+			html[0].addEventListener("click", async ev => {
 				const btn = ev.target.closest(".stonetop-arcanum-discover-btn");
 				if (!btn) return;
 				ev.stopPropagation();
 				const { slug } = btn.dataset;
-				Dialog.confirm({
-					title: game.i18n.localize("stonetop.arcana.discoverTitle"),
+				const ok = await confirmOutcome({
+					title:   game.i18n.localize("stonetop.arcana.discoverTitle"),
 					content: `<p>${game.i18n.localize("stonetop.arcana.discoverConfirm")}</p>`,
-					yes: () => this._stonetopCharacter.discoverArcanum(slug).then(() => this.render(false)),
-					render: bringDialogToFront,
-					options: { classes: ["dialog", "stonetop"] },
+					yes:     { label: game.i18n.localize("stonetop.arcana.discoverYes"), icon: "fa-eye" },
+					no:      { label: game.i18n.localize("stonetop.arcana.discoverNo") },
+					// Revealing a card the party has found destroys nothing, so Enter goes ahead.
+					defaultYes: true,
 				});
+				if (!ok) return;
+				await this._stonetopCharacter.discoverArcanum(slug);
+				this.render(false);
 			}, true);
 
 			html[0].addEventListener("click", ev => {
@@ -5279,26 +5286,29 @@ export function createStonetopCharacterSheetClass(Base) {
 				this._stonetopCharacter.setArcanumResource(key, newVal, { render: false });
 			}, true);
 
-			html[0].addEventListener("click", ev => {
+			html[0].addEventListener("click", async ev => {
 				const btn = ev.target.closest(".stonetop-arcanum-delete");
 				if (!btn) return;
 				ev.stopPropagation();
 				const { slug } = btn.dataset;
 				const title = btn.closest(".stonetop-arcanum-card")
 					?.querySelector(".stonetop-arcanum-title")?.textContent?.trim() || "this arcanum";
-				Dialog.confirm({
+				const ok = await confirmOutcome({
 					title:   "Remove arcanum",
 					content: `<p>Remove <strong>${escHtml(title)}</strong> from your arcana? This can't be undone.</p>`,
-					// render(false) via _renderAfter, not render(true): every sibling handler
-					// repaints in place, while force re-opens the window and resets its position.
-					// The catch matters more — a failed removal used to leave the card the user
-					// was just told was gone sitting on the sheet with nothing logged.
-					yes:     () => this._renderAfter(
-						this._pruneArcanumUserPrefs(slug)
-							.then(() => this._stonetopCharacter.removeArcanum(slug))),
-					render:  bringDialogToFront,
-					options: { classes: ["dialog", "stonetop", "stonetop-remove-arcanum-dialog"] },
+					yes:     { label: "Remove the arcanum", icon: "fa-trash" },
+					no:      { label: "Keep it" },
+					classes: ["stonetop-remove-arcanum-dialog"],
 				});
+				if (!ok) return;
+				// render(false) via _renderAfter, not render(true): every sibling handler
+				// repaints in place, while force re-opens the window and resets its position.
+				// The catch matters more — a failed removal used to leave the card the user
+				// was just told was gone sitting on the sheet with nothing logged.
+				await this._renderAfter((async () => {
+					await this._pruneArcanumUserPrefs(slug);
+					await this._stonetopCharacter.removeArcanum(slug);
+				})());
 			}, true);
 
 			html[0].addEventListener("click", ev => {
@@ -6954,16 +6964,15 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		async _onInventoryReset() {
-			Dialog.confirm({
-				title: game.i18n.localize("stonetop.inventory.resetTitle"),
+			const ok = await confirmOutcome({
+				title:   game.i18n.localize("stonetop.inventory.resetTitle"),
 				content: `<p>${game.i18n.localize("stonetop.inventory.resetConfirm")}</p>`,
-				yes: async () => {
-					await this._stonetopCharacter.resetInventorySelections();
-					this.render(false);
-				},
-				render: bringDialogToFront,
-				options: { classes: ["dialog", "stonetop"] },
+				yes:     { label: game.i18n.localize("stonetop.inventory.resetYes"), icon: "fa-eraser" },
+				no:      { label: game.i18n.localize("stonetop.inventory.resetNo") },
 			});
+			if (!ok) return;
+			await this._stonetopCharacter.resetInventorySelections();
+			this.render(false);
 		}
 
 		async _onInventoryPoolEdit(ev) {
@@ -7388,14 +7397,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			const item = this.actor.items.find(i => i.type === "move" && i.name === BATTLE_JOY);
 			// No move on the sheet means this state was stranded by a playbook swap: there is
 			// nothing to roll, so the only thing left to offer is putting it out.
-			const rolled = item && await Dialog.confirm({
+			const rolled = item && await confirmOutcome({
 				title:   game.i18n.localize("stonetop.battleJoy.endTitle"),
 				content: `<p>${game.i18n.localize("stonetop.battleJoy.endPrompt")}</p>`,
-				yes:     () => true,
-				no:      () => false,
+				yes:     { label: game.i18n.localize("stonetop.battleJoy.endRoll"), icon: "fa-dice" },
+				no:      { label: game.i18n.localize("stonetop.battleJoy.endNoRoll"), icon: "fa-person-walking" },
 				defaultYes: true,
-				render:  bringDialogToFront,
-				options: { classes: ["dialog", "stonetop"] },
 			});
 			// Cancelled with Escape or the X — leave the Heavy exactly as they were, still raging.
 			if (rolled === null) return;
@@ -7551,14 +7558,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!followers?.length) return;
 			const names = joinNames(followers.map(f => f.name));
 			const plural = followers.length > 1;
-			const confirmed = await Dialog.confirm({
-				title:      "Manifest follower",
-				content:    `<p>Manifest <strong>${escHtml(names)}</strong> and add ${plural ? "them" : "it"} to your Followers tab?</p>`,
-				yes:        () => true,
-				no:         () => false,
-				defaultYes: false,
-				render:     bringDialogToFront,
-				options:    { classes: ["dialog", "stonetop"] },
+			const confirmed = await confirmOutcome({
+				title:   "Manifest follower",
+				content: `<p>Manifest <strong>${escHtml(names)}</strong> and add ${plural ? "them" : "it"} to your Followers tab?</p>`,
+				yes:     { label: `Add ${plural ? "them" : "it"} to Followers`, icon: "fa-user-plus" },
+				no:      { label: "Not now" },
 			});
 			if (!confirmed) return;
 
@@ -7656,15 +7660,14 @@ export function createStonetopCharacterSheetClass(Base) {
 
 		// Offer to clear a departing batch from the Followers tab.
 		_confirmServantDeparture(slug, who, note) {
-			Dialog.confirm({
-				title:      "Send them back",
-				content:    `<p>${note}</p><p>Remove <strong>${escHtml(who)}</strong> from your Followers?</p>`,
-				yes:        () => this._removeCustomFollower(slug),
-				no:         () => {},
+			return confirmOutcome({
+				title:   "Send them back",
+				content: `<p>${note}</p><p>Remove <strong>${escHtml(who)}</strong> from your Followers?</p>`,
+				yes:     { label: "Remove them from Followers", icon: "fa-user-minus" },
+				no:      { label: "Keep them listed" },
+				// They have already gone back; taking them off the tab is the expected next step.
 				defaultYes: true,
-				render:     bringDialogToFront,
-				options:    { classes: ["dialog", "stonetop"] },
-			});
+			}).then(ok => ok && this._removeCustomFollower(slug));
 		}
 
 		_removeCustomFollower(slug) {
@@ -9711,11 +9714,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!id) return;
 			const wound = this._woundRecord(id);
 			const label = wound?.text ? `“${wound.text}”` : "this wound";
-			const ok = await Dialog.confirm({
-				title: "Remove Wound",
+			const ok = await confirmOutcome({
+				title:   "Remove Wound",
 				content: `<p>Remove ${_esc(label)} from the sheet? This deletes it entirely: to keep its fiction as a healed scar instead, edit it and tick “Healed, move to Scars.”</p>`,
-				render:  bringDialogToFront,
-				options: { classes: ["dialog", "stonetop", "stonetop-remove-wound-dialog"] },
+				yes:     { label: "Remove the wound", icon: "fa-trash" },
+				no:      { label: "Keep it" },
+				classes: ["stonetop-remove-wound-dialog"],
 			});
 			if (!ok) return;
 			await this._stonetopCharacter.removeWound(id);

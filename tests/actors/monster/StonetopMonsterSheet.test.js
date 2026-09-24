@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { stubConfirm } from "../../fakes/confirm.js";
 import { createStonetopMonsterSheetClass } from "../../../module/actors/monster/StonetopMonsterSheet.js";
 import { SYSTEM_ID } from "../../../module/system-id.js";
 
@@ -1223,7 +1224,7 @@ describe("StonetopMonsterSheet", () => {
 		sheet._editMode = true;
 
 		const originalDialog = globalThis.Dialog;
-		globalThis.Dialog = { confirm: vi.fn().mockResolvedValue(true) };
+		stubConfirm(true);
 		try {
 			const handlers = [];
 			const root = {
@@ -1261,7 +1262,7 @@ describe("StonetopMonsterSheet", () => {
 		sheet._editMode = true;
 
 		const originalDialog = globalThis.Dialog;
-		globalThis.Dialog = { confirm: vi.fn().mockResolvedValue(true) };
+		stubConfirm(true);
 		try {
 			const handlers = [];
 			const root = {

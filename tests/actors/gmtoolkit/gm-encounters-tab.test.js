@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { stubConfirm } from "../../fakes/confirm.js";
 import { readRepo as read, readCss, repoFileExists, declarations } from "../../fakes/css.js";
 import {
 	withGmEncountersTab,
@@ -1262,16 +1263,19 @@ describe("the Encounters tab: notes, used and delete", () => {
 	// something: that is "mark used", which is one click both ways.
 	it("asks before deleting an encounter, and escapes its name in the prompt", async () => {
 		const { host, actor } = makeHost([{ id: "e1", name: "<b>Crypt</b>", entries: [] }]);
-		let content = "";
-		global.Dialog = { confirm: vi.fn(async opts => { content = opts.content; return true; }) };
+		const asked = stubConfirm(true);
 		await host._onEncounterRemove("e1");
+		const { content, buttons } = asked.mock.calls[0][0];
 		expect(content).toContain("&lt;b&gt;Crypt&lt;/b&gt;");
+		// The buttons say what they do, and Enter keeps the encounter.
+		expect(buttons.map(b => b.label)).toEqual(["Delete the encounter", "Keep it"]);
+		expect(buttons.find(b => b.default).action).toBe("no");
 		expect(listOf(actor)).toEqual([]);
 	});
 
 	it("keeps the encounter when the confirm is declined", async () => {
 		const { host, actor } = makeHost([{ id: "e1", name: "Crypt", entries: [] }]);
-		global.Dialog = { confirm: vi.fn(async () => false) };
+		stubConfirm(false);
 		await host._onEncounterRemove("e1");
 		expect(listOf(actor)).toHaveLength(1);
 	});
@@ -1688,11 +1692,11 @@ describe("the Encounters tab: what the edit pencil gates", () => {
 		const root = fakeRoot();
 		host._activateGmEncountersListeners(root);
 		const el = makeEncounterEl(root, listOf(actor)[0]);
-		global.Dialog = { confirm: vi.fn(async () => true) };
+		const asked = stubConfirm(true);
 		await root.emit("click", el.rows.x1.remove);
 		await root.emit("click", el.remove);
 		expect(updates).toEqual([]);
-		expect(global.Dialog.confirm).not.toHaveBeenCalled();
+		expect(asked).not.toHaveBeenCalled();
 	});
 
 	// The reason this tab exists is to be dropped into and noted on mid-session, and one that has

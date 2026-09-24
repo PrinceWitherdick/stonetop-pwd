@@ -1,4 +1,4 @@
-import { bringDialogToFront } from "../utils/front-on-open.js";
+import { confirmOutcome } from "../utils/ask-with-buttons.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { shuffle } from "../utils/arrays.js";
@@ -1462,14 +1462,12 @@ export class IntroductionsDialog extends StonetopDialog {
 		if (!_isStep(phase)) return;
 		if (game.user?.isGM) return this._pass();
 		const isAsk = phase.kind === "ask";
-		const confirmed = await Dialog.confirm({
+		const confirmed = await confirmOutcome({
 			title:   "Pass this part?",
 			content: `<p>Passing means you're <strong>done ${isAsk ? "asking" : "answering"}</strong> for this part of the introductions: you won't be asked to ${isAsk ? "ask" : "answer"} another question about <em>${escHtml(phase.title)}</em>.</p>`
 			       + `<p>Anything you've already recorded is kept, and the group carries on. If you change your mind, just ask your GM.</p>`,
-			yes:        () => true,
-			no:         () => false,
-			defaultYes: false,
-			render:     bringDialogToFront,
+			yes:     { label: "Pass this part", icon: "fa-forward" },
+			no:      { label: `Keep ${isAsk ? "asking" : "answering"}` },
 		});
 		if (confirmed) await this._pass();
 	}

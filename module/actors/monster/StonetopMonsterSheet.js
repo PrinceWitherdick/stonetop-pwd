@@ -1,4 +1,5 @@
 import { CREATURE_TYPE_CHOICES, creatureTypeIcon, creatureTypeLabel } from "../../bestiary/creature-types.js";
+import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { hasText } from "../bestiary/codex.js";
 import { rollDamageAt } from "../../combat/attack-flow.js";
 import { damageBlows } from "../../utils/damage.js";
@@ -675,9 +676,12 @@ export function createStonetopMonsterSheetClass(Base) {
 					const li   = ev.target.closest("[data-item-id]");
 					const item = this.actor.items.get(li?.dataset?.itemId);
 					if (!item) return;
-					const confirmed = await Dialog.confirm({
+					const confirmed = await confirmOutcome({
 						title:   "Delete Move",
-						content: `<p>Delete <strong>${item.name}</strong>?</p>`,
+						// Escaped: a move name is user text, and this is HTML.
+						content: `<p>Delete <strong>${escHtml(item.name)}</strong>?</p>`,
+						yes:     { label: "Delete the move", icon: "fa-trash" },
+						no:      { label: "Keep it" },
 					});
 					if (!confirmed) return;
 					// If the move being deleted is the live armor boost, revert it first

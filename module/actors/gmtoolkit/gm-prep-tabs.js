@@ -21,6 +21,7 @@
 // Storage staying on the steading is also correct on its own terms: a world has one set of
 // threats whoever is running it, and a second GM opening their own toolkit sees the same prep.
 import { listThreatPages, createThreat } from "../../threats/threat-store.js";
+import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { buildThreatCardVM, wireThreatDoomChange, wireThreatCardDrag } from "../../threats/threat-view.js";
 import { THREAT_PROXIMITIES, THREAT_TYPES } from "../../threats/threat-types.js";
 import { threatGuidanceSections } from "../../threats/threat-guidance.js";
@@ -568,10 +569,12 @@ export function withGmPrepTabs(Base) {
 		// Confirm-and-delete a GM-prep page: identical card + scene-pin cleanup for all three
 		// kinds, and only the noun differs — the deletion itself is one function (deleteGmPrepPage).
 		async _confirmDeletePrepPage(page, title) {
-			const ok = await Dialog.confirm({
+			const ok = await confirmOutcome({
 				title,
 				content: `<p>Delete <strong>${escHtml(page.name)}</strong>? This removes its card and any pins placed on scenes.</p>`,
-				options: { classes: ["dialog", "stonetop", "stonetop-delete-threat-dialog"] },
+				yes:     { label: "Delete it and its pins", icon: "fa-trash" },
+				no:      { label: "Keep it" },
+				classes: ["stonetop-delete-threat-dialog"],
 			});
 			if (!ok) return;
 			await deleteGmPrepPage(page);
