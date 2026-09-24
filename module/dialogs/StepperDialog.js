@@ -1,4 +1,5 @@
 import { FrontOnOpen } from "../utils/front-on-open.js";
+import { holdCentre } from "../utils/hold-centre.js";
 import { getSetting } from "../settings.js";
 import { getWalkthroughResume, patchWalkthroughResume, saveWalkthroughPosition } from "./walkthrough-resume.js";
 
@@ -100,19 +101,46 @@ export class StepperDialog extends Application {
 	}
 
 	async _render(force, options) {
-		const stepChanged = this._renderedStep !== this._step;
-		await super._render(force, options);
-		this._renderedStep = this._step;
-		this._frontOnOpen.apply();
-		// After super._render, which is where core writes the restored scroll offsets back.
-		if (stepChanged) {
-			const port = this.element?.[0]?.querySelector(this._stepScrollSelector);
-			if (port) port.scrollTop = 0;
+		// Core DROPS a render asked for while one is still drawing (appv1 `_render` returns early
+		// on RENDERING). A step with a slow getData (the Expedition route's map art, the Outfit
+		// step's per-PC snapshots) makes that window wide: a quick second Next moved `_step` on
+		// while the screen stayed put, so the Next after it skipped a step. So remember the ask
+		// and draw once more when the current render lands; however many arrive, one redraw
+		// shows the latest state.
+		if (this._state === Application.RENDER_STATES.RENDERING) {
+			this._renderAgain = { force: !!(this._renderAgain?.force || force) };
+			return;
 		}
-		// Auto-height wizards recompute height after each render so the window hugs the
-		// current step's content (AppV1 caps the result via CSS max-height).
-		if (this._autoHeight) this.setPosition({ height: "auto" });
-		this._saveResume();
+		// The step this render draws, read before the await: `_step` can move while it runs.
+		const drawing = this._step;
+		const stepChanged = this._renderedStep !== drawing;
+		// An auto-height wizard changes size from step to step. Where the previous step stood is
+		// taken BEFORE the redraw, so the new size can be centred on it (utils/hold-centre.js):
+		// otherwise it grows downward from its top edge, and a tall step walks off the screen.
+		// Not on the first render, where Foundry centres the window itself.
+		const recentre = this._autoHeight && stepChanged && this._renderedStep !== undefined ? holdCentre(this) : null;
+		try {
+			await super._render(force, options);
+			this._renderedStep = drawing;
+			this._frontOnOpen.apply();
+			// After super._render, which is where core writes the restored scroll offsets back.
+			if (stepChanged) {
+				const port = this.element?.[0]?.querySelector(this._stepScrollSelector);
+				if (port) port.scrollTop = 0;
+			}
+			// Auto-height wizards recompute height after each render so the window hugs the
+			// current step's content (AppV1 caps the result via CSS max-height).
+			if (this._autoHeight) this.setPosition({ height: "auto" });
+			// Then back over the old centre, now the new height is known.
+			recentre?.();
+			this._saveResume();
+		} finally {
+			// Only onto a window that is still up: a forced redraw of one closed mid-render
+			// would reopen it.
+			const again = this._renderAgain;
+			this._renderAgain = null;
+			if (again && this._state === Application.RENDER_STATES.RENDERED) this.render(again.force);
+		}
 	}
 
 	// Result-dialog protocol: a caller awaits promise(); the dialog collects input and
