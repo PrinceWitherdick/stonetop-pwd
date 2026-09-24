@@ -20432,6 +20432,20 @@ a.steading-player-open:hover {
 	flex: 0 0 auto;
 }
 
+/* Core gives every `<i>` in an app button a 3px right margin, which put the glyph 1.56px left of
+   centre; and a glyph sized from the UI font grew inside this fixed 20px box (21px at root 24).
+   A whole-px 11px glyph with no margin sits within 0.19px of centre at root 16/20/24.
+   Probe: z:/tmp/foundry-verify/herd-step-centre.mjs.
+   The crew's and a custom group's size steppers are the same fix: there the glyph also sat up to
+   1px high in a fixed 22px box at root 24 (probe: crew-step-centre.mjs, beside it). */
+.steading-herd-step > i,
+.stonetop-crew-size-step > i,
+.stonetop-custom-group-size-step > i {
+	margin: 0;
+	font-size: 11px;
+	line-height: 1;
+}
+
 .steading-herd-step:hover:not(:disabled) {
 	background: rgba(0,0,0,0.1);
 }
