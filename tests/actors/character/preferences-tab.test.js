@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { readRepo as read, readCss, repoFileExists, declarations, stripComments } from "../../fakes/css.js";
+import {
+	readRepo as read, readCss, repoFileExists, declarations, stripComments, specificity, beats,
+} from "../../fakes/css.js";
+import { fakeEl, fakeRoot } from "../../fakes/dom.js";
 import {
 	GM_ONLY_KEYS, PREFERENCE_GROUPS, PREFERENCE_KEYS, buildPreferenceGroups, formatRange, openPreferenceMenu, setPreference,
 } from "../../../module/utils/sheet-preferences.js";
-import { showsPreferencesTab } from "../../../module/utils/preferences-tab.js";
+import { showsPreferencesTab, withPreferencesTab } from "../../../module/utils/preferences-tab.js";
 
 // The character sheet's Preferences tab: this PLAYER's client settings, surfaced where they read
 // their character. See module/utils/sheet-preferences.js and tab-preferences.hbs.
@@ -109,7 +112,10 @@ describe("Preferences tab wiring", () => {
 
 	it("names the tab in en.json", () => {
 		expect(EN.stonetop.sheet.tabs.preferences).toBeTruthy();
-		for (const key of ["intro", "openSettings", ...PREFERENCE_GROUPS.map(g => g.id)]) {
+		for (const key of [
+			"intro", "openSettings", "searchLabel", "searchPlaceholder", "noMatches",
+			...PREFERENCE_GROUPS.map(g => g.id),
+		]) {
 			expect(EN.stonetop.sheet.preferences[key], `missing sheet.preferences.${key}`).toBeTruthy();
 		}
 	});
@@ -149,6 +155,251 @@ describe("Preferences tab wiring", () => {
 		expect(wired).toBeGreaterThan(-1);
 		expect(guard).toBeGreaterThan(-1);
 		expect(wired).toBeLessThan(guard);
+	});
+});
+
+// ── The search bar ────────────────────────────────────────────────────────────────────────
+
+// One filter over the whole tab, drawn open at the top of it. Six folds of rows and the one a
+// reader came for is usually the one that makes the text bigger — so this is the search that must
+// not have to be found before it can be used, and it is the only one on these sheets drawn open.
+//
+// The failures worth pinning are the quiet ones. A search that hides ROWS and leaves their group
+// headings standing answers a one-row term with six titles over nothing. A term that matches
+// nothing leaves the tab blank and reads as broken. A group the reader folded last week keeps the
+// row they just typed the name of hidden. And the sheet re-renders on most of the settings on this
+// very tab, so a term that does not survive one hands the whole list back mid-search.
+
+describe("Preferences tab search", () => {
+	const PREFS_JS  = read("module/utils/preferences-tab.js");
+	const SEARCH_HBS = read("templates/actor/partials/tab-search-control.hbs");
+
+	it("mounts the shared control rather than a box of its own", () => {
+		expect(TAB_HBS).toContain('{{> "stonetop.tab-search-control" searchPinned=true');
+		expect(TAB_HBS).toContain('(localize "stonetop.sheet.preferences.searchLabel")');
+		expect(TAB_HBS).toContain('(localize "stonetop.sheet.preferences.searchPlaceholder")');
+		// No second implementation: the filtering, the memory and the Escape handling all come
+		// from wireTabSearch, and a hand-rolled input here would be a copy that drifts.
+		expect(stripComments(TAB_HBS)).not.toMatch(/<input[^>]*type="search"/);
+	});
+
+	// The pinned shape has no toggle, because a button whose only job is to shut a box that
+	// cannot shut is a dead control. `wireTabSearch` used to bail out when it could not find one.
+	it("draws no toggle when pinned, and the filter wires without one", () => {
+		expect(SEARCH_HBS).toContain("{{#if searchPinned}}");
+		expect(SEARCH_HBS).toContain("stonetop-tab-search--pinned");
+		const SEARCH_JS = read("module/utils/tab-search.js");
+		expect(SEARCH_JS).toContain("if (!scope || !box || !input || (!toggle && !pinned)) return;");
+	});
+
+	// Named `searchPinned`, not `pinned`: the partial is reached from ~45 section headings, many
+	// inside `{{#each}}` loops, and Handlebars merges a partial's hash into the caller's context —
+	// so a bare `pinned` would also match a view-model field of that name.
+	it("names the flag distinctly enough to survive the hash merge", () => {
+		expect(stripComments(SEARCH_HBS)).not.toMatch(/\{\{#if pinned\}\}/);
+	});
+
+	// The term lives on the SHEET, like every other filter's: changing a setting from this tab
+	// re-renders the sheet, so a term kept in the DOM would be gone on the next keystroke's worth
+	// of settling.
+	it("remembers the term across a re-render, in the sheet-level store", () => {
+		expect(PREFS_JS).toContain("this._tabSearchTerms ??= {}");
+		expect(PREFS_JS).toContain('key: "preferences"');
+	});
+
+	// The shared filter restores a remembered term with `notify: false`, so the group pass has to
+	// be run by hand afterwards or a re-render comes back with every heading standing over rows
+	// the filter has just hidden.
+	it("runs the group pass again after wiring, for the restored term", () => {
+		const body = PREFS_JS.slice(PREFS_JS.indexOf("_wirePreferenceSearch"));
+		const wired = body.indexOf("wireTabSearch(panel, {");
+		const again = body.indexOf("\n\t\t\tsyncGroups();");
+		expect(wired).toBeGreaterThan(-1);
+		expect(again).toBeGreaterThan(wired);
+	});
+
+	// A fold the reader set earlier must not hide the row they just typed the name of.
+	//
+	// It has to be `!important` and it has to OUT-SPECIFY, both: the rule it is beating is the
+	// shared `.stonetop-section-folded { display: none !important }`, and an important declaration
+	// beats any non-important one at any specificity. The first cut of this had neither, and did
+	// nothing at all — the group's heading came back and the row stayed hidden under it.
+	const FORCE_OPEN = ".stonetop .stonetop-preferences.is-searching\n"
+		+ "\t.stonetop-preference-row.stonetop-section-folded:not(.stonetop-search-hidden)";
+
+	it("forces a folded group open while a term is up, loudly enough to beat the fold", () => {
+		const own = declarations(CSS, FORCE_OPEN);
+		expect(own, "the force-open rule is gone or renamed").toBeTruthy();
+		expect(own).toMatch(/display:\s*grid\s*!important/);
+		expect(beats(specificity(FORCE_OPEN), specificity(".stonetop-section-folded"))).toBe(true);
+		// Bare `!important` rules in this file reach sheets that render the class without the root.
+		expect(FORCE_OPEN.startsWith(".stonetop ")).toBe(true);
+	});
+
+	// …and the weight added to beat the FOLD must not go on to beat the FILTER. Specificity is
+	// read before source order, so without the `:not()` this rule outranks
+	// `.stonetop-search-hidden` (important, but 0,1,0) and a folded group opens showing every row
+	// it holds rather than the one that matched.
+	it("still lets the filter hide the rows that did not match inside it", () => {
+		expect(FORCE_OPEN).toContain(":not(.stonetop-search-hidden)");
+		expect(beats(specificity(FORCE_OPEN), specificity(".stonetop-search-hidden"))).toBe(true);
+	});
+
+	// `.is-open` pulls the box up 8px so a heading's underline does not shift as it grows. There is
+	// no heading over this one, so left in, the bar hangs into the intro above it.
+	it("resets the heading-box lift the pinned bar has no heading to protect", () => {
+		const pinned = declarations(CSS, ".stonetop-tab-search.stonetop-tab-search--pinned");
+		expect(pinned, "the pinned skin is gone or renamed").toBeTruthy();
+		expect(pinned).toMatch(/margin-top:\s*0/);
+		// It ties with `.is-open` on specificity, so it can only win by sitting later in the file.
+		expect(CSS.indexOf(".stonetop-tab-search.stonetop-tab-search--pinned"))
+			.toBeGreaterThan(CSS.indexOf(".stonetop-tab-search.is-open {"));
+	});
+
+	// A field is as long as the longest thing anyone types into it, and these are words like
+	// "contrast". Full width read as a heading band with a caret in it rather than as a control,
+	// and promised a kind of input nobody was going to give it. The cap still has to yield on a
+	// sheet narrower than the cap, which is the `min()` rather than a bare width.
+	it("sizes the bar to what goes in it, and still fits a narrow sheet", () => {
+		const pinned = declarations(CSS, ".stonetop-tab-search.stonetop-tab-search--pinned");
+		expect(pinned).toMatch(/width:\s*min\(100%,\s*\d+(\.\d+)?em\)/);
+		expect(pinned).not.toMatch(/width:\s*100%/);
+	});
+
+	// The intro and the bar are one block and the rule goes UNDER the pair. On the rule's first
+	// home — the intro's own `border-bottom` — it cut the reader off from the box before they had
+	// read the sentence explaining it, and left the box hanging over Accessibility as though it
+	// were that group's. Whichever element carries it, it has to be exactly one of them: both, and
+	// the preamble grows a second line through it.
+	it("rules off the whole preamble, not the sentence above the bar", () => {
+		const intro    = declarations(CSS, ".stonetop-preferences-intro");
+		const controls = declarations(CSS, ".stonetop-preferences-controls");
+		expect(controls, "the controls row is gone or renamed").toBeTruthy();
+		expect(controls).toMatch(/border-bottom:\s*1px solid/);
+		expect(intro).not.toMatch(/border-bottom:\s*1px solid/);
+		// Order in the markup is what puts the bar inside that rule rather than below it.
+		const body = stripComments(TAB_HBS);
+		expect(body.indexOf("stonetop-preferences-intro"))
+			.toBeLessThan(body.indexOf("stonetop-preferences-controls"));
+	});
+});
+
+// The filter's actual behaviour, over the DOM stand-in: what a term leaves standing.
+describe("Preferences tab search, filtering", () => {
+	const GROUPS = [
+		["Accessibility", ["Text Size", "Sheet Contrast", "Paper Texture"]],
+		["Rolling and Chat", ["Ask Roll Mode Each Roll", "Show Roll Stat Chips"]],
+	];
+
+	/** One rendered tab: the pinned box (no toggle), the no-matches line, and the groups. */
+	function buildTab(groups = GROUPS) {
+		const root  = fakeRoot();
+		const panel = fakeEl({ cls: ["stonetop-preferences"], parent: root });
+		const box   = fakeEl({ cls: ["stonetop-tab-search", "stonetop-tab-search--pinned"], parent: panel });
+		const input = fakeEl({ cls: ["stonetop-tab-search-input"], parent: box });
+		const empty = fakeEl({ cls: ["stonetop-preferences-no-matches"], parent: panel });
+		const built = groups.map(([name, labels]) => {
+			const group = fakeEl({ cls: ["stonetop-preference-group"], parent: panel });
+			const rows  = labels.map(label => {
+				const row = fakeEl({ cls: ["stonetop-preference-row"], parent: group });
+				row.textContent = label;
+				return row;
+			});
+			return { name, group, rows };
+		});
+		return { root, panel, box, input, empty, groups: built };
+	}
+
+	const Host = withPreferencesTab(class {});
+	const fire = (node, type, ev = {}) => { for (const fn of node.handlers[type] ?? []) fn(ev); };
+	const type = (tab, term) => { tab.input.value = term; fire(tab.input, "input", {}); };
+
+	const isHidden  = el => el.classes.includes("stonetop-search-hidden");
+	const rowsShown = tab => tab.groups.flatMap(g => g.rows).filter(r => !isHidden(r)).map(r => r.textContent);
+	const groupsShown = tab => tab.groups.filter(g => !isHidden(g.group)).map(g => g.name);
+
+	it("leaves everything standing before a term is typed", () => {
+		const tab = buildTab();
+		new Host()._wirePreferences(tab.root);
+
+		expect(rowsShown(tab)).toHaveLength(5);
+		expect(groupsShown(tab)).toEqual(["Accessibility", "Rolling and Chat"]);
+		expect(tab.empty.classes).not.toContain("is-visible");
+	});
+
+	it("keeps the matching rows and takes the emptied group with them", () => {
+		const tab = buildTab();
+		new Host()._wirePreferences(tab.root);
+		type(tab, "roll");
+
+		expect(rowsShown(tab)).toEqual(["Ask Roll Mode Each Roll", "Show Roll Stat Chips"]);
+		// The heading of a group with nothing left in it is a title over nothing, and a fold
+		// caret that folds air.
+		expect(groupsShown(tab)).toEqual(["Rolling and Chat"]);
+		expect(tab.panel.classes).toContain("is-searching");
+		expect(tab.empty.classes).not.toContain("is-visible");
+	});
+
+	it("says so rather than going blank when nothing matches", () => {
+		const tab = buildTab();
+		new Host()._wirePreferences(tab.root);
+		type(tab, "gorcoron");
+
+		expect(rowsShown(tab)).toEqual([]);
+		expect(groupsShown(tab)).toEqual([]);
+		expect(tab.empty.classes).toContain("is-visible");
+	});
+
+	it("puts the whole tab back when the term goes", () => {
+		const tab = buildTab();
+		new Host()._wirePreferences(tab.root);
+		type(tab, "gorcoron");
+		type(tab, "");
+
+		expect(rowsShown(tab)).toHaveLength(5);
+		expect(groupsShown(tab)).toHaveLength(2);
+		expect(tab.empty.classes).not.toContain("is-visible");
+		expect(tab.panel.classes).not.toContain("is-searching");
+	});
+
+	// The one this tab needs more than any other: most of the rows on it re-render the sheet from
+	// their own onChange, so changing a setting mid-search IS the re-render.
+	it("comes back filtered — groups and all — on the next render", () => {
+		const host = new Host();
+		const first = buildTab();
+		host._wirePreferences(first.root);
+		type(first, "roll");
+
+		const second = buildTab();
+		host._wirePreferences(second.root);
+
+		expect(second.input.value).toBe("roll");
+		expect(rowsShown(second)).toEqual(["Ask Roll Mode Each Roll", "Show Roll Stat Chips"]);
+		expect(groupsShown(second)).toEqual(["Rolling and Chat"]);
+	});
+
+	// Escape clears the term everywhere; a pinned box keeps the caret rather than shutting, so a
+	// reader who over-typed can start again without going back for the field.
+	it("clears on Escape without shutting a box that cannot shut", () => {
+		const tab = buildTab();
+		new Host()._wirePreferences(tab.root);
+		type(tab, "roll");
+		fire(tab.input, "keydown", { key: "Escape" });
+
+		expect(tab.input.value).toBe("");
+		expect(rowsShown(tab)).toHaveLength(5);
+		expect(tab.input.focused).toBe(false);
+		expect(tab.box.classes).toContain("stonetop-tab-search--pinned");
+	});
+
+	// A sheet without the tab is not an error, and neither is a tab whose every key failed to
+	// register: the "nothing matches" line answers a search, not an empty registry.
+	it("does not answer an empty tab with a line about searching", () => {
+		const tab = buildTab([]);
+		new Host()._wirePreferences(tab.root);
+		type(tab, "roll");
+
+		expect(tab.empty.classes).not.toContain("is-visible");
 	});
 });
 

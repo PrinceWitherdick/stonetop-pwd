@@ -132,6 +132,11 @@ describe("the sheets that mount one", () => {
 	const stores = {
 		"module/actors/character/StonetopCharacterSheet.js": 5,
 		"module/actors/steading/StonetopSteadingSheet.js": 2,
+		// Not a sheet but a MIXIN, and it is in this list for exactly that reason: the Preferences
+		// tab's bar is wired once here and lands on both the character sheet and the GM Toolkit,
+		// so a slot missed here is a filter lost on two sheets rather than one. `this` is the
+		// sheet either way, which is what makes the store the same store.
+		"module/utils/preferences-tab.js": 1,
 	};
 	for (const [file, calls] of Object.entries(stores)) {
 		it(`${path.basename(file)} gives every filter a slot in one sheet-level store`, () => {

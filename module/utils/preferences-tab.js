@@ -18,6 +18,7 @@
 // it is, on the other hand, decides whether the tab is there at all — see `showsPreferencesTab`.
 import { setPreference, formatRange, openPreferenceMenu } from "./sheet-preferences.js";
 import { openSystemSettings } from "./open-settings.js";
+import { wireTabSearch } from "./tab-search.js";
 import { GM_TOOLKIT_TYPE } from "../actors/gmtoolkit/gm-toolkit-actor.js";
 
 /** OWNER, from a client that has core's constants; 3 is its value where one does not (tests). */
@@ -170,6 +171,73 @@ export function withPreferencesTab(Base) {
 				ev.preventDefault();
 				openSystemSettings();
 			});
+
+			this._wirePreferenceSearch(panel);
+		}
+
+		/**
+		 * The search bar over the tab, from the shared filter every other tab's search uses.
+		 *
+		 * The rows are the items, and a row's whole text is what a term is matched against —
+		 * which is the point of matching `textContent` rather than the label alone. A hint is
+		 * usually where a setting's real words are ("reload", "italics", "parchment"), and a
+		 * select's option labels are inside the row too, so "serif" finds the font row by an
+		 * option nobody wrote a label for. Nothing is indexed here: `wireTabSearch` caches each
+		 * row's text on first use and the render that rebuilds these rows drops the cache with
+		 * them, so it cannot go stale against a value that just changed.
+		 *
+		 * `onFilter` is the part this tab needs and the moves tab does not. `wireTabSearch`
+		 * deliberately leaves group HEADINGS alone — everywhere else the search box lives inside
+		 * one, and hiding an empty heading would take the box with it — but here the box is the
+		 * tab's own first line, so a group whose rows all went is a heading over nothing and a
+		 * fold caret that folds air. Six of those under a term matching one row is most of what
+		 * the reader sees. So the groups are hidden and revealed from the rows' own state after
+		 * every pass, by the same class, and the "nothing matches" line is shown when the lot
+		 * went.
+		 *
+		 * `_tabSearchTerms` is the sheet-level store the character and steading sheets already
+		 * keep their filters in: a live term has to survive the re-render that follows changing
+		 * a setting that repaints the sheet — which on THIS tab is most of them — rather than
+		 * handing the reader back the whole list with the box empty.
+		 */
+		_wirePreferenceSearch(panel) {
+			const groups   = [...panel.querySelectorAll(".stonetop-preference-group")];
+			const empty    = panel.querySelector(".stonetop-preferences-no-matches");
+			const isHidden = el => el.classList.contains("stonetop-search-hidden");
+			// Named the way the sheets that mount their own filters name it, because it IS theirs:
+			// `this` here is the character sheet or the Toolkit, and this slot sits in the same
+			// store as the Moves and Arcana terms on the one that has them.
+			const searchTerms = (this._tabSearchTerms ??= {});
+
+			const syncGroups = () => {
+				let anyShown = false;
+				for (const group of groups) {
+					const rows  = [...group.querySelectorAll(".stonetop-preference-row")];
+					const shown = rows.some(row => !isHidden(row));
+					group.classList.toggle("stonetop-search-hidden", !shown);
+					anyShown ||= shown;
+				}
+				// A tab with no groups at all (every key unregistered) is already empty for a
+				// reason that is not the search, and saying "nothing matches" over it would be
+				// answering a question nobody asked.
+				empty?.classList.toggle("is-visible", !!groups.length && !anyShown
+					&& panel.classList.contains("is-searching"));
+			};
+
+			wireTabSearch(panel, {
+				itemSel: ".stonetop-preference-row",
+				textFor: row => row.textContent,
+				onFilter: syncGroups,
+				memory: searchTerms, key: "preferences",
+			});
+
+			// Once more, by hand, for the render that came back holding a term. `wireTabSearch`
+			// restores the filter with `notify: false` — its callers' callbacks are packers that
+			// at that moment still belong to the render just replaced — so the row classes land
+			// and nothing closes the groups around them. Ours is an arrow built over THIS render's
+			// groups and safe to run now; it is idempotent, so the no-term case simply confirms
+			// that every group is showing.
+			syncGroups();
 		}
 	};
 }

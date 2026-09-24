@@ -5,10 +5,28 @@
 
       `stonetop-section-heading-control` marks it as a control that RIDES IN a heading rather
       than in the content below it, so folding the section takes it along — see
-      _wireSectionCollapse. Without it, a search box would be left hovering over nothing. --}}
-<span class="stonetop-tab-search stonetop-section-heading-control" role="search">
+      _wireSectionCollapse. Without it, a search box would be left hovering over nothing.
+
+      `searchPinned` is the OTHER shape: a box that is already open and never shuts, for a tab
+      whose search is the first thing on the page rather than a control tucked in beside a
+      heading (the Preferences tab). There is no toggle button in that shape — a button whose
+      only job is to shut a box that cannot shut is a dead control — so the glyph is a plain
+      `<i>` and the input carries the accessible name on its own. `wireTabSearch` wires a
+      control with no toggle, and leaves a pinned box open when it loses focus.
+
+      NAMED `searchPinned` AND NOT `pinned`: this partial is reached from ~45 section headings,
+      many of them inside `{{#each}}` loops, and Handlebars merges a partial's hash into the
+      caller's context — so a bare `pinned` here would also match a view-model field of that
+      name and quietly turn some other tab's search into a shape it never asked for. The long
+      name is the same precaution section-heading.hbs spells out at length for its own
+      parameters. --}}
+<span class="stonetop-tab-search stonetop-section-heading-control{{#if searchPinned}} stonetop-tab-search--pinned{{/if}}" role="search">
+	{{#if searchPinned}}
+	<i class="fas fa-magnifying-glass stonetop-tab-search-glyph" aria-hidden="true"></i>
+	{{else}}
 	<button type="button" class="stonetop-tab-search-toggle" title="{{title}}" aria-label="{{title}}">
 		<i class="fas fa-magnifying-glass" aria-hidden="true"></i>
 	</button>
+	{{/if}}
 	<input type="search" class="stonetop-tab-search-input" placeholder="{{placeholder}}" aria-label="{{title}}">
 </span>

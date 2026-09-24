@@ -68,6 +68,9 @@
         "hover": "On Hover Info",
         "fights": "Fights",
         "worldScoped": "This one is the whole table's, not yours. Changing it changes it for everyone, then offers to reload the whole table.",
+        "searchLabel": "Search settings",
+        "searchPlaceholder": "Search settings…",
+        "noMatches": "No setting here matches what you typed. Try a shorter word, or open all Stonetop settings below.",
         "openSettings": "All Stonetop Settings…"
       }
     },

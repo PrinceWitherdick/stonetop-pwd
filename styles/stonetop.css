@@ -3265,15 +3265,49 @@ input.stonetop-name-field {
    Edge to edge, like every other page on this sheet: the tab's own 12px side gutter is the
    whole inset — see the nine-tab padding rule further down. */
 
+/* The intro and the search bar are ONE BLOCK, and the rule goes under the pair of them rather
+   than between them. Both are the tab's preamble — one says whose settings these are, the other
+   is how you get to one — and a rule between them cut the reader off from the box before they
+   had read the sentence that explains it, while leaving the box hanging over the first group as
+   though it belonged to Accessibility. The rule's job is to divide the preamble from the
+   settings, so it sits at the bottom of the preamble: see `.stonetop-preferences-controls`,
+   which carries it. */
 .stonetop-preferences-intro {
-	margin: 0 0 14px;
-	padding-bottom: 10px;
-	border-bottom: 1px solid var(--color-border-light-2);
+	margin: 0 0 10px;
 	color: var(--st-text-secondary);
 	font-size: var(--st-fs-sm);
 	font-style: italic;
 }
 
+/* The search bar over the groups, and the foot of the preamble. Already open and sized to its
+   content, unlike every other search on these sheets — see the pinned variant down in the
+   tab-search block, and the note in tab-preferences.hbs for why this one is not hidden behind
+   a glass. */
+.stonetop-preferences-controls {
+	margin: 0 0 14px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--color-border-light-2);
+}
+
+/* "Nothing here matches…", drawn only while a term has emptied the tab. Kept in the markup
+   rather than built by JS so the sentence lives in en.json with the rest of the tab's copy. */
+.stonetop-preferences-no-matches {
+	display: none;
+	margin: 0;
+	padding: 6px 0;
+	color: var(--st-text-secondary);
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+}
+
+.stonetop-preferences-no-matches.is-visible {
+	display: block;
+}
+
+/* A group with nothing left in it after the filter is hidden whole — heading, caret and all —
+   by the shared `.stonetop-search-hidden` at the foot of the tab-search block. _wirePreferenceSearch
+   stamps it from the rows' own state, because the filter itself hides ITEMS and leaves headings
+   standing: everywhere else the search box lives inside one, and here it does not. */
 .stonetop-preference-group + .stonetop-preference-group {
 	margin-top: var(--stonetop-section-gap, 12px);
 }
@@ -3353,6 +3387,37 @@ input.stonetop-name-field {
    stamps this class on each of the heading's following siblings — see section-editing.js. */
 .stonetop-preference-row.stonetop-section-folded {
 	display: none;
+}
+
+/* …except while the tab's search is running, when a fold the reader set earlier would be
+   hiding the very row they just typed the name of. The search is a question about the WHOLE
+   tab, so it answers over the folds, and they come back the moment the box is empty. Same
+   trade the Arcana sections make (search `.stonetop-arcana-collapsible.is-searching`),
+   including leaving the caret reading "collapsed" while the term is up: it is telling the
+   truth about the state the section goes back to.
+
+   `!important` BECAUSE THE RULE IT HAS TO BEAT IS, and this is the whole reason the rule reads
+   the way it does. The fold is not hidden by the row rule just above — that one is redundant —
+   but by the shared `.stonetop-section-folded { display: none !important }` near the fold
+   machinery's own block, whose `!important` is there to beat the flex and grid displays the
+   folded elements carry. An important declaration beats any non-important one at any
+   specificity, so the first cut of this rule did nothing at all: a reader with the
+   Accessibility group folded searched "contrast", the group's heading came back and the row
+   they wanted stayed hidden under it. Important against important is settled by specificity,
+   which this wins at 0,4,0 against 0,1,0.
+
+   Prefixed with `.stonetop` rather than left bare, which is this file's standing rule for any
+   `!important`: a bare `.stonetop-foo` rule reaches any sheet that renders the class without
+   the root, and an `!important` one cannot be outranked there.
+
+   And it says `:not(.stonetop-search-hidden)` out loud rather than leaning on the filter's own
+   rule to hold the line. That rule is `!important` as well but only 0,1,0, and specificity is
+   read before source order — so without this, the weight added to beat the FOLD would have gone
+   on to beat the FILTER too, and a folded group would have opened showing every row it holds
+   instead of the one that matched. A forced-open group shows the matches and nothing else. */
+.stonetop .stonetop-preferences.is-searching
+	.stonetop-preference-row.stonetop-section-folded:not(.stonetop-search-hidden) {
+	display: grid !important;
 }
 
 .stonetop-preference-select {
@@ -23566,6 +23631,54 @@ a.steading-player-open:hover {
 	opacity: 1;
 	pointer-events: auto;
 	padding: 0 6px 0 2px;
+}
+
+/* ---- Pinned variant: a search bar, not a glass ---------------------------
+   The Preferences tab's filter (tab-search-control.hbs, `searchPinned`). Drawn open, with no
+   toggle button — the glass is a plain <i> — because it is the first line of the tab rather
+   than a control tucked in beside a heading.
+
+   SIZED TO WHAT GOES IN IT, not to the panel. It was full-width first and that was wrong: a
+   field is as long as the longest thing anyone types into it, and these are words like
+   "contrast" and "italics", so a 900px box was a stripe of empty white promising a kind of
+   input nobody was going to give it. It also read as a heading band rather than as a control.
+   `min()` keeps it honest on a narrow sheet — the Toolkit can be dragged well under 22em —
+   where it goes back to taking what there is rather than overflowing the page.
+
+   The `.is-open` rules above are the thing being overridden and they are ordinary two-class
+   selectors, so these carry the block class as well (0,2,0 for the box, 0,3,0 for the input)
+   and win by sitting LATER in the file, which is the modifier order this sheet keeps
+   throughout. Note the `margin-top` reset: `.is-open` pulls the box up by 8px to keep a
+   heading's underline from shifting as it grows, and there is no heading here to protect —
+   left in, it would hang the bar into the intro above it. */
+.stonetop-tab-search.stonetop-tab-search--pinned {
+	display: flex;
+	width: min(100%, 22em);
+	height: calc(26px * var(--stonetop-font-scale, 1));
+	margin-top: 0;
+	padding-left: 6px;
+	background: #fff;
+	border-color: var(--color-border-dark, #7a7971);
+}
+
+.stonetop-tab-search.stonetop-tab-search--pinned .stonetop-tab-search-glyph {
+	flex: 0 0 auto;
+	/* The same grey the toggle button's icon rests at: a mark saying what the field is, not a
+	   control, and it is not competing with the text typed beside it. */
+	color: #9b9a94;
+	font-size: calc(15px * var(--stonetop-font-scale, 1));
+	line-height: 1;
+	align-self: center;
+}
+
+.stonetop-tab-search.stonetop-tab-search--pinned .stonetop-tab-search-input {
+	flex: 1 1 auto;
+	width: auto;
+	max-width: none;
+	opacity: 1;
+	pointer-events: auto;
+	padding: 0 6px;
+	font-weight: normal;
 }
 
 /* Exception: grow DOWNWARD where the heading is a scrollport's first line.

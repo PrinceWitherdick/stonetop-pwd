@@ -15,6 +15,11 @@
  * single column / section within one (`.stonetop-inventory-regular`), so sibling sections each get
  * their own independent filter.
  *
+ * A PINNED control (`searchPinned` in the partial) is the same wiring with the collapsing taken
+ * out: it is drawn open, has no toggle button, and stays open when it loses focus. The Preferences
+ * tab uses it because its search is the tab's first line rather than a control beside a heading.
+ * Nothing here needs telling which shape it has beyond the class the partial stamped.
+ *
  * A live term is DOM state, so a re-render would drop it: the sheet re-renders on plenty of
  * things a reader does mid-search (rolling a move from its title, editing an item), and each one
  * used to hand back the unfiltered list, scrolled to the top, with the box shut. Pass `memory`
@@ -39,8 +44,13 @@
 export function wireTabSearch(scope, {itemSel, textFor, onFilter, memory = null, key = null}) {
 	const box    = scope?.querySelector(".stonetop-tab-search");
 	const input  = box?.querySelector(".stonetop-tab-search-input");
+	// A PINNED control has no toggle: it is drawn open and never shuts (the Preferences tab's
+	// search bar — see tab-search-control.hbs). So the toggle is optional here, and the three
+	// places below that would otherwise shut the box are skipped for one. Everything else —
+	// the filtering, Escape-to-clear, the memory — is the same wiring either way.
 	const toggle = box?.querySelector(".stonetop-tab-search-toggle");
-	if (!scope || !box || !input || !toggle) return;
+	const pinned = !!box?.classList?.contains("stonetop-tab-search--pinned");
+	if (!scope || !box || !input || (!toggle && !pinned)) return;
 
 	const items = [...scope.querySelectorAll(itemSel)];
 	// The search index (per-item text, which may need a nested DOM walk) is built lazily on first
@@ -70,25 +80,31 @@ export function wireTabSearch(scope, {itemSel, textFor, onFilter, memory = null,
 	box.addEventListener("keydown", ev => ev.stopPropagation());
 	// preventDefault on mousedown so clicking the button never pulls focus off the input; otherwise
 	// the blur-to-collapse below would fight the toggle.
-	toggle.addEventListener("mousedown", ev => ev.preventDefault());
-	toggle.addEventListener("click", () => {
-		if (box.classList.contains("is-open")) {
-			box.classList.remove("is-open");
-			if (input.value) { input.value = ""; apply(); }
-			input.blur();
-		} else {
-			box.classList.add("is-open");
-			input.focus();
-		}
-	});
+	if (toggle) {
+		toggle.addEventListener("mousedown", ev => ev.preventDefault());
+		toggle.addEventListener("click", () => {
+			if (box.classList.contains("is-open")) {
+				box.classList.remove("is-open");
+				if (input.value) { input.value = ""; apply(); }
+				input.blur();
+			} else {
+				box.classList.add("is-open");
+				input.focus();
+			}
+		});
+	}
+	// Escape clears the term everywhere. It only SHUTS the box where there is a box to shut: a
+	// pinned one keeps the caret, so a reader who over-typed can start again without going back
+	// for the field.
 	input.addEventListener("keydown", ev => {
 		if (ev.key !== "Escape") return;
 		input.value = ""; apply();
+		if (pinned) return;
 		box.classList.remove("is-open");
 		input.blur();
 	});
 	// Clicking away collapses an empty box; one holding a live term stays open.
-	input.addEventListener("blur", () => { if (!input.value.trim()) box.classList.remove("is-open"); });
+	if (!pinned) input.addEventListener("blur", () => { if (!input.value.trim()) box.classList.remove("is-open"); });
 
 	// The term this control was left holding when the DOM it lived in was replaced. The box is
 	// re-opened with it, so an active filter is never hiding items behind a shut box. Focus is NOT
@@ -100,7 +116,7 @@ export function wireTabSearch(scope, {itemSel, textFor, onFilter, memory = null,
 	// packer reads, and they land here, before this render wires and runs its own first pack.
 	if (memory && key && memory[key]) {
 		input.value = memory[key];
-		box.classList.add("is-open");
+		if (!pinned) box.classList.add("is-open");
 		apply({notify: false});
 	}
 }

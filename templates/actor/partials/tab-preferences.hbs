@@ -29,6 +29,33 @@
 			{{localize "stonetop.sheet.preferences.intro"}}
 		</p>
 
+		{{!-- The filter over everything below, and the one search on these sheets that is drawn
+		      ALREADY OPEN (`searchPinned`). Every other one hides behind a magnifying glass beside
+		      a heading, where the reader has arrived to look at a list and the box is a second
+		      thought. This tab is the opposite: it is six folds of rows a reader reaches WANTING
+		      one of them, usually the one that makes the text bigger, and a settings search that
+		      has to be found before it can be used is a search the person who most needs it will
+		      not find. It sits with the intro, inside the rule that divides this preamble from
+		      the settings, so the sentence explaining whose settings these are and the way to
+		      reach one read as the one block they are.
+
+		      It matches a row's whole text — label, hint, the option labels inside a select — so
+		      "serif" finds the font row and "reload" finds the Fight tab switch by its warning.
+		      Wired in module/utils/preferences-tab.js; an active term also forces open any group
+		      the reader had folded, so a match is never hiding inside a shut section. --}}
+		<div class="stonetop-preferences-controls">
+			{{> "stonetop.tab-search-control" searchPinned=true
+			    title=(localize "stonetop.sheet.preferences.searchLabel")
+			    placeholder=(localize "stonetop.sheet.preferences.searchPlaceholder")}}
+		</div>
+
+		{{!-- Shown by the filter when a term matches nothing. Without it the tab answers a typo
+		      with the intro, a blank space and the Foundry settings button, which reads as a tab
+		      that has broken rather than as a search that found nothing. --}}
+		<p class="stonetop-preferences-no-matches" role="status">
+			{{localize "stonetop.sheet.preferences.noMatches"}}
+		</p>
+
 		{{#each stonetop.preferences}}
 		<div class="stonetop-preference-group" data-preference-group="{{id}}">
 			{{> "stonetop.section-heading" title=title collapse=collapse}}
