@@ -120,6 +120,9 @@ function normalizeChartEntry(raw, index) {
 		// through normalization deliberately: dropped, every route-added row would read as the
 		// GM's own the moment it was re-read, and nothing could ever clear it.
 		fromRoute: !!raw.fromRoute,
+		// Ticked on Running the journey once the party has dealt with it (Book I p.323: "Present
+		// each challenge only once. After the party deals with it, then tick that challenge off").
+		done: !!raw.done,
 	};
 }
 

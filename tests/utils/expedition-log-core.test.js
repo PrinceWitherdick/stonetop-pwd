@@ -6,6 +6,8 @@ import {
 	addExpedition,
 	selectExpedition,
 	deleteExpedition,
+	mergeLogs,
+	sameLog,
 } from "../../module/utils/expedition-log-core.js";
 
 // Pure list ops for the growing expedition log. The dialog supplies randomID/Date.now
@@ -95,5 +97,62 @@ describe("deleteExpedition", () => {
 	it("empties the log cleanly when the last trip is removed", () => {
 		const log = { currentId: "a", list: [trip("a")] };
 		expect(deleteExpedition(log, "a")).toEqual({ currentId: null, list: [] });
+	});
+});
+
+// Two GMs on one trip: each window's copy, merged with the other's write against what the world
+// held when the copy was taken.
+describe("mergeLogs", () => {
+	const base = { currentId: "a", list: [{ ...trip("a", "The Long Walk"), chart: { route: "", rows: [{ id: "r1", text: "Rope" }] } }] };
+	const edit = (log, fn) => { const next = structuredClone(log); fn(next); return next; };
+
+	it("keeps a change made on either side", () => {
+		const mine   = edit(base, l => { l.list[0].chart.route = "Over the pass"; });
+		const theirs = edit(base, l => { l.list[0].title = "Renamed"; });
+		const merged = mergeLogs(base, mine, theirs);
+		expect(merged.list[0]).toMatchObject({ title: "Renamed", chart: { route: "Over the pass" } });
+	});
+
+	it("takes theirs where both changed the same answer", () => {
+		const mine   = edit(base, l => { l.list[0].title = "Mine"; });
+		const theirs = edit(base, l => { l.list[0].title = "Theirs"; });
+		expect(mergeLogs(base, mine, theirs).list[0].title).toBe("Theirs");
+	});
+
+	it("merges rows by id, so a row added on each side is kept", () => {
+		const mine   = edit(base, l => { l.list[0].chart.rows.push({ id: "r2", text: "Lantern" }); });
+		const theirs = edit(base, l => { l.list[0].chart.rows.push({ id: "r3", text: "Salt" }); });
+		expect(mergeLogs(base, mine, theirs).list[0].chart.rows.map(r => r.id)).toEqual(["r1", "r3", "r2"]);
+	});
+
+	it("keeps a row or a trip deleted on either side deleted", () => {
+		const mine   = edit(base, l => { l.list[0].chart.rows = []; });
+		const theirs = edit(base, l => { l.list.push(trip("b")); });
+		const merged = mergeLogs(base, mine, theirs);
+		expect(merged.list[0].chart.rows).toEqual([]);
+		expect(merged.list.map(e => e.id)).toEqual(["a", "b"]);
+		expect(mergeLogs(base, edit(base, l => { l.list[0].title = "Edited"; }), { currentId: null, list: [] }).list).toEqual([]);
+	});
+
+	it("keeps this window on its own trip, unless that trip is gone", () => {
+		const two    = { currentId: "a", list: [trip("a"), trip("b")] };
+		const theirs = { currentId: "b", list: [trip("a"), trip("b"), trip("c")] };
+		expect(mergeLogs(two, two, theirs).currentId).toBe("a");
+		expect(mergeLogs(two, two, { currentId: "b", list: [trip("b")] }).currentId).toBe("b");
+	});
+
+	it("leaves its inputs untouched", () => {
+		const mine   = edit(base, l => { l.list[0].chart.route = "Over the pass"; });
+		const theirs = edit(base, l => { l.list[0].title = "Renamed"; });
+		const before = structuredClone([base, mine, theirs]);
+		mergeLogs(base, mine, theirs);
+		expect([base, mine, theirs]).toEqual(before);
+	});
+});
+
+describe("sameLog", () => {
+	it("ignores key order and a key left undefined, as a JSON round trip does", () => {
+		expect(sameLog({ a: 1, b: { c: [1, 2] } }, { b: { c: [1, 2] }, a: 1, d: undefined })).toBe(true);
+		expect(sameLog({ a: [1, 2] }, { a: [2, 1] })).toBe(false);
 	});
 });

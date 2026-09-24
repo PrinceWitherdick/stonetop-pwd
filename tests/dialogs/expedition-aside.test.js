@@ -77,27 +77,30 @@ describe("the walkthrough's steps", () => {
 	// stranded, still printed on the page with nowhere left to edit them. So the two are pinned to
 	// each other here rather than left to be noticed a season later.
 	//
-	// ONE EXEMPTION, and it is the other half of the same rule rather than a hole in it.
-	// "Other preparations" was retired as a step, so `exp.prep` has no writer by design — and
-	// the Chronicle deliberately goes on READING it, because trips logged while the step existed
-	// still carry what a GM typed there and deleting the line would un-print it from pages that
-	// already hold it. Naming it here is what keeps that a decision: an unlisted key with no
-	// writer is still the accident this test was written for.
+	// THE EXEMPTIONS are the other half of the same rule rather than a hole in it. A retired key
+	// has no writer by design, and the Chronicle deliberately goes on READING it, because trips
+	// logged while its box existed still carry what a GM typed there and deleting the line would
+	// un-print it from pages that already hold it. Naming each one here is what keeps that a
+	// decision: an unlisted key with no writer is still the accident this test was written for.
 	//
-	// `running` is the second, on the same terms. "Running the journey" asked for the points of
+	// (`prep` was the first, and has a writer again: the note under "Other preparations" at the
+	// foot of the Requisition step, because Going home reads it back. So it is off the list, as
+	// the last assertion below requires.)
+	//
+	// `running` is on the same terms. "Running the journey" asked for the points of
 	// interest and the legs of travel, which is the question the route step before it already
 	// answers on a map — so the box went and the step is prose and a die now. The Chronicle keeps
 	// reading the key for the trips that were logged with it, and keeps printing them as "The
 	// journey"; what it will not do is offer a heading nobody can fill in.
 	//
-	// `outfit` is the third, and the same shape again: "who's carrying what, and what loads" is
+	// `outfit` is the second, and the same shape again: "who's carrying what, and what loads" is
 	// what the live party-load readout on that step already reads off the sheets, so the box under
 	// it went. Stored answers still print as "Outfit & supplies".
 	//
-	// `requisition` is the fourth. What they borrowed is what the step's asset list is TICKED
+	// `requisition` is the third. What they borrowed is what the step's asset list is TICKED
 	// with, and the Chronicle prints those names under "Requisitioned" on its own — so that
 	// heading keeps a writer even with the box gone, and stored sentences still print beneath it.
-	const RETIRED = new Set(["prep", "running", "outfit", "requisition"]);
+	const RETIRED = new Set(["running", "outfit", "requisition"]);
 
 	it("give every prose section the Chronicle compiles somewhere to be written", () => {
 		const chronicle = read("module/utils/chronicle-core.js");
@@ -118,7 +121,7 @@ describe("the walkthrough's steps", () => {
 		for (const key of RETIRED) expect([...writable], `exp.${key} has a step again`).not.toContain(key);
 	});
 
-	// The step itself is gone from the rail, which is the visible half of the above.
+	// The step itself is gone from the rail: the rest of prep is an aside at the foot of Requisition.
 	it("no longer walks the GM through a step of its own for the rest of prep", () => {
 		expect(steps.some(s => s.key === "prep")).toBe(false);
 		expect(steps.map(s => s.title)).not.toContain("Other preparations");

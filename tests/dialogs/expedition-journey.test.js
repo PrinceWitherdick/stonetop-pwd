@@ -1104,7 +1104,7 @@ describe("seeing the whole map", () => {
 			let closed = 0;
 			d._showMapTier("worlds-end");
 			d._mapWindows.set("worlds-end", { rendered: true, close: () => { closed++; return Promise.resolve(); } });
-			global.Dialog = { confirm: () => Promise.resolve(true) };
+			d._askDeleteExpedition = async () => true;
 
 			await d[act]("trip-1");
 			expect(closed, act).toBe(1);
@@ -1620,6 +1620,20 @@ describe("carrying the pick onto Chart a Course", () => {
 		});
 		await d._setJourneyPlace("destination", "the-red-grove");
 		expect(charted()).toEqual([]);
+	});
+
+	// ...unless the GM has written under it. What they told the table is theirs: a route that can
+	// no longer fill the blank is no reason to throw away "10 days, pack for rain".
+	it("keeps a line of its own the GM has answered", async () => {
+		const d = dialog({ origin: "stonetop", destination: "lygos" }, {
+			picked: [
+				{ id: "a", group: "requirements", key: "days",        fromRoute: true, answer: "10 days, pack for rain" },
+				{ id: "b", group: "requirements", key: "firstTravel", fromRoute: true, answer: "  " },
+			],
+		});
+		await d._setJourneyPlace("destination", "the-red-grove");
+		expect(charted()).toEqual(["days"]);
+		expect(chartedRow("days").answer).toBe("10 days, pack for rain");
 	});
 
 	// A row added once and taken off by the GM does not come back on the next pick: the carry

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { fakeForm, stubAsk } from "../fakes/confirm.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +29,17 @@ vi.mock("../../module/utils/world.js", () => ({
 	isSteadingActor: a => a?.type === "stonetop" || a?.system?.customType === "stonetop",
 }));
 
+// The Requisition roll's chat card, caught rather than posted: what matters here is the formula
+// the walkthrough hands it, which is where advantage shows.
+const seasons = vi.hoisted(() => ({ calls: [] }));
+vi.mock("../../module/utils/roll-engine.js", async importOriginal => ({
+	...(await importOriginal()),
+	rollSeasonsCard: async opts => {
+		seasons.calls.push(opts);
+		return { total: 8, tier: "partial", label: "7&ndash;9" };
+	},
+}));
+
 const { ExpeditionDialog } = await import("../../module/dialogs/ExpeditionDialog.js");
 const { StonetopSteading } = await import("../../module/actors/steading/StonetopSteading.js");
 
@@ -40,6 +52,8 @@ function steadingActor(assets, name = "Stonetop") {
 		name,
 		type: "stonetop",
 		system: {},
+		// The walkthrough is the GM's, and the GM owns the steading.
+		isOwner: true,
 		flags: { stonetop: { steading: { assets } } },
 		getFlag: (_scope, key) => (key === "steading" ? actor.flags.stonetop.steading : null),
 		setFlag: vi.fn((_scope, _key, value) => { actor.flags.stonetop.steading = value; }),
@@ -298,14 +312,15 @@ describe("renaming a trip", () => {
 // and the walkthrough offers no way to bring it back: its picker only ever offers to return what
 // the CURRENT trip is holding.
 describe("deleting a trip", () => {
-	beforeEach(() => { global.Dialog = { confirm: () => Promise.resolve(true) }; });
+	// Answer the "Delete this expedition?" window with the delete.
+	const answerDelete = d => { d._askDeleteExpedition = async () => true; return d; };
 
 	it("sends home whatever it was holding", async () => {
 		const d = dialog([{ id: "trip-1", title: "The Wandering Tower", createdAt: 0 }]);
 		await d._toggleRequisitionedAsset(1, true);
 		expect(assetsNow()[1].takenBy.expedition.id).toBe("trip-1");
 
-		d._closeMapWindows = async () => {};
+		answerDelete(d)._closeMapWindows = async () => {};
 		await d._deleteCurrentExpedition();
 
 		expect(assetsNow()[1].takenBy).toBeUndefined();
@@ -324,7 +339,7 @@ describe("deleting a trip", () => {
 
 		// Switch to the EARLIER trip and delete that one, so the holder is the trip that shifts up.
 		d._log().currentId = "trip-1";
-		d._closeMapWindows = async () => {};
+		answerDelete(d)._closeMapWindows = async () => {};
 		await d._deleteCurrentExpedition();
 
 		// trip-2 is the only trip left, so it is Expedition 1 now.
@@ -359,5 +374,130 @@ describe("the panel is wired to the step, and to the handler", () => {
 	it("styles the three states the rows are built with", () => {
 		for (const cls of [".stonetop-exp-assets", ".stonetop-exp-asset-btn", ".stonetop-exp-asset.is-ours", ".stonetop-exp-asset.is-elsewhere"])
 			expect(CSS, cls).toContain(cls);
+	});
+});
+
+// Each click reads the log and the steading's whole asset list, awaits the steading write, then
+// writes both back whole. Two clicks inside one round trip used to start from the same snapshot,
+// and the second put back a list without the first.
+describe("two assets taken in quick succession", () => {
+	it("keeps both, on the steading and on the trip", async () => {
+		const actor = world.steading;
+		actor.setFlag = vi.fn(async (_scope, _key, value) => {
+			await new Promise(resolve => setTimeout(resolve, 5));
+			actor.flags.stonetop.steading = value;
+		});
+		const d = dialog();
+
+		await Promise.all([d._toggleRequisitionedAsset(0, true), d._toggleRequisitionedAsset(1, true)]);
+
+		expect(assetsNow()[0].takenBy?.expedition?.id).toBe("trip-1");
+		expect(assetsNow()[1].takenBy?.expedition?.id).toBe("trip-1");
+		expect(tripNow().requisitioned.map(r => r.name)).toEqual(["A pair of hardy draft horses", "A wagon"]);
+	});
+
+	it("still runs the next click after one that failed", async () => {
+		const d = dialog();
+		const first = d._toggleRequisitionedAsset(0, true);
+		world.steading.setFlag = vi.fn(() => { throw new Error("refused"); });
+		await first;
+		world.steading.setFlag = vi.fn((_scope, _key, value) => { world.steading.flags.stonetop.steading = value; });
+		await d._toggleRequisitionedAsset(1, true);
+		expect(assetsNow()[1].takenBy?.expedition?.id).toBe("trip-1");
+	});
+});
+
+// Requisition is a +Fortunes roll like any other: the steading sheet nets the chosen mode against
+// every rule's advantage and SPENDS a held one (Rites of the Land). Rolled from here it used to
+// be a plain 2d6 that left the hold waiting for a roll it was never promised to.
+describe("rolling Requisition", () => {
+	beforeEach(() => {
+		seasons.calls = [];
+		global.Roll = class {};
+	});
+
+	const held = () => world.steading.flags.stonetop.steading.fortunesAdvantage ?? null;
+
+	it("rolls 2d6 when nothing gives advantage", async () => {
+		await dialog()._rollRequisition();
+		expect(seasons.calls[0].formula).toMatch(/^2d6 /);
+	});
+
+	it("rolls at advantage when the GM picks it (the Marshal's Logistics)", async () => {
+		const d = dialog();
+		d._reqMode = "adv";
+		await d._rollRequisition();
+		expect(seasons.calls[0].formula).toMatch(/^3d6kh2 /);
+	});
+
+	it("applies the steading's held advantage, spends it, and names it on the card", async () => {
+		world.steading.flags.stonetop.steading.fortunesAdvantage = { source: "Rites of the Land" };
+		await dialog()._rollRequisition();
+		expect(seasons.calls[0].formula).toMatch(/^3d6kh2 /);
+		expect(seasons.calls[0].conditionNotes).toEqual(["Rites of the Land: advantage"]);
+		expect(held()).toBeNull();
+	});
+
+	it("nets a chosen disadvantage against the held advantage, and still spends the hold", async () => {
+		world.steading.flags.stonetop.steading.fortunesAdvantage = { source: "Rites of the Land" };
+		const d = dialog();
+		d._reqMode = "dis";
+		await d._rollRequisition();
+		expect(seasons.calls[0].formula).toMatch(/^2d6 /);
+		expect(held()).toBeNull();
+	});
+
+	it("starts on the steading's own sticky roll modifier", () => {
+		const getFlag = world.steading.getFlag;
+		world.steading.getFlag = (scope, key) => (key === "rollMode" ? "dis" : getFlag(scope, key));
+		expect(dialog()._requisitionMode()).toBe("dis");
+	});
+
+	// One trip's Requisition total is no answer to the next trip's.
+	it("keeps the result with the trip it was rolled for", async () => {
+		const d = dialog([
+			{ id: "trip-1", title: "The Wandering Tower", createdAt: 0 },
+			{ id: "trip-2", title: "The Long Walk", createdAt: 1 },
+		]);
+		await d._rollRequisition();
+		expect(d._rolls[d._rollKey("requisition")]?.total).toBe(8);
+		d._log().currentId = "trip-2";
+		expect(d._rolls[d._rollKey("requisition")]).toBeUndefined();
+		d._log().currentId = "trip-1";
+		expect(d._rolls[d._rollKey("requisition")]?.total).toBe(8);
+	});
+});
+
+// A bare Yes/No under "its notes can't be recovered" doesn't say what it agrees to.
+describe("asking before a trip is deleted", () => {
+	beforeEach(() => {
+		global.document = { createElement: () => ({}) };
+	});
+
+	it("names both outcomes, the delete first", async () => {
+		const wait = stubAsk("keep");
+		await dialog()._askDeleteExpedition("The Wandering Tower");
+		const asked = wait.mock.calls[0][0];
+		expect(asked.buttons.map(b => b.label)).toEqual(["Delete the expedition", "Keep it"]);
+		expect(asked.buttons.find(b => b.default).action).toBe("keep");
+		expect(asked.classes).toContain("stonetop");
+		expect(asked.content.innerHTML).toContain("<strong>The Wandering Tower</strong>");
+	});
+
+	// The delete button answers with what was ticked; Keep it and a closed window, null.
+	it("deletes only on the delete", async () => {
+		stubAsk("delete", fakeForm());
+		expect(await dialog()._askDeleteExpedition("x")).toEqual({ removePage: false });
+		stubAsk("keep");
+		expect(await dialog()._askDeleteExpedition("x")).toBeNull();
+		stubAsk(null);
+		expect(await dialog()._askDeleteExpedition("x")).toBeNull();
+	});
+
+	it("keeps the trip when the answer is Keep it", async () => {
+		const d = dialog();
+		d._askDeleteExpedition = async () => null;
+		await d._deleteCurrentExpedition();
+		expect(store.expeditionAnswers.list.map(t => t.id)).toEqual(["trip-1"]);
 	});
 });

@@ -1,10 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { confirmOutcome, askWithButtons } from "../../module/utils/ask-with-buttons.js";
 import { fakeForm, stubAsk, stubConfirm } from "../fakes/confirm.js";
 
 // The house rule for a window that confirms a write: the buttons NAME the outcome ("Remove the
 // move" / "Keep it"), never Yes/No, affirmative first. Core's Dialog.confirm hard-wires Yes/No, so
 // every confirm goes through this helper instead.
+
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 describe("confirmOutcome", () => {
 	it("puts the named answers on the buttons, the affirmative first", async () => {
@@ -83,5 +88,24 @@ describe("an answer read off the window's form", () => {
 		const config = asked.mock.calls[0][0];
 		expect(config.position).toEqual({ width: 460 });
 		expect(config.buttons[0].class).toBe("stonetop-dialog-btn--danger");
+	});
+});
+
+// The guard: a bare Yes/No confirm anywhere in the system is the thing this helper replaced.
+describe("no bare Yes/No confirms", () => {
+	it("leaves no Dialog.confirm call in the system's code", () => {
+		const hits = [];
+		const walk = dir => {
+			for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+				const full = path.join(dir, entry.name);
+				if (entry.isDirectory()) walk(full);
+				else if (entry.name.endsWith(".js")) {
+					const code = fs.readFileSync(full, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+					if (/\bDialog\.confirm\s*\(/.test(code)) hits.push(path.relative(root, full));
+				}
+			}
+		};
+		walk(path.join(root, "module"));
+		expect(hits).toEqual([]);
 	});
 });

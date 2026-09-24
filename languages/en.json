@@ -293,14 +293,14 @@
         "runTip": "Open the expedition walkthrough on a new trip, named after this one",
         "reopen": "Open the walkthrough",
         "reopenTip": "Open the expedition walkthrough on this trip, with everything already noted in it",
-        "markUsed": "Mark this one run, and file it below",
-        "markUsedShort": "Mark run",
+        "markUsed": "Mark this one complete, and file it below",
+        "markUsedShort": "Mark complete",
         "markUnused": "Put this one back on the list above",
         "markUnusedShort": "Put back on the list",
         "removeEncounter": "Delete this expedition",
         "removeEntry": "Take this out of the expedition",
         "removeTitle": "Delete Expedition",
-        "removeBody": "Delete <strong>{name}</strong> and the {count} things gathered into it? Nothing they point at is touched: the maps, sites and monsters themselves stay exactly where they are, and so does anything the walkthrough has recorded about the trip. To take an expedition off the list but keep what is in it, mark it run with the tick instead and it moves to Completed.",
+        "removeBody": "Delete <strong>{name}</strong> and the {count} things gathered into it? Nothing they point at is touched: the maps, sites and monsters themselves stay exactly where they are, and so does anything the walkthrough has recorded about the trip. To take an expedition off the list but keep what is in it, mark it complete with the tick instead and it moves to Completed.",
         "removeUnnamed": "this expedition",
         "removeYes": "Delete the expedition",
         "removeNo": "Keep it",
@@ -1469,6 +1469,19 @@
       "noSurprise": "No Surprise held to spend"
     },
     "expedition": {
+      "fateMode": {
+        "advTooltip": "Roll 2d6 and keep the higher",
+        "normalTooltip": "Roll 1d6",
+        "disTooltip": "Roll 2d6 and keep the lower"
+      },
+      "delete": {
+        "title": "Delete this expedition?",
+        "ask": "Delete {name} from the log? Its notes can't be recovered, and anything it requisitioned goes back to the steading.",
+        "unnamed": "this expedition",
+        "yes": "Delete the expedition",
+        "no": "Keep it",
+        "removePage": "Also remove its page from the Chronicle (you may have edited it there)"
+      },
       "route": {
         "goToOpen": " Open {map} and try again.",
         "goToImport": " This world has no scene for it yet. The Import Book Art macro builds one.",

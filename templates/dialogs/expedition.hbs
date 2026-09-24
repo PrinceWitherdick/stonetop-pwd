@@ -89,6 +89,18 @@
           on had been read. --}}
     {{#if showRoll}}
     <div class="stonetop-spring-roll-wrap">
+      {{#if reqMode}}
+      {{!-- How it's rolled. The shared strip (roll-mode-strip.hbs), flipped in place by
+            activateListeners; the wrapper's data-mode-for says which roll it sets. Advantage the
+            steading is holding is named under it, because the roll spends it whatever the strip
+            says. --}}
+      <div class="stonetop-exp-mode" data-mode-for="requisition">
+        {{> "stonetop.roll-mode-strip" rollMode=reqMode labelKey="stonetop.rollMode.pickerLabel" tipKey="stonetop.rollMode"}}
+        {{#if reqHeld}}
+        <p class="stonetop-exp-req-held"><i class="fas fa-angles-up" aria-hidden="true"></i> The steading holds advantage on its next +Fortunes roll ({{reqHeld}}). This roll spends it.</p>
+        {{/if}}
+      </div>
+      {{/if}}
       {{#if herdShare}}
       <label class="stonetop-requisition-herd"><input type="checkbox" class="stonetop-check" name="herdShare"><span>{{herdShare}}</span></label>
       {{/if}}
@@ -167,6 +179,12 @@
 
     {{#if showFate}}
     <div class="stonetop-spring-roll-wrap">
+      {{#if fateMode}}
+      {{!-- The Die of Fate's own dice on the hovers: one d6, or two keeping one. --}}
+      <div class="stonetop-exp-mode" data-mode-for="fate">
+        {{> "stonetop.roll-mode-strip" rollMode=fateMode labelKey="stonetop.rollMode.pickerLabel" tipKey="stonetop.expedition.fateMode"}}
+      </div>
+      {{/if}}
       <button type="button" class="stonetop-exp-fate-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary">
         <i class="fas fa-dice-d6"></i> Roll the Die of Fate
       </button>
@@ -192,6 +210,45 @@
         <i class="fas fa-people-group" aria-hidden="true"></i> <span data-struggle-call-label>{{struggle.label}}</span>
       </button>
       <span class="stonetop-gm-struggle-hint" data-struggle-call-hint>{{struggle.hint}}</span>
+    </div>
+    {{/if}}
+
+    {{!-- The charted list, on Running the journey: the to-do list Chart a Course made, with the
+          book's advice for working through it. Only the tick is live; the words were settled on
+          that step. --}}
+    {{#if chartTodo}}
+    <div class="stonetop-guide-aside stonetop-exp-todo">
+      <h3 class="stonetop-guide-aside-head">The way ahead</h3>
+      <div class="stonetop-guide-aside-body stonetop-spring-body">
+        <p>What you told them on <strong>Chart a Course</strong> (p.322). <strong>Requirements</strong> they skipped: tell them the consequences, and if they go anyway, bar the way or add challenges. The ones they met, threaten with soft moves (put the guide in danger, the cart is loud) and target with hard ones.</p>
+        <p><strong>Challenges</strong>: bring each in once, on a leg or at a point of interest, usually with a soft move. On a 6- you can drop them straight into one. Tick it off once they've dealt with it.</p>
+      </div>
+      {{#if chartTodo.hasRows}}
+      {{#each chartTodo.groups}}
+      <div class="stonetop-exp-checkgroup-label">{{label}}</div>
+      <ul class="stonetop-exp-todo-list">
+        {{#each entries}}
+        <li class="stonetop-exp-todo-item{{#if done}} is-done{{/if}}" data-chart-id="{{id}}">
+          <label class="stonetop-camp-check">
+            <input type="checkbox" class="stonetop-check stonetop-exp-todo-check" {{#if done}}checked{{/if}}>
+            <span class="stonetop-exp-todo-text">{{{line}}}{{#if said}}<span class="stonetop-exp-todo-said">: {{said}}</span>{{/if}}</span>
+          </label>
+        </li>
+        {{/each}}
+      </ul>
+      {{/each}}
+      {{else}}
+      <p class="stonetop-exp-todo-empty">Nothing was charted for this trip. What you tell them on Chart a Course lands here.</p>
+      {{/if}}
+    </div>
+    {{/if}}
+
+    {{!-- A headed aside at the FOOT of the step: advice that belongs to the step but must not come
+          between its prose and its roll (Requisition's "Other preparations"). --}}
+    {{#if endAside}}
+    <div class="stonetop-guide-aside">
+      <h3 class="stonetop-guide-aside-head">{{endAside.label}}</h3>
+      <div class="stonetop-guide-aside-body stonetop-spring-body">{{{endAside.body}}}</div>
     </div>
     {{/if}}
 
@@ -304,6 +361,23 @@
           one thing on this step that WRITES, and it belongs under the questions rather than
           among them. GM-only, and it says so plainly when the world has no steading sheet
           to clear a debility on. --}}
+    {{!-- Going home: what was set in motion before they left, noted on the Requisition step. The
+          book's reason for noting it at all is this moment (p.310): a Pull Together and a
+          follower's task are rolled as the party returns. --}}
+    {{#if homeProjects}}
+    <div class="stonetop-guide-aside stonetop-exp-projects">
+      <h3 class="stonetop-guide-aside-head">Waiting on their return</h3>
+      <div class="stonetop-guide-aside-body stonetop-spring-body">
+        <p>Roll what was left until they came home, now, as they walk back in: a <em>Pull Together</em>, a follower's task. For an NPC who isn't a follower, reveal what you decided.</p>
+      </div>
+      {{#if homeProjects.text}}
+      <p class="stonetop-exp-projects-note">{{homeProjects.text}}</p>
+      {{else}}
+      <p class="stonetop-exp-todo-empty">Nothing was noted under Other preparations on the Requisition step.</p>
+      {{/if}}
+    </div>
+    {{/if}}
+
     {{#if returnTriumphant}}
     <div class="stonetop-exp-triumph">
       {{#if returnTriumphant.body}}

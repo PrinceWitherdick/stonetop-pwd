@@ -363,6 +363,7 @@ export async function onReady() {
 	// the console.
 	game.stonetop.saveChronicle     = () => writeChronicle().then(j => j?.sheet?.render(true));
 	game.stonetop.openExpedition    = () => ExpeditionDialog.open();
+	game.stonetop.onExpeditionLog   = (value, userId) => ExpeditionDialog.onLogChanged(value, userId);
 	game.stonetop.openWeather       = () => WeatherDialog.open();
 	// Put the canvas weather back in step with the weather-effect settings. Registered here
 	// because settings.js reaches this way rather than importing the seasons module, which reads

@@ -164,7 +164,7 @@ export function multiDieFaces(roll) {
  * clicked it. Pass `alias` instead to speak the card under a fixed name with no header
  * (the Expedition Requisition card).
  */
-export async function rollSeasonsCard({ formula, title = "", alias = "", resultTable, resultLegend = "", missCountsAsPartial = "" } = {}) {
+export async function rollSeasonsCard({ formula, title = "", alias = "", resultTable, resultLegend = "", missCountsAsPartial = "", conditionNotes = [] } = {}) {
 	const roll = await new Roll(formula).evaluate();
 	const rolled = classifyResult(roll.total).key;
 	// As rollStat's option of the same name: a 6- that a rule counts as a 7-9, said on the card.
@@ -179,7 +179,9 @@ export async function rollSeasonsCard({ formula, title = "", alias = "", resultT
 		roll.formula,
 		multiDieFaces(roll),
 		resultLegend || _resultTableLegend(resultTable),
-	);
+	// And rollStat's `conditionNotes`, in its pills: what put the roll at advantage (a held Rites
+	// of the Land advantage, say), so this card says why as a stat roll's does.
+	) + conditionsRowHtml(conditionNotePills(conditionNotes));
 	await roll.toMessage({
 		speaker: alias ? { alias } : ChatMessage.getSpeaker(),
 		flavor:  title
@@ -554,6 +556,12 @@ function _woundJustifyHtml(actor, resultClass) {
 	</div>`;
 }
 
+/** A caller's own named conditions, one pill each. Text, never markup (see rollStat). */
+function conditionNotePills(notes) {
+	return (Array.isArray(notes) ? notes : []).filter(Boolean)
+		.map(note => `<li class="stonetop-condition-note">${escHtml(note)}</li>`);
+}
+
 /**
  * The "Conditions Applied:" row a roll card wears under its result — the Advantage /
  * Forward / Situational pills.
@@ -710,9 +718,7 @@ export async function rollStat(statKey, actor, options = {}) {
 	// so a roll that is at advantage for a reason settled seasons ago says which reason. Text, not
 	// markup: the pill's chrome belongs to this card, and a caller passing HTML would be styling
 	// someone else's card from a long way off.
-	for (const note of (Array.isArray(options.conditionNotes) ? options.conditionNotes : []).filter(Boolean)) {
-		conditions.push(`<li class="stonetop-condition-note">${escHtml(note)}</li>`);
-	}
+	conditions.push(...conditionNotePills(options.conditionNotes));
 	if (missCountsAsPartial && rolled.key === "failure") {
 		conditions.push(`<li class="stonetop-condition-note">${escHtml(`Rolled a 6-, counted as a 7-9 (${missCountsAsPartial})`)}</li>`);
 	}

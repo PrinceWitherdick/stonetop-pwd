@@ -982,7 +982,11 @@ export function registerSettings() {
 		scope: "world",
 		config: false,
 		type: Object,
-		default: {}
+		default: {},
+		// An open walkthrough holds its own copy of the log, so a second GM's write has to reach
+		// it or the next save here writes the old copy back over theirs. The writer's id comes
+		// with it, so a client can tell its own echo from somebody else's change.
+		onChange: (value, _options, userId) => game.stonetop?.onExpeditionLog?.(value, userId),
 	});
 
 	// The system-macro hotbar layout version this client has been snapped to (see

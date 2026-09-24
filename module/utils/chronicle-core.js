@@ -208,26 +208,44 @@ export function introQaPairs(record, slug) {
 // printed after it instead. Same field either way: the record does not care which shape the step
 // drew it in.
 function chartedGroups(chart, route = null) {
-	const picked = chartPicked(chart);
-	return CHART_GROUPS
+	return chartedLines(chart, route)
 		.map(group => {
-			const mine = picked.filter(e => e.group === group.key);
-			if (!mine.length) return "";
-			const lis = mine.map(entry => {
-				const text = chartEntryText(entry);
-				const said = String(entry.answer ?? "").trim();
-				// An authored line is the book's words; one the GM wrote is theirs, and is the
-				// only user-authored string in this list.
-				const line = entry.key
-					? fillChartBlank(text, entry.key, route, said)
-					: escHtml(text);
-				const after = (entry.key && hasFillBlank(text)) ? "" : said;
-				return `<li>${line}${after ? `: ${escHtml(after)}` : ""}</li>`;
-			}).join("");
+			const lis = group.entries
+				.map(({ line, said }) => `<li>${line}${said ? `: ${escHtml(said)}` : ""}</li>`)
+				.join("");
 			return `<p><strong>${escHtml(group.label)}</strong></p><ul>${lis}</ul>`;
 		})
-		.filter(Boolean)
 		.join("");
+}
+
+/**
+ * The charted list resolved line by line, grouped as Chart a Course groups it: the one resolver
+ * the Chronicle (chartedGroups, above) and the walkthrough's Running to-do both read.
+ *
+ * `line` is HTML: an authored prompt with the answer spliced into its blank, or the GM's own
+ * sentence escaped (the only user-authored string in this list). `said` is plain text, what was
+ * said after a line with no blank to splice it into, and "" otherwise.
+ *
+ * @returns {Array<{label: string, entries: Array<{id: string, line: string, said: string, done: boolean}>}>}
+ *   only the groups with something in them
+ */
+export function chartedLines(chart, route = null) {
+	const picked = chartPicked(chart);
+	return CHART_GROUPS
+		.map(group => ({
+			label:   group.label,
+			entries: picked.filter(e => e.group === group.key).map(entry => {
+				const text = chartEntryText(entry);
+				const said = String(entry.answer ?? "").trim();
+				return {
+					id:   entry.id,
+					line: entry.key ? fillChartBlank(text, entry.key, route, said) : escHtml(text),
+					said: (entry.key && hasFillBlank(text)) ? "" : said,
+					done: !!entry.done,
+				};
+			}),
+		}))
+		.filter(group => group.entries.length);
 }
 
 // "Stonetop to Marshedge to Lygos: at least 40 days", then a line per leg.
@@ -288,12 +306,11 @@ function buildExpeditionPage(exp, index) {
 		// so `exp.requisition` is LEGACY in the same way `exp.outfit` above is, still printed
 		// under the list for the trips that were logged with it.
 		proseSection("Requisitioned", requisitionedList(exp?.requisitioned) + paragraphs(exp?.requisition)),
-		// LEGACY, and kept deliberately. "Other preparations" is no longer a step of the
-		// walkthrough (ExpeditionDialog's _STEPS), so nothing writes `exp.prep` any more — but
-		// trips logged while it was a step still carry what a GM typed there, and dropping this
-		// line would silently un-print it from every Chronicle page that already holds it.
-		// `proseSection` returns nothing for empty prose and the list is filtered, so a trip
-		// logged since the step went away simply has no such heading.
+		// Written by the note under "Other preparations" at the foot of the Requisition step
+		// (ExpeditionDialog's _STEPS), the same `prep` field it had when it was a step of its own,
+		// so trips logged either side of that change print under the one heading. `proseSection`
+		// returns nothing for empty prose and the list is filtered, so a trip with no note simply
+		// has no such heading.
 		proseSection("Other preparations", paragraphs(exp?.prep)),
 		proseSection("The journey", paragraphs(exp?.running)),
 		// LEGACY, like the three above. The arriving-home step's "Return Triumphant?" box is

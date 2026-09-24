@@ -491,6 +491,27 @@ describe("rollSeasonsCard", () => {
 		expect(flavor).toContain("Pick <strong>one seasonal gain</strong>");
 		expect(flavor).toContain("<strong>Threats abound</strong>");
 	});
+
+	// A stat roll names what put it at advantage; so does this card, which the walkthrough's
+	// Requisition posts (a held Rites of the Land advantage).
+	it("names the roll's conditions in the stat card's pills, escaped", async () => {
+		rollTotal = 9;
+		await rollSeasonsCard({
+			formula: "3d6kh2", alias: "Requisition", resultTable: SPRING_SEASONS_RESULT,
+			conditionNotes: ["Rites of the Land: advantage", "", "<b>bold</b>"],
+		});
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-conditions");
+		expect(flavor).toContain(`<li class="stonetop-condition-note">Rites of the Land: advantage</li>`);
+		expect(flavor).toContain("&lt;b&gt;bold&lt;/b&gt;");
+		expect(flavor.match(/stonetop-condition-note/g)).toHaveLength(2);
+	});
+
+	it("draws no conditions row when there is nothing to name", async () => {
+		rollTotal = 9;
+		await rollSeasonsCard({ formula: "2d6", alias: "Requisition", resultTable: SPRING_SEASONS_RESULT });
+		expect(rollMessages[0].flavor).not.toContain("stonetop-roll-conditions");
+	});
 });
 
 // Herd of Horses: "When you Requisition half the herd or less, treat a 6- as a 7-9." Applied to

@@ -1,4 +1,5 @@
 import { stonetopCardShell, rollFormulaChip } from "./chat.js";
+import { damageRollFormula } from "./roll-engine.js";
 import { DEFAULT_FATE_TABLE, fateRangeLabel, fateRowFor, fateRowText } from "../data/fate-tables.js";
 
 // Stonetop's d6 oracle (weather, the Vellum Scroll's costs, etc.). Rolled bare, results
@@ -9,6 +10,11 @@ import { DEFAULT_FATE_TABLE, fateRangeLabel, fateRowFor, fateRowText } from "../
 // table's row back instead of the bare band, because "4: point to a looming danger" is the
 // answer the GM pressed the button for. The tables live in data/fate-tables.js so the step
 // printing one and the card resolving it read the same rows.
+
+/** The dice for a mode: one d6, or two with the better (advantage) or worse kept, as any die is. */
+export function fateDiceFormula(rollMode) {
+	return damageRollFormula("1d6", rollMode);
+}
 
 /**
  * Roll the Die of Fate and post a colour-coded result card to chat.
@@ -27,15 +33,20 @@ import { DEFAULT_FATE_TABLE, fateRangeLabel, fateRowFor, fateRowText } from "../
  * light to land, or a GM reading chat has no reason to watch the table at all. A hook that returns
  * `false` — a walk a later click superseded — posts NOTHING, so one landing is one card.
  *
+ * ADVANTAGE AND DISADVANTAGE are the book's own knob on it: Make Camp says to consider either,
+ * "depending on how well prepared they are" (Book I p.335). Two dice, the better or the worse
+ * one kept, the same shape advantage takes on a move's 2d6.
+ *
  * @param {object} [table]  A table from data/fate-tables.js. Omitted → the bare oracle.
  * @param {object} [options]
+ * @param {"adv"|"dis"|"normal"} [options.rollMode]  Anything else rolls the one die.
  * @param {(result: {table: object, row: object, index: number, total: number}) => any}
  *        [options.beforePost]  Awaited between the roll and the card. Return false to post none.
  * @returns {Promise<object|null>}  `{roll, row, index}`, or null when `beforePost` called it off.
  */
-export async function rollDieOfFate(fateTable = DEFAULT_FATE_TABLE, { beforePost = null } = {}) {
+export async function rollDieOfFate(fateTable = DEFAULT_FATE_TABLE, { beforePost = null, rollMode = "normal" } = {}) {
 	const table = Array.isArray(fateTable?.rows) ? fateTable : DEFAULT_FATE_TABLE;
-	const roll = await new Roll("1d6").evaluate();
+	const roll = await new Roll(fateDiceFormula(rollMode)).evaluate();
 	const row  = fateRowFor(table, roll.total);
 	const index = table.rows.indexOf(row);
 

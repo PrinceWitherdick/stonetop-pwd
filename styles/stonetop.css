@@ -1529,6 +1529,10 @@ body :is(.app, .window-app).stonetop-height-resized {
 	height: auto;
 	min-height: var(--button-size);
 }
+/* An opt-in beside the question (deleting a trip: "also remove its Chronicle page"). The shared
+   first-line checkbox row (.stonetop-camp-check), so a label that wraps reads as one item; this
+   only sets it off from the question above. */
+.application.dialog.stonetop-ask .stonetop-ask-check { margin: 6px 0 0; }
 
 /* ── Neutralize Foundry v14's orange hover / focus accent ──────────────────
    v14 paints button hover, and button + input focus outlines, with its "warm"
@@ -35695,6 +35699,56 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	   clear the 3:1 a meaningful shape needs. 30% black was about 2:1 on the paper, and a
 	   literal the high-contrast skin could not reach. */
 	border: 1.5px solid var(--st-text-muted); background: transparent;
+}
+/* How a roll here is made (Requisition, a step's Die of Fate): the pre-roll window's strip, on
+   its own line above the roll button, with Requisition's held-advantage note under it. */
+.stonetop-expedition-dialog .stonetop-exp-mode {
+	flex: 1 1 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.stonetop-expedition-dialog .stonetop-exp-mode .stonetop-roll-mode-picker .stonetop-roll-mode-btn {
+	padding: 4px 10px;
+}
+.stonetop-expedition-dialog .stonetop-exp-req-held {
+	margin: 0;
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	color: var(--st-text-secondary);
+}
+/* Running the journey's to-do list: what was charted, ticked off as it is dealt with. A tick
+   strikes the line and quiets it rather than removing it, because the book says a challenge they
+   dealt with can come back. */
+.stonetop-expedition-dialog .stonetop-exp-todo-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+/* Each line is the shared first-line checkbox row (.stonetop-camp-check), spaced by the list's gap. */
+.stonetop-expedition-dialog .stonetop-exp-todo-item .stonetop-camp-check { margin: 0; }
+.stonetop-expedition-dialog .stonetop-exp-todo-said { color: var(--st-text-secondary); font-style: italic; }
+.stonetop-expedition-dialog .stonetop-exp-todo-item.is-done .stonetop-exp-todo-text {
+	text-decoration: line-through;
+	color: var(--st-text-secondary);
+}
+.stonetop-expedition-dialog .stonetop-exp-todo-empty {
+	margin: 0;
+	font-style: italic;
+	color: var(--st-text-secondary);
+}
+/* Going home's read-back of the note from Other preparations: the GM's own lines, kept as typed. */
+.stonetop-expedition-dialog .stonetop-exp-projects-note {
+	margin: 0;
+	padding: 8px 12px;
+	white-space: pre-wrap;
+	color: var(--st-text-body);
+	border-left: 3px solid var(--st-gold-text);
+	background: var(--st-gold-bg);
+	border-radius: var(--st-radius-sm);
 }
 .stonetop-expedition-dialog .lvl-light .stonetop-exp-load-pip.on { background: var(--st-green-border); border-color: var(--st-green-border); }
 .stonetop-expedition-dialog .lvl-normal .stonetop-exp-load-pip.on { background: var(--st-accent-fill); border-color: var(--st-accent-fill); }

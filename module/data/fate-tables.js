@@ -52,7 +52,7 @@ export const FATE_TABLES = {
 			{ faces: [2],    tone: "bad",   text: "Something dangerous approaches, curious but not aggressive." },
 			{ faces: [3],    tone: "mixed", text: "Something annoying happens (critters, rain, an argument)." },
 			{ faces: [4, 5], tone: "mixed", text: "The night passes uneventfully." },
-			{ faces: [6],    tone: "good",  text: "A small boon, or an uneventful night." },
+			{ faces: [6],    tone: "good",  text: "They observe something interesting, find something useful, or otherwise gain some small boon; or the night passes uneventfully." },
 		],
 	},
 	// Weather & the Die of Fate — whether they get the weather they were hoping for.

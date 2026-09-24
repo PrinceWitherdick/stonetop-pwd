@@ -157,7 +157,7 @@ describe("adding, answering and removing", () => {
 		await d._mutateChart(list => [...list,
 			{ id: "x", group: "challenges", key: "lost", text: "", answer: "" }]);
 		expect(chartPicked(saved().chart)).toEqual([
-			{ id: "x", group: "challenges", key: "lost", text: "", answer: "", fromRoute: false },
+			{ id: "x", group: "challenges", key: "lost", text: "", answer: "", fromRoute: false, done: false },
 		]);
 	});
 
