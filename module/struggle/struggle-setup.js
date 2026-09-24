@@ -1,4 +1,5 @@
 import { GM_TICKED_HALF_MISSES, MOVE, ROLL_MODES, ROW_KIND, STAT_KEYS, STAT_LABELS } from "./struggle-rules.js";
+import { joinNames } from "../utils/strings.js";
 
 /**
  * THE GM'S SETUP, pure: what the Call for Struggle as One window shows, and the rows it turns into.
@@ -6,7 +7,7 @@ import { GM_TICKED_HALF_MISSES, MOVE, ROLL_MODES, ROW_KIND, STAT_KEYS, STAT_LABE
  * The book's order (p.328): clarify the danger and the stakes, establish the party's approach, then
  * "figure out which stat(s) make the most sense... Everyone might roll the same stat, or (if they
  * break up the jobs), they might each roll something different." So each character gets the stats
- * the GM allows (none ticked = their choice), a mode, and anyone OUTSIDE the struggle who Aids them.
+ * the GM allows (none picked = their choice), a mode, and anyone OUTSIDE the struggle who Aids them.
  *
  * A ROSTER entry is one character as StruggleSetupDialog read them:
  *   {actorId, name, img, owns: string[], load: "light"|"normal"|"heavy"|"", overloaded: boolean,
@@ -30,6 +31,35 @@ export function followerKey(actorId, ftype, slug) {
 }
 
 /**
+ * WHO AIDS A CHARACTER FROM OUTSIDE (p.328: "they're already involved", so nobody rolling can). The
+ * GM picks from the people the setup already knows are outside it, a character left out or a follower
+ * not rolling, or names someone else in the scene. A pick is `pc:<actorId>`, `follower:<fkey>`,
+ * AID_OTHER (the typed `aidOther` is the name), or "" for nobody.
+ */
+export const AID_OTHER = "other";
+const AID_PC = "pc:";
+const AID_FOLLOWER = "follower:";
+
+/** Everyone in the roster who could be picked, rolling or not, by pick value. */
+function aidPeople(roster, draft) {
+	const people = new Map();
+	for (const pc of roster) {
+		people.set(`${AID_PC}${pc.actorId}`, { name: pc.name, label: pc.name, kind: "pc", rolling: !!draft.pcs[pc.actorId]?.include });
+		for (const f of pc.followers ?? []) {
+			people.set(`${AID_FOLLOWER}${f.fkey}`, { name: f.name, label: `${f.name} (${pc.name}'s)`, kind: "follower", rolling: !!draft.followers[f.fkey]?.include });
+		}
+	}
+	return people;
+}
+
+/** The name a character's outside Aid goes by, or "" for nobody (a "someone else" left unnamed too). */
+function aidName(people, choice) {
+	const pick = choice?.aidPick ?? "";
+	if (pick === AID_OTHER) return (choice.aidOther ?? "").trim();
+	return people.get(pick)?.name ?? "";
+}
+
+/**
  * The draft a setup opens on. Every character in, rolling their choice of stat at no advantage; a
  * follower is in when the player has marked them as travelling with the party.
  */
@@ -37,7 +67,7 @@ export function newSetupDraft(roster, { danger = "", approach = "", journey = fa
 	const pcs = {};
 	const followers = {};
 	for (const pc of roster) {
-		pcs[pc.actorId] = { include: only ? only.includes(pc.actorId) : true, stats: [], mode: "normal", aidBy: "", aidAdv: true, ticks: [] };
+		pcs[pc.actorId] = { include: only ? only.includes(pc.actorId) : true, stats: [], mode: "normal", aidPick: "", aidOther: "", aidAdv: true, ticks: [] };
 		for (const f of pc.followers ?? []) {
 			followers[f.fkey] = { include: !!f.party, bonus: 0, mode: "normal" };
 		}
@@ -57,9 +87,11 @@ function clampBonus(value, exceptional) {
  */
 export function setupRows(roster, draft) {
 	const rows = [];
+	const people = aidPeople(roster, draft);
 	for (const pc of roster) {
 		const choice = draft.pcs[pc.actorId];
 		if (choice?.include) {
+			const aidBy = aidName(people, choice);
 			rows.push({
 				kind: ROW_KIND.PC,
 				actorId: pc.actorId,
@@ -69,7 +101,7 @@ export function setupRows(roster, draft) {
 				mode: ROLL_MODES.includes(choice.mode) ? choice.mode : "normal",
 				halfMisses: (choice.ticks ?? []).filter(m => GM_TICKED_HALF_MISSES.includes(m) && pc.owns.includes(m)),
 				owns: CARRIED.filter(m => pc.owns.includes(m)),
-				aid: choice.aidBy?.trim() ? { by: choice.aidBy.trim(), advantage: !!choice.aidAdv } : null,
+				aid: aidBy ? { by: aidBy, advantage: choice.aidAdv !== false } : null,
 			});
 		}
 		for (const f of pc.followers ?? []) {
@@ -114,8 +146,50 @@ function loadText(pc) {
 	return "";
 }
 
+/**
+ * One character's outside Aid, for the template: the list (nobody, those outside the struggle, then
+ * someone else), and what the GM's pick means. A pick the rules frown on is FLAGGED, never refused:
+ * someone rolling in the struggle (kept in the list under its own heading, so a character ticked back
+ * in after being picked does not silently vanish from the card), or one person Aiding two at once.
+ */
+function aidView(pc, roster, draft, people) {
+	const choice = draft.pcs[pc.actorId] ?? {};
+	const pick = choice.aidPick ?? "";
+	const option = ([value, p]) => ({ value, label: p.label, selected: value === pick });
+	const outside = [...people].filter(([, p]) => !p.rolling);
+	const groups = [
+		{ label: "Left out of the struggle", options: outside.filter(([, p]) => p.kind === "pc").map(option) },
+		{ label: "Followers not rolling", options: outside.filter(([, p]) => p.kind === "follower").map(option) },
+	];
+	const picked = people.get(pick);
+	if (picked?.rolling) groups.push({ label: "Rolling in the struggle", options: [option([pick, picked])] });
+
+	const flags = [];
+	if (picked?.rolling) flags.push(`${picked.name} is rolling in the struggle, and only someone outside it can Aid (Book I p.328).`);
+	if (picked) {
+		const alsoAiding = roster
+			.filter(other => other.actorId !== pc.actorId && draft.pcs[other.actorId]?.include && draft.pcs[other.actorId]?.aidPick === pick)
+			.map(other => other.name);
+		if (alsoAiding.length) flags.push(`${picked.name} is also Aiding ${joinNames(alsoAiding)}.`);
+	}
+
+	const advantage = choice.aidAdv !== false;
+	return {
+		groups: groups.filter(g => g.options.length),
+		isOther: pick === AID_OTHER,
+		other: choice.aidOther ?? "",
+		picked: pick !== "",
+		gives: [
+			{ value: "adv", label: "Advantage", selected: advantage },
+			{ value: "more", label: "More than alone", selected: !advantage },
+		],
+		flags,
+	};
+}
+
 /** The setup window, for the template. */
 export function setupView(roster, draft, { askerName = "", live = false } = {}) {
+	const people = aidPeople(roster, draft);
 	const pcs = roster.map(pc => {
 		const choice = draft.pcs[pc.actorId] ?? {};
 		return {
@@ -126,8 +200,7 @@ export function setupView(roster, draft, { askerName = "", live = false } = {}) 
 			loadText: loadText(pc),
 			stats: STAT_KEYS.map(key => ({ key, label: STAT_LABELS[key], checked: (choice.stats ?? []).includes(key) })),
 			modes: ROLL_MODES.map(mode => ({ value: mode, label: MODE_LABELS[mode], selected: (choice.mode ?? "normal") === mode })),
-			aidBy: choice.aidBy ?? "",
-			aidAdv: choice.aidAdv !== false,
+			aid: aidView(pc, roster, draft, people),
 			ticks: GM_TICKED_HALF_MISSES.filter(m => pc.owns.includes(m)).map(m => ({
 				name: m,
 				label: `${m}: ${HALF_MISS_WHEN[m]}, so a 6- counts as a 7-9`,

@@ -10,6 +10,7 @@ import { clearAsk, liveStruggle, startStruggle } from "./struggle-store.js";
 const TEMPLATE = "systems/stonetop-pwd/templates/dialogs/struggle-setup.hbs";
 const WINDOW_ID = "stonetop-struggle-setup";
 const SCROLLER = ".stonetop-guide-main";
+const REDRAWS_ON = new Set(["include", "aidPick"]);
 
 /** A selector that finds this control again in a fresh draw, or null for one that has no key. */
 function controlSelector(el) {
@@ -187,8 +188,9 @@ export class StruggleSetupDialog extends StonetopDialog {
 			if (!choice.include) continue;
 			choice.stats = [...field("stat")].filter(i => i.checked).map(i => i.value);
 			choice.mode = one("mode")?.value ?? choice.mode;
-			choice.aidBy = one("aidBy")?.value ?? choice.aidBy;
-			if (one("aidAdv")) choice.aidAdv = one("aidAdv").checked;
+			choice.aidPick = one("aidPick")?.value ?? choice.aidPick;
+			if (one("aidOther")) choice.aidOther = one("aidOther").value;
+			if (one("aidAdv")) choice.aidAdv = one("aidAdv").value !== "more";
 			choice.ticks = [...field("tick")].filter(i => i.checked).map(i => i.value);
 		}
 		for (const [fkey, choice] of Object.entries(draft.followers)) {
@@ -201,8 +203,9 @@ export class StruggleSetupDialog extends StonetopDialog {
 	}
 
 	_onChange(ev) {
-		// Ticking somebody in or out changes what their card holds; everything else just waits for Call.
-		if (ev.target?.dataset?.field !== "include") return;
+		// Ticking somebody in or out changes what their card holds, and who can Aid from outside; picking
+		// who Aids changes which fields follow and what every card flags. Everything else waits for Call.
+		if (!REDRAWS_ON.has(ev.target?.dataset?.field)) return;
 		this._capture();
 		this.render(false);
 	}

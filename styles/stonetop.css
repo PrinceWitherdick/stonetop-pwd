@@ -8428,6 +8428,26 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	border: none;
 }
 
+/* Every field in both windows wears the system's well (`.stonetop-cf-input`, and what
+   `.stonetop-themed` gives a bare input): translucent white on the paper, a #999 hairline, the slate
+   ring on focus. Core's own fill is a grey wash under a dark border, which on this paper read as a
+   disabled box. Its inset shadow is put out on the field itself (see the roster notes), since core's
+   `:focus` rule sets one straight back. */
+.stonetop-struggle-window :is(input[type="text"], select, textarea) {
+	border: 1px solid #999;
+	border-radius: var(--st-radius-sm);
+	background: rgba(255, 255, 255, 0.7);
+	box-shadow: none;
+	color: var(--st-text);
+}
+
+.stonetop-struggle-window :is(input[type="text"], select, textarea):focus {
+	border-color: var(--st-btn-primary-border);
+	box-shadow: 0 0 4px var(--color-shadow-highlight);
+}
+
+.stonetop-struggle-window :is(input[type="text"], textarea)::placeholder { color: var(--st-text-muted); }
+
 /* -- The setup -- */
 .stonetop-struggle-field {
 	display: flex;
@@ -8439,7 +8459,9 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-struggle-field textarea {
 	width: 100%;
 	min-height: 3.2em;
+	padding: 4px 8px;
 	resize: vertical;
+	line-height: 1.45;
 	font-family: inherit;
 	font-size: inherit;
 }
@@ -8457,45 +8479,94 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	border: none;
 }
 
+/* Equal chips, three and three, in the character sheet's stat order: a line that filled to the card
+   broke them four and a stray two at most widths. The card's 18em floor still holds "+CON" at a third. */
 .stonetop-struggle-chips {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px 6px;
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 5px;
 }
 
+/* A stat is a chip, the system's pick-from-a-pool pill (`.stonetop-cf-chip`): the chip is the control,
+   so its checkbox is kept for the keyboard and the reader but not drawn, where a box inside a pill
+   was two controls for one choice. A picked chip is the selected green, and its edge doubles, so the
+   colour is not the only thing that changes. */
 .stonetop-struggle-chip {
-	display: inline-flex;
+	position: relative;
+	display: flex;
 	align-items: center;
-	gap: 0.35em;
-	padding: 2px 8px;
-	border: 1px solid var(--color-border-light-2, rgba(0, 0, 0, 0.15));
+	justify-content: center;
+	padding: 2px 10px;
+	border: 1px solid rgba(100, 116, 139, 0.3);
 	border-radius: 999px;
+	background: hsl(210 12% 92%);
 	cursor: pointer;
 	font-weight: 600;
 	color: var(--st-text-body);
+	transition: background 0.12s, border-color 0.12s;
 }
+
+.stonetop-struggle-chip:hover { background: hsl(210 12% 85%); }
 
 .stonetop-struggle-chip:has(input:checked) {
-	border-color: var(--st-btn-primary-border);
-	box-shadow: inset 0 0 0 1px var(--st-btn-primary-border);
-	color: var(--st-text);
+	border-color: var(--st-green-border);
+	background: var(--st-green-bg);
+	box-shadow: inset 0 0 0 1px var(--st-green-border);
+	color: var(--st-green-text);
 }
 
-.stonetop-struggle-chip > input { flex: 0 0 auto; margin: 0; }
-
-.stonetop-struggle-setup .stonetop-camp-line input[type="text"] {
-	flex: 1 1 10em;
-	width: auto;
-	min-width: 0;
+.stonetop-struggle-chip:has(input:focus-visible) {
+	outline: 2px solid var(--st-btn-primary-bg);
+	outline-offset: 1px;
 }
 
-.stonetop-struggle-setup .stonetop-camp-line select { width: auto; max-width: 100%; }
-
-.stonetop-struggle-follower {
-	margin: 4px 0 0;
-	padding: 4px 0 0;
-	border-top: 1px dashed var(--color-border-light-2, rgba(0, 0, 0, 0.15));
+.stonetop-struggle-chip > input {
+	position: absolute;
+	inset: 0;
+	margin: 0;
+	opacity: 0;
+	pointer-events: none;
 }
+
+/* "Rolls with" and "Aided by" (and a follower's two lists): the words in one column and the fields in
+   the next, so the fields line up down the card instead of each dropping under its own label. A list
+   sizes to its longest choice; the name box takes the rest of the line. */
+.stonetop-struggle-fields {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	gap: 6px 10px;
+	color: var(--st-text-body);
+}
+
+.stonetop-struggle-fields > label { display: contents; }
+.stonetop-struggle-fields select { justify-self: start; width: auto; max-width: 100%; }
+.stonetop-struggle-fields input[type="text"] { width: 100%; min-width: 0; }
+
+/* Who Aids from outside names people, some of them long ("Enfys, your acolyte, beloved by birds
+   (Aerin's)"), so it takes the column rather than sizing to its longest name and pushing the card
+   wide. A flag under it (someone rolling picked, or one person Aiding two) keeps the gold cue. */
+.stonetop-struggle-fields select.stonetop-struggle-aid { justify-self: stretch; width: 100%; min-width: 0; }
+.stonetop-struggle-fields + .stonetop-struggle-cue,
+.stonetop-struggle-cue + .stonetop-struggle-cue { margin-top: 6px; }
+
+/* A follower's settings sit under their name, in from the tick, so which follower they belong to is
+   read from the indent rather than from a rule drawn between every one. */
+.stonetop-struggle-follower + .stonetop-struggle-follower { margin-top: 4px; }
+
+.stonetop-struggle-follower-body {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 2px 0 4px;
+	padding-left: calc(15px * var(--stonetop-font-scale, 1) + 0.5em);
+}
+
+.stonetop-struggle-follower-body > .stonetop-camp-note { margin: 0; }
+
+/* The follower's bonus says what it is in its own words ("+1: a tag or move applies"), so it has the
+   width of the card rather than a label beside it that would cut those words short. */
+.stonetop-struggle-bonus { align-self: stretch; width: 100%; min-width: 0; }
 
 /* The GM's button onto the move, on the toolkit's Expeditions tab (wearing the expedition card's Run
    button skin) and on the walkthrough's journey step (beside the Die of Fate). The hint says what the

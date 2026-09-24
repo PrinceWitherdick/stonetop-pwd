@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MOVE, ROW_KIND } from "../../module/struggle/struggle-rules.js";
 import {
-	followerKey, journeyMatters, newSetupDraft, setupHelpers, setupRows, setupView,
+	AID_OTHER, followerKey, journeyMatters, newSetupDraft, setupHelpers, setupRows, setupView,
 } from "../../module/struggle/struggle-setup.js";
 
 /** The GM's setup: what it offers, and the rows it calls the struggle with. */
@@ -43,9 +43,28 @@ describe("the rows a struggle is called with", () => {
 	it("carries the GM's stats, mode and outside Aid", () => {
 		const r = roster();
 		const draft = newSetupDraft(r);
-		Object.assign(draft.pcs.rhianna, { stats: ["int", "wis", "luck"], mode: "adv", aidBy: " Lowri ", aidAdv: false });
+		Object.assign(draft.pcs.rhianna, { stats: ["int", "wis", "luck"], mode: "adv", aidPick: AID_OTHER, aidOther: " Lowri ", aidAdv: false });
 		const row = setupRows(r, draft)[0];
 		expect(row).toMatchObject({ stats: ["int", "wis"], mode: "adv", aid: { by: "Lowri", advantage: false } });
+	});
+
+	it("names outside Aid by who was picked: a character left out, or a follower not rolling", () => {
+		const r = roster();
+		const draft = newSetupDraft(r);
+		draft.pcs.garet.include = false;
+		draft.pcs.rhianna.aidPick = "pc:garet";
+		draft.pcs.vahid.aidPick = `follower:${crew.fkey}`;
+		const rows = setupRows(r, draft);
+		expect(rows.find(row => row.actorId === "rhianna").aid).toEqual({ by: "Garet", advantage: true });
+		expect(rows.find(row => row.actorId === "vahid" && row.kind === ROW_KIND.PC).aid).toEqual({ by: "Crew", advantage: true });
+	});
+
+	it("carries no Aid for nobody, or for someone else left unnamed", () => {
+		const r = roster();
+		const draft = newSetupDraft(r);
+		draft.pcs.vahid.aidPick = AID_OTHER;
+		draft.pcs.vahid.aidOther = "  ";
+		expect(setupRows(r, draft).filter(row => row.kind === ROW_KIND.PC).map(row => row.aid)).toEqual([null, null, null]);
 	});
 
 	it("rolls a follower at +2 only when they are exceptional", () => {
@@ -88,6 +107,45 @@ describe("the setup view", () => {
 		expect(vahid.ticks.map(t => t.label)).toEqual(["Stone Cold: they keep calm and carry on, so a 6- counts as a 7-9"]);
 		expect(vahid.loadText).toBe("Heavy load");
 		expect(view.pcs.find(p => p.actorId === "rhianna").ticks).toEqual([]);
+	});
+
+	it("offers as outside Aid only those outside the struggle, then someone else", () => {
+		const r = roster();
+		const draft = newSetupDraft(r);
+		draft.pcs.garet.include = false;
+		const aid = setupView(r, draft).pcs.find(p => p.actorId === "rhianna").aid;
+		expect(aid.groups.map(g => [g.label, g.options.map(o => [o.value, o.label])])).toEqual([
+			["Left out of the struggle", [["pc:garet", "Garet"]]],
+			["Followers not rolling", [[`follower:${crew.fkey}`, "Crew (Rhianna's)"]]],
+		]);
+		expect(aid).toMatchObject({ picked: false, isOther: false, flags: [] });
+	});
+
+	it("asks for a name only for someone else, and what the Aid gives only once someone is picked", () => {
+		const r = roster();
+		const draft = newSetupDraft(r);
+		draft.pcs.vahid.aidPick = AID_OTHER;
+		draft.pcs.vahid.aidAdv = false;
+		const aid = setupView(r, draft).pcs.find(p => p.actorId === "vahid").aid;
+		expect(aid).toMatchObject({ picked: true, isOther: true });
+		expect(aid.gives.find(g => g.selected).value).toBe("more");
+	});
+
+	it("flags, without refusing, an Aider who is rolling in the struggle, and one person Aiding two", () => {
+		const r = roster();
+		const draft = newSetupDraft(r);
+		draft.pcs.garet.include = false;
+		draft.pcs.rhianna.aidPick = "pc:garet";
+		draft.pcs.vahid.aidPick = "pc:garet";
+		let view = setupView(r, draft);
+		expect(view.pcs.find(p => p.actorId === "rhianna").aid.flags).toEqual(["Garet is also Aiding Vahid."]);
+
+		draft.pcs.garet.include = true;
+		view = setupView(r, draft);
+		const rhianna = view.pcs.find(p => p.actorId === "rhianna").aid;
+		expect(rhianna.flags[0]).toBe("Garet is rolling in the struggle, and only someone outside it can Aid (Book I p.328).");
+		expect(rhianna.groups.at(-1)).toEqual({ label: "Rolling in the struggle", options: [{ value: "pc:garet", label: "Garet", selected: true }] });
+		expect(setupRows(r, draft).find(row => row.actorId === "rhianna").aid).toEqual({ by: "Garet", advantage: true });
 	});
 
 	it("will not call a struggle while one is under way, or with nobody in it", () => {
