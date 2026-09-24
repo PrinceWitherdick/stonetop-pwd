@@ -1494,6 +1494,39 @@ body :is(.app, .window-app).stonetop-height-resized {
 	color: var(--st-red-text);
 }
 
+/* ── A question and its answers: `.stonetop-ask` ─────────────────────────
+   The shape a good few of our DialogV2s are: a paragraph of rule, then one button per answer,
+   each labelled with what it DOES rather than yes/no. Two things that shape needs and core does
+   not give it.
+
+   A MEASURE. A DialogV2 sets no width, and ApplicationV2's `width: "auto"` is shrink-to-fit
+   against the VIEWPORT rather than against anything readable -- so a two-sentence question opened
+   as a single line around 1100px wide at the default text size, and half as wide again at the
+   larger sizes some of us run. The cap is that sentence's measure, scaled by the same
+   `--stonetop-font-scale` the prose itself is scaled by on `.stonetop .window-content`, so the
+   question comes to about three lines whatever the size. A `max-width` and not a
+   `position: {width}`: a number of pixels is right at exactly one text size, and shrink-to-fit
+   honours a cap, so a short question still opens a short window.
+
+   A ROW PER ANSWER. Core lays the footer out `flex: 1` and pins every button to a fixed
+   `height: var(--button-size)`, so a label too long for its half of the row wraps INSIDE a box
+   that cannot grow -- the ApplicationV2 twin of the AppV1 trap in `.stonetop.dialog
+   .dialog-buttons button` above. These labels are verb phrases ("Rushing in: lose the Readiness",
+   "Ilsa takes the blow for Wren"), and several of these windows are a list of choices rather than
+   a yes or a no, so each answer takes a row of its own, read top to bottom with the affirmative
+   first. Unlayered, so it beats core's `@layer blocks.base` `.standard-form .form-footer > button`
+   whatever the specificity. `height: auto` over core's fixed one is the safety net under all of
+   it: a name long enough to wrap a label even at full width makes its own button taller instead
+   of spilling out of it. */
+.application.dialog.stonetop-ask {
+	max-width: calc(26rem * var(--stonetop-font-scale, 1));
+}
+.application.dialog.stonetop-ask .form-footer > button {
+	flex: 1 0 100%;
+	height: auto;
+	min-height: var(--button-size);
+}
+
 /* ── Neutralize Foundry v14's orange hover / focus accent ──────────────────
    v14 paints button hover, and button + input focus outlines, with its "warm"
    palette (--color-warm-1 #ee9b3a / --color-warm-2 #c9593f) via the

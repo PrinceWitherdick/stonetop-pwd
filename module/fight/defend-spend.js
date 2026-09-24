@@ -211,7 +211,9 @@ export async function pickOne(items, { title, question, labelOf, DialogV2 = glob
 	if (items.length <= 1) return items[0] ?? null;
 	if (!DialogV2) return null;
 	const index = await DialogV2.wait({
-		classes: themedDialogClasses(),
+		// A list of spends, each named for who takes what: `stonetop-ask` caps the window's width
+		// and gives every offer a row of its own (stonetop.css).
+		classes: themedDialogClasses("stonetop-ask"),
 		window: { title },
 		content: contentElement(`<p>${escHtml(question)}</p>`),
 		buttons: [

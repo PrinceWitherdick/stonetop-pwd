@@ -40,7 +40,9 @@ export async function askGoingOnOffense(actor, moveName, { DialogV2 = globalThis
 	if (!DialogV2) return false;
 	const count = heldReadiness(actor);
 	const answer = await DialogV2.wait({
-		classes: themedDialogClasses(),
+		// `stonetop-ask` carries the window's measure and a row per answer: a DialogV2 is auto-width,
+		// so this paragraph would otherwise open as one very long line (stonetop.css).
+		classes: themedDialogClasses("stonetop-ask"),
 		window: { title: format(`${KEY}.askTitle`, { name: actor.name, count }) },
 		content: contentElement(`<p>${escHtml(format(`${KEY}.ask`, { name: actor.name, count, move: moveName }))}</p>`),
 		// Affirmative first: the rule's own case, the one that costs something.

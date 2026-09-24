@@ -19,7 +19,9 @@ import { breakCamp, campActors, campRecordOf, stateOfCamp } from "./camp-store.j
 export async function askWithButtons({ title, content, buttons, defaultKey = null }) {
 	const chosen  = defaultKey ?? buttons[0]?.key;
 	const pressed = await foundry.applications.api.DialogV2.wait({
-		classes: themedDialogClasses("stonetop-camp-ask"),
+		// `stonetop-ask` is the question-and-answers shape (stonetop.css): it caps the width a
+		// DialogV2 would otherwise take from the viewport, and gives each answer a row of its own.
+		classes: themedDialogClasses("stonetop-camp-ask", "stonetop-ask"),
 		window:  { title },
 		content,
 		buttons: buttons.map(button => ({
