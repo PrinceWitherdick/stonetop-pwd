@@ -515,6 +515,8 @@ Hooks.once("init", () => {
 		// mounted behind the "Ask How to Roll Each Time" client setting — see RollDialog.js.
 		"stonetop.roll-mode-radios":     "systems/stonetop-pwd/templates/actor/partials/roll-mode-radios.hbs",
 		"stonetop.roll-mode-picker":     "systems/stonetop-pwd/templates/actor/partials/roll-mode-picker.hbs",
+		// The pill itself, inside the picker and over each roll the expedition walkthrough makes.
+		"stonetop.roll-mode-strip":      "systems/stonetop-pwd/templates/actor/partials/roll-mode-strip.hbs",
 		"stonetop.lore-section":          "systems/stonetop-pwd/templates/actor/partials/lore-section.hbs",
 		"stonetop.lore-options-edit":     "systems/stonetop-pwd/templates/actor/partials/lore-options-edit.hbs",
 		"stonetop.lore-options-readonly": "systems/stonetop-pwd/templates/actor/partials/lore-options-readonly.hbs",

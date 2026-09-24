@@ -117,7 +117,7 @@ function readModifier(root) {
 /** Buttons rather than the radios a segmented strip is normally built around: the pill has to
  *  repaint the instant it is clicked and there is no document write behind it to re-render off
  *  (the choice lives and dies with this window), so the fill hangs off a class we move. */
-function wireModePicker(root, onChange) {
+export function wireModePicker(root, onChange) {
 	const options = root.querySelectorAll(".stonetop-roll-mode-btn");
 	options.forEach(btn => {
 		btn.addEventListener("click", () => {

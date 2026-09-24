@@ -1,0 +1,41 @@
+{{!-- The Disadvantage / Normal / Advantage strip itself: a segmented pill of three buttons, worst
+      to best, left to right, so it reads as a scale rather than a menu. What "stonetop.roll-mode-picker"
+      puts in a section heading, and what the expedition walkthrough offers over each roll it makes.
+      The pre-roll window (module/dialogs/RollDialog.js) builds the same markup in JS, and its
+      `wireModePicker` is what flips it in place.
+
+      Buttons, not radio inputs: a NAMED input inside an actor sheet's form is submitted into
+      `_updateObject` and lands in `expandObject(formData)` as a stray top-level key.
+
+      Params:
+        rollMode  "adv" | "normal" | "dis", the one pressed
+        labelKey  the group's accessible name
+        tipKey    where the three hovers live (`{tipKey}.disTooltip` and so on): they say what dice
+                  each mode rolls, which is not the same for every roll. --}}
+<div class="stonetop-segmented-picker stonetop-roll-mode-picker" role="group"
+     aria-label="{{localize labelKey}}">
+	<button type="button"
+	        class="stonetop-segmented-picker-option stonetop-roll-mode-btn{{#if (eq rollMode "dis")}} is-active{{/if}}"
+	        data-roll-mode="dis"
+	        aria-pressed="{{#if (eq rollMode "dis")}}true{{else}}false{{/if}}"
+	        data-tooltip="{{localize (concat tipKey ".disTooltip")}}">
+		<i class="fa-solid fa-angles-down" aria-hidden="true"></i>
+		<span>{{localize "stonetop.rollMode.dis"}}</span>
+	</button>
+	<button type="button"
+	        class="stonetop-segmented-picker-option stonetop-roll-mode-btn{{#if (eq rollMode "normal")}} is-active{{/if}}"
+	        data-roll-mode="normal"
+	        aria-pressed="{{#if (eq rollMode "normal")}}true{{else}}false{{/if}}"
+	        data-tooltip="{{localize (concat tipKey ".normalTooltip")}}">
+		<i class="fa-solid fa-equals" aria-hidden="true"></i>
+		<span>{{localize "stonetop.rollMode.normal"}}</span>
+	</button>
+	<button type="button"
+	        class="stonetop-segmented-picker-option stonetop-roll-mode-btn{{#if (eq rollMode "adv")}} is-active{{/if}}"
+	        data-roll-mode="adv"
+	        aria-pressed="{{#if (eq rollMode "adv")}}true{{else}}false{{/if}}"
+	        data-tooltip="{{localize (concat tipKey ".advTooltip")}}">
+		<i class="fa-solid fa-angles-up" aria-hidden="true"></i>
+		<span>{{localize "stonetop.rollMode.adv"}}</span>
+	</button>
+</div>
