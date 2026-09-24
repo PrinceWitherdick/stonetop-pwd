@@ -1,4 +1,5 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
+import { holdCentre } from "../utils/hold-centre.js";
 import {
 	ORIGINS, NATURES, FORM_FIELDS, detailFieldsForNature,
 	rollOnTable, seedDescriptionHtml,
@@ -69,21 +70,13 @@ export class StonetopArcanaInspireDialog extends StonetopDialog {
 	}
 
 	// Re-center on the previous step's center when a step change resizes the window, so
-	// the modal grows/shrinks in place rather than jumping (mirrors LevelUpDialog).
+	// the modal grows/shrinks in place rather than jumping (utils/hold-centre.js).
 	get _autoHeight() { return true; }
 
 	async _render(force, options) {
-		const p = this.position;
-		const prevCenter = [p?.left, p?.top, p?.width, p?.height].every(Number.isFinite)
-			? { x: p.left + p.width / 2, y: p.top + p.height / 2 }
-			: null;
+		const recentre = holdCentre(this);
 		await super._render(force, options);
-		if (prevCenter) {
-			this.setPosition({
-				left: prevCenter.x - this.position.width / 2,
-				top:  prevCenter.y - this.position.height / 2,
-			});
-		}
+		recentre();
 	}
 
 	_natureKey() {

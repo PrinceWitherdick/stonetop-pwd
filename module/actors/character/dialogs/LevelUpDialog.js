@@ -1,4 +1,5 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
+import { holdCentre } from "../../../utils/hold-centre.js";
 import { markProseSpiralBullets } from "../../../utils/journal-spiral-bullets.js";
 import { moveGroupsForPlaybook, moveGroupKeys } from "./onboarding-move-groups.js";
 import { moveMarkBudget } from "../move-mark-budget.js";
@@ -85,17 +86,14 @@ export class LevelUpDialog extends StonetopDialog {
 	}
 
 	async _render(force, options) {
-		// Capture the previous step's CENTER before re-rendering. A step change
-		// resizes the window; without this it would grow from a fixed corner (or
+		// Hold the previous step's CENTER before re-rendering (utils/hold-centre.js). A step
+		// change resizes the window; without this it would grow from a fixed corner (or
 		// Foundry would re-center it in the viewport, reading as a jump). Re-centering
 		// on this point keeps the new, larger window centered over the old one.
-		// Null on first render (no prior position), where Foundry centers us.
-		const p = this.position;
-		const prevCenter = [p?.left, p?.top, p?.width, p?.height].every(Number.isFinite)
-			? { x: p.left + p.width / 2, y: p.top + p.height / 2 }
-			: null;
+		// Nothing is held on the first render (no prior position), where Foundry centers us.
+		const recentre = holdCentre(this);
 		await super._render(force, options);
-		this._applyStepSize(prevCenter);
+		this._applyStepSize(recentre);
 	}
 
 	// Resize the window to match the active step — but only when the step actually
@@ -105,20 +103,16 @@ export class LevelUpDialog extends StonetopDialog {
 	// balloon); only the width differs — the move, foreign-move, and invocation
 	// pickers widen for their two-column grids (LEVELUP_WIDE_STEPS). So a short step
 	// like the stat picker shrinks back down instead of hanging at the wide size. When
-	// `prevCenter` is known the window is re-centered on it so the resize stays put.
-	_applyStepSize(prevCenter = null) {
+	// given `recentre` (holdCentre's answer) the window is re-centered on the old centre so
+	// the resize stays put.
+	_applyStepSize(recentre = null) {
 		if (this._sizedStep === this._step) return;
 		this._sizedStep = this._step;
 		const width = LEVELUP_WIDE_STEPS.includes(this._step) ? LEVELUP_MOVE_WIDTH : LEVELUP_BASE_WIDTH;
 		// Apply the new width + fit-to-content height first so Foundry resolves the
 		// final height, then recenter using the now-known dimensions.
 		this.setPosition({ width, height: "auto" });
-		if (prevCenter) {
-			this.setPosition({
-				left: prevCenter.x - this.position.width / 2,
-				top:  prevCenter.y - this.position.height / 2,
-			});
-		}
+		recentre?.();
 	}
 
 	getData() {
