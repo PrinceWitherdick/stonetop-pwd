@@ -76,11 +76,12 @@ afterEach(() => {
 });
 
 describe("ringButtons", () => {
-	it("gives a character Clash then Let Fly, and their damage die", () => {
+	it("gives a character Clash, Let Fly and Defy Danger in the ring's order, not their sheet's, and their damage die", () => {
 		const { moves, damage } = ringButtons(bram(), { die: "d8" });
 		expect(moves).toEqual([
 			{ run: "move", itemId: "clash", label: "Clash", icon: "fa-solid fa-swords" },
 			{ run: "move", itemId: "letfly", label: "Let Fly", icon: "fa-solid fa-bow-arrow" },
+			{ run: "move", itemId: "defy", label: "Defy Danger", icon: "fa-solid fa-person-running" },
 		]);
 		expect(damage).toEqual([{ run: "damage", label: "Damage", formula: "d8", icon: "fa-solid fa-dice-d8" }]);
 	});
@@ -213,8 +214,9 @@ describe("ringButtons", () => {
 		}
 	});
 
-	it("offers the three fighting moves: the two basic attacks and Defend", () => {
-		expect(RING_MOVES.map(m => m.name)).toEqual(["Clash", "Let Fly", "Defend"]);
+	it("offers the three fighting moves, then Defy Danger, which a follower's Order already opens on", () => {
+		expect(RING_MOVES.map(m => m.name)).toEqual(["Clash", "Let Fly", "Defend", "Defy Danger"]);
+		expect(RING_MOVES.filter(m => m.characterOnly).map(m => m.name)).toEqual(["Defy Danger"]);
 	});
 
 	it("shows the Readiness a character holds over their token, and nothing when they hold none", () => {
@@ -436,15 +438,16 @@ describe("ringGrowth", () => {
 describe("the ring's template", () => {
 	it("puts moves on the left and damage on the right, numbered straight through, each saying what it rolls", () => {
 		const context = ringContext(ringButtons(bram(), { die: "d8" }), { name: "Bram" });
-		expect([...context.moves, ...context.damage].map(b => b.label)).toEqual(["Clash", "Let Fly", "Damage"]);
+		expect([...context.moves, ...context.damage].map(b => b.label)).toEqual(["Clash", "Let Fly", "Defy Danger", "Damage"]);
 		const html = template(context);
 		const left = html.slice(html.indexOf("col left"), html.indexOf("col right"));
 		const right = html.slice(html.indexOf("col right"));
 		expect(left).toContain('data-index="0"');
 		expect(left).toContain('aria-label="Roll Clash"');
 		expect(left).toContain('data-index="1"');
+		expect(left).toContain('aria-label="Roll Defy Danger"');
 		expect(left).not.toContain("stonetop-fight-ring-formula");
-		expect(right).toContain('data-index="2"');
+		expect(right).toContain('data-index="3"');
 		expect(right).toContain('aria-label="Roll damage: Damage, d8"');
 		expect(right).toContain('<span class="stonetop-fight-ring-formula">d8</span>');
 		expect(html).toContain('aria-label="Bram in the fight: Moves"');
@@ -514,7 +517,7 @@ describe("the ring window", () => {
 		expect(ring.closes).toBe(1);
 		expect(actor.sheet.rollMoveById).toHaveBeenCalledWith("letfly", { shiftKey: false });
 		await ring.render({ object: token });
-		await Ring.DEFAULT_OPTIONS.actions.ringRoll.call(ring, { shiftKey: true }, { dataset: { index: "2" } });
+		await Ring.DEFAULT_OPTIONS.actions.ringRoll.call(ring, { shiftKey: true }, { dataset: { index: "3" } });
 		expect(rollCharacterDamageAt).toHaveBeenCalledWith(actor, { label: "Damage", rollMode: undefined, seeded: true, strikeBack: false, shiftKey: true });
 	});
 });
@@ -536,7 +539,7 @@ describe("clicking tokens", () => {
 		expect(ring.rendered).toBe(true);
 		expect(ring.object).toBe(token);
 		expect(ring.renders.at(-1)).toMatchObject({ force: true, position: true, object: token });
-		expect(ring.context.moves.map(m => m.label)).toEqual(["Clash", "Let Fly"]);
+		expect(ring.context.moves.map(m => m.label)).toEqual(["Clash", "Let Fly", "Defy Danger"]);
 	});
 
 	it("puts it away on the next press, and keeps it away when that press was on the same token", async () => {

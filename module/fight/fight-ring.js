@@ -3,7 +3,7 @@
 // Core puts its token HUD round a token on a RIGHT-click (visibility, effects, configuration). A plain
 // LEFT-click on a token in the fight puts this one there instead, laid out the same way, so a player can
 // act without opening a sheet:
-//  • a character: Clash, Let Fly and Defend on the left, their damage die on the right, and while they
+//  • a character: Clash, Let Fly, Defend and Defy Danger on the left, their damage die on the right, and while they
 //    hold Readiness, Defend's "strike back at an attacker (deal your damage, with disadvantage)" (p.216),
 //    Big Damn Hero's "lock eyes with an attacker" for a Would-Be Hero who has it, and the Readiness they
 //    hold, shown over the token so the table can see what they have to spend;
@@ -61,6 +61,9 @@ export const RING_MOVES = [
 	{ name: "Let Fly", icon: "fa-solid fa-bow-arrow", orderKey: "let-fly" },
 	// The third fighting move (p.216): holding a position, or jumping in for someone.
 	{ name: "Defend", icon: "fa-solid fa-shield", orderKey: "defend" },
+	// Not a fighting move, but the one a fight asks for most: ducking the club, crossing the melee. A
+	// character's only: a follower's Order button already opens on it, the book's default (Order Followers).
+	{ name: "Defy Danger", icon: "fa-solid fa-person-running", orderKey: "defy-danger", characterOnly: true },
 ];
 
 /** The glyph on Defend's strike back, the one spend of Readiness that is a roll of its own. */
@@ -195,7 +198,7 @@ export function ringButtons(actor, { die = "", order = null, swarm = null, readi
 		// (Book I p.473). Their character rolls all three (p.462), through the same dialog their card
 		// opens; Order is last because it is the one that asks which move rather than saying.
 		if (order) {
-			const offered = [...RING_MOVES, { name: localize("stonetop.fight.ring.order"), icon: ORDER_ICON, orderKey: null }];
+			const offered = [...RING_MOVES.filter(m => !m.characterOnly), { name: localize("stonetop.fight.ring.order"), icon: ORDER_ICON, orderKey: null }];
 			for (const { name, icon, orderKey } of offered) {
 				moves.push({ run: "order", moveKey: orderKey, label: name, icon, order });
 			}
