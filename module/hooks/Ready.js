@@ -36,6 +36,7 @@ import { ExpeditionDialog } from "../dialogs/ExpeditionDialog.js";
 import { WeatherDialog } from "../dialogs/WeatherDialog.js";
 import { refreshWeatherFx } from "../seasons/current-weather.js";
 import { postFxMasterSuggestionOnce } from "../seasons/fxmaster-suggestion.js";
+import { postAttackFxSuggestionOnce } from "../combat/attack-fx-suggestion.js";
 import { WelcomeDialog } from "../dialogs/WelcomeDialog.js";
 import { FoundryBasicsDialog } from "../dialogs/FoundryBasicsDialog.js";
 import { CharacterCreationDialog } from "../actors/character/dialogs/CharacterCreationDialog.js";
@@ -565,6 +566,9 @@ export async function onReady() {
 		catch (err) { console.error("Stonetop | player hotbar macro placement failed", err); }
 	}
 	if (game.user.isGM) {
+		// Read BEFORE the greeting is posted: afterwards every world has had it, and the attack
+		// effects card below is only for a world greeted before the greeting named its modules.
+		const greeted = !!getSetting("startupWelcomeShown");
 		await _postStartupWelcomeMessageOnce();
 		await _postBook2ArtReminderOnce();
 		// After the art reminder, and for the same reason it is ordered where it is: both are
@@ -574,6 +578,8 @@ export async function onReady() {
 		// than a suggestion about an optional module, so a failed post must not take it with it.
 		try { await postFxMasterSuggestionOnce(); }
 		catch (err) { console.error("Stonetop | FXMaster suggestion failed:", err); }
+		try { await postAttackFxSuggestionOnce({ greeted }); }
+		catch (err) { console.error("Stonetop | attack effects suggestion failed:", err); }
 		// Background, like the seeds above. This one has to BROWSE the art folder before it
 		// can tell there is nothing to offer, and it deliberately leaves its flag unset when
 		// the plan is empty so a later import still gets the nudge — so for a GM who never

@@ -507,6 +507,17 @@ export function registerSettings() {
 		default: false
 	});
 
+	// Whether the one-time "your attacks could be seen and heard" chat card has been posted
+	// (see combat/attack-fx-suggestion.js). For worlds greeted before the greeting card named
+	// Sequencer, JB2A and SoundFx Library; a world greeted since is marked done unposted.
+	game.settings.register(SYSTEM_ID, "attackFxSuggestionShown", {
+		name: "Attack Effects Module Suggestion Shown",
+		scope: "world",
+		config: false,
+		type: Boolean,
+		default: false
+	});
+
 	// RETIRED KEY: "peopleCropRebuildOffered". Superseded by bookArtRebuildOffered below and
 	// no longer registered — nothing reads it, and Foundry simply ignores a stored value whose
 	// key it does not know, so leaving it registered bought nothing. Named here so the key is
