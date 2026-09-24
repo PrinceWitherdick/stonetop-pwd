@@ -29,7 +29,7 @@
     {{#each journey.tiers}}
     <button type="button" role="tab" aria-selected="{{isActive}}" data-tier="{{slug}}"
             class="stonetop-journey-tier{{#if isActive}} is-active{{/if}}">
-      {{name}}{{#unless hasMap}} <i class="fas fa-image-slash" data-tooltip="Not imported"></i>{{/unless}}
+      {{name}}{{#unless hasMap}} <i class="fas fa-image-slash" role="img" aria-label="Not imported" data-tooltip="Not imported"></i>{{/unless}}
     </button>
     {{/each}}
   </div>
@@ -47,7 +47,7 @@
         site wears as a pin on the picture below: that one is drawn at 18px, where this one does
         not read. One idea, two sizes, two drawings -- and this control belongs with the list. --}}
   <button type="button" class="stonetop-journey-place-site" data-tooltip="{{journey.placeSite.tooltip}}">
-    <i class="fas fa-mountain-sun"></i> {{journey.placeSite.label}}
+    <i class="fas fa-mountain-sun" aria-hidden="true"></i> {{journey.placeSite.label}}
   </button>
   {{/if}}
   {{!-- Put the way they go onto the table's own map. NEXT TO "put a site on the map" (user,
@@ -65,7 +65,7 @@
   {{#if journey.scene}}
   <button type="button" class="stonetop-journey-to-scene{{#if journey.scene.showing}} is-showing{{/if}}"
           data-tooltip="{{journey.scene.tooltip}}">
-    <i class="fas {{journey.scene.icon}}"></i> {{journey.scene.label}}
+    <i class="fas {{journey.scene.icon}}" aria-hidden="true"></i> {{journey.scene.label}}
   </button>
   {{/if}}
 </div>

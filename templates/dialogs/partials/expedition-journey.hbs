@@ -136,8 +136,8 @@
                 content-link click (and drag) off `a[data-link]` and only paints the class. An
                 anchor with the class alone looks exactly like a link and does nothing. --}}
           <a class="content-link stonetop-journey-book" data-link draggable="true"
-             data-uuid="{{uuid}}" data-tooltip="Read the gazetteer">
-            <i class="fas fa-book-open"></i>
+             data-uuid="{{uuid}}" data-tooltip="Read the gazetteer" aria-label="Read about {{name}} in the gazetteer">
+            <i class="fas fa-book-open" aria-hidden="true"></i>
           </a>
           {{/if}}
         </li>

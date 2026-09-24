@@ -32222,7 +32222,7 @@ th:has(> .stonetop-roll-table-btn) {
 	white-space: nowrap;
 	padding: 5px 14px;
 	font-family: var(--font-stonetop);
-	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
+	font-size: calc(0.95rem * var(--stonetop-font-scale, 1));
 	cursor: pointer;
 	border: 1px solid var(--color-border-dark, #7a7971);
 	border-radius: var(--st-radius-sm);
@@ -32232,7 +32232,7 @@ th:has(> .stonetop-roll-table-btn) {
 }
 
 .stonetop-spring-roll-btn:hover,
-.stonetop-spring-ask-btn:hover { background: hsl(40 25% 85%); }
+.stonetop-spring-ask-btn:hover { background: var(--st-warm-hover-bg); }
 .stonetop-spring-roll-btn > i,
 .stonetop-spring-ask-btn > i { margin-right: 4px; }
 
@@ -32279,7 +32279,7 @@ th:has(> .stonetop-roll-table-btn) {
 }
 
 .stonetop-spring-roll-result-label {
-	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
+	font-size: calc(0.92rem * var(--stonetop-font-scale, 1));
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 }
@@ -32335,7 +32335,7 @@ th:has(> .stonetop-roll-table-btn) {
 
 .stonetop-spring-tiers--cards .stonetop-spring-tier-text {
 	flex: 1;
-	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
+	font-size: calc(0.95rem * var(--stonetop-font-scale, 1));
 	line-height: 1.45;
 }
 
@@ -32379,23 +32379,23 @@ th:has(> .stonetop-roll-table-btn) {
 
 /* Tier colour-coding (shared by the dialog roll result and the chat card) */
 
-.stonetop-spring--success { color: #1a5c2e; }
-.stonetop-spring--partial { color: #7a4a00; }
-.stonetop-spring--failure { color: #8a2020; }
+.stonetop-spring--success { color: var(--st-green-text); }
+.stonetop-spring--partial { color: var(--st-gold-text); }
+.stonetop-spring--failure { color: var(--st-red-text); }
 
 .stonetop-spring-roll-result.stonetop-spring--success {
-	background: rgba(40, 140, 70, 0.1);
-	border-color: rgba(40, 140, 70, 0.4);
+	background: var(--st-green-bg);
+	border-color: var(--st-green-border);
 }
 
 .stonetop-spring-roll-result.stonetop-spring--partial {
-	background: rgba(200, 120, 20, 0.1);
-	border-color: rgba(200, 120, 20, 0.4);
+	background: var(--st-gold-bg);
+	border-color: var(--st-gold-border);
 }
 
 .stonetop-spring-roll-result.stonetop-spring--failure {
-	background: rgba(176, 48, 48, 0.1);
-	border-color: rgba(176, 48, 48, 0.4);
+	background: var(--st-red-bg);
+	border-color: var(--st-red-border);
 }
 
 /* Q&A answer fields (styled after the journal Q&A: question-spiral prompt + a
@@ -32455,7 +32455,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius);
 	background: rgba(255, 255, 255, 0.4);
 	font-family: var(--font-stonetop);
-	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
+	font-size: calc(0.95rem * var(--stonetop-font-scale, 1));
 	line-height: 1.45;
 }
 
@@ -32464,9 +32464,9 @@ th:has(> .stonetop-roll-table-btn) {
 	align-items: flex-start;
 	gap: 6px;
 	margin: 0;
-	font-size: calc(0.82rem * var(--stonetop-font-scale, 1));
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	font-style: italic;
-	color: var(--color-text-dark-secondary);
+	color: var(--st-text-secondary);
 }
 
 .stonetop-spring-qa-empty > i { margin-top: 2px; }
@@ -32502,18 +32502,18 @@ th:has(> .stonetop-roll-table-btn) {
 
 .stonetop-exp-bar-label {
 	flex-shrink: 0;
-	font-size: calc(0.72rem * var(--stonetop-font-scale, 1));
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
 	font-weight: 600;
-	color: var(--color-text-dark-secondary);
+	color: var(--st-text-secondary);
 }
 
 .stonetop-exp-title,
 .stonetop-exp-switch {
 	height: 26px;
 	font-family: var(--font-stonetop);
-	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
+	font-size: calc(0.95rem * var(--stonetop-font-scale, 1));
 	border: 1px solid rgba(0, 0, 0, 0.22);
 	border-radius: var(--st-radius);
 	background: rgba(255, 255, 255, 0.4);
@@ -32524,16 +32524,21 @@ th:has(> .stonetop-roll-table-btn) {
 .stonetop-exp-switch { flex: 0 1 auto; max-width: 40%; padding: 2px 4px; }
 
 /* Core sets `button { display: flex }` (block-level → full-width); keep the New pill
-   content-sized (see the button-display-flex note). */
+   content-sized (see the button-display-flex note). Both pills stand the same fixed 26px
+   as the name box and the switcher beside them: left to their content, the label's
+   inherited 28px line box made New 38px tall, half again the rest of the row. */
 .stonetop-exp-new {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4em;
 	flex-shrink: 0;
 	width: auto;
-	padding: 4px 10px;
+	height: 26px;
+	min-height: 0;
+	line-height: normal;
+	padding: 0 10px;
 	font-family: var(--font-stonetop);
-	font-size: calc(0.8rem * var(--stonetop-font-scale, 1));
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	cursor: pointer;
 	border: 1px solid var(--color-border-dark, #7a7971);
 	border-radius: var(--st-radius-sm);
@@ -32542,7 +32547,7 @@ th:has(> .stonetop-roll-table-btn) {
 	transition: background 0.15s;
 }
 
-.stonetop-exp-new:hover { background: hsl(40 25% 85%); }
+.stonetop-exp-new:hover { background: var(--st-warm-hover-bg); }
 
 /* Icon-only "delete this expedition" pill. No font-family (it holds a Font Awesome
    glyph); danger tint on hover. */
@@ -32552,13 +32557,15 @@ th:has(> .stonetop-roll-table-btn) {
 	justify-content: center;
 	flex-shrink: 0;
 	width: auto;
-	padding: 4px 8px;
-	font-size: calc(0.8rem * var(--stonetop-font-scale, 1));
+	height: 26px;
+	min-height: 0;
+	padding: 0 8px;
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	cursor: pointer;
 	border: 1px solid var(--color-border-dark, #7a7971);
 	border-radius: var(--st-radius-sm);
 	background: var(--stonetop-bg, #f5f0e8);
-	color: var(--color-text-dark-secondary);
+	color: var(--st-text-secondary);
 	transition: background 0.15s, color 0.15s;
 }
 
@@ -32588,10 +32595,10 @@ th:has(> .stonetop-roll-table-btn) {
 
 .stonetop-exp-checkgroup-label {
 	font-weight: 600;
-	font-size: calc(0.82rem * var(--stonetop-font-scale, 1));
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
-	color: var(--color-text-dark-secondary);
+	color: var(--st-text-secondary);
 }
 
 /* ── The charted list ───────────────────────────────────────────────────────────────────
@@ -32704,7 +32711,7 @@ th:has(> .stonetop-roll-table-btn) {
    has to be matched. */
 .stonetop-exp-questions > li {
 	position: relative;
-	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
+	font-size: calc(0.95rem * var(--stonetop-font-scale, 1));
 	line-height: 1.4;
 	padding-left: calc(1em + var(--stonetop-spiral-gap));
 }
@@ -32772,7 +32779,7 @@ th:has(> .stonetop-roll-table-btn) {
 	border: 1px solid rgba(0, 0, 0, 0.1);
 	border-radius: var(--st-radius);
 	background: rgba(0, 0, 0, 0.02);
-	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
+	font-size: calc(0.92rem * var(--stonetop-font-scale, 1));
 }
 
 /* Only the inline reference table needs lifting off the paragraph above it. */
@@ -32791,8 +32798,8 @@ th:has(> .stonetop-roll-table-btn) {
 	text-align: center;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	font-size: calc(0.85rem * var(--stonetop-font-scale, 1));
-	color: var(--color-text-dark-secondary);
+	font-size: calc(0.92rem * var(--stonetop-font-scale, 1));
+	color: var(--st-text-secondary);
 	white-space: nowrap;
 }
 
@@ -35610,7 +35617,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-expedition-dialog .stonetop-exp-load-row {
 	display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
 	padding: 8px 12px; border-bottom: 1px solid rgba(0,0,0,0.06);
-	border-left: 3px solid slategrey;
+	/* The token, not the literal: the high-contrast skin re-points it, and the row's avatar and
+	   pips already follow it there. */
+	border-left: 3px solid var(--st-accent-fill);
 }
 .stonetop-expedition-dialog .stonetop-exp-load-row:last-child { border-bottom: none; }
 .stonetop-expedition-dialog .stonetop-exp-load-row.lvl-light { border-left-color: var(--st-green-border); }
@@ -35673,7 +35682,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop-expedition-dialog .stonetop-exp-load-fol {
 	font-family: var(--font-stonetop); font-size: var(--st-fs-2xs);
-	text-transform: uppercase; letter-spacing: 0.04em; color: var(--st-text-faint);
+	text-transform: uppercase; letter-spacing: 0.04em; color: var(--st-text-secondary);
 	border: 1px solid rgba(0,0,0,0.2); border-radius: var(--st-radius-sm); padding: 0 4px;
 }
 
@@ -35682,7 +35691,10 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-expedition-dialog .stonetop-exp-load-band { display: flex; gap: 5px; }
 .stonetop-expedition-dialog .stonetop-exp-load-pip {
 	width: 11px; height: 11px; transform: rotate(45deg); border-radius: 2px;
-	border: 1.5px solid rgba(0,0,0,0.3); background: transparent;
+	/* An empty diamond is still a count the GM reads ("room for two more"), so its edge has to
+	   clear the 3:1 a meaningful shape needs. 30% black was about 2:1 on the paper, and a
+	   literal the high-contrast skin could not reach. */
+	border: 1.5px solid var(--st-text-muted); background: transparent;
 }
 .stonetop-expedition-dialog .lvl-light .stonetop-exp-load-pip.on { background: var(--st-green-border); border-color: var(--st-green-border); }
 .stonetop-expedition-dialog .lvl-normal .stonetop-exp-load-pip.on { background: var(--st-accent-fill); border-color: var(--st-accent-fill); }
@@ -35723,7 +35735,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(0,0,0,0.18);
 }
 .stonetop-expedition-dialog .stonetop-exp-load-move .ic { font-weight: 700; font-size: var(--st-fs-2xs); }
-.stonetop-expedition-dialog .stonetop-exp-load-move .rq { color: var(--st-text-faint); font-size: var(--st-fs-2xs); }
+.stonetop-expedition-dialog .stonetop-exp-load-move .rq { color: var(--st-text-secondary); font-size: var(--st-fs-2xs); }
 /* A 0.10 wash, NOT the solid --st-red-bg: a switched-off move is struck through and read
    past, so it stays quieter than the "over encumbered" pill that shares the red border. */
 .stonetop-expedition-dialog .stonetop-exp-load-move.off { color: var(--st-red-text); background: rgba(200,60,60,0.10); border-color: var(--st-red-border); }
@@ -35832,6 +35844,11 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-family: var(--font-stonetop); font-size: var(--st-fs-xs); line-height: 1.35;
 }
 .stonetop-expedition-dialog .stonetop-exp-asset-btn:hover { background: rgba(0,0,0,0.06); }
+.stonetop-expedition-dialog .stonetop-exp-asset-btn:focus-visible,
+.stonetop-expedition-dialog .stonetop-exp-load-chip:focus-visible {
+	outline: 2px solid var(--st-btn-primary-bg);
+	outline-offset: 1px;
+}
 .stonetop-expedition-dialog .stonetop-exp-asset-btn .tick {
 	flex: 0 0 auto; width: 1em; text-align: center;
 	font-weight: 700; font-size: var(--st-fs-2xs); color: var(--st-text-faint);
@@ -36278,7 +36295,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 .stonetop-journey-canvas .stonetop-journey-tag em {
-	font-weight: 400; font-style: italic; color: #8a6a12;
+	font-weight: 400; font-style: italic; color: var(--st-gold-text);
 }
 .stonetop-journey-canvas .h-centre .stonetop-journey-tag { left: 50%; transform: translateX(-50%); }
 .stonetop-journey-canvas .h-left   .stonetop-journey-tag { left: -4px; }
@@ -36319,7 +36336,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-journey-canvas .stonetop-journey-exit.is-chosen .stonetop-journey-arrow { width: 20px; height: 20px; }
 .stonetop-journey-canvas .stonetop-journey-spot.is-chosen .stonetop-journey-tag,
 .stonetop-journey-canvas .stonetop-journey-exit.is-chosen .stonetop-journey-tag {
-	color: #8a6a12; border-color: #9a6f0e;
+	color: var(--st-gold-text); border-color: #9a6f0e;
 }
 
 /* WHERE THEY SET OUT FROM, when that is a point the GM put down rather than a place the books
@@ -36510,6 +36527,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    colours the bookmark and leaves the pick unlit. */
 .stonetop-journey .stonetop-journey-list li:has(.stonetop-journey-row:hover) {
 	background: var(--st-slate-hover-bg); border-color: var(--st-slate-hover-border);
+}
+/* The ring goes on the pill too, for the same reason the hover does: the row inside it has its
+   own outline unpinned below, and a keyboard reader tabbing down the list otherwise saw nothing
+   move. */
+.stonetop-journey .stonetop-journey-list li:has(.stonetop-journey-row:focus-visible) {
+	outline: 2px solid var(--st-btn-primary-bg);
+	outline-offset: 1px;
 }
 /* A prose row that happens to be a <button>, so core's button rule has to be unpinned in full:
    `display: flex` on its own replaces only `display`, and the `justify-content: center` beside it

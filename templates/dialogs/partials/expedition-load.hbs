@@ -12,8 +12,9 @@
 <div class="stonetop-exp-load-pick">
   <span class="stonetop-exp-load-picklab">On this trip:</span>
   {{#each loadReadout.chips}}
-  <button type="button" class="stonetop-exp-load-chip{{#unless on}} is-out{{/unless}}{{#if undeadKind}} is-undead is-undead--{{undeadKind}}{{/if}}" data-actor-id="{{id}}">
-    <span class="tick">✓</span> <span class="stonetop-chip-text">{{name}}</span>
+  <button type="button" class="stonetop-exp-load-chip{{#unless on}} is-out{{/unless}}{{#if undeadKind}} is-undead is-undead--{{undeadKind}}{{/if}}" data-actor-id="{{id}}"
+          aria-pressed="{{#if on}}true{{else}}false{{/if}}">
+    <span class="tick" aria-hidden="true">✓</span> <span class="stonetop-chip-text">{{name}}</span>
   </button>
   {{/each}}
 </div>

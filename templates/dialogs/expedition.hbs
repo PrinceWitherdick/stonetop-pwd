@@ -43,11 +43,11 @@
       {{/if}}
       {{#if expedition.hasAny}}
       <button type="button" class="stonetop-exp-delete" title="Delete this expedition" aria-label="Delete this expedition">
-        <i class="fas fa-trash"></i>
+        <i class="fas fa-trash" aria-hidden="true"></i>
       </button>
       {{/if}}
       <button type="button" class="stonetop-exp-new" title="Start a new expedition">
-        <i class="fas fa-plus"></i> New
+        <i class="fas fa-plus" aria-hidden="true"></i> New
       </button>
     </div>
     {{/if}}
@@ -143,8 +143,9 @@
                   events, so a tooltip on it would never open. --}}
             <button type="button" class="stonetop-exp-asset-btn"
                     data-asset-index="{{index}}" data-take="{{take}}"
+                    aria-pressed="{{#if ours}}true{{else}}false{{/if}}"
                     {{#if elsewhere}}disabled{{/if}}>
-              <span class="tick">{{glyph}}</span>
+              <span class="tick" aria-hidden="true">{{glyph}}</span>
               <span class="nm">{{name}}</span>
             </button>
             {{#if elsewhere}}<span class="stonetop-exp-asset-where">{{where}}</span>{{/if}}
@@ -253,8 +254,9 @@
                 <span class="stonetop-gm-wonder-question stonetop-gm-wonder-question--fixed">{{{text}}}</span>
                 <span class="stonetop-gm-wonder-tools">
                   <button type="button" class="stonetop-gm-wonder-remove stonetop-exp-chart-remove"
-                          data-tooltip="Take this back off the list" data-tooltip-direction="UP">
-                    <i class="fas fa-trash"></i>
+                          data-tooltip="Take this back off the list" data-tooltip-direction="UP"
+                          aria-label="Take this back off the list">
+                    <i class="fas fa-trash" aria-hidden="true"></i>
                   </button>
                 </span>
               </div>
@@ -271,7 +273,7 @@
           {{/if}}
           <button type="button" class="stonetop-gm-wonder-add-btn stonetop-exp-chart-add"
                   data-chart-group="{{key}}">
-            <i class="fas fa-plus"></i> {{addLabel}}
+            <i class="fas fa-plus" aria-hidden="true"></i> {{addLabel}}
           </button>
         </div>
         {{/each}}
@@ -410,15 +412,15 @@
   </div>
 
   <div class="stonetop-guide-nav">
-    <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
+    <button type="button" class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back" aria-hidden="true"></span>Back</button>
     <span class="stonetop-spring-step-label">{{stepLabel}}</span>
     {{#if isLast}}
     <span class="stonetop-exp-done-actions">
-      {{#if isGM}}<button type="button" class="stonetop-exp-chronicle" data-tooltip="Compiles each logged trip into the Expeditions journal (in a &quot;The Chronicle&quot; folder), GM-only." data-tooltip-direction="UP"><i class="fas fa-feather"></i> Save to the Chronicle</button>{{/if}}
-      <button class="stonetop-spring-done stonetop-guide-btn--primary">Done ✦</button>
+      {{#if isGM}}<button type="button" class="stonetop-exp-chronicle" data-tooltip="Compiles each logged trip into the Expeditions journal (in a &quot;The Chronicle&quot; folder), GM-only." data-tooltip-direction="UP"><i class="fas fa-feather" aria-hidden="true"></i> Save to the Chronicle</button>{{/if}}
+      <button type="button" class="stonetop-spring-done stonetop-guide-btn--primary">Done <span aria-hidden="true">✦</span></button>
     </span>
     {{else}}
-    <button class="stonetop-spring-next">Next<span class="stonetop-nav-arrow"></span></button>
+    <button type="button" class="stonetop-spring-next">Next<span class="stonetop-nav-arrow" aria-hidden="true"></span></button>
     {{/if}}
   </div>
 
