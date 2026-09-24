@@ -62,7 +62,8 @@ import {openPortraitFrameEditor} from "../../utils/PortraitFrameDialog.js";
 import {localize} from "../../utils/i18n.js";
 import {closeRelmapTab, detachRelmapTab, makeFirstRelationshipMap, relmapTabContext, STEADING_RELMAP_TAB, syncRelmapTab} from "./steading-relmap-tab.js";
 import {closeTimelineTab, detachTimelineTab, syncTimelineTab, TIMELINE_TAB} from "../../timeline/timeline-tab.js";
-import {DIMINISHED_MOVES, STEADING_MOVE, improvementQuestions, netRollMode, rollAdjustments, rollConditionNotes} from "./improvement-rolls.js";
+import {DIMINISHED_MOVES, STEADING_MOVE, improvementQuestions, rollAdjustments} from "./improvement-rolls.js";
+import {settleSteadingRoll} from "./steading-roll.js";
 
 /**
  * What the member-photo WINDOW shows, given the path a member actually wears.
@@ -2624,9 +2625,9 @@ export function createStonetopSteadingSheetClass(Base) {
 					// This matters most for the hold that exists: Rites of the Land buys "advantage on
 					// the steading's next +Fortunes roll", and spring's Seasons Change is the ONLY roll
 					// in the flow with no button of its own — so before this the one roll that names
-					// the hold was the one roll that could not spend it. Precedence mirrors
-					// `_onSteadingRoll` exactly: the hold beats the sticky selector, because it is a
-					// thing the fiction already paid for rather than a preference.
+					// the hold was the one roll that could not spend it. Settled exactly as
+					// `_onSteadingRoll` settles it (./steading-roll.js): the hold outranks the sticky
+					// selector as a SOURCE of advantage, and nets against a sticky Disadvantage.
 					const askHopefulBtn = root.querySelector("[data-action='ask-hopeful']");
 					askHopefulBtn?.addEventListener("click", async () => {
 						// Disabled for the duration and then GIVEN BACK, unlike the once-per-season
@@ -2638,17 +2639,20 @@ export function createStonetopSteadingSheetClass(Base) {
 						if (askHopefulBtn.disabled) return;
 						askHopefulBtn.disabled = true;
 						try {
-							const held = this._stonetopSteading.fortunesAdvantage();
-							postSeasonsRollPrompt({
+							const { held, rollMode, spend } = await settleSteadingRoll(this._stonetopSteading, {
+								moveName: "Seasons Change", statKey: "fortunes",
+								chosenMode: this._sheetRollMode(),
+								canSpend: !!this.actor.isOwner,
+							});
+							// Spent once the card that carries it is up, and not before.
+							await postSeasonsRollPrompt({
 								alias: `Seasons Change: ${label}`,
 								fortunes,
-								rollMode: held ? "adv" : this._sheetRollMode(),
+								rollMode,
 								why: held?.source ?? "",
 							});
-							if (held) {
-								await this._stonetopSteading.clearFortunesAdvantage();
-								this.render(false);
-							}
+							await spend();
+							if (held) this.render(false);
 						} finally { askHopefulBtn.disabled = false; }
 					});
 
@@ -3042,26 +3046,24 @@ export function createStonetopSteadingSheetClass(Base) {
 			// move's window asked about the steading's improvements, and is absent for a roll made
 			// without one (the Moves tab's roll chip).
 			const { situational = 0, improvementAnswers, winter = false, ...rest } = rollOptions;
-			// A sacrifice promised advantage on the steading's NEXT +Fortunes roll (Rites of the
-			// Land). SPENT below, because this is the roll it was promised to.
-			const held = statKey === "fortunes" ? this._stonetopSteading.fortunesAdvantage() : null;
-			const adjusted = rollAdjustments({
+			// Every rule's advantage and disadvantage, netted against the player's mode, and a
+			// sacrifice's held +Fortunes advantage (Rites of the Land) applied, because this is the
+			// roll it was promised to (./steading-roll.js). Spent just before the dice, below. The player's mode is the caller's when
+			// it has one (the prompt's answer), and the sheet's sticky selector when it does not.
+			// `??`, not `||`: the prompt omits the key entirely when it did not ask.
+			const adjusted = await settleSteadingRoll(this._stonetopSteading, {
 				moveName, statKey,
-				has: slug => this._hasImprovement(slug),
+				chosenMode: rest.rollMode ?? this._sheetRollMode(),
 				answers: improvementAnswers ?? {},
 				tactics: this._militiaTactics(),
-				diminished, winter,
-				held: held?.source ?? "",
+				winter,
+				canSpend: !!this.actor.isOwner,
 			});
 			const options = {
 				...defaultRollOptions,
 				...rest,
 				moveName,
-				// The player's mode is the caller's when it has one (the prompt's answer), and the
-				// sheet's sticky selector when it does not. `??`, not `||`: the prompt omits the key
-				// entirely when it did not ask. Every rule's advantage and disadvantage then nets
-				// against it, since the two cancel out (Book I).
-				rollMode: netRollMode(normalizeRollMode(rest.rollMode ?? this._sheetRollMode()), adjusted.adv, adjusted.dis),
+				rollMode: adjusted.rollMode,
 				modifier: (rest.modifier ?? 0) + situational,
 				statValue: this._stonetopSteading.getStatValue(statKey),
 			};
@@ -3078,8 +3080,7 @@ export function createStonetopSteadingSheetClass(Base) {
 				options.stonetopDebility = "Lacking";
 				options.stonetopDebilityTooltip = "Treat Prosperity as 1 lower.";
 			}
-			const notes = rollConditionNotes(adjusted);
-			if (notes.length) options.conditionNotes = [...(rest.conditionNotes ?? []), ...notes];
+			if (adjusted.conditionNotes.length) options.conditionNotes = [...(rest.conditionNotes ?? []), ...adjusted.conditionNotes];
 			// Deploy's 7-9 names who picks the consequence, once the window has asked.
 			if (moveName === STEADING_MOVE.DEPLOY && improvementAnswers) {
 				const results = deployResults(adjusted.strength);
@@ -3087,10 +3088,8 @@ export function createStonetopSteadingSheetClass(Base) {
 				options.resultLegend = _resultsLegendHtml(results);
 			}
 			if (adjusted.missAsPartial) options.missCountsAsPartial = adjusted.missAsPartial;
-			if (held) {
-				await this._stonetopSteading.clearFortunesAdvantage();
-				this.render(false);
-			}
+			await adjusted.spend();
+			if (adjusted.held) this.render(false);
 			await rollStat(statKey, this.actor, {
 				...options,
 			});

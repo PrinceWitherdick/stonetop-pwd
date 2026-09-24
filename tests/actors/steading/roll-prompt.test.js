@@ -499,7 +499,7 @@ describe("what asks before it rolls", () => {
 	// absence, and must not be replaced by a selector left on Advantage.
 	it("falls back to the sheet's sticky selector for a mode nobody answered", () => {
 		expect(CHARACTER_JS).toContain("normalizeRollMode(rollMode ?? this.rollMode)");
-		expect(STEADING_JS).toContain("normalizeRollMode(rest.rollMode ?? this._sheetRollMode())");
+		expect(STEADING_JS).toContain("chosenMode: rest.rollMode ?? this._sheetRollMode()");
 		expect(read("module/actors/character/dialogs/RequisitionDialog.js"))
 			.toContain('prompted.rollMode ?? this._steadingActor.getFlag(SYSTEM_ID, "rollMode")');
 		// Know Things rolls with an explicit mode (its own advantage is lifted onto whatever the
@@ -518,7 +518,8 @@ describe("what asks before it rolls", () => {
 		const roll = STEADING_JS.slice(STEADING_JS.indexOf("await this._onSteadingRoll(flow.label"));
 		expect(roll.slice(0, 200)).toMatch(/\.\.\.prompted,\s*\.\.\.this\._homesteadRollOptions/);
 		const steadingRoll = STEADING_JS.slice(STEADING_JS.indexOf("async _onSteadingRoll(moveName, statKey"));
-		expect(steadingRoll.slice(0, 4000)).toContain("netRollMode(");
+		// The netting itself is steading-roll.js's (tests/actors/steading/steading-roll.test.js).
+		expect(steadingRoll.slice(0, 4000)).toContain("settleSteadingRoll(");
 	});
 
 	// Shift is the escape hatch: the dice and nothing else. The rule lives in the prompt, not in

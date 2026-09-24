@@ -76,9 +76,9 @@ describe("how the hand-off is wired", () => {
 		const at = SHEET.indexOf("data-action='ask-hopeful'");
 		expect(at).toBeGreaterThan(-1);
 		const body = SHEET.slice(at, at + 1200);
-		expect(body).toContain("fortunesAdvantage()");
-		expect(body).toContain("clearFortunesAdvantage()");
-		expect(body).toContain(`rollMode: held ? "adv"`);
+		// Settled (and spent) as every steading roll is: tests/actors/steading/steading-roll.test.js.
+		expect(body).toContain("settleSteadingRoll(this._stonetopSteading");
+		expect(body).toContain("canSpend: !!this.actor.isOwner");
 	});
 });
 

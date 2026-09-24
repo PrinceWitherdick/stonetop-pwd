@@ -35,7 +35,7 @@ function makeSheet({ built = [], stats = {}, diminished = false, militiaR = [], 
 		improvementDef: vi.fn(slug => IMPROVEMENT_DEFINITIONS.find(d => d.slug === slug) ?? null),
 		improvementRequirements: vi.fn(slug => (slug === "wellTrainedMilitia" ? militiaR : [])),
 	};
-	const actor = { name: "Stonetop", type: "stonetop", typedActor, getFlag: vi.fn(() => sticky) };
+	const actor = { name: "Stonetop", type: "stonetop", isOwner: true, typedActor, getFlag: vi.fn(() => sticky) };
 	const Base = class {
 		constructor() { this._actor = actor; }
 		get actor() { return this._actor; }

@@ -206,6 +206,8 @@ export async function rollSeasonsCard({ formula, title = "", alias = "", resultT
  * @param {string} [rollMode]  "adv" | "dis" | "normal" — NOT core's public/gmroll/blind.
  * @param {string} [why]       What bought the advantage, named on the card so the table can see
  *   the sacrifice land rather than reading two extra dice and wondering.
+ * @returns {Promise<ChatMessage>|undefined} the card being posted, so a caller spending the hold
+ *   can wait until it is up
  */
 export function postSeasonsRollPrompt({
 	alias = "Seasons Change: Spring",
@@ -238,7 +240,7 @@ export function postSeasonsRollPrompt({
 			</button>
 		</div>
 	</div>`;
-	ChatMessage.create({
+	return ChatMessage.create({
 		speaker: { alias },
 		content: stonetopChatCard(alias, body, "stonetop-seasons-prompt-card"),
 	});

@@ -8,7 +8,8 @@ import { escHtml } from "../../../utils/strings.js";
 import { CUSTOM_ASSET_VALUE, assetTakenLabel, wireCustomAssetSelect } from "../../../utils/requisition-asset.js";
 import { SYSTEM_ID } from "../../../system-id.js";
 import { promptRoll } from "../../../dialogs/RollDialog.js";
-import { STEADING_MOVE, improvementQuestions, rollAdjustments } from "../../steading/improvement-rolls.js";
+import { STEADING_MOVE, improvementQuestions } from "../../steading/improvement-rolls.js";
+import { settleSteadingRoll } from "../../steading/steading-roll.js";
 
 /**
  * The player-facing Requisition move. Lists the linked steading's on-hand assets
@@ -76,20 +77,25 @@ export class RequisitionDialog extends StonetopDialog {
 		// How this one is rolled is asked here, ahead of the roll — see RollDialog.js, which
 		// decides for itself whether it has anything to ask. Cancelling rolls nothing. When it
 		// does not ask for a mode the steading sheet's own sticky Roll Modifier flag answers
-		// instead, which is what that control is still there for.
+		// instead, which is what that control is still there for. Settled as every steading roll
+		// is (actors/steading/steading-roll.js): a held +Fortunes advantage is spent here too, by
+		// a player who can write the steading.
 		root.querySelector(".stonetop-requisition-roll-btn")?.addEventListener("click", async ev => {
 			const prompted = await promptRoll({ title: "Requisition", shiftKey: ev.shiftKey });
 			if (!prompted) return;
-			const { missAsPartial } = rollAdjustments({
+			const terms = await settleSteadingRoll(this._steading, {
 				moveName: STEADING_MOVE.REQUISITION, statKey: "fortunes",
-				has: slug => this._steading.improvementCompleted(slug),
+				chosenMode: prompted.rollMode ?? this._steadingActor.getFlag(SYSTEM_ID, "rollMode"),
 				answers: { herdShare: !!root.querySelector('[name="herdShare"]')?.checked },
+				canSpend: !!this._steadingActor.isOwner,
 			});
-			rollStat("fortunes", this._steadingActor, {
-				...(missAsPartial ? { missCountsAsPartial: missAsPartial } : {}),
+			await terms.spend();
+			await rollStat("fortunes", this._steadingActor, {
+				...(terms.missAsPartial ? { missCountsAsPartial: terms.missAsPartial } : {}),
+				...(terms.conditionNotes.length ? { conditionNotes: terms.conditionNotes } : {}),
 				moveName: "Requisition",
 				statValue: this._steading.getStatValue("fortunes"),
-				rollMode: prompted.rollMode ?? this._steadingActor.getFlag(SYSTEM_ID, "rollMode") ?? "normal",
+				rollMode: terms.rollMode,
 				// The steading rolls carry no forward/ongoing, so the prompt's one-off IS the
 				// whole modifier here — the engine reads it back out as the Situational pill.
 				modifier: prompted.situational,

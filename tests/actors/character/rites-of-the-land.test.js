@@ -86,13 +86,15 @@ describe("how it is wired", () => {
 	// promised to — a hold that survived would apply to every Fortunes roll afterwards.
 	// The hold is one more SOURCE of advantage (improvement-rolls.js#rollAdjustments), netted like
 	// every other: a GM-imposed disadvantage on the same roll cancels it, as the book has it.
+	// Settled for every steading roll in one place (steading-roll.js, and its own test file).
 	it("spends the hold on the next +Fortunes roll, and only that one", () => {
-		const at = STEADING_SHEET.indexOf('statKey === "fortunes" ? this._stonetopSteading.fortunesAdvantage()');
-		expect(at).toBeGreaterThan(-1);
-		const block = STEADING_SHEET.slice(at, at + 4000);
-		expect(block).toContain('held: held?.source ?? ""');
-		expect(block).toContain("netRollMode(");
-		expect(block).toContain("clearFortunesAdvantage()");
+		const settle = read("module/actors/steading/steading-roll.js");
+		expect(settle).toContain('statKey === "fortunes" && canSpend ? steading.fortunesAdvantage');
+		expect(settle).toContain('held: held?.source ?? ""');
+		expect(settle).toContain("netRollMode(");
+		expect(settle).toContain("clearFortunesAdvantage()");
+		const at = STEADING_SHEET.indexOf("async _onSteadingRoll(moveName, statKey");
+		expect(STEADING_SHEET.slice(at, at + 4000)).toContain("settleSteadingRoll(this._stonetopSteading");
 	});
 
 	it("names the reason on the card rather than leaving the advantage unexplained", () => {
