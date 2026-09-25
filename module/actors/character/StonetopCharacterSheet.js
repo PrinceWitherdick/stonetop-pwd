@@ -76,6 +76,7 @@ import {getDragEventData, deletionEntry, enrichHTML, imagePopout, renderTemplate
 import {STEADING_DEFAULTS, StonetopSteading} from "../steading/StonetopSteading.js";
 import {readCurrentSeason, readCurrentYear} from "../../seasons/current-season.js";
 import {openRitesOfTheLand} from "./rites-of-the-land.js";
+import {HEALERS_ARTS, HEALERS_ARTS_STOCK, HEALERS_ARTS_STOCK_HP, healersArtsCarers, carerWis, recoverHeal, recoverBreakdown, canReachCarerStock, payHealersArtsStock} from "./healers-arts.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
 import {getHoverDescriptionSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getFollowerCardsCollapsed, setFollowerCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getAskRollModeEachRollSetting, isClassicLayout, layoutClasses, stampLayoutClass, isTimelineEnabled} from "../../settings.js";
@@ -294,7 +295,7 @@ export const GUIDED_CHARACTER_MOVES = {
 	"Recover": {
 		trigger: "When you take time to catch your breath and tend to what ails you, expend 1 use of supplies and regain HP equal to 4 + Prosperity.",
 		results: ["You can't gain this benefit again until you take more damage."],
-		note: "When you tend to a debility or problematic wound, say how. The GM will say it's taken care of, or tell you what else is required.",
+		note: "When you tend to a debility or problematic wound, say how. The GM will say it's taken care of, or tell you what else is required. Under the care of someone with Healer's Arts, you recover extra HP equal to their WIS; if they also spend 1 Stock, you heal 5 more and your wounds are stabilized.",
 	},
 	// Kept so every way into the move still arrives at _openGuidedCharacterMove, which hands it to the
 	// shared window (module/struggle/) before this text is ever drawn: the move is the party's, not
@@ -432,6 +433,100 @@ function _supplyPurseFieldHtml(purses, legend) {
 function _chosenSupplyPurse(html, purses) {
 	const slug = html?.find?.('input[name="supplyPurse"]:checked')?.val();
 	return purses.eligible.find(p => p.slug === slug) ?? null;
+}
+
+// ── Healer's Arts on the Recover window (actors/character/healers-arts.js) ──────────────────────
+// Who is tending the Recover, whether their Stock is spent, and out of which purse. The select
+// starts on "No one", so a Recover nobody tends reads and heals exactly as it always did.
+
+/** The care fields. `carers` as StonetopCharacterSheet#_recoverCarers reads them. */
+function _recoverCareHtml(carers) {
+	return `<div class="stonetop-recover-care">
+		<label class="stonetop-homestead-field stonetop-recover-carer"><span>Under the care of</span>
+			<select name="recoverCarer">
+				<option value="">No one</option>
+				${carers.map(c => `<option value="${_esc(c.id)}">${_esc(c.name)} (WIS ${sign(c.wis)})</option>`).join("")}
+			</select>
+		</label>
+		<label class="stonetop-homestead-choice stonetop-recover-stock" style="display:none">
+			<input type="checkbox" class="stonetop-check" name="recoverStock">
+			<span class="stonetop-recover-stock-label"></span>
+		</label>
+		<label class="stonetop-homestead-field stonetop-move-cost-pick stonetop-recover-stock-pick" style="display:none"><span>Spend from</span>
+			<select name="recoverStockSource"></select>
+		</label>
+		<p class="stonetop-homestead-note stonetop-recover-stock-why" style="display:none"></p>
+	</div>`;
+}
+
+/** What the care fields say now: `{carer, stock, sourceKey}`, or null when nobody is tending. */
+function _chosenRecoverCare(html, carers) {
+	const root = html?.[0] ?? html;
+	const id = root?.querySelector?.('[name="recoverCarer"]')?.value ?? "";
+	const carer = carers.find(c => c.id === id);
+	if (!carer) return null;
+	const tick = root.querySelector('[name="recoverStock"]');
+	const stock = !!tick?.checked && !tick.disabled && carer.canPay;
+	// The purse is this window's to pick only when this client pays; otherwise the carer's side picks it.
+	const sourceKey = stock && carer.direct ? (root.querySelector('[name="recoverStockSource"]')?.value || null) : null;
+	return { carer, stock, sourceKey };
+}
+
+/**
+ * Keep the window's readout, the Stock tick and the Recover button in step with the care fields.
+ * The tick is offered only when the carer can pay, and says why not when they cannot.
+ */
+function _wireRecoverCare(html, { hp, base, carers }) {
+	const root = html?.[0] ?? html;
+	const form = root?.querySelector?.(".stonetop-recover-dialog") ?? root;
+	if (!form?.querySelector?.('[name="recoverCarer"]')) return;
+	const tickRow = form.querySelector(".stonetop-recover-stock");
+	const tick = form.querySelector('[name="recoverStock"]');
+	const pick = form.querySelector(".stonetop-recover-stock-pick");
+	const why = form.querySelector(".stonetop-recover-stock-why");
+	const show = (el, on) => { if (el) el.style.display = on ? "" : "none"; };
+
+	const paint = () => {
+		const care = _chosenRecoverCare(html, carers);
+		const carer = care?.carer ?? null;
+		show(tickRow, !!carer);
+		if (carer) {
+			tick.disabled = !carer.canPay;
+			if (!carer.canPay) tick.checked = false;
+			// A carer this client does not own decides for themselves (healers-arts.js#payHealersArtsStock),
+			// so the tick asks rather than spends.
+			form.querySelector(".stonetop-recover-stock-label").textContent = carer.direct
+				? `Spend ${HEALERS_ARTS_STOCK} of ${carer.name}'s Stock: +${HEALERS_ARTS_STOCK_HP} HP and stabilize wounds`
+				: `Ask ${carer.name} to spend ${HEALERS_ARTS_STOCK} Stock: +${HEALERS_ARTS_STOCK_HP} HP and stabilize wounds`;
+		}
+		// Which purse, asked exactly when the sheet's own "Spend from" asks it (stock-cost.js). Only
+		// for a carer this client pays for; an asked carer picks their own purse.
+		const asking = !!carer && !!care.stock && carer.direct && mustAskStockSource(carer.payable);
+		if (asking) {
+			const select = pick.querySelector("select");
+			const keys = carer.payable.map(s => s.key).join("|");
+			if (select.dataset.keys !== keys) {
+				select.innerHTML = carer.payable
+					.map(s => `<option value="${_esc(s.key)}">${_esc(stockSourceChoiceLabel(s, HEALERS_ARTS_STOCK))}</option>`).join("");
+				select.dataset.keys = keys;
+			}
+		}
+		show(pick, asking);
+		const reason = carer && !carer.canPay ? carer.whyNot : "";
+		if (why) why.textContent = reason;
+		show(why, !!reason);
+
+		const heal = recoverHeal({ base, hp: hp.value, max: hp.max, wis: carer ? carer.wis : null, stock: !!care?.stock });
+		const newHp = form.querySelector(".stonetop-recover-new-hp");
+		if (newHp) newHp.textContent = String(heal.newHp);
+		const breakdown = form.querySelector(".stonetop-recover-breakdown");
+		if (breakdown) breakdown.textContent = recoverBreakdown(heal, carer?.name ?? "");
+		const button = form.closest?.(".app, .application")?.querySelector?.("button[data-button='recover']");
+		if (button) button.textContent = `Recover (+${heal.gained} HP)`;
+	};
+	form.querySelector('[name="recoverCarer"]').addEventListener("change", paint);
+	tick?.addEventListener("change", paint);
+	paint();
 }
 
 // The GM's artifact control (_onArtifactGmControl). The rungs in ladder order, weakest first,
@@ -9386,8 +9481,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!fallback) return;
 
 			const healAmount = snapshot.inventory?.smallItemLimit ?? 4;
-			const newHp      = Math.min(hp.value + healAmount, hp.max);
+			const plain      = recoverHeal({ base: healAmount, hp: hp.value, max: hp.max });
 			const guide      = GUIDED_CHARACTER_MOVES.Recover;
+			// Healer's Arts: whoever could be tending this Recover (healers-arts.js). None, and the
+			// window is the plain Recover it always was.
+			const carers     = await this._recoverCarers();
 
 			new Dialog({
 				title: "Recover",
@@ -9396,39 +9494,126 @@ export function createStonetopCharacterSheetClass(Base) {
 					<div class="stonetop-homestead-reference">
 						<ul>
 							<li>Expend <strong>1 use of supplies</strong>.</li>
-							<li>Regain HP: <strong>${hp.value} &rarr; ${newHp}</strong> (4+Prosperity = ${healAmount}).</li>
+							<li>Regain HP: <strong>${hp.value} &rarr; <span class="stonetop-recover-new-hp">${plain.newHp}</span></strong> (<span class="stonetop-recover-breakdown">${_esc(recoverBreakdown(plain))}</span>).</li>
 						</ul>
 					</div>
 					${_supplyPurseFieldHtml(purses, "Pay with")}
+					${carers.length ? _recoverCareHtml(carers) : ""}
 					<p class="stonetop-homestead-note">${_esc(guide.note)} You can't gain this benefit again until you take more damage.</p>
 				</form>`,
 				buttons: {
 					cancel:  { label: "Cancel" },
 					recover: {
-						label: `Recover (+${newHp - hp.value} HP)`,
-						callback: (html) => this._applyRecover({
-							purse:  _chosenSupplyPurse(html, purses) ?? fallback,
-							oldHp:  hp.value,
-							newHp,
-						}),
+						label: `Recover (+${plain.gained} HP)`,
+						callback: (html) => {
+							const care = _chosenRecoverCare(html, carers);
+							return this._applyRecover({
+								purse:  _chosenSupplyPurse(html, purses) ?? fallback,
+								oldHp:  hp.value,
+								newHp:  plain.newHp,
+								...(care ? { care: { ...care, base: healAmount } } : {}),
+							});
+						},
 					},
 				},
 				default: "recover",
-				render: bringDialogToFront,
+				render: html => {
+					bringDialogToFront(html);
+					if (carers.length) _wireRecoverCare(html, { hp, base: healAmount, carers });
+				},
 			}, { width: 480, classes: this._pastDeathWindowClasses(["dialog", "stonetop", "stonetop-recover-dialog"]) }).render(true);
 		}
 
-		async _applyRecover({ purse, oldHp, newHp }) {
+		/**
+		 * Every character who could be tending this Recover: Healer's Arts LEARNED, this character
+		 * included ("someone Recovers under your care" does not exclude the carer). Each carries its
+		 * WIS and the purses that could pay the Stock, read LIVE through the carer's own
+		 * StonetopCharacter#stockSources, and whether this client can reach them at all. `direct`
+		 * when this client owns the carer and so spends the Stock itself; otherwise the carer's
+		 * player (or the GM) is asked (healers-arts.js#payHealersArtsStock).
+		 */
+		async _recoverCarers() {
+			const actors = healersArtsCarers(game.actors?.contents ?? game.actors ?? []);
+			return Promise.all(actors.map(async actor => {
+				const sources = (await actor.typedActor?.stockSources?.()) ?? [];
+				const payable = payableStockSources(sources, HEALERS_ARTS_STOCK);
+				const reachable = canReachCarerStock(actor);
+				return {
+					id: actor.id, name: actor.name, wis: carerWis(actor), payable, direct: !!actor.isOwner,
+					canPay: payable.length > 0 && reachable,
+					whyNot: !payable.length
+						? `${actor.name} has no Stock left to spend.`
+						: reachable ? "" : `Spending ${actor.name}'s Stock needs ${actor.name}'s player or the GM here.`,
+				};
+			}));
+		}
+
+		/**
+		 * `care` is the Recover window's Healer's Arts answer (`_chosenRecoverCare`, plus the base
+		 * heal): the carer's WIS rides the heal, and a ticked Stock is paid out of the CARER's purse
+		 * (healers-arts.js#payHealersArtsStock) for 5 more HP and every open wound stabilized.
+		 *
+		 * The Stock is paid FIRST, and a Stock that could not be paid spends nothing at all: the
+		 * player ticked it for the 5 HP, so a Recover quietly made without it would be the wrong
+		 * one. A carer who KEEPS their Stock is different: it was theirs to keep, so the Recover goes
+		 * ahead under their care without the 5 HP or the stabilizing, and says so. And the HP is
+		 * re-read after, because a Vessel tending their own Recover has just bled 2d4 for that
+		 * Stock, and an asked carer may have taken a while to answer.
+		 */
+		async _applyRecover({ purse, oldHp, newHp, care = null }) {
+			let paid = null;
+			let kept = null;
+			let wounds = { update: {}, stabilized: [] };
+			if (care) {
+				if (care.stock) {
+					const answer = await payHealersArtsStock({ carer: game.actors?.get(care.carer.id), patient: this.actor, sourceKey: care.sourceKey });
+					if (!answer) {
+						ui.notifications?.warn(`${care.carer.name}'s Stock could not be spent, so nothing was. Recover again without it, or once it can be.`);
+						return;
+					}
+					if (answer.declined) {
+						kept = answer;
+						ui.notifications?.info(answer.unanswered
+							? `No answer came about ${care.carer.name}'s Stock, so none was spent: you recover without the extra ${HEALERS_ARTS_STOCK_HP} HP, and your wounds are not stabilized.`
+							: `${care.carer.name} kept their Stock: you recover without the extra ${HEALERS_ARTS_STOCK_HP} HP, and your wounds are not stabilized.`);
+					} else {
+						paid = answer;
+						wounds = this._stonetopCharacter.stabilizeOpenWoundsUpdate();
+					}
+				}
+				oldHp = this._stonetopCharacter.hp;
+				newHp = recoverHeal({
+					base: care.base, hp: oldHp, max: await this._stonetopCharacter.computedMaxHp(),
+					wis: care.carer.wis, stock: !!paid,
+				}).newHp;
+			}
+
 			await this._stonetopCharacter.setInventoryResource(purse.slug, Math.max(0, purse.remaining - 1));
 			await this.actor.update({
 				"system.attributes.hp.value": newHp,
 				"flags.stonetop-pwd.recover.spent": true,
+				...wounds.update,
 			});
 
 			const rows = [
 				{ label: purse.label, value: `Expended 1 use (${purse.remaining - 1} left)` },
 				{ label: "HP", value: `${oldHp} → ${newHp} (+${newHp - oldHp})` },
 			];
+			if (care) {
+				rows.push({ label: HEALERS_ARTS, value: `Under ${care.carer.name}'s care: +${Math.max(0, care.carer.wis)} HP (WIS)` });
+				if (paid) {
+					rows.push({ label: `${care.carer.name}'s Stock`, value: `${stockReceipt(paid, HEALERS_ARTS_STOCK, paid.lost)}: +${HEALERS_ARTS_STOCK_HP} HP` });
+					rows.push({
+						label: "Wounds stabilized",
+						value: wounds.stabilized.length ? wounds.stabilized.map(w => w.text || "(unnamed wound)").join(", ") : "None open",
+					});
+				} else if (kept) {
+					rows.push({
+						label: `${care.carer.name}'s Stock`,
+						value: `${kept.unanswered ? "Not answered" : "Kept"}, not spent: no extra ${HEALERS_ARTS_STOCK_HP} HP, wounds not stabilized`,
+					});
+				}
+			}
 			postMoveToChat(this.actor, "Recover", rows);
 
 			this.render(false);

@@ -3827,6 +3827,27 @@ export class StonetopCharacter {
 		await this.updateWound(id, { status });
 	}
 
+	/**
+	 * Every open problematic wound, stabilized: Healer's Arts with its Stock, "their wounds/injuries
+	 * are stabilized". The same change tending one wound on Recover makes (status stabilized, any
+	 * stored requirement cleared); a permanent injury stays permanent and a healed scar is left alone.
+	 *
+	 * Handed back as an UPDATE rather than written, so the Recover that bought it carries it in its
+	 * own write, with the HP. `update` is empty when nothing needed stabilizing.
+	 *
+	 * @returns {{update: object, stabilized: object[]}}
+	 */
+	stabilizeOpenWoundsUpdate() {
+		const stabilized = [];
+		const wounds = this._woundList().map(w => {
+			if (w.healed || w.status !== "problematic") return w;
+			const next = { ...w, status: "stabilized", requirementNote: "" };
+			stabilized.push(next);
+			return next;
+		});
+		return { update: stabilized.length ? { "system.attributes.wounds": wounds } : {}, stabilized };
+	}
+
 	// "Heal" keeps the record as a scar (healed:true) rather than deleting it, so the
 	// "it's now true" fiction stays referenceable in the collapsed Scars list.
 	async healWound(id) {
