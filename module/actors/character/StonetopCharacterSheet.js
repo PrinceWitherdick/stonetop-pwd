@@ -800,7 +800,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		_stonetopCharacter;
 		_editMode = false;
 		// The playbook's Invocation list as of the last render, so a click can name one without
-		// re-reading the playbook document. Empty until then, and for everyone but a Lightbearer.
+		// re-reading the playbook document. Empty until then, and for anyone without Invocations
+		// (everyone but a Lightbearer or a character who learned Invoke the Sun God).
 		_invocationOptions = [];
 
 		constructor(...args) {
@@ -1689,7 +1690,12 @@ export function createStonetopCharacterSheetClass(Base) {
 					};
 				}
 			}
-			context.stonetop.invocations          = this._buildInvocationsData(playbookDoc);
+			// The Lightbearer's own, or the Lightbearer's list for anyone else with Invoke the Sun
+			// God (a Would-be Hero through Versatile) — see StonetopCharacter#invocationSource.
+			context.stonetop.invocations          = this._buildInvocationsData(
+				await this._stonetopCharacter.invocationSource(playbookDoc),
+				{ borrowed: !playbookDoc?.invocations?.options?.length },
+			);
 			// Only when there's something in it — an empty group renders as a bare heading over
 			// an empty list, which no other move group does (they all hide themselves when
 			// empty). Creating a move doesn't need the section standing by: the "Create a move"
@@ -2929,9 +2935,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			return { ...groups, possessionFollowerOffers };
 		}
 
-		_buildInvocationsData(playbookDoc) {
-			const raw = playbookDoc?.invocations;
-			// The playbook's own option list, kept for the paths that need to name an Invocation
+		// `borrowed`: the list is the Lightbearer's, drawn on through Invoke the Sun God by someone
+		// else, who starts knowing none (StonetopCharacter#invocationSource) rather than the
+		// insert's 2.
+		_buildInvocationsData(raw, { borrowed = false } = {}) {
+			// The Invocation list (StonetopCharacter#invocationSource), kept for the paths that need to name an Invocation
 			// without rebuilding the tab: the click handler, the header chip, and the chat line
 			// that says which one just ended. Stashed BEFORE the early return, so a sheet whose
 			// playbook no longer has Invocations still gets an (empty) list rather than a stale one
@@ -2964,7 +2972,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				return a.label.localeCompare(b.label);
 			});
 			return {
-				startingCount: raw.startingCount ?? 2,
+				startingCount: borrowed ? 0 : (raw.startingCount ?? 2),
 				hideUnknown:   this.actor.getFlag(STONETOP_SCOPE, "hideUnknownInvocations") ?? false,
 				// The banner over the grid. Named here as well as on its own card because the
 				// hide-un-learned toggle and the search can both push that card out of sight, and
@@ -7078,15 +7086,26 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		async _onLevelUpOpen() {
+			const open = LevelUpDialog.openFor(this.actor.id);
+			if (open) return open.bringToTop();
 			const levelUpData = await this._stonetopCharacter.getLevelUpData();
 			new LevelUpDialog(
 				this._stonetopCharacter,
 				levelUpData,
-				(addedMoveName) => {
+				(addedMoveName, { applied = false, foreignMoveName = null } = {}) => {
 					this.render(false);
 					// Levelling into Big Magic frees an additional remarkable trait — open
-					// the sacred-pouch editor so the player picks it right away.
+					// the sacred-pouch editor so the player picks it right away. Learned
+					// through a cross-playbook move (the Seeker's Initiate), it's the foreign
+					// move that frees it.
 					if (addedMoveName) this._maybeOpenPossessionChoicesForMove(addedMoveName);
+					if (foreignMoveName) this._maybeOpenPossessionChoicesForMove(foreignMoveName);
+					// Book I p.528: "If a PC has enough XP to Level Up twice, then they Level Up
+					// twice right away." So the next one opens straight after.
+					if (applied && this._stonetopCharacter.canLevelUp) {
+						ui.notifications?.info(game.i18n.localize("stonetop.specialMoves.levelUp.again"));
+						this._onLevelUpOpen();
+					}
 				},
 				{ classes: this._pastDeathWindowClasses(LevelUpDialog.defaultOptions.classes) },
 			).render(true);

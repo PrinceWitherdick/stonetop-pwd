@@ -244,6 +244,17 @@
               "title": "Stock",
               "labels": []
             },
+            "usesBonus": {
+              "evenLevelBonus": 1,
+              "sinceGranted": true,
+              "earliestGrant": 2,
+              "moveBonus": [
+                {
+                  "moveName": "Big Magic",
+                  "perInstance": 2
+                }
+              ]
+            },
             "choiceGroups": [
               {
                 "heading": "What remarkable trait does it possess?",

@@ -14,6 +14,7 @@ import {
 } from "../../fakes/LiveCharacter.js";
 import { PLAYBOOKS, STAT_KEYS } from "../../fakes/sourcePack.js";
 import { moveMarkBudget } from "../../../module/actors/character/move-mark-budget.js";
+import { readRepo } from "../../fakes/css.js";
 
 
 // Resolve whatever selection the picked move demands at acquisition: a stat for
@@ -58,6 +59,12 @@ async function levelUpOnce(char, actor) {
 	const statChoicesBefore = Object.keys(actor.getFlag("stonetop-pwd", "improvedStatChoices") ?? {}).length;
 
 	const pick = data.availableMoves[0];
+	// Never offered below its level gate: the source move's requirement.level is at most the
+	// level this advance reaches.
+	const pickSource = sourceMovesFor(data.playbookName).find(d => d._id === pick.compendiumId);
+	expect(pickSource, `${pick.name} is a ${data.playbookName} move`).toBeTruthy();
+	expect(pickSource.system?.requirement?.level ?? 1, `${pick.name} offered at level ${data.newLevel}`)
+		.toBeLessThanOrEqual(data.newLevel);
 	const invocation = data.needsInvocation ? data.availableInvocations[0].slug : null;
 	const choices = await choicesFor(char, pick, data.newLevel, actor);
 
@@ -367,6 +374,183 @@ describe("StonetopCharacter level-up — replacing moves and playbook-locked mov
 		expect(names).not.toContain("Dangerous");
 		expect(names).not.toContain("Potential for Greatness");
 		expect(names.length).toBeGreaterThan(0);
+	});
+});
+
+describe("StonetopCharacter.applyLevelUp — refuses a stale or unaffordable level-up", () => {
+	const heavyMove = (name) => sourceMovesFor("The Heavy").find(d => d.name === name)._id;
+
+	it("writes nothing when the character has left the level the choices were built for", async () => {
+		const { char, actor } = buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", level: 3, xp: 50 });
+		const before = moveCount(actor);
+
+		const result = await char.applyLevelUp(heavyMove("Berserker"), null, null, { fromLevel: 2 });
+
+		expect(result).toEqual({ applied: false, reason: "level" });
+		expect(actor.system.attributes.level.value).toBe(3);
+		expect(actor.system.attributes.xp.value).toBe(50);
+		expect(moveCount(actor)).toBe(before);
+	});
+
+	it("writes nothing without the 6 + 2×level XP it costs", async () => {
+		const { char, actor } = buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", level: 3, xp: 11 });
+		const before = moveCount(actor);
+
+		const result = await char.applyLevelUp(heavyMove("Berserker"), null, null, { fromLevel: 3 });
+
+		expect(result).toEqual({ applied: false, reason: "xp" });
+		expect(actor.system.attributes.level.value).toBe(3);
+		expect(actor.system.attributes.xp.value).toBe(11);
+		expect(moveCount(actor)).toBe(before);
+	});
+
+	it("spends exactly the cost when the XP is there", async () => {
+		const { char, actor } = buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", level: 3, xp: 12 });
+
+		const result = await char.applyLevelUp(heavyMove("Berserker"), null, null, { fromLevel: 3 });
+
+		expect(result).toEqual({ applied: true });
+		expect(actor.system.attributes.level.value).toBe(4);
+		expect(actor.system.attributes.xp.value).toBe(0);
+	});
+
+	it("canLevelUp reads the 6 + 2×level threshold", () => {
+		expect(buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", level: 3, xp: 11 }).char.canLevelUp).toBe(false);
+		expect(buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", level: 3, xp: 12 }).char.canLevelUp).toBe(true);
+	});
+});
+
+// Level Up step 4, Book I p.528: "If you are the Blessed (or have a sacred pouch) and your new
+// level is even, increase your max Stock by 1."
+describe("Sacred pouch max Stock grows at even levels, the Seeker's included", () => {
+	const POUCH = "sacred-pouch";
+	// The Seeker's pouch as the pack prints it: its growth rule is playbook data, not code.
+	const seekerPouch = { options: JSON.parse(readRepo("packs/src/stonetop-items/playbooks/the-seeker.json"))
+		.flags.stonetop.specialPossessions.options.filter(o => o.slug === POUCH) };
+	const blessedPouch = { options: [{ slug: POUCH, resource: { max: 3 },
+		usesBonus: { evenLevelBonus: 1, moveBonus: [{ moveName: "Big Magic", perInstance: 2 }] } }] };
+	const seekerAt = (grantedAt) => buildLiveCharacter({
+		slug: "the-seeker", name: "The Seeker",
+		flags: grantedAt == null ? {} : { "possessions.grantedAtLevel": { [POUCH]: grantedAt } },
+	}).char;
+	const max = (char, possessions, level, owned = new Map()) =>
+		char.computePossessionMaxUses(possessions, owned, level)[POUCH] ?? possessions.options[0].resource.max;
+
+	it("the Blessed's matches the book's Blodwen: level 6 holds 6", () => {
+		const { char } = buildLiveCharacter({ slug: "the-blessed", name: "The Blessed" });
+		expect(max(char, blessedPouch, 6)).toBe(6);
+	});
+
+	it("the Seeker's starts at 3 and gains 1 at each even level from the one it arrived at", () => {
+		const char = seekerAt(3);
+		expect(max(char, seekerPouch, 3)).toBe(3);
+		expect(max(char, seekerPouch, 4)).toBe(4);
+		expect(max(char, seekerPouch, 5)).toBe(4);
+		expect(max(char, seekerPouch, 6)).toBe(5);
+	});
+
+	it("taken on an even level-up, it gains that level's +1 at once (step 3 before step 4)", () => {
+		expect(max(seekerAt(2), seekerPouch, 2)).toBe(4);
+	});
+
+	it("Big Magic learned through Initiate adds its +2", () => {
+		const owned = new Map([["Big Magic", [{}]]]);
+		expect(max(seekerAt(4), seekerPouch, 4, owned)).toBe(6);
+	});
+
+	// Granted before the level was recorded: counted from level 2, the first Initiate can be
+	// taken at. Reading it flat left a level-8 Seeker at 3 Stock.
+	it("a pouch with no recorded level counts from level 2, Initiate's earliest", () => {
+		expect(max(seekerAt(null), seekerPouch, 8)).toBe(7);
+		expect(max(seekerAt(null), seekerPouch, 3)).toBe(4);
+	});
+
+	it("Initiate of the Secret Arts records the level the pouch arrived at", async () => {
+		const initiateId = sourceMovesFor("The Seeker").find(d => d.name === "Initiate of the Secret Arts")._id;
+		const { char, actor } = buildLiveCharacter({ slug: "the-seeker", name: "The Seeker", level: 3 });
+		vi.spyOn(char, "selectPossession").mockResolvedValue(undefined);
+		await char.applyLevelUp(initiateId, null, { crossPlaybook: true, foreignMoveId: null, grantsPossession: POUCH });
+		expect(actor.getFlag("stonetop-pwd", "possessions.grantedAtLevel")).toEqual({ [POUCH]: 4 });
+	});
+
+	it("sacredPouchMax works it out without a snapshot (the chat card's Spend button)", async () => {
+		const { char } = buildLiveCharacter({ slug: "the-seeker", name: "The Seeker", level: 6,
+			flags: { "possessions.grantedAtLevel": { [POUCH]: 4 } } });
+		expect(await char.sacredPouchMax()).toBe(5);
+	});
+});
+
+// Level Up step 5, Book I p.528: "If you are the Lightbearer (or have Invoke the Sun God) and
+// your new level is even, choose a new invocation."
+describe("Invocations for a character with Invoke the Sun God who isn't the Lightbearer", () => {
+	const invokeTheSunGod = () => {
+		const raw = sourceMovesFor("The Lightbearer").find(d => d.name === "Invoke the Sun God");
+		return { name: raw.name, type: "move", system: structuredClone(raw.system) };
+	};
+
+	it("draws on the Lightbearer's list", async () => {
+		const { char } = buildLiveCharacter({ slug: "the-would-be-hero", name: "The Would-Be Hero", items: [invokeTheSunGod()] });
+		const source = await char.invocationSource();
+		expect(source.options.length).toBeGreaterThan(0);
+	});
+
+	it("has none without the move", async () => {
+		const { char } = buildLiveCharacter({ slug: "the-would-be-hero", name: "The Would-Be Hero" });
+		expect(await char.invocationSource()).toBeNull();
+	});
+
+	it("is owed a new one on an even level", async () => {
+		const { char } = buildLiveCharacter({ slug: "the-would-be-hero", name: "The Would-Be Hero", level: 3, items: [invokeTheSunGod()] });
+		const data = await char.getLevelUpData();
+		expect(data.needsInvocation).toBe(true);
+		expect(data.availableInvocations.length).toBeGreaterThan(0);
+	});
+
+	it("without the move, an even level still carries the list (for a pick of it this level) but asks for none", async () => {
+		const { char } = buildLiveCharacter({ slug: "the-would-be-hero", name: "The Would-Be Hero", level: 3 });
+		const data = await char.getLevelUpData();
+		expect(data.needsInvocation).toBe(false);
+		expect(data.availableInvocations.length).toBeGreaterThan(0);
+	});
+
+	it("an odd level carries nothing", async () => {
+		const { char } = buildLiveCharacter({ slug: "the-would-be-hero", name: "The Would-Be Hero", level: 2, items: [invokeTheSunGod()] });
+		const data = await char.getLevelUpData();
+		expect(data.needsInvocation).toBe(false);
+		expect(data.availableInvocations).toEqual([]);
+	});
+});
+
+// The Ranger's Beast-Bonded background: "Mark 1 action at 1st level, then another at 3rd,
+// 5th, 7th, and 9th."
+describe("Beast-Bonded companion actions at level-up", () => {
+	const ranger = ({ level, marked = [] }) => buildLiveCharacter({
+		slug: "the-ranger", name: "The Ranger", level,
+		flags: { "background.selected": "beast-bonded", "background.markedActions": marked },
+	});
+
+	it("asks for one more action on reaching 3rd level", async () => {
+		const { char } = ranger({ level: 2, marked: ["call-back"] });
+		const data = await char.getLevelUpData();
+		expect(data.companionActions.allowance).toBe(1);
+		expect(data.companionActions.options.find(o => o.slug === "call-back").marked).toBe(true);
+	});
+
+	it("asks for nothing on a level without one", async () => {
+		const { char } = ranger({ level: 3, marked: ["call-back", "gauge-distance"] });
+		expect((await char.getLevelUpData()).companionActions).toBeNull();
+	});
+
+	it("catches up an action skipped at an earlier level", async () => {
+		const { char } = ranger({ level: 3, marked: ["call-back"] });
+		expect((await char.getLevelUpData()).companionActions.allowance).toBe(1);
+	});
+
+	it("records the pick with the level-up", async () => {
+		const { char, actor } = ranger({ level: 2, marked: ["call-back"] });
+		const move = (await char.getLevelUpData()).availableMoves[0];
+		await char.applyLevelUp(move.compendiumId, null, { companionActions: ["sense-emotion"] });
+		expect(actor.getFlag("stonetop-pwd", "background.markedActions")).toEqual(["call-back", "sense-emotion"]);
 	});
 });
 

@@ -22,7 +22,11 @@
 	<div class="stonetop-invocations-rules">
 		<p>While one Invocation is ongoing, you can't use another. You can end an Invocation whenever you wish, and it will end immediately if your holy light is extinguished. An invocation's range is equal to that of its light source.</p>
 		{{#if stonetop.invocationsEdit}}
+		{{#if stonetop.invocations.startingCount}}
 		<p>You start knowing <strong>{{stonetop.invocations.startingCount}}</strong> Invocations. Each time you reach an even-numbered level, learn 1 new Invocation.</p>
+		{{else}}
+		<p>Each time you reach an even-numbered level, learn 1 new Invocation.</p>
+		{{/if}}
 		{{/if}}
 	</div>
 

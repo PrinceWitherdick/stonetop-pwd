@@ -43,10 +43,10 @@ import {moveMarkBudget} from "./move-mark-budget.js";
 import {StonetopFlags, STONETOP_SCOPE, resolvedFlags, resolvedFlagProperty} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG, ownsAsteriskMove} from "./WouldBeHeroAsterisk.js";
-import {HOLY_LIGHT_FLAG, canWieldHolyLight} from "./holy-light.js";
 import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, isMoveLearned, ownedMoveNames, ownsMoveNamed} from "./owns-move.js";
 import {RITES_OF_THE_LAND, SACRED_POUCH_SLUG, NO_POUCH_STOCK_NOTE, BLESSED_PLAYBOOK, isVessel, stockSourcesForFlags, stockCostFromDescription} from "./stock-cost.js";
 import {loseHpForStock} from "./provisions.js";
+import {HOLY_LIGHT_FLAG, canWieldHolyLight, INVOKE_THE_SUN_GOD} from "./holy-light.js";
 import {moveArmor, barkskinMarkedBy} from "./move-armor.js";
 import {ONGOING_INVOCATION_FLAG, readOngoing} from "./ongoing-invocation.js";
 import {CONDEMNED_FLAG, canCondemn, readCondemned, addCondemned, removeCondemned, noteCondemned} from "./condemn.js";
@@ -375,6 +375,11 @@ export class StonetopCharacter {
 
 	get _characterLevel() { return this._actor.system?.attributes?.level?.value ?? 1; }
 
+	// Whether the character has the 6 + twice-their-level XP that Level Up costs right now.
+	get canLevelUp() {
+		return (this._actor.system?.attributes?.xp?.value ?? 0) >= xpToLevelUp(this._characterLevel);
+	}
+
 	// Potential-for-Greatness stat slot: choosing a stat writes +1 to that stored
 	// stat (and reverts the previously chosen one), recording the level it was
 	// marked on. Newly filled slots auto-fill the current level.
@@ -455,6 +460,25 @@ export class StonetopCharacter {
 		const slug = this._actor.system?.playbook?.slug;
 		if (!slug) return null;
 		return this._playbookRepo.findBySlug(slug);
+	}
+
+	// The Invocations this character draws on ({ options, … }), or null for none. The
+	// Lightbearer's come with the playbook. Anyone else who has Invoke the Sun God (a Would-be
+	// Hero through Versatile) learns from the same list: Level Up step 5, Book I p.528, "If you
+	// are the Lightbearer (or have Invoke the Sun God) and your new level is even, choose a new
+	// invocation." The Invocations insert's "you start knowing 2" is addressed to the
+	// Lightbearer alone, so such a character starts knowing none and learns them at even levels.
+	async invocationSource(playbookData = undefined) {
+		const own = playbookData === undefined ? await this.playbook() : playbookData;
+		if (own?.invocations?.options?.length) return own.invocations;
+		if (!ownsMoveNamed(this._actor, INVOKE_THE_SUN_GOD)) return null;
+		return this.lightbearerInvocations();
+	}
+
+	// The Lightbearer playbook's Invocations, whoever is asking, or null if it can't be found.
+	async lightbearerInvocations() {
+		const lightbearer = await this._playbookRepo.findBySlug(LIGHTBEARER_SLUG);
+		return lightbearer?.invocations?.options?.length ? lightbearer.invocations : null;
 	}
 
 	// The expedition moves shown to players on the character sheet: the full
@@ -1999,17 +2023,31 @@ export class StonetopCharacter {
 		await item.setFlag(STONETOP_SCOPE, "learned", !!learned);
 	}
 
+	// A possession's `usesBonus` (playbook data) grows its max: the Blessed's pouch +1 each even level
+	// and +2 per Big Magic. The Seeker's, from Initiate of the Secret Arts ("as per the Blessed"),
+	// carries `sinceGranted`: Level Up step 4, Book I p.528, "If you are the Blessed (or have a sacred
+	// pouch) and your new level is even, increase your max Stock by 1", so it grows only from the
+	// level it was granted at. Step 3 (choose the move) comes before step 4, so a pouch taken on an
+	// even level-up gains that level's +1 at once. A pouch granted before its level was recorded
+	// counts from `earliestGrant`, the first level Initiate can be taken at (it requires level 2);
+	// reading such a pouch flat would leave a level-8 Seeker at 3 Stock instead of 7.
 	computePossessionMaxUses(specialPossessions, ownedAllByName, level) {
 		const result = { ...this._possessions.maxUses };
 		for (const opt of (specialPossessions?.options ?? [])) {
-			if (!opt.usesBonus) continue;
+			const usesBonus = opt.usesBonus;
+			if (!usesBonus) continue;
 			let bonus = 0;
-			if (opt.usesBonus.evenLevelBonus) {
-				bonus += Math.floor(level / 2) * opt.usesBonus.evenLevelBonus;
+			if (usesBonus.evenLevelBonus) {
+				// The Blessed has had the pouch since level 1. A pouch granted later counts only
+				// the even levels from the one it arrived at (unrecorded: its earliest possible).
+				const from = usesBonus.sinceGranted
+					? (this._possessions.grantedAtLevel[opt.slug] ?? usesBonus.earliestGrant ?? level + 1)
+					: 1;
+				bonus += _evenLevelsBetween(from, level) * usesBonus.evenLevelBonus;
 			}
 			// LEARNED copies only: an un-learned Big Magic stays on the sheet switched off, and
 			// its "+2 max Stock" must not keep growing the pouch.
-			bonus += sumMoveBonus(opt.usesBonus.moveBonus, n => (ownedAllByName.get(n) ?? []).filter(isMoveLearned).length);
+			bonus += sumMoveBonus(usesBonus.moveBonus, n => (ownedAllByName.get(n) ?? []).filter(isMoveLearned).length);
 			if (bonus > 0) result[opt.slug] = (opt.resource?.max ?? 0) + bonus;
 		}
 		return result;
@@ -3866,12 +3904,34 @@ export class StonetopCharacter {
 			lockedMoves    = all.filter(e => e.locked);
 		}
 
+		// Level Up step 5: on an even level, the Lightbearer (or anyone with Invoke the Sun God)
+		// chooses a new Invocation. The list rides along on every even level even for someone
+		// who lacks the move today, because step 3 comes first: a Would-be Hero who takes
+		// Invoke the Sun God through Versatile on this very level-up is owed one at once, and
+		// the dialog opens that step off `availableInvocations` when they pick it.
 		let needsInvocation     = false;
 		let availableInvocations = [];
-		if (newLevel % 2 === 0 && playbookData?.invocations?.options?.length) {
+		if (newLevel % 2 === 0) {
+			const source = await this.invocationSource(playbookData);
+			const list   = source ?? await this.lightbearerInvocations();
 			const selected = new Set(actor.getFlag(STONETOP_SCOPE, "invocations.selected") ?? []);
-			availableInvocations = playbookData.invocations.options.filter(o => !selected.has(o.slug));
-			needsInvocation = availableInvocations.length > 0;
+			availableInvocations = (list?.options ?? []).filter(o => !selected.has(o.slug));
+			needsInvocation = !!source && availableInvocations.length > 0;
+		}
+
+		// A Beast-Bonded Ranger marks another companion action at 3rd, 5th, 7th and 9th level
+		// (their background: "Mark 1 action at 1st level, then another at 3rd, 5th, 7th, and
+		// 9th"). Whatever the new level allows beyond what's marked is owed now, so a character
+		// who skipped one catches up here too.
+		const markable = this._selectedBackground(playbookData)?.markableActions;
+		let companionActions = null;
+		if (markable?.options?.length) {
+			const marked = new Set(this._background.markedActions);
+			const options = markable.options.map(o => ({ slug: o.slug, label: o.label, marked: marked.has(o.slug) }));
+			const owed = allowedMarkableActions(markable, newLevel) - options.filter(o => o.marked).length;
+			const open = options.filter(o => !o.marked).length;
+			const allowance = Math.min(owed, open);
+			if (allowance > 0) companionActions = { label: markable.label ?? "", allowance, options };
 		}
 
 		return {
@@ -3883,6 +3943,7 @@ export class StonetopCharacter {
 			lockedMoves,
 			needsInvocation,
 			availableInvocations,
+			companionActions,
 			// Current stat values, so the stat-increase picker can grey out any stat
 			// already at the chosen move's cap (+2 / +3).
 			stats: Object.entries(_STAT_DEFS).map(([key, { name, abbr }]) => ({
@@ -3942,23 +4003,33 @@ export class StonetopCharacter {
 	// collects it, this commits it. The move is added first so the choice can key off the
 	// new item's id, then the choice is applied — a mid-flow failure leaves the move owned
 	// (its choice re-collectable from the card) rather than a half-applied stat bump.
-	async applyLevelUp(selectedMoveCompendiumId, selectedInvocationSlug, choices = null) {
+	//
+	// Returns `{ applied: true }`, or `{ applied: false, reason }` when nothing was written:
+	// `"level"` — the character is no longer at `fromLevel`, the level the caller's choices
+	// were built for (the same level-up already applied from another window); `"xp"` — they
+	// no longer have the 6 + 2×level XP it costs (Book I p.528: the move needs that much).
+	async applyLevelUp(selectedMoveCompendiumId, selectedInvocationSlug, choices = null, { fromLevel = null } = {}) {
 		// Through the XP lock (utils/xp.js), not adjustXp: the level and the XP it cost move in
 		// ONE update, and splitting them would leave a moment where the character has the new
 		// level and has not paid for it. Both are therefore read inside the lock, so a mark that
-		// landed while the level-up dialog was open is spent from rather than overwritten.
+		// landed while the level-up dialog was open is spent from rather than overwritten, and
+		// the checks below see the values the write replaces.
 		//
 		// Only the write is held: the move additions below reach into compendia, and keeping
 		// every other XP change on this client waiting on a pack read would trade one rare bug
 		// for a common stall.
-		await withXpLock(this._actor, async () => {
+		const refused = await withXpLock(this._actor, async () => {
 			const level = this._actor.system?.attributes?.level?.value ?? 1;
 			const xp    = this._actor.system?.attributes?.xp?.value ?? 0;
+			if (fromLevel != null && level !== fromLevel) return "level";
+			if (xp < xpToLevelUp(level)) return "xp";
 			await this._actor.update({
 				"system.attributes.level.value": level + 1,
-				"system.attributes.xp.value":   Math.max(0, xp - xpToLevelUp(level)),
+				"system.attributes.xp.value":   xp - xpToLevelUp(level),
 			});
+			return null;
 		});
+		if (refused) return { applied: false, reason: refused };
 		let addedItem = null;
 		if (selectedMoveCompendiumId) {
 			addedItem = await this.addMove(selectedMoveCompendiumId);
@@ -3978,10 +4049,15 @@ export class StonetopCharacter {
 		if (choices?.marks?.picks?.length) {
 			await this._applyMarkChoices(choices.marks.moveName, choices.marks.picks);
 		}
+		// The Beast-Bonded Ranger's companion actions for the level just reached.
+		if (choices?.companionActions?.length) {
+			await this._background.setMarkedActions(new Set([...this._background.markedActions, ...choices.companionActions]));
+		}
 		if (selectedInvocationSlug) {
 			const current = this._actor.getFlag(STONETOP_SCOPE, "invocations.selected") ?? [];
 			await this._actor.setFlag(STONETOP_SCOPE, "invocations.selected", [...current, selectedInvocationSlug]);
 		}
+		return { applied: true };
 	}
 
 	// Record an Improved/Superior Stat pick: remember which stat this move instance raised
@@ -4048,6 +4124,8 @@ export class StonetopCharacter {
 		}
 		if (grantsPossession && !this._possessions.selected.has(grantsPossession)) {
 			await this.selectPossession(grantsPossession);
+			// applyLevelUp has already raised the level, so this is the level being gained.
+			await this._possessions.setGrantedAtLevel(grantsPossession, this._characterLevel);
 		}
 	}
 
@@ -4092,11 +4170,20 @@ export class StonetopCharacter {
 
 // ── Snapshot helpers ──────────────────────────────────────────────────────────
 
+// The playbook whose Invocations anyone with Invoke the Sun God learns from.
+const LIGHTBEARER_SLUG = "the-lightbearer";
+
 // Whether a possession's choiceGroups leave anything to pick: any radio line, or a
 // multi-select whose effective cap (maxSelect + move bonus) isn't zero.
 function _hasEditableChoice(choiceGroups, moveCounts) {
 	return (choiceGroups ?? []).some(cg => (cg.subgroups ?? []).some(sg =>
 		!sg.multiSelect || effectiveSubgroupMax(sg, moveCounts) !== 0));
+}
+
+// How many even levels lie in [from, to], inclusive.
+function _evenLevelsBetween(from, to) {
+	if (to < from) return 0;
+	return Math.floor(to / 2) - Math.floor((from - 1) / 2);
 }
 
 // The 9 playbooks by display name (as stored in a move's system.playbook), for the

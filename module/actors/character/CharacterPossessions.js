@@ -8,6 +8,9 @@ export class CharacterPossessions {
 	get maxUses()     { return this._flags.getFlag("maxUses") ?? {}; }
 	get subChoices()  { return this._flags.getFlag("subChoices") ?? {}; }
 	get choiceUses()  { return this._flags.getFlag("choiceUses") ?? {}; }
+	// The level a move-granted possession arrived at (the Seeker's sacred pouch), keyed by
+	// slug. Its Stock grows only from then on — see StonetopCharacter#computePossessionMaxUses.
+	get grantedAtLevel() { return this._flags.getFlag("grantedAtLevel") ?? {}; }
 	// Player-written "something else (discuss with GM)" possessions — items not on the
 	// playbook's list, stored as { slug, label } since there's no option to match by slug.
 	get custom()      { return this._flags.getFlag("custom") ?? []; }
@@ -16,6 +19,10 @@ export class CharacterPossessions {
 		const s = this.selected;
 		s.add(slug);
 		await this._flags.setFlag("selected", [...s]);
+	}
+
+	async setGrantedAtLevel(slug, level) {
+		await this._flags.setFlag("grantedAtLevel", { ...this.grantedAtLevel, [slug]: level });
 	}
 
 	// Forget everything a move-granted possession carried (its level, spent uses and picks),
@@ -95,6 +102,7 @@ export class CharacterPossessions {
 		const key = `${possessionSlug}:${choiceSlug}`;
 		await this._flags.setFlag("choiceCarried", { ...this.choiceCarried, [key]: !!isCarried });
 	}
+
 
 	// Free text the player wrote into a sub-option's fill-in blank (the Would-Be Hero's
 	// "A shield, bearing ___'s crest"), keyed possessionSlug:choiceSlug like choiceUses.

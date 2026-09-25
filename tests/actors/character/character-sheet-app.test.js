@@ -145,6 +145,9 @@ function makeCharacterMock(actor) {
 		moveResources: { add: vi.fn() },
 		buildSnapshot: vi.fn(async () => ({})),
 		setInventoryResource: vi.fn(),
+		// The real one falls back to the Lightbearer's list for anyone with Invoke the Sun God;
+		// these tests only ever hand it a playbook that carries its own.
+		invocationSource: vi.fn(async playbookDoc => playbookDoc?.invocations?.options?.length ? playbookDoc.invocations : null),
 	};
 }
 
@@ -758,6 +761,16 @@ describe("StonetopCharacterSheet ongoing Invocation", () => {
 		await actor.typedActor.setOngoingInvocation("warmth-of-the-sun");
 		expect((await sheet.getData()).stonetop.ongoingInvocation)
 			.toEqual({ active: true, slug: "warmth-of-the-sun", label: "Warmth of the Sun" });
+	});
+
+	// The insert's "you start knowing 2" is the Lightbearer's; anyone else with Invoke the Sun God
+	// starts knowing none (StonetopCharacter#invocationSource).
+	it("says the Lightbearer starts knowing 2, and a borrower none", () => {
+		installGetDataGlobals();
+		const { sheet } = invokingSheet({ ongoing: "" });
+		const raw = { startingCount: 2, options: [{ slug: "warmth-of-the-sun", label: "Warmth of the Sun" }] };
+		expect(sheet._buildInvocationsData(raw).startingCount).toBe(2);
+		expect(sheet._buildInvocationsData(raw, { borrowed: true }).startingCount).toBe(0);
 	});
 
 	// "You can end an Invocation whenever you wish" — one click, nothing to confirm. It posts,
