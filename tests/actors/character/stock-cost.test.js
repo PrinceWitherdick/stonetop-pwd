@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { readRepo as read } from "../../fakes/css.js";
 import {
-	stockSources, canPayStock, defaultStockSource, stockCostFromDescription,
+	stockSources, stockSourcesForFlags, canPayStock, defaultStockSource, stockCostFromDescription,
+	payableStockSources, mustAskStockSource, stockSourceChoiceLabel, stockReceipt, vesselHpFormula, isVessel,
 	SACRED_POUCH_SLUG, DEFAULT_SACRED_POUCH_MAX,
 } from "../../../module/actors/character/stock-cost.js";
 import { GUIDED_CHARACTER_MOVES } from "../../../module/actors/character/StonetopCharacterSheet.js";
@@ -39,6 +40,103 @@ const strip = h => h.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\
 // Danu's Grasp is the one move that CHARGES before it rolls: "spend 1 Stock and roll +WIS".
 // Its dialog has to answer two questions before the dice — can this character pay, and out of
 // what — and refuse the roll when the answer is no.
+
+describe("stockSourcesForFlags — the pouch's real max", () => {
+	// A level-6 Blessed's pouch holds 6 (Book I p.528's Blodwen), a figure no flag stores:
+	// read off the flags alone, spending 3 of 6 looked like an empty pouch.
+	const flags = { possessions: { selected: [SACRED_POUCH_SLUG], uses: { [SACRED_POUCH_SLUG]: 3 }, maxUses: {} } };
+
+	it("pays out of the derived max when given one", () => {
+		expect(stockSourcesForFlags({ ...flags, pouchMax: 6 })[0].remaining).toBe(3);
+	});
+
+	it("falls back to the printed 3 without one", () => {
+		expect(stockSourcesForFlags(flags)[0].remaining).toBe(0);
+	});
+
+	// Both payers ask ONE live reader (StonetopCharacter#stockSources, which asks sacredPouchMax).
+	// The sheet used to read the render snapshot's max, which does not exist until the sheet has
+	// drawn: a window opened from the hotbar after a reload priced a raised pouch at 3.
+	it("both payers read the purse live, through the character: the sheet's dialog and the chat card", () => {
+		const sheet = read("module/actors/character/StonetopCharacterSheet.js");
+		expect(sheet).toContain("const sources = await this._stonetopCharacter.stockSources();");
+		expect(sheet).not.toContain("derivedPossessionMax(SACRED_POUCH_SLUG)");
+		expect(read("stonetop.js")).toContain("await character.stockSources()");
+		expect(read("module/actors/character/StonetopCharacter.js")).toContain("pouchMax:      await this.sacredPouchMax(playbookData),");
+	});
+
+	// The Blessed's pouch is PRESELECTED, so it is often never written to `possessions.selected`.
+	// Reading that list alone left such a Blessed with no purse while the gear tab said they had one.
+	it("takes the caller's answer to whether the pouch is held", () => {
+		const unwritten = { possessions: { selected: [], uses: {} } };
+		expect(stockSourcesForFlags(unwritten).map(s => s.key)).toEqual([]);
+		expect(stockSourcesForFlags({ ...unwritten, hasPouch: true }).map(s => s.key)).toEqual(["stock"]);
+		// And an explicit "no" wins over a stale list.
+		expect(stockSourcesForFlags({ ...flags, hasPouch: false }).map(s => s.key)).toEqual([]);
+	});
+});
+
+// The Vessel background: "When you would spend 1 Stock from your sacred pouch, you may choose to
+// lose 2d4 HP instead." The user's ruling: offered EVEN WHEN THE POUCH IS EMPTY, never by default.
+describe("the Vessel's third purse", () => {
+	it("is a Blessed with the vessel background, and nobody else", () => {
+		expect(isVessel({ playbookName: "The Blessed", backgroundSlug: "vessel" })).toBe(true);
+		expect(isVessel({ playbookName: "The Blessed", backgroundSlug: "initiate" })).toBe(false);
+		expect(isVessel({ playbookName: "The Seeker", backgroundSlug: "vessel" })).toBe(false);
+		expect(isVessel()).toBe(false);
+	});
+
+	it("is offered only to a Vessel, after the pouch and the Boon", () => {
+		expect(stockSources({}).map(s => s.key)).toEqual(["stock"]);
+		expect(stockSources({ boonMax: 4, vesselHp: 7 }).map(s => s.key)).toEqual(["stock", "boon", "hp"]);
+	});
+
+	// The whole point of the ruling: a Vessel is never locked out of a Stock move.
+	it("pays when the pouch is empty and there is no Boon", () => {
+		const sources = stockSources({ pouchStored: 3, vesselHp: 7 });
+		expect(sources[0].remaining).toBe(0);
+		expect(canPayStock(sources, 1)).toBe(true);
+		expect(canPayStock(sources, 2)).toBe(true);
+		expect(payableStockSources(sources, 1).map(s => s.key)).toEqual(["hp"]);
+	});
+
+	it("has nothing left to give at 0 HP", () => {
+		const sources = stockSources({ pouchStored: 3, vesselHp: 0 });
+		expect(canPayStock(sources, 1)).toBe(false);
+	});
+
+	// "may choose": never the purse a caller falls back to without asking.
+	it("is never the default purse", () => {
+		expect(defaultStockSource(stockSources({ pouchStored: 3, vesselHp: 7 }), 1)).toBeNull();
+		expect(defaultStockSource(stockSources({ pouchStored: 1, vesselHp: 7 }), 1).key).toBe("stock");
+		expect(defaultStockSource(stockSources({ pouchStored: 3, boonMax: 4, boonStored: 1, vesselHp: 7 }), 1).key).toBe("boon");
+	});
+
+	// Both pickers (the sheet's "Spend from" and the chat card's buttons) ask on this.
+	it("is always asked for, even as the only purse that can pay", () => {
+		const only = payableStockSources(stockSources({ pouchStored: 3, vesselHp: 7 }), 1);
+		expect(mustAskStockSource(only)).toBe(true);
+		expect(mustAskStockSource(payableStockSources(stockSources({ pouchStored: 1 }), 1))).toBe(false);
+		expect(mustAskStockSource(payableStockSources(stockSources({ pouchStored: 1, boonMax: 4, boonStored: 1 }), 1))).toBe(true);
+	});
+
+	// 2d4 per Stock: the book's trade is per Stock, so a 2-Stock cost is the trade made twice.
+	it("throws 2d4 per Stock", () => {
+		expect(vesselHpFormula(1)).toBe("2d4");
+		expect(vesselHpFormula(2)).toBe("4d4");
+		expect(vesselHpFormula()).toBe("2d4");
+	});
+
+	it("reads as a trade, on the picker and on the receipt", () => {
+		const [pouch, hp] = stockSources({ pouchStored: 1, vesselHp: 7 });
+		expect(stockSourceChoiceLabel(pouch, 1)).toBe("Stock (2 left)");
+		expect(stockSourceChoiceLabel(hp, 1)).toBe("Lose 2d4 HP instead");
+		expect(stockReceipt(pouch, 1)).toBe("Spent 1 Stock");
+		expect(stockReceipt(hp, 1, 5)).toBe("Lost 5 HP in place of 1 Stock");
+		// A chat stamp from before the Vessel purse existed still reads.
+		expect(stockReceipt({ amount: 1, label: "Boon" }, 1)).toBe("Spent 1 Boon");
+	});
+});
 
 describe("stockSources", () => {
 	// BOTH tracks store checks SPENT, not held (model/Resource.js: "current - checks used").
@@ -252,9 +350,10 @@ describe("the moves that spend at one trigger and roll at another", () => {
 		// _postMoveCard leaves the button off unless asked (stockSpend defaults false).
 		expect(body).toContain("this._postMoveCard(name,");
 		expect(body).not.toContain("stockSpend");
-		// It says what it cost, out of the purse that was actually charged.
+		// It says what it cost, out of the purse that was actually charged (and for a Vessel, the
+		// HP it took).
 		expect(body).toContain("stonetop-move-cost-receipt");
-		expect(body).toContain("${_esc(paid.label)}");
+		expect(body).toContain("${_esc(stockReceipt(paid, spend.amount, paid.lost))}");
 	});
 
 	// ⚠ AND WHAT MAKING THE MOVE DOES BEYOND THE CARD. Two of these three moves are the whole of
@@ -278,7 +377,7 @@ describe("the moves that spend at one trigger and roll at another", () => {
 	// "Spent 1 Stock" are different sentences, and guessing gets one of them wrong.
 	it("hands back the purse it charged", () => {
 		const spend = SHEET.slice(SHEET.indexOf("async _spendStockCost"));
-		expect(spend.slice(0, 1400)).toContain("return source;");
+		expect(spend.slice(0, 1400)).toContain("return { ...source, lost };");
 	});
 
 	// Affirmative left, and the PAIR stays together: Spend then Roll, in the order the move's two
@@ -321,7 +420,7 @@ describe("Danu's Grasp, on the sheet", () => {
 	// be emptied on the sheet behind it between opening the window and pressing the button.
 	it("re-reads the purse before it charges", () => {
 		const spend = SHEET.slice(SHEET.indexOf("async _spendStockCost"));
-		expect(spend.slice(0, 900)).toContain("const live = this._stockCostView(cost)");
+		expect(spend.slice(0, 900)).toContain("const live = await this._stockCostView(cost)");
 		expect(spend.slice(0, 900)).toContain("return false");
 	});
 
@@ -387,8 +486,23 @@ describe("paying for a move that does not roll", () => {
 		expect(STONETOP).toContain("function _chatWireSpendStock");
 		expect(STONETOP).toContain("_chatWireSpendStock(message, html);");
 		// The SAME reader the gated dialog uses, so the two cannot disagree about the purse.
-		expect(STONETOP).toContain("stockSourcesForFlags");
-		expect(STONETOP).toContain("defaultStockSource");
+		expect(STONETOP).toContain("await character.stockSources()");
+	});
+
+	// It used to take the pouch first, always. With a Boon held, or a Vessel's HP on offer, which
+	// purse pays is the player's call, asked exactly when the sheet's "Spend from" picker asks it.
+	it("asks which purse pays whenever there is a choice, as the sheet does", () => {
+		const at = STONETOP.indexOf("function _chatWireSpendStock");
+		const body = STONETOP.slice(at, STONETOP.indexOf("\n}\n", at));
+		expect(body).toContain("mustAskStockSource(payable) ? await askStockSource(payable, amount, moveName) : payable[0]");
+		expect(body).not.toContain("defaultStockSource");
+		// Paid through the character, so a Vessel's HP is thrown and lost the same way as on the sheet.
+		expect(body).toContain("await character.spendStock(source, amount, { moveName, speaker: message.speaker })");
+		expect(SHEET).toContain("mustAskStockSource(cost.payable)");
+		// Shared with a carer answering a Healer's Arts ask (actors/character/ask-stock-source.js).
+		const ask = read("module/actors/character/ask-stock-source.js");
+		expect(ask).toContain("askWithButtons({");
+		expect(ask).toContain('label: "Leave it unpaid"');
 	});
 
 	// One card is one use of the move, so it is paid for once however many clients render it.

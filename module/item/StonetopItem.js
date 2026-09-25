@@ -183,6 +183,7 @@ export function createStonetopItemClass(BaseItem) {
 		 *   never Foundry's core public/gmroll/blind/self rollMode)
 		 * @param {string}  [options.stonetopDebility]
 		 * @param {string}  [options.stonetopDebilityTooltip]
+		 * @param {string}  [options.actions]            - HTML button row for a description-only card
 		 */
 		async roll(options = {}) {
 			const actor = this.parent;
@@ -224,10 +225,12 @@ export function createStonetopItemClass(BaseItem) {
 				const monster = this.type === "monsterMove";
 				const title   = monster ? "Move" : this.name;
 				const lead    = monster ? `<p>${escHtml(this.name)}</p>` : "";
+				// `actions` is a caller's button row (the Blessed's "Spend 1 Stock"), inside the card
+				// for the reason utils/chat.js#moveChatCard gives: outside it, it has no card to style it.
 				return ChatMessage.create({
 					content: `<div class="stonetop-chat-move">
 						<h3 class="stonetop-chat-move-name">${escHtml(title)}</h3>
-						<div class="stonetop-chat-move-description">${lead}${body}${signoff}</div>
+						<div class="stonetop-chat-move-description">${lead}${body}${signoff}</div>${options.actions ?? ""}
 					</div>`,
 					speaker: ChatMessage.getSpeaker({ actor }),
 					flags: { [STONETOP_SCOPE]: { move: this.name } },

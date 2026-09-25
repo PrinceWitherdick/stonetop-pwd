@@ -26,6 +26,22 @@ export const RITES_MOVE = RITES_OF_THE_LAND;
 /** Which season's rites have been overseen — one per season, per the move's first line. */
 export const RITES_SEASON_STEP = "ritesOfTheLand";
 
+/**
+ * The season-step key for ONE overseer. "Once per season" is per character (user ruling): a
+ * second Blessed, or anyone who took the move through Versatile or Worldly, oversees their own
+ * rites, so the marker is keyed by the actor and one owner's rites never close another's.
+ *
+ * The bare RITES_SEASON_STEP key, written before the marker was per character, names nobody,
+ * so no reader looks at it any more. It is at most one season stale; reading it as "everyone
+ * has overseen" would refuse every owner but the one who wrote it, which is the bug this key
+ * fixes. The cost of ignoring it is that its writer may oversee once more in that one season,
+ * and since the move SETS the Boon rather than adding to it, a second oversight gains nothing
+ * a Surplus did not pay for.
+ */
+export function ritesSeasonStep(actorId) {
+	return `${RITES_SEASON_STEP}:${actorId}`;
+}
+
 /** Boon held for overseeing the rites, and for doing so having given up a Surplus. */
 export const BOON_PLAIN = 1;
 export const BOON_WITH_SURPLUS = 4;
@@ -69,18 +85,20 @@ const DIALOG_OPTIONS = { classes: ["dialog", "stonetop", "stonetop-rites-dialog"
  * @param {object} deps
  * @param {object} deps.character  StonetopCharacter — holds the Boon track.
  * @param {object} deps.steading   StonetopSteading, or null when the world has none yet.
+ * @param {string} deps.actorId    the overseer's actor id; the season marker is theirs alone
  * @param {number} deps.year       campaign year, for the once-per-season marker
  * @param {string} deps.seasonId   current season id, likewise
  * @param {Function} [deps.onApplied]
  */
-export function openRitesOfTheLand({ character, steading, year = 1, seasonId = "", onApplied } = {}) {
+export function openRitesOfTheLand({ character, steading, actorId = "", year = 1, seasonId = "", onApplied } = {}) {
 	if (!character) return;
+	const step = ritesSeasonStep(actorId);
 	const boonMax = Number(character.ritesBoonMax?.() ?? BOON_WITH_SURPLUS) || BOON_WITH_SURPLUS;
 	const state = ritesOptions({
 		boonHeld: character.ritesBoonHeld?.() ?? 0,
 		boonMax,
 		surplus: steading?.getStatValue("surplus") ?? 0,
-		ritesDone: !!(steading && seasonId && steading.seasonStepApplied(RITES_SEASON_STEP, year, seasonId)),
+		ritesDone: !!(steading && seasonId && steading.seasonStepApplied(step, year, seasonId)),
 		debilities: markedDebilities(steading).map(d => d.id),
 	});
 
@@ -162,8 +180,8 @@ export function openRitesOfTheLand({ character, steading, year = 1, seasonId = "
 				el.addEventListener("click", async () => {
 					if (el.disabled) return;
 					el.disabled = true;
-					await _overseeRites({
-						character, steading, year, seasonId, state,
+					await overseeRites({
+						character, steading, step, year, seasonId, state,
 						withSurplus: el.dataset.rites === "surplus",
 					});
 					onApplied?.();
@@ -178,8 +196,11 @@ export function openRitesOfTheLand({ character, steading, year = 1, seasonId = "
 	});
 }
 
-/** Hold the Boon, spend the Surplus if that is the bargain, and mark the season done. */
-async function _overseeRites({ character, steading, year, seasonId, withSurplus, state }) {
+/**
+ * Hold the Boon, spend the Surplus if that is the bargain, and mark the season done for this
+ * overseer (`step` is ritesSeasonStep(actorId)). Exported for its tests.
+ */
+export async function overseeRites({ character, steading, step, year, seasonId, withSurplus, state }) {
 	// THE SURPLUS FIRST, and the Boon set to what was actually paid for.
 	//
 	// The sacrifice and the season marker ride ONE write, through the same reader the Inn's
@@ -195,10 +216,10 @@ async function _overseeRites({ character, steading, year, seasonId, withSurplus,
 	// to give up.
 	let paid = withSurplus;
 	if (withSurplus && steading) {
-		paid = await steading.spendSurplus(1, { stonetopMove: RITES_MOVE, step: RITES_SEASON_STEP, year, seasonId }) !== null;
+		paid = await steading.spendSurplus(1, { stonetopMove: RITES_MOVE, step, year, seasonId }) !== null;
 		if (!paid) globalThis.ui?.notifications?.warn?.("No Surplus left to sacrifice. The rites are overseen without it.");
 	}
-	if (!paid && steading && seasonId) await steading.setSeasonStepApplied(RITES_SEASON_STEP, year, seasonId);
+	if (!paid && steading && seasonId) await steading.setSeasonStepApplied(step, year, seasonId);
 
 	const held = paid ? state.surplusBoon : state.plainBoon;
 	await character.setRitesBoon(held);

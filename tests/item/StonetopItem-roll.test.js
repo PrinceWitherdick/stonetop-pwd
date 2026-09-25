@@ -155,6 +155,17 @@ describe("StonetopItem.roll: a monster's move posted without a roll", () => {
 		expect(heading(posted.content)).toBe("Call the watch");
 		expect(posted.content).not.toContain("<p>Call the watch</p>");
 	});
+
+	// A Stock move made from the hotbar (rollMoveById) posts through here, and needs the same
+	// Spend button the Moves tab's card carries: inside the card, with the `move` stamp kept.
+	it("carries a caller's button row inside the card, keeping the move stamp", async () => {
+		const actions = `<div class="card-buttons"><button class="stonetop-spend-stock">Spend 1 Stock</button></div>`;
+		const posted = await makeItem("Call the Spirits", { description: "<p>When you spend 1 Stock…</p>" }).roll({ actions });
+
+		expect(posted.content).toContain("stonetop-spend-stock");
+		expect(posted.content.indexOf("stonetop-spend-stock")).toBeLessThan(posted.content.lastIndexOf("</div>"));
+		expect(posted.flags["stonetop-pwd"].move).toBe("Call the Spirits");
+	});
 });
 
 // A monster's move that rolls dice is an attack (utils/damage.js#foeAttacks), so it rolls on the

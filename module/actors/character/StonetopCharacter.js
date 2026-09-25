@@ -43,9 +43,10 @@ import {moveMarkBudget} from "./move-mark-budget.js";
 import {StonetopFlags, STONETOP_SCOPE, resolvedFlags, resolvedFlagProperty} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG, ownsAsteriskMove} from "./WouldBeHeroAsterisk.js";
-import {ownedNamesOr, ownedMove, ownsLearnedMoveNamed, isMoveLearned} from "./owns-move.js";
-import {RITES_OF_THE_LAND} from "./stock-cost.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight} from "./holy-light.js";
+import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, isMoveLearned, ownedMoveNames, ownsMoveNamed} from "./owns-move.js";
+import {RITES_OF_THE_LAND, SACRED_POUCH_SLUG, NO_POUCH_STOCK_NOTE, BLESSED_PLAYBOOK, isVessel, stockSourcesForFlags, stockCostFromDescription} from "./stock-cost.js";
+import {loseHpForStock} from "./provisions.js";
 import {moveArmor, barkskinMarkedBy} from "./move-armor.js";
 import {ONGOING_INVOCATION_FLAG, readOngoing} from "./ongoing-invocation.js";
 import {CONDEMNED_FLAG, canCondemn, readCondemned, addCondemned, removeCondemned, noteCondemned} from "./condemn.js";
@@ -1632,9 +1633,56 @@ export class StonetopCharacter {
 		return Math.max(0, Number(this._moveResources.getMoveResources()[RITES_OF_THE_LAND]) || 0);
 	}
 
-	/** That track's capacity, read off the owned move so a homebrewed one still works. */
+	/**
+	 * That track's capacity, read off the owned move so a homebrewed one still works. Only a
+	 * LEARNED Rites of the Land has one: an un-learned move is kept on the sheet switched off.
+	 */
 	ritesBoonMax() {
-		return Number(ownedMove(this._actor, RITES_OF_THE_LAND)?.system?.resource?.max) || 0;
+		return Number(ownedLearnedMove(this._actor, RITES_OF_THE_LAND)?.system?.resource?.max) || 0;
+	}
+
+	/** Is this character a Vessel (the Blessed's background that can pay Stock in HP)? */
+	get isVessel() {
+		return isVessel({ playbookName: this._actor.system?.playbook?.name ?? null, backgroundSlug: this._background.selectedSlug });
+	}
+
+	/**
+	 * Every purse this character can pay a Stock cost out of, read LIVE: the pouch (its real max
+	 * and whether it is held, preselected included), the Boon of a learned Rites of the Land, and
+	 * a Vessel's HP. The ONE reader for both payers, the sheet's dialog and the chat card's Spend
+	 * button, so they cannot disagree; and asked rather than read off a snapshot, because a
+	 * snapshot exists only once the sheet has rendered.
+	 */
+	async stockSources() {
+		// Resolved once for both questions below: Recover asks this of every carer in the party.
+		const playbookData = await this.playbook();
+		return stockSourcesForFlags({
+			possessions:   this._possessions,
+			moveResources: this._moveResources.getMoveResources(),
+			ritesMax:      this.ritesBoonMax() || null,
+			pouchMax:      await this.sacredPouchMax(playbookData),
+			hasPouch:      await this.holdsPossession(SACRED_POUCH_SLUG, playbookData),
+			vesselHp:      this.isVessel ? this.hp : null,
+		});
+	}
+
+	/**
+	 * Pay `amount` Stock out of `source` (one of stockSources' purses). The purse knows which way
+	 * its track counts (the pouch up as it empties, the Boon down); a Vessel's HP has no track and
+	 * is paid by a visible 2d4 roll instead. Returns `{ lost }`, the HP a Vessel lost (0 otherwise).
+	 */
+	async spendStock(source, amount = 1, { moveName = "", speaker } = {}) {
+		if (source?.vessel) {
+			const { lost } = await loseHpForStock(this._actor, { amount, moveName, speaker });
+			return { lost };
+		}
+		const next = source.after(amount);
+		if (source.key === "boon") {
+			await this._moveResources.setUses(RITES_OF_THE_LAND, next, moveName ? { stonetopMove: moveName } : undefined);
+		} else {
+			await this._possessions.setUses(SACRED_POUCH_SLUG, next);
+		}
+		return { lost: 0 };
 	}
 
 	/** "Hold N Boon" — the move SETS the track rather than adding to it. */
@@ -1939,17 +1987,40 @@ export class StonetopCharacter {
 			if (opt.usesBonus.evenLevelBonus) {
 				bonus += Math.floor(level / 2) * opt.usesBonus.evenLevelBonus;
 			}
-			bonus += sumMoveBonus(opt.usesBonus.moveBonus, n => ownedAllByName.get(n)?.length ?? 0);
+			// LEARNED copies only: an un-learned Big Magic stays on the sheet switched off, and
+			// its "+2 max Stock" must not keep growing the pouch.
+			bonus += sumMoveBonus(opt.usesBonus.moveBonus, n => (ownedAllByName.get(n) ?? []).filter(isMoveLearned).length);
 			if (bonus > 0) result[opt.slug] = (opt.resource?.max ?? 0) + bonus;
 		}
 		return result;
 	}
 
-	// Move name → how many of that move the actor owns. Feeds sub-choice caps that
-	// grow with a move (the Blessed's sacred-pouch remarkable traits, +1 per Big Magic).
+	// Whether this character has a special possession, picked or preselected, for a caller with
+	// no snapshot (a chat card asking about trapping gear or a sacred pouch). `playbookData` for a
+	// caller that has already resolved it.
+	async holdsPossession(slug, playbookData = undefined) {
+		const pb = playbookData === undefined ? await this.playbook() : playbookData;
+		return this._selectedPossessionSlugs(pb).has(slug);
+	}
+
+	// The sacred pouch's real max Stock, worked out now (for a caller with no snapshot, like
+	// the chat card's Spend button): the printed 3 plus even levels and Big Magic. Null when
+	// the playbook offers no pouch. `playbookData` for a caller that has already resolved it.
+	async sacredPouchMax(playbookData = undefined) {
+		const pb = playbookData === undefined ? await this.playbook() : playbookData;
+		const options = pb?.specialPossessions?.options ?? [];
+		const printed = options.find(o => o.slug === SACRED_POUCH_SLUG)?.resource?.max ?? null;
+		if (printed == null) return null;
+		const derived = this.computePossessionMaxUses(pb.specialPossessions, this._buildOwnedMovesMap(), this._characterLevel);
+		return derived[SACRED_POUCH_SLUG] ?? printed;
+	}
+
+	// Move name → how many of that move the actor has LEARNED (an un-learned copy is kept on
+	// the sheet switched off, and grants nothing). Feeds sub-choice caps that grow with a move
+	// (the Blessed's sacred-pouch remarkable traits, +1 per Big Magic).
 	ownedMoveCounts() {
 		const counts = {};
-		for (const [name, items] of this._buildOwnedMovesMap()) counts[name] = items.length;
+		for (const [name, items] of this._buildOwnedMovesMap()) counts[name] = items.filter(isMoveLearned).length;
 		return counts;
 	}
 
@@ -3797,6 +3868,12 @@ export class StonetopCharacter {
 			}
 		}
 		out.sort((a, b) => a.playbook.localeCompare(b.playbook) || a.name.localeCompare(b.name));
+		// A move that costs Stock, offered to someone with no sacred pouch to pay it from, says
+		// so on its row (`stockNote`). Said, never filtered: the book lets them take it. Not for a
+		// pick that brings its own pouch in the same step (Initiate of the Secret Arts).
+		const hasPouch = crossPlaybook?.grantsPossession === SACRED_POUCH_SLUG
+			|| await this.holdsPossession(SACRED_POUCH_SLUG);
+		for (const m of out) m.stockNote = !hasPouch && stockCostFromDescription(m.description) ? NO_POUCH_STOCK_NOTE : null;
 		return out;
 	}
 

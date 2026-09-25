@@ -167,6 +167,9 @@ export class LevelUpDialog extends StonetopDialog {
 			description:   m.description,
 			playbook:      m.playbook,
 			requiresLabel: m.requiresLabel ?? null,
+			// "Costs Stock; you have no sacred pouch", or null. Display only (see
+			// StonetopCharacter#getForeignMovesForLevelUp, which leaves it off an Initiate pick).
+			stockNote:     m.stockNote ?? null,
 			selected:      m.compendiumId === this._selectedForeignMoveId,
 		}));
 

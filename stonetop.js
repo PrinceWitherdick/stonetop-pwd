@@ -102,12 +102,12 @@ import { installWindowRestore } from "./module/utils/window-restore.js";
 import { registerUuidRedirects } from "./module/migration/compat.js";
 import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
 import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
-import { CharacterPossessions } from "./module/actors/character/CharacterPossessions.js";
-import { stockSourcesForFlags, defaultStockSource, SACRED_POUCH_SLUG, RITES_OF_THE_LAND } from "./module/actors/character/stock-cost.js";
-import { readProvisionsYield, rollProvisions } from "./module/actors/character/provisions.js";
+import { payableStockSources, mustAskStockSource, stockReceipt } from "./module/actors/character/stock-cost.js";
+import { askStockSource } from "./module/actors/character/ask-stock-source.js";
+import { readProvisionsYield, rollProvisions, rollStock } from "./module/actors/character/provisions.js";
+import { askWithButtons } from "./module/utils/ask-with-buttons.js";
 import { belongsToMessage, wirePickedOptionButton } from "./module/utils/picked-option-button.js";
 import { readOptionDamage } from "./module/utils/damage.js";
-import { ownedMove } from "./module/actors/character/owns-move.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
@@ -1662,8 +1662,9 @@ function _chatWireMusterRaise(message, html) {
 // POUCH, several tabs away — so a card that says "spend 1 Stock" carries the button that does it.
 //
 // Rites of the Land's "Spend Boon in lieu of Stock, 1-for-1" applies here exactly as it does to
-// the gated moves, through the same reader (actors/character/stock-cost.js), so the dialog and
-// this button can never disagree about what is in the purse.
+// the gated moves, and so does a Vessel's "lose 2d4 HP instead", through the same reader
+// (StonetopCharacter#stockSources), so the dialog and this button can never disagree about what
+// is in the purse.
 function _chatWireSpendStock(message, html) {
 	const btn = html.querySelector(".stonetop-spend-stock");
 	// Through the same skeleton as the steading's card buttons — the latch, the permission
@@ -1673,46 +1674,37 @@ function _chatWireSpendStock(message, html) {
 		// Stamped on the message, not inferred from the button: a card is one use of the move,
 		// and one use is paid for once however many clients render it.
 		flag: "stockSpent",
-		onSettled: (already, [b]) => { b.textContent = `Spent ${already.amount} ${already.label}`; },
+		// The stamp is shaped like a purse ({ label, vessel }) so the receipt reads off it the way
+		// the sheet's reads off the purse it charged. An older stamp has no `vessel` and reads as Stock.
+		onSettled: (already, [b]) => { b.textContent = stockReceipt(already, already.amount, already.lost); },
 		warn: "You need permission to spend this character's Stock.",
 		errorNote: "Error spending Stock",
 		actorType: "character",
 		subject: actor => actor,
 		run: async (actor, button) => {
 			const amount = Math.max(1, Number(button.dataset.amount) || 1);
-			const source = defaultStockSource(stockSourcesForFlags(readStockFlags(actor)), amount);
-			if (!source) {
+			const character = actor.typedActor;
+			const moveName = _cardMoveName(message) ?? html.querySelector(".stonetop-chat-move-name")?.textContent?.trim() ?? "";
+			// Read LIVE: the pouch's real max and whether it is held (preselected included), a
+			// learned Rites of the Land's Boon, and a Vessel's HP.
+			const payable = payableStockSources(await character.stockSources(), amount);
+			if (!payable.length) {
 				ui.notifications.warn("No Stock or Boon left to spend.");
 				return { abort: true };
 			}
-			// The purse knows which way it counts: the pouch up as it empties, the Boon down.
-			const next = source.after(amount);
-			if (source.key === "boon") {
-				await new StonetopFlags(actor, "moves").setSubKey("backgroundChoices", RITES_OF_THE_LAND, next);
-			} else {
-				await new CharacterPossessions(new StonetopFlags(actor, "possessions")).setUses(SACRED_POUCH_SLUG, next);
-			}
+			// Which purse, asked exactly as the sheet's "Spend from" picker asks it: only when
+			// there is a choice, and always when the Vessel's HP is one of them.
+			const source = mustAskStockSource(payable) ? await askStockSource(payable, amount, moveName) : payable[0];
+			// Closed, or left unpaid: nothing spent, and the button comes back for later.
+			if (!source) return { abort: true };
+			const { lost } = await character.spendStock(source, amount, { moveName, speaker: message.speaker });
+			const receipt = stockReceipt(source, amount, lost);
 			return {
-				stamp: { amount, label: source.label },
-				notice: `Spent ${amount} ${source.label} (${source.remaining - amount} left).`,
+				stamp: { amount, label: source.label, vessel: !!source.vessel, lost },
+				notice: source.vessel ? `${receipt}.` : `${receipt} (${source.remaining - amount} left).`,
 			};
 		},
 	});
-}
-
-/** The two flag bags the purse is read from, off a bare Actor. */
-function readStockFlags(actor) {
-	const rites = ownedMove(actor, RITES_OF_THE_LAND);
-	const possessions = new StonetopFlags(actor, "possessions");
-	return {
-		possessions: {
-			selected: possessions.getFlag("selected") ?? [],
-			uses:     possessions.getFlag("uses") ?? {},
-			maxUses:  possessions.getFlag("maxUses") ?? {},
-		},
-		moveResources: new StonetopFlags(actor, "moves").getFlag("backgroundChoices") ?? {},
-		ritesMax: rites?.system?.resource?.max ?? null,
-	};
 }
 
 // -- ROLL CARD PICK LIST ---------------------------------------
@@ -1876,17 +1868,47 @@ function _chatWireProvisionsPicks(message, html) {
 		// say so, rather than offering to "roll" a 6.
 		icon:    pick => (pick.isRoll ? "fas fa-dice-d6" : "fas fa-basket-shopping"),
 		label:   pick => (pick.isRoll ? ` Roll ${pick.formula} uses` : ` Take ${pick.formula} uses`),
-		readout: paid => _provisionsPaidEl(paid.uses),
+		readout: paid => _provisionsPaidEl(paid.uses, paid.stock),
 		onPress: (btn, index, pick) => _onRollProvisions(message, btn, index, pick),
 	});
 }
 
-/** The static readout a rolled option wears from then on. */
-function _provisionsPaidEl(uses) {
+/** The static readout a rolled option wears from then on: provisions, or Stock for a pouch. */
+function _provisionsPaidEl(uses, stock = false) {
 	const el = document.createElement("span");
 	el.className = "stonetop-provisions-paid";
-	el.textContent = `+${uses} ${uses === 1 ? "use" : "uses"}`;
+	el.textContent = stock ? `+${uses} Stock` : `+${uses} ${uses === 1 ? "use" : "uses"}`;
 	return el;
+}
+
+// The move whose payouts trapping gear and a sacred pouch reach into (see _onRollProvisions).
+const FORAGE = "Forage";
+
+/**
+ * A sacred pouch "can produce Stock instead of provisions" when its owner Forages, so a payout
+ * asks which, while the pouch has room. Null when there is no choice to make (no pouch, a full
+ * one, or not a Forage); otherwise `{ pouchMax }` for Stock, false for provisions, and undefined
+ * when the window was closed without an answer.
+ */
+async function _forageIntoPouch(message, actor, pick) {
+	if (_cardMoveName(message) !== FORAGE) return null;
+	// The one Stock reader (StonetopCharacter#stockSources): whether the pouch is held, its real max,
+	// and its count clamped to that max, so a count past it (Big Magic removed after it was spent
+	// into) never reads as a pouch holding negative Stock.
+	const pouch = (await actor.typedActor?.stockSources?.())?.find(s => s.key === "stock");
+	if (!pouch?.max || pouch.stored <= 0) return null;
+	const pouchMax = pouch.max;
+	const answer = await askWithButtons({
+		title: "Forage",
+		content: `<p>Your sacred pouch holds ${pouch.remaining} of ${pouchMax} Stock. `
+			+ `You can produce Stock instead of provisions: the same ${escHtml(pick.formula)}.</p>`,
+		buttons: [
+			{ key: "stock",      label: "Restock the pouch", icon: "fa-seedling",       value: "stock" },
+			{ key: "provisions", label: "Take provisions",   icon: "fa-basket-shopping", value: "provisions" },
+		],
+	});
+	if (answer === null) return undefined;
+	return answer === "stock" ? { pouchMax } : false;
 }
 
 async function _onRollProvisions(message, btn, index, pick) {
@@ -1898,6 +1920,23 @@ async function _onRollProvisions(message, btn, index, pick) {
 			btn.disabled = false;
 			return;
 		}
+
+		// A sacred pouch may take this haul as Stock instead. Closing the window pays nothing yet.
+		const intoPouch = await _forageIntoPouch(message, actor, pick);
+		if (intoPouch === undefined) {
+			btn.disabled = false;
+			return;
+		}
+		if (intoPouch) {
+			const { produced, held } = await rollStock(actor, { formula: pick.formula, pouchMax: intoPouch.pouchMax, speaker: message.speaker });
+			btn.replaceWith(_provisionsPaidEl(produced, true));
+			for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
+			ui.notifications.info(`${actor.name} produced ${produced} Stock (${held} in the pouch).`);
+			const rolled = { ...(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {}), [index]: { uses: produced, formula: pick.formula, stock: true } };
+			await message.setFlag(SYSTEM_ID, "provisionsRolled", rolled);
+			return;
+		}
+
 
 		// Rolled to chat rather than quietly: how much food the party came back with is a number
 		// the whole table plays off, and a die nobody saw is a number they have to take on faith.

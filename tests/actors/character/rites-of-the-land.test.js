@@ -1,8 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readRepo as read } from "../../fakes/css.js";
 import {
 	ritesOptions, RITES_MOVE, RITES_SEASON_STEP, BOON_PLAIN, BOON_WITH_SURPLUS,
+	ritesSeasonStep, overseeRites,
 } from "../../../module/actors/character/rites-of-the-land.js";
+import { StonetopSteading } from "../../../module/actors/steading/StonetopSteading.js";
 
 // Rites of the Land is two triggers in one move, and its effects land on three documents:
 // The Boon on the CHARACTER, Surplus and any cleared debility on the STEADING, and a promise of
@@ -68,9 +70,12 @@ describe("how it is wired", () => {
 		expect(CHAR.slice(at, at + 400)).not.toMatch(/held\s*\+/);
 	});
 
-	it("marks the rites once per season", () => {
-		expect(RITES).toContain("setSeasonStepApplied(RITES_SEASON_STEP, year, seasonId)");
+	it("marks the rites once per season, per overseer", () => {
+		expect(RITES).toContain("setSeasonStepApplied(step, year, seasonId)");
+		expect(RITES).toContain("steading.seasonStepApplied(step, year, seasonId)");
+		expect(RITES).not.toContain("seasonStepApplied(RITES_SEASON_STEP");
 		expect(RITES_SEASON_STEP).toBe("ritesOfTheLand");
+		expect(SHEET).toContain("actorId: this.actor.id,");
 	});
 
 	// The promise outlives the window it was made in, so it is written on the steading — the one
@@ -127,5 +132,59 @@ describe("how it is wired", () => {
 
 	it("names the move once, where both halves read it", () => {
 		expect(RITES_MOVE).toBe("Rites of the Land");
+	});
+});
+
+// "Once per season" is per character (user ruling). The marker used to be one key on the
+// steading, so a second owner of the move (a second Blessed, or a Versatile / Worldly pick) was
+// told "Already overseen" for rites they had never held.
+describe("once per season, per overseer", () => {
+	// A steading whose flag writes land where its reads look, so a second oversight sees the first.
+	function liveSteading({ surplus = 2, seasonSteps = {} } = {}) {
+		const actor = {
+			type: "stonetop",
+			system: { attributes: { surplus: { value: surplus } } },
+			flags: { "stonetop-pwd": { steading: { seasonSteps: { ...seasonSteps } } } },
+			getFlag(scope, key) { return this.flags[scope]?.[key]; },
+			async setFlag(scope, key, value) { this.flags[scope][key] = value; },
+			update: vi.fn(async function (data) {
+				for (const [path, value] of Object.entries(data)) {
+					const keys = path.split(".");
+					const last = keys.pop();
+					keys.reduce((node, k) => (node[k] ??= {}), actor)[last] = value;
+				}
+			}),
+		};
+		return new StonetopSteading(actor);
+	}
+	const character = () => ({ setRitesBoon: vi.fn(async () => {}) });
+	const state = ritesOptions({ surplus: 2, boonMax: 4 });
+	const at = { year: 2, seasonId: "summer" };
+
+	it("keys the marker by the overseer's actor", () => {
+		expect(ritesSeasonStep("abc")).toBe("ritesOfTheLand:abc");
+	});
+
+	it("closes the rites for the one who oversaw them and nobody else", async () => {
+		const steading = liveSteading();
+		await overseeRites({ character: character(), steading, step: ritesSeasonStep("gwynn"), ...at, withSurplus: false, state });
+		expect(steading.seasonStepApplied(ritesSeasonStep("gwynn"), 2, "summer")).toBe(true);
+		expect(steading.seasonStepApplied(ritesSeasonStep("wren"), 2, "summer")).toBe(false);
+	});
+
+	it("closes it the same way when the Surplus is sacrificed", async () => {
+		const steading = liveSteading();
+		const who = character();
+		await overseeRites({ character: who, steading, step: ritesSeasonStep("wren"), ...at, withSurplus: true, state });
+		expect(steading.getStatValue("surplus")).toBe(1);
+		expect(who.setRitesBoon).toHaveBeenCalledWith(BOON_WITH_SURPLUS);
+		expect(steading.seasonStepApplied(ritesSeasonStep("wren"), 2, "summer")).toBe(true);
+		expect(steading.seasonStepApplied(ritesSeasonStep("gwynn"), 2, "summer")).toBe(false);
+	});
+
+	// A marker written before the key was per character names nobody, so it blocks nobody.
+	it("reads an old, un-keyed marker as nobody's", () => {
+		const steading = liveSteading({ seasonSteps: { [RITES_SEASON_STEP]: "2:summer" } });
+		expect(steading.seasonStepApplied(ritesSeasonStep("gwynn"), 2, "summer")).toBe(false);
 	});
 });

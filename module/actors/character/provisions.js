@@ -1,6 +1,9 @@
 import { CharacterInventory } from "./CharacterInventory.js";
+import { CharacterPossessions } from "./CharacterPossessions.js";
 import { StonetopFlags } from "./StonetopFlags.js";
+import { SACRED_POUCH_SLUG, vesselHpFormula } from "./stock-cost.js";
 import { stonetopChatCard, rollFormulaChip, rollResultNumber } from "../../utils/chat.js";
+import { applyDamageToActor } from "../../utils/damage.js";
 import { multiDieFaces } from "../../utils/roll-engine.js";
 import { escHtml } from "../../utils/strings.js";
 
@@ -137,23 +140,97 @@ export async function grantProvisions(actor, uses, { carry = false } = {}) {
  * @param {{held: number}|null} larder  the pack after the haul, when there was one
  */
 function _provisionsCard(roll, title, note, larder) {
-	const faces = multiDieFaces(roll);
-	const uses  = Math.max(0, Math.trunc(roll.total));
+	const uses = Math.max(0, Math.trunc(roll.total));
 	// Two things a player wants off this card: what the die paid, and what is in the pack now.
 	// The second is only knowable once the write has landed, which is why the card is built after
 	// it rather than before.
 	const details = [note, larder ? `${larder.held} in the pack` : ""].filter(Boolean).join(" • ");
+	return _haulCard(roll, title, `${uses === 1 ? "use" : "uses"} of provisions`, details);
+}
+
+/** A thrown haul: the chip, the total and what it was a total OF. Shared by provisions and Stock. */
+function _haulCard(roll, title, label, details) {
+	const faces = multiDieFaces(roll);
+	const total = Math.max(0, Math.trunc(roll.total));
 	const body = `<div class="card-content">
 		${rollFormulaChip(roll.formula, faces)}
 		<div class="stonetop-roll-result">
-			${rollResultNumber(uses, faces)}
+			${rollResultNumber(total, faces)}
 			<div class="stonetop-roll-result-body">
-				<span class="stonetop-roll-result-label">${uses === 1 ? "use" : "uses"} of provisions</span>
+				<span class="stonetop-roll-result-label">${escHtml(label)}</span>
 				<span class="stonetop-roll-result-details">${escHtml(details)}</span>
 			</div>
 		</div>
 	</div>`;
 	return stonetopChatCard(title, body, "stonetop-provisions-card");
+}
+
+/**
+ * The sacred pouch's "When you Forage, you can produce Stock instead of provisions" (the Blessed;
+ * a Seeker's Initiate pouch is "as per the Blessed"). Throws what the Forage option owes and puts
+ * it back in the pouch rather than the larder, never past the pouch's capacity.
+ *
+ * The pouch counts Stock SPENT (see stock-cost.js), so producing Stock lowers the stored number.
+ *
+ * @param {Actor} actor
+ * @param {object} options
+ * @param {string} options.formula   the Forage option's own count
+ * @param {number} options.pouchMax  the pouch's real capacity (StonetopCharacter#sacredPouchMax)
+ * @param {object} [options.speaker]
+ * @returns {Promise<{produced: number, restocked: number, held: number}>}
+ */
+export async function rollStock(actor, { formula, pouchMax, speaker } = {}) {
+	const roll = await new Roll(formula).evaluate();
+	const produced = Math.max(0, Math.trunc(roll.total));
+	const possessions = new CharacterPossessions(new StonetopFlags(actor, "possessions"));
+	const { spent, restocked, held } = restockPouch(possessions.uses[SACRED_POUCH_SLUG], produced, pouchMax);
+	if (restocked) await possessions.setUses(SACRED_POUCH_SLUG, spent - restocked);
+	const details = produced > restocked ? `${held} in the pouch (full)` : `${held} in the pouch`;
+	await roll.toMessage({
+		speaker: speaker ?? ChatMessage.getSpeaker({ actor }),
+		flavor:  _haulCard(roll, "Stock", "Stock", details),
+	});
+	return { produced, restocked, held };
+}
+
+/**
+ * The Vessel's price: "When you would spend 1 Stock from your sacred pouch, you may choose to lose
+ * 2d4 HP instead." Throws the dice where the table can see them and takes that much HP.
+ *
+ * HP LOST, not damage: no armor stands between a Vessel and Danu's power, so the total comes off
+ * through the plain HP writer (utils/damage.js#applyDamageToActor, the one the damage cards use
+ * AFTER armor), attributed to the move for the ledger. The card goes out after the write, so it
+ * can say where HP ended up, the same order rollStock keeps.
+ *
+ * @param {Actor} actor
+ * @param {object} options
+ * @param {number} [options.amount]    the Stock this stands in for (2d4 per Stock)
+ * @param {string} [options.moveName]  the move being paid for: the card's title and the ledger's
+ * @param {object} [options.speaker]
+ * @returns {Promise<{lost: number, oldHp: number, newHp: number}>}
+ */
+export async function loseHpForStock(actor, { amount = 1, moveName = "", speaker } = {}) {
+	const roll = await new Roll(vesselHpFormula(amount)).evaluate();
+	const lost = Math.max(0, Math.trunc(roll.total));
+	const hp = await applyDamageToActor(actor, lost, moveName ? { stonetopMove: moveName } : {});
+	const oldHp = hp?.oldHp ?? 0;
+	const newHp = hp?.newHp ?? 0;
+	await roll.toMessage({
+		speaker: speaker ?? ChatMessage.getSpeaker({ actor }),
+		flavor:  _haulCard(roll, moveName || "Vessel", "HP lost", `in place of ${amount} Stock • HP ${oldHp} → ${newHp}`),
+	});
+	return { lost, oldHp, newHp };
+}
+
+/**
+ * How much of a Stock haul the pouch can take. `stored` is the pouch's number (Stock SPENT);
+ * only that much room exists, so the rest is lost. Pure.
+ */
+export function restockPouch(stored, produced, pouchMax) {
+	const max = Math.max(0, Math.trunc(Number(pouchMax) || 0));
+	const spent = Math.min(max, Math.max(0, Math.trunc(Number(stored) || 0)));
+	const restocked = Math.min(spent, Math.max(0, Math.trunc(Number(produced) || 0)));
+	return { spent, restocked, held: max - (spent - restocked) };
 }
 
 /**

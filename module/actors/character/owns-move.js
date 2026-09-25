@@ -48,6 +48,15 @@ export function ownedMove(actor, name) {
 	return (actor?.items ?? []).find(i => i.type === "move" && i.name === name);
 }
 
+/**
+ * `ownedMove`, for a RULE: the owned move Item only while it is still learned. Rites of the
+ * Land's Boon track is read off the move for its `max`, and an un-learned Rites must not keep
+ * offering a Boon purse (see ownsLearnedMoveNamed for why the two questions differ).
+ */
+export function ownedLearnedMove(actor, name) {
+	return (actor?.items ?? []).find(i => i.type === "move" && i.name === name && isMoveLearned(i));
+}
+
 /** Every move name this character owns, as a Set, for callers testing several names at once. */
 export function ownedMoveNames(actor) {
 	return new Set((actor?.items ?? []).filter(i => i.type === "move").map(i => i.name));

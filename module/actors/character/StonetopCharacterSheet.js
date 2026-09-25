@@ -57,7 +57,7 @@ import {postMoveToChat, moveChatCard, pickableMoveDescription} from "../../utils
 import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
 import {statApproaches} from "../../utils/stat-approaches.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
-import {stockSourcesForFlags, canPayStock, defaultStockSource, stockCostFromDescription, SACRED_POUCH_SLUG, RITES_OF_THE_LAND} from "./stock-cost.js";
+import {canPayStock, defaultStockSource, payableStockSources, mustAskStockSource, stockSourceChoiceLabel, stockReceipt, vesselHpFormula, stockCostFromDescription, RITES_OF_THE_LAND} from "./stock-cost.js";
 import {supplyPursesFor, defaultSupplyPurse, SUPPLY_PURPOSE} from "./supply-cost.js";
 import {openMakeCamp} from "../../camp/camp-flow.js";
 import {openStruggleAsOne} from "../../struggle/struggle-flow.js";
@@ -271,6 +271,18 @@ export const GUIDED_CHARACTER_MOVES = {
 		],
 		cost: { amount: 1, label: "Stock" },
 		note: "The Stock is spent when you roll. Storing the drawn malady costs the space of a second Stock; mark that on the pouch yourself.",
+		roll: "wis",
+	},
+	// No cost to gate: the roll is for USING the borrowed power. What the player needs reminding of
+	// is the other half, that the power sits in the pouch "in place of 1 Stock" while they hold it.
+	"Borrow Power": {
+		trigger: "When a spirit or beast loans you power, ask the GM for one of its tags or moves. Store it in your pouch in place of 1 Stock. When you use the borrowed tag or move, roll +WIS.",
+		results: [
+			"10+: you do it and can use the power again.",
+			"7-9: you do it, but lose the power.",
+			"6-: the GM makes a move.",
+		],
+		note: "The borrowed power takes the space of 1 Stock in your pouch; mark that on the pouch yourself.",
 		roll: "wis",
 	},
 	"Forage": {
@@ -5830,7 +5842,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!rollable) {                     // description-only move → post to chat
 				// Aid asks whom first, exactly as the Moves tab's click does (pc-asks/).
 				if (await beginAid(this.actor, item)) return;
-				const posted = await item.roll();
+				// With the same Spend button the Moves tab's name-click puts on the card: a Stock
+				// move made from the hotbar or the fight ring is paid for there, or nowhere.
+				// Through item.roll rather than around it, so the card keeps the `move` stamp that
+				// option damage reads.
+				const posted = await item.roll({ actions: this._stockSpendButtonHtml(item.system?.description ?? "") });
 				// The other half: a move dragged to the hotbar is used from there just as truly
 				// as from the sheet, so it gets the same effects.
 				await this._onDescriptionMoveUsed(item);
@@ -6231,7 +6247,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * nothing would store what was typed into them, so they only stood between the move and
 		 * its roll (the homefront dialogs on the steading sheet lost theirs for the same reason).
 		 */
-		_openGuidedCharacterMove({ name, guide }, rollable) {
+		// ASYNC because the Stock purse is read live (see _stockCostView). Every caller opens it and
+		// moves on, so none of them waits on the window.
+		async _openGuidedCharacterMove({ name, guide }, rollable) {
 			// Struggle as One is the whole party's move, not one character's roll: it goes to the shared
 			// window (module/struggle/), from every way the move can be reached.
 			if (name === STRUGGLE_MOVE) return this._onStruggleAsOne();
@@ -6265,13 +6283,13 @@ export function createStonetopCharacterSheetClass(Base) {
 
 			// A move that CHARGES before it rolls (Danu's Grasp: "spend 1 Stock and roll +WIS").
 			// `cost` is null for every other guide, and then none of this applies.
-			const cost = guide.cost ? this._stockCostView(guide.cost) : null;
+			const cost = guide.cost ? await this._stockCostView(guide.cost) : null;
 			// A move that spends at ONE trigger and rolls at ANOTHER (Veil, Amulets & Talismans,
 			// Wards & Bindings — see _deferredStockGuide). Priced and gated the same way, out of
 			// the same purse, but it gates its OWN button only: the roll below belongs to the
 			// second trigger, and a Blessed rolling for a veil they paid for last session must
 			// still be able to make it with an empty pouch.
-			const spend = guide.spend ? this._stockCostView(guide.spend) : null;
+			const spend = guide.spend ? await this._stockCostView(guide.spend) : null;
 
 			const buttons = {
 				cancel: { label: "Cancel" },
@@ -6294,7 +6312,7 @@ export function createStonetopCharacterSheetClass(Base) {
 						// could be charged for twice.
 						await this._postMoveCard(name,
 							moveCardBody(guide.printed?.description ?? "", guide.printed?.moveResults ?? null)
-							+ `<p class="stonetop-move-cost-receipt">Spent ${spend.amount} ${_esc(paid.label)}.</p>`);
+							+ `<p class="stonetop-move-cost-receipt">${_esc(stockReceipt(paid, spend.amount, paid.lost))}.</p>`);
 						// AND WHAT MAKING IT DOES BEYOND THE CARD. This is the first of the move's
 						// two moments and the one the fiction lays something at: the charm is
 						// crafted here, and the roster is where a charm laid is written down. See
@@ -6401,6 +6419,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			openRitesOfTheLand({
 				character: this._stonetopCharacter,
 				steading,
+				// "Once per season" is per overseer: the marker is keyed by this character.
+				actorId: this.actor.id,
 				year: steadingActor ? readCurrentYear(steadingActor) : 1,
 				seasonId: steadingActor ? (readCurrentSeason(steadingActor)?.season ?? "") : "",
 				onApplied: () => {
@@ -6416,21 +6436,19 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * Both tracks store checks SPENT, not held (see stock-cost.js), so what is left is
 		 * `max - spent` in each. The Boon only appears for a Blessed who owns Rites of the Land,
 		 * whose last line is "Spend Boon in lieu of Stock, 1-for-1" — without it, a Blessed
-		 * holding Boon and an empty pouch would be refused a move the book grants them.
+		 * holding Boon and an empty pouch would be refused a move the book grants them. A Vessel
+		 * gets a third, their HP, which never runs dry.
 		 */
-		_stockCostView({ amount = 1, label = "Stock" } = {}) {
-			// THROUGH stockSourcesForFlags, not stockSources: its whole reason for existing is
-			// that this dialog and the chat card's Spend button must never disagree about what
-			// the purse holds, and it was doing that job for one of the two callers it names.
-			const sources = stockSourcesForFlags({
-				possessions: this._stonetopCharacter.possessions,
-				moveResources: this._stonetopCharacter.moveResources.getMoveResources(),
-				ritesMax: ownedMove(this.actor, RITES_OF_THE_LAND)?.system?.resource?.max ?? null,
-			});
+		async _stockCostView({ amount = 1, label = "Stock" } = {}) {
+			// THROUGH StonetopCharacter#stockSources, the reader the chat card's Spend button asks
+			// too, so the two can never disagree about what the purse holds. It is read LIVE: the
+			// render snapshot's pouch max existed only once the sheet had drawn, so a window opened
+			// from the hotbar after a reload priced a raised pouch at its printed 3.
+			const sources = await this._stonetopCharacter.stockSources();
 			return {
 				amount, label, sources,
 				affordable: canPayStock(sources, amount),
-				payable: sources.filter(s => s.remaining >= amount),
+				payable: payableStockSources(sources, amount),
 			};
 		}
 
@@ -6448,12 +6466,19 @@ export function createStonetopCharacterSheetClass(Base) {
 		_stockCostHtml(cost, { deferred = false } = {}) {
 			const purses = cost.sources.map(s =>
 				`<span class="stonetop-move-cost-purse${s.remaining >= cost.amount ? "" : " is-empty"}">`
-				+ `${_esc(s.label)} <strong>${s.remaining}</strong> of ${s.max}</span>`).join("");
+				// A Vessel's HP has no count to show; it reads as the trade the background offers.
+				+ (s.vessel
+					? `or lose <strong>${vesselHpFormula(cost.amount)}</strong> HP (Vessel)`
+					: `${_esc(s.label)} <strong>${s.remaining}</strong> of ${s.max}`)
+				+ `</span>`).join("");
 			// Only asked when there is genuinely a choice; one payable purse is spent silently.
-			const picker = cost.payable.length > 1
+			// Always asked when the Vessel's HP is on offer, even alone: the book says a Vessel
+			// "may choose" to bleed, so it is never taken without being named. The pouch sits
+			// first, so the select starts on it.
+			const picker = mustAskStockSource(cost.payable)
 				? `<label class="stonetop-homestead-field stonetop-move-cost-pick"><span>Spend from</span>
 					<select name="stockCostSource">${cost.payable
-						.map(s => `<option value="${_esc(s.key)}">${_esc(s.label)} (${s.remaining} left)</option>`).join("")}</select>
+						.map(s => `<option value="${_esc(s.key)}">${_esc(stockSourceChoiceLabel(s, cost.amount))}</option>`).join("")}</select>
 				</label>`
 				: "";
 			const lead = deferred
@@ -6478,26 +6503,23 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * "Spent 1 Boon" on its card rather than guessing which of the two it took.
 		 *
 		 * Spending INCREMENTS the pouch and DECREMENTS the Boon — the purse is asked (see
-		 * stock-cost.js), because the two count in opposite directions.
+		 * stock-cost.js), because the two count in opposite directions. A Vessel's HP is paid by
+		 * a visible 2d4 roll (StonetopCharacter#spendStock), and the purse handed back carries the
+		 * HP it took as `lost`, for the receipt.
 		 */
 		async _spendStockCost(cost, html, moveName) {
 			const chosen = html?.[0]?.querySelector('[name="stockCostSource"]')?.value ?? null;
-			const live = this._stockCostView(cost);
+			const live = await this._stockCostView(cost);
 			const source = live.payable.find(s => s.key === chosen) ?? defaultStockSource(live.sources, cost.amount);
 			if (!source) {
 				ui.notifications?.warn(`No ${cost.label} left to spend on ${moveName}.`);
 				return false;
 			}
-			// Ask the purse: the pouch counts up as it empties, the Boon counts down.
-			const next = source.after(cost.amount);
-			if (source.key === "boon") {
-				await this._stonetopCharacter.moveResources.setUses(RITES_OF_THE_LAND, next, { stonetopMove: moveName });
-			} else {
-				await this._stonetopCharacter.setPossessionUses(SACRED_POUCH_SLUG, next);
-			}
-			ui.notifications?.info(`${moveName}: spent ${cost.amount} ${source.label} (${source.remaining - cost.amount} left).`);
+			const { lost } = await this._stonetopCharacter.spendStock(source, cost.amount, { moveName });
+			const left = source.vessel ? "" : ` (${source.remaining - cost.amount} left)`;
+			ui.notifications?.info(`${moveName}: ${stockReceipt(source, cost.amount, lost)}${left}.`);
 			this.render(false);
-			return source;
+			return { ...source, lost };
 		}
 
 		/**
@@ -6691,14 +6713,17 @@ export function createStonetopCharacterSheetClass(Base) {
 					optionsHtml += `<optgroup label="${_esc(m.playbook)}">`;
 					lastPb = m.playbook;
 				}
-				optionsHtml += `<option value="${_esc(m.compendiumId)}">${_esc(m.name)}</option>`;
+				// A Stock move offered to someone with no pouch says so (getForeignMovesForLevelUp's
+				// `stockNote`), on the option as well as under the text: it is still theirs to pick.
+				optionsHtml += `<option value="${_esc(m.compendiumId)}">${_esc(m.name)}${m.stockNote ? " (costs Stock)" : ""}</option>`;
 			}
 			if (lastPb !== null) optionsHtml += "</optgroup>";
 			const descFor = id => {
 				const m = foreign.find(x => x.compendiumId === id);
 				if (!m) return "";
 				const req = m.requiresLabel ? `<p class="stonetop-move-note">Requires: ${_esc(m.requiresLabel)}</p>` : "";
-				return `${m.description ?? ""}${req}`;
+				const stock = m.stockNote ? `<p class="stonetop-move-note">${_esc(m.stockNote)}</p>` : "";
+				return `${m.description ?? ""}${req}${stock}`;
 			};
 			const pouchNote = grantsPossession
 				? `<p class="notes">${_esc(addedItem.name)} also grants a Sacred Pouch.</p>`
