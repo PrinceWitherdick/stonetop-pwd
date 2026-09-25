@@ -94,7 +94,7 @@ const DELIVERY_FALLBACK = Object.freeze({
 export const HIT_BURST = FX_KINDS.burst.onTarget;
 
 /**
- * WEAPON_META's slugs (data/weapons.js), plus the Lightbearer's holy light, as kinds. A gear-choice
+ * WEAPON_META's slugs (data/weapons.js), plus the move-granted weapons (MOVE_GRANTED_WEAPONS), as kinds. A gear-choice
  * weapon's slug is `possession:choice` and is read by its choice (blowKind strips the rest).
  */
 const SLUG_KINDS = Object.freeze({
@@ -119,6 +119,8 @@ const SLUG_KINDS = Object.freeze({
 	"sling": "sling",
 	"naphtha": "flask",
 	"purifying-flames-holy-light": "holy",
+	// All in the Wrist's throwing blades: a dagger's throw, where the name's "blades" would read a sword.
+	"all-in-the-wrist-throwing-blades": "dagger",
 });
 
 /**

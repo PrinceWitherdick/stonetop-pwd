@@ -180,6 +180,20 @@ describe("what a blow adds", () => {
 		expect(blowOffers(pim, { strikeBack: false }).map(o => o.key)).not.toContain("rememberMe");
 	});
 
+	it("offers Second Intent's +1d4 unticked on a parry's strike back, and nowhere else", () => {
+		// "When you Defend and spend 1 Readiness to Parry & Riposte, also pick 1 option from the Ambush list":
+		// "Deal +1d4 damage" is one option of four, so the line opens unticked.
+		const fox = hero("Fox", [HERO_MOVES.SECOND_INTENT]);
+		expect(blowOffers(fox, { strikeBack: true, parry: true }).find(o => o.key === "secondIntent"))
+			.toMatchObject({ dice: "1d4", applied: false, label: "Second Intent: +1d4 damage (your Ambush pick)" });
+		// The fight ring's plain Defend strike back is not a Parry & Riposte.
+		expect(blowOffers(fox, { strikeBack: true }).map(o => o.key)).not.toContain("secondIntent");
+		expect(blowOffers(fox, {}).map(o => o.key)).not.toContain("secondIntent");
+		// Un-learned, it offers nothing.
+		const off = hero("Fox", [{ type: "move", name: HERO_MOVES.SECOND_INTENT, flags: { [SYSTEM_ID]: { learned: false } } }]);
+		expect(blowOffers(off, { strikeBack: true, parry: true }).map(o => o.key)).not.toContain("secondIntent");
+	});
+
 	it("adds Hungry Flames to a blow dealt with a holy light", () => {
 		const sael = hero("Sael", [HERO_MOVES.HUNGRY_FLAMES]);
 		const light = { slug: "purifying-flames-holy-light", name: "Holy light", range: ["hand", "close"] };

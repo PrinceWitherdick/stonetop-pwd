@@ -25,7 +25,7 @@
 
 import {STONETOP_SCOPE} from "../actors/character/StonetopFlags.js";
 import {weaponMetaFromNote} from "../data/weapon-from-note.js";
-import {weaponMeta, isClashWeapon, isLetFlyWeapon, weaponTraitText, weaponArmorBits, grantedWeaponForMove, MOVE_GRANTED_WEAPONS, UNARMED_META, MELEE_RANGES} from "../data/weapons.js";
+import {weaponMeta, isClashWeapon, isLetFlyWeapon, weaponTraitText, weaponArmorBits, grantedWeaponForMove, MOVE_GRANTED_WEAPONS, UNARMED_META, MELEE_RANGES, ALL_IN_THE_WRIST, withWristThrow} from "../data/weapons.js";
 import {escHtml, joinNames} from "../utils/strings.js";
 import {stonetopChatCard, rollFormulaChip, damageMark, damageBadge, damageKeywordsHtml, optionKey, whisperGm, cardNoticeHtml, canUserWriteCard} from "../utils/chat.js";
 import {rollDamage, multiDieFaces, sign, damageRollFormula, damageConditionPills, conditionsRowHtml, classifyResult} from "../utils/roll-engine.js";
@@ -45,7 +45,7 @@ import {halveDamage, spentOn} from "../fight/defend-spend.js";
 // Playbook moves the fight turns on: Undaunted's +1 armor and +1d6, Big Damn Hero's locked eyes
 // (fight/hero-moves.js).
 import {undauntedNow, eyesLockedAgainst, ownDamageMode, blowOffers as heroOffers, muscleboundWeapon, berserkNow, defenderDisadvantage, recordHarmedBy, recordClash, foeAdvantage, defenderMoveKey} from "../fight/hero-moves.js";
-import {ownsLearnedMoveNamed} from "../actors/character/owns-move.js";
+import {ownsLearnedMoveNamed, ownsLearnedBookMoveNamed, ownedLearnedBookMove, isPlayerAuthoredMove} from "../actors/character/owns-move.js";
 import {armorGateWords, barkskinMarks, wearsBarkskin, withBarkskinBase} from "../actors/character/move-armor.js";
 import {format, localize} from "../utils/i18n.js";
 import {foldModes} from "../utils/roll-mode.js";
@@ -123,14 +123,16 @@ const ATTACK_MOVES = {
 /**
  * The attack-move config for a rolled move item, or null for any other move.
  *
- * A playbook move is only ITSELF when it came from a playbook: a move a player wrote (moveType
- * "other") that happens to be called Ambush acts as the plain move they wrote, which is the rule
- * grantedWeaponAttackFor already applies to the granted-weapon path. The basic moves need no such
- * guard — nothing but Clash is called Clash, and a world that renames it has bigger plans.
+ * A playbook move is only ITSELF when it came from a playbook: a move a player wrote (the custom-move
+ * flag, owns-move.js#isPlayerAuthoredMove) that happens to be called Ambush acts as the plain move
+ * they wrote, which is the rule grantedWeaponAttackFor already applies to the granted-weapon path.
+ * NOT moveType "other": a GM-dropped foreign Ambush lands as "other" too, and is still the book's.
+ * The basic moves need no such guard — nothing but Clash is called Clash, and a world that renames
+ * it has bigger plans.
  */
 export function attackMoveFor(item) {
 	const move = ATTACK_MOVES[item?.name] ?? null;
-	if (move?.playbook && item?.system?.moveType === "other") return null;
+	if (move?.playbook && isPlayerAuthoredMove(item)) return null;
 	return move;
 }
 
@@ -151,11 +153,12 @@ export function attackMoveFor(item) {
  * Null for every other move, and for a granting move whose attack move the actor doesn't own —
  * the caller then treats it as the description-only move it has always been. Matched on the
  * resolved ITEM, never a row's text: an un-owned playbook row carries no item at all, and a
- * player-authored move (moveType "other") that happens to share the name acts as itself, the
- * same rule the guided-move and stat-picker paths apply.
+ * player-authored move (the custom-move flag, not moveType "other", which a GM-dropped foreign
+ * move also carries) that happens to share the name acts as itself, the same rule the guided-move
+ * and stat-picker paths apply.
  */
 export function grantedWeaponAttackFor(actor, item) {
-	if (item?.type !== "move" || item.system?.moveType === "other") return null;
+	if (item?.type !== "move" || isPlayerAuthoredMove(item)) return null;
 	const granted = grantedWeaponForMove(item.name);
 	if (!granted?.viaMove || !ATTACK_MOVES[granted.viaMove]) return null;
 	const attackItem = actor?.items?.find(i => i.type === "move" && i.name === granted.viaMove);
@@ -186,6 +189,8 @@ function isFriendly(disposition) {
 // `ammoMax` / `ammoLabels` (see StonetopCharacter#_gearSources) and threaded to the chat card.
 /** The Ranger's volley, asked before a Let Fly with a bow (askBlotOutTheSun). */
 const BLOT_OUT_THE_SUN = "Blot Out the Sun";
+/** The Fox's 12+ on a +DEX Clash (battleDancing). */
+const BATTLE_DANCER = "Battle Dancer";
 
 const AMMO_MAX = 2;
 const AMMO_LABELS = ["Plenty", "Low ammo", "All out"];
@@ -213,9 +218,19 @@ function ammoStatusLabel(index, { max, labels }) {
 // possessions.choiceUses under the composite `possession:choice` key, not in
 // inventory.resources — so which store to read is a property of the weapon, carried on its
 // record as `ammoStore` and threaded through to the chat card.
+//
+// A THIRD STORE, "move": a weapon a move grants whose ammo is that move's own resource track:
+// All in the Wrist's throwing blades (○ a few left ○ out), kept under the move's NAME in
+// MoveResources (`ammoMove` on the record). It counts boxes MARKED, the same way round as the
+// equipment tab's ○○: nothing marked is a full hand, and a Let Fly 7-9 marks the next one. That is
+// the SPENT-style counter, not the hold pools' "a ticked pip is held" (MoveResources#setUses).
 function weaponAmmoIndex(actor, weapon) {
 	const { max } = ammoTrack(weapon);
 	const slug = weapon?.slug;
+	if (weapon?.ammoStore === "move") {
+		const used = actor.typedActor?.moveResources?.getMoveResources?.()?.[weapon.ammoMove];
+		return Math.min(Math.max(0, Number(used) || 0), max);
+	}
 	// Through the possessions store's own reader, the way the write goes through its writer:
 	// a gear-choice key contains a colon, and where those uses live is that class's business.
 	if ((weapon?.ammoStore ?? "inventory") === "possessions") {
@@ -263,7 +278,11 @@ async function advanceWeaponAmmo(actor, weapon) {
 	const track = ammoTrack(weapon);
 	const slug = weapon?.slug;
 	const next = Math.min(weaponAmmoIndex(actor, weapon) + 1, track.max);
-	if ((weapon?.ammoStore ?? "inventory") === "possessions") {
+	if (weapon?.ammoStore === "move") {
+		// The move's own track, through its store's writer (a sub-key, so no sibling move's track is
+		// touched), attributed to the move for the ledger.
+		await actor.typedActor?.moveResources?.setUses?.(weapon.ammoMove, next, { stonetopMove: weapon.ammoMove });
+	} else if ((weapon?.ammoStore ?? "inventory") === "possessions") {
 		// Through the possessions store's own writer rather than a dotted update path: a
 		// gear-choice key contains a colon, and a whole-object write keeps it out of Foundry's
 		// path expansion entirely (the same reason setChoiceUses is written that way).
@@ -293,7 +312,7 @@ function legacyCarriedGear(actor) {
 // The carried weapons that fit `move`,
 // plus any weapon an owned move grants (the Lightbearer's holy light). A granted weapon
 // isn't inventory, so it's appended rather than read off the checked flags; it's offered
-// whenever its move is owned, since whether the fiction supports it — wielding a holy
+// whenever its move is owned and learned, since whether the fiction supports it — wielding a holy
 // light against a creature of darkness — is the table's call, not ours.
 export async function carriedAttackWeapons(actor, move) {
 	const out = [];
@@ -305,6 +324,8 @@ export async function carriedAttackWeapons(actor, move) {
 	const gear = (await actor.typedActor?.carriedWeaponGear?.()) ?? legacyCarriedGear(actor);
 	// Weapons of War gives the steading's battleaxes and swords "x piercing" (data/weapons.js).
 	const weaponsOfWar = !!actor.typedActor?.weaponsOfWarEarned?.();
+	// All in the Wrist: "Any knife or dagger gets the thrown tag in your hands" (data/weapons.js).
+	const wristThrow = ownsLearnedBookMoveNamed(actor, ALL_IN_THE_WRIST);
 	for (const g of gear) {
 		// A catalog or gear-choice weapon is in the curated table; anything picked up in play
 		// states its own mechanics in its tag line instead.
@@ -315,8 +336,9 @@ export async function carriedAttackWeapons(actor, move) {
 		// horse and the mule print the damage THEY deal; and a player carrying any of them was
 		// asked which one they were attacking with. The book's equipment list is exactly what
 		// WEAPON_META was curated from, so a row it doesn't name is not a weapon.
-		const meta = (g.weaponSlug ? weaponMeta(g.weaponSlug, { weaponsOfWar }) : null)
+		const read = (g.weaponSlug ? weaponMeta(g.weaponSlug, { weaponsOfWar }) : null)
 			?? (g.catalog ? null : weaponMetaFromNote(g.name, g.note, { ammo: !!g.ammo }));
+		const meta = read && wristThrow ? withWristThrow(read) : read;
 		if (!meta || !move.filter(meta)) continue;
 		const weapon = {
 			slug: g.slug, meta,
@@ -331,8 +353,18 @@ export async function carriedAttackWeapons(actor, move) {
 		// the roll rather than a second recording of it.
 		const granted = grantedWeaponForMove(moveName);
 		if (!move.filter(granted.meta)) continue;
-		if (!actor.items.some(i => i.type === "move" && i.name === moveName)) continue;
-		out.push({ slug: granted.slug, meta: granted.meta, ammoLabel: null, ammoStore: "inventory", grantedBy: moveName, whenStat: granted.whenStat });
+		// LEARNED, and the book's move: an un-learned grant arms nobody, and a player's own move of
+		// the name is theirs (the rule grantedWeaponAttackFor applies).
+		const grantor = ownedLearnedBookMove(actor, moveName);
+		if (!grantor) continue;
+		const weapon = { slug: granted.slug, meta: granted.meta, ammoStore: granted.ammoStore ?? "inventory", grantedBy: moveName, whenStat: granted.whenStat };
+		// A granted weapon with ammo counts it on its move's own track, whose length and words
+		// are the move's to say, exactly as an inventory item's are (ammoTrack).
+		if (weapon.ammoStore === "move") {
+			const resource = grantor.system?.resource ?? null;
+			Object.assign(weapon, { ammoMove: moveName, ammoMax: Number(resource?.max) || null, ammoLabels: Array.isArray(resource?.labels) ? resource.labels : null });
+		}
+		out.push({ ...weapon, ammoLabel: granted.meta.ammo ? weaponAmmoLabel(actor, weapon) : null });
 	}
 	return withUnarmedChoice(out);
 }
@@ -357,9 +389,11 @@ export function withUnarmedChoice(candidates) {
 // The flattened, storable weapon record baked into the chat card (no functions). The ammo track's
 // shape rides along with the store it lives in: the card is what "deplete your ammo" is pressed
 // on, and by then the gear record it came from is long gone.
-function serializeWeapon({ slug, meta, ammoStore = "inventory", ammoMax = null, ammoLabels = null }) {
+function serializeWeapon({ slug, meta, ammoStore = "inventory", ammoMax = null, ammoLabels = null, ammoMove = null }) {
 	return {
 		slug, ammoStore, ammoMax, ammoLabels,
+		// Only for a track kept on a move (weaponAmmoIndex), so every other card stays as it was.
+		...(ammoMove ? { ammoMove } : {}),
 		name: meta.name, range: meta.range, damageBonus: meta.damageBonus,
 		piercing: meta.piercing, ignoresArmor: meta.ignoresArmor, area: meta.area,
 		damageDie: meta.damageDie, tags: meta.tags, ammo: meta.ammo,
@@ -686,6 +720,63 @@ export function buildTierActions(move) {
 	return { success: roll, partial: move.counterOnPartial ? confirmBtn(true) : roll };
 }
 
+/**
+ * Battle Dancer (Fox): "When you roll +DEX to Clash, on a 12+ you deal your damage, avoid your enemy's
+ * attack, and impress/embarrass/overawe your foes."
+ *
+ * THE 12+ REPLACES THE PICK (the user's ruling). It is not the 10+ with a bonus on top: the Fox takes
+ * all three, so the pick-1 list goes, and "Strike hard and fast ... but suffer your enemy's attack"
+ * cannot be ticked into a counter-attack the move just said they avoid.
+ *
+ * Two halves, because they are known at different times. Whether this Clash was rolled +DEX by someone
+ * with Battle Dancer learned is known only before the dice, so it rides the card (`battleDancer`, from
+ * `dancesAt`). Whether it came to 12 is read off the card's roll every time it is asked, so a GM's Shift
+ * Up onto a 12 turns it on and a Shift Down off one turns it back off.
+ */
+function dancesAt(actor, move, stat) {
+	return move?.key === "clash" && String(stat ?? "").toLowerCase() === "dex"
+		&& ownsLearnedBookMoveNamed(actor, BATTLE_DANCER);
+}
+
+/** Is this Clash card a Battle Dancer 12+? Read live off the card's roll (see dancesAt). */
+export function battleDancing(message, attack = message?.getFlag?.(SCOPE, "attack")) {
+	return !!attack?.battleDancer && Number(message?.rolls?.[0]?.total) >= 12;
+}
+
+/** The notice that stands where the pick-1 list was, on a Battle Dancer 12+. */
+const BATTLE_DANCER_NOTICE = "stonetop-battle-dancer-notice";
+
+/**
+ * Show a Battle Dancer 12+ on its card: the move's pick-1 list (and its tally) hidden and its boxes
+ * locked, and in their place what the 12+ does instead. Hidden rather than removed, and the notice
+ * taken back off when the card is no longer a 12+, because a GM's Shift can move it either way and the
+ * card re-renders (the list's own visibility is repainted each render, stonetop.js#_paintPickCount).
+ */
+function wireBattleDancer(message, root, attack) {
+	const dancing = battleDancing(message, attack);
+	for (const list of dancing ? root.querySelectorAll?.(".stonetop-picklist") ?? [] : []) {
+		list.hidden = true;
+		const tally = list.previousElementSibling;
+		if (tally?.classList?.contains("stonetop-picklist-count")) tally.hidden = true;
+		for (const box of list.querySelectorAll(".stonetop-picklist-check")) box.disabled = true;
+	}
+	const existing = root.querySelector?.(`.${BATTLE_DANCER_NOTICE}`) ?? null;
+	if (!dancing) { existing?.remove(); return; }
+	if (existing) return;
+	const actions = root.querySelector?.(".stonetop-roll-tier-actions");
+	if (!actions?.parentNode) return;
+	const holder = actions.ownerDocument.createElement("div");
+	holder.innerHTML = cardNoticeHtml({
+		className: BATTLE_DANCER_NOTICE,
+		icon: "fa-wind",
+		title: escHtml(localize("stonetop.fight.heroMoves.battleDancer.title")),
+		lead: localize("stonetop.fight.heroMoves.battleDancer.lead"),
+		items: ["deal", "avoid", "impress"].map(key => `<li>${escHtml(localize(`stonetop.fight.heroMoves.battleDancer.${key}`))}</li>`),
+	});
+	const notice = holder.firstElementChild;
+	if (notice) actions.parentNode.insertBefore(notice, actions);
+}
+
 // -- Entry point (called from StonetopCharacter.onRoll) -----------------------
 
 /**
@@ -759,7 +850,9 @@ export async function maybeBeginAttack(actor, item, { stat = null, weaponSlug = 
 		tierActions: buildTierActions(move),
 		// `damageMode` rides the card because the ammo was spent HERE and the damage is rolled later, off
 		// the Confirm button: an advantage bought before the roll has to still be there when it happens.
-		messageFlags: attackFlagEnvelope({ move: item.name, moveKey: move.key, attackerUuid: actor.uuid, weapon, targets, ...(loosed.damageMode ? { damageMode: loosed.damageMode } : {}) }),
+		// `battleDancer` is settled here because only here is the stat rolled known; whether the total
+		// reached 12 is read off the card itself, so a GM's Shift Up/Down moves it (battleDancing).
+		messageFlags: attackFlagEnvelope({ move: item.name, moveKey: move.key, attackerUuid: actor.uuid, weapon, targets, ...(loosed.damageMode ? { damageMode: loosed.damageMode } : {}), ...(dancesAt(actor, move, stat) ? { battleDancer: true } : {}) }),
 	};
 }
 
@@ -898,9 +991,13 @@ function damageLabel(move, weapon) {
  *
  * `commit` is the caller's own price for the blow, taken once the window is answered and BEFORE any
  * ticked line is paid for: a Parry & Riposte that cannot be afforded stops the strike back, and a
- * stopped blow must not have spent the player's Resolve on the way (see strikeBackAt).
+ * stopped blow must not have spent the player's Resolve on the way (see strikeBackAt). It is handed
+ * the keys of the lines the window came back with ticked, so a parry can tell its Second Intent card
+ * whether the +1d4 was the pick (fight/defend-spend.js#spendOnBlow).
+ *
+ * `parry` marks a strike back as the one a Parry & Riposte bought (fight/hero-moves.js#blowOffers).
  */
-async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = "", shiftKey = false, seed = null, formula = "", rollMode: noted = "", offers = null, defenders = null, attacker = "", targets = [], strikeBack = false, attackAt = Date.now(), commit = null } = {}) {
+async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = "", shiftKey = false, seed = null, formula = "", rollMode: noted = "", offers = null, defenders = null, attacker = "", targets = [], strikeBack = false, parry = false, attackAt = Date.now(), commit = null } = {}) {
 	// A stat block's blow brings its own die and its own "w/disadvantage" (rollDamageAt); an attack
 	// move works both out from the character.
 	const base     = formula || await damageFormula(actor, weapon, extraDice);
@@ -917,16 +1014,16 @@ async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = ""
 	// The character's own moves that add to this blow (fight/hero-moves.js#blowOffers). A follower's blow
 	// is not the character's, so it is offered none of them.
 	const lines    = offers ?? [
-		...(attacker ? [] : heroOffers(actor, { targets, weapon, strikeBack, attackAt })),
+		...(attacker ? [] : heroOffers(actor, { targets, weapon, strikeBack, parry, attackAt })),
 		// ...and what the people being hit bring to it, which is theirs to untick rather than the roller's.
 		...defenderLines(known.offered),
 	];
 	// `attacker` names a follower swinging from their character's sheet (rollFollowerDamageAt).
 	const adjust   = await promptDamage({ attacker: attacker || actor?.name, formula: base, shiftKey, ...(rollMode ? { rollMode } : {}), seed, offers: lines });
 	if (!adjust) return null;
-	if (commit && !await commit()) return null;
 	// What the ticked lines cost and what they add beyond dice: a Resolve off the track, a tag on the blow.
 	const taken    = takenOffers(lines, adjust);
+	if (commit && !await commit(taken.map(offer => offer.key))) return null;
 	for (const offer of taken) await offer.spend?.(actor);
 	const addTags  = taken.flatMap(offer => offer.tags ?? []);
 	return { base, ...adjust, ...(addTags.length ? { addTags } : {}) };
@@ -1055,7 +1152,8 @@ function defenderLines(offered) {
  * @param {string} attackerUuid the card's attacker (an actor's uuid, a token's actor for a monster, or a foe's token)
  * @param {string} label        the card's title
  * @param {object} [options]
- * @param {() => Promise<boolean>} [options.commit]  false stops the strike back unrolled
+ * @param {(ticked?: string[]) => Promise<boolean>} [options.commit]  false stops the strike back unrolled;
+ *   handed the keys of the damage window's ticked lines (none when there was no die to strike with)
  * @returns {Promise<boolean>} whether a strike back was rolled
  */
 export async function strikeBackAt(actor, attackerUuid, label, { commit = async () => true } = {}) {
@@ -1072,7 +1170,7 @@ export async function strikeBackAt(actor, attackerUuid, label, { commit = async 
 	const token = (isToken ? doc : null) ?? attacker?.token
 		?? (attacker?.getActiveTokens?.(false, true) ?? []).find(t => t?.parent?.id === scene?.id) ?? null;
 	const targets = token ? [{ uuid: token.uuid, name: token.name ?? attacker.name, actorId: attacker?.id ?? null, disposition: token.disposition ?? 0, hasActor: true }] : [];
-	const damage = await askDamageAdjustment(actor, { formula: blow.formula, rollMode: "dis", seed: null, weapon: blow.weapon, targets, strikeBack: true, commit });
+	const damage = await askDamageAdjustment(actor, { formula: blow.formula, rollMode: "dis", seed: null, weapon: blow.weapon, targets, strikeBack: true, parry: true, commit });
 	if (!damage) return false;
 	await rollAndPostDamage(actor, { move: blow.move, weapon: blow.weapon, targets, damage, fx: {} });
 	return true;
@@ -1282,11 +1380,13 @@ const DAMAGE_ADVANTAGE = {
 	ambush: { move: "Cheap Shot", weapon: w => !!w?.range?.includes("hand") },
 };
 
-function damageAdvantageFrom(actor, moveKey, weapon) {
+// Exported for the tests; the flow reaches it only through askDamageAdjustment.
+export function damageAdvantageFrom(actor, moveKey, weapon) {
 	const rider = DAMAGE_ADVANTAGE[moveKey];
 	if (!rider || !rider.weapon(weapon)) return null;
-	const owned = actor?.items?.some?.(i => i.type === "move" && i.name === rider.move && i.system?.moveType !== "other");
-	return owned ? "adv" : null;
+	// LEARNED, and the book's: an un-learned Cheap Shot sharpens nothing, and a player's own move of
+	// that name is theirs, while one a GM dropped from another playbook is still Cheap Shot.
+	return ownsLearnedBookMoveNamed(actor, rider.move) ? "adv" : null;
 }
 
 // Hover text for the "problematic wound" link in the messy reminder (Book I, Harm &
@@ -1916,6 +2016,9 @@ export function wireAttackConfirm(message, html) {
 	// here, and a tick behind a hidden row is not a pick.
 	wireAttackAmmo(message, root, attack);
 
+	// A Battle Dancer 12+ takes the pick-1 list off the card and says what it does instead.
+	wireBattleDancer(message, root, attack);
+
 	// After the lock above, not before: the label has to read the ticks the card is frozen with.
 	wireAttackNoHarm(root, attack.moveKey);
 
@@ -1951,10 +2054,14 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	// Whatever the move's OWN ticked bullets add, stacked on top of the tier's own
 	// unconditional numbers (Clash's 7-9 suffers the enemy's attack whether or not anything is
 	// ticked). One list, read where the player ticked it — see pickedOptionLabels and PICK_EFFECTS.
-	const fx = pickedEffects(attack.moveKey, pickedOptionLabels(root));
+	//
+	// A Battle Dancer 12+ has no pick to read: it deals the damage and avoids the attack, whatever a box
+	// said before the list was taken off the card (see battleDancing).
+	const dancing = battleDancing(message, attack);
+	const fx = pickedEffects(attack.moveKey, dancing ? [] : pickedOptionLabels(root));
 
 	const extraDice = fx.extraDice.filter(Boolean);
-	const counter   = btn.dataset.counter === "1" || fx.counter;
+	const counter   = !dancing && (btn.dataset.counter === "1" || fx.counter);
 	const deplete   = fx.addons.includes(DEPLETE);
 	let ignoresArmor = fx.ignoresArmor;
 

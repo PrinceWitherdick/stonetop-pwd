@@ -93,7 +93,7 @@ import {ARTIFACT_STATE, concealArtifactFields, isArtifactUpgrade, normalizeArtif
 import {isLoveLetter} from "./love-letters.js";
 import {deriveLoadLevel, loadLimitsFor} from "../../utils/load.js";
 import {maxDie, stepDie, normalizeDamageDie} from "../../utils/damage-die.js";
-import {WEAPONS_OF_WAR_COMMON, WEAPONS_OF_WAR_PIERCING} from "../../data/weapons.js";
+import {WEAPONS_OF_WAR_COMMON, WEAPONS_OF_WAR_PIERCING, ALL_IN_THE_WRIST} from "../../data/weapons.js";
 import {X_PIERCING_MAX} from "../../utils/damage.js";
 
 /** The Judge's Castigate, whose damage rides every Censure (see brandCondemned). */
@@ -1967,6 +1967,12 @@ export class StonetopCharacter {
 			this._inventory.setSmallPool(smallPool),
 			this._inventory.setDrawn({}),
 		]);
+		// All in the Wrist: "Reset your ammo whenever you Outfit." The blades' track is the move's own
+		// (data/weapons.js), counting boxes marked, so a reset is a zero. Written only when something is
+		// marked, so an Outfit by anyone else costs no extra update.
+		if ((Number(this._moveResources.getMoveResources()?.[ALL_IN_THE_WRIST]) || 0) > 0) {
+			await this._moveResources.setUses(ALL_IN_THE_WRIST, 0, { stonetopMove: ALL_IN_THE_WRIST });
+		}
 	}
 
 	async resetInventorySelections() {

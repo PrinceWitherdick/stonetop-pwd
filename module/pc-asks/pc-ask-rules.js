@@ -1,4 +1,5 @@
 import { escHtml, stripHtmlToText } from "../utils/strings.js";
+import { isPlayerAuthoredMove } from "../actors/character/owns-move.js";
 
 // Three basic moves are made BY one character and settled by SOMEONE ELSE:
 //
@@ -78,10 +79,11 @@ export function pcAskFor(moveName) {
 
 /**
  * Whether this item is one of the three, as the book prints it. A player's own custom move that
- * happens to share the name acts as itself, the rule the guided moves already follow.
+ * happens to share the name acts as itself, the rule the guided moves already follow (asked of the
+ * custom-move flag, owns-move.js#isPlayerAuthoredMove, not of moveType "other").
  */
 export function isPcAskMove(item) {
-	return item?.type === "move" && item.system?.moveType !== "other" && !!pcAskFor(item?.name);
+	return item?.type === "move" && !isPlayerAuthoredMove(item) && !!pcAskFor(item?.name);
 }
 
 /** Whether the question is open at this result. Aid is always open; a 6- asks nothing. */

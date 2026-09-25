@@ -116,7 +116,7 @@ describe("asking whom, before the dice", () => {
 
 	// The rule is the book's move; a player's own move that only shares its name is their own.
 	it("leaves a custom move that shares the name alone", async () => {
-		const custom = { ...move(INTERFERE_MOVE), system: { moveType: "other" } };
+		const custom = { ...move(INTERFERE_MOVE), system: { moveType: "other" }, flags: { "stonetop-pwd": { custom: true } } };
 		expect(await aimPcAskRoll(actors.aeliana, custom)).toBeNull();
 		expect(pickPersonOnMap).not.toHaveBeenCalled();
 	});
@@ -148,7 +148,7 @@ describe("Aid", () => {
 
 	it("hands any other move back to the sheet without asking", async () => {
 		expect(await beginAid(actors.aeliana, move("Defy Danger"))).toBe(false);
-		expect(await beginAid(actors.aeliana, { ...move(AID_MOVE), system: { moveType: "other" } })).toBe(false);
+		expect(await beginAid(actors.aeliana, { ...move(AID_MOVE), system: { moveType: "other" }, flags: { "stonetop-pwd": { custom: true } } })).toBe(false);
 		expect(pickPersonOnMap).not.toHaveBeenCalled();
 	});
 

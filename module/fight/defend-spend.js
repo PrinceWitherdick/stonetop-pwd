@@ -15,8 +15,9 @@
 //  • PARRY & RIPOSTE (Fox): "spend 1 Readiness to both halve an attack's effects/damage and strike back at
 //    the attacker (deal your damage with disadvantage), instead of spending 1 Readiness for each." One more
 //    button, which halves the blow and rolls the strike back at whoever struck it. With SECOND INTENT it
-//    also puts the Ambush list in front of them: "also pick 1 option from the Ambush list". Whether the
-//    weapon is one "you can wield quickly" is the table's to say.
+//    also puts the Ambush list in front of them: "also pick 1 option from the Ambush list", and offers its
+//    "Deal +1d4 damage" on the strike back's own damage window. Whether the weapon is one "you can wield
+//    quickly" is the table's to say.
 //  • STEADFAST GUARDIAN (Heavy): "While you hold Readiness (from Defend), you can always suffer the
 //    damage/effects of an attack instead of your ward; no need to spend Readiness". Taking it for them is
 //    free, for as long as they hold any.
@@ -243,7 +244,7 @@ function pickOffer(offers, kind) {
  * took time.
  *
  * @param {object} [deps]
- * @param {(defender: Actor, attackerUuid: string, label: string, options: {commit: () => Promise<boolean>}) => Promise<unknown>} [deps.strikeBack]
+ * @param {(defender: Actor, attackerUuid: string, label: string, options: {commit: (ticked?: string[]) => Promise<boolean>}) => Promise<unknown>} [deps.strikeBack]
  * @returns {Promise<boolean>} whether the spend was taken
  */
 export async function spendOnBlow(message, kind, offer, { scope = SYSTEM_ID, strikeBack = null, relay = false } = {}) {
@@ -271,9 +272,16 @@ export async function spendOnBlow(message, kind, offer, { scope = SYSTEM_ID, str
 	// On a blow a character takes, the card's attacker IS that character: the foe is `foeUuid`.
 	const attacker = current.selfHarm ? (current.foeUuid ?? "") : (current.attackerUuid ?? "");
 	let taken = false;
-	await strike(offer.defender, attacker, format(`${KEY}.parryStrike`, {}), { commit: async () => (taken = await take()) });
+	// Which of the damage window's lines went out ticked: Second Intent's +1d4 is one of them, and if the
+	// player took it there, that WAS their pick from the Ambush list.
+	let ticked = [];
+	await strike(offer.defender, attacker, format(`${KEY}.parryStrike`, {}), {
+		commit: async (keys = []) => { ticked = keys; return (taken = await take()); },
+	});
 	if (!taken) return false;
-	if (ownsLearnedMoveNamed(offer.defender, HERO_MOVES.SECOND_INTENT)) await postSecondIntent(offer.defender);
+	if (ownsLearnedMoveNamed(offer.defender, HERO_MOVES.SECOND_INTENT)) {
+		await postSecondIntent(offer.defender, { dieTaken: ticked.includes("secondIntent") });
+	}
 	return true;
 }
 
@@ -378,13 +386,19 @@ async function postKnockedDown(actor, cost, foe) {
  * Second Intent: "When you Defend and spend 1 Readiness to Parry & Riposte, also pick 1 option from the
  * Ambush list." The list is read off the character's own Ambush, so it is the book's words; the pick is
  * theirs to say.
+ *
+ * The strike back's damage window offered "Deal +1d4 damage" as a line of its own (hero-moves.js#blowOffers),
+ * because by the time this card posts the strike back has already rolled. `dieTaken` says whether it went
+ * out ticked: if so the pick is made and the card says so; if not, the card says the d4 is behind them, so
+ * nobody reads "Deal +1d4 damage" on the list below as still to roll.
  */
-async function postSecondIntent(actor) {
+async function postSecondIntent(actor, { dieTaken = false } = {}) {
 	const ambush = ownedMove(actor, "Ambush");
 	const options = (firstOptionList(ambush?.system?.description)?.items ?? []).map(stripHtmlToText).filter(Boolean);
-	const list = options.length ? `<ul>${options.map(o => `<li>${escHtml(o)}</li>`).join("")}</ul>` : "";
+	const list = !dieTaken && options.length ? `<ul>${options.map(o => `<li>${escHtml(o)}</li>`).join("")}</ul>` : "";
+	const said = format(`${KEY}.${dieTaken ? "secondIntentTookDie" : "secondIntent"}`, { name: actor.name });
 	return globalThis.ChatMessage?.create?.({
-		content: stonetopChatCard(HERO_MOVES.SECOND_INTENT, `<div class="card-content"><p>${escHtml(format(`${KEY}.secondIntent`, { name: actor.name }))}</p>${list}</div>`, "stonetop-second-intent-card"),
+		content: stonetopChatCard(HERO_MOVES.SECOND_INTENT, `<div class="card-content"><p>${escHtml(said)}</p>${list}</div>`, "stonetop-second-intent-card"),
 		speaker: globalThis.ChatMessage?.getSpeaker?.({ actor }),
 	});
 }

@@ -2168,7 +2168,8 @@
         "knockedDownOne": "{defender} gets knocked down (halve it)",
         "knockedDownChoice": "{defender} gets knocked down under the blow on {ward}",
         "noteKnockedDown": "{defender} got knocked down, halving the blow (I Get Knocked Down).",
-        "secondIntent": "{name} parried: also pick 1 option from the Ambush list."
+        "secondIntent": "{name} parried: also pick 1 option from the Ambush list. The strike back was rolled without the +1d4 damage.",
+        "secondIntentTookDie": "{name} parried and took +1d4 damage on the strike back: that is their pick from the Ambush list."
       },
       "heroMoves": {
         "undaunted": {
@@ -2179,6 +2180,10 @@
         },
         "rememberMe": {
           "label": "Something to Remember Me By: +{dice} damage, and you mark them",
+          "pill": "{move} +{dice}"
+        },
+        "secondIntent": {
+          "label": "Second Intent: +{dice} damage (your Ambush pick)",
           "pill": "{move} +{dice}"
         },
         "hungryFlames": {
@@ -2243,6 +2248,13 @@
           "area": "Area: roll damage separately for each target",
           "keep": "Keep your arrows",
           "spent": "{name} looses a volley: {weapon} is now {status}."
+        },
+        "battleDancer": {
+          "title": "Battle Dancer: 12+ on +DEX",
+          "lead": "Instead of picking from the list:",
+          "deal": "You deal your damage",
+          "avoid": "You avoid your enemy's attack",
+          "impress": "You impress, embarrass or overawe your foes"
         },
         "muscleboundNote": "Musclebound: forceful and messy, and more so where it already was.",
         "berserkerHint": "Berserker: in your Battle Joy you lash out at anyone nearby, friend and foe alike. Damage is rolled separately for each.",

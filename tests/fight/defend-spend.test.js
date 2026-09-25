@@ -199,6 +199,44 @@ describe("spendOnBlow", () => {
 			expect(posted).toEqual([]);
 		});
 	});
+
+	// Second Intent: "When you Defend and spend 1 Readiness to Parry & Riposte, also pick 1 option from the
+	// Ambush list." Its "Deal +1d4 damage" is offered on the strike back's own window, and the card that
+	// follows says whether it was taken there.
+	describe("Second Intent", () => {
+		let saved;
+		let posted;
+		beforeEach(() => {
+			saved = globalThis.ChatMessage;
+			posted = [];
+			globalThis.ChatMessage = { create: vi.fn(async data => posted.push(data)), getSpeaker: () => ({}) };
+		});
+		afterEach(() => { globalThis.ChatMessage = saved; });
+
+		const fox = () => {
+			const actor = character("fox", 2, ["Parry & Riposte", "Second Intent"]);
+			actor.items.push({ type: "move", name: "Ambush", system: { description: "<p>pick 1:</p><ul><li>Deal +1d4 damage</li><li>Slip away before they can react</li></ul>" } });
+			return actor;
+		};
+		/** A strike back whose damage window came back with `keys` ticked. */
+		const strikingWith = keys => vi.fn(async (_d, _a, _l, { commit }) => commit(keys));
+
+		it("says the pick was the +1d4 when the strike back took it", async () => {
+			const card = message({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.bram", name: "Bram" }] });
+			expect(await spendOnBlow(card, "parry", { row: card.flag.results[0], defender: fox(), cost: 1 }, { strikeBack: strikingWith(["secondIntent"]) })).toBe(true);
+			expect(posted[0].content).toContain("fox parried and took +1d4 damage on the strike back");
+			// The pick is made: the list is not put in front of them again.
+			expect(posted[0].content).not.toContain("Slip away");
+		});
+
+		it("puts the Ambush list in front of them, and says the d4 was not taken, when it was not", async () => {
+			const card = message({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.bram", name: "Bram" }] });
+			expect(await spendOnBlow(card, "parry", { row: card.flag.results[0], defender: fox(), cost: 1 }, { strikeBack: strikingWith([]) })).toBe(true);
+			expect(posted[0].content).toContain("also pick 1 option from the Ambush list");
+			expect(posted[0].content).toContain("without the +1d4 damage");
+			expect(posted[0].content).toContain("Slip away before they can react");
+		});
+	});
 });
 
 // More than one spend on offer: a button each, and one to spend nothing.

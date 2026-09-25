@@ -10,7 +10,7 @@
  * Pure: no Foundry global is touched, so every caller stays testable with a plain object.
  */
 
-import { SYSTEM_ID } from "../../system-id.js";
+import { SYSTEM_ID, LEGACY_FLAG_SCOPES, isCutOver } from "../../system-id.js";
 
 /** Does this actor own a MOVE by that exact name? */
 export function ownsMoveNamed(actor, name) {
@@ -38,6 +38,39 @@ export function isMoveLearned(item) {
  */
 export function ownsLearnedMoveNamed(actor, name) {
 	return !!actor?.items?.some(i => i.type === "move" && i.name === name && isMoveLearned(i));
+}
+
+/**
+ * Did a PLAYER write this move, in the custom-move dialog, rather than a book print it?
+ *
+ * The custom-move flag is the answer (utils/custom-move-data.js#buildCustomMoveData stamps it), and
+ * `moveType "other"` is NOT: a GM who drops another playbook's move on a sheet lands it as "other"
+ * too (StonetopCharacter#onDropMove), and a dropped Ambush is still the book's Ambush. A rule that
+ * lets a player's own move "act as itself" asks this, so the foreign move keeps working.
+ *
+ * Read through the older scopes too until the item is cut over (system-id.js#isCutOver): a custom
+ * move written before the rename carries its flag under `stonetop_pwd`, and must not start
+ * answering as the book's move of that name just because the migration hasn't reached it yet.
+ */
+export function isPlayerAuthoredMove(item) {
+	const flags = item?.flags;
+	if (flags?.[SYSTEM_ID]?.custom) return true;
+	if (!flags || isCutOver(item)) return false;
+	return LEGACY_FLAG_SCOPES.some(scope => !!flags[scope]?.custom);
+}
+
+/**
+ * `ownedLearnedMove`, for a rule that means the BOOK's move of that name: a player's own move that
+ * happens to share the name is not it (see isPlayerAuthoredMove). A move-granted weapon asks this,
+ * for the move's own resource track.
+ */
+export function ownedLearnedBookMove(actor, name) {
+	return (actor?.items ?? []).find(i => i.type === "move" && i.name === name && isMoveLearned(i) && !isPlayerAuthoredMove(i));
+}
+
+/** `ownedLearnedBookMove` as a yes/no, which is all Cheap Shot needs. */
+export function ownsLearnedBookMoveNamed(actor, name) {
+	return !!ownedLearnedBookMove(actor, name);
 }
 
 /**

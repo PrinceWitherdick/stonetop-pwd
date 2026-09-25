@@ -85,9 +85,17 @@ describe("grantedWeaponAttackFor", () => {
 	});
 
 	it("lets a player-authored move of the same name act as itself", () => {
-		const actor = lightbearer(CLASH, { name: "Purifying Flames", system: { moveType: "other" } });
+		// Player-authored is the custom-move flag (owns-move.js#isPlayerAuthoredMove), not moveType.
+		const actor = lightbearer(CLASH, { name: "Purifying Flames", system: { moveType: "other" }, flags: { "stonetop-pwd": { custom: true } } });
 
 		expect(grantedWeaponAttackFor(actor, actor.items[1])).toBeNull();
+	});
+
+	it("still grants the holy light from a Purifying Flames a GM dropped from the Lightbearer", () => {
+		// onDropMove lands a foreign playbook move as moveType "other"; it is still the book's move.
+		const actor = lightbearer(CLASH, { name: "Purifying Flames", system: { moveType: "other", playbook: "The Lightbearer" } });
+
+		expect(grantedWeaponAttackFor(actor, actor.items[1])?.weaponSlug).toBe("purifying-flames-holy-light");
 	});
 
 	it("declines an un-owned playbook row, which carries no item at all", () => {

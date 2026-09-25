@@ -20,7 +20,14 @@ describe("which moves ask", () => {
 	it("is the three basic moves, and not a custom move that shares a name", () => {
 		for (const name of [AID_MOVE, INTERFERE_MOVE, PERSUADE_PC_MOVE]) {
 			expect(isPcAskMove({ type: "move", name, system: { moveType: "basic" } }), name).toBe(true);
-			expect(isPcAskMove({ type: "move", name, system: { moveType: "other" } }), name).toBe(false);
+			// A player's own move is the custom-move flag, not moveType "other" (owns-move.js#isPlayerAuthoredMove).
+			expect(isPcAskMove({ type: "move", name, system: { moveType: "other" }, flags: { "stonetop-pwd": { custom: true } } }), name).toBe(false);
+			// ...so the book's move, stored as "other" with no flag (a GM's drop), is still the book's.
+			expect(isPcAskMove({ type: "move", name, system: { moveType: "other" } }), name).toBe(true);
+			// A custom move from before the rename still carries its flag under the old scope...
+			expect(isPcAskMove({ type: "move", name, system: { moveType: "other" }, flags: { stonetop_pwd: { custom: true } } }), name).toBe(false);
+			// ...until the item is cut over, when the new scope is authoritative.
+			expect(isPcAskMove({ type: "move", name, system: { moveType: "other" }, flags: { stonetop_pwd: { custom: true }, "stonetop-pwd": { __migratedFrom: "stonetop_pwd" } } }), name).toBe(true);
 		}
 		expect(isPcAskMove({ type: "move", name: "Defy Danger", system: { moveType: "basic" } })).toBe(false);
 	});

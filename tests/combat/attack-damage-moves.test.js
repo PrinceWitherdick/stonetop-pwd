@@ -25,6 +25,8 @@ const HAMMER   = packMove("playbook-moves/the-judge/the-hammer-and-the-book.json
 const bulletsOf = (description) => firstOptionList(description)?.items ?? [];
 
 const item = (name, moveType = "playbook") => ({ type: "move", name, system: { moveType } });
+// A move a player wrote in the custom-move dialog (utils/custom-move-data.js#buildCustomMoveData).
+const custom = (name) => ({ ...item(name, "other"), flags: { "stonetop-pwd": { custom: true } } });
 
 describe("attackMoveFor: which moves deal a character's damage", () => {
 	it("takes the two basic attacks and the three playbook moves that also deal your damage", () => {
@@ -43,9 +45,17 @@ describe("attackMoveFor: which moves deal a character's damage", () => {
 
 	it("lets a move a player wrote under the same name act as itself", () => {
 		// A world's own "Ambush" is whatever they wrote; hijacking it into a weapon prompt and a
-		// damage card would be this flow deciding what someone else's move means.
-		expect(attackMoveFor(item("Ambush", "other"))).toBeNull();
-		expect(attackMoveFor(item("Call the Shot", "other"))).toBeNull();
+		// damage card would be this flow deciding what someone else's move means. What marks it as
+		// theirs is the custom-move flag (owns-move.js#isPlayerAuthoredMove).
+		expect(attackMoveFor(custom("Ambush"))).toBeNull();
+		expect(attackMoveFor(custom("Call the Shot"))).toBeNull();
+	});
+
+	it("still attacks with an Ambush a GM dropped from the Fox onto another playbook", () => {
+		// onDropMove rewrites a foreign playbook move to moveType "other", but it is still the
+		// book's Ambush, with no custom flag, and it still deals the Fox's damage.
+		expect(attackMoveFor(item("Ambush", "other"))?.key).toBe("ambush");
+		expect(attackMoveFor(item("Call the Shot", "other"))?.key).toBe("call-the-shot");
 	});
 
 	it("still claims Clash, whatever a world stores it as", () => {

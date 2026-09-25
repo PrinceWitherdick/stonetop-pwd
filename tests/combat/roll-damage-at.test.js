@@ -1046,6 +1046,50 @@ describe("a Clash confirmed after the dice", () => {
 		expect(damageFlag().results[0].formula).toMatch(/kl1$/);
 	});
 
+	// Battle Dancer (Fox): "When you roll +DEX to Clash, on a 12+ you deal your damage, avoid your enemy's
+	// attack, and impress/embarrass/overawe your foes." The 12+ REPLACES the pick (the user's ruling).
+	describe("Battle Dancer's 12+", () => {
+		const STRIKE_HARD = "Strike hard and fast, for 1d6 extra damage, but suffer your enemy's attack";
+		/** Confirm a Clash with "Strike hard" ticked, totalling `total`, with or without Battle Dancer on the card. */
+		async function confirmTicked(pim, { total, battleDancer }) {
+			const listeners = [];
+			const btn = { disabled: false, title: "", innerHTML: "", dataset: { counter: "0" }, addEventListener: (type, fn) => listeners.push(fn) };
+			const label = { textContent: STRIKE_HARD };
+			const box = { closest: sel => (sel === ".stonetop-picklist-item" ? { querySelector: () => label } : null) };
+			const root = {
+				querySelectorAll: sel => (sel === ".stonetop-attack-confirm" ? [btn] : sel === ".stonetop-picklist-check:checked" ? [box] : []),
+				querySelector: () => null,
+			};
+			const message = Object.assign(makeMessage({ attack: { move: "Clash", moveKey: "clash", attackerUuid: pim.uuid, weapon: null, targets: [], ...(battleDancer ? { battleDancer: true } : {}) } }), { rolls: [{ total }] });
+			const byToken = globalThis.fromUuid;
+			globalThis.fromUuid = async uuid => (uuid === pim.uuid ? pim : byToken(uuid));
+			wireAttackConfirm(message, root);
+			await new Promise(resolve => setTimeout(resolve, 0));
+			await listeners[0]({ shiftKey: true });
+		}
+
+		it("deals the damage without the strike-hard d6 and suffers no counter-attack", async () => {
+			const pim = hero("pim", "Pim");
+			fightInARow([["pim", pim], ["crin", crinwin("crinwin")]]);
+			await confirmTicked(pim, { total: 12, battleDancer: true });
+			expect(damageFlag().results[0].formula).not.toContain("1d6");
+			// The damage card and nothing after it: no counter-attack coming back at Pim.
+			expect(posted).toHaveLength(1);
+		});
+
+		it("is the plain 10+ on an 11, and without Battle Dancer on the card", async () => {
+			for (const at of [{ total: 11, battleDancer: true }, { total: 12, battleDancer: false }]) {
+				posted.length = 0;
+				const pim = hero("pim", "Pim");
+				fightInARow([["pim", pim], ["crin", crinwin("crinwin")]]);
+				await confirmTicked(pim, at);
+				expect(damageFlag().results[0].formula).toContain("1d6");
+				// ...and the pick's price, the enemy's attack, follows the damage.
+				expect(posted.length).toBeGreaterThan(1);
+			}
+		});
+	});
+
 	it("keeps the foe frozen at the roll, whoever the character is fighting now", async () => {
 		const pim = hero("pim", "Pim");
 		const { tokens } = fightInARow([["crin", crinwin("crinwin")], ["pim", pim], ["gap", hero("ally", "Ally")], ["far", crinwin("far")]]);

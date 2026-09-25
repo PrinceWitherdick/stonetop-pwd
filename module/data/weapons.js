@@ -36,6 +36,9 @@
 
 import { altStatGrantForMove } from "./alt-stat-grants.js";
 
+/** The Fox's move that arms them with throwing blades and throws their knives (MOVE_GRANTED_WEAPONS). */
+export const ALL_IN_THE_WRIST = "All in the Wrist";
+
 export const M = (over = {}) => ({
 	range: [],
 	damageBonus: 0,
@@ -97,7 +100,35 @@ export const MOVE_GRANTED_WEAPONS = {
 		readyWhen: "holyLight",
 		unreadyNotice: "stonetop.holyLight.unlitAttackNotice",
 	},
+	// The Fox's "few iron throwing blades (near) on you; they don't take up space in your inventory.
+	// Reset your ammo whenever you Outfit." Thrown as well as near, so the blow flies rather than
+	// swings and a Musclebound hand counts it as the thrown attack it is. Their ammo is the MOVE's
+	// own track (○ a few left ○ out), not an inventory item's: `ammoStore: "move"` tells the attack
+	// flow to read and mark it there (combat/attack-flow.js#weaponAmmoIndex).
+	[ALL_IN_THE_WRIST]: {
+		slug: "all-in-the-wrist-throwing-blades",
+		meta: M({ name: "Iron throwing blades", range: ["near", "thrown"], iron: true, ammo: true }),
+		ammoStore: "move",
+	},
 };
+
+/**
+ * The rest of All in the Wrist: "Any knife or dagger gets the thrown tag in your hands." Read off
+ * the weapon's NAME, so the catalog's knife and silver-alloy dagger and a dagger picked up in play
+ * all count, the way the book's "any" means.
+ */
+const KNIFE_OR_DAGGER = /\b(?:knife|knives|daggers?)\b/i;
+
+/** Is this weapon a knife or a dagger? Accepts a WEAPON_META entry or any record with a `name`. */
+export function isKnifeOrDagger(meta) {
+	return !!meta && KNIFE_OR_DAGGER.test(String(meta.name ?? ""));
+}
+
+/** `meta` as it is in the hands of someone with All in the Wrist: a knife or dagger gains `thrown`. */
+export function withWristThrow(meta) {
+	if (!isKnifeOrDagger(meta) || meta.range.includes("thrown")) return meta;
+	return { ...meta, range: [...meta.range, "thrown"] };
+}
 
 /**
  * Attacking with nothing in hand. Not carried, and not a weapon anyone owns — the attack flow

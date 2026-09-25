@@ -90,7 +90,7 @@ import {withSectionEditing} from "../../utils/section-editing.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {annotateInvocationEffects, splitEmpoweredEffect} from "./invocation-effects.js";
 import {CONSECRATED_FLAME, INVOKE_THE_SUN_GOD, EMPOWERED_INVOCATIONS, ownsMoveNamed, showHolyLight} from "./holy-light.js";
-import {ownedMoveNames, ownedMove, ownsLearnedMoveNamed, isMoveLearned} from "./owns-move.js";
+import {ownedMoveNames, ownedMove, ownsLearnedMoveNamed, isPlayerAuthoredMove, isMoveLearned} from "./owns-move.js";
 import {invocationLabel, invokeNotice, readOngoing, resolveInvocationUse} from "./ongoing-invocation.js";
 import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE} from "./condemn.js";
 import {readyRulebookIcon, openSharedRulebook} from "../../books/rulebook-icons.js";
@@ -3418,13 +3418,14 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.preventDefault();
 				const li = nameEl.closest("li");
 				const name = nameEl.textContent.trim();
-				// A player-authored move (moveType "other") that happens to share a guided
-				// move's name acts as itself, never the built-in dialog — the same rule the
-				// dice path applies in _guidedMoveForRollable.
+				// A player-authored move (the custom-move flag; a GM-dropped foreign move is
+				// "other" too and still the book's) that happens to share a guided move's name
+				// acts as itself, never the built-in dialog — the same rule the dice path
+				// applies in _guidedMoveForRollable.
 				// The row's own item, when it has one — an un-owned playbook row has none. Read
-				// once here: the moveType check below and _maybeConsecrateFlame both want it.
+				// once here: the authorship check below and _maybeConsecrateFlame both want it.
 				const item = li?.dataset.itemId ? this.actor.items.get(li.dataset.itemId) : null;
-				const isOtherMove = item?.system?.moveType === "other";
+				const isOtherMove = isPlayerAuthoredMove(item);
 				// Aid is made on someone else's roll: ask whom, and post the card the GM answers on
 				// (pc-asks/). Only for someone who can act for this character; a reader gets the text.
 				if (this.isEditable && await beginAid(this.actor, item)) return;
@@ -6342,11 +6343,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			const li = rollable.closest(".stonetop-item");
 			const name = li?.querySelector(".stonetop-item-name")?.textContent?.trim()
 				?? rollable.dataset.label?.trim();
-			// A player-authored custom move (moveType "other") that happens to share a
-			// guided move's name should roll as itself, not hijack the built-in dialog — and its
-			// text is its own, so it never earns a deferred-spend door off it either.
+			// A player-authored custom move (the custom-move flag, not moveType "other", which a
+			// GM-dropped foreign move also carries) that happens to share a guided move's name
+			// should roll as itself, not hijack the built-in dialog — and its text is its own, so
+			// it never earns a deferred-spend door off it either.
 			const item = li?.dataset.itemId ? this.actor.items.get(li.dataset.itemId) : null;
-			if (item?.system?.moveType === "other") return null;
+			if (isPlayerAuthoredMove(item)) return null;
 			// The hand-written table first, so the two moves that spend AND roll on one trigger
 			// keep the gate that refuses their dice; anything left is asked whether its own
 			// printed text charges Stock at a trigger of its own.

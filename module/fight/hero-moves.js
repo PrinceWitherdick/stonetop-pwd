@@ -15,6 +15,8 @@
 //    damage, in a fight or not; it meets a strike back's disadvantage and the two cancel.
 //  • MUSCLEBOUND (Heavy): "When you make a hand-to-hand or thrown attack, it's forceful and messy."
 //  • SOMETHING TO REMEMBER ME BY (Would-Be Hero): "+1d4" on a strike back bought with Readiness.
+//  • SECOND INTENT (Fox): a Parry & Riposte also picks 1 from the Ambush list, and "Deal +1d4 damage" is
+//    one of them. Offered UNTICKED on the parry's strike back, since the pick may be another option.
 //  • HUNGRY FLAMES (Lightbearer): "+1d6" whenever the blow is dealt with a holy light.
 //  • BIG GAME HUNTER / GIANT SLAYER (Ranger): "+2" / "another +2" at the weak spot of a large or huge
 //    creature. The fight knows the size; whether this blow found the weak spot is the table's, so the
@@ -402,10 +404,12 @@ export function berserkNow(actor) {
  * @param {object[]} [options.targets]   who the blow is aimed at
  * @param {object|null} [options.weapon] the weapon in hand
  * @param {boolean} [options.strikeBack] a Defend strike back (p.216)
+ * @param {boolean} [options.parry]      that strike back is the one a Parry & Riposte bought, rather than
+ *   the plain Defend option the fight ring's Strike back spends on (Second Intent rides only this one)
  * @param {number} [options.attackAt]    when the card this answers was written (see recordClash)
  * @returns {Array<{key: string, dice: string, label: string, pill: string, applied?: boolean, tags?: string[], spend?: Function}>}
  */
-export function blowOffers(actor, { targets = [], weapon = null, strikeBack = false, attackAt = Date.now() } = {}) {
+export function blowOffers(actor, { targets = [], weapon = null, strikeBack = false, parry = false, attackAt = Date.now() } = {}) {
 	if (actor?.type !== "character") return [];
 	const offers = [];
 	const undaunted = undauntedOffer(actor);
@@ -416,6 +420,10 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 		pill: format(`${MOVE_KEY}.${key}.pill`, { dice, move }),
 	});
 	if (strikeBack && has(actor, HERO_MOVES.REMEMBER_ME)) add("rememberMe", HERO_MOVES.REMEMBER_ME, "1d4");
+	// Second Intent: "When you Defend and spend 1 Readiness to Parry & Riposte, also pick 1 option from the
+	// Ambush list", and "Deal +1d4 damage" is on it. UNTICKED: the pick is the player's, and may be another
+	// option. Whether they took it here is what the Second Intent card then says (defend-spend.js).
+	if (strikeBack && parry && has(actor, HERO_MOVES.SECOND_INTENT)) add("secondIntent", HERO_MOVES.SECOND_INTENT, "1d4", { applied: false });
 	if (isHolyLight(weapon) && has(actor, HERO_MOVES.HUNGRY_FLAMES)) add("hungryFlames", HERO_MOVES.HUNGRY_FLAMES, "1d6");
 	// Nemesis rides every attack after the Clash that earned it — never the Clash's own damage, which is
 	// what `since` against the card's age settles.
