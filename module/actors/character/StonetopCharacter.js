@@ -46,6 +46,7 @@ import {heroDisplayName, WBH_HERO_FLAG, ownsAsteriskMove} from "./WouldBeHeroAst
 import {tookBackground} from "./took-background.js";
 import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, isMoveLearned, ownedMoveNames, ownsMoveNamed} from "./owns-move.js";
 import {fineWhiskyOffer as fineWhiskyOfferFrom, isPersuadeMove, FINE_WHISKY_SOURCE} from "./fine-whisky.js";
+import {tagLoadGatedMoves} from "./load-gates.js";
 import {RITES_OF_THE_LAND, SACRED_POUCH_SLUG, NO_POUCH_STOCK_NOTE, BLESSED_PLAYBOOK, isVessel, stockSourcesForFlags, stockCostFromDescription} from "./stock-cost.js";
 import {loseHpForStock} from "./provisions.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight, INVOKE_THE_SUN_GOD} from "./holy-light.js";
@@ -549,6 +550,9 @@ export class StonetopCharacter {
 		const gear = this._gearSources(playbookData, allOutfitItems, arcanaCarried);
 		const moves    = await this._buildMovesSection(playbookData, ownedAllByName, actorLevel, gear);
 		const inventory = await this._buildInventorySection(playbookData, ownedAllByName, actorLevel, view, arcanaCarried);
+		// A load-gated move the load on the sheet has switched off (Catlike's quiet, Free Running) wears
+		// a tag saying so on its card. Display only: see load-gates.js.
+		tagLoadGatedMoves(moves, inventory?.outfit?.load?.selected ?? null);
 		const postDeath = await this._postDeath.buildSnapshot();
 		const pdiLabel  = postDeath.activeInsert?.name ?? null;
 		const moveBonuses = await this._ownedMoveBonuses(playbookData, ownedAllByName);
@@ -857,6 +861,7 @@ export class StonetopCharacter {
 						.withMax(resourceDef.max)
 						.withTitle(resourceDef.title ?? null)
 						.withLabels(resourceDef.labels ?? [])
+						.withSpendTooltip(new ResourceDef(resourceDef).spendTooltip)
 						.build() : null;
 					const { options: markOptions, budget: markBudget } = _buildMarkOptions(
 						{ markOptions: i.system?.markOptions, markBudget: i.system?.markBudget, ownedIds: [i._id], owned: true },
@@ -4846,6 +4851,9 @@ function _buildMoveEntry(entry, source, moveResourcesMap, bgSlugs = new Set(), m
 		.withMax(resourceDef.max)
 		.withTitle(resourceDef.title ?? null)
 		.withLabels(resourceDef.labels ?? [])
+		// Silver Tongued's Nerve: "Spend 1 to:" and its menu, off the same ResourceDef an Other
+		// move's track reads (see _buildOtherMoveResource).
+		.withSpendTooltip(new ResourceDef(resourceDef).spendTooltip)
 		.build() : null;
 	const repeat = entry.repeatable
 		? { max: entry.repeatChecks.length, current: entry.ownedIds.length }

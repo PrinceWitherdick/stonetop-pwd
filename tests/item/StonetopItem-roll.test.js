@@ -226,3 +226,27 @@ describe("StonetopItem.roll: a monster's rolling move", () => {
 		expect(rollFormula).toHaveBeenCalledWith("d4", expect.anything(), expect.objectContaining({ label: "Call the watch" }));
 	});
 });
+
+// The roll card is where the ROLLER is known, so it is where their extra picks are laid over the
+// move's printed caps (actors/character/move-pick-bonuses.js).
+describe("StonetopItem.roll — the roller's own picks", () => {
+	const SEEK = {
+		moveType: "basic", rollType: "wis",
+		description: "<p>When you study a situation, roll +WIS: <strong>on a 10+</strong>, ask the GM 3 questions from the list below; <strong>on a 7-9</strong>, ask 1:</p><ul><li>What happened here recently?</li><li>What is about to happen?</li></ul>",
+	};
+
+	it("counts a Perceptive Fox's extra question, and her question on a 6-", async () => {
+		await makeItem("Seek Insight", SEEK, [move("Perceptive")]).roll();
+		const card = rollStat.mock.calls[0][2].moveDescription;
+		expect(card).toContain('data-pick-max-success="4"');
+		expect(card).toContain('data-pick-max-partial="2"');
+		expect(card).toContain('data-pick-max-failure="1"');
+	});
+
+	it("leaves everyone else on the move's own caps", async () => {
+		await makeItem("Seek Insight", SEEK, []).roll();
+		const card = rollStat.mock.calls[0][2].moveDescription;
+		expect(card).toContain('data-pick-max-success="3"');
+		expect(card).not.toContain("data-pick-max-failure");
+	});
+});

@@ -46,6 +46,9 @@ export class Resource {
 		this.maxStat = b._maxStat ?? null;
 		this.title   = b._title;
 		this.labels  = b._labels;
+		// The "Spend 1 to:" hover the move templates hang on the track's title (ResourceDef builds
+		// it). Absent on every track without a spend menu, so those keep the shape they always had.
+		if (b._spendTooltip) this.spendTooltip = b._spendTooltip;
 	}
 }
 
@@ -55,5 +58,6 @@ export class ResourceBuilder {
 	withMaxStat(v) { this._maxStat = v; return this; }
 	withTitle(v)   { this._title   = v; return this; }
 	withLabels(v)  { this._labels  = v; return this; }
+	withSpendTooltip(v) { this._spendTooltip = v; return this; }
 	build()        { return new Resource(this); }
 }

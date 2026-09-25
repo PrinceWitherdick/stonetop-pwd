@@ -1308,8 +1308,24 @@
       "bothTooltip": "{brands} bearing your brand, {oaths} held to an oath. Click to open the roster.",
       "notSwearable": "{name} is not somebody who can swear an oath."
     },
+    "loadGate": {
+      "whole": "needs a {load} load",
+      "clause": "{clause}: needs a {load} load",
+      "tooltip": "Your load is heavier than this move allows. Lighten it for the move to apply.",
+      "load": {
+        "light": "light",
+        "normal": "normal or light",
+        "heavy": "heavy or lighter"
+      }
+    },
     "rollOffers": {
       "fineWhisky": "Share a skin of fine whisky (spend 1 use): advantage"
+    },
+    "pickBonus": {
+      "note": "{source}: {detail}.",
+      "plus": "{n} more on a hit",
+      "missFloor": "{n} even on a 6-",
+      "joiner": ", and "
     },
     "artifact": {
       "identify": "Identify artifact",

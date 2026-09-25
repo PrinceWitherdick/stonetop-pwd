@@ -9,6 +9,7 @@ import {stonetopThumbnail} from "../utils/item-icon.js";
 import {STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "../actors/character/StonetopFlags.js";
 import {newArcanumSlug, isArcanumData} from "./createArcanum.js";
 import {isKnowThings, knowThingsRollOptions} from "../actors/character/know-things.js";
+import {withMovePickBonuses} from "../actors/character/move-pick-bonuses.js";
 
 /**
  * Which world item owns each arcanum slug: `slug -> item id`.
@@ -296,8 +297,12 @@ export function createStonetopItemClass(BaseItem) {
 			// `options.pickable` is for a move whose list is answered by someone OTHER than the roller
 			// (Interfere: the foiled player picks, on a card that is not theirs to tick), which keeps
 			// the list as printed for its own answer to be drawn in (pc-asks/pc-ask-flow.js).
-			const cardDescription = moveCardBody(moveDescription, this.system?.moveResults,
-				{ pickable: options.pickable ?? !declaredPicks.length }) + signoff;
+			//
+			// The printed list's caps are a reading of the MOVE; what the ROLLER brings to it (a
+			// Perceptive Fox's extra question, a 6- that still asks one, The Natural's added
+			// question) is laid over them here, where the roller is known. See move-pick-bonuses.js.
+			const cardDescription = withMovePickBonuses(moveCardBody(moveDescription, this.system?.moveResults,
+				{ pickable: options.pickable ?? !declaredPicks.length }), actor, this.name) + signoff;
 
 			if (stat) return rollStat(stat, actor, {
 				...options,

@@ -78,6 +78,7 @@ import {
 import { drawnOn, offMapNote, routePath, tierDraws, tierDrawing, tierDrawingEnds } from "../utils/route-path.js";
 import { posterSceneFor } from "../book2-art/poster-map-catalog.js";
 import { format, localize } from "../utils/i18n.js";
+import { loadGatedClause, overLoadGate } from "../actors/character/load-gates.js";
 import {
 	clearRouteOnScene, offMapNames, routeFlagTouched, sceneRouteCheck, sceneRouteRefusal,
 	sceneJourney, sceneShowsJourney, showRouteOnScene,
@@ -246,12 +247,6 @@ function _gatedReqLabel(maxLoad, requiresUnarmored) {
 	const load = maxLoad === "light" ? "needs light" : `needs ≤ ${maxLoad}`;
 	return requiresUnarmored ? `${load}, unarmored` : load;
 }
-
-// Load tiers lightest→heaviest, so a gated move is active when the current tier is at
-// or below its cap. `null` (nothing carried) ranks as light. Only these three tiers are
-// ever looked up: _gatedMovesFor receives an overloaded PC's tier already collapsed to
-// "heavy", and a move's maxLoad is only ever light/normal/heavy.
-const _LOAD_RANK = { light: 0, normal: 1, heavy: 2 };
 
 // The display label for each tier bucket. The pill's CSS class is the bucket key itself
 // (light/normal/heavy/over), so it needs no separate field.
@@ -3495,14 +3490,17 @@ export class ExpeditionDialog extends StepperDialog {
 	// the common gate; Uncanny Reflexes also needs the PC unarmored (worn-armor base 0),
 	// checked via the snapshot's wornArmor.
 	_gatedMovesFor(snap, tier, wornArmor = 0) {
-		const cur = _LOAD_RANK[tier] ?? 0;
 		return (snap?.moves ?? [])
 			.flatMap(cat => cat.moves ?? [])
 			.filter(m => m.owned && m.maxLoad)
 			.map(m => {
-				const loadOk = cur <= (_LOAD_RANK[m.maxLoad] ?? 0);
+				const loadOk = !overLoadGate(m.maxLoad, tier);
 				const active = m.requiresUnarmored ? (loadOk && wornArmor === 0) : loadOk;
-				return { name: m.name, active, req: _gatedReqLabel(m.maxLoad, m.requiresUnarmored) };
+				// Only the clause that names the load, when the move prints others it leaves alone:
+				// Catlike's "act with care" goes quiet under a heavy load, its hiding in shadows does
+				// not, so the row names the clause rather than crossing out the whole move.
+				const { partial, clause } = loadGatedClause(m.description);
+				return { name: partial ? `${m.name} (${clause})` : m.name, active, req: _gatedReqLabel(m.maxLoad, m.requiresUnarmored) };
 			});
 	}
 

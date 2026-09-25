@@ -131,6 +131,9 @@
 				      title trailing after. It rolls too — see the chip's own handler. --}}
 				<strong class="stonetop-item-name{{#if (and owned rollType)}} rollable move-rollable{{/if}}"{{#if (and owned rollType)}} data-roll="{{rollType}}" data-mod=""{{/if}}>{{name}}</strong>
 				{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
+				{{!-- The load on the sheet is heavier than this move's trigger allows (Catlike, Free
+				      Running). Display only: actors/character/load-gates.js. --}}
+				{{#if loadGateNote}}<span class="stonetop-move-load-tag" data-tooltip="{{localize 'stonetop.loadGate.tooltip'}}" data-tooltip-direction="UP">{{loadGateNote}}</span>{{/if}}
 				{{#if requirementsUnmet}}<i class="fas fa-triangle-exclamation stonetop-move-req-warning" data-tooltip="You own this move but do not meet its requirement{{#if requiresLabel}} ({{requiresLabel}}){{/if}}. Add the missing prerequisite, or drop this move." data-tooltip-direction="UP" aria-hidden="true"></i>{{/if}}
 				{{#if markBudget.needsChoice}}<i class="fas fa-hand-pointer stonetop-move-choice-needed" data-tooltip="This move has selections left to make ({{markBudget.used}} of {{markBudget.max}} chosen). Tap the hand to jump into the moves editor and choose the rest." data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
 				{{#if statChoiceNeeded}}<i class="fas fa-hand-pointer stonetop-move-stat-choice-needed" data-tooltip="You took this move but haven't chosen which stat to raise, so it isn't boosting anything yet. Tap the hand to pick a stat (+1, max +{{statChoiceNeeded.cap}})." data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}

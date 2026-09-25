@@ -30,7 +30,7 @@ import {grantedWeaponAttackFor, rollCharacterDamageAt, rollFollowerDamageAt} fro
 import {offerBattleJoyOnDamage} from "../../combat/battle-joy-offer.js";
 import {ownDamageMode} from "../../fight/hero-moves.js";
 import {followerInFight} from "../../fight/follower-fight.js";
-import {ALT_STAT_GRANTS} from "../../data/alt-stat-grants.js";
+import {altStatGrantsFor} from "../../data/alt-stat-grants.js";
 import {readOnboardingResume, writeOnboardingResume, clearOnboardingResume} from "./onboarding-resume.js";
 import {trackCreationFlow} from "./creation-flow.js";
 import {CharacterLedger} from "./CharacterLedger.js";
@@ -51,7 +51,7 @@ import {defendReadinessHold} from "../../combat/defend-readiness.js";
 import {dieFromDamage, printedBlow} from "../../utils/damage.js";
 import {normalizeDamageDie} from "../../utils/damage-die.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
-import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct} from "../../utils/strings.js";
+import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct, stripHtmlToText} from "../../utils/strings.js";
 import {playbookIconPath, partyCharacters} from "../../utils/playbook-actors.js";
 import {postMoveToChat, moveChatCard, pickableMoveDescription} from "../../utils/chat.js";
 import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
@@ -66,6 +66,7 @@ import {STRUGGLE_MOVE} from "../../struggle/struggle-rules.js";
 import {rollProvisions, ON_THE_HOOF} from "./provisions.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
 import {knowThingsRollChoices, withAdvantage, KNOW_THINGS_STAT} from "./arcana-identify.js";
+import {movePickBonusesFor} from "./move-pick-bonuses.js";
 import {statRuleIssues} from "./stat-rules.js";
 import {ARTIFACT_STATE, artifactStateForTier, knowThingsArtifactResults, seekInsightArtifactResults,
 	ARTIFACT_INSIGHT_QUESTIONS, ARTIFACT_LEAD_SUGGESTIONS} from "./artifact-identify.js";
@@ -88,7 +89,7 @@ import {withSectionEditing} from "../../utils/section-editing.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {annotateInvocationEffects, splitEmpoweredEffect} from "./invocation-effects.js";
 import {CONSECRATED_FLAME, INVOKE_THE_SUN_GOD, EMPOWERED_INVOCATIONS, ownsMoveNamed, showHolyLight} from "./holy-light.js";
-import {ownedMoveNames, ownedMove, ownsLearnedMoveNamed} from "./owns-move.js";
+import {ownedMoveNames, ownedMove, ownsLearnedMoveNamed, isMoveLearned} from "./owns-move.js";
 import {invocationLabel, invokeNotice, readOngoing, resolveInvocationUse} from "./ongoing-invocation.js";
 import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE} from "./condemn.js";
 import {readyRulebookIcon, openSharedRulebook} from "../../books/rulebook-icons.js";
@@ -6094,7 +6095,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const askItem = this._statChoiceMoveForRollable(rollable);
 			if (askItem) { this._promptStatChoice(askItem, rollable, undefined, { shiftKey }); return "handled"; }
 
-			const altChoice = this._altStatChoiceForRollable(rollable);
+			const altChoice = await this._altStatChoiceForRollable(rollable);
 			if (altChoice) {
 				this._promptStatChoice(altChoice.item, rollable, altChoice.stats, { shiftKey, grants: altChoice.grants });
 				return "handled";
@@ -6121,26 +6122,50 @@ export function createStonetopCharacterSheetClass(Base) {
 		// { item, stats: [default, ...alts], grants: [grantingMove, …] } or null — the
 		// granting moves come back so the picker can show the rule that earned the extra
 		// stat (their own text carries the fictional trigger). See ALT_STAT_GRANTS.
-		_altStatChoiceForRollable(rollable) {
+		//
+		// Only a LEARNED move grants: an un-learned Skill at Arms is kept on the sheet switched
+		// off, and must not go on offering +DEX on a Clash. A background row (the Fox's The
+		// Natural) grants to the character who took it, and is quoted by the background's own
+		// sentence about the move, read off the playbook.
+		async _altStatChoiceForRollable(rollable) {
 			const itemId = rollable.closest(".item")?.dataset.itemId;
 			if (!itemId) return null;
 			const item = this.actor.items.get(itemId);
 			if (!item || item.type !== "move") return null;
 			const defaultStat = normalizeRollType(item.system?.rollType);
 			if (!defaultStat || !_STAT_KEYS.has(defaultStat)) return null; // skip "ask"/formula moves
-			const owned = new Map(this.actor.items.filter(i => i.type === "move").map(i => [i.name, i]));
-			const alts = [];
+			const learned = new Map(this.actor.items.filter(i => i.type === "move" && isMoveLearned(i)).map(i => [i.name, i]));
+			const rows = altStatGrantsFor({ moveName: item.name, defaultStat }, {
+				learnedMoveNames: learned.keys(),
+				...this._altStatBackground(),
+			});
+			if (!rows.length) return null;
 			const grants = [];
-			for (const g of ALT_STAT_GRANTS) {
-				const matches = (g.whenMove && g.whenMove === item.name)
-					|| (g.whenDefaultStat && g.whenDefaultStat === defaultStat);
-				if (matches && owned.has(g.ownsMove) && g.altStat !== defaultStat && !alts.includes(g.altStat)) {
-					alts.push(g.altStat);
-					grants.push(owned.get(g.ownsMove));
-				}
+			for (const g of rows) {
+				grants.push(g.ownsMove ? learned.get(g.ownsMove) : await this._backgroundGrantQuote(g.background, item.name));
 			}
-			if (!alts.length) return null;
-			return { item, stats: [defaultStat, ...alts], grants };
+			return { item, stats: [defaultStat, ...rows.map(g => g.altStat)], grants };
+		}
+
+		/** Who this character is, as an ALT_STAT_GRANTS background row asks it. */
+		_altStatBackground() {
+			return {
+				playbook:   this.actor.system?.playbook?.name ?? null,
+				background: this._stonetopCharacter?.background?.selectedSlug || null,
+			};
+		}
+
+		/**
+		 * A background that grants an alternate stat, shaped as the stat picker quotes a granting
+		 * move: its label, and the paragraph of its text that names `moveName` (the rest of a
+		 * background is who the character was, not the rule).
+		 */
+		async _backgroundGrantQuote(background, moveName) {
+			const found = ((await this._stonetopCharacter?.playbook?.())?.backgrounds ?? [])
+				.find(b => b.slug === background.slug);
+			const paragraphs = String(found?.description ?? "").match(/<p\b[^>]*>[\s\S]*?<\/p>/gi) ?? [];
+			const rule = paragraphs.filter(p => stripHtmlToText(p).includes(moveName)).join("");
+			return { name: background.label, system: { description: rule } };
 		}
 
 		// The pre-roll prompt (RollDialog.js), titled with whatever this sheet knows the roll by.
@@ -8003,7 +8028,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Naturalist's advantage) gets asked which apply, since every one of those triggers
 			// is fiction the system can't see. Everyone else rolls straight through, so the
 			// ordinary case stays a single click.
-			const choices = knowThingsRollChoices(moves.map(i => i.name));
+			// LEARNED moves only: one switched off on the sheet bends nothing.
+			const choices = knowThingsRollChoices(moves.filter(isMoveLearned).map(i => i.name), this._altStatBackground());
 			const picked  = choices.hasChoice
 				? await this._promptIdentifyRoll(choices, moves)
 				: { stat: KNOW_THINGS_STAT, advantage: false };
@@ -8256,7 +8282,9 @@ export function createStonetopCharacterSheetClass(Base) {
 					?? `<p>When you <strong><em>study a situation or person, looking to the GM for insight</em></strong>, roll +WIS.</p>`,
 				moveResults: buildMoveTierResults(seekInsightArtifactResults()),
 			});
-			if (classifyResult(Number(roll?.total) || 0).key === "failure") return;
+			// A miss asks nothing, unless the roller asks one "even on a 6-" (Perceptive).
+			if (classifyResult(Number(roll?.total) || 0).key === "failure"
+				&& !movePickBonusesFor(this.actor, "Seek Insight").some(b => b.missFloor)) return;
 			await this._postMoveCard(
 				game.i18n.format("stonetop.artifact.insightTitle", { name: knowledge.name }),
 				`<ul>${ARTIFACT_INSIGHT_QUESTIONS.map(q => `<li>${escHtml(q)}</li>`).join("")}</ul>`);

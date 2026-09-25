@@ -422,18 +422,13 @@ export function pickableMoveDescription(description) {
 	// Read from the WHOLE move, lead-in and the prose below the bullets both.
 	const tiers = pickTiersFrom(`${lead} ${below}`);
 	// (pickListItem is exported below — one emitter for the two surfaces that print these.)
-	const limitAttrs = typeof limits === "number"
-		? ` data-pick-max="${limits}"`
-		: Object.entries(limits ?? {}).map(([tier, n]) => ` data-pick-max-${tier}="${n}"`).join("");
-	// Stamped only when a tier was actually read. An empty answer is "nothing is known", and the
-	// reader (utils/pick-tally.js#tierOffersPicks) must go on showing the list for it.
-	const tierAttr = tiers.length ? ` data-pick-tiers="${tiers.join(" ")}"` : "";
+	const stamp = pickListStampAttrs(limits, tiers);
 
 	// The item's own markup, raw: it carries the move's ◇/○/□ glyphs and emphasis, and the
 	// description it came from is rendered raw by moveChatCard for exactly that reason.
 	const items = list.items.map((inner, i) => pickListItem(inner, i)).join("");
 	return html.slice(0, list.index)
-		+ `<ul class="stonetop-picklist"${limitAttrs}${tierAttr}>${items}</ul>`
+		+ `<ul class="stonetop-picklist"${stamp}>${items}</ul>`
 		+ html.slice(list.index + list.length);
 }
 
@@ -493,10 +488,40 @@ const _PICKLIST_OPEN_RE = /<ul class="stonetop-picklist"([^>]*)>/i;
 export function descriptionPickTiers(description) {
 	const open = _PICKLIST_OPEN_RE.exec(String(description ?? ""));
 	if (!open) return [];
-	const stamped = /data-pick-tiers="([^"]*)"/i.exec(open[1])?.[1];
-	if (!stamped) return [...TIER_KEYS];
-	const named = new Set(stamped.split(/\s+/).filter(Boolean));
-	return TIER_KEYS.filter(tier => named.has(tier));
+	const { tiers } = readPickListStamp(open[1]);
+	if (!tiers.length) return [...TIER_KEYS];
+	return TIER_KEYS.filter(tier => tiers.includes(tier));
+}
+
+/**
+ * A pick list's STAMP, the attributes on its `<ul>` saying how many each tier may take and which
+ * tiers reach it: written here for pickableMoveDescription, read back by descriptionPickTiers and by
+ * move-pick-bonuses.js#applyPickBonuses, which rewrites it. One format, spelled once.
+ *
+ * `limits` is a flat count (`data-pick-max`) or `{ tier: n }` (`data-pick-max-<tier>`). `tiers` is
+ * stamped only when a tier was actually read: an empty answer is "nothing is known", and the reader
+ * (utils/pick-tally.js#tierOffersPicks) must go on showing the list for it.
+ */
+export function pickListStampAttrs(limits, tiers = []) {
+	const limitAttrs = typeof limits === "number"
+		? ` data-pick-max="${limits}"`
+		: Object.entries(limits ?? {}).map(([tier, n]) => ` data-pick-max-${tier}="${n}"`).join("");
+	const tierAttr = tiers.length ? ` data-pick-tiers="${tiers.join(" ")}"` : "";
+	return limitAttrs + tierAttr;
+}
+
+/**
+ * That stamp read back off a list's opening-tag attributes: `caps`, each tier's count (a flat count
+ * spread over every tier; 0 for uncapped), and `tiers`, the tiers it names (empty when unstamped,
+ * which reaches every tier).
+ */
+export function readPickListStamp(attrs) {
+	const attr = name => new RegExp(`\\s${name}="([^"]*)"`, "i").exec(attrs ?? "")?.[1] ?? null;
+	const flat = Number(attr("data-pick-max")) || 0;
+	return {
+		caps:  Object.fromEntries(TIER_KEYS.map(t => [t, flat || Number(attr(`data-pick-max-${t}`)) || 0])),
+		tiers: (attr("data-pick-tiers") ?? "").split(/\s+/).filter(Boolean),
+	};
 }
 
 /**

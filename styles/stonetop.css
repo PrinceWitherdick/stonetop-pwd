@@ -4504,6 +4504,22 @@ input.stonetop-name-field {
 	cursor: pointer;
 }
 
+/* A load-gated move the sheet's load has switched off (actors/character/load-gates.js): the roll
+   chip's box, dashed and not clickable, since it is a note about the move rather than a way in. */
+.stonetop-move-load-tag {
+	display: inline-block;
+	text-box: trim-both cap alphabetic;
+	box-sizing: border-box;
+	padding: calc(1px + var(--st-trim-top)) 6px calc(1px + var(--st-trim-bottom));
+	border: 1px dashed var(--color-text-dark-secondary);
+	border-radius: var(--st-radius-sm);
+	font-size: calc(0.72rem * var(--stonetop-font-scale, 1));
+	font-style: italic;
+	line-height: 1.2;
+	line-height: round(calc(0.72rem * var(--stonetop-font-scale, 1) * 1.2), 1px);
+	color: var(--color-text-dark-secondary);
+	cursor: help;
+}
 /* -- Read-only tab (not in edit mode) ----------------------------- */
 
 .stonetop-readonly input,
