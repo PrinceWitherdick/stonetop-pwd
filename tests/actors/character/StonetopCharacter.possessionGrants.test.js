@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { TestCharacterBuilder } from "../../fakes/TestCharacterBuilder.js";
 import { FakeActorBuilder } from "../../fakes/FakeActorBuilder.js";
+import { FakeInventoryRepository } from "../../fakes/FakeInventoryRepository.js";
+import { OutfitItemBuilder } from "../../../module/model/OutfitItem.js";
+import { repairAllPossessionGrants } from "../../../module/migration/possession-grant-repair.js";
 
 // A playbook whose Apiary bundles two small + one ◇ regular item, plus a Mastiffs
 // possession with no grantsItems (a follower — nothing to materialize).
@@ -441,5 +444,214 @@ describe("StonetopCharacter — possession gear renders in the card, not the col
 			.build();
 		const snap = await new TestCharacterBuilder(actor).addPlaybook(PLAYBOOK).build().buildSnapshot();
 		expect(snap.inventory.outfit.smallItems.some(i => i.name === "A write-in")).toBe(true);
+	});
+});
+
+// ── Outfit: "You can select ... Any of your special possessions" ─────────────────
+// The sheet's load counts possession gear (grantsItems bundles and chosen gear), but the Outfit
+// window used to list only the columns, treasures and arcana. So a Fox with the Burglar's kit
+// marked saw 0 load in Outfit and landed heavy on the sheet, and the kit could be neither marked
+// nor unmarked there: its old marks survived every Outfit, because both stores merge.
+describe("StonetopCharacter: Outfit lists and writes special-possession gear", () => {
+	const KIT_AND_WEAPONS = {
+		slug: "the-heavy",
+		name: "The Heavy",
+		specialPossessions: {
+			options: [
+				{
+					slug: "burglars-kit",
+					label: "<strong>Burglar's kit</strong>",
+					grantsItems: [
+						{ name: "Grappling hook", column: "regular", weight: 1 },
+						{ name: "Lockpicks", column: "small" },
+					],
+				},
+				{
+					slug: "weapons-of-war",
+					label: "Weapons of war",
+					choices: {
+						gear: true,
+						options: [
+							{ slug: "sword",      label: "◇ Sword, iron (<em>close</em>, +1 damage)" },
+							{ slug: "long-spear", label: "◇◇ Long spear, fine steel (<em>reach</em>, 2 piercing)" },
+							{ slug: "shield",     label: "A shield, bearing ___'s crest", shield: true },
+						],
+					},
+				},
+			],
+		},
+	};
+
+	function build({ checked = {}, carried = {} } = {}) {
+		const actor = new FakeActorBuilder()
+			.withPlaybook("the-heavy", "The Heavy")
+			.withItems([
+				grantedItem({ _id: "hook", name: "Grappling hook", sourcePossession: "burglars-kit", inventoryColumn: "regular" }),
+				grantedItem({ _id: "picks", name: "Lockpicks", sourcePossession: "burglars-kit", inventoryColumn: "small" }),
+			])
+			.withFlag("possessions.selected", ["burglars-kit", "weapons-of-war"])
+			.withFlag("possessions.subChoices", { "weapons-of-war": ["sword", "long-spear", "shield"] })
+			.withFlag("possessions.choiceTexts", { "weapons-of-war:shield": "Aratis" })
+			.withFlag("possessions.choiceCarried", carried)
+			.withFlag("inventory.checked", checked)
+			.build();
+		return { actor, character: new TestCharacterBuilder(actor).addPlaybook(KIT_AND_WEAPONS).build() };
+	}
+
+	it("carries granted and chosen gear into the Outfit snapshot, each row keyed by where its mark lives", async () => {
+		const { character } = build({ checked: { hook: true }, carried: { "weapons-of-war:long-spear": true } });
+		const { outfit } = (await character.buildSnapshot()).inventory;
+
+		expect(outfit.possessionRegular).toEqual([
+			{ slug: "hook", name: "Grappling hook", note: "Burglar's kit", weight: 1, checked: true },
+			{ slug: "weapons-of-war:sword", name: "Sword, iron (close, +1 damage)", note: "Weapons of war", weight: 1, checked: false },
+			{ slug: "weapons-of-war:long-spear", name: "Long spear, fine steel (reach, 2 piercing)", note: "Weapons of war", weight: 2, checked: true },
+		]);
+		// No ◇, so the small column; the fill-in blank reads with what the player wrote into it.
+		expect(outfit.possessionSmall).toEqual([
+			{ slug: "picks", name: "Lockpicks", note: "Burglar's kit", weight: 1, checked: false },
+			{ slug: "weapons-of-war:shield", name: "A shield, bearing Aratis's crest", note: "Weapons of war", weight: 0, checked: false },
+		]);
+		// And the load those rows stand for is the load the sheet shows.
+		expect(outfit.load.totalMarks).toBe(3);
+	});
+
+	it("applyOutfit sends a gear choice's mark to choiceCarried and an item's to inventory.checked, and unmarking clears both", async () => {
+		const { character } = build({ checked: { hook: true, picks: true }, carried: { "weapons-of-war:long-spear": true } });
+
+		await character.applyOutfit({
+			hook: false, picks: true,
+			"weapons-of-war:sword": true, "weapons-of-war:long-spear": false, "weapons-of-war:shield": false,
+		}, 0, 0);
+
+		const { outfit } = (await character.buildSnapshot()).inventory;
+		const marks = Object.fromEntries([...outfit.possessionRegular, ...outfit.possessionSmall].map(r => [r.slug, r.checked]));
+		expect(marks).toEqual({
+			hook: false, picks: true,
+			"weapons-of-war:sword": true, "weapons-of-war:long-spear": false, "weapons-of-war:shield": false,
+		});
+		expect(outfit.load.totalMarks).toBe(1);
+		// A composite key never lands in the item store, where nothing would read it.
+		expect(Object.keys(character._inventory.checked).some(k => k.includes(":"))).toBe(false);
+	});
+});
+
+// ── Repair: gear made before its grant was corrected ────────────────────────────
+// The Tannery cuirass was made as {modifier: 1} from 1.3.2 to 1.6.0. The grant now says
+// {base: 1}, but gear is made once and never revisited, so those cuirasses went on stacking on a
+// hauberk (3 armor with a base-2 hauberk) and reading as armored by modifier alone.
+describe("StonetopCharacter: repairPossessionGrants", () => {
+	const FOX = {
+		slug: "the-fox",
+		name: "The Fox",
+		specialPossessions: {
+			options: [
+				{
+					slug: "tannery",
+					label: "Tannery",
+					grantsItems: [{ name: "Boiled leather cuirass (1 armor)", column: "regular", weight: 1, armor: { base: 1 } }],
+				},
+				{
+					slug: "burglars-kit",
+					label: "Burglar's kit",
+					grantsItems: [{
+						name: "Lantern", sourceKey: "Lantern (close, area)", column: "regular", weight: 1,
+						resource: { max: 5, title: null, labels: [] }, resourceSuffix: "hours, close, area",
+					}],
+				},
+			],
+		},
+	};
+	const HAUBERK = new OutfitItemBuilder()
+		.withSlug("hauberk").withName("Hauberk").withWeight(2).withInventoryColumn("regular")
+		.withArmor({ base: 2 }).build();
+
+	const oldCuirass = (overrides = {}) => ({
+		_id: "cuirass", type: "move", name: "Boiled leather cuirass (1 armor)",
+		system: {
+			moveType: "inventory-custom", inventoryColumn: "regular", weight: 1, armor: { modifier: 1 },
+			sourcePossession: "tannery", sourceKey: "Boiled leather cuirass (1 armor)", ...overrides,
+		},
+	});
+	const oldLantern = () => ({
+		_id: "lantern", type: "move", name: "Lantern (close, area)",
+		system: {
+			moveType: "inventory-custom", inventoryColumn: "regular", weight: 1,
+			resource: { max: 6, title: null, labels: [] },
+			sourcePossession: "burglars-kit", sourceKey: "Lantern (close, area)",
+		},
+	});
+
+	function build(items, { resources = {}, checked = { hauberk: true, cuirass: true }, selected = ["tannery", "burglars-kit"], applied } = {}) {
+		const builder = new FakeActorBuilder()
+			.withPlaybook("the-fox", "The Fox")
+			.withItems(items)
+			.withFlag("possessions.selected", selected)
+			.withFlag("inventory.checked", checked)
+			.withFlag("inventory.resources", resources);
+		if (applied) builder.withFlag("possessionGrantsApplied", applied);
+		const actor = builder.build();
+		const character = new TestCharacterBuilder(actor)
+			.addPlaybook(FOX)
+			.withInventoryRepo(new FakeInventoryRepository([HAUBERK]))
+			.build();
+		return { actor, character };
+	}
+
+	it("turns an old {modifier: 1} cuirass into {base: 1}, so it no longer stacks with a base-2 hauberk", async () => {
+		const { actor, character } = build([oldCuirass()]);
+		expect((await character.buildSnapshot()).vitals.armor).toBe(3);
+
+		expect(await character.repairPossessionGrants()).toBe(1);
+
+		expect(actor.items[0].system.armor).toEqual({ base: 1 });
+		expect((await character.buildSnapshot()).vitals.armor).toBe(2);
+	});
+
+	it("is idempotent: a second run finds nothing to write", async () => {
+		const { actor, character } = build([oldCuirass()]);
+		await character.repairPossessionGrants();
+		expect(await character.repairPossessionGrants()).toBe(0);
+		expect(actor.updateEmbeddedDocuments).toHaveBeenCalledTimes(1);
+	});
+
+	it("leaves the marks and a track's count alone, clamping the count only when the track shrank past it", async () => {
+		const checked = { hauberk: true, cuirass: true, lantern: true };
+		const { character } = build([oldCuirass(), oldLantern()], { checked, resources: { lantern: 3 } });
+		await character.repairPossessionGrants();
+		expect(character._inventory.checked).toEqual(checked);
+		expect(character._inventory.resources.lantern).toBe(3);
+
+		const full = build([oldLantern()], { resources: { lantern: 6 } });
+		await full.character.repairPossessionGrants();
+		expect(full.actor.items[0].system.resource).toEqual({ max: 5, title: null, labels: [] });
+		expect(full.character._inventory.resources.lantern).toBe(5);
+	});
+
+	it("never touches gear with no possession tag, however much it looks like a grant", async () => {
+		const handMade = oldCuirass({ sourcePossession: null, sourceKey: null });
+		const { actor, character } = build([handMade]);
+		expect(await character.repairPossessionGrants()).toBe(0);
+		expect(actor.updateEmbeddedDocuments).not.toHaveBeenCalled();
+		expect(actor.items[0].system.armor).toEqual({ modifier: 1 });
+	});
+
+	it("runs as part of ensurePossessionGrants when that resolves the playbook", async () => {
+		// burglars-kit not yet applied, so the back-fill resolves the playbook and repairs too.
+		const { actor, character } = build([oldCuirass()], { applied: { tannery: true } });
+		await character.ensurePossessionGrants();
+		expect(actor.items[0].system.armor).toEqual({ base: 1 });
+	});
+
+	it("the world sweep repairs every character and counts the ones it wrote to", async () => {
+		const broken = build([oldCuirass()]);
+		const fine = build([oldCuirass({ armor: { base: 1 } })]);
+		const actors = [
+			{ type: "character", typedActor: broken.character },
+			{ type: "character", typedActor: fine.character },
+			{ type: "npc", typedActor: { repairPossessionGrants: () => { throw new Error("not a character"); } } },
+		];
+		expect(await repairAllPossessionGrants({ actors })).toBe(1);
+		expect(broken.actor.items[0].system.armor).toEqual({ base: 1 });
 	});
 });

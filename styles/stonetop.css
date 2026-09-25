@@ -14129,7 +14129,8 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	letter-spacing: 0.03em;
 }
 
-.stonetop-outfit-section-heading--arcana {
+.stonetop-outfit-section-heading--arcana,
+.stonetop-outfit-section-heading--possessions {
 	margin-top: 10px;
 }
 

@@ -65,6 +65,21 @@
 				<button type="button" class="stonetop-outfit-undefined-btn" data-pool="regular" data-dir="1"{{#unless canAddUndefinedRegular}} disabled{{/unless}}>+</button>
 				<span class="stonetop-glyph stonetop-glyph--diamond-selected">◆</span>
 			</div>
+
+			{{#if hasPossessionRegular}}
+			<h3 class="stonetop-outfit-section-heading stonetop-outfit-section-heading--possessions">{{{localize "stonetop.specialMoves.outfit.possessionItems"}}}</h3>
+			<hr class="stonetop-inv-separator">
+			{{#each possessionRegular}}
+			<label class="stonetop-outfit-item{{#if checked}} is-checked{{/if}}">
+				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{slug}}" {{#if checked}}checked{{/if}}>
+				<span class="stonetop-outfit-item-diamonds">
+					{{#each (times weight)}}<span class="stonetop-outfit-diamond"></span>{{/each}}
+				</span>
+				<span class="stonetop-outfit-item-name">{{name}}</span>
+				{{#if note}}<span class="stonetop-outfit-item-note">({{note}})</span>{{/if}}
+			</label>
+			{{/each}}
+			{{/if}}
 		</section>
 
 		{{!-- Small items --}}
@@ -89,6 +104,19 @@
 				<button type="button" class="stonetop-outfit-undefined-btn" data-pool="small" data-dir="1"{{#unless canAddUndefinedSmall}} disabled{{/unless}}>+</button>
 				<span class="stonetop-glyph stonetop-glyph--checkbox">□</span>
 			</div>
+
+			{{#if hasPossessionSmall}}
+			<h3 class="stonetop-outfit-section-heading stonetop-outfit-section-heading--possessions">{{{localize "stonetop.specialMoves.outfit.possessionItems"}}}</h3>
+			<hr class="stonetop-inv-separator">
+			{{#each possessionSmall}}
+			<label class="stonetop-outfit-item stonetop-outfit-item-small{{#if checked}} is-checked{{/if}}">
+				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{slug}}" {{#if checked}}checked{{/if}}>
+				<span class="stonetop-outfit-square"></span>
+				<span class="stonetop-outfit-item-name">{{name}}</span>
+				{{#if note}}<span class="stonetop-outfit-item-note">({{note}})</span>{{/if}}
+			</label>
+			{{/each}}
+			{{/if}}
 
 			{{#if hasArcana}}
 			<h3 class="stonetop-outfit-section-heading stonetop-outfit-section-heading--arcana">{{{localize "stonetop.specialMoves.outfit.arcanaItems"}}}</h3>

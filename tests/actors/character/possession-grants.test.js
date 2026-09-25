@@ -1,9 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import {
 	grantsToCreate,
 	grantAdoptionKeys,
 	grantSourceMap,
 	itemGrantKey,
+	grantOfTaggedItem,
+	grantRepair,
 } from "../../../module/actors/character/possession-grants.js";
 
 const APIARY = [
@@ -64,10 +66,10 @@ describe("grantsToCreate", () => {
 
 	it("passes a worn item's armor shape through to system.armor", () => {
 		const [item] = grantsToCreate(
-			[{ name: "Boiled leather cuirass (1 armor)", column: "regular", weight: 1, armor: { modifier: 1 } }],
+			[{ name: "Boiled leather cuirass (1 armor)", column: "regular", weight: 1, armor: { base: 1 } }],
 			new Set(), { slug: "tannery", sourceLabel: "Tannery" },
 		);
-		expect(item.system.armor).toEqual({ modifier: 1 });
+		expect(item.system.armor).toEqual({ base: 1 });
 	});
 
 	it("leaves armor off items that don't grant any", () => {
@@ -165,5 +167,92 @@ describe("itemGrantKey", () => {
 		expect(itemGrantKey({ name: "Nails", system: { inventoryColumn: "small" } })).toBe("small:Nails");
 		expect(itemGrantKey({ name: "Nails", system: {} })).toBe("small:Nails");
 		expect(itemGrantKey({ name: "Nails" })).toBe("small:Nails");
+	});
+});
+
+// Gear is made once and nothing revisits it, so a grant corrected in a later release (the Tannery
+// cuirass, `{modifier: 1}` from 1.3.2 to 1.6.0, `{base: 1}` now) stayed wrong on the characters
+// who took it. These two decide which grant a tagged item came from and what to rewrite.
+describe("grantOfTaggedItem", () => {
+	const BURGLARS_KIT = {
+		slug: "burglars-kit",
+		grantsItems: [
+			// Renamed, keeping the old name as its sourceKey: the items made before still carry it.
+			{ name: "Lantern", sourceKey: "Lantern (close, area)", column: "regular", weight: 1, resource: { max: 5 } },
+			{ name: "Grappling hook", column: "regular", weight: 1 },
+		],
+	};
+	const tagged = (name, sourceKey) => ({ name, system: { sourcePossession: "burglars-kit", sourceKey } });
+
+	it("finds the grant by the sourceKey it stamped, whatever the item is called now", () => {
+		expect(grantOfTaggedItem(tagged("Lantern (close, area)", "Lantern (close, area)"), BURGLARS_KIT).name).toBe("Lantern");
+		expect(grantOfTaggedItem(tagged("Grappling hook", "Grappling hook"), BURGLARS_KIT).name).toBe("Grappling hook");
+	});
+
+	it("falls back to the item's current name when its sourceKey no longer names a grant", () => {
+		expect(grantOfTaggedItem(tagged("Grappling hook", "Hook (old)"), BURGLARS_KIT).name).toBe("Grappling hook");
+	});
+
+	it("names no grant for an item it cannot place, or a name two grants share", () => {
+		expect(grantOfTaggedItem(tagged("Crowbar", "Crowbar"), BURGLARS_KIT)).toBeNull();
+		expect(grantOfTaggedItem(tagged("Lantern", null), { grantsItems: [
+			{ name: "Lantern", column: "regular" }, { name: "Lanterns", aliases: ["Lantern"], column: "regular" },
+		] })).toBeNull();
+		expect(grantOfTaggedItem(tagged("Lantern", "Lantern"), undefined)).toBeNull();
+	});
+});
+
+describe("grantRepair", () => {
+	const CUIRASS = { name: "Boiled leather cuirass (1 armor)", column: "regular", weight: 1, armor: { base: 1 } };
+	const item = system => ({ _id: "c", name: CUIRASS.name, system: { moveType: "inventory-custom", sourcePossession: "tannery", sourceKey: CUIRASS.name, ...system } });
+
+	const release = globalThis.game?.release;
+	afterEach(() => { if (globalThis.game) globalThis.game.release = release; });
+
+	it("turns an old stacking-modifier cuirass into worn armor, DELETING the modifier (v13 spelling)", () => {
+		const repair = grantRepair(item({ inventoryColumn: "regular", weight: 1, armor: { modifier: 1 } }), CUIRASS);
+		// An update MERGES into an object field, so writing {base: 1} alone would leave a
+		// {base: 1, modifier: 1} that still counts twice. The modifier has to be removed.
+		expect(repair.update).toEqual({ "system.armor.base": 1, "system.armor.-=modifier": null });
+		expect(repair.resourceMax).toBeNull();
+	});
+
+	it("deletes with a ForcedDeletion instance on v14", () => {
+		globalThis.game.release = { generation: 14 };
+		const repair = grantRepair(item({ inventoryColumn: "regular", weight: 1, armor: { modifier: 1 } }), CUIRASS);
+		expect(repair.update["system.armor.base"]).toBe(1);
+		expect(repair.update["system.armor.modifier"]).toBeInstanceOf(foundry.data.operators.ForcedDeletion);
+	});
+
+	it("is null for an item that already matches, so a second run writes nothing", () => {
+		expect(grantRepair(item({ inventoryColumn: "regular", weight: 1, armor: { base: 1 } }), CUIRASS)).toBeNull();
+		expect(grantRepair(item({ inventoryColumn: "small", weight: 1 }), { name: "Lime", column: "small" })).toBeNull();
+	});
+
+	it("corrects the column, a ◇ item's weight, and armor a grant has dropped or gained", () => {
+		expect(grantRepair(item({ inventoryColumn: "small", weight: 1, armor: { base: 1 } }), CUIRASS).update)
+			.toEqual({ "system.inventoryColumn": "regular" });
+		expect(grantRepair(item({ inventoryColumn: "regular", weight: 2, armor: { base: 1 } }), CUIRASS).update)
+			.toEqual({ "system.weight": 1 });
+		expect(grantRepair(item({ inventoryColumn: "regular", weight: 1, armor: { base: 1 } }), { ...CUIRASS, armor: undefined }).update)
+			.toEqual({ "system.armor": null });
+		expect(grantRepair(item({ inventoryColumn: "regular", weight: 1, armor: null }), CUIRASS).update)
+			.toEqual({ "system.armor": { base: 1 } });
+	});
+
+	it("resizes a uses track to the grant's max but leaves the rest of it, and the name, alone", () => {
+		const LANTERN = { name: "Lantern", sourceKey: "Lantern (close, area)", column: "regular", weight: 1, resource: { max: 5, title: null, labels: [] } };
+		const old = { _id: "l", name: "Lantern (close, area)", system: { inventoryColumn: "regular", weight: 1, resource: { max: 6, title: "Oil", labels: [] } } };
+		expect(grantRepair(old, LANTERN)).toEqual({ update: { "system.resource.max": 5 }, resourceMax: 5 });
+	});
+
+	it("gives an item with no track of its own none (the sheet reads the grant's already)", () => {
+		const WHISKY = { name: "Skins of fine whisky", column: "small", resource: { max: 2 } };
+		expect(grantRepair({ name: "Fine whisky", system: { inventoryColumn: "small" } }, WHISKY)).toBeNull();
+	});
+
+	it("does nothing without both an item and a grant", () => {
+		expect(grantRepair(item({ inventoryColumn: "regular" }), null)).toBeNull();
+		expect(grantRepair(null, CUIRASS)).toBeNull();
 	});
 });

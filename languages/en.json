@@ -423,6 +423,7 @@
         "loadBonusNote": "With <em><strong>{moves}</strong></em>, every load allows {bonus} more <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>: up to {light} light, {normal} normal, {heavy} heavy.",
         "arcanaItems": "Arcana",
         "treasureItems": "Treasures",
+        "possessionItems": "Special possessions",
         "smallItemLimit": "Mark up to <strong>{limit}</strong> small items (4+Prosperity)",
         "confirm": "Confirm Outfit",
         "totalWeight": "<span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> marked",

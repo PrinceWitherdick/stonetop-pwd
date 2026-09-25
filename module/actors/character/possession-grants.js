@@ -9,6 +9,8 @@
 // like any write-in) tagged with `sourcePossession`/`sourceKey` for sync, plus a
 // `sourceLabel` that drives the "from <possession>" note on the gear tab.
 
+import { deletionEntry } from "../../utils/foundry-compat.js";
+
 /**
  * Every name one grant answers to, qualified by the column it lands in
  * (`regular:Bee smokers` / `small:Honey`).
@@ -76,6 +78,91 @@ export function grantAdoptionKeys(slug, activeOptions = []) {
 		if (source?.slug === slug) mine.set(key, source.grant);
 	}
 	return mine;
+}
+
+/**
+ * The grant a TAGGED item was made from, within its own possession `opt`, or null.
+ *
+ * Asked by `sourceKey` first, because that is what grantsToCreate stamped and what a renamed
+ * grant keeps pointing at (the lanterns' `sourceKey` is their old name). Then by every name a
+ * grant answers to, first the item's `sourceKey` and then its current name, for an item whose
+ * grant has since been renamed without keeping the old spelling. A name two grants of the one
+ * possession both answer to matches neither: guessing there would rewrite the wrong item.
+ */
+export function grantOfTaggedItem(item, opt) {
+	const grants = (opt?.grantsItems ?? []).filter(g => g?.name);
+	const key    = item?.system?.sourceKey ?? null;
+	const one    = hits => (hits.length === 1 ? hits[0] : null);
+	const byKey  = key ? one(grants.filter(g => (g.sourceKey ?? g.name) === key)) : null;
+	if (byKey) return byKey;
+	const answersTo = (g, name) => [g.name, g.sourceKey, ...(g.aliases ?? [])].includes(name);
+	for (const name of [key, item?.name]) {
+		if (!name) continue;
+		const hit = one(grants.filter(g => answersTo(g, name)));
+		if (hit) return hit;
+	}
+	return null;
+}
+
+// Armor shapes compared as data: `{}` and null both mean "no armor", and key order is noise.
+function armorShape(armor) {
+	if (!armor || typeof armor !== "object") return null;
+	const entries = Object.entries(armor).filter(([, v]) => v != null).sort(([a], [b]) => a.localeCompare(b));
+	return entries.length ? Object.fromEntries(entries) : null;
+}
+
+/**
+ * What an item a possession granted has to change to match its grant AS AUTHORED NOW: the
+ * embedded-item update (dotted `system.*` keys, no `_id`) plus the new track size, or null when
+ * it already matches.
+ *
+ * Gear is materialized once (grantsToCreate) and never revisited, so a grant corrected after a
+ * character took it stayed wrong on that character forever: the Tannery's cuirass was made as a
+ * `{modifier: 1}` from 1.3.2 to 1.6.0 and still stacks on a hauberk in those worlds. Only what
+ * the grant itself defines is compared, which is the gear's rules shape: `armor`, `weight` (a ◇
+ * item's), `inventoryColumn` and the uses track's `max`. Never the name, the marks or the count
+ * on the track, which are the player's; the caller clamps that count when `resourceMax` shrinks.
+ *
+ * Armor keys the grant no longer has are DELETED rather than overwritten, because `system.armor`
+ * is an object field and an update merges into it: writing `{base: 1}` over `{modifier: 1}`
+ * would leave a `{base: 1, modifier: 1}` that counts twice. Pure but for `deletionEntry`, which
+ * picks the deletion spelling the running core applies.
+ *
+ * @returns {{update: object, resourceMax: number|null}|null}
+ */
+export function grantRepair(item, grant) {
+	if (!item || !grant) return null;
+	const sys    = item.system ?? {};
+	const update = {};
+	const column = grant.column === "regular" ? "regular" : "small";
+	if (sys.inventoryColumn !== column) update["system.inventoryColumn"] = column;
+	// Only a ◇ item's weight is the grant's; a small item carries whatever the model defaulted.
+	if (column === "regular") {
+		const weight = grant.weight ?? 1;
+		if (Number(sys.weight) !== weight) update["system.weight"] = weight;
+	}
+	const want = armorShape(grant.armor);
+	const have = armorShape(sys.armor);
+	if (JSON.stringify(want) !== JSON.stringify(have)) {
+		if (!want) update["system.armor"] = null;
+		else if (!have) update["system.armor"] = { ...want };
+		else {
+			for (const [k, v] of Object.entries(want)) if (have[k] !== v) update[`system.armor.${k}`] = v;
+			for (const k of Object.keys(sys.armor)) {
+				if (!(k in want)) { const [path, value] = deletionEntry(`system.armor.${k}`); update[path] = value; }
+			}
+		}
+	}
+	// The track's SIZE only. An item with no track of its own reads the grant's already
+	// (StonetopCharacter#_buildInventorySection's mapCustomItem), so there is nothing to correct.
+	let resourceMax = null;
+	const wantMax = Number(grant.resource?.max);
+	if (sys.resource && typeof sys.resource === "object" && Number.isFinite(wantMax)
+		&& Number(sys.resource.max) !== wantMax) {
+		update["system.resource.max"] = wantMax;
+		resourceMax = wantMax;
+	}
+	return Object.keys(update).length ? { update, resourceMax } : null;
 }
 
 // Build the embedded-item create payloads for a possession's grants, skipping any

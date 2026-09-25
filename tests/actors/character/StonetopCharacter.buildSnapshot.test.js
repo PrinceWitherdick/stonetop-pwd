@@ -477,7 +477,7 @@ describe("buildSnapshot — vitals", () => {
 	it("a checked possession-granted cuirass (custom item) adds its armor", async () => {
 		const cuirass = {
 			_id: "cuirass-1", type: "move", name: "Boiled leather cuirass (1 armor)",
-			system: { moveType: "inventory-custom", inventoryColumn: "regular", weight: 1, armor: { modifier: 1 }, sourcePossession: "tannery" },
+			system: { moveType: "inventory-custom", inventoryColumn: "regular", weight: 1, armor: { base: 1 }, sourcePossession: "tannery" },
 		};
 		const worn = new FakeActorBuilder().withItems([cuirass]).withFlag("inventory.checked", { "cuirass-1": true }).build();
 		const wornSnap = await new TestCharacterBuilder(worn).build().buildSnapshot();

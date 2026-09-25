@@ -62,7 +62,7 @@ import {CharacterInstincts} from "./CharacterInstincts.js";
 import {CharacterAppearance} from "./CharacterAppearance.js";
 import {CharacterOrigin} from "./CharacterOrigin.js";
 import {CharacterPossessions} from "./CharacterPossessions.js";
-import {grantsToCreate, grantSourceMap, grantAdoptionKeys, itemGrantKey} from "./possession-grants.js";
+import {grantsToCreate, grantSourceMap, grantAdoptionKeys, itemGrantKey, grantOfTaggedItem, grantRepair} from "./possession-grants.js";
 import {CharacterInventory} from "./CharacterInventory.js";
 import {maybeBeginAttack, maybeCounterOnMiss, maybeMissFx, attackMoveFor, attackFoeAdvantage, recordClashedFoes, rollMoveDamageAt} from "../../combat/attack-flow.js";
 import {aimPcAskRoll} from "../../pc-asks/pc-ask-flow.js";
@@ -315,6 +315,15 @@ function _splitInlineStatuses(label) {
 		statuses: [...parts, close >= 0 ? last.slice(0, close) : last].map(trim),
 		after:    close >= 0 ? last.slice(close) : "",
 	};
+}
+
+// A gear-choice row (StonetopCharacter#_buildChoiceGearByPossession) as one line of plain text:
+// the whole printed label, with what the player wrote into its blank ("A shield, bearing Aratis's
+// crest") and the blank left showing when they have written nothing.
+function _choiceGearText(row) {
+	const text  = stripHtmlToText(row?.fullLabel ?? row?.label ?? "");
+	const blank = splitFillBlank(text);
+	return blank.hasBlank && row?.fillValue ? `${blank.before}${row.fillValue}${blank.after}` : text;
 }
 
 // On the gear tab a possession's circle track renders in the component's top-right,
@@ -1229,6 +1238,25 @@ export class StonetopCharacter {
 		const choiceGearRegularAll   = [...choiceGearByPossession.values()].flatMap(b => b.regular);
 		const choiceGearSmallAll     = [...choiceGearByPossession.values()].flatMap(b => b.small);
 
+		// The same possession gear as plain Outfit rows, since Outfit lets you "select ... any of
+		// your special possessions" and the load above counts it. Without these the Outfit window
+		// showed a Fox with the Burglar's kit marked as carrying nothing, then the sheet came back
+		// heavy, and the gear could be neither marked nor unmarked there. Each row keeps the key
+		// its mark lives under: a granted item's id (inventory.checked) or a gear choice's
+		// `poss:choice` (possessions.choiceCarried), which applyOutfit sends back to the right store.
+		// Grouped by possession in the playbook's order, each row naming its possession.
+		const possessionLabels = new Map((playbookData?.specialPossessions?.options ?? [])
+			.map(opt => [opt.slug, stripHtmlToText(opt.label ?? "")]));
+		const outfitPossessionRows = column => [...new Set([...possessionLabels.keys(), ...grantedByPossession.keys(), ...choiceGearByPossession.keys()])]
+			.flatMap(slug => [
+				...(grantedByPossession.get(slug)?.[column] ?? [])
+					.map(i => ({ slug: i.slug, name: i.name, weight: i.weight, checked: i.checked })),
+				...(choiceGearByPossession.get(slug)?.[column] ?? [])
+					.map(r => ({ slug: `${slug}:${r.choiceSlug}`, name: _choiceGearText(r), weight: r.weight, checked: r.checked })),
+			].map(row => ({ ...row, note: possessionLabels.get(slug) || null })));
+		const outfitPossessionRegular = outfitPossessionRows("regular");
+		const outfitPossessionSmall   = outfitPossessionRows("small");
+
 		let possessions = null;
 		if (playbookData?.specialPossessions) {
 			const maxUsesMap = this.computePossessionMaxUses(playbookData.specialPossessions, ownedAllByName, actorLevel);
@@ -1369,6 +1397,8 @@ export class StonetopCharacter {
 			.withArcanaSmall(arcanaSmall)
 			.withTreasureRegular(treasureRegular)
 			.withTreasureSmall(treasureSmall)
+			.withPossessionRegular(outfitPossessionRegular)
+			.withPossessionSmall(outfitPossessionSmall)
 			.withSmallItemLimit(smallItemLimit)
 			.withSteadingName(steadingName)
 			.withLoadBonus(loadBonus)
@@ -1578,6 +1608,9 @@ export class StonetopCharacter {
 					label:          rowLabel,
 					// Re-attached after the inline circles: the label's closing paren.
 					labelAfter:     useInline ? inline.after : "",
+					// The whole printed line, inline statuses and all, for a surface that lists the
+					// gear as one line of text with no track to stand in for them (the Outfit window).
+					fullLabel:      label,
 					resourceInline: useInline,
 					weight,
 					// Worn/borne gear among the choices (the Judge's Makerglass shield) carries the
@@ -1960,9 +1993,21 @@ export class StonetopCharacter {
 	// nothing else to store. Outfit redefines the whole loadout, so the per-item
 	// draw records are cleared — its checked items are defined load, not drawn from
 	// the reserve. The pools and item marks stay freely editable afterwards.
+	//
+	// A special possession's chosen gear (Weapons of War) keeps its carry mark in a store of its
+	// own, possessions.choiceCarried, so its `poss:choice` keys are sent there and every other key
+	// to inventory.checked. The split is by the colon: a gear-choice key has one and no outfit
+	// slug or item id ever does (see _gearSources). Unmarked rows are written as `false`, which is
+	// what clears them: both stores merge, so a key left out would keep its old mark.
 	async applyOutfit(checkedMap, regularPool = 0, smallPool = 0) {
+		const itemMarks   = {};
+		const choiceMarks = {};
+		for (const [key, value] of Object.entries(checkedMap ?? {})) {
+			(key.includes(":") ? choiceMarks : itemMarks)[key] = !!value;
+		}
 		await Promise.all([
-			this._inventory.setAllChecked(checkedMap),
+			this._inventory.setAllChecked(itemMarks),
+			this._possessions.setChoicesCarried(choiceMarks),
 			this._inventory.setRegularPool(regularPool),
 			this._inventory.setSmallPool(smallPool),
 			this._inventory.setDrawn({}),
@@ -2377,7 +2422,8 @@ export class StonetopCharacter {
 		if (!selected.length) return;
 		const applied = this._possessionGrantsApplied();
 		if (selected.every(slug => applied[slug])) return;
-		const options = (await this.playbook())?.specialPossessions?.options ?? [];
+		const playbookData = await this.playbook();
+		const options = playbookData?.specialPossessions?.options ?? [];
 		if (!options.length) return;
 		for (const slug of selected) {
 			if (applied[slug]) continue;
@@ -2391,6 +2437,49 @@ export class StonetopCharacter {
 				await this._markPossessionGrantsApplied(slug);
 			}
 		}
+		// The playbook is resolved now anyway, so bring the gear already there up to its grants
+		// too. The steady state bails above without reaching this; the once-per-version sweep in
+		// Ready (migration/possession-grant-repair.js) is what reaches those characters.
+		await this.repairPossessionGrants(playbookData);
+	}
+
+	/**
+	 * Bring every item a possession granted up to its grant as the playbook authors it NOW, for
+	 * the gear made before a grant was corrected: grantsToCreate runs once per item and nothing
+	 * revisits it, so the Tannery cuirass made as `{modifier: 1}` (1.3.2 to 1.6.0) went on
+	 * stacking on a hauberk, and read as armored by modifier alone, long after the grant said
+	 * `{base: 1}`. What is compared and what is left alone is possession-grants.js#grantRepair.
+	 *
+	 * Only TAGGED items (`sourcePossession`) are touched, and only one whose grant can be named
+	 * (grantOfTaggedItem): hand-written gear, and untagged legacy gear adopted by name, are the
+	 * player's to shape. The marks are never written. A stored track count is clamped only when
+	 * the track it counts on got smaller. Idempotent: a matching item produces no update, so a
+	 * second run writes nothing.
+	 *
+	 * @param {object} [playbookData]  the resolved playbook, when the caller already has it
+	 * @returns {Promise<number>} how many items were rewritten
+	 */
+	async repairPossessionGrants(playbookData = undefined) {
+		// Bail before resolving the playbook when there is no tagged gear to compare.
+		const tagged = this._actor.items.filter(i => i.type === "move"
+			&& i.system?.moveType === "inventory-custom" && i.system?.sourcePossession);
+		if (!tagged.length) return 0;
+		const pb = playbookData === undefined ? await this.playbook() : playbookData;
+		const bySlug = new Map((pb?.specialPossessions?.options ?? []).map(o => [o.slug, o]));
+		if (!bySlug.size) return 0;
+		const resources = this._inventory.resources;
+		const updates = [];
+		const clamps  = [];
+		for (const item of tagged) {
+			const repair = grantRepair(item, grantOfTaggedItem(item, bySlug.get(item.system.sourcePossession)));
+			if (!repair) continue;
+			updates.push({ _id: item._id, ...repair.update });
+			const count = Number(resources[item._id]);
+			if (repair.resourceMax != null && count > repair.resourceMax) clamps.push([item._id, repair.resourceMax]);
+		}
+		if (updates.length) await this._actor.updateEmbeddedDocuments("Item", updates);
+		for (const [id, max] of clamps) await this._inventory.setResource(id, max);
+		return updates.length;
 	}
 	async setCustomPossessions(labels) { await this._possessions.setCustom(labels); }
 	async removeCustomPossession(slug) { await this._possessions.removeCustom(slug); }

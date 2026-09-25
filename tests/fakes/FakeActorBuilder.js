@@ -129,6 +129,23 @@ export class FakeActorBuilder {
 			}),
 			createEmbeddedDocuments: vi.fn(),
 			deleteEmbeddedDocuments: vi.fn(),
+			// Applies each `{_id, ...dotted paths}` update to the matching item, honouring both
+			// deletion spellings (`-=leaf: null` and a ForcedDeletion instance), so a test can read
+			// the item back rather than only inspect the call.
+			updateEmbeddedDocuments: vi.fn(async (_type, updates = []) => {
+				const ForcedDeletion = globalThis.foundry?.data?.operators?.ForcedDeletion;
+				for (const { _id, ...data } of updates) {
+					const item = actor.items.find(i => i._id === _id);
+					if (!item) continue;
+					for (const [path, value] of Object.entries(data)) {
+						const parts = String(path).split(".");
+						const leaf = parts.at(-1);
+						if (leaf.startsWith("-=")) _unsetProperty(item, [...parts.slice(0, -1), leaf.slice(2)].join("."));
+						else if (ForcedDeletion && value instanceof ForcedDeletion) _unsetProperty(item, path);
+						else _setProperty(item, path, value);
+					}
+				}
+			}),
 		};
 		return actor;
 	}

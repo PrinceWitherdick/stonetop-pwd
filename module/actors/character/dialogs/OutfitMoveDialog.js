@@ -28,6 +28,12 @@ export class OutfitMoveDialog extends StonetopDialog {
 			...(outfitSnapshot.arcanaRegular ?? []),
 			...(outfitSnapshot.arcanaSmall ?? []),
 		];
+		// Special-possession gear ("Any of your special possessions") under its own heading in
+		// each column, as the sheet draws it inside the possession cards. Kept apart from the two
+		// lists above only for that heading: it weighs and counts exactly like them. Each row's
+		// slug is the key its mark lives under, which applyOutfit routes to the right store.
+		this._possessionRegular = outfitSnapshot.possessionRegular ?? [];
+		this._possessionSmall   = outfitSnapshot.possessionSmall ?? [];
 		this._smallItemLimit = outfitSnapshot.smallItemLimit ?? null;
 		// A move's loadBonus raises each load cap (Pack Horse by one); the snapshot carries
 		// the limits in effect so the thresholds and the regular ◇ ceiling here match the
@@ -40,7 +46,8 @@ export class OutfitMoveDialog extends StonetopDialog {
 		// badges here and the sheet's load lines cannot drift apart.
 		this._loadBands      = outfitSnapshot.loadBands ?? loadBandLabels(this._loadLimits);
 		this._checked = {};
-		for (const item of [...this._regularItems, ...this._smallItems, ...this._arcanaItems]) {
+		for (const item of [...this._regularItems, ...this._smallItems, ...this._arcanaItems,
+			...this._possessionRegular, ...this._possessionSmall]) {
 			this._checked[item.slug] = item.checked;
 		}
 		// "Undefined" ◇/□ marks the player reserves without assigning to an item.
@@ -63,20 +70,16 @@ export class OutfitMoveDialog extends StonetopDialog {
 	}
 
 	getData() {
-		const regularItems = this._regularItems.map(item => ({
-			slug:    item.slug,
-			name:    item.name,
-			note:    item.note,
-			weight:  item.weight,
-			checked: this._checked[item.slug] ?? false,
-		}));
-
-		const smallItems = this._smallItems.map(item => ({
+		const smallRow = item => ({
 			slug:    item.slug,
 			name:    item.name,
 			note:    item.note,
 			checked: this._checked[item.slug] ?? false,
-		}));
+		});
+		// A regular row carries its weight too.
+		const regularRow = item => ({ ...smallRow(item), weight: item.weight });
+		const regularItems = this._regularItems.map(regularRow);
+		const smallItems = this._smallItems.map(smallRow);
 
 		const arcanaItems = this._arcanaItems.map(item => ({
 			slug:    item.slug,
@@ -91,6 +94,9 @@ export class OutfitMoveDialog extends StonetopDialog {
 			checked: this._checked[item.slug] ?? false,
 		}));
 
+		const possessionRegular = this._possessionRegular.map(regularRow);
+		const possessionSmall = this._possessionSmall.map(smallRow);
+
 		const smallItemLimit = this._smallItemLimit;
 		const pools = this._resolvePools();
 
@@ -99,6 +105,10 @@ export class OutfitMoveDialog extends StonetopDialog {
 			smallItems,
 			arcanaItems,
 			hasArcana:         arcanaItems.length > 0,
+			possessionRegular,
+			possessionSmall,
+			hasPossessionRegular: possessionRegular.length > 0,
+			hasPossessionSmall:   possessionSmall.length > 0,
 			totalMarks:        pools.totalMarks,
 			loadLevel:         pools.loadLevel,
 			loadLevelNone:     pools.loadLevel === null,
@@ -134,7 +144,7 @@ export class OutfitMoveDialog extends StonetopDialog {
 		const undefinedRegularMax  = Math.max(0, this._loadLimits.heavy - checkedRegularWeight);
 		const undefinedRegular     = Math.min(this._undefinedRegular, undefinedRegularMax);
 
-		const checkedSmallCount = this._smallItems.filter(i => this._checked[i.slug]).length;
+		const checkedSmallCount = [...this._smallItems, ...this._possessionSmall].filter(i => this._checked[i.slug]).length;
 		const undefinedSmallMax = Math.max(0, (this._smallItemLimit ?? 9) - checkedSmallCount);
 		const undefinedSmall    = Math.min(this._undefinedSmall, undefinedSmallMax);
 
@@ -198,7 +208,7 @@ export class OutfitMoveDialog extends StonetopDialog {
 	}
 
 	_computeTotalWeight() {
-		return [...this._regularItems, ...this._arcanaItems]
+		return [...this._regularItems, ...this._arcanaItems, ...this._possessionRegular]
 			.filter(i => this._checked[i.slug])
 			.reduce((sum, i) => sum + (i.weight ?? 0), 0);
 	}

@@ -67,6 +67,7 @@ import { NEW_SHOOT_MARKER, LEGACY_SHOOT_MARKERS } from "../data/follower-actor.j
 import { isDefaultImg } from "../utils/strings.js";
 import { updatePlacedTokens } from "../utils/placed-tokens.js";
 import { grandfatherWeaponsOfWar } from "../migration/weapons-of-war-grandfather.js";
+import { repairAllPossessionGrants } from "../migration/possession-grant-repair.js";
 
 const _EOS_MACRO_NAME   = "End of Session";
 const _EOS_MACRO_IMG    = "systems/stonetop-pwd/assets/icons/macros/truce.svg";
@@ -218,6 +219,12 @@ export async function onReady() {
 		// narrowed grant is what ships, so a world swept once has nothing left to find.
 		try { await oncePerVersion("weaponsOfWarGrandfather", grandfatherWeaponsOfWar); }
 		catch (err) { console.error("Stonetop | Weapons of War grandfathering failed", err); }
+		// Bring special-possession gear made before its grant was corrected up to the grant (the
+		// Tannery cuirass made as a stacking modifier; see migration/possession-grant-repair.js).
+		// Per VERSION, because a grant only changes with a release: each new version is one more
+		// chance for a grant to have moved, and between releases there is nothing to find.
+		try { await oncePerVersion("possessionGrantRepair", repairAllPossessionGrants); }
+		catch (err) { console.error("Stonetop | special-possession gear repair failed", err); }
 
 		// Point player tokens back at the characters they stand for. An unlinked PC token carries
 		// a private copy of its character, and the two drift because a roll writes to the sheet's

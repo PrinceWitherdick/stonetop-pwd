@@ -176,6 +176,13 @@ export class InventorySegmentSnapshot {
  *           one counts toward load like any other ◇ gear.
  * @property {InventoryItemSnapshot[]} treasureSmall   - Pocket-sized journal treasures, under the
  *           same heading in the small column; marking one eats the 4+Prosperity allowance.
+ * @property {{slug:string, name:string, note:string|null, weight:number, checked:boolean}[]} possessionRegular
+ *           - Special-possession ◇ gear (grantsItems bundles and chosen gear) as rows for the Outfit
+ *           window, which the gear tab draws inside the possession cards instead. `slug` is the key
+ *           the mark lives under: an item id, or a gear choice's `poss:choice`; `note` names the
+ *           possession. Counted toward load exactly as the cards' rows are.
+ * @property {{slug:string, name:string, note:string|null, weight:number, checked:boolean}[]} possessionSmall
+ *           - The same for possession gear with no ◇; marking one eats the 4+Prosperity allowance.
  * @property {number|null} smallItemLimit - 4+Prosperity from the linked steading actor, or null if unavailable
  * @property {string|null} steadingName   - Name of the linked steading actor, or null if unavailable
  * @property {number} loadBonus           - Total ◇ the owned moves add to every load cap (0 for most)
@@ -208,6 +215,8 @@ export class OutfitSnapshot {
 		this.arcanaSmall     = b._arcanaSmall ?? [];
 		this.treasureRegular = b._treasureRegular ?? [];
 		this.treasureSmall   = b._treasureSmall ?? [];
+		this.possessionRegular = b._possessionRegular ?? [];
+		this.possessionSmall   = b._possessionSmall ?? [];
 		this.smallItemLimit  = b._smallItemLimit ?? null;
 		this.steadingName    = b._steadingName ?? null;
 		this.loadBonus       = b._loadBonus ?? 0;
@@ -232,6 +241,8 @@ export class OutfitSnapshotBuilder {
 	withArcanaSmall(v)     { this._arcanaSmall     = v; return this; }
 	withTreasureRegular(v) { this._treasureRegular = v; return this; }
 	withTreasureSmall(v)   { this._treasureSmall   = v; return this; }
+	withPossessionRegular(v) { this._possessionRegular = v; return this; }
+	withPossessionSmall(v)   { this._possessionSmall   = v; return this; }
 	withSmallItemLimit(v)  { this._smallItemLimit  = v; return this; }
 	withSteadingName(v)    { this._steadingName    = v; return this; }
 	withLoadBonus(v)       { this._loadBonus       = v; return this; }

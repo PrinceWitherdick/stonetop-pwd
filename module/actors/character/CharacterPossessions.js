@@ -103,6 +103,13 @@ export class CharacterPossessions {
 		await this._flags.setFlag("choiceCarried", { ...this.choiceCarried, [key]: !!isCarried });
 	}
 
+	// Several carry marks at once, keyed `possessionSlug:choiceSlug` (the Outfit window's batch).
+	// Unmarked ones are written as `false`, for the same reason as above.
+	async setChoicesCarried(carriedMap) {
+		const marks = Object.fromEntries(Object.entries(carriedMap ?? {}).map(([k, v]) => [k, !!v]));
+		if (!Object.keys(marks).length) return;
+		await this._flags.setFlag("choiceCarried", { ...this.choiceCarried, ...marks });
+	}
 
 	// Free text the player wrote into a sub-option's fill-in blank (the Would-Be Hero's
 	// "A shield, bearing ___'s crest"), keyed possessionSlug:choiceSlug like choiceUses.
