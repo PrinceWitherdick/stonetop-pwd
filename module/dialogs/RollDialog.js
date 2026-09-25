@@ -188,33 +188,62 @@ function rollDialogButtons(rollLabel, settle, readAnswer) {
  * roll surface passes its `shiftKey` straight through. Skipping does not force Normal: it answers
  * exactly as "nothing was asked" answers, so a sheet selector still applies to a Shift-click.
  *
+ * OFFERED LINES (`offers`) are something the character could spend on this roll that the sheet
+ * cannot know they mean to: a skin of fine whisky shared before a Persuade. Each is its own ticked
+ * line, and the answer names the ones left ticked in `takenOffers` (their keys). The line does NOT
+ * move the mode picker: what it buys is a SOURCE of advantage, folded by the caller with every
+ * other source so it nets against a disadvantage (StonetopCharacter#onRoll). A line is the
+ * player's to take, so it OPENS the window even when neither setting asks anything (the window then
+ * shows just the lines), and an answer that never showed them took none: a Shift-click is the dice
+ * and nothing else. Not the damage window's rule, whose lines are the move's own riders rather
+ * than something carried and spent.
+ *
  * @param {object} [opts]
  * @param {string} [opts.title]        Dialog title — usually the move or stat being rolled.
  * @param {boolean} [opts.shiftKey]    Skip the window entirely.
  * @param {boolean} [opts.askMode]     Override the "Ask How to Roll Each Time" setting (tests).
  * @param {boolean} [opts.askModifier] Override the "Prompt for Roll Modifier" setting (tests).
- * @returns {Promise<{rollMode?: string, situational: number}|null>}
+ * @param {Array<{key: string, label: string, applied?: boolean}>} [opts.offers]
+ * @returns {Promise<{rollMode?: string, situational: number, takenOffers?: string[]}|null>}
  */
 export function promptRoll({
 	title = "Roll",
 	shiftKey = false,
 	askMode = getAskRollModeEachRollSetting(),
 	askModifier = askMode || getPromptRollModifierSetting(),
+	offers = [],
 } = {}) {
+	const lines = (Array.isArray(offers) ? offers : []).filter(offer => offer?.key);
+	// Only an answer that HAD lines says which it took, so every roll offered none keeps the exact
+	// shape it always had.
+	const withTaken = (answer, taken) => (lines.length ? { ...answer, takenOffers: taken } : answer);
 	// Nothing to ask, or told not to ask: answer as if the window had opened and been left
-	// alone. No Dialog is constructed at all — one that opened and closed itself would still
-	// steal focus from whatever the player was doing.
-	if (shiftKey || (!askMode && !askModifier)) {
-		return Promise.resolve(askMode ? { rollMode: DEFAULT_ROLL_MODE, situational: 0 } : { situational: 0 });
+	// alone, except that a line nobody saw is not taken. No Dialog is constructed at all — one
+	// that opened and closed itself would still steal focus from whatever the player was doing.
+	if (shiftKey || (!askMode && !askModifier && !lines.length)) {
+		return Promise.resolve(withTaken(askMode ? { rollMode: DEFAULT_ROLL_MODE, situational: 0 } : { situational: 0 }, []));
 	}
 	return new Promise(resolve => {
 		const settle = settler(resolve);
+		// The stepper comes with either half; a window opened only for its lines asks nothing else,
+		// because the settings said not to.
+		const withStepper = askMode || askModifier;
 
 		// The answer's SHAPE follows from what was asked: no picker, no `rollMode` key, so a
 		// sheet selector is not overruled by a window that never put the question.
-		const readAnswer = root => (askMode
+		const readAnswer = root => withTaken(askMode
 			? { rollMode: readActiveMode(root), situational: readModifier(root) }
-			: { situational: readModifier(root) });
+			: { situational: withStepper ? readModifier(root) : 0 },
+		lines.filter(offer => {
+			const box = root?.querySelector?.(`[name="offer-${offer.key}"]`);
+			return box ? !!box.checked : offer.applied !== false;
+		}).map(offer => offer.key));
+		// The damage window's line markup and skin: one look for "a ticked thing this roll spends".
+		const offerLines = lines.map(offer => `
+				<label class="stonetop-damage-seed stonetop-damage-seed--move stonetop-roll-offer">
+					<input type="checkbox" class="stonetop-check stonetop-damage-seed-check" name="offer-${escHtml(offer.key)}"${offer.applied === false ? "" : " checked"}>
+					<span class="stonetop-damage-seed-text">${escHtml(offer.label)}</span>
+				</label>`).join("");
 
 		// This window's readout is the dice line ("Roll 3d6 and keep the highest two"), which is
 		// the mode picker's own answer restated. The damage window replaces it with a formula
@@ -223,11 +252,13 @@ export function promptRoll({
 				${modePickerHtml("How are you rolling this?", DEFAULT_ROLL_MODE)}
 				<p class="stonetop-roll-dice" aria-live="polite">${diceReadout(DEFAULT_ROLL_MODE)}</p>` : "";
 
+		const modifierSection = withStepper ? `
+				<p class="stonetop-roll-prompt">Add a one-off modifier (a held bonus, a GM-granted +1, a penalty&hellip;).</p>
+				${stepperHtml(localize("stonetop.rollMode.modifierLabel"))}` : "";
+
 		const dialog = new Dialog({
 			title,
-			content: `<form class="stonetop-roll-form">${modeSection}
-				<p class="stonetop-roll-prompt">Add a one-off modifier (a held bonus, a GM-granted +1, a penalty&hellip;).</p>
-				${stepperHtml(localize("stonetop.rollMode.modifierLabel"))}
+			content: `<form class="stonetop-roll-form">${modeSection}${offerLines}${modifierSection}
 			</form>`,
 			buttons: rollDialogButtons("Roll", settle, readAnswer),
 			default: "roll",
@@ -243,9 +274,11 @@ export function promptRoll({
 				const input = wireStepper(root, () => {});
 				// Focus the modifier, not the picker: Normal is already the answer to the picker's
 				// question, so the field that might need typing into is the one to land in, and
-				// Enter still fires the default Roll button from there.
-				input?.focus();
-				input?.select?.();
+				// Enter still fires the default Roll button from there. A window of lines alone
+				// lands on its first line.
+				const landing = input ?? root.querySelector(".stonetop-roll-offer input");
+				landing?.focus();
+				landing?.select?.();
 			},
 		}, { classes: ["dialog", "stonetop", "stonetop-roll-dialog"], width: 380 });
 
@@ -268,6 +301,12 @@ export function promptRoll({
  */
 function unpromptedDamage(rollMode) {
 	return { rollMode: normalizeRollMode(rollMode), bonus: 0, extraDice: "" };
+}
+
+/** Whether promptRoll's `takenOffers` took `offer`. An answer that never showed it took nothing. */
+export function tookOffer(offer, takenOffers) {
+	if (!offer) return false;
+	return Array.isArray(takenOffers) && takenOffers.includes(offer.key);
 }
 
 /**

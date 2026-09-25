@@ -289,7 +289,7 @@ export const GUIDED_CHARACTER_MOVES = {
 	"Forage": {
 		trigger: "When you spend a few hours seeking food in the wild, roll +WIS. In winter, you have disadvantage.",
 		results: ["10+: pick 2.", "7-9: pick 1.", "6-: you find nothing, and there is danger or risk."],
-		note: "Provisions can substitute for supplies when you Make Camp, 1-for-1. The four options are on the result card; take as many as the roll allows.",
+		note: "Provisions can substitute for supplies when you Make Camp, 1-for-1. The four options are on the result card; take as many as the roll allows. In winter the disadvantage is added to the roll for you, from the steading's season. A Blessed Raised by Wolves has advantage, also added for them; in winter the two cancel and the roll goes straight.",
 		roll: "wis",
 	},
 	"Recover": {
@@ -6153,15 +6153,24 @@ export function createStonetopCharacterSheetClass(Base) {
 		// settings that decide which halves it asks and whether it opens at all, and the shape of
 		// the answer all belong to promptRoll, which the steading sheet and the Requisition dialog
 		// call for themselves — this is not a second front door to them.
-		_promptRollOptions({ shiftKey = false, rollable = null, title = null } = {}) {
+		//
+		// And the lines the character could spend on this roll (StonetopCharacter#rollOffers: a skin
+		// of fine whisky on a Persuade), off the move the rollable sits on or the `moveItem` passed.
+		_promptRollOptions({ shiftKey = false, rollable = null, title = null, moveItem = null } = {}) {
 			const moveName = rollable?.closest(".stonetop-item")?.querySelector(".stonetop-item-name")?.textContent?.trim();
 			const statKey  = rollable?.dataset?.roll;
-			return promptRoll({
+			const itemId   = rollable?.closest?.(".item")?.dataset?.itemId;
+			const item     = moveItem ?? (itemId ? this.actor.items.get(itemId) : null);
+			const ask = (offers = []) => promptRoll({
 				shiftKey,
 				title: title
 					|| moveName
 					|| (statKey && _STAT_KEYS.has(statKey) ? `Roll +${statKey.toUpperCase()}` : "Roll"),
+				...(offers.length ? { offers } : {}),
 			});
+			// A roll with no move behind it has nothing to offer, and asks at once rather than a tick later.
+			if (!item || !this._stonetopCharacter?.rollOffers) return ask();
+			return Promise.resolve(this._stonetopCharacter.rollOffers(item)).then(offers => ask(offers ?? []));
 		}
 
 		// `grants` are the moves that opened this choice up (empty for a move whose own
@@ -6177,7 +6186,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					// Offer the roll prompt once the stat is chosen, mirroring the inline roll
 					// path; Shift on the original click skips it, a cancel aborts the roll.
 					callback: async () => {
-						const prompted = await this._promptRollOptions({ shiftKey, title: item.name });
+						const prompted = await this._promptRollOptions({ shiftKey, title: item.name, moveItem: item });
 						if (!prompted) return;
 						await this._stonetopCharacter.onRoll({ currentTarget: rollable }, { statOverride: key, ...prompted });
 					},

@@ -1308,6 +1308,9 @@
       "bothTooltip": "{brands} bearing your brand, {oaths} held to an oath. Click to open the roster.",
       "notSwearable": "{name} is not somebody who can swear an oath."
     },
+    "rollOffers": {
+      "fineWhisky": "Share a skin of fine whisky (spend 1 use): advantage"
+    },
     "artifact": {
       "identify": "Identify artifact",
       "identifyTooltip": "There's more to this than meets the eye. Know Things or Seek Insight about it.",

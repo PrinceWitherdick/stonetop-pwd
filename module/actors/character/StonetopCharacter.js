@@ -34,7 +34,7 @@ import {
 	VitalsSnapshotBuilder,
 } from "../../model/CharacterSnapshot.js";
 import {PlaybookMoveEntry} from "./PlaybookMoveEntry.js";
-import {normalizeRollMode} from "../../dialogs/RollDialog.js";
+import {normalizeRollMode, tookOffer} from "../../dialogs/RollDialog.js";
 import {deletionEntry} from "../../utils/foundry-compat.js";
 import {statRequirementsUnmet} from "./stat-requirement.js";
 import {effectiveRequiredMoves, requiredMovesUnmet, requirementLabel} from "./move-requirement.js";
@@ -43,7 +43,9 @@ import {moveMarkBudget} from "./move-mark-budget.js";
 import {StonetopFlags, STONETOP_SCOPE, resolvedFlags, resolvedFlagProperty} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG, ownsAsteriskMove} from "./WouldBeHeroAsterisk.js";
+import {tookBackground} from "./took-background.js";
 import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, isMoveLearned, ownedMoveNames, ownsMoveNamed} from "./owns-move.js";
+import {fineWhiskyOffer as fineWhiskyOfferFrom, isPersuadeMove, FINE_WHISKY_SOURCE} from "./fine-whisky.js";
 import {RITES_OF_THE_LAND, SACRED_POUCH_SLUG, NO_POUCH_STOCK_NOTE, BLESSED_PLAYBOOK, isVessel, stockSourcesForFlags, stockCostFromDescription} from "./stock-cost.js";
 import {loseHpForStock} from "./provisions.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight, INVOKE_THE_SUN_GOD} from "./holy-light.js";
@@ -79,6 +81,8 @@ import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, stripHtml
 import {splitFillBlank, fillBlank} from "../../utils/fill-blanks.js";
 import {localize as _loc, format} from "../../utils/i18n.js";
 import {getStonetopSteadingActor} from "../../utils/world.js";
+import {readCurrentSeason} from "../../seasons/current-season.js";
+import {seasonLabel} from "../../seasons/seasons-change-reminders.js";
 import {moveChatCard} from "../../utils/chat.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
 import {buildCustomMoveData, clampInt} from "../../utils/custom-move-data.js";
@@ -94,6 +98,25 @@ import {X_PIERCING_MAX} from "../../utils/damage.js";
 const CASTIGATE = "Castigate";
 
 /**
+ * Backgrounds that give advantage on one move, always. The Blessed's Raised by Wolves: "Also,
+ * when you Forage, you have advantage." A SOURCE like any other (see foldAdvantage), so the
+ * winter's disadvantage on the same Forage cancels it and the roll goes straight.
+ */
+const BACKGROUND_MOVE_ADVANTAGE = [
+	{ background: { playbook: BLESSED_PLAYBOOK, slug: "raised-by-wolves" }, move: "Forage", source: "Raised by Wolves" },
+];
+
+/**
+ * Seasons that give disadvantage on one move, always. Forage: "In winter, you have disadvantage."
+ * Read off the steading's clock (seasons/current-season.js#readCurrentSeason), so the player no
+ * longer sets it by hand. A SOURCE like the background's advantage (see foldDisadvantage), so the
+ * two cancel, and a Disadvantage the player picked for the same winter does not count twice.
+ */
+const SEASON_MOVE_DISADVANTAGE = [
+	{ season: "winter", move: "Forage" },
+];
+
+/**
  * Advantage from somewhere other than the picker, folded into a roll's options and NAMED on the card.
  *
  * The one shape it takes, whatever bought it: a promise made at a peaceful camp, a grudge a foe owes
@@ -104,6 +127,14 @@ const CASTIGATE = "Castigate";
 function foldAdvantage(options, source) {
 	return {
 		...layModes(options, ["adv"]),
+		conditionNotes: [...(options.conditionNotes ?? []), source],
+	};
+}
+
+/** The other side of foldAdvantage: disadvantage imposed from outside the picker, named on the card. */
+function foldDisadvantage(options, source) {
+	return {
+		...layModes(options, ["dis"]),
 		conditionNotes: [...(options.conditionNotes ?? []), source],
 	};
 }
@@ -1691,6 +1722,84 @@ export class StonetopCharacter {
 	}
 
 	/**
+	 * The name of the background that gives this character advantage on `moveName`, or null
+	 * (see BACKGROUND_MOVE_ADVANTAGE). Asked by both roll paths, onRoll and onDirectStatRoll.
+	 */
+	backgroundMoveAdvantage(moveName) {
+		if (!moveName) return null;
+		const who = { playbook: this._actor.system?.playbook?.name ?? null, background: this._background.selectedSlug };
+		return BACKGROUND_MOVE_ADVANTAGE.find(g => g.move === moveName && tookBackground(who, g.background))?.source ?? null;
+	}
+
+	/**
+	 * The skin of fine whisky this character could share on a Persuade, or null (see fine-whisky.js):
+	 * carried, and with a use left. Read live, for the roll window and for onRoll both.
+	 */
+	async fineWhiskyOffer() {
+		const { items, marks } = await this._carriedGearSources();
+		const byId = new Map(this._actor.items.filter(i => i.type === "move").map(i => [i._id, i]));
+		const possessionUses = this._possessions.uses;
+		const gear = items.map(g => {
+			const doc = byId.get(g.slug);
+			if (!doc) return g;
+			// A granted skin keeps its grant's key, and a skin made before its grant carried a track of
+			// its own counts off its possession's (mapCustomItem reads it the same way).
+			const from = doc.system?.sourcePossession ?? null;
+			return { ...g, sourceKey: doc.system?.sourceKey ?? null, legacyUsed: from ? possessionUses[from] ?? null : null };
+		});
+		return fineWhiskyOfferFrom({ gear, marks, resources: this._inventory.resources });
+	}
+
+	/**
+	 * The ticked lines the roll window offers before `item` is rolled (dialogs/RollDialog.js
+	 * #promptRoll): what the character carries that this roll could spend. Only fine whisky today.
+	 *
+	 * Each line carries what taking it does, so onRoll settles every line the same way: `source`, the
+	 * advantage it folds in, named on the card, and `spend(moveName)`, its price, paid after the dice.
+	 */
+	async rollOffers(item) {
+		if (!isPersuadeMove(item?.name)) return [];
+		const whisky = await this.fineWhiskyOffer();
+		if (!whisky) return [];
+		return [{
+			...whisky,
+			source: FINE_WHISKY_SOURCE,
+			// 1 use marked (an inventory track counts what is spent). Re-read, so a use marked by hand
+			// while the window was open is not undone.
+			spend: async moveName => {
+				const used = Number(this._inventory.resources[whisky.slug] ?? whisky.used) || 0;
+				await this._inventory.setResource(whisky.slug, Math.min(whisky.max, used + 1), { stonetopMove: moveName });
+			},
+		}];
+	}
+
+	/**
+	 * The name of the season that gives this character disadvantage on `moveName` ("Winter"), or
+	 * null (see SEASON_MOVE_DISADVANTAGE). The season is the steading's stamped clock; with no
+	 * steading, or no Seasons Change recorded on it, nothing is imposed. Asked beside
+	 * backgroundMoveAdvantage by both roll paths.
+	 */
+	seasonMoveDisadvantage(moveName) {
+		if (!moveName || !SEASON_MOVE_DISADVANTAGE.some(g => g.move === moveName)) return null;
+		const season = readCurrentSeason(this.getSteadingActor())?.season ?? null;
+		const hit = SEASON_MOVE_DISADVANTAGE.find(g => g.move === moveName && g.season === season);
+		return hit ? seasonLabel(hit.season) : null;
+	}
+
+	/**
+	 * `options` with the standing modes on `moveName` folded in, for both roll paths: a background's
+	 * advantage (Raised by Wolves on Forage), then a season's disadvantage (winter on Forage), so the
+	 * two cancel.
+	 */
+	_foldStandingModes(options, moveName) {
+		const upbringing = this.backgroundMoveAdvantage(moveName);
+		const season = this.seasonMoveDisadvantage(moveName);
+		let folded = upbringing ? foldAdvantage(options, upbringing) : options;
+		if (season) folded = foldDisadvantage(folded, season);
+		return folded;
+	}
+
+	/**
 	 * Every purse this character can pay a Stock cost out of, read LIVE: the pouch (its real max
 	 * and whether it is held, preselected included), the Boon of a learned Rites of the Land, and
 	 * a Vessel's HP. The ONE reader for both payers, the sheet's dialog and the chat card's Spend
@@ -2644,7 +2753,11 @@ export class StonetopCharacter {
 	// truthy answers both mean "taken, stop looking" — the distinction is only for a caller with
 	// something to fire after the roll (see MOVE_ROLL_EFFECTS), which must not fire on a prompt
 	// nobody answered.
-	async onRoll(event, { statOverride = null, situational = 0, weaponSlug = null, rollMode = null } = {}) {
+	//
+	// `takenOffers` is the roll window's answer about the lines it offered (dialogs/RollDialog.js
+	// #promptRoll, from rollOffers below): the keys left ticked. Null from a caller that asked no
+	// window, which takes none: a line the player never saw is never spent.
+	async onRoll(event, { statOverride = null, situational = 0, weaponSlug = null, rollMode = null, takenOffers = null } = {}) {
 		const itemId = event.currentTarget.closest(".item")?.dataset.itemId;
 		if (!itemId) return false;
 		const item = this._actor.items.get(itemId);
@@ -2713,6 +2826,12 @@ export class StonetopCharacter {
 		// Heavy's advantage cancels rather than quietly outranking the debility — and NAMED on the card.
 		const grudge = attackExtra ? attackFoeAdvantage(this._actor, attackExtra) : null;
 		if (grudge) Object.assign(rollOptions, foldAdvantage(rollOptions, grudge));
+		// A background's standing advantage and a season's standing disadvantage on one move: the same fold.
+		if (!descriptionOnly) Object.assign(rollOptions, this._foldStandingModes(rollOptions, item.name));
+		// The lines the roll window offered and the player left ticked (rollOffers: a skin of fine
+		// whisky shared before a Persuade): the same fold, each paid for after the dice, below.
+		const taken = descriptionOnly ? [] : (await this.rollOffers(item)).filter(offer => tookOffer(offer, takenOffers));
+		for (const offer of taken) Object.assign(rollOptions, foldAdvantage(rollOptions, offer.source));
 
 		// A promise made earlier (a peaceful camp) is spent HERE — after the guards above, so
 		// reading a move's text or backing out of the weapon prompt never burns it.
@@ -2723,6 +2842,9 @@ export class StonetopCharacter {
 		const withSurprise = surprise ? { ...promised, conditionNotes: [...(promised.conditionNotes ?? []), surprise] } : promised;
 
 		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, withSurprise), descriptionOnly });
+
+		// What the taken lines cost, paid once the dice have landed.
+		if (roll) for (const offer of taken) await offer.spend(item.name);
 
 		// Defend: fill the character's Readiness circles from the tier they just rolled
 		// (p.216), never lowering a pool they already hold.
@@ -3265,14 +3387,18 @@ export class StonetopCharacter {
 
 		// Returned so a caller that has to act on the outcome (the arcana Identify roll) can
 		// classify the total without re-rolling or re-deriving the tier thresholds.
+		const base = {
+			rollMode: normalizeRollMode(rollMode ?? this.rollMode),
+			modifier,
+			forward,
+			ongoing,
+			...rest,
+		};
+		// A guided move whose row has no rollable of its own rolls here by name, so its standing
+		// advantage and disadvantage are folded here as well as in onRoll.
+		const standing = this._foldStandingModes(base, rest.moveName);
 		const roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat,
-			await this._spendHeldRollModes({
-				rollMode: normalizeRollMode(rollMode ?? this.rollMode),
-				modifier,
-				forward,
-				ongoing,
-				...rest,
-			})));
+			await this._spendHeldRollModes(standing)));
 
 		if (forward !== 0) {
 			await this._actor.update({ "system.attributes.forward.value": 0 }, extraOptions.moveName ? { stonetopMove: extraOptions.moveName } : {});
