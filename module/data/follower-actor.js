@@ -13,6 +13,7 @@
 // the mapping can be unit-tested without a world.
 
 import { normalizeTags, parseFollowerArmor } from "./follower-build.js";
+import { followerArmorGate } from "../actors/character/move-armor.js";
 import { CREATURE_TYPES, CREATURE_TYPE_ICON_SUFFIX, creatureTypeIcon, creatureTypeForFaIcon } from "../bestiary/creature-types.js";
 import { escHtml, isDefaultImg, stripHtmlToText } from "../utils/strings.js";
 import { systemAssetVariants } from "../migration/compat.js";
@@ -239,6 +240,10 @@ export const CARD_FIELD_PATHS = Object.freeze({
 	hpMax:       "system.attributes.hp.max",
 	armor:       "system.attributes.armor.value",
 	armorSource: "system.attributes.armor.source",
+	// A printed armor clause ("2 (0 vs. iron)"): how much of the armor it takes away, and what does.
+	// The damage card offers it back with a ticked box (combat/attack-flow.js#wireConditionalArmor).
+	armorConditional:       "system.attributes.armor.conditional",
+	armorConditionalSource: "system.attributes.armor.conditionalSource",
 	damage:      "system.attributes.damage.value",
 	// The card's rollable die, so the NPC sheet's damage roll works straight away.
 	damageRoll:  "system.attributes.damage.rollFormula",
@@ -255,6 +260,7 @@ export function followerActorFields(follower = {}) {
 	const split = splitFollowerName(follower?.name);
 	const name  = split.name || "Follower";
 	const img   = followerPortraitImg(follower);
+	const armorGate = followerArmorGate(follower?.armor);
 	const fields = {
 		name,
 		tokenName:   name,
@@ -266,6 +272,8 @@ export function followerActorFields(follower = {}) {
 		hpMax:       followerHpMax(follower),
 		armor:       parseFollowerArmor(follower?.armor),
 		armorSource: String(follower?.armorSource ?? "").trim(),
+		armorConditional:       armorGate.conditional,
+		armorConditionalSource: armorGate.conditionalSource,
 		damage:      String(follower?.damage ?? "").trim(),
 		damageRoll:  String(follower?.damageRoll ?? "").trim(),
 		notes:       followerNotesHtml(follower),

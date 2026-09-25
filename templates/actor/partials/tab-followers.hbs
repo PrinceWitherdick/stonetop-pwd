@@ -362,7 +362,7 @@
 					<input class="stonetop-follower-stat-input stonetop-follower-armor-source-input" type="text" data-ftype="{{ftype}}" data-slug="{{slug}}" data-field="armorSource" value="{{armorSource}}" placeholder="from… (leather, shield…)" data-tooltip="Where their armor comes from: leather, a shield, thick hides. Optional, and it never changes the number." data-tooltip-direction="UP">
 				</div>
 				{{else}}
-				<span class="stonetop-follower-field-value">{{armor}}{{#if armorSource}} <span class="stonetop-follower-armor-source">({{armorSource}})</span>{{/if}}</span>
+				<span class="stonetop-follower-field-value">{{armor}}{{#if armorSource}} <span class="stonetop-follower-armor-source">({{armorSource}})</span>{{/if}}{{#if armorGateNote}} <span class="stonetop-follower-armor-source stonetop-follower-armor-gate">({{armorGateNote}})</span>{{/if}}</span>
 				{{/if}}
 			</div>
 		</div>

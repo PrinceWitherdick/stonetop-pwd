@@ -389,6 +389,22 @@ describe("syncFollowerActors", () => {
 		});
 	});
 
+	// An NPC made before a printed armor clause was carried holds 0 there, which is the schema's
+	// "nothing here": the card's clause fills it, so Afon's damage row can ask about iron.
+	it("carries a printed armor clause onto an NPC made before it was carried", async () => {
+		const npc = makeFollowerActor("Actor.a", { ...CARD, armor: 2 });
+		npc.system.attributes.armor = { value: 2, source: "" };
+		character = makeCharacter({ f1: "Actor.a" });
+
+		await syncFollowerActors(character, [snap({ armor: "2 (0 vs. iron)" })]);
+
+		expect(wrote(npc)).toMatchObject({
+			"system.attributes.armor.conditional": 2,
+			"system.attributes.armor.conditionalSource": "vs. iron",
+		});
+		expect(wrote(npc)["system.attributes.armor.value"]).toBeUndefined();
+	});
+
 	it("re-prints the notes when the cost or the gear on the card changes", async () => {
 		const npc = makeFollowerActor("Actor.a");
 		character = makeCharacter({ f1: "Actor.a" });

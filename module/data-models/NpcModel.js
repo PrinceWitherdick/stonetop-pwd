@@ -72,6 +72,13 @@ export class NpcModel extends foundry.abstract.TypeDataModel {
 				armor: new fields.SchemaField({
 					value:  new fields.NumberField({ required: true, integer: true, initial: 0 }),
 					source: new fields.StringField({ required: true, blank: true }),
+					// The part of `value` a printed clause takes away, and what takes it: a follower's
+					// "2 (0 vs. iron)" is value 2, conditional 2, conditionalSource "vs. iron". Written
+					// from the follower's card (data/follower-actor.js) and offered back on a damage card
+					// with a ticked box (combat/attack-flow.js#wireConditionalArmor), the same fields a
+					// character's Barkskin rides in (CharacterModel).
+					conditional:       new fields.NumberField({ required: true, integer: true, initial: 0 }),
+					conditionalSource: new fields.StringField({ required: true, blank: true, initial: "" }),
 				}),
 				damage: new fields.SchemaField({
 					value:       new fields.StringField({ required: true, blank: true }),

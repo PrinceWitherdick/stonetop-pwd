@@ -46,7 +46,7 @@ import {halveDamage, spentOn} from "../fight/defend-spend.js";
 // (fight/hero-moves.js).
 import {undauntedNow, eyesLockedAgainst, ownDamageMode, blowOffers as heroOffers, muscleboundWeapon, berserkNow, defenderDisadvantage, recordHarmedBy, recordClash, foeAdvantage, defenderMoveKey} from "../fight/hero-moves.js";
 import {ownsLearnedMoveNamed} from "../actors/character/owns-move.js";
-import {armorGateKey} from "../actors/character/move-armor.js";
+import {armorGateWords, barkskinMarks, wearsBarkskin, withBarkskinBase} from "../actors/character/move-armor.js";
 import {format, localize} from "../utils/i18n.js";
 import {foldModes} from "../utils/roll-mode.js";
 import {bringDialogToFront} from "../utils/front-on-open.js";
@@ -1691,15 +1691,47 @@ export function seedArmor(seed) {
  * The armor a damage row is taken against: the stored number, the one the Fight tab and the token show.
  * A character's is derived from what they carry, and actors/character/vitals-mirror.js keeps it current
  * whatever changed it and whether or not their sheet is open.
+ *
+ * `barkskin` hands over the world's Barkskin marks (see barkskinOnce), which every card shares.
  */
-function wornArmor(actor) {
+function wornArmor(actor, barkskin = barkskinOnce()) {
 	const stored = actor?.system?.attributes?.armor ?? {};
-	return {
+	const worn = {
 		armor: Number(stored.value) || 0,
 		unpierceable: Number(stored.unpierceable) || 0,
-		// The part a move grants on a clause only the fiction can answer (see conditionalArmorOf).
+		// The part a move grants on a clause only the fiction can answer (see conditionalArmorOf). On a
+		// follower's NPC, a printed clause instead: Afon's "0 vs. iron" (data/follower-actor.js).
 		conditional: Math.max(0, Number(stored.conditional) || 0),
 		conditionalSource: String(stored.conditionalSource ?? ""),
+	};
+	// A character's stored armor already carries a Blessed's Barkskin (vitals-mirror.js). Anyone else
+	// wearing it, a follower above all, has it read here, from the marks as they stand when the blow
+	// lands: their NPC keeps only its card's numbers. A person may be marked by the name on their card,
+	// so an NPC matches a name-only mark too (actors/character/move-armor.js#wearsBarkskin).
+	if (!actor || actor.type === "character") return worn;
+	return withBarkskinBase(worn, wearsBarkskin(barkskin(), actor, { byName: actor.type === "npc" }));
+}
+
+/**
+ * The world's Barkskin marks (actors/character/move-armor.js#barkskinMarks), scanned on first ask and
+ * kept for the WORLD, not the card: every damage card in the log re-renders on scroll, on update and
+ * on another client's Apply, and each used to walk game.actors afresh. Kept until something that
+ * could change a mark does (forgetBarkskinMarks, on any actor or move being made, changed or
+ * deleted; stonetop.js), or the actor collection itself is a different one. Only characters lay
+ * marks, so no row needs itself left out of them.
+ */
+let worldBarkskin = null;
+
+/** Drop the kept Barkskin marks, so the next card to ask scans again (see barkskinOnce). */
+export function forgetBarkskinMarks() {
+	worldBarkskin = null;
+}
+
+function barkskinOnce() {
+	return () => {
+		const actors = globalThis.game?.actors ?? [];
+		if (worldBarkskin?.actors !== actors) worldBarkskin = { actors, marks: barkskinMarks(actors) };
+		return worldBarkskin.marks;
 	};
 }
 
@@ -1711,8 +1743,8 @@ function wornArmor(actor) {
  * It is applied by default — the clause is the ordinary case for whoever took the move — and the card
  * offers it back with one tick, which is the moment it matters and the moment the table knows.
  */
-function conditionalArmorOf(actor) {
-	const worn = wornArmor(actor);
+function conditionalArmorOf(actor, barkskin) {
+	const worn = wornArmor(actor, barkskin);
 	return worn.conditional > 0 ? { armor: worn.conditional, source: worn.conditionalSource } : null;
 }
 
@@ -2506,6 +2538,7 @@ async function applyOwedDamage(message, damage) {
 	// What each token does on the map once this press lands (combat/attack-fx.js#playHitReactions):
 	// on whoever actually took the blow, which is the stand-in when a Defend put one in the way.
 	const reactions = [];
+	const barkskin = barkskinOnce();
 	for (const r of current.results) {
 		if (doneUuids.has(r.uuid)) continue;
 		const td = await fromUuid(r.uuid);
@@ -2524,7 +2557,7 @@ async function applyOwedDamage(message, damage) {
 		}
 		// Undaunted: "+1 armor" while outnumbered or facing a foe bigger than them.
 		const undaunted = targetActor.type === "character" && !!undauntedNow(targetActor);
-		const worn = wornArmor(targetActor);
+		const worn = wornArmor(targetActor, barkskin);
 		// Barkskin and the Candle rest on fiction, and the card lets the table say the clause was not met
 		// (wireConditionalArmor). Ticked off, that much armor comes back out of the total.
 		const gatedOff = armorLeftOff(current).has(r.uuid) ? worn.conditional : 0;
@@ -2578,8 +2611,9 @@ async function applyOwedDamage(message, damage) {
 		const dead = t.newHp === 0 ? " <em>(0 HP)</em>" : "";
 		const half = raw !== rolled ? ` <span class="stonetop-damage-mitigated">(${escHtml(format("stonetop.fight.defend.halvedFrom", { rolled }))})</span>` : "";
 		const brave = undaunted ? ` <span class="stonetop-damage-mitigated">(${escHtml(format("stonetop.fight.heroMoves.undaunted.armorNote", {}))})</span>` : "";
+		const gateWords = gatedOff ? armorGateWords(worn.conditionalSource) : null;
 		const bare = gatedOff
-			? ` <span class="stonetop-damage-mitigated">(${escHtml(format("stonetop.fight.heroMoves.armorGate.note", { move: worn.conditionalSource, armor: gatedOff }))})</span>`
+			? ` <span class="stonetop-damage-mitigated">(${escHtml(format(`stonetop.fight.heroMoves.armorGate.${gateWords?.noteKey ?? "note"}`, { move: worn.conditionalSource, ...gateWords?.params, armor: gatedOff }))})</span>`
 			: "";
 		lines.push(`<li><strong>${escHtml(rowName)}</strong>: ${effective} damage${back}${half}${mitigated}${brave}${bare}: ${t.oldHp} &rarr; ${t.newHp} HP${dead}</li>`);
 	}
@@ -2624,16 +2658,17 @@ export function wireConditionalArmor(message, html, gateFor = applyGateOnce(mess
 	// nothing at all, and every uuid resolution below would be thrown away.
 	if (gate.hide) return;
 	const several = damage.results.filter(r => r.uuid).length > 1;
+	const barkskin = barkskinOnce();
 
 	for (const row of damage.results) {
 		if (!row.uuid || done.has(row.uuid)) continue;
 		const standIn = standIns.get(row.uuid);
 		const target = damageRowActor(resolveSync(standIn?.by ?? row.uuid));
-		const gated = target ? conditionalArmorOf(target) : null;
+		const gated = target ? conditionalArmorOf(target, barkskin) : null;
 		// No key means a `conditionalSource` this build does not know (a world written by a later one),
-		// which has no words to offer the armor back with (actors/character/move-armor.js#armorGateKey).
-		const gateKey = gated ? armorGateKey(gated.source) : null;
-		if (!gateKey) continue;
+		// which has no words to offer the armor back with (actors/character/move-armor.js#armorGateWords).
+		const gateWords = gated ? armorGateWords(gated.source) : null;
+		if (!gateWords) continue;
 
 		const label = document.createElement("label");
 		label.className = "stonetop-damage-armor-gate";
@@ -2641,7 +2676,7 @@ export function wireConditionalArmor(message, html, gateFor = applyGateOnce(mess
 		box.type = "checkbox";
 		box.className = "stonetop-check";
 		box.checked = !off.has(row.uuid);
-		const words = format(`stonetop.fight.heroMoves.armorGate.${gateKey}`, { armor: gated.armor });
+		const words = format(`stonetop.fight.heroMoves.armorGate.${gateWords.key}`, { ...gateWords.params, armor: gated.armor });
 		// Named whenever the box is not plainly about the one person the card is about — which a
 		// stand-in's box never is, even on a card with a single row. The same words applyOwedDamage
 		// labels that row with, so the question and the arithmetic name the same character.

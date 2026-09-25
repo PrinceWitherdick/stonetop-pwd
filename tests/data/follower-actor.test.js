@@ -33,7 +33,7 @@ describe("followerNpcActorData", () => {
 		expect(data.name).toBe("The Ragged Half-Dozen");
 		expect(data.system.hasStats).toBe(true);
 		expect(data.system.attributes.hp).toEqual({ value: 14, max: 36 });
-		expect(data.system.attributes.armor).toEqual({ value: 1, source: "leather" });
+		expect(data.system.attributes.armor).toEqual({ value: 1, source: "leather", conditional: 0, conditionalSource: "" });
 		expect(data.system.attributes.damage).toEqual({ value: "d8 (close)", rollFormula: "d8" });
 		expect(data.system.instinct).toBe("To question leadership");
 		expect(data.system.pronouns).toBe("they");
@@ -119,6 +119,19 @@ describe("followerNpcActorData", () => {
 	it("reads a book-format armor string down to its number", () => {
 		expect(followerNpcActorData({ armor: "2 (0 vs. iron)" }).system.attributes.armor.value).toBe(2);
 		expect(followerNpcActorData({ armor: "—" }).system.attributes.armor.value).toBe(0);
+	});
+
+	// Afon's "Armor 2 (0 vs. iron)" (Book I p.145) is a clause the sheet cannot check, so it rides to
+	// the NPC the way Barkskin rides on a character: all 2 armor by default, with the 2 iron takes away
+	// kept apart for the damage card to offer back with a ticked "Not iron" box.
+	it("keeps what a printed clause takes away, and what takes it, beside the armor", () => {
+		expect(followerNpcActorData({ armor: "2 (0 vs. iron)" }).system.attributes.armor)
+			.toMatchObject({ value: 2, conditional: 2, conditionalSource: "vs. iron" });
+		// A clause about where armor comes from is not a condition, and a hand-typed number has none.
+		expect(followerNpcActorData({ armor: "1 (shield)" }).system.attributes.armor)
+			.toMatchObject({ value: 1, conditional: 0, conditionalSource: "" });
+		expect(followerNpcActorData({ armor: 2 }).system.attributes.armor)
+			.toMatchObject({ value: 2, conditional: 0, conditionalSource: "" });
 	});
 
 	it("records where it came from and files it in the given folder", () => {

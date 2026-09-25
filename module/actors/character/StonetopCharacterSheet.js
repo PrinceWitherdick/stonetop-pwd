@@ -122,7 +122,7 @@ import {arcanaSummonFollowers} from "../../data/arcana-summons.js";
 import {joinNames} from "../../utils/strings.js";
 import {availablePossessionFollowers} from "../../data/possession-followers.js";
 import {FOLLOWER_MOVES} from "../../data/follower-moves.js";
-import {FOLLOWER_DRAG_TYPE} from "../../data/follower-actor.js";
+import {FOLLOWER_DRAG_TYPE, splitFollowerName} from "../../data/follower-actor.js";
 import {CREW_INDIVIDUAL_NAMES, CREW_INDIVIDUAL_TAGS, CREW_INDIVIDUAL_TRAITS} from "../../data/steading-members.js";
 import {resolvePortrait, portraitActionLabel} from "../../utils/portrait-frame.js";
 import {displayPortraitSrc} from "../../book2-art/people-portraits.js";
@@ -133,6 +133,7 @@ import {headerPortraitContext, usedActorPortraits, wirePortraitPopout, pointImag
 import {addPopoutHeaderControl, addPortraitFrameControl, addTokenizerControl} from "../../utils/popout-header-control.js";
 import {canOpenTokenizer, openTokenizer} from "../../utils/portrait-tokenizer.js";
 import {ensureFollowerActors, followerActorFromLink, syncFollowerActors} from "./follower-actors.js";
+import {barkskinMarks, wearsBarkskin, MOVE_ARMOR_BASE} from "./move-armor.js";
 import {localize, format} from "../../utils/i18n.js";
 import {promptRaiseFromDead} from "../../hooks/DeathsDoorPrompt.js";
 
@@ -2992,7 +2993,26 @@ export function createStonetopCharacterSheetClass(Base) {
 				card.hasDetails = editing || hasReference;
 				return card;
 			};
-			const finalize = (card) => withFolds(withOrderData(withExceptional(withSectionEdits(withGroupFight(withStatOverrides(card))))));
+			// A Blessed's Barkskin on a follower: "when you mark another with 1 Stock, they gain this
+			// benefit", 2 armor while touching the earth. A BASE, so it shows only where it beats the
+			// follower's own armor. Said on the Armor line; the NUMBER stays the card's own, because
+			// that is what the follower's NPC carries, and the damage row reads the mark itself, live
+			// (combat/attack-flow.js#wornArmor). Matched as the marks roster matches people: the
+			// follower's actor, or a mark laid on their name (move-armor.js#wearsBarkskin).
+			let barkskinIndex = null;
+			const withBarkskin = (card) => {
+				if (!card?.ftype) return card;
+				barkskinIndex ??= barkskinMarks(globalThis.game?.actors ?? []);
+				if (!barkskinIndex.ids.size && !barkskinIndex.names.size) return card;
+				const name = card.name || splitFollowerName(card.label).name;
+				const marked = wearsBarkskin(barkskinIndex, { name }, { byName: true })
+					|| [card.actorUuid, card.sourceUuid].some(uuid => uuid && wearsBarkskin(barkskinIndex, { uuid }));
+				if (marked && parseFollowerArmor(card.armor) < MOVE_ARMOR_BASE) {
+					card.armorGateNote = format("stonetop.fight.heroMoves.armorGate.barkskin", { armor: MOVE_ARMOR_BASE });
+				}
+				return card;
+			};
+			const finalize = (card) => withFolds(withOrderData(withExceptional(withSectionEdits(withBarkskin(withGroupFight(withStatOverrides(card)))))));
 			// Playbook possession-followers (the Would-be Hero's dog, the Ranger's Hounds,
 			// the Blessed's Mastiffs) ship as gear text; offer to materialize any the PC
 			// holds but hasn't added yet as a follower card (deduped by sourceUuid, like

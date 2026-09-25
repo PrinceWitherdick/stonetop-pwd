@@ -2210,7 +2210,9 @@
         "armorGate": {
           "barkskin": "Barkskin: {armor} armor, while touching the earth",
           "candle": "A Candle Against the Dark: {armor} armor, wielding a holy light and otherwise unarmed",
-          "note": "without {move}'s {armor} armor"
+          "note": "without {move}'s {armor} armor",
+          "versus": "Not {against}: {armor} armor, which {against} goes straight through",
+          "versusNote": "{against} goes through {armor} armor"
         },
         "uncanny": {
           "label": "{name}'s Uncanny Reflexes: roll with disadvantage, for a blow they could dodge or roll with",

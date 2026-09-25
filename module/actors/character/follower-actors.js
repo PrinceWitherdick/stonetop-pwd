@@ -282,9 +282,9 @@ function fieldFollowsCard(actor, key, stamped) {
 	return current === stamped;
 }
 
-// The card's two NUMBER fields. NpcModel starts both at 0, which is that schema's way of saying
+// The card's NUMBER fields. NpcModel starts each at 0, which is that schema's way of saying
 // "nothing here" — so for these, 0 is the empty field, exactly as "" is for the text ones.
-const NUMERIC_CARD_FIELDS = new Set(["hpMax", "armor"]);
+const NUMERIC_CARD_FIELDS = new Set(["hpMax", "armor", "armorConditional"]);
 
 /**
  * Is this field empty — nothing to lose, so the card may fill it?

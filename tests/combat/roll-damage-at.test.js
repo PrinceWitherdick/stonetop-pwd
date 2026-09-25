@@ -284,6 +284,73 @@ describe("Apply damage and the fight's rules", () => {
 		expect(actions.kids).toEqual([]);
 	});
 
+	/** A follower's NPC: HP to lose, and whatever armor its card gave it. */
+	const followerNpc = (id, name, armor) => ({
+		...hero(id, name), type: "npc",
+		system: { attributes: { armor, hp: { value: 8, max: 8 }, damage: { value: "d6" } } },
+	});
+	/** Wire a card's armor boxes into a DOM small enough to read back. */
+	function armorBoxes(results) {
+		const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+		globalThis.document = { createElement: element };
+		const actions = element("div");
+		const message = makeMessage({ damage: { move: "Bite", results, applied: [] } });
+		message.canUserModify = () => true;
+		wireConditionalArmor(message, { querySelector: sel => (sel === ".stonetop-attack-actions" ? actions : null) });
+		return { actions, message };
+	}
+
+	// Afon's "Armor 2 (0 vs. iron)" (Book I p.145): his armor applies, and the card asks about iron.
+	it("asks about a follower's printed armor clause with a ticked box, and takes the armor off when unticked", async () => {
+		const afon = followerNpc("afon", "Afon", { value: 2, conditional: 2, conditionalSource: "vs. iron" });
+		const { tokens } = fightInARow([["afon", afon]]);
+		const row = { uuid: tokens.afon.uuid, name: "Afon", raw: 5 };
+		const { actions, message } = armorBoxes([row]);
+		const label = actions.kids[0];
+		expect(label.kids[0].checked).toBe(true);
+		expect(label.kids[1].textContent).toContain("Not iron");
+		label.kids[0].checked = false;
+		await label.kids[0].fire();
+		expect(message.getFlag(SCOPE, "damage").armorOff).toEqual([row.uuid]);
+
+		// Ticked: his 2 armor takes 2 off the 5. Unticked, iron goes straight through.
+		await apply({ move: "Bite", weapon: null, results: [row], applied: [] });
+		expect(afon.system.attributes.hp.value).toBe(5);
+		afon.system.attributes.hp.value = 8;
+		await apply({ move: "Bite", weapon: null, results: [row], applied: [], armorOff: [row.uuid] });
+		expect(afon.system.attributes.hp.value).toBe(3);
+		expect(posted.at(-1).content).toContain("iron goes through 2 armor");
+	});
+
+	// Barkskin: "When you mark another with 1 Stock, they gain this benefit." A follower's NPC keeps only
+	// its card's numbers, so the mark is read when the blow lands.
+	it("gives a follower wearing a Blessed's Barkskin a 2-armor base, with the earth box", async () => {
+		const enfys = followerNpc("enfys", "Enfys", { value: 0 });
+		const { tokens } = fightInARow([["enfys", enfys]]);
+		const aerin = {
+			id: "aerin", name: "Aerin", type: "character", uuid: "Actor.aerin",
+			items: [{ type: "move", name: "Barkskin" }],
+			getFlag: (scope, key) => (key === "blessedMarks" ? [{ kind: "barkskin", name: "Enfys" }] : undefined),
+		};
+		globalThis.game.actors = collection([aerin, enfys]);
+		const row = { uuid: tokens.enfys.uuid, name: "Enfys", raw: 5 };
+		const { actions } = armorBoxes([row]);
+		expect(actions.kids[0].kids[1].textContent).toContain("Barkskin");
+		expect(actions.kids[0].kids[1].textContent).toContain("touching the earth");
+
+		await apply({ move: "Bite", weapon: null, results: [row], applied: [] });
+		expect(enfys.system.attributes.hp.value).toBe(5);
+		enfys.system.attributes.hp.value = 8;
+		await apply({ move: "Bite", weapon: null, results: [row], applied: [], armorOff: [row.uuid] });
+		expect(enfys.system.attributes.hp.value).toBe(3);
+
+		// No mark, no bark.
+		globalThis.game.actors = collection([enfys]);
+		enfys.system.attributes.hp.value = 8;
+		await apply({ move: "Bite", weapon: null, results: [row], applied: [] });
+		expect(enfys.system.attributes.hp.value).toBe(3);
+	});
+
 	it("hands a blow to the defender who took it for their ward, against the defender's armor", async () => {
 		const pim = hero("pim", "Pim");
 		const aeliana = hero("aeliana", "Aeliana");

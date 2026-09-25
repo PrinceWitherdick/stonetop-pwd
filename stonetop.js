@@ -81,7 +81,7 @@ import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/a
 import { possessionTrackUses, BOOKS_AND_SCROLLS, HOLY_RELICS } from "./module/actors/character/possession-tracks.js";
 import { INVOKE_THE_SUN_GOD } from "./module/actors/character/holy-light.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
-import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery } from "./module/combat/attack-flow.js";
+import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, forgetBarkskinMarks, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery } from "./module/combat/attack-flow.js";
 import { wireDefendSpends, SPEND_QUERY, handleSpendQuery } from "./module/fight/defend-spend.js";
 import { HEALERS_ARTS_QUERY, handleHealersArtsQuery } from "./module/actors/character/healers-arts.js";
 import { markQuestionBullets } from "./module/utils/question-bullets.js";
@@ -918,6 +918,14 @@ Hooks.on("updateActor", (actor, changes) => {
 	if (actor?.type !== "monster") return;
 	if ("name" in (changes ?? {}) || changes?.system?.concept !== undefined) invalidateMonsterRefIndex();
 });
+
+// -- BARKSKIN MARKS --------------------------------------------
+// The damage cards keep one scan of the world's Barkskin marks (attack-flow.js#barkskinOnce). A
+// mark is a flag on the Blessed and counts only while Barkskin is learned, so any actor or move
+// made, changed or deleted drops the scan for the next card to take again.
+for (const hook of ["createActor", "updateActor", "deleteActor", "createItem", "updateItem", "deleteItem"]) {
+	Hooks.on(hook, forgetBarkskinMarks);
+}
 
 // -- CROSS-CLIENT RENDER SYNC ----------------------------------
 // Arcana resource-track clicks persist with { render: false } so the masonry doesn't
