@@ -1,11 +1,14 @@
-import { statRequirementLabel, statRequirementsUnmet } from "./stat-requirement.js";
+import { statRequirementsUnmet } from "./stat-requirement.js";
+import { effectiveRequiredMoves, requiredMovesUnmet, requirementLabel } from "./move-requirement.js";
 
 export class PlaybookMoveEntry {
 	constructor(entry, ownedInstances, bgMoveNames, ownedAllByName, actorLevel, actorPlaybook, actorStats = {}) {
 		const isFromPlaybook   = entry.isStarting;
 		const isFromBackground = bgMoveNames.has(entry.name);
 		const req              = entry.requirement;
-		const requiresMoves    = req?.moves ?? [];
+		// The replaced move is folded into the required moves so every lock/sort reader sees it.
+		const replaces         = entry.replaces ?? null;
+		const requiresMoves    = effectiveRequiredMoves(req, replaces);
 		const requiresStats    = req?.stats ?? null;
 		const repeatMax        = entry.repeatMax ?? 1;
 		const lastOwnedId      = ownedInstances[ownedInstances.length - 1]?._id ?? null;
@@ -24,27 +27,23 @@ export class PlaybookMoveEntry {
 		this.source = isFromPlaybook ? "Starting move" : isFromBackground ? "Background" : null;
 		this.requiresPlaybook = req?.playbook ?? null;
 		this.minLevel = req?.level ?? null;
-		this.requires = requiresMoves[0] ?? null;
-		const requiresParts = [];
-		if (requiresMoves.length > 0) requiresParts.push(requiresMoves.join(", "));
-		// `req.stats` (e.g. Musclebound's { str: 2 }) is a machine-checkable per-stat
-		// prerequisite — its label rides here and it DOES feed `locked` below.
-		if (requiresStats)            requiresParts.push(statRequirementLabel(requiresStats));
-		// `req.note` is a display-only prerequisite (e.g. "All 6 marks in Potential for
-		// Greatness") that the engine can't check mechanically — it's shown to the player
-		// but never feeds `locked`, so it can't permanently lock the move the way an
-		// un-matchable `requirement.moves` string does.
-		if (req?.note)                requiresParts.push(req.note);
-		if (this.minLevel)            requiresParts.push(`level ${this.minLevel}+`);
-		this.requiresLabel = requiresParts.length > 0 ? requiresParts.join("; ") : null;
+		// Alpha's "Wild Speech or Spirit Tongue" (`req.anyMoves`) sorts under its first option.
+		this.requires = requiresMoves[0] ?? req?.anyMoves?.[0] ?? null;
+		this.replaces = replaces;
+		// `req.stats` (Musclebound's { str: 2 }) is labelled here and DOES feed `locked` below;
+		// `req.note` is labelled but never does (move-requirement.js#requirementLabel).
+		this.requiresLabel = requirementLabel(req, { replaces, level: this.minLevel });
 		// Per-stat ceiling for stat-increase moves (Improved Stat = +2, Superior Stat =
 		// +3). Drives the level-up stat picker's cap enforcement and marks the move as
 		// one that needs a stat choice when taken.
 		this.cap = entry.cap ?? null;
 		this.repeatable = repeatMax > 1;
 		this.repeatMax = repeatMax;
+		// Taking a replacing move gives up the one it replaces, so once this move is owned
+		// the replaced move's absence is the expected state, not a broken prerequisite.
+		const moveMissing = m => !ownedAllByName.has(m) && !(m === replaces && ownedInstances.length > 0);
 		this.locked = !this.isStarting && !!(
-			requiresMoves.some(m => !ownedAllByName.has(m)) ||
+			requiredMovesUnmet({ moves: requiresMoves, anyMoves: req?.anyMoves }, m => !moveMissing(m)) ||
 			(this.requiresPlaybook && this.requiresPlaybook !== actorPlaybook) ||
 			(this.minLevel && actorLevel < this.minLevel) ||
 			statRequirementsUnmet(requiresStats, actorStats)

@@ -74,8 +74,10 @@ async function levelUpOnce(char, actor) {
 	// Level + XP bookkeeping (cost = 6 + 2·level, per Book I).
 	expect(actor.system.attributes.level.value).toBe(levelBefore + 1);
 	expect(actor.system.attributes.xp.value).toBe(Math.max(0, xpBefore - cost));
-	// A move was always gained.
-	expect(moveCount(actor)).toBeGreaterThan(movesBefore);
+	// A move was always gained, unless it replaced one (Book I p.529): then the original went.
+	expect(ownedMoveNames(actor)).toContain(pick.name);
+	if (pick.replaces) expect(ownedMoveNames(actor)).not.toContain(pick.replaces);
+	else expect(moveCount(actor)).toBeGreaterThan(movesBefore);
 
 	// The move's demanded selection was actually committed.
 	if (pick.cap != null) {
@@ -94,7 +96,8 @@ async function levelUpOnce(char, actor) {
 }
 
 // Names of every advanced move reachable WITHOUT crossing playbooks: its whole
-// requirement.moves chain stays in-playbook and its stat gate is met by `finalStats`.
+// requirement.moves chain (and one of its requirement.anyMoves, if it has any) stays
+// in-playbook and its stat gate is met by `finalStats`.
 // (Level gates only delay a move, they don't make it unreachable.) These MUST all be
 // owned once the climb exhausts the playbook — anything missing would be lost content.
 function inHomeReachableAdvanced(playbookName, finalStats) {
@@ -114,6 +117,8 @@ function inHomeReachableAdvanced(playbookName, finalStats) {
 			if (!homeNames.has(r)) { ok = false; break; }   // needs a foreign move
 			if (!reachable(byName.get(r), stack)) { ok = false; break; }
 		}
+		const anyOf = req?.anyMoves ?? [];
+		if (ok && anyOf.length) ok = anyOf.some(r => homeNames.has(r) && reachable(byName.get(r), stack));
 		stack.delete(doc.name);
 		memo.set(doc.name, ok);
 		return ok;
@@ -152,19 +157,24 @@ describe("StonetopCharacter level-up climb — every playbook to exhaustion", ()
 			expect(finalLevel).toBeGreaterThanOrEqual(20);
 
 			// "Not missing anything": every move reachable without crossing playbooks was
-			// taken.
+			// taken. A move given up for its replacement (Bulwark, for A Mighty Rampart) was
+			// taken too; it just isn't owned any more.
 			const mustOwn = inHomeReachableAdvanced(pb.name, finalStats);
-			const missed = [...mustOwn].filter(name => !owned.has(name));
+			const retired = new Set(actor.items.map(i => i.system?.replaces).filter(Boolean));
+			const missed = [...mustOwn].filter(name => !owned.has(name) && !retired.has(name));
 			expect(missed).toEqual([]);
 
 			// Anything still locked is locked ONLY because it needs a move from another
-			// playbook that we never picked up (e.g. the Ranger's Alpha needs the Blessed's
-			// Spirit Tongue) — never because a same-playbook advance got stranded.
+			// playbook that we never picked up, never because a same-playbook advance got
+			// stranded. (The Ranger's Alpha needs Wild Speech OR the Blessed's Spirit Tongue, so
+			// the climb's Wild Speech unlocks it.)
 			for (const locked of exhausted.lockedMoves) {
 				const src = sourceMovesFor(pb.name).find(d => d.name === locked.name);
 				const reqMoves = src?.system?.requirement?.moves ?? [];
+				const anyOf = src?.system?.requirement?.anyMoves ?? [];
 				const homeNames = new Set(sourceMovesFor(pb.name).map(d => d.name));
-				const crossOnlyPrereq = reqMoves.some(r => !owned.has(r) && !homeNames.has(r));
+				const crossOnlyPrereq = reqMoves.some(r => !owned.has(r) && !homeNames.has(r)) ||
+					(anyOf.length > 0 && anyOf.every(r => !owned.has(r) && !homeNames.has(r)));
 				expect(crossOnlyPrereq, `${pb.name} left "${locked.name}" locked without a cross-playbook reason`).toBe(true);
 			}
 
@@ -213,30 +223,33 @@ describe("StonetopCharacter level-up climb — per-rule guarantees", () => {
 		expect(Object.values(actor.getFlag("stonetop-pwd", "improvedStatChoices"))).toEqual(["str", "str", "str", "str"]);
 	});
 
-	it("Ranger: a cross-playbook Worldly pick of Spirit Tongue unlocks Alpha (cross-playbook prerequisite)", async () => {
+	// Book I, the Ranger's Alpha: "(Requires level 6+, and Wild Speech or Spirit Tongue)".
+	// Either one unlocks it; neither leaves it locked.
+	it("Ranger: Alpha needs Wild Speech OR Spirit Tongue, and either one unlocks it", async () => {
 		const rangerId  = (name) => sourceMovesFor("The Ranger").find(d => d.name === name)._id;
 		const spiritTongueId = sourceMovesFor("The Blessed").find(d => d.name === "Spirit Tongue")._id;
 
-		// A level-6 Ranger who already has Wild Speech (Alpha's in-playbook prerequisite)
-		// but not yet Spirit Tongue (its cross-playbook prerequisite).
+		// A level-6 Ranger with neither: Alpha is locked, and says what would unlock it.
+		const neither = buildLiveCharacter({ slug: "the-ranger", name: "The Ranger", level: 6 });
+		const locked = (await neither.char.getLevelUpData()).lockedMoves.find(m => m.name === "Alpha");
+		expect(locked).toBeTruthy();
+		expect(locked.requiresLabel).toBe("Wild Speech or Spirit Tongue; level 6+");
+
+		// Wild Speech alone is enough.
+		const { char: withWild } = buildLiveCharacter({ slug: "the-ranger", name: "The Ranger", level: 6 });
+		await withWild.addMove(rangerId("Wild Speech"));
+		expect((await withWild.getLevelUpData()).availableMoves.map(m => m.name)).toContain("Alpha");
+
+		// So is Spirit Tongue alone, learned from the Blessed through Worldly.
 		const { char, actor } = buildLiveCharacter({ slug: "the-ranger", name: "The Ranger", level: 6 });
-		await char.addMove(rangerId("Wild Speech"));
-
-		const before = await char.getLevelUpData();
-		expect(before.availableMoves.map(m => m.name)).not.toContain("Alpha");
-		expect(before.lockedMoves.map(m => m.name)).toContain("Alpha");
-
-		// Take Worldly and learn Spirit Tongue from the Blessed.
 		await char.applyLevelUp(rangerId("Worldly"), null, {
 			crossPlaybook: true, foreignMoveId: spiritTongueId, grantsPossession: null,
 		});
 		const spiritTongue = actor.items.find(i => i.name === "Spirit Tongue");
 		expect(spiritTongue).toBeTruthy();
 		expect(spiritTongue.flags["stonetop-pwd"].grantedBy).toMatchObject({ move: "Worldly" });
-
-		// Alpha is now learnable.
-		const after = await char.getLevelUpData();
-		expect(after.availableMoves.map(m => m.name)).toContain("Alpha");
+		expect(ownedMoveNames(actor)).not.toContain("Wild Speech");
+		expect((await char.getLevelUpData()).availableMoves.map(m => m.name)).toContain("Alpha");
 	});
 
 	it("Lightbearer: offers an invocation every even level and never re-offers a chosen or starting one", async () => {
@@ -289,5 +302,107 @@ describe("StonetopCharacter level-up climb — per-rule guarantees", () => {
 		expect(grantSpy).toHaveBeenCalledWith("sacred-pouch");
 		const learned = actor.items.find(i => i.name === foreign[0].name);
 		expect(learned.flags["stonetop-pwd"].grantedBy).toMatchObject({ move: "Initiate of the Secret Arts" });
+	});
+});
+
+// Book I p.529: "If a move replaces a different move, then it requires the one it
+// replaces. If a player takes such a move, they lose the original move and any benefits it
+// conferred." And p.528: "A move that requires a specific playbook is never available to
+// other playbooks. No one but the Heavy can take Dangerous."
+describe("StonetopCharacter level-up — replacing moves and playbook-locked moves", () => {
+	const judgeMove = (name) => sourceMovesFor("The Judge").find(d => d.name === name)._id;
+
+	it("taking A Mighty Rampart gives up Bulwark, which is not offered again", async () => {
+		const { char, actor } = buildLiveCharacter({ slug: "the-judge", name: "The Judge", level: 5 });
+		await char.applyLevelUp(judgeMove("Bulwark"), null, null);
+		expect(ownedMoveNames(actor)).toContain("Bulwark");
+
+		await char.applyLevelUp(judgeMove("A Mighty Rampart"), null, null);
+
+		expect(ownedMoveNames(actor)).toContain("A Mighty Rampart");
+		expect(ownedMoveNames(actor)).not.toContain("Bulwark");
+		const data = await char.getLevelUpData();
+		const offered = [...data.availableMoves, ...data.lockedMoves].map(m => m.name);
+		expect(offered).not.toContain("Bulwark");
+	});
+
+	it("un-ticking A Mighty Rampart hands Bulwark back", async () => {
+		const { char, actor } = buildLiveCharacter({ slug: "the-judge", name: "The Judge", level: 5 });
+		await char.applyLevelUp(judgeMove("Bulwark"), null, null);
+		await char.applyLevelUp(judgeMove("A Mighty Rampart"), null, null);
+		const rampart = actor.items.find(i => i.name === "A Mighty Rampart");
+
+		await char.removeMove(rampart._id);
+
+		expect(ownedMoveNames(actor)).toContain("Bulwark");
+		expect(ownedMoveNames(actor)).not.toContain("A Mighty Rampart");
+	});
+
+	it("a replacing move ticked without its original retires nothing, so un-ticking it restores nothing", async () => {
+		const { char, actor } = buildLiveCharacter({ slug: "the-judge", name: "The Judge", level: 6 });
+		const rampart = await char.addMove(judgeMove("A Mighty Rampart"));
+		await char.removeMove(rampart._id);
+		expect(ownedMoveNames(actor)).not.toContain("Bulwark");
+	});
+
+	it("a Would-be Hero can't take Big Damn Hero without In Over Your Head", async () => {
+		const wbhMove = (name) => sourceMovesFor("The Would-Be Hero").find(d => d.name === name)._id;
+		const { char, actor } = buildLiveCharacter({ slug: "the-would-be-hero", name: "The Would-Be Hero", level: 6 });
+		expect(ownedMoveNames(actor)).not.toContain("In Over Your Head");
+
+		let data = await char.getLevelUpData();
+		expect(data.availableMoves.map(m => m.name)).not.toContain("Big Damn Hero");
+		const locked = data.lockedMoves.find(m => m.name === "Big Damn Hero");
+		expect(locked.requiresLabel).toBe("level 6+; replaces In Over Your Head");
+
+		await char.applyLevelUp(wbhMove("In Over Your Head"), null, null);
+		data = await char.getLevelUpData();
+		expect(data.availableMoves.map(m => m.name)).toContain("Big Damn Hero");
+	});
+
+	it("a cross-playbook pick never offers Dangerous or Potential for Greatness", async () => {
+		const { char } = buildLiveCharacter({ slug: "the-fox", name: "The Fox", level: 6 });
+		const foreign = await char.getForeignMovesForLevelUp({ playbooks: "any" }, 7);
+		const names = foreign.map(m => m.name);
+		expect(names).not.toContain("Dangerous");
+		expect(names).not.toContain("Potential for Greatness");
+		expect(names.length).toBeGreaterThan(0);
+	});
+});
+
+describe("A retired move learned through Versatile comes back as Versatile's", () => {
+	it("keeps its Granted by when the replacing move is un-ticked, or its own Versatile is un-learned", async () => {
+		const versatileId = sourceMovesFor("The Would-Be Hero").find(d => d.name === "Versatile")._id;
+		const judge = (name) => sourceMovesFor("The Judge").find(d => d.name === name)._id;
+		const { char, actor } = buildLiveCharacter({ slug: "the-would-be-hero", name: "The Would-Be Hero", level: 5 });
+		const cross = { crossPlaybook: true, grantsPossession: null };
+		await char.applyLevelUp(versatileId, null, { ...cross, foreignMoveId: judge("Bulwark") });
+		const v1 = actor.items.find(i => i.name === "Versatile");
+		await char.applyLevelUp(versatileId, null, { ...cross, foreignMoveId: judge("A Mighty Rampart") });
+		const v2 = actor.items.filter(i => i.name === "Versatile").find(i => i._id !== v1._id);
+		expect(ownedMoveNames(actor)).not.toContain("Bulwark");
+
+		// Un-learning the second Versatile takes its Rampart, which hands Bulwark back.
+		await char.removeMove(v2._id);
+		const bulwark = actor.items.find(i => i.name === "Bulwark");
+		expect(bulwark).toBeTruthy();
+		expect(ownedMoveNames(actor)).not.toContain("A Mighty Rampart");
+		expect(bulwark.flags["stonetop-pwd"].grantedBy).toMatchObject({ move: "Versatile", instanceId: v1._id });
+	});
+
+	it("does not come back once the Versatile that granted it is gone", async () => {
+		const versatileId = sourceMovesFor("The Would-Be Hero").find(d => d.name === "Versatile")._id;
+		const judge = (name) => sourceMovesFor("The Judge").find(d => d.name === name)._id;
+		const { char, actor } = buildLiveCharacter({ slug: "the-would-be-hero", name: "The Would-Be Hero", level: 5 });
+		const cross = { crossPlaybook: true, grantsPossession: null };
+		await char.applyLevelUp(versatileId, null, { ...cross, foreignMoveId: judge("Bulwark") });
+		const v1 = actor.items.find(i => i.name === "Versatile");
+		await char.applyLevelUp(versatileId, null, { ...cross, foreignMoveId: judge("A Mighty Rampart") });
+		const v2 = actor.items.filter(i => i.name === "Versatile").find(i => i._id !== v1._id);
+
+		await char.removeMove(v1._id);
+		await char.removeMove(v2._id);
+		expect(ownedMoveNames(actor)).not.toContain("Bulwark");
+		expect(ownedMoveNames(actor)).not.toContain("A Mighty Rampart");
 	});
 });

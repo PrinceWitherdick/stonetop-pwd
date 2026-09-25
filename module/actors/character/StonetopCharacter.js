@@ -36,7 +36,8 @@ import {
 import {PlaybookMoveEntry} from "./PlaybookMoveEntry.js";
 import {normalizeRollMode} from "../../dialogs/RollDialog.js";
 import {deletionEntry} from "../../utils/foundry-compat.js";
-import {statRequirementLabel, statRequirementsUnmet} from "./stat-requirement.js";
+import {statRequirementsUnmet} from "./stat-requirement.js";
+import {effectiveRequiredMoves, requiredMovesUnmet, requirementLabel} from "./move-requirement.js";
 import {MoveResources} from "./MoveResources.js";
 import {moveMarkBudget} from "./move-mark-budget.js";
 import {StonetopFlags, STONETOP_SCOPE, resolvedFlags, resolvedFlagProperty} from "./StonetopFlags.js";
@@ -530,7 +531,7 @@ export class StonetopCharacter {
 			// every render, not written once.
 			.withVitals(_buildVitalsSection(actor, playbookData, armor, moveBonuses, wornArmorBase, insertHpPenalty(postDeath.activeInsert?.lore), unpierceableArmor, armorBase, { value: conditionalArmor, source: conditionalSource }))
 			.withMoves(moves)
-			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null))
+			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null, this._retiredPickCount()))
 			.withInventory(inventory)
 			.withArcana(await this._arcana.buildSnapshot(actor.system.stats ?? {}, this._inventory.checked, this._inventory.resources))
 			.withPostDeathInsert(postDeath)
@@ -777,6 +778,7 @@ export class StonetopCharacter {
 		if (learnedItems.length > 0) {
 			const learnedResourcesMap = this._moveResources.getMoveResources();
 			const learnedMarksMap     = this._moveResources.getMarks();
+			const learnedActorStats   = _statValueMap(this._actor.system?.stats);
 			categories.push(new MoveCategorySnapshotBuilder()
 				.withKey("learned")
 				.withTitle("Learned Moves")
@@ -802,6 +804,12 @@ export class StonetopCharacter {
 					const { options: markOptions, budget: markBudget } = _buildMarkOptions(
 						{ markOptions: i.system?.markOptions, markBudget: i.system?.markBudget, ownedIds: [i._id], owned: true },
 						learnedMarksMap[i.name] ?? {});
+					// Its prerequisites, read by the same checks a playbook move's are (a required
+					// move, a level, a stat): a Heavy who learned Parry & Riposte through Seasoned
+					// Warrior and then dropped Skill at Arms is warned, as a playbook move would be.
+					// A WARNING only: nothing is locked or taken away. Its playbook requirement is
+					// not asked, since a learned move is from another playbook by definition.
+					const checked = _learnedMoveRequirement(i, ownedAllByName, actorLevel, learnedActorStats);
 					return new MoveSnapshotBuilder()
 						.withId(i._id).withCompendiumId(i._id).withOwnedId(i._id)
 						.withName(i.name)
@@ -812,7 +820,8 @@ export class StonetopCharacter {
 						.withSource({ type: "learned" })
 						.withSourceLabel(sourceLabel)
 						.withOwned(true).withOwnedIds([i._id])
-						.withLocked(false).withRequirement(null).withRequiresLabel(null)
+						.withLocked(false).withRequirement(null).withRequiresLabel(checked.requiresLabel)
+						.withRequirementsUnmet(checked.requirementsUnmet)
 						.withResource(resource)
 						.withMarkOptions(markOptions).withMarkBudget(markBudget)
 						.withMaxLoad(i.system?.maxLoad)
@@ -2344,16 +2353,54 @@ export class StonetopCharacter {
 		if (!doc) return null;
 		if (skipIfOwned && this._actor.items.some(i => i.type === "move" && i.name === doc.name)) return null;
 		const created = await this._actor.createEmbeddedDocuments("Item", [doc.toObject()]);
-		return created?.[0] ?? null;
+		const added = created?.[0] ?? null;
+		if (added) await this._retireReplacedMove(added);
+		return added;
 	}
 
+	// Book I p.529: "If a move replaces a different move, then it requires the one it
+	// replaces. If a player takes such a move, they lose the original move and any benefits
+	// it conferred." Done here rather than in applyLevelUp so every way of gaining a move
+	// obeys it: the level-up dialog, the Moves-tab checkboxes, and a cross-playbook pick.
+	// Retired through removeMove so the original's own bookkeeping goes with it. The new
+	// item remembers what it retired, which is the only move removeMove will hand back if
+	// this one is un-ticked; a replacing move ticked in edit mode without its original
+	// retires nothing and so restores nothing.
+	async _retireReplacedMove(added) {
+		const replaced = added.system?.replaces;
+		if (!replaced) return;
+		const originals = this._actor.items.filter(i => i.type === "move" && i.name === replaced);
+		if (!originals.length) return;
+		// An original learned through a cross-playbook move keeps its "Granted by" on the way
+		// back, so it returns to Learned Moves rather than landing loose.
+		const grantedBy = originals.map(i => i.flags?.[STONETOP_SCOPE]?.grantedBy).find(Boolean) ?? null;
+		for (const it of originals) await this.removeMove(it._id);
+		await added.setFlag(STONETOP_SCOPE, "retiredMove", replaced);
+		if (grantedBy) await added.setFlag(STONETOP_SCOPE, "retiredGrantedBy", grantedBy);
+	}
+
+	// Hand back the move a now-removed replacing move retired (see _retireReplacedMove).
+	async _restoreRetiredMove(gone) {
+		const flags   = gone?.flags?.[STONETOP_SCOPE];
+		const retired = flags?.retiredMove;
+		if (!retired) return;
+		// An original that came through a cross-playbook move comes back only while that move is
+		// still here: un-learning the granter would have taken the original with it, so handing it
+		// back now would leave a foreign move on the sheet that nothing grants.
+		const grantedBy = flags.retiredGrantedBy;
+		if (grantedBy && !this._actor.items.some(i => i._id === grantedBy.instanceId)) return;
+		const restored = await this.addPlaybookMoveByName(gone.system?.playbook, retired);
+		if (restored && grantedBy) await restored.setFlag(STONETOP_SCOPE, "grantedBy", grantedBy);
+	}
+
+	// Returns the created move item, or null when nothing was added (already owned, unknown).
 	async addPlaybookMoveByName(playbookName, moveName) {
-		if (!playbookName || !moveName) return;
+		if (!playbookName || !moveName) return null;
 		const ownedNames = new Set(this._actor.items.filter(i => i.type === "move").map(i => i.name));
-		if (ownedNames.has(moveName)) return;
+		if (ownedNames.has(moveName)) return null;
 		const entries = await this._moveRepo.getPlaybookMoves(playbookName);
 		const entry = entries.find(e => e.name === moveName);
-		if (entry) await this.addMove(entry.id);
+		return entry ? this.addMove(entry.id) : null;
 	}
 
 	async removeMove(ownedId) {
@@ -2366,9 +2413,9 @@ export class StonetopCharacter {
 		// granted with grantedBy.instanceId === its own item id. Removing the cross-playbook
 		// move must also remove those granted moves, or they'd linger in "Learned Moves" with
 		// a dangling "Granted by <gone move>" label and an ability the player no longer has.
-		const orphans = this._actor.items
-			.filter(i => i.type === "move" && i.flags?.[STONETOP_SCOPE]?.grantedBy?.instanceId === ownedId)
-			.map(i => i._id);
+		const orphanItems = this._actor.items
+			.filter(i => i.type === "move" && i.flags?.[STONETOP_SCOPE]?.grantedBy?.instanceId === ownedId);
+		const orphans = orphanItems.map(i => i._id);
 		await this._actor.deleteEmbeddedDocuments("Item", [ownedId, ...orphans]);
 		if (removed) await this._revertStatIncreaseChoice(removed);
 		// A custom move's resource track is stored under its item id (see buildSnapshot), and
@@ -2376,6 +2423,10 @@ export class StonetopCharacter {
 		// forever. Shipped moves key by name and keep theirs on purpose. Only `removed` can be
 		// custom: the cascaded orphans are cross-playbook grants, which are always shipped.
 		if (_isCustomMove(removed)) await this._moveResources.clear(ownedId);
+		// Un-ticking a replacing move (A Mighty Rampart) hands back the move it retired
+		// (Bulwark), so an undo leaves the character as it was. The cascade counts too: un-
+		// learning the Versatile that granted a Rampart undoes the Rampart's swap as well.
+		for (const gone of [removed, ...orphanItems]) await this._restoreRetiredMove(gone);
 	}
 
 	// Apply the "either X OR Y" starting-move picks: grant the chosen move in each group
@@ -3676,9 +3727,10 @@ export class StonetopCharacter {
 		if (playbookData?.name) {
 			const bgMoveNames = this._backgroundMoveNames(this._selectedBackground(playbookData));
 			const entries     = await this._moveRepo.getPlaybookMoves(playbookData.name);
+			const retired     = this._retiredMoveNames();
 			const all = this.sortPlaybookMoves(
 				this.buildMovelistContext(entries, ownedAllByName, bgMoveNames, newLevel, playbookData.name)
-			).filter(e => !e.owned || (e.repeatable && e.ownedIds.length < e.repeatMax));
+			).filter(e => (!e.owned || (e.repeatable && e.ownedIds.length < e.repeatMax)) && !retired.has(e.name));
 			availableMoves = all.filter(e => !e.locked);
 			lockedMoves    = all.filter(e => e.locked);
 		}
@@ -3717,15 +3769,16 @@ export class StonetopCharacter {
 	// playbook "for which they otherwise qualify". Given the picked move's `crossPlaybook`
 	// config + the level being gained, returns the qualifying foreign moves
 	// ({compendiumId, name, description, playbook}), EXCLUDING: Improved/Superior Stat
-	// (cap != null), other cross-playbook moves (no third-playbook chaining), and moves
-	// already owned. The foreign move's own `requirement.playbook` is intentionally IGNORED
-	// — crossing playbooks is the point — but its level + required-move prereqs are honored.
+	// (cap != null), other cross-playbook moves (no third-playbook chaining), moves
+	// already owned, and playbook-locked moves (Dangerous, Potential for Greatness — see
+	// _foreignMoveQualifies). Level, required-move and stat prereqs are honored.
 	async getForeignMovesForLevelUp(crossPlaybook, level) {
 		const ownName = (await this.playbook())?.name ?? this._actor.system?.playbook?.name ?? null;
 		const allowed = crossPlaybook?.playbooks === "any"
 			? _ALL_PLAYBOOK_NAMES.filter(p => p !== ownName)
 			: (crossPlaybook?.playbooks ?? []).filter(p => p !== ownName);
 		const ownedNames = new Set(this._actor.items.filter(i => i.type === "move").map(i => i.name));
+		const retired    = this._retiredMoveNames();
 		const actorStats = _statValueMap(this._actor.system?.stats);
 		const out = [], seen = new Set();
 		// Fetch every allowed playbook's moves concurrently — the reads are independent
@@ -3737,10 +3790,10 @@ export class StonetopCharacter {
 			for (const def of movesPerPlaybook[i]) {
 				if (def.cap != null) continue;          // no Improved/Superior Stat
 				if (def.crossPlaybook) continue;         // no third-playbook chaining
-				if (ownedNames.has(def.name) || seen.has(def.name)) continue;
+				if (ownedNames.has(def.name) || retired.has(def.name) || seen.has(def.name)) continue;
 				if (!_foreignMoveQualifies(def, ownedNames, level, actorStats)) continue;
 				seen.add(def.name);
-				out.push({ compendiumId: def.id, name: def.name, description: def.description ?? "", playbook: pb, requiresLabel: _foreignRequiresLabel(def.requirement) });
+				out.push({ compendiumId: def.id, name: def.name, description: def.description ?? "", playbook: pb, requiresLabel: requirementLabel(def.requirement, { replaces: def.replaces ?? null }) });
 			}
 		}
 		out.sort((a, b) => a.playbook.localeCompare(b.playbook) || a.name.localeCompare(b.name));
@@ -3873,6 +3926,23 @@ export class StonetopCharacter {
 		}
 	}
 
+	// Names of moves an owned move replaces (Bulwark, while A Mighty Rampart is owned). The
+	// original was given up for its replacement, so it is not offered again.
+	_retiredMoveNames() {
+		return new Set(this._actor.items
+			.filter(i => i.type === "move" && i.system?.replaces)
+			.map(i => i.system.replaces));
+	}
+
+	// How many playbook picks were given up to a replacing move, for the level move budget.
+	// A replacement that came through a cross-playbook pick is skipped: it and the move it
+	// retired both sit in Learned Moves, which the budget never counted.
+	_retiredPickCount() {
+		return this._actor.items.filter(i => i.type === "move"
+			&& i.flags?.[STONETOP_SCOPE]?.retiredMove
+			&& !i.flags?.[STONETOP_SCOPE]?.grantedBy).length;
+	}
+
 	_buildOwnedMovesMap() {
 		const map = new Map();
 		for (const item of this._actor.items.filter(i => i.type === "move")) {
@@ -3893,35 +3963,27 @@ const _ALL_PLAYBOOK_NAMES = [
 ];
 
 // A foreign move qualifies for a cross-playbook pick when the actor owns its required
-// moves, meets its level, and meets any machine-checkable stat minimum (Musclebound's
-// STR +2 — gated here just as it is on its home playbook, so crossing playbooks can't
-// dodge the prereq). Its `requirement.playbook` is intentionally ignored (the
-// cross-playbook move grants the cross-playbook access); a null requirement always
-// qualifies. NOTE: a freeform `requirement.note` (e.g. "All 6 marks in Potential for
-// Greatness") is still NOT machine-checked — it can't be without a per-note rule engine —
-// so such a move stays pickable; the note is surfaced in the picker for the player to
-// self-police, exactly as the sheet shows note-only prerequisites on owned moves.
+// moves (including the one it replaces), meets its level, and meets any machine-checkable
+// stat minimum (Musclebound's STR +2 — gated here just as it is on its home playbook, so
+// crossing playbooks can't dodge the prereq); a null requirement always qualifies.
+//
+// A move that names a playbook in its requirement never qualifies. Book I p.528: "A move
+// that requires a specific playbook is never available to other playbooks. No one but the
+// Heavy can take Dangerous, and no one but the Would-be Hero can have Potential for
+// Greatness." Every move offered here comes from another playbook, and the cross-playbook
+// moves are what grant the access, so the playbook tag marks exactly the moves that access
+// does not reach.
+//
+// NOTE: a freeform `requirement.note` (e.g. "All 6 marks in Potential for Greatness") is
+// still NOT machine-checked — it can't be without a per-note rule engine — so such a move
+// stays pickable; the note is surfaced in the picker for the player to self-police, exactly
+// as the sheet shows note-only prerequisites on owned moves.
 function _foreignMoveQualifies(def, ownedNames, level, actorStats = {}) {
-	const req = def.requirement;
-	if (!req) return true;
+	const req = def.requirement ?? {};
+	if (req.playbook) return false;
 	if (req.level && level < req.level) return false;
-	for (const m of (req.moves ?? [])) if (!ownedNames.has(m)) return false;
-	if (statRequirementsUnmet(req.stats, actorStats)) return false;
-	return true;
-}
-
-// Display string of a foreign move's prerequisites for the picker (required moves + the
-// machine-checked stat minimum + the freeform note); the playbook requirement is omitted
-// (crossing playbooks is the point) and level is omitted (already enforced). Null when
-// there's nothing to show.
-function _foreignRequiresLabel(req) {
-	if (!req) return null;
-	const parts = [];
-	if (req.moves?.length) parts.push(req.moves.join(", "));
-	const statLabel = statRequirementLabel(req.stats);
-	if (statLabel)         parts.push(statLabel);
-	if (req.note)          parts.push(req.note);
-	return parts.length ? parts.join("; ") : null;
+	if (requiredMovesUnmet({ ...req, moves: effectiveRequiredMoves(req, def.replaces) }, m => ownedNames.has(m))) return false;
+	return !statRequirementsUnmet(req.stats, actorStats);
 }
 
 const _STAT_DEFS = {
@@ -4369,6 +4431,21 @@ function _buildMarkOptions(entry, markCounts) {
 	return { options, budget };
 }
 
+/**
+ * A LEARNED move's prerequisites, as `{ requiresLabel, requirementsUnmet }`, through PlaybookMoveEntry
+ * so the label and the checks (required moves, any-of moves, level, stats, "replaces") are the very
+ * ones a playbook move's card gets. Owned, and never a starting move, so an unmet one reads as the
+ * same "requirement not met" warning. The requirement's playbook is dropped first: a learned move is
+ * from another playbook by definition.
+ */
+function _learnedMoveRequirement(item, ownedAllByName, actorLevel, actorStats) {
+	const { playbook: _foreign, ...requirement } = item.system?.requirement ?? {};
+	const entry = new PlaybookMoveEntry(
+		{ name: item.name, isStarting: false, requirement, replaces: item.system?.replaces || null },
+		[item], new Set(), ownedAllByName, actorLevel, null, actorStats);
+	return { requiresLabel: entry.requiresLabel, requirementsUnmet: entry.requirementsUnmet };
+}
+
 function _buildMoveEntry(entry, source, moveResourcesMap, bgSlugs = new Set(), moveBackgroundAnswers = {}, improvedStatChoices = {}, moveMarksMap = {}, actorStats = {}) {
 	const resourceDef = entry.resource;
 	const resource = resourceDef ? new ResourceBuilder()
@@ -4524,7 +4601,7 @@ function _rollLabelForMove(name, rollType, data = {}) {
 	return ROLL_LABELS_BY_TYPE[normalizedRollType] ?? null;
 }
 
-function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, loveLetters = [], playbookName = null) {
+function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, loveLetters = [], playbookName = null, retiredPicks = 0) {
 	const playbookCat   = categories.find(c => c.key === "playbook");
 	const basicCat      = categories.find(c => c.key === "basic");
 	const expeditionCat = categories.find(c => c.key === "expedition");
@@ -4545,9 +4622,11 @@ function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, love
 	// twice) counts each take, and a cross-playbook pick (Versatile) counts once —
 	// the foreign move it grants lives in the Learned category and is excluded.
 	// Background / auto-granted starting moves are `isStarting` and never counted.
+	// A replacing move (A Mighty Rampart) gave up an earlier pick (Bulwark) to be taken,
+	// so each one it retired still counts: `retiredPicks`.
 	const chosenInstances = (playbookCat?.moves ?? [])
 		.filter(m => !m.isStarting)
-		.reduce((n, m) => n + (m.ownedIds?.length ?? 0), 0);
+		.reduce((n, m) => n + (m.ownedIds?.length ?? 0), 0) + retiredPicks;
 	const expectedPicks = pickCount + Math.max(0, actorLevel - 1);
 	const levelMovesShortfall = Math.max(0, expectedPicks - chosenInstances);
 	const levelMovesOverage = Math.max(0, chosenInstances - expectedPicks);

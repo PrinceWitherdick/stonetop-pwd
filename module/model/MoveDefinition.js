@@ -13,6 +13,9 @@ export class MoveDefinition {
 		this.moveResults = data.system?.moveResults     ?? null;
 		this.isStarting  = data.system?.isStartingMove  ?? false;
 		this.requirement = data.system?.requirement     ?? null;
+		// The move this one replaces ("Requires level 6+; replaces Bulwark"), or null. Book I
+		// p.529: a replacing move requires the one it replaces, and taking it loses the original.
+		this.replaces    = data.system?.replaces        || null;
 		this.repeatMax   = data.system?.repeatMax       ?? null;
 		// Per-stat ceiling for stat-increase moves (+2 / +3); null otherwise. A non-null
 		// cap marks the move as needing a stat-choice picker at level-up.

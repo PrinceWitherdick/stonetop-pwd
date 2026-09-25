@@ -2,7 +2,7 @@ import { MoveDefinition } from "../../../model/MoveDefinition.js";
 import { FoundryPackStore } from "./FoundryPackStore.js";
 import { ITEMS_PACK } from "../StonetopFlags.js";
 
-const PLAYBOOK_FIELDS   = ["system.playbook", "system.isStartingMove", "system.requirement",
+const PLAYBOOK_FIELDS   = ["system.playbook", "system.isStartingMove", "system.requirement", "system.replaces",
                             "system.rollType", "system.description", "system.repeatMax", "system.cap", "system.resource",
                             "system.hpBonus", "system.armorBonus", "system.loadBonus", "system.maxLoad", "system.requiresUnarmored", "system.markOptions", "system.markBudget", "system.crossPlaybook", "system.asterisk", "system.moveResults"];
 const POST_DEATH_FIELDS = ["system.playbook", "system.rollType", "system.description", "system.resource", "system.moveResults"];

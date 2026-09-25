@@ -90,10 +90,12 @@ function cleanMove(doc) {
     }
     if (s.resource?.max) out.resource = cleanResource(s.resource);
     if (s.isStartingMove) out.isStartingMove = true;
-    if (s.requirement && (s.requirement.level > 1 || s.requirement.moves?.length || s.requirement.note || s.requirement.stats)) {
+    if (s.requirement && (s.requirement.level > 1 || s.requirement.moves?.length || s.requirement.anyMoves?.length || s.requirement.note || s.requirement.stats)) {
         out.requirement = {};
         if (s.requirement.level > 1) out.requirement.level = s.requirement.level;
         if (s.requirement.moves?.length) out.requirement.moves = s.requirement.moves;
+        // Any ONE of these is enough (Alpha: "Wild Speech or Spirit Tongue").
+        if (s.requirement.anyMoves?.length) out.requirement.anyMoves = s.requirement.anyMoves;
         // Machine-checkable per-stat minimum (Musclebound's { str: 2 }) — gates the move.
         if (s.requirement.stats) out.requirement.stats = s.requirement.stats;
         // Display-only prerequisite the engine can't check mechanically (e.g. "All 6 marks

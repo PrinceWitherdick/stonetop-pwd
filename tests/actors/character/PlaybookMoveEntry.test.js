@@ -67,6 +67,38 @@ describe("PlaybookMoveEntry (stat-increase cap)", () => {
 	});
 });
 
+describe("PlaybookMoveEntry (a move that replaces another)", () => {
+	// Book I p.529: a replacing move requires the move it replaces, and taking it gives the
+	// original up. The data spells the prereq out for A Mighty Rampart only; Big Damn Hero
+	// carries just `replaces`.
+	const bigDamnHero = new MoveDefinition({
+		_id: "bdh", name: "Big Damn Hero",
+		system: { playbook: "The Would-Be Hero", requirement: { level: 6 }, replaces: "In Over Your Head" },
+	});
+	const rampart = new MoveDefinition({
+		_id: "amr", name: "A Mighty Rampart",
+		system: { playbook: "The Judge", requirement: { level: 6, moves: ["Bulwark"] }, replaces: "Bulwark" },
+	});
+
+	it("is locked until the move it replaces is owned", () => {
+		expect(new PlaybookMoveEntry(bigDamnHero, [], NO_BG, NO_OWNED_BY_NAME, 6, "The Would-Be Hero").locked).toBe(true);
+		expect(new PlaybookMoveEntry(bigDamnHero, [], NO_BG, new Set(["In Over Your Head"]), 6, "The Would-Be Hero").locked).toBe(false);
+	});
+
+	it("reads as the book prints it, naming the replaced move once", () => {
+		expect(new PlaybookMoveEntry(bigDamnHero, [], NO_BG, NO_OWNED_BY_NAME, 6, "The Would-Be Hero").requiresLabel)
+			.toBe("level 6+; replaces In Over Your Head");
+		expect(new PlaybookMoveEntry(rampart, [], NO_BG, NO_OWNED_BY_NAME, 6, "The Judge").requiresLabel)
+			.toBe("level 6+; replaces Bulwark");
+	});
+
+	it("once owned, the original's absence is not a broken prerequisite", () => {
+		const entry = new PlaybookMoveEntry(rampart, [{ _id: "r1" }], NO_BG, new Set(["A Mighty Rampart"]), 6, "The Judge");
+		expect(entry.locked).toBe(false);
+		expect(entry.requirementsUnmet).toBe(false);
+	});
+});
+
 describe("PlaybookMoveEntry (broken prerequisites on a learned move)", () => {
 	// Move B requires Move A. The actor learned B, then edited their moves and
 	// removed A — B should flag `requirementsUnmet` so the sheet can warn.
@@ -167,5 +199,36 @@ describe("PlaybookMoveEntry (machine-checkable stat requirement)", () => {
 	it("does NOT flag an OWNED move whose stat still meets the gate", () => {
 		const entry = new PlaybookMoveEntry(def, [{ _id: "mb1" }], NO_BG, new Set(["Musclebound"]), 2, "The Heavy", { str: 2 });
 		expect(entry.requirementsUnmet).toBe(false);
+	});
+});
+
+// Book I, the Ranger's Alpha: "(Requires level 6+, and Wild Speech or Spirit Tongue)". Any
+// ONE of `requirement.anyMoves` is enough; `requirement.moves` still needs every one.
+describe("PlaybookMoveEntry (an either-or required move)", () => {
+	const alpha = new MoveDefinition({
+		_id: "alpha", name: "Alpha",
+		system: { playbook: "The Ranger", requirement: { level: 6, anyMoves: ["Wild Speech", "Spirit Tongue"] } },
+	});
+	const at6 = (owned, instances = []) => new PlaybookMoveEntry(alpha, instances, NO_BG, new Set(owned), 6, "The Ranger");
+
+	it("is unlocked by either move alone", () => {
+		expect(at6(["Wild Speech"]).locked).toBe(false);
+		expect(at6(["Spirit Tongue"]).locked).toBe(false);
+		expect(at6(["Wild Speech", "Spirit Tongue"]).locked).toBe(false);
+	});
+
+	it("is locked with neither, and prints them as the book does", () => {
+		const entry = at6([]);
+		expect(entry.locked).toBe(true);
+		expect(entry.requiresLabel).toBe("Wild Speech or Spirit Tongue; level 6+");
+	});
+
+	it("flags an owned Alpha once neither move is left", () => {
+		expect(at6([], [{ _id: "a1" }]).requirementsUnmet).toBe(true);
+		expect(at6(["Spirit Tongue"], [{ _id: "a1" }]).requirementsUnmet).toBe(false);
+	});
+
+	it("sorts under its first option", () => {
+		expect(at6([]).requires).toBe("Wild Speech");
 	});
 });

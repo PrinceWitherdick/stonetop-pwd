@@ -117,18 +117,36 @@ describe("playbook advancement data", () => {
 	it("every required-move prerequisite is obtainable (in-playbook or via a cross-playbook move)", () => {
 		const offenders = [];
 		for (const d of DOCS) {
-			const reqs = d.system?.requirement?.moves ?? [];
-			if (!reqs.length) continue;
+			const reqs  = d.system?.requirement?.moves ?? [];
+			const anyOf = d.system?.requirement?.anyMoves ?? [];
+			if (!reqs.length && !anyOf.length) continue;
 			const home = d.system.playbook;
 			const reach = crossReach(home);
-			for (const r of reqs) {
+			const obtainable = r => {
 				const offeredBy = NAME_TO_PLAYBOOKS.get(r);
-				if (!offeredBy) { offenders.push(`${home}/${d.name} → unknown move "${r}"`); continue; }
-				const obtainable = offeredBy.has(home) || [...offeredBy].some(pb => reach.has(pb));
-				if (!obtainable) offenders.push(`${home}/${d.name} → "${r}" not obtainable`);
+				return !!offeredBy && (offeredBy.has(home) || [...offeredBy].some(pb => reach.has(pb)));
+			};
+			for (const r of [...reqs, ...anyOf]) {
+				if (!NAME_TO_PLAYBOOKS.get(r)) offenders.push(`${home}/${d.name} → unknown move "${r}"`);
 			}
+			// Every all-of move must be reachable; an any-of list needs just one reachable.
+			for (const r of reqs) {
+				if (NAME_TO_PLAYBOOKS.get(r) && !obtainable(r)) offenders.push(`${home}/${d.name} → "${r}" not obtainable`);
+			}
+			if (anyOf.length && !anyOf.some(obtainable)) offenders.push(`${home}/${d.name} → none of "${anyOf.join(" or ")}" obtainable`);
 		}
 		expect(offenders).toEqual([]);
+	});
+
+	it("a book 'X or Y' prerequisite is stored as any-of, never as all-of", () => {
+		// Book I, the Ranger's advanced moves: "ALPHA (Requires level 6+, and Wild Speech or Spirit
+		// Tongue)". It is the only "or" prerequisite among the playbook moves; Second Intent's
+		// "Parry & Riposte, and Ambush" is the only genuine all-of pair.
+		const alpha = (BY_NAME.get("The Ranger") ?? []).find(d => d.name === "Alpha");
+		expect(alpha.system.requirement).toMatchObject({ level: 6, anyMoves: ["Wild Speech", "Spirit Tongue"] });
+		expect(alpha.system.requirement.moves ?? []).toEqual([]);
+		const multi = DOCS.filter(d => (d.system?.requirement?.moves ?? []).length > 1).map(d => d.name);
+		expect(multi).toEqual(["Second Intent"]);
 	});
 
 	it("each playbook has enough advancement capacity to climb well past level 10", () => {

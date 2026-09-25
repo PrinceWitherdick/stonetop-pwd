@@ -93,7 +93,7 @@ describe("FoundryMoveRepository", () => {
 			const repo = new FoundryMoveRepository();
 			await repo.getPlaybookMoves("The Blessed");
 			expect(pack.getIndex).toHaveBeenCalledWith({
-				fields: ["system.playbook", "system.isStartingMove", "system.requirement",
+				fields: ["system.playbook", "system.isStartingMove", "system.requirement", "system.replaces",
 				         "system.rollType", "system.description", "system.repeatMax", "system.cap", "system.resource",
 				         "system.hpBonus", "system.armorBonus", "system.loadBonus", "system.maxLoad", "system.requiresUnarmored", "system.markOptions", "system.markBudget", "system.crossPlaybook", "system.asterisk", "system.moveResults"],
 			});

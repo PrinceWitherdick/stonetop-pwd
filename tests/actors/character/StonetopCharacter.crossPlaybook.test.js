@@ -8,7 +8,7 @@ function foreignMove(id, name, system = {}) {
 }
 
 describe("StonetopCharacter.getForeignMovesForLevelUp", () => {
-	it("returns qualifying foreign moves; excludes stat / cross-playbook / owned / under-level / unmet-prereq, and IGNORES requirement.playbook", async () => {
+	it("returns qualifying foreign moves; excludes stat / cross-playbook / owned / under-level / unmet-prereq / playbook-locked", async () => {
 		const actor = new FakeActorBuilder()
 			.withPlaybook("the-fox", "The Fox")
 			.addItem({ _id: "o1", type: "move", name: "Armored", system: { moveType: "playbook", playbook: "The Heavy" } })
@@ -19,13 +19,13 @@ describe("StonetopCharacter.getForeignMovesForLevelUp", () => {
 			.addPlaybookMove(foreignMove("f3", "Seasoned Warrior", { crossPlaybook: { playbooks: ["X"] } })) // ✗ cross-playbook
 			.addPlaybookMove(foreignMove("f4", "Armored"))                                                // ✗ already owned
 			.addPlaybookMove(foreignMove("f5", "Cut From Granite", { requirement: { moves: ["Carved Out of Wood"] } })) // ✗ missing prereq
-			.addPlaybookMove(foreignMove("f6", "Hardy", { requirement: { playbook: "The Heavy" } }))       // ✓ playbook req ignored
+			.addPlaybookMove(foreignMove("f6", "Hardy", { requirement: { playbook: "The Heavy" } }))       // ✗ playbook-locked (Book I p.528: "No one but the Heavy can take Dangerous")
 			.addPlaybookMove(foreignMove("f7", "Tough", { requirement: { level: 6 } }))                    // ✗ under level
 			.build();
 
 		const result = await char.getForeignMovesForLevelUp({ playbooks: ["The Heavy"] }, 5);
-		expect(result.map(m => m.name)).toEqual(["Hardy", "Smash"]); // sorted by playbook then name
-		expect(result[0]).toMatchObject({ compendiumId: "f6", playbook: "The Heavy", description: "Hardy desc" });
+		expect(result.map(m => m.name)).toEqual(["Smash"]);
+		expect(result[0]).toMatchObject({ compendiumId: "f1", playbook: "The Heavy", description: "Smash desc" });
 	});
 
 	it("admits a foreign move whose required move the actor DOES own", async () => {

@@ -767,7 +767,7 @@
       },
       "requirement": {
         "level": 6,
-        "moves": [
+        "anyMoves": [
           "Wild Speech",
           "Spirit Tongue"
         ]

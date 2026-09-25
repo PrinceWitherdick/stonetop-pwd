@@ -2655,6 +2655,21 @@ describe("buildSnapshot — movelist / level move budget", () => {
 		expect(ml.characterLevel).toBe(3);
 	});
 
+	it("counts a pick given up to a replacing move, so the swap is not a shortfall", async () => {
+		// Level 3 ⇒ 2 starting + 2 advancements = 4 picks: Alpha, Bravo, Charlie, then
+		// Rampart, which replaced Charlie. Three moves owned, four picks made.
+		const ml = await buildMovelist({
+			level: 3,
+			defs:  [pbMove("a", "Alpha"), pbMove("b", "Bravo"), pbMove("c", "Charlie"),
+				pbMove("r", "Rampart", { replaces: "Charlie" })],
+			items: [ownedMove("a1", "Alpha"), ownedMove("b1", "Bravo"),
+				{ ...ownedMove("r1", "Rampart"), flags: { "stonetop-pwd": { retiredMove: "Charlie" } } }],
+		});
+		expect(ml.levelMovesIncomplete).toBe(false);
+		expect(ml.levelMovesShortfall).toBe(0);
+		expect(ml.levelMovesOverLimit).toBe(false);
+	});
+
 	it("does not flag a character that has made every pick for its level", async () => {
 		// Level 4 ⇒ 2 starting + 3 advancements = 5 picks; all five owned.
 		const ml = await buildMovelist({
