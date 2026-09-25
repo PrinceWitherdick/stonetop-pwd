@@ -846,6 +846,14 @@
       "confirmContent": "This character already has a playbook. Choosing a new one will replace it and may reset character data. Are you sure?",
       "pickerTitle": "Choose a Playbook"
     },
+    "changeBackground": {
+      "title": "Change Background?",
+      "content": "Leaving {old} takes away {moves}. What is held there stays on record and comes back if the move does.",
+      "held": "{move} ({count} {track} held)",
+      "marked": "{move} (with its marks)",
+      "yes": "Change to {new}",
+      "no": "Keep {old}"
+    },
     "onboarding": {
       "saveButton": "Save",
       "savedTitle": "Selections Saved",

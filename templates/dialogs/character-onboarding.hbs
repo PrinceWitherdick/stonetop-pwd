@@ -296,10 +296,10 @@
 			<p class="stonetop-onboarding-names-label">Suggested names for {{region}}:</p>
 			{{#each nameGroups}}
 			<div class="stonetop-onboarding-name-group">
-				<p class="stonetop-onboarding-name-group-label">{{region}}</p>
+				<p class="stonetop-onboarding-name-group-label">{{region}}{{#if note}}: {{note}}{{/if}}</p>
 				<div class="stonetop-onboarding-name-chips">
 					{{#each names}}
-					<button type="button" class="onboard-name-chip" data-name="{{this}}">{{this}}</button>
+					<button type="button" class="onboard-name-chip" data-name="{{this}}" data-combine="{{../combine}}">{{this}}</button>
 					{{/each}}
 				</div>
 			</div>
@@ -310,9 +310,10 @@
 		<div class="stonetop-onboarding-names-section{{#if selected}} is-visible{{/if}}"
 		     data-region="{{region}}">
 			<p class="stonetop-onboarding-names-label">Suggested names for {{region}}:</p>
+			{{#if note}}<p class="stonetop-onboarding-names-label">{{note}}</p>{{/if}}
 			<div class="stonetop-onboarding-name-chips">
 				{{#each names}}
-				<button type="button" class="onboard-name-chip" data-name="{{this}}">{{this}}</button>
+				<button type="button" class="onboard-name-chip" data-name="{{this}}" data-combine="{{../combine}}">{{this}}</button>
 				{{/each}}
 			</div>
 		</div>
@@ -996,8 +997,20 @@
 				       value="{{slug}}"
 				       data-section="{{sectionSlug}}"
 				       data-option="{{slug}}"
+				       data-index="0"
 				       {{#if isSelected}}checked{{/if}}
 				       {{#if disabled}}disabled{{/if}}>
+				{{#each extraBoxes}}
+				<input type="checkbox" class="stonetop-onboarding-check"
+				       name="onboard-lore-pick-{{../sectionSlug}}"
+				       value="{{../slug}}"
+				       data-section="{{../sectionSlug}}"
+				       data-option="{{../slug}}"
+				       data-index="{{index}}"
+				       aria-label="Choose it again"
+				       {{#if checked}}checked{{/if}}
+				       {{#if disabled}}disabled{{/if}}>
+				{{/each}}
 				<span class="stonetop-onboarding-lore-pick-text">{{#if hasBlank}}{{{fillBefore}}}<input type="text" class="onboard-lore-text stonetop-onboarding-lore-fill" data-section="{{sectionSlug}}" data-option="{{slug}}" value="{{fillValue}}" placeholder="…" aria-label="Fill in the blank">{{{fillAfter}}}{{else}}{{{description}}}{{/if}}</span>
 			</label>
 			{{/each}}

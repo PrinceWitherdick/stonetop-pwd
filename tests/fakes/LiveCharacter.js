@@ -16,7 +16,10 @@ import { loadPlaybookMoveDocs, movesByPlaybook, loadPlaybookDefs, STAT_KEYS } fr
 const ALL_DOCS = loadPlaybookMoveDocs();
 const BY_NAME  = movesByPlaybook(ALL_DOCS);
 const BY_ID    = new Map(ALL_DOCS.map(d => [d._id, d]));
-const { bySlug: PB_BY_SLUG } = loadPlaybookDefs();
+const { bySlug: PB_BY_SLUG, byName: PB_BY_NAME } = loadPlaybookDefs();
+// A playbook's "either X OR Y" starting-move groups. data/playbooks.json keeps the pack's
+// `moves` block as `movesNote`; the engine reads them as StonetopPlaybook#startingMoveChoices.
+const choiceGroupsOf = pb => pb?.movesNote?.choices ?? [];
 
 // The standard creation array (+2/+1/+1/0/0/-1) with the +2 in STR, so STR-gated moves
 // (the Heavy's Musclebound = STR +2) are reachable from level 1.
@@ -107,7 +110,14 @@ export function makeLiveActor({ slug, name, level = 1, xp = 9999, stats = {}, it
 		unsetFlag: vi.fn(async (scope, key) => unsetPath(flagStore[scope], key)),
 		// Real, stateful writes — the whole point of this harness.
 		update: vi.fn(async (updates = {}) => {
-			for (const [k, v] of Object.entries(updates)) setPath(actor, k, v);
+			for (const [k, v] of Object.entries(updates)) {
+				// A deletion in either spelling deletionEntry writes: the legacy "-=key" or a
+				// ForcedDeletion value. Set as a value, either would leave the key standing.
+				const last = k.lastIndexOf(".");
+				if (k.slice(last + 1).startsWith("-=")) unsetPath(actor, `${k.slice(0, last + 1)}${k.slice(last + 3)}`);
+				else if (v instanceof (globalThis.foundry?.data?.operators?.ForcedDeletion ?? class {})) unsetPath(actor, k);
+				else setPath(actor, k, v);
+			}
 		}),
 		createEmbeddedDocuments: vi.fn(async (_type, dataArr = []) => {
 			const created = dataArr.map(makeLiveItem);
@@ -139,16 +149,32 @@ function makeSourceMoveRepo() {
 	};
 }
 
+// The either/or groups ride along as the getter the engine reads them by, so the other half
+// taken at a level-up counts as the pick it is. The starting-moves note does not: a climb's
+// character never made its free pick, so its budget is its level-ups alone.
 function makePlaybookRepo() {
-	return { findBySlug: async (slug) => PB_BY_SLUG.get(slug) ?? null };
+	return {
+		findBySlug: async (slug) => {
+			const pb = PB_BY_SLUG.get(slug);
+			return pb ? { ...pb, startingMoveChoices: choiceGroupsOf(pb) } : null;
+		},
+	};
 }
 
 // A freshly-created character owns its playbook's starting moves; seed them so prereqs
-// rooted at a starting move resolve and starting moves aren't re-offered at level-up.
+// rooted at a starting move resolve and starting moves aren't re-offered at level-up. Of an
+// "either X OR Y" group only the first option, as onboarding grants it (stamped as the one
+// started with), so the other half stays open to a level-up pick.
 export function startingMoveItems(playbookName) {
+	const groups = choiceGroupsOf(PB_BY_NAME.get(playbookName));
+	const later  = new Set(groups.flatMap(g => (g.options ?? []).slice(1)));
+	const first  = new Set(groups.map(g => g.options?.[0]).filter(Boolean));
 	return (BY_NAME.get(playbookName) ?? [])
-		.filter(d => d.system?.isStartingMove)
-		.map(d => makeLiveItem({ name: d.name, type: "move", system: structuredClone(d.system) }));
+		.filter(d => d.system?.isStartingMove && !later.has(d.name))
+		.map(d => makeLiveItem({
+			name: d.name, type: "move", system: structuredClone(d.system),
+			flags: first.has(d.name) ? { "stonetop-pwd": { startingChoice: true } } : undefined,
+		}));
 }
 
 export function buildLiveCharacter({

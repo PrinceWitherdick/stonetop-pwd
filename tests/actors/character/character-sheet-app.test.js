@@ -131,6 +131,10 @@ function makeCharacterMock(actor) {
 		}),
 		onRoll: vi.fn(async () => true),
 		ensureStartingMoves: vi.fn(),
+		backgroundState: () => ({ slug: background.selectedSlug, setupChoices: {} }),
+		backgroundMovesDropped: vi.fn(async () => []),
+		settleBackgroundMoves: vi.fn(async () => {}),
+		settleBackgroundPossessions: vi.fn(async () => {}),
 		updateName: vi.fn(async name => actor.update({ name })),
 		addMove: vi.fn(),
 		removeMove: vi.fn(),
@@ -340,11 +344,17 @@ describe("StonetopCharacterSheet event handlers", () => {
 		expect(actor.typedActor.background.selectBackground).toHaveBeenCalledWith("vessel");
 	});
 
-	it("_onBackgroundChange calls ensureStartingMoves after selecting background", async () => {
+	// The one helper that takes back the old background's move and grants the new one's, handed
+	// the background as it was before the change.
+	it("_onBackgroundChange settles the background's moves after selecting it", async () => {
 		const actor = makeActor();
 		const sheet = makeSheet(actor);
 		await sheet._onBackgroundChange({ currentTarget: { value: "vessel" } });
-		expect(actor.typedActor.ensureStartingMoves).toHaveBeenCalled();
+		expect(actor.typedActor.settleBackgroundMoves).toHaveBeenCalledWith({ slug: "", setupChoices: {} });
+		expect(actor.typedActor.background.selectBackground.mock.invocationCallOrder[0])
+			.toBeLessThan(actor.typedActor.settleBackgroundMoves.mock.invocationCallOrder[0]);
+		// ...and the special possessions it hands over (the Missionary's aviary), the same way.
+		expect(actor.typedActor.settleBackgroundPossessions).toHaveBeenCalledWith({ slug: "", setupChoices: {} });
 	});
 
 	it("_onAppearanceChange calls appearance.select with lineIdx and value", async () => {

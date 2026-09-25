@@ -81,6 +81,7 @@ import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/a
 import { possessionTrackUses, BOOKS_AND_SCROLLS, HOLY_RELICS } from "./module/actors/character/possession-tracks.js";
 import { INVOKE_THE_SUN_GOD } from "./module/actors/character/holy-light.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
+import { repeatBoxLocked } from "./module/actors/character/PlaybookMoveEntry.js";
 import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, forgetBarkskinMarks, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery } from "./module/combat/attack-flow.js";
 import { wireDefendSpends, SPEND_QUERY, handleSpendQuery } from "./module/fight/defend-spend.js";
 import { HEALERS_ARTS_QUERY, handleHealersArtsQuery } from "./module/actors/character/healers-arts.js";
@@ -282,10 +283,12 @@ Hooks.once("init", () => {
 		if (!move?.repeat) return [];
 		const { max, current } = move.repeat;
 		const lastOwnedId = move.ownedIds[move.ownedIds.length - 1] ?? null;
+		// A starting move locks only its first box (see repeatBoxLocked): the Seeker's second Well
+		// Versed is ticked here like any repeatable move's.
 		return Array.from({ length: max }, (_, i) => ({
 			checked:  i < current,
 			ownedId:  i < current ? lastOwnedId : null,
-			disabled: move.isStarting || move.locked || (!(i < current) && i !== current),
+			disabled: repeatBoxLocked(i, current, move.isStarting) || move.locked,
 		}));
 	});
 

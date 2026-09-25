@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PlaybookMoveEntry } from "../../../module/actors/character/PlaybookMoveEntry.js";
+import { PlaybookMoveEntry, repeatBoxLocked } from "../../../module/actors/character/PlaybookMoveEntry.js";
 import { MoveDefinition } from "../../../module/model/MoveDefinition.js";
 
 // Helper: build a repeatable, non-starting move definition (e.g. Improved Stat).
@@ -55,6 +55,40 @@ describe("PlaybookMoveEntry (repeatable moves)", () => {
 		expect(entry.repeatable).toBe(false);
 		expect(entry.repeatMax).toBe(1);
 		expect(entry.repeatChecks).toBeNull();
+	});
+});
+
+// A repeatable STARTING move (the Seeker's Well Versed) used to have every box disabled, so a second
+// take could only be made in the level-up dialog. Only the take it started with is locked now.
+describe("PlaybookMoveEntry (a repeatable starting move)", () => {
+	const wellVersed = () => new MoveDefinition({
+		_id: "wv", name: "Well Versed",
+		system: { playbook: "The Seeker", isStartingMove: true, repeatMax: 3 },
+	});
+	const boxes = entry => entry.repeatChecks.map(b => b.disabled);
+
+	it("locks only the first box, and opens the next one", () => {
+		const entry = new PlaybookMoveEntry(wellVersed(), [{ _id: "a" }], NO_BG, NO_OWNED_BY_NAME, 3, "The Seeker");
+		expect(entry.isStarting).toBe(true);
+		expect(boxes(entry)).toEqual([true, false, true]);
+	});
+
+	it("leaves a later take free to untick, and the one after it free to tick", () => {
+		const entry = new PlaybookMoveEntry(wellVersed(), [{ _id: "a" }, { _id: "b" }], NO_BG, NO_OWNED_BY_NAME, 3, "The Seeker");
+		expect(boxes(entry)).toEqual([true, false, false]);
+	});
+
+	it("locks nothing on the either/or half the character did not start with", () => {
+		const entry = new PlaybookMoveEntry(wellVersed(), [{ _id: "a" }], NO_BG, NO_OWNED_BY_NAME, 3, "The Seeker", {}, new Set(["Well Versed"]));
+		expect(entry.isStarting).toBe(false);
+		expect(boxes(entry)).toEqual([false, false, true]);
+	});
+
+	it("is the one rule the sheet's helper asks too", () => {
+		expect(repeatBoxLocked(0, 1, true)).toBe(true);
+		expect(repeatBoxLocked(1, 1, true)).toBe(false);
+		expect(repeatBoxLocked(0, 1, false)).toBe(false);
+		expect(repeatBoxLocked(2, 1, false)).toBe(true);
 	});
 });
 

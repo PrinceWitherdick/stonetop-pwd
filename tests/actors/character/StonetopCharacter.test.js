@@ -669,11 +669,13 @@ describe("StonetopCharacter.applyStartingMoveChoices", () => {
 		expect(actor.createEmbeddedDocuments).toHaveBeenCalledWith("Item", [{ name: "Uncanny Reflexes" }]);
 	});
 
-	it("leaves the already-owned chosen move alone (no duplicate, no removal)", async () => {
-		const { actor, char } = charWith([{ type: "move", name: "Armored", _id: "owned-a" }]);
+	it("leaves the already-owned chosen move alone (no duplicate, no removal), and stamps it", async () => {
+		const armored = { type: "move", name: "Armored", _id: "owned-a", setFlag: vi.fn() };
+		const { actor, char } = charWith([armored]);
 		await char.applyStartingMoveChoices(GROUPS, { 0: "a1" });
 		expect(actor.deleteEmbeddedDocuments).not.toHaveBeenCalled();
 		expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+		expect(armored.setFlag).toHaveBeenCalledWith(expect.any(String), "startingChoice", true);
 	});
 
 	it("does nothing for a group with no pick", async () => {

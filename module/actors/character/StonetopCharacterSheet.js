@@ -1,5 +1,6 @@
 import {MoveResourceButton} from "./elements/move-resource-button.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
+import { parseMovePickCount, backgroundPossessionSlugs } from "./StonetopCharacter.js";
 import {BackgroundInputChoice} from "./elements/background-input-choice.js";
 import {PossessionUseButton} from "./elements/possession-use-button.js";
 import {OutfitMoveDialog} from "./dialogs/OutfitMoveDialog.js";
@@ -6733,10 +6734,47 @@ export function createStonetopCharacterSheetClass(Base) {
 			postMoveToChat(this.actor, name, selected.length ? [{ label: "Selected", value: selected.join("\n") }] : []);
 		}
 
+		// A new background takes back the old one's move and grants its own (settleBackgroundMoves),
+		// and the same for the special possessions it hands over (settleBackgroundPossessions).
+		// When the move going has something on it, a held track (Rites of the Land's Boon) or marks,
+		// the player is told first and may stay; nothing else about a change asks.
 		async _onBackgroundChange(ev) {
 			const slug = ev.currentTarget.value;
-			await this._stonetopCharacter.background.selectBackground(slug);
-			await this._stonetopCharacter.ensureStartingMoves();
+			const character = this._stonetopCharacter;
+			const previous = character.backgroundState();
+			const dropping = await character.backgroundMovesDropped(previous, { ...previous, slug });
+			if (dropping.length && !(await this._confirmBackgroundMovesDropped(previous.slug, slug, dropping))) {
+				this.render(false);
+				return;
+			}
+			await character.background.selectBackground(slug);
+			await character.settleBackgroundMoves(previous);
+			await character.settleBackgroundPossessions(previous);
+		}
+
+		// True to go ahead. Asks only when a move going holds something (see _onBackgroundChange).
+		async _confirmBackgroundMovesDropped(oldSlug, newSlug, dropping) {
+			const held  = this._stonetopCharacter.moveResources?.getMoveResources?.() ?? {};
+			const marks = this._stonetopCharacter.moveResources?.getMarks?.() ?? {};
+			const holding = dropping.flatMap(item => {
+				const count = Number(held[item.name]) || 0;
+				if (count > 0 && item.system?.resource) {
+					return [format("stonetop.changeBackground.held", { move: item.name, count, track: item.system.resource.title ?? "" })];
+				}
+				if (Object.values(marks[item.name] ?? {}).some(v => Array.isArray(v) ? v.length : Number(v) > 0)) {
+					return [format("stonetop.changeBackground.marked", { move: item.name })];
+				}
+				return [];
+			});
+			if (!holding.length) return true;
+			const backgrounds = (await this._stonetopCharacter.playbook())?.backgrounds ?? [];
+			const label = slug => backgrounds.find(b => b.slug === slug)?.label ?? slug;
+			return !!(await confirmOutcome({
+				title:   localize("stonetop.changeBackground.title"),
+				content: `<p>${_esc(format("stonetop.changeBackground.content", { old: label(oldSlug), moves: joinNames(holding) }))}</p>`,
+				yes:     { label: format("stonetop.changeBackground.yes", { new: label(newSlug) }) },
+				no:      { label: format("stonetop.changeBackground.no", { old: label(oldSlug) }) },
+			}));
 		}
 
 		async _onAppearanceChange(ev) {
@@ -10333,18 +10371,37 @@ export function createStonetopCharacterSheetClass(Base) {
 		// Uncanny Reflexes) by the owned move's NAME — its compendium id isn't knowable
 		// from the actor alone. The onboarding dialog swaps the name for the id once its
 		// move list loads, so the moves step shows the choice already made rather than
-		// forcing a re-pick. Keyed by choice-group index.
+		// forcing a re-pick. Keyed by choice-group index. The option the character STARTED
+		// with (StonetopCharacter#startingChoiceItems), not merely the first one held: a Fox who
+		// took Skill at Arms at a level-up after starting with Ambush restores Ambush, so
+		// confirming the re-run changes nothing.
 		_restoreOwnedMoveChoices(playbookDoc) {
 			const groups = playbookDoc?.flags?.stonetop?.moves?.choices ?? [];
-			// Its own walk, not the render memo: this runs from the onboarding restore rather
-			// than from getData, so there may be no current render to share one with.
-			const ownedNames = ownedMoveNames(this.actor);
 			const picks = {};
-			groups.forEach((group, i) => {
-				const owned = (group.options ?? []).find(name => ownedNames.has(name));
-				if (owned) picks[i] = owned;
+			this._stonetopCharacter.startingChoiceItems(groups).forEach((item, i) => {
+				if (item) picks[i] = item.name;
 			});
 			return picks;
+		}
+
+		// Restore onboarding's free picks (StonetopCharacter#creationPickItems) by the owned move's
+		// NAME, with the "+1 to which stat?" each stat move recorded, keyed the same way. The dialog
+		// swaps both for compendium ids once its move list loads (_reconcileMoveChoices), and the
+		// apply resolves any name still standing. Returns { moves, moveStatChoices }.
+		// `playbookDoc` is the playbook Item, or the StonetopPlaybook getData hands over.
+		_restoreCreationPicks(playbookDoc, f) {
+			const st      = playbookDoc?.flags?.stonetop;
+			const choices = st ? st.moves?.choices : playbookDoc?.startingMoveChoices;
+			const picks   = playbookDoc
+				? this._stonetopCharacter.creationPickItems(playbookDoc.name, (st ?? playbookDoc).backgrounds ?? [], choices ?? [])
+				: [];
+			const statChoices = f.improvedStatChoices ?? {};
+			return {
+				moves:           picks.map(item => item.name),
+				moveStatChoices: Object.fromEntries(picks
+					.filter(item => item.system?.cap != null && statChoices[item._id])
+					.map(item => [item.name, statChoices[item._id]])),
+			};
 		}
 
 		_readSelectionsFromActor(playbookDoc = null) {
@@ -10386,7 +10443,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				possessionChoices: foundry.utils.deepClone(f.possessions?.subChoices ?? {}),
 				possessionChoiceTexts: foundry.utils.deepClone(f.possessions?.choiceTexts ?? {}),
 				customPossession: f.possessions?.custom?.[0]?.label ?? "",
-				moves:           [], // compendium IDs are hard to recover; player re-picks
+				// The free picks already taken, by NAME as the either/or picks are, so a re-run shows
+				// them picked and confirming again changes nothing (see _restoreCreationPicks).
+				...this._restoreCreationPicks(playbookDoc, f),
 				moveChoices:     this._restoreOwnedMoveChoices(playbookDoc),
 				invocations:     [...(f.invocations?.selected ?? [])],
 				initiates:       Object.entries(f.background?.choices ?? {})
@@ -10590,6 +10649,19 @@ export function createStonetopCharacterSheetClass(Base) {
 
 		async _applyPlaybookSelections(playbookDoc, selections) {
 			const slug = playbookDoc.system?.slug ?? "";
+			const character = this._stonetopCharacter;
+			const st = playbookDoc.flags?.stonetop ?? {};
+			// Read before anything below changes it: the moves the old background gave go
+			// (settleBackgroundMoves), and the free picks the player didn't pick again go too.
+			const previousBackground = character.backgroundState();
+			// Picks arrive as compendium ids, or by name when a re-run restored them and the moves
+			// step was never opened to swap them (_restoreCreationPicks).
+			const { idByName, nameById } = await character.playbookMoveIndex(playbookDoc.name);
+			const pickedIds = (selections.moves ?? []).map(pick => idByName.get(pick) ?? pick);
+			if (parseMovePickCount(st.moves?.startingMovesNote) > 0) {
+				const keep = new Set(pickedIds.map(id => nameById.get(id)).filter(Boolean));
+				await character.dropCreationPicksExcept(keep, playbookDoc.name, st.backgrounds ?? [], st.moves?.choices ?? []);
+			}
 			const updates = {
 				"system.playbook": { uuid: playbookDoc.uuid, name: playbookDoc.name, slug },
 				...this._playbookHpInit(playbookDoc),
@@ -10609,14 +10681,15 @@ export function createStonetopCharacterSheetClass(Base) {
 			updates[`flags.${STONETOP_SCOPE}.onboardingStats`] = statFlagObj;
 			await this.actor.update(updates);
 
-			// Background must be saved before ensureStartingMoves reads it.
 			if (selections.backgroundSlug) {
 				await this._stonetopCharacter.background.selectBackground(selections.backgroundSlug);
 			}
-			await this._stonetopCharacter.ensureStartingMoves();
 
 			const { flagUpd, selectedBackground, backgroundSetup } =
 				await this._applyCommonSelections(playbookDoc, selections);
+			// Once the background AND its setup picks are stored (A Life of Crime's Burgle OR Light
+			// Fingers is one): the old background's move goes, and the starting moves are granted.
+			await character.settleBackgroundMoves(previousBackground);
 
 			// Apply-specific: create owned possession items, add moves, bg extras.
 			const rawPossessions = playbookDoc.flags?.stonetop?.specialPossessions;
@@ -10625,6 +10698,18 @@ export function createStonetopCharacterSheetClass(Base) {
 					...(rawPossessions.preselected ?? []),
 					...(selections.possessions ?? []),
 				];
+				// A re-run takes back a possession the player unticked, with the gear it granted
+				// (deselectPossession). Not the playbook's own gear, nor what the background hands
+				// over (selected below), nor one only a move grants (the Seeker's Initiate pouch).
+				const kept = new Set([
+					...slugsToSelect,
+					...backgroundPossessionSlugs(selectedBackground, selections.backgroundSetup?.choices),
+					...this.actor.items.filter(i => i.type === "move").map(i => i.system?.crossPlaybook?.grantsPossession).filter(Boolean),
+				]);
+				for (const slug of [...character.possessions.selected]) {
+					if (kept.has(slug) || (rawPossessions.options ?? []).find(o => o.slug === slug)?.grantOnly) continue;
+					await character.deselectPossession(slug);
+				}
 				for (const slug of slugsToSelect) {
 					await this._stonetopCharacter.selectPossession(slug);
 				}
@@ -10649,8 +10734,11 @@ export function createStonetopCharacterSheetClass(Base) {
 					selections.customPossession?.trim() ? [selections.customPossession] : [],
 				);
 			}
-			for (const compendiumId of (selections.moves ?? [])) {
-				await this._stonetopCharacter.addMove(compendiumId, { skipIfOwned: true });
+			for (const compendiumId of pickedIds) {
+				const added = await this._stonetopCharacter.addMove(compendiumId, { skipIfOwned: true });
+				// Stamped as the free pick, so a later re-run can replace it (creationPickItems).
+				const pickedName = added?.name ?? nameById.get(compendiumId);
+				if (pickedName) await character.markCreationPick(pickedName);
 				// A stat-increase move picked at creation (the Would-Be Hero's Improved Stat)
 				// carries a "+1 to which stat?" choice made in onboarding — apply it against the
 				// owned instance (freshly added or already present), bumping the chosen stat and
@@ -10659,15 +10747,20 @@ export function createStonetopCharacterSheetClass(Base) {
 				// and the base-stat write above just reset the stat, so gating there would drop
 				// the +1. applyCreationStatChoice is idempotent (base reset first, +1 capped).
 				await this._stonetopCharacter.applyCreationStatChoice(
-					compendiumId, selections.moveStatChoices?.[compendiumId],
+					compendiumId, selections.moveStatChoices?.[compendiumId] ?? selections.moveStatChoices?.[pickedName],
 				);
+				// Big Magic as the free pick frees a second remarkable trait, but the possession
+				// step ran before the moves step and allowed only one. Ask for it now, as the
+				// level-up and Moves-tab paths do.
+				if (added) await this._maybeOpenPossessionChoicesForMove(added.name);
 			}
 			// "Either X OR Y" starting-move choices (e.g. the Heavy's Armored OR
 			// Uncanny Reflexes) — ensureStartingMoves skips these, so add the picks and
 			// drop any previously-chosen alternative so re-running doesn't leave both.
 			await this._stonetopCharacter.applyStartingMoveChoices(
 				playbookDoc.flags?.stonetop?.moves?.choices ?? [],
-				selections.moveChoices ?? {},
+				// A restored pick is still a name until the moves step swaps it for its id.
+				Object.fromEntries(Object.entries(selections.moveChoices ?? {}).map(([group, pick]) => [group, idByName.get(pick) ?? pick])),
 			);
 			for (const slug of (selectedBackground?.extraPossessions ?? [])) {
 				await this._stonetopCharacter.selectPossession(slug);
@@ -10805,13 +10898,25 @@ export function createStonetopCharacterSheetClass(Base) {
 				const patch = initiateChoicePatch(playbookDoc.flags?.stonetop?.backgrounds, selections.initiates);
 				if (Object.keys(patch).length) await this._stonetopCharacter.background.setChoices(patch);
 			}
-			for (const [key, count] of Object.entries(selections.lore?.picks ?? {})) {
-				const [sectionSlug, optionSlug] = key.split(":");
-				if (count > 0) await this._stonetopCharacter.setLoreOptionCount(sectionSlug, optionSlug, count);
+			// Each of the playbook's pick lists is set WHOLESALE, its unticked options written as 0: the
+			// counts merge on write, so writing only the ticked ones kept every earlier pick beside its
+			// replacement, and a "choose 1" shrine came back from a re-run with two. Only the playbook's
+			// own sections, which are the ones onboarding shows; other lore on the actor is left alone.
+			if (selections.lore) {
+				const picks = selections.lore.picks ?? {};
+				for (const section of (playbookDoc.flags?.stonetop?.lore ?? [])) {
+					const pickOptions = (section.options ?? []).filter(o => o.type !== "text");
+					if (!section.slug || !pickOptions.length) continue;
+					const counts = Object.fromEntries(pickOptions.map(o => [o.slug, Math.max(0, Number(picks[`${section.slug}:${o.slug}`]) || 0)]));
+					await this._stonetopCharacter.setLoreSectionCounts(section.slug, counts);
+				}
 			}
+			// A written answer the player emptied is emptied on the sheet too, rather than kept.
+			const storedLoreTexts = this._stonetopCharacter.loreTexts ?? {};
 			for (const [key, value] of Object.entries(selections.lore?.texts ?? {})) {
 				const [sectionSlug, optionSlug] = key.split(":");
 				if (value?.trim()) await this._stonetopCharacter.setLoreOptionText(sectionSlug, optionSlug, value.trim());
+				else if (storedLoreTexts[key]) await this._stonetopCharacter.setLoreOptionText(sectionSlug, optionSlug, "");
 			}
 
 			const flagUpd = {};

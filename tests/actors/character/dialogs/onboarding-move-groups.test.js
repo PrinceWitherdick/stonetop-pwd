@@ -71,12 +71,32 @@ describe("partitionMovesByGroup", () => {
 
 	it("collects what no group claims into a trailing 'Other'", () => {
 		const groups = partitionMovesByGroup("The Blessed",
-			named("Improved Stat", "Barkskin", "Superior Stat", "Heed My Words"));
+			named("Improved Stat", "Barkskin", "Superior Stat"));
 
 		expect(groups.map(g => g.key)).toEqual(["nature", UNGROUPED_MOVE_KEY]);
 		expect(groups.at(-1).label).toBe("Other");
 		expect(groups.at(-1).moves.map(m => m.name))
-			.toEqual(["Improved Stat", "Superior Stat", "Heed My Words"]);
+			.toEqual(["Improved Stat", "Superior Stat"]);
+	});
+
+	// The user's call: Heed My Words sits with the Spirits moves rather than falling to "Other".
+	it("files the Blessed's Heed My Words under Spirits", () => {
+		expect(moveGroupKeys("The Blessed", "Heed My Words")).toEqual(["spirits"]);
+		const groups = partitionMovesByGroup("The Blessed", named("Heed My Words", "Improved Stat"));
+		expect(groups.map(g => [g.key, g.moves.map(m => m.name)])).toEqual([
+			["spirits", ["Heed My Words"]],
+			[UNGROUPED_MOVE_KEY, ["Improved Stat"]],
+		]);
+	});
+
+	// The Fox audit: Laugh at Danger sits with the Charm moves rather than falling to "Other".
+	it("files the Fox's Laugh at Danger under Charm", () => {
+		expect(moveGroupKeys("The Fox", "Laugh at Danger")).toEqual(["charm"]);
+		const groups = partitionMovesByGroup("The Fox", named("Laugh at Danger", "Improved Stat"));
+		expect(groups.map(g => [g.key, g.moves.map(m => m.name)])).toEqual([
+			["charm", ["Laugh at Danger"]],
+			[UNGROUPED_MOVE_KEY, ["Improved Stat"]],
+		]);
 	});
 
 	it("drops groups that came out empty", () => {

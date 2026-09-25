@@ -801,7 +801,7 @@ export class StonetopCharacter {
 			const entries = await this._moveRepo.getPlaybookMoves(playbookData.name);
 			if (entries.length > 0) {
 				const sorted = this.sortPlaybookMoves(
-					this.buildMovelistContext(entries, ownedAllByName, bgMoveNames, actorLevel, playbookData.name)
+					this.buildMovelistContext(entries, ownedAllByName, bgMoveNames, actorLevel, playbookData.name, this._startingChoiceGroups(playbookData))
 				);
 				const moveResourcesMap = this._moveResources.getMoveResources();
 				const moveMarksMap     = this._moveResources.getMarks();
@@ -2450,7 +2450,7 @@ export class StonetopCharacter {
 		let playbookMoves = [];
 		if (playbookName) {
 			const entries = await this._moveRepo.getPlaybookMoves(playbookName);
-			playbookMoves = this.sortPlaybookMoves(this.buildMovelistContext(entries, ownedAllByName, bgMoveNames, actorLevel, playbookName));
+			playbookMoves = this.sortPlaybookMoves(this.buildMovelistContext(entries, ownedAllByName, bgMoveNames, actorLevel, playbookName, this._startingChoiceGroups(playbookData)));
 
 			const moveResourcesMap = this._moveResources.getMoveResources();
 			for (const move of playbookMoves) {
@@ -2532,11 +2532,215 @@ export class StonetopCharacter {
 		return backgroundMoveNames(background, this._background.setupChoices);
 	}
 
-	buildMovelistContext(entries, ownedAllByName, bgMoveNames, actorLevel, actorPlaybook) {
+	// The background chosen and the setup picks made under it, as settleBackgroundMoves wants
+	// them: read BEFORE a change of background, so what the old one gave can be taken back.
+	backgroundState() {
+		return { slug: this._background.selectedSlug, setupChoices: { ...this._background.setupChoices } };
+	}
+
+	// The owned moves a change of background from `from` to `to` (each a backgroundState) takes
+	// back: what the old background gave, less what the new one gives too, less any move the
+	// character also holds some other way (see _heldBesidesBackground). Every background shape
+	// counts, through backgroundMoveNames: a flat `moves` list (Rites of the Land) and a move taken
+	// in a setup choice (A Life of Crime's Burgle OR Light Fingers), so changing only that pick
+	// takes back the other. Asked before the change as well as by it, so the Details tab can warn
+	// about a move with something held on its track.
+	async backgroundMovesDropped(from, to) {
+		const playbookData = await this.playbook();
+		const backgrounds  = playbookData?.backgrounds ?? [];
+		const gives = state => backgroundMoveNames(backgrounds.find(b => b.slug === state?.slug), state?.setupChoices);
+		const kept  = gives(to);
+		const gone  = new Set([...gives(from)].filter(name => !kept.has(name)));
+		if (!gone.size) return [];
+		return this._actor.items.filter(i => i.type === "move" && gone.has(i.name)
+			&& (!i.system?.playbook || i.system.playbook === playbookData?.name)
+			&& !_heldBesidesBackground(i));
+	}
+
+	// Book I: "You start with Spirit Tongue, Call the Spirits, 1 from your Background, and 1 of
+	// your choice." So a change of background takes back the old one's move and grants the new
+	// one's; ensureStartingMoves alone only ever added, and the leftover then counted as a pick
+	// and tripped the over-budget banner. Run once the new background and its setup picks are
+	// stored, with what they were before (backgroundState). The ONE path for the Details tab's
+	// dropdown and for onboarding. Through removeMove, so the move's own bookkeeping goes with it;
+	// a shipped move's track is keyed by its name and is there again if the move comes back.
+	async settleBackgroundMoves(previous) {
+		const current = this.backgroundState();
+		for (const item of await this.backgroundMovesDropped(previous, current)) {
+			if (this._actor.items.some(i => i._id === item._id)) await this.removeMove(item._id);
+		}
+		if ((previous?.slug ?? "") !== current.slug) await this._settleBackgroundAnswers(previous?.slug, current.slug);
+		await this.ensureStartingMoves();
+	}
+
+	// The possessions half of a change of background (backgroundPossessionSlugs): what the old one
+	// handed over goes, with its gear, unless the new one hands it over too or the character holds
+	// it some other way (the playbook's own gear, a move's grantsPossession); what the new one hands
+	// over is selected. Left alone, a gift outlives its background and turns into an ordinary pick,
+	// over the playbook's count. For the Details tab's dropdown; onboarding settles its own.
+	async settleBackgroundPossessions(previous) {
+		const playbookData = await this.playbook();
+		const backgrounds  = playbookData?.backgrounds ?? [];
+		const gives = state => backgroundPossessionSlugs(backgrounds.find(b => b.slug === state?.slug), state?.setupChoices);
+		const kept  = gives(this.backgroundState());
+		const held  = new Set([
+			...(playbookData?.specialPossessions?.preselected ?? []),
+			...this._actor.items.filter(i => i.type === "move").map(i => i.system?.crossPlaybook?.grantsPossession).filter(Boolean),
+		]);
+		for (const slug of gives(previous)) {
+			if (kept.has(slug) || held.has(slug) || !this._possessions.selected.has(slug)) continue;
+			await this.deselectPossession(slug);
+		}
+		for (const slug of kept) {
+			if (!this._possessions.selected.has(slug)) await this.selectPossession(slug);
+		}
+	}
+
+	// A background's `moveChoices` answer a move's question rather than grant it: the Seeker's
+	// "Well Versed in the Things Below" is the Patriot's, stored as Well Versed's answer. On a
+	// change of background the new one's fixed answer replaces the old; one that offers a choice
+	// keeps the old answer if it is among the offers, and otherwise the answer goes, to be picked
+	// again, rather than going on naming the old background's topic.
+	async _settleBackgroundAnswers(fromSlug, toSlug) {
+		const backgrounds = (await this.playbook())?.backgrounds ?? [];
+		const keyOf = choice => choice.move ?? choice.slug ?? choice.label ?? "";
+		const was = (backgrounds.find(b => b.slug === fromSlug)?.moveChoices ?? []).map(keyOf).filter(Boolean);
+		if (!was.length) return;
+		const next    = new Map((backgrounds.find(b => b.slug === toSlug)?.moveChoices ?? []).map(c => [keyOf(c), c]));
+		const answers = resolvedFlags(this._actor).moves?.backgroundAnswers ?? {};
+		const update  = {};
+		for (const key of was) {
+			const path   = `flags.${STONETOP_SCOPE}.moves.backgroundAnswers.${key}`;
+			const choice = next.get(key);
+			if (choice?.value) {
+				update[path] = { label: choice.label ?? key, value: choice.value };
+			} else if (answers[key] && !(choice?.options ?? []).includes(answers[key].value)) {
+				const [deleteKey, deleteValue] = deletionEntry(path);
+				update[deleteKey] = deleteValue;
+			}
+		}
+		if (Object.keys(update).length) await this._actor.update(update);
+	}
+
+	/**
+	 * The moves the character took as onboarding's free pick ("1 of your choice"; the Would-be
+	 * Hero's 2), so a re-run of onboarding can show them picked and replace them rather than add
+	 * beside them. Onboarding stamps each with CREATION_PICK_FLAG (markCreationPick).
+	 *
+	 * A character made before the stamp has none. At 1st level every playbook move it holds that
+	 * onboarding could have offered is one: no level-up has happened to add another. Past 1st
+	 * level a level-up pick of the same kind of move (Barkskin at 3rd) can't be told from a free
+	 * pick, so NONE are claimed, and onboarding never takes away a move a level-up gave. Picking it
+	 * again on a re-run stamps it, which settles the question from then on.
+	 *
+	 * Synchronous, from the playbook as onboarding reads it: `backgrounds` and the "either X OR Y"
+	 * `choiceGroups` (moves.choices), whose moves are never a free pick.
+	 */
+	creationPickItems(playbookName, backgrounds = [], choiceGroups = []) {
+		const moves = this._actor.items.filter(i => i.type === "move" && i.system?.moveType === "playbook"
+			&& i.system?.playbook === playbookName && !i.flags?.[STONETOP_SCOPE]?.grantedBy);
+		const stamped = moves.filter(i => i.flags?.[STONETOP_SCOPE]?.[CREATION_PICK_FLAG]);
+		if (stamped.length) return stamped;
+		if ((this._actor.system?.attributes?.level?.value ?? 1) > 1) return [];
+		const bgNames     = this._backgroundMoveNames((backgrounds ?? []).find(b => b.slug === this._background.selectedSlug));
+		const choiceNames = startingMoveChoiceNames(choiceGroups);
+		return moves.filter(i => !i.system?.isStartingMove && !bgNames.has(i.name) && !choiceNames.has(i.name)
+			&& !(Number(i.system?.requirement?.level) > 1));
+	}
+
+	// A re-run of onboarding REPLACES the free pick: each earlier one (creationPickItems) the
+	// player didn't pick again is taken back, through removeMove so an Improved Stat's +1 comes off
+	// and a pouch trait Big Magic freed goes with it. Before the base stats are written back, so
+	// that +1 comes off the stat it was put on.
+	async dropCreationPicksExcept(keepNames, playbookName, backgrounds = [], choiceGroups = []) {
+		for (const item of this.creationPickItems(playbookName, backgrounds, choiceGroups)) {
+			if (keepNames.has(item.name)) continue;
+			if (this._actor.items.some(i => i._id === item._id)) await this.removeMove(item._id);
+		}
+	}
+
+	// Stamp an onboarding free pick (see creationPickItems): the move just added, or the copy
+	// already owned when a re-run picked it again. One copy per pick.
+	async markCreationPick(moveName) {
+		const owned = this._actor.items.filter(i => i.type === "move" && i.name === moveName);
+		if (!owned.length || owned.some(i => i.flags?.[STONETOP_SCOPE]?.[CREATION_PICK_FLAG])) return;
+		await owned[0].setFlag(STONETOP_SCOPE, CREATION_PICK_FLAG, true);
+	}
+
+	/**
+	 * The "either X OR Y" starting move each of the playbook's `choiceGroups` (moves.choices: the
+	 * Fox's Ambush OR Skill at Arms, the Heavy's Armored OR Uncanny Reflexes) was settled with: one
+	 * owned item per group, or null while none is. Every option carries isStartingMove, but only
+	 * the one taken at creation is the starting move. The other half taken later, at a level-up or
+	 * as onboarding's free pick, is a pick like any other. Onboarding stamps the one it grants with
+	 * STARTING_CHOICE_FLAG (markStartingChoice).
+	 *
+	 * A character made before the stamp: the option it holds that wasn't the free pick or a
+	 * cross-playbook grant, or, holding both, the one gained first (book order when that can't be
+	 * told). Past 1st level that is a guess, so applyStartingMoveChoices takes nothing away on it.
+	 */
+	startingChoiceItems(choiceGroups = []) {
+		const flagsOf = i => i.flags?.[STONETOP_SCOPE] ?? {};
+		const created = i => i._stats?.createdTime ?? Infinity;
+		return (choiceGroups ?? []).map(group => {
+			const options = group.options ?? [];
+			const held    = this._actor.items.filter(i => i.type === "move" && options.includes(i.name) && !flagsOf(i).grantedBy);
+			const stamped = held.find(i => flagsOf(i)[STARTING_CHOICE_FLAG]);
+			if (stamped) return stamped;
+			return held.filter(i => !flagsOf(i)[CREATION_PICK_FLAG])
+				.sort((a, b) => (created(a) - created(b)) || (options.indexOf(a.name) - options.indexOf(b.name)))[0] ?? null;
+		});
+	}
+
+	// The either/or options this character did NOT start with (startingChoiceItems), which their
+	// isStartingMove no longer describes: the other half of each settled group, held or not. A
+	// group not yet settled demotes only what is held (a free pick), and leaves the options still
+	// to be chosen between reading as starting moves.
+	demotedStartingChoices(choiceGroups = []) {
+		const starting = this.startingChoiceItems(choiceGroups);
+		const held     = ownedMoveNames(this._actor);
+		const demoted  = new Set();
+		(choiceGroups ?? []).forEach((group, i) => {
+			for (const name of group.options ?? []) {
+				if (starting[i] ? name !== starting[i].name : held.has(name)) demoted.add(name);
+			}
+		});
+		return demoted;
+	}
+
+	// Stamp the either/or option onboarding granted (see startingChoiceItems). One copy, and not
+	// the free pick's copy when there is another.
+	async markStartingChoice(moveName) {
+		const owned = this._actor.items.filter(i => i.type === "move" && i.name === moveName && !i.flags?.[STONETOP_SCOPE]?.grantedBy);
+		if (!owned.length || owned.some(i => i.flags?.[STONETOP_SCOPE]?.[STARTING_CHOICE_FLAG])) return;
+		const item = owned.find(i => !i.flags?.[STONETOP_SCOPE]?.[CREATION_PICK_FLAG]) ?? owned[0];
+		await item.setFlag(STONETOP_SCOPE, STARTING_CHOICE_FLAG, true);
+	}
+
+	// A playbook's moves by name and by id: onboarding's picks arrive as compendium ids, or as the
+	// names a re-run restores them by when the moves step was never opened to swap them.
+	async playbookMoveIndex(playbookName) {
+		const entries = playbookName ? await this._moveRepo.getPlaybookMoves(playbookName) : [];
+		return {
+			idByName: new Map(entries.map(e => [e.name, e.id])),
+			nameById: new Map(entries.map(e => [e.id, e.name])),
+		};
+	}
+
+	// `choiceGroups`: the playbook's "either X OR Y" groups (_startingChoiceGroups), so only the
+	// option this character started with reads as a starting move (demotedStartingChoices).
+	buildMovelistContext(entries, ownedAllByName, bgMoveNames, actorLevel, actorPlaybook, choiceGroups = []) {
 		const actorStats = _statValueMap(this._actor.system?.stats);
+		const demoted    = this.demotedStartingChoices(choiceGroups);
 		return entries.map(e =>
-			new PlaybookMoveEntry(e, ownedAllByName.get(e.name) ?? [], bgMoveNames, ownedAllByName, actorLevel, actorPlaybook, actorStats)
+			new PlaybookMoveEntry(e, ownedAllByName.get(e.name) ?? [], bgMoveNames, ownedAllByName, actorLevel, actorPlaybook, actorStats, demoted)
 		);
+	}
+
+	// A playbook's "either X OR Y" starting-move groups, from the StonetopPlaybook the repository
+	// hands back or the raw flags shape.
+	_startingChoiceGroups(playbookData) {
+		return playbookData?.startingMoveChoices ?? playbookData?.moves?.choices ?? [];
 	}
 
 	sortPlaybookMoves(moves) {
@@ -2713,23 +2917,33 @@ export class StonetopCharacter {
 		await this._possessions.forgetGranted(slug);
 	}
 
-	// Apply the "either X OR Y" starting-move picks: grant the chosen move in each group
-	// and remove any other option from the same group the actor still owns, so switching
-	// the choice (on a re-run of onboarding) doesn't leave the character owning both.
+	// Apply the "either X OR Y" starting-move picks: grant the chosen move in each group and stamp
+	// it (markStartingChoice), and take back the option the character STARTED with when that was
+	// the other one, so switching the choice on a re-run doesn't leave both. Only that one: the
+	// other half taken at a level-up, or as the free pick, is the character's by another right and
+	// stays. Past 1st level a character from before the stamp can't say which half it started with
+	// (startingChoiceItems only guesses), so nothing is taken back, as creationPickItems claims
+	// nothing there; the pick is stamped, which settles it from then on. A starting option that is
+	// the free pick too (a re-run that swapped the halves) stays as the free pick, unstamped.
 	// `choiceGroups` is the playbook's `moves.choices`; `chosenIdByGroup` maps group index
 	// → chosen compendium id.
 	async applyStartingMoveChoices(choiceGroups, chosenIdByGroup) {
+		const level   = this._actor.system?.attributes?.level?.value ?? 1;
+		const settled = this.startingChoiceItems(choiceGroups);
 		for (let i = 0; i < (choiceGroups?.length ?? 0); i++) {
 			const chosenId = chosenIdByGroup?.[i];
 			if (!chosenId) continue;
 			const chosenDoc = await this._moveRepo.getPlaybookMoveDocument(chosenId);
 			if (!chosenDoc) continue;
-			const optionNames = new Set(choiceGroups[i].options ?? []);
-			const stale = this._actor.items.filter(it =>
-				it.type === "move" && optionNames.has(it.name) && it.name !== chosenDoc.name
-			);
-			for (const it of stale) await this.removeMove(it._id);
+			const was   = settled[i];
+			const flags = was?.flags?.[STONETOP_SCOPE] ?? {};
+			const claimed = !!was && (flags[STARTING_CHOICE_FLAG] || level <= 1);
+			if (claimed && was.name !== chosenDoc.name && this._actor.items.some(it => it._id === was._id)) {
+				if (flags[CREATION_PICK_FLAG]) await was.unsetFlag(STONETOP_SCOPE, STARTING_CHOICE_FLAG);
+				else await this.removeMove(was._id);
+			}
 			await this.addMove(chosenId, { skipIfOwned: true });
+			await this.markStartingChoice(chosenDoc.name);
 		}
 	}
 
@@ -4034,6 +4248,9 @@ export class StonetopCharacter {
 	async setArcanumResource(slug, count, options)                       { await this._inventory.setResource(slug, count, options); }
 	async setLoreOptionCount(loreSlug, optionSlug, count)           { await this._lore.setCount(loreSlug, optionSlug, count); }
 	async setLoreOptionText(loreSlug, optionSlug, value)            { await this._lore.setText(loreSlug, optionSlug, value); }
+	// One section's counts in one write, zeros included, so a section can be set wholesale.
+	async setLoreSectionCounts(loreSlug, counts)                    { await this._lore.setCounts(loreSlug, counts); }
+	get loreTexts()                                                 { return this._lore.texts; }
 
 	async getLevelUpData() {
 		const actor      = this._actor;
@@ -4051,7 +4268,7 @@ export class StonetopCharacter {
 			const entries     = await this._moveRepo.getPlaybookMoves(playbookData.name);
 			const retired     = this._retiredMoveNames();
 			const all = this.sortPlaybookMoves(
-				this.buildMovelistContext(entries, ownedAllByName, bgMoveNames, newLevel, playbookData.name)
+				this.buildMovelistContext(entries, ownedAllByName, bgMoveNames, newLevel, playbookData.name, this._startingChoiceGroups(playbookData))
 			).filter(e => (!e.owned || (e.repeatable && e.ownedIds.length < e.repeatMax)) && !retired.has(e.name));
 			availableMoves = all.filter(e => !e.locked);
 			lockedMoves    = all.filter(e => e.locked);
@@ -4605,6 +4822,27 @@ export function backgroundMoveNames(background, setupChoices = {}) {
 	return names;
 }
 
+// The item flag onboarding stamps on a move taken as its free pick ("1 of your choice"), so a
+// re-run can tell that pick from a level-up's. See StonetopCharacter#creationPickItems.
+export const CREATION_PICK_FLAG = "creationPick";
+
+// The item flag onboarding stamps on the "either X OR Y" option it granted, the one the character
+// STARTED with, so the other half taken later reads as an ordinary pick. See
+// StonetopCharacter#startingChoiceItems.
+export const STARTING_CHOICE_FLAG = "startingChoice";
+
+// A background's move the character ALSO holds some other way, which a change of background
+// must leave where it is: a starting move (an "either X OR Y" pick included, which carries
+// isStartingMove too), onboarding's free pick (a Vessel who took Trackless Step, then became
+// Raised by Wolves and back), or a move learned through a cross-playbook move. A level-up pick
+// carries no such mark (nor does a free pick made before the stamp existed), so one that a later
+// background also gives is taken back when that background is left. That needs a pick of the
+// very move the next background grants, and ticking it again on the Moves tab restores it.
+function _heldBesidesBackground(item) {
+	const flags = item.flags?.[STONETOP_SCOPE];
+	return !!(item.system?.isStartingMove || flags?.[CREATION_PICK_FLAG] || flags?.grantedBy);
+}
+
 // The special possessions a background hands over on top of the playbook's picks: its fixed
 // `extraPossessions` (the Judge's Missionary: "an aviary in addition to your usual choice") and
 // any `apply: "possession"` setup pick (the Fox's A Life of Crime: burglar's kit or hidden
@@ -5033,9 +5271,10 @@ function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, love
 	// Background / auto-granted starting moves are `isStarting` and never counted.
 	// A replacing move (A Mighty Rampart) gave up an earlier pick (Bulwark) to be taken,
 	// so each one it retired still counts: `retiredPicks`.
+	// A repeatable starting move taken again (the Seeker's Well Versed) spent a pick on each take
+	// past the first.
 	const chosenInstances = (playbookCat?.moves ?? [])
-		.filter(m => !m.isStarting)
-		.reduce((n, m) => n + (m.ownedIds?.length ?? 0), 0) + retiredPicks;
+		.reduce((n, m) => n + Math.max(0, (m.ownedIds?.length ?? 0) - (m.isStarting ? 1 : 0)), 0) + retiredPicks;
 	const expectedPicks = pickCount + Math.max(0, actorLevel - 1);
 	const levelMovesShortfall = Math.max(0, expectedPicks - chosenInstances);
 	const levelMovesOverage = Math.max(0, chosenInstances - expectedPicks);

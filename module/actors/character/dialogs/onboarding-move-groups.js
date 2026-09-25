@@ -22,14 +22,14 @@ import { deepFreeze } from "../../../utils/localized-once.js";
 
 export const ONBOARDING_MOVE_GROUPS = deepFreeze({
 	"The Blessed": [
-		{ key: "spirits", label: "Spirits", moves: ["Big Magic", "Borrow Power", "Call the Spirits", "Danu's Grasp", "Rites of the Land", "Shared Souls", "Spirit Tongue", "Voice of the Earth Mother"] },
+		{ key: "spirits", label: "Spirits", moves: ["Big Magic", "Borrow Power", "Call the Spirits", "Danu's Grasp", "Heed My Words", "Rites of the Land", "Shared Souls", "Spirit Tongue", "Voice of the Earth Mother"] },
 		{ key: "nature", label: "Nature", moves: ["Barkskin", "Into the Lion's Den", "Lightning Rod", "Nature's Wrath", "Trackless Step", "Wild Soul"] },
 		{ key: "wards", label: "Wards", moves: ["Amulets & Talismans", "Healer's Arts", "Potent Workings", "Suck the Poison Out", "Veil", "Wards & Bindings"] },
 	],
 	"The Fox": [
 		{ key: "stealth", label: "Stealth", moves: ["Burgle", "Catlike", "Eye on the Door", "Free Running", "Light Fingers", "Slippery", "Danger Sense", "Perceptive"] },
 		{ key: "combat", label: "Combat", moves: ["All in the Wrist", "Ambush", "Battle Dancer", "Cheap Shot", "Parry & Riposte", "Second Intent", "Skill at Arms"] },
-		{ key: "charm", label: "Charm", moves: ["Irresistible", "Pants on Fire", "Rapier Wit", "Silver Tongued", "Under Your Skin"] },
+		{ key: "charm", label: "Charm", moves: ["Irresistible", "Laugh at Danger", "Pants on Fire", "Rapier Wit", "Silver Tongued", "Under Your Skin"] },
 	],
 	"The Heavy": [
 		{ key: "offense", label: "Offense", moves: ["Battle Joy", "Berserker", "Bringer of Ruin", "Dangerous", "Mighty Thews", "Musclebound", "Nemesis", "Payback", "Relentless", "Terror on the Field", "Intimidating", "Formidable"] },

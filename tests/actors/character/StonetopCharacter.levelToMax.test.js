@@ -99,6 +99,13 @@ async function levelUpOnce(char, actor) {
 		expect(actor.getFlag("stonetop-pwd", "invocations.selected") ?? []).toContain(invocation);
 	}
 
+	// The sheet's move budget holds at every step: one pick per level gained, no more, no fewer.
+	// The other half of an "either X OR Y" taken here (the Fox's Skill at Arms, the Heavy's
+	// Uncanny Reflexes) is one of those picks, not a second starting move the budget skips.
+	const { movelist } = await char.buildSnapshot();
+	expect(movelist.levelMovesShortfall, `${data.playbookName} short after ${pick.name} at level ${data.newLevel}`).toBe(0);
+	expect(movelist.levelMovesOverage, `${data.playbookName} over after ${pick.name} at level ${data.newLevel}`).toBe(0);
+
 	return { name: pick.name, level: data.newLevel, cap: pick.cap, cross: !!pick.crossPlaybook, invocation, marked: choices?.marks?.moveName ?? null };
 }
 
@@ -210,6 +217,29 @@ describe("StonetopCharacter level-up climb — every playbook to exhaustion", ()
 
 describe("StonetopCharacter level-up climb — per-rule guarantees", () => {
 	const heavyMove = (name) => sourceMovesFor("The Heavy").find(d => d.name === name)._id;
+
+	// Book: "You start with Ambush OR Skill at Arms; Danger Sense OR Perceptive" (the Fox), and
+	// "Armored OR Uncanny Reflexes" (the Heavy). The half not started with is a level-up pick
+	// like any other: offered, taken, counted, and not labelled a starting move.
+	it.each([
+		["the-fox", "The Fox", ["Ambush", "Danger Sense"], ["Skill at Arms", "Perceptive"]],
+		["the-heavy", "The Heavy", ["Armored"], ["Uncanny Reflexes"]],
+	])("%s: the climb takes the other half of each either/or as a level-up pick", async (slug, name, started, others) => {
+		const { char, actor } = buildLiveCharacter({ slug, name });
+		expect(ownedMoveNames(actor).filter(n => [...started, ...others].includes(n)).sort()).toEqual([...started].sort());
+		vi.spyOn(char, "selectPossession").mockResolvedValue(undefined);
+		const picks = [];
+		for (let guard = 0; guard < 400; guard++) {
+			const step = await levelUpOnce(char, actor);
+			if (!step) break;
+			picks.push(step.name);
+		}
+		for (const other of others) expect(picks).toContain(other);
+		const { movelist } = await char.buildSnapshot();
+		const label = n => movelist.playbookMoves.find(m => m.name === n);
+		for (const n of started) expect(label(n).sourceLabel).toBe("Starting move");
+		for (const n of others) expect(label(n)).toMatchObject({ owned: true, isStarting: false, sourceLabel: null });
+	});
 
 	it("Improved Stat raises a stat only to +2, then Superior Stat lifts it to +3", async () => {
 		const { char, actor } = buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", level: 6, stats: { str: 0 } });

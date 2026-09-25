@@ -1,9 +1,26 @@
 import { statRequirementsUnmet } from "./stat-requirement.js";
 import { effectiveRequiredMoves, requiredMovesUnmet, requirementLabel } from "./move-requirement.js";
 
+/**
+ * Whether box `i` of a repeatable move owned `current` times is closed to a click. Boxes are taken
+ * in order: every ticked box and the next free one are open, the rest wait their turn.
+ *
+ * A STARTING move locks only its FIRST box, the take it started with. A second Well Versed is an
+ * ordinary pick, ticked on the Moves tab like any repeatable move's (the level-up dialog always
+ * allowed it). The other half of an either/or taken later is not starting at all (`demotedStarting`
+ * below), so none of its boxes lock. The sheet's `repeatChecks` helper (stonetop.js) asks this too.
+ */
+export function repeatBoxLocked(i, current, isStarting) {
+	return (isStarting && i === 0) || (!(i < current) && i !== current);
+}
+
 export class PlaybookMoveEntry {
-	constructor(entry, ownedInstances, bgMoveNames, ownedAllByName, actorLevel, actorPlaybook, actorStats = {}) {
-		const isFromPlaybook   = entry.isStarting;
+	// `demotedStarting`: the "either X OR Y" options this character did not start with
+	// (StonetopCharacter#demotedStartingChoices). Every option carries isStartingMove, but the
+	// other half taken later is an ordinary pick: counted in the level's budget, labelled as
+	// nothing, and free to untick.
+	constructor(entry, ownedInstances, bgMoveNames, ownedAllByName, actorLevel, actorPlaybook, actorStats = {}, demotedStarting = null) {
+		const isFromPlaybook   = entry.isStarting && !demotedStarting?.has(entry.name);
 		const isFromBackground = bgMoveNames.has(entry.name);
 		const req              = entry.requirement;
 		// The replaced move is folded into the required moves so every lock/sort reader sees it.
@@ -64,7 +81,7 @@ export class PlaybookMoveEntry {
 				// so a player may deliberately take it anyway (the row then shows the
 				// "requirement not met" warning). The (not movesEdit) gate in the template
 				// still keeps every box read-only outside edit mode.
-				disabled: this.isStarting || (!(i < ownedInstances.length) && i !== ownedInstances.length),
+				disabled: repeatBoxLocked(i, ownedInstances.length, this.isStarting),
 			}))
 			: null;
 		this.resource = entry.resource;

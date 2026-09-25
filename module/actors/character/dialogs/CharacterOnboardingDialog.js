@@ -22,6 +22,7 @@ import { LORE_TERM_TOOLTIPS } from "../../../utils/lore-terms.js";
 import { getHoverDescriptionSetting } from "../../../settings.js";
 import { moveGroupsForPlaybook, moveGroupKeys } from "./onboarding-move-groups.js";
 import { effectiveSubgroupMax } from "./possession-choice-cap.js";
+import { requiredMovesUnmet } from "../move-requirement.js";
 import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { ensurePackIndex } from "../../../utils/pack-index.js";
 import { SYSTEM_ID } from "../../../system-id.js";
@@ -31,6 +32,19 @@ const SEEKER_ARCANA_SLUGS = ["collection", "arcana-major", "arcana-minor"];
 // The Ranger's animal-companion builder only applies to characters who have the
 // Animal Companion move (Beast-Bonded background or a free-pick choice).
 const ANIMAL_COMPANION_MOVE = "Animal Companion";
+
+/**
+ * The name after a suggested-name chip is clicked. Most regions offer whole names, so a chip
+ * replaces the name. A region whose names are words to join (the Blessed's Wild: "mix and match
+ * 1-3 of these", `combine: 3`) adds the word to the end instead, up to `combine` words: a click
+ * past that leaves the name alone, and a word already in the name is not added twice.
+ */
+export function combineNameChip(current, word, combine = 0) {
+	if (!(combine > 0)) return word;
+	const words = String(current ?? "").trim().split(/\s+/).filter(Boolean);
+	if (words.length >= combine || words.includes(word)) return words.join(" ");
+	return [...words, word].join(" ");
+}
 
 const STEADING_NPC_TRAITS = [
 	"all thumbs", "ambitious", "beloved by everyone", "beautiful singing voice",
@@ -330,7 +344,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	_originNameGroups() {
 		return this._origins
 			.filter(o => !this._isGordinsDelve(o.region) && o.names?.length)
-			.map(o => ({ region: o.region, names: o.names }));
+			.map(o => ({ region: o.region, names: o.names, note: o.note ?? "", combine: o.combine ?? 0 }));
 	}
 
 	_appearanceLineLabel(options, lineIdx) {
@@ -351,7 +365,56 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		return parseMovePickCount(this._playbookDoc.flags?.stonetop?.moves?.startingMovesNote);
 	}
 
+	// The moves the moves step offers as the free pick ("1 of your choice"), out of the loaded
+	// move list (_movesCache), as things stand in the selections.
+	_freePickOffers() {
+		const selectedBg = this._backgrounds.find(b => b.slug === this._selections.backgroundSlug);
+		// The moves the background hands over, setup-choice picks included (the background
+		// step runs before this one, so the pick is already made). Keeping them out of the
+		// free-pick pool matters twice over: the player must not spend their one free pick
+		// on a move they're being given anyway (the grant then no-ops and the pick is
+		// silently lost), and the sheet must not count the gift against the level's budget.
+		const bgMoveNames     = backgroundMoveNames(selectedBg, this._selections.backgroundSetup?.choices);
+		const choiceMoveNames = startingMoveChoiceNames(this._rawMoveChoices);
+		// The either/or options picked so far, by name (the radios hold compendium ids).
+		const choiceIds         = new Set(Object.values(this._selections.moveChoices ?? {}));
+		const chosenChoiceNames = new Set(this._movesCache.filter(d => choiceIds.has(d.id) || choiceIds.has(d.name)).map(d => d.name));
+		// What a free pick's required moves may lean on: the moves the character is guaranteed
+		// to end up with. Of the either/or options that is only the one picked in each group,
+		// so a Fox who picked Skill at Arms is offered Parry & Riposte, and one who picked
+		// Ambush is not. A change of radio re-renders the step, so this follows it.
+		const grantedNames = new Set([
+			...this._movesCache
+				.filter(d => d.system?.isStartingMove && !choiceMoveNames.has(d.name))
+				.map(d => d.name),
+			...chosenChoiceNames,
+			...bgMoveNames,
+		]);
+		return this._movesCache.filter(doc => {
+			// The other half of an either/or MAY be the free pick (the user's ruling): a Fox who
+			// starts with Ambush can take Skill at Arms as their 1 of choice. The half picked in
+			// its group is theirs already.
+			if (doc.system?.isStartingMove && !choiceMoveNames.has(doc.name)) return false;
+			if (bgMoveNames.has(doc.name)) return false;
+			if (chosenChoiceNames.has(doc.name)) return false;
+			if (doc.system?.requirement?.level > 1) return false;
+			if (requiredMovesUnmet(doc.system?.requirement, r => grantedNames.has(r))) return false;
+			return true;
+		});
+	}
+
+	// How many tales a section's count is for. The Fox's tall tales are "a couple of your more
+	// memorable adventures", and each list says "(choose 1 per tale)": `tales` on the section
+	// turns that into a count for the whole list. Every other section is one.
+	_loreTales(section) {
+		return Math.max(1, Math.floor(Number(section?.tales) || 1));
+	}
+
 	_parseLorePickMax(section) {
+		return this._parseLorePickMaxPerTale(section) * this._loreTales(section);
+	}
+
+	_parseLorePickMaxPerTale(section) {
 		const desc = String(section?.description ?? "").toLowerCase();
 		if (/answer\s+at\s+least/.test(desc)) return Infinity;
 		// "choose N–M" / "choose N-M" (en-dash U+2013 or regular hyphen)
@@ -372,12 +435,27 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		return Infinity;
 	}
 
+	// Every tick counts, so an option taken twice (a tall tale's `max: 2`) is two of the section's.
 	_countLoreSectionPicks(sectionSlug) {
 		let n = 0;
 		for (const [key, val] of Object.entries(this._selections.lore.picks)) {
-			if (key.startsWith(`${sectionSlug}:`) && val > 0) n++;
+			if (key.startsWith(`${sectionSlug}:`)) n += Math.max(0, Number(val) || 0);
 		}
 		return n;
+	}
+
+	// A lore pick's box `index` (0 for the first take, 1 for the second) ticked or unticked.
+	// Ticking box N means N+1 takes; unticking it means N. Refused (false) past the option's own
+	// `max` or the section's count; the caller puts the box back.
+	_setLorePick(section, optionSlug, index, checked) {
+		const opt = (section?.options ?? []).find(o => o.slug === optionSlug);
+		if (!section || !opt) return false;
+		const key     = `${section.slug}:${optionSlug}`;
+		const current = Math.max(0, Number(this._selections.lore.picks[key]) || 0);
+		const next    = checked ? Math.min(index + 1, opt.max ?? 1) : Math.min(index, current);
+		if (next > current && this._countLoreSectionPicks(section.slug) - current + next > this._parseLorePickMax(section)) return false;
+		this._selections.lore.picks[key] = next;
+		return true;
 	}
 
 	_isSeekerArcanaSection(section) {
@@ -751,15 +829,24 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				// it), so it persists and renders through the existing text machinery.
 				const desc  = this._normalizeOnboardingText(opt.description ?? "");
 				const blank = splitFillBlank(desc);
+				const max   = opt.max ?? 1;
 				return {
 					slug:        opt.slug,
 					sectionSlug: section.slug,
 					description: desc,
 					type:        "pick",
-					max:         opt.max ?? 1,
+					max,
 					count,
 					isSelected:  count > 0,
 					disabled:    !count && atLimit,
+					// An option that may be taken more than once (a tall tale told twice) gets a box
+					// per further take, as the sheet draws it. Each opens once the one before it is
+					// ticked, and shuts with the rest when the section is full.
+					extraBoxes:  Array.from({ length: Math.max(0, max - 1) }, (_, i) => ({
+						index:    i + 1,
+						checked:  count > i + 1,
+						disabled: count < i + 1 || (count === i + 1 && atLimit),
+					})),
 					hasBlank:    blank.hasBlank,
 					fillBefore:  blank.before,
 					fillAfter:   blank.after,
@@ -972,6 +1059,13 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		const idByName = new Map(this._movesCache.map(doc => [doc.name, doc.id]));
 		for (const [groupIndex, value] of Object.entries(this._selections.moveChoices)) {
 			if (idByName.has(value)) this._selections.moveChoices[groupIndex] = idByName.get(value);
+		}
+		// The free picks a re-run restores come by name too, and so do their stat picks.
+		this._selections.moves = this._selections.moves.map(value => idByName.get(value) ?? value);
+		for (const [key, stat] of Object.entries(this._selections.moveStatChoices)) {
+			if (!idByName.has(key)) continue;
+			delete this._selections.moveStatChoices[key];
+			this._selections.moveStatChoices[idByName.get(key)] = stat;
 		}
 	}
 
@@ -1335,6 +1429,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	// ── Resume helpers ───────────────────────────────────────────────
 
 	_parseLorePickMin(section) {
+		return this._parseLorePickMinPerTale(section) * this._loreTales(section);
+	}
+
+	_parseLorePickMinPerTale(section) {
 		const desc = String(section?.description ?? "").toLowerCase();
 		const rangeM = desc.match(/(?:choose|pick)\s+(\d+)\s*[\u2013-]\s*(\d+)/);
 		if (rangeM) return parseInt(rangeM[1], 10);
@@ -1766,6 +1864,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			origins = this._origins.map(o => ({
 				region:   o.region,
 				names:    o.names ?? [],
+				// "The Wild: mix and match 1-3 of these": the book's own instruction, and how many
+				// of the region's words a name may join (see combineNameChip).
+				note:     o.note ?? "",
+				combine:  o.combine ?? 0,
 				nameGroups: this._isGordinsDelve(o.region) ? this._originNameGroups() : [],
 				isGordinsDelve: this._isGordinsDelve(o.region),
 				selected: this._selections.originRegion === o.region,
@@ -1822,24 +1924,14 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// Now that the move list (with each move's cap) is loaded, drop any stat pick
 			// whose move was unselected or whose stat sits at the cap after a stats edit.
 			this._reconcileMoveStatChoices();
-			const selectedBg  = this._backgrounds.find(b => b.slug === this._selections.backgroundSlug);
-			// The moves the background hands over, setup-choice picks included (the background
-			// step runs before this one, so the pick is already made). Keeping them out of the
-			// free-pick pool matters twice over: the player must not spend their one free pick
-			// on a move they're being given anyway (the grant then no-ops and the pick is
-			// silently lost), and the sheet must not count the gift against the level's budget.
-			const bgMoveNames = backgroundMoveNames(selectedBg, this._selections.backgroundSetup?.choices);
-			const chosenIds   = new Set(this._selections.moves);
-			const atLimit     = chosenIds.size >= this._movePickCount;
 			const n           = this._movePickCount;
 			movePickNote = `Choose ${n} more starting ${n === 1 ? "move" : "moves"}`;
 
 			const docByName = new Map(this._movesCache.map(doc => [doc.name, doc]));
 			// "Either X OR Y" choice groups (e.g. the Heavy's Armored OR Uncanny
-			// Reflexes). The chosen move is granted separately, so its options are
-			// kept out of the free-pick list below.
-			const choiceMoveNames = startingMoveChoiceNames(this._rawMoveChoices);
-			moveChoiceGroups = this._rawMoveChoices.map((group, groupIndex) => ({
+			// Reflexes). The chosen move is granted separately, so it is kept out of the
+			// free-pick list below; the option not chosen stays in it (_freePickOffers).
+			moveChoiceGroups =this._rawMoveChoices.map((group, groupIndex) => ({
 				groupIndex,
 				label: this._normalizeOnboardingText(group.label ?? "Choose one"),
 				options: (group.options ?? []).flatMap(name => {
@@ -1855,26 +1947,16 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				}),
 			}));
 
-			// What a free pick's `requirement.moves` may lean on: the moves the character
-			// is guaranteed to end up with. An either/or option is NOT guaranteed — only
-			// one per group is taken — so they're excluded, or a Fox who picked Ambush
-			// would be offered Parry & Riposte, which needs Skill at Arms.
-			const grantedNames = new Set([
-				...this._movesCache
-					.filter(d => d.system?.isStartingMove && !choiceMoveNames.has(d.name))
-					.map(d => d.name),
-				...bgMoveNames,
-			]);
-			moveOptions = this._movesCache
-				.filter(doc => {
-					if (doc.system?.isStartingMove) return false;
-					if (bgMoveNames.has(doc.name)) return false;
-					if (choiceMoveNames.has(doc.name)) return false;
-					if (doc.system?.requirement?.level > 1) return false;
-					const reqMoves = doc.system?.requirement?.moves ?? [];
-					if (reqMoves.length && !reqMoves.every(r => grantedNames.has(r))) return false;
-					return true;
-				})
+			const offered = this._freePickOffers();
+			// A pick this list no longer offers is let go: a re-run's restored free pick that the
+			// background just chosen now grants, say, or Parry & Riposte once the radio moved
+			// off Skill at Arms. Kept, it would fill the count with a card the player can't see
+			// to untick.
+			const offeredIds  = new Set(offered.map(doc => doc.id));
+			this._selections.moves = this._selections.moves.filter(id => offeredIds.has(id));
+			const chosenIds   = new Set(this._selections.moves);
+			const atLimit     = chosenIds.size >= this._movePickCount;
+			moveOptions = offered
 				.map(doc => {
 					const cap = doc.system?.cap ?? null;
 					return {
@@ -2810,14 +2892,21 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			_refreshNextButton();
 		});
 
-		// "Either X OR Y" starting-move choices (one radio group per choice).
-		html.find("[name^='onboard-move-choice-']").on("change", ev => {
-			this._selections.moveChoices[ev.currentTarget.dataset.group] = ev.currentTarget.value;
-			html.find(`[name='${ev.currentTarget.name}']`).each((_, radio) => {
-				radio.closest(".stonetop-onboarding-card--move-choice")
-					?.classList.toggle("is-selected", radio.checked);
-			});
-			_refreshNextButton();
+		// "Either X OR Y" starting-move choices (one radio group per choice). Re-rendered, since
+		// the pick decides the free picks on offer: Skill at Arms opens Parry & Riposte, the half
+		// just picked leaves the list and the other half joins it, and a free pick that leaned on
+		// the half given up is let go. Scroll kept, as the arcana pickers do.
+		html.find("[name^='onboard-move-choice-']").on("change", async ev => {
+			const { name, value } = ev.currentTarget;
+			this._selections.moveChoices[ev.currentTarget.dataset.group] = value;
+			const stepEl    = html.find(".stonetop-onboarding-step")[0];
+			const scrollTop = stepEl?.scrollTop ?? 0;
+			await this.render(false);
+			const root      = this.element?.[0];
+			const newStepEl = root?.querySelector(".stonetop-onboarding-step");
+			if (newStepEl) newStepEl.scrollTop = scrollTop;
+			// Keyboard focus stays on the radio the player just moved to.
+			[...(root?.querySelectorAll(`[name='${name}']`) ?? [])].find(r => r.value === value)?.focus({ preventScroll: true });
 		});
 
 		// Filter the move cards by the search text and the active group chip. Pure
@@ -3048,32 +3137,27 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 		// ── Lore picks ────────────────────────────────────────────────
 		html.find("[name^='onboard-lore-pick-']").on("change", ev => {
-			const { section, option } = ev.currentTarget.dataset;
-			const key     = `${section}:${option}`;
-			const checked = ev.currentTarget.checked;
+			const { section, option, index } = ev.currentTarget.dataset;
 			const rawSec  = this._rawLore.find(s => s.slug === section);
 			const pickMax = this._parseLorePickMax(rawSec);
 
-			if (checked) {
-				const current = this._countLoreSectionPicks(section);
-				if (current >= pickMax) {
-					ev.currentTarget.checked = false;
-					return;
-				}
-				this._selections.lore.picks[key] = 1;
-			} else {
-				this._selections.lore.picks[key] = 0;
+			if (!this._setLorePick(rawSec, option, Number(index ?? 0), ev.currentTarget.checked)) {
+				ev.currentTarget.checked = !ev.currentTarget.checked;
+				return;
 			}
 
-			ev.currentTarget.closest(".stonetop-onboarding-lore-pick")
-				?.classList.toggle("is-selected", ev.currentTarget.checked);
-
+			// Redrawn from the counts, since one tick can change a neighbouring box: ticking an
+			// option's second box takes the first too, and unticking its first drops both.
 			const newCount = this._countLoreSectionPicks(section);
 			const atLimit  = pickMax < Infinity && newCount >= pickMax;
 			html.find(`[name='onboard-lore-pick-${section}']`).each((_, el) => {
-				if (!el.checked) el.disabled = atLimit;
-				el.closest(".stonetop-onboarding-lore-pick")
-					?.classList.toggle("stonetop-onboarding-lore-pick--disabled", !el.checked && atLimit);
+				const count = this._selections.lore.picks[`${section}:${el.dataset.option}`] ?? 0;
+				const box   = Number(el.dataset.index ?? 0);
+				el.checked  = box < count;
+				el.disabled = !el.checked && (atLimit || box > count);
+				const row = el.closest(".stonetop-onboarding-lore-pick");
+				row?.classList.toggle("is-selected", count > 0);
+				row?.classList.toggle("stonetop-onboarding-lore-pick--disabled", !count && atLimit);
 			});
 			html.find(".stonetop-onboarding-lore-pick-count").text(newCount);
 			_refreshNextButton();
@@ -3164,7 +3248,8 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		});
 
 		html.find(".onboard-name-chip").on("click", ev => {
-			const name = ev.currentTarget.dataset.name;
+			const { name: word, combine } = ev.currentTarget.dataset;
+			const name = combineNameChip(this._selections.name, word, Number(combine) || 0);
 			this._selections.name = name;
 			html.find(".onboard-name-input").val(name);
 			_refreshNextButton();
