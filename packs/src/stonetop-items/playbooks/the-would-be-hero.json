@@ -157,8 +157,14 @@
             "choices": {
               "pickCount": 1,
               "options": [
-                { "slug": "retriever", "label": "<em>retriever</em>" },
-                { "slug": "herder", "label": "<em>herder</em>" }
+                {
+                  "slug": "retriever",
+                  "label": "<em>retriever</em>"
+                },
+                {
+                  "slug": "herder",
+                  "label": "<em>herder</em>"
+                }
               ]
             }
           },
@@ -171,6 +177,7 @@
             "slug": "husbandry-tools",
             "label": "Husbandry tools",
             "description": "brushes, muzzles, collars, feed, ◇ whips, ◇ bridles, etc. Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
+            "rulesNote": "Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
             "grantsItems": [
               {
                 "name": "Brushes",
@@ -211,7 +218,9 @@
                 {
                   "slug": "shield",
                   "label": "◇◇ <strong>A shield</strong>, bearing ___'s crest",
-                  "armor": { "modifier": 1 },
+                  "armor": {
+                    "modifier": 1
+                  },
                   "shield": true
                 },
                 {
@@ -241,6 +250,7 @@
             "slug": "smithy",
             "label": "Smithy",
             "description": "(or access to it): iron goods, ingots, thick gloves, ◇ tongs, ◇ bellows, an anvil, etc.",
+            "rulesNote": "Or access to it.",
             "grantsItems": [
               {
                 "name": "Iron goods",
@@ -308,6 +318,7 @@
             "slug": "tannery",
             "label": "Tannery",
             "description": "(or access to it): lime, acid, salts, thick gloves, ◇ a boiled leather cuirass (1 armor), etc.",
+            "rulesNote": "Or access to it.",
             "grantsItems": [
               {
                 "name": "Lime",

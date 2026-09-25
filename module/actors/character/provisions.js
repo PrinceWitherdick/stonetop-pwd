@@ -28,6 +28,17 @@ import { escHtml } from "../../utils/strings.js";
 export const PROVISIONS_SLUG = "provisions";
 
 /**
+ * The Ranger's trapping gear: "When you Forage, get +1 use of provisions." Once per Forage, so it
+ * rides the first provisions payout the Forage card makes (stonetop.js#_onRollProvisions).
+ */
+export const TRAPPING_GEAR_SLUG = "trapping-gear";
+
+/** A Forage payout's formula with trapping gear's +1 on it. Pure. */
+export function withTrappingGear(formula) {
+	return `${formula}+1`;
+}
+
+/**
  * The Ranger's On the Hoof: "When you travel through the wilderness, you can procure 1d6 uses of
  * provisions each day (roll with disadvantage in winter or barren terrain)." A description-only
  * move — no roll tier, nothing to hit — so USING it is simply collecting the day's food, which is

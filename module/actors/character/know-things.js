@@ -6,8 +6,11 @@
 //   LOGBOOK (the Seeker) — "You have a logbook (2 uses, slow)... When you (and only you) consult
 //     your logbook and expend a use, you can ignore a Know Things roll you just made and treat
 //     the result as a 10+. When the Seasons Change, reset your logbook to 2 uses."
+//   BOOKS & SCROLLS (a Seeker or Lightbearer special possession) — "(○○○○○ uses): expend a use
+//     to consult your collection and turn a Know Things roll you just made into a 10+." The
+//     Logbook's rule, paid from a possession track instead of a move's (possession-tracks.js).
 //
-// Both are decisions the player makes AFTER seeing the dice, so both live on the chat card
+// All are decisions the player makes AFTER seeing the dice, so they live on the chat card
 // rather than in a pre-roll prompt. This module holds the pure part: which moves apply, what a
 // character has left to spend, and the card markup. The Foundry writes live in stonetop.js
 // beside Burn Brightly, the existing post-roll card mutation.
@@ -33,8 +36,8 @@ export function isKnowThings(moveName) {
  * The stored number is how many pips are FILLED, and for a move track a filled pip means a use
  * SPENT (module/model/Resource.js documents `current` as "checks used", and a fresh character has
  * no flag at all, which must read as an untouched logbook rather than an exhausted one). So
- * `left = max - spent`, and spending INCREMENTS. Do not copy this to the possession tracks, which
- * count the other way.
+ * `left = max - spent`, and spending INCREMENTS. A possession track (books & scrolls, the sacred
+ * pouch) counts the same way; Rites of the Land's Boon is the pool that counts the other.
  *
  * `max` comes off the owned move Item rather than a constant, so a homebrew or re-pointed Logbook
  * keeps working. Returns null when the character doesn't own the move at all.

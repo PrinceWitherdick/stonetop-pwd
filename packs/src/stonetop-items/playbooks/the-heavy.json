@@ -262,6 +262,7 @@
             "slug": "husbandry-tools",
             "label": "Husbandry tools",
             "description": "brushes, muzzles, collars, feed, ◇ whips, ◇ bridles, etc. Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
+            "rulesNote": "Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
             "grantsItems": [
               {
                 "name": "Brushes",
@@ -295,6 +296,7 @@
             "slug": "smithy",
             "label": "Smithy",
             "description": "(or access to it): iron goods, ingots, thick gloves, ◇ tongs, ◇ bellows, an anvil, etc.",
+            "rulesNote": "Or access to it.",
             "grantsItems": [
               {
                 "name": "Iron goods",

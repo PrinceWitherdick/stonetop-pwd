@@ -302,6 +302,7 @@
             "slug": "husbandry-tools",
             "label": "Husbandry tools",
             "description": "brushes, muzzles, collars, feed, ◇ whips, ◇ bridles, etc. Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
+            "rulesNote": "Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
             "grantsItems": [
               {
                 "name": "Brushes",
@@ -345,6 +346,7 @@
             "slug": "trapping-gear",
             "label": "Trapping gear",
             "description": "snares, pelts, musk, bait, etc. When you <em>Forage</em>, get +1 use of provisions.",
+            "rulesNote": "When you <em>Forage</em>, get +1 use of provisions.",
             "grantsItems": [
               {
                 "name": "Snares",

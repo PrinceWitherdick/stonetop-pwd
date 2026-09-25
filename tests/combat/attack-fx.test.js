@@ -98,7 +98,7 @@ afterEach(() => {
 	delete globalThis.matchMedia;
 });
 
-const sword = { slug: "sword", name: "Sword", range: ["hand", "close"], tags: [] };
+const sword = { slug: "sword", name: "Sword", range: ["close"], tags: [] };
 const bow = { slug: "bow-arrows", name: "Bow & arrows", range: ["near"], tags: [] };
 const target = t => ({ uuid: t.uuid, name: t.id, hasActor: true });
 

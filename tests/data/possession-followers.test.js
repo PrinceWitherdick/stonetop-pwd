@@ -15,6 +15,18 @@ describe("possessionFollower", () => {
 		expect(dog.sourceUuid).toBe("possession:a-good-dog");
 	});
 
+	// "follower (☐ retriever or ☐ herder, keen-nosed, clever)": the pick is the player's.
+	it("leads the dog's tags with the retriever or herder the player picked", () => {
+		expect(possessionFollower("a-good-dog", ["retriever"]).tags).toEqual(["retriever", "keen-nosed", "clever"]);
+		expect(possessionFollower("a-good-dog", ["herder"]).tags).toEqual(["herder", "keen-nosed", "clever"]);
+	});
+
+	it("leaves the dog's choice off, rather than guessing, when nothing is picked", () => {
+		const dog = possessionFollower("a-good-dog");
+		expect(dog.tags).toEqual(["keen-nosed", "clever"]);
+		expect(dog.choiceTags).toBeUndefined();
+	});
+
 	it("returns the Ranger's Hounds and Blessed's Mastiffs as groups", () => {
 		expect(possessionFollower("hounds").isGroup).toBe(true);
 		expect(possessionFollower("hounds").size).toBe(2);

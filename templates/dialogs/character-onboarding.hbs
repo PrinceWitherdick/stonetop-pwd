@@ -371,7 +371,7 @@
 						       {{#if isPreselected}}data-preselected="true"{{/if}}>
 						<strong class="stonetop-onboarding-card-title">{{{label}}}</strong>
 						{{#if isPreselected}}
-						<span class="stonetop-onboarding-possession-badge">Included</span>
+						<span class="stonetop-onboarding-possession-badge">{{#if isFromBackground}}From your background{{else}}Included{{/if}}</span>
 						{{/if}}
 					</div>
 					{{#if description}}

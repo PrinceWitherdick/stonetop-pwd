@@ -248,11 +248,14 @@ export class OutfitSnapshotBuilder {
  * @property {PossessionItemSnapshot[]} items
  */
 export class PossessionsSnapshot {
-	constructor(pickCount, pickNote, items, isIncomplete = false) {
+	constructor(pickCount, pickNote, items, isIncomplete = false, overBy = 0) {
 		this.pickCount    = pickCount;
 		this.pickNote     = pickNote;
 		this.items        = items;
 		this.isIncomplete = isIncomplete;
+		// How many picks past the playbook's count are held (0 when within it): flagged, not refused.
+		this.overBy       = overBy;
+		this.isOverLimit  = overBy > 0;
 	}
 }
 

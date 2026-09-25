@@ -376,6 +376,21 @@
 			</button>
 		</div>
 		{{/if}}
+		{{#if stonetop.inventory.possessions.isOverLimit}}
+		<div class="stonetop-intros-notice stonetop-intros-notice--warn stonetop-moves-level-notice">
+			<i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+			<div class="stonetop-moves-level-notice-body">
+				<p>
+				{{#if (eq stonetop.inventory.possessions.overBy 1)}}
+					{{localize "stonetop.inventory.possessionsOverLimitOne"}}
+				{{else}}
+					{{localize "stonetop.inventory.possessionsOverLimitMany" count=stonetop.inventory.possessions.overBy}}
+				{{/if}}
+				</p>
+				<p class="stonetop-moves-level-notice-hint">{{localize "stonetop.inventory.possessionsOverLimitHint"}}</p>
+			</div>
+		</div>
+		{{/if}}
 	</div>
 	{{/if}}
 

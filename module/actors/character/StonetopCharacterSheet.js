@@ -6748,6 +6748,10 @@ export function createStonetopCharacterSheetClass(Base) {
 							if (!id) return;
 							picked = true;
 							await this._stonetopCharacter._applyForeignMoveChoice(addedItem, id, grantsPossession);
+							// Big Magic learned through Initiate frees a remarkable trait on the
+							// pouch, same as taking it on its home playbook.
+							const learned = foreign.find(m => m.compendiumId === id);
+							if (learned) await this._maybeOpenPossessionChoicesForMove(learned.name);
 						},
 					},
 					cancel: { label: "Cancel" },
@@ -8435,7 +8439,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		async _onAddPossessionFollower(slug) {
 			if (!this.isEditable || !slug) return;
 			const { possessionFollower } = await import("../../data/possession-followers.js");
-			const input = possessionFollower(slug);
+			// The dog's retriever / herder pick lives on the possession, not the catalog.
+			const picked = resolvedFlags(this.actor).possessions?.subChoices?.[slug] ?? [];
+			const input = possessionFollower(slug, picked);
 			if (!input) return;
 			const existing = this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {};
 			if (Object.values(existing).some(f => f?.sourceUuid === input.sourceUuid)) return;

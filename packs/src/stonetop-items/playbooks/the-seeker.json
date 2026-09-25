@@ -243,7 +243,45 @@
               "max": 3,
               "title": "Stock",
               "labels": []
-            }
+            },
+            "choiceGroups": [
+              {
+                "heading": "What remarkable trait does it possess?",
+                "note": "one per Big Magic",
+                "subgroups": [
+                  {
+                    "multiSelect": true,
+                    "maxSelect": 0,
+                    "maxSelectBonus": {
+                      "moveBonus": [
+                        {
+                          "moveName": "Big Magic",
+                          "perInstance": 1
+                        }
+                      ]
+                    },
+                    "options": [
+                      {
+                        "slug": "trait-indestructible",
+                        "label": "It cannot be cut, torn, or burned by any natural means."
+                      },
+                      {
+                        "slug": "trait-unnoticed",
+                        "label": "Unless someone is specifically searching for your pouch, they will ignore its presence."
+                      },
+                      {
+                        "slug": "trait-sealed",
+                        "label": "So long as the pouch is sealed, nothing within can be detected or found by magic, nor can anything within escape or affect the outside world."
+                      },
+                      {
+                        "slug": "trait-unclean",
+                        "label": "Unnatural and unclean creatures cannot bear to touch it."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
           },
           {
             "slug": "books-and-scrolls",
@@ -339,6 +377,7 @@
             "slug": "laboratory",
             "label": "Laboratory",
             "description": "chemics, reagents, vials, measures, ◇ scales, ◇ decanters, etc. Every season, produce d4-1 uses of ◇ naphtha (<em>thrown, area, dangerous, ignores armor</em>).",
+            "rulesNote": "Every season, produce d4-1 uses of ◇ naphtha (<em>thrown, area, dangerous, ignores armor</em>).",
             "grantsItems": [
               {
                 "name": "Chemics",
@@ -417,6 +456,7 @@
             "slug": "trade-contacts",
             "label": "Trade contacts",
             "description": "small amounts of salt, glass, silk, spice, medicinal herbs, pigments, ivory, etc.",
+            "rulesNote": "Small amounts of each.",
             "grantsItems": [
               {
                 "name": "Salt",

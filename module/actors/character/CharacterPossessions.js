@@ -18,6 +18,12 @@ export class CharacterPossessions {
 		await this._flags.setFlag("selected", [...s]);
 	}
 
+	// Forget everything a move-granted possession carried (its level, spent uses and picks),
+	// so taking the move again starts the possession fresh rather than half-spent.
+	async forgetGranted(slug) {
+		await this._flags.batch({ deletes: { grantedAtLevel: [slug], uses: [slug], subChoices: [slug] } });
+	}
+
 	async deselect(slug) {
 		const s = this.selected;
 		s.delete(slug);

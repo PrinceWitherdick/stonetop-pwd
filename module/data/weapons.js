@@ -56,13 +56,16 @@ export const WEAPON_META = {
 	"silver-alloy-dagger":M({ name: "Silver-alloy dagger",range: ["hand"], tags: ["silver"] }),
 	"spear":              M({ name: "Spear",              range: ["close", "thrown"], piercing: "prosperity" }),
 	"long-spear":         M({ name: "Long spear",         range: ["reach"], piercing: "prosperity" }),
+	// The Marshal's Weapons of War spear is fine steel, a flat "2 piercing" rather than the
+	// iron spear's x. Its gear choice names this key through its own `weaponSlug`.
+	"long-spear-fine-steel": M({ name: "Long spear, fine steel", range: ["reach"], piercing: 2 }),
 	"maul":               M({ name: "Maul",               range: ["close"], tags: ["forceful", "awkward"] }),
 	"hatchet":            M({ name: "Hatchet",            range: ["hand", "thrown"], piercing: "prosperity" }),
 	"mattock":            M({ name: "Mattock",            range: ["close"], piercing: "prosperity", tags: ["messy", "awkward"] }),
 	"mace-or-flail":      M({ name: "Mace or flail",      range: ["close"], iron: true, tags: ["forceful"] }),
 	"battleaxe":          M({ name: "Battleaxe",          range: ["close"], iron: true, tags: ["messy"] }),
 	"short-sword":        M({ name: "Short sword",        range: ["hand", "close"], iron: true }),
-	"sword":              M({ name: "Sword",              range: ["hand", "close"], iron: true, damageBonus: 1 }),
+	"sword":              M({ name: "Sword",              range: ["close"], iron: true, damageBonus: 1 }),
 	"warhammer":          M({ name: "Warhammer",          range: ["close"], iron: true, piercing: 2 }),
 
 	// ---- Thrown / ranged (Let Fly) -------------------------------------------

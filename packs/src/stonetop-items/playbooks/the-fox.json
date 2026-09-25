@@ -220,9 +220,16 @@
                 "weight": 1
               },
               {
-                "name": "Lantern (close, area)",
+                "name": "Lantern",
+                "sourceKey": "Lantern (close, area)",
                 "column": "regular",
-                "weight": 1
+                "weight": 1,
+                "resource": {
+                  "max": 5,
+                  "title": null,
+                  "labels": []
+                },
+                "resourceSuffix": "hours, close, area"
               },
               {
                 "name": "Grappling hook",
@@ -399,6 +406,7 @@
             "slug": "tannery",
             "label": "Tannery",
             "description": "(or access to it): lime, acid, salts, thick gloves, ◇ a boiled leather cuirass (1 armor), etc.",
+            "rulesNote": "Or access to it.",
             "grantsItems": [
               {
                 "name": "Lime",
@@ -430,6 +438,7 @@
             "slug": "trade-contacts",
             "label": "Trade contacts",
             "description": "small amounts of salt, glass, silk, spice, medicinal herbs, pigments, ivory, etc.",
+            "rulesNote": "Small amounts of each.",
             "grantsItems": [
               {
                 "name": "Salt",

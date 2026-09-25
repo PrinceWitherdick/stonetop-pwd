@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { carriedAttackWeapons } from "../../module/combat/attack-flow.js";
 import { weaponMetaFromNote } from "../../module/data/weapon-from-note.js";
 import { mitigateDamage } from "../../module/utils/damage.js";
-import { isClashWeapon, isLetFlyWeapon } from "../../module/data/weapons.js";
+import { isClashWeapon, isLetFlyWeapon, WEAPON_META } from "../../module/data/weapons.js";
 import { TestCharacterBuilder } from "../fakes/TestCharacterBuilder.js";
 import { FakeActorBuilder } from "../fakes/FakeActorBuilder.js";
 import { FakeInventoryRepository } from "../fakes/FakeInventoryRepository.js";
@@ -296,6 +297,61 @@ describe("StonetopCharacter#carriedWeaponGear (the real source)", () => {
 		const actor = { items: [], typedActor: char, getFlag: () => null };
 		const out = await carriedAttackWeapons(actor, CLASH);
 		expect(out.map(c => c.meta.name)).toContain("Battleaxe");
+	});
+});
+
+// The Marshal's Weapons of War spear is "Long spear, fine steel (reach, 2 piercing)", where the
+// catalog's is the iron spear's x piercing. Keyed by its choice slug alone it took Prosperity.
+describe("the Marshal's fine-steel long spear", () => {
+	const MARSHAL = {
+		slug: "the-marshal", name: "The Marshal",
+		specialPossessions: {
+			pickCount: 0, preselected: ["weapons-of-war"],
+			options: [{
+				slug: "weapons-of-war", label: "Weapons of war",
+				choices: {
+					pickCount: 3, gear: true,
+					options: [{
+						slug: "long-spear", weaponSlug: "long-spear-fine-steel",
+						label: "◇◇ Long spear, fine steel (reach, 2 piercing)",
+					}],
+				},
+			}],
+		},
+	};
+
+	it("is its own weapon: a flat 2 piercing, not the steading's Prosperity", async () => {
+		const actor = new FakeActorBuilder()
+			.withPlaybook("the-marshal", "The Marshal")
+			.withFlag("possessions.subChoices", { "weapons-of-war": ["long-spear"] })
+			.withFlag("possessions.choiceCarried", { "weapons-of-war:long-spear": true })
+			.build();
+		const char = await new TestCharacterBuilder(actor)
+			.withInventoryRepo(new FakeInventoryRepository([]))
+			.withArcanaRepo(new FakeArcanaRepository([]))
+			.addPlaybook(MARSHAL).build();
+		const out = await carriedAttackWeapons({ items: [], typedActor: char, getFlag: () => null }, CLASH);
+		expect(out).toHaveLength(1);
+		// Still carried and ammo-tracked under its choice slug; only its stats are its own.
+		expect(out[0].slug).toBe("weapons-of-war:long-spear");
+		expect(out[0].meta.piercing).toBe(2);
+		expect(out[0].meta.range).toEqual(["reach"]);
+	});
+
+	it("the shipped Marshal names it", () => {
+		const marshal = JSON.parse(readFileSync("packs/src/stonetop-items/playbooks/the-marshal.json", "utf8"));
+		const spear = marshal.flags.stonetop.specialPossessions.options.find(o => o.slug === "weapons-of-war")
+			.choices.options.find(c => c.slug === "long-spear");
+		expect(spear.weaponSlug).toBe("long-spear-fine-steel");
+		expect(WEAPON_META[spear.weaponSlug].piercing).toBe(2);
+	});
+});
+
+// "Sword, iron (close, +1 damage)" on every list that prints it; hand is the SHORT sword's.
+describe("the sword's range", () => {
+	it("is close, not hand", () => {
+		expect(WEAPON_META.sword.range).toEqual(["close"]);
+		expect(WEAPON_META["short-sword"].range).toEqual(["hand", "close"]);
 	});
 });
 

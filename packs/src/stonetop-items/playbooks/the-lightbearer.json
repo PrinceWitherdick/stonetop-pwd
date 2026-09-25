@@ -308,9 +308,16 @@
                 "column": "small"
               },
               {
-                "name": "Lanterns (close, area)",
+                "name": "Lanterns",
+                "sourceKey": "Lanterns (close, area)",
                 "column": "regular",
-                "weight": 1
+                "weight": 1,
+                "resource": {
+                  "max": 5,
+                  "title": null,
+                  "labels": []
+                },
+                "resourceSuffix": "hours, close, area"
               }
             ]
           },

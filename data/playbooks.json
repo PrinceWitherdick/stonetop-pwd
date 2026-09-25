@@ -565,6 +565,7 @@
           "slug": "goat-herd",
           "label": "Goat herd",
           "description": "milk, cheese, pelts, meat, blood, horn, wool, etc. Each season, 1 in 4 chance of having a bezoar (swallow it to cure poison).",
+          "rulesNote": "Each season, 1 in 4 chance of having a bezoar (swallow it to cure poison).",
           "grantsItems": [
             {
               "name": "Milk",
@@ -600,6 +601,7 @@
           "slug": "herb-garden",
           "label": "Herb garden",
           "description": "shears, mortars &amp; pestles, herbs, seeds, remedies, mild poisons, ◇ spades, etc. Each spring, d4 uses of bendis root (<em>reach, area</em>, burns ~1 hr, fumes repel perversions of nature).",
+          "rulesNote": "Each spring, d4 uses of bendis root (<em>reach, area</em>, burns ~1 hr, fumes repel perversions of nature).",
           "grantsItems": [
             {
               "name": "Shears",
@@ -920,9 +922,16 @@
               "weight": 1
             },
             {
-              "name": "Lantern (close, area)",
+              "name": "Lantern",
+              "sourceKey": "Lantern (close, area)",
               "column": "regular",
-              "weight": 1
+              "weight": 1,
+              "resource": {
+                "max": 5,
+                "title": null,
+                "labels": []
+              },
+              "resourceSuffix": "hours, close, area"
             },
             {
               "name": "Grappling hook",
@@ -1099,6 +1108,7 @@
           "slug": "tannery",
           "label": "Tannery",
           "description": "(or access to it): lime, acid, salts, thick gloves, ◇ a boiled leather cuirass (1 armor), etc.",
+          "rulesNote": "Or access to it.",
           "grantsItems": [
             {
               "name": "Lime",
@@ -1130,6 +1140,7 @@
           "slug": "trade-contacts",
           "label": "Trade contacts",
           "description": "small amounts of salt, glass, silk, spice, medicinal herbs, pigments, ivory, etc.",
+          "rulesNote": "Small amounts of each.",
           "grantsItems": [
             {
               "name": "Salt",
@@ -1605,6 +1616,7 @@
           "slug": "husbandry-tools",
           "label": "Husbandry tools",
           "description": "brushes, muzzles, collars, feed, ◇ whips, ◇ bridles, etc. Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
+          "rulesNote": "Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
           "grantsItems": [
             {
               "name": "Brushes",
@@ -1638,6 +1650,7 @@
           "slug": "smithy",
           "label": "Smithy",
           "description": "(or access to it): iron goods, ingots, thick gloves, ◇ tongs, ◇ bellows, an anvil, etc.",
+          "rulesNote": "Or access to it.",
           "grantsItems": [
             {
               "name": "Iron goods",
@@ -2238,6 +2251,7 @@
           "slug": "smithy",
           "label": "Smithy",
           "description": "(or access to it): iron goods, ingots, thick gloves, ◇ tongs, ◇ bellows, an anvil, etc.",
+          "rulesNote": "Or access to it.",
           "grantsItems": [
             {
               "name": "Iron goods",
@@ -2717,9 +2731,16 @@
               "column": "small"
             },
             {
-              "name": "Lanterns (close, area)",
+              "name": "Lanterns",
+              "sourceKey": "Lanterns (close, area)",
               "column": "regular",
-              "weight": 1
+              "weight": 1,
+              "resource": {
+                "max": 5,
+                "title": null,
+                "labels": []
+              },
+              "resourceSuffix": "hours, close, area"
             }
           ]
         },
@@ -3351,6 +3372,7 @@
               },
               {
                 "slug": "long-spear",
+                "weaponSlug": "long-spear-fine-steel",
                 "label": "◇◇ <strong>Long spear</strong>, fine steel (<em>reach</em>, 2 piercing)"
               },
               {
@@ -3911,6 +3933,7 @@
           "slug": "husbandry-tools",
           "label": "Husbandry tools",
           "description": "brushes, muzzles, collars, feed, ◇ whips, ◇ bridles, etc. Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
+          "rulesNote": "Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
           "grantsItems": [
             {
               "name": "Brushes",
@@ -3954,6 +3977,7 @@
           "slug": "trapping-gear",
           "label": "Trapping gear",
           "description": "snares, pelts, musk, bait, etc. When you <em>Forage</em>, get +1 use of provisions.",
+          "rulesNote": "When you <em>Forage</em>, get +1 use of provisions.",
           "grantsItems": [
             {
               "name": "Snares",
@@ -4459,7 +4483,45 @@
             "max": 3,
             "title": "Stock",
             "labels": []
-          }
+          },
+          "choiceGroups": [
+            {
+              "heading": "What remarkable trait does it possess?",
+              "note": "one per Big Magic",
+              "subgroups": [
+                {
+                  "multiSelect": true,
+                  "maxSelect": 0,
+                  "maxSelectBonus": {
+                    "moveBonus": [
+                      {
+                        "moveName": "Big Magic",
+                        "perInstance": 1
+                      }
+                    ]
+                  },
+                  "options": [
+                    {
+                      "slug": "trait-indestructible",
+                      "label": "It cannot be cut, torn, or burned by any natural means."
+                    },
+                    {
+                      "slug": "trait-unnoticed",
+                      "label": "Unless someone is specifically searching for your pouch, they will ignore its presence."
+                    },
+                    {
+                      "slug": "trait-sealed",
+                      "label": "So long as the pouch is sealed, nothing within can be detected or found by magic, nor can anything within escape or affect the outside world."
+                    },
+                    {
+                      "slug": "trait-unclean",
+                      "label": "Unnatural and unclean creatures cannot bear to touch it."
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         },
         {
           "slug": "books-and-scrolls",
@@ -4555,6 +4617,7 @@
           "slug": "laboratory",
           "label": "Laboratory",
           "description": "chemics, reagents, vials, measures, ◇ scales, ◇ decanters, etc. Every season, produce d4-1 uses of ◇ naphtha (<em>thrown, area, dangerous, ignores armor</em>).",
+          "rulesNote": "Every season, produce d4-1 uses of ◇ naphtha (<em>thrown, area, dangerous, ignores armor</em>).",
           "grantsItems": [
             {
               "name": "Chemics",
@@ -4633,6 +4696,7 @@
           "slug": "trade-contacts",
           "label": "Trade contacts",
           "description": "small amounts of salt, glass, silk, spice, medicinal herbs, pigments, ivory, etc.",
+          "rulesNote": "Small amounts of each.",
           "grantsItems": [
             {
               "name": "Salt",
@@ -4913,6 +4977,7 @@
           "slug": "husbandry-tools",
           "label": "Husbandry tools",
           "description": "brushes, muzzles, collars, feed, ◇ whips, ◇ bridles, etc. Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
+          "rulesNote": "Gain advantage to Persuade domestic beasts (livestock, dogs, etc.).",
           "grantsItems": [
             {
               "name": "Brushes",
@@ -4985,6 +5050,7 @@
           "slug": "smithy",
           "label": "Smithy",
           "description": "(or access to it): iron goods, ingots, thick gloves, ◇ tongs, ◇ bellows, an anvil, etc.",
+          "rulesNote": "Or access to it.",
           "grantsItems": [
             {
               "name": "Iron goods",
@@ -5052,6 +5118,7 @@
           "slug": "tannery",
           "label": "Tannery",
           "description": "(or access to it): lime, acid, salts, thick gloves, ◇ a boiled leather cuirass (1 armor), etc.",
+          "rulesNote": "Or access to it.",
           "grantsItems": [
             {
               "name": "Lime",

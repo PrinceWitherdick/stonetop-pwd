@@ -7,9 +7,9 @@
 //
 // Keyed by the possession's slug (matching specialPossessions.options[].slug on the
 // playbook). `sourceUuid` (`possession:<slug>`) dedupes re-adds, exactly like the
-// arcana summons. Where the handout offers a tag choice, we bake a sensible default
-// and note the alternative — the resulting card is fully editable, so the player
-// adjusts to their pick.
+// arcana summons. Where the playbook offers a tag choice (the dog is a retriever OR a
+// herder), `choiceTags` names the choice slugs that are tags, and the one the player
+// picked on the possession leads the card's tags.
 
 export const POSSESSION_FOLLOWER_CATALOG = {
 	// The Would-be Hero — "A good dog" (single follower).
@@ -17,12 +17,12 @@ export const POSSESSION_FOLLOWER_CATALOG = {
 		name:       "Good dog",
 		typeLabel:  "a good dog",
 		portraitIcon: "fas fa-dog",
-		tags:       ["herder", "keen-nosed", "clever"],
+		tags:       ["keen-nosed", "clever"],
+		choiceTags: ["retriever", "herder"],
 		hp:         6,
 		damage:     "d6 (hand, grabby)",
 		instinct:   "to play",
 		cost:       "affection",
-		notes:      "Choose when you gain it: a retriever, or a herder (keen-nosed, clever).",
 		sourceUuid: "possession:a-good-dog",
 	},
 	// The Ranger — "Hounds" (2–3 followers → a group).
@@ -55,9 +55,20 @@ export const POSSESSION_FOLLOWER_CATALOG = {
 	},
 };
 
-/** The follower-catalog entry for a possession slug, or null if it grants no follower. */
-export function possessionFollower(slug) {
-	return POSSESSION_FOLLOWER_CATALOG[slug] ?? null;
+/**
+ * The follower inputs for a possession slug, or null if it grants no follower.
+ * `picked` is the possession's sub-choice slugs (possessions.subChoices[slug]); the
+ * ones among the entry's `choiceTags` lead its tags, so the Would-be Hero's dog is the
+ * retriever or the herder they chose. Nothing picked yet leaves the choice off rather
+ * than guessing it.
+ */
+export function possessionFollower(slug, picked = []) {
+	const entry = POSSESSION_FOLLOWER_CATALOG[slug];
+	if (!entry) return null;
+	if (!entry.choiceTags) return entry;
+	const { choiceTags, ...rest } = entry;
+	const chosen = choiceTags.filter(t => (picked ?? []).includes(t));
+	return { ...rest, tags: [...chosen, ...entry.tags] };
 }
 
 /**

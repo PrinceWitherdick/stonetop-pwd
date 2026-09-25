@@ -608,13 +608,14 @@ export class StonetopCharacter {
 			.map(i => rec(i._id, { ...readInventoryItemData(i), name: i.name }));
 		const arcana = arcanaCarried.map(i => rec(i.slug, i));
 		// Gear choices are the one store that is NOT inventory.checked, so their marks are
-		// collected alongside their items and unioned into `marks` below. Their CHOICE slug is
-		// the WEAPON_META key ("battleaxe", "long-spear"), while their carried mark and ammo
-		// track are both keyed by the composite — hence the two slugs on the record.
+		// collected alongside their items and unioned into `marks` below. Their weapon slug is
+		// the WEAPON_META key ("battleaxe"; the Marshal's fine-steel "long-spear" names its own),
+		// while their carried mark and ammo track are both keyed by the composite — hence the
+		// two slugs on the record.
 		const choiceRows = [...this._buildChoiceGearByPossession(playbookData).values()]
 			.flatMap(b => [...b.regular, ...b.small])
 			.map(r => rec(`${r.possessionSlug}:${r.choiceSlug}`, { ...r, name: r.label, note: r.label }, {
-				weaponSlug: r.choiceSlug, ammoStore: "possessions", carried: r.checked,
+				weaponSlug: r.weaponSlug, ammoStore: "possessions", carried: r.checked,
 			}));
 		const items = [
 			...outfit, ...custom, ...arcana,
@@ -1155,7 +1156,8 @@ export class StonetopCharacter {
 		let possessions = null;
 		if (playbookData?.specialPossessions) {
 			const maxUsesMap = this.computePossessionMaxUses(playbookData.specialPossessions, ownedAllByName, actorLevel);
-			possessions = this._buildPossessionsSnapshot(playbookData.specialPossessions, maxUsesMap, prosperity, grantedByPossession, choiceGearByPossession);
+			const fromBackground = backgroundPossessionSlugs(this._selectedBackground(playbookData), this._background.setupChoices);
+			possessions = this._buildPossessionsSnapshot(playbookData.specialPossessions, maxUsesMap, prosperity, grantedByPossession, choiceGearByPossession, fromBackground);
 		}
 
 		const moveResourceState = this._moveResources.getMoveResources();
@@ -1301,12 +1303,15 @@ export class StonetopCharacter {
 		return new InventorySnapshot(outfit, possessions, other, loveLetters);
 	}
 
-	_buildPossessionsSnapshot(specialPossessions, maxUsesMap, prosperity = null, grantedByPossession = new Map(), choiceGearByPossession = new Map()) {
+	_buildPossessionsSnapshot(specialPossessions, maxUsesMap, prosperity = null, grantedByPossession = new Map(), choiceGearByPossession = new Map(), fromBackground = new Set()) {
 		const { pickNote, pickCount, preselected = [], options } = specialPossessions;
 		const selectedSlugs = this._possessions.selected;
 		const usesMap = this._possessions.uses;
 		const subChoicesMap = this._possessions.subChoices;
 		const preselectedSet = new Set(preselected);
+		// Owned move counts, scanned once for the whole list and only if a possession has choice groups.
+		let moveCounts;
+		const ownedMoveCounts = () => (moveCounts ??= this.ownedMoveCounts());
 
 		let chosenCount = 0;
 		const items = options
@@ -1316,8 +1321,9 @@ export class StonetopCharacter {
 			.map(opt => {
 			const isPre = preselectedSet.has(opt.slug);
 			const isSelected = isPre || selectedSlugs.has(opt.slug);
-			// A granted possession doesn't consume one of the playbook's normal picks.
-			if (isSelected && !isPre && !opt.grantOnly) chosenCount++;
+			// A granted possession doesn't consume one of the playbook's normal picks, and
+			// neither does one the background handed over ("in addition to your usual choice").
+			if (isSelected && !isPre && !opt.grantOnly && !fromBackground.has(opt.slug)) chosenCount++;
 			const maxUses = maxUsesMap[opt.slug] ?? opt.resource?.max ?? null;
 			const currentUses = isSelected ? (usesMap[opt.slug] ?? 0) : 0;
 			const resourceDef = opt.resource ?? null;
@@ -1368,13 +1374,19 @@ export class StonetopCharacter {
 				// "x piercing" weapons (e.g. the Ranger's composite bow) resolve to the
 				// steading's Prosperity for display here, just like outfit items — onboarding
 				// keeps the literal "x" since it renders the raw playbook description instead.
-				.withDescription(hasGrantedGear ? "" : _transformPiercingNote(_stripPossessionUsesAnnotation(opt.description ?? "", resourceDef), prosperity))
+				// A gear-granting possession's description is just its item list, which the
+				// granted rows now say — except for the rule the book prints after it ("Gain
+				// advantage to Persuade domestic beasts", Trapping gear's +1 provisions), which
+				// lives in `rulesNote` so it doesn't vanish with the list.
+				.withDescription(hasGrantedGear ? (opt.rulesNote ?? "") : _transformPiercingNote(_stripPossessionUsesAnnotation(opt.description ?? "", resourceDef), prosperity))
 				.withSelected(isSelected)
 				.withChecked(isSelected)
 				// A granted grant-only possession (the Initiate Sacred Pouch) is locked like
 				// preselected gear: it can't be re-added from the sheet (it's filtered out of
-				// the picker), so don't let it be accidentally unchecked away either.
-				.withDisabled(isPre || (isSelected && !!opt.grantOnly))
+				// the picker), so don't let it be accidentally unchecked away either. So is one
+				// the background handed over (A Life of Crime's burglar's kit): it goes with the
+				// background, not with a click (the user's ruling).
+				.withDisabled(isPre || (isSelected && (!!opt.grantOnly || fromBackground.has(opt.slug))))
 				.withPreselected(isPre)
 				// Preselected possessions (the Blessed's sacred pouch, Marshal's symbol of
 				// authority, etc.) are starting *gear*, not moves — show no source label
@@ -1390,8 +1402,10 @@ export class StonetopCharacter {
 				// sacred pouch), woven under the description on the gear tab. Gear-bearing
 				// bundles show their picks as the ◇ rows instead, so no prose summary.
 				.withChoiceSummary(isSelected && !isGearChoice ? this._buildPossessionChoiceSummary(opt, subChoicesMap[opt.slug] ?? []) : null)
-				// Has editable choiceGroups → gear tab shows an "edit" pencil (in edit mode).
-				.withHasChoiceGroups(isSelected && !!opt.choiceGroups?.length)
+				// Has editable choiceGroups → gear tab shows an "edit" pencil (in edit mode). Not
+				// while every line is capped at nothing: the Seeker's pouch has no remarkable
+				// trait until Big Magic grants one, so the editor would offer nothing to pick.
+				.withHasChoiceGroups(isSelected && !!opt.choiceGroups?.length && _hasEditableChoice(opt.choiceGroups, ownedMoveCounts()))
 				// Bundled gear materialized for this possession (Distillery → firkins, whisky,
 				// malt…), split ◇ / small, rendered inside the card. Only present when selected.
 				.withGrantedRegular(grantedGear.regular)
@@ -1426,7 +1440,9 @@ export class StonetopCharacter {
 		});
 
 		const isIncomplete = pickCount > 0 && chosenCount < pickCount;
-		return new PossessionsSnapshot(pickCount, pickNote, [...items, ...customItems], isIncomplete);
+		// Too many is flagged the same way, never refused: a GM may have allowed the extra.
+		const overBy = pickCount > 0 ? Math.max(0, chosenCount - pickCount) : 0;
+		return new PossessionsSnapshot(pickCount, pickNote, [...items, ...customItems], isIncomplete, overBy);
 	}
 
 	// A gear-bearing `choices` possession (the Heavy's / Marshal's Weapons of War) shows the
@@ -1479,6 +1495,10 @@ export class StonetopCharacter {
 				const row = {
 					possessionSlug: opt.slug,
 					choiceSlug:     c.slug,
+					// The WEAPON_META key. Usually the choice slug itself; a choice that shares
+					// a slug with a catalog weapon but not its stats names its own (the
+					// Marshal's fine-steel long spear is 2 piercing, not the iron spear's x).
+					weaponSlug:     c.weaponSlug ?? c.slug,
 					label:          rowLabel,
 					// Re-attached after the inline circles: the label's closing paren.
 					labelAfter:     useInline ? inline.after : "",
@@ -2498,6 +2518,46 @@ export class StonetopCharacter {
 		// (Bulwark), so an undo leaves the character as it was. The cascade counts too: un-
 		// learning the Versatile that granted a Rampart undoes the Rampart's swap as well.
 		for (const gone of [removed, ...orphanItems]) await this._restoreRetiredMove(gone);
+		await this._trimSubChoicesOverCap([removed, ...orphanItems]);
+		await this._releaseGrantedPossession(removed);
+	}
+
+	// Un-learning Big Magic takes back the remarkable trait it unlocked ("one per Big
+	// Magic"). Each selected possession line whose cap grows with a removed move, and now
+	// holds more picks than that cap, drops its most recent picks down to it: sub-choices
+	// keep the order they were made in, so the trait the move brought goes first.
+	async _trimSubChoicesOverCap(goneMoves) {
+		const goneNames = new Set(goneMoves.filter(Boolean).map(i => i.name));
+		if (!goneNames.size) return;
+		const sp = (await this.playbook())?.specialPossessions;
+		const moveCounts = this.ownedMoveCounts();
+		for (const { opt, sg } of this._selectedPossessionSubgroups(sp)) {
+			if (!sg.multiSelect) continue;
+			if (!(sg.maxSelectBonus?.moveBonus ?? []).some(mb => goneNames.has(mb.moveName))) continue;
+			const max = effectiveSubgroupMax(sg, moveCounts);
+			if (max == null) continue;
+			const lineSlugs = new Set((sg.options ?? []).map(o => o.slug));
+			const picked = this._possessions.subChoices[opt.slug] ?? [];
+			const drop = new Set(picked.filter(s => lineSlugs.has(s)).slice(max));
+			if (!drop.size) continue;
+			await this.setPossessionSubChoices(opt.slug, picked.filter(s => !drop.has(s)));
+		}
+	}
+
+	// Un-learning Initiate of the Secret Arts takes back the Sacred Pouch it brought: "You
+	// have a 'Sacred Pouch'" only while you have the move. The pouch is grant-only, so the
+	// sheet can't untick it, and it would otherwise outlive the move for good. Kept when
+	// another copy of a granting move remains, or when the playbook gives the possession
+	// on its own (a Blessed who learned Initiate keeps the pouch they started with).
+	async _releaseGrantedPossession(gone) {
+		const slug = gone?.system?.crossPlaybook?.grantsPossession;
+		if (!slug || !this._possessions.selected.has(slug)) return;
+		if (this._actor.items.some(i => i.type === "move" && i.system?.crossPlaybook?.grantsPossession === slug)) return;
+		const sp  = (await this.playbook())?.specialPossessions;
+		const opt = sp?.options?.find(o => o.slug === slug);
+		if (!opt?.grantOnly || (sp.preselected ?? []).includes(slug)) return;
+		await this.deselectPossession(slug);
+		await this._possessions.forgetGranted(slug);
 	}
 
 	// Apply the "either X OR Y" starting-move picks: grant the chosen move in each group
@@ -4032,6 +4092,13 @@ export class StonetopCharacter {
 
 // ── Snapshot helpers ──────────────────────────────────────────────────────────
 
+// Whether a possession's choiceGroups leave anything to pick: any radio line, or a
+// multi-select whose effective cap (maxSelect + move bonus) isn't zero.
+function _hasEditableChoice(choiceGroups, moveCounts) {
+	return (choiceGroups ?? []).some(cg => (cg.subgroups ?? []).some(sg =>
+		!sg.multiSelect || effectiveSubgroupMax(sg, moveCounts) !== 0));
+}
+
 // The 9 playbooks by display name (as stored in a move's system.playbook), for the
 // Versatile "any other playbook" cross-playbook pick.
 const _ALL_PLAYBOOK_NAMES = [
@@ -4296,6 +4363,21 @@ export function backgroundMoveNames(background, setupChoices = {}) {
 		if (chosen) names.add(chosen);
 	}
 	return names;
+}
+
+// The special possessions a background hands over on top of the playbook's picks: its fixed
+// `extraPossessions` (the Judge's Missionary: "an aviary in addition to your usual choice") and
+// any `apply: "possession"` setup pick (the Fox's A Life of Crime: burglar's kit or hidden
+// stash). The possessions version of backgroundMoveNames, and for the same reason: a gift must
+// not also be taken as a pick, or the pick is silently lost.
+export function backgroundPossessionSlugs(background, setupChoices = {}) {
+	const slugs = new Set(background?.extraPossessions ?? []);
+	for (const choice of (background?.setup?.choices ?? [])) {
+		if (choice.apply !== "possession" || !choice.key) continue;
+		const chosen = setupChoices?.[choice.key];
+		if (chosen) slugs.add(chosen);
+	}
+	return slugs;
 }
 
 // The move names sitting in a playbook's "either X OR Y" starting-move groups (the

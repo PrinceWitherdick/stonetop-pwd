@@ -558,6 +558,9 @@
       "smallPoolAtLimit": "You've used all your small-item slots, so there's no room to reserve more undefined □. Un-mark a small item to free up room.",
       "smallOverAllotment": "That's more small items than your Outfit allotment of {limit} (4+Prosperity). Expend a use of supplies to carry an extra small item, or check with your GM.",
       "choosePossessionsButton": "Choose Special Possessions",
+      "possessionsOverLimitOne": "This character has 1 more special possession than the playbook lets you choose.",
+      "possessionsOverLimitMany": "This character has {count} more special possessions than the playbook lets you choose.",
+      "possessionsOverLimitHint": "Turn on Edit and untick one, or leave it if your GM agreed to it.",
       "outfit": {
         "heading": "When you <em><strong>Outfit</strong></em>, mark a number of <span class=\"stonetop-glyph stonetop-glyph--diamond\">◇</span> below on specific items or as a group. Your load is whatever you've marked:",
         "currentLoad": "Carrying <strong>{count}</strong> <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>.",

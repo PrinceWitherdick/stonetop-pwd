@@ -356,6 +356,7 @@
             "slug": "smithy",
             "label": "Smithy",
             "description": "(or access to it): iron goods, ingots, thick gloves, ◇ tongs, ◇ bellows, an anvil, etc.",
+            "rulesNote": "Or access to it.",
             "grantsItems": [
               {
                 "name": "Iron goods",

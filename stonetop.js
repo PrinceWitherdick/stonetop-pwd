@@ -78,6 +78,8 @@ import { moveChatCard, canRewriteCard } from "./module/utils/chat.js";
 import { grantsWholeList, paintPickTally, pickLimitFor, releaseOverLimit, tierOffersPicks } from "./module/utils/pick-tally.js";
 import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
+import { possessionTrackUses, BOOKS_AND_SCROLLS, HOLY_RELICS } from "./module/actors/character/possession-tracks.js";
+import { INVOKE_THE_SUN_GOD } from "./module/actors/character/holy-light.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
 import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery } from "./module/combat/attack-flow.js";
 import { wireDefendSpends, SPEND_QUERY, handleSpendQuery } from "./module/fight/defend-spend.js";
@@ -104,7 +106,7 @@ import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
 import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
 import { payableStockSources, mustAskStockSource, stockReceipt } from "./module/actors/character/stock-cost.js";
 import { askStockSource } from "./module/actors/character/ask-stock-source.js";
-import { readProvisionsYield, rollProvisions, rollStock } from "./module/actors/character/provisions.js";
+import { readProvisionsYield, rollProvisions, rollStock, withTrappingGear, TRAPPING_GEAR_SLUG } from "./module/actors/character/provisions.js";
 import { askWithButtons } from "./module/utils/ask-with-buttons.js";
 import { belongsToMessage, wirePickedOptionButton } from "./module/utils/picked-option-button.js";
 import { readOptionDamage } from "./module/utils/damage.js";
@@ -1405,63 +1407,154 @@ function _wireNeverAtALoss(message, html, actor) {
 	}
 }
 
-// "expend a use ... treat the result as a 10+". Only offered while the card is still below a
-// strong hit and the logbook still has a use in it.
+// "expend a use ... treat the result as a 10+". Two things buy it: the Logbook move and the
+// books & scrolls possession, each offered while the card is still below a strong hit and its
+// track still has a use in it. Spending either settles the card, so both buttons go with it.
 function _wireLogbook(message, html, actor, card) {
 	if (message.getFlag(SYSTEM_ID, "knowThingsUpgrade")) return;
 	const roll = message.rolls?.at(0);
 	if (!roll || roll.total >= STRONG_HIT_TOTAL) return;
 
-	const uses = logbookUses(actor, actor.typedActor?.moveResources?.getMoveResources?.() ?? {});
-	if (!uses || uses.left <= 0) return;
-
 	const cardButtons = card.querySelector(".stonetop-card-buttons");
 	if (!cardButtons) return;
+	for (const source of _knowThingsUpgradeSources(actor)) {
+		const uses = source.read();
+		if (!uses || uses.left <= 0) continue;
+		const btn = document.createElement("button");
+		btn.className = "stonetop-logbook-btn";
+		btn.innerHTML = `<i class="fas ${source.icon}"></i> ${escHtml(source.button)}`;
+		btn.dataset.tooltip = `Expend a use (${uses.left} of ${uses.max} left) to ignore this roll and treat the result as a 10+.`;
+		btn.dataset.tooltipDirection = "UP";
+		cardButtons.appendChild(btn);
+		cardButtons.style.display = "flex";
+		btn.addEventListener("click", () => _spendKnowThingsUpgrade(message, actor, cardButtons, btn, source));
+	}
+}
+
+/**
+ * What can turn a Know Things roll into a 10+, each read and spent through the store it lives
+ * in. Both tracks count uses SPENT, so expending one increments.
+ */
+function _knowThingsUpgradeSources(actor) {
+	return [
+		{
+			key: LOGBOOK, title: "Logbook", icon: "fa-book", button: "Consult your logbook",
+			noun: "their logbook", empty: "Your logbook has no uses left.",
+			read:  () => logbookUses(actor, actor.typedActor?.moveResources?.getMoveResources?.() ?? {}),
+			// Routed through the class that owns the move-track storage shape — the same door the
+			// sheet's pips use — so the flag path is spelled out in one place. Attributed for the
+			// ledger.
+			spend: now => actor.typedActor.moveResources.setUses(LOGBOOK, now.spent + 1, { stonetopMove: LOGBOOK }),
+		},
+		{
+			key: BOOKS_AND_SCROLLS.slug, title: "Books & Scrolls", icon: "fa-scroll", button: "Consult your books & scrolls",
+			noun: "their collection", empty: "Your books & scrolls have no uses left.",
+			read:  () => possessionTrackUses(_possessionFlags(actor), BOOKS_AND_SCROLLS),
+			spend: now => actor.typedActor.possessions.setUses(BOOKS_AND_SCROLLS.slug, now.spent + 1),
+		},
+	];
+}
+
+async function _spendKnowThingsUpgrade(message, actor, cardButtons, btn, source) {
+	btn.disabled = true;
+	try {
+		// Re-read at click time: the track may have been spent elsewhere since this rendered.
+		const now = source.read();
+		if (!now || now.left <= 0) {
+			ui.notifications.warn(source.empty);
+			return;
+		}
+		await source.spend(now);
+		// The other source's button, if any: the card is a 10+ now, with nothing left to buy.
+		for (const other of cardButtons.querySelectorAll(".stonetop-logbook-btn")) other.disabled = true;
+		// Pad to exactly 10. _shiftRoll only steps by one, and stopping at 10 keeps the card
+		// off the 12+ "critical" label a bigger pad would earn.
+		const rolls = message.rolls;
+		const shifted = rolls.at(0);
+		while (shifted.total < STRONG_HIT_TOTAL) await _shiftRoll(shifted, 1);
+		await message.update({
+			rolls,
+			flavor: _shiftRollCardFlavor(message.flavor, shifted.total, shifted.formula),
+			flags:  { [SYSTEM_ID]: { knowThingsUpgrade: source.key } },
+		});
+		await ChatMessage.create({
+			content: moveChatCard(source.title,
+				`<p><strong>${escHtml(actor.name)}</strong> consults ${source.noun} and expends a use`
+				+ ` (${now.left - 1} of ${now.max} left), treating that roll as a 10+.</p>`),
+			speaker: ChatMessage.getSpeaker({ actor }),
+		});
+		// If this roll was identifying an arcanum or an artifact, the 10+ the use just bought
+		// has to actually hand the thing over — the outcome was committed when the dice landed.
+		await _resyncIdentification(message, actor, shifted.total);
+		actor.sheet?.render(false);
+	} catch (err) {
+		console.error(`Stonetop | Error consulting ${source.noun}:`, err);
+		btn.disabled = false;
+	}
+}
+
+/** The `possessions` flag bag a possession track is read from, off a bare Actor. */
+function _possessionFlags(actor) {
+	const possessions = new StonetopFlags(actor, "possessions");
+	return { selected: possessions.getFlag("selected") ?? [], uses: possessions.getFlag("uses") ?? {} };
+}
+
+// -- HOLY RELICS: A USE IN LIEU OF A CONSEQUENCE ----------------
+/**
+ * The Lightbearer's holy relics (○○○ uses): "if you have one in inventory when you Invoke the Sun
+ * God, you can mark a use in lieu of choosing a consequence." Invoke the Sun God's roll card lists
+ * the consequences to choose on a 7+, so the relic is offered there, as the Logbook is on a Know
+ * Things card. One per card: it stands in for the player's own choice, and the GM's pick on a 7-9
+ * is still theirs to make. Settled on the message, so every client shows the same card.
+ */
+function _chatWireHolyRelics(message, html) {
+	const card = html.querySelector(".stonetop-roll-card");
+	if (!card || _cardMoveName(message) !== INVOKE_THE_SUN_GOD) return;
+	const cardButtons = card.querySelector(".stonetop-card-buttons");
+	if (!cardButtons || cardButtons.querySelector(".stonetop-holy-relic-btn")) return;
+	if (message.getFlag(SYSTEM_ID, "holyRelicSpent")) return;
+	const roll = message.rolls?.at(0);
+	// A 6- has no consequence list for the player to choose from; the GM says what happens.
+	if (!roll || _classifyShiftedTotal(roll.total).key === "failure") return;
+	const actor = speakerActor(message);
+	if (!canRewriteCard(message, actor)) return;
+	const relics = possessionTrackUses(_possessionFlags(actor), HOLY_RELICS);
+	if (!relics || relics.left <= 0) return;
+
 	const btn = document.createElement("button");
-	btn.className = "stonetop-logbook-btn";
-	btn.innerHTML = `<i class="fas fa-book"></i> Consult your logbook`;
-	btn.dataset.tooltip = `Expend a use (${uses.left} of ${uses.max} left) to ignore this roll and treat the result as a 10+.`;
+	btn.className = "stonetop-logbook-btn stonetop-holy-relic-btn";
+	btn.innerHTML = `<i class="fas fa-sun"></i> Mark a holy relic`;
+	btn.dataset.tooltip = `Mark a use (${relics.left} of ${relics.max} left) in lieu of choosing a consequence.`;
 	btn.dataset.tooltipDirection = "UP";
 	cardButtons.appendChild(btn);
 	cardButtons.style.display = "flex";
 
-	btn.addEventListener("click", async () => {
-		btn.disabled = true;
-		try {
-			// Re-read at click time: the track may have been spent elsewhere since this rendered.
-			const now = logbookUses(actor, actor.typedActor?.moveResources?.getMoveResources?.() ?? {});
+	// The card-button skeleton: the latch on the message, the permission check, the re-render and the
+	// button put back on a throw. A spent card never draws the button, so there is nothing to relabel.
+	_wireSteadingCardButtons(message, [btn], {
+		flag: "holyRelicSpent",
+		onSettled: () => {},
+		warn: "You need permission to mark this character's holy relics.",
+		errorNote: "Error marking a holy relic",
+		actorType: "character",
+		subject: a => a,
+		run: async actor => {
+			// Re-read at click time: the track may have been marked elsewhere since this rendered.
+			const now = possessionTrackUses(_possessionFlags(actor), HOLY_RELICS);
 			if (!now || now.left <= 0) {
-				ui.notifications.warn("Your logbook has no uses left.");
-				return;
+				ui.notifications.warn("Your holy relics have no uses left.");
+				btn.remove();
+				return { abort: true };
 			}
-			// A move track counts uses SPENT, so expending one increments. Routed through the
-			// class that owns that storage shape — the same door the sheet's pips use — so the
-			// flag path is spelled out in one place. Attributed for the ledger.
-			await actor.typedActor.moveResources.setUses(LOGBOOK, now.spent + 1, { stonetopMove: LOGBOOK });
-			// Pad to exactly 10. _shiftRoll only steps by one, and stopping at 10 keeps the card
-			// off the 12+ "critical" label a bigger pad would earn.
-			const rolls = message.rolls;
-			const shifted = rolls.at(0);
-			while (shifted.total < STRONG_HIT_TOTAL) await _shiftRoll(shifted, 1);
-			await message.update({
-				rolls,
-				flavor: _shiftRollCardFlavor(message.flavor, shifted.total, shifted.formula),
-				flags:  { [SYSTEM_ID]: { knowThingsUpgrade: LOGBOOK } },
-			});
+			await actor.typedActor.possessions.setUses(HOLY_RELICS.slug, now.spent + 1);
 			await ChatMessage.create({
-				content: moveChatCard("Logbook",
-					`<p><strong>${escHtml(actor.name)}</strong> consults their logbook and expends a use`
-					+ ` (${now.left - 1} of ${now.max} left), treating that roll as a 10+.</p>`),
+				content: moveChatCard("Holy Relics",
+					`<p><strong>${escHtml(actor.name)}</strong> marks a use of their holy relics`
+					+ ` (${now.left - 1} of ${now.max} left) in lieu of choosing a consequence.</p>`),
 				speaker: ChatMessage.getSpeaker({ actor }),
 			});
-			// If this roll was identifying an arcanum or an artifact, the 10+ the use just bought
-			// has to actually hand the thing over — the outcome was committed when the dice landed.
-			await _resyncIdentification(message, actor, shifted.total);
-			actor.sheet?.render(false);
-		} catch (err) {
-			console.error("Stonetop | Error consulting the logbook:", err);
-			btn.disabled = false;
-		}
+			btn.remove();
+		},
 	});
 }
 
@@ -1937,16 +2030,24 @@ async function _onRollProvisions(message, btn, index, pick) {
 			return;
 		}
 
+		// Trapping gear's "+1 use of provisions" is once per Forage: the first provisions payout on
+		// the card carries it, and the stamp below says which one did.
+		const paidBefore = Object.values(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {});
+		const trapping = _cardMoveName(message) === FORAGE
+			&& !paidBefore.some(p => p?.trapping)
+			&& !!(await actor.typedActor?.holdsPossession?.(TRAPPING_GEAR_SLUG));
+		const formula = trapping ? withTrappingGear(pick.formula) : pick.formula;
 
 		// Rolled to chat rather than quietly: how much food the party came back with is a number
 		// the whole table plays off, and a die nobody saw is a number they have to take on faith.
 		// A flat count has no such doubt and posts nothing — a card announcing a rolled "6" out of
 		// a formula that is the literal 6 is noise.
 		const { uses, larder } = await rollProvisions(actor, {
-			formula:  pick.formula,
+			formula,
 			announce: pick.isRoll,
 			carry:    pick.claimsLoad,
 			speaker:  message.speaker,
+			note:     trapping ? "+1 from trapping gear" : "",
 		});
 		btn.replaceWith(_provisionsPaidEl(uses));
 		for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
@@ -1954,7 +2055,7 @@ async function _onRollProvisions(message, btn, index, pick) {
 
 		// Stamped last: the larder is the thing that had to land, and a stamp written before it
 		// would lock out the retry if the write failed.
-		const rolled = { ...(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {}), [index]: { uses, formula: pick.formula } };
+		const rolled = { ...(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {}), [index]: { uses, formula, ...(trapping ? { trapping: true } : {}) } };
 		await message.setFlag(SYSTEM_ID, "provisionsRolled", rolled);
 	} catch (err) {
 		console.error("Stonetop | Error rolling provisions:", err);
@@ -2076,6 +2177,8 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// After the roll-shift pass (which hides the button row from non-GMs) and after Burn
 	// Brightly, so the logbook pill sits to its right in the shared button row.
 	_chatWireKnowThings(message, html);
+	// Same row, same reason: a spend that rewrites what the roll costs the player.
+	_chatWireHolyRelics(message, html);
 	// The XP receipt's own row, not the shared button row the two above claim — a card with no
 	// roll behind it never grows a Shift or a Burn Brightly, and this never lands on one that has.
 	wireUndoXpMark(message, html);

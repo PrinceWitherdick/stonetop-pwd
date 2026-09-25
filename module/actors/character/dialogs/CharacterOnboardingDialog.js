@@ -1,6 +1,6 @@
 // Descriptions for animal companion trait tags — checked before compendium lookup.
 import { isMajorArcana } from "../../../arcana-icons.js";
-import { parseMovePickCount, allowedMarkableActions, backgroundMoveNames, startingMoveChoiceNames } from "../StonetopCharacter.js";
+import { parseMovePickCount, allowedMarkableActions, backgroundMoveNames, backgroundPossessionSlugs, startingMoveChoiceNames } from "../StonetopCharacter.js";
 import { ITEMS_PACK, ARCANA_PACK } from "../StonetopFlags.js";
 import { markQuestionBullets } from "../../../utils/question-bullets.js";
 import { openJournalSheetAsChild } from "../../../utils/front-on-open.js";
@@ -1896,6 +1896,12 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const raw         = this._rawPossessions;
 			const pickCount   = raw.pickCount ?? 0;
 			const preselected = new Set(raw.preselected ?? []);
+			// What the background hands over (the Missionary's aviary, A Life of Crime's burglar's
+			// kit or hidden stash) is shown taken and locked, like the preselected gear, and is
+			// dropped from the free picks: the background step runs first, so a pick made before
+			// the player went Back and changed it can still be sitting here.
+			const fromBackground = backgroundPossessionSlugs(this._selectedBackground(), this._selections.backgroundSetup?.choices);
+			this._selections.possessions = this._selections.possessions.filter(slug => !fromBackground.has(slug));
 			const chosen      = new Set(this._selections.possessions);
 			const customLabel = this._selections.customPossession ?? "";
 			const total       = this._possessionPickTotal();
@@ -1917,14 +1923,15 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				// Grant-only possessions (the Seeker's Initiate-of-the-Secret-Arts Sacred
 				// Pouch) are gained by a level-up move, never picked at creation — hide them.
 				options: (raw.options ?? []).filter(opt => !opt.grantOnly).map(opt => {
-					const isPre = preselected.has(opt.slug);
+					const isFromBackground = fromBackground.has(opt.slug);
+					const isPre = preselected.has(opt.slug) || isFromBackground;
 					const isChosen = chosen.has(opt.slug);
 					const isSelected = isPre || isChosen;
 					return {
 						slug: opt.slug,
 						label: this._normalizeOnboardingText(opt.label),
 						description: this._normalizeOnboardingText(opt.description),
-						isPreselected: isPre, isSelected,
+						isPreselected: isPre, isSelected, isFromBackground,
 						disabled: isPre || (!isSelected && atLimit),
 						// "Pick N from this list" bundles (Weapons of war, Symbol of
 						// authority…). Always rendered; the options stay disabled until the

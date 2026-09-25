@@ -570,6 +570,7 @@
             "slug": "goat-herd",
             "label": "Goat herd",
             "description": "milk, cheese, pelts, meat, blood, horn, wool, etc. Each season, 1 in 4 chance of having a bezoar (swallow it to cure poison).",
+            "rulesNote": "Each season, 1 in 4 chance of having a bezoar (swallow it to cure poison).",
             "grantsItems": [
               {
                 "name": "Milk",
@@ -605,6 +606,7 @@
             "slug": "herb-garden",
             "label": "Herb garden",
             "description": "shears, mortars &amp; pestles, herbs, seeds, remedies, mild poisons, ◇ spades, etc. Each spring, d4 uses of bendis root (<em>reach, area</em>, burns ~1 hr, fumes repel perversions of nature).",
+            "rulesNote": "Each spring, d4 uses of bendis root (<em>reach, area</em>, burns ~1 hr, fumes repel perversions of nature).",
             "grantsItems": [
               {
                 "name": "Shears",
