@@ -16,6 +16,9 @@ const move = (id, name) => ({ id, type: "npcMove", name, system: {} });
 const cardOf = (actor, characters = [], resolve = undefined) =>
 	followerCardFor(actor, { characters, ...(resolve === undefined ? {} : { resolve }) });
 
+/** The Initiate background with Enfys picked: without it an initiate is nobody's follower (initiates.js). */
+const INITIATE_BG = { selected: "initiate", choices: { enfys: true } };
+
 /** A character with follower flags, and a sheet that records what it was asked to order. */
 function character(id, flags = {}) {
 	const actor = fakeActor({ id, type: "character", name: id, flags: { [SYSTEM_ID]: flags } });
@@ -75,7 +78,7 @@ describe("followerTakesOrders", () => {
 
 describe("followerOrderInfo", () => {
 	it("hands the dialog the follower standing on the map: their name, tags and their own moves", () => {
-		const cadi = character("cadi");
+		const cadi = character("cadi", { background: INITIATE_BG });
 		const enfys = follower({
 			name: "Enfys", tags: "brave, healer", moves: ["Tend the wounded", "Sing the old songs"],
 			origin: { characterUuid: "Actor.cadi", ftype: "initiate", slug: "enfys" },
@@ -97,11 +100,11 @@ describe("followerOrderInfo", () => {
 	// follower and a beast follower too (see withExceptional). The token reads whatever the card stored,
 	// at the card's own detail path, or the two doors into one dialog would roll differently.
 	it("reads exceptional off a slug-keyed card too, so the map agrees with the card", () => {
-		const cadi = character("cadi", { initiateDetails: { enfys: { exceptional: true } } });
+		const cadi = character("cadi", { initiateDetails: { enfys: { exceptional: true } }, background: INITIATE_BG });
 		const enfys = follower({ origin: { characterUuid: "Actor.cadi", ftype: "initiate", slug: "enfys" } });
 		expect(followerOrderInfo(enfys, cardOf(enfys, [cadi])).follower.exceptional).toBe(true);
 		// and stays false for a card that never set it
-		const bram = character("bram", { initiateDetails: { enfys: {} } });
+		const bram = character("bram", { initiateDetails: { enfys: {} }, background: INITIATE_BG });
 		const plain = follower({ origin: { characterUuid: "Actor.bram", ftype: "initiate", slug: "enfys" } });
 		expect(followerOrderInfo(plain, cardOf(plain, [bram])).follower.exceptional).toBe(false);
 	});

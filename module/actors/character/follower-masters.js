@@ -15,6 +15,16 @@
 
 import { SYSTEM_ID } from "../../system-id.js";
 import { readableFlags } from "./StonetopFlags.js";
+import { initiateActive } from "./initiates.js";
+
+/**
+ * Whether a card is one of the character's followers at all. Every card is, except an initiate of
+ * Danu while the Initiate background is not the one taken: their card and their NPC are kept for a
+ * return to it (initiates.js), but meanwhile they follow nobody.
+ */
+function cardStands(flags, ftype, slug) {
+	return ftype !== "initiate" || initiateActive(flags, slug);
+}
 
 /**
  * Where a character keeps its followers, and what kind of card each root holds. These are the roots
@@ -94,6 +104,7 @@ function followerLinks(character) {
 	};
 	const flags = readableFlags(character);
 	for (const [name, root] of Object.entries(FOLLOWER_ROOTS)) walk(flags[name], 0, root, "");
+	for (const [uuid, card] of links) if (!cardStands(flags, card.ftype, card.slug)) links.delete(uuid);
 	return links;
 }
 
@@ -121,8 +132,10 @@ export function followerMasterIndex({ characters = [], actors = [] } = {}) {
 	const masters = new Map();
 	for (const actor of actors) {
 		if (actor?.type !== "npc" || !actor.id) continue;
-		const origin = actor.flags?.[SYSTEM_ID]?.followerOrigin?.characterUuid;
-		const master = byUuid.get(origin) ?? claimed.get(actor.uuid) ?? null;
+		const origin = actor.flags?.[SYSTEM_ID]?.followerOrigin;
+		let stamped = byUuid.get(origin?.characterUuid) ?? null;
+		if (stamped && !cardStands(readableFlags(stamped), origin.ftype, origin.slug ?? "")) stamped = null;
+		const master = stamped ?? claimed.get(actor.uuid) ?? null;
 		if (master && master.id !== actor.id) masters.set(actor.id, master);
 	}
 	return masters;
@@ -163,7 +176,13 @@ export function followerCardFor(actor, { characters = null, resolve = globalThis
 			try { character = resolve(origin.characterUuid, { strict: false }); } catch { character = null; }
 		}
 		character ??= searchable().find(c => c?.uuid === origin.characterUuid) ?? null;
-		if (character?.type === "character") return { character, ftype: origin.ftype, slug: origin.slug ?? "" };
+		if (character?.type === "character") {
+			// Named outright, so the answer is this card or nobody: a dormant initiate's NPC is not
+			// somebody else's follower just because it is not this character's.
+			return cardStands(readableFlags(character), origin.ftype, origin.slug ?? "")
+				? { character, ftype: origin.ftype, slug: origin.slug ?? "" }
+				: null;
+		}
 	}
 	const uuids = linkUuidsFor(actor);
 	for (const character of searchable()) {

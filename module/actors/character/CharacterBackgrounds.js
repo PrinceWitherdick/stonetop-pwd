@@ -40,6 +40,11 @@ export class CharacterBackgrounds {
 		await this._flags.setFlag("choices", { ...current, [choice.slug]: choice.isChecked });
 	}
 
+	// Several choices at once, in one write: `{ slug: checked }`. Slugs left out keep what they had.
+	async setChoices(patch) {
+		await this._flags.setFlag("choices", { ...this.choices, ...patch });
+	}
+
 	async setSetupResource(key, value) {
 		await this._flags.setFlag("setupResources", { ...this.setupResources, [key]: value });
 	}

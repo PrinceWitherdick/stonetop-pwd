@@ -27,9 +27,14 @@
               "subtitle": "Bird-wise, innocent, magical, well-informed",
               "hp": 6,
               "armor": "0",
-              "damage": "d4 (hand)",
+              "damage": "bronze knife d4 (hand)",
               "instinct": "to get distracted",
               "cost": "knowledge, secret lore",
+              "moves": [
+                "Speak with birds",
+                "Ask a difficult question",
+                "Wander off"
+              ],
               "choiceRows": [
                 {
                   "type": "pronoun",
@@ -69,9 +74,14 @@
               "subtitle": "Fae-wise, devious, magical, self-sufficient, stealthy",
               "hp": 8,
               "armor": "2 (0 vs. iron)",
-              "damage": "d6 (hand)",
+              "damage": "bronze hatchet d6 (hand)",
               "instinct": "to act impulsively",
               "cost": "wonder, joy",
+              "moves": [
+                "Weave a minor glamor",
+                "Appear or disappear unexpectedly",
+                "Speak an uncomfortable truth"
+              ],
               "choiceRows": [
                 {
                   "type": "pronoun",
@@ -111,9 +121,14 @@
               "subtitle": "Herb-wise, gossipy, tireless, healer, magical",
               "hp": 6,
               "armor": "0",
-              "damage": "d6 (hand)",
+              "damage": "iron knife d6 (hand)",
               "instinct": "to take offense",
               "cost": "consideration, affection",
+              "moves": [
+                "Tend to the sick, injured, women in labor",
+                "Weave a talisman of fertility or good luck",
+                "Point out a flaw in a person or plan"
+              ],
               "choiceRows": [
                 {
                   "type": "pronoun",
@@ -154,9 +169,14 @@
               "subtitle": "Fates-wise, beautiful, passionate, magical",
               "hp": 6,
               "armor": "1 (shield)",
-              "damage": "d6 (close, thrown)",
+              "damage": "iron spear d6 (close, thrown)",
               "instinct": "to lack discretion",
               "cost": "tenderness, respect",
+              "moves": [
+                "Perform a divination",
+                "Speak a (dire) prophecy",
+                "Make a big deal about something"
+              ],
               "choiceRows": [
                 {
                   "type": "pronoun",
@@ -195,12 +215,18 @@
             {
               "slug": "seren",
               "label": "Seren the Eldest, wise and hard as winter",
-              "subtitle": "Exceptional, story-wise, insightful, frail, magical",
+              "subtitle": "Story-wise, insightful, frail, magical",
+              "exceptional": true,
               "hp": 3,
               "armor": "0",
-              "damage": "d4 (close)",
+              "damage": "walking stick d4 (close)",
               "instinct": "to hew to tradition",
               "cost": "deference, good sense shown",
+              "moves": [
+                "Consult the spirits, or abjure them",
+                "Spin a tale to make a point",
+                "Use shame and guilt as leverage"
+              ],
               "choiceRows": [
                 {
                   "type": "pronoun",

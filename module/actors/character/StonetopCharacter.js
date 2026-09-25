@@ -51,6 +51,7 @@ import {RITES_OF_THE_LAND, SACRED_POUCH_SLUG, NO_POUCH_STOCK_NOTE, BLESSED_PLAYB
 import {loseHpForStock} from "./provisions.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight, INVOKE_THE_SUN_GOD} from "./holy-light.js";
 import {moveArmor, barkskinMarkedBy} from "./move-armor.js";
+import {choiceCountState} from "./initiates.js";
 import {ONGOING_INVOCATION_FLAG, readOngoing} from "./ongoing-invocation.js";
 import {CONDEMNED_FLAG, canCondemn, readCondemned, addCondemned, removeCondemned, noteCondemned} from "./condemn.js";
 import {OATHS_FLAG, canBindOaths, readOaths, addOath, removeOath, noteOath, setOathBroken} from "./oaths.js";
@@ -4665,14 +4666,21 @@ function _buildPlaybookSection(playbookData, background, instinct, appearance, o
 	const savedOrigin  = origin.selected || null;
 
 	const bgOptions = (playbookData.backgrounds ?? []).map(b => {
+		// "Choose 2 or 3": a full list disables what is left unticked, as a possession's choices do at
+		// their cap, and a short one is flagged rather than refused (initiates.js#choiceCountState).
+		const countState = b.choices
+			? choiceCountState(b.choices.count, b.choices.options.filter(o => savedChoices?.[o.slug]).length)
+			: null;
 		const choices = b.choices ? new BackgroundChoicesSnapshotBuilder()
 			.withLabel(b.choices.label)
 			.withCount(b.choices.count)
 			.withCountLabel(b.choices.count.join(" or "))
-			.withOptions(b.choices.options.map(o =>
-				new BackgroundChoiceOptionSnapshot(o.slug, o.label, !!(savedChoices?.[o.slug]))
-			))
+			.withOptions(b.choices.options.map(o => {
+				const checked = !!(savedChoices?.[o.slug]);
+				return new BackgroundChoiceOptionSnapshot(o.slug, o.label, checked, !checked && countState.atMax);
+			}))
 			.withSaved(savedChoices)
+			.withCountState(countState.checked, countState.underMin)
 			.build() : null;
 		return new BackgroundOptionSnapshotBuilder()
 			.withSlug(b.slug)

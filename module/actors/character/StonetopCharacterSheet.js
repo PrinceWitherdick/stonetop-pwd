@@ -133,6 +133,7 @@ import {headerPortraitContext, usedActorPortraits, wirePortraitPopout, pointImag
 import {addPopoutHeaderControl, addPortraitFrameControl, addTokenizerControl} from "../../utils/popout-header-control.js";
 import {canOpenTokenizer, openTokenizer} from "../../utils/portrait-tokenizer.js";
 import {ensureFollowerActors, followerActorFromLink, syncFollowerActors} from "./follower-actors.js";
+import {INITIATE_BACKGROUND, activeInitiateOptions, initiateBackground, initiateChoicePatch, initiateExceptional, initiateMoves, initiateOption} from "./initiates.js";
 import {barkskinMarks, wearsBarkskin, MOVE_ARMOR_BASE} from "./move-armor.js";
 import {localize, format} from "../../utils/i18n.js";
 import {promptRaiseFromDead} from "../../hooks/DeathsDoorPrompt.js";
@@ -2596,13 +2597,15 @@ export function createStonetopCharacterSheetClass(Base) {
 
 			// -- Initiates of Danu (Blessed + Initiate background) ------
 			let initiates = null;
-			const bgChoices        = sf.background?.choices ?? {};
 			const initiatesLoyalty = sf.initiatesLoyalty  ?? {};
 			const initiatesHp      = sf.initiatesHp       ?? {};
 			const sfInitiateDetails = sf.initiateDetails  ?? {};
-			const initiateBg       = (playbookDoc?.backgrounds ?? []).find(b => b.slug === "initiate");
+			const initiateBg       = initiateBackground(playbookDoc?.backgrounds);
 			if (initiateBg?.choices?.options?.length) {
-				const selected = initiateBg.choices.options.filter(opt => bgChoices[opt.slug]);
+				// Only while the Initiate background is the one taken (initiates.js). The picks and
+				// each initiate's details are kept through a change of background, so a return to
+				// Initiate brings these cards back as they were.
+				const selected = activeInitiateOptions(playbookDoc?.backgrounds, sf);
 				if (selected.length) {
 					initiates = selected.map(opt => {
 						const det = sfInitiateDetails[opt.slug] ?? {};
@@ -2667,7 +2670,9 @@ export function createStonetopCharacterSheetClass(Base) {
 							choiceDetails,
 							loyalty:       _makeLoyaltyPips(initiatesLoyalty[opt.slug] ?? 0),
 							loyaltySlug:   opt.slug,
-							..._followerExtras(det),
+							// The insert prints each initiate's three moves and Seren's "Exceptional";
+							// both stand until the player writes their own (initiates.js).
+							..._followerExtras({ ...det, moves: initiateMoves(det, opt), exceptional: initiateExceptional(det, opt) }),
 						};
 					});
 				}
@@ -9330,6 +9335,17 @@ export function createStonetopCharacterSheetClass(Base) {
 		async orderFollower(follower, { ftype = "", slug = "" } = {}) {
 			const members = follower?.member ? [] : groupFollowerMembers(resolvedFlags(this.actor), { ftype, slug });
 			if (members.length) follower = { ...follower, members };
+			// An initiate the insert prints "Exceptional" (Seren) is exceptional until their player says
+			// otherwise. That default is playbook data, which the token's door cannot read synchronously
+			// (fight/follower-fight.js reads the stored toggle only), so it is settled here, where both
+			// doors meet, and only when nobody has set the toggle.
+			if (ftype === "initiate") {
+				const det = foundry.utils.getProperty(resolvedFlags(this.actor), _followerDetailBase(ftype, slug)) ?? {};
+				if (det.exceptional == null) {
+					const opt = initiateOption((await this._stonetopCharacter?.playbook?.())?.backgrounds, slug);
+					follower = { ...follower, exceptional: initiateExceptional(det, opt) };
+				}
+			}
 			// Shield Wall is the Marshal's order to THEIR crew, so only the crew is offered it.
 			if (ftype === "crew" && ownsLearnedMoveNamed(this.actor, SHIELD_WALL_MOVE)) follower = { ...follower, shieldWall: true };
 			new OrderFollowersDialog(this.actor, follower,
@@ -10781,8 +10797,13 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (answer?.value) backgroundAnswers[key] = answer;
 			}
 
-			for (const slug of (selections.initiates ?? [])) {
-				await this._stonetopCharacter.background.addChoice({ slug, isChecked: true });
+			// The initiates are a SET: the ones picked are ticked and every other initiate is crossed
+			// off, so re-running onboarding without Enfys drops her rather than keeping her beside her
+			// replacement. Only when Initiate is the background being applied: a trip through another
+			// background leaves the picks alone, for a return to Initiate to restore (initiates.js).
+			if (selectedBackground?.slug === INITIATE_BACKGROUND) {
+				const patch = initiateChoicePatch(playbookDoc.flags?.stonetop?.backgrounds, selections.initiates);
+				if (Object.keys(patch).length) await this._stonetopCharacter.background.setChoices(patch);
 			}
 			for (const [key, count] of Object.entries(selections.lore?.picks ?? {})) {
 				const [sectionSlug, optionSlug] = key.split(":");

@@ -7,6 +7,9 @@ import { SYSTEM_ID } from "../../../module/system-id.js";
 
 const actor = (id, type, flags = {}) => ({ id, uuid: `Actor.${id}`, name: id, type, flags: { [SYSTEM_ID]: flags } });
 
+/** A Blessed who took the Initiate background and picked Enfys: the only way Enfys is anyone's follower. */
+const INITIATE_BG = { selected: "initiate", choices: { enfys: true } };
+
 describe("followerMasterIndex", () => {
 	it("finds an actor made for a follower card by the character it records", () => {
 		const bram = actor("bram", "character");
@@ -19,6 +22,7 @@ describe("followerMasterIndex", () => {
 			customFollowers: { abc: { sourceUuid: "Actor.maeve", name: "Maeve" } },
 			crew: { details: { actorUuid: "Actor.crew" } },
 			initiateDetails: { enfys: { actorUuid: "Actor.enfys" } },
+			background: INITIATE_BG,
 		});
 		const actors = [cadi, actor("maeve", "npc"), actor("crew", "npc"), actor("enfys", "npc"), actor("tovia", "npc")];
 		const masters = followerMasterIndex({ characters: [cadi], actors });
@@ -49,6 +53,7 @@ describe("followerCardFor", () => {
 			initiateDetails: { enfys: { actorUuid: "Actor.enfys" } },
 			beastDetails: { "dog-follower": { actorUuid: "Actor.dog" } },
 			crew: { details: { actorUuid: "Actor.crew" } },
+			background: INITIATE_BG,
 		});
 		const card = uuid => followerCardFor({ ...actor("x", "npc"), uuid }, { characters: [cadi] });
 		expect(card("Actor.maeve")).toMatchObject({ ftype: "custom", slug: "abc123" });
@@ -81,5 +86,26 @@ describe("followerCardFor", () => {
 		expect(followerCardFor(actor("stranger", "npc"), { characters: [cadi] })).toBe(null);
 		expect(followerCardFor(actor("wolf", "monster"), { characters: [cadi] })).toBe(null);
 		expect(followerCardFor(null, { characters: [cadi] })).toBe(null);
+	});
+
+	// Book I p.145: the initiates are followers "if you took the Initiate background". A Blessed who
+	// switched to another background keeps Enfys's card and NPC for a return to it, but meanwhile her
+	// token is nobody's follower: no Order buttons on the map, no "Following" line on her sheet.
+	it("is nobody's card for an initiate while the Initiate background is not the one taken", () => {
+		const stamped = actor("enfys", "npc", { followerOrigin: { characterUuid: "Actor.cadi", ftype: "initiate", slug: "enfys" } });
+		const vessel = actor("cadi", "character", {
+			initiateDetails: { enfys: { actorUuid: "Actor.enfys" } },
+			background: { selected: "vessel", choices: { enfys: true } },
+		});
+		expect(followerCardFor(stamped, { characters: [vessel], resolve: () => vessel })).toBe(null);
+		expect(followerCardFor(actor("enfys", "npc"), { characters: [vessel] })).toBe(null);
+		expect(followerMasterIndex({ characters: [vessel], actors: [vessel, stamped] }).size).toBe(0);
+
+		// Back to Initiate, and she is Cadi's again, picks and all.
+		const initiate = actor("cadi", "character", { initiateDetails: { enfys: { actorUuid: "Actor.enfys" } }, background: INITIATE_BG });
+		expect(followerCardFor(stamped, { characters: [initiate], resolve: () => initiate })).toMatchObject({ ftype: "initiate", slug: "enfys" });
+		// ...but not an initiate who was crossed off.
+		const crossed = actor("cadi", "character", { background: { selected: "initiate", choices: { enfys: false } } });
+		expect(followerCardFor(stamped, { characters: [crossed], resolve: () => crossed })).toBe(null);
 	});
 });

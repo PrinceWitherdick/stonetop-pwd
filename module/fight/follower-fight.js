@@ -78,7 +78,9 @@ export function followerOrderInfo(actor, card) {
 	if (!card || !followerTakesOrders(card)) return null;
 	// Whatever the type, exceptional is read at the card's own detail path, the one the sheet's
 	// control writes to. Book I p.462 gates the crew and the animal companion behind a move, but lets
-	// the GM call ANY outstanding follower exceptional, so no type is left out here.
+	// the GM call ANY outstanding follower exceptional, so no type is left out here. An initiate the
+	// insert prints "Exceptional" (Seren) is so until that toggle says otherwise; the default is playbook
+	// data this cannot read synchronously, so the sheet's orderFollower, which this is handed to, settles it.
 	const base = followerDetailBase(card.ftype, card.slug);
 	const details = base ? foundry.utils.getProperty(readableFlags(card.character), base) : null;
 	return {

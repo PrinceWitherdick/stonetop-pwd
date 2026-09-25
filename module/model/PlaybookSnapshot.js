@@ -127,10 +127,12 @@ export class OriginSection {
 
 /** One choice within a background's optional choice list. */
 export class BackgroundChoiceOptionSnapshot {
-	constructor(slug, label, checked) {
-		this.slug    = slug;
-		this.label   = label;
-		this.checked = checked;
+	constructor(slug, label, checked, disabled = false) {
+		this.slug     = slug;
+		this.label    = label;
+		this.checked  = checked;
+		// An unticked option once the list is full ("choose 2 or 3" with 3 ticked).
+		this.disabled = disabled;
 	}
 }
 
@@ -141,6 +143,8 @@ export class BackgroundChoiceOptionSnapshot {
  * @property {string} countLabel
  * @property {BackgroundChoiceOptionSnapshot[]} options
  * @property {Object.<string,boolean>} saved
+ * @property {number} checkedCount - how many options are ticked
+ * @property {boolean} underMin - fewer ticked than the count asks for (flagged, never blocked)
  */
 export class BackgroundChoicesSnapshot {
 	constructor(b) {
@@ -149,6 +153,8 @@ export class BackgroundChoicesSnapshot {
 		this.countLabel = b._countLabel;
 		this.options    = b._options;
 		this.saved      = b._saved;
+		this.checkedCount = b._checkedCount ?? 0;
+		this.underMin     = !!b._underMin;
 	}
 }
 
@@ -158,6 +164,7 @@ export class BackgroundChoicesSnapshotBuilder {
 	withCountLabel(v) { this._countLabel = v; return this; }
 	withOptions(v)    { this._options    = v; return this; }
 	withSaved(v)      { this._saved      = v; return this; }
+	withCountState(checked, underMin) { this._checkedCount = checked; this._underMin = underMin; return this; }
 	build()           { return new BackgroundChoicesSnapshot(this); }
 }
 
