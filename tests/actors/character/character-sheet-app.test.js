@@ -135,6 +135,7 @@ function makeCharacterMock(actor) {
 		backgroundMovesDropped: vi.fn(async () => []),
 		settleBackgroundMoves: vi.fn(async () => {}),
 		settleBackgroundPossessions: vi.fn(async () => {}),
+		clearPlaybookData: vi.fn(async () => {}),
 		updateName: vi.fn(async name => actor.update({ name })),
 		addMove: vi.fn(),
 		removeMove: vi.fn(),

@@ -100,6 +100,21 @@ import {X_PIERCING_MAX} from "../../utils/damage.js";
 const CASTIGATE = "Castigate";
 
 /**
+ * The state a playbook move leaves on a character, and whether anything they hold still makes it:
+ * `held(actor, owned)` with the render's `ownedMoveNames` Set. The ONE list, read two ways: a
+ * `glyph` is the header glyph that shows the state (headerGlyphOwnership), and once a playbook
+ * change leaves nothing that can make it, its `flags` go (clearPlaybookData).
+ */
+const MOVE_STATE = [
+	{ glyph: "holyLight", held: canWieldHolyLight, flags: [HOLY_LIGHT_FLAG] },
+	{ glyph: "condemn",   held: canCondemn,        flags: [CONDEMNED_FLAG] },
+	{ glyph: "oaths",     held: canBindOaths,      flags: [OATHS_FLAG] },
+	{ glyph: "battleJoy", held: canEnterBattleJoy, flags: [BATTLE_JOY_FLAG] },
+	{ glyph: "blessed",   held: canMarkBlessed,    flags: [BLESSED_MARKS_FLAG] },
+	{ held: (actor, owned) => ownedNamesOr(actor, owned).has(INVOKE_THE_SUN_GOD), flags: ["invocations", ONGOING_INVOCATION_FLAG] },
+];
+
+/**
  * Backgrounds that give advantage on one move, always. The Blessed's Raised by Wolves: "Also,
  * when you Forage, you have advantage." A SOURCE like any other (see foldAdvantage), so the
  * winter's disadvantage on the same Forage cancels it and the roll goes straight.
@@ -2727,6 +2742,76 @@ export class StonetopCharacter {
 		};
 	}
 
+	/**
+	 * A change of playbook (a new one dropped on the sheet, or "New" in the creation flow, both
+	 * behind a confirm that says what goes) clears what came with the old one. `oldPlaybookName`
+	 * is the name its moves carry in `system.playbook`. Run BEFORE the new playbook is written,
+	 * because the removals still read the old one (a pouch trait's cap, a grant-only possession).
+	 *
+	 * Cleared: the old playbook's moves, through removeMove so cascades and reverts run (a move
+	 * learned through its Versatile goes with it, an Improved Stat's +1 comes off), and the tracks
+	 * and marks those moves kept; its special possessions and the gear they granted; the background,
+	 * its picks and the answers it gave; the instinct; the lore; the followers it brought (crew,
+	 * animal companion, initiates, a possession's dog), whose NPC actors stay in the sidebar,
+	 * unlisted; and the state of moves no longer held (Blessed marks, a Judge's brands and oaths,
+	 * the holy light and invocations, Battle Joy, the Would-be Hero's crossed-off "Would-be").
+	 *
+	 * Kept: name, level, XP, stats, appearance, origin, notes, relationships, inventory (beasts
+	 * included), arcana, post-death moves, custom followers, and every move not of the old playbook.
+	 */
+	async clearPlaybookData(oldPlaybookName) {
+		if (!oldPlaybookName) return;
+		const playbookData = await this.playbook();
+		// The pack's name as well as the one on the sheet: a Would-be Hero may retitle the field,
+		// but their moves still carry the pack's.
+		const oldNames = new Set([oldPlaybookName, playbookData?.name].filter(Boolean));
+		const before = ownedMoveNames(this._actor);
+		// Passes, because taking back a replacing move hands back the one it retired (A Mighty
+		// Rampart returns Bulwark), and that one is the old playbook's too.
+		for (let pass = 0; pass < 5; pass++) {
+			const doomed = this._actor.items.filter(i => i.type === "move" && oldNames.has(i.system?.playbook));
+			if (!doomed.length) break;
+			for (const item of doomed) {
+				// Already gone with the move that granted it.
+				if (this._actor.items.some(i => i._id === item._id)) await this.removeMove(item._id);
+			}
+		}
+		const after = ownedMoveNames(this._actor);
+		const gone  = [...before].filter(name => !after.has(name));
+
+		const sp = playbookData?.specialPossessions;
+		const possessionSlugs = new Set([...(sp?.preselected ?? []), ...this._possessions.selected]);
+		for (const slug of possessionSlugs) await this._removePossessionGrants(slug);
+
+		const flags = resolvedFlags(this._actor);
+		const keys  = [
+			"possessions", "possessionGrantsApplied", "background", "instinct", "lore",
+			"moves.backgroundAnswers", "moves.dismissedLevelOverage",
+			"crew", "animalCompanion",
+			"initiateDetails", "initiatesLoyalty", "initiatesHp", "initiatesReadiness", "initiatesAmmo",
+			WBH_HERO_FLAG,
+			// Each move's track and marks are keyed by its name.
+			...gone.map(name => `moves.backgroundChoices.${name}`),
+			...gone.map(name => `moves.moveMarks.${name}`),
+		];
+		// A possession's follower once added as a card (the Would-be Hero's dog) is the old
+		// playbook's too. Keyed by id, found by the possession it came from.
+		const possessionSources = new Set((sp?.options ?? []).map(o => `possession:${o.slug}`));
+		for (const [id, follower] of Object.entries(flags.customFollowers ?? {})) {
+			if (possessionSources.has(follower?.sourceUuid)) keys.push(`customFollowers.${id}`);
+		}
+		// State a move leaves standing, once no move that makes it is held.
+		for (const state of MOVE_STATE) if (!state.held(this._actor, after)) keys.push(...state.flags);
+
+		const update = {};
+		for (const key of keys) {
+			if (foundry.utils.getProperty(flags, key) === undefined) continue;
+			const [deleteKey, deleteValue] = deletionEntry(`flags.${STONETOP_SCOPE}.${key}`);
+			update[deleteKey] = deleteValue;
+		}
+		if (Object.keys(update).length) await this._actor.update(update);
+	}
+
 	// `choiceGroups`: the playbook's "either X OR Y" groups (_startingChoiceGroups), so only the
 	// option this character started with reads as a starting move (demotedStartingChoices).
 	buildMovelistContext(entries, ownedAllByName, bgMoveNames, actorLevel, actorPlaybook, choiceGroups = []) {
@@ -3308,13 +3393,7 @@ export class StonetopCharacter {
 	 */
 	headerGlyphOwnership(owned = null) {
 		owned = ownedNamesOr(this._actor, owned);
-		return {
-			holyLight: canWieldHolyLight(this._actor, owned),
-			condemn:   canCondemn(this._actor, owned),
-			oaths:     canBindOaths(this._actor, owned),
-			battleJoy: canEnterBattleJoy(this._actor, owned),
-			blessed:   canMarkBlessed(this._actor, owned),
-		};
+		return Object.fromEntries(MOVE_STATE.filter(s => s.glyph).map(s => [s.glyph, s.held(this._actor, owned)]));
 	}
 
 	// -- Holy light (the Lightbearer's consecrated flame) ----------------------------

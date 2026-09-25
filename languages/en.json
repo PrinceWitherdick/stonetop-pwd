@@ -843,8 +843,15 @@
       "createButtonLabel": "Create Character",
       "answerQuestionsButtonLabel": "Answer Background Questions",
       "confirmTitle": "Reset Character?",
-      "confirmContent": "This character already has a playbook. Choosing a new one will replace it and may reset character data. Are you sure?",
-      "pickerTitle": "Choose a Playbook"
+      "confirmContent": "This character already has a playbook. Choosing a different one clears everything that came with the old one: its moves (and any moves they taught), special possessions and their gear, background, instinct, lore answers and followers (their actors stay in the sidebar). Name, level, XP, stats, notes, relationships, inventory and arcana stay. Choosing the same playbook again keeps all of it and lets you redo your choices.",
+      "confirmNew": "Choose a playbook",
+      "confirmEdit": "Edit this character",
+      "confirmKeep": "Leave it as it is",
+      "pickerTitle": "Choose a Playbook",
+      "changePlaybookTitle": "Change Playbook?",
+      "changePlaybookContent": "Changing {name} from {old} to {new} clears everything that came with {old}: its moves (and any moves they taught), special possessions and their gear, background, instinct, lore answers and followers (their actors stay in the sidebar). Name, level, XP, stats, notes, relationships, inventory and arcana stay.",
+      "changePlaybookYes": "Become {new}",
+      "changePlaybookNo": "Stay {old}"
     },
     "changeBackground": {
       "title": "Change Background?",

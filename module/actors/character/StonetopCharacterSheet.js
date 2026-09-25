@@ -1,5 +1,5 @@
 import {MoveResourceButton} from "./elements/move-resource-button.js";
-import { confirmOutcome } from "../../utils/ask-with-buttons.js";
+import { confirmOutcome, askWithButtons } from "../../utils/ask-with-buttons.js";
 import { parseMovePickCount, backgroundPossessionSlugs } from "./StonetopCharacter.js";
 import {BackgroundInputChoice} from "./elements/background-input-choice.js";
 import {PossessionUseButton} from "./elements/possession-use-button.js";
@@ -177,6 +177,16 @@ const FOLLOWER_ARMOR_SOURCES = [
 ];
 
 const _esc = escHtml;
+
+// Whether the playbook a character has (`system.playbook`: { name, slug }) is the playbook Item
+// `doc`. By slug where both carry one, since a Would-be Hero can retitle their playbook's NAME;
+// by name otherwise. A change of playbook clears the old one's data (clearPlaybookData), so the
+// same one again must never read as a change.
+function _isSamePlaybook(current, doc) {
+	const slug = doc?.system?.slug;
+	if (current?.slug && slug) return current.slug === slug;
+	return (current?.name ?? "") === (doc?.name ?? "");
+}
 
 /**
  * Every move in a snapshot's movelist, flattened — basic, expedition, playbook, learned, the
@@ -5811,6 +5821,19 @@ export function createStonetopCharacterSheetClass(Base) {
 				(redirectedTo?.sheet ?? this).render(false);
 				return;
 			}
+			// A DIFFERENT playbook clears what came with the old one (the user's ruling), once the
+			// player has been told what that is. The same one dropped again clears nothing.
+			const oldPlaybook = actor.system?.playbook;
+			if (oldPlaybook?.name && !_isSamePlaybook(oldPlaybook, playbookDoc)) {
+				const go = await confirmOutcome({
+					title:   localize("stonetop.newCharacter.changePlaybookTitle"),
+					content: `<p>${_esc(format("stonetop.newCharacter.changePlaybookContent", { name: actor.name, old: oldPlaybook.name, new: playbookDoc.name }))}</p>`,
+					yes:     { label: format("stonetop.newCharacter.changePlaybookYes", { new: playbookDoc.name }) },
+					no:      { label: format("stonetop.newCharacter.changePlaybookNo", { old: oldPlaybook.name }) },
+				});
+				if (!go) return;
+				await target.clearPlaybookData(oldPlaybook.name);
+			}
 			await actor.update({
 				"system.playbook": {
 					uuid: playbookDoc.uuid,
@@ -10179,28 +10202,21 @@ export function createStonetopCharacterSheetClass(Base) {
 			}
 
 			if (existingPlaybook) {
-				new Dialog({
-					title:   game.i18n.localize("stonetop.newCharacter.confirmTitle"),
-					content: `<p>${game.i18n.localize("stonetop.newCharacter.confirmContent")}</p>`,
-					buttons: {
-						cancel: {
-							icon:     '<i class="fas fa-times"></i>',
-							label:    "Cancel",
-						},
-						edit: {
-							icon:     '<i class="fas fa-edit"></i>',
-							label:    "Edit",
-							callback: () => this._openEditCharacterOnboarding(),
-						},
-						reset: {
-							icon:     '<i class="fas fa-undo"></i>',
-							label:    "New",
-							callback: openPicker,
-						},
-					},
-					default: "cancel",
-					render: bringDialogToFront,
-				}, { classes: ["dialog", "stonetop", "stonetop-new-character-confirm"] }).render(true);
+				// Says what a different playbook clears; the clearing itself runs when the new one
+				// is applied (_applyPlaybookSelections → clearPlaybookData), and only if it differs.
+				const answer = await askWithButtons({
+					title:   localize("stonetop.newCharacter.confirmTitle"),
+					content: `<p>${_esc(localize("stonetop.newCharacter.confirmContent"))}</p>`,
+					buttons: [
+						{ key: "new",  label: localize("stonetop.newCharacter.confirmNew"),  icon: "fa-undo",  value: "new" },
+						{ key: "edit", label: localize("stonetop.newCharacter.confirmEdit"), icon: "fa-edit",  value: "edit" },
+						{ key: "keep", label: localize("stonetop.newCharacter.confirmKeep"), icon: "fa-xmark", value: null },
+					],
+					defaultKey: "keep",
+					classes:    ["stonetop-new-character-confirm"],
+				});
+				if (answer === "new") openPicker();
+				else if (answer === "edit") await this._openEditCharacterOnboarding();
 			} else {
 				openPicker();
 			}
@@ -10651,6 +10667,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			const slug = playbookDoc.system?.slug ?? "";
 			const character = this._stonetopCharacter;
 			const st = playbookDoc.flags?.stonetop ?? {};
+			// "New" onto a character who already had a DIFFERENT playbook: what came with the old one
+			// goes first (the confirm in _onNewCharacter said so). The same playbook clears nothing.
+			const oldPlaybook = this.actor.system?.playbook;
+			const newPlaybook = !oldPlaybook?.name || !_isSamePlaybook(oldPlaybook, playbookDoc);
+			if (oldPlaybook?.name && newPlaybook) {
+				await character.clearPlaybookData(oldPlaybook.name);
+			}
 			// Read before anything below changes it: the moves the old background gave go
 			// (settleBackgroundMoves), and the free picks the player didn't pick again go too.
 			const previousBackground = character.backgroundState();
@@ -10662,9 +10685,11 @@ export function createStonetopCharacterSheetClass(Base) {
 				const keep = new Set(pickedIds.map(id => nameById.get(id)).filter(Boolean));
 				await character.dropCreationPicksExcept(keep, playbookDoc.name, st.backgrounds ?? [], st.moves?.choices ?? []);
 			}
+			// HP starts full only with a new playbook. A re-run of the same one (tweaking a finished
+			// character, or Save part-way through creation) leaves the damage they've taken.
 			const updates = {
 				"system.playbook": { uuid: playbookDoc.uuid, name: playbookDoc.name, slug },
-				...this._playbookHpInit(playbookDoc),
+				...(newPlaybook ? this._playbookHpInit(playbookDoc) : {}),
 			};
 			if (slug && isDefaultImg(this.actor.img)) {
 				const icon = playbookIconPath(slug);
