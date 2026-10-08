@@ -253,7 +253,26 @@ function clearTravel(el) {
  *                                      plain press on open paper draws a box instead of panning.
  * @param {Function} handlers.onDrawn   `ids => void` — that box let go of, with who is inside it;
  *                                      or null for a draw abandoned (Escape, a lost pointer).
- * @returns {Function} teardown.
+ *
+ * ── DRAWING LINES (user, 2026-10-07: "more, easier ways to draw these lines... The little chain
+ *    circle is kind of small and hard to click") ──
+ *
+ * The handle is no longer the only way to start a line. Alt held on a face drags a line out of it
+ * instead of moving them, and while the "Draw lines" tool is armed EVERY face is a handle: a drag draws
+ * a line, and a click picks somebody and the next click on somebody else joins the two (the AIM, a band
+ * that follows the pointer with no button held).
+ *
+ * @param {Function} handlers.linkBand  `(fromId, at, toId) => string` — the `d` of the half-drawn
+ *                                      line from a person to the pointer at `at` (board percentages),
+ *                                      or to `toId` when it is over somebody. The window's, because
+ *                                      the radius it trims to is the window's; without it the band
+ *                                      runs from the centre.
+ * @param {Function} handlers.linking   `() => boolean` — whether the "Draw lines" tool is armed.
+ * @param {Function} handlers.onLinkPicked `(id|null) => void` — the tool's first click picked this
+ *                                      person to draw from, or the pick was let go.
+ * @param {Function} handlers.onStopLinking `() => void` — Escape on the board with the tool armed and
+ *                                      nobody picked: stand the tool down.
+ * @returns {Function} teardown, carrying `stopAiming()` for a window that stands the tool down itself.
  */
 export function wireRelmapDrag(root, {
 	surface, nodeAt, onMove, onNudge, onDragMove, onDragEnd, onLink, onLinkFrom, onOpen, onPickEdge,
@@ -261,6 +280,7 @@ export function wireRelmapDrag(root, {
 	seatAt, onSeatMove, onSeat, onSeatEnd, onSeatNudge,
 	selected = () => [], onSelect, nodesIn, onGroupMove, onGroupDragMove, onGroupDragEnd, onGroupNudge,
 	groupMembers, onPickGroup, onRemoveGroup, drawing = () => false, onDrawn,
+	linkBand, linking = () => false, onLinkPicked, onStopLinking,
 	canEdit = () => true,
 	canMove = canEdit,
 	canRemove = canEdit,
@@ -459,6 +479,77 @@ export function wireRelmapDrag(root, {
 	}
 
 	/**
+	 * The half-drawn line from `id` (standing at `from`) to the pointer at `at`, or to `over` once it
+	 * is over somebody. The window trims it to the rims (`linkBand`), so it leaves the face where the
+	 * line it becomes will leave it, rather than lying over the face from its centre.
+	 */
+	function bandFor(id, from, at, over) {
+		if (linkBand) return linkBand(id, at, over?.dataset?.relmapNode ?? null) ?? "";
+		return `M ${from.left},${from.top} L ${at.left},${at.top}`;
+	}
+
+	/**
+	 * THE "DRAW LINES" TOOL'S FIRST CLICK: who a line is being drawn FROM, with no button held, and
+	 * where the pointer last was (null from the keyboard, which draws no band). The band follows the
+	 * pointer, and the next click on somebody else draws the line.
+	 */
+	let aim = null;
+
+	/** Pick `id` to draw from. */
+	function startAim(id, clientX = null, clientY = null) {
+		endAim();
+		aim = { id, clientX, clientY };
+		// Escape lets the pick go, through the page's one Escape watcher, so the key never reaches
+		// core's dismiss and closes the window instead. See relationship-board.js. Only an Escape
+		// aimed at this board's window, or at nothing in particular: no button is down, and the GM
+		// may have gone off to another window, whose own Escape must still work there.
+		beginCancellableDrag(cancelAim, { owns: aimOwnsEscape });
+		nodeEl(id)?.classList.add("is-link-source");
+		onLinkPicked?.(id);
+		if (clientX !== null) schedule();
+	}
+
+	/** Let the pick go, on every way out: a line drawn, Escape, a click on paper, the tool put down. */
+	function endAim() {
+		if (!aim) return;
+		aim = null;
+		endCancellableDrag(cancelAim);
+		for (const el of board.querySelectorAll?.(".is-link-source") ?? []) el.classList.remove("is-link-source");
+		markLinkTarget(null);
+		rubber.remove();
+		onLinkPicked?.(null);
+	}
+
+	const cancelAim = () => endAim();
+
+	/** Whether an Escape is the pick's: pressed with the focus in the board's window, or nowhere. */
+	function aimOwnsEscape(ev) {
+		const target = ev?.target;
+		if (!target || target === globalThis.document?.body || target === globalThis.document?.documentElement) return true;
+		const frame = view?.closest?.(".app, .application") ?? view;
+		return frame?.contains?.(target) ?? true;
+	}
+
+	/**
+	 * One frame of the aim. ⚠ A REPAINT REPLACES THE BOARD'S CONTENTS (never the board itself), and it
+	 * is not held back for an aim the way it is for a drag, since no button is down. So the band is put
+	 * back on the board and the mark back on whoever the source is NOW, every frame.
+	 */
+	function paintAim() {
+		if (!linking?.() || !canEdit()) { endAim(); return; }
+		const source = nodeEl(aim.id);
+		const spot = nodeAt?.(aim.id);
+		if (!source || !spot) { endAim(); return; }
+		if (!source.classList.contains("is-link-source")) source.classList.add("is-link-source");
+		if (aim.clientX === null) return;
+		const at = surface.pointToPercent({ clientX: aim.clientX, clientY: aim.clientY });
+		const over = nodeUnder(aim.clientX, aim.clientY, aim.id);
+		if (!board.contains?.(rubber)) board.appendChild(rubber);
+		if (at) rubberLine.setAttribute("d", bandFor(aim.id, { left: spot.x, top: spot.y }, at, over));
+		markLinkTarget(over);
+	}
+
+	/**
 	 * ONE exit for every way a drag can end: dropped, cancelled, Escape, or the pointer lost.
 	 *
 	 * State is cleared FIRST because `releasePointerCapture` fires `lostpointercapture`
@@ -543,7 +634,8 @@ export function wireRelmapDrag(root, {
 	 */
 	function frame() {
 		frameId = 0;
-		if (!drag?.started) return;
+		if (!drag) { if (aim) paintAim(); return; }
+		if (!drag.started) return;
 		if (carries(drag) && (drag.group || drag.el)) {
 			// Where the drop would land, worked out the way the drop works it out (`heldTravel`), and
 			// only then turned back into window pixels, at the scale painted NOW, for the transform.
@@ -595,7 +687,7 @@ export function wireRelmapDrag(root, {
 			// a target too, so "am I on them" is a real question. Same frame as the band, so the
 			// ring and the line it belongs to are never a frame out of step.
 			const over = nodeUnder(drag.clientX, drag.clientY, drag.id);
-			if (at) rubberLine.setAttribute("d", `M ${drag.from.left},${drag.from.top} L ${at.left},${at.top}`);
+			if (at) rubberLine.setAttribute("d", bandFor(drag.id, drag.from, at, over));
 			markLinkTarget(over);
 		} else if (drag.kind === "box") {
 			const got = boxed(drag, drag.clientX, drag.clientY);
@@ -797,19 +889,24 @@ export function wireRelmapDrag(root, {
 		const handle = ev.target.closest?.("[data-relmap-handle]");
 		const node = ev.target.closest?.("[data-relmap-node]");
 		if (!handle && !node) return;
+		// A FACE THAT DRAWS A LINE INSTEAD OF MOVING: with Alt held, or anywhere while the "Draw lines"
+		// tool is armed. A line is not a move, so this answers to `canEdit` (asked above) and not to
+		// `canMove`, as the handle always has.
+		const linksFrom = !handle && (!!ev.altKey || !!linking?.());
 		// A board that places its own portraits is not one they can be dragged about on. Returning
 		// here and not consuming the event is what keeps the press working as a CLICK: the sheet
 		// still opens, and the only thing missing is the drag that had nowhere to go.
-		if (!handle && !canMove()) return;
+		if (!handle && !linksFrom && !canMove()) return;
 
 		const id = handle ? handle.dataset.relmapHandle : node.dataset.relmapNode;
 		const spot = nodeAt?.(id);
 		if (!spot) return;
+		const links = !!handle || linksFrom;
 
 		drag = {
-			kind: handle ? "link" : "node",
+			kind: links ? "link" : "node",
 			id,
-			el: handle ? null : node,
+			el: links ? null : node,
 			pointerId: ev.pointerId,
 			startX: ev.clientX, startY: ev.clientY,
 			clientX: ev.clientX, clientY: ev.clientY,
@@ -819,7 +916,7 @@ export function wireRelmapDrag(root, {
 			grab: surface.pointToPercent?.({ clientX: ev.clientX, clientY: ev.clientY }) ?? null,
 			// EVERYBODY ELSE COMING ALONG, when the face pressed is one of several selected. Worked out
 			// at the press, for the reason `from` is: by the release the board has been redrawn.
-			group: handle ? null : groupFor(id, spot, node),
+			group: links ? null : groupFor(id, spot, node),
 			started: false,
 		};
 		// NO POINTER CAPTURE YET, and this is the whole reason the board's clicks work.
@@ -841,6 +938,13 @@ export function wireRelmapDrag(root, {
 	});
 
 	view.addEventListener("pointermove", ev => {
+		// THE AIM FOLLOWS THE POINTER WITH NO BUTTON DOWN, one frame at a time like a drag.
+		if (!drag && aim) {
+			aim.clientX = ev.clientX;
+			aim.clientY = ev.clientY;
+			schedule();
+			return;
+		}
 		if (!drag || ev.pointerId !== drag.pointerId) return;
 		drag.dx = ev.clientX - drag.startX;
 		drag.dy = ev.clientY - drag.startY;
@@ -856,6 +960,8 @@ export function wireRelmapDrag(root, {
 			if (ev.buttons === 0) { end(); return; }
 			if (!isLiftedDrag(drag.dx, drag.dy)) return;
 			drag.started = true;
+			// A REAL DRAG PUTS A PICK DOWN: the band and the Escape slot are the drag's now.
+			endAim();
 			// NOW, and not at pointerdown: a fast drag has to keep being followed once the cursor
 			// leaves the window, and the pointerup has to arrive even if it happens out over the
 			// scene canvas. Taken only here, so an unmoved press keeps its own click (see above).
@@ -1066,6 +1172,22 @@ export function wireRelmapDrag(root, {
 		// click a mouse makes counts from 1. Read affirmatively -- an event stand-in with no
 		// `detail` at all is not a keyboard press and must not be taken for one.
 		const face = ev.target.closest?.("[data-relmap-open]");
+		// WITH "DRAW LINES" ARMED, A CLICK ON A FACE IS THE TOOL'S, from the mouse and the keyboard
+		// alike: the first picks who to draw from, the next on somebody else draws the line, and the
+		// same face again lets the pick go. Enter on a face draws lines instead of opening a sheet
+		// while the tool is on; the double click still opens one.
+		if (face && linking?.() && canEdit()) {
+			ev.preventDefault();
+			const id = face.dataset.relmapOpen;
+			if (aim && aim.id !== id) {
+				const from = aim.id;
+				endAim();
+				onLink?.(from, id);
+			} else if (aim) endAim();
+			else if (ev.detail === 0) startAim(id);
+			else startAim(id, ev.clientX, ev.clientY);
+			return;
+		}
 		if (face) {
 			ev.preventDefault();
 			if (ev.detail === 0) onOpen?.(face.dataset.relmapOpen);
@@ -1092,6 +1214,7 @@ export function wireRelmapDrag(root, {
 			: false;
 		paperPress = null;
 		if (isPaper(ev.target) && (stayedPut || board.contains?.(ev.target))) {
+			endAim();
 			onPickNone?.();
 			// AND THE SELECTION IS LET GO WITH IT, by the same click and for the same reason: letting go
 			// has to be as easy as taking hold. Not on a click with Shift held, which says "adding",
@@ -1145,6 +1268,14 @@ export function wireRelmapDrag(root, {
 		// key has nothing to do here and goes on to whatever core does with it. Only from the BOARD:
 		// the tie bar floats in this viewport too, and its Escape is its own.
 		// AND IT STANDS AN ARMED GROUP TOOL DOWN, first, since that is the last thing the reader asked for.
+		// AND THE "DRAW LINES" TOOL THE SAME WAY, once nobody is picked (a pick's own Escape is the
+		// capture-phase one, and lets only the pick go).
+		if (ev.key === "Escape" && !drag && !aim && isPaper(ev.target) && linking?.()) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			onStopLinking?.();
+			return;
+		}
 		if (ev.key === "Escape" && !drag && isPaper(ev.target) && drawing?.()) {
 			ev.preventDefault();
 			ev.stopPropagation();
@@ -1313,5 +1444,8 @@ export function wireRelmapDrag(root, {
 		nudge(chosen.length > 1 && chosen.includes(id) ? chosen : [id]);
 	});
 
-	return () => { end(); };
+	const teardown = () => { endAim(); end(); };
+	// For the window, which stands the "Draw lines" tool down from its own footer, outside this board.
+	teardown.stopAiming = () => endAim();
+	return teardown;
 }

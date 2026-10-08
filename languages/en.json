@@ -2492,6 +2492,10 @@
       "removeLabel": "Take {name} off this map",
       "removeGesture": "Right-click to see the delete button.",
       "selectGesture": "Shift-click to select several people and move them together.",
+      "altGesture": "Alt-drag to draw a line from them.",
+      "lineTool": "Draw lines",
+      "lineHint": "Draw lines: drag from one person to another, or click one and then the other. Escape or press again to stop.",
+      "linePicked": "Drawing a line from {name}. Click who it goes to, or Escape to let go.",
       "selection": {
         "count": "{count} selected. Drag any of them, or use the arrow keys, to move them together. Escape lets go.",
         "none": "Nobody is selected."

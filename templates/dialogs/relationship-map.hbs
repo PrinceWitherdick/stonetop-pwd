@@ -915,6 +915,17 @@
         <span>{{groupLabel}}</span>
       </button>
 
+      {{!-- DRAWING LINES FROM ANY FACE, not only the small handle on its rim. While it is pressed a
+            drag from one person to another draws a line, and so do a click on one and a click on
+            the other. It stays pressed for the next line; pressed again, or Escape, puts it down.
+            `aria-pressed` is written by `_paintLineTool`. --}}
+      <button type="button" class="stonetop-relmap-tool stonetop-relmap-linetool"
+              data-relmap-action="lines" aria-pressed="false"
+              data-tooltip="{{lineHint}}" aria-label="{{lineHint}}">
+        <i class="fas fa-bezier-curve"></i>
+        <span>{{lineLabel}}</span>
+      </button>
+
       {{!-- MAKING SOMEBODY NEW AND PUTTING THEM ON, for whoever may create actors, players included
             (see the `create` entry in the window's TOOLS). The sidebar's Person worksheet, then a seat on
             this board, so a face that does not exist yet is one press rather than a trip to the
