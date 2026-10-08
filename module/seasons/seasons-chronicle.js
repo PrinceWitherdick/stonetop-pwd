@@ -3,6 +3,7 @@ import { sign } from "../utils/roll-engine.js";
 import { ensureChronicleFolder, ensureChronicleJournal } from "../utils/chronicle-journals.js";
 import { seasonLabel, SEASON_IDS } from "./seasons-change-reminders.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { displayYear } from "./campaign-year.js";
 
 // ── Seasons Change chronicle ───────────────────────────────────────────────────
 // Records each Seasons Change move (the steading flow's "Done") into a "Seasons Change"
@@ -47,9 +48,17 @@ export function cardinalWord(n) {
  *
  * Pages named the old way are renamed on load — see module/migration/season-year-page-names.js.
  * That sweep reads THIS function, so the two cannot drift.
+ *
+ * `year` is a STORED year (1 = the first year of play) and the number printed is what the GM
+ * said that year is called (`displayYear`, campaign-year.js): "Year 1247" in a world that set its
+ * start year, "Year One" in one that never did. A year from before play in a world that never
+ * named its start reads "Ten Years Before Year One", never "Year -9".
  */
 export function yearLabel(year) {
-	return `Year ${cardinalWord(year)}`;
+	const shown = displayYear(year);
+	if (shown >= 1) return `Year ${cardinalWord(shown)}`;
+	const before = 1 - shown;
+	return `${cardinalWord(before)} ${before === 1 ? "Year" : "Years"} Before Year One`;
 }
 
 // Find (or create) the "Seasons Change" journal in the Chronicle folder, reusing the
@@ -141,7 +150,9 @@ export async function recordSeasonsChange({ seasonId, year = 1, gainNames = [], 
 			type:  "text",
 			sort:  maxSort + 10,
 			text:  { content: block, format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML },
-			flags: { [SYSTEM_ID]: { chronicleYear: yr } },
+			// The name it was given, so a later start year can tell it from one a GM typed
+			// (migration/season-year-page-names.js#YEAR_PAGE_NAME_FLAG).
+			flags: { [SYSTEM_ID]: { chronicleYear: yr, yearPageName: yearName } },
 		}]);
 	}
 

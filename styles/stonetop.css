@@ -22315,6 +22315,65 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 
 .stonetop-season-year-hint:empty { display: none; }
 
+/* ── History: the timeline entry's own extras (season-picker.js) ──────────────
+   A fifth card for a year whose season nobody remembers, across the whole row under the
+   four seasons because it is the odd one out, not a fifth season. No book art exists for
+   it, so the year's hourglass stands in, at the season glyphs' visual weight. */
+.stonetop-season-picker .stonetop-season-card--unknown {
+	grid-column: 1 / -1;
+	flex-direction: row;
+	padding: 8px;
+}
+
+.stonetop-season-icon--unknown {
+	font-size: 1.6em;
+	color: var(--st-text-muted);
+}
+
+/* "or [ 10 ] years ago": the year field said the way history is told, under the year row.
+   Qualified past `.stonetop-season-picker p` for its margin, as the footnotes are. */
+.stonetop-season-picker p.stonetop-season-year-ago {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 8px 0 0;
+	font-size: var(--st-fs-sm);
+}
+
+.stonetop-season-year-ago-input {
+	width: 4.5em;
+	text-align: center;
+	font-family: var(--font-stonetop);
+	font-weight: 600;
+}
+
+/* ── Set the Year (seasons/campaign-year-dialog.js) and the first spring's ask ── */
+.stonetop-campaign-year-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-weight: 600;
+}
+
+.stonetop-campaign-year-input {
+	width: 6em;
+	text-align: center;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-md);
+	font-weight: 600;
+}
+
+.stonetop-campaign-year-hint,
+.stonetop-campaign-year-preview,
+.stonetop-spring-year-hint {
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-muted);
+}
+
+.stonetop-spring-year .stonetop-spring-year-input {
+	width: 6em;
+}
+
 /* ── The Seasons Change flow's own header ────────────────────────────────────
    The banner at the top of "Seasons Change: <season>": the season's glyph, its name, and
    the year in the same stadium chip the steading header's clock wears.
@@ -47309,7 +47368,8 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 
 /* THE GROUP TOOL IS ARMED: the next drag on open paper draws a box, so the board says so. */
 .stonetop-relmap.is-drawing-group .stonetop-relmap-view { cursor: crosshair; }
-.stonetop-relmap-grouptool[aria-pressed="true"] {
+.stonetop-relmap-grouptool[aria-pressed="true"],
+.stonetop-relmap-linetool[aria-pressed="true"] {
 	border-color: var(--st-btn-primary-border);
 	background: var(--st-slate-hover-bg);
 }
@@ -47324,6 +47384,23 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 }
 
 .stonetop-relmap-groupbar .stonetop-relmap-tiebar-btn[hidden] { display: none; }
+
+/* THE "DRAW LINES" TOOL IS ARMED: every face draws a line rather than moving, so it stops looking
+   like something to grab. */
+.stonetop-relmap.is-drawing-lines:not(.is-readonly) .stonetop-relmap-face { cursor: crosshair; }
+
+/* WHO THE TOOL'S FIRST CLICK PICKED to draw from, while the band follows the pointer to somebody else.
+   A DOUBLE RING, so it is told from the single green ring of the person the line would land on
+   (`is-link-target`) by its shape and not only its colour, and from the selection's dashed outline
+   the same way. A box-shadow, for the reason that ring gives: nothing under the pointer may move. */
+.stonetop-relmap-node.is-link-source .stonetop-relmap-face {
+	box-shadow:
+		0 0 0 2px var(--st-accent-fill),
+		0 0 0 4px var(--st-page),
+		0 0 0 6px var(--st-accent-fill);
+}
+
+.stonetop-relmap-node.is-link-source .stonetop-relmap-name { font-weight: 700; }
 
 /* ── The people ───────────────────────────────────────────────────────────────
    A round portrait, a name under it, and a handle on the rim. Positioned by its CENTRE, which
@@ -47503,16 +47580,21 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	white-space: nowrap;
 }
 
+/* 30px AND NOT THE 22 IT WAS (user, 2026-10-07: "The little chain circle is kind of small and hard to
+   click"), with a pad of invisible reach round it below, so the press that counts is about 40px
+   across. Hung further out than it was, so the disc and its pad stay off the face: the two together
+   reach under ten pixels inside the rim, at the corner only, and a press anywhere else on the face
+   still moves the person. */
 .stonetop-relmap-handle {
 	position: absolute;
-	top: -4px;
-	right: -4px;
-	width: 22px;
-	height: 22px;
+	top: -12px;
+	right: -12px;
+	width: 30px;
+	height: 30px;
 	padding: 0;
 	border-radius: 50%;
 	line-height: 0;
-	font-size: 11px;
+	font-size: 14px;
 	/* Hidden until the node is hovered or the handle itself is focused, so a board being READ is
 	   portraits and lines rather than a rash of buttons. Focus is what keeps it reachable from a
 	   keyboard, where there is no hover to give. */
@@ -47522,6 +47604,16 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 
 .stonetop-relmap-node:hover .stonetop-relmap-handle,
 .stonetop-relmap-handle:focus-visible { opacity: 1; }
+
+/* THE REACH ROUND IT: a press a few pixels off the disc still lands on the handle. A pseudo-element
+   is part of the button for a hit test, and paints nothing. ⚠ Measured from INSIDE the button's
+   border (an absolute box hangs off the padding box), so -6px reaches about 5px past the disc. */
+.stonetop-relmap-handle::before {
+	content: "";
+	position: absolute;
+	inset: -6px;
+	border-radius: 50%;
+}
 
 /* The trash can that takes somebody off the map, on the corner OPPOSITE the handle so that the
    two are never mistaken for one another.
@@ -47541,14 +47633,14 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    the cursor all evening. */
 .stonetop-relmap-bin {
 	position: absolute;
-	top: -4px;
-	left: -4px;
-	width: 22px;
-	height: 22px;
+	top: -12px;
+	left: -12px;
+	width: 30px;
+	height: 30px;
 	padding: 0;
 	border-radius: 50%;
 	line-height: 0;
-	font-size: 11px;
+	font-size: 14px;
 	display: none;
 }
 
@@ -49403,7 +49495,10 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 :is(.stonetop-timeline-orient-group,
     :is(.application, .window-app).stonetop-themed .window-content .stonetop-timeline-orient-group) .stonetop-timeline-orient {
 	flex: 0 0 auto;
-	padding: 2px 9px;
+	/* 4px, not the view toggle's 2px: that strip holds words, this one a down arrow nearly an em
+	   tall, which at 2px came within 2px of the segment's top and bottom edges and read as touching
+	   the floor. Still well short of the 32px buttons beside it. */
+	padding: 4px 9px;
 	border: 0;
 	border-right: 1px solid #4f5b66;
 	background: #fff;
@@ -49465,6 +49560,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    leading) so the whole row lines up; only their colours stay quiet. Colour-only transition for the
    reason the CTA gives: a metric left to animate makes the button jitter under the pointer. */
 .stonetop-timeline-open-full,
+.stonetop-timeline-ages-open,
 .stonetop-timeline-colours-open,
 .stonetop-timeline-show-summary {
 	box-sizing: border-box;
@@ -49772,6 +49868,288 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 .stonetop-timeline-scroll:focus-visible {
 	outline: 2px solid var(--st-btn-primary-bg);
 	outline-offset: -2px;
+}
+
+/* THE AGES (timeline/timeline-ages-band.js): named runs of years, a band each, laid OVER the column
+   (user, 2026-10-07: "along the bottom of the timeline (over content in the timeline)"). Across, the
+   strip lies along the column's foot; Down, along its right edge (the user's call), the names read
+   sideways. Overlapping Ages take a row each, `--age-row` 0 nearest the edge.
+
+   ⚠ THE STRIP SHARES THE COLUMN'S GRID CELL, which is what puts it over the timeline without being
+   part of what scrolls. So the column and the scrubber are PLACED: an auto-placed column would skip
+   the cell the strip had taken and fall into the scrubber's row.
+
+   The strip lets every press through to the column (a drag starts anywhere) except on a band itself.
+   Each band's place along it is the script's (`--age-pos`, `--age-length`), read off where its years
+   are drawn; `--age-shift` slides the name along so it stays on screen; `--timeline-ages-clip`
+   hides the strip under the aggregate's pinned names, and `--timeline-ages-bar` lifts it off a
+   scrollbar the column shows. */
+.stonetop-timeline {
+	--timeline-age-h: calc(1.75rem * var(--stonetop-font-scale, 1));
+}
+
+.stonetop-timeline > .stonetop-timeline-scroll {
+	grid-row: 2;
+	grid-column: 1;
+}
+
+.stonetop-timeline > .stonetop-timeline-scrub {
+	grid-row: 3;
+	grid-column: 1;
+}
+
+.stonetop-timeline-ages {
+	--timeline-ages-size: calc(var(--timeline-age-rows, 1) * var(--timeline-age-h));
+	--timeline-age-wash: 14%;
+	grid-row: 2;
+	grid-column: 1;
+	position: relative;
+	/* Over the pinned heads (3 at most), under the toolbar's dropdowns (5). */
+	z-index: 4;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.stonetop-timeline--horizontal > .stonetop-timeline-ages {
+	align-self: end;
+	height: var(--timeline-ages-size);
+	margin-bottom: var(--timeline-ages-bar, 0px);
+	clip-path: inset(0 0 0 var(--timeline-ages-clip, 0px));
+}
+
+.stonetop-timeline:not(.stonetop-timeline--horizontal) > .stonetop-timeline-ages {
+	justify-self: end;
+	align-self: stretch;
+	width: var(--timeline-ages-size);
+	margin-right: var(--timeline-ages-bar, 0px);
+	clip-path: inset(var(--timeline-ages-clip, 0px) 0 0 0);
+}
+
+/* Across, the column's foot gains the strip's height, so the last of the timeline can still be
+   scrolled up clear of it. Down needs none: the right edge already keeps its drag-off room. */
+.stonetop-timeline--horizontal > .stonetop-timeline-scroll[data-age-rows] {
+	padding-bottom: calc(12px + var(--timeline-age-rows, 0) * var(--timeline-age-h));
+}
+
+/* ONE BAND. Opaque paper under a wash of the Age's colour, so the cards it lies over do not show
+   through its name; the name and the leading edges in the colour itself. The colour is the four
+   inline `--tl-tag-*` a custom tag wears (timeline-tags.js#customTagStyle), which
+   `.stonetop-timeline-kind--custom` picks between per skin, each already walked until it reads on
+   that skin's paper under that same wash (timeline-colours.js#kindColourSet). The two leading edges
+   are an inset shadow, not borders, which the themed skin's button rule would overwrite.
+   ⚠ NO TRANSITION: core gives every button `transition: all 0.5s`, and the script moves these every
+   scroll frame; animated, every band would trail half a second behind its years. */
+.stonetop-timeline-age {
+	position: absolute;
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	/* From the band's start, where --age-shift is counted from (core centres a button's content). */
+	justify-content: flex-start;
+	margin: 0;
+	padding: 0;
+	min-width: 0;
+	min-height: 0;
+	border: 0;
+	border-radius: 0;
+	box-shadow: inset 2px 2px 0 var(--tl-kind);
+	overflow: hidden;
+	white-space: nowrap;
+	pointer-events: auto;
+	font-family: var(--font-stonetop);
+	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
+	font-variant: small-caps;
+	letter-spacing: 0.03em;
+	line-height: 1;
+	color: var(--tl-kind);
+	/* The wash, named once for the themed restatement below. */
+	--timeline-age-wash-image: linear-gradient(color-mix(in srgb, var(--tl-kind) var(--timeline-age-wash), transparent), color-mix(in srgb, var(--tl-kind) var(--timeline-age-wash), transparent));
+	background-color: var(--st-page);
+	background-image: var(--timeline-age-wash-image);
+	transition: none;
+	cursor: default;
+}
+
+/* THE SAME BAND IN THE POP-OUT, whose skin paints every body button slate at (0,4,1) and its hover
+   at (0,5,1). Restated here at (0,5,1) and (0,6,1). */
+:is(.application, .window-app).stonetop-themed .window-content .stonetop-timeline-ages button.stonetop-timeline-age,
+:is(.application, .window-app).stonetop-themed .window-content .stonetop-timeline-ages button.stonetop-timeline-age:hover {
+	border: 0;
+	color: var(--tl-kind);
+	background-color: var(--st-page);
+	background-image: var(--timeline-age-wash-image);
+}
+
+.stonetop-timeline-age[data-off] {
+	visibility: hidden;
+}
+
+button.stonetop-timeline-age {
+	cursor: pointer;
+}
+
+button.stonetop-timeline-age:focus-visible {
+	outline: 2px solid var(--st-btn-primary-bg);
+	outline-offset: -2px;
+}
+
+.stonetop-timeline-age-name {
+	flex: 0 0 auto;
+	padding: 0 8px;
+}
+
+.stonetop-timeline--horizontal > .stonetop-timeline-ages .stonetop-timeline-age {
+	left: var(--age-pos, 0px);
+	width: var(--age-length, 0px);
+	bottom: calc(var(--age-row, 0) * var(--timeline-age-h));
+	height: var(--timeline-age-h);
+}
+
+.stonetop-timeline--horizontal > .stonetop-timeline-ages .stonetop-timeline-age-name {
+	transform: translateX(var(--age-shift, 0px));
+}
+
+.stonetop-timeline:not(.stonetop-timeline--horizontal) > .stonetop-timeline-ages .stonetop-timeline-age {
+	top: var(--age-pos, 0px);
+	height: var(--age-length, 0px);
+	right: calc(var(--age-row, 0) * var(--timeline-age-h));
+	width: var(--timeline-age-h);
+	writing-mode: vertical-rl;
+}
+
+.stonetop-timeline:not(.stonetop-timeline--horizontal) > .stonetop-timeline-ages .stonetop-timeline-age-name {
+	transform: translateY(var(--age-shift, 0px));
+}
+
+/* High contrast washes nothing (timeline-colours.js holds its chips to bare paper there too), so the
+   name is measured against the page alone. `html.`, not `:root.`, for the reason the custom tag's
+   rule gives. */
+html.stonetop-high-contrast .stonetop-timeline-ages {
+	--timeline-age-wash: 0%;
+}
+
+/* AN AGE'S BARE YEAR (timeline-view.js#withAgeMarks): a year nothing is written in, opened only so an
+   Age has its first or last year to lie under (user, 2026-10-07). Its separator alone, given room
+   along the axis, so a band running between two of them is long enough to print its name.
+   ⚠ THE ROOM IS AN EMPTY SPACER, never a `min-width` on the separator or its node: either one
+   REPLACED the column's own minimum in Chrome, and the long history labels ("41 Years Before Year
+   One") were squeezed under their neighbours. A spacer only adds a floor under the label's width. */
+.stonetop-timeline-hyear[data-age-mark]::before {
+	content: "";
+	grid-row: 1;
+	grid-column: 1;
+	width: 10rem;
+}
+
+.stonetop-timeline-swim-year[data-age-mark]::before {
+	content: "";
+	width: 10rem;
+}
+
+.stonetop-timeline-year[data-age-mark] {
+	min-height: 5.5rem;
+}
+
+/* THE GM'S AGES WINDOW (dialogs/TimelineAgesDialog.js): a row per Age, its colour as a swatch at
+   the front, then name, years, colour and Delete. */
+.stonetop-timeline-ages-form {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 4px 2px;
+}
+
+.stonetop-timeline-ages-intro {
+	margin: 0;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-body);
+}
+
+.stonetop-timeline-ages-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	max-height: 60vh;
+	overflow-y: auto;
+}
+
+.stonetop-timeline-ages-row {
+	display: grid;
+	grid-template-columns: 8px minmax(9em, 1fr) 6.5em 6.5em auto auto;
+	align-items: end;
+	gap: 8px;
+	padding: 6px 8px 6px 0;
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius-sm);
+}
+
+.stonetop-timeline-ages-row.is-invalid {
+	border-color: var(--st-red-text);
+	box-shadow: inset 0 0 0 1px var(--st-red-text);
+}
+
+.stonetop-timeline-ages-sample {
+	align-self: stretch;
+	margin: -6px 0;
+	border-radius: var(--st-radius-sm) 0 0 var(--st-radius-sm);
+	background: var(--tl-kind);
+}
+
+.stonetop-timeline-ages-field {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.stonetop-timeline-ages-label {
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+}
+
+.stonetop-timeline-ages-field input[type="text"],
+.stonetop-timeline-ages-field input[type="number"] {
+	width: 100%;
+	min-width: 0;
+}
+
+.stonetop-timeline-ages-field input[type="color"] {
+	width: 3em;
+	height: var(--input-height, 28px);
+	padding: 0 2px;
+}
+
+.stonetop-timeline-ages-remove,
+.stonetop-timeline-ages-add {
+	width: auto;
+	flex: 0 0 auto;
+}
+
+.stonetop-timeline-ages-add {
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.stonetop-timeline-ages-none {
+	padding: 8px 0;
+	font-style: italic;
+	color: var(--st-text-secondary);
+}
+
+.stonetop-timeline-ages-actions {
+	display: flex;
+	gap: 8px;
+}
+
+.stonetop-timeline-ages-actions > button {
+	flex: 1 1 0;
 }
 
 /* Grab-and-throw (utils/drag-scroll.js). The grab hand only while there is somewhere to go, so it

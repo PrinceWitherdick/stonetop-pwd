@@ -16,7 +16,8 @@
  *
  * WHAT IT WILL RENAME, and why that is safe:
  *   Only a page whose name is EXACTLY what one of the naming schemes would have produced for
- *   the year on its own `chronicleYear` flag. A GM who has titled a page "Year One — the
+ *   the year on its own `chronicleYear` flag, or the name this system itself last gave it (its
+ *   `yearPageName` flag, for names a start year has since moved). A GM who has titled a page "Year One — the
  *   Hillfolk winter" has said something this cannot improve on, and it is left alone. That is
  *   also what makes the sweep safe to run forever: it recognises a generated name, and the
  *   name it writes is one of the ones it recognises, so a second pass has nothing to do.
@@ -26,7 +27,7 @@
  */
 
 import { SYSTEM_ID } from "../system-id.js";
-import { yearLabel } from "../seasons/seasons-chronicle.js";
+import { cardinalWord, yearLabel } from "../seasons/seasons-chronicle.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 
 /**
@@ -52,14 +53,30 @@ export function legacyYearName(n) {
 }
 
 /**
+ * The flag a year page carries the name this system last gave it under: written when the page is
+ * made (seasons-chronicle.js#recordSeasonsChange) and on every rename here. What lets a name the
+ * START YEAR moved ("Year 1247", minted before the GM changed their mind to 1300) be told from one
+ * a GM typed ("Year 12", to match their own calendar): only the first is the flag's.
+ */
+export const YEAR_PAGE_NAME_FLAG = "yearPageName";
+
+/** The name this system last gave a page, or "" for one it never stamped. */
+function stampedName(page) {
+	const name = page?.flags?.[SYSTEM_ID]?.[YEAR_PAGE_NAME_FLAG];
+	return typeof name === "string" ? name : "";
+}
+
+/**
  * Every name this system has ever generated for a campaign year, current scheme first.
  *
  * A page wearing ANY of them is a page nobody has titled by hand, which is the whole test. It
  * includes the current name on purpose: that is what makes a second run a no-op rather than a
- * rule that happens to hold today.
+ * rule that happens to hold today. The third is what the year was called before a world could
+ * name its start year ("Year One"); a page named since then carries its name in a flag instead
+ * (`YEAR_PAGE_NAME_FLAG`), so the start year moving it again is still recognised.
  */
 export function generatedYearNames(year) {
-	return [yearLabel(year), legacyYearName(year)];
+	return [yearLabel(year), legacyYearName(year), `Year ${cardinalWord(year)}`];
 }
 
 /**
@@ -80,8 +97,9 @@ export function planYearPageRenames(pages) {
 		// whether a page is ours to rename — one call, and no second opinion about what a year
 		// is called. Anything not on the list belongs to whoever typed it.
 		const [want, ...older] = generatedYearNames(year);
-		if (page.name === want || !older.includes(page.name)) continue;
-		updates.push({ _id: page._id, name: want });
+		if (page.name === want) continue;
+		if (!older.includes(page.name) && !(page.name && page.name === stampedName(page))) continue;
+		updates.push({ _id: page._id, name: want, flags: { [SYSTEM_ID]: { [YEAR_PAGE_NAME_FLAG]: want } } });
 	}
 	return updates;
 }

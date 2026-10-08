@@ -53,6 +53,7 @@ import { StonetopBrowserDialog } from "../dialogs/StonetopBrowserDialog.js";
 import { findVisibleJournal, SETTING_OVERVIEW_JOURNAL } from "../utils/seeded-journals.js";
 import { getStonetopSteadingActor, getStonetopSteadingActorOrWarn } from "../utils/world.js";
 import { nextSeasonStamp, readCurrentSeason, readCurrentYear } from "../seasons/current-season.js";
+import { installCampaignYearSync, openCampaignYearDialog } from "../seasons/campaign-year-dialog.js";
 import { rollMoveFromUuid } from "./HotbarDrop.js";
 import { ensureThreatsEntry } from "../threats/threat-store.js";
 import { ensureHazardsEntry } from "../hazards/hazard-store.js";
@@ -463,6 +464,12 @@ export async function onReady() {
 		const next = nextSeasonStamp(readCurrentSeason(steading), readCurrentYear(steading));
 		steading.sheet._showSeasonDialog(next.season, next.year);
 	};
+	// Say what year it is, which names every year the campaign has recorded (seasons/campaign-year.js).
+	// The bar's "Set the Year" button. GM-only: it writes a world setting.
+	game.stonetop.openCampaignYear = () => openCampaignYearDialog();
+	// Every client repaints its sheets when the GM renames the years; the primary GM renames the
+	// Seasons Change journal's year pages to match.
+	installCampaignYearSync();
 	// Compile the recorded Introductions + Spring Burst answers into the shared
 	// "Chronicle" journal and open it (GM-only). Callable from the Introductions
 	// dialog's "Let spring break forth!" finish, the Expedition dialog, a macro, or

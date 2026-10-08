@@ -13,6 +13,19 @@
 
     <div class="stonetop-spring-body">{{{step.body}}}</div>
 
+    {{!-- WHAT YEAR IS IT: what the campaign's first year is called (seasons/campaign-year.js). Saved
+          on change, like the answers below; the bar's Set the Year changes it later. --}}
+    {{#if yearAsk}}
+    <div class="stonetop-spring-qa-wrap">
+      <div class="stonetop-spring-qa stonetop-spring-year">
+        <label class="stonetop-spring-qa-prompt" for="stonetop-spring-year-input">{{localize "stonetop.campaignYear.springAsk"}}</label>
+        <input id="stonetop-spring-year-input" class="stonetop-season-year-input stonetop-spring-year-input"
+               type="number" inputmode="numeric" step="1" min="{{yearAsk.min}}" value="{{yearAsk.value}}">
+        <p class="stonetop-spring-year-hint" aria-live="polite">{{yearAsk.hint}}</p>
+      </div>
+    </div>
+    {{/if}}
+
     {{#if showRoll}}
     <div class="stonetop-spring-roll-wrap">
       <button type="button" class="stonetop-spring-ask-btn stonetop-spring-roll-btn--primary">

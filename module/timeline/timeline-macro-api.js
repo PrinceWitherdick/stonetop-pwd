@@ -5,7 +5,9 @@
 // and the builders the system's own recorders word their rows with, so a seeded Seasons Change,
 // expedition or site visit reads exactly as one the table recorded (and carries the same key, so a
 // later live record patches it rather than adding a second). And the flag the world's custom tags
-// are kept under, so its cleanup never deletes the journal holding them.
+// are kept under, so its cleanup never deletes the journal holding them. And the Ages' own cleaner
+// and colour walk (timeline-ages.js), so the seeded Ages are stored and coloured exactly as the GM's
+// Ages window stores and colours them.
 //
 // Through `mutateTrack` and not a page update of the macro's own, because the system is writing the
 // same pages while the macro runs (a level climbed, a follower named, a death) and those writes take
@@ -16,6 +18,7 @@
 export { mutateTrack, findTrackPage, trackForActor } from "./timeline-store.js";
 export { readEntries, upsertByKey, patchEntry, removeEntry } from "./timeline-core.js";
 export { TIMELINE_TAGS_FLAG } from "./timeline-tags.js";
+export { agesToStored, nextAgeColour, normalizeAges } from "./timeline-ages.js";
 export { seasonLabel } from "../seasons/seasons-change-reminders.js";
 export { seasonEntryBody } from "./timeline-season-entry.js";
 export { expeditionMilestone } from "./timeline-expedition.js";

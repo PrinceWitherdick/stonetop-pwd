@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readRepo as read, readCss, declarations } from "../fakes/css.js";
 import {
 	MAX_CAMPAIGN_YEAR, clampYear, seasonPickerHtml, wireSeasonPicker, openSeasonPicker,
@@ -73,8 +73,8 @@ function fakeEvent(type, props = {}) {
 }
 
 /** Render the real picker markup, scan it into stand-ins, and wire it as the dialog does. */
-function mount({ prompt = "Which season?", startYear = 1, latestYear = startYear, selected = null, note = "", altAction = null } = {}) {
-	const html  = seasonPickerHtml({ prompt, startYear, selected, note, altAction });
+function mount({ prompt = "Which season?", startYear = 1, latestYear = startYear, selected = null, note = "", altAction = null, extra = {} } = {}) {
+	const html  = seasonPickerHtml({ prompt, startYear, selected, note, altAction, ...extra });
 	const nodes = [...html.matchAll(/<([a-z]+)\b([^>]*)>/g)].map(([, tag, attrText]) => nodeFrom(tag, attrText));
 	const root  = {
 		querySelector:    sel => nodes.find(n => matches(n, sel)) ?? null,
@@ -87,9 +87,11 @@ function mount({ prompt = "Which season?", startYear = 1, latestYear = startYear
 		latestYear,
 		onPick: (season, year) => picked.push({ season, year }),
 		onAlt:  year => alted.push(year),
+		...extra,
 	});
 	return {
 		html,
+		ago:   root.querySelector(".stonetop-season-year-ago-input"),
 		root,
 		picked,
 		alted,
@@ -229,6 +231,68 @@ describe("the season picker's year field", () => {
 		expect(html).toContain(`min="1"`);
 		expect(html).toContain(`max="${MAX_CAMPAIGN_YEAR}"`);
 		expect(html).toContain(`type="number"`);
+	});
+});
+
+// The GM names the campaign's first year (seasons/campaign-year.js). The field shows and takes the
+// year as the world CALLS it; everything behind it stays counted from the first year of play.
+describe("the year field in a world that named its start year", () => {
+	beforeEach(() => { globalThis.game = { settings: { get: () => 1247 } }; });
+	afterEach(() => { delete globalThis.game; });
+
+	it("shows the named year, and hands back the stored one", () => {
+		const ui = mount({ startYear: 3 });
+		expect(ui.input.value).toBe("1249");
+		expect(ui.name.textContent).toBe("Year 1249");
+		ui.type("1250");
+		ui.card("summer").click();
+		expect(ui.picked).toEqual([{ season: "summer", year: 4 }]);
+	});
+
+	it("bounds the input in named years, and still never below play's first", () => {
+		const ui = mount({ startYear: 1 });
+		expect(ui.html).toContain(`min="1247"`);
+		expect(ui.html).toContain(`max="${1246 + MAX_CAMPAIGN_YEAR}"`);
+		ui.type("1200");
+		ui.commit();
+		expect(ui.input.value).toBe("1247");
+	});
+});
+
+// The timeline's own entries hold history: years before play, a year with no season, "years ago".
+describe("the picker as the timeline entry asks it", () => {
+	const HISTORY = { unknownCard: true, minYear: -9999, maxYear: MAX_CAMPAIGN_YEAR, agoFrom: 3 };
+	beforeEach(() => { globalThis.game = { settings: { get: () => 1247 } }; });
+	afterEach(() => { delete globalThis.game; });
+
+	it("offers a fifth card that picks the year alone", () => {
+		const ui = mount({ startYear: 3, extra: HISTORY });
+		expect(ui.root.querySelectorAll(".stonetop-season-card")).toHaveLength(SEASON_IDS.length + 1);
+		expect(ui.html).toContain("Season unknown");
+		ui.card("").click();
+		expect(ui.picked).toEqual([{ season: "", year: 3 }]);
+	});
+
+	it("leaves the fifth card off every other picker", () => {
+		expect(mount().html).not.toContain("stonetop-season-card--unknown");
+	});
+
+	it("goes back before play, and says how long ago in years", () => {
+		const ui = mount({ startYear: 3, extra: HISTORY });
+		expect(ui.ago.value).toBe("0");
+		ui.type("1239");
+		expect(ui.ago.value).toBe("10");
+		ui.card("").click();
+		expect(ui.picked.at(-1)).toEqual({ season: "", year: -7 });
+	});
+
+	it("takes 'years ago' as the year it means", () => {
+		const ui = mount({ startYear: 3, extra: HISTORY });
+		ui.ago.value = "10";
+		ui.ago.dispatchEvent(fakeEvent("input"));
+		expect(ui.input.value).toBe("1239");
+		ui.card("winter").click();
+		expect(ui.picked.at(-1)).toEqual({ season: "winter", year: -7 });
 	});
 });
 

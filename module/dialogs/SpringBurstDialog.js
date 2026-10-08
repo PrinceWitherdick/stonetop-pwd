@@ -12,6 +12,10 @@ import { applySeasonalGains } from "../actors/steading/seasonal-gains.js";
 import { markWalkthroughDone } from "./walkthrough-resume.js";
 import { saveChronicleFromButton } from "../utils/chronicle.js";
 import { SEASONAL_GAINS } from "./spring-burst-data.js";
+import { displayYear, setStartYear } from "../seasons/campaign-year.js";
+import { campaignYearPreview } from "../seasons/campaign-year-dialog.js";
+import { timelineNow } from "../timeline/timeline-record.js";
+import { localize } from "../utils/i18n.js";
 
 const ANSWERS_SETTING = "springBurstAnswers";
 
@@ -93,6 +97,8 @@ const _STEPS = [
 		key:   "spring",
 		title: "Spring bursts forth",
 		icon:  "fa-seedling",
+		// "What year is it?": the first spring is the first year of play, so the answer names it.
+		askYear: true,
 		body:  `<p>The introductions are done and the maps are marked. Tell the players that <strong>spring has just broken forth upon the land</strong>: the snows recede, the soil softens, and Stonetop stirs to life.</p>
 				<p>This last step turns everything they've given you into the seed of your first adventure.</p>`,
 	},
@@ -231,6 +237,7 @@ export class SpringBurstDialog extends StepperDialog {
 		html.find(".stonetop-spring-ask-btn").on("click", () => this._askToRoll());
 		html.find(".stonetop-spring-done").on("click", ev => this._finish(ev.currentTarget));
 		// Save answers on blur/change so the textarea keeps focus while typing.
+		html.find(".stonetop-spring-year-input").on("change", ev => this._saveYear(ev.currentTarget));
 		html.find(".stonetop-spring-qa-answer").on("change", ev => {
 			const el = ev.currentTarget;
 			this._saveAnswer(el.dataset.answerKey, el.value, el.dataset.answerId);
@@ -257,7 +264,25 @@ export class SpringBurstDialog extends StepperDialog {
 			// moment the GM delegates the roll (and not before).
 			gains:     step.showGains && this._delegatedRoll ? this._gainsContext() : null,
 			qa:        this._qaContext(step.qa),
+			yearAsk:   step.askYear ? this._yearAskContext() : null,
 		};
+	}
+
+	// The year field on the opening step. It opens on what the clock's year is called now, which is
+	// the start year in a new world; a walkthrough re-run mid-campaign asks the same question the
+	// bar's Set the Year does, so the same arithmetic answers it.
+	_yearAskContext() {
+		const nowYear = timelineNow().year;
+		return { value: displayYear(nowYear), min: nowYear, hint: localize("stonetop.campaignYear.springHint") };
+	}
+
+	// Name the years by what was typed. Refused (with the reason under the field) rather than
+	// clamped: a year before play began is a slip, not an answer.
+	async _saveYear(input) {
+		const answer = campaignYearPreview(input?.value, timelineNow().year);
+		const hint = input?.closest?.(".stonetop-spring-year")?.querySelector?.(".stonetop-spring-year-hint");
+		if (hint) hint.textContent = answer.start === null ? answer.text : localize("stonetop.campaignYear.springHint");
+		if (answer.start !== null) await setStartYear(answer.start);
 	}
 
 	// The seasonal-gains checklist for the omen step: each Book I gain plus whether

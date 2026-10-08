@@ -17,12 +17,13 @@
 
 import { SEASON_IDS, seasonLabel } from "../seasons/seasons-change-reminders.js";
 import { yearLabel } from "../seasons/seasons-chronicle.js";
+import { yearsAgo } from "../seasons/campaign-year.js";
 import { periodLabel } from "../seasons/current-season.js";
 import { localize, format } from "../utils/i18n.js";
 import { enrichHTML } from "../utils/foundry-compat.js";
 import {
 	TIMELINE_CARD_SOURCES, TIMELINE_KILLS_SOURCE, TIMELINE_SEASON_SOURCE, UNDATED_PERIOD_KEY, foeLines,
-	groupByPeriod, killTotal, periodFacts, periodKey, readEntries, sortEntries,
+	groupByPeriod, killTotal, periodFacts, periodKey, periodRank, readEntries, sortEntries,
 } from "./timeline-core.js";
 import { customTagStyle, filterKey, indexCustomTags, isKindTag, liveTag } from "./timeline-tags.js";
 
@@ -224,17 +225,41 @@ function noteHasRoom(note) {
 	return !!(note.title || note.body || note.canEdit);
 }
 
+/**
+ * How long before now a period from BEFORE PLAY was: "10 years ago". Only history wears it (a stored
+ * year below 1); a season the table played through is placed by its own date, and every one of them
+ * saying how long ago it was would bury the headings in arithmetic.
+ *
+ * @param {number|null} year     The period's stored year; null for the undated block.
+ * @param {number}      nowYear  The stored year the clock is in.
+ */
+export function agoLabel(year, nowYear) {
+	if (year === null || year >= 1) return "";
+	// The clock never reads below 1, so a year from before play is always at least one year back.
+	const back = Math.max(1, yearsAgo(year, nowYear));
+	return back === 1 ? localize("stonetop.timeline.yearAgo") : format("stonetop.timeline.yearsAgo", { count: back });
+}
+
 /** One period block, with whatever it holds. `startsYear` and `above` are set by the builders. */
 function periodVM(period, entries, opts, seasonNotes = []) {
+	const undated = period.key === UNDATED_PERIOD_KEY;
 	return {
 		key:         period.key,
 		label:       periodLabel(period),
-		seasonLabel: period.season ? seasonLabel(period.season) : "",
-		yearLabel:   period.season ? yearLabel(period.year) : "",
-		year:        period.season ? period.year : 0,
+		// A year whose season nobody remembers says so where the season's name would be.
+		seasonLabel: period.season ? seasonLabel(period.season)
+			: (period.yearOnly ? localize("stonetop.timeline.seasonUnknown") : ""),
+		yearLabel:   undated ? "" : yearLabel(period.year),
+		agoLabel:    undated ? "" : agoLabel(period.year, opts.nowYear ?? 1),
+		// null for the undated block: 0 is a real year (the one before play began).
+		year:        undated ? null : period.year,
+		yearOnly:    !!period.yearOnly,
+		// A year with nothing written in it, opened only so an Age's band has its first or last year
+		// to lie under (`withAgeMarks`): its year chip is drawn, and no season after it.
+		ageMark:     !!period.ageMark,
 		glyphClass:  seasonGlyphClass(period.season),
 		seasonClass: seasonColourClass(period.season),
-		undated:     period.key === UNDATED_PERIOD_KEY,
+		undated,
 		startsYear:  false,
 		above:       true,
 		entries:     entries.map(e => cardVM(e, opts)),
@@ -253,14 +278,44 @@ function periodVM(period, entries, opts, seasonNotes = []) {
  */
 function markYearsAndSides(periods) {
 	let lastYear = null;
-	periods.forEach((period, index) => {
-		period.above = index % 2 === 0;
+	// An Age's bare year has no cards to hang, so it takes no turn in the alternation.
+	let side = 0;
+	periods.forEach((period) => {
+		if (!period.ageMark) period.above = side++ % 2 === 0;
 		if (period.undated) return;
 		period.startsYear = period.year !== lastYear;
 		lastYear = period.year;
 	});
 	return periods;
 }
+
+/**
+ * The periods with a bare year added for each of `years` (stored) that none of them is in: what
+ * lets an Age whose first or last year nobody wrote anything in still be drawn (user, 2026-10-07:
+ * "show an age even without timeline entries"). Its key is its own, never a real period's, and it
+ * ranks where a year-only period of that year would, before its Spring.
+ *
+ * @param {Array<{year: number|null, rank: number}>} periods  Period facts, any order.
+ * @param {number[]} years
+ * @returns {Array}  Sorted by rank, the marks holding no entries.
+ */
+export function withAgeMarks(periods, years = []) {
+	const have = new Set(periods.map(period => period.year).filter(year => year !== null));
+	const marks = [];
+	for (const year of new Set(years)) {
+		if (!Number.isFinite(year) || have.has(year)) continue;
+		marks.push({
+			key: `${year}:${AGE_MARK_PERIOD}`, year, season: "", yearOnly: false, ageMark: true,
+			rank: periodRank({ year, yearOnly: true }), entries: [],
+		});
+	}
+	// Sorted even with no marks: the full timeline hands in its periods in the order the tracks
+	// first met them, and leans on this for chronology.
+	return [...periods, ...marks].sort((a, b) => a.rank - b.rank);
+}
+
+/** The suffix on an Age's bare year's key ("-40:age"), apart from the year-only period's "year". */
+const AGE_MARK_PERIOD = "age";
 
 /**
  * One track as its own timeline: every period it has anything in, oldest first.
@@ -271,8 +326,11 @@ function markYearsAndSides(periods) {
  * toolbar's "N slain" chip came off at the user's request, 2026-10-03); it is kept for when it returns.
  *
  * @param {{trackId, name, entries, actor?}} track
- * @param {{canEdit?: boolean, hidden?: string[], tags?: Array}} [opts]  `tags` = the world's custom
- *        tags (timeline-tag-store.js#worldCustomTags); a typed row wearing one it cannot find wears none.
+ * @param {{canEdit?: boolean, hidden?: string[], tags?: Array, nowYear?: number, ageYears?: number[]}} [opts]
+ *        `tags` = the world's custom tags (timeline-tag-store.js#worldCustomTags); a typed row wearing
+ *        one it cannot find wears none. `nowYear` = the clock's stored year, which history's "N years
+ *        ago" counts from. `ageYears` = the stored years an Age starts or ends in, each given a bare
+ *        year if nothing is written in it (timeline-ages.js#ageMarkYears).
  */
 export function buildTrackVM(track, opts = {}) {
 	const all = readEntries(track?.entries ?? []);
@@ -285,7 +343,7 @@ export function buildTrackVM(track, opts = {}) {
 	const shown = all.filter(e => isSeasonRow(e)
 		? noteHasRoom(seasonNoteVM(e, noteOpts))
 		: !off.has(filterKey(e, tags)));
-	const periods = groupByPeriod(shown);
+	const periods = withAgeMarks(groupByPeriod(shown), opts.ageYears);
 	const cardOpts = { ...opts, tags };
 	return {
 		trackId:   track?.trackId ?? "",
@@ -330,7 +388,7 @@ export function buildTrackVM(track, opts = {}) {
  *
  * @param {Array<{trackId, name, entries, actor?}>} tracks
  * @param {{canEdit?: (trackId: string) => boolean, hidden?: string[], hiddenTracks?: string[],
- *          tags?: Array}} [opts]
+ *          tags?: Array, nowYear?: number, ageYears?: number[]}} [opts]  `ageYears` as buildTrackVM's.
  */
 export function buildAggregateVM(allTracks = [], opts = {}) {
 	const canEdit = opts.canEdit ?? (() => false);
@@ -378,8 +436,11 @@ export function buildAggregateVM(allTracks = [], opts = {}) {
 		}
 	}
 
-	const periods = markYearsAndSides([...byKey.values()].sort((a, b) => a.rank - b.rank).map(period => ({
-		...periodVM(period, [], {}, notesByKey.get(period.key) ?? []),
+	// Whether anything written is SHOWN, asked before an Age's bare years are added: a board of
+	// nothing but those is still a board the Filter menu has emptied.
+	const written = byKey.size;
+	const periods = markYearsAndSides(withAgeMarks([...byKey.values()], opts.ageYears).map(period => ({
+		...periodVM(period, [], { nowYear: opts.nowYear }, notesByKey.get(period.key) ?? []),
 		// The lane, not the block, holds the cards here: a row of this table is one season across
 		// every thread, and each cell is what that thread did in it.
 		lanes: tracks.map(track => {
@@ -395,7 +456,11 @@ export function buildAggregateVM(allTracks = [], opts = {}) {
 
 	// Read across, a cell opens the year its season does: the swimlanes draw that year's rule before it.
 	for (const period of periods) {
-		for (const lane of period.lanes) lane.opensYear = period.startsYear;
+		for (const lane of period.lanes) {
+			lane.opensYear = period.startsYear;
+			// An Age's bare year: its rule is drawn, and no cell after it.
+			lane.ageMark = period.ageMark;
+		}
 	}
 
 	const heads = tracks.map(t => ({
@@ -411,7 +476,7 @@ export function buildAggregateVM(allTracks = [], opts = {}) {
 		periods,
 		swimlanes: heads.map((head, index) => ({ ...head, cells: periods.map(period => period.lanes[index]) })),
 		isEmpty:   total === 0,
-		allHidden: total > 0 && !periods.length,
+		allHidden: total > 0 && !written,
 	};
 }
 

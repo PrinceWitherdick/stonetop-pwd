@@ -21,7 +21,7 @@
 // no effect.
 
 import { SEASON_IDS } from "../seasons/seasons-change-reminders.js";
-import { campaignYear, seasonRank, seasonStampKey } from "../seasons/current-season.js";
+import { historyYear } from "../seasons/campaign-year.js";
 
 /** The steading's own track. Player tracks are keyed by actor id. */
 export const TIMELINE_TRACK_STEADING = "steading";
@@ -31,6 +31,9 @@ export const TIMELINE_KEY_PREFIX = "timeline:";
 
 /** Where entries that carry no readable season are gathered. See `groupByPeriod`. */
 export const UNDATED_PERIOD_KEY = "undated";
+
+/** The suffix on a year-only period's key ("-9:year"): a year whose season nobody remembers. */
+const YEAR_ONLY_PERIOD = "year";
 
 /**
  * What wrote an entry. EVERY ROW IS STORED: there are no derived rows any more.
@@ -104,8 +107,12 @@ export function normalizeEntry(raw, index = 0) {
 	const source = TIMELINE_SOURCES.includes(raw?.source) ? raw.source : "hand";
 	return {
 		id:        String(raw?.id ?? "").replace(/\./g, "").trim() || `entry-${index}`,
-		year:      campaignYear(raw?.year),
+		// STORED, and allowed below 1: a timeline holds the table's history from before play.
+		year:      historyYear(raw?.year),
 		season,
+		// "Some time that year": a blank season that still has a year. Only ever true on a blank
+		// season, so a row given a season later reads as that season and nothing else.
+		yearOnly:  !season && raw?.yearOnly === true,
 		order:     slot(raw?.order),
 		title:     String(raw?.title ?? "").trim(),
 		place:     String(raw?.place ?? "").trim(),
@@ -211,21 +218,34 @@ function withinPeriod(a, b) {
 	return (a.order - b.order) || (a.createdAt - b.createdAt) || a.id.localeCompare(b.id);
 }
 
+/** Slots in a year's rank: its year-only period first, then the four seasons in SEASON_IDS order. */
+const RANK_SLOTS = SEASON_IDS.length + 1;
+
 /**
- * The rank of the period an entry belongs to: `seasonRank`'s own number, so this file cannot drift
- * from the clock's idea of which season follows which. Undated entries rank -1, which is what
- * `seasonRank` already answers for an unstamped clock, and so sort before the first real season.
+ * The rank of the period an entry belongs to. The seasons follow each other in SEASON_IDS order,
+ * the clock's own; a year whose season is unknown ranks ahead of that year's Spring, since nothing
+ * says it came later. Undated entries rank below everything, so they head the timeline, before even
+ * the oldest history.
+ *
+ * Not `seasonRank` (current-season.js): that is the CLOCK's rank and floors the year at 1, where a
+ * timeline holds years before play.
  */
 export function periodRank(entry) {
-	return entry?.season ? seasonRank({ season: entry.season, year: entry.year }) : -1;
+	const year = historyYear(entry?.year);
+	const index = SEASON_IDS.indexOf(entry?.season);
+	if (index >= 0) return year * RANK_SLOTS + index + 1;
+	return entry?.yearOnly ? year * RANK_SLOTS : -Infinity;
 }
 
 /**
- * The period key an entry files under: the clock's own stamp key, so a timeline period and a
- * once-per-season marker cannot disagree about what "that season" is called.
+ * The period key an entry files under: the clock's own "<year>:<season>" shape (seasonStampKey), so a
+ * timeline period and a once-per-season marker cannot disagree about what "that season" is called.
+ * Written out rather than called because the clock's key floors the year at 1 and a timeline holds
+ * history. A year whose season is unknown files as "<year>:year"; nothing undated has a year at all.
  */
 export function periodKey(entry) {
-	return seasonStampKey(entry) || UNDATED_PERIOD_KEY;
+	if (SEASON_IDS.includes(entry?.season)) return `${historyYear(entry.year)}:${entry.season}`;
+	return entry?.yearOnly ? `${historyYear(entry.year)}:${YEAR_ONLY_PERIOD}` : UNDATED_PERIOD_KEY;
 }
 
 /**
@@ -235,10 +255,12 @@ export function periodKey(entry) {
  */
 export function periodFacts(entry) {
 	return {
-		key:    periodKey(entry),
-		year:   entry?.season ? entry.year : 0,
-		season: entry?.season ?? "",
-		rank:   periodRank(entry),
+		key:      periodKey(entry),
+		// null, not 0, for the undated block: 0 is a real year now (the one before play began).
+		year:     entry?.season || entry?.yearOnly ? historyYear(entry.year) : null,
+		season:   entry?.season ?? "",
+		yearOnly: !entry?.season && !!entry?.yearOnly,
+		rank:     periodRank(entry),
 	};
 }
 

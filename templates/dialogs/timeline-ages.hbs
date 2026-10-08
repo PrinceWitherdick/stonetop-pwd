@@ -1,0 +1,66 @@
+{{!-- THE GM'S AGES (dialogs/TimelineAgesDialog.js): one row per Age, a way to add another, Save and
+      Cancel. Every field names its row's Age in `data-age-id`, which is how the draft is kept as
+      the GM types, and `data-ages-focus`, which is how the keyboard comes back after Add or Delete
+      redraws the window.
+
+      The years are the years as the world CALLS them; the dialog stores them counted from play. --}}
+<div class="stonetop-timeline-ages-form">
+	<p class="stonetop-timeline-ages-intro">{{localize "stonetop.timeline.ages.intro"}}</p>
+
+	<ol class="stonetop-timeline-ages-list">
+		{{#each rows}}
+		<li class="stonetop-timeline-ages-row{{#if invalid}} is-invalid{{/if}}" data-age-id="{{id}}">
+			{{!-- The band as the timeline will draw it, in this page's skin. --}}
+			<span class="stonetop-timeline-ages-sample stonetop-timeline-kind--custom" style="{{style}}" aria-hidden="true"></span>
+
+			<label class="stonetop-timeline-ages-field stonetop-timeline-ages-field--name">
+				<span class="stonetop-timeline-ages-label">{{localize "stonetop.timeline.ages.name"}}</span>
+				<input type="text" class="stonetop-timeline-ages-name" value="{{name}}" maxlength="{{@root.nameMax}}"
+				       placeholder="{{localize "stonetop.timeline.ages.namePlaceholder"}}"
+				       data-ages-focus="name-{{id}}">
+			</label>
+
+			<label class="stonetop-timeline-ages-field">
+				<span class="stonetop-timeline-ages-label">{{localize "stonetop.timeline.ages.from"}}</span>
+				<input type="number" class="stonetop-timeline-ages-from" value="{{fromText}}" step="1" inputmode="numeric"
+				       min="{{@root.minYear}}" max="{{@root.maxYear}}" data-ages-focus="from-{{id}}">
+			</label>
+
+			<label class="stonetop-timeline-ages-field">
+				<span class="stonetop-timeline-ages-label">{{localize "stonetop.timeline.ages.to"}}</span>
+				<input type="number" class="stonetop-timeline-ages-to" value="{{toText}}" step="1" inputmode="numeric"
+				       min="{{@root.minYear}}" max="{{@root.maxYear}}"
+				       placeholder="{{localize "stonetop.timeline.ages.toPlaceholder"}}"
+				       data-ages-focus="to-{{id}}">
+			</label>
+
+			<label class="stonetop-timeline-ages-field stonetop-timeline-ages-field--colour">
+				<span class="stonetop-timeline-ages-label">{{localize "stonetop.timeline.ages.colour"}}</span>
+				<input type="color" class="stonetop-timeline-ages-colour" value="{{colour}}" data-ages-focus="colour-{{id}}">
+			</label>
+
+			<button type="button" class="stonetop-timeline-ages-remove" data-ages-focus="remove-{{id}}"
+			        aria-label="{{localize "stonetop.timeline.ages.remove"}}" data-tooltip="{{localize "stonetop.timeline.ages.remove"}}">
+				<i class="fas fa-trash" aria-hidden="true"></i>
+			</button>
+		</li>
+		{{else}}
+		<li class="stonetop-timeline-ages-none">{{localize "stonetop.timeline.ages.none"}}</li>
+		{{/each}}
+	</ol>
+
+	<button type="button" class="stonetop-timeline-ages-add" data-ages-focus="add">
+		<i class="fas fa-plus" aria-hidden="true"></i>
+		<span>{{localize "stonetop.timeline.ages.add"}}</span>
+	</button>
+
+	{{!-- Affirmative on the LEFT, which is this system's own button order. --}}
+	<footer class="stonetop-timeline-ages-actions">
+		<button type="button" class="stonetop-cta stonetop-timeline-ages-save" data-ages-focus="save">
+			{{localize "stonetop.timeline.ages.save"}}
+		</button>
+		<button type="button" class="stonetop-timeline-ages-cancel" data-ages-focus="cancel">
+			{{localize "stonetop.timeline.ages.cancel"}}
+		</button>
+	</footer>
+</div>

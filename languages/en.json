@@ -2734,11 +2734,27 @@
       "followHint": "Right-click to follow the world setting for this map again.",
       "followed": "This map's pin names follow the world setting again."
     },
+    "campaignYear": {
+      "title": "Set the Year",
+      "hint": "Name the year your campaign is in. Every year already recorded, including the timeline's history from before play, moves with it and keeps its distance from now.",
+      "label": "What year is it now?",
+      "preview": "Play began in Year {year}.",
+      "empty": "Type the year it is now.",
+      "tooEarly": "It can be no earlier than {min}, or play would have begun before year 1.",
+      "tooLate": "It can be no later than {max}.",
+      "set": "Set the year",
+      "keep": "Keep the year as it is",
+      "springAsk": "What year is it?",
+      "springHint": "The year play begins in, as your world counts its years. Keep what it shows if you have no calendar in mind; the GM can change it later from the year on the time bar, and everything recorded moves with it."
+    },
     "timeline": {
       "disabled": "The timeline is turned off in this world's settings.",
       "windowTitle": "The Timeline",
       "trackTitle": "{name}: the timeline",
       "beforeRecord": "Before the record",
+      "seasonUnknown": "Season unknown",
+      "yearAgo": "1 year ago",
+      "yearsAgo": "{count} years ago",
       "newEntry": "New Entry",
       "newEntryTooltip": "Write down something that happened, and when",
       "openFull": "Open the full timeline",
@@ -2857,6 +2873,32 @@
         "save": "Save colours",
         "saveFailed": "The timeline colours could not be saved. Your choices are still in the Colours menu, so you can try Save again.",
         "cancel": "Cancel"
+      },
+      "ages": {
+        "open": "Ages",
+        "openTooltip": "Name runs of years as Ages, drawn as bands along the timeline for everyone in this world",
+        "title": "Timeline Ages",
+        "intro": "An Age is a named run of years, like the Age of Embers. Each one is drawn as a coloured band under its years on the timeline, for everyone at the table. Leave the last year blank for an Age that is still going.",
+        "name": "Name",
+        "namePlaceholder": "The Age of Embers",
+        "from": "First year",
+        "to": "Last year",
+        "toPlaceholder": "Still going",
+        "colour": "Colour",
+        "remove": "Delete this Age",
+        "none": "No Ages yet. Add one to name a run of years.",
+        "add": "Add an Age",
+        "save": "Save Ages",
+        "cancel": "Cancel",
+        "saveFailed": "The Ages could not be saved. Your changes are still in the window, so you can try Save again.",
+        "invalid": {
+          "name": "Every Age needs a name. Name the marked Age, or delete it.",
+          "from": "Every Age needs a first year. Give the marked Age one, or delete it."
+        },
+        "ongoing": "now",
+        "band": "{name}: {from} to {to}",
+        "show": "Ages",
+        "stripLabel": "Ages"
       },
       "kills": {
         "title": "Slew {count}"

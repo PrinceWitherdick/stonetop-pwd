@@ -54,10 +54,20 @@ describe("what it collects", () => {
 		expect(result).toEqual({
 			season: "autumn",
 			year: 3,
+			yearOnly: false,
 			title: "The Bloody Hollow",
 			place: "The barrow",
 			body: "We went down and Kefta did not come back.",
 		});
+	});
+
+	// History rarely keeps its season: the "Season unknown" card is a blank season WITH a year.
+	it("sends a year with no season as year-only, and clears it once a season is picked", () => {
+		const dialog = makeDialog({ season: "", year: -9 });
+		dialog._yearOnly = true;
+		expect(dialog._save(makeForm({ [TITLE]: "The Forest Folk vanish" }))).toMatchObject({ season: "", year: -9, yearOnly: true });
+		dialog._season = "winter";
+		expect(dialog._save(makeForm({ [TITLE]: "The Forest Folk vanish" }))).toMatchObject({ season: "winter", yearOnly: false });
 	});
 
 	it("trims what was typed, so a stray space is not stored as content", () => {

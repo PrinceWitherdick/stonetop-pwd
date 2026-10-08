@@ -176,10 +176,11 @@ export function nearestStop(targets = [], value = 0) {
 /**
  * The on-screen extent of each year, as one rectangle per year: every element stamped with it, read
  * in ONE pass over the column (this runs every scroll frame). A year with nothing drawn is absent.
+ * Also what the Ages' bands are laid under (timeline-ages-band.js).
  *
  * @returns {Map<string, {left, top, right, bottom}>}  keyed by the attribute's text
  */
-function yearRects(scroll) {
+export function yearRects(scroll) {
 	const rects = new Map();
 	for (const el of scroll.querySelectorAll(`[${YEAR_ATTR}]`)) {
 		const r = el.getBoundingClientRect();
