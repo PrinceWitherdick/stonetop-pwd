@@ -2334,8 +2334,13 @@ input.stonetop-name-field {
    that used to live here were all beating pbta's own icon sizing, which is one more reason the
    die is not worth having back. */
 
+/* STRETCHED across the header column, which otherwise lays its children out at content width
+   (`align-items: flex-start` on .sheet-header__fields). Left to shrink-wrap, the block was only as
+   wide as the playbook description, so the Book I icon's `margin-left: auto` stopped at that
+   text's right edge instead of the sheet's. */
 .stonetop-playbook-block {
 	margin-top: 0;
+	align-self: stretch;
 }
 
 .stonetop-playbook-description {
@@ -3777,15 +3782,28 @@ input.stonetop-name-field {
 	background: transparent;
 }
 
-/* Chevron is hidden until the pointer is over the sidebar, then fades in. */
+/* The chevron is ALWAYS painted. It used to sit at `opacity: 0` until the pointer
+   crossed the sidebar, which made the handle undiscoverable to anyone who did not already
+   know it was there, and once collapsed left nothing on screen at all but a blank 14px
+   strip. Open, it rests at a quiet 0.6 so it does not compete with the move list; the
+   hover brings it to full ink. */
 .stonetop-sidebar-toggle i {
 	font-size: 0.8em;
-	opacity: 0;
+	opacity: 0.6;
 	transition: transform 0.15s, opacity 0.12s;
 }
 
-.stonetop-moves-sidebar:hover .stonetop-sidebar-toggle i {
+.stonetop-moves-sidebar:hover .stonetop-sidebar-toggle i,
+.stonetop-moves-sidebar.is-collapsed .stonetop-sidebar-toggle i {
 	opacity: 1;
+}
+
+/* The sidebar's name, written up the collapsed strip so a folded sidebar says what it
+   holds. Only the collapsed state shows it: open, the sidebar's own headings already do.
+   `aria-hidden` in the markup, because the button's aria-label already names the
+   outcome and a screen reader would otherwise read the name twice. */
+.stonetop-sidebar-toggle-label {
+	display: none;
 }
 
 .stonetop-sidebar-body {
@@ -3805,11 +3823,103 @@ input.stonetop-name-field {
 	overflow-x: hidden;
 }
 
-/* Collapsed: the move content is removed and the sidebar shrinks to just the handle
-   strip (matching the handle width), handing the freed width to the active tab. */
+/* Collapsed: the move content is removed and the sidebar shrinks to a 24px pull-tab,
+   handing the freed width to the active tab. 24px rather than the handle's own 14 so the
+   sidebar's name fits written vertically down it. */
 .stonetop-moves-sidebar.is-collapsed {
-	width: 14px;
-	min-width: 14px;
+	width: 24px;
+	min-width: 24px;
+	/* Closed off along the top as well as the left, with the corner between them rounded,
+	   so the folded strip reads as a tab tucked against the rail rather than a stripe
+	   painted down the page. Same hairline the left edge already uses. `overflow: hidden`
+	   clips the handle's tint to that rounded corner; it is safe only here, because open
+	   the handle hangs in the gutter OUTSIDE the sidebar and needs `visible`. */
+	border-top: 1px solid var(--color-border-light-2);
+	border-top-left-radius: var(--st-radius-lg);
+	overflow: hidden;
+	/* The seam's own fade, so the two hand over in step (see below). */
+	transition: border-top-color 0.15s ease-out, border-top-left-radius 0.15s ease-out;
+}
+
+/* ...except where something else already rules that line. Once the tab scrolls, the frosted
+   seam paints `.stonetop-sheet-layout`'s own border-top across the WHOLE layout, strip
+   included, and the strip's border would sit right under it as a second, darker line. The
+   same doubling happens at rest on a layout that is `--own-seam` (a header rule sits flush
+   above it: the classic steading) and on the classic character sheet, whose tab strip does.
+   In all three the strip gives up its top edge and the rounded corner it framed: the line
+   above it is already the top of the tab.
+
+   The border goes transparent rather than away, for the reason the seam rule gives: dropping
+   it would move the strip's contents a pixel each time the seam came and went. */
+.stonetop-sheet-layout:has(> .sheet-body.is-scrolled) > .stonetop-moves-sidebar.is-collapsed,
+.stonetop-sheet-layout--own-seam > .stonetop-moves-sidebar.is-collapsed,
+.stonetop-layout-classic .stonetop-sheet-layout > .stonetop-moves-sidebar.is-collapsed {
+	border-top-color: transparent;
+	border-top-left-radius: 0;
+}
+
+/* ...and the handle becomes the WHOLE strip: tinted so it reads as a tab and not as a
+   gap in the sheet, and clickable from top to bottom rather than only on a 14x30 patch in
+   the corner. It moves from the gutter left of the border onto the strip itself.
+   Every selector here is (0,3,0) or more and sits after `.stonetop-sidebar-toggle:focus
+   :not(:hover)`, which would otherwise clear the tint the moment a click left the button
+   focused. */
+.stonetop-moves-sidebar.is-collapsed .stonetop-sidebar-toggle {
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	width: auto;
+	height: auto;
+	min-height: 0;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 10px;
+	padding: 10px 0;
+	border-radius: 0;
+	background: rgb(var(--st-ink-rgb) / 0.03);
+	color: var(--st-text-secondary);
+}
+
+.stonetop-moves-sidebar.is-collapsed .stonetop-sidebar-toggle:hover {
+	background: rgb(var(--st-ink-rgb) / 0.08);
+	color: var(--st-text);
+}
+
+.stonetop-moves-sidebar.is-collapsed .stonetop-sidebar-toggle-label {
+	display: block;
+	writing-mode: vertical-rl;
+	font-size: var(--st-fs-sm);
+	letter-spacing: 0.04em;
+	white-space: nowrap;
+}
+
+/* Collapsed, the strip runs FLUSH to the window's right edge, against the tab rail. What
+   held it 8px short was not a scrollbar gutter (`.window-content` hides its bar and
+   reserves none) but the form's own 8px inset, `.pbta.sheet.actor .window-content form`.
+   Open, that inset is harmless: the sidebar body carries its own right gutter. Collapsed,
+   it left a sliver of bare parchment between the tab and the rail.
+
+   So the layout reaches back over the inset by exactly that 8px, and only while its
+   sidebar is folded. Nothing between the layout and the form clips on the character
+   sheet, so the margin alone does it.
+
+   The steading's classic sidebar is the same shape one level up: its `.sheet-wrapper`
+   is `overflow: hidden` and would clip a layout that reached past it, so there the
+   WRAPPER takes the margin and gives it straight back to the header, which keeps its
+   inset. `:has()` is live, so all of this follows the handle's class toggle with no
+   re-render. */
+.pbta.sheet.actor.character .stonetop-sheet-layout:has(> .stonetop-moves-sidebar.is-collapsed) {
+	margin-right: -8px;
+}
+
+.steading-sheet .sheet-wrapper:has(> .stonetop-sheet-layout > .stonetop-moves-sidebar.is-collapsed) {
+	margin-right: -8px;
+}
+
+.steading-sheet .sheet-wrapper:has(> .stonetop-sheet-layout > .stonetop-moves-sidebar.is-collapsed) > :not(.stonetop-sheet-layout) {
+	margin-right: 8px;
 }
 
 .stonetop-moves-sidebar.is-collapsed .stonetop-sidebar-body {
@@ -33826,7 +33936,7 @@ th:has(> .stonetop-roll-table-btn) {
    exploration moves, on every step of Run an Expedition.
 
    It wears `.stonetop-moves-sidebar` (the character sheet's Basic Moves chrome: the
-   border, the gutter, the absolutely-positioned collapse handle, the 14px collapsed
+   border, the gutter, the absolutely-positioned collapse handle, the 24px collapsed
    strip) and this modifier adjusts only what a dialog column needs differently. Both
    selectors are one class, so BEM order is load-bearing: these must stay LATER in the
    file than `.stonetop-moves-sidebar` (~line 2719) or the width below loses the tie.
@@ -33862,11 +33972,14 @@ th:has(> .stonetop-roll-table-btn) {
 	padding-top: 12px;
 }
 
-/* Collapsed, the fixed width has to yield to the 14px strip, which is also one class
+/* Collapsed, the fixed width has to yield to the 24px strip, which is also one class
    and would otherwise lose to the 200px above on source order alone. */
 .stonetop-guide-moves-sidebar.is-collapsed {
-	width: 14px;
-	min-width: 14px;
+	width: 24px;
+	min-width: 24px;
+	/* The collapsed strip's top hairline, in this rail's own ink like its left edge (the
+	   shared rule's core variable can be absent on a dialog). */
+	border-top-color: rgb(var(--st-ink-rgb) / 0.1);
 }
 
 /* The sheets size their own <h3>s, and nothing does that inside a dialog, so this
