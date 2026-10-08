@@ -54,6 +54,18 @@ class FakePanel {
 
 	setHost(host) { this.host = host; }
 	async close() { this.closed += 1; }
+
+	// StonetopDialog's kept place, cut down to the column's offset and whether it was in the
+	// document when read.
+	_readPlace() {
+		const body = this.element?.[0];
+		return body ? { scrolledLeft: body.scrollLeft, readAttached: !!body.parent } : null;
+	}
+
+	_restorePlace(place) {
+		this.restored = place;
+		if (place) this.element[0].scrollLeft = place.scrolledLeft;
+	}
 }
 vi.mock("../../module/dialogs/TimelinePanel.js", () => ({ TimelinePanel: FakePanel }));
 
@@ -71,6 +83,7 @@ function makeNode() {
 	return {
 		children: [],
 		parent: null,
+		scrollLeft: 0,
 		replaceChildren(...kids) {
 			for (const kid of this.children) kid.parent = null;
 			this.children = kids;
@@ -79,6 +92,8 @@ function makeNode() {
 		remove() {
 			if (this.parent) this.parent.children = this.parent.children.filter(kid => kid !== this);
 			this.parent = null;
+			// As Chrome does: a box out of the document has lost its scroll offset.
+			this.scrollLeft = 0;
 		},
 	};
 }
@@ -196,6 +211,31 @@ describe("a re-render moves the panel rather than rebuilding it", () => {
 		syncTimelineTab(sheet, second);
 		expect(built).toHaveLength(1);
 		expect(second.mount.children[0]).toBe(built[0].element[0]);
+	});
+
+	// The element survives the move; its scroll offset does not, because a detached box has none.
+	// Without this the timeline went back to its first season on every write to the actor.
+	it("puts the reader back where they had scrolled to", () => {
+		const sheet = makeSheet();
+		syncTimelineTab(sheet, makeRoot());
+		built[0].element[0].scrollLeft = 900;
+		detachTimelineTab(sheet);
+		syncTimelineTab(sheet, makeRoot());
+		expect(built[0].restored, "read after the lift, when there was nothing left to read").toMatchObject({ readAttached: true });
+		expect(built[0].element[0].scrollLeft).toBe(900);
+	});
+
+	it("puts a place back once, not on every later sync", () => {
+		const sheet = makeSheet();
+		syncTimelineTab(sheet, makeRoot());
+		built[0].element[0].scrollLeft = 900;
+		detachTimelineTab(sheet);
+		syncTimelineTab(sheet, makeRoot());
+		built[0].element[0].scrollLeft = 120;
+		built[0].restored = undefined;
+		syncTimelineTab(sheet, makeRoot());
+		expect(built[0].restored).toBeUndefined();
+		expect(built[0].element[0].scrollLeft).toBe(120);
 	});
 });
 

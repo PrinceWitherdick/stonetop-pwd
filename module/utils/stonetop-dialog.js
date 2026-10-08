@@ -6,6 +6,15 @@ import { FrontOnOpen } from "./front-on-open.js";
 const PROGRESS_RENDER_MS = 150;
 
 /**
+ * Whether `column` is drawn at all. A column in a sheet tab the reader is not on, or in a minimized
+ * window, has no box: it reads 0 down and across while still HOLDING its offset, and an offset written
+ * to it is dropped. A stand-in with no layout (the test suite's) counts as drawn.
+ */
+function isDrawn(column) {
+	return typeof column?.getClientRects !== "function" || column.getClientRects().length > 0;
+}
+
+/**
  * Base class for Stonetop's authoring dialogs (custom move, love letter, add inventory
  * item, monster builder, love-letter reader). It centralises the two pieces of lifecycle
  * every one of them repeated:
@@ -188,10 +197,12 @@ export class StonetopDialog extends Application {
 		const scroller = this._keptScrollSelector;
 		const active = globalThis.document?.activeElement;
 		const column = scroller ? before.querySelector?.(scroller) : null;
+		// A hidden column reads 0 both ways, so its place is the last one it was seen at.
+		const held = column && !isDrawn(column) ? this._heldOffsets : null;
 		return {
 			scroller,
-			scrolled:     column?.scrollTop ?? 0,
-			scrolledLeft: column?.scrollLeft ?? 0,
+			scrolled:     held?.top ?? column?.scrollTop ?? 0,
+			scrolledLeft: held?.left ?? column?.scrollLeft ?? 0,
 			focused:      active && before.contains?.(active) ? this._focusSelector(active) : null,
 		};
 	}
@@ -207,11 +218,48 @@ export class StonetopDialog extends Application {
 		// its drag gutter (utils/drag-scroll.js), so a reader who had scrolled right up to the edge
 		// would otherwise be thrown a whole gutter by somebody else's write.
 		const column = place.scroller ? after?.querySelector?.(place.scroller) : null;
-		if (column) {
-			column.scrollTop = place.scrolled;
-			column.scrollLeft = place.scrolledLeft;
-		}
+		if (column) this._putOffsets(column, { top: place.scrolled, left: place.scrolledLeft });
 		if (place.focused) after?.querySelector?.(place.focused)?.focus?.({ preventScroll: true });
+	}
+
+	/**
+	 * Write `offsets` into `column`: now if it is drawn, or the moment it is if not. A hidden column
+	 * drops the write, so a redraw behind a tab the reader is not on (or a minimized window) would
+	 * otherwise hand them the start of the column when they come back to it.
+	 */
+	_putOffsets(column, offsets) {
+		this._heldOffsets = offsets;
+		this._offsetsWaiter?.disconnect();
+		this._offsetsWaiter = null;
+		const write = () => {
+			column.scrollTop = offsets.top;
+			column.scrollLeft = offsets.left;
+		};
+		if (isDrawn(column)) { write(); return; }
+		if (typeof globalThis.ResizeObserver !== "function") return;
+		const waiter = new globalThis.ResizeObserver(() => {
+			if (!isDrawn(column)) return;
+			waiter.disconnect();
+			if (this._offsetsWaiter === waiter) this._offsetsWaiter = null;
+			write();
+		});
+		waiter.observe(column);
+		this._offsetsWaiter = waiter;
+	}
+
+	/**
+	 * Keep `_heldOffsets` on wherever the reader scrolls the kept column, so a redraw while it is
+	 * hidden still knows their place. Once per column: a sheet tab carries the SAME column through
+	 * its own repaints (utils/mounted-panel-slot.js).
+	 */
+	_trackOffsets() {
+		const scroller = this._keptScrollSelector;
+		const column = scroller ? this.element?.[0]?.querySelector?.(scroller) : null;
+		if (!column?.addEventListener || this._trackedColumn === column) return;
+		this._trackedColumn = column;
+		column.addEventListener("scroll", () => {
+			if (isDrawn(column)) this._heldOffsets = { top: column.scrollTop, left: column.scrollLeft };
+		}, { passive: true });
 	}
 
 	async _render(force, options) {
@@ -224,6 +272,7 @@ export class StonetopDialog extends Application {
 		if (this._autoHeight) this.setPosition({ height: "auto" });
 		// After the fit, which is why this is not core's `scrollY` (see _keptScrollSelector).
 		this._restorePlace(place);
+		this._trackOffsets();
 	}
 
 	activateListeners(html) {
@@ -234,6 +283,8 @@ export class StonetopDialog extends Application {
 	async close(options = {}) {
 		this._frontOnOpen.stop();
 		this._cancelThrottledRender();
+		this._offsetsWaiter?.disconnect();
+		this._offsetsWaiter = null;
 		try {
 			return await super.close(options);
 		} finally {

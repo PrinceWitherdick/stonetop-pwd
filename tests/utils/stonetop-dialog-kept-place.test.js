@@ -146,6 +146,82 @@ describe("a window that keeps its reader's place", () => {
 	});
 });
 
+// A column in a sheet tab the reader is not on (or a minimized window) has no box: it reads 0 both ways
+// while still holding its offset, and drops an offset written to it. A redraw there used to keep 0
+// and hand the reader the start of the column when they came back.
+describe("a column that is hidden at the redraw", () => {
+	/** A column that can be hidden, that hears its own scrolls, and that is laid out unless hidden. */
+	function hideable() {
+		let top = 0, left = 0;
+		const column = {
+			hidden: false,
+			onScroll: null,
+			getClientRects() { return this.hidden ? [] : [{}]; },
+			addEventListener(type, fn) { if (type === "scroll") this.onScroll = fn; },
+			// Hidden, it reads 0 and drops a write, as Chrome's does.
+			get scrollTop() { return this.hidden ? 0 : top; },
+			set scrollTop(v) { if (!this.hidden) top = v; },
+			get scrollLeft() { return this.hidden ? 0 : left; },
+			set scrollLeft(v) { if (!this.hidden) left = v; },
+		};
+		const root = { querySelector: sel => (sel === COLUMN ? column : null), contains: () => false };
+		return { root, column };
+	}
+
+	/** Every ResizeObserver made, so a test can tell it the column got a box. */
+	function observers() {
+		const made = [];
+		vi.stubGlobal("ResizeObserver", class {
+			constructor(fn) { this.fn = fn; this.live = true; made.push(this); }
+			observe() {}
+			disconnect() { this.live = false; }
+		});
+		return made;
+	}
+
+	/** Render `app` once onto each draw in turn. */
+	async function renders(app, ...draws) {
+		let shown = app._shownDraw ?? null;
+		Object.defineProperty(app, "element", { configurable: true, get: () => (shown ? [shown.root] : []) });
+		app.setPosition = vi.fn();
+		const queue = [...draws];
+		vi.spyOn(Application.prototype, "_render").mockImplementation(async () => { shown = queue.shift(); app._shownDraw = shown; });
+		for (let i = 0; i < draws.length; i += 1) await app._render(false, {});
+	}
+
+	it("keeps the place it was last scrolled to, and puts it back when the column is shown", async () => {
+		const made = observers();
+		const first = hideable();
+		const next = hideable();
+		const app = new Kept();
+		await renders(app, first);
+		first.column.scrollTop = 240;
+		first.column.scrollLeft = 900;
+		first.column.onScroll();
+		first.column.hidden = true;
+		next.column.hidden = true;
+		await renders(app, next);
+		expect(next.column.scrollTop, "written into a column with no box").toBe(0);
+
+		next.column.hidden = false;
+		made.filter(o => o.live).forEach(o => o.fn());
+		expect(next.column.scrollTop).toBe(240);
+		expect(next.column.scrollLeft).toBe(900);
+		expect(made.some(o => o.live), "still waiting after it landed").toBe(false);
+	});
+
+	it("does not take a hidden column's 0 for the reader's place", async () => {
+		observers();
+		const first = hideable();
+		const app = new Kept();
+		await renders(app, first);
+		first.column.scrollTop = 240;
+		first.column.onScroll();
+		first.column.hidden = true;
+		expect(app._readPlace().scrolled).toBe(240);
+	});
+});
+
 // Every other StonetopDialog: declaring nothing, it redraws exactly as it always did.
 describe("a window that declares no place", () => {
 	it("keeps neither the column nor the keyboard", async () => {
