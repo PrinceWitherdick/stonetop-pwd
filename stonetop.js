@@ -32,6 +32,7 @@ import { createRelationshipMapEntrySheetClass } from "./module/journal/Relations
 import { RELMAP_SHEET_CLASS } from "./module/relmap/relmap-doc.js";
 import { ThreatBoard } from "./module/threats/threat-board.js";
 import { onReady } from "./module/hooks/Ready.js";
+import { registerPrecompiledTemplates } from "./module/utils/templates.js";
 import { handleImportedJournalArt, ART_INDEX_SETTINGS } from "./module/book2-art/reapply.js";
 import { clearArtBrowseCache, ART_BROWSE_INPUTS } from "./module/book2-art/browse.js";
 import { onRenderActorSheet } from "./module/hooks/RenderActorSheet.js";
@@ -541,8 +542,8 @@ Hooks.once("init", () => {
 	// it before any auto-opening sheet/walkthrough render, which is where a "partial could
 	// not be found" race would actually bite.
 	game.stonetop ??= {};
-	game.stonetop.templatesReady = loadTemplates({
-		"stonetop.arcanum-sheet":      "systems/stonetop-pwd/templates/item/arcanum-sheet.hbs",
+	const partials = {
+		"stonetop.arcanum-sheet":     "systems/stonetop-pwd/templates/item/arcanum-sheet.hbs",
 		"stonetop.arcanum-sheet-edit": "systems/stonetop-pwd/templates/item/arcanum-sheet-edit.hbs",
 		"stonetop.actor-header":     "systems/stonetop-pwd/templates/actor/partials/actor-header.hbs",
 		"stonetop.portrait-frame-pip": "systems/stonetop-pwd/templates/actor/partials/portrait-frame-pip.hbs",
@@ -689,7 +690,11 @@ Hooks.once("init", () => {
 		"stonetop.card-gm-moves":             "systems/stonetop-pwd/templates/journal/partials/card-gm-moves.hbs",
 		"stonetop.card-player-moves":         "systems/stonetop-pwd/templates/journal/partials/card-player-moves.hbs",
 		"stonetop.site-group":                "systems/stonetop-pwd/templates/journal/partials/site-group.hbs",
-	});
+	};
+	// A release carries every template precompiled; registering them first leaves loadTemplates
+	// nothing to fetch or compile. A checkout carries none, and loads as it always has.
+	registerPrecompiledTemplates(partials);
+	game.stonetop.templatesReady = loadTemplates(partials);
 
 	// Last line of `init`, so reaching it means the whole run got through. A world that never
 	// records this has a partial boot however healthy it looks, which is what reportBootHealth

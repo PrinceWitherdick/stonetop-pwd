@@ -13,15 +13,16 @@
 export function replaceTextMatches(container, { skip, regex, render }) {
 	if (!container?.querySelectorAll) return;
 
-	const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-		acceptNode: node =>
-			node.parentElement?.closest(skip) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
-	});
+	// No `acceptNode` filter: a JS filter is a native-to-JS call for every text node in the
+	// container, whitespace included, and on a character sheet that crossing (plus a `.closest`
+	// against the whole skip list each time) was most of the walk. Match the text first and ask
+	// `.closest` only of the handful of nodes that actually hold a match.
+	const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
 	const toReplace = [];
 	let node;
 	while ((node = walker.nextNode())) {
 		regex.lastIndex = 0;
-		if (regex.test(node.textContent)) toReplace.push(node);
+		if (regex.test(node.data) && !node.parentElement?.closest(skip)) toReplace.push(node);
 	}
 
 	const append = (frag, out) => {

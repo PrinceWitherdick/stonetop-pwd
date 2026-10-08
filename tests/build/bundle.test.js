@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { BUNDLE_ENTRY, BUNDLE_OPTIONS, BUNDLE_OUTFILE, ROOT, buildBundle } from "../../scripts/bundle.js";
+import { BUNDLE_ENTRY, BUNDLE_OPTIONS, BUNDLE_OUTFILE, PRECOMPILED_TEMPLATES_MODULE, ROOT, buildBundle, precompileTemplates } from "../../scripts/bundle.js";
 import { RELMAP_WINDOW_CLASS } from "../../module/utils/window-restore.js";
 
 /**
@@ -72,6 +72,18 @@ describe("the release bundle", () => {
 			// Declared under its own name, or renamed by the bundler and handed its name back by keepNames.
 			expect(code, name).toMatch(new RegExp(`\\bclass ${name}\\b|"${name}"\\)`));
 		}
+	});
+
+	it("carries every template precompiled, so a release never fetches or compiles one", () => {
+		const keys = Object.keys(precompileTemplates());
+		expect(keys.length).toBeGreaterThan(150);
+		const id = JSON.parse(read("system.json")).id;
+		for (const key of keys) {
+			expect(key.startsWith(`systems/${id}/templates/`), key).toBe(true);
+			expect(code, key).toContain(JSON.stringify(key));
+		}
+		// A checkout keeps compiling live: only the bundle's copy of the stand-in is filled.
+		expect(read(PRECOMPILED_TEMPLATES_MODULE)).toContain("export default null");
 	});
 
 	it("maps back to the module files a release ships beside it", () => {
