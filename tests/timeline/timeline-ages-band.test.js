@@ -62,6 +62,17 @@ describe("wireAgeBands", () => {
 		unwire();
 	});
 
+	it("writes layout pixels when the window is drawn at a UI scale", () => {
+		vi.stubGlobal("requestAnimationFrame", (fn) => { fn(); return 1; });
+		const { scroll, layer, band } = rig();
+		// The same strip drawn twice its size: 800 on screen, laid out 400.
+		Object.defineProperty(layer, "offsetWidth", { value: 400 });
+		const unwire = wireAgeBands(scroll, layer, { horizontal: true });
+		expect(band.style.getPropertyValue("--age-pos")).toBe("50px");
+		expect(band.style.getPropertyValue("--age-length")).toBe("250px");
+		unwire();
+	});
+
 	it("hides a band whose years are not drawn", () => {
 		vi.stubGlobal("requestAnimationFrame", (fn) => { fn(); return 1; });
 		const { scroll, layer, band } = rig();

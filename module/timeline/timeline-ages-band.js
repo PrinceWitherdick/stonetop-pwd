@@ -15,6 +15,7 @@
 // move it.
 
 import { yearRects } from "./timeline-scrub.js";
+import { drawnScale } from "../utils/drawn-scale.js";
 
 /** Worn by a band with nothing to cover on screen (and by every band until it is first placed). */
 export const OFF_ATTR = "data-off";
@@ -80,9 +81,12 @@ export function wireAgeBands(scroll, layer, { horizontal = true, pinned = "" } =
 		const spans = yearRects(scroll);
 		const strip = layer.getBoundingClientRect();
 		const origin = horizontal ? strip.left : strip.top;
-		const size = horizontal ? strip.width : strip.height;
+		// Rects are on screen and the bands' px are laid out: a window drawn at a UI scale reports the
+		// first scaled and not the second, so every on-screen distance is divided by the strip's scale.
+		const scale = drawnScale(layer, strip, { horizontal });
+		const size = (horizontal ? strip.width : strip.height) / scale;
 		const head = pinned ? scroll.querySelector(pinned)?.getBoundingClientRect?.() : null;
-		const clip = head ? Math.max(0, (horizontal ? head.right : head.bottom) - origin) : 0;
+		const clip = head ? Math.max(0, ((horizontal ? head.right : head.bottom) - origin) / scale) : 0;
 		// The column's own scrollbar, where it shows one, is kept clear: the strip sits above it.
 		const bar = horizontal
 			? Math.max(0, scroll.offsetHeight - scroll.clientHeight - (scroll.clientTop || 0) * 2)
@@ -95,8 +99,8 @@ export function wireAgeBands(scroll, layer, { horizontal = true, pinned = "" } =
 			return {
 				band,
 				at: bandPlacement({
-					start: (horizontal ? first.left : first.top) - origin,
-					end:   (horizontal ? last.right : last.bottom) - origin,
+					start: ((horizontal ? first.left : first.top) - origin) / scale,
+					end:   ((horizontal ? last.right : last.bottom) - origin) / scale,
 					size, clip, name,
 				}),
 			};

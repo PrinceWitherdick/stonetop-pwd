@@ -234,6 +234,23 @@ describe("wireYearScrubber", () => {
 		expect(scroll.scrollLeft).toBe(-12);
 	});
 
+	it("measures in layout pixels when the window is drawn at a UI scale", () => {
+		// The same column drawn twice its size: every rect doubled, the scroll offsets not.
+		const x2 = (x, y, w, h) => () => rect(2 * (x - scroll.scrollLeft), 2 * (y - scroll.scrollTop), 2 * w, 2 * h);
+		Object.defineProperty(scroll, "offsetWidth", { value: 1000 });
+		scroll.getBoundingClientRect = () => rect(0, 0, 2000, 1200);
+		const [y1, y2, y3] = scroll.querySelectorAll("li");
+		y1.getBoundingClientRect = x2(0, 0, 400, 300);
+		y2.getBoundingClientRect = x2(400, 0, 400, 300);
+		y3.getBoundingClientRect = x2(800, 0, 1600, 300);
+		scroll.querySelector(".pic").getBoundingClientRect = x2(0, 0, 2400, 300);
+		unwire = wireYearScrubber(scroll, bar, { stops, horizontal: true, picture: ".pic" });
+		expect(ticks()).toEqual(["0", "0.125", "1"]);
+		slide(500);
+		expect(scroll.scrollLeft).toBe(400);
+		expect(scroll.scrollTop).toBe(-150);
+	});
+
 	it("wires nothing for fewer than two years", () => {
 		unwire = wireYearScrubber(scroll, bar, { stops: stops.slice(0, 1), horizontal: true });
 		slide(1000);

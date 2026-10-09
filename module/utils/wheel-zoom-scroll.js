@@ -16,6 +16,7 @@
 // knows which element is the picture and which is the empty room round it.
 
 import { stepZoom, wheelNotches } from "./image-zoom.js";
+import { drawnScale } from "./drawn-scale.js";
 
 /** The custom property the scale is handed to the stylesheet through, unitless. */
 export const ZOOM_VAR = "--wheel-zoom";
@@ -75,13 +76,14 @@ export function wireWheelZoom(el, { content, get = () => 1, set = () => {}, step
 	paint(clampScale(get(), min, max));
 
 	// The picture's corner in the box's scroll coordinates. Read off the layout, not worked out from
-	// the gutter and the padding, so nothing here has to know how the host spaces its content.
-	const originOf = (target, box) => {
+	// the gutter and the padding, so nothing here has to know how the host spaces its content. Rects
+	// are on screen and scroll offsets laid out, so the distance is divided by the box's scale `s`.
+	const originOf = (target, box, s) => {
 		const r = target?.getBoundingClientRect?.();
 		if (!r) return { x: 0, y: 0 };
 		return {
-			x: r.left - box.left - (el.clientLeft || 0) + el.scrollLeft,
-			y: r.top - box.top - (el.clientTop || 0) + el.scrollTop,
+			x: (r.left - box.left) / s - (el.clientLeft || 0) + el.scrollLeft,
+			y: (r.top - box.top) / s - (el.clientTop || 0) + el.scrollTop,
 		};
 	};
 
@@ -103,11 +105,13 @@ export function wireWheelZoom(el, { content, get = () => 1, set = () => {}, step
 
 		const target = content ? el.querySelector?.(content) : null;
 		const box = el.getBoundingClientRect?.() ?? { left: 0, top: 0 };
+		// The UI scale, not the wheel's: the zoom is on the content, so the box is drawn as big after.
+		const s = drawnScale(el, box);
 		const pointer = {
-			x: cursor.x - box.left - (el.clientLeft || 0),
-			y: cursor.y - box.top - (el.clientTop || 0),
+			x: (cursor.x - box.left) / s - (el.clientLeft || 0),
+			y: (cursor.y - box.top) / s - (el.clientTop || 0),
 		};
-		const before = originOf(target, box);
+		const before = originOf(target, box, s);
 		const scroll = { x: el.scrollLeft, y: el.scrollTop };
 
 		set(to);
@@ -117,7 +121,7 @@ export function wireWheelZoom(el, { content, get = () => 1, set = () => {}, step
 		// scroll coordinates read in one state, so a nudge scroll anchoring makes during that layout
 		// is already counted in rather than added twice.
 		const boxAfter = el.getBoundingClientRect?.() ?? box;
-		const after = originOf(target, boxAfter);
+		const after = originOf(target, boxAfter, s);
 		el.scrollLeft = anchoredScroll({
 			scroll: scroll.x, pointer: pointer.x, originBefore: before.x, originAfter: after.x, from, to,
 		});

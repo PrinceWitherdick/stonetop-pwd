@@ -25,6 +25,11 @@
 // Everything is measured off the LIVE layout (`getBoundingClientRect`), so the wheel's zoom, the drag
 // gutter and the four shapes need no arithmetic of their own: a year is wherever its `[data-year]`
 // elements are drawn.
+//
+// Measured on the page and spent in layout pixels: a window drawn at a UI scale reports its rects
+// scaled, and the scroll offsets they are added to are not (as timeline-menu-room.js).
+
+import { drawnScale } from "../utils/drawn-scale.js";
 
 /** What every element a year occupies is stamped with, in all four shapes. */
 export const YEAR_ATTR = "data-year";
@@ -80,7 +85,8 @@ export function scrubTicks(stops = []) {
  * for Horizontal's cross axis, where the timeline is centred top to bottom however big the zoom has
  * made it (user, 2026-10-03).
  *
- * All positions are on screen (client pixels), as `getBoundingClientRect` gives them.
+ * All positions are in layout pixels, the scroll offset's own unit: `yearTargets` and `scrubTo` bring
+ * what `getBoundingClientRect` gives them back from any UI scale first.
  *
  * @param {{scroll: number, viewStart: number, viewSize: number, spanStart: number, spanSize: number, inset?: number, fromStart?: boolean}} at
  * @returns {number}  The new scroll offset (unclamped; the browser clamps).
@@ -223,14 +229,27 @@ export function pictureRect(picture) {
 }
 
 /**
- * The view's own rectangle: the column's padding box less its scrollbars, which is what the reader
- * actually sees through.
+ * The view's own rectangle, on screen: the column's padding box less its scrollbars, which is what
+ * the reader actually sees through. `scale` is how much bigger the window is drawn than it is laid
+ * out (1 unscaled): divide an on-screen distance by it to get one a scroll offset can take.
  */
 function viewRect(scroll) {
 	const r = scroll.getBoundingClientRect();
-	const left = r.left + (scroll.clientLeft || 0);
-	const top = r.top + (scroll.clientTop || 0);
-	return { left, top, width: scroll.clientWidth || r.width, height: scroll.clientHeight || r.height };
+	const scale = drawnScale(scroll, r);
+	const left = r.left + (scroll.clientLeft || 0) * scale;
+	const top = r.top + (scroll.clientTop || 0) * scale;
+	const width = scroll.clientWidth ? scroll.clientWidth * scale : r.width;
+	const height = scroll.clientHeight ? scroll.clientHeight * scale : r.height;
+	return { left, top, width, height, scale };
+}
+
+/**
+ * `centredScroll` for a view and a span measured on screen: both brought back to layout pixels first,
+ * so the offset is right at any UI scale.
+ */
+function centredOnScreen(view, { viewStart, viewSize, spanStart, spanSize, ...at }) {
+	const s = view.scale;
+	return centredScroll({ ...at, viewStart: viewStart / s, viewSize: viewSize / s, spanStart: spanStart / s, spanSize: spanSize / s });
 }
 
 /**
@@ -253,8 +272,8 @@ export function yearTargets(scroll, stops, { horizontal, inset = 0 } = {}) {
 		const span = spans.get(String(year));
 		if (!span) return null;
 		const target = horizontal
-			? centredScroll({ scroll: offset, viewStart: view.left, viewSize: view.width, spanStart: span.left, spanSize: span.right - span.left })
-			: centredScroll({ scroll: offset, viewStart: view.top, viewSize: view.height, spanStart: span.top, spanSize: span.bottom - span.top, inset });
+			? centredOnScreen(view, { scroll: offset, viewStart: view.left, viewSize: view.width, spanStart: span.left, spanSize: span.right - span.left })
+			: centredOnScreen(view, { scroll: offset, viewStart: view.top, viewSize: view.height, spanStart: span.top, spanSize: span.bottom - span.top, inset });
 		const low = Math.max(0, target);
 		return room > 0 ? Math.min(room, low) : low;
 	});
@@ -282,7 +301,7 @@ export function scrubTo(scroll, stops, value, { horizontal, picture = null, inse
 	const across = !whole ? null : horizontal
 		? { scroll: scroll.scrollTop, viewStart: view.top, viewSize: view.height, spanStart: whole.top, spanSize: whole.height, fromStart: false }
 		: { scroll: scroll.scrollLeft, viewStart: view.left, viewSize: view.width, spanStart: whole.left, spanSize: whole.width, inset };
-	const cross = across ? centredScroll(across) : null;
+	const cross = across ? centredOnScreen(view, across) : null;
 	if (horizontal) {
 		scroll.scrollLeft = main;
 		if (cross !== null) scroll.scrollTop = cross;

@@ -18,9 +18,14 @@
 // button. A RIGHT drag goes from anywhere, as on the board.
 //
 // Touch is left alone: the browser already scrolls a finger natively, momentum and all.
+//
+// The hand is measured on screen and the box scrolls in layout pixels: in a window drawn at a UI
+// scale the pointer's travel is divided by the scale (utils/drawn-scale.js), or the board would run
+// faster or slower than the hand and slide out from under it.
 
 import { GLIDE_WINDOW_MS, glideStep, throwVelocity, worthGliding } from "./pan-glide.js";
 import { prefersReducedMotion } from "./reduced-motion.js";
+import { drawnScale } from "./drawn-scale.js";
 
 /** How far a press must travel, in window pixels, before it is a drag rather than a click. */
 export const LIFT_PX = 4;
@@ -105,6 +110,7 @@ export function wireDragScroll(el, { controls = DRAG_SCROLL_CONTROLS, gutter: gu
 	if (!el?.addEventListener) return () => {};
 
 	let press = null;        // { id, button, x, y, left, top, lifted }
+	let scale = 1;           // the box's UI scale, taken at the press; the throw after it spends it too
 	let marks = [];          // the trail a throw is read from
 	let glide = null;        // { velocity, at }
 	let glideId = 0;
@@ -137,8 +143,8 @@ export function wireDragScroll(el, { controls = DRAG_SCROLL_CONTROLS, gutter: gu
 		glide.at = t;
 		glide.velocity = velocity;
 		// The content follows the hand, so the scroll offset runs the OTHER way.
-		const wantLeft = el.scrollLeft - dx;
-		const wantTop = el.scrollTop - dy;
+		const wantLeft = el.scrollLeft - dx / scale;
+		const wantTop = el.scrollTop - dy / scale;
 		el.scrollLeft = wantLeft;
 		el.scrollTop = wantTop;
 		// An axis the box could not go any further on is done (see ZoomPanSurface#_glideFrame).
@@ -162,11 +168,10 @@ export function wireDragScroll(el, { controls = DRAG_SCROLL_CONTROLS, gutter: gu
 
 	// A press on the box's OWN scrollbar is the reader dragging the thumb, which already scrolls;
 	// panning as well would run the content the other way under it.
-	const onScrollbar = (ev) => {
-		if (ev.target !== el || typeof el.getBoundingClientRect !== "function") return false;
-		const box = el.getBoundingClientRect();
-		return ev.clientX >= box.left + (el.clientLeft || 0) + el.clientWidth
-			|| ev.clientY >= box.top + (el.clientTop || 0) + el.clientHeight;
+	const onScrollbar = (ev, box, s) => {
+		if (ev.target !== el || !box) return false;
+		return ev.clientX >= box.left + ((el.clientLeft || 0) + el.clientWidth) * s
+			|| ev.clientY >= box.top + ((el.clientTop || 0) + el.clientHeight) * s;
 	};
 
 	const onDown = (ev) => {
@@ -179,7 +184,11 @@ export function wireDragScroll(el, { controls = DRAG_SCROLL_CONTROLS, gutter: gu
 		if (ev.button !== 0 && !right) return;
 		if (ev.buttons > 2) return;
 		if (!right && controls && ev.target?.closest?.(controls)) return;
-		if (onScrollbar(ev)) return;
+		// One read of the box serves both the scrollbar test and the press's scale.
+		const box = el.getBoundingClientRect?.();
+		const s = drawnScale(el, box);
+		if (onScrollbar(ev, box, s)) return;
+		scale = s;
 		press = {
 			id: ev.pointerId, button: ev.button, x: ev.clientX, y: ev.clientY,
 			left: el.scrollLeft, top: el.scrollTop, lifted: false,
@@ -202,8 +211,8 @@ export function wireDragScroll(el, { controls = DRAG_SCROLL_CONTROLS, gutter: gu
 		}
 		ev.preventDefault?.();
 		// From where the drag STARTED plus the travel, so a clamped edge cannot make it creep.
-		el.scrollLeft = press.left - dx;
-		el.scrollTop = press.top - dy;
+		el.scrollLeft = press.left - dx / scale;
+		el.scrollTop = press.top - dy / scale;
 		mark(ev);
 	};
 
@@ -295,9 +304,12 @@ export function wireDragScroll(el, { controls = DRAG_SCROLL_CONTROLS, gutter: gu
 	const sizeGutter = () => {
 		if (el.isConnected === false) return;
 		const win = el.ownerDocument?.defaultView ?? globalThis.window;
+		// The box's size is laid out and the browser window's is on screen: the cap is brought into
+		// the box's own pixels, so a scaled window's gutter still stops at a screenful.
+		const s = drawnScale(el);
 		const measured = gutterFor(
 			{ width: el.clientWidth, height: el.clientHeight },
-			{ width: win?.innerWidth, height: win?.innerHeight },
+			{ width: win?.innerWidth / s, height: win?.innerHeight / s },
 			gutterShare,
 		);
 		const next = { ...measured, y: pinBottom ? 0 : measured.y, top: pinTop ? 0 : measured.y, left: pinLeft ? 0 : measured.x };
