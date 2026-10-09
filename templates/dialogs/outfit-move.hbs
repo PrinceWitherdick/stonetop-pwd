@@ -34,7 +34,9 @@
 	{{!-- Running mark total (specific items + undefined) --}}
 	<div class="stonetop-outfit-weight-row">
 		<span class="stonetop-outfit-weight-diamonds">
-			{{#each (times totalMarks)}}<span class="stonetop-outfit-diamond-filled">◆</span>{{/each}}
+			{{!-- Empty spans: the icon is the background. A literal ◆ here would be re-skinned by
+			      wrapStonetopGlyphsInEl into a second diamond overlapping the first. --}}
+			{{#each (times totalMarks)}}<span class="stonetop-outfit-diamond-filled"></span>{{/each}}
 			{{#if loadLevelNone}}<span class="stonetop-outfit-weight-none">{{{localize "stonetop.specialMoves.outfit.loadNone"}}}</span>{{/if}}
 		</span>
 		{{#unless loadLevelNone}}

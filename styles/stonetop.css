@@ -14695,13 +14695,16 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	flex-direction: column;
 }
 
+/* The item columns scroll on their own; the body only scrolls as a fallback, when the
+   window is so short (or the UI font so large) that the rules text above them leaves the
+   columns less than their min-height. */
 .stonetop-outfit-move-body {
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
 	padding: 4px 2px 2px;
 	height: 100%;
-	overflow: hidden;
+	overflow-y: auto;
 }
 
 .stonetop-outfit-description {
@@ -14799,6 +14802,13 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-size: var(--st-fs-base);
 }
 
+.stonetop-outfit-weight-diamonds {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px;
+}
+
 .stonetop-outfit-diamond-filled {
 	display: inline-block;
 	width: calc(10px * var(--stonetop-font-scale, 1));
@@ -14817,12 +14827,16 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-size: var(--st-fs-sm);
 }
 
-/* Two-column item layout */
+/* Two-column item layout. A flex child's min-height defaults to its content height, so
+   without the explicit min-height here the columns grew to every item's height, the body
+   clipped them, and neither section ever got a scrollbar. Stretch (not flex-start) so each
+   section is exactly the columns' height and its own overflow-y takes over. */
 .stonetop-outfit-columns {
 	display: flex;
 	gap: 12px;
-	align-items: flex-start;
-	flex: 1;
+	align-items: stretch;
+	flex: 1 1 0;
+	min-height: 12em;
 	overflow: hidden;
 }
 
@@ -14854,11 +14868,13 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	color: var(--color-text-dark-secondary, #666);
 }
 
-/* Item rows */
+/* Item rows. Wrap, so a note too long to share the line drops below the name (right-aligned,
+   as on the sheet) instead of squeezing the name into "Mess / kit". */
 .stonetop-outfit-item {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: baseline;
-	gap: 4px;
+	column-gap: 4px;
 	margin: 1px 0;
 	font-size: var(--st-fs-base);
 	cursor: pointer;
@@ -14868,11 +14884,10 @@ button.stonetop-mark-sign-btn.is-active:hover {
 
 .stonetop-outfit-item:hover { background: rgba(0,0,0,0.04); }
 
-/* A ◇0 arcanum has no checkbox (it costs nothing, so there is nothing to mark). Pad by the
-   checkbox's width + the row gap so its name still lines up with the markable rows above,
-   the same way .stonetop-inv-static does it on the gear tab. Not a pointer: nothing to click. */
+/* A ◇0 arcanum has no checkbox (it costs nothing, so there is nothing to mark). No indent
+   needed: every row's checkbox is hidden here, and its empty diamond column keeps the
+   shared width, so its name lines up already. Not a pointer: nothing to click. */
 .stonetop-outfit-item.stonetop-outfit-item-static {
-	padding-left: calc(15px * var(--stonetop-font-scale, 1) + 4px + 2px);
 	cursor: default;
 }
 
@@ -14882,12 +14897,21 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	display: none;
 }
 
-/* Diamond spans for regular items */
+/* Diamond spans for regular items. One fixed-width column sized to the heaviest item on
+   offer, counted from the rows drawn as the sheet's inventory does (the heaviest gear is
+   ◇◇◇), so names line up across the regular, possession and arcana lists. Centred on the
+   first line rather than baseline-aligned: an empty box's baseline is its bottom edge,
+   which sat the diamonds high against the text. */
+.stonetop-outfit-columns:has(.stonetop-outfit-item-diamonds > :nth-child(2)) { --outfit-diamond-slots: 2; }
+.stonetop-outfit-columns:has(.stonetop-outfit-item-diamonds > :nth-child(3)) { --outfit-diamond-slots: 3; }
 .stonetop-outfit-item-diamonds {
 	display: inline-flex;
 	align-items: center;
 	flex-shrink: 0;
+	align-self: center;
 	gap: 2px;
+	min-width: calc(var(--outfit-diamond-slots, 1) * 10px * var(--stonetop-font-scale, 1)
+		+ (var(--outfit-diamond-slots, 1) - 1) * 2px);
 }
 
 .stonetop-outfit-diamond {
@@ -14905,20 +14929,27 @@ button.stonetop-mark-sign-btn.is-active:hover {
 /* Square for small items */
 .stonetop-outfit-square {
 	display: inline-block;
-	width: 10px;
-	height: 10px;
+	box-sizing: border-box;
+	width: calc(10px * var(--stonetop-font-scale, 1));
+	height: calc(10px * var(--stonetop-font-scale, 1));
 	border: 1px solid currentColor;
 	background: transparent;
 	flex-shrink: 0;
+	align-self: center;
+	/* Takes the same room as the diamond column, so a small item's name lines up with the
+	   arcana rows below it in the same list once a ◇◇ item widens that column. */
+	margin-right: calc((var(--outfit-diamond-slots, 1) - 1) * (10px * var(--stonetop-font-scale, 1) + 2px));
 }
 
 .stonetop-outfit-item.is-checked .stonetop-outfit-square {
 	background: currentColor;
 }
 
-.stonetop-outfit-item-name { flex: 1; }
+.stonetop-outfit-item-name { flex: 1 1 auto; }
 
 .stonetop-outfit-item-note {
+	margin-left: auto;
+	text-align: right;
 	color: var(--color-text-dark-secondary);
 	font-size: var(--st-fs-base);
 }
@@ -14958,6 +14989,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 
 /* Footer */
 .stonetop-outfit-footer {
+	flex-shrink: 0;
 	display: flex;
 	justify-content: flex-end;
 	padding-top: 4px;
