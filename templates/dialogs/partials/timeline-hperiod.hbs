@@ -34,7 +34,7 @@
 <li class="stonetop-timeline-hperiod {{#if above}}stonetop-timeline-hperiod--above{{else}}stonetop-timeline-hperiod--below{{/if}}{{#if entries.length}} stonetop-timeline-hperiod--cards{{/if}}" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
 	<div class="stonetop-timeline-hnode">
 		<div class="stonetop-timeline-hhead{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}">
-			{{> "stonetop.timeline-period-head"}}
+			{{~> "stonetop.timeline-period-head"}}
 		</div>
 	</div>
 	<ol class="stonetop-timeline-cards stonetop-timeline-hcards">

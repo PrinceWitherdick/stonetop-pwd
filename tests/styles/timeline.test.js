@@ -125,7 +125,7 @@ describe("the timeline and the season inks", () => {
 			"templates/dialogs/timeline.hbs",
 		]) {
 			expect(readRepo(rel), `${rel} does not use the shared period heading`)
-				.toContain('{{> "stonetop.timeline-period-head"}}');
+				.toContain('{{~> "stonetop.timeline-period-head"}}');
 		}
 	});
 

@@ -133,4 +133,22 @@ describe("a Seasons Change inside its season's heading", () => {
 		for (const tag of tags) expect(tag).toContain("{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}");
 		expect(readCss()).toContain(".stonetop-timeline-head--notes");
 	});
+
+	// A partial called on a line of its own takes that line's indent onto every line it prints, so a
+	// `<pre>` in a note gains the template's tabs. Core v14 and the release bundle compile with
+	// `preventIndent`; v13 and a hot reload do not. `{{~>` makes the call not stand alone.
+	it("is called so that it never indents a note's lines", () => {
+		const hosts = readRepo("templates/dialogs/timeline.hbs")
+			+ readRepo("templates/dialogs/partials/timeline-period.hbs")
+			+ readRepo("templates/dialogs/partials/timeline-hperiod.hbs");
+		const calls = hosts.match(/\{\{~?>\s*"stonetop\.timeline-period-head"\}\}/g) ?? [];
+		expect(calls).toHaveLength(4);
+		for (const call of calls) expect(call).toMatch(/^\{\{~>/);
+
+		const hb = Handlebars.create();
+		hb.registerPartial("head", "{{{body}}}");
+		const host = (call) => hb.compile(`<header>\n\t\t${call}\n</header>`)({ body: "<pre>a\nb</pre>" });
+		expect(host("{{> head}}"), "the mechanism this guards against").toContain("<pre>a\n\t\tb</pre>");
+		expect(host("{{~> head}}")).toContain("<pre>a\nb</pre>");
+	});
 });

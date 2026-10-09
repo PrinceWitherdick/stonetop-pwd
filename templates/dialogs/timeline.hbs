@@ -259,7 +259,7 @@
 					{{!-- An Age's bare year (timeline-view.js#withAgeMarks) is its separator alone. --}}
 					{{#unless ageMark}}
 					<div class="stonetop-timeline-swim-head{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
-						{{> "stonetop.timeline-period-head"}}
+						{{~> "stonetop.timeline-period-head"}}
 					</div>
 					{{/unless}}
 					{{/each}}
@@ -305,7 +305,7 @@
 					{{#unless ageMark}}
 					<div class="stonetop-timeline-row" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
 						<div class="stonetop-timeline-row-head{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}">
-							{{> "stonetop.timeline-period-head"}}
+							{{~> "stonetop.timeline-period-head"}}
 						</div>
 
 						{{#each lanes}}

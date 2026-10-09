@@ -41,8 +41,10 @@ export const PRECOMPILED_TEMPLATES_MODULE = "module/utils/precompiled-templates.
 
 /**
  * Every templates/**\/*.hbs as a precompiled Handlebars spec, keyed by the path Foundry asks for
- * it by (`systems/<id>/templates/...`). Compiled with the one option core's `getTemplate` compiles
- * with, so a precompiled template renders exactly as a fetched one would.
+ * it by (`systems/<id>/templates/...`). Compiled with the one option core v14's `getTemplate`
+ * compiles with, so a precompiled template renders exactly as a fetched one would there. v13's
+ * compiles without `preventIndent`, so a template must never rely on it: a partial whose output
+ * holds a `<pre>` is called with `{{~> }}` (tests/timeline/timeline-templates.test.js).
  * @returns {Record<string, string>} template path -> the spec's JavaScript source
  */
 export function precompileTemplates() {
