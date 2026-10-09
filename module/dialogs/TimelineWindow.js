@@ -364,9 +364,10 @@ export class TimelineWindow extends StonetopDialog {
 			timeline: vm,
 			trackId: this._trackId,
 			trackName: this._trackName,
-			// A missing page in single-track mode is a thread nobody can write in yet, which reads
-			// differently from an empty one: the first is waiting on a GM, the second on the reader.
-			hasPage: single ? !!tracks[0].page : true,
+			// A missing page in single-track mode reads as waiting on a GM only to a reader who cannot
+			// write it: one who can is offered the empty thread, and their first entry mints the page
+			// (_onNewEntry's `create`). Otherwise the invite would contradict the New Entry above it.
+			awaitingGm: single && !tracks[0].page && !this._canEdit(this._trackId),
 			canEdit: single ? this._canEdit(this._trackId) : tracks.some(t => this._canEdit(t.trackId)),
 			// The aggregate has nowhere further to go, so it does not offer the door to itself.
 			showOpenFull: single,

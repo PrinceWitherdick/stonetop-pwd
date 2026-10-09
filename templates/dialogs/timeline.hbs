@@ -199,9 +199,10 @@
 	      under it, so the shapes below read as they always did. --}}
 	<div class="stonetop-timeline-canvas">
 
-		{{!-- A thread with no page yet reads differently from an empty one: the first is waiting on
-		      a GM opening the world, the second on the reader picking up a pen. --}}
-		{{#unless hasPage}}
+		{{!-- A thread with no page yet that this reader cannot write reads differently from an empty
+		      one: the first is waiting on a GM opening the world, the second on the reader picking up a
+		      pen. A reader who CAN write a pageless thread is handed the empty one (awaitingGm). --}}
+		{{#if awaitingGm}}
 		<div class="stonetop-timeline-invite">
 			<p class="stonetop-timeline-invite-lead">{{localize "stonetop.timeline.noTrack.lead"}}</p>
 			<p class="stonetop-timeline-invite-hint">{{localize "stonetop.timeline.noTrack.hint"}}</p>
@@ -324,7 +325,7 @@
 		{{/if}}
 
 		{{/if}}
-		{{/unless}}
+		{{/if}}
 	</div>{{!-- /canvas --}}
 	</div>
 

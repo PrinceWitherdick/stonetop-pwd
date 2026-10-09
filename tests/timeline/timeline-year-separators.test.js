@@ -19,7 +19,6 @@ function render({ single, periods, tracks = [] }) {
 	hbs.registerPartial("stonetop.timeline-period", "");
 	hbs.registerPartial("stonetop.timeline-hperiod", readRepo("templates/dialogs/partials/timeline-hperiod.hbs"));
 	const html = hbs.compile(readRepo("templates/dialogs/timeline.hbs"))({
-		hasPage: true,
 		horizontal: true,
 		single,
 		timeline: {
