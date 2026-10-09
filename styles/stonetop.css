@@ -11229,7 +11229,10 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    are direct children, so match them with `>` to avoid suppressing a parent item that
    merely contains a nested marked sub-item. Unlock-option checkboxes are wrapped in a
    <span>, and that list never nests, so match them as a descendant. */
-.stonetop-arcanum-body li:has(> .stonetop-arcanum-box, > .stonetop-arcanum-circle, > .stonetop-arcanum-diamond, .stonetop-arcanum-unlock-check)::before {
+/* The same holds for a walked □/○ that opens the item (`stonetop-glyph-run--lead`, set by
+   wrapStonetopGlyphsInEl): the arcanum item sheet and the Arcana tab's lone ○ draw the
+   book's mark as a glyph rather than an injected checkbox, and would show it beside a spiral. */
+.stonetop-arcanum-body li:has(> .stonetop-arcanum-box, > .stonetop-arcanum-circle, > .stonetop-arcanum-diamond, .stonetop-arcanum-unlock-check, > .stonetop-glyph-run--lead, > p:first-child > .stonetop-glyph-run--lead)::before {
 	content: none;
 }
 
@@ -11238,7 +11241,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    width and stacks vertically — matching the printed cards — rather than being squeezed
    into a narrow column to the right of the boxes (which also strands trailing tracks like
    ○○○). Scoped to inline markers; unlock options keep their own checkbox + text flex row. */
-.stonetop-arcanum-body li:has(> .stonetop-arcanum-box, > .stonetop-arcanum-circle, > .stonetop-arcanum-diamond) {
+.stonetop-arcanum-body li:has(> .stonetop-arcanum-box, > .stonetop-arcanum-circle, > .stonetop-arcanum-diamond, > .stonetop-glyph-run--lead, > p:first-child > .stonetop-glyph-run--lead) {
 	display: block;
 }
 
@@ -11769,6 +11772,10 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	content: ""; flex-shrink: 0; width: 9px; height: 9px; margin-top: 3px;
 	background-image: var(--stonetop-spiral-icon);
 	background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.5;
+}
+/* An item that opens with its own □/○ needs no spiral beside it (see the arcanum body above). */
+.stonetop-arcanum-chat-card li:has(> .stonetop-glyph-run--lead, > p:first-child > .stonetop-glyph-run--lead)::before {
+	content: none;
 }
 
 /* -- Details tab sections --------------------------------------- */
