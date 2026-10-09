@@ -40,11 +40,11 @@ import { escHtml } from "../utils/strings.js";
 import { GUTTER_LEFT_VAR, GUTTER_TOP_VAR, GUTTER_X_VAR, GUTTER_Y_VAR, wireDragScroll } from "../utils/drag-scroll.js";
 import { clampScale, wireWheelZoom } from "../utils/wheel-zoom-scroll.js";
 import {
-	TIMELINE_JOURNAL_NAME, allTracks, findTimelineJournal, mutateTrack, readTrack, trackDisplayName,
+	TIMELINE_JOURNAL_NAME, allTracks, findTimelineJournal, mutateTrack, pageTrackId, readTrack, trackDisplayName,
 	trackForActor,
 } from "../timeline/timeline-store.js";
 import {
-	TIMELINE_CARD_SOURCES, addEntry, moveEntry, patchEntry, removeEntry, trackIdFromKey,
+	TIMELINE_CARD_SOURCES, addEntry, moveEntry, patchEntry, removeEntry,
 } from "../timeline/timeline-core.js";
 import { SYSTEM_ID } from "../system-id.js";
 import {
@@ -554,11 +554,6 @@ export class TimelineWindow extends StonetopDialog {
 		return trackDisplayName(trackId);
 	}
 
-	/** The track a changed page belongs to, for the sync gate. Reads the key, writes nothing. */
-	_pageTrackId(page) {
-		return trackIdFromKey(page?.getFlag?.(SYSTEM_ID, "chronicleKey")) || page?.system?.trackId || "";
-	}
-
 	// ── reading preferences (this reader only) ─────────────────────────────────
 
 	/** Lay the timeline down the page or across it. Client-scoped; the re-render is the work. */
@@ -886,7 +881,7 @@ export class TimelineWindow extends StonetopDialog {
 		this._unwireSync();
 		const ours = (page) => page?.parent?.name === TIMELINE_JOURNAL_NAME
 			&& page.parent.id === findTimelineJournal()?.id
-			&& (!this.isSingleTrack || this._pageTrackId(page) === this._trackId);
+			&& (!this.isSingleTrack || pageTrackId(page) === this._trackId);
 		const repaint = (page) => { if (ours(page)) this._syncRepaint(); };
 
 		for (const hook of ["updateJournalEntryPage", "createJournalEntryPage", "deleteJournalEntryPage"]) {
