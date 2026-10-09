@@ -918,6 +918,29 @@ body {
 	flex: 0 0 auto;
 }
 
+/* A DialogV2 whose content outgrows the screen scrolls instead of losing its footer. Core caps
+   `.application` at the viewport (`max-height: calc(100vh - 1.5 * hotbar)`) and clips
+   `.window-content`, but neither the `form.dialog-form` flex column inside it nor its
+   `.dialog-content` may shrink (min-height: auto = content height), so a long chooser ("Choose a
+   site for the map", the Chart a Course prompts) ran off the bottom of the window with its OK button
+   and no scrollbar. Zero specificity on purpose: the bespoke dialogs that lay their content out
+   themselves (ledger, artifact, prose notes...) keep winning with their own rules. */
+:where(.application.dialog.stonetop > .window-content > .dialog-form) {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+/* The 3px pad, cancelled by the margin, is room for focus rings and input box-shadows: a scroller
+   clips at its padding edge, and a field flush with the content's side would lose its ring. */
+:where(.application.dialog.stonetop > .window-content > .dialog-form > .dialog-content) {
+	min-height: 0;
+	overflow-y: auto;
+	padding: 3px;
+	margin: -3px;
+}
+:where(.application.dialog.stonetop > .window-content > .dialog-form > .form-footer) {
+	flex: 0 0 auto;
+}
+
 /* -- A footer button whose label wraps ------------------------- */
 /* Our dialog buttons NAME the outcome they commit -- "Spend 1 Surplus, clear Malcontent",
    "Suffer: The mill burns", "Stand the muster down". That is house style, and it is also longer
