@@ -8024,6 +8024,17 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	flex-shrink: 0;
 }
 
+/* One diamond column per list, as wide as that list's heaviest row, so a ◇ row's name lines up
+   with a ◇◇ row's instead of starting a diamond further left. Counted in CSS from the rows
+   actually drawn (the heaviest gear is ◇◇◇), so a list of ◇ items reserves no extra room. Each
+   possession's gear box counts for itself: the nearest container's value is the one inherited. */
+:is(.stonetop-inventory-regular, .stonetop-possession-gear) { --inv-diamond-slots: 1; }
+:is(.stonetop-inventory-regular, .stonetop-possession-gear):has(.stonetop-inv-diamonds > :nth-child(2)) { --inv-diamond-slots: 2; }
+:is(.stonetop-inventory-regular, .stonetop-possession-gear):has(.stonetop-inv-diamonds > :nth-child(3)) { --inv-diamond-slots: 3; }
+:is(.stonetop-inventory-regular, .stonetop-possession-gear) .stonetop-inv-diamonds {
+	min-width: calc(var(--inv-diamond-slots) * 14px * var(--stonetop-font-scale, 1));
+}
+
 /* Override Foundry's .vtt .window-app input[type=checkbox] (0,3,1) with (0,4,1) */
 .vtt .window-app input[type=checkbox].stonetop-inv-diamond {
 	appearance: none !important;
@@ -27465,7 +27476,12 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	display: flex;
 	gap: 0px;
 	flex-shrink: 0;
+	/* As wide as the list's heaviest kit (Shield and Thick hides are ◇◇), so every label lines
+	   up. Each pip is 14px plus its 1px margin a side (`.stonetop-crew-gear-check` below). */
+	min-width: calc(var(--crew-pip-slots, 1) * (14px * var(--stonetop-font-scale, 1) + 2px));
 }
+.stonetop-crew-gear-list:has(.stonetop-crew-gear-pips > :nth-child(2)) { --crew-pip-slots: 2; }
+.stonetop-crew-gear-list:has(.stonetop-crew-gear-pips > :nth-child(3)) { --crew-pip-slots: 3; }
 
 /* Circle pip — used for gear pips and supplies */
 .vtt .window-app input[type=checkbox].stonetop-crew-pip {
