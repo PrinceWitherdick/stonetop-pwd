@@ -28,6 +28,27 @@ export function playbookTitle(actor) {
 }
 
 /**
+ * Whether an actor update touched what `playbookTitle` reads: the playbook itself (picked, swapped
+ * or cleared from the sheet) or the Would-Be Hero's cross-off flag, which renames the playbook
+ * without touching it.
+ *
+ * `changed` reaches an update hook expanded, so a dotted `system.playbook.name` write and a
+ * whole-object `system.playbook` one both land here. Both deletion shapes count too: dropping a
+ * playbook has to drop its title as readily as picking one adds it.
+ *
+ * ⚠ The flag bag is read with BRACKETS: the package id is hyphenated, so a dotted
+ * `changed.flags.stonetop-pwd` parses as a subtraction and throws at runtime.
+ *
+ * @param {object} changed  the update that was applied
+ */
+export function playbookTitleChanged(changed) {
+	const bag = changed?.flags?.[STONETOP_SCOPE];
+	if (bag && (WBH_HERO_FLAG in bag || `-=${WBH_HERO_FLAG}` in bag)) return true;
+	const sys = changed?.system;
+	return !!sys && ("playbook" in sys || "-=playbook" in sys);
+}
+
+/**
  * A player character named the way the table says them out loud: "Pim The Lightbearer".
  *
  * DISPLAY ONLY — the Actor document keeps the bare name it was given. The playbook is not

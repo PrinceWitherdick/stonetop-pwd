@@ -31,7 +31,7 @@ import { openOrFocus } from "../utils/open-or-focus.js";
 import { registerRestorableWindow } from "../utils/window-restore.js";
 import { openingSize } from "../utils/opening-size.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
-import { playbookTitle } from "../utils/playbook-actors.js";
+import { playbookTitle, playbookTitleChanged } from "../utils/playbook-actors.js";
 import { localize, format } from "../utils/i18n.js";
 import { promptForTimelineEntry } from "./TimelineEntryDialog.js";
 import { pickContentOption } from "./content-picker.js";
@@ -123,6 +123,8 @@ export class TimelineWindow extends StonetopDialog {
 		this._trackKind = trackKind;
 		this._trackName = name;
 		this._syncHooks = [];
+		// The actors drawn on the last paint (a lane's name, portrait and playbook), for _wireSync.
+		this._drawnActorIds = new Set();
 		// Takes the grab-and-throw back off the scroll column a repaint is about to replace.
 		this._unwireDragScroll = null;
 		// The wheel's zoom, kept on the instance so a repaint (anyone's write at the table) leaves the
@@ -322,6 +324,7 @@ export class TimelineWindow extends StonetopDialog {
 		// Fresh per render; see `_canEdit`.
 		this._editCache = new Map();
 		const tracks = this._tracks();
+		this._drawnActorIds = new Set(tracks.map(t => t.actor?.id).filter(Boolean));
 		// The world's custom tags: what a typed row's tag chip is named and coloured by, and the lines
 		// after the kinds in the Filter menu. A hidden tag the world has since lost is dropped from
 		// the count like an unknown kind.
@@ -905,6 +908,20 @@ export class TimelineWindow extends StonetopDialog {
 
 		// The GM renaming the years (seasons/campaign-year.js): every heading and chip says a new name.
 		this._syncHooks.push([START_YEAR_CHANGED_HOOK, Hooks.on(START_YEAR_CHANGED_HOOK, () => this._syncRepaint())]);
+
+		// An actor drawn on the board renamed, re-pictured, or given a new playbook (or a Would-Be
+		// Hero crossing off "Would-be"): its lane says the old one until repainted. The page's own
+		// rename waits on the primary GM (timeline-watch.js), so it is no signal when none is online.
+		const actorChanged = (actor, changes = {}) => {
+			if (!this._drawnActorIds.has(actor?.id)) return;
+			// The thread's own name was handed in at construction and titles the window, its scroll
+			// label and the entry dialog: a repaint alone would draw the old one again.
+			if ("name" in changes && this.isSingleTrack && actor.id === this._trackActor()?.id) {
+				this._trackName = actor.name;
+			}
+			if ("name" in changes || "img" in changes || playbookTitleChanged(changes)) this._syncRepaint();
+		};
+		this._syncHooks.push(["updateActor", Hooks.on("updateActor", actorChanged)]);
 	}
 
 	/**
