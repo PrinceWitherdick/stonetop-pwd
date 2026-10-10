@@ -6464,8 +6464,9 @@ export class StonetopCharacter {
 				"system.attributes.xp.value":   xp - xpToLevelUp(level),
 			};
 			// The move learned rides on the update so the timeline's level-up row can name it
-			// (timeline/timeline-watch.js reads it back off the options).
-			await this._actor.update(levelUp, moveName ? { [LEARNED_OPTION]: moveName } : {});
+			// (timeline/timeline-watch.js reads it back off the options), and the ledger names the
+			// move that spent the XP, as every other automated write does (`stonetopMove`).
+			await this._actor.update(levelUp, { stonetopMove: "Level Up", ...(moveName ? { [LEARNED_OPTION]: moveName } : {}) });
 			return null;
 		});
 		if (refused) return { applied: false, reason: refused };

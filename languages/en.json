@@ -27,6 +27,45 @@
     "actorCreate": {
       "title": "Create an Actor"
     },
+    "endOfSession": {
+      "title": "End of Session",
+      "personalHeading": "Personal XP",
+      "personalTag": "each player",
+      "instinct": "Point out how you <strong>demonstrated or struggled with your instinct</strong>. If you can, mark XP.",
+      "relationship": "Say how your <strong>relationship with or opinion of a PC, NPC, or group has changed</strong>. If you can, mark XP.",
+      "groupHeading": "Group XP",
+      "groupTag": "check each \"yes\", everyone marks XP",
+      "questions": {
+        "learnedWorld": "Did we learn more about the world or its history?",
+        "defeatedThreat": "Did we defeat a threat to Stonetop or the region?",
+        "improvedStanding": "Did we improve our standing with our neighbors?",
+        "improvedStonetop": "Did we make a lasting improvement to Stonetop, or tangible progress towards doing so?"
+      },
+      "tally": "+{xp} XP to each character ticked below.",
+      "whoHeading": "Who marks it",
+      "whoTag": "everyone at the table",
+      "whoHint": "Ticked: the characters of players who are logged in. Untick anyone who was not at the table.",
+      "dead": "dead",
+      "nobody": "There are no player characters in this world.",
+      "tableHeading": "Around the Table",
+      "praise": "<strong>Praise</strong> something about the session (in the fiction or around the table) that you enjoyed or appreciated.",
+      "wish": "<strong>Wish</strong> for future sessions: more __, less __, a chance to __, handling __ in a different way, etc. Wishes can be about what happens in the fiction or around the table. The GM will take notes.",
+      "award": "Award +{xp} Group XP & Close",
+      "close": "Close",
+      "gmOnly": "Only the GM can award the session's XP.",
+      "againTitle": "Award the session's XP again?",
+      "againPrompt": "<p>End of Session XP was already awarded {minutes} minutes ago: +{xp} XP to {count} characters. Award it again?</p>",
+      "againYes": "Award it again",
+      "againNo": "Don't award it",
+      "cardTitle": "End of Session: Group XP (+{xp})",
+      "cardPaid": "{names} each marked <strong>+{xp} XP</strong>.",
+      "cardFailed": "Not paid, the XP could not be written: {names}.",
+      "cardLeftOut": "Not at the table, not paid: {names}.",
+      "failedWarn": "Some of the session's XP could not be written: {names}. See the console."
+    },
+    "camp": {
+      "npcHealNoGm": "{name} was fed at the fire, but you don't own their token's actor and no GM is online to heal it. Ask the GM to raise its HP by hand."
+    },
     "steading": {
       "notLinked": "No Stonetop steading linked. Drag a Stonetop actor onto this sheet to link it.",
       "settlement": "Settlement",

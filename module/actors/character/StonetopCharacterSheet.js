@@ -7026,6 +7026,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				// denominator in the tally over the boxes (see _openGuidedCharacterMove).
 				pickMax:    move.pickMax,
 				roll,
+				// "(and don't mark XP)" on its 6- (the Timeless Vault): the roll marks none (data/arcana-moves.js).
+				...(move.noXpOnMiss ? { noXpOnMiss: true } : {}),
 				post:       "Send to chat",
 			};
 		}
@@ -7145,7 +7147,9 @@ export function createStonetopCharacterSheetClass(Base) {
 					// The move's own ladder on the roll card (an arcanum mystery's printed text, `guide.card`),
 					// so the card marks the rung the dice landed on as an item move's card does.
 					const ladder = guide.card ? { moveDescription: moveCardBody(guide.card, null) } : {};
-					await this._stonetopCharacter.onDirectStatRoll(stat, { moveName: name, ...ladder, ...flat, ...prompted });
+					// A move whose 6- says "don't mark XP" (an arcanum's, from _arcanumMoveGuide) marks none on a miss.
+					const noXp = guide.noXpOnMiss ? { noXpOnMiss: true } : {};
+					await this._stonetopCharacter.onDirectStatRoll(stat, { moveName: name, ...ladder, ...flat, ...noXp, ...prompted });
 				};
 				buttons.roll = {
 					label: fixedStat ? `Roll +${fixedStat.toUpperCase()}` : "Roll",

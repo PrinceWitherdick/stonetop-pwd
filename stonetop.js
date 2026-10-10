@@ -81,7 +81,7 @@ import { info } from "./module/utils/logger.js";
 import { boldMissText } from "./module/utils/strings.js";
 import { moveBodyHtml, remarkRolledTier } from "./module/utils/move-tiers.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
-import { rollSeasonsCard, sign, markMissXp, reconcileMissXp, pbtaDiceFormula, seasonsRollTable, seasonsRollPicks, syncCountedNotePill } from "./module/utils/roll-engine.js";
+import { rollSeasonsCard, sign, markMissXpByChoice, reconcileMissXp, pbtaDiceFormula, seasonsRollTable, seasonsRollPicks, syncCountedNotePill } from "./module/utils/roll-engine.js";
 import { countedResult, rolledRecord, cardCountedTier, totalTier } from "./module/utils/counted-tier.js";
 import { burnBrightlyAffordable, burnsBrightlyDriven } from "./module/actors/character/burn-brightly.js";
 import { wireImpetuousYouth, giveItAll, GIVE_IT_ALL_ACTION, HURT_DAMAGE, IMPETUOUS_YOUTH } from "./module/actors/character/impetuous-youth.js";
@@ -92,7 +92,7 @@ import { inCardTurn } from "./module/utils/card-queue.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
 import { moveChatCard, canRewriteCard, rolledTotalCard } from "./module/utils/chat.js";
 import { grantsWholeList, paintPickTally, pickLimitFor, releaseOverLimit, tierOffersPicks } from "./module/utils/pick-tally.js";
-import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
+import { wireUndoXpMark, missXpTakenByLift, missXpChoice, MISS_XP_CHOICE_FLAG } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
 import { possessionTrackUses, BOOKS_AND_SCROLLS, HOLY_RELICS } from "./module/actors/character/possession-tracks.js";
 import { INVOKE_THE_SUN_GOD } from "./module/actors/character/holy-light.js";
@@ -1552,7 +1552,9 @@ function _chatWireKnowThings(message, html) {
 function _wireNeverAtALoss(message, html, actor) {
 	const buttons = html.querySelectorAll(".stonetop-know-things-xp");
 	if (!buttons.length) return;
-	const chosen = message.getFlag(SYSTEM_ID, "knowThingsXp") ?? null;
+	// The latch is the generic miss-XP choice (undo-xp-mark.js#MISS_XP_CHOICE_FLAG), which a rewrite lifting
+	// the card off the miss takes off with the XP; an old card's Know Things latch reads the same.
+	const chosen = missXpChoice(message);
 	for (const btn of buttons) {
 		if (chosen) {
 			btn.disabled = true;
@@ -1564,9 +1566,12 @@ function _wireNeverAtALoss(message, html, actor) {
 			const choice = btn.dataset.choice;
 			let latched = false;
 			try {
-				await message.setFlag(SYSTEM_ID, "knowThingsXp", choice);
+				await message.setFlag(SYSTEM_ID, MISS_XP_CHOICE_FLAG, choice);
 				latched = true;
-				if (choice === "mark") return void await markMissXp(actor, "Know Things");
+				// Tied to the card, so a Logbook's 10+, a Burn Brightly or a Shift that lifts it off the miss takes
+				// the XP back and offers the choice again (roll-engine.js#markMissXpByChoice), and its receipt goes
+				// where the roll went.
+				if (choice === "mark") return void await markMissXpByChoice(message, actor, "Know Things");
 				await ChatMessage.create({
 					content: moveChatCard("Never at a Loss",
 						`<p><strong>${escHtml(actor.name)}</strong> declines the XP. The GM tells them nothing`
@@ -1581,7 +1586,7 @@ function _wireNeverAtALoss(message, html, actor) {
 				// rendering disabled from here on and no way to ask again. Re-enabling the DOM is
 				// not enough on its own: the next render reads the flag, not these buttons.
 				if (latched) {
-					await message.unsetFlag(SYSTEM_ID, "knowThingsXp")
+					await message.unsetFlag(SYSTEM_ID, MISS_XP_CHOICE_FLAG)
 						.catch(e => console.error("Stonetop | Could not release the Never at a Loss latch:", e));
 				}
 				for (const b of buttons) b.disabled = false;

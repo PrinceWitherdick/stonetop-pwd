@@ -491,6 +491,17 @@ export function registerSettings() {
 		default: false
 	});
 
+	// The last End of Session group award, `{at, xp, ids}` (dialogs/EndOfSessionDialog.js): when, how
+	// much, and to whom. World-scoped so a second GM, or the same GM reopening the window, is asked
+	// before the session's XP is handed out again.
+	game.settings.register(SYSTEM_ID, "lastEndOfSession", {
+		name: "Last End of Session Award",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {}
+	});
+
 	// Whether the "(TEST ONLY) Populate World" dev macro has been seeded into the
 	// world's Macro Directory (see hooks/Ready.js _ensureTestPopulateMacro). Set true
 	// after the first GM load so it's added exactly once — a GM who later deletes it

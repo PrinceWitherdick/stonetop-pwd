@@ -85,4 +85,29 @@ export class CharacterModel extends foundry.abstract.TypeDataModel {
 			relationships: new fields.ObjectField({ required: true }),
 		};
 	}
+
+	/** Nobody owes XP: a negative total typed on the sheet is written as 0 (clampNegativeXp). */
+	async _preUpdate(changes, options, user) {
+		clampNegativeXp(changes);
+		return super._preUpdate?.(changes, options, user);
+	}
+}
+
+/**
+ * Write a negative XP total in an Actor update as 0, in place. The sheet's XP box is a typed number
+ * whose `min="0"` the browser does not enforce on a change-submit, and the schema has no floor (one
+ * now would fail validation on any world already holding a negative total). Left in, the next mark
+ * through utils/xp.js#adjustXp floors at 0 first, so a +1 from -3 reads as +4 in the ledger.
+ *
+ * Reads both shapes an update can arrive in: expanded, and with a dotted key.
+ *
+ * @param {object} changes  the update, as handed to _preUpdate
+ * @returns {object} the same object
+ */
+export function clampNegativeXp(changes) {
+	const DOTTED = "system.attributes.xp.value";
+	if (typeof changes?.[DOTTED] === "number" && changes[DOTTED] < 0) changes[DOTTED] = 0;
+	const xp = changes?.system?.attributes?.xp;
+	if (xp && typeof xp.value === "number" && xp.value < 0) xp.value = 0;
+	return changes;
 }
