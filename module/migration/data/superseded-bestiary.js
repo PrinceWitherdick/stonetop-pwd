@@ -87,7 +87,7 @@ export const SUPERSEDED_BESTIARY = {
 	"h9IhOM9HBNmdrzUh": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["627b202954b450fc","9b55e0da69fcb93a"],"system.qualities":["c0d125755c2939ac"]},"items":{}}, // Shaksa
 	"Hogu0AEnAffI0HHr": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["9b55e0da69fcb93a","9e698379edf28cbf"],"system.qualities":["742acbe42b3f0448"]},"items":{"7pVz5nkhpWGqQBnf":{"img":["ac42d357268b8d4d"]},"X1QtTUNdLiLq0IMf":{"img":["c7194771a342f89c"]}}}, // Coedwaig
 	"HQCqcFlZZzEr8EHZ": {"paths":{"system.qualities":["3ad819fe4e6463ea"]},"items":{}}, // Thornthumb
-	"hZq0cfLjfytNVrWs": {"paths":{"system.entry":["8ca2cdc43a071ba4"]},"items":{"MMCPJaxCRYnBpjBD":{"img":["f99e66800d55a5fc"]}}}, // Crinwin Broodfather
+	"hZq0cfLjfytNVrWs": {"paths":{"system.entry":["8ca2cdc43a071ba4"]},"items":{"hPN9iPWSsIt68SXk":{"name":["86109ffc9753eb17"]},"MMCPJaxCRYnBpjBD":{"img":["f99e66800d55a5fc"]}}}, // Crinwin Broodfather
 	"i2U1Qxscwoqw6eR0": {"paths":{},"items":{"hvLUifuoBTJgnYtb":{"img":["7cf47f9b83df3cea"]}}}, // The Crombil, Awakened
 	"i7EPIDkGLO5AFm2f": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["827b030ffea1dd27","9b55e0da69fcb93a"],"system.qualities":["19b1d965fd0d4adb"]},"items":{}}, // Nerth Serpent
 	"I8J5ARGoRPfBMNBb": {"paths":{"system.entry":["8a593855240afae1","9b55e0da69fcb93a"]},"items":{}}, // Ulliam Unlucky
@@ -235,6 +235,7 @@ export const BESTIARY_FINGERPRINTS = {
 	"aWbHPmGW9htXdyUN": "283af36b07261e68",
 	"B0W8jT7lRFLJK4ds": "eea1bf2b9a5abb9a",
 	"b1nCTG0uwf7dLQmx": "78ff34d2decc8bd0",
+	"BanditManmarchHd": "23281c52efb397da",
 	"baV7yiVwXMTKa49B": "95c18a9271c692de",
 	"BCA8xC2gsvHO43ou": "417dc81b307e6ad6",
 	"BgPtjVOTWvJBYE7z": "7b9b529e33bd6872",
@@ -264,7 +265,7 @@ export const BESTIARY_FINGERPRINTS = {
 	"EDaesIZe2McJdVG7": "9e09066b0c8b6100",
 	"EfKVm2sMXRjrnB6L": "393fbe312e1dfba1",
 	"eU2PTY1DoA2n95RT": "9814c79fcdf4a6d3",
-	"F0SuxRtw6dqB6Nvh": "adb3c5da520e401d",
+	"F0SuxRtw6dqB6Nvh": "61acbf170688bb35",
 	"fc4528DgaFiiq2i9": "7a9153c3cc6c74be",
 	"fNEJcPa37GBqXwOq": "ae52846b98111948",
 	"fnzABVPboAe4m9Y8": "f72823709fa2fea2",
@@ -285,7 +286,7 @@ export const BESTIARY_FINGERPRINTS = {
 	"h9IhOM9HBNmdrzUh": "7d1666351c09220f",
 	"Hogu0AEnAffI0HHr": "0701f269795bb912",
 	"HQCqcFlZZzEr8EHZ": "a548ca0e7d39ec6c",
-	"hZq0cfLjfytNVrWs": "5421b1fc7ee4b7f9",
+	"hZq0cfLjfytNVrWs": "bf54e51e3150c27f",
 	"i2U1Qxscwoqw6eR0": "91cf27b4238b6e87",
 	"i7EPIDkGLO5AFm2f": "a4193c6c50016563",
 	"I8J5ARGoRPfBMNBb": "fd221b51fd862b3a",

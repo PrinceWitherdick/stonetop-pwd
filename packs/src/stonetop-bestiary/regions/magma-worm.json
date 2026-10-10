@@ -31,6 +31,8 @@
     "creatureType": "unknown-origin"
   },
   "prototypeToken": {
+    "width": 2,
+    "height": 2,
     "name": "Magma Worm",
     "actorLink": false,
     "disposition": -1,

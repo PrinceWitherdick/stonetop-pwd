@@ -80,6 +80,7 @@ import { settleAllArcanumBoxLayouts, settleOwnArcanumBoxLayouts } from "../migra
 import { refreshHeldMoves } from "../migration/move-refresh.js";
 import { refreshSteadingImprovements } from "../migration/improvement-refresh.js";
 import { refreshSeededMonsters } from "../migration/bestiary-refresh.js";
+import { sizeMonsterTokens, MONSTER_TOKEN_SIZE_SWEEP } from "../migration/monster-token-size.js";
 import { refreshCatalogFollowers } from "../migration/follower-refresh.js";
 import { splitFollowerWholeParty, FOLLOWER_WHOLE_PARTY_SWEEP } from "../migration/follower-whole-party.js";
 
@@ -268,6 +269,11 @@ export async function onReady() {
 		// an older pack shipped is brought up to the pack; a GM's own edit is left.
 		try { await oncePerVersion("bestiaryRefresh", refreshSeededMonsters); }
 		catch (err) { console.error("Stonetop | refreshing seeded monsters failed", err); }
+		// And a large or huge monster's prototype token, still the 1x1 every stat block used to ship
+		// with (migration/monster-token-size.js): 2x2 and 3x3. Tokens already on a scene are left.
+		// Once per WORLD: a 1x1 a GM sets after it is theirs.
+		try { await oncePerVersion(MONSTER_TOKEN_SIZE_SWEEP, sizeMonsterTokens); }
+		catch (err) { console.error("Stonetop | sizing monster tokens failed", err); }
 		// And the follower cards made from the system's own lists (migration/follower-refresh.js): the
 		// good dog's herder default and two summons' notes, wherever a card still holds the old value.
 		try { await oncePerVersion("followerRefresh", refreshCatalogFollowers); }

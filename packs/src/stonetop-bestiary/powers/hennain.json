@@ -30,6 +30,8 @@
     "creatureType": "spirit"
   },
   "prototypeToken": {
+    "width": 3,
+    "height": 3,
     "name": "Hennain",
     "actorLink": false,
     "disposition": -1,

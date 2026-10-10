@@ -12,7 +12,8 @@
 // scripts/gen-superseded-fields.js from git history), so a GM's edit to a monster is never touched.
 // A monster is matched to its pack entry by the compendium source the seed stamped on it, and its
 // moves by id (the seed keeps them), else by name. Moves are only corrected: one the GM deleted is
-// not put back, and one they added is never matched. Current HP is play, not the stat block: it moves
+// not put back, and one they added is never matched. The one exception is a move the pack RETIRED
+// because the book never printed it (RETIRED_BESTIARY_MOVES), taken off a copy still holding it as shipped. Current HP is play, not the stat block: it moves
 // with max HP only on a monster that is unhurt.
 
 import { BESTIARY_PACK } from "../system-id.js";
@@ -63,14 +64,28 @@ export function bestiarySourceId(actor) {
 }
 
 /**
+ * Moves the pack once shipped and no longer does, because the book never printed them, by pack _id:
+ * each `{ _id, name }` as it shipped. A seeded copy still holding one under that id AND that name is
+ * a copy nobody touched, and loses it; a renamed one is the GM's and stays.
+ *
+ * The Crinwin's "Choke with sinewy fingers" was written for the hand-made reference Crinwin. Its
+ * printed moves are three: mimic noises, hide or vanish, snatch and dart away (Book I p.390,
+ * Book II p.61), and its choking is already its Damage line ("claws, rocks, choking d6 (hand)").
+ */
+export const RETIRED_BESTIARY_MOVES = {
+	F0SuxRtw6dqB6Nvh: [{ _id: "HwT4Rew3fxkzRx6m", name: "Choke with sinewy fingers" }],
+};
+
+/**
  * What refreshing one seeded monster writes: `{ actor, items }`, the actor update and the embedded
- * move updates, or null. PURE.
+ * move updates, plus `deletes` (move ids) when a retired move is still held as shipped; or null. PURE.
  *
  * @param {object} held     the world monster
  * @param {object} entry    its pack entry, items included
  * @param {object} former   SUPERSEDED_BESTIARY[entry._id]: `{ paths, items: { [itemId]: paths } }`
+ * @param {Array<{_id: string, name: string}>} [retired]  RETIRED_BESTIARY_MOVES[entry._id]
  */
-export function monsterRefresh(held, entry, former = {}) {
+export function monsterRefresh(held, entry, former = {}, retired = RETIRED_BESTIARY_MOVES[entry?._id] ?? []) {
 	if (!held || !entry) return null;
 	const actor = fieldRefresh(held, entry, MONSTER_PATHS, former.paths) ?? {};
 	// An unhurt monster stays unhurt at its new size; a hurt one keeps its wounds, and only comes down
@@ -83,15 +98,18 @@ export function monsterRefresh(held, entry, former = {}) {
 	}
 	const packMoves = entry.items ?? [];
 	const items = [];
+	const deletes = [];
 	for (const move of held.items ?? []) {
 		const id = move._id ?? move.id;
+		const gone = retired.find(r => r._id === id && r.name === move.name);
+		if (gone && !packMoves.some(m => m._id === id)) { deletes.push(id); continue; }
 		const source = packMoves.find(m => m._id === id) ?? packMoves.find(m => m.name === move.name);
 		if (!source) continue;
 		const update = fieldRefresh(move, source, MONSTER_MOVE_PATHS, former.items?.[source._id]);
 		if (update) items.push({ _id: id, ...update });
 	}
-	if (!Object.keys(actor).length && !items.length) return null;
-	return { actor: Object.keys(actor).length ? actor : null, items };
+	if (!Object.keys(actor).length && !items.length && !deletes.length) return null;
+	return { actor: Object.keys(actor).length ? actor : null, items, ...(deletes.length ? { deletes } : {}) };
 }
 
 /**
@@ -114,18 +132,19 @@ export async function refreshSeededMonsters({ actors = globalThis.game?.actors ?
 		formatKey: "SUPERSEDED_FORMAT", expected: SUPERSEDED_FORMAT, exportName: "SUPERSEDED_BESTIARY",
 		stale: "the superseded-bestiary data is out of date; seeded monsters are left as they are",
 	});
-	const ids = [...new Set(seeded.map(s => s.id))].filter(id => former[id]);
+	const ids = [...new Set(seeded.map(s => s.id))].filter(id => former[id] || RETIRED_BESTIARY_MOVES[id]);
 	if (!ids.length) return 0;
 	const entries = await (getEntries ?? readPack)(ids);
 	const byId = new Map(entries.map(e => [e._id, e]));
 	let written = 0;
 	const failures = new SweepFailures("refreshing seeded monsters");
 	for (const { actor, id } of seeded) {
-		const r = monsterRefresh(actor, byId.get(id), former[id]);
+		const r = monsterRefresh(actor, byId.get(id), former[id] ?? {});
 		if (!r) continue;
 		await failures.attempt(actor.name, async () => {
 			if (r.actor) await actor.update(r.actor);
 			if (r.items.length) await actor.updateEmbeddedDocuments("Item", r.items);
+			if (r.deletes?.length) await actor.deleteEmbeddedDocuments("Item", r.deletes);
 			written += 1;
 		});
 	}

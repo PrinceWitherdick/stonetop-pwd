@@ -30,6 +30,8 @@
     "creatureType": "natural-beast"
   },
   "prototypeToken": {
+    "width": 2,
+    "height": 2,
     "name": "Totnatter",
     "actorLink": false,
     "disposition": -1,

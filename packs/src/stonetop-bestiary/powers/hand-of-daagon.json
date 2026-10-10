@@ -31,6 +31,8 @@
     "creatureType": "emanation"
   },
   "prototypeToken": {
+    "width": 2,
+    "height": 2,
     "name": "Hand of Daagon",
     "actorLink": false,
     "disposition": -1,

@@ -31,6 +31,8 @@
     "creatureType": "corrupted"
   },
   "prototypeToken": {
+    "width": 2,
+    "height": 2,
     "name": "Jellied Horror",
     "actorLink": false,
     "disposition": -1,

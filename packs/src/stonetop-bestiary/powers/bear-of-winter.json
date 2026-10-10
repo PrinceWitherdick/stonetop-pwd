@@ -31,6 +31,8 @@
     "creatureType": "fae"
   },
   "prototypeToken": {
+    "width": 3,
+    "height": 3,
     "name": "Bear of Winter",
     "actorLink": false,
     "disposition": -1,
