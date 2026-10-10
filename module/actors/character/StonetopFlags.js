@@ -10,6 +10,13 @@ export const STONETOP_SCOPE = _scope;
  */
 export const MIRRORED_HP_PENALTY_FLAG = "mirroredHpPenalty";
 
+/**
+ * Update option: this write takes HP down to a max that fell (or a typed number over it, p.53 "your
+ * current HP can never go higher than your max"). Hit points lost that way are not damage taken, so the
+ * hooks that answer a blow (combat/battle-joy-offer.js, "when you spill blood") stand aside for it.
+ */
+export const HP_CEILING_OPTION = "stonetopHpCeiling";
+
 // Compendium pack ids, derived from the system scope so a system-id rename touches only
 // system-id.js. Re-exported rather than declared here: they live beside packId now, where the
 // journal, bestiary and macro packs could join them. Import from either; do not retype the

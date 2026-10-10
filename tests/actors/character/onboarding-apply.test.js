@@ -715,6 +715,64 @@ describe("changing playbook", () => {
 	});
 });
 
+// "Start play with your current HP equal to your max HP" (Book I p.53): the REAL max, with the
+// stats, moves and any lasting adjustment in it, not the printed number the drop seeds.
+describe("a new playbook starts at full HP", () => {
+	const hp = actor => actor.system.attributes.hp;
+	const HEAVY_RUN = () => ({
+		backgroundSlug: "sheriff", stats: { str: 2, dex: 1, con: 1, int: 0, wis: 0, cha: -1 },
+		moves: [], lore: { picks: {}, texts: {} },
+	});
+
+	it("through onboarding: current and stored max HP are the computed max", async () => {
+		const { char, actor, sheet } = freshBlessed();
+		await sheet._applyPlaybookSelections(playbookDoc("the-heavy"), HEAVY_RUN());
+
+		const max = await char.computedMaxHp();
+		expect(max).toBeGreaterThan(0);
+		expect(hp(actor).value).toBe(max);
+		expect(hp(actor).max).toBe(max);
+	});
+
+	it("keeps a lasting adjustment through the change, and starts full at the max it gives", async () => {
+		const { char, actor, sheet } = freshBlessed();
+		await sheet._applyPlaybookSelections(playbookDoc("the-blessed"), FIRST_RUN());
+		await actor.update({ "system.attributes.hp.adjustment": -3 });
+		const unadjusted = (await char.computedMaxHp()) + 3;
+
+		await sheet._applyPlaybookSelections(playbookDoc("the-heavy"), HEAVY_RUN());
+
+		const max = await char.computedMaxHp();
+		expect(hp(actor).adjustment).toBe(-3);
+		expect(hp(actor).value).toBe(max);
+		expect(max).not.toBe(unadjusted);
+	});
+
+	it("a re-run of the SAME playbook leaves the damage taken", async () => {
+		const { actor, sheet } = freshBlessed();
+		await sheet._applyPlaybookSelections(playbookDoc("the-blessed"), FIRST_RUN());
+		await actor.update({ "system.attributes.hp.value": 2 });
+
+		await sheet._applyPlaybookSelections(playbookDoc("the-blessed"), sheet._readSelectionsFromActor(playbookDoc("the-blessed")));
+
+		expect(hp(actor).value).toBe(2);
+	});
+
+	it("through a playbook drop: current and stored max HP are the computed max, adjustment and all", async () => {
+		const { char, actor } = buildLiveCharacter({ seedStartingMoves: false });
+		await actor.update({ "system.attributes.hp.adjustment": -3 });
+		const sheet = sheetFor(char, actor);
+		stubConfirm(true);
+
+		await sheet._onDropPlaybook(playbookDoc("the-heavy"));
+
+		const max = await char.computedMaxHp();
+		expect(max).toBe(playbookDoc("the-heavy").flags.stonetop.hp - 3);
+		expect(hp(actor).value).toBe(max);
+		expect(hp(actor).max).toBe(max);
+	});
+});
+
 describe("the Wild's names: mix and match 1-3", () => {
 	it("appends a word, up to three, and never the same word twice", () => {
 		expect(combineNameChip("", "Red", 3)).toBe("Red");

@@ -64,7 +64,7 @@ import {mountScrollFrost} from "../../utils/scroll-frost.js";
 import {withSheetSizeMemory} from "../../utils/sheet-size.js";
 import { personalSymbolAction, displayPersonalSymbol } from "./personal-symbol.js";
 import { crewExists, crewBackgroundTag, effectiveCrewSize, customGroupSize, crewAnonymousCount, crewAnonMemberLabel, crewIndividualLabel, customGroupMemberLabel, customGroupPresent, groupFollowerMembers, groupFollowerStanding, CREW_SIZE_MAX } from "../../utils/crew.js";
-import {resolvedFlags, resolvedFlagProperty, STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "./StonetopFlags.js";
+import {resolvedFlags, resolvedFlagProperty, STONETOP_SCOPE, ITEM_FLAG_SCOPE, HP_CEILING_OPTION} from "./StonetopFlags.js";
 import { FOLLOWER_FLAGS as _FOLLOWER_FLAGS, fillFollowerSlug as _fillSlug, followerDetailBase as _followerDetailBase, clampFollowerHp as _clampHp, intOverrideOrNull as _intOverrideOrNull, companionBase, crewMemberHpMax, followerHpMaxOverride, ownedBeastSlugs, orderedCustomFollowers } from "./follower-roster.js";
 import {createArcanumItem} from "../../item/createArcanum.js";
 import {rollStat, sign, classifyResult, messageOfRoll} from "../../utils/roll-engine.js";
@@ -1359,7 +1359,14 @@ export function createStonetopCharacterSheetClass(Base) {
 		async getData() {
 			this._ownedMoveNameCache = null;
 			const context = await super.getData();
-			context.system ??= this.actor.system;
+			// A COPY, never the document's own `system`: the computed vitals are mirrored into it below for
+			// the inputs, and writing them into the live DataModel changed the document in memory on this
+			// client only. That hid the stored numbers from StonetopCharacter#syncStoredVitals here and
+			// left them stale everywhere else. Core's own copy (`context.data`, a fresh toObject) when there
+			// is one; else the live one with `attributes`, the subtree the mirror writes into, cloned.
+			const liveSystem = this.actor.system ?? {};
+			context.system ??= context.data?.system
+				?? { ...liveSystem, attributes: foundry.utils.deepClone(liveSystem.attributes ?? {}) };
 			context.isCharacter = this.actor.type === "character";
 			// The viewer reaches the snapshot because a hidden artifact's tags are concealed
 			// while it's built, not while it's rendered (Book I p.430) — the GM sees what they
@@ -1662,9 +1669,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			// rebuild the whole snapshot on every render. 0 means "no playbook, nothing to mirror".
 			this._computedMaxHp = context.stonetop.playbook ? v.hp.max : 0;
 			// Same deal for armor (the same mirror), and for a sharper reason: the setProperty
-			// above writes the LIVE actor.system DataModel (getData leaves `context.system` unset,
-			// so line ~1187 aliases it to the document's own), which persists nothing and is only
-			// ever true on a client that has rendered this sheet. The combat flow reads the STORED
+			// above writes only this render's copy of `system` (see the top of getData), which
+			// persists nothing. The combat flow reads the STORED
 			// `attributes.armor.value` off the document — on the GM's client, who has never opened
 			// the player's sheet, that was the schema initial of 0, so a PC in mail and a shield
 			// soaked nothing. Unlike max HP, 0 is a legitimate computed armor (unarmored), so this
@@ -6362,6 +6368,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			// The playbook's preselected possessions (the Judge's Scribe's tools) are held from
 			// now on, whether or not onboarding runs, so their gear arrives with the drop.
 			await target.ensurePossessionGrants();
+			// The drop seeded the playbook's printed HP; play starts at the REAL max (Book I p.53).
+			await target.startAtFullHp();
 			(redirectedTo?.sheet ?? this).render(false);
 		}
 
@@ -11691,6 +11699,33 @@ export function createStonetopCharacterSheetClass(Base) {
 			this.render(false);
 		}
 
+		// ── Current HP, never over the max ─────────────────────────────────────────
+		// "Your current HP can never go higher than your max" (Book I p.53). The HP box is a named
+		// input, so a typed number reaches the document through the form's own submit; it is capped
+		// here at the max this render worked out (_computedMaxHp, 0 with no playbook: nothing to cap
+		// against). The box is put right too, so it never shows a number that was not saved. A cap is
+		// not damage taken, even where it takes an old number over a fallen max down (HP_CEILING_OPTION).
+		_getSubmitData(updateData = {}) {
+			const data = super._getSubmitData(updateData);
+			const path = "system.attributes.hp.value";
+			const max = Number(this._computedMaxHp) || 0;
+			this._hpCapped = false;
+			if (max > 0 && data && path in data && Number(data[path]) > max) {
+				data[path] = max;
+				this._hpCapped = true;
+				const input = this.form?.querySelector?.(`input[name="${path}"]`);
+				if (input) input.value = String(max);
+			}
+			return data;
+		}
+
+		async _updateObject(event, formData) {
+			if (!this._hpCapped) return super._updateObject(event, formData);
+			this._hpCapped = false;
+			if (!this.object?.id) return;
+			return this.object.update(formData, { [HP_CEILING_OPTION]: true });
+		}
+
 		// ── Max HP ─────────────────────────────────────────────────────────────────
 		// Hand-editing the max-HP field. The number in the box is derived (playbook + move
 		// bonuses - a Thrall's Marks), so the difference between it and what was typed is what
@@ -12761,6 +12796,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (pick) await character.setCreationMark(move, pick);
 			}
 			await this._applyBackgroundNeighbors(backgroundSetup, selections, { previousTraits: previousNeighborTraits });
+			// Once the stats, moves and possessions are all in: a new playbook starts at its REAL max
+			// HP, not the printed number seeded above (Book I p.53).
+			if (newPlaybook) await character.startAtFullHp();
 			this.render(false);
 		}
 

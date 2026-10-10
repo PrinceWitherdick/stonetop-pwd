@@ -33,6 +33,7 @@ import {
 	BATTLE_JOY, BATTLE_JOY_FLAG, BATTLE_JOY_DROPPED_OPTION, BATTLE_JOY_REGAIN, BATTLE_JOY_REGAIN_CHOICE, battleJoyEndsUnrolled,
 } from "../actors/character/battle-joy.js";
 import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
+import { HP_CEILING_OPTION } from "../actors/character/StonetopFlags.js";
 import { UNSTOPPABLE } from "../actors/character/deaths-door.js";
 import { keepsFightingAtZero } from "../actors/character/unstoppable.js";
 import { answersFor, openZeroHpMove } from "../hooks/DeathsDoorPrompt.js";
@@ -159,6 +160,9 @@ export function installBattleJoyOnHurt({ hooks = globalThis.Hooks } = {}) {
 		["preUpdateActor", hooks.on("preUpdateActor", (actor, changes, options) => {
 			try {
 				if (actor?.type !== "character") return;
+				// HP taken down to a max that fell (a soul-wound, a Thrall's Mark) or a typed number capped at
+				// it: no blood spilled, so nothing to offer (StonetopFlags.js#HP_CEILING_OPTION).
+				if (options?.[HP_CEILING_OPTION]) return;
 				// The HP test first: most character updates touch no HP, and it costs nothing to ask.
 				const raw = globalThis.foundry?.utils?.getProperty?.(changes, "system.attributes.hp.value");
 				if (raw === undefined || !ownsLearnedMoveNamed(actor, BATTLE_JOY)) return;
@@ -358,8 +362,11 @@ async function regainBattleJoyHp(actor) {
 	const hp = Number(actor.system?.attributes?.hp?.value) || 0;
 	const to = healTo(hp, roll.total, await character.computedMaxHp());
 	if (to > hp) await character.restoreHp(to, BATTLE_JOY);
+	// The card says what the sheet now holds, read back after the write: the restore can land on less
+	// than asked (a Thrall's Torment's Blessing halves every heal, deaths-door-actor.js#recoveredHpTo).
+	const now = Number(actor.system?.attributes?.hp?.value) || 0;
 	await roll.toMessage({
 		speaker: ChatMessage.getSpeaker({ actor }),
-		flavor:  rolledTotalCard(roll, BATTLE_JOY, localize(`${KEY}.regainedLabel`), format(`${KEY}.regainedLine`, { from: hp, to })),
+		flavor:  rolledTotalCard(roll, BATTLE_JOY, localize(`${KEY}.regainedLabel`), format(`${KEY}.regainedLine`, { from: hp, to: Math.max(hp, now) })),
 	});
 }

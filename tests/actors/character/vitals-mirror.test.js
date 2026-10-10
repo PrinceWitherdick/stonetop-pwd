@@ -221,7 +221,24 @@ describe("StonetopCharacter#syncStoredVitals", () => {
 	it("brings the HP down to a max that drops below it, in the same write", async () => {
 		const { self, actor } = typed({ armor: { value: 2, unpierceable: 0 }, hp: { value: 18, max: 18 } }, { armor: 2, unpierceable: 0, maxHp: 16 });
 		await sync(self);
-		expect(actor.update).toHaveBeenCalledWith({ "system.attributes.hp.max": 16, "system.attributes.hp.value": 16 }, { stonetopLedger: true });
+		// Tagged as a cap, not a blow: the Battle Joy offer must not read it as blood spilled (wave 4 HP-3).
+		expect(actor.update).toHaveBeenCalledWith({ "system.attributes.hp.max": 16, "system.attributes.hp.value": 16 }, { stonetopLedger: true, stonetopHpCeiling: true });
+	});
+
+	// Wave 4 HP-1: the sheet's getData used to write the computed numbers into the LIVE `system` on the
+	// client that rendered it, so a comparison against `system` came out equal and nothing was stored.
+	it("compares against the stored source, not numbers a render wrote into the live document", async () => {
+		const { self, actor } = typed({ armor: { value: 3, unpierceable: 0 }, hp: { value: 18, max: 16 } }, { armor: 3, unpierceable: 0, maxHp: 16 });
+		actor._source = { system: { attributes: { armor: { value: 2, unpierceable: 0 }, hp: { value: 18, max: 18 } } } };
+		expect(await sync(self)).toBe(true);
+		expect(actor.update).toHaveBeenCalledWith({
+			"system.attributes.armor.value": 3,
+			"system.attributes.armor.unpierceable": 0,
+			"system.attributes.armor.conditional": 0,
+			"system.attributes.armor.conditionalSource": "",
+			"system.attributes.hp.max": 16,
+			"system.attributes.hp.value": 16,
+		}, { stonetopLedger: true, stonetopHpCeiling: true });
 	});
 
 	// #20: the clamp is HP lost, so it is logged, naming the Mark when one did it.

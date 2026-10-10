@@ -160,6 +160,15 @@ describe("installBattleJoyOnHurt", () => {
 		expect(other).toEqual({});
 	});
 
+	// Wave 4 HP-3: HP taken down to a max that fell (or a typed number capped at it) is no blood spilled.
+	it("leaves alone HP a fallen max takes with it", () => {
+		const hooks = fakeHooks();
+		installBattleJoyOnHurt({ hooks });
+		const options = { stonetopHpCeiling: true };
+		hooks.fire("preUpdateActor", heavy(), { system: { attributes: { hp: { value: 6 } } } }, options);
+		expect(options[HP_LOST_OPTION]).toBeUndefined();
+	});
+
 	// Dropping to 0 HP ended it in the same write (hooks/DeathsDoorPrompt.js); the chat line is said
 	// once, by whoever made the change.
 	it("says a Heavy who dropped has come out of their Battle Joy, on the writer's client only", async () => {
@@ -402,6 +411,16 @@ describe("the Battle Joy roll card's buttons", () => {
 		const { duvin, message } = rolled({ hp: 11 });
 		await settleBattleJoyResult(message, duvin, "regain");
 		expect(duvin.typedActor.restoreHp).toHaveBeenCalledWith(12, "Battle Joy");
+	});
+
+	// A Thrall's Torment's Blessing halves the heal inside restoreHp (rounded up): the card reads the
+	// sheet back, so it says 7 → 9, not the 7 → 10 that was asked.
+	it("says what the sheet now holds when the heal is halved", async () => {
+		const { duvin, message } = rolled({ hp: 7 });
+		duvin.typedActor.restoreHp = vi.fn(async to => { duvin.system.attributes.hp.value = 7 + Math.ceil((to - 7) / 2); return true; });
+		await settleBattleJoyResult(message, duvin, "regain");
+		expect(duvin.typedActor.restoreHp).toHaveBeenCalledWith(10, "Battle Joy");
+		expect(posted.at(-1).flavor).toContain("HP 7 → 9");
 	});
 
 	it("the 6- marks the chosen debility, once, and says so", async () => {

@@ -45,8 +45,8 @@ import {normalizeWound as _normalizeWound, normalizeWoundList} from "./wound-rec
 import {moveMarkBudget, markOptionCapNote} from "./move-mark-budget.js";
 import {markEntries, filledMarks, filledMarkCount, trimEmptyTail, oncePerLevelCautions, ONCE_PER_LEVEL_MARKS} from "./pfg-marks.js";
 import {MARK_STAT_CAPS} from "./stat-rules.js";
-import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG, resolvedFlags, readableFlags, resolvedFlagProperty} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, UNSTOPPABLE, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, lostToTheGm, stateOnTakingInsert, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
+import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG, HP_CEILING_OPTION, resolvedFlags, readableFlags, resolvedFlagProperty} from "./StonetopFlags.js";
 import {heroDisplayName, WBH_HERO_FLAG} from "./WouldBeHeroAsterisk.js";
 import {tookBackground} from "./took-background.js";
 import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, moveLearnedIn, switchedOffGranter, ownedMoveNames, ownsMoveNamed, bookMoveName} from "./owns-move.js";
@@ -4823,7 +4823,12 @@ export class StonetopCharacter {
 	async syncStoredVitals(vitals = null) {
 		const worked = vitals ?? await this.computedVitals();
 		const { armor, unpierceable, maxHp, conditional = 0, conditionalSource = "" } = worked;
-		const attrs = this._actor.system?.attributes ?? {};
+		// Compared against the STORED fields (`_source`), never the live `system`: the sheet's getData used
+		// to write the computed numbers into the live DataModel on the client that rendered it, which made
+		// every comparison below come out equal there and left the stored armor, max HP and die stale for
+		// everyone else (the GM's Apply, the token bar, the Fight tab). The live values are only a fallback
+		// for a document with no source (a test double).
+		const attrs = this._actor._source?.system?.attributes ?? this._actor.system?.attributes ?? {};
 		const update = {};
 		const floor = Number(unpierceable) || 0;
 		// The fiction-gated part of the total travels with it, for the same reason the floor does: the
@@ -4858,7 +4863,11 @@ export class StonetopCharacter {
 		if (die && die !== String(attrs.damage?.value ?? "").trim()) update["system.attributes.damage.value"] = die;
 		if (!Object.keys(update).length) return false;
 		const hpBefore = Number(attrs.hp?.value) || 0;
-		const written = await this._actor.update(update, { stonetopLedger: true });
+		const written = await this._actor.update(update, {
+			stonetopLedger: true,
+			// HP a falling max takes with it is not a blow landing (StonetopFlags.js#HP_CEILING_OPTION).
+			...(update["system.attributes.hp.value"] !== undefined ? { [HP_CEILING_OPTION]: true } : {}),
+		});
 		// The mirror stays quiet, but HP taken down with a falling max is HP the character LOST, and
 		// nothing else files it. One line for it, naming what lowered the max where that is known.
 		//
@@ -6036,8 +6045,30 @@ export class StonetopCharacter {
 			? { "system.attributes.hp.adjustment": target - base, "system.attributes.hp.max": target }
 			: { "system.attributes.hp.max": target };
 		if (this.hp > target) update["system.attributes.hp.value"] = target;
-		await this._actor.update(update);
+		// The HP that goes with a lowered max is not damage taken (StonetopFlags.js#HP_CEILING_OPTION).
+		if (update["system.attributes.hp.value"] !== undefined) await this._actor.update(update, { [HP_CEILING_OPTION]: true });
+		else await this._actor.update(update);
 		return target;
+	}
+
+	/**
+	 * A new playbook starts at full HP: "Start play with your current HP equal to your max HP" (Book I
+	 * p.53). The REAL max (computedVitals), not the playbook's printed number the drop seeded: a hand-set
+	 * adjustment survives a change of playbook (it records an arcanum's or a post-death insert's lasting
+	 * cost or boon, and those stay), and so do move bonuses still held. The stored max is written beside
+	 * it, as syncStoredVitals would. Ledger-quiet: the playbook change already filed its HP. Returns the
+	 * HP now in play (unchanged with no playbook to work a max from).
+	 */
+	async startAtFullHp() {
+		const { maxHp } = await this.computedVitals();
+		if (!(maxHp > 0)) return this.hp;
+		const update = {};
+		if (this.hp !== maxHp) update["system.attributes.hp.value"] = maxHp;
+		if (this.storedMaxHp !== maxHp) update["system.attributes.hp.max"] = maxHp;
+		if (!Object.keys(update).length) return maxHp;
+		// A negative adjustment takes the seeded number DOWN to the real max, which is not a blow landing.
+		await this._actor.update(update, { stonetopLedger: true, [HP_CEILING_OPTION]: true });
+		return maxHp;
 	}
 
 	/** The hand-set damage die, or null when the die follows the playbook. */

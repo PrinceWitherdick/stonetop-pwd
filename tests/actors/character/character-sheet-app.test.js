@@ -151,6 +151,7 @@ function makeCharacterMock(actor) {
 		onRoll: vi.fn(async () => true),
 		ensureStartingMoves: vi.fn(),
 		ensurePossessionGrants: vi.fn(),
+		startAtFullHp: vi.fn(),
 		backgroundState: () => ({ slug: background.selectedSlug, setupChoices: {} }),
 		backgroundMovesDropped: vi.fn(async () => []),
 		settleBackgroundMoves: vi.fn(async () => {}),
@@ -1177,6 +1178,65 @@ describe("StonetopCharacterSheet damage die editing", () => {
 		const context = await sheet.getData();
 		expect(context.system.attributes.damage.value).toBe("d8");
 	});
+
+	// Wave 4 HP-1: written into the live document, the mirrored numbers made the stored-vitals mirror
+	// compare equal on this client and store nothing, leaving the GM's Apply and token bar stale.
+	it("getData mirrors into a copy of system, never the live document", async () => {
+		installGetDataGlobals();
+		const actor = makeActor();
+		actor.typedActor.playbook = vi.fn(async () => null);
+		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.buildSnapshot = vi.fn(async () => {
+			const snap = minimalSheetSnapshot({});
+			snap.vitals.damage = "d8";
+			snap.vitals.armor = 3;
+			return snap;
+		});
+		const liveArmor = actor.system.attributes.armor?.value;
+		const liveDamage = actor.system.attributes.damage?.value;
+		const sheet = makeSheet(actor);
+
+		const context = await sheet.getData();
+		expect(context.system).not.toBe(actor.system);
+		expect(context.system.attributes.armor.value).toBe(3);
+		expect(actor.system.attributes.armor?.value).toBe(liveArmor);
+		expect(actor.system.attributes.damage?.value).toBe(liveDamage);
+	});
+});
+
+// Wave 4 HP-2: "your current HP can never go higher than your max" (Book I p.53).
+describe("StonetopCharacterSheet typed HP is capped at the max", () => {
+	function capSheet(submitted, computedMax) {
+		const update = vi.fn(async () => {});
+		const Base = class {
+			constructor() { this.object = { id: "a1", update }; }
+			get actor() { return { typedActor: {}, getFlag: () => undefined }; }
+			_getSubmitData() { return { ...submitted }; }
+			async _updateObject(_e, formData) { return update(formData); }
+		};
+		const sheet = new (createStonetopCharacterSheetClass(Base))();
+		sheet._computedMaxHp = computedMax;
+		return { sheet, update };
+	}
+
+	it("caps a typed HP over the computed max, and tags the write as a cap", async () => {
+		const { sheet, update } = capSheet({ "system.attributes.hp.value": 25, name: "Duv" }, 20);
+		const data = sheet._getSubmitData();
+		expect(data["system.attributes.hp.value"]).toBe(20);
+		await sheet._updateObject(null, data);
+		expect(update).toHaveBeenCalledWith(data, { stonetopHpCeiling: true });
+	});
+
+	it("leaves HP at or under the max alone, and a character with no playbook (no max) too", async () => {
+		const under = capSheet({ "system.attributes.hp.value": 12 }, 20);
+		const data = under.sheet._getSubmitData();
+		expect(data["system.attributes.hp.value"]).toBe(12);
+		await under.sheet._updateObject(null, data);
+		expect(under.update).toHaveBeenCalledWith(data);
+
+		const none = capSheet({ "system.attributes.hp.value": 25 }, 0);
+		expect(none.sheet._getSubmitData()["system.attributes.hp.value"]).toBe(25);
+	});
 });
 
 describe("StonetopCharacterSheet Details tab section visibility", () => {
@@ -1912,6 +1972,8 @@ describe("StonetopCharacterSheet._onDropPlaybook", () => {
 		expect(actor.typedActor.ensureStartingMoves).toHaveBeenCalled();
 		// Its preselected possessions' gear arrives with the drop, not only through onboarding.
 		expect(actor.typedActor.ensurePossessionGrants).toHaveBeenCalled();
+		// And play starts at the real max HP (Book I p.53).
+		expect(actor.typedActor.startAtFullHp).toHaveBeenCalled();
 	});
 
 	it("still takes the three real inserts as inserts", async () => {
