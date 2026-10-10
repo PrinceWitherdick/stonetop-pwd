@@ -6,10 +6,11 @@
 // doom track, and/or custom player-facing moves, plus the damage worksheet (die +
 // effect picks, or outright certain death).
 //
-// Hazards share threats' storage/visibility architecture verbatim: one hazard per
-// world JournalEntry in a per-steading folder, reveal = the ENTRY's ownership flip,
-// UI-level hiding only (see ThreatPageModel.js and threat-store.js for the full
-// rationale; the same caveats apply).
+// Hazards share threats' storage/visibility architecture verbatim: every hazard is a
+// page of the steading's ONE "<Steading> Hazards" JournalEntry (steading flag
+// `hazardsEntryId`), which stays `ownership.default: NONE`. There is no player reveal;
+// hazards are pure GM prep, and the hiding is UI-level only (see ThreatPageModel.js and
+// threat-store.js for the full rationale; the same caveats apply).
 import { HAZARD_DAMAGE_DICE, HAZARD_DAMAGE_EFFECTS } from "../hazards/hazard-data.js";
 import { doomTrackFields, customPlayerMovesField } from "./shared-page-fields.js";
 

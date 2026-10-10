@@ -64,4 +64,16 @@ describe("hazardDamageLine (stored system data -> card line)", () => {
 	it("prefers certain death over the worksheet", () => {
 		expect(hazardDamageLine({ damageDie: "d4", certainDeath: true })).toMatch(/Death's Door/);
 	});
+
+	// p.383 is "choose all that apply", so both piercing rows stay tickable, but the line carries
+	// one piercing value: the larger, which already covers the smaller.
+	it("prints one piercing tag, the larger, when both piercing rows are ticked", () => {
+		expect(hazardDamageLine({ damageDie: "d8", damageEffects: ["pierce1", "pierce3"] }))
+			.toBe("1d8 (3 piercing, messy)");
+		expect(hazardDamageLine({ damageDie: "d8", damageEffects: ["pierce3", "pierce1", "forceful"] }))
+			.toBe("1d8 (3 piercing, messy, forceful)");
+		expect(hazardDamageLine({ damageDie: "d6", damageEffects: ["pierce1"], damageExtra: "2 piercing, area" }))
+			.toBe("1d6 (2 piercing, messy, area)");
+		expect(hazardDamageLine({ damageDie: "d6", damageEffects: ["pierce1"] })).toBe("1d6 (1 piercing, messy)");
+	});
 });

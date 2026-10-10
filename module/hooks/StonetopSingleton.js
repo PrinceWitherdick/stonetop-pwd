@@ -73,6 +73,13 @@ export function registerStonetopSingletonHooks() {
 		// catches every path: a macro, a duplicate, a compendium import or a drag-drop all pass
 		// through preCreateActor and none of them go near our picker.
 		if (isGmToolkitData(data ?? actor)) {
+			// GM-only even when the world has none yet. Players hold Create Actor on a fresh
+			// world, and a toolkit a player made would be theirs: `theGmToolkit()` would adopt it,
+			// the GM's "C" key would be pointed at it, and the delete guard would keep it.
+			if (!game.user?.isGM) {
+				ui.notifications?.warn("Only the GM can create the GM Toolkit.");
+				return false;
+			}
 			if (!gmToolkitActors().length) return;
 			ui.notifications?.warn("This world already has a GM Toolkit.");
 			return false;
