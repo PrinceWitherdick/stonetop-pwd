@@ -69,7 +69,6 @@ const QUOTED = {
 		// dialog turned out to be unreachable and the guide was dropped; the steading sheet's
 		// copy of the same rules line, which a player really does read, is still waived below.
 		"\"6-: you find yourself in a spot — the GM will describe it or ask yo",
-		"equence and they'll eventually go &mdash; otherwise they break free of your",
 		"quired. Stabilizing isn't healing — that takes Convalesce.</p>",
 	],
 	"module/actors/character/deaths-door.js": [

@@ -20,7 +20,7 @@ describe("Servant of Daagon aspect tables", () => {
 	});
 
 	// The chosen moves become the batch's move lines as written, so they are the book's
-	// words (Book II p.560), not a paraphrase.
+	// words (Book II p.561), not a paraphrase.
 	it("words the moves as the book prints them", () => {
 		expect(SERVANT_MOVE_OPTIONS).toEqual([
 			"Wriggle free of danger/restraint",

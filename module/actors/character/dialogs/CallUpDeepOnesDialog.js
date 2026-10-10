@@ -44,7 +44,9 @@ export class CallUpDeepOnesDialog extends StonetopDialog {
 	 * @param {Function} onApply - async ({ input, cost }) => void
 	 */
 	constructor(actor, ring, onApply, options = {}) {
-		super(options);
+		// One window per character, not one per client: a GM running two Ring-bearers gets two
+		// windows with two DOM ids rather than two windows fighting over one (perDocumentOptions).
+		super(StonetopDialog.perDocumentOptions("stonetop-call-up-deep-ones", actor?.id, options));
 		this._actor       = actor;
 		this._ring        = ring ?? {};
 		this._onApply     = onApply;
@@ -61,7 +63,6 @@ export class CallUpDeepOnesDialog extends StonetopDialog {
 
 	static get defaultOptions() {
 		return foundry.utils.mergeObject(super.defaultOptions, {
-			id:        "stonetop-call-up-deep-ones",
 			title:     "Call Up the Deep Ones",
 			template:  "systems/stonetop-pwd/templates/dialogs/call-up-deep-ones.hbs",
 			// Rail + panel, at a fixed height so switching panels never resizes the

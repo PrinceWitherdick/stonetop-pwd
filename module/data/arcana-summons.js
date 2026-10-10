@@ -292,6 +292,9 @@ export const ARCANA_SUMMONS = {
 	},
 
 	"ring-of-daagon": {
+		// The Ring becomes a follower only "when you make the last mark" (Book II p.560): its summon
+		// waits on the card being unlocked (servant-of-daagon.js#summonUnlocked).
+		untilUnlocked: true,
 		followers: [
 			{
 				name:         "Ring of Daagon",

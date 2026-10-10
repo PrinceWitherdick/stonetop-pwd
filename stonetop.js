@@ -48,6 +48,7 @@ import { wireFollowerDeathsDoor } from "./module/actors/character/follower-death
 import { FOLLOWER_LOYALTY_QUERY, handleFollowerLoyaltyQuery } from "./module/actors/character/follower-bond.js";
 import { FOLLOWER_HANDOFF_QUERY, handleFollowerHandoffQuery } from "./module/actors/character/follower-handoff.js";
 import { wireImproviseCard, wireMarkConsequenceCard } from "./module/actors/character/arcana-seeker-moves.js";
+import { wireSendBackCard } from "./module/actors/character/send-them-back.js";
 import { wireInvocationEffects, BATH_QUERY, handleBathQuery } from "./module/actors/character/invocation-apply.js";
 import { installBattleHolds } from "./module/combat/battle-holds.js";
 import { hideAttackFxForReducedMotion } from "./module/combat/attack-fx.js";
@@ -2517,6 +2518,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// "Mark a consequence" as a move's cost (the Ring of Daagon's Call Up and Send Them Back):
 	// the Ring's next Consequence, through Conduit of Power / Overchannel's ask, once per card.
 	wireMarkConsequenceCard(message, html);
+	// Send Them Back (the Ring of Daagon's servants): the row of the tier the card ends on settles the
+	// batch, once per card.
+	wireSendBackCard(message, html);
 	// We Happy Few, every tier: who heard the speech holds its Inspiration, once per card.
 	wireSpeechCard(message, html);
 	// "You or an ally gain advantage" (Everything Burns' 10+, Work With What You've Got's 7+, and the posted

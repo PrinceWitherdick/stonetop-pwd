@@ -1699,6 +1699,7 @@
           "namePlaceholder": "e.g. Reckless Charge",
           "nameRequired": "Your move needs a name.",
           "worldCreated": "Created move \"{name}\". Drag it onto a character sheet to add it.",
+          "worldCopiesHint": "Copies already on character sheets keep their old text. To update one, remove the old copy from that sheet, then drag this move onto it again.",
           "descriptionLabel": "What happens? (the trigger and effect)",
           "descriptionPlaceholder": "When you…",
           "descriptionHint": "Wrap the trigger in ***three asterisks*** for the book's bold italic. **Two** make bold, *one* makes italic. A blank line starts a new paragraph.",

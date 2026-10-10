@@ -40,7 +40,8 @@ import {BackgroundNeighborsDialog, storedNeighborPicks, storedNeighborTraits, tr
 import {BackgroundAnswersDialog} from "./dialogs/BackgroundAnswersDialog.js";
 import {SeekerMajorArcanumDialog} from "./dialogs/SeekerMajorArcanumDialog.js";
 import {minorArcanaHeldElsewhere} from "./seeker-collection.js";
-import {RING_SOURCE_UUID, SERVANT_SOURCE_UUID, buildServantFollower} from "../../data/servant-of-daagon.js";
+import {RING_SOURCE_UUID, SERVANT_SOURCE_UUID, buildServantFollower, findRingFollower, summonUnlocked, RING_ARCANUM_SLUG} from "../../data/servant-of-daagon.js";
+import {SEND_THEM_BACK, sendBackRollOptions} from "./send-them-back.js";
 import {grantedWeaponForMove, weaponTraitText} from "../../data/weapons.js";
 import {grantedWeaponAttackFor, rollCharacterDamageAt, rollFollowerDamageAt, crewBlow} from "../../combat/attack-flow.js";
 import {offerBattleJoyOnDamage, endBattleJoyUnrolled} from "../../combat/battle-joy-offer.js";
@@ -154,7 +155,7 @@ import {BlessedMarksDialog} from "./dialogs/BlessedMarksDialog.js";
 import {wrapGlyphTextContainers, wrapStonetopGlyphsInEl} from "../../utils/glyphs.js";
 import {prepareMoveHoverBody} from "../../utils/move-hover.js";
 import {StonetopAutocomplete} from "../../utils/autocomplete.js";
-import {canAuthorCustomMoves, canCreateArcana} from "../../utils/authoring-gates.js";
+import {canAuthorCustomMoves, canAuthorCustomMovesOn, canCreateArcana} from "../../utils/authoring-gates.js";
 import {enrichMoveRefsInEl, fetchMoveRef} from "../../utils/move-refs.js";
 import {buildRelationshipRows, wireRelationshipTable, wireRelationshipLinks, relationshipDropResult, relationshipDropNotice, wireRelationshipDropHighlight} from "../../utils/relationship-hearts.js";
 import {wireAvatarPreview, removeAvatarPreview} from "../../utils/avatar-preview.js";
@@ -747,18 +748,6 @@ function _makeLoyaltyPips(val, max = 3) {
 	return Array.from({ length: max }, (_, i) => ({ index: i, filled: i < val }));
 }
 
-// The Ring of Daagon and its Servants share one Loyalty pool (Book II). Find the Ring
-// follower in a customFollowers map so a Servant batch's pips + Spend button act on the
-// Ring's track. Callers pass an in-hand map (getData) or a freshly-read flag.
-function findRingFollower(map = {}) {
-	const entry = Object.entries(map).find(([, f]) => f?.sourceUuid === RING_SOURCE_UUID);
-	return {
-		id:      entry?.[0] ?? null,
-		name:    entry?.[1]?.name || "the Ring of Daagon",
-		loyalty: Math.max(0, Number(entry?.[1]?.loyalty) || 0),
-		hasRing: !!entry,
-	};
-}
 
 // Readiness circles (Defend, p.216 / followers p.469). The Defend move holds up
 // to 3 (10+) or 1 (7-9); a borne shield adds +1 to either, so the cap is 4 with
@@ -1909,6 +1898,8 @@ export function createStonetopCharacterSheetClass(Base) {
 					// card instead, so they're excluded here — the Ring's button adds just the Ring.
 					const followers = (item.summonFollowers ?? []).filter(f => !f.viaCallUp);
 					if (!followers.length) continue;
+					// The Ring becomes a follower only "when you make the last mark" (Book II p.560).
+					if (!summonUnlocked(item.slug, item.unlocked)) continue;
 					const names   = joinNames(followers.map(f => f.name));
 					const plural  = followers.length > 1;
 					// A repeatable follower (the Ring's Servants) can always be summoned
@@ -1937,7 +1928,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Authoring custom moves can be restricted to the GM (world setting). When
 			// restricted, players still see/roll existing custom moves but get no "+"
 			// button or edit pencils. Existing moves always render regardless.
-			context.stonetop.canAuthorCustomMoves = canAuthorCustomMoves();
+			// And only on a sheet this viewer can write: the handlers refuse a read-only sheet, so an
+			// observer is not shown a "Create a move" button that does nothing.
+			context.stonetop.canAuthorCustomMoves = canAuthorCustomMovesOn(this.isEditable);
 			// Love letters are GM prep (Book I p.568): only the GM gets the edit/delete
 			// affordances on a letter's card. Players read and resolve their own letters.
 			context.stonetop.canAuthorLoveLetters = game.user.isGM;
@@ -3020,7 +3013,12 @@ export function createStonetopCharacterSheetClass(Base) {
 					// Spend button at the Ring's track so spending a Servant's Loyalty decrements the
 					// Ring, and Call Up pays from the same pool. Readiness/ammo stay on the batch's own
 					// id (they key off card.slug), so only Loyalty is shared.
-					if (card.isServant && ringId) {
+					if (card.isServant && card.brokenFree) {
+						// "This batch breaks free of your control and are no longer followers" (Book II
+						// p.561): no Loyalty, shared or own, and so no Order (canOrder rides the Loyalty
+						// track below) and no seat in a Struggle as One. The card stays as a record.
+						card.loyalty = null;
+					} else if (card.isServant && ringId) {
 						card.sharedLoyalty = true;
 						card.loyalty       = _makeLoyaltyPips(ringLoyaltyVal);
 						card.loyaltySlug   = ringId;
@@ -5130,7 +5128,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-callup-deep-ones").on("click", () => this._onCallUpDeepOnes());
 			html.find(".stonetop-send-back").on("click", ev => {
 				const { slug, followerName } = ev.currentTarget.dataset;
-				this._onSendServantsBack(slug, followerName);
+				this._onSendServantsBack(slug, followerName, { shiftKey: ev.shiftKey });
 			});
 			// Have What They Need (a follower produces an item) / restock the crew's Supplies.
 			html.find(".stonetop-follower-have-need").on("click", ev => {
@@ -9013,6 +9011,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			// button adds just the Ring itself.
 			const followers = arcanaSummonFollowers(arcanum)?.filter(f => !f.viaCallUp);
 			if (!followers?.length) return;
+			// "When you make the last mark, you unlock the ring's mysteries ... The ring itself becomes a
+			// follower" (Book II p.560). The Ring only: every other summon is as it was.
+			if (!summonUnlocked(slug, await this._stonetopCharacter.isArcanumUnlocked?.(slug))) {
+				ui.notifications?.warn?.("Make the last mark on the Ring of Daagon first: then the Ring becomes a follower.");
+				return;
+			}
 			const existing = this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {};
 			const present  = new Set(Object.values(existing).map(f => f?.sourceUuid).filter(Boolean));
 			// `repeatable` followers (e.g. the Ring of Daagon's Servants) can be
@@ -9086,6 +9090,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				ui.notifications?.warn?.("Add the Ring of Daagon as a follower first, then Call Up the Deep Ones.");
 				return;
 			}
+			// "When you make the last mark, you unlock the ring's mysteries and may Call Up the Deep Ones"
+			// (Book II p.560): a Ring follower added before then does not open the door early.
+			if (!summonUnlocked(RING_ARCANUM_SLUG, await this._stonetopCharacter.isArcanumUnlocked?.(RING_ARCANUM_SLUG))) {
+				ui.notifications?.warn?.("Make the last mark on the Ring of Daagon first: then you may Call Up the Deep Ones.");
+				return;
+			}
 			new CallUpDeepOnesDialog(this.actor, ring, ({ input, cost }) => this._applyCallUp(input, cost)).render(true);
 		}
 
@@ -9128,18 +9138,21 @@ export function createStonetopCharacterSheetClass(Base) {
 			this.render(false);
 		}
 
-		// Send Them Back (roll +CHA): 10+ they go now; 7-9 they go but do some harm; 6-
-		// they resist — spend their (shared) Loyalty / mark a consequence, or they break free.
-		async _onSendServantsBack(slug, name) {
+		// Send Them Back (Book II p.561): a +CHA roll like any other, through the one path every direct
+		// roll takes (StonetopCharacter#onDirectStatRoll: the sticky mode or the pre-roll window's, ongoing,
+		// what the next roll is owed, the debilities). What the result does is settled on the card's own
+		// buttons, which read the tier the card ends on (send-them-back.js), not in a window opened now.
+		async _onSendServantsBack(slug, name, { shiftKey = false } = {}) {
 			if (!this.isEditable || !slug) return;
-			const who = name
-				|| this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}.name`)
-				|| "the servants of Daagon";
+			const batch = this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}`);
+			// "This batch breaks free of your control and are no longer followers": nothing left to send back.
+			if (!batch || batch.brokenFree) return;
+			const who = name || batch.name || "the servants of Daagon";
 			// A use of the Ring, so Mind Over Magic may swap its +CHA for +INT: asked only when it can.
 			const alt = mindOverMagicRoll(this.actor, "cha");
 			const stat = alt
 				? await askWithButtons({
-					title:   "Send Them Back",
+					title:   SEND_THEM_BACK,
 					content: `<p>Which stat do you roll to send <strong>${escHtml(who)}</strong> back?</p>`,
 					buttons: [
 						{ key: "cha", label: "Roll +CHA", icon: "fa-dice", value: "cha" },
@@ -9148,42 +9161,32 @@ export function createStonetopCharacterSheetClass(Base) {
 				})
 				: "cha";
 			if (!stat) return;
-			const rollOptions = {
-				moveName:        "Send Them Back",
-				moveDescription: `<p>When you <strong><em>send them back whence they came</em></strong>, roll +CHA.</p>`,
+			// The pre-roll window every other roll gets; absent `rollMode` in its answer, the sticky selector decides.
+			const prompted = await promptRoll({ title: SEND_THEM_BACK, shiftKey });
+			if (!prompted) return;
+			return this._stonetopCharacter.onDirectStatRoll(stat, {
+				...prompted,
+				...sendBackRollOptions(slug),
+				// Aimed at nobody, whatever is targeted on the map.
+				targets: [],
 				// The book's text says +CHA; the card's pills say why this roll is +INT.
 				...(stat !== "cha" ? { conditionNotes: [`Rolled +INT instead (${alt.source})`] } : {}),
-				moveResults: {
-					success: { value: "They go, now." },
-					partial: { value: "They go, but take their time and likely do some harm on the way out." },
-					failure: { value: "Spend their Loyalty or mark a consequence and they'll eventually go, otherwise this batch breaks free of your control." },
-				},
-			};
-			// A +CHA roll like any other: Miserable (or Dazed, for Mind Over Magic's +INT) puts it at
-			// disadvantage (Book I p.241), through the one seam every debility reaches a roll by.
-			const roll = await rollStat(stat, this.actor,
-				this._stonetopCharacter?.applyDebilityRollMode?.(stat, rollOptions) ?? rollOptions);
-			const total = Number(roll?.total) || 0;
-			if (total >= 10) return this._confirmServantDeparture(slug, who, "They return to the deep at once.");
-			if (total >= 7)  return this._confirmServantDeparture(slug, who, "They go, but take their time and likely do some harm on the way out.");
-			return this._onServantsResist(slug, who);
+			});
 		}
 
-		// Offer to clear a departing batch from the Followers tab.
-		_confirmServantDeparture(slug, who, note) {
-			return confirmOutcome({
-				title:   "Send them back",
-				content: `<p>${note}</p><p>Remove <strong>${escHtml(who)}</strong> from your Followers?</p>`,
-				yes:     { label: "Remove them from Followers", icon: "fa-user-minus" },
-				no:      { label: "Keep them listed" },
-				// They have already gone back; taking them off the tab is the expected next step.
-				defaultYes: true,
-			}).then(ok => ok && this._removeCustomFollower(slug));
-		}
-
-		_removeCustomFollower(slug) {
+		// `updateOptions` names the move that removed it, for the ledger (Send Them Back's card).
+		async _removeCustomFollower(slug, updateOptions = {}) {
+			// The NPC made for the card stays in the sidebar (deleting it is the GM's call), but stops
+			// answering to this card: an orphaned stamp sent the ring's Order to a card that was gone
+			// (wave 3 audit FOL-3, follower-handoff.js#unlinkRemovedFollower). Read before the card goes.
+			const unlink = unlinkRemovedFollower(this.actor, slug);
 			const [key, val] = deletionEntry(`flags.${STONETOP_SCOPE}.customFollowers.${slug}`);
-			return this.actor.update({ [key]: val }).then(() => this.render(false));
+			await this.actor.update({ [key]: val }, updateOptions);
+			if (unlink?.npc?.isOwner) {
+				await unlink.npc.update(unlink.update, { stonetopLedger: true })
+					.catch(err => console.warn("Stonetop | could not unlink the removed follower's NPC", err));
+			}
+			this.render(false);
 		}
 
 		/**
@@ -10086,61 +10089,6 @@ export function createStonetopCharacterSheetClass(Base) {
 					close:   () => resolve(answer),
 				}, { width: 460, classes: this._pastDeathWindowClasses(["dialog", "stonetop", "stonetop-empower-dialog", "stonetop-invoke-dialog"]) }).render(true);
 			});
-		}
-
-		// The 6- branch: pay to make them leave (spend the Ring's shared Loyalty, or mark a
-		// consequence) or let them break free of your control.
-		_onServantsResist(slug, who) {
-			const ring       = this._ringFollowerEntry();
-			const canLoyalty = ring.hasRing && ring.loyalty > 0;
-			const buttons    = {};
-			if (canLoyalty) buttons.loyalty = {
-				icon:     '<i class="fas fa-hand-holding-heart"></i>',
-				label:    `Spend 1 Loyalty (${ring.loyalty})`,
-				callback: () => this._payServantExit(slug, who, "loyalty"),
-			};
-			buttons.consequence = {
-				icon:     '<i class="fas fa-triangle-exclamation"></i>',
-				label:    "Mark a consequence",
-				callback: () => this._payServantExit(slug, who, "consequence"),
-			};
-			buttons.free = {
-				icon:     '<i class="fas fa-skull-crossbones"></i>',
-				label:    "Let them break free",
-				callback: () => this._servantsBreakLoose(slug, who),
-			};
-			new Dialog({
-				title:   "They won't go quietly",
-				content: `<p><strong>${escHtml(who)}</strong> resist. Spend their Loyalty or mark a consequence and they'll eventually go &mdash; otherwise they break free of your control.</p>`,
-				buttons,
-				default: canLoyalty ? "loyalty" : "consequence",
-				render:  bringDialogToFront,
-			}, { classes: ["dialog", "stonetop"] }).render(true);
-		}
-
-		async _payServantExit(slug, who, kind) {
-			const ring = this._ringFollowerEntry();
-			let line;
-			let actions = "";
-			if (kind === "loyalty" && ring.id && ring.loyalty > 0) {
-				await this.actor.setFlag(STONETOP_SCOPE, `customFollowers.${ring.id}.loyalty`, ring.loyalty - 1);
-				line = `<p>You spend <strong>1 Loyalty</strong> from ${escHtml(ring.name)} (now ${ring.loyalty - 1}). <strong>${escHtml(who)}</strong> will eventually go.</p>`;
-			} else {
-				line = `<p>You <strong>mark a consequence</strong>. <strong>${escHtml(who)}</strong> will eventually go.</p>`;
-				// The Ring's next Consequence, from the card (as Call Up's).
-				actions = markConsequenceButton(RING_OF_DAAGON, "Ring of Daagon");
-			}
-			await this._postMoveCard("Send Them Back", line, { actions });
-			this._confirmServantDeparture(slug, who, "They'll eventually go.");
-		}
-
-		async _servantsBreakLoose(slug, who) {
-			// No longer yours to command. Flag the batch (the card shows a "broke free" badge)
-			// and note it; it stays on the tab until removed.
-			await this.actor.setFlag(STONETOP_SCOPE, `customFollowers.${slug}.brokenFree`, true);
-			await this._postMoveCard("Send Them Back",
-				`<p><strong>${escHtml(who)}</strong> break free of your control. They are no longer yours to command.</p>`);
-			this.render(false);
 		}
 
 		// Materialize a playbook possession-follower (the Would-be Hero's dog, the

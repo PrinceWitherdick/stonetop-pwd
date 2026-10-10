@@ -6403,6 +6403,7 @@ export class StonetopCharacter {
 		await this._writeWounds(wounds, "Convalesce");
 	}
 	async getArcanum(slug)                           { return this._arcana.getArcanum(slug); }
+	async isArcanumUnlocked(slug)                    { return this._arcana.isArcanumUnlocked(slug); }
 	async getArcanumMove(slug, moveSlug)             { return this._arcana.getArcanumMove(slug, moveSlug); }
 	async addArcanum(slug)                           { await this._arcana.addArcanum(slug); }
 	// Its tracks AND its carried mark go with it, so a card that comes back (given back, re-found)

@@ -169,6 +169,18 @@ describe("condensedArcanumMove", () => {
 		expect(condensedArcanumMove({ name: "When you listen", description: "<p>You hear it.</p>" }).roll).toBe(null);
 	});
 
+	// Book II p.518: the Timeless Vault's runes, "on a 6- ... (and don't mark XP)". The clause is only in the
+	// back's prose, not the condensed move's own text.
+	it("marks no XP on the Timeless Vault's 6-, read off its back", () => {
+		const vault = DOCS.find(d => d.flags?.stonetop?.slug === "timeless-vault").flags.stonetop.back;
+		expect(condensedArcanumMove(vault.move, { backDescription: vault.description }).noXpOnMiss).toBe(true);
+		expect(condensedArcanumMove(missive(), { backDescription: backOf("time-worn-missive") }).noXpOnMiss).toBe(false);
+		expect(condensedArcanumMove({ name: "When you", description: "<p>roll +CON: on a 6-, don't mark XP.</p>" }).noXpOnMiss).toBe(true);
+		// A back with a Moves section is other moves' prose, not this one's.
+		expect(condensedArcanumMove({ name: "When you", description: "<p>roll +CON</p>" },
+			{ backDescription: "<h3>Moves</h3><p><strong>□ OTHER</strong> on a 6-, don't mark XP.</p>" }).noXpOnMiss).toBe(false);
+	});
+
 	it("is null for a card with no condensed move", () => {
 		expect(condensedArcanumMove(null)).toBe(null);
 		expect(condensedArcanumMove({ name: "", description: "" })).toBe(null);
