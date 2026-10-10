@@ -53,6 +53,15 @@ export const DEATHS_DOOR_FLAG = "deathsDoor";
 export const HARD_TO_KILL_TRADE_FLAG = "hardToKillTrade";
 
 /**
+ * Actor flag key (under the system scope): this Heavy was reduced to 0 HP IN BATTLE with Unstoppable learned,
+ * and fights on ("When you are reduced to 0 HP in battle, you can keep fighting", Book I p.114). Stamped by the
+ * HP write that drops them (hooks/DeathsDoorPrompt.js#onPreUpdateActorDeathsDoor), so whether they were in a fight
+ * is read at the drop, not later. Cleared when they stop fighting: any write that moves them off dying (the Door
+ * rolled, the GM's not-lethal ruling, hit points back above 0) and the fight's end (combat/battle-joy-offer.js).
+ */
+export const UNSTOPPABLE_FIGHTING_FLAG = "unstoppableFighting";
+
+/**
  * Whether Hard to Kill's trade is on offer: out of the action off a 7-9 that opened it, with Hard to Kill learned.
  * Pure, for the sheet's card.
  */

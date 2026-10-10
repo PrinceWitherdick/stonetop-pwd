@@ -6,13 +6,15 @@ import {
 	DEATHS_DOOR_ROLLING_FLAG,
 	DEATHS_DOOR_STATE,
 	HARD_TO_KILL_TRADE_FLAG,
+	UNSTOPPABLE_FIGHTING_FLAG,
 	effectiveDeathsDoorState,
 	nextDeathsDoorState,
 	raisedFromDead,
 	zeroHpMove,
 } from "../actors/character/deaths-door.js";
 import {
-	UNSTOPPABLE_INSTEAD_OPTION, UNSTOPPABLE_REGAIN_OPTION, fightsOnWhenDropped, keepsFightingAtZero, regainInstead,
+	UNSTOPPABLE_INSTEAD_OPTION, UNSTOPPABLE_REGAIN_OPTION, clearCirclesUpdate, downOnUnstoppable, fightsOnWhenDropped,
+	keepsFightingAtZero, regainInstead, stopFightingUpdate,
 } from "../actors/character/unstoppable.js";
 import { BATTLE_JOY_DROPPED_OPTION, BATTLE_JOY_FLAG } from "../actors/character/battle-joy.js";
 import { canKeepOneHp } from "../actors/character/inspiration.js";
@@ -67,7 +69,17 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 	if (actor?.type !== "character") return;
 
 	const raw = foundry.utils.getProperty(changes, "system.attributes.hp.value");
-	if (raw === undefined) return;
+	if (raw === undefined) {
+		// Unstoppable's "fighting on" stamp goes with any write that names a state other than dying, hit
+		// points or not: the Door rolled (a 7-9 out of the action writes no HP), the GM's not-lethal ruling.
+		try {
+			const named = foundry.utils.getProperty(changes, `flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`);
+			if (named !== undefined && named !== DEATHS_DOOR_STATE.DYING) liftFightingStamp(actor, changes);
+		} catch (err) {
+			console.error("Stonetop | Error lifting Unstoppable's stamp:", err);
+		}
+		return;
+	}
 
 	// A throw out of a preUpdate hook aborts the document update, so a fault in here would
 	// stop HP being written at all — losing damage rather than merely losing the card. Nothing
@@ -122,13 +134,22 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 			}
 		}
 
+		// Unstoppable: "When you are reduced to 0 HP IN BATTLE, you can keep fighting" (Book I p.114). Whether
+		// they were in a fight is read HERE, at the drop, and stamped (deaths-door.js#UNSTOPPABLE_FIGHTING_FLAG)
+		// for keepsFightingAtZero to read from now on. Only the HP write that drops them stamps it: a write that
+		// names the state itself (the GM's "Mark dying" on someone already out of the action) did not reduce them
+		// to 0 in battle. The stamp goes with them leaving dying (healed, the Door settled); a hit at 0 keeps it.
+		const dropped = next === DEATHS_DOOR_STATE.DYING && state !== DEATHS_DOOR_STATE.DYING;
+		const fightsOn = dropped && !settlesDoor && fightsOnWhenDropped(actor);
+		if (fightsOn) foundry.utils.setProperty(changes, `flags.${STONETOP_SCOPE}.${UNSTOPPABLE_FIGHTING_FLAG}`, true);
+		else if (dropped || next !== DEATHS_DOOR_STATE.DYING || newHp > 0) liftFightingStamp(actor, changes);
+
 		// The Heavy's Battle Joy lasts "as long as you keep fighting", and one who drops to 0 HP has
 		// stopped (the user's ruling): it ends in this same write, with no roll, so the Death's Door
 		// roll that follows takes their debilities again. Not for a Heavy whose Unstoppable keeps them
 		// fighting at 0: theirs ends when the fight does (combat/battle-joy-offer.js#actionStops). The
 		// committed half says so in chat, off the option.
-		if (next === DEATHS_DOOR_STATE.DYING && state !== DEATHS_DOOR_STATE.DYING
-			&& resolvedFlagProperty(actor, BATTLE_JOY_FLAG) && !fightsOnWhenDropped(actor)) {
+		if (dropped && resolvedFlagProperty(actor, BATTLE_JOY_FLAG) && !fightsOn) {
 			const [key, value] = deletionEntry(`flags.${STONETOP_SCOPE}.${BATTLE_JOY_FLAG}`);
 			foundry.utils.setProperty(changes, key, value);
 			options[BATTLE_JOY_DROPPED_OPTION] = true;
@@ -158,6 +179,11 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 	} catch (err) {
 		console.error("Stonetop | Error recording the dying state:", err);
 	}
+}
+
+/** Fold the lifting of Unstoppable's "fighting on" stamp into a pending write (nothing when none is laid). */
+function liftFightingStamp(actor, changes) {
+	for (const [key, value] of Object.entries(stopFightingUpdate(actor))) foundry.utils.setProperty(changes, key, value);
 }
 
 /**
@@ -501,13 +527,26 @@ export async function markNotLethal(actor) {
 			: format(`${_I18N}.dyingCard.notDying`, { name: actor?.name ?? "" }));
 		return false;
 	}
+	// A Heavy fighting on at 0 HP on Unstoppable's word has survived this: "If you survive, clear all your
+	// circles" (Book I p.114), and their Battle Joy, kept going at the drop, is over with them out of the
+	// action, with no roll (battle-joy.js#battleJoyEndsUnrolled). Both in the same write, so nothing stale
+	// (a circle charged against the next Death's Door, debilities ignored while unconscious) outlives the ruling.
+	const unstoppable = downOnUnstoppable(actor) ? clearCirclesUpdate(actor) : { marks: 0, update: {} };
+	const joyEnds = !!resolvedFlagProperty(actor, BATTLE_JOY_FLAG);
 	await actor.update({
 		[`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`]: DEATHS_DOOR_STATE.OUT_OF_ACTION,
 		...Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_ROLLING_FLAG}`)]),
+		...(joyEnds ? Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${BATTLE_JOY_FLAG}`)]) : {}),
+		...unstoppable.update,
+		// Out of the action, they have stopped fighting: the "fighting on" stamp goes too.
+		...stopFightingUpdate(actor),
 	}, { stonetopMove: localize(`${_I18N}.title`) });
-	await postDyingCard(actor, localize(`${_I18N}.title`), `
-			<p>${format(`${_I18N}.dyingCard.notLethalCard`, { name: escHtml(actor.name) })}</p>
-		`);
+	const name = escHtml(actor.name);
+	const lines = [format(`${_I18N}.dyingCard.notLethalCard`, { name })];
+	if (unstoppable.marks === 1) lines.push(format(`${_I18N}.chat.unstoppableOne`, { name }));
+	else if (unstoppable.marks > 1) lines.push(format(`${_I18N}.chat.unstoppableMany`, { name, count: unstoppable.marks }));
+	if (joyEnds) lines.push(format("stonetop.battleJoy.endedDown", { name }));
+	await postDyingCard(actor, localize(`${_I18N}.title`), lines.map(line => `<p>${line}</p>`).join(""));
 	return true;
 }
 
@@ -534,9 +573,12 @@ export async function markDyingByFiat(actor) {
 		return false;
 	}
 	// A new brush with death: whatever the last one's 7-9 left open for Hard to Kill goes with it, as on the HP path.
+	// And they were not "reduced to 0 HP in battle" by this ruling (Book I p.114): already down, they face the Door
+	// rather than fight on, so no Unstoppable stamp is laid, and any left over is lifted.
 	await actor.update({
 		[`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`]: DEATHS_DOOR_STATE.DYING,
 		...Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${HARD_TO_KILL_TRADE_FLAG}`)]),
+		...stopFightingUpdate(actor),
 	}, { stonetopMove: localize(`${_I18N}.title`) });
 	return true;
 }

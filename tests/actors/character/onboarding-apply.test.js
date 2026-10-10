@@ -609,6 +609,9 @@ describe("changing playbook", () => {
 				"background.choices": { enfys: true, afon: true },
 				"initiateDetails.enfys.pronoun": "she",
 				"initiatesLoyalty": { enfys: 2 },
+				"initiatesParty": { enfys: true },
+				// A stray Unstoppable stamp (a Heavy's, from a playbook this character wore before).
+				"unstoppableFighting": true,
 				"possessions.selected": ["sacred-pouch", "mastiffs"],
 				"possessions.subChoices": { "sacred-pouch": ["trait-sealed"] },
 				"lore.counts": { "the-earth-mother:shrine-loved": 1 },
@@ -640,7 +643,7 @@ describe("changing playbook", () => {
 		}
 		expect(names).toEqual(expect.arrayContaining(["Dangerous", "Hard to Kill"]));
 		expect(moveArmor({ actor }).base).toBe(0);
-		for (const key of ["possessions", "background", "lore", "initiateDetails", "initiatesLoyalty", "blessedMarks", "instinct"]) {
+		for (const key of ["possessions", "background", "lore", "initiateDetails", "initiatesLoyalty", "initiatesParty", "unstoppableFighting", "blessedMarks", "instinct"]) {
 			expect(flag(actor, key), key).toBeNull();
 		}
 		expect(flag(actor, "moves.backgroundChoices")?.["Rites of the Land"]).toBeUndefined();

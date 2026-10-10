@@ -3,6 +3,7 @@ import {
 	dyingCardGmOptions, markDyingByFiat, markNotLethal, postDyingPrompt, wireDyingPrompt,
 } from "../../module/hooks/DeathsDoorPrompt.js";
 import { DEATHS_DOOR_STATE } from "../../module/actors/character/deaths-door.js";
+import { keepsFightingAtZero } from "../../module/actors/character/unstoppable.js";
 
 // Audit DD-4: the GM's two rulings on the dying card, which only hit points could make before. "If the source of
 // damage isn't likely to kill anyone, then the PC is simply out of the action" (Book I p.240), and "they might also
@@ -113,6 +114,38 @@ describe("markNotLethal: out of the action, with no Door to face", () => {
 		expect(await markNotLethal(actor)).toBe(false);
 		expect(actor.update).not.toHaveBeenCalled();
 	});
+
+	// Unstoppable: "When you stop fighting, roll for Death's Door with a -1 penalty for each circle marked. If
+	// you survive, clear all your circles" (Book I p.114). A raging Heavy fighting on at 0 HP whom the GM rules
+	// not lethal has survived: the circles clear and the Battle Joy ends, unrolled, in the ruling's own write.
+	it("clears a Heavy's Unstoppable circles and ends their Battle Joy in the same write", async () => {
+		const actor = pc({ flags: { deathsDoor: DEATHS_DOOR_STATE.DYING, battleJoy: true, unstoppableFighting: true, moves: { backgroundChoices: { Unstoppable: 2 } } } });
+		actor.items = [{ type: "move", name: "Unstoppable", flags: {} }];
+		actor.getFlag = (scope, key) => key.split(".").reduce((node, part) => node?.[part], actor.flags[scope]);
+
+		expect(await markNotLethal(actor)).toBe(true);
+
+		expect(actor.update).toHaveBeenCalledTimes(1);
+		expect(actor.update.mock.calls[0][0]).toMatchObject({
+			[`flags.${SCOPE}.deathsDoor`]: DEATHS_DOOR_STATE.OUT_OF_ACTION,
+			[`flags.${SCOPE}.-=battleJoy`]: null,
+			[`flags.${SCOPE}.moves.backgroundChoices.Unstoppable`]: 0,
+			// Out of the action, they have stopped fighting: the stamp laid at the drop goes too.
+			[`flags.${SCOPE}.-=unstoppableFighting`]: null,
+		});
+		const card = ChatMessage.create.mock.calls[0][0].content;
+		expect(card).toContain("clears all 2 Unstoppable circles");
+		expect(card).toContain("their Battle Joy ends, with no roll");
+	});
+
+	it("leaves the circles of an Unstoppable switched off alone", async () => {
+		const actor = pc({ flags: { deathsDoor: DEATHS_DOOR_STATE.DYING, moves: { backgroundChoices: { Unstoppable: 2 } } } });
+		actor.items = [{ type: "move", name: "Unstoppable", flags: { [SCOPE]: { learned: false } } }];
+		actor.getFlag = (scope, key) => key.split(".").reduce((node, part) => node?.[part], actor.flags[scope]);
+		await markNotLethal(actor);
+		expect(Object.keys(actor.update.mock.calls[0][0]).some(k => k.includes("Unstoppable"))).toBe(false);
+		expect(ChatMessage.create.mock.calls[0][0].content).not.toContain("Unstoppable");
+	});
 });
 
 describe("markDyingByFiat: sent to the Door at 0 HP", () => {
@@ -124,6 +157,26 @@ describe("markDyingByFiat: sent to the Door at 0 HP", () => {
 		const [data, options] = actor.update.mock.calls[0];
 		expect(data).toMatchObject({ [`flags.${SCOPE}.deathsDoor`]: DEATHS_DOOR_STATE.DYING, [`flags.${SCOPE}.-=hardToKillTrade`]: null });
 		expect(options).toEqual({ stonetopMove: "Death's Door" });
+	});
+
+	// Unstoppable: "When you are reduced to 0 HP in battle, you can keep fighting" (Book I p.114). A Heavy put back
+	// on the Door by the GM's fiat, already down and out of the action, was not reduced to 0 in battle by it: they
+	// face the Door rather than fight on, even with a fight running round them, and a stale stamp is lifted.
+	it("does not set a Heavy who was out of the action fighting on, in a fight or not", async () => {
+		const actor = pc({ flags: { deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION, unstoppableFighting: true } });
+		actor.items = [{ type: "move", name: "Unstoppable", flags: {} }];
+		game.combats = [{ combatants: [{ actor: { id: actor.id } }] }];
+		try {
+			await markDyingByFiat(actor);
+			const [data] = actor.update.mock.calls[0];
+			expect(data).toMatchObject({ [`flags.${SCOPE}.-=unstoppableFighting`]: null });
+			// As the write lands: dying, and no stamp.
+			actor.flags[SCOPE].deathsDoor = DEATHS_DOOR_STATE.DYING;
+			delete actor.flags[SCOPE].unstoppableFighting;
+			expect(keepsFightingAtZero(actor)).toBe(false);
+		} finally {
+			delete game.combats;
+		}
 	});
 
 	it("writes nothing above 0 HP, or for someone already dying or dead", async () => {

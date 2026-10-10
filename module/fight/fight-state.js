@@ -19,6 +19,7 @@
 //    only for the scene on screen, so a scene nobody is looking at has melee and recorded shots only.
 
 import { SYSTEM_ID } from "../system-id.js";
+import { each } from "./in-battle.js";
 import { engage, HEROES, FOES } from "./engagements.js";
 import { classifySide, bodiesFor } from "./fight-sides.js";
 import { followerRoster } from "./fight-vitals.js";
@@ -44,8 +45,8 @@ export const groupStartSize = actor => Math.max(0, Math.trunc(Number(actor?.flag
 const OWNER = 3;
 
 const ours = doc => doc?.flags?.[SYSTEM_ID] ?? {};
-/** A collection as an array; nothing for anything that cannot be walked. */
-export const each = collection => (typeof collection?.[Symbol.iterator] === "function" ? [...collection] : []);
+// A collection as an array (in-battle.js, a leaf, so the character rules can share it).
+export { each };
 
 /** Whether a Combat was started (or claimed) as a Stonetop fight. */
 export function isFight(combat) {

@@ -107,15 +107,26 @@ describe("onPreUpdateActorDeathsDoor — the state a hit records", () => {
 	});
 });
 
+/** Unstoppable works "in battle" (Book I p.114): put the character in a fight, read by actor id. */
+function inBattle(actor) {
+	actor.id ??= "heavy-1";
+	global.game.combats = [{ combatants: [{ actor: { id: actor.id } }] }];
+}
+
 /**
  * Unstoppable: "If you would regain HP while fighting, clear one mark instead." Decided on the HP
  * write itself, before the state reads it, so a Heavy fighting on at 0 stays dying.
  */
 describe("onPreUpdateActorDeathsDoor: Unstoppable's mark instead of hit points", () => {
 	const unstoppable = { type: "move", name: "Unstoppable", system: { resource: { max: 5 } }, flags: {} };
-	function fightingOn(marks) {
-		const actor = about({ deathsDoor: DEATHS_DOOR_STATE.DYING, "moves.backgroundChoices": { Unstoppable: marks } }, 0);
+	// Dropped in battle, so the drop stamped them as fighting on (`stamped: false` for one who dropped outside it).
+	function fightingOn(marks, { stamped = true } = {}) {
+		const actor = about({
+			deathsDoor: DEATHS_DOOR_STATE.DYING, "moves.backgroundChoices": { Unstoppable: marks },
+			...(stamped ? { unstoppableFighting: true } : {}),
+		}, 0);
 		actor.items = [unstoppable];
+		inBattle(actor);
 		return actor;
 	}
 	function heal(actor, hp, changes = {}) {
@@ -146,11 +157,82 @@ describe("onPreUpdateActorDeathsDoor: Unstoppable's mark instead of hit points",
 		expect(options[UNSTOPPABLE_INSTEAD_OPTION]).toBeUndefined();
 	});
 
+	// "If you would regain HP while fighting": one who dropped outside battle is not fighting, so the hit points
+	// come back as usual, even with a fight running round them now.
+	it("lets the hit points through for a Heavy who dropped outside battle", () => {
+		const actor = fightingOn(3, { stamped: false });
+		const { changes, options } = heal(actor, 4);
+		expect(changes.system.attributes.hp.value).toBe(4);
+		expect(options[UNSTOPPABLE_INSTEAD_OPTION]).toBeUndefined();
+	});
+
 	it("lets through the write that takes the hit points back after all", () => {
 		const actor = fightingOn(3);
 		const changes = { system: { attributes: { hp: { value: 4 } } } };
 		onPreUpdateActorDeathsDoor(actor, changes, { [UNSTOPPABLE_REGAIN_OPTION]: true });
 		expect(changes.system.attributes.hp.value).toBe(4);
+	});
+});
+
+/**
+ * Unstoppable: "When you are reduced to 0 HP IN BATTLE, you can keep fighting" (Book I p.114). Whether they were
+ * in a fight is read at the drop and stamped (`unstoppableFighting`), so a fight that starts later does not count;
+ * the stamp goes when they stop fighting (healed, the Door settled, the GM's rulings), and a hit at 0 keeps it.
+ */
+describe("onPreUpdateActorDeathsDoor: Unstoppable's stamp, laid at the drop", () => {
+	const STAMP = "unstoppableFighting";
+	function heavy({ hp = 5, flags = {}, battle = true } = {}) {
+		const actor = about(flags, hp);
+		actor.items = [{ type: "move", name: "Unstoppable", system: {}, flags: {} }];
+		inBattle(actor);
+		if (!battle) global.game.combats = [];
+		return actor;
+	}
+	function write(actor, changes) {
+		onPreUpdateActorDeathsDoor(actor, changes, {});
+		return changes.flags?.["stonetop-pwd"] ?? {};
+	}
+	const hp = value => ({ system: { attributes: { hp: { value } } } });
+
+	it("stamps a Heavy reduced to 0 HP in battle", () => {
+		expect(write(heavy(), hp(0))[STAMP]).toBe(true);
+	});
+
+	it("stamps nothing for one reduced to 0 HP outside battle, so a fight started later does not make them fight on", () => {
+		const bag = write(heavy({ battle: false }), hp(0));
+		expect(bag.deathsDoor).toBe(DEATHS_DOOR_STATE.DYING);
+		expect(bag).not.toHaveProperty([STAMP]);
+	});
+
+	it("stamps nothing for one whose Unstoppable is switched off", () => {
+		const actor = heavy();
+		actor.items[0].flags = { "stonetop-pwd": { learned: false } };
+		expect(write(actor, hp(0))).not.toHaveProperty([STAMP]);
+	});
+
+	it("keeps the stamp through a hit taken at 0 HP", () => {
+		const bag = write(heavy({ hp: 0, flags: { deathsDoor: DEATHS_DOOR_STATE.DYING, [STAMP]: true } }), hp(0));
+		expect(bag).not.toHaveProperty([`-=${STAMP}`]);
+	});
+
+	it("lifts it when they are healed back above 0 HP", () => {
+		const bag = write(heavy({ hp: 0, flags: { deathsDoor: DEATHS_DOOR_STATE.DYING, [STAMP]: true } }), hp(3));
+		expect(bag).toHaveProperty([`-=${STAMP}`], null);
+	});
+
+	it("lifts it when the Door is settled, with hit points or without", () => {
+		const stamped = () => heavy({ hp: 0, flags: { deathsDoor: DEATHS_DOOR_STATE.DYING, [STAMP]: true } });
+		expect(write(stamped(), { ...hp(1), flags: { "stonetop-pwd": { deathsDoor: null } } })).toHaveProperty([`-=${STAMP}`], null);
+		expect(write(stamped(), { flags: { "stonetop-pwd": { deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION } } })).toHaveProperty([`-=${STAMP}`], null);
+		expect(write(stamped(), { flags: { "stonetop-pwd": { deathsDoor: DEATHS_DOOR_STATE.FATE_PENDING } } })).toHaveProperty([`-=${STAMP}`], null);
+	});
+
+	// The GM's "Mark dying" on a Heavy already out of the action at 0 HP names the state itself: it did not
+	// reduce them to 0 HP in battle, so nothing is stamped even with a fight running round them.
+	it("stamps nothing on a write that names dying itself", () => {
+		const out = () => heavy({ hp: 0, flags: { deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION } });
+		expect(write(out(), { flags: { "stonetop-pwd": { deathsDoor: DEATHS_DOOR_STATE.DYING } } })).not.toHaveProperty([STAMP]);
+		expect(write(out(), { ...hp(0), flags: { "stonetop-pwd": { deathsDoor: DEATHS_DOOR_STATE.DYING } } })).not.toHaveProperty([STAMP]);
 	});
 });
 
@@ -163,6 +245,7 @@ describe("onPreUpdateActorDeathsDoor: a raging Heavy dropping to 0 HP", () => {
 	function raging({ unstoppable = false, hp = 5, state = null } = {}) {
 		const actor = about({ battleJoy: true, ...(state ? { deathsDoor: state } : {}) }, hp);
 		actor.items = unstoppable ? [{ type: "move", name: "Unstoppable", system: {}, flags: {} }] : [];
+		inBattle(actor);
 		return actor;
 	}
 	function drop(actor, hp = 0) {
@@ -184,6 +267,16 @@ describe("onPreUpdateActorDeathsDoor: a raging Heavy dropping to 0 HP", () => {
 		expect(bag.deathsDoor).toBe(DEATHS_DOOR_STATE.DYING);
 		expect(bag).not.toHaveProperty(["-=battleJoy"]);
 		expect(options[BATTLE_JOY_DROPPED_OPTION]).toBeUndefined();
+	});
+
+	// "When you are reduced to 0 HP in battle" (Book I p.114): dropped with no fight running, Unstoppable does
+	// not keep them going, so the Battle Joy ends as anyone's does.
+	it("ends it for a Heavy with Unstoppable who drops outside battle", () => {
+		const actor = raging({ unstoppable: true });
+		global.game.combats = [];
+		const { bag, options } = drop(actor);
+		expect(bag).toHaveProperty(["-=battleJoy"], null);
+		expect(options[BATTLE_JOY_DROPPED_OPTION]).toBe(true);
 	});
 
 	it("touches nothing on a hit that leaves them standing, or on a calm Heavy", () => {

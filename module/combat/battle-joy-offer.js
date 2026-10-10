@@ -35,7 +35,7 @@ import {
 import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
 import { HP_CEILING_OPTION } from "../actors/character/StonetopFlags.js";
 import { UNSTOPPABLE } from "../actors/character/deaths-door.js";
-import { keepsFightingAtZero } from "../actors/character/unstoppable.js";
+import { keepsFightingAtZero, stopFightingUpdate } from "../actors/character/unstoppable.js";
 import { answersFor, openZeroHpMove } from "../hooks/DeathsDoorPrompt.js";
 import { healTo } from "../camp/camp-rules.js";
 import { each } from "../fight/fight-state.js";
@@ -210,6 +210,7 @@ function isRaging(actor) {
 
 /** Whether the action stopping asks anything of this character: a Battle Joy, or Unstoppable at 0 HP. */
 function stopsSomething(actor) {
+	// The stamp laid at the drop outlives the combat, which is gone from the world by deleteCombat.
 	return isRaging(actor) || keepsFightingAtZero(actor);
 }
 
@@ -233,8 +234,9 @@ export async function endBattleJoyUnrolled(actor) {
  *  1. Battle Joy ends: roll +CON through the sheet's own ending (a Heavy still standing), or, for one
  *     who is down, with no roll at all (endBattleJoyUnrolled).
  *  2. Unstoppable: "When you stop fighting, roll for Death's Door." A Heavy fighting on at 0 HP
- *     (unstoppable.js#keepsFightingAtZero) is told so and handed the walkthrough, AFTER the Joy is
- *     over, so their debilities count on that roll again.
+ *     (unstoppable.js#keepsFightingAtZero, off the stamp laid at the drop: the combat is gone by now) is
+ *     told so, the stamp is lifted (they have stopped fighting), and they are handed the walkthrough,
+ *     AFTER the Joy is over, so their debilities count on that roll again.
  */
 export async function actionStops(actor, { endBattleJoy, openDeathsDoor = openZeroHpMove } = {}) {
 	if (isRaging(actor)) {
@@ -242,6 +244,8 @@ export async function actionStops(actor, { endBattleJoy, openDeathsDoor = openZe
 		else await endBattleJoy?.(actor);
 	}
 	if (keepsFightingAtZero(actor)) {
+		// keepsFightingAtZero reads the stamp, so there is always one to lift here.
+		await actor.update(stopFightingUpdate(actor), { stonetopMove: UNSTOPPABLE });
 		await postMoveNote(actor, UNSTOPPABLE, format("stonetop.unstoppable.stopsFighting", { name: actor.name }));
 		await openDeathsDoor(actor);
 	}

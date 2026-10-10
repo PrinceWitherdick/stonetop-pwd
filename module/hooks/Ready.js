@@ -74,6 +74,7 @@ import { grandfatherWeaponsOfWar } from "../migration/weapons-of-war-grandfather
 import { grandfatherRetiredMoves } from "../migration/retired-move-grandfather.js";
 import { grandfatherWouldBeHeroes } from "../migration/would-be-hero-grandfather.js";
 import { grandfatherCreationFinished, CREATION_FINISHED_SWEEP } from "../migration/creation-finished-grandfather.js";
+import { grandfatherUnstoppableFighting, UNSTOPPABLE_FIGHTING_SWEEP } from "../migration/unstoppable-fighting-grandfather.js";
 import { repairAllPossessionGrants } from "../migration/possession-grant-repair.js";
 import { repairMasteredArcanumCircles } from "../migration/mastered-arcanum-circles.js";
 import { settleAllArcanumBoxLayouts, settleOwnArcanumBoxLayouts } from "../migration/tulpa-move-boxes.js";
@@ -304,6 +305,11 @@ export async function onReady() {
 		// the work itself skips any world that has a stamp for it.
 		try { await oncePerVersion(CREATION_FINISHED_SWEEP, grandfatherCreationFinished); }
 		catch (err) { console.error("Stonetop | creation-finished grandfathering failed", err); }
+		// Stamp a Heavy already down and fighting on at 0 HP on Unstoppable, which the old rule read without
+		// the in-battle stamp the drop now lays (migration/unstoppable-fighting-grandfather.js). Once per WORLD,
+		// for the same reason.
+		try { await oncePerVersion(UNSTOPPABLE_FIGHTING_SWEEP, grandfatherUnstoppableFighting); }
+		catch (err) { console.error("Stonetop | Unstoppable fighting-on grandfathering failed", err); }
 		// Bring special-possession gear made before its grant was corrected up to the grant (the
 		// Tannery cuirass made as a stacking modifier; see migration/possession-grant-repair.js).
 		// Per VERSION, because a grant only changes with a release: each new version is one more

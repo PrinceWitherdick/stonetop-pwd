@@ -24,7 +24,7 @@ import { INSPIRATION_FLAG } from "./inspiration.js";
 import { BLESSING_FLAG } from "./roll-boosts.js";
 import { NEEDS_SUN_FLAG, ONGOING_INVOCATION_FLAGS } from "./ongoing-invocation.js";
 import { MIRRORED_HP_PENALTY_FLAG } from "./StonetopFlags.js";
-import { DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLLING_FLAG } from "./deaths-door.js";
+import { DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLLING_FLAG, UNSTOPPABLE_FIGHTING_FLAG } from "./deaths-door.js";
 
 // What the vitals are worked out from on the character document itself, outside its flags. Its items
 // have hooks of their own. HP, XP, wounds, the name and the portrait move nothing, and the mirror's own
@@ -45,6 +45,8 @@ export const FLAG_NOISE = new Set([
 	"readiness", "ledger", "camp", "campOwed", "campHunger", DEATHS_DOOR_FLAG,
 	// The Death's Door roll in progress, written three to five times a roll (the claim, the dice, each boost, the end).
 	DEATHS_DOOR_ROLLING_FLAG,
+	// Unstoppable's "fighting on at 0 HP" stamp, laid with the drop and lifted when the fight ends.
+	UNSTOPPABLE_FIGHTING_FLAG,
 	CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG, ALPHA_FLAG,
 	INSPIRATION_FLAG, BLESSING_FLAG, NEEDS_SUN_FLAG.split(".")[0], ...ONGOING_INVOCATION_FLAGS,
 	// The mirror's own bookkeeping, written in the same update as the max it describes.

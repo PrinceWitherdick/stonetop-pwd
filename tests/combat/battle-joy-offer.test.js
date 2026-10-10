@@ -274,10 +274,18 @@ describe("installBattleJoyEnd: the action stops", () => {
 	});
 
 	/** Put a table()'s Heavy down at 0 HP and dying, with Unstoppable learned if asked. */
-	function down(duvin, { unstoppable = false } = {}) {
+	// Down at 0 HP and dying; with Unstoppable, reduced there in battle (the drop's stamp) unless `inBattle: false`.
+	function down(duvin, { unstoppable = false, inBattle = true } = {}) {
 		duvin.system.attributes.hp.value = 0;
 		duvin.flags[SYSTEM_ID].deathsDoor = "dying";
 		if (unstoppable) duvin.items.push({ type: "move", name: "Unstoppable", flags: {} });
+		if (unstoppable && inBattle) duvin.flags[SYSTEM_ID].unstoppableFighting = true;
+		duvin.update = vi.fn(async changes => {
+			for (const key of Object.keys(changes)) {
+				const leaf = key.split(".").at(-1);
+				if (leaf.startsWith("-=")) delete duvin.flags[SYSTEM_ID][leaf.slice(2)];
+			}
+		});
 		return duvin;
 	}
 
@@ -307,6 +315,23 @@ describe("installBattleJoyEnd: the action stops", () => {
 		await vi.waitFor(() => expect(openDeathsDoor).toHaveBeenCalledWith(duvin));
 		expect(order).toEqual([["door", undefined]]);
 		expect(posted.map(p => p.content).join(" ")).toContain("time to roll Death&#x27;s Door");
+		// They have stopped fighting: the stamp laid at the drop is lifted, though the combat is long gone.
+		expect(duvin.update).toHaveBeenCalledWith({ [`flags.${SYSTEM_ID}.-=unstoppableFighting`]: null }, { stonetopMove: "Unstoppable" });
+		expect(duvin.flags[SYSTEM_ID].unstoppableFighting).toBeUndefined();
+	});
+
+	// "When you are reduced to 0 HP in battle" (Book I p.114): one who dropped outside battle and was later put
+	// in a fight never fought on, so its end asks nothing of them; their Door is the ordinary one, already offered.
+	it("asks nothing at the fight's end of a Heavy who dropped outside battle", async () => {
+		const openDeathsDoor = vi.fn(async () => {});
+		const duvin = down(table("p1", { raging: false }), { unstoppable: true, inBattle: false });
+		const hooks = hooksFake();
+		installBattleJoyEnd({ hooks, endBattleJoy: vi.fn(), openDeathsDoor });
+		globalThis.game.combats = [];
+		hooks.fire("deleteCombat", combat("f1", [duvin]));
+		await new Promise(r => setTimeout(r, 0));
+		expect(openDeathsDoor).not.toHaveBeenCalled();
+		expect(duvin.update).not.toHaveBeenCalled();
 	});
 
 	it("asks Death's Door of one fighting on who was never raging, and nothing of one on their feet", async () => {
