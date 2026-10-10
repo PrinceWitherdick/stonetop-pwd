@@ -127,7 +127,17 @@ describe("Persuade's answer row", () => {
 		const html = answerRowHtml({ ask: ask(PERSUADE_PC_MOVE), tier: "success", canAnswer: true });
 		expect(html).toContain("Do it, and mark XP");
 		expect(html).toContain("Refuse, and say how Aeliana could convince you");
-		expect(answerRowHtml({ ask: ask(PERSUADE_PC_MOVE), tier: "partial", canAnswer: true })).toContain("Refuse, or make a counter-offer");
+		expect(answerRowHtml({ ask: ask(PERSUADE_PC_MOVE), tier: "partial", canAnswer: true })).toContain("Make a counter-offer");
+	});
+
+	// Book I p.226: on a 7-9 they "can refuse or make a counter-offer if they like".
+	it("lets a 7-9 refuse outright, as well as counter-offer", () => {
+		const html = answerRowHtml({ ask: ask(PERSUADE_PC_MOVE), tier: "partial", canAnswer: true });
+		expect(html).toContain(`data-pc-answer="decline"`);
+		expect(html).toContain(">Refuse<");
+		expect(offersChoice(PERSUADE_PC_MOVE, "decline", "partial")).toBe(true);
+		expect(offersChoice(PERSUADE_PC_MOVE, "decline", "success")).toBe(false);
+		expect(answerSentence(ask(PERSUADE_PC_MOVE), "decline")).toBe("Bram refuses.");
 	});
 
 	it("is posted saying who decides, one row per tier that asks", () => {
