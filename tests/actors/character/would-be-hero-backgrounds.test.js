@@ -31,6 +31,18 @@ import { SYSTEM_ID } from "../../../module/system-id.js";
 // Only the dice are stood in for: the Death's Door window reads what the roll was handed and the total.
 const rollStat = vi.hoisted(() => vi.fn(async () => ({ total: 5 })));
 vi.mock("../../../module/utils/roll-engine.js", async importOriginal => ({ ...(await importOriginal()), rollStat }));
+// The Door's pre-roll window, answered as one that asked nothing.
+const promptRoll = vi.hoisted(() => vi.fn(async () => ({ situational: 0 })));
+vi.mock("../../../module/dialogs/RollDialog.js", async importOriginal => ({ ...(await importOriginal()), promptRoll }));
+
+// A Death's Door window's stand-in character: dying, and rolling straight through to the dice as
+// StonetopCharacter#onDirectStatRoll would hand them over.
+const atTheDoor = (actor, deathsDoorRollOptions) => ({
+	_actor: actor,
+	deathsDoorState: "dying",
+	deathsDoorRollOptions,
+	onDirectStatRoll: (stat, opts) => rollStat(stat, actor, opts),
+});
 
 const WBH = "The Would-Be Hero";
 const ALL_PLAYBOOKS = loadPlaybookPackDocs();
@@ -359,7 +371,7 @@ describe("Death's Door for a Destined hero", () => {
 
 	it("the walkthrough applies the shifted tier, and the card and window both name the Destined", async () => {
 		const actor = { id: "a1", name: "Wynfor", type: "character", getFlag: () => null };
-		const character = { _actor: actor, deathsDoorRollOptions: () => deathsDoorRollOptions([], {}, { backgroundSlug: "destined" }) };
+		const character = atTheDoor(actor, () => deathsDoorRollOptions([], {}, { backgroundSlug: "destined" }));
 		const dialog = new DeathsDoorDialog(character, () => {});
 		dialog._applyTier = vi.fn(async () => {});
 		dialog.renderIfOpen = vi.fn();
@@ -376,7 +388,7 @@ describe("Death's Door for a Destined hero", () => {
 
 	it("a fulfilled destiny rolls Death's Door as written", async () => {
 		const actor = { id: "a1", name: "Wynfor", type: "character", getFlag: () => null };
-		const character = { _actor: actor, deathsDoorRollOptions: () => deathsDoorRollOptions([], {}, { backgroundSlug: "destined", setupResources: { "destiny-fulfilled": 1 } }) };
+		const character = atTheDoor(actor, () => deathsDoorRollOptions([], {}, { backgroundSlug: "destined", setupResources: { "destiny-fulfilled": 1 } }));
 		const dialog = new DeathsDoorDialog(character, () => {});
 		dialog._applyTier = vi.fn(async () => {});
 		dialog.renderIfOpen = vi.fn();
@@ -407,8 +419,10 @@ describe("Never Gonna Keep Me Down at Death's Door", () => {
 	it("'Don't roll: take a 10+' marks the circle, lands a 10+ with no dice, and names the move", async () => {
 		const posted = [];
 		globalThis.ChatMessage = { create: vi.fn(async d => posted.push(d)), getSpeaker: () => ({}) };
-		const { char, actor } = hero({ items: [neverGonna()] });
+		// At the Door: dying at 0 HP, which is the only time the window offers the button.
+		const { char, actor } = hero({ items: [neverGonna()], flags: { deathsDoor: "dying" } });
 		actor.id = "a1";
+		actor.system.attributes.hp.value = 0;
 		const dialog = new DeathsDoorDialog(char, () => {});
 		dialog._applyTier = vi.fn(async () => {});
 		dialog.renderIfOpen = vi.fn();

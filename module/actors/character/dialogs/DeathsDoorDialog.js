@@ -1,12 +1,13 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
-import { stonetopChatCard } from "../../../utils/chat.js";
 import { escHtml } from "../../../utils/strings.js";
 import { TIER_LABELS } from "../../../utils/move-results.js";
-import { classifyResult, messageOfRoll, rollStat } from "../../../utils/roll-engine.js";
+import { classifyResult, messageOfRoll } from "../../../utils/roll-engine.js";
+import { promptRoll } from "../../../dialogs/RollDialog.js";
 import { guideRailStep } from "../../../utils/guide-rail.js";
 import {
-	DEATHS_DOOR_ROLL_FLAG, DEATHS_DOOR_ROLL_STALE_MS, DEATHS_DOOR_STATE, NEVER_GONNA_KEEP_ME_DOWN,
-	deathsDoorCardTier, deathsDoorCardTierShift, deathsDoorRollWatch, zeroHpMove,
+	DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLL_FLAG, DEATHS_DOOR_ROLL_STALE_MS, DEATHS_DOOR_STATE, HARD_TO_KILL,
+	HARD_TO_KILL_TRADE_FLAG, NEVER_GONNA_KEEP_ME_DOWN, deathsDoorCardTier, deathsDoorCardTierShift,
+	deathsDoorRollWatch, zeroHpMove,
 } from "../deaths-door.js";
 import {
 	clearDeathsDoorRollMarker, deathsDoorRollCard, deathsDoorRollClock, deathsDoorRollMarker, deathsDoorRollPosted,
@@ -19,6 +20,8 @@ import { ROLLED_FLAG, countedNote, countedTier, outcomeTier } from "../../../uti
 import { activatePostDeathChoices, buildPostDeathChoices, outstandingLabel } from "../post-death-choices.js";
 import { endBattleJoyUnrolled } from "../../../combat/battle-joy-offer.js";
 import { SYSTEM_ID } from "../../../system-id.js";
+import { deletionEntry } from "../../../utils/foundry-compat.js";
+import { postDyingCard } from "../../../hooks/DeathsDoorPrompt.js";
 import { format, localize } from "../../../utils/i18n.js";
 import { rollRewrite } from "../../../utils/roll-rewrite.js";
 import { rollCardRoute } from "../../../utils/roll-card-writer.js";
@@ -235,6 +238,25 @@ function cardBoostNotes(card, total, { bend = true } = {}) {
 	return notes;
 }
 
+/**
+ * Hard to Kill's 7-9 trade, "mark a debility of your choice to regain 1 HP" (p.114): THE one, for this window's
+ * result step and for the sheet's Death's Door card, which offers it once this window has gone (StonetopCharacter
+ * Sheet#_onHardToKillTrade). One write for the debility, the hit point, the end of being out of the action and
+ * the trade's latch (HARD_TO_KILL_TRADE_FLAG), and the table is told. Whether it was made.
+ */
+export async function tradeHardToKillDebility(character, key) {
+	const name = character?.debilityChoices?.find(d => d.key === key)?.name ?? key;
+	const actor = character._actor ?? null;
+	const latch = actor?.getFlag?.(SYSTEM_ID, HARD_TO_KILL_TRADE_FLAG)
+		? Object.fromEntries([deletionEntry(`flags.${SYSTEM_ID}.${HARD_TO_KILL_TRADE_FLAG}`)]) : null;
+	const ok = await character.markDebility(key, { hp: 1, moveName: HARD_TO_KILL, clearsDeathsDoor: true, alsoUpdate: latch });
+	if (!ok) return false;
+	await postDyingCard(actor, HARD_TO_KILL, `<p>${format(`${_I18N}.chat.hardToKill`, {
+		name: escHtml(actor?.name ?? localize(`${_I18N}.theCharacter`)), debility: escHtml(name),
+	})}</p>`);
+	return true;
+}
+
 export class DeathsDoorDialog extends StonetopDialog {
 	constructor(character, onDone, options = {}) {
 		// One window PER CHARACTER — see StonetopDialog.perDocumentOptions for why sharing one id
@@ -347,7 +369,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 		return foundry.utils.mergeObject(super.defaultOptions, {
 			id:        "stonetop-deathsdoor-dialog",
 			template:  "systems/stonetop-pwd/templates/dialogs/deaths-door.hbs",
-			title:     "Death's Door",
+			title:     localize(`${_I18N}.title`),
 			width:     620,
 			height:    "auto",
 			resizable: true,
@@ -599,7 +621,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 	activateListeners(html) {
 		super.activateListeners(html);
 
-		html.find(".deaths-door-roll-btn").on("click", () => this._onRoll());
+		// Shift skips the pre-roll window, as it does on every other roll (RollDialog.js#promptRoll).
+		html.find(".deaths-door-roll-btn").on("click", (ev) => this._onRoll({ shiftKey: !!ev.shiftKey }));
 		html.find(".deaths-door-skip-roll-btn").on("click", () => this._onTakeTenPlus());
 		html.find(".deaths-door-close-btn").on("click", () => this._onFinish());
 		html.find(".deaths-door-cancel-btn").on("click", () => this.close());
@@ -679,7 +702,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 	 * table. The Heavy's own Hard to Kill already carries `noXpOnMiss` in the pack, so this is
 	 * also what the one Death's Door roll the compendium describes in full expects.
 	 */
-	async _onRoll() {
+	async _onRoll({ shiftKey = false } = {}) {
 		if (this._rolling) return;
 		this._rolling = true;
 		let claimed = false;
@@ -690,7 +713,17 @@ export class DeathsDoorDialog extends StonetopDialog {
 			// A roll is already on the table, another owner's or one this window holds (this window had not
 			// redrawn for it yet): that one stands.
 			if (this._rollWatch().kind !== "none") { this.renderIfOpen(); return; }
+			// The character is not at the Door any more (brought back up, or the Door settled elsewhere) while this
+			// window still showed the dice. Checked here as well as by the GM's ruling, which a table with no GM
+			// connected does not have.
+			if (this._notAtTheDoor()) return;
 			const { penalty, tierShift = null } = this._character.deathsDoorRollOptions();
+
+			// The pre-roll window every other roll gets (the mode, when the table asks it each time, and the one-off
+			// stepper), asked before the claim so backing out of it claims and rolls nothing. Absent `rollMode` in its
+			// answer, the sheet's sticky selector decides (onDirectStatRoll).
+			const prompted = await promptRoll({ title: _MOVE.name, shiftKey });
+			if (!prompted) return;
 
 			// Claimed (through the GM, when one is connected) and said on the actor before anything else moves, the
 			// Battle Joy's end included, so no other window offers the dice while these are in the air. A claim
@@ -703,19 +736,21 @@ export class DeathsDoorDialog extends StonetopDialog {
 			// debilities again (combat/battle-joy-offer.js#endBattleJoyUnrolled).
 			await endBattleJoyUnrolled(actor);
 
-			// Rolling +CON exposes the roll to `miserable`, like any other +CON roll; +nothing
-			// touches no stat and so is untouched by debilities.
-			const rollOptions = this._character.applyDebilityRollMode?.(this._stat, { rollMode: "normal" })
-				?? { rollMode: "normal" };
-
-			roll = await rollStat(this._stat, actor, {
-				...rollOptions,
+			// The one path every direct roll takes (StonetopCharacter#onDirectStatRoll): the sticky mode or the
+			// window's, ongoing, and what the next roll is owed, claimed and spent here. An Aid's advantage is the
+			// book's own case: "If someone tries to save the dying PC ... they're Aiding the Death's Door roll"
+			// (p.245). Rolling +CON exposes the roll to `miserable` there, like any other +CON roll; +nothing
+			// touches no stat and so is untouched by debilities. Aimed at nobody, whatever is targeted on the map.
+			// Unstoppable's penalty rides the stepper's one-off modifier.
+			roll = await this._character.onDirectStatRoll(this._stat, {
+				...prompted,
+				situational: (Number(prompted.situational) || 0) + (Number(penalty) || 0),
+				targets:     [],
 				// The roll's nonce on its card, so a window picking the roll up finds it even when the marker
 				// never got as far as naming it (the page went while the dice were still in the air).
 				messageFlags: { [SYSTEM_ID]: { [DEATHS_DOOR_ROLL_FLAG]: this._rollNonce } },
 				statValue:   this._stat ? undefined : 0,
 				moveName:    _MOVE.name,
-				modifier:    penalty,
 				noXpOnMiss:  true,
 				// Destined: "treat a 6- on Death's Door as a 7-9, and a 7-9 as a 10+". The card reads its
 				// tier the same way and names the background beside the result.
@@ -730,6 +765,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 					value: t.options ? `${t.text} ${t.options.join(" / ")}` : t.text,
 				}])),
 			});
+			// No dice were thrown (the roll was refused on its way): the finally below gives the Door back.
+			if (!roll) return;
 
 			this._rolledTotal = roll.total;
 			this._tierShift = tierShift;
@@ -739,7 +776,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 			this._readLanded();
 			this._step = "result";
 			// A fresh roll is a fresh brush with death: re-arm the per-result actions so a
-			// re-roll (a GM tier shift, say) can record its own outcome. The mark is pointedly NOT
+			// re-roll can record its own outcome. The mark is pointedly NOT
 			// re-armed — it's a wound on the sheet now, not a pending action, and re-arming it
 			// would leave a re-rolled 10+ carrying two marks for one visit to the Door.
 			this._debilityTraded = false;
@@ -787,6 +824,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 			if (!skipRollMove) return;
 			// No dice, but the Door is being faced here all the same: said first, as a roll says it (_onRoll).
 			if (this._rollWatch().kind !== "none") { this.renderIfOpen(); return; }
+			if (this._notAtTheDoor()) return;
 			claimed = true;
 			if (!(await this._claimRoll())) { this.renderIfOpen(); return; }
 			// Facing the Door is when they stop fighting, with or without the dice (see _onRoll).
@@ -1133,9 +1171,24 @@ export class DeathsDoorDialog extends StonetopDialog {
 	 * Never Gonna Keep Me Down's 10+. A roll no longer this window's lands nothing (_yieldRoll).
 	 */
 	async _land(key) {
-		if (this._lostRoll()) return this._yieldRoll();
+		// Brought back up (or settled elsewhere) while the dice were in the air: a roll whose marker never got
+		// written, or a table with no GM to clear it, would otherwise land a tier on someone no longer dying.
+		if (this._lostRoll() || this._character?.deathsDoorState !== DEATHS_DOOR_STATE.DYING) return this._yieldRoll();
 		await this._applyTier(key);
 		await this._releaseRoll();
+	}
+
+	/**
+	 * Whether this window's character has left the Door since it drew the dice: healed above 0 HP, or the Door
+	 * settled from another window. Says so and redraws when it has. The GM's claim ruling refuses such a roll
+	 * too (deaths-door.js#deathsDoorClaimRuling), but a table with no GM connected has no ruling, so the window
+	 * asks for itself before anything is written.
+	 */
+	_notAtTheDoor() {
+		if (this._character?.deathsDoorState === DEATHS_DOOR_STATE.DYING) return false;
+		ui.notifications?.info?.(format(`${_I18N}.claimSettled`, { actor: this._actorName }));
+		this.renderIfOpen();
+		return true;
 	}
 
 	/** Stop holding the roll here. The marker is left alone: _releaseRoll clears it, _yieldRoll leaves it to its new holder. */
@@ -1254,13 +1307,24 @@ export class DeathsDoorDialog extends StonetopDialog {
 		const card   = deathsDoorRollCard(marker);
 		const total  = card?.rolls?.at?.(0)?.total ?? marker.total ?? null;
 		const state  = this._character?.deathsDoorState ?? null;
+		// A 6- is read first: one whose fate was an insert leaves them out of the action too, with the insert on.
 		const missed = state === DEATHS_DOOR_STATE.FATE_PENDING || state === DEATHS_DOOR_STATE.DEAD
 			|| this._character?.zeroHpMove?.dialog === false;
+		// Otherwise the tier the roll counted as: its card's, which a boost moved last, else its marker's as this
+		// window last saw it. A 7-9 traded back to 1 HP (Hard to Kill) leaves no state to read it from, and neither
+		// does a character brought back up mid-roll.
+		const counted = (card && total != null ? deathsDoorCardTier(card, total) : null) ?? marker.tier ?? null;
+		const landed = missed ? "failure" : state === DEATHS_DOOR_STATE.OUT_OF_ACTION ? "partial" : counted;
+		// Nothing landed at all (they were brought back up before the dice did): no result to show as theirs.
+		if (!landed) {
+			this._watched = null;
+			return;
+		}
 		this._spectator     = { userName: marker.userName || _anotherPlayer() };
 		this._rolledTotal   = total;
 		this._rollMessage   = null;
 		this._boostsPending = false;
-		this._landed   = state === DEATHS_DOOR_STATE.OUT_OF_ACTION ? "partial" : missed ? "failure" : "success";
+		this._landed   = landed;
 		this._tierNote = cardBoostNotes(card, total).join(" ");
 		this._step     = "result";
 	}
@@ -1433,8 +1497,18 @@ export class DeathsDoorDialog extends StonetopDialog {
 		} else if (key === "partial") {
 			await this._clearUnstoppable();
 			// Pointedly no HP: "no longer dying" is not "back up". They're unconscious (or close
-			// enough) until the GM says otherwise, which is what the state records.
-			await this._character.setDeathsDoorState(DEATHS_DOOR_STATE.OUT_OF_ACTION);
+			// enough) until the GM says otherwise, which is what the state records. A Heavy's Hard to
+			// Kill trade opens with it, latched in the same write, so the sheet's card can still offer
+			// it once this window is closed (HARD_TO_KILL_TRADE_FLAG).
+			const actor = this._character._actor;
+			if (this._character.deathsDoorRollOptions?.()?.hardToKill && typeof actor?.update === "function") {
+				await actor.update({
+					[`flags.${SYSTEM_ID}.${DEATHS_DOOR_FLAG}`]: DEATHS_DOOR_STATE.OUT_OF_ACTION,
+					[`flags.${SYSTEM_ID}.${HARD_TO_KILL_TRADE_FLAG}`]: true,
+				});
+			} else {
+				await this._character.setDeathsDoorState(DEATHS_DOOR_STATE.OUT_OF_ACTION);
+			}
 		} else {
 			// A 6- decides nothing but that the roll is spent — which of the three fates they take
 			// is still theirs, and the GM will want to ask about it before they answer.
@@ -1505,22 +1579,16 @@ export class DeathsDoorDialog extends StonetopDialog {
 		this._markText = text;
 	}
 
-	/** Hard to Kill, 7-9: "you can mark a debility of your choice to regain 1 HP" (p.113). */
+	/** Hard to Kill, 7-9: "you can mark a debility of your choice to regain 1 HP" (p.114). */
 	async _onTradeDebility(key) {
 		if (this._debilityTraded || !key) return;
-		const name = this._character.debilityChoices.find(d => d.key === key)?.name ?? key;
 		this._debilityTraded = true;
 		try {
-			// One write: the debility, the hit point and the end of being out of the action are
-			// all the one trade.
-			const ok = await this._character.markDebility(key,
-				{ hp: 1, moveName: "Hard to Kill", clearsDeathsDoor: true });
-			if (!ok) { this._debilityTraded = false; return; }
+			if (!(await tradeHardToKillDebility(this._character, key))) { this._debilityTraded = false; return; }
 		} catch (err) {
 			this._debilityTraded = false;
 			throw err;
 		}
-		await this._post("Hard to Kill", `<p>${format(`${_I18N}.chat.hardToKill`, { name: escHtml(this._actorName), debility: escHtml(name) })}</p>`);
 		this.renderIfOpen();
 	}
 
@@ -1535,7 +1603,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 	 */
 	async _onChooseFate(key) {
 		const fate = _FATES.find(f => f.key === key);
-		if (!fate || this._fateApplied) return;
+		if (!fate || this._fateApplied || this._noFateOwed()) return;
 
 		if (fate.insert === "choice") { this._step = "fate"; this.render(true); return; }
 		if (fate.insert) return this._onTakeInsert(fate.insert);
@@ -1560,9 +1628,21 @@ export class DeathsDoorDialog extends StonetopDialog {
 		this.renderIfOpen();
 	}
 
+	/**
+	 * Whether the 6- this window is offering fates for is no longer owed: the GM cleared the pending fate in
+	 * edit mode, or it was chosen from another window, while this one still showed the buttons. Says so and
+	 * redraws when it is not, so a stale button never sets `dead` or grants an insert nobody is owed.
+	 */
+	_noFateOwed() {
+		if (this._fatePending) return false;
+		ui.notifications?.info?.(format(`${_I18N}.fateSettled`, { actor: this._actorName }));
+		this.renderIfOpen();
+		return true;
+	}
+
 	/** Grant a post-death insert — the actual mechanical consequence of refusing to go. */
 	async _onTakeInsert(slug) {
-		if (this._fateApplied || !slug) return;
+		if (this._fateApplied || !slug || this._noFateOwed()) return;
 		this._fateApplied = true;
 		try {
 			// They died and came back: no longer dying, and emphatically not dead, but out of the
@@ -1619,11 +1699,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 	}
 
 	async _post(title, body) {
-		const actor = this._character?._actor ?? null;
-		await ChatMessage.create({
-			speaker: actor ? ChatMessage.getSpeaker({ actor }) : ChatMessage.getSpeaker(),
-			content: stonetopChatCard(title, `<div class="card-content">${body}</div>`, "stonetop-dying-card"),
-		});
+		await postDyingCard(this._character?._actor ?? null, title, body);
 	}
 
 	/**

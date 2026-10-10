@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import Handlebars from "handlebars";
-import { DeathsDoorDialog } from "../../../../module/actors/character/dialogs/DeathsDoorDialog.js";
+import { DeathsDoorDialog, tradeHardToKillDebility } from "../../../../module/actors/character/dialogs/DeathsDoorDialog.js";
 import {
 	DEATHS_DOOR_ROLL_FLAG, DEATHS_DOOR_ROLL_STALE_MS, DEATHS_DOOR_STATE, NEVER_GONNA_KEEP_ME_DOWN, isDeathsDoorCard,
 } from "../../../../module/actors/character/deaths-door.js";
@@ -13,13 +13,22 @@ import {
 import { stubAsk } from "../../../fakes/confirm.js";
 import { readRepo } from "../../../fakes/css.js";
 import { escHtml } from "../../../../module/utils/strings.js";
-import { deletionTarget } from "../../../../module/utils/foundry-compat.js";
+import { deletionEntry, deletionTarget } from "../../../../module/utils/foundry-compat.js";
 
 // Only the roll itself is stood in for (the Battle Joy case below reads what it was handed), and the card it
 // was posted as (none, unless a test hands one over: the Burn Brightly / Impetuous Youth cases below).
 const rollStat = vi.hoisted(() => vi.fn(async () => ({ total: 8 })));
 const messageOfRoll = vi.hoisted(() => vi.fn(() => null));
 vi.mock("../../../../module/utils/roll-engine.js", async importOriginal => ({ ...(await importOriginal()), rollStat, messageOfRoll }));
+// The pre-roll window every roll gets: answered as a window that asked nothing, unless a test says otherwise.
+const promptRoll = vi.hoisted(() => vi.fn(async () => ({ situational: 0 })));
+vi.mock("../../../../module/dialogs/RollDialog.js", async importOriginal => ({ ...(await importOriginal()), promptRoll }));
+
+// StonetopCharacter#onDirectStatRoll as these stand-ins have it: the debility pass, then the dice. The real one also
+// folds the sticky mode, ongoing and what the next roll is owed; its own tests cover that, these cover the window.
+function directRoll(stat, opts) {
+	return rollStat(stat, this._actor, this.applyDebilityRollMode ? this.applyDebilityRollMode(stat, opts) : opts);
+}
 
 // A character at the Door, with only what the 10+ path touches: the hit point it hands back and
 // the wound list the mark goes into. The wound store is the real shape (add returns an id, patch
@@ -30,6 +39,8 @@ function makeCharacter() {
 	let next = 0;
 	return {
 		_actor: { id: "actor-1" },
+		deathsDoorState: "dying",
+		onDirectStatRoll: directRoll,
 		wounds,
 		restored: false,
 		async returnToOneHp() { this.restored = true; },
@@ -248,7 +259,8 @@ describe("DeathsDoorDialog: a Battle Joy ends before the roll", () => {
 
 		expect(actor.flags["stonetop-pwd"].battleJoy).toBeUndefined();
 		expect(posted[0].content).toContain("their Battle Joy ends, with no roll");
-		expect(rollStat.mock.calls[0][2]).toMatchObject({ rollMode: "dis", modifier: -1, noXpOnMiss: true });
+		// Unstoppable's -1 rides the one-off modifier, and the roll is aimed at nobody on the map.
+		expect(rollStat.mock.calls[0][2]).toMatchObject({ rollMode: "dis", situational: -1, noXpOnMiss: true, targets: [] });
 	});
 });
 
@@ -443,6 +455,8 @@ describe("DeathsDoorDialog: Burn Brightly and giving it your all, before the tie
 	function doorFor(actor, tierShift = null) {
 		const character = {
 			_actor: actor,
+			deathsDoorState: "dying",
+			onDirectStatRoll: directRoll,
 			deathsDoorRollOptions: () => ({ statChoices: [{ stat: "", label: "+nothing" }], penalty: 0, tierShift }),
 		};
 		const dialog = new DeathsDoorDialog(character, () => {});
@@ -666,7 +680,7 @@ describe("Death's Door's roll card offers neither boost itself", () => {
 		const main = readRepo("stonetop.js");
 		const wire = main.slice(main.indexOf("function _chatWireBurnBrightly"), main.indexOf("// -- +1 TO A ROLL JUST MADE"));
 		// Any 0-HP move's card (deaths-door.js#isZeroHpMoveCard), Death's Door's among them.
-		expect(wire).toMatch(/if \(!alreadyBurned && \(!canAfford \|\| isZeroHpMoveCard\(message\)\)\) return;/);
+		expect(wire).toMatch(/if \(!alreadyBurned\) \{[^}]*?if \(isZeroHpMoveCard\(message\)\) return;/);
 		// And the window's footer puts accepting first (Foundry's order), each boost naming what it does.
 		const hbs = readRepo("templates/dialogs/deaths-door.hbs");
 		const accept = hbs.indexOf("deaths-door-accept-btn");
@@ -791,6 +805,7 @@ describe("DeathsDoorDialog: a roll under way, seen from every owner's window", (
 		const character = {
 			_actor: actor,
 			get deathsDoorState() { return actor.flags[SCOPE].deathsDoor ?? null; },
+			onDirectStatRoll: directRoll,
 			deathsDoorRollOptions: () => ({ statChoices: [{ stat: "", label: "+nothing" }], penalty: 0, tierShift, skipRollMove }),
 			setDeathsDoorState: vi.fn(async state => {
 				if (state) actor.flags[SCOPE].deathsDoor = state;
@@ -1173,6 +1188,129 @@ describe("DeathsDoorDialog: a roll under way, seen from every owner's window", (
 		});
 	});
 
+	// Audit DD-3: a window left open while the character left the Door. With no GM connected there is no claim
+	// ruling to refuse the roll, so the window asks for itself before anything is written.
+	describe("a window left open on someone no longer at the Door, with no GM to rule", () => {
+		it("rolls nothing for a character brought back up, and writes no marker", async () => {
+			as("p1");
+			const { actor, character } = dyingHero({ background: null });
+			const dialog = windowOn(character);
+			delete actor.flags[SCOPE].deathsDoor;   // healed above 0 HP while the window sat on the dice
+
+			await dialog._onRoll();
+			await dialog._onTakeTenPlus();
+
+			expect(rollStat).not.toHaveBeenCalled();
+			expect(markerWrites(actor)).toHaveLength(0);
+			expect(character.setDeathsDoorState).not.toHaveBeenCalled();
+		});
+
+		it("chooses no fate once none is owed, and still does while one is", async () => {
+			as("p1");
+			const { actor, character } = dyingHero({ background: null });
+			character.setPostDeathInsert = vi.fn(async () => {});
+			const dialog = windowOn(character);
+			actor.flags[SCOPE].deathsDoor = DEATHS_DOOR_STATE.OUT_OF_ACTION;   // the GM cleared the pending fate
+
+			await dialog._onChooseFate("last-door");
+			await dialog._onTakeInsert("ghost");
+			expect(character.setDeathsDoorState).not.toHaveBeenCalled();
+			expect(character.setPostDeathInsert).not.toHaveBeenCalled();
+
+			actor.flags[SCOPE].deathsDoor = DEATHS_DOOR_STATE.FATE_PENDING;
+			await dialog._onChooseFate("last-door");
+			expect(character.setDeathsDoorState).toHaveBeenCalledWith(DEATHS_DOOR_STATE.DEAD);
+		});
+	});
+
+	// Audit DD-5: Hard to Kill's 7-9 trade, latched with the 7-9 so the sheet's card can offer it once this window
+	// has gone.
+	describe("Hard to Kill's 7-9 trade", () => {
+		it("opens with the 7-9, in the same write as out of the action", async () => {
+			as("p1");
+			const { actor, character } = dyingHero({ background: null });
+			character.deathsDoorRollOptions = () => ({ statChoices: [{ stat: "", label: "+nothing" }], penalty: 0, hardToKill: true });
+			actor.update.mockClear();
+
+			await rollAt(windowOn(character), 8);
+
+			const opened = actor.update.mock.calls.find(([data]) => `flags.${SCOPE}.hardToKillTrade` in data);
+			expect(opened?.[0]).toEqual({
+				[`flags.${SCOPE}.deathsDoor`]: DEATHS_DOOR_STATE.OUT_OF_ACTION,
+				[`flags.${SCOPE}.hardToKillTrade`]: true,
+			});
+			expect(stateOf(actor)).toBe(DEATHS_DOOR_STATE.OUT_OF_ACTION);
+		});
+
+		it("is made once, by the one trade both the window and the sheet's card call, which closes the latch in its write", async () => {
+			const actor = { name: "Duvin", flags: { [SCOPE]: { hardToKillTrade: true } } };
+			actor.getFlag = (scope, key) => actor.flags[scope]?.[key];
+			actor.unsetFlag = vi.fn(async (scope, key) => { delete actor.flags[scope][key]; });
+			const character = {
+				_actor: actor,
+				debilityChoices: [{ key: "weakened", name: "Weakened", marked: false }],
+				markDebility: vi.fn(async () => true),
+			};
+
+			expect(await tradeHardToKillDebility(character, "weakened")).toBe(true);
+
+			expect(character.markDebility).toHaveBeenCalledWith("weakened", {
+				hp: 1, moveName: "Hard to Kill", clearsDeathsDoor: true,
+				alsoUpdate: Object.fromEntries([deletionEntry(`flags.${SCOPE}.hardToKillTrade`)]),
+			});
+			expect(actor.unsetFlag).not.toHaveBeenCalled();
+			expect(ChatMessage.create.mock.calls.at(-1)[0].content).toContain("marks <strong>Weakened</strong> to regain 1 HP");
+		});
+	});
+
+	// Audit DD-8: a watching window names the tier that landed, not the state that followed it.
+	describe("a watched result, read after more happened", () => {
+		it("reads a 7-9 traded back to 1 HP as a 7-9, and a 6- that took an insert as a 6-", async () => {
+			as("p1");
+			const weak = dyingHero();
+			const rolled = windowOn(weak.character);
+			await rollAt(rolled, 8);
+			as("gm");
+			const watcher = windowOn(weak.character);
+			watcher._syncRoll();
+			as("p1");
+			await rolled._onAcceptResult();
+			delete weak.actor.flags[SCOPE].deathsDoor;   // Hard to Kill's trade: 1 HP, no state left behind
+			as("gm");
+			watcher._syncRoll();
+			expect(watcher.getData()).toMatchObject({ isWeak: true, spectator: true });
+
+			as("p1");
+			const miss = dyingHero();
+			const missed = windowOn(miss.character);
+			await rollAt(missed, 4);
+			as("gm");
+			const onlooker = windowOn(miss.character);
+			onlooker._syncRoll();
+			as("p1");
+			await missed._onAcceptResult();
+			// The Ghost taken: out of the action, with the insert's own 0-HP move from now on.
+			miss.actor.flags[SCOPE].deathsDoor = DEATHS_DOOR_STATE.OUT_OF_ACTION;
+			miss.character.zeroHpMove = { dialog: false };
+			as("gm");
+			onlooker._syncRoll();
+			expect(onlooker.getData()).toMatchObject({ isMiss: true, spectator: true });
+		});
+
+		it("shows no result as theirs when they were brought back up before anything landed", () => {
+			as("p1");
+			const { actor, character } = dyingHero({ background: null });
+			actor.flags[SCOPE].deathsDoorRolling = { userId: "p2", userName: "Bea", nonce: "n1", at: 1_000_000 };
+			const watcher = windowOn(character);
+			watcher._syncRoll();
+			// Healed with the dice still in the air: the state and the marker go together.
+			delete actor.flags[SCOPE].deathsDoor;
+			delete actor.flags[SCOPE].deathsDoorRolling;
+			watcher._syncRoll();
+			expect(watcher.getData()).toMatchObject({ isResult: false, spectator: false, isStrong: false });
+		});
+	});
+
 	describe("the roller's own window, opened again (a reload mid-roll)", () => {
 		it("picks the waiting result back up instead of offering the dice", async () => {
 			as("p1");
@@ -1230,6 +1368,8 @@ describe("DeathsDoorDialog: a roll under way, seen from every owner's window", (
 				// Aline presses first, but her claim is still on its way to the GM when Bea presses hers.
 				as("p1");
 				const alinePress = aline._onRoll();
+				// Past the pre-roll window: her claim is on its way, under her name.
+				await vi.waitFor(() => expect(gm.query).toHaveBeenCalledTimes(1));
 				as("p2");
 				const card = await rollAt(bea, 8);
 				expect(rollingOn(actor)).toMatchObject({ userId: "p2", total: 8 });
@@ -1262,11 +1402,12 @@ describe("DeathsDoorDialog: a roll under way, seen from every owner's window", (
 		it("refuses a claim that arrives after the Door was settled: nothing rolls a second tier", async () => {
 			let letAlineThrough;
 			const alineHeld = new Promise(resolve => { letAlineThrough = resolve; });
-			withGM({ holdFor: { p1: alineHeld } });
+			const gm = withGM({ holdFor: { p1: alineHeld } });
 			const { actor, character } = dyingHero({ background: null });   // nothing to wait on: lands with the dice
 			as("p1");
 			const aline = windowOn(character);
 			const alinePress = aline._onRoll();
+			await vi.waitFor(() => expect(gm.query).toHaveBeenCalledTimes(1));
 			as("p2");
 			await rollAt(windowOn(character), 9);
 			expect(stateOf(actor)).toBe(DEATHS_DOOR_STATE.OUT_OF_ACTION);
@@ -1287,6 +1428,7 @@ describe("DeathsDoorDialog: a roll under way, seen from every owner's window", (
 			as("p1");
 			const aline = windowOn(character);
 			const alinePress = aline._onRoll();
+			await vi.waitFor(() => expect(gm.query).toHaveBeenCalledTimes(1));
 
 			as("gm");
 			let during = null;

@@ -6226,13 +6226,17 @@ export class StonetopCharacter {
 	 *
 	 * `key` can be Walk It Off's (walk-it-off.js) while debilityChoices lists it: the move's box is
 	 * marked instead, and no debility is.
+	 *
+	 * `alsoUpdate`: a further fragment for the same write, as restoreHp's (Hard to Kill's trade closes its
+	 * latch in it).
 	 */
-	async markDebility(key, { hp = null, moveName, clearsDeathsDoor = false } = {}) {
+	async markDebility(key, { hp = null, moveName, clearsDeathsDoor = false, alsoUpdate = null } = {}) {
 		const choice = this.debilityChoices.find(d => d.key === key);
 		if (!choice || choice.marked) return false;
 		const update = debilityData(key, true);
 		if (hp !== null && hp > this.hp) update["system.attributes.hp.value"] = hp;
 		if (clearsDeathsDoor) Object.assign(update, this._clearDeathsDoorUpdate);
+		if (alsoUpdate) Object.assign(update, alsoUpdate);
 		await this._actor.update(update, moveName ? { stonetopMove: moveName } : {});
 		return true;
 	}

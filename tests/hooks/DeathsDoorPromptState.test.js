@@ -227,6 +227,17 @@ describe("onPreUpdateActorDeathsDoor: a Death's Door roll left on the sheet", ()
 		// And nothing to drop is never written as a deletion.
 		expect(hit({}, 5, 0)).not.toHaveProperty(["-=deathsDoorRolling"]);
 	});
+
+	// Audit DD-5: a Hard to Kill trade the last brush's 7-9 left open belongs to that brush. Going down afresh drops
+	// it, so a later out-of-the-action that no 7-9 opened (a GM's "not lethal", an insert taken) never offers it.
+	it("drops a Hard to Kill trade the last brush left open, on going down afresh", () => {
+		const bag = hit({ hardToKillTrade: true }, 5, 0);
+		expect(bag.deathsDoor).toBe(DEATHS_DOOR_STATE.DYING);
+		expect(bag).toHaveProperty(["-=hardToKillTrade"], null);
+		// Not on the hit point that ends a brush: the trade is still that brush's to make.
+		expect(hit({ deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION, hardToKillTrade: true }, 0, 1))
+			.not.toHaveProperty(["-=hardToKillTrade"]);
+	});
 });
 
 /**

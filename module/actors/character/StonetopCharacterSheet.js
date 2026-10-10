@@ -14,14 +14,14 @@ import {prefersReducedMotion} from "../../utils/reduced-motion.js";
 import {LevelUpDialog} from "./dialogs/LevelUpDialog.js";
 import {moveChoiceKey} from "./dialogs/well-versed-topics.js";
 import {PossessionChoicesDialog} from "./dialogs/PossessionChoicesDialog.js";
-import {DeathsDoorDialog} from "./dialogs/DeathsDoorDialog.js";
+import {DeathsDoorDialog, tradeHardToKillDebility} from "./dialogs/DeathsDoorDialog.js";
 import {UndeathDialog} from "./dialogs/UndeathDialog.js";
 import {buildPostDeathChoices, choiceWriteIns, sectionReader} from "./post-death-choices.js";
 import {moveActionsFor, runPostDeathAction} from "./post-death-actions.js";
 import {
 	buildPostDeathTabView, completeMasterTask, gainThrallMark, runPostDeathOutcome, setFavorFromPip, tickInsertLore,
 } from "./post-death-outcomes.js";
-import {DEATHS_DOOR_STATE, HARD_TO_KILL, PAST_DEATH_KINDS, POST_DEATH_INSERT_SLUGS, UNDEATH_MOVE_NAMES, halfMaxHp, pastDeathClasses, pastDeathKind, zeroHpMove} from "./deaths-door.js";
+import {DEATHS_DOOR_STATE, HARD_TO_KILL, HARD_TO_KILL_TRADE_FLAG, PAST_DEATH_KINDS, POST_DEATH_INSERT_SLUGS, UNDEATH_MOVE_NAMES, halfMaxHp, pastDeathClasses, pastDeathKind, hardToKillTradeOpen, zeroHpMove} from "./deaths-door.js";
 import {WoundDialog} from "./dialogs/WoundDialog.js";
 import {WOUND_STATUS_GLYPH, WOUND_STATUS_LABEL} from "./wound-display.js";
 import {normalizeWound, normalizeWoundList} from "./wound-record.js";
@@ -2143,6 +2143,11 @@ export function createStonetopCharacterSheetClass(Base) {
 				// Post-Death route below, and for the same reason: whoever is holding the wrench has
 				// already said they are changing the sheet.
 				clearFate: isFatePending && !!snapshot.editMode,
+				// Hard to Kill's 7-9 trade, still open once the window that rolled it has gone (closed, or the GM's
+				// fallback window): "mark a debility of your choice to regain 1 HP" (p.114). The debilities still
+				// unmarked, each a button; latched by the 7-9 (HARD_TO_KILL_TRADE_FLAG) and spent by the trade.
+				hardToKillTrade: this.isEditable && this._hardToKillTradeIsOpen(this._stonetopCharacter, state)
+					? (this._stonetopCharacter.debilityChoices ?? []).filter(d => !d.marked) : null,
 				// The way to the Post-Death tab for a table who resolved the Door in conversation.
 				// That tab is opt-in (showPostDeath), and until this control existed the only thing
 				// that ever opted in was REMOVING an insert — so the "Choose Your Fate" picker, whose
@@ -4788,6 +4793,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-levelup-icon").on("click", this._onLevelUpOpen.bind(this));
 			html.find(".stonetop-deathsdoor-open-btn").on("click", this._onDeathsDoorOpen.bind(this));
 			html.find(".stonetop-deathsdoor-clear-btn").on("click", this._onDeathsDoorClear.bind(this));
+		html.find(".stonetop-deathsdoor-htk-btn").on("click", ev => this._onHardToKillTrade(ev));
 			html.find(".stonetop-deathsdoor-postdeath-btn").on("click", this._onPostDeathTabOpen.bind(this));
 			// The `Dead` tag in the header. The other way into the raise question is putting hit
 			// points on a dead sheet, and a table that plays the resurrection out in the fiction
@@ -8155,6 +8161,38 @@ export function createStonetopCharacterSheetClass(Base) {
 			const pending = char.deathsDoorState === DEATHS_DOOR_STATE.FATE_PENDING;
 			if (char.zeroHpMove.dialog && (pending || char.canFaceDeathsDoor)) return this._onDeathsDoorOpen();
 			ui.notifications?.info(format("stonetop.unstoppable.hardToKillNotDying", { name: this.actor.name }));
+		}
+
+		/**
+		 * Whether Hard to Kill's 7-9 trade is open for `char` in Death's Door `state` (deaths-door.js#hardToKillTradeOpen):
+		 * the Death's Door card's buttons and the trade they make ask the same question. The moves are read (every
+		 * owned item filtered) only once the 7-9's latch is set and they are out of the action, the one case their
+		 * answer can change.
+		 */
+		_hardToKillTradeIsOpen(char, state) {
+			const latched = !!this.actor.getFlag?.(STONETOP_SCOPE, HARD_TO_KILL_TRADE_FLAG);
+			if (!latched || state !== DEATHS_DOOR_STATE.OUT_OF_ACTION) return false;
+			return hardToKillTradeOpen({ state, latched, hardToKill: !!char?.deathsDoorRollOptions?.()?.hardToKill });
+		}
+
+		/**
+		 * Hard to Kill's 7-9 trade from the Death's Door card (_buildDeathsDoorData's hardToKillTrade), for a Heavy
+		 * whose Death's Door window is gone: the same trade the window makes (DeathsDoorDialog.js#
+		 * tradeHardToKillDebility), asked again here so a stale card cannot trade twice.
+		 */
+		async _onHardToKillTrade(event) {
+			event?.preventDefault?.();
+			const button = event?.currentTarget;
+			const key = button?.dataset?.debility;
+			const char = this._stonetopCharacter;
+			if (!key || !this.isEditable || !char) return;
+			if (!this._hardToKillTradeIsOpen(char, char.deathsDoorState)) return void this.render(false);
+			if (button) button.disabled = true;
+			try {
+				await tradeHardToKillDebility(char, key);
+			} finally {
+				this.render(false);
+			}
 		}
 
 		/**
