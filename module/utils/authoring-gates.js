@@ -13,5 +13,11 @@ export function gmOnlyGate(gmOnlySettingKey) {
 /** Whether the current user may author custom moves. */
 export function canAuthorCustomMoves() { return gmOnlyGate("customMovesGmOnly"); }
 
+/**
+ * Whether a character sheet offers this user custom-move authoring: the gate above, on a sheet the
+ * user can write. The sheet's handlers refuse a read-only sheet, so its buttons must not show there.
+ */
+export function canAuthorCustomMovesOn(sheetEditable) { return !!sheetEditable && canAuthorCustomMoves(); }
+
 /** Whether the current user may author homebrew arcana (minor & major). */
 export function canCreateArcana() { return gmOnlyGate("arcanaCreationGmOnly"); }

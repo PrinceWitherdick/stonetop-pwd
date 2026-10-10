@@ -448,7 +448,10 @@ describe("handleApplyQuery", () => {
 		expect(second).toBe(false);
 		expect(hp.value).toBe(7);
 		expect(flags[SCOPE].damage.applied).toHaveLength(1);
-		expect(message.setFlag).toHaveBeenCalledTimes(1);
+		// The one press writes twice: its `applying` mark before the HP, and the latch (clearing the mark)
+		// after it. The second ask writes nothing.
+		expect(message.setFlag).toHaveBeenCalledTimes(2);
+		expect(flags[SCOPE].damage.applying).toBeNull();
 	});
 
 	it("applies nothing for a player who does not own the row", async () => {

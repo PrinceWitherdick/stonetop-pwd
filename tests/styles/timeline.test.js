@@ -125,7 +125,7 @@ describe("the timeline and the season inks", () => {
 			"templates/dialogs/timeline.hbs",
 		]) {
 			expect(readRepo(rel), `${rel} does not use the shared period heading`)
-				.toContain('{{> "stonetop.timeline-period-head"}}');
+				.toContain('{{~> "stonetop.timeline-period-head"}}');
 		}
 	});
 
@@ -246,9 +246,9 @@ describe("the aggregate's columns", () => {
 	// User, 2026-10-03: the year rides in the shared year chip, at the heading's own size.
 	it("puts the vertical year heading in the year chip, full size", () => {
 		expect(readRepo("templates/dialogs/partials/timeline-period.hbs"))
-			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"><span class="stonetop-year-chip">{{yearLabel}}</span></h2>');
+			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-year-chip">{{yearLabel}}</span></h2>');
 		expect(readRepo("templates/dialogs/timeline.hbs"))
-			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"><span class="stonetop-timeline-year-cell"><span class="stonetop-year-chip">{{yearLabel}}</span></span></h2>');
+			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell"><span class="stonetop-year-chip">{{yearLabel}}</span></span></h2>');
 		expect(value(".stonetop-timeline-year .stonetop-year-chip", "font-size")).toBe("inherit");
 	});
 
@@ -412,24 +412,26 @@ describe("the timeline laid across the page", () => {
 	it("keeps the aggregate's header row against the column's top edge", () => {
 		expect(value(".stonetop-timeline-scroll > .stonetop-timeline-canvas:has(> .stonetop-timeline-board, > .stonetop-timeline-swim)", "margin-top"))
 			.toBe("0");
-		expect(readRepo("module/dialogs/TimelineWindow.js")).toMatch(/pinTop: true/);
+		expect(readRepo("module/dialogs/TimelineWindow.js")).toContain("pinTop: !(roomAcrossLine && readAcross),");
 	});
 
 	// The swimlanes' thread names and the board's season cells are sticky at the left, and must never
-	// slide right off that edge: no left pad on the column, no left gutter (user, 2026-10-03). A single
-	// thread, the sheet tabs' only shape, keeps the same two edges too (user, 2026-10-05).
+	// slide right off that edge: no left pad on the column, no left gutter (user, 2026-10-03).
 	it("keeps the aggregate's left column against the column's left edge", () => {
 		expect(value(".stonetop-timeline-scroll:has(> .stonetop-timeline-canvas > .stonetop-timeline-swim)", "padding-left"))
 			.toBe("0");
 		expect(value(".stonetop-timeline:not(.stonetop-timeline--horizontal) .stonetop-timeline-scroll", "padding-left"))
 			.toBe("0");
-		expect(readRepo("module/dialogs/TimelineWindow.js")).toMatch(/pinLeft: true/);
+		expect(readRepo("module/dialogs/TimelineWindow.js")).toContain("pinLeft: !(roomAcrossLine && !readAcross),");
 	});
 
-	// Every shape, pop-out and sheet tab alike, stops at the timeline's foot (user, 2026-10-05); only
-	// the right keeps room to drag off into.
-	it("stops the column at the timeline's foot", () => {
-		expect(readRepo("module/dialogs/TimelineWindow.js")).toMatch(/pinBottom: true/);
+	// The aggregate stops at its foot (user, 2026-10-05); a single thread read down does too. Read
+	// across, a single thread's line can be dragged to the middle of the view, so it has room above
+	// AND below it (user, 2026-10-07).
+	it("stops the column at the timeline's foot, but for a single thread's line read across", () => {
+		const src = readRepo("module/dialogs/TimelineWindow.js");
+		expect(src).toContain("pinBottom: !(roomAcrossLine && readAcross),");
+		expect(src).toContain("const roomAcrossLine = this.isSingleTrack;");
 	});
 
 	// THE WHEEL'S ZOOM goes on the picture and never on the canvas, whose padding is the drag gutter

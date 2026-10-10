@@ -16,16 +16,21 @@
  *  • clear one mark instead ...... regainInstead, in the HP write's preUpdate (hooks/DeathsDoorPrompt.js)
  *  • the penalty, and the clear .. deaths-door.js#deathsDoorRollOptions and DeathsDoorDialog
  *
- * STILL FIGHTING IS THE DYING STATE: at 0 HP with Death's Door not yet rolled. Rolling it is what
- * "when you stop fighting" asks for, and every state the roll leaves behind is off this track.
+ * STILL FIGHTING IS THE DYING STATE: at 0 HP with Death's Door not yet rolled, reduced there in battle
+ * (the UNSTOPPABLE_FIGHTING_FLAG stamp, laid at the drop). Rolling it is what "when you stop fighting"
+ * asks for, and every state the roll leaves behind is off this track.
  *
  * Rules ask for a LEARNED Unstoppable (owns-move.js#ownsLearnedMoveNamed): one kept on the sheet
  * switched off keeps its circles on show and does nothing with them.
  */
 
 import { MoveResources } from "./MoveResources.js";
-import { StonetopFlags, resolvedFlagProperty } from "./StonetopFlags.js";
-import { DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, POST_DEATH_INSERT_SLUGS, UNSTOPPABLE } from "./deaths-door.js";
+import { STONETOP_SCOPE, StonetopFlags, resolvedFlagProperty } from "./StonetopFlags.js";
+import {
+	DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, POST_DEATH_INSERT_SLUGS, UNSTOPPABLE, UNSTOPPABLE_FIGHTING_FLAG,
+} from "./deaths-door.js";
+import { deletionEntry } from "../../utils/foundry-compat.js";
+import { inBattle } from "../../fight/in-battle.js";
 import { ownedLearnedMove, ownsLearnedMoveNamed } from "./owns-move.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { postMoveNote } from "../../utils/chat.js";
@@ -47,24 +52,53 @@ const tracks = actor => new MoveResources(new StonetopFlags(actor, "moves"));
 
 /**
  * Is this character down at 0 HP and still in the fight on Unstoppable's word? A character, with
- * Unstoppable learned, at 0 HP, and dying with Death's Door not yet rolled.
+ * Unstoppable learned, at 0 HP, dying with Death's Door not yet rolled, and reduced to 0 IN BATTLE:
+ * "When you are reduced to 0 HP in battle, you can keep fighting" (Book I p.114).
+ *
+ * "In battle" is read AT THE DROP, not now: the HP write that drops them stamps UNSTOPPABLE_FIGHTING_FLAG
+ * when they stood in a fight (fightsOnWhenDropped), and this reads the stamp. So a Heavy who drops with no
+ * fight running (a fall, a trap) takes the ordinary road to Death's Door even if a combat starts round them
+ * later; one put back on the Door by the GM's fiat after being out of the action was not reduced to 0 in
+ * battle by it either; and one who dropped in a fight still fights on once that combat is deleted, until
+ * the fight's end hands them the Door (combat/battle-joy-offer.js#actionStops) and lifts the stamp.
  *
  * Not one who carries a post-death insert: their 0-HP move is the insert's own (deaths-door.js
  * #zeroHpMove), and the move defers Death's Door, which is behind them.
  */
 export function keepsFightingAtZero(actor) {
+	return downOnUnstoppable(actor) && resolvedFlagProperty(actor, UNSTOPPABLE_FIGHTING_FLAG) === true;
+}
+
+/**
+ * keepsFightingAtZero without the stamp: down at 0 HP, dying, with Unstoppable learned, however they got
+ * there. For "If you survive, clear all your circles" (hooks/DeathsDoorPrompt.js#markNotLethal), which
+ * clears whatever is marked.
+ */
+export function downOnUnstoppable(actor) {
 	if (actor?.type !== "character") return false;
 	if ((Number(actor?.system?.attributes?.hp?.value) || 0) > 0) return false;
 	if (resolvedFlagProperty(actor, DEATHS_DOOR_FLAG) !== DEATHS_DOOR_STATE.DYING) return false;
-	return fightsOnWhenDropped(actor);
+	return holdsUnstoppable(actor);
 }
 
 /**
  * keepsFightingAtZero, asked of a character still on their feet: WOULD dropping to 0 HP leave them
- * fighting on? For the write that makes them dying (hooks/DeathsDoorPrompt.js), which has to decide
- * before the hit points and the state it reads are on the document.
+ * fighting on? For the write that makes them dying (hooks/DeathsDoorPrompt.js), which decides before the
+ * hit points and the state it reads are on the document, and stamps the answer. Here the fight IS read
+ * live, since this is the moment of the drop.
  */
-export function fightsOnWhenDropped(actor) {
+export function fightsOnWhenDropped(actor, { combats = globalThis.game?.combats } = {}) {
+	return holdsUnstoppable(actor) && inBattle(actor, combats);
+}
+
+/** The update fragment that lifts the "fighting on" stamp: they have stopped fighting. Empty when none is laid. */
+export function stopFightingUpdate(actor) {
+	if (resolvedFlagProperty(actor, UNSTOPPABLE_FIGHTING_FLAG) == null) return {};
+	return Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${UNSTOPPABLE_FIGHTING_FLAG}`)]);
+}
+
+/** A character whose 0-HP move is Death's Door, with Unstoppable learned. */
+function holdsUnstoppable(actor) {
 	if (actor?.type !== "character") return false;
 	if (POST_DEATH_INSERT_SLUGS.includes(resolvedFlagProperty(actor, "postDeathInsert.slug"))) return false;
 	return ownsLearnedMoveNamed(actor, UNSTOPPABLE);
@@ -73,6 +107,18 @@ export function fightsOnWhenDropped(actor) {
 /** How many of Unstoppable's circles are marked. */
 export function unstoppableMarks(actor) {
 	return Math.max(0, Math.trunc(Number(tracks(actor).getMoveResources()?.[UNSTOPPABLE]) || 0));
+}
+
+/**
+ * "If you survive, clear all your circles", as an update fragment to fold into the write that says they
+ * survived (the GM's not-lethal ruling, hooks/DeathsDoorPrompt.js#markNotLethal). Empty, with `marks` 0,
+ * when none is marked.
+ *
+ * @returns {{marks: number, update: object}}  how many were marked, and the write that clears them
+ */
+export function clearCirclesUpdate(actor) {
+	const marks = unstoppableMarks(actor);
+	return { marks, update: marks ? tracks(actor).usesUpdate(UNSTOPPABLE, 0) : {} };
 }
 
 function circlesOf(actor) {

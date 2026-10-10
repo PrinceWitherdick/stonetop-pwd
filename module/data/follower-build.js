@@ -253,6 +253,10 @@ export function buildCustomFollower(input = {}) {
 		// normal state and means "no portrait", which is exactly what falls the card back to
 		// portraitIcon — so a follower never needs one and nothing has to be migrated.
 		img:          String(input.img ?? "").trim(),
+		// The square of that portrait the source actor was already framed to (a People of Stonetop
+		// face cropped on the steading roster), kept only beside a portrait it was measured on.
+		...(String(input.img ?? "").trim() && input.portraitFrame && typeof input.portraitFrame === "object"
+			? { portraitFrame: input.portraitFrame } : {}),
 		tags:         normalizeTags(input.tags),
 		hpMax,
 		hpCurrent,
@@ -310,10 +314,21 @@ export function orderFollowersBonus({ helps = 0, hinders = 0, exceptional = fals
 	// the way rolls a straight 2d6. Neither side stacks either — "by default, it
 	// doesn't matter if you have multiple sources of advantage vs. a single source of
 	// disadvantage" — so this is a boolean XOR, not a tally.
-	const adv = !!advantage;
-	const dis = x > 0 || !!disadvantage;
+	const sources = orderFollowersModeSources({ hinders: x, advantage, disadvantage });
+	const adv = sources.includes("adv");
+	const dis = sources.includes("dis");
 	const rollMode = adv === dis ? "normal" : (adv ? "adv" : "dis");
 	return { bonus, rollMode };
+}
+
+/**
+ * The sides that spoke on an Order Followers roll, `["adv"]`, `["adv", "dis"]` and so on: what
+ * orderFollowersBonus nets into its `rollMode`, kept as SOURCES for the roll, so a cancelled pair stays
+ * cancelled when one more side is laid on it (We Happy Few's nerves: roll-mode.js#layModes).
+ */
+export function orderFollowersModeSources({ hinders = 0, advantage = false, disadvantage = false } = {}) {
+	const dis = Math.trunc(Number(hinders) || 0) > 0 || !!disadvantage;
+	return [...(advantage ? ["adv"] : []), ...(dis ? ["dis"] : [])];
 }
 
 // ── Readiness cap (Defend, p.216 / followers p.469) ──────────────────────────

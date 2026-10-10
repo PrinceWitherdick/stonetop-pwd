@@ -32,9 +32,9 @@ import {
 	RELMAP_BOARD_ASPECT, RELMAP_BOARD_WIDTH, RELMAP_CAPTION_FLOOR_PX, RELMAP_CAPTION_PX,
 	RELMAP_HEAD_PX,
 	ROUTE_HEAD_PATH, ROUTE_HEAD_VIEWBOX,
-	boardBounds, boardMetrics,
+	bandPath, boardBounds, boardMetrics,
 	captionRoomPx, captionSize, clampReach, clearanceBow, curveWithGap, edgeArrowheads, edgeBow,
-	edgeCurve, edgeLabelAnchor, freeSpot, groupShapes, groupsInside, seatAlong, spreadLabels,
+	edgeCurve, edgeLabelAnchor, freeSpot, groupShapes, groupsInside, nodeRadiusPct, seatAlong, spreadLabels,
 } from "../utils/relmap-geometry.js";
 import {
 	RELMAP_DASHES, RELMAP_DASH_DEFAULT, RELMAP_DIRS, RELMAP_FLAG, RELMAP_GROUP_DASHES, RELMAP_GROUP_SHAPES, RELMAP_INKS,
@@ -254,6 +254,8 @@ const TOOLS = Object.freeze({
 	create: { needsEdit: true, needsActorCreate: true, run: app => app._createPerson() },
 	// A GROUP ROUND SOME PEOPLE: the selection at once, or a box drawn on the next drag. See `_groupTool`.
 	group: { needsEdit: true, run: app => app._groupTool() },
+	// DRAWING LINES FROM ANY FACE, not only the small handle on its rim. See `_lineTool`.
+	lines: { needsEdit: true, run: app => app._lineTool() },
 	// ⚠ NO "droppulled", AND NO "hidepulled" EITHER. Everything the old "Pull in ratings" button
 	// left behind is read the way every other line on the board is read now: rubbed out one at a
 	// time from the tie bar, with undo behind it. What the checkbox under the board does instead is
@@ -282,6 +284,16 @@ const TOOLS = Object.freeze({
 function mayCreateActors() {
 	return globalThis.Actor?.canUserCreate?.(game.user) ?? !!game.user?.isGM;
 }
+
+/**
+ * The footer's tools that ARM the board rather than act at once: the button's action, the flag that
+ * says it is armed, the method that arms or stands it down, and the class the board wears meanwhile
+ * (its cursor). The group tool draws a box round people; "Draw lines" makes every face a handle.
+ */
+const ARMABLE_TOOLS = Object.freeze([
+	{ action: "group", armed: "_drawArmed", arm: "_armDraw", boardClass: "is-drawing-group" },
+	{ action: "lines", armed: "_linesArmed", arm: "_armLines", boardClass: "is-drawing-lines" },
+]);
 
 export class RelationshipMapWindow extends StonetopDialog {
 	constructor(entry, options = {}) {
@@ -399,6 +411,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._pickedGroupParts = [];
 		this._pendingGroupPick = "";
 		this._drawArmed = false;
+		// THE "DRAW LINES" TOOL, armed: every face is a handle until it is put down. See `_lineTool`.
+		this._linesArmed = false;
 		// THE GEOMETRY THE MARKUP NOW ON SCREEN WAS BUILT FROM, kept for exactly one reason: the
 		// gap cut in each stroke has to be re-cut against the caption that actually painted, and
 		// that cannot be known until the caption is in a document. See `_fitGapsToPaint`.
@@ -724,6 +738,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// no i18n in it; see utils/relmap-group-bar.js.
 			groupLabel: localize("stonetop.relmap.groups.tool"),
 			groupHint: localize("stonetop.relmap.groups.toolHint"),
+			lineLabel: localize("stonetop.relmap.lineTool"),
+			lineHint: localize("stonetop.relmap.lineHint"),
 			groupBar: {
 				label: localize("stonetop.relmap.groups.bar"),
 				name: localize("stonetop.relmap.groups.name"),
@@ -1067,7 +1083,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// AND SELECTING SEVERAL, which is the same kind of gesture: a modifier on a click, with nothing
 		// on the board to suggest it until somebody says so.
 		const gesture = canEdit
-			? ` ${localize("stonetop.relmap.removeGesture")} ${localize("stonetop.relmap.selectGesture")}`
+			? ` ${localize("stonetop.relmap.removeGesture")} ${localize("stonetop.relmap.selectGesture")} ${localize("stonetop.relmap.altGesture")}`
 			: "";
 		// ⚠ WITH A FULL STOP PUT IN WHERE THE SENTENCE BEFORE IT HAS NONE. Two of the three
 		// tooltips below end in one; the third is a bare name, and "The Miller Right-click for the
@@ -1452,16 +1468,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// drag layer: ownership can change under an open board, and a drag that writes to a map the
 			// reader may no longer edit is a drag that appears to work and is silently thrown away.
 			canEdit: () => this.canEdit,
-			nodeAt: id => {
-				// An unwritten nudge is where the portrait actually is, so it answers first -- and then one
-				// written and not yet back from the server, which the document has not heard about either.
-				// Read off the document in that breath, the next arrow key started from where the portrait
-				// had been, and the walk jumped back a step. See `_writeNudge`.
-				if (this._pendingNudge.has(id)) return { ...this._pendingNudge.get(id) };
-				if (this._landingNudge.has(id)) return { ...this._landingNudge.get(id) };
-				const node = readGraph(this.boardDoc).nodes[id];
-				return node ? { x: node.x, y: node.y } : null;
-			},
+			nodeAt: id => this._nodeAt(id),
 			onMove: (id, at) => this._moveNode(id, at),
 			onNudge: (id, at) => this._nudgeNode(id, at),
 			// ⚠ THE CAPTION'S FOUR HANDLERS, AND THE GEOMETRY IS ALL ON THIS SIDE OF THEM. The drag
@@ -1491,6 +1498,12 @@ export class RelationshipMapWindow extends StonetopDialog {
 			onGroupNudge: moves => this._nudgeNodes(moves),
 			onLink: (a, b) => this._createLink(a, b),
 			onLinkFrom: id => this._linkFrom(id),
+			// THE HALF-DRAWN LINE, trimmed to the rims here because the radius is this window's.
+			linkBand: (from, at, to) => this._linkBand(from, at, to),
+			// THE "DRAW LINES" TOOL: every face a handle while it is armed. See `_lineTool`.
+			linking: () => this._linesArmed,
+			onLinkPicked: id => { if (id) this._announce(format("stonetop.relmap.linePicked", { name: this._nameOf(readGraph(this.boardDoc), id) })); },
+			onStopLinking: () => this._armLines(false),
 			onOpen: id => this._openPerson(id),
 			// A LINE TAKEN HOLD OF, which is the bar and no longer a window: everything a line
 			// says is on the bar, and rubbing it out is the last press on it.
@@ -1522,15 +1535,17 @@ export class RelationshipMapWindow extends StonetopDialog {
 		root.querySelectorAll("[data-relmap-action]").forEach(button => {
 			button.addEventListener("click", ev => this._onToolClick(ev));
 		});
-		// ESCAPE ON THE GROUP TOOL ITSELF STANDS IT DOWN. The board's own Escape (relmap-drag.js) is
-		// heard on the board only, and right after arming the tool the focus is still on this button:
+		// ESCAPE ON AN ARMED TOOL ITSELF STANDS IT DOWN. The board's own Escape (relmap-drag.js) is
+		// heard on the board only, and right after arming the tool the focus is still on its button:
 		// left to bubble, the key reaches core, which closes the whole window instead.
-		root.querySelector("[data-relmap-action='group']")?.addEventListener("keydown", ev => {
-			if (ev.key !== "Escape" || !this._drawArmed) return;
-			ev.preventDefault();
-			ev.stopPropagation();
-			this._armDraw(false);
-		});
+		for (const tool of ARMABLE_TOOLS) {
+			root.querySelector(`[data-relmap-action='${tool.action}']`)?.addEventListener("keydown", ev => {
+				if (ev.key !== "Escape" || !this[tool.armed]) return;
+				ev.preventDefault();
+				ev.stopPropagation();
+				this[tool.arm](false);
+			});
+		}
 
 		// WHICH BOARD OF THIS MAP IS UP. Delegated from the strip rather than bound per tab,
 		// because `_paintPages` replaces every tab in it whenever somebody at the far end of the
@@ -1573,7 +1588,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// What this reader can take back lives on their own machine, not in the markup a render was
 		// built from, and a fresh bar comes up with both buttons enabled until it is told otherwise.
 		this._paintHistory();
-		this._paintGroupTool();
+		this._paintTools();
 		if (this._lit) this._lightPerson(this._lit);
 		if (this._litGroup) this._lightGroup(this._litGroup);
 		// The selection outlives a render (a resize, say), and its marks do not. Except onto a board
@@ -3788,6 +3803,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._groupBar?.close();
 		this._pendingGroupPick = "";
 		if (this._drawArmed) this._armDraw(false);
+		if (this._linesArmed) this._armLines(false);
 	}
 
 	/**
@@ -3805,6 +3821,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		for (const bar of this._bars) bar.discard();
 		this._pendingGroupPick = "";
 		if (this._drawArmed) this._armDraw(false);
+		if (this._linesArmed) this._armLines(false);
 	}
 
 	/**
@@ -3872,6 +3889,44 @@ export class RelationshipMapWindow extends StonetopDialog {
 			? localize("stonetop.relmap.history.moved")
 			: format("stonetop.relmap.history.movedMany", { count: ids.length });
 		return this._write(patch, { label, coalesce, onto: { kind: "nodes", ids }, graph });
+	}
+
+	/**
+	 * Where a portrait is RIGHT NOW. An unwritten nudge is where the portrait actually is, so it
+	 * answers first -- and then one written and not yet back from the server, which the document has
+	 * not heard about either. Read off the document in that breath, the next arrow key started from
+	 * where the portrait had been, and the walk jumped back a step. See `_writeNudge`.
+	 *
+	 * `graph`, when the caller already read one this breath, saves normalising the board again.
+	 */
+	_nodeAt(id, graph = null) {
+		if (this._pendingNudge.has(id)) return { ...this._pendingNudge.get(id) };
+		if (this._landingNudge.has(id)) return { ...this._landingNudge.get(id) };
+		const node = (graph ?? readGraph(this.boardDoc)).nodes[id];
+		return node ? { x: node.x, y: node.y } : null;
+	}
+
+	/**
+	 * The half-drawn line out of `fromId`, as a `d`: from their RIM, not their centre, to the pointer
+	 * at `at`, or to the rim of `toId` once it is over them, which is where the line it becomes will
+	 * end. Asked once per painted frame of a link drag. See `bandPath`.
+	 */
+	_linkBand(fromId, at, toId = null) {
+		if (!at) return "";
+		// The graph the board on screen was drawn from, for both ends: this runs every painted frame of
+		// the drag, and normalising the whole board each frame to read two positions is waste.
+		const graph = this._drawn?.graph ?? readGraph(this.boardDoc);
+		const from = this._nodeAt(fromId, graph);
+		if (!from) return "";
+		const r = this._drawn?.board?.r ?? nodeRadiusPct();
+		const to = toId ? this._nodeAt(toId, graph) : null;
+		return bandPath({
+			from: { left: from.x, top: from.y },
+			to: to ? { left: to.x, top: to.y } : at,
+			aspect: RELMAP_BOARD_ASPECT,
+			r,
+			rTo: to ? r : 0,
+		});
 	}
 
 	async _openPerson(id) {
@@ -4135,6 +4190,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 */
 	_groupTool() {
 		if (this._drawArmed) { this._armDraw(false); return; }
+		if (this._linesArmed) this._armLines(false);
 		if (this._selected.length) { this._makeGroup(this._selected); return; }
 		this._armDraw(true);
 		this._announce(localize("stonetop.relmap.groups.drawHint"));
@@ -4142,15 +4198,40 @@ export class RelationshipMapWindow extends StonetopDialog {
 
 	_armDraw(on) {
 		this._drawArmed = !!on;
-		this._paintGroupTool();
+		this._paintTools();
 	}
 
-	/** The tool's pressed state, and the board's cursor while it is armed. */
-	_paintGroupTool() {
+	/**
+	 * THE "DRAW LINES" TOOL ON THE FOOTER (user, 2026-10-07: "more, easier ways to draw these lines").
+	 *
+	 * While it is armed every face is a handle: a drag from anywhere on one draws a line, and a click
+	 * picks somebody and a click on somebody else joins them (relmap-drag.js). It STAYS armed after a
+	 * line, so a table can draw several in a row; pressed again, or Escape on the board, puts it down.
+	 * It and the group tool are never armed at once, since both claim a plain press.
+	 */
+	_lineTool() {
+		if (this._linesArmed) { this._armLines(false); return; }
+		if (this._drawArmed) this._armDraw(false);
+		this._armLines(true);
+		this._announce(localize("stonetop.relmap.lineHint"));
+	}
+
+	_armLines(on) {
+		this._linesArmed = !!on;
+		if (!this._linesArmed) this._teardownDrag?.stopAiming?.();
+		this._paintTools();
+	}
+
+	/** Each armable tool's pressed state, and the board's cursor while one is armed. */
+	_paintTools() {
 		const root = this._root;
 		if (!root) return;
-		root.querySelector?.("[data-relmap-action='group']")?.setAttribute?.("aria-pressed", this._drawArmed ? "true" : "false");
-		root.querySelector?.(".stonetop-relmap")?.classList?.toggle("is-drawing-group", this._drawArmed);
+		const board = root.querySelector?.(".stonetop-relmap");
+		for (const tool of ARMABLE_TOOLS) {
+			const on = !!this[tool.armed];
+			root.querySelector?.(`[data-relmap-action='${tool.action}']`)?.setAttribute?.("aria-pressed", on ? "true" : "false");
+			board?.classList?.toggle(tool.boardClass, on);
+		}
 	}
 
 	/**

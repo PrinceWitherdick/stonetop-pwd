@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { SYSTEM_ID } from "../../module/system-id.js";
+import { followerHpWriteUpdate } from "../../module/actors/character/follower-fate.js";
 
 // A document update path is a STRING that Foundry splits on "." (foundry.utils.setProperty).
 // A hyphen is perfectly legal inside one, so the scope is written plainly:
@@ -90,9 +91,13 @@ describe("flag update paths", () => {
 		for (const store of ["customFollowers", "initiatesHp", "beastHp", "crew.individualsHp"]) {
 			expect(sheet, `${store} is written with a bracketed scope`)
 				.not.toContain(`flags["${SYSTEM_ID}"].${store}`);
-			expect(sheet, `${store} has no dotted write left`)
-				.toContain(`flags.${SYSTEM_ID}.${store}`);
 		}
+		expect(sheet, "customFollowers has no dotted write left").toContain(`flags.${SYSTEM_ID}.customFollowers`);
+		// The HP box's write is built in one place (follower-fate.js#followerHpWriteUpdate), from a path, so
+		// the update it hands back is what has to be dotted.
+		expect(Object.keys(followerHpWriteUpdate({}, "initiate", "ash", 0, 3))).toEqual([`flags.${SYSTEM_ID}.initiatesHp.ash`]);
+		expect(Object.keys(followerHpWriteUpdate({}, "beast", "ox", 0, 3))).toEqual([`flags.${SYSTEM_ID}.beastHp.ox`]);
+		expect(Object.keys(followerHpWriteUpdate({}, "crew-individual", null, 2, 3))).toEqual([`flags.${SYSTEM_ID}.crew.individualsHp.2`]);
 	});
 
 	it("splits a dotted scope path the way Foundry does", () => {

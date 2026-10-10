@@ -5,23 +5,27 @@ import { escHtml, formatOutcomeDetail, stripHtmlToText, sign } from "./strings.j
 import { pickLimitsFrom } from "./move-picks.js";
 import { pickLeadText, TIER_KEYS, TIER_LABELS } from "./move-results.js";
 import { markRolledTier, moveTiersHtml, rollCardBody } from "./move-tiers.js";
-import { stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, dieResultsText, multiDieFaces, damageMark, damageBadge, damageKeywordsHtml, pickListItem, descriptionPickTiers, cardNoticeHtml } from "./chat.js";
+import { stonetopChatCard, springRollCardBody, rollFormulaChip, rollResultNumber, dieResultsText, multiDieFaces, damageMark, damageBadge, damageKeywordsHtml, pickListItem, descriptionPickTiers, cardNoticeHtml, whisperedAs } from "./chat.js";
 import { adjustXp } from "./xp.js";
-import { XP_MARK_FLAG, XP_MARK_FOR_FLAG, XP_UNDONE_FLAG, MISS_XP_FLAG, takeBackXpMark } from "./undo-xp-mark.js";
+import {
+	XP_MARK_FLAG, XP_MARK_FOR_FLAG, MISS_XP_FLAG, MISS_XP_STATE_FLAG, MISS_XP_ACTOR_FLAG, MISS_XP_BY_CHOICE_FLAG, XP_PER_MISS,
+	MISS_XP_CHOICE_LATCHES,
+	liveMissReceipt, missReceipts, missXpIsByChoice, missXpMarked, missXpWaived, takeBackXpMark,
+} from "./undo-xp-mark.js";
 import { inCardTurn } from "./card-queue.js";
 import { pressRollCard, registerRollCardAction } from "./roll-card-writer.js";
 import { speakerActor } from "./speaker-actor.js";
 import { composeDamageFormula, seedBonus, extraTerm } from "./damage.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { getBooleanSetting } from "../settings.js";
-import { privateMessageModeOptions } from "./foundry-compat.js";
+import { privateMessageModeOptions, deletionEntry } from "./foundry-compat.js";
 import { CRITICAL_TOTAL, ROLLED_FLAG, rolledRecord, countedNote, cardCountedTier } from "./counted-tier.js";
 import { SEASONAL_GAINS } from "../dialogs/spring-burst-data.js";
 
 // What a miss is worth (Book I p.209: "a tick mark that raises your total by 1"). Named because
 // the mark and the Undo that takes it back have to agree, and a card stamped by one number and
-// reversed by another is a bug that only shows up as a total nobody can account for.
-const XP_PER_MISS = 1;
+// reversed by another is a bug that only shows up as a total nobody can account for. Defined with the
+// take-back in ./undo-xp-mark.js, which needs the same number.
 
 // Defined in ./counted-tier.js (its tier ladder reads it too), re-exported here where its readers already reach for it.
 export { CRITICAL_TOTAL };
@@ -209,7 +213,7 @@ export { dieResultsText, multiDieFaces };
  * clicked it. Pass `alias` instead to speak the card under a fixed name, which then
  * heads it too (the Expedition Requisition card).
  */
-export async function rollSeasonsCard({ formula, title = "", alias = "", resultTable, resultLegend = "", missCountsAsPartial = "", countsAsMiss = "", conditionNotes = [], pickOptions = null, pickReference = null } = {}) {
+export async function rollSeasonsCard({ formula, title = "", alias = "", resultTable, resultLegend = "", missCountsAsPartial = "", countsAsMiss = "", conditionNotes = [], pickOptions = null, pickReference = null, tierActions = null, actor = null } = {}) {
 	const roll = await new Roll(formula).evaluate();
 	const rolled = classifyResult(roll.total).key;
 	// As rollStat's option of the same name: a 6- that a rule counts as a 7-9, said on the card.
@@ -239,11 +243,17 @@ export async function rollSeasonsCard({ formula, title = "", alias = "", resultT
 		resultLegend + reference,
 	// And rollStat's `conditionNotes`, in its pills: what put the roll at advantage (a held Rites
 	// of the Land advantage, say), so this card says why as a stat roll's does.
-	) + conditionsRowHtml(conditionNotePills(conditionNotes));
+	) + conditionsRowHtml(conditionNotePills(conditionNotes))
+		// And rollStat's `tierActions`, for the tier landed on only (this card has no Shift to reveal
+		// another): the Expedition Requisition's 6- cost button.
+		+ (tierActions?.[tier]
+			? `<div class="card-buttons stonetop-roll-tier-actions" data-active-tier="${escHtml(tier)}"><div class="stonetop-roll-tier-action" data-tier="${escHtml(tier)}">${tierActions[tier]}</div></div>`
+			: "");
 	// Titled even when spoken under an alias: the title row is what carries the "?" that brings a
 	// hidden description back, and without it a table that hides descriptions would lose the ladder.
+	// `actor` rides an aliased speaker so a card button can find what it acts on (speakerActor).
 	await roll.toMessage({
-		speaker: alias ? { alias } : ChatMessage.getSpeaker(),
+		speaker: alias ? { alias, ...(actor?.id ? { actor: actor.id } : {}) } : ChatMessage.getSpeaker(),
 		flavor:  stonetopChatCard(title || alias, body, "stonetop-spring-card", description ? DESC_TOGGLE_HTML : ""),
 	});
 	return { total: roll.total, tier, label: result.label };
@@ -986,9 +996,15 @@ export async function rollStat(statKey, actor, options = {}) {
 			// animation is long enough for a Burn Brightly or a Shift to land first, and only one client
 			// lining both up decides which came first. The writer reads the card as it is by then.
 			const done = await pressRollCard(card, MISS_XP_ACTION, { rollMode });
-			// The GM's client did not answer: mark it here on the same reading rather than lose the XP.
-			// Should the GM's turn still land, the receipt's Undo is there for the second mark.
-			if (done === null) await inCardTurn(card, () => reconcileMissXp(card, card.rolls?.at?.(0)?.total ?? roll.total, { actor, rollMode }));
+			// The GM's client did not answer: mark it here on the same reading rather than lose the XP. The mark
+			// is recorded on the card first (MISS_XP_STATE_FLAG), so a GM's turn that still lands later finds it
+			// marked and marks nothing. On the character the CARD speaks for, as the GM's turn would mark: the
+			// sheet's own actor can be an unlinked token's private copy (utils/speaker-actor.js).
+			if (done === null) {
+				const speaker = speakerActor(card);
+				await inCardTurn(card, () => reconcileMissXp(card, card.rolls?.at?.(0)?.total ?? roll.total,
+					{ actor: speaker?.type === "character" ? speaker : actor, rollMode }));
+			}
 		}
 	}
 
@@ -1053,23 +1069,18 @@ export async function markMissXp(actor, moveName, { forCard = null, rollMode = g
 		move: moveName,
 		description: `<p>On a <strong>miss</strong> (a total of 6 or less), you <strong>mark XP</strong>, a tick mark that raises your total by 1, unless the move says otherwise.</p>`,
 	});
-	return ChatMessage.create({
+	const messageData = {
 		content:  receipt.content,
 		speaker:  ChatMessage.getSpeaker({ actor }),
-		rollMode,
 		// The roller's, when the GM's client writes it: a chat message is "the GM, or whoever authored it"
 		// to modify, and the receipt's Undo is the player's (undo-xp-mark.js#wireUndoXpMark).
 		...(author ? { author } : {}),
 		flags:    { [SYSTEM_ID]: { ...receipt.flags, ...(forCard ? { [XP_MARK_FOR_FLAG]: forCard } : {}) } },
-	});
-}
-
-/** The receipt still standing for `card`'s miss: marked for it and not undone. Null when none. */
-export function liveMissReceipt(card) {
-	if (!card?.id) return null;
-	const messages = globalThis.game?.messages?.contents ?? [];
-	return messages.findLast(m => m.getFlag?.(SYSTEM_ID, XP_MARK_FOR_FLAG) === card.id
-		&& !m.getFlag(SYSTEM_ID, XP_UNDONE_FLAG)) ?? null;
+	};
+	// Where the roll went: the roll card's own whisper (and blindness), else the chat mode applied the way
+	// core does it, so a Blind or Private GM miss does not announce itself to the whole table on its receipt.
+	const card = forCard ? globalThis.game?.messages?.get?.(forCard) ?? null : null;
+	return ChatMessage.create(whisperedAs(messageData, card, rollMode));
 }
 
 /**
@@ -1084,15 +1095,81 @@ export function liveMissReceipt(card) {
  *
  * Run by the card's writer, in the card's turn: after a rewrite (stonetop.js#_resyncRewrittenTotal), and for
  * the roll's own miss (MISS_XP_ACTION). `rollMode` is the roller's, for a receipt written on the GM's client.
+ *
+ * Whether the XP is held is read off the card as well as its receipt (undo-xp-mark.js#missXpMarked): a
+ * receipt deleted from the log still has its XP taken back on a lift, and is not marked a second time by a
+ * rewrite that leaves the card on a miss. A miss its player undid by hand stays undone (missXpWaived).
+ *
+ * A card whose miss XP a BUTTON marks (MISS_XP_BY_CHOICE_FLAG: Never at a Loss, a steading roll's "Mark
+ * XP") is never marked here, only taken back; lifted off the miss, its latches come off with the XP
+ * (undo-xp-mark.js#MISS_XP_CHOICE_LATCHES), so a card brought back down offers the choice again. Its XP is the character the button named
+ * (MISS_XP_ACTOR_FLAG) where it named one, since a steading roll is spoken by the steading.
  */
 export async function reconcileMissXp(card, total, { actor = null, rollMode = undefined } = {}) {
-	if (!card?.getFlag?.(SYSTEM_ID, MISS_XP_FLAG) || actor?.type !== "character") return;
+	if (!card?.getFlag?.(SYSTEM_ID, MISS_XP_FLAG)) return;
+	const markedFor = card.getFlag(SYSTEM_ID, MISS_XP_ACTOR_FLAG);
+	if (markedFor) actor = globalThis.game?.actors?.get?.(markedFor) ?? null;
+	if (actor?.type !== "character") return;
+	// The chat log read once, for every question asked of the card's receipts below.
+	const receipts = missReceipts(card);
+	if (missXpWaived(card, receipts)) return;
 	const miss = cardCountedTier(card, total, SYSTEM_ID) === "failure";
-	const live = liveMissReceipt(card);
+	const marked = missXpMarked(card, receipts);
+	const byChoice = missXpIsByChoice(card);
 	const move = card.getFlag(SYSTEM_ID, ROLLED_FLAG)?.move ?? null;
 	const author = card.author?.id ?? null;
-	if (miss && !live) await markMissXp(actor, move, { forCard: card.id, author, ...(rollMode ? { rollMode } : {}) });
-	else if (!miss && live) await takeBackXpMark(live, actor, { move: move ? `${move} (no longer a miss)` : "No longer a miss" });
+	if (miss && !marked && !byChoice) {
+		// Recorded on the card BEFORE the mark, and taken off again if the mark fails: a second writer
+		// arriving meanwhile (a GM's turn landing after the roller's fallback) reads it and marks nothing.
+		await card.setFlag(SYSTEM_ID, MISS_XP_STATE_FLAG, "marked");
+		try {
+			await markMissXp(actor, move, { forCard: card.id, author, ...(rollMode ? { rollMode } : {}) });
+		} catch (err) {
+			await card.unsetFlag(SYSTEM_ID, MISS_XP_STATE_FLAG)
+				.catch(e => console.error("Stonetop | Could not release a miss XP record:", e));
+			throw err;
+		}
+	} else if (!miss && marked) {
+		const takeBack = move ? `${move} (no longer a miss)` : "No longer a miss";
+		const live = liveMissReceipt(card, receipts);
+		// No receipt left to latch (it was deleted): the XP the card records is taken back all the same.
+		if (live) await takeBackXpMark(live, actor, { move: takeBack });
+		else await adjustXp(actor, -XP_PER_MISS, { move: takeBack });
+		if (byChoice) await card.update(Object.fromEntries(MISS_XP_CHOICE_LATCHES.map(key => deletionEntry(`flags.${SYSTEM_ID}.${key}`))));
+		else await card.setFlag(SYSTEM_ID, MISS_XP_STATE_FLAG, "none");
+	}
+}
+
+/**
+ * Mark a miss's XP from a BUTTON on its card (Never at a Loss's "Mark XP", a steading roll's), tied to the
+ * card as a roll's own mark is: the card is stamped as a miss that earned XP, marked by choice, and (for a
+ * steading roll, spoken by the steading) whose XP it was, so a rewrite that lifts it off the miss takes the
+ * XP back and opens the choice again (reconcileMissXp). The receipt is the ordinary one, Undo and all, and
+ * goes where the roll card went. Stamped BEFORE the mark and taken off again if the mark fails.
+ *
+ * @param {ChatMessage} card   the roll card the button is on
+ * @param {Actor} actor        the character marking XP
+ * @param {string} moveName    for the ledger
+ * @param {object} [options]
+ * @param {boolean} [options.naming]  record `actor` on the card as the one whose XP follows it
+ */
+export async function markMissXpByChoice(card, actor, moveName, { naming = false } = {}) {
+	const stamps = {
+		[MISS_XP_FLAG]: true,
+		[MISS_XP_BY_CHOICE_FLAG]: true,
+		[MISS_XP_STATE_FLAG]: "marked",
+		...(naming ? { [MISS_XP_ACTOR_FLAG]: actor.id } : {}),
+	};
+	const flagPath = key => `flags.${SYSTEM_ID}.${key}`;
+	await card.update(Object.fromEntries(Object.entries(stamps).map(([key, value]) => [flagPath(key), value])));
+	try {
+		// A card with no whisper went to everyone, so its receipt does too, whatever this client's chat mode.
+		return await markMissXp(actor, moveName, { forCard: card.id, author: card.author?.id ?? null, rollMode: "publicroll" });
+	} catch (err) {
+		await card.update(Object.fromEntries(Object.keys(stamps).map(key => deletionEntry(flagPath(key)))))
+			.catch(e => console.error("Stonetop | Could not release a miss XP mark:", e));
+		throw err;
+	}
 }
 
 /** The roll card action that marks a roll's own miss XP on the card's writer (see rollStat). */
@@ -1163,10 +1240,14 @@ export function damageConditionPills({ rollMode = "normal", bonus = 0, extraDice
 // at the old home for a reader to mistake for the real one.
 
 /**
- * Apply advantage/disadvantage to a damage formula by doubling its first dice
- * term and keeping the better/worse half — Stonetop "roll damage twice, take the
- * higher/lower" (e.g. "d6" with disadvantage → "2d6kl1", "d8+2" → "2d8kl1+2").
- * Non-adv/dis modes and dieless formulas pass through unchanged.
+ * Apply advantage/disadvantage to a damage formula by rolling its first dice term
+ * twice and keeping the better/worse ROLL: Stonetop "roll damage twice, take the
+ * higher/lower" (Book I p.21, p.399). One die is two of it, keeping one ("d6" with
+ * disadvantage → "2d6kl1", "d8+2" → "2d8kl1+2"). Several dice are two whole ROLLS of
+ * them, keeping the better or worse total ("2d4" with disadvantage → "{2d4,2d4}kl"),
+ * never the best or worst dice picked one by one out of the four, which is a
+ * different (and kinder) number. Non-adv/dis modes and dieless formulas pass through
+ * unchanged.
  *
  * Exported because the attack flow evaluates its own Rolls (one per target) rather than
  * going through {@link rollDamage}, and a mode that only applied on the single-target path
@@ -1177,7 +1258,7 @@ export function damageRollFormula(formula, rollMode) {
 	return String(formula).replace(/(\d*)d(\d+)/i, (match, count, faces) => {
 		const n = Number(count || 1);
 		const keep = rollMode === "adv" ? "kh" : "kl";
-		return `${n * 2}d${faces}${keep}${n}`;
+		return n > 1 ? `{${n}d${faces},${n}d${faces}}${keep}` : `2d${faces}${keep}1`;
 	});
 }
 

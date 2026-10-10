@@ -58,6 +58,20 @@ describe("the camp window's template", () => {
 		expect(row(html, "bram")).not.toContain("data-tooltip=");
 	});
 
+	// The settle restores a dying character none of their own HP: the card says so, and offers neither
+	// the bedroll's die nor a peaceful night's advantage.
+	it("tells a dying character the night restores no HP, with no bedroll or peaceful-night box", async () => {
+		const dying = { ...aeliana({ hp: 0, carriesBedroll: true }), dying: true };
+		const mine = row(await render([dying]), "aeliana");
+		expect(mine).toContain("Dying, so the night itself restores no HP.");
+		expect(mine).toMatch(/0 &rarr; 0|0 → 0/);
+		expect(mine).not.toContain('data-camp-field="bedroll"');
+		expect(mine).not.toContain('data-camp-field="peaceful"');
+		const up = row(await render([aeliana({ hp: 0, carriesBedroll: true })]), "aeliana");
+		expect(up).toContain('data-camp-field="bedroll"');
+		expect(up).toContain('data-camp-field="peaceful"');
+	});
+
 	it("gives every row its own night radios", async () => {
 		const html = await render([aeliana(), bram()], { editable: ["aeliana", "bram"] });
 		expect(row(html, "aeliana")).toContain('name="campBenefit-aeliana"');

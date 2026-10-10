@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
 	computeMonster,
 	buildMonsterActorData,
+	monsterTokenSize,
+	rederiveMonsterHp,
 	stepDie,
 	ORGANIZATIONS,
 	SIZES,
@@ -65,8 +67,11 @@ describe("computeMonster — armor", () => {
 	it("adds +1 armor for tiny automatically and tags the source", () => {
 		const out = computeMonster({ organization: "horde", size: "tiny", armorBase: 1 });
 		expect(out.armorValue).toBe(2); // leathers(1) + tiny(+1)
-		expect(out.armorSource).toContain("hide");
-		expect(out.armorSource).toContain("small");
+		expect(out.armorSource).toBe("hide, size");
+	});
+
+	it("names a tiny creature's armor source its size, never 'small' (Book II prints '(size)')", () => {
+		expect(computeMonster({ organization: "horde", size: "tiny" }).armorSource).toBe("size");
 	});
 
 	it("stacks shield / skilled / no-organs modifiers", () => {
@@ -114,6 +119,36 @@ describe("computeMonster — damage", () => {
 		expect(out.damageTags).toEqual(["reach", "messy", "1 piercing", "forceful"]);
 		expect(out.damageValue).toContain("(reach, messy, 1 piercing, forceful)");
 		expect(out.damageValue).toContain("d10+2");
+	});
+
+	it("brings messy with each piercing row, as Book I p.398 prints them", () => {
+		expect(computeMonster({ damageTags: ["hand", "1 piercing"] }).damageTags).toEqual(["hand", "1 piercing", "messy"]);
+		expect(computeMonster({ damageTags: ["3 piercing"] }).damageTags).toEqual(["3 piercing", "messy"]);
+	});
+
+	it("ADDS deft's +1 piercing to the row's piercing, as one tag", () => {
+		// "It strikes deftly and precisely: +1 piercing" (p.399). Thick hide plus deft is 2 piercing,
+		// tearing metal plus deft is 4: one number, which is what every reader of the line takes.
+		const hide = computeMonster({ organization: "solitary", attackName: "claws", damageTags: ["hand", "1 piercing"], damageMods: ["deft"] });
+		expect(hide.damageValue).toBe("claws d10 (hand, 2 piercing, messy)");
+		const metal = computeMonster({ organization: "solitary", attackName: "claws", damageTags: ["3 piercing"], damageMods: ["deft", "strong"] });
+		expect(metal.damageTags).toEqual(["4 piercing", "messy", "forceful"]);
+		expect(parseMonsterAttacks(metal.damageValue, metal.rollFormula)[0].piercing).toBe(4);
+		// Deft on its own is 1 piercing, and no messy: only the rows bring that.
+		expect(computeMonster({ damageTags: ["hand"], damageMods: ["deft"] }).damageTags).toEqual(["hand", "1 piercing"]);
+	});
+
+	it("gives a second blow on the creature's die the modifiers' tags as well as their +2", () => {
+		const out = computeMonster({
+			organization: "solitary", attackName: "claws", damageTags: ["hand", "1 piercing"],
+			damageMods: ["strong", "deft"],
+			extraAttacks: [{ name: "bite", tags: ["hand"] }, { name: "hurled rock", die: "d6", tags: ["near"] }],
+		});
+		expect(out.damageValue).toBe(
+			"claws d10+2 (hand, 2 piercing, messy, forceful), bite d10+2 (hand, forceful, 1 piercing), or hurled rock d6 (near)");
+		const [, bite, rock] = parseMonsterAttacks(out.damageValue, out.rollFormula);
+		expect(bite.piercing).toBe(1);
+		expect(rock.piercing).toBe(0);
 	});
 
 	it("notes advantage in the prose damage value", () => {
@@ -176,10 +211,12 @@ describe("computeMonster — damage", () => {
 
 	it("prints a second attack the way the book prints one", () => {
 		// The Assassin, in worksheet form: two blows, two dice, and only one of them ignores armor.
+		// Its dagger's 1 piercing is the deft kind, not the messy thick-hide row.
 		const out = computeMonster({
 			organization: "solitary",
 			attackName: "dagger",
-			damageTags: ["hand", "1 piercing"],
+			damageTags: ["hand"],
+			damageMods: ["deft"],
 			extraAttacks: [{ name: "garrote", die: "d8", tags: ["hand", "grabby", "ignores armor"] }],
 		});
 		expect(out.damageValue)
@@ -325,6 +362,38 @@ describe("buildMonsterActorData", () => {
 		expect(data.system.attributes.hp).toEqual({ value: 0, max: 0 });
 		expect(data.system.count).toBe(1);
 		expect(data.items).toEqual([]);
+	});
+
+	it("sizes the token to the creature: large 2x2, huge 3x3, anything smaller one square", () => {
+		const side = size => {
+			const { width, height } = buildMonsterActorData({ name: "X", size }).prototypeToken;
+			expect(width).toBe(height);
+			return width;
+		};
+		expect([side("tiny"), side("small"), side(""), side("large"), side("huge")]).toEqual([1, 1, 1, 2, 3]);
+		expect(monsterTokenSize(" Huge ")).toBe(3);
+		expect(monsterTokenSize(undefined)).toBe(1);
+	});
+});
+
+describe("rederiveMonsterHp", () => {
+	it("works max HP out from organization, size and the ticked rows (Book I p.396)", () => {
+		expect(rederiveMonsterHp({ organization: "group", size: "large", hpMax: 14, hpValue: 14 })).toEqual({ max: 10, value: 10 });
+		// The Almtakers: group 6, large +4, particularly tough +4.
+		expect(rederiveMonsterHp({ organization: "group", size: "large", hpMods: ["tough"], hpMax: 6, hpValue: 6 }).max).toBe(14);
+		expect(rederiveMonsterHp({ organization: "solitary", size: "", hpMax: 0, hpValue: 0 })).toEqual({ max: 12, value: 12 });
+	});
+
+	it("keeps damage taken, floored at 0 and never above the new max", () => {
+		expect(rederiveMonsterHp({ organization: "solitary", size: "huge", hpMax: 12, hpValue: 7 })).toEqual({ max: 20, value: 15 });
+		expect(rederiveMonsterHp({ organization: "horde", hpMax: 12, hpValue: 2 })).toEqual({ max: 3, value: 0 });
+		// Healed above its old max by hand: nothing taken, so it sits at the new max.
+		expect(rederiveMonsterHp({ organization: "horde", hpMax: 3, hpValue: 9 })).toEqual({ max: 3, value: 3 });
+	});
+
+	it("answers null without an organization to start from", () => {
+		expect(rederiveMonsterHp({ organization: "", size: "large" })).toBeNull();
+		expect(rederiveMonsterHp({ organization: "group (3)" })).toBeNull();
 	});
 });
 

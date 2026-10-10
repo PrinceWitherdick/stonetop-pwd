@@ -46,8 +46,11 @@ import { isPrimaryGM } from "../../utils/primary-gm.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { holdForEach, shareHold } from "../../utils/share-hold.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
+import { cardTierNow } from "../../utils/counted-tier.js";
+import { asArray } from "../../utils/playbook-actors.js";
 import { ownerUsers } from "../../hooks/DeathsDoorPrompt.js";
-import { isZeroHpMoveCard } from "./deaths-door.js";
+import { DEATHS_DOOR_ROLL_FLAG, DEATHS_DOOR_ROLLING_FLAG, isDeathsDoorCard, isUndeathCard } from "./deaths-door.js";
+import { deathsDoorRollMarker } from "./deaths-door-actor.js";
 import { ownsLearnedMoveNamed, ownedMove } from "./owns-move.js";
 import { heldOnTrack, learnedTrack, takeBackHeld } from "./MoveResources.js";
 import { STRUGGLE_MESSAGE_FLAG } from "../../struggle/struggle-rules.js";
@@ -70,7 +73,7 @@ const SOURCES = {
 	diligence: { move: CHRONICLER, cost: 1, on: "any" },
 	sanction:  { move: COMMUNE_WITH_ARATIS, cost: 1, on: "own" },
 	manyHands: { move: MANY_HANDS, cost: 0, on: "other", notInStruggle: true },
-	blessing:  { move: PIETY, cost: 1, on: "own", held: blessingHeld, spend: spendBlessing },
+	blessing:  { move: PIETY, cost: 1, on: "own", held: blessingHeld, spend: spendBlessing, refund: holdBlessing },
 };
 export const BOOST_SOURCES = Object.freeze(Object.keys(SOURCES));
 
@@ -93,20 +96,52 @@ export function boostsOn(message, scope = SYSTEM_ID) {
 }
 
 /**
- * Whether this card is a move or stat roll a +1 can go on: it carries a roll, and a hit tier to move, and it
- * is not a damage card. Read off the stored flavor rather than the rendered card, so the GM's client
- * answering a relayed press asks the same question the button did. PURE.
+ * Whether this is a card a +1 can ever go on: a move or stat roll, carrying a roll and a hit tier to move, and
+ * not a damage card. Read off the stored flavor rather than the rendered card, so the GM's client answering a
+ * relayed press asks the same question the button did. PURE. The +1s a card already took are drawn on any
+ * such card (wireRollBoosts), a Death's Door card whose tier has since landed included.
  *
- * Not a 0-HP move's card either (Death's Door, Undying, Dark Succor): each one's window settles the tier when
- * the dice land, so a +1 pressed on the card afterwards would relabel it, spend the helper's hold, and change
- * nothing (deaths-door.js#isZeroHpMoveCard).
+ * Not an insert's 0-HP move's card (Undying, Dark Succor): its window settles the tier when the dice land, so a
+ * +1 pressed on the card afterwards would relabel it, spend the helper's hold, and change nothing
+ * (deaths-door.js#isUndeathCard).
  */
-export function isBoostableRoll(message, scope = SYSTEM_ID) {
+function isBoostableCard(message, scope = SYSTEM_ID) {
 	if (!message?.rolls?.length) return false;
 	if (message.getFlag?.(scope, "damage")) return false;
-	if (isZeroHpMoveCard(message)) return false;
+	if (isUndeathCard(message)) return false;
 	const flavor = String(message.flavor ?? "");
 	return flavor.includes("stonetop-roll-result-label") && !flavor.includes("stonetop-damage-roll-card");
+}
+
+/**
+ * Whether this card takes a +1 NOW: a card that ever can (isBoostableCard), and a Death's Door card only while
+ * its window is still waiting on the tier (deathsDoorAwaitsPlusOnes). The Door is a roll like any other (Book I
+ * p.245), and Diligence is spent "at any time" on "a roll that you or a fellow player just made" (the Judge, Book
+ * I p.118), so the Door's window pauses for these +1s as it does for Burn Brightly
+ * (dialogs/DeathsDoorDialog.js#_boostsLeft). `doorOpen` is that window's own word, for a marker its client has
+ * not yet heard (the GM's client writes a claim it rules on). Reads the card, and for a Death's Door card its
+ * roller's marker.
+ */
+export function isBoostableRoll(message, scope = SYSTEM_ID, { doorOpen = false } = {}) {
+	if (!isBoostableCard(message, scope)) return false;
+	return !isDeathsDoorCard(message) || doorOpen || deathsDoorAwaitsPlusOnes(message);
+}
+
+/**
+ * Whether a Death's Door card is still open to a +1: its dice are down and its tier not yet written. That is
+ * exactly while the roller's marker (deaths-door-actor.js#deathsDoorRollMarker) is this card's roll, which the
+ * window claims before the dice and clears as the tier lands, on anything below a 10+ (the move's top, where a
+ * +1 buys nothing). The roll is matched by its nonce, which the card is stamped with as it is posted
+ * (deaths-door.js#DEATHS_DOOR_ROLL_FLAG), so the card is open from the moment it exists, before the marker
+ * names it; or by the card the marker names. Until the marker has the tier, the card's own reading of it
+ * stands in, so a 10+ is shut from the first. `actorOf` is the card's speaker by default.
+ */
+export function deathsDoorAwaitsPlusOnes(message, { actorOf = speakerActor } = {}) {
+	if (!message?.id || !isDeathsDoorCard(message)) return false;
+	const marker = deathsDoorRollMarker(actorOf(message));
+	if (!marker) return false;
+	if (marker.messageId !== message.id && marker.nonce !== message.getFlag?.(SYSTEM_ID, DEATHS_DOOR_ROLL_FLAG)) return false;
+	return (marker.tier ?? cardTierNow(message, SYSTEM_ID)) !== "success";
 }
 
 /** Whether this card is one row's roll in a Struggle as One (struggle-store.js stamps it). PURE. */
@@ -145,15 +180,21 @@ export function actsForHelper(user, owners = []) {
  * @param {Actor[]} p.helpers  characters who might help: the world's, or the one a relayed press names
  * @param {object} p.user
  * @param {(actor: Actor) => object[]} [p.ownersOf]
+ * @param {boolean} [p.anyone]  every helper's that someone connected could press for, not just this user's: the
+ *   Death's Door window asks whether ANYONE could still add a +1, to know whether to wait on it. A helper with
+ *   nobody online who owns them is left out (a GM online owns them all, and stands in for an absent player:
+ *   actsForHelper), so the window never waits on a +1 nobody can press.
+ * @param {boolean} [p.doorOpen]  the Death's Door window's own word that its card still waits on the tier, for
+ *   the moment before its marker says so (deathsDoorAwaitsPlusOnes)
  * @returns {{source: string, helper: Actor, cost: number, held: number}[]}
  */
-export function boostOffers({ message, roller, helpers = [], user, ownersOf = ownerUsers, scope = SYSTEM_ID }) {
-	if (roller?.type !== "character" || !isBoostableRoll(message, scope)) return [];
+export function boostOffers({ message, roller, helpers = [], user, ownersOf = ownerUsers, scope = SYSTEM_ID, anyone = false, doorOpen = false }) {
+	if (roller?.type !== "character" || !isBoostableRoll(message, scope, { doorOpen })) return [];
 	const used = boostsOn(message, scope);
 	const struggle = isStruggleRoll(message, scope);
 	// This user's helpers first: on a player's client that is their own character, so the item scans
 	// below run for one sheet rather than every character in the world, on every render of the card.
-	const mine = helpers.filter(h => h?.type === "character" && actsForHelper(user, ownersOf(h)));
+	const mine = helpers.filter(h => h?.type === "character" && (anyone ? ownersOf(h).some(o => o.active) : actsForHelper(user, ownersOf(h))));
 	const offers = [];
 	for (const source of BOOST_SOURCES) {
 		const { move, cost, on, held: holds, notInStruggle } = SOURCES[source];
@@ -169,6 +210,20 @@ export function boostOffers({ message, roller, helpers = [], user, ownersOf = ow
 		}
 	}
 	return offers;
+}
+
+/**
+ * One +1 button's face, as the card and the Death's Door window both draw it: its label, named for the
+ * helper only when this user could press the same source for two of them (`offers`, all they are drawn
+ * beside), and its tooltip. PURE apart from the localization.
+ */
+export function boostButtonFace(offer, offers = []) {
+	const label = localize(`${KEY}.button.${offer.source}`);
+	const twin  = offers.some(o => o !== offer && o.source === offer.source);
+	return {
+		label: twin ? format(`${KEY}.buttonFor`, { label, name: offer.helper.name }) : label,
+		tip:   format(`${KEY}.tip.${offer.source}`, { name: offer.helper.name, held: offer.held }),
+	};
 }
 
 /** The line the card prints for one +1 taken: "+1 Diligence (Aeron)". PURE. */
@@ -195,17 +250,36 @@ export function takeBoost(message, offer, { shiftRoll, cardFlavor, afterShift = 
 		if (!def || !helper) return false;
 		const used = boostsOn(message, scope);
 		if (used.some(b => b.source === source && b.by === helper.uuid)) return false;
+		// A Death's Door card whose tier has landed since the button was drawn: a +1 now would change nothing.
+		if (isDeathsDoorCard(message) && !deathsDoorAwaitsPlusOnes(message)) return false;
 		if (def.cost) {
 			const held = heldFor(helper, source, scope);
 			if (held < def.cost) return false;
 			if (def.spend) await def.spend(helper, scope);
 			else await helper.typedActor.moveResources.setUses(def.move, held - def.cost, { stonetopMove: def.move });
 		}
-		await writeCardRoll(message, roll => shiftRoll(roll, 1), { cardFlavor, afterShift }, {
-			flags: { [scope]: { [BOOSTS_FLAG]: [...used, { source, by: helper.uuid, name: helper.name }] } },
-		});
+		try {
+			await writeCardRoll(message, roll => shiftRoll(roll, 1), { cardFlavor, afterShift }, {
+				flags: { [scope]: { [BOOSTS_FLAG]: [...used, { source, by: helper.uuid, name: helper.name }] } },
+			});
+		} catch (err) {
+			// The pip is paid back when the +1 never reached the card (the card gone, the write refused). The +1
+			// and its name land in ONE write, so a card that names it took it, and a throw after that (the
+			// tier effects that follow a new total) keeps the spend.
+			if (def.cost && !boostsOn(message, scope).some(b => b.source === source && b.by === helper.uuid)) {
+				await refundBoost(helper, source, scope).catch(e => console.error("Stonetop | could not pay back a +1's spend", e));
+			}
+			throw err;
+		}
 		return true;
 	});
+}
+
+/** Give back the pip a +1 spent off its source, for a +1 that never reached the card (one that cost a pip: takeBoost asks). */
+async function refundBoost(helper, source, scope = SYSTEM_ID) {
+	const def = SOURCES[source];
+	if (def.refund) return def.refund(helper, scope);
+	await helper.typedActor.moveResources.setUses(def.move, heldFor(helper, source, scope) + def.cost, { stonetopMove: def.move });
 }
 
 /** A player's +1 on a card they did not write: the GM's client records it. Whether it was taken. */
@@ -242,8 +316,53 @@ export async function handleBoostQuery(data, context = {}, deps = {}) {
 
 /** The world's characters, the helpers a card asks about. */
 function worldCharacters() {
-	return [...(globalThis.game?.actors ?? [])].filter(a => a?.type === "character");
+	return asArray(globalThis.game?.actors).filter(a => a?.type === "character");
 }
+
+/**
+ * Press one +1, by the route the card is written by (utils/roll-card-writer.js#rollCardRoute): here, or through
+ * the GM's client (BOOST_QUERY). Whether it was taken. The card's own button and the Death's Door window both
+ * press here.
+ */
+export function pressBoost(message, offer, deps, { route = rollCardRoute(message, globalThis.game?.user), scope = SYSTEM_ID } = {}) {
+	if (!route || !offer) return Promise.resolve(false);
+	return route === "relay" ? askGMToBoost(message, offer) : takeBoost(message, offer, { ...deps, scope });
+}
+
+/**
+ * The +1s a Death's Door card can still take, for its window (dialogs/DeathsDoorDialog.js#_boostsLeft): `any`,
+ * whether anyone at all could add one (the window waits on it: a Judge's player can press theirs on the card),
+ * and `mine`, the ones this user presses for their own characters, which the window draws as buttons of its own.
+ * Asked with the window's word that the card is still open (`doorOpen`), since its marker may not name it yet.
+ *
+ * @returns {{any: boolean, mine: {source: string, helper: Actor, cost: number, held: number}[]}}
+ */
+export function deathsDoorPlusOnes(message, roller, { user = globalThis.game?.user, helpers = worldCharacters(), ownersOf = ownerUsers, scope = SYSTEM_ID } = {}) {
+	// One pass over every helper, split after: the window needs both answers, and a second pass would scan
+	// this user's helpers twice.
+	const all = boostOffers({ message, roller, helpers, ownersOf, scope, doorOpen: true, anyone: true });
+	return { any: all.length > 0, mine: all.filter(o => actsForHelper(user, ownersOf(o.helper))) };
+}
+
+/**
+ * `updateActor`: a Death's Door roll's marker moved (deaths-door.js#DEATHS_DOOR_ROLLING_FLAG), so the Door
+ * cards of that character redraw on this client: one now waiting on its tier gains its +1 buttons, and one whose
+ * tier has landed loses them. The marker is written with `render: false`, and a card only redraws when IT
+ * changes, so nothing else would. The latest few cards only: the roll's card is always among them.
+ */
+export function onUpdateActorDoorPlusOnes(actor, changes, { messages = globalThis.game?.messages, redraw = m => globalThis.ui?.chat?.updateMessage?.(m) } = {}) {
+	if (actor?.type !== "character") return;
+	const flags = changes?.flags?.[SYSTEM_ID] ?? {};
+	if (!(DEATHS_DOOR_ROLLING_FLAG in flags) && !(`-=${DEATHS_DOOR_ROLLING_FLAG}` in flags)) return;
+	for (const message of asArray(messages).slice(-DOOR_CARD_REDRAW_DEPTH)) {
+		// Not a card this client has not drawn: core's updateMessage would post it at the foot of the log.
+		if (!message?.logged || !isDeathsDoorCard(message) || speakerActor(message)?.id !== actor.id) continue;
+		try { redraw(message); } catch { /* the log is not drawn on this client */ }
+	}
+}
+
+// How far back through the chat log onUpdateActorDoorPlusOnes looks for a Door card to redraw.
+const DOOR_CARD_REDRAW_DEPTH = 30;
 
 /** Name each +1 taken in the card's Conditions row, making the row when the roll had none. */
 function drawBoostNotes(card, boosts) {
@@ -269,7 +388,8 @@ function drawBoostNotes(card, boosts) {
  */
 export function wireRollBoosts(message, html, deps, { user = globalThis.game?.user, scope = SYSTEM_ID } = {}) {
 	const card = html?.querySelector?.(".stonetop-roll-card");
-	if (!card || !isBoostableRoll(message, scope)) return;
+	// The +1s already taken stay on the card for good; what is still on offer is boostOffers' to say.
+	if (!card || !isBoostableCard(message, scope)) return;
 	drawBoostNotes(card, boostsOn(message, scope));
 
 	const row = card.querySelector(".stonetop-card-buttons");
@@ -277,22 +397,18 @@ export function wireRollBoosts(message, html, deps, { user = globalThis.game?.us
 	if (!route) return;
 	const offers = boostOffers({ message, roller: speakerActor(message), helpers: worldCharacters(), user, scope });
 	for (const offer of offers) {
-		// Named for the helper only when this user could press the same source for two of them.
-		const twin = offers.some(o => o !== offer && o.source === offer.source);
-		const label = localize(`${KEY}.button.${offer.source}`);
+		const face = boostButtonFace(offer, offers);
 		const button = document.createElement("button");
 		button.type = "button";
 		button.className = `stonetop-roll-boost-btn stonetop-roll-boost-btn--${offer.source}`;
-		button.textContent = twin ? format(`${KEY}.buttonFor`, { label, name: offer.helper.name }) : label;
-		button.dataset.tooltip = format(`${KEY}.tip.${offer.source}`, { name: offer.helper.name, held: offer.held });
+		button.textContent = face.label;
+		button.dataset.tooltip = face.tip;
 		button.dataset.tooltipDirection = "UP";
 		button.addEventListener("click", async () => {
 			if (button.disabled) return;
 			button.disabled = true;
 			try {
-				const taken = route === "relay"
-					? await askGMToBoost(message, offer)
-					: await takeBoost(message, offer, { ...deps, scope });
+				const taken = await pressBoost(message, offer, deps, { route, scope });
 				if (!taken) {
 					globalThis.ui?.notifications?.warn(localize(`${KEY}.refused`));
 					button.disabled = false;

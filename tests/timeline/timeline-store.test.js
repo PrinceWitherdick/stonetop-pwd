@@ -120,6 +120,26 @@ describe("findTrackPage", () => {
 		world({ pages: [] });
 		expect(findTrackPage("pc-kefta")).toBeNull();
 	});
+
+	// The same rule the lanes are drawn by (`pageTrackId`): a page allTracks shows is a page the
+	// writes find, so a write never mints a second one beside it.
+	it("finds a page minted without the flag by its own trackId, as the lanes do", () => {
+		world({ pages: [fakePage({ name: "Ellis", system: { trackId: "pc-ellis" } })] });
+		expect(findTrackPage("pc-ellis")?.name).toBe("Ellis");
+		expect(allTracks()[0].page).toBe(findTrackPage("pc-ellis"));
+	});
+
+	// Trimmed as `trackKey` trims it into a key: a stray space must not read as a track with no
+	// page, or `ensureTrackPage` mints a second one beside it.
+	it("finds the page for an id with stray whitespace", () => {
+		world({ pages: [fakePage({ key: trackKey("pc-ellis"), name: "Ellis" })] });
+		expect(findTrackPage(" pc-ellis ")?.name).toBe("Ellis");
+	});
+
+	it("never answers a page of another type, whatever key it carries", () => {
+		world({ pages: [fakePage({ key: trackKey("pc-ellis"), name: "Ellis", type: "text" })] });
+		expect(findTrackPage("pc-ellis")).toBeNull();
+	});
 });
 
 describe("readTrack", () => {
@@ -199,6 +219,18 @@ describe("syncTrackPages", () => {
 		const minted = await Promise.all([syncTrackPages(), syncTrackPages(), syncTrackPages()]);
 		expect(minted).toEqual([3, 0, 0]);
 		expect(journal.pages).toHaveLength(3);
+	});
+
+	it("counts a page minted without the flag, and mints only the tracks with none", async () => {
+		const journal = world({
+			pages: [fakePage({ name: "Ellis", system: { trackId: "pc-ellis" } })],
+			actors: [ELLIS, KEFTA],
+		});
+		global.game.user = { isGM: true };
+		let made = [];
+		journal.createEmbeddedDocuments = async (_type, data) => { made = data; return data; };
+		expect(await syncTrackPages()).toBe(1);
+		expect(made.map(d => d.flags[SYSTEM_ID].chronicleKey)).toEqual([trackKey("pc-kefta")]);
 	});
 });
 

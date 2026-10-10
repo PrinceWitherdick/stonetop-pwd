@@ -1,11 +1,15 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { answersFor } from "../hooks/DeathsDoorPrompt.js";
-import { playsCharacter } from "../camp/camp-store.js";
+import { playsCharacter, whisperFor } from "../utils/playbook-actors.js";
 import { isGmToolkitData, theGmToolkit } from "../actors/gmtoolkit/gm-toolkit-actor.js";
 import { anyActiveGM } from "../utils/primary-gm.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
 import { stonetopChatCard } from "../utils/chat.js";
+import { layModes } from "../utils/roll-mode.js";
 import { dieResultsText, markMissXp, rollStat } from "../utils/roll-engine.js";
+import { ROLLED_FLAG } from "../utils/counted-tier.js";
+import { format } from "../utils/i18n.js";
+import { WE_HAPPY_FEW, fightStateActive } from "../actors/character/fight-states.js";
 import {
 	ROW_KIND, SPOTS, STRUGGLE_ASK_FLAG, STRUGGLE_FLAG, STRUGGLE_MESSAGE_FLAG, STRUGGLE_MOVE, STRUGGLE_ROLL_FLAG,
 	STRUGGLE_STATUS, TIER, allowedStats, bundleChoices, halfMissesFor, isLive, newStruggleRecord, readStruggle,
@@ -168,7 +172,9 @@ export function askTurnedDown(actor, changes) {
 	if (!myAsks.has(actor?.id) || !touchesFlag(changes, STRUGGLE_ASK_FLAG) || askOf(actor)) return false;
 	const askId = myAsks.get(actor.id);
 	myAsks.delete(actor.id);
-	return currentStruggle()?.id !== askId;
+	const struggle = currentStruggle();
+	// Answered by a struggle the GM called on its own, with this character in it, is answered too.
+	return struggle?.id !== askId && !(isLive(struggle) && struggle.rows.some(r => r.actorId === actor.id));
 }
 
 // ── CALLING IT ─────────────────────────────────────────────────────────────────────────────────
@@ -205,9 +211,13 @@ export async function startStruggle(setup) {
 	await host.update({ [STRUGGLE_PATH]: record }, QUIET);
 	await postCard("Struggle as One", struggleCalledRows(record));
 	// The ask it answers is taken down after, so its player's client already sees the struggle
-	// (askTurnedDown) and does not read the ask going away as a no.
-	const asker = setup.askActorId ? game.actors?.get(setup.askActorId) : null;
-	if (asker) await clearAsk(asker);
+	// (askTurnedDown) and does not read the ask going away as a no. So is any other ask from a character
+	// it calls on: that player is in it now, and an ask left up would open a stale setup once it ends.
+	const askers = new Set([setup.askActorId, ...record.rows.map(r => r.actorId)].filter(Boolean));
+	for (const actorId of askers) {
+		const asker = game.actors?.get(actorId);
+		if (asker && askOf(asker)) await clearAsk(asker);
+	}
 	return { ok: true, struggle: record };
 }
 
@@ -246,12 +256,6 @@ async function struggleMoveText() {
 	}
 }
 
-/** Who a row's roll is shown to before the GM shares it: every GM, and everyone who plays the character. */
-function whisperFor(actor) {
-	const users = game.users?.contents ?? [...(game.users ?? [])];
-	return [...new Set(users.filter(u => u.isGM || playsCharacter(actor, u)).map(u => u.id))];
-}
-
 /**
  * Roll one row. Only its driver may, only while the struggle is rolling, and only once.
  *
@@ -282,11 +286,25 @@ export async function rollRow(rowKey, { stat = "" } = {}) {
 	try {
 		await ensureRecord(actor, struggle.id);
 		const { mode, adv, dis } = boardRow.rollMode;
+		// A roll already in the log for this row IS its roll: a reload that landed between the dice and the
+		// record below left the row looking unrolled, and rolling it again would be a second try at it.
+		const posted = postedRoll(struggle.id, rowKey);
+		if (posted) {
+			const roll = posted.rolls?.[0];
+			await writeRowRoll(actor, rowKey, {
+				stat: posted.getFlag?.(SYSTEM_ID, ROLLED_FLAG)?.stat ?? statKey,
+				roll, mode, messageId: posted.id,
+			});
+			return { ok: true };
+		}
 		const halfMiss = halfMissesFor(row, struggle)[0] ?? "";
 		const nonce = foundry.utils.randomID();
 		const options = {
-			rollMode: mode,
+			// The board's sides, not only the mode they net to (roll-mode.js#layModes): a GM's disadvantage
+			// cancelled by an Aid stays cancelled when the roll lays a debility or a held promise on it.
+			...layModes({ rollMode: "normal" }, [adv.length ? "adv" : "", dis.length ? "dis" : ""]),
 			noXpOnMiss: true,
+			// Shown before the GM shares it: every GM, and everyone who plays the character.
 			whisper: whisperFor(actor),
 			moveDescription: await struggleMoveText(),
 			messageFlags: { [SYSTEM_ID]: { [STRUGGLE_MESSAGE_FLAG]: { id: struggle.id, row: rowKey, nonce } } },
@@ -298,8 +316,12 @@ export async function rollRow(rowKey, { stat = "" } = {}) {
 		};
 		let roll;
 		if (row.kind === ROW_KIND.FOLLOWER) {
+			// The character's shaken nerves ride a follower's roll as they ride Order Followers' own
+			// (StonetopCharacter#onOrderFollowersRoll): giving orders is still that character rolling.
+			const nerves = fightStateActive(actor, "nerves");
 			roll = await rollStat("follower", actor, {
-				...options,
+				...(nerves ? layModes(options, ["dis"]) : options),
+				...(nerves ? { conditionNotes: [...options.conditionNotes, format("stonetop.nerves.rollNote", { move: WE_HAPPY_FEW })] } : {}),
 				statValue: row.bonus,
 				modifier: 0,
 				moveName: `${row.name}: ${STRUGGLE_MOVE}`,
@@ -311,20 +333,33 @@ export async function rollRow(rowKey, { stat = "" } = {}) {
 		if (!roll) return { ok: false, reason: "no-roll" };
 		const message = (game.messages?.contents ?? [])
 			.findLast(m => m?.getFlag?.(SYSTEM_ID, STRUGGLE_MESSAGE_FLAG)?.nonce === nonce);
-		await actor.update({
-			[`${ROLL_PATH}.rolls.${rowKey}`]: {
-				stat: statKey,
-				total: roll.total,
-				dice: dieResultsText(roll),
-				mode,
-				messageId: message?.id ?? "",
-				at: Date.now(),
-			},
-		}, QUIET);
+		await writeRowRoll(actor, rowKey, { stat: statKey, roll, mode, messageId: message?.id ?? "" });
 		return { ok: true };
 	} finally {
 		rolling.delete(rowKey);
 	}
+}
+
+/** This struggle's roll card for a row, when there is one in this client's log. */
+function postedRoll(struggleId, rowKey) {
+	return (game.messages?.contents ?? []).findLast(m => {
+		const tag = m?.getFlag?.(SYSTEM_ID, STRUGGLE_MESSAGE_FLAG);
+		return tag?.id === struggleId && tag?.row === rowKey;
+	}) ?? null;
+}
+
+/** A row's roll, written on the character who rolled it. */
+async function writeRowRoll(actor, rowKey, { stat, roll, mode, messageId }) {
+	await actor.update({
+		[`${ROLL_PATH}.rolls.${rowKey}`]: {
+			stat,
+			total: roll?.total,
+			dice: dieResultsText(roll),
+			mode,
+			messageId,
+			at: Date.now(),
+		},
+	}, QUIET);
 }
 
 /**
@@ -429,6 +464,18 @@ export async function undoRescue(rescuerKey) {
 const ending = new Set();
 
 /**
+ * Who a struggle's miss receipt is written as: a player of the character, one who is logged in first, so the
+ * receipt's Undo is theirs. Null when only a GM plays them.
+ *
+ * Plays, not merely owns (playbook-actors.js#playsCharacter), as the asking cards and the end of a session
+ * ask it: at a table where every player owns every sheet, ownership picked whoever came first in the list.
+ */
+export function struggleReceiptAuthor(actor, users = game.users) {
+	const players = [...(users?.contents ?? users ?? [])].filter(user => !user.isGM && playsCharacter(actor, user));
+	return (players.find(user => user.active) ?? players[0])?.id ?? null;
+}
+
+/**
  * End the struggle: everyone still in a spot marks the XP their 6- earned, and the table gets the
  * summary. GM only.
  *
@@ -450,7 +497,12 @@ export async function endStruggle() {
 		if (!closed) return false;
 		for (const { actorId } of owed) {
 			const actor = game.actors?.get(actorId);
-			if (actor?.type === "character") await markMissXp(actor, STRUGGLE_MOVE);
+			// Out loud, since the results are shared by now, and written as the character's player: a GM-written
+			// receipt is the GM's to Undo (a chat message is "the GM, or whoever authored it" to change), and the
+			// GM's own chat mode would have whispered it away from the player whose XP it is.
+			if (actor?.type === "character") {
+				await markMissXp(actor, STRUGGLE_MOVE, { rollMode: "publicroll", author: struggleReceiptAuthor(actor) });
+			}
 		}
 		await postCard("Struggle as One: how it went", struggleSummaryRows(struggle, board));
 		return true;

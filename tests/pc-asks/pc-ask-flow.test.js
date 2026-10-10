@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../module/dialogs/RelationshipLinkDialog.js", () => ({ pickPersonOnMap: vi.fn() }));
-vi.mock("../../module/utils/playbook-actors.js", () => ({ getPlayerCharacters: vi.fn() }));
+vi.mock("../../module/utils/playbook-actors.js", async importOriginal => ({ ...(await importOriginal()), getPlayerCharacters: vi.fn() }));
 vi.mock("../../module/actors/character/deaths-door-actor.js", () => ({ isOutOfPlay: vi.fn(actor => !!actor?.dead) }));
 vi.mock("../../module/utils/xp.js", () => ({ adjustXp: vi.fn(async () => ({ applied: 1, after: 5, max: 8 })) }));
 
@@ -25,7 +25,10 @@ let log;
 function character(id, name, extra = {}) {
 	return {
 		id, name, type: "character", isOwner: false,
-		typedActor: { holdAdvantage: vi.fn(async () => {}), holdDisadvantage: vi.fn(async () => {}) },
+		typedActor: {
+			holdAdvantage: vi.fn(async () => {}), holdDisadvantage: vi.fn(async () => {}),
+			releaseHeldAdvantage: vi.fn(async () => true), releaseHeldDisadvantage: vi.fn(async () => true),
+		},
 		...extra,
 	};
 }
@@ -38,19 +41,32 @@ const askOf = move => ({ move, byId: "aeliana", byName: "Aeliana", targetId: "br
 const asking = move => message("ask-1", { [PC_ASK_FLAG]: askOf(move) });
 const move = name => ({ type: "move", name, system: { moveType: "basic", description: "<p>When you help someone who has not yet rolled, the GM picks 1:</p><ul><li>They can accomplish more than they could alone</li><li>They gain advantage on their roll</li></ul>" } });
 
-function world({ isGM = false, ownsBram = false, samHere = false } = {}) {
+/**
+ * Sam plays Bram (assigned). Alex plays Aeliana, and makes the moves; with `alexOwnsBram` every player owns
+ * every sheet and Alex has no character assigned, so only who plays whom tells them apart. The current
+ * user is the GM, Sam (`ownsBram`), Alex (`me: "alex"`), or a player with no part in it.
+ */
+function world({ isGM = false, ownsBram = false, samHere = false, me = null, alexOwnsBram = false, chatMode = "publicroll" } = {}) {
+	const gm = { id: "gm", isGM: true, name: "GM", active: true, character: null };
 	const sam = { id: "player-2", isGM: false, name: "Sam", active: samHere, character: { id: "bram" } };
+	const alex = { id: "player-1", isGM: false, name: "Alex", active: true, character: alexOwnsBram ? null : { id: "aeliana" } };
+	const alexIsMe = !isGM && !ownsBram && me === "alex";
 	actors = {
-		aeliana: character("aeliana", "Aeliana"),
-		bram: character("bram", "Bram", { isOwner: isGM || ownsBram, testUserPermission: user => user === sam }),
+		aeliana: character("aeliana", "Aeliana", { testUserPermission: user => user === alex }),
+		bram: character("bram", "Bram", {
+			isOwner: isGM || ownsBram || (alexIsMe && alexOwnsBram),
+			testUserPermission: user => user === sam || (alexOwnsBram && user === alex),
+		}),
 		cora: character("cora", "Cora", { dead: true }),
 	};
 	log = [];
 	getPlayerCharacters.mockReturnValue(Object.values(actors));
 	globalThis.game = {
 		...savedGame,
-		user: { id: isGM ? "gm" : "player-2", isGM },
-		users: [sam],
+		release: { generation: 13 },
+		settings: { get: (scope, key) => (scope === "core" && key === "rollMode" ? chatMode : undefined) },
+		user: isGM ? gm : ownsBram ? sam : alexIsMe ? alex : { id: "player-3", isGM: false, name: "Nobody" },
+		users: [gm, sam, alex],
 		actors: { get: id => actors[id] ?? null },
 		messages: { contents: log, get: id => log.find(m => m.id === id) ?? null },
 	};
@@ -100,6 +116,20 @@ describe("asking whom, before the dice", () => {
 		expect(extra.pickable).toBe(false);
 		expect(extra.conditionNotes).toEqual(["Foiling Bram"]);
 		expect(extra.tierActions).toBeUndefined();
+	});
+
+	// The question is the target's player's to answer, so a private roll still has to reach them.
+	it("whispers a private roll to the GMs and the target's player as well", async () => {
+		world({ chatMode: "gmroll" });
+		pickPersonOnMap.mockResolvedValue("bram");
+		const extra = await aimPcAskRoll(actors.aeliana, move(PERSUADE_PC_MOVE));
+		expect([...extra.whisper].sort()).toEqual(["gm", "player-2"]);
+	});
+
+	it("leaves a public roll public", async () => {
+		pickPersonOnMap.mockResolvedValue("bram");
+		const extra = await aimPcAskRoll(actors.aeliana, move(INTERFERE_MOVE));
+		expect(extra.whisper).toBeUndefined();
 	});
 
 	it("gives a Persuade its answer rows", async () => {
@@ -210,6 +240,23 @@ describe("answering", () => {
 		expect(ChatMessage.create).not.toHaveBeenCalled();
 	});
 
+	// "Ask their player" (p.226), "the initial player ... chooses" (p.218): at a table where every player owns
+	// every sheet, owning Bram does not make Alex the one who answers for him, least of all to his own question.
+	it("does not let the asker answer their own question, however many sheets they own", async () => {
+		world({ me: "alex", alexOwnsBram: true });
+		const card = Object.assign(asking(INTERFERE_MOVE), { author: { id: "player-1" } });
+		await answerPcAsk(card, "relent", "success");
+		expect(ChatMessage.create).not.toHaveBeenCalled();
+	});
+
+	it("lets the GM answer while the only owner logged in is the one who asked", async () => {
+		world({ isGM: true, alexOwnsBram: true, samHere: false });
+		const card = Object.assign(asking(INTERFERE_MOVE), { author: { id: "player-1" } });
+		await answerPcAsk(card, "anyway", "success");
+		expect(actors.bram.typedActor.holdDisadvantage).toHaveBeenCalledWith("Interfered with by Aeliana");
+		expect(ChatMessage.create).toHaveBeenCalledTimes(1);
+	});
+
 	it("marks the persuaded character's XP on a receipt their Undo can take back", async () => {
 		world({ ownsBram: true });
 		await answerPcAsk(asking(PERSUADE_PC_MOVE), "agree", "success");
@@ -282,6 +329,89 @@ describe("on every client", () => {
 		expect(ui.chat.updateMessage).toHaveBeenCalledWith(card);
 		handlers.createChatMessage(message("m10", {}));
 		expect(ui.chat.updateMessage).toHaveBeenCalledTimes(2);
+	});
+
+	// Deleting the answer reopens the question; an agreed Persuade's XP must leave with it, or a second
+	// "agree" pays the same question twice.
+	it("takes back an agreed Persuade's XP when its answer is deleted, on the deleting client only", async () => {
+		world({ ownsBram: true });
+		const card = asking(PERSUADE_PC_MOVE);
+		log.push(card);
+		await answerPcAsk(card, "agree", "success");
+		const answer = log.at(-1);
+		answer.speaker = { actor: "bram" };
+		const handlers = {};
+		globalThis.Hooks = { on: vi.fn((name, fn) => { handlers[name] = fn; }), once: () => {} };
+		registerPcAskHooks();
+		adjustXp.mockClear();
+		// Core takes the deleted card out of the log before its hook runs.
+		log.splice(log.indexOf(answer), 1);
+		handlers.deleteChatMessage(answer, {}, "someone-else");
+		handlers.deleteChatMessage(answer, {}, game.user.id);
+		await vi.waitFor(() => expect(adjustXp).toHaveBeenCalledTimes(1));
+		expect(adjustXp).toHaveBeenCalledWith(actors.bram, -1, { move: `${PERSUADE_PC_MOVE} (answer withdrawn)` });
+	});
+
+	// Clearing the chat log deletes every card, the asking card with its answer, before any delete hook runs.
+	// That is the history going, not the question reopened: the XP the table already earned stays.
+	it("takes back nothing when the asking card goes with its answer, as a cleared chat log does", async () => {
+		world({ ownsBram: true });
+		const card = asking(PERSUADE_PC_MOVE);
+		log.push(card);
+		await answerPcAsk(card, "agree", "success");
+		const answer = log.at(-1);
+		answer.speaker = { actor: "bram" };
+		const handlers = {};
+		globalThis.Hooks = { on: vi.fn((name, fn) => { handlers[name] = fn; }), once: () => {} };
+		registerPcAskHooks();
+		adjustXp.mockClear();
+		log.length = 0;
+		handlers.deleteChatMessage(card, {}, game.user.id);
+		handlers.deleteChatMessage(answer, {}, game.user.id);
+		await new Promise(resolve => setTimeout(resolve, 0));
+		expect(adjustXp).not.toHaveBeenCalled();
+	});
+
+	// The question reopened, what its answer laid goes with it, by the name it was held under.
+	it("takes back the held advantage or disadvantage a deleted answer laid", async () => {
+		world({ isGM: true });
+		const aid = asking(AID_MOVE);
+		const interfere = Object.assign(asking(INTERFERE_MOVE), { id: "ask-2" });
+		log.push(aid, interfere);
+		const handlers = {};
+		globalThis.Hooks = { on: vi.fn((name, fn) => { handlers[name] = fn; }), once: () => {} };
+		registerPcAskHooks();
+		const gave = Object.assign(message("m8", { [PC_ANSWER_FLAG]: { to: "ask-1", choice: "advantage" } }), { speaker: { actor: "bram" } });
+		const laid = Object.assign(message("m9", { [PC_ANSWER_FLAG]: { to: "ask-2", choice: "anyway" } }), { speaker: { actor: "bram" } });
+		handlers.deleteChatMessage(gave, {}, game.user.id);
+		handlers.deleteChatMessage(laid, {}, game.user.id);
+		await vi.waitFor(() => expect(actors.bram.typedActor.releaseHeldDisadvantage).toHaveBeenCalledTimes(1));
+		expect(actors.bram.typedActor.releaseHeldAdvantage).toHaveBeenCalledWith("Aeliana's Aid");
+		expect(actors.bram.typedActor.releaseHeldDisadvantage).toHaveBeenCalledWith("Interfered with by Aeliana");
+		expect(adjustXp).not.toHaveBeenCalled();
+	});
+
+	it("leaves a held mode alone when the asking card went too", async () => {
+		world({ isGM: true });
+		const handlers = {};
+		globalThis.Hooks = { on: vi.fn((name, fn) => { handlers[name] = fn; }), once: () => {} };
+		registerPcAskHooks();
+		const laid = Object.assign(message("m9", { [PC_ANSWER_FLAG]: { to: "ask-1", choice: "anyway" } }), { speaker: { actor: "bram" } });
+		handlers.deleteChatMessage(laid, {}, game.user.id);
+		await new Promise(resolve => setTimeout(resolve, 0));
+		expect(actors.bram.typedActor.releaseHeldDisadvantage).not.toHaveBeenCalled();
+	});
+
+	it("takes nothing back for a deleted refusal, or a receipt already undone", async () => {
+		const handlers = {};
+		globalThis.Hooks = { on: vi.fn((name, fn) => { handlers[name] = fn; }), once: () => {} };
+		registerPcAskHooks();
+		const refusal = Object.assign(message("m7", { [PC_ANSWER_FLAG]: { to: "ask-1", choice: "refuse" } }), { speaker: { actor: "bram" } });
+		const undone = Object.assign(message("m8", { [PC_ANSWER_FLAG]: { to: "ask-1", choice: "agree" }, xpMark: 1, xpMarkUndone: true }), { speaker: { actor: "bram" } });
+		handlers.deleteChatMessage(refusal, {}, game.user.id);
+		handlers.deleteChatMessage(undone, {}, game.user.id);
+		await new Promise(resolve => setTimeout(resolve, 0));
+		expect(adjustXp).not.toHaveBeenCalled();
 	});
 
 	// Core's updateMessage posts a card it has never drawn at the foot of the log, out of order.

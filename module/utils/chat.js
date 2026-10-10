@@ -2,6 +2,7 @@ import {escHtml, stripHtmlToText, decodeEntities} from "./strings.js";
 import {isReferenceList, pickLimitsFrom, pickTiersFrom} from "./move-picks.js";
 import {MOVE_TIERS_CLASS, TIER_KEYS} from "./move-results.js";
 import {findGearTerm} from "./gear-term-tooltips.js";
+import {coreGeneration} from "./foundry-compat.js";
 
 // The tier ladder's own `<ul>`, recognised in an attribute string — see `firstOptionList`.
 const _LADDER_CLASS_RE = new RegExp(`\\bclass="[^"]*\\b${MOVE_TIERS_CLASS}\\b`, "i");
@@ -120,11 +121,29 @@ export function rollResultNumber(total, dieFaces = "") {
  * the roll has no dice terms.
  */
 export function dieResultsText(roll) {
-	const dice = roll?.dice ?? [];
-	const faces = dice.flatMap(term =>
+	const terms = Array.isArray(roll?.terms) ? roll.terms : [];
+	// A damage roll at advantage of SEVERAL dice is a pool of two whole rolls ("{2d4,2d4}kh",
+	// roll-engine.js#damageRollFormula): each roll reads as its faces added up ("1+3"), the one the pool
+	// dropped in parentheses, so the readout says which ROLL was kept rather than four loose dice.
+	if (!terms.some(_isPoolTerm)) return _diceFaces(roll?.dice ?? []).join(", ");
+	return terms.flatMap(term => {
+		if (!_isPoolTerm(term)) return _diceFaces(Array.isArray(term?.results) && term?.faces ? [term] : []);
+		return term.rolls.map((sub, i) => {
+			const faces = (sub?.dice ?? []).flatMap(d => (d.results ?? []).filter(r => r.active !== false && !r.discarded).map(r => r.result)).join("+");
+			const kept = term.results?.[i]?.active !== false && !term.results?.[i]?.discarded;
+			return kept ? faces : `(${faces})`;
+		});
+	}).join(", ");
+}
+
+/** A dice pool term (`{2d4,2d4}kh`): its sub-rolls and whether each was kept. */
+const _isPoolTerm = term => Array.isArray(term?.rolls) && Array.isArray(term?.results);
+
+/** Each die's face, a discarded one in parentheses. */
+function _diceFaces(dice) {
+	return dice.flatMap(term =>
 		(term.results ?? []).map(r => (r.active === false || r.discarded ? `(${r.result})` : `${r.result}`))
 	);
-	return faces.join(", ");
 }
 
 /** Die faces for a *multi*-die roll ("2, 4"), or "" for a single die — the readout
@@ -313,6 +332,41 @@ export async function whisperGm(content, { flags = null } = {}) {
 		speaker: { alias: "Stonetop" },
 		...(flags ? { flags } : {}),
 	})) ?? null;
+}
+
+/**
+ * `messageData` sent where `source` went, for a card that follows another (a miss's XP receipt, a Would-Be
+ * Hero's reminder, a blow's applied damage): `source`'s whisper list (and blindness) when it was whispered,
+ * else `rollMode` (the client's chat mode, currentChatMode) applied the way core applies it, else left
+ * as it is. `rollMode` as a create-data key alone does nothing, so a Blind or Private GM roll's follow-up
+ * would otherwise be announced to the whole table. Written onto `messageData`, which is returned.
+ *
+ * @param {object} messageData           ChatMessage create data.
+ * @param {ChatMessage|null} source      the card this one follows.
+ * @param {string|null} [rollMode]       the chat mode for when `source` was not whispered.
+ * @returns {object}
+ */
+export function whisperedAs(messageData, source, rollMode = null) {
+	const whisper = Array.isArray(source?.whisper) ? source.whisper.filter(Boolean) : [];
+	if (whisper.length) {
+		messageData.whisper = whisper;
+		if (source.blind) messageData.blind = true;
+	} else if (rollMode) applyChatMode(messageData, rollMode);
+	return messageData;
+}
+
+/**
+ * A chat mode applied to `messageData` the way core applies it: v14's `messageMode` through
+ * `ChatMessage.applyMode`, v13's `rollMode` through `ChatMessage.applyRollMode`. A public mode
+ * changes nothing, and anything unreadable leaves the message as it was.
+ */
+function applyChatMode(messageData, mode) {
+	try {
+		if (coreGeneration() >= 14 && typeof ChatMessage.applyMode === "function") ChatMessage.applyMode(messageData, mode);
+		else ChatMessage.applyRollMode?.(messageData, mode);
+	} catch (err) {
+		console.warn("Stonetop | could not apply the chat mode to a card", err);
+	}
 }
 
 /**

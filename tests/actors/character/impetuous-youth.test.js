@@ -86,6 +86,21 @@ describe("offersGiveItAll", () => {
 		expect(offersGiveItAll(card({ flags: { [GAVE_IT_ALL_FLAG]: { cost: "lost" } } }), hero())).toBe(false);
 		expect(offersGiveItAll(card({ record: rolledRecord("", { moveName: "Death's Door" }) }), hero())).toBe(false);
 	});
+
+	// The Door's card takes +1s while its window waits on the tier (roll-boosts.js#isBoostableRoll), but its
+	// give it your all stays the window's own (giveItAllAtDeathsDoor).
+	it("offers nothing on a Death's Door card even while its window waits on the tier for +1s", () => {
+		const door = card({ record: rolledRecord("", { moveName: "Death's Door" }) });
+		door.speaker = { actor: "wren" };
+		const dying = { ...hero(), flags: { [SCOPE]: { ...hero().flags[SCOPE], deathsDoorRolling: { userId: "u-wren", nonce: "n1", messageId: door.id, total: 8, tier: "partial" } } } };
+		const saved = game.actors;
+		game.actors = { get: id => (id === "wren" ? dying : null), contents: [dying] };
+		try {
+			expect(offersGiveItAll(door, dying)).toBe(false);
+		} finally {
+			game.actors = saved;
+		}
+	});
 });
 
 describe("giveItAll", () => {

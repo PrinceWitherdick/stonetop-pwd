@@ -45,17 +45,20 @@ import {normalizeWound as _normalizeWound, normalizeWoundList} from "./wound-rec
 import {moveMarkBudget, markOptionCapNote} from "./move-mark-budget.js";
 import {markEntries, filledMarks, filledMarkCount, trimEmptyTail, oncePerLevelCautions, ONCE_PER_LEVEL_MARKS} from "./pfg-marks.js";
 import {MARK_STAT_CAPS} from "./stat-rules.js";
-import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG, resolvedFlags, readableFlags, resolvedFlagProperty} from "./StonetopFlags.js";
-import {DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, UNSTOPPABLE, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, lostToTheGm, stateOnTakingInsert, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
+import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG, HP_CEILING_OPTION, resolvedFlags, readableFlags, resolvedFlagProperty} from "./StonetopFlags.js";
+import {DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, UNSTOPPABLE, UNSTOPPABLE_FIGHTING_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, lostToTheGm, stateOnTakingInsert, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG} from "./WouldBeHeroAsterisk.js";
 import {tookBackground} from "./took-background.js";
-import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, moveLearnedIn, switchedOffGranter, ownedMoveNames, ownsMoveNamed} from "./owns-move.js";
+import {AUSPICIOUS_BIRTH, auspiciousBirthChoice} from "./invoke-consequences.js";
+import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, moveLearnedIn, switchedOffGranter, ownedMoveNames, ownsMoveNamed, bookMoveName} from "./owns-move.js";
 import {ANIMAL_COMPANION_MOVE, RANGER_SLUG, MAGNIFICENT_SPECIMEN_MOVE, COMPANION_TRAIT_PICKS_PER_SPECIMEN, companionTraitAllowance, trimCompanionTraits} from "./animal-companion.js";
 import {fineWhiskyOffer as fineWhiskyOfferFrom, isPersuadeMove, FINE_WHISKY_SOURCE} from "./fine-whisky.js";
 import {tagLoadGatedMoves} from "./load-gates.js";
 import {startOfPlayGear, START_GEAR_FLAG} from "./start-of-play-gear.js";
 import {RITES_OF_THE_LAND, SACRED_POUCH_SLUG, NO_POUCH_STOCK_NOTE, BLESSED_PLAYBOOK, isVessel, stockSourcesForFlags, stockCostFromDescription} from "./stock-cost.js";
 import {loseHpForStock} from "./provisions.js";
+import {SUPPLY_SLUGS, supplyPursesFor, spendablePurseResources as _spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack} from "./supply-cost.js";
+import {askWriteInSource, WRITE_IN_SOURCE} from "./write-in-source.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight, INVOKE_THE_SUN_GOD, holyLightAfterRoll, LUMINOUS_SHIELD} from "./holy-light.js";
 import {moveArmor, barkskinMarkedBy} from "./move-armor.js";
 import {invocationLabels} from "./ongoing-invocation.js";
@@ -82,13 +85,13 @@ import {brokenOaths, oathbreakerAgainst, alphaAgainst, spendAlphaOver, upAgainAg
 import {defendReadinessHold, defendReadinessCap, readinessCount, readinessForTier, READINESS_FLAG, DEFEND_MOVE} from "../../combat/defend-readiness.js";
 import {settleReadinessOnAttack} from "../../combat/readiness-loss.js";
 import {messageOfRoll, CRITICAL_TOTAL} from "../../utils/roll-engine.js";
-import {countedTier, outcomeTier, rolledRecord} from "../../utils/counted-tier.js";
+import {cardCountedTier, cardTotal, countedTier, outcomeTier, rolledRecord, ROLLED_FLAG} from "../../utils/counted-tier.js";
 import {ANGER_IS_A_GIFT, A_FORCE_TO_BE_RECKONED_WITH, SPEAK_TRUTH_TO_POWER, forceTurnedTables, righteousAngerSubtitle, speakTruthRefusedActions} from "./would-be-hero-cards.js";
 import {shippedRapportTrack} from "./up-with-people.js";
 import {foldModes, layModes} from "../../utils/roll-mode.js";
 import {fightStateActive, revealOnAttack, WE_HAPPY_FEW} from "./fight-states.js";
 import {spendSurpriseForRoll} from "../../combat/battle-holds.js";
-import {settleTierEffects, recordTierEffects} from "./tier-effects.js";
+import {settleTierEffects, recordTierEffects, reconcileTierEffects} from "./tier-effects.js";
 import {xpToLevelUp, withXpLock} from "../../utils/xp.js";
 import {CharacterArcana} from "./CharacterArcana.js";
 import {seekerArcanaState, seekerArcanaChosen, seekerCardRoles, majorMarkBoxes, withMinorRole, seekerMajorSwitchPlan, seekerMajorOwed} from "./seeker-collection.js";
@@ -99,10 +102,10 @@ import {effectiveSubgroupMax, sumMoveBonus} from "./dialogs/possession-choice-ca
 import {partitionMovesByGroup} from "./dialogs/onboarding-move-groups.js";
 import {backgroundMarkOption, hasBackgroundMarkOptions, moveChoiceKey} from "./dialogs/well-versed-topics.js";
 import {FoundryRepositoryFactory} from "./repositories/FoundryRepositoryFactory.js";
-import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, stripHtmlToText} from "../../utils/strings.js";
+import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, splitNames, stripHtmlToText} from "../../utils/strings.js";
 import {splitFillBlank, fillBlank} from "../../utils/fill-blanks.js";
 import {localize as _loc, format} from "../../utils/i18n.js";
-import {getStonetopSteadingActor} from "../../utils/world.js";
+import {getStonetopSteadingActor, effectiveProsperity, FALLBACK_FOUR_PLUS_PROSPERITY} from "../../utils/world.js";
 import {readCurrentSeason} from "../../seasons/current-season.js";
 import {seasonLabel} from "../../seasons/seasons-change-reminders.js";
 import {moveChatCard, postMoveNote} from "../../utils/chat.js";
@@ -195,15 +198,19 @@ const SEASON_MOVE_DISADVANTAGE = [
  * A Force to Be Reckoned With ("When you Defy Danger against something trying to harm or constrain you,
  * on a 12+ you turn the tables on them").
  *
- * A row rides the moves its `moves(name)` answers for, by the name the roll is made under: `() => true`
- * is a row of every move roll (Constant Vigilance, Underestimated), a roll with no move item behind it (a
- * guided move, Improvise: directRollOffers) included, but never a bare stat roll, which is no move.
+ * A row rides the moves its `moves(name)` answers for, by the name the roll is made under. A row with
+ * `anyMove: true` instead rides every move roll ("whatever move you make": Constant Vigilance,
+ * Underestimated), a roll with no move item behind it (a guided move, Improvise: directRollOffers) included,
+ * but never a bare stat roll, which is no move. Those are the only rows a move a player wrote is offered: a
+ * homebrew "Defy Danger" is not the book's, so it earns no Stone Cold, Safety First or A Force to Be Reckoned
+ * With (owns-move.js#bookMoveName), but it is still a move rolled in their presence. Said by a field, not by
+ * which function `moves` is, so a row written `moves: () => true` cannot quietly read as a named row.
  *
  * A row applies to a character who has `ownsLearned` LEARNED, took the `background` (took-background.js),
  * holds the special possession `possession`, has picked AND carries (the ◇) the gear choice
  * `possessionChoice`, keyed `possession:choice` as the carry marks are, or has the worn insert's lore
  * option `postDeathLore` marked ("consequences:disturbing"); and never while the debility
- * `unlessDebility` is marked, nor while the learned move `whileHolding` holds nothing on its track
+ * `unlessDebility` is marked (unless Battle Joy has them ignoring it), nor while the learned move `whileHolding` holds nothing on its track
  * (Safety First's Protection). `spendHeld` names that track: taken, the line spends 1 of it after the
  * dice. Taken, a line's `source` is folded in as advantage and named on the card, unless its `effect`
  * says otherwise (see _foldTakenOffers): "missAsPartial" counts a 6- as a 7-9 instead, "partialAsSuccess" a 7-9
@@ -237,7 +244,7 @@ const FICTION_ROLL_OFFERS = [
 		source: "Home on the Range", label: "stonetop.rollOffers.homeOnTheRange", effect: "missAsPartial" },
 	{ key: "trailblazer", moves: name => name === "Defy Danger", ownsLearned: "Trailblazer",
 		source: "Trailblazer", label: "stonetop.rollOffers.trailblazer", effect: "successNote", note: "stonetop.rollOffers.trailblazerNote" },
-	{ key: "constant-vigilance", moves: () => true, ownsLearned: "Constant Vigilance", unlessDebility: "dazed",
+	{ key: "constant-vigilance", anyMove: true, ownsLearned: "Constant Vigilance", unlessDebility: "dazed",
 		source: "Constant Vigilance", label: "stonetop.rollOffers.constantVigilance" },
 	{ key: "lets-make-a-deal", moves: isPersuadeMove, ownsLearned: "Let's Make a Deal",
 		source: "Let's Make a Deal", label: "stonetop.rollOffers.letsMakeADeal", effect: "partialAsSuccess" },
@@ -251,7 +258,7 @@ const FICTION_ROLL_OFFERS = [
 		source: SPEAK_TRUTH_TO_POWER, label: "stonetop.rollOffers.speakTruthToPower", tierActions: speakTruthRefusedActions },
 	{ key: "better-part-of-valor", moves: name => name === "Defy Danger", ownsLearned: "Better Part of Valor",
 		source: "Better Part of Valor", label: "stonetop.rollOffers.betterPartOfValor" },
-	{ key: "underestimated", moves: () => true, ownsLearned: "Underestimated",
+	{ key: "underestimated", anyMove: true, ownsLearned: "Underestimated",
 		source: "Underestimated", label: "stonetop.rollOffers.underestimated" },
 	{ key: "force-to-be-reckoned-with", moves: name => name === "Defy Danger", ownsLearned: A_FORCE_TO_BE_RECKONED_WITH,
 		source: A_FORCE_TO_BE_RECKONED_WITH, label: "stonetop.rollOffers.forceToBeReckonedWith",
@@ -381,12 +388,40 @@ function foldDisadvantage(options, source) {
 }
 
 /**
- * Two promises' names as one, joined as every list of names is (strings.js#joinNames): "A peaceful
- * night's rest & Aeliana's Aid". Blank halves drop out, and a name promised twice is said once.
+ * Run `fn` once every claim already queued for `actor` on this client has settled (turn-queue.js#inTurn,
+ * one line per actor; see StonetopCharacter#_claimNextRollOwed), so two rolls started together (a
+ * double-click, a second move rolled while the first's dice still animate) read the +forward and the
+ * held promises one after the other: the second reads what the first left.
  */
-function joinSources(held, source) {
-	const parts = [...new Set([held, source].map(part => String(part ?? "").trim()).filter(Boolean))];
-	return joinNames(parts) || "a promise";
+function _inRollTurn(actor, fn) {
+	if (!actor || typeof actor !== "object") return fn();
+	return inTurn(`roll:${actor.uuid ?? actor.id ?? ""}`, fn);
+}
+
+/**
+ * The names a held promise was laid under (StonetopCharacter#heldAdvantage), as the list they are
+ * stored as: `{sources: ["A peaceful night's rest", "Aeliana's Aid"]}`.
+ *
+ * A flag written before that holds ONE string, joined for display (`{source: "A peaceful night's rest
+ * & Aeliana's Aid"}`), and is cut back into its names here, on read, the one place splitNames is still
+ * used. Cut rather than kept whole because a whole "A peaceful night's rest & Dewi's Aid" would read
+ * as one Aid (follower-deaths-door.js#aidAdvantageSources) and spend the night's rest with it; an old
+ * name with its own ", " or " & " is cut too, which only stops it being taken back by name before the
+ * next roll spends it. Every write lays the list.
+ */
+function heldSources(held) {
+	if (!held || typeof held !== "object") return [];
+	const parts = Array.isArray(held.sources) ? held.sources : splitNames(held.source);
+	return parts.map(part => String(part ?? "").trim()).filter(Boolean);
+}
+
+/**
+ * More promises laid beside those held, as one list: blanks drop out, and a name promised twice is
+ * held once. `added` is one name or several (a camp's peaceful night and fur-lined bedroll, a refund).
+ */
+function mergeSources(held, added) {
+	const parts = [...new Set([...held, ...[added].flat()].map(part => String(part ?? "").trim()).filter(Boolean))];
+	return parts.length ? parts : ["a promise"];
 }
 
 const OTHER_MOVE_TYPES = ["background", "special", "follower", "homefront"];
@@ -928,6 +963,18 @@ export class StonetopCharacter {
 	 *        Omitting it conceals, which is the safe way round for a caller that forgot.
 	 */
 	async buildSnapshot(view = {}) {
+		return (await this.snapshotWithGear(view)).snapshot;
+	}
+
+	/**
+	 * buildSnapshot, and the gear picture it was built from (`_gearSources`' `{ items, marks }`), from
+	 * ONE pass: for a caller that needs both (camp-store.js#campVitalsFor: the sheet's numbers and the
+	 * fur-lined bedroll), which otherwise built the gear twice.
+	 *
+	 * @param {object} [view]  as buildSnapshot
+	 * @returns {Promise<{snapshot: object, gear: {items: object[], marks: object}}>}
+	 */
+	async snapshotWithGear(view = {}) {
 		const actor = this._actor;
 		const actorLevel = actor.system?.attributes?.level?.value ?? 1;
 		const playbookData = await this.playbook();
@@ -955,9 +1002,6 @@ export class StonetopCharacter {
 		const crewStats = _buildCrewStats(crewDef, moveBonuses);
 		const moves    = await this._buildMovesSection(playbookData, ownedAllByName, actorLevel, gear, this._markCapState(crewStats));
 		const inventory = await this._buildInventorySection(playbookData, ownedAllByName, actorLevel, view, arcanaCarried);
-		// A load-gated move the load on the sheet has switched off (Catlike's quiet, Free Running) wears
-		// a tag saying so on its card. Display only: see load-gates.js.
-		tagLoadGatedMoves(moves, inventory?.outfit?.load?.selected ?? null);
 		const postDeath = await this._postDeath.buildSnapshot();
 		const pdiLabel  = postDeath.activeInsert?.name ?? null;
 		// The worn-armor base (leather/mail/etc., excluding shields and move bonuses) gates
@@ -981,10 +1025,14 @@ export class StonetopCharacter {
 		// read the derived armor as the size of the adjustment instead, and a typed 2 banked a
 		// delta that landed back on 0.
 		const { worn: wornArmorBase, base: armorBase, armor, unpierceable: unpierceableArmor, conditional: conditionalArmor, conditionalSource } = this._armorFrom(gear, moveBonuses);
+		// A load-gated move the load on the sheet has switched off (Catlike's quiet, Free Running) wears
+		// a tag saying so on its card, as does one that also needs its owner unarmored (Uncanny
+		// Reflexes) while they wear armor. Display only: see load-gates.js.
+		tagLoadGatedMoves(moves, inventory?.outfit?.load?.selected ?? null, wornArmorBase);
 		const arcanaLore = (playbookData?.lore ?? []).some(e => e.arcanaImage || (e.options ?? []).some(o => o.arcanaRole))
 			? await this._arcana.buildLoreDisplay()
 			: null;
-		return new CharacterSnapshotBuilder()
+		const snapshot = new CharacterSnapshotBuilder()
 			.withName(actor.name)
 			.withPlaybook(playbookData ? _buildPlaybookSection(playbookData, this._background, this._instinct, this._appearance, this._origin, this._lore, actor.name, arcanaLore, !!this._actor.getFlag(STONETOP_SCOPE, WBH_HERO_FLAG), actorLevel) : null)
 			.withDebilities(_buildDebilitiesSection(actor, this._moveResources))
@@ -1006,6 +1054,7 @@ export class StonetopCharacter {
 			.withCompanionDef(await this.companionSource(playbookData))
 			.withViewerIsGM(!!view.viewerIsGM)
 			.build();
+		return { snapshot, gear };
 	}
 
 	/**
@@ -1422,7 +1471,8 @@ export class StonetopCharacter {
 		const smallItemLimit = this.getSmallItemLimit(steadingActor);
 		const usesPerSupply  = this.getUsesPerSupply(steadingActor);
 		const steadingName   = steadingActor?.name ?? null;
-		const prosperity     = smallItemLimit !== null ? smallItemLimit - 4 : null;
+		// Null when it can't be read: the "x piercing" captions then keep the literal x.
+		const prosperity     = effectiveProsperity(steadingActor);
 		const commonSpecialSet = this._earnedCommonSpecialSlugs(steadingActor, allItems);
 		// Weapons of War: "Battleaxes and swords have 'x piercing'", resolved below with the rest.
 		const weaponsOfWar     = this.weaponsOfWarEarned(steadingActor);
@@ -1447,7 +1497,7 @@ export class StonetopCharacter {
 			// 4+Prosperity supplies rule (+1 with a Mill), then the number printed on the item.
 			const acquiredMax = Number(acquiredMaxes[outfitItem.slug]);
 			const resMax = Number.isFinite(acquiredMax) ? acquiredMax
-				: (isProsperityResource && usesPerSupply !== null) ? usesPerSupply
+				: isProsperityResource ? usesPerSupply
 				: res?.max;
 			// Armored reduces a carried shield's ◇ cost (min 1), so it reads ◆ instead of ◆◆.
 			const weight = _shieldAdjustedWeight(outfitItem.weight, outfitItem.shield, shieldLoadReduction);
@@ -1777,16 +1827,19 @@ export class StonetopCharacter {
 		const allRegularForLoad    = [...flatRegular, ...arcanaRegular, ...grantedRegularAll, ...choiceGearRegularAll, ...treasureRegular];
 		const checkedRegularWeight = allRegularForLoad
 			.filter(i => i.checked).reduce((sum, i) => sum + (i.weight ?? 0), 0);
-		// The undefined pool can hold whatever's left under the heavy cap; the stored
-		// count is clamped to that so the reserve never pushes the load past heavy.
+		// The undefined ◇ count as STORED, never clamped to the room left under heavy: Outfit and
+		// the pool track already keep a reservation under heavy (regularPoolMax is that room, the
+		// at-your-limit toast's cap), so the only way past it is weight gained in the field, loot
+		// and provisions, which draw nothing from the reserve. A clamp here used to swallow that
+		// weight into the reserve, so a character could never read as carrying 10 ◇ or more while
+		// any undefined ◇ was left (Book I p.327: "If they want to carry 10 ◇ or more...").
 		const regularPoolMax     = Math.max(0, loadLimits.heavy - checkedRegularWeight);
-		const regularPoolCurrent = Math.min(rPool, regularPoolMax);
 		// The ◇ track always shows the full load capacity, so the diamonds never vanish
-		// as you mark items: reserve that no longer fits under the cap simply renders as
-		// empty ◇ (clicking one warns you're at your limit — see regularPoolCap). Only a
-		// Pack Horse / loadBonus move raises the cap (to 10), so an overloaded carry still
-		// tops out at heavy rather than sprouting extra ◇.
+		// as you mark items. Only a Pack Horse / loadBonus move raises the cap (to 10), so an
+		// overloaded carry still tops out at heavy rather than sprouting extra ◇. The reserve is
+		// held to that track's size alone (a Pack Horse given up), never to the room left in it.
 		const regularPoolSlots   = loadLimits.heavy;
+		const regularPoolCurrent = Math.min(regularPoolSlots, Math.max(0, Math.trunc(Number(rPool) || 0)));
 		const totalRegularMarks  = checkedRegularWeight + regularPoolCurrent;
 		const derivedLoadLevel   = deriveLoadLevel(totalRegularMarks, loadLimits);
 
@@ -1803,11 +1856,16 @@ export class StonetopCharacter {
 		const addedSmall = addedSpecial.filter(i => i.inventoryColumn === "small");
 		const possessionSmall = possessionSpecial.filter(i => i.inventoryColumn === "small");
 		const commonSmall = commonSpecial.filter(i => i.inventoryColumn === "small");
+		// The small grid is the printed insert's own block of common small items. A SPECIAL small
+		// item (a lantern, salt, a handful of silvers) is listed with the rest of the column even
+		// when its catalog row is flagged smallGrid: it was dropped from the list by that flag and
+		// never put in the grid, which only holds the standard items, so one bought through Trade &
+		// Barter vanished from the sheet and the Outfit window alike.
 		const smallItems = [
 			...allSmall.filter(i => !i.smallGrid).map(mapItem),
-			...addedSmall.filter(i => !i.smallGrid).map(mapAddedSpecial),
-			...possessionSmall.filter(i => !i.smallGrid).map(mapItem),
-			...commonSmall.filter(i => !i.smallGrid).map(mapItem),
+			...addedSmall.map(mapAddedSpecial),
+			...possessionSmall.map(mapItem),
+			...commonSmall.map(mapItem),
 			...writeInItems.filter(i => i.system.inventoryColumn === "small").map(mapCustomItem),
 		];
 		const smallGridItems = allSmall.filter(i => i.smallGrid).map(mapItem);
@@ -1818,13 +1876,17 @@ export class StonetopCharacter {
 		// outside the list but still eat the allowance. Weightless arcana (arcanaSmall)
 		// deliberately do NOT: they merely sit in this column, and have never cost a
 		// player anything — counting them now would silently shrink the allowance for
-		// every card owned.
+		// every card owned. 4+0 when Prosperity can't be read ("+0 by default", p.88; getSmallItemLimit).
+		// The stored □ count is shown as it is, like the ◇ one: a small find picked up in the
+		// field takes nothing from the reserve.
+		const smallAllotment   = smallItemLimit;
 		const checkedSmallCount = [...smallItems, ...smallGridItems, ...grantedSmallAll, ...choiceGearSmallAll, ...treasureSmall].filter(i => i.checked).length;
-		const smallPoolMax     = Math.max(0, (smallItemLimit ?? 9) - checkedSmallCount);
-		const smallPoolCurrent = Math.min(sPool, smallPoolMax);
+		const smallPoolMax     = Math.max(0, smallAllotment - checkedSmallCount);
 		// Like the ◇ track, the □ track always shows the full 4+Prosperity allotment, so
-		// boxes never vanish as small items are marked.
-		const smallPoolSlots   = smallItemLimit ?? 9;
+		// boxes never vanish as small items are marked. The reserve is only held to the track's
+		// own size, which a fall in Prosperity can take below what was reserved.
+		const smallPoolSlots   = smallAllotment;
+		const smallPoolCurrent = Math.min(smallPoolSlots, Math.max(0, Math.trunc(Number(sPool) || 0)));
 
 		const outfit = new OutfitSnapshotBuilder()
 			.withLoad(load)
@@ -1843,6 +1905,8 @@ export class StonetopCharacter {
 			.withPossessionRegular(outfitPossessionRegular)
 			.withPossessionSmall(outfitPossessionSmall)
 			.withSmallItemLimit(smallItemLimit)
+			.withProsperity(prosperity)
+			.withUsesPerSupply(usesPerSupply)
 			.withSteadingName(steadingName)
 			.withLoadBonus(loadBonus)
 			.withLoadBonusMoves(loadBonusMoves)
@@ -2323,9 +2387,12 @@ export class StonetopCharacter {
 	 * on the card; `effect`, what it does to the roll (advantage unless it says "missAsPartial",
 	 * "partialAsSuccess" or a note); and
 	 * `spend(moveName)`, its price if it has one, paid after the dice.
+	 *
+	 * A move a player wrote that shares a book move's name acts as itself (owns-move.js#bookMoveName): it is
+	 * offered only the rows of every move roll and Binding Arbitration's line, never the named rows.
 	 */
 	async rollOffers(item) {
-		return this._rollOffersNamed(item?.name);
+		return this._rollOffersNamed(item?.name, { book: !item || bookMoveName(item) != null });
 	}
 
 	/**
@@ -2349,11 +2416,15 @@ export class StonetopCharacter {
 		return (await this._rollOffersNamed(moveName)).filter(offer => !asked.has(offer.source));
 	}
 
-	/** rollOffers and directRollOffers: the lines a roll made under `moveName` is offered. */
-	async _rollOffersNamed(moveName) {
+	/**
+	 * rollOffers and directRollOffers: the lines a roll made under `moveName` is offered. `book` false is a
+	 * move a player wrote under that name (rollOffers): only the rows of every move roll
+	 * (`anyMove`) and Binding Arbitration's line, no named row and no skin of fine whisky.
+	 */
+	async _rollOffersNamed(moveName, { book = true } = {}) {
 		if (!moveName) return [];
 		const offers = [];
-		const whisky = isPersuadeMove(moveName) ? await this.fineWhiskyOffer() : null;
+		const whisky = book && isPersuadeMove(moveName) ? await this.fineWhiskyOffer() : null;
 		if (whisky) {
 			offers.push({
 				...whisky,
@@ -2367,8 +2438,12 @@ export class StonetopCharacter {
 			});
 		}
 		for (const row of FICTION_ROLL_OFFERS) {
-			if (!row.moves(moveName)) continue;
-			if (row.unlessDebility && this._actor.system?.attributes?.debilities?.options?.[row.unlessDebility]?.value) continue;
+			if (!row.anyMove && (!book || !row.moves(moveName))) continue;
+			// "Unless you're dazed" (Constant Vigilance, p.131) reads the debility's EFFECT, which a raging Heavy
+			// ignores (Battle Joy, p.114: "the effects of debilities as long as you keep fighting"), so it gates
+			// nothing while the dice ignore it too (ignoresDebilities).
+			if (row.unlessDebility && !this.ignoresDebilities
+				&& this._actor.system?.attributes?.debilities?.options?.[row.unlessDebility]?.value) continue;
 			if (row.whileHolding && !(learnedTrack(this._actor, row.whileHolding)?.held > 0)) continue;
 			if (!await this._earnsRollOffer(row)) continue;
 			offers.push({
@@ -2585,63 +2660,157 @@ export class StonetopCharacter {
 			.map(i => i.slug));
 	}
 
+	// 4+Prosperity, the Prosperity being the one gear works from (effectiveProsperity: 1 lower while
+	// the steading is Lacking). FALLBACK_FOUR_PLUS_PROSPERITY (4+0) when it can't be read, so every
+	// reader gets a number. The few that must know it was NOT read (the "x piercing" captions, which
+	// keep the literal x, and the notes that print the limit) ask effectiveProsperity themselves, or
+	// the snapshot's `prosperity` / `prosperityKnown`.
 	getSmallItemLimit(steading = this.getSteadingActor()) {
-		const rawProsperity = (steading ? resolvedFlagProperty(steading, "steading.system.attributes.prosperity.value") : null)
-			?? steading?.system?.attributes?.prosperity?.value;
-		if (rawProsperity == null) return null;
-		const prosperity = Number(rawProsperity);
-		return isNaN(prosperity) ? null : 4 + prosperity;
+		const prosperity = effectiveProsperity(steading);
+		return prosperity === null ? FALLBACK_FOUR_PLUS_PROSPERITY : 4 + prosperity;
 	}
 
 	/**
 	 * The uses in one ◆ of supplies: 4+Prosperity (Book I p.89), and 1 more once the steading has a
-	 * Mill. Null when Prosperity cannot be read, like getSmallItemLimit.
+	 * Mill. 4+0 when Prosperity cannot be read ("+0 by default", p.88), and a Mill still adds its 1.
 	 *
 	 * The Mill's text says "when you Outfit from Stonetop", and nothing records where an Outfit
 	 * happened, so an earned Mill always counts: the same reading Weapons of War gets.
 	 */
 	getUsesPerSupply(steading = this.getSteadingActor()) {
 		const limit = this.getSmallItemLimit(steading);
-		if (limit === null) return null;
+		if (!steading) return limit;
 		const steadingFlags = resolvedFlagProperty(steading, "steading") ?? {};
-		const mill = !!steadingFlags.improvements?.[_MILL_IMPROVEMENT]?.completed
+		const mill =!!steadingFlags.improvements?.[_MILL_IMPROVEMENT]?.completed
 			// A Resources row is `{name, checked}`: one left unticked is not a Mill the village has.
 			|| (steadingFlags.resources ?? []).some(r => String(r?.name ?? r) === _MILL_RESOURCE && r?.checked !== false);
 		return limit + (mill ? 1 : 0);
 	}
 
 	/**
-	 * Have What You Need (one-click): marking a specific item on the Inventory tab
-	 * draws marks from the undefined pool (its weight, or 1 for a small item). If
-	 * the pool can't cover it, the shortfall just adds to your load — that's loot
-	 * you picked up in the field (Book I p.87). We remember how much each mark drew
-	 * so un-marking returns exactly that (an item defined at Outfit drew nothing, so
-	 * un-marking just drops its weight) — toggling can never invent reserve marks.
-	 * The pool is also directly editable, so any state is reachable.
+	 * What this character can spend uses of supplies from (supply-cost.js#spendablePurseResources):
+	 * the printed supplies rows they are CARRYING (`inventory.checked`; provisions and sap count
+	 * marked or not), every purse capped at the size the sheet draws its
+	 * track at. A printed supplies row is 4+Prosperity (+1 with a Mill, getUsesPerSupply) and an
+	 * acquired track (provisions) is its `resourceMax`, the same order of precedence as the sheet's
+	 * own rows (_buildInventorySection's mapItem). `per` is the uses in one ◆ when the caller already
+	 * has it (the snapshot's OutfitSnapshot#usesPerSupply), so a render does not read the steading again.
+	 */
+	supplyPurseLimits(per = this.getUsesPerSupply()) {
+		const max = Object.fromEntries(SUPPLY_SLUGS.map(slug => [slug, per]));
+		for (const [slug, acquired] of Object.entries(this._inventory.resourceMax)) {
+			if (Number.isFinite(Number(acquired))) max[slug] = Number(acquired);
+		}
+		return { checked: this._inventory.checked, max };
+	}
+
+	/**
+	 * `inventory.resources` as a spend sees it (supplyPurseLimits); every non-purse track as stored.
+	 * `carriedOnly: false` keeps the cap but not the carrying test, for a write that pays a spend
+	 * already agreed: a row set down between the offer and the write must not be zeroed by it.
+	 * `per` is the uses in one ◆ when the caller already read it (supplyPurseLimits).
+	 */
+	spendablePurseResources({ carriedOnly = true, per = undefined } = {}) {
+		const { checked, max } = this.supplyPurseLimits(per);
+		return _spendablePurseResources(this._inventory.resources, { checked: carriedOnly ? checked : null, max });
+	}
+
+	/**
+	 * supply-cost.js#supplyPursesFor over what this character can actually reach. `usesPerSupply`
+	 * as supplyPurseLimits takes it, when the caller already has the snapshot's.
+	 */
+	supplyPurses(purpose, { usesPerSupply } = {}) {
+		return supplyPursesFor(this._inventory.resources, purpose, this.supplyPurseLimits(usesPerSupply));
+	}
+
+	/**
+	 * Mark or un-mark an item on the Inventory tab.
+	 *
+	 * Have What You Need (the default): marking an item draws marks from the undefined pool (its
+	 * weight, or 1 for a small item). If the pool can't cover it, the shortfall just adds to your
+	 * load. We remember how much each mark drew so un-marking returns exactly that (an item defined
+	 * at Outfit drew nothing, so un-marking just drops its weight), so toggling can never invent
+	 * reserve marks. The pool is also directly editable, so any state is reachable.
+	 *
+	 * `loot`: something picked up in the field (a dropped treasure, provisions) is weight on top of
+	 * what was Outfitted, not a mark that was there all along, so it draws NOTHING from the reserve
+	 * and the load grows by its weight, past heavy if need be (Book I p.327).
+	 *
+	 * A ◆ of supplies is its food, and the tick moves the ◆, not the food (supply-cost.js#
+	 * suppliesUsesOnMark, #suppliesGiveBack): a mark that DRAWS an undefined ◆ packs a fresh, full
+	 * one ("one ◆ of supplies contains 4 uses, but you add Stonetop's current Prosperity to that",
+	 * Book I p.88), any other mark picks the row up as it is, and un-marking a ◆ some of whose food
+	 * is gone hands back no undefined ◆. So un-ticking and re-ticking can never refill a row.
 	 *
 	 * @param {string}  slug
 	 * @param {boolean} isChecked  Whether the item is now carried.
 	 * @param {object}  opts
 	 * @param {boolean} [opts.small]   Small item (□, costs 1) vs regular item (◇, costs its weight).
 	 * @param {number}  [opts.weight]  Regular item weight (◇ to move).
+	 * @param {boolean} [opts.loot]    Gained in the field: draws nothing from the undefined pool.
+	 * @param {number}  [opts.uses]    The row's uses to write with the mark, when the caller packs it
+	 *   to a count of its own (Have What You Need at the fire, camp-store.js#haveWhatYouNeedAtCamp).
+	 * @param {string}  [opts.stonetopMove]  The move the ledger names for these writes, when a move made them.
+	 *
+	 * Every change (the mark, the uses, the draw record, the pool) goes out in ONE actor.update, each
+	 * as its own dotted sub-key so a second client's write to a sibling key is left standing. The
+	 * ledger still files a line per field, as it did when they were separate writes.
 	 */
-	async toggleCarriedItem(slug, isChecked, { small = false, weight = 1 } = {}) {
-		await this._inventory.setItemChecked(slug, isChecked);
-		const cost      = small ? 1 : Math.max(0, weight);
-		const pool      = small ? this._inventory.smallPool : this._inventory.regularPool;
-		const nextDrawn = { ...this._inventory.drawn };
-		let next;
-		if (isChecked) {
-			const spent = Math.min(cost, pool);
-			next = pool - spent;
-			if (spent > 0) nextDrawn[slug] = spent; else delete nextDrawn[slug];
-		} else {
-			next = pool + (nextDrawn[slug] ?? 0);
-			delete nextDrawn[slug];
+	async toggleCarriedItem(slug, isChecked, { small = false, weight = 1, loot = false, uses: setUses, stonetopMove } = {}) {
+		const writeOptions = stonetopMove ? { stonetopMove } : undefined;
+		const wasChecked = !!this._inventory.checked[slug];
+		const supplies   = SUPPLY_SLUGS.includes(slug);
+		const perSupply  = supplies ? this.getUsesPerSupply() : 0;
+		const uses       = supplies ? Number(this._inventory.resources[slug]) || 0 : 0;
+		const update = this._inventory.checkedData(slug, isChecked);
+		const drawn = Number(this._inventory.drawn[slug]) || 0;
+		const reserve = this._reserveDrawData(slug, isChecked, {
+			small, weight, loot, giveBack: supplies ? suppliesGiveBack({ drawn, uses, perSupply }) : null,
+		});
+		if (setUses !== undefined) {
+			Object.assign(update, this._inventory.resourceData(slug, setUses));
+		} else if (supplies && isChecked && !wasChecked) {
+			const packed = suppliesUsesOnMark({ drew: reserve.drawn, uses, perSupply });
+			if (packed !== uses) Object.assign(update, this._inventory.resourceData(slug, packed));
 		}
-		await this._inventory.setDrawn(nextDrawn);
-		if (small) await this._inventory.setSmallPool(next);
-		else       await this._inventory.setRegularPool(next);
+		Object.assign(update, reserve.update);
+		await this._actor.update(update, writeOptions);
+	}
+
+	/**
+	 * Have What You Need's draw on the undefined reserve for the row keyed `key`, as an update fragment (the
+	 * draw record and the pool): a mark draws the row's cost (1 for a small row, nothing for loot) as far as the
+	 * reserve goes; setting it down hands back `giveBack`, by default what the record says was drawn.
+	 * `drawn` is the new record. toggleCarriedItem and setChoiceGearCarried both draw through here.
+	 */
+	_reserveDrawData(key, isChecked, { small = false, weight = 1, loot = false, giveBack = null } = {}) {
+		const pool  = small ? this._inventory.smallPool : this._inventory.regularPool;
+		const drawn = isChecked && !loot ? Math.min(small ? 1 : Math.max(0, weight), pool) : 0;
+		const next  = isChecked ? pool - drawn : pool + (giveBack ?? (Number(this._inventory.drawn[key]) || 0));
+		return { drawn, update: { ...this._inventory.drawnData(key, drawn), ...this._inventory.poolData(next, { small }) } };
+	}
+
+	/**
+	 * Mark a WRITTEN-IN item (or a treasure: one kept from an earlier trip is a possession the PC
+	 * can "Have What You Need ... to mark ... once you're in the field", Book I p.89) as carried,
+	 * asking where it came from (write-in-source.js): had all
+	 * along (Have What You Need, which moves an undefined mark onto it) or found out here (new
+	 * weight, which draws nothing). Asked only while the matching undefined pool has a mark the
+	 * first answer could use; with none left it can only be new, and is marked as such unasked.
+	 *
+	 * Resolves to the answer (WRITE_IN_SOURCE), or null when the window was closed, in which case
+	 * nothing is written and the item stays unmarked. Un-marking goes through toggleCarriedItem as
+	 * ever, handing back exactly what the draw record says.
+	 */
+	async markWriteInCarried(slug, { name = "", small = false, weight = 1, stonetopMove } = {}) {
+		const pool = small ? this._inventory.smallPool : this._inventory.regularPool;
+		const cost = small ? 1 : Math.max(0, Number(weight) || 0);
+		const answer = pool > 0 && cost > 0
+			? await askWriteInSource({ name, small, weight: cost, pool })
+			: WRITE_IN_SOURCE.FOUND;
+		if (!answer) return null;
+		await this.toggleCarriedItem(slug, true, { small, weight, loot: answer === WRITE_IN_SOURCE.FOUND, stonetopMove });
+		return answer;
 	}
 
 	// Outfit batch-marks the inventory: it writes the checked items and the two
@@ -2654,30 +2823,61 @@ export class StonetopCharacter {
 	// own, possessions.choiceCarried, so its `poss:choice` keys are sent there and every other key
 	// to inventory.checked. The split is by the colon: a gear-choice key has one and no outfit
 	// slug or item id ever does (see _gearSources). Unmarked rows are written as `false`, which is
-	// what clears them: both stores merge, so a key left out would keep its old mark.
+	// what clears them: both stores merge, so a key left out would keep its old mark. The draw
+	// records go by an unset for the same reason: an empty map written over them changed nothing.
+	//
+	// Outfit packs the food: every supplies row it leaves marked is full, whether or not it was
+	// marked before (a second Outfit restocks a row eaten down on the last trip, Book I p.77, p.88),
+	// and a row it leaves unmarked holds nothing, food left at home (_suppliesEmptied).
 	async applyOutfit(checkedMap, regularPool = 0, smallPool = 0) {
 		const itemMarks   = {};
 		const choiceMarks = {};
 		for (const [key, value] of Object.entries(checkedMap ?? {})) {
 			(key.includes(":") ? choiceMarks : itemMarks)[key] = !!value;
 		}
-		await Promise.all([
-			this._inventory.setAllChecked(itemMarks),
-			this._possessions.setChoicesCarried(choiceMarks),
-			this._inventory.setRegularPool(regularPool),
-			this._inventory.setSmallPool(smallPool),
-			this._inventory.setDrawn({}),
-		]);
+		const packed = SUPPLY_SLUGS.filter(slug => itemMarks[slug]);
+		const usesPerSupply = packed.length ? this.getUsesPerSupply() : 0;
+		const resources = this._inventory.resources;
+		const packing = [
+			...packed.filter(slug => Number(resources[slug]) !== usesPerSupply).map(slug => [slug, usesPerSupply]),
+			...this._suppliesEmptied(SUPPLY_SLUGS.filter(slug => slug in itemMarks && !itemMarks[slug])),
+		];
+		// ONE update for the lot, every mark and track its own dotted sub-key (see toggleCarriedItem).
+		await this._actor.update(Object.assign(
+			this._inventory.allCheckedData(itemMarks),
+			this._possessions.choicesCarriedData(choiceMarks),
+			this._inventory.poolData(regularPool),
+			this._inventory.poolData(smallPool, { small: true }),
+			this._inventory.clearDrawnData(),
+			...packing.map(([slug, count]) => this._inventory.resourceData(slug, count)),
+		));
 		// All in the Wrist: "Reset your ammo whenever you Outfit." The blades' track is the move's own
 		// (data/weapons.js), counting boxes marked, so a reset is a zero. Written only when something is
-		// marked, so an Outfit by anyone else costs no extra update.
+		// marked, so an Outfit by anyone else costs no extra update. A write of its own, not folded into
+		// the one above: it carries the move's name for the ledger, and an update names one move for
+		// every line it files.
 		if ((Number(this._moveResources.getMoveResources()?.[ALL_IN_THE_WRIST]) || 0) > 0) {
 			await this._moveResources.setUses(ALL_IN_THE_WRIST, 0, { stonetopMove: ALL_IN_THE_WRIST });
 		}
 	}
 
+	// "Clear all item marks", wherever a mark lives: the chosen gear of a special possession (Weapons
+	// of War, the Judge's shield) keeps its own in possessions.choiceCarried, and left there it went
+	// on counting toward load and armor after the Reset. The supplies rows set down go empty with
+	// them ("When you return home, clear the marks from your Inventory insert", Book I p.89): food in
+	// the larder is not tracked, and the next trip's ◆ of supplies is packed fresh.
 	async resetInventorySelections() {
-		await this._inventory.resetSelections();
+		await this._actor.update(Object.assign(
+			this._inventory.resetSelectionsData(),
+			this._possessions.clearCarriedData(),
+			...this._suppliesEmptied(SUPPLY_SLUGS).map(([slug, count]) => this._inventory.resourceData(slug, count)),
+		));
+	}
+
+	/** `[slug, 0]` for each of these supplies rows that still holds a use, so emptying writes only what changes. */
+	_suppliesEmptied(slugs) {
+		const resources = this._inventory.resources;
+		return slugs.filter(slug => (Number(resources[slug]) || 0) > 0).map(slug => [slug, 0]);
 	}
 
 	async addCustomInventoryItem(name, weight) {
@@ -2932,10 +3132,13 @@ export class StonetopCharacter {
 
 	// Move name → how many of that move the actor has LEARNED (an un-learned copy is kept on
 	// the sheet switched off, and grants nothing). Feeds sub-choice caps that grow with a move
-	// (the Blessed's sacred-pouch remarkable traits, +1 per Big Magic).
-	ownedMoveCounts() {
+	// (the Blessed's sacred-pouch remarkable traits, +1 per Big Magic). `learnedOnly` false counts every
+	// copy still on the sheet, learned or not (_trimSubChoicesOverCap: only removal trims).
+	ownedMoveCounts({ learnedOnly = true } = {}) {
 		const counts = {};
-		for (const [name, items] of this._buildOwnedMovesMap()) counts[name] = items.filter(i => moveLearnedIn(i, this._actor.items)).length;
+		for (const [name, items] of this._buildOwnedMovesMap()) {
+			counts[name] = learnedOnly ? items.filter(i => moveLearnedIn(i, this._actor.items)).length : items.length;
+		}
 		return counts;
 	}
 
@@ -3234,7 +3437,8 @@ export class StonetopCharacter {
 		const kept = new Set(choiceSlugs ?? []);
 		const dropped = (this._possessions.subChoices[possessionSlug] ?? [])
 			.filter(s => !kept.has(s) && this._possessions.isChoiceCarried(possessionSlug, s));
-		await this._possessions.writeSubChoices(possessionSlug, choiceSlugs ?? [], { uncarry: dropped });
+		const also = await this._choiceGiveBackData(possessionSlug, dropped);
+		await this._possessions.writeSubChoices(possessionSlug, choiceSlugs ?? [], { uncarry: dropped, also });
 	}
 	async deselectSubChoice(possessionSlug, choiceSlug) {
 		// Giving up a gear-bundle option drops its ◇ carry mark too, so re-choosing that
@@ -3242,7 +3446,33 @@ export class StonetopCharacter {
 		// each actor.update re-runs the ledger's snapshot diff (see writeSubChoices).
 		const remaining = (this._possessions.subChoices[possessionSlug] ?? []).filter(s => s !== choiceSlug);
 		const uncarry = this._possessions.isChoiceCarried(possessionSlug, choiceSlug) ? [choiceSlug] : [];
-		await this._possessions.writeSubChoices(possessionSlug, remaining, { uncarry });
+		const also = await this._choiceGiveBackData(possessionSlug, uncarry);
+		await this._possessions.writeSubChoices(possessionSlug, remaining, { uncarry, also });
+	}
+	/**
+	 * What carried gear choices given up (`choiceSlugs` of `possessionSlug`) drew from the undefined reserve
+	 * when marked in the field (setChoiceGearCarried), handed back as their carry marks go: the draw records
+	 * forgotten and each pool refilled, as an update fragment. Summed per pool, so two rows dropped together
+	 * both count. Read while the rows are still picked, since only a picked row is built.
+	 */
+	async _choiceGiveBackData(possessionSlug, choiceSlugs) {
+		const drawn = this._inventory.drawn;
+		const keyOf = slug => `${possessionSlug}:${slug}`;
+		const drew = (choiceSlugs ?? []).filter(slug => (Number(drawn[keyOf(slug)]) || 0) > 0);
+		if (!drew.length) return {};
+		const bundle = this._buildChoiceGearByPossession(await this.playbook()).get(possessionSlug);
+		const rows = [...(bundle?.regular ?? []), ...(bundle?.small ?? [])];
+		const back = { regular: 0, small: 0 };
+		const update = {};
+		for (const slug of drew) {
+			const row = rows.find(r => r.choiceSlug === slug);
+			// Small as setChoiceGearCarried drew it: a row with no ◇ weight drew from the □ pool.
+			back[row && !(row.weight > 0) ? "small" : "regular"] += Number(drawn[keyOf(slug)]);
+			Object.assign(update, this._inventory.drawnData(keyOf(slug), 0));
+		}
+		if (back.regular) Object.assign(update, this._inventory.poolData(this._inventory.regularPool + back.regular));
+		if (back.small) Object.assign(update, this._inventory.poolData(this._inventory.smallPool + back.small, { small: true }));
+		return update;
 	}
 	async selectSubChoiceExclusive(possessionSlug, choiceSlug, exclusiveSlugs) { await this._possessions.selectExclusive(possessionSlug, choiceSlug, exclusiveSlugs); }
 	async setSubChoiceUses(possessionSlug, choiceSlug, count, options) { await this._possessions.setChoiceUses(possessionSlug, choiceSlug, count, options); }
@@ -3252,7 +3482,24 @@ export class StonetopCharacter {
 	subChoiceUses(possessionSlug, choiceSlug) { return Number(this._possessions.choiceUses[`${possessionSlug}:${choiceSlug}`]) || 0; }
 	// The ◇ on a chosen weapon's row: whether it's on your person right now (counts toward
 	// load). Independent of the pick itself — see _buildChoiceGearByPossession.
-	async setChoiceGearCarried(possessionSlug, choiceSlug, isCarried) { await this._possessions.setChoiceCarried(possessionSlug, choiceSlug, isCarried); }
+	//
+	// Have What You Need reaches this gear as it reaches a possession's granted gear (Book I p.326:
+	// "If you mark a slot, fill it with a common mundane item or something from your special
+	// possessions"; p.327, Sawyl's lantern: "He moves a ◇ from "undefined" to the slot"). So a tick
+	// draws the row's weight (1 for a small row) from the undefined reserve, as far as the reserve
+	// goes, and records the draw under the row's `poss:choice` key; setting it down hands back exactly
+	// that (_reserveDrawData, as toggleCarriedItem draws). Outfit and Reset clear every draw record, so gear marked there
+	// drew nothing and gives nothing back. The mark, the draw and the pool go out in ONE update.
+	async setChoiceGearCarried(possessionSlug, choiceSlug, isCarried) {
+		const key = `${possessionSlug}:${choiceSlug}`;
+		const update = this._possessions.choicesCarriedData({ [key]: isCarried });
+		if (!!isCarried !== this._possessions.isChoiceCarried(possessionSlug, choiceSlug)) {
+			const bundle = this._buildChoiceGearByPossession(await this.playbook()).get(possessionSlug);
+			const row = [...(bundle?.regular ?? []), ...(bundle?.small ?? [])].find(r => r.choiceSlug === choiceSlug);
+			if (row) Object.assign(update, this._reserveDrawData(key, !!isCarried, { small: !(row.weight > 0), weight: row.weight }).update);
+		}
+		await this._actor.update(update);
+	}
 	async setPossessionChoiceText(possessionSlug, choiceSlug, value) { await this._possessions.setChoiceText(possessionSlug, choiceSlug, value); }
 
 	// How many of the selected background's markable actions the character may mark at its
@@ -3878,8 +4125,11 @@ export class StonetopCharacter {
 			"arcana.major", "arcana.minorDraw", "arcana.minorRoles", "arcana.majorMarks", "arcana.majorMarksFor",
 			"moves.backgroundAnswers", "moves.dismissedLevelOverage",
 			"crew", "animalCompanion",
-			"initiateDetails", "initiatesLoyalty", "initiatesHp", "initiatesReadiness", "initiatesAmmo",
+			// "With the party" too (follower-party.js), or an initiate picked again later comes back already travelling.
+			"initiateDetails", "initiatesLoyalty", "initiatesHp", "initiatesReadiness", "initiatesAmmo", "initiatesParty",
 			WBH_HERO_FLAG,
+			// Unstoppable's "fighting on at 0 HP" stamp: the move it reads goes with the Heavy.
+			UNSTOPPABLE_FIGHTING_FLAG,
 			// Each move's track and marks are keyed by its name.
 			...gone.map(name => `moves.backgroundChoices.${name}`),
 			...gone.map(name => `moves.moveMarks.${name}`),
@@ -4205,11 +4455,15 @@ export class StonetopCharacter {
 	// Magic"). Each selected possession line whose cap grows with a removed move, and now
 	// holds more picks than that cap, drops its most recent picks down to it: sub-choices
 	// keep the order they were made in, so the trait the move brought goes first.
+	// Only REMOVAL trims (the user's ruling): an un-learned copy still on the sheet keeps the
+	// trait it paid for, so the cap here counts every copy still held, learned or not, not the
+	// learned-only ownedMoveCounts. Otherwise removing one of two copies, the other un-learned,
+	// would cut both copies' traits.
 	async _trimSubChoicesOverCap(goneMoves) {
 		const goneNames = new Set(goneMoves.filter(Boolean).map(i => i.name));
 		if (!goneNames.size) return;
 		const sp = (await this.playbook())?.specialPossessions;
-		const moveCounts = this.ownedMoveCounts();
+		const moveCounts = this.ownedMoveCounts({ learnedOnly: false });
 		for (const { opt, sg } of this._selectedPossessionSubgroups(sp)) {
 			if (!sg.multiSelect) continue;
 			if (!(sg.maxSelectBonus?.moveBonus ?? []).some(mb => goneNames.has(mb.moveName))) continue;
@@ -4273,17 +4527,19 @@ export class StonetopCharacter {
 	}
 
 	// Removing a copy of Magnificent Specimen takes back the 2 options it gave the companion: the
-	// stored picks are cut to what the type's "Pick N more" and the LEARNED book copies left still
-	// allow, the newest first and never the pre-ticked option (animal-companion.js#trimCompanionTraits).
+	// stored picks are cut to what the type's "Pick N more" and the book copies still HELD allow,
+	// the newest first and never the pre-ticked option (animal-companion.js#trimCompanionTraits).
 	// Only on removal: un-learning a copy keeps the picks, as un-learning Big Magic keeps its trait
-	// (_trimSubChoicesOverCap runs from here too), so re-learning it has them straight back.
+	// (_trimSubChoicesOverCap runs from here too), so re-learning it has them straight back. So the
+	// allowance here counts every book copy still on the sheet, learned or not: removing one of two
+	// copies, the other un-learned, keeps what the un-learned copy still pays for.
 	async _trimCompanionTraitsOnRemoval(goneMoves) {
 		if (!goneMoves.some(i => i?.name === MAGNIFICENT_SPECIMEN_MOVE && !_isCustomMove(i))) return;
 		const companion = resolvedFlags(this._actor)?.animalCompanion;
 		if (!companion?.type || !Array.isArray(companion.traits)) return;
 		const typeData = ((await this.companionSource())?.types ?? []).find(t => t.slug === companion.type);
 		if (!typeData) return;
-		const allowance = companionTraitAllowance(typeData, _learnedBookSpecimens(this._buildOwnedMovesMap(), this._actor.items));
+		const allowance = companionTraitAllowance(typeData, _bookSpecimens(this._buildOwnedMovesMap(), this._actor.items, { learnedOnly: false }));
 		const kept = trimCompanionTraits(typeData, companion.traits, allowance);
 		if (kept.length !== companion.traits.length) await this._actor.setFlag(STONETOP_SCOPE, "animalCompanion.traits", kept);
 	}
@@ -4415,13 +4671,13 @@ export class StonetopCharacter {
 		const aimed = descriptionOnly ? null : await aimPcAskRoll(this._actor, item);
 		if (aimed === "cancel") return "cancel";
 
-		const forward  = descriptionOnly ? 0 : this._actor.system?.attributes?.forward?.value ?? 0;
+		// The +forward is not read here: it is claimed with the held promises just before the dice, below.
 		const ongoing  = descriptionOnly ? 0 : this._actor.system?.attributes?.ongoing?.value ?? 0;
 		// A one-off situational modifier from the optional pre-roll prompt; the roll
 		// engine surfaces it as a "Situational" pill (modifier − forward − ongoing).
 		const situ     = descriptionOnly ? 0 : situational;
 
-		const modifier    = forward + ongoing + situ;
+		const modifier    = ongoing + situ;
 		// `rollMode` is the pre-roll prompt's answer when the prompt asked for one (see
 		// RollDialog.js), and ABSENT when it did not — which is the ordinary case, because the
 		// mode is normally the sticky selector on this sheet. So the sheet's own flag is the
@@ -4429,13 +4685,14 @@ export class StonetopCharacter {
 		// player who set Advantage on their sheet, on every roll.
 		const rollOptions = {
 			rollMode: normalizeRollMode(rollMode ?? this.rollMode),
-			modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}), ...(aimed ?? {}),
+			// `forward` from what the roll is owed, added once it is claimed (_foldOwed).
+			modifier, forward: 0, ongoing, statOverride: stat, ...(attackExtra ?? {}), ...(aimed ?? {}),
 		};
 
 		// A grudge this character is owed against the very foe they are attacking: Relentless on a Clash
 		// with someone who survived the last one, But I Get Up Again on whoever knocked them down. Folded
-		// in like a held advantage (see _spendHeldRollModes) — before the debility pass, so a Weakened
-		// Heavy's advantage cancels rather than quietly outranking the debility — and NAMED on the card.
+		// in like a held advantage (see _foldOwed), before the debility pass, so a Weakened
+		// Heavy's advantage cancels rather than quietly outranking the debility, and NAMED on the card.
 		const grudge = attackExtra ? attackFoeAdvantage(this._actor, attackExtra) : null;
 		if (grudge) Object.assign(rollOptions, foldAdvantage(rollOptions, grudge));
 		// Every other roll aimed at someone owes what _foldAimedModes folds: Binding Arbitration's "advantage
@@ -4464,15 +4721,25 @@ export class StonetopCharacter {
 		const taken = descriptionOnly ? [] : await _takenOffers(takenOffers, offered, () => this.rollOffers(item), { oathbreakerNamed });
 		Object.assign(rollOptions, _foldTakenOffers(rollOptions, taken));
 
-		// A promise made earlier (a peaceful camp) is spent HERE — after the guards above, so
-		// reading a move's text or backing out of the weapon prompt never burns it.
-		const promised = descriptionOnly ? rollOptions : await this._spendHeldRollModes(rollOptions);
+		// What the next roll is owed (the +forward, a promise made earlier: a peaceful camp, an Interfere) is
+		// CLAIMED HERE, after the guards above, so reading a move's text or backing out of the weapon prompt
+		// never burns it; and in one write before the dice, so a second roll started while these dice still
+		// animate reads what this one left (_claimNextRollOwed). Put back when no dice are thrown.
+		const owed = descriptionOnly ? null : await this._claimNextRollOwed(item?.name);
+		const promised = owed ? this._foldOwed(rollOptions, owed) : rollOptions;
 
-		// Prepare a Welcome spends 1 Surprise to roll; the card says so, or that there was none to spend.
-		const surprise = descriptionOnly ? null : await spendSurpriseForRoll(this._actor, item);
-		const withSurprise = surprise ? { ...promised, conditionNotes: [...(promised.conditionNotes ?? []), surprise] } : promised;
-
-		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, withSurprise), descriptionOnly });
+		let withSurprise = promised;
+		let roll;
+		try {
+			// Prepare a Welcome spends 1 Surprise to roll; the card says so, or that there was none to spend.
+			const surprise = descriptionOnly ? null : await spendSurpriseForRoll(this._actor, item);
+			if (surprise) withSurprise = { ...promised, conditionNotes: [...(promised.conditionNotes ?? []), surprise] };
+			roll = await item.roll({ ...this.applyDebilityRollMode(stat, withSurprise), descriptionOnly });
+		} catch (err) {
+			await owed?.refund();
+			throw err;
+		}
+		if (!roll) await owed?.refund();
 
 		// What the taken lines cost, paid once the dice have landed, and a 12+'s "criticalNote" hook.
 		await _payTakenOffers(taken, roll, item.name);
@@ -4485,13 +4752,11 @@ export class StonetopCharacter {
 		// shaking the nerves, Prepare a Welcome's 10+ regaining 1 Surprise, Commune with Aratis's 10+
 		// holding 2 Sanction, the holy light lit or snuffed. Stated flatly, so each goes on with the dice.
 		// What each did is written on the card, so a later Shift or +1 moving its tier can bring the
-		// character along, undoing only what this roll did (actors/character/tier-effects.js).
-		if (!descriptionOnly && Number.isFinite(roll?.total)) {
-			// The tier the roll COUNTS as, as its card reads: a taken line that treats a 7-9 as a 10+ (or a 6- as a
-			// 7-9) settles the effects of the tier it counts as, the same one a later rewrite reads.
-			const tier = outcomeTier(countedTier(roll.total, rolledRecord("", withSurprise)));
-			await recordTierEffects(messageOfRoll(roll), await settleTierEffects(this._actor, item.name, tier, null, { character: this, targets: aimedAt }));
-		}
+		// character along, undoing only what this roll did (actors/character/tier-effects.js). Never for a move a
+		// player wrote under a book move's name (owns-move.js#bookMoveName): a homebrew "Prepare a Welcome" spent
+		// no Surprise, so its 10+ regains none, and with no record on its card a later Shift brings nothing along.
+		const tierMove = bookMoveName(item);
+		if (!descriptionOnly && tierMove && Number.isFinite(roll?.total)) await this._settleRolledTierEffects(roll, tierMove, withSurprise, aimedAt);
 
 		// Clash's 6-: "your maneuver fails and you suffer your enemy's attack". A flat consequence
 		// with nothing in the tier to decide, so it fires off the dice rather than off a button —
@@ -4510,10 +4775,30 @@ export class StonetopCharacter {
 		// this one rather than this one's own damage (combat/attack-flow.js#recordClashedFoes).
 		if (!descriptionOnly && attackExtra) await recordClashedFoes(this._actor, attackExtra);
 
-		if (forward !== 0) {
-			await this._actor.update({ "system.attributes.forward.value": 0 }, { stonetopMove: item?.name });
-		}
 		return true;
+	}
+
+	/**
+	 * What the tier just rolled does to the character (tier-effects.js), settled and written on the card.
+	 *
+	 * Read off the CARD, not the Roll in hand: a Burn Brightly, a +1 or a GM's Shift can land on the card
+	 * between the dice and here (the miss XP's relay to the GM's client is in between), and a rewrite only
+	 * lifts a copy of the roll (roll-card-writer.js#writeCardRoll). Such a rewrite found no record on the
+	 * card to bring along (tier-effects.js#reconcileTierEffects), so one that lands while these are being
+	 * settled is caught up from the total the card shows once they are written.
+	 *
+	 * The tier the roll COUNTS as, as its card reads: a taken line that treats a 7-9 as a 10+ (or a 6- as a
+	 * 7-9) settles the effects of the tier it counts as, the same one a later rewrite reads.
+	 */
+	async _settleRolledTierEffects(roll, moveName, options, targets) {
+		const card = messageOfRoll(roll);
+		const liveTotal = () => cardTotal(card) ?? roll.total;
+		const tierAt = total => outcomeTier(card?.getFlag?.(STONETOP_SCOPE, ROLLED_FLAG)
+			? cardCountedTier(card, total, STONETOP_SCOPE)
+			: countedTier(total, rolledRecord("", options)));
+		const tier = tierAt(liveTotal());
+		await recordTierEffects(card, await settleTierEffects(this._actor, moveName, tier, null, { character: this, targets }));
+		if (card && tierAt(liveTotal()) !== tier) await reconcileTierEffects(card, liveTotal(), { actor: this._actor });
 	}
 
 	// -- Defend Readiness (Book I, Combat & Boons p.216) ----------------------
@@ -4547,8 +4832,10 @@ export class StonetopCharacter {
 
 	/**
 	 * The derived vitals everything outside the sheet reads off the STORED fields, `{armor, unpierceable,
-	 * maxHp}`: buildSnapshot's arithmetic without building a sheet. `maxHp` is 0 with no playbook, which
-	 * is "nothing to say", not a max of 0 (see computedMaxHp).
+	 * maxHp, damage}`: buildSnapshot's arithmetic without building a sheet. `maxHp` is 0 with no playbook,
+	 * which is "nothing to say", not a max of 0 (see computedMaxHp). `damage` is the die the character
+	 * rolls (computedDamageDie's answer, from the playbook and move bonuses already worked out here), or
+	 * null with no override and no playbook.
 	 *
 	 * The stored armor is what the damage card's Apply takes off (combat/attack-flow.js#wornArmor), so a
 	 * shield handed over mid-fight with the sheet closed has to reach it: actors/character/vitals-mirror.js.
@@ -4559,7 +4846,8 @@ export class StonetopCharacter {
 			this._postDeath.hpPenalty(),
 		]);
 		const { armor, unpierceable, conditional, conditionalSource } = this._armorFrom(gear, moveBonuses);
-		return { armor, unpierceable, conditional, conditionalSource, maxHp: playbookData ? _hpFrom(this._actor, playbookData, moveBonuses, hpPenalty).hpMax : 0, hpPenalty };
+		const damage = this.damageDieOverride ?? _derivedDamageDie(playbookData, moveBonuses);
+		return { armor, unpierceable, conditional, conditionalSource, maxHp: playbookData ? _hpFrom(this._actor, playbookData, moveBonuses, hpPenalty).hpMax : 0, hpPenalty, damage };
 	}
 
 	/**
@@ -4600,18 +4888,27 @@ export class StonetopCharacter {
 	 * The two armor numbers move together: a floor is part of the total above it, so a disagreement in
 	 * either writes both. A non-finite armor (nothing worked out, or a move bonus that is not a number)
 	 * writes neither, where 0 is real (unarmored) and must overwrite a stale number. Max HP only with a
-	 * playbook to derive it from (0 says there is none). Ledger-silenced: the real change was the gear,
+	 * playbook to derive it from (0 says there is none). The damage die onto `system.attributes.damage.value`
+	 * when the vitals carry one (`damage`, computedVitals'; the sheet hands in none) and the stored one
+	 * differs: the character's own rolls ask for the computed die, but another hero's best die in a
+	 * pile-on (fight/damage-seed.js#attackerProfile) and a character struck back at as a foe
+	 * (utils/damage.js#foeAttacks) read the stored one. Ledger-silenced: the real change was the gear,
 	 * the level or the Mark, which the ledger already files; the one exception is HP a falling max takes
 	 * down with it, which is filed on its own line. Returns whether it wrote.
 	 *
-	 * @param {{armor: number|null, unpierceable: number, conditional?: number, conditionalSource?: string, maxHp: number}} [vitals]  computedVitals' answer.
+	 * @param {{armor: number|null, unpierceable: number, conditional?: number, conditionalSource?: string, maxHp: number, damage?: string|null}} [vitals]  computedVitals' answer.
 	 *   A caller handing in its own numbers must carry the WHOLE armor group: the write is one update
 	 *   over all four fields, so an omitted `conditional` writes the default back over a real one.
 	 */
 	async syncStoredVitals(vitals = null) {
 		const worked = vitals ?? await this.computedVitals();
 		const { armor, unpierceable, maxHp, conditional = 0, conditionalSource = "" } = worked;
-		const attrs = this._actor.system?.attributes ?? {};
+		// Compared against the STORED fields (`_source`), never the live `system`: the sheet's getData used
+		// to write the computed numbers into the live DataModel on the client that rendered it, which made
+		// every comparison below come out equal there and left the stored armor, max HP and die stale for
+		// everyone else (the GM's Apply, the token bar, the Fight tab). The live values are only a fallback
+		// for a document with no source (a test double).
+		const attrs = this._actor._source?.system?.attributes ?? this._actor.system?.attributes ?? {};
 		const update = {};
 		const floor = Number(unpierceable) || 0;
 		// The fiction-gated part of the total travels with it, for the same reason the floor does: the
@@ -4642,9 +4939,15 @@ export class StonetopCharacter {
 			if ((penaltyBefore ?? 0) !== penalty) update[`flags.${STONETOP_SCOPE}.${MIRRORED_HP_PENALTY_FLAG}`] = penalty;
 			penaltyNow = penalty;
 		}
+		const die = String(worked.damage ?? "").trim();
+		if (die && die !== String(attrs.damage?.value ?? "").trim()) update["system.attributes.damage.value"] = die;
 		if (!Object.keys(update).length) return false;
 		const hpBefore = Number(attrs.hp?.value) || 0;
-		const written = await this._actor.update(update, { stonetopLedger: true });
+		const written = await this._actor.update(update, {
+			stonetopLedger: true,
+			// HP a falling max takes with it is not a blow landing (StonetopFlags.js#HP_CEILING_OPTION).
+			...(update["system.attributes.hp.value"] !== undefined ? { [HP_CEILING_OPTION]: true } : {}),
+		});
 		// The mirror stays quiet, but HP taken down with a falling max is HP the character LOST, and
 		// nothing else files it. One line for it, naming what lowered the max where that is known.
 		//
@@ -5242,14 +5545,15 @@ export class StonetopCharacter {
 
 	/**
 	 * Matched on the resolved ITEM's name, never on a row's text: an un-owned playbook row posts its
-	 * text with no item at all, and a player-authored custom move can carry any name.
+	 * text with no item at all, and a player-authored custom move can carry any name, so a homebrew
+	 * "Battle Joy" ends nothing (owns-move.js#bookMoveName).
 	 *
 	 * Returns whether it actually ended something, so the sheet knows whether this roll was the end
 	 * of a rage (and can repaint the glyph) or an ordinary Battle Joy roll by somebody who never
 	 * ticked it on.
 	 */
 	async _endBattleJoyBeforeRoll(item) {
-		if (item?.name !== BATTLE_JOY) return false;
+		if (bookMoveName(item) !== BATTLE_JOY) return false;
 		return this.setBattleJoy(false);
 	}
 
@@ -5288,24 +5592,28 @@ export class StonetopCharacter {
 		// `rollMode` is the pre-roll prompt's answer when the prompt asked for one (RollDialog.js)
 		// and absent otherwise, in which case the sheet's sticky selector decides. Destructured
 		// rather than left in `rest` so the caller cannot half-set it: Know Things passes a mode
-		// it has already lifted through withAdvantage, and that is a value, not an override.
+		// it has already lifted through advantageRollOptions, and that is a value, not an override.
 		// `targets` is whom the roll is aimed at, for a caller that knows better than this user's targets
 		// on the map ([] for a roll aimed at nobody: Struggle as One's); absent, those targets decide.
 		// `takenOffers` and `offered` are the roll window's answer about the lines it offered, as onRoll's
 		// are (directRollOffers); a caller that asked no window (Struggle as One) takes none.
+		// A caller that netted sources of its own (Struggle as One's board, Know Things' Polyglot) hands them
+		// over as `modeBase` + `modeSources` (roll-mode.js#layModes) beside the mode they fold to, so a
+		// cancelled pair stays cancelled when a debility or a held promise is laid on below.
 		const { situational = 0, rollMode = null, targets = null, takenOffers = null, offered = null, ...rest } = extraOptions;
-		const forward  = this._actor.system?.attributes?.forward?.value ?? 0;
+		// The +forward is claimed with the held promises just before the dice, below.
 		const ongoing  = this._actor.system?.attributes?.ongoing?.value ?? 0;
 		// `situational` is the one-off modifier from the optional pre-roll prompt; the
 		// roll engine renders it as a "Situational" pill (modifier − forward − ongoing).
-		const modifier = forward + ongoing + situational;
+		const modifier = ongoing + situational;
 
 		// Returned so a caller that has to act on the outcome (the arcana Identify roll) can
 		// classify the total without re-rolling or re-deriving the tier thresholds.
 		const base = {
 			rollMode: normalizeRollMode(rollMode ?? this.rollMode),
 			modifier,
-			forward,
+			// Added once claimed (_foldOwed).
+			forward: 0,
 			ongoing,
 			...rest,
 		};
@@ -5319,15 +5627,20 @@ export class StonetopCharacter {
 		// Arbitration's is dropped when the aim above has already named the oath.
 		const taken = await _takenOffers(takenOffers, offered, () => this.directRollOffers(rest.moveName),
 			{ oathbreakerNamed: aimed.oathbreaker });
-		const roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat,
-			await this._spendHeldRollModes(_foldTakenOffers(standing, taken))));
+		// Claimed just before the dice and put back when none are thrown, as onRoll does (_claimNextRollOwed).
+		const owed = await this._claimNextRollOwed(rest.moveName);
+		let roll;
+		try {
+			roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat,
+				this._foldOwed(_foldTakenOffers(standing, taken), owed)));
+		} catch (err) {
+			await owed.refund();
+			throw err;
+		}
+		if (!roll) await owed.refund();
 		await _payTakenOffers(taken, roll, rest.moveName);
 		// Alpha's and But I Get Up Again's advantage was for this one roll against them.
 		if (roll) await aimed.spend();
-
-		if (forward !== 0) {
-			await this._actor.update({ "system.attributes.forward.value": 0 }, extraOptions.moveName ? { stonetopMove: extraOptions.moveName } : {});
-		}
 		return roll;
 	}
 
@@ -5349,13 +5662,17 @@ export class StonetopCharacter {
 	 * @param {object} opts
 	 * @param {number} [opts.bonus]     - 0, 1, or 2
 	 * @param {string} [opts.rollMode]  - "normal" | "adv" | "dis"
+	 * @param {string[]} [opts.modeSources] - the sides that netted to `rollMode` (data/follower-build.js
+	 *   #orderFollowersModeSources), so the nerves are folded with each of them rather than with the net
 	 * @param {string} [opts.moveName]  - Card header, e.g. "Hari: Defy Danger"
 	 */
-	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", moveName, shieldWall = false } = {}) {
+	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", modeSources = null, moveName, shieldWall = false } = {}) {
 		const { rollStat } = await import("../../utils/roll-engine.js");
 		// Return the roll so the caller can react to the result — e.g. auto-holding
 		// Readiness when a follower is ordered to Defend and rolls 7+ (p.469).
-		const mode = ["adv", "dis"].includes(rollMode) ? rollMode : "normal";
+		// With the sides handed over, a straight roll reached by cancelling stays straight under the nerves;
+		// without them (a caller that hands only the net), the net is the one side.
+		const sources = Array.isArray(modeSources) ? modeSources : [rollMode];
 		const nerves = fightStateActive(this._actor, "nerves");
 		// Where an advantage came from, when the Marshal's Shield Wall gave it, and a disadvantage.
 		const conditionNotes = [
@@ -5364,7 +5681,7 @@ export class StonetopCharacter {
 		];
 		return rollStat("follower", this._actor, {
 			statValue: Math.trunc(Number(bonus) || 0),
-			rollMode:  nerves ? foldModes(["dis"], mode) : mode,
+			rollMode:  foldModes(nerves ? [...sources, "dis"] : sources, "normal"),
 			moveName:  moveName || "Order Followers",
 			modifier:  0,
 			...(conditionNotes.length ? { conditionNotes } : {}),
@@ -5415,12 +5732,11 @@ export class StonetopCharacter {
 	/** The debility half of {@link applyDebilityRollMode}: what a marked box does to this roll. */
 	_debilityRollMode(stat, options) {
 		const debilityOptions = this._actor.system.attributes?.debilities?.options ?? {};
+		// Which stats a debility touches is the BOOK's (p.52), read off _DEBILITY_DEFS as the snapshot, the
+		// sheet and the tooltips read it. The stored `stat` array beside each box is never consulted: a world
+		// whose copy drifted (a macro, an import) would otherwise roll differently from what every display says.
 		const activeEntry = Object.entries(debilityOptions).find(
-			([key, opt]) => {
-				if (!opt.value) return false;
-				const affectedStats = Array.isArray(opt.stat) ? opt.stat : _DEBILITY_DEF_BY_KEY[key]?.stats;
-				return affectedStats?.includes(stat);
-			}
+			([key, opt]) => !!opt?.value && !!_DEBILITY_DEF_BY_KEY[key]?.stats.includes(stat)
 		);
 		if (!activeEntry) return options;
 		const [key] = activeEntry;
@@ -5464,7 +5780,8 @@ export class StonetopCharacter {
 	 * that don't. This is a promise: it outranks both, it names itself on the card, and it is
 	 * consumed by the one roll it was owed to.
 	 *
-	 * Stored as WHAT PROMISED it rather than a bare `true`, so the card can say why.
+	 * Stored as WHAT PROMISED it rather than a bare `true`, so the card can say why: the names, as a
+	 * list. Answers `{sources, source}` (`source` is that list joined for display) or null.
 	 */
 	heldAdvantage() {
 		return this._heldMode("heldAdvantage");
@@ -5472,6 +5789,34 @@ export class StonetopCharacter {
 
 	async clearHeldAdvantage() {
 		await this._clearHeldMode("heldAdvantage");
+	}
+
+	/**
+	 * Take back ONE promise of advantage, by the name it was given under (give-advantage.js#givenSource),
+	 * leaving any other promise held beside it: "A peaceful night's rest & Aeron's Everything Burns" loses
+	 * the second name and keeps the first. For a gift whose roll card was moved off the tier that gave it
+	 * (give-advantage-flow.js#reconcileGivenAdvantage). Whether it was still held to take back.
+	 */
+	async releaseHeldAdvantage(source) {
+		return this._releaseHeldSource("heldAdvantage", source);
+	}
+
+	/**
+	 * {@link releaseHeldAdvantage} for a held disadvantage: an Interfere's answer withdrawn
+	 * (pc-asks/pc-ask-flow.js#withdrawDeletedAnswer) takes back its own name and nothing held beside it.
+	 */
+	async releaseHeldDisadvantage(source) {
+		return this._releaseHeldSource("heldDisadvantage", source);
+	}
+
+	async _releaseHeldSource(flag, source) {
+		const held = this._heldMode(flag);
+		const name = String(source ?? "").trim();
+		if (!held?.sources.includes(name)) return false;
+		const rest = held.sources.filter(part => part !== name);
+		if (!rest.length) await this._actor.setFlag(STONETOP_SCOPE, flag, null);
+		else await this._actor.update({ [`flags.${STONETOP_SCOPE}.${flag}`]: { sources: rest } });
+		return true;
 	}
 
 	/**
@@ -5486,7 +5831,8 @@ export class StonetopCharacter {
 	}
 
 	/** {@link holdAdvantage} as an update fragment, for a move that writes several things at once
-	 *  (camp/camp-rules.js#campShareUpdate). Joined with a promise already held, the same way. */
+	 *  (camp/camp-rules.js#campShareUpdate). Laid beside a promise already held, the same way; `source`
+	 *  may be one name or several (the camp's two promises in one write). */
 	heldAdvantageData(source) {
 		return this._heldModeData("heldAdvantage", source);
 	}
@@ -5519,13 +5865,16 @@ export class StonetopCharacter {
 		await this._clearHeldMode("heldDisadvantage");
 	}
 
-	// The two held promises differ only in their flag ("heldAdvantage" / "heldDisadvantage").
+	// The two held promises differ only in their flag ("heldAdvantage" / "heldDisadvantage"). Read as
+	// the list of names (heldSources, which also reads a flag from before the list) and the one line
+	// every surface shows for them, joined as every list of names is (strings.js#joinNames).
 	_heldMode(flag) {
-		return resolvedFlags(this._actor)[flag] ?? null;
+		const sources = heldSources(resolvedFlags(this._actor)[flag]);
+		return sources.length ? { sources, source: joinNames(sources) } : null;
 	}
 
 	_heldModeData(flag, source) {
-		return { [`flags.${STONETOP_SCOPE}.${flag}`]: { source: joinSources(this._heldMode(flag)?.source, source) } };
+		return { [`flags.${STONETOP_SCOPE}.${flag}`]: { sources: mergeSources(this._heldMode(flag)?.sources ?? [], source) } };
 	}
 
 	async _clearHeldMode(flag) {
@@ -5555,21 +5904,60 @@ export class StonetopCharacter {
 	 * mode that quietly vanished, and either way they are SPENT, because they were made about this
 	 * roll and this is the roll that happened.
 	 *
-	 * Cleared BEFORE the dice, like the steading's, so a second roll cannot spend the same promise:
-	 * in one write, whichever of the two were held.
+	 * The +forward rides along: added to the roll's modifier and named on its card (roll-engine.js
+	 * #rollStat's Forward pill). PURE: what is folded here was claimed by _claimNextRollOwed.
+	 *
+	 * @param {object} options  the roll's options so far
+	 * @param {{forward: number, held: {adv: object|null, dis: object|null}}} owed
 	 */
-	async _spendHeldRollModes(options) {
-		const adv = this.heldAdvantage();
-		const dis = this.heldDisadvantage();
-		if (!adv && !dis) return options;
-		await this._actor.update({
-			...(adv ? { [`flags.${STONETOP_SCOPE}.heldAdvantage`]: null } : {}),
-			...(dis ? { [`flags.${STONETOP_SCOPE}.heldDisadvantage`]: null } : {}),
-		});
+	_foldOwed(options, { forward = 0, held = {} } = {}) {
+		const { adv = null, dis = null } = held ?? {};
+		const withForward = forward
+			? { ...options, modifier: (options.modifier ?? 0) + forward, forward: (options.forward ?? 0) + forward }
+			: options;
+		if (!adv && !dis) return withForward;
 		return {
-			...layModes(options, [adv ? "adv" : "", dis ? "dis" : ""]),
-			conditionNotes: [...(options.conditionNotes ?? []), ...[adv, dis].filter(Boolean).map(held => held.source)],
+			...layModes(withForward, [adv ? "adv" : "", dis ? "dis" : ""]),
+			conditionNotes: [...(withForward.conditionNotes ?? []), ...[adv, dis].filter(Boolean).map(promise => promise.source)],
 		};
+	}
+
+	/**
+	 * CLAIM what the next roll is owed: the +forward and whatever is held over it (an advantage, a
+	 * disadvantage, or both). Read and cleared in ONE write, before the dice, in this character's roll
+	 * turn on this client (_inRollTurn), so two rolls started together cannot both take them: the second
+	 * reads what the first left, which is nothing. A roll that throws before its dice, or makes none, puts
+	 * them back with `refund()`, so a promise is never lost to a roll that did not happen.
+	 *
+	 * @param {string|null} [moveName]  the move the ledger files the cleared +forward under
+	 * @returns {Promise<{forward: number, held: {adv: object|null, dis: object|null}, refund: () => Promise<void>}>}
+	 */
+	_claimNextRollOwed(moveName = null) {
+		const ledger = moveName ? { stonetopMove: moveName } : {};
+		return _inRollTurn(this._actor, async () => {
+			const forward = Math.trunc(Number(this._actor.system?.attributes?.forward?.value) || 0);
+			const adv = this.heldAdvantage();
+			const dis = this.heldDisadvantage();
+			const update = {
+				...(forward ? { "system.attributes.forward.value": 0 } : {}),
+				...(adv ? { [`flags.${STONETOP_SCOPE}.heldAdvantage`]: null } : {}),
+				...(dis ? { [`flags.${STONETOP_SCOPE}.heldDisadvantage`]: null } : {}),
+			};
+			if (Object.keys(update).length) await this._actor.update(update, ledger);
+			let refunded = false;
+			const refund = () => _inRollTurn(this._actor, async () => {
+				if (refunded || !Object.keys(update).length) return;
+				refunded = true;
+				// Laid back BESIDE whatever was given since (a new +1 forward, another promise), never over it.
+				const now = Math.trunc(Number(this._actor.system?.attributes?.forward?.value) || 0);
+				await this._actor.update({
+					...(forward ? { "system.attributes.forward.value": now + forward } : {}),
+					...(adv ? this.heldAdvantageData(adv.sources) : {}),
+					...(dis ? this.heldDisadvantageData(dis.sources) : {}),
+				}, ledger);
+			});
+			return { forward, held: { adv, dis }, refund };
+		});
 	}
 
 	// ── Death and dying (Book I, Harm & Healing p.245) ─────────────────────────
@@ -5736,8 +6124,30 @@ export class StonetopCharacter {
 			? { "system.attributes.hp.adjustment": target - base, "system.attributes.hp.max": target }
 			: { "system.attributes.hp.max": target };
 		if (this.hp > target) update["system.attributes.hp.value"] = target;
-		await this._actor.update(update);
+		// The HP that goes with a lowered max is not damage taken (StonetopFlags.js#HP_CEILING_OPTION).
+		if (update["system.attributes.hp.value"] !== undefined) await this._actor.update(update, { [HP_CEILING_OPTION]: true });
+		else await this._actor.update(update);
 		return target;
+	}
+
+	/**
+	 * A new playbook starts at full HP: "Start play with your current HP equal to your max HP" (Book I
+	 * p.53). The REAL max (computedVitals), not the playbook's printed number the drop seeded: a hand-set
+	 * adjustment survives a change of playbook (it records an arcanum's or a post-death insert's lasting
+	 * cost or boon, and those stay), and so do move bonuses still held. The stored max is written beside
+	 * it, as syncStoredVitals would. Ledger-quiet: the playbook change already filed its HP. Returns the
+	 * HP now in play (unchanged with no playbook to work a max from).
+	 */
+	async startAtFullHp() {
+		const { maxHp } = await this.computedVitals();
+		if (!(maxHp > 0)) return this.hp;
+		const update = {};
+		if (this.hp !== maxHp) update["system.attributes.hp.value"] = maxHp;
+		if (this.storedMaxHp !== maxHp) update["system.attributes.hp.max"] = maxHp;
+		if (!Object.keys(update).length) return maxHp;
+		// A negative adjustment takes the seeded number DOWN to the real max, which is not a blow landing.
+		await this._actor.update(update, { stonetopLedger: true, [HP_CEILING_OPTION]: true });
+		return maxHp;
 	}
 
 	/** The hand-set damage die, or null when the die follows the playbook. */
@@ -5918,6 +6328,23 @@ export class StonetopCharacter {
 	}
 
 	/**
+	 * debilityChoices for a MOVE that has this character mark a debility (Hard to Kill's 7-9 trade, Battle Joy's
+	 * 6-): Auspicious Birth's circle first when that background is taken, "When one of your moves has you mark a
+	 * debility, you may mark this background's circle instead, to no ill effect" (invoke-consequences.js
+	 * #auspiciousBirthChoice; Invoke the Sun God and Burn Twice as Bright offer it through debilityPayments). Not
+	 * for a hand tick on the sheet, which is the GM's "mark a debility" rather than one of the character's moves,
+	 * and never a list of things to clear: the circle clears only at camp and Convalesce.
+	 */
+	get debilityMarkChoices() {
+		const circle = auspiciousBirthChoice({
+			playbook: this._actor.system?.playbook?.name ?? null,
+			background: this._background.selectedSlug || null,
+			setupResources: this._background.setupResources,
+		});
+		return circle ? [circle, ...this.debilityChoices] : this.debilityChoices;
+	}
+
+	/**
 	 * Mark one debility, optionally in the same write as an HP change and the end of a brush
 	 * with death — the Heavy's Hard to Kill trades exactly that on a 7-9 ("mark a debility of
 	 * your choice to regain 1 HP", which is also what takes them out of being out of the
@@ -5929,14 +6356,19 @@ export class StonetopCharacter {
 	 * open — a Heavy healed to 6 who then trades a debility was being set back down to 1.
 	 *
 	 * `key` can be Walk It Off's (walk-it-off.js) while debilityChoices lists it: the move's box is
-	 * marked instead, and no debility is.
+	 * marked instead, and no debility is. Or Auspicious Birth's circle while debilityMarkChoices lists it,
+	 * marked in the same write (the moves offering it are the only callers that hand that key in).
+	 *
+	 * `alsoUpdate`: a further fragment for the same write, as restoreHp's (Hard to Kill's trade closes its
+	 * latch in it).
 	 */
-	async markDebility(key, { hp = null, moveName, clearsDeathsDoor = false } = {}) {
-		const choice = this.debilityChoices.find(d => d.key === key);
+	async markDebility(key, { hp = null, moveName, clearsDeathsDoor = false, alsoUpdate = null } = {}) {
+		const choice = this.debilityMarkChoices.find(d => d.key === key);
 		if (!choice || choice.marked) return false;
-		const update = debilityData(key, true);
+		const update = choice.circle ? this._background.setupResourceData(AUSPICIOUS_BIRTH.slug, 1) : debilityData(key, true);
 		if (hp !== null && hp > this.hp) update["system.attributes.hp.value"] = hp;
 		if (clearsDeathsDoor) Object.assign(update, this._clearDeathsDoorUpdate);
+		if (alsoUpdate) Object.assign(update, alsoUpdate);
 		await this._actor.update(update, moveName ? { stonetopMove: moveName } : {});
 		return true;
 	}
@@ -6099,9 +6531,12 @@ export class StonetopCharacter {
 		await this._writeWounds(wounds, "Convalesce");
 	}
 	async getArcanum(slug)                           { return this._arcana.getArcanum(slug); }
+	async isArcanumUnlocked(slug)                    { return this._arcana.isArcanumUnlocked(slug); }
 	async getArcanumMove(slug, moveSlug)             { return this._arcana.getArcanumMove(slug, moveSlug); }
 	async addArcanum(slug)                           { await this._arcana.addArcanum(slug); }
-	async removeArcanum(slug)                        { await this._arcana.removeArcanum(slug); await this._inventory.clearArcanumResources(slug); }
+	// Its tracks AND its carried mark go with it, so a card that comes back (given back, re-found)
+	// arrives set down and charged afresh, not already counting toward load.
+	async removeArcanum(slug)                        { await this._arcana.removeArcanum(slug); await this._inventory.clearArcanumResources(slug); await this._inventory.clearCarried(slug); }
 	async identifyArcanum(slug, options)             { await this._arcana.identifyArcanum(slug, options); }
 	async identifyAndRevealArcanum(slug, options)    { await this._arcana.identifyAndRevealArcanum(slug, options); }
 	async identifyFrontOwedArcanum(slug, options)    { await this._arcana.identifyFrontOwedArcanum(slug, options); }
@@ -6319,8 +6754,9 @@ export class StonetopCharacter {
 				"system.attributes.xp.value":   xp - xpToLevelUp(level),
 			};
 			// The move learned rides on the update so the timeline's level-up row can name it
-			// (timeline/timeline-watch.js reads it back off the options).
-			await this._actor.update(levelUp, moveName ? { [LEARNED_OPTION]: moveName } : {});
+			// (timeline/timeline-watch.js reads it back off the options), and the ledger names the
+			// move that spent the XP, as every other automated write does (`stonetopMove`).
+			await this._actor.update(levelUp, { stonetopMove: "Level Up", ...(moveName ? { [LEARNED_OPTION]: moveName } : {}) });
 			return null;
 		});
 		if (refused) return { applied: false, reason: refused };
@@ -6603,10 +7039,17 @@ const _STAT_DEFS = {
 	cha: { name: "Charisma",     abbr: "CHA" },
 };
 
+// The three debilities (Book I p.52). `description` is the book's line, read out of languages/en.json
+// (`stonetop.debilities.<key>.description`), the same key the stat block's tooltips localize, so the roll
+// card, the debility pickers and the sheet say one thing.
+const _debilityDef = (key, name, stats) => ({
+	key, name, stats,
+	get description() { return _loc(`stonetop.debilities.${key}.description`); },
+});
 const _DEBILITY_DEFS = [
-	{ key: "weakened",  name: "Weakened",  stats: ["str", "dex"], description: "Fatigued, tired, sluggish, shaky. Disadvantage on +STR or +DEX rolls." },
-	{ key: "dazed",     name: "Dazed",     stats: ["int", "wis"], description: "Out of it, befuddled, not thinking clearly. Disadvantage on +INT or +WIS rolls." },
-	{ key: "miserable", name: "Miserable", stats: ["con", "cha"], description: "Greatly distressed, angry, unwell, in pain. Disadvantage on +CON or +CHA rolls." },
+	_debilityDef("weakened",  "Weakened",  ["str", "dex"]),
+	_debilityDef("dazed",     "Dazed",     ["int", "wis"]),
+	_debilityDef("miserable", "Miserable", ["con", "cha"]),
 ];
 const _DEBILITY_DEF_BY_KEY = Object.fromEntries(_DEBILITY_DEFS.map(d => [d.key, d]));
 
@@ -6670,11 +7113,12 @@ function _buildWoundsSection(actor) {
  * The DERIVED damage die: the playbook's, raised by any owned move that raises it. Null without a
  * playbook, since there is nothing to derive from.
  *
- * Stated here alone because two callers need the same answer at very different prices — the vitals
- * section building a whole sheet, and `computedDamageDie` answering a single damage roll. A second
- * copy is how the roller and the sheet come to disagree about what die a character rolls.
+ * Stated here alone because its callers need the same answer at very different prices: the vitals
+ * section building a whole sheet, `computedVitals` feeding the stored mirror, and `computedDamageDie`
+ * answering a single damage roll. A second copy is how the roller and the sheet come to disagree
+ * about what die a character rolls.
  *
- * Does NOT consider the hand-typed override: that WINS over this, and the two callers apply it at
+ * Does NOT consider the hand-typed override: that WINS over this, and the callers apply it at
  * their own layer (the field is what the sheet renders, and it is checked first by the accessor).
  */
 function _derivedDamageDie(playbookData, moveBonuses = {}) {
@@ -6767,7 +7211,7 @@ function _buildCrewStats(crew, moveBonuses) {
 // only while LEARNED (an un-learned move grants nothing) and only for the BOOK's move (a
 // player's own move of that name is not it, as _ownsLearnedBookCopy says).
 function _buildCompanionBonuses(moveBonuses, ownedAllByName, items) {
-	const specimens = _learnedBookSpecimens(ownedAllByName, items);
+	const specimens = _bookSpecimens(ownedAllByName, items);
 	return {
 		hp:         moveBonuses.companionHp    ?? 0,
 		armor:      moveBonuses.companionArmor ?? 0,
@@ -6776,9 +7220,11 @@ function _buildCompanionBonuses(moveBonuses, ownedAllByName, items) {
 }
 
 // How many LEARNED book copies of Magnificent Specimen `ownedAllByName` holds, read against the
-// actor's `items` (a copy a switched-off cross move granted is off with it).
-function _learnedBookSpecimens(ownedAllByName, items) {
-	return (ownedAllByName.get?.(MAGNIFICENT_SPECIMEN_MOVE) ?? []).filter(i => !_isCustomMove(i) && moveLearnedIn(i, items)).length;
+// actor's `items` (a copy a switched-off cross move granted is off with it). `learnedOnly` false
+// counts every book copy still held, learned or not (_trimCompanionTraitsOnRemoval).
+function _bookSpecimens(ownedAllByName, items, { learnedOnly = true } = {}) {
+	return (ownedAllByName.get?.(MAGNIFICENT_SPECIMEN_MOVE) ?? [])
+		.filter(i => !_isCustomMove(i) && (!learnedOnly || moveLearnedIn(i, items))).length;
 }
 
 function _originDescriptionForRegion(region) {

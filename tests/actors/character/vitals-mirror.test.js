@@ -5,7 +5,8 @@ import { StonetopCharacter } from "../../../module/actors/character/StonetopChar
 import { READINESS_FLAG } from "../../../module/combat/defend-readiness.js";
 import { LEDGER_KEY } from "../../../module/utils/ledger-core.js";
 import { CAMP_FLAG, CAMP_OWED_FLAG } from "../../../module/camp/camp-rules.js";
-import { DEATHS_DOOR_FLAG } from "../../../module/actors/character/deaths-door.js";
+import { CAMP_HUNGER_FLAG } from "../../../module/camp/camp-store.js";
+import { DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLLING_FLAG, UNSTOPPABLE_FIGHTING_FLAG } from "../../../module/actors/character/deaths-door.js";
 import { INSPIRATION_FLAG } from "../../../module/actors/character/inspiration.js";
 import { BLESSING_FLAG } from "../../../module/actors/character/roll-boosts.js";
 import { ONGOING_INVOCATION_FLAGS } from "../../../module/actors/character/ongoing-invocation.js";
@@ -43,6 +44,9 @@ describe("what moves a vital", () => {
 		expect(mayMoveVitals({ system: { attributes: { xp: { value: 3 }, wounds: [] } } })).toBe(false);
 		for (const key of FLAG_NOISE) expect(mayMoveVitals({ flags: { "stonetop-pwd": { [key]: 1 } } })).toBe(false);
 		expect(mayMoveVitals({ flags: { "stonetop-pwd": { "-=camp": null } } })).toBe(false);
+		// The Death's Door roll in progress, written and cleared several times a roll (audit DD-6).
+		expect(mayMoveVitals({ flags: { "stonetop-pwd": { deathsDoorRolling: { userId: "u", nonce: "n" } } } })).toBe(false);
+		expect(mayMoveVitals({ flags: { "stonetop-pwd": { "-=deathsDoorRolling": null } } })).toBe(false);
 	});
 
 	// The keyed ledger's own writes: one entry per key, and the one-time conversion of an old
@@ -54,8 +58,8 @@ describe("what moves a vital", () => {
 
 	it("spells each quiet flag as its owner does", () => {
 		expect([...FLAG_NOISE].sort()).toEqual([
-			READINESS_FLAG, LEDGER_KEY, CAMP_FLAG, CAMP_OWED_FLAG, DEATHS_DOOR_FLAG,
-			CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG, ALPHA_FLAG,
+			READINESS_FLAG, LEDGER_KEY, CAMP_FLAG, CAMP_OWED_FLAG, CAMP_HUNGER_FLAG, DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLLING_FLAG,
+			UNSTOPPABLE_FIGHTING_FLAG, CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG, ALPHA_FLAG,
 			INSPIRATION_FLAG, BLESSING_FLAG, "invocations", ...ONGOING_INVOCATION_FLAGS, MIRRORED_HP_PENALTY_FLAG,
 		].sort());
 		// The Candle against the Dark's armor reads the light, so lighting it must re-mirror.
@@ -217,7 +221,24 @@ describe("StonetopCharacter#syncStoredVitals", () => {
 	it("brings the HP down to a max that drops below it, in the same write", async () => {
 		const { self, actor } = typed({ armor: { value: 2, unpierceable: 0 }, hp: { value: 18, max: 18 } }, { armor: 2, unpierceable: 0, maxHp: 16 });
 		await sync(self);
-		expect(actor.update).toHaveBeenCalledWith({ "system.attributes.hp.max": 16, "system.attributes.hp.value": 16 }, { stonetopLedger: true });
+		// Tagged as a cap, not a blow: the Battle Joy offer must not read it as blood spilled (wave 4 HP-3).
+		expect(actor.update).toHaveBeenCalledWith({ "system.attributes.hp.max": 16, "system.attributes.hp.value": 16 }, { stonetopLedger: true, stonetopHpCeiling: true });
+	});
+
+	// Wave 4 HP-1: the sheet's getData used to write the computed numbers into the LIVE `system` on the
+	// client that rendered it, so a comparison against `system` came out equal and nothing was stored.
+	it("compares against the stored source, not numbers a render wrote into the live document", async () => {
+		const { self, actor } = typed({ armor: { value: 3, unpierceable: 0 }, hp: { value: 18, max: 16 } }, { armor: 3, unpierceable: 0, maxHp: 16 });
+		actor._source = { system: { attributes: { armor: { value: 2, unpierceable: 0 }, hp: { value: 18, max: 18 } } } };
+		expect(await sync(self)).toBe(true);
+		expect(actor.update).toHaveBeenCalledWith({
+			"system.attributes.armor.value": 3,
+			"system.attributes.armor.unpierceable": 0,
+			"system.attributes.armor.conditional": 0,
+			"system.attributes.armor.conditionalSource": "",
+			"system.attributes.hp.max": 16,
+			"system.attributes.hp.value": 16,
+		}, { stonetopLedger: true, stonetopHpCeiling: true });
 	});
 
 	// #20: the clamp is HP lost, so it is logged, naming the Mark when one did it.
@@ -267,6 +288,27 @@ describe("StonetopCharacter#syncStoredVitals", () => {
 		const { self, actor } = typed({ armor: { value: 2, unpierceable: 0 }, hp: { value: 9, max: 18 } }, { armor: 2, unpierceable: 0, maxHp: 16 });
 		await sync(self);
 		expect(actor.update).toHaveBeenCalledWith({ "system.attributes.hp.max": 16 }, { stonetopLedger: true });
+	});
+
+	// Potential for Greatness raised the die to a d8 with the sheet closed: another hero's pile-on reads the
+	// stored die (fight/damage-seed.js#attackerProfile), so it follows, in the vitals' own write.
+	it("mirrors the damage die the character rolls in the same quiet write, and only when it differs", async () => {
+		const { self, actor } = typed({ armor: { value: 2, unpierceable: 0 }, hp: { max: 18 }, damage: { value: "d6" } },
+			{ armor: 2, unpierceable: 0, maxHp: 16, damage: "d8" });
+		expect(await sync(self)).toBe(true);
+		expect(actor.update).toHaveBeenCalledTimes(1);
+		expect(actor.update).toHaveBeenCalledWith({ "system.attributes.hp.max": 16, "system.attributes.damage.value": "d8" }, { stonetopLedger: true });
+		const settled = typed({ armor: { value: 2, unpierceable: 0 }, hp: { max: 18 }, damage: { value: " d8" } },
+			{ armor: 2, unpierceable: 0, maxHp: 18, damage: "d8" });
+		expect(await sync(settled.self)).toBe(false);
+		expect(settled.actor.update).not.toHaveBeenCalled();
+	});
+
+	it("leaves the stored die alone with none to say (no playbook, no override), or from the sheet's numbers", async () => {
+		const none = typed({ armor: { value: 0 }, hp: { max: 10 }, damage: { value: "d6" } }, { armor: 0, unpierceable: 0, maxHp: 0, damage: null });
+		expect(await sync(none.self)).toBe(false);
+		const sheet = typed({ armor: { value: 0 }, hp: { max: 10 }, damage: { value: "d6" } }, null);
+		expect(await StonetopCharacter.prototype.syncStoredVitals.call(sheet.self, { armor: 0, unpierceable: 0, maxHp: 0 })).toBe(false);
 	});
 
 	it("leaves max HP alone with no playbook to derive it from", async () => {

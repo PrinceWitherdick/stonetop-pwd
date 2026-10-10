@@ -95,6 +95,7 @@ describe("OrderFollowersDialog", () => {
 		expect(handed).toEqual({
 			bonus:        1,
 			rollMode:     "normal",
+			modeSources:  [],
 			moveName:     "The Crew: Let Fly",
 			moveKey:      "let-fly",
 			followerName: "The Crew",
@@ -223,5 +224,16 @@ describe("OrderFollowersDialog, Shield Wall", () => {
 		dialog.close = () => {};
 		await dialog._finish();
 		expect(handed).toMatchObject({ moveKey: "defend", rollMode: "adv", shieldWall: true });
+	});
+
+	// A cancelled pair is handed over as the two sides that spoke, not only the straight roll they net to, so
+	// the roll can lay one more side on it without tipping it (We Happy Few's nerves: p.230).
+	it("hands over both sides of a cancelled pair beside the straight mode", async () => {
+		let handed = null;
+		const dialog = new OrderFollowersDialog({ name: "Maddoc" }, { name: "The Crew", shieldWall: true, moveKey: "defend" }, r => { handed = r; });
+		dialog._disadvantage = true;
+		dialog.close = () => {};
+		await dialog._finish();
+		expect(handed).toMatchObject({ rollMode: "normal", modeSources: ["adv", "dis"] });
 	});
 });

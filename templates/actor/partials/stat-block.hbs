@@ -28,11 +28,11 @@
 	      distinction matters: the debilities are still marked, and will bite again the moment the
 	      action stops. The roll path reads the same state (StonetopCharacter#ignoresDebilities), so
 	      what this says and what the dice do cannot disagree. --}}
-	<div class="stonetop-debilities{{#if stonetop.battleJoy.raging}} is-ignored{{/if}}"
-	     {{#if stonetop.battleJoy.raging}}data-tooltip="{{localize "stonetop.battleJoy.debilitiesIgnored"}}" data-tooltip-direction="UP"{{/if}}>
+	<div class="stonetop-debilities{{#if stonetop.battleJoy.debilitiesIgnored}} is-ignored{{/if}}"
+	     {{#if stonetop.battleJoy.debilitiesIgnored}}data-tooltip="{{localize "stonetop.battleJoy.debilitiesIgnored"}}" data-tooltip-direction="UP"{{/if}}>
 		<div class="stonetop-debility">
 			<span class="stonetop-debility-bracket"></span>
-			<label class="stonetop-debility-control" data-tooltip="Fatigued, tired, sluggish, shaky. Disadvantage on +STR or +DEX rolls." data-tooltip-direction="UP">
+			<label class="stonetop-debility-control" data-tooltip="{{localize "stonetop.debilities.weakened.description"}}" data-tooltip-direction="UP">
 				<input type="checkbox" class="attr-list"
 				       name="system.attributes.debilities.options.weakened.value"
 				       {{#if system.attributes.debilities.options.weakened.value}}checked{{/if}}>
@@ -41,7 +41,7 @@
 		</div>
 		<div class="stonetop-debility">
 			<span class="stonetop-debility-bracket"></span>
-			<label class="stonetop-debility-control" data-tooltip="Out of it, befuddled, not thinking clearly. Disadvantage on +INT or +WIS rolls." data-tooltip-direction="UP">
+			<label class="stonetop-debility-control" data-tooltip="{{localize "stonetop.debilities.dazed.description"}}" data-tooltip-direction="UP">
 				<input type="checkbox" class="attr-list"
 				       name="system.attributes.debilities.options.dazed.value"
 				       {{#if system.attributes.debilities.options.dazed.value}}checked{{/if}}>
@@ -50,7 +50,7 @@
 		</div>
 		<div class="stonetop-debility">
 			<span class="stonetop-debility-bracket"></span>
-			<label class="stonetop-debility-control" data-tooltip="Greatly distressed, angry, unwell, in pain. Disadvantage on +CON or +CHA rolls." data-tooltip-direction="UP">
+			<label class="stonetop-debility-control" data-tooltip="{{localize "stonetop.debilities.miserable.description"}}" data-tooltip-direction="UP">
 				<input type="checkbox" class="attr-list"
 				       name="system.attributes.debilities.options.miserable.value"
 				       {{#if system.attributes.debilities.options.miserable.value}}checked{{/if}}>

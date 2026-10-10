@@ -8,6 +8,7 @@
 // same contract the inline stat picker already keeps for alt-stat grants.
 
 import { altStatGrantsFor } from "../../data/alt-stat-grants.js";
+import { layModes } from "../../utils/roll-mode.js";
 
 /** Know Things is +INT (Book I p.220); alt stats are grants layered on top. */
 export const KNOW_THINGS_STAT = "int";
@@ -44,15 +45,18 @@ export function knowThingsRollChoices(ownedMoveNames = [], { playbook = null, ba
 }
 
 /**
- * Fold a claimed advantage into the roll mode the character already carries.
+ * Fold a claimed advantage into the roll mode the character already carries, as a roll's options.
  *
  * Book I p.230: "When you make a roll with both advantage and disadvantage, they cancel each
  * other out" and "Advantage/disadvantage don't 'stack.' They're binary." So advantage on top of
- * disadvantage is a normal roll, and advantage on top of advantage is still just advantage —
+ * disadvantage is a normal roll, and advantage on top of advantage is still just advantage,
  * never a second die. Not claiming it leaves the character's own roll mode untouched.
+ *
+ * The mode it folds to, AND the sides that spoke (`modeBase`, `modeSources`: roll-mode.js#layModes), for
+ * StonetopCharacter#onDirectStatRoll. With the sides kept, a Disadvantage cancelled by Polyglot stays
+ * cancelled when a debility is laid on after it (Dazed on +INT): one side each way, however many of each
+ * (p.230), where the netted "normal" alone would have been tipped back to disadvantage.
  */
-export function withAdvantage(rollMode, claimed) {
-	if (!claimed) return rollMode;
-	if (rollMode === "dis") return "normal";
-	return "adv";
+export function advantageRollOptions(rollMode, claimed) {
+	return layModes({ rollMode }, claimed ? ["adv"] : []);
 }

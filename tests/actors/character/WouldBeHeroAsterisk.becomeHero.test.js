@@ -10,6 +10,8 @@ import {
 	asteriskMoveUsed,
 	asteriskUseCounts,
 	crossOffWouldBe,
+	canRestoreWouldBe,
+	restoreWouldBe,
 	heroDisplayName,
 	WBH_HERO_FLAG,
 } from "../../../module/actors/character/WouldBeHeroAsterisk.js";
@@ -173,5 +175,51 @@ describe("asteriskMoveUsed", () => {
 		expect(await crossOffWouldBe(actor)).toBe(false);
 		expect(ChatMessage.create).toHaveBeenCalledTimes(1);
 		expect(ChatMessage.create.mock.calls[0][0].content).not.toContain("used");
+	});
+});
+
+// A player pressed "I used it" for a use that never happened (user bug report, 2026-10-09): nothing on the
+// sheet un-crossed it. The header's edit-mode button writes "Would-be" back in.
+describe("restoreWouldBe", () => {
+	let saved;
+	beforeEach(() => {
+		saved = globalThis.ChatMessage;
+		globalThis.ChatMessage = { create: vi.fn(), getSpeaker: vi.fn(() => ({})) };
+	});
+	afterEach(() => { globalThis.ChatMessage = saved; });
+
+	it("writes Would-be back in, says so, and the next starred use crosses it off again", async () => {
+		const actor = makeActor({ moves: ["Undaunted"] });
+		await asteriskMoveUsed(actor, "Undaunted");
+		ChatMessage.create.mockClear();
+		expect(await restoreWouldBe(actor)).toBe(true);
+		// FALSE, not removed: the grandfathering leaves a flag written either way alone.
+		expect(actor.setFlag).toHaveBeenLastCalledWith(SYSTEM_ID, WBH_HERO_FLAG, false);
+		expect(playbookTitle(actor)).toBe("The Would-Be Hero");
+		expect(ChatMessage.create).toHaveBeenCalledTimes(1);
+		expect(ChatMessage.create.mock.calls[0][0].content).toContain("A Would-Be Hero Again");
+		expect(asteriskUseCounts(actor, "Undaunted")).toBe(true);
+		expect(await asteriskMoveUsed(actor, "Undaunted")).toBe(true);
+		expect(playbookTitle(actor)).toBe("The Hero");
+	});
+
+	it("does nothing for a hero still Would-be, or another playbook", async () => {
+		expect(canRestoreWouldBe(makeActor())).toBe(false);
+		expect(await restoreWouldBe(makeActor())).toBe(false);
+		expect(canRestoreWouldBe(makeActor({ slug: "the-heavy", isHero: true }))).toBe(false);
+		expect(canRestoreWouldBe(makeActor({ isHero: true }))).toBe(true);
+		expect(ChatMessage.create).not.toHaveBeenCalled();
+	});
+
+	it("the header offers it to the owner, in edit mode alone", () => {
+		const hbs = readRepo("templates/actor/partials/actor-header.hbs");
+		expect(hbs).toContain("{{#if stonetop.wouldBeRestorable}}{{#unless stonetop.postDeathInsert.activeInsert}}");
+		expect(hbs).toContain('class="stonetop-inline-btn stonetop-would-be-restore"');
+		const sheet = readRepo("module/actors/character/StonetopCharacterSheet.js");
+		expect(sheet).toMatch(/context\.stonetop\.wouldBeRestorable = this\.isEditable && canRestoreWouldBe\(this\.actor\)/);
+		expect(sheet).toMatch(/button\.stonetop-would-be-restore[\s\S]{0,900}restoreWouldBe\(this\.actor\)/);
+		const css = readRepo("styles/stonetop.css");
+		expect(css).toMatch(/\.stonetop-playbook-row \.stonetop-would-be-restore \{\s*display: none;/);
+		expect(css).toMatch(/\.stonetop-edit-mode \.stonetop-playbook-row \.stonetop-would-be-restore \{\s*display: inline-flex;/);
 	});
 });

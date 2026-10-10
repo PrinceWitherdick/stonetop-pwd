@@ -1,10 +1,10 @@
 import {escHtml} from "../utils/strings.js";
 import {stonetopChatCard} from "../utils/chat.js";
-import {STONETOP_SCOPE, resolvedFlagProperty} from "../actors/character/StonetopFlags.js";
+import {STONETOP_SCOPE} from "../actors/character/StonetopFlags.js";
 import {isPrimaryGM as _isPrimaryGM} from "../utils/primary-gm.js";
 import {STEADING_ACTOR_TYPE, STEADING_DEFAULT_IMG} from "../actors/steading/steading-portrait.js";
 import {isGmToolkitData, gmToolkitActors} from "../actors/gmtoolkit/gm-toolkit-actor.js";
-import {rollOmensOfFate} from "../actors/character/destined.js";
+import {isDestined, rollOmensOfFate} from "../actors/character/destined.js";
 import {format, localize} from "../utils/i18n.js";
 
 const _OMEN_REMINDER_FLAG = "lastOmenReminder";
@@ -73,6 +73,13 @@ export function registerStonetopSingletonHooks() {
 		// catches every path: a macro, a duplicate, a compendium import or a drag-drop all pass
 		// through preCreateActor and none of them go near our picker.
 		if (isGmToolkitData(data ?? actor)) {
+			// GM-only even when the world has none yet. Players hold Create Actor on a fresh
+			// world, and a toolkit a player made would be theirs: `theGmToolkit()` would adopt it,
+			// the GM's "C" key would be pointed at it, and the delete guard would keep it.
+			if (!game.user?.isGM) {
+				ui.notifications?.warn("Only the GM can create the GM Toolkit.");
+				return false;
+			}
 			if (!gmToolkitActors().length) return;
 			ui.notifications?.warn("This world already has a GM Toolkit.");
 			return false;
@@ -144,8 +151,9 @@ export function registerStonetopSingletonHooks() {
 export async function remindDestinedOmenRoll() {
 	if (!_isPrimaryGM()) return;
 	if (!game.settings?.get?.(STONETOP_SCOPE, "startOfSessionReminders")) return;
-	const destined = game.actors?.filter(a =>
-		a.type === "character" && resolvedFlagProperty(a, "background.selected") === "destined") ?? [];
+	// The same test the Roll button's roll asks (destined.js#isDestined: the Would-Be Hero's background, not a
+	// bare slug), so the card never names a hero whose button would roll nothing.
+	const destined = game.actors?.filter(a => isDestined(a)) ?? [];
 	if (!destined.length) return;
 
 	const steading = _getStonetopActors().at(0);

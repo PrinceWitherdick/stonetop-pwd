@@ -154,6 +154,7 @@ function _glyphSpan(glyph, next) {
  * the wrapper no longer holds a glyph for the regex to match.
  */
 export function wrapStonetopGlyphsInEl(container) {
+	const runs = [];
 	replaceTextMatches(container, {
 		skip:  ".stonetop-glyph, .stonetop-move-ref",
 		regex: _GLYPH_RE,
@@ -173,9 +174,36 @@ export function wrapStonetopGlyphsInEl(container) {
 				run.appendChild(_glyphSpan(ch, cluster[i + 1]));
 			});
 			flushLiteral();
+			runs.push(run);
 			return run;
 		},
 	});
+	runs.forEach(_markIfLeading);
+}
+
+/**
+ * Tag a glyph run that OPENS its list item ("<li>□ Lose 1d6 HP…") as `--lead`: that item already
+ * has a marker of its own, so CSS drops the spiral bullet that would otherwise sit beside it, the
+ * same way it does for the sheet's injected arcanum checkboxes. Done here, once the walk has placed
+ * the run, because `:first-child` ignores text nodes and so cannot tell this from "Carry a ◇ item"
+ * in CSS alone; the CSS then matches it as `li > .--lead` or `li > p:first-child > .--lead`. Only a
+ * run that starts with the glyph itself counts; "(□)" at the head of an item is prose. Asked only
+ * of the runs this walk made, so a re-walk that wraps nothing costs nothing.
+ */
+function _markIfLeading(run) {
+	if (!run.firstChild?.classList?.contains("stonetop-glyph") || !_opensParent(run)) return;
+	// Text through the rich-text editor reads "<li><p>□ …</p></li>": the paragraph that opens the
+	// item stands in for it.
+	const parent = run.parentElement;
+	const item = parent?.tagName === "P" && _opensParent(parent) ? parent.parentElement : parent;
+	if (item?.tagName === "LI") run.classList.add("stonetop-glyph-run--lead");
+}
+
+/** Nothing but whitespace before `node` in its parent. */
+function _opensParent(node) {
+	let before = node.previousSibling;
+	while (before?.nodeType === Node.TEXT_NODE && !before.data.trim()) before = before.previousSibling;
+	return !before;
 }
 
 /**

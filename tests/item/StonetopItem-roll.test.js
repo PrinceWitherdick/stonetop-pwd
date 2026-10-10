@@ -86,6 +86,17 @@ describe("StonetopItem.roll — Never at a Loss", () => {
 		await item.roll();
 		expect(rollStat.mock.calls[0][2].noXpOnMiss).toBe(false);
 	});
+
+	// Wave 3 audit CUS-3: the extras are the BOOK move's. A player's or GM's own move that happens to be
+	// called "Know Things" acts as itself, as the guided-move and attack paths already keep.
+	it("does not fire on a player's own move that shares the book move's name", async () => {
+		const item = makeItem("Know Things", KNOW_THINGS, [move("Know Things"), move("Never at a Loss")]);
+		item.flags = { "stonetop-pwd": { custom: true } };
+		await item.roll();
+		const opts = rollStat.mock.calls[0][2];
+		expect(opts.noXpOnMiss).toBe(false);
+		expect(opts.tierActions).toBeUndefined();
+	});
 });
 
 // Battle Joy: "on a 6-, mark a debility but don't mark XP". The pack carries noXpOnMiss now, but a copy
@@ -95,7 +106,7 @@ describe("StonetopItem.roll: Battle Joy's ending roll", () => {
 
 	function heavyItem(debilities = []) {
 		const item = makeItem("Battle Joy", BATTLE_JOY);
-		item.parent.typedActor = { debilityChoices: debilities };
+		item.parent.typedActor = { debilityMarkChoices: debilities };
 		return item;
 	}
 

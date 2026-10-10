@@ -161,6 +161,14 @@ describe("applyRosterHit", () => {
 		expect(hit).toMatchObject({ down: true, before: 3, after: 2 });
 		expect(marshal.flags[SYSTEM_ID].crew.memberHp).toEqual([0]);
 	});
+
+	it("names the blow's move on the Marshal's ledger, and so does handing it to another member", async () => {
+		const { crew, marshal } = world();
+		const hit = await applyRosterHit(crew, 4, { stonetopMove: "Clash" });
+		expect(marshal.update).toHaveBeenLastCalledWith(expect.anything(), { stonetopMove: "Clash" });
+		await moveRosterHit(hit.roster, "anon:2", 4, { stonetopMove: "Clash" });
+		expect(marshal.update).toHaveBeenLastCalledWith(expect.anything(), { stonetopMove: "Clash" });
+	});
 });
 
 describe("moveRosterHit", () => {

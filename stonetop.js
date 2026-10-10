@@ -32,6 +32,7 @@ import { createRelationshipMapEntrySheetClass } from "./module/journal/Relations
 import { RELMAP_SHEET_CLASS } from "./module/relmap/relmap-doc.js";
 import { ThreatBoard } from "./module/threats/threat-board.js";
 import { onReady } from "./module/hooks/Ready.js";
+import { registerPrecompiledTemplates } from "./module/utils/templates.js";
 import { handleImportedJournalArt, ART_INDEX_SETTINGS } from "./module/book2-art/reapply.js";
 import { clearArtBrowseCache, ART_BROWSE_INPUTS } from "./module/book2-art/browse.js";
 import { onRenderActorSheet } from "./module/hooks/RenderActorSheet.js";
@@ -43,7 +44,11 @@ import { onUpdateActorUnstoppable } from "./module/actors/character/unstoppable.
 import { installBattleJoyOnHurt, installBattleJoyEnd, wireBattleJoyResult } from "./module/combat/battle-joy-offer.js";
 import { wireInvokeConsequences, wireWielderInvoke, invokeCardChoosesConsequence, invokeActionRow, TEN_PLUS_FLAG } from "./module/actors/character/invoke-consequences.js";
 import { wireLoyalToTheEnd } from "./module/actors/character/companion-bond.js";
+import { wireFollowerDeathsDoor } from "./module/actors/character/follower-deaths-door.js";
+import { FOLLOWER_LOYALTY_QUERY, handleFollowerLoyaltyQuery } from "./module/actors/character/follower-bond.js";
+import { FOLLOWER_HANDOFF_QUERY, handleFollowerHandoffQuery } from "./module/actors/character/follower-handoff.js";
 import { wireImproviseCard, wireMarkConsequenceCard } from "./module/actors/character/arcana-seeker-moves.js";
+import { wireSendBackCard } from "./module/actors/character/send-them-back.js";
 import { wireInvocationEffects, BATH_QUERY, handleBathQuery } from "./module/actors/character/invocation-apply.js";
 import { installBattleHolds } from "./module/combat/battle-holds.js";
 import { hideAttackFxForReducedMotion } from "./module/combat/attack-fx.js";
@@ -80,24 +85,24 @@ import { info } from "./module/utils/logger.js";
 import { boldMissText } from "./module/utils/strings.js";
 import { moveBodyHtml, remarkRolledTier } from "./module/utils/move-tiers.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
-import { rollSeasonsCard, sign, markMissXp, reconcileMissXp, pbtaDiceFormula, seasonsRollTable, seasonsRollPicks, syncCountedNotePill } from "./module/utils/roll-engine.js";
-import { countedResult, rolledRecord, cardCountedTier, totalTier } from "./module/utils/counted-tier.js";
+import { rollSeasonsCard, sign, markMissXpByChoice, reconcileMissXp, pbtaDiceFormula, seasonsRollTable, seasonsRollPicks, syncCountedNotePill } from "./module/utils/roll-engine.js";
+import { countedResult, rolledRecord, cardCountedTier, cardTierNow } from "./module/utils/counted-tier.js";
 import { burnBrightlyAffordable, burnsBrightlyDriven } from "./module/actors/character/burn-brightly.js";
 import { wireImpetuousYouth, giveItAll, GIVE_IT_ALL_ACTION, HURT_DAMAGE, IMPETUOUS_YOUTH } from "./module/actors/character/impetuous-youth.js";
-import { isUndeathCard, isZeroHpMoveCard } from "./module/actors/character/deaths-door.js";
+import { isZeroHpMoveCard } from "./module/actors/character/deaths-door.js";
 import { registerRollRewrite } from "./module/utils/roll-rewrite.js";
 import { ROLL_CARD_QUERY, handleRollCardQuery, pressRollCard, registerRollCardAction, writeCardRoll } from "./module/utils/roll-card-writer.js";
 import { inCardTurn } from "./module/utils/card-queue.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
-import { moveChatCard, canRewriteCard, rolledTotalCard } from "./module/utils/chat.js";
+import { moveChatCard, canRewriteCard, canUserWriteCard, rolledTotalCard } from "./module/utils/chat.js";
 import { grantsWholeList, paintPickTally, pickLimitFor, releaseOverLimit, tierOffersPicks } from "./module/utils/pick-tally.js";
-import { wireUndoXpMark } from "./module/utils/undo-xp-mark.js";
+import { wireUndoXpMark, missXpTakenByLift, missXpChoice, MISS_XP_CHOICE_FLAG } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
 import { possessionTrackUses, BOOKS_AND_SCROLLS, HOLY_RELICS } from "./module/actors/character/possession-tracks.js";
 import { INVOKE_THE_SUN_GOD } from "./module/actors/character/holy-light.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
 import { repeatBoxLocked } from "./module/actors/character/PlaybookMoveEntry.js";
-import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireUnstoppableMark, forgetBarkskinMarks, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery, wireRosterHitMove, ROSTER_MOVE_QUERY, handleRosterMoveQuery } from "./module/combat/attack-flow.js";
+import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireUnstoppableMark, forgetBarkskinMarks, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery, wireRosterHitMove, ROSTER_MOVE_QUERY, handleRosterMoveQuery, reconcileClashCounter, registerCounterAvoidedHooks } from "./module/combat/attack-flow.js";
 import { wireDefendSpends, SPEND_QUERY, handleSpendQuery } from "./module/fight/defend-spend.js";
 import { HEALERS_ARTS_QUERY, handleHealersArtsQuery } from "./module/actors/character/healers-arts.js";
 import { markQuestionBullets } from "./module/utils/question-bullets.js";
@@ -128,10 +133,11 @@ import { payableStockSources, mustAskStockSource, stockReceipt } from "./module/
 import { askStockSource } from "./module/actors/character/ask-stock-source.js";
 import { readProvisionsYield, rollProvisions, rollStock, withTrappingGear, TRAPPING_GEAR_SLUG } from "./module/actors/character/provisions.js";
 import { askWithButtons, confirmOutcome } from "./module/utils/ask-with-buttons.js";
-import { belongsToMessage, wirePickedOptionButton } from "./module/utils/picked-option-button.js";
+import { belongsToMessage, wirePickedOptionButton, claimPickedOption, settlePickedOption, releasePickedOption } from "./module/utils/picked-option-button.js";
 import { readOptionDamage } from "./module/utils/damage.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
+import { withLateStampLatch } from "./module/utils/card-latch.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
 import { registerCampHooks } from "./module/camp/camp-store.js";
 import { registerVitalsMirrorHooks } from "./module/actors/character/vitals-mirror.js";
@@ -144,13 +150,16 @@ import { registerTimelineWindowRestore } from "./module/dialogs/TimelineWindow.j
 import { registerStruggleHooks } from "./module/struggle/struggle-flow.js";
 import { registerPcAskHooks, wirePcAskCard } from "./module/pc-asks/pc-ask-flow.js";
 import { registerFightTab } from "./module/fight/fight-boot.js";
-import { wireRollBoosts, BOOST_QUERY, handleBoostQuery, BLESSING_QUERY, handleBlessingQuery } from "./module/actors/character/roll-boosts.js";
+import { wireRollBoosts, BOOST_QUERY, handleBoostQuery, BLESSING_QUERY, handleBlessingQuery, onUpdateActorDoorPlusOnes } from "./module/actors/character/roll-boosts.js";
 import { reconcileTierEffects } from "./module/actors/character/tier-effects.js";
 import {
 	INSPIRATION_QUERY, handleInspirationQuery, onUpdateActorInspirationAtZero, wireInspirationDamage, wireKeepOneHp, wireSpeechCard,
 } from "./module/actors/character/inspiration-flow.js";
 import { GIVE_ADVANTAGE_QUERY, handleGiveAdvantageQuery, wireGiveAdvantage } from "./module/actors/character/give-advantage-flow.js";
 import { wireWouldBeHeroCards } from "./module/actors/character/would-be-hero-cards.js";
+import { wireSteadingMissXp } from "./module/actors/steading/steading-miss-xp.js";
+import { REQUISITION_MISS_COST_FLAG, STEADING_FORTUNES_CARD_ACTIONS, assetFromButton, settleRequisitionMiss, takeRequisitionedAsset } from "./module/actors/steading/steading-card-actions.js";
+import { wireTradeItemCard } from "./module/actors/steading/steading-trade-card.js";
 import { UP_WITH_PEOPLE_QUERY, handleUpWithPeopleQuery } from "./module/actors/character/up-with-people.js";
 import {
 	DEATHS_DOOR_BOOST_QUERY, DEATHS_DOOR_CLAIM_QUERY, burnBrightlyOnDoorCard, handleDeathsDoorBoostQuery,
@@ -218,6 +227,11 @@ Hooks.once("init", () => {
 	// And every other player's rewrite of a roll card's dice (Burn Brightly, giving it your all, a Know Things
 	// upgrade), written by the GM's client like the +1s above, so one client writes each card (utils/roll-card-writer.js).
 	if (CONFIG.queries) CONFIG.queries[ROLL_CARD_QUERY] = (data, context) => handleRollCardQuery(data, context);
+	// And a follower's Loyalty moved by a PC who does not lead them, for a follower who follows the party as a
+	// whole (Book I p.464; actors/character/follower-bond.js), and a follower handed to a character the player
+	// cannot write, with the NPC that stands for them (p.480; actors/character/follower-handoff.js).
+	if (CONFIG.queries) CONFIG.queries[FOLLOWER_LOYALTY_QUERY] = (data, context) => handleFollowerLoyaltyQuery(data, context);
+	if (CONFIG.queries) CONFIG.queries[FOLLOWER_HANDOFF_QUERY] = (data, context) => handleFollowerHandoffQuery(data, context);
 
 	// Every window and modal in the system is drag-resizable; the ad-hoc
 	// Dialog popups we spawn from sheets default to resizable too. The companion
@@ -541,8 +555,8 @@ Hooks.once("init", () => {
 	// it before any auto-opening sheet/walkthrough render, which is where a "partial could
 	// not be found" race would actually bite.
 	game.stonetop ??= {};
-	game.stonetop.templatesReady = loadTemplates({
-		"stonetop.arcanum-sheet":      "systems/stonetop-pwd/templates/item/arcanum-sheet.hbs",
+	const partials = {
+		"stonetop.arcanum-sheet":     "systems/stonetop-pwd/templates/item/arcanum-sheet.hbs",
 		"stonetop.arcanum-sheet-edit": "systems/stonetop-pwd/templates/item/arcanum-sheet-edit.hbs",
 		"stonetop.actor-header":     "systems/stonetop-pwd/templates/actor/partials/actor-header.hbs",
 		"stonetop.portrait-frame-pip": "systems/stonetop-pwd/templates/actor/partials/portrait-frame-pip.hbs",
@@ -689,7 +703,11 @@ Hooks.once("init", () => {
 		"stonetop.card-gm-moves":             "systems/stonetop-pwd/templates/journal/partials/card-gm-moves.hbs",
 		"stonetop.card-player-moves":         "systems/stonetop-pwd/templates/journal/partials/card-player-moves.hbs",
 		"stonetop.site-group":                "systems/stonetop-pwd/templates/journal/partials/site-group.hbs",
-	});
+	};
+	// A release carries every template precompiled; registering them first leaves loadTemplates
+	// nothing to fetch or compile. A checkout carries none, and loads as it always has.
+	registerPrecompiledTemplates(partials);
+	game.stonetop.templatesReady = loadTemplates(partials);
 
 	// Last line of `init`, so reaching it means the whole run got through. A world that never
 	// records this has a partial boot however healthy it looks, which is what reportBootHealth
@@ -1082,6 +1100,9 @@ Hooks.on("updateActor", onUpdateActorDeathsDoorAutoOpen);
 // The other direction: hit points appearing on a sheet that is through the Last Door. Nothing
 // walks `dead` back on its own, so this asks whoever made the change whether it was a raising.
 Hooks.on("updateActor", onUpdateActorDeathsDoorRaised);
+// The Door's card takes the Judge's and the Lightbearer's +1s while its window waits on the tier: redrawn here
+// as the roll's marker moves, so the buttons come and go with that wait (roll-boosts.js).
+Hooks.on("updateActor", (actor, changes) => onUpdateActorDoorPlusOnes(actor, changes));
 // Unstoppable: a Heavy fighting on at 0 HP who "would regain HP" clears a mark instead (decided in
 // the preUpdate above); this offers the hit points back to whoever healed them.
 Hooks.on("updateActor", onUpdateActorUnstoppable);
@@ -1268,10 +1289,10 @@ function _chatWireRollShifting(message, html) {
 	// most tables never touch it. When disabled, don't inject or reveal the buttons, and
 	// hide any the roll card pre-rendered; the shared .stonetop-card-buttons row is left
 	// for Burn Brightly (wired next) to claim if the owner qualifies.
-	// Not on an insert's 0-HP move (Undying, Dark Succor): its window applies the tier the dice gave
-	// and hears nothing after, so a shift would relabel the card under costs already paid
-	// (deaths-door.js#isUndeathCard). Death's Door's own window follows a shift, and keeps them.
-	const showShift = game.user.isGM && getSetting("chatShiftButtons") && !isUndeathCard(message);
+	// Not on any 0-HP move's card, Death's Door included (deaths-door.js#isZeroHpMoveCard): its window
+	// applies the tier the dice gave and hears nothing after, so a shift would relabel the card under a
+	// tier already written to the sheet (a 6- shifted to a 7-9 would still owe a fate there).
+	const showShift = game.user.isGM && getSetting("chatShiftButtons") && !isZeroHpMoveCard(message);
 
 	if (showShift && !cardButtons.querySelector("[data-action='shiftUp']")) {
 		cardButtons.insertAdjacentHTML("afterbegin", `
@@ -1301,14 +1322,20 @@ function _chatWireBurnBrightly(message, html) {
 	if (!actor || actor.type !== "character" || !actor.isOwner) return;
 
 	const alreadyBurned = message.getFlag(SYSTEM_ID, "burnBrightly") ?? false;
-	const xp    = actor.system?.attributes?.xp?.value    ?? 0;
-	const level = actor.system?.attributes?.level?.value ?? 1;
-	const canAfford = burnBrightlyAffordable(actor, xp, level);
-
-	// Not on a 0-HP move's card while unspent: Death's Door's window offers Burn Brightly before it settles the
-	// tier, and Undying's and Dark Succor's apply the tier the dice gave, so a +1 here afterwards would relabel
-	// the card and change nothing (deaths-door.js#isZeroHpMoveCard). A spend made there still shows here, spent.
-	if (!alreadyBurned && (!canAfford || isZeroHpMoveCard(message))) return;
+	if (!alreadyBurned) {
+		// Not on a 0-HP move's card while unspent: Death's Door's window offers Burn Brightly before it settles the
+		// tier, and Undying's and Dark Succor's apply the tier the dice gave, so a +1 here afterwards would relabel
+		// the card and change nothing (deaths-door.js#isZeroHpMoveCard). A spend made there still shows here, spent.
+		if (isZeroHpMoveCard(message)) return;
+		const xp    = actor.system?.attributes?.xp?.value    ?? 0;
+		const level = actor.system?.attributes?.level?.value ?? 1;
+		if (!burnBrightlyAffordable(actor, xp, level)) return;
+		// Less the XP this card's own miss marked, when the +1 would lift it off the miss: that XP is taken back
+		// by the very burn it would pay for (undo-xp-mark.js#missXpTakenByLift). Asked last, as it can read the
+		// whole chat log, and on every render of every roll card.
+		const lifted = (Number(message.rolls?.at?.(0)?.total) || 0) + 1;
+		if (!burnBrightlyAffordable(actor, xp - missXpTakenByLift(message, lifted), level)) return;
+	}
 
 	const btn = document.createElement("button");
 	btn.className = "stonetop-burn-brightly-btn";
@@ -1482,6 +1509,13 @@ async function _resyncRewrittenTotal(message, actor, total) {
 	} catch (err) {
 		console.error("Stonetop | Error reminding of Potential for Greatness after a rewritten roll:", err);
 	}
+	// A Clash moved down onto a 6- suffers the enemy's attack it never took; one lifted off a 6- keeps the
+	// blow it already took, and its Confirm strikes no second one (combat/attack-flow.js#reconcileClashCounter).
+	try {
+		await reconcileClashCounter(message, actor, total);
+	} catch (err) {
+		console.error("Stonetop | Error matching a rewritten Clash's counter-attack:", err);
+	}
 }
 
 // Impetuous Youth's "give it your all" (actors/character/impetuous-youth.js): the same lift every other
@@ -1547,7 +1581,9 @@ function _chatWireKnowThings(message, html) {
 function _wireNeverAtALoss(message, html, actor) {
 	const buttons = html.querySelectorAll(".stonetop-know-things-xp");
 	if (!buttons.length) return;
-	const chosen = message.getFlag(SYSTEM_ID, "knowThingsXp") ?? null;
+	// The latch is the generic miss-XP choice (undo-xp-mark.js#MISS_XP_CHOICE_FLAG), which a rewrite lifting
+	// the card off the miss takes off with the XP; an old card's Know Things latch reads the same.
+	const chosen = missXpChoice(message);
 	for (const btn of buttons) {
 		if (chosen) {
 			btn.disabled = true;
@@ -1559,9 +1595,12 @@ function _wireNeverAtALoss(message, html, actor) {
 			const choice = btn.dataset.choice;
 			let latched = false;
 			try {
-				await message.setFlag(SYSTEM_ID, "knowThingsXp", choice);
+				await message.setFlag(SYSTEM_ID, MISS_XP_CHOICE_FLAG, choice);
 				latched = true;
-				if (choice === "mark") return void await markMissXp(actor, "Know Things");
+				// Tied to the card, so a Logbook's 10+, a Burn Brightly or a Shift that lifts it off the miss takes
+				// the XP back and offers the choice again (roll-engine.js#markMissXpByChoice), and its receipt goes
+				// where the roll went.
+				if (choice === "mark") return void await markMissXpByChoice(message, actor, "Know Things");
 				await ChatMessage.create({
 					content: moveChatCard("Never at a Loss",
 						`<p><strong>${escHtml(actor.name)}</strong> declines the XP. The GM tells them nothing`
@@ -1576,7 +1615,7 @@ function _wireNeverAtALoss(message, html, actor) {
 				// rendering disabled from here on and no way to ask again. Re-enabling the DOM is
 				// not enough on its own: the next render reads the flag, not these buttons.
 				if (latched) {
-					await message.unsetFlag(SYSTEM_ID, "knowThingsXp")
+					await message.unsetFlag(SYSTEM_ID, MISS_XP_CHOICE_FLAG)
 						.catch(e => console.error("Stonetop | Could not release the Never at a Loss latch:", e));
 				}
 				for (const b of buttons) b.disabled = false;
@@ -1590,8 +1629,7 @@ function _wireNeverAtALoss(message, html, actor) {
 // track still has a use in it. Spending either settles the card, so both buttons go with it.
 function _wireLogbook(message, html, actor, card) {
 	if (message.getFlag(SYSTEM_ID, "knowThingsUpgrade")) return;
-	const roll = message.rolls?.at(0);
-	if (!roll || roll.total >= STRONG_HIT_TOTAL) return;
+	if (_knowThingsCountsAsStrongHit(message)) return;
 
 	const cardButtons = card.querySelector(".stonetop-card-buttons");
 	if (!cardButtons) return;
@@ -1669,8 +1707,7 @@ async function _upgradeKnowThings(message, user, sourceKey) {
 	const source = actor ? _knowThingsUpgradeSources(actor).find(s => s.key === sourceKey) : null;
 	if (!source) return { upgraded: false };
 	return inCardTurn(message, async () => {
-		const roll = message.rolls?.at(0);
-		if (message.getFlag(SYSTEM_ID, "knowThingsUpgrade") || !roll || roll.total >= STRONG_HIT_TOTAL) return { upgraded: false };
+		if (message.getFlag(SYSTEM_ID, "knowThingsUpgrade") || _knowThingsCountsAsStrongHit(message)) return { upgraded: false };
 		const now = source.read();
 		if (!now || now.left <= 0) return { upgraded: false, empty: true };
 		await source.spend(now);
@@ -1690,10 +1727,21 @@ async function _upgradeKnowThings(message, user, sourceKey) {
 	});
 }
 
-/** Whether a rolled card's (shifted) total is a 6-; a card with no roll has not missed. */
+/**
+ * Whether a rolled card COUNTS as a 6- now: its (shifted) total, bent by the rules stamped on it (a "count a miss
+ * as a 7-9" lifts it off the miss, counted-tier.js). A card with no roll has not missed.
+ */
 function _invokeCardMissed(message) {
-	const roll = message.rolls?.at(0);
-	return !!roll && totalTier(roll.total) === "failure";
+	return cardTierNow(message, SYSTEM_ID) === "failure";
+}
+
+/**
+ * Whether a Know Things card already COUNTS as a 10+ (its shifted total, or a 7-9 a rule on the card treats as a
+ * 10+), so a Logbook or books & scrolls use would buy nothing. A card with no roll has nothing to upgrade.
+ */
+function _knowThingsCountsAsStrongHit(message) {
+	const tier = cardTierNow(message, SYSTEM_ID);
+	return tier == null || tier === "success";
 }
 
 /** The `possessions` flag bag a possession track is read from, off a bare Actor. */
@@ -1782,21 +1830,24 @@ function _chatWireHolyRelics(message, html) {
  * is in flight, refuse politely without permission, go through StonetopSteading so the write
  * lands in BOTH `system.*` and the mirrored steading flag the sheet actually reads from (a raw
  * `actor.update` of `system.*` alone leaves the mirror stale and the change invisible), then
- * re-render the steading's open sheets and say what happened. Any throw puts the buttons back.
+ * re-render the steading's open sheets and say what happened. The card is latched BEFORE the work
+ * (card-latch.js#withLateStampLatch), so a client that can pay but cannot write the card never pays
+ * twice; any throw gives the latch and the buttons back.
  *
  * @param {ChatMessage} message
  * @param {HTMLElement[]} btns          the buttons; they enable and disable as one
  * @param {object} opts
  * @param {string} opts.flag            message flag that latches the card as used
- * @param {Function} opts.onSettled     (storedFlag, btns) => void, relabels an already-used card
+ * @param {Function} opts.onSettled     (storedFlag, btns) => void, relabels an already-used card;
+ *                                      `storedFlag` is `true` while the work is in flight
  * @param {string} opts.warn            what to say to someone without permission
  * @param {string} opts.errorNote       console context if the write throws
  * @param {Function} opts.run           (subject, btn) => {stamp?, notice?, abort?} — does the work
  * @param {string} [opts.actorType]     which actor subtype may press it; "stonetop" by default
  * @param {Function} [opts.subject]     actor => what `run` is handed; a StonetopSteading by default
  *
- * `abort: true` from `run` means it declined to do anything — the buttons come back and the card
- * is left unstamped, which is what a purse that emptied between render and click needs.
+ * `abort: true` from `run` means it declined to do anything: the buttons come back and the card's
+ * latch is taken off again, which is what a purse that emptied between render and click needs.
  */
 function _wireSteadingCardButtons(message, btns, {
 	flag, onSettled, warn, errorNote, run,
@@ -1814,22 +1865,23 @@ function _wireSteadingCardButtons(message, btns, {
 
 	for (const btn of btns) {
 		btn.addEventListener("click", async () => {
-			for (const b of btns) b.disabled = true;
 			try {
 				const actor = speakerActor(message);
 				if (!actor?.isOwner || actor.type !== actorType) {
 					ui.notifications.warn(warn);
-					for (const b of btns) b.disabled = false;
 					return;
 				}
-				const { stamp = true, notice, abort = false } = await run(subject(actor), btn) ?? {};
-				if (abort) {
-					for (const b of btns) b.disabled = false;
+				// The latch is a flag on the CARD, which only the GM or whoever posted it may write. Owning
+				// the actor is not enough: a player pressing a button on a card the GM posted for them would
+				// have the latch's write throw, and nothing but the console would say so.
+				if (!canUserWriteCard(message, game.user, { whenUnknown: !!game.user?.isGM })) {
+					ui.notifications.warn(game.i18n.localize("stonetop.rollCard.notCardWriter"));
 					return;
 				}
-				await message.setFlag(SYSTEM_ID, flag, stamp);
+				const done = await withLateStampLatch(message, flag, btns, () => run(subject(actor), btn));
+				if (!done) return;
 				for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
-				if (notice) ui.notifications.info(notice);
+				if (done.notice) ui.notifications.info(done.notice);
 			} catch (err) {
 				console.error(`Stonetop | ${errorNote}:`, err);
 				for (const b of btns) b.disabled = false;
@@ -1838,19 +1890,43 @@ function _wireSteadingCardButtons(message, btns, {
 	}
 }
 
+// Requisition's 6- take: its Fortunes through Meet with Disaster's floor, and the asset the card names
+// marked out (actors/steading/steading-card-actions.js). The 10+/7-9 take from the steading's own window
+// marks the asset out alone. A character's Requisition window stamps the same miss flag when its Take
+// pays the cost, so the card cannot charge it twice.
 function _chatWireRequisitionMissCost(message, html) {
 	const btn = html.querySelector(".stonetop-requisition-miss-cost");
 	_wireSteadingCardButtons(message, btn ? [btn] : [], {
-		flag: "requisitionMissCostApplied",
+		flag: REQUISITION_MISS_COST_FLAG,
 		onSettled: (_already, [b]) => { b.textContent = "Miss cost applied"; },
 		warn: "You need permission to update the steading's Fortunes.",
 		errorNote: "Error applying Requisition miss cost",
-		run: async steading => {
-			const newFortunes = Math.max(steading.getStatValue("fortunes") - 1, -1);
-			await steading.setSystemValue("stats.fortunes.value", newFortunes, { stonetopMove: "Requisition" });
-			return { notice: `Fortunes reduced to ${sign(newFortunes)}.` };
-		},
+		run: (steading, b) => settleRequisitionMiss(steading, { asset: assetFromButton(b) }),
 	});
+	const take = html.querySelectorAll(".stonetop-requisition-take-asset");
+	_wireSteadingCardButtons(message, [...take], {
+		flag: "requisitionAssetTaken",
+		onSettled: (_already, btns) => { for (const b of btns) b.textContent = "Taken"; },
+		warn: "You need permission to update the steading's assets.",
+		errorNote: "Error marking a requisitioned asset out",
+		run: (steading, b) => takeRequisitionedAsset(steading, { asset: assetFromButton(b) }),
+	});
+}
+
+// -- A STEADING MOVE'S FORTUNES, from its card --------------------
+// Muster's cost when it was left to the card, its pitch-in give-back, and Pull Together's 7-9
+// "reduce Fortunes by 1": one latch each, the writes in actors/steading/steading-card-actions.js.
+function _chatWireSteadingFortunes(message, html) {
+	for (const action of STEADING_FORTUNES_CARD_ACTIONS) {
+		const btns = [...html.querySelectorAll(action.selector)];
+		_wireSteadingCardButtons(message, btns, {
+			flag: action.flag,
+			onSettled: (_already, all) => { for (const b of all) b.textContent = action.settled; },
+			warn: action.warn,
+			errorNote: `Error settling ${action.flag}`,
+			run: action.run,
+		});
+	}
 }
 
 // -- MARK DIMINISHED from the roll card ----------------------------
@@ -1893,7 +1969,7 @@ function _chatWireAurochsHunt(message, html) {
 	const horses = html.querySelector(".stonetop-aurochs-horses");
 	_wireSteadingCardButtons(message, horses ? [horses] : [], {
 		flag: "aurochsHorses",
-		onSettled: (already, [b]) => { b.textContent = `${already.rolled} horses lamed or killed`; },
+		onSettled: (already, [b]) => { b.textContent = already.rolled ? `${already.rolled} horses lamed or killed` : "Horses lamed or killed"; },
 		warn: "You need permission to update the steading's herd.",
 		errorNote: "Error rolling the aurochs hunt's lost horses",
 		run: async steading => {
@@ -1939,18 +2015,22 @@ function _chatWireMusterRaise(message, html) {
 		flag: "musterRaised",
 		onSettled: (already, btns) => {
 			const chosen = btns.find(b => !!b.dataset.defenses === !!already.defenses) ?? btns[0];
-			chosen.textContent = already.defenses ? "Muster raised, +1 Defenses" : "Muster raised";
+			chosen.textContent = already.capped ? "Muster raised (Defenses already +3)"
+				: already.defenses ? "Muster raised, +1 Defenses" : "Muster raised";
 		},
 		warn: "You need permission to update the steading.",
 		errorNote: "Error raising the muster",
 		run: async (steading, btn) => {
 			const defenses = !!btn.dataset.defenses;
 			// Taking it through raiseMuster (rather than nudging the stat by hand) is what
-			// records that the +1 was taken, so standing the muster down gives it back.
-			await steading.raiseMuster({ defenses });
+			// records that the +1 was taken, so standing the muster down gives it back. At +3 it
+			// adds nothing (Defenses "can range from -1 to +3", p.512) and records as much.
+			const { capped = false } = await steading.raiseMuster({ defenses }) ?? {};
 			return {
-				stamp: { defenses },
-				notice: defenses
+				stamp: { defenses, capped },
+				notice: capped
+					? "The muster is up: Stonetop is alert. Defenses is already +3, so the muster adds nothing to it."
+					: defenses
 					? "The muster is up: Stonetop is alert, with +1 Defenses while it holds."
 					: "The muster is up: Stonetop is alert and ready for action.",
 			};
@@ -2160,9 +2240,12 @@ function _chatWireRollCardPicks(message, html) {
  * gets the same die. The ◇ in the first option is what makes it claim a point of load; the
  * second tops up a pack that is already being carried.
  */
+// The card flag a Forage payout is latched under, by option index (picked-option-button.js).
+const PROVISIONS_FLAG = "provisionsRolled";
+
 function _chatWireProvisionsPicks(message, html) {
 	wirePickedOptionButton(message, html, {
-		flagKey:      "provisionsRolled",
+		flagKey:      PROVISIONS_FLAG,
 		wiredKey:     "provisionsWired",
 		buttonClass:  "stonetop-provisions-roll",
 		readoutClass: "stonetop-provisions-paid",
@@ -2171,16 +2254,21 @@ function _chatWireProvisionsPicks(message, html) {
 		// say so, rather than offering to "roll" a 6.
 		icon:    pick => (pick.isRoll ? "fas fa-dice-d6" : "fas fa-basket-shopping"),
 		label:   pick => (pick.isRoll ? ` Roll ${pick.formula} uses` : ` Take ${pick.formula} uses`),
-		readout: paid => _provisionsPaidEl(paid.uses, paid.stock),
+		readout: paid => _provisionsPaidEl(paid.uses, paid.stock, paid.pending),
 		onPress: (btn, index, pick) => _onRollProvisions(message, btn, index, pick),
 	});
 }
 
-/** The static readout a rolled option wears from then on: provisions, or Stock for a pouch. */
-function _provisionsPaidEl(uses, stock = false) {
+/**
+ * The static readout a rolled option wears from then on: provisions, or Stock for a pouch. While
+ * the payout is CLAIMED but not yet in (picked-option-button.js#claimPickedOption) it says so, so
+ * nobody else is offered the button meanwhile.
+ */
+function _provisionsPaidEl(uses, stock = false, pending = false) {
 	const el = document.createElement("span");
 	el.className = "stonetop-provisions-paid";
-	el.textContent = stock ? `+${uses} Stock` : `+${uses} ${uses === 1 ? "use" : "uses"}`;
+	el.textContent = pending ? "Being taken…"
+		: stock ? `+${uses} Stock` : `+${uses} ${uses === 1 ? "use" : "uses"}`;
 	return el;
 }
 
@@ -2216,6 +2304,10 @@ async function _forageIntoPouch(message, actor, pick) {
 
 async function _onRollProvisions(message, btn, index, pick) {
 	btn.disabled = true;
+	// Claimed on the card before anything is paid (picked-option-button.js, "CLAIM, PAY, SETTLE"),
+	// and released again if nothing ends up paid, so the button comes back for a retry.
+	let claimed = false;
+	let paid = false;
 	try {
 		const actor = speakerActor(message);
 		if (!actor?.isOwner || actor.type !== "character") {
@@ -2223,26 +2315,41 @@ async function _onRollProvisions(message, btn, index, pick) {
 			btn.disabled = false;
 			return;
 		}
+		// The payout is stamped on the card, which only the GM or whoever rolled it may write: a
+		// player taking food off a card the GM rolled for them used to be paid and never stamped,
+		// so the button came back and paid again.
+		if (!canRewriteCard(message, actor)) {
+			ui.notifications.warn("Only the GM or whoever rolled this card can take what it pays out.");
+			btn.disabled = false;
+			return;
+		}
+		claimed = await claimPickedOption(message, PROVISIONS_FLAG, index);
+		if (!claimed) {
+			btn.disabled = false;
+			return;
+		}
 
 		// A sacred pouch may take this haul as Stock instead. Closing the window pays nothing yet.
 		const intoPouch = await _forageIntoPouch(message, actor, pick);
 		if (intoPouch === undefined) {
+			await releasePickedOption(message, PROVISIONS_FLAG, index);
+			claimed = false;
 			btn.disabled = false;
 			return;
 		}
 		if (intoPouch) {
 			const { produced, held } = await rollStock(actor, { formula: pick.formula, pouchMax: intoPouch.pouchMax, speaker: message.speaker });
+			paid = true;
 			btn.replaceWith(_provisionsPaidEl(produced, true));
 			for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
 			ui.notifications.info(`${actor.name} produced ${produced} Stock (${held} in the pouch).`);
-			const rolled = { ...(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {}), [index]: { uses: produced, formula: pick.formula, stock: true } };
-			await message.setFlag(SYSTEM_ID, "provisionsRolled", rolled);
+			await settlePickedOption(message, PROVISIONS_FLAG, index, { uses: produced, formula: pick.formula, stock: true });
 			return;
 		}
 
 		// Trapping gear's "+1 use of provisions" is once per Forage: the first provisions payout on
 		// the card carries it, and the stamp below says which one did.
-		const paidBefore = Object.values(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {});
+		const paidBefore = Object.values(message.getFlag(SYSTEM_ID, PROVISIONS_FLAG) ?? {});
 		const trapping = _cardMoveName(message) === FORAGE
 			&& !paidBefore.some(p => p?.trapping)
 			&& !!(await actor.typedActor?.holdsPossession?.(TRAPPING_GEAR_SLUG));
@@ -2259,16 +2366,17 @@ async function _onRollProvisions(message, btn, index, pick) {
 			speaker:  message.speaker,
 			note:     trapping ? "+1 from trapping gear" : "",
 		});
+		paid = true;
 		btn.replaceWith(_provisionsPaidEl(uses));
 		for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
 		if (larder) ui.notifications.info(`${actor.name} gained ${uses} uses of provisions (${larder.held} in the pack).`);
 
-		// Stamped last: the larder is the thing that had to land, and a stamp written before it
-		// would lock out the retry if the write failed.
-		const rolled = { ...(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {}), [index]: { uses, formula, ...(trapping ? { trapping: true } : {}) } };
-		await message.setFlag(SYSTEM_ID, "provisionsRolled", rolled);
+		await settlePickedOption(message, PROVISIONS_FLAG, index, { uses, formula, ...(trapping ? { trapping: true } : {}) });
 	} catch (err) {
 		console.error("Stonetop | Error rolling provisions:", err);
+		// Nothing landed: give the claim back so the option can be pressed again. A payout that
+		// DID land keeps its claim, so it is never offered twice.
+		if (claimed && !paid) await releasePickedOption(message, PROVISIONS_FLAG, index).catch(() => {});
 		btn.disabled = false;
 	}
 }
@@ -2422,11 +2530,16 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	wireWielderInvoke(message, html);
 	// Loyal to the End's 7-9 and 6-: the companion's "injured" tag, added once per card.
 	wireLoyalToTheEnd(message, html);
+	// A follower's Death's Door card: the +nothing roll, then 10+ back to 1 HP or 6- dead (follower-deaths-door.js).
+	wireFollowerDeathsDoor(message, html);
 	// Improvise, rolled from an un-learned mystery: its 7+'s "use it this once" and its 10+'s step.
 	wireImproviseCard(message, html);
 	// "Mark a consequence" as a move's cost (the Ring of Daagon's Call Up and Send Them Back):
 	// the Ring's next Consequence, through Conduit of Power / Overchannel's ask, once per card.
 	wireMarkConsequenceCard(message, html);
+	// Send Them Back (the Ring of Daagon's servants): the row of the tier the card ends on settles the
+	// batch, once per card.
+	wireSendBackCard(message, html);
 	// We Happy Few, every tier: who heard the speech holds its Inspiration, once per card.
 	wireSpeechCard(message, html);
 	// "You or an ally gain advantage" (Everything Burns' 10+, Work With What You've Got's 7+, and the posted
@@ -2435,6 +2548,8 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// The Would-Be Hero's card buttons: Speak Truth to Power's "They refused: +1 Resolve", In Over Your
 	// Head's "Mark XP", Voice of Experience's "Ask it" (actors/character/would-be-hero-cards.js).
 	wireWouldBeHeroCards(message, html);
+	// A steading roll's miss: "Mark XP" for whoever made the move (actors/steading/steading-miss-xp.js).
+	wireSteadingMissXp(message, html);
 	// Same row, same reason: a spend that rewrites what the roll costs the player.
 	_chatWireHolyRelics(message, html);
 	// The XP receipt's own row, not the shared button row the two above claim — a card with no
@@ -2444,6 +2559,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	_chatWireDeployMarkDiminished(message, html);
 	_chatWireAurochsHunt(message, html);
 	_chatWireMusterRaise(message, html);
+	_chatWireSteadingFortunes(message, html);
+	// Trade & Barter's 10+/7-9: the special item handed over, once per card.
+	wireTradeItemCard(message, html);
 	_chatWireSpendStock(message, html);
 	_chatWireSeasonsRoll(message, html);
 	// The Seasons Change reminder card's "Reset logbook", for the Seeker's own player.
@@ -2523,6 +2641,11 @@ registerStruggleHooks();
 // -- AID, INTERFERE, PERSUADE (VS. PCS) -----------------------
 // On every client: an answer posted to one of these cards (or deleted) redraws the card it answers.
 registerPcAskHooks();
+
+// -- CLASH: A COUNTER-ATTACK THE 10+ AVOIDED ------------------
+// On every client: a Clash card whose struck counter-attack turns avoided (or not) redraws that blow's
+// damage card, so its "Take this damage" stands down or comes back (combat/attack-flow.js).
+registerCounterAvoidedHooks();
 
 // -- SEASONS CHANGE: "ask the most hopeful to roll" -----------
 // Wire the roll button on a spring Seasons Change prompt card (postSeasonsRollPrompt):

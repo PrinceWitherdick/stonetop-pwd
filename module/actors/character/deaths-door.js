@@ -15,7 +15,7 @@
  *    dying ("the Lady waves you off"), so a bare `hp <= 0` test would let them roll again
  *    and again off one brush with death.
  *
- *  • How the Heavy's moves bend the Death's Door roll (Book I p.113): Hard to Kill offers
+ *  • How the Heavy's moves bend the Death's Door roll (Book I p.114): Hard to Kill offers
  *    +CON or +nothing and a 7-9 escape hatch, Unstoppable defers the roll and charges -1 per
  *    circle marked. And the Would-Be Hero's: Never Gonna Keep Me Down skips it for a 10+ once
  *    a session, and a Destined hero's tier moves up a step until their destiny is fulfilled.
@@ -44,6 +44,30 @@ export const DEATHS_DOOR_STATE = {
 
 /** Actor flag key (under the system scope) holding the DEATHS_DOOR_STATE value. */
 export const DEATHS_DOOR_FLAG = "deathsDoor";
+
+/**
+ * Actor flag key (under the system scope): Hard to Kill's 7-9 trade is still open ("on a 7-9, you can mark a
+ * debility of your choice to regain 1 HP"). Written with the 7-9 that opens it, so the sheet's Death's Door card
+ * can offer it once the window that rolled is gone, and cleared by the trade or by the next brush with death.
+ */
+export const HARD_TO_KILL_TRADE_FLAG = "hardToKillTrade";
+
+/**
+ * Actor flag key (under the system scope): this Heavy was reduced to 0 HP IN BATTLE with Unstoppable learned,
+ * and fights on ("When you are reduced to 0 HP in battle, you can keep fighting", Book I p.114). Stamped by the
+ * HP write that drops them (hooks/DeathsDoorPrompt.js#onPreUpdateActorDeathsDoor), so whether they were in a fight
+ * is read at the drop, not later. Cleared when they stop fighting: any write that moves them off dying (the Door
+ * rolled, the GM's not-lethal ruling, hit points back above 0) and the fight's end (combat/battle-joy-offer.js).
+ */
+export const UNSTOPPABLE_FIGHTING_FLAG = "unstoppableFighting";
+
+/**
+ * Whether Hard to Kill's trade is on offer: out of the action off a 7-9 that opened it, with Hard to Kill learned.
+ * Pure, for the sheet's card.
+ */
+export function hardToKillTradeOpen({ state = null, latched = false, hardToKill = false } = {}) {
+	return !!latched && !!hardToKill && state === DEATHS_DOOR_STATE.OUT_OF_ACTION;
+}
 
 /** Move names the routing and roll rules key off, so no caller retypes the literals. */
 export const HARD_TO_KILL  = "Hard to Kill";
@@ -239,9 +263,10 @@ export function isUndeathCard(message) {
 }
 
 /**
- * Any 0-HP move's card: Death's Door or an insert's. The one question the card's lifts ask (roll-boosts.js
- * isBoostableRoll, stonetop.js's Burn Brightly), since every one of them is settled by its own window.
- * isDeathsDoorCard stays apart for what only the Door's window offers (Impetuous Youth's give it your all).
+ * Any 0-HP move's card: Death's Door or an insert's. The question the card's Burn Brightly and the GM's Shift
+ * ask (stonetop.js), since every one of them is settled by its own window. The +1s ask isUndeathCard alone
+ * (roll-boosts.js#isBoostableRoll), since a Door card takes them while its window waits; Impetuous Youth's
+ * card button asks isDeathsDoorCard, since the Door's give it your all is its window's own.
  */
 export function isZeroHpMoveCard(message) {
 	return isDeathsDoorCard(message) || isUndeathCard(message);
@@ -529,7 +554,7 @@ export function raisedFromDead({ oldHp, newHp, state = null }) {
 }
 
 /**
- * How this character rolls Death's Door, given the Heavy's two moves that bend it (p.113).
+ * How this character rolls Death's Door, given the Heavy's two moves that bend it (p.114).
  *
  *  • HARD TO KILL — "you can roll +CON or +nothing (your choice)", and "on a 7-9, you can
  *    mark a debility of your choice to regain 1 HP".

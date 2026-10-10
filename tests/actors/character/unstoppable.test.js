@@ -8,18 +8,28 @@ import { stubConfirm } from "../../fakes/confirm.js";
 import {
 	UNSTOPPABLE_INSTEAD_OPTION,
 	UNSTOPPABLE_REGAIN_OPTION,
+	downOnUnstoppable,
+	fightsOnWhenDropped,
 	keepsFightingAtZero,
 	markUnstoppable,
 	onUpdateActorUnstoppable,
 	regainInstead,
+	stopFightingUpdate,
 	unstoppableMarks,
 } from "../../../module/actors/character/unstoppable.js";
 import { DEATHS_DOOR_STATE } from "../../../module/actors/character/deaths-door.js";
 
 const TRACK = "flags.stonetop-pwd.moves.backgroundChoices.Unstoppable";
 
-/** A Heavy with Unstoppable, down at `hp` in `state`, with `marks` circles marked. */
-function heavy({ hp = 0, state = DEATHS_DOOR_STATE.DYING, marks = 0, learned = true, insert = null } = {}) {
+// "When you are reduced to 0 HP IN BATTLE": read at the drop, which stamps `unstoppableFighting` (the HP write's
+// preUpdate, tests/hooks/DeathsDoorPromptState.test.js). Each Heavy below carries that stamp unless
+// `fighting: false`, and stands in a combat NOW unless `inBattle: false`; the two are separate on purpose.
+let savedCombats;
+beforeEach(() => { savedCombats = globalThis.game.combats; });
+afterEach(() => { globalThis.game.combats = savedCombats; });
+
+/** A Heavy with Unstoppable, down at `hp` in `state`, with `marks` circles marked, stamped and in a fight unless told not. */
+function heavy({ hp = 0, state = DEATHS_DOOR_STATE.DYING, marks = 0, learned = true, insert = null, inBattle = true, fighting = true } = {}) {
 	const def = sourceMovesFor("The Heavy").find(d => d.name === "Unstoppable");
 	const unstoppable = makeLiveItem({
 		name: "Unstoppable", type: "move", system: structuredClone(def.system),
@@ -29,8 +39,11 @@ function heavy({ hp = 0, state = DEATHS_DOOR_STATE.DYING, marks = 0, learned = t
 	if (state) flags.deathsDoor = state;
 	if (marks) flags["moves.backgroundChoices"] = { Unstoppable: marks };
 	if (insert) flags["postDeathInsert.slug"] = insert;
+	if (fighting) flags.unstoppableFighting = true;
 	const built = buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", items: [unstoppable], flags });
 	built.actor.system.attributes.hp = { value: hp, max: 20 };
+	built.actor.id = "heavy-1";
+	globalThis.game.combats = inBattle ? [{ combatants: [{ actorId: built.actor.id }] }] : [];
 	return built.actor;
 }
 
@@ -51,6 +64,36 @@ describe("keepsFightingAtZero", () => {
 
 	it("is nobody whose Unstoppable is switched off", () => {
 		expect(keepsFightingAtZero(heavy({ learned: false }))).toBe(false);
+	});
+
+	// "When you are reduced to 0 HP in battle" (Book I p.114), read AT THE DROP: a Heavy who dropped with no fight
+	// running (a fall, a trap) has no stamp, and a combat started round them since does not make them fight on.
+	// downOnUnstoppable is the same test without the stamp, for clearing the circles on a not-lethal ruling.
+	it("is nobody who dropped outside battle, even once a fight is running round them", () => {
+		const actor = heavy({ fighting: false, inBattle: true });
+		expect(keepsFightingAtZero(actor)).toBe(false);
+		expect(downOnUnstoppable(actor)).toBe(true);
+		expect(regainInstead(heavy({ marks: 3, fighting: false }), { oldHp: 0, newHp: 4 })).toBeNull();
+	});
+
+	// The stamp outlives the combat: by deleteCombat the fight is gone from the world, and the fight's end is
+	// what hands them the Door (combat/battle-joy-offer.js#actionStops).
+	it("is one who dropped in battle, after the combat itself is gone", () => {
+		expect(keepsFightingAtZero(heavy({ fighting: true, inBattle: false }))).toBe(true);
+	});
+
+	// The drop's own question is asked of the world as it is at the drop.
+	it("asks at the drop whether they stand in a fight, by actor id, from a linked token's combatant too", () => {
+		const actor = heavy({ hp: 5, state: null, fighting: false, inBattle: false });
+		expect(fightsOnWhenDropped(actor)).toBe(false);
+		expect(fightsOnWhenDropped(actor, { combats: [{ combatants: [{ actor: { id: actor.id } }] }] })).toBe(true);
+		expect(fightsOnWhenDropped(actor, { combats: [{ combatants: [{ actorId: "someone-else" }] }] })).toBe(false);
+		expect(fightsOnWhenDropped(heavy({ hp: 5, state: null, learned: false }))).toBe(false);
+	});
+
+	it("lifts the stamp with stopFightingUpdate, and asks nothing when none is laid", () => {
+		expect(stopFightingUpdate(heavy())).toEqual({ "flags.stonetop-pwd.-=unstoppableFighting": null });
+		expect(stopFightingUpdate(heavy({ fighting: false }))).toEqual({});
 	});
 
 	it("is nobody whose 0-HP move is an insert's rather than Death's Door", () => {

@@ -456,7 +456,7 @@ export class CharacterArcana {
 		// reveal, a 7-9's owed back) lets the owner read it, not roll it. It goes by the side's
 		// title when there is one, since its "name" is a whole trigger.
 		if (moveSlug === CONDENSED_MOVE_SLUG) {
-			const move = condensedArcanumMove(item.back?.move);
+			const move = condensedArcanumMove(item.back?.move, { backDescription: item.back?.description ?? "" });
 			if (!move) return null;
 			const cardTitle = item.back?.title ?? item.front?.title ?? "";
 			const learned = _backRealised(item, this.identifiedSlugs, this.unlockCounts, this._flags.getFlag("boxes") ?? {});
@@ -476,6 +476,13 @@ export class CharacterArcana {
 	async getArcanum(slug) {
 		const [item] = await this._arcanaRepo.findBySlugs([slug]);
 		return item ?? null;
+	}
+
+	/** Whether a card's unlock track is complete: its front's options, its ○ run and its □ tasks. */
+	async isArcanumUnlocked(slug) {
+		const item = await this.getArcanum(slug);
+		if (!item?.front) return false;
+		return _isUnlocked(item, this.unlockCounts, this.boxStates, unlockCircleCount(item.front.unlock?.description));
 	}
 
 	async addArcanum(slug) {

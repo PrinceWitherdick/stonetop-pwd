@@ -31,6 +31,8 @@
     "creatureType": "fae"
   },
   "prototypeToken": {
+    "width": 2,
+    "height": 2,
     "name": "Auntie Sallow",
     "actorLink": false,
     "disposition": -1,

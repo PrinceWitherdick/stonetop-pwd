@@ -13,7 +13,9 @@ import { localize } from "../utils/i18n.js";
  * function the Seasons Change journal titles its pages with, so a reader looking at both sees one
  * naming scheme rather than two.
  */
-export function periodLabel({ season, year } = {}) {
+export function periodLabel({ season, year, yearOnly = false } = {}) {
+	// A timeline entry from a year whose season nobody remembers is named by its year alone.
+	if (!season && yearOnly) return yearLabel(year);
 	if (!season) return localize("stonetop.timeline.beforeRecord");
 	return `${seasonLabel(season)}, ${yearLabel(year)}`;
 }

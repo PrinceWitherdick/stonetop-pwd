@@ -14,6 +14,8 @@
 // Storage/visibility: one "Timeline" JournalEntry in The Chronicle folder, created OWNER by default
 // so a player can write their own thread. See timeline-store.js for why that is the same bargain
 // the relationship map strikes rather than a new one.
+import { MIN_HISTORY_YEAR } from "../seasons/campaign-year.js";
+
 const fields = foundry.data.fields;
 
 export class TimelinePageModel extends foundry.abstract.TypeDataModel {
@@ -42,8 +44,14 @@ export class TimelinePageModel extends foundry.abstract.TypeDataModel {
 				// The date: the campaign clock's own pair, plus where this sits among the other
 				// entries in that same season. No day number, deliberately -- the book gives Stonetop
 				// seasons and years and nothing finer.
-				year:   new fields.NumberField({ required: true, integer: true, min: 1, initial: 1 }),
+				//
+				// `year` is STORED (1 = the first year of play; what it is called is the world's
+				// `campaignStartYear`, seasons/campaign-year.js). Below 1 is history from before play,
+				// which only a timeline holds. `yearOnly` marks a row whose season nobody knows: a
+				// blank season WITH it is "some time that year", a blank season without it is undated.
+				year:   new fields.NumberField({ required: true, integer: true, min: MIN_HISTORY_YEAR, initial: 1 }),
 				season: new fields.StringField({ required: true, blank: true, initial: "" }),
+				yearOnly: new fields.BooleanField({ required: true, initial: false }),
 				order:  new fields.NumberField({ required: true, integer: true, min: 0, initial: 0 }),
 
 				// What happened. `title` is the line the timeline prints; `place` is free text with a

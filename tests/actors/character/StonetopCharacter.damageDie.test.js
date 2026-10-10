@@ -114,3 +114,14 @@ describe("StonetopCharacter.computedDamageDie", () => {
 		expect(await char.computedDamageDie()).toBeNull();
 	});
 });
+
+// The vitals mirror writes the stored die from computedVitals' own pass (StonetopCharacter#syncStoredVitals,
+// vitals-mirror.js), so that pass has to give the die the roller rolls.
+describe("StonetopCharacter.computedVitals' damage die", () => {
+	it("agrees with computedDamageDie, on the playbook's die, an override, and no playbook", async () => {
+		for (const opts of [{}, { override: "d6" }, { playbook: false }]) {
+			const { char } = makeChar(opts);
+			expect((await char.computedVitals()).damage).toBe(await char.computedDamageDie());
+		}
+	});
+});

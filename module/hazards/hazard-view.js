@@ -5,7 +5,7 @@
 // wiring (doom toggles, drag-to-pin) works on hazard cards without a parallel set of
 // handlers.
 import { HAZARD_ACCENT, resolveDamageEffects, formatHazardDamage } from "./hazard-data.js";
-import { hasText, stringList, buildDoomRows, buildImpending, buildCustomPlayerMoves, cardEnricher } from "../journal/card-vm.js";
+import { hasText, stringList, buildDoomRows, buildImpending, buildCustomPlayerMoves, cardEnricher, asCardHtml } from "../journal/card-vm.js";
 
 /** The hazard's book-style damage line ("1d10+2 (ignores armor, forceful)"), derived
  *  from the stored worksheet picks plus any free-form extras. */
@@ -46,7 +46,9 @@ export async function buildHazardCardVM(page, { forOwner } = {}) {
 		certainDeath: !!sys.certainDeath,
 		instinct: String(sys.instinct ?? ""),
 		hasInstinct: hasText(sys.instinct),
-		description: await enrich(sys.description),
+		// Written in the wizard's textarea; a hazard saved before that text was stored as
+		// paragraphs is drawn with its line breaks all the same.
+		description: await enrich(asCardHtml(sys.description)),
 		hasDescription: hasText(sys.description),
 		advanceTrigger: String(sys.advanceTrigger ?? ""),
 		hasAdvanceTrigger: hasText(sys.advanceTrigger),

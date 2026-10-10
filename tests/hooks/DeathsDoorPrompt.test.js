@@ -178,6 +178,18 @@ describe("onUpdateActorDeathsDoorAutoOpen — opening the move on the dying play
 			delete global.ui;
 		}
 	});
+
+	// "When you are reduced to 0 HP IN BATTLE" (Book I p.114): dropped with no fight running (a fall, a trap),
+	// no stamp was laid, so the Heavy takes the ordinary road and the walkthrough opens, even with a fight
+	// running round them now.
+	it("opens as ever for a Heavy with Unstoppable who dropped outside battle", () => {
+		const { actor, sheet } = world();
+		fightingOn(actor);
+		delete actor.flags[SCOPE].unstoppableFighting;
+		global.game.combats = [{ combatants: [{ actor: { id: actor.id } }] }];
+		onUpdateActorDeathsDoorAutoOpen(actor, becameDying);
+		expect(sheet.render).toHaveBeenCalledWith(true);
+	});
 });
 
 /** Make a world()'s actor a Heavy down at 0 HP, dying, with Unstoppable learned. */
@@ -186,7 +198,8 @@ function fightingOn(actor) {
 	global.game.i18n = ENGLISH;
 	actor.name = "Duvin";
 	actor.system = { attributes: { hp: { value: 0 } } };
-	actor.flags = { [SCOPE]: { deathsDoor: DEATHS_DOOR_STATE.DYING } };
+	// "When you are reduced to 0 HP in battle": the drop that took them there stamped it (DeathsDoorPromptState.test.js).
+	actor.flags = { [SCOPE]: { deathsDoor: DEATHS_DOOR_STATE.DYING, unstoppableFighting: true } };
 	actor.items = [{ type: "move", name: "Unstoppable", flags: {} }];
 	return actor;
 }

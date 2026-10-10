@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { supplyPursesFor, defaultSupplyPurse, campUsesNeeded, SUPPLY_PURPOSE, SUPPLY_SLUGS } from "../../../module/actors/character/supply-cost.js";
+import { supplyPursesFor, defaultSupplyPurse, campUsesNeeded, spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack, SUPPLY_PURPOSE, SUPPLY_SLUGS } from "../../../module/actors/character/supply-cost.js";
 
 const labels = rows => rows.map(r => r.label);
 
@@ -85,5 +85,58 @@ describe("campUsesNeeded", () => {
 
 	it("treats junk head counts as nobody", () => {
 		expect([campUsesNeeded(-3, false), campUsesNeeded(NaN, true), campUsesNeeded("", false)]).toEqual([0, 0, 0]);
+	});
+});
+
+// ── what a character can reach ───────────────────────────────────────────────
+
+describe("spendablePurseResources", () => {
+	// Only MARKED rows can be spent (Book I p.89: "clear the marks from your Inventory insert" when
+	// home), and never past the row's current size, which a fall in Prosperity can shrink.
+	it("empties a purse that is not carried and caps one that is", () => {
+		const out = spendablePurseResources(
+			{ supplies: 6, "more-supplies": 3, provisions: 2, "a-ring": 5 },
+			{ checked: { supplies: true, provisions: true }, max: { supplies: 4, "more-supplies": 4 } },
+		);
+		expect(out).toEqual({ supplies: 4, "more-supplies": 0, provisions: 2, "a-ring": 5 });
+	});
+
+	// IA-3: the mark test is the printed rows' alone (the INV-4 ruling). Provisions from a haul that
+	// claimed no ◆ ("an extra 1d6 uses", p.79) and Twisting Pine sap are spendable unmarked.
+	it("asks only the three printed supplies rows to be marked", () => {
+		const out = spendablePurseResources(
+			{ supplies: 3, provisions: 2, "twisting-pine": 1 },
+			{ checked: {}, max: {} },
+		);
+		expect(out).toEqual({ supplies: 0, provisions: 2, "twisting-pine": 1 });
+	});
+
+	it("leaves the purses as stored when nothing is asked", () => {
+		expect(spendablePurseResources({ supplies: 6 })).toEqual({ supplies: 6 });
+	});
+
+	it("feeds supplyPursesFor when it is handed the limits", () => {
+		const purses = supplyPursesFor({ supplies: 3, "more-supplies": 2 }, SUPPLY_PURPOSE.RECOVER, { checked: { "more-supplies": true } });
+		expect(purses.eligible.map(p => [p.slug, p.remaining])).toEqual([["more-supplies", 2]]);
+		expect(purses.total).toBe(2);
+	});
+});
+
+// IA-1: a ◆ of supplies is its food; the tick moves the ◆ (Book I p.88, p.326-327).
+describe("suppliesUsesOnMark / suppliesGiveBack", () => {
+	it("packs a fresh, full ◆ when the mark drew an undefined ◆ or the row was empty", () => {
+		expect(suppliesUsesOnMark({ drew: 1, uses: 0, perSupply: 5 })).toBe(5);
+		expect(suppliesUsesOnMark({ drew: 1, uses: 2, perSupply: 5 })).toBe(5);
+		expect(suppliesUsesOnMark({ drew: 0, uses: 2, perSupply: 5 })).toBe(2);
+		// Marked by hand at home after a Reset: a fresh ◆, not an empty one.
+		expect(suppliesUsesOnMark({ drew: 0, uses: 0, perSupply: 5 })).toBe(5);
+	});
+
+	it("hands back the draw only while the ◆ is still full", () => {
+		expect(suppliesGiveBack({ drawn: 1, uses: 5, perSupply: 5 })).toBe(1);
+		expect(suppliesGiveBack({ drawn: 1, uses: 6, perSupply: 5 })).toBe(1);
+		expect(suppliesGiveBack({ drawn: 1, uses: 4, perSupply: 5 })).toBe(0);
+		expect(suppliesGiveBack({ drawn: 1, uses: 0, perSupply: 5 })).toBe(0);
+		expect(suppliesGiveBack({ drawn: 0, uses: 5, perSupply: 5 })).toBe(0);
 	});
 });

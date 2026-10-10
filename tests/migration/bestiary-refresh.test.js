@@ -68,6 +68,24 @@ describe("monsterRefresh", () => {
 		expect(Object.keys(monsterRefresh(hurt, specter, SUPERSEDED_BESTIARY[specter._id]).actor)).toEqual(["system.attributes.armor.source"]);
 	});
 
+	it("takes the Crinwin's unprinted choke move off a copy still holding it as shipped, and only then", () => {
+		const crinwin = source("regions/crinwin.json");
+		const choke = { _id: "HwT4Rew3fxkzRx6m", name: "Choke with sinewy fingers", type: "monsterMove", img: "x.webp", system: { description: "", rollFormula: "d6" } };
+		const old = seeded(crinwin, c => { c.items.push(structuredClone(choke)); return c; });
+		expect(monsterRefresh(old, crinwin, SUPERSEDED_BESTIARY[crinwin._id] ?? {})).toMatchObject({ deletes: [choke._id] });
+		// Renamed, it is the GM's own move now, and stays.
+		const mine = seeded(crinwin, c => { c.items.push({ ...structuredClone(choke), name: "Throttle" }); return c; });
+		expect(monsterRefresh(mine, crinwin, SUPERSEDED_BESTIARY[crinwin._id] ?? {})?.deletes).toBeUndefined();
+	});
+
+	it("names the Broodfather's tongue with its printed damage, off the generated history", () => {
+		const brood = source("regions/crinwin-broodfather.json");
+		const tongue = brood.items.find(m => m._id === "hPN9iPWSsIt68SXk");
+		expect(tongue.name).toBe("Lash out with a choking tongue (d6+2, reach, forceful, grabby)");
+		const old = seeded(brood, c => { c.items.find(m => m._id === tongue._id).name = "Lash out with a choking tongue"; return c; });
+		expect(monsterRefresh(old, brood, SUPERSEDED_BESTIARY[brood._id]).items).toEqual([{ _id: tongue._id, name: tongue.name }]);
+	});
+
 	it("never matches a move the GM added, and reads a 0 as a value", () => {
 		const entry = { items: [{ _id: "a", name: "Bite", img: "new.webp" }] };
 		const held = { items: [{ _id: "z", name: "Howl", img: "old.webp" }] };
@@ -122,6 +140,19 @@ describe("refreshSeededMonsters", () => {
 		await expect(refreshSeededMonsters({ actors: [broken, fine], getEntries: async () => [specter] })).rejects.toThrow(/Broken/);
 		expect(fine.update).toHaveBeenCalled();
 		spy.mockRestore();
+	});
+
+	it("deletes a retired move from a seeded copy", async () => {
+		const crinwin = source("regions/crinwin.json");
+		const old = seeded(crinwin, c => {
+			c.items.push({ _id: "HwT4Rew3fxkzRx6m", name: "Choke with sinewy fingers", type: "monsterMove", img: "x.webp", system: { description: "", rollFormula: "d6" } });
+			return c;
+		});
+		old.update = vi.fn(async () => {});
+		old.updateEmbeddedDocuments = vi.fn(async () => {});
+		old.deleteEmbeddedDocuments = vi.fn(async () => {});
+		expect(await refreshSeededMonsters({ actors: [old], getEntries: async () => [crinwin] })).toBe(1);
+		expect(old.deleteEmbeddedDocuments).toHaveBeenCalledWith("Item", ["HwT4Rew3fxkzRx6m"]);
 	});
 
 	it("reads no pack at all in a world with no seeded monsters", async () => {

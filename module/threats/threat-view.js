@@ -2,9 +2,9 @@
 // the page sheet (view mode), the steading Threats tab, and the on-canvas overlay.
 // Centralizing it keeps the book-faithful card identical everywhere and gives every
 // host the same data-* hooks (data-portent-index / data-doom) to wire interactivity.
-import { threatType, threatProximity } from "./threat-types.js";
+import { threatType, threatProximity, THREAT_TYPE_IDS } from "./threat-types.js";
 import { setPortentDone, setDoomDone } from "./threat-store.js";
-import { hasText, stringList, buildDoomRows, buildImpending, buildCustomPlayerMoves, cardEnricher } from "../journal/card-vm.js";
+import { hasText, stringList, buildDoomRows, buildImpending, buildCustomPlayerMoves, cardEnricher, asCardHtml } from "../journal/card-vm.js";
 
 /**
  * View-model for one threat page. Async because prose fields are enriched. Pass
@@ -29,7 +29,15 @@ export async function buildThreatCardVM(page, { forOwner } = {}) {
 	const cleansing = stringList(sys.cleansing);
 	const nested = (Array.isArray(sys.nested) ? sys.nested : [])
 		.filter(n => hasText(n?.name))
-		.map(n => ({ name: String(n.name), type: threatType(n.type).label, instinct: String(n.instinct ?? "") }));
+		.map(n => {
+			// A lesser threat written up "in parentheses" (Book I p.289: "(rabble; to covet)"). The
+			// editor lets its type stay blank, and `threatType` would quietly answer Villain for that,
+			// so only a real type id is named; the parenthetical carries whichever halves exist.
+			const type = THREAT_TYPE_IDS.includes(n.type) ? threatType(n.type).label : "";
+			const instinct = String(n.instinct ?? "");
+			const note = [type, instinct.trim()].filter(Boolean).join("; ");
+			return { name: String(n.name), type, instinct, note };
+		});
 
 	const customPlayerMoves = await buildCustomPlayerMoves(sys, enrich);
 
@@ -48,7 +56,9 @@ export async function buildThreatCardVM(page, { forOwner } = {}) {
 		cleansing,
 		hasCleansing: cleansing.length > 0,
 		proximity,
-		description: await enrich(sys.description),
+		// Rich text from the editor passes through unchanged; a plain-text seed (a Things Below
+		// write-up) keeps its paragraph breaks.
+		description: await enrich(asCardHtml(sys.description)),
 		hasDescription: hasText(sys.description),
 		doomRows,
 		impendingDoom: impending,

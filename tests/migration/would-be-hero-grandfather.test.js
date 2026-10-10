@@ -9,8 +9,8 @@ const SCOPE = "stonetop-pwd";
 const move = (name, { version = "1.6.5", asterisk = false } = {}) => ({
 	type: "move", name, system: asterisk ? { asterisk: true } : {}, _stats: version ? { systemVersion: version } : {},
 });
-const hero = ({ slug = "the-would-be-hero", items = [], flagged = false } = {}) => {
-	const flags = flagged ? { [WBH_HERO_FLAG]: true } : {};
+const hero = ({ slug = "the-would-be-hero", items = [], flagged = false, flag } = {}) => {
+	const flags = flagged ? { [WBH_HERO_FLAG]: true } : flag !== undefined ? { [WBH_HERO_FLAG]: flag } : {};
 	return {
 		type: "character",
 		system: { playbook: { slug } },
@@ -40,6 +40,18 @@ describe("who was The Hero by ownership", () => {
 
 	it("is not one already flagged, another playbook, or a hero with no starred move", () => {
 		expect(heroByOwnership(hero({ items: [move("Big Damn Hero")], flagged: true }))).toBe(false);
+	});
+
+	// "Would-be" written back in by hand (WouldBeHeroAsterisk.js#restoreWouldBe) is the flag FALSE, and
+	// this sweep runs every release: crossing it off again would undo the fix at the next update.
+	it("is not one whose crossing-off was undone by hand", () => {
+		expect(heroByOwnership(hero({ items: [move("Big Damn Hero")], flag: false }))).toBe(false);
+	});
+
+	it("the sweep passes a restored hero over, release after release", async () => {
+		const restored = hero({ items: [move("Big Damn Hero")], flag: false });
+		expect(await grandfatherWouldBeHeroes({ actors: [restored] })).toBe(0);
+		expect(restored.setFlag).not.toHaveBeenCalled();
 		expect(heroByOwnership(hero({ slug: "the-heavy", items: [move("Big Damn Hero")] }))).toBe(false);
 		expect(heroByOwnership(hero({ items: [move("Potential for Greatness")] }))).toBe(false);
 	});

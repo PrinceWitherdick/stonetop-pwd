@@ -475,8 +475,8 @@ export function canDeleteLedgerEntry(actor, entry, user = globalThis.game?.user)
  * Both writers below read the stored entries and decide what to write from them (the head a run
  * folds into, the oldest entries a trim drops), and they are driven from
  * StonetopActor#_onUpdate, which fires once per actor update. Several places deliberately fire
- * CONCURRENT updates on a single actor — CharacterArcana's `Promise.all` of three setFlags,
- * CharacterInventory.resetSelections' four unsetFlags. Each of those flag writes survives on its
+ * CONCURRENT updates on a single actor — CharacterArcana's `Promise.all` of three setFlags, and
+ * the Inventory Reset's four unsetFlags as it once was. Each of those flag writes survives on its
  * own, because they touch different keys and the server merges them; but the ledger appends they
  * trigger all read the SAME stored array, and the last write back wins. Every entry but one was
  * dropped, and mergeRuns folding the head made the loss read as intended behaviour rather than

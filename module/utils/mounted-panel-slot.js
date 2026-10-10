@@ -18,6 +18,11 @@
 //     and none of it should happen because somebody opened the sheet to look at their HP.
 //   • THE FIELD IS CLEARED BEFORE `close()`, so nothing reached from the close path finds a sheet
 //     still holding the panel it is closing.
+//   • MOVING THE ELEMENT DOES NOT MOVE ITS SCROLL. A box taken out of the document loses its scroll
+//     offset (Chrome reads 0 the moment it is detached, and it comes back at 0), so the timeline's
+//     column went back to its first season on every sheet repaint while its zoom, kept on the
+//     instance, survived. The panel's own kept place (StonetopDialog#_readPlace) is read before the
+//     lift and put back after the move.
 //
 // Plain functions returned in a bundle rather than a mixin, matching the idiom both sheets already
 // use: a `wireX(root, ...)` per concern, called from the sheet's own lifecycle.
@@ -40,6 +45,9 @@ function activeTab(sheet) {
  * @returns {{sync: Function, detach: Function, close: Function}}
  */
 export function mountedPanelSlot({ field, tab, mountSel, build }) {
+	// Where each panel's reader was when `detach` lifted it out, until `sync` puts it back.
+	const places = new WeakMap();
+
 	/**
 	 * Put the panel where it belongs, whatever has just happened to the sheet.
 	 *
@@ -65,6 +73,10 @@ export function mountedPanelSlot({ field, tab, mountSel, build }) {
 		if (body) {
 			panel.setHost(mount);
 			mount.replaceChildren(body);
+			if (places.has(panel)) {
+				panel._restorePlace?.(places.get(panel));
+				places.delete(panel);
+			}
 			return;
 		}
 
@@ -92,7 +104,13 @@ export function mountedPanelSlot({ field, tab, mountSel, build }) {
 	 * `panel._element`.
 	 */
 	function detach(sheet) {
-		sheet?.[field]?.element?.[0]?.remove();
+		const panel = sheet?.[field];
+		const body = panel?.element?.[0];
+		if (!body) return;
+		// ⚠ READ WHILE IT IS STILL IN THE DOCUMENT: out of it, the column has no offset to read.
+		const place = panel._readPlace?.();
+		if (place) places.set(panel, place);
+		body.remove();
 	}
 
 	/**

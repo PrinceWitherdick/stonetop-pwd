@@ -4,6 +4,7 @@ import path from "node:path";
 import {
 	invokeConsequenceKind, CONSEQUENCE, cardInvocations, invokeDebilityChoices, settleInvokeDebility, settleInvokeTick,
 	CIRCLE_CHOICE, CONSEQUENCES_FLAG, wielderRollOptions, settleWielderInvoke, WIELDER_INVOKED_FLAG, invokeTenPlusCardBody,
+	auspiciousBirthChoice,
 } from "../../../module/actors/character/invoke-consequences.js";
 import { firstOptionList } from "../../../module/utils/chat.js";
 
@@ -55,6 +56,11 @@ function lightbearer({ running = [], lit = true, marked = [], background = null,
 		clearNeedsSun: vi.fn(async slugs => { const removed = needsSun.filter(s => slugs.includes(s)); needsSun = needsSun.filter(s => !slugs.includes(s)); return removed; }),
 		get needsSun() { return needsSun; },
 		debilityChoices: ["weakened", "dazed", "miserable"].map(key => ({ key, name: key[0].toUpperCase() + key.slice(1), marked: marked.includes(key) })),
+		// As StonetopCharacter#debilityMarkChoices: Auspicious Birth's circle first when that background is taken.
+		get debilityMarkChoices() {
+			const circleChoice = auspiciousBirthChoice({ playbook: "The Lightbearer", background, setupResources: model.background.setupResources });
+			return circleChoice ? [circleChoice, ...model.debilityChoices] : model.debilityChoices;
+		},
 		markDebility: vi.fn(async key => !marked.includes(key)),
 		background: {
 			selectedSlug: background,

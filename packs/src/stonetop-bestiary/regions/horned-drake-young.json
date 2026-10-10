@@ -31,6 +31,8 @@
     "creatureType": "natural-beast"
   },
   "prototypeToken": {
+    "width": 2,
+    "height": 2,
     "name": "Drake Calf",
     "actorLink": false,
     "disposition": -1,

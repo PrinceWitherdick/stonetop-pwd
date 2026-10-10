@@ -514,7 +514,8 @@ describe("paying for a move that does not roll", () => {
 		expect(body).toContain("_wireSteadingCardButtons(message,");
 		expect(body).toContain('flag: "stockSpent"');
 		expect(STONETOP).toContain("const already = message.getFlag(SYSTEM_ID, flag);");
-		expect(STONETOP).toContain("await message.setFlag(SYSTEM_ID, flag, stamp);");
+		expect(STONETOP).toContain("await withLateStampLatch(message, flag, btns,");
+		expect(read("module/utils/card-latch.js")).toContain("await message.setFlag(SYSTEM_ID, flag, stamp)");
 	});
 
 	// The two moves gated at ROLL time never reach the posting tail, so no card of theirs can

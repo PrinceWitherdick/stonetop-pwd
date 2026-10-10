@@ -10,7 +10,11 @@
       tokens, which belong to the steading header's clock; a test counts every read of them). The
       name and the glyph here still say WHICH season, so the colour is never the only signal.
 
-      The undated block has no season and no year, so it prints its own label and no chip.
+      The undated block has no season and no year, so it prints its own label and no chip. A year
+      whose season nobody remembers (`yearOnly`) prints "Season unknown" and no glyph, and its chip.
+
+      HISTORY says how long ago it was, in the chip beside its year ("Year 1237 · 10 years ago"):
+      `agoLabel`, set only on years from before play (timeline-view.js#agoLabel).
 
       WHAT THE SEASONS CHANGE RECORDED prints under the name (`seasonNotes`, timeline-view.js): the
       gains, the Surplus and any notes, IN the heading rather than as a card filed under it, which
@@ -29,7 +33,7 @@
 	<span class="stonetop-timeline-period-name">{{#if undated}}{{label}}{{else}}{{seasonLabel}}{{/if}}</span>
 </h3>
 {{#unless undated}}
-<span class="stonetop-year-chip">{{yearLabel}}</span>
+<span class="stonetop-year-chip">{{yearLabel}}{{#if agoLabel}} &middot; {{agoLabel}}{{/if}}</span>
 {{/unless}}
 {{#if seasonNotes.length}}
 <div class="stonetop-timeline-season-notes">

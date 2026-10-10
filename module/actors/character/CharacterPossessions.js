@@ -69,14 +69,17 @@ export class CharacterPossessions {
 	// write. Every actor.update on a character re-runs the ledger's snapshot diff, so a pick
 	// change and the carry marks it invalidates must not go out as separate updates — which
 	// is why the caller hands both over at once (see StonetopCharacter#deselectSubChoice for
-	// the rule about which picks lose their mark).
-	async writeSubChoices(possessionSlug, choiceSlugs, { uncarry = [] } = {}) {
+	// the rule about which picks lose their mark). `also` is an update fragment landed in the same
+	// write: the undefined marks those carry marks drew, handed back (StonetopCharacter#_choiceGiveBackData).
+	async writeSubChoices(possessionSlug, choiceSlugs, { uncarry = [], also = {} } = {}) {
 		const sets = { subChoices: { ...this.subChoices, [possessionSlug]: [...(choiceSlugs ?? [])] } };
 		if (uncarry.length) {
 			sets.choiceCarried = { ...this.choiceCarried };
 			for (const slug of uncarry) sets.choiceCarried[`${possessionSlug}:${slug}`] = false;
 		}
-		await this._flags.batch({ sets });
+		if (!Object.keys(also).length) return this._flags.batch({ sets });
+		const data = Object.assign({}, ...Object.entries(sets).map(([key, value]) => this._flags.updateData(key, value)));
+		await this._flags.applyUpdateData({ ...data, ...also });
 	}
 
 	async selectExclusive(possessionSlug, choiceSlug, exclusiveSlugs) {
@@ -111,12 +114,23 @@ export class CharacterPossessions {
 		await this._flags.setFlag("choiceCarried", { ...this.choiceCarried, [key]: !!isCarried });
 	}
 
-	// Several carry marks at once, keyed `possessionSlug:choiceSlug` (the Outfit window's batch).
-	// Unmarked ones are written as `false`, for the same reason as above.
-	async setChoicesCarried(carriedMap) {
-		const marks = Object.fromEntries(Object.entries(carriedMap ?? {}).map(([k, v]) => [k, !!v]));
-		if (!Object.keys(marks).length) return;
-		await this._flags.setFlag("choiceCarried", { ...this.choiceCarried, ...marks });
+	// Several carry marks at once, keyed `possessionSlug:choiceSlug` (the Outfit window's batch), as
+	// an update fragment that StonetopCharacter#applyOutfit lands with the rest of the Outfit. Each
+	// mark is its own sub-key, so one this call doesn't name keeps what is stored for it. Unmarked
+	// ones are written as `false`, for the same reason as above.
+	choicesCarriedData(carriedMap) {
+		const data = {};
+		for (const [key, value] of Object.entries(carriedMap ?? {})) {
+			Object.assign(data, this._flags.subKeyData("choiceCarried", key, !!value));
+		}
+		return data;
+	}
+
+	// Set every chosen piece of gear down (Reset Inventory: "Clear all item marks"), as a fragment for
+	// StonetopCharacter#resetInventorySelections' one update. An unset rather than a map of `false`s,
+	// so nothing is left behind for a merge to keep.
+	clearCarriedData() {
+		return this._flags.deletionData("choiceCarried");
 	}
 
 	// Free text the player wrote into a sub-option's fill-in blank (the Would-Be Hero's

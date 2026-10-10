@@ -69,7 +69,6 @@ const QUOTED = {
 		// dialog turned out to be unreachable and the guide was dropped; the steading sheet's
 		// copy of the same rules line, which a player really does read, is still waived below.
 		"\"6-: you find yourself in a spot — the GM will describe it or ask yo",
-		"equence and they'll eventually go &mdash; otherwise they break free of your",
 		"quired. Stabilizing isn't healing — that takes Convalesce.</p>",
 	],
 	"module/actors/character/deaths-door.js": [
@@ -95,9 +94,6 @@ const QUOTED = {
 	],
 	"module/utils/roll-engine.js": [
 		"\"<strong>Threats abound</strong> &mdash; and don't mark XP.\" },",
-	],
-	"templates/actor/partials/tab-followers.hbs": [
-		"=\"Send them back whence they came — roll +CHA to dismiss this batch.\"",
 	],
 	"templates/dialogs/arcana-inspire.hbs": [
 		"pur your creativity, not limit it — interpret them loosely.</p>",

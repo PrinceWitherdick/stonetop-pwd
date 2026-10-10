@@ -68,6 +68,15 @@ describe("the GM Toolkit is one per world", () => {
 		expect(hooks.preCreate({ type: "gmToolkit" }, { type: "gmToolkit" }, { keepId: true })).toBe(false);
 	});
 
+	// Players hold Create Actor on a fresh world. A player-made toolkit would be the player's, and
+	// the ready hook would then adopt it and point the GM's "C" key at it.
+	it("vetoes a player's create even when the world has none yet", () => {
+		globalThis.game.user = { isGM: false };
+		const hooks = registerHooks();
+		expect(hooks.preCreate({ type: "gmToolkit" }, { type: "gmToolkit" }, {})).toBe(false);
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("Only the GM"));
+	});
+
 	it("leaves every other actor type alone", () => {
 		globalThis.game.actors = [toolkit()];
 		const hooks = registerHooks();

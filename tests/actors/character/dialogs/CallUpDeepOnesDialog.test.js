@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { CallUpDeepOnesDialog } from "../../../../module/actors/character/dialogs/CallUpDeepOnesDialog.js";
 
-// "Each time you Call Up the Deep Ones, roll five d4s" (Book II p.560). The window keeps an
+// "Each time you Call Up the Deep Ones, roll five d4s" (Book II p.561). The window keeps an
 // unspent roll, announces a deliberate re-roll, and rolls how many appear exactly once.
 
 // Each `new Roll(formula)` answers the next queued total set; 5d4 reads `dice[0].results`.

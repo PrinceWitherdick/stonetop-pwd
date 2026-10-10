@@ -126,6 +126,9 @@
         <fieldset class="stonetop-camp-part stonetop-camp-night">
           <legend class="stonetop-camp-part-label">The night: pick 1</legend>
           <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="{{night.radioName}}" value="hp" data-camp-field="benefit" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:benefit-hp"{{#if night.hp}} checked{{/if}}><span>Regain half your max HP: <span class="stonetop-camp-hp">{{night.hpBefore}} &rarr; {{night.hpAfter}}</span>{{#if night.halvedText}} <em>{{night.halvedText}}</em>{{/if}}</span></label>
+          {{#if night.dyingText}}
+          <p class="stonetop-camp-meal-line stonetop-camp-meal-note stonetop-camp-dying">{{night.dyingText}}</p>
+          {{/if}}
           {{#if night.hasDebilities}}
           <div class="stonetop-camp-line">
             <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="{{night.radioName}}" value="debility" data-camp-field="benefit" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:benefit-debility"{{#if night.debility}} checked{{/if}}><span>Clear a debility:</span></label>
@@ -136,7 +139,9 @@
           {{#if bedroll.carries}}
           <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-camp-field="bedroll" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:bedroll"{{#if bedroll.uses}} checked{{/if}}><span>Sleep in the bedroll: regain 1d6 extra HP</span></label>
           {{/if}}
+          {{#if showPeaceful}}
           <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-camp-field="peaceful" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:peaceful"{{#if peaceful}} checked{{/if}}><span>The rest was peaceful, comfortable or enjoyable: advantage on the next roll</span></label>
+          {{/if}}
         </fieldset>
         {{/if}}
 

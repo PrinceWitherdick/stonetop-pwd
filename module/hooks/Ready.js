@@ -53,6 +53,7 @@ import { StonetopBrowserDialog } from "../dialogs/StonetopBrowserDialog.js";
 import { findVisibleJournal, SETTING_OVERVIEW_JOURNAL } from "../utils/seeded-journals.js";
 import { getStonetopSteadingActor, getStonetopSteadingActorOrWarn } from "../utils/world.js";
 import { nextSeasonStamp, readCurrentSeason, readCurrentYear } from "../seasons/current-season.js";
+import { installCampaignYearSync, openCampaignYearDialog } from "../seasons/campaign-year-dialog.js";
 import { rollMoveFromUuid } from "./HotbarDrop.js";
 import { ensureThreatsEntry } from "../threats/threat-store.js";
 import { ensureHazardsEntry } from "../hazards/hazard-store.js";
@@ -73,13 +74,16 @@ import { grandfatherWeaponsOfWar } from "../migration/weapons-of-war-grandfather
 import { grandfatherRetiredMoves } from "../migration/retired-move-grandfather.js";
 import { grandfatherWouldBeHeroes } from "../migration/would-be-hero-grandfather.js";
 import { grandfatherCreationFinished, CREATION_FINISHED_SWEEP } from "../migration/creation-finished-grandfather.js";
+import { grandfatherUnstoppableFighting, UNSTOPPABLE_FIGHTING_SWEEP } from "../migration/unstoppable-fighting-grandfather.js";
 import { repairAllPossessionGrants } from "../migration/possession-grant-repair.js";
 import { repairMasteredArcanumCircles } from "../migration/mastered-arcanum-circles.js";
 import { settleAllArcanumBoxLayouts, settleOwnArcanumBoxLayouts } from "../migration/tulpa-move-boxes.js";
 import { refreshHeldMoves } from "../migration/move-refresh.js";
 import { refreshSteadingImprovements } from "../migration/improvement-refresh.js";
 import { refreshSeededMonsters } from "../migration/bestiary-refresh.js";
+import { sizeMonsterTokens, MONSTER_TOKEN_SIZE_SWEEP } from "../migration/monster-token-size.js";
 import { refreshCatalogFollowers } from "../migration/follower-refresh.js";
+import { splitFollowerWholeParty, FOLLOWER_WHOLE_PARTY_SWEEP } from "../migration/follower-whole-party.js";
 
 const _EOS_MACRO_NAME   = "End of Session";
 const _EOS_MACRO_IMG    = "systems/stonetop-pwd/assets/icons/macros/truce.svg";
@@ -266,10 +270,20 @@ export async function onReady() {
 		// an older pack shipped is brought up to the pack; a GM's own edit is left.
 		try { await oncePerVersion("bestiaryRefresh", refreshSeededMonsters); }
 		catch (err) { console.error("Stonetop | refreshing seeded monsters failed", err); }
+		// And a large or huge monster's prototype token, still the 1x1 every stat block used to ship
+		// with (migration/monster-token-size.js): 2x2 and 3x3. Tokens already on a scene are left.
+		// Once per WORLD: a 1x1 a GM sets after it is theirs.
+		try { await oncePerVersion(MONSTER_TOKEN_SIZE_SWEEP, sizeMonsterTokens); }
+		catch (err) { console.error("Stonetop | sizing monster tokens failed", err); }
 		// And the follower cards made from the system's own lists (migration/follower-refresh.js): the
 		// good dog's herder default and two summons' notes, wherever a card still holds the old value.
 		try { await oncePerVersion("followerRefresh", refreshCatalogFollowers); }
 		catch (err) { console.error("Stonetop | refreshing catalog followers failed", err); }
+		// A custom follower's old "Party follower" switch meant both travelling with the party and
+		// following it as a whole (p.464); now two switches, so one switched on gets both
+		// (migration/follower-whole-party.js). Once per WORLD, like the creation-finished stamp below.
+		try { await oncePerVersion(FOLLOWER_WHOLE_PARTY_SWEEP, splitFollowerWholeParty); }
+		catch (err) { console.error("Stonetop | splitting the followers' party switch failed", err); }
 		// Keep a crossbow a character already carries on the sheet now that Weapons of War grants only
 		// the five weapons it names (migration/weapons-of-war-grandfather.js). GATED: it reads the
 		// outfit catalog and then every character's inventory flags, and it is legacy repair — the
@@ -291,6 +305,11 @@ export async function onReady() {
 		// the work itself skips any world that has a stamp for it.
 		try { await oncePerVersion(CREATION_FINISHED_SWEEP, grandfatherCreationFinished); }
 		catch (err) { console.error("Stonetop | creation-finished grandfathering failed", err); }
+		// Stamp a Heavy already down and fighting on at 0 HP on Unstoppable, which the old rule read without
+		// the in-battle stamp the drop now lays (migration/unstoppable-fighting-grandfather.js). Once per WORLD,
+		// for the same reason.
+		try { await oncePerVersion(UNSTOPPABLE_FIGHTING_SWEEP, grandfatherUnstoppableFighting); }
+		catch (err) { console.error("Stonetop | Unstoppable fighting-on grandfathering failed", err); }
 		// Bring special-possession gear made before its grant was corrected up to the grant (the
 		// Tannery cuirass made as a stacking modifier; see migration/possession-grant-repair.js).
 		// Per VERSION, because a grant only changes with a release: each new version is one more
@@ -463,6 +482,12 @@ export async function onReady() {
 		const next = nextSeasonStamp(readCurrentSeason(steading), readCurrentYear(steading));
 		steading.sheet._showSeasonDialog(next.season, next.year);
 	};
+	// Say what year it is, which names every year the campaign has recorded (seasons/campaign-year.js).
+	// The bar's "Set the Year" button. GM-only: it writes a world setting.
+	game.stonetop.openCampaignYear = () => openCampaignYearDialog();
+	// Every client repaints its sheets when the GM renames the years; the primary GM renames the
+	// Seasons Change journal's year pages to match.
+	installCampaignYearSync();
 	// Compile the recorded Introductions + Spring Burst answers into the shared
 	// "Chronicle" journal and open it (GM-only). Callable from the Introductions
 	// dialog's "Let spring break forth!" finish, the Expedition dialog, a macro, or

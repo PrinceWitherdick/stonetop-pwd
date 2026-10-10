@@ -150,4 +150,40 @@ describe("Burn Brightly on a card", () => {
 		expect(message.rolls[0].total).toBe(10);
 		expect(message.getFlag(SYSTEM_ID, "burnBrightly")).toBe(true);
 	});
+
+	// A miss's own +1 XP is taken back by the burn that lifts the card off the miss, so it cannot pay for it.
+	describe("against the card's own miss XP", () => {
+		let savedMessages;
+		const burner = xp => {
+			const actor = {
+				id: "wren", name: "Wren", type: "character", flags: {},
+				system: { attributes: { xp: { value: xp }, level: { value: 1 } } },
+				getFlag: () => undefined,
+				update: vi.fn(async data => { actor.system.attributes.xp.value = data["system.attributes.xp.value"]; }),
+			};
+			return actor;
+		};
+		const missCard = total => {
+			const message = card({ total });
+			message.update({ flags: { [SYSTEM_ID]: { missXp: true, missXpState: "marked" } } });
+			const receipt = { id: "r1", getFlag: (scope, key) => (scope === SYSTEM_ID ? { xpMark: 1, xpMarkFor: "msg1" }[key] : undefined) };
+			globalThis.game.messages = { contents: [message, receipt], get: id => [message, receipt].find(m => m.id === id) ?? null };
+			return message;
+		};
+		beforeEach(() => { savedMessages = globalThis.game.messages; });
+		afterEach(() => { globalThis.game.messages = savedMessages; });
+
+		it("refuses a burn the miss's XP alone made affordable", async () => {
+			// 7 XP before the roll, 8 with the miss: the threshold at level 1, but only thanks to the miss.
+			const actor = burner(8);
+			expect(await burnBrightlyOnDoorCard(missCard(6), actor, { shiftRoll: plusOne, ...hands() })).toBeNull();
+			expect(actor.system.attributes.xp.value).toBe(8);
+		});
+
+		it("still counts it when the +1 leaves the card on a miss", async () => {
+			const actor = burner(8);
+			expect(await burnBrightlyOnDoorCard(missCard(5), actor, { shiftRoll: plusOne, ...hands() })).toEqual({ from: 5, to: 6 });
+			expect(actor.system.attributes.xp.value).toBe(6);
+		});
+	});
 });

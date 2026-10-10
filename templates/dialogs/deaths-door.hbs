@@ -144,6 +144,7 @@
 			<p class="deaths-door-roll-option-hint">{{localize "stonetop.specialMoves.deathsDoor.result.notLanded"}}
 				{{#if canBurnBrightly}}{{{localize "stonetop.specialMoves.deathsDoor.result.burnOffer" cost=burnBrightlyCost}}}{{/if}}
 				{{#if canGiveItAll}}{{{localize "stonetop.specialMoves.deathsDoor.result.giveAllOffer"}}}{{/if}}
+				{{#if canPlusOne}}{{{localize "stonetop.specialMoves.deathsDoor.result.plusOnesOffer"}}}{{/if}}
 				{{localize "stonetop.specialMoves.deathsDoor.result.orAccept"}}</p>
 			{{! A private roll taken over, with no GM connected to change its card (DeathsDoorDialog#_boostOffers). }}
 			{{#if privateBoostsNote}}
@@ -369,6 +370,14 @@
 		<span>{{localize "stonetop.specialMoves.deathsDoor.buttons.giveAll"}}</span>
 	</button>
 	{{/if}}
+	{{! The roll-card +1s this user presses for their own characters (Diligence, Sanction, Many Hands, a
+	    Blessing), labelled as the card labels them. Other players press theirs on the card. }}
+	{{#each plusOneButtons}}
+	<button class="deaths-door-boost-btn deaths-door-plus-one-btn" type="button" data-plus-one="{{key}}" title="{{title}}">
+		<i class="fas fa-plus"></i>
+		<span>{{label}}</span>
+	</button>
+	{{/each}}
 	{{else}}
 	<button class="deaths-door-close-btn is-primary" type="button">
 		<i class="fas fa-check"></i> {{localize "stonetop.specialMoves.deathsDoor.buttons.done"}}

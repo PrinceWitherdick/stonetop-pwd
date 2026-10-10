@@ -114,6 +114,14 @@ export function joinNames(names) {
 	return `${list.slice(0, -1).join(", ")} & ${list[list.length - 1]}`;
 }
 
+// joinNames undone: "A, B & C" back to ["A","B","C"], each part trimmed, blanks dropped ("" is []).
+// A name with its own ", " or " & " in it is cut there too, so nothing new should be stored joined
+// and read back with this: keep the list. Its one caller reads a held promise written before its
+// names were stored as a list (StonetopCharacter.js#heldSources).
+export function splitNames(text) {
+	return String(text ?? "").trim().split(/, | & /).map(part => part.trim()).filter(Boolean);
+}
+
 // Collapse rich text (an HTML / ProseMirror field) to a single plain-text line for a tooltip or
 // a ledger/preview: drop tags (turning a line or block BREAK into a space so words don't glue),
 // decode the handful of named entities our authored prose uses, and squeeze whitespace. Returns

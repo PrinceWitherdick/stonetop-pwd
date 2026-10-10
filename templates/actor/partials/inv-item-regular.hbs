@@ -4,7 +4,12 @@
       `stonetop-inventory-item-check` class, `data-slug`, `data-weight`) lives in exactly
       one place. Context: an inventory item snapshot, plus `deletable` — whether this row
       may be removed individually in edit mode (write-ins and treasures may; catalog gear
-      may not). `isAddedSpecial` is absent on rows that can't be one, so its ✕ falls out. --}}
+      may not). `isAddedSpecial` is absent on rows that can't be one, so its ✕ falls out.
+      `data-loot` marks weight gained in the field (the provisions a Forage brought in): marking
+      it draws nothing from the undefined ◇ (StonetopCharacter#toggleCarriedItem).
+      `data-write-in` marks a written-in item or a treasure, which could be either (found out
+      here, or owned all along and produced by Have What You Need, Book I p.89, p.326), so marking
+      one asks (StonetopCharacter#markWriteInCarried); `data-name` is the name that question uses. --}}
 <div class="stonetop-inv-item{{#if treasure}} stonetop-inv-treasure{{/if}}{{#if checked}} is-checked{{/if}}">
 	<label class="stonetop-inv-item-toggle">
 		<span class="stonetop-inv-diamonds">
@@ -12,6 +17,8 @@
 			<input type="checkbox" class="stonetop-inventory-item-check stonetop-inv-diamond"
 			       data-slug="{{../slug}}"
 			       data-weight="{{../weight}}"
+			       {{#if (eq ../slug "provisions")}}data-loot="true"{{/if}}
+			       {{#if ../deletable}}data-write-in="true" data-name="{{../name}}"{{/if}}
 			       {{#if ../checked}}checked{{/if}}
 			       {{#if ../disabled}}disabled{{/if}}>
 			{{/each}}

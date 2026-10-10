@@ -24,6 +24,13 @@ import { ownsLearnedBookMoveNamed } from "./owns-move.js";
  * return to it (initiates.js), but meanwhile they follow nobody.
  */
 function cardStands(flags, ftype, slug) {
+	// A custom card removed from the sheet (or handed to another PC) is gone, and an NPC still stamped
+	// with it is nobody's follower: otherwise the ring's Order reached the old sheet, and a Defend there
+	// wrote a ghost card back into existence (wave 3 audit FOL-3).
+	if (ftype === "custom") {
+		const record = slug ? flags?.customFollowers?.[slug] : null;
+		return !!record && typeof record === "object";
+	}
 	return ftype !== "initiate" || initiateActive(flags, slug);
 }
 

@@ -10,6 +10,9 @@
 // So a Would-Be Hero holding a starred move made under a release that crossed off on ownership
 // (LAST_OWNERSHIP_VERSION or earlier) is flagged, silently: the crossing-off already happened, and
 // announcing it again would be news to nobody. A starred move taken since waits for its first use.
+//
+// A flag already written either way is left alone, FALSE included: that is a hero whose crossing-off
+// was undone by hand (WouldBeHeroAsterisk.js#restoreWouldBe), and this runs again every release.
 
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
 import { WBH_HERO_FLAG, WBH_PLAYBOOK_SLUG, ASTERISK_MOVES } from "../actors/character/WouldBeHeroAsterisk.js";
@@ -20,12 +23,12 @@ import { madeAtOrBefore } from "./made-under.js";
 export const LAST_OWNERSHIP_VERSION = "1.6.5";
 
 /**
- * Whether `actor` was already The Hero by the old reading: a Would-Be Hero, not flagged, holding a
+ * Whether `actor` was already The Hero by the old reading: a Would-Be Hero, never flagged, holding a
  * starred move made under a release that crossed off on ownership. PURE apart from the actor.
  */
 export function heroByOwnership(actor) {
 	if (actor?.type !== "character" || playbookSlug(actor) !== WBH_PLAYBOOK_SLUG) return false;
-	if (actor.getFlag?.(STONETOP_SCOPE, WBH_HERO_FLAG)) return false;
+	if (actor.getFlag?.(STONETOP_SCOPE, WBH_HERO_FLAG) != null) return false;
 	return Array.from(actor.items ?? []).some(i => i.type === "move"
 		&& (i.system?.asterisk || ASTERISK_MOVES.includes(i.name))
 		&& madeAtOrBefore(i, LAST_OWNERSHIP_VERSION));

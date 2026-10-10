@@ -21,19 +21,24 @@
       the pop-out, whose swimlanes keep theirs). Its own column, so the list's `--timeline-hcols`
       (timeline.hbs) gives it one; the chip sizes it.
 
+      AN AGE'S BARE YEAR (`ageMark`, timeline-view.js#withAgeMarks) is the separator alone: a year
+      nothing is written in, opened so an Age's band has its year to lie under.
+
       Context: one period view-model (timeline-view.js#periodVM). --}}
 {{#if startsYear}}
-<li class="stonetop-timeline-hyear" data-year="{{year}}">
+<li class="stonetop-timeline-hyear" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>
 	<h2 class="stonetop-timeline-hyear-node"><span class="stonetop-year-chip">{{yearLabel}}</span></h2>
 </li>
 {{/if}}
+{{#unless ageMark}}
 <li class="stonetop-timeline-hperiod {{#if above}}stonetop-timeline-hperiod--above{{else}}stonetop-timeline-hperiod--below{{/if}}{{#if entries.length}} stonetop-timeline-hperiod--cards{{/if}}" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
 	<div class="stonetop-timeline-hnode">
 		<div class="stonetop-timeline-hhead{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}">
-			{{> "stonetop.timeline-period-head"}}
+			{{~> "stonetop.timeline-period-head"}}
 		</div>
 	</div>
 	<ol class="stonetop-timeline-cards stonetop-timeline-hcards">
 		{{#each entries}}{{> "stonetop.timeline-card"}}{{/each}}
 	</ol>
 </li>
+{{/unless}}

@@ -2,6 +2,9 @@ import { SYSTEM_ID } from "../system-id.js";
 import { adjustXp } from "./xp.js";
 import { speakerActor } from "./speaker-actor.js";
 import { canRewriteCard } from "./chat.js";
+import { cardCountedTier } from "./counted-tier.js";
+import { inCardTurn } from "./card-queue.js";
+import { pressRollCard, registerRollCardAction } from "./roll-card-writer.js";
 
 // Taking back the XP a miss just marked.
 //
@@ -28,6 +31,94 @@ export const XP_UNDONE_FLAG = "xpMarkUndone";
 export const XP_MARK_FOR_FLAG = "xpMarkFor";
 /** On a roll card: its miss earns XP (a character's roll, and the move does not say otherwise). */
 export const MISS_XP_FLAG = "missXp";
+/**
+ * On a roll card: where its miss XP stands, kept on the CARD so that a deleted receipt, or one its
+ * player undid by hand, is still known there. "marked" while the miss's XP is held, "waived" once the
+ * player took it back with the receipt's Undo (a later rewrite never marks it again), "none" once a
+ * rewrite lifted it off the miss. Absent on a card rolled before this was kept.
+ */
+export const MISS_XP_STATE_FLAG = "missXpState";
+/** On a roll card: whose XP a button marked for its miss (a steading roll's "Mark XP"), so the XP follows the card. */
+export const MISS_XP_ACTOR_FLAG = "missXpActor";
+/** On a roll card: its miss XP is marked by a button and never on its own (Never at a Loss, a steading roll). */
+export const MISS_XP_BY_CHOICE_FLAG = "missXpByChoice";
+/**
+ * On a roll card: the choice a button row gave its miss XP ("mark" or "decline"), the row's latch (Never
+ * at a Loss). Taken off with the XP when a rewrite lifts the card off the miss, so the row asks again.
+ */
+export const MISS_XP_CHOICE_FLAG = "missXpChoice";
+/** The same latch under its old, Know Things-only name, on cards rolled before MISS_XP_CHOICE_FLAG. Read only. */
+export const KNOW_THINGS_XP_FLAG = "knowThingsXp";
+
+/**
+ * Every latch a button's miss mark puts on a card, taken off together once a rewrite lifts it off the miss
+ * (roll-engine.js#reconcileMissXp). The old Know Things latch is among them, so an old card asks again too.
+ */
+export const MISS_XP_CHOICE_LATCHES = Object.freeze([
+	MISS_XP_FLAG, MISS_XP_BY_CHOICE_FLAG, MISS_XP_ACTOR_FLAG, MISS_XP_STATE_FLAG, MISS_XP_CHOICE_FLAG, KNOW_THINGS_XP_FLAG,
+]);
+
+/** The choice `card`'s button row gave its miss XP ("mark", "decline"), or null; an old card's is read too. */
+export function missXpChoice(card) {
+	return card?.getFlag?.(SYSTEM_ID, MISS_XP_CHOICE_FLAG) ?? card?.getFlag?.(SYSTEM_ID, KNOW_THINGS_XP_FLAG) ?? null;
+}
+
+/** Whether `card`'s miss XP is marked by a button and never on its own (see MISS_XP_BY_CHOICE_FLAG). */
+export function missXpIsByChoice(card) {
+	return !!card?.getFlag?.(SYSTEM_ID, MISS_XP_BY_CHOICE_FLAG) || missXpChoice(card) === "mark";
+}
+/** What one miss marks. */
+export const XP_PER_MISS = 1;
+
+/**
+ * Every receipt marked for `card`'s miss, undone or not, read off the whole chat log. A reader asking
+ * several of the questions below of one card reads it once and hands the list to each (`receipts`), as
+ * roll-engine.js#reconcileMissXp does.
+ */
+export const missReceipts = card => (globalThis.game?.messages?.contents ?? [])
+	.filter(m => m.getFlag?.(SYSTEM_ID, XP_MARK_FOR_FLAG) === card.id);
+
+/** The receipt still standing for `card`'s miss: marked for it and not undone. Null when none. */
+export function liveMissReceipt(card, receipts = null) {
+	if (!card?.id) return null;
+	return (receipts ?? missReceipts(card)).findLast(m => !m.getFlag(SYSTEM_ID, XP_UNDONE_FLAG)) ?? null;
+}
+
+/**
+ * Whether `card`'s miss XP is held right now. A live receipt says so; failing one, the card's own
+ * record does, because a receipt can be deleted from the log while its XP stays marked. A card
+ * recording "marked" whose receipt is still there but undone was undone by hand (a rewrite's take-back
+ * moves the card off "marked" in the same turn), which is a waiver, not a mark.
+ */
+export function missXpMarked(card, receipts = null) {
+	if (!card?.getFlag) return false;
+	const state = card.getFlag(SYSTEM_ID, MISS_XP_STATE_FLAG) ?? null;
+	if (state === "waived") return false;
+	receipts ??= missReceipts(card);
+	if (liveMissReceipt(card, receipts)) return true;
+	return state === "marked" && receipts.length === 0;
+}
+
+/** Whether `card`'s player has given up its miss XP by hand, so no rewrite may mark it again. */
+export function missXpWaived(card, receipts = null) {
+	const state = card?.getFlag?.(SYSTEM_ID, MISS_XP_STATE_FLAG) ?? null;
+	if (state === "waived") return true;
+	if (state !== "marked") return false;
+	receipts ??= missReceipts(card);
+	return !liveMissReceipt(card, receipts) && receipts.length > 0;
+}
+
+/**
+ * The XP a rewrite of `card` to `newTotal` would take back from its own miss: what Burn Brightly may
+ * not count as spendable, since the +1 it buys is what erases it. Zero when the card has no miss XP
+ * held, or the new total is still a miss. The card's own flags are asked first: whether the XP is held
+ * reads the chat log (missXpMarked), and this runs on every render of a roll card (stonetop.js).
+ */
+export function missXpTakenByLift(card, newTotal) {
+	if (!card?.getFlag?.(SYSTEM_ID, MISS_XP_FLAG)) return 0;
+	if (cardCountedTier(card, newTotal, SYSTEM_ID) === "failure") return 0;
+	return missXpMarked(card) ? XP_PER_MISS : 0;
+}
 
 /**
  * Hand back what a receipt marked, once: latch the card, then take the XP back through the queue.
@@ -52,6 +143,54 @@ export async function takeBackXpMark(message, actor, { move = "Undo XP" } = {}) 
 		throw err;
 	}
 }
+
+/** The roll card action that undoes a miss's receipt by hand on the card's writer (see undoXpReceipt). */
+export const UNDO_MISS_XP_ACTION = "undoMissXp";
+
+async function waiveMissXp(card) {
+	try { await card.setFlag(SYSTEM_ID, MISS_XP_STATE_FLAG, "waived"); }
+	catch (err) { console.warn("Stonetop | Could not record a waived miss XP on its roll card:", err); }
+}
+
+/**
+ * Undo an XP receipt by hand (its Undo button).
+ *
+ * A MISS's receipt is undone on its ROLL CARD's writer, in the card's turn, because that is where every
+ * rewrite of the card marks or takes back the same XP (roll-engine.js#reconcileMissXp). Undone here
+ * instead, a press racing a rewrite that lifts the card off the miss passes the same unset latch on two
+ * clients, and the XP is taken back twice. The card is stamped "waived" in that same turn, so no later
+ * rewrite that leaves it on a miss marks the XP again.
+ *
+ * Any other receipt (an agreed Persuade, In Over Your Head), or a miss's whose card is gone or whose
+ * writer did not answer, is undone on this client.
+ *
+ * @returns {Promise<{applied: boolean, after: number, max: number}|null>} as takeBackXpMark
+ */
+export async function undoXpReceipt(message, actor, { messages = globalThis.game?.messages } = {}) {
+	const forCard = message?.getFlag?.(SYSTEM_ID, XP_MARK_FOR_FLAG);
+	const card = forCard ? messages?.get?.(forCard) ?? null : null;
+	if (card) {
+		const relayed = await pressRollCard(card, UNDO_MISS_XP_ACTION, { receiptId: message.id });
+		if (relayed) return relayed.already ? null : relayed;
+	}
+	const out = await takeBackXpMark(message, actor);
+	if (out && card) await waiveMissXp(card);
+	return out;
+}
+
+registerRollCardAction(UNDO_MISS_XP_ACTION, ({ message: card, user, data }) => {
+	const receipt = globalThis.game?.messages?.get?.(data?.receiptId) ?? null;
+	if (!receipt || receipt.getFlag?.(SYSTEM_ID, XP_MARK_FOR_FLAG) !== card?.id) return null;
+	const actor = speakerActor(receipt);
+	// Only for whoever plays the character the receipt marked, as every other press on a card.
+	if (actor?.type !== "character" || !actor.testUserPermission?.(user, "OWNER")) return null;
+	return inCardTurn(card, async () => {
+		const out = await takeBackXpMark(receipt, actor);
+		if (!out) return { already: true };
+		await waiveMissXp(card);
+		return { applied: out.applied, after: out.after, max: out.max };
+	});
+});
 
 /**
  * The card's spent state.
@@ -106,8 +245,9 @@ export function wireUndoXpMark(message, html) {
 		btn.disabled = true;
 		try {
 			// takeBackXpMark latches first and releases the latch if the write fails, so a failure
-			// never leaves the card reading "undone" with the XP still marked.
-			const out = await takeBackXpMark(message, actor);
+			// never leaves the card reading "undone" with the XP still marked. A miss's receipt goes
+			// through its roll card's writer (undoXpReceipt).
+			const out = await undoXpReceipt(message, actor);
 			// Already at zero: the XP has been spent on a level since, so there is nothing left to
 			// hand back. The card is still marked undone, because the mark IS withdrawn, but
 			// saying so out loud beats a button that looks like it did nothing.

@@ -8,37 +8,39 @@
 // tested and reused by the importer.
 
 export const MONSTER_TAGS = {
-	// ── Organization (every monster has one; drives HP & damage) ──────────────
-	solitary:   "Fights or hunts by itself. A solitary creature is tougher than its kin: roughly 12 HP and d10 damage on its own.",
-	group:      "Travels and fights in small groups of 2–5. Each member has about 6 HP and deals d8 damage.",
-	horde:      "Swarms in large groups of 6 or more. Each member is weak, about 3 HP and d6 damage, but dangerous through sheer numbers.",
+	// ── Organization (every monster has one; drives HP & damage, Book I pp.395-398) ──
+	solitary:   "Hunts or fights by itself: 12 HP and d10 damage.",
+	group:      "Hunts or fights in small groups (2-5 per group): 6 HP and d8 damage each.",
+	horde:      "Hunts or fights in large groups (6 or more): 3 HP and d6 damage each.",
 
-	// ── Size (fictional scale; modifies HP and damage) ────────────────────────
-	tiny:       "Cat-sized or smaller. Frail (−2 HP) and short-reaching, but hard to hit.",
-	small:      "About the size of a human child.",
-	large:      "As big as a horse or cart. Sturdier than a person (+4 HP).",
-	huge:       "Elephant-sized or bigger. Tremendously durable (+8 HP) and hits hard, often from a distance.",
+	// ── Size (Book I pp.395-398: HP, damage, range, armor) ────────────────────
+	tiny:       "Cat-sized or smaller: -2 HP, -2 damage, +1 armor, and its attack's range is one step lower.",
+	small:      "Like a human child: its attack's range is one step lower.",
+	large:      "Like a horse, cart, etc.: +4 HP, +1 damage, and its attack gains a range.",
+	huge:       "Like an elephant, or bigger: +8 HP, +3 damage, and its attack gains a range.",
 
-	// ── Nature (what kind of thing it fundamentally is) ───────────────────────
-	construct:  "A made thing: animated but not truly alive. Often immune to effects that target living bodies.",
-	spirit:     "A being of the Spirit World, wholly or partly immaterial. May be hard to harm by ordinary means.",
-	undead:     "Animate dead: once-living, now sustained by some unnatural force. Unmoved by what afflicts the living.",
-	corrupted:  "Twisted and defiled by the Things Below or similar foul power.",
-	fae:        "A creature of Faerie, bound by ancient pacts and strange rules.",
-	primordial: "An elemental, primal force from the world's deep origins.",
-	emanation:  "A manifestation or projection of a greater power, not a discrete body of its own.",
+	// ── Nature (Book I p.395, "What is its nature?") ──────────────────────────
+	construct:  "Made by someone.",
+	spirit:     "Lacks physical form.",
+	undead:     "Dead, but in denial.",
+	corrupted:  "Changed by the Things Below.",
+	fae:        "Between physical and spiritual.",
+	primordial: "From the first age of creation.",
+	emanation:  "A manifestation of a greater power, not a body of its own.",
 
-	// ── Behavior & traits (Book I p.395 grounds the first set) ────────────────
-	hoarder:     "Amasses trinkets and treasure.",
-	cautious:    "Avoids fights and flees early.",
-	cunning:     "Clever, calculating intelligence.",
-	devious:     "Tricky, scheming intelligence: favors deception and misdirection.",
-	terrifying:  "Has a disturbing or terrible presence; facing it can require steeling yourself.",
-	stealthy:    "Sneaks, surprises, and ambushes.",
-	magical:     "Uses spells or magic.",
-	organized:   "Works well in groups, with coordination and tactics.",
+	// ── Notable for (Book I p.395, "What is it notable for?") ─────────────────
+	hoarder:     "Amassing trinkets and treasure.",
+	cautious:    "Avoiding fights, fleeing early.",
+	cunning:     "Intelligence.",
+	devious:     "Intelligence.",
+	terrifying:  "Disturbing or terrible presence.",
+	stealthy:    "Sneaking, surprising, ambushing.",
+	magical:     "Using spells or magic.",
+	organized:   "Working well in groups.",
+
+	// ── Other recurring tags (made up per creature, as Book I p.395 invites) ──
 	hardy:       "Tough and resilient; shrugs off hardship and punishment.",
-	amorphous:   "Has no fixed form; hard to harm by conventional means and able to squeeze through gaps.",
+	amorphous:   "Has no fixed form; able to squeeze through gaps.",
 	fearless:    "Knows no fear: won't flee, falter, or be cowed.",
 	implacable:  "Relentless and unstoppable; cannot be reasoned with or deterred.",
 	fierce:      "Ferocious and aggressive in a fight.",

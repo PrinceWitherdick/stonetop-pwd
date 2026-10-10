@@ -39,6 +39,17 @@
 		{{/if}}
 
 		<div class="stonetop-timeline-toolbar-end">
+			{{!-- The GM's Ages: named runs of years drawn as bands along the timeline's foot
+			      (dialogs/TimelineAgesDialog.js). A window of its own rather than a dropdown: each Age
+			      is a row of five fields, and the list grows. --}}
+			{{#if agesEditable}}
+			<button type="button" class="stonetop-timeline-ages-open" data-timeline-focus="ages"
+			        data-tooltip="{{localize "stonetop.timeline.ages.openTooltip"}}">
+				<i class="fas fa-landmark" aria-hidden="true"></i>
+				<span>{{localize "stonetop.timeline.ages.open"}}</span>
+			</button>
+			{{/if}}
+
 			{{!-- The GM's colour each kind wears, for the whole world: a dropdown under its button, as
 			      Filter is (user, 2026-10-04). One row per kind: the chip as a card prints it, painted
 			      in the colour this page would wear, and the picker beside it. A pick is previewed by
@@ -133,6 +144,15 @@
 					</label>
 					{{/each}}
 					{{#if threads.length}}</div></div>{{/if}}
+					{{!-- The Ages' bands, once the world has any: this reader's own on/off. --}}
+					{{#if agesToggle}}
+					<label class="stonetop-timeline-show-kind stonetop-timeline-show-ages">
+						<input type="checkbox" class="stonetop-timeline-show-check" data-timeline-ages
+						       data-timeline-focus="show-ages"{{#if agesToggle.shown}} checked{{/if}}>
+						<i class="fas fa-landmark" aria-hidden="true"></i>
+						<span>{{localize "stonetop.timeline.ages.show"}}</span>
+					</label>
+					{{/if}}
 					<button type="button" class="stonetop-timeline-show-all" data-timeline-focus="show-all">
 						{{localize "stonetop.timeline.show.all"}}
 					</button>
@@ -173,15 +193,16 @@
 
 	{{!-- Focusable, so a keyboard can scroll it -- across as well as down -- and named, so a screen
 	      reader says what it has landed in. --}}
-	<div class="stonetop-timeline-scroll" tabindex="0" role="region" aria-label="{{scrollLabel}}">
+	<div class="stonetop-timeline-scroll" tabindex="0" role="region" aria-label="{{scrollLabel}}"{{#if ages}} data-age-rows style="--timeline-age-rows: {{ages.rows}};"{{/if}}>
 	{{!-- The CANVAS: everything below, padded on every side by the empty room the timeline can be
 	      dragged off into (utils/drag-scroll.js sizes it; the stylesheet spends it). Not re-indented
 	      under it, so the shapes below read as they always did. --}}
 	<div class="stonetop-timeline-canvas">
 
-		{{!-- A thread with no page yet reads differently from an empty one: the first is waiting on
-		      a GM opening the world, the second on the reader picking up a pen. --}}
-		{{#unless hasPage}}
+		{{!-- A thread with no page yet that this reader cannot write reads differently from an empty
+		      one: the first is waiting on a GM opening the world, the second on the reader picking up a
+		      pen. A reader who CAN write a pageless thread is handed the empty one (awaitingGm). --}}
+		{{#if awaitingGm}}
 		<div class="stonetop-timeline-invite">
 			<p class="stonetop-timeline-invite-lead">{{localize "stonetop.timeline.noTrack.lead"}}</p>
 			<p class="stonetop-timeline-invite-hint">{{localize "stonetop.timeline.noTrack.hint"}}</p>
@@ -212,7 +233,7 @@
 			{{#if horizontal}}
 				{{!-- A column per season, and a narrow one before each season that opens a year for
 				      its separator (timeline-hperiod.hbs). --}}
-				<ol class="stonetop-timeline-htrack" style="--timeline-hcols:{{#each timeline.periods}}{{#if startsYear}} auto{{/if}} minmax(15rem, 19rem){{/each}};">
+				<ol class="stonetop-timeline-htrack" style="--timeline-hcols:{{#each timeline.periods}}{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(15rem, 19rem){{/unless}}{{/each}};">
 					{{#each timeline.periods}}{{> "stonetop.timeline-hperiod"}}{{/each}}
 				</ol>
 			{{else}}
@@ -230,14 +251,17 @@
 				      2026-10-04): a narrow column of its own, the year's chip in the heads row and a red
 				      rule down through every thread. `--timeline-swim-cols` gives it the column, and each
 				      thread's row a rule cell in it, so the grid's columns stay one per cell. --}}
-				<div class="stonetop-timeline-swim" style="--timeline-swim-cols: 15rem{{#each timeline.periods}}{{#if startsYear}} auto{{/if}} minmax(15rem, 1fr){{/each}};">
+				<div class="stonetop-timeline-swim" style="--timeline-swim-cols: 15rem{{#each timeline.periods}}{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(15rem, 1fr){{/unless}}{{/each}};">
 					{{#each timeline.periods}}
 					{{#if startsYear}}
-					<h2 class="stonetop-timeline-swim-year" data-year="{{year}}"><span class="stonetop-year-chip">{{yearLabel}}</span></h2>
+					<h2 class="stonetop-timeline-swim-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-year-chip">{{yearLabel}}</span></h2>
 					{{/if}}
+					{{!-- An Age's bare year (timeline-view.js#withAgeMarks) is its separator alone. --}}
+					{{#unless ageMark}}
 					<div class="stonetop-timeline-swim-head{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
-						{{> "stonetop.timeline-period-head"}}
+						{{~> "stonetop.timeline-period-head"}}
 					</div>
+					{{/unless}}
 					{{/each}}
 
 					{{#each timeline.swimlanes}}
@@ -248,12 +272,14 @@
 					{{#if opensYear}}
 					<span class="stonetop-timeline-swim-year-rule" aria-hidden="true"></span>
 					{{/if}}
+					{{#unless ageMark}}
 					<div class="stonetop-timeline-lane{{#if isEmpty}} stonetop-timeline-lane--empty{{/if}}"
 					     data-track-id="{{trackId}}">
 						<ol class="stonetop-timeline-cards">
 							{{#each entries}}{{> "stonetop.timeline-card"}}{{/each}}
 						</ol>
 					</div>
+					{{/unless}}
 					{{/each}}
 					{{/each}}
 				</div>
@@ -273,11 +299,13 @@
 
 					{{#each timeline.periods}}
 					{{#if startsYear}}
-					<h2 class="stonetop-timeline-year" data-year="{{year}}"><span class="stonetop-timeline-year-cell"><span class="stonetop-year-chip">{{yearLabel}}</span></span></h2>
+					<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell"><span class="stonetop-year-chip">{{yearLabel}}</span></span></h2>
 					{{/if}}
+					{{!-- An Age's bare year is its heading alone. --}}
+					{{#unless ageMark}}
 					<div class="stonetop-timeline-row" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
 						<div class="stonetop-timeline-row-head{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}">
-							{{> "stonetop.timeline-period-head"}}
+							{{~> "stonetop.timeline-period-head"}}
 						</div>
 
 						{{#each lanes}}
@@ -289,6 +317,7 @@
 						</div>
 						{{/each}}
 					</div>
+					{{/unless}}
 					{{/each}}
 
 				</div>
@@ -296,9 +325,36 @@
 		{{/if}}
 
 		{{/if}}
-		{{/unless}}
+		{{/if}}
 	</div>{{!-- /canvas --}}
 	</div>
+
+	{{!-- THE AGES (timeline/timeline-ages-band.js): a band per Age laid OVER the column, along its
+	      foot when the timeline runs across and down its right edge when it runs down, each moved
+	      under the years it covers as the column scrolls and zooms. In the column's own grid cell, so
+	      it covers the timeline without being part of what scrolls. Every band opens `data-off`
+	      until it is first placed. A GM presses one to edit its Age; a player reads its years off
+	      the tooltip. --}}
+	{{#if ages}}
+	<div class="stonetop-timeline-ages" role="group" aria-label="{{localize "stonetop.timeline.ages.stripLabel"}}"
+	     style="--timeline-age-rows: {{ages.rows}};">
+		{{#each ages.bands}}
+		{{#if @root.agesEditable}}
+		<button type="button" class="stonetop-timeline-age stonetop-timeline-kind--custom" data-off
+		        data-age-id="{{id}}" data-age-first="{{first}}" data-age-last="{{last}}"
+		        style="--age-row: {{row}}; {{style}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}">
+			<span class="stonetop-timeline-age-name">{{name}}</span>
+		</button>
+		{{else}}
+		<span class="stonetop-timeline-age stonetop-timeline-kind--custom" data-off
+		      data-age-id="{{id}}" data-age-first="{{first}}" data-age-last="{{last}}"
+		      style="--age-row: {{row}}; {{style}}" data-tooltip="{{tooltip}}">
+			<span class="stonetop-timeline-age-name">{{name}}</span>
+		</span>
+		{{/if}}
+		{{/each}}
+	</div>
+	{{/if}}
 
 	{{!-- THE YEAR SCRUBBER (timeline/timeline-scrub.js): slide to a year and the column centres on
 	      it; move the column and the thumb follows. One tick per year shown, the thumb free to rest

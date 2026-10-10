@@ -48,12 +48,14 @@
  * follower's token whose roster cannot be found (its card gone, a stale link) is healed the same way,
  * known for a group by its own data (rosterlessGroupInfo): no group's pool is ever raised.
  *
- * A FOLLOWER'S CARD HEALS TOO (user's ruling). A follower keeps a second HP box on their character's
- * Followers tab, and the card and the NPC are deliberately never re-synced after the NPC is made (a
- * sync would undo a GM's healing on the token mid-fight). A heal is not a sync: the Bath raises both
- * by the same amount, each to its own max, never lowering either (restoreFollowerCardHp). The card's
- * max is the one the tab draws (StonetopCharacterSheet#followerCardHp), and raising a fallen custom
- * follower above 0 clears their "Dead" mark as the HP box does (follower-fate.js#followerReviveUpdate).
+ * A FOLLOWER'S CARD HEALS TOO (user's ruling). A follower keeps an HP box on their character's
+ * Followers tab. While they have an NPC its HP is theirs and the box mirrors it (wave 3 audit FOL-1,
+ * fight/roster-fate.js#onUpdateActorFollowerHp), so healing that NPC as the patient heals the card, and
+ * nothing is written to the box beside it. A follower patient who is not that NPC (the NPC they were
+ * recruited from, once their card has an actor of its own) also heals their card by the same amount,
+ * never lowering it (restoreFollowerCardHp, through follower-hp.js#setFollowerHp): the box to the max
+ * the tab draws (StonetopCharacterSheet#followerCardHp), and raising a fallen custom follower above 0
+ * clears their "Dead" mark as the HP box does (follower-fate.js#followerReviveUpdate).
  * When this client cannot write the character whose card (or roster) it is, the whole heal goes to the
  * GM's client (healPatient), which checks the member named against the roster itself.
  *
@@ -83,7 +85,9 @@ import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat
 import { isPrimaryGM } from "../../utils/primary-gm.js";
 import { partyCharacters } from "../../utils/playbook-actors.js";
 import { followerCardFor, followerMasterIndex } from "./follower-masters.js";
-import { followerFateHpPath, followerReviveUpdate } from "./follower-fate.js";
+import { followerFateHpPath, linkedFollowerNpc } from "./follower-fate.js";
+import { setFollowerHp } from "./follower-hp.js";
+import { followerActorFromLink } from "./follower-actors.js";
 import { readableFlags } from "./StonetopFlags.js";
 import { isUnliving } from "./deaths-door-actor.js";
 import { escHtml } from "../../utils/strings.js";
@@ -453,32 +457,41 @@ async function sheetCardHp(character, ftype, slug) {
 	return (await character?.sheet?.followerCardHp?.(ftype, slug)) ?? null;
 }
 
+/** The NPC whose HP is the card's (follower-fate.js#linkedFollowerNpc), or null. */
+function cardNpc(card, link = followerActorFromLink) {
+	return linkedFollowerNpc(readableFlags(card?.character), card?.ftype, card?.slug ?? "", link);
+}
+
+/** Whether `patient` is the card's NPC, or an unlinked token of it: healing it heals the card. */
+function patientIsCardNpc(patient, card) {
+	const uuid = cardNpc(card)?.uuid;
+	return !!uuid && (patient?.uuid === uuid || patient?.token?.baseActor?.uuid === uuid);
+}
+
 /**
- * Give a follower's CARD back `amount` HP: the box on their character's Followers tab, never past the
- * card's own max and never lowering it. `card` is followerCardFor's `{character, ftype, slug}`.
+ * Give a follower's CARD back `amount` HP, never past its max and never lowering it, through the one HP
+ * writer (follower-hp.js#setFollowerHp). `card` is followerCardFor's `{character, ftype, slug}`.
  *
- * Written where the tab's HP input writes it (the sheet's _followerHpUpdate, whose single-box paths are
- * followerFateHpPath), in one update with the revive the HP input's handler makes: a fallen custom
- * follower raised above 0 is no longer marked Dead (followerReviveUpdate). A heal only raises, so the
- * 0-HP fate dialog, which that handler opens on a crossing down to 0, has nothing to do here.
- * Answers `{gain, from, to}`, or null for a card with no single HP box.
+ * While the follower has an NPC, ITS HP is theirs: the NPC is raised, to its own max, and the box
+ * follows it (fight/roster-fate.js#onUpdateActorFollowerHp). Otherwise the box on their character's
+ * Followers tab is, to the card's own max, in one update with the revive the HP input's handler makes: a
+ * fallen custom follower raised above 0 is no longer marked Dead (followerReviveUpdate). A heal only
+ * raises, so the 0-HP fate dialog has nothing to do here. Answers `{gain, from, to}`, or null for a card
+ * with no single HP box, or an NPC nobody here could write.
  */
-export async function restoreFollowerCardHp(card, amount, { moveName = BATH_NAME, cardHp = sheetCardHp } = {}) {
+export async function restoreFollowerCardHp(card, amount, { moveName = BATH_NAME, cardHp = sheetCardHp, link = followerActorFromLink } = {}) {
 	const { character, ftype, slug = "" } = card ?? {};
 	if (!character || !CARD_HP_TYPES.has(ftype) || isGroupFollower(card)) return null;
-	const path = followerFateHpPath(ftype, slug);
-	const box = path ? await cardHp(character, ftype, slug) : null;
+	const npc = cardNpc(card, link);
+	const hp = npc ? npc.system?.attributes?.hp : null;
+	const box = npc ? (hp ? { max: hp.max, current: hp.value } : null)
+		: followerFateHpPath(ftype, slug) ? await cardHp(character, ftype, slug) : null;
 	if (!box) return null;
 	const gain = Math.max(0, Math.round(Number(amount) || 0));
 	const max = Math.max(0, Math.trunc(Number(box.max) || 0));
 	const from = Math.max(0, Math.trunc(Number(box.current) || 0));
 	const to = healTo(from, gain, max);
-	if (to !== from) {
-		await character.update({
-			[`flags.${SYSTEM_ID}.${path}`]: to,
-			...followerReviveUpdate(ftype, slug, to, readableFlags(character)),
-		}, { stonetopMove: moveName });
-	}
+	if (to !== from && !(await setFollowerHp(character, { follower: ftype, slug }, to, { moveName, raiseOnly: true, link: () => npc }))) return null;
 	return { gain, from, to };
 }
 
@@ -689,8 +702,9 @@ async function applyBathToGroup(patient, group, plan, memberKey) {
  * Heal `patient` with `picks`, on this client. Answers what happened, plain data (it crosses the GM
  * relay): `{patient, hp, cleared, stabilized, healed, minor, affliction}`. Anyone but a player
  * character takes the HP alone (restoreActorHp); the debility and wound picks are never theirs. A
- * follower's card takes the same HP (restoreFollowerCardHp), said as `card`; the card's one HP line is
- * the NPC's, unless only the card's box moved. A group token heals one member (applyBathToGroup), the
+ * follower's card takes the same HP (restoreFollowerCardHp), said as `card`, unless the patient is the
+ * card's own NPC, whose HP the box mirrors; the card's one HP line is the NPC's, unless only the card's
+ * box moved. A group token heals one member (applyBathToGroup), the
  * one `memberKey` names on a roster.
  */
 export async function applyBath(patient, picks, { cardFor = followerCardFor, cardHp = sheetCardHp, memberKey = null, resolve } = {}) {
@@ -701,7 +715,8 @@ export async function applyBath(patient, picks, { cardFor = followerCardFor, car
 		if (group) return applyBathToGroup(patient, group, plan, memberKey);
 		const npc = plan.hp ? await restoreActorHp(patient, plan.hp) : null;
 		const followed = plan.hp ? healableCard(patient, cardFor) : null;
-		const box = followed ? await restoreFollowerCardHp(followed, plan.hp, { cardHp }) : null;
+		// The patient is the card's NPC: that heal is the card's, and the box follows it.
+		const box = followed && !patientIsCardNpc(patient, followed) ? await restoreFollowerCardHp(followed, plan.hp, { cardHp }) : null;
 		if (plan.hp && !npc && !box) return null;
 		const moved = hp => !!hp && hp.to > hp.from;
 		const hp = !npc || (!moved(npc) && moved(box)) ? box : npc;

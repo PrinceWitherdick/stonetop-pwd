@@ -33,6 +33,20 @@
 			</button>
 			{{/with}}
 
+			{{! Hard to Kill's 7-9 trade, still open once the Death's Door window has gone: one button per
+			    debility still unmarked. See hardToKillTrade. }}
+			{{#if stonetop.deathsDoor.hardToKillTrade}}
+			<p class="stonetop-special-move-locked-hint">
+				<i class="fas fa-shield-heart"></i>
+				{{{localize "stonetop.specialMoves.deathsDoor.result.debilityAsk"}}}
+			</p>
+			{{#each stonetop.deathsDoor.hardToKillTrade}}
+			<button type="button" class="stonetop-deathsdoor-htk-btn" data-debility="{{key}}" data-tooltip="{{description}}">
+				{{name}}
+			</button>
+			{{/each}}
+			{{/if}}
+
 			{{! Edit mode's way off a fate that was settled away from this window — or retconned.
 			    Nothing else clears `fate-pending`, and a sheet left holding it is never recognised
 			    as dying again. See clearFate. }}

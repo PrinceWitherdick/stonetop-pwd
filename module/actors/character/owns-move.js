@@ -106,12 +106,25 @@ export function isPlayerAuthoredMove(item) {
 }
 
 /**
+ * The name a table keyed by the BOOK's moves looks this move up by (MOVE_ROLL_INSTEAD, the guided moves,
+ * ATTACK_MOVES, PC_ASKS, the pick bonuses and roll options, a move's use and roll effects...), or null
+ * for a move a player wrote (isPlayerAuthoredMove): a homebrew "Know Things" acts as itself and borrows
+ * none of the book's behaviour. THE one guard for every such lookup, so none can forget it.
+ *
+ * `name` is the name the caller reads the move by, the item's own unless given: a sheet row read by
+ * its text may have no item at all (an un-owned playbook row), and that row is the book's.
+ */
+export function bookMoveName(item, name = item?.name) {
+	return isPlayerAuthoredMove(item) ? null : (name ?? null);
+}
+
+/**
  * `ownedLearnedMove`, for a rule that means the BOOK's move of that name: a player's own move that
- * happens to share the name is not it (see isPlayerAuthoredMove). A move-granted weapon asks this,
- * for the move's own resource track.
+ * happens to share the name is not it (bookMoveName). A move-granted weapon asks this, for the move's
+ * own resource track.
  */
 export function ownedLearnedBookMove(actor, name) {
-	return (actor?.items ?? []).find(i => i.type === "move" && i.name === name && moveLearnedIn(i, actor.items) && !isPlayerAuthoredMove(i));
+	return (actor?.items ?? []).find(i => i.type === "move" && bookMoveName(i) === name && moveLearnedIn(i, actor.items));
 }
 
 /** `ownedLearnedBookMove` as a yes/no, which is all Cheap Shot needs. */

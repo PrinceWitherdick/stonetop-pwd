@@ -711,6 +711,39 @@ export function edgeCurve({ from, to, bow = 0, aspect = RELMAP_BOARD_ASPECT, r =
 }
 
 /**
+ * The half-drawn line a reader is dragging out of a portrait: straight, and STARTING AT THE RIM.
+ *
+ * (user, 2026-10-07: "shouldn't go inside the first token at all - I see it going almost halfway
+ * through it".) Drawn from the centre, the band lies over the face it comes out of for a whole radius,
+ * because it is laid on top of the portraits rather than under them. Trimmed here the way `edgeCurve`
+ * trims a real line, so the band and the line it is about to become leave the face at the same place.
+ *
+ * `rTo` trims the far end too, for a band already over the person it would join, so it stops at their
+ * rim exactly as the drawn line will; while it is only following the pointer, it reaches the pointer.
+ *
+ * Measured in FLAT space, for the reason `nodeRadiusPct` gives: a face is a circle in pixels and an
+ * ellipse in percentages.
+ *
+ * @returns {string} a `d`, or "" while the pointer is still inside the rim and there is nothing to draw.
+ */
+export function bandPath({ from, to, aspect = RELMAP_BOARD_ASPECT, r = nodeRadiusPct(), rTo = 0 } = {}) {
+	if (!from || !to) return "";
+	const ratio = ratioOf(aspect);
+	const p0 = flat(from, ratio);
+	const p2 = flat(to, ratio);
+	const dx = p2.left - p0.left;
+	const dy = p2.top - p0.top;
+	const len = Math.hypot(dx, dy);
+	const start = Math.max(0, Number(r) || 0);
+	const stop = Math.max(0, Number(rTo) || 0);
+	if (!(len > start + stop)) return "";
+	const along = d => unflat({ left: p0.left + (dx / len) * d, top: p0.top + (dy / len) * d }, ratio);
+	const a = along(start);
+	const b = along(len - stop);
+	return `M ${round(a.left)},${round(a.top)} L ${round(b.left)},${round(b.top)}`;
+}
+
+/**
  * Where a link's label sits, and how far it is turned over.
  *
  * ON the curve at its halfway point, not on the chord between the ends: the whole reason a second

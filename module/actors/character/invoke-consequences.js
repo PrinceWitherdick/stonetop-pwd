@@ -160,21 +160,34 @@ function labelsOf(slugs) {
 }
 
 /**
+ * Auspicious Birth's circle as a stand-in for a debility: "When one of your moves has you mark a debility, you
+ * may mark this background's circle instead, to no ill effect. Clear it when you Make Camp or Convalesce."
+ * (Lightbearer playbook.) In the shape of StonetopCharacter#debilityChoices' entries, `circle` set, or null
+ * when the background is not taken. PURE, over the playbook's NAME, the background slug and its setup tracks.
+ * Offered only where a MOVE marks the debility (StonetopCharacter#debilityMarkChoices), never on a hand tick,
+ * and never cleared as a debility is: only camp and Convalesce clear it (background-tracks.js).
+ */
+export function auspiciousBirthChoice({ playbook = null, background = null, setupResources = {} } = {}) {
+	if (!tookBackground({ playbook, background }, AUSPICIOUS_BIRTH)) return null;
+	return {
+		key: CIRCLE_CHOICE, circle: true, standIn: true,
+		name: localize("stonetop.invocations.consequenceCircleName"),
+		description: localize("stonetop.invocations.consequenceCircle"),
+		marked: Number(setupResources?.[AUSPICIOUS_BIRTH.slug]) > 0,
+	};
+}
+
+/**
  * What a move that has you "mark a debility" can be paid with (Invoke the Sun God's consequence,
- * Burn Twice as Bright's price): the Auspicious Birth circle first when that background is taken and
- * its circle is clear ("you may mark this background's circle instead, to no ill effect", so it costs
- * nothing), then each debility not already marked. `[{key, circle, name}]`, `name` the debility's.
+ * Burn Twice as Bright's price): StonetopCharacter#debilityMarkChoices still unmarked, so the Auspicious
+ * Birth circle first when that background is taken and its circle is clear ("you may mark this
+ * background's circle instead, to no ill effect", so it costs nothing), then each debility not already
+ * marked. `[{key, circle, name}]`, `name` the debility's.
  */
 export function debilityPayments(actor) {
-	const model = actor?.typedActor;
-	const out = [];
-	const bg = model?.background;
-	const took = tookBackground({ playbook: actor?.system?.playbook?.name ?? null, background: bg?.selectedSlug ?? null }, AUSPICIOUS_BIRTH);
-	if (took && !(Number(bg?.setupResources?.[AUSPICIOUS_BIRTH.slug]) > 0)) out.push({ key: CIRCLE_CHOICE, circle: true, name: "" });
-	for (const d of model?.debilityChoices ?? []) {
-		if (d?.key && !d.marked) out.push({ key: d.key, circle: false, name: d.name ?? d.key });
-	}
-	return out;
+	return (actor?.typedActor?.debilityMarkChoices ?? [])
+		.filter(d => d?.key && !d.marked)
+		.map(d => ({ key: d.key, circle: !!d.circle, name: d.circle ? "" : (d.name ?? d.key) }));
 }
 
 /**

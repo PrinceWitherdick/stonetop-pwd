@@ -2,10 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { CAMP_EXTRA, CAMP_STALE_MS, CAMP_STATE, CAMP_STATUS, SETTLE_REFUSAL, planExtra } from "../../module/camp/camp-rules.js";
 import {
-	applyCampShares, breakCamp, campMembers, campWriterId, hostCamp, joinCamp, onUpdateActorCamp,
+	applyCampShares, breakCamp, campMembers, campWriterId, hostCamp, joinCamp, managesCamp, onDeleteActorCamp, onUpdateActorCamp,
 	openCamps, partyFollowerMouths, payPendingShares, registerCampHooks, sendAwayFromCamp, setCampChoices, settleCamp,
 	stateOfCamp, takenFromCamp,
 } from "../../module/camp/camp-store.js";
+import { settleRefusalText } from "../../module/camp/camp-view.js";
 import { campCharacter, campParty, restoreCampWorld } from "../fakes/camp.js";
 
 /**
@@ -16,6 +17,12 @@ import { campCharacter, campParty, restoreCampWorld } from "../fakes/camp.js";
 afterEach(restoreCampWorld);
 
 const campOf = actor => actor.flags[SYSTEM_ID].camp;
+
+/**
+ * The writes that paid a share, as opposed to the claim written first that says whose client is
+ * paying it (camp-store.js#payShare).
+ */
+const payments = actor => actor.update.mock.calls.filter(([, options]) => options?.stonetopMove === "Make Camp");
 
 /** Aeliana hosting, Bram sitting with her, and Aeliana paying for both of them. */
 async function readyToSettle(options = {}) {
@@ -157,6 +164,40 @@ describe("finding camps and who is at them", () => {
 		expect(campOf(aeliana).hunger).toBe(0);
 	});
 
+	// Send them away removes the camp record whole; bringing them back must not re-roll the bill.
+	it("keeps a Ravenous Thrall's roll when they are sent away and brought back to the same fire", async () => {
+		const { aeliana, bram, toMessage, act } = campParty({ rolled: 3, bram: { pastDeath: "thrall", thrallMarks: ["ravenous"] } });
+		const camp = await hostCamp(aeliana);
+		await joinCamp(bram, camp);
+		act("gm");
+		await sendAwayFromCamp(bram, camp);
+		expect(campOf(bram)).toBeUndefined();
+		await joinCamp(bram, camp);
+		expect(toMessage).toHaveBeenCalledTimes(1);
+		expect(campOf(bram).hunger).toBe(3);
+		// Another fire is another meal, and rolls again.
+		await joinCamp(bram, await hostCamp(aeliana));
+		expect(toMessage).toHaveBeenCalledTimes(2);
+	});
+
+	// openedAt and the cold check used each machine's own clock, and a clock hours off read a camp
+	// opened a minute ago as left cold.
+	it("ages a camp on the server's clock, whatever this machine's clock says", async () => {
+		const { aeliana } = campParty();
+		game.time = { serverTime: 5_000_000 };
+		const camp = await hostCamp(aeliana);
+		expect(campOf(aeliana).openedAt).toBe(5_000_000);
+		const clock = vi.spyOn(Date, "now").mockReturnValue(5_000_000 + CAMP_STALE_MS + 60_000);
+		try {
+			expect(stateOfCamp(camp)).toBe(CAMP_STATE.OPEN);
+			expect(openCamps()).toHaveLength(1);
+		} finally {
+			clock.mockRestore();
+		}
+		game.time.serverTime = 5_000_000 + CAMP_STALE_MS + 1;
+		expect(stateOfCamp(camp)).toBe(CAMP_STATE.COLD);
+	});
+
 	// A debility cleared by Recover while the camp sits open must not stay on offer.
 	it("reads which debilities are marked live, and names them from the sheet", async () => {
 		const { aeliana } = campParty();
@@ -270,9 +311,24 @@ describe("sending someone away", () => {
 describe("breaking the camp up", () => {
 	it("closes the camp on its host, and spends nothing anyone shared", async () => {
 		const { aeliana } = await readyToSettle();
-		await breakCamp(aeliana);
+		expect(await breakCamp(aeliana)).toBe(true);
 		expect(campOf(aeliana).status).toBe(CAMP_STATUS.CANCELLED);
 		expect(aeliana.flags[SYSTEM_ID].inventory.resources.supplies).toBe(4);
+	});
+
+	// Break up waits on a confirm, and somebody else can settle the camp while it is up.
+	it("will not break up a camp settled while its confirm was up, and a Break up landing anyway keeps the meal", async () => {
+		const { aeliana, bram, camp, act } = await readyToSettle();
+		await settleCamp(camp);
+		expect(await breakCamp(aeliana)).toBe(false);
+		expect(campOf(aeliana).status).toBe(CAMP_STATUS.SETTLED);
+		// Crossing on the wire, the cancel lands on top of the plan all the same.
+		aeliana.flags[SYSTEM_ID].camp.status = CAMP_STATUS.CANCELLED;
+		expect(stateOfCamp(camp)).toBe(CAMP_STATE.SETTLED);
+		act("player-2");
+		await applyCampShares(aeliana);
+		expect(campOf(bram).applied).toBe(true);
+		expect(bram.system.attributes.hp.value).toBe(12);
 	});
 });
 
@@ -289,6 +345,19 @@ describe("settling the camp", () => {
 		expect(await settleCamp(camp)).toEqual({ ok: false, reason: SETTLE_REFUSAL.NOT_YOURS });
 		act("gm");
 		expect((await settleCamp(camp)).ok).toBe(true);
+	});
+
+	// A table that shares every sheet makes every player an owner of every character.
+	it("is not for another player who merely owns the host too", async () => {
+		const { aeliana, camp, act } = await readyToSettle({ aeliana: { owners: ["player-1", "player-2"] } });
+		act("player-2");
+		expect(managesCamp(aeliana)).toBe(false);
+		expect(await settleCamp(camp)).toEqual({ ok: false, reason: SETTLE_REFUSAL.NOT_YOURS });
+		expect(campOf(aeliana).status).toBe(CAMP_STATUS.OPEN);
+		act("player-1");
+		expect(managesCamp(aeliana)).toBe(true);
+		act("gm");
+		expect(managesCamp(aeliana)).toBe(true);
 	});
 
 	it("waits while anyone eating has no food, and writes nothing", async () => {
@@ -313,6 +382,38 @@ describe("settling the camp", () => {
 		// Nothing is said about a plan before it exists.
 		expect(aeliana.update.mock.invocationCallOrder[0]).toBeLessThan(toMessage.mock.invocationCallOrder[0]);
 		expect(toMessage.mock.invocationCallOrder[0]).toBeLessThan(ChatMessage.create.mock.invocationCallOrder[0]);
+	});
+
+	// CAMP-5. A Book II treasure is a write-in on the sheet, not an outfit row, so it is found among
+	// every gear store (StonetopCharacter#_gearSources) by name, and only when its ◇ is marked.
+	it("sits a character down with the fur-lined bedroll they carry, as a bedroll", async () => {
+		const { aeliana, bram } = campParty({
+			aeliana: { gear: [{ name: "A fur-lined bedroll", carried: true }] },
+			bram:    { gear: [{ name: "A fur-lined bedroll", carried: false }] },
+		});
+		const camp = await hostCamp(aeliana);
+		await joinCamp(bram, camp);
+		expect(campOf(aeliana)).toMatchObject({ bedroll: true, vitals: { bedroll: true, furBedroll: true } });
+		expect(campOf(bram)).toMatchObject({ bedroll: false, vitals: { bedroll: false, furBedroll: false } });
+		// The sheet's numbers and the gear come from one pass of the model, not one each.
+		expect(aeliana.typedActor.snapshotWithGear).toHaveBeenCalledTimes(1);
+	});
+
+	it("rolls one 1d6 for the fur-lined bedroll beside a plain one, and holds its advantage once paid", async () => {
+		const { aeliana, camp, toMessage } = await readyToSettle({ aeliana: {
+			outfit: [{ slug: "bedroll", checked: true }],
+			gear:   [{ name: "A fur-lined bedroll", carried: true }],
+		} });
+		expect((await settleCamp(camp)).ok).toBe(true);
+		const plan = campOf(aeliana).plan;
+		expect(plan.map(entry => [entry.actorId, planExtra(entry, CAMP_EXTRA.BEDROLL), entry.furBedroll])).toEqual([["aeliana", 3, true], ["bram", 0, false]]);
+		expect(toMessage).toHaveBeenCalledTimes(1);
+		await applyCampShares(aeliana);
+		expect(aeliana.flags[SYSTEM_ID].heldAdvantage).toEqual({ sources: ["A fur-lined bedroll"] });
+		// Paid once: a second pass over the same camp lays nothing more.
+		aeliana.update.mockClear();
+		await applyCampShares(aeliana);
+		expect(payments(aeliana)).toHaveLength(0);
 	});
 
 	// The Judge's Break Bread: one meal, so one 1d8 for each person eating, however many hold it.
@@ -408,7 +509,7 @@ describe("paying the shares", () => {
 	it("pays the shares this client was elected for, and only those", async () => {
 		const { aeliana, bram } = await settled();
 		await applyCampShares(aeliana);
-		expect(aeliana.update).toHaveBeenCalledTimes(1);
+		expect(payments(aeliana)).toHaveLength(1);
 		expect(aeliana.update).toHaveBeenCalledWith(expect.any(Object), { stonetopMove: "Make Camp" });
 		expect(aeliana.flags[SYSTEM_ID].inventory.resources.supplies).toBe(2);
 		expect(aeliana.system.attributes.hp.value).toBe(12);
@@ -420,7 +521,7 @@ describe("paying the shares", () => {
 	it("lays held disadvantage on everyone with a Quicksilver Dreams Thrall, and not on the Thrall", async () => {
 		const { aeliana, bram, act } = await settled({ bram: { pastDeath: "thrall", thrallMarks: ["quicksilver-dreams"] } });
 		await applyCampShares(aeliana);
-		expect(aeliana.flags[SYSTEM_ID].heldDisadvantage).toEqual({ source: "Nightmares (Quicksilver Dreams)" });
+		expect(aeliana.flags[SYSTEM_ID].heldDisadvantage).toEqual({ sources: ["Nightmares (Quicksilver Dreams)"] });
 		act("player-2");
 		await applyCampShares(aeliana);
 		expect(bram.flags[SYSTEM_ID].heldDisadvantage).toBeUndefined();
@@ -431,7 +532,7 @@ describe("paying the shares", () => {
 		const { aeliana, bram, act } = await settled();
 		act("player-2");
 		await applyCampShares(aeliana);
-		expect(bram.update).toHaveBeenCalledTimes(1);
+		expect(payments(bram)).toHaveLength(1);
 		expect(bram.system.attributes.hp.value).toBe(12);
 		expect(aeliana.update).not.toHaveBeenCalled();
 	});
@@ -440,7 +541,7 @@ describe("paying the shares", () => {
 		const { aeliana, bram, act } = await settled({ bramOnline: false });
 		act("gm");
 		await applyCampShares(aeliana);
-		expect(bram.update).toHaveBeenCalledTimes(1);
+		expect(payments(bram)).toHaveLength(1);
 		expect(aeliana.update).not.toHaveBeenCalled();
 	});
 
@@ -449,7 +550,57 @@ describe("paying the shares", () => {
 		const { aeliana } = await settled();
 		await Promise.all([applyCampShares(aeliana), applyCampShares(aeliana)]);
 		await applyCampShares(aeliana);
-		expect(aeliana.update).toHaveBeenCalledTimes(1);
+		expect(payments(aeliana)).toHaveLength(1);
+	});
+
+	// Two clients can each think the election is theirs for a moment: a player connecting just as the
+	// camp settles, before the GM's client has heard they are back.
+	it("claims a share with this user's id first, and leaves one another logged-in client has claimed", async () => {
+		const { aeliana, bram, act } = await settled({ bramOnline: false });
+		act("gm");
+		bram.flags[SYSTEM_ID].camp.paidBy = "player-1";
+		await applyCampShares(aeliana);
+		expect(bram.update).not.toHaveBeenCalled();
+		// A claim by somebody who has since logged off is no claim.
+		game.users.contents.find(u => u.id === "player-1").active = false;
+		await applyCampShares(aeliana);
+		expect(bram.update.mock.calls[0][0]).toEqual({ [`flags.${SYSTEM_ID}.camp.paidBy`]: "gm" });
+		expect(campOf(bram)).toMatchObject({ applied: true, paidBy: "gm" });
+		expect(payments(bram)).toHaveLength(1);
+	});
+
+	it("pays nothing when another client's claim has replaced this one's by the time it would pay", async () => {
+		const { aeliana, bram, act } = await settled({ bramOnline: false });
+		act("gm");
+		const write = bram.update.getMockImplementation();
+		bram.update.mockImplementationOnce(async (update, options) => {
+			await write(update, options);
+			bram.flags[SYSTEM_ID].camp.paidBy = "player-1";
+		});
+		await applyCampShares(aeliana);
+		expect(payments(bram)).toHaveLength(0);
+		expect(campOf(bram).applied).toBe(false);
+		expect(bram.system.attributes.hp.value).toBe(4);
+	});
+
+	// The share lands as absolute numbers, so what the pack and the HP were before the followers were
+	// read must not be what is written: a blow or a find in between would be undone.
+	it("reads the pack and the HP after reading the followers, right before it writes", async () => {
+		const party = campParty({ aeliana: { followers: { hound: { party: true, hpMax: 6, hpCurrent: 6 } } } });
+		const { aeliana, bram } = party;
+		const camp = await hostCamp(aeliana);
+		await joinCamp(bram, camp);
+		await setCampChoices(aeliana, { "offer.supplies": 3 });
+		await settleCamp(camp);
+		aeliana.typedActor.playbook = async () => {
+			// While the followers are read: a blow lands, and somebody finds two more uses of supplies.
+			aeliana.system.attributes.hp.value = 2;
+			aeliana.flags[SYSTEM_ID].inventory.resources.supplies = 6;
+			throw new Error("no playbook to read");
+		};
+		await applyCampShares(aeliana);
+		expect(aeliana.system.attributes.hp.value).toBe(10);
+		expect(aeliana.flags[SYSTEM_ID].inventory.resources.supplies).toBe(3);
 	});
 
 	it("does not pay a character who has since sat down at another camp", async () => {
@@ -472,7 +623,7 @@ describe("the world's watch on camps", () => {
 	it("pays this client's shares when a host's camp is settled", async () => {
 		const { aeliana } = await settled();
 		onUpdateActorCamp(aeliana, { flags: { [SYSTEM_ID]: { camp: { status: CAMP_STATUS.SETTLED } } } });
-		await vi.waitFor(() => expect(aeliana.update).toHaveBeenCalledTimes(1));
+		await vi.waitFor(() => expect(payments(aeliana)).toHaveLength(1));
 	});
 
 	it("redraws the camp cards in the log when a camp changes state", async () => {
@@ -504,6 +655,26 @@ describe("the world's watch on camps", () => {
 		onUpdateActorCamp(bram, { flags: { [SYSTEM_ID]: { "-=camp": null } } });
 		onUpdateActorCamp(bram, { flags: { [SYSTEM_ID]: { camp: new foundry.data.operators.ForcedDeletion() } } });
 		expect(ui.chat.updateMessage).toHaveBeenCalledTimes(3);
+	});
+
+	// No updateActor says a character was deleted, so the cards of the camp they hosted stayed open.
+	it("redraws the camp cards when a seated character is deleted, and not for one at no camp", async () => {
+		const handlers = {};
+		const setupHooks = globalThis.Hooks;
+		globalThis.Hooks = { on: (name, fn) => { handlers[name] = fn; }, once: () => {} };
+		try {
+			registerCampHooks();
+			expect(handlers.deleteActor).toBe(onDeleteActorCamp);
+		} finally {
+			globalThis.Hooks = setupHooks;
+		}
+		const card = { getFlag: (scope, key) => (key === "campJoin" ? { campId: "camp-x", hostId: "aeliana" } : undefined) };
+		const { aeliana, bram } = campParty({ messages: [card] });
+		onDeleteActorCamp(bram);
+		expect(ui.chat.updateMessage).not.toHaveBeenCalled();
+		await hostCamp(aeliana);
+		onDeleteActorCamp(aeliana);
+		expect(ui.chat.updateMessage).toHaveBeenCalledWith(card);
 	});
 
 	it("leaves the cards alone for a choice made at the fire", async () => {
@@ -558,6 +729,39 @@ describe("one client settles a camp", () => {
 		await new Promise(resolve => setTimeout(resolve, 0));
 		expect(campOf(aeliana).status).toBe(CAMP_STATUS.OPEN);
 		expect(ChatMessage.create).not.toHaveBeenCalled();
+	});
+
+	// With the host's player away, the election can fall to another player who owns the host but does
+	// not play it; that client settles the GM's request all the same.
+	it("is settled from a GM's request by the elected client, though its player does not play the host", async () => {
+		const { aeliana, camp, act } = await readyToSettle({ aeliana: { owners: ["player-1", "player-2"] } });
+		game.users.contents.find(u => u.id === "player-1").active = false;
+		act("gm");
+		expect(await settleCamp(camp)).toEqual({ ok: true, plan: null });
+		act("player-2");
+		onUpdateActorCamp(aeliana, { flags: { [SYSTEM_ID]: { camp: { settleAsk: campOf(aeliana).settleAsk } } } });
+		await vi.waitFor(() => expect(campOf(aeliana).status).toBe(CAMP_STATUS.SETTLED));
+	});
+
+	it("tells the client that asked, and only that one, why the settling client could not settle", async () => {
+		const { aeliana, camp, act } = await readyToSettle();
+		act("gm");
+		await settleCamp(camp);
+		const ask = campOf(aeliana).settleAsk;
+		// Before the host's player hears the request, the meal has come up short.
+		campOf(aeliana).offer.supplies = 1;
+		act("player-1");
+		onUpdateActorCamp(aeliana, { flags: { [SYSTEM_ID]: { camp: { settleAsk: ask } } } });
+		await vi.waitFor(() => expect(campOf(aeliana).settleRefused).toEqual({ ask, reason: SETTLE_REFUSAL.SHORT }));
+		expect(campOf(aeliana).status).toBe(CAMP_STATUS.OPEN);
+		expect(ui.notifications.warn).not.toHaveBeenCalled();
+		// The GM's client hears the answer, once.
+		act("gm");
+		const answer = { flags: { [SYSTEM_ID]: { camp: { settleRefused: campOf(aeliana).settleRefused } } } };
+		onUpdateActorCamp(aeliana, answer);
+		onUpdateActorCamp(aeliana, answer);
+		expect(ui.notifications.warn).toHaveBeenCalledTimes(1);
+		expect(ui.notifications.warn).toHaveBeenCalledWith(settleRefusalText(SETTLE_REFUSAL.SHORT));
 	});
 
 	it("settles once when pressed twice at once", async () => {

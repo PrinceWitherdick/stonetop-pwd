@@ -138,6 +138,6 @@ describe("where they stand", () => {
 		expect(rule).toMatch(/opacity:/);
 		expect(rule).not.toMatch(/pointer-events/);
 		expect(read("templates/actor/partials/stat-block.hbs"))
-			.toContain("stonetop-debilities{{#if stonetop.battleJoy.raging}} is-ignored{{/if}}");
+			.toContain("stonetop-debilities{{#if stonetop.battleJoy.debilitiesIgnored}} is-ignored{{/if}}");
 	});
 });

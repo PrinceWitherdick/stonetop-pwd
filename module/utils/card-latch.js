@@ -43,6 +43,35 @@ export async function withCardLatch(message, flag, value, buttons, work) {
 }
 
 /**
+ * withCardLatch for work whose stamp is known only once it is done (a steading card's button, which
+ * records what was rolled or which button was pressed). The card is latched with `true` FIRST, so a
+ * client that could do the work but not write the card never does it twice; then `work()` runs and
+ * answers `{stamp, notice, abort}`. `abort` gives the card back. A `stamp` other than `true` replaces
+ * the provisional one; if that second write fails the card stays latched with `true` (the work is
+ * done), and a reader of the flag has to cope with `true` anyway, for a render in between.
+ *
+ * @param {ChatMessage} message
+ * @param {string} flag
+ * @param {Iterable<HTMLButtonElement>} buttons
+ * @param {() => Promise<{stamp?: *, notice?: string, abort?: boolean}|void>} work
+ * @returns {Promise<{stamp: *, notice?: string}|null>}  what the work answered, or null when it aborted
+ */
+export async function withLateStampLatch(message, flag, buttons, work) {
+	let done = null;
+	await withCardLatch(message, flag, true, buttons, async () => {
+		const { stamp = true, notice, abort = false } = await work() ?? {};
+		if (abort) return false;
+		done = { stamp, notice };
+		if (stamp !== true) {
+			await message.setFlag(SYSTEM_ID, flag, stamp)
+				.catch(err => console.warn(`Stonetop | could not record the ${flag} stamp; the card stays latched`, err));
+		}
+		return true;
+	});
+	return done;
+}
+
+/**
  * Wire a card's once-only buttons (stonetop.js renderChatMessageHTML): the `selector` buttons of THIS
  * message show as chosen once `flag` is set, are disabled for a client that cannot rewrite the card,
  * and otherwise run `act(actor, btn, buttons)` on click (which latches through withCardLatch). Safe

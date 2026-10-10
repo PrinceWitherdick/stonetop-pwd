@@ -24,8 +24,8 @@ export const MOVE_ROLL_OPTIONS = [
 	// Never at a Loss defers a Know Things miss's XP to a choice on the card.
 	{ matches: isKnowThings, build: knowThingsRollOptions },
 	// Battle Joy's ending roll: "on a 6-, mark a debility but don't mark XP", with the 10+'s 1d4 HP and
-	// the 6-'s debility as buttons (combat/battle-joy-offer.js).
-	{ matches: named(BATTLE_JOY), build: actor => battleJoyRollOptions(actor.typedActor?.debilityChoices ?? []) },
+	// the 6-'s debility as buttons (combat/battle-joy-offer.js), Auspicious Birth's circle among them when taken.
+	{ matches: named(BATTLE_JOY), build: actor => battleJoyRollOptions(actor.typedActor?.debilityMarkChoices ?? []) },
 	// "You may Invoke the Sun God right now as if you rolled a 10+" (invoke-consequences.js#wireWielderInvoke).
 	{ matches: named(WIELDER_OF_THE_WHITE_FLAME), build: wielderRollOptions },
 	// Every tier asks who heard the speech (inspiration-flow.js#wireSpeechCard).

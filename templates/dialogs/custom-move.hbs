@@ -38,31 +38,36 @@
 			{{!-- The move: name + what it does --}}
 			<section class="stonetop-custom-move-section" data-tab="move"{{#unless (eq activeTab "move")}} hidden{{/unless}}>
 				<div class="stonetop-custom-move-field">
-					<label for="stonetop-custom-move-name">{{localize "stonetop.character.moves.custom.nameLabel"}}</label>
-					<input type="text" id="stonetop-custom-move-name" name="name" value="{{name}}"
+					<label for="stonetop-custom-move-name-{{uid}}">{{localize "stonetop.character.moves.custom.nameLabel"}}</label>
+					<input type="text" id="stonetop-custom-move-name-{{uid}}" name="name" value="{{name}}"
 					       placeholder="{{localize 'stonetop.character.moves.custom.namePlaceholder'}}" required>
 				</div>
 
 				<div class="stonetop-custom-move-field">
-					<label for="stonetop-custom-move-desc">{{localize "stonetop.character.moves.custom.descriptionLabel"}}</label>
-					<textarea id="stonetop-custom-move-desc" name="description" rows="7"
+					<label for="stonetop-custom-move-desc-{{uid}}">{{localize "stonetop.character.moves.custom.descriptionLabel"}}</label>
+					<textarea id="stonetop-custom-move-desc-{{uid}}" name="description" rows="7"
 					          placeholder="{{localize 'stonetop.character.moves.custom.descriptionPlaceholder'}}">{{description}}</textarea>
 					<p class="stonetop-custom-move-hint">{{localize "stonetop.character.moves.custom.descriptionHint"}}</p>
 				</div>
 
 				<div class="stonetop-custom-move-field">
-					<label for="stonetop-custom-move-requires">{{localize "stonetop.character.moves.custom.requiresLabel"}}</label>
-					<input type="text" id="stonetop-custom-move-requires" name="requires" value="{{requires}}"
+					<label for="stonetop-custom-move-requires-{{uid}}">{{localize "stonetop.character.moves.custom.requiresLabel"}}</label>
+					<input type="text" id="stonetop-custom-move-requires-{{uid}}" name="requires" value="{{requires}}"
 					       placeholder="{{localize 'stonetop.character.moves.custom.requiresPlaceholder'}}">
 					<p class="stonetop-custom-move-hint">{{localize "stonetop.character.moves.custom.requiresHint"}}</p>
 				</div>
+				{{!-- A world move is copied onto a sheet when dropped there; an edit here never reaches
+				      a copy already handed out. --}}
+				{{#if worldMove}}
+				<p class="stonetop-custom-move-hint stonetop-custom-move-world-copies">{{localize "stonetop.character.moves.custom.worldCopiesHint"}}</p>
+				{{/if}}
 			</section>
 
 			{{!-- Dice roll: which stat, plus the 10+/7-9/6- result text when it rolls --}}
 			<section class="stonetop-custom-move-section" data-tab="roll"{{#unless (eq activeTab "roll")}} hidden{{/unless}}>
 				<div class="stonetop-custom-move-field">
-					<label for="stonetop-custom-move-roll">{{localize "stonetop.character.moves.custom.rollLabel"}}</label>
-					<select id="stonetop-custom-move-roll" name="rollType">
+					<label for="stonetop-custom-move-roll-{{uid}}">{{localize "stonetop.character.moves.custom.rollLabel"}}</label>
+					<select id="stonetop-custom-move-roll-{{uid}}" name="rollType">
 						{{#each rollOptions}}
 						<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
 						{{/each}}
@@ -73,16 +78,16 @@
 				<div class="stonetop-custom-move-results{{#unless hasRoll}} is-hidden{{/unless}}">
 					<h4 class="stonetop-custom-move-results-title">{{localize "stonetop.character.moves.custom.resultsTitle"}}</h4>
 					<div class="stonetop-custom-move-field">
-						<label for="stonetop-custom-move-success">{{localize "stonetop.character.moves.custom.success"}}</label>
-						<textarea id="stonetop-custom-move-success" name="success" rows="2">{{results.success}}</textarea>
+						<label for="stonetop-custom-move-success-{{uid}}">{{localize "stonetop.character.moves.custom.success"}}</label>
+						<textarea id="stonetop-custom-move-success-{{uid}}" name="success" rows="2">{{results.success}}</textarea>
 					</div>
 					<div class="stonetop-custom-move-field">
-						<label for="stonetop-custom-move-partial">{{localize "stonetop.character.moves.custom.partial"}}</label>
-						<textarea id="stonetop-custom-move-partial" name="partial" rows="2">{{results.partial}}</textarea>
+						<label for="stonetop-custom-move-partial-{{uid}}">{{localize "stonetop.character.moves.custom.partial"}}</label>
+						<textarea id="stonetop-custom-move-partial-{{uid}}" name="partial" rows="2">{{results.partial}}</textarea>
 					</div>
 					<div class="stonetop-custom-move-field">
-						<label for="stonetop-custom-move-failure">{{localize "stonetop.character.moves.custom.failure"}}</label>
-						<textarea id="stonetop-custom-move-failure" name="failure" rows="2">{{results.failure}}</textarea>
+						<label for="stonetop-custom-move-failure-{{uid}}">{{localize "stonetop.character.moves.custom.failure"}}</label>
+						<textarea id="stonetop-custom-move-failure-{{uid}}" name="failure" rows="2">{{results.failure}}</textarea>
 					</div>
 				</div>
 			</section>
@@ -92,17 +97,17 @@
 				<p class="stonetop-custom-move-hint">{{localize "stonetop.character.moves.custom.resourceHint"}}</p>
 				<div class="stonetop-custom-move-row">
 					<div class="stonetop-custom-move-field">
-						<label for="stonetop-custom-move-res-title">{{localize "stonetop.character.moves.custom.resourceName"}}</label>
-						<input type="text" id="stonetop-custom-move-res-title" name="resourceTitle" value="{{resource.title}}" placeholder="{{localize 'stonetop.character.moves.custom.resourceNamePlaceholder'}}">
+						<label for="stonetop-custom-move-res-title-{{uid}}">{{localize "stonetop.character.moves.custom.resourceName"}}</label>
+						<input type="text" id="stonetop-custom-move-res-title-{{uid}}" name="resourceTitle" value="{{resource.title}}" placeholder="{{localize 'stonetop.character.moves.custom.resourceNamePlaceholder'}}">
 					</div>
 					<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
-						<label for="stonetop-custom-move-res-max">{{localize "stonetop.character.moves.custom.resourceMax"}}</label>
-						<input type="number" id="stonetop-custom-move-res-max" name="resourceMax" min="0" max="20" value="{{resource.max}}">
+						<label for="stonetop-custom-move-res-max-{{uid}}">{{localize "stonetop.character.moves.custom.resourceMax"}}</label>
+						<input type="number" id="stonetop-custom-move-res-max-{{uid}}" name="resourceMax" min="0" max="20" value="{{resource.max}}">
 					</div>
 				</div>
 				<div class="stonetop-custom-move-field">
-					<label for="stonetop-custom-move-res-labels">{{localize "stonetop.character.moves.custom.resourceLabels"}}</label>
-					<input type="text" id="stonetop-custom-move-res-labels" name="resourceLabels" value="{{resource.labels}}" placeholder="{{localize 'stonetop.character.moves.custom.resourceLabelsPlaceholder'}}">
+					<label for="stonetop-custom-move-res-labels-{{uid}}">{{localize "stonetop.character.moves.custom.resourceLabels"}}</label>
+					<input type="text" id="stonetop-custom-move-res-labels-{{uid}}" name="resourceLabels" value="{{resource.labels}}" placeholder="{{localize 'stonetop.character.moves.custom.resourceLabelsPlaceholder'}}">
 				</div>
 			</section>
 
@@ -111,16 +116,16 @@
 				<p class="stonetop-custom-move-hint">{{localize "stonetop.character.moves.custom.bonusesHint"}}</p>
 				<div class="stonetop-custom-move-row">
 					<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
-						<label for="stonetop-custom-move-hp">{{localize "stonetop.character.moves.custom.hpBonus"}}</label>
-						<input type="number" id="stonetop-custom-move-hp" name="hpBonus" min="0" max="99" value="{{bonuses.hp}}">
+						<label for="stonetop-custom-move-hp-{{uid}}">{{localize "stonetop.character.moves.custom.hpBonus"}}</label>
+						<input type="number" id="stonetop-custom-move-hp-{{uid}}" name="hpBonus" min="0" max="99" value="{{bonuses.hp}}">
 					</div>
 					<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
-						<label for="stonetop-custom-move-armor">{{localize "stonetop.character.moves.custom.armorBonus"}}</label>
-						<input type="number" id="stonetop-custom-move-armor" name="armorBonus" min="0" max="99" value="{{bonuses.armor}}">
+						<label for="stonetop-custom-move-armor-{{uid}}">{{localize "stonetop.character.moves.custom.armorBonus"}}</label>
+						<input type="number" id="stonetop-custom-move-armor-{{uid}}" name="armorBonus" min="0" max="99" value="{{bonuses.armor}}">
 					</div>
 					<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
-						<label for="stonetop-custom-move-load">{{localize "stonetop.character.moves.custom.loadBonus"}}</label>
-						<input type="number" id="stonetop-custom-move-load" name="loadBonus" min="0" max="99" value="{{bonuses.load}}">
+						<label for="stonetop-custom-move-load-{{uid}}">{{localize "stonetop.character.moves.custom.loadBonus"}}</label>
+						<input type="number" id="stonetop-custom-move-load-{{uid}}" name="loadBonus" min="0" max="99" value="{{bonuses.load}}">
 					</div>
 				</div>
 

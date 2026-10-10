@@ -11,8 +11,8 @@ import { X_PIERCING_MAX, resolvePiercing } from "../../module/utils/damage.js";
 const SAVED = globalThis.game;
 afterEach(() => { globalThis.game = SAVED; });
 
-function withProsperity(value) {
-	const steading = { type: "stonetop", system: { attributes: { prosperity: { value } } }, flags: {} };
+function withProsperity(value, { lacking = false } = {}) {
+	const steading = { type: "stonetop", system: { attributes: { prosperity: { value }, debilities: { options: { lacking: { value: lacking } } } } }, flags: {} };
 	globalThis.game = { ...SAVED, actors: { find: fn => [steading].find(fn), get: () => null, filter: fn => [steading].filter(fn), contents: [steading] } };
 }
 
@@ -43,6 +43,15 @@ describe("how much x piercing comes to", () => {
 		withProsperity(3);
 		expect(resolvePiercing("prosperity")).toBe(2);
 		withProsperity(-1);
+		expect(resolvePiercing("prosperity")).toBe(0);
+	});
+
+	// Lacking: "Treat Prosperity as if it's 1 lower than it is" (Book I p.513), at damage time
+	// exactly as on the sheet's "1 piercing" caption.
+	it("counts a Lacking steading's Prosperity as 1 lower", () => {
+		withProsperity(2, { lacking: true });
+		expect(resolvePiercing("prosperity")).toBe(1);
+		withProsperity(1, { lacking: true });
 		expect(resolvePiercing("prosperity")).toBe(0);
 	});
 });

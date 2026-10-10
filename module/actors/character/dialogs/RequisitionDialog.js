@@ -1,5 +1,8 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
-import { rollStat, sign } from "../../../utils/roll-engine.js";
+import { rollStat, sign, messageOfRoll } from "../../../utils/roll-engine.js";
+import { askWithButtons } from "../../../utils/ask-with-buttons.js";
+import { cardCountedTier } from "../../../utils/counted-tier.js";
+import { REQUISITION_MISS_COST_FLAG, payRequisitionMissCost, requisitionMissCostAction } from "../../steading/steading-card-actions.js";
 import { StonetopSteading, HERD_ASSET_BEAST, HERD_ASSET_NAME, isHerdAsset } from "../../steading/StonetopSteading.js";
 import { askHorsesFromHerd, herdHorsesLabel } from "../../steading/herd-requisition.js";
 import { assetLabel, beastFollowerForAsset, followerInputFromBeast } from "../../../data/beasts.js";
@@ -8,6 +11,7 @@ import { bringDialogToFront } from "../../../utils/front-on-open.js";
 import { escHtml, joinNames } from "../../../utils/strings.js";
 import { CUSTOM_ASSET_VALUE, assetTakenLabel, wireCustomAssetSelect } from "../../../utils/requisition-asset.js";
 import { SYSTEM_ID } from "../../../system-id.js";
+import { withCardLatch } from "../../../utils/card-latch.js";
 import { promptRoll } from "../../../dialogs/RollDialog.js";
 import { STEADING_MOVE, improvementQuestions } from "../../steading/improvement-rolls.js";
 import { settleSteadingRoll } from "../../steading/steading-roll.js";
@@ -106,7 +110,8 @@ export class RequisitionDialog extends StonetopDialog {
 				canSpend: !!this._steadingActor.isOwner,
 			});
 			await terms.spend();
-			await rollStat("fortunes", this._steadingActor, {
+			const answers = this._rollAnswers(root);
+			const roll = await rollStat("fortunes", this._steadingActor, {
 				...(terms.missAsPartial ? { missCountsAsPartial: terms.missAsPartial } : {}),
 				...(terms.conditionNotes.length ? { conditionNotes: terms.conditionNotes } : {}),
 				moveName: "Requisition",
@@ -115,7 +120,13 @@ export class RequisitionDialog extends StonetopDialog {
 				// The steading rolls carry no forward/ongoing, so the prompt's one-off IS the
 				// whole modifier here — the engine reads it back out as the Situational pill.
 				modifier: prompted.situational,
+				// "On a 6-, don't mark XP--you can take the asset with you, but if you do, reduce
+				// Fortunes by 1" (p.308): the cost on the card, for whoever can write the steading.
+				tierActions: { failure: requisitionMissCostAction() },
 			});
+			// What the Take below reads: the card (its tier read live, so a GM's Shift counts) and the
+			// herd count the roll was made for.
+			this._lastRoll = { message: messageOfRoll(roll), herdCount: answers.herdCount };
 		});
 
 		takeButton?.addEventListener("click", async () => {
@@ -127,50 +138,87 @@ export class RequisitionDialog extends StonetopDialog {
 			}
 			takeButton.disabled = true;
 
-			// The herd is not lent out whole: so many horses leave it (askHorsesFromHerd).
-			if (choice.asset && isHerdAsset(choice.asset)) {
-				try {
-					await this._takeFromHerd(root);
-				} finally {
-					takeButton.disabled = false;
-				}
-				return;
-			}
-
+			// Taken on a 6-: asked first, paid only once something was actually taken. A horse count
+			// closed, or an asset another window took meanwhile, costs nothing.
+			let taken = false;
 			try {
-				await this._character.addCustomInventoryItem(choice.name, 1);
+				taken = await this._payMissOnTake(choice.name, {
+					// The herd is not lent out whole: so many horses leave it (askHorsesFromHerd).
+					take: () => (choice.asset && isHerdAsset(choice.asset)) ? this._takeFromHerd(root) : this._takeAsset(choice),
+				});
 			} catch (err) {
-				// Re-enable the button (there's no re-render on this path) so a transient
-				// document-write failure doesn't strand the dialog until it's reopened.
-				console.warn("Stonetop | Could not add requisitioned asset to items:", err);
-				ui.notifications.warn(`Could not add ${choice.name} to your items.`);
-				takeButton.disabled = false;
-				return;
+				// The take or its 6- payment threw. A payment that throws takes the card's latch back,
+				// so the card's own button can still charge it.
+				console.warn("Stonetop | Could not finish the Requisition take:", err);
+				ui.notifications.warn(`Could not finish taking ${choice.name}. If it was taken on a 6-, the GM can still pay the cost from the roll card's "Take it on a miss" button.`);
+				this.render(false);
 			}
-			this._maybeOfferAsFollower(choice.asset ?? choice.name);
-
-			if (Number.isInteger(choice.index)) {
-				try {
-					await this._steading.setAssetTaken(choice.index, {
-						name: this._characterActor.name,
-						id: this._characterActor.id,
-					});
-					ui.notifications.info(`${choice.name} requisitioned from ${this._steadingActor.name}.`);
-				} catch (err) {
-					console.warn("Stonetop | Could not mark asset taken on steading:", err);
-					ui.notifications.warn(
-						`${choice.name} added to your items, but you lack permission to update ${this._steadingActor.name}'s assets.`
-					);
-				}
-			} else {
-				ui.notifications.info(`${choice.name} added to your items.`);
-			}
-
-			this._onChange?.();
-			this.render(false);
+			// A take re-renders the window; one that took nothing leaves this button to try again.
+			if (!taken) takeButton.disabled = false;
 		});
 
 		root.querySelector(".stonetop-requisition-close")?.addEventListener("click", () => this.close());
+	}
+
+	/**
+	 * Take one steading asset (or a typed custom one) into the character's items.
+	 *
+	 * Marked out on the steading FIRST: an asset another window took meanwhile (or a row deleted
+	 * under this one's index) is refused there, and nothing is added. A write the player has no
+	 * permission for still lets them take it, as before, with a warning. An item that then cannot
+	 * be added hands the asset back, so the steading never says it is out with someone who lacks it.
+	 * @returns {Promise<boolean>} whether it was taken
+	 */
+	async _takeAsset(choice) {
+		let denied = false;
+		let marked = false;
+		if (Number.isInteger(choice.index)) {
+			try {
+				marked = await this._steading.setAssetTaken(choice.index, {
+					name: this._characterActor.name,
+					id: this._characterActor.id,
+				}, { name: choice.name });
+			} catch (err) {
+				console.warn("Stonetop | Could not mark asset taken on steading:", err);
+				denied = true;
+			}
+			if (!denied && marked === false) {
+				ui.notifications.warn(`${choice.name} is no longer on hand at ${this._steadingActor.name}.`);
+				this.render(false);
+				return false;
+			}
+		}
+
+		try {
+			await this._character.addCustomInventoryItem(choice.name, 1);
+		} catch (err) {
+			console.warn("Stonetop | Could not add requisitioned asset to items:", err);
+			ui.notifications.warn(`Could not add ${choice.name} to your items.`);
+			if (marked) {
+				try {
+					await this._steading.returnAsset(choice.index);
+				} catch (returnErr) {
+					console.warn("Stonetop | Could not hand the asset back to the steading:", returnErr);
+				}
+				this.render(false);
+			}
+			return false;
+		}
+		this._maybeOfferAsFollower(choice.asset ?? choice.name);
+
+		if (denied) {
+			ui.notifications.warn(
+				`${choice.name} added to your items, but you lack permission to update ${this._steadingActor.name}'s assets.`
+			);
+		} else if (Number.isInteger(choice.index)) {
+			ui.notifications.info(`${choice.name} requisitioned from ${this._steadingActor.name}.`);
+		} else {
+			ui.notifications.info(`${choice.name} added to your items.`);
+		}
+
+		this._onChange?.();
+		this.render(false);
+		return true;
 	}
 
 	/** The window's questions, as settleSteadingRoll reads them. */
@@ -183,14 +231,72 @@ export class RequisitionDialog extends StonetopDialog {
 	}
 
 	/**
+	 * A Take after this window's roll came up 6- (read off its card, so a GM's Shift counts): "you
+	 * can take the asset with you, but if you do, reduce Fortunes by 1" (p.308). Asked, then stamped
+	 * on the card and paid through Meet with Disaster's floor, so its own button cannot charge it
+	 * again. A player who cannot write the steading takes it all the same and is told the card's
+	 * button is how the GM pays it. Nothing to ask with no roll, a hit, or a cost already paid.
+	 *
+	 * Asked BEFORE `take` runs, paid only AFTER it reports something taken: a horse count closed,
+	 * or an asset another window took meanwhile, costs nothing.
+	 * @param {string} name
+	 * @param {{ask?: Function, take?: () => Promise<boolean>}} [opts]
+	 * @returns {Promise<boolean>} whether anything was taken
+	 */
+	async _payMissOnTake(name, { ask = askWithButtons, take = async () => true } = {}) {
+		const card = this._lastRoll?.message ?? null;
+		if (!card) return take();
+		if (cardCountedTier(card, card.rolls?.at?.(0)?.total, SYSTEM_ID) !== "failure") return take();
+		if (card.getFlag?.(SYSTEM_ID, REQUISITION_MISS_COST_FLAG)) return take();
+		const answer = await ask({
+			title: "Taken on a miss",
+			content: `<p>The Requisition was a 6-. You can take <strong>${escHtml(name)}</strong> with you, but if you do, reduce Fortunes by 1.</p>`,
+			buttons: [
+				{ key: "take", label: "Take it: reduce Fortunes by 1", icon: "fa-arrow-down", value: "take" },
+				{ key: "leave", label: "Leave it", icon: "fa-xmark", value: null },
+			],
+		});
+		if (answer !== "take") return false;
+		if (!(await take())) return false;
+		if (!this._steadingActor.isOwner) {
+			ui.notifications.warn(`You can't update ${this._steadingActor.name}'s Fortunes: the GM pays it from the roll card's "Take it on a miss" button.`);
+			return true;
+		}
+		// Latched on the card FIRST (card-latch.js#withCardLatch), so a window that could pay but not write
+		// the card never leaves the card's button to charge it again; a payment that throws takes the latch
+		// back. A card this user cannot write is left to its button, like a steading they cannot write.
+		let paying = false;
+		let notice = "";
+		try {
+			await withCardLatch(card, REQUISITION_MISS_COST_FLAG, true, [], async () => {
+				paying = true;
+				({ notice } = await payRequisitionMissCost(this._steading));
+				return true;
+			});
+		} catch (err) {
+			if (paying) throw err;
+			console.warn("Stonetop | Could not latch the Requisition card's miss cost:", err);
+			ui.notifications.warn(`You can't mark the Requisition card's miss cost paid: the GM pays it from the roll card's "Take it on a miss" button.`);
+			return true;
+		}
+		ui.notifications.info(notice);
+		return true;
+	}
+
+	/**
 	 * Requisition from the Herd of Horses: ask how many, take them out of the tracked herd, and
 	 * make each one a follower (ruling: "Ask, take from herd"). The herd's own row is never marked
 	 * out: the herd stays home. Nothing is written when the answer is none.
+	 *
+	 * Never more than the count this window's roll was made for, when it was made for one: that
+	 * count is what "half the herd or less, treat a 6- as a 7-9" was read against.
 	 * @returns {Promise<boolean>} whether any horses were taken
 	 */
 	async _takeFromHerd(root) {
+		const rolled = Math.trunc(Number(this._lastRoll?.herdCount) || 0);
+		const grown = this._steading.herdRequisitionCap();
 		const count = await askHorsesFromHerd({
-			cap: this._steading.herdRequisitionCap(),
+			cap: rolled > 0 ? Math.min(grown, rolled) : grown,
 			preset: herdCountAnswer(root),
 			who: this._characterActor.name,
 		});

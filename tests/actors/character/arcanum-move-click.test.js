@@ -74,6 +74,12 @@ describe("_arcanumMoveGuide", () => {
 		expect(sheet._arcanumMoveGuide(FIRST_LIGHT).roll).toBe("con");
 	});
 
+	it("carries a 6-'s \"don't mark XP\" to the roll, and nothing for a move without one", () => {
+		const { sheet } = makeSheet();
+		expect(sheet._arcanumMoveGuide({ ...FIRST_LIGHT, noXpOnMiss: true }).noXpOnMiss).toBe(true);
+		expect(sheet._arcanumMoveGuide(FIRST_LIGHT).noXpOnMiss).toBeUndefined();
+	});
+
 	it("withholds the roll from a mystery not yet learned", () => {
 		const { sheet } = makeSheet();
 		expect(sheet._arcanumMoveGuide({ ...FIRST_LIGHT, learned: false }).roll).toBeNull();
@@ -270,10 +276,6 @@ describe("the Ring of Daagon's cost cards carry 'Mark a consequence'", () => {
 		expect(posted()).toContain("(5d4: 3, 1, 4, 2, 2; 1d6+1: 3)");
 	});
 
-	it("Send Them Back's 6- paid with a consequence carries the button; paid in Loyalty, not", async () => {
-		await ringSheet({ loyalty: 1 })._payServantExit("servants", "Servants of Daagon", "consequence");
-		expect(posted()).toContain("stonetop-mark-consequence");
-		await ringSheet({ loyalty: 1 })._payServantExit("servants", "Servants of Daagon", "loyalty");
-		expect(posted()).not.toContain("stonetop-mark-consequence");
-	});
+	// Send Them Back's 6- is now its card's own buttons, and its "Mark a consequence" marks the Ring's
+	// Consequence on the press (send-them-back.js; tests/actors/character/send-them-back.test.js).
 });

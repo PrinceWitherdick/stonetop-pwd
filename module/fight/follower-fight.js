@@ -33,6 +33,18 @@ import { normalizeTags, pileOnBonus } from "../data/follower-build.js";
 import { BEAST_CATALOG } from "../data/beasts.js";
 
 /**
+ * Whether a custom follower's card is only a record now, with nobody to order: one marked Dead by the 0-HP
+ * fate (wave 3 audit FOL-9), and a Servant batch that broke free on Send Them Back's 6-, "no longer
+ * followers" (Book II p.561; re-check FO-3). The sheet's Order buttons, the map's ring and the sheet's
+ * orderFollower all ask this. `flags` is the character's resolved flags. PURE.
+ */
+export function customFollowerOutOfOrders(flags, ftype, slug) {
+	if (ftype !== "custom" || !slug) return false;
+	const record = flags?.customFollowers?.[slug];
+	return !!(record?.dead || record?.brokenFree);
+}
+
+/**
  * Whether a card is a follower who takes orders at all.
  *
  * A Loyalty track marks a true follower, and livestock has none: the goat in the pen is not ordered
@@ -76,6 +88,7 @@ function followerMoves(actor) {
  */
 export function followerOrderInfo(actor, card) {
 	if (!card || !followerTakesOrders(card)) return null;
+	if (customFollowerOutOfOrders(readableFlags(card.character), card.ftype, card.slug)) return null;
 	// Whatever the type, exceptional is read at the card's own detail path, the one the sheet's
 	// control writes to. Book I p.462 gates the crew and the animal companion behind a move, but lets
 	// the GM call ANY outstanding follower exceptional, so no type is left out here. An initiate the

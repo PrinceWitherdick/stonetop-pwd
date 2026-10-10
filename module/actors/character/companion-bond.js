@@ -8,10 +8,13 @@
 // button (lendStrength): the 1d6 is thrown where the table sees it, the Ranger LOSES THE WHOLE ROLL
 // through the plain HP writer (utils/damage.js#applyDamageToActor, the Vessel's price's path, so 0 HP
 // opens Death's Door as any HP loss does), and the companion regains as much, never past its max, the
-// rest wasted (the user's ruling). Its HP is on its card and on the NPC that stands for it, and both are
-// raised, each to its own max, as Bath of Healing Light raises a follower
-// (invocation-apply.js#restoreFollowerCardHp, #restoreActorHp). Offered at full HP too: the book does not
-// forbid it, so the card only says the HP would be wasted.
+// rest wasted (the user's ruling). The companion is raised as Bath of Healing Light raises a follower's
+// card (invocation-apply.js#restoreFollowerCardHp, through follower-hp.js#setFollowerHp): the NPC that
+// stands for it, whose HP is its own while there is one (the card's box mirrors it), else the box, to its
+// max. Offered at full HP too: the book does not forbid it, so the card only says the HP would be wasted.
+// Refused BEFORE the die when the companion's HP cannot be written from here (an NPC this client does not
+// own, and no GM connected to write it for them: lendStrengthWritable), so the Ranger never loses HP the
+// companion cannot regain; the warning is the one setFollowerHp gives (follower-hp.js#NO_GM_KEY).
 //
 // LOYAL TO THE END: "On a 7-9, it gets the injured tag. On a 6-, it's injured and will die soon unless
 // someone saves it." Both tiers carry an "Add the injured tag" button (roll-engine's tierActions), spent
@@ -22,8 +25,9 @@
 
 import { SYSTEM_ID } from "../../system-id.js";
 import { STONETOP_SCOPE, readableFlags } from "./StonetopFlags.js";
-import { restoreActorHp, restoreFollowerCardHp } from "./invocation-apply.js";
+import { restoreFollowerCardHp } from "./invocation-apply.js";
 import { followerActorFromLink } from "./follower-actors.js";
+import { NO_GM_KEY, canSetFollowerHp } from "./follower-hp.js";
 import { applyDamageToActor } from "../../utils/damage.js";
 import { rolledTotalCard } from "../../utils/chat.js";
 import { withCardLatch, wireLatchedButtons } from "../../utils/card-latch.js";
@@ -95,36 +99,54 @@ export function companionNpc(actor) {
 }
 
 /**
- * "Lend it your strength": throw 1d6, lose all of it, and give the companion as much back, its card's box
- * and its NPC's each to their own max. The card goes out after the writes, so it can say where both ended.
+ * Whether the companion's HP can be raised from this client, by setFollowerHp's own rule
+ * (follower-hp.js#canSetFollowerHp): it has no NPC (its card's box is on the Ranger), or this client owns
+ * the NPC, or a GM is connected to write it. PURE apart from the flags.
+ *
+ * @param {Actor} actor           the Ranger
+ * @param {Actor|null} npc        the companion's NPC, as its card links it
+ * @param {User|null} [gm]        the active GM
+ */
+export function lendStrengthWritable(actor, npc, gm = globalThis.game?.users?.activeGM ?? null) {
+	return canSetFollowerHp(actor, { follower: "animal-companion" }, { link: () => npc, gm });
+}
+
+/**
+ * "Lend it your strength": throw 1d6, lose all of it, and give the companion as much back, to its max: its
+ * NPC when it has one, else its card's box (restoreFollowerCardHp). The card goes out after the writes, so
+ * it can say where the companion ended. Refused before the die, with nothing lost, when the companion's HP
+ * cannot be written from here (lendStrengthWritable).
  *
  * @param {Actor} actor  the Ranger
  * @param {object} [options]
  * @param {Function} [options.cardHp]  reads the card's HP box (restoreFollowerCardHp's; the sheet's by default)
- * @param {Actor|null} [options.npc]   the companion's NPC; one this client cannot write is left alone
- * @returns {Promise<null|{amount: number, hp: object|null, card: object|null, npc: object|null}>}
+ * @param {Actor|null} [options.npc]   the companion's NPC; one this client cannot write is healed by the GM's
+ * @param {User|null} [options.gm]     the active GM, for the tests
+ * @returns {Promise<null|{amount: number, hp: object|null, card: object|null}>}
  */
-export async function lendStrength(actor, { cardHp, npc = companionNpc(actor) } = {}) {
+export async function lendStrength(actor, { cardHp, npc = companionNpc(actor), gm } = {}) {
 	if (!actor) return null;
+	if (!lendStrengthWritable(actor, npc, gm)) {
+		globalThis.ui?.notifications?.warn?.(format(NO_GM_KEY, { name: npc?.name ?? "" }));
+		return null;
+	}
 	const roll = await new Roll(LEND_STRENGTH_FORMULA).evaluate();
 	const amount = Math.max(0, Math.trunc(Number(roll.total) || 0));
 	const hp = await applyDamageToActor(actor, amount, { stonetopMove: LEND_STRENGTH });
 	const card = await restoreFollowerCardHp({ character: actor, ftype: "animal-companion", slug: "" }, amount,
-		{ moveName: LEND_STRENGTH, ...(cardHp ? { cardHp } : {}) });
-	const npcHp = npc?.isOwner ? await restoreActorHp(npc, amount, { moveName: LEND_STRENGTH }) : null;
+		{ moveName: LEND_STRENGTH, link: () => npc, ...(cardHp ? { cardHp } : {}) });
 	const companion = String(readableFlags(actor)?.animalCompanion?.name ?? "").trim() || localize(`${KEY}.fallbackName`);
-	const healed = card ?? npcHp;
 	const lines = [
 		format(`${KEY}.lendLost`, { name: actor.name ?? "", amount, from: hp?.oldHp ?? 0, to: hp?.newHp ?? 0 }),
-		healed
-			? format(`${KEY}.lendGained`, { name: companion, gain: healed.to - healed.from, from: healed.from, to: healed.to })
+		card
+			? format(`${KEY}.lendGained`, { name: companion, gain: card.to - card.from, from: card.from, to: card.to })
 			: format(`${KEY}.lendNoBox`, { name: companion }),
 	];
 	await roll.toMessage({
 		speaker: globalThis.ChatMessage?.getSpeaker?.({ actor }),
 		flavor:  rolledTotalCard(roll, [LEND_STRENGTH, localize(`${KEY}.bondHeading`)], localize(`${KEY}.lendLabel`), lines),
 	});
-	return { amount, hp, card, npc: npcHp };
+	return { amount, hp, card };
 }
 
 // -- Loyal to the End's card --------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, HERD_SURPLUS_PER, WINTER_DEBT_STEP, SURPLUS_SEASON_STEP, REMINDER_SEASON_STEP, INN_ROLL_SEASON_STEP } from "./StonetopSteading.js";
+import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, HERD_SURPLUS_PER, WINTER_DEBT_STEP, SURPLUS_SEASON_STEP, REMINDER_SEASON_STEP, INN_ROLL_SEASON_STEP, isHerdAsset } from "./StonetopSteading.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { flatRequirementItems, forceCompleteTicks } from "../../utils/improvement-def.js";
 import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml, SEASONAL_GAIN_LIST} from "../../utils/roll-engine.js";
@@ -17,15 +17,17 @@ import {addPersonToSteading, personFieldPath, isActorRow, personRowActor, usedPe
 import {PERSON_DEFAULT_IMG} from "../../utils/person-portrait.js";
 import {openNpcNotesDialog} from "./npc-notes-dialog.js";
 import {openReturnTriumphant} from "./return-triumphant.js";
+import {withSteadingMissXp} from "./steading-miss-xp.js";
+import {PULL_TOGETHER_COST_ACTION, addTierActions, payFortunesCost, requisitionMissCostAction, requisitionTakeAction, withMusterCostActions} from "./steading-card-actions.js";
+import {tradeItemActions} from "./steading-trade-card.js";
 import {openInnGathering} from "./inn-gathering.js";
 import {openWinterDebtDialog, winterConsequencesHtml, sufferWinterShortfall, winterDebtState, winterDebtStepHtml, wireWinterDebtStep} from "./winter-debt.js";
 import {openDisasterPicker, openOwedDisasterPicker, meetWithDisaster, disasterFortunes, debilityPath} from "./steading-debilities.js";
 import {autumnHarvest, winterConsumption, surplusRollFormula, seasonalYields, militiaTactics, builtOnTheFields, MILITIA_SEASON_STEP} from "./season-effects.js";
 import {upkeepsDue, withSurplusBonus, surplusBonusNote} from "./improvement-rules.js";
 import {openPeoplePortraitPicker} from "./PeopleGalleryDialog.js";
-import {STONETOP_SCOPE, StonetopFlags} from "../character/StonetopFlags.js";
+import {STONETOP_SCOPE} from "../character/StonetopFlags.js";
 import {SpecialItemPickerDialog} from "../character/dialogs/SpecialItemPickerDialog.js";
-import {CharacterInventory} from "../character/CharacterInventory.js";
 import {SPECIAL_ITEM_CATALOG} from "../../data/special-items.js";
 import {getRollStatChipsSetting, getOpenSheetsInEditMode, getHoverDescriptionSetting, getSidebarCollapsed, setSidebarCollapsed, getAskRollModeEachRollSetting, isClassicLayout, isRelationshipMapShown, isTimelineShown, layoutClasses, stampLayoutClass} from "../../settings.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
@@ -95,6 +97,8 @@ const _STEADING_MOVES_RAW = [
 		statLabel: "Fortunes",
 		rollable: false,
 		interactive: true,
+		// "6-: ... don't mark XP": no "Mark XP" button on its miss card (./steading-miss-xp.js).
+		noXpOnMiss: true,
 		description: `<div class="stonetop-seasons-grid">
   <img src="systems/stonetop-pwd/assets/icons/seasons/spring_icon.svg" class="stonetop-season-row-icon" alt="Spring">
   <div><strong>Spring</strong>: The <em>most hopeful</em> rolls +Fortunes. <strong>10+:</strong> pick 1 seasonal gain. <strong>7–9:</strong> pick 1 gain, but a threat makes itself known. <strong>6−:</strong> threats abound; don't mark XP. Reset Fortunes to +1.</div>
@@ -119,7 +123,13 @@ const _STEADING_MOVES_RAW = [
 		interactive: true,
 		description: `<p>When you <strong>set a community to work on improvements, to secure new resources, or to make major repairs</strong>, spend whatever the GM says is required and roll <strong>+Population</strong>.</p>
 <p><strong>On a 10+:</strong> the job gets done.</p>
-<p><strong>On a 7-9:</strong> pick 1: other work does not get done; the work is shoddy or crude; there is a consequence; or there is an unforeseen cost, requirement, or challenge.</p>
+<p><strong>On a 7-9:</strong> pick 1:</p>
+<ul>
+  <li>It gets done, but other work doesn't; reduce Fortunes by 1</li>
+  <li>It gets done, but the work is shoddy, crude</li>
+  <li>It gets done, but there's a consequence (bad blood, an injury, a threat unearthed, etc.)</li>
+  <li>There's an unforeseen cost, requirement, or challenge; address it and the job gets done</li>
+</ul>
 <p><em>Diminished debility: disadvantage on this roll.</em></p>`,
 	},
 	{
@@ -129,7 +139,7 @@ const _STEADING_MOVES_RAW = [
 		statLabel: "Population",
 		rollable: true,
 		interactive: true,
-		description: `<p>When <strong>Stonetop needs mustering against a threat</strong>, reduce Fortunes by 1 and roll <strong>+Population</strong>.</p>
+		description: `<p>When you <strong>press every able body into the defense of a steading</strong>, reduce Fortunes by 1 and roll <strong>+Population</strong>.</p>
 <p><strong>On a 7+:</strong> the steading is alert and ready for action until the threat passes, the Seasons Change, or you cease to oversee the muster. On a 10+, also pick 2; on a 7-9, also pick 1.</p>
 <ul>
   <li>Increase Defenses by 1 as long as the muster holds</li>
@@ -163,6 +173,7 @@ const _STEADING_MOVES_RAW = [
 		statLabel: "Prosperity",
 		rollable: true,
 		interactive: true,
+		noXpOnMiss: true,
 		description: `<p>When you <strong>wish to acquire or sell a commonly available item</strong>, you can. When you seek to acquire or sell a special item, roll <strong>+Prosperity</strong> and subtract the item's Value. In winter, you have disadvantage.</p>
 <p><strong>On a 10+:</strong> you can get it or sell it for a fair price.</p>
 <p><strong>On a 7-9 when buying:</strong> the GM picks 1 complication.</p>`,
@@ -183,7 +194,8 @@ const _STEADING_MOVES_RAW = [
 		statLabel: "Fortunes",
 		rollable: false,
 		interactive: true,
-		description: `<p>When you <strong>borrow some of the steading's assets for an expedition</strong> or otherwise put them at risk, roll <strong>+Fortunes</strong>.</p>
+		noXpOnMiss: true,
+		description: `<p>When you <strong>borrow some of the steading's assets for an expedition</strong> (like the horses or a plow), roll <strong>+Fortunes</strong>.</p>
 <p><strong>On a 10+:</strong> go ahead, but bring it back safely.</p>
 <p><strong>On a 7-9:</strong> you'll need to do some convincing.</p>
 <p><strong>On a 6-:</strong> don't mark XP; you can take the asset with you if you want, but if you do, reduce Fortunes by 1.</p>`,
@@ -203,17 +215,20 @@ const _STEADING_MOVES_RAW = [
 		description: `<p>When you <strong>return home in triumph</strong> — having saved your fellows, put down the threat, seized the opportunity, etc. — clear one of the steading's debilities (<em>diminished</em>, <em>lacking</em>, or <em>malcontent</em>).</p>
 <p>If the steading has no debilities marked, then increase Fortunes by 1.</p>`,
 	},
+	// A REFERENCE card, not a move the steading makes: Book I has no +Fortunes Persuade. The residents
+	// are NPCs, and convincing one is the character's own Persuade (vs. NPCs), +CHA (p.224). Kept on
+	// the list because Malcontent's "folks need Persuading more often" points here. `reference` keeps
+	// the row from reading as a move this steading cannot make; it carries no slug and no stat, so a
+	// click on it rolls nothing and spends nothing.
 	{
 		slug: "persuade",
 		label: "Persuade",
-		stat: "fortunes",
-		statLabel: "Fortunes",
-		rollable: true,
-		interactive: true,
-		description: `<p>When you need to <strong>convince the residents of Stonetop to do something costly, dangerous, or against their interests</strong>, roll <strong>+Fortunes</strong>.</p>
-<p><strong>On a 10+:</strong> they go along with it, at least for now.</p>
-<p><strong>On a 7–9:</strong> they need something in return, or they'll only go partway.</p>
-<p><strong>On a miss:</strong> they refuse outright, and may resent being asked.</p>
+		stat: null,
+		statLabel: null,
+		rollable: false,
+		interactive: false,
+		reference: true,
+		description: `<p>The residents are NPCs. When you <strong>press or entice an NPC</strong>, make the <strong>Persuade (vs. NPCs)</strong> move from your own character sheet: "say what you want them to do (or not do). If they have reason to resist, roll +CHA" (Book I p.224). The steading rolls nothing for it.</p>
 <p><em>Malcontent debility: folks need Persuading more often than usual.</em></p>`,
 	},
 	// The two improvements that ARE a move. Listed only once built (`requires`), since a
@@ -255,6 +270,14 @@ const _STEADING_MOVES_RAW = [
 	},
 ];
 const STEADING_MOVES = [..._STEADING_MOVES_RAW].sort((a, b) => a.label.localeCompare(b.label));
+
+/**
+ * Whether a steading roll's miss marks no XP: its move says "don't mark XP" (`noXpOnMiss` on its entry
+ * above, as a character move's `noXpOnMiss` does). Every other move earns it, a new one included.
+ */
+function steadingMoveNoXpOnMiss(moveName) {
+	return !!_STEADING_MOVES_RAW.find(move => move.label === moveName)?.noXpOnMiss;
+}
 const STEADING_STAT_CHIP_LABELS = {
 	Defenses: "DEF",
 	Fortunes: "FOR",
@@ -524,11 +547,16 @@ const HOMESTEAD_MOVE_FLOWS = {
 		trigger: "When you set a community to work on improvements, to secure new resources, or to make major repairs, spend whatever the GM says is required and roll +Population.",
 		pickPools: {
 			partial: [
-				"It gets done, but other work does not; reduce Fortunes by 1.",
-				"It gets done, but the work is shoddy or crude.",
-				"It gets done, but there is a consequence.",
-				"There is an unforeseen cost, requirement, or challenge; address it and the job gets done.",
+				"It gets done, but other work doesn't; reduce Fortunes by 1",
+				"It gets done, but the work is shoddy, crude",
+				"It gets done, but there's a consequence (bad blood, an injury, a threat unearthed, etc.)",
+				"There's an unforeseen cost, requirement, or challenge; address it and the job gets done",
 			],
+		},
+		// The one pick that writes something: its Fortunes, through Meet with Disaster's floor
+		// (./steading-card-actions.js), like every "reduce Fortunes by 1".
+		tierActions: {
+			partial: PULL_TOGETHER_COST_ACTION,
 		},
 		results: [
 			RESULT.strong("the job gets done."),
@@ -541,7 +569,7 @@ const HOMESTEAD_MOVE_FLOWS = {
 		label: "Muster",
 		stat: "population",
 		statLabel: "Population",
-		trigger: "When Stonetop needs mustering against a threat, reduce Fortunes by 1 and roll +Population.",
+		trigger: "When you press every able body into the defense of a steading, reduce Fortunes by 1 and roll +Population.",
 		beforeRoll: "musterCost",
 		pickPools: {
 			success: MUSTER_CHOICES,
@@ -651,18 +679,6 @@ const HOMESTEAD_MOVE_FLOWS = {
 			RESULT.miss("the GM decides what they've heard."),
 		],
 		note: "",
-	},
-	persuade: {
-		label: "Persuade",
-		stat: "fortunes",
-		statLabel: "Fortunes",
-		trigger: "When you need to convince the residents of Stonetop to do something costly, dangerous, or against their interests, roll +Fortunes.",
-		results: [
-			RESULT.strong("they go along with it, at least for now."),
-			RESULT.weak("they need something in return, or they'll only go partway."),
-			RESULT.miss("they refuse outright, and may resent being asked.", "Miss"),
-		],
-		note: "Malcontent means folks need Persuading more often than usual.",
 	},
 };
 
@@ -894,7 +910,7 @@ export function createStonetopSteadingSheetClass(Base) {
 				statChipLabel: STEADING_STAT_CHIP_LABELS[move.statLabel] ?? move.statLabel,
 				moveSlug: move.interactive ? move.slug : "",
 				moveName: !move.interactive && move.rollable ? move.label : "",
-				unowned: !move.rollable && !move.interactive,
+				unowned: !move.rollable && !move.interactive && !move.reference,
 			}));
 			context.stonetop.rollMode = this._sheetRollMode();
 			context.stonetop.showRollStatChips = getRollStatChipsSetting();
@@ -1878,14 +1894,16 @@ export function createStonetopSteadingSheetClass(Base) {
 				</label>`;
 			}).join("");
 
-			// Trade & Barter is how special items are acquired — let the player pick one from the
-			// handout list. The pick fills the Value field for the roll, adds the item to a
-			// character's inventory, and names itself in the chip beside the button (which is a
-			// readout, not an input: nothing reads it back).
+			// Trade & Barter is how special items are acquired, so let the player pick one from the
+			// handout list. The pick fills the Value field for the roll and names itself in the chip
+			// beside the button; the hidden `specialItem` carries it to the card, whose 10+ and 7-9
+			// offer to add it to (or, sold, take it off) a character. Nothing changes hands before the
+			// dice: "On a 6- either way ... you'll need to travel to ___ or wait until next season" (p.540).
 			const specialItemHtml = flow.specialItems
 				? `<div class="stonetop-tb-special">
 					<button type="button" class="stonetop-tb-special-btn"><i class="fas fa-gem"></i> Choose a special item…</button>
 					<span class="stonetop-tb-special-chosen" data-tb-chosen hidden="hidden"></span>
+					<input type="hidden" name="specialItem" value="">
 				</div>`
 				: "";
 
@@ -1911,10 +1929,10 @@ export function createStonetopSteadingSheetClass(Base) {
 						callback: async html => {
 							const prompted = await promptRoll({ title: flow.label });
 							if (!prompted) return;
-							await this._applyHomesteadBeforeRoll(flow);
+							const before = await this._applyHomesteadBeforeRoll(flow);
 							const data = this._formDataFromDialog(html);
 							await this._onSteadingRoll(flow.label, flow.stat, {
-								...prompted, ...this._homesteadRollOptions(flow, html),
+								...prompted, ...this._homesteadRollOptions(flow, html), ...before,
 								improvementAnswers: Object.fromEntries(questions.map(q => [q.name, data[q.name] ?? ""])),
 							});
 						},
@@ -1931,8 +1949,8 @@ export function createStonetopSteadingSheetClass(Base) {
 		}
 
 		// Trade & Barter: open the Special Items picker. Picking an item sets the move's Value
-		// (the modifier the roll subtracts), names itself in the chip beside the button, and
-		// adds itself to a chosen character's inventory.
+		// (the modifier the roll subtracts), names itself in the chip beside the button, and rides
+		// the hidden `specialItem` to the card. It changes no one's inventory: that waits on the dice.
 		_onPickSpecialItem(dialogHtml) {
 			const picker = new SpecialItemPickerDialog(SPECIAL_ITEM_CATALOG, async (slug) => {
 				const item = SPECIAL_ITEM_CATALOG.flatMap(g => g.items).find(i => i.slug === slug);
@@ -1944,36 +1962,11 @@ export function createStonetopSteadingSheetClass(Base) {
 					chosen.textContent = item.traits ? `${item.name} (${item.traits})` : item.name;
 					chosen.removeAttribute("hidden");
 				}
-
-				const character = await this._promptSpecialItemCharacter();
-				if (character) {
-					await new CharacterInventory(new StonetopFlags(character, "inventory")).addSpecial(slug);
-					ui.notifications.info(`${item.name} added to ${character.name}.`);
-				}
+				const carried = dialogHtml[0].querySelector('[name="specialItem"]');
+				if (carried) carried.value = slug;
 				picker.close();
 			});
 			picker.render(true);
-		}
-
-		_promptSpecialItemCharacter() {
-			const chars = game.actors.filter(a => a.type === "character" && a.isOwner);
-			if (!chars.length) {
-				ui.notifications.warn("No editable character to add the item to.");
-				return Promise.resolve(null);
-			}
-			return new Promise(resolve => {
-				new Dialog({
-					title: "Add to which character?",
-					content: `<form class="stonetop-tb-char-pick"><label>Character
-						<select name="char">${chars.map(c => `<option value="${c.id}">${_esc(c.name)}</option>`).join("")}</select></label></form>`,
-					buttons: {
-						cancel: { label: "Cancel", callback: () => resolve(null) },
-						add:    { label: "Add", callback: html => resolve(game.actors.get(html[0].querySelector('[name="char"]').value)) },
-					},
-					default: "add",
-					close: () => resolve(null),
-				}, { classes: ["dialog", "stonetop", "stonetop-tb-char-pick-dialog"] }).render(true);
-			});
 		}
 
 		_formDataFromDialog(html) {
@@ -1981,27 +1974,49 @@ export function createStonetopSteadingSheetClass(Base) {
 			return form ? Object.fromEntries(new FormData(form)) : {};
 		}
 
+		/**
+		 * A move's cost before its roll; today only Muster's "reduce Fortunes by 1" (p.534).
+		 *
+		 * Paid here, through Meet with Disaster's floor (./steading-card-actions.js), only by someone
+		 * who can write the steading while Fortunes is above -1. Otherwise it is left to the card:
+		 * a player who cannot write the steading would have the write refused and lose the roll with
+		 * it, and at -1 the cost is a Meet with Disaster that a 7+ picking "Everyone's willing to pitch
+		 * in" avoids (p.532), which nobody can know before the dice.
+		 * @returns {Promise<{musterCost?: "paid"|"owed"}>} spread over the roll's options
+		 */
 		async _applyHomesteadBeforeRoll(flow) {
-			if (flow.beforeRoll !== "musterCost") return;
+			if (flow.beforeRoll !== "musterCost") return {};
 			const fortunes = this._stonetopSteading.getStatValue("fortunes");
-			await this._stonetopSteading.setSystemValue("stats.fortunes.value", Math.max(fortunes - 1, -1));
+			if (!this.actor.isOwner) {
+				ui.notifications.info("You can't update the steading, so the Muster's 1 Fortunes is paid from its card.");
+				return { musterCost: "owed" };
+			}
+			if (fortunes <= -1) {
+				ui.notifications.info("Fortunes is at −1, so the Muster's cost waits on its card: pay it there (the steading Meets with Disaster), or leave it if everyone pitches in.");
+				return { musterCost: "owed" };
+			}
+			const { notice } = await payFortunesCost(this._stonetopSteading, { stonetopMove: "Muster", cause: "the Muster's cost" });
 			this.render(false);
-			ui.notifications.info(`Muster cost applied: Fortunes ${ sign(fortunes) } -> ${ sign(Math.max(fortunes - 1, -1)) }.`);
+			ui.notifications.info(`Muster cost applied. ${notice}`);
+			return { musterCost: "paid" };
 		}
 
 		// What the dialog adds to the roll. Every flow's tier text, legend, pick pools and tier
 		// actions come off the flow itself in _onSteadingRoll — shared with the bare roll button
 		// on the Moves tab, which has no dialog to read — so all that is left here is the one
-		// move whose dialog holds controls: Trade & Barter's Value and its winter disadvantage.
+		// move whose dialog holds controls: Trade & Barter's Value, its winter disadvantage, and
+		// the special item the card offers to hand over.
 		_homesteadRollOptions(flow, html) {
 			if (!flow.rollFields) return {};
 			const data = this._formDataFromDialog(html);
 			const value = Math.max(0, parseInt(data.value, 10) || 0);
+			const tradeItem = String(data.specialItem ?? "").trim();
 			return {
 				modifier: value ? -value : 0,
 				// A SOURCE of disadvantage, not the mode: _onSteadingRoll nets it against any
 				// advantage (a Township's), since the two cancel out.
 				winter: !!data.winter,
+				...(tradeItem ? { tradeItem } : {}),
 			};
 		}
 
@@ -2068,8 +2083,6 @@ export function createStonetopSteadingSheetClass(Base) {
 		}
 
 		async _onRequisitionWalkthrough() {
-			const fortunes = this._stonetopSteading.getStatValue("fortunes");
-			const newFortunes = Math.max(fortunes - 1, -1);
 			const availableAssets = this._stonetopSteading.getAvailableAssets();
 			const assetOptions = availableAssets
 				.map(asset => `<option value="${escHtml(asset.name)}">${escHtml(asset.name)}</option>`)
@@ -2091,7 +2104,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			const dialog = new Dialog({
 				title: "Requisition",
 				content: `<form class="stonetop-homestead-dialog">
-					<p class="stonetop-homestead-trigger"><em>When you borrow some of the steading's assets for an expedition or otherwise put them at risk, roll +Fortunes.</em></p>
+					<p class="stonetop-homestead-trigger"><em>When you borrow some of the steading's assets for an expedition (like the horses or a plow), roll +Fortunes.</em></p>
 					<div class="stonetop-homestead-fields">
 						<label class="stonetop-homestead-field">
 							<span>Asset</span>
@@ -2120,15 +2133,22 @@ export function createStonetopSteadingSheetClass(Base) {
 							const data = this._formDataFromDialog(html);
 							const asset = String(data.asset ?? "").trim();
 							if (asset) postMoveToChat(this.actor, "Requisition", [{ label: "Asset", value: asset }]);
+							// The asset ROW the pick names, so the card's take marks it out on the Assets
+							// list. Not the herd's row: the herd stays home and its horses are counted out
+							// from a character's Requisition window. A typed asset has no row to mark.
+							const row = availableAssets.find(a => a.name.trim() === asset && !isHerdAsset(a));
+							const taken = row ? { index: row.index, name: row.name } : {};
 							await this._onSteadingRoll("Requisition", "fortunes", {
 								...prompted,
 								improvementAnswers: Object.fromEntries(questions.map(q => [q.name, data[q.name] ?? ""])),
 								moveResults: _moveResultsFromRows(requisitionResults),
 								resultLegend: _resultsLegendHtml(requisitionResults),
+								// 10+ and 7-9 (once convinced): take it. 6-: take it anyway, at 1 Fortunes,
+								// through Meet with Disaster's floor (./steading-card-actions.js).
 								tierActions: {
-									failure: `<button type="button" class="stonetop-requisition-miss-cost" data-action="requisition-miss-cost">
-										<i class="fas fa-arrow-down"></i> Take it on a miss: Fortunes ${sign(fortunes)} -> ${sign(newFortunes)}
-									</button>`,
+									success: requisitionTakeAction(taken),
+									partial: requisitionTakeAction(taken),
+									failure: requisitionMissCostAction(taken),
 								},
 							});
 						},
@@ -3549,7 +3569,10 @@ export function createStonetopSteadingSheetClass(Base) {
 			// roll engine surfaces the sum as a Situational pill. `improvementAnswers` is what the
 			// move's window asked about the steading's improvements, and is absent for a roll made
 			// without one (the Moves tab's roll chip).
-			const { situational = 0, improvementAnswers, winter = false, ...rest } = rollOptions;
+			// `musterCost` is how Muster's cost went before the roll (_applyHomesteadBeforeRoll) and
+			// `tradeItem` the special item a Trade & Barter is about: both become card buttons below,
+			// and neither is a roll option.
+			const { situational = 0, improvementAnswers, winter = false, musterCost, tradeItem, ...rest } = rollOptions;
 			// Every rule's advantage and disadvantage, netted against the player's mode, and a
 			// sacrifice's held +Fortunes advantage (Rites of the Land) applied, because this is the
 			// roll it was promised to (./steading-roll.js). Spent just before the dice, below. The player's mode is the caller's when
@@ -3594,6 +3617,18 @@ export function createStonetopSteadingSheetClass(Base) {
 				options.resultLegend = _resultsLegendHtml(results);
 			}
 			if (adjusted.missAsPartial) options.missCountsAsPartial = adjusted.missAsPartial;
+			// Muster's cost on the card: its pitch-in give-back once paid, or the cost itself when it
+			// was left there (./steading-card-actions.js). And a traded special item's hand-over on the
+			// 10+ and 7-9 alone; a 6- gets nothing (p.540).
+			let cardActions = withMusterCostActions(options.tierActions ?? null, musterCost);
+			if (tradeItem) {
+				const trade = tradeItemActions(tradeItem);
+				if (trade) cardActions = addTierActions(cardActions, { success: trade, partial: trade });
+			}
+			// The roll is the steading's, but its miss is the mover's XP: a button on the 6- marks it for them
+			// (./steading-miss-xp.js). Not on a move whose 6- says otherwise (`noXpOnMiss` on its entry).
+			const tierActions = withSteadingMissXp(cardActions, { noXpOnMiss: steadingMoveNoXpOnMiss(moveName) });
+			if (tierActions) options.tierActions = tierActions;
 			await adjusted.spend();
 			if (adjusted.held) this.render(false);
 			await rollStat(statKey, this.actor, {

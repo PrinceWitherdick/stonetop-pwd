@@ -27,11 +27,61 @@
     "actorCreate": {
       "title": "Create an Actor"
     },
+    "endOfSession": {
+      "title": "End of Session",
+      "personalHeading": "Personal XP",
+      "personalTag": "each player",
+      "instinct": "Point out how you <strong>demonstrated or struggled with your instinct</strong>. If you can, mark XP.",
+      "relationship": "Say how your <strong>relationship with or opinion of a PC, NPC, or group has changed</strong>. If you can, mark XP.",
+      "groupHeading": "Group XP",
+      "groupTag": "check each \"yes\", everyone marks XP",
+      "questions": {
+        "learnedWorld": "Did we learn more about the world or its history?",
+        "defeatedThreat": "Did we defeat a threat to Stonetop or the region?",
+        "improvedStanding": "Did we improve our standing with our neighbors?",
+        "improvedStonetop": "Did we make a lasting improvement to Stonetop, or tangible progress towards doing so?"
+      },
+      "tally": "+{xp} XP to each character ticked below.",
+      "whoHeading": "Who marks it",
+      "whoTag": "everyone at the table",
+      "whoHint": "Ticked: the characters of players who are logged in. Untick anyone who was not at the table.",
+      "dead": "dead",
+      "nobody": "There are no player characters in this world.",
+      "tableHeading": "Around the Table",
+      "praise": "<strong>Praise</strong> something about the session (in the fiction or around the table) that you enjoyed or appreciated.",
+      "wish": "<strong>Wish</strong> for future sessions: more __, less __, a chance to __, handling __ in a different way, etc. Wishes can be about what happens in the fiction or around the table. The GM will take notes.",
+      "award": "Award +{xp} Group XP & Close",
+      "close": "Close",
+      "gmOnly": "Only the GM can award the session's XP.",
+      "againTitle": "Award the session's XP again?",
+      "againPrompt": "<p>End of Session XP was already awarded {minutes} minutes ago: +{xp} XP to {count} characters. Award it again?</p>",
+      "againYes": "Award it again",
+      "againNo": "Don't award it",
+      "cardTitle": "End of Session: Group XP (+{xp})",
+      "cardPaid": "{names} each marked <strong>+{xp} XP</strong>.",
+      "cardFailed": "Not paid, the XP could not be written: {names}.",
+      "cardLeftOut": "Not at the table, not paid: {names}.",
+      "failedWarn": "Some of the session's XP could not be written: {names}. See the console."
+    },
+    "camp": {
+      "npcHealNoGm": "{name} was fed at the fire, but you don't own their token's actor and no GM is online to heal it. Ask the GM to raise its HP by hand."
+    },
     "steading": {
       "notLinked": "No Stonetop steading linked. Drag a Stonetop actor onto this sheet to link it.",
       "settlement": "Settlement",
       "settlementShowTooltip": "Show this settlement on the sheet",
       "settlementsAllHidden": "No settlements ticked. Use the pencil to choose which ones this steading tracks.",
+      "missXp": {
+        "button": "Mark XP",
+        "buttonTooltip": "On a miss, whoever made the move marks XP. Marks it for your own character.",
+        "pick": "Mark XP for someone else",
+        "pickTooltip": "Choose which character made the move and marks the XP.",
+        "pickTitle": "Who marks the XP?",
+        "pickPrompt": "<p>Who made this move? On a miss, they mark XP.</p>",
+        "marked": "{name} marked XP for this miss.",
+        "nobody": "There is no player character to mark the XP for.",
+        "refused": "That XP could not be marked: the card is no longer a miss, or its XP is already marked."
+      },
       "season": {
         "setTooltip": "Make the Seasons Change move (or just correct what the sheet says)"
       },
@@ -387,6 +437,19 @@
         "lockedHint": "Only available when the character is dying: at 0 HP, with the move still to face.",
         "claimHeld": "{name} is already rolling Death's Door for {actor}, so nothing was rolled here. This window follows their roll.",
         "claimSettled": "Death's Door for {actor} was settled before this roll could start, so nothing was rolled.",
+        "fateSettled": "{actor} no longer owes a fate from Death's Door, so nothing was written.",
+        "dyingCard": {
+          "lead": "<strong>{name}</strong> is at 0 HP: they're <strong>dying</strong>.",
+          "leadUndeath": "<strong>{name}</strong> is at 0 HP. Death's Door is behind them: <strong>{move}</strong> triggers instead.",
+          "notLethal": "Not lethal: out of the action",
+          "notLethalHint": "GM: what dropped them wasn't likely to kill anyone, so they are simply out of the action, with no Death's Door (or Dark Succor) to face. Not for Undying or Tethered, which trigger at 0 HP whatever dropped them.",
+          "markDying": "Mark dying",
+          "markDyingHint": "GM: they are at 0 HP and the fiction says they are dying (a lethal blow, a long fall), so they face their 0-HP move.",
+          "notLethalCard": "<strong>{name}</strong> is out of the action, not dying: what dropped them wasn't likely to kill anyone.",
+          "notDying": "{name} isn't dying, so there is nothing to call off.",
+          "notLethalUndeath": "{move} triggers when {name} is reduced to 0 HP, lethal or not, so there is nothing to call off.",
+          "cannotMarkDying": "{name} can be marked dying only at 0 HP, and not while already dying, owing a fate or dead."
+        },
         "privateBoostsNeedGM": "This roll was private, so Burn Brightly and giving it your all need the GM online to change its card.",
         "boostRelayFailed": "The GM's client couldn't change the roll's card. Try again, or accept the result as it stands.",
         "anotherPlayer": "Another player",
@@ -485,6 +548,7 @@
           "notLanded": "This result hasn't landed yet.",
           "burnOffer": "<strong>Burn Brightly</strong>: spend {cost} XP to add +1 to the roll.",
           "giveAllOffer": "<strong>Impetuous Youth</strong>: give it your all to turn it into the next result up, and pick what it costs you.",
+          "plusOnesOffer": "<strong>+1 to the roll</strong>: a Judge's Diligence or Many Hands, Sanction, or a Blessing can still add +1, here or from the roll's chat card.",
           "orAccept": "Or accept it as it stands.",
           "restored": "Back to <strong>1 HP</strong>, and no longer dying.",
           "outOfAction": "No longer dying. Unconscious, or close enough, until the GM says otherwise, still at 0 HP.",
@@ -853,6 +917,18 @@
       "regularPoolAtLimit": "You're already carrying a full load, so there's no room to reserve more undefined ◇. Un-mark a carried item to free up room.",
       "smallPoolAtLimit": "You've used all your small-item slots, so there's no room to reserve more undefined □. Un-mark a small item to free up room.",
       "smallOverAllotment": "That's more small items than your Outfit allotment of {limit} (4+Prosperity). Expend a use of supplies to carry an extra small item, or check with your GM.",
+      "writeInSource": {
+        "title": "Where did this come from?",
+        "intro": "<p>You are marking <strong>{name}</strong>. Did you have it with you all along, or is it something new you picked up out here?</p>",
+        "hadRegularCovered": "<li><strong>Had it all along</strong> (<em>Have What You Need</em>): it uses {cost} of your {pool} undefined ◆, so your load stays the same.</li>",
+        "hadRegularPartly": "<li><strong>Had it all along</strong> (<em>Have What You Need</em>): it uses your last {pool} undefined ◆, and the other {rest} ◆ add to your load.</li>",
+        "foundRegular": "<li><strong>Found it</strong>: it is new, so it adds {weight} ◆ to your load and your undefined ◆ stay as they are.</li>",
+        "hadSmall": "<li><strong>Had it all along</strong> (<em>Have What You Need</em>): it uses 1 of your {pool} undefined □.</li>",
+        "foundSmall": "<li><strong>Found it</strong>: it is a new small item, written into a blank of its own. Your undefined □ stay as they are.</li>",
+        "closeNote": "<p>Close this window to leave it unmarked.</p>",
+        "had": "Had it all along",
+        "found": "Found it"
+      },
       "choosePossessionsButton": "Choose Special Possessions",
       "possessionsOverLimitOne": "This character has 1 more special possession than the playbook lets you choose.",
       "possessionsOverLimitMany": "This character has {count} more special possessions than the playbook lets you choose.",
@@ -1222,7 +1298,8 @@
       "closeForNow": "Close for Now"
     },
     "rollCard": {
-      "writerSilent": "The GM's client did not answer in time. It may still go through, so check the card before pressing again."
+      "writerSilent": "The GM's client did not answer in time. It may still go through, so check the card before pressing again.",
+      "notCardWriter": "Only the GM or whoever posted this card can use its buttons."
     },
     "optionHpLoss": {
       "title": "Lose {formula} HP?",
@@ -1254,7 +1331,12 @@
       "organizationGroup": "Group (2-5)",
       "organizationSolitary": "Solitary",
       "organizationNone": "—",
-      "resetDefaults": "Reset HP & damage die to organization defaults",
+      "resetDefaults": "Work out max HP from organization and size",
+      "resetHpTitle": "Work out max HP",
+      "resetHpAsk": "Max HP from the book's table (Book I p.396): {organization} ({orgHp}), {size} ({sizeHp}), plus whatever else applies. The damage line is left as it is. Damage already taken stays taken.",
+      "resetHpNoOrganization": "Pick an organization first: it sets the base HP.",
+      "resetHpApply": "Set max HP",
+      "resetHpKeep": "Keep it as it is",
       "size": "Size",
       "tags": "Tags",
       "qualities": "Special Qualities",
@@ -1527,6 +1609,44 @@
           "addPlaceholder": "Add a tag…",
           "addLabel": "Add this tag",
           "remove": "Remove the {tag} tag"
+        },
+        "bond": {
+          "button": "Pay cost",
+          "tooltip": "Strengthen Your Bond: pay their cost, and if you haven't done so recently, they hold +1 Loyalty (max 3).",
+          "atMaxTooltip": "They hold 3 Loyalty: Strengthen Your Bond doesn't trigger.",
+          "fallenTooltip": "They have fallen.",
+          "atMax": "{name} holds 3 Loyalty already: Strengthen Your Bond doesn't trigger.",
+          "card": "You pay {name}'s cost: they hold +1 Loyalty, {loyalty} in all.",
+          "cardCost": "(Their cost: {cost}.)",
+          "recently": "The PC and/or follower should have a significant scene \"on camera\" before they can Strengthen Their Bond again."
+        },
+        "wholeParty": {
+          "label": "Follows the party as a whole",
+          "hint": "(any PC may pay its cost or spend its Loyalty)",
+          "badge": "Follows the party as a whole: any PC may pay its cost or spend its Loyalty."
+        },
+        "handoff": {
+          "failed": "{name} could not be handed to {target}: a GM needs to be online to write a character you do not own.",
+          "npcWaits": "The follower's NPC keeps its old owners until a GM is online to change them."
+        },
+        "npcHp": {
+          "noGm": "{name}'s HP is kept on their actor, which you don't own, and no GM is online to change it. Ask the GM to set it by hand."
+        },
+        "door": {
+          "triggers": "{name} triggers Death's Door (even if they weren't directed to by their PC). {leader}'s player rolls for them.",
+          "rollButton": "Roll Death's Door (+nothing)",
+          "fallbackName": "Your follower",
+          "rule": "{name} is dying, and glimpses the Last Door and the Lady of Crows. Roll +nothing.",
+          "success": "{name} wrests themselves back to the realm of the living: back to 1 HP, and back in the action. Say how their brush with death has marked them.",
+          "partial": "The Lady waves {name} off: no longer dying, but out of the action (unconscious, or close enough) until the GM says otherwise.",
+          "failure": "{name}'s time has come. They can make one last move as if they rolled a 12+, but after that they're dead.",
+          "upButton": "Back to 1 HP",
+          "deadButton": "Mark dead",
+          "aidOffer": "Advantage from {source} (Aiding the Death's Door roll)",
+          "tierMoved": "This card no longer reads that result: use the buttons of the result it shows now.",
+          "fateSub": "Death's Door, 6-: their time has come (p.244)",
+          "fateNote": "One last move as if they rolled a 12+, then they're dead, unless you spare them. Close this to decide later: the card's Mark dead button waits.",
+          "fateLater": "Decide later"
         }
       },
       "moveTypes": {
@@ -1581,6 +1701,7 @@
           "namePlaceholder": "e.g. Reckless Charge",
           "nameRequired": "Your move needs a name.",
           "worldCreated": "Created move \"{name}\". Drag it onto a character sheet to add it.",
+          "worldCopiesHint": "Copies already on character sheets keep their old text. To update one, remove the old copy from that sheet, then drag this move onto it again.",
           "descriptionLabel": "What happens? (the trigger and effect)",
           "descriptionPlaceholder": "When you…",
           "descriptionHint": "Wrap the trigger in ***three asterisks*** for the book's bold italic. **Two** make bold, *one* makes italic. A blank line starts a new paragraph.",
@@ -1885,6 +2006,10 @@
       "whole": "needs a {load} load",
       "clause": "{clause}: needs a {load} load",
       "tooltip": "Your load is heavier than this move allows. Lighten it for the move to apply.",
+      "unarmored": "needs you unarmored",
+      "loadAndUnarmored": "needs a {load} load and no armor",
+      "clauseNeed": "{clause}: {need}",
+      "unarmoredTooltip": "You are wearing armor, and this move needs you unarmored. Take the armor off for the move to apply.",
       "load": {
         "light": "light",
         "normal": "normal or light",
@@ -2018,6 +2143,14 @@
       "asteriskConfirm": "Did you use {move}? The first use of a starred move crosses off \"Would-be\" for good: you become The Hero.",
       "asteriskYes": "Cross off \"Would-be\"",
       "asteriskNo": "Not yet",
+      "restoreButton": "Restore \"Would-be\"",
+      "restoreTooltip": "Crossed off \"Would-be\" by mistake? Write it back in. The next starred move you use crosses it off again.",
+      "restoreTitle": "Restore \"Would-be\"",
+      "restoreConfirm": "Write \"Would-be\" back in? You go back to being The Would-Be Hero until you next use a starred move.",
+      "restoreYes": "Restore \"Would-be\"",
+      "restoreNo": "Keep The Hero",
+      "restoreCardTitle": "A Would-Be Hero Again",
+      "heroRestored": "<strong>{name}</strong>'s &ldquo;Would-be&rdquo; was crossed off by mistake and has been written back in.",
       "voiceAskButton": "Ask it",
       "voiceAskTooltip": "Voice of Experience: asking \"What is about to happen?\" is a use of the starred move, and crosses off \"Would-be\" the first time.",
       "heroCardTitle": "A Would-Be Hero No Longer",
@@ -2215,7 +2348,8 @@
       "releaseTitle": "Let the advantage go",
       "releasePrompt": "Give up the advantage promised by {source}? Your next roll goes out as it otherwise would, and nothing records the promise afterwards.",
       "releaseConfirm": "Let it go",
-      "releaseCancel": "Keep holding it"
+      "releaseCancel": "Keep holding it",
+      "givenSpent": "{name} already used the advantage this roll gave."
     },
     "heldDisadvantage": {
       "label": "Disadvantage held over your next roll",
@@ -2254,6 +2388,18 @@
       "debilityButton": "Mark {debility}",
       "debilityMarked": "{name} marks {debility} as their Battle Joy ends, and marks no XP for the miss.",
       "debilityTaken": "That debility is already marked. Choose another."
+    },
+    "debilities": {
+      "tooltip": "A debility is a temporary condition from harm, strain, or stress. There are three, each giving disadvantage on rolls with its stats: Weakened (+STR / +DEX), Dazed (+INT / +WIS), and Miserable (+CON / +CHA). Clear them by resting, recovering, or tending to what ails you.",
+      "weakened": {
+        "description": "Fatigued, tired, sluggish, shaky. Disadvantage on +STR or +DEX rolls."
+      },
+      "dazed": {
+        "description": "Out of it, befuddled, not thinking clearly. Disadvantage on +INT or +WIS rolls."
+      },
+      "miserable": {
+        "description": "Greatly distressed, angry, unwell, in pain. Disadvantage on +CON or +CHA rolls."
+      }
     },
     "personalSymbol": {
       "button": "Display it: crew +1 Loyalty",
@@ -2492,6 +2638,10 @@
       "removeLabel": "Take {name} off this map",
       "removeGesture": "Right-click to see the delete button.",
       "selectGesture": "Shift-click to select several people and move them together.",
+      "altGesture": "Alt-drag to draw a line from them.",
+      "lineTool": "Draw lines",
+      "lineHint": "Draw lines: drag from one person to another, or click one and then the other. Escape or press again to stop.",
+      "linePicked": "Drawing a line from {name}. Click who it goes to, or Escape to let go.",
       "selection": {
         "count": "{count} selected. Drag any of them, or use the arrow keys, to move them together. Escape lets go.",
         "none": "Nobody is selected."
@@ -2730,11 +2880,27 @@
       "followHint": "Right-click to follow the world setting for this map again.",
       "followed": "This map's pin names follow the world setting again."
     },
+    "campaignYear": {
+      "title": "Set the Year",
+      "hint": "Name the year your campaign is in. Every year already recorded, including the timeline's history from before play, moves with it and keeps its distance from now.",
+      "label": "What year is it now?",
+      "preview": "Play began in Year {year}.",
+      "empty": "Type the year it is now.",
+      "tooEarly": "It can be no earlier than {min}, or play would have begun before year 1.",
+      "tooLate": "It can be no later than {max}.",
+      "set": "Set the year",
+      "keep": "Keep the year as it is",
+      "springAsk": "What year is it?",
+      "springHint": "The year play begins in, as your world counts its years. Keep what it shows if you have no calendar in mind; the GM can change it later from the year on the time bar, and everything recorded moves with it."
+    },
     "timeline": {
       "disabled": "The timeline is turned off in this world's settings.",
       "windowTitle": "The Timeline",
       "trackTitle": "{name}: the timeline",
       "beforeRecord": "Before the record",
+      "seasonUnknown": "Season unknown",
+      "yearAgo": "1 year ago",
+      "yearsAgo": "{count} years ago",
       "newEntry": "New Entry",
       "newEntryTooltip": "Write down something that happened, and when",
       "openFull": "Open the full timeline",
@@ -2853,6 +3019,32 @@
         "save": "Save colours",
         "saveFailed": "The timeline colours could not be saved. Your choices are still in the Colours menu, so you can try Save again.",
         "cancel": "Cancel"
+      },
+      "ages": {
+        "open": "Ages",
+        "openTooltip": "Name runs of years as Ages, drawn as bands along the timeline for everyone in this world",
+        "title": "Timeline Ages",
+        "intro": "An Age is a named run of years, like the Age of Embers. Each one is drawn as a coloured band under its years on the timeline, for everyone at the table. Leave the last year blank for an Age that is still going.",
+        "name": "Name",
+        "namePlaceholder": "The Age of Embers",
+        "from": "First year",
+        "to": "Last year",
+        "toPlaceholder": "Still going",
+        "colour": "Colour",
+        "remove": "Delete this Age",
+        "none": "No Ages yet. Add one to name a run of years.",
+        "add": "Add an Age",
+        "save": "Save Ages",
+        "cancel": "Cancel",
+        "saveFailed": "The Ages could not be saved. Your changes are still in the window, so you can try Save again.",
+        "invalid": {
+          "name": "Every Age needs a name. Name the marked Age, or delete it.",
+          "from": "Every Age needs a first year. Give the marked Age one, or delete it."
+        },
+        "ongoing": "now",
+        "band": "{name}: {from} to {to}",
+        "show": "Ages",
+        "stripLabel": "Ages"
       },
       "kills": {
         "title": "Slew {count}"
@@ -3110,7 +3302,12 @@
         "bestPill": "{name}'s {formula}",
         "hardest": "hardest-hitting",
         "piercingWhile": "while the +{bonus} is on",
-        "armorBack": "{shown} on the card, {rolled} before their {armor} armor"
+        "armorBack": "{shown} on the card, {rolled} before their {armor} armor",
+        "reRollOwn": "This total was rolled with {name}'s {formula}. Striking alone, re-roll your own damage rather than apply it."
+      },
+      "counterAvoided": {
+        "label": "Avoided",
+        "tooltip": "The Clash this attack answers ended on a 10+ that avoided, prevented, or countered it, so there is nothing to take. If that roll moves off the 10+, this button comes back."
       },
       "groupHit": {
         "down": "one of them goes down, {after} still standing",

@@ -56,7 +56,20 @@
 //             the season's heading) and typed rows on Stonetop's own thread, and level-ups,
 //             kills, the trip home, a site visit, a follower and the Graveyard's deaths on each
 //             character's, and moves the steading's clock on to Year Three to match (its season
-//             kept, and a clock already past Year Three left alone).
+//             kept, and a clock already past Year Three left alone). Under it, HISTORY FROM
+//             BEFORE PLAY: an undated row, a season sixty years back, years whose season nobody
+//             remembers (the Forest Folk vanishing ten years ago), and the year just before play,
+//             on Stonetop's thread, plus a row or two on four characters' and on Hafgan's. Names
+//             play's first year 1247 (the `campaignStartYear` world setting) on a world that
+//             never named it, so the years read "Year 1247" onwards and history "Year 1239 · 10
+//             years ago"; a world with its own start year keeps it.
+//             Names SEVEN AGES over it (the `timelineAges` world setting), drawn as bands along
+//             the timeline's foot: two ancient Ages with nothing written in any of their years
+//             (the timeline opens their first and last years bare, so the bands still show),
+//             Ages that start on a written year and end on a bare one, one nested inside another
+//             and one running across the start of play (so the strip stacks), one coloured by
+//             hand, and the current Age still going. Each takes the next colour of the world's
+//             own colour walk, so a re-run never repeats one. The GM's own Ages are kept.
 //             Seeds the steading "Stonetop" (the world's required
 //             singleton) with a thematic set of test Residents, Neighbors, and Players (the
 //             created PCs) so the steading sheet's member tables aren't empty — each resident
@@ -158,9 +171,11 @@
 //             example NPC (and their now-empty folders), sends home every steading asset a test
 //             trip was holding (matched by trip id, so the GM's own requisitions are untouched),
 //             unmarks the seeded debility while it is still the only one marked, takes the
-//             seeded rows off Stonetop's Timeline thread (the table's own rows stay), and prunes
+//             seeded rows off Stonetop's Timeline thread (the table's own rows stay), takes the
+//             seeded Ages off the world's (the GM's own stay), and prunes
 //             the matching Chronicle pages, the test characters' Timeline threads among them. The
-//             clock stays in Year Three, like the season it was left in.
+//             clock stays in Year Three, like the season it was left in, and the start year it
+//             named stays too (the bar's Set the Year changes it back).
 
 (async () => {
   // Re-entrancy guard: a double-click on the hotbar — or clicking the macro again while
@@ -1213,6 +1228,82 @@
     year:   1 + Math.floor(p / TEST_TIMELINE_SEASONS.length),
   });
 
+  // ── Before play: the history the characters come with ─────────────────
+  // What the years are CALLED (seasons/campaign-year.js): the world setting `campaignStartYear`
+  // names play's first year, so Year One reads "Year 1247" and Spring of the third year
+  // "Spring, Year 1249". Set only on a world that has never named its years (the setting still at
+  // 1); a GM who already said what year it is keeps their answer. The years are stored counted from
+  // play's first year either way, so nothing below depends on which name they wear.
+  const TEST_START_YEAR = 1247;
+
+  // When a seeded row happened. `p` is a season of play (timelinePeriod). `ago` is HISTORY: that
+  // many years before the clock's third year, so `ago: 10` is stored year -7 and reads "Year 1239 ·
+  // 10 years ago"; with a `season` it is that season of that year, without one it is the timeline's
+  // "Season unknown" (yearOnly), which is how most history is remembered. `undated` is the one block
+  // with no year at all ("Before the record").
+  const timelineWhen = row => {
+    if (row.undated) return { season: "", year: 1, yearOnly: false };
+    if (row.ago == null) return timelinePeriod(row.p);
+    return { season: row.season ?? "", year: TEST_TIMELINE_YEARS - row.ago, yearOnly: !row.season };
+  };
+
+  // Stonetop's history before the first spring: every shape the timeline holds before play (no
+  // date at all, a season long ago, years with no season, and the year just before play, stored as
+  // year 0, which must read as a real year and not as "no year"). The Forest Folk row is the user's
+  // own example. The raiders on the ridge lead into the harvest raid of the first autumn.
+  const TEST_TIMELINE_HISTORY = [
+    { undated: true, title: "The standing stones", place: "Stonetop",
+      body: "<p>Raised before anyone kept count. The village grew up around them, and nobody remembers which came first.</p>" },
+    { ago: 60, season: "winter", title: "The Long Winter",
+      body: "<p>Snow on the high pasture until midsummer. The old folk still count their years from it.</p>" },
+    { ago: 18, season: "summer", title: "The mill raised on the Stream", place: "Stonetop" },
+    { ago: 10, title: "The Forest Folk vanish", place: "The Wood",
+      body: "<p>Their paths through the Wood went quiet in a single season. Nobody saw them go, and nobody has seen them since.</p>" },
+    { ago: 3, season: "autumn", title: "Smoke on the high ridge",
+      body: "<p>Only smoke, and gone by morning. Nobody thought much of it until the next harvest.</p>" },
+  ];
+
+  // A row or two from before play on some of the characters' threads (short slugs), and on the
+  // Graveyard's Hafgan (TEST_TIMELINE_GRAVES), so the Across board has history in more than one lane.
+  const TEST_TIMELINE_PC_HISTORY = {
+    heavy:           [{ ago: 8, title: "Took up the axe", body: "<p>Their father's, notched in the Hillfolk feud.</p>" }],
+    ranger:          [{ ago: 10, season: "autumn", title: "Last to see the Forest Folk", place: "The Wood" }],
+    "would-be-hero": [{ ago: 15, season: "spring", title: "Born the spring the river flooded" }],
+    blessed:         [{ ago: 9, title: "Went to the herbwife as a child" }],
+  };
+
+  // ── The Ages: named runs of years over the timeline ───────────────────
+  // Laid over the history above as bands along the timeline's foot (timeline/timeline-ages.js), each
+  // dated like a history row: `ago` years before the clock's third year (timelineWhen), or `p`, a
+  // season of play (only its year counts). `to` left out is an Age still going. Chosen so every
+  // shape the strip draws has an example:
+  //   • NOTHING WRITTEN IN THEM AT ALL: the Giants and the Ice, back to back, five hundred to a
+  //     hundred and twenty years ago. The timeline opens their first and last years as bare years
+  //     (timeline-view.js#withAgeMarks) so the bands have somewhere to lie.
+  //   • STARTING ON A WRITTEN YEAR AND ENDING ON A BARE ONE: the Long Winters (the Long Winter row)
+  //     and the Quiet Years (the mill raised on the Stream).
+  //   • ONE INSIDE ANOTHER: the Hollow Wood (the Forest Folk vanishing to the axe taken up), inside
+  //     the Quiet Years, so the strip takes a second row.
+  //   • ACROSS THE START OF PLAY: the Ridge War, from the smoke on the ridge to the hungry winter,
+  //     overlapping the Founding.
+  //   • STILL GOING: the Founding, from the first spring on.
+  // The Ice wears a colour the GM picked by hand; every other takes the world's colour walk
+  // (timeline-ages.js#nextAgeColour), which only moves on, so a re-run never repeats a colour.
+  // EVERY ID STARTS TEST_AGE_ID: that is how a re-run and the cleanup take the seeded Ages off the
+  // world's list and leave the GM's own.
+  const TEST_AGE_ID = "testAge";
+  const TEST_TIMELINE_AGES = [
+    { id: "giants",  name: "The Reign of the Giants", from: { ago: 500 }, to: { ago: 301 } },
+    { id: "ice",     name: "The Age of Ice",          from: { ago: 300 }, to: { ago: 120 }, colour: "#295a8c" },
+    { id: "winters", name: "The Long Winters",        from: { ago: 60 },  to: { ago: 40 } },
+    { id: "quiet",   name: "The Quiet Years",         from: { ago: 18 },  to: { ago: 4 } },
+    { id: "hollow",  name: "The Hollow Wood",         from: { ago: 10 },  to: { ago: 8 } },
+    { id: "ridge",   name: "The Ridge War",           from: { ago: 3 },   to: { p: 3 } },
+    { id: "founding", name: "The Founding",           from: { p: 0 } },
+  ];
+  // An Age's year, stored: `ago` back from the clock's third year, or the year of season `p`.
+  const ageYear = at => (at.ago != null ? TEST_TIMELINE_YEARS - at.ago : timelinePeriod(at.p).year);
+
   // Stonetop's own thread. `turned` is every Seasons Change, worded by the system's own
   // seasonEntryBody, which the timeline prints in that season's HEADING rather than as a card. The
   // first is session zero's Let Spring Burst Forth, which records Spring of Year One the same way
@@ -1317,7 +1408,8 @@
                           kills: { 2: ["Hillfolk raider", "Hillfolk raider"], 6: ["Crinwin"] } },
     "Nesta Fell":       { died: 3, row: { p: 1, title: "Carried word across the gorge bridge" } },
     "Emrys Tal":        { died: 4, row: { p: 2, title: "Heard a name in the smoke after the raid" } },
-    "Hafgan the Elder": { died: 7, row: { p: 0, title: "Opened the spring moot", place: "Stonetop" } },
+    "Hafgan the Elder": { died: 7, row: { p: 0, title: "Opened the spring moot", place: "Stonetop" },
+                          history: [{ ago: 31, title: "Made Judge", place: "Stonetop" }] },
   };
 
   // The trip that is HOME (TEST_EXPEDITIONS by title): set out in the second summer, back in the
@@ -1395,6 +1487,56 @@
   };
 
   /**
+   * Take the seeded Ages off the world's list, and only those (by TEST_AGE_ID): the GM's own stay.
+   * Run by the cleanup and again before every seed. Answers how many went; 0 on a build without
+   * Ages, whose setting is not registered.
+   */
+  const clearTestAges = async (tl) => {
+    if (!tl?.normalizeAges) return 0;
+    try {
+      const ages = tl.normalizeAges(game.settings.get(FLAG_SCOPE, "timelineAges"));
+      const kept = ages.filter(age => !age.id.startsWith(TEST_AGE_ID));
+      if (kept.length === ages.length) return 0;
+      await game.settings.set(FLAG_SCOPE, "timelineAges", tl.agesToStored(kept));
+      return ages.length - kept.length;
+    } catch { return 0; }
+  };
+
+  /**
+   * Name the test Ages (TEST_TIMELINE_AGES) beside whatever Ages the GM already has. Colours come off
+   * the world's own walk, which is moved on and stored, exactly as the Ages window's Add does.
+   * Answers how many were named; 0 on a build without Ages.
+   */
+  const seedTestAges = async (tl) => {
+    if (!tl?.nextAgeColour) return 0;
+    try {
+      await clearTestAges(tl);
+      const theirs = tl.normalizeAges(game.settings.get(FLAG_SCOPE, "timelineAges"));
+      let seq = Number(game.settings.get(FLAG_SCOPE, "timelineAgeColourSeq")) || 0;
+      const inUse = theirs.map(age => age.colour);
+      const ours = TEST_TIMELINE_AGES.map(age => {
+        let colour = age.colour;
+        if (!colour) {
+          const next = tl.nextAgeColour({ seq, inUse });
+          colour = next.hex;
+          seq = next.seq;
+        }
+        inUse.push(colour);
+        return {
+          id: `${TEST_AGE_ID}-${age.id}`, name: age.name, colour,
+          from: ageYear(age.from), to: age.to ? ageYear(age.to) : null,
+        };
+      });
+      await game.settings.set(FLAG_SCOPE, "timelineAges", tl.agesToStored([...theirs, ...ours]));
+      await game.settings.set(FLAG_SCOPE, "timelineAgeColourSeq", seq);
+      return ours.length;
+    } catch (err) {
+      console.warn("[TEST] Could not name the test Ages.", err);
+      return 0;
+    }
+  };
+
+  /**
    * The whole history: Stonetop's thread, every living character's, and the Graveyard's. Answers
    * how many tracks were written, or 0 when the system has no timeline to hand the macro.
    */
@@ -1405,7 +1547,10 @@
       return 0;
     }
     const at = (p, row) => ({ ...timelinePeriod(p), ...row });
-    const typed = (p, row, key) => at(p, { source: "hand", key, title: row.title, place: row.place ?? "", body: row.body ?? "" });
+    // A typed row, dated by its `p`, or by `ago`/`undated` for history (timelineWhen).
+    const typed = (row, key) => ({
+      ...timelineWhen(row), source: "hand", key, title: row.title, place: row.place ?? "", body: row.body ?? "",
+    });
     const killRows = (kills, tag) => Object.entries(kills)
       .map(([p, foes]) => at(Number(p), { source: "kills", key: `test:kills:${tag}:${p}`, title: "", foes }));
     const byPeriod = list => list.sort((a, b) => (a.year - b.year)
@@ -1435,7 +1580,8 @@
           source: "season", key: `test:season:${t.p}`, title: t.title ?? tl.seasonLabel(timelinePeriod(t.p).season),
           body: tl.seasonEntryBody({ gainNames: t.gains, surplusChange: t.surplus, notes: t.notes }),
         })),
-        ...TEST_TIMELINE_STEADING.rows.map((r, n) => typed(r.p, r, `test:steading:${n}`)),
+        ...TEST_TIMELINE_HISTORY.map((r, n) => typed(r, `test:history:${n}`)),
+        ...TEST_TIMELINE_STEADING.rows.map((r, n) => typed(r, `test:steading:${n}`)),
         ...(tripRow ? [tripRow] : []),
         ...(siteRow ? [siteRow] : []),
       ];
@@ -1464,7 +1610,8 @@
           { source: "levelup", key: `levelup:${n}`, title: level(n), ...redate }));
       }
       const rows = [
-        ...(TEST_TIMELINE_PC_ROWS[slug] ?? []).map((r, n) => typed(r.p, r, `test:pc:${n}`)),
+        ...(TEST_TIMELINE_PC_HISTORY[slug] ?? []).map((r, n) => typed(r, `test:pc-history:${n}`)),
+        ...(TEST_TIMELINE_PC_ROWS[slug] ?? []).map((r, n) => typed(r, `test:pc:${n}`)),
         ...levels,
         ...killRows(timelineKillsFor(slot), slot),
         ...followerRows(actor, 1 + (slot % 4)),
@@ -1490,7 +1637,8 @@
       const deathKey = tl.readEntries(tl.findTrackPage(actor.id)?.system?.entries)
         .find(e => e.key.startsWith("death:"))?.key ?? "death:mortal";
       const rows = [
-        typed(grave.row.p, grave.row, "test:grave:0"),
+        ...(grave.history ?? []).map((r, n) => typed(r, `test:grave-history:${n}`)),
+        typed(grave.row, "test:grave:0"),
         ...killRows(grave.kills ?? {}, `grave${slot}`),
         ...followerRows(actor, Math.min(grave.row.p + 1, grave.died)),
         at(grave.died, { source: "death", key: deathKey, title: game.i18n.localize("stonetop.timeline.milestone.death"), ...redate }),
@@ -2523,6 +2671,9 @@
     const steadingTl = game.actors.find(a => a.type === "stonetop" || a.system?.customType === "stonetop");
     const tlRowsCleared = tlCleanup ? await clearTestTimelineRows(tlCleanup, steadingTl) : 0;
     if (tlRowsCleared) console.log(`[TEST] Took ${tlRowsCleared} seeded row(s) off Stonetop's timeline.`);
+    // And the seeded Ages off the world's list (by id): the GM's own Ages stay.
+    const agesCleared = await clearTestAges(tlCleanup);
+    if (agesCleared) console.log(`[TEST] Took ${agesCleared} seeded Age(s) off the timeline.`);
 
     // Prune the matching Chronicle pages (the test PCs + the example expedition) so the
     // compiled Chronicle keeps no stale test content. Pages carry the stable chronicleKey
@@ -5451,11 +5602,30 @@
   // After the trips are logged (the expedition row is keyed by a trip id), after the sites are
   // seeded (a visit is keyed by a page id), and after the steading block has raised the clock to
   // the third year, so the whole history sits behind the header.
+  // Name the years first (TEST_START_YEAR), so the season headings, the clock and the Seasons
+  // Change pages all read "Year 1247" onwards from the start. Only on a world that never named
+  // them; a build without the setting throws on the read and simply keeps "Year One".
+  let startYearNote = "";
+  try {
+    if (Number(game.settings.get(FLAG_SCOPE, "campaignStartYear")) === 1) {
+      await game.settings.set(FLAG_SCOPE, "campaignStartYear", TEST_START_YEAR);
+      startYearNote = ` Named play's first year ${TEST_START_YEAR}.`;
+    } else {
+      startYearNote = ` Kept the world's own start year, ${game.settings.get(FLAG_SCOPE, "campaignStartYear")}.`;
+    }
+  } catch { /* no campaignStartYear in this build: the years stay "Year One" */ }
+
   const timelineTracks = await seedTestTimeline({
     steading, pcs: created, pcSlugs: createdSlugs, graves: buried, trips: examples, sitePages: testSitePages,
   });
   if (timelineTracks) {
-    console.log(`[TEST] Timeline: ${TEST_TIMELINE_YEARS} years of history (Spring, Year One to Spring, Year ${TEST_TIMELINE_YEARS}) on ${timelineTracks} thread(s). Open it with game.stonetop.openTimeline().`);
+    console.log(`[TEST] Timeline: ${TEST_TIMELINE_YEARS} years of play (Spring of the first year to Spring of the third) plus ${TEST_TIMELINE_HISTORY.length} rows of history before play on Stonetop's thread, on ${timelineTracks} thread(s).${startYearNote} Open it with game.stonetop.openTimeline().`);
+  }
+  // The Ages over it: after the history, so the bands have its years to lie under, and after the
+  // start year is named, though nothing here depends on it (Ages are stored in play's own years).
+  const testAges = await seedTestAges(await game.stonetop?.macroModules?.timeline?.());
+  if (testAges) {
+    console.log(`[TEST] Named ${testAges} Ages over the timeline (two with nothing written in any of their years, one nested, one across the start of play, one still going). The GM edits them from the timeline's Ages button.`);
   }
 
   // ── The relationship map ("Stonetop") ────────────────────────────────────
@@ -5474,7 +5644,7 @@
   // is somehow run before onReady wires up the API.)
   await game.stonetop?.saveChronicle?.();
 
-  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${expeditions ? `${expeditions.added} prepped expeditions (${expeditions.bound} bound to a logged trip), ` : ""}${timelineTracks ? `a ${TEST_TIMELINE_YEARS}-year timeline on ${timelineTracks} threads, ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, ${relmap ? `a relationship map (${relmap.home.people} people and ${relmap.home.lines} lines on the village board, ${relmap.party.people} and ${relmap.party.lines} on the party board, ${relmap.test.people} and ${relmap.test.lines} on the hidden "Test" board), ` : ""} introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
+  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${expeditions ? `${expeditions.added} prepped expeditions (${expeditions.bound} bound to a logged trip), ` : ""}${timelineTracks ? `a ${TEST_TIMELINE_YEARS}-year timeline on ${timelineTracks} threads${testAges ? ` under ${testAges} Ages` : ""}, ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, ${relmap ? `a relationship map (${relmap.home.people} people and ${relmap.home.lines} lines on the village board, ${relmap.party.people} and ${relmap.party.lines} on the party board, ${relmap.test.people} and ${relmap.test.lines} on the hidden "Test" board), ` : ""} introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
   } finally {
     globalThis.__stonetopTestFixturesRunning = false;
   }

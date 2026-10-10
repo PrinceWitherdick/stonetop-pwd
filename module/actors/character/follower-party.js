@@ -2,7 +2,7 @@
 // of follower card (the user's ruling of 2026-10-02).
 //
 // Make Camp feeds "each member of the party" (Book I p.79), and a follower fed at the fire regains HP
-// like a PC (p.248). Custom followers have long carried a `party` toggle; the built-in cards (the
+// like a PC (p.240). Custom followers have long carried a `party` toggle; the built-in cards (the
 // animal companion, the crew, initiates, beasts) now carry the same one. Unset, it reads as each
 // kind's default: an animal companion and a crew go where their PC goes, initiates and beasts stay
 // home unless ticked. Ticking or unticking stores an explicit boolean beside that type's other flags.
@@ -46,6 +46,25 @@ export function followerInPartyFlags(flags, ftype, slug = "") {
 /** Whether a follower of `actor` is with the party. */
 export function followerInParty(actor, ftype, slug = "") {
 	return followerInPartyFlags(readableFlags(actor), ftype, slug);
+}
+
+// FOLLOWS THE PARTY AS A WHOLE is a DIFFERENT question from travelling with it (wave 3 audit FOL-6, the
+// user's ruling of 2026-10-09). Book I p.464: "As a rule, a follower is tied to one PC, and only that PC
+// can pay its cost or spend its Loyalty. But if an NPC follows the party as a whole, then any PC can
+// generate or spend that follower's Loyalty." A guide who follows only Blodwen still eats at the fire.
+// The custom card carried ONE switch labelled with this rule while the camp read it as travel, so the
+// two are split: `party` (above) is travel, `wholeParty` is this. Only a custom follower can follow the
+// party as a whole; the built-in ones are each their own PC's by playbook or possession.
+
+/** Where a follower's "follows the party as a whole" switch is stored, or null for a kind that has none. */
+export function followerWholePartyPath(ftype, slug = "") {
+	return ftype === "custom" && slug ? `customFollowers.${slug}.wholeParty` : null;
+}
+
+/** Whether a follower follows the party as a whole (any PC may move its Loyalty). PURE. */
+export function followsPartyAsWhole(flags, ftype, slug = "") {
+	const path = followerWholePartyPath(ftype, slug);
+	return !!path && foundry.utils.getProperty(flags ?? {}, path) === true;
 }
 
 /**

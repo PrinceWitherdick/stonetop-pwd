@@ -128,6 +128,15 @@ describe("StonetopCharacter.setMaxHp", () => {
 		expect(actor.system.attributes.hp.value).toBe(18);
 	});
 
+	// Wave 4 HP-3: HP a lowered max takes with it is not a blow, so the write says so (Battle Joy reads it).
+	it("tags the HP a lowered max takes as a cap, and leaves a write that takes none untagged", async () => {
+		const { char, actor } = makeChar({ hp: 20 });
+		await char.setMaxHp(18, { base: 20 });
+		expect(actor.update).toHaveBeenLastCalledWith(expect.objectContaining({ "system.attributes.hp.value": 18 }), { stonetopHpCeiling: true });
+		await char.setMaxHp(24, { base: 20 });
+		expect(actor.update.mock.calls.at(-1)).toHaveLength(1);
+	});
+
 	it("refuses to set a max of 0 or less", async () => {
 		const { char, actor } = makeChar();
 		expect(await char.setMaxHp(0, { base: 20 })).toBe(1);

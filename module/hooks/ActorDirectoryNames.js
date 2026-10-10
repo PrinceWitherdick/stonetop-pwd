@@ -1,6 +1,4 @@
-import { playbookTitle } from "../utils/playbook-actors.js";
-import { WBH_HERO_FLAG } from "../actors/character/WouldBeHeroAsterisk.js";
-import { SYSTEM_ID } from "../system-id.js";
+import { playbookTitle, playbookTitleChanged } from "../utils/playbook-actors.js";
 import { repaintActorRow } from "./actor-directory-rows.js";
 
 /**
@@ -54,28 +52,13 @@ export function decorateNameRow(li, actor) {
 }
 
 /**
- * Repaint one actor's sidebar row when the playbook behind its epithet changes.
- *
- * Covers both halves of what `playbookTitle` reads: the playbook itself (picked, swapped or
- * cleared from the sheet) and the Would-Be Hero's cross-off flag, which renames the playbook
- * without touching it.
- *
- * ⚠ The flag bag is read with BRACKETS off SYSTEM_ID — the package id is hyphenated, so a
- * dotted `changed.flags.stonetop-pwd` parses as a subtraction and throws at runtime.
+ * Repaint one actor's sidebar row when the playbook behind its epithet changes (see
+ * `playbookTitleChanged` for what counts).
  *
  * @param {Actor}  actor
  * @param {object} changed  the update that was applied
  */
 export function onUpdateActorPlaybookName(actor, changed) {
-	if (actor?.type !== "character") return;
-	const bag = changed?.flags?.[SYSTEM_ID];
-	const heroChanged = !!bag && (WBH_HERO_FLAG in bag || `-=${WBH_HERO_FLAG}` in bag);
-	// `changed` reaches the hook expanded, so a dotted `system.playbook.name` write and a
-	// whole-object `system.playbook` one both land here. Both deletion shapes count too:
-	// dropping a playbook has to drop the epithet as readily as picking one adds it.
-	const sys = changed?.system;
-	const playbookChanged = !!sys && ("playbook" in sys || "-=playbook" in sys);
-	if (!heroChanged && !playbookChanged) return;
-
+	if (actor?.type !== "character" || !playbookTitleChanged(changed)) return;
 	repaintActorRow(actor, decorateNameRow);
 }

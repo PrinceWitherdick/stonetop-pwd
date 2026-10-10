@@ -25,6 +25,9 @@ export function characterMoveSaver(character) {
  */
 export function worldMoveSaver() {
 	return {
+		// A dropped world move is a COPY (onDropMove embeds it whole), so the editor says an edit
+		// here does not reach sheets that already hold it.
+		world: true,
 		create: (input) => createWorldItem(
 			{ ...buildCustomMoveData(input), type: "move" },
 			"stonetop.character.moves.custom.worldCreated",
@@ -116,6 +119,11 @@ export class CustomMoveDialog extends StonetopDialog {
 		const activeIndex = Math.max(0, SECTIONS.findIndex(s => s.key === this._activeTab));
 		return {
 			isEdit: !!this._item,
+			// Per-window suffix for the field ids, so two open dialogs (a create beside an edit) never
+			// point a label at the other window's field.
+			uid: this.appId,
+			// A reusable world move says that copies already on sheets keep their old text.
+			worldMove: !!this._saver?.world,
 			// Left rail + banner. Only the first-render active state comes from here;
 			// switching panels afterwards is client-side, so nothing typed is lost.
 			activeTab: this._activeTab,
@@ -176,7 +184,9 @@ export class CustomMoveDialog extends StonetopDialog {
 		root.querySelector(".stonetop-custom-move-back")?.addEventListener("click", () => this._step(root, -1));
 		root.querySelector(".stonetop-custom-move-next")?.addEventListener("click", () => this._step(root, 1));
 
-		root.querySelector(".stonetop-custom-move-save")?.addEventListener("click", () => this._save(root));
+		// Latched: Save awaits the write before it closes, and a second click in that gap would
+		// create the move twice.
+		root.querySelector(".stonetop-custom-move-save")?.addEventListener("click", ev => this._guardBusy(ev, () => this._save(root)));
 		root.querySelector(".stonetop-custom-move-cancel")?.addEventListener("click", () => this.close());
 	}
 
@@ -220,6 +230,9 @@ export class CustomMoveDialog extends StonetopDialog {
 			// field instead of silently doing nothing inside a hidden panel.
 			this._selectTab(root, SECTIONS[0].key);
 			root.querySelector("[name=name]")?.focus();
+			// Nothing was saved, so the latched Save button is offered again.
+			const save = root.querySelector(".stonetop-custom-move-save");
+			if (save) save.disabled = false;
 			return;
 		}
 		const input = {

@@ -33,8 +33,9 @@ import {
 	BATTLE_JOY, BATTLE_JOY_FLAG, BATTLE_JOY_DROPPED_OPTION, BATTLE_JOY_REGAIN, BATTLE_JOY_REGAIN_CHOICE, battleJoyEndsUnrolled,
 } from "../actors/character/battle-joy.js";
 import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
+import { HP_CEILING_OPTION } from "../actors/character/StonetopFlags.js";
 import { UNSTOPPABLE } from "../actors/character/deaths-door.js";
-import { keepsFightingAtZero } from "../actors/character/unstoppable.js";
+import { keepsFightingAtZero, stopFightingUpdate } from "../actors/character/unstoppable.js";
 import { answersFor, openZeroHpMove } from "../hooks/DeathsDoorPrompt.js";
 import { healTo } from "../camp/camp-rules.js";
 import { each } from "../fight/fight-state.js";
@@ -159,6 +160,9 @@ export function installBattleJoyOnHurt({ hooks = globalThis.Hooks } = {}) {
 		["preUpdateActor", hooks.on("preUpdateActor", (actor, changes, options) => {
 			try {
 				if (actor?.type !== "character") return;
+				// HP taken down to a max that fell (a soul-wound, a Thrall's Mark) or a typed number capped at
+				// it: no blood spilled, so nothing to offer (StonetopFlags.js#HP_CEILING_OPTION).
+				if (options?.[HP_CEILING_OPTION]) return;
 				// The HP test first: most character updates touch no HP, and it costs nothing to ask.
 				const raw = globalThis.foundry?.utils?.getProperty?.(changes, "system.attributes.hp.value");
 				if (raw === undefined || !ownsLearnedMoveNamed(actor, BATTLE_JOY)) return;
@@ -206,6 +210,7 @@ function isRaging(actor) {
 
 /** Whether the action stopping asks anything of this character: a Battle Joy, or Unstoppable at 0 HP. */
 function stopsSomething(actor) {
+	// The stamp laid at the drop outlives the combat, which is gone from the world by deleteCombat.
 	return isRaging(actor) || keepsFightingAtZero(actor);
 }
 
@@ -229,8 +234,9 @@ export async function endBattleJoyUnrolled(actor) {
  *  1. Battle Joy ends: roll +CON through the sheet's own ending (a Heavy still standing), or, for one
  *     who is down, with no roll at all (endBattleJoyUnrolled).
  *  2. Unstoppable: "When you stop fighting, roll for Death's Door." A Heavy fighting on at 0 HP
- *     (unstoppable.js#keepsFightingAtZero) is told so and handed the walkthrough, AFTER the Joy is
- *     over, so their debilities count on that roll again.
+ *     (unstoppable.js#keepsFightingAtZero, off the stamp laid at the drop: the combat is gone by now) is
+ *     told so, the stamp is lifted (they have stopped fighting), and they are handed the walkthrough,
+ *     AFTER the Joy is over, so their debilities count on that roll again.
  */
 export async function actionStops(actor, { endBattleJoy, openDeathsDoor = openZeroHpMove } = {}) {
 	if (isRaging(actor)) {
@@ -238,6 +244,8 @@ export async function actionStops(actor, { endBattleJoy, openDeathsDoor = openZe
 		else await endBattleJoy?.(actor);
 	}
 	if (keepsFightingAtZero(actor)) {
+		// keepsFightingAtZero reads the stamp, so there is always one to lift here.
+		await actor.update(stopFightingUpdate(actor), { stonetopMove: UNSTOPPABLE });
 		await postMoveNote(actor, UNSTOPPABLE, format("stonetop.unstoppable.stopsFighting", { name: actor.name }));
 		await openDeathsDoor(actor);
 	}
@@ -342,7 +350,7 @@ export async function settleBattleJoyResult(message, actor, choice, { buttons = 
 			globalThis.ui?.notifications?.warn?.(localize(`${KEY}.debilityTaken`));
 			return false;
 		}
-		const name = actor.typedActor?.debilityChoices?.find(d => d.key === choice)?.name ?? choice;
+		const name = actor.typedActor?.debilityMarkChoices?.find(d => d.key === choice)?.name ?? choice;
 		await postMoveNote(actor, BATTLE_JOY, format(`${KEY}.debilityMarked`, { name: actor.name, debility: name }));
 		return true;
 	});
@@ -358,8 +366,11 @@ async function regainBattleJoyHp(actor) {
 	const hp = Number(actor.system?.attributes?.hp?.value) || 0;
 	const to = healTo(hp, roll.total, await character.computedMaxHp());
 	if (to > hp) await character.restoreHp(to, BATTLE_JOY);
+	// The card says what the sheet now holds, read back after the write: the restore can land on less
+	// than asked (a Thrall's Torment's Blessing halves every heal, deaths-door-actor.js#recoveredHpTo).
+	const now = Number(actor.system?.attributes?.hp?.value) || 0;
 	await roll.toMessage({
 		speaker: ChatMessage.getSpeaker({ actor }),
-		flavor:  rolledTotalCard(roll, BATTLE_JOY, localize(`${KEY}.regainedLabel`), format(`${KEY}.regainedLine`, { from: hp, to })),
+		flavor:  rolledTotalCard(roll, BATTLE_JOY, localize(`${KEY}.regainedLabel`), format(`${KEY}.regainedLine`, { from: hp, to: Math.max(hp, now) })),
 	});
 }

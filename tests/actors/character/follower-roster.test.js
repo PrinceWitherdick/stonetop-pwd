@@ -51,6 +51,14 @@ describe("followerRoster", () => {
 		expect(crewMemberHpMax({ crew: { details: { hpMax: "9" } } }, { memberHp: 6 })).toBe(9);
 		expect(crewMemberHpMax({ crew: { details: { hpMax: "" } } }, { memberHp: 6 })).toBe(6);
 	});
+
+	it("leaves out a Servant batch that broke free (Book II p.561: no longer followers)", () => {
+		const sf = { customFollowers: {
+			s: { name: "Deep Ones", hpMax: 3, order: 1, party: true, brokenFree: true },
+			r: { name: "Ring of Daagon", hpMax: 0, order: 2, party: true },
+		} };
+		expect(followerRoster(actorWith(), sf).map(f => f.slug)).toEqual(["r"]);
+	});
 });
 
 describe("followerRosterOf", () => {

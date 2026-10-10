@@ -14,6 +14,8 @@
 // Measured on the page and written in layout pixels: a window drawn at a UI scale reports its rects
 // scaled, and the variable is spent unscaled.
 
+import { drawnScale } from "../utils/drawn-scale.js";
+
 /** The custom property the stylesheet reads. */
 export const MENU_ROOM_VAR = "--timeline-menu-room";
 
@@ -33,7 +35,7 @@ export function fitMenuToTimeline(menu) {
 	if (!box || !timeline) return;
 	const frame = timeline.getBoundingClientRect();
 	if (!frame.height || !timeline.offsetHeight) return;
-	const scale = frame.height / timeline.offsetHeight;
+	const scale = drawnScale(timeline, frame, { horizontal: false });
 	const room = (frame.bottom - box.getBoundingClientRect().top) / scale - MENU_ROOM_MARGIN;
 	box.style.setProperty(MENU_ROOM_VAR, `${Math.max(0, Math.floor(room))}px`);
 }

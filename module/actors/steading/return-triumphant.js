@@ -1,6 +1,7 @@
 import { sign } from "../../utils/roll-engine.js";
 import { clearDebility, markedDebilities, openDebilityPicker } from "./steading-debilities.js";
 import { warn } from "../../utils/logger.js";
+import { STEADING_STAT_MAX } from "./StonetopSteading.js";
 
 // ── Return Triumphant (Book I p.339) ────────────────────────────────────────────
 // No dice: the move clears one of the steading's marked debilities, or raises Fortunes
@@ -58,9 +59,15 @@ export function openReturnTriumphant(steading, { onApplied, fromWalkthrough = fa
 
 	const marked = markedDebilities(steading);
 
-	// No debilities marked → the move raises Fortunes by 1 instead.
+	// No debilities marked → the move raises Fortunes by 1 instead, never past +3: Fortunes "can
+	// range from -1 to +3" (Book I p.508), and the sheet's track draws no box above it.
 	if (marked.length === 0) {
 		const fortunes    = steading.getStatValue("fortunes");
+		if (fortunes >= STEADING_STAT_MAX) {
+			globalThis.ui?.notifications?.info?.(`You return home in triumph, but the steading has no debilities marked and Fortunes is already ${sign(fortunes)}, the most it can be.`);
+			done().catch(err => warn("could not credit the triumph", err));
+			return;
+		}
 		const newFortunes = fortunes + 1;
 		new Dialog({
 			title: "Return Triumphant",

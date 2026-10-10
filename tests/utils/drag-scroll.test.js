@@ -8,7 +8,7 @@ import {
 // drags, which way the box goes, which clicks a drag eats, and that a throw keeps it going.
 
 /** A scroll box: offsets clamped to what the content allows, as a browser clamps them. */
-function fakeBox({ w = 400, h = 300, sw = 2000, sh = 1500 } = {}) {
+function fakeBox({ w = 400, h = 300, sw = 2000, sh = 1500, scale = 1 } = {}) {
 	const listeners = new Map();
 	const classes = new Set();
 	let left = 0;
@@ -22,7 +22,9 @@ function fakeBox({ w = 400, h = 300, sw = 2000, sh = 1500 } = {}) {
 		set scrollLeft(v) { left = clamp(v, sw - w); },
 		get scrollTop() { return top; },
 		set scrollTop(v) { top = clamp(v, sh - h); },
-		getBoundingClientRect: () => ({ left: 0, top: 0, width: w + 12, height: h + 12 }),
+		// `scale`: a window drawn at a UI scale, whose rect is scaled and whose layout is not.
+		offsetWidth: w + 12, offsetHeight: h + 12,
+		getBoundingClientRect: () => ({ left: 0, top: 0, width: (w + 12) * scale, height: (h + 12) * scale }),
 		classList: {
 			add: c => classes.add(c),
 			remove: c => classes.delete(c),
@@ -210,6 +212,58 @@ describe("wireDragScroll", () => {
 	it("puts no gutter on a box that did not ask for one", () => {
 		expect(box.scrollLeft).toBe(500);
 		expect(box.scrollTop).toBe(500);
+	});
+
+	// A window drawn at twice its size: the hand travels on screen, the box scrolls laid out, so the
+	// content stays under the hand only if the travel is halved.
+	describe("in a window drawn at a UI scale", () => {
+		let big;
+		let offBig;
+		beforeEach(() => {
+			big = fakeBox({ scale: 2 });
+			big.scrollLeft = 500;
+			big.scrollTop = 500;
+			offBig = wireDragScroll(big);
+		});
+		afterEach(() => offBig?.());
+
+		it("keeps the content under the hand", () => {
+			big.emit("pointerdown", { clientX: 100, clientY: 100, target: child() });
+			big.emit("pointermove", { clientX: 160, clientY: 70 });
+			expect(big.scrollLeft).toBe(470);
+			expect(big.scrollTop).toBe(515);
+		});
+
+		it("finds its scrollbar where it is drawn, not where it is laid out", () => {
+			// Past the laid-out client width (400) but inside the drawn one (800): the content.
+			big.emit("pointerdown", { clientX: 405, clientY: 100, target: big });
+			big.emit("pointermove", { clientX: 465, clientY: 100 });
+			expect(big.scrollLeft).toBe(470);
+			big.emit("pointerup", { clientX: 465, clientY: 100 });
+			// Past the drawn client width: the scrollbar, left to the browser.
+			big.emit("pointerdown", { clientX: 805, clientY: 100, target: big });
+			big.emit("pointermove", { clientX: 805, clientY: 200 });
+			expect(big.scrollTop).toBe(500);
+		});
+
+		it("throws as far as the hand does on screen", () => {
+			const glideAfterThrow = (el) => {
+				let t = 0;
+				vi.spyOn(globalThis.performance, "now").mockImplementation(() => t);
+				el.emit("pointerdown", { clientX: 300, clientY: 100, target: child() });
+				t = 10; el.emit("pointermove", { clientX: 280, clientY: 100 });
+				t = 20; el.emit("pointermove", { clientX: 260, clientY: 100 });
+				t = 30; el.emit("pointerup", { clientX: 240, clientY: 100 });
+				const released = el.scrollLeft;
+				t = 46; frames.splice(0).forEach(fn => fn?.());
+				vi.restoreAllMocks();
+				return el.scrollLeft - released;
+			};
+			const plain = glideAfterThrow(box);
+			const scaled = glideAfterThrow(big);
+			expect(plain).toBeGreaterThan(0);
+			expect(scaled).toBeCloseTo(plain / 2, 5);
+		});
 	});
 });
 
