@@ -1,5 +1,5 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
-import { orderFollowersBonus } from "../../../data/follower-build.js";
+import { orderFollowersBonus, orderFollowersModeSources } from "../../../data/follower-build.js";
 import { sign } from "../../../utils/roll-engine.js";
 
 // ── OrderFollowersDialog ─────────────────────────────────────────────────────
@@ -167,12 +167,14 @@ export class OrderFollowersDialog extends StonetopDialog {
 		const helps   = tagStates.filter(s => s === "help").length
 			+ Object.values(this._moveState).filter(s => s === "help").length;
 		const hinders = tagStates.filter(s => s === "hinder").length;
-		return orderFollowersBonus({
+		const inputs = {
 			helps, hinders,
 			exceptional:  !!this._follower.exceptional,
 			advantage:    this._hasAdvantage(),
 			disadvantage: this._disadvantage,
-		});
+		};
+		// The sides that spoke ride along with the mode they net to, so the roll can lay one more on them.
+		return { ...orderFollowersBonus(inputs), modeSources: orderFollowersModeSources(inputs) };
 	}
 
 	// Whether a tag the player marked "in the way" is imposing disadvantage on its
@@ -298,7 +300,7 @@ export class OrderFollowersDialog extends StonetopDialog {
 		const customEl = root?.querySelector(".stonetop-of-custom");
 		if (customEl) this._customMove = customEl.value;
 
-		const { bonus, rollMode } = this._result();
+		const { bonus, rollMode, modeSources } = this._result();
 		// A member ordered on their own rolls under their own name: "Glaw: Let Fly".
 		const name = this._name();
 		const moveName = `${name || "Follower"}: ${this._moveLabel()}`;
@@ -306,7 +308,7 @@ export class OrderFollowersDialog extends StonetopDialog {
 		// (e.g. the Defend → hold-Readiness reaction) don't have to re-parse them out of
 		// the flattened moveName string.
 		await this._onRoll?.({
-			bonus, rollMode, moveName, moveKey: this._moveKey, followerName: name,
+			bonus, rollMode, modeSources, moveName, moveKey: this._moveKey, followerName: name,
 			member: this._member()?.key ?? null,
 			shieldWall: this._wallAdvantage(),
 		});

@@ -532,8 +532,10 @@ describe("Beast-Bonded on the companion card, and Lend it your strength (M8)", (
 		expect((await followerGroups(char, actor)).animalCompanion.bond).toMatchObject({ canLend: true, atFull: false });
 	});
 
-	it("the Ranger loses the whole roll; the card and the NPC regain it, each capped at its max", async () => {
-		const { actor } = await bonded(["lend-strength"], { "animalCompanion.hpCurrent": 14 });
+	// Its NPC's HP is the companion's while there is one, and the card's box mirrors it (follower-hp.js), so the
+	// NPC alone is raised; with none, the box is.
+	it("the Ranger loses the whole roll; the companion's NPC regains it, capped at its max, and the box is left to mirror it", async () => {
+		const { actor } = await bonded(["lend-strength"], { "animalCompanion.hpCurrent": 14, "animalCompanion.details": { actorUuid: "Actor.steed" } });
 		actor.system.attributes.hp.value = 8;
 		const npc = { isOwner: true, system: { attributes: { hp: { value: 10, max: 16 } } }, update: vi.fn(async u => { npc.system.attributes.hp.value = u["system.attributes.hp.value"]; }) };
 		const toMessage = vi.fn();
@@ -542,8 +544,10 @@ describe("Beast-Bonded on the companion card, and Lend it your strength (M8)", (
 			const out = await bond.lendStrength(actor, { npc, cardHp: async () => ({ max: 16, current: 14 }) });
 			expect(out.amount).toBe(5);
 			expect(actor.system.attributes.hp.value).toBe(3);
-			expect(actor.getFlag(STONETOP_SCOPE, "animalCompanion.hpCurrent")).toBe(16);
+			expect(actor.getFlag(STONETOP_SCOPE, "animalCompanion.hpCurrent")).toBe(14);
 			expect(npc.system.attributes.hp.value).toBe(15);
+			expect(npc.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 15 }, { stonetopMove: "Lend it your strength" });
+			expect(out.card).toEqual({ gain: 5, from: 10, to: 15 });
 			expect(toMessage).toHaveBeenCalledOnce();
 			expect(toMessage.mock.calls[0][0].flavor).toContain("Lend it your strength");
 		} finally {

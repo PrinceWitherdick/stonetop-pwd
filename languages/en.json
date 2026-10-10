@@ -1602,6 +1602,44 @@
           "addPlaceholder": "Add a tag…",
           "addLabel": "Add this tag",
           "remove": "Remove the {tag} tag"
+        },
+        "bond": {
+          "button": "Pay cost",
+          "tooltip": "Strengthen Your Bond: pay their cost, and if you haven't done so recently, they hold +1 Loyalty (max 3).",
+          "atMaxTooltip": "They hold 3 Loyalty: Strengthen Your Bond doesn't trigger.",
+          "fallenTooltip": "They have fallen.",
+          "atMax": "{name} holds 3 Loyalty already: Strengthen Your Bond doesn't trigger.",
+          "card": "You pay {name}'s cost: they hold +1 Loyalty, {loyalty} in all.",
+          "cardCost": "(Their cost: {cost}.)",
+          "recently": "The PC and/or follower should have a significant scene \"on camera\" before they can Strengthen Their Bond again."
+        },
+        "wholeParty": {
+          "label": "Follows the party as a whole",
+          "hint": "(any PC may pay its cost or spend its Loyalty)",
+          "badge": "Follows the party as a whole: any PC may pay its cost or spend its Loyalty."
+        },
+        "handoff": {
+          "failed": "{name} could not be handed to {target}: a GM needs to be online to write a character you do not own.",
+          "npcWaits": "The follower's NPC keeps its old owners until a GM is online to change them."
+        },
+        "npcHp": {
+          "noGm": "{name}'s HP is kept on their actor, which you don't own, and no GM is online to change it. Ask the GM to set it by hand."
+        },
+        "door": {
+          "triggers": "{name} triggers Death's Door (even if they weren't directed to by their PC). {leader}'s player rolls for them.",
+          "rollButton": "Roll Death's Door (+nothing)",
+          "fallbackName": "Your follower",
+          "rule": "{name} is dying, and glimpses the Last Door and the Lady of Crows. Roll +nothing.",
+          "success": "{name} wrests themselves back to the realm of the living: back to 1 HP, and back in the action. Say how their brush with death has marked them.",
+          "partial": "The Lady waves {name} off: no longer dying, but out of the action (unconscious, or close enough) until the GM says otherwise.",
+          "failure": "{name}'s time has come. They can make one last move as if they rolled a 12+, but after that they're dead.",
+          "upButton": "Back to 1 HP",
+          "deadButton": "Mark dead",
+          "aidOffer": "Advantage from {source} (Aiding the Death's Door roll)",
+          "tierMoved": "This card no longer reads that result: use the buttons of the result it shows now.",
+          "fateSub": "Death's Door, 6-: their time has come (p.244)",
+          "fateNote": "One last move as if they rolled a 12+, then they're dead, unless you spare them. Close this to decide later: the card's Mark dead button waits.",
+          "fateLater": "Decide later"
         }
       },
       "moveTypes": {

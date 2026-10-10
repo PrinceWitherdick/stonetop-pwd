@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { buildLiveCharacter, makeLiveItem, resetLiveIds } from "../../fakes/LiveCharacter.js";
 import { WE_HAPPY_FEW } from "../../../module/actors/character/fight-states.js";
 
@@ -45,5 +45,31 @@ describe("shaken nerves on a roll", () => {
 	it("leaves a steady Marshal's rolls exactly as they were", () => {
 		const { char } = marshal();
 		expect(char.applyDebilityRollMode("int", { rollMode: "normal" })).toEqual({ rollMode: "normal" });
+	});
+});
+
+// Order Followers hands over the sides its window netted (Shield Wall's advantage, a hindering tag), so the
+// nerves fold with each of them: one side each way is straight however many of each there are (p.230).
+describe("shaken nerves on an Order Followers roll", () => {
+	let rolled;
+	beforeEach(() => {
+		rolled = [];
+		vi.doMock("../../../module/utils/roll-engine.js", () => ({
+			rollStat: vi.fn(async (stat, actor, options) => { rolled.push(options); return { total: 7 }; }),
+		}));
+	});
+	afterEach(() => vi.doUnmock("../../../module/utils/roll-engine.js"));
+
+	it("keeps a cancelled advantage and disadvantage straight", async () => {
+		const { char } = marshal({ shaken: true });
+		await char.onOrderFollowersRoll({ bonus: 1, rollMode: "normal", modeSources: ["adv", "dis"], shieldWall: true });
+		expect(rolled[0].rollMode).toBe("normal");
+	});
+
+	it("still cancels a lone advantage, and puts a straight roll at disadvantage", async () => {
+		const { char } = marshal({ shaken: true });
+		await char.onOrderFollowersRoll({ rollMode: "adv", modeSources: ["adv"] });
+		await char.onOrderFollowersRoll({ rollMode: "normal", modeSources: [] });
+		expect(rolled.map(o => o.rollMode)).toEqual(["normal", "dis"]);
 	});
 });

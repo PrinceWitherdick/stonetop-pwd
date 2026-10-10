@@ -437,11 +437,25 @@
 				{{/each}}
 			</div>
 			{{#unless edit.stats}}
+			{{!-- Strengthen Your Bond (p.464): pay their cost and they hold +1 Loyalty, max 3.
+			      Disabled at 3 ("If a follower holds 3 Loyalty, then Strengthen Your Bond doesn't
+			      trigger") and on a fallen follower. The pips stay click-editable beside it.
+			      Not on a Servant of Daagon batch: they print no cost, only "sharing a pool of Loyalty with
+			      the Ring itself" (Book II p.560), whose cost is paid on the Ring's own card. --}}
+			{{#unless isServant}}
+			<button type="button" class="stonetop-pay-cost stonetop-inline-btn"
+			        data-ftype="{{ftype}}" data-slug="{{loyaltySlug}}" data-follower-name="{{orderName}}" data-cost="{{cost}}"
+			        data-loyalty-value="{{loyaltyValue}}"{{#if wholeParty}} data-whole-party{{/if}}{{#if dead}} data-dead{{/if}}
+			        {{#if dead}}disabled data-tooltip="{{localize "stonetop.character.followers.bond.fallenTooltip"}}"{{else}}{{#if loyaltyAtMax}}disabled data-tooltip="{{localize "stonetop.character.followers.bond.atMaxTooltip"}}"{{else}}data-tooltip="{{localize "stonetop.character.followers.bond.tooltip"}}"{{/if}}{{/if}} data-tooltip-direction="UP">
+				<i class="fas fa-hand-holding-heart"></i> {{localize "stonetop.character.followers.bond.button"}}
+			</button>
+			{{/unless}}
 			{{!-- Spend Loyalty (p.464): overcome fear / resist instinct / do something
-			      they'd rather not. Disabled when they hold none. --}}
+			      they'd rather not. Disabled when they hold none, and on a fallen follower. --}}
 			<button type="button" class="stonetop-spend-loyalty stonetop-inline-btn"
 			        data-ftype="{{ftype}}" data-slug="{{loyaltySlug}}" data-follower-name="{{orderName}}"
-			        {{#unless loyaltyValue}}disabled data-tooltip="No Loyalty to spend." data-tooltip-direction="UP"{{else}}data-tooltip="Spend 1 Loyalty (overcome fear / resist instinct / do something they'd rather not)." data-tooltip-direction="UP"{{/unless}}>
+			        data-loyalty-value="{{loyaltyValue}}"{{#if wholeParty}} data-whole-party{{/if}}{{#if dead}} data-dead{{/if}}
+			        {{#if dead}}disabled data-tooltip="{{localize "stonetop.character.followers.bond.fallenTooltip"}}" data-tooltip-direction="UP"{{else}}{{#unless loyaltyValue}}disabled data-tooltip="No Loyalty to spend." data-tooltip-direction="UP"{{else}}data-tooltip="Spend 1 Loyalty (overcome fear / resist instinct / do something they'd rather not)." data-tooltip-direction="UP"{{/unless}}{{/if}}>
 				<i class="fas fa-hand-holding-hand"></i> Spend
 			</button>
 			{{/unless}}
@@ -1013,10 +1027,13 @@
 			<div class="stonetop-group-fight-numbers">{{> stonetopFightingInNumbers ftypeAttr="custom" fallbackName="Group"}}</div>
 			{{!-- Clash / Let Fly for the whole group open the Order dialog with the
 			      group's tags (p.471); each rule row above carries its own damage roll. --}}
+			{{!-- A Servant batch that broke free is no longer anyone's to order (Book II p.561). --}}
+			{{#unless brokenFree}}
 			<div class="stonetop-group-fight-roll-row">
 				{{> stonetopOrderButton ftype="custom" moveKey="clash"   icon="fa-dice-d6" caption="Clash"}}
 				{{> stonetopOrderButton ftype="custom" moveKey="let-fly" icon="fa-dice-d6" caption="Let Fly"}}
 			</div>
+			{{/unless}}
 		</details>
 		{{/if}}
 
@@ -1038,21 +1055,28 @@
 		<div class="stonetop-daagon-shared-note"><i class="fas fa-ring"></i> Loyalty is the Ring's shared pool.</div>
 		{{/if}}
 		{{#if brokenFree}}
-		<div class="stonetop-daagon-broke-free"><i class="fas fa-skull-crossbones"></i> Broke free of your control. No longer yours to command.</div>
-		{{/if}}
+		{{!-- No longer followers, so nothing to send back: the card stays as a record until removed. --}}
+		<div class="stonetop-daagon-broke-free"><i class="fas fa-skull-crossbones"></i> Broke free of your control. No longer your followers.</div>
+		<div class="stonetop-daagon-actions">
+			<button type="button" class="stonetop-follower-remove stonetop-inline-btn stonetop-inline-btn--danger" data-slug="{{slug}}">
+				<i class="fas fa-trash"></i> Remove
+			</button>
+		</div>
+		{{else}}
 		<div class="stonetop-daagon-actions">
 			<button type="button" class="stonetop-send-back stonetop-daagon-btn" data-slug="{{slug}}" data-follower-name="{{orderName}}"
-			        data-tooltip="Send them back whence they came — roll +CHA to dismiss this batch." data-tooltip-direction="UP">
+			        data-tooltip="Send them back whence they came: roll +CHA to dismiss this batch." data-tooltip-direction="UP">
 				<i class="fas fa-hand-sparkles"></i> Send Them Back
 			</button>
 		</div>
 		{{/if}}
+		{{/if}}
 		{{/unless}}
 
-		{{!-- Party-wide follower badge (advisory): any PC may pay its cost or spend
-		      its Loyalty (p.464). --}}
-		{{#if party}}{{#unless edit.card}}
-		<div class="stonetop-follower-party-badge"><i class="fas fa-people-group"></i> Party follower: any PC may pay its cost or spend its Loyalty.</div>
+		{{!-- Follows the party as a whole (p.464): any PC may pay its cost or spend its Loyalty.
+		      Its own switch, apart from "travels with the party" (follower-party.js). --}}
+		{{#if wholeParty}}{{#unless edit.card}}
+		<div class="stonetop-follower-party-badge"><i class="fas fa-people-group"></i> {{localize "stonetop.character.followers.wholeParty.badge"}}</div>
 		{{/unless}}{{/if}}
 		{{!-- Fallen follower (marked Dead from the 0-HP fate): keep the card as a record but
 		      surface a Remove button here so the player needn't open the edit pencil to clear
@@ -1069,7 +1093,11 @@
 		<div class="stonetop-follower-card-actions">
 			<label class="stonetop-follower-party-toggle">
 				<input type="checkbox" class="stonetop-follower-party-check" data-ftype="custom" data-slug="{{slug}}" {{#if party}}checked{{/if}}>
-				Party follower <span class="stonetop-follower-party-hint">(any PC pays/spends its Loyalty)</span>
+				Party follower <span class="stonetop-follower-party-hint">(travels with the party: eats and rests at Make Camp)</span>
+			</label>
+			<label class="stonetop-follower-party-toggle">
+				<input type="checkbox" class="stonetop-follower-party-check" data-switch="wholeParty" data-ftype="custom" data-slug="{{slug}}" {{#if wholeParty}}checked{{/if}}>
+				{{localize "stonetop.character.followers.wholeParty.label"}} <span class="stonetop-follower-party-hint">{{localize "stonetop.character.followers.wholeParty.hint"}}</span>
 			</label>
 			<div class="stonetop-follower-card-actions-buttons">
 				<button type="button" class="stonetop-follower-handoff stonetop-inline-btn" data-slug="{{slug}}" data-follower-name="{{orderName}}">

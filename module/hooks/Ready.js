@@ -81,6 +81,7 @@ import { refreshHeldMoves } from "../migration/move-refresh.js";
 import { refreshSteadingImprovements } from "../migration/improvement-refresh.js";
 import { refreshSeededMonsters } from "../migration/bestiary-refresh.js";
 import { refreshCatalogFollowers } from "../migration/follower-refresh.js";
+import { splitFollowerWholeParty, FOLLOWER_WHOLE_PARTY_SWEEP } from "../migration/follower-whole-party.js";
 
 const _EOS_MACRO_NAME   = "End of Session";
 const _EOS_MACRO_IMG    = "systems/stonetop-pwd/assets/icons/macros/truce.svg";
@@ -271,6 +272,11 @@ export async function onReady() {
 		// good dog's herder default and two summons' notes, wherever a card still holds the old value.
 		try { await oncePerVersion("followerRefresh", refreshCatalogFollowers); }
 		catch (err) { console.error("Stonetop | refreshing catalog followers failed", err); }
+		// A custom follower's old "Party follower" switch meant both travelling with the party and
+		// following it as a whole (p.464); now two switches, so one switched on gets both
+		// (migration/follower-whole-party.js). Once per WORLD, like the creation-finished stamp below.
+		try { await oncePerVersion(FOLLOWER_WHOLE_PARTY_SWEEP, splitFollowerWholeParty); }
+		catch (err) { console.error("Stonetop | splitting the followers' party switch failed", err); }
 		// Keep a crossbow a character already carries on the sheet now that Weapons of War grants only
 		// the five weapons it names (migration/weapons-of-war-grandfather.js). GATED: it reads the
 		// outfit catalog and then every character's inventory flags, and it is legacy repair — the

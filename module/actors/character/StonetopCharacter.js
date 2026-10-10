@@ -5573,13 +5573,17 @@ export class StonetopCharacter {
 	 * @param {object} opts
 	 * @param {number} [opts.bonus]     - 0, 1, or 2
 	 * @param {string} [opts.rollMode]  - "normal" | "adv" | "dis"
+	 * @param {string[]} [opts.modeSources] - the sides that netted to `rollMode` (data/follower-build.js
+	 *   #orderFollowersModeSources), so the nerves are folded with each of them rather than with the net
 	 * @param {string} [opts.moveName]  - Card header, e.g. "Hari: Defy Danger"
 	 */
-	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", moveName, shieldWall = false } = {}) {
+	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", modeSources = null, moveName, shieldWall = false } = {}) {
 		const { rollStat } = await import("../../utils/roll-engine.js");
 		// Return the roll so the caller can react to the result — e.g. auto-holding
 		// Readiness when a follower is ordered to Defend and rolls 7+ (p.469).
-		const mode = ["adv", "dis"].includes(rollMode) ? rollMode : "normal";
+		// With the sides handed over, a straight roll reached by cancelling stays straight under the nerves;
+		// without them (a caller that hands only the net), the net is the one side.
+		const sources = Array.isArray(modeSources) ? modeSources : [rollMode];
 		const nerves = fightStateActive(this._actor, "nerves");
 		// Where an advantage came from, when the Marshal's Shield Wall gave it, and a disadvantage.
 		const conditionNotes = [
@@ -5588,7 +5592,7 @@ export class StonetopCharacter {
 		];
 		return rollStat("follower", this._actor, {
 			statValue: Math.trunc(Number(bonus) || 0),
-			rollMode:  nerves ? foldModes(["dis"], mode) : mode,
+			rollMode:  foldModes(nerves ? [...sources, "dis"] : sources, "normal"),
 			moveName:  moveName || "Order Followers",
 			modifier:  0,
 			...(conditionNotes.length ? { conditionNotes } : {}),

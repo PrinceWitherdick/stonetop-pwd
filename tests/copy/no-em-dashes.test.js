@@ -96,9 +96,6 @@ const QUOTED = {
 	"module/utils/roll-engine.js": [
 		"\"<strong>Threats abound</strong> &mdash; and don't mark XP.\" },",
 	],
-	"templates/actor/partials/tab-followers.hbs": [
-		"=\"Send them back whence they came — roll +CHA to dismiss this batch.\"",
-	],
 	"templates/dialogs/arcana-inspire.hbs": [
 		"pur your creativity, not limit it — interpret them loosely.</p>",
 	],

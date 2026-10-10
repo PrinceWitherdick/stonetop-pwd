@@ -44,6 +44,9 @@ import { onUpdateActorUnstoppable } from "./module/actors/character/unstoppable.
 import { installBattleJoyOnHurt, installBattleJoyEnd, wireBattleJoyResult } from "./module/combat/battle-joy-offer.js";
 import { wireInvokeConsequences, wireWielderInvoke, invokeCardChoosesConsequence, invokeActionRow, TEN_PLUS_FLAG } from "./module/actors/character/invoke-consequences.js";
 import { wireLoyalToTheEnd } from "./module/actors/character/companion-bond.js";
+import { wireFollowerDeathsDoor } from "./module/actors/character/follower-deaths-door.js";
+import { FOLLOWER_LOYALTY_QUERY, handleFollowerLoyaltyQuery } from "./module/actors/character/follower-bond.js";
+import { FOLLOWER_HANDOFF_QUERY, handleFollowerHandoffQuery } from "./module/actors/character/follower-handoff.js";
 import { wireImproviseCard, wireMarkConsequenceCard } from "./module/actors/character/arcana-seeker-moves.js";
 import { wireInvocationEffects, BATH_QUERY, handleBathQuery } from "./module/actors/character/invocation-apply.js";
 import { installBattleHolds } from "./module/combat/battle-holds.js";
@@ -223,6 +226,11 @@ Hooks.once("init", () => {
 	// And every other player's rewrite of a roll card's dice (Burn Brightly, giving it your all, a Know Things
 	// upgrade), written by the GM's client like the +1s above, so one client writes each card (utils/roll-card-writer.js).
 	if (CONFIG.queries) CONFIG.queries[ROLL_CARD_QUERY] = (data, context) => handleRollCardQuery(data, context);
+	// And a follower's Loyalty moved by a PC who does not lead them, for a follower who follows the party as a
+	// whole (Book I p.464; actors/character/follower-bond.js), and a follower handed to a character the player
+	// cannot write, with the NPC that stands for them (p.480; actors/character/follower-handoff.js).
+	if (CONFIG.queries) CONFIG.queries[FOLLOWER_LOYALTY_QUERY] = (data, context) => handleFollowerLoyaltyQuery(data, context);
+	if (CONFIG.queries) CONFIG.queries[FOLLOWER_HANDOFF_QUERY] = (data, context) => handleFollowerHandoffQuery(data, context);
 
 	// Every window and modal in the system is drag-resizable; the ad-hoc
 	// Dialog popups we spawn from sheets default to resizable too. The companion
@@ -2502,6 +2510,8 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	wireWielderInvoke(message, html);
 	// Loyal to the End's 7-9 and 6-: the companion's "injured" tag, added once per card.
 	wireLoyalToTheEnd(message, html);
+	// A follower's Death's Door card: the +nothing roll, then 10+ back to 1 HP or 6- dead (follower-deaths-door.js).
+	wireFollowerDeathsDoor(message, html);
 	// Improvise, rolled from an un-learned mystery: its 7+'s "use it this once" and its 10+'s step.
 	wireImproviseCard(message, html);
 	// "Mark a consequence" as a move's cost (the Ring of Daagon's Call Up and Send Them Back):

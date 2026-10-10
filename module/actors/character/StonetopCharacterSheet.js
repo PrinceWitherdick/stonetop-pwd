@@ -33,7 +33,8 @@ import {NpcToFollowerDialog} from "./dialogs/NpcToFollowerDialog.js";
 import {OrderFollowersDialog} from "./dialogs/OrderFollowersDialog.js";
 import {FollowerFateDialog} from "./dialogs/FollowerFateDialog.js";
 import {CrewSetupDialog, crewSetupLimit, crewSetupUpdate} from "./dialogs/CrewSetupDialog.js";
-import {FOLLOWER_FATE_TYPES, SIR_PERMISSION_TO_DIE, isCrewMemberRow, isCustomMemberRow, followerFateHpPath, followerFateLoyaltyType, wasStanding, followerReviveUpdate, crewMemberFateName, customMemberFateName, sirPermissionOffer, crewIndividualRemovalUpdate, crewMemberDeathUpdate, customMemberDeathUpdate, customMemberStruckOff, postLetGoReceipt} from "./follower-fate.js";
+import {FOLLOWER_FATE_TYPES, SIR_PERMISSION_TO_DIE, isCrewMemberRow, isCustomMemberRow, followerFateHpPath, followerFateLoyaltyType, wasStanding, crewMemberFateName, customMemberFateName, sirPermissionOffer, crewIndividualRemovalUpdate, crewMemberDeathUpdate, customMemberDeathUpdate, customMemberStruckOff, postLetGoReceipt} from "./follower-fate.js";
+import {setFollowerHp} from "./follower-hp.js";
 import {CallUpDeepOnesDialog} from "./dialogs/CallUpDeepOnesDialog.js";
 import {BackgroundNeighborsDialog, storedNeighborPicks, storedNeighborTraits, traitedNeighbors} from "./dialogs/BackgroundNeighborsDialog.js";
 import {BackgroundAnswersDialog} from "./dialogs/BackgroundAnswersDialog.js";
@@ -45,7 +46,7 @@ import {grantedWeaponAttackFor, rollCharacterDamageAt, rollFollowerDamageAt, cre
 import {offerBattleJoyOnDamage, endBattleJoyUnrolled} from "../../combat/battle-joy-offer.js";
 import {ownDamageMode, toughLoveHeld, callOut, workedItOut, leapIn, HERO_MOVES} from "../../fight/hero-moves.js";
 import {ASTERISK_MOVES, asteriskUseCounts, asteriskMoveUsed, canRestoreWouldBe, restoreWouldBe} from "./WouldBeHeroAsterisk.js";
-import {followerInFight} from "../../fight/follower-fight.js";
+import {followerInFight, customFollowerOutOfOrders} from "../../fight/follower-fight.js";
 import {altStatGrantsFor} from "../../data/alt-stat-grants.js";
 import {readOnboardingResume, writeOnboardingResume, clearOnboardingResume} from "./onboarding-resume.js";
 import {trackCreationFlow} from "./creation-flow.js";
@@ -65,7 +66,8 @@ import { crewExists, crewBackgroundTag, effectiveCrewSize, customGroupSize, crew
 import {resolvedFlags, resolvedFlagProperty, STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "./StonetopFlags.js";
 import { FOLLOWER_FLAGS as _FOLLOWER_FLAGS, fillFollowerSlug as _fillSlug, followerDetailBase as _followerDetailBase, clampFollowerHp as _clampHp, intOverrideOrNull as _intOverrideOrNull, companionBase, crewMemberHpMax, followerHpMaxOverride, ownedBeastSlugs, orderedCustomFollowers } from "./follower-roster.js";
 import {createArcanumItem} from "../../item/createArcanum.js";
-import {rollStat, sign, classifyResult} from "../../utils/roll-engine.js";
+import {rollStat, sign, classifyResult, messageOfRoll} from "../../utils/roll-engine.js";
+import { recordTierEffects, settleFollowerReadiness } from "./tier-effects.js";
 import {defendReadinessHold} from "../../combat/defend-readiness.js";
 import {dieFromDamage, printedBlow} from "../../utils/damage.js";
 import {normalizeDamageDie} from "../../utils/damage-die.js";
@@ -112,7 +114,10 @@ import {annotateInvocationEffects, splitEmpoweredEffect} from "./invocation-effe
 import {CONSECRATED_FLAME, INVOKE_THE_SUN_GOD, EMPOWERED_INVOCATIONS, showHolyLight} from "./holy-light.js";
 import {ownedMoveNames, ownedMove, ownedLearnedMove, ownsLearnedMoveNamed, bookMoveName, moveLearnedIn} from "./owns-move.js";
 import { crewIsExceptional, companionIsExceptional, EXCEPTIONAL_FROM_MOVE } from "./follower-masters.js";
-import { followerInPartyFlags, followerPartyPath } from "./follower-party.js";
+import { followerInPartyFlags, followerPartyPath, followerWholePartyPath, followsPartyAsWhole } from "./follower-party.js";
+import { FOLLOWER_LOYALTY_MAX, SPEND_LOYALTY, changeFollowerLoyalty, followerLoyaltyPath, loyaltyMover, strengthenBond } from "./follower-bond.js";
+import { handOffTargets, requestHandOff, unlinkRemovedFollower } from "./follower-handoff.js";
+import { followerDoorCardHtml } from "./follower-deaths-door.js";
 import { ANIMAL_COMPANION_MOVE, COMPANION_TRAIT_PICKS_PER_SPECIMEN, MAGNIFICENT_SPECIMEN_MOVE, companionPaidTraits, companionTraitAllowance } from "./animal-companion.js";
 import { LOYAL_TO_THE_END, beastBondActions, companionConditions, lendStrength, loyalToTheEndTierActions, removeCompanionCondition } from "./companion-bond.js";
 import { CompanionSetupDialog, companionSetupUpdate } from "./dialogs/CompanionSetupDialog.js";
@@ -917,10 +922,6 @@ function _followerDragSnapshot(card, actor) {
 // Only a genuinely unset (null/undefined/non-numeric) size defaults to 6 — an
 // explicit 0 is honoured, so emptying the roster doesn't spring back to six.
 // Shared by the read side (_buildFollowersData) and the resize/delete handlers.
-
-// Flag path where a follower type stores its Loyalty value, driving the single
-// shared loyalty-pip click handler (see _FOLLOWER_FLAGS).
-function _followerLoyaltyPath(ftype, slug) { return _fillSlug(_FOLLOWER_FLAGS[ftype]?.loyalty, slug); }
 
 // Flag path where a follower type holds Readiness (held when it Defends, p.469).
 // One card-body row drives every type: the crew's entry is the group's common
@@ -3153,10 +3154,14 @@ export function createStonetopCharacterSheetClass(Base) {
 				card.portraitFrameLabel = `Frame ${card.orderName}'s face`;
 				if (Array.isArray(card.loyalty) && card.loyalty.length) {
 					card.loyaltyValue = card.loyalty.filter(p => p.filled).length;
+					// Strengthen Your Bond doesn't trigger at 3 (p.464), so its button greys there.
+					card.loyaltyAtMax = card.loyaltyValue >= FOLLOWER_LOYALTY_MAX;
 					// A Loyalty track marks a true follower (every orderable type has one;
 					// livestock doesn't), so it gates the Order button the same way it
 					// gates the readiness stepper below — no Order action on a butcher beast.
-					card.canOrder = true;
+					// Nor on a follower marked Dead by the 0-HP fate: their card stays as a record,
+					// but nobody orders the fallen (wave 3 audit FOL-9), nor a Servant batch that broke free (FO-3).
+					card.canOrder = !card.dead && !card.brokenFree;
 					// "Have what they need" (p.326) adds an item to a follower's gear on the fly,
 					// reached the way any player move is: "when you direct your follower to do
 					// something that would trigger a player move, and they do it, they trigger the
@@ -3292,6 +3297,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			// the expedition, and starts in a Struggle as One. Unset, the companion and the crew are in.
 			const withParty = (card) => {
 				if (card?.ftype) card.party = followerInPartyFlags(sf, card.ftype, card.slug ?? "");
+				// And, a separate question, whether they follow the party as a whole (p.464: any PC may
+				// then pay their cost or spend their Loyalty). Custom followers only.
+				if (card?.ftype) card.wholeParty = followsPartyAsWhole(sf, card.ftype, card.slug ?? "");
 				return card;
 			};
 			const finalize = (card) => withParty(withFolds(withOrderData(withExceptional(withTagEdits(withSectionEdits(withBarkskin(withGroupFight(withStatOverrides(card)))))))));
@@ -4594,6 +4602,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// at somebody else's - still gets to set their own font size from it.
 			this._wirePreferences(html);
 
+			// Strengthen Your Bond and, for a follower of the whole party, Spend Loyalty: above the guard,
+			// since any PC may move such a follower's Loyalty (p.464; _wireFollowerBond).
+			this._wireFollowerBond(html);
+
 			if (!this.isEditable) return;
 
 			// Details-tab per-section edit pencils: toggle just that section's edit
@@ -5095,7 +5107,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// ftype; clicking a filled pip clears up to it, an empty one fills up to it.
 			html.find("button.stonetop-loyalty-pip").on("click", async ev => {
 				const { loyalty: ftype, slug } = ev.currentTarget.dataset;
-				const path = _followerLoyaltyPath(ftype, slug);
+				const path = followerLoyaltyPath(ftype, slug);
 				if (!path) return;
 				const idx     = Number(ev.currentTarget.dataset.index);
 				const current = Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0;
@@ -6141,16 +6153,19 @@ export function createStonetopCharacterSheetClass(Base) {
 				// as alive; only an explicit 0 means they were already down.
 				const wasAlive = fateEligible
 					&& wasStanding(this.actor.getFlag(STONETOP_SCOPE, followerFateHpPath(follower, slug, index)));
-				// Reviving a fallen custom follower (HP back above 0) clears its "dead" mark so
-				// the card returns to normal: a mirror of the fate dialog's "Dead" outcome. One
-				// rule with Bath of Healing Light's heal of a card (follower-fate.js). A custom
-				// group's member marked fallen at the group's floor is revived the same way.
-				// In the HP's own write: one update, one re-render.
-				const update = {
-					...this._followerHpUpdate(follower, slug, index, val),
-					...followerReviveUpdate(follower, slug, val, resolvedFlags(this.actor), index),
-				};
-				if (Object.keys(update).length) await this.actor.update(update);
+				// The one HP writer (follower-hp.js#setFollowerHp). A one-body follower with an NPC: the
+				// NPC's HP is theirs (wave 3 audit FOL-1), so it is the NPC that is written, and
+				// fight/roster-fate.js#onUpdateActorFollowerHp mirrors it back here and asks their fate on
+				// a drop to 0, once; this handler's own fate path never fires for them. Anyone else's box
+				// is written with the revive it makes: a fallen custom follower (or a custom group's member
+				// marked fallen) raised above 0 is no longer marked, one rule with Bath of Healing Light's
+				// heal of a card. In the HP's own write: one update, one re-render. Nothing written (an NPC
+				// nobody here could write) redraws the box as it stands.
+				const written = await setFollowerHp(this.actor, { follower, slug, index }, val);
+				if (written !== "box") {
+					if (!written) this.render(false);
+					return;
+				}
 				// Capture the follower's display name off the live card BEFORE the
 				// re-render detaches this input from the DOM. A crew member, or a custom
 				// group's, is named by their own roster row, never by the card (which would
@@ -10714,20 +10729,52 @@ export function createStonetopCharacterSheetClass(Base) {
 		// the HP row's own type (crew rows included, see follower-fate.js), `index` the roster
 		// row for a crew member or a custom group's. Loyalty is read off the follower's own
 		// track, the crew's shared one for a crew member, the group's for a group member.
-		_openFollowerFate({ follower, slug, index, name } = {}) {
-			const loyaltyPath = _followerLoyaltyPath(followerFateLoyaltyType(follower), slug);
-			const loyalty = loyaltyPath ? Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, loyaltyPath)) || 0) : 0;
+		// `door`: opened from a Death's Door 6- card (_followerDoorDeath), Dead and the spare only; `onSettled`
+		// hears whether a fate was chosen (true, once it is applied) or the window closed without one (false).
+		_openFollowerFate({ follower, slug, index, name, door = false, onSettled = null } = {}) {
+			const loyalty = this._followerFateLoyalty(follower, slug);
 			// Loyal to the End is the Ranger's animal-companion move (p.469 → p.143):
 			// it replaces the standard fate choice, and only the companion gets it.
 			const dialog = new FollowerFateDialog(this.actor, {
-				name, loyalty,
+				name, loyalty, door,
 				isAnimalCompanion: follower === "animal-companion",
 				isCrewMember:      isCrewMemberRow(follower),
 				isGroupMember:     isCustomMemberRow(follower),
 				sir:              sirPermissionOffer(this.actor, loyalty),
-			}, (action, { letGo = false } = {}) => this._resolveFollowerFate(action, { name, loyalty, follower, slug, index, letGo }));
+				onDismiss:        () => onSettled?.(false),
+			}, async (action, { letGo = false } = {}) => {
+				try {
+					await this._resolveFollowerFate(action, { name, loyalty, follower, slug, index, letGo });
+				} finally {
+					onSettled?.(true);
+				}
+			});
 			dialog.render(true);
 			return dialog;
+		}
+
+		// The Loyalty a fate row's follower holds: their own track, the crew's for a crew member, the
+		// group's for a group member.
+		_followerFateLoyalty(follower, slug) {
+			const loyaltyPath = followerLoyaltyPath(followerFateLoyaltyType(follower), slug);
+			return loyaltyPath ? Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, loyaltyPath)) || 0) : 0;
+		}
+
+		/**
+		 * A follower's Death's Door 6-, from the card's "Mark dead" (follower-deaths-door.js): they "would die".
+		 * With SIR, PERMISSION TO DIE, SIR learned that is the Marshal's move ("When one of your followers would
+		 * die, you can spend 1 of their Loyalty to have them survive (out of the action, but alive). If you let
+		 * them go, mark XP."), so the fate dialog opens on its Dead and its spare, let-go box pre-ticked, exactly
+		 * as for any other fall; without it, Dead is written as before. Answers whether a fate was applied
+		 * (false gives the card its button back).
+		 */
+		async _followerDoorDeath({ follower, slug = "", index = null, name = "" } = {}) {
+			const loyalty = this._followerFateLoyalty(follower, slug);
+			if (!sirPermissionOffer(this.actor, loyalty).letGo) {
+				await this._resolveFollowerFate("dead", { name, loyalty, follower, slug, index });
+				return true;
+			}
+			return new Promise(resolve => this._openFollowerFate({ follower, slug, index, name, door: true, onSettled: resolve }));
 		}
 
 		// Apply the fate chosen for a follower that hit 0 HP (FollowerFateDialog).
@@ -10743,7 +10790,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const who = escHtml(plainWho);
 			if (action === "spare") {
 				if (!ownsLearnedMoveNamed(this.actor, SIR_PERMISSION_TO_DIE)) return;
-				const path = _followerLoyaltyPath(followerFateLoyaltyType(follower), slug);
+				const path = followerLoyaltyPath(followerFateLoyaltyType(follower), slug);
 				// Decrement the LIVE track, not the count the dialog opened with.
 				const live = path ? Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0) : 0;
 				if (live <= 0) {
@@ -10779,7 +10826,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			}
 			let body;
 			if (action === "deathsdoor") {
-				body = `<p><strong>${who}</strong> triggers <strong>Death's Door</strong>: ${escHtml(this.actor.name)} rolls for them.</p>`;
+				// "Their PC's player rolls" (p.469): the card carries the +nothing roll (follower-deaths-door.js).
+				body = followerDoorCardHtml({ follower, slug, index, name: plainWho }, this.actor.name);
 			} else if (action === "dying") {
 				body = `<p><strong>${who}</strong> is dying: out of the action; they'll die or hit Death's Door soon if no one intervenes.</p>`;
 			} else if (action === "dead") {
@@ -10832,30 +10880,6 @@ export function createStonetopCharacterSheetClass(Base) {
 			}
 			await this._postMoveCard("Follower Down", body);
 			this.render(false);
-		}
-
-		// A follower's current HP as `val`, as an actor.update fragment (empty for a row that has
-		// none). The per-slug / per-index HP stores are object-valued flags: the single changed key
-		// is written with a dotted path (Foundry merges it) instead of cloning the whole map; the two
-		// array-valued member stores are written whole.
-		_followerHpUpdate(follower, slug, index, val) {
-			const arrayWith = key => {
-				const arr = [...(this.actor.getFlag(STONETOP_SCOPE, key) ?? [])];
-				arr[Number(index)] = val;
-				return { [`flags.stonetop-pwd.${key}`]: arr };
-			};
-			switch (follower) {
-				case "animal-companion": return { "flags.stonetop-pwd.animalCompanion.hpCurrent": val };
-				case "initiate":         return { [`flags.stonetop-pwd.initiatesHp.${slug}`]: val };
-				case "crew-individual":  return { [`flags.stonetop-pwd.crew.individualsHp.${Number(index)}`]: val };
-				case "crew-member":      return arrayWith("crew.memberHp");
-				case "crew-group":       return { "flags.stonetop-pwd.crew.groupHp": val };
-				case "beast":            return { [`flags.stonetop-pwd.beastHp.${slug}`]: val };
-				case "custom":           return { [`flags.stonetop-pwd.customFollowers.${slug}.hpCurrent`]: val };
-				case "custom-group":     return { [`flags.stonetop-pwd.customFollowers.${slug}.groupHp`]: val };
-				case "custom-member":    return arrayWith(`customFollowers.${slug}.memberHp`);
-				default:                 return {};
-			}
 		}
 
 		// The crew's headcount, for the Supplies restock outside _buildFollowersData. Same
@@ -10998,6 +11022,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * @param {{ftype: string, slug: string}} card  whose Readiness a Defend writes to
 		 */
 		async orderFollower(follower, { ftype = "", slug = "" } = {}) {
+			// Both doors (the card and the map) meet here: the fallen and a batch that broke free take no orders
+			// (Book II p.561 "no longer followers"; fight/follower-fight.js#customFollowerOutOfOrders).
+			if (customFollowerOutOfOrders(resolvedFlags(this.actor), ftype, slug)) return;
 			const members = follower?.member ? [] : groupFollowerMembers(resolvedFlags(this.actor), { ftype, slug });
 			if (members.length) follower = { ...follower, members };
 			// An initiate the insert prints "Exceptional" (Seren) is exceptional until their player says
@@ -11037,24 +11064,35 @@ export function createStonetopCharacterSheetClass(Base) {
 		// When a follower is Ordered to Defend and rolls 7+, they hold Readiness (p.469):
 		// 1 on a 7–9, 3 on a 10+ (a shield adds +1 — the player can click one more). We
 		// set the base hold automatically off the Order Followers result and post a note.
+		//
+		// SETTLED, NOT FIRED (wave 3 audit FOL-5): the hold is written through tier-effects.js
+		// #settleFollowerReadiness and RECORDED on the order's card (`followerReadiness`), for any total,
+		// so a Shift or a +1 that moves the card later brings the pool to the new tier, the way a PC's
+		// own Defend is kept (reconcileTierEffects). A 6- shifted to 7-9 holds 1; a 10+ shifted down
+		// gives back what it raised, and Readiness spent since stays spent.
 		async _maybeHoldReadinessOnDefend(ftype, slug, result, roll) {
 			const total = Number(roll?.total);
-			if (!Number.isFinite(total) || total < 7) return;
+			if (!Number.isFinite(total)) return;
 			// The dialog reports the chosen move + follower name structurally, so we don't
 			// have to sniff "defend" out of (or split ":" from) the flattened moveName.
 			if (result?.moveKey !== "defend") return;
 			const path = _followerReadinessPath(ftype, slug ?? "");
 			if (!path) return;
-			// Base hold via the shared, unit-tested tier→hold table (defend-readiness.js), so PC
-			// and follower Defend holds can't drift. The follower path leaves the shield's +1 as a
-			// manual pip (advertised in shieldNote below), so we don't pass hasShield; the total ≥ 7
-			// guard above guarantees a success/partial tier here.
-			const held = defendReadinessHold(classifyResult(total).key);
+			const who = result?.followerName || "Your follower";
 			// Never REDUCE an already-held pool: a follower who held 3 (or clicked a 4th pip
 			// for their shield) and then Defends again at 7–9 keeps the higher pool rather
 			// than being silently knocked down to 1.
 			const existing = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0);
-			const next = Math.max(existing, held);
+			const tier = classifyResult(total).key;
+			const record = await settleFollowerReadiness(this.actor, tier, { path, prior: existing, set: existing, name: who });
+			await recordTierEffects(messageOfRoll(roll), { followerReadiness: record });
+			if (total < 7) return;
+			// Base hold via the shared, unit-tested tier→hold table (defend-readiness.js), so PC
+			// and follower Defend holds can't drift. The follower path leaves the shield's +1 as a
+			// manual pip (advertised in shieldNote below). The pool it settled at is the higher of
+			// the two (defend-readiness.js#readinessForTier's `set`).
+			const held = defendReadinessHold(tier);
+			const next = record.set;
 			// Only advertise the shield's +1 when the follower actually bears one, and only
 			// when this Defend set the (fresh) base hold — not when we kept a higher pool.
 			const bearsShield = this._followerHasShield(ftype, slug ?? "");
@@ -11062,10 +11100,6 @@ export function createStonetopCharacterSheetClass(Base) {
 			const shieldNote = (bearsShield && next === held)
 				? (result?.shieldWall ? ` (${held + READINESS_SHIELD_WALL_BONUS} with the shield wall)` : ` (${held + 1} with their shield)`)
 				: "";
-			if (next !== existing) {
-				await this.actor.update({ [`flags.stonetop-pwd.${path}`]: next }, { stonetopMove: "Defend" });
-			}
-			const who = result?.followerName || "Your follower";
 			await this._postMoveCard("Defend: Readiness held",
 				`<p><strong>${escHtml(who)}</strong> holds <strong>${next}</strong> Readiness${shieldNote}.</p>`
 				+ `<p>Spend it to suffer the damage/effects of an attack for a ward, or to draw all attention to themselves.</p>`);
@@ -11085,7 +11119,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		// Loyalty track by one (attributed so the ledger reads "via Spend Loyalty") and
 		// posts a chat note naming what it bought.
 		_onSpendLoyalty(ftype, slug, name) {
-			const path = _followerLoyaltyPath(ftype, slug);
+			const path = followerLoyaltyPath(ftype, slug);
 			if (!path) return;
 			const current = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0);
 			if (current <= 0) { ui.notifications?.warn?.(`${name || "This follower"} holds no Loyalty to spend.`); return; }
@@ -11100,7 +11134,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				content: `<form class="stonetop-spend-form"><p>Spend <strong>1 Loyalty</strong> (${current} held) to have <strong>${escHtml(name || "them")}</strong>:</p>${opts}</form>`,
 				buttons: {
 					spend:  { icon: '<i class="fas fa-hand-holding-heart"></i>', label: "Spend 1 Loyalty",
-						callback: html => this._applySpendLoyalty(path, name, reasons, html) },
+						callback: html => this._applySpendLoyalty(path, name, reasons, html, { ftype, slug }) },
 					cancel: { label: "Cancel" },
 				},
 				default: "spend",
@@ -11108,9 +11142,19 @@ export function createStonetopCharacterSheetClass(Base) {
 			}, { classes: this._pastDeathWindowClasses(["dialog", "stonetop"]) }).render(true);
 		}
 
-		async _applySpendLoyalty(path, name, reasons, html) {
+		async _applySpendLoyalty(path, name, reasons, html, { ftype = "", slug = "" } = {}) {
 			const key    = html?.[0]?.querySelector('input[name="spend-loyalty"]:checked')?.value ?? reasons[0].key;
 			const reason = reasons.find(r => r.key === key)?.label ?? "";
+			// A follower who follows the party as a whole (p.464) can have their Loyalty spent by any PC:
+			// a player viewing the leader's sheet without writing it spends through the GM (follower-bond.js).
+			if (!this.actor.isOwner) {
+				const step = await changeFollowerLoyalty(this.actor, { ftype, slug, delta: -1, move: SPEND_LOYALTY });
+				if (!step) { ui.notifications?.warn?.(`${name || "This follower"}'s Loyalty could not be spent.`); return; }
+				await this._postMoveCard(SPEND_LOYALTY,
+					`<p>You spend <strong>1 Loyalty</strong> to have <strong>${escHtml(name || "them")}</strong> <em>${escHtml(reason.toLowerCase())}</em>.</p>`
+					+ `<p>They now hold <strong>${step.to}</strong> Loyalty.</p>`);
+				return;
+			}
 			// Decrement the LIVE value, not the count captured when this (non-modal) dialog
 			// opened — the track may have changed since, and writing captured−1 would clobber it.
 			const live = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0);
@@ -11122,6 +11166,42 @@ export function createStonetopCharacterSheetClass(Base) {
 			this.render(false);
 		}
 
+		/**
+		 * STRENGTHEN YOUR BOND (p.464): "When you pay your follower's cost, and you haven't done so
+		 * recently, they hold +1 Loyalty (max 3)." The Pay cost button by the Loyalty pips: +1, a card
+		 * naming the move, the ledger's "via Strengthen Your Bond" (follower-bond.js#strengthenBond).
+		 */
+		async _onPayCost({ ftype = "", slug = "", followerName = "", cost = "" } = {}) {
+			await strengthenBond(this.actor, { ftype, slug, name: followerName, cost });
+			this.render(false);
+		}
+
+		/**
+		 * The Loyalty buttons, wired ABOVE the sheet's isEditable gate: a follower who follows the party
+		 * as a whole (p.464, `data-whole-party`) may have their cost paid or Loyalty spent by any PC, so a
+		 * player viewing the leader's sheet gets those two buttons back from core's read-only disabling
+		 * (follower-bond.js#mayMoveLoyalty, asked through one loyaltyMover for the pass), at the same bounds the
+		 * template draws them at.
+		 */
+		_wireFollowerBond(html) {
+			const root = html?.[0];
+			if (!root) return;
+			if (!this.isEditable) {
+				const mayMove = loyaltyMover(this.actor, game.user);
+				for (const btn of root.querySelectorAll(".stonetop-pay-cost[data-whole-party], .stonetop-spend-loyalty[data-whole-party]")) {
+					const { ftype, slug } = btn.dataset;
+					const held = Number(btn.dataset.loyaltyValue) || 0;
+					const open = btn.classList.contains("stonetop-pay-cost") ? held < FOLLOWER_LOYALTY_MAX : held > 0;
+					if (open && !("dead" in btn.dataset) && mayMove(ftype, slug ?? "")) btn.disabled = false;
+				}
+				html.find(".stonetop-spend-loyalty[data-whole-party]").on("click", ev => {
+					const { ftype, slug, followerName } = ev.currentTarget.dataset;
+					this._onSpendLoyalty(ftype, slug ?? "", followerName);
+				});
+			}
+			html.find(".stonetop-pay-cost").on("click", ev => this._onPayCost(ev.currentTarget.dataset));
+		}
+
 		// Spend 1 Readiness (Followers in Fights, p.469/473): a follower holding
 		// Readiness suffers an attack for a ward or draws all attention. If they wouldn't
 		// want to, the player must also spend 1 Loyalty (p.547) — surfaced as a checkbox.
@@ -11130,7 +11210,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!rPath) return;
 			const readiness = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, rPath)) || 0);
 			if (readiness <= 0) { ui.notifications?.warn?.(`${name || "This follower"} holds no Readiness to spend.`); return; }
-			const lPath   = _followerLoyaltyPath(ftype, slug);
+			const lPath   = followerLoyaltyPath(ftype, slug);
 			const loyalty = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, lPath)) || 0);
 			const reasons = [
 				{ key: "suffer",    label: "Suffer the damage/effects of an attack for a ward" },
@@ -11178,11 +11258,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			this.render(false);
 		}
 
-		// Hand a custom follower off to another PC (NPCs & Followers p.480: a follower
-		// can shift from one PC's lead to another's). Only custom followers transfer —
-		// the built-in ones are tied to a playbook / background / inventory item.
+		// Hand a custom follower off to another PC (NPCs & Followers p.480: "they shift their loyalty
+		// from one PC to another (or their current leader passes off responsibility for them to another
+		// PC)"). Only custom followers transfer: the built-in ones are tied to a playbook / background /
+		// inventory item. EVERY other character is offered; one this player cannot write, and the NPC's
+		// ownership, are written by the GM's client (follower-handoff.js#requestHandOff).
 		_onHandOffFollower(slug, name) {
-			const targets = game.actors.filter(a => a.type === "character" && a.id !== this.actor.id && a.isOwner);
+			const targets = handOffTargets(this.actor);
 			if (!targets.length) {
 				ui.notifications?.warn?.("No other character is available to take this follower.");
 				return;
@@ -11207,16 +11289,17 @@ export function createStonetopCharacterSheetClass(Base) {
 			const data   = this.actor.getFlag(STONETOP_SCOPE, `customFollowers.${slug}`);
 			const target = game.actors.get(targetId);
 			if (!data || !target) return;
-			// Fresh id + order on the destination so it can't collide with one of theirs.
-			const targetMap = target.getFlag(STONETOP_SCOPE, "customFollowers") ?? {};
-			const maxOrder  = Object.values(targetMap).reduce((m, f) => Math.max(m, Number(f?.order) || 0), 0);
-			const newId     = foundry.utils.randomID(16);
-			await target.update({
-				[`flags.stonetop-pwd.customFollowers.${newId}`]: { ...data, order: Math.max(maxOrder + 1, Date.now()) },
-			});
-			await this._removeCustomFollower(slug);
+			const done = await requestHandOff(this.actor, target, slug);
+			if (!done) {
+				ui.notifications?.warn?.(game.i18n.format("stonetop.character.followers.handoff.failed", { name: data.name || "This follower", target: target.name }));
+				return;
+			}
+			if (!done.npcOwnership && !game.user?.isGM && data.actorUuid) {
+				ui.notifications?.info?.(game.i18n.localize("stonetop.character.followers.handoff.npcWaits"));
+			}
 			await this._postMoveCard("Follower Handed Off",
 				`<p><strong>${escHtml(data.name || "A follower")}</strong> now follows <strong>${escHtml(target.name)}</strong>.</p>`);
+			this.render(false);
 		}
 
 		async _onRecoverOpen() {
@@ -11627,7 +11710,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		 */
 		async _onFollowerPartyToggle(ev) {
 			const el = ev.currentTarget;
-			const path = followerPartyPath(el.dataset.ftype || "custom", el.dataset.slug ?? "");
+			// The custom card's second switch, "follows the party as a whole" (p.464), names itself.
+			const pathFor = el.dataset.switch === "wholeParty" ? followerWholePartyPath : followerPartyPath;
+			const path = pathFor(el.dataset.ftype || "custom", el.dataset.slug ?? "");
 			if (!path) return;
 			await this.actor.update({ [`flags.${STONETOP_SCOPE}.${path}`]: !!el.checked });
 			this.render(false);
