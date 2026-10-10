@@ -40,6 +40,12 @@
 					{{stonetop.playbook.name}}{{#if stonetop.playbook.instinct.badge}} <span class="stonetop-instinct-badge" data-tooltip="{{stonetop.playbook.instinct.badge.tooltip}}" data-tooltip-direction="DOWN">({{stonetop.playbook.instinct.badge.word}})</span>{{/if}}
 					{{else}}Drop a playbook here{{/if}}
 				</span>
+				{{!-- "Would-be" crossed off by mistake: written back in from edit mode (CSS shows it there
+				      alone), since nothing else on the sheet un-crosses it. --}}
+				{{#if stonetop.wouldBeRestorable}}{{#unless stonetop.postDeathInsert.activeInsert}}
+				<button type="button" class="stonetop-inline-btn stonetop-would-be-restore"
+				        data-tooltip="{{localize 'stonetop.wouldBeHero.restoreTooltip'}}" data-tooltip-direction="DOWN"><i class="fas fa-rotate-left" aria-hidden="true"></i> {{localize "stonetop.wouldBeHero.restoreButton"}}</button>
+				{{/unless}}{{/if}}
 				{{#if stonetop.postDeathInsert.activeInsert}}
 				{{#if stonetop.playbook.name}}
 				{{! The playbook goes grey the moment the insert lands — that identity IS replaced.

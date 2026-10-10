@@ -1,6 +1,6 @@
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
 import { escHtml } from "../../utils/strings.js";
-import { stonetopChatCard, canUserWriteCard } from "../../utils/chat.js";
+import { stonetopChatCard, canUserWriteCard, whisperedAs } from "../../utils/chat.js";
 import { playbookSlug } from "../../utils/playbook-slug.js";
 import { ownsLearnedMoveNamed } from "./owns-move.js";
 import { MARK_STAT_CAPS } from "./stat-rules.js";
@@ -43,6 +43,11 @@ const _STAT_KEYS = new Set(["str", "dex", "con", "int", "wis", "cha"]);
 // Crossed off is the flag (WBH_HERO_FLAG) and nothing else: owning a starred move is not using it, and
 // losing one later does not un-cross it. A character flagged before this ruling (when a GAIN crossed it
 // off) stays The Hero.
+//
+// A crossing-off made by mistake (the "I used it" button pressed for a use that never happened) is
+// undone by restoreWouldBe, which writes the flag FALSE rather than removing it: false is "Would-be on
+// purpose", and it keeps the grandfathering (migration/would-be-hero-grandfather.js) from crossing it
+// off again on the next release.
 
 /** The Would-Be Hero's starred moves, as the pack names them. */
 export const ASTERISK_MOVES = Object.freeze([
@@ -208,7 +213,6 @@ export async function maybeRemindPotentialForGreatness(actor, statKey, total, { 
 	const buttons = offer.open.map(o =>
 		`<button type="button" class="stonetop-pfg-mark-btn" data-pfg-kind="${o.kind}">${escHtml(_pfgLabel(o.kind, statKey))}</button>`).join("");
 	const list = Array.isArray(whisper) ? whisper.filter(Boolean) : [];
-	const cardWhisper = Array.isArray(message?.whisper) ? message.whisper.filter(Boolean) : [];
 	const messageData = {
 		content: stonetopChatCard(POTENTIAL_FOR_GREATNESS,
 			`<div class="stonetop-roll-card-description">
@@ -220,13 +224,10 @@ export async function maybeRemindPotentialForGreatness(actor, statKey, total, { 
 		flags: { [STONETOP_SCOPE]: { [PFG_REMINDER_FLAG]: { stat: statKey } } },
 	};
 	// Where the roll went: an explicit whisper list, else the roll card's own whisper (and blindness), else
-	// the chat mode applied the way core does it. `rollMode` as a create-data key alone does nothing, so a
-	// Blind or Private GM roll's 10+ would otherwise be announced to the whole table.
+	// the chat mode applied the way core does it, so a Blind or Private GM roll's 10+ is not announced to
+	// the whole table.
 	if (list.length) messageData.whisper = list;
-	else if (cardWhisper.length) {
-		messageData.whisper = cardWhisper;
-		if (message.blind) messageData.blind = true;
-	} else if (rollMode) ChatMessage.applyRollMode?.(messageData, rollMode);
+	else whisperedAs(messageData, message, rollMode);
 	await ChatMessage.create(messageData);
 	return true;
 }
@@ -310,6 +311,34 @@ export async function crossOffWouldBe(actor, moveName = "") {
 		content: stonetopChatCard(localize(`${KEY}.heroCardTitle`),
 			`<div class="stonetop-roll-card-description">
 				<p>${said}</p>
+			</div>`),
+		speaker: ChatMessage.getSpeaker?.({ actor }),
+	});
+	return true;
+}
+
+/**
+ * Whether `actor` is a Would-Be Hero who has crossed off "Would-be", the one state restoreWouldBe undoes.
+ * By slug, like the guards above. PURE apart from the actor.
+ */
+export function canRestoreWouldBe(actor) {
+	if (actor?.type !== "character" || playbookSlug(actor) !== WBH_PLAYBOOK_SLUG) return false;
+	return !!actor.getFlag?.(STONETOP_SCOPE, WBH_HERO_FLAG);
+}
+
+/**
+ * Write "Would-be" back in, for a crossing-off made by mistake, and say so in chat as the crossing-off
+ * was. The flag goes to false, not away (see the top of this file). The next starred move used crosses
+ * it off again as usual. Whether it restored anything.
+ */
+export async function restoreWouldBe(actor) {
+	if (!canRestoreWouldBe(actor)) return false;
+	await actor.setFlag(STONETOP_SCOPE, WBH_HERO_FLAG, false);
+	const ChatMessage = globalThis.ChatMessage;
+	await ChatMessage?.create?.({
+		content: stonetopChatCard(localize(`${KEY}.restoreCardTitle`),
+			`<div class="stonetop-roll-card-description">
+				<p>${format(`${KEY}.heroRestored`, { name: escHtml(actor.name) })}</p>
 			</div>`),
 		speaker: ChatMessage.getSpeaker?.({ actor }),
 	});

@@ -44,7 +44,7 @@ import {grantedWeaponForMove, weaponTraitText} from "../../data/weapons.js";
 import {grantedWeaponAttackFor, rollCharacterDamageAt, rollFollowerDamageAt, crewBlow} from "../../combat/attack-flow.js";
 import {offerBattleJoyOnDamage, endBattleJoyUnrolled} from "../../combat/battle-joy-offer.js";
 import {ownDamageMode, toughLoveHeld, callOut, workedItOut, leapIn, HERO_MOVES} from "../../fight/hero-moves.js";
-import {ASTERISK_MOVES, asteriskUseCounts, asteriskMoveUsed} from "./WouldBeHeroAsterisk.js";
+import {ASTERISK_MOVES, asteriskUseCounts, asteriskMoveUsed, canRestoreWouldBe, restoreWouldBe} from "./WouldBeHeroAsterisk.js";
 import {followerInFight} from "../../fight/follower-fight.js";
 import {altStatGrantsFor} from "../../data/alt-stat-grants.js";
 import {readOnboardingResume, writeOnboardingResume, clearOnboardingResume} from "./onboarding-resume.js";
@@ -1722,6 +1722,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			context.stonetop.asteriskUse = this.isEditable
 				? Object.fromEntries(ASTERISK_MOVES.filter(name => asteriskUseCounts(this.actor, name)).map(name => [name, true]))
 				: {};
+			// The header's way back from a crossing-off made by mistake, beside "The Hero". Drawn for the
+			// owner whenever there is one to undo, shown in edit mode alone (actor-header.hbs).
+			context.stonetop.wouldBeRestorable = this.isEditable && canRestoreWouldBe(this.actor);
 			const selections = playbookDoc ? this._readSelectionsFromActor(playbookDoc) : null;
 			context.stonetop.hasIncompleteBackgroundQuestions = playbookDoc
 				? CharacterOnboardingDialog.hasIncompleteQuestions(playbookDoc, selections)
@@ -4053,6 +4056,19 @@ export function createStonetopCharacterSheetClass(Base) {
 					no:      { label: localize("stonetop.wouldBeHero.asteriskNo") },
 				});
 				if (ok && await asteriskMoveUsed(this.actor, moveName)) this.render(false);
+			});
+			// ...and put back when that was a mistake (WouldBeHeroAsterisk.js#restoreWouldBe).
+			html.find("button.stonetop-would-be-restore").on("click", async ev => {
+				ev.preventDefault();
+				ev.stopPropagation();
+				if (!this.isEditable) return;
+				const ok = await confirmOutcome({
+					title:   localize("stonetop.wouldBeHero.restoreTitle"),
+					content: `<p>${escHtml(localize("stonetop.wouldBeHero.restoreConfirm"))}</p>`,
+					yes:     { label: localize("stonetop.wouldBeHero.restoreYes"), icon: "fa-rotate-left" },
+					no:      { label: localize("stonetop.wouldBeHero.restoreNo") },
+				});
+				if (ok && await restoreWouldBe(this.actor)) this.render(false);
 			});
 
 			// -- Basic move hover panel --------------------------------------------

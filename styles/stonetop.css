@@ -12524,6 +12524,23 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	white-space: nowrap;
 }
 
+/* The way back from crossing off "Would-be" by mistake (actor-header.hbs). Edit mode alone: a hero who
+   meant it should not carry an undo beside their name at the table. Two classes, because the shared
+   `.stonetop-inline-btn` sets its display later in this file. On the big name's baseline, like the
+   retired playbook above, and `width: auto` against core's full-width buttons. */
+.stonetop-playbook-row .stonetop-would-be-restore {
+	display: none;
+	align-self: flex-end;
+	flex: none;
+	width: auto;
+	margin-bottom: 4px;
+	font-size: var(--st-fs-sm);
+	white-space: nowrap;
+}
+.stonetop-edit-mode .stonetop-playbook-row .stonetop-would-be-restore {
+	display: inline-flex;
+}
+
 /* The strike in the maroon core rules every heading with (`h1`–`h4` get
    `border-bottom: … var(--color-underline-header)`, which is what draws the line under Granted
    Moves, Instinct and the rest). Reading the core token rather than restating #782e22 keeps the
