@@ -398,7 +398,8 @@ describe("the Weather card", () => {
 		expect(data.content).toContain("Crisp, breezy");
 		expect(data.content).not.toContain("stonetop-weather-number");
 		expect(data.content).not.toContain("stonetop-roll-formula");
-		expect(globalThis.ChatMessage.applyRollMode).toHaveBeenCalled();
+		// This client's chat mode, read once through foundry-compat.js#currentChatMode and applied as core does.
+		expect(globalThis.ChatMessage.applyRollMode).toHaveBeenCalledWith(data, "publicroll");
 	});
 
 	it("still calls out the roll-again rider on a chosen row", async () => {

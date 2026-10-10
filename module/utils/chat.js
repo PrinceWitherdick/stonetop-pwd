@@ -2,6 +2,7 @@ import {escHtml, stripHtmlToText, decodeEntities} from "./strings.js";
 import {isReferenceList, pickLimitsFrom, pickTiersFrom} from "./move-picks.js";
 import {MOVE_TIERS_CLASS, TIER_KEYS} from "./move-results.js";
 import {findGearTerm} from "./gear-term-tooltips.js";
+import {coreGeneration} from "./foundry-compat.js";
 
 // The tier ladder's own `<ul>`, recognised in an attribute string — see `firstOptionList`.
 const _LADDER_CLASS_RE = new RegExp(`\\bclass="[^"]*\\b${MOVE_TIERS_CLASS}\\b`, "i");
@@ -313,6 +314,41 @@ export async function whisperGm(content, { flags = null } = {}) {
 		speaker: { alias: "Stonetop" },
 		...(flags ? { flags } : {}),
 	})) ?? null;
+}
+
+/**
+ * `messageData` sent where `source` went, for a card that follows another (a miss's XP receipt, a Would-Be
+ * Hero's reminder, a blow's applied damage): `source`'s whisper list (and blindness) when it was whispered,
+ * else `rollMode` (the client's chat mode, currentChatMode) applied the way core applies it, else left
+ * as it is. `rollMode` as a create-data key alone does nothing, so a Blind or Private GM roll's follow-up
+ * would otherwise be announced to the whole table. Written onto `messageData`, which is returned.
+ *
+ * @param {object} messageData           ChatMessage create data.
+ * @param {ChatMessage|null} source      the card this one follows.
+ * @param {string|null} [rollMode]       the chat mode for when `source` was not whispered.
+ * @returns {object}
+ */
+export function whisperedAs(messageData, source, rollMode = null) {
+	const whisper = Array.isArray(source?.whisper) ? source.whisper.filter(Boolean) : [];
+	if (whisper.length) {
+		messageData.whisper = whisper;
+		if (source.blind) messageData.blind = true;
+	} else if (rollMode) applyChatMode(messageData, rollMode);
+	return messageData;
+}
+
+/**
+ * A chat mode applied to `messageData` the way core applies it: v14's `messageMode` through
+ * `ChatMessage.applyMode`, v13's `rollMode` through `ChatMessage.applyRollMode`. A public mode
+ * changes nothing, and anything unreadable leaves the message as it was.
+ */
+function applyChatMode(messageData, mode) {
+	try {
+		if (coreGeneration() >= 14 && typeof ChatMessage.applyMode === "function") ChatMessage.applyMode(messageData, mode);
+		else ChatMessage.applyRollMode?.(messageData, mode);
+	} catch (err) {
+		console.warn("Stonetop | could not apply the chat mode to a card", err);
+	}
 }
 
 /**

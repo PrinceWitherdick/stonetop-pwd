@@ -27,6 +27,7 @@
 // with nobody wiring it up by hand.
 
 import { SYSTEM_ID } from "../system-id.js";
+import { deletionEntry } from "./foundry-compat.js";
 
 /**
  * Is this element part of the card being wired?
@@ -101,4 +102,45 @@ export function wirePickedOptionButton(message, html, spec) {
 
 		btn.addEventListener("click", () => onPress(btn, index, pick));
 	}
+}
+
+// ── The latch, written in the right order ─────────────────────────────────────
+// CLAIM, PAY, SETTLE. The latch used to be stamped AFTER the payout landed, so a press that could
+// pay but not stamp (a player who owns the character but not the card: the GM rolled it for them,
+// and a chat message is "the GM, or whoever authored it") paid out, failed to stamp, and on the
+// next render offered the same button again. Claiming first means a client that cannot write the
+// card pays nothing, and a second press finds the claim. A payout that then fails RELEASES the
+// claim, so the retry the old order protected is still there.
+
+/**
+ * Claim option `index` before paying it out. False, having written nothing, when it is already
+ * claimed or paid, or when this client may not write the card.
+ *
+ * @param {ChatMessage} message
+ * @param {string} flagKey
+ * @param {string} index
+ * @returns {Promise<boolean>}
+ */
+export async function claimPickedOption(message, flagKey, index) {
+	const done = message.getFlag(SYSTEM_ID, flagKey) ?? {};
+	if (done[index]) return false;
+	try {
+		await message.setFlag(SYSTEM_ID, flagKey, { ...done, [index]: { pending: true } });
+	} catch (err) {
+		console.warn("Stonetop | Could not claim a card's payout:", err);
+		return false;
+	}
+	return true;
+}
+
+/** Stamp what a claimed option paid (`record`, which the readout reads), ending the claim. */
+export async function settlePickedOption(message, flagKey, index, record) {
+	// Merged over the claim, so `pending` is written false rather than left behind.
+	await message.setFlag(SYSTEM_ID, flagKey, { [index]: { ...record, pending: false } });
+}
+
+/** Take a claim back when nothing was paid, so the option can be pressed again. */
+export async function releasePickedOption(message, flagKey, index) {
+	const [path, value] = deletionEntry(`flags.${SYSTEM_ID}.${flagKey}.${index}`);
+	await message.update({ [path]: value });
 }

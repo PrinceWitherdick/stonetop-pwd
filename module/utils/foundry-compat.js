@@ -374,18 +374,27 @@ export function privateMessageModeOptions() {
 }
 
 /**
- * Is this client's chat set to post for everyone? v14 keeps the mode in `core.messageMode`
- * ("public"), and still answers the old `core.rollMode` key, but with a deprecation warning on
- * every read; v13 has only `core.rollMode` ("publicroll"). Anything unreadable is NOT public:
- * this is asked before showing something the table would otherwise not have seen, and the safe
- * mistake is keeping a whispered roll whispered.
+ * This client's chat mode, as its own core spells it: v14 keeps it in `core.messageMode` ("public",
+ * "gm", "blind", "self", "ic"), and still answers the old `core.rollMode` key, but with a deprecation
+ * warning on every read; v13 has only `core.rollMode` ("publicroll", "gmroll", "blindroll",
+ * "selfroll"). Null when it cannot be read. The one place either key is read for the client's mode.
+ *
+ * @returns {string|null}
  */
-export function chatModeIsPublic() {
+export function currentChatMode() {
 	try {
 		const settings = globalThis.game?.settings;
-		if (coreGeneration() >= 14) return settings?.get?.("core", "messageMode") === "public";
-		return settings?.get?.("core", "rollMode") === "publicroll";
+		return settings?.get?.("core", coreGeneration() >= 14 ? "messageMode" : "rollMode") ?? null;
 	} catch {
-		return false;
+		return null;
 	}
+}
+
+/**
+ * Is this client's chat set to post for everyone (`currentChatMode` is v14's "public" or v13's
+ * "publicroll")? Anything unreadable is NOT public: this is asked before showing something the table
+ * would otherwise not have seen, and the safe mistake is keeping a whispered roll whispered.
+ */
+export function chatModeIsPublic() {
+	return currentChatMode() === (coreGeneration() >= 14 ? "public" : "publicroll");
 }

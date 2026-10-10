@@ -90,6 +90,13 @@ export class StonetopFlags {
 		return { [path]: value };
 	}
 
+	// The same, for ONE sub-key of a flag object (the `subKeyData` counterpart): drops that key
+	// alone, in the form `batch`'s `deletes` writes, so its siblings are left as stored.
+	subKeyDeletionData(key, subKey) {
+		const [path, value] = deletionEntry(`flags.${_scope}.${this.buildKey(key)}.${subKey}`);
+		return { [path]: value };
+	}
+
 	// Apply a fragment built by updateData/deletionData on its own, for a caller that has no
 	// other changes to batch it with. No-op on an empty or absent fragment.
 	async applyUpdateData(data, options) {

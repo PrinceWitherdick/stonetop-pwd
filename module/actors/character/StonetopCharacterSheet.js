@@ -72,7 +72,7 @@ import {normalizeDamageDie} from "../../utils/damage-die.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
 import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct, stripHtmlToText} from "../../utils/strings.js";
 import {playbookIconPath, partyCharacters} from "../../utils/playbook-actors.js";
-import {postMoveToChat, moveChatCard, pickableMoveDescription} from "../../utils/chat.js";
+import {postMoveToChat, moveChatCard, pickableMoveDescription, whisperedAs} from "../../utils/chat.js";
 import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
 import {statApproaches} from "../../utils/stat-approaches.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
@@ -92,7 +92,7 @@ import {ARTIFACT_STATE, artifactStateForTier, knowThingsArtifactResults, seekIns
 import {knowThingsRollOptions} from "./know-things.js";
 import {getStonetopSteadingActor} from "../../utils/world.js";
 import {openChroniclePageForActor} from "../../utils/chronicle.js";
-import {getDragEventData, deletionEntry, enrichHTML, imagePopout, renderTemplate} from "../../utils/foundry-compat.js";
+import {getDragEventData, deletionEntry, enrichHTML, imagePopout, renderTemplate, currentChatMode} from "../../utils/foundry-compat.js";
 import {STEADING_DEFAULTS, StonetopSteading} from "../steading/StonetopSteading.js";
 import {settleSteadingRoll} from "../steading/steading-roll.js";
 import {readCurrentSeason, readCurrentYear} from "../../seasons/current-season.js";
@@ -5745,15 +5745,13 @@ export function createStonetopCharacterSheetClass(Base) {
 				const { slug, flipped } = title.dataset;
 				this._stonetopCharacter.getArcanumChatContent(slug, flipped === "true").then(content => {
 					if (!content) return;
-					// applyRollMode sets whisper/blind from the configured roll mode; passing
+					// The chat mode applied the way core applies it (chat.js#whisperedAs); passing
 					// rollMode as a create-data key alone does nothing, so a "Private GM Roll"
 					// setting would still broadcast a referenced card back to every player.
-					const messageData = {
+					return ChatMessage.create(whisperedAs({
 						content,
 						speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-					};
-					ChatMessage.applyRollMode(messageData, game.settings.get("core", "rollMode"));
-					return ChatMessage.create(messageData);
+					}, null, currentChatMode()));
 				}).catch(err => console.error("Stonetop | could not post the arcanum card", err));
 			}, true);
 

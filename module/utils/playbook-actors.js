@@ -114,6 +114,24 @@ export function asArray(users) {
 }
 
 /**
+ * Whether `user` plays this character, as opposed to merely being allowed to edit it.
+ *
+ * A table that lets the party read each other's sheets gives every player ownership of every
+ * character, and a GM owns them all, so ownership cannot say whose row is whose. The assigned
+ * character can, when there is one; a player with none assigned plays what they own.
+ */
+export function playsCharacter(actor, user = game.user) {
+	if (!actor || !user) return false;
+	if (user.character) return user.character.id === actor.id;
+	return !user.isGM && !!actor.testUserPermission?.(user, "OWNER");
+}
+
+/** Who a private card about this character goes to: every GM, and everyone who plays the character. */
+export function whisperFor(actor, users = game.users) {
+	return [...new Set(asArray(users).filter(u => u.isGM || playsCharacter(actor, u)).map(u => u.id))];
+}
+
+/**
  * Is `actor` some OTHER user's assigned character (their `User#character`)? Then it is theirs,
  * whoever else has been given ownership of it: a GM who lets Bob run Alice's PC while she is away
  * has not made it Bob's. hooks/Ready.js asks this before greeting a player with "your" character,

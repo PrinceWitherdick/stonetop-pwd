@@ -75,6 +75,21 @@ export function outcomeTier(tier) {
 	return tier === "critical" ? "success" : tier;
 }
 
+/** The total a posted roll card shows NOW (after any Shift or rewrite), or null when it carries no roll. */
+export function cardTotal(message) {
+	const total = Number(message?.rolls?.at?.(0)?.total);
+	return Number.isFinite(total) ? total : null;
+}
+
+/**
+ * The tier a posted roll card counts as NOW (after any Shift or rewrite), as a move's outcomes are keyed
+ * (a 12+ is its 10+), or null with no roll. `scope` as cardCountedTier's.
+ */
+export function cardTierNow(message, scope) {
+	const total = cardTotal(message);
+	return total == null ? null : outcomeTier(cardCountedTier(message, total, scope));
+}
+
 /** Whether a counted tier is a 10+ (a 12+ is one too). */
 export function isStrongHit(tier) {
 	return tier === "success" || tier === "critical";

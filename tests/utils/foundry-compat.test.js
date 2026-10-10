@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { chatModeIsPublic, deletionEntry, getDragEventData, hasVideoExtension, imagePopout, imagePopoutTitle, setAppOption } from "../../module/utils/foundry-compat.js";
+import { chatModeIsPublic, currentChatMode, deletionEntry, getDragEventData, hasVideoExtension, imagePopout, imagePopoutTitle, setAppOption } from "../../module/utils/foundry-compat.js";
 
 describe("deletionEntry", () => {
 	afterEach(() => {
@@ -193,5 +193,17 @@ describe("chatModeIsPublic", () => {
 		expect(chatModeIsPublic()).toBe(false);
 		globalThis.game = undefined;
 		expect(chatModeIsPublic()).toBe(false);
+	});
+
+	// The one reader under it: each core's own key, its own spelling, null when unreadable.
+	it("reads the mode in each core's own spelling, and null when it cannot", () => {
+		core(14, { messageMode: "ic", rollMode: "publicroll" });
+		expect(currentChatMode()).toBe("ic");
+		core(13, { messageMode: "public", rollMode: "gmroll" });
+		expect(currentChatMode()).toBe("gmroll");
+		core(13, {});
+		expect(currentChatMode()).toBeNull();
+		globalThis.game = { release: { generation: 14 }, settings: { get: () => { throw new Error("not registered"); } } };
+		expect(currentChatMode()).toBeNull();
 	});
 });

@@ -5,7 +5,10 @@ import { crewExists } from "../utils/crew.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { followerInPartyFlags, followerMouths, partyFollowers, partyMouths } from "../actors/character/follower-party.js";
 import { partyFollowersOf } from "../actors/character/follower-roster.js";
-import { deletionTarget } from "../utils/foundry-compat.js";
+// Now is the server's clock (serverNow): a camp goes cold CAMP_STALE_MS after it opened, and the clients
+// that stamp and read that time can sit hours apart on their own clocks.
+import { deletionTarget, serverNow } from "../utils/foundry-compat.js";
+import { asArray, playsCharacter } from "../utils/playbook-actors.js";
 import { postMoveToChat, rolledTotalCard } from "../utils/chat.js";
 import { capitalizeFirst } from "../utils/strings.js";
 import {
@@ -198,17 +201,11 @@ export function isCampWriter(actor) {
 }
 
 /**
- * Whether `user` plays this character, as opposed to merely being allowed to edit it.
- *
- * A table that lets the party read each other's sheets gives every player ownership of every
- * character, and a GM owns them all, so ownership cannot say whose row is whose. The assigned
- * character can, when there is one; a player with none assigned plays what they own.
+ * Whether `user` plays this character, as opposed to merely being allowed to edit it. The rule is
+ * playbook-actors.js#playsCharacter, since a Struggle, an asking card and the end of a session ask it
+ * too; named here as well for the camp's own readers.
  */
-export function playsCharacter(actor, user = game.user) {
-	if (!actor || !user) return false;
-	if (user.character) return user.character.id === actor.id;
-	return !user.isGM && !!actor.testUserPermission?.(user, "OWNER");
-}
+export { playsCharacter };
 
 /** The living characters this user plays and can write, which are the ones they can bring to a camp. */
 export function myCampCharacters() {
