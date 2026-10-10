@@ -67,6 +67,22 @@ describe("where the button is", () => {
 		expect(giveAdvantageCardHtml(pc({ id: "x" }), "Countermeasures")).toBe("");
 	});
 
+	// GUARD (wave 4): a move a player wrote under the book's name acts as itself (owns-move.js#bookMoveName).
+	it("is not on a player's own move of that name, nor earned by one held learned", () => {
+		const seeker = pc({ id: "s", moves: ["Countermeasures"] });
+		const homebrew = { type: "move", name: "Countermeasures", flags: { [SCOPE]: { custom: true } } };
+		expect(giveAdvantageCardHtml(seeker, "Countermeasures", seeker.items[0])).toContain("Give advantage to...");
+		expect(giveAdvantageCardHtml(seeker, "Countermeasures", homebrew)).toBe("");
+		const writer = pc({ id: "w" });
+		writer.items = [homebrew];
+		expect(giveAdvantageCardHtml(writer, "Countermeasures")).toBe("");
+		expect(giveAdvantageRollOptions("Everything Burns")({ ...writer, items: [{ ...homebrew, name: "Everything Burns" }] })).toBeNull();
+		// Both sheet posts hand over the move they post.
+		const sheet = readRepo("module/actors/character/StonetopCharacterSheet.js");
+		expect(sheet).toContain("giveAdvantageCardHtml(this.actor, name, item)");
+		expect(sheet).toContain("giveAdvantageCardHtml(this.actor, item.name, item)");
+	});
+
 	it("is put on both of the sheet's description-only posts (the Moves tab and the hotbar)", () => {
 		const sheet = readRepo("module/actors/character/StonetopCharacterSheet.js");
 		expect(sheet.match(/giveAdvantageCardHtml\(this\.actor, /g)).toHaveLength(2);

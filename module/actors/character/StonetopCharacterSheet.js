@@ -3804,7 +3804,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				ChatMessage.create({
 					// And the "Give advantage to..." button of a move that gives it (Countermeasures, Sage Advice),
 					// and In Over Your Head's Mark XP.
-					content: moveChatCard(name, printed, { actions: this._stockSpendButtonHtml(stockBody) + giveAdvantageCardHtml(this.actor, name) + inOverYourHeadCardHtml(this.actor, name) }),
+					content: moveChatCard(name, printed, { actions: this._stockSpendButtonHtml(stockBody) + giveAdvantageCardHtml(this.actor, name, item) + inOverYourHeadCardHtml(this.actor, name, item) }),
 					speaker,
 				});
 				// A description-only move has no rollType, so it falls all the way through to
@@ -6540,7 +6540,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// move made from the hotbar or the fight ring is paid for there, or nowhere.
 				// Through item.roll rather than around it, so the card keeps the `move` stamp that
 				// option damage reads.
-				const posted = await item.roll({ actions: this._stockSpendButtonHtml(item.system?.description ?? "") + giveAdvantageCardHtml(this.actor, item.name) + inOverYourHeadCardHtml(this.actor, item.name) });
+				const posted = await item.roll({ actions: this._stockSpendButtonHtml(item.system?.description ?? "") + giveAdvantageCardHtml(this.actor, item.name, item) + inOverYourHeadCardHtml(this.actor, item.name, item) });
 				// The other half: a move dragged to the hotbar is used from there just as truly
 				// as from the sheet, so it gets the same effects.
 				await this._onDescriptionMoveUsed(item);
@@ -6816,14 +6816,18 @@ export function createStonetopCharacterSheetClass(Base) {
 		// off, and must not go on offering +DEX on a Clash. A background row (the Fox's The
 		// Natural) grants to the character who took it, and is quoted by the background's own
 		// sentence about the move, read off the playbook.
+		//
+		// Both sides are the BOOK's (owns-move.js#bookMoveName): a move a player wrote under a book move's
+		// name acts as itself, so a homebrew "Clash" is offered no +DEX, and a homebrew "Skill at Arms"
+		// grants none.
 		async _altStatChoiceForRollable(rollable) {
 			const itemId = rollable.closest(".item")?.dataset.itemId;
 			if (!itemId) return null;
 			const item = this.actor.items.get(itemId);
-			if (!item || item.type !== "move") return null;
+			if (!item || item.type !== "move" || bookMoveName(item) == null) return null;
 			const defaultStat = normalizeRollType(item.system?.rollType);
 			if (!defaultStat || !_STAT_KEYS.has(defaultStat)) return null; // skip "ask"/formula moves
-			const learned = new Map(this.actor.items.filter(i => i.type === "move" && moveLearnedIn(i, this.actor.items)).map(i => [i.name, i]));
+			const learned = new Map(this.actor.items.filter(i => i.type === "move" && bookMoveName(i) != null && moveLearnedIn(i, this.actor.items)).map(i => [i.name, i]));
 			const rows = altStatGrantsFor({ moveName: item.name, defaultStat }, {
 				learnedMoveNames: learned.keys(),
 				...this._altStatBackground(),

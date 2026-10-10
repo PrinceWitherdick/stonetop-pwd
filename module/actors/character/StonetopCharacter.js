@@ -198,9 +198,13 @@ const SEASON_MOVE_DISADVANTAGE = [
  * A Force to Be Reckoned With ("When you Defy Danger against something trying to harm or constrain you,
  * on a 12+ you turn the tables on them").
  *
- * A row rides the moves its `moves(name)` answers for, by the name the roll is made under: `() => true`
- * is a row of every move roll (Constant Vigilance, Underestimated), a roll with no move item behind it (a
- * guided move, Improvise: directRollOffers) included, but never a bare stat roll, which is no move.
+ * A row rides the moves its `moves(name)` answers for, by the name the roll is made under. A row with
+ * `anyMove: true` instead rides every move roll ("whatever move you make": Constant Vigilance,
+ * Underestimated), a roll with no move item behind it (a guided move, Improvise: directRollOffers) included,
+ * but never a bare stat roll, which is no move. Those are the only rows a move a player wrote is offered: a
+ * homebrew "Defy Danger" is not the book's, so it earns no Stone Cold, Safety First or A Force to Be Reckoned
+ * With (owns-move.js#bookMoveName), but it is still a move rolled in their presence. Said by a field, not by
+ * which function `moves` is, so a row written `moves: () => true` cannot quietly read as a named row.
  *
  * A row applies to a character who has `ownsLearned` LEARNED, took the `background` (took-background.js),
  * holds the special possession `possession`, has picked AND carries (the ◇) the gear choice
@@ -240,7 +244,7 @@ const FICTION_ROLL_OFFERS = [
 		source: "Home on the Range", label: "stonetop.rollOffers.homeOnTheRange", effect: "missAsPartial" },
 	{ key: "trailblazer", moves: name => name === "Defy Danger", ownsLearned: "Trailblazer",
 		source: "Trailblazer", label: "stonetop.rollOffers.trailblazer", effect: "successNote", note: "stonetop.rollOffers.trailblazerNote" },
-	{ key: "constant-vigilance", moves: () => true, ownsLearned: "Constant Vigilance", unlessDebility: "dazed",
+	{ key: "constant-vigilance", anyMove: true, ownsLearned: "Constant Vigilance", unlessDebility: "dazed",
 		source: "Constant Vigilance", label: "stonetop.rollOffers.constantVigilance" },
 	{ key: "lets-make-a-deal", moves: isPersuadeMove, ownsLearned: "Let's Make a Deal",
 		source: "Let's Make a Deal", label: "stonetop.rollOffers.letsMakeADeal", effect: "partialAsSuccess" },
@@ -254,7 +258,7 @@ const FICTION_ROLL_OFFERS = [
 		source: SPEAK_TRUTH_TO_POWER, label: "stonetop.rollOffers.speakTruthToPower", tierActions: speakTruthRefusedActions },
 	{ key: "better-part-of-valor", moves: name => name === "Defy Danger", ownsLearned: "Better Part of Valor",
 		source: "Better Part of Valor", label: "stonetop.rollOffers.betterPartOfValor" },
-	{ key: "underestimated", moves: () => true, ownsLearned: "Underestimated",
+	{ key: "underestimated", anyMove: true, ownsLearned: "Underestimated",
 		source: "Underestimated", label: "stonetop.rollOffers.underestimated" },
 	{ key: "force-to-be-reckoned-with", moves: name => name === "Defy Danger", ownsLearned: A_FORCE_TO_BE_RECKONED_WITH,
 		source: A_FORCE_TO_BE_RECKONED_WITH, label: "stonetop.rollOffers.forceToBeReckonedWith",
@@ -2383,9 +2387,12 @@ export class StonetopCharacter {
 	 * on the card; `effect`, what it does to the roll (advantage unless it says "missAsPartial",
 	 * "partialAsSuccess" or a note); and
 	 * `spend(moveName)`, its price if it has one, paid after the dice.
+	 *
+	 * A move a player wrote that shares a book move's name acts as itself (owns-move.js#bookMoveName): it is
+	 * offered only the rows of every move roll and Binding Arbitration's line, never the named rows.
 	 */
 	async rollOffers(item) {
-		return this._rollOffersNamed(item?.name);
+		return this._rollOffersNamed(item?.name, { book: !item || bookMoveName(item) != null });
 	}
 
 	/**
@@ -2409,11 +2416,15 @@ export class StonetopCharacter {
 		return (await this._rollOffersNamed(moveName)).filter(offer => !asked.has(offer.source));
 	}
 
-	/** rollOffers and directRollOffers: the lines a roll made under `moveName` is offered. */
-	async _rollOffersNamed(moveName) {
+	/**
+	 * rollOffers and directRollOffers: the lines a roll made under `moveName` is offered. `book` false is a
+	 * move a player wrote under that name (rollOffers): only the rows of every move roll
+	 * (`anyMove`) and Binding Arbitration's line, no named row and no skin of fine whisky.
+	 */
+	async _rollOffersNamed(moveName, { book = true } = {}) {
 		if (!moveName) return [];
 		const offers = [];
-		const whisky = isPersuadeMove(moveName) ? await this.fineWhiskyOffer() : null;
+		const whisky = book && isPersuadeMove(moveName) ? await this.fineWhiskyOffer() : null;
 		if (whisky) {
 			offers.push({
 				...whisky,
@@ -2427,7 +2438,7 @@ export class StonetopCharacter {
 			});
 		}
 		for (const row of FICTION_ROLL_OFFERS) {
-			if (!row.moves(moveName)) continue;
+			if (!row.anyMove && (!book || !row.moves(moveName))) continue;
 			// "Unless you're dazed" (Constant Vigilance, p.131) reads the debility's EFFECT, which a raging Heavy
 			// ignores (Battle Joy, p.114: "the effects of debilities as long as you keep fighting"), so it gates
 			// nothing while the dice ignore it too (ignoresDebilities).
@@ -4680,8 +4691,11 @@ export class StonetopCharacter {
 		// shaking the nerves, Prepare a Welcome's 10+ regaining 1 Surprise, Commune with Aratis's 10+
 		// holding 2 Sanction, the holy light lit or snuffed. Stated flatly, so each goes on with the dice.
 		// What each did is written on the card, so a later Shift or +1 moving its tier can bring the
-		// character along, undoing only what this roll did (actors/character/tier-effects.js).
-		if (!descriptionOnly && Number.isFinite(roll?.total)) await this._settleRolledTierEffects(roll, item.name, withSurprise, aimedAt);
+		// character along, undoing only what this roll did (actors/character/tier-effects.js). Never for a move a
+		// player wrote under a book move's name (owns-move.js#bookMoveName): a homebrew "Prepare a Welcome" spent
+		// no Surprise, so its 10+ regains none, and with no record on its card a later Shift brings nothing along.
+		const tierMove = bookMoveName(item);
+		if (!descriptionOnly && tierMove && Number.isFinite(roll?.total)) await this._settleRolledTierEffects(roll, tierMove, withSurprise, aimedAt);
 
 		// Clash's 6-: "your maneuver fails and you suffer your enemy's attack". A flat consequence
 		// with nothing in the tier to decide, so it fires off the dice rather than off a button —

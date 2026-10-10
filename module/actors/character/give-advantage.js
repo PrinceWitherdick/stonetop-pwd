@@ -30,7 +30,7 @@
  * GM's relay are give-advantage-flow.js's.
  */
 
-import { ownsLearnedMoveNamed } from "./owns-move.js";
+import { bookMoveName, ownsLearnedBookMoveNamed } from "./owns-move.js";
 import { escHtml } from "../../utils/strings.js";
 import { ARTIFACT_INSIGHT_QUESTIONS } from "./artifact-identify.js";
 
@@ -73,7 +73,7 @@ function buttonHtml(moveName) {
 export function giveAdvantageRollOptions(moveName) {
 	return actor => {
 		const tiers = GIVE_ADVANTAGE_MOVES[moveName]?.tiers;
-		if (!tiers?.length || actor?.type !== "character" || !ownsLearnedMoveNamed(actor, moveName)) return null;
+		if (!tiers?.length || actor?.type !== "character" || !ownsLearnedBookMoveNamed(actor, moveName)) return null;
 		return { tierActions: Object.fromEntries(tiers.map(tier => [tier, buttonHtml(moveName)])) };
 	};
 }
@@ -81,10 +81,15 @@ export function giveAdvantageRollOptions(moveName) {
 /**
  * The button for a move whose card is its posted text (Countermeasures, Sage Advice), for the
  * sheet's and the hotbar's description-only posts: "" for any other move, or one not held learned.
+ * `item` is the move being posted, when there is one: a move a player wrote under the book's name acts
+ * as itself and gives nothing (owns-move.js#bookMoveName), nor does the book's own learned copy count
+ * for it.
  */
-export function giveAdvantageCardHtml(actor, moveName) {
+export function giveAdvantageCardHtml(actor, moveName, item = null) {
 	const rule = GIVE_ADVANTAGE_MOVES[moveName];
-	if (!rule || rule.tiers || actor?.type !== "character" || !ownsLearnedMoveNamed(actor, moveName)) return "";
+	if (!rule || rule.tiers || actor?.type !== "character") return "";
+	if (item && bookMoveName(item, moveName) == null) return "";
+	if (!ownsLearnedBookMoveNamed(actor, moveName)) return "";
 	return `<div class="card-buttons stonetop-roll-actions stonetop-give-advantage-row">${buttonHtml(moveName)}</div>`;
 }
 

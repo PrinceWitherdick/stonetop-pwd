@@ -81,6 +81,19 @@ describe("In Over Your Head's Mark XP", () => {
 		expect(inOverYourHeadCardHtml(hero().actor, "In Over Your Head")).toBe("");
 	});
 
+	// A move a player wrote under the book's name acts as itself (owns-move.js#bookMoveName): it marks no XP,
+	// and it does not count as the book's learned copy for anyone else's card either.
+	it("is on no card of a move a player wrote under its name", () => {
+		const { actor } = hero({ moves: ["In Over Your Head"] });
+		const homebrew = makeLiveItem({ name: "In Over Your Head", type: "move", flags: { [SCOPE]: { custom: true } } });
+		expect(inOverYourHeadCardHtml(actor, "In Over Your Head", homebrew)).toBe("");
+		expect(inOverYourHeadCardHtml(actor, "In Over Your Head", actor.items.find(i => i.name === "In Over Your Head")))
+			.toContain("stonetop-in-over-your-head-xp");
+		const writer = hero().actor;
+		writer.items.push(homebrew);
+		expect(inOverYourHeadCardHtml(writer, "In Over Your Head")).toBe("");
+	});
+
 	it("marks 1 XP and posts the receipt with its Undo", async () => {
 		const { actor } = hero({ moves: ["In Over Your Head"] });
 		actor.system.attributes.xp.value = 3;
