@@ -1999,13 +1999,15 @@ export function createStonetopCharacterSheetClass(Base) {
 				// with the hash arguments beside it.
 				tooltipKey: _judgeMarksTooltipKey(brands.length, oaths.length),
 			};
-			// The Heavy's Battle Joy. `raging` is not only a glyph state: it is what greys the three
-			// debility boxes out on the Moves tab and what stops them biting in the roll path, so
-			// the same read feeds both (see StonetopCharacter#ignoresDebilities).
+			// The Heavy's Battle Joy. `raging` is the glyph's state (the bare flag). The three debility
+			// boxes grey out on `debilitiesIgnored` instead, the very read that stops them biting in the
+			// roll path (StonetopCharacter#ignoresDebilities: raging AND the move learned), so a rage
+			// flag left on an un-learned Battle Joy cannot show "ignored" while the dice still take them.
 			const raging = this._stonetopCharacter.battleJoy;
 			context.stonetop.battleJoy = {
 				show:   showBattleJoy({ owns: ownsGlyph.battleJoy, raging }),
 				raging,
+				debilitiesIgnored: this._stonetopCharacter.ignoresDebilities,
 				..._toggleGlyphKeys(BATTLE_JOY_GLYPH, raging, context.editable),
 			};
 			// Three more on/off states a fight turns on: the Marshal's shaken nerves, the Storm Markings'
@@ -2145,9 +2147,10 @@ export function createStonetopCharacterSheetClass(Base) {
 				clearFate: isFatePending && !!snapshot.editMode,
 				// Hard to Kill's 7-9 trade, still open once the window that rolled it has gone (closed, or the GM's
 				// fallback window): "mark a debility of your choice to regain 1 HP" (p.114). The debilities still
-				// unmarked, each a button; latched by the 7-9 (HARD_TO_KILL_TRADE_FLAG) and spent by the trade.
+				// unmarked, each a button; latched by the 7-9 (HARD_TO_KILL_TRADE_FLAG) and spent by the trade. A
+				// move's mark, so Auspicious Birth's circle may stand in (debilityMarkChoices).
 				hardToKillTrade: this.isEditable && this._hardToKillTradeIsOpen(this._stonetopCharacter, state)
-					? (this._stonetopCharacter.debilityChoices ?? []).filter(d => !d.marked) : null,
+					? (this._stonetopCharacter.debilityMarkChoices ?? []).filter(d => !d.marked) : null,
 				// The way to the Post-Death tab for a table who resolved the Door in conversation.
 				// That tab is opt-in (showPostDeath), and until this control existed the only thing
 				// that ever opted in was REMOVING an insert — so the "Choose Your Fate" picker, whose
@@ -6512,8 +6515,10 @@ export function createStonetopCharacterSheetClass(Base) {
 		// StonetopCharacter#withPickContext.
 		async rollMoveById(itemId, { shiftKey = false, pickContext = null } = {}) {
 			const item = this.actor?.items?.get(itemId);
-			if (!item) return void ui.notifications.warn("That move is no longer on this character.");
-			if (!this.isEditable) return;
+			// `false` on a refusal, as on a backed-out roll (below): a caller that latches on a roll (the Omens
+			// reminder's button, destined.js#rollOmensOfFate) must not read "nothing rolled" as a roll.
+			if (!item) { ui.notifications.warn("That move is no longer on this character."); return false; }
+			if (!this.isEditable) return false;
 
 			// A +Fortunes love letter rolls the steading's Fortunes, settled as every steading roll
 			// is, from the hotbar as from the reader.
@@ -8278,7 +8283,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 */
 		async rollMoveByName(name, opts = {}) {
 			const item = this.actor?.items?.find(i => i.type === "move" && i.name === name);
-			if (!item) return void ui.notifications.warn(`${name} isn't on this character's sheet.`);
+			if (!item) { ui.notifications.warn(`${name} isn't on this character's sheet.`); return false; }
 			return this.rollMoveById(item.id, opts);
 		}
 

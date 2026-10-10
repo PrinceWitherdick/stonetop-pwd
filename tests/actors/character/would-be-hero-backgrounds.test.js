@@ -249,6 +249,20 @@ describe("rolling +Omens", () => {
 		expect(await settleTierEffects(actor, OMENS_OF_FATE, "success")).toEqual({});
 		expect(omens(actor)).toBe(2);
 	});
+
+	// The sheet refusing (not editable here) rolls nothing, and says so with `false`, so the reminder's
+	// button is not spent on it (wave 4 DES-1).
+	it("answers no roll when the sheet refuses the move", async () => {
+		const { actor, char, sheet } = hero({ flags: { "background.selected": "destined" } });
+		await char.ensureStartingMoves();
+		actor.isOwner = true;
+		Object.defineProperty(sheet, "isEditable", { get: () => false });
+		// The harness keeps items as a plain array; the sheet looks one up as an EmbeddedCollection does.
+		actor.items.get = id => actor.items.find(i => (i.id ?? i._id) === id);
+		actor.sheet = sheet;
+		expect(await rollOmensOfFate(actor)).toBe(false);
+		expect(rollStat).not.toHaveBeenCalled();
+	});
 });
 
 describe("the start-of-session Omens reminder", () => {
@@ -259,8 +273,11 @@ describe("the start-of-session Omens reminder", () => {
 	it("prints the book's words and a Roll button per Destined hero", async () => {
 		const posted = [];
 		globalThis.ChatMessage = { create: vi.fn(async d => posted.push(d)) };
-		const destinedHero = { id: "hero-1", name: "Wynfor", type: "character", flags: { [SYSTEM_ID]: { background: { selected: "destined" } } }, getFlag: () => null };
-		const actors = [destinedHero];
+		const destinedHero = { id: "hero-1", name: "Wynfor", type: "character", system: { playbook: { name: WBH } }, flags: { [SYSTEM_ID]: { background: { selected: "destined" } } }, getFlag: () => null };
+		// The same slug under another playbook is not the Would-Be Hero's Destined: its button would roll
+		// nothing (rollOmensOfFate asks isDestined), so the card leaves it out (wave 4 DES-1).
+		const notAHero = { id: "other-1", name: "Siwan", type: "character", system: { playbook: { name: "The Heavy" } }, flags: { [SYSTEM_ID]: { background: { selected: "destined" } } }, getFlag: () => null };
+		const actors = [destinedHero, notAHero];
 		globalThis.game = {
 			i18n: saved.game.i18n,
 			user: { id: "gm", isGM: true },
@@ -275,6 +292,8 @@ describe("the start-of-session Omens reminder", () => {
 		expect(html).toContain("the GM will describe a vision or portent that points toward your fate and/or clarifies your current situation");
 		expect(html).toContain("and how your fears play into them");
 		expect(html).toContain('class="stonetop-omens-roll-btn" data-actor-id="hero-1"');
+		expect(html).not.toContain('data-actor-id="other-1"');
+		expect(html).not.toContain("Siwan");
 	});
 
 	it("the button rolls that hero's Omens of Fate for its owner, and is disabled for anyone else", async () => {

@@ -90,6 +90,9 @@ function makeCharacterMock(actor) {
 		get canMarkBlessed() { return canMark; },
 		set canMarkBlessed(value) { canMark = !!value; },
 		get battleJoy() { return raging; },
+		// The real one is raging AND Battle Joy learned (battle-joy.js#ignoresDebilities); the
+		// learned half is `canEnterBattleJoy` here.
+		get ignoresDebilities() { return raging && canRage; },
 		// A METHOD, matching the real accessor's signature, for the reason headerGlyphOwnership
 		// below is one: a getter here would keep passing while the sheet called a function.
 		// `holdAdvantage` is the tests' knob rather than a setter of the same name, which cannot
@@ -640,16 +643,17 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		await sheet._stonetopCharacter.setBattleJoy(true);
 		expect(await header()).toMatchObject({
 			blessedMarks: { show: true, count: 1 },
-			battleJoy:    { show: true, raging: true },
+			battleJoy:    { show: true, raging: true, debilitiesIgnored: true },
 		});
 
 		// Both survive losing the moves while their state stands: marks so they can be lifted, and
-		// a rage because a stranded one would go on cancelling the character's debilities.
+		// a rage so it can be ended. But a stranded rage ignores nothing (the roll path's
+		// ignoresDebilities), so the debility boxes stop reading "ignored" with it (wave 4 DEB-1).
 		actor.typedActor.canMarkBlessed = false;
 		actor.typedActor.canEnterBattleJoy = false;
 		expect(await header()).toMatchObject({
 			blessedMarks: { show: true, count: 1 },
-			battleJoy:    { show: true, raging: true },
+			battleJoy:    { show: true, raging: true, debilitiesIgnored: false },
 		});
 	});
 

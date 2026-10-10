@@ -106,7 +106,7 @@ describe("StonetopItem.roll: Battle Joy's ending roll", () => {
 
 	function heavyItem(debilities = []) {
 		const item = makeItem("Battle Joy", BATTLE_JOY);
-		item.parent.typedActor = { debilityChoices: debilities };
+		item.parent.typedActor = { debilityMarkChoices: debilities };
 		return item;
 	}
 

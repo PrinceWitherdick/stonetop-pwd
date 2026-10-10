@@ -1248,7 +1248,7 @@ describe("DeathsDoorDialog: a roll under way, seen from every owner's window", (
 			actor.unsetFlag = vi.fn(async (scope, key) => { delete actor.flags[scope][key]; });
 			const character = {
 				_actor: actor,
-				debilityChoices: [{ key: "weakened", name: "Weakened", marked: false }],
+				debilityMarkChoices: [{ key: "weakened", name: "Weakened", marked: false }],
 				markDebility: vi.fn(async () => true),
 			};
 

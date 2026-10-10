@@ -1,16 +1,12 @@
 import { getHoverDescriptionSetting } from "../settings.js";
 import { JOURNAL_EDITOR_SELECTOR } from "./journal-editor-guard.js";
 import { replaceTextMatches } from "./text-nodes.js";
+import { localize } from "./i18n.js";
 
-// The three character debilities and what each one does. This is the canonical
-// rules text mirrored from `_DEBILITY_DEFS` in
-// module/actors/character/StonetopCharacter.js — kept here as a plain string so
-// this tiny util doesn't import the heavy character class. If the definitions
-// there change, update this too.
-export const DEBILITY_TOOLTIP =
-	"A debility is a temporary condition from harm, strain, or stress. There are three, each giving disadvantage on rolls with its stats: " +
-	"Weakened (+STR / +DEX), Dazed (+INT / +WIS), and Miserable (+CON / +CHA). " +
-	"Clear them by resting, recovering, or tending to what ails you.";
+// The three character debilities and what each one does (Book I p.52, p.241-242), in one sentence. Kept in
+// languages/en.json beside each debility's own line (`stonetop.debilities.*`, which StonetopCharacter's
+// _DEBILITY_DEFS and the stat block's tooltips read), so there is one copy of the rules text to keep.
+export const DEBILITY_TOOLTIP_KEY = "stonetop.debilities.tooltip";
 
 // The bare word "debility" / "debilities", case-insensitive. The stateless form
 // is for the per-node `.test()` pre-filter; the global form (derived from it)
@@ -56,6 +52,7 @@ export function markDebilityTooltips(container) {
 	// lets us skip building the TreeWalker and running `.closest(_SKIP)` per node.
 	if (!_DEBILITY_RE.test(container.textContent ?? "")) return;
 
+	const tooltip = localize(DEBILITY_TOOLTIP_KEY);
 	replaceTextMatches(container, {
 		skip:  _SKIP,
 		regex: _DEBILITY_RE_G,
@@ -64,7 +61,7 @@ export function markDebilityTooltips(container) {
 			if (_STEADING_QUALIFIED.test(text.slice(0, match.index))) return null;
 			const span = document.createElement("span");
 			span.className = "stonetop-debility-term";
-			span.dataset.tooltip = DEBILITY_TOOLTIP;
+			span.dataset.tooltip = tooltip;
 			span.textContent = match[0];
 			return span;
 		},

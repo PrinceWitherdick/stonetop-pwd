@@ -346,7 +346,7 @@ export async function settleBattleJoyResult(message, actor, choice, { buttons = 
 			globalThis.ui?.notifications?.warn?.(localize(`${KEY}.debilityTaken`));
 			return false;
 		}
-		const name = actor.typedActor?.debilityChoices?.find(d => d.key === choice)?.name ?? choice;
+		const name = actor.typedActor?.debilityMarkChoices?.find(d => d.key === choice)?.name ?? choice;
 		await postMoveNote(actor, BATTLE_JOY, format(`${KEY}.debilityMarked`, { name: actor.name, debility: name }));
 		return true;
 	});

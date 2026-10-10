@@ -372,7 +372,7 @@ describe("the Battle Joy roll card's buttons", () => {
 			computedMaxHp: async () => 12,
 			restoreHp: vi.fn(async to => { duvin.system.attributes.hp.value = to; return true; }),
 			markDebility: vi.fn(async key => !marked.includes(key)),
-			debilityChoices: [{ key: "weakened", name: "Weakened" }, { key: "dazed", name: "Dazed" }],
+			debilityMarkChoices: [{ key: "weakened", name: "Weakened" }, { key: "dazed", name: "Dazed" }],
 		};
 		globalThis.game.actors = { get: id => (id === duvin.id ? duvin : undefined) };
 		const message = {

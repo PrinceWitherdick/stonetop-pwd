@@ -2387,6 +2387,18 @@
       "debilityMarked": "{name} marks {debility} as their Battle Joy ends, and marks no XP for the miss.",
       "debilityTaken": "That debility is already marked. Choose another."
     },
+    "debilities": {
+      "tooltip": "A debility is a temporary condition from harm, strain, or stress. There are three, each giving disadvantage on rolls with its stats: Weakened (+STR / +DEX), Dazed (+INT / +WIS), and Miserable (+CON / +CHA). Clear them by resting, recovering, or tending to what ails you.",
+      "weakened": {
+        "description": "Fatigued, tired, sluggish, shaky. Disadvantage on +STR or +DEX rolls."
+      },
+      "dazed": {
+        "description": "Out of it, befuddled, not thinking clearly. Disadvantage on +INT or +WIS rolls."
+      },
+      "miserable": {
+        "description": "Greatly distressed, angry, unwell, in pain. Disadvantage on +CON or +CHA rolls."
+      }
+    },
     "personalSymbol": {
       "button": "Display it: crew +1 Loyalty",
       "tooltip": "When you display or reveal your personal symbol in a dramatic fashion, your crew holds +1 Loyalty (max 3). Click once you have.",

@@ -245,7 +245,7 @@ function cardBoostNotes(card, total, { bend = true } = {}) {
  * the trade's latch (HARD_TO_KILL_TRADE_FLAG), and the table is told. Whether it was made.
  */
 export async function tradeHardToKillDebility(character, key) {
-	const name = character?.debilityChoices?.find(d => d.key === key)?.name ?? key;
+	const name = character?.debilityMarkChoices?.find(d => d.key === key)?.name ?? key;
 	const actor = character._actor ?? null;
 	const latch = actor?.getFlag?.(SYSTEM_ID, HARD_TO_KILL_TRADE_FLAG)
 		? Object.fromEntries([deletionEntry(`flags.${SYSTEM_ID}.${HARD_TO_KILL_TRADE_FLAG}`)]) : null;
@@ -607,7 +607,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 			// 7-9 — Hard to Kill's trade is the only way back to 1 HP on a weak hit, and taking
 			// it is what ends being out of the action.
 			hardToKill:      opts.hardToKill,
-			debilityChoices: this._character?.debilityChoices?.filter(d => !d.marked) ?? [],
+			// A move's "mark a debility", so Auspicious Birth's circle may stand in (debilityMarkChoices).
+			debilityChoices: this._character?.debilityMarkChoices?.filter(d => !d.marked) ?? [],
 			debilityTraded:  !!this._debilityTraded,
 			outOfAction:     !this._boostsPending && key === "partial" && !this._debilityTraded,
 

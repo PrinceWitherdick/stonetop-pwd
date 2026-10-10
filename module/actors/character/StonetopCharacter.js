@@ -49,6 +49,7 @@ import {DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, UNSTOPPABLE, can
 import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG, HP_CEILING_OPTION, resolvedFlags, readableFlags, resolvedFlagProperty} from "./StonetopFlags.js";
 import {heroDisplayName, WBH_HERO_FLAG} from "./WouldBeHeroAsterisk.js";
 import {tookBackground} from "./took-background.js";
+import {AUSPICIOUS_BIRTH, auspiciousBirthChoice} from "./invoke-consequences.js";
 import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, moveLearnedIn, switchedOffGranter, ownedMoveNames, ownsMoveNamed, bookMoveName} from "./owns-move.js";
 import {ANIMAL_COMPANION_MOVE, RANGER_SLUG, MAGNIFICENT_SPECIMEN_MOVE, COMPANION_TRAIT_PICKS_PER_SPECIMEN, companionTraitAllowance, trimCompanionTraits} from "./animal-companion.js";
 import {fineWhiskyOffer as fineWhiskyOfferFrom, isPersuadeMove, FINE_WHISKY_SOURCE} from "./fine-whisky.js";
@@ -205,7 +206,7 @@ const SEASON_MOVE_DISADVANTAGE = [
  * holds the special possession `possession`, has picked AND carries (the ◇) the gear choice
  * `possessionChoice`, keyed `possession:choice` as the carry marks are, or has the worn insert's lore
  * option `postDeathLore` marked ("consequences:disturbing"); and never while the debility
- * `unlessDebility` is marked, nor while the learned move `whileHolding` holds nothing on its track
+ * `unlessDebility` is marked (unless Battle Joy has them ignoring it), nor while the learned move `whileHolding` holds nothing on its track
  * (Safety First's Protection). `spendHeld` names that track: taken, the line spends 1 of it after the
  * dice. Taken, a line's `source` is folded in as advantage and named on the card, unless its `effect`
  * says otherwise (see _foldTakenOffers): "missAsPartial" counts a 6- as a 7-9 instead, "partialAsSuccess" a 7-9
@@ -2427,7 +2428,11 @@ export class StonetopCharacter {
 		}
 		for (const row of FICTION_ROLL_OFFERS) {
 			if (!row.moves(moveName)) continue;
-			if (row.unlessDebility && this._actor.system?.attributes?.debilities?.options?.[row.unlessDebility]?.value) continue;
+			// "Unless you're dazed" (Constant Vigilance, p.131) reads the debility's EFFECT, which a raging Heavy
+			// ignores (Battle Joy, p.114: "the effects of debilities as long as you keep fighting"), so it gates
+			// nothing while the dice ignore it too (ignoresDebilities).
+			if (row.unlessDebility && !this.ignoresDebilities
+				&& this._actor.system?.attributes?.debilities?.options?.[row.unlessDebility]?.value) continue;
 			if (row.whileHolding && !(learnedTrack(this._actor, row.whileHolding)?.held > 0)) continue;
 			if (!await this._earnsRollOffer(row)) continue;
 			offers.push({
@@ -5652,12 +5657,11 @@ export class StonetopCharacter {
 	/** The debility half of {@link applyDebilityRollMode}: what a marked box does to this roll. */
 	_debilityRollMode(stat, options) {
 		const debilityOptions = this._actor.system.attributes?.debilities?.options ?? {};
+		// Which stats a debility touches is the BOOK's (p.52), read off _DEBILITY_DEFS as the snapshot, the
+		// sheet and the tooltips read it. The stored `stat` array beside each box is never consulted: a world
+		// whose copy drifted (a macro, an import) would otherwise roll differently from what every display says.
 		const activeEntry = Object.entries(debilityOptions).find(
-			([key, opt]) => {
-				if (!opt.value) return false;
-				const affectedStats = Array.isArray(opt.stat) ? opt.stat : _DEBILITY_DEF_BY_KEY[key]?.stats;
-				return affectedStats?.includes(stat);
-			}
+			([key, opt]) => !!opt?.value && !!_DEBILITY_DEF_BY_KEY[key]?.stats.includes(stat)
 		);
 		if (!activeEntry) return options;
 		const [key] = activeEntry;
@@ -6249,6 +6253,23 @@ export class StonetopCharacter {
 	}
 
 	/**
+	 * debilityChoices for a MOVE that has this character mark a debility (Hard to Kill's 7-9 trade, Battle Joy's
+	 * 6-): Auspicious Birth's circle first when that background is taken, "When one of your moves has you mark a
+	 * debility, you may mark this background's circle instead, to no ill effect" (invoke-consequences.js
+	 * #auspiciousBirthChoice; Invoke the Sun God and Burn Twice as Bright offer it through debilityPayments). Not
+	 * for a hand tick on the sheet, which is the GM's "mark a debility" rather than one of the character's moves,
+	 * and never a list of things to clear: the circle clears only at camp and Convalesce.
+	 */
+	get debilityMarkChoices() {
+		const circle = auspiciousBirthChoice({
+			playbook: this._actor.system?.playbook?.name ?? null,
+			background: this._background.selectedSlug || null,
+			setupResources: this._background.setupResources,
+		});
+		return circle ? [circle, ...this.debilityChoices] : this.debilityChoices;
+	}
+
+	/**
 	 * Mark one debility, optionally in the same write as an HP change and the end of a brush
 	 * with death — the Heavy's Hard to Kill trades exactly that on a 7-9 ("mark a debility of
 	 * your choice to regain 1 HP", which is also what takes them out of being out of the
@@ -6260,15 +6281,16 @@ export class StonetopCharacter {
 	 * open — a Heavy healed to 6 who then trades a debility was being set back down to 1.
 	 *
 	 * `key` can be Walk It Off's (walk-it-off.js) while debilityChoices lists it: the move's box is
-	 * marked instead, and no debility is.
+	 * marked instead, and no debility is. Or Auspicious Birth's circle while debilityMarkChoices lists it,
+	 * marked in the same write (the moves offering it are the only callers that hand that key in).
 	 *
 	 * `alsoUpdate`: a further fragment for the same write, as restoreHp's (Hard to Kill's trade closes its
 	 * latch in it).
 	 */
 	async markDebility(key, { hp = null, moveName, clearsDeathsDoor = false, alsoUpdate = null } = {}) {
-		const choice = this.debilityChoices.find(d => d.key === key);
+		const choice = this.debilityMarkChoices.find(d => d.key === key);
 		if (!choice || choice.marked) return false;
-		const update = debilityData(key, true);
+		const update = choice.circle ? this._background.setupResourceData(AUSPICIOUS_BIRTH.slug, 1) : debilityData(key, true);
 		if (hp !== null && hp > this.hp) update["system.attributes.hp.value"] = hp;
 		if (clearsDeathsDoor) Object.assign(update, this._clearDeathsDoorUpdate);
 		if (alsoUpdate) Object.assign(update, alsoUpdate);
@@ -6942,10 +6964,17 @@ const _STAT_DEFS = {
 	cha: { name: "Charisma",     abbr: "CHA" },
 };
 
+// The three debilities (Book I p.52). `description` is the book's line, read out of languages/en.json
+// (`stonetop.debilities.<key>.description`), the same key the stat block's tooltips localize, so the roll
+// card, the debility pickers and the sheet say one thing.
+const _debilityDef = (key, name, stats) => ({
+	key, name, stats,
+	get description() { return _loc(`stonetop.debilities.${key}.description`); },
+});
 const _DEBILITY_DEFS = [
-	{ key: "weakened",  name: "Weakened",  stats: ["str", "dex"], description: "Fatigued, tired, sluggish, shaky. Disadvantage on +STR or +DEX rolls." },
-	{ key: "dazed",     name: "Dazed",     stats: ["int", "wis"], description: "Out of it, befuddled, not thinking clearly. Disadvantage on +INT or +WIS rolls." },
-	{ key: "miserable", name: "Miserable", stats: ["con", "cha"], description: "Greatly distressed, angry, unwell, in pain. Disadvantage on +CON or +CHA rolls." },
+	_debilityDef("weakened",  "Weakened",  ["str", "dex"]),
+	_debilityDef("dazed",     "Dazed",     ["int", "wis"]),
+	_debilityDef("miserable", "Miserable", ["con", "cha"]),
 ];
 const _DEBILITY_DEF_BY_KEY = Object.fromEntries(_DEBILITY_DEFS.map(d => [d.key, d]));
 
