@@ -3204,7 +3204,12 @@
         "bestPill": "{name}'s {formula}",
         "hardest": "hardest-hitting",
         "piercingWhile": "while the +{bonus} is on",
-        "armorBack": "{shown} on the card, {rolled} before their {armor} armor"
+        "armorBack": "{shown} on the card, {rolled} before their {armor} armor",
+        "reRollOwn": "This total was rolled with {name}'s {formula}. Striking alone, re-roll your own damage rather than apply it."
+      },
+      "counterAvoided": {
+        "label": "Avoided",
+        "tooltip": "The Clash this attack answers ended on a 10+ that avoided, prevented, or countered it, so there is nothing to take. If that roll moves off the 10+, this button comes back."
       },
       "groupHit": {
         "down": "one of them goes down, {after} still standing",

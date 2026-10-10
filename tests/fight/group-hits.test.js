@@ -108,4 +108,12 @@ describe("isLoneBlowOnGroup", () => {
 		const { target, bram, scene } = world({ fightTab: false });
 		expect(isLoneBlowOnGroup(target, bram, scene)).toBe(false);
 	});
+
+	it("takes the card's word for whether the attacker was a group when the blow was rolled", () => {
+		// The crew's blow applied after its fight ended is still a group's; Bram's is still his own.
+		const { target, bram, crew, scene } = world();
+		expect(isLoneBlowOnGroup(target, crew, null, { attackerGroup: true })).toBe(false);
+		expect(isLoneBlowOnGroup(target, crew, scene, { attackerGroup: false })).toBe(true);
+		expect(isLoneBlowOnGroup(target, bram, scene, { attackerGroup: true })).toBe(false);
+	});
 });

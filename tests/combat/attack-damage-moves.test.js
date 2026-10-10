@@ -128,9 +128,10 @@ describe("what a hit tier puts on the card", () => {
 describe("pickedEffects: the move's own bullets, and what each one is worth", () => {
 	const effectsOfWholeList = (key, description) => pickedEffects(key, bulletsOf(description));
 
-	it("Clash: strike-hard carries the 1d6 and the counter-attack; avoiding carries neither", () => {
+	it("Clash: strike-hard carries the 1d6 and the counter-attack; avoiding carries neither, only its mark", () => {
+		// The mark is what stands down a counter-attack already struck off a 6- this 10+ was lifted from (RA-2).
 		expect(pickedEffects("clash", [bulletsOf(CLASH.description)[0]]))
-			.toEqual({ extraDice: [], counter: false, ignoresArmor: false, addons: [] });
+			.toEqual({ extraDice: [], counter: false, ignoresArmor: false, addons: ["avoid"] });
 		expect(pickedEffects("clash", [bulletsOf(CLASH.description)[1]]))
 			.toEqual({ extraDice: ["1d6"], counter: true, ignoresArmor: false, addons: [] });
 	});

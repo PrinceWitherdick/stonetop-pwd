@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { SCOPE, pc, installCombatChatFakes, uninstallCombatChatFakes, cardWithFlag, makeMessage, NO_ACTIVE_GM } from "../fakes/combat-chat.js";
 
 // Everything else in utils/damage.js stays real — parseMonsterAttacks above all, since the three
 // routes below are chosen by what it reads out of a shipped stat block's prose.
-const { sufferEnemyAttack, maybeCounterOnMiss, tagNoticesHtml, resolveSufferChoice, dealSufferedAmount } = await import("../../module/combat/attack-flow.js");
+const attackFlow = await import("../../module/combat/attack-flow.js");
+const { sufferEnemyAttack, maybeCounterOnMiss, tagNoticesHtml, resolveSufferChoice, dealSufferedAmount, tierCounters, reconcileClashCounter } = attackFlow;
 const { FICTION_DAMAGE_TAGS } = await import("../../module/utils/damage.js");
 
 let posted;
@@ -337,5 +338,150 @@ describe("maybeCounterOnMiss", () => {
 		]);
 		expect(await maybeCounterOnMiss(pc, clash, { total: 3 }, frozen([]))).toBe(true);
 		expect(damageCard().flags[SCOPE].damage.move).toBe("Rime Lord's attack");
+	});
+
+	it("latches the blow on its card, so a 6- lifted onto a 7-9 is not struck twice", async () => {
+		const targets = targeting("bronze khopesh d10+2 (close)", "d10+2");
+		const message = makeMessage({ attack: { moveKey: "clash", targets } });
+		expect(await maybeCounterOnMiss(pc, clash, { total: 6 }, frozen(targets), { message })).toBe(true);
+		expect(message.flags.attack.countered).toBe(true);
+		// Burn Brightly makes it a 7: the 7-9 Confirm's own counter is already paid.
+		expect(tierCounters(message.flags.attack, { button: true })).toBe(false);
+		expect(tierCounters({ moveKey: "clash" }, { button: true })).toBe(true);
+		expect(tierCounters({ moveKey: "clash" }, { button: true, dancing: true })).toBe(false);
+	});
+});
+
+describe("a blow whose dice come to less than nothing", () => {
+	it("shows 0 on the card and keeps the true sum on its flag", async () => {
+		globalThis.Roll = class {
+			constructor(formula) { this.formula = formula; }
+			async evaluate() { this.total = -1; this.dice = []; return this; }
+		};
+		await sufferEnemyAttack(pc, { targets: targeting("nip d4-2 (hand)", "d4-2") });
+		expect(damageCard().flags[SCOPE].damage.results[0].raw).toBe(-1);
+		expect(damageCard().content).toContain('stonetop-roll-result-number">0<');
+		expect(damageCard().content).not.toContain(">-1<");
+	});
+});
+
+describe("the targeted damage card follows the roller's chat mode", () => {
+	it("is whispered on a blind roll, as the no-target card already was", async () => {
+		globalThis.game.settings = { get: (scope, key) => (key === "rollMode" ? "blindroll" : "roll") };
+		globalThis.ChatMessage.applyRollMode = vi.fn((data, mode) => {
+			if (mode === "blindroll") Object.assign(data, { whisper: ["gm1"], blind: true });
+		});
+		await sufferEnemyAttack(pc, { targets: targeting("bronze khopesh d10+2 (close)", "d10+2") });
+		expect(globalThis.ChatMessage.applyRollMode).toHaveBeenCalledWith(expect.anything(), "blindroll");
+		expect(damageCard()).toMatchObject({ whisper: ["gm1"], blind: true });
+	});
+});
+
+describe("reconcileClashCounter: a rewritten Clash total", () => {
+	it("strikes the counter-attack when a hit is shifted down onto a 6-, once", async () => {
+		const targets = targeting("bronze khopesh d10+2 (close)", "d10+2");
+		const message = makeMessage({ attack: { moveKey: "clash", targets } });
+		expect(await reconcileClashCounter(message, pc, 5)).toBe(true);
+		expect(damageCard()).toBeTruthy();
+		expect(message.flags.attack.countered).toBe(true);
+		expect(await reconcileClashCounter(message, pc, 4)).toBe(false);
+		expect(posted.filter(p => p.flags?.[SCOPE]?.damage)).toHaveLength(1);
+	});
+
+	it("does nothing for a hit, a card already countered, or another attack move", async () => {
+		const targets = targeting("bronze khopesh d10+2 (close)", "d10+2");
+		expect(await reconcileClashCounter(makeMessage({ attack: { moveKey: "clash", targets } }), pc, 8)).toBe(false);
+		expect(await reconcileClashCounter(makeMessage({ attack: { moveKey: "clash", targets, countered: true } }), pc, 5)).toBe(false);
+		expect(await reconcileClashCounter(makeMessage({ attack: { moveKey: "let-fly", targets } }), pc, 5)).toBe(false);
+		expect(posted).toHaveLength(0);
+	});
+});
+
+// Wave 3 RAW re-check RA-2: Clash's 10+ "pick 1: Avoid, prevent, or counter your enemy's attack" (Book I
+// p.214). A 6- whose counter-attack was already struck, lifted onto a 10+ that avoids it, leaves that blow
+// on the log: its "Take this damage" stands down (never applied, never deleted), and comes back when a
+// rewrite moves the card onto a tier that suffers the attack again.
+describe("a counter-attack the 10+ avoided", () => {
+	const { counterAvoided, registerCounterAvoidedHooks, wireApplyDamage } = attackFlow;
+	const clash = { name: "Clash", system: { moveType: "basic" } };
+
+	it("is posted naming the Clash card it answers", async () => {
+		const targets = targeting("bronze khopesh d10+2 (close)", "d10+2");
+		const message = makeMessage({ attack: { moveKey: "clash", targets } });
+		await maybeCounterOnMiss(pc, clash, { total: 5 }, { messageFlags: { [SCOPE]: { attack: { targets } } } }, { message });
+		expect(damageCard().flags[SCOPE].damage.counterOf).toBe("msg1");
+	});
+
+	it("carries the Clash card through the GM's 'Which attack?' and 'Name the damage' cards", async () => {
+		const targets = targetingResolvable("rusty sword d8+2 (close) or crushing grip (grabby)", "");
+		await sufferEnemyAttack(pc, { targets, counterOf: "msg1" });
+		const choice = choiceCard();
+		expect(choice.flags[SCOPE].sufferChoice.counterOf).toBe("msg1");
+		const ask = makeMessage(choice.flags[SCOPE]);
+		await resolveSufferChoice(ask, 1);
+		const amount = amountCard();
+		expect(amount.flags[SCOPE].sufferAmount.counterOf).toBe("msg1");
+		await dealSufferedAmount(makeMessage(amount.flags[SCOPE]), "3");
+		expect(damageCard().flags[SCOPE].damage.counterOf).toBe("msg1");
+	});
+
+	it("is avoided only while the card stands on the 10+ that avoided it", () => {
+		expect(counterAvoided({ countered: true, avoids: true }, "success")).toBe(true);
+		expect(counterAvoided({ countered: true, avoids: true }, "partial")).toBe(false);
+		expect(counterAvoided({ countered: true, avoids: true }, "failure")).toBe(false);
+		expect(counterAvoided({ countered: true }, "success")).toBe(false);
+		expect(counterAvoided({ avoids: true }, "success")).toBe(false);
+	});
+
+	it("is settled by a rewrite that moves the card off the 10+ and back, striking nothing new", async () => {
+		const targets = targeting("bronze khopesh d10+2 (close)", "d10+2");
+		const message = makeMessage({ attack: { moveKey: "clash", targets, countered: true, avoids: true, avoided: true, resolved: true } });
+		expect(await reconcileClashCounter(message, pc, 8)).toBe(false);
+		expect(message.flags.attack.avoided).toBe(false);
+		expect(await reconcileClashCounter(message, pc, 11)).toBe(false);
+		expect(message.flags.attack.avoided).toBe(true);
+		expect(posted).toHaveLength(0);
+	});
+
+	function applyButton(damage, clashCard) {
+		const listeners = [];
+		const button = { disabled: false, title: "", innerHTML: "", style: {}, addEventListener: (type, fn) => listeners.push(fn) };
+		globalThis.game.messages = { get: id => (id === clashCard?.id ? clashCard : null) };
+		globalThis.fromUuidSync = uuid => (uuid === pc.uuid ? pc : null);
+		const message = makeMessage({ damage });
+		wireApplyDamage(message, { querySelector: sel => (sel === ".stonetop-apply-damage" ? button : null) });
+		return { button, listeners };
+	}
+
+	it("stands its card's 'Take this damage' down while avoided, and leaves it live otherwise", () => {
+		const damage = { selfHarm: true, move: "Rime Lord's attack", counterOf: "clash1", results: [{ uuid: pc.uuid, name: "Pim", raw: 9 }] };
+		const avoided = applyButton(damage, { id: "clash1", getFlag: () => ({ countered: true, avoids: true, avoided: true }) });
+		expect(avoided.button.disabled).toBe(true);
+		expect(avoided.button.innerHTML).toContain("Avoided");
+		expect(avoided.listeners).toHaveLength(0);
+
+		const suffered = applyButton(damage, { id: "clash1", getFlag: () => ({ countered: true, avoids: true, avoided: false }) });
+		expect(suffered.button.disabled).toBe(false);
+		expect(suffered.listeners).toHaveLength(1);
+	});
+
+	it("redraws the blow's card on every client when the Clash card's avoid changes", () => {
+		let onUpdate = null;
+		const was = globalThis.Hooks;
+		globalThis.Hooks = { on: (name, fn) => { if (name === "updateChatMessage") onUpdate = fn; } };
+		try {
+			registerCounterAvoidedHooks();
+		} finally {
+			globalThis.Hooks = was;
+		}
+		const blow = { logged: true, getFlag: (scope, key) => (key === "damage" ? { counterOf: "clash1" } : undefined) };
+		const other = { logged: true, getFlag: () => undefined };
+		globalThis.game.messages = [blow, other];
+		globalThis.ui.chat = { updateMessage: vi.fn() };
+		onUpdate({ id: "clash1" }, { flags: { [SCOPE]: { attack: { avoided: true } } } });
+		expect(globalThis.ui.chat.updateMessage).toHaveBeenCalledTimes(1);
+		expect(globalThis.ui.chat.updateMessage).toHaveBeenCalledWith(blow);
+		onUpdate({ id: "clash1" }, { flags: { [SCOPE]: { attack: { resolved: true } } } });
+		expect(globalThis.ui.chat.updateMessage).toHaveBeenCalledTimes(1);
 	});
 });

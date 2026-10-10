@@ -28,8 +28,9 @@ import {crewWeaponChoices} from "./crew-weapons.js";
 import {weaponMetaFromNote} from "../data/weapon-from-note.js";
 import {weaponMeta, isClashWeapon, isLetFlyWeapon, weaponTraitText, weaponArmorBits, grantedWeaponForMove, MOVE_GRANTED_WEAPONS, UNARMED_META, MELEE_RANGES, ALL_IN_THE_WRIST, withWristThrow} from "../data/weapons.js";
 import {escHtml, joinNames} from "../utils/strings.js";
-import {stonetopChatCard, rollFormulaChip, damageMark, damageBadge, damageKeywordsHtml, optionKey, whisperGm, cardNoticeHtml, canUserWriteCard} from "../utils/chat.js";
-import {rollDamage, multiDieFaces, sign, damageRollFormula, damageConditionPills, conditionsRowHtml, classifyResult} from "../utils/roll-engine.js";
+import {stonetopChatCard, rollFormulaChip, damageMark, damageBadge, damageKeywordsHtml, optionKey, whisperGm, cardNoticeHtml, canUserWriteCard, whisperedAs} from "../utils/chat.js";
+import {rollDamage, multiDieFaces, sign, damageRollFormula, damageConditionPills, conditionsRowHtml, classifyResult, messageOfRoll} from "../utils/roll-engine.js";
+import {cardCountedTier} from "../utils/counted-tier.js";
 import {mitigateDamage, resolvePiercing, applyDamageToActor, damageRowActor, composeDamageFormula, seedBonus, damageSeedBonus, foeAttacks, fictionTagsIn, hardestAttackIndex} from "../utils/damage.js";
 import {promptDamage} from "../dialogs/RollDialog.js";
 // The fight's +N for several attackers (Book I p.414), offered to the damage rolls below. Every builder
@@ -41,7 +42,7 @@ import {rollTargets} from "../fight/fight-targets.js";
 // used are let go once it is (fight/fight-shots.js).
 import {recordShots, releaseSpentTargets, shotOnRecordAt} from "../fight/fight-shots.js";
 // A lone attacker's blow on a token standing for a group hits one member of it (fight/group-hits.js).
-import {isLoneBlowOnGroup, applyMemberHit, applyRosterHit, killsFromHit, moveRosterHit, rosterGroupFor} from "../fight/group-hits.js";
+import {isLoneBlowOnGroup, attackerIsGroup, applyMemberHit, applyRosterHit, killsFromHit, moveRosterHit, rosterGroupFor} from "../fight/group-hits.js";
 import {halveDamage, spentOn} from "../fight/defend-spend.js";
 // Playbook moves the fight turns on: Undaunted's +1 armor and +1d6, Big Damn Hero's locked eyes
 // (fight/hero-moves.js).
@@ -56,7 +57,7 @@ import {format, localize} from "../utils/i18n.js";
 import {foldModes} from "../utils/roll-mode.js";
 import {bringDialogToFront} from "../utils/front-on-open.js";
 import {isPrimaryGM, anyActiveGM} from "../utils/primary-gm.js";
-import {resolveSync, queryAsker, chatModeIsPublic} from "../utils/foundry-compat.js";
+import {resolveSync, queryAsker, chatModeIsPublic, currentChatMode} from "../utils/foundry-compat.js";
 import {inCardTurn} from "../utils/card-queue.js";
 import {belongsToMessage, wirePickedOptionButton} from "../utils/picked-option-button.js";
 import {settleReadinessOnAttack} from "./readiness-loss.js";
@@ -567,6 +568,9 @@ export function snapshotTargets() {
 const YOUR_CALL = "your-call";
 const DEPLETE   = "deplete";
 const NO_HARM   = "no-harm";
+// Clash's 10+ "Avoid, prevent, or counter your enemy's attack": no number, but a counter-attack already
+// struck off the card (a 6- lifted onto the 10+) is then one the character avoided (reconcileClashCounter).
+const AVOID     = "avoid";
 
 /**
  * What each of a move's PRINTED BULLETS does when it is ticked — the whole of what the vanished
@@ -588,6 +592,7 @@ const NO_HARM   = "no-harm";
  */
 const PICK_EFFECTS = {
 	clash: {
+		"Avoid, prevent, or counter your enemy's attack": { addon: AVOID },
 		"Strike hard and fast, for 1d6 extra damage, but suffer your enemy's attack":
 			{ extraDice: "1d6", counter: true },
 	},
@@ -1564,7 +1569,7 @@ export function tagNoticesHtml(weapon) {
 // no-target Clash needed a whole extra branch here just to have somewhere to put that button.
 // The tier fires the counter itself now, straight after this returns (resolveAttackTier), and it
 // comes back through this same function as a damage card of its own (postIncomingDamage).
-async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignoresArmor = false, selfHarm = false, foeUuid = "", shots = true, groupBlow = false, followerBlow = false, own = true, spillsBlood = own, fx = null }) {
+async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignoresArmor = false, selfHarm = false, foeUuid = "", shots = true, groupBlow = false, followerBlow = false, own = true, spillsBlood = own, fx = null, counterOf = "" }) {
 	// What the blow is swung WITH, for the animation (combat/attack-fx.js), taken before the lines
 	// below lay armor and fiction tags over it: those change what Apply does, not what a spear is.
 	const struckWith = weapon;
@@ -1616,8 +1621,12 @@ async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignores
 		results = applyable.map((t, i) => ({
 			uuid: t.uuid, name: t.name, actorId: t.actorId, disposition: t.disposition,
 			raw: rolls[i].total, formula: rolls[i].formula, faces: multiDieFaces(rolls[i]),
+			...undauntedStamp(t.uuid),
 		}));
-		await postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm, notices, foeUuid, groupBlow, followerBlow });
+		// Whether the roller strikes as a group, as the fight stands NOW: Apply may come after the fight has
+		// ended or moved on, and a group's blow must not turn into a lone one then (fight/group-hits.js).
+		const attackerGroup = selfHarm ? null : attackerIsGroup(actor, resolveSync(applyable[0].uuid)?.parent ?? globalThis.canvas?.scene ?? null);
+		await postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm, notices, foeUuid, groupBlow, followerBlow, attackerGroup, counterOf });
 		// The blow on the map, as its card lands. `fx` is the caller saying this was a weapon's blow at
 		// all: a move's own number (rollOptionDamage, rollMoveDamageAt) passes none and draws nothing.
 		// Never awaited, and it cannot throw: everything before it is already spent.
@@ -1967,6 +1976,23 @@ function undyingSufferer(actor) {
 }
 
 /**
+ * Undaunted on a damage row, as the fight stands when the blow is ROLLED: `{undaunted: true}` where the fight
+ * shows it holding, `{undaunted: false}` where the character has the move and the fight does not show it,
+ * nothing for anyone else. Apply reads this rather than the fight at its own moment, which is on whichever
+ * client presses it (the GM's, for a player's relayed press) and against whatever scene that client is
+ * looking at.
+ *
+ * @param {string} uuid  the row's target
+ */
+function undauntedStamp(uuid) {
+	let hit = null;
+	try { hit = damageRowActor(resolveSync(uuid)); } catch { hit = null; }
+	if (hit?.type !== "character") return {};
+	if (undauntedNow(hit)) return { undaunted: true };
+	return undauntedUnread(hit) ? { undaunted: false } : {};
+}
+
+/**
  * The rows a damage card's flag lists under `key`, as a Set: `armorOff`, whose conditional armor has been
  * ticked off (wireConditionalArmor); `unstoppableOff`, whose Unstoppable mark has been ticked off
  * (wireUnstoppableMark); `undauntedArmor`, whose Undaunted +1 armor the table has ticked ON (wireUndauntedArmor);
@@ -2011,7 +2037,7 @@ function appendRowBox(message, actions, { row, standIn, target, several, gate, d
 	});
 }
 
-function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm = false, notices = "", foeUuid = "", groupBlow = false, followerBlow = false }) {
+function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm = false, notices = "", foeUuid = "", groupBlow = false, followerBlow = false, attackerGroup = null, counterOf = "" }) {
 	// Several targets is the book's own rule now that the roller is asked who a blow hits
 	// (fight/fight-targets.js), so the note says when it applies rather than calling it an abstraction.
 	const multiWarn = results.length > 1 && !weapon?.area
@@ -2030,8 +2056,10 @@ function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, dama
 		const label = r.uuid
 			? `${escHtml(r.name)}${friendly ? " <em>(friendly)</em>" : ""}`
 			: "Damage dealt";
+		// Never below 0 on the card (a d4-2, or a group's -N): Apply clamps the same way, and the stored `raw`
+		// keeps the true sum, which a +N added back later is reckoned from.
 		return `<li class="stonetop-damage-row stonetop-roll-result stonetop-roll-result--damage"${r.uuid ? ` data-uuid="${escHtml(r.uuid)}"` : ""}>
-			${damageMark(r.raw, r.faces)}
+			${damageMark(Math.max(0, r.raw), r.faces)}
 			<div class="stonetop-roll-result-body">
 				<span class="stonetop-roll-result-label stonetop-damage-target${friendly ? " is-friendly" : ""}">${label}</span>
 				<span class="stonetop-roll-result-details">${detail}</span>
@@ -2081,7 +2109,9 @@ function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, dama
 		</div>
 	</div>${adjustHtml}`;
 
-	return ChatMessage.create({
+	// THE ROLLER'S CHAT MODE, as the no-target card (roll-engine.js#rollDamage) and the blow's animation
+	// (chatModeIsPublic) already honour it: a GM's blind or private damage roll stays theirs.
+	return ChatMessage.create(whisperedAs({
 		speaker: ChatMessage.getSpeaker({ actor }),
 		content: stonetopChatCard(`${move}: damage`, body, "stonetop-attack-damage-card", damageBadge()),
 		flags: { [SCOPE]: { damage: {
@@ -2097,6 +2127,11 @@ function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, dama
 			// A group follower off the map striking (rollFollowerDamageAt): the card's speaker is their
 			// character, a lone body, so Apply is told the blow is a group's (fight/group-hits.js).
 			...(groupBlow ? { groupBlow: true } : {}),
+			// Whether the roller was a group in the fight when the blow was struck (rollAndPostDamage): what
+			// Apply reads to tell a lone blow on a group from a group's, rather than the fight as it is then.
+			...(typeof attackerGroup === "boolean" ? { attackerGroup } : {}),
+			// A counter-attack: the Clash card it answers, whose 10+ may yet avoid it (reconcileClashCounter).
+			...(counterOf ? { counterOf } : {}),
 			// The fight's +N, with whether it was rolled INTO the results above: leaving it off (or
 			// adding it back) adjusts each one at apply time (wireApplyDamage) and redraws the totals
 			// on every client (wireDamageSeed). Only on a card that has one.
@@ -2106,7 +2141,7 @@ function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, dama
 		// Happy Few's Inspiration die is not offered on it (actors/character/inspiration-flow.js). The
 		// same message flag the plain card carries.
 		...(followerBlow ? { followerBlow: true } : {}) } },
-	});
+	}, null, currentChatMode()));
 }
 
 // -- Chat-card wiring (dispatched from stonetop.js renderChatMessageHTML) ------
@@ -2225,7 +2260,7 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	const fx = pickedEffects(attack.moveKey, dancing ? [] : pickedOptionLabels(root));
 
 	const extraDice = fx.extraDice.filter(Boolean);
-	const counter   = !dancing && (btn.dataset.counter === "1" || fx.counter);
+	const counter   = tierCounters(attack, { dancing, button: btn.dataset.counter === "1", picked: fx.counter });
 	const deplete   = fx.addons.includes(DEPLETE);
 	let ignoresArmor = fx.ignoresArmor;
 
@@ -2268,7 +2303,17 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 		{ moveKey: attack.moveKey, weapon: attack.weapon, extraDice, shiftKey, seed: seedForTargets(actor, targets), targets, attackAt: Number(message?.timestamp) || Date.now(), rollMode: attack.damageMode ?? "" });
 	if (!damage) { btn.disabled = false; return; }
 
-	await lockAttackCard(message, root, { yourCall, targets });
+	// The counter-attack is latched with the card, so a rewrite that moves the total afterwards cannot
+	// strike it a second time (reconcileClashCounter). A blow already struck off this card (a 6- lifted onto
+	// the 10+) that the 10+ now avoids ("Avoid, prevent, or counter your enemy's attack", p.214, or a Battle
+	// Dancer's 12+) is marked avoided, which takes the "Take this damage" off its card (avoidedCounterOf).
+	const avoids = fx.addons.includes(AVOID) || dancing;
+	await lockAttackCard(message, root, {
+		yourCall, targets,
+		...(counter ? { countered: true } : {}),
+		...(avoids ? { avoids: true } : {}),
+		...(avoids && attack.countered ? { avoided: true } : {}),
+	});
 	// The deplete row's own button is the usual way to pay it. A player who ticked it and went
 	// straight to the dice has still picked it, so the Confirm pays it for them; one the button
 	// already paid is not paid twice (depleteAmmoAndPost checks the card).
@@ -2284,7 +2329,7 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	// the player picked and the 10+ says it as strike-hard's price, so both arrive here as the
 	// one flag; Clash's 6-, which deals no damage at all and so has no Confirm to reach this
 	// from, fires the same counter-attack off the miss itself (maybeCounterOnMiss).
-	if (counter) await sufferEnemyAttack(actor, { targets });
+	if (counter) await sufferEnemyAttack(actor, { targets, counterOf: message.id });
 }
 
 /**
@@ -2295,28 +2340,125 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
  * and a button is an offer — one a table that had already moved on to the GM's move never went
  * back and pressed, leaving the blow unstruck in the log. So the miss fires it.
  *
- * FIRED FROM THE ROLL, not from the card, and that is what makes it safe to fire without a latch.
- * Every other suffering in this file hangs off a chat card that every client renders and any of
- * them might click; this runs once, inside the `onRoll` that threw the dice, on the one client
- * that threw them. There is no second copy of it anywhere to guard against.
+ * FIRED FROM THE ROLL, not from the card: this runs once, inside the `onRoll` that threw the dice, on
+ * the one client that threw them. But the card's total can still MOVE afterwards (Burn Brightly, a GM's
+ * Shift, a +1 pressed on the card), and a 6- lifted to a 7-9 grows a Confirm whose tier suffers the
+ * attack too. So the blow is latched on the card (`attack.countered`), and that Confirm strikes nothing
+ * a second time (tierCounters); a total moved DOWN onto a 6- strikes it then (reconcileClashCounter).
  *
  * @param {Actor}  actor        the character who rolled
  * @param {Item}   item         the move they rolled it for
  * @param {Roll}   roll         what the dice came to
  * @param {object} [attackExtra] what maybeBeginAttack returned, for the targets it froze
+ * @param {object} [options]
+ * @param {ChatMessage|null} [options.message]  the roll's card, to latch the blow on
  * @returns {Promise<boolean>} whether a counter-attack was fired
  */
-export async function maybeCounterOnMiss(actor, item, roll, attackExtra = null) {
+export async function maybeCounterOnMiss(actor, item, roll, attackExtra = null, { message = messageOfRoll(roll) } = {}) {
 	if (!attackMoveFor(item)?.counterOnMiss) return false;
 	if (!Number.isFinite(roll?.total)) return false;
 	if (classifyResult(roll.total).key !== "failure") return false;
 
-	// The targets frozen at the click, or — for a player who reached for T only once the dice had
-	// landed — whatever they hold now. This runs on the attacker's own client, where
+	// The targets frozen at the click, or, for a player who reached for T only once the dice had
+	// landed, whatever they hold now. This runs on the attacker's own client, where
 	// `game.user.targets` is theirs, which is the same latitude resolveAttackTier allows a hit.
 	const frozen = attackFlagsOf(attackExtra)?.targets;
-	await sufferEnemyAttack(actor, { targets: frozen?.length ? frozen : snapshotTargets() });
+	await setAttackFlag(message, "countered", true, "latch the counter-attack on its card");
+	await sufferEnemyAttack(actor, { targets: frozen?.length ? frozen : snapshotTargets(), counterOf: message?.id ?? "" });
 	return true;
+}
+
+/**
+ * Write `attack.<key>` on an attack card, when it does not already read as `value`: `countered`, so its
+ * counter-attack is struck once, and `avoided`, whether that blow was avoided (reconcileClashCounter). The
+ * counter-attack's damage card reads `avoided` (`damage.counterOf`, wireApplyDamage) and stands its "Take
+ * this damage" down while it holds, and every client redraws it (registerCounterAvoidedHooks). Nothing is
+ * applied, taken back or deleted: an avoided blow is one nobody presses. Only the one key is written, merged
+ * into the rest of the flag. Never throws; `what` says in the warning what could not be written.
+ */
+async function setAttackFlag(message, key, value, what) {
+	const attack = message?.getFlag?.(SCOPE, "attack");
+	if (!attack || !!attack[key] === !!value) return;
+	try {
+		await message.setFlag(SCOPE, `attack.${key}`, value);
+	} catch (err) {
+		console.warn(`Stonetop | could not ${what}`, err);
+	}
+}
+
+/**
+ * Whether a tier's Confirm strikes the foe's counter-attack: the tier's own (Clash's 7-9 button) or a
+ * ticked bullet's (strike hard), never on a Battle Dancer 12+, and never on a card whose counter-attack
+ * was already struck (a 6- that a rewrite lifted onto this tier). PURE.
+ *
+ * @param {object} attack  the card's attack flag
+ * @param {{dancing?: boolean, button?: boolean, picked?: boolean}} p
+ */
+export function tierCounters(attack, { dancing = false, button = false, picked = false } = {}) {
+	return !dancing && !attack?.countered && (button || picked);
+}
+
+/**
+ * A rewritten Clash total (stonetop.js#_resyncRewrittenTotal) that now COUNTS as a 6-: "you suffer your
+ * enemy's attack", struck now if it never was. The other direction: a 6- lifted onto a hit keeps the blow
+ * it already took, and its Confirm will not strike again (tierCounters); a 10+ confirmed with "Avoid,
+ * prevent, or counter" marks that blow avoided, and a later move off the 10+ (or back onto it) is settled
+ * here (counterAvoided).
+ *
+ * Run on the card's writer, so the latch it writes is one this client may write.
+ *
+ * @param {ChatMessage} message
+ * @param {Actor} actor  the character speaking the card
+ * @param {number} total
+ * @returns {Promise<boolean>} whether a counter-attack was fired
+ */
+export async function reconcileClashCounter(message, actor, total) {
+	const attack = message?.getFlag?.(SCOPE, "attack");
+	if (!attack || !actor) return false;
+	if (!Object.values(ATTACK_MOVES).some(move => move.counterOnMiss && move.key === attack.moveKey)) return false;
+	if (!Number.isFinite(Number(total))) return false;
+	const tier = cardCountedTier(message, Number(total), SCOPE);
+	if (attack.countered) {
+		await setAttackFlag(message, "avoided", counterAvoided(attack, tier), "record whether the counter-attack was avoided");
+		return false;
+	}
+	if (tier !== "failure") return false;
+	await setAttackFlag(message, "countered", true, "latch the counter-attack on its card");
+	await sufferEnemyAttack(actor, { targets: attack.targets ?? [], counterOf: message.id });
+	return true;
+}
+
+/**
+ * Whether a Clash card's counter-attack, already struck, is one the character AVOIDED: they confirmed the
+ * 10+ with "Avoid, prevent, or counter your enemy's attack" (p.214) or danced it off (Battle Dancer), and
+ * the card still stands on the 10+. Moved off it, the tier they land on suffers the attack again. PURE.
+ *
+ * @param {object} attack  the card's attack flag
+ * @param {string} tier    the tier the card counts as now (counted-tier.js)
+ */
+export function counterAvoided(attack, tier) {
+	return !!attack?.countered && !!attack?.avoids && tier === "success";
+}
+
+/** The Clash card a counter-attack's damage card answers to, when it says it was avoided. */
+function avoidedCounterOf(damage, messages = globalThis.game?.messages) {
+	if (!damage?.counterOf) return false;
+	return !!messages?.get?.(damage.counterOf)?.getFlag?.(SCOPE, "attack")?.avoided;
+}
+
+/**
+ * On every client: a Clash card whose counter-attack turns avoided (or no longer avoided) redraws the damage
+ * cards it struck, so their "Take this damage" stands down or comes back. Registered once, in stonetop.js.
+ */
+export function registerCounterAvoidedHooks() {
+	globalThis.Hooks?.on?.("updateChatMessage", (message, change) => {
+		const attack = change?.flags?.[SCOPE]?.attack;
+		if (!attack || !("avoided" in attack)) return;
+		for (const card of globalThis.game?.messages ?? []) {
+			if (!card.logged || card.getFlag?.(SCOPE, "damage")?.counterOf !== message.id) continue;
+			try { globalThis.ui?.chat?.updateMessage?.(card); } catch { /* the log is not drawn on this client */ }
+		}
+	});
 }
 
 /**
@@ -2706,6 +2848,15 @@ export function wireApplyDamage(message, html, gateFor = applyGateOnce(message))
 		return;
 	}
 
+	// A counter-attack the Clash card's 10+ avoided ("Avoid, prevent, or counter your enemy's attack", p.214):
+	// nothing to take while it stands. A rewrite that moves the card off the 10+ brings the button back.
+	if (avoidedCounterOf(damage)) {
+		btn.disabled = true;
+		btn.innerHTML = `<i class="fas fa-shield-halved"></i> ${escHtml(localize("stonetop.fight.counterAvoided.label"))}`;
+		btn.title = localize("stonetop.fight.counterAvoided.tooltip");
+		return;
+	}
+
 	btn.addEventListener("click", async () => {
 		// One press at a time. The rows are applied one after another, and a second press that read the
 		// card before the first wrote `applied` would take every row's HP twice.
@@ -2768,6 +2919,8 @@ export async function handleApplyQuery(data, context = {}, { messages = game.mes
 	const message = messages?.get?.(data?.messageId);
 	const damage = message?.getFlag?.(SCOPE, "damage");
 	if (!user || !damage?.results?.length) return false;
+	// An avoided counter-attack (wireApplyDamage): a press that left before the avoid landed takes nothing.
+	if (avoidedCounterOf(damage, messages)) return false;
 	const applied = new Set((damage.applied ?? []).map(a => a.uuid));
 	const owed = damage.results.filter(r => !applied.has(r.uuid));
 	if (!owed.length) return false;
@@ -2780,10 +2933,42 @@ export async function handleApplyQuery(data, context = {}, { messages = game.mes
 /**
  * Apply every row of a damage card not yet applied, and post what each took. Returns whether any row
  * was recorded as applied.
+ *
+ * TWO MARKS ON THE CARD, one before the HP and one after it:
+ *  • `applying` (who is applying it) goes down FIRST. A Readiness spend can be recorded on another client
+ *    than the one applying (the GM halving a blow on a card the player wrote and is taking): the card queue
+ *    orders presses on one client only, so without this a spend landing mid-apply took the Readiness and
+ *    halved nothing. takeSpend (fight/defend-spend.js) refuses while it is set by someone still connected.
+ *  • the `applied` latch goes down LAST, and goes down even when a row throws part-way, for the rows whose
+ *    HP was already written: a press that failed on its third row must not take the first two again.
  */
 async function applyOwedDamage(message, damage) {
+	const owed = message.getFlag(SCOPE, "damage") ?? damage;
+	const doneBefore = new Set((Array.isArray(owed.applied) ? owed.applied : []).map(a => a.uuid));
+	// A press that waited its turn behind one that took everything (applyInTurn): nothing to write or say.
+	if (!owed.results.some(r => !doneBefore.has(r.uuid))) return false;
+	await message.setFlag(SCOPE, "damage.applying", game.user?.id ?? true);
+	const record = { applied: null };
+	let landed = false;
+	try {
+		landed = await applyOwedRows(message, damage, record);
+		return landed;
+	} finally {
+		// After a press that threw part-way (`landed` is only set once the rows are done), and also after one
+		// that landed nothing, which may have left before its own latch was written.
+		if (!landed) {
+			// The rows already written are latched, and the card is let go for spends again.
+			await message.setFlag(SCOPE, "damage", { ...(record.applied ? { applied: record.applied } : {}), applying: null })
+				.catch(err => console.error("Stonetop | could not latch the damage already applied", err));
+		}
+	}
+}
+
+/** applyOwedDamage's rows. `record.applied` is the latch as it grows, for a press that fails part-way. */
+async function applyOwedRows(message, damage, record) {
 	const current = message.getFlag(SCOPE, "damage") ?? damage;
 	const nextApplied = Array.isArray(current.applied) ? [...current.applied] : [];
+	record.applied = nextApplied;
 	const before = nextApplied.length;
 	const doneUuids = new Set(nextApplied.map(a => a.uuid));
 	// A press that waited its turn behind one that took everything (applyInTurn): nothing to write or say.
@@ -2828,9 +3013,15 @@ async function applyOwedDamage(message, damage) {
 		}
 		// Undaunted: "+1 armor" while outnumbered or facing a foe bigger than them. Where the fight shows it,
 		// always; where it does not, only when the table ticked the card's box (wireConditionalArmor).
-		// The fight is asked once: where undauntedNow has just said no, undauntedUnread need not ask it again (null).
-		const undaunted = targetActor.type === "character"
-			&& (!!undauntedNow(targetActor) || (damageSet(current, "undauntedArmor").has(r.uuid) && undauntedUnread(targetActor, null)));
+		// The fight as it stood at the ROLL (undauntedStamp) where the row carries it and nobody stood in, so the
+		// answer does not hang on which client presses Apply or which scene it is looking at. A card without the
+		// stamp asks the fight now; that is asked once: where undauntedNow has just said no, undauntedUnread need
+		// not ask it again (null).
+		const stamped = defender ? undefined : r.undaunted;
+		const ticked = damageSet(current, "undauntedArmor").has(r.uuid);
+		const undaunted = targetActor.type === "character" && (typeof stamped === "boolean"
+			? stamped || ticked
+			: (!!undauntedNow(targetActor) || (ticked && undauntedUnread(targetActor, null))));
 		const worn = wornArmor(targetActor, barkskin);
 		// Barkskin and the Candle rest on fiction, and the card lets the table say the clause was not met
 		// (wireConditionalArmor). Ticked off, that much armor comes back out of the total.
@@ -2865,10 +3056,10 @@ async function applyOwedDamage(message, damage) {
 			? ` <span class="stonetop-damage-mitigated">(${escHtml(format("stonetop.fight.undying.halvedNote", { soaked }))})</span>`
 			: "";
 		// ONE MEMBER OF A GROUP, for one attacker's blow: see fight/group-hits.js.
-		if (!current.selfHarm && !current.groupBlow && isLoneBlowOnGroup(targetActor, attacker, td?.parent ?? null)) {
+		if (!current.selfHarm && !current.groupBlow && isLoneBlowOnGroup(targetActor, attacker, td?.parent ?? null, { attackerGroup: current.attackerGroup ?? null })) {
 			// A group follower's: the first member standing on its character's roster, which the card then
 			// offers to hand to another (wireRosterHitMove).
-			const onRoster = await applyRosterHit(targetActor, effective);
+			const onRoster = await applyRosterHit(targetActor, effective, { stonetopMove: current.move });
 			if (onRoster) {
 				reactions.push({ uuid: struck, reaction: hitReaction({ raw, effective, lowered: onRoster.harmed }) });
 				nextApplied.push({ uuid: r.uuid, effective, member: true, down: onRoster.down, before: onRoster.before, after: onRoster.after, roster: onRoster.roster });
@@ -2895,7 +3086,8 @@ async function applyOwedDamage(message, damage) {
 		const pool = fightsAsGroup({ type: targetActor.type, fightAsGroup: targetActor.system?.fightAsGroup, organization: targetActor.system?.organization })
 			? { count: targetActor.system?.count, hpMax: targetActor.system?.attributes?.hp?.max }
 			: null;
-		const t = await applyDamageToActor(targetActor, effective);
+		// Named for the ledger: "HP 12 to 7, via Clash" (or the foe's attack the card is titled with).
+		const t = await applyDamageToActor(targetActor, effective, current.move ? { stonetopMove: current.move } : {});
 		// A target actor with no hp attribute (e.g. a steading token) yields null. Skip it
 		// without recording it as applied, so it can be retried if the actor is fixed —
 		// rather than rendering "undefined → undefined HP" and marking it done forever.
@@ -2938,12 +3130,13 @@ async function applyOwedDamage(message, damage) {
 			: "";
 		lines.push(`<li><strong>${escHtml(rowName)}</strong>: ${effective} damage${back}${half}${mitigated}${brave}${bare}${undead}: ${t.oldHp} &rarr; ${t.newHp} HP${dead}${unstoppable}</li>`);
 	}
-	// Only the latch: a Readiness spend another client wrote meanwhile stays on the card.
-	await message.setFlag(SCOPE, "damage.applied", nextApplied);
-	await ChatMessage.create({
+	// Only the latch and the applying mark: a Readiness spend another client wrote meanwhile stays on the card.
+	await message.setFlag(SCOPE, "damage", { applied: nextApplied, applying: null });
+	// Whispered as the card it answers was: a blind GM roll's applied numbers are as private as its total.
+	await ChatMessage.create(whisperedAs({
 		content: stonetopChatCard(`${current.move}: damage applied`, `<div class="card-content"><ul class="stonetop-homestead-chat-list">${lines.join("")}</ul></div>`, "stonetop-attack-applied-card"),
 		speaker: { alias: "Stonetop" },
-	});
+	}, message));
 	// After the latch and the card: the HP is written and said, so this is only the map catching up.
 	playHitReactions(reactions, { whispered: (message.whisper?.length ?? 0) > 0 });
 	return nextApplied.length > before;
@@ -3013,7 +3206,7 @@ export function wireConditionalArmor(message, html, gateFor = applyGateOnce(mess
 function wireRowBoxes(message, actions, { damage, pending, gate, done, several }, { qualifies, className, wordsKey, key, listsTicked }) {
 	const listed = damageSet(damage, key);
 	for (const { row, standIn, target } of pending) {
-		if (!qualifies(target)) continue;
+		if (!qualifies(target, row, standIn)) continue;
 		appendRowBox(message, actions, { row, standIn, target, several, gate, done, className, words: format(wordsKey, {}), key, listed, listsTicked });
 	}
 }
@@ -3045,7 +3238,9 @@ function wireUndyingHalf(message, actions, rows) {
  */
 function wireUndauntedArmor(message, actions, rows) {
 	wireRowBoxes(message, actions, rows, {
-		qualifies: target => target?.type === "character" && undauntedUnread(target),
+		// Read off the row's stamp (undauntedStamp) where it has one and nobody stood in, as Apply reads it.
+		qualifies: (target, row, standIn) => target?.type === "character"
+			&& (!standIn && typeof row?.undaunted === "boolean" ? row.undaunted === false : undauntedUnread(target)),
 		className: "stonetop-damage-armor-gate stonetop-damage-undaunted",
 		wordsKey: "stonetop.fight.heroMoves.undaunted.armorBox", key: "undauntedArmor", listsTicked: true,
 	});
@@ -3166,7 +3361,7 @@ async function moveRosterHitOnCard(message, rowUuid, toKey) {
 	const at = applied.findIndex(a => a?.uuid === rowUuid && a.roster);
 	if (at < 0) return false;
 	const entry = applied[at];
-	const moved = await moveRosterHit(entry.roster, toKey, entry.effective);
+	const moved = await moveRosterHit(entry.roster, toKey, entry.effective, { stonetopMove: current.move });
 	if (!moved) return false;
 	applied[at] = { ...entry, roster: moved.roster, down: moved.down, after: moved.after };
 	await message.setFlag(SCOPE, "damage.applied", applied);
@@ -3245,6 +3440,15 @@ export function wireDamageSeed(message, html, gateFor = applyGateOnce(message)) 
 		pill.textContent = seed.applied === false ? seed.pillLeftOff : seed.pill;
 		pill.classList.toggle("is-left-off", seed.applied === false);
 	}
+	// A total rolled with another attacker's die, its +N since left off: said on the card, on every client.
+	const reRoll = reRollOwnWarning(seed);
+	const list = root.querySelector(".stonetop-damage-list");
+	if (reRoll && list?.after && !root.querySelector(".stonetop-damage-reroll-own")) {
+		const note = document.createElement("p");
+		note.className = "stonetop-attack-warn stonetop-damage-reroll-own";
+		note.textContent = reRoll;
+		list.after(note);
+	}
 
 	const btn = root.querySelector(".stonetop-damage-seed-toggle");
 	if (!btn) return;
@@ -3268,13 +3472,31 @@ export function wireDamageSeed(message, html, gateFor = applyGateOnce(message)) 
 			await inCardTurn(message, async () => {
 				const current = message.getFlag(SCOPE, "damage");
 				if (!current?.seed || (current.applied ?? []).length) return;
-				await message.setFlag(SCOPE, "damage.seed", { ...current.seed, applied: current.seed.applied === false });
+				const next = { ...current.seed, applied: current.seed.applied === false };
+				await message.setFlag(SCOPE, "damage.seed", next);
+				// Left off after the roll borrowed another attacker's die: that die is no longer the roller's
+				// to roll, and the card cannot roll it again for them, so it says so rather than keep it quietly.
+				const warn = reRollOwnWarning(next);
+				if (warn) ui.notifications?.warn(warn);
 			});
 		} catch (err) {
 			console.error("Stonetop | changing the fight's extra damage failed", err);
 			btn.disabled = false;
 		}
 	});
+}
+
+/**
+ * What a damage card says when its total was rolled with ANOTHER attacker's die (the pile-on's best die,
+ * utils/damage.js#withBestDie) and the +N has since been left off: "roll one combatant's damage (usually the
+ * best one)" was for attacking together (p.414), so a roller now striking alone should roll their own. ""
+ * when that is not the case. PURE.
+ *
+ * @param {object|null} seed  the card's seed
+ */
+export function reRollOwnWarning(seed) {
+	if (!seed?.useBest || !seed.best?.formula || seed.applied !== false || seed.rolled === false) return "";
+	return format("stonetop.fight.seed.reRollOwn", { name: seed.best.name ?? "", formula: seed.best.formula });
 }
 
 // -- Suffering the enemy's attack ---------------------------------------------
@@ -3315,7 +3537,7 @@ export function wireDamageSeed(message, html, gateFor = applyGateOnce(message)) 
  * THE FIRST TARGET, because Clash is a single-foe move — the card already warns when a player
  * points it at several, and the one that struck back is the one they closed with.
  */
-export async function sufferEnemyAttack(pc, { targets } = {}) {
+export async function sufferEnemyAttack(pc, { targets, counterOf = "" } = {}) {
 	if (!pc) return null;
 	// The fight's +N when several foes are in contact with the character (Book I p.414): rolled into
 	// the blow, named on its card, and left off from there if the table waives it.
@@ -3330,7 +3552,7 @@ export async function sufferEnemyAttack(pc, { targets } = {}) {
 		const engaged = engagedFoeTargets(pc, engagement);
 		const distinct = [...new Map(engaged.map(t => [t.actorId ?? t.uuid, t])).values()];
 		if (distinct.length === 1) aimed = distinct;
-		else if (distinct.length > 1) return sufferFromSeveral(pc, distinct, seed);
+		else if (distinct.length > 1) return sufferFromSeveral(pc, distinct, seed, counterOf);
 	}
 
 	const target = aimed[0] ?? null;
@@ -3353,12 +3575,12 @@ export async function sufferEnemyAttack(pc, { targets } = {}) {
 	const attacks = foeAttacks(foe).map(attack => ({ ...attack, foeUuid: target?.uuid ?? "" }));
 
 	if (attacks.length > 1) {
-		return askTheGm(postSufferChoiceCard({ pc, foeName, foeText, attacks, seed }), { foeName, waitingFor: "which attack it made" });
+		return askTheGm(postSufferChoiceCard({ pc, foeName, foeText, attacks, seed, counterOf }), { foeName, waitingFor: "which attack it made" });
 	}
 	// `formula`, not the count: a printed attack can be an attack and still have no die (see above).
 	const only = attacks[0] ?? null;
-	if (only?.formula) return postIncomingDamage(pc, only, { foeName, seed });
-	return askTheGm(postSufferAmountCard({ pc, foeName, foeText, attack: only, seed }), { foeName, waitingFor: "what it costs" });
+	if (only?.formula) return postIncomingDamage(pc, only, { foeName, seed, counterOf });
+	return askTheGm(postSufferAmountCard({ pc, foeName, foeText, attack: only, seed, counterOf }), { foeName, waitingFor: "what it costs" });
 }
 
 /**
@@ -3366,7 +3588,7 @@ export async function sufferEnemyAttack(pc, { targets } = {}) {
  * attack each of them prints, each row naming whose it is. A foe that prints no attack still gets a
  * row, priced by the GM like any die-less blow.
  */
-async function sufferFromSeveral(pc, foes, seed) {
+async function sufferFromSeveral(pc, foes, seed, counterOf = "") {
 	const attacks = [];
 	const actors = await Promise.all(foes.map(foe => fromUuid(foe.uuid).then(td => td?.actor ?? null).catch(() => null)));
 	for (const [i, foe] of foes.entries()) {
@@ -3377,7 +3599,7 @@ async function sufferFromSeveral(pc, foes, seed) {
 		for (const attack of rows) attacks.push({ ...attack, foeName: foe.name, foeUuid: foe.uuid });
 	}
 	const foeName = joinNames(foes.map(f => f.name));
-	return askTheGm(postSufferChoiceCard({ pc, foeName, foeText: "", attacks, seed }), { foeName, waitingFor: "which attack struck" });
+	return askTheGm(postSufferChoiceCard({ pc, foeName, foeText: "", attacks, seed, counterOf }), { foeName, waitingFor: "which attack struck" });
 }
 
 /**
@@ -3431,7 +3653,7 @@ async function askTheGm(posting, { foeName, waitingFor }) {
  * printed d12+1 is the book's number, with nothing for them to attach to. `rollMode` carries the
  * stat line's own "w/advantage", which damageRollFormula applies to the die.
  */
-async function postIncomingDamage(pc, attack, { foeName = "", seed = null } = {}) {
+async function postIncomingDamage(pc, attack, { foeName = "", seed = null, counterOf = "" } = {}) {
 	// Big Damn Hero: a foe the character locked eyes with rolls this at disadvantage.
 	const foe = attack?.foeUuid ? await fromUuid(attack.foeUuid).then(td => td?.actor ?? null).catch(() => null) : null;
 	const pcToken = pcEngagement(pc)?.combatant?.token ?? null;
@@ -3459,6 +3681,9 @@ async function postIncomingDamage(pc, attack, { foeName = "", seed = null } = {}
 		targets: [selfTarget(pc)],
 		selfHarm: true,
 		foeUuid: attack?.foeUuid ?? "",
+		// The Clash card this blow answers, when it is a counter-attack: a 10+ that avoids it stands its
+		// "Take this damage" down (avoidedCounterOf).
+		counterOf,
 		// The foe's token strikes the character's: the card's speaker is the one struck, so the blow on
 		// the map is aimed the other way round from every other card's.
 		fx: { attacker: attack?.foeUuid || null, blow: attack?.label ?? "" },
@@ -3569,10 +3794,10 @@ export function sufferChoiceCardBody({ pcName, foeName, foeText, attacks, seed =
  * the GM" to "suffered". There is no such button now — the tier that states the counter-attack
  * fires it — so the pick has only its own latch to keep.
  */
-async function postSufferChoiceCard({ pc, foeName, foeText, attacks, seed = null }) {
+async function postSufferChoiceCard({ pc, foeName, foeText, attacks, seed = null, counterOf = "" }) {
 	const body = sufferChoiceCardBody({ pcName: pc.name, foeName, foeText, attacks, seed });
 	return whisperGm(stonetopChatCard("Which attack?", body, "stonetop-suffer-choice-card"), {
-		flags: { [SCOPE]: { sufferChoice: { pcUuid: pc.uuid, foeName, foeText, attacks, chosen: null, ...(seed ? { seed } : {}) } } },
+		flags: { [SCOPE]: { sufferChoice: { pcUuid: pc.uuid, foeName, foeText, attacks, chosen: null, ...(seed ? { seed } : {}), ...(counterOf ? { counterOf } : {}) } } },
 	});
 }
 
@@ -3659,8 +3884,9 @@ export async function resolveSufferChoice(message, index) {
 	// Whose blow it was: the attack's own foe on a card holding several foes' attacks, else the card's.
 	const foeName = attack.foeName ?? choice.foeName;
 	const seed = choice.seed ?? null;
-	if (attack.formula) await postIncomingDamage(pc, attack, { foeName, seed });
-	else await postSufferAmountCard({ pc, foeName, foeText: choice.foeText, attack, seed });
+	const counterOf = choice.counterOf ?? "";
+	if (attack.formula) await postIncomingDamage(pc, attack, { foeName, seed, counterOf });
+	else await postSufferAmountCard({ pc, foeName, foeText: choice.foeText, attack, seed, counterOf });
 	return true;
 }
 
@@ -3682,7 +3908,7 @@ export async function resolveSufferChoice(message, index) {
  * the ordinary damage card from there, so armor comes off it exactly as it comes off every other
  * blow in this file — said out loud under the field, so the number is typed knowing it.
  */
-async function postSufferAmountCard({ pc, foeName, foeText, attack = null, seed = null }) {
+async function postSufferAmountCard({ pc, foeName, foeText, attack = null, seed = null, counterOf = "" }) {
 	// The blow as its damage card will carry it (postIncomingDamage): the other foes' piercing rides it
 	// while their +N is on, and Undaunted adds its armor at Apply.
 	const incoming = seed ? seedWithoutStriker(seed, attack?.foeUuid ?? "") : null;
@@ -3708,7 +3934,7 @@ async function postSufferAmountCard({ pc, foeName, foeText, attack = null, seed 
 		</div>
 	</div>`;
 	return whisperGm(stonetopChatCard("Name the enemy's damage", body, "stonetop-suffer-amount-card"), {
-		flags: { [SCOPE]: { sufferAmount: { pcUuid: pc.uuid, foeName, attack, dealt: null, ...(seed ? { seed } : {}) } } },
+		flags: { [SCOPE]: { sufferAmount: { pcUuid: pc.uuid, foeName, attack, dealt: null, ...(seed ? { seed } : {}), ...(counterOf ? { counterOf } : {}) } } },
 	});
 }
 
@@ -3818,6 +4044,6 @@ export async function dealSufferedAmount(message, amount) {
 		...(state.attack ?? {}),
 		// Last, so it beats the priced attack's own empty formula rather than being beaten by it.
 		formula: String(dealt),
-	}, { foeName: state.foeName, seed: state.seed ?? null });
+	}, { foeName: state.foeName, seed: state.seed ?? null, counterOf: state.counterOf ?? "" });
 	return true;
 }

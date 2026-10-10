@@ -98,7 +98,7 @@ import { possessionTrackUses, BOOKS_AND_SCROLLS, HOLY_RELICS } from "./module/ac
 import { INVOKE_THE_SUN_GOD } from "./module/actors/character/holy-light.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
 import { repeatBoxLocked } from "./module/actors/character/PlaybookMoveEntry.js";
-import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireUnstoppableMark, forgetBarkskinMarks, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery, wireRosterHitMove, ROSTER_MOVE_QUERY, handleRosterMoveQuery } from "./module/combat/attack-flow.js";
+import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireUnstoppableMark, forgetBarkskinMarks, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery, wireRosterHitMove, ROSTER_MOVE_QUERY, handleRosterMoveQuery, reconcileClashCounter, registerCounterAvoidedHooks } from "./module/combat/attack-flow.js";
 import { wireDefendSpends, SPEND_QUERY, handleSpendQuery } from "./module/fight/defend-spend.js";
 import { HEALERS_ARTS_QUERY, handleHealersArtsQuery } from "./module/actors/character/healers-arts.js";
 import { markQuestionBullets } from "./module/utils/question-bullets.js";
@@ -1487,6 +1487,13 @@ async function _resyncRewrittenTotal(message, actor, total) {
 	} catch (err) {
 		console.error("Stonetop | Error reminding of Potential for Greatness after a rewritten roll:", err);
 	}
+	// A Clash moved down onto a 6- suffers the enemy's attack it never took; one lifted off a 6- keeps the
+	// blow it already took, and its Confirm strikes no second one (combat/attack-flow.js#reconcileClashCounter).
+	try {
+		await reconcileClashCounter(message, actor, total);
+	} catch (err) {
+		console.error("Stonetop | Error matching a rewritten Clash's counter-attack:", err);
+	}
 }
 
 // Impetuous Youth's "give it your all" (actors/character/impetuous-youth.js): the same lift every other
@@ -2533,6 +2540,11 @@ registerStruggleHooks();
 // -- AID, INTERFERE, PERSUADE (VS. PCS) -----------------------
 // On every client: an answer posted to one of these cards (or deleted) redraws the card it answers.
 registerPcAskHooks();
+
+// -- CLASH: A COUNTER-ATTACK THE 10+ AVOIDED ------------------
+// On every client: a Clash card whose struck counter-attack turns avoided (or not) redraws that blow's
+// damage card, so its "Take this damage" stands down or comes back (combat/attack-flow.js).
+registerCounterAvoidedHooks();
 
 // -- SEASONS CHANGE: "ask the most hopeful to roll" -----------
 // Wire the roll button on a spring Seasons Change prompt card (postSeasonsRollPrompt):
