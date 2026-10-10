@@ -2763,26 +2763,31 @@ export class StonetopCharacter {
 		const perSupply  = supplies ? this.getUsesPerSupply() : 0;
 		const uses       = supplies ? Number(this._inventory.resources[slug]) || 0 : 0;
 		const update = this._inventory.checkedData(slug, isChecked);
-		const cost  = small ? 1 : Math.max(0, weight);
-		const pool  = small ? this._inventory.smallPool : this._inventory.regularPool;
 		const drawn = Number(this._inventory.drawn[slug]) || 0;
-		let next;
-		let nextDrawn;
-		if (isChecked) {
-			nextDrawn = loot ? 0 : Math.min(cost, pool);
-			next = pool - nextDrawn;
-		} else {
-			next = pool + (supplies ? suppliesGiveBack({ drawn, uses, perSupply }) : drawn);
-			nextDrawn = 0;
-		}
+		const reserve = this._reserveDrawData(slug, isChecked, {
+			small, weight, loot, giveBack: supplies ? suppliesGiveBack({ drawn, uses, perSupply }) : null,
+		});
 		if (setUses !== undefined) {
 			Object.assign(update, this._inventory.resourceData(slug, setUses));
 		} else if (supplies && isChecked && !wasChecked) {
-			const packed = suppliesUsesOnMark({ drew: nextDrawn, uses, perSupply });
+			const packed = suppliesUsesOnMark({ drew: reserve.drawn, uses, perSupply });
 			if (packed !== uses) Object.assign(update, this._inventory.resourceData(slug, packed));
 		}
-		Object.assign(update, this._inventory.drawnData(slug, nextDrawn), this._inventory.poolData(next, { small }));
+		Object.assign(update, reserve.update);
 		await this._actor.update(update, writeOptions);
+	}
+
+	/**
+	 * Have What You Need's draw on the undefined reserve for the row keyed `key`, as an update fragment (the
+	 * draw record and the pool): a mark draws the row's cost (1 for a small row, nothing for loot) as far as the
+	 * reserve goes; setting it down hands back `giveBack`, by default what the record says was drawn.
+	 * `drawn` is the new record. toggleCarriedItem and setChoiceGearCarried both draw through here.
+	 */
+	_reserveDrawData(key, isChecked, { small = false, weight = 1, loot = false, giveBack = null } = {}) {
+		const pool  = small ? this._inventory.smallPool : this._inventory.regularPool;
+		const drawn = isChecked && !loot ? Math.min(small ? 1 : Math.max(0, weight), pool) : 0;
+		const next  = isChecked ? pool - drawn : pool + (giveBack ?? (Number(this._inventory.drawn[key]) || 0));
+		return { drawn, update: { ...this._inventory.drawnData(key, drawn), ...this._inventory.poolData(next, { small }) } };
 	}
 
 	/**
@@ -3127,10 +3132,13 @@ export class StonetopCharacter {
 
 	// Move name → how many of that move the actor has LEARNED (an un-learned copy is kept on
 	// the sheet switched off, and grants nothing). Feeds sub-choice caps that grow with a move
-	// (the Blessed's sacred-pouch remarkable traits, +1 per Big Magic).
-	ownedMoveCounts() {
+	// (the Blessed's sacred-pouch remarkable traits, +1 per Big Magic). `learnedOnly` false counts every
+	// copy still on the sheet, learned or not (_trimSubChoicesOverCap: only removal trims).
+	ownedMoveCounts({ learnedOnly = true } = {}) {
 		const counts = {};
-		for (const [name, items] of this._buildOwnedMovesMap()) counts[name] = items.filter(i => moveLearnedIn(i, this._actor.items)).length;
+		for (const [name, items] of this._buildOwnedMovesMap()) {
+			counts[name] = learnedOnly ? items.filter(i => moveLearnedIn(i, this._actor.items)).length : items.length;
+		}
 		return counts;
 	}
 
@@ -3429,7 +3437,8 @@ export class StonetopCharacter {
 		const kept = new Set(choiceSlugs ?? []);
 		const dropped = (this._possessions.subChoices[possessionSlug] ?? [])
 			.filter(s => !kept.has(s) && this._possessions.isChoiceCarried(possessionSlug, s));
-		await this._possessions.writeSubChoices(possessionSlug, choiceSlugs ?? [], { uncarry: dropped });
+		const also = await this._choiceGiveBackData(possessionSlug, dropped);
+		await this._possessions.writeSubChoices(possessionSlug, choiceSlugs ?? [], { uncarry: dropped, also });
 	}
 	async deselectSubChoice(possessionSlug, choiceSlug) {
 		// Giving up a gear-bundle option drops its ◇ carry mark too, so re-choosing that
@@ -3437,7 +3446,33 @@ export class StonetopCharacter {
 		// each actor.update re-runs the ledger's snapshot diff (see writeSubChoices).
 		const remaining = (this._possessions.subChoices[possessionSlug] ?? []).filter(s => s !== choiceSlug);
 		const uncarry = this._possessions.isChoiceCarried(possessionSlug, choiceSlug) ? [choiceSlug] : [];
-		await this._possessions.writeSubChoices(possessionSlug, remaining, { uncarry });
+		const also = await this._choiceGiveBackData(possessionSlug, uncarry);
+		await this._possessions.writeSubChoices(possessionSlug, remaining, { uncarry, also });
+	}
+	/**
+	 * What carried gear choices given up (`choiceSlugs` of `possessionSlug`) drew from the undefined reserve
+	 * when marked in the field (setChoiceGearCarried), handed back as their carry marks go: the draw records
+	 * forgotten and each pool refilled, as an update fragment. Summed per pool, so two rows dropped together
+	 * both count. Read while the rows are still picked, since only a picked row is built.
+	 */
+	async _choiceGiveBackData(possessionSlug, choiceSlugs) {
+		const drawn = this._inventory.drawn;
+		const keyOf = slug => `${possessionSlug}:${slug}`;
+		const drew = (choiceSlugs ?? []).filter(slug => (Number(drawn[keyOf(slug)]) || 0) > 0);
+		if (!drew.length) return {};
+		const bundle = this._buildChoiceGearByPossession(await this.playbook()).get(possessionSlug);
+		const rows = [...(bundle?.regular ?? []), ...(bundle?.small ?? [])];
+		const back = { regular: 0, small: 0 };
+		const update = {};
+		for (const slug of drew) {
+			const row = rows.find(r => r.choiceSlug === slug);
+			// Small as setChoiceGearCarried drew it: a row with no ◇ weight drew from the □ pool.
+			back[row && !(row.weight > 0) ? "small" : "regular"] += Number(drawn[keyOf(slug)]);
+			Object.assign(update, this._inventory.drawnData(keyOf(slug), 0));
+		}
+		if (back.regular) Object.assign(update, this._inventory.poolData(this._inventory.regularPool + back.regular));
+		if (back.small) Object.assign(update, this._inventory.poolData(this._inventory.smallPool + back.small, { small: true }));
+		return update;
 	}
 	async selectSubChoiceExclusive(possessionSlug, choiceSlug, exclusiveSlugs) { await this._possessions.selectExclusive(possessionSlug, choiceSlug, exclusiveSlugs); }
 	async setSubChoiceUses(possessionSlug, choiceSlug, count, options) { await this._possessions.setChoiceUses(possessionSlug, choiceSlug, count, options); }
@@ -3447,7 +3482,24 @@ export class StonetopCharacter {
 	subChoiceUses(possessionSlug, choiceSlug) { return Number(this._possessions.choiceUses[`${possessionSlug}:${choiceSlug}`]) || 0; }
 	// The ◇ on a chosen weapon's row: whether it's on your person right now (counts toward
 	// load). Independent of the pick itself — see _buildChoiceGearByPossession.
-	async setChoiceGearCarried(possessionSlug, choiceSlug, isCarried) { await this._possessions.setChoiceCarried(possessionSlug, choiceSlug, isCarried); }
+	//
+	// Have What You Need reaches this gear as it reaches a possession's granted gear (Book I p.326:
+	// "If you mark a slot, fill it with a common mundane item or something from your special
+	// possessions"; p.327, Sawyl's lantern: "He moves a ◇ from "undefined" to the slot"). So a tick
+	// draws the row's weight (1 for a small row) from the undefined reserve, as far as the reserve
+	// goes, and records the draw under the row's `poss:choice` key; setting it down hands back exactly
+	// that (_reserveDrawData, as toggleCarriedItem draws). Outfit and Reset clear every draw record, so gear marked there
+	// drew nothing and gives nothing back. The mark, the draw and the pool go out in ONE update.
+	async setChoiceGearCarried(possessionSlug, choiceSlug, isCarried) {
+		const key = `${possessionSlug}:${choiceSlug}`;
+		const update = this._possessions.choicesCarriedData({ [key]: isCarried });
+		if (!!isCarried !== this._possessions.isChoiceCarried(possessionSlug, choiceSlug)) {
+			const bundle = this._buildChoiceGearByPossession(await this.playbook()).get(possessionSlug);
+			const row = [...(bundle?.regular ?? []), ...(bundle?.small ?? [])].find(r => r.choiceSlug === choiceSlug);
+			if (row) Object.assign(update, this._reserveDrawData(key, !!isCarried, { small: !(row.weight > 0), weight: row.weight }).update);
+		}
+		await this._actor.update(update);
+	}
 	async setPossessionChoiceText(possessionSlug, choiceSlug, value) { await this._possessions.setChoiceText(possessionSlug, choiceSlug, value); }
 
 	// How many of the selected background's markable actions the character may mark at its
@@ -4400,11 +4452,15 @@ export class StonetopCharacter {
 	// Magic"). Each selected possession line whose cap grows with a removed move, and now
 	// holds more picks than that cap, drops its most recent picks down to it: sub-choices
 	// keep the order they were made in, so the trait the move brought goes first.
+	// Only REMOVAL trims (the user's ruling): an un-learned copy still on the sheet keeps the
+	// trait it paid for, so the cap here counts every copy still held, learned or not, not the
+	// learned-only ownedMoveCounts. Otherwise removing one of two copies, the other un-learned,
+	// would cut both copies' traits.
 	async _trimSubChoicesOverCap(goneMoves) {
 		const goneNames = new Set(goneMoves.filter(Boolean).map(i => i.name));
 		if (!goneNames.size) return;
 		const sp = (await this.playbook())?.specialPossessions;
-		const moveCounts = this.ownedMoveCounts();
+		const moveCounts = this.ownedMoveCounts({ learnedOnly: false });
 		for (const { opt, sg } of this._selectedPossessionSubgroups(sp)) {
 			if (!sg.multiSelect) continue;
 			if (!(sg.maxSelectBonus?.moveBonus ?? []).some(mb => goneNames.has(mb.moveName))) continue;
@@ -4468,17 +4524,19 @@ export class StonetopCharacter {
 	}
 
 	// Removing a copy of Magnificent Specimen takes back the 2 options it gave the companion: the
-	// stored picks are cut to what the type's "Pick N more" and the LEARNED book copies left still
-	// allow, the newest first and never the pre-ticked option (animal-companion.js#trimCompanionTraits).
+	// stored picks are cut to what the type's "Pick N more" and the book copies still HELD allow,
+	// the newest first and never the pre-ticked option (animal-companion.js#trimCompanionTraits).
 	// Only on removal: un-learning a copy keeps the picks, as un-learning Big Magic keeps its trait
-	// (_trimSubChoicesOverCap runs from here too), so re-learning it has them straight back.
+	// (_trimSubChoicesOverCap runs from here too), so re-learning it has them straight back. So the
+	// allowance here counts every book copy still on the sheet, learned or not: removing one of two
+	// copies, the other un-learned, keeps what the un-learned copy still pays for.
 	async _trimCompanionTraitsOnRemoval(goneMoves) {
 		if (!goneMoves.some(i => i?.name === MAGNIFICENT_SPECIMEN_MOVE && !_isCustomMove(i))) return;
 		const companion = resolvedFlags(this._actor)?.animalCompanion;
 		if (!companion?.type || !Array.isArray(companion.traits)) return;
 		const typeData = ((await this.companionSource())?.types ?? []).find(t => t.slug === companion.type);
 		if (!typeData) return;
-		const allowance = companionTraitAllowance(typeData, _learnedBookSpecimens(this._buildOwnedMovesMap(), this._actor.items));
+		const allowance = companionTraitAllowance(typeData, _bookSpecimens(this._buildOwnedMovesMap(), this._actor.items, { learnedOnly: false }));
 		const kept = trimCompanionTraits(typeData, companion.traits, allowance);
 		if (kept.length !== companion.traits.length) await this._actor.setFlag(STONETOP_SCOPE, "animalCompanion.traits", kept);
 	}
@@ -7150,7 +7208,7 @@ function _buildCrewStats(crew, moveBonuses) {
 // only while LEARNED (an un-learned move grants nothing) and only for the BOOK's move (a
 // player's own move of that name is not it, as _ownsLearnedBookCopy says).
 function _buildCompanionBonuses(moveBonuses, ownedAllByName, items) {
-	const specimens = _learnedBookSpecimens(ownedAllByName, items);
+	const specimens = _bookSpecimens(ownedAllByName, items);
 	return {
 		hp:         moveBonuses.companionHp    ?? 0,
 		armor:      moveBonuses.companionArmor ?? 0,
@@ -7159,9 +7217,11 @@ function _buildCompanionBonuses(moveBonuses, ownedAllByName, items) {
 }
 
 // How many LEARNED book copies of Magnificent Specimen `ownedAllByName` holds, read against the
-// actor's `items` (a copy a switched-off cross move granted is off with it).
-function _learnedBookSpecimens(ownedAllByName, items) {
-	return (ownedAllByName.get?.(MAGNIFICENT_SPECIMEN_MOVE) ?? []).filter(i => !_isCustomMove(i) && moveLearnedIn(i, items)).length;
+// actor's `items` (a copy a switched-off cross move granted is off with it). `learnedOnly` false
+// counts every book copy still held, learned or not (_trimCompanionTraitsOnRemoval).
+function _bookSpecimens(ownedAllByName, items, { learnedOnly = true } = {}) {
+	return (ownedAllByName.get?.(MAGNIFICENT_SPECIMEN_MOVE) ?? [])
+		.filter(i => !_isCustomMove(i) && (!learnedOnly || moveLearnedIn(i, items))).length;
 }
 
 function _originDescriptionForRegion(region) {

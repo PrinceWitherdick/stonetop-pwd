@@ -69,14 +69,17 @@ export class CharacterPossessions {
 	// write. Every actor.update on a character re-runs the ledger's snapshot diff, so a pick
 	// change and the carry marks it invalidates must not go out as separate updates — which
 	// is why the caller hands both over at once (see StonetopCharacter#deselectSubChoice for
-	// the rule about which picks lose their mark).
-	async writeSubChoices(possessionSlug, choiceSlugs, { uncarry = [] } = {}) {
+	// the rule about which picks lose their mark). `also` is an update fragment landed in the same
+	// write: the undefined marks those carry marks drew, handed back (StonetopCharacter#_choiceGiveBackData).
+	async writeSubChoices(possessionSlug, choiceSlugs, { uncarry = [], also = {} } = {}) {
 		const sets = { subChoices: { ...this.subChoices, [possessionSlug]: [...(choiceSlugs ?? [])] } };
 		if (uncarry.length) {
 			sets.choiceCarried = { ...this.choiceCarried };
 			for (const slug of uncarry) sets.choiceCarried[`${possessionSlug}:${slug}`] = false;
 		}
-		await this._flags.batch({ sets });
+		if (!Object.keys(also).length) return this._flags.batch({ sets });
+		const data = Object.assign({}, ...Object.entries(sets).map(([key, value]) => this._flags.updateData(key, value)));
+		await this._flags.applyUpdateData({ ...data, ...also });
 	}
 
 	async selectExclusive(possessionSlug, choiceSlug, exclusiveSlugs) {

@@ -256,6 +256,19 @@ describe("Magnificent Specimen: 2 options per copy", () => {
 		expect((await char.buildSnapshot()).companionBonuses.traitPicks).toBe(0);
 	});
 
+	// Only REMOVAL trims: an un-learned copy still on the sheet keeps the 2 options it paid for, so removing
+	// the other copy trims to one copy's worth, not to none.
+	it("removing one copy keeps the options an un-learned second copy still pays for", async () => {
+		const { char, actor } = rangerAt(4, { animalCompanion: { type: "brute", traits: ["tough", ...FULL] } });
+		await char.addMove(ranger("Animal Companion")._id);
+		const first = await char.addMove(ranger(MS)._id);
+		const second = await char.addMove(ranger(MS)._id);
+		await second.setFlag(STONETOP_SCOPE, "learned", false);
+		expect(traitsOf(actor)).toHaveLength(8);
+		await char.removeMove(first._id);
+		expect(traitsOf(actor)).toEqual(["tough", "quick", "powerful", "fearless", "keen-nosed", "protective"]);
+	});
+
 	it("a player's own move named Magnificent Specimen gives no options", async () => {
 		const { char, actor } = rangerAt(2);
 		actor.items.push(makeLiveItem({ name: MS, type: "move", system: { moveType: "other" }, flags: { "stonetop-pwd": { custom: true } } }));

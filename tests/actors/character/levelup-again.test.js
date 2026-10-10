@@ -68,6 +68,15 @@ describe("levelling up twice", () => {
 		expect(sheet._maybeOpenPossessionChoicesForMove).toHaveBeenCalledWith("Big Magic");
 	});
 
+	it("opens the companion's trait picker for a Magnificent Specimen learned through a cross-playbook pick (POS-2)", async () => {
+		const { sheet } = makeSheet({ canLevelUp: false });
+		sheet._maybeOpenCompanionTraitsForMove = vi.fn();
+		await sheet._onLevelUpOpen();
+		opened[0]._onDone("Wild Soul", { applied: true, foreignMoveName: "Magnificent Specimen" });
+		expect(sheet._maybeOpenCompanionTraitsForMove).toHaveBeenCalledWith("Wild Soul");
+		expect(sheet._maybeOpenCompanionTraitsForMove).toHaveBeenCalledWith("Magnificent Specimen");
+	});
+
 	it("raises the window already open for that character instead of opening another", async () => {
 		const { sheet, character } = makeSheet({ canLevelUp: true });
 		const open = { id: "stonetop-levelup-dialog-actorA", bringToTop: vi.fn() };

@@ -7795,7 +7795,12 @@ export function createStonetopCharacterSheetClass(Base) {
 							// Big Magic learned through Initiate frees a remarkable trait on the
 							// pouch, same as taking it on its home playbook.
 							const learned = foreign.find(m => m.compendiumId === id);
-							if (learned) await this._maybeOpenPossessionChoicesForMove(learned.name);
+							if (learned) {
+								await this._maybeOpenPossessionChoicesForMove(learned.name);
+								// Magnificent Specimen through Wild Soul or Versatile owes the companion its 2
+								// more options, as on the Ranger's own sheet.
+								this._maybeOpenCompanionTraitsForMove(learned.name);
+							}
 						},
 					},
 					cancel: { label: "Cancel" },
@@ -7888,7 +7893,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		// Weapons-of-war style gear (see tab-equipment.hbs): the options a possession's `choices`
 		// bundle has already had chosen, rendered as ◇/□ rows. Ticking a diamond marks that
 		// weapon as carried — the pick itself lives on the edit-mode checklist — and load
-		// re-derives on the re-render.
+		// re-derives on the re-render. Marked in the field it is Have What You Need, so it draws
+		// from the undefined marks like the possession's granted gear (StonetopCharacter#
+		// setChoiceGearCarried).
 		async _onPossessionChoiceGearCheck(ev) {
 			const el = ev.currentTarget;
 			const { possessionSlug, choiceSlug } = el.dataset;
@@ -8167,8 +8174,10 @@ export function createStonetopCharacterSheetClass(Base) {
 					if (addedMoveName) this._maybeOpenPossessionChoicesForMove(addedMoveName);
 					if (foreignMoveName) this._maybeOpenPossessionChoicesForMove(foreignMoveName);
 					// Levelling into Magnificent Specimen owes the companion 2 more options: open its
-					// card's trait picker so they're asked now.
+					// card's trait picker so they're asked now. Learned through a cross-playbook move
+					// (Wild Soul, Versatile), it's the foreign move that owes them.
 					if (addedMoveName) this._maybeOpenCompanionTraitsForMove(addedMoveName);
+					if (foreignMoveName) this._maybeOpenCompanionTraitsForMove(foreignMoveName);
 					// Book I p.528: "If a PC has enough XP to Level Up twice, then they Level Up
 					// twice right away." So the next one opens straight after.
 					if (applied && this._stonetopCharacter.canLevelUp) {
