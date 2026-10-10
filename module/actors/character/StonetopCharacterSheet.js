@@ -84,7 +84,7 @@ import {beginAid} from "../../pc-asks/pc-ask-flow.js";
 import {STRUGGLE_MOVE} from "../../struggle/struggle-rules.js";
 import {rollProvisions, ON_THE_HOOF} from "./provisions.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
-import {knowThingsRollChoices, withAdvantage, KNOW_THINGS_STAT, KNOW_THINGS_ADVANTAGE_MOVES} from "./arcana-identify.js";
+import {knowThingsRollChoices, advantageRollOptions, KNOW_THINGS_STAT, KNOW_THINGS_ADVANTAGE_MOVES} from "./arcana-identify.js";
 import {movePickBonusesFor, withMovePickBonuses} from "./move-pick-bonuses.js";
 import {statRuleIssues} from "./stat-rules.js";
 import {ARTIFACT_STATE, artifactStateForTier, knowThingsArtifactResults, seekInsightArtifactResults,
@@ -110,7 +110,7 @@ import {withSectionEditing} from "../../utils/section-editing.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {annotateInvocationEffects, splitEmpoweredEffect} from "./invocation-effects.js";
 import {CONSECRATED_FLAME, INVOKE_THE_SUN_GOD, EMPOWERED_INVOCATIONS, showHolyLight} from "./holy-light.js";
-import {ownedMoveNames, ownedMove, ownedLearnedMove, ownsLearnedMoveNamed, isPlayerAuthoredMove, moveLearnedIn} from "./owns-move.js";
+import {ownedMoveNames, ownedMove, ownedLearnedMove, ownsLearnedMoveNamed, bookMoveName, moveLearnedIn} from "./owns-move.js";
 import { crewIsExceptional, companionIsExceptional, EXCEPTIONAL_FROM_MOVE } from "./follower-masters.js";
 import { followerInPartyFlags, followerPartyPath } from "./follower-party.js";
 import { ANIMAL_COMPANION_MOVE, COMPANION_TRAIT_PICKS_PER_SPECIMEN, MAGNIFICENT_SPECIMEN_MOVE, companionPaidTraits, companionTraitAllowance } from "./animal-companion.js";
@@ -3703,11 +3703,10 @@ export function createStonetopCharacterSheetClass(Base) {
 				// The row's own item, when it has one — an un-owned playbook row has none. Read
 				// once here: the authorship check below and _maybeConsecrateFlame both want it.
 				const item = li?.dataset.itemId ? this.actor.items.get(li.dataset.itemId) : null;
-				const isOtherMove = isPlayerAuthoredMove(item);
 				// Aid is made on someone else's roll: ask whom, and post the card the GM answers on
 				// (pc-asks/). Only for someone who can act for this character; a reader gets the text.
 				if (this.isEditable && await beginAid(this.actor, item)) return;
-				const guide = isOtherMove ? null : GUIDED_CHARACTER_MOVES[name];
+				const guide = GUIDED_CHARACTER_MOVES[bookMoveName(item, name)];
 				// A ROLLABLE MOVE NEVER REACHES HERE. Its name element IS the `.rollable` now
 				// (see move-group.hbs), and the rollable handler below runs in the CAPTURE phase
 				// on this same root — it takes the click and stops it before this bubble-phase
@@ -3788,7 +3787,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			// un-learned custom move), which it posts to chat.
 			// Restricted to owners/GMs (isEditable) so observers cannot roll on others' actors —
 			// their click falls through to that handler and gets the move's text instead.
-			html[0].addEventListener("click", async ev => {
+			// Registered below, behind the in-flight guard (_guardRollableClick).
+			const rollFromClick = async ev => {
 				// Don't intercept clicks on enabled inputs (e.g. editing a stat value).
 				if (ev.target.tagName === "INPUT" && !ev.target.disabled && !ev.target.readOnly) return;
 				// The "+STAT" chip beside a title rolls the move too: it reads as part of the same
@@ -3884,7 +3884,8 @@ export function createStonetopCharacterSheetClass(Base) {
 						}
 					}
 				}
-			}, true);
+			};
+			html[0].addEventListener("click", ev => this._guardRollableClick(ev, rollFromClick), true);
 
 			// The whole basic/expedition row is tappable, not just its title.
 			// The title and the "+stat" chip roll via the capture handler above
@@ -6653,6 +6654,39 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		/**
+		 * The rollable click handler, behind an in-flight guard: a double-click is ONE roll. The same
+		 * rollable pressed again while its first press is still asking or rolling is stopped and let go,
+		 * so it neither rolls twice nor falls through to the row's own handler. Keyed by what the rollable
+		 * rolls rather than by its element, since the first press's writes re-render the sheet under the
+		 * second; and per rollable, so another move can still be rolled while these dice animate (what the
+		 * two would share, the +forward and a held promise, the character claims one roll at a time:
+		 * StonetopCharacter#_claimNextRollOwed).
+		 *
+		 * @param {MouseEvent} ev
+		 * @param {(ev: MouseEvent) => Promise<void>} handler  the click handler proper
+		 * @returns {Promise<void>|undefined}
+		 */
+		_guardRollableClick(ev, handler) {
+			const target = ev?.target;
+			const rollable = target?.closest?.(".rollable")
+				?? target?.closest?.(".stonetop-move-roll-chip")?.closest("li")?.querySelector(".rollable");
+			const key = rollable && this.isEditable
+				? [rollable.closest(".item")?.dataset?.itemId, rollable.dataset?.roll, rollable.dataset?.label, rollable.textContent?.trim()]
+					.map(part => part ?? "").join("|")
+				: null;
+			this._rollablesInFlight ??= new Set();
+			if (key !== null && this._rollablesInFlight.has(key)) {
+				// Not an input being edited: those the handler leaves alone, and so does this.
+				if (!(target.tagName === "INPUT" && !target.disabled && !target.readOnly)) ev.stopPropagation();
+				return undefined;
+			}
+			if (key !== null) this._rollablesInFlight.add(key);
+			const done = handler(ev);
+			if (key === null) return done;
+			return done.finally(() => this._rollablesInFlight.delete(key));
+		}
+
+		/**
 		 * Everything a move roll has to ASK before the dice are thrown: the guided-move dialog,
 		 * the "ask" stat picker, the alt-stat picker, then the pre-roll prompt (how to roll it,
 		 * and any one-off modifier).
@@ -6675,7 +6709,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		 */
 		async _resolveMoveRollPrompts(rollable, { shiftKey = false, pickContext = null } = {}) {
 			const insteadItem = this.actor.items.get(rollable.closest(".item")?.dataset?.itemId ?? "");
-			const instead = insteadItem?.type === "move" ? MOVE_ROLL_INSTEAD[insteadItem.name] : null;
+			// The book's moves only: a player's or GM's own move that shares a name (a homebrew "Hard to
+			// Kill") rolls as itself, as _guidedMoveForRollable already keeps.
+			const instead = insteadItem?.type === "move" ? MOVE_ROLL_INSTEAD[bookMoveName(insteadItem)] : null;
 			if (instead && await instead(this, { shiftKey, pickContext })) return "handled";
 
 			const guided = this._guidedMoveForRollable(rollable);
@@ -6903,7 +6939,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// should roll as itself, not hijack the built-in dialog — and its text is its own, so
 			// it never earns a deferred-spend door off it either.
 			const item = li?.dataset.itemId ? this.actor.items.get(li.dataset.itemId) : null;
-			if (isPlayerAuthoredMove(item)) return null;
+			if (bookMoveName(item, name) == null) return null;
 			// The hand-written table first, so the two moves that spend AND roll on one trigger
 			// keep the gate that refuses their dice; anything left is asked whether its own
 			// printed text charges Stock at a trigger of its own.
@@ -8493,10 +8529,11 @@ export function createStonetopCharacterSheetClass(Base) {
 		/**
 		 * What rolling a move does beyond rolling it. Resolved from the ITEM rather than the row's
 		 * text, for the reason MOVE_USE_EFFECTS is: an un-owned playbook row carries no item id at
-		 * all, and a player-authored custom move can be called anything.
+		 * all, and a player-authored custom move can be called anything (bookMoveName: theirs is null).
 		 */
 		async _onMoveRolled(item) {
-			const effect = item?.name ? MOVE_ROLL_EFFECTS[item.name] : null;
+			const name = item?.name ? bookMoveName(item) : null;
+			const effect = name ? MOVE_ROLL_EFFECTS[name] : null;
 			if (effect) await effect(this);
 		}
 
@@ -8742,11 +8779,12 @@ export function createStonetopCharacterSheetClass(Base) {
 
 		/**
 		 * Run whatever using this description-only move does beyond posting its text — see
-		 * MOVE_USE_EFFECTS. One lookup, called from both tails that post a move to chat.
+		 * MOVE_USE_EFFECTS. One lookup, called from both tails that post a move to chat. A player's own
+		 * move of a book move's name posts its text and does nothing more (bookMoveName).
 		 */
 		async _onDescriptionMoveUsed(item) {
 			if (item?.type !== "move") return;
-			await MOVE_USE_EFFECTS[item.name]?.(this);
+			await MOVE_USE_EFFECTS[bookMoveName(item)]?.(this);
 		}
 
 		// Open the Create-a-Follower walkthrough (Book I, NPCs & Followers, p.474).
@@ -9217,12 +9255,13 @@ export function createStonetopCharacterSheetClass(Base) {
 				takenOffers: prompted.takenOffers,
 				offered:     prompted.offered,
 				// The move's own advantage (Polyglot, Naturalist) stacks on top of whatever the
-				// roll was already going to be, which is what withAdvantage is for: it lifts
-				// Disadvantage to Normal and Normal to Advantage rather than overwriting either.
+				// roll was already going to be, which is what advantageRollOptions is for: it lifts
+				// Disadvantage to Normal and Normal to Advantage rather than overwriting either, and
+				// hands over both sides so a debility laid on after cannot tip a cancelled pair.
 				// What it lifts is the prompt's answer when the prompt asked for a mode, and the
-				// sheet's sticky selector when it did not — this roll passes an explicit mode, so
+				// sheet's sticky selector when it did not: this roll passes an explicit mode, so
 				// the fallback onDirectStatRoll would have applied has to be spelled out here.
-				rollMode: withAdvantage(prompted.rollMode ?? this._stonetopCharacter.rollMode, picked.advantage),
+				...advantageRollOptions(prompted.rollMode ?? this._stonetopCharacter.rollMode, picked.advantage),
 				// This roll bypasses StonetopItem.roll, so it has to stamp the move identity and
 				// pick up Never at a Loss / the Logbook itself — otherwise the card's post-roll
 				// buttons would work from the Moves tab but not from here.

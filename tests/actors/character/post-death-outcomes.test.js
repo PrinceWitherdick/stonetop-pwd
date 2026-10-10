@@ -217,7 +217,7 @@ describe("pressing an outcome", () => {
 	it("holds an advantage for INSATIABLE, named for it", async () => {
 		const { char } = makeUndead("revenant", { counts: { "consequences:insatiable": 1 } });
 		await runPostDeathOutcome(char, "indulge", { source: "INSATIABLE" });
-		expect(char.heldAdvantage()).toEqual({ source: "Insatiable" });
+		expect(char.heldAdvantage()).toEqual({ sources: ["Insatiable"], source: "Insatiable" });
 	});
 
 	it("clears the one debility chosen", async () => {

@@ -186,9 +186,10 @@ describe("who asks for ticks", () => {
 	// list in the description would start its data-index at 0 again and scramble the saved ticks.
 	it("but not on a move that names its own pool", () => {
 		const item = read("module/item/StonetopItem.js");
-		const at = item.indexOf("const cardDescription");
+		const at = item.indexOf("const body = moveCardBody(moveDescription,");
 		expect(at).toBeGreaterThan(-1);
 		expect(item.slice(at, at + 160)).toContain("declaredPicks.length");
+		expect(item).toContain("const cardDescription = (bookName == null ? body :");
 	});
 
 	// The boxes are wired by the shared roll-card handler, which finds any .stonetop-picklist-check

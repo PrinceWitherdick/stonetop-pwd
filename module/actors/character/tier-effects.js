@@ -31,6 +31,7 @@ import { LUMINOUS_SHIELD, WIELDER_OF_THE_WHITE_FLAME } from "./holy-light.js";
 import { DEFEND_MOVE } from "../../combat/defend-readiness.js";
 import { HERO_MOVES, foeKey, recordAlphaOver, forgetAlphaOver } from "../../fight/hero-moves.js";
 import { OMENS_OF_FATE, settleOmensTier } from "./destined.js";
+import { reconcileGivenAdvantage } from "./give-advantage-flow.js";
 
 /** The message flag holding what a roll's tier effects have done, keyed as TIER_EFFECTS is. */
 export const TIER_EFFECTS_FLAG = "tierEffects";
@@ -160,6 +161,14 @@ export async function recordTierEffects(message, record, { scope = SYSTEM_ID } =
  * @param {Actor|null} [options.actor]  the roller (default: the card's speaker)
  */
 export async function reconcileTierEffects(message, total, { actor = undefined, scope = SYSTEM_ID } = {}) {
+	// A held advantage the card's tier gave someone (Everything Burns' 10+): taken back once the card is moved
+	// off that tier. Kept on the card apart from `tierEffects`, since it is pressed after the roll and may go
+	// to another character than the roller (give-advantage-flow.js#reconcileGivenAdvantage).
+	try {
+		await reconcileGivenAdvantage(message, total, { scope });
+	} catch (err) {
+		console.error("Stonetop | taking back the advantage a moved roll card gave failed", err);
+	}
 	const done = message?.getFlag?.(scope, TIER_EFFECTS_FLAG);
 	if (!done || typeof done !== "object" || !Number.isFinite(Number(total))) return false;
 	const roller = actor === undefined ? speakerActor(message) : actor;

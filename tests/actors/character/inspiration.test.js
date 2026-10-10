@@ -533,7 +533,7 @@ describe("wiring", () => {
 	});
 
 	it("puts the speech buttons on a We Happy Few roll, after anything the roll already carries", () => {
-		expect(item).toMatch(/moveRollOptions\(this\.name, actor, options\.tierActions\)/);
+		expect(item).toMatch(/moveRollOptions\(bookName, actor, options\.tierActions\)/);
 		const marshal = pc({ id: "m", moves: [WE_HAPPY_FEW] });
 		const opts = moveRollOptions(WE_HAPPY_FEW, marshal, { success: "<p>note</p>" });
 		expect(opts.tierActions.success).toMatch(/^<p>note<\/p><button[^>]*stonetop-inspire-allies/);

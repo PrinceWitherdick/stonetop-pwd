@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { Window } from "happy-dom";
 import { stubConfirm } from "../../fakes/confirm.js";
 import { createStonetopCharacterSheetClass, woundEditPatch } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { WoundDialog } from "../../../module/actors/character/dialogs/WoundDialog.js";
@@ -2361,5 +2362,57 @@ describe("StonetopCharacterSheet Post-Death tab controls", () => {
 		expect(char.markSectionOption).not.toHaveBeenCalled();
 		// The re-render is what redraws the box unticked.
 		expect(sheet.render).toHaveBeenCalledWith(false);
+	});
+});
+
+// A double-click on a move's title is ONE roll: the rollable click handler sits behind an in-flight guard,
+// keyed by what the rollable rolls (the sheet re-renders under the second click), so a second press of the
+// same rollable while the first is still asking or rolling is stopped and let go. Another move still rolls.
+describe("the rollable click guard", () => {
+	const doc = new Window().document;
+	function rollable(itemId, label) {
+		const li = doc.createElement("li");
+		li.className = "item";
+		li.dataset.itemId = itemId;
+		const title = doc.createElement("span");
+		title.className = "rollable";
+		title.dataset.roll = "wis";
+		title.textContent = label;
+		li.appendChild(title);
+		return title;
+	}
+	const click = target => ({ target, stopPropagation: vi.fn() });
+
+	it("lets the same rollable's second press go while the first is in flight, and takes it again after", async () => {
+		const sheet = makeSheet(makeActor());
+		let finish;
+		const handler = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+		const first = sheet._guardRollableClick(click(rollable("m1", "Seek Insight")), handler);
+		// The sheet re-rendered: a new element for the same move.
+		const second = click(rollable("m1", "Seek Insight"));
+		expect(sheet._guardRollableClick(second, handler)).toBeUndefined();
+		expect(second.stopPropagation).toHaveBeenCalled();
+		expect(handler).toHaveBeenCalledTimes(1);
+		finish();
+		await first;
+		sheet._guardRollableClick(click(rollable("m1", "Seek Insight")), handler);
+		expect(handler).toHaveBeenCalledTimes(2);
+	});
+
+	it("still rolls another move while the first is in flight", () => {
+		const sheet = makeSheet(makeActor());
+		const handler = vi.fn(() => new Promise(() => {}));
+		sheet._guardRollableClick(click(rollable("m1", "Seek Insight")), handler);
+		sheet._guardRollableClick(click(rollable("m2", "Defy Danger")), handler);
+		expect(handler).toHaveBeenCalledTimes(2);
+	});
+
+	it("lets the guard go when the press throws", async () => {
+		const sheet = makeSheet(makeActor());
+		const failing = vi.fn(async () => { throw new Error("no"); });
+		await expect(sheet._guardRollableClick(click(rollable("m1", "Seek Insight")), failing)).rejects.toThrow("no");
+		const handler = vi.fn(async () => {});
+		await sheet._guardRollableClick(click(rollable("m1", "Seek Insight")), handler);
+		expect(handler).toHaveBeenCalledTimes(1);
 	});
 });

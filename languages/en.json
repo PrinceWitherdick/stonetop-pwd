@@ -2215,7 +2215,8 @@
       "releaseTitle": "Let the advantage go",
       "releasePrompt": "Give up the advantage promised by {source}? Your next roll goes out as it otherwise would, and nothing records the promise afterwards.",
       "releaseConfirm": "Let it go",
-      "releaseCancel": "Keep holding it"
+      "releaseCancel": "Keep holding it",
+      "givenSpent": "{name} already used the advantage this roll gave."
     },
     "heldDisadvantage": {
       "label": "Disadvantage held over your next roll",

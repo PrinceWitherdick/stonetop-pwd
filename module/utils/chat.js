@@ -121,11 +121,29 @@ export function rollResultNumber(total, dieFaces = "") {
  * the roll has no dice terms.
  */
 export function dieResultsText(roll) {
-	const dice = roll?.dice ?? [];
-	const faces = dice.flatMap(term =>
+	const terms = Array.isArray(roll?.terms) ? roll.terms : [];
+	// A damage roll at advantage of SEVERAL dice is a pool of two whole rolls ("{2d4,2d4}kh",
+	// roll-engine.js#damageRollFormula): each roll reads as its faces added up ("1+3"), the one the pool
+	// dropped in parentheses, so the readout says which ROLL was kept rather than four loose dice.
+	if (!terms.some(_isPoolTerm)) return _diceFaces(roll?.dice ?? []).join(", ");
+	return terms.flatMap(term => {
+		if (!_isPoolTerm(term)) return _diceFaces(Array.isArray(term?.results) && term?.faces ? [term] : []);
+		return term.rolls.map((sub, i) => {
+			const faces = (sub?.dice ?? []).flatMap(d => (d.results ?? []).filter(r => r.active !== false && !r.discarded).map(r => r.result)).join("+");
+			const kept = term.results?.[i]?.active !== false && !term.results?.[i]?.discarded;
+			return kept ? faces : `(${faces})`;
+		});
+	}).join(", ");
+}
+
+/** A dice pool term (`{2d4,2d4}kh`): its sub-rolls and whether each was kept. */
+const _isPoolTerm = term => Array.isArray(term?.rolls) && Array.isArray(term?.results);
+
+/** Each die's face, a discarded one in parentheses. */
+function _diceFaces(dice) {
+	return dice.flatMap(term =>
 		(term.results ?? []).map(r => (r.active === false || r.discarded ? `(${r.result})` : `${r.result}`))
 	);
-	return faces.join(", ");
 }
 
 /** Die faces for a *multi*-die roll ("2, 4"), or "" for a single die — the readout

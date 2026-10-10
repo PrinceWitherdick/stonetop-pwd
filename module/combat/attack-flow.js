@@ -48,7 +48,7 @@ import {halveDamage, spentOn} from "../fight/defend-spend.js";
 import {undauntedNow, undauntedUnread, HERO_MOVES, eyesLockedAgainst, ownDamageMode, blowOffers as heroOffers, muscleboundWeapon, berserkNow, defenderDisadvantage, recordHarmedBy, recordClash, foeAdvantage, defenderMoveKey} from "../fight/hero-moves.js";
 // Undaunted is a starred move: its use can cross off "Would-be" (the Would-Be Hero's asterisk seam).
 import {asteriskMoveUsed} from "../actors/character/WouldBeHeroAsterisk.js";
-import {ownsLearnedMoveNamed, ownsLearnedBookMoveNamed, ownedLearnedBookMove, isPlayerAuthoredMove} from "../actors/character/owns-move.js";
+import {ownsLearnedMoveNamed, ownsLearnedBookMoveNamed, ownedLearnedBookMove, bookMoveName} from "../actors/character/owns-move.js";
 import {armorGateWords, barkskinMarks, wearsBarkskin, withBarkskinBase} from "../actors/character/move-armor.js";
 import {keepsFightingAtZero, markUnstoppable} from "../actors/character/unstoppable.js";
 import {actorPastDeathKind, isOutOfPlay} from "../actors/character/deaths-door-actor.js";
@@ -130,16 +130,16 @@ const ATTACK_MOVES = {
  * The attack-move config for a rolled move item, or null for any other move.
  *
  * A playbook move is only ITSELF when it came from a playbook: a move a player wrote (the custom-move
- * flag, owns-move.js#isPlayerAuthoredMove) that happens to be called Ambush acts as the plain move
- * they wrote, which is the rule grantedWeaponAttackFor already applies to the granted-weapon path.
+ * flag; owns-move.js#bookMoveName answers null for it) that happens to be called Ambush acts as the
+ * plain move they wrote, which is the rule grantedWeaponAttackFor already applies to the granted-weapon
+ * path.
  * NOT moveType "other": a GM-dropped foreign Ambush lands as "other" too, and is still the book's.
  * The basic moves need no such guard — nothing but Clash is called Clash, and a world that renames
  * it has bigger plans.
  */
 export function attackMoveFor(item) {
 	const move = ATTACK_MOVES[item?.name] ?? null;
-	if (move?.playbook && isPlayerAuthoredMove(item)) return null;
-	return move;
+	return move?.playbook ? ATTACK_MOVES[bookMoveName(item)] ?? null : move;
 }
 
 /**
@@ -164,8 +164,9 @@ export function attackMoveFor(item) {
  * and stat-picker paths apply.
  */
 export function grantedWeaponAttackFor(actor, item) {
-	if (item?.type !== "move" || isPlayerAuthoredMove(item)) return null;
-	const granted = grantedWeaponForMove(item.name);
+	const name = item?.type === "move" ? bookMoveName(item) : null;
+	if (!name) return null;
+	const granted = grantedWeaponForMove(name);
 	if (!granted?.viaMove || !ATTACK_MOVES[granted.viaMove]) return null;
 	const attackItem = actor?.items?.find(i => i.type === "move" && i.name === granted.viaMove);
 	if (!attackItem) return null;

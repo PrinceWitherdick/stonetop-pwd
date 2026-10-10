@@ -1163,10 +1163,14 @@ export function damageConditionPills({ rollMode = "normal", bonus = 0, extraDice
 // at the old home for a reader to mistake for the real one.
 
 /**
- * Apply advantage/disadvantage to a damage formula by doubling its first dice
- * term and keeping the better/worse half — Stonetop "roll damage twice, take the
- * higher/lower" (e.g. "d6" with disadvantage → "2d6kl1", "d8+2" → "2d8kl1+2").
- * Non-adv/dis modes and dieless formulas pass through unchanged.
+ * Apply advantage/disadvantage to a damage formula by rolling its first dice term
+ * twice and keeping the better/worse ROLL: Stonetop "roll damage twice, take the
+ * higher/lower" (Book I p.21, p.399). One die is two of it, keeping one ("d6" with
+ * disadvantage → "2d6kl1", "d8+2" → "2d8kl1+2"). Several dice are two whole ROLLS of
+ * them, keeping the better or worse total ("2d4" with disadvantage → "{2d4,2d4}kl"),
+ * never the best or worst dice picked one by one out of the four, which is a
+ * different (and kinder) number. Non-adv/dis modes and dieless formulas pass through
+ * unchanged.
  *
  * Exported because the attack flow evaluates its own Rolls (one per target) rather than
  * going through {@link rollDamage}, and a mode that only applied on the single-target path
@@ -1177,7 +1181,7 @@ export function damageRollFormula(formula, rollMode) {
 	return String(formula).replace(/(\d*)d(\d+)/i, (match, count, faces) => {
 		const n = Number(count || 1);
 		const keep = rollMode === "adv" ? "kh" : "kl";
-		return `${n * 2}d${faces}${keep}${n}`;
+		return n > 1 ? `{${n}d${faces},${n}d${faces}}${keep}` : `2d${faces}${keep}1`;
 	});
 }
 

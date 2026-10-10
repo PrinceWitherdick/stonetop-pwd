@@ -184,6 +184,25 @@ describe("taking a +1", () => {
 		expect(message.rolls[0].total).toBe(9);
 	});
 
+	// The pip is spent before the card is written; a write that never lands pays it back.
+	it("pays the Diligence back when the +1 never reaches the card", async () => {
+		const aeron = judge();
+		const message = card();
+		message.update = vi.fn(async () => { throw new Error("the card is gone"); });
+		await expect(takeBoost(message, { source: "diligence", helper: aeron }, deps())).rejects.toThrow("the card is gone");
+		expect(aeron.tracks[CHRONICLER]).toBe(2);
+	});
+
+	// But a +1 that landed keeps its spend, though something after the write (the tier effects) threw.
+	it("keeps the spend when the +1 landed and what follows it throws", async () => {
+		const aeron = judge();
+		const message = card();
+		const d = { ...deps(), afterShift: vi.fn(async () => { throw new Error("tier effects"); }) };
+		await expect(takeBoost(message, { source: "diligence", helper: aeron }, d)).rejects.toThrow("tier effects");
+		expect(aeron.tracks[CHRONICLER]).toBe(1);
+		expect(message.rolls[0].total).toBe(9);
+	});
+
 	it("adds Many Hands for free, and refuses Diligence from an empty track", async () => {
 		const aeron = judge({ held: {} });
 		const message = card();
@@ -291,6 +310,14 @@ describe("Piety's Blessing on a roll card", () => {
 		expect(offersFor({ message, roller: wren, helpers: [wren], user: player("fox") })).toEqual([]);
 		expect(offersFor({ roller: wren, helpers: [wren], user: player("fox") })).toEqual([]);
 		expect(await takeBoost(card(), { source: "blessing", helper: wren }, deps())).toBe(false);
+	});
+
+	it("gives the Blessing back when the +1 never reaches the card", async () => {
+		const wren = blessedFox();
+		const message = card();
+		message.update = vi.fn(async () => { throw new Error("the card is gone"); });
+		await expect(takeBoost(message, { source: "blessing", helper: wren }, deps())).rejects.toThrow("the card is gone");
+		expect(blessingHeld(wren, SCOPE)).toBe(1);
 	});
 
 	it("spends the Lightbearer's own Blessing off Piety's pip", async () => {

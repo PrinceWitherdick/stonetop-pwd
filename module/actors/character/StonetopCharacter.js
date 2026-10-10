@@ -49,7 +49,7 @@ import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG
 import {DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, UNSTOPPABLE, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, lostToTheGm, stateOnTakingInsert, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG} from "./WouldBeHeroAsterisk.js";
 import {tookBackground} from "./took-background.js";
-import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, moveLearnedIn, switchedOffGranter, ownedMoveNames, ownsMoveNamed} from "./owns-move.js";
+import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, moveLearnedIn, switchedOffGranter, ownedMoveNames, ownsMoveNamed, bookMoveName} from "./owns-move.js";
 import {ANIMAL_COMPANION_MOVE, RANGER_SLUG, MAGNIFICENT_SPECIMEN_MOVE, COMPANION_TRAIT_PICKS_PER_SPECIMEN, companionTraitAllowance, trimCompanionTraits} from "./animal-companion.js";
 import {fineWhiskyOffer as fineWhiskyOfferFrom, isPersuadeMove, FINE_WHISKY_SOURCE} from "./fine-whisky.js";
 import {tagLoadGatedMoves} from "./load-gates.js";
@@ -82,13 +82,13 @@ import {brokenOaths, oathbreakerAgainst, alphaAgainst, spendAlphaOver, upAgainAg
 import {defendReadinessHold, defendReadinessCap, readinessCount, readinessForTier, READINESS_FLAG, DEFEND_MOVE} from "../../combat/defend-readiness.js";
 import {settleReadinessOnAttack} from "../../combat/readiness-loss.js";
 import {messageOfRoll, CRITICAL_TOTAL} from "../../utils/roll-engine.js";
-import {countedTier, outcomeTier, rolledRecord} from "../../utils/counted-tier.js";
+import {cardCountedTier, cardTotal, countedTier, outcomeTier, rolledRecord, ROLLED_FLAG} from "../../utils/counted-tier.js";
 import {ANGER_IS_A_GIFT, A_FORCE_TO_BE_RECKONED_WITH, SPEAK_TRUTH_TO_POWER, forceTurnedTables, righteousAngerSubtitle, speakTruthRefusedActions} from "./would-be-hero-cards.js";
 import {shippedRapportTrack} from "./up-with-people.js";
 import {foldModes, layModes} from "../../utils/roll-mode.js";
 import {fightStateActive, revealOnAttack, WE_HAPPY_FEW} from "./fight-states.js";
 import {spendSurpriseForRoll} from "../../combat/battle-holds.js";
-import {settleTierEffects, recordTierEffects} from "./tier-effects.js";
+import {settleTierEffects, recordTierEffects, reconcileTierEffects} from "./tier-effects.js";
 import {xpToLevelUp, withXpLock} from "../../utils/xp.js";
 import {CharacterArcana} from "./CharacterArcana.js";
 import {seekerArcanaState, seekerArcanaChosen, seekerCardRoles, majorMarkBoxes, withMinorRole, seekerMajorSwitchPlan, seekerMajorOwed} from "./seeker-collection.js";
@@ -99,7 +99,7 @@ import {effectiveSubgroupMax, sumMoveBonus} from "./dialogs/possession-choice-ca
 import {partitionMovesByGroup} from "./dialogs/onboarding-move-groups.js";
 import {backgroundMarkOption, hasBackgroundMarkOptions, moveChoiceKey} from "./dialogs/well-versed-topics.js";
 import {FoundryRepositoryFactory} from "./repositories/FoundryRepositoryFactory.js";
-import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, stripHtmlToText} from "../../utils/strings.js";
+import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, splitNames, stripHtmlToText} from "../../utils/strings.js";
 import {splitFillBlank, fillBlank} from "../../utils/fill-blanks.js";
 import {localize as _loc, format} from "../../utils/i18n.js";
 import {getStonetopSteadingActor} from "../../utils/world.js";
@@ -381,12 +381,40 @@ function foldDisadvantage(options, source) {
 }
 
 /**
- * Two promises' names as one, joined as every list of names is (strings.js#joinNames): "A peaceful
- * night's rest & Aeliana's Aid". Blank halves drop out, and a name promised twice is said once.
+ * Run `fn` once every claim already queued for `actor` on this client has settled (turn-queue.js#inTurn,
+ * one line per actor; see StonetopCharacter#_claimNextRollOwed), so two rolls started together (a
+ * double-click, a second move rolled while the first's dice still animate) read the +forward and the
+ * held promises one after the other: the second reads what the first left.
  */
-function joinSources(held, source) {
-	const parts = [...new Set([held, source].map(part => String(part ?? "").trim()).filter(Boolean))];
-	return joinNames(parts) || "a promise";
+function _inRollTurn(actor, fn) {
+	if (!actor || typeof actor !== "object") return fn();
+	return inTurn(`roll:${actor.uuid ?? actor.id ?? ""}`, fn);
+}
+
+/**
+ * The names a held promise was laid under (StonetopCharacter#heldAdvantage), as the list they are
+ * stored as: `{sources: ["A peaceful night's rest", "Aeliana's Aid"]}`.
+ *
+ * A flag written before that holds ONE string, joined for display (`{source: "A peaceful night's rest
+ * & Aeliana's Aid"}`), and is cut back into its names here, on read, the one place splitNames is still
+ * used. Cut rather than kept whole because a whole "A peaceful night's rest & Dewi's Aid" would read
+ * as one Aid (follower-deaths-door.js#aidAdvantageSources) and spend the night's rest with it; an old
+ * name with its own ", " or " & " is cut too, which only stops it being taken back by name before the
+ * next roll spends it. Every write lays the list.
+ */
+function heldSources(held) {
+	if (!held || typeof held !== "object") return [];
+	const parts = Array.isArray(held.sources) ? held.sources : splitNames(held.source);
+	return parts.map(part => String(part ?? "").trim()).filter(Boolean);
+}
+
+/**
+ * More promises laid beside those held, as one list: blanks drop out, and a name promised twice is
+ * held once. `added` is one name or several (a camp's peaceful night and fur-lined bedroll, a refund).
+ */
+function mergeSources(held, added) {
+	const parts = [...new Set([...held, ...[added].flat()].map(part => String(part ?? "").trim()).filter(Boolean))];
+	return parts.length ? parts : ["a promise"];
 }
 
 const OTHER_MOVE_TYPES = ["background", "special", "follower", "homefront"];
@@ -4415,13 +4443,13 @@ export class StonetopCharacter {
 		const aimed = descriptionOnly ? null : await aimPcAskRoll(this._actor, item);
 		if (aimed === "cancel") return "cancel";
 
-		const forward  = descriptionOnly ? 0 : this._actor.system?.attributes?.forward?.value ?? 0;
+		// The +forward is not read here: it is claimed with the held promises just before the dice, below.
 		const ongoing  = descriptionOnly ? 0 : this._actor.system?.attributes?.ongoing?.value ?? 0;
 		// A one-off situational modifier from the optional pre-roll prompt; the roll
 		// engine surfaces it as a "Situational" pill (modifier − forward − ongoing).
 		const situ     = descriptionOnly ? 0 : situational;
 
-		const modifier    = forward + ongoing + situ;
+		const modifier    = ongoing + situ;
 		// `rollMode` is the pre-roll prompt's answer when the prompt asked for one (see
 		// RollDialog.js), and ABSENT when it did not — which is the ordinary case, because the
 		// mode is normally the sticky selector on this sheet. So the sheet's own flag is the
@@ -4429,13 +4457,14 @@ export class StonetopCharacter {
 		// player who set Advantage on their sheet, on every roll.
 		const rollOptions = {
 			rollMode: normalizeRollMode(rollMode ?? this.rollMode),
-			modifier, forward, ongoing, statOverride: stat, ...(attackExtra ?? {}), ...(aimed ?? {}),
+			// `forward` from what the roll is owed, added once it is claimed (_foldOwed).
+			modifier, forward: 0, ongoing, statOverride: stat, ...(attackExtra ?? {}), ...(aimed ?? {}),
 		};
 
 		// A grudge this character is owed against the very foe they are attacking: Relentless on a Clash
 		// with someone who survived the last one, But I Get Up Again on whoever knocked them down. Folded
-		// in like a held advantage (see _spendHeldRollModes) — before the debility pass, so a Weakened
-		// Heavy's advantage cancels rather than quietly outranking the debility — and NAMED on the card.
+		// in like a held advantage (see _foldOwed), before the debility pass, so a Weakened
+		// Heavy's advantage cancels rather than quietly outranking the debility, and NAMED on the card.
 		const grudge = attackExtra ? attackFoeAdvantage(this._actor, attackExtra) : null;
 		if (grudge) Object.assign(rollOptions, foldAdvantage(rollOptions, grudge));
 		// Every other roll aimed at someone owes what _foldAimedModes folds: Binding Arbitration's "advantage
@@ -4464,15 +4493,25 @@ export class StonetopCharacter {
 		const taken = descriptionOnly ? [] : await _takenOffers(takenOffers, offered, () => this.rollOffers(item), { oathbreakerNamed });
 		Object.assign(rollOptions, _foldTakenOffers(rollOptions, taken));
 
-		// A promise made earlier (a peaceful camp) is spent HERE — after the guards above, so
-		// reading a move's text or backing out of the weapon prompt never burns it.
-		const promised = descriptionOnly ? rollOptions : await this._spendHeldRollModes(rollOptions);
+		// What the next roll is owed (the +forward, a promise made earlier: a peaceful camp, an Interfere) is
+		// CLAIMED HERE, after the guards above, so reading a move's text or backing out of the weapon prompt
+		// never burns it; and in one write before the dice, so a second roll started while these dice still
+		// animate reads what this one left (_claimNextRollOwed). Put back when no dice are thrown.
+		const owed = descriptionOnly ? null : await this._claimNextRollOwed(item?.name);
+		const promised = owed ? this._foldOwed(rollOptions, owed) : rollOptions;
 
-		// Prepare a Welcome spends 1 Surprise to roll; the card says so, or that there was none to spend.
-		const surprise = descriptionOnly ? null : await spendSurpriseForRoll(this._actor, item);
-		const withSurprise = surprise ? { ...promised, conditionNotes: [...(promised.conditionNotes ?? []), surprise] } : promised;
-
-		const roll = await item.roll({ ...this.applyDebilityRollMode(stat, withSurprise), descriptionOnly });
+		let withSurprise = promised;
+		let roll;
+		try {
+			// Prepare a Welcome spends 1 Surprise to roll; the card says so, or that there was none to spend.
+			const surprise = descriptionOnly ? null : await spendSurpriseForRoll(this._actor, item);
+			if (surprise) withSurprise = { ...promised, conditionNotes: [...(promised.conditionNotes ?? []), surprise] };
+			roll = await item.roll({ ...this.applyDebilityRollMode(stat, withSurprise), descriptionOnly });
+		} catch (err) {
+			await owed?.refund();
+			throw err;
+		}
+		if (!roll) await owed?.refund();
 
 		// What the taken lines cost, paid once the dice have landed, and a 12+'s "criticalNote" hook.
 		await _payTakenOffers(taken, roll, item.name);
@@ -4486,12 +4525,7 @@ export class StonetopCharacter {
 		// holding 2 Sanction, the holy light lit or snuffed. Stated flatly, so each goes on with the dice.
 		// What each did is written on the card, so a later Shift or +1 moving its tier can bring the
 		// character along, undoing only what this roll did (actors/character/tier-effects.js).
-		if (!descriptionOnly && Number.isFinite(roll?.total)) {
-			// The tier the roll COUNTS as, as its card reads: a taken line that treats a 7-9 as a 10+ (or a 6- as a
-			// 7-9) settles the effects of the tier it counts as, the same one a later rewrite reads.
-			const tier = outcomeTier(countedTier(roll.total, rolledRecord("", withSurprise)));
-			await recordTierEffects(messageOfRoll(roll), await settleTierEffects(this._actor, item.name, tier, null, { character: this, targets: aimedAt }));
-		}
+		if (!descriptionOnly && Number.isFinite(roll?.total)) await this._settleRolledTierEffects(roll, item.name, withSurprise, aimedAt);
 
 		// Clash's 6-: "your maneuver fails and you suffer your enemy's attack". A flat consequence
 		// with nothing in the tier to decide, so it fires off the dice rather than off a button —
@@ -4510,10 +4544,30 @@ export class StonetopCharacter {
 		// this one rather than this one's own damage (combat/attack-flow.js#recordClashedFoes).
 		if (!descriptionOnly && attackExtra) await recordClashedFoes(this._actor, attackExtra);
 
-		if (forward !== 0) {
-			await this._actor.update({ "system.attributes.forward.value": 0 }, { stonetopMove: item?.name });
-		}
 		return true;
+	}
+
+	/**
+	 * What the tier just rolled does to the character (tier-effects.js), settled and written on the card.
+	 *
+	 * Read off the CARD, not the Roll in hand: a Burn Brightly, a +1 or a GM's Shift can land on the card
+	 * between the dice and here (the miss XP's relay to the GM's client is in between), and a rewrite only
+	 * lifts a copy of the roll (roll-card-writer.js#writeCardRoll). Such a rewrite found no record on the
+	 * card to bring along (tier-effects.js#reconcileTierEffects), so one that lands while these are being
+	 * settled is caught up from the total the card shows once they are written.
+	 *
+	 * The tier the roll COUNTS as, as its card reads: a taken line that treats a 7-9 as a 10+ (or a 6- as a
+	 * 7-9) settles the effects of the tier it counts as, the same one a later rewrite reads.
+	 */
+	async _settleRolledTierEffects(roll, moveName, options, targets) {
+		const card = messageOfRoll(roll);
+		const liveTotal = () => cardTotal(card) ?? roll.total;
+		const tierAt = total => outcomeTier(card?.getFlag?.(STONETOP_SCOPE, ROLLED_FLAG)
+			? cardCountedTier(card, total, STONETOP_SCOPE)
+			: countedTier(total, rolledRecord("", options)));
+		const tier = tierAt(liveTotal());
+		await recordTierEffects(card, await settleTierEffects(this._actor, moveName, tier, null, { character: this, targets }));
+		if (card && tierAt(liveTotal()) !== tier) await reconcileTierEffects(card, liveTotal(), { actor: this._actor });
 	}
 
 	// -- Defend Readiness (Book I, Combat & Boons p.216) ----------------------
@@ -4547,8 +4601,10 @@ export class StonetopCharacter {
 
 	/**
 	 * The derived vitals everything outside the sheet reads off the STORED fields, `{armor, unpierceable,
-	 * maxHp}`: buildSnapshot's arithmetic without building a sheet. `maxHp` is 0 with no playbook, which
-	 * is "nothing to say", not a max of 0 (see computedMaxHp).
+	 * maxHp, damage}`: buildSnapshot's arithmetic without building a sheet. `maxHp` is 0 with no playbook,
+	 * which is "nothing to say", not a max of 0 (see computedMaxHp). `damage` is the die the character
+	 * rolls (computedDamageDie's answer, from the playbook and move bonuses already worked out here), or
+	 * null with no override and no playbook.
 	 *
 	 * The stored armor is what the damage card's Apply takes off (combat/attack-flow.js#wornArmor), so a
 	 * shield handed over mid-fight with the sheet closed has to reach it: actors/character/vitals-mirror.js.
@@ -4559,7 +4615,8 @@ export class StonetopCharacter {
 			this._postDeath.hpPenalty(),
 		]);
 		const { armor, unpierceable, conditional, conditionalSource } = this._armorFrom(gear, moveBonuses);
-		return { armor, unpierceable, conditional, conditionalSource, maxHp: playbookData ? _hpFrom(this._actor, playbookData, moveBonuses, hpPenalty).hpMax : 0, hpPenalty };
+		const damage = this.damageDieOverride ?? _derivedDamageDie(playbookData, moveBonuses);
+		return { armor, unpierceable, conditional, conditionalSource, maxHp: playbookData ? _hpFrom(this._actor, playbookData, moveBonuses, hpPenalty).hpMax : 0, hpPenalty, damage };
 	}
 
 	/**
@@ -4600,11 +4657,15 @@ export class StonetopCharacter {
 	 * The two armor numbers move together: a floor is part of the total above it, so a disagreement in
 	 * either writes both. A non-finite armor (nothing worked out, or a move bonus that is not a number)
 	 * writes neither, where 0 is real (unarmored) and must overwrite a stale number. Max HP only with a
-	 * playbook to derive it from (0 says there is none). Ledger-silenced: the real change was the gear,
+	 * playbook to derive it from (0 says there is none). The damage die onto `system.attributes.damage.value`
+	 * when the vitals carry one (`damage`, computedVitals'; the sheet hands in none) and the stored one
+	 * differs: the character's own rolls ask for the computed die, but another hero's best die in a
+	 * pile-on (fight/damage-seed.js#attackerProfile) and a character struck back at as a foe
+	 * (utils/damage.js#foeAttacks) read the stored one. Ledger-silenced: the real change was the gear,
 	 * the level or the Mark, which the ledger already files; the one exception is HP a falling max takes
 	 * down with it, which is filed on its own line. Returns whether it wrote.
 	 *
-	 * @param {{armor: number|null, unpierceable: number, conditional?: number, conditionalSource?: string, maxHp: number}} [vitals]  computedVitals' answer.
+	 * @param {{armor: number|null, unpierceable: number, conditional?: number, conditionalSource?: string, maxHp: number, damage?: string|null}} [vitals]  computedVitals' answer.
 	 *   A caller handing in its own numbers must carry the WHOLE armor group: the write is one update
 	 *   over all four fields, so an omitted `conditional` writes the default back over a real one.
 	 */
@@ -4642,6 +4703,8 @@ export class StonetopCharacter {
 			if ((penaltyBefore ?? 0) !== penalty) update[`flags.${STONETOP_SCOPE}.${MIRRORED_HP_PENALTY_FLAG}`] = penalty;
 			penaltyNow = penalty;
 		}
+		const die = String(worked.damage ?? "").trim();
+		if (die && die !== String(attrs.damage?.value ?? "").trim()) update["system.attributes.damage.value"] = die;
 		if (!Object.keys(update).length) return false;
 		const hpBefore = Number(attrs.hp?.value) || 0;
 		const written = await this._actor.update(update, { stonetopLedger: true });
@@ -5242,14 +5305,15 @@ export class StonetopCharacter {
 
 	/**
 	 * Matched on the resolved ITEM's name, never on a row's text: an un-owned playbook row posts its
-	 * text with no item at all, and a player-authored custom move can carry any name.
+	 * text with no item at all, and a player-authored custom move can carry any name, so a homebrew
+	 * "Battle Joy" ends nothing (owns-move.js#bookMoveName).
 	 *
 	 * Returns whether it actually ended something, so the sheet knows whether this roll was the end
 	 * of a rage (and can repaint the glyph) or an ordinary Battle Joy roll by somebody who never
 	 * ticked it on.
 	 */
 	async _endBattleJoyBeforeRoll(item) {
-		if (item?.name !== BATTLE_JOY) return false;
+		if (bookMoveName(item) !== BATTLE_JOY) return false;
 		return this.setBattleJoy(false);
 	}
 
@@ -5288,24 +5352,28 @@ export class StonetopCharacter {
 		// `rollMode` is the pre-roll prompt's answer when the prompt asked for one (RollDialog.js)
 		// and absent otherwise, in which case the sheet's sticky selector decides. Destructured
 		// rather than left in `rest` so the caller cannot half-set it: Know Things passes a mode
-		// it has already lifted through withAdvantage, and that is a value, not an override.
+		// it has already lifted through advantageRollOptions, and that is a value, not an override.
 		// `targets` is whom the roll is aimed at, for a caller that knows better than this user's targets
 		// on the map ([] for a roll aimed at nobody: Struggle as One's); absent, those targets decide.
 		// `takenOffers` and `offered` are the roll window's answer about the lines it offered, as onRoll's
 		// are (directRollOffers); a caller that asked no window (Struggle as One) takes none.
+		// A caller that netted sources of its own (Struggle as One's board, Know Things' Polyglot) hands them
+		// over as `modeBase` + `modeSources` (roll-mode.js#layModes) beside the mode they fold to, so a
+		// cancelled pair stays cancelled when a debility or a held promise is laid on below.
 		const { situational = 0, rollMode = null, targets = null, takenOffers = null, offered = null, ...rest } = extraOptions;
-		const forward  = this._actor.system?.attributes?.forward?.value ?? 0;
+		// The +forward is claimed with the held promises just before the dice, below.
 		const ongoing  = this._actor.system?.attributes?.ongoing?.value ?? 0;
 		// `situational` is the one-off modifier from the optional pre-roll prompt; the
 		// roll engine renders it as a "Situational" pill (modifier − forward − ongoing).
-		const modifier = forward + ongoing + situational;
+		const modifier = ongoing + situational;
 
 		// Returned so a caller that has to act on the outcome (the arcana Identify roll) can
 		// classify the total without re-rolling or re-deriving the tier thresholds.
 		const base = {
 			rollMode: normalizeRollMode(rollMode ?? this.rollMode),
 			modifier,
-			forward,
+			// Added once claimed (_foldOwed).
+			forward: 0,
 			ongoing,
 			...rest,
 		};
@@ -5319,15 +5387,20 @@ export class StonetopCharacter {
 		// Arbitration's is dropped when the aim above has already named the oath.
 		const taken = await _takenOffers(takenOffers, offered, () => this.directRollOffers(rest.moveName),
 			{ oathbreakerNamed: aimed.oathbreaker });
-		const roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat,
-			await this._spendHeldRollModes(_foldTakenOffers(standing, taken))));
+		// Claimed just before the dice and put back when none are thrown, as onRoll does (_claimNextRollOwed).
+		const owed = await this._claimNextRollOwed(rest.moveName);
+		let roll;
+		try {
+			roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat,
+				this._foldOwed(_foldTakenOffers(standing, taken), owed)));
+		} catch (err) {
+			await owed.refund();
+			throw err;
+		}
+		if (!roll) await owed.refund();
 		await _payTakenOffers(taken, roll, rest.moveName);
 		// Alpha's and But I Get Up Again's advantage was for this one roll against them.
 		if (roll) await aimed.spend();
-
-		if (forward !== 0) {
-			await this._actor.update({ "system.attributes.forward.value": 0 }, extraOptions.moveName ? { stonetopMove: extraOptions.moveName } : {});
-		}
 		return roll;
 	}
 
@@ -5464,7 +5537,8 @@ export class StonetopCharacter {
 	 * that don't. This is a promise: it outranks both, it names itself on the card, and it is
 	 * consumed by the one roll it was owed to.
 	 *
-	 * Stored as WHAT PROMISED it rather than a bare `true`, so the card can say why.
+	 * Stored as WHAT PROMISED it rather than a bare `true`, so the card can say why: the names, as a
+	 * list. Answers `{sources, source}` (`source` is that list joined for display) or null.
 	 */
 	heldAdvantage() {
 		return this._heldMode("heldAdvantage");
@@ -5472,6 +5546,34 @@ export class StonetopCharacter {
 
 	async clearHeldAdvantage() {
 		await this._clearHeldMode("heldAdvantage");
+	}
+
+	/**
+	 * Take back ONE promise of advantage, by the name it was given under (give-advantage.js#givenSource),
+	 * leaving any other promise held beside it: "A peaceful night's rest & Aeron's Everything Burns" loses
+	 * the second name and keeps the first. For a gift whose roll card was moved off the tier that gave it
+	 * (give-advantage-flow.js#reconcileGivenAdvantage). Whether it was still held to take back.
+	 */
+	async releaseHeldAdvantage(source) {
+		return this._releaseHeldSource("heldAdvantage", source);
+	}
+
+	/**
+	 * {@link releaseHeldAdvantage} for a held disadvantage: an Interfere's answer withdrawn
+	 * (pc-asks/pc-ask-flow.js#withdrawDeletedAnswer) takes back its own name and nothing held beside it.
+	 */
+	async releaseHeldDisadvantage(source) {
+		return this._releaseHeldSource("heldDisadvantage", source);
+	}
+
+	async _releaseHeldSource(flag, source) {
+		const held = this._heldMode(flag);
+		const name = String(source ?? "").trim();
+		if (!held?.sources.includes(name)) return false;
+		const rest = held.sources.filter(part => part !== name);
+		if (!rest.length) await this._actor.setFlag(STONETOP_SCOPE, flag, null);
+		else await this._actor.update({ [`flags.${STONETOP_SCOPE}.${flag}`]: { sources: rest } });
+		return true;
 	}
 
 	/**
@@ -5486,7 +5588,8 @@ export class StonetopCharacter {
 	}
 
 	/** {@link holdAdvantage} as an update fragment, for a move that writes several things at once
-	 *  (camp/camp-rules.js#campShareUpdate). Joined with a promise already held, the same way. */
+	 *  (camp/camp-rules.js#campShareUpdate). Laid beside a promise already held, the same way; `source`
+	 *  may be one name or several (the camp's two promises in one write). */
 	heldAdvantageData(source) {
 		return this._heldModeData("heldAdvantage", source);
 	}
@@ -5519,13 +5622,16 @@ export class StonetopCharacter {
 		await this._clearHeldMode("heldDisadvantage");
 	}
 
-	// The two held promises differ only in their flag ("heldAdvantage" / "heldDisadvantage").
+	// The two held promises differ only in their flag ("heldAdvantage" / "heldDisadvantage"). Read as
+	// the list of names (heldSources, which also reads a flag from before the list) and the one line
+	// every surface shows for them, joined as every list of names is (strings.js#joinNames).
 	_heldMode(flag) {
-		return resolvedFlags(this._actor)[flag] ?? null;
+		const sources = heldSources(resolvedFlags(this._actor)[flag]);
+		return sources.length ? { sources, source: joinNames(sources) } : null;
 	}
 
 	_heldModeData(flag, source) {
-		return { [`flags.${STONETOP_SCOPE}.${flag}`]: { source: joinSources(this._heldMode(flag)?.source, source) } };
+		return { [`flags.${STONETOP_SCOPE}.${flag}`]: { sources: mergeSources(this._heldMode(flag)?.sources ?? [], source) } };
 	}
 
 	async _clearHeldMode(flag) {
@@ -5555,21 +5661,60 @@ export class StonetopCharacter {
 	 * mode that quietly vanished, and either way they are SPENT, because they were made about this
 	 * roll and this is the roll that happened.
 	 *
-	 * Cleared BEFORE the dice, like the steading's, so a second roll cannot spend the same promise:
-	 * in one write, whichever of the two were held.
+	 * The +forward rides along: added to the roll's modifier and named on its card (roll-engine.js
+	 * #rollStat's Forward pill). PURE: what is folded here was claimed by _claimNextRollOwed.
+	 *
+	 * @param {object} options  the roll's options so far
+	 * @param {{forward: number, held: {adv: object|null, dis: object|null}}} owed
 	 */
-	async _spendHeldRollModes(options) {
-		const adv = this.heldAdvantage();
-		const dis = this.heldDisadvantage();
-		if (!adv && !dis) return options;
-		await this._actor.update({
-			...(adv ? { [`flags.${STONETOP_SCOPE}.heldAdvantage`]: null } : {}),
-			...(dis ? { [`flags.${STONETOP_SCOPE}.heldDisadvantage`]: null } : {}),
-		});
+	_foldOwed(options, { forward = 0, held = {} } = {}) {
+		const { adv = null, dis = null } = held ?? {};
+		const withForward = forward
+			? { ...options, modifier: (options.modifier ?? 0) + forward, forward: (options.forward ?? 0) + forward }
+			: options;
+		if (!adv && !dis) return withForward;
 		return {
-			...layModes(options, [adv ? "adv" : "", dis ? "dis" : ""]),
-			conditionNotes: [...(options.conditionNotes ?? []), ...[adv, dis].filter(Boolean).map(held => held.source)],
+			...layModes(withForward, [adv ? "adv" : "", dis ? "dis" : ""]),
+			conditionNotes: [...(withForward.conditionNotes ?? []), ...[adv, dis].filter(Boolean).map(promise => promise.source)],
 		};
+	}
+
+	/**
+	 * CLAIM what the next roll is owed: the +forward and whatever is held over it (an advantage, a
+	 * disadvantage, or both). Read and cleared in ONE write, before the dice, in this character's roll
+	 * turn on this client (_inRollTurn), so two rolls started together cannot both take them: the second
+	 * reads what the first left, which is nothing. A roll that throws before its dice, or makes none, puts
+	 * them back with `refund()`, so a promise is never lost to a roll that did not happen.
+	 *
+	 * @param {string|null} [moveName]  the move the ledger files the cleared +forward under
+	 * @returns {Promise<{forward: number, held: {adv: object|null, dis: object|null}, refund: () => Promise<void>}>}
+	 */
+	_claimNextRollOwed(moveName = null) {
+		const ledger = moveName ? { stonetopMove: moveName } : {};
+		return _inRollTurn(this._actor, async () => {
+			const forward = Math.trunc(Number(this._actor.system?.attributes?.forward?.value) || 0);
+			const adv = this.heldAdvantage();
+			const dis = this.heldDisadvantage();
+			const update = {
+				...(forward ? { "system.attributes.forward.value": 0 } : {}),
+				...(adv ? { [`flags.${STONETOP_SCOPE}.heldAdvantage`]: null } : {}),
+				...(dis ? { [`flags.${STONETOP_SCOPE}.heldDisadvantage`]: null } : {}),
+			};
+			if (Object.keys(update).length) await this._actor.update(update, ledger);
+			let refunded = false;
+			const refund = () => _inRollTurn(this._actor, async () => {
+				if (refunded || !Object.keys(update).length) return;
+				refunded = true;
+				// Laid back BESIDE whatever was given since (a new +1 forward, another promise), never over it.
+				const now = Math.trunc(Number(this._actor.system?.attributes?.forward?.value) || 0);
+				await this._actor.update({
+					...(forward ? { "system.attributes.forward.value": now + forward } : {}),
+					...(adv ? this.heldAdvantageData(adv.sources) : {}),
+					...(dis ? this.heldDisadvantageData(dis.sources) : {}),
+				}, ledger);
+			});
+			return { forward, held: { adv, dis }, refund };
+		});
 	}
 
 	// ── Death and dying (Book I, Harm & Healing p.245) ─────────────────────────
@@ -6670,11 +6815,12 @@ function _buildWoundsSection(actor) {
  * The DERIVED damage die: the playbook's, raised by any owned move that raises it. Null without a
  * playbook, since there is nothing to derive from.
  *
- * Stated here alone because two callers need the same answer at very different prices — the vitals
- * section building a whole sheet, and `computedDamageDie` answering a single damage roll. A second
- * copy is how the roller and the sheet come to disagree about what die a character rolls.
+ * Stated here alone because its callers need the same answer at very different prices: the vitals
+ * section building a whole sheet, `computedVitals` feeding the stored mirror, and `computedDamageDie`
+ * answering a single damage roll. A second copy is how the roller and the sheet come to disagree
+ * about what die a character rolls.
  *
- * Does NOT consider the hand-typed override: that WINS over this, and the two callers apply it at
+ * Does NOT consider the hand-typed override: that WINS over this, and the callers apply it at
  * their own layer (the field is what the sheet renders, and it is checked first by the accessor).
  */
 function _derivedDamageDie(playbookData, moveBonuses = {}) {

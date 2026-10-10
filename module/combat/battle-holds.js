@@ -17,7 +17,7 @@
 // spend, so the pip comes off as it is rolled and one goes back on a 10+. A Marshal holding none still
 // rolls (a sheet flags, it never blocks), and the card says the Surprise was not there.
 
-import { ownsLearnedMoveNamed, ownedMove } from "../actors/character/owns-move.js";
+import { bookMoveName, ownsLearnedMoveNamed, ownedMove } from "../actors/character/owns-move.js";
 import { heldOnTrack, learnedTrack, takeBackHeld } from "../actors/character/MoveResources.js";
 import { answersFor } from "../hooks/DeathsDoorPrompt.js";
 import { postMoveNote } from "../utils/chat.js";
@@ -44,12 +44,12 @@ const heldOn = learnedTrack;
 
 /**
  * Prepare a Welcome is being rolled: take the Surprise it spends. Returns the note the roll card should
- * carry, or null for any other move.
+ * carry, or null for any other move, a player's own move of that name among them (owns-move.js#bookMoveName).
  *
  * @returns {Promise<string|null>}
  */
 export async function spendSurpriseForRoll(actor, item) {
-	if (item?.name !== PREPARE_A_WELCOME) return null;
+	if (bookMoveName(item) !== PREPARE_A_WELCOME) return null;
 	const track = heldOn(actor, PREPARE_A_WELCOME);
 	if (!track) return null;
 	if (track.held <= 0) return localize(`${KEY}.noSurprise`);

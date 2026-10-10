@@ -70,7 +70,7 @@ const SOURCES = {
 	diligence: { move: CHRONICLER, cost: 1, on: "any" },
 	sanction:  { move: COMMUNE_WITH_ARATIS, cost: 1, on: "own" },
 	manyHands: { move: MANY_HANDS, cost: 0, on: "other", notInStruggle: true },
-	blessing:  { move: PIETY, cost: 1, on: "own", held: blessingHeld, spend: spendBlessing },
+	blessing:  { move: PIETY, cost: 1, on: "own", held: blessingHeld, spend: spendBlessing, refund: holdBlessing },
 };
 export const BOOST_SOURCES = Object.freeze(Object.keys(SOURCES));
 
@@ -201,11 +201,28 @@ export function takeBoost(message, offer, { shiftRoll, cardFlavor, afterShift = 
 			if (def.spend) await def.spend(helper, scope);
 			else await helper.typedActor.moveResources.setUses(def.move, held - def.cost, { stonetopMove: def.move });
 		}
-		await writeCardRoll(message, roll => shiftRoll(roll, 1), { cardFlavor, afterShift }, {
-			flags: { [scope]: { [BOOSTS_FLAG]: [...used, { source, by: helper.uuid, name: helper.name }] } },
-		});
+		try {
+			await writeCardRoll(message, roll => shiftRoll(roll, 1), { cardFlavor, afterShift }, {
+				flags: { [scope]: { [BOOSTS_FLAG]: [...used, { source, by: helper.uuid, name: helper.name }] } },
+			});
+		} catch (err) {
+			// The pip is paid back when the +1 never reached the card (the card gone, the write refused). The +1
+			// and its name land in ONE write, so a card that names it took it, and a throw after that (the
+			// tier effects that follow a new total) keeps the spend.
+			if (def.cost && !boostsOn(message, scope).some(b => b.source === source && b.by === helper.uuid)) {
+				await refundBoost(helper, source, scope).catch(e => console.error("Stonetop | could not pay back a +1's spend", e));
+			}
+			throw err;
+		}
 		return true;
 	});
+}
+
+/** Give back the pip a +1 spent off its source, for a +1 that never reached the card (one that cost a pip: takeBoost asks). */
+async function refundBoost(helper, source, scope = SYSTEM_ID) {
+	const def = SOURCES[source];
+	if (def.refund) return def.refund(helper, scope);
+	await helper.typedActor.moveResources.setUses(def.move, heldFor(helper, source, scope) + def.cost, { stonetopMove: def.move });
 }
 
 /** A player's +1 on a card they did not write: the GM's client records it. Whether it was taken. */

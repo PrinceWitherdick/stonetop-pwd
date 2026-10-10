@@ -9,8 +9,10 @@ import {
 	GIVE_ADVANTAGE_MOVES, giveAdvantageRollOptions, giveAdvantageCardHtml, givenSource, advantageRecipients, SEEK_INSIGHT_QUESTIONS,
 } from "../../../module/actors/character/give-advantage.js";
 import {
-	giveAdvantage, handleGiveAdvantageQuery, offerAdvantage, wireGiveAdvantage, GIVE_ADVANTAGE_QUERY, GIVEN_FLAG, GIVING_FLAG,
+	giveAdvantage, handleGiveAdvantageQuery, offerAdvantage, reconcileGivenAdvantage, wireGiveAdvantage, GIVE_ADVANTAGE_QUERY, GIVEN_FLAG, GIVING_FLAG,
 } from "../../../module/actors/character/give-advantage-flow.js";
+import { reconcileTierEffects } from "../../../module/actors/character/tier-effects.js";
+import { ROLLED_FLAG, rolledRecord } from "../../../module/utils/counted-tier.js";
 import { moveRollOptions } from "../../../module/actors/character/move-roll-options.js";
 import { buildLiveCharacter, makeLiveItem, sourceMovesFor } from "../../fakes/LiveCharacter.js";
 import { readRepo } from "../../fakes/css.js";
@@ -134,7 +136,7 @@ describe("giving it", () => {
 		expect(await offerAdvantage(card, s, "Countermeasures", { pick, party: () => [b] })).toBe(true);
 		expect(pick.mock.calls[0][0].options.map(o => o.id)).toEqual(["s", "b"]);
 		expect(b.typedActor.holdAdvantage).toHaveBeenCalledWith("s's Countermeasures");
-		expect(card.getFlag(SCOPE, GIVEN_FLAG)).toEqual({ name: "b", move: "Countermeasures" });
+		expect(card.getFlag(SCOPE, GIVEN_FLAG)).toEqual({ name: "b", move: "Countermeasures", uuid: "Actor.b", source: "s's Countermeasures" });
 	});
 
 	it("gives nothing when another client's press took the card while this one chose", async () => {
@@ -278,7 +280,7 @@ describe("the Would-Be Hero's advice and Resourceful", () => {
 		expect(await offerAdvantage(card, hero, "Inquiring Minds", { pick, party })).toBe(true);
 		expect(pick).not.toHaveBeenCalled();
 		expect(hero.typedActor.holdAdvantage).toHaveBeenCalledWith("Inquiring Minds");
-		expect(card.getFlag(SCOPE, GIVEN_FLAG)).toEqual({ name: "Wren", move: "Inquiring Minds" });
+		expect(card.getFlag(SCOPE, GIVEN_FLAG)).toEqual({ name: "Wren", move: "Inquiring Minds", uuid: "Actor.h", source: "Inquiring Minds" });
 	});
 
 	it("puts Resourceful's Seek Insight line and hold on Defy Danger's 6- alone, for a learned owner", () => {
@@ -307,5 +309,91 @@ describe("the Would-Be Hero's advice and Resourceful", () => {
 		expect(await ask(other)).toBe(false);
 		expect(await ask(hero)).toBe(true);
 		expect(hero.typedActor.holdAdvantage).toHaveBeenCalledWith("Resourceful");
+	});
+});
+
+// A gift a roll card's TIER gave (Everything Burns' 10+, Work With What You've Got's 7+) is taken back when the
+// card is moved off that tier, as Sanction and Surprise are (tier-effects.js), and the card forgets it gave
+// anything so its button is back should the card return.
+describe("a gift whose roll card moves off its tier", () => {
+	function givenCard(move = "Everything Burns", given = {}) {
+		const card = message({ flags: {
+			[ROLLED_FLAG]: rolledRecord("int", { moveName: move }),
+			[GIVEN_FLAG]: { name: "b", move, uuid: "Actor.b", source: `s's ${move}`, ...given },
+			[GIVING_FLAG]: "u-s",
+		} });
+		card.update = vi.fn(async update => {
+			for (const key of Object.keys(update)) delete card.flags[SCOPE][key.split(".").pop().replace(/^-=/, "")];
+		});
+		return card;
+	}
+	function holder({ owner = true } = {}) {
+		const b = pc({ id: "b", owner });
+		b.typedActor.releaseHeldAdvantage = vi.fn(async () => true);
+		return b;
+	}
+
+	it("takes it back from the one who holds it when shifted down off the 10+, and lets the card give again", async () => {
+		const b = holder();
+		const card = givenCard();
+		expect(await reconcileGivenAdvantage(card, 9, { resolve: () => b })).toBe(true);
+		expect(b.typedActor.releaseHeldAdvantage).toHaveBeenCalledWith("s's Everything Burns");
+		expect(card.getFlag(SCOPE, GIVEN_FLAG)).toBeUndefined();
+		expect(card.getFlag(SCOPE, GIVING_FLAG)).toBeUndefined();
+	});
+
+	it("keeps it while the card still stands on a tier that gives it", async () => {
+		const b = holder();
+		expect(await reconcileGivenAdvantage(givenCard(), 12, { resolve: () => b })).toBe(false);
+		expect(await reconcileGivenAdvantage(givenCard("Work With What You've Got"), 8, { resolve: () => b })).toBe(false);
+		expect(b.typedActor.releaseHeldAdvantage).not.toHaveBeenCalled();
+	});
+
+	it("keeps it, and the card's record of it, when this client cannot write the one who holds it", async () => {
+		const b = holder({ owner: false });
+		const card = givenCard();
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		expect(await reconcileGivenAdvantage(card, 9, { resolve: () => b })).toBe(false);
+		expect(b.typedActor.releaseHeldAdvantage).not.toHaveBeenCalled();
+		expect(card.getFlag(SCOPE, GIVEN_FLAG)).toMatchObject({ name: "b" });
+	});
+
+	// Wave 3 RAW re-check RA-1: one roll, one advantage. A gift already used on a roll since cannot be taken back,
+	// and a card that forgot it would offer the same roll's advantage a second time once moved back onto the tier.
+	it("keeps the record, marked spent, when the advantage was already used, so the card never gives it again", async () => {
+		const b = holder();
+		b.typedActor.releaseHeldAdvantage = vi.fn(async () => false);
+		const card = givenCard();
+		expect(await reconcileGivenAdvantage(card, 9, { resolve: () => b })).toBe(false);
+		expect(card.getFlag(SCOPE, GIVEN_FLAG)).toMatchObject({ name: "b", move: "Everything Burns", spent: true });
+		expect(card.update).not.toHaveBeenCalled();
+		// Back on the 10+ and off it again: nothing more is asked of the holder.
+		expect(await reconcileGivenAdvantage(card, 11, { resolve: () => b })).toBe(false);
+		expect(await reconcileGivenAdvantage(card, 8, { resolve: () => b })).toBe(false);
+		expect(b.typedActor.releaseHeldAdvantage).toHaveBeenCalledTimes(1);
+
+		const root = new Window().document.createElement("div");
+		root.innerHTML = giveAdvantageRollOptions("Everything Burns")(pc({ id: "s", moves: ["Everything Burns"] })).tierActions.success;
+		wireGiveAdvantage(card, root, { giver: pc({ id: "s" }), usable: true });
+		expect(root.querySelector(".stonetop-give-advantage")).toBeNull();
+		expect(root.querySelector(".stonetop-give-advantage-readout").textContent).toBe("b already used the advantage this roll gave.");
+	});
+
+	it("keeps the record, marked spent, when the one who held it is gone", async () => {
+		const card = givenCard();
+		expect(await reconcileGivenAdvantage(card, 9, { resolve: () => null })).toBe(false);
+		expect(card.getFlag(SCOPE, GIVEN_FLAG)).toMatchObject({ spent: true });
+	});
+
+	it("is brought along by the one seam every rewrite of a card's total reaches", async () => {
+		const b = holder();
+		const was = globalThis.fromUuidSync;
+		globalThis.fromUuidSync = vi.fn(uuid => (uuid === "Actor.b" ? b : null));
+		try {
+			await reconcileTierEffects(givenCard(), 9, { actor: null });
+		} finally {
+			globalThis.fromUuidSync = was;
+		}
+		expect(b.typedActor.releaseHeldAdvantage).toHaveBeenCalledWith("s's Everything Burns");
 	});
 });
