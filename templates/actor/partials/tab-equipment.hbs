@@ -141,13 +141,13 @@
 		</div>
 
 		{{!-- Small items (right column) --}}
-		<div class="stonetop-inventory-small" data-small-allotment="{{stonetop.inventory.outfit.smallItemLimit}}">
+		<div class="stonetop-inventory-small" data-small-allotment="{{stonetop.inventory.outfit.smallPool.max}}">
 			{{> "stonetop.section-heading" title=(localize "stonetop.inventory.smallItems")
 			    collapse="invSmall"
 			    searchControl=true
 			    searchTitle=(localize "stonetop.inventory.searchSmallLabel")
 			    searchPlaceholder=(localize "stonetop.inventory.searchSmallPlaceholder")}}
-			{{#if stonetop.inventory.outfit.smallItemLimit}}
+			{{#if stonetop.inventory.outfit.prosperityKnown}}
 			<p class="stonetop-inv-section-note">{{{format "stonetop.inventory.smallItemsNoteWithLimit" limit=stonetop.inventory.outfit.smallItemLimit}}}</p>
 			{{else}}
 			<p class="stonetop-inv-section-note">{{{localize "stonetop.inventory.smallItemsNote"}}}</p>

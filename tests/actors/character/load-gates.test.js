@@ -63,6 +63,21 @@ describe("the Moves tab's tag", () => {
 		expect(cats[0].moves.map(m => m.loadGateNote ?? null)).toEqual(["needs a light load", null]);
 	});
 
+	// Uncanny Reflexes: "When you are unarmored and carrying a normal or light load". The tag read
+	// the load alone, so an armored Heavy saw no tag while the expedition readout struck it off.
+	it("tags a move that needs its owner unarmored while armor is worn", () => {
+		const uncanny = owned(UNCANNY, { requiresUnarmored: UNCANNY.system.requiresUnarmored });
+		expect(uncanny.requiresUnarmored).toBe(true);
+		expect(loadGateNote(uncanny, "normal", 0)).toBeNull();
+		expect(loadGateNote(uncanny, "normal", 2)).toBe("needs you unarmored");
+		expect(loadGateNote(uncanny, "heavy", 2)).toBe("needs a normal or light load and no armor");
+		expect(loadGateNote(uncanny, "heavy", 0)).toBe("needs a normal or light load");
+		const cats = [{ moves: [uncanny] }];
+		tagLoadGatedMoves(cats, "light", 2);
+		expect(cats[0].moves[0].loadGateNote).toBe("needs you unarmored");
+		expect(cats[0].moves[0].loadGateTooltip).toMatch(/armor/);
+	});
+
 	it("reads the load the sheet itself derives", async () => {
 		const FOX = { slug: "the-fox", name: "The Fox", startingMovesNote: "", backgrounds: [] };
 		const system = { moveType: "playbook", playbook: "The Fox", maxLoad: "light", description: FREE_RUN.system.description };

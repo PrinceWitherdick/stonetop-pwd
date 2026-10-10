@@ -10,6 +10,7 @@ import {
 } from "../../../module/actors/character/healers-arts.js";
 import { createStonetopCharacterSheetClass, GUIDED_CHARACTER_MOVES } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { buildLiveCharacter } from "../../fakes/LiveCharacter.js";
+import { supplyPursesFor } from "../../../module/actors/character/supply-cost.js";
 import { readRepo as read } from "../../fakes/css.js";
 
 const move = (name, learned = true) => ({ type: "move", name, flags: learned ? {} : { "stonetop-pwd": { learned: false } } });
@@ -347,6 +348,8 @@ describe("the Recover window", () => {
 				hp,
 				computedMaxHp: vi.fn(async () => max),
 				inventoryResourceData: vi.fn((slug, count) => ({ [`flags.stonetop-pwd.inventory.resources.${slug}`]: count })),
+				// What the patient can reach (StonetopCharacter#supplyPurses): every stored use, here.
+				supplyPurses: vi.fn(purpose => supplyPursesFor(flags["inventory.resources"], purpose)),
 				stabilizeOpenWoundsUpdate: vi.fn(() => ({ update: { "system.attributes.wounds": ["stabilized"] }, stabilized: [{ text: "Gashed arm" }] })),
 			},
 		};

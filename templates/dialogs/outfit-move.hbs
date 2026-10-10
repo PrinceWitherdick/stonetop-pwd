@@ -40,7 +40,7 @@
 			{{#if loadLevelNone}}<span class="stonetop-outfit-weight-none">{{{localize "stonetop.specialMoves.outfit.loadNone"}}}</span>{{/if}}
 		</span>
 		{{#unless loadLevelNone}}
-		<span class="stonetop-outfit-weight-count">{{totalMarks}} {{{localize "stonetop.specialMoves.outfit.totalWeight"}}}</span>
+		<span class="stonetop-outfit-weight-count">{{totalMarks}} {{{localize "stonetop.specialMoves.outfit.totalWeight"}}}{{#if loadLevelOverloaded}} <strong class="stonetop-outfit-overloaded">{{localize "stonetop.inventory.outfit.overloaded"}}</strong>{{/if}}</span>
 		{{/unless}}
 	</div>
 

@@ -40,7 +40,7 @@ function makeSheet(flags = {}) {
 	const actor = new FakeActorBuilder().withFlags(flags).build();
 	actor.id = "actor-1";
 	actor.isOwner = true;
-	actor.typedActor = { getSmallItemLimit: vi.fn(() => 5) };
+	actor.typedActor = { getUsesPerSupply: vi.fn(() => 5) };
 	const Base = class {
 		constructor() { this._actor = actor; }
 		get actor() { return this._actor; }
@@ -223,8 +223,7 @@ describe("_onHaveWhatTheyNeed — a follower produces a needed item", () => {
 
 describe("_onRestockCrewSupplies — one full diamond of supplies per member", () => {
 	// "By default, one ◇ of supplies contains 4 uses, but you add Stonetop's current
-	// Prosperity to that" (p.88). getSmallItemLimit answers 4+Prosperity for the small-item
-	// allotment (p.306) and stands in for it here because the arithmetic is the same.
+	// Prosperity to that" (p.88): getUsesPerSupply, 4+0 when Prosperity can't be read.
 	it("fills one set per member, to 4+Prosperity uses each", async () => {
 		const { sheet, actor } = makeSheet({ crew: { size: 4 } });
 		await sheet._onRestockCrewSupplies();

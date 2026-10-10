@@ -4,9 +4,15 @@ import { applyGearTermTooltips } from "../../../utils/gear-term-tooltips.js";
 import { wrapStonetopGlyphsInEl } from "../../../utils/glyphs.js";
 import { LOAD_LEVEL_LIMITS, deriveLoadLevel, loadBandLabels } from "../../../utils/load.js";
 
+/** The window's id, one per character (perDocumentOptions). */
+export const OUTFIT_ID_PREFIX = "stonetop-outfit-dialog";
+
 export class OutfitMoveDialog extends StonetopDialog {
 	constructor(character, outfitSnapshot, onDone, options = {}) {
-		super(options);
+		// One window PER CHARACTER: a GM outfitting two PCs at once used to get the second one's
+		// rows painted into the first one's frame (see StonetopDialog.perDocumentOptions), and the
+		// confirm then wrote to whichever character the frame was last filled for.
+		super(StonetopDialog.perDocumentOptions(OUTFIT_ID_PREFIX, character?._actor?.id, options));
 		this._character      = character;
 		// Journal treasures render under their own heading on the sheet, but for Outfit
 		// they're just carried gear: fold them back into the column they weigh against, so
@@ -34,7 +40,10 @@ export class OutfitMoveDialog extends StonetopDialog {
 		// slug is the key its mark lives under, which applyOutfit routes to the right store.
 		this._possessionRegular = outfitSnapshot.possessionRegular ?? [];
 		this._possessionSmall   = outfitSnapshot.possessionSmall ?? [];
-		this._smallItemLimit = outfitSnapshot.smallItemLimit ?? null;
+		// 4+Prosperity, or 4+0 when it can't be read (StonetopCharacter#getSmallItemLimit); the limit
+		// line is printed only when it was read.
+		this._smallItemLimit  = outfitSnapshot.smallItemLimit;
+		this._prosperityKnown = !!outfitSnapshot.prosperityKnown;
 		// A move's loadBonus raises each load cap (Pack Horse by one); the snapshot carries
 		// the limits in effect so the thresholds and the regular ◇ ceiling here match the
 		// sheet, plus the name of whatever granted the bonus for the note below the bar.
@@ -114,7 +123,9 @@ export class OutfitMoveDialog extends StonetopDialog {
 			loadLevelNone:     pools.loadLevel === null,
 			loadLevelLight:    pools.loadLevel === "light",
 			loadLevelNormal:   pools.loadLevel === "normal",
-			loadLevelHeavy:    pools.loadLevel === "heavy",
+			// Overloaded still lights the heavy band, as on the sheet, and says so beside the count.
+			loadLevelHeavy:    pools.loadLevel === "heavy" || pools.loadLevel === "overloaded",
+			loadLevelOverloaded: pools.loadLevel === "overloaded",
 			undefinedRegular:        pools.undefinedRegular,
 			canAddUndefinedRegular:  pools.undefinedRegular < pools.undefinedRegularMax,
 			canRemUndefinedRegular:  pools.undefinedRegular > 0,
@@ -123,7 +134,7 @@ export class OutfitMoveDialog extends StonetopDialog {
 			canRemUndefinedSmall:    pools.undefinedSmall > 0,
 			totalSmallMarks:   pools.totalSmallMarks,
 			smallItemLimit,
-			hasSmallItemLimit: smallItemLimit !== null,
+			hasSmallItemLimit: this._prosperityKnown,
 			loadBonus:         this._loadBonus,
 			loadBonusFrom:     this._loadBonusFrom,
 			// The two objects themselves, under the names the gear tab's own load lines read
@@ -145,7 +156,7 @@ export class OutfitMoveDialog extends StonetopDialog {
 		const undefinedRegular     = Math.min(this._undefinedRegular, undefinedRegularMax);
 
 		const checkedSmallCount = [...this._smallItems, ...this._possessionSmall].filter(i => this._checked[i.slug]).length;
-		const undefinedSmallMax = Math.max(0, (this._smallItemLimit ?? 9) - checkedSmallCount);
+		const undefinedSmallMax = Math.max(0, this._smallItemLimit - checkedSmallCount);
 		const undefinedSmall    = Math.min(this._undefinedSmall, undefinedSmallMax);
 
 		const totalMarks = checkedRegularWeight + undefinedRegular;
@@ -213,9 +224,10 @@ export class OutfitMoveDialog extends StonetopDialog {
 			.reduce((sum, i) => sum + (i.weight ?? 0), 0);
 	}
 
+	// "overloaded" is kept, not folded into heavy: the sheet calls 10 ◇ or more overloaded (Book I
+	// p.327, "If they want to carry 10 ◇ or more..."), and the window that sets the load has to say
+	// the same before the player confirms it. getData lights the heavy band for it too.
 	_loadLevelFor(weight) {
-		// The Outfit bar has only three tiers, so fold "overloaded" back into heavy.
-		const level = deriveLoadLevel(weight, this._loadLimits);
-		return level === "overloaded" ? "heavy" : level;
+		return deriveLoadLevel(weight, this._loadLimits);
 	}
 }

@@ -129,7 +129,7 @@ import { payableStockSources, mustAskStockSource, stockReceipt } from "./module/
 import { askStockSource } from "./module/actors/character/ask-stock-source.js";
 import { readProvisionsYield, rollProvisions, rollStock, withTrappingGear, TRAPPING_GEAR_SLUG } from "./module/actors/character/provisions.js";
 import { askWithButtons, confirmOutcome } from "./module/utils/ask-with-buttons.js";
-import { belongsToMessage, wirePickedOptionButton } from "./module/utils/picked-option-button.js";
+import { belongsToMessage, wirePickedOptionButton, claimPickedOption, settlePickedOption, releasePickedOption } from "./module/utils/picked-option-button.js";
 import { readOptionDamage } from "./module/utils/damage.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
@@ -2177,9 +2177,12 @@ function _chatWireRollCardPicks(message, html) {
  * gets the same die. The ◇ in the first option is what makes it claim a point of load; the
  * second tops up a pack that is already being carried.
  */
+// The card flag a Forage payout is latched under, by option index (picked-option-button.js).
+const PROVISIONS_FLAG = "provisionsRolled";
+
 function _chatWireProvisionsPicks(message, html) {
 	wirePickedOptionButton(message, html, {
-		flagKey:      "provisionsRolled",
+		flagKey:      PROVISIONS_FLAG,
 		wiredKey:     "provisionsWired",
 		buttonClass:  "stonetop-provisions-roll",
 		readoutClass: "stonetop-provisions-paid",
@@ -2188,16 +2191,21 @@ function _chatWireProvisionsPicks(message, html) {
 		// say so, rather than offering to "roll" a 6.
 		icon:    pick => (pick.isRoll ? "fas fa-dice-d6" : "fas fa-basket-shopping"),
 		label:   pick => (pick.isRoll ? ` Roll ${pick.formula} uses` : ` Take ${pick.formula} uses`),
-		readout: paid => _provisionsPaidEl(paid.uses, paid.stock),
+		readout: paid => _provisionsPaidEl(paid.uses, paid.stock, paid.pending),
 		onPress: (btn, index, pick) => _onRollProvisions(message, btn, index, pick),
 	});
 }
 
-/** The static readout a rolled option wears from then on: provisions, or Stock for a pouch. */
-function _provisionsPaidEl(uses, stock = false) {
+/**
+ * The static readout a rolled option wears from then on: provisions, or Stock for a pouch. While
+ * the payout is CLAIMED but not yet in (picked-option-button.js#claimPickedOption) it says so, so
+ * nobody else is offered the button meanwhile.
+ */
+function _provisionsPaidEl(uses, stock = false, pending = false) {
 	const el = document.createElement("span");
 	el.className = "stonetop-provisions-paid";
-	el.textContent = stock ? `+${uses} Stock` : `+${uses} ${uses === 1 ? "use" : "uses"}`;
+	el.textContent = pending ? "Being taken…"
+		: stock ? `+${uses} Stock` : `+${uses} ${uses === 1 ? "use" : "uses"}`;
 	return el;
 }
 
@@ -2233,6 +2241,10 @@ async function _forageIntoPouch(message, actor, pick) {
 
 async function _onRollProvisions(message, btn, index, pick) {
 	btn.disabled = true;
+	// Claimed on the card before anything is paid (picked-option-button.js, "CLAIM, PAY, SETTLE"),
+	// and released again if nothing ends up paid, so the button comes back for a retry.
+	let claimed = false;
+	let paid = false;
 	try {
 		const actor = speakerActor(message);
 		if (!actor?.isOwner || actor.type !== "character") {
@@ -2240,26 +2252,41 @@ async function _onRollProvisions(message, btn, index, pick) {
 			btn.disabled = false;
 			return;
 		}
+		// The payout is stamped on the card, which only the GM or whoever rolled it may write: a
+		// player taking food off a card the GM rolled for them used to be paid and never stamped,
+		// so the button came back and paid again.
+		if (!canRewriteCard(message, actor)) {
+			ui.notifications.warn("Only the GM or whoever rolled this card can take what it pays out.");
+			btn.disabled = false;
+			return;
+		}
+		claimed = await claimPickedOption(message, PROVISIONS_FLAG, index);
+		if (!claimed) {
+			btn.disabled = false;
+			return;
+		}
 
 		// A sacred pouch may take this haul as Stock instead. Closing the window pays nothing yet.
 		const intoPouch = await _forageIntoPouch(message, actor, pick);
 		if (intoPouch === undefined) {
+			await releasePickedOption(message, PROVISIONS_FLAG, index);
+			claimed = false;
 			btn.disabled = false;
 			return;
 		}
 		if (intoPouch) {
 			const { produced, held } = await rollStock(actor, { formula: pick.formula, pouchMax: intoPouch.pouchMax, speaker: message.speaker });
+			paid = true;
 			btn.replaceWith(_provisionsPaidEl(produced, true));
 			for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
 			ui.notifications.info(`${actor.name} produced ${produced} Stock (${held} in the pouch).`);
-			const rolled = { ...(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {}), [index]: { uses: produced, formula: pick.formula, stock: true } };
-			await message.setFlag(SYSTEM_ID, "provisionsRolled", rolled);
+			await settlePickedOption(message, PROVISIONS_FLAG, index, { uses: produced, formula: pick.formula, stock: true });
 			return;
 		}
 
 		// Trapping gear's "+1 use of provisions" is once per Forage: the first provisions payout on
 		// the card carries it, and the stamp below says which one did.
-		const paidBefore = Object.values(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {});
+		const paidBefore = Object.values(message.getFlag(SYSTEM_ID, PROVISIONS_FLAG) ?? {});
 		const trapping = _cardMoveName(message) === FORAGE
 			&& !paidBefore.some(p => p?.trapping)
 			&& !!(await actor.typedActor?.holdsPossession?.(TRAPPING_GEAR_SLUG));
@@ -2276,16 +2303,17 @@ async function _onRollProvisions(message, btn, index, pick) {
 			speaker:  message.speaker,
 			note:     trapping ? "+1 from trapping gear" : "",
 		});
+		paid = true;
 		btn.replaceWith(_provisionsPaidEl(uses));
 		for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
 		if (larder) ui.notifications.info(`${actor.name} gained ${uses} uses of provisions (${larder.held} in the pack).`);
 
-		// Stamped last: the larder is the thing that had to land, and a stamp written before it
-		// would lock out the retry if the write failed.
-		const rolled = { ...(message.getFlag(SYSTEM_ID, "provisionsRolled") ?? {}), [index]: { uses, formula, ...(trapping ? { trapping: true } : {}) } };
-		await message.setFlag(SYSTEM_ID, "provisionsRolled", rolled);
+		await settlePickedOption(message, PROVISIONS_FLAG, index, { uses, formula, ...(trapping ? { trapping: true } : {}) });
 	} catch (err) {
 		console.error("Stonetop | Error rolling provisions:", err);
+		// Nothing landed: give the claim back so the option can be pressed again. A payout that
+		// DID land keeps its claim, so it is never offered twice.
+		if (claimed && !paid) await releasePickedOption(message, PROVISIONS_FLAG, index).catch(() => {});
 		btn.disabled = false;
 	}
 }

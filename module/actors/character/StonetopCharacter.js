@@ -56,6 +56,8 @@ import {tagLoadGatedMoves} from "./load-gates.js";
 import {startOfPlayGear, START_GEAR_FLAG} from "./start-of-play-gear.js";
 import {RITES_OF_THE_LAND, SACRED_POUCH_SLUG, NO_POUCH_STOCK_NOTE, BLESSED_PLAYBOOK, isVessel, stockSourcesForFlags, stockCostFromDescription} from "./stock-cost.js";
 import {loseHpForStock} from "./provisions.js";
+import {SUPPLY_SLUGS, supplyPursesFor, spendablePurseResources as _spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack} from "./supply-cost.js";
+import {askWriteInSource, WRITE_IN_SOURCE} from "./write-in-source.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight, INVOKE_THE_SUN_GOD, holyLightAfterRoll, LUMINOUS_SHIELD} from "./holy-light.js";
 import {moveArmor, barkskinMarkedBy} from "./move-armor.js";
 import {invocationLabels} from "./ongoing-invocation.js";
@@ -102,7 +104,7 @@ import {FoundryRepositoryFactory} from "./repositories/FoundryRepositoryFactory.
 import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, splitNames, stripHtmlToText} from "../../utils/strings.js";
 import {splitFillBlank, fillBlank} from "../../utils/fill-blanks.js";
 import {localize as _loc, format} from "../../utils/i18n.js";
-import {getStonetopSteadingActor} from "../../utils/world.js";
+import {getStonetopSteadingActor, effectiveProsperity, FALLBACK_FOUR_PLUS_PROSPERITY} from "../../utils/world.js";
 import {readCurrentSeason} from "../../seasons/current-season.js";
 import {seasonLabel} from "../../seasons/seasons-change-reminders.js";
 import {moveChatCard, postMoveNote} from "../../utils/chat.js";
@@ -956,6 +958,18 @@ export class StonetopCharacter {
 	 *        Omitting it conceals, which is the safe way round for a caller that forgot.
 	 */
 	async buildSnapshot(view = {}) {
+		return (await this.snapshotWithGear(view)).snapshot;
+	}
+
+	/**
+	 * buildSnapshot, and the gear picture it was built from (`_gearSources`' `{ items, marks }`), from
+	 * ONE pass: for a caller that needs both (camp-store.js#campVitalsFor: the sheet's numbers and the
+	 * fur-lined bedroll), which otherwise built the gear twice.
+	 *
+	 * @param {object} [view]  as buildSnapshot
+	 * @returns {Promise<{snapshot: object, gear: {items: object[], marks: object}}>}
+	 */
+	async snapshotWithGear(view = {}) {
 		const actor = this._actor;
 		const actorLevel = actor.system?.attributes?.level?.value ?? 1;
 		const playbookData = await this.playbook();
@@ -983,9 +997,6 @@ export class StonetopCharacter {
 		const crewStats = _buildCrewStats(crewDef, moveBonuses);
 		const moves    = await this._buildMovesSection(playbookData, ownedAllByName, actorLevel, gear, this._markCapState(crewStats));
 		const inventory = await this._buildInventorySection(playbookData, ownedAllByName, actorLevel, view, arcanaCarried);
-		// A load-gated move the load on the sheet has switched off (Catlike's quiet, Free Running) wears
-		// a tag saying so on its card. Display only: see load-gates.js.
-		tagLoadGatedMoves(moves, inventory?.outfit?.load?.selected ?? null);
 		const postDeath = await this._postDeath.buildSnapshot();
 		const pdiLabel  = postDeath.activeInsert?.name ?? null;
 		// The worn-armor base (leather/mail/etc., excluding shields and move bonuses) gates
@@ -1009,10 +1020,14 @@ export class StonetopCharacter {
 		// read the derived armor as the size of the adjustment instead, and a typed 2 banked a
 		// delta that landed back on 0.
 		const { worn: wornArmorBase, base: armorBase, armor, unpierceable: unpierceableArmor, conditional: conditionalArmor, conditionalSource } = this._armorFrom(gear, moveBonuses);
+		// A load-gated move the load on the sheet has switched off (Catlike's quiet, Free Running) wears
+		// a tag saying so on its card, as does one that also needs its owner unarmored (Uncanny
+		// Reflexes) while they wear armor. Display only: see load-gates.js.
+		tagLoadGatedMoves(moves, inventory?.outfit?.load?.selected ?? null, wornArmorBase);
 		const arcanaLore = (playbookData?.lore ?? []).some(e => e.arcanaImage || (e.options ?? []).some(o => o.arcanaRole))
 			? await this._arcana.buildLoreDisplay()
 			: null;
-		return new CharacterSnapshotBuilder()
+		const snapshot = new CharacterSnapshotBuilder()
 			.withName(actor.name)
 			.withPlaybook(playbookData ? _buildPlaybookSection(playbookData, this._background, this._instinct, this._appearance, this._origin, this._lore, actor.name, arcanaLore, !!this._actor.getFlag(STONETOP_SCOPE, WBH_HERO_FLAG), actorLevel) : null)
 			.withDebilities(_buildDebilitiesSection(actor, this._moveResources))
@@ -1034,6 +1049,7 @@ export class StonetopCharacter {
 			.withCompanionDef(await this.companionSource(playbookData))
 			.withViewerIsGM(!!view.viewerIsGM)
 			.build();
+		return { snapshot, gear };
 	}
 
 	/**
@@ -1450,7 +1466,8 @@ export class StonetopCharacter {
 		const smallItemLimit = this.getSmallItemLimit(steadingActor);
 		const usesPerSupply  = this.getUsesPerSupply(steadingActor);
 		const steadingName   = steadingActor?.name ?? null;
-		const prosperity     = smallItemLimit !== null ? smallItemLimit - 4 : null;
+		// Null when it can't be read: the "x piercing" captions then keep the literal x.
+		const prosperity     = effectiveProsperity(steadingActor);
 		const commonSpecialSet = this._earnedCommonSpecialSlugs(steadingActor, allItems);
 		// Weapons of War: "Battleaxes and swords have 'x piercing'", resolved below with the rest.
 		const weaponsOfWar     = this.weaponsOfWarEarned(steadingActor);
@@ -1475,7 +1492,7 @@ export class StonetopCharacter {
 			// 4+Prosperity supplies rule (+1 with a Mill), then the number printed on the item.
 			const acquiredMax = Number(acquiredMaxes[outfitItem.slug]);
 			const resMax = Number.isFinite(acquiredMax) ? acquiredMax
-				: (isProsperityResource && usesPerSupply !== null) ? usesPerSupply
+				: isProsperityResource ? usesPerSupply
 				: res?.max;
 			// Armored reduces a carried shield's ◇ cost (min 1), so it reads ◆ instead of ◆◆.
 			const weight = _shieldAdjustedWeight(outfitItem.weight, outfitItem.shield, shieldLoadReduction);
@@ -1805,16 +1822,19 @@ export class StonetopCharacter {
 		const allRegularForLoad    = [...flatRegular, ...arcanaRegular, ...grantedRegularAll, ...choiceGearRegularAll, ...treasureRegular];
 		const checkedRegularWeight = allRegularForLoad
 			.filter(i => i.checked).reduce((sum, i) => sum + (i.weight ?? 0), 0);
-		// The undefined pool can hold whatever's left under the heavy cap; the stored
-		// count is clamped to that so the reserve never pushes the load past heavy.
+		// The undefined ◇ count as STORED, never clamped to the room left under heavy: Outfit and
+		// the pool track already keep a reservation under heavy (regularPoolMax is that room, the
+		// at-your-limit toast's cap), so the only way past it is weight gained in the field, loot
+		// and provisions, which draw nothing from the reserve. A clamp here used to swallow that
+		// weight into the reserve, so a character could never read as carrying 10 ◇ or more while
+		// any undefined ◇ was left (Book I p.327: "If they want to carry 10 ◇ or more...").
 		const regularPoolMax     = Math.max(0, loadLimits.heavy - checkedRegularWeight);
-		const regularPoolCurrent = Math.min(rPool, regularPoolMax);
 		// The ◇ track always shows the full load capacity, so the diamonds never vanish
-		// as you mark items: reserve that no longer fits under the cap simply renders as
-		// empty ◇ (clicking one warns you're at your limit — see regularPoolCap). Only a
-		// Pack Horse / loadBonus move raises the cap (to 10), so an overloaded carry still
-		// tops out at heavy rather than sprouting extra ◇.
+		// as you mark items. Only a Pack Horse / loadBonus move raises the cap (to 10), so an
+		// overloaded carry still tops out at heavy rather than sprouting extra ◇. The reserve is
+		// held to that track's size alone (a Pack Horse given up), never to the room left in it.
 		const regularPoolSlots   = loadLimits.heavy;
+		const regularPoolCurrent = Math.min(regularPoolSlots, Math.max(0, Math.trunc(Number(rPool) || 0)));
 		const totalRegularMarks  = checkedRegularWeight + regularPoolCurrent;
 		const derivedLoadLevel   = deriveLoadLevel(totalRegularMarks, loadLimits);
 
@@ -1831,11 +1851,16 @@ export class StonetopCharacter {
 		const addedSmall = addedSpecial.filter(i => i.inventoryColumn === "small");
 		const possessionSmall = possessionSpecial.filter(i => i.inventoryColumn === "small");
 		const commonSmall = commonSpecial.filter(i => i.inventoryColumn === "small");
+		// The small grid is the printed insert's own block of common small items. A SPECIAL small
+		// item (a lantern, salt, a handful of silvers) is listed with the rest of the column even
+		// when its catalog row is flagged smallGrid: it was dropped from the list by that flag and
+		// never put in the grid, which only holds the standard items, so one bought through Trade &
+		// Barter vanished from the sheet and the Outfit window alike.
 		const smallItems = [
 			...allSmall.filter(i => !i.smallGrid).map(mapItem),
-			...addedSmall.filter(i => !i.smallGrid).map(mapAddedSpecial),
-			...possessionSmall.filter(i => !i.smallGrid).map(mapItem),
-			...commonSmall.filter(i => !i.smallGrid).map(mapItem),
+			...addedSmall.map(mapAddedSpecial),
+			...possessionSmall.map(mapItem),
+			...commonSmall.map(mapItem),
 			...writeInItems.filter(i => i.system.inventoryColumn === "small").map(mapCustomItem),
 		];
 		const smallGridItems = allSmall.filter(i => i.smallGrid).map(mapItem);
@@ -1846,13 +1871,17 @@ export class StonetopCharacter {
 		// outside the list but still eat the allowance. Weightless arcana (arcanaSmall)
 		// deliberately do NOT: they merely sit in this column, and have never cost a
 		// player anything — counting them now would silently shrink the allowance for
-		// every card owned.
+		// every card owned. 4+0 when Prosperity can't be read ("+0 by default", p.88; getSmallItemLimit).
+		// The stored □ count is shown as it is, like the ◇ one: a small find picked up in the
+		// field takes nothing from the reserve.
+		const smallAllotment   = smallItemLimit;
 		const checkedSmallCount = [...smallItems, ...smallGridItems, ...grantedSmallAll, ...choiceGearSmallAll, ...treasureSmall].filter(i => i.checked).length;
-		const smallPoolMax     = Math.max(0, (smallItemLimit ?? 9) - checkedSmallCount);
-		const smallPoolCurrent = Math.min(sPool, smallPoolMax);
+		const smallPoolMax     = Math.max(0, smallAllotment - checkedSmallCount);
 		// Like the ◇ track, the □ track always shows the full 4+Prosperity allotment, so
-		// boxes never vanish as small items are marked.
-		const smallPoolSlots   = smallItemLimit ?? 9;
+		// boxes never vanish as small items are marked. The reserve is only held to the track's
+		// own size, which a fall in Prosperity can take below what was reserved.
+		const smallPoolSlots   = smallAllotment;
+		const smallPoolCurrent = Math.min(smallPoolSlots, Math.max(0, Math.trunc(Number(sPool) || 0)));
 
 		const outfit = new OutfitSnapshotBuilder()
 			.withLoad(load)
@@ -1871,6 +1900,8 @@ export class StonetopCharacter {
 			.withPossessionRegular(outfitPossessionRegular)
 			.withPossessionSmall(outfitPossessionSmall)
 			.withSmallItemLimit(smallItemLimit)
+			.withProsperity(prosperity)
+			.withUsesPerSupply(usesPerSupply)
 			.withSteadingName(steadingName)
 			.withLoadBonus(loadBonus)
 			.withLoadBonusMoves(loadBonusMoves)
@@ -2613,63 +2644,152 @@ export class StonetopCharacter {
 			.map(i => i.slug));
 	}
 
+	// 4+Prosperity, the Prosperity being the one gear works from (effectiveProsperity: 1 lower while
+	// the steading is Lacking). FALLBACK_FOUR_PLUS_PROSPERITY (4+0) when it can't be read, so every
+	// reader gets a number. The few that must know it was NOT read (the "x piercing" captions, which
+	// keep the literal x, and the notes that print the limit) ask effectiveProsperity themselves, or
+	// the snapshot's `prosperity` / `prosperityKnown`.
 	getSmallItemLimit(steading = this.getSteadingActor()) {
-		const rawProsperity = (steading ? resolvedFlagProperty(steading, "steading.system.attributes.prosperity.value") : null)
-			?? steading?.system?.attributes?.prosperity?.value;
-		if (rawProsperity == null) return null;
-		const prosperity = Number(rawProsperity);
-		return isNaN(prosperity) ? null : 4 + prosperity;
+		const prosperity = effectiveProsperity(steading);
+		return prosperity === null ? FALLBACK_FOUR_PLUS_PROSPERITY : 4 + prosperity;
 	}
 
 	/**
 	 * The uses in one ◆ of supplies: 4+Prosperity (Book I p.89), and 1 more once the steading has a
-	 * Mill. Null when Prosperity cannot be read, like getSmallItemLimit.
+	 * Mill. 4+0 when Prosperity cannot be read ("+0 by default", p.88), and a Mill still adds its 1.
 	 *
 	 * The Mill's text says "when you Outfit from Stonetop", and nothing records where an Outfit
 	 * happened, so an earned Mill always counts: the same reading Weapons of War gets.
 	 */
 	getUsesPerSupply(steading = this.getSteadingActor()) {
 		const limit = this.getSmallItemLimit(steading);
-		if (limit === null) return null;
+		if (!steading) return limit;
 		const steadingFlags = resolvedFlagProperty(steading, "steading") ?? {};
-		const mill = !!steadingFlags.improvements?.[_MILL_IMPROVEMENT]?.completed
+		const mill =!!steadingFlags.improvements?.[_MILL_IMPROVEMENT]?.completed
 			// A Resources row is `{name, checked}`: one left unticked is not a Mill the village has.
 			|| (steadingFlags.resources ?? []).some(r => String(r?.name ?? r) === _MILL_RESOURCE && r?.checked !== false);
 		return limit + (mill ? 1 : 0);
 	}
 
 	/**
-	 * Have What You Need (one-click): marking a specific item on the Inventory tab
-	 * draws marks from the undefined pool (its weight, or 1 for a small item). If
-	 * the pool can't cover it, the shortfall just adds to your load — that's loot
-	 * you picked up in the field (Book I p.87). We remember how much each mark drew
-	 * so un-marking returns exactly that (an item defined at Outfit drew nothing, so
-	 * un-marking just drops its weight) — toggling can never invent reserve marks.
-	 * The pool is also directly editable, so any state is reachable.
+	 * What this character can spend uses of supplies from (supply-cost.js#spendablePurseResources):
+	 * the printed supplies rows they are CARRYING (`inventory.checked`; provisions and sap count
+	 * marked or not), every purse capped at the size the sheet draws its
+	 * track at. A printed supplies row is 4+Prosperity (+1 with a Mill, getUsesPerSupply) and an
+	 * acquired track (provisions) is its `resourceMax`, the same order of precedence as the sheet's
+	 * own rows (_buildInventorySection's mapItem). `per` is the uses in one ◆ when the caller already
+	 * has it (the snapshot's OutfitSnapshot#usesPerSupply), so a render does not read the steading again.
+	 */
+	supplyPurseLimits(per = this.getUsesPerSupply()) {
+		const max = Object.fromEntries(SUPPLY_SLUGS.map(slug => [slug, per]));
+		for (const [slug, acquired] of Object.entries(this._inventory.resourceMax)) {
+			if (Number.isFinite(Number(acquired))) max[slug] = Number(acquired);
+		}
+		return { checked: this._inventory.checked, max };
+	}
+
+	/**
+	 * `inventory.resources` as a spend sees it (supplyPurseLimits); every non-purse track as stored.
+	 * `carriedOnly: false` keeps the cap but not the carrying test, for a write that pays a spend
+	 * already agreed: a row set down between the offer and the write must not be zeroed by it.
+	 * `per` is the uses in one ◆ when the caller already read it (supplyPurseLimits).
+	 */
+	spendablePurseResources({ carriedOnly = true, per = undefined } = {}) {
+		const { checked, max } = this.supplyPurseLimits(per);
+		return _spendablePurseResources(this._inventory.resources, { checked: carriedOnly ? checked : null, max });
+	}
+
+	/**
+	 * supply-cost.js#supplyPursesFor over what this character can actually reach. `usesPerSupply`
+	 * as supplyPurseLimits takes it, when the caller already has the snapshot's.
+	 */
+	supplyPurses(purpose, { usesPerSupply } = {}) {
+		return supplyPursesFor(this._inventory.resources, purpose, this.supplyPurseLimits(usesPerSupply));
+	}
+
+	/**
+	 * Mark or un-mark an item on the Inventory tab.
+	 *
+	 * Have What You Need (the default): marking an item draws marks from the undefined pool (its
+	 * weight, or 1 for a small item). If the pool can't cover it, the shortfall just adds to your
+	 * load. We remember how much each mark drew so un-marking returns exactly that (an item defined
+	 * at Outfit drew nothing, so un-marking just drops its weight), so toggling can never invent
+	 * reserve marks. The pool is also directly editable, so any state is reachable.
+	 *
+	 * `loot`: something picked up in the field (a dropped treasure, provisions) is weight on top of
+	 * what was Outfitted, not a mark that was there all along, so it draws NOTHING from the reserve
+	 * and the load grows by its weight, past heavy if need be (Book I p.327).
+	 *
+	 * A ◆ of supplies is its food, and the tick moves the ◆, not the food (supply-cost.js#
+	 * suppliesUsesOnMark, #suppliesGiveBack): a mark that DRAWS an undefined ◆ packs a fresh, full
+	 * one ("one ◆ of supplies contains 4 uses, but you add Stonetop's current Prosperity to that",
+	 * Book I p.88), any other mark picks the row up as it is, and un-marking a ◆ some of whose food
+	 * is gone hands back no undefined ◆. So un-ticking and re-ticking can never refill a row.
 	 *
 	 * @param {string}  slug
 	 * @param {boolean} isChecked  Whether the item is now carried.
 	 * @param {object}  opts
 	 * @param {boolean} [opts.small]   Small item (□, costs 1) vs regular item (◇, costs its weight).
 	 * @param {number}  [opts.weight]  Regular item weight (◇ to move).
+	 * @param {boolean} [opts.loot]    Gained in the field: draws nothing from the undefined pool.
+	 * @param {number}  [opts.uses]    The row's uses to write with the mark, when the caller packs it
+	 *   to a count of its own (Have What You Need at the fire, camp-store.js#haveWhatYouNeedAtCamp).
+	 * @param {string}  [opts.stonetopMove]  The move the ledger names for these writes, when a move made them.
+	 *
+	 * Every change (the mark, the uses, the draw record, the pool) goes out in ONE actor.update, each
+	 * as its own dotted sub-key so a second client's write to a sibling key is left standing. The
+	 * ledger still files a line per field, as it did when they were separate writes.
 	 */
-	async toggleCarriedItem(slug, isChecked, { small = false, weight = 1 } = {}) {
-		await this._inventory.setItemChecked(slug, isChecked);
-		const cost      = small ? 1 : Math.max(0, weight);
-		const pool      = small ? this._inventory.smallPool : this._inventory.regularPool;
-		const nextDrawn = { ...this._inventory.drawn };
+	async toggleCarriedItem(slug, isChecked, { small = false, weight = 1, loot = false, uses: setUses, stonetopMove } = {}) {
+		const writeOptions = stonetopMove ? { stonetopMove } : undefined;
+		const wasChecked = !!this._inventory.checked[slug];
+		const supplies   = SUPPLY_SLUGS.includes(slug);
+		const perSupply  = supplies ? this.getUsesPerSupply() : 0;
+		const uses       = supplies ? Number(this._inventory.resources[slug]) || 0 : 0;
+		const update = this._inventory.checkedData(slug, isChecked);
+		const cost  = small ? 1 : Math.max(0, weight);
+		const pool  = small ? this._inventory.smallPool : this._inventory.regularPool;
+		const drawn = Number(this._inventory.drawn[slug]) || 0;
 		let next;
+		let nextDrawn;
 		if (isChecked) {
-			const spent = Math.min(cost, pool);
-			next = pool - spent;
-			if (spent > 0) nextDrawn[slug] = spent; else delete nextDrawn[slug];
+			nextDrawn = loot ? 0 : Math.min(cost, pool);
+			next = pool - nextDrawn;
 		} else {
-			next = pool + (nextDrawn[slug] ?? 0);
-			delete nextDrawn[slug];
+			next = pool + (supplies ? suppliesGiveBack({ drawn, uses, perSupply }) : drawn);
+			nextDrawn = 0;
 		}
-		await this._inventory.setDrawn(nextDrawn);
-		if (small) await this._inventory.setSmallPool(next);
-		else       await this._inventory.setRegularPool(next);
+		if (setUses !== undefined) {
+			Object.assign(update, this._inventory.resourceData(slug, setUses));
+		} else if (supplies && isChecked && !wasChecked) {
+			const packed = suppliesUsesOnMark({ drew: nextDrawn, uses, perSupply });
+			if (packed !== uses) Object.assign(update, this._inventory.resourceData(slug, packed));
+		}
+		Object.assign(update, this._inventory.drawnData(slug, nextDrawn), this._inventory.poolData(next, { small }));
+		await this._actor.update(update, writeOptions);
+	}
+
+	/**
+	 * Mark a WRITTEN-IN item (or a treasure: one kept from an earlier trip is a possession the PC
+	 * can "Have What You Need ... to mark ... once you're in the field", Book I p.89) as carried,
+	 * asking where it came from (write-in-source.js): had all
+	 * along (Have What You Need, which moves an undefined mark onto it) or found out here (new
+	 * weight, which draws nothing). Asked only while the matching undefined pool has a mark the
+	 * first answer could use; with none left it can only be new, and is marked as such unasked.
+	 *
+	 * Resolves to the answer (WRITE_IN_SOURCE), or null when the window was closed, in which case
+	 * nothing is written and the item stays unmarked. Un-marking goes through toggleCarriedItem as
+	 * ever, handing back exactly what the draw record says.
+	 */
+	async markWriteInCarried(slug, { name = "", small = false, weight = 1, stonetopMove } = {}) {
+		const pool = small ? this._inventory.smallPool : this._inventory.regularPool;
+		const cost = small ? 1 : Math.max(0, Number(weight) || 0);
+		const answer = pool > 0 && cost > 0
+			? await askWriteInSource({ name, small, weight: cost, pool })
+			: WRITE_IN_SOURCE.FOUND;
+		if (!answer) return null;
+		await this.toggleCarriedItem(slug, true, { small, weight, loot: answer === WRITE_IN_SOURCE.FOUND, stonetopMove });
+		return answer;
 	}
 
 	// Outfit batch-marks the inventory: it writes the checked items and the two
@@ -2682,30 +2802,61 @@ export class StonetopCharacter {
 	// own, possessions.choiceCarried, so its `poss:choice` keys are sent there and every other key
 	// to inventory.checked. The split is by the colon: a gear-choice key has one and no outfit
 	// slug or item id ever does (see _gearSources). Unmarked rows are written as `false`, which is
-	// what clears them: both stores merge, so a key left out would keep its old mark.
+	// what clears them: both stores merge, so a key left out would keep its old mark. The draw
+	// records go by an unset for the same reason: an empty map written over them changed nothing.
+	//
+	// Outfit packs the food: every supplies row it leaves marked is full, whether or not it was
+	// marked before (a second Outfit restocks a row eaten down on the last trip, Book I p.77, p.88),
+	// and a row it leaves unmarked holds nothing, food left at home (_suppliesEmptied).
 	async applyOutfit(checkedMap, regularPool = 0, smallPool = 0) {
 		const itemMarks   = {};
 		const choiceMarks = {};
 		for (const [key, value] of Object.entries(checkedMap ?? {})) {
 			(key.includes(":") ? choiceMarks : itemMarks)[key] = !!value;
 		}
-		await Promise.all([
-			this._inventory.setAllChecked(itemMarks),
-			this._possessions.setChoicesCarried(choiceMarks),
-			this._inventory.setRegularPool(regularPool),
-			this._inventory.setSmallPool(smallPool),
-			this._inventory.setDrawn({}),
-		]);
+		const packed = SUPPLY_SLUGS.filter(slug => itemMarks[slug]);
+		const usesPerSupply = packed.length ? this.getUsesPerSupply() : 0;
+		const resources = this._inventory.resources;
+		const packing = [
+			...packed.filter(slug => Number(resources[slug]) !== usesPerSupply).map(slug => [slug, usesPerSupply]),
+			...this._suppliesEmptied(SUPPLY_SLUGS.filter(slug => slug in itemMarks && !itemMarks[slug])),
+		];
+		// ONE update for the lot, every mark and track its own dotted sub-key (see toggleCarriedItem).
+		await this._actor.update(Object.assign(
+			this._inventory.allCheckedData(itemMarks),
+			this._possessions.choicesCarriedData(choiceMarks),
+			this._inventory.poolData(regularPool),
+			this._inventory.poolData(smallPool, { small: true }),
+			this._inventory.clearDrawnData(),
+			...packing.map(([slug, count]) => this._inventory.resourceData(slug, count)),
+		));
 		// All in the Wrist: "Reset your ammo whenever you Outfit." The blades' track is the move's own
 		// (data/weapons.js), counting boxes marked, so a reset is a zero. Written only when something is
-		// marked, so an Outfit by anyone else costs no extra update.
+		// marked, so an Outfit by anyone else costs no extra update. A write of its own, not folded into
+		// the one above: it carries the move's name for the ledger, and an update names one move for
+		// every line it files.
 		if ((Number(this._moveResources.getMoveResources()?.[ALL_IN_THE_WRIST]) || 0) > 0) {
 			await this._moveResources.setUses(ALL_IN_THE_WRIST, 0, { stonetopMove: ALL_IN_THE_WRIST });
 		}
 	}
 
+	// "Clear all item marks", wherever a mark lives: the chosen gear of a special possession (Weapons
+	// of War, the Judge's shield) keeps its own in possessions.choiceCarried, and left there it went
+	// on counting toward load and armor after the Reset. The supplies rows set down go empty with
+	// them ("When you return home, clear the marks from your Inventory insert", Book I p.89): food in
+	// the larder is not tracked, and the next trip's ◆ of supplies is packed fresh.
 	async resetInventorySelections() {
-		await this._inventory.resetSelections();
+		await this._actor.update(Object.assign(
+			this._inventory.resetSelectionsData(),
+			this._possessions.clearCarriedData(),
+			...this._suppliesEmptied(SUPPLY_SLUGS).map(([slug, count]) => this._inventory.resourceData(slug, count)),
+		));
+	}
+
+	/** `[slug, 0]` for each of these supplies rows that still holds a use, so emptying writes only what changes. */
+	_suppliesEmptied(slugs) {
+		const resources = this._inventory.resources;
+		return slugs.filter(slug => (Number(resources[slug]) || 0) > 0).map(slug => [slug, 0]);
 	}
 
 	async addCustomInventoryItem(name, weight) {
@@ -6246,7 +6397,9 @@ export class StonetopCharacter {
 	async getArcanum(slug)                           { return this._arcana.getArcanum(slug); }
 	async getArcanumMove(slug, moveSlug)             { return this._arcana.getArcanumMove(slug, moveSlug); }
 	async addArcanum(slug)                           { await this._arcana.addArcanum(slug); }
-	async removeArcanum(slug)                        { await this._arcana.removeArcanum(slug); await this._inventory.clearArcanumResources(slug); }
+	// Its tracks AND its carried mark go with it, so a card that comes back (given back, re-found)
+	// arrives set down and charged afresh, not already counting toward load.
+	async removeArcanum(slug)                        { await this._arcana.removeArcanum(slug); await this._inventory.clearArcanumResources(slug); await this._inventory.clearCarried(slug); }
 	async identifyArcanum(slug, options)             { await this._arcana.identifyArcanum(slug, options); }
 	async identifyAndRevealArcanum(slug, options)    { await this._arcana.identifyAndRevealArcanum(slug, options); }
 	async identifyFrontOwedArcanum(slug, options)    { await this._arcana.identifyFrontOwedArcanum(slug, options); }

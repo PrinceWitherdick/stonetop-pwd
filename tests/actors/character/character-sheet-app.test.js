@@ -5,6 +5,7 @@ import { createStonetopCharacterSheetClass, woundEditPatch } from "../../../modu
 import { WoundDialog } from "../../../module/actors/character/dialogs/WoundDialog.js";
 import {FakeActorBuilder} from "../../fakes/FakeActorBuilder.js";
 import { DEATHS_DOOR_STATE, zeroHpMove, zeroHpResolution } from "../../../module/actors/character/deaths-door.js";
+import { supplyPursesFor } from "../../../module/actors/character/supply-cost.js";
 
 // The people picker Castigate asks "who did you Censure?" with. Replaced so a test can answer it (or
 // back out) without a window; the rest of the module is the real one.
@@ -178,6 +179,9 @@ function makeCharacterMock(actor) {
 		buildSnapshot: vi.fn(async () => ({})),
 		setInventoryResource: vi.fn(),
 		inventoryResourceData: vi.fn((slug, count) => ({ [`flags.stonetop-pwd.inventory.resources.${slug}`]: count })),
+		// The real one reaches only the purses being carried, each capped at its size
+		// (StonetopCharacter#supplyPurses, tested on the model). Here every stored use is in reach.
+		supplyPurses: vi.fn(purpose => supplyPursesFor(actor.getFlag("stonetop-pwd", "inventory.resources") ?? {}, purpose)),
 		// The live hit points and the COMPUTED max, as Recover and Convalesce read them at the press.
 		get hp() { return Number(actor.system?.attributes?.hp?.value) || 0; },
 		computedMaxHp: vi.fn(async () => Number(actor.system?.attributes?.hp?.max) || 0),
@@ -192,8 +196,10 @@ function makeCharacterMock(actor) {
 	};
 }
 
+// 4+Prosperity on the OUTFIT, where buildSnapshot puts it (InventorySnapshot is { outfit, ... }).
+// This mock used to carry it on the inventory itself, which pinned the sheet's wrong read in place.
 function recoverSnapshot({ hpValue = 4, hpMax = 8, smallItemLimit = 5 } = {}) {
-	return { vitals: { hp: { value: hpValue, max: hpMax } }, inventory: { smallItemLimit } };
+	return { vitals: { hp: { value: hpValue, max: hpMax } }, inventory: { outfit: { smallItemLimit } } };
 }
 
 function makeActor() {
@@ -227,7 +233,7 @@ function minimalSheetSnapshot(movelist) {
 		playbook: null,
 		movelist,
 		vitals: { armor: 0, xp: { value: 0, max: 8 }, hp: { value: 8, max: 8 }, damage: "d4" },
-		inventory: { smallItemLimit: null },
+		inventory: { outfit: { smallItemLimit: 4 } },
 		postDeathInsert: null,
 		crewBonuses: null,
 		companionBonuses: null,
@@ -1392,6 +1398,28 @@ describe("StonetopCharacterSheet._buildRecoverData", () => {
 		const data = sheet._buildRecoverData(recoverSnapshot({ hpValue: 8, hpMax: 8 }));
 		expect(data.canRecover).toBe(false);
 		expect(data.hint.icon).toBe("fa-heart");
+	});
+
+	// Book I p.328: "regain HP equal to 4+Prosperity". The sheet read 4+Prosperity off the inventory,
+	// which never carries it, so every Recover healed the fallback 4 whatever the steading's Prosperity.
+	// 4+0 when Prosperity can't be read is the snapshot's own answer (StonetopCharacter#getSmallItemLimit).
+	it("heals 4+Prosperity as the snapshot's outfit has it", () => {
+		const actor = new FakeActorBuilder().withFlag("inventory.resources", { supplies: 3 }).build();
+		actor.typedActor = makeCharacterMock(actor);
+		const sheet = makeSheet(actor);
+		expect(sheet._buildRecoverData(recoverSnapshot({ hpValue: 2, hpMax: 20, smallItemLimit: 6 })).healAmount).toBe(6);
+		expect(sheet._buildRecoverData(recoverSnapshot({ hpValue: 2, hpMax: 20, smallItemLimit: 3 })).healAmount).toBe(3);
+		expect(sheet._buildRecoverData(recoverSnapshot({ hpValue: 2, hpMax: 20, smallItemLimit: 4 })).healAmount).toBe(4);
+	});
+
+	// Only MARKED supplies can be spent: the card asks the character what it can reach, not the flag.
+	it("counts only the supplies the character is carrying", () => {
+		const actor = new FakeActorBuilder().withFlag("inventory.resources", { supplies: 3 }).build();
+		actor.typedActor = makeCharacterMock(actor);
+		actor.typedActor.supplyPurses = vi.fn(purpose => supplyPursesFor({ supplies: 3 }, purpose, { checked: {} }));
+		const data = makeSheet(actor)._buildRecoverData(recoverSnapshot({ hpValue: 4 }));
+		expect(data.suppliesLeft).toBe(0);
+		expect(data.canRecover).toBe(false);
 	});
 });
 

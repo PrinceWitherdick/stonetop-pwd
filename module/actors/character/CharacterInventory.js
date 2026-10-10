@@ -20,8 +20,17 @@ export class CharacterInventory {
 	// Outfit have no entry, so un-marking them just drops their weight from the load.
 	get drawn()        { return this._flags.getFlag("drawn") ?? {}; }
 
-	async setItemChecked(slug, isChecked) {
-		await this._flags.setFlag("checked", { ...this.checked, [slug]: isChecked });
+	// One slug's mark, written as its own sub-key like setResource: re-sending the whole map from
+	// this client's copy would write back a stale mark for every OTHER slug a second client (or a
+	// second click landing first) had just changed.
+	async setItemChecked(slug, isChecked, options) {
+		await this._flags.setSubKey("checked", slug, isChecked, options);
+	}
+
+	// That write as a fragment, for an action that lands it with other changes in ONE actor.update
+	// (StonetopCharacter#toggleCarriedItem: the mark, the draw record and the pool together).
+	checkedData(slug, isChecked) {
+		return this._flags.subKeyData("checked", slug, isChecked);
 	}
 
 	async setResource(slug, count, options) {
@@ -53,20 +62,53 @@ export class CharacterInventory {
 		}
 	}
 
-	async setRegularPool(count) {
-		await this._flags.setFlag("regularPool", count);
+	async setRegularPool(count, options) {
+		await this._flags.setFlag("regularPool", count, options);
 	}
 
-	async setSmallPool(count) {
-		await this._flags.setFlag("smallPool", count);
+	async setSmallPool(count, options) {
+		await this._flags.setFlag("smallPool", count, options);
 	}
 
-	async setDrawn(drawnMap) {
-		await this._flags.setFlag("drawn", drawnMap);
+	// The undefined ◇ (or, `small`, □) reserve's write as a fragment, for one-update actions.
+	poolData(count, { small = false } = {}) {
+		return this._flags.updateData(small ? "smallPool" : "regularPool", count);
 	}
 
-	async setAllChecked(checkedMap) {
-		await this._flags.setFlag("checked", { ...this.checked, ...checkedMap });
+	// Record how much one item's Have-What-You-Need mark drew, or forget it at 0, as a fragment.
+	// Forgetting is a deletion of that slug, never a smaller map: setFlag MERGES, so a map written
+	// without the slug left its old count standing, and un-marking the item later handed that count
+	// back to the reserve as undefined ◇ nobody had. Empty when there is nothing to forget.
+	drawnData(slug, count) {
+		if (count > 0) return this._flags.subKeyData("drawn", slug, count);
+		return slug in this.drawn ? this._flags.subKeyDeletionData("drawn", slug) : {};
+	}
+
+	// Forget every draw record (Outfit redefines the whole loadout), as a fragment. An unset, for
+	// the reason above.
+	clearDrawnData() {
+		return this._flags.deletionData("drawn");
+	}
+
+	// Every slug's mark as its own sub-key, so a key this call doesn't name keeps whatever is stored
+	// for it now rather than this client's older copy (see setItemChecked). `allCheckedData` is the
+	// fragment, for a caller that lands it with other changes.
+	async setAllChecked(checkedMap, options) {
+		await this._flags.applyUpdateData(this.allCheckedData(checkedMap), options);
+	}
+
+	allCheckedData(checkedMap) {
+		const data = {};
+		for (const [slug, value] of Object.entries(checkedMap ?? {})) {
+			Object.assign(data, this._flags.subKeyData("checked", slug, value));
+		}
+		return data;
+	}
+
+	// Drop one slug's carried mark outright (a removed arcanum), so a re-acquired one comes back
+	// set down rather than already counting toward load.
+	async clearCarried(slug) {
+		if (slug in this.checked) await this._flags.batch({ deletes: { checked: [slug] } });
 	}
 
 	async addSpecial(slug) {
@@ -111,14 +153,16 @@ export class CharacterInventory {
 
 	// Clears item marks, both undefined ◇/□ reserves (which is what drives the
 	// derived load), and the per-item draw records. Item uses (resources) and
-	// added-special items are left alone.
-	async resetSelections() {
-		await Promise.all([
-			this._flags.unsetFlag("checked"),
-			this._flags.unsetFlag("regularPool"),
-			this._flags.unsetFlag("smallPool"),
-			this._flags.unsetFlag("drawn"),
-		]);
+	// added-special items are left alone. A special possession's chosen gear keeps its marks in
+	// another store (possessions.choiceCarried); StonetopCharacter#resetInventorySelections clears it,
+	// in the same update as this fragment.
+	resetSelectionsData() {
+		return {
+			...this._flags.deletionData("checked"),
+			...this._flags.deletionData("regularPool"),
+			...this._flags.deletionData("smallPool"),
+			...this._flags.deletionData("drawn"),
+		};
 	}
 
 	// `base` defaults to the worn-armor base of `allItems` (pass it in — the sheet snapshot

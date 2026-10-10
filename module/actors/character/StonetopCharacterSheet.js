@@ -77,7 +77,7 @@ import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
 import {statApproaches} from "../../utils/stat-approaches.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
 import {canPayStock, defaultStockSource, payableStockSources, mustAskStockSource, stockSourceChoiceLabel, stockReceipt, vesselHpFormula, stockCostFromDescription, RITES_OF_THE_LAND} from "./stock-cost.js";
-import {supplyPursesFor, defaultSupplyPurse, SUPPLY_PURPOSE} from "./supply-cost.js";
+import {defaultSupplyPurse, SUPPLY_PURPOSE} from "./supply-cost.js";
 import {openMakeCamp} from "../../camp/camp-flow.js";
 import {openStruggleAsOne} from "../../struggle/struggle-flow.js";
 import {beginAid} from "../../pc-asks/pc-ask-flow.js";
@@ -495,6 +495,17 @@ const BATTLE_JOY_GLYPH = {
 function _toggleGlyphKeys(keys, on, editable) {
 	const state = on ? "on" : "off";
 	return { labelKey: keys.label[state], tooltipKey: (editable ? keys.tooltip : keys.readOnly)[state] };
+}
+
+/**
+ * Recover's "regain HP equal to 4+Prosperity" (Book I p.328), off the snapshot's OUTFIT, where
+ * buildSnapshot puts 4+Prosperity (InventorySnapshot is { outfit, possessions, ... }). It used to be
+ * read off the inventory itself, which never has it, so every Recover healed the fallback 4. 4+0
+ * when Prosperity can't be read ("+0 by default", p.88), which the snapshot already answers
+ * (StonetopCharacter#getSmallItemLimit).
+ */
+function _recoverHealBase(snapshot) {
+	return snapshot.inventory.outfit.smallItemLimit;
 }
 
 /**
@@ -1697,7 +1708,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				? `Armor ${armorAdjust > 0 ? "+" : "−"}${Math.abs(armorAdjust)} by hand (your gear and moves give ${armorDerived}). Type a new total to change it, or ${armorDerived} to clear it.`
 				: (context.stonetop.editMode ? "Type a new total to set it by hand. The difference is kept as your gear changes." : "");
 			// Followers tab — build data from flags + playbook definition.
-			// Pass smallItemLimit from the already-computed snapshot so crew gear
+			// Pass the Prosperity from the already-computed snapshot so crew gear
 			// uses the exact same prosperity value as outfit inventory items.
 			const playbookDoc = await this._stonetopCharacter.playbook();
 			// Moves that grant a possession sub-choice (Big Magic → sacred-pouch trait):
@@ -1748,7 +1759,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			// And the Animal Companion insert the companion card is drawn from: the Ranger's own, or the
 			// one a learned Animal Companion borrows (StonetopCharacter#companionSource).
 			const companionDef            = context.stonetop.companionDef ?? null;
-			context.stonetop.followers    = this._buildFollowersData(playbookDoc, context.stonetop.inventory?.smallItemLimit ?? null, crewStats, companionBonuses, crewDef, companionDef);
+			// 4+Prosperity lives on the snapshot's OUTFIT (InventorySnapshot is { outfit, possessions, ... }).
+			context.stonetop.followers    = this._buildFollowersData(playbookDoc, context.stonetop.inventory?.outfit?.prosperity ?? null, crewStats, companionBonuses, crewDef, companionDef);
 			context.stonetop.hasFollowers = !!(
 				context.stonetop.followers.animalCompanion ||
 				context.stonetop.followers.crew ||
@@ -2147,12 +2159,15 @@ export function createStonetopCharacterSheetClass(Base) {
 		// damage again (cleared by the preUpdateActor hook in stonetop.js).
 		_buildRecoverData(snapshot) {
 			const locked      = !!this.actor.getFlag(STONETOP_SCOPE, "recover.spent");
-			const resources   = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
 			// Only what may actually pay for a Recover is counted: a pack full of provisions is
 			// not an answer to "can you Recover?" (supply-cost.js, Book I p.89), and counting it
-			// here would light the button and then have the dialog refuse it.
-			const suppliesLeft = supplyPursesFor(resources, SUPPLY_PURPOSE.RECOVER).total;
-			const healAmount  = snapshot.inventory?.smallItemLimit ?? 4;
+			// here would light the button and then have the dialog refuse it. Nor is a supplies
+			// row nobody marked, or uses past the row's current size (StonetopCharacter#supplyPurses).
+			// The size is the snapshot's own uses per ◆, so a render does not read the steading again.
+			const suppliesLeft = this._stonetopCharacter.supplyPurses(SUPPLY_PURPOSE.RECOVER, {
+				usesPerSupply: snapshot.inventory?.outfit?.usesPerSupply,
+			}).total;
+			const healAmount  = _recoverHealBase(snapshot);
 			const hp          = snapshot.vitals.hp;
 			const atFullHp    = hp.value >= hp.max;
 			// A Ghost or a Revenant: "You gain no benefit from ... Recover." First, because nothing
@@ -2304,7 +2319,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		// (StonetopCharacter#companionSource), the same way: null draws no card. The card also asks
 		// that Animal Companion is held (the panel rule), so a companion whose move has gone keeps its
 		// flags for the move's return.
-		_buildFollowersData(playbookDoc, smallItemLimit = null, crewStats = { memberHp: 6, armor: 0, damageDie: "d6", rollMod: 1 }, companionBonuses = { hp: 0, armor: 0, traitPicks: 0 }, crewDef = playbookDoc?.crew ?? null, companionDef = playbookDoc?.animalCompanion ?? null) {
+		// `prosperity` is the snapshot's (OutfitSnapshot#prosperity), null when it can't be read, which
+		// leaves the crew gear's "x piercing" literal.
+		_buildFollowersData(playbookDoc, prosperity = null, crewStats = { memberHp: 6, armor: 0, damageDie: "d6", rollMod: 1 }, companionBonuses = { hp: 0, armor: 0, traitPicks: 0 }, crewDef = playbookDoc?.crew ?? null, companionDef = playbookDoc?.animalCompanion ?? null) {
 			const sf = resolvedFlags(this.actor);
 			// Which collapsible crew sections are expanded. Seeded from the persisted
 			// per-actor setting in the constructor (so it survives a sheet reopen);
@@ -2570,12 +2587,11 @@ export function createStonetopCharacterSheetClass(Base) {
 				const crewArmor       = crewArmorOverride ?? crewGearArmor(inventoryDef, gearFlags, crewStats.armor ?? 0);
 				// Supplies: one set per crew member, each set being one ◇ of supplies. A ◇ holds
 				// "4 uses, but you add Stonetop's current Prosperity to that" (p.88) — the same
-				// arithmetic the small-item allotment uses (p.306), which is why smallItemLimit can
-				// stand in for it. Two separate rules that happen to agree, so keep both citations:
-				// errata to either one stops them agreeing. The steading's Mill is where they already
-				// part: it adds 1 use to each ◇ of supplies, and nothing to the small items.
-				const pipsPerSet      = this._stonetopCharacter?.getUsesPerSupply?.() ?? smallItemLimit ?? 5;
-				const prosperity      = smallItemLimit !== null ? smallItemLimit - 4 : null;
+				// arithmetic the small-item allotment uses (p.306). Two separate rules that happen to
+				// agree, so keep both citations: errata to either one stops them agreeing. The
+				// steading's Mill is where they already part: it adds 1 use to each ◇ of supplies, and
+				// nothing to the small items (StonetopCharacter#getUsesPerSupply, 4+0 unread).
+				const pipsPerSet      = this._stonetopCharacter.getUsesPerSupply();
 				const suppliesRaw     = sf.crew?.supplies;
 				// A short (or absent) stored array just reads as unfilled sets — every lookup below
 				// defaults to 0 — so it never needs padding out to the roster's length here.
@@ -7868,18 +7884,41 @@ export function createStonetopCharacterSheetClass(Base) {
 			// outside that column but must still draw from the small pool).
 			const smallColumn = el.closest(".stonetop-inventory-small");
 			const small = el.dataset.small === "true" || !!smallColumn;
+			// A written-in item or a treasure could have been there all along (Have What You Need: a
+			// treasure kept from an earlier trip is a possession now, Book I p.89) or be something new,
+			// so marking one asks which (StonetopCharacter#markWriteInCarried). A closed window marks
+			// nothing, so the boxes go back to unmarked.
+			if (el.checked && el.dataset.writeIn === "true") {
+				const answer = await this._stonetopCharacter.markWriteInCarried(el.dataset.slug, {
+					name:   el.dataset.name ?? "",
+					small,
+					weight: Number(el.dataset.weight ?? 1),
+				});
+				// A mark is one actor update, which re-renders the sheet itself; a closed window wrote
+				// nothing, so only that case draws again here.
+				if (answer === null) {
+					if (group) for (const box of group.querySelectorAll(".stonetop-inv-diamond")) box.checked = false;
+					el.checked = false;
+					el.closest(".stonetop-inv-item")?.classList.remove("is-checked");
+					this.render(false);
+				}
+				return;
+			}
 			if (small && el.checked && smallColumn) this._warnIfOverSmallAllotment(smallColumn);
+			// One actor update (StonetopCharacter#toggleCarriedItem), whose re-render redraws the load.
 			await this._stonetopCharacter.toggleCarriedItem(el.dataset.slug, el.checked, {
 				small,
 				weight: Number(el.dataset.weight ?? 1),
+				// The provisions a Forage brought in are weight gained in the field, not something had
+				// all along: they draw nothing from the undefined pool (inv-item-*.hbs).
+				loot:   el.dataset.loot === "true",
 			});
-			this.render(false);
 		}
 
 		// Small items don't count toward load and have no hard limit (Book I p.84/326),
 		// so marking past the 4+Prosperity Outfit allotment is allowed — but flag it, so
-		// the player remembers to expend supplies or square it with the GM. Only warns
-		// when a steading is linked (otherwise Prosperity, and the allotment, is unknown).
+		// the player remembers to expend supplies or square it with the GM. The allotment is the
+		// □ track's own size, 4+Prosperity, or 4+0 when Prosperity can't be read.
 		_warnIfOverSmallAllotment(smallColumn) {
 			const raw = smallColumn.dataset.smallAllotment;
 			if (raw == null || raw === "") return;
@@ -8015,8 +8054,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				no:      { label: game.i18n.localize("stonetop.inventory.resetNo") },
 			});
 			if (!ok) return;
+			// One actor update, which re-renders the sheet.
 			await this._stonetopCharacter.resetInventorySelections();
-			this.render(false);
 		}
 
 		async _onInventoryPoolEdit(ev) {
@@ -10879,7 +10918,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Uses per ◇ is "4 + Prosperity" (p.88), +1 with a Mill — a synchronous read; no need to
 			// build the whole sheet snapshot just to pull one scalar off it. Same value, same reasoning
 			// as the pipsPerSet the grid is drawn with.
-			const pipsPerSet = this._stonetopCharacter.getUsesPerSupply?.() ?? this._stonetopCharacter.getSmallItemLimit() ?? 5;
+			const pipsPerSet = this._stonetopCharacter.getUsesPerSupply();
 			const size       = this._crewRosterSize();
 			await this.actor.setFlag(STONETOP_SCOPE, "crew.supplies", Array(size).fill(pipsPerSet));
 			const who = size === 1 ? "its one member" : `all ${size} members`;
@@ -11152,12 +11191,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (this.actor.getFlag(STONETOP_SCOPE, "recover.spent")) return;
 			if (hp.value >= hp.max) return;
 
-			const resources = this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {};
-			const purses    = supplyPursesFor(resources, SUPPLY_PURPOSE.RECOVER);
+			const purses    = this._stonetopCharacter.supplyPurses(SUPPLY_PURPOSE.RECOVER);
 			const fallback  = defaultSupplyPurse(purses);
 			if (!fallback) return;
 
-			const healAmount = snapshot.inventory?.smallItemLimit ?? 4;
+			const healAmount = _recoverHealBase(snapshot);
 			// Torment's Blessing halves whatever the Recover would heal; the breakdown says so.
 			const slow       = slowToHeal(this.actor);
 			const plain      = recoverHeal({ base: healAmount, hp: hp.value, max: hp.max, slow });
@@ -11254,7 +11292,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (this.actor.getFlag(STONETOP_SCOPE, "recover.spent")) {
 				return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.lockedHint"));
 			}
-			const livePurse = () => supplyPursesFor(this.actor.getFlag(STONETOP_SCOPE, "inventory.resources") ?? {}, SUPPLY_PURPOSE.RECOVER)
+			const livePurse = () => this._stonetopCharacter.supplyPurses(SUPPLY_PURPOSE.RECOVER)
 				.eligible.find(p => p.slug === purse?.slug) ?? null;
 			if (!livePurse()) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint"));
 			const max = await this._stonetopCharacter.computedMaxHp();

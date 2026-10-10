@@ -282,7 +282,7 @@ describe("buildSnapshot — inventory: the Arcana section's column split", () =>
 			"arcana.owned":      ["a-gold-ring"],
 			"inventory.checked": { "a-gold-ring": true },
 		});
-		const limit = snap.inventory.outfit.smallItemLimit ?? 9;
+		const limit = snap.inventory.outfit.smallItemLimit ?? 4;
 		expect(snap.inventory.outfit.smallPoolCap).toBe(limit);
 	});
 
