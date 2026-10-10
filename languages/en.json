@@ -548,6 +548,7 @@
           "notLanded": "This result hasn't landed yet.",
           "burnOffer": "<strong>Burn Brightly</strong>: spend {cost} XP to add +1 to the roll.",
           "giveAllOffer": "<strong>Impetuous Youth</strong>: give it your all to turn it into the next result up, and pick what it costs you.",
+          "plusOnesOffer": "<strong>+1 to the roll</strong>: a Judge's Diligence or Many Hands, Sanction, or a Blessing can still add +1, here or from the roll's chat card.",
           "orAccept": "Or accept it as it stands.",
           "restored": "Back to <strong>1 HP</strong>, and no longer dying.",
           "outOfAction": "No longer dying. Unconscious, or close enough, until the GM says otherwise, still at 0 HP.",

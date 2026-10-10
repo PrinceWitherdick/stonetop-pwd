@@ -150,7 +150,7 @@ import { registerTimelineWindowRestore } from "./module/dialogs/TimelineWindow.j
 import { registerStruggleHooks } from "./module/struggle/struggle-flow.js";
 import { registerPcAskHooks, wirePcAskCard } from "./module/pc-asks/pc-ask-flow.js";
 import { registerFightTab } from "./module/fight/fight-boot.js";
-import { wireRollBoosts, BOOST_QUERY, handleBoostQuery, BLESSING_QUERY, handleBlessingQuery } from "./module/actors/character/roll-boosts.js";
+import { wireRollBoosts, BOOST_QUERY, handleBoostQuery, BLESSING_QUERY, handleBlessingQuery, onUpdateActorDoorPlusOnes } from "./module/actors/character/roll-boosts.js";
 import { reconcileTierEffects } from "./module/actors/character/tier-effects.js";
 import {
 	INSPIRATION_QUERY, handleInspirationQuery, onUpdateActorInspirationAtZero, wireInspirationDamage, wireKeepOneHp, wireSpeechCard,
@@ -1100,6 +1100,9 @@ Hooks.on("updateActor", onUpdateActorDeathsDoorAutoOpen);
 // The other direction: hit points appearing on a sheet that is through the Last Door. Nothing
 // walks `dead` back on its own, so this asks whoever made the change whether it was a raising.
 Hooks.on("updateActor", onUpdateActorDeathsDoorRaised);
+// The Door's card takes the Judge's and the Lightbearer's +1s while its window waits on the tier: redrawn here
+// as the roll's marker moves, so the buttons come and go with that wait (roll-boosts.js).
+Hooks.on("updateActor", (actor, changes) => onUpdateActorDoorPlusOnes(actor, changes));
 // Unstoppable: a Heavy fighting on at 0 HP who "would regain HP" clears a mark instead (decided in
 // the preUpdate above); this offers the hit points back to whoever healed them.
 Hooks.on("updateActor", onUpdateActorUnstoppable);

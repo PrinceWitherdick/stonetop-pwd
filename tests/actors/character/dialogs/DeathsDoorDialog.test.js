@@ -651,6 +651,107 @@ describe("DeathsDoorDialog: Burn Brightly and giving it your all, before the tie
 		await closer.close();
 		expect(closer._applyTier).toHaveBeenCalledWith("failure");
 	});
+
+	// PB2-1 (the user's ruling): the Door waits for the roll-card +1s too. Diligence is spent "at any time to add +1
+	// to a roll that you or a fellow player just made" (Book I p.118), and the Door is a roll like any other.
+	describe("the roll-card +1s (Diligence, Sanction, Many Hands, a Blessing)", () => {
+		const CHRONICLER = "Chronicler of Stonetop";
+		let savedActors;
+		let savedUsers;
+		let judge;
+		const asList = users => (Array.isArray(users) ? users : users?.contents ?? []);
+
+		beforeEach(() => {
+			judge = {
+				id: "judge", uuid: "Actor.judge", name: "Aeron", type: "character",
+				items: [{ type: "move", name: CHRONICLER, flags: {}, system: { resource: { max: 3 } } }],
+				typedActor: { moveResources: { getMoveResources: () => ({ [CHRONICLER]: judge.diligence }) } },
+				diligence: 1,
+				// Played by someone online: the window waits only on a +1 a connected user could press.
+				testUserPermission: user => user?.id === "u-judge",
+			};
+			savedActors = game.actors;
+			savedUsers = game.users;
+			game.actors = { contents: [judge], get: id => (id === "judge" ? judge : null) };
+			const judgePlayer = { id: "u-judge", isGM: false, active: true };
+			const contents = [...asList(savedUsers), judgePlayer];
+			game.users = { contents, get: id => contents.find(u => u.id === id) ?? null, activeGM: savedUsers?.activeGM ?? null };
+		});
+		afterEach(() => { game.actors = savedActors; game.users = savedUsers; });
+
+		// The Door's card as the roll engine draws it: a hit tier to move, which is what a +1 goes on.
+		async function rollCard(dialog, total) {
+			const card = doorCard(total);
+			card.flavor = `<span class="stonetop-roll-result-label">${total}</span>`;
+			const rolled = { total };
+			rollStat.mockResolvedValueOnce(rolled);
+			messageOfRoll.mockImplementation(r => (r === rolled ? card : null));
+			await dialog._onRoll();
+			return card;
+		}
+
+		it("waits while a fellow Judge holds Diligence, and says so; not on a 10+, and not with none held", async () => {
+			const dialog = doorFor(hero());
+			await rollCard(dialog, 9);
+			expect(dialog._applyTier).not.toHaveBeenCalled();
+			expect(dialog.getData()).toMatchObject({ boostsPending: true, canPlusOne: true, canBurnBrightly: false });
+
+			const top = doorFor(hero());
+			await rollCard(top, 10);
+			expect(top._applyTier).toHaveBeenCalledWith("success");
+
+			judge.diligence = 0;
+			const dry = doorFor(hero());
+			await rollCard(dry, 9);
+			expect(dry._applyTier).toHaveBeenCalledWith("partial");
+		});
+
+		it("reads the tier again when the Judge's +1 lands on the card, names it, and lands once nothing is left", async () => {
+			const dialog = doorFor(hero());
+			const card = await rollCard(dialog, 9);
+			// The Judge's player pressed Diligence on the card: the +1 and who gave it, and their pip spent.
+			card.rolls = [{ total: 10, formula: "2d6 + 1" }];
+			card.store.rollBoosts = [{ source: "diligence", by: "Actor.judge", name: "Aeron" }];
+			judge.diligence = 0;
+
+			await dialog._onCardRewritten();
+
+			expect(dialog._applyTier).toHaveBeenCalledTimes(1);
+			expect(dialog._applyTier).toHaveBeenCalledWith("success");
+			expect(dialog.getData()).toMatchObject({ boostsPending: false, isStrong: true, rolledTotal: 10 });
+			expect(dialog.getData().tierNote).toBe("+1 Diligence (Aeron).");
+			// A copy of the card behind the window (lower, or unchanged) is never read back over it.
+			await dialog._onCardRewritten();
+			expect(dialog._applyTier).toHaveBeenCalledTimes(1);
+		});
+
+		it("keeps waiting after a +1 while another can still come, and Accept lands it", async () => {
+			judge.diligence = 1;
+			const many = { ...judge, id: "judge2", uuid: "Actor.judge2", name: "Bryn",
+				items: [{ type: "move", name: "Many Hands Make Light Work", flags: {}, system: {} }] };
+			game.actors = { contents: [judge, many], get: id => ({ judge, judge2: many })[id] ?? null };
+			const dialog = doorFor(hero());
+			const card = await rollCard(dialog, 7);
+			card.rolls = [{ total: 8, formula: "2d6 + 1" }];
+			card.store.rollBoosts = [{ source: "diligence", by: "Actor.judge", name: "Aeron" }];
+
+			await dialog._onCardRewritten();
+
+			// Bryn's Many Hands is still on offer: the 8 waits.
+			expect(dialog._applyTier).not.toHaveBeenCalled();
+			expect(dialog.getData()).toMatchObject({ boostsPending: true, canPlusOne: true, rolledTotal: 8 });
+			await dialog._onAcceptResult();
+			expect(dialog._applyTier).toHaveBeenCalledWith("partial");
+		});
+
+		it("draws the buttons and names the offer in the footer", () => {
+			const hbs = readRepo("templates/dialogs/deaths-door.hbs");
+			expect(hbs).toContain("deaths-door-plus-one-btn");
+			expect(hbs.indexOf("deaths-door-plus-one-btn")).toBeGreaterThan(hbs.indexOf("deaths-door-accept-btn"));
+			expect(hbs).toContain(`{{{localize "stonetop.specialMoves.deathsDoor.result.plusOnesOffer"}}}`);
+			expect(game.i18n.localize("stonetop.specialMoves.deathsDoor.result.plusOnesOffer")).toContain("+1 to the roll");
+		});
+	});
 });
 
 describe("Death's Door's roll card offers neither boost itself", () => {

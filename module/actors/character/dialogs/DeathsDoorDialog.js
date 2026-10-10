@@ -25,6 +25,7 @@ import { postDyingCard } from "../../../hooks/DeathsDoorPrompt.js";
 import { format, localize } from "../../../utils/i18n.js";
 import { rollRewrite } from "../../../utils/roll-rewrite.js";
 import { rollCardRoute } from "../../../utils/roll-card-writer.js";
+import { boostButtonFace, boostNote, boostsOn, deathsDoorPlusOnes, pressBoost } from "../roll-boosts.js";
 import { BURN_BRIGHTLY_COST } from "../burn-brightly.js";
 import { GAVE_IT_ALL_FLAG, GIVE_IT_ALL_COSTS, IMPETUOUS_YOUTH, askGiveItAllCost, giveItAllAtDeathsDoor } from "../impetuous-youth.js";
 
@@ -57,7 +58,10 @@ const _MOVE = zeroHpMove(null);
  * they are buttons on the roll card, but this window settles the tier the moment the dice land, so a
  * lift on the card afterwards would only relabel it. So when either is on offer the result step waits
  * on the counted tier with a button for each and "Accept this result", and the tier is written only
- * once the player accepts (or nothing is left to offer). See _onBurnBrightly and _onGiveItAll.
+ * once the player accepts (or nothing is left to offer). See _onBurnBrightly and _onGiveItAll. It waits the same
+ * way on the roll-card +1s (Diligence, Sanction, Many Hands, a Blessing: roll-boosts.js) while anyone could still
+ * add one: this user's own are buttons here, and another player's are pressed on the card, which takes them only
+ * while this wait lasts (roll-boosts.js#deathsDoorAwaitsPlusOnes). See _onPlusOne and _onCardRewritten.
  *
  * Any owner of the character can open this window, so the roll is claimed before the dice: through the primary
  * GM's client, which rules on one claim at a time, so two owners pressing Roll together make one roll and the other
@@ -218,13 +222,33 @@ const _giveAllNote = (from, to, spent) => (spent
 	? format(`${_I18N}.notes.giveAll`, { label: IMPETUOUS_YOUTH.label, from, to, spent })
 	: format(`${_I18N}.notes.giveAllNoCost`, { label: IMPETUOUS_YOUTH.label, from, to }));
 
+/** _boostsLeft with nothing on offer. Frozen: it is handed out, never built on. */
+const _NO_BOOSTS = Object.freeze({ burn: false, giveAll: false, plusOnes: false, mine: Object.freeze([]), any: false });
+
+// The +1s a card took (roll-boosts.js), one note each: "+1 Diligence (Aeron).".
+const _plusOneNotes = card => boostsOn(card).map(b => `${boostNote(b)}.`);
+
+// What identifies one +1 the window offers, so a press finds the offer it was drawn for.
+const _plusOneKey = offer => `${offer.source}:${offer.helper?.uuid ?? ""}`;
+
+/**
+ * The window's own +1 buttons, from the offers this user presses (roll-boosts.js#deathsDoorPlusOnes): labelled as
+ * the card labels them, named for the helper when this user could press one source for two of them.
+ */
+function _plusOneButtons(offers = []) {
+	return offers.map(offer => {
+		const { label, tip } = boostButtonFace(offer, offers);
+		return { key: _plusOneKey(offer), label, title: tip };
+	});
+}
+
 /**
  * What a Death's Door card says was done to its roll after the dice, for a window that did not do it: the
  * Destined's bend (counted-tier.js#countedNote), Burn Brightly and giving it your all, read off the card's own
  * flags (the rolling window's notes live only in that window). `bend: false` leaves the bend out, for a window
  * that says it in its own words (_readLanded).
  */
-function cardBoostNotes(card, total, { bend = true } = {}) {
+function cardBoostNotes(card, total, { bend = true, plusOnes = true } = {}) {
 	if (!card) return [];
 	const notes = [];
 	if (card.getFlag?.(SYSTEM_ID, "burnBrightly")) notes.push(localize(`${_I18N}.notes.burnOnCard`));
@@ -233,6 +257,7 @@ function cardBoostNotes(card, total, { bend = true } = {}) {
 		const spent = GIVE_IT_ALL_COSTS.find(c => c.key === gave.cost)?.spent ?? gave.cost;
 		notes.push(_giveAllNote(gave.from, gave.to, spent));
 	}
+	if (plusOnes) notes.push(..._plusOneNotes(card));
 	const bent = bend ? countedNote(total, card.getFlag?.(SYSTEM_ID, ROLLED_FLAG) ?? null) : "";
 	if (bent) notes.push(`${bent}.`);
 	return notes;
@@ -559,6 +584,10 @@ export class DeathsDoorDialog extends StonetopDialog {
 			boostsPending:   this._boostsPending,
 			canBurnBrightly: this._boostsPending && boosts.burn,
 			canGiveItAll:    this._boostsPending && boosts.giveAll,
+			// The +1s anyone could still add (Diligence, Sanction, Many Hands, a Blessing): said above, and the
+			// ones this user presses for their own characters drawn as buttons (_plusOneButtons).
+			canPlusOne:      this._boostsPending && boosts.plusOnes,
+			plusOneButtons:  this._boostsPending ? _plusOneButtons(boosts.mine) : [],
 			burnBrightlyCost: BURN_BRIGHTLY_COST,
 			// A private roll taken over with no GM connected: only the GM's client could change its card, so it
 			// says why Accept is all there is.
@@ -630,6 +659,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 		html.find(".deaths-door-accept-btn").on("click", () => this._onAcceptResult());
 		html.find(".deaths-door-burn-btn").on("click", () => this._onBurnBrightly());
 		html.find(".deaths-door-give-all-btn").on("click", () => this._onGiveItAll());
+		html.find(".deaths-door-plus-one-btn").on("click", (ev) => this._onPlusOne(ev.currentTarget.dataset.plusOne ?? ""));
 		html.find(".deaths-door-take-over-btn").on("click", () => this._onTakeOver());
 
 		html.find(".deaths-door-stat-choice").on("change", (ev) => { this._stat = ev.currentTarget.value; });
@@ -787,11 +817,12 @@ export class DeathsDoorDialog extends StonetopDialog {
 			// class header). Otherwise the tier lands now, exactly as it always has.
 			this._rollMessage = messageOfRoll(roll);
 			this._privateCardId = null;
-			this._boostsPending = this._boostOffers().any;
+			const left = this._boostsLeft();
+			this._boostsPending = this._boostOffers(left).any;
 			// The card, the total, the tier it counts as and what could still move it go on the marker the moment
 			// the dice land, whatever follows: a window that has to take the roll over (one whose client was never
 			// sent a private card included) accepts it from there rather than rolling it again.
-			await this._noteRoll();
+			await this._noteRoll(left);
 			if (!this._boostsPending) await this._land(this._landed);
 			// Shut while the dice were in the air: accepted as it stands, as close() accepts a waiting result.
 			else if (this._settleOnRollEnd) await this._settleBoosts();
@@ -867,7 +898,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 		this._landed = outcomeTier(countedTier(total, { missCountsAsPartial: bends, partialCountsAsSuccess: bends }));
 		const shifted = this._landed === rolled ? ""
 			: format(`${_I18N}.notes.shifted`, { shift: this._tierShift, from: TIER_LABELS[rolled], to: TIER_LABELS[this._landed] });
-		this._tierNote = [...this._boostNotes, shifted].filter(Boolean).join(" ");
+		// The +1s are read off the card, whoever pressed them: a Judge's player presses theirs on the card itself.
+		this._tierNote = [...this._boostNotes, ..._plusOneNotes(this._rollMessage), shifted].filter(Boolean).join(" ");
 	}
 
 	/**
@@ -877,16 +909,25 @@ export class DeathsDoorDialog extends StonetopDialog {
 	 * paid for nothing. Neither without the Door's card to rewrite (this client's copy, or the GM's of a
 	 * private card this client was never sent: _privateCardId), or the rewrite functions stonetop.js
 	 * registers (utils/roll-rewrite.js): a lift the card could not show would be a second story of the roll.
+	 *
+	 * And the roll-card +1s (`plusOnes`): Diligence, Sanction, Many Hands and a Blessing (roll-boosts.js), while
+	 * anyone at all could still add one, below a 10+ too. The Door is a roll like any other, and Diligence is spent
+	 * "at any time to add +1 to a roll that you or a fellow player just made" (Book I p.118), so the result waits
+	 * for them as it waits for Burn Brightly (the user's ruling). `mine` are the ones this user presses for their
+	 * own characters, drawn here; everyone else's are on the card. Only on a card this client has: a private
+	 * roll's card is the GM's to show.
 	 */
 	_boostsLeft() {
-		const none  = { burn: false, giveAll: false, any: false };
 		const actor = this._character?._actor ?? null;
-		if (!actor || !(this._rollMessage || this._privateCardId) || !rollRewrite() || this._rolledTotal == null) return none;
+		if (!actor || !(this._rollMessage || this._privateCardId) || !rollRewrite() || this._rolledTotal == null) return _NO_BOOSTS;
 		const { burn, giveAll } = deathsDoorBoostsLeft(actor, this._landed, {
 			burned:  this._burned,
 			gaveAll: this._gaveAll || !!this._rollMessage?.getFlag?.(SYSTEM_ID, GAVE_IT_ALL_FLAG),
 		});
-		return { burn, giveAll, any: burn || giveAll };
+		const plus = this._rollMessage && this._landed !== "success"
+			? deathsDoorPlusOnes(this._rollMessage, actor)
+			: { any: false, mine: [] };
+		return { burn, giveAll, plusOnes: plus.any, mine: plus.mine, any: burn || giveAll || plus.any };
 	}
 
 	/**
@@ -901,13 +942,11 @@ export class DeathsDoorDialog extends StonetopDialog {
 
 	/**
 	 * The boosts that can be pressed here, now: those left (_boostsLeft), while something can rewrite the card
-	 * (_boostRoute). With nothing that can, none can be, and `needsGM` says that is why.
+	 * (_boostRoute). With nothing that can, none can be, and `needsGM` says that is why. `left` is a reading of
+	 * _boostsLeft the caller already made, which walks every character in the world for the +1s.
 	 */
-	_boostOffers() {
-		const left = this._boostsLeft();
-		if (left.any && !this._boostRoute()) {
-			return { burn: false, giveAll: false, any: false, needsGM: true };
-		}
+	_boostOffers(left = this._boostsLeft()) {
+		if (left.any && !this._boostRoute()) return { ..._NO_BOOSTS, needsGM: true };
 		return { ...left, needsGM: false };
 	}
 
@@ -970,6 +1009,46 @@ export class DeathsDoorDialog extends StonetopDialog {
 	}
 
 	/**
+	 * One of the roll-card +1s (Diligence, Sanction, Many Hands, a Blessing), pressed here for one of this user's
+	 * own characters: the card's own press (roll-boosts.js#pressBoost), on this client or through the GM's, then
+	 * the tier read again off the card (_onCardRewritten). One another player presses on the card is read the
+	 * same way as the card changes (_listen).
+	 */
+	async _onPlusOne(key) {
+		if (this._boosting || !this._boostsPending || !this._rollMessage) return;
+		const offer = this._boostOffers().mine.find(o => _plusOneKey(o) === key);
+		if (!offer) return;
+		this._boosting = true;
+		try {
+			const taken = await pressBoost(this._rollMessage, offer, rollRewrite(), { route: this._boostRoute() });
+			if (!taken) {
+				ui.notifications?.warn?.(localize("stonetop.rollBoosts.refused"));
+				return;
+			}
+			await this._onCardRewritten();
+		} catch (err) {
+			console.error("Stonetop | Error adding +1 at Death's Door:", err);
+		} finally {
+			await this._endBoost();
+		}
+	}
+
+	/**
+	 * The Door's card shows a total this window has not read (a +1 pressed on it, here or by another player, or
+	 * written by the GM's client): the tier is read again and settled once nothing is left to offer, exactly as
+	 * after a boost of the window's own (_afterBoost). Nothing while the result has already landed. Every boost
+	 * only ever raises the total, so a card reading LOWER than this window is only a copy that has not yet heard a
+	 * rewrite the GM's client answered (_boostViaGM), and is left alone.
+	 */
+	async _onCardRewritten() {
+		if (!this._boostsPending || !this._rollMessage) return false;
+		const total = this._cardTotal();
+		if (total == null || total <= (Number(this._rolledTotal) || 0)) return false;
+		await this._afterBoost(null, total);
+		return true;
+	}
+
+	/**
 	 * A boost the GM's client writes (_boostRoute): it spends it and rewrites the card
 	 * (deaths-door-relay.js#handleDeathsDoorBoostQuery), and this window carries on from the total and the counted
 	 * tier it answers, exactly as from its own rewrite: this client's copy of a card it can read may not have heard
@@ -1008,15 +1087,23 @@ export class DeathsDoorDialog extends StonetopDialog {
 		this._rolledTotal = total ?? this._cardTotal();
 		this._readLanded();
 		if (counted) this._landed = counted;
-		const settles = !this._boostsLeft().any;
+		const left = this._boostsLeft();
 		// The moved total goes on the marker (and keeps it from going stale while they choose), then lands if it must.
-		await this._noteRoll();
+		await this._noteRoll(left);
+		const settles = !left.any;
 		if (settles) await this._settleBoosts();
 	}
 
 	/** A boost is done: let the next press through, and settle for a window closed while it ran. */
 	async _endBoost() {
 		this._boosting = false;
+		// A +1 whose write reached this client while the boost ran (the GM's client wrote it): read now, since the
+		// card's update was let past while this window was busy (_listen).
+		try {
+			await this._onCardRewritten();
+		} catch (err) {
+			console.error("Stonetop | Error reading Death's Door's card again:", err);
+		}
 		if (this._settleOnBoostEnd && this._boostsPending) await this._settleBoosts();
 		this.renderIfOpen();
 	}
@@ -1136,10 +1223,11 @@ export class DeathsDoorDialog extends StonetopDialog {
 	/**
 	 * The dice are down, or a boost moved them, or a 10+ was taken without them: the card, the total, the tier it
 	 * counts as and the boosts still on offer, for the other windows (and for one that takes the roll over).
+	 * `known` is the caller's own reading of _boostsLeft, made a moment before, so it is not walked again.
 	 */
-	async _noteRoll() {
+	async _noteRoll(known = null) {
 		if (!this._markerWritten || this._lostRoll()) return;
-		const left = this._boostsPending ? this._boostsLeft() : null;
+		const left = this._boostsPending ? (known ?? this._boostsLeft()) : null;
 		this._claimed = {
 			...this._claimed,
 			at:        deathsDoorRollClock(),
@@ -1286,7 +1374,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 		// Spent is read off the card where there is one, else off what the marker still lists as on offer.
 		this._burned  = card ? !!card.getFlag?.(SYSTEM_ID, "burnBrightly") : !!left && !left.includes("burn");
 		this._gaveAll = card ? !!card.getFlag?.(SYSTEM_ID, GAVE_IT_ALL_FLAG) : !!left && !left.includes("giveAll");
-		this._boostNotes  = cardBoostNotes(card, total, { bend: false });
+		// Not its +1s: _readLanded reads those off the card itself.
+		this._boostNotes  = cardBoostNotes(card, total, { bend: false, plusOnes: false });
 		this._readLanded();
 		// The card's own reading of the tier it counts as (the Destined's bends are stamped on it), where there is one.
 		if (card) this._landed = deathsDoorCardTier(card, total);
@@ -1398,6 +1487,15 @@ export class DeathsDoorDialog extends StonetopDialog {
 		this._hooks = [
 			["updateActor",       Hooks.on("updateActor", actor => { if (actor?.id === actorId) redraw(); })],
 			["updateChatMessage", Hooks.on("updateChatMessage", message => {
+				// This window's own card, raised by a +1 pressed on it (another player's Diligence, say): the tier is
+				// read again. Not while a boost of its own runs; _endBoost catches up on what it let past.
+				if (message?.id && message.id === this._rollMessage?.id && this._boostsPending && !this._boosting) {
+					// A write that raised nothing (a latch, a copy catching up) redraws only as any other would.
+					this._onCardRewritten()
+						.then(moved => (moved ? this.renderIfOpen() : redraw()))
+						.catch(err => console.error("Stonetop | Error reading Death's Door's card again:", err));
+					return;
+				}
 				if (message?.getFlag?.(SYSTEM_ID, DEATHS_DOOR_ROLL_FLAG)) redraw();
 			})],
 			["userConnected",     Hooks.on("userConnected", redraw)],

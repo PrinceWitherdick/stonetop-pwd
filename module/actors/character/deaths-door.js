@@ -263,9 +263,10 @@ export function isUndeathCard(message) {
 }
 
 /**
- * Any 0-HP move's card: Death's Door or an insert's. The one question the card's lifts ask (roll-boosts.js
- * isBoostableRoll, stonetop.js's Burn Brightly), since every one of them is settled by its own window.
- * isDeathsDoorCard stays apart for what only the Door's window offers (Impetuous Youth's give it your all).
+ * Any 0-HP move's card: Death's Door or an insert's. The question the card's Burn Brightly and the GM's Shift
+ * ask (stonetop.js), since every one of them is settled by its own window. The +1s ask isUndeathCard alone
+ * (roll-boosts.js#isBoostableRoll), since a Door card takes them while its window waits; Impetuous Youth's
+ * card button asks isDeathsDoorCard, since the Door's give it your all is its window's own.
  */
 export function isZeroHpMoveCard(message) {
 	return isDeathsDoorCard(message) || isUndeathCard(message);
