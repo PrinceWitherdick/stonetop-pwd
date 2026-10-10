@@ -100,7 +100,7 @@ import {STEADING_DEFAULTS, StonetopSteading} from "../steading/StonetopSteading.
 import {settleSteadingRoll} from "../steading/steading-roll.js";
 import {readCurrentSeason, readCurrentYear} from "../../seasons/current-season.js";
 import {openRitesOfTheLand} from "./rites-of-the-land.js";
-import {HEALERS_ARTS, HEALERS_ARTS_STOCK, HEALERS_ARTS_STOCK_HP, healersArtsCarers, carerWis, recoverHeal, recoverBreakdown, canReachCarerStock, payHealersArtsStock} from "./healers-arts.js";
+import {HEALERS_ARTS, HEALERS_ARTS_STOCK, HEALERS_ARTS_STOCK_HP, healersArtsCarers, carerWis, recoverHeal, recoverBreakdown, canReachCarerStock, payHealersArtsStock, spendsCarerStockDirectly} from "./healers-arts.js";
 import {isUnliving, recoveredHpTo, slowToHeal} from "./deaths-door-actor.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
@@ -11342,17 +11342,18 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * included ("someone Recovers under your care" does not exclude the carer). Each carries its
 		 * WIS and the purses that could pay the Stock, read LIVE through the carer's own
 		 * StonetopCharacter#stockSources, and whether this client can reach them at all. `direct`
-		 * when this client owns the carer and so spends the Stock itself; otherwise the carer's
-		 * player (or the GM) is asked (healers-arts.js#payHealersArtsStock).
+		 * when this user decides on the carer's Stock and so spends it itself
+		 * (healers-arts.js#spendsCarerStockDirectly); otherwise the carer's player (or the GM) is
+		 * asked (healers-arts.js#payHealersArtsStock).
 		 */
 		async _recoverCarers() {
 			const actors = healersArtsCarers(game.actors?.contents ?? game.actors ?? []);
 			return Promise.all(actors.map(async actor => {
 				const sources = (await actor.typedActor?.stockSources?.()) ?? [];
 				const payable = payableStockSources(sources, HEALERS_ARTS_STOCK);
-				const reachable = canReachCarerStock(actor);
+				const reachable = canReachCarerStock(actor, { patient: this.actor });
 				return {
-					id: actor.id, name: actor.name, wis: carerWis(actor), payable, direct: !!actor.isOwner,
+					id: actor.id, name: actor.name, wis: carerWis(actor), payable, direct: spendsCarerStockDirectly(actor, { patient: this.actor }),
 					canPay: payable.length > 0 && reachable,
 					whyNot: !payable.length
 						? `${actor.name} has no Stock left to spend.`
@@ -11422,6 +11423,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!livePurse() || this.actor.getFlag(STONETOP_SCOPE, "recover.spent")) {
 				const why = livePurse() ? game.i18n.localize("stonetop.specialMoves.recover.lockedHint") : game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint");
 				ui.notifications?.warn(paid ? `${why} ${care.carer.name}'s Stock was already spent.` : why);
+				return;
+			}
+			// A Vessel tending their own Recover can pay the Stock in their own blood (2d4 HP), and that can
+			// drop them to 0 HP and onto Death's Door: "A character disabled this way can't save themselves"
+			// (Book I p.240), so the Recover the payment was for is refused now, the Stock already gone.
+			const dying = this._dyingHint();
+			if (dying) {
+				ui.notifications?.warn(paid ? `${dying.text} ${care.carer.name}'s Stock was already spent.` : dying.text);
 				return;
 			}
 			// Read after any Stock was paid, for the reasons above; the purse too, as it is now.

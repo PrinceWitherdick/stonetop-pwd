@@ -26,7 +26,7 @@ import { format } from "../../utils/i18n.js";
 export const FOLLOWER_NPC_HP_QUERY = "stonetop.followerNpcHp";
 
 /** The warning when nobody can write the NPC; Make Camp passes its own. */
-const NO_GM_KEY = "stonetop.character.followers.npcHp.noGm";
+export const NO_GM_KEY = "stonetop.character.followers.npcHp.noGm";
 
 /** A whole number, never below 0. */
 function hpCount(value) {
@@ -51,6 +51,17 @@ function updateWith(doc, update, moveName) {
 /** The NPC standing for a character's one-body follower `{ftype, slug}`, or null. */
 function followerNpcOf(character, ftype, slug) {
 	return linkedFollowerNpc(readableFlags(character), ftype, slug ?? "", followerActorFromLink);
+}
+
+/**
+ * Whether setFollowerHp could write this row's HP from this client: no NPC stands for it (its box is on the
+ * leader), this client owns the NPC, or a GM is connected to write it for them (FOLLOWER_NPC_HP_QUERY). The
+ * rule setFollowerHp itself follows, asked ahead by a move that pays before it heals (companion-bond.js's
+ * Lend Strength), so nothing is paid for a heal that cannot land.
+ */
+export function canSetFollowerHp(character, row, { link = followerActorFromLink, gm = globalThis.game?.users?.activeGM ?? null } = {}) {
+	const npc = linkedFollowerNpc(readableFlags(character), row?.follower, row?.slug ?? "", link);
+	return !npc || !!npc.isOwner || !!gm;
 }
 
 /**

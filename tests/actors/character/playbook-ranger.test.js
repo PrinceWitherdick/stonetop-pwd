@@ -580,6 +580,37 @@ describe("Beast-Bonded on the companion card, and Lend it your strength (M8)", (
 			vi.unstubAllGlobals();
 		}
 	});
+
+	// Audit PB3-1: an NPC this client cannot write, with no GM connected to write it, cannot be raised, so the
+	// Ranger is refused before the die rather than losing HP the companion never regains.
+	it("is refused before the die, with nothing lost, when the companion's NPC cannot be written from here", async () => {
+		const { actor } = await bonded(["lend-strength"], { "animalCompanion.hpCurrent": 10, "animalCompanion.details": { actorUuid: "Actor.steed" } });
+		actor.system.attributes.hp.value = 8;
+		const npc = { name: "Bran", isOwner: false, system: { attributes: { hp: { value: 10, max: 16 } } }, update: vi.fn() };
+		const evaluate = vi.fn();
+		const warn = vi.fn();
+		vi.stubGlobal("Roll", class { async evaluate() { evaluate(); this.total = 4; return this; } toMessage() {} });
+		vi.stubGlobal("ui", { notifications: { warn } });
+		try {
+			expect(await bond.lendStrength(actor, { npc, gm: null })).toBeNull();
+			expect(evaluate).not.toHaveBeenCalled();
+			expect(actor.system.attributes.hp.value).toBe(8);
+			expect(npc.update).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledOnce();
+			expect(warn.mock.calls[0][0]).toContain("Bran");
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it("can be written with no NPC (the card's box), an NPC this client owns, or a GM connected to write it", async () => {
+		const { actor } = await bonded(["lend-strength"], { "animalCompanion.details": { actorUuid: "Actor.steed" } });
+		const theirs = { isOwner: false };
+		expect(bond.lendStrengthWritable(actor, null, null)).toBe(true);
+		expect(bond.lendStrengthWritable(actor, { isOwner: true }, null)).toBe(true);
+		expect(bond.lendStrengthWritable(actor, theirs, { id: "gm" })).toBe(true);
+		expect(bond.lendStrengthWritable(actor, theirs, null)).toBe(false);
+	});
 });
 
 describe("Loyal to the End's injured tag (M11)", () => {
