@@ -1298,7 +1298,8 @@
       "closeForNow": "Close for Now"
     },
     "rollCard": {
-      "writerSilent": "The GM's client did not answer in time. It may still go through, so check the card before pressing again."
+      "writerSilent": "The GM's client did not answer in time. It may still go through, so check the card before pressing again.",
+      "notCardWriter": "Only the GM or whoever posted this card can use its buttons."
     },
     "optionHpLoss": {
       "title": "Lose {formula} HP?",

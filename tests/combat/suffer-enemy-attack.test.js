@@ -402,7 +402,7 @@ describe("reconcileClashCounter: a rewritten Clash total", () => {
 // on the log: its "Take this damage" stands down (never applied, never deleted), and comes back when a
 // rewrite moves the card onto a tier that suffers the attack again.
 describe("a counter-attack the 10+ avoided", () => {
-	const { counterAvoided, registerCounterAvoidedHooks, wireApplyDamage } = attackFlow;
+	const { counterAvoided, registerCounterAvoidedHooks, wireApplyDamage, AVOIDS_BY_PICK, AVOIDS_BY_DANCE } = attackFlow;
 	const clash = { name: "Clash", system: { moveType: "basic" } };
 
 	it("is posted naming the Clash card it answers", async () => {
@@ -431,6 +431,35 @@ describe("a counter-attack the 10+ avoided", () => {
 		expect(counterAvoided({ countered: true, avoids: true }, "failure")).toBe(false);
 		expect(counterAvoided({ countered: true }, "success")).toBe(false);
 		expect(counterAvoided({ avoids: true }, "success")).toBe(false);
+	});
+
+	// A 12+ is a 10+ for the pick (counted-tier.js#outcomeTier): lifted on past 11, the avoid stands.
+	it("stays avoided by the pick when the card goes on up to a 12+", () => {
+		expect(counterAvoided({ countered: true, avoids: AVOIDS_BY_PICK }, "critical", 12)).toBe(true);
+		expect(counterAvoided({ countered: true, avoids: true }, "critical", 13)).toBe(true);
+		expect(counterAvoided({ countered: true, avoids: AVOIDS_BY_PICK }, "success", 10)).toBe(true);
+	});
+
+	// Battle Dancer: "on a 12+ you deal your damage, avoid your enemy's attack" (the Fox's sheet). The dance's
+	// avoid is the 12+'s own, and nothing was picked, so a card shifted down to 10-11 suffers the attack.
+	it("is avoided by the dance only while the card stands on the 12+", () => {
+		expect(counterAvoided({ countered: true, avoids: AVOIDS_BY_DANCE }, "critical", 12)).toBe(true);
+		expect(counterAvoided({ countered: true, avoids: AVOIDS_BY_DANCE }, "critical", 14)).toBe(true);
+		expect(counterAvoided({ countered: true, avoids: AVOIDS_BY_DANCE }, "success", 11)).toBe(false);
+		expect(counterAvoided({ countered: true, avoids: AVOIDS_BY_DANCE }, "partial", 8)).toBe(false);
+	});
+
+	it("keeps a pick's avoid when a rewrite lifts the card from 10 to 12, and drops a dance's at 11", async () => {
+		const targets = targeting("bronze khopesh d10+2 (close)", "d10+2");
+		const picked = makeMessage({ attack: { moveKey: "clash", targets, countered: true, avoids: AVOIDS_BY_PICK, avoided: true, resolved: true } });
+		await reconcileClashCounter(picked, pc, 12);
+		expect(picked.flags.attack.avoided).toBe(true);
+		const danced = makeMessage({ attack: { moveKey: "clash", targets, countered: true, avoids: AVOIDS_BY_DANCE, avoided: true, resolved: true } });
+		await reconcileClashCounter(danced, pc, 11);
+		expect(danced.flags.attack.avoided).toBe(false);
+		await reconcileClashCounter(danced, pc, 12);
+		expect(danced.flags.attack.avoided).toBe(true);
+		expect(posted).toHaveLength(0);
 	});
 
 	it("is settled by a rewrite that moves the card off the 10+ and back, striking nothing new", async () => {

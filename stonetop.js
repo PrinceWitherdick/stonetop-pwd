@@ -86,7 +86,7 @@ import { boldMissText } from "./module/utils/strings.js";
 import { moveBodyHtml, remarkRolledTier } from "./module/utils/move-tiers.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
 import { rollSeasonsCard, sign, markMissXpByChoice, reconcileMissXp, pbtaDiceFormula, seasonsRollTable, seasonsRollPicks, syncCountedNotePill } from "./module/utils/roll-engine.js";
-import { countedResult, rolledRecord, cardCountedTier, totalTier } from "./module/utils/counted-tier.js";
+import { countedResult, rolledRecord, cardCountedTier, cardTierNow } from "./module/utils/counted-tier.js";
 import { burnBrightlyAffordable, burnsBrightlyDriven } from "./module/actors/character/burn-brightly.js";
 import { wireImpetuousYouth, giveItAll, GIVE_IT_ALL_ACTION, HURT_DAMAGE, IMPETUOUS_YOUTH } from "./module/actors/character/impetuous-youth.js";
 import { isZeroHpMoveCard } from "./module/actors/character/deaths-door.js";
@@ -94,7 +94,7 @@ import { registerRollRewrite } from "./module/utils/roll-rewrite.js";
 import { ROLL_CARD_QUERY, handleRollCardQuery, pressRollCard, registerRollCardAction, writeCardRoll } from "./module/utils/roll-card-writer.js";
 import { inCardTurn } from "./module/utils/card-queue.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
-import { moveChatCard, canRewriteCard, rolledTotalCard } from "./module/utils/chat.js";
+import { moveChatCard, canRewriteCard, canUserWriteCard, rolledTotalCard } from "./module/utils/chat.js";
 import { grantsWholeList, paintPickTally, pickLimitFor, releaseOverLimit, tierOffersPicks } from "./module/utils/pick-tally.js";
 import { wireUndoXpMark, missXpTakenByLift, missXpChoice, MISS_XP_CHOICE_FLAG } from "./module/utils/undo-xp-mark.js";
 import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
@@ -1629,8 +1629,7 @@ function _wireNeverAtALoss(message, html, actor) {
 // track still has a use in it. Spending either settles the card, so both buttons go with it.
 function _wireLogbook(message, html, actor, card) {
 	if (message.getFlag(SYSTEM_ID, "knowThingsUpgrade")) return;
-	const roll = message.rolls?.at(0);
-	if (!roll || roll.total >= STRONG_HIT_TOTAL) return;
+	if (_knowThingsCountsAsStrongHit(message)) return;
 
 	const cardButtons = card.querySelector(".stonetop-card-buttons");
 	if (!cardButtons) return;
@@ -1708,8 +1707,7 @@ async function _upgradeKnowThings(message, user, sourceKey) {
 	const source = actor ? _knowThingsUpgradeSources(actor).find(s => s.key === sourceKey) : null;
 	if (!source) return { upgraded: false };
 	return inCardTurn(message, async () => {
-		const roll = message.rolls?.at(0);
-		if (message.getFlag(SYSTEM_ID, "knowThingsUpgrade") || !roll || roll.total >= STRONG_HIT_TOTAL) return { upgraded: false };
+		if (message.getFlag(SYSTEM_ID, "knowThingsUpgrade") || _knowThingsCountsAsStrongHit(message)) return { upgraded: false };
 		const now = source.read();
 		if (!now || now.left <= 0) return { upgraded: false, empty: true };
 		await source.spend(now);
@@ -1729,10 +1727,21 @@ async function _upgradeKnowThings(message, user, sourceKey) {
 	});
 }
 
-/** Whether a rolled card's (shifted) total is a 6-; a card with no roll has not missed. */
+/**
+ * Whether a rolled card COUNTS as a 6- now: its (shifted) total, bent by the rules stamped on it (a "count a miss
+ * as a 7-9" lifts it off the miss, counted-tier.js). A card with no roll has not missed.
+ */
 function _invokeCardMissed(message) {
-	const roll = message.rolls?.at(0);
-	return !!roll && totalTier(roll.total) === "failure";
+	return cardTierNow(message, SYSTEM_ID) === "failure";
+}
+
+/**
+ * Whether a Know Things card already COUNTS as a 10+ (its shifted total, or a 7-9 a rule on the card treats as a
+ * 10+), so a Logbook or books & scrolls use would buy nothing. A card with no roll has nothing to upgrade.
+ */
+function _knowThingsCountsAsStrongHit(message) {
+	const tier = cardTierNow(message, SYSTEM_ID);
+	return tier == null || tier === "success";
 }
 
 /** The `possessions` flag bag a possession track is read from, off a bare Actor. */
@@ -1860,6 +1869,13 @@ function _wireSteadingCardButtons(message, btns, {
 				const actor = speakerActor(message);
 				if (!actor?.isOwner || actor.type !== actorType) {
 					ui.notifications.warn(warn);
+					return;
+				}
+				// The latch is a flag on the CARD, which only the GM or whoever posted it may write. Owning
+				// the actor is not enough: a player pressing a button on a card the GM posted for them would
+				// have the latch's write throw, and nothing but the console would say so.
+				if (!canUserWriteCard(message, game.user, { whenUnknown: !!game.user?.isGM })) {
+					ui.notifications.warn(game.i18n.localize("stonetop.rollCard.notCardWriter"));
 					return;
 				}
 				const done = await withLateStampLatch(message, flag, btns, () => run(subject(actor), btn));

@@ -30,7 +30,7 @@ import {weaponMeta, isClashWeapon, isLetFlyWeapon, weaponTraitText, weaponArmorB
 import {escHtml, joinNames} from "../utils/strings.js";
 import {stonetopChatCard, rollFormulaChip, damageMark, damageBadge, damageKeywordsHtml, optionKey, whisperGm, cardNoticeHtml, canUserWriteCard, whisperedAs} from "../utils/chat.js";
 import {rollDamage, multiDieFaces, sign, damageRollFormula, damageConditionPills, conditionsRowHtml, classifyResult, messageOfRoll} from "../utils/roll-engine.js";
-import {cardCountedTier} from "../utils/counted-tier.js";
+import {cardCountedTier, outcomeTier, CRITICAL_TOTAL} from "../utils/counted-tier.js";
 import {mitigateDamage, resolvePiercing, applyDamageToActor, damageRowActor, composeDamageFormula, seedBonus, damageSeedBonus, foeAttacks, fictionTagsIn, hardestAttackIndex} from "../utils/damage.js";
 import {promptDamage} from "../dialogs/RollDialog.js";
 // The fight's +N for several attackers (Book I p.414), offered to the damage rolls below. Every builder
@@ -2307,11 +2307,12 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	// strike it a second time (reconcileClashCounter). A blow already struck off this card (a 6- lifted onto
 	// the 10+) that the 10+ now avoids ("Avoid, prevent, or counter your enemy's attack", p.214, or a Battle
 	// Dancer's 12+) is marked avoided, which takes the "Take this damage" off its card (avoidedCounterOf).
-	const avoids = fx.addons.includes(AVOID) || dancing;
+	// Which of the two it was is stamped, because they last differently (counterAvoided).
+	const avoids = dancing ? AVOIDS_BY_DANCE : fx.addons.includes(AVOID) ? AVOIDS_BY_PICK : null;
 	await lockAttackCard(message, root, {
 		yourCall, targets,
 		...(counter ? { countered: true } : {}),
-		...(avoids ? { avoids: true } : {}),
+		...(avoids ? { avoids } : {}),
 		...(avoids && attack.countered ? { avoided: true } : {}),
 	});
 	// The deplete row's own button is the usual way to pay it. A player who ticked it and went
@@ -2419,7 +2420,7 @@ export async function reconcileClashCounter(message, actor, total) {
 	if (!Number.isFinite(Number(total))) return false;
 	const tier = cardCountedTier(message, Number(total), SCOPE);
 	if (attack.countered) {
-		await setAttackFlag(message, "avoided", counterAvoided(attack, tier), "record whether the counter-attack was avoided");
+		await setAttackFlag(message, "avoided", counterAvoided(attack, tier, Number(total)), "record whether the counter-attack was avoided");
 		return false;
 	}
 	if (tier !== "failure") return false;
@@ -2431,14 +2432,26 @@ export async function reconcileClashCounter(message, actor, total) {
 /**
  * Whether a Clash card's counter-attack, already struck, is one the character AVOIDED: they confirmed the
  * 10+ with "Avoid, prevent, or counter your enemy's attack" (p.214) or danced it off (Battle Dancer), and
- * the card still stands on the 10+. Moved off it, the tier they land on suffers the attack again. PURE.
+ * the card still stands where that holds. Moved off it, the tier they land on suffers the attack again. PURE.
+ *
+ * The pick holds on any 10+, a 12+ included (a 12+ is a 10+ for a move's outcomes, counted-tier.js#
+ * outcomeTier). The dance holds only on the 12+ itself: "on a 12+ you deal your damage, avoid your enemy's
+ * attack" (Battle Dancer, the Fox's sheet), so a card shifted down to 10-11 no longer dances, and nothing
+ * was picked. An older card stamped `avoids: true` reads as the pick.
  *
  * @param {object} attack  the card's attack flag
  * @param {string} tier    the tier the card counts as now (counted-tier.js)
+ * @param {number|null} [total]  the card's total now, for the dance's 12+
  */
-export function counterAvoided(attack, tier) {
-	return !!attack?.countered && !!attack?.avoids && tier === "success";
+export function counterAvoided(attack, tier, total = null) {
+	if (!attack?.countered || !attack?.avoids) return false;
+	if (attack.avoids === AVOIDS_BY_DANCE) return Number(total) >= CRITICAL_TOTAL;
+	return outcomeTier(tier) === "success";
 }
+
+/** How a Clash card's 10+ avoided its counter-attack (the attack flag's `avoids`; see counterAvoided). */
+export const AVOIDS_BY_PICK = "pick";
+export const AVOIDS_BY_DANCE = "dance";
 
 /** The Clash card a counter-attack's damage card answers to, when it says it was avoided. */
 function avoidedCounterOf(damage, messages = globalThis.game?.messages) {
